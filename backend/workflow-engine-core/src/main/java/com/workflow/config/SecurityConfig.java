@@ -71,6 +71,7 @@ public class SecurityConfig {
                 .requestMatchers(new AntPathRequestMatcher("/api/v1/processes/definitions/deployments/**")).permitAll()
                 .requestMatchers(new AntPathRequestMatcher("/api/v1/processes/definitions/**")).permitAll()
                 .requestMatchers(new AntPathRequestMatcher("/api/v1/processes/instances/*/purge")).permitAll()
+                .requestMatchers(new AntPathRequestMatcher("/api/v1/processes/instances")).permitAll()
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

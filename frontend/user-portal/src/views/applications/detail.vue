@@ -874,8 +874,10 @@ const parseBpmnXmlAndGetFormId = (xml: string): { formId: string | null, formNam
           }
         }
         tasks.set(id, { name, formId, formName })
-        // Direct match on current node
-        if (name === currentNodeName || id === currentNodeName) {
+        // Direct match on current node (whitespace-normalized for robustness)
+        const normName = currentNodeName.trim().replace(/\s+/g, ' ')
+        const normBpmnName = name.trim().replace(/\s+/g, ' ')
+        if (normBpmnName === normName || id === currentNodeName) {
           return { formId, formName }
         }
       } else if (localName === 'sequenceFlow') {
@@ -1014,12 +1016,13 @@ const parseBpmnXmlAndGetPreviousFormIds = (xml: string): Array<{ formId: string 
     }
     const taskIds = new Set(tasks.keys())
     let currentId = ''
+    const normNodeName = currentNodeName.trim().replace(/\s+/g, ' ')
     for (const [id, info] of tasks) {
-      if (info.name === currentNodeName || id === currentNodeName) { currentId = id; break }
+      const normInfoName = info.name.trim().replace(/\s+/g, ' ')
+      if (normInfoName === normNodeName || id === currentNodeName) { currentId = id; break }
     }
     // If no match (process completed, currentNode = "End"), find the last userTask (no outgoing edges to other userTasks)
     if (!currentId) {
-      const taskIds = new Set(tasks.keys())
       // Find node with no outgoing edges to other userTasks (the last userTask in the process)
       for (const [id] of tasks) {
         const outTargets = flows.filter(f => f.source === id).map(f => f.target)
@@ -1167,8 +1170,9 @@ const parseBpmnXml = (xml: string) => {
     const hasApproval = historyRecords.value.some(h => h.status === 'completed' && (h.nodeName.includes('Approval') || h.nodeName.includes('Approval')))
     const hasRejection = historyRecords.value.some(h => h.status === 'rejected')
     
-    // Get current node name
+    // Get current node name (normalized for robust matching)
     const currentNodeName = processInfo.value.currentNode || ''
+    const normNodeName = currentNodeName.trim().replace(/\s+/g, ' ')
     let foundCurrentNode = false
 
     // Detect subProcess elements and determine which have been entered
@@ -1203,7 +1207,7 @@ const parseBpmnXml = (xml: string) => {
         enteredSubProcesses.add(spId)
         continue
       }
-      if (spName && historyRecords.value.some(h => h.nodeName === spName)) {
+      if (spName && normNodeName && spName.trim().replace(/\s+/g, ' ') === normNodeName) {
         enteredSubProcesses.add(spId)
         continue
       }
@@ -1341,9 +1345,9 @@ const parseBpmnXml = (xml: string) => {
       const id = task.getAttribute('id') || `task_${index}`
       const name = task.getAttribute('name') || t('task.taskFallbackName', { index: index + 1 })
       const pos = positionMap.get(id)
-      
+
       let status: 'completed' | 'current' | 'pending' | 'rejected' = 'pending'
-      
+
       // Prefer status from history records
       const historyStatus = nodeStatusMap.get(name)
       if (snapshotActive) {
@@ -1379,8 +1383,11 @@ const parseBpmnXml = (xml: string) => {
           completed.push(id)
         }
       } else if (processInfo.value.status === 'RUNNING') {
-        // Process running: determine status based on current node name
-        if (name === currentNodeName || id === currentNodeName) {
+        // Process running: determine status based on current node name.
+        // Normalize whitespace for robust comparison, then fall back to matching by taskDefinitionKey.
+        const normName = currentNodeName.trim().replace(/\s+/g, ' ')
+        const normBpmnName = name.trim().replace(/\s+/g, ' ')
+        if (normBpmnName === normName || id === currentNodeName) {
           status = 'current'
           currentNodeId.value = id
           foundCurrentNode = true

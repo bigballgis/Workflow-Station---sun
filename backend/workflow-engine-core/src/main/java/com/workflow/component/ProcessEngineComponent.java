@@ -1667,16 +1667,40 @@ public class ProcessEngineComponent {
             throw new WorkflowValidationException(Collections.singletonList(
                 new WorkflowValidationException.ValidationError("processInstanceId", "Process instance ID must not be empty", request.getProcessInstanceId())));
         }
-        
+
         if (!StringUtils.hasText(request.getAction())) {
             throw new WorkflowValidationException(Collections.singletonList(
                 new WorkflowValidationException.ValidationError("action", "Operation type must not be empty", request.getAction())));
         }
-        
+
         String action = request.getAction().toLowerCase();
         if (!List.of("suspend", "activate", "terminate").contains(action)) {
             throw new WorkflowValidationException(Collections.singletonList(
                 new WorkflowValidationException.ValidationError("action", "Unsupported operation type", request.getAction())));
+        }
+    }
+
+    /**
+     * 获取最新版本的 BPMN XML 内容
+     * @param processDefinitionKey 流程定义 key
+     * @return BPMN XML 字符串，未找到时返回 null
+     */
+    public String getBpmnXml(String processDefinitionKey) {
+        try {
+            ProcessDefinition pd = repositoryService.createProcessDefinitionQuery()
+                    .processDefinitionKey(processDefinitionKey)
+                    .latestVersion()
+                    .singleResult();
+            if (pd == null) {
+                log.warn("Process definition not found: {}", processDefinitionKey);
+                return null;
+            }
+            try (var in = repositoryService.getResourceAsStream(pd.getDeploymentId(), pd.getResourceName())) {
+                return new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            }
+        } catch (Exception e) {
+            log.error("Failed to get BPMN XML for processDefinitionKey={}: {}", processDefinitionKey, e.getMessage());
+            return null;
         }
     }
 }

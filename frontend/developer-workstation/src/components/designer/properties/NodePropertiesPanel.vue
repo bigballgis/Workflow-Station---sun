@@ -29,6 +29,14 @@
         :function-unit-id="functionUnitId"
       />
       
+      <!-- Sub-process properties (multi-instance config lives here) -->
+      <SubProcessProperties
+        v-else-if="isSubProcessElement"
+        :modeler="modeler"
+        :element="selectedElement"
+        :function-unit-id="functionUnitId"
+      />
+
       <!-- Other task properties (generic task, script task, etc.) -->
       <TaskProperties
         v-else-if="isTaskElement"
@@ -99,6 +107,7 @@ import ProcessProperties from './ProcessProperties.vue'
 import TaskProperties from './TaskProperties.vue'
 import UserTaskProperties from './UserTaskProperties.vue'
 import ServiceTaskProperties from './ServiceTaskProperties.vue'
+import SubProcessProperties from './SubProcessProperties.vue'
 import GatewayProperties from './GatewayProperties.vue'
 import SequenceFlowProperties from './SequenceFlowProperties.vue'
 import EventProperties from './EventProperties.vue'
@@ -133,10 +142,20 @@ const isServiceTaskElement = computed(() =>
   selectedElement.value && isServiceTask(selectedElement.value)
 )
 
+const isSubProcessElement = computed(() => {
+  if (!selectedElement.value) return false
+  const type = getElementType(selectedElement.value)
+  return type === 'bpmn:SubProcess' || type === 'bpmn:AdHocSubProcess' || type === 'bpmn:Transaction'
+})
+
 const isTaskElement = computed(() => {
   if (!selectedElement.value) return false
-  // Exclude UserTask and ServiceTask, they have dedicated components
-  if (isUserTask(selectedElement.value) || isServiceTask(selectedElement.value)) {
+  // Exclude UserTask, ServiceTask and SubProcess — they have dedicated components
+  if (
+    isUserTask(selectedElement.value) ||
+    isServiceTask(selectedElement.value) ||
+    isSubProcessElement.value
+  ) {
     return false
   }
   const type = getElementType(selectedElement.value)
@@ -189,7 +208,11 @@ const panelTitle = computed(() => {
   if (isTaskElement.value) {
     return t('properties.taskConfig')
   }
-  
+
+  if (isSubProcessElement.value) {
+    return t('properties.subProcessConfig')
+  }
+
   const typeMap: Record<string, string> = {
     'bpmn:Process': t('properties.processProperties'),
     'bpmn:ExclusiveGateway': t('properties.gatewayTypeExclusive'),
@@ -203,7 +226,7 @@ const panelTitle = computed(() => {
     'bpmn:IntermediateCatchEvent': t('properties.eventTypeIntermediateCatchEvent'),
     'bpmn:IntermediateThrowEvent': t('properties.eventTypeIntermediateThrowEvent'),
     'bpmn:BoundaryEvent': t('properties.eventTypeBoundaryEvent'),
-    'bpmn:SubProcess': t('properties.elementProperties'),
+    'bpmn:SubProcess': t('properties.subProcessConfig'),
     'bpmn:CallActivity': t('properties.elementProperties')
   }
   

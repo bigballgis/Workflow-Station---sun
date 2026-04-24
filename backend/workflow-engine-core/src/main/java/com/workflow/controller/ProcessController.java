@@ -238,6 +238,24 @@ public class ProcessController {
     }
     
     /**
+     * 根据流程定义 key 获取 BPMN XML
+     */
+    @GetMapping("/definitions/{processDefinitionKey}/bpmn")
+    @Operation(summary = "获取 BPMN XML", description = "根据流程定义 key 获取 BPMN XML 内容")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getBpmnXml(
+            @Parameter(description = "流程定义 key")
+            @PathVariable String processDefinitionKey) {
+        String bpmnXml = processEngineComponent.getBpmnXml(processDefinitionKey);
+        if (bpmnXml == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error("NOT_FOUND", "Process definition not found: " + processDefinitionKey));
+        }
+        return ResponseEntity.ok(ApiResponse.success(Map.of(
+                "processDefinitionKey", processDefinitionKey,
+                "bpmnXml", bpmnXml)));
+    }
+
+    /**
      * 获取流程实例状态
      * 用于检查流程是否已完成以及获取最后一个活动节点
      */
@@ -265,8 +283,8 @@ public class ProcessController {
     @ExceptionHandler(WorkflowBusinessException.class)
     public ResponseEntity<ApiResponse<?>> handleBusinessException(
             WorkflowBusinessException ex, WebRequest request) {
-        log.error("Workflow business error [{}]: {}", ex.getErrorCode(), ex.getMessage(), ex.getCause());
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
+        log.warn("Workflow business error [{}]: {}", ex.getErrorCode(), ex.getMessage());
+        return ResponseEntity.badRequest().body(
                 ApiResponse.error(ex.getErrorCode(), ex.getMessage()));
     }
 }

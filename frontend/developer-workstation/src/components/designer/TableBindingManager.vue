@@ -65,24 +65,34 @@
       @close="resetForm"
     >
       <el-form :model="bindingForm" :rules="formRules" ref="formRef" label-width="120px" label-position="left">
+        <!-- Must-add-primary-first hint -->
+        <el-alert
+          v-if="needsPrimaryFirst && !editingBinding"
+          type="warning"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 12px;"
+        >
+          <template #title>{{ t('tableBinding.primaryFirstHint') }}</template>
+        </el-alert>
+
         <el-form-item :label="t('tableBinding.bindingType')" prop="bindingType">
           <el-select v-model="bindingForm.bindingType" style="width: 100%" :disabled="!!editingBinding && editingBinding.bindingType === 'PRIMARY'" @change="handleBindingTypeChange">
             <el-option :label="t('tableBinding.primaryTable')" value="PRIMARY" :disabled="hasPrimaryBinding && bindingForm.bindingType !== 'PRIMARY'" />
-            <el-option :label="t('tableBinding.subTable')" value="SUB" />
-            <el-option
-              v-if="showRelatedBindingOption"
-              :label="t('tableBinding.relatedTable')"
-              value="RELATED"
-            />
+            <el-option :label="t('tableBinding.subTable')" value="SUB" :disabled="needsPrimaryFirst" />
+            <el-option :label="t('tableBinding.relatedTable')" value="RELATED" />
           </el-select>
+          <div v-if="bindingForm.bindingType === 'RELATED' && !editingBinding" class="form-item-tip">
+            {{ t('tableBinding.relatedForLookupHint') }}
+          </div>
         </el-form-item>
 
         <el-form-item :label="t('tableBinding.selectTable')" prop="tableId">
           <el-select 
             v-model="bindingForm.tableId" 
-            :placeholder="t('tableBinding.selectTablePlaceholder')" 
+            :placeholder="selectTablePlaceholder" 
             style="width: 100%"
-            :disabled="!!editingBinding"
+            :disabled="!!editingBinding || !bindingForm.bindingType"
             @change="handleTableSelect"
           >
             <el-option 
@@ -92,6 +102,11 @@
               :value="table.id"
               :disabled="isTableBound(table.id)"
             />
+            <template #empty>
+              <div style="padding: 8px 12px; color: #909399; font-size: 12px;">
+                {{ emptyTableListHint }}
+              </div>
+            </template>
           </el-select>
         </el-form-item>
         
@@ -152,15 +167,11 @@ const props = defineProps<{
   tables: TableDefinition[]
 }>()
 
+/** PROCESS / TASK 表单走「一主多子 + RELATED 用于 Lookup」的模式；
+ *  非 PROCESS / TASK 表单不强制这套主/子+外键规则。 */
 const restrictPrimarySubOnly = computed(
   () => props.formType === 'PROCESS' || props.formType === 'TASK'
 )
-
-/** 流程/任务表单不展示「关联表」绑定；若历史数据存在 RELATED，编辑时仍显示以便改为 SUB */
-const showRelatedBindingOption = computed(() => {
-  if (!restrictPrimarySubOnly.value) return true
-  return editingBinding.value?.bindingType === 'RELATED'
-})
 
 const emit = defineEmits<{
   (e: 'update'): void
@@ -174,12 +185,18 @@ const editingBinding = ref<TableBinding | null>(null)
 const formRef = ref<FormInstance>()
 const deployedRelationTables = ref<RelationTableDTO[]>([])
 
-const bindingForm = ref<TableBindingRequest>({
-  tableId: 0,
-  bindingType: 'SUB',
-  bindingMode: 'READONLY',
-  foreignKeyField: undefined
-})
+function makeEmptyBindingForm(): TableBindingRequest {
+  // 默认类型：若尚无 PRIMARY 就让用户先建 PRIMARY，否则默认 SUB
+  const defaultType: BindingType = bindings.value.some(b => b.bindingType === 'PRIMARY') ? 'SUB' : 'PRIMARY'
+  return {
+    tableId: 0,
+    bindingType: defaultType,
+    bindingMode: defaultType === 'PRIMARY' ? 'EDITABLE' : 'READONLY',
+    foreignKeyField: undefined
+  }
+}
+
+const bindingForm = ref<TableBindingRequest>(makeEmptyBindingForm())
 
 const formRules = computed<FormRules>(() => {
   const base: FormRules = {
@@ -200,32 +217,54 @@ const hasPrimaryBinding = computed(() => {
   return bindings.value.some(b => b.bindingType === 'PRIMARY')
 })
 
+/** 对 PROCESS / TASK 表单：SUB 必须在有 PRIMARY 之后才能添加（后端 SUB_REQUIRES_PRIMARY）。
+ *  RELATED 不受此限制（它是 Lookup 参考数据，与主从关系无关）。 */
+const needsPrimaryFirst = computed(
+  () => restrictPrimarySubOnly.value && !hasPrimaryBinding.value
+)
+
 // Available tables
 const availableTables = computed(() => {
   return props.tables
 })
 
-// Filtered tables based on binding type
+// Filtered tables based on binding type — 严格按类型过滤，避免用户在 SUB 里看到 MAIN 再报错
 const filteredAvailableTables = computed(() => {
   const bt = bindingForm.value.bindingType
-  if (bt === 'PRIMARY' || bt === 'SUB' || (restrictPrimarySubOnly.value && bt === 'RELATED')) {
-    // 流程/任务：仅主表/子表；历史 RELATED 编辑时仍只列 MAIN/SUB 供改正
-    // Show only function unit's main table and sub tables
+  if (bt === 'PRIMARY') {
     return props.tables
-      .filter(t => t.tableType === 'MAIN' || t.tableType === 'SUB')
+      .filter(t => t.tableType === 'MAIN')
       .map(t => ({ id: t.id, displayLabel: `${t.tableName} (${tableTypeLabel(t.tableType)})`, fieldDefinitions: t.fieldDefinitions }))
-  } else {
-    // RELATED: show function unit's relation tables + admin center deployed relation tables
-    const localRelation = props.tables
-      .filter(t => t.tableType === 'RELATION')
-      .map(t => ({ id: t.id, displayLabel: `${t.tableName} (${tableTypeLabel(t.tableType)})`, fieldDefinitions: t.fieldDefinitions }))
-    const remote = deployedRelationTables.value.map(t => ({
-      id: -t.id, // negative ID to distinguish from local tables
-      displayLabel: `${t.displayName || t.tableName} (Deployed Relation Table)`,
-      fieldDefinitions: t.fieldDefinitions || []
-    }))
-    return [...localRelation, ...remote]
   }
+  if (bt === 'SUB') {
+    return props.tables
+      .filter(t => t.tableType === 'SUB')
+      .map(t => ({ id: t.id, displayLabel: `${t.tableName} (${tableTypeLabel(t.tableType)})`, fieldDefinitions: t.fieldDefinitions }))
+  }
+  // RELATED：列出本功能单元的 RELATION 表 + 管理中心已部署的关联表
+  const localRelation = props.tables
+    .filter(t => t.tableType === 'RELATION')
+    .map(t => ({ id: t.id, displayLabel: `${t.tableName} (${tableTypeLabel(t.tableType)})`, fieldDefinitions: t.fieldDefinitions }))
+  const deployedLabel = t('tableBinding.deployedRelationTable')
+  const remote = deployedRelationTables.value.map(r => ({
+    id: -r.id, // negative ID to distinguish from local tables
+    displayLabel: `${r.displayName || r.tableName} (${deployedLabel})`,
+    fieldDefinitions: r.fieldDefinitions || []
+  }))
+  return [...localRelation, ...remote]
+})
+
+const selectTablePlaceholder = computed(() => {
+  if (needsPrimaryFirst.value) return t('tableBinding.primaryFirstHint')
+  return t('tableBinding.selectTablePlaceholder')
+})
+
+const emptyTableListHint = computed(() => {
+  const bt = bindingForm.value.bindingType
+  if (bt === 'PRIMARY') return t('tableBinding.noMainTableAvailable')
+  if (bt === 'SUB') return t('tableBinding.noSubTableAvailable')
+  if (bt === 'RELATED') return t('tableBinding.noRelationTableAvailable')
+  return t('tableBinding.selectBindingTypeFirst')
 })
 
 // Fields of the selected table
@@ -300,7 +339,6 @@ function handleBindingTypeChange() {
   bindingForm.value.foreignKeyField = undefined
   if (
     bindingForm.value.bindingType === 'RELATED'
-    && !restrictPrimarySubOnly.value
     && deployedRelationTables.value.length === 0
   ) {
     loadDeployedRelationTables()
@@ -318,23 +356,14 @@ async function loadDeployedRelationTables() {
   }
 }
 
-// Handle table selection change
-function handleTableSelect(tableId: number) {
-  const table = props.tables.find(t => t.id === tableId)
-  if (table) {
-    if (table.tableType === 'MAIN' && !hasPrimaryBinding.value) {
-      bindingForm.value.bindingType = 'PRIMARY'
-      bindingForm.value.bindingMode = 'EDITABLE'
-    } else if (table.tableType === 'SUB') {
-      bindingForm.value.bindingType = 'SUB'
-      bindingForm.value.bindingMode = 'READONLY'
-    } else if (!restrictPrimarySubOnly.value) {
-      bindingForm.value.bindingType = 'RELATED'
-      bindingForm.value.bindingMode = 'READONLY'
-    } else {
-      bindingForm.value.bindingType = 'SUB'
-      bindingForm.value.bindingMode = 'READONLY'
-    }
+// Handle table selection change — 仅调整 bindingMode 默认值，bindingType 由用户主动选择，
+// 这样 filteredAvailableTables 已经保证了 tableType 与 bindingType 一致，不会再出现后端报错
+function handleTableSelect(_tableId: number) {
+  const bt = bindingForm.value.bindingType
+  if (bt === 'PRIMARY') {
+    bindingForm.value.bindingMode = 'EDITABLE'
+  } else {
+    bindingForm.value.bindingMode = 'READONLY'
   }
 }
 
@@ -370,12 +399,35 @@ async function handleDelete(binding: TableBinding) {
   }
 }
 
+/** 把后端业务错误码映射成对用户友好的提示 */
+function mapBackendError(err: any): string {
+  const body = err?.response?.data
+  const code = body?.code || body?.errorCode
+  const message = body?.message
+  const codeMap: Record<string, string> = {
+    SUB_REQUIRES_PRIMARY: t('tableBinding.primaryFirstHint'),
+    PRIMARY_BINDING_EXISTS: t('tableBinding.primaryBindingExists'),
+    BINDING_EXISTS: t('tableBinding.bindingExists'),
+    PRIMARY_REQUIRES_MAIN_TABLE: t('tableBinding.primaryRequiresMainTable'),
+    SUB_BINDING_REQUIRES_SUB_TABLE: t('tableBinding.subBindingRequiresSubTable'),
+    SUB_REQUIRES_FOREIGN_KEY: t('tableBinding.foreignKeyRequired'),
+    INVALID_FOREIGN_KEY: t('tableBinding.invalidForeignKey'),
+    RELATED_BINDING_REQUIRES_RELATION_TABLE: t('tableBinding.relatedBindingRequiresRelationTable')
+  }
+  if (code && codeMap[code]) return codeMap[code]
+  return message || t('tableBinding.operationFailed')
+}
+
 // Submit form
 async function handleSubmit() {
   if (!formRef.value) return
-  
-  await formRef.value.validate()
-  
+
+  try {
+    await formRef.value.validate()
+  } catch {
+    return
+  }
+
   submitting.value = true
   try {
     // For deployed relation tables (negative ID), convert to relationTableId
@@ -401,7 +453,8 @@ async function handleSubmit() {
     loadBindings()
     emit('update')
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.message || t('tableBinding.operationFailed'))
+    console.error('[TableBindingManager] submit failed:', e?.response?.data || e)
+    ElMessage({ type: 'error', message: mapBackendError(e), duration: 5000 })
   } finally {
     submitting.value = false
   }
@@ -410,14 +463,21 @@ async function handleSubmit() {
 // Reset form
 function resetForm() {
   editingBinding.value = null
-  bindingForm.value = {
-    tableId: 0,
-    bindingType: 'SUB',
-    bindingMode: 'READONLY',
-    foreignKeyField: undefined
-  }
+  bindingForm.value = makeEmptyBindingForm()
   formRef.value?.resetFields()
 }
+
+// 打开 Add 对话框前根据当前 bindings 刷新默认值，并预加载已部署的关联表（RELATED 选项可能被切换到）
+watch(showAddDialog, (open) => {
+  if (open) {
+    if (!editingBinding.value) {
+      bindingForm.value = makeEmptyBindingForm()
+    }
+    if (deployedRelationTables.value.length === 0) {
+      loadDeployedRelationTables()
+    }
+  }
+})
 
 // Reload when formId changes
 watch(() => props.formId, () => {

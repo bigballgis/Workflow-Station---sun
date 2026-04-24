@@ -1100,11 +1100,9 @@ public class TaskProcessComponent {
             variables.putAll(request.getFormData());
         }
 
-        // 如果是"分配参与人"任务，从子表数据构建多实例集合变量
-        if ("Task_AssignParticipants".equals(task.getTaskDefinitionKey())) {
-            buildParticipantsCollection(variables);
-        }
-        
+        // 检测当前任务是否是多实例子流程的前置任务；若是，从 BPMN 读取 collection 变量名和 assignee 字段并构建集合变量
+        injectMiCollectionFromBpmn(task.getProcessDefinitionKey(), task.getTaskDefinitionKey(), task.getProcessInstanceId(), variables);
+
         log.info("Variables before calling workflowEngineClient: {}", variables);
         
         Optional<Map<String, Object>> result = workflowEngineClient.completeTask(taskId, userId, action, variables);
@@ -1434,67 +1432,289 @@ public class TaskProcessComponent {
     }
 
     /**
-     * 从 __subTables__ 中解析 participants 行列表：优先表名 {@code participants}，否则取第一个「像子表行」的 List（含 id/rowId/assignee 等）。
+     * 检测当前完成的任务是否是多实例子流程的前置任务；若是，从 BPMN 动态读取 collection 变量名和 assignee 字段，
+     * 从 __subTables__ 构建集合变量并注入到 variables 中。
+     * <p>
+     * 替代原有的硬编码 {@code Task_AssignParticipants} 判断，自动适配所有 BPMN 多实例配置。
      */
     @SuppressWarnings("unchecked")
-    private List<Object> resolveParticipantsRows(Map<String, Object> subTables) {
-        Object named = subTables.get("participants");
-        if (named instanceof List && !((List<?>) named).isEmpty()) {
-            return (List<Object>) named;
-        }
-        for (Object v : subTables.values()) {
-            if (!(v instanceof List<?> list) || list.isEmpty()) {
-                continue;
+    private void injectMiCollectionFromBpmn(String processDefinitionKey, String taskDefinitionKey,
+                                            String processInstanceId, Map<String, Object> variables) {
+        try {
+            Optional<String> bpmnOpt = workflowEngineClient.getBpmnXml(processDefinitionKey);
+            if (bpmnOpt.isEmpty()) {
+                log.warn("[MI] Could not fetch BPMN XML for processDefinitionKey={}", processDefinitionKey);
+                return;
             }
-            Object first = list.get(0);
-            if (first instanceof Map<?, ?> m) {
-                if (m.containsKey("assignee_user_id") || m.containsKey("assigneeId")
-                        || m.containsKey("id") || m.containsKey("rowId")) {
-                    return (List<Object>) v;
-                }
+            String bpmnXml = bpmnOpt.get();
+
+            // 1. 找到当前任务节点
+            int taskStart = findElementStart(bpmnXml, "userTask", "id", taskDefinitionKey);
+            if (taskStart < 0) {
+                log.debug("[MI] UserTask not found in BPMN: {}", taskDefinitionKey);
+                return;
             }
+            int taskEnd = findElementEnd(bpmnXml, taskStart);
+            String taskElement = bpmnXml.substring(taskStart, taskEnd);
+
+            // 2. 找到当前任务的下一节点（outgoing flow target）
+            String targetRef = extractAttribute(taskElement, "outgoing", "targetRef");
+            if (targetRef == null) {
+                // 尝试多行格式
+                targetRef = extractAttributeMultiline(taskElement, "outgoing", "targetRef");
+            }
+            if (targetRef == null) {
+                log.debug("[MI] No outgoing flow found for task {}", taskDefinitionKey);
+                return;
+            }
+
+            // 3. 检查目标节点是否为多实例 SubProcess
+            int spStart = findElementStart(bpmnXml, "subProcess", "id", targetRef);
+            if (spStart < 0) {
+                // 可能是 Call Activity 或其他类型，不是 MI SubProcess
+                log.debug("[MI] Target {} is not a subProcess", targetRef);
+                return;
+            }
+            int spEnd = findElementEnd(bpmnXml, spStart);
+            String spElement = bpmnXml.substring(spStart, spEnd);
+
+            if (!spElement.contains("multiInstanceLoopCharacteristics")) {
+                log.debug("[MI] Target subProcess {} is not multi-instance", targetRef);
+                return;
+            }
+
+            // 4. 从 SubProcess 扩展中提取 collection 变量名
+            String collectionVariableName = extractFlowableCollection(spElement);
+            if (collectionVariableName == null || collectionVariableName.isBlank()) {
+                log.warn("[MI] SubProcess {} has no flowable:collection configuration", targetRef);
+                return;
+            }
+
+            // 5. 从 SubProcess 内部的 UserTask 提取 assigneeField
+            String assigneeField = extractAssigneeFieldFromSubProcess(spElement);
+            if (assigneeField == null || assigneeField.isBlank()) {
+                log.warn("[MI] No assigneeField found in subProcess {} inner UserTask", targetRef);
+                return;
+            }
+
+            // 6. 从 __subTables__ 构建集合变量
+            buildMiCollectionVariable(variables, collectionVariableName, assigneeField);
+        } catch (Exception e) {
+            log.warn("[MI] injectMiCollectionFromBpmn failed for processDefinitionKey={}, taskDefinitionKey={}: {}",
+                    processDefinitionKey, taskDefinitionKey, e.getMessage());
         }
-        return List.of();
     }
 
     /**
-     * 从 __subTables__.participants 构建多实例集合变量
-     * 每个元素包含 rowId 和 assignee_user_id，供多实例子流程使用
+     * 从 __subTables__ 构建多实例集合变量。
+     * collectionVariableName 格式：multiInstance_{subTableName}_collection
+     * 每个元素：{ rowId, [assigneeField]: assigneeValue }
      */
     @SuppressWarnings("unchecked")
-    private void buildParticipantsCollection(Map<String, Object> variables) {
-        try {
-            Object subTablesObj = variables.get("__subTables__");
-            if (!(subTablesObj instanceof Map)) {
-                log.warn("[MultiInstance] No __subTables__ found, setting empty participants collection");
-                variables.put("multiInstance_participants_collection", List.of());
-                return;
-            }
-            Map<String, Object> subTables = (Map<String, Object>) subTablesObj;
-            // 设计器/脚本可能用表名 participants；门户前端常以 bindingId 为 key，需兼容两种结构
-            List<Object> rows = resolveParticipantsRows(subTables);
-            if (rows.isEmpty()) {
-                log.warn("[MultiInstance] No participants sub-table rows found, setting empty collection");
-                variables.put("multiInstance_participants_collection", List.of());
-                return;
-            }
-            List<Map<String, Object>> collection = new java.util.ArrayList<>();
-            for (Object rowObj : rows) {
-                if (!(rowObj instanceof Map)) continue;
-                Map<String, Object> row = (Map<String, Object>) rowObj;
-                Map<String, Object> item = new HashMap<>();
-                // rowId is used by the sub-process to identify which row to update
-                Object rowId = row.get("rowId");
-                if (rowId == null) rowId = row.get("id");
-                item.put("rowId", rowId);
-                item.put("assignee_user_id", row.get("assignee_user_id"));
-                collection.add(item);
-            }
-            variables.put("multiInstance_participants_collection", collection);
-            log.info("[MultiInstance] Built participants collection with {} items", collection.size());
-        } catch (Exception e) {
-            log.warn("[MultiInstance] Failed to build participants collection: {}", e.getMessage());
-            variables.put("multiInstance_participants_collection", List.of());
+    private void buildMiCollectionVariable(Map<String, Object> variables, String collectionVariableName,
+                                          String assigneeField) {
+        Object subTablesObj = variables.get("__subTables__");
+        if (!(subTablesObj instanceof Map)) {
+            log.warn("[MI] No __subTables__ found, setting empty collection for {}", collectionVariableName);
+            variables.put(collectionVariableName, List.of());
+            return;
         }
+        Map<String, Object> subTables = (Map<String, Object>) subTablesObj;
+
+        // 收集所有子表行（前端以 bindingId 为 key 或以表名为 key）
+        List<Map<String, Object>> allRows = new java.util.ArrayList<>();
+        for (Object v : subTables.values()) {
+            if (v instanceof List<?> list) {
+                for (Object rowObj : list) {
+                    if (rowObj instanceof Map) {
+                        allRows.add((Map<String, Object>) rowObj);
+                    }
+                }
+            }
+        }
+
+        if (allRows.isEmpty()) {
+            log.warn("[MI] No sub-table rows found, setting empty collection for {}", collectionVariableName);
+            variables.put(collectionVariableName, List.of());
+            return;
+        }
+
+        List<Map<String, Object>> collection = new java.util.ArrayList<>();
+        List<Integer> emptyAssigneeRows = new java.util.ArrayList<>();
+        for (int i = 0; i < allRows.size(); i++) {
+            Map<String, Object> row = allRows.get(i);
+            Object rowId = row.get("rowId");
+            if (rowId == null) rowId = row.get("id");
+            Object assigneeValue = row.get(assigneeField);
+
+            Map<String, Object> item = new HashMap<>();
+            item.put("rowId", rowId != null ? rowId : null);
+            // assigneeField 字段的值存入集合元素，供 Flowable 多实例 assigneeExpression 使用
+            item.put(assigneeField, assigneeValue != null ? String.valueOf(assigneeValue).trim() : null);
+
+            if (assigneeValue == null || String.valueOf(assigneeValue).trim().isEmpty()) {
+                emptyAssigneeRows.add(i + 1);
+            }
+
+            collection.add(item);
+        }
+
+        if (!emptyAssigneeRows.isEmpty()) {
+            String rowNumbers = String.join(", ",
+                    emptyAssigneeRows.stream().map(String::valueOf).toArray(String[]::new));
+            log.warn("[MI] Rows {} have empty assigneeField '{}' for collection {}", rowNumbers, assigneeField, collectionVariableName);
+        }
+
+        variables.put(collectionVariableName, collection);
+        log.info("[MI] Built collection '{}' with {} items, assigneeField='{}'",
+                collectionVariableName, collection.size(), assigneeField);
+    }
+
+    // ==================== BPMN XML 解析辅助方法 ====================
+
+    private int findElementStart(String xml, String elementName, String attrName, String attrValue) {
+        String openTag = "<" + elementName + " ";
+        int pos = 0;
+        while (true) {
+            int idx = xml.indexOf(openTag, pos);
+            if (idx < 0) return -1;
+            int tagEnd = xml.indexOf('>', idx);
+            if (tagEnd < 0) return -1;
+            String tag = xml.substring(idx, tagEnd + 1);
+            if (extractAttributeFromTag(tag, attrName, attrValue) != null) {
+                return idx;
+            }
+            pos = idx + 1;
+        }
+    }
+
+    private int findElementEnd(String xml, int start) {
+        int depth = 1;
+        int pos = start + 1;
+        while (depth > 0 && pos < xml.length()) {
+            int nextOpen = xml.indexOf('<', pos);
+            int nextClose = xml.indexOf("</", pos);
+            if (nextClose >= 0 && (nextOpen < 0 || nextClose <= nextOpen)) {
+                if (nextClose == start) break;
+                depth--;
+                pos = nextClose + 2;
+            } else if (nextOpen >= 0) {
+                String nsTag = xml.substring(nextOpen, Math.min(nextOpen + elementName(xml, nextOpen).length() + 2, xml.length()));
+                depth++;
+                pos = nextOpen + 1;
+            } else {
+                break;
+            }
+        }
+        int closeTag = xml.indexOf('>', pos);
+        return closeTag > 0 ? closeTag + 1 : pos;
+    }
+
+    private String elementName(String xml, int openTagPos) {
+        int end = openTagPos + 1;
+        while (end < xml.length() && !Character.isWhitespace(xml.charAt(end)) && xml.charAt(end) != '>') {
+            end++;
+        }
+        return xml.substring(openTagPos + 1, end);
+    }
+
+    private String extractAttributeFromTag(String tag, String attrName, String expectedValue) {
+        int pos = 0;
+        while (pos < tag.length()) {
+            while (pos < tag.length() && Character.isWhitespace(tag.charAt(pos))) pos++;
+            if (pos >= tag.length()) break;
+            int eq = tag.indexOf('=', pos);
+            if (eq < 0) break;
+            String name = tag.substring(pos, eq).trim();
+            pos = eq + 1;
+            while (pos < tag.length() && Character.isWhitespace(tag.charAt(pos))) pos++;
+            if (pos >= tag.length()) break;
+            char quote = tag.charAt(pos);
+            if (quote == '"' || quote == '\'') {
+                pos++;
+                int end = tag.indexOf(quote, pos);
+                if (end < 0) break;
+                String value = tag.substring(pos, end);
+                pos = end + 1;
+                if (name.equals(attrName) && value.equals(expectedValue)) {
+                    return value;
+                }
+            } else {
+                break;
+            }
+        }
+        return null;
+    }
+
+    private String extractAttribute(String element, String childElement, String attrName) {
+        int childStart = element.indexOf("<" + childElement + " ");
+        if (childStart < 0) return null;
+        int tagEnd = element.indexOf('>', childStart);
+        if (tagEnd < 0) return null;
+        String tag = element.substring(childStart, tagEnd);
+        return extractAttributeFromTag(tag, attrName, null);
+    }
+
+    private String extractAttributeMultiline(String element, String childElement, String attrName) {
+        int childStart = element.indexOf("<" + childElement);
+        if (childStart < 0) return null;
+        int closeTag = element.indexOf("</" + childElement + ">", childStart);
+        if (closeTag < 0) return null;
+        String inner = element.substring(childStart, closeTag);
+        return extractAttributeFromTag(inner, attrName, null);
+    }
+
+    private String extractFlowableCollection(String subProcessElement) {
+        // 查找 <multiInstanceLoopCharacteristics> 内的 <flowable:collection>xxx</flowable:collection>
+        int miStart = subProcessElement.indexOf("multiInstanceLoopCharacteristics");
+        if (miStart < 0) return null;
+        int innerEnd = subProcessElement.indexOf("</multiInstanceLoopCharacteristics>", miStart);
+        if (innerEnd < 0) return null;
+        String miInner = subProcessElement.substring(miStart, innerEnd);
+
+        // 查找 flowable:collection 或 bpmn:collection
+        for (String nsPrefix : List.of("flowable:", "bpmn:")) {
+            String colTag = nsPrefix + "collection>";
+            int colStart = miInner.indexOf("<" + colTag);
+            if (colStart >= 0) {
+                int textStart = miInner.indexOf('>', colStart) + 1;
+                int textEnd = miInner.indexOf('<', textStart);
+                if (textEnd > textStart) {
+                    return miInner.substring(textStart, textEnd).trim();
+                }
+            }
+        }
+        return null;
+    }
+
+    private String extractAssigneeFieldFromSubProcess(String subProcessElement) {
+        // 在 SubProcess 内部查找 userTask 的 custom:property name="assigneeField"
+        int utStart = subProcessElement.indexOf("<userTask ");
+        if (utStart < 0) return null;
+        int utEnd = subProcessElement.indexOf("</userTask>", utStart);
+        if (utEnd < 0) return null;
+        String userTaskElement = subProcessElement.substring(utStart, utEnd);
+
+        int propsStart = userTaskElement.indexOf("custom:properties");
+        if (propsStart < 0) return null;
+        int propsEnd = userTaskElement.indexOf("</custom:properties>", propsStart);
+        if (propsEnd < 0) return null;
+        String propsElement = userTaskElement.substring(propsStart, propsEnd);
+
+        int propStart = 0;
+        while (true) {
+            int pStart = propsElement.indexOf("<custom:property ", propStart);
+            if (pStart < 0 || pStart > propsEnd) break;
+            int tagEnd = propsElement.indexOf('>', pStart);
+            if (tagEnd < 0) break;
+            String propTag = propsElement.substring(pStart, tagEnd);
+            String name = extractAttributeFromTag(propTag, "name", null);
+            if ("assigneeField".equals(name)) {
+                String value = extractAttributeFromTag(propTag, "value", null);
+                if (value != null) return value;
+            }
+            propStart = pStart + 1;
+        }
+        return null;
     }
 }

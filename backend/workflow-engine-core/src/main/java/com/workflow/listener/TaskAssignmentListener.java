@@ -206,7 +206,8 @@ public class TaskAssignmentListener implements FlowableEventListener {
             }
 
             if (assigneeTypeRaw == null || assigneeTypeRaw.isEmpty()) {
-                log.debug("No assigneeType defined for task {}", taskId);
+                log.warn("TaskAssignmentListener: task {} has no assigneeType in BPMN extensions, process variables, or delegateAssigneeVariable — task will remain unassigned (no assignee, no candidates). processInstanceId={}, taskDefKey={}, processDefId={}",
+                        taskId, processInstanceId, taskDefinitionKey, processDefinitionId);
                 return;
             }
 
@@ -274,6 +275,13 @@ public class TaskAssignmentListener implements FlowableEventListener {
                 businessUnitId = assigneeValue;
             }
 
+            if (resolvedType == AssigneeType.BU_ROLE && (businessUnitId == null || businessUnitId.isEmpty())) {
+                log.warn("TaskAssignmentListener: BU_ROLE task {} has no businessUnitId — task will be created without assignee/candidates. roleId={}, activeBusinessUnitId from process vars={}",
+                        taskId, roleId, getStringVariable(
+                                cachedVariables != null ? cachedVariables
+                                        : runtimeService.getVariables(processInstanceId), "activeBusinessUnitId"));
+            }
+
             AssigneeAnchor anchor = computeAnchor(assigneeTypeRaw.trim(), resolvedType, assigneeAnchorExt);
             String anchorUserId = null;
             if (resolvedType.requiresAnchorUserId()) {
@@ -287,6 +295,11 @@ public class TaskAssignmentListener implements FlowableEventListener {
 
             TaskAssigneeResolver.ResolveResult result = taskAssigneeResolver.resolve(
                     assigneeTypeRaw.trim(), roleId, businessUnitId, initiatorId, anchorUserId, activeBusinessUnitId);
+
+            log.info("TaskAssignmentListener: resolve result for task {}: assignee={}, candidateUsers={}, error={}",
+                    taskId, result != null ? result.getAssignee() : "null",
+                    result != null ? result.getCandidateUsers() : "null",
+                    result != null ? result.getErrorMessage() : "null");
 
             applyResolveResult(taskId, task, processInstanceId, result, assigneeTypeRaw);
         } catch (Exception e) {

@@ -140,10 +140,57 @@
 
           <template v-if="assigneeType === 'ELEMENT_VARIABLE'">
             <el-form-item :label="t('properties.subTableIdField')">
-              <el-input v-model="elementSubTableId" @change="updateExtProp('subTableId', elementSubTableId)" />
+              <el-select
+                v-model="elementSubTableId"
+                :placeholder="t('properties.selectSubTable')"
+                :loading="loadingSubTables"
+                clearable
+                filterable
+                style="width: 100%"
+                @change="handleSubTableChange"
+              >
+                <el-option
+                  v-for="table in subTables"
+                  :key="table.id"
+                  :label="`${table.tableDisplayName || table.tableName} (${table.tableName})`"
+                  :value="table.id"
+                />
+              </el-select>
             </el-form-item>
             <el-form-item :label="t('properties.subTableNameField')">
-              <el-input v-model="elementSubTableName" @change="updateExtProp('subTableName', elementSubTableName)" />
+              <el-input v-model="elementSubTableName" disabled />
+              <div class="form-tip">{{ t('properties.subTableNameAutoFilledTip') }}</div>
+            </el-form-item>
+            <el-alert type="info" :closable="false" show-icon style="margin-bottom: 8px;">
+              <template #title>{{ t('properties.elementVariableRuntimeHint') }}</template>
+            </el-alert>
+            <el-form-item :label="t('properties.assigneeFieldLabel')" required>
+              <el-select
+                v-model="assigneeField"
+                :placeholder="assigneeFieldPlaceholder"
+                :loading="loadingSubTables"
+                :disabled="!elementSubTableId"
+                clearable
+                filterable
+                style="width: 100%"
+                @change="handleAssigneeFieldChange"
+              >
+                <el-option
+                  v-for="field in assigneeFieldOptions"
+                  :key="field.fieldName"
+                  :label="`${field.description || field.fieldName} (${field.fieldName})`"
+                  :value="field.fieldName"
+                />
+              </el-select>
+              <div class="form-tip">{{ t('properties.assigneeFieldTip') }}</div>
+            </el-form-item>
+            <el-form-item :label="t('properties.rowIdVariableLabel')">
+              <el-input
+                v-model="rowIdVariable"
+                @change="updateExtProp('rowIdVariable', rowIdVariable)"
+                placeholder="currentItem.rowId"
+              />
+              <div class="form-tip">{{ t('properties.rowIdVariableTip') }}</div>
             </el-form-item>
           </template>
           
@@ -222,9 +269,16 @@
       </el-collapse-item>
       
       <!-- Multi-instance config -->
-      <el-collapse-item :title="t('properties.multiInstanceConfig')" name="multiInstance">
+      <el-collapse-item
+        v-if="!parentIsMultiInstanceSubProcess"
+        :title="t('properties.multiInstanceConfig')"
+        name="multiInstance"
+      >
         <el-form label-position="top" size="small">
-          <el-form-item :label="t('properties.enableMultiInstance')">
+          <el-alert type="info" :closable="false" show-icon>
+            <template #title>{{ t('properties.userTaskMultiInstanceHint') }}</template>
+          </el-alert>
+          <el-form-item :label="t('properties.enableMultiInstance')" style="margin-top: 8px;">
             <el-switch v-model="multiInstance" @change="updateExtProp('multiInstance', multiInstance)" />
           </el-form-item>
           
@@ -258,7 +312,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import type { BpmnElement, BpmnModeler } from '@/types/bpmn'
-import type { FormDefinition, ActionDefinition } from '@/api/functionUnit'
+import type { FormDefinition, ActionDefinition, TableDefinition } from '@/api/functionUnit'
 import { functionUnitApi } from '@/api/functionUnit'
 import { adminCenterApi, type BusinessUnitInfo, type RoleInfo } from '@/api/adminCenter'
 import {
@@ -313,8 +367,12 @@ const manualAssignVariable = ref('')
 const manualAssignBuVariable = ref('')
 const manualAssignRoleVariable = ref('')
 const assigneeVariableName = ref('')
-const elementSubTableId = ref('')
+const elementSubTableId = ref<number | ''>('')
 const elementSubTableName = ref('')
+const assigneeField = ref('')
+const rowIdVariable = ref('')
+const subTables = ref<TableDefinition[]>([])
+const loadingSubTables = ref(false)
 
 /** 顺序流变化时递增，驱动「单入线」校验刷新 */
 const topologyTick = ref(0)
@@ -466,8 +524,14 @@ function loadProperties() {
   manualAssignBuVariable.value = ext.manualAssignBuVariable || ''
   manualAssignRoleVariable.value = ext.manualAssignRoleVariable || ''
   assigneeVariableName.value = ext.assigneeVariable || ''
-  elementSubTableId.value = ext.subTableId || ''
+  const rawSubTableId = ext.subTableId
+  elementSubTableId.value =
+    typeof rawSubTableId === 'number'
+      ? rawSubTableId
+      : (rawSubTableId ? Number(rawSubTableId) || '' : '')
   elementSubTableName.value = ext.subTableName || ''
+  assigneeField.value = ext.assigneeField || ''
+  rowIdVariable.value = ext.rowIdVariable || ''
   formId.value = ext.formId || null
   actionIds.value = ext.actionIds || []
   timeoutEnabled.value = ext.timeoutEnabled || false
@@ -507,6 +571,63 @@ function handleFormChange(id: number | null) {
     updateExtProp('formName', form.formName)
   }
 }
+
+function handleSubTableChange(id: number | '') {
+  if (id === '' || id === null || id === undefined) {
+    elementSubTableName.value = ''
+    assigneeField.value = ''
+    rowIdVariable.value = ''
+    updateExtProp('subTableId', '')
+    updateExtProp('subTableName', '')
+    updateExtProp('assigneeField', '')
+    updateExtProp('rowIdVariable', '')
+    return
+  }
+  updateExtProp('subTableId', id)
+  const table = subTables.value.find(tb => tb.id === id)
+  if (table) {
+    elementSubTableName.value = table.tableName
+    updateExtProp('subTableName', table.tableName)
+
+    // If current assigneeField not in this table's fields, reset it and try to auto-pick a plausible one
+    const fieldNames = (table.fieldDefinitions || []).map(fd => fd.fieldName)
+    if (!assigneeField.value || !fieldNames.includes(assigneeField.value)) {
+      const preferred = (table.fieldDefinitions || []).find(fd =>
+        /^(assignee|assignee_user_id|user_id|handler|owner_user_id|approver)$/i.test(fd.fieldName)
+      )
+      assigneeField.value = preferred?.fieldName || ''
+      updateExtProp('assigneeField', assigneeField.value)
+    }
+
+    // Default rowIdVariable convention uses the element variable (currentItem) of the parent SubProcess
+    if (!rowIdVariable.value) {
+      rowIdVariable.value = 'currentItem.rowId'
+      updateExtProp('rowIdVariable', rowIdVariable.value)
+    }
+  }
+}
+
+function handleAssigneeFieldChange(value: string) {
+  updateExtProp('assigneeField', value || '')
+}
+
+const assigneeFieldOptions = computed(() => {
+  const table = subTables.value.find(tb => tb.id === elementSubTableId.value)
+  return table?.fieldDefinitions || []
+})
+
+const assigneeFieldPlaceholder = computed(() => {
+  if (!elementSubTableId.value) return t('properties.selectSubTableFirst')
+  return t('properties.selectAssigneeField')
+})
+
+const parentIsMultiInstanceSubProcess = computed(() => {
+  const parent = (props.element as any)?.parent
+  const parentBo = parent?.businessObject
+  if (!parentBo) return false
+  if (parentBo.$type !== 'bpmn:SubProcess') return false
+  return !!parentBo.loopCharacteristics
+})
 
 function onAssigneeAnchorChange(v: 'INITIATOR' | 'LAST_TASK_ASSIGNEE') {
   if (v === 'LAST_TASK_ASSIGNEE') {
@@ -736,6 +857,19 @@ async function loadActions() {
   }
 }
 
+async function loadSubTables() {
+  loadingSubTables.value = true
+  try {
+    const res = await functionUnitApi.getTables(props.functionUnitId)
+    const all = res.data || []
+    subTables.value = all.filter(tb => (tb.tableType || '').toUpperCase() === 'SUB')
+  } catch {
+    subTables.value = []
+  } finally {
+    loadingSubTables.value = false
+  }
+}
+
 watch(() => props.element, loadProperties, { immediate: true })
 
 function bumpTopologyTick() {
@@ -747,6 +881,7 @@ onMounted(() => {
   loadProperties()
   loadForms()
   loadActions()
+  loadSubTables()
 })
 
 onUnmounted(() => {

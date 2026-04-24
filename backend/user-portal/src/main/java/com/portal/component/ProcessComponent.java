@@ -204,25 +204,26 @@ public class ProcessComponent {
 
         log.info("Using Flowable engine to start process: {}", processKey);
         
+        // 直接从 BPMN XML 提取 process id——这是 Flowable 部署时使用的实际 key，
+        // 比依赖 deployResponse 更可靠（deployResponse 的 processDefinitionKey 提取有时序问题）。
+        String bpmnProcessId = extractProcessIdFromBpmn(bpmnXml);
+        if (bpmnProcessId == null || bpmnProcessId.isEmpty()) {
+            throw new IllegalStateException("无法从 BPMN XML 中提取 process id，请检查 BPMN 格式是否正确: " + processKey);
+        }
+
         // 先部署流程定义（如果尚未部署）
-        String actualProcessKey = processKey; // 默认使用传入的 key
+        String actualProcessKey = bpmnProcessId;
         Optional<Map<String, Object>> deployResult = workflowEngineClient.deployProcess(processKey, bpmnXml, processName);
         if (deployResult.isPresent()) {
             Map<String, Object> deployed = deployResult.get();
             log.info("Process definition deployed: {}", deployed);
-            // WorkflowEngineClient 已 unwrap ApiResponse.data，此处为部署结果顶层 Map（含 processDefinitionKey）
-            Object pdk = deployed.get("processDefinitionKey");
-            if (pdk != null && !pdk.toString().isEmpty()) {
-                actualProcessKey = pdk.toString();
-                log.info("Using actual process definition key from deployment: {}", actualProcessKey);
+            Object deployedKey = deployed.get("processDefinitionKey");
+            if (deployedKey != null && !deployedKey.toString().isEmpty()) {
+                actualProcessKey = deployedKey.toString();
+                log.info("Using actual process definition key from deployment response: {}", actualProcessKey);
             }
         } else {
-            // 部署失败或引擎返回空，尝试从 BPMN XML 中提取 process id 作为 key
-            String bpmnProcessId = extractProcessIdFromBpmn(bpmnXml);
-            if (bpmnProcessId != null && !bpmnProcessId.isEmpty()) {
-                actualProcessKey = bpmnProcessId;
-                log.info("Deploy returned empty, using BPMN process id as key: {}", actualProcessKey);
-            }
+            log.info("Deploy returned empty, using BPMN process id as key: {}", actualProcessKey);
         }
 
         // 启动流程实例：剥离客户端伪造的工作台键；有 UBR 的用户必须携带有效 JWT 工作台上下文（与 hasContext 一致）
@@ -267,15 +268,9 @@ public class ProcessComponent {
             }
         }
 
-        Optional<Map<String, Object>> startResult = workflowEngineClient.startProcess(
+        Map<String, Object> data = workflowEngineClient.startProcess(
                 actualProcessKey, request.getBusinessKey(), userId, variables);
 
-        if (startResult.isEmpty()) {
-            throw new IllegalStateException("启动流程失败: " + processKey);
-        }
-        
-        // startResult 已为 unwrap 后的 ProcessInstanceResult 字段 Map，无嵌套 data
-        Map<String, Object> data = startResult.get();
         if (data == null || data.get("processInstanceId") == null) {
             throw new IllegalStateException("启动流程返回数据为空: " + processKey);
         }
@@ -1171,10 +1166,12 @@ public class ProcessComponent {
         
         ProcessInstance instance = optInstance.get();
         ProcessInstanceInfo info = toProcessInstanceInfo(instance);
-        
-        // 如果流程正在运行且没有当前节点信息，从 Flowable 实时获取
-        if ("RUNNING".equals(instance.getStatus()) && 
-            (info.getCurrentNode() == null || info.getCurrentAssignee() == null)) {
+
+        // If the process is still running but the local DB has no currentNode stored,
+        // try to fetch the live state from Flowable — this self-heals processes where
+        // the auto-complete path set currentNode=null (e.g. no next task after initiator task).
+        if ("RUNNING".equals(instance.getStatus()) &&
+            (info.getCurrentNode() == null || info.getCurrentNode().isEmpty())) {
             try {
                 if (workflowEngineClient.isAvailable()) {
                     Optional<Map<String, Object>> tasksResult = workflowEngineClient.getProcessInstanceTasks(processId);
@@ -1190,36 +1187,32 @@ public class ProcessComponent {
                                 if (currentAssigneeId == null) {
                                     currentAssigneeId = (String) currentTask.get("assignmentTarget");
                                 }
-                                
-                                // 获取当前处理人名称
                                 String currentAssigneeName = (String) currentTask.get("currentAssigneeName");
                                 if (currentAssigneeName == null || currentAssigneeName.isEmpty()) {
-                                    // 如果没有名称，尝试解析用户ID为名称
                                     if (currentAssigneeId != null && !currentAssigneeId.isEmpty()) {
                                         currentAssigneeName = resolveUserDisplayName(currentAssigneeId);
                                     }
                                 }
-                                
-                                // 更新返回的信息
-                                info.setCurrentNode(currentNodeName);
-                                info.setCurrentAssignee(currentAssigneeName != null ? currentAssigneeName : currentAssigneeId);
-                                
-                                // 同时更新本地数据库（保存用户名称而不是ID）
-                                instance.setCurrentNode(currentNodeName);
-                                instance.setCurrentAssignee(currentAssigneeName != null ? currentAssigneeName : currentAssigneeId);
-                                processInstanceRepository.save(instance);
-                                
-                                log.info("Updated process instance {} with currentNode={}, currentAssignee={}", 
-                                        processId, currentNodeName, currentAssigneeName);
+
+                                if (currentNodeName != null && !currentNodeName.isEmpty()) {
+                                    info.setCurrentNode(currentNodeName);
+                                    info.setCurrentAssignee(currentAssigneeName != null ? currentAssigneeName : currentAssigneeId);
+                                    instance.setCurrentNode(currentNodeName);
+                                    instance.setCurrentAssignee(currentAssigneeName != null ? currentAssigneeName : currentAssigneeId);
+                                    processInstanceRepository.save(instance);
+                                    log.info("getProcessDetail: refreshed currentNode={}, currentAssignee={} from Flowable for process {}",
+                                            currentNodeName, currentAssigneeName, processId);
+                                }
+                            } else {
+                                log.debug("getProcessDetail: no active tasks in Flowable for process {}, keeping null currentNode", processId);
                             }
                         }
                     }
                 }
             } catch (Exception e) {
-                log.warn("Failed to get current task info from Flowable for process {}: {}", processId, e.getMessage());
+                log.warn("getProcessDetail: failed to refresh currentNode from Flowable for process {}: {}", processId, e.getMessage());
             }
         }
-
         enrichSubTablesWithAssignmentData(info);
         
         return info;
@@ -1626,36 +1619,85 @@ public class ProcessComponent {
     }
     
     /**
-     * 获取功能单元完整内容（不检查权限，用于内部调用）
+     * 获取功能单元完整内容（不检查权限，用于内部调用）。
+     * Primary source: admin-center (function unit catalog with BPMN, forms, etc.).
+     * If admin-center returns no BPMN, falls back to workflow-engine (deployed BPMN by functionUnitCode).
      */
     public Map<String, Object> getFunctionUnitContent(String functionUnitIdOrCode) {
         log.info("Getting function unit content for: {}", functionUnitIdOrCode);
-        
+
         try {
-            // 先解析功能单元 ID（支持 code 或名称）
-            String functionUnitId = functionUnitAccessComponent.resolveFunctionUnitId(functionUnitIdOrCode);
-            log.info("Resolved function unit ID: {}", functionUnitId);
-            
+            // 先解析功能单元 ID（支持 code 或 ID）
+            String functionUnitId = functionUnitIdOrCode;
+            try {
+                functionUnitId = functionUnitAccessComponent.resolveFunctionUnitId(functionUnitIdOrCode);
+                log.info("Resolved function unit ID: {}", functionUnitId);
+            } catch (Exception e) {
+                log.warn("Could not resolve functionUnitId for {}, using as-is: {}", functionUnitIdOrCode, e.getMessage());
+            }
+
             String url = adminCenterUrl + "/api/v1/admin/function-units/" + functionUnitId + "/content";
             log.info("Fetching function unit content from: {}", url);
-            
+
             @SuppressWarnings("unchecked")
             Map<String, Object> response = restTemplate.getForObject(url, Map.class);
-            
+
             Map<String, Object> payload = ApiResponseBodyUnwrap.unwrapDataMap(response);
             if (!payload.isEmpty()) {
-                log.info("Got function unit content: name={}", payload.get("name"));
+                log.info("Got function unit content from admin-center: name={}", payload.get("name"));
                 return payload;
             }
-            
-            return Collections.emptyMap();
-            
+
+            log.warn("Admin-center returned empty content for functionUnitId={}; attempting fallback to workflow-engine BPMN", functionUnitId);
+
+            // Fallback: fetch BPMN from workflow-engine by functionUnitCode, wrap in same shape
+            return loadBpmnFallbackFromEngine(functionUnitIdOrCode);
+
         } catch (Exception e) {
             log.error("Failed to get function unit content for {}: {}", functionUnitIdOrCode, e.getMessage(), e);
+            // Attempt fallback before giving up
+            try {
+                Map<String, Object> fallback = loadBpmnFallbackFromEngine(functionUnitIdOrCode);
+                if (fallback != null && !fallback.isEmpty()) {
+                    log.info("Function unit content loaded via workflow-engine fallback for {}", functionUnitIdOrCode);
+                    return fallback;
+                }
+            } catch (Exception ignored) { /* fall through to error result */ }
             Map<String, Object> errorResult = new HashMap<>();
             errorResult.put("error", e.getMessage());
             return errorResult;
         }
+    }
+
+    /**
+     * Fallback: load BPMN from workflow-engine using functionUnitCode (or functionUnitId if it's a code).
+     * Returns a payload compatible with getFunctionUnitContent shape: { name, processes: [{ data: bpmnXml }] }
+     */
+    private Map<String, Object> loadBpmnFallbackFromEngine(String functionUnitIdOrCode) {
+        if (!workflowEngineClient.isAvailable()) {
+            log.warn("Workflow engine not available for BPMN fallback");
+            return Collections.emptyMap();
+        }
+        try {
+            Optional<String> bpmnOpt = workflowEngineClient.getBpmnXml(functionUnitIdOrCode);
+            if (bpmnOpt.isPresent() && bpmnOpt.get() != null && !bpmnOpt.get().isBlank()) {
+                log.info("BPMN loaded from workflow-engine for key: {}", functionUnitIdOrCode);
+                Map<String, Object> result = new HashMap<>();
+                result.put("name", functionUnitIdOrCode);
+                result.put("code", functionUnitIdOrCode);
+                List<Map<String, Object>> processes = new ArrayList<>();
+                Map<String, Object> processEntry = new HashMap<>();
+                processEntry.put("data", bpmnOpt.get());
+                processes.add(processEntry);
+                result.put("processes", processes);
+                return result;
+            } else {
+                log.warn("Workflow engine returned no BPMN for key: {}", functionUnitIdOrCode);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to load BPMN from workflow-engine for {}: {}", functionUnitIdOrCode, e.getMessage());
+        }
+        return Collections.emptyMap();
     }
     
     /**

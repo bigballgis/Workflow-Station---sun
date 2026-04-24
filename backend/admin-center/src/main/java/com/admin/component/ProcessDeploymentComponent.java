@@ -118,13 +118,19 @@ public class ProcessDeploymentComponent {
      * 从 BPMN XML 中提取流程 Key
      */
     private String extractProcessKey(String bpmnXml, String defaultKey) {
+        String extracted = extractProcessKey(bpmnXml);
+        return extracted != null ? extracted : defaultKey;
+    }
+
+    /**
+     * 从 BPMN XML 中提取 <process id="..."> 属性值
+     */
+    private String extractProcessKey(String bpmnXml) {
         try {
-            // 简单的 XML 解析，提取 process id
             int processStart = bpmnXml.indexOf("<bpmn:process");
             if (processStart == -1) {
                 processStart = bpmnXml.indexOf("<process");
             }
-            
             if (processStart != -1) {
                 int idStart = bpmnXml.indexOf("id=\"", processStart);
                 if (idStart != -1) {
@@ -136,10 +142,9 @@ public class ProcessDeploymentComponent {
                 }
             }
         } catch (Exception e) {
-            log.warn("Failed to extract process key from BPMN XML, using default: {}", defaultKey);
+            log.debug("Failed to extract process key from BPMN XML: {}", e.getMessage());
         }
-        
-        return defaultKey;
+        return null;
     }
 
     /**

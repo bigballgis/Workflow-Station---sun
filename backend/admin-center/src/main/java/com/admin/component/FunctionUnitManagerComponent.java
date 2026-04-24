@@ -675,12 +675,16 @@ public class FunctionUnitManagerComponent {
 
             if (content.getContentType() == ContentType.PROCESS && data != null) {
                 data = decodeBase64IfNeeded(data);
+                String processKey = extractProcessKey(data);
                 processes.add(ProcessContentDTO.builder()
                         .id(content.getId())
                         .name(content.getContentName())
                         .sourceId(content.getSourceId())
                         .data(data)
                         .type(ContentType.PROCESS.name())
+                        .flowableProcessDefinitionKey(content.getFlowableProcessDefinitionId() != null
+                                ? content.getFlowableProcessDefinitionId()
+                                : processKey)
                         .build());
             } else if (content.getContentType() == ContentType.FORM) {
                 data = fetchLatestConfigJsonOrFallback(content, data);
@@ -1688,5 +1692,30 @@ public class FunctionUnitManagerComponent {
         }
         
         return history;
+    }
+
+    /**
+     * 从 BPMN XML 中提取 <process id="..."> 属性值
+     */
+    private String extractProcessKey(String bpmnXml) {
+        try {
+            int processStart = bpmnXml.indexOf("<bpmn:process");
+            if (processStart == -1) {
+                processStart = bpmnXml.indexOf("<process");
+            }
+            if (processStart != -1) {
+                int idStart = bpmnXml.indexOf("id=\"", processStart);
+                if (idStart != -1) {
+                    idStart += 4;
+                    int idEnd = bpmnXml.indexOf("\"", idStart);
+                    if (idEnd != -1) {
+                        return bpmnXml.substring(idStart, idEnd);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.debug("Failed to extract process key from BPMN XML: {}", e.getMessage());
+        }
+        return null;
     }
 }

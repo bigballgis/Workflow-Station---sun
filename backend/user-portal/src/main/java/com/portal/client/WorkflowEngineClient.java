@@ -92,6 +92,21 @@ public class WorkflowEngineClient {
         }
     }
 
+    /** 从 Engine 返回的 JSON 响应体里提取业务 message 字段 */
+    private String extractMessage(String body) {
+        if (body == null || body.isBlank()) return "未知错误";
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode node = mapper.readTree(body);
+            // 支持 { "message": "..." } 或 { "data": { "message": "..." } } 或 { "error": "..." }
+            JsonNode msg = node.path("message");
+            if (msg.isMissingNode()) msg = node.path("data").path("message");
+            if (msg.isMissingNode()) msg = node.path("error");
+            if (!msg.isMissingNode() && !msg.isNull()) return msg.asText();
+        } catch (Exception ignored) { }
+        return body.length() > 200 ? body.substring(0, 200) + "..." : body;
+    }
+
     private HttpEntity<Void> authorizedGetEntity() {
         HttpHeaders headers = new HttpHeaders();
         forwardInboundAuthorization(headers);
@@ -127,6 +142,8 @@ public class WorkflowEngineClient {
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                 return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()));
             }
+        } catch (HttpClientErrorException | HttpServerErrorException e) {
+            log.warn("Failed to deploy process to workflow engine (HTTP {}): {}", e.getStatusCode(), e.getResponseBodyAsString());
         } catch (Exception e) {
             log.warn("Failed to deploy process to workflow engine: {}", e.getMessage());
         }
@@ -134,43 +151,51 @@ public class WorkflowEngineClient {
     }
 
     /**
-     * 启动流程实例
+     * 启动流程实例。
+     * 失败时抛出 IllegalStateException（含 Engine 返回的具体业务错误信息），调用方无需判断空值。
      */
-    public Optional<Map<String, Object>> startProcess(String processDefinitionKey, String businessKey, 
+    public Map<String, Object> startProcess(String processDefinitionKey, String businessKey,
                                                        String startUserId, Map<String, Object> variables) {
         if (!isAvailable()) {
-            return Optional.empty();
+            throw new IllegalStateException("Workflow engine unavailable, cannot start process: " + processDefinitionKey);
         }
         try {
             String url = workflowEngineUrl + "/api/v1/processes/instances";
-            
+
             Map<String, Object> request = new HashMap<>();
             request.put("processDefinitionKey", processDefinitionKey);
             request.put("businessKey", businessKey);
             request.put("startUserId", startUserId);
             request.put("variables", variables);
-            
+
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
             forwardInboundAuthorization(headers);
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
-            
+
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                 url, HttpMethod.POST, entity,
                 new ParameterizedTypeReference<Map<String, Object>>() {});
-            
+
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                Map<String, Object> unwrapped = ApiResponseBodyUnwrap.unwrapDataMap(response.getBody());
-                return Optional.of(unwrapped);
+                return ApiResponseBodyUnwrap.unwrapDataMap(response.getBody());
             }
-        } catch (org.springframework.web.client.HttpClientErrorException e) {
-            log.error("Failed to start process in workflow engine (HTTP {}): {}", e.getStatusCode(), e.getResponseBodyAsString());
-        } catch (org.springframework.web.client.HttpServerErrorException e) {
-            log.error("Failed to start process in workflow engine (HTTP {}): {}", e.getStatusCode(), e.getResponseBodyAsString());
+        } catch (HttpClientErrorException e) {
+            String body = e.getResponseBodyAsString();
+            String msg = extractMessage(body);
+            log.error("Failed to start process in workflow engine (HTTP {}): {}", e.getStatusCode(), body);
+            throw new IllegalStateException("启动流程失败[" + e.getStatusCode() + "]: " + msg);
+        } catch (HttpServerErrorException e) {
+            String body = e.getResponseBodyAsString();
+            String msg = extractMessage(body);
+            log.error("Failed to start process in workflow engine (HTTP {}): {}", e.getStatusCode(), body);
+            throw new IllegalStateException("启动流程失败[" + e.getStatusCode() + "]: " + msg);
         } catch (Exception e) {
             log.error("Failed to start process in workflow engine: {}", e.getMessage(), e);
+            throw new IllegalStateException("启动流程失败: " + e.getMessage());
         }
-        return Optional.empty();
+        // unreachable
+        throw new IllegalStateException("Unexpected empty response from workflow engine");
     }
 
     /**
@@ -1079,6 +1104,41 @@ public class WorkflowEngineClient {
             }
         } catch (Exception e) {
             log.warn("Failed to execute N8N action via workflow engine: {}", e.getMessage());
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * 根据流程定义 key 获取 BPMN XML
+     * @param processDefinitionKey 流程定义 key
+     * @return BPMN XML 字符串，失败时返回 Optional.empty()
+     */
+    public Optional<String> getBpmnXml(String processDefinitionKey) {
+        if (!isAvailable()) {
+            return Optional.empty();
+        }
+        try {
+            String url = workflowEngineUrl + "/api/v1/processes/definitions/" + processDefinitionKey + "/bpmn";
+            HttpHeaders headers = new HttpHeaders();
+            forwardInboundAuthorization(headers);
+            HttpEntity<Void> entity = new HttpEntity<>(headers);
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    url, HttpMethod.GET, entity,
+                    new ParameterizedTypeReference<Map<String, Object>>() {});
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                Map<String, Object> body = response.getBody();
+                Object data = body.get("data");
+                if (data instanceof Map) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> dataMap = (Map<String, Object>) data;
+                    Object bpmnXml = dataMap.get("bpmnXml");
+                    if (bpmnXml instanceof String) {
+                        return Optional.of((String) bpmnXml);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to get BPMN XML for processDefinitionKey={}: {}", processDefinitionKey, e.getMessage());
         }
         return Optional.empty();
     }

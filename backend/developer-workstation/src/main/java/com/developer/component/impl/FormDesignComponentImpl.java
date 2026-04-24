@@ -351,19 +351,18 @@ public class FormDesignComponentImpl implements FormDesignComponent {
     }
 
     /**
-     * PROCESS / TASK 表单：仅允许主表 + 子表的一对多绑定；禁止 RELATED / 已发布关联表绑定；
-     * 主表绑定须对应 MAIN 物理表；子表绑定须对应 SUB 物理表、且须先存在主表绑定并填写外键字段。
+     * PROCESS / TASK 表单绑定规则：
+     *   - PRIMARY：必须对应 MAIN 物理表（承载表单主数据）；
+     *   - SUB：必须对应 SUB 物理表，必须先存在 PRIMARY 绑定并填写指向主表的外键；
+     *   - RELATED：用于 Lookup 组件引用参考数据，可绑定本功能单元的 RELATION 表或管理中心部署的关联表，
+     *     不要求 PRIMARY 存在，也不要求外键。
+     * 非 PROCESS / TASK 表单不受这些额外约束。
      */
     private void enforcePrimarySubBindingRules(FormDefinition form, FormTableBindingRequest request,
             TableDefinition table, boolean isDeployedRelationTableBinding) {
         FormType ft = form.getFormType();
         if (ft != FormType.PROCESS && ft != FormType.TASK) {
             return;
-        }
-        if (request.getBindingType() == BindingType.RELATED || isDeployedRelationTableBinding) {
-            throw new DeveloperBusinessException("RELATED_BINDING_NOT_ALLOWED",
-                    i18nService.getMessage("form.related_binding_not_allowed"),
-                    i18nService.getMessage("form.use_primary_sub_only"));
         }
         if (request.getBindingType() == BindingType.PRIMARY) {
             if (table != null && table.getTableType() != TableType.MAIN) {
@@ -388,6 +387,14 @@ public class FormDesignComponentImpl implements FormDesignComponent {
                         i18nService.getMessage("form.sub_binding_requires_foreign_key"),
                         i18nService.getMessage("form.specify_fk_to_main"));
             }
+        }
+        // RELATED 绑定在 PROCESS / TASK 下也允许，用于 Lookup 组件引用；无需 PRIMARY、也无需外键。
+        // 但本地表 RELATED 绑定必须对应 RELATION 物理表，避免把 MAIN / SUB 误绑成关联表。
+        if (request.getBindingType() == BindingType.RELATED && !isDeployedRelationTableBinding
+                && table != null && table.getTableType() != TableType.RELATION) {
+            throw new DeveloperBusinessException("RELATED_BINDING_REQUIRES_RELATION_TABLE",
+                    i18nService.getMessage("form.related_binding_requires_relation_table"),
+                    i18nService.getMessage("form.choose_relation_physics_table"));
         }
     }
     

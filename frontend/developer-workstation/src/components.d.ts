@@ -110,6 +110,7 @@ declare module 'vue' {
     RowFormulaEditor: typeof import('./components/designer/RowFormulaEditor.vue')['default']
     SequenceFlowProperties: typeof import('./components/designer/properties/SequenceFlowProperties.vue')['default']
     ServiceTaskProperties: typeof import('./components/designer/properties/ServiceTaskProperties.vue')['default']
+    SubProcessProperties: typeof import('./components/designer/properties/SubProcessProperties.vue')['default']
     SubTableAddDialog: typeof import('./components/designer/SubTableAddDialog.vue')['default']
     SubTableBindingSelect: typeof import('./components/designer/SubTableBindingSelect.vue')['default']
     SubTableField: typeof import('./components/designer/SubTableField.vue')['default']

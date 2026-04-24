@@ -16,13 +16,16 @@ public final class ApiResponseBodyUnwrap {
 
     /**
      * 若 {@code body} 为 ApiResponse 且 {@code data} 是对象，返回 {@code data}；否则返回 {@code body} 本身（兼容未包装的 DTO）。
+     * 兼容两种 ApiResponse 格式：{@code success: true}（platform-common）和 {@code code: "SUCCESS"}（workflow-engine）。
      */
     @SuppressWarnings("unchecked")
     public static Map<String, Object> unwrapDataMap(Map<String, Object> body) {
         if (body == null || body.isEmpty()) {
             return Collections.emptyMap();
         }
-        if (Boolean.TRUE.equals(body.get("success")) && body.get("data") instanceof Map<?, ?>) {
+        boolean isSuccess = Boolean.TRUE.equals(body.get("success"))
+                || "SUCCESS".equals(body.get("code"));
+        if (isSuccess && body.get("data") instanceof Map<?, ?>) {
             return (Map<String, Object>) body.get("data");
         }
         return body;
@@ -36,7 +39,9 @@ public final class ApiResponseBodyUnwrap {
         if (map == null || map.isEmpty()) {
             return Collections.emptyList();
         }
-        if (Boolean.TRUE.equals(map.get("success"))) {
+        boolean isSuccess = Boolean.TRUE.equals(map.get("success"))
+                || "SUCCESS".equals(map.get("code"));
+        if (isSuccess) {
             Object data = map.get("data");
             if (data instanceof List<?>) {
                 return (List<Map<String, Object>>) data;

@@ -58,8 +58,8 @@ public class WorkflowExceptionControllerAdvice {
     public ResponseEntity<ApiResponse<Void>> handleWorkflowBusiness(
             WorkflowBusinessException ex, WebRequest request) {
         String traceId = shortTraceId();
-        log.error("Workflow business [{}] {}: [{}] {}",
-                traceId, getPath(request), ex.getErrorCode(), ex.getMessage(), ex);
+        log.warn("Workflow business [{}] {}: [{}] {}",
+                traceId, getPath(request), ex.getErrorCode(), ex.getMessage());
 
         ErrorResponse error = ErrorResponse.builder()
                 .code(ex.getErrorCode())
@@ -70,7 +70,7 @@ public class WorkflowExceptionControllerAdvice {
                 .timestamp(Instant.now())
                 .build();
 
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(error));
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.error(error));
     }
 
     private static String shortTraceId() {
