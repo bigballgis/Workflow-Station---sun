@@ -1,0 +1,153 @@
+<template>
+  <el-dialog
+    :model-value="visible"
+    :title="title || (mode === 'edit' ? t('common.edit') : t('common.add'))"
+    width="700px"
+    :close-on-click-modal="false"
+    @update:model-value="handleClose"
+    @closed="handleClosed"
+  >
+    <!-- Sub-table form preview (form-create based on designed rule) -->
+    <div v-if="formRule && formRule.length" class="sub-table-form-preview">
+      <form-create
+        v-if="formCreateMounted"
+        v-model="formData"
+        :rule="formRule"
+        :option="formOption"
+      />
+      <div v-else class="form-loading">
+        <el-icon class="is-loading"><Loading /></el-icon>
+        <span>{{ t('common.loading') }}...</span>
+      </div>
+    </div>
+
+    <!-- Fallback: if no rule defined, show message -->
+    <el-empty v-else :description="t('subTable.noFormDesign')" :image-size="60" />
+
+    <template #footer>
+      <el-button @click="handleClose">{{ t('common.cancel') }}</el-button>
+    </template>
+  </el-dialog>
+</template>
+
+<script setup lang="ts">
+import { ref, watch, nextTick } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { Loading } from '@element-plus/icons-vue'
+
+export interface SubTableFormDialogProps {
+  visible: boolean
+  title?: string
+  mode: 'add' | 'edit'
+  initialData?: Record<string, any>
+  /** Form-create rule from the sub-table form designer */
+  rule?: any[]
+  /** Form-create option from the sub-table form designer */
+  option?: any
+}
+
+const props = withDefaults(defineProps<SubTableFormDialogProps>(), {
+  mode: 'add',
+  rule: () => [],
+  option: () => ({}),
+})
+
+const emit = defineEmits<{
+  (e: 'update:visible', val: boolean): void
+  (e: 'save', rowData: Record<string, any>): void
+}>()
+
+const { t } = useI18n()
+
+const formData = ref<Record<string, any>>({})
+const formCreateMounted = ref(false)
+
+// Default form-create option for sub-table forms
+const defaultFormOption = {
+  resetBtn: false,
+  submitBtn: false,
+  showMsg: true,
+  form: {
+    labelPosition: 'left',
+    labelWidth: '140px',
+  },
+  onSubmit: () => {}, // We handle save manually
+}
+
+const formOption = ref({ ...defaultFormOption, ...props.option })
+
+// Watch for dialog open/close and initialData changes
+watch(
+  () => [props.visible, props.initialData],
+  ([open, data]) => {
+    if (open) {
+      formCreateMounted.value = false
+      // Reset form data
+      if (props.mode === 'edit' && data) {
+        formData.value = { ...data }
+      } else {
+        formData.value = {}
+      }
+      // Update option if provided
+      formOption.value = { ...defaultFormOption, ...props.option }
+      // Mount form-create after dialog opens
+      nextTick(() => {
+        formCreateMounted.value = true
+      })
+    }
+  },
+  { immediate: true }
+)
+
+// Watch rule changes
+watch(
+  () => props.rule,
+  (rule) => {
+    // Rule is reactive, form-create should update automatically
+  }
+)
+
+function handleClose() {
+  emit('update:visible', false)
+}
+
+function handleClosed() {
+  formCreateMounted.value = false
+  formData.value = {}
+}
+
+function handleSave() {
+  // Get the form-create instance and validate
+  // Since we're using v-model and rule are reactive, we can directly validate
+  // For simplicity, just emit the current form data
+  emit('save', { ...formData.value })
+  emit('update:visible', false)
+}
+
+// Computed form rule (reactive to prop changes)
+const formRule = ref<any[]>([])
+watch(
+  () => props.rule,
+  (rule) => {
+    formRule.value = rule || []
+  },
+  { immediate: true, deep: true }
+)
+</script>
+
+<style scoped>
+.sub-table-form-preview {
+  min-height: 200px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.form-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 200px;
+  color: #909399;
+}
+</style>

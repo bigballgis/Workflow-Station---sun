@@ -170,7 +170,7 @@ export interface TableBinding {
 
 // Table binding request
 export interface TableBindingRequest {
-  tableId: number
+  tableId?: number
   relationTableId?: number
   bindingType: BindingType
   bindingMode?: BindingMode

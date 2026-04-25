@@ -295,15 +295,8 @@ public class ProcessComponent {
             }
         }
 
-        Optional<Map<String, Object>> startResult = workflowEngineClient.startProcess(
+        Map<String, Object> data = workflowEngineClient.startProcess(
                 actualProcessKey, request.getBusinessKey(), userId, variables);
-
-        if (startResult.isEmpty()) {
-            throw new IllegalStateException("Failed to start process: " + processKey);
-        }
-        
-        // startResult 已为 unwrap 后的 ProcessInstanceResult 字段 Map，无嵌套 data
-        Map<String, Object> data = startResult.get();
         if (data == null || data.get("processInstanceId") == null) {
             throw new IllegalStateException("Process start returned empty data: " + processKey);
         }

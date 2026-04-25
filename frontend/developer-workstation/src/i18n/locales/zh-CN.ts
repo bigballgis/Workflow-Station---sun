@@ -1082,8 +1082,18 @@ export default {
     relatedBindingRequiresRelationTable: '本地「关联表」绑定必须选择「关联表（RELATION）」类型的表，或从管理中心挑一张已部署的关联表。'
   },
   subTable: {
-    defaultTitle: '子表数据',
-    deleteConfirm: '确定要删除这条记录吗？'
+    defaultTitle: '数据',
+    deleteConfirm: '确定要删除这条记录吗？',
+    noFormDesign: '请先在表单设计器中设计子表表单'
+  },
+  subTableView: {
+    formDesign: '表单设计',
+    listView: '列表视图',
+    tableColumns: '表字段',
+    columns: '列',
+    noFieldsImported: '暂未导入字段',
+    displayLabel: '显示标签',
+    previewValue: '预览值'
   },
   preview: {
     itemName: '项目名称',

@@ -22,7 +22,8 @@
 
 <script setup lang="ts">
 import { computed, inject, onMounted, getCurrentInstance } from 'vue'
-import { Grid, ArrowRight } from '@element-plus/icons-vue'
+// Icons are globally registered in main.ts via ElementPlusIconsVue
+// No need for local imports, which can cause circular dependency issues in production build
 import { useI18n } from 'vue-i18n'
 
 interface DesignerSubBinding {

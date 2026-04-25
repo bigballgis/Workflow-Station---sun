@@ -1087,8 +1087,18 @@ export default {
     email: 'Email'
   },
   subTable: {
-    defaultTitle: 'Sub Table Data',
-    deleteConfirm: 'Are you sure to delete this record?'
+    defaultTitle: 'Data',
+    deleteConfirm: 'Are you sure to delete this record?',
+    noFormDesign: 'Please design the sub-table form in the Form Designer first'
+  },
+  subTableView: {
+    formDesign: 'Form Design',
+    listView: 'List View',
+    tableColumns: 'Table Columns',
+    columns: 'columns',
+    noFieldsImported: 'No fields imported yet',
+    displayLabel: 'Display Label',
+    previewValue: 'Preview Value'
   },
   preview: {
     itemName: 'Item Name',

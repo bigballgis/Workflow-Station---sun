@@ -1083,8 +1083,18 @@ export default {
     relatedBindingRequiresRelationTable: '本地「關聯表」綁定必須選擇「關聯表（RELATION）」類型的表，或從管理中心挑一張已部署的關聯表。'
   },
   subTable: {
-    defaultTitle: '子表資料',
-    deleteConfirm: '確定要刪除這條記錄嗎？'
+    defaultTitle: '資料',
+    deleteConfirm: '確定要刪除這條記錄嗎？',
+    noFormDesign: '請先在表單設計器中設計子表表單'
+  },
+  subTableView: {
+    formDesign: '表單設計',
+    listView: '列表視圖',
+    tableColumns: '表欄位',
+    columns: '列',
+    noFieldsImported: '暫未導入欄位',
+    displayLabel: '顯示標籤',
+    previewValue: '預覽值'
   },
   preview: {
     itemName: '項目名稱',

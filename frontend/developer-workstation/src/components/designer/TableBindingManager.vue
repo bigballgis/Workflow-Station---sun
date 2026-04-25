@@ -111,7 +111,7 @@
         </el-form-item>
         
         <el-form-item :label="t('tableBinding.bindingMode')" prop="bindingMode">
-          <el-radio-group v-model="bindingForm.bindingMode">
+          <el-radio-group v-model="bindingForm.bindingMode" :disabled="bindingForm.bindingType === 'RELATED'">
             <el-radio value="EDITABLE">{{ t('tableBinding.editable') }}</el-radio>
             <el-radio value="READONLY">{{ t('tableBinding.readOnly') }}</el-radio>
           </el-radio-group>
@@ -189,7 +189,7 @@ function makeEmptyBindingForm(): TableBindingRequest {
   // 默认类型：若尚无 PRIMARY 就让用户先建 PRIMARY，否则默认 SUB
   const defaultType: BindingType = bindings.value.some(b => b.bindingType === 'PRIMARY') ? 'SUB' : 'PRIMARY'
   return {
-    tableId: 0,
+    tableId: undefined as unknown as number,
     bindingType: defaultType,
     bindingMode: defaultType === 'PRIMARY' ? 'EDITABLE' : 'READONLY',
     foreignKeyField: undefined
@@ -335,8 +335,12 @@ async function loadBindings() {
 
 // Handle binding type change - reset table selection
 function handleBindingTypeChange() {
-  bindingForm.value.tableId = 0
+  bindingForm.value.tableId = undefined as unknown as number
   bindingForm.value.foreignKeyField = undefined
+  // RELATED type must be READONLY
+  if (bindingForm.value.bindingType === 'RELATED') {
+    bindingForm.value.bindingMode = 'READONLY'
+  }
   if (
     bindingForm.value.bindingType === 'RELATED'
     && deployedRelationTables.value.length === 0
@@ -358,7 +362,7 @@ async function loadDeployedRelationTables() {
 
 // Handle table selection change — 仅调整 bindingMode 默认值，bindingType 由用户主动选择，
 // 这样 filteredAvailableTables 已经保证了 tableType 与 bindingType 一致，不会再出现后端报错
-function handleTableSelect(_tableId: number) {
+function handleTableSelect(_tableId?: number) {
   const bt = bindingForm.value.bindingType
   if (bt === 'PRIMARY') {
     bindingForm.value.bindingMode = 'EDITABLE'
@@ -432,9 +436,10 @@ async function handleSubmit() {
   try {
     // For deployed relation tables (negative ID), convert to relationTableId
     const requestData = { ...bindingForm.value }
-    if (requestData.tableId < 0) {
+    // tableId < 0 means it's a deployed relation table
+    if (requestData.tableId && requestData.tableId < 0) {
       requestData.relationTableId = -requestData.tableId
-      requestData.tableId = 0
+      requestData.tableId = undefined
     }
     
     if (editingBinding.value) {

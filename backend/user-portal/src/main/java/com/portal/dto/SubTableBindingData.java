@@ -16,6 +16,7 @@ public class SubTableBindingData {
     private String tableName;
     private String bindingType;
     private String bindingMode;
+    private Long subListViewId;
     private List<Map<String, Object>> columns;
     private List<Map<String, Object>> data;
 }

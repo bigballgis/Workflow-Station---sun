@@ -15,7 +15,7 @@ interface SubTableBindingSelectProps {
 }
 
 interface SubTableBindingSelectEmits {
-  'update:modelValue': (val: number | null) => void
+  'update:modelValue': [val: number | null]
 }
 
 const props = defineProps<SubTableBindingSelectProps>()
@@ -24,7 +24,10 @@ const { t } = useI18n()
 
 // Get subBindings from inject (provided by FormDesigner) or fall back to prop
 const injectedSubBindings = inject<() => DesignerSubBinding[]>('designerSubBindings', () => [])
-const subBindings = computed(() => props.subBindings?.length ? props.subBindings : injectedSubBindings())
+const allSubBindings = computed(() => props.subBindings?.length ? props.subBindings : injectedSubBindings())
+
+// Only show SUB type bindings for sub-table widget binding selection
+const subBindings = computed(() => allSubBindings.value.filter(b => b.bindingType === 'SUB'))
 </script>
 
 <template>

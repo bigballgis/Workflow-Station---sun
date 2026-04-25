@@ -60,7 +60,7 @@
           </template>
           <!-- password -->
           <template v-else-if="col.type === 'password'">
-            <span>••••••</span>
+            <span>******</span>
           </template>
           <!-- default -->
           <span v-else>{{ scope.row[col.field] ?? '-' }}</span>
@@ -91,12 +91,27 @@
       />
     </div>
 
+    <!-- 使用表单设计器的 form-create 规则渲染对话框 (优先使用) -->
+    <SubTableFormDialog
+      v-if="formDialogVisible"
+      :visible="formDialogVisible"
+      :title="config.title || t('subTable.defaultTitle')"
+      :mode="dialogMode"
+      :initialData="dialogInitialData"
+      :rule="formRule"
+      :option="formOption"
+      @update:visible="formDialogVisible = $event"
+      @save="handleDialogSave"
+    />
+
+    <!-- 备用的简单对话框（当没有 form-create 规则时） -->
     <SubTableAddDialog
-      :visible="dialogVisible"
+      v-else-if="simpleDialogVisible"
+      :visible="simpleDialogVisible"
       :columns="dialogColumns"
       :mode="dialogMode"
       :initialData="dialogInitialData"
-      @update:visible="dialogVisible = $event"
+      @update:visible="simpleDialogVisible = $event"
       @save="handleDialogSave"
     />
   </div>
@@ -109,6 +124,7 @@ import { Plus } from '@element-plus/icons-vue'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import DOMPurify from 'dompurify'
 import SubTableAddDialog from './SubTableAddDialog.vue'
+import SubTableFormDialog from './SubTableFormDialog.vue'
 import type { DialogColumn } from './subTableAddDialogHelpers'
 
 const { t } = useI18n()
@@ -151,6 +167,10 @@ const props = defineProps<{
   modelValue?: any[]
   editable?: boolean
   foreignKeyValue?: string | number
+  /** Form-create rule from the sub-table form designer */
+  formRule?: any[]
+  /** Form-create option from the sub-table form designer */
+  formOption?: any
 }>()
 
 const emit = defineEmits<{
@@ -165,8 +185,9 @@ const tableData = ref<any[]>([])
 const currentPage = ref(1)
 const total = ref(0)
 
-// Dialog state
-const dialogVisible = ref(false)
+// Dialog state - 使用两个独立的 dialog 来避免状态冲突
+const formDialogVisible = ref(false)
+const simpleDialogVisible = ref(false)
 const dialogMode = ref<'add' | 'edit'>('add')
 const editingRowIndex = ref<number | null>(null)
 const dialogInitialData = ref<Record<string, any> | undefined>(undefined)
@@ -176,6 +197,9 @@ const editable = computed(() => props.editable !== false)
 
 // 计算属性：显示的列
 const displayColumns = computed(() => props.config.columns || [])
+
+// 是否使用 form-create 对话框（当有 formRule 时优先使用）
+const hasFormRule = computed(() => props.formRule && props.formRule.length > 0)
 
 // 将 ColumnConfig 转换为 DialogColumn（兼容 SubTableAddDialog 的类型）
 const dialogColumns = computed<DialogColumn[]>(() => {
@@ -208,7 +232,13 @@ function handleAdd() {
   dialogMode.value = 'add'
   dialogInitialData.value = undefined
   editingRowIndex.value = null
-  dialogVisible.value = true
+  if (hasFormRule.value) {
+    simpleDialogVisible.value = false
+    formDialogVisible.value = true
+  } else {
+    formDialogVisible.value = false
+    simpleDialogVisible.value = true
+  }
 }
 
 // 编辑行 — 打开 Dialog 并预填数据
@@ -216,7 +246,13 @@ function openEditDialog(index: number) {
   dialogMode.value = 'edit'
   editingRowIndex.value = index
   dialogInitialData.value = { ...tableData.value[index] }
-  dialogVisible.value = true
+  if (hasFormRule.value) {
+    simpleDialogVisible.value = false
+    formDialogVisible.value = true
+  } else {
+    formDialogVisible.value = false
+    simpleDialogVisible.value = true
+  }
 }
 
 // Dialog 保存回调

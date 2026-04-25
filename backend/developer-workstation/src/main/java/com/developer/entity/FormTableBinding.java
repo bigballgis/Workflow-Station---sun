@@ -66,7 +66,14 @@ public class FormTableBinding {
      */
     @Column(name = "sort_order")
     private Integer sortOrder;
-    
+
+    /**
+     * 子表列表视图配置ID
+     * 仅当 bindingType 为 SUB 时使用，关联到 dw_sub_table_view_configs 表
+     */
+    @Column(name = "sub_list_view_id")
+    private Long subListViewId;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

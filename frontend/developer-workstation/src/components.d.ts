@@ -114,6 +114,8 @@ declare module 'vue' {
     SubTableAddDialog: typeof import('./components/designer/SubTableAddDialog.vue')['default']
     SubTableBindingSelect: typeof import('./components/designer/SubTableBindingSelect.vue')['default']
     SubTableField: typeof import('./components/designer/SubTableField.vue')['default']
+    SubTableFormDialog: typeof import('./components/designer/SubTableFormDialog.vue')['default']
+    SubTableListView: typeof import('./components/designer/SubTableListView.vue')['default']
     SubTablePlaceholderWidget: typeof import('./components/designer/SubTablePlaceholderWidget.vue')['default']
     SubTableValidationEditor: typeof import('./components/designer/SubTableValidationEditor.vue')['default']
     TableBindingManager: typeof import('./components/designer/TableBindingManager.vue')['default']

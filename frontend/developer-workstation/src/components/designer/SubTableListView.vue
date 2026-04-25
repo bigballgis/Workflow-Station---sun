@@ -1,11 +1,11 @@
 <template>
-  <div class="relation-table-view">
+  <div class="relation-table-view sub-table-list-view">
     <!-- Left: Table columns panel -->
     <div class="columns-panel" v-if="columnsPanelOpen">
       <div class="columns-panel-header">
         <div class="columns-panel-title">
           <el-icon style="margin-right: 6px;"><Menu /></el-icon>
-          <span>Table columns</span>
+          <span>{{ t('subTableView.tableColumns') }}</span>
         </div>
         <el-icon class="columns-panel-close" @click="columnsPanelOpen = false"><Close /></el-icon>
       </div>
@@ -47,11 +47,11 @@
       <!-- Toolbar with Preview and Clear -->
       <div class="grid-toolbar" v-if="viewFields.length > 0">
         <div class="toolbar-left">
-          <span class="field-count">{{ viewFields.length }} columns</span>
+          <span class="field-count">{{ viewFields.length }} {{ t('subTableView.columns') }}</span>
         </div>
         <div class="toolbar-right">
-          <el-button size="small" @click="handlePreview">Preview</el-button>
-          <el-button size="small" type="danger" plain @click="handleClear">Clear</el-button>
+          <el-button size="small" @click="handlePreview">{{ t('common.preview') }}</el-button>
+          <el-button size="small" type="danger" plain @click="handleClear">{{ t('common.clear') }}</el-button>
         </div>
       </div>
 
@@ -69,7 +69,7 @@
           @drop.stop="onColDrop($event, index)"
           @dragend="onColDragEnd"
         >
-          <span class="col-name">{{ field.fieldName }}</span>
+          <span class="col-name">{{ field.comment || field.fieldName }}</span>
           <el-icon class="col-remove" @click.stop="removeField(index)"><Close /></el-icon>
         </div>
       </div>
@@ -81,14 +81,14 @@
         </div>
       </div>
 
-      <el-empty v-if="viewFields.length === 0" description="No fields imported" />
+      <el-empty v-if="viewFields.length === 0" :description="t('subTableView.noFieldsImported')" :image-size="60" />
     </div>
 
     <!-- Preview dialog -->
-    <el-dialog v-model="showPreview" title="Preview" width="800px" destroy-on-close>
+    <el-dialog v-model="showPreview" :title="t('common.preview')" width="800px" destroy-on-close>
       <el-table :data="previewFieldRows" border style="width: 100%;">
-        <el-table-column prop="label" :label="' '" min-width="200" />
-        <el-table-column prop="value" :label="' '" min-width="200" />
+        <el-table-column prop="label" :label="t('subTableView.displayLabel')" min-width="200" />
+        <el-table-column prop="value" :label="t('subTableView.previewValue')" min-width="200" />
       </el-table>
     </el-dialog>
   </div>
@@ -97,7 +97,10 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { Search, Close, Menu, DArrowRight, EditPen, Calendar, Document, Coin, Switch as SwitchIcon } from '@element-plus/icons-vue'
-import { relationTableViewApi, type RelationFieldDTO } from '@/api/relationTable'
+import { useI18n } from 'vue-i18n'
+import { subTableViewApi, type SubTableFieldDTO } from '@/api/subTableView'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   binding: {
@@ -111,15 +114,16 @@ const props = defineProps<{
   }
   functionUnitId: number
   formId: number
-  /** All available fields for this relation table */
-  availableFields?: RelationFieldDTO[]
+  /** All available fields for this sub-table */
+  availableFields?: SubTableFieldDTO[]
   /** Fields currently shown in the view (ordered) */
-  modelValue?: RelationFieldDTO[]
+  modelValue?: SubTableFieldDTO[]
 }>()
 
 const emit = defineEmits<{
-  (e: 'update:modelValue', fields: RelationFieldDTO[]): void
-  (e: 'update:availableFields', fields: RelationFieldDTO[]): void
+  (e: 'update:modelValue', fields: SubTableFieldDTO[]): void
+  (e: 'update:availableFields', fields: SubTableFieldDTO[]): void
+  (e: 'save'): void
 }>()
 
 const columnsPanelOpen = ref(true)
@@ -128,11 +132,11 @@ const showPreview = ref(false)
 const loadingFields = ref(false)
 
 // Local fallback: when parent doesn't yet have allFields, store the loaded value here
-// so the panel still renders while we propagate the update to the parent.
-const localAvailableFields = ref<RelationFieldDTO[]>([])
+const localAvailableFields = ref<SubTableFieldDTO[]>([])
 
 // All available fields: prefer prop (parent-managed), fall back to locally loaded
 const allFields = computed(() => props.availableFields?.length ? props.availableFields : localAvailableFields.value)
+
 // Fields currently in the view (user-selected, ordered)
 const viewFields = computed({
   get: () => props.modelValue || [],
@@ -149,12 +153,12 @@ async function loadFields() {
   if (!props.formId || !props.binding?.bindingId) return
   loadingFields.value = true
   try {
-    const res = await relationTableViewApi.getAvailableFields(props.formId, props.binding.bindingId)
-    const fields: RelationFieldDTO[] = res.data || []
+    const res = await subTableViewApi.getAvailableFields(props.formId, props.binding.bindingId)
+    const fields: SubTableFieldDTO[] = res.data || []
     localAvailableFields.value = fields
     emit('update:availableFields', fields)
   } catch (e) {
-    console.error('[RelationTableView] failed to load fields:', e)
+    console.error('[SubTableListView] failed to load fields:', e)
   } finally {
     loadingFields.value = false
   }
@@ -201,7 +205,7 @@ const getFieldIcon = (dataType: string) => {
   return EditPen
 }
 
-const getMockValue = (field: RelationFieldDTO): string => {
+const getMockValue = (field: SubTableFieldDTO): string => {
   const type = (field.dataType || '').toUpperCase()
   if (type.includes('INT') || type === 'BIGINT') return '1'
   if (type.includes('DECIMAL') || type.includes('NUMERIC') || type.includes('FLOAT') || type.includes('DOUBLE')) return '100.00'
@@ -214,15 +218,6 @@ const getMockValue = (field: RelationFieldDTO): string => {
   return 'Sample'
 }
 
-const previewRows = computed(() => {
-  if (viewFields.value.length === 0) return []
-  const row: Record<string, any> = {}
-  for (const f of viewFields.value) {
-    row[f.fieldName] = getMockValue(f)
-  }
-  return [row]
-})
-
 const previewFieldRows = computed(() => {
   return viewFields.value.map(f => ({
     label: f.comment || f.fieldName,
@@ -231,24 +226,27 @@ const previewFieldRows = computed(() => {
 })
 
 // --- Field operations ---
-const addFieldToView = (field: RelationFieldDTO) => {
+const addFieldToView = (field: SubTableFieldDTO) => {
   if (!isFieldInView(field.fieldName)) {
     emit('update:modelValue', [...viewFields.value, field])
+    emit('save')
   }
 }
 
 const removeField = (index: number) => {
   emit('update:modelValue', viewFields.value.filter((_, i) => i !== index))
+  emit('save')
 }
 
 const handlePreview = () => { showPreview.value = true }
 
 const handleClear = () => {
   emit('update:modelValue', [])
+  emit('save')
 }
 
 // --- Drag from left panel to grid ---
-const onFieldDragStart = (e: DragEvent, field: RelationFieldDTO) => {
+const onFieldDragStart = (e: DragEvent, field: SubTableFieldDTO) => {
   dragSourceField.value = field.fieldName
   isDraggingFromPanel.value = true
   e.dataTransfer!.effectAllowed = 'copy'
@@ -272,6 +270,7 @@ const onGridDrop = (e: DragEvent) => {
   const field = allFields.value.find(f => f.fieldName === fieldName)
   if (field && !isFieldInView(fieldName)) {
     emit('update:modelValue', [...viewFields.value, field])
+    emit('save')
   }
   dragSourceField.value = null
   isDraggingFromPanel.value = false
@@ -299,6 +298,7 @@ const onColDrop = (_e: DragEvent, targetIndex: number) => {
     const [moved] = arr.splice(dragColIndex.value, 1)
     arr.splice(targetIndex, 0, moved)
     emit('update:modelValue', arr)
+    emit('save')
   }
   dragColIndex.value = null
   dragOverIndex.value = null
@@ -313,11 +313,12 @@ const onColDragEnd = () => {
 defineExpose({
   getViewFields: () => viewFields.value,
   getAllFields: () => allFields.value,
+  loadFields,
 })
 </script>
 
 <style scoped>
-.relation-table-view {
+.sub-table-list-view {
   display: flex;
   height: calc(100vh - 260px);
   border: 1px solid var(--el-border-color-light);

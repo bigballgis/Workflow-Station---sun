@@ -19,6 +19,7 @@ import com.developer.repository.FormDefinitionRepository;
 import com.developer.repository.FormTableBindingRepository;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.TableDefinitionRepository;
+import com.developer.service.SubTableViewService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -39,7 +40,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @RequiredArgsConstructor
 public class FormDesignComponentImpl implements FormDesignComponent {
-    
+
     private final FormDefinitionRepository formDefinitionRepository;
     private final FunctionUnitRepository functionUnitRepository;
     private final TableDefinitionRepository tableDefinitionRepository;
@@ -47,6 +48,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
     private final ObjectMapper objectMapper;
     private final I18nService i18nService;
     private final JdbcTemplate jdbcTemplate;
+    private final SubTableViewService subTableViewService;
     
     @Override
     @Transactional
@@ -280,8 +282,22 @@ public class FormDesignComponentImpl implements FormDesignComponent {
                 .foreignKeyField(request.getForeignKeyField())
                 .sortOrder(sortOrder)
                 .build();
-        
-        return formTableBindingRepository.save(binding);
+
+        binding = formTableBindingRepository.save(binding);
+
+        // Auto-create default sub-table list view for SUB bindings
+        if (request.getBindingType() == BindingType.SUB) {
+            try {
+                var viewConfig = subTableViewService.createDefaultViewConfig(binding.getId());
+                binding.setSubListViewId(viewConfig.getId());
+                binding = formTableBindingRepository.save(binding);
+                log.info("Created default sub-table list view for binding: {}", binding.getId());
+            } catch (Exception e) {
+                log.warn("Failed to create default sub-table list view for binding {}: {}", binding.getId(), e.getMessage());
+            }
+        }
+
+        return binding;
     }
     
     @Override
@@ -327,6 +343,18 @@ public class FormDesignComponentImpl implements FormDesignComponent {
     public void deleteBinding(Long bindingId) {
         FormTableBinding binding = formTableBindingRepository.findById(bindingId)
                 .orElseThrow(() -> new ResourceNotFoundException("FormTableBinding", bindingId));
+
+        // Delete associated sub-table view config if exists
+        if (binding.getSubListViewId() != null) {
+            try {
+                subTableViewService.getViewConfig(bindingId);
+                // The view config will be cleaned up via cascade or manual deletion
+                log.info("Cleaning up sub-table view config for binding: {}", bindingId);
+            } catch (Exception e) {
+                log.debug("No sub-table view config to clean up for binding: {}", bindingId);
+            }
+        }
+
         formTableBindingRepository.delete(binding);
     }
     

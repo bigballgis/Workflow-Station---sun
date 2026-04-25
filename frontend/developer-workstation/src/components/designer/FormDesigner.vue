@@ -167,7 +167,34 @@
             @update:model-value="(val: any) => updateRelationViewFields(binding.bindingId, val)"
             @update:available-fields="(val: any) => updateRelationViewAllFields(binding.bindingId, val)"
           />
-          <!-- Sub Table: show form designer -->
+          <!-- Sub Table: show form designer with List View tab -->
+          <div v-else-if="binding.bindingType === 'SUB'" class="sub-table-design-wrapper">
+            <el-tabs v-model="subTableActiveTab">
+              <el-tab-pane :label="t('subTableView.formDesign')" name="form">
+                <div class="fc-designer-wrapper">
+                  <fc-designer
+                    :ref="(el: any) => setSubDesignerRef(el, index)"
+                    :config="designerConfig"
+                    height="calc(100vh - 320px)"
+                  />
+                </div>
+              </el-tab-pane>
+              <el-tab-pane :label="t('subTableView.listView')" name="listView">
+                <SubTableListView
+                  :ref="(el: any) => { if (el) subTableListViewRefs[binding.bindingId] = el }"
+                  :binding="binding"
+                  :function-unit-id="props.functionUnitId"
+                  :form-id="selectedForm!.id"
+                  :available-fields="subTableViewState[binding.bindingId]?.allFields || []"
+                  :model-value="subTableViewState[binding.bindingId]?.viewFields || []"
+                  @update:model-value="(val: any) => updateSubTableViewFields(binding.bindingId, val)"
+                  @update:available-fields="(val: any) => updateSubTableViewAllFields(binding.bindingId, val)"
+                  @save="handleSubTableViewSave(binding.bindingId)"
+                />
+              </el-tab-pane>
+            </el-tabs>
+          </div>
+          <!-- Sub Table (non-SUB fallback, should not happen) -->
           <div v-else class="fc-designer-wrapper">
             <fc-designer
               :ref="(el: any) => setSubDesignerRef(el, index)"
@@ -270,6 +297,7 @@
                 v-model="previewData"
                 :rule="item.rule"
                 :option="previewOption"
+                :key="'preview-form-' + item.modelKey"
               />
             </div>
             <!-- Inline sub-table -->
@@ -285,6 +313,8 @@
                 :config="{ title: item.binding.tableName, columns: item.binding.columns }"
                 :modelValue="previewTableRows[item.binding.bindingId]"
                 :editable="true"
+                :formRule="item.binding.rule"
+                :formOption="item.binding.option"
                 @update:modelValue="previewTableRows[item.binding.bindingId] = $event"
               />
               <el-empty v-else :description="t('form.noFormContent')" :image-size="40" style="border: 1px solid #e6e6e6; border-radius: 4px;" />
@@ -481,10 +511,12 @@ import { relationTableBindingApi, type RelationFieldDTO } from '@/api/relationTa
 import TableBindingManager from './TableBindingManager.vue'
 import SubTableField from './SubTableField.vue'
 import RelationTableView from './RelationTableView.vue'
+import SubTableListView from './SubTableListView.vue'
 import LookupPreview from './LookupPreview.vue'
 import { lookupStore } from './lookupStore'
 import api from '@/api'
 import { BUILT_IN_TEMPLATES, type FormTemplate } from './formTemplates'
+import { subTableViewApi, type SubTableFieldDTO, type SubTableViewConfig } from '@/api/subTableView'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -525,7 +557,7 @@ let autoSaveTimer: ReturnType<typeof setTimeout> | null = null
 // Mixed preview items: alternating form-create rule segments and inline sub-tables
 const previewItems = ref<Array<
   | { kind: 'fields'; rule: any[]; modelKey: string }
-  | { kind: 'subTable'; binding: { bindingId: number; bindingType: string; bindingMode: string; tableName: string; tableType: string; tableDescription: string; rule: any[]; columns: any[] } }
+  | { kind: 'subTable'; binding: { bindingId: number; bindingType: string; bindingMode: string; tableName: string; tableType: string; tableDescription: string; rule: any[]; option?: any; columns: any[] } }
   | { kind: 'relationTable'; tableName: string; fields: Array<{ label: string; value: string }> }
   | { kind: 'lookup'; label: string; placeholder: string; searchFields: string[]; displayFields: string[]; viewFields: any[]; fieldDefs: any[]; bindingId?: number }
 >>([])
@@ -542,10 +574,15 @@ const subDesignerRefs = ref<any[]>([])
 const relationTableViewRefs = ref<Record<number, any>>({})
 // Relation table view state (keyed by bindingId)
 const relationViewState = ref<Record<number, { allFields: any[]; viewFields: any[] }>>({})
+// Sub-table list view refs (keyed by bindingId)
+const subTableListViewRefs = ref<Record<number, any>>({})
+// Sub-table list view state (keyed by bindingId)
+const subTableViewState = ref<Record<number, { allFields: SubTableFieldDTO[]; viewFields: SubTableFieldDTO[] }>>({})
 // In-memory cache: persists sub form rules across tab switches (tabs unmount when not active)
 const subFormCache = ref<Record<number, { rule: any[]; options: any }>>({})
 
 function setSubDesignerRef(el: any, index: number) {
+  console.log('[FormDesigner] setSubDesignerRef:', { el: !!el, index, binding: designerSubBindings.value[index] })
   if (!el) {
     // Tab is unmounting — snapshot current rule into cache before ref is lost
     const prev = subDesignerRefs.value[index]
@@ -557,6 +594,7 @@ function setSubDesignerRef(el: any, index: number) {
             rule: prev.getRule() || [],
             options: prev.getOption() || {}
           }
+          console.log('[FormDesigner] Cached sub form:', { bindingId: binding.bindingId, ruleCount: prev.getRule()?.length })
         } catch {}
       }
     }
@@ -575,6 +613,70 @@ function updateRelationViewFields(bindingId: number, fields: any[]) {
 function updateRelationViewAllFields(bindingId: number, fields: any[]) {
   const existing = relationViewState.value[bindingId] || { allFields: [], viewFields: [] }
   relationViewState.value = { ...relationViewState.value, [bindingId]: { ...existing, allFields: fields } }
+}
+
+// Sub-table list view state management
+function updateSubTableViewFields(bindingId: number, fields: SubTableFieldDTO[]) {
+  const existing = subTableViewState.value[bindingId] || { allFields: [], viewFields: [] }
+  subTableViewState.value = { ...subTableViewState.value, [bindingId]: { ...existing, viewFields: fields } }
+}
+
+function updateSubTableViewAllFields(bindingId: number, fields: SubTableFieldDTO[]) {
+  const existing = subTableViewState.value[bindingId] || { allFields: [], viewFields: [] }
+  subTableViewState.value = { ...subTableViewState.value, [bindingId]: { ...existing, allFields: fields } }
+}
+
+async function handleSubTableViewSave(bindingId: number) {
+  const state = subTableViewState.value[bindingId]
+  if (!state || !selectedForm.value) return
+
+  const fields = state.viewFields.map((f, index) => ({
+    fieldName: f.fieldName,
+    displayLabel: f.comment || f.fieldName,
+    columnWidth: 150,
+    sortOrder: index,
+    visible: true
+  }))
+
+  try {
+    await subTableViewApi.saveViewConfig(selectedForm.value.id, bindingId, fields)
+  } catch (e) {
+    console.error('[FormDesigner] Failed to save sub-table view config:', e)
+  }
+}
+
+async function loadSubTableViewConfig(bindingId: number, binding: any) {
+  if (!selectedForm.value) return
+
+  try {
+    // Get or create the view config
+    const res = await subTableViewApi.getOrCreateView(selectedForm.value.id, bindingId)
+    const config: SubTableViewConfig = res.data
+
+    // Get available fields from the sub-table
+    const fieldsRes = await subTableViewApi.getAvailableFields(selectedForm.value.id, bindingId)
+    const availableFields: SubTableFieldDTO[] = fieldsRes.data || []
+
+    // Merge view config with available fields
+    const viewFieldsMap = new Map(config.viewFields.map(f => [f.fieldName, f]))
+    const viewFields: SubTableFieldDTO[] = config.viewFields
+      .filter(f => f.visible !== false)
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map(f => {
+        const available = availableFields.find(af => af.fieldName === f.fieldName)
+        return {
+          fieldName: f.fieldName,
+          dataType: available?.dataType || 'VARCHAR',
+          comment: f.displayLabel || f.fieldName,
+        } as SubTableFieldDTO
+      })
+
+    subTableViewState.value[bindingId] = { allFields: availableFields, viewFields }
+  } catch (e) {
+    console.error('[FormDesigner] Failed to load sub-table view config:', e)
+    // Initialize with empty state
+    subTableViewState.value[bindingId] = { allFields: [], viewFields: [] }
+  }
 }
 
 // Non-PRIMARY bindings for tabs（RELATED 用于 Lookup，也需要显示在设计器里配置视图字段）
@@ -629,6 +731,12 @@ watch([() => selectedForm.value?.id, designerSubBindings, () => store.tables], (
   lookupStore.tables = store.tables as any[]
 }, { immediate: true })
 
+// Watch for tableBindings changes and log for debugging
+watch(() => selectedForm.value?.tableBindings, (newVal) => {
+  console.log('[FormDesigner] tableBindings changed:', newVal)
+}, { deep: true })
+
+
 const createForm = reactive({ formName: '', formType: 'PROCESS' as FormType, description: '', boundTableId: null as number | null })
 const bindingForm = ref<FormDefinition | null>(null)
 
@@ -661,6 +769,17 @@ function isImportingRelationTable(): boolean {
   // Check formBindings (for deployed relation tables where tableId is from rt_table_definitions)
   const binding = formBindings.value.find(b => b.tableId === importTableId.value)
   return binding?.bindingType === 'RELATED'
+}
+
+// Check if the currently selected import table is a SUB type table
+function isImportingSubTable(): boolean {
+  if (!importTableId.value) return false
+  // Check store.tables for SUB type tables
+  const table = store.tables.find(t => t.id === importTableId.value)
+  if (table?.tableType === 'SUB') return true
+  // Check formBindings for SUB type bindings
+  const binding = formBindings.value.find(b => b.tableId === importTableId.value)
+  return binding?.bindingType === 'SUB'
 }
 
 // Get bindingId for a given tableId (for relation table imports)
@@ -722,18 +841,18 @@ const designerConfig = computed(() => ({
 // Default form options — label left-aligned
 const defaultFormOption = { form: { labelPosition: 'left' } }
 
-// Preview options
-const previewOption = ref({
+// Sub-table tabs default to form design
+const subTableActiveTab = ref('form')
+
+// Preview options - plain object (not ref, form-create expects a reactive object)
+const previewOption = {
   submitBtn: false,
   resetBtn: false,
-  form: { labelPosition: 'left', labelWidth: '200px' },
-  // Use authenticated axios for effect.fetch so select options load correctly in preview
-  fetch: (opt: any) => {
-    const { action, method = 'get', data, headers, onSuccess, onError } = opt
-    api.request({ url: action, method, data, headers })
-      .then((res: any) => onSuccess(res))
-      .catch((err: any) => onError(err))
-  }
+}
+
+const getPreviewOption = (): Record<string, any> => ({
+  submitBtn: false,
+  resetBtn: false,
 })
 
 const formTypeLabel = (type: string) => {
@@ -916,12 +1035,13 @@ function handleManageBindings(form: FormDefinition) {
  * Table binding update callback
  */
 async function handleBindingUpdate() {
-  await loadForms()
-  // If we're currently in the designer view, refresh the selected form's bindings in place
+  // Reload bindings directly instead of full loadForms
   if (selectedForm.value) {
     try {
       const res = await functionUnitApi.getFormBindings(props.functionUnitId, selectedForm.value.id)
       selectedForm.value = { ...selectedForm.value, tableBindings: res.data || [] }
+      console.log('[FormDesigner] handleBindingUpdate - Updated tableBindings:', selectedForm.value.tableBindings)
+      console.log('[FormDesigner] handleBindingUpdate - designerSubBindings:', designerSubBindings.value)
       // Reset sub designer state so new tabs render cleanly
       subDesignerRefs.value = []
       subFormCache.value = {}
@@ -939,7 +1059,9 @@ async function handleBindingUpdate() {
         }
       }
       relationViewState.value = updated
-    } catch {}
+    } catch (e) {
+      console.error('[FormDesigner] Failed to update bindings:', e)
+    }
   }
 }
 
@@ -1261,6 +1383,60 @@ async function handleConfirmImportFields() {
       return
     }
 
+    // Check if importing into a sub table - update both form designer and list view
+    if (isImportingSubTable()) {
+      // Update sub-table list view state
+      const subFields = selectedImportFields.value.map((f, idx) => ({
+        fieldName: f.fieldName,
+        dataType: f.dataType || 'VARCHAR',
+        comment: f.description || f.fieldName,
+      })) as SubTableFieldDTO[]
+      const allSubFields = availableFields.value.map((f) => ({
+        fieldName: f.fieldName,
+        dataType: f.dataType || 'VARCHAR',
+        comment: f.description || f.fieldName,
+      })) as SubTableFieldDTO[]
+
+      const bindingId = importTableId.value
+        ? getBindingIdForTable(importTableId.value)
+        : Number(activeDesignerTab.value)
+      if (bindingId) {
+        subTableViewState.value = {
+          ...subTableViewState.value,
+          [bindingId]: { allFields: allSubFields, viewFields: subFields }
+        }
+      }
+
+      // Also import to sub-table form designer
+      const rules = selectedImportFields.value.map(fieldToFormRule)
+
+      // Find target sub designer ref
+      let targetRef: any = null
+      if (bindingId) {
+        const index = designerSubBindings.value.findIndex(b => b.bindingId === bindingId)
+        if (index >= 0) targetRef = subDesignerRefs.value[index]
+      }
+
+      if (targetRef) {
+        const currentRules: any[] = targetRef.getRule() || []
+        const existingFields = new Set(currentRules.map((r: any) => r.field))
+        const newRules = rules.filter(r => !existingFields.has(r.field))
+        const duplicateCount = rules.length - newRules.length
+
+        if (duplicateCount > 0) {
+          ElMessage.warning(t('form.skipExisting', { count: duplicateCount }))
+        }
+
+        if (newRules.length > 0) {
+          targetRef.setRule([...currentRules, ...newRules])
+        }
+      }
+
+      ElMessage.success(t('form.importedSuccess', { count: selectedImportFields.value.length }))
+      showImportFieldsDialog.value = false
+      return
+    }
+
     const rules = selectedImportFields.value.map(fieldToFormRule)
 
     // Determine target designer: active sub tab or main
@@ -1562,6 +1738,13 @@ function handleTabChange(tabName: string) {
     return
   }
 
+  // For SUB bindings, load sub-table list view config
+  if (binding.bindingType === 'SUB') {
+    if (!subTableViewState.value[bindingId]) {
+      loadSubTableViewConfig(bindingId, binding)
+    }
+  }
+
   const subForms = config.subForms || {}
   nextTick(() => {
     setTimeout(() => {
@@ -1797,9 +1980,24 @@ async function handleSaveForm(isManual = false) {
     // 子表占位符必须绑定 SUB 类型表绑定（流程/任务表单下一主多子，数据走子表单增删改）
     if (selectedForm.value.formType === 'PROCESS' || selectedForm.value.formType === 'TASK') {
       const subTableRules = rule.filter((r: any) => r.type === 'subTable' && r._bindingId)
+      // Use designerSubBindings for validation (includes latest bindings from store)
+      const bindingMap = new Map(designerSubBindings.value.map(b => [b.bindingId, b.bindingType]))
+      console.log('[FormDesigner] Validating subTable widgets:', {
+        subTableRules: subTableRules.map(r => ({ _bindingId: r._bindingId, title: r.title })),
+        bindingMap: Array.from(bindingMap.entries()),
+        designerSubBindings: designerSubBindings.value,
+        selectedFormTableBindings: selectedForm.value.tableBindings
+      })
       for (const st of subTableRules) {
-        const b = selectedForm.value.tableBindings?.find((x: TableBinding) => x.id === st._bindingId)
-        if (!b || b.bindingType !== 'SUB') {
+        const bindingType = bindingMap.get(st._bindingId)
+        console.log('[FormDesigner] Checking subTable widget:', { bindingId: st._bindingId, bindingType, isSub: bindingType === 'SUB' })
+        if (!bindingType) {
+          console.error('[FormDesigner] bindingId not found in bindingMap:', st._bindingId)
+          // Try to find in selectedForm.tableBindings directly
+          const directFind = selectedForm.value.tableBindings?.find((b: any) => b.id === st._bindingId)
+          console.error('[FormDesigner] Direct lookup in tableBindings:', directFind)
+        }
+        if (!bindingType || bindingType !== 'SUB') {
           if (isManual) ElMessage.error(t('form.subTableOnlySubBinding'))
           return
         }
@@ -1923,6 +2121,9 @@ function handlePreview() {
   fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9ec725'},body:JSON.stringify({sessionId:'9ec725',location:'FormDesigner.vue:handlePreview',message:'handlePreview called',data:{selectedFormId:selectedForm.value?.id,formName:selectedForm.value?.formName},timestamp:Date.now(),runId:'debug',hypothesisId:'H6'})}).catch(()=>{});
   // #endregion
   console.log('[DEBUG] after fetch')
+
+  // Wrapper to catch errors during preview generation
+  function buildPreview() {
   if (!selectedForm.value) {
     // #region debug log no form
     fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9ec725'},body:JSON.stringify({sessionId:'9ec725',location:'FormDesigner.vue:handlePreview',message:'H6: no selectedForm, returning early',data:{},timestamp:Date.now(),runId:'debug',hypothesisId:'H6'})}).catch(()=>{});
@@ -1963,90 +2164,42 @@ function handlePreview() {
     console.log('[DEBUG] deepScan error:', e)
   }
   console.log('[DEBUG] B: after deepScan')
-  console.log('[DEBUG] ========== START LAYOUT SCAN ==========')
-  console.log('[DEBUG] B1: before layout scan loop')
-  try {
-    // Scan all rule items for lookup fields inside layout containers
-    for (const r of rawRule) {
-      if (!r) continue
-      // Check various possible child locations
-      const directChildren = r.children
-      const propsChildren = r.props?.children
-      const propsList = r.props?.list
-      const propsItems = r.props?.items
-      const propsFields = r.props?.fields
-      console.log('[DEBUG] Checking rule item:', r.type, 'field:', r.field, 'directChildren:', !!directChildren, 'propsChildren:', !!propsChildren, 'propsList:', !!propsList)
-      
-      if (LOOKUP_EXTRACT_CONTAINERS.has(r.type)) {
-        // Try all possible child sources
-        const childrenSources = [directChildren, propsChildren, propsList, propsItems, propsFields].filter(c => c && Array.isArray(c))
-        for (const children of childrenSources) {
-          extractLookupsFromItems(children)
-        }
-      }
-    }
-  } catch (e) {
-    console.error('[DEBUG] Layout scan error:', e)
-    throw e  // Re-throw
-  }
-  console.log('[DEBUG] C: layout scan done')
-  console.log('[DEBUG] Extracted lookups from layout containers:', extractedLookups.length, extractedLookups.map(l => l.field))
-  console.log('[DEBUG] ========== END LAYOUT SCAN ==========')
   previewData.value = {}
   previewSubData.value = {}
   previewTableRows.value = {}
 
   // Sync label position from designer option
-  try {
-    const opt = designerRef.value.getOption() || {}
-    previewOption.value = {
-      submitBtn: false,
-      resetBtn: false,
-      form: {
-        labelPosition: opt.form?.labelPosition || 'left',
-        labelWidth: '200px'
-      },
-      fetch: (opt: any) => {
-        const { action, method = 'get', data, headers, onSuccess, onError } = opt
-        api.request({ url: action, method, data, headers })
-          .then((res: any) => onSuccess(res))
-          .catch((err: any) => onError(err))
-      }
-    }
-  } catch {
-    previewOption.value = {
-      submitBtn: false, resetBtn: false,
-      form: { labelPosition: 'left', labelWidth: '200px' },
-      fetch: (opt: any) => {
-        const { action, method = 'get', data, headers, onSuccess, onError } = opt
-        api.request({ url: action, method, data, headers })
-          .then((res: any) => onSuccess(res))
-          .catch((err: any) => onError(err))
-      }
-    }
-  }
+  Object.assign(previewOption, {
+    submitBtn: false,
+    resetBtn: false,
+  })
 
   const config = selectedForm.value.configJson || {}
   const subForms = config.subForms || {}
   const nonPrimary = (selectedForm.value.tableBindings || []).filter((b: TableBinding) => b.bindingType !== 'PRIMARY')
 
   // Build a map of bindingId -> binding info for quick lookup
-  const bindingMap = new Map<number, { bindingId: number; bindingType: string; bindingMode: string; tableName: string; tableType: string; tableDescription: string; rule: any[]; columns: any[] }>()
+  const bindingMap = new Map<number, { bindingId: number; bindingType: string; bindingMode: string; tableName: string; tableType: string; tableDescription: string; rule: any[]; option?: any; columns: any[] }>()
   nonPrimary.forEach((b: TableBinding) => {
     const bindingId = b.id as number
     const index = designerSubBindings.value.findIndex(d => d.bindingId === bindingId)
     const subRef = subDesignerRefs.value[index]
     let rule: any[] = []
+    let option: any = {}
     try {
       if (subRef) {
         rule = subRef.getRule() || []
+        option = subRef.getOption() || {}
       } else if (subFormCache.value[bindingId]) {
         rule = subFormCache.value[bindingId].rule || []
+        option = subFormCache.value[bindingId].options || {}
       } else {
         rule = subForms[bindingId]?.rule || []
+        option = subForms[bindingId]?.options || {}
       }
     } catch {
       rule = subFormCache.value[bindingId]?.rule || subForms[bindingId]?.rule || []
+      option = subFormCache.value[bindingId]?.options || subForms[bindingId]?.options || {}
     }
     previewTableRows.value[bindingId] = []
     const columns = deriveColumnsFromBinding({ bindingId }, { [bindingId]: { rule } })
@@ -2058,6 +2211,7 @@ function handlePreview() {
       tableType: (store.tables.find(t => t.id === b.tableId)?.tableType) || (b.bindingType === 'RELATED' ? 'RELATION' : ''),
       tableDescription: (store.tables.find(t => t.id === b.tableId)?.description) || '',
       rule,
+      option,
       columns
     })
   })
@@ -2065,7 +2219,8 @@ function handlePreview() {
   // Debug
   console.log('[Preview] rawRule types:', rawRule.map(r => `${r.type}(${r._bindingId ?? r.field})`))
   console.log('[Preview] bindingMap keys:', [...bindingMap.keys()])
-  console.log('[Preview] nonPrimary bindings:', nonPrimary.map((b: TableBinding) => b.id))
+  console.log('[Preview] nonPrimary bindings:', nonPrimary.map((b: TableBinding) => ({ id: b.id, bindingType: b.bindingType })))
+  console.log('[Preview] bindingMap content:', [...bindingMap.entries()].map(([k, v]) => ({ key: k, columnsCount: v.columns?.length, columns: v.columns })))
 
   // ── Normalize custom types for form-create preview ──────────────────────────
   // form-create cannot pass nested options (with children) to custom components
@@ -2105,7 +2260,9 @@ function handlePreview() {
   })
 
   // ── Flatten rule: recursively extract lookup items from layout containers ───
-  // Layout components that can contain lookup fields: elCard, group, el-row, el-col, etc.
+  // NOTE: We no longer extract lookups from containers. Lookup fields should remain
+  // in the regular fields segment and be rendered by form-create, not as separate preview items.
+  // Extracting them caused duplicate rendering issues.
   const LOOKUP_EXTRACT_CONTAINERS = new Set(['elCard', 'group', 'el-row', 'el-col', 'el-collapse', 'el-tabs', 'div', 'card', 'layout'])
   const extractedLookups: any[] = []
 
@@ -2172,99 +2329,32 @@ function handlePreview() {
     pendingRelationPreviews = []
   }
 
-  // ── Process all rule items (including extracted lookups from layout containers) ──
-  // Use a Set to track which lookups we've already processed to avoid duplicates
-  const processedLookupFields = new Set<string>()
-  const allRuleItems = [
-    ...rawRule,
-    ...extractedLookups.filter(l => !processedLookupFields.has(l.field) && (processedLookupFields.add(l.field), true))
-  ]
+  // ── Process all rule items ──
+  // NOTE: extractedLookups are intentionally NOT added to allRuleItems.
+  // Lookup fields inside layout containers (like card) will be rendered by form-create
+  // as part of the fields segment, not as separate preview items.
+  // Adding them separately caused duplicate rendering issues.
+  const allRuleItems = rawRule
   for (const ruleItem of allRuleItems) {
     // #region debug log all rule items
     fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9ec725'},body:JSON.stringify({sessionId:'9ec725',location:'FormDesigner.vue:ruleItemLoop',message:'Rule item in loop',data:{type:ruleItem.type,field:ruleItem.field,title:ruleItem.title,hasLookupConfig:!!ruleItem.props?.lookupConfig},timestamp:Date.now(),runId:'debug',hypothesisId:'H5'})}).catch(()=>{});
     // #endregion
     // _bindingId may be at top-level (after parseRule) or still in props (if getRule skipped parseRule)
     const itemBindingId = ruleItem._bindingId ?? ruleItem.props?._bindingId ?? null
+    console.log('[Preview] Checking ruleItem:', { type: ruleItem.type, _bindingId: itemBindingId, field: ruleItem.field })
     if (ruleItem.type === 'subTable' && itemBindingId != null) {
       flushSegment()
       // Add inline sub-table if binding exists
       const binding = bindingMap.get(Number(itemBindingId))
+      console.log('[Preview] Found subTable with bindingId:', itemBindingId, 'binding found:', !!binding)
       if (binding) {
         items.push({ kind: 'subTable', binding })
         bindingMap.delete(Number(itemBindingId)) // mark as placed
       }
     } else if (ruleItem.type === 'lookup') {
-      // #region debug log lookup type check
-      fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9ec725'},body:JSON.stringify({sessionId:'9ec725',location:'FormDesigner.vue:lookupTypeCheck',message:'ruleItem.type === lookup matched',data:{type:ruleItem.type,field:ruleItem.field,title:ruleItem.title},timestamp:Date.now(),runId:'debug',hypothesisId:'H5'})}).catch(()=>{});
-      // #endregion
-      // Flush current segment so lookup appears in its own section
-      flushSegment()
-
-      try {
-        const rawConfig = ruleItem.props?.lookupConfig
-        const lookupCfg = typeof rawConfig === 'string' ? JSON.parse(rawConfig || '{}') : (rawConfig || {})
-
-        // Resolve field definitions for this lookup
-        let fieldDefs: any[] = []
-
-        // Ensure relationViewState is loaded from saved config
-        if (lookupCfg.bindingId && !relationViewState.value[lookupCfg.bindingId]) {
-          const config = selectedForm.value?.configJson || {}
-          const saved = (config.relationViews || {})[lookupCfg.bindingId]
-          if (saved) {
-            relationViewState.value = {
-              ...relationViewState.value,
-              [lookupCfg.bindingId]: { allFields: saved.allFields || [], viewFields: saved.viewFields || [] }
-            }
-          }
-        }
-
-        // Collect allFields for column definitions
-        if (lookupCfg.bindingId && relationViewState.value[lookupCfg.bindingId]) {
-          fieldDefs = relationViewState.value[lookupCfg.bindingId].allFields || []
-        }
-        if (fieldDefs.length === 0 && lookupCfg.tableId) {
-          const table = store.tables.find(t => t.id === lookupCfg.tableId) as any
-          fieldDefs = table?.fieldDefinitions || table?.fields || []
-        }
-        if (fieldDefs.length === 0 && lookupCfg.tableId) {
-          fieldDefs = lookupStore.rtFieldCache[lookupCfg.tableId] || []
-        }
-
-        // Resolve viewFields for the view display after selection
-        let viewFields: any[] = []
-        if (lookupCfg.bindingId && relationViewState.value[lookupCfg.bindingId]) {
-          viewFields = relationViewState.value[lookupCfg.bindingId].viewFields || []
-        }
-
-        items.push({
-          kind: 'lookup',
-          label: ruleItem.title || ruleItem.field || 'Lookup',
-          placeholder: ruleItem.props?.placeholder || 'Click to search',
-          searchFields: lookupCfg.searchFields || [],
-          displayFields: lookupCfg.displayFields || [],
-          viewFields,
-          fieldDefs,
-          bindingId: lookupCfg.bindingId,
-        })
-        // #region debug log lookup item added
-        fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9ec725'},body:JSON.stringify({sessionId:'9ec725',location:'FormDesigner.vue:addLookupItem',message:'Lookup item added to previewItems',data:{label:ruleItem.title,searchFields:lookupCfg.searchFields,displayFields:lookupCfg.displayFields,fieldDefsCount:fieldDefs.length},timestamp:Date.now(),runId:'debug',hypothesisId:'H5'})}).catch(()=>{});
-        // #endregion
-        console.log('[DEBUG FormDesigner] Added lookup item to previewItems', { label: ruleItem.title, searchFields: lookupCfg.searchFields, displayFields: lookupCfg.displayFields })
-      } catch (e) {
-        console.warn('[Preview] lookup config parse error:', e)
-        // #region debug log lookup error
-        fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9ec725'},body:JSON.stringify({sessionId:'9ec725',location:'FormDesigner.vue:lookupParseError',message:'Lookup parse error',data:{error:String(e)},timestamp:Date.now(),runId:'debug',hypothesisId:'H5'})}).catch(()=>{});
-        // #endregion
-        // Fallback: render as readonly input
-        currentSegment.push({
-          ...ruleItem,
-          type: 'input',
-          prefix: undefined,
-          suffix: undefined,
-          props: { placeholder: ruleItem.props?.placeholder || 'Click to search', readonly: true }
-        })
-      }
+      // Push lookup to currentSegment so form-create renders it in its original container position
+      // Do NOT create a separate preview item for lookup - that causes duplicate rendering
+      currentSegment.push(ruleItem)
     } else if (FC_SKIP_PREVIEW.has(ruleItem.type)) {
       // Skip form-create proprietary components in preview
     } else {
@@ -2285,11 +2375,38 @@ function handlePreview() {
   fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9ec725'},body:JSON.stringify({sessionId:'9ec725',location:'FormDesigner.vue:buildPreview',message:'Preview items built',data:{itemKinds:items.map(i=>i.kind),lookupCount:items.filter(i=>i.kind==='lookup').length},timestamp:Date.now(),runId:'debug',hypothesisId:'H5'})}).catch(()=>{});
   // #endregion
   console.log('[Preview] previewItems:', items.map(i => i.kind === 'fields' ? `fields(${i.rule.length})` : i.kind))
-  console.log('[DEBUG FormDesigner] previewItems built', { itemKinds: items.map(i => i.kind), lookupCount: items.filter(i => i.kind === 'lookup').length })
+  console.log('[DEBUG FormDesigner] previewItems built', {
+    itemKinds: items.map(i => i.kind),
+    lookupCount: items.filter(i => i.kind === 'lookup').length,
+    subTableCount: items.filter(i => i.kind === 'subTable').length,
+    items: items.map(i => ({
+      kind: i.kind,
+      hasBinding: i.kind === 'subTable' ? !!i.binding : undefined,
+      columnsCount: i.kind === 'subTable' ? i.binding?.columns?.length : undefined
+    }))
+  })
   previewSubBindings.value = [] // no longer used for bottom rendering
 
   showPreviewDialog.value = true
   console.log('[DEBUG] ==================== handlePreview END ====================')
+  } // end of buildPreview function
+
+  // Wrap the entire preview building in try-catch to handle circular dependency errors
+  try {
+    buildPreview()
+  } catch (e: any) {
+    console.error('[FormDesigner] Preview build error:', e)
+    // Try a simpler preview with just the basic rule
+    try {
+      const basicRule = (selectedForm.value?.configJson?.rule || []).filter((r: any) => r.type !== 'subTable')
+      previewItems.value = [{ kind: 'fields', rule: basicRule, modelKey: 'fallback' }]
+      previewSubBindings.value = []
+      showPreviewDialog.value = true
+    } catch (e2) {
+      console.error('[FormDesigner] Fallback preview also failed:', e2)
+      ElMessage.error(t('form.previewFailed'))
+    }
+  }
 }
 
 async function handleBindNode(form: FormDefinition) {
