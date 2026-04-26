@@ -522,6 +522,7 @@ const placedBindingIds = computed((): Set<number> => {
   const ids = new Set<number>()
   const collect = (fields: any[]) => fields.forEach((f: any) => {
     if (f.type === 'subTable' && f._bindingId != null) ids.add(f._bindingId)
+    if (Array.isArray(f.children)) collect(f.children)
   })
   collect(formFields.value)
   formTabs.value.forEach((tab: any) => collect(tab.fields))
@@ -1781,18 +1782,10 @@ const parseFormConfig = (configStr: string) => {
             const tabName = tabPane.props.name || `tab_${tabs.length}`
             const tabLabel = tabPane.props.label || `Tab ${tabs.length + 1}`
             
-            const tabFields: FormField[] = []
-            if (tabPane.children && Array.isArray(tabPane.children)) {
-              for (const item of tabPane.children) {
-                if (item.field) {
-                  const field = convertFormCreateRule(item)
-                  if (field) tabFields.push(field)
-                }
-                if (item.children && Array.isArray(item.children)) {
-                  tabFields.push(...extractFieldsRecursive(item.children))
-                }
-              }
-            }
+            const tabFields: FormField[] =
+              tabPane.children && Array.isArray(tabPane.children)
+                ? extractFieldsRecursive(tabPane.children)
+                : []
             
             tabs.push({ name: tabName, label: tabLabel, fields: tabFields })
           }
@@ -1917,11 +1910,35 @@ const deriveColumnsFromBinding = (binding: any, subForms?: Record<string, any>):
   return []
 }
 
+// form-create runtime-only nodes. Layout containers must still be traversed so
+// task detail keeps the same visible fields and sub-table positions as preview.
+const FC_SKIP_TYPES = new Set(['subForm', 'tableForm', 'tableFormColumn'])
+
 // Recursively extract fields
 const extractFieldsRecursive = (items: any[]): FormField[] => {
   const fields: FormField[] = []
   for (const item of items) {
-    if (item.type === 'lookup' && item.field) {
+    const bindingId = item._bindingId ?? item.props?._bindingId
+    if (item.type === 'subTable' && bindingId != null) {
+      fields.push({
+        key: `__subTable_${bindingId}`,
+        label: '',
+        type: 'subTable',
+        _bindingId: Number(bindingId),
+        span: 24
+      })
+    } else if (isCardRule(item)) {
+      fields.push({
+        key: getLayoutKey(item, fields.length, 'card'),
+        label: getLayoutLabel(item),
+        type: 'card',
+        span: item.col?.span || 24,
+        children: item.children && Array.isArray(item.children)
+          ? extractFieldsRecursive(item.children)
+          : []
+      } as any)
+      continue
+    } else if (item.type === 'lookup' && item.field) {
       let lookupCfg: any = {}
       try {
         const raw = item.props?.lookupConfig
@@ -1950,6 +1967,8 @@ const extractFieldsRecursive = (items: any[]): FormField[] => {
         _lookupViewFields: resolvedViewFields
       }
       fields.push(field)
+    } else if (FC_SKIP_TYPES.has(item.type)) {
+      continue
     } else if (item.field) {
       const field = convertFormCreateRule(item)
       if (field) fields.push(field)
@@ -1960,6 +1979,12 @@ const extractFieldsRecursive = (items: any[]): FormField[] => {
   }
   return fields
 }
+
+const isCardRule = (item: any): boolean => ['el-card', 'elCard', 'card'].includes(item.type)
+const getLayoutKey = (item: any, index: number, fallback: string): string =>
+  String(item.field || item.name || item.id || `__layout_${fallback}_${index}`)
+const getLayoutLabel = (item: any): string =>
+  String(item.title || item.props?.header || item.props?.title || '')
 
 // Convert form rules
 const convertFormCreateRule = (rule: any): FormField | null => {

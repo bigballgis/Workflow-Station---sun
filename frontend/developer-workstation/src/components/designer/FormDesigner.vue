@@ -294,63 +294,13 @@
     <!-- Preview dialog -->
     <el-dialog v-model="showPreviewDialog" :title="t('form.previewTitle')" width="900px" destroy-on-close>
       <div class="preview-container">
-        <template v-if="previewItems.length > 0">
-          <template v-for="(item, idx) in previewItems" :key="idx">
-            <!-- Normal form fields segment -->
-            <div v-if="item.kind === 'fields'" class="form-preview-wrapper">
-              <form-create
-                v-if="item.rule.length"
-                v-model="previewData"
-                :rule="item.rule"
-                :option="previewOption"
-                :key="'preview-form-' + item.modelKey"
-              />
-            </div>
-            <!-- Inline sub-table -->
-            <div v-else-if="item.kind === 'subTable'" style="margin-top: 16px; margin-bottom: 8px;">
-              <div class="sub-preview-header" style="display: flex; align-items: center; margin-bottom: 8px;">
-                <el-tag :type="item.binding.bindingType === 'SUB' ? 'success' : 'warning'" size="small">
-                  {{ item.binding.bindingType === 'SUB' ? t('tableBinding.subTableType') : t('tableBinding.relationTableType') }}
-                </el-tag>
-                <span style="margin-left: 8px; font-weight: 500;">{{ item.binding.tableName }}</span>
-              </div>
-              <SubTableField
-                v-if="item.binding.columns && item.binding.columns.length"
-                :config="{ title: item.binding.tableName, columns: item.binding.columns }"
-                :modelValue="previewTableRows[item.binding.bindingId]"
-                :editable="true"
-                :formRule="item.binding.rule"
-                :formOption="item.binding.option"
-                @update:modelValue="previewTableRows[item.binding.bindingId] = $event"
-              />
-              <el-empty v-else :description="t('form.noFormContent')" :image-size="40" style="border: 1px solid #e6e6e6; border-radius: 4px;" />
-            </div>
-            <!-- Relation table preview (under lookup field) -->
-            <div v-else-if="item.kind === 'relationTable'" class="relation-preview-wrapper">
-              <el-table
-                :data="item.fields"
-                border
-                size="small"
-                class="relation-preview-table"
-              >
-                <el-table-column prop="label" :label="' '" min-width="200" />
-                <el-table-column prop="value" :label="' '" min-width="200" />
-              </el-table>
-            </div>
-            <!-- Interactive lookup preview -->
-            <div v-else-if="item.kind === 'lookup'" class="lookup-preview-item">
-              <LookupPreview
-                :label="item.label"
-                :placeholder="item.placeholder"
-                :search-fields="item.searchFields"
-                :display-fields="item.displayFields"
-                :view-fields="item.viewFields"
-                :field-defs="item.fieldDefs"
-                :show-backfill-view="item.showBackfillView !== false"
-              />
-            </div>
-          </template>
-        </template>
+        <FormPreviewItems
+          v-if="previewItems.length > 0"
+          v-model:preview-data="previewData"
+          v-model:preview-table-rows="previewTableRows"
+          :items="previewItems"
+          :preview-option="previewOption"
+        />
         <el-empty v-else :description="t('form.noFormContent')" />
       </div>
     </el-dialog>
@@ -516,10 +466,10 @@ import type { FormDefinition, FieldDefinition, TableBinding, BindingType, FormTy
 import { functionUnitApi } from '@/api/functionUnit'
 import { relationTableBindingApi, type RelationFieldDTO } from '@/api/relationTable'
 import TableBindingManager from './TableBindingManager.vue'
-import SubTableField from './SubTableField.vue'
 import RelationTableView from './RelationTableView.vue'
 import SubTableListView from './SubTableListView.vue'
-import LookupPreview from './LookupPreview.vue'
+import FormPreviewItems from './FormPreviewItems.vue'
+import type { FormPreviewItem } from './formPreviewTypes'
 import { lookupStore } from './lookupStore'
 import api from '@/api'
 import { BUILT_IN_TEMPLATES, type FormTemplate } from './formTemplates'
@@ -586,12 +536,7 @@ const linkFormComponents = ref<Array<{
 }>>([])
 
 // Mixed preview items: alternating form-create rule segments and inline sub-tables
-const previewItems = ref<Array<
-  | { kind: 'fields'; rule: any[]; modelKey: string }
-  | { kind: 'subTable'; binding: { bindingId: number; bindingType: string; bindingMode: string; tableName: string; tableType: string; tableDescription: string; rule: any[]; option?: any; columns: any[]; subMode?: string } }
-  | { kind: 'relationTable'; tableName: string; fields: Array<{ label: string; value: string }> }
-  | { kind: 'lookup'; label: string; placeholder: string; searchFields: string[]; displayFields: string[]; viewFields: any[]; fieldDefs: any[]; showBackfillView?: boolean; bindingId?: number }
->>([])
+const previewItems = ref<FormPreviewItem[]>([])
 
 // Sub-designer refs (one per non-PRIMARY binding)
 const subDesignerRefs = ref<any[]>([])
@@ -2195,6 +2140,36 @@ const checkDuplicateBinding = (selectedId: number, currentRuleIndex: number): bo
   }
 }
 
+function getRuleChildren(item: any): any[] {
+  const childSources = [
+    item?.children,
+    item?.props?.children,
+    item?.props?.list,
+    item?.props?.items,
+    item?.props?.fields,
+  ]
+  return childSources.find(children => Array.isArray(children)) || []
+}
+
+function collectSubTableRules(items: any[]): any[] {
+  const result: any[] = []
+  for (const item of items || []) {
+    if (!item) continue
+    if (item.type === 'subTable') result.push(item)
+    const children = getRuleChildren(item)
+    if (children.length) result.push(...collectSubTableRules(children))
+  }
+  return result
+}
+
+function isCardRule(item: any): boolean {
+  return ['el-card', 'elCard', 'card'].includes(item?.type)
+}
+
+function getLayoutLabel(item: any): string {
+  return String(item?.title || item?.props?.header || item?.props?.title || '')
+}
+
 /**
  * Handle sub-table binding selection change — check for duplicates and warn
  */
@@ -2337,8 +2312,10 @@ async function handleSaveForm(isManual = false) {
     const rule = designerRef.value.getRule()
     const options = designerRef.value.getOption()
 
+    const subTableRules = collectSubTableRules(rule)
+
     // Validate: all subTable placeholders must have a _bindingId selected
-    const invalidPlaceholders = rule.filter((r: any) => r.type === 'subTable' && !r._bindingId)
+    const invalidPlaceholders = subTableRules.filter((r: any) => !r._bindingId)
     if (invalidPlaceholders.length > 0) {
       if (isManual) ElMessage.error(t('form.subTableBindingRequired'))
       return
@@ -2346,16 +2323,16 @@ async function handleSaveForm(isManual = false) {
 
     // 子表占位符必须绑定 SUB 类型表绑定（流程/任务表单下一主多子，数据走子表单增删改）
     if (selectedForm.value.formType === 'PROCESS' || selectedForm.value.formType === 'TASK') {
-      const subTableRules = rule.filter((r: any) => r.type === 'subTable' && r._bindingId)
+      const boundSubTableRules = subTableRules.filter((r: any) => r._bindingId)
       // Use designerSubBindings for validation (includes latest bindings from store)
       const bindingMap = new Map(designerSubBindings.value.map(b => [b.bindingId, b.bindingType]))
       console.log('[FormDesigner] Validating subTable widgets:', {
-        subTableRules: subTableRules.map(r => ({ _bindingId: r._bindingId, title: r.title })),
+        subTableRules: boundSubTableRules.map(r => ({ _bindingId: r._bindingId, title: r.title })),
         bindingMap: Array.from(bindingMap.entries()),
         designerSubBindings: designerSubBindings.value,
         selectedFormTableBindings: selectedForm.value.tableBindings
       })
-      for (const st of subTableRules) {
+      for (const st of boundSubTableRules) {
         const bindingType = bindingMap.get(st._bindingId)
         console.log('[FormDesigner] Checking subTable widget:', { bindingId: st._bindingId, bindingType, isSub: bindingType === 'SUB' })
         if (!bindingType) {
@@ -2661,106 +2638,65 @@ function handlePreview() {
     return r
   })
 
-  // ── Flatten rule: recursively extract lookup items from layout containers ───
-  // NOTE: We no longer extract lookups from containers. Lookup fields should remain
-  // in the regular fields segment and be rendered by form-create, not as separate preview items.
-  // Extracting them caused duplicate rendering issues.
-  const LOOKUP_EXTRACT_CONTAINERS = new Set(['elCard', 'group', 'el-row', 'el-col', 'el-collapse', 'el-tabs', 'div', 'card', 'layout'])
-  const extractedLookups: any[] = []
-
-  function extractLookupsFromItems(items: any[]): void {
-    if (!items || !Array.isArray(items)) return
-    for (const item of items) {
-      if (!item) continue
-      try {
-        console.log('[DEBUG] extractLookupsFromItems - item:', item.type, 'field:', item.field, 'props lookupConfig:', !!item.props?.lookupConfig)
-        // Check for lookup: type === 'lookup' OR has lookupConfig in props
-        if (item.type === 'lookup' || item.props?.lookupConfig) {
-          // Only extract if not already at top level
-          extractedLookups.push(item)
-        }
-        if (item.children && Array.isArray(item.children)) {
-          extractLookupsFromItems(item.children)
-        }
-      } catch (e) {
-        console.error('[DEBUG] extractLookupsFromItems item error:', e)
-      }
-    }
-  }
-
-  // Scan all rule items for lookup fields inside layout containers
-  for (const r of rawRule) {
-    // Check various possible child locations
-    const directChildren = r.children
-    const propsChildren = r.props?.children
-    const propsList = r.props?.list
-    const propsItems = r.props?.items
-    const propsFields = r.props?.fields
-    console.log('[DEBUG] Checking rule item:', r.type, 'field:', r.field, 'directChildren:', !!directChildren, 'propsChildren:', !!propsChildren, 'propsList:', !!propsList)
-    
-    if (LOOKUP_EXTRACT_CONTAINERS.has(r.type)) {
-      // Try all possible child sources
-      const childrenSources = [directChildren, propsChildren, propsList, propsItems, propsFields].filter(c => c && Array.isArray(c))
-      for (const children of childrenSources) {
-        extractLookupsFromItems(children)
-      }
-    }
-  }
-  console.log('[DEBUG] Extracted lookups from layout containers:', extractedLookups.length, extractedLookups.map(l => l.field))
-  console.log('[DEBUG] ========== END LAYOUT SCAN ==========')
-
-  // Build previewItems: split rawRule into segments separated by subTable placeholders
-  const items: typeof previewItems.value = []
-  let currentSegment: any[] = []
-  let segmentIndex = 0
-
   // form-create proprietary types that should not be rendered in preview
   const FC_SKIP_PREVIEW = new Set(['subForm', 'tableForm', 'tableFormColumn', 'group', 'el-row', 'el-col'])
-  // Pending relation table previews to insert after the current segment flushes
-  let pendingRelationPreviews: Array<{ tableName: string; fields: Array<{ label: string; value: string }> }> = []
 
-  function flushSegment() {
-    if (currentSegment.length > 0) {
-      items.push({ kind: 'fields', rule: [...currentSegment], modelKey: `seg_${segmentIndex++}` })
-      currentSegment = []
-    }
-    // Append any pending relation table previews right after this segment
-    for (const rp of pendingRelationPreviews) {
-      items.push({ kind: 'relationTable', tableName: rp.tableName, fields: rp.fields })
-    }
-    pendingRelationPreviews = []
+  function containsSubTableRule(item: any): boolean {
+    if (!item) return false
+    if (item.type === 'subTable' && (item._bindingId ?? item.props?._bindingId) != null) return true
+    return getRuleChildren(item).some(child => containsSubTableRule(child))
   }
 
-  // ── Process all rule items ──
-  // NOTE: extractedLookups are intentionally NOT added to allRuleItems.
-  // Lookup fields inside layout containers (like card) will be rendered by form-create
-  // as part of the fields segment, not as separate preview items.
-  // Adding them separately caused duplicate rendering issues.
-  const allRuleItems = rawRule
-  for (const ruleItem of allRuleItems) {
-    // _bindingId may be at top-level (after parseRule) or still in props (if getRule skipped parseRule)
-    const itemBindingId = ruleItem._bindingId ?? ruleItem.props?._bindingId ?? null
-    console.log('[Preview] Checking ruleItem:', { type: ruleItem.type, _bindingId: itemBindingId, field: ruleItem.field })
-    if (ruleItem.type === 'subTable' && itemBindingId != null) {
-      flushSegment()
-      // Add inline sub-table if binding exists
-      const binding = bindingMap.get(Number(itemBindingId))
-      console.log('[Preview] Found subTable with bindingId:', itemBindingId, 'binding found:', !!binding)
-      if (binding) {
-        items.push({ kind: 'subTable', binding })
-        bindingMap.delete(Number(itemBindingId)) // mark as placed
+  function buildPreviewItems(ruleItems: any[], localBindingMap: Map<number, any>, keyPrefix = 'seg'): FormPreviewItem[] {
+    const items: FormPreviewItem[] = []
+    let currentSegment: any[] = []
+    let segmentIndex = 0
+
+    function flushSegment() {
+      if (currentSegment.length > 0) {
+        items.push({ kind: 'fields', rule: [...currentSegment], modelKey: `${keyPrefix}_${segmentIndex++}` })
+        currentSegment = []
       }
-    } else if (ruleItem.type === 'lookup') {
-      flushSegment()
-      items.push(makeLookupPreviewItem(ruleItem, config))
-    } else if (FC_SKIP_PREVIEW.has(ruleItem.type)) {
-      // Skip form-create proprietary components in preview
-    } else {
-      currentSegment.push(ruleItem)
     }
+
+    for (const ruleItem of ruleItems) {
+      const itemBindingId = ruleItem._bindingId ?? ruleItem.props?._bindingId ?? null
+      console.log('[Preview] Checking ruleItem:', { type: ruleItem.type, _bindingId: itemBindingId, field: ruleItem.field })
+
+      if (ruleItem.type === 'subTable' && itemBindingId != null) {
+        flushSegment()
+        const binding = localBindingMap.get(Number(itemBindingId))
+        console.log('[Preview] Found subTable with bindingId:', itemBindingId, 'binding found:', !!binding)
+        if (binding) {
+          items.push({ kind: 'subTable', binding })
+          localBindingMap.delete(Number(itemBindingId))
+        }
+      } else if (isCardRule(ruleItem) && containsSubTableRule(ruleItem)) {
+        flushSegment()
+        items.push({
+          kind: 'card',
+          title: getLayoutLabel(ruleItem),
+          items: buildPreviewItems(getRuleChildren(ruleItem), localBindingMap, `card_${segmentIndex++}`),
+          modelKey: `${keyPrefix}_card_${segmentIndex}`,
+        })
+      } else if (ruleItem.type === 'lookup') {
+        flushSegment()
+        items.push(makeLookupPreviewItem(ruleItem, config))
+      } else if (FC_SKIP_PREVIEW.has(ruleItem.type)) {
+        if (containsSubTableRule(ruleItem)) {
+          flushSegment()
+          items.push(...buildPreviewItems(getRuleChildren(ruleItem), localBindingMap, `${keyPrefix}_layout_${segmentIndex++}`))
+        }
+      } else {
+        currentSegment.push(ruleItem)
+      }
+    }
+
+    flushSegment()
+    return items
   }
-  // Flush remaining fields
-  flushSegment()
+
+  const items = buildPreviewItems(rawRule, bindingMap)
   // Append any unplaced bindings at the bottom (skip RELATED — already shown under lookup fields)
   // Only SUB bindings that were explicitly placed via subTable component are shown;
   // unplaced bindings (no component in the form) are not rendered.

@@ -32,6 +32,12 @@ import java.util.stream.Collectors;
 @Slf4j
 @RequiredArgsConstructor
 public class ProcessDesignComponentImpl implements ProcessDesignComponent {
+    private static final Pattern FLOW_NODE_ID_PATTERN = Pattern.compile(
+            "<bpmn:(startEvent|endEvent|userTask|serviceTask|scriptTask|manualTask|sendTask|receiveTask|"
+                    + "businessRuleTask|task|subProcess|exclusiveGateway|parallelGateway|inclusiveGateway|"
+                    + "eventBasedGateway|complexGateway|intermediateCatchEvent|intermediateThrowEvent|"
+                    + "boundaryEvent|callActivity)\\b[^>]*\\bid=\"([^\"]+)\"",
+            Pattern.DOTALL);
     
     private final ProcessDefinitionRepository processDefinitionRepository;
     private final FunctionUnitRepository functionUnitRepository;
@@ -184,11 +190,10 @@ public class ProcessDesignComponentImpl implements ProcessDesignComponent {
     
     private List<String> extractNodeIds(String bpmnXml) {
         List<String> ids = new ArrayList<>();
-        Pattern pattern = Pattern.compile("id=\"([^\"]+)\"");
-        Matcher matcher = pattern.matcher(bpmnXml);
+        Matcher matcher = FLOW_NODE_ID_PATTERN.matcher(bpmnXml);
         
         while (matcher.find()) {
-            ids.add(matcher.group(1));
+            ids.add(matcher.group(2));
         }
         
         return ids;
@@ -207,7 +212,7 @@ public class ProcessDesignComponentImpl implements ProcessDesignComponent {
     }
     
     private boolean isStartOrEndEvent(String bpmnXml, String nodeId) {
-        String pattern = String.format("(startEvent|endEvent)[^>]*id=\"%s\"", nodeId);
+        String pattern = String.format("(startEvent|endEvent)[^>]*id=\"%s\"", Pattern.quote(nodeId));
         return Pattern.compile(pattern).matcher(bpmnXml).find();
     }
     

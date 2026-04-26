@@ -273,6 +273,7 @@ const placedBindingIds = computed((): Set<number> => {
   const ids = new Set<number>()
   const collect = (fields: any[]) => fields.forEach((f: any) => {
     if (f.type === 'subTable' && f._bindingId != null) ids.add(f._bindingId)
+    if (Array.isArray(f.children)) collect(f.children)
   })
   collect(formFields.value)
   formTabs.value.forEach((tab: any) => collect(tab.fields))
@@ -859,20 +860,34 @@ const parseFormConfig = (configStr: string) => {
 }
 
 // 递归提取字段
-// form-create 专有组件类型，不应被平铺渲染，直接跳过（含其 children）
-const FC_SKIP_TYPES = new Set(['group', 'subForm', 'tableForm', 'tableFormColumn', 'el-row', 'el-col'])
+// These are structural/runtime-only form-create nodes. Layout containers must be
+// traversed so user portal keeps the same visible fields and sub-table positions
+// as developer workstation Form Preview.
+const FC_SKIP_TYPES = new Set(['subForm', 'tableForm', 'tableFormColumn'])
 
 const extractFieldsRecursive = (items: any[]): FormField[] => {
   const fields: FormField[] = []
   for (const item of items) {
-    if (item.type === 'subTable' && item._bindingId != null) {
+    const bindingId = item._bindingId ?? item.props?._bindingId
+    if (item.type === 'subTable' && bindingId != null) {
       fields.push({
-        key: `__subTable_${item._bindingId}`,
+        key: `__subTable_${bindingId}`,
         label: '',
         type: 'subTable',
-        _bindingId: item._bindingId,
+        _bindingId: Number(bindingId),
         span: 24
       })
+    } else if (isCardRule(item)) {
+      fields.push({
+        key: getLayoutKey(item, fields.length, 'card'),
+        label: getLayoutLabel(item),
+        type: 'card',
+        span: item.col?.span || 24,
+        children: item.children && Array.isArray(item.children)
+          ? extractFieldsRecursive(item.children)
+          : []
+      } as any)
+      continue
     } else if (item.type === 'lookup' && item.field) {
       // Lookup field — parse config from form-create rule props.lookupConfig
       let lookupCfg: any = {}
@@ -905,18 +920,23 @@ const extractFieldsRecursive = (items: any[]): FormField[] => {
       }
       fields.push(field)
     } else if (FC_SKIP_TYPES.has(item.type)) {
-      // form-create 专有组件，跳过，不递归其子字段
       continue
     } else if (item.field) {
       const field = convertFormCreateRule(item)
       if (field) fields.push(field)
-    } else if (item.children && Array.isArray(item.children)) {
-      // 布局容器（无 field）才递归
+    }
+    if (item.children && Array.isArray(item.children)) {
       fields.push(...extractFieldsRecursive(item.children))
     }
   }
   return fields
 }
+
+const isCardRule = (item: any): boolean => ['el-card', 'elCard', 'card'].includes(item.type)
+const getLayoutKey = (item: any, index: number, fallback: string): string =>
+  String(item.field || item.name || item.id || `__layout_${fallback}_${index}`)
+const getLayoutLabel = (item: any): string =>
+  String(item.title || item.props?.header || item.props?.title || '')
 
 // 将 form-create 规则转换为 FormRenderer 字段
 const convertFormCreateRule = (rule: any): FormField | null => {

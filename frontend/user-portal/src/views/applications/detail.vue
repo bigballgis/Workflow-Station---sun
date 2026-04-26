@@ -311,6 +311,7 @@ const placedBindingIds = computed((): Set<number> => {
   const ids = new Set<number>()
   const collect = (fields: any[]) => fields.forEach((f: any) => {
     if (f.type === 'subTable' && f._bindingId != null) ids.add(f._bindingId)
+    if (Array.isArray(f.children)) collect(f.children)
   })
   collect(formFields.value)
   formTabs.value.forEach((tab: any) => collect(tab.fields))
@@ -1629,21 +1630,34 @@ const parseFormConfig = (configStr: string) => {
   }
 }
 
-// form-create proprietary container: do not recurse into its subtree (consistent with start.vue)
-const FC_SKIP_TYPES = new Set(['group', 'subForm', 'tableForm', 'tableFormColumn'])
+// form-create runtime-only nodes. Layout containers such as group/el-row/el-col
+// must be traversed so application detail matches developer workstation preview.
+const FC_SKIP_TYPES = new Set(['subForm', 'tableForm', 'tableFormColumn'])
 
 // Recursively extract fields
 const extractFieldsRecursive = (items: any[]): FormField[] => {
   const fields: FormField[] = []
   for (const item of items) {
-    if (item.type === 'subTable' && item._bindingId != null) {
+    const bindingId = item._bindingId ?? item.props?._bindingId
+    if (item.type === 'subTable' && bindingId != null) {
       fields.push({
-        key: `__subTable_${item._bindingId}`,
+        key: `__subTable_${bindingId}`,
         label: '',
         type: 'subTable',
-        _bindingId: item._bindingId,
+        _bindingId: Number(bindingId),
         span: 24,
       })
+    } else if (isCardRule(item)) {
+      fields.push({
+        key: getLayoutKey(item, fields.length, 'card'),
+        label: getLayoutLabel(item),
+        type: 'card',
+        span: item.col?.span || 24,
+        children: item.children && Array.isArray(item.children)
+          ? extractFieldsRecursive(item.children)
+          : [],
+      } as any)
+      continue
     } else if (item.type === 'lookup' && item.field) {
       let lookupCfg: any = {}
       try {
@@ -1675,19 +1689,22 @@ const extractFieldsRecursive = (items: any[]): FormField[] => {
       fields.push(field)
     } else if (FC_SKIP_TYPES.has(item.type)) {
       continue
-    } else if (item.type === 'el-row' || item.type === 'el-col') {
-      if (item.children && Array.isArray(item.children)) {
-        fields.push(...extractFieldsRecursive(item.children))
-      }
     } else if (item.field) {
       const field = convertFormCreateRule(item)
       if (field) fields.push(field)
-    } else if (item.children && Array.isArray(item.children)) {
+    }
+    if (item.children && Array.isArray(item.children)) {
       fields.push(...extractFieldsRecursive(item.children))
     }
   }
   return fields
 }
+
+const isCardRule = (item: any): boolean => ['el-card', 'elCard', 'card'].includes(item.type)
+const getLayoutKey = (item: any, index: number, fallback: string): string =>
+  String(item.field || item.name || item.id || `__layout_${fallback}_${index}`)
+const getLayoutLabel = (item: any): string =>
+  String(item.title || item.props?.header || item.props?.title || '')
 
 // Convert form rules
 const convertFormCreateRule = (rule: any): FormField | null => {

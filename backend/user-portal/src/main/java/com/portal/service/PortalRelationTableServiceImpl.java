@@ -21,6 +21,13 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class PortalRelationTableServiceImpl implements PortalRelationTableService {
 
+    private static final Long SYSTEM_USER_TABLE_ID = -1_000_000_001L;
+    private static final String SYSTEM_USER_TABLE_NAME = "sys_users";
+    private static final List<String> SYSTEM_USER_FIELD_NAMES = List.of(
+            "id", "username", "display_name", "full_name", "email", "employee_id", "status", "language");
+    private static final List<String> DEFAULT_SYSTEM_USER_SEARCH_FIELDS = List.of(
+            "username", "display_name", "full_name", "email", "employee_id");
+
     private final JdbcTemplate jdbcTemplate;
     private final RoleAccessComponent roleAccessComponent;
 
@@ -165,6 +172,10 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
                                                       List<String> searchFields, String displayField,
                                                       int limit) {
         try {
+            if (SYSTEM_USER_TABLE_ID.equals(tableId)) {
+                return searchSystemUsersForLookup(keyword, searchFields, limit);
+            }
+
             String tableName = getPhysicalTableName(tableId);
             if (tableName == null) {
                 return Collections.emptyList();
@@ -261,6 +272,10 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
     @Transactional(readOnly = true)
     public List<Map<String, Object>> getViewFieldsByTableId(Long tableId) {
         try {
+            if (SYSTEM_USER_TABLE_ID.equals(tableId)) {
+                return systemUserViewFields();
+            }
+
             // First try rt_view_fields (configured view)
             String sql = "SELECT vf.field_name, vf.display_label, vf.column_width, vf.sort_order, vf.visible "
                     + "FROM rt_view_fields vf "
@@ -297,6 +312,84 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
 
     // ==================== Helper methods ====================
 
+    private List<Map<String, Object>> searchSystemUsersForLookup(String keyword,
+                                                                 List<String> searchFields,
+                                                                 int limit) {
+        int safeLimit = normalizeLimit(limit);
+        String columns = SYSTEM_USER_FIELD_NAMES.stream()
+                .map(this::sanitizeIdentifier)
+                .collect(Collectors.joining(", "));
+
+        if (keyword == null || keyword.isBlank()) {
+            String sql = "SELECT " + columns + " FROM " + SYSTEM_USER_TABLE_NAME
+                    + " WHERE deleted = false AND status = 'ACTIVE'"
+                    + " ORDER BY username LIMIT ?";
+            return jdbcTemplate.queryForList(sql, safeLimit);
+        }
+
+        List<String> sanitizedFields = systemUserSearchFields(searchFields).stream()
+                .map(this::sanitizeIdentifier)
+                .toList();
+        String whereClause = sanitizedFields.stream()
+                .map(f -> f + " ILIKE ?")
+                .collect(Collectors.joining(" OR "));
+
+        String likePattern = "%" + keyword + "%";
+        Object[] params = new Object[sanitizedFields.size() + 1];
+        Arrays.fill(params, 0, sanitizedFields.size(), likePattern);
+        params[sanitizedFields.size()] = safeLimit;
+
+        String sql = "SELECT " + columns + " FROM " + SYSTEM_USER_TABLE_NAME
+                + " WHERE deleted = false AND status = 'ACTIVE' AND ("
+                + whereClause + ") ORDER BY username LIMIT ?";
+        return jdbcTemplate.queryForList(sql, params);
+    }
+
+    private List<String> systemUserSearchFields(List<String> searchFields) {
+        if (searchFields == null || searchFields.isEmpty()) {
+            return DEFAULT_SYSTEM_USER_SEARCH_FIELDS;
+        }
+        List<String> allowedFields = searchFields.stream()
+                .filter(SYSTEM_USER_FIELD_NAMES::contains)
+                .distinct()
+                .toList();
+        return allowedFields.isEmpty() ? DEFAULT_SYSTEM_USER_SEARCH_FIELDS : allowedFields;
+    }
+
+    private List<Map<String, Object>> systemUserViewFields() {
+        List<Map<String, Object>> fields = new ArrayList<>();
+        for (int i = 0; i < SYSTEM_USER_FIELD_NAMES.size(); i++) {
+            String fieldName = SYSTEM_USER_FIELD_NAMES.get(i);
+            Map<String, Object> field = new HashMap<>();
+            field.put("fieldName", fieldName);
+            field.put("displayLabel", systemUserFieldLabel(fieldName));
+            field.put("columnWidth", null);
+            field.put("sortOrder", i + 1);
+            field.put("visible", true);
+            fields.add(field);
+        }
+        return fields;
+    }
+
+    private String systemUserFieldLabel(String fieldName) {
+        return switch (fieldName) {
+            case "id" -> "User ID";
+            case "username" -> "Username";
+            case "display_name" -> "Display Name";
+            case "full_name" -> "Full Name";
+            case "email" -> "Email";
+            case "employee_id" -> "Employee ID";
+            case "status" -> "Status";
+            case "language" -> "Language";
+            default -> fieldName;
+        };
+    }
+
+    private int normalizeLimit(int limit) {
+        if (limit <= 0) return 50;
+        return Math.min(limit, 200);
+    }
+
     private Set<String> getUserRoleIds(String userId) {
         // Roles assigned directly or via virtual groups
         List<Map<String, Object>> roles = roleAccessComponent.getUserBusinessRoles(userId);
@@ -331,6 +424,9 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
     }
 
     private String getPhysicalTableName(Long tableId) {
+        if (SYSTEM_USER_TABLE_ID.equals(tableId)) {
+            return SYSTEM_USER_TABLE_NAME;
+        }
         String sql = "SELECT table_name FROM rt_table_definitions WHERE id = ? AND status = ?";
         List<String> names = jdbcTemplate.query(sql,
                 (rs, rowNum) -> rs.getString("table_name"),
@@ -339,6 +435,9 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
     }
 
     private List<String> getFieldNames(Long tableId) {
+        if (SYSTEM_USER_TABLE_ID.equals(tableId)) {
+            return SYSTEM_USER_FIELD_NAMES;
+        }
         String sql = "SELECT field_name FROM rt_field_definitions WHERE table_id = ? ORDER BY sort_order ASC";
         return jdbcTemplate.query(sql, (rs, rowNum) -> rs.getString("field_name"), tableId);
     }

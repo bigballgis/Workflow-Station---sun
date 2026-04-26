@@ -21,7 +21,94 @@
           >
             <el-row :gutter="20">
               <template v-for="field in tab.fields" :key="field.key">
-                <template v-if="field.type === 'subTable'">
+                <template v-if="field.type === 'card'">
+                  <el-col :span="field.span || 24">
+                    <el-card shadow="never" class="form-layout-card">
+                      <template v-if="field.label" #header>
+                        <span class="form-layout-card-title">{{ field.label }}</span>
+                      </template>
+                      <el-row :gutter="20">
+                        <template v-for="child in field.children || []" :key="child.key">
+                          <template v-if="child.type === 'subTable'">
+                            <el-col :span="24" style="padding: 0;">
+                              <SubTableField
+                                v-if="resolveBinding(child._bindingId)"
+                                :title="resolveBinding(child._bindingId)!.tableName"
+                                :columns="resolveBinding(child._bindingId)!.columns"
+                                :model-value="resolveBinding(child._bindingId)!.data"
+                                :editable="!readonly && resolveBinding(child._bindingId)!.bindingMode === 'EDITABLE'"
+                                :row-formulas="getSubFormRowFormulas(child._bindingId)"
+                                :summary-columns="getSummaryColumns(child._bindingId)"
+                                :summary-aggregations="getSummaryAggregations(child._bindingId)"
+                                :validation-config="getSubTableValidation(child._bindingId)"
+                                :upload-url="uploadUrl"
+                                :task-id="taskId"
+                                :assignee-field="subTableAssigneeField(child._bindingId)"
+                                :show-assign-button="showSubTableAssignColumn(child._bindingId)"
+                                :can-assign="!readonly && showSubTableAssignColumn(child._bindingId)"
+                                :enable-polling="enableSubTablePolling"
+                                :polling-interval="subTablePollingInterval"
+                                @update:model-value="(rows: any[]) => handleSubTableUpdate(child._bindingId!, rows)"
+                                style="margin-bottom: 16px;"
+                              />
+                            </el-col>
+                          </template>
+                          <template v-else-if="child.type === 'lookup'">
+                            <el-col :span="child.span || 24">
+                              <el-form-item :prop="child.key" class="lookup-form-item">
+                                <template #label>
+                                  <span class="lookup-label-text">
+                                    <el-icon class="lookup-label-icon"><Search /></el-icon>
+                                    {{ child.label }}
+                                  </span>
+                                </template>
+                                <div class="lookup-field-wrapper">
+                                  <LookupField
+                                    v-model="formData[child.key]"
+                                    :table-id="(child as any)._lookupTableId"
+                                    :search-fields="(child as any)._lookupSearchFields || []"
+                                    :display-field="(child as any)._lookupDisplayField || ''"
+                                    :display-fields="(child as any)._lookupDisplayFields || []"
+                                    :view-fields="(child as any)._lookupViewFields || []"
+                                    :placeholder="child.placeholder"
+                                    :readonly="readonly"
+                                    @select="(row: any) => handleLookupSelect(child.key, row)"
+                                    @clear="() => handleLookupClear(child.key)"
+                                    @view-fields-loaded="(fields: any[]) => lookupLoadedViewFields[child.key] = fields"
+                                  />
+                                  <LookupViewDisplay
+                                    v-if="lookupSelectedData[child.key]"
+                                    :selected-data="lookupSelectedData[child.key]"
+                                    :view-fields="(child as any)._lookupViewFields?.length ? (child as any)._lookupViewFields : (lookupLoadedViewFields[child.key] || [])"
+                                  />
+                                </div>
+                              </el-form-item>
+                            </el-col>
+                          </template>
+                          <el-col v-else :span="child.span || 24" v-show="engineVisibility.get(child.key) ?? true">
+                            <el-form-item :label="child.label" :prop="child.key" :required="child.required">
+                              <FieldRenderer
+                                :field="child"
+                                :model-value="formData[child.key]"
+                                :readonly="readonly"
+                                :disabled="engineFieldStates.get(child.key)?.disabled || false"
+                                :visible="engineVisibility.get(child.key) ?? true"
+                                :options="engineOptions.get(child.key)"
+                                :upload-url="uploadUrl"
+                                :user-search-results="userSearchResults.get(child.key)"
+                                @update:model-value="(val: any) => handleFieldChange(child.key, val)"
+                                @upload:success="(res: any, file: any, key: string) => handleUploadSuccess(res, file, key)"
+                                @upload:remove="(file: any, key: string) => handleUploadRemove(file, key)"
+                                @search:users="handleUserSearch"
+                              />
+                            </el-form-item>
+                          </el-col>
+                        </template>
+                      </el-row>
+                    </el-card>
+                  </el-col>
+                </template>
+                <template v-else-if="field.type === 'subTable'">
                   <el-col :span="24" style="padding: 0;">
                     <SubTableField
                       v-if="resolveBinding(field._bindingId)"
@@ -109,7 +196,94 @@
       <template v-else>
         <el-row :gutter="20">
           <template v-for="field in fields" :key="field.key">
-            <template v-if="field.type === 'subTable'">
+            <template v-if="field.type === 'card'">
+              <el-col :span="field.span || 24">
+                <el-card shadow="never" class="form-layout-card">
+                  <template v-if="field.label" #header>
+                    <span class="form-layout-card-title">{{ field.label }}</span>
+                  </template>
+                  <el-row :gutter="20">
+                    <template v-for="child in field.children || []" :key="child.key">
+                      <template v-if="child.type === 'subTable'">
+                        <el-col :span="24" style="padding: 0;">
+                          <SubTableField
+                            v-if="resolveBinding(child._bindingId)"
+                            :title="resolveBinding(child._bindingId)!.tableName"
+                            :columns="resolveBinding(child._bindingId)!.columns"
+                            :model-value="resolveBinding(child._bindingId)!.data"
+                            :editable="!readonly && resolveBinding(child._bindingId)!.bindingMode === 'EDITABLE'"
+                            :row-formulas="getSubFormRowFormulas(child._bindingId)"
+                            :summary-columns="getSummaryColumns(child._bindingId)"
+                            :summary-aggregations="getSummaryAggregations(child._bindingId)"
+                            :validation-config="getSubTableValidation(child._bindingId)"
+                            :upload-url="uploadUrl"
+                            :task-id="taskId"
+                            :assignee-field="subTableAssigneeField(child._bindingId)"
+                            :show-assign-button="showSubTableAssignColumn(child._bindingId)"
+                            :can-assign="!readonly && showSubTableAssignColumn(child._bindingId)"
+                            :enable-polling="enableSubTablePolling"
+                            :polling-interval="subTablePollingInterval"
+                            @update:model-value="(rows: any[]) => handleSubTableUpdate(child._bindingId!, rows)"
+                            style="margin-bottom: 16px;"
+                          />
+                        </el-col>
+                      </template>
+                      <template v-else-if="child.type === 'lookup'">
+                        <el-col :span="child.span || 24">
+                          <el-form-item :prop="child.key" class="lookup-form-item">
+                            <template #label>
+                              <span class="lookup-label-text">
+                                <el-icon class="lookup-label-icon"><Search /></el-icon>
+                                {{ child.label }}
+                              </span>
+                            </template>
+                            <div class="lookup-field-wrapper">
+                              <LookupField
+                                v-model="formData[child.key]"
+                                :table-id="(child as any)._lookupTableId"
+                                :search-fields="(child as any)._lookupSearchFields || []"
+                                :display-field="(child as any)._lookupDisplayField || ''"
+                                :display-fields="(child as any)._lookupDisplayFields || []"
+                                :view-fields="(child as any)._lookupViewFields || []"
+                                :placeholder="child.placeholder"
+                                :readonly="readonly"
+                                @select="(row: any) => handleLookupSelect(child.key, row)"
+                                @clear="() => handleLookupClear(child.key)"
+                                @view-fields-loaded="(fields: any[]) => lookupLoadedViewFields[child.key] = fields"
+                              />
+                              <LookupViewDisplay
+                                v-if="lookupSelectedData[child.key]"
+                                :selected-data="lookupSelectedData[child.key]"
+                                :view-fields="(child as any)._lookupViewFields?.length ? (child as any)._lookupViewFields : (lookupLoadedViewFields[child.key] || [])"
+                              />
+                            </div>
+                          </el-form-item>
+                        </el-col>
+                      </template>
+                      <el-col v-else :span="child.span || 24" v-show="engineVisibility.get(child.key) ?? true">
+                        <el-form-item :label="child.label" :prop="child.key" :required="child.required">
+                          <FieldRenderer
+                            :field="child"
+                            :model-value="formData[child.key]"
+                            :readonly="readonly"
+                            :disabled="engineFieldStates.get(child.key)?.disabled || false"
+                            :visible="engineVisibility.get(child.key) ?? true"
+                            :options="engineOptions.get(child.key)"
+                            :upload-url="uploadUrl"
+                            :user-search-results="userSearchResults.get(child.key)"
+                            @update:model-value="(val: any) => handleFieldChange(child.key, val)"
+                            @upload:success="(res: any, file: any, key: string) => handleUploadSuccess(res, file, key)"
+                            @upload:remove="(file: any, key: string) => handleUploadRemove(file, key)"
+                            @search:users="handleUserSearch"
+                          />
+                        </el-form-item>
+                      </el-col>
+                    </template>
+                  </el-row>
+                </el-card>
+              </el-col>
+            </template>
+            <template v-else-if="field.type === 'subTable'">
               <el-col :span="24" style="padding: 0;">
                 <SubTableField
                   v-if="resolveBinding(field._bindingId)"
@@ -345,10 +519,12 @@ const uploadFileLists = ref<Record<string, Array<{ name: string; url: string; ui
 
 // Get all fields (including fields in tabs)
 const allFields = computed(() => {
+  const flatten = (items: FormField[]): FormField[] =>
+    items.flatMap(field => field.children?.length ? flatten(field.children) : [field])
   if (hasTabs.value && props.tabs) {
-    return props.tabs.flatMap(tab => tab.fields)
+    return props.tabs.flatMap(tab => flatten(tab.fields))
   }
-  return props.fields
+  return flatten(props.fields)
 })
 
 // ---------------------------------------------------------------------------
@@ -836,6 +1012,21 @@ defineExpose({
 
   :deep(.el-form) {
     width: 100%;
+  }
+
+  .form-layout-card {
+    width: 100%;
+    margin-bottom: 18px;
+
+    :deep(.el-card__header) {
+      padding: 12px 16px;
+      font-weight: 500;
+      background: #fafafa;
+    }
+  }
+
+  .form-layout-card-title {
+    color: #303133;
   }
 
   .color-swatch {

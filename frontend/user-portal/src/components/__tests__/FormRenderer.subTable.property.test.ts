@@ -32,6 +32,66 @@ describe('Property 1: parseFormConfig round-trip for subTable rules', () => {
       { numRuns: 100 },
     )
   })
+
+  it('reads subTable binding id from props when designer keeps it there', () => {
+    fc.assert(
+      fc.property(
+        fc.array(fc.integer({ min: 1, max: 9999 }), { minLength: 1, maxLength: 5 }),
+        (bindingIds) => {
+          const rules = bindingIds.map(id => ({ type: 'subTable', props: { _bindingId: id } }))
+          const fields = extractFieldsRecursive(rules, noopConverter)
+          const subTableFields = fields.filter(f => f.type === 'subTable')
+          expect(subTableFields.map(f => f._bindingId)).toEqual(bindingIds)
+        },
+      ),
+      { numRuns: 100 },
+    )
+  })
+
+  it('finds subTable placeholders nested inside layout containers', () => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 1, max: 9999 }),
+        (bindingId) => {
+          const rules = [{
+            type: 'group',
+            children: [{
+              type: 'el-row',
+              children: [{
+                type: 'el-col',
+                children: [{ type: 'subTable', _bindingId: bindingId }],
+              }],
+            }],
+          }]
+          const fields = extractFieldsRecursive(rules, noopConverter)
+          expect(fields.some(f => f.type === 'subTable' && f._bindingId === bindingId)).toBe(true)
+        },
+      ),
+      { numRuns: 100 },
+    )
+  })
+
+  it('preserves card layout containers with their nested fields', () => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 1, max: 9999 }),
+        fc.string({ minLength: 1, maxLength: 20 }),
+        (bindingId, title) => {
+          const rules = [{
+            type: 'el-card',
+            title,
+            children: [{ type: 'subTable', props: { _bindingId: bindingId } }],
+          }]
+          const fields = extractFieldsRecursive(rules, noopConverter)
+          expect(fields).toHaveLength(1)
+          expect(fields[0].type).toBe('card')
+          expect(fields[0].label).toBe(title)
+          expect(fields[0].children?.some(f => f.type === 'subTable' && f._bindingId === bindingId)).toBe(true)
+        },
+      ),
+      { numRuns: 100 },
+    )
+  })
 })
 
 describe('Property 6: Tab-pane subTable placeholder produces FormField in correct tab', () => {

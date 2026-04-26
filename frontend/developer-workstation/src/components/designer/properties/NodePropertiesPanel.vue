@@ -138,6 +138,61 @@ const isUserTaskElement = computed(() =>
   selectedElement.value && isUserTask(selectedElement.value)
 )
 
+function getElementRefId(ref: any): string {
+  return typeof ref === 'string' ? ref : (ref?.id || '')
+}
+
+function findFirstUserTaskInSubProcess(parentBo: any): any {
+  const flowElements: any[] = parentBo?.flowElements || []
+  const byId = new Map(flowElements.filter(fe => fe?.id).map(fe => [fe.id, fe]))
+  const sequenceFlows = flowElements.filter(fe => fe?.$type === 'bpmn:SequenceFlow')
+  const outgoingBySource = new Map<string, string[]>()
+
+  for (const flow of sequenceFlows) {
+    const sourceId = getElementRefId(flow.sourceRef)
+    const targetId = getElementRefId(flow.targetRef)
+    if (!sourceId || !targetId) continue
+    const outgoing = outgoingBySource.get(sourceId) || []
+    outgoing.push(targetId)
+    outgoingBySource.set(sourceId, outgoing)
+  }
+
+  const startIds = flowElements
+    .filter(fe => fe?.$type === 'bpmn:StartEvent')
+    .map(fe => fe.id)
+    .filter(Boolean)
+
+  const queue = [...startIds]
+  const visited = new Set<string>()
+  while (queue.length > 0) {
+    const id = queue.shift()
+    if (!id || visited.has(id)) continue
+    visited.add(id)
+
+    for (const targetId of outgoingBySource.get(id) || []) {
+      const target = byId.get(targetId)
+      if (target?.$type === 'bpmn:UserTask') {
+        return target
+      }
+      queue.push(targetId)
+    }
+  }
+
+  return flowElements.find(fe => fe?.$type === 'bpmn:UserTask')
+}
+
+const isMultiInstanceSubTaskElement = computed(() => {
+  if (!isUserTaskElement.value) return false
+  const element = selectedElement.value as any
+  const parentBo = element?.parent?.businessObject
+  if (parentBo?.$type !== 'bpmn:SubProcess' || !parentBo.loopCharacteristics) {
+    return false
+  }
+  const firstUserTask = findFirstUserTaskInSubProcess(parentBo)
+  const currentId = element?.businessObject?.id || element?.id
+  return !!firstUserTask && firstUserTask.id === currentId
+})
+
 const isServiceTaskElement = computed(() => 
   selectedElement.value && isServiceTask(selectedElement.value)
 )
@@ -196,6 +251,9 @@ const panelTitle = computed(() => {
   
   // User task
   if (isUserTaskElement.value) {
+    if (isMultiInstanceSubTaskElement.value) {
+      return t('properties.subTaskConfig')
+    }
     return t('properties.userTaskConfig')
   }
   

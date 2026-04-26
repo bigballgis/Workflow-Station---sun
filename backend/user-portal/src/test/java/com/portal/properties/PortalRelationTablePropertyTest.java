@@ -7,6 +7,8 @@ import com.portal.dto.PageResponse;
 import com.portal.service.PortalRelationTableService;
 import com.portal.service.PortalRelationTableServiceImpl;
 import net.jqwik.api.*;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 
@@ -14,7 +16,6 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -24,6 +25,8 @@ import static org.mockito.Mockito.*;
  * Covers Properties 5, 6, 13, 18.
  */
 class PortalRelationTablePropertyTest {
+
+    private static final Long SYSTEM_USER_TABLE_ID = -1_000_000_001L;
 
     /**
      * Property 5: Portal 可见性过滤
@@ -114,10 +117,8 @@ class PortalRelationTablePropertyTest {
         PageResponse<Map<String, Object>> pageResult = service.queryTableData(tableId, userId, 0, 10, null);
         assertThat(pageResult.getContent()).isEmpty();
 
-        // Verify: exportCsv throws when user has no access
-        assertThatThrownBy(() -> service.exportCsv(tableId, userId, 1000))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Access denied");
+        // Verify: exportCsv returns an empty payload when user has no access
+        assertThat(service.exportCsv(tableId, userId, 1000)).isEmpty();
     }
 
     /**
@@ -170,6 +171,35 @@ class PortalRelationTablePropertyTest {
                     });
             assertThat(hasMatch).isTrue();
         }
+    }
+
+    @Test
+    void systemUserLookupShouldQuerySysUsersWithAllowedColumnsOnly() {
+        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+        RoleAccessComponent roleAccess = mock(RoleAccessComponent.class);
+        PortalRelationTableService service = new PortalRelationTableServiceImpl(jdbcTemplate, roleAccess);
+
+        List<Map<String, Object>> mockResults = List.of(Map.of(
+                "id", "user-1",
+                "username", "alice",
+                "display_name", "Alice"
+        ));
+        when(jdbcTemplate.queryForList(anyString(), any(Object[].class))).thenReturn(mockResults);
+
+        List<Map<String, Object>> results = service.searchForLookup(
+                SYSTEM_USER_TABLE_ID,
+                "ali",
+                List.of("username", "display_name", "password_hash"),
+                "display_name",
+                10);
+
+        assertThat(results).isEqualTo(mockResults);
+        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+        verify(jdbcTemplate).queryForList(sqlCaptor.capture(), any(Object[].class));
+        String sql = sqlCaptor.getValue();
+        assertThat(sql).contains("SELECT id, username, display_name, full_name, email, employee_id, status, language FROM sys_users");
+        assertThat(sql).contains("deleted = false", "status = 'ACTIVE'");
+        assertThat(sql).doesNotContain("password_hash");
     }
 
     /**

@@ -15,9 +15,90 @@
           </el-form-item>
         </el-form>
       </el-collapse-item>
+
+      <!-- Multi-instance sub-task config -->
+      <el-collapse-item
+        v-if="isFirstMultiInstanceSubTask"
+        :title="t('properties.subTaskConfig')"
+        name="subTask"
+      >
+        <el-form label-position="top" size="small">
+          <el-alert type="info" :closable="false" show-icon style="margin-bottom: 8px;">
+            <template #title>{{ t('properties.subTaskConfigHint') }}</template>
+          </el-alert>
+
+          <el-form-item :label="t('properties.subTableIdField')" required>
+            <el-select
+              v-model="elementSubTableId"
+              :placeholder="t('properties.selectSubTable')"
+              :loading="loadingSubTables"
+              clearable
+              filterable
+              style="width: 100%"
+              @change="handleSubTableChange"
+            >
+              <el-option
+                v-for="table in subTables"
+                :key="table.id"
+                :label="`${table.tableDisplayName || table.tableName} (${table.tableName})`"
+                :value="table.id"
+              />
+            </el-select>
+          </el-form-item>
+
+          <el-form-item :label="t('properties.subTableNameField')">
+            <el-input v-model="elementSubTableName" disabled />
+            <div class="form-tip">{{ t('properties.subTableNameAutoFilledTip') }}</div>
+          </el-form-item>
+
+          <el-form-item :label="t('properties.assigneeFieldLabel')" required>
+            <el-select
+              v-model="assigneeField"
+              :placeholder="assigneeFieldPlaceholder"
+              :loading="loadingSubTables"
+              :disabled="!elementSubTableId"
+              clearable
+              filterable
+              style="width: 100%"
+              @change="handleAssigneeFieldChange"
+            >
+              <el-option
+                v-for="field in assigneeFieldOptions"
+                :key="field.fieldName"
+                :label="`${field.description || field.fieldName} (${field.fieldName})`"
+                :value="field.fieldName"
+              />
+            </el-select>
+            <div class="form-tip">{{ t('properties.subTaskAssigneeFieldTip') }}</div>
+          </el-form-item>
+
+          <el-form-item :label="t('properties.subTaskForm')" required>
+            <el-select
+              v-model="formId"
+              @change="handleFormChange"
+              :placeholder="t('properties.selectSubTaskForm')"
+              clearable
+              filterable
+              style="width: 100%"
+            >
+              <el-option v-for="form in forms" :key="form.id" :label="form.formName" :value="form.id" />
+            </el-select>
+            <div class="form-tip">{{ t('properties.subTaskFormTip') }}</div>
+          </el-form-item>
+
+          <el-form-item :label="t('properties.rowIdVariableLabel')">
+            <el-input
+              v-model="rowIdVariable"
+              @change="updateExtProp('rowIdVariable', rowIdVariable)"
+              placeholder="currentItem.rowId"
+            />
+            <div class="form-tip">{{ t('properties.rowIdVariableTip') }}</div>
+          </el-form-item>
+        </el-form>
+      </el-collapse-item>
       
       <!-- Assignee config -->
-      <el-collapse-item :title="t('properties.assigneeConfig')" name="assignee">
+      <el-collapse-item v-if="!isFirstMultiInstanceSubTask" :title="t('properties.assigneeConfig')" name="assignee">
         <el-form label-position="top" size="small">
           <el-form-item :label="t('properties.assigneeType')">
             <el-select v-model="assigneeType" @change="handleAssigneeTypeChange">
@@ -214,7 +295,7 @@
       </el-collapse-item>
       
       <!-- Form binding -->
-      <el-collapse-item :title="t('properties.form')" name="form">
+      <el-collapse-item v-if="!isFirstMultiInstanceSubTask" :title="t('properties.form')" name="form">
         <el-form label-position="top" size="small">
           <el-form-item :label="t('properties.bindForm')">
             <el-select v-model="formId" @change="handleFormChange" :placeholder="t('properties.selectForm')" clearable>
@@ -331,7 +412,7 @@ const props = defineProps<{
   functionUnitId: number
 }>()
 
-const activeGroups = ref(['basic', 'assignee', 'form', 'actions'])
+const activeGroups = ref(['basic', 'subTask', 'assignee', 'form', 'actions'])
 
 // Basic properties
 const taskName = ref('')
@@ -541,6 +622,10 @@ function loadProperties() {
   sequential.value = ext.sequential || false
   collection.value = ext.collection || ''
   completionCondition.value = ext.completionCondition || ''
+
+  if (isFirstMultiInstanceSubTask.value) {
+    ensureSubTaskAssigneeMode()
+  }
   
   // Load data based on assignment type
   if (needsRoleId.value) {
@@ -564,15 +649,29 @@ function updateExtProp(name: string, value: any) {
   setExtensionProperty(props.modeler, props.element, name, value)
 }
 
+function ensureSubTaskAssigneeMode() {
+  if (!isFirstMultiInstanceSubTask.value || assigneeType.value === 'ELEMENT_VARIABLE') {
+    return
+  }
+  assigneeType.value = 'ELEMENT_VARIABLE'
+  lastLoadedAssigneeType.value = 'ELEMENT_VARIABLE'
+  updateExtProp('assigneeType', 'ELEMENT_VARIABLE')
+  updateExtProp('assigneeLabel', t('properties.elementVariableType'))
+}
+
 function handleFormChange(id: number | null) {
+  ensureSubTaskAssigneeMode()
   updateExtProp('formId', id)
   const form = forms.value.find(f => f.id === id)
   if (form) {
     updateExtProp('formName', form.formName)
+  } else {
+    updateExtProp('formName', '')
   }
 }
 
 function handleSubTableChange(id: number | '') {
+  ensureSubTaskAssigneeMode()
   if (id === '' || id === null || id === undefined) {
     elementSubTableName.value = ''
     assigneeField.value = ''
@@ -608,6 +707,7 @@ function handleSubTableChange(id: number | '') {
 }
 
 function handleAssigneeFieldChange(value: string) {
+  ensureSubTaskAssigneeMode()
   updateExtProp('assigneeField', value || '')
 }
 
@@ -627,6 +727,57 @@ const parentIsMultiInstanceSubProcess = computed(() => {
   if (!parentBo) return false
   if (parentBo.$type !== 'bpmn:SubProcess') return false
   return !!parentBo.loopCharacteristics
+})
+
+function getElementRefId(ref: any): string {
+  return typeof ref === 'string' ? ref : (ref?.id || '')
+}
+
+function findFirstUserTaskInSubProcess(parentBo: any): any {
+  const flowElements: any[] = parentBo?.flowElements || []
+  const byId = new Map(flowElements.filter(fe => fe?.id).map(fe => [fe.id, fe]))
+  const sequenceFlows = flowElements.filter(fe => fe?.$type === 'bpmn:SequenceFlow')
+  const outgoingBySource = new Map<string, string[]>()
+
+  for (const flow of sequenceFlows) {
+    const sourceId = getElementRefId(flow.sourceRef)
+    const targetId = getElementRefId(flow.targetRef)
+    if (!sourceId || !targetId) continue
+    const outgoing = outgoingBySource.get(sourceId) || []
+    outgoing.push(targetId)
+    outgoingBySource.set(sourceId, outgoing)
+  }
+
+  const startIds = flowElements
+    .filter(fe => fe?.$type === 'bpmn:StartEvent')
+    .map(fe => fe.id)
+    .filter(Boolean)
+
+  const queue = [...startIds]
+  const visited = new Set<string>()
+  while (queue.length > 0) {
+    const id = queue.shift()
+    if (!id || visited.has(id)) continue
+    visited.add(id)
+
+    for (const targetId of outgoingBySource.get(id) || []) {
+      const target = byId.get(targetId)
+      if (target?.$type === 'bpmn:UserTask') {
+        return target
+      }
+      queue.push(targetId)
+    }
+  }
+
+  return flowElements.find(fe => fe?.$type === 'bpmn:UserTask')
+}
+
+const isFirstMultiInstanceSubTask = computed(() => {
+  if (!parentIsMultiInstanceSubProcess.value) return false
+  const parentBo = (props.element as any)?.parent?.businessObject
+  const firstUserTask = findFirstUserTaskInSubProcess(parentBo)
+  const currentId = props.element?.businessObject?.id || props.element?.id
+  return !!firstUserTask && firstUserTask.id === currentId
 })
 
 function onAssigneeAnchorChange(v: 'INITIATOR' | 'LAST_TASK_ASSIGNEE') {

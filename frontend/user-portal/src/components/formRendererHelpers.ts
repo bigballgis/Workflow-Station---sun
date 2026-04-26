@@ -34,6 +34,7 @@ export interface FormField {
   uploadAccept?: string
   uploadLimit?: number
   _bindingId?: number  // set when type === 'subTable'
+  children?: FormField[] // set for layout containers such as card
 }
 
 export interface FormTab {
@@ -55,24 +56,54 @@ export function extractFieldsRecursive(
   converter: (item: Record<string, unknown>) => FormField | null = () => null
 ): FormField[] {
   const fields: FormField[] = []
-  for (const item of items) {
-    if (item.type === 'subTable' && item._bindingId != null) {
+  items.forEach((item, index) => {
+    const props = item.props as Record<string, unknown> | undefined
+    const bindingId = item._bindingId ?? props?._bindingId
+    if (item.type === 'subTable' && bindingId != null) {
       fields.push({
-        key: `__subTable_${item._bindingId}`,
+        key: `__subTable_${bindingId}`,
         label: '',
         type: 'subTable',
-        _bindingId: item._bindingId as number,
+        _bindingId: Number(bindingId),
         span: 24
+      })
+    } else if (isCardRule(item)) {
+      fields.push({
+        key: getLayoutKey(item, index, 'card'),
+        label: getLayoutLabel(item),
+        type: 'card',
+        span: getRuleSpan(item),
+        children: Array.isArray(item.children)
+          ? extractFieldsRecursive(item.children as Record<string, unknown>[], converter)
+          : []
       })
     } else if (item.field) {
       const field = converter(item)
       if (field) fields.push(field)
     }
-    if (item.children && Array.isArray(item.children)) {
+    if (!isCardRule(item) && item.children && Array.isArray(item.children)) {
       fields.push(...extractFieldsRecursive(item.children as Record<string, unknown>[], converter))
     }
-  }
+  })
   return fields
+}
+
+function isCardRule(item: Record<string, unknown>): boolean {
+  return item.type === 'el-card' || item.type === 'elCard' || item.type === 'card'
+}
+
+function getLayoutKey(item: Record<string, unknown>, index: number, fallback: string): string {
+  return String(item.field || item.name || item.id || `__layout_${fallback}_${index}`)
+}
+
+function getLayoutLabel(item: Record<string, unknown>): string {
+  const props = item.props as Record<string, unknown> | undefined
+  return String(item.title || props?.header || props?.title || '')
+}
+
+function getRuleSpan(item: Record<string, unknown>): number {
+  const col = item.col as Record<string, unknown> | undefined
+  return typeof col?.span === 'number' ? col.span : 24
 }
 
 /**

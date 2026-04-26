@@ -3,14 +3,14 @@
 > **详细信息已迁移到 `.kiro/issues/index.yaml`**
 > 本文件仅保留统计摘要和当前待处理清单。
 
-## 统计 (截至 2026-04-26)
+## 统计 (截至 2026-04-27)
 
 | 状态 | 数量 |
 |------|------|
-| ✅ Fixed | **149** |
-| 🔓 Open | **3** |
+| ✅ Fixed | **150** |
+| 🔓 Open | **5** |
 | ⏸️ Wontfix | **1** |
-| **总计** | **153** |
+| **总计** | **156** |
 
 按严重度的分布见 `index.yaml` 各条目的 `severity` 字段。
 
@@ -23,6 +23,8 @@
 | 137 | architecture | developer-workstation 功能单元版本/部署双轨并存 |
 | 141 | quality | init-scripts README 与 fu 种子 code 不一致 |
 | 152 | bug | user-portal tasks 页 submitAction 捕获异常后仍弹 success |
+| 155 | quality | user-portal subTablePositionControl.property.test.ts 未注册 Element Plus 导致 Vitest unhandled errors |
+| 156 | quality | user-portal vue-tsc 在当前工具链下启动失败，无法执行类型检查 |
 
 ### Wontfix
 

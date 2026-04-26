@@ -84,6 +84,7 @@ declare module 'vue' {
     EventProperties: typeof import('./components/designer/properties/EventProperties.vue')['default']
     ExecutionLogViewer: typeof import('./components/debug/ExecutionLogViewer.vue')['default']
     FormDesigner: typeof import('./components/designer/FormDesigner.vue')['default']
+    FormPreviewItems: typeof import('./components/designer/FormPreviewItems.vue')['default']
     FormulaEditor: typeof import('./components/designer/FormulaEditor.vue')['default']
     FunctionUnitCard: typeof import('./components/function-unit/FunctionUnitCard.vue')['default']
     GatewayProperties: typeof import('./components/designer/properties/GatewayProperties.vue')['default']

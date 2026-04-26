@@ -1121,3 +1121,25 @@
   category: quality
   summary: "FormDesigner.vue 残留硬编码调试 fetch 到旧 session，运行时会持续发送 previewItems 调试日志"
   file: "frontend/developer-workstation/src/components/designer/FormDesigner.vue"
+
+- id: "154"
+  status: fixed
+  fixed_at: "2026-04-27"
+  severity: minor
+  category: quality
+  summary: "developer-workstation 流程校验 valid=true 时仍将 definitions、sequenceFlow、BPMNDI 元素误报为 ORPHAN_NODE warning"
+  file: "backend/developer-workstation/src/main/java/com/developer/component/impl/ProcessDesignComponentImpl.java"
+
+- id: "155"
+  status: open
+  severity: minor
+  category: quality
+  summary: "user-portal subTablePositionControl.property.test.ts 挂载 FormRenderer 未注册 Element Plus，断言通过但 Vitest 因大量 el-* 组件解析警告以 unhandled errors 退出"
+  file: "frontend/user-portal/src/views/__tests__/subTablePositionControl.property.test.ts"
+
+- id: "156"
+  status: open
+  severity: minor
+  category: quality
+  summary: "user-portal vue-tsc 在 Node 22 / 当前 TypeScript 组合下启动即报 Search string not found: supportedTSExtensions，无法执行类型检查"
+  file: "frontend/user-portal/package.json"
