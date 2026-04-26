@@ -167,7 +167,7 @@
             @update:model-value="(val: any) => updateRelationViewFields(binding.bindingId, val)"
             @update:available-fields="(val: any) => updateRelationViewAllFields(binding.bindingId, val)"
           />
-          <!-- Sub Table: show form designer with List View tab -->
+          <!-- Sub Table: show form designer with List View tab (FORM_ONLY has no list view) -->
           <div v-else-if="binding.bindingType === 'SUB'" class="sub-table-design-wrapper">
             <el-tabs v-model="subTableActiveTab">
               <el-tab-pane :label="t('subTableView.formDesign')" name="form">
@@ -179,7 +179,7 @@
                   />
                 </div>
               </el-tab-pane>
-              <el-tab-pane :label="t('subTableView.listView')" name="listView">
+              <el-tab-pane v-if="binding.subMode !== 'FORM_ONLY'" :label="t('subTableView.listView')" name="listView">
                 <SubTableListView
                   :ref="(el: any) => { if (el) subTableListViewRefs[binding.bindingId] = el }"
                   :binding="binding"
@@ -554,10 +554,22 @@ const autoSaving = ref(false)
 const lastAutoSaveTime = ref<Date | null>(null)
 let autoSaveTimer: ReturnType<typeof setTimeout> | null = null
 
+// Link form components loaded from API (for LinkForm widget binding selection)
+const linkFormComponents = ref<Array<{
+  id: number
+  componentName: string
+  linkedFormId: number
+  linkedFormName?: string
+  displayField?: string
+  linkText: string
+  columnLabel?: string
+  sortOrder: number
+}>>([])
+
 // Mixed preview items: alternating form-create rule segments and inline sub-tables
 const previewItems = ref<Array<
   | { kind: 'fields'; rule: any[]; modelKey: string }
-  | { kind: 'subTable'; binding: { bindingId: number; bindingType: string; bindingMode: string; tableName: string; tableType: string; tableDescription: string; rule: any[]; option?: any; columns: any[] } }
+  | { kind: 'subTable'; binding: { bindingId: number; bindingType: string; bindingMode: string; tableName: string; tableType: string; tableDescription: string; rule: any[]; option?: any; columns: any[]; subMode?: string } }
   | { kind: 'relationTable'; tableName: string; fields: Array<{ label: string; value: string }> }
   | { kind: 'lookup'; label: string; placeholder: string; searchFields: string[]; displayFields: string[]; viewFields: any[]; fieldDefs: any[]; bindingId?: number }
 >>([])
@@ -691,6 +703,7 @@ const designerSubBindings = computed(() => {
     tableId: b.tableId,
     tableType: (store.tables.find(t => t.id === b.tableId)?.tableType) || (b.bindingType === 'RELATED' ? 'RELATION' : ''),
     tableDescription: (store.tables.find(t => t.id === b.tableId)?.description) || '',
+    subMode: b.subMode,
   }))
 })
 
@@ -717,6 +730,13 @@ provide('designerRelationBindings', () => designerSubBindings.value
 // Provide formId for lookup config components
 provide('designerFormId', () => selectedForm.value?.id ?? null)
 
+// Provide link form components for LinkFormBindingSelect
+provide('linkFormComponents', () => linkFormComponents.value.map(c => ({
+  id: c.id,
+  componentName: c.componentName,
+  linkedFormName: c.linkedFormName,
+})))
+
 // Sync relation bindings and formId to lookupStore for fc-designer property panel components
 watch([() => selectedForm.value?.id, designerSubBindings, () => store.tables], () => {
   lookupStore.formId = selectedForm.value?.id ?? null
@@ -735,6 +755,26 @@ watch([() => selectedForm.value?.id, designerSubBindings, () => store.tables], (
 watch(() => selectedForm.value?.tableBindings, (newVal) => {
   console.log('[FormDesigner] tableBindings changed:', newVal)
 }, { deep: true })
+
+// Watch for selectedForm changes and load linkFormComponents
+watch([() => selectedForm.value, () => props.functionUnitId], async ([form, fuId]) => {
+  if (form && fuId) {
+    await loadLinkFormComponents()
+  } else {
+    linkFormComponents.value = []
+  }
+}, { immediate: true })
+
+async function loadLinkFormComponents() {
+  try {
+    const { linkFormComponentApi } = await import('@/api/linkFormComponent')
+    const res = await linkFormComponentApi.getComponents(props.functionUnitId)
+    linkFormComponents.value = res.data || []
+  } catch (e) {
+    console.error('[FormDesigner] failed to load linkFormComponents:', e)
+    linkFormComponents.value = []
+  }
+}
 
 
 const createForm = reactive({ formName: '', formType: 'PROCESS' as FormType, description: '', boundTableId: null as number | null })
@@ -2212,7 +2252,8 @@ function handlePreview() {
       tableDescription: (store.tables.find(t => t.id === b.tableId)?.description) || '',
       rule,
       option,
-      columns
+      columns,
+      subMode: b.subMode,
     })
   })
 

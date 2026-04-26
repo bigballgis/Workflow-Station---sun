@@ -154,6 +154,9 @@ export interface FormDefinition {
 // Table binding type
 export type BindingType = 'PRIMARY' | 'SUB' | 'RELATED'
 
+// Sub binding mode
+export type SubBindingMode = 'FULL' | 'FORM_ONLY'
+
 // Binding mode
 export type BindingMode = 'EDITABLE' | 'READONLY'
 
@@ -162,10 +165,13 @@ export interface TableBinding {
   id?: number
   tableId: number
   tableName?: string
+  tableType?: string
   bindingType: BindingType
   bindingMode: BindingMode
   foreignKeyField?: string
   sortOrder: number
+  subListViewId?: number
+  subMode?: SubBindingMode
 }
 
 // Table binding request
@@ -176,6 +182,7 @@ export interface TableBindingRequest {
   bindingMode?: BindingMode
   foreignKeyField?: string
   sortOrder?: number
+  subMode?: SubBindingMode
 }
 
 export interface ActionDefinition {

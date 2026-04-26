@@ -16,6 +16,8 @@ import i18n from './i18n'
 import './styles/index.scss'
 import SubTablePlaceholderWidget from './components/designer/SubTablePlaceholderWidget.vue'
 import SubTableBindingSelect from './components/designer/SubTableBindingSelect.vue'
+import LinkFormPlaceholderWidget from './components/designer/LinkFormPlaceholderWidget.vue'
+import LinkFormBindingSelect from './components/designer/LinkFormBindingSelect.vue'
 import { FcEditor, FcTransfer, FcCascader, FcSlider } from './components/designer/fc-custom-fields'
 import LookupComponent from './components/designer/LookupComponent.vue'
 import LookupBindingSelect from './components/designer/LookupBindingSelect.vue'
@@ -45,6 +47,10 @@ FcDesigner.component('SubTableBindingSelect', SubTableBindingSelect)
 
 // Register SubTablePlaceholderWidget as the canvas renderer for 'subTable' type
 FcDesigner.component('subTable', SubTablePlaceholderWidget)
+
+// Register LinkFormPlaceholderWidget as the canvas renderer for 'linkForm' type
+FcDesigner.component('linkForm', LinkFormPlaceholderWidget)
+FcDesigner.component('LinkFormBindingSelect', LinkFormBindingSelect)
 
 // Register custom field components so form-create can render them in canvas & preview
 FcDesigner.component('editor', FcEditor)
@@ -105,6 +111,59 @@ FcDesigner.addDragRule({
         type: 'SubTableBindingSelect',
         field: '_bindingId',
         title: 'Sub Table Binding',
+        props: {}
+      }
+    ]
+  }
+})
+
+// Register the linkForm drag rule so it appears in the designer left menu
+FcDesigner.addDragRule({
+  name: 'linkForm',
+  label: 'Link Form',
+  icon: 'icon-link',
+  menu: 'main',
+  mask: true,
+  input: false,
+  drag: false,
+  dragBtn: true,
+  inside: false,
+  only: false,
+  handleBtn: true,
+  languageKey: [],
+  loadRule(rule: any) {
+    rule.props = rule.props || {}
+    if (rule._componentId !== undefined) {
+      rule.props._componentId = rule._componentId
+    }
+  },
+  parseRule(rule: any) {
+    if (rule.props && rule.props._componentId !== undefined) {
+      rule._componentId = rule.props._componentId
+      delete rule.props._componentId
+    } else {
+      if (rule._componentId === undefined) rule._componentId = null
+    }
+  },
+  watch: {
+    _componentId({ value, rule }: { value: any; rule: any }) {
+      rule._componentId = value ?? null
+    }
+  },
+  rule() {
+    return {
+      type: 'linkForm',
+      _componentId: null,
+      title: 'Link Form',
+      props: { _componentId: null }
+    }
+  },
+  props() {
+    return [
+      {
+        type: 'LinkFormBindingSelect',
+        field: '_componentId',
+        title: 'Link Form Component',
         props: {}
       }
     ]

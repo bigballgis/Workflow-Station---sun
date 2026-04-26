@@ -3,6 +3,7 @@ package com.developer.dto;
 import com.developer.entity.FormTableBinding;
 import com.developer.enums.BindingMode;
 import com.developer.enums.BindingType;
+import com.developer.enums.SubMode;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -18,7 +19,7 @@ import java.time.Instant;
 @NoArgsConstructor
 @AllArgsConstructor
 public class FormTableBindingResponse {
-    
+
     private Long id;
     private Long formId;
     private Long tableId;
@@ -30,7 +31,9 @@ public class FormTableBindingResponse {
     private Integer sortOrder;
     private Instant createdAt;
     private Instant updatedAt;
-    
+    private Long subListViewId;
+    private SubMode subMode;
+
     /**
      * 从实体转换为响应DTO
      */
@@ -58,6 +61,8 @@ public class FormTableBindingResponse {
                 .sortOrder(binding.getSortOrder())
                 .createdAt(binding.getCreatedAt())
                 .updatedAt(binding.getUpdatedAt())
+                .subListViewId(binding.getSubListViewId())
+                .subMode(binding.getSubMode())
                 .build();
     }
 }

@@ -44,6 +44,16 @@
             <span v-else class="text-muted">-</span>
           </template>
         </el-table-column>
+        <el-table-column prop="subMode" :label="t('tableBinding.subMode')" width="130">
+          <template #default="{ row }">
+            <span v-if="row.bindingType === 'SUB'">
+              <el-tag :type="row.subMode === 'FULL' ? 'success' : 'info'" size="small">
+                {{ row.subMode === 'FULL' ? t('tableBinding.subModeFull') : t('tableBinding.subModeFormOnly') }}
+              </el-tag>
+            </span>
+            <span v-else class="text-muted">-</span>
+          </template>
+        </el-table-column>
         <el-table-column :label="t('tableBinding.operations')" width="120">
           <template #default="{ row }">
             <el-button link type="primary" size="small" @click="handleEdit(row)">{{ t('common.edit') }}</el-button>
@@ -85,6 +95,18 @@
           <div v-if="bindingForm.bindingType === 'RELATED' && !editingBinding" class="form-item-tip">
             {{ t('tableBinding.relatedForLookupHint') }}
           </div>
+        </el-form-item>
+
+        <!-- Sub binding mode (only show for SUB type) -->
+        <el-form-item
+          :label="t('tableBinding.subMode')"
+          v-if="bindingForm.bindingType === 'SUB'"
+        >
+          <el-radio-group v-model="bindingForm.subMode">
+            <el-radio value="FULL">{{ t('tableBinding.subModeFull') }}</el-radio>
+            <el-radio value="FORM_ONLY">{{ t('tableBinding.subModeFormOnly') }}</el-radio>
+          </el-radio-group>
+          <div class="form-item-tip">{{ t('tableBinding.subModeTip') }}</div>
         </el-form-item>
 
         <el-form-item :label="t('tableBinding.selectTable')" prop="tableId">
@@ -204,7 +226,7 @@ const formRules = computed<FormRules>(() => {
     bindingType: [{ required: true, message: t('tableBinding.selectBindingTypeRequired'), trigger: 'change' }],
     bindingMode: [{ required: true, message: t('tableBinding.selectBindingModeRequired'), trigger: 'change' }]
   }
-  if (restrictPrimarySubOnly.value && bindingForm.value.bindingType === 'SUB') {
+  if (restrictPrimarySubOnly.value && (bindingForm.value.bindingType === 'SUB')) {
     base.foreignKeyField = [
       { required: true, message: t('tableBinding.foreignKeyRequired'), trigger: 'change' }
     ]

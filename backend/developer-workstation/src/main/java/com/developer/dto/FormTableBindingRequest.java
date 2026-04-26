@@ -2,6 +2,7 @@ package com.developer.dto;
 
 import com.developer.enums.BindingMode;
 import com.developer.enums.BindingType;
+import com.developer.enums.SubMode;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -16,35 +17,43 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class FormTableBindingRequest {
-    
+
     /**
      * 要绑定的表ID
      */
     private Long tableId;
-    
+
     /**
      * Relation Table ID（来自 rt_table_definitions，RELATED 类型使用）
      */
     private Long relationTableId;
-    
+
     /**
      * 绑定类型
      */
     @NotNull(message = "{validation.binding_type_required}")
     private BindingType bindingType;
-    
+
     /**
      * 绑定模式
      */
     private BindingMode bindingMode;
-    
+
     /**
      * 外键字段名（子表/关联表需要）
      */
     private String foreignKeyField;
-    
+
     /**
      * 排序顺序
      */
     private Integer sortOrder;
+
+    /**
+     * 子表绑定模式
+     * FULL: 完整模式（表单设计 + 列表视图）
+     * FORM_ONLY: 仅表单模式（仅表单设计）
+     * 仅当 bindingType 为 SUB 时使用
+     */
+    private SubMode subMode;
 }

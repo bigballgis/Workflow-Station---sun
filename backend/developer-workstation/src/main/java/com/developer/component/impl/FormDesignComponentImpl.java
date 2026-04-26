@@ -12,6 +12,7 @@ import com.developer.entity.TableDefinition;
 import com.developer.enums.BindingMode;
 import com.developer.enums.BindingType;
 import com.developer.enums.FormType;
+import com.developer.enums.SubMode;
 import com.developer.enums.TableType;
 import com.developer.exception.DeveloperBusinessException;
 import com.developer.exception.ResourceNotFoundException;
@@ -285,8 +286,8 @@ public class FormDesignComponentImpl implements FormDesignComponent {
 
         binding = formTableBindingRepository.save(binding);
 
-        // Auto-create default sub-table list view for SUB bindings
-        if (request.getBindingType() == BindingType.SUB) {
+        // Auto-create default sub-table list view for SUB bindings with FULL mode
+        if (request.getBindingType() == BindingType.SUB && request.getSubMode() != SubMode.FORM_ONLY) {
             try {
                 var viewConfig = subTableViewService.createDefaultViewConfig(binding.getId());
                 binding.setSubListViewId(viewConfig.getId());
@@ -296,6 +297,10 @@ public class FormDesignComponentImpl implements FormDesignComponent {
                 log.warn("Failed to create default sub-table list view for binding {}: {}", binding.getId(), e.getMessage());
             }
         }
+
+        // Set sub mode
+        binding.setSubMode(request.getSubMode());
+        binding = formTableBindingRepository.save(binding);
 
         return binding;
     }
