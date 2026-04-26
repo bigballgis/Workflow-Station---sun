@@ -1113,3 +1113,11 @@
   category: bug
   summary: "user-portal tasks 页 submitAction 捕获异常后仍弹 success，委托/转办/催办失败时会误导用户"
   file: "frontend/user-portal/src/views/tasks/index.vue"
+
+- id: "153"
+  status: fixed
+  fixed_at: "2026-04-26"
+  severity: minor
+  category: quality
+  summary: "FormDesigner.vue 残留硬编码调试 fetch 到旧 session，运行时会持续发送 previewItems 调试日志"
+  file: "frontend/developer-workstation/src/components/designer/FormDesigner.vue"

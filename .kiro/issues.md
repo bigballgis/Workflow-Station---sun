@@ -3,14 +3,14 @@
 > **详细信息已迁移到 `.kiro/issues/index.yaml`**
 > 本文件仅保留统计摘要和当前待处理清单。
 
-## 统计 (截至 2026-04-04)
+## 统计 (截至 2026-04-26)
 
 | 状态 | 数量 |
 |------|------|
-| ✅ Fixed | **144** |
-| 🔓 Open | **2** |
+| ✅ Fixed | **149** |
+| 🔓 Open | **3** |
 | ⏸️ Wontfix | **1** |
-| **总计** | **147** |
+| **总计** | **153** |
 
 按严重度的分布见 `index.yaml` 各条目的 `severity` 字段。
 
@@ -22,6 +22,7 @@
 |----|------|------|
 | 137 | architecture | developer-workstation 功能单元版本/部署双轨并存 |
 | 141 | quality | init-scripts README 与 fu 种子 code 不一致 |
+| 152 | bug | user-portal tasks 页 submitAction 捕获异常后仍弹 success |
 
 ### Wontfix
 

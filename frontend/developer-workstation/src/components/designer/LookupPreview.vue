@@ -21,31 +21,36 @@
           class="lookup-input"
           @focus="onInputFocus"
         />
-        <!-- Dropdown: absolute-positioned inside .lookup-field for correct dialog context -->
-        <div
-          v-if="dropdownVisible"
-          class="lookup-dropdown-panel"
-          ref="dropdownRef"
-        >
-          <el-table
-            :data="filteredResults"
-            size="small"
-            @row-click="handleSelect"
-            highlight-current-row
-            max-height="260"
-          >
-            <el-table-column
-              v-for="col in visibleColumns"
-              :key="col.prop"
-              :prop="col.prop"
-              :label="col.label"
-              min-width="120"
-            />
-          </el-table>
-          <div v-if="filteredResults.length === 0" class="lookup-no-data">No data</div>
-        </div>
       </div>
     </div>
+
+    <Teleport to="body">
+      <div
+        v-if="dropdownVisible"
+        class="lookup-dropdown-panel"
+        ref="dropdownRef"
+        :style="dropdownStyle"
+        @mousedown.stop
+        @click.stop
+      >
+        <el-table
+          :data="filteredResults"
+          size="small"
+          @row-click="handleSelect"
+          highlight-current-row
+          max-height="260"
+        >
+          <el-table-column
+            v-for="col in visibleColumns"
+            :key="col.prop"
+            :prop="col.prop"
+            :label="col.label"
+            min-width="120"
+          />
+        </el-table>
+        <div v-if="filteredResults.length === 0" class="lookup-no-data">No data</div>
+      </div>
+    </Teleport>
 
     <!-- View display after selection -->
     <div v-if="showBackfillView && selectedRow && displayViewFields.length > 0" class="lookup-view-display">
@@ -65,7 +70,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onBeforeUnmount } from 'vue'
+import { ref, computed, nextTick, onBeforeUnmount } from 'vue'
 import { Search, Close } from '@element-plus/icons-vue'
 
 interface ViewField {
@@ -98,22 +103,12 @@ const props = withDefaults(defineProps<{
 const dropdownRef = ref<HTMLElement>()
 const fieldRef = ref<HTMLElement>()
 const dropdownVisible = ref(false)
+const dropdownStyle = ref<Record<string, string>>({})
 const searchKeyword = ref('')
 const selectedRow = ref<Record<string, any> | null>(null)
 
-// #region debug log H4 - watch dropdownVisible
-watch(dropdownVisible, (newVal, oldVal) => {
-  fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9ec725'},body:JSON.stringify({sessionId:'9ec725',location:'LookupPreview.vue:watch',message:'H4: dropdownVisible changed',data:{oldVal,newVal},timestamp:Date.now(),runId:'debug',hypothesisId:'H4'})}).catch(()=>{});
-});
-// #endregion
-
-console.log('[DEBUG LookupPreview] Component mounted', { label: props.label, searchFields: props.searchFields, displayFields: props.displayFields })
-
 // Columns shown in the dropdown table: use displayFields from lookup config
 const visibleColumns = computed(() => {
-  // #region debug log H3
-  fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9ec725'},body:JSON.stringify({sessionId:'9ec725',location:'LookupPreview.vue:visibleColumns',message:'H3: visibleColumns computed',data:{displayFields:props.displayFields,searchFields:props.searchFields,fieldDefsCount:props.fieldDefs?.length},timestamp:Date.now(),runId:'debug',hypothesisId:'H3'})}).catch(()=>{});
-  // #endregion
   if (props.displayFields?.length > 0) {
     return props.displayFields.map(f => {
       const fd = props.fieldDefs.find(d => d.fieldName === f)
@@ -184,26 +179,32 @@ function getMockValue(dataType: string, index: number): string {
   return `Sample ${index}`
 }
 
-function showDropdown() {
-  // #region debug log H1
-  fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9ec725'},body:JSON.stringify({sessionId:'9ec725',location:'LookupPreview.vue:showDropdown',message:'H1: showDropdown called',data:{currentVisible:dropdownVisible.value},timestamp:Date.now(),runId:'debug',hypothesisId:'H1'})}).catch(()=>{});
-  // #endregion
-  console.log('[DEBUG LookupPreview] showDropdown called, current visible:', dropdownVisible.value)
-  if (dropdownVisible.value) return
-  dropdownVisible.value = true
-  // #region debug log H1 result
-  fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9ec725'},body:JSON.stringify({sessionId:'9ec725',location:'LookupPreview.vue:showDropdown',message:'H1: dropdownVisible set to true',data:{newVisible:dropdownVisible.value},timestamp:Date.now(),runId:'debug',hypothesisId:'H1'})}).catch(()=>{});
-  // #endregion
-  console.log('[DEBUG LookupPreview] showDropdown, now visible:', dropdownVisible.value)
+function updateDropdownPosition() {
+  const rect = fieldRef.value?.getBoundingClientRect()
+  if (!rect) return
+  dropdownStyle.value = {
+    position: 'fixed',
+    top: `${rect.bottom + 4}px`,
+    left: `${rect.left}px`,
+    width: `${rect.width}px`,
+    zIndex: '3000',
+  }
 }
 
-function handleWrapperClick(e: MouseEvent) {
-  console.log('[DEBUG LookupPreview] handleWrapperClick', { target: (e.target as HTMLElement).className, tag: (e.target as HTMLElement).tagName })
+function showDropdown() {
+  if (dropdownVisible.value) {
+    updateDropdownPosition()
+    return
+  }
+  dropdownVisible.value = true
+  nextTick(updateDropdownPosition)
+}
+
+function handleWrapperClick() {
   showDropdown()
 }
 
 function handleFieldClick(e: MouseEvent) {
-  console.log('[DEBUG LookupPreview] handleFieldClick', { target: (e.target as HTMLElement).className })
   // Show dropdown when clicking on the lookup field area (but not on the clear button)
   if ((e.target as HTMLElement).closest('.lookup-selected-close')) return
   showDropdown()
@@ -222,36 +223,28 @@ function handleClear() {
 }
 
 function onInputFocus() {
-  // #region debug log H1 focus
-  fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9ec725'},body:JSON.stringify({sessionId:'9ec725',location:'LookupPreview.vue:onInputFocus',message:'H1: input focus event fired',data:{},timestamp:Date.now(),runId:'debug',hypothesisId:'H1'})}).catch(()=>{});
-  // #endregion
   showDropdown()
 }
 
 // Close dropdown when clicking outside
 function onDocClick(e: MouseEvent) {
-  // #region debug log H2
-  fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9ec725'},body:JSON.stringify({sessionId:'9ec725',location:'LookupPreview.vue:onDocClick',message:'H2: onDocClick invoked',data:{dropdownVisible:dropdownVisible.value,targetClass:(e.target as HTMLElement).className,targetTag:(e.target as HTMLElement).tagName},timestamp:Date.now(),runId:'debug',hypothesisId:'H2'})}).catch(()=>{});
-  // #endregion
   if (!dropdownVisible.value) return
   const target = e.target as Node
   // Also keep dropdown open when clicking inside the input/field container
   const inField = fieldRef.value && fieldRef.value.contains(target)
   const inDropdown = dropdownRef.value && dropdownRef.value.contains(target)
-  // #region debug log H2 result
-  fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9ec725'},body:JSON.stringify({sessionId:'9ec725',location:'LookupPreview.vue:onDocClick',message:'H2: checking click location',data:{inField,inFieldRefExists:!!fieldRef.value,inDropdown,willClose:!(inField||inDropdown)},timestamp:Date.now(),runId:'debug',hypothesisId:'H2'})}).catch(()=>{});
-  // #endregion
   if (inField || inDropdown) return
   dropdownVisible.value = false
-  // #region debug log H2 closed
-  fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9ec725'},body:JSON.stringify({sessionId:'9ec725',location:'LookupPreview.vue:onDocClick',message:'H2: dropdown CLOSED by outside click',data:{},timestamp:Date.now(),runId:'debug',hypothesisId:'H2'})}).catch(()=>{});
-  // #endregion
 }
 
 document.addEventListener('mousedown', onDocClick)
+window.addEventListener('scroll', updateDropdownPosition, true)
+window.addEventListener('resize', updateDropdownPosition)
 
 onBeforeUnmount(() => {
   document.removeEventListener('mousedown', onDocClick)
+  window.removeEventListener('scroll', updateDropdownPosition, true)
+  window.removeEventListener('resize', updateDropdownPosition)
 })
 </script>
 
@@ -339,10 +332,6 @@ onBeforeUnmount(() => {
 }
 
 .lookup-dropdown-panel {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
   z-index: 3000;
   background: #fff;
   border: 1px solid #dcdfe6;

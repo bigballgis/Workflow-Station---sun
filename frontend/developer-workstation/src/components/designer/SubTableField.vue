@@ -64,7 +64,9 @@
           </template>
           <!-- link form action -->
           <template v-else-if="col.type === 'linkForm'">
-            <el-link type="primary" :underline="false">{{ col.props?.linkText || t('linkForm.defaultLinkText') }}</el-link>
+            <el-link type="primary" :underline="false" @click.stop="openLinkFormDialog(col, scope.row)">
+              {{ col.props?.linkText || t('linkForm.defaultLinkText') }}
+            </el-link>
           </template>
           <!-- lookup action -->
           <template v-else-if="col.type === 'lookup'">
@@ -130,6 +132,18 @@
       :initialData="dialogInitialData"
       @update:visible="simpleDialogVisible = $event"
       @save="handleDialogSave"
+    />
+
+    <SubTableFormDialog
+      v-if="linkFormDialogVisible"
+      :visible="linkFormDialogVisible"
+      :title="linkFormDialogTitle"
+      mode="edit"
+      :initialData="linkFormInitialData"
+      :rule="linkFormRule"
+      :option="linkFormOption"
+      @update:visible="linkFormDialogVisible = $event"
+      @save="handleLinkFormSave"
     />
   </div>
 </template>
@@ -206,9 +220,14 @@ const total = ref(0)
 // Dialog state - 使用两个独立的 dialog 来避免状态冲突
 const formDialogVisible = ref(false)
 const simpleDialogVisible = ref(false)
+const linkFormDialogVisible = ref(false)
 const dialogMode = ref<'add' | 'edit'>('add')
 const editingRowIndex = ref<number | null>(null)
 const dialogInitialData = ref<Record<string, any> | undefined>(undefined)
+const linkFormDialogTitle = ref('')
+const linkFormInitialData = ref<Record<string, any> | undefined>(undefined)
+const linkFormRule = ref<any[]>([])
+const linkFormOption = ref<any>({})
 
 // 计算属性：是否可编辑
 const editable = computed(() => props.editable !== false)
@@ -271,6 +290,19 @@ function openEditDialog(index: number) {
     formDialogVisible.value = false
     simpleDialogVisible.value = true
   }
+}
+
+function openLinkFormDialog(col: ColumnConfig, row: Record<string, any>) {
+  linkFormDialogTitle.value = col.label || col.props?.linkText || t('linkForm.defaultLinkText')
+  linkFormInitialData.value = { ...row }
+  linkFormRule.value = col.props?.formRule || props.formRule || []
+  linkFormOption.value = col.props?.formOption || props.formOption || {}
+  linkFormDialogVisible.value = true
+}
+
+function handleLinkFormSave(rowData: Record<string, any>) {
+  linkFormDialogVisible.value = false
+  linkFormInitialData.value = rowData
 }
 
 // Dialog 保存回调

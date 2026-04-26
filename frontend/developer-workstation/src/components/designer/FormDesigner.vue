@@ -169,7 +169,7 @@
           />
           <!-- Sub Table: show form designer with List View tab (FORM_ONLY has no list view) -->
           <div v-else-if="binding.bindingType === 'SUB'" class="sub-table-design-wrapper">
-            <el-tabs v-model="subTableActiveTab">
+            <el-tabs v-model="subTableActiveTab" @tab-change="(tabName: any) => handleSubTableInnerTabChange(tabName, binding)">
               <el-tab-pane :label="t('subTableView.formDesign')" name="form">
                 <div class="fc-designer-wrapper">
                   <fc-designer
@@ -593,12 +593,6 @@ const previewItems = ref<Array<
   | { kind: 'lookup'; label: string; placeholder: string; searchFields: string[]; displayFields: string[]; viewFields: any[]; fieldDefs: any[]; showBackfillView?: boolean; bindingId?: number }
 >>([])
 
-// #region debug watch previewItems
-watch(previewItems, (newVal) => {
-  fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9ec725'},body:JSON.stringify({sessionId:'9ec725',location:'FormDesigner.vue:watchPreviewItems',message:'H6: previewItems changed',data:{count:newVal.length,kinds:newVal.map(i=>i.kind),hasLookup:newVal.some(i=>i.kind==='lookup')},timestamp:Date.now(),runId:'debug',hypothesisId:'H6'})}).catch(()=>{});
-}, { immediate: true });
-// #endregion
-
 // Sub-designer refs (one per non-PRIMARY binding)
 const subDesignerRefs = ref<any[]>([])
 // Relation table view refs (keyed by bindingId)
@@ -680,7 +674,9 @@ async function handleSubTableViewSave(bindingId: number) {
   }))
 
   try {
-    await subTableViewApi.saveViewConfig(selectedForm.value.id, bindingId, fields)
+    if (fields.length > 0) {
+      await subTableViewApi.saveViewConfig(selectedForm.value.id, bindingId, fields)
+    }
     await persistSubTableListViewColumns(bindingId, state.viewFields)
   } catch (e) {
     console.error('[FormDesigner] Failed to save sub-table view config:', e)
@@ -692,7 +688,7 @@ async function persistSubTableListViewColumns(bindingId: number, columns: SubTab
   const currentConfig = selectedForm.value.configJson || {}
   const subListViews = {
     ...(currentConfig.subListViews || {}),
-    [bindingId]: { columns }
+    [bindingId]: { columns, allowEmptyColumns: columns.length === 0 }
   }
   const nextConfig = { ...currentConfig, subListViews }
   selectedForm.value = { ...selectedForm.value, configJson: nextConfig }
@@ -725,7 +721,7 @@ async function loadSubTableViewConfig(bindingId: number, binding: any) {
 
     // Merge view config with available fields
     const viewFieldsMap = new Map(config.viewFields.map(f => [f.fieldName, f]))
-    const viewFields: SubTableFieldDTO[] = config.viewFields
+    let viewFields: SubTableFieldDTO[] = config.viewFields
       .filter(f => f.visible !== false)
       .sort((a, b) => a.sortOrder - b.sortOrder)
       .map(f => {
@@ -736,19 +732,24 @@ async function loadSubTableViewConfig(bindingId: number, binding: any) {
           comment: f.displayLabel || f.fieldName,
         } as SubTableFieldDTO
       })
+    if (viewFields.length === 0 && availableFields.length > 0) {
+      viewFields = availableFields.map(field => ({ ...field, columnType: 'field' as const }))
+    }
 
     const savedListDesigner = (selectedForm.value.configJson?.subListViews || {})[bindingId] || {}
+    const mergedViewFields = mergeSubTableListColumns(viewFields, savedListDesigner)
     subTableViewState.value[bindingId] = {
       allFields: availableFields,
-      viewFields: mergeSubTableListColumns(viewFields, savedListDesigner)
+      viewFields: mergedViewFields
     }
   } catch (e) {
     console.error('[FormDesigner] Failed to load sub-table view config:', e)
     // Initialize with empty state
     const savedListDesigner = (selectedForm.value.configJson?.subListViews || {})[bindingId] || {}
+    const mergedViewFields = mergeSubTableListColumns([], savedListDesigner)
     subTableViewState.value[bindingId] = {
       allFields: [],
-      viewFields: mergeSubTableListColumns([], savedListDesigner)
+      viewFields: mergedViewFields
     }
   }
 }
@@ -761,7 +762,7 @@ function mergeSubTableListColumns(
   const savedColumns = Array.isArray(savedListConfig?.columns) ? savedListConfig.columns : []
   if (savedColumns.length > 0) {
     const fieldByName = new Map(fieldColumns.map(field => [field.fieldName, field]))
-    return savedColumns
+    const mergedColumns = savedColumns
       .map((column: any) => {
         if (column?.columnType === 'linkForm') return hydrateLinkFormColumn(column)
         if (column?.columnType === 'lookup') return hydrateLookupColumn(column)
@@ -769,6 +770,7 @@ function mergeSubTableListColumns(
         return field ? { ...field, comment: column.comment || column.displayLabel || field.comment } : null
       })
       .filter(Boolean) as SubTableListColumnDTO[]
+    return mergedColumns
   }
 
   const legacyRules = Array.isArray(savedListConfig?.rule) ? savedListConfig.rule : []
@@ -1232,12 +1234,18 @@ function toSubTablePreviewColumns(bindingId: number, rule: any[], config: any) {
   if (Array.isArray(listColumns) && listColumns.length) {
     return listColumns.map((column: any) => {
       if (column.columnType === 'linkForm') {
+        const targetBindingId = column.boundSubTableBindingId || bindingId
+        const targetFormDesign = getSubTableFormDesign(targetBindingId)
         return {
           field: column.fieldName || `linkForm:${column.componentId || bindingId}`,
           label: column.columnLabel || column.comment || column.linkText || t('linkForm.defaultLinkText'),
           type: 'linkForm',
           minWidth: 120,
-          props: { linkText: column.linkText || t('linkForm.defaultLinkText') }
+          props: {
+            linkText: column.linkText || t('linkForm.defaultLinkText'),
+            formRule: targetFormDesign.rule,
+            formOption: targetFormDesign.options,
+          }
         }
       }
       if (column.columnType === 'lookup') {
@@ -1962,6 +1970,7 @@ function handleSelectForm(row: FormDefinition) {
   subTableListViewRefs.value = {}
   subTableViewState.value = {}
   activeDesignerTab.value = 'main'
+  subTableActiveTab.value = 'form'
 
   // Load table bindings
   functionUnitApi.getFormBindings(props.functionUnitId, row.id)
@@ -1982,6 +1991,19 @@ function handleSelectForm(row: FormDefinition) {
         }
       }
       relationViewState.value = initialState
+      const savedSubListViews = config.subListViews || {}
+      const initialSubTableViewState: Record<number, { allFields: SubTableFieldDTO[]; viewFields: SubTableListColumnDTO[] }> = {}
+      for (const b of (res.data || [])) {
+        if (b.bindingType === 'SUB') {
+          const id = b.id as number
+          const saved = savedSubListViews[id]
+          initialSubTableViewState[id] = {
+            allFields: [],
+            viewFields: Array.isArray(saved?.columns) ? saved.columns : []
+          }
+        }
+      }
+      subTableViewState.value = initialSubTableViewState
       // Load sub designers after bindings are known
       nextTick(() => setTimeout(() => loadSubDesigners(row), 200))
     })
@@ -2050,7 +2072,7 @@ function handleTabChange(tabName: string) {
 
   // For SUB bindings, load sub-table list view config
   if (binding.bindingType === 'SUB') {
-    if (!subTableViewState.value[bindingId]) {
+    if (!subTableViewState.value[bindingId] || subTableViewState.value[bindingId].allFields.length === 0) {
       loadSubTableViewConfig(bindingId, binding)
     }
   }
@@ -2070,6 +2092,13 @@ function handleTabChange(tabName: string) {
       }
     }, 100)
   })
+}
+
+function handleSubTableInnerTabChange(tabName: string, binding: any) {
+  if (tabName !== 'listView') return
+  if (!subTableViewState.value[binding.bindingId] || subTableViewState.value[binding.bindingId].allFields.length === 0) {
+    loadSubTableViewConfig(binding.bindingId, binding)
+  }
 }
 
 function handleBackToList() {
@@ -2373,11 +2402,20 @@ async function handleSaveForm(isManual = false) {
       const listRef = subTableListViewRefs.value[binding.bindingId]
       if (listRef) {
         const columns = listRef.getListColumns?.() || listRef.getViewFields?.() || []
-        subListViews[binding.bindingId] = { columns }
-        const existing = subTableViewState.value[binding.bindingId] || { allFields: [], viewFields: [] }
-        subTableViewState.value[binding.bindingId] = {
-          ...existing,
-          viewFields: columns
+        const state = subTableViewState.value[binding.bindingId]
+        const existing = (selectedForm.value!.configJson?.subListViews || {})[binding.bindingId]
+        const existingColumns = Array.isArray(existing?.columns) ? existing.columns : []
+        const stateLoaded = !!state && ((state.allFields?.length || 0) > 0 || (state.viewFields?.length || 0) > 0)
+        if (columns.length === 0 && existingColumns.length > 0 && !stateLoaded) {
+          // The list-view tab can mount before its async config load finishes; preserve saved columns.
+          subListViews[binding.bindingId] = existing
+        } else {
+          subListViews[binding.bindingId] = { columns }
+          const nextState = state || { allFields: [], viewFields: [] }
+          subTableViewState.value[binding.bindingId] = {
+            ...nextState,
+            viewFields: columns
+          }
         }
       } else {
         const state = subTableViewState.value[binding.bindingId]
@@ -2458,17 +2496,11 @@ async function handleDeleteForm(row: FormDefinition) {
 
 function handlePreview() {
   console.log('[DEBUG] ==================== handlePreview START ====================')
-  // #region debug log handlePreview entry
-  fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9ec725'},body:JSON.stringify({sessionId:'9ec725',location:'FormDesigner.vue:handlePreview',message:'handlePreview called',data:{selectedFormId:selectedForm.value?.id,formName:selectedForm.value?.formName},timestamp:Date.now(),runId:'debug',hypothesisId:'H6'})}).catch(()=>{});
-  // #endregion
   console.log('[DEBUG] after fetch')
 
   // Wrapper to catch errors during preview generation
   function buildPreview() {
   if (!selectedForm.value) {
-    // #region debug log no form
-    fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9ec725'},body:JSON.stringify({sessionId:'9ec725',location:'FormDesigner.vue:handlePreview',message:'H6: no selectedForm, returning early',data:{},timestamp:Date.now(),runId:'debug',hypothesisId:'H6'})}).catch(()=>{});
-    // #endregion
     console.log('[DEBUG] no selectedForm, returning early')
     return
   }
@@ -2678,9 +2710,6 @@ function handlePreview() {
   // Adding them separately caused duplicate rendering issues.
   const allRuleItems = rawRule
   for (const ruleItem of allRuleItems) {
-    // #region debug log all rule items
-    fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9ec725'},body:JSON.stringify({sessionId:'9ec725',location:'FormDesigner.vue:ruleItemLoop',message:'Rule item in loop',data:{type:ruleItem.type,field:ruleItem.field,title:ruleItem.title,hasLookupConfig:!!ruleItem.props?.lookupConfig},timestamp:Date.now(),runId:'debug',hypothesisId:'H5'})}).catch(()=>{});
-    // #endregion
     // _bindingId may be at top-level (after parseRule) or still in props (if getRule skipped parseRule)
     const itemBindingId = ruleItem._bindingId ?? ruleItem.props?._bindingId ?? null
     console.log('[Preview] Checking ruleItem:', { type: ruleItem.type, _bindingId: itemBindingId, field: ruleItem.field })
@@ -2712,9 +2741,6 @@ function handlePreview() {
   previewItems.value = items
   // Keep previewRule for backward compat (used by previewSubBindings logic elsewhere if any)
   previewRule.value = rawRule.filter(r => r.type !== 'subTable')
-  // #region debug log FormDesigner preview
-  fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9ec725'},body:JSON.stringify({sessionId:'9ec725',location:'FormDesigner.vue:buildPreview',message:'Preview items built',data:{itemKinds:items.map(i=>i.kind),lookupCount:items.filter(i=>i.kind==='lookup').length},timestamp:Date.now(),runId:'debug',hypothesisId:'H5'})}).catch(()=>{});
-  // #endregion
   console.log('[Preview] previewItems:', items.map(i => i.kind === 'fields' ? `fields(${i.rule.length})` : i.kind))
   console.log('[DEBUG FormDesigner] previewItems built', {
     itemKinds: items.map(i => i.kind),

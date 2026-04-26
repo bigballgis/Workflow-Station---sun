@@ -108,9 +108,11 @@ public class FormDesignComponentImpl implements FormDesignComponent {
             }
         }
         
+        Map<String, Object> mergedConfigJson = preserveExistingSubListViewsOnAccidentalEmpty(
+                formDefinition.getConfigJson(), request.getConfigJson());
         formDefinition.setFormName(request.getFormName());
         formDefinition.setFormType(request.getFormType());
-        formDefinition.setConfigJson(request.getConfigJson());
+        formDefinition.setConfigJson(mergedConfigJson);
         formDefinition.setDescription(request.getDescription());
         
         if (request.getBoundTableId() != null) {
@@ -173,6 +175,37 @@ public class FormDesignComponentImpl implements FormDesignComponent {
     @Transactional(readOnly = true)
     public List<FormDefinition> getByFunctionUnitId(Long functionUnitId) {
         return formDefinitionRepository.findByFunctionUnitIdWithBindings(functionUnitId);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> preserveExistingSubListViewsOnAccidentalEmpty(
+            Map<String, Object> existingConfigJson,
+            Map<String, Object> incomingConfigJson) {
+        if (incomingConfigJson == null || !(incomingConfigJson.get("subListViews") instanceof Map<?, ?> incomingRaw)
+                || existingConfigJson == null || !(existingConfigJson.get("subListViews") instanceof Map<?, ?> existingRaw)) {
+            return incomingConfigJson;
+        }
+
+        Map<String, Object> mergedConfigJson = new LinkedHashMap<>(incomingConfigJson);
+        Map<String, Object> mergedSubListViews = new LinkedHashMap<>();
+        incomingRaw.forEach((key, value) -> mergedSubListViews.put(String.valueOf(key), value));
+
+        existingRaw.forEach((bindingId, existingValue) -> {
+            Object incomingValue = mergedSubListViews.get(String.valueOf(bindingId));
+            if (!(existingValue instanceof Map<?, ?> existingView)
+                    || !(incomingValue instanceof Map<?, ?> incomingView)
+                    || !(existingView.get("columns") instanceof List<?> existingColumns)
+                    || !(incomingView.get("columns") instanceof List<?> incomingColumns)) {
+                return;
+            }
+            boolean allowEmptyColumns = Boolean.TRUE.equals(incomingView.get("allowEmptyColumns"));
+            if (!allowEmptyColumns && !existingColumns.isEmpty() && incomingColumns.isEmpty()) {
+                mergedSubListViews.put(String.valueOf(bindingId), existingValue);
+            }
+        });
+
+        mergedConfigJson.put("subListViews", mergedSubListViews);
+        return mergedConfigJson;
     }
     
     @Override

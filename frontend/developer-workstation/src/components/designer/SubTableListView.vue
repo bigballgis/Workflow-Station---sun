@@ -221,7 +221,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { Search, Close, Menu, DArrowRight, EditPen, Calendar, Document, Coin, Switch as SwitchIcon, Link, Operation } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
@@ -392,18 +392,6 @@ onMounted(() => {
     loadFields()
   }
 })
-
-// Track if we've auto-initialized the view (to avoid re-initializing)
-const autoInitialized = ref(false)
-
-// Watch for allFields changes - if view is empty and fields are loaded, auto-add all
-watch(() => allFields.value, (fields) => {
-  if (fields.length > 0 && viewColumns.value.length === 0 && !autoInitialized.value) {
-    // Auto-add all fields to view when view is empty and fields are loaded
-    emit('update:modelValue', fields.map(field => ({ ...field, columnType: 'field' })))
-    autoInitialized.value = true
-  }
-}, { immediate: true })
 
 const filteredAvailableFields = computed(() => {
   const kw = fieldSearchKeyword.value.trim().toLowerCase()
