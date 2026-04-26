@@ -1147,6 +1147,15 @@ function deriveColumnsFromBinding(binding: any, subForms?: Record<string, any>) 
       if (rProps.props !== undefined) passProps.labelProps = rProps.props
       // cascader: map props.props to cascaderProps if not already set
       if (type === 'cascader' && rProps.props && !passProps.cascaderProps) passProps.cascaderProps = rProps.props
+      if (type === 'lookup') {
+        const lookupPreviewConfig = resolveLookupPreviewConfig(rProps.lookupConfig || '{}')
+        passProps.lookupConfig = rProps.lookupConfig || '{}'
+        passProps.searchFields = lookupPreviewConfig.searchFields
+        passProps.displayFields = lookupPreviewConfig.displayFields
+        passProps.viewFields = lookupPreviewConfig.viewFields
+        passProps.fieldDefs = lookupPreviewConfig.fieldDefs
+        passProps.showBackfillView = lookupPreviewConfig.showBackfillView
+      }
       if (options) passProps.options = options
       return {
         field: r.field,
@@ -1232,6 +1241,7 @@ function toSubTablePreviewColumns(bindingId: number, rule: any[], config: any) {
   const savedColumns = (config.subListViews || {})[bindingId]?.columns
   const listColumns = liveColumns?.length ? liveColumns : savedColumns
   if (Array.isArray(listColumns) && listColumns.length) {
+    const ruleByField = new Map((Array.isArray(rule) ? rule : []).map((ruleItem: any) => [ruleItem?.field, ruleItem]))
     return listColumns.map((column: any) => {
       if (column.columnType === 'linkForm') {
         const targetBindingId = column.boundSubTableBindingId || bindingId
@@ -1256,6 +1266,24 @@ function toSubTablePreviewColumns(bindingId: number, rule: any[], config: any) {
           type: 'lookup',
           minWidth: 260,
           placeholder: lookupPreviewConfig.placeholder,
+          props: {
+            searchFields: lookupPreviewConfig.searchFields,
+            displayFields: lookupPreviewConfig.displayFields,
+            viewFields: lookupPreviewConfig.viewFields,
+            fieldDefs: lookupPreviewConfig.fieldDefs,
+            showBackfillView: lookupPreviewConfig.showBackfillView
+          }
+        }
+      }
+      const fieldRule = ruleByField.get(column.fieldName)
+      if (fieldRule?.type === 'lookup' || fieldRule?.props?.lookupConfig) {
+        const lookupPreviewConfig = resolveLookupPreviewConfig(fieldRule.props?.lookupConfig || '{}', config)
+        return {
+          field: column.fieldName,
+          label: column.comment || column.columnLabel || fieldRule.title || column.fieldName,
+          type: 'lookup',
+          minWidth: 260,
+          placeholder: fieldRule.props?.placeholder || lookupPreviewConfig.placeholder,
           props: {
             searchFields: lookupPreviewConfig.searchFields,
             displayFields: lookupPreviewConfig.displayFields,

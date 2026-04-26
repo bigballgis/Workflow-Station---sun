@@ -5,14 +5,15 @@
         <el-icon class="lookup-label-icon"><Search /></el-icon>
         {{ label }}
       </label>
-      <div class="lookup-field" @click="handleFieldClick" ref="fieldRef">
+      <div class="lookup-field" :class="{ readonly }" @click="handleFieldClick" ref="fieldRef">
         <!-- Selected value: input container with inner tag -->
         <div v-if="selectedRow" class="lookup-selected-wrapper">
           <span class="lookup-selected-tag">
             <span class="lookup-selected-text">{{ searchKeyword }}</span>
-            <el-icon class="lookup-selected-close" @click.stop="handleClear"><Close /></el-icon>
+            <el-icon v-if="!readonly" class="lookup-selected-close" @click.stop="handleClear"><Close /></el-icon>
           </span>
         </div>
+        <span v-else-if="readonly" class="lookup-readonly-empty">-</span>
         <!-- Search input (hidden when a value is selected) -->
         <el-input
           v-else
@@ -70,7 +71,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, onBeforeUnmount } from 'vue'
+import { ref, computed, nextTick, onBeforeUnmount, watch } from 'vue'
 import { Search, Close } from '@element-plus/icons-vue'
 
 interface ViewField {
@@ -89,6 +90,7 @@ interface FieldDef {
 }
 
 const props = withDefaults(defineProps<{
+  modelValue?: any
   label: string
   placeholder?: string
   searchFields: string[]
@@ -96,9 +98,15 @@ const props = withDefaults(defineProps<{
   viewFields: ViewField[]
   fieldDefs: FieldDef[]
   showBackfillView?: boolean
+  readonly?: boolean
 }>(), {
-  showBackfillView: true
+  showBackfillView: true,
+  readonly: false
 })
+
+const emit = defineEmits<{
+  (e: 'update:modelValue', value: any): void
+}>()
 
 const dropdownRef = ref<HTMLElement>()
 const fieldRef = ref<HTMLElement>()
@@ -179,6 +187,37 @@ function getMockValue(dataType: string, index: number): string {
   return `Sample ${index}`
 }
 
+function getPrimaryDisplayField() {
+  return props.displayFields?.[0] || visibleColumns.value[0]?.prop || props.searchFields?.[0] || ''
+}
+
+function getDisplayText(row: Record<string, any> | null) {
+  if (!row) return ''
+  const displayField = getPrimaryDisplayField()
+  if (displayField && row[displayField] != null) {
+    return String(row[displayField])
+  }
+  const firstValue = Object.values(row).find(value => value != null && value !== '')
+  return firstValue == null ? '' : String(firstValue)
+}
+
+function normalizeValue(value: any): Record<string, any> | null {
+  if (value == null || value === '') return null
+  if (typeof value === 'object' && !Array.isArray(value)) return value
+  const displayField = getPrimaryDisplayField()
+  return displayField ? { [displayField]: value } : { value }
+}
+
+watch(
+  () => [props.modelValue, props.displayFields, props.searchFields, visibleColumns.value],
+  ([value]) => {
+    const nextRow = normalizeValue(value)
+    selectedRow.value = nextRow
+    searchKeyword.value = getDisplayText(nextRow)
+  },
+  { immediate: true, deep: true }
+)
+
 function updateDropdownPosition() {
   const rect = fieldRef.value?.getBoundingClientRect()
   if (!rect) return
@@ -192,6 +231,7 @@ function updateDropdownPosition() {
 }
 
 function showDropdown() {
+  if (props.readonly) return
   if (dropdownVisible.value) {
     updateDropdownPosition()
     return
@@ -211,15 +251,17 @@ function handleFieldClick(e: MouseEvent) {
 }
 
 function handleSelect(row: Record<string, any>) {
-  const displayField = props.displayFields?.[0] || visibleColumns.value[0]?.prop
-  searchKeyword.value = displayField ? String(row[displayField] ?? '') : ''
   selectedRow.value = row
+  searchKeyword.value = getDisplayText(row)
+  emit('update:modelValue', row)
   dropdownVisible.value = false
 }
 
 function handleClear() {
+  if (props.readonly) return
   searchKeyword.value = ''
   selectedRow.value = null
+  emit('update:modelValue', null)
 }
 
 function onInputFocus() {
@@ -285,6 +327,10 @@ onBeforeUnmount(() => {
   min-width: 0;
   position: relative;
 
+  &.readonly {
+    cursor: default;
+  }
+
   .lookup-input {
     width: 100%;
   }
@@ -329,6 +375,11 @@ onBeforeUnmount(() => {
       }
     }
   }
+}
+
+.lookup-readonly-empty {
+  color: #909399;
+  line-height: 32px;
 }
 
 .lookup-dropdown-panel {

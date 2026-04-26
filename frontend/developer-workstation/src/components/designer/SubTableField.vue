@@ -72,6 +72,7 @@
           <template v-else-if="col.type === 'lookup'">
             <LookupPreview
               class="sub-table-lookup-preview"
+              :model-value="scope.row[col.field]"
               :label="''"
               :placeholder="col.placeholder || 'Click to search'"
               :search-fields="col.props?.searchFields || []"
@@ -79,6 +80,7 @@
               :view-fields="col.props?.viewFields || []"
               :field-defs="col.props?.fieldDefs || []"
               :show-backfill-view="col.props?.showBackfillView !== false"
+              readonly
             />
           </template>
           <!-- default -->

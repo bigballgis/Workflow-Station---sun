@@ -1,6 +1,7 @@
 <template>
   <div class="lookup-component">
     <LookupPreview
+      v-model="lookupValue"
       :label="''"
       :placeholder="placeholder || previewConfig.placeholder"
       :search-fields="previewConfig.searchFields"
@@ -22,6 +23,15 @@ const props = defineProps<{
   placeholder?: string
   lookupConfig?: string
 }>()
+
+const emit = defineEmits<{
+  (e: 'update:modelValue', value: any): void
+}>()
+
+const lookupValue = computed({
+  get: () => props.modelValue,
+  set: (value) => emit('update:modelValue', value)
+})
 
 function parseLookupConfig(raw?: string): Record<string, any> {
   if (!raw) return {}
