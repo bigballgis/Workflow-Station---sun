@@ -61,6 +61,9 @@ public class RelationViewServiceImpl implements RelationViewService {
     @Override
     @Transactional(readOnly = true)
     public List<RelationFieldDTO> getAvailableFields(Long tableId) {
+        if (RelationTableBindingServiceImpl.SYSTEM_USER_TABLE_ID.equals(tableId)) {
+            return systemUserFields();
+        }
         String sql = "SELECT id, field_name, data_type, length, precision_value, scale, "
                 + "nullable, is_primary_key, default_value, comment, sort_order "
                 + "FROM rt_field_definitions WHERE table_id = ? ORDER BY sort_order ASC";
@@ -77,5 +80,32 @@ public class RelationViewServiceImpl implements RelationViewService {
                 .comment(rs.getString("comment"))
                 .sortOrder(rs.getInt("sort_order"))
                 .build(), tableId);
+    }
+
+    private List<RelationFieldDTO> systemUserFields() {
+        return List.of(
+                systemUserField(1, "id", RelationDataType.VARCHAR, true, "User ID"),
+                systemUserField(2, "username", RelationDataType.VARCHAR, false, "Username"),
+                systemUserField(3, "display_name", RelationDataType.VARCHAR, false, "Display Name"),
+                systemUserField(4, "full_name", RelationDataType.VARCHAR, false, "Full Name"),
+                systemUserField(5, "email", RelationDataType.VARCHAR, false, "Email"),
+                systemUserField(6, "employee_id", RelationDataType.VARCHAR, false, "Employee ID"),
+                systemUserField(7, "status", RelationDataType.VARCHAR, false, "Status"),
+                systemUserField(8, "language", RelationDataType.VARCHAR, false, "Language")
+        );
+    }
+
+    private RelationFieldDTO systemUserField(int sortOrder, String fieldName, RelationDataType dataType,
+            boolean primaryKey, String comment) {
+        return RelationFieldDTO.builder()
+                .id((long) -sortOrder)
+                .fieldName(fieldName)
+                .dataType(dataType)
+                .length(255)
+                .nullable(!primaryKey)
+                .isPrimaryKey(primaryKey)
+                .comment(comment)
+                .sortOrder(sortOrder)
+                .build();
     }
 }

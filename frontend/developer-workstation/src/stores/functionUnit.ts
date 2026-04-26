@@ -104,6 +104,11 @@ export const useFunctionUnitStore = defineStore('functionUnit', () => {
 
   async function updateForm(functionUnitId: number, formId: number, data: Partial<FormDefinition>) {
     const res = await functionUnitApi.updateForm(functionUnitId, formId, data)
+    const updated = res.data
+    const index = forms.value.findIndex(form => form.id === formId)
+    if (index >= 0) {
+      forms.value[index] = updated
+    }
     return res.data
   }
 

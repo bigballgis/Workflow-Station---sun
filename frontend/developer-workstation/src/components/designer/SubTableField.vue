@@ -62,6 +62,23 @@
           <template v-else-if="col.type === 'password'">
             <span>******</span>
           </template>
+          <!-- link form action -->
+          <template v-else-if="col.type === 'linkForm'">
+            <el-link type="primary" :underline="false">{{ col.props?.linkText || t('linkForm.defaultLinkText') }}</el-link>
+          </template>
+          <!-- lookup action -->
+          <template v-else-if="col.type === 'lookup'">
+            <LookupPreview
+              class="sub-table-lookup-preview"
+              :label="''"
+              :placeholder="col.placeholder || 'Click to search'"
+              :search-fields="col.props?.searchFields || []"
+              :display-fields="col.props?.displayFields || []"
+              :view-fields="col.props?.viewFields || []"
+              :field-defs="col.props?.fieldDefs || []"
+              :show-backfill-view="col.props?.showBackfillView !== false"
+            />
+          </template>
           <!-- default -->
           <span v-else>{{ scope.row[col.field] ?? '-' }}</span>
         </template>
@@ -125,6 +142,7 @@ import { ElMessageBox, ElMessage } from 'element-plus'
 import DOMPurify from 'dompurify'
 import SubTableAddDialog from './SubTableAddDialog.vue'
 import SubTableFormDialog from './SubTableFormDialog.vue'
+import LookupPreview from './LookupPreview.vue'
 import type { DialogColumn } from './subTableAddDialogHelpers'
 
 const { t } = useI18n()
@@ -142,7 +160,7 @@ function sanitizeHtml(html: string): string {
 interface ColumnConfig {
   field: string
   label: string
-  type?: 'input' | 'number' | 'date' | 'switch' | 'text' | 'textarea' | 'select' | 'radio' | 'checkbox' | 'datetime' | 'upload' | 'user' | 'department' | 'password' | 'timerange' | 'treeselect' | 'colorPicker' | 'rate' | 'slider' | 'tree' | 'editor' | 'signature' | 'transfer' | 'cascader'
+  type?: 'input' | 'number' | 'date' | 'switch' | 'text' | 'textarea' | 'select' | 'radio' | 'checkbox' | 'datetime' | 'upload' | 'user' | 'department' | 'password' | 'timerange' | 'treeselect' | 'colorPicker' | 'rate' | 'slider' | 'tree' | 'editor' | 'signature' | 'transfer' | 'cascader' | 'linkForm' | 'lookup'
   width?: number
   minWidth?: number
   required?: boolean
@@ -345,6 +363,15 @@ defineExpose({
     max-height: 40px;
     object-fit: contain;
     vertical-align: middle;
+  }
+
+  .sub-table-lookup-preview {
+    min-width: 220px;
+    margin-bottom: 0;
+
+    :deep(.lookup-label-text) {
+      display: none;
+    }
   }
 }
 </style>

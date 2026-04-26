@@ -24,6 +24,7 @@ const relationBindings = computed(() => lookupStore.relationBindings)
 const selectedBindingId = ref<number | null>(null)
 const searchFields = ref<string[]>([])
 const displayFields = ref<string[]>([])
+const showBackfillView = ref(true)
 // Fields loaded from API for deployed relation tables
 const apiFields = ref<FieldInfo[]>([])
 const fieldsLoading = ref(false)
@@ -84,10 +85,12 @@ function parseModelValue() {
     selectedBindingId.value = cfg.bindingId ?? null
     searchFields.value = cfg.searchFields ?? []
     displayFields.value = cfg.displayFields ?? []
+    showBackfillView.value = cfg.showBackfillView !== false
   } catch {
     selectedBindingId.value = null
     searchFields.value = []
     displayFields.value = []
+    showBackfillView.value = true
   }
 }
 
@@ -99,6 +102,7 @@ function emitUpdate() {
     tableName: binding?.tableName ?? '',
     searchFields: searchFields.value,
     displayFields: displayFields.value,
+    showBackfillView: showBackfillView.value,
   }
   emit('update:modelValue', JSON.stringify(cfg))
 }
@@ -149,6 +153,11 @@ function handleSearchFieldsChange(val: string[]) {
 
 function handleDisplayFieldsChange(val: string[]) {
   displayFields.value = val
+  emitUpdate()
+}
+
+function handleShowBackfillViewChange(val: string | number | boolean) {
+  showBackfillView.value = Boolean(val)
   emitUpdate()
 }
 
@@ -236,6 +245,16 @@ watch(selectedBindingId, (val) => {
             <span>{{ getFieldLabel(f) }}</span>
           </el-option>
         </el-select>
+      </div>
+
+      <div class="lookup-field-group">
+        <label class="lookup-label">Backfill View</label>
+        <el-switch
+          :model-value="showBackfillView"
+          active-text="Yes"
+          inactive-text="No"
+          @change="handleShowBackfillViewChange"
+        />
       </div>
     </template>
   </div>

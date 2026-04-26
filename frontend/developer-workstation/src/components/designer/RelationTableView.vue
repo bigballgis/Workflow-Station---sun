@@ -55,12 +55,12 @@
         </div>
       </div>
 
-      <!-- Column headers (draggable) -->
-      <div class="column-headers" v-if="viewFields.length > 0">
+      <!-- Column rows (draggable) -->
+      <div class="column-rows" v-if="viewFields.length > 0">
         <div
           v-for="(field, index) in viewFields"
           :key="field.fieldName"
-          class="column-header"
+          class="column-row"
           :class="{ 'drag-over': dragOverIndex === index }"
           draggable="true"
           @dragstart="onColDragStart($event, index)"
@@ -69,15 +69,13 @@
           @drop.stop="onColDrop($event, index)"
           @dragend="onColDragEnd"
         >
-          <span class="col-name">{{ field.fieldName }}</span>
-          <el-icon class="col-remove" @click.stop="removeField(index)"><Close /></el-icon>
-        </div>
-      </div>
-
-      <!-- Data row (mock) -->
-      <div class="data-row" v-if="viewFields.length > 0">
-        <div v-for="field in viewFields" :key="field.fieldName" class="data-cell">
-          {{ getMockValue(field) }}
+          <div class="column-row-label">
+            <span class="col-name">{{ field.comment || field.fieldName }}</span>
+            <el-icon class="col-remove" @click.stop="removeField(index)"><Close /></el-icon>
+          </div>
+          <div class="column-row-value">
+            {{ getMockValue(field) }}
+          </div>
         </div>
       </div>
 
@@ -401,50 +399,44 @@ defineExpose({
 .toolbar-left { font-size: 13px; color: #666; }
 .toolbar-right { display: flex; gap: 8px; }
 
-.column-headers {
-  display: flex;
+.column-rows {
   border: 1px solid var(--el-border-color-light);
-  border-bottom: 2px solid var(--el-border-color);
-  background: #fafafa;
   min-height: 36px;
 }
-.column-header {
-  flex: 1;
-  min-width: 80px;
+.column-row {
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+  color: #333;
+  cursor: grab;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+  user-select: none;
+  transition: background 0.15s;
+}
+.column-row:last-child { border-bottom: none; }
+.column-row:hover { background: #f0f0f0; }
+.column-row.drag-over { background: var(--el-color-primary-light-9, #ecf5ff); border-left: 2px solid var(--el-color-primary, #409eff); }
+.column-row-label {
+  width: 240px;
+  min-width: 160px;
+  align-self: stretch;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 6px 10px;
-  font-size: 13px;
   font-weight: 500;
-  color: #333;
-  cursor: grab;
+  background: #fafafa;
   border-right: 1px solid var(--el-border-color-lighter);
-  user-select: none;
-  transition: background 0.15s;
 }
-.column-header:last-child { border-right: none; }
-.column-header:hover { background: #f0f0f0; }
-.column-header.drag-over { background: var(--el-color-primary-light-9, #ecf5ff); border-left: 2px solid var(--el-color-primary, #409eff); }
-.col-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.col-remove { font-size: 12px; color: #ccc; cursor: pointer; flex-shrink: 0; margin-left: 4px; }
-.col-remove:hover { color: var(--el-color-danger, #f56c6c); }
-
-.data-row {
-  display: flex;
-  border: 1px solid var(--el-border-color-light);
-  border-top: none;
-  min-height: 36px;
-}
-.data-cell {
+.column-row-value {
   flex: 1;
-  min-width: 80px;
+  min-width: 0;
   display: flex;
   align-items: center;
   padding: 6px 10px;
-  font-size: 13px;
   color: #666;
-  border-right: 1px solid var(--el-border-color-lighter);
 }
-.data-cell:last-child { border-right: none; }
+.col-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.col-remove { font-size: 12px; color: #ccc; cursor: pointer; flex-shrink: 0; margin-left: 4px; }
+.col-remove:hover { color: var(--el-color-danger, #f56c6c); }
 </style>

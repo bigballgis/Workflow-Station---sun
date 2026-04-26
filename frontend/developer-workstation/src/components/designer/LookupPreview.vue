@@ -48,7 +48,7 @@
     </div>
 
     <!-- View display after selection -->
-    <div v-if="selectedRow && displayViewFields.length > 0" class="lookup-view-display">
+    <div v-if="showBackfillView && selectedRow && displayViewFields.length > 0" class="lookup-view-display">
       <el-descriptions :column="1" border size="small" direction="horizontal">
         <el-descriptions-item
           v-for="field in displayViewFields"
@@ -83,14 +83,17 @@ interface FieldDef {
   description?: string
 }
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   label: string
   placeholder?: string
   searchFields: string[]
   displayFields: string[]
   viewFields: ViewField[]
   fieldDefs: FieldDef[]
-}>()
+  showBackfillView?: boolean
+}>(), {
+  showBackfillView: true
+})
 
 const dropdownRef = ref<HTMLElement>()
 const fieldRef = ref<HTMLElement>()
@@ -340,7 +343,7 @@ onBeforeUnmount(() => {
   top: calc(100% + 4px);
   left: 0;
   right: 0;
-  z-index: 10;
+  z-index: 3000;
   background: #fff;
   border: 1px solid #dcdfe6;
   border-radius: 4px;

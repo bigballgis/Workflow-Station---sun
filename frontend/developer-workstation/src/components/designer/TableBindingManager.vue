@@ -207,6 +207,10 @@ const editingBinding = ref<TableBinding | null>(null)
 const formRef = ref<FormInstance>()
 const deployedRelationTables = ref<RelationTableDTO[]>([])
 
+function toRelationTableOptionId(tableId: number): number {
+  return tableId < 0 ? tableId : -tableId
+}
+
 function makeEmptyBindingForm(): TableBindingRequest {
   // 默认类型：若尚无 PRIMARY 就让用户先建 PRIMARY，否则默认 SUB
   const defaultType: BindingType = bindings.value.some(b => b.bindingType === 'PRIMARY') ? 'SUB' : 'PRIMARY'
@@ -269,7 +273,7 @@ const filteredAvailableTables = computed(() => {
     .map(t => ({ id: t.id, displayLabel: `${t.tableName} (${tableTypeLabel(t.tableType)})`, fieldDefinitions: t.fieldDefinitions }))
   const deployedLabel = t('tableBinding.deployedRelationTable')
   const remote = deployedRelationTables.value.map(r => ({
-    id: -r.id, // negative ID to distinguish from local tables
+    id: toRelationTableOptionId(r.id), // negative ID to distinguish from local tables
     displayLabel: `${r.displayName || r.tableName} (${deployedLabel})`,
     fieldDefinitions: r.fieldDefinitions || []
   }))
@@ -296,16 +300,20 @@ const selectedTableFields = computed(() => {
     const table = props.tables.find(t => t.id === bindingForm.value.tableId)
     return table?.fieldDefinitions || []
   }
-  // For deployed relation tables (negative ID), look up from loaded data
-  const realId = -bindingForm.value.tableId
-  const table = deployedRelationTables.value.find(t => t.id === realId)
+  // For deployed/system relation tables (negative ID), look up from loaded data.
+  const table = deployedRelationTables.value.find(t => toRelationTableOptionId(t.id) === bindingForm.value.tableId)
   return table?.fieldDefinitions || []
 })
 
 // Check if table is already bound
 function isTableBound(tableId: number): boolean {
   if (editingBinding.value?.tableId === tableId) return false
-  return bindings.value.some(b => b.tableId === tableId)
+  return bindings.value.some(b => {
+    if (bindingForm.value.bindingType === 'RELATED' && b.bindingType === 'RELATED') {
+      return toRelationTableOptionId(b.tableId) === tableId
+    }
+    return b.tableId === tableId
+  })
 }
 
 // Get table name by ID
@@ -456,11 +464,12 @@ async function handleSubmit() {
 
   submitting.value = true
   try {
-    // For deployed relation tables (negative ID), convert to relationTableId
+    // For deployed/system relation tables (negative ID), convert to relationTableId
     const requestData = { ...bindingForm.value }
-    // tableId < 0 means it's a deployed relation table
+    // tableId < 0 means it's a deployed/system relation table option
     if (requestData.tableId && requestData.tableId < 0) {
-      requestData.relationTableId = -requestData.tableId
+      const remoteTable = deployedRelationTables.value.find(t => toRelationTableOptionId(t.id) === requestData.tableId)
+      requestData.relationTableId = remoteTable ? remoteTable.id : -requestData.tableId
       requestData.tableId = undefined
     }
     

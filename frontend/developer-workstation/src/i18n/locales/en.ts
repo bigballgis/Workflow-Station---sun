@@ -1104,16 +1104,21 @@ export default {
     formDesign: 'Form Design',
     listView: 'List View',
     tableColumns: 'Table Columns',
+    extendAction: 'Extend Action',
     columns: 'columns',
     noFieldsImported: 'No fields imported yet',
     displayLabel: 'Display Label',
-    previewValue: 'Preview Value'
+    previewValue: 'Preview Value',
+    listFormDesigner: 'List View Form Designer',
+    dragLinkFormHint: 'Drag Link Form from the component panel into the list view'
   },
   linkForm: {
     createComponent: 'Create Link Form',
     componentName: 'Component Name',
     linkedForm: 'Linked Form',
     selectLinkedForm: 'Select a linked form',
+    boundSubTable: 'Bound Sub Table',
+    selectSubTable: 'Select a Sub Table',
     columnLabel: 'Column Label',
     columnLabelPlaceholder: 'Column title in list view',
     linkText: 'Link Text',

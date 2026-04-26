@@ -1099,16 +1099,21 @@ export default {
     formDesign: '表单设计',
     listView: '列表视图',
     tableColumns: '表字段',
+    extendAction: 'Extend Action',
     columns: '列',
     noFieldsImported: '暂未导入字段',
     displayLabel: '显示标签',
-    previewValue: '预览值'
+    previewValue: '预览值',
+    listFormDesigner: '列表视图表单设计器',
+    dragLinkFormHint: '可从左侧组件面板拖拽 Link Form 到列表视图'
   },
   linkForm: {
     createComponent: '创建链接表单',
     componentName: '组件名称',
     linkedForm: '关联表单',
     selectLinkedForm: '请选择关联的表单',
+    boundSubTable: '绑定 Sub Table',
+    selectSubTable: '请选择 Sub Table',
     columnLabel: '列表列标签',
     columnLabelPlaceholder: '在列表视图中的列标题',
     linkText: '链接文字',

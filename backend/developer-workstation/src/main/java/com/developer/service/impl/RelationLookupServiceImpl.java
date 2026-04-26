@@ -22,6 +22,10 @@ import java.util.List;
 @RequiredArgsConstructor
 public class RelationLookupServiceImpl implements RelationLookupService {
 
+    private static final Long SYSTEM_USER_TABLE_ID = -1_000_000_001L;
+    private static final String SYSTEM_USER_TABLE_NAME = "sys_users";
+    private static final String SYSTEM_USER_DISPLAY_NAME = "User";
+
     private final RelationLookupConfigRepository lookupConfigRepository;
     private final FormTableBindingRepository formTableBindingRepository;
     private final RelationViewConfigRepository viewConfigRepository;
@@ -88,6 +92,7 @@ public class RelationLookupServiceImpl implements RelationLookupService {
 
     private String getRelationTableDisplayName(Long tableId) {
         if (tableId == null) return null;
+        if (SYSTEM_USER_TABLE_ID.equals(tableId)) return SYSTEM_USER_DISPLAY_NAME;
         String sql = "SELECT display_name FROM rt_table_definitions WHERE id = ?";
         List<String> names = jdbcTemplate.query(sql, (rs, rowNum) -> rs.getString("display_name"), tableId);
         return names.isEmpty() ? null : names.get(0);
@@ -95,6 +100,7 @@ public class RelationLookupServiceImpl implements RelationLookupService {
 
     private String getRelationTableName(Long tableId) {
         if (tableId == null) return null;
+        if (SYSTEM_USER_TABLE_ID.equals(tableId)) return SYSTEM_USER_TABLE_NAME;
         String sql = "SELECT table_name FROM rt_table_definitions WHERE id = ?";
         List<String> names = jdbcTemplate.query(sql, (rs, rowNum) -> rs.getString("table_name"), tableId);
         return names.isEmpty() ? null : names.get(0);

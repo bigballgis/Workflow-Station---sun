@@ -42,6 +42,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class FormDesignComponentImpl implements FormDesignComponent {
 
+    private static final Long SYSTEM_USER_TABLE_ID = -1_000_000_001L;
+
     private final FormDefinitionRepository formDefinitionRepository;
     private final FunctionUnitRepository functionUnitRepository;
     private final TableDefinitionRepository tableDefinitionRepository;
@@ -514,6 +516,9 @@ public class FormDesignComponentImpl implements FormDesignComponent {
     public String resolveRelationTableName(FormTableBinding binding) {
         if (binding.getBindingType() != BindingType.RELATED || binding.getRelationTableId() == null) {
             return null;
+        }
+        if (SYSTEM_USER_TABLE_ID.equals(binding.getRelationTableId())) {
+            return "sys_users";
         }
         try {
             return jdbcTemplate.queryForObject(

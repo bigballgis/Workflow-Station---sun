@@ -18,6 +18,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -26,6 +27,10 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class RelationTableBindingServiceImpl implements RelationTableBindingService {
+
+    public static final Long SYSTEM_USER_TABLE_ID = -1_000_000_001L;
+    private static final String SYSTEM_USER_TABLE_NAME = "sys_users";
+    private static final String SYSTEM_USER_DISPLAY_NAME = "User";
 
     private final FormTableBindingRepository formTableBindingRepository;
     private final FormDefinitionRepository formDefinitionRepository;
@@ -37,7 +42,7 @@ public class RelationTableBindingServiceImpl implements RelationTableBindingServ
     public List<RelationTableDTO> getAvailableTables() {
         String sql = "SELECT id, table_name, display_name, description, status, enabled, "
                 + "portal_visible, current_version FROM rt_table_definitions WHERE status = ?";
-        List<RelationTableDTO> tables = jdbcTemplate.query(sql, (rs, rowNum) -> RelationTableDTO.builder()
+        List<RelationTableDTO> tables = new ArrayList<>(jdbcTemplate.query(sql, (rs, rowNum) -> RelationTableDTO.builder()
                 .id(rs.getLong("id"))
                 .tableName(rs.getString("table_name"))
                 .displayName(rs.getString("display_name"))
@@ -46,7 +51,7 @@ public class RelationTableBindingServiceImpl implements RelationTableBindingServ
                 .enabled(rs.getBoolean("enabled"))
                 .portalVisible(rs.getBoolean("portal_visible"))
                 .currentVersion(rs.getInt("current_version"))
-                .build(), RelationTableStatus.DEPLOYED.getCode());
+                .build(), RelationTableStatus.DEPLOYED.getCode()));
 
         // Load field definitions for each table
         String fieldSql = "SELECT id, field_name, data_type, length, precision_value, scale, "
@@ -67,6 +72,20 @@ public class RelationTableBindingServiceImpl implements RelationTableBindingServ
                     .sortOrder(rs.getInt("sort_order"))
                     .build(), table.getId());
             table.setFieldDefinitions(fields);
+        }
+
+        if (systemUserTableExists()) {
+            tables.add(RelationTableDTO.builder()
+                    .id(SYSTEM_USER_TABLE_ID)
+                    .tableName(SYSTEM_USER_TABLE_NAME)
+                    .displayName(SYSTEM_USER_DISPLAY_NAME)
+                    .description("System user table")
+                    .status(RelationTableStatus.DEPLOYED)
+                    .enabled(true)
+                    .portalVisible(false)
+                    .currentVersion(1)
+                    .fieldDefinitions(systemUserFields())
+                    .build());
         }
 
         return tables;
@@ -144,8 +163,44 @@ public class RelationTableBindingServiceImpl implements RelationTableBindingServ
 
     private String getRelationTableDisplayName(Long tableId) {
         if (tableId == null) return null;
+        if (SYSTEM_USER_TABLE_ID.equals(tableId)) return SYSTEM_USER_DISPLAY_NAME;
         String sql = "SELECT display_name FROM rt_table_definitions WHERE id = ?";
         List<String> names = jdbcTemplate.query(sql, (rs, rowNum) -> rs.getString("display_name"), tableId);
         return names.isEmpty() ? null : names.get(0);
+    }
+
+    private boolean systemUserTableExists() {
+        Integer count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = ?",
+                Integer.class,
+                SYSTEM_USER_TABLE_NAME);
+        return count != null && count > 0;
+    }
+
+    private List<RelationFieldDTO> systemUserFields() {
+        return List.of(
+                systemUserField(1, "id", RelationDataType.VARCHAR, true, "User ID"),
+                systemUserField(2, "username", RelationDataType.VARCHAR, false, "Username"),
+                systemUserField(3, "display_name", RelationDataType.VARCHAR, false, "Display Name"),
+                systemUserField(4, "full_name", RelationDataType.VARCHAR, false, "Full Name"),
+                systemUserField(5, "email", RelationDataType.VARCHAR, false, "Email"),
+                systemUserField(6, "employee_id", RelationDataType.VARCHAR, false, "Employee ID"),
+                systemUserField(7, "status", RelationDataType.VARCHAR, false, "Status"),
+                systemUserField(8, "language", RelationDataType.VARCHAR, false, "Language")
+        );
+    }
+
+    private RelationFieldDTO systemUserField(int sortOrder, String fieldName, RelationDataType dataType,
+            boolean primaryKey, String comment) {
+        return RelationFieldDTO.builder()
+                .id((long) -sortOrder)
+                .fieldName(fieldName)
+                .dataType(dataType)
+                .length(255)
+                .nullable(!primaryKey)
+                .isPrimaryKey(primaryKey)
+                .comment(comment)
+                .sortOrder(sortOrder)
+                .build();
     }
 }

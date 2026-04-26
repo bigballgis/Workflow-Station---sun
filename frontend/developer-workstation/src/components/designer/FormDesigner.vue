@@ -181,12 +181,18 @@
               </el-tab-pane>
               <el-tab-pane v-if="binding.subMode !== 'FORM_ONLY'" :label="t('subTableView.listView')" name="listView">
                 <SubTableListView
-                  :ref="(el: any) => { if (el) subTableListViewRefs[binding.bindingId] = el }"
+                  :ref="(el: any) => setSubTableListViewRef(el, binding.bindingId)"
                   :binding="binding"
                   :function-unit-id="props.functionUnitId"
                   :form-id="selectedForm!.id"
                   :available-fields="subTableViewState[binding.bindingId]?.allFields || []"
                   :model-value="subTableViewState[binding.bindingId]?.viewFields || []"
+                  :link-form-components="linkFormComponents"
+                  :sub-table-bindings="designerSubBindings.filter(b => b.bindingType === 'SUB')"
+                  :resolve-sub-table-form-design="getSubTableFormDesign"
+                  :resolve-lookup-preview-config="resolveLookupPreviewConfig"
+                  :form-rule="getSubTableFormRule(binding.bindingId)"
+                  :form-option="getSubTableFormOption(binding.bindingId)"
                   @update:model-value="(val: any) => updateSubTableViewFields(binding.bindingId, val)"
                   @update:available-fields="(val: any) => updateSubTableViewAllFields(binding.bindingId, val)"
                   @save="handleSubTableViewSave(binding.bindingId)"
@@ -340,6 +346,7 @@
                 :display-fields="item.displayFields"
                 :view-fields="item.viewFields"
                 :field-defs="item.fieldDefs"
+                :show-backfill-view="item.showBackfillView !== false"
               />
             </div>
           </template>
@@ -519,6 +526,18 @@ import { BUILT_IN_TEMPLATES, type FormTemplate } from './formTemplates'
 import { subTableViewApi, type SubTableFieldDTO, type SubTableViewConfig } from '@/api/subTableView'
 
 const { t } = useI18n()
+
+type SubTableListColumnDTO = SubTableFieldDTO & {
+  columnType?: 'field' | 'linkForm' | 'lookup'
+  componentId?: number
+  linkedFormId?: number
+  linkedFormName?: string
+  linkText?: string
+  columnLabel?: string
+  boundSubTableBindingId?: number
+  boundSubTableName?: string
+  lookupConfig?: string
+}
 const router = useRouter()
 
 interface ProcessNode {
@@ -571,7 +590,7 @@ const previewItems = ref<Array<
   | { kind: 'fields'; rule: any[]; modelKey: string }
   | { kind: 'subTable'; binding: { bindingId: number; bindingType: string; bindingMode: string; tableName: string; tableType: string; tableDescription: string; rule: any[]; option?: any; columns: any[]; subMode?: string } }
   | { kind: 'relationTable'; tableName: string; fields: Array<{ label: string; value: string }> }
-  | { kind: 'lookup'; label: string; placeholder: string; searchFields: string[]; displayFields: string[]; viewFields: any[]; fieldDefs: any[]; bindingId?: number }
+  | { kind: 'lookup'; label: string; placeholder: string; searchFields: string[]; displayFields: string[]; viewFields: any[]; fieldDefs: any[]; showBackfillView?: boolean; bindingId?: number }
 >>([])
 
 // #region debug watch previewItems
@@ -589,9 +608,17 @@ const relationViewState = ref<Record<number, { allFields: any[]; viewFields: any
 // Sub-table list view refs (keyed by bindingId)
 const subTableListViewRefs = ref<Record<number, any>>({})
 // Sub-table list view state (keyed by bindingId)
-const subTableViewState = ref<Record<number, { allFields: SubTableFieldDTO[]; viewFields: SubTableFieldDTO[] }>>({})
+const subTableViewState = ref<Record<number, { allFields: SubTableFieldDTO[]; viewFields: SubTableListColumnDTO[] }>>({})
 // In-memory cache: persists sub form rules across tab switches (tabs unmount when not active)
 const subFormCache = ref<Record<number, { rule: any[]; options: any }>>({})
+
+function setSubTableListViewRef(el: any, bindingId: number) {
+  if (el) {
+    subTableListViewRefs.value[bindingId] = el
+  } else {
+    delete subTableListViewRefs.value[bindingId]
+  }
+}
 
 function setSubDesignerRef(el: any, index: number) {
   console.log('[FormDesigner] setSubDesignerRef:', { el: !!el, index, binding: designerSubBindings.value[index] })
@@ -628,7 +655,7 @@ function updateRelationViewAllFields(bindingId: number, fields: any[]) {
 }
 
 // Sub-table list view state management
-function updateSubTableViewFields(bindingId: number, fields: SubTableFieldDTO[]) {
+function updateSubTableViewFields(bindingId: number, fields: SubTableListColumnDTO[]) {
   const existing = subTableViewState.value[bindingId] || { allFields: [], viewFields: [] }
   subTableViewState.value = { ...subTableViewState.value, [bindingId]: { ...existing, viewFields: fields } }
 }
@@ -642,7 +669,9 @@ async function handleSubTableViewSave(bindingId: number) {
   const state = subTableViewState.value[bindingId]
   if (!state || !selectedForm.value) return
 
-  const fields = state.viewFields.map((f, index) => ({
+  const fields = state.viewFields
+    .filter(f => !f.columnType || f.columnType === 'field')
+    .map((f, index) => ({
     fieldName: f.fieldName,
     displayLabel: f.comment || f.fieldName,
     columnWidth: 150,
@@ -652,8 +681,33 @@ async function handleSubTableViewSave(bindingId: number) {
 
   try {
     await subTableViewApi.saveViewConfig(selectedForm.value.id, bindingId, fields)
+    await persistSubTableListViewColumns(bindingId, state.viewFields)
   } catch (e) {
     console.error('[FormDesigner] Failed to save sub-table view config:', e)
+  }
+}
+
+async function persistSubTableListViewColumns(bindingId: number, columns: SubTableListColumnDTO[]) {
+  if (!selectedForm.value) return
+  const currentConfig = selectedForm.value.configJson || {}
+  const subListViews = {
+    ...(currentConfig.subListViews || {}),
+    [bindingId]: { columns }
+  }
+  const nextConfig = { ...currentConfig, subListViews }
+  selectedForm.value = { ...selectedForm.value, configJson: nextConfig }
+  const updated = await store.updateForm(props.functionUnitId, selectedForm.value.id, {
+    formName: selectedForm.value.formName,
+    formType: selectedForm.value.formType,
+    description: selectedForm.value.description,
+    configJson: nextConfig,
+    ...(selectedForm.value.formType === 'TASK' && selectedForm.value.fieldPermissions
+      ? { fieldPermissions: selectedForm.value.fieldPermissions }
+      : {})
+  })
+  selectedForm.value = {
+    ...selectedForm.value,
+    configJson: updated.configJson || nextConfig
   }
 }
 
@@ -683,12 +737,106 @@ async function loadSubTableViewConfig(bindingId: number, binding: any) {
         } as SubTableFieldDTO
       })
 
-    subTableViewState.value[bindingId] = { allFields: availableFields, viewFields }
+    const savedListDesigner = (selectedForm.value.configJson?.subListViews || {})[bindingId] || {}
+    subTableViewState.value[bindingId] = {
+      allFields: availableFields,
+      viewFields: mergeSubTableListColumns(viewFields, savedListDesigner)
+    }
   } catch (e) {
     console.error('[FormDesigner] Failed to load sub-table view config:', e)
     // Initialize with empty state
-    subTableViewState.value[bindingId] = { allFields: [], viewFields: [] }
+    const savedListDesigner = (selectedForm.value.configJson?.subListViews || {})[bindingId] || {}
+    subTableViewState.value[bindingId] = {
+      allFields: [],
+      viewFields: mergeSubTableListColumns([], savedListDesigner)
+    }
   }
+}
+
+function mergeSubTableListColumns(
+  viewFields: SubTableFieldDTO[],
+  savedListConfig: any
+): SubTableListColumnDTO[] {
+  const fieldColumns = viewFields.map(field => ({ ...field, columnType: 'field' as const }))
+  const savedColumns = Array.isArray(savedListConfig?.columns) ? savedListConfig.columns : []
+  if (savedColumns.length > 0) {
+    const fieldByName = new Map(fieldColumns.map(field => [field.fieldName, field]))
+    return savedColumns
+      .map((column: any) => {
+        if (column?.columnType === 'linkForm') return hydrateLinkFormColumn(column)
+        if (column?.columnType === 'lookup') return hydrateLookupColumn(column)
+        const field = fieldByName.get(column?.fieldName)
+        return field ? { ...field, comment: column.comment || column.displayLabel || field.comment } : null
+      })
+      .filter(Boolean) as SubTableListColumnDTO[]
+  }
+
+  const legacyRules = Array.isArray(savedListConfig?.rule) ? savedListConfig.rule : []
+  const legacyLinkColumns = legacyRules
+    .filter((rule: any) => rule?.type === 'linkForm')
+    .map((rule: any) => hydrateLinkFormColumn({
+      columnType: 'linkForm',
+      componentId: rule._componentId ?? rule.props?._componentId
+    }))
+    .filter((column: SubTableListColumnDTO) => !!column.componentId)
+
+  return [...fieldColumns, ...legacyLinkColumns]
+}
+
+function hydrateLookupColumn(column: any): SubTableListColumnDTO {
+  return {
+    columnType: 'lookup',
+    fieldName: column.fieldName || `lookup:${column.bindingId || 'action'}`,
+    dataType: 'LOOKUP',
+    nullable: true,
+    isPrimaryKey: false,
+    comment: column.comment || column.columnLabel || 'Lookup',
+    columnLabel: column.columnLabel || column.comment || 'Lookup',
+    lookupConfig: column.lookupConfig || '{}'
+  }
+}
+
+function hydrateLinkFormColumn(column: any): SubTableListColumnDTO {
+  const componentId = Number(column.componentId)
+  const component = linkFormComponents.value.find(c => c.id === componentId)
+  return {
+    columnType: 'linkForm',
+    fieldName: `linkForm:${componentId || column.fieldName || Date.now()}`,
+    dataType: 'LINK_FORM',
+    nullable: true,
+    isPrimaryKey: false,
+    componentId,
+    linkedFormId: column.linkedFormId ?? component?.linkedFormId,
+    linkedFormName: column.linkedFormName ?? component?.linkedFormName,
+    comment: column.comment || column.columnLabel || component?.columnLabel || component?.componentName || t('linkForm.defaultLinkText'),
+    columnLabel: column.columnLabel ?? component?.columnLabel,
+    linkText: column.linkText || component?.linkText || t('linkForm.defaultLinkText'),
+    boundSubTableBindingId: column.boundSubTableBindingId,
+    boundSubTableName: column.boundSubTableName
+  }
+}
+
+function getSubTableFormDesign(bindingId: number): { rule: any[]; options: any } {
+  const index = designerSubBindings.value.findIndex(b => b.bindingId === bindingId)
+  const subRef = index >= 0 ? subDesignerRefs.value[index] : null
+  const saved = (selectedForm.value?.configJson?.subForms || {})[bindingId] || {}
+  try {
+    if (subRef) {
+      return {
+        rule: subRef.getRule?.() || [],
+        options: subRef.getOption?.() || {}
+      }
+    }
+  } catch {}
+  return subFormCache.value[bindingId] || { rule: saved.rule || [], options: saved.options || defaultFormOption }
+}
+
+function getSubTableFormRule(bindingId: number): any[] {
+  return getSubTableFormDesign(bindingId).rule
+}
+
+function getSubTableFormOption(bindingId: number): any {
+  return getSubTableFormDesign(bindingId).options
 }
 
 // Non-PRIMARY bindings for tabs（RELATED 用于 Lookup，也需要显示在设计器里配置视图字段）
@@ -1009,6 +1157,116 @@ function deriveColumnsFromBinding(binding: any, subForms?: Record<string, any>) 
     })
   }
   return []
+}
+
+function parseLookupConfig(raw?: string): any {
+  if (!raw) return {}
+  try {
+    return JSON.parse(raw)
+  } catch {
+    return {}
+  }
+}
+
+function getRelationFieldDefs(bindingId?: number, config: any = {}) {
+  if (!bindingId) return []
+  const state = relationViewState.value[bindingId]
+  const saved = (config.relationViews || {})[bindingId]
+  const fields = state?.allFields || saved?.allFields || []
+  if (fields.length) {
+    return fields.map((f: any) => ({
+      fieldName: f.fieldName,
+      dataType: f.dataType,
+      comment: f.comment,
+      description: f.description || f.comment
+    }))
+  }
+
+  const binding = designerSubBindings.value.find(b => b.bindingId === bindingId)
+  const table = store.tables.find(t => t.id === binding?.tableId)
+  return ((table as any)?.fieldDefinitions || []).map((f: any) => ({
+    fieldName: f.fieldName,
+    dataType: f.dataType,
+    comment: f.comment || f.description,
+    description: f.description || f.comment
+  }))
+}
+
+function makeLookupPreviewItem(ruleItem: any, config: any) {
+  const previewConfig = resolveLookupPreviewConfig(ruleItem.props?.lookupConfig || '{}', config)
+  return {
+    kind: 'lookup' as const,
+    label: ruleItem.title || 'Lookup',
+    placeholder: ruleItem.props?.placeholder || previewConfig.placeholder,
+    searchFields: previewConfig.searchFields,
+    displayFields: previewConfig.displayFields,
+    viewFields: previewConfig.viewFields,
+    fieldDefs: previewConfig.fieldDefs,
+    showBackfillView: previewConfig.showBackfillView,
+    bindingId: previewConfig.bindingId
+  }
+}
+
+function resolveLookupPreviewConfig(rawLookupConfig: string, explicitConfig?: any) {
+  const config = explicitConfig || selectedForm.value?.configJson || {}
+  const lookupConfig = parseLookupConfig(rawLookupConfig)
+  const bindingId = lookupConfig.bindingId
+  const savedRelationView = bindingId ? (config.relationViews || {})[bindingId] : null
+  return {
+    placeholder: 'Click to search',
+    searchFields: lookupConfig.searchFields || [],
+    displayFields: lookupConfig.displayFields || [],
+    viewFields: lookupConfig.showBackfillView === false
+      ? []
+      : (savedRelationView?.viewFields || relationViewState.value[bindingId]?.viewFields || []),
+    fieldDefs: getRelationFieldDefs(bindingId, config),
+    showBackfillView: lookupConfig.showBackfillView !== false,
+    bindingId
+  }
+}
+
+function toSubTablePreviewColumns(bindingId: number, rule: any[], config: any) {
+  const liveColumns = subTableViewState.value[bindingId]?.viewFields
+  const savedColumns = (config.subListViews || {})[bindingId]?.columns
+  const listColumns = liveColumns?.length ? liveColumns : savedColumns
+  if (Array.isArray(listColumns) && listColumns.length) {
+    return listColumns.map((column: any) => {
+      if (column.columnType === 'linkForm') {
+        return {
+          field: column.fieldName || `linkForm:${column.componentId || bindingId}`,
+          label: column.columnLabel || column.comment || column.linkText || t('linkForm.defaultLinkText'),
+          type: 'linkForm',
+          minWidth: 120,
+          props: { linkText: column.linkText || t('linkForm.defaultLinkText') }
+        }
+      }
+      if (column.columnType === 'lookup') {
+        const lookupPreviewConfig = resolveLookupPreviewConfig(column.lookupConfig || '{}', config)
+        return {
+          field: column.fieldName || `lookup:${bindingId}`,
+          label: column.columnLabel || column.comment || 'Lookup',
+          type: 'lookup',
+          minWidth: 260,
+          placeholder: lookupPreviewConfig.placeholder,
+          props: {
+            searchFields: lookupPreviewConfig.searchFields,
+            displayFields: lookupPreviewConfig.displayFields,
+            viewFields: lookupPreviewConfig.viewFields,
+            fieldDefs: lookupPreviewConfig.fieldDefs,
+            showBackfillView: lookupPreviewConfig.showBackfillView
+          }
+        }
+      }
+      return {
+        field: column.fieldName,
+        label: column.comment || column.columnLabel || column.fieldName,
+        type: undefined,
+        minWidth: 100
+      }
+    })
+  }
+
+  return deriveColumnsFromBinding({ bindingId }, { [bindingId]: { rule } })
 }
 
 /**
@@ -1517,6 +1775,16 @@ async function loadForms() {
     await store.fetchForms(props.functionUnitId)
     await store.fetchTables(props.functionUnitId)
     await store.fetchProcess(props.functionUnitId)
+    if (selectedForm.value) {
+      const refreshed = store.forms.find(form => form.id === selectedForm.value?.id)
+      if (refreshed) {
+        selectedForm.value = {
+          ...selectedForm.value,
+          ...refreshed,
+          tableBindings: selectedForm.value.tableBindings
+        }
+      }
+    }
     // 解析BPMN XML获取表单绑定信息
     parseFormBindingsFromBpmn()
   } finally {
@@ -1691,6 +1959,8 @@ function handleSelectForm(row: FormDefinition) {
   selectedForm.value = { ...row }
   subDesignerRefs.value = []
   subFormCache.value = {}
+  subTableListViewRefs.value = {}
+  subTableViewState.value = {}
   activeDesignerTab.value = 'main'
 
   // Load table bindings
@@ -2094,19 +2364,50 @@ async function handleSaveForm(isManual = false) {
       }
     })
 
-    await store.updateForm(props.functionUnitId, selectedForm.value.id, {
+    // Collect sub-table list view columns, including dropped Link Form columns.
+    const subListViews: Record<number, { columns: SubTableListColumnDTO[] }> = {
+      ...(selectedForm.value.configJson?.subListViews || {})
+    }
+    designerSubBindings.value.forEach((binding) => {
+      if (binding.bindingType !== 'SUB') return
+      const listRef = subTableListViewRefs.value[binding.bindingId]
+      if (listRef) {
+        const columns = listRef.getListColumns?.() || listRef.getViewFields?.() || []
+        subListViews[binding.bindingId] = { columns }
+        const existing = subTableViewState.value[binding.bindingId] || { allFields: [], viewFields: [] }
+        subTableViewState.value[binding.bindingId] = {
+          ...existing,
+          viewFields: columns
+        }
+      } else {
+        const state = subTableViewState.value[binding.bindingId]
+        if (state?.viewFields?.length) {
+          subListViews[binding.bindingId] = { columns: state.viewFields }
+        } else {
+          const existing = (selectedForm.value!.configJson?.subListViews || {})[binding.bindingId]
+          if (existing) subListViews[binding.bindingId] = existing
+        }
+      }
+    })
+
+    const nextConfig = { rule, options, subForms, relationViews, subListViews }
+    const updated = await store.updateForm(props.functionUnitId, selectedForm.value.id, {
       formName: selectedForm.value.formName,
       formType: selectedForm.value.formType,
       description: selectedForm.value.description,
-      configJson: { rule, options, subForms, relationViews },
+      configJson: nextConfig,
       ...(selectedForm.value.formType === 'TASK' && selectedForm.value.fieldPermissions
         ? { fieldPermissions: selectedForm.value.fieldPermissions }
         : {})
     })
+    selectedForm.value = {
+      ...selectedForm.value,
+      configJson: updated.configJson || nextConfig
+    }
 
     if (isManual) {
       ElMessage.success(t('form.saveSuccess'))
-      loadForms()
+      await loadForms()
     } else {
       lastAutoSaveTime.value = new Date()
     }
@@ -2242,7 +2543,7 @@ function handlePreview() {
       option = subFormCache.value[bindingId]?.options || subForms[bindingId]?.options || {}
     }
     previewTableRows.value[bindingId] = []
-    const columns = deriveColumnsFromBinding({ bindingId }, { [bindingId]: { rule } })
+    const columns = toSubTablePreviewColumns(bindingId, rule, config)
     bindingMap.set(bindingId, {
       bindingId,
       bindingType: b.bindingType,
@@ -2393,9 +2694,8 @@ function handlePreview() {
         bindingMap.delete(Number(itemBindingId)) // mark as placed
       }
     } else if (ruleItem.type === 'lookup') {
-      // Push lookup to currentSegment so form-create renders it in its original container position
-      // Do NOT create a separate preview item for lookup - that causes duplicate rendering
-      currentSegment.push(ruleItem)
+      flushSegment()
+      items.push(makeLookupPreviewItem(ruleItem, config))
     } else if (FC_SKIP_PREVIEW.has(ruleItem.type)) {
       // Skip form-create proprietary components in preview
     } else {

@@ -8,7 +8,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, inject } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 interface LinkFormComponentInfo {
@@ -25,6 +25,7 @@ const props = defineProps<{
 }>()
 
 const { t } = useI18n()
+const injectedComponents = inject<() => LinkFormComponentInfo[]>('linkFormComponents', () => [])
 
 function onWidgetClick(e: MouseEvent) {
   e.stopPropagation()
@@ -47,7 +48,7 @@ const state = computed((): PlaceholderState => {
 })
 
 const linkFormComponents = computed((): LinkFormComponentInfo[] => {
-  return props.components || []
+  return props.components?.length ? props.components : injectedComponents()
 })
 
 const displayName = computed(() => {

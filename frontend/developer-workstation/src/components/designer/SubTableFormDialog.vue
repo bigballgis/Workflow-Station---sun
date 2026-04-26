@@ -26,6 +26,7 @@
 
     <template #footer>
       <el-button @click="handleClose">{{ t('common.cancel') }}</el-button>
+      <el-button type="primary" @click="handleSave">{{ t('common.save') }}</el-button>
     </template>
   </el-dialog>
 </template>
@@ -74,7 +75,17 @@ const defaultFormOption = {
   onSubmit: () => {}, // We handle save manually
 }
 
-const formOption = ref({ ...defaultFormOption, ...props.option })
+function buildDialogFormOption(option: Record<string, any> = {}) {
+  return {
+    ...defaultFormOption,
+    ...option,
+    resetBtn: false,
+    submitBtn: false,
+    onSubmit: () => {},
+  }
+}
+
+const formOption = ref(buildDialogFormOption(props.option))
 
 // Watch for dialog open/close and initialData changes
 watch(
@@ -89,7 +100,7 @@ watch(
         formData.value = {}
       }
       // Update option if provided
-      formOption.value = { ...defaultFormOption, ...props.option }
+      formOption.value = buildDialogFormOption(props.option)
       // Mount form-create after dialog opens
       nextTick(() => {
         formCreateMounted.value = true
