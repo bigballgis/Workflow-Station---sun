@@ -995,7 +995,7 @@ const processFormValues = ref<Record<string, any>>({})
 // Task 17.2: Task Form data
 const taskFormDTO = ref<TaskFormDataDTO | null>(null)
 const hasConfiguredSaveAction = computed(() =>
-  (taskInfo.value.actions || []).some(action => action.actionType === 'SAVE')
+  (taskInfo.value.actions || []).some(action => (action.actionType || '').trim().toUpperCase() === 'SAVE')
 )
 const showImplicitSaveAction = computed(() =>
   !formReadOnly.value && !hasConfiguredSaveAction.value
@@ -2571,7 +2571,8 @@ const handleCustomAction = (action: TaskActionInfo) => {
   console.log('Custom action clicked:', action)
   
   // Handle different action types based on actionType
-  switch (action.actionType) {
+  const actionType = (action.actionType || '').trim().toUpperCase()
+  switch (actionType) {
     case 'SAVE':
       saveCurrentTaskForm()
       break
@@ -2831,7 +2832,7 @@ const getButtonType = (buttonColor?: string): 'primary' | 'success' | 'warning' 
 }
 
 function getActionLabel(action: TaskActionInfo): string {
-  return action.actionType === 'SAVE' ? t('common.save') : action.actionName
+  return (action.actionType || '').trim().toUpperCase() === 'SAVE' ? t('common.save') : action.actionName
 }
 
 // Get icon component
