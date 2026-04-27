@@ -27,7 +27,7 @@ import static org.mockito.Mockito.*;
  *
  * <p>Validates: Requirements 11.1, 11.2</p>
  */
-@Tag("Feature: ai-function-unit-generation, Property 2: 锁排他性")
+@Tag("Feature: ai-function-unit-generation, Property 2: lock exclusivity")
 class AiLockExclusivityProperties {
 
     /**

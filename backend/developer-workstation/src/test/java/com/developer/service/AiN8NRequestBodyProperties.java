@@ -26,7 +26,7 @@ import static org.mockito.Mockito.mock;
  *
  * <p><b>Validates: Requirements 15</b></p>
  */
-@Tag("Feature: ai-function-unit-generation-refactor, Property 12: N8N 请求体包含完整 schemaMetadata")
+@Tag("Feature: ai-function-unit-generation-refactor, Property 12: N8N request body contains complete schemaMetadata")
 class AiN8NRequestBodyProperties {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
@@ -74,7 +74,7 @@ class AiN8NRequestBodyProperties {
      * <p><b>Validates: Requirements 15</b></p>
      */
     @Property(tries = 100)
-    @Label("Property 12: schemaMetadata 包含 formTypes/tableTypes/actionTypes/configJsonExtensions/visibilityConditionFormat/newEntities")
+    @Label("Property 12: schemaMetadata contains formTypes/tableTypes/actionTypes/configJsonExtensions/visibilityConditionFormat/newEntities")
     @SuppressWarnings("unchecked")
     void schemaMetadataContainsAllRequiredFields(
             @ForAll AiPhase phase,
@@ -146,7 +146,7 @@ class AiN8NRequestBodyProperties {
      * <p><b>Validates: Requirements 15</b></p>
      */
     @Property(tries = 100)
-    @Label("Property 12b: includeExplanations 始终为 true")
+    @Label("Property 12b: includeExplanations is always true")
     void includeExplanationsIsAlwaysTrue(
             @ForAll AiPhase phase,
             @ForAll AiMode mode) {
@@ -170,7 +170,7 @@ class AiN8NRequestBodyProperties {
      * <p><b>Validates: Requirements 15</b></p>
      */
     @Property(tries = 100)
-    @Label("Property 12c: regenerateScope 为 null 时默认 ALL，非 null 时透传")
+    @Label("Property 12c: regenerateScope defaults to ALL when null, passes through when non-null")
     void regenerateScopeDefaultsToAllWhenNull(
             @ForAll AiPhase phase,
             @ForAll AiMode mode,

@@ -30,7 +30,7 @@ import static org.mockito.Mockito.when;
  *
  * <p><b>Validates: Requirements 45.1, 45.2</b></p>
  */
-@Tag("Feature: ai-function-unit-generation-refactor, Property 24: N8N 成功时间戳追踪")
+@Tag("Feature: ai-function-unit-generation-refactor, Property 24: N8N success timestamp tracking")
 class AiN8NResilienceProperties {
 
     @SuppressWarnings("unchecked")

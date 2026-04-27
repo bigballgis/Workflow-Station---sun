@@ -34,7 +34,7 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/v1/history")
 @RequiredArgsConstructor
-@Tag(name = "历史数据", description = "流程和任务历史数据查询API")
+@Tag(name = "History Data", description = "Process and task history data query API")
 public class HistoryController {
 
     private final HistoryService historyService;
@@ -47,19 +47,19 @@ public class HistoryController {
      * 获取用户已处理的任务列表
      */
     @GetMapping("/completed-tasks")
-    @Operation(summary = "获取用户已处理任务", description = "查询用户已完成处理的历史任务列表")
+    @Operation(summary = "Get user completed tasks", description = "Query user completed task history list")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getCompletedTasks(
-            @Parameter(description = "用户ID", required = true)
+            @Parameter(description = "User ID", required = true)
             @RequestParam("userId") String userId,
-            @Parameter(description = "页码，从0开始")
+            @Parameter(description = "Page number, starting from 0")
             @RequestParam(value = "page", defaultValue = "0") int page,
-            @Parameter(description = "每页大小")
+            @Parameter(description = "Page size")
             @RequestParam(value = "size", defaultValue = "20") int size,
-            @Parameter(description = "关键词搜索")
+            @Parameter(description = "Keyword search")
             @RequestParam(value = "keyword", required = false) String keyword,
-            @Parameter(description = "开始时间")
+            @Parameter(description = "Start time")
             @RequestParam(value = "startTime", required = false) String startTime,
-            @Parameter(description = "结束时间")
+            @Parameter(description = "End time")
             @RequestParam(value = "endTime", required = false) String endTime) {
         
         log.info("Getting completed tasks for user: {}, page: {}, size: {}", userId, page, size);
@@ -205,9 +205,9 @@ public class HistoryController {
      * 获取流程实例的任务历史
      */
     @GetMapping("/tasks")
-    @Operation(summary = "获取任务历史", description = "根据流程实例ID获取任务历史")
+    @Operation(summary = "Get task history", description = "Get task history by process instance ID")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getTaskHistory(
-            @Parameter(description = "流程实例ID", required = true)
+            @Parameter(description = "Process instance ID", required = True)
             @RequestParam("processInstanceId") String processInstanceId) {
         
         log.info("Getting task history for process instance: {}", processInstanceId);
@@ -284,9 +284,9 @@ public class HistoryController {
      * 获取流程实例的活动历史
      */
     @GetMapping("/activities")
-    @Operation(summary = "获取活动历史", description = "根据流程实例ID获取活动历史")
+    @Operation(summary = "Get activity history", description = "Get activity history by process instance ID")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getActivityHistory(
-            @Parameter(description = "流程实例ID", required = true)
+            @Parameter(description = "Process instance ID", required = True)
             @RequestParam("processInstanceId") String processInstanceId) {
         
         log.info("Getting activity history for process instance: {}", processInstanceId);
@@ -322,9 +322,9 @@ public class HistoryController {
      * 获取用户流程统计数据
      */
     @GetMapping("/process-statistics")
-    @Operation(summary = "获取用户流程统计", description = "查询用户发起的流程统计数据")
+    @Operation(summary = "Get user process statistics", description = "Query process statistics initiated by user")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getProcessStatistics(
-            @Parameter(description = "用户ID", required = true)
+            @Parameter(description = "User ID", required = true)
             @RequestParam("userId") String userId) {
         
         log.info("Getting process statistics for user: {}", userId);

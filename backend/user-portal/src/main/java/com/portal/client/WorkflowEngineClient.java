@@ -94,7 +94,7 @@ public class WorkflowEngineClient {
 
     /** 从 Engine 返回的 JSON 响应体里提取业务 message 字段 */
     private String extractMessage(String body) {
-        if (body == null || body.isBlank()) return "未知错误";
+        if (body == null || body.isBlank()) return "Unknown error";
         try {
             ObjectMapper mapper = new ObjectMapper();
             JsonNode node = mapper.readTree(body);
@@ -187,15 +187,15 @@ public class WorkflowEngineClient {
             String body = e.getResponseBodyAsString();
             String msg = extractMessage(body);
             log.error("Failed to start process in workflow engine (HTTP {}): {}", e.getStatusCode(), body);
-            throw new IllegalStateException("启动流程失败[" + e.getStatusCode() + "]: " + msg);
+            throw new IllegalStateException("Failed to start process [" + e.getStatusCode() + "]: " + msg);
         } catch (HttpServerErrorException e) {
             String body = e.getResponseBodyAsString();
             String msg = extractMessage(body);
             log.error("Failed to start process in workflow engine (HTTP {}): {}", e.getStatusCode(), body);
-            throw new IllegalStateException("启动流程失败[" + e.getStatusCode() + "]: " + msg);
+            throw new IllegalStateException("Failed to start process [" + e.getStatusCode() + "]: " + msg);
         } catch (Exception e) {
             log.error("Failed to start process in workflow engine: {}", e.getMessage(), e);
-            throw new IllegalStateException("启动流程失败: " + e.getMessage());
+            throw new IllegalStateException("Failed to start process: " + e.getMessage());
         }
         // unreachable
         throw new IllegalStateException("Unexpected empty response from workflow engine");

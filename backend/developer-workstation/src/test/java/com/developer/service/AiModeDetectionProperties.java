@@ -30,7 +30,7 @@ import static org.mockito.Mockito.when;
  *
  * <p><b>Validates: Requirements 4.1, 4.2, 4.3</b></p>
  */
-@Tag("Feature: ai-function-unit-generation, Property 1: 模式判定正确性")
+@Tag("Feature: ai-function-unit-generation, Property 1: mode detection correctness")
 class AiModeDetectionProperties {
 
     /**
@@ -132,7 +132,7 @@ class AiModeDetectionProperties {
      * <p><b>Validates: Requirements 5.1, 5.2</b></p>
      */
     @Property(tries = 100)
-    @Label("Property 3: determineMode 覆盖 decisionDefinitions")
+    @Label("Property 3: determineMode covers decisionDefinitions")
     void functionUnitWithOnlyDecisionDefinitionsShouldBeModifyMode(
             @ForAll @LongRange(min = 1, max = 10000) Long functionUnitId) {
 

@@ -29,7 +29,7 @@ import static org.mockito.Mockito.*;
  *
  * <p><b>Validates: Requirements 49.1, 49.2, 49.3</b></p>
  */
-@Tag("Feature: ai-function-unit-generation-refactor, Property 29: 应用-撤销往返")
+@Tag("Feature: ai-function-unit-generation-refactor, Property 29: apply-undo roundtrip")
 class AiUndoProperties {
 
     private final ObjectMapper objectMapper = new ObjectMapper();

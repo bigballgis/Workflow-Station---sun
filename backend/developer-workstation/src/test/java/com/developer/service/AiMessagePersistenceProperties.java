@@ -27,7 +27,7 @@ import static org.mockito.Mockito.when;
  *
  * <p><b>Validates: Requirements 14.1, 14.5</b></p>
  */
-@Tag("Feature: ai-function-unit-generation, Property 12: 消息持久化往返")
+@Tag("Feature: ai-function-unit-generation, Property 12: message persistence roundtrip")
 class AiMessagePersistenceProperties {
 
     /**

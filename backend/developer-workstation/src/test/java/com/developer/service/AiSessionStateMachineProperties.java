@@ -31,7 +31,7 @@ import static org.mockito.Mockito.when;
  *
  * <p><b>Validates: Requirements 13.1, 13.6, 13.7</b></p>
  */
-@Tag("Feature: ai-function-unit-generation, Property 13: 会话状态机正确性")
+@Tag("Feature: ai-function-unit-generation, Property 13: session state machine correctness")
 class AiSessionStateMachineProperties {
 
     private AiGenerationServiceImpl createService(AiSessionRepository aiSessionRepository) {

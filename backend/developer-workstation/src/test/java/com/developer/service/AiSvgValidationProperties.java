@@ -16,7 +16,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p><b>Validates: Requirements 9.1</b></p>
  */
-@Tag("Feature: ai-function-unit-generation, Property 5: SVG 安全校验")
+@Tag("Feature: ai-function-unit-generation, Property 5: SVG security validation")
 class AiSvgValidationProperties {
 
     private final AiValidationServiceImpl validationService = new AiValidationServiceImpl();
@@ -61,7 +61,7 @@ class AiSvgValidationProperties {
 
         assertThat(result.getErrors().stream()
                 .anyMatch(e -> "SVG_VALIDATION".equals(e.getErrorType())
-                        && e.getDescription().contains("事件属性")))
+                        && e.getDescription().contains("event attribute")))
                 .isTrue();
     }
 

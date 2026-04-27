@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p><b>Validates: Requirements 9.1</b></p>
  */
-@Tag("Feature: ai-function-unit-generation, Property 4: 枚举值封闭性校验")
+@Tag("Feature: ai-function-unit-generation, Property 4: enum value closure validation")
 class AiEnumValidationProperties {
 
     private final AiValidationServiceImpl validationService = new AiValidationServiceImpl();

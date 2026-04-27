@@ -23,7 +23,7 @@ import static org.mockito.Mockito.mock;
  *
  * <p><b>Feature: ai-function-unit-generation-refactor</b></p>
  */
-@Tag("Feature: ai-function-unit-generation-refactor, Property 2: 分级截断保留业务逻辑字段")
+@Tag("Feature: ai-function-unit-generation-refactor, Property 2: tiered truncation preserves business logic fields")
 class AiTruncationProperties {
 
     private AiGenerationServiceImpl createService() {
@@ -38,7 +38,7 @@ class AiTruncationProperties {
     }
 
     /**
-     * Feature: ai-function-unit-generation-refactor, Property 2: 分级截断保留业务逻辑字段
+     * Feature: ai-function-unit-generation-refactor, Property 2: tiered truncation preserves business logic fields
      *
      * <p>Verifies that tier-1 truncation preserves formulas/linkages/crossFieldRules/summaryRules
      * but truncates the rule array, and actionDefinitions configJson remains unchanged.</p>
@@ -46,7 +46,7 @@ class AiTruncationProperties {
      * <p><b>Validates: Requirements 4.1, 4.4</b></p>
      */
     @Property(tries = 100)
-    @Label("Property 2: 分级截断保留业务逻辑字段")
+    @Label("Property 2: tiered truncation preserves business logic fields")
     @SuppressWarnings("unchecked")
     void tieredTruncationPreservesBusinessLogicFields(
             @ForAll @IntRange(min = 1, max = 10) int ruleCount) {
@@ -119,7 +119,7 @@ class AiTruncationProperties {
     }
 
     /**
-     * Feature: ai-function-unit-generation-refactor, Property 17: 截断后 Map 可变性
+     * Feature: ai-function-unit-generation-refactor, Property 17: Map mutability after truncation
      *
      * <p>Verifies that truncated Maps are mutable — put() does not throw
      * UnsupportedOperationException.</p>
@@ -127,7 +127,7 @@ class AiTruncationProperties {
      * <p><b>Validates: Requirements 40.1, 40.2</b></p>
      */
     @Property(tries = 100)
-    @Label("Property 17: 截断后 Map 可变性")
+    @Label("Property 17: Map mutability after truncation")
     @SuppressWarnings("unchecked")
     void truncatedConfigJsonMapsAreMutable(
             @ForAll @IntRange(min = 1, max = 5) int ruleCount) {
@@ -178,7 +178,7 @@ class AiTruncationProperties {
      * <p><b>Validates: Requirements 40.1, 40.2</b></p>
      */
     @Property(tries = 50)
-    @Label("Property 17: tier-2 截断后 Map 可变性")
+    @Label("Property 17: tier-2 Map mutability after truncation")
     @SuppressWarnings("unchecked")
     void tier2TruncatedConfigJsonMapsAreMutable(
             @ForAll @IntRange(min = 3, max = 8) int formCount) {

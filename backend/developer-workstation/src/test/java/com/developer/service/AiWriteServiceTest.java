@@ -72,7 +72,7 @@ class AiWriteServiceTest {
                 .tableDefinitions(List.of(Map.of(
                         "tableName", "orders",
                         "tableType", "MAIN",
-                        "tableDisplayName", "订单表",
+                        "tableDisplayName", "Order Table",
                         "fieldDefinitions", List.of(Map.of(
                                 "fieldName", "id",
                                 "dataType", "BIGINT",
@@ -114,7 +114,7 @@ class AiWriteServiceTest {
                 .tableDefinitions(List.of(Map.of(
                         "tableName", "new_table",
                         "tableType", "MAIN",
-                        "tableDisplayName", "新表",
+                        "tableDisplayName", "New Table",
                         "fieldDefinitions", List.of(Map.of(
                                 "fieldName", "id",
                                 "dataType", "BIGINT",

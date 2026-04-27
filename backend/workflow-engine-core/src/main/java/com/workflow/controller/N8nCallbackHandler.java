@@ -32,7 +32,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/workflow/n8n")
 @RequiredArgsConstructor
-@Tag(name = "N8N 回调处理", description = "接收 N8N 工作流执行结果回调")
+@Tag(name = "N8N Callback Handler", description = "Receive N8N workflow execution result callbacks")
 public class N8nCallbackHandler {
 
     private static final String REDIS_KEY_PREFIX = "n8n:callback:";
@@ -59,7 +59,7 @@ public class N8nCallbackHandler {
      * 6. 处理完成后删除 Redis 中的 callbackToken
      */
     @PostMapping("/callback")
-    @Operation(summary = "N8N 回调", description = "接收 N8N 工作流执行完成后的回调通知")
+    @Operation(summary = "N8N Callback", description = "Receive callback notification after N8N workflow execution completes")
     public ResponseEntity<ApiResponse<Void>> handleCallback(@RequestBody @Valid N8nCallbackRequest request) {
         String callbackToken = request.getCallbackToken();
         log.info("Received N8N callback: callbackToken={}, status={}", callbackToken, request.getStatus());

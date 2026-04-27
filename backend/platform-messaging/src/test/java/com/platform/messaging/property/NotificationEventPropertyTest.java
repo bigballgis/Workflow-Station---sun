@@ -18,14 +18,14 @@ import static org.mockito.Mockito.mock;
 
 /**
  * Property tests for NotificationEvent.
- * Feature: kafka-in-app-messaging, Property 12: Kafka Key 为 targetUserId
+ * Feature: kafka-in-app-messaging, Property 12: Kafka Key is targetUserId
  *
  * Validates: Requirements 7.5
  */
 class NotificationEventPropertyTest {
 
     /**
-     * Property 12: Kafka Key 为 targetUserId
+     * Property 12: Kafka Key is targetUserId
      *
      * For any NotificationEvent with a targetUserId, the KafkaEventPublisher
      * should use targetUserId as the Kafka message key, ensuring ordered
@@ -34,7 +34,7 @@ class NotificationEventPropertyTest {
      * Validates: Requirements 7.5
      */
     @Property(tries = 100)
-    @Label("Feature: kafka-in-app-messaging, Property 12: Kafka Key 为 targetUserId")
+    @Label("Feature: kafka-in-app-messaging, Property 12: Kafka Key is targetUserId")
     void kafkaKeyShouldBeTargetUserId(
             @ForAll @AlphaChars @Size(min = 1, max = 50) String targetUserId,
             @ForAll("notificationTypes") String notificationType,

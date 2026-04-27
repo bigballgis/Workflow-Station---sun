@@ -27,7 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p><b>Validates: Requirements 10.3, 10.4</b></p>
  */
-@Tag("Feature: ai-function-unit-generation, Property 10: 全量替换写入正确性")
+@Tag("Feature: ai-function-unit-generation, Property 10: full replacement write correctness")
 class AiFullReplacementWriteProperties {
 
     // --- Reuse test doubles from AiTransactionAtomicityProperties ---

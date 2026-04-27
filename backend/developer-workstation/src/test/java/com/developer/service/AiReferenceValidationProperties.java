@@ -17,7 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p><b>Validates: Requirements 9.1</b></p>
  */
-@Tag("Feature: ai-function-unit-generation, Property 7: 引用完整性校验")
+@Tag("Feature: ai-function-unit-generation, Property 7: reference integrity validation")
 class AiReferenceValidationProperties {
 
     private final AiValidationServiceImpl validationService = new AiValidationServiceImpl();

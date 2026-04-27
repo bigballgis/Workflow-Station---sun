@@ -29,7 +29,7 @@ import static org.mockito.Mockito.when;
  *
  * <p><b>Validates: Requirements 3.4, 3.8</b></p>
  */
-@Tag("Feature: ai-function-unit-generation, Property 16: 阶段转换有序性")
+@Tag("Feature: ai-function-unit-generation, Property 16: phase transition ordering")
 class AiPhaseTransitionProperties {
 
     private AiGenerationServiceImpl createService(AiSessionRepository aiSessionRepository) {

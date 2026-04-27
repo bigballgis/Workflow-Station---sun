@@ -19,7 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p><b>Validates: Requirements 6.1, 6.2, 6.3, 6.4, 6.5, 6.6</b></p>
  */
-@Tag("Feature: ai-function-unit-generation-refactor, Property 4: 决策定义校验完整性")
+@Tag("Feature: ai-function-unit-generation-refactor, Property 4: decision definition validation completeness")
 class AiDecisionValidationProperties {
 
     private final AiValidationServiceImpl validationService = new AiValidationServiceImpl();

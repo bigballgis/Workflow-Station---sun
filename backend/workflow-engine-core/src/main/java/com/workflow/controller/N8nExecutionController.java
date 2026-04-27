@@ -35,7 +35,7 @@ import java.util.List;
 @Slf4j
 @RestController
 @RequiredArgsConstructor
-@Tag(name = "N8N 执行记录", description = "N8N 执行记录查询与 Action 同步执行 API")
+@Tag(name = "N8N Execution Records", description = "N8N execution record query and Action sync execution API")
 public class N8nExecutionController {
 
     private final N8nExecutionRecordRepository executionRecordRepository;
@@ -49,19 +49,19 @@ public class N8nExecutionController {
      * Validates: Requirements 7.3
      */
     @GetMapping("/api/workflow/n8n/executions")
-    @Operation(summary = "查询执行记录列表", description = "支持按流程实例ID、状态、时间范围筛选和分页")
+    @Operation(summary = "Query execution record list", description = "Support filtering by process instance ID, status, time range and pagination")
     public ResponseEntity<ApiResponse<Page<N8nExecutionRecord>>> listExecutions(
-            @Parameter(description = "流程实例ID")
+            @Parameter(description = "Process instance ID")
             @RequestParam(value = "processInstanceId", required = false) String processInstanceId,
-            @Parameter(description = "执行状态: PENDING, RUNNING, SUCCESS, FAILED, TIMEOUT")
+            @Parameter(description = "Execution status: PENDING, RUNNING, SUCCESS, FAILED, TIMEOUT")
             @RequestParam(value = "status", required = false) String status,
-            @Parameter(description = "开始时间（ISO-8601）")
+            @Parameter(description = "Start time (ISO-8601)")
             @RequestParam(value = "startTime", required = false) String startTime,
-            @Parameter(description = "结束时间（ISO-8601）")
+            @Parameter(description = "End time (ISO-8601)")
             @RequestParam(value = "endTime", required = false) String endTime,
-            @Parameter(description = "页码，从0开始")
+            @Parameter(description = "Page number, starting from 0")
             @RequestParam(value = "page", defaultValue = "0") int page,
-            @Parameter(description = "每页大小")
+            @Parameter(description = "Page size")
             @RequestParam(value = "size", defaultValue = "20") int size) {
 
         log.info("Querying N8N executions: processInstanceId={}, status={}, startTime={}, endTime={}, page={}, size={}",
@@ -81,9 +81,9 @@ public class N8nExecutionController {
      * Validates: Requirements 7.4
      */
     @GetMapping("/api/workflow/n8n/executions/{id}")
-    @Operation(summary = "查询执行记录详情", description = "根据ID返回完整执行记录详情")
+    @Operation(summary = "Query execution record detail", description = "Returns complete execution record detail by ID")
     public ResponseEntity<ApiResponse<N8nExecutionRecord>> getExecution(
-            @Parameter(description = "执行记录ID", required = true)
+            @Parameter(description = "Execution record ID", required = true)
             @PathVariable("id") Long id) {
 
         log.info("Querying N8N execution detail: id={}", id);
@@ -103,7 +103,7 @@ public class N8nExecutionController {
      * Validates: Requirements 10.20, 10.21, 10.22, 10.23
      */
     @PostMapping("/api/v1/n8n/execute")
-    @Operation(summary = "N8N Action 同步执行", description = "内部 API：同步执行 N8N 工作流并返回结果")
+    @Operation(summary = "N8N Action sync execution", description = "Internal API: Synchronously execute N8N workflow and return result")
     public ResponseEntity<ApiResponse<N8nExecutionResult>> executeSynchronous(
             @RequestBody @Valid N8nActionRequest request) {
 

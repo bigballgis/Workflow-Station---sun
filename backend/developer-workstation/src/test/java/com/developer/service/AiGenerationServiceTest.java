@@ -165,14 +165,14 @@ class AiGenerationServiceTest {
                 AiMessage.builder()
                         .sessionId(sessionId)
                         .role(AiMessageRole.USER)
-                        .content("请帮我设计一个订单管理功能")
+                        .content("Please help me design an order management function")
                         .phase(AiPhase.REQUIREMENTS)
                         .createdAt(Instant.now())
                         .build(),
                 AiMessage.builder()
                         .sessionId(sessionId)
                         .role(AiMessageRole.ASSISTANT)
-                        .content("好的，我来帮你设计")
+                        .content("Sure, let me help you design it")
                         .phase(AiPhase.REQUIREMENTS)
                         .createdAt(Instant.now())
                         .build()
@@ -185,8 +185,8 @@ class AiGenerationServiceTest {
 
         assertEquals(2, history.size());
         assertEquals("user", history.get(0).get("role"));
-        assertEquals("请帮我设计一个订单管理功能", history.get(0).get("content"));
+        assertEquals("Please help me design an order management function", history.get(0).get("content"));
         assertEquals("assistant", history.get(1).get("role"));
-        assertEquals("好的，我来帮你设计", history.get(1).get("content"));
+        assertEquals("Sure, let me help you design it", history.get(1).get("content"));
     }
 }

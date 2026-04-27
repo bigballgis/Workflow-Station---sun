@@ -21,7 +21,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p><b>Validates: Requirements 41.1, 41.2, 41.3</b></p>
  */
-@Tag("Feature: ai-function-unit-generation-refactor, Property 19: 质量评分不变量")
+@Tag("Feature: ai-function-unit-generation-refactor, Property 19: quality score invariant")
 class AiQualityScoreProperties {
 
     private final AiValidationServiceImpl validationService = new AiValidationServiceImpl();

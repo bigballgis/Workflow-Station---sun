@@ -21,7 +21,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p><b>Validates: Requirements 42.3</b></p>
  */
-@Tag("Feature: ai-function-unit-generation-refactor, Property 20: 增量重新生成范围隔离")
+@Tag("Feature: ai-function-unit-generation-refactor, Property 20: incremental regeneration scope isolation")
 class AiScopedWriteProperties {
 
     /**

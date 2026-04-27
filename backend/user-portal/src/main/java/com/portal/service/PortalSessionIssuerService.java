@@ -121,7 +121,7 @@ public class PortalSessionIssuerService {
         } catch (RuntimeException e) {
             log.warn("Portal session issue failed: {}", e.getMessage());
             return ResponseEntity.badRequest().body(LoginResponse.builder()
-                    .message(e.getMessage() != null ? e.getMessage() : "登录失败")
+                    .message(e.getMessage() != null ? e.getMessage() : "Login failed")
                     .build());
         }
     }

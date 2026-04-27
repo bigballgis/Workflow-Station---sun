@@ -23,7 +23,7 @@ import static org.mockito.Mockito.mock;
  *
  * <p><b>Validates: Requirements 24</b></p>
  */
-@Tag("Feature: ai-function-unit-generation-refactor, Property 16: SSE emitter 动态超时计算")
+@Tag("Feature: ai-function-unit-generation-refactor, Property 16: SSE emitter dynamic timeout calculation")
 class AiSseTimeoutProperties {
 
     private AiGenerationServiceImpl createService(int n8nTimeoutSeconds) {

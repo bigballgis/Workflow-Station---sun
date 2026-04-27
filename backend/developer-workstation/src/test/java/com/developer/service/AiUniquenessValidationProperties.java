@@ -17,7 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p><b>Validates: Requirements 9.1</b></p>
  */
-@Tag("Feature: ai-function-unit-generation, Property 8: 唯一性校验")
+@Tag("Feature: ai-function-unit-generation, Property 8: uniqueness validation")
 class AiUniquenessValidationProperties {
 
     private final AiValidationServiceImpl validationService = new AiValidationServiceImpl();

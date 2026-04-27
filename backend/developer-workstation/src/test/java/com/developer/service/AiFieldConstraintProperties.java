@@ -18,7 +18,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p><b>Validates: Requirements 9.1</b></p>
  */
-@Tag("Feature: ai-function-unit-generation, Property 6: 字段约束校验")
+@Tag("Feature: ai-function-unit-generation, Property 6: field constraint validation")
 class AiFieldConstraintProperties {
 
     private final AiValidationServiceImpl validationService = new AiValidationServiceImpl();

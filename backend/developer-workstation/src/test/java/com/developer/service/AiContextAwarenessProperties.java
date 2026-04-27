@@ -49,7 +49,7 @@ class AiContextAwarenessProperties {
      * Validates: Requirements 2.1, 2.2, 2.3, 2.4, 2.5
      */
     @Property(tries = 100)
-    @Label("Property 2: getLatestDocuments 阶段-模式映射正确性")
+    @Label("Property 2: getLatestDocuments stage-mode mapping correctness")
     void getLatestDocumentsReturnsCorrectDocumentTypes(@ForAll AiPhase phase, @ForAll AiMode mode) {
         setupService();
         Long functionUnitId = 1L;
@@ -102,7 +102,7 @@ class AiContextAwarenessProperties {
      * Validates: Requirements 5.3
      */
     @Property(tries = 100)
-    @Label("Property 5: 文档内容截断不变量")
+    @Label("Property 5: document content truncation invariant")
     void truncateDocumentsPreservesOrTruncatesContent(
             @ForAll @StringLength(min = 0, max = 100000) String content) {
         setupService();
@@ -121,9 +121,9 @@ class AiContextAwarenessProperties {
         if (content.length() <= 50000) {
             assertEquals(content, resultContent, "Content ≤ 50000 should be unchanged");
         } else {
-            String suffix = "[已截断]";
+            String suffix = "[truncated]";
             assertTrue(resultContent.endsWith(suffix),
-                    "Content > 50000 should end with [已截断]");
+                    "Content > 50000 should end with [truncated]");
             assertEquals(50000 + suffix.length(), resultContent.length(),
                     "Truncated content length should be 50000 + suffix length");
             assertEquals(content.substring(0, 50000), resultContent.substring(0, 50000),
@@ -137,7 +137,7 @@ class AiContextAwarenessProperties {
      * Validates: Requirements 3.1, 3.2, 3.3
      */
     @Property(tries = 100)
-    @Label("Property 3: buildN8NRequestBody 正确包含 existingDocuments")
+    @Label("Property 3: buildN8NRequestBody correctly includes existingDocuments")
     void buildN8NRequestBodyIncludesExistingDocuments(
             @ForAll AiPhase phase, @ForAll AiMode mode,
             @ForAll @StringLength(min = 1, max = 100) String docContent) {
@@ -180,7 +180,7 @@ class AiContextAwarenessProperties {
      * Validates: Requirements 4.1
      */
     @Property(tries = 100)
-    @Label("Property 4: context 预序列化为字符串，existingDocuments 格式化为可读文本")
+    @Label("Property 4: context pre-serialized as string, existingDocuments formatted as readable text")
     void buildN8NRequestBodyPreSerializesContextAndDocuments(
             @ForAll AiPhase phase, @ForAll AiMode mode) {
         setupService();
@@ -224,7 +224,7 @@ class AiContextAwarenessProperties {
      * Validates: Requirements 5.1, 5.2
      */
     @Property(tries = 100)
-    @Label("Property 7: 上下文序列化大小不变量")
+    @Label("Property 7: context serialization size invariant")
     void contextSerializationSizeInvariant(
             @ForAll @StringLength(min = 0, max = 500) String name,
             @ForAll @StringLength(min = 0, max = 1000) String description,

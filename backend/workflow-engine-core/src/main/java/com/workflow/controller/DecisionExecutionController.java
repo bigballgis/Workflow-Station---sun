@@ -32,9 +32,9 @@ public class DecisionExecutionController {
      * 评估决策表
      */
     @PostMapping("/{decisionKey}/evaluate")
-    @Operation(summary = "评估决策表", description = "根据输入变量评估指定的决策表并返回匹配规则的输出条目")
+    @Operation(summary = "Evaluate decision table", description = "Evaluate the specified decision table based on input variables and return matching rule output entries")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> evaluateDecision(
-            @Parameter(description = "决策键", required = true)
+            @Parameter(description = "Decision key", required = true)
             @PathVariable String decisionKey,
             @RequestBody(required = false) Map<String, Object> variables) {
 
