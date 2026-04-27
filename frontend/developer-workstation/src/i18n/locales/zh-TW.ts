@@ -403,6 +403,7 @@ export default {
     delegate: '委託',
     rollback: '回退',
     withdraw: '撤回',
+    saveDraft: '儲存',
     processSubmit: '流程提交',
     processReject: '流程駁回',
     composite: '組合動作',

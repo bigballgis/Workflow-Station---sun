@@ -69,6 +69,7 @@
               <el-option :label="t('action.withdraw')" value="WITHDRAW" />
             </el-option-group>
             <el-option-group :label="t('action.processOperations')">
+              <el-option :label="t('action.saveDraft')" value="SAVE" />
               <el-option :label="t('action.processSubmit')" value="PROCESS_SUBMIT" />
               <el-option :label="t('action.processReject')" value="PROCESS_REJECT" />
               <el-option :label="t('action.composite')" value="COMPOSITE" />
@@ -420,6 +421,7 @@
               <el-option :label="t('action.withdraw')" value="WITHDRAW" />
             </el-option-group>
             <el-option-group :label="t('action.processOperations')">
+              <el-option :label="t('action.saveDraft')" value="SAVE" />
               <el-option :label="t('action.processSubmit')" value="PROCESS_SUBMIT" />
               <el-option :label="t('action.processReject')" value="PROCESS_REJECT" />
               <el-option :label="t('action.composite')" value="COMPOSITE" />
@@ -585,6 +587,7 @@ const actionTypeLabel = (type: string) => {
     DELEGATE: t('action.delegate'),
     ROLLBACK: t('action.rollback'),
     WITHDRAW: t('action.withdraw'),
+    SAVE: t('action.saveDraft'),
     PROCESS_SUBMIT: t('action.processSubmit'),
     PROCESS_REJECT: t('action.processReject'),
     COMPOSITE: t('action.composite'),

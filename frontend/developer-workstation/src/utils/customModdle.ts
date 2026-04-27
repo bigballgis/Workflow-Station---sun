@@ -93,7 +93,18 @@ export const flowableModdleDescriptor = {
   name: 'Flowable',
   prefix: 'flowable',
   uri: 'http://flowable.org/bpmn',
+  xml: {
+    tagAlias: 'lowerCase'
+  },
   types: [
+    {
+      name: 'MultiInstanceLoopCharacteristics',
+      extends: ['bpmn:MultiInstanceLoopCharacteristics'],
+      properties: [
+        { name: 'collection', type: 'String', isAttr: true },
+        { name: 'elementVariable', type: 'String', isAttr: true }
+      ]
+    },
     {
       name: 'collection',
       superClass: ['Element'],

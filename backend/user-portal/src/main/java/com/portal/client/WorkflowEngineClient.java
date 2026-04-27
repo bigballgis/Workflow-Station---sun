@@ -144,9 +144,13 @@ public class WorkflowEngineClient {
                 return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()));
             }
         } catch (HttpClientErrorException | HttpServerErrorException e) {
-            log.warn("Failed to deploy process to workflow engine (HTTP {}): {}", e.getStatusCode(), e.getResponseBodyAsString());
+            String body = e.getResponseBodyAsString();
+            String msg = extractMessage(body);
+            log.warn("Failed to deploy process to workflow engine (HTTP {}): {}", e.getStatusCode(), body);
+            throw new IllegalStateException("部署流程失败[" + e.getStatusCode() + "]: " + msg);
         } catch (Exception e) {
-            log.warn("Failed to deploy process to workflow engine: {}", e.getMessage());
+            log.warn("Failed to deploy process to workflow engine: {}", e.getMessage(), e);
+            throw new IllegalStateException("部署流程失败: " + e.getMessage(), e);
         }
         return Optional.empty();
     }

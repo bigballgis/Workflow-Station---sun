@@ -292,6 +292,18 @@
           style="width: 100%"
         />
 
+        <!-- lookup -->
+        <LookupField
+          v-else-if="col.type === 'lookup'"
+          v-model="formData[col.field]"
+          :table-id="Number(col.props?.tableId || 0)"
+          :search-fields="col.props?.searchFields || []"
+          :display-field="col.props?.displayField || ''"
+          :display-fields="col.props?.displayFields || []"
+          :view-fields="col.props?.viewFields || []"
+          :placeholder="col.placeholder || col.label"
+        />
+
         <!-- user — remote search select (consistent with FieldRenderer) -->
         <el-select
           v-else-if="col.type === 'user'"
@@ -357,6 +369,7 @@ import { buildInitialRow, buildRules } from './subTableAddDialogHelpers'
 import type { DialogColumn } from './subTableAddDialogHelpers'
 import type { RowFormulaRule, ValidationRule } from './formRendererHelpers'
 import { evaluateFormula, validateField } from './businessLogicEngine'
+import LookupField from './lookup/LookupField.vue'
 
 // ─── Component ────────────────────────────────────────────────────────────────
 

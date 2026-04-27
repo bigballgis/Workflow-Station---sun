@@ -129,20 +129,6 @@
               <template #title>{{ t('properties.buUnboundedDeprecated') }}</template>
             </el-alert>
           </div>
-
-          <el-form-item v-if="showAssigneeAnchor" :label="t('properties.assigneeAnchor')">
-            <el-select v-model="assigneeAnchor" @change="onAssigneeAnchorChange">
-              <el-option :label="t('properties.anchorInitiator')" value="INITIATOR" />
-              <el-option :label="t('properties.anchorLastCompleter')" value="LAST_TASK_ASSIGNEE" />
-            </el-select>
-            <div v-if="assigneeAnchor === 'LAST_TASK_ASSIGNEE'" class="form-tip">{{ t('properties.hierarchyRoleAnchorTip') }}</div>
-          </el-form-item>
-
-          <div v-if="lastTaskAnchorTopologyInvalid" class="claim-tip">
-            <el-alert type="error" :closable="false" show-icon>
-              <template #title>{{ t('properties.lastTaskAnchorIncomingBad', { count: incomingSequenceFlowCount }) }}</template>
-            </el-alert>
-          </div>
           
           <!-- Display current assignment label -->
           <div v-if="assigneeLabel" class="assignee-label">
@@ -438,7 +424,6 @@ type AssigneeTypeEnum =
 // Assignee config
 const assigneeType = ref<AssigneeTypeEnum>('INITIATOR')
 const lastLoadedAssigneeType = ref<AssigneeTypeEnum>('INITIATOR')
-const assigneeAnchor = ref<'INITIATOR' | 'LAST_TASK_ASSIGNEE'>('INITIATOR')
 const roleId = ref('')
 const businessUnitId = ref('')
 const assigneeLabel = ref('')
@@ -456,7 +441,7 @@ const subTables = ref<TableDefinition[]>([])
 const loadingSubTables = ref(false)
 
 /** 顺序流变化时递增，驱动「单入线」校验刷新 */
-const topologyTick = ref(0)
+const topologyTick = ref(0) // retained for backward compatibility; anchor UI removed
 
 // Business unit and role data
 const businessUnits = ref<BusinessUnitInfo[]>([])
@@ -487,8 +472,6 @@ const completionCondition = ref('')
 
 const basicProps = computed(() => getBasicProperties(props.element))
 
-const ANCHORED_ASSIGNEE_TYPES: AssigneeTypeEnum[] = ['HIERARCHY_ROLE', 'ENTITY_MANAGER', 'FUNCTION_MANAGER']
-
 const ROLE_ID_ASSIGNEE_TYPES: AssigneeTypeEnum[] = [
   'HIERARCHY_ROLE',
   'BU_ROLE',
@@ -507,20 +490,6 @@ function assigneeTypeNeedsRoleId(t: AssigneeTypeEnum): boolean {
 const needsBuForRole = computed(
   () => assigneeType.value === 'FIXED_BU_ROLE' || assigneeType.value === 'BU_ROLE'
 )
-
-const showAssigneeAnchor = computed(() => ANCHORED_ASSIGNEE_TYPES.includes(assigneeType.value))
-
-const incomingSequenceFlowCount = computed(() => {
-  topologyTick.value
-  return countIncomingSequenceFlows(props.element as any)
-})
-
-const lastTaskAnchorTopologyInvalid = computed(() => {
-  if (!showAssigneeAnchor.value || assigneeAnchor.value !== 'LAST_TASK_ASSIGNEE') {
-    return false
-  }
-  return incomingSequenceFlowCount.value !== 1
-})
 
 // Whether role ID is needed
 const needsRoleId = computed(() => assigneeTypeNeedsRoleId(assigneeType.value))
@@ -593,9 +562,12 @@ function loadProperties() {
   }
   assigneeType.value = (rawType as AssigneeTypeEnum) || 'INITIATOR'
   lastLoadedAssigneeType.value = assigneeType.value
-  const anchorRaw = (ext.assigneeAnchor as string) || 'INITIATOR'
-  assigneeAnchor.value =
-    anchorRaw.toUpperCase() === 'LAST_TASK_ASSIGNEE' ? 'LAST_TASK_ASSIGNEE' : 'INITIATOR'
+  if (!ext.assigneeType) {
+    updateExtProp('assigneeType', assigneeType.value)
+    if (assigneeType.value === 'INITIATOR') {
+      updateExtProp('assigneeLabel', t('properties.initiator'))
+    }
+  }
   roleId.value = ext.roleId || ''
   businessUnitId.value = ext.businessUnitId || ''
   assigneeLabel.value = ext.assigneeLabel || ''
@@ -780,33 +752,10 @@ const isFirstMultiInstanceSubTask = computed(() => {
   return !!firstUserTask && firstUserTask.id === currentId
 })
 
-function onAssigneeAnchorChange(v: 'INITIATOR' | 'LAST_TASK_ASSIGNEE') {
-  if (v === 'LAST_TASK_ASSIGNEE') {
-    const n = countIncomingSequenceFlows(props.element as any)
-    if (n !== 1) {
-      ElMessage.error(t('properties.lastTaskAnchorSelectBlocked', { count: n }))
-      assigneeAnchor.value = 'INITIATOR'
-      updateExtProp('assigneeAnchor', 'INITIATOR')
-      return
-    }
-  }
-  updateExtProp('assigneeAnchor', v)
-}
-
 function handleAssigneeTypeChange(type: AssigneeTypeEnum) {
   const prev = lastLoadedAssigneeType.value
   lastLoadedAssigneeType.value = type
   updateExtProp('assigneeType', type)
-
-  const wasAnchored = ANCHORED_ASSIGNEE_TYPES.includes(prev)
-  const nowAnchored = ANCHORED_ASSIGNEE_TYPES.includes(type)
-  if (nowAnchored && !wasAnchored) {
-    assigneeAnchor.value = 'INITIATOR'
-    updateExtProp('assigneeAnchor', 'INITIATOR')
-  } else if (!nowAnchored) {
-    assigneeAnchor.value = 'INITIATOR'
-    updateExtProp('assigneeAnchor', '')
-  }
 
   const labelMap: Record<AssigneeTypeEnum, string> = {
     INITIATOR: t('properties.initiator'),
@@ -980,6 +929,7 @@ const actionTypeLabel = (type: string) => {
     DELEGATE: t('action.delegate'),
     ROLLBACK: t('action.rollback'),
     WITHDRAW: t('action.withdraw'),
+    SAVE: t('action.saveDraft'),
     PROCESS_SUBMIT: t('action.processSubmit'),
     PROCESS_REJECT: t('action.processReject'),
     COMPOSITE: t('action.composite'),

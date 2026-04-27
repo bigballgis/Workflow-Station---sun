@@ -246,7 +246,7 @@ public class ProcessComponent {
                 log.info("Using actual process definition key from deployment response: [{}]", flowableProcessKey);
             }
         } else {
-            log.info("Deploy returned empty, using API/BPMN process key: [{}]", flowableProcessKey);
+            throw new IllegalStateException("Process deployment returned empty data: " + processKey);
         }
         log.info("=== [DIAG] FINAL actualProcessKey to be used for startProcess: [{}]", flowableProcessKey);
 

@@ -19,6 +19,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  * Task Form REST API 控制器
  * 提供 Task Form 数据获取、提交、已完成任务快照查询
@@ -57,7 +60,17 @@ public class TaskFormController {
                 SecurityContextUtils.getCurrentUsername().orElse(null))) {
             throw new PortalException("403", "You do not have permission to submit this task form");
         }
-        taskFormComponent.submitTaskForm(taskId, userId, request.getFormData(), request.getBaselineValues());
+        Map<String, Object> formData = new HashMap<>(request.getFormData());
+        if (request.getSubTableData() != null && !request.getSubTableData().isEmpty()) {
+            Map<String, Object> subTables = new HashMap<>();
+            Object existing = formData.get("__subTables__");
+            if (existing instanceof Map<?, ?> existingMap) {
+                existingMap.forEach((key, value) -> subTables.put(String.valueOf(key), value));
+            }
+            request.getSubTableData().forEach(subTables::put);
+            formData.put("__subTables__", subTables);
+        }
+        taskFormComponent.submitTaskForm(taskId, userId, formData, request.getBaselineValues());
         return ApiResponse.success(null);
     }
 

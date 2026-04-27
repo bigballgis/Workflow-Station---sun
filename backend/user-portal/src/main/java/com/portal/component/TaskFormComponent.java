@@ -345,7 +345,8 @@ public class TaskFormComponent {
         }
 
         return formData.entrySet().stream()
-                .filter(entry -> "EDITABLE".equals(fieldPermissions.get(entry.getKey())))
+                .filter(entry -> "__subTables__".equals(entry.getKey())
+                        || "EDITABLE".equals(fieldPermissions.get(entry.getKey())))
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 

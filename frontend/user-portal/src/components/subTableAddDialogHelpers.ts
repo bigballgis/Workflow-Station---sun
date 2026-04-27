@@ -24,6 +24,7 @@ export type ColumnType =
   | 'signature'
   | 'transfer'
   | 'cascader'
+  | 'lookup'
 
 export interface TreeNode {
   label: string
@@ -53,6 +54,11 @@ export interface DialogColumn {
     maxlength?: number
     userType?: 'user' | 'department'
     treeData?: TreeNode[]
+    tableId?: number
+    searchFields?: string[]
+    displayField?: string
+    displayFields?: string[]
+    viewFields?: Array<Record<string, unknown>>
     isRange?: boolean
     valueFormat?: string
     startPlaceholder?: string
@@ -101,6 +107,9 @@ export function buildInitialRow(columns: DialogColumn[]): Record<string, unknown
       case 'cascader':
         row[col.field] = []
         break
+      case 'lookup':
+        row[col.field] = null
+        break
       case 'editor':
         row[col.field] = ''
         break
@@ -121,7 +130,7 @@ export function buildRules(columns: DialogColumn[]): FormRules {
     if (col.required) {
       const trigger =
         col.type === 'select' || col.type === 'date' || col.type === 'datetime' || col.type === 'checkbox'
-        || col.type === 'cascader' || col.type === 'transfer'
+        || col.type === 'cascader' || col.type === 'transfer' || col.type === 'lookup'
           ? 'change'
           : 'blur'
       rules[col.field] = [{ required: true, message: `${col.label} is required`, trigger }]
@@ -154,6 +163,7 @@ export const CONTROL_TYPE_MAP: Record<NonNullable<ColumnType> | 'text', string> 
   signature: 'ElInput',
   transfer: 'ElTransfer',
   cascader: 'ElCascader',
+  lookup: 'LookupField',
 }
 
 export function resolveControlComponent(col: DialogColumn): string {
@@ -229,6 +239,26 @@ export function resolveDisplayValue(col: DialogColumn, rawValue: unknown): strin
 
   if (col.type === 'cascader') {
     if (Array.isArray(rawValue)) return rawValue.join(' / ')
+    return String(rawValue)
+  }
+
+  if (col.type === 'lookup') {
+    if (typeof rawValue === 'object') {
+      const row = rawValue as Record<string, unknown>
+      const displayField = col.props?.displayField
+      if (displayField && row[displayField] != null) {
+        return String(row[displayField])
+      }
+      const displayFields = col.props?.displayFields || []
+      const values = displayFields
+        .map(field => row[field])
+        .filter(value => value != null && String(value).trim() !== '')
+      if (values.length > 0) {
+        return values.map(String).join(' / ')
+      }
+      const first = Object.values(row).find(value => value != null && String(value).trim() !== '')
+      return first != null ? String(first) : '-'
+    }
     return String(rawValue)
   }
 

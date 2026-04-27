@@ -68,6 +68,39 @@
             />
             <span v-else>-</span>
           </template>
+          <template v-else-if="col.type === 'lookup'">
+            <div class="lookup-preview-wrapper sub-table-lookup-preview">
+              <div class="lookup-form-item">
+                <label class="lookup-label-text">
+                  <el-icon class="lookup-label-icon"><Search /></el-icon>
+                </label>
+                <div class="lookup-field readonly">
+                  <div v-if="lookupSelectedRow(col, scope.row[col.field])" class="lookup-selected-wrapper">
+                    <span class="lookup-selected-tag">
+                      <span class="lookup-selected-text">{{ resolveDisplayValue(col, scope.row[col.field]) }}</span>
+                    </span>
+                  </div>
+                  <span v-else class="lookup-readonly-empty">-</span>
+                </div>
+              </div>
+              <div
+                v-if="col.props?.showBackfillView !== false && lookupSelectedRow(col, scope.row[col.field]) && lookupDisplayViewFields(col).length > 0"
+                class="lookup-view-display"
+              >
+                <el-descriptions :column="1" border size="small" direction="horizontal">
+                  <el-descriptions-item
+                    v-for="field in lookupDisplayViewFields(col)"
+                    :key="field.fieldName"
+                    :label="field.displayLabel || field.fieldName"
+                    label-class-name="lookup-view-label"
+                    class-name="lookup-view-value"
+                  >
+                    {{ lookupSelectedRow(col, scope.row[col.field])?.[field.fieldName] ?? '-' }}
+                  </el-descriptions-item>
+                </el-descriptions>
+              </div>
+            </div>
+          </template>
           <span v-else>{{ resolveDisplayValue(col, scope.row[col.field]) }}</span>
         </template>
       </el-table-column>
@@ -200,7 +233,7 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Plus, Document, Loading } from '@element-plus/icons-vue'
+import { Plus, Document, Loading, Search } from '@element-plus/icons-vue'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import DOMPurify from 'dompurify'
 import SubTableAddDialog from './SubTableAddDialog.vue'
@@ -249,10 +282,35 @@ function columnMinWidth(col: Column): number {
     case 'signature':    return 150
     case 'transfer':     return 180
     case 'cascader':     return 180
+    case 'lookup':       return 260
     case 'slider':       return 160
     case 'password':     return 120
     default:             return 120
   }
+}
+
+function getLookupPrimaryDisplayField(col: Column): string {
+  const displayFields = col.props?.displayFields
+  if (Array.isArray(displayFields) && displayFields.length > 0) return String(displayFields[0])
+  if (typeof col.props?.displayField === 'string' && col.props.displayField) return col.props.displayField
+  const searchFields = col.props?.searchFields
+  if (Array.isArray(searchFields) && searchFields.length > 0) return String(searchFields[0])
+  return ''
+}
+
+function lookupSelectedRow(col: Column, rawValue: unknown): Record<string, any> | null {
+  if (rawValue == null || rawValue === '') return null
+  if (typeof rawValue === 'object' && !Array.isArray(rawValue)) return rawValue as Record<string, any>
+  const displayField = getLookupPrimaryDisplayField(col)
+  return displayField ? { [displayField]: rawValue } : { value: rawValue }
+}
+
+function lookupDisplayViewFields(col: Column): Array<{ fieldName: string; displayLabel?: string; sortOrder?: number; visible?: boolean }> {
+  const fields = col.props?.viewFields
+  if (!Array.isArray(fields)) return []
+  return [...fields]
+    .filter((field: any) => field?.visible !== false)
+    .sort((a: any, b: any) => (a?.sortOrder ?? 0) - (b?.sortOrder ?? 0))
 }
 
 const props = defineProps<{
@@ -879,6 +937,96 @@ watch(() => props.taskId, () => {
     max-height: 40px;
     object-fit: contain;
     vertical-align: middle;
+  }
+
+  .lookup-preview-wrapper {
+    margin-bottom: 0;
+  }
+
+  .lookup-form-item {
+    display: flex;
+    align-items: flex-start;
+  }
+
+  .lookup-label-text {
+    white-space: nowrap;
+    width: auto;
+    min-width: fit-content;
+    max-width: 200px;
+    height: auto;
+    line-height: 1.5;
+    padding-top: 6px;
+    padding-right: 12px;
+    font-size: 14px;
+    color: #606266;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .lookup-label-icon {
+    color: #409eff;
+    font-size: 14px;
+  }
+
+  .lookup-field {
+    flex: 1;
+    min-width: 0;
+    position: relative;
+
+    &.readonly {
+      cursor: default;
+    }
+
+    .lookup-selected-wrapper {
+      display: flex;
+      align-items: center;
+      min-height: 32px;
+      padding: 4px 8px;
+      border: 1px solid #dcdfe6;
+      border-radius: 4px;
+      background: #fff;
+    }
+
+    .lookup-selected-tag {
+      display: inline-flex;
+      align-items: center;
+      max-width: 100%;
+      height: 24px;
+      padding: 0 8px;
+      border-radius: 4px;
+      background: #f0f2f5;
+      font-size: 13px;
+      color: #909399;
+      line-height: 24px;
+
+      .lookup-selected-text {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+    }
+  }
+
+  .lookup-readonly-empty {
+    color: #909399;
+    line-height: 32px;
+  }
+
+  .lookup-view-display {
+    margin-top: 8px;
+
+    :deep(.lookup-view-label) {
+      width: 40%;
+      font-weight: 500;
+      color: #606266;
+      background: #fafafa;
+    }
+
+    :deep(.lookup-view-value) {
+      color: #303133;
+    }
   }
 
   .assignee-cell {

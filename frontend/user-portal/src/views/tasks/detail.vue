@@ -131,10 +131,11 @@
                 v-model="formData"
                 :label-width="prevForm.labelWidth"
                 :readonly="true"
+                :subTableBindings="prevForm.subTableBindings"
               />
             </div>
-            <template v-if="prevForm.subTableBindings.length > 0">
-              <div v-for="binding in prevForm.subTableBindings" :key="binding.bindingId" class="sub-table-section">
+            <template v-if="previousBottomSubTableBindings(prevForm).length > 0">
+              <div v-for="binding in previousBottomSubTableBindings(prevForm)" :key="binding.bindingId" class="sub-table-section">
                 <SubTableField
                   :title="binding.tableName"
                   :columns="binding.columns"
@@ -169,7 +170,7 @@
                 :subTableBindings="subTableBindings"
                 :task-id="effectiveTaskId"
                 :allow-sub-table-assign="allowSubTableAssignForCurrentTask"
-                @update:subTableData="(id: number, rows: any[]) => { const b = subTableBindings.find(x => x.bindingId === id); if (b) b.data = rows }"
+                @update:subTableData="syncMainSubTableRows"
               />
             </div>
             <el-empty v-else :description="t('task.noFormData')" />
@@ -193,6 +194,7 @@
                 :can-assign="allowSubTableAssignForCurrentTask && !formReadOnly && binding.bindingMode === 'EDITABLE' && !!effectiveTaskId && !!resolveAssigneeFieldForBinding(binding.columns, binding.tableName)"
                 :show-fill-button="isMiSubTaskMode && !formReadOnly"
                 :fill-button-label="isParticipantsBinding(binding) ? t('task.addParticipantInfoForm') : undefined"
+                @update:model-value="(rows: any[]) => syncMainSubTableRows(binding.bindingId, rows)"
                 @fillForm="(row: any) => openMiFillDialog(row)"
               />
             </div>
@@ -248,6 +250,14 @@
             <el-button @click="$router.back()">{{ t('task.backToList') }}</el-button>
           </div>
           <div class="right-actions">
+            <el-button
+              v-if="showImplicitSaveAction"
+              type="primary"
+              :loading="savingTaskForm"
+              @click="saveCurrentTaskForm"
+            >
+              {{ t('common.save') }}
+            </el-button>
             <!-- Show custom buttons when custom Actions are configured -->
             <template v-if="taskInfo.actions && taskInfo.actions.length > 0">
               <el-button
@@ -257,7 +267,7 @@
                 @click="handleCustomAction(action)"
               >
                 <el-icon v-if="action.icon"><component :is="getIconComponent(action.icon)" /></el-icon>
-                {{ action.actionName }}
+                {{ getActionLabel(action) }}
               </el-button>
             </template>
             <!-- Show default approval buttons when no custom Actions are configured -->
@@ -374,6 +384,8 @@
           v-model="miFillDialogData"
           :label-width="formLabelWidth"
           :readonly="formReadOnly || miFillDialogReadOnly"
+          :subTableBindings="miFillSubTableBindings"
+          @update:subTableData="syncMiFillSubTableRows"
         />
       </div>
       <el-empty v-else :description="t('task.noFormData')" />
@@ -388,7 +400,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, nextTick, markRaw, computed } from 'vue'
+import { ref, reactive, onMounted, onBeforeUnmount, nextTick, markRaw, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
@@ -458,6 +470,7 @@ const router = useRouter()
 const taskId = route.params.id as string
 const loading = ref(true)
 const submitting = ref(false)
+const savingTaskForm = ref(false)
 const taskInfo = ref<Partial<TaskInfo>>({})
 const effectiveTaskId = computed(() => {
   const currentTaskId = (taskInfo.value as Record<string, unknown>)?.taskId
@@ -533,6 +546,101 @@ const bottomSubTableBindings = computed(() =>
   subTableBindings.value.filter(b => !placedBindingIds.value.has(b.bindingId))
 )
 
+function collectPlacedBindingIds(fields: any[]): Set<number> {
+  const ids = new Set<number>()
+  const collect = (items: any[]) => items.forEach((f: any) => {
+    if (f.type === 'subTable' && f._bindingId != null) ids.add(f._bindingId)
+    if (Array.isArray(f.children)) collect(f.children)
+  })
+  collect(fields)
+  return ids
+}
+
+function previousBottomSubTableBindings(prevForm: PreviousFormEntry) {
+  const ids = collectPlacedBindingIds([
+    ...(prevForm.fields || []),
+    ...(prevForm.tabs || []).flatMap(tab => tab.fields || [])
+  ])
+  return prevForm.subTableBindings.filter(binding => !ids.has(binding.bindingId))
+}
+
+function normalizeSubTableName(name?: string): string {
+  return String(name || '').trim().toLowerCase()
+}
+
+function subTableBindingMatches(
+  target: { bindingId: number; tableName: string },
+  source: { bindingId: number; tableName: string }
+): boolean {
+  const targetName = normalizeSubTableName(target.tableName)
+  const sourceName = normalizeSubTableName(source.tableName)
+  return target.bindingId === source.bindingId || (!!targetName && targetName === sourceName)
+}
+
+function cloneSubTableRows(rows: any[]): any[] {
+  try {
+    return JSON.parse(JSON.stringify(rows))
+  } catch {
+    return rows.map(row => ({ ...row }))
+  }
+}
+
+function cloneSubTableBindings<T extends Array<{ data: any[] }>>(bindings: T): T {
+  return bindings.map(binding => ({
+    ...binding,
+    data: cloneSubTableRows(Array.isArray(binding.data) ? binding.data : [])
+  })) as T
+}
+
+function syncMainSubTableRows(bindingId: number, rows: any[]) {
+  const source = subTableBindings.value.find(b => b.bindingId === bindingId)
+  if (!source) return
+
+  const nextRows = Array.isArray(rows) ? rows : []
+  const sync = (binding: { bindingId: number; tableName: string; data: any[] }) => {
+    if (subTableBindingMatches(binding, source)) {
+      binding.data = binding === source ? nextRows : cloneSubTableRows(nextRows)
+    }
+  }
+  subTableBindings.value.forEach(sync)
+  previousForms.value.forEach(form => form.subTableBindings.forEach(sync))
+
+  const subTables = { ...((formData.value.__subTables__ as Record<string, any>) || {}) }
+  subTables[source.bindingId] = nextRows
+  subTables[String(source.bindingId)] = nextRows
+  if (source.tableName) {
+    subTables[source.tableName] = nextRows
+    subTables[normalizeSubTableName(source.tableName)] = nextRows
+  }
+  formData.value = { ...formData.value, __subTables__: subTables }
+  scheduleSubTableAutosave()
+}
+
+function getSavedSubTableRows(savedSubTables: any, binding: { bindingId: number; tableName: string }): any[] | undefined {
+  if (!savedSubTables || typeof savedSubTables !== 'object') return undefined
+  const saved =
+    savedSubTables[binding.bindingId] ??
+    savedSubTables[String(binding.bindingId)] ??
+    savedSubTables[binding.tableName] ??
+    savedSubTables[normalizeSubTableName(binding.tableName)]
+  return Array.isArray(saved) ? saved : undefined
+}
+
+function hydrateCurrentSubTablesFromPreviousForms() {
+  for (const current of subTableBindings.value) {
+    if (Array.isArray(current.data) && current.data.length > 0) continue
+    const previous = previousForms.value
+      .flatMap(form => form.subTableBindings)
+      .find(binding =>
+        binding.data?.length > 0 &&
+        subTableBindingMatches(current, binding)
+      )
+    if (previous) {
+      current.data = cloneSubTableRows(previous.data)
+    }
+  }
+}
+
 /** Only show sub-table Assign on the BPMN "Assign Participants" user task; initiator/other tasks only fill rows without per-row assignment */
 const allowSubTableAssignForCurrentTask = computed(() => {
   const tdk = (taskInfo.value as { taskDefinitionKey?: string }).taskDefinitionKey || ''
@@ -558,8 +666,77 @@ const isMiSubTaskMode = ref(false)
 // MI subtask fill-form dialog state
 const miFillDialogVisible = ref(false)
 const miFillDialogData = ref<Record<string, any>>({})
+const miFillSubTableBindings = ref<typeof subTableBindings.value>([])
 const miFilled = ref(false)
 const miFillDialogReadOnly = ref(false)
+let subTableAutosaveTimer: ReturnType<typeof setTimeout> | null = null
+
+function buildSubTableSubmitPayload() {
+  const subTables: Record<string, any> = { ...((formData.value.__subTables__ as Record<string, any>) || {}) }
+  const subTableData: Record<string, Array<Record<string, unknown>>> = {}
+
+  for (const binding of subTableBindings.value) {
+    const rows = cloneSubTableRows(Array.isArray(binding.data) ? binding.data : [])
+    subTables[binding.bindingId] = rows
+    subTables[String(binding.bindingId)] = rows
+    subTableData[String(binding.bindingId)] = rows
+    if (binding.tableName) {
+      subTables[binding.tableName] = rows
+      subTables[normalizeSubTableName(binding.tableName)] = rows
+      subTableData[binding.tableName] = rows
+    }
+  }
+
+  return {
+    formData: { __subTables__: subTables },
+    subTableData
+  }
+}
+
+function buildCurrentTaskFormSubmitPayload() {
+  const subTablePayload = buildSubTableSubmitPayload()
+  return {
+    formData: {
+      ...formData.value,
+      ...subTablePayload.formData
+    },
+    subTableData: subTablePayload.subTableData,
+    baselineValues: taskFormDTO.value?.fieldValues || {}
+  }
+}
+
+async function saveCurrentTaskForm() {
+  if (formReadOnly.value || !effectiveTaskId.value) return
+  savingTaskForm.value = true
+  try {
+    await apiSubmitTaskForm(effectiveTaskId.value, buildCurrentTaskFormSubmitPayload())
+    ElMessage.success(t('task.operationSuccess'))
+  } catch (error) {
+    console.error('[TaskForm] save failed:', error)
+    ElMessage.error(t('task.operationFailed'))
+  } finally {
+    savingTaskForm.value = false
+  }
+}
+
+function scheduleSubTableAutosave() {
+  if (formReadOnly.value || isCompletedTask.value || isMiSubTaskMode.value) return
+  if (!effectiveTaskId.value) return
+  if (subTableAutosaveTimer) clearTimeout(subTableAutosaveTimer)
+
+  subTableAutosaveTimer = setTimeout(async () => {
+    subTableAutosaveTimer = null
+    try {
+      await apiSubmitTaskForm(effectiveTaskId.value, {
+        ...buildSubTableSubmitPayload(),
+        baselineValues: {}
+      })
+    } catch (error) {
+      console.error('[SubTable] autosave failed:', error)
+      ElMessage.error(t('task.operationFailed'))
+    }
+  }, 400)
+}
 
 function getCurrentFormFieldKeys(): string[] {
   const keys = new Set<string>()
@@ -645,14 +822,30 @@ function isolateMiSubTaskData(taskData: any) {
 
 function openMiFillDialog(row: any) {
   miFillDialogData.value = { ...formData.value }
+  miFillSubTableBindings.value = cloneSubTableBindings(subTableBindings.value)
   miFillDialogReadOnly.value = false
   miFillDialogVisible.value = true
 }
 
-function saveMiFillDialog() {
-  formData.value = { ...formData.value, ...miFillDialogData.value }
-  miFilled.value = true
-  miFillDialogVisible.value = false
+function syncMiFillSubTableRows(bindingId: number, rows: any[]) {
+  const target = miFillSubTableBindings.value.find(binding => binding.bindingId === bindingId)
+  if (!target) return
+  const nextRows = Array.isArray(rows) ? rows : []
+  target.data = nextRows
+
+  const subTables = { ...((miFillDialogData.value.__subTables__ as Record<string, any>) || {}) }
+  subTables[target.bindingId] = nextRows
+  subTables[String(target.bindingId)] = nextRows
+  if (target.tableName) {
+    subTables[target.tableName] = nextRows
+    subTables[normalizeSubTableName(target.tableName)] = nextRows
+  }
+  miFillDialogData.value = { ...miFillDialogData.value, __subTables__: subTables }
+}
+
+async function saveMiFillDialog() {
+  const subTables = { ...((miFillDialogData.value.__subTables__ as Record<string, any>) || {}) }
+  const subTableData: Record<string, Array<Record<string, unknown>>> = {}
 
   // Persist MI form field values into the participant row so that
   // the backend stores the complete row and the Detail dialog in
@@ -669,10 +862,41 @@ function saveMiFillDialog() {
       if (!Array.isArray(rows)) return
       for (const row of rows) Object.assign(row, miValues)
     }
-    for (const b of subTableBindings.value) mergeIntoRows(b.data)
+    for (const b of miFillSubTableBindings.value) mergeIntoRows(b.data)
     for (const pf of previousForms.value) {
       for (const b of pf.subTableBindings) mergeIntoRows(b.data)
     }
+  }
+
+  for (const binding of miFillSubTableBindings.value) {
+    const rows = cloneSubTableRows(Array.isArray(binding.data) ? binding.data : [])
+    subTables[binding.bindingId] = rows
+    subTables[String(binding.bindingId)] = rows
+    subTableData[String(binding.bindingId)] = rows
+    if (binding.tableName) {
+      subTables[binding.tableName] = rows
+      subTables[normalizeSubTableName(binding.tableName)] = rows
+      subTableData[binding.tableName] = rows
+    }
+  }
+
+  const nextFormData = { ...formData.value, ...miFillDialogData.value, __subTables__: subTables }
+
+  submitting.value = true
+  try {
+    await apiSubmitTaskForm(taskId, {
+      formData: nextFormData,
+      subTableData,
+      baselineValues: taskFormDTO.value?.fieldValues || {}
+    })
+    formData.value = nextFormData
+    miFilled.value = true
+    miFillDialogVisible.value = false
+    ElMessage.success(t('task.operationSuccess'))
+  } catch {
+    ElMessage.error(t('task.operationFailed'))
+  } finally {
+    submitting.value = false
   }
 }
 
@@ -770,6 +994,12 @@ const processFormValues = ref<Record<string, any>>({})
 
 // Task 17.2: Task Form data
 const taskFormDTO = ref<TaskFormDataDTO | null>(null)
+const hasConfiguredSaveAction = computed(() =>
+  (taskInfo.value.actions || []).some(action => action.actionType === 'SAVE')
+)
+const showImplicitSaveAction = computed(() =>
+  !formReadOnly.value && !hasConfiguredSaveAction.value
+)
 
 // Task 17.3: Completed task snapshot
 const completedFormData = ref<CompletedTaskFormData | null>(null)
@@ -937,8 +1167,10 @@ const loadFunctionUnitContent = async (processKey: string) => {
       
       // Parse subForms from configJson
       let subForms: Record<string, any> = {}
+      let formConfigForSubTables: Record<string, any> = {}
       try {
         const cfg = typeof selectedForm.data === 'string' ? JSON.parse(selectedForm.data) : (selectedForm.data || {})
+        formConfigForSubTables = cfg
         subForms = cfg.subForms || {}
       } catch {}
 
@@ -948,7 +1180,7 @@ const loadFunctionUnitContent = async (processKey: string) => {
       console.log('[SubTable] selectedForm:', selectedForm.name, 'tableBindings:', JSON.stringify(tableBindings))
       for (const b of tableBindings) {
         if (b.bindingType === 'PRIMARY') continue
-        const columns = deriveColumnsFromBinding(b, subForms)
+        const columns = deriveColumnsFromBinding(b, subForms, formConfigForSubTables)
         bindings.push({
           bindingId: b.bindingId,
           bindingType: b.bindingType,
@@ -969,10 +1201,10 @@ const loadFunctionUnitContent = async (processKey: string) => {
       const savedSubTables = formData.value.__subTables__
       if (savedSubTables && typeof savedSubTables === 'object') {
         bindings.forEach(binding => {
-          const saved = savedSubTables[binding.bindingId] ?? savedSubTables[String(binding.bindingId)]
+          const saved = getSavedSubTableRows(savedSubTables, binding)
           console.log('[SubTable] binding', binding.bindingId, '-> saved:', JSON.stringify(saved))
-          if (Array.isArray(saved)) {
-            binding.data = saved
+          if (saved) {
+            binding.data = cloneSubTableRows(saved)
           }
         })
       } else {
@@ -1042,22 +1274,24 @@ const loadFunctionUnitContent = async (processKey: string) => {
 
           // Parse sub-table bindings
           let prevSubForms: Record<string, any> = {}
+          let prevConfigForSubTables: Record<string, any> = {}
           try {
             const cfg = typeof prevForm.data === 'string' ? JSON.parse(prevForm.data) : (prevForm.data || {})
+            prevConfigForSubTables = cfg
             prevSubForms = cfg.subForms || {}
           } catch {}
           const prevBindings: PreviousFormEntry['subTableBindings'] = []
           for (const b of (prevForm.tableBindings || [])) {
             if (b.bindingType === 'PRIMARY') continue
-            const cols = deriveColumnsFromBinding(b, prevSubForms)
+            const cols = deriveColumnsFromBinding(b, prevSubForms, prevConfigForSubTables)
             const binding = {
               bindingId: b.bindingId, bindingType: b.bindingType, bindingMode: b.bindingMode,
               foreignKeyField: b.foreignKeyField, tableName: b.tableDisplayName || b.tableName,
               tableType: b.tableType, tableDescription: b.tableDescription, columns: cols, data: [] as any[]
             }
             if (savedSubTables) {
-              const saved = savedSubTables[b.bindingId] ?? savedSubTables[String(b.bindingId)]
-              if (Array.isArray(saved)) binding.data = saved
+              const saved = getSavedSubTableRows(savedSubTables, binding)
+              if (saved) binding.data = cloneSubTableRows(saved)
             }
             prevBindings.push(binding)
           }
@@ -1073,6 +1307,7 @@ const loadFunctionUnitContent = async (processKey: string) => {
         }
 
         previousForms.value = collectedPrevForms
+        hydrateCurrentSubTablesFromPreviousForms()
       } else {
         previousForms.value = []
       }
@@ -1807,14 +2042,14 @@ const parseFormConfig = (configStr: string) => {
 }
 
 // Derive display columns for a sub-table binding based on table metadata
-const deriveColumnsFromBinding = (binding: any, subForms?: Record<string, any>): Array<{ field: string; label: string; type?: string; required?: boolean; options?: Array<{ label: string; value: any }>; props?: Record<string, any> }> => {
+const deriveColumnsFromBinding = (binding: any, subForms?: Record<string, any>, config?: Record<string, any>): Array<{ field: string; label: string; type?: string; required?: boolean; options?: Array<{ label: string; value: any }>; props?: Record<string, any> }> => {
   // Consistent with process/start: prefer subFormConfig on binding, then configJson.subForms (supports string/number key)
   const subFormRule =
     binding.subFormConfig?.rule ||
     subForms?.[binding.bindingId]?.rule ||
     subForms?.[String(binding.bindingId)]?.rule
   if (subFormRule && Array.isArray(subFormRule) && subFormRule.length > 0) {
-    return subFormRule.map((r: any) => {
+    const subFormColumns = subFormRule.map((r: any) => {
       const rProps = r.props || {}
       let type: string | undefined
 
@@ -1892,6 +2127,25 @@ const deriveColumnsFromBinding = (binding: any, subForms?: Record<string, any>):
       // cascader: map props.props to cascaderProps if not already set
       if (type === 'cascader' && rProps.props && !passProps.cascaderProps) passProps.cascaderProps = rProps.props
 
+      if (type === 'lookup') {
+        let lookupCfg: any = {}
+        try {
+          const raw = rProps.lookupConfig
+          lookupCfg = typeof raw === 'string' ? JSON.parse(raw || '{}') : (raw || {})
+        } catch { lookupCfg = {} }
+        const dbCfg = lookupDbConfigs.value[r.field]
+        const relationView = lookupCfg.bindingId ? relationViewConfigs.value[lookupCfg.bindingId] : undefined
+        passProps.lookupConfig = rProps.lookupConfig || '{}'
+        passProps.tableId = lookupCfg.tableId || dbCfg?.tableId || 0
+        passProps.searchFields = lookupCfg.searchFields || dbCfg?.searchFields || []
+        passProps.displayField = lookupCfg.displayFields?.[0] || dbCfg?.displayField || ''
+        passProps.displayFields = lookupCfg.displayFields || []
+        passProps.viewFields = lookupCfg.showBackfillView === false
+          ? []
+          : (relationView?.viewFields || dbCfg?.viewFields || [])
+        passProps.showBackfillView = lookupCfg.showBackfillView !== false
+      }
+
       // Sync options into props.options so SubTableAddDialog can read from col.props?.options
       if (options) passProps.options = options
 
@@ -1906,8 +2160,82 @@ const deriveColumnsFromBinding = (binding: any, subForms?: Record<string, any>):
         ...(Object.keys(passProps).length > 0 ? { props: passProps } : {}),
       }
     })
+    const listColumns =
+      config?.subListViews?.[binding.bindingId]?.columns ||
+      config?.subListViews?.[String(binding.bindingId)]?.columns
+    if (Array.isArray(listColumns) && listColumns.length > 0) {
+      const ruleByField = new Map(subFormRule.map((ruleItem: any) => [ruleItem?.field, ruleItem]))
+      const subFormColumnByField = new Map(subFormColumns.map(col => [col.field, col]))
+      const assigneeField = resolveAssigneeFieldForBinding(
+        subFormColumns as Array<{ field?: string }>,
+        binding.tableDisplayName || binding.tableName
+      )
+      return listColumns.map((column: any) => {
+        if (column.columnType === 'lookup') {
+          const label = column.columnLabel || column.comment || 'Lookup'
+          const field = isSyntheticLookupField(column.fieldName) && isAssigneeLikeLabel(label) && assigneeField
+            ? assigneeField
+            : (column.fieldName || `lookup:${binding.bindingId}`)
+          return {
+            field,
+            label,
+            type: 'lookup',
+            minWidth: 260,
+            props: buildLookupColumnProps(column.lookupConfig || '{}')
+          }
+        }
+
+        const fieldRule = ruleByField.get(column.fieldName)
+        const baseColumn = subFormColumnByField.get(column.fieldName)
+        if (fieldRule?.type === 'lookup' || fieldRule?.props?.lookupConfig || baseColumn?.type === 'lookup') {
+          return {
+            ...(baseColumn || {}),
+            field: column.fieldName,
+            label: column.comment || column.columnLabel || baseColumn?.label || fieldRule?.title || column.fieldName,
+            type: 'lookup',
+            minWidth: column.minWidth || baseColumn?.minWidth || 260,
+            placeholder: fieldRule?.props?.placeholder || baseColumn?.placeholder,
+            props: buildLookupColumnProps(fieldRule?.props?.lookupConfig || baseColumn?.props?.lookupConfig || '{}')
+          }
+        }
+
+        return {
+          ...(baseColumn || {}),
+          field: column.fieldName,
+          label: column.comment || column.columnLabel || baseColumn?.label || column.fieldName,
+          minWidth: column.minWidth || baseColumn?.minWidth || 100
+        }
+      })
+    }
+    return subFormColumns
   }
   return []
+}
+
+function isSyntheticLookupField(fieldName?: string): boolean {
+  return !fieldName || String(fieldName).startsWith('lookup:')
+}
+
+function isAssigneeLikeLabel(label?: string): boolean {
+  const normalized = String(label || '').trim().toLowerCase()
+  return /assignee|处理人|負責人|经办人|經辦人/.test(normalized)
+}
+
+function buildLookupColumnProps(rawLookupConfig: unknown): Record<string, any> {
+  let lookupCfg: any = {}
+  try {
+    lookupCfg = typeof rawLookupConfig === 'string' ? JSON.parse(rawLookupConfig || '{}') : (rawLookupConfig || {})
+  } catch { lookupCfg = {} }
+  const relationView = lookupCfg.bindingId ? relationViewConfigs.value[lookupCfg.bindingId] : undefined
+  return {
+    lookupConfig: typeof rawLookupConfig === 'string' ? rawLookupConfig : JSON.stringify(lookupCfg || {}),
+    tableId: lookupCfg.tableId || 0,
+    searchFields: lookupCfg.searchFields || [],
+    displayField: lookupCfg.displayFields?.[0] || '',
+    displayFields: lookupCfg.displayFields || [],
+    viewFields: lookupCfg.showBackfillView === false ? [] : (relationView?.viewFields || []),
+    showBackfillView: lookupCfg.showBackfillView !== false
+  }
 }
 
 // form-create runtime-only nodes. Layout containers must still be traversed so
@@ -2170,6 +2498,10 @@ const submitApprove = async () => {
     for (const b of subTableBindings.value) {
       mergedSub[b.bindingId] = b.data
       mergedSub[String(b.bindingId)] = b.data
+      if (b.tableName) {
+        mergedSub[b.tableName] = b.data
+        mergedSub[normalizeSubTableName(b.tableName)] = b.data
+      }
     }
     const participantsBinding = subTableBindings.value.find(
       b => b.tableName === 'participants' || resolveAssigneeFieldForBinding(b.columns, b.tableName)
@@ -2240,6 +2572,10 @@ const handleCustomAction = (action: TaskActionInfo) => {
   
   // Handle different action types based on actionType
   switch (action.actionType) {
+    case 'SAVE':
+      saveCurrentTaskForm()
+      break
+
     case 'APPROVE':
       if (!validateSubTableAssigneesForComplete()) return
       currentApproveAction.value = 'APPROVE'
@@ -2494,6 +2830,10 @@ const getButtonType = (buttonColor?: string): 'primary' | 'success' | 'warning' 
   return colorMap[buttonColor || ''] || 'primary'
 }
 
+function getActionLabel(action: TaskActionInfo): string {
+  return action.actionType === 'SAVE' ? t('common.save') : action.actionName
+}
+
 // Get icon component
 const getIconComponent = (iconName?: string) => {
   if (!iconName) return null
@@ -2515,6 +2855,13 @@ const getIconComponent = (iconName?: string) => {
 
 onMounted(() => {
   loadTaskDetail()
+})
+
+onBeforeUnmount(() => {
+  if (subTableAutosaveTimer) {
+    clearTimeout(subTableAutosaveTimer)
+    subTableAutosaveTimer = null
+  }
 })
 </script>
 

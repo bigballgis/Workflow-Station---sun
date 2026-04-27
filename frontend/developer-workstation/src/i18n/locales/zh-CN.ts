@@ -407,6 +407,7 @@ export default {
     delegate: '委托',
     rollback: '回退',
     withdraw: '撤回',
+    saveDraft: '保存',
     processSubmit: '流程提交',
     processReject: '流程驳回',
     composite: '组合动作',

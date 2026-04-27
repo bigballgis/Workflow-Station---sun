@@ -119,15 +119,18 @@ public class ProcessEngineComponent {
             // Validate request parameters
             validateDeploymentRequest(request);
             
+            // Normalize known legacy BPMN serialization issues before validation/deploy
+            String normalizedBpmnXml = normalizeBpmnXml(request.getBpmnXml());
+
             // Validate BPMN file format
-            validateBpmnFile(request.getBpmnXml());
+            validateBpmnFile(normalizedBpmnXml);
             
             // Create deployment
             Deployment deployment = repositoryService.createDeployment()
                 .name(request.getName())
                 .category(request.getCategory())
                 .key(request.getKey())
-                .addString(request.getKey() + ".bpmn", request.getBpmnXml())
+                .addString(request.getKey() + ".bpmn", normalizedBpmnXml)
                 .deploy();
             
             // Get deployed process definitions
@@ -1557,9 +1560,10 @@ public class ProcessEngineComponent {
         
         // Finally use Flowable for deeper validation (only after basic validation passes)
         try {
+            String normalizedBpmnContent = normalizeBpmnXml(bpmnContent);
             Deployment tempDeployment = repositoryService.createDeployment()
                 .name("temp-validation")
-                .addInputStream("temp.bpmn", new ByteArrayInputStream(bpmnContent.getBytes()))
+                .addInputStream("temp.bpmn", new ByteArrayInputStream(normalizedBpmnContent.getBytes()))
                 .deploy();
                 
             // Validation succeeded, delete temp deployment
@@ -1569,6 +1573,29 @@ public class ProcessEngineComponent {
             throw new WorkflowValidationException(Collections.singletonList(
                 new WorkflowValidationException.ValidationError("bpmnXml", "BPMN file format validation failed: " + e.getMessage(), bpmnContent)));
         }
+    }
+
+    /**
+     * Normalize BPMN XML to tolerate known legacy serialization mistakes.
+     *
+     * IMPORTANT: Keep this minimal and targeted. We only normalize casing of BPMN element names
+     * that must match the BPMN 2.0 XSD exactly, otherwise Flowable deployment validation fails.
+     */
+    private String normalizeBpmnXml(String bpmnXml) {
+        if (bpmnXml == null || bpmnXml.isBlank()) {
+            return bpmnXml;
+        }
+
+        // Legacy bug: Some exports used <*:MultiInstanceLoopCharacteristics> (capital M),
+        // but BPMN 2.0 requires <*:multiInstanceLoopCharacteristics>.
+        // Accept any prefix (bpmn:, bpmn2:, etc.) and also the no-prefix variant.
+        String normalized = bpmnXml
+                .replaceAll("(<\\s*[^\\s:>]+:)MultiInstanceLoopCharacteristics(\\b)", "$1multiInstanceLoopCharacteristics$2")
+                .replaceAll("(<\\s*)MultiInstanceLoopCharacteristics(\\b)", "$1multiInstanceLoopCharacteristics$2")
+                .replaceAll("(</\\s*[^\\s:>]+:)MultiInstanceLoopCharacteristics(\\s*>)", "$1multiInstanceLoopCharacteristics$2")
+                .replaceAll("(</\\s*)MultiInstanceLoopCharacteristics(\\s*>)", "$1multiInstanceLoopCharacteristics$2");
+
+        return normalized;
     }
     
     private void validateStartProcessRequest(StartProcessRequest request) {

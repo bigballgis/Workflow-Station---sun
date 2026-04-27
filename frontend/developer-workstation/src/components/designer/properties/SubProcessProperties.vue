@@ -205,18 +205,6 @@ function readLoopChars(): { collection: string; elementVariable: string; complet
   return result
 }
 
-function buildFlowableExtensionElements(moddle: any, collectionName: string, elementVarName: string) {
-  const values: any[] = []
-  if (collectionName) {
-    values.push(moddle.create('flowable:collection', { body: collectionName }))
-  }
-  if (elementVarName) {
-    values.push(moddle.create('flowable:elementVariable', { body: elementVarName }))
-  }
-  if (values.length === 0) return null
-  return moddle.create('bpmn:ExtensionElements', { values })
-}
-
 function writeLoopCharacteristics() {
   if (!props.element || !props.modeler) return
   const modeling = props.modeler.get('modeling')
@@ -227,17 +215,19 @@ function writeLoopCharacteristics() {
     return
   }
 
-  const extElements = buildFlowableExtensionElements(
-    moddle,
-    collectionVariable.value.trim(),
-    (elementVariable.value || 'currentItem').trim()
-  )
-
   const loopProps: any = {
     isSequential: !!sequential.value
   }
-  if (extElements) {
-    loopProps.extensionElements = extElements
+  let collectionName = collectionVariable.value.trim()
+  if (!collectionName) {
+    collectionName =
+      suggestedCollectionVariable.value || 'multiInstance_subProcess_collection'
+    collectionVariable.value = collectionName
+  }
+  const elementVarName = (elementVariable.value || 'currentItem').trim()
+  loopProps['flowable:collection'] = collectionName
+  if (elementVarName) {
+    loopProps['flowable:elementVariable'] = elementVarName
   }
   if (completionCondition.value.trim()) {
     loopProps.completionCondition = moddle.create('bpmn:FormalExpression', {
@@ -247,12 +237,6 @@ function writeLoopCharacteristics() {
 
   const loopChars = moddle.create('bpmn:MultiInstanceLoopCharacteristics', loopProps)
 
-  if (extElements) {
-    extElements.$parent = loopChars
-    for (const v of extElements.values) {
-      v.$parent = extElements
-    }
-  }
   if (loopProps.completionCondition) {
     loopProps.completionCondition.$parent = loopChars
   }

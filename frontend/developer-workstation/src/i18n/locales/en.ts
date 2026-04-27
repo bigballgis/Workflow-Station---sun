@@ -371,6 +371,7 @@ export default {
     delegate: 'Delegate',
     rollback: 'Rollback',
     withdraw: 'Withdraw',
+    saveDraft: 'Save',
     processSubmit: 'Process Submit',
     processReject: 'Process Reject',
     composite: 'Composite Action',
