@@ -5,7 +5,7 @@ This folder contains a **generator** that exports the current `kk` snapshot from
 ### Files
 
 - `generate-kk-init.ps1`: connect to Postgres and generate `00-init-kk.sql`
-- `../99-maintenance/01-add-save-action-to-kk.sql`: idempotent patch to ensure `SAVE` action exists and is bound in BPMN (Base64-safe)
+- `01-add-save-action.sql`: idempotent patch to ensure `SAVE` action exists and is bound in BPMN (Base64-safe)
 
 ### Usage (PowerShell)
 

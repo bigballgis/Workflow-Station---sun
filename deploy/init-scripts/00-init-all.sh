@@ -120,6 +120,13 @@ for f in /docker-entrypoint-initdb.d/16-meeting-participant-collection/00-*.sql 
   [ -f "$f" ] && echo "  Running $(basename $f)..." && $PSQL -f "$f"
 done
 
+if [ -f /docker-entrypoint-initdb.d/17-kk/00-init-kk.sql ]; then
+  echo ""
+  echo "[5d/6] Loading Function Unit kk..."
+  echo "  Running 00-init-kk.sql..."
+  $PSQL -f /docker-entrypoint-initdb.d/17-kk/00-init-kk.sql
+fi
+
 echo ""
 echo "[6/6] Seed scripts finished."
 
@@ -129,7 +136,7 @@ echo "  Database Initialization Complete!"
 echo "========================================="
 echo "  Login: admin / admin123  (test: 44027893 / admin123)"
 echo "  Change password after first login!"
-echo "  Demo function units: Platform Showcase fu-20260403-a1b2c4; Digital Lending System V2 (EN) fu-20260403-a1b2c6; Meeting Participant Info Collection fu-20260403-a1b2c5"
+echo "  Demo function units: Platform Showcase fu-20260403-a1b2c4; Digital Lending System V2 (EN) fu-20260403-a1b2c6; Meeting Participant Info Collection fu-20260403-a1b2c5; kk fu-20260422-23tfag"
 echo "  E2E users (password=password): e2e_zhangwei e2e_lina e2e_wangfang e2e_zhaomin e2e_sunqiang e2e_zhoujie e2e_wugang"
 echo "  (Re-seed: run init-scripts/99-maintenance/00-wipe-all-function-units.sql then reload 08- and 16- scripts if needed.)"
 echo "========================================="

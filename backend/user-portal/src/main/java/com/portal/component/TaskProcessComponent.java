@@ -16,7 +16,16 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
+import org.xml.sax.InputSource;
 
+import javax.xml.XMLConstants;
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import java.io.StringReader;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
@@ -1441,64 +1450,73 @@ public class TaskProcessComponent {
     private void injectMiCollectionFromBpmn(String processDefinitionKey, String taskDefinitionKey,
                                             String processInstanceId, Map<String, Object> variables) {
         try {
+            if (processDefinitionKey == null || processDefinitionKey.isBlank()
+                    || taskDefinitionKey == null || taskDefinitionKey.isBlank()) {
+                log.debug("[MI] Missing processDefinitionKey or taskDefinitionKey, skip collection injection");
+                return;
+            }
             Optional<String> bpmnOpt = workflowEngineClient.getBpmnXml(processDefinitionKey);
             if (bpmnOpt.isEmpty()) {
                 log.warn("[MI] Could not fetch BPMN XML for processDefinitionKey={}", processDefinitionKey);
                 return;
             }
-            String bpmnXml = bpmnOpt.get();
+            Document document = parseBpmnSecurely(bpmnOpt.get());
 
-            // 1. 找到当前任务节点
-            int taskStart = findElementStart(bpmnXml, "userTask", "id", taskDefinitionKey);
-            if (taskStart < 0) {
+            // 1. 找到当前任务节点（兼容 bpmn:userTask / userTask）
+            Element taskElement = findElementByLocalNameAndId(document, "userTask", taskDefinitionKey);
+            if (taskElement == null) {
                 log.debug("[MI] UserTask not found in BPMN: {}", taskDefinitionKey);
                 return;
             }
-            int taskEnd = findElementEnd(bpmnXml, taskStart);
-            String taskElement = bpmnXml.substring(taskStart, taskEnd);
 
-            // 2. 找到当前任务的下一节点（outgoing flow target）
-            String targetRef = extractAttribute(taskElement, "outgoing", "targetRef");
-            if (targetRef == null) {
-                // 尝试多行格式
-                targetRef = extractAttributeMultiline(taskElement, "outgoing", "targetRef");
-            }
-            if (targetRef == null) {
+            // 2. outgoing 节点内容是 sequenceFlow id，需要先解析 sequenceFlow.targetRef
+            List<String> outgoingFlowIds = getDirectChildTextValues(taskElement, "outgoing");
+            if (outgoingFlowIds.isEmpty()) {
                 log.debug("[MI] No outgoing flow found for task {}", taskDefinitionKey);
                 return;
             }
 
-            // 3. 检查目标节点是否为多实例 SubProcess
-            int spStart = findElementStart(bpmnXml, "subProcess", "id", targetRef);
-            if (spStart < 0) {
-                // 可能是 Call Activity 或其他类型，不是 MI SubProcess
-                log.debug("[MI] Target {} is not a subProcess", targetRef);
+            for (String flowId : outgoingFlowIds) {
+                Element sequenceFlow = findElementByLocalNameAndId(document, "sequenceFlow", flowId);
+                String targetRef = sequenceFlow != null ? sequenceFlow.getAttribute("targetRef") : null;
+                if (targetRef == null || targetRef.isBlank()) {
+                    log.debug("[MI] SequenceFlow {} has no targetRef", flowId);
+                    continue;
+                }
+
+                // 3. 检查目标节点是否为多实例 SubProcess
+                Element subProcess = findElementByLocalNameAndId(document, "subProcess", targetRef);
+                if (subProcess == null) {
+                    log.debug("[MI] Target {} is not a subProcess", targetRef);
+                    continue;
+                }
+
+                Element loopCharacteristics = firstDirectChild(subProcess, "multiInstanceLoopCharacteristics");
+                if (loopCharacteristics == null) {
+                    log.debug("[MI] Target subProcess {} is not multi-instance", targetRef);
+                    continue;
+                }
+
+                // 4. 从 loopCharacteristics 提取 collection 变量名（兼容属性和子元素两种写法）
+                String collectionVariableName = extractFlowableCollection(loopCharacteristics);
+                if (collectionVariableName == null || collectionVariableName.isBlank()) {
+                    log.warn("[MI] SubProcess {} has no flowable:collection configuration", targetRef);
+                    continue;
+                }
+
+                // 5. 从 SubProcess 内部的 UserTask 提取 assigneeField
+                String assigneeField = extractAssigneeFieldFromSubProcess(subProcess);
+                if (assigneeField == null || assigneeField.isBlank()) {
+                    log.warn("[MI] No assigneeField found in subProcess {} inner UserTask", targetRef);
+                    continue;
+                }
+
+                // 6. 从 __subTables__ 构建集合变量
+                buildMiCollectionVariable(variables, collectionVariableName, assigneeField);
                 return;
             }
-            int spEnd = findElementEnd(bpmnXml, spStart);
-            String spElement = bpmnXml.substring(spStart, spEnd);
 
-            if (!spElement.contains("multiInstanceLoopCharacteristics")) {
-                log.debug("[MI] Target subProcess {} is not multi-instance", targetRef);
-                return;
-            }
-
-            // 4. 从 SubProcess 扩展中提取 collection 变量名
-            String collectionVariableName = extractFlowableCollection(spElement);
-            if (collectionVariableName == null || collectionVariableName.isBlank()) {
-                log.warn("[MI] SubProcess {} has no flowable:collection configuration", targetRef);
-                return;
-            }
-
-            // 5. 从 SubProcess 内部的 UserTask 提取 assigneeField
-            String assigneeField = extractAssigneeFieldFromSubProcess(spElement);
-            if (assigneeField == null || assigneeField.isBlank()) {
-                log.warn("[MI] No assigneeField found in subProcess {} inner UserTask", targetRef);
-                return;
-            }
-
-            // 6. 从 __subTables__ 构建集合变量
-            buildMiCollectionVariable(variables, collectionVariableName, assigneeField);
+            log.debug("[MI] No outgoing multi-instance subProcess found for task {}", taskDefinitionKey);
         } catch (Exception e) {
             log.warn("[MI] injectMiCollectionFromBpmn failed for processDefinitionKey={}, taskDefinitionKey={}: {}",
                     processDefinitionKey, taskDefinitionKey, e.getMessage());
@@ -1571,6 +1589,85 @@ public class TaskProcessComponent {
     }
 
     // ==================== BPMN XML 解析辅助方法 ====================
+
+    private Document parseBpmnSecurely(String xml) throws Exception {
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        factory.setNamespaceAware(true);
+        factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
+        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+        factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
+        factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+        factory.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
+        factory.setXIncludeAware(false);
+        factory.setExpandEntityReferences(false);
+
+        DocumentBuilder builder = factory.newDocumentBuilder();
+        return builder.parse(new InputSource(new StringReader(xml)));
+    }
+
+    private Element findElementByLocalNameAndId(Document document, String localName, String id) {
+        if (document == null || localName == null || id == null) {
+            return null;
+        }
+        NodeList nodes = document.getElementsByTagNameNS("*", localName);
+        for (int i = 0; i < nodes.getLength(); i++) {
+            Node node = nodes.item(i);
+            if (node instanceof Element element && id.equals(element.getAttribute("id"))) {
+                return element;
+            }
+        }
+        return null;
+    }
+
+    private Element firstDirectChild(Element parent, String localName) {
+        if (parent == null || localName == null) {
+            return null;
+        }
+        NodeList children = parent.getChildNodes();
+        for (int i = 0; i < children.getLength(); i++) {
+            Node node = children.item(i);
+            if (node instanceof Element element && localName.equals(element.getLocalName())) {
+                return element;
+            }
+        }
+        return null;
+    }
+
+    private List<String> getDirectChildTextValues(Element parent, String localName) {
+        java.util.ArrayList<String> values = new java.util.ArrayList<>();
+        if (parent == null || localName == null) {
+            return values;
+        }
+        NodeList children = parent.getChildNodes();
+        for (int i = 0; i < children.getLength(); i++) {
+            Node node = children.item(i);
+            if (node instanceof Element element && localName.equals(element.getLocalName())) {
+                String text = element.getTextContent();
+                if (text != null && !text.isBlank()) {
+                    values.add(text.trim());
+                }
+            }
+        }
+        return values;
+    }
+
+    private String findFirstPropertyValue(Element root, String propertyName) {
+        if (root == null || propertyName == null) {
+            return null;
+        }
+        NodeList nodes = root.getElementsByTagNameNS("*", "property");
+        for (int i = 0; i < nodes.getLength(); i++) {
+            Node node = nodes.item(i);
+            if (node instanceof Element element
+                    && propertyName.equals(element.getAttribute("name"))) {
+                String value = element.getAttribute("value");
+                if (value != null && !value.isBlank()) {
+                    return value;
+                }
+            }
+        }
+        return null;
+    }
 
     private int findElementStart(String xml, String elementName, String attrName, String attrValue) {
         String openTag = "<" + elementName + " ";
@@ -1664,57 +1761,36 @@ public class TaskProcessComponent {
         return extractAttributeFromTag(inner, attrName, null);
     }
 
-    private String extractFlowableCollection(String subProcessElement) {
-        // 查找 <multiInstanceLoopCharacteristics> 内的 <flowable:collection>xxx</flowable:collection>
-        int miStart = subProcessElement.indexOf("multiInstanceLoopCharacteristics");
-        if (miStart < 0) return null;
-        int innerEnd = subProcessElement.indexOf("</multiInstanceLoopCharacteristics>", miStart);
-        if (innerEnd < 0) return null;
-        String miInner = subProcessElement.substring(miStart, innerEnd);
+    private String extractFlowableCollection(Element loopCharacteristics) {
+        if (loopCharacteristics == null) {
+            return null;
+        }
 
-        // 查找 flowable:collection 或 bpmn:collection
-        for (String nsPrefix : List.of("flowable:", "bpmn:")) {
-            String colTag = nsPrefix + "collection>";
-            int colStart = miInner.indexOf("<" + colTag);
-            if (colStart >= 0) {
-                int textStart = miInner.indexOf('>', colStart) + 1;
-                int textEnd = miInner.indexOf('<', textStart);
-                if (textEnd > textStart) {
-                    return miInner.substring(textStart, textEnd).trim();
+        String collection = loopCharacteristics.getAttributeNS("http://flowable.org/bpmn", "collection");
+        if (collection == null || collection.isBlank()) {
+            collection = loopCharacteristics.getAttribute("flowable:collection");
+        }
+        if (collection == null || collection.isBlank()) {
+            collection = loopCharacteristics.getAttribute("collection");
+        }
+        if (collection != null && !collection.isBlank()) {
+            return collection.trim();
+        }
+
+        NodeList children = loopCharacteristics.getChildNodes();
+        for (int i = 0; i < children.getLength(); i++) {
+            Node node = children.item(i);
+            if (node instanceof Element element && "collection".equals(element.getLocalName())) {
+                String text = element.getTextContent();
+                if (text != null && !text.isBlank()) {
+                    return text.trim();
                 }
             }
         }
         return null;
     }
 
-    private String extractAssigneeFieldFromSubProcess(String subProcessElement) {
-        // 在 SubProcess 内部查找 userTask 的 custom:property name="assigneeField"
-        int utStart = subProcessElement.indexOf("<userTask ");
-        if (utStart < 0) return null;
-        int utEnd = subProcessElement.indexOf("</userTask>", utStart);
-        if (utEnd < 0) return null;
-        String userTaskElement = subProcessElement.substring(utStart, utEnd);
-
-        int propsStart = userTaskElement.indexOf("custom:properties");
-        if (propsStart < 0) return null;
-        int propsEnd = userTaskElement.indexOf("</custom:properties>", propsStart);
-        if (propsEnd < 0) return null;
-        String propsElement = userTaskElement.substring(propsStart, propsEnd);
-
-        int propStart = 0;
-        while (true) {
-            int pStart = propsElement.indexOf("<custom:property ", propStart);
-            if (pStart < 0 || pStart > propsEnd) break;
-            int tagEnd = propsElement.indexOf('>', pStart);
-            if (tagEnd < 0) break;
-            String propTag = propsElement.substring(pStart, tagEnd);
-            String name = extractAttributeFromTag(propTag, "name", null);
-            if ("assigneeField".equals(name)) {
-                String value = extractAttributeFromTag(propTag, "value", null);
-                if (value != null) return value;
-            }
-            propStart = pStart + 1;
-        }
-        return null;
+    private String extractAssigneeFieldFromSubProcess(Element subProcessElement) {
+        return findFirstPropertyValue(subProcessElement, "assigneeField");
     }
 }

@@ -114,7 +114,7 @@ VALUES (6, 5, 5, 'PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPGJwbW46ZG
 
 -- ---------------------------------------------------------------------------
 -- 9) Ensure SAVE action exists and is bound in BPMN (Base64-safe)
---     (inlined from deploy/init-scripts/99-maintenance/01-add-save-action-to-kk.sql)
+--     (inlined from deploy/init-scripts/17-kk/01-add-save-action.sql)
 -- ---------------------------------------------------------------------------
 -- =============================================================================
 -- Patch: Add SAVE action to Function Unit "kk" (developer catalog)

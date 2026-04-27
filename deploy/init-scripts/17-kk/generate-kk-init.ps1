@@ -165,7 +165,7 @@ VALUES ($procId, $fuId, $procFuVerId, $(("'" + $bpmnBase64.Replace("'","''") + "
 
 "@
 
-$patchPath = "deploy/init-scripts/99-maintenance/01-add-save-action-to-kk.sql"
+$patchPath = "deploy/init-scripts/17-kk/01-add-save-action.sql"
 if (-not (Test-Path $patchPath)) { throw "Patch file not found: $patchPath" }
 $patchSql = Get-Content -Path $patchPath -Raw -Encoding UTF8
 

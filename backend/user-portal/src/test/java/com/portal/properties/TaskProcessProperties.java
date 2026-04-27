@@ -19,6 +19,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
@@ -31,6 +32,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -378,6 +380,75 @@ class TaskProcessProperties {
         
         assertTrue(exception.getMessage().contains("Flowable engine unavailable")
                 || exception.getMessage().contains("Flowable 引擎不可用"));
+    }
+
+    @Test
+    void completingTaskBeforeMultiInstanceSubProcessInjectsCollectionVariable() {
+        String taskId = "task_mi";
+        String userId = "user_1";
+        String processDefinitionKey = "Process_1";
+        String taskDefinitionKey = "Activity_assignment";
+
+        Map<String, Object> taskMap = createTaskMap(taskId, "USER", userId);
+        taskMap.put("processDefinitionKey", processDefinitionKey);
+        taskMap.put("taskDefinitionKey", taskDefinitionKey);
+        taskMap.put("variables", Map.of(
+                "__subTables__", Map.of("66", List.of(
+                        Map.of("id", 101L, "assignee", "assignee_1", "name", "row 1"),
+                        Map.of("rowId", 102L, "assignee", "assignee_2", "name", "row 2")
+                ))
+        ));
+        mockFlowableTaskResponse(taskId, taskMap);
+        when(workflowEngineClient.getBpmnXml(processDefinitionKey)).thenReturn(Optional.of("""
+                <?xml version="1.0" encoding="UTF-8"?>
+                <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                    xmlns:flowable="http://flowable.org/bpmn"
+                    xmlns:custom="http://workflow.platform/schema/custom">
+                  <bpmn:process id="Process_1" isExecutable="true">
+                    <bpmn:userTask id="Activity_assignment" name="assignment">
+                      <bpmn:outgoing>Flow_to_mi</bpmn:outgoing>
+                    </bpmn:userTask>
+                    <bpmn:sequenceFlow id="Flow_to_mi" sourceRef="Activity_assignment" targetRef="Activity_multi" />
+                    <bpmn:subProcess id="Activity_multi" name="multi">
+                      <bpmn:multiInstanceLoopCharacteristics flowable:collection="multiInstance_subtable_collection"
+                          flowable:elementVariable="currentItem" />
+                      <bpmn:userTask id="Activity_inner" name="sub form">
+                        <bpmn:extensionElements>
+                          <custom:properties>
+                            <custom:property name="assigneeField" value="assignee" />
+                          </custom:properties>
+                        </bpmn:extensionElements>
+                      </bpmn:userTask>
+                    </bpmn:subProcess>
+                  </bpmn:process>
+                </bpmn:definitions>
+                """));
+
+        TaskCompleteRequest request = TaskCompleteRequest.builder()
+                .taskId(taskId)
+                .action("APPROVE")
+                .variables(Map.of(
+                        "__subTables__", Map.of("66", List.of(
+                                Map.of("id", 101L, "assignee", "assignee_1", "name", "row 1"),
+                                Map.of("rowId", 102L, "assignee", "assignee_2", "name", "row 2")
+                        ))
+                ))
+                .build();
+
+        taskProcessComponent.completeTask(request, userId);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> variablesCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(workflowEngineClient).completeTask(eq(taskId), eq(userId), eq("APPROVE"), variablesCaptor.capture());
+        Object collectionObj = variablesCaptor.getValue().get("multiInstance_subtable_collection");
+        assertInstanceOf(List.class, collectionObj);
+
+        List<?> collection = (List<?>) collectionObj;
+        assertEquals(2, collection.size());
+        assertEquals(101L, ((Map<?, ?>) collection.get(0)).get("rowId"));
+        assertEquals("assignee_1", ((Map<?, ?>) collection.get(0)).get("assignee"));
+        assertEquals(102L, ((Map<?, ?>) collection.get(1)).get("rowId"));
+        assertEquals("assignee_2", ((Map<?, ?>) collection.get(1)).get("assignee"));
     }
 
     /**
