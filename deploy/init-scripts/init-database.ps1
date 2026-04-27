@@ -89,7 +89,8 @@ $migrations = @(
     "00-schema/28-dw-function-unit-dev-groups.sql",
     "00-schema/29-up-permission-request-submitted-by.sql",
     "00-schema/30-widen-flowable-identitylink-columns.sql",
-    "00-schema/31-widen-flowable-act-hi-comment-columns.sql"
+    "00-schema/31-widen-flowable-act-hi-comment-columns.sql",
+    "00-schema/32-add-dw-form-table-binding-subview-columns.sql"
 )
 foreach ($m in $migrations) {
     $path = Join-Path $ScriptDir $m

@@ -1143,3 +1143,10 @@
   category: quality
   summary: "user-portal vue-tsc 在 Node 22 / 当前 TypeScript 组合下启动即报 Search string not found: supportedTSExtensions，无法执行类型检查"
   file: "frontend/user-portal/package.json"
+
+- id: "157"
+  status: open
+  severity: major
+  category: security
+  summary: "BpmnActionParser DOM 解析 BPMN 时未禁用 DTD/外部实体，存在 XXE 风险"
+  file: "backend/workflow-engine-core/src/main/java/com/workflow/component/BpmnActionParser.java"

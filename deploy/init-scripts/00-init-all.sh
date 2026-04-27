@@ -32,7 +32,8 @@ for f in /docker-entrypoint-initdb.d/00-schema/01-*.sql \
 done
 
 # --- Step 2: Incremental migrations ---
-# Note: Migration 09 was intentionally skipped (no 09-*.sql file exists)
+# Note: 09-* reserved (intentionally unused). Flowable tables are managed by workflow-engine-core
+# (flowable.database-schema-update=true in docker profile) and can be repaired via 99-maintenance/01-repair-flowable-schema.sql
 echo ""
 echo "[2/6] Applying incremental migrations..."
 for f in /docker-entrypoint-initdb.d/00-schema/06-*.sql \
@@ -58,7 +59,8 @@ for f in /docker-entrypoint-initdb.d/00-schema/06-*.sql \
          /docker-entrypoint-initdb.d/00-schema/28-*.sql \
          /docker-entrypoint-initdb.d/00-schema/29-*.sql \
          /docker-entrypoint-initdb.d/00-schema/30-*.sql \
-         /docker-entrypoint-initdb.d/00-schema/31-*.sql; do
+         /docker-entrypoint-initdb.d/00-schema/31-*.sql \
+         /docker-entrypoint-initdb.d/00-schema/32-*.sql; do
     [ -f "$f" ] && echo "  Running $(basename $f)..." && $PSQL -f "$f"
 done
 
@@ -120,11 +122,14 @@ for f in /docker-entrypoint-initdb.d/16-meeting-participant-collection/00-*.sql 
   [ -f "$f" ] && echo "  Running $(basename $f)..." && $PSQL -f "$f"
 done
 
+echo ""
+echo "[5d/6] Loading Function Unit kk..."
 if [ -f /docker-entrypoint-initdb.d/17-kk/00-init-kk.sql ]; then
-  echo ""
-  echo "[5d/6] Loading Function Unit kk..."
   echo "  Running 00-init-kk.sql..."
   $PSQL -f /docker-entrypoint-initdb.d/17-kk/00-init-kk.sql
+else
+  echo "  ERROR: kk init script not found at /docker-entrypoint-initdb.d/17-kk/00-init-kk.sql"
+  exit 1
 fi
 
 echo ""

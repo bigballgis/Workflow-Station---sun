@@ -8,9 +8,9 @@
 | 状态 | 数量 |
 |------|------|
 | ✅ Fixed | **150** |
-| 🔓 Open | **5** |
+| 🔓 Open | **6** |
 | ⏸️ Wontfix | **1** |
-| **总计** | **156** |
+| **总计** | **157** |
 
 按严重度的分布见 `index.yaml` 各条目的 `severity` 字段。
 
@@ -25,6 +25,7 @@
 | 152 | bug | user-portal tasks 页 submitAction 捕获异常后仍弹 success |
 | 155 | quality | user-portal subTablePositionControl.property.test.ts 未注册 Element Plus 导致 Vitest unhandled errors |
 | 156 | quality | user-portal vue-tsc 在当前工具链下启动失败，无法执行类型检查 |
+| 157 | security | BpmnActionParser DOM 解析 BPMN 时未禁用 DTD/外部实体，存在 XXE 风险 |
 
 ### Wontfix
 

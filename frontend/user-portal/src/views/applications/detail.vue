@@ -108,10 +108,12 @@
                 v-model="formData"
                 :label-width="prevForm.labelWidth"
                 :readonly="true"
+                :subTableBindings="prevForm.subTableBindings"
+                @update:subTableData="(id: number, rows: any[]) => { const b = prevForm.subTableBindings.find(x => x.bindingId === id); if (b) b.data = rows }"
               />
             </div>
-            <template v-if="prevForm.subTableBindings.length > 0">
-              <div v-for="binding in prevForm.subTableBindings" :key="binding.bindingId" class="sub-table-section">
+            <template v-if="unplacedSubTableBindings(prevForm).length > 0">
+              <div v-for="binding in unplacedSubTableBindings(prevForm)" :key="binding.bindingId" class="sub-table-section">
                 <SubTableField
                   :title="binding.tableName"
                   :columns="binding.columns"
@@ -308,19 +310,23 @@ const subTableBindings = ref<Array<{
 }>>([])
 
 const placedBindingIds = computed((): Set<number> => {
-  const ids = new Set<number>()
-  const collect = (fields: any[]) => fields.forEach((f: any) => {
-    if (f.type === 'subTable' && f._bindingId != null) ids.add(f._bindingId)
-    if (Array.isArray(f.children)) collect(f.children)
-  })
-  collect(formFields.value)
-  formTabs.value.forEach((tab: any) => collect(tab.fields))
-  return ids
+  return collectPlacedBindingIds(formFields.value, formTabs.value)
 })
 
 const bottomSubTableBindings = computed(() =>
   subTableBindings.value.filter(b => !placedBindingIds.value.has(b.bindingId))
 )
+
+function collectPlacedBindingIds(fields: any[], tabs: Array<{ fields: any[] }> = []): Set<number> {
+  const ids = new Set<number>()
+  const collect = (items: any[]) => items.forEach((f: any) => {
+    if (f.type === 'subTable' && f._bindingId != null) ids.add(f._bindingId)
+    if (Array.isArray(f.children)) collect(f.children)
+  })
+  collect(fields)
+  tabs.forEach(tab => collect(tab.fields))
+  return ids
+}
 
 // Lookup config fallback map (from rt_lookup_configs)
 const lookupDbConfigs = ref<Record<string, { tableId: number; searchFields: string[]; displayField: string; viewFields: any[] }>>({})
@@ -349,6 +355,11 @@ interface PreviousFormEntry {
   }>
 }
 const previousForms = ref<PreviousFormEntry[]>([])
+
+function unplacedSubTableBindings(prevForm: PreviousFormEntry): PreviousFormEntry['subTableBindings'] {
+  const placedIds = collectPlacedBindingIds(prevForm.fields, prevForm.tabs)
+  return prevForm.subTableBindings.filter(b => !placedIds.has(b.bindingId))
+}
 
 // Sub-task form detail dialog
 const subTaskDetailVisible = ref(false)

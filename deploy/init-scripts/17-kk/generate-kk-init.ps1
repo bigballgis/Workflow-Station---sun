@@ -113,11 +113,139 @@ $actionInserts = Exec-Psql "select 'INSERT INTO dw_action_definitions (id, funct
 
 $formInserts = Exec-Psql "select 'INSERT INTO dw_form_definitions (id, function_unit_id, form_name, form_type, config_json, description, bound_table_id, lock_version, created_at, updated_at, field_permissions, show_live_values) VALUES ('|| id ||','|| function_unit_id ||','|| quote_literal(form_name) ||','|| quote_literal(form_type) ||','|| quote_literal(config_json::text) ||'::jsonb,'|| coalesce(quote_literal(description),'NULL') ||','|| coalesce(bound_table_id::text,'NULL') ||','|| lock_version ||','|| quote_literal(created_at::text) ||','|| quote_literal(updated_at::text) ||','|| coalesce(quote_literal(field_permissions::text),'NULL') ||','|| coalesce((case when show_live_values is null then 'NULL' when show_live_values then 'true' else 'false' end),'NULL') ||');' from dw_form_definitions where function_unit_id=$fuId order by id;"
 
-$bindingInserts = Exec-Psql "select 'INSERT INTO dw_form_table_bindings (id, form_id, table_id, relation_table_id, binding_type, binding_mode, foreign_key_field, sort_order, created_at, updated_at, sub_list_view_id, standalone_form_id, sub_mode) VALUES ('|| id ||','|| form_id ||','|| table_id ||','|| coalesce(relation_table_id::text,'NULL') ||','|| quote_literal(binding_type) ||','|| quote_literal(binding_mode) ||','|| coalesce(quote_literal(foreign_key_field),'NULL') ||','|| coalesce(sort_order::text,'NULL') ||','|| quote_literal(created_at::text) ||','|| quote_literal(updated_at::text) ||','|| coalesce(sub_list_view_id::text,'NULL') ||','|| coalesce(standalone_form_id::text,'NULL') ||','|| coalesce(quote_literal(sub_mode),'NULL') ||');' from dw_form_table_bindings where form_id in (select id from dw_form_definitions where function_unit_id=$fuId) order by form_id, sort_order, id;"
+$bindingInserts = Exec-Psql "select 'INSERT INTO dw_form_table_bindings (id, form_id, table_id, relation_table_id, binding_type, binding_mode, foreign_key_field, sort_order, created_at, updated_at, sub_list_view_id, sub_mode) VALUES ('|| id ||','|| form_id ||','|| coalesce(table_id::text,'NULL') ||','|| coalesce(relation_table_id::text,'NULL') ||','|| quote_literal(binding_type) ||','|| quote_literal(binding_mode) ||','|| coalesce(quote_literal(foreign_key_field),'NULL') ||','|| coalesce(sort_order::text,'NULL') ||','|| quote_literal(created_at::text) ||','|| quote_literal(updated_at::text) ||','|| coalesce(sub_list_view_id::text,'NULL') ||','|| coalesce(quote_literal(sub_mode),'NULL') ||');' from dw_form_table_bindings where form_id in (select id from dw_form_definitions where function_unit_id=$fuId) order by form_id, sort_order, id;"
 
 $stageBindingInserts = Exec-Psql "select 'INSERT INTO dw_form_stage_bindings (id, form_id, stage_id, stage_name, created_at) VALUES ('|| id ||','|| form_id ||','|| stage_id ||','|| quote_literal(stage_name) ||','|| quote_literal(created_at::text) ||');' from dw_form_stage_bindings where form_id in (select id from dw_form_definitions where function_unit_id=$fuId) order by form_id, id;"
 
 $tableRelationInserts = Exec-Psql "select 'INSERT INTO dw_table_relations (id, function_unit_id, source_table_id, source_field_name, relation_type, target_table_id, target_field_name, created_at, updated_at) VALUES ('|| id ||','|| function_unit_id ||','|| source_table_id ||','|| quote_literal(source_field_name) ||','|| quote_literal(relation_type) ||','|| target_table_id ||','|| quote_literal(target_field_name) ||','|| quote_literal(created_at::text) ||','|| quote_literal(updated_at::text) ||');' from dw_table_relations where function_unit_id=$fuId order by id;"
+
+# ---------------------------------------------------------------------------
+# Relation Table (rt_*) view/lookup configs
+# - Relation tables themselves are global (rt_table_definitions); per-form configs live in rt_view_configs/fields and rt_lookup_configs.
+# - We export configs that are linked to kk bindings/forms so Form Designer can render relation-table views and lookup views.
+# ---------------------------------------------------------------------------
+
+# Relation Table definitions referenced by kk (RELATED bindings with relation_table_id > 0)
+$rtTableDefInserts = Exec-Psql @"
+select
+  'INSERT INTO rt_table_definitions (id, table_name, display_name, description, status, enabled, portal_visible, current_version, created_at, created_by, updated_at, updated_by) VALUES ('||
+  id||','||quote_literal(table_name)||','||coalesce(quote_literal(display_name),'NULL')||','||coalesce(quote_literal(description),'NULL')||','||
+  quote_literal(status)||','||(case when enabled then 'true' else 'false' end)||','||(case when portal_visible then 'true' else 'false' end)||','||
+  coalesce(current_version::text,'NULL')||','||quote_literal(created_at::text)||','||coalesce(quote_literal(created_by),'NULL')||','||
+  quote_literal(updated_at::text)||','||coalesce(quote_literal(updated_by),'NULL')||
+  ') ON CONFLICT (table_name) DO UPDATE SET display_name=EXCLUDED.display_name, description=EXCLUDED.description, status=EXCLUDED.status, enabled=EXCLUDED.enabled, portal_visible=EXCLUDED.portal_visible, current_version=EXCLUDED.current_version, updated_at=EXCLUDED.updated_at, updated_by=EXCLUDED.updated_by;'
+from rt_table_definitions
+where id in (
+  select distinct relation_table_id
+  from dw_form_table_bindings
+  where form_id in (select id from dw_form_definitions where function_unit_id = $fuId)
+    and relation_table_id is not null
+    and relation_table_id > 0
+)
+order by id;
+"@
+
+$rtFieldDefInserts = Exec-Psql @"
+select
+  'INSERT INTO rt_field_definitions (id, table_id, field_name, data_type, length, precision_value, scale, nullable, is_primary_key, default_value, comment, sort_order) VALUES ('||
+  id||','||table_id||','||quote_literal(field_name)||','||quote_literal(data_type)||','||
+  coalesce(length::text,'NULL')||','||coalesce(precision_value::text,'NULL')||','||coalesce(scale::text,'NULL')||','||
+  (case when nullable then 'true' else 'false' end)||','||
+  (case when is_primary_key then 'true' else 'false' end)||','||
+  coalesce(quote_literal(default_value),'NULL')||','||coalesce(quote_literal(comment),'NULL')||','||sort_order||
+  ') ON CONFLICT (id) DO NOTHING;'
+from rt_field_definitions
+where table_id in (
+  select id
+  from rt_table_definitions
+  where id in (
+    select distinct relation_table_id
+    from dw_form_table_bindings
+    where form_id in (select id from dw_form_definitions where function_unit_id = $fuId)
+      and relation_table_id is not null
+      and relation_table_id > 0
+  )
+)
+order by table_id, sort_order, id;
+"@
+
+$rtTableVersionInserts = Exec-Psql @"
+select
+  'INSERT INTO rt_table_versions (id, table_id, version_number, snapshot_data, deployed_by, deployed_at, change_log) VALUES ('||
+  id||','||table_id||','||version_number||','||quote_literal(snapshot_data)||','||quote_literal(deployed_by)||','||
+  quote_literal(deployed_at::text)||','||coalesce(quote_literal(change_log),'NULL')||
+  ') ON CONFLICT (id) DO NOTHING;'
+from rt_table_versions
+where table_id in (
+  select distinct relation_table_id
+  from dw_form_table_bindings
+  where form_id in (select id from dw_form_definitions where function_unit_id = $fuId)
+    and relation_table_id is not null
+    and relation_table_id > 0
+)
+order by table_id, version_number, id;
+"@
+
+$rtTableAccessInserts = Exec-Psql @"
+select
+  'INSERT INTO rt_table_access (id, table_id, target_type, target_id, created_at, created_by) VALUES ('||
+  quote_literal(id)||','||table_id||','||quote_literal(target_type)||','||quote_literal(target_id)||','||
+  quote_literal(created_at::text)||','||coalesce(quote_literal(created_by),'NULL')||
+  ') ON CONFLICT (id) DO NOTHING;'
+from rt_table_access
+where table_id in (
+  select distinct relation_table_id
+  from dw_form_table_bindings
+  where form_id in (select id from dw_form_definitions where function_unit_id = $fuId)
+    and relation_table_id is not null
+    and relation_table_id > 0
+)
+order by table_id, id;
+"@
+$rtViewConfigInserts = Exec-Psql @"
+select
+  'INSERT INTO rt_view_configs (id, binding_id, table_id, field_config, created_at, updated_at) VALUES ('||
+  id||','||binding_id||','||table_id||','||coalesce(quote_literal(field_config),'NULL')||','||
+  quote_literal(created_at::text)||','||coalesce(quote_literal(updated_at::text),'NULL')||
+  ');'
+from rt_view_configs
+where binding_id in (
+  select id
+  from dw_form_table_bindings
+  where form_id in (select id from dw_form_definitions where function_unit_id = $fuId)
+)
+order by id;
+"@
+
+$rtViewFieldInserts = Exec-Psql @"
+select
+  'INSERT INTO rt_view_fields (id, view_config_id, field_name, display_label, column_width, sort_order, visible) VALUES ('||
+  id||','||view_config_id||','||quote_literal(field_name)||','||coalesce(quote_literal(display_label),'NULL')||','||
+  coalesce(column_width::text,'NULL')||','||sort_order||','||(case when visible then 'true' else 'false' end)||
+  ');'
+from rt_view_fields
+where view_config_id in (
+  select id from rt_view_configs
+  where binding_id in (
+    select id
+    from dw_form_table_bindings
+    where form_id in (select id from dw_form_definitions where function_unit_id = $fuId)
+  )
+)
+order by view_config_id, sort_order, id;
+"@
+
+$rtLookupConfigInserts = Exec-Psql @"
+select
+  'INSERT INTO rt_lookup_configs (id, form_id, component_id, view_config_id, table_id, search_fields, display_field, created_at, updated_at) VALUES ('||
+  id||','||form_id||','||quote_literal(component_id)||','||coalesce(view_config_id::text,'NULL')||','||table_id||','||
+  coalesce(quote_literal(search_fields),'NULL')||','||coalesce(quote_literal(display_field),'NULL')||','||
+  quote_literal(created_at::text)||','||coalesce(quote_literal(updated_at::text),'NULL')||
+  ');'
+from rt_lookup_configs
+where form_id in (select id from dw_form_definitions where function_unit_id = $fuId)
+order by form_id, id;
+"@
 
 $procRow = Exec-Psql "select id, function_unit_version_id, created_at::text, updated_at::text from dw_process_definitions where function_unit_id=$fuId order by updated_at desc limit 1;"
 $procParts = $procRow.Split('|')
@@ -140,6 +268,85 @@ BEGIN
   IF v_fu_id IS NULL THEN
     RETURN;
   END IF;
+
+  -- Clean relation-table configs linked to this function unit (rt_* tables are global, but configs are tied to bindings/forms)
+  DELETE FROM rt_view_fields
+    WHERE view_config_id IN (
+      SELECT id FROM rt_view_configs
+      WHERE binding_id IN (
+        SELECT id FROM dw_form_table_bindings
+        WHERE form_id IN (SELECT id FROM dw_form_definitions WHERE function_unit_id = v_fu_id)
+      )
+    );
+  DELETE FROM rt_view_configs
+    WHERE binding_id IN (
+      SELECT id FROM dw_form_table_bindings
+      WHERE form_id IN (SELECT id FROM dw_form_definitions WHERE function_unit_id = v_fu_id)
+    );
+  DELETE FROM rt_lookup_configs
+    WHERE form_id IN (SELECT id FROM dw_form_definitions WHERE function_unit_id = v_fu_id);
+
+  -- Optionally remove relation table definitions that are referenced by this function unit's RELATED bindings.
+  -- Relation tables are global; this keeps re-running this init script deterministic in dev DBs.
+  DELETE FROM rt_table_access
+    WHERE table_id IN (
+      SELECT DISTINCT relation_table_id
+      FROM dw_form_table_bindings
+      WHERE form_id IN (SELECT id FROM dw_form_definitions WHERE function_unit_id = v_fu_id)
+        AND relation_table_id IS NOT NULL
+        AND relation_table_id > 0
+    );
+  DELETE FROM rt_view_fields
+    WHERE view_config_id IN (
+      SELECT id FROM rt_view_configs
+      WHERE table_id IN (
+        SELECT DISTINCT relation_table_id
+        FROM dw_form_table_bindings
+        WHERE form_id IN (SELECT id FROM dw_form_definitions WHERE function_unit_id = v_fu_id)
+          AND relation_table_id IS NOT NULL
+          AND relation_table_id > 0
+      )
+    );
+  DELETE FROM rt_view_configs
+    WHERE table_id IN (
+      SELECT DISTINCT relation_table_id
+      FROM dw_form_table_bindings
+      WHERE form_id IN (SELECT id FROM dw_form_definitions WHERE function_unit_id = v_fu_id)
+        AND relation_table_id IS NOT NULL
+        AND relation_table_id > 0
+    );
+  DELETE FROM rt_lookup_configs
+    WHERE table_id IN (
+      SELECT DISTINCT relation_table_id
+      FROM dw_form_table_bindings
+      WHERE form_id IN (SELECT id FROM dw_form_definitions WHERE function_unit_id = v_fu_id)
+        AND relation_table_id IS NOT NULL
+        AND relation_table_id > 0
+    );
+  DELETE FROM rt_field_definitions
+    WHERE table_id IN (
+      SELECT DISTINCT relation_table_id
+      FROM dw_form_table_bindings
+      WHERE form_id IN (SELECT id FROM dw_form_definitions WHERE function_unit_id = v_fu_id)
+        AND relation_table_id IS NOT NULL
+        AND relation_table_id > 0
+    );
+  DELETE FROM rt_table_versions
+    WHERE table_id IN (
+      SELECT DISTINCT relation_table_id
+      FROM dw_form_table_bindings
+      WHERE form_id IN (SELECT id FROM dw_form_definitions WHERE function_unit_id = v_fu_id)
+        AND relation_table_id IS NOT NULL
+        AND relation_table_id > 0
+    );
+  DELETE FROM rt_table_definitions
+    WHERE id IN (
+      SELECT DISTINCT relation_table_id
+      FROM dw_form_table_bindings
+      WHERE form_id IN (SELECT id FROM dw_form_definitions WHERE function_unit_id = v_fu_id)
+        AND relation_table_id IS NOT NULL
+        AND relation_table_id > 0
+    );
 
   DELETE FROM dw_form_table_bindings WHERE form_id IN (SELECT id FROM dw_form_definitions WHERE function_unit_id = v_fu_id);
   DELETE FROM dw_form_stage_bindings WHERE form_id IN (SELECT id FROM dw_form_definitions WHERE function_unit_id = v_fu_id);
@@ -196,6 +403,52 @@ $sqlOut += ""
 $sqlOut += $formInserts
 $sqlOut += ""
 $sqlOut += $bindingInserts
+$sqlOut += ""
+$sqlOut += "-- ---------------------------------------------------------------------------"
+$sqlOut += "-- Relation Table (rt_*) configs linked to kk (optional; may be empty)"
+$sqlOut += "-- ---------------------------------------------------------------------------"
+$sqlOut += "-- rt_table_definitions / rt_field_definitions / rt_table_versions / rt_table_access"
+if (($rtTableDefInserts -join "").Trim().Length -gt 0) {
+  $sqlOut += $rtTableDefInserts
+} else {
+  $sqlOut += "-- (no rt_table_definitions referenced by kk)"
+}
+$sqlOut += ""
+if (($rtFieldDefInserts -join "").Trim().Length -gt 0) {
+  $sqlOut += $rtFieldDefInserts
+} else {
+  $sqlOut += "-- (no rt_field_definitions referenced by kk)"
+}
+$sqlOut += ""
+if (($rtTableVersionInserts -join "").Trim().Length -gt 0) {
+  $sqlOut += $rtTableVersionInserts
+} else {
+  $sqlOut += "-- (no rt_table_versions referenced by kk)"
+}
+$sqlOut += ""
+if (($rtTableAccessInserts -join "").Trim().Length -gt 0) {
+  $sqlOut += $rtTableAccessInserts
+} else {
+  $sqlOut += "-- (no rt_table_access referenced by kk)"
+}
+$sqlOut += ""
+if (($rtViewConfigInserts -join "").Trim().Length -gt 0) {
+  $sqlOut += $rtViewConfigInserts
+} else {
+  $sqlOut += "-- (no rt_view_configs linked to kk bindings)"
+}
+$sqlOut += ""
+if (($rtViewFieldInserts -join "").Trim().Length -gt 0) {
+  $sqlOut += $rtViewFieldInserts
+} else {
+  $sqlOut += "-- (no rt_view_fields linked to kk view configs)"
+}
+$sqlOut += ""
+if (($rtLookupConfigInserts -join "").Trim().Length -gt 0) {
+  $sqlOut += $rtLookupConfigInserts
+} else {
+  $sqlOut += "-- (no rt_lookup_configs linked to kk forms)"
+}
 $sqlOut += ""
 $sqlOut += $stageBindingInserts
 $sqlOut += ""
