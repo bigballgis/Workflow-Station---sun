@@ -207,7 +207,7 @@ public class HistoryController {
     @GetMapping("/tasks")
     @Operation(summary = "Get task history", description = "Get task history by process instance ID")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getTaskHistory(
-            @Parameter(description = "Process instance ID", required = True)
+            @Parameter(description = "Process instance ID", required = true)
             @RequestParam("processInstanceId") String processInstanceId) {
         
         log.info("Getting task history for process instance: {}", processInstanceId);
@@ -286,7 +286,7 @@ public class HistoryController {
     @GetMapping("/activities")
     @Operation(summary = "Get activity history", description = "Get activity history by process instance ID")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getActivityHistory(
-            @Parameter(description = "Process instance ID", required = True)
+            @Parameter(description = "Process instance ID", required = true)
             @RequestParam("processInstanceId") String processInstanceId) {
         
         log.info("Getting activity history for process instance: {}", processInstanceId);
