@@ -147,7 +147,6 @@ const handlePageChange = () => {
 }
 
 const viewTask = (task: TaskInfo) => {
-  // 跳转到流程详情页面，携带该任务的完成时间，用于在详情页过滤历史记录
   const query: Record<string, string> = {}
   if (task.completedTime) {
     query.snapshotTime = task.completedTime
@@ -155,7 +154,13 @@ const viewTask = (task: TaskInfo) => {
   if (task.taskName) {
     query.snapshotTaskName = task.taskName
   }
-  router.push({ path: `/applications/${task.processInstanceId}`, query })
+  if (task.taskId) {
+    query.snapshotTaskId = task.taskId
+  }
+  if (task.taskDefinitionKey) {
+    query.snapshotTaskDefinitionKey = task.taskDefinitionKey
+  }
+  router.push({ path: `/tasks/${task.taskId}`, query })
 }
 
 const formatDuration = (ms: number | undefined) => {

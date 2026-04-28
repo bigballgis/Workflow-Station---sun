@@ -1544,7 +1544,11 @@ const loadFunctionUnitContent = async (processKey: string) => {
 const loadProcessAndTaskFormData = async (taskData: any) => {
   const processInstanceId = taskData.processInstanceId
   const currentTaskId = taskData.id || taskId
-  const isCompleted = taskData.endTime != null || taskData.completed === true
+  const isCompleted =
+    taskData.endTime != null ||
+    taskData.completedTime != null ||
+    taskData.completed === true ||
+    String(taskData.status || '').toUpperCase() === 'COMPLETED'
   const miSubTask = isMiSubTask(taskData)
 
   // 17.1: Load Process Form data

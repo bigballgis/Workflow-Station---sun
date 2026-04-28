@@ -155,6 +155,20 @@ public class MultiInstanceDataResolver {
             );
         }
     }
+
+    public boolean subTableExists(String subTableName) {
+        if (subTableName == null || subTableName.isBlank()) {
+            return false;
+        }
+        try {
+            String resolvedRegclass = jdbcTemplate.queryForObject(
+                "SELECT to_regclass(?)::text", String.class, subTableName);
+            return resolvedRegclass != null && !resolvedRegclass.isBlank();
+        } catch (Exception e) {
+            log.warn("检查子表是否存在失败: subTableName={}", subTableName, e);
+            return false;
+        }
+    }
     
     /**
      * 回写子任务表单数据到子表（含乐观锁校验）

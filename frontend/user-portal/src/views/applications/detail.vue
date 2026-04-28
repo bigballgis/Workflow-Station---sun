@@ -130,8 +130,8 @@
         </div>
       </template>
 
-      <!-- Form data (MI subtask skips the standalone card; form fields are shown via the sub-table Detail button dialog) -->
-      <div v-if="!currentFormIsMiSubTask" class="section form-section">
+      <!-- Form data (Completed Tasks renders the same form as To Do, but readonly) -->
+      <div v-if="showCurrentFormSection" class="section form-section">
         <div class="section-header">
           <el-icon><Document /></el-icon>
           <span>{{ currentFormName || t('applicationDetail.applicationForm') }}</span>
@@ -259,6 +259,8 @@ const processId = route.params.id as string
 const snapshotTime = route.query.snapshotTime as string | undefined
 // Snapshot task name from completed tasks entry, used to highlight that node as current
 const snapshotTaskName = route.query.snapshotTaskName as string | undefined
+const snapshotTaskId = route.query.snapshotTaskId as string | undefined
+const snapshotTaskDefinitionKey = route.query.snapshotTaskDefinitionKey as string | undefined
 
 /** Consistent with request interceptor; used to determine if the initiator is viewing their own application */
 function getPortalUserId(): string | null {
@@ -369,6 +371,7 @@ const subTaskDetailData = ref<Record<string, any>>({})
 const subTaskFormSchema = ref<any>(null)
 const subTaskFormId = ref<string | null>(null)
 const currentFormIsMiSubTask = ref(false)
+const showCurrentFormSection = computed(() => !currentFormIsMiSubTask.value || !!snapshotTaskName)
 
 const hasSubTaskFormSchema = computed(() => !!subTaskFormSchema.value)
 
@@ -407,8 +410,47 @@ function openSubTaskDetailDialog(row: any) {
   subTaskDetailVisible.value = true
 }
 
+function getCurrentFormFieldKeys(): string[] {
+  const keys = new Set<string>()
+  formFields.value.forEach((field: any) => {
+    if (field?.key) keys.add(String(field.key))
+  })
+  formTabs.value.forEach((tab: any) => {
+    ;(tab?.fields || []).forEach((field: any) => {
+      if (field?.key) keys.add(String(field.key))
+    })
+  })
+  return Array.from(keys)
+}
+
+function hydrateCurrentFormDataFromCompletedSubTaskRows() {
+  const formKeys = getCurrentFormFieldKeys()
+  if (formKeys.length === 0) return
+
+  const rows = [
+    ...subTableBindings.value.flatMap(binding => binding.data || []),
+    ...previousForms.value.flatMap(form => form.subTableBindings.flatMap(binding => binding.data || []))
+  ]
+  const viewerId = getPortalUserId()
+  const completedRows = rows.filter((row: any) => row?.task_status === 'COMPLETED')
+  const viewerRows = viewerId
+    ? completedRows.filter((row: any) => row?.assignee_user_id === viewerId)
+    : []
+  const row = (viewerRows.length > 0 ? viewerRows : completedRows)[0]
+  if (!row) return
+
+  const nextData = { ...formData.value }
+  for (const key of formKeys) {
+    if (Object.prototype.hasOwnProperty.call(row, key)) {
+      nextData[key] = row[key]
+    }
+  }
+  formData.value = nextData
+}
+
 // Flow history records
 const historyRecords = ref<HistoryRecord[]>([])
+const snapshotActivityId = ref<string | null>(snapshotTaskDefinitionKey || null)
 
 const getCurrentAssigneeDisplay = () => {
   // Direct assignee
@@ -541,8 +583,7 @@ const loadProcessDetail = async () => {
       // only the row whose task was actually completed is shown.
       if (snapshotTaskName) {
         const viewerId = getPortalUserId()
-        const initiatorId = (data.startUserId || '').trim()
-        if (viewerId && viewerId !== initiatorId) {
+        if (viewerId) {
           const filterByAssignee = (bindings: typeof subTableBindings.value) => {
             for (const binding of bindings) {
               if (binding.data && binding.data.length > 0 && hasAssignmentData(binding.data)) {
@@ -567,54 +608,12 @@ const loadProcessDetail = async () => {
             filterByAssignee(prevForm.subTableBindings)
           }
         }
+        hydrateCurrentFormDataFromCompletedSubTaskRows()
       }
 
-      // Snapshot mode (RUNNING only): compute the next node after snapshotTaskName via BPMN and mark it as current; skip for terminated processes
-      if (snapshotTaskName && data.status === 'RUNNING' && processNodes.value.length > 0 && processFlows.value.length > 0) {
-        const nextNodeName = findNextNodeName(snapshotTaskName)
-        if (nextNodeName) {
-          processInfo.value = { ...processInfo.value, currentNode: nextNodeName }
-          const nextNode = processNodes.value.find(n => n.name === nextNodeName)
-          if (nextNode) {
-            if (nextNode.type === 'end') {
-              if (isRejectedName(nextNodeName)) {
-                nextNode.status = 'rejected'
-              } else {
-                nextNode.status = 'completed'
-                if (!completedNodeIds.value.includes(nextNode.id)) {
-                  completedNodeIds.value.push(nextNode.id)
-                }
-              }
-            } else {
-              // Non-end event (e.g. next userTask): mark as current (orange)
-              nextNode.status = 'current'
-              // Remove from completed list to prevent downstream gateways from being incorrectly marked green
-              completedNodeIds.value = completedNodeIds.value.filter(id => id !== nextNode.id)
-              if (nextNode.type === 'subprocess') {
-                const childTaskIds = getSubProcessUserTaskIds(nextNode.id)
-                for (const childTaskId of childTaskIds) {
-                  const childNode = processNodes.value.find(n => n.id === childTaskId)
-                  if (childNode) {
-                    childNode.status = 'current'
-                    completedNodeIds.value = completedNodeIds.value.filter(id => id !== childTaskId)
-                  }
-                }
-              }
-              // Reset downstream nodes that were only marked completed because the current node was their predecessor
-              const downstreamIds = processFlows.value.filter(f => f.sourceRef === nextNode.id).map(f => f.targetRef)
-              for (const targetId of downstreamIds) {
-                const targetNode = processNodes.value.find(n => n.id === targetId)
-                const completedIncoming = processFlows.value.filter(f => f.targetRef === targetId && completedNodeIds.value.includes(f.sourceRef))
-                const wasOnlyCurrent = completedIncoming.length === 0 && (targetNode?.status === 'completed' || completedNodeIds.value.includes(targetId))
-                if (targetNode && wasOnlyCurrent) {
-                  targetNode.status = 'pending'
-                  completedNodeIds.value = completedNodeIds.value.filter(id => id !== targetId)
-                }
-              }
-            }
-            currentNodeId.value = nextNode.id
-          }
-        }
+      // Completed Tasks is a readonly snapshot of the completed task itself; do not advance the diagram to the next active node.
+      if (snapshotTaskName) {
+        currentNodeId.value = ''
       }
     }
   } catch (error: any) {
@@ -897,7 +896,7 @@ const parseBpmnXmlAndGetFormId = (xml: string): { formId: string | null, formNam
     const parser = new DOMParser()
     const doc = parser.parseFromString(xml, 'text/xml')
     // Snapshot mode (from Completed Tasks): use snapshotTaskName; otherwise use currentNode
-    const currentNodeName = snapshotTaskName || processInfo.value.currentNode || ''
+    const currentNodeName = snapshotActivityId.value || snapshotTaskDefinitionKey || snapshotTaskName || processInfo.value.currentNode || ''
     
     const allElements = doc.getElementsByTagName('*')
 
@@ -1186,7 +1185,8 @@ const parseBpmnXml = (xml: string) => {
     const flows: ProcessFlow[] = []
     const completed: string[] = []
     // Only enable snapshot view while process is RUNNING; show real completed state when ended (avoid orange Current Step)
-    const snapshotActive = !!(snapshotTaskName && processInfo.value.status === 'RUNNING')
+    const snapshotNodeKey = snapshotActivityId.value || snapshotTaskDefinitionKey || snapshotTaskName || ''
+    const snapshotActive = !!(snapshotNodeKey && processInfo.value.status === 'RUNNING')
 
     // Parse position info
     const positionMap = new Map()
@@ -1275,7 +1275,7 @@ const parseBpmnXml = (xml: string) => {
 
     // Detect active multi-instance subprocesses whose child tasks are still running
     const activeMultiInstanceSubProcesses = new Set<string>()
-    if (processInfo.value.status === 'RUNNING') {
+    if (processInfo.value.status === 'RUNNING' && !snapshotActive) {
       for (const [spId, sp] of subProcessMap) {
         if (!enteredSubProcesses.has(spId)) continue
         const spChildren = sp.getElementsByTagName('*')
@@ -1358,7 +1358,7 @@ const parseBpmnXml = (xml: string) => {
             userTaskCount++
             const taskName = spChildren[i].getAttribute('name') || ''
             const taskId = spChildren[i].getAttribute('id') || ''
-            if (taskName === snapshotTaskName || taskId === snapshotTaskName) {
+            if (taskName === snapshotNodeKey || taskId === snapshotNodeKey) {
               snapshotMatchesChild = true
             }
           }
@@ -1401,7 +1401,7 @@ const parseBpmnXml = (xml: string) => {
       const historyStatus = nodeStatusMap.get(name)
       if (snapshotActive) {
         // Snapshot mode: only show status up to snapshotTaskName
-        if (name === snapshotTaskName || id === snapshotTaskName) {
+        if (name === snapshotNodeKey || id === snapshotNodeKey) {
           status = 'completed'
           completed.push(id)
           foundCurrentNode = true
@@ -1475,7 +1475,9 @@ const parseBpmnXml = (xml: string) => {
       const pos = positionMap.get(spId)
 
       let spStatus: 'completed' | 'current' | 'pending' = 'pending'
-      if (enteredSubProcesses.has(spId)) {
+      if (snapshotActive && completedSnapshotSingleTaskSubProcesses.has(spId)) {
+        spStatus = 'completed'
+      } else if (enteredSubProcesses.has(spId)) {
         const childElements = sp.getElementsByTagName('*')
         let hasCurrentChild = false
         let allChildrenDone = true
@@ -1895,6 +1897,12 @@ const loadProcessHistory = async () => {
 
       // Running + snapshot: only keep records up to this task; completed processes show full history
       let filteredData = historyData
+      if (snapshotTaskId) {
+        const snapshotRecord = historyData.find((item: any) => String(item.taskId || '') === snapshotTaskId)
+        if (snapshotRecord?.activityId) {
+          snapshotActivityId.value = String(snapshotRecord.activityId)
+        }
+      }
       if (snapshotTaskName && processInfo.value.status === 'RUNNING') {
         // Find the last occurrence of snapshotTaskName in the history list (sorted by time) and truncate there
         const snapshotIdx = historyData.map((item: any) => item.activityName || item.taskName).lastIndexOf(snapshotTaskName)

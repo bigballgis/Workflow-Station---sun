@@ -35,6 +35,7 @@ import org.flowable.engine.repository.ProcessDefinition;
 import org.flowable.engine.runtime.ProcessInstance;
 import org.flowable.identitylink.api.IdentityLink;
 import org.flowable.task.api.Task;
+import org.flowable.task.api.history.HistoricTaskInstance;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -1536,8 +1537,18 @@ public class TaskManagerComponent {
             if (extendedTaskInfoOpt.isPresent()) {
                 return convertToTaskInfo(extendedTaskInfoOpt.get());
             }
+
+            // 3. Completed Tasks list may link to Flowable historic task IDs that
+            // were not mirrored into wf_extended_task_info. Return a read-only
+            // TaskInfo shape so portal /tasks/:id can reuse the To Do detail renderer.
+            HistoricTaskInstance historicTask = historyService.createHistoricTaskInstanceQuery()
+                .taskId(taskId)
+                .singleResult();
+            if (historicTask != null) {
+                return buildTaskInfoFromHistoricTask(historicTask);
+            }
             
-            // 3. 都找不到，抛出异常
+            // 4. 都找不到，抛出异常
             throw new WorkflowValidationException(Collections.singletonList(
                 new WorkflowValidationException.ValidationError(
                     "taskId", "Task not found", taskId)));
@@ -1712,6 +1723,35 @@ public class TaskManagerComponent {
             .candidateUserIds(candidateUserIds.isEmpty() ? null : candidateUserIds)
             .candidateGroupIds(candidateGroupIds.isEmpty() ? null : candidateGroupIds)
             .actionIds(extractedActionIds)
+            .build();
+    }
+
+    private TaskListResult.TaskInfo buildTaskInfoFromHistoricTask(HistoricTaskInstance task) {
+        String processDefinitionId = task.getProcessDefinitionId();
+        String processDefinitionKey = extractProcessDefinitionKey(processDefinitionId);
+        String processDefinitionName = getProcessDefinitionName(processDefinitionId);
+        String assignee = task.getAssignee();
+
+        return TaskListResult.TaskInfo.builder()
+            .taskId(task.getId())
+            .taskName(task.getName())
+            .taskDescription(task.getDescription())
+            .processInstanceId(task.getProcessInstanceId())
+            .processDefinitionId(processDefinitionId)
+            .processDefinitionKey(processDefinitionKey)
+            .processDefinitionName(processDefinitionName)
+            .taskDefinitionKey(task.getTaskDefinitionKey())
+            .currentAssignee(assignee)
+            .currentAssigneeName(StringUtils.hasText(assignee) ? resolveUserDisplayName(assignee) : null)
+            .assignmentType(StringUtils.hasText(assignee) ? AssignmentType.USER : AssignmentType.VIRTUAL_GROUP)
+            .assignmentTarget(assignee)
+            .priority(task.getPriority())
+            .createdTime(task.getCreateTime() != null
+                ? LocalDateTime.ofInstant(task.getCreateTime().toInstant(), java.time.ZoneId.systemDefault()) : null)
+            .dueDate(task.getDueDate() != null
+                ? LocalDateTime.ofInstant(task.getDueDate().toInstant(), java.time.ZoneId.systemDefault()) : null)
+            .formKey(task.getFormKey())
+            .status("COMPLETED")
             .build();
     }
 
@@ -2193,6 +2233,7 @@ public class TaskManagerComponent {
     private TaskListResult.TaskInfo convertToTaskInfo(ExtendedTaskInfo extendedTaskInfo) {
         // 获取流程定义名称
         String processDefinitionName = getProcessDefinitionName(extendedTaskInfo.getProcessDefinitionId());
+        String processDefinitionKey = extractProcessDefinitionKey(extendedTaskInfo.getProcessDefinitionId());
         
         return TaskListResult.TaskInfo.builder()
             .taskId(extendedTaskInfo.getTaskId())
@@ -2200,7 +2241,9 @@ public class TaskManagerComponent {
             .taskDescription(extendedTaskInfo.getTaskDescription())
             .processInstanceId(extendedTaskInfo.getProcessInstanceId())
             .processDefinitionId(extendedTaskInfo.getProcessDefinitionId())
+            .processDefinitionKey(processDefinitionKey)
             .processDefinitionName(processDefinitionName)
+            .taskDefinitionKey(extendedTaskInfo.getTaskDefinitionKey())
             .assignmentType(extendedTaskInfo.getAssignmentType())
             .assignmentTarget(extendedTaskInfo.getAssignmentTarget())
             .currentAssignee(extendedTaskInfo.getCurrentAssignee())
@@ -2468,6 +2511,13 @@ public class TaskManagerComponent {
                 
                 if (subTableRowId == null || subTableName == null) {
                     log.warn("多实例子任务缺少 subTableRowId/subTableName, 跳过回写: taskId={}", taskId);
+                    return;
+                }
+
+                if (!multiInstanceDataResolver.subTableExists(subTableName)
+                        && variables.containsKey("__subTables__")) {
+                    log.info("多实例子任务使用变量型子表，跳过物理表回写: taskId={}, subTableName={}, rowId={}",
+                            taskId, subTableName, subTableRowId);
                     return;
                 }
                 
