@@ -12,8 +12,8 @@ import java.util.Locale;
 public enum Language {
     
     EN("en", "English", Locale.ENGLISH),
-    ZH_CN("zh-CN", "简体中文", Locale.SIMPLIFIED_CHINESE),
-    ZH_TW("zh-TW", "繁體中文", Locale.TRADITIONAL_CHINESE);
+    ZH_CN("zh-CN", "Simplified Chinese", Locale.SIMPLIFIED_CHINESE),
+    ZH_TW("zh-TW", "Traditional Chinese", Locale.TRADITIONAL_CHINESE);
     
     private final String code;
     private final String displayName;

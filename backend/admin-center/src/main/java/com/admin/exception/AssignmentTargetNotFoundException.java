@@ -6,7 +6,7 @@ package com.admin.exception;
 public class AssignmentTargetNotFoundException extends AdminBusinessException {
 
     public AssignmentTargetNotFoundException(String targetType, String targetId) {
-        super("ASSIGNMENT_TARGET_NOT_FOUND", "分配目标不存在: targetType=" + targetType + ", targetId=" + targetId);
+        super("ASSIGNMENT_TARGET_NOT_FOUND", "Assignment target not found: targetType=" + targetType + ", targetId=" + targetId);
     }
 
     public AssignmentTargetNotFoundException(String message, Throwable cause) {

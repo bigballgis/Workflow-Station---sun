@@ -947,8 +947,8 @@ public class TaskAssignmentListener implements FlowableEventListener {
         notificationDispatchHelper.publishToUserAfterCommit(
                 userId.trim(),
                 "TASK",
-                "新任务待办",
-                String.format("您有新的待办任务「%s」。流程实例：%s", label, processInstanceId != null ? processInstanceId : "-"),
+                "New Task",
+                String.format("You have a new task \"%s\". Process: %s", label, processInstanceId != null ? processInstanceId : "-"),
                 "/tasks/" + taskId,
                 "workflow-engine");
     }
@@ -961,8 +961,8 @@ public class TaskAssignmentListener implements FlowableEventListener {
         notificationDispatchHelper.publishToUserAfterCommit(
                 userId.trim(),
                 "TASK",
-                "新的候选任务",
-                String.format("您被加入任务「%s」的候选人列表，可前往待办认领。流程实例：%s",
+                "New Candidate Task",
+                String.format("You have been added as a candidate for task \"%s\". You can claim it from your pending tasks. Process: %s",
                         label, processInstanceId != null ? processInstanceId : "-"),
                 "/tasks/" + taskId,
                 "workflow-engine");

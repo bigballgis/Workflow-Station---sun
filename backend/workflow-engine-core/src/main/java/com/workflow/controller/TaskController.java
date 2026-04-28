@@ -62,7 +62,7 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/v1/tasks")
 @RequiredArgsConstructor
-@Tag(name = "任务管理", description = "工作流任务管理API")
+    @Tag(name = "Task Management", description = "Workflow task management API")
 public class TaskController {
 
     private final TaskManagerComponent taskManagerComponent;
@@ -79,21 +79,21 @@ public class TaskController {
      * 查询任务列表
      */
     @GetMapping
-    @Operation(summary = "查询任务列表", description = "根据条件查询任务列表")
+    @Operation(summary = "Query Task List", description = "Query tasks by criteria")
     public ResponseEntity<ApiResponse<TaskListResult>> getTasks(
-            @Parameter(description = "用户ID")
+            @Parameter(description = "User ID")
             @RequestParam(value = "userId", required = false) String userId,
-            @Parameter(description = "流程实例ID")
+            @Parameter(description = "Process instance ID")
             @RequestParam(value = "processInstanceId", required = false) String processInstanceId,
-            @Parameter(description = "页码")
+            @Parameter(description = "Page number")
             @RequestParam(value = "page", defaultValue = "0") int page,
-            @Parameter(description = "每页大小")
+            @Parameter(description = "Page size")
             @RequestParam(value = "size", required = false) Integer size,
-            @Parameter(description = "虚拟组ID列表")
+            @Parameter(description = "Virtual group ID list")
             @RequestParam(value = "groupIds", required = false) List<String> groupIds,
-            @Parameter(description = "部门角色列表")
+            @Parameter(description = "Department role list")
             @RequestParam(value = "deptRoles", required = false) List<String> deptRoles,
-            @Parameter(description = "门户当前工作台业务单元（可选；用于过滤 FIXED_BU_ROLE 与 JWT 不一致的待办）")
+            @Parameter(description = "Portal current workspace business unit (optional; filters pending tasks where FIXED_BU_ROLE is inconsistent with JWT)")
             @RequestParam(value = "activeBusinessUnitId", required = false) String activeBusinessUnitId) {
         
         // Validate and sanitize inputs using security integration service
@@ -149,9 +149,9 @@ public class TaskController {
      * 获取任务详情
      */
     @GetMapping("/{taskId}")
-    @Operation(summary = "获取任务详情", description = "根据ID获取任务详情")
+    @Operation(summary = "Get Task Details", description = "Get task details by ID")
     public ResponseEntity<ApiResponse<TaskListResult.TaskInfo>> getTask(
-            @Parameter(description = "任务ID", required = true)
+            @Parameter(description = "Task ID", required = true)
             @PathVariable String taskId) {
         
         log.info("Getting task details: {}", taskId);
@@ -163,9 +163,9 @@ public class TaskController {
      * 获取任务流转历史
      */
     @GetMapping("/{taskId}/history")
-    @Operation(summary = "获取任务流转历史", description = "获取任务所属流程实例的流转历史")
+    @Operation(summary = "Get Task Flow History", description = "Get the flow history of a task's process instance")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getTaskHistory(
-            @Parameter(description = "任务ID", required = true)
+            @Parameter(description = "Task ID", required = true)
             @PathVariable String taskId) {
         
         log.info("Getting task history for task: {}", taskId);
@@ -181,9 +181,9 @@ public class TaskController {
      * 获取流程实例流转历史（通过流程实例ID）
      */
     @GetMapping("/process/{processInstanceId}/history")
-    @Operation(summary = "获取流程实例流转历史", description = "获取流程实例的完整流转历史，包含用户名称解析")
+    @Operation(summary = "Get Process Instance Flow History", description = "Get the complete flow history of a process instance with user name resolution")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getProcessInstanceHistory(
-            @Parameter(description = "流程实例ID", required = true)
+            @Parameter(description = "Process instance ID", required = true)
             @PathVariable String processInstanceId) {
         
         log.info("Getting process instance history for: {}", processInstanceId);
@@ -405,9 +405,9 @@ public class TaskController {
      * 分配任务
      */
     @PostMapping("/{taskId}/assign")
-    @Operation(summary = "分配任务", description = "将任务分配给用户或组")
+    @Operation(summary = "Assign Task", description = "Assign task to a user or group")
     public ResponseEntity<ApiResponse<TaskAssignmentResult>> assignTask(
-            @Parameter(description = "任务ID", required = true)
+            @Parameter(description = "Task ID", required = true)
             @PathVariable String taskId,
             @RequestBody @Valid TaskAssignmentRequest request) {
 
@@ -431,9 +431,9 @@ public class TaskController {
      * 认领任务
      */
     @PostMapping("/{taskId}/claim")
-    @Operation(summary = "认领任务", description = "认领虚拟组或部门角色任务")
+    @Operation(summary = "Claim Task", description = "Claim a virtual group or department role task")
     public ResponseEntity<ApiResponse<TaskAssignmentResult>> claimTask(
-            @Parameter(description = "任务ID", required = true)
+            @Parameter(description = "Task ID", required = true)
             @PathVariable String taskId,
             @RequestBody(required = false) TaskClaimRequest request) {
         
@@ -464,9 +464,9 @@ public class TaskController {
      * 委托任务
      */
     @PostMapping("/{taskId}/delegate")
-    @Operation(summary = "委托任务", description = "将任务委托给其他用户")
+    @Operation(summary = "Delegate Task", description = "Delegate task to another user")
     public ResponseEntity<ApiResponse<TaskAssignmentResult>> delegateTask(
-            @Parameter(description = "任务ID", required = true)
+            @Parameter(description = "Task ID", required = true)
             @PathVariable String taskId,
             @RequestBody @Valid TaskDelegationRequest request) {
         
@@ -491,9 +491,9 @@ public class TaskController {
      * 取消认领任务
      */
     @PostMapping("/{taskId}/unclaim")
-    @Operation(summary = "取消认领任务", description = "取消认领已认领的任务")
+    @Operation(summary = "Unclaim Task", description = "Unclaim a previously claimed task")
     public ResponseEntity<ApiResponse<TaskAssignmentResult>> unclaimTask(
-            @Parameter(description = "任务ID", required = true)
+            @Parameter(description = "Task ID", required = true)
             @PathVariable String taskId,
             @RequestBody Map<String, Object> request) {
         
@@ -516,9 +516,9 @@ public class TaskController {
      * 转办任务
      */
     @PostMapping("/{taskId}/transfer")
-    @Operation(summary = "转办任务", description = "将任务转办给其他用户")
+    @Operation(summary = "Transfer Task", description = "Transfer task to another user")
     public ResponseEntity<ApiResponse<TaskAssignmentResult>> transferTask(
-            @Parameter(description = "任务ID", required = true)
+            @Parameter(description = "Task ID", required = true)
             @PathVariable String taskId,
             @RequestBody Map<String, Object> request) {
         
@@ -545,9 +545,9 @@ public class TaskController {
      * 完成任务
      */
     @PostMapping("/{taskId}/complete")
-    @Operation(summary = "完成任务", description = "完成指定的任务")
+    @Operation(summary = "Complete Task", description = "Complete the specified task")
     public ResponseEntity<ApiResponse<TaskAssignmentResult>> completeTask(
-            @Parameter(description = "任务ID", required = true)
+            @Parameter(description = "Task ID", required = true)
             @PathVariable String taskId,
             @RequestBody Map<String, Object> request) {
         
@@ -581,9 +581,9 @@ public class TaskController {
      * 回退任务
      */
     @PostMapping("/{taskId}/return")
-    @Operation(summary = "回退任务", description = "将任务回退到指定的历史节点")
+    @Operation(summary = "Return Task", description = "Return the task to a specified historical node")
     public ResponseEntity<ApiResponse<TaskAssignmentResult>> returnTask(
-            @Parameter(description = "任务ID", required = true)
+            @Parameter(description = "Task ID", required = true)
             @PathVariable String taskId,
             @RequestBody @Valid TaskReturnRequest request) {
         
@@ -612,9 +612,9 @@ public class TaskController {
      * 获取可回退的历史节点
      */
     @GetMapping("/{taskId}/returnable-activities")
-    @Operation(summary = "获取可回退节点", description = "获取任务可以回退到的历史节点列表")
+    @Operation(summary = "Get Returnable Activities", description = "Get the list of historical nodes the task can be returned to")
     public ResponseEntity<ApiResponse<List<TaskListResult.TaskInfo>>> getReturnableActivities(
-            @Parameter(description = "任务ID", required = true)
+            @Parameter(description = "Task ID", required = true)
             @PathVariable String taskId) {
         
         log.info("Getting returnable activities for task: {}", taskId);
@@ -626,7 +626,7 @@ public class TaskController {
      * 批量完成任务
      */
     @PostMapping("/batch/complete")
-    @Operation(summary = "批量完成任务", description = "批量完成多个任务")
+    @Operation(summary = "Batch Complete Tasks", description = "Complete multiple tasks in batch")
     public ResponseEntity<ApiResponse<Map<String, Object>>> batchCompleteTasks(
             @RequestBody Map<String, Object> request) {
         
@@ -681,7 +681,7 @@ public class TaskController {
      * 统计用户任务数量
      */
     @GetMapping("/count")
-    @Operation(summary = "统计任务数量", description = "统计当前认证用户的待办任务数量（不信任查询参数中的 userId）")
+    @Operation(summary = "Count User Tasks", description = "Count pending task count for the current authenticated user (userId query param is not trusted)")
     public ResponseEntity<ApiResponse<Map<String, Object>>> countTasks() {
 
         Optional<String> actor = WorkflowActorResolver.currentUserId();
@@ -708,9 +708,9 @@ public class TaskController {
      * 返回用户所属的虚拟组ID列表和部门角色列表，用于任务查询
      */
     @GetMapping("/user-permissions")
-    @Operation(summary = "获取用户任务权限", description = "获取用户的虚拟组和角色信息，用于任务查询")
+    @Operation(summary = "Get User Task Permissions", description = "Get user's virtual group and role information for task queries")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getUserTaskPermissions(
-            @Parameter(description = "用户ID", required = true)
+            @Parameter(description = "User ID", required = true)
             @RequestParam("userId") String userId) {
         
         Optional<String> actor = WorkflowActorResolver.currentUserId();
@@ -740,11 +740,11 @@ public class TaskController {
      * 检查用户是否有任务操作权限
      */
     @GetMapping("/{taskId}/check-permission")
-    @Operation(summary = "检查任务权限", description = "检查用户是否有操作指定任务的权限")
+    @Operation(summary = "Check Task Permission", description = "Check if user has permission to operate on the specified task")
     public ResponseEntity<ApiResponse<Map<String, Object>>> checkTaskPermission(
-            @Parameter(description = "任务ID", required = true)
+            @Parameter(description = "Task ID", required = true)
             @PathVariable String taskId,
-            @Parameter(description = "用户ID", required = true)
+            @Parameter(description = "User ID", required = true)
             @RequestParam("userId") String userId) {
         
         Optional<String> actor = WorkflowActorResolver.currentUserId();
@@ -783,15 +783,15 @@ public class TaskController {
      * 这是多实例任务分发流程的第一步：前置任务处理人通过 Assign 按钮为每个子表行指定处理人。
      */
     @PostMapping("/{taskId}/sub-table-rows/{rowId}/assign")
-    @Operation(summary = "分配子表行处理人", description = "为多实例子流程的子表行分配处理人")
+    @Operation(summary = "Assign Sub-Table Row Handler", description = "Assign handler for a sub-table row in a multi-instance sub-process")
     public ResponseEntity<ApiResponse<AssignSubTableRowResponse>> assignSubTableRow(
-            @Parameter(description = "任务ID", required = true)
+            @Parameter(description = "Task ID", required = true)
             @PathVariable String taskId,
-            @Parameter(description = "子表行ID", required = true)
+            @Parameter(description = "Sub-table row ID", required = true)
             @PathVariable Long rowId,
             @RequestBody @Valid AssignSubTableRowRequest request) {
         
-        log.info("分配子表行处理人: taskId={}, rowId={}, assigneeId={}", 
+        log.info("Assigning sub-table row handler: taskId={}, rowId={}, assigneeId={}", 
             taskId, rowId, request.getAssigneeId());
         
         try {
@@ -807,7 +807,7 @@ public class TaskController {
             
             return ResponseEntity.ok(ApiResponse.success(response));
         } catch (Exception e) {
-            log.error("分配子表行处理人失败: taskId={}, rowId={}", taskId, rowId, e);
+            log.error("Failed to assign sub-table row handler: taskId={}, rowId={}", taskId, rowId, e);
             
             return ResponseEntity.badRequest().body(
                 ApiResponse.error("ASSIGN_SUBTABLE_ROW_FAILED", e.getMessage())
@@ -823,12 +823,12 @@ public class TaskController {
      * **Validates: Requirements 6.1**
      */
     @GetMapping("/{taskId}/sub-task-form-data")
-    @Operation(summary = "加载子任务表单数据", description = "加载多实例子任务的表单数据，包含主任务信息和子表数据行")
+    @Operation(summary = "Load Sub-Task Form Data", description = "Load multi-instance sub-task form data, including main task info and sub-table data rows")
     public ResponseEntity<ApiResponse<com.workflow.component.MultiInstanceDataResolver.SubTaskFormData>> getSubTaskFormData(
-            @Parameter(description = "任务ID", required = true)
+            @Parameter(description = "Task ID", required = true)
             @PathVariable String taskId) {
         
-        log.info("加载子任务表单数据: taskId={}", taskId);
+        log.info("Loading sub-task form data: taskId={}", taskId);
         
         try {
             com.workflow.component.MultiInstanceDataResolver.SubTaskFormData formData = 
@@ -836,7 +836,7 @@ public class TaskController {
             
             return ResponseEntity.ok(ApiResponse.success(formData));
         } catch (Exception e) {
-            log.error("加载子任务表单数据失败: taskId={}", taskId, e);
+            log.error("Failed to load sub-task form data: taskId={}", taskId, e);
             
             return ResponseEntity.badRequest().body(
                 ApiResponse.error("LOAD_SUBTASK_FORM_DATA_FAILED", e.getMessage())

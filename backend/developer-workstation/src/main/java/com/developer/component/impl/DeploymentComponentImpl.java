@@ -165,7 +165,7 @@ public class DeploymentComponentImpl implements DeploymentComponent {
                         pd.getBpmnXml(), functionUnitId);
                 if (!miResult.isValid()) {
                     throw new DeveloperBusinessException("MULTI_INSTANCE_VALIDATION_FAILED",
-                            "多实例配置验证失败: " + miResult.getErrors());
+                            "Multi-instance configuration validation failed: " + miResult.getErrors());
                 }
             }
             updateStep(steps, stepMultiInstance, "SUCCESS", i18nService.getMessage("deploy.multi_instance_validate_ok"));
@@ -177,7 +177,7 @@ public class DeploymentComponentImpl implements DeploymentComponent {
                 ValidationResult lastTaskTopo = processDesignComponent.validateLastTaskAssigneeTopology(pd.getBpmnXml());
                 if (!lastTaskTopo.isValid()) {
                     throw new DeveloperBusinessException("LAST_TASK_ANCHOR_TOPOLOGY_FAILED",
-                            "上一完成任务锚点拓扑校验失败: " + lastTaskTopo.getErrors());
+                            "Last completed task anchor topology validation failed: " + lastTaskTopo.getErrors());
                 }
             }
             updateStep(steps, stepLastTaskTopo, "SUCCESS", i18nService.getMessage("deploy.last_task_assignee_topology_ok"));

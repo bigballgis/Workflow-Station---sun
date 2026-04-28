@@ -6,10 +6,10 @@ package com.admin.exception;
 public class RelationTableNotFoundException extends AdminBusinessException {
 
     public RelationTableNotFoundException(Long tableId) {
-        super("RELATION_TABLE_NOT_FOUND", "Relation Table 不存在: " + tableId);
+        super("RELATION_TABLE_NOT_FOUND", "Relation Table not found: " + tableId);
     }
 
     public RelationTableNotFoundException(String tableName) {
-        super("RELATION_TABLE_NOT_FOUND", "Relation Table 不存在: " + tableName);
+        super("RELATION_TABLE_NOT_FOUND", "Relation Table not found: " + tableName);
     }
 }

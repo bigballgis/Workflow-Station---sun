@@ -23,7 +23,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/v1/monitoring")
 @RequiredArgsConstructor
-@Tag(name = "监控管理", description = "流程监控和统计分析API")
+    @Tag(name = "Monitoring", description = "Process monitoring and statistics API")
 public class MonitoringController {
 
     private final com.workflow.component.ProcessEngineComponent processEngineComponent;
@@ -32,7 +32,7 @@ public class MonitoringController {
      * 查询流程监控数据
      */
     @PostMapping("/processes/query")
-    @Operation(summary = "查询流程监控数据", description = "根据条件查询流程实例的监控数据")
+    @Operation(summary = "Query Process Monitoring Data", description = "Query process instance monitoring data by criteria")
     public ResponseEntity<ApiResponse<Map<String, Object>>> queryProcessMonitorData(
             @RequestBody Map<String, Object> request) {
         
@@ -44,9 +44,9 @@ public class MonitoringController {
      * 获取流程统计信息
      */
     @GetMapping("/processes/statistics")
-    @Operation(summary = "获取流程统计信息", description = "获取流程实例的统计分析数据")
+    @Operation(summary = "Get Process Statistics", description = "Get process instance statistics and analysis data")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getProcessStatistics(
-            @Parameter(description = "流程定义键")
+            @Parameter(description = "Process definition key")
             @RequestParam(value = "processDefinitionKey", required = false) String processDefinitionKey) {
         
         Map<String, Object> result = Map.of("statistics", "process-stats", "processDefinitionKey", processDefinitionKey);
@@ -57,9 +57,9 @@ public class MonitoringController {
      * 获取流程图状态渲染数据
      */
     @GetMapping("/processes/{processInstanceId}/diagram")
-    @Operation(summary = "获取流程图状态渲染数据", description = "获取流程实例的执行状态和路径高亮数据")
+    @Operation(summary = "Get Process Diagram Render Data", description = "Get process instance execution status and path highlighting data")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getProcessDiagramData(
-            @Parameter(description = "流程实例ID", required = true)
+            @Parameter(description = "Process instance ID", required = true)
             @PathVariable String processInstanceId) {
         
         Map<String, Object> result = Map.of("processInstanceId", processInstanceId, "diagram", "diagram-data");
@@ -70,9 +70,9 @@ public class MonitoringController {
      * 获取流程实例的当前活动节点
      */
     @GetMapping("/processes/{processInstanceId}/current-activity")
-    @Operation(summary = "获取当前活动节点", description = "获取流程实例的当前活动节点信息")
+    @Operation(summary = "Get Active Nodes", description = "Get current active node information of a process instance")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getCurrentActivity(
-            @Parameter(description = "流程实例ID", required = true)
+            @Parameter(description = "Process instance ID", required = true)
             @PathVariable String processInstanceId) {
         
         log.info("Getting current activity for process instance: {}", processInstanceId);
@@ -84,7 +84,7 @@ public class MonitoringController {
      * 查询历史数据
      */
     @PostMapping("/history/query")
-    @Operation(summary = "查询历史数据", description = "根据条件查询历史流程和任务数据")
+    @Operation(summary = "Query History Data", description = "Query historical process and task data by criteria")
     public ResponseEntity<ApiResponse<Map<String, Object>>> queryHistoryData(
             @RequestBody Map<String, Object> request) {
         
@@ -96,10 +96,10 @@ public class MonitoringController {
      * 导出历史数据
      */
     @PostMapping("/history/export")
-    @Operation(summary = "导出历史数据", description = "导出历史数据为指定格式")
+    @Operation(summary = "Export History Data", description = "Export history data in specified format")
     public ResponseEntity<ApiResponse<Map<String, Object>>> exportHistoryData(
             @RequestBody Map<String, Object> request,
-            @Parameter(description = "导出格式")
+            @Parameter(description = "Export format")
             @RequestParam(value = "exportFormat", defaultValue = "JSON") String exportFormat) {
         
         Map<String, Object> result = Map.of("exportFormat", exportFormat, "exported", true);
@@ -110,7 +110,7 @@ public class MonitoringController {
      * 系统健康检查
      */
     @GetMapping("/health")
-    @Operation(summary = "系统健康检查", description = "检查工作流引擎系统的健康状态")
+    @Operation(summary = "System Health Check", description = "Check the health status of the workflow engine system")
     public ResponseEntity<ApiResponse<Map<String, Object>>> healthCheck() {
         
         Map<String, Object> result = Map.of("healthy", true, "status", "UP");

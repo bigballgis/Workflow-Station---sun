@@ -37,7 +37,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/v1/processes")
 @RequiredArgsConstructor
-@Tag(name = "流程管理", description = "流程定义和流程实例管理API")
+@Tag(name = "Process Management", description = "Process definition and instance management API")
 public class ProcessController {
 
     private final ProcessEngineComponent processEngineComponent;
@@ -46,7 +46,7 @@ public class ProcessController {
      * 部署流程定义
      */
     @PostMapping("/definitions/deploy")
-    @Operation(summary = "部署流程定义", description = "上传BPMN文件并部署流程定义")
+    @Operation(summary = "Deploy Process Definition", description = "Upload BPMN file and deploy process definition")
     public ResponseEntity<ApiResponse<DeploymentResult>> deployProcessDefinition(
             @RequestBody @Valid ProcessDefinitionRequest request) {
         
@@ -67,11 +67,11 @@ public class ProcessController {
      * 查询流程定义列表
      */
     @GetMapping("/definitions")
-    @Operation(summary = "查询流程定义列表", description = "根据条件查询流程定义列表")
+    @Operation(summary = "List Process Definitions", description = "Query process definitions by criteria")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getProcessDefinitions(
-            @Parameter(description = "流程定义键")
+            @Parameter(description = "Process definition key")
             @RequestParam(value = "key", required = false) String key,
-            @Parameter(description = "流程分类")
+            @Parameter(description = "Process category")
             @RequestParam(value = "category", required = false) String category) {
         
         log.info("Querying process definitions: key={}, category={}", key, category);
@@ -88,7 +88,7 @@ public class ProcessController {
      * 启动流程实例
      */
     @PostMapping("/instances")
-    @Operation(summary = "启动流程实例", description = "根据流程定义启动新的流程实例")
+    @Operation(summary = "Start Process Instance", description = "Start a new process instance by process definition")
     public ResponseEntity<ApiResponse<ProcessInstanceResult>> startProcessInstance(
             @RequestBody @Valid StartProcessRequest request) {
         
@@ -110,9 +110,9 @@ public class ProcessController {
      * 获取流程实例详情
      */
     @GetMapping("/instances/{processInstanceId}")
-    @Operation(summary = "获取流程实例详情", description = "根据ID获取流程实例详情")
+    @Operation(summary = "Get Process Instance Details", description = "Get process instance details by ID")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getProcessInstance(
-            @Parameter(description = "流程实例ID", required = true)
+            @Parameter(description = "Process instance ID", required = true)
             @PathVariable String processInstanceId) {
         
         log.info("Getting process instance: {}", processInstanceId);
@@ -144,9 +144,9 @@ public class ProcessController {
      * 取消（终止）流程实例
      */
     @DeleteMapping("/instances/{processInstanceId}")
-    @Operation(summary = "取消流程实例", description = "终止运行中的流程实例")
+    @Operation(summary = "Cancel Process Instance", description = "Terminate a running process instance")
     public ResponseEntity<ApiResponse<Map<String, Object>>> cancelProcessInstance(
-            @Parameter(description = "流程实例ID", required = true)
+            @Parameter(description = "Process instance ID", required = true)
             @PathVariable String processInstanceId,
             @RequestBody(required = false) Map<String, Object> body) {
         
@@ -176,9 +176,9 @@ public class ProcessController {
      * purge 运行中与历史流程实例（功能单元版本回滚等场景，由 user-portal / 管理端编排调用）
      */
     @PostMapping("/instances/{processInstanceId}/purge")
-    @Operation(summary = "purge 流程实例", description = "删除运行中实例（若存在）并删除历史记录")
+    @Operation(summary = "Purge Process Instance", description = "Delete running instance (if exists) and remove history records")
     public ResponseEntity<ApiResponse<Map<String, Object>>> purgeProcessInstance(
-            @Parameter(description = "流程实例ID", required = true)
+            @Parameter(description = "Process instance ID", required = true)
             @PathVariable String processInstanceId) {
         log.info("Purging process instance (runtime+history): {}", processInstanceId);
         processEngineComponent.purgeProcessInstanceAndHistory(processInstanceId);
@@ -191,11 +191,11 @@ public class ProcessController {
      * 删除流程定义
      */
     @DeleteMapping("/definitions/deployments/{deploymentId}")
-    @Operation(summary = "删除流程定义", description = "根据部署ID删除流程定义")
+    @Operation(summary = "Delete Process Definition", description = "Delete process definition by deployment ID")
     public ResponseEntity<ApiResponse<Map<String, Object>>> deleteProcessDefinition(
-            @Parameter(description = "部署ID", required = true)
+            @Parameter(description = "Deployment ID", required = true)
             @PathVariable String deploymentId,
-            @Parameter(description = "是否级联删除")
+            @Parameter(description = "Cascade delete")
             @RequestParam(value = "cascade", defaultValue = "false") boolean cascade) {
         
         log.info("Deleting process definition: deploymentId={}, cascade={}", deploymentId, cascade);
@@ -209,9 +209,9 @@ public class ProcessController {
      * 暂停流程定义
      */
     @PostMapping("/definitions/{processDefinitionId}/suspend")
-    @Operation(summary = "暂停流程定义", description = "暂停指定的流程定义")
+    @Operation(summary = "Suspend Process Definition", description = "Suspend the specified process definition")
     public ResponseEntity<ApiResponse<Map<String, Object>>> suspendProcessDefinition(
-            @Parameter(description = "流程定义ID", required = true)
+            @Parameter(description = "Process definition ID", required = true)
             @PathVariable String processDefinitionId) {
         
         log.info("Suspending process definition: {}", processDefinitionId);
@@ -225,9 +225,9 @@ public class ProcessController {
      * 激活流程定义
      */
     @PostMapping("/definitions/{processDefinitionId}/activate")
-    @Operation(summary = "激活流程定义", description = "激活指定的流程定义")
+    @Operation(summary = "Activate Process Definition", description = "Activate the specified process definition")
     public ResponseEntity<ApiResponse<Map<String, Object>>> activateProcessDefinition(
-            @Parameter(description = "流程定义ID", required = true)
+            @Parameter(description = "Process definition ID", required = true)
             @PathVariable String processDefinitionId) {
         
         log.info("Activating process definition: {}", processDefinitionId);
@@ -241,9 +241,9 @@ public class ProcessController {
      * 根据流程定义 key 获取 BPMN XML
      */
     @GetMapping("/definitions/{processDefinitionKey}/bpmn")
-    @Operation(summary = "获取 BPMN XML", description = "根据流程定义 key 获取 BPMN XML 内容")
+    @Operation(summary = "Get BPMN XML", description = "Get BPMN XML content by process definition key")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getBpmnXml(
-            @Parameter(description = "流程定义 key")
+            @Parameter(description = "Process definition key")
             @PathVariable String processDefinitionKey) {
         String bpmnXml = processEngineComponent.getBpmnXml(processDefinitionKey);
         if (bpmnXml == null) {
@@ -260,9 +260,9 @@ public class ProcessController {
      * 用于检查流程是否已完成以及获取最后一个活动节点
      */
     @GetMapping("/{processInstanceId}/status")
-    @Operation(summary = "获取流程实例状态", description = "获取流程实例的当前状态，包括是否完成、最后活动节点等信息")
+    @Operation(summary = "Get Process Instance Status", description = "Get current status of a process instance, including completion status and last active node")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getProcessInstanceStatus(
-            @Parameter(description = "流程实例ID", required = true)
+            @Parameter(description = "Process instance ID", required = true)
             @PathVariable String processInstanceId) {
         
         log.info("Getting process instance status: {}", processInstanceId);

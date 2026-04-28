@@ -6,10 +6,10 @@ package com.admin.exception;
 public class FunctionUnitNotFoundException extends AdminBusinessException {
     
     public FunctionUnitNotFoundException(String functionUnitId) {
-        super("FUNCTION_UNIT_NOT_FOUND", "功能单元不存在: " + functionUnitId);
+        super("FUNCTION_UNIT_NOT_FOUND", "Function unit not found: " + functionUnitId);
     }
     
     public FunctionUnitNotFoundException(String code, String version) {
-        super("FUNCTION_UNIT_NOT_FOUND", "功能单元不存在: " + code + ":" + version);
+        super("FUNCTION_UNIT_NOT_FOUND", "Function unit not found: " + code + ":" + version);
     }
 }

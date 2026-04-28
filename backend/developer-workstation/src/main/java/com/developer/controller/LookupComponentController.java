@@ -20,13 +20,13 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/forms/{formId}/lookup-config")
 @RequiredArgsConstructor
-@Tag(name = "Lookup 组件", description = "Lookup 组件配置管理")
+    @Tag(name = "Lookup Component", description = "Lookup component configuration management")
 public class LookupComponentController {
 
     private final RelationLookupService lookupService;
 
     @GetMapping("/{componentId}")
-    @Operation(summary = "获取 Lookup 配置")
+    @Operation(summary = "Get Lookup Configuration")
     @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<RelationLookupConfig>> getLookupConfig(
             @PathVariable Long formId,
@@ -36,7 +36,7 @@ public class LookupComponentController {
     }
 
     @PutMapping("/{componentId}")
-    @Operation(summary = "保存 Lookup 配置")
+    @Operation(summary = "Save Lookup Configuration")
     @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
     public ResponseEntity<ApiResponse<RelationLookupConfig>> saveLookupConfig(
             @PathVariable Long formId,
@@ -47,7 +47,7 @@ public class LookupComponentController {
     }
 
     @GetMapping("/{componentId}/bound-views")
-    @Operation(summary = "获取已绑定的 View 列表")
+    @Operation(summary = "Get Bound Views List")
     @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<List<BoundViewDTO>>> getBoundViews(
             @PathVariable Long formId,
