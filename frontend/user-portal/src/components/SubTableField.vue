@@ -362,9 +362,11 @@ type Column = DialogColumn & {
 
 interface SubTableBinding {
   bindingId: number
+  tableId?: number | null
   bindingType: string
   bindingMode: string
   tableName: string
+  physicalTableName?: string
   tableType: string
   tableDescription: string
   columns: Column[]
@@ -448,6 +450,7 @@ const props = defineProps<{
   showFillButton?: boolean
   fillButtonLabel?: string
   linkedSubTableBindings?: SubTableBinding[]
+  suppressLinkFormInitialData?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -494,6 +497,37 @@ const linkedFormLabelWidth = computed(() => {
   return typeof width === 'string' && width.trim() ? width : '125px'
 })
 const canEditSelectedLinkBinding = computed(() => !!(props.editable && selectedLinkBinding.value?.bindingMode === 'EDITABLE'))
+
+function normalizeSubTableName(name?: string): string {
+  return String(name || '').trim().toLowerCase()
+}
+
+function subTableBindingMatches(
+  target?: { bindingId: number; tableName: string; physicalTableName?: string; tableId?: number | null } | null,
+  source?: { bindingId: number; tableName: string; physicalTableName?: string; tableId?: number | null } | null
+): boolean {
+  if (!target || !source) return false
+  if (target.bindingId === source.bindingId) return true
+  if (target.tableId != null && source.tableId != null && Number(target.tableId) === Number(source.tableId)) return true
+  const targetPhysicalName = normalizeSubTableName(target.physicalTableName)
+  const sourcePhysicalName = normalizeSubTableName(source.physicalTableName)
+  if (targetPhysicalName && sourcePhysicalName && targetPhysicalName === sourcePhysicalName) return true
+  const targetName = normalizeSubTableName(target.tableName)
+  const sourceName = normalizeSubTableName(source.tableName)
+  return !!targetName && targetName === sourceName
+}
+
+function resolveLinkedFallbackRows(binding?: SubTableBinding): any[] {
+  if (!binding) return []
+  if (Array.isArray(binding.data) && binding.data.length > 0) return binding.data
+  const sameTableBinding = props.linkedSubTableBindings?.find(item =>
+    item !== binding &&
+    Array.isArray(item.data) &&
+    item.data.length > 0 &&
+    subTableBindingMatches(item, binding)
+  )
+  return Array.isArray(sameTableBinding?.data) ? sameTableBinding.data : []
+}
 
 // Assignee column: show when assign buttons are active, OR when data already has assignee values (read-only completed tasks)
 const showAssigneeColumn = computed(() => {
@@ -542,8 +576,10 @@ function handleLinkFormClick(col: Column, row: Record<string, any>, rowIndex: nu
   const rowSub = row?.__subTables__ && typeof row.__subTables__ === 'object' ? (row.__subTables__ as Record<string, any>) : {}
   const saved = (boundId != null ? (rowSub[boundId] ?? rowSub[String(boundId)]) : undefined) ?? (boundName ? (rowSub[boundName] ?? rowSub[String(boundName)]) : undefined)
   const savedRows = Array.isArray(saved) ? saved : []
-  linkedSubTableRows.value = [...savedRows]
-  linkedFormData.value = buildLinkedFormData({ ...(binding || ({} as any)), data: savedRows })
+  const fallbackRows = resolveLinkedFallbackRows(binding)
+  const effectiveSavedRows = props.suppressLinkFormInitialData ? (savedRows.length > 0 ? savedRows : fallbackRows) : savedRows
+  linkedSubTableRows.value = [...effectiveSavedRows]
+  linkedFormData.value = buildLinkedFormData({ ...(binding || ({} as any)), data: effectiveSavedRows })
   linkFormDialogVisible.value = true
 }
 

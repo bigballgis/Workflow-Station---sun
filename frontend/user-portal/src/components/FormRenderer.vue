@@ -48,7 +48,8 @@
                                 :can-assign="!readonly && showSubTableAssignColumn(child._bindingId)"
                                 :enable-polling="enableSubTablePolling"
                                 :polling-interval="subTablePollingInterval"
-                                :linked-sub-table-bindings="subTableBindings"
+                                :linked-sub-table-bindings="linkableSubTableBindings"
+                                :suppress-link-form-initial-data="suppressLinkFormInitialData"
                                 @update:model-value="(rows: any[]) => handleSubTableUpdate(child._bindingId!, rows)"
                                 @update:linked-sub-table-data="handleSubTableUpdate"
                                 style="margin-bottom: 16px;"
@@ -131,7 +132,8 @@
                       :can-assign="!readonly && showSubTableAssignColumn(field._bindingId)"
                       :enable-polling="enableSubTablePolling"
                       :polling-interval="subTablePollingInterval"
-                      :linked-sub-table-bindings="subTableBindings"
+                      :linked-sub-table-bindings="linkableSubTableBindings"
+                      :suppress-link-form-initial-data="suppressLinkFormInitialData"
                       @update:model-value="(rows: any[]) => handleSubTableUpdate(field._bindingId!, rows)"
                       @update:linked-sub-table-data="handleSubTableUpdate"
                       style="margin-bottom: 16px;"
@@ -231,7 +233,8 @@
                             :can-assign="!readonly && showSubTableAssignColumn(child._bindingId)"
                             :enable-polling="enableSubTablePolling"
                             :polling-interval="subTablePollingInterval"
-                            :linked-sub-table-bindings="subTableBindings"
+                            :linked-sub-table-bindings="linkableSubTableBindings"
+                            :suppress-link-form-initial-data="suppressLinkFormInitialData"
                             @update:model-value="(rows: any[]) => handleSubTableUpdate(child._bindingId!, rows)"
                             @update:linked-sub-table-data="handleSubTableUpdate"
                             style="margin-bottom: 16px;"
@@ -314,7 +317,8 @@
                   :can-assign="!readonly && showSubTableAssignColumn(field._bindingId)"
                   :enable-polling="enableSubTablePolling"
                   :polling-interval="subTablePollingInterval"
-                  :linked-sub-table-bindings="subTableBindings"
+                  :linked-sub-table-bindings="linkableSubTableBindings"
+                  :suppress-link-form-initial-data="suppressLinkFormInitialData"
                   @update:model-value="(rows: any[]) => handleSubTableUpdate(field._bindingId!, rows)"
                   @update:linked-sub-table-data="handleSubTableUpdate"
                   style="margin-bottom: 16px;"
@@ -411,9 +415,11 @@ const { t } = useI18n()
 // ---------------------------------------------------------------------------
 interface SubTableBinding {
   bindingId: number
+  tableId?: number | null
   bindingType: string
   bindingMode: string
   tableName: string
+  physicalTableName?: string
   tableType: string
   tableDescription: string
   columns: any[]
@@ -431,6 +437,7 @@ interface Props {
   labelPosition?: 'left' | 'right' | 'top'
   size?: 'large' | 'default' | 'small'
   subTableBindings?: SubTableBinding[]
+  linkedSubTableBindings?: SubTableBinding[]
   previewSubTables?: boolean
   uploadUrl?: string
   // Task 7.2: BusinessLogicEngine config
@@ -444,6 +451,8 @@ interface Props {
   subTablePollingInterval?: number
   /** When false, hides the sub-table Assign button (only the "Assign Participants" task node allows assignment) */
   allowSubTableAssign?: boolean
+  /** In MI todo mode, link-form Details should open blank instead of reusing row-level historical child data. */
+  suppressLinkFormInitialData?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -454,8 +463,10 @@ const props = withDefaults(defineProps<Props>(), {
   labelPosition: 'left',
   size: 'default',
   subTableBindings: () => [],
+  linkedSubTableBindings: undefined,
   previewSubTables: false,
   allowSubTableAssign: true,
+  suppressLinkFormInitialData: false,
 })
 
 const emit = defineEmits<{
@@ -506,6 +517,7 @@ const bindingMap = computed(() => {
   for (const b of (props.subTableBindings ?? [])) map.set(b.bindingId, b)
   return map
 })
+const linkableSubTableBindings = computed(() => props.linkedSubTableBindings ?? props.subTableBindings)
 const resolveBinding = (id?: number) => {
   const binding = id != null ? bindingMap.value.get(id) : undefined
   return binding

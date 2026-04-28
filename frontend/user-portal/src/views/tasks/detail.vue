@@ -171,6 +171,8 @@
                 :label-width="prevForm.labelWidth"
                 :readonly="true"
                 :subTableBindings="prevForm.subTableBindings"
+                :linked-sub-table-bindings="linkableSubTableBindings"
+                :suppress-link-form-initial-data="isMiSubTaskMode && !isCompletedTask"
               />
             </div>
             <template v-if="previousBottomSubTableBindings(prevForm).length > 0">
@@ -182,7 +184,8 @@
                   :editable="false"
                   :show-fill-button="isMiSubTaskMode && isParticipantsBinding(binding)"
                   :fill-button-label="t('task.addParticipantInfoForm')"
-                  :linked-sub-table-bindings="prevForm.subTableBindings"
+                  :linked-sub-table-bindings="linkableSubTableBindings"
+                  :suppress-link-form-initial-data="isMiSubTaskMode && !isCompletedTask"
                   @fillForm="(row: any) => openMiFillDialog(row)"
                   @update:linked-sub-table-data="(bindingId: number, rows: any[]) => syncPreviousLinkedSubTableRows(prevForm, bindingId, rows)"
                 />
@@ -211,9 +214,11 @@
               :label-width="formLabelWidth"
               :readonly="formReadOnly"
               :subTableBindings="subTableBindings"
+              :linked-sub-table-bindings="linkableSubTableBindings"
               :preview-sub-tables="isMiSubTaskMode"
               :task-id="effectiveTaskId"
               :allow-sub-table-assign="allowSubTableAssignForCurrentTask"
+              :suppress-link-form-initial-data="isMiSubTaskMode && !isCompletedTask"
               @update:subTableData="syncMainSubTableRows"
             />
           </div>
@@ -237,7 +242,8 @@
                 :can-assign="allowSubTableAssignForCurrentTask && !formReadOnly && binding.bindingMode === 'EDITABLE' && !!effectiveTaskId && !!resolveAssigneeFieldForBinding(binding.columns, binding.tableName)"
                 :show-fill-button="isMiSubTaskMode && !formReadOnly"
                 :fill-button-label="isParticipantsBinding(binding) ? t('task.addParticipantInfoForm') : undefined"
-                :linked-sub-table-bindings="subTableBindings"
+                :linked-sub-table-bindings="linkableSubTableBindings"
+                :suppress-link-form-initial-data="isMiSubTaskMode && !isCompletedTask"
                 @update:model-value="(rows: any[]) => syncMainSubTableRows(binding.bindingId, rows)"
                 @update:linked-sub-table-data="syncMainSubTableRows"
                 @fillForm="(row: any) => openMiFillDialog(row)"
@@ -574,6 +580,7 @@ interface PreviousFormEntry {
     bindingMode: string
     foreignKeyField: string | null
     tableName: string
+    physicalTableName?: string
     tableType: string
     tableDescription: string
     columns: Array<{ field: string; label: string; type?: string; props?: Record<string, any> }>
@@ -592,6 +599,7 @@ const subTableBindings = ref<Array<{
   bindingMode: string
   foreignKeyField: string | null
   tableName: string
+  physicalTableName?: string
   tableType: string
   tableDescription: string
   columns: Array<{ field: string; label: string; type?: string; props?: Record<string, any> }>
@@ -641,6 +649,11 @@ const bottomSubTableBindings = computed(() =>
   subTableBindings.value.filter(b => !placedBindingIds.value.has(b.bindingId) && !linkBoundBindingIds.value.has(b.bindingId))
 )
 
+const linkableSubTableBindings = computed(() => [
+  ...subTableBindings.value,
+  ...previousForms.value.flatMap(form => form.subTableBindings)
+])
+
 function collectPlacedBindingIds(fields: any[]): Set<number> {
   const ids = new Set<number>()
   const collect = (items: any[]) => items.forEach((f: any) => {
@@ -665,9 +678,12 @@ function normalizeSubTableName(name?: string): string {
 }
 
 function subTableBindingMatches(
-  target: { bindingId: number; tableName: string; tableId?: number | null },
-  source: { bindingId: number; tableName: string; tableId?: number | null }
+  target: { bindingId: number; tableName: string; physicalTableName?: string; tableId?: number | null },
+  source: { bindingId: number; tableName: string; physicalTableName?: string; tableId?: number | null }
 ): boolean {
+  const targetPhysicalName = normalizeSubTableName(target.physicalTableName)
+  const sourcePhysicalName = normalizeSubTableName(source.physicalTableName)
+  if (targetPhysicalName && sourcePhysicalName && targetPhysicalName === sourcePhysicalName) return true
   const targetName = normalizeSubTableName(target.tableName)
   const sourceName = normalizeSubTableName(source.tableName)
   const samePhysicalTable = target.tableId != null && source.tableId != null && Number(target.tableId) === Number(source.tableId)
@@ -694,7 +710,7 @@ function syncMainSubTableRows(bindingId: number, rows: any[]) {
   if (!source) return
 
   const nextRows = Array.isArray(rows) ? rows : []
-  const sync = (binding: { bindingId: number; tableName: string; tableId?: number | null; data: any[] }) => {
+  const sync = (binding: { bindingId: number; tableName: string; physicalTableName?: string; tableId?: number | null; data: any[] }) => {
     if (subTableBindingMatches(binding, source)) {
       binding.data = binding === source ? nextRows : cloneSubTableRows(nextRows)
     }
@@ -1306,6 +1322,7 @@ const loadFunctionUnitContent = async (processKey: string) => {
           bindingMode: b.bindingMode,
           foreignKeyField: b.foreignKeyField,
           tableName: b.tableDisplayName || b.tableName,
+          physicalTableName: b.tableName,
           tableType: b.tableType,
           tableDescription: b.tableDescription,
           columns,
@@ -1408,7 +1425,7 @@ const loadFunctionUnitContent = async (processKey: string) => {
             const subFormDesign = resolveSubFormDesign(b, prevSubForms)
             const binding = {
               bindingId: b.bindingId, tableId: b.tableId ?? null, bindingType: b.bindingType, bindingMode: b.bindingMode,
-              foreignKeyField: b.foreignKeyField, tableName: b.tableDisplayName || b.tableName,
+              foreignKeyField: b.foreignKeyField, tableName: b.tableDisplayName || b.tableName, physicalTableName: b.tableName,
               tableType: b.tableType, tableDescription: b.tableDescription, columns: cols,
               formFields: subFormDesign.formFields,
               formOptions: subFormDesign.formOptions,
@@ -1508,7 +1525,7 @@ const loadFunctionUnitContent = async (processKey: string) => {
                 const savedSubTables = formData.value.__subTables__
                 const binding = {
                   bindingId: b.bindingId, bindingType: b.bindingType, bindingMode: b.bindingMode,
-                  foreignKeyField: b.foreignKeyField, tableName: b.tableDisplayName || b.tableName,
+                  foreignKeyField: b.foreignKeyField, tableName: b.tableDisplayName || b.tableName, physicalTableName: b.tableName,
                   tableType: b.tableType, tableDescription: b.tableDescription, columns: cols, data: [] as any[]
                 }
                 if (savedSubTables) {
