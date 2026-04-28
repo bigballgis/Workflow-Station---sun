@@ -506,27 +506,8 @@ const bindingMap = computed(() => {
   for (const b of (props.subTableBindings ?? [])) map.set(b.bindingId, b)
   return map
 })
-const missingBindingLogKeys = new Set<string>()
-const agentDebugLog = (runId: string, hypothesisId: string, location: string, message: string, data: Record<string, any>) => {
-  fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'b88427' }, body: JSON.stringify({ sessionId: 'b88427', runId, hypothesisId, location, message, data, timestamp: Date.now() }) }).catch(() => {})
-}
 const resolveBinding = (id?: number) => {
   const binding = id != null ? bindingMap.value.get(id) : undefined
-  if (id != null && !binding) {
-    const key = `${id}:${(props.subTableBindings ?? []).map(item => item.bindingId).join(',')}`
-    if (!missingBindingLogKeys.has(key)) {
-      missingBindingLogKeys.add(key)
-      // #region agent log
-      agentDebugLog('subform-copy-initial', 'S2', 'FormRenderer.vue:493', 'missing subtable binding for rendered subTable field', {
-        requestedBindingId: id,
-        availableBindingIds: (props.subTableBindings ?? []).map(item => item.bindingId),
-        fieldCount: props.fields?.length || 0,
-        tabCount: props.tabs?.length || 0,
-        readonly: props.readonly
-      })
-      // #endregion
-    }
-  }
   return binding
 }
 

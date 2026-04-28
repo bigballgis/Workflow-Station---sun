@@ -21,6 +21,7 @@
     @close="handleClose"
   >
     <el-form
+      :key="dialogKey"
       ref="formRef"
       :model="formData"
       :rules="formRules"
@@ -360,7 +361,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed, shallowRef, onBeforeUnmount, inject } from 'vue'
+import { ref, watch, computed, shallowRef, onBeforeUnmount, inject, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Upload } from '@element-plus/icons-vue'
 import type { FormInstance } from 'element-plus'
@@ -396,16 +397,7 @@ const emit = defineEmits<{
 const formRef = ref<FormInstance>()
 const formData = ref<Record<string, any>>({})
 const uploadNames = ref<Record<string, string>>({})
-
-const agentDebugLog = (runId: string, hypothesisId: string, location: string, message: string, data: Record<string, any>) => {
-  fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'b88427' }, body: JSON.stringify({ sessionId: 'b88427', runId, hypothesisId, location, message, data, timestamp: Date.now() }) }).catch(() => {})
-}
-
-function assigneeLikeFields(): string[] {
-  return props.columns
-    .map(col => col.field)
-    .filter(field => /assignee|处理人|負責人|经办人|經辦人/i.test(String(field)))
-}
+const dialogKey = ref(0)
 
 // ─── Signature canvas state ───────────────────────────────────────────────────
 const signatureCanvasRefs = ref<Record<string, HTMLCanvasElement>>({})
@@ -605,53 +597,64 @@ function validateColumns(): boolean {
   return allValid
 }
 
+function initDialogFormState(trigger: 'open' | 'data-change') {
+  if (!props.visible) return
+  // Force re-mount on open to reset internal control state.
+  if (trigger === 'open') dialogKey.value += 1
+  uploadNames.value = {}
+  columnErrors.value = {}
+  // Fetch department tree if any column is of type 'department'
+  if (props.columns.some(c => c.type === 'department')) {
+    fetchDepartmentTree()
+  }
+  if (props.mode === 'edit' && props.initialData) {
+    // Deep-clone to avoid mutating the original row
+    formData.value = { ...buildInitialRow(props.columns), ...JSON.parse(JSON.stringify(props.initialData)) }
+    // Back-fill upload file names from URL
+    for (const col of props.columns) {
+      if (col.type === 'upload' && formData.value[col.field]) {
+        const url: string = formData.value[col.field]
+        uploadNames.value[col.field] = url.split('/').pop() || url
+      }
+    }
+  } else {
+    formData.value = buildInitialRow(props.columns)
+  }
+
+  // Element Plus Form keeps some per-field state; ensure each init starts clean.
+  nextTick(() => {
+    formRef.value?.clearValidate()
+  })
+}
+
 // Initialise / reset form whenever dialog opens
 watch(
   () => props.visible,
   (open) => {
     if (!open) return
-    uploadNames.value = {}
-    columnErrors.value = {}
-    // Fetch department tree if any column is of type 'department'
-    if (props.columns.some(c => c.type === 'department')) {
-      fetchDepartmentTree()
-    }
-    if (props.mode === 'edit' && props.initialData) {
-      // Deep-clone to avoid mutating the original row
-      formData.value = { ...buildInitialRow(props.columns), ...JSON.parse(JSON.stringify(props.initialData)) }
-      // Back-fill upload file names from URL
-      for (const col of props.columns) {
-        if (col.type === 'upload' && formData.value[col.field]) {
-          const url: string = formData.value[col.field]
-          uploadNames.value[col.field] = url.split('/').pop() || url
-        }
-      }
-    } else {
-      formData.value = buildInitialRow(props.columns)
-    }
-    const fields = assigneeLikeFields()
-    // #region agent log
-    agentDebugLog('pre-fix', 'H1,H2', 'SubTableAddDialog.vue:597', 'record dialog initialized form data', {
-      mode: props.mode,
-      columnCount: props.columns.length,
-      assigneeLikeFields: fields,
-      initialDataKeys: props.initialData ? Object.keys(props.initialData) : [],
-      initialDataHasAssigneeLikeValue: fields.some(field =>
-        props.initialData?.[field] != null && props.initialData?.[field] !== ''
-      ),
-      initializedHasAssigneeLikeValue: fields.some(field =>
-        formData.value[field] != null && formData.value[field] !== ''
-      ),
-      initializedHasAssignmentDisplayName: !!formData.value.assignee_display_name
-    })
-    // #endregion
+    initDialogFormState('open')
   },
   { immediate: false }
 )
 
+// Also re-init while visible if caller swaps initialData/mode without fully closing.
+watch(
+  () => [props.mode, props.initialData] as const,
+  () => {
+    if (!props.visible) return
+    initDialogFormState('data-change')
+  },
+  { deep: false }
+)
+
 function handleClose() {
   destroyEditors()
-  formRef.value?.resetFields()
+  // Avoid resetFields(): it resets to the first-mounted "initial model" snapshot and
+  // can leak previous values between different row edits. We explicitly reset our model.
+  uploadNames.value = {}
+  columnErrors.value = {}
+  formData.value = buildInitialRow(props.columns)
+  formRef.value?.clearValidate()
   emit('update:visible', false)
 }
 

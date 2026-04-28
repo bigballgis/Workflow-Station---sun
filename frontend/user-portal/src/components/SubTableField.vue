@@ -465,19 +465,6 @@ const uploadNames = ref<Record<string, string>>({})
 // Set of keys currently being downloaded
 const downloadingKeys = ref<Record<string, boolean>>({})
 
-const agentDebugLog = (runId: string, hypothesisId: string, location: string, message: string, data: Record<string, any>) => {
-  const payload = JSON.stringify({ sessionId: 'b88427', runId, hypothesisId, location, message, data, timestamp: Date.now() })
-  fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'b88427' }, body: payload }).catch(() => {
-    try { navigator.sendBeacon('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', new Blob([payload], { type: 'application/json' })) } catch {}
-  })
-}
-
-function assigneeLikeFields(): string[] {
-  return props.columns
-    .map(col => col.field)
-    .filter(field => /assignee|处理人|負責人|经办人|經辦人/i.test(String(field)))
-}
-
 // Dialog state
 const dialogVisible = ref(false)
 const dialogMode = ref<'add' | 'edit'>('add')
@@ -507,30 +494,6 @@ const linkedFormLabelWidth = computed(() => {
   return typeof width === 'string' && width.trim() ? width : '125px'
 })
 const canEditSelectedLinkBinding = computed(() => !!(props.editable && selectedLinkBinding.value?.bindingMode === 'EDITABLE'))
-
-watch(linkFormDialogVisible, async (visible) => {
-  if (!visible) return
-  await nextTick()
-  requestAnimationFrame(() => {
-    const panel = linkFormModalPanelRef.value
-    if (!panel) return
-    const overlay = panel.closest('.link-form-modal-overlay')
-    const pr = panel.getBoundingClientRect()
-    const vh = window.innerHeight
-    const centerY = pr.top + pr.height / 2
-    // #region agent log
-    agentDebugLog('post-fix', 'H-vert,H-footer', 'SubTableField.vue:linkFormModalLayout', 'link form modal layout metrics', {
-      panelTop: Math.round(pr.top),
-      panelHeight: Math.round(pr.height),
-      viewportH: vh,
-      distanceFromViewportVerticalCenter: Math.round(Math.abs(centerY - vh / 2)),
-      overlayAlignItems: overlay instanceof HTMLElement ? getComputedStyle(overlay).alignItems : 'n/a',
-      canEditLinkBinding: canEditSelectedLinkBinding.value,
-      linkedFormFieldCount: linkedFormFields.value.length
-    })
-    // #endregion
-  })
-})
 
 // Assignee column: show when assign buttons are active, OR when data already has assignee values (read-only completed tasks)
 const showAssigneeColumn = computed(() => {
@@ -567,54 +530,7 @@ function getSummaryMethod({ columns: tableCols }: { columns: any[] }) {
 
 watch(() => props.modelValue, (v) => { rows.value = v ? [...v] : [] }, { immediate: true, deep: true })
 
-watch(
-  () => [props.title, props.columns, props.modelValue] as const,
-  () => {
-    const linkColumns = props.columns.filter(col => col.type === 'linkForm')
-    if (!linkColumns.length) return
-    // #region agent log
-    agentDebugLog('link-form-popup-pre-fix', 'R1,R3', 'SubTableField.vue:421', 'linkForm columns and row payload available', {
-      title: props.title,
-      rowCount: rows.value.length,
-      linkColumns: linkColumns.map(col => ({
-        field: col.field,
-        label: col.label,
-        props: {
-          linkText: col.props?.linkText,
-          componentId: col.props?.componentId,
-          boundSubTableBindingId: col.props?.boundSubTableBindingId,
-          boundSubTableName: col.props?.boundSubTableName
-        }
-      })),
-      firstRowKeys: rows.value[0] && typeof rows.value[0] === 'object' ? Object.keys(rows.value[0]) : [],
-      firstRowSubTableKeys: rows.value[0]?.__subTables__ && typeof rows.value[0].__subTables__ === 'object'
-        ? Object.keys(rows.value[0].__subTables__)
-        : []
-    })
-    // #endregion
-  },
-  { immediate: true, deep: true }
-)
-
 function handleLinkFormClick(col: Column, row: Record<string, any>, rowIndex: number) {
-  // #region agent log
-  agentDebugLog('link-form-popup-pre-fix', 'R1,R2,R3', 'SubTableField.vue:450', 'linkForm clicked', {
-    title: props.title,
-    rowIndex,
-    column: {
-      field: col.field,
-      label: col.label,
-      props: {
-        linkText: col.props?.linkText,
-        componentId: col.props?.componentId,
-        boundSubTableBindingId: col.props?.boundSubTableBindingId,
-        boundSubTableName: col.props?.boundSubTableName
-      }
-    },
-    rowKeys: row && typeof row === 'object' ? Object.keys(row) : [],
-    rowSubTableKeys: row?.__subTables__ && typeof row.__subTables__ === 'object' ? Object.keys(row.__subTables__) : []
-  })
-  // #endregion
   activeLinkColumn.value = col
   activeLinkRowIndex.value = rowIndex
   const binding = props.linkedSubTableBindings?.find(item =>
@@ -682,17 +598,6 @@ function saveLinkedFormData() {
     return base
   })
 
-  // #region agent log
-  agentDebugLog('post-fix', 'H-persist,H-isolation', 'SubTableField.vue:saveLinkedFormData', 'link form saved into main row __subTables__ and emitted update:modelValue', {
-    title: props.title,
-    linkRowIndex,
-    boundId,
-    boundName,
-    savedRowSubTableKeys: nextMainRows[linkRowIndex]?.__subTables__ ? Object.keys(nextMainRows[linkRowIndex].__subTables__) : [],
-    savedLinkedRowCount: Array.isArray(currentRows) ? currentRows.length : -1
-  })
-  // #endregion
-
   emit('update:modelValue', nextMainRows)
   linkFormDialogVisible.value = false
 }
@@ -756,18 +661,6 @@ function handleAdd() {
   dialogMode.value = 'add'
   dialogInitialData.value = undefined
   editingRowIndex.value = null
-  // #region agent log
-  agentDebugLog('pre-fix', 'H1,H2', 'SubTableField.vue:444', 'open add record dialog', {
-    title: props.title,
-    rowCount: rows.value.length,
-    columnCount: props.columns.length,
-    assigneeFieldPropPresent: !!props.assigneeField,
-    assigneeLikeFields: assigneeLikeFields(),
-    previousRowHasAssigneeLikeValue: rows.value.some(row =>
-      assigneeLikeFields().some(field => row?.[field] != null && row?.[field] !== '')
-    )
-  })
-  // #endregion
   dialogVisible.value = true
 }
 
@@ -775,22 +668,6 @@ function openEditDialog(i: number) {
   dialogMode.value = 'edit'
   editingRowIndex.value = i
   dialogInitialData.value = { ...rows.value[i] }
-  const fields = assigneeLikeFields()
-  // #region agent log
-  agentDebugLog('pre-fix', 'H1,H2', 'SubTableField.vue:451', 'open edit record dialog', {
-    title: props.title,
-    rowIndex: i,
-    rowCount: rows.value.length,
-    columnCount: props.columns.length,
-    assigneeFieldPropPresent: !!props.assigneeField,
-    assigneeLikeFields: fields,
-    initialDataKeys: Object.keys(dialogInitialData.value || {}),
-    initialDataHasAssigneeLikeValue: fields.some(field =>
-      dialogInitialData.value?.[field] != null && dialogInitialData.value?.[field] !== ''
-    ),
-    hasAssignmentDisplayName: !!dialogInitialData.value?.assignee_display_name
-  })
-  // #endregion
   dialogVisible.value = true
 }
 
@@ -1100,15 +977,29 @@ async function refreshSubTableData() {
     const result = response.data || response
     
     if (result.rows && Array.isArray(result.rows)) {
-      // Merge the refreshed data with existing rows
-      const updatedRows = rows.value.map(existingRow => {
-        const refreshedRow = result.rows.find((r: any) => r.id === existingRow.id)
+      // Merge the refreshed data with existing rows.
+      // IMPORTANT: do NOT match by `id` when missing/undefined, or the first refreshed row
+      // can be merged into every row, causing cross-row field leakage (e.g. assignee).
+      const refreshedRows = result.rows as Array<Record<string, any>>
+      const refreshedByPk = new Map<string | number, Record<string, any>>()
+      for (const r of refreshedRows) {
+        const pk = resolveSubTableRowPk(r)
+        if (pk != null && pk !== '') refreshedByPk.set(pk, r)
+      }
+
+      const updatedRows = rows.value.map((existingRow, idx) => {
+        const pk = resolveSubTableRowPk(existingRow)
+        const refreshedRow =
+          (pk != null && refreshedByPk.get(pk)) ||
+          null
         if (refreshedRow) {
-          // Update assignee and status fields while preserving other data
-          return {
-            ...existingRow,
-            ...refreshedRow
-          }
+          return { ...existingRow, ...refreshedRow }
+        }
+        // Fallback: if no PKs are available, only merge by index when both sides exist.
+        // This is safer than "undefined id" matching.
+        const byIndex = refreshedRows[idx]
+        if (pk == null && byIndex && resolveSubTableRowPk(byIndex) == null) {
+          return { ...existingRow, ...byIndex }
         }
         return existingRow
       })

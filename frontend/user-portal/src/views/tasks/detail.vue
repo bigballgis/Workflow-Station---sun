@@ -515,13 +515,6 @@ const router = useRouter()
 
 const taskId = route.params.id as string
 
-const agentDebugLog = (runId: string, hypothesisId: string, location: string, message: string, data: Record<string, any>) => {
-  const payload = JSON.stringify({ sessionId: 'b88427', runId, hypothesisId, location, message, data, timestamp: Date.now() })
-  fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'b88427' }, body: payload }).catch(() => {
-    try { navigator.sendBeacon('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', new Blob([payload], { type: 'application/json' })) } catch {}
-  })
-}
-
 const loading = ref(true)
 const submitting = ref(false)
 const savingTaskForm = ref(false)
@@ -868,30 +861,6 @@ function isolateMiSubTaskData(taskData: any) {
   const myRowId = Number(currentItem.rowId)
   if (Number.isNaN(myRowId)) return
 
-  // #region agent log
-  agentDebugLog('pre-fix', 'H4,H5', 'tasks/detail.vue:759', 'before MI subtask row isolation', {
-    myRowId,
-    formDataSubTableKeys: formData.value.__subTables__ ? Object.keys(formData.value.__subTables__) : [],
-    currentBindings: subTableBindings.value.map(binding => ({
-      bindingId: binding.bindingId,
-      tableId: binding.tableId,
-      tableName: binding.tableName,
-      rows: binding.data?.length || 0,
-      rowKeySets: (binding.data || []).slice(0, 3).map((row: any) => Object.keys(row || {}))
-    })),
-    previousForms: previousForms.value.map(form => ({
-      formName: form.formName,
-      bindings: form.subTableBindings.map(binding => ({
-        bindingId: binding.bindingId,
-        tableId: binding.tableId,
-        tableName: binding.tableName,
-        rows: binding.data?.length || 0,
-        rowKeySets: (binding.data || []).slice(0, 3).map((row: any) => Object.keys(row || {}))
-      }))
-    }))
-  })
-  // #endregion
-
   // Multi-instance data isolation: each sub-task only sees its own participant row.
   for (const binding of subTableBindings.value) {
     const rows = Array.isArray(binding.data) ? binding.data : []
@@ -952,44 +921,11 @@ function isolateMiSubTaskData(taskData: any) {
   }
 
   formData.value = cleanedFormData
-  // #region agent log
-  agentDebugLog('pre-fix', 'H4,H5', 'tasks/detail.vue:825', 'after MI subtask row isolation', {
-    myRowId,
-    formDataKeys: Object.keys(formData.value),
-    formDataSubTableKeys: formData.value.__subTables__ ? Object.keys(formData.value.__subTables__) : [],
-    currentBindings: subTableBindings.value.map(binding => ({
-      bindingId: binding.bindingId,
-      tableId: binding.tableId,
-      tableName: binding.tableName,
-      rows: binding.data?.length || 0
-    })),
-    previousForms: previousForms.value.map(form => ({
-      formName: form.formName,
-      bindings: form.subTableBindings.map(binding => ({
-        bindingId: binding.bindingId,
-        tableId: binding.tableId,
-        tableName: binding.tableName,
-        rows: binding.data?.length || 0
-      }))
-    }))
-  })
-  // #endregion
 }
 
 function openMiFillDialog(row: any) {
   miFillDialogData.value = { ...formData.value }
   miFillSubTableBindings.value = cloneSubTableBindings(subTableBindings.value)
-  // #region agent log
-  agentDebugLog('subform-copy-initial', 'S3,S4', 'tasks/detail.vue:826', 'open MI fill dialog data summary', {
-    rowKeys: row && typeof row === 'object' ? Object.keys(row) : [],
-    rowSubTableKeys: row?.__subTables__ ? Object.keys(row.__subTables__) : [],
-    formDataSubTableKeys: formData.value.__subTables__ ? Object.keys(formData.value.__subTables__) : [],
-    clonedBindingIds: miFillSubTableBindings.value.map(binding => binding.bindingId),
-    clonedBindingRowCounts: miFillSubTableBindings.value.map(binding => ({ bindingId: binding.bindingId, rows: binding.data?.length || 0 })),
-    placedBindingIds: Array.from(placedBindingIds.value),
-    isMiSubTaskMode: isMiSubTaskMode.value
-  })
-  // #endregion
   miFillDialogReadOnly.value = false
   miFillDialogVisible.value = true
 }
@@ -1048,15 +984,6 @@ async function saveMiFillDialog() {
   }
 
   const nextFormData = { ...formData.value, ...miFillDialogData.value, __subTables__: subTables }
-  // #region agent log
-  agentDebugLog('subform-copy-initial', 'S4,S5', 'tasks/detail.vue:884', 'save MI fill dialog payload summary', {
-    miDialogSubTableKeys: miFillDialogData.value.__subTables__ ? Object.keys(miFillDialogData.value.__subTables__) : [],
-    outputSubTableKeys: Object.keys(subTables),
-    subTableDataKeys: Object.keys(subTableData),
-    bindingRowCounts: miFillSubTableBindings.value.map(binding => ({ bindingId: binding.bindingId, rows: binding.data?.length || 0 })),
-    nextFormDataKeys: Object.keys(nextFormData)
-  })
-  // #endregion
 
   submitting.value = true
   try {
@@ -1226,42 +1153,6 @@ const loadTaskDetail = async () => {
           const val = formData.value[key]
           return val != null && val !== '' && val !== false
         })
-        // #region agent log
-        agentDebugLog('subform-copy-initial', 'S1,S3', 'tasks/detail.vue:1040', 'MI subtask detail mode summary after isolation', {
-          formKeys,
-          miFilled: miFilled.value,
-          formDataKeys: Object.keys(formData.value),
-          formDataSubTableKeys: formData.value.__subTables__ ? Object.keys(formData.value.__subTables__) : [],
-          subTableBindingIds: subTableBindings.value.map(binding => binding.bindingId),
-          bottomBindingIds: bottomSubTableBindings.value.map(binding => binding.bindingId),
-          placedBindingIds: Array.from(placedBindingIds.value)
-        })
-        // #endregion
-        // #region agent log
-        agentDebugLog('post-main-render-fix', 'R1,R2,R3', 'tasks/detail.vue:1124', 'MI subtask render path summary', {
-          currentFormName: currentFormName.value,
-          fieldTypes: formFields.value.map((field: any) => ({
-            type: field.type,
-            label: field.label,
-            bindingId: field._bindingId,
-            children: Array.isArray(field.children) ? field.children.map((child: any) => ({ type: child.type, label: child.label, bindingId: child._bindingId })) : []
-          })),
-          tabFieldTypes: formTabs.value.map((tab: any) => ({
-            label: tab.label,
-            fields: (tab.fields || []).map((field: any) => ({ type: field.type, label: field.label, bindingId: field._bindingId }))
-          })),
-          subTableBindings: subTableBindings.value.map(binding => ({
-            bindingId: binding.bindingId,
-            tableId: binding.tableId,
-            tableName: binding.tableName,
-            bindingMode: binding.bindingMode,
-            columnTypes: binding.columns.map(column => ({ field: column.field, label: column.label, type: column.type })),
-            rows: binding.data.length
-          })),
-          placedBindingIds: Array.from(placedBindingIds.value),
-          bottomBindingIds: bottomSubTableBindings.value.map(binding => binding.bindingId)
-        })
-        // #endregion
       }
     }
   } catch (error: any) {
@@ -1454,32 +1345,6 @@ const loadFunctionUnitContent = async (processKey: string) => {
         }
       })
       subTableBindings.value = bindings
-      // #region agent log
-      agentDebugLog('subform-copy-initial', 'S1,S2,S3', 'tasks/detail.vue:1227', 'task detail form and subtable binding summary', {
-        selectedFormName: selectedForm.name,
-        sourceId: selectedForm.sourceId,
-        formFieldCount: formFields.value.length,
-        tabCount: formTabs.value.length,
-        placedBindingIds: Array.from(placedBindingIds.value),
-        bindingIds: bindings.map(binding => binding.bindingId),
-        bindingRowCounts: bindings.map(binding => ({
-          bindingId: binding.bindingId,
-          tableId: binding.tableId,
-          tableName: binding.tableName,
-          rows: binding.data?.length || 0,
-          columns: binding.columns?.length || 0,
-          linkColumns: binding.columns
-            ?.filter((column: any) => column.type === 'linkForm')
-            .map((column: any) => ({
-              field: column.field,
-              label: column.label,
-              props: column.props
-            })) || []
-        })),
-        savedSubTableKeys: savedSubTables && typeof savedSubTables === 'object' ? Object.keys(savedSubTables) : [],
-        currentTaskDefinitionKey: taskInfo.value.taskDefinitionKey
-      })
-      // #endregion
       // Collect all distinct forms bound to nodes before the current one (read-only display)
       // Only consider when the current node successfully matched its own form
       if (content.processes?.length > 0 && (currentFormInfo.formId || currentFormInfo.formName)) {
@@ -1568,32 +1433,6 @@ const loadFunctionUnitContent = async (processKey: string) => {
 
         previousForms.value = collectedPrevForms
         hydrateCurrentSubTablesFromPreviousForms()
-        // #region agent log
-        agentDebugLog('pre-fix', 'H3,H4,H5', 'tasks/detail.vue:1358', 'previous forms and current subtable hydration summary', {
-          selectedFormName: selectedForm.name,
-          currentFormInfo,
-          previousFormNames: previousForms.value.map(form => form.formName),
-          previousBindings: previousForms.value.map(form => ({
-            formName: form.formName,
-            bindings: form.subTableBindings.map(binding => ({
-              bindingId: binding.bindingId,
-              tableId: binding.tableId,
-              tableName: binding.tableName,
-              rows: binding.data?.length || 0,
-              columns: binding.columns?.length || 0,
-              rowKeySets: (binding.data || []).slice(0, 3).map((row: any) => Object.keys(row || {}))
-            }))
-          })),
-          currentBindings: subTableBindings.value.map(binding => ({
-            bindingId: binding.bindingId,
-            tableId: binding.tableId,
-            tableName: binding.tableName,
-            rows: binding.data?.length || 0,
-            columns: binding.columns?.length || 0
-          })),
-          formDataSubTableKeys: formData.value.__subTables__ ? Object.keys(formData.value.__subTables__) : []
-        })
-        // #endregion
       } else {
         previousForms.value = []
       }
