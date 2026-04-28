@@ -38,6 +38,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * 任务创建时按 BPMN 扩展属性 {@code assigneeType} 等解析处理人。
@@ -84,6 +86,9 @@ public class TaskAssignmentListener implements FlowableEventListener {
     private NotificationDispatchHelper notificationDispatchHelper;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private static final ObjectMapper USER_REF_OBJECT_MAPPER = new ObjectMapper();
+    private static final Pattern UUID_PATTERN = Pattern.compile(
+            "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}");
 
     @Override
     public void onEvent(FlowableEvent event) {
@@ -437,6 +442,102 @@ public class TaskAssignmentListener implements FlowableEventListener {
         return null;
     }
 
+    private static String normalizeFlowableUserIdValue(Object raw) {
+        if (raw == null) {
+            return null;
+        }
+        String id;
+        if (raw instanceof Map<?, ?> m) {
+            id = extractUserIdFromRefMap(m);
+        } else if (raw instanceof Number n) {
+            double d = n.doubleValue();
+            if (Double.isFinite(d) && Math.floor(d) == d) {
+                id = String.valueOf(n.longValue());
+            } else {
+                id = n.toString();
+            }
+        } else {
+            id = extractUserIdFromString(String.valueOf(raw));
+        }
+        if (id == null) {
+            return null;
+        }
+        String t = id.trim();
+        if (t.isEmpty() || "null".equalsIgnoreCase(t)) {
+            return null;
+        }
+        if (t.length() > FLOWABLE_IDENTITY_USER_ID_MAX) {
+            log.warn("ELEMENT_VARIABLE: skip assignee id longer than {} chars (Flowable identity link limit)",
+                    FLOWABLE_IDENTITY_USER_ID_MAX);
+            return null;
+        }
+        return t;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static String extractUserIdFromString(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        String value = raw.trim();
+        if (value.isEmpty()) {
+            return value;
+        }
+        String mapLikeId = extractUserIdFromMapLikeString(value);
+        if (mapLikeId != null) {
+            return mapLikeId;
+        }
+        if (value.startsWith("\"")) {
+            try {
+                Object parsed = USER_REF_OBJECT_MAPPER.readValue(value, Object.class);
+                if (parsed instanceof String parsedString) {
+                    return extractUserIdFromString(parsedString);
+                }
+            } catch (Exception ignored) {
+                // Not a JSON string literal; try the generic UUID fallback below.
+            }
+        }
+        if (value.startsWith("{") || value.startsWith("[")) {
+            try {
+                Object parsed = USER_REF_OBJECT_MAPPER.readValue(value, Object.class);
+                if (parsed instanceof Map<?, ?> map) {
+                    String id = extractUserIdFromRefMap(map);
+                    return id != null ? id : value;
+                }
+                if (parsed instanceof List<?> list && !list.isEmpty()) {
+                    Object first = list.get(0);
+                    if (first instanceof Map<?, ?> map) {
+                        String id = extractUserIdFromRefMap(map);
+                        return id != null ? id : value;
+                    }
+                    return first != null ? String.valueOf(first).trim() : value;
+                }
+            } catch (Exception ignored) {
+                // Not JSON, keep the original string.
+            }
+        }
+        Matcher matcher = UUID_PATTERN.matcher(value);
+        if (matcher.find()) {
+            return matcher.group();
+        }
+        return value;
+    }
+
+    private static String extractUserIdFromMapLikeString(String value) {
+        if (value == null || !value.startsWith("{") || !value.endsWith("}") || !value.contains("=")) {
+            return null;
+        }
+        for (String key : new String[]{"id", "userId", "user_id", "value"}) {
+            Matcher matcher = Pattern.compile("(?i)(^|[,\\{]\\s*)" + Pattern.quote(key) + "\\s*=\\s*([^,}]+)")
+                    .matcher(value);
+            if (matcher.find()) {
+                String id = matcher.group(2).trim();
+                return id.isEmpty() || "null".equalsIgnoreCase(id) ? null : id;
+            }
+        }
+        return null;
+    }
+
     private static List<String> sanitizeFlowableUserIds(List<String> ids) {
         if (ids == null || ids.isEmpty()) {
             return ids;
@@ -574,6 +675,17 @@ public class TaskAssignmentListener implements FlowableEventListener {
                         assigneeFieldFromBpmn = getExtensionProperty(userTask, "assigneeField");
                     }
                 }
+                // Flowable's in-memory BpmnModel can miss designer custom properties. Keep this
+                // aligned with TaskManagerComponent orphan repair, which reads the deployed XML.
+                subTableId = firstNonBlank(subTableId,
+                        bpmnActionParser.getUserTaskExtensionPropertyValue(processDefinitionId, taskDefinitionKey,
+                                "subTableId"));
+                subTableName = firstNonBlank(subTableName,
+                        bpmnActionParser.getUserTaskExtensionPropertyValue(processDefinitionId, taskDefinitionKey,
+                                "subTableName"));
+                assigneeFieldFromBpmn = firstNonBlank(assigneeFieldFromBpmn,
+                        bpmnActionParser.getUserTaskExtensionPropertyValue(processDefinitionId, taskDefinitionKey,
+                                "assigneeField"));
             }
 
             // 与门户 buildParticipantsCollection、子表列名对齐：优先 BPMN assigneeField，其次 assigneeId，再次 assignee_user_id
@@ -593,7 +705,13 @@ public class TaskAssignmentListener implements FlowableEventListener {
                 return;
             }
 
-            String assigneeId = String.valueOf(assigneeIdObj);
+            String assigneeId = normalizeFlowableUserIdValue(assigneeIdObj);
+            if (assigneeId == null || assigneeId.isBlank()) {
+                log.warn("ELEMENT_VARIABLE: cannot normalize assignee id from currentItem for task {} (assigneeField={}, rawType={})",
+                        taskId, assigneeFieldFromBpmn,
+                        assigneeIdObj != null ? assigneeIdObj.getClass().getSimpleName() : "null");
+                return;
+            }
 
             try {
                 taskService.setAssignee(taskId, assigneeId);

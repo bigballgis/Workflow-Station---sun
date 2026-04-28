@@ -485,6 +485,33 @@ const findNextNodeName = (taskName: string): string | null => {
   return candidates[0]
 }
 
+const getSubProcessUserTaskIds = (subProcessId: string): string[] => {
+  if (!bpmnXml.value || !subProcessId) return []
+  try {
+    const parser = new DOMParser()
+    const doc = parser.parseFromString(bpmnXml.value, 'text/xml')
+    const allElements = doc.getElementsByTagName('*')
+    for (let i = 0; i < allElements.length; i++) {
+      const el = allElements[i]
+      const localName = el.localName || el.nodeName.split(':').pop()
+      if (localName !== 'subProcess' || el.getAttribute('id') !== subProcessId) continue
+      const childIds: string[] = []
+      const children = el.getElementsByTagName('*')
+      for (let j = 0; j < children.length; j++) {
+        const childLocalName = children[j].localName || children[j].nodeName.split(':').pop()
+        if (childLocalName === 'userTask') {
+          const childId = children[j].getAttribute('id')
+          if (childId) childIds.push(childId)
+        }
+      }
+      return childIds
+    }
+  } catch (error) {
+    console.warn('Failed to resolve subprocess user tasks:', error)
+  }
+  return []
+}
+
 // Load process details
 const loadProcessDetail = async () => {
   loading.value = true
@@ -563,6 +590,16 @@ const loadProcessDetail = async () => {
               nextNode.status = 'current'
               // Remove from completed list to prevent downstream gateways from being incorrectly marked green
               completedNodeIds.value = completedNodeIds.value.filter(id => id !== nextNode.id)
+              if (nextNode.type === 'subprocess') {
+                const childTaskIds = getSubProcessUserTaskIds(nextNode.id)
+                for (const childTaskId of childTaskIds) {
+                  const childNode = processNodes.value.find(n => n.id === childTaskId)
+                  if (childNode) {
+                    childNode.status = 'current'
+                    completedNodeIds.value = completedNodeIds.value.filter(id => id !== childTaskId)
+                  }
+                }
+              }
               // Reset downstream nodes that were only marked completed because the current node was their predecessor
               const downstreamIds = processFlows.value.filter(f => f.sourceRef === nextNode.id).map(f => f.targetRef)
               for (const targetId of downstreamIds) {
@@ -1269,7 +1306,6 @@ const parseBpmnXml = (xml: string) => {
         }
       }
     }
-
     // Completed multi-instance subprocesses: entered MI subprocesses where all child userTasks are done
     const completedMultiInstanceSubProcesses = new Set<string>()
     for (const [spId, sp] of subProcessMap) {
@@ -1359,6 +1395,7 @@ const parseBpmnXml = (xml: string) => {
       const pos = positionMap.get(id)
 
       let status: 'completed' | 'current' | 'pending' | 'rejected' = 'pending'
+      const parentSpId = getParentSubProcessId(task)
 
       // Prefer status from history records
       const historyStatus = nodeStatusMap.get(name)
@@ -1387,6 +1424,10 @@ const parseBpmnXml = (xml: string) => {
         if (status === 'completed' || status === 'rejected') {
           completed.push(id)
         }
+      } else if (parentSpId && activeMultiInstanceSubProcesses.has(parentSpId)) {
+        status = 'current'
+        currentNodeId.value = id
+        foundCurrentNode = true
       } else if (processInfo.value.status === 'COMPLETED') {
         // Process completed: only mark nodes that were actually executed (matched via history records)
         const historyMatch = historyRecords.value.find(h => h.nodeName === name || h.nodeId === id)
@@ -1416,7 +1457,6 @@ const parseBpmnXml = (xml: string) => {
       
       nodes.push({ id, name, type: 'task', status, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
     })
-    
     // Parse service tasks
     doc.querySelectorAll('serviceTask').forEach((task, index) => {
       const id = task.getAttribute('id') || `service_${index}`
@@ -1477,10 +1517,13 @@ const parseBpmnXml = (xml: string) => {
       const id = gateway.getAttribute('id') || `gateway_${index}`
       const name = gateway.getAttribute('name') || ''
       const pos = positionMap.get(id)
+      const parentSpId = getParentSubProcessId(gateway)
       
       // Determine gateway status from history records
-      let status: 'completed' | 'pending' = 'pending'
-      if (snapshotActive) {
+      let status: 'completed' | 'current' | 'pending' = 'pending'
+      if (parentSpId && activeMultiInstanceSubProcesses.has(parentSpId)) {
+        status = 'current'
+      } else if (snapshotActive) {
         // Snapshot mode: check if the gateway incoming nodes are completed
         if (completedNodeNames.has(name)) {
           status = 'completed'

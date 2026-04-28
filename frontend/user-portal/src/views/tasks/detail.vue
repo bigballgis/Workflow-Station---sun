@@ -468,6 +468,11 @@ const userStore = useUserStore()
 const router = useRouter()
 
 const taskId = route.params.id as string
+
+const agentDebugLog = (runId: string, hypothesisId: string, location: string, message: string, data: Record<string, any>) => {
+  fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '619bad' }, body: JSON.stringify({ sessionId: '619bad', runId, hypothesisId, location, message, data, timestamp: Date.now() }) }).catch(() => {})
+}
+
 const loading = ref(true)
 const submitting = ref(false)
 const savingTaskForm = ref(false)
@@ -823,6 +828,17 @@ function isolateMiSubTaskData(taskData: any) {
 function openMiFillDialog(row: any) {
   miFillDialogData.value = { ...formData.value }
   miFillSubTableBindings.value = cloneSubTableBindings(subTableBindings.value)
+  // #region agent log
+  agentDebugLog('subform-copy-initial', 'S3,S4', 'tasks/detail.vue:826', 'open MI fill dialog data summary', {
+    rowKeys: row && typeof row === 'object' ? Object.keys(row) : [],
+    rowSubTableKeys: row?.__subTables__ ? Object.keys(row.__subTables__) : [],
+    formDataSubTableKeys: formData.value.__subTables__ ? Object.keys(formData.value.__subTables__) : [],
+    clonedBindingIds: miFillSubTableBindings.value.map(binding => binding.bindingId),
+    clonedBindingRowCounts: miFillSubTableBindings.value.map(binding => ({ bindingId: binding.bindingId, rows: binding.data?.length || 0 })),
+    placedBindingIds: Array.from(placedBindingIds.value),
+    isMiSubTaskMode: isMiSubTaskMode.value
+  })
+  // #endregion
   miFillDialogReadOnly.value = false
   miFillDialogVisible.value = true
 }
@@ -881,6 +897,15 @@ async function saveMiFillDialog() {
   }
 
   const nextFormData = { ...formData.value, ...miFillDialogData.value, __subTables__: subTables }
+  // #region agent log
+  agentDebugLog('subform-copy-initial', 'S4,S5', 'tasks/detail.vue:884', 'save MI fill dialog payload summary', {
+    miDialogSubTableKeys: miFillDialogData.value.__subTables__ ? Object.keys(miFillDialogData.value.__subTables__) : [],
+    outputSubTableKeys: Object.keys(subTables),
+    subTableDataKeys: Object.keys(subTableData),
+    bindingRowCounts: miFillSubTableBindings.value.map(binding => ({ bindingId: binding.bindingId, rows: binding.data?.length || 0 })),
+    nextFormDataKeys: Object.keys(nextFormData)
+  })
+  // #endregion
 
   submitting.value = true
   try {
@@ -1036,6 +1061,17 @@ const loadTaskDetail = async () => {
           const val = formData.value[key]
           return val != null && val !== '' && val !== false
         })
+        // #region agent log
+        agentDebugLog('subform-copy-initial', 'S1,S3', 'tasks/detail.vue:1040', 'MI subtask detail mode summary after isolation', {
+          formKeys,
+          miFilled: miFilled.value,
+          formDataKeys: Object.keys(formData.value),
+          formDataSubTableKeys: formData.value.__subTables__ ? Object.keys(formData.value.__subTables__) : [],
+          subTableBindingIds: subTableBindings.value.map(binding => binding.bindingId),
+          bottomBindingIds: bottomSubTableBindings.value.map(binding => binding.bindingId),
+          placedBindingIds: Array.from(placedBindingIds.value)
+        })
+        // #endregion
       }
     }
   } catch (error: any) {
@@ -1224,6 +1260,19 @@ const loadFunctionUnitContent = async (processKey: string) => {
         }
       })
       subTableBindings.value = bindings
+      // #region agent log
+      agentDebugLog('subform-copy-initial', 'S1,S2,S3', 'tasks/detail.vue:1227', 'task detail form and subtable binding summary', {
+        selectedFormName: selectedForm.name,
+        sourceId: selectedForm.sourceId,
+        formFieldCount: formFields.value.length,
+        tabCount: formTabs.value.length,
+        placedBindingIds: Array.from(placedBindingIds.value),
+        bindingIds: bindings.map(binding => binding.bindingId),
+        bindingRowCounts: bindings.map(binding => ({ bindingId: binding.bindingId, rows: binding.data?.length || 0, columns: binding.columns?.length || 0 })),
+        savedSubTableKeys: savedSubTables && typeof savedSubTables === 'object' ? Object.keys(savedSubTables) : [],
+        currentTaskDefinitionKey: taskInfo.value.taskDefinitionKey
+      })
+      // #endregion
       // Collect all distinct forms bound to nodes before the current one (read-only display)
       // Only consider when the current node successfully matched its own form
       if (content.processes?.length > 0 && (currentFormInfo.formId || currentFormInfo.formName)) {

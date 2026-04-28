@@ -25,9 +25,6 @@ import org.springframework.web.client.RestTemplate;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 
 import jakarta.servlet.http.HttpServletResponse;
 
@@ -208,13 +205,6 @@ public class TaskController {
             @PathVariable Long rowId,
             @RequestBody @Valid SubTableRowAssignRequest request,
             @CurrentUserId String userId) {
-        // #region agent log
-        appendDebugLog("H4-controller-hit", "TaskController.assignSubTableRow", String.format(
-                "\"taskIdLen\":%d,\"rowId\":%d,\"assigneeIdLen\":%d",
-                taskId != null ? taskId.length() : 0,
-                rowId != null ? rowId : -1L,
-                request.getAssigneeId() != null ? request.getAssigneeId().length() : 0));
-        // #endregion
         Map<String, Object> data = taskProcessComponent.assignSubTableRow(taskId, rowId, request.getAssigneeId(), userId,
                 SecurityContextUtils.getCurrentUsername().orElse(null));
         return ApiResponse.success(data);
@@ -226,14 +216,6 @@ public class TaskController {
             @PathVariable String taskId,
             @RequestBody @Valid SubTableRowAssignByIdentityRequest request,
             @CurrentUserId String userId) {
-        // #region agent log
-        appendDebugLog("H17-assign-by-identity", "TaskController.assignSubTableRowByIdentity", String.format(
-                "\"taskIdLen\":%d,\"hasEmail\":%s,\"hasName\":%s,\"hasDept\":%s",
-                taskId != null ? taskId.length() : 0,
-                String.valueOf(request.getEmail() != null && !request.getEmail().isBlank()),
-                String.valueOf(request.getName() != null && !request.getName().isBlank()),
-                String.valueOf(request.getDepartment() != null && !request.getDepartment().isBlank())));
-        // #endregion
         Map<String, Object> data = taskProcessComponent.assignSubTableRowByIdentity(
                 taskId,
                 request.getAssigneeId(),
@@ -251,25 +233,9 @@ public class TaskController {
     @Operation(summary = "查询主任务子表数据（代理 workflow-engine）")
     @GetMapping("/{taskId}/sub-table-data/all")
     public ApiResponse<Map<String, Object>> getSubTableDataAll(@PathVariable String taskId) {
-        // #region agent log
-        appendDebugLog("H11-subdata-proxy", "TaskController.getSubTableDataAll",
-                String.format("\"taskIdLen\":%d", taskId != null ? taskId.length() : 0));
-        // #endregion
         return workflowEngineClient.getSubTableDataAll(taskId)
                 .map(ApiResponse::success)
                 .orElseGet(() -> ApiResponse.error("502", "Failed to fetch sub-table data from workflow engine"));
-    }
-
-    private void appendDebugLog(String hypothesisId, String location, String dataJson) {
-        // #region agent log
-        try {
-            String line = String.format(
-                    "{\"sessionId\":\"97dc8c\",\"runId\":\"run1\",\"hypothesisId\":\"%s\",\"location\":\"%s\",\"message\":\"controller hit\",\"data\":{%s},\"timestamp\":%d}%n",
-                    hypothesisId, location, dataJson, System.currentTimeMillis());
-            Files.writeString(Path.of(".cursor", "debug-97dc8c.log"), line, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-        } catch (Exception ignored) {
-        }
-        // #endregion
     }
 
     /**

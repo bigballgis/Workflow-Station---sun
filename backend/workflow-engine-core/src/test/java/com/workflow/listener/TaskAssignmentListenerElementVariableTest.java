@@ -2,6 +2,7 @@ package com.workflow.listener;
 
 import com.workflow.entity.ExtendedTaskInfo;
 import com.workflow.enums.AssignmentType;
+import com.workflow.component.BpmnActionParser;
 import com.workflow.repository.ExtendedTaskInfoRepository;
 import com.workflow.service.TaskAssigneeResolver;
 import org.flowable.bpmn.model.BpmnModel;
@@ -55,6 +56,9 @@ class TaskAssignmentListenerElementVariableTest {
     
     @Mock
     private RepositoryService repositoryService;
+
+    @Mock
+    private BpmnActionParser bpmnActionParser;
     
     @Mock
     private ExtendedTaskInfoRepository extendedTaskInfoRepository;
@@ -84,6 +88,7 @@ class TaskAssignmentListenerElementVariableTest {
             injectField("taskService", taskService);
             injectField("runtimeService", runtimeService);
             injectField("repositoryService", repositoryService);
+            injectField("bpmnActionParser", bpmnActionParser);
             injectField("extendedTaskInfoRepository", extendedTaskInfoRepository);
         } catch (Exception e) {
             throw new RuntimeException("Failed to inject mocks", e);
@@ -179,6 +184,40 @@ class TaskAssignmentListenerElementVariableTest {
             String extProps = captor.getValue().getExtendedProperties();
             assertThat(extProps).contains("\"subTableRowId\":102");
             assertThat(extProps).contains("\"subTableRowVersion\":2");
+        }
+
+        @Test
+        @DisplayName("应该从已部署 BPMN XML 回退读取 assigneeField")
+        void shouldUseDeployedXmlAssigneeFieldFallback() {
+            // Given
+            TaskEntity task = createMockTask();
+            when(task.getAssignee()).thenReturn(null);
+            when(task.getExecutionId()).thenReturn(EXECUTION_ID);
+
+            BpmnModel bpmnModel = createBpmnModelWithElementVariable(SUB_TABLE_ID, SUB_TABLE_NAME);
+            when(repositoryService.getBpmnModel(PROCESS_DEFINITION_ID)).thenReturn(bpmnModel);
+            when(bpmnActionParser.getUserTaskExtensionPropertyValue(
+                    eq(PROCESS_DEFINITION_ID), eq(TASK_DEFINITION_KEY), anyString()))
+                .thenAnswer(invocation -> "assigneeField".equals(invocation.getArgument(2))
+                    ? "reviewer_user_id"
+                    : null);
+
+            Map<String, Object> currentItem = new HashMap<>();
+            currentItem.put("rowId", 109L);
+            currentItem.put("reviewer_user_id", "user-from-deployed-xml");
+            currentItem.put("rowVersion", 1L);
+            when(runtimeService.getVariable(EXECUTION_ID, "currentItem")).thenReturn(currentItem);
+
+            FlowableEntityEventImpl event = createTaskCreatedEvent(task);
+
+            // When
+            listener.onEvent(event);
+
+            // Then
+            verify(taskService).setAssignee(TASK_ID, "user-from-deployed-xml");
+            ArgumentCaptor<ExtendedTaskInfo> captor = ArgumentCaptor.forClass(ExtendedTaskInfo.class);
+            verify(extendedTaskInfoRepository).save(captor.capture());
+            assertThat(captor.getValue().getAssignmentTarget()).isEqualTo("user-from-deployed-xml");
         }
         
         @Test

@@ -1559,20 +1559,28 @@ public class TaskProcessComponent {
 
         List<Map<String, Object>> collection = new java.util.ArrayList<>();
         List<Integer> emptyAssigneeRows = new java.util.ArrayList<>();
+        java.util.Set<String> seenRows = new java.util.LinkedHashSet<>();
         for (int i = 0; i < allRows.size(); i++) {
             Map<String, Object> row = allRows.get(i);
             Object rowId = row.get("rowId");
             if (rowId == null) rowId = row.get("id");
             Object assigneeValue = row.get(assigneeField);
+            String assigneeText = assigneeValue != null ? String.valueOf(assigneeValue).trim() : "";
+            if (assigneeText.isEmpty()) {
+                emptyAssigneeRows.add(i + 1);
+                continue;
+            }
+            String rowKey = rowId != null
+                    ? "row:" + String.valueOf(rowId).trim()
+                    : "assignee:" + assigneeText;
+            if (!seenRows.add(rowKey)) {
+                continue;
+            }
 
             Map<String, Object> item = new HashMap<>();
             item.put("rowId", rowId != null ? rowId : null);
             // assigneeField 字段的值存入集合元素，供 Flowable 多实例 assigneeExpression 使用
-            item.put(assigneeField, assigneeValue != null ? String.valueOf(assigneeValue).trim() : null);
-
-            if (assigneeValue == null || String.valueOf(assigneeValue).trim().isEmpty()) {
-                emptyAssigneeRows.add(i + 1);
-            }
+            item.put(assigneeField, assigneeText);
 
             collection.add(item);
         }

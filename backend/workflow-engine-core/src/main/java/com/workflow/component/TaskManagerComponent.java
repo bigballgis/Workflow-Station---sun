@@ -50,6 +50,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * 任务管理组件
@@ -60,6 +62,10 @@ import java.util.Optional;
 @Component
 @Transactional
 public class TaskManagerComponent {
+
+    private static final ObjectMapper USER_REF_OBJECT_MAPPER = new ObjectMapper();
+    private static final Pattern UUID_PATTERN = Pattern.compile(
+            "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}");
 
     @Autowired
     private TaskService taskService;
@@ -500,8 +506,8 @@ public class TaskManagerComponent {
                 if (assigneeObj == null) {
                     continue;
                 }
-                String assigneeId = String.valueOf(assigneeObj).trim();
-                if (assigneeId.isEmpty() || "null".equals(assigneeId)) {
+                String assigneeId = normalizeFlowableUserIdValue(assigneeObj);
+                if (assigneeId == null || assigneeId.isBlank()) {
                     continue;
                 }
                 taskService.setAssignee(t.getId(), assigneeId);
@@ -511,6 +517,119 @@ public class TaskManagerComponent {
                 log.warn("Repair orphan MI task {} failed: {}", t.getId(), ex.getMessage());
             }
         }
+    }
+
+    private static String normalizeFlowableUserIdValue(Object raw) {
+        if (raw == null) {
+            return null;
+        }
+        String id;
+        if (raw instanceof java.util.Map<?, ?> m) {
+            id = null;
+            for (String k : new String[]{"id", "userId", "user_id", "value"}) {
+                Object v = m.get(k);
+                if (v != null) {
+                    String s = String.valueOf(v).trim();
+                    if (!s.isEmpty()) {
+                        id = s;
+                        break;
+                    }
+                }
+            }
+            if (id == null) {
+                id = String.valueOf(raw);
+            }
+        } else {
+            id = extractUserIdFromString(String.valueOf(raw));
+        }
+        if (id == null) {
+            return null;
+        }
+        String t = id.trim();
+        if (t.isEmpty() || "null".equalsIgnoreCase(t)) {
+            return null;
+        }
+        if (t.length() > 255) {
+            log.warn("Repair orphan MI task: skip assignee id longer than 255 chars");
+            return null;
+        }
+        return t;
+    }
+
+    private static String extractUserIdFromString(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        String value = raw.trim();
+        if (value.isEmpty()) {
+            return value;
+        }
+        String mapLikeId = extractUserIdFromMapLikeString(value);
+        if (mapLikeId != null) {
+            return mapLikeId;
+        }
+        if (value.startsWith("\"")) {
+            try {
+                Object parsed = USER_REF_OBJECT_MAPPER.readValue(value, Object.class);
+                if (parsed instanceof String parsedString) {
+                    return extractUserIdFromString(parsedString);
+                }
+            } catch (Exception ignored) {
+                // Not a JSON string literal; try the generic UUID fallback below.
+            }
+        }
+        if (value.startsWith("{") || value.startsWith("[")) {
+            try {
+                Object parsed = USER_REF_OBJECT_MAPPER.readValue(value, Object.class);
+                if (parsed instanceof java.util.Map<?, ?> map) {
+                    String id = extractUserIdFromRefMap(map);
+                    return id != null ? id : value;
+                }
+                if (parsed instanceof List<?> list && !list.isEmpty()) {
+                    Object first = list.get(0);
+                    if (first instanceof java.util.Map<?, ?> map) {
+                        String id = extractUserIdFromRefMap(map);
+                        return id != null ? id : value;
+                    }
+                    return first != null ? String.valueOf(first).trim() : value;
+                }
+            } catch (Exception ignored) {
+                // Not JSON, keep the original string.
+            }
+        }
+        Matcher matcher = UUID_PATTERN.matcher(value);
+        if (matcher.find()) {
+            return matcher.group();
+        }
+        return value;
+    }
+
+    private static String extractUserIdFromMapLikeString(String value) {
+        if (value == null || !value.startsWith("{") || !value.endsWith("}") || !value.contains("=")) {
+            return null;
+        }
+        for (String key : new String[]{"id", "userId", "user_id", "value"}) {
+            Matcher matcher = Pattern.compile("(?i)(^|[,\\{]\\s*)" + Pattern.quote(key) + "\\s*=\\s*([^,}]+)")
+                    .matcher(value);
+            if (matcher.find()) {
+                String id = matcher.group(2).trim();
+                return id.isEmpty() || "null".equalsIgnoreCase(id) ? null : id;
+            }
+        }
+        return null;
+    }
+
+    private static String extractUserIdFromRefMap(java.util.Map<?, ?> map) {
+        for (String k : new String[]{"id", "userId", "user_id", "value"}) {
+            Object v = map.get(k);
+            if (v != null) {
+                String s = String.valueOf(v).trim();
+                if (!s.isEmpty()) {
+                    return s;
+                }
+            }
+        }
+        return null;
     }
 
     /**

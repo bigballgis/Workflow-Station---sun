@@ -33,11 +33,6 @@ public class ProcessController {
     private final I18nService i18nService;
     private final FunctionUnitAccessComponent functionUnitAccessComponent;
 
-    // #region agent log
-    @jakarta.annotation.PostConstruct
-    void debugInit() { try { var logPath = java.nio.file.Path.of(System.getProperty("user.dir")).resolve("debug-cfebf0.log"); var w = new java.io.FileWriter(logPath.toFile(), true); w.write("{\"sessionId\":\"cfebf0\",\"hypothesisId\":\"init\",\"location\":\"ProcessController:init\",\"message\":\"ProcessController instrumentation active\",\"data\":{\"cwd\":\"" + System.getProperty("user.dir").replace("\\\\","\\\\\\\\") + "\"},\"timestamp\":" + System.currentTimeMillis() + "}\n"); w.close(); log.info("Debug cfebf0 instrumentation active, log path: {}", logPath); } catch (Exception ignored) {} }
-    // #endregion
-
     @GetMapping("/definitions")
     @Operation(summary = "获取可发起的流程定义列表")
     public ApiResponse<List<ProcessDefinitionInfo>> getDefinitions(
@@ -206,9 +201,6 @@ public class ProcessController {
         ProcessInstanceInfo detail = processComponent.getProcessDetail(processId);
         if (detail != null && userId != null) {
             boolean isParticipant = processComponent.isProcessParticipant(userId, detail);
-            // #region agent log
-            try { var logPath = java.nio.file.Path.of(System.getProperty("user.dir")).resolve("debug-cfebf0.log"); var w = new java.io.FileWriter(logPath.toFile(), true); w.write("{\"sessionId\":\"cfebf0\",\"hypothesisId\":\"A-fix\",\"location\":\"ProcessController:getProcessDetail\",\"message\":\"participant check post-fix\",\"data\":{\"userId\":\"" + userId + "\",\"processId\":\"" + processId + "\",\"startUserId\":\"" + detail.getStartUserId() + "\",\"currentAssignee\":\"" + detail.getCurrentAssignee() + "\",\"candidateUsers\":\"" + detail.getCandidateUsers() + "\",\"status\":\"" + detail.getStatus() + "\",\"isParticipant\":" + isParticipant + "},\"timestamp\":" + System.currentTimeMillis() + "}\n"); w.close(); } catch (Exception ignored) {}
-            // #endregion
             if (!isParticipant) {
                 log.warn("User {} attempted to access process {} without being a participant", userId, processId);
                 return ApiResponse.error("403", "You are not a participant of this process");
@@ -307,9 +299,6 @@ public class ProcessController {
             ProcessInstanceInfo detail = processComponent.getProcessDetail(processId);
             if (detail != null) {
                 boolean isParticipant = processComponent.isProcessParticipant(userId, detail);
-                // #region agent log
-                try { var logPath = java.nio.file.Path.of(System.getProperty("user.dir")).resolve("debug-cfebf0.log"); var w = new java.io.FileWriter(logPath.toFile(), true); w.write("{\"sessionId\":\"cfebf0\",\"hypothesisId\":\"B-fix\",\"location\":\"ProcessController:getProcessHistory\",\"message\":\"participant check history post-fix\",\"data\":{\"userId\":\"" + userId + "\",\"processId\":\"" + processId + "\",\"isParticipant\":" + isParticipant + "},\"timestamp\":" + System.currentTimeMillis() + "}\n"); w.close(); } catch (Exception ignored) {}
-                // #endregion
                 if (!isParticipant) {
                     log.warn("User {} attempted to access process history {} without being a participant", userId, processId);
                     return ApiResponse.error("403", "You are not a participant of this process");

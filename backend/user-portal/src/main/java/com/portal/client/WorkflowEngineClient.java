@@ -21,9 +21,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.platform.security.util.SecurityContextUtils;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -335,74 +332,23 @@ public class WorkflowEngineClient {
      */
     public Optional<Map<String, Object>> getTaskById(String taskId) {
         if (!isAvailable()) {
-            // #region agent log
-            appendAgentDebugLog("H41-getTaskById-unavailable", "WorkflowEngineClient.getTaskById",
-                    String.format("\"taskId\":\"%s\",\"available\":false", safeJson(taskId)));
-            // #endregion
             return Optional.empty();
         }
         try {
             String url = workflowEngineUrl + "/api/v1/tasks/" + taskId;
-            // #region agent log
-            appendAgentDebugLog("H41-getTaskById-request", "WorkflowEngineClient.getTaskById",
-                    String.format("\"taskId\":\"%s\",\"url\":\"%s\"", safeJson(taskId), safeJson(url)));
-            // #endregion
             
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                 url, HttpMethod.GET, authorizedGetEntity(),
                 new ParameterizedTypeReference<Map<String, Object>>() {});
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                // #region agent log
-                appendAgentDebugLog("H42-getTaskById-2xx", "WorkflowEngineClient.getTaskById",
-                        String.format("\"taskId\":\"%s\",\"status\":%d,\"bodyKeys\":\"%s\"",
-                                safeJson(taskId),
-                                response.getStatusCode().value(),
-                                safeJson(String.join(",", response.getBody().keySet()))));
-                // #endregion
                 return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()));
             }
         } catch (Exception e) {
-            // #region agent log
-            String extra = "";
-            if (e instanceof HttpClientErrorException cex) {
-                extra = String.format(",\"httpStatus\":%d,\"respLen\":%d",
-                        cex.getStatusCode().value(), cex.getResponseBodyAsString() != null ? cex.getResponseBodyAsString().length() : 0);
-            } else if (e instanceof HttpServerErrorException sex) {
-                extra = String.format(",\"httpStatus\":%d,\"respLen\":%d",
-                        sex.getStatusCode().value(), sex.getResponseBodyAsString() != null ? sex.getResponseBodyAsString().length() : 0);
-            }
-            appendAgentDebugLog("H43-getTaskById-exception", "WorkflowEngineClient.getTaskById",
-                    String.format("\"taskId\":\"%s\",\"errorType\":\"%s\",\"error\":\"%s\"%s",
-                            safeJson(taskId),
-                            safeJson(e.getClass().getSimpleName()),
-                            safeJson(String.valueOf(e.getMessage())),
-                            extra));
-            // #endregion
             log.warn("Failed to get task by id from workflow engine: {}", e.getMessage());
         }
         return Optional.empty();
     }
-
-    // #region agent log
-    private void appendAgentDebugLog(String hypothesisId, String location, String dataJson) {
-        try {
-            String line = String.format(
-                    "{\"sessionId\":\"97dc8c\",\"runId\":\"run-assign-backend\",\"hypothesisId\":\"%s\",\"location\":\"%s\",\"message\":\"workflow task lookup\",\"data\":{%s},\"timestamp\":%d}%n",
-                    hypothesisId, location, dataJson, System.currentTimeMillis());
-            Files.writeString(Path.of("d:\\Repos\\Workflow-Station---sun\\.cursor\\debug-97dc8c.log"), line,
-                    StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-        } catch (Exception ignored) {
-        }
-    }
-
-    private String safeJson(String value) {
-        if (value == null) {
-            return "";
-        }
-        return value.replace("\\", "\\\\").replace("\"", "'").replace("\n", " ").replace("\r", " ");
-    }
-    // #endregion
 
     /**
      * 查询主任务子表数据（用于分配前回补 rowId / 实时同步）。

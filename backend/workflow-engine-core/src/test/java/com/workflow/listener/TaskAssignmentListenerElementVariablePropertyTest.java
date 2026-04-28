@@ -1,6 +1,7 @@
 package com.workflow.listener;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.workflow.component.BpmnActionParser;
 import com.workflow.entity.ExtendedTaskInfo;
 import com.workflow.enums.AssignmentType;
 import com.workflow.repository.ExtendedTaskInfoRepository;
@@ -53,6 +54,7 @@ public class TaskAssignmentListenerElementVariablePropertyTest {
         TaskService taskService = mock(TaskService.class);
         RuntimeService runtimeService = mock(RuntimeService.class);
         RepositoryService repositoryService = mock(RepositoryService.class);
+        BpmnActionParser bpmnActionParser = mock(BpmnActionParser.class);
         ExtendedTaskInfoRepository extendedTaskInfoRepository = mock(ExtendedTaskInfoRepository.class);
         
         TaskAssignmentListener listener = new TaskAssignmentListener();
@@ -61,6 +63,7 @@ public class TaskAssignmentListenerElementVariablePropertyTest {
         injectField(listener, "taskService", taskService);
         injectField(listener, "runtimeService", runtimeService);
         injectField(listener, "repositoryService", repositoryService);
+        injectField(listener, "bpmnActionParser", bpmnActionParser);
         injectField(listener, "extendedTaskInfoRepository", extendedTaskInfoRepository);
         
         // 创建 mock TaskEntity
@@ -155,6 +158,7 @@ public class TaskAssignmentListenerElementVariablePropertyTest {
         TaskService taskService = mock(TaskService.class);
         RuntimeService runtimeService = mock(RuntimeService.class);
         RepositoryService repositoryService = mock(RepositoryService.class);
+        BpmnActionParser bpmnActionParser = mock(BpmnActionParser.class);
         ExtendedTaskInfoRepository extendedTaskInfoRepository = mock(ExtendedTaskInfoRepository.class);
         
         TaskAssignmentListener listener = new TaskAssignmentListener();
@@ -162,6 +166,7 @@ public class TaskAssignmentListenerElementVariablePropertyTest {
         injectField(listener, "taskService", taskService);
         injectField(listener, "runtimeService", runtimeService);
         injectField(listener, "repositoryService", repositoryService);
+        injectField(listener, "bpmnActionParser", bpmnActionParser);
         injectField(listener, "extendedTaskInfoRepository", extendedTaskInfoRepository);
         
         // 创建 mock TaskEntity
@@ -207,6 +212,7 @@ public class TaskAssignmentListenerElementVariablePropertyTest {
         TaskService taskService = mock(TaskService.class);
         RuntimeService runtimeService = mock(RuntimeService.class);
         RepositoryService repositoryService = mock(RepositoryService.class);
+        BpmnActionParser bpmnActionParser = mock(BpmnActionParser.class);
         ExtendedTaskInfoRepository extendedTaskInfoRepository = mock(ExtendedTaskInfoRepository.class);
         
         TaskAssignmentListener listener = new TaskAssignmentListener();
@@ -214,6 +220,7 @@ public class TaskAssignmentListenerElementVariablePropertyTest {
         injectField(listener, "taskService", taskService);
         injectField(listener, "runtimeService", runtimeService);
         injectField(listener, "repositoryService", repositoryService);
+        injectField(listener, "bpmnActionParser", bpmnActionParser);
         injectField(listener, "extendedTaskInfoRepository", extendedTaskInfoRepository);
         
         // 创建 mock TaskEntity
