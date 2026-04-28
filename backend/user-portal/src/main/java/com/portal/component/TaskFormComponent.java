@@ -414,28 +414,48 @@ public class TaskFormComponent {
         log.info("Capturing task form snapshot for task: {}, user: {}", taskId, userId);
 
         TaskInfo taskInfo = getTaskInfo(taskId);
+        persistTaskFormSnapshot(taskId, userId, taskInfo.taskDefinitionKey, taskInfo.processInstanceId, Collections.emptyMap());
+    }
 
+    /**
+     * Task 完成后捕获快照。
+     * <p>任务完成后 Flowable 运行时任务已不存在，调用方需要传入完成前拿到的 stage/process 信息。</p>
+     */
+    @Transactional
+    public void captureTaskFormSnapshot(String taskId, String userId, String taskDefinitionKey,
+                                        String processInstanceId, Map<String, Object> completedVariables) {
+        log.info("Capturing completed task form snapshot for task: {}, stage: {}", taskId, taskDefinitionKey);
+
+        persistTaskFormSnapshot(taskId, userId, taskDefinitionKey, processInstanceId,
+                completedVariables != null ? completedVariables : Collections.emptyMap());
+    }
+
+    private void persistTaskFormSnapshot(String taskId, String userId, String taskDefinitionKey,
+                                         String processInstanceId, Map<String, Object> completedVariables) {
         // Get Task Form field subset
-        Map<String, Object> formDefinition = fetchTaskFormByStageId(taskInfo.taskDefinitionKey);
+        Map<String, Object> formDefinition = fetchTaskFormByStageId(taskDefinitionKey);
         Map<String, String> fieldPermissions = formDefinition != null
                 ? extractFieldPermissions(formDefinition)
                 : Collections.emptyMap();
 
-        ProcessInstance processInstance = processInstanceRepository.findById(taskInfo.processInstanceId)
+        ProcessInstance processInstance = processInstanceRepository.findById(processInstanceId)
                 .orElseThrow(() -> new PortalException("404",
-                        "Process instance not found: " + taskInfo.processInstanceId));
+                        "Process instance not found: " + processInstanceId));
 
-        Map<String, Object> allVariables = processInstance.getVariables() != null
-                ? processInstance.getVariables()
-                : Collections.emptyMap();
+        Map<String, Object> allVariables = new HashMap<>(
+                processInstance.getVariables() != null ? processInstance.getVariables() : Collections.emptyMap());
+        allVariables.putAll(completedVariables);
 
         // Get current values for the Task Form's field subset
         Map<String, Object> fieldValues = extractFieldSubset(allVariables, fieldPermissions.keySet());
+        if (allVariables.containsKey("__subTables__")) {
+            fieldValues.put("__subTables__", allVariables.get("__subTables__"));
+        }
 
         // Create TaskFormSnapshot
         TaskFormSnapshot snapshot = TaskFormSnapshot.builder()
                 .taskId(taskId)
-                .taskDefinitionKey(taskInfo.taskDefinitionKey)
+                .taskDefinitionKey(taskDefinitionKey)
                 .assignee(userId)
                 .completedAt(Instant.now())
                 .fieldValues(fieldValues)

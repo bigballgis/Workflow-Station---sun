@@ -5,6 +5,7 @@ import com.portal.component.ChangeHistoryComponent;
 import com.portal.component.FunctionUnitAccessComponent;
 import com.portal.component.ProcessComponent;
 import com.portal.component.ProcessDraftComponent;
+import com.portal.component.TaskFormComponent;
 import com.portal.dto.ProcessDefinitionInfo;
 import com.portal.dto.ProcessInstanceInfo;
 import com.portal.dto.ProcessStartRequest;
@@ -54,7 +55,7 @@ class ProcessOperationProperties {
                 Mockito.mock(com.portal.service.PortalWorkspaceAuthService.class);
         Mockito.when(portalWorkspaceAuthService.listWorkspaceContexts(Mockito.any()))
                 .thenReturn(Collections.emptyList());
-        processComponent = Mockito.spy(new ProcessComponent(favoriteProcessRepository, processDraftRepository, processInstanceRepository, processHistoryRepository, Mockito.mock(com.portal.repository.ActionDefinitionRepository.class), functionUnitAccessComponent, workflowEngineClient, processDraftComponent, Mockito.mock(ChangeHistoryComponent.class), portalWorkspaceAuthService, Mockito.mock(RestTemplate.class), Mockito.mock(org.springframework.jdbc.core.JdbcTemplate.class), Mockito.mock(com.portal.component.MeetingParticipantVariablesPersistence.class)));
+        processComponent = Mockito.spy(new ProcessComponent(favoriteProcessRepository, processDraftRepository, processInstanceRepository, processHistoryRepository, Mockito.mock(com.portal.repository.ActionDefinitionRepository.class), functionUnitAccessComponent, workflowEngineClient, processDraftComponent, Mockito.mock(ChangeHistoryComponent.class), portalWorkspaceAuthService, Mockito.mock(RestTemplate.class), Mockito.mock(org.springframework.jdbc.core.JdbcTemplate.class), Mockito.mock(com.portal.component.MeetingParticipantVariablesPersistence.class), Mockito.mock(TaskFormComponent.class)));
         
         // Mock getFunctionUnitContent 返回包含 BPMN XML 的内容
         String mockBpmnXml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><bpmn:definitions></bpmn:definitions>";

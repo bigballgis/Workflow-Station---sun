@@ -60,6 +60,7 @@ public class ProcessComponent {
     private final RestTemplate restTemplate;
     private final JdbcTemplate jdbcTemplate;
     private final MeetingParticipantVariablesPersistence meetingParticipantVariablesPersistence;
+    private final TaskFormComponent taskFormComponent;
 
     @jakarta.persistence.PersistenceContext
     private jakarta.persistence.EntityManager entityManager;
@@ -384,6 +385,8 @@ public class ProcessComponent {
                         if (completeResult.isPresent()
                                 && !Boolean.FALSE.equals(completeResult.get().get("success"))) {
                             log.info("First task completed successfully: {}", taskId);
+                            taskFormComponent.captureTaskFormSnapshot(
+                                    taskId, userId, firstTaskDefKey, flowableProcessInstanceId, variables);
                             
                             // 完成第一个任务后，查询当前任务（下一个审批节点）
                             Optional<Map<String, Object>> nextTasksResult = workflowEngineClient.getProcessInstanceTasks(flowableProcessInstanceId);

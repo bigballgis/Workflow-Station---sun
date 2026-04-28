@@ -70,7 +70,7 @@
         <div class="section-header">
           <el-icon><Share /></el-icon>
           <span>{{ t('task.workflowDiagram') }}</span>
-          <el-tag type="warning" size="small">
+          <el-tag v-if="!isCompletedTask" type="warning" size="small">
             {{ taskInfo.taskName || t('task.pending') }}
           </el-tag>
         </div>
@@ -86,6 +86,7 @@
             :selected-node-id="selectedNodeId ?? ''"
             :show-toolbar="true"
             :show-legend="true"
+            :show-current-step="!isCompletedTask"
             @node-click="handleNodeClick"
           />
           <el-empty v-else :description="t('task.noProcessDefinition')" />
@@ -97,7 +98,7 @@
         <div class="section-header">
           <el-icon><Document /></el-icon>
           <span>{{ selectedNodeForm.formName }}</span>
-          <el-tag v-if="selectedNodeForm.isCurrentTask" type="warning" size="small">{{ t('task.currentStep') }}</el-tag>
+          <el-tag v-if="selectedNodeForm.isCurrentTask && !isCompletedTask" type="warning" size="small">{{ t('task.currentStep') }}</el-tag>
           <el-tag v-else type="info" size="small">{{ t('task.readonly') }}</el-tag>
           <el-button size="small" @click="clearNodeSelection" style="margin-left: auto;">{{ t('common.back') }}</el-button>
         </div>
@@ -271,7 +272,11 @@
 
       <!-- Task 19.2: Change history panel (title and collapse handled internally by ChangeHistoryPanel) -->
       <div v-if="taskInfo.processInstanceId" class="section change-history-section">
-        <ChangeHistoryPanel :process-instance-id="taskInfo.processInstanceId" />
+        <ChangeHistoryPanel
+          :process-instance-id="taskInfo.processInstanceId"
+          :snapshot-time="completedHistorySnapshotTime"
+          :task-instance-id="completedHistoryTaskId"
+        />
       </div>
 
       <!-- Section 4: Flow history -->
@@ -745,6 +750,37 @@ function getSavedSubTableRows(savedSubTables: any, binding: { bindingId: number;
   return Array.isArray(saved) ? saved : undefined
 }
 
+function applySavedRowsToBindings<T extends Array<{ bindingId: number; tableName: string; data: any[] }>>(bindings: T, savedSubTables: any): T {
+  if (!savedSubTables || typeof savedSubTables !== 'object') return bindings
+  bindings.forEach(binding => {
+    const saved = getSavedSubTableRows(savedSubTables, binding)
+    if (saved) {
+      binding.data = cloneSubTableRows(saved)
+    }
+  })
+  return bindings
+}
+
+function applyCompletedSnapshotToForm(data: CompletedTaskFormData | null) {
+  const snapshotValues = (data?.snapshot?.fieldValues || {}) as Record<string, any>
+  formData.value = { ...snapshotValues }
+
+  const savedSubTables = snapshotValues.__subTables__
+  applySavedRowsToBindings(subTableBindings.value, savedSubTables)
+  previousForms.value.forEach(form => {
+    applySavedRowsToBindings(form.subTableBindings, savedSubTables)
+  })
+
+  if (savedSubTables && typeof savedSubTables === 'object' && nodeFormMap.value.size > 0) {
+    const nextMap = new Map(nodeFormMap.value)
+    nextMap.forEach(info => {
+      info.values = { ...snapshotValues }
+      applySavedRowsToBindings(info.subTableBindings, savedSubTables)
+    })
+    nodeFormMap.value = nextMap
+  }
+}
+
 function hydrateCurrentSubTablesFromPreviousForms() {
   for (const current of subTableBindings.value) {
     if (Array.isArray(current.data) && current.data.length > 0) continue
@@ -1141,6 +1177,45 @@ const isCompletedTask = ref(false)
 // Task 17.4: Return_To_Requester state
 const isReturnToRequester = ref(false)
 
+function isCompletedTaskData(taskData: any): boolean {
+  return taskData?.endTime != null ||
+    taskData?.completedTime != null ||
+    taskData?.completed === true ||
+    String(taskData?.status || '').toUpperCase() === 'COMPLETED'
+}
+
+function hasCompletedSnapshotRoute(): boolean {
+  return typeof route.query.snapshotTime === 'string' ||
+    typeof route.query.snapshotTaskId === 'string'
+}
+
+const completedHistorySnapshotTime = computed(() => (
+  isCompletedTask.value && typeof route.query.snapshotTime === 'string'
+    ? route.query.snapshotTime
+    : ''
+))
+
+const completedHistoryTaskId = computed(() => (
+  isCompletedTask.value && typeof route.query.snapshotTaskId === 'string'
+    ? route.query.snapshotTaskId
+    : taskId
+))
+
+function isWithinCompletedSnapshot(itemTime?: string | null): boolean {
+  if (!isCompletedTask.value || !completedHistorySnapshotTime.value) return true
+  if (!itemTime) return true
+  const item = dayjs(itemTime)
+  const cutoff = dayjs(completedHistorySnapshotTime.value)
+  if (!item.isValid() || !cutoff.isValid()) return true
+  return item.valueOf() <= cutoff.valueOf()
+}
+
+function shouldKeepCompletedHistoryItem(item: TaskHistoryInfo): boolean {
+  if (!isCompletedTask.value || !hasCompletedSnapshotRoute()) return true
+  if (completedHistoryTaskId.value && item.taskId === completedHistoryTaskId.value) return true
+  return isWithinCompletedSnapshot(item.operationTime)
+}
+
 const loadTaskDetail = async () => {
   loading.value = true
   taskError.value = null
@@ -1149,6 +1224,11 @@ const loadTaskDetail = async () => {
     const data = res.data || res
     if (data) {
       taskInfo.value = data
+      isCompletedTask.value = isCompletedTaskData(data) || hasCompletedSnapshotRoute()
+      if (isCompletedTask.value) {
+        formReadOnly.value = true
+        currentNodeId.value = ''
+      }
       if (data.variables) formData.value = data.variables
       // Load flow history first, as diagram parsing needs history records
       await loadTaskHistory()
@@ -1194,8 +1274,9 @@ const loadTaskHistory = async () => {
     const res = await getTaskHistory(taskId)
     const data = res.data || res
     if (data && Array.isArray(data)) {
+      const visibleHistory = data.filter(shouldKeepCompletedHistoryItem)
       // Convert to HistoryRecord format (keep gateway records for diagram status determination)
-      historyRecords.value = data.map((item: TaskHistoryInfo, index: number) => ({
+      historyRecords.value = visibleHistory.map((item: TaskHistoryInfo, index: number) => ({
         id: `history_${index}`,
         nodeId: item.activityId || `node_${index}`,
         nodeName: item.activityName || t('task.unknownNode'),
@@ -1538,7 +1619,7 @@ const loadFunctionUnitContent = async (processKey: string) => {
 
             const nodeName = el.getAttribute('name') || nodeId
             const currentDefKey = (taskInfo.value as any).taskDefinitionKey || ''
-            const isCurrentTask = nodeId === currentDefKey || nodeName === taskInfo.value.taskName
+            const isCurrentTask = !isCompletedTask.value && (nodeId === currentDefKey || nodeName === taskInfo.value.taskName)
 
             newMap.set(nodeId, {
               formName: matchedForm.name || nodeName,
@@ -1570,11 +1651,7 @@ const loadFunctionUnitContent = async (processKey: string) => {
 const loadProcessAndTaskFormData = async (taskData: any) => {
   const processInstanceId = taskData.processInstanceId
   const currentTaskId = taskData.id || taskId
-  const isCompleted =
-    taskData.endTime != null ||
-    taskData.completedTime != null ||
-    taskData.completed === true ||
-    String(taskData.status || '').toUpperCase() === 'COMPLETED'
+  const isCompleted = isCompletedTaskData(taskData) || hasCompletedSnapshotRoute()
   const miSubTask = isMiSubTask(taskData)
 
   // 17.1: Load Process Form data
@@ -1614,6 +1691,7 @@ const loadProcessAndTaskFormData = async (taskData: any) => {
         const ctData = (ctRes as any).data || ctRes
         if (ctData) {
           completedFormData.value = ctData
+          applyCompletedSnapshotToForm(ctData)
         }
       } catch (e) {
         console.warn('[detail] Failed to load completed task form data:', e)
@@ -1894,6 +1972,7 @@ const parseBpmnXmlAndGetPreviousFormIds = (xml: string): Array<{ formId: string 
 const parseBpmnXml = (xml: string) => {
   if (!xml) return
   try {
+    currentNodeId.value = ''
     const parser = new DOMParser()
     const doc = parser.parseFromString(xml, 'text/xml')
     const nodes: ProcessNode[] = []
@@ -1933,7 +2012,8 @@ const parseBpmnXml = (xml: string) => {
     const hasApproval = historyRecords.value.some(h => h.status === 'completed' && h.nodeName.includes('Approval'))
     const hasRejection = historyRecords.value.some(h => h.status === 'rejected')
     
-    // Get current task name
+    const showCurrentStep = !isCompletedTask.value
+    const currentTaskDefinitionKey = (taskInfo.value as any).taskDefinitionKey || ''
     const currentTaskName = taskInfo.value.taskName || ''
     let currentNodeFound = false
 
@@ -1964,7 +2044,7 @@ const parseBpmnXml = (xml: string) => {
     const enteredSubProcesses = new Set<string>()
     for (const [spId, sp] of subProcessMap) {
       const spName = sp.getAttribute('name') || ''
-      if ((spName && spName === currentTaskName) || spId === currentTaskName) {
+      if (showCurrentStep && ((spName && spName === currentTaskName) || spId === currentTaskName)) {
         enteredSubProcesses.add(spId)
         continue
       }
@@ -1978,7 +2058,7 @@ const parseBpmnXml = (xml: string) => {
         if (childLocal !== 'userTask' && childLocal !== 'serviceTask') continue
         const taskName = childElements[i].getAttribute('name') || ''
         const taskId = childElements[i].getAttribute('id') || ''
-        if (taskName === currentTaskName || historyRecords.value.some(h => h.nodeName === taskName || h.nodeId === taskId)) {
+        if ((showCurrentStep && taskName === currentTaskName) || historyRecords.value.some(h => h.nodeName === taskName || h.nodeId === taskId)) {
           enteredSubProcesses.add(spId)
           break
         }
@@ -2000,7 +2080,7 @@ const parseBpmnXml = (xml: string) => {
       }
       if (!isMultiInstance) continue
       const spName = sp.getAttribute('name') || ''
-      if ((spName && spName === currentTaskName) || spId === currentTaskName) {
+      if (showCurrentStep && ((spName && spName === currentTaskName) || spId === currentTaskName)) {
         activeMultiInstanceSubProcesses.add(spId)
         continue
       }
@@ -2009,8 +2089,8 @@ const parseBpmnXml = (xml: string) => {
         if (childLocal !== 'userTask') continue
         const taskName = spChildren[i].getAttribute('name') || ''
         const taskId = spChildren[i].getAttribute('id') || ''
-        if (taskName === currentTaskName || taskId === currentTaskName ||
-            historyRecords.value.some(h => h.nodeName === taskName && h.status === 'current')) {
+        if ((showCurrentStep && (taskName === currentTaskName || taskId === currentTaskName || taskId === currentTaskDefinitionKey)) ||
+            (showCurrentStep && historyRecords.value.some(h => h.nodeName === taskName && h.status === 'current'))) {
           activeMultiInstanceSubProcesses.add(spId)
           break
         }
@@ -2059,7 +2139,7 @@ const parseBpmnXml = (xml: string) => {
       let startStatus: 'completed' | 'current' | 'pending' = 'completed'
       if (parentSpId && !enteredSubProcesses.has(parentSpId)) {
         startStatus = 'pending'
-      } else if (parentSpId && activeMultiInstanceSubProcesses.has(parentSpId)) {
+      } else if (showCurrentStep && parentSpId && activeMultiInstanceSubProcesses.has(parentSpId)) {
         startStatus = 'current'
       }
       nodes.push({ id, name: event.getAttribute('name') || t('task.startNode'), type: 'start', status: startStatus, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
@@ -2076,8 +2156,12 @@ const parseBpmnXml = (xml: string) => {
       
       let status: 'completed' | 'current' | 'pending' = 'pending'
       
+      if (isCompletedTask.value && (completedHistoryIds.has(id) || completedNodeNames.has(name) || name === currentTaskName || id === currentTaskName || id === currentTaskDefinitionKey)) {
+        status = 'completed'
+        completed.push(id)
+      }
       // Check if this is the current task
-      if (name === currentTaskName || id === currentTaskName) {
+      else if (showCurrentStep && (name === currentTaskName || id === currentTaskName || id === currentTaskDefinitionKey)) {
         status = 'current'
         currentNodeId.value = id
         currentNodeFound = true
@@ -2117,7 +2201,7 @@ const parseBpmnXml = (xml: string) => {
           userTaskCount++
           const taskName = childElements[i].getAttribute('name') || ''
           const taskId = childElements[i].getAttribute('id') || ''
-          if (taskName === currentTaskName || taskId === currentTaskName) {
+          if (showCurrentStep && (taskName === currentTaskName || taskId === currentTaskName || taskId === currentTaskDefinitionKey)) {
             hasCurrentChild = true
             break
           }
@@ -2127,7 +2211,7 @@ const parseBpmnXml = (xml: string) => {
           }
         }
         if (!userTaskCount) allChildrenDone = false
-        spStatus = hasCurrentChild ? 'current' : allChildrenDone ? 'completed' : 'current'
+        spStatus = hasCurrentChild ? 'current' : allChildrenDone ? 'completed' : (showCurrentStep ? 'current' : 'pending')
       }
       nodes.push({ id: spId, name, type: 'subprocess', status: spStatus, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
       if (spStatus === 'completed') completed.push(spId)
@@ -2179,7 +2263,7 @@ const parseBpmnXml = (xml: string) => {
       // SubProcess-internal endEvents stay pending when the subProcess hasn't been entered
       if (parentSpId && !enteredSubProcesses.has(parentSpId)) {
         // keep 'pending'
-      } else if (parentSpId && activeMultiInstanceSubProcesses.has(parentSpId)) {
+      } else if (showCurrentStep && parentSpId && activeMultiInstanceSubProcesses.has(parentSpId)) {
         status = 'current'
       } else if (parentSpId && completedMultiInstanceSubProcesses.has(parentSpId)) {
         status = 'completed'

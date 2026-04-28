@@ -1,6 +1,8 @@
 package com.portal.properties;
 
 import com.portal.client.WorkflowEngineClient;
+import com.portal.component.ChangeHistoryComponent;
+import com.portal.component.TaskFormComponent;
 import com.portal.component.TaskProcessComponent;
 import com.portal.component.TaskQueryComponent;
 import com.portal.component.VirtualGroupAccessComponent;
@@ -70,6 +72,12 @@ class TaskProcessProperties {
     @Mock
     private PortalWorkspaceAuthService portalWorkspaceAuthService;
 
+    @Mock
+    private ChangeHistoryComponent changeHistoryComponent;
+
+    @Mock
+    private TaskFormComponent taskFormComponent;
+
     private TaskQueryComponent taskQueryComponent;
     private TaskProcessComponent taskProcessComponent;
     private Random random;
@@ -93,6 +101,8 @@ class TaskProcessProperties {
             delegationAuditRepository, 
             workflowEngineClient,
             processInstanceRepository,
+            changeHistoryComponent,
+            taskFormComponent,
             jdbcTemplate
         );
         random = new Random();

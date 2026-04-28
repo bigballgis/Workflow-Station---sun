@@ -144,6 +144,8 @@ const { t } = useI18n()
 
 interface Props {
   processInstanceId: string
+  snapshotTime?: string
+  taskInstanceId?: string
 }
 
 const props = defineProps<Props>()
@@ -337,7 +339,7 @@ async function loadHistory() {
   try {
     const res = await getChangeHistory(props.processInstanceId) as Record<string, unknown>
     const raw = res?.data ?? res
-    records.value = Array.isArray(raw) ? raw : []
+    records.value = Array.isArray(raw) ? raw.filter(shouldKeepRecordInSnapshot) : []
   } catch (e: unknown) {
     console.error('Failed to load change history:', e)
     error.value = t('changeHistory.loadFailed')
@@ -345,6 +347,17 @@ async function loadHistory() {
   } finally {
     loading.value = false
   }
+}
+
+function shouldKeepRecordInSnapshot(row: ChangeHistoryRecord): boolean {
+  if (!props.snapshotTime && !props.taskInstanceId) return true
+  if (props.taskInstanceId && row.taskInstanceId === props.taskInstanceId) return true
+  if (!props.snapshotTime) return true
+
+  const item = dayjs(row.timestamp)
+  const cutoff = dayjs(props.snapshotTime)
+  if (!item.isValid() || !cutoff.isValid()) return true
+  return item.valueOf() <= cutoff.valueOf()
 }
 
 function formatTimestamp(ts: string): string {
@@ -375,7 +388,7 @@ function getChangeTypeTag(changeType: string): 'success' | 'warning' | 'danger' 
   return map[changeType] || 'info'
 }
 
-watch(() => props.processInstanceId, () => {
+watch(() => [props.processInstanceId, props.snapshotTime, props.taskInstanceId], () => {
   loadHistory()
 })
 

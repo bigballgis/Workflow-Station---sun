@@ -53,6 +53,7 @@ public class TaskProcessComponent {
     private final WorkflowEngineClient workflowEngineClient;
     private final ProcessInstanceRepository processInstanceRepository;
     private final ChangeHistoryComponent changeHistoryComponent;
+    private final TaskFormComponent taskFormComponent;
     private final JdbcTemplate jdbcTemplate;
 
     /**
@@ -1149,6 +1150,8 @@ public class TaskProcessComponent {
                 mergedVars.putAll(variables);
                 syncInstance.setVariables(mergedVars);
                 processInstanceRepository.save(syncInstance);
+                taskFormComponent.captureTaskFormSnapshot(
+                        taskId, userId, task.getTaskDefinitionKey(), syncProcessId, mergedVars);
                 log.info("Synced {} approval variables back to local ProcessInstance {}", 
                         mergedVars.size(), syncProcessId);
             }

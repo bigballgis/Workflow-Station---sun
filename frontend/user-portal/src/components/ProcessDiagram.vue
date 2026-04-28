@@ -7,7 +7,7 @@
           <span class="legend-dot completed"></span>
           <span>{{ t('diagram.completed') }}</span>
         </div>
-        <div class="legend-item">
+        <div v-if="showCurrentStep" class="legend-item">
           <span class="legend-dot current"></span>
           <span>{{ t('diagram.currentStep') }}</span>
         </div>
@@ -34,7 +34,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { computed, ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ZoomIn, ZoomOut, RefreshRight, FullScreen } from '@element-plus/icons-vue'
 // @ts-ignore
@@ -73,6 +73,7 @@ interface Props {
   selectedNodeId?: string
   showToolbar?: boolean
   showLegend?: boolean
+  showCurrentStep?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -83,7 +84,8 @@ const props = withDefaults(defineProps<Props>(), {
   completedNodeIds: () => [],
   selectedNodeId: '',
   showToolbar: true,
-  showLegend: true
+  showLegend: true,
+  showCurrentStep: true
 })
 
 const emit = defineEmits<{
@@ -96,6 +98,7 @@ const canvasRef = ref<HTMLElement>()
 const zoomLevel = ref(1)
 
 let viewer: any = null
+const showCurrentStep = computed(() => props.showCurrentStep)
 
 const destroyViewer = () => {
   if (viewer) {
@@ -122,7 +125,7 @@ const applyStatusColors = () => {
     if (node.status === 'rejected') {
       fill = '#ffebee'
       stroke = '#f44336'
-    } else if (node.id === props.currentNodeId || node.status === 'current') {
+    } else if (showCurrentStep.value && (node.id === props.currentNodeId || node.status === 'current')) {
       fill = '#fff3e0'
       stroke = '#FF6600'
     } else if (props.completedNodeIds.includes(node.id) || node.status === 'completed') {
