@@ -113,8 +113,10 @@
           </div>
           <el-empty v-else :description="t('processStart.noFormConfig')" />
 
-          <!-- Sub-tables (SUB / RELATED bindings) -->
-          <template v-if="bottomSubTableBindings.length > 0">
+          <!-- Sub-tables (SUB / RELATED bindings)
+               Only render when the form config places at least one subTable placeholder.
+               If designer removes subTable placeholders, user portal should not force-show bindings. -->
+          <template v-if="hasSubTablePlaceholder && bottomSubTableBindings.length > 0">
             <div
               v-for="binding in bottomSubTableBindings"
               :key="binding.bindingId"
@@ -283,6 +285,8 @@ const placedBindingIds = computed((): Set<number> => {
 const bottomSubTableBindings = computed(() =>
   subTableBindings.value.filter(b => !placedBindingIds.value.has(b.bindingId))
 )
+
+const hasSubTablePlaceholder = computed(() => placedBindingIds.value.size > 0)
 
 // Lookup config fallback map (from rt_lookup_configs)
 const lookupDbConfigs = ref<Record<string, { tableId: number; searchFields: string[]; displayField: string; viewFields: any[] }>>({})
