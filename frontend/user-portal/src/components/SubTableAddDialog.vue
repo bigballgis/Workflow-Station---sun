@@ -395,6 +395,16 @@ const formRef = ref<FormInstance>()
 const formData = ref<Record<string, any>>({})
 const uploadNames = ref<Record<string, string>>({})
 
+const agentDebugLog = (runId: string, hypothesisId: string, location: string, message: string, data: Record<string, any>) => {
+  fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'b88427' }, body: JSON.stringify({ sessionId: 'b88427', runId, hypothesisId, location, message, data, timestamp: Date.now() }) }).catch(() => {})
+}
+
+function assigneeLikeFields(): string[] {
+  return props.columns
+    .map(col => col.field)
+    .filter(field => /assignee|处理人|負責人|经办人|經辦人/i.test(String(field)))
+}
+
 // ─── Signature canvas state ───────────────────────────────────────────────────
 const signatureCanvasRefs = ref<Record<string, HTMLCanvasElement>>({})
 const signingField = ref<string | null>(null)
@@ -617,6 +627,22 @@ watch(
     } else {
       formData.value = buildInitialRow(props.columns)
     }
+    const fields = assigneeLikeFields()
+    // #region agent log
+    agentDebugLog('pre-fix', 'H1,H2', 'SubTableAddDialog.vue:597', 'record dialog initialized form data', {
+      mode: props.mode,
+      columnCount: props.columns.length,
+      assigneeLikeFields: fields,
+      initialDataKeys: props.initialData ? Object.keys(props.initialData) : [],
+      initialDataHasAssigneeLikeValue: fields.some(field =>
+        props.initialData?.[field] != null && props.initialData?.[field] !== ''
+      ),
+      initializedHasAssigneeLikeValue: fields.some(field =>
+        formData.value[field] != null && formData.value[field] !== ''
+      ),
+      initializedHasAssignmentDisplayName: !!formData.value.assignee_display_name
+    })
+    // #endregion
   },
   { immediate: false }
 )

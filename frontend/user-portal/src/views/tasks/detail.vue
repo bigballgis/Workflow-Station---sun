@@ -143,7 +143,9 @@
                   :editable="false"
                   :show-fill-button="isMiSubTaskMode && isParticipantsBinding(binding)"
                   :fill-button-label="t('task.addParticipantInfoForm')"
+                  :linked-sub-table-bindings="prevForm.subTableBindings"
                   @fillForm="(row: any) => openMiFillDialog(row)"
+                  @update:linked-sub-table-data="(bindingId: number, rows: any[]) => syncPreviousLinkedSubTableRows(prevForm, bindingId, rows)"
                 />
               </div>
             </template>
@@ -151,30 +153,32 @@
         </div>
       </template>
 
-      <!-- Section 3: Form data (MI subtask form fields shown via sub-table Add button dialog, no standalone card needed) -->
-      <div v-if="!isMiSubTaskMode || bottomSubTableBindings.length > 0" class="section form-section">
+      <!-- Section 3: Form data -->
+      <div
+        v-if="formFields.length > 0 || formTabs.length > 0 || bottomSubTableBindings.length > 0"
+        class="section form-section"
+      >
         <div class="section-header">
           <el-icon><Document /></el-icon>
           <span>{{ currentFormName || t('task.taskForm') }}</span>
         </div>
         <div class="section-content">
-          <template v-if="!isMiSubTaskMode">
-            <div v-if="formFields.length > 0 || formTabs.length > 0" class="form-container">
-              <FormRenderer
-                :fields="formFields"
-                :tabs="formTabs"
-                :model-value="formData"
-                @update:model-value="val => formData = { ...formData, ...val }"
-                :label-width="formLabelWidth"
-                :readonly="formReadOnly"
-                :subTableBindings="subTableBindings"
-                :task-id="effectiveTaskId"
-                :allow-sub-table-assign="allowSubTableAssignForCurrentTask"
-                @update:subTableData="syncMainSubTableRows"
-              />
-            </div>
-            <el-empty v-else :description="t('task.noFormData')" />
-          </template>
+          <div v-if="formFields.length > 0 || formTabs.length > 0" class="form-container">
+            <FormRenderer
+              :fields="formFields"
+              :tabs="formTabs"
+              :model-value="formData"
+              @update:model-value="val => formData = { ...formData, ...val }"
+              :label-width="formLabelWidth"
+              :readonly="formReadOnly"
+              :subTableBindings="subTableBindings"
+              :preview-sub-tables="isMiSubTaskMode"
+              :task-id="effectiveTaskId"
+              :allow-sub-table-assign="allowSubTableAssignForCurrentTask"
+              @update:subTableData="syncMainSubTableRows"
+            />
+          </div>
+          <el-empty v-else-if="!bottomSubTableBindings.length" :description="t('task.noFormData')" />
 
           <!-- Sub-tables (SUB / RELATED bindings) -->
           <template v-if="bottomSubTableBindings.length > 0">
@@ -194,7 +198,9 @@
                 :can-assign="allowSubTableAssignForCurrentTask && !formReadOnly && binding.bindingMode === 'EDITABLE' && !!effectiveTaskId && !!resolveAssigneeFieldForBinding(binding.columns, binding.tableName)"
                 :show-fill-button="isMiSubTaskMode && !formReadOnly"
                 :fill-button-label="isParticipantsBinding(binding) ? t('task.addParticipantInfoForm') : undefined"
+                :linked-sub-table-bindings="subTableBindings"
                 @update:model-value="(rows: any[]) => syncMainSubTableRows(binding.bindingId, rows)"
+                @update:linked-sub-table-data="syncMainSubTableRows"
                 @fillForm="(row: any) => openMiFillDialog(row)"
               />
             </div>
@@ -385,6 +391,7 @@
           :label-width="formLabelWidth"
           :readonly="formReadOnly || miFillDialogReadOnly"
           :subTableBindings="miFillSubTableBindings"
+          :preview-sub-tables="true"
           @update:subTableData="syncMiFillSubTableRows"
         />
       </div>
@@ -470,7 +477,10 @@ const router = useRouter()
 const taskId = route.params.id as string
 
 const agentDebugLog = (runId: string, hypothesisId: string, location: string, message: string, data: Record<string, any>) => {
-  fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '619bad' }, body: JSON.stringify({ sessionId: '619bad', runId, hypothesisId, location, message, data, timestamp: Date.now() }) }).catch(() => {})
+  const payload = JSON.stringify({ sessionId: 'b88427', runId, hypothesisId, location, message, data, timestamp: Date.now() })
+  fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'b88427' }, body: payload }).catch(() => {
+    try { navigator.sendBeacon('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', new Blob([payload], { type: 'application/json' })) } catch {}
+  })
 }
 
 const loading = ref(true)
@@ -511,13 +521,16 @@ interface PreviousFormEntry {
   tabs: FormTab[]
   subTableBindings: Array<{
     bindingId: number
+    tableId?: number | null
     bindingType: string
     bindingMode: string
     foreignKeyField: string | null
     tableName: string
     tableType: string
     tableDescription: string
-    columns: Array<{ field: string; label: string; type?: string }>
+    columns: Array<{ field: string; label: string; type?: string; props?: Record<string, any> }>
+    formFields?: FormField[]
+    formOptions?: Record<string, any>
     data: any[]
   }>
 }
@@ -526,13 +539,16 @@ const previousForms = ref<PreviousFormEntry[]>([])
 // Sub-table bindings for the current form
 const subTableBindings = ref<Array<{
   bindingId: number
+  tableId?: number | null
   bindingType: string
   bindingMode: string
   foreignKeyField: string | null
   tableName: string
   tableType: string
   tableDescription: string
-  columns: Array<{ field: string; label: string; type?: string }>
+  columns: Array<{ field: string; label: string; type?: string; props?: Record<string, any> }>
+  formFields?: FormField[]
+  formOptions?: Record<string, any>
   data: any[]
 }>>([])
 
@@ -547,8 +563,34 @@ const placedBindingIds = computed((): Set<number> => {
   return ids
 })
 
+function collectLinkBoundBindingIds(bindings: Array<{ columns?: Array<{ type?: string; props?: Record<string, any> }> }>): Set<number> {
+  const ids = new Set<number>()
+  bindings.forEach(binding => {
+    binding.columns?.forEach(column => {
+      const boundId = column.type === 'linkForm' ? column.props?.boundSubTableBindingId : null
+      if (boundId != null) ids.add(Number(boundId))
+    })
+  })
+  return ids
+}
+
+function resolveSubFormDesign(binding: any, subForms?: Record<string, any>): { formFields: FormField[]; formOptions?: Record<string, any> } {
+  const design =
+    binding.subFormConfig ||
+    subForms?.[binding.bindingId] ||
+    subForms?.[String(binding.bindingId)] ||
+    {}
+  const rule = Array.isArray(design.rule) ? design.rule : []
+  return {
+    formFields: rule.length > 0 ? extractFieldsRecursive(rule) : [],
+    formOptions: design.options
+  }
+}
+
+const linkBoundBindingIds = computed(() => collectLinkBoundBindingIds(subTableBindings.value))
+
 const bottomSubTableBindings = computed(() =>
-  subTableBindings.value.filter(b => !placedBindingIds.value.has(b.bindingId))
+  subTableBindings.value.filter(b => !placedBindingIds.value.has(b.bindingId) && !linkBoundBindingIds.value.has(b.bindingId))
 )
 
 function collectPlacedBindingIds(fields: any[]): Set<number> {
@@ -566,7 +608,8 @@ function previousBottomSubTableBindings(prevForm: PreviousFormEntry) {
     ...(prevForm.fields || []),
     ...(prevForm.tabs || []).flatMap(tab => tab.fields || [])
   ])
-  return prevForm.subTableBindings.filter(binding => !ids.has(binding.bindingId))
+  const linkBoundIds = collectLinkBoundBindingIds(prevForm.subTableBindings)
+  return prevForm.subTableBindings.filter(binding => !ids.has(binding.bindingId) && !linkBoundIds.has(binding.bindingId))
 }
 
 function normalizeSubTableName(name?: string): string {
@@ -574,12 +617,13 @@ function normalizeSubTableName(name?: string): string {
 }
 
 function subTableBindingMatches(
-  target: { bindingId: number; tableName: string },
-  source: { bindingId: number; tableName: string }
+  target: { bindingId: number; tableName: string; tableId?: number | null },
+  source: { bindingId: number; tableName: string; tableId?: number | null }
 ): boolean {
   const targetName = normalizeSubTableName(target.tableName)
   const sourceName = normalizeSubTableName(source.tableName)
-  return target.bindingId === source.bindingId || (!!targetName && targetName === sourceName)
+  const samePhysicalTable = target.tableId != null && source.tableId != null && Number(target.tableId) === Number(source.tableId)
+  return target.bindingId === source.bindingId || samePhysicalTable || (!!targetName && targetName === sourceName)
 }
 
 function cloneSubTableRows(rows: any[]): any[] {
@@ -602,7 +646,7 @@ function syncMainSubTableRows(bindingId: number, rows: any[]) {
   if (!source) return
 
   const nextRows = Array.isArray(rows) ? rows : []
-  const sync = (binding: { bindingId: number; tableName: string; data: any[] }) => {
+  const sync = (binding: { bindingId: number; tableName: string; tableId?: number | null; data: any[] }) => {
     if (subTableBindingMatches(binding, source)) {
       binding.data = binding === source ? nextRows : cloneSubTableRows(nextRows)
     }
@@ -619,6 +663,12 @@ function syncMainSubTableRows(bindingId: number, rows: any[]) {
   }
   formData.value = { ...formData.value, __subTables__: subTables }
   scheduleSubTableAutosave()
+}
+
+function syncPreviousLinkedSubTableRows(prevForm: PreviousFormEntry, bindingId: number, rows: any[]) {
+  const source = prevForm.subTableBindings.find(binding => binding.bindingId === bindingId)
+  if (!source) return
+  source.data = Array.isArray(rows) ? rows : []
 }
 
 function getSavedSubTableRows(savedSubTables: any, binding: { bindingId: number; tableName: string }): any[] | undefined {
@@ -763,6 +813,30 @@ function isolateMiSubTaskData(taskData: any) {
   const myRowId = Number(currentItem.rowId)
   if (Number.isNaN(myRowId)) return
 
+  // #region agent log
+  agentDebugLog('pre-fix', 'H4,H5', 'tasks/detail.vue:759', 'before MI subtask row isolation', {
+    myRowId,
+    formDataSubTableKeys: formData.value.__subTables__ ? Object.keys(formData.value.__subTables__) : [],
+    currentBindings: subTableBindings.value.map(binding => ({
+      bindingId: binding.bindingId,
+      tableId: binding.tableId,
+      tableName: binding.tableName,
+      rows: binding.data?.length || 0,
+      rowKeySets: (binding.data || []).slice(0, 3).map((row: any) => Object.keys(row || {}))
+    })),
+    previousForms: previousForms.value.map(form => ({
+      formName: form.formName,
+      bindings: form.subTableBindings.map(binding => ({
+        bindingId: binding.bindingId,
+        tableId: binding.tableId,
+        tableName: binding.tableName,
+        rows: binding.data?.length || 0,
+        rowKeySets: (binding.data || []).slice(0, 3).map((row: any) => Object.keys(row || {}))
+      }))
+    }))
+  })
+  // #endregion
+
   // Multi-instance data isolation: each sub-task only sees its own participant row.
   for (const binding of subTableBindings.value) {
     const rows = Array.isArray(binding.data) ? binding.data : []
@@ -823,6 +897,28 @@ function isolateMiSubTaskData(taskData: any) {
   }
 
   formData.value = cleanedFormData
+  // #region agent log
+  agentDebugLog('pre-fix', 'H4,H5', 'tasks/detail.vue:825', 'after MI subtask row isolation', {
+    myRowId,
+    formDataKeys: Object.keys(formData.value),
+    formDataSubTableKeys: formData.value.__subTables__ ? Object.keys(formData.value.__subTables__) : [],
+    currentBindings: subTableBindings.value.map(binding => ({
+      bindingId: binding.bindingId,
+      tableId: binding.tableId,
+      tableName: binding.tableName,
+      rows: binding.data?.length || 0
+    })),
+    previousForms: previousForms.value.map(form => ({
+      formName: form.formName,
+      bindings: form.subTableBindings.map(binding => ({
+        bindingId: binding.bindingId,
+        tableId: binding.tableId,
+        tableName: binding.tableName,
+        rows: binding.data?.length || 0
+      }))
+    }))
+  })
+  // #endregion
 }
 
 function openMiFillDialog(row: any) {
@@ -1072,6 +1168,31 @@ const loadTaskDetail = async () => {
           placedBindingIds: Array.from(placedBindingIds.value)
         })
         // #endregion
+        // #region agent log
+        agentDebugLog('post-main-render-fix', 'R1,R2,R3', 'tasks/detail.vue:1124', 'MI subtask render path summary', {
+          currentFormName: currentFormName.value,
+          fieldTypes: formFields.value.map((field: any) => ({
+            type: field.type,
+            label: field.label,
+            bindingId: field._bindingId,
+            children: Array.isArray(field.children) ? field.children.map((child: any) => ({ type: child.type, label: child.label, bindingId: child._bindingId })) : []
+          })),
+          tabFieldTypes: formTabs.value.map((tab: any) => ({
+            label: tab.label,
+            fields: (tab.fields || []).map((field: any) => ({ type: field.type, label: field.label, bindingId: field._bindingId }))
+          })),
+          subTableBindings: subTableBindings.value.map(binding => ({
+            bindingId: binding.bindingId,
+            tableId: binding.tableId,
+            tableName: binding.tableName,
+            bindingMode: binding.bindingMode,
+            columnTypes: binding.columns.map(column => ({ field: column.field, label: column.label, type: column.type })),
+            rows: binding.data.length
+          })),
+          placedBindingIds: Array.from(placedBindingIds.value),
+          bottomBindingIds: bottomSubTableBindings.value.map(binding => binding.bindingId)
+        })
+        // #endregion
       }
     }
   } catch (error: any) {
@@ -1217,8 +1338,10 @@ const loadFunctionUnitContent = async (processKey: string) => {
       for (const b of tableBindings) {
         if (b.bindingType === 'PRIMARY') continue
         const columns = deriveColumnsFromBinding(b, subForms, formConfigForSubTables)
+        const subFormDesign = resolveSubFormDesign(b, subForms)
         bindings.push({
           bindingId: b.bindingId,
+          tableId: b.tableId ?? null,
           bindingType: b.bindingType,
           bindingMode: b.bindingMode,
           foreignKeyField: b.foreignKeyField,
@@ -1226,6 +1349,8 @@ const loadFunctionUnitContent = async (processKey: string) => {
           tableType: b.tableType,
           tableDescription: b.tableDescription,
           columns,
+          formFields: subFormDesign.formFields,
+          formOptions: subFormDesign.formOptions,
           data: []
         })
       }
@@ -1268,7 +1393,20 @@ const loadFunctionUnitContent = async (processKey: string) => {
         tabCount: formTabs.value.length,
         placedBindingIds: Array.from(placedBindingIds.value),
         bindingIds: bindings.map(binding => binding.bindingId),
-        bindingRowCounts: bindings.map(binding => ({ bindingId: binding.bindingId, rows: binding.data?.length || 0, columns: binding.columns?.length || 0 })),
+        bindingRowCounts: bindings.map(binding => ({
+          bindingId: binding.bindingId,
+          tableId: binding.tableId,
+          tableName: binding.tableName,
+          rows: binding.data?.length || 0,
+          columns: binding.columns?.length || 0,
+          linkColumns: binding.columns
+            ?.filter((column: any) => column.type === 'linkForm')
+            .map((column: any) => ({
+              field: column.field,
+              label: column.label,
+              props: column.props
+            })) || []
+        })),
         savedSubTableKeys: savedSubTables && typeof savedSubTables === 'object' ? Object.keys(savedSubTables) : [],
         currentTaskDefinitionKey: taskInfo.value.taskDefinitionKey
       })
@@ -1333,10 +1471,14 @@ const loadFunctionUnitContent = async (processKey: string) => {
           for (const b of (prevForm.tableBindings || [])) {
             if (b.bindingType === 'PRIMARY') continue
             const cols = deriveColumnsFromBinding(b, prevSubForms, prevConfigForSubTables)
+            const subFormDesign = resolveSubFormDesign(b, prevSubForms)
             const binding = {
-              bindingId: b.bindingId, bindingType: b.bindingType, bindingMode: b.bindingMode,
+              bindingId: b.bindingId, tableId: b.tableId ?? null, bindingType: b.bindingType, bindingMode: b.bindingMode,
               foreignKeyField: b.foreignKeyField, tableName: b.tableDisplayName || b.tableName,
-              tableType: b.tableType, tableDescription: b.tableDescription, columns: cols, data: [] as any[]
+              tableType: b.tableType, tableDescription: b.tableDescription, columns: cols,
+              formFields: subFormDesign.formFields,
+              formOptions: subFormDesign.formOptions,
+              data: [] as any[]
             }
             if (savedSubTables) {
               const saved = getSavedSubTableRows(savedSubTables, binding)
@@ -1357,6 +1499,32 @@ const loadFunctionUnitContent = async (processKey: string) => {
 
         previousForms.value = collectedPrevForms
         hydrateCurrentSubTablesFromPreviousForms()
+        // #region agent log
+        agentDebugLog('pre-fix', 'H3,H4,H5', 'tasks/detail.vue:1358', 'previous forms and current subtable hydration summary', {
+          selectedFormName: selectedForm.name,
+          currentFormInfo,
+          previousFormNames: previousForms.value.map(form => form.formName),
+          previousBindings: previousForms.value.map(form => ({
+            formName: form.formName,
+            bindings: form.subTableBindings.map(binding => ({
+              bindingId: binding.bindingId,
+              tableId: binding.tableId,
+              tableName: binding.tableName,
+              rows: binding.data?.length || 0,
+              columns: binding.columns?.length || 0,
+              rowKeySets: (binding.data || []).slice(0, 3).map((row: any) => Object.keys(row || {}))
+            }))
+          })),
+          currentBindings: subTableBindings.value.map(binding => ({
+            bindingId: binding.bindingId,
+            tableId: binding.tableId,
+            tableName: binding.tableName,
+            rows: binding.data?.length || 0,
+            columns: binding.columns?.length || 0
+          })),
+          formDataSubTableKeys: formData.value.__subTables__ ? Object.keys(formData.value.__subTables__) : []
+        })
+        // #endregion
       } else {
         previousForms.value = []
       }
@@ -2220,6 +2388,20 @@ const deriveColumnsFromBinding = (binding: any, subForms?: Record<string, any>, 
         binding.tableDisplayName || binding.tableName
       )
       return listColumns.map((column: any) => {
+        if (column.columnType === 'linkForm') {
+          return {
+            field: column.fieldName || `linkForm:${column.componentId || binding.bindingId}`,
+            label: column.columnLabel || column.comment || column.linkText || 'Link Form',
+            type: 'linkForm',
+            minWidth: column.minWidth || 120,
+            props: {
+              linkText: column.linkText || 'Details',
+              componentId: column.componentId,
+              boundSubTableBindingId: column.boundSubTableBindingId,
+              boundSubTableName: column.boundSubTableName
+            }
+          }
+        }
         if (column.columnType === 'lookup') {
           const label = column.columnLabel || column.comment || 'Lookup'
           const field = isSyntheticLookupField(column.fieldName) && isAssigneeLikeLabel(label) && assigneeField

@@ -65,6 +65,7 @@ export default {
     attachments: '附件',
     all: '全部',
     actions: '操作',
+    operation: '操作',
     back: '返回',
     downloading: '正在下載檔案...',
     downloadFailed: '檔案下載失敗，請重試',

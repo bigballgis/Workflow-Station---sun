@@ -36,7 +36,7 @@
                                 :title="resolveBinding(child._bindingId)!.tableName"
                                 :columns="resolveBinding(child._bindingId)!.columns"
                                 :model-value="resolveBinding(child._bindingId)!.data"
-                                :editable="!readonly && resolveBinding(child._bindingId)!.bindingMode === 'EDITABLE'"
+                                :editable="isSubTableEditable(child._bindingId)"
                                 :row-formulas="getSubFormRowFormulas(child._bindingId)"
                                 :summary-columns="getSummaryColumns(child._bindingId)"
                                 :summary-aggregations="getSummaryAggregations(child._bindingId)"
@@ -48,7 +48,9 @@
                                 :can-assign="!readonly && showSubTableAssignColumn(child._bindingId)"
                                 :enable-polling="enableSubTablePolling"
                                 :polling-interval="subTablePollingInterval"
+                                :linked-sub-table-bindings="subTableBindings"
                                 @update:model-value="(rows: any[]) => handleSubTableUpdate(child._bindingId!, rows)"
+                                @update:linked-sub-table-data="handleSubTableUpdate"
                                 style="margin-bottom: 16px;"
                               />
                             </el-col>
@@ -115,7 +117,7 @@
                       :title="resolveBinding(field._bindingId)!.tableName"
                       :columns="resolveBinding(field._bindingId)!.columns"
                       :model-value="resolveBinding(field._bindingId)!.data"
-                      :editable="!readonly && resolveBinding(field._bindingId)!.bindingMode === 'EDITABLE'"
+                      :editable="isSubTableEditable(field._bindingId)"
                       :row-formulas="getSubFormRowFormulas(field._bindingId)"
                       :summary-columns="getSummaryColumns(field._bindingId)"
                       :summary-aggregations="getSummaryAggregations(field._bindingId)"
@@ -127,7 +129,9 @@
                       :can-assign="!readonly && showSubTableAssignColumn(field._bindingId)"
                       :enable-polling="enableSubTablePolling"
                       :polling-interval="subTablePollingInterval"
+                      :linked-sub-table-bindings="subTableBindings"
                       @update:model-value="(rows: any[]) => handleSubTableUpdate(field._bindingId!, rows)"
+                      @update:linked-sub-table-data="handleSubTableUpdate"
                       style="margin-bottom: 16px;"
                     />
                   </el-col>
@@ -211,7 +215,7 @@
                             :title="resolveBinding(child._bindingId)!.tableName"
                             :columns="resolveBinding(child._bindingId)!.columns"
                             :model-value="resolveBinding(child._bindingId)!.data"
-                            :editable="!readonly && resolveBinding(child._bindingId)!.bindingMode === 'EDITABLE'"
+                            :editable="isSubTableEditable(child._bindingId)"
                             :row-formulas="getSubFormRowFormulas(child._bindingId)"
                             :summary-columns="getSummaryColumns(child._bindingId)"
                             :summary-aggregations="getSummaryAggregations(child._bindingId)"
@@ -223,7 +227,9 @@
                             :can-assign="!readonly && showSubTableAssignColumn(child._bindingId)"
                             :enable-polling="enableSubTablePolling"
                             :polling-interval="subTablePollingInterval"
+                            :linked-sub-table-bindings="subTableBindings"
                             @update:model-value="(rows: any[]) => handleSubTableUpdate(child._bindingId!, rows)"
+                            @update:linked-sub-table-data="handleSubTableUpdate"
                             style="margin-bottom: 16px;"
                           />
                         </el-col>
@@ -290,7 +296,7 @@
                   :title="resolveBinding(field._bindingId)!.tableName"
                   :columns="resolveBinding(field._bindingId)!.columns"
                   :model-value="resolveBinding(field._bindingId)!.data"
-                  :editable="!readonly && resolveBinding(field._bindingId)!.bindingMode === 'EDITABLE'"
+                  :editable="isSubTableEditable(field._bindingId)"
                   :row-formulas="getSubFormRowFormulas(field._bindingId)"
                   :summary-columns="getSummaryColumns(field._bindingId)"
                   :summary-aggregations="getSummaryAggregations(field._bindingId)"
@@ -302,7 +308,9 @@
                   :can-assign="!readonly && showSubTableAssignColumn(field._bindingId)"
                   :enable-polling="enableSubTablePolling"
                   :polling-interval="subTablePollingInterval"
+                  :linked-sub-table-bindings="subTableBindings"
                   @update:model-value="(rows: any[]) => handleSubTableUpdate(field._bindingId!, rows)"
+                  @update:linked-sub-table-data="handleSubTableUpdate"
                   style="margin-bottom: 16px;"
                 />
               </el-col>
@@ -402,6 +410,8 @@ interface SubTableBinding {
   tableDescription: string
   columns: any[]
   data: any[]
+  formFields?: FormField[]
+  formOptions?: Record<string, any>
 }
 
 interface Props {
@@ -413,6 +423,7 @@ interface Props {
   labelPosition?: 'left' | 'right' | 'top'
   size?: 'large' | 'default' | 'small'
   subTableBindings?: SubTableBinding[]
+  previewSubTables?: boolean
   uploadUrl?: string
   // Task 7.2: BusinessLogicEngine config
   config?: FormBusinessLogicConfig
@@ -435,6 +446,7 @@ const props = withDefaults(defineProps<Props>(), {
   labelPosition: 'left',
   size: 'default',
   subTableBindings: () => [],
+  previewSubTables: false,
   allowSubTableAssign: true,
 })
 
@@ -488,7 +500,7 @@ const bindingMap = computed(() => {
 })
 const missingBindingLogKeys = new Set<string>()
 const agentDebugLog = (runId: string, hypothesisId: string, location: string, message: string, data: Record<string, any>) => {
-  fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '619bad' }, body: JSON.stringify({ sessionId: '619bad', runId, hypothesisId, location, message, data, timestamp: Date.now() }) }).catch(() => {})
+  fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'b88427' }, body: JSON.stringify({ sessionId: 'b88427', runId, hypothesisId, location, message, data, timestamp: Date.now() }) }).catch(() => {})
 }
 const resolveBinding = (id?: number) => {
   const binding = id != null ? bindingMap.value.get(id) : undefined
@@ -508,6 +520,12 @@ const resolveBinding = (id?: number) => {
     }
   }
   return binding
+}
+
+function isSubTableEditable(bindingId?: number): boolean {
+  const binding = resolveBinding(bindingId)
+  if (!binding || props.readonly) return false
+  return props.previewSubTables || binding.bindingMode === 'EDITABLE'
 }
 
 function subTableAssigneeField(bindingId?: number): string | undefined {

@@ -65,6 +65,7 @@ export default {
     attachments: 'Attachments',
     all: 'All',
     actions: 'Actions',
+    operation: 'Operation',
     back: 'Back',
     downloading: 'Downloading file...',
     downloadFailed: 'Download failed, please try again',

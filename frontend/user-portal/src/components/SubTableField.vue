@@ -101,6 +101,11 @@
               </div>
             </div>
           </template>
+          <template v-else-if="col.type === 'linkForm'">
+            <el-link type="primary" :underline="false" @click="handleLinkFormClick(col, scope.row, scope.$index)">
+              {{ col.props?.linkText || t('linkForm.defaultLinkText') }}
+            </el-link>
+          </template>
           <span v-else>{{ resolveDisplayValue(col, scope.row[col.field]) }}</span>
         </template>
       </el-table-column>
@@ -117,7 +122,7 @@
         </template>
       </el-table-column>
 
-      <el-table-column v-if="editable" :label="t('subTable.actions')" width="120">
+      <el-table-column v-if="editable" :label="t('common.operation')" width="120">
         <template #default="scope">
           <el-button link type="primary" size="small" @click="openEditDialog(scope.$index)">{{ t('subTable.edit') }}</el-button>
           <el-button link type="danger" size="small" @click="deleteRow(scope.$index)">{{ t('subTable.delete') }}</el-button>
@@ -185,7 +190,7 @@
 
     <SubTableAddDialog
       :visible="dialogVisible"
-      :columns="columns"
+      :columns="editableColumns"
       :mode="dialogMode"
       :initialData="dialogInitialData"
       :row-formulas="rowFormulas"
@@ -194,6 +199,87 @@
       @update:visible="dialogVisible = $event"
       @save="handleDialogSave"
     />
+
+    <Teleport to="body">
+      <div v-if="linkFormDialogVisible" class="link-form-modal-overlay">
+        <div ref="linkFormModalPanelRef" class="link-form-modal-panel" role="dialog" aria-modal="true">
+          <div class="link-form-modal-header">
+            <span>{{ activeLinkColumn?.label || selectedLinkBinding?.tableName || t('linkForm.linkedForm') }}</span>
+          </div>
+          <div class="link-form-dialog-body">
+            <el-alert
+              v-if="selectedLinkBinding && linkedFormFields.length === 0"
+              type="warning"
+              :closable="false"
+              show-icon
+              :title="t('subTable.noData')"
+              style="margin-bottom: 12px;"
+            />
+            <el-form
+              v-if="selectedLinkBinding && linkedFormFields.length > 0"
+              :model="linkedFormData"
+              :label-width="linkedFormLabelWidth"
+              label-position="right"
+            >
+              <el-row :gutter="20">
+                <template v-for="field in linkedFormFields" :key="field.key">
+                  <el-col v-if="field.type === 'card'" :span="field.span || 24">
+                    <el-card shadow="never" class="linked-form-card">
+                      <template v-if="field.label" #header>
+                        <span>{{ field.label }}</span>
+                      </template>
+                      <el-row :gutter="20">
+                        <el-col v-for="child in field.children || []" :key="child.key" :span="child.span || 24">
+                          <el-form-item :label="child.label" :prop="child.key" :required="child.required">
+                            <FieldRenderer
+                              :field="child"
+                              :model-value="linkedFormData[child.key]"
+                              :readonly="!canEditSelectedLinkBinding"
+                              @update:model-value="(val: any) => updateLinkedFormField(child.key, val)"
+                            />
+                          </el-form-item>
+                        </el-col>
+                      </el-row>
+                    </el-card>
+                  </el-col>
+                  <el-col v-else :span="field.span || 24">
+                    <el-form-item :label="field.label" :prop="field.key" :required="field.required">
+                      <FieldRenderer
+                        :field="field"
+                        :model-value="linkedFormData[field.key]"
+                        :readonly="!canEditSelectedLinkBinding"
+                        @update:model-value="(val: any) => updateLinkedFormField(field.key, val)"
+                      />
+                    </el-form-item>
+                  </el-col>
+                </template>
+              </el-row>
+            </el-form>
+            <SubTableField
+              v-else-if="selectedLinkBinding"
+              :title="selectedLinkBinding.tableName"
+              :columns="selectedLinkBinding.columns"
+              :model-value="linkedSubTableRows"
+              :editable="canEditSelectedLinkBinding"
+              :linked-sub-table-bindings="linkedSubTableBindings"
+              @update:model-value="handleLinkedSubTableUpdate"
+            />
+            <el-empty v-else :description="t('subTable.noData')" :image-size="60" />
+          </div>
+          <div class="link-form-modal-footer">
+            <el-button @click="linkFormDialogVisible = false">{{ t('common.cancel') }}</el-button>
+            <el-button
+              v-if="selectedLinkBinding && linkedFormFields.length > 0"
+              type="primary"
+              :disabled="!canEditSelectedLinkBinding"
+              @click="saveLinkedFormData"
+            >
+              {{ t('common.save') }}
+            </el-button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
 
     <!-- User picker dialog for assignment -->
     <el-dialog 
@@ -231,7 +317,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue'
+import { ref, watch, computed, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Plus, Document, Loading, Search } from '@element-plus/icons-vue'
 import { ElMessageBox, ElMessage } from 'element-plus'
@@ -239,8 +325,9 @@ import DOMPurify from 'dompurify'
 import SubTableAddDialog from './SubTableAddDialog.vue'
 import { resolveDisplayValue } from './subTableAddDialogHelpers'
 import type { DialogColumn } from './subTableAddDialogHelpers'
-import type { RowFormulaRule, SubTableValidationConfig } from './formRendererHelpers'
+import type { FormField, RowFormulaRule, SubTableValidationConfig } from './formRendererHelpers'
 import { calculateSummary } from './businessLogicEngine'
+import FieldRenderer from './FieldRenderer.vue'
 import type { AssignSubTableRowResponse } from '@/api/task'
 import { assignSubTableRow, assignSubTableRowByIdentity, getSubTableData, getTaskDetail } from '@/api/task'
 import {
@@ -263,7 +350,28 @@ function sanitizeHtml(html: string): string {
   })
 }
 
-type Column = DialogColumn
+type Column = DialogColumn & {
+  type?: DialogColumn['type'] | 'linkForm'
+  props?: DialogColumn['props'] & {
+    linkText?: string
+    componentId?: number
+    boundSubTableBindingId?: number
+    boundSubTableName?: string
+  }
+}
+
+interface SubTableBinding {
+  bindingId: number
+  bindingType: string
+  bindingMode: string
+  tableName: string
+  tableType: string
+  tableDescription: string
+  columns: Column[]
+  data: any[]
+  formFields?: FormField[]
+  formOptions?: Record<string, any>
+}
 
 /** Return a reasonable minimum column width based on field type */
 function columnMinWidth(col: Column): number {
@@ -339,6 +447,7 @@ const props = defineProps<{
   // Fill form button (todo detail for MI subtask)
   showFillButton?: boolean
   fillButtonLabel?: string
+  linkedSubTableBindings?: SubTableBinding[]
 }>()
 
 const emit = defineEmits<{
@@ -347,6 +456,7 @@ const emit = defineEmits<{
   (e: 'dataRefreshed', rows: any[]): void
   (e: 'viewDetail', row: any, index: number): void
   (e: 'fillForm', row: any, index: number): void
+  (e: 'update:linkedSubTableData', bindingId: number, rows: any[]): void
 }>()
 
 const rows = ref<any[]>([])
@@ -355,11 +465,72 @@ const uploadNames = ref<Record<string, string>>({})
 // Set of keys currently being downloaded
 const downloadingKeys = ref<Record<string, boolean>>({})
 
+const agentDebugLog = (runId: string, hypothesisId: string, location: string, message: string, data: Record<string, any>) => {
+  const payload = JSON.stringify({ sessionId: 'b88427', runId, hypothesisId, location, message, data, timestamp: Date.now() })
+  fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'b88427' }, body: payload }).catch(() => {
+    try { navigator.sendBeacon('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', new Blob([payload], { type: 'application/json' })) } catch {}
+  })
+}
+
+function assigneeLikeFields(): string[] {
+  return props.columns
+    .map(col => col.field)
+    .filter(field => /assignee|处理人|負責人|经办人|經辦人/i.test(String(field)))
+}
+
 // Dialog state
 const dialogVisible = ref(false)
 const dialogMode = ref<'add' | 'edit'>('add')
 const editingRowIndex = ref<number | null>(null)
 const dialogInitialData = ref<Record<string, any> | undefined>(undefined)
+const linkFormDialogVisible = ref(false)
+const linkFormModalPanelRef = ref<HTMLElement | null>(null)
+const activeLinkColumn = ref<Column | null>(null)
+const activeLinkRowIndex = ref<number | null>(null)
+const linkedSubTableRows = ref<any[]>([])
+const linkedFormData = ref<Record<string, any>>({})
+
+const selectedLinkBinding = computed(() => {
+  const col = activeLinkColumn.value
+  if (!col) return null
+  const boundId = col.props?.boundSubTableBindingId
+  const boundName = col.props?.boundSubTableName
+  return props.linkedSubTableBindings?.find(binding =>
+    (boundId != null && Number(binding.bindingId) === Number(boundId)) ||
+    (!!boundName && binding.tableName === boundName)
+  ) || null
+})
+
+const linkedFormFields = computed(() => selectedLinkBinding.value?.formFields || [])
+const linkedFormLabelWidth = computed(() => {
+  const width = selectedLinkBinding.value?.formOptions?.form?.labelWidth
+  return typeof width === 'string' && width.trim() ? width : '125px'
+})
+const canEditSelectedLinkBinding = computed(() => !!(props.editable && selectedLinkBinding.value?.bindingMode === 'EDITABLE'))
+
+watch(linkFormDialogVisible, async (visible) => {
+  if (!visible) return
+  await nextTick()
+  requestAnimationFrame(() => {
+    const panel = linkFormModalPanelRef.value
+    if (!panel) return
+    const overlay = panel.closest('.link-form-modal-overlay')
+    const pr = panel.getBoundingClientRect()
+    const vh = window.innerHeight
+    const centerY = pr.top + pr.height / 2
+    // #region agent log
+    agentDebugLog('post-fix', 'H-vert,H-footer', 'SubTableField.vue:linkFormModalLayout', 'link form modal layout metrics', {
+      panelTop: Math.round(pr.top),
+      panelHeight: Math.round(pr.height),
+      viewportH: vh,
+      distanceFromViewportVerticalCenter: Math.round(Math.abs(centerY - vh / 2)),
+      overlayAlignItems: overlay instanceof HTMLElement ? getComputedStyle(overlay).alignItems : 'n/a',
+      canEditLinkBinding: canEditSelectedLinkBinding.value,
+      linkedFormFieldCount: linkedFormFields.value.length
+    })
+    // #endregion
+  })
+})
 
 // Assignee column: show when assign buttons are active, OR when data already has assignee values (read-only completed tasks)
 const showAssigneeColumn = computed(() => {
@@ -369,6 +540,8 @@ const showAssigneeColumn = computed(() => {
     r && (r.assignee_display_name || r[props.assigneeField!])
   )
 })
+
+const editableColumns = computed(() => props.columns.filter(col => col.type !== 'linkForm'))
 
 // Summary row support
 const hasSummary = computed(() => (props.summaryColumns?.length ?? 0) > 0)
@@ -393,6 +566,144 @@ function getSummaryMethod({ columns: tableCols }: { columns: any[] }) {
 }
 
 watch(() => props.modelValue, (v) => { rows.value = v ? [...v] : [] }, { immediate: true, deep: true })
+
+watch(
+  () => [props.title, props.columns, props.modelValue] as const,
+  () => {
+    const linkColumns = props.columns.filter(col => col.type === 'linkForm')
+    if (!linkColumns.length) return
+    // #region agent log
+    agentDebugLog('link-form-popup-pre-fix', 'R1,R3', 'SubTableField.vue:421', 'linkForm columns and row payload available', {
+      title: props.title,
+      rowCount: rows.value.length,
+      linkColumns: linkColumns.map(col => ({
+        field: col.field,
+        label: col.label,
+        props: {
+          linkText: col.props?.linkText,
+          componentId: col.props?.componentId,
+          boundSubTableBindingId: col.props?.boundSubTableBindingId,
+          boundSubTableName: col.props?.boundSubTableName
+        }
+      })),
+      firstRowKeys: rows.value[0] && typeof rows.value[0] === 'object' ? Object.keys(rows.value[0]) : [],
+      firstRowSubTableKeys: rows.value[0]?.__subTables__ && typeof rows.value[0].__subTables__ === 'object'
+        ? Object.keys(rows.value[0].__subTables__)
+        : []
+    })
+    // #endregion
+  },
+  { immediate: true, deep: true }
+)
+
+function handleLinkFormClick(col: Column, row: Record<string, any>, rowIndex: number) {
+  // #region agent log
+  agentDebugLog('link-form-popup-pre-fix', 'R1,R2,R3', 'SubTableField.vue:450', 'linkForm clicked', {
+    title: props.title,
+    rowIndex,
+    column: {
+      field: col.field,
+      label: col.label,
+      props: {
+        linkText: col.props?.linkText,
+        componentId: col.props?.componentId,
+        boundSubTableBindingId: col.props?.boundSubTableBindingId,
+        boundSubTableName: col.props?.boundSubTableName
+      }
+    },
+    rowKeys: row && typeof row === 'object' ? Object.keys(row) : [],
+    rowSubTableKeys: row?.__subTables__ && typeof row.__subTables__ === 'object' ? Object.keys(row.__subTables__) : []
+  })
+  // #endregion
+  activeLinkColumn.value = col
+  activeLinkRowIndex.value = rowIndex
+  const binding = props.linkedSubTableBindings?.find(item =>
+    (col.props?.boundSubTableBindingId != null && Number(item.bindingId) === Number(col.props.boundSubTableBindingId)) ||
+    (!!col.props?.boundSubTableName && item.tableName === col.props.boundSubTableName)
+  )
+  const boundId = col.props?.boundSubTableBindingId
+  const boundName = col.props?.boundSubTableName || binding?.tableName
+  const rowSub = row?.__subTables__ && typeof row.__subTables__ === 'object' ? (row.__subTables__ as Record<string, any>) : {}
+  const saved = (boundId != null ? (rowSub[boundId] ?? rowSub[String(boundId)]) : undefined) ?? (boundName ? (rowSub[boundName] ?? rowSub[String(boundName)]) : undefined)
+  const savedRows = Array.isArray(saved) ? saved : []
+  linkedSubTableRows.value = [...savedRows]
+  linkedFormData.value = buildLinkedFormData({ ...(binding || ({} as any)), data: savedRows })
+  linkFormDialogVisible.value = true
+}
+
+function buildLinkedFormData(binding?: SubTableBinding): Record<string, any> {
+  const source = binding?.data?.[0] && typeof binding.data[0] === 'object' ? binding.data[0] : {}
+  const next: Record<string, any> = { ...source }
+  binding?.formFields?.forEach(field => {
+    if (field.type === 'card') {
+      field.children?.forEach(child => {
+        if (next[child.key] === undefined) next[child.key] = child.defaultValue ?? null
+      })
+    } else if (next[field.key] === undefined) {
+      next[field.key] = field.defaultValue ?? null
+    }
+  })
+  return next
+}
+
+function updateLinkedFormField(key: string, value: any) {
+  linkedFormData.value = { ...linkedFormData.value, [key]: value }
+}
+
+function saveLinkedFormData() {
+  const linkRowIndex = activeLinkRowIndex.value
+  const col = activeLinkColumn.value
+  if (linkRowIndex == null || !col) {
+    linkFormDialogVisible.value = false
+    return
+  }
+
+  const boundId = col.props?.boundSubTableBindingId
+  const binding = selectedLinkBinding.value
+  const boundName = col.props?.boundSubTableName || binding?.tableName
+
+  const currentRows = linkedSubTableRows.value.length > 0 ? [...linkedSubTableRows.value] : [{}]
+  currentRows[0] = { ...currentRows[0], ...linkedFormData.value }
+  linkedSubTableRows.value = [...currentRows]
+
+  const nextMainRows = rows.value.map((r, idx) => {
+    if (idx !== linkRowIndex) return r
+    const base = (r && typeof r === 'object') ? { ...r } : {}
+    const sub = { ...((base.__subTables__ && typeof base.__subTables__ === 'object') ? base.__subTables__ : {}) } as Record<string, any>
+    if (boundId != null) {
+      sub[boundId] = currentRows
+      sub[String(boundId)] = currentRows
+    }
+    if (boundName) {
+      sub[boundName] = currentRows
+      sub[String(boundName)] = currentRows
+    }
+    base.__subTables__ = sub
+    return base
+  })
+
+  // #region agent log
+  agentDebugLog('post-fix', 'H-persist,H-isolation', 'SubTableField.vue:saveLinkedFormData', 'link form saved into main row __subTables__ and emitted update:modelValue', {
+    title: props.title,
+    linkRowIndex,
+    boundId,
+    boundName,
+    savedRowSubTableKeys: nextMainRows[linkRowIndex]?.__subTables__ ? Object.keys(nextMainRows[linkRowIndex].__subTables__) : [],
+    savedLinkedRowCount: Array.isArray(currentRows) ? currentRows.length : -1
+  })
+  // #endregion
+
+  emit('update:modelValue', nextMainRows)
+  linkFormDialogVisible.value = false
+}
+
+function handleLinkedSubTableUpdate(rows: any[]) {
+  linkedSubTableRows.value = [...rows]
+  const bindingId = selectedLinkBinding.value?.bindingId
+  if (bindingId != null) {
+    emit('update:linkedSubTableData', bindingId, rows)
+  }
+}
 
 
 
@@ -445,6 +756,18 @@ function handleAdd() {
   dialogMode.value = 'add'
   dialogInitialData.value = undefined
   editingRowIndex.value = null
+  // #region agent log
+  agentDebugLog('pre-fix', 'H1,H2', 'SubTableField.vue:444', 'open add record dialog', {
+    title: props.title,
+    rowCount: rows.value.length,
+    columnCount: props.columns.length,
+    assigneeFieldPropPresent: !!props.assigneeField,
+    assigneeLikeFields: assigneeLikeFields(),
+    previousRowHasAssigneeLikeValue: rows.value.some(row =>
+      assigneeLikeFields().some(field => row?.[field] != null && row?.[field] !== '')
+    )
+  })
+  // #endregion
   dialogVisible.value = true
 }
 
@@ -452,6 +775,22 @@ function openEditDialog(i: number) {
   dialogMode.value = 'edit'
   editingRowIndex.value = i
   dialogInitialData.value = { ...rows.value[i] }
+  const fields = assigneeLikeFields()
+  // #region agent log
+  agentDebugLog('pre-fix', 'H1,H2', 'SubTableField.vue:451', 'open edit record dialog', {
+    title: props.title,
+    rowIndex: i,
+    rowCount: rows.value.length,
+    columnCount: props.columns.length,
+    assigneeFieldPropPresent: !!props.assigneeField,
+    assigneeLikeFields: fields,
+    initialDataKeys: Object.keys(dialogInitialData.value || {}),
+    initialDataHasAssigneeLikeValue: fields.some(field =>
+      dialogInitialData.value?.[field] != null && dialogInitialData.value?.[field] !== ''
+    ),
+    hasAssignmentDisplayName: !!dialogInitialData.value?.assignee_display_name
+  })
+  // #endregion
   dialogVisible.value = true
 }
 
@@ -1049,5 +1388,59 @@ watch(() => props.taskId, () => {
       flex-shrink: 0;
     }
   }
+}
+
+.link-form-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.link-form-modal-panel {
+  width: min(700px, calc(100vw - 48px));
+  max-height: 84vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+}
+
+.link-form-modal-header,
+.link-form-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid #ebeef5;
+}
+
+.link-form-modal-header {
+  font-weight: 600;
+  color: #303133;
+}
+
+.link-form-modal-footer {
+  justify-content: flex-end;
+  gap: 8px;
+  border-top: 1px solid #ebeef5;
+  border-bottom: 0;
+}
+
+.link-form-dialog-body {
+  min-height: 160px;
+  padding: 16px;
+  overflow: auto;
+}
+
+.linked-form-card {
+  width: 100%;
+  margin-bottom: 12px;
 }
 </style>
