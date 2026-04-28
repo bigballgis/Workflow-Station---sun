@@ -70,6 +70,7 @@ interface Props {
   bpmnXml?: string
   currentNodeId?: string
   completedNodeIds?: string[]
+  selectedNodeId?: string
   showToolbar?: boolean
   showLegend?: boolean
 }
@@ -80,6 +81,7 @@ const props = withDefaults(defineProps<Props>(), {
   bpmnXml: '',
   currentNodeId: '',
   completedNodeIds: () => [],
+  selectedNodeId: '',
   showToolbar: true,
   showLegend: true
 })
@@ -147,6 +149,20 @@ const applyStatusColors = () => {
       el.style.fill = fill
       el.style.stroke = stroke
     })
+
+    // Apply selected-node highlight (blue border, overrides status colors)
+    if (props.selectedNodeId && props.selectedNodeId === node.id) {
+      shapes.forEach(shape => {
+        const el = shape as SVGElement
+        el.style.stroke = '#409EFF'
+        el.style.strokeWidth = '3px'
+      })
+      paths.forEach(path => {
+        const el = path as SVGElement
+        el.style.stroke = '#409EFF'
+        el.style.strokeWidth = '3px'
+      })
+    }
   })
 }
 
@@ -230,6 +246,22 @@ const renderBpmn = async () => {
       if (z !== undefined) zoomLevel.value = z as number
     })
 
+    // Wire up node-click event on the diagram
+    eventBus.on('element.click', (event: any) => {
+      const element = event.element
+      if (!element) return
+      // Only emit for shape elements (nodes), not edges/connections
+      if (element.type === 'bpmn:SequenceFlow' ||
+          element.type?.includes('Edge') ||
+          element.type === 'label') {
+        return
+      }
+      const node = props.nodes.find(n => n.id === element.id)
+      if (node) {
+        emit('node-click', node)
+      }
+    })
+
     emit('loaded')
   } catch (err) {
     console.error('Failed to render BPMN:', err)
@@ -277,7 +309,7 @@ watch(() => props.bpmnXml, async (xml) => {
   }
 }, { immediate: false })
 
-watch([() => props.nodes, () => props.completedNodeIds, () => props.currentNodeId], () => {
+watch([() => props.nodes, () => props.completedNodeIds, () => props.currentNodeId, () => props.selectedNodeId], () => {
   applyStatusColors()
 }, { deep: true })
 
@@ -367,4 +399,7 @@ defineExpose({ zoomIn, zoomOut, resetZoom, fitViewport })
 
 /* Allow bpmn-js SVG to render fully without clipping */
 .bpmn-canvas svg { overflow: visible !important; }
+
+/* Pointer cursor on clickable nodes */
+.djs-shape { cursor: pointer !important; }
 </style>

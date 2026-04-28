@@ -83,10 +83,49 @@
             :bpmn-xml="bpmnXml"
             :current-node-id="currentNodeId"
             :completed-node-ids="completedNodeIds"
+            :selected-node-id="selectedNodeId ?? ''"
             :show-toolbar="true"
             :show-legend="true"
+            @node-click="handleNodeClick"
           />
           <el-empty v-else :description="t('task.noProcessDefinition')" />
+        </div>
+      </div>
+
+      <!-- Selected node form (click a node in the diagram to show its form) -->
+      <div v-if="selectedNodeId && selectedNodeForm" class="section form-section">
+        <div class="section-header">
+          <el-icon><Document /></el-icon>
+          <span>{{ selectedNodeForm.formName }}</span>
+          <el-tag v-if="selectedNodeForm.isCurrentTask" type="warning" size="small">{{ t('task.currentStep') }}</el-tag>
+          <el-tag v-else type="info" size="small">{{ t('task.readonly') }}</el-tag>
+          <el-button size="small" @click="clearNodeSelection" style="margin-left: auto;">{{ t('common.back') }}</el-button>
+        </div>
+        <div class="section-content">
+          <div v-if="selectedNodeForm.fields.length > 0 || selectedNodeForm.tabs.length > 0" class="form-container">
+            <FormRenderer
+              :fields="selectedNodeForm.fields"
+              :tabs="selectedNodeForm.tabs"
+              :model-value="selectedNodeForm.values"
+              :label-width="formLabelWidth"
+              :readonly="true"
+              :subTableBindings="selectedNodeForm.subTableBindings"
+            />
+          </div>
+          <el-empty v-else :description="t('task.noFormData')" />
+        </div>
+      </div>
+      <!-- Node selected but no form bound -->
+      <div v-else-if="selectedNodeId && !selectedNodeForm" class="section form-section">
+        <div class="section-header">
+          <el-icon><Document /></el-icon>
+          <span>{{ selectedNodeId }}</span>
+        </div>
+        <div class="section-content">
+          <el-empty :description="`No Form Bound`" />
+          <div style="text-align: center; margin-top: 8px;">
+            <el-button size="small" @click="clearNodeSelection">{{ t('common.back') }}</el-button>
+          </div>
         </div>
       </div>
 
@@ -117,7 +156,7 @@
 
       <!-- Section 3: Previous node forms (read-only, displayed in order) -->
       <template v-for="prevForm in previousForms" :key="prevForm.formId">
-        <div class="section form-section">
+        <div v-if="!selectedNodeId" class="section form-section">
           <div class="section-header">
             <el-icon><Document /></el-icon>
             <span>{{ prevForm.formName }}</span>
@@ -153,9 +192,9 @@
         </div>
       </template>
 
-      <!-- Section 3: Form data -->
+      <!-- Section 3: Form data (hide normal task form card when previewing a selected node) -->
       <div
-        v-if="formFields.length > 0 || formTabs.length > 0 || bottomSubTableBindings.length > 0"
+        v-if="!selectedNodeId && (!isMiSubTaskMode || bottomSubTableBindings.length > 0 || formFields.length > 0 || formTabs.length > 0)"
         class="section form-section"
       >
         <div class="section-header">
@@ -503,6 +542,22 @@ const processFlows = ref<ProcessFlow[]>([])
 const currentNodeId = ref('')
 const completedNodeIds = ref<string[]>([])
 const bpmnXml = ref('')
+
+// Node-to-form mapping for diagram click interaction
+const selectedNodeId = ref<string | null>(null)
+interface NodeFormInfo {
+  formName: string
+  isCurrentTask: boolean
+  fields: FormField[]
+  tabs: FormTab[]
+  values: Record<string, any>
+  subTableBindings: PreviousFormEntry['subTableBindings']
+}
+const nodeFormMap = ref<Map<string, NodeFormInfo>>(new Map())
+const selectedNodeForm = computed<NodeFormInfo | null>(() => {
+  if (!selectedNodeId.value) return null
+  return nodeFormMap.value.get(selectedNodeId.value) ?? null
+})
 
 // Form data
 const formFields = ref<FormField[]>([])
@@ -1088,6 +1143,20 @@ const onActionDialogOpened = () => {
   }
 }
 
+// ── Node click handlers for diagram ──────────────────────────────────────
+const handleNodeClick = (node: ProcessNode) => {
+  if (selectedNodeId.value === node.id) {
+    // Clicking the same node again deselects
+    clearNodeSelection()
+  } else {
+    selectedNodeId.value = node.id
+  }
+}
+
+const clearNodeSelection = () => {
+  selectedNodeId.value = null
+}
+
 // Form popup state
 const formPopupVisible = ref(false)
 const formPopupTitle = ref('')
@@ -1527,6 +1596,107 @@ const loadFunctionUnitContent = async (processKey: string) => {
         // #endregion
       } else {
         previousForms.value = []
+      }
+
+      // Build node-to-form map for diagram click interaction
+      try {
+        const newMap = new Map<string, NodeFormInfo>()
+        const bpmnData = content.processes[0]?.data
+        if (bpmnData) {
+          const parser = new DOMParser()
+          const doc = parser.parseFromString(bpmnData, 'text/xml')
+          const allElements = doc.getElementsByTagName('*')
+          for (let i = 0; i < allElements.length; i++) {
+            const el = allElements[i]
+            const localName = el.localName || el.nodeName.split(':').pop()
+            if (localName !== 'userTask' && localName !== 'subProcess' && localName !== 'serviceTask') continue
+            const nodeId = el.getAttribute('id') || ''
+            if (!nodeId) continue
+            // Extract formId/formName from node properties
+            let formId: string | null = null
+            let formName: string | null = null
+            const props = el.getElementsByTagName('*')
+            for (let j = 0; j < props.length; j++) {
+              const p = props[j]
+              const ln = p.localName || p.nodeName.split(':').pop()
+              if (ln === 'property' || ln === 'values') {
+                const n = p.getAttribute('name'), v = p.getAttribute('value')
+                if (n === 'formId' && v) formId = v
+                if (n === 'formName' && v) formName = v
+              }
+            }
+            // Try to match a form from content.forms
+            let matchedForm: any = null
+            if (formId) {
+              matchedForm = content.forms.find((f: any) => String(f.sourceId) === formId)
+            }
+            if (!matchedForm && formName) {
+              matchedForm = content.forms.find((f: any) => f.name === formName)
+            }
+            if (!matchedForm) continue
+
+            // Parse form fields
+            const nodeFields: FormField[] = []
+            const nodeTabs: FormTab[] = []
+            const nodeBindings: PreviousFormEntry['subTableBindings'] = []
+            try {
+              const cfg = typeof matchedForm.data === 'string' ? JSON.parse(matchedForm.data) : (matchedForm.data || {})
+              const rules = cfg.rule && Array.isArray(cfg.rule) ? cfg.rule : (Array.isArray(cfg) ? cfg : null)
+              if (rules) {
+                const tabsRule = rules.find((r: any) => r.type === 'el-tabs')
+                if (tabsRule?.children) {
+                  for (const tabPane of tabsRule.children) {
+                    if (tabPane.type === 'el-tab-pane' && tabPane.props) {
+                      const tabFields: FormField[] = []
+                      if (tabPane.children) tabFields.push(...extractFieldsRecursive(tabPane.children))
+                      nodeTabs.push({ name: tabPane.props.name || `tab_${nodeTabs.length}`, label: tabPane.props.label || `Tab ${nodeTabs.length + 1}`, fields: tabFields })
+                    }
+                  }
+                } else {
+                  nodeFields.push(...extractFieldsRecursive(rules))
+                }
+              }
+              // Parse sub-table bindings
+              let subForms: Record<string, any> = {}
+              let configForSubTables: Record<string, any> = {}
+              try {
+                configForSubTables = cfg
+                subForms = cfg.subForms || {}
+              } catch {}
+              for (const b of (matchedForm.tableBindings || [])) {
+                if (b.bindingType === 'PRIMARY') continue
+                const cols = deriveColumnsFromBinding(b, subForms, configForSubTables)
+                const savedSubTables = formData.value.__subTables__
+                const binding = {
+                  bindingId: b.bindingId, bindingType: b.bindingType, bindingMode: b.bindingMode,
+                  foreignKeyField: b.foreignKeyField, tableName: b.tableDisplayName || b.tableName,
+                  tableType: b.tableType, tableDescription: b.tableDescription, columns: cols, data: [] as any[]
+                }
+                if (savedSubTables) {
+                  const saved = getSavedSubTableRows(savedSubTables, binding)
+                  if (saved) binding.data = cloneSubTableRows(saved)
+                }
+                nodeBindings.push(binding)
+              }
+            } catch {}
+
+            const nodeName = el.getAttribute('name') || nodeId
+            const currentDefKey = (taskInfo.value as any).taskDefinitionKey || ''
+            const isCurrentTask = nodeId === currentDefKey || nodeName === taskInfo.value.taskName
+
+            newMap.set(nodeId, {
+              formName: matchedForm.name || nodeName,
+              isCurrentTask,
+              fields: nodeFields,
+              tabs: nodeTabs,
+              values: { ...formData.value },
+              subTableBindings: nodeBindings
+            })
+          }
+        }
+        nodeFormMap.value = newMap
+      } catch (e) {
+        console.warn('[NodeFormMap] Failed to build:', e)
       }
     }
   } catch (error: any) {
