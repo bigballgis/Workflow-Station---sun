@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.ChangeHistoryContext;
+import com.portal.dto.SubTableChange;
 import com.portal.exception.PortalException;
 import com.portal.dto.ProcessDefinitionInfo;
 import com.portal.dto.ProcessInstanceInfo;
@@ -1873,30 +1874,70 @@ public class ProcessComponent {
             return;
         }
 
-        // Resolve actual form field names from form definitions; only record those.
-        Set<String> formFieldNames = resolveFormFieldNames(variables);
+        ChangeHistoryContext context = ChangeHistoryContext.builder()
+                .processInstanceId(processInstanceId)
+                .taskInstanceId(taskInstanceId)
+                .stageId(taskDefinitionKey)
+                .userId(userId)
+                .build();
 
-        Map<String, Object> filtered = new LinkedHashMap<>();
-        for (Map.Entry<String, Object> e : variables.entrySet()) {
-            String k = e.getKey();
-            if (!formFieldNames.isEmpty() && !formFieldNames.contains(k)) {
-                continue;
-            }
-            filtered.put(k, e.getValue());
-        }
-        if (filtered.isEmpty()) {
-            return;
-        }
+        // Record top-level field changes
         try {
-            ChangeHistoryContext context = ChangeHistoryContext.builder()
-                    .processInstanceId(processInstanceId)
-                    .taskInstanceId(taskInstanceId)
-                    .stageId(taskDefinitionKey)
-                    .userId(userId)
-                    .build();
-            changeHistoryComponent.recordFieldChanges(context, Collections.emptyMap(), filtered);
+            // Resolve actual form field names from form definitions; only record those.
+            Set<String> formFieldNames = resolveFormFieldNames(variables);
+
+            Map<String, Object> filtered = new LinkedHashMap<>();
+            for (Map.Entry<String, Object> e : variables.entrySet()) {
+                String k = e.getKey();
+                if ("__subTables__".equals(k)) {
+                    continue; // handled separately below
+                }
+                if (!formFieldNames.isEmpty() && !formFieldNames.contains(k)) {
+                    continue;
+                }
+                filtered.put(k, e.getValue());
+            }
+
+            if (!filtered.isEmpty()) {
+                changeHistoryComponent.recordFieldChanges(context, Collections.emptyMap(), filtered);
+            }
         } catch (Exception e) {
             log.warn("Failed to record initial submit change history for process {}: {}",
+                    processInstanceId, e.getMessage());
+        }
+
+        // Record sub-table (subform) rows submitted during process initiation as ROW_ADD
+        try {
+            Object subTablesObj = variables.get("__subTables__");
+            if (subTablesObj instanceof Map<?, ?>) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> subTables = (Map<String, Object>) subTablesObj;
+                for (Map.Entry<String, Object> subTableEntry : subTables.entrySet()) {
+                    String subTableKey = subTableEntry.getKey();
+                    Object rowsObj = subTableEntry.getValue();
+                    if (!(rowsObj instanceof List<?>)) {
+                        continue;
+                    }
+                    @SuppressWarnings("unchecked")
+                    List<Map<String, Object>> rows = (List<Map<String, Object>>) rowsObj;
+                    if (rows.isEmpty()) {
+                        continue;
+                    }
+                    List<SubTableChange> changes = new ArrayList<>();
+                    for (Map<String, Object> row : rows) {
+                        Object rowId = row.get("id");
+                        changes.add(SubTableChange.builder()
+                                .changeType("ROW_ADD")
+                                .rowIdentifier(String.valueOf(rowId))
+                                .oldValues(null)
+                                .newValues(new HashMap<>(row))
+                                .build());
+                    }
+                    changeHistoryComponent.recordSubTableChanges(context, subTableKey, changes);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to record initial sub-table change history for process {}: {}",
                     processInstanceId, e.getMessage());
         }
     }

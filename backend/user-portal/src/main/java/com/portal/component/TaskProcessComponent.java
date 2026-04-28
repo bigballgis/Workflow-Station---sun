@@ -3,6 +3,8 @@ package com.portal.component;
 import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.TaskCompleteRequest;
 import com.portal.dto.TaskInfo;
+import com.portal.dto.ChangeHistoryContext;
+import com.portal.dto.SubTableChange;
 import com.portal.entity.DelegationAudit;
 import com.portal.entity.DelegationRule;
 import com.portal.entity.ProcessInstance;
@@ -27,6 +29,7 @@ import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.StringReader;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -49,6 +52,7 @@ public class TaskProcessComponent {
     private final DelegationAuditRepository delegationAuditRepository;
     private final WorkflowEngineClient workflowEngineClient;
     private final ProcessInstanceRepository processInstanceRepository;
+    private final ChangeHistoryComponent changeHistoryComponent;
     private final JdbcTemplate jdbcTemplate;
 
     /**
@@ -1151,7 +1155,45 @@ public class TaskProcessComponent {
         } catch (Exception e) {
             log.warn("Failed to sync approval variables to local ProcessInstance: {}", e.getMessage());
         }
-        
+
+        // Record Change_History for field and sub-table changes during approval (best-effort)
+        try {
+            String chProcessId = task.getProcessInstanceId();
+            Optional<ProcessInstance> chOpt = processInstanceRepository.findById(chProcessId);
+            if (chOpt.isPresent()) {
+                ProcessInstance chInstance = chOpt.get();
+                Map<String, Object> chOldVars = chInstance.getVariables() != null
+                        ? new HashMap<>(chInstance.getVariables())
+                        : new HashMap<>();
+                // Rebuild the change payload: only the newly submitted variables (exclude system keys)
+                Map<String, Object> chSubmitted = new HashMap<>(variables);
+                chSubmitted.remove("action");
+                chSubmitted.remove("decision");
+                chSubmitted.remove("approvalStatus");
+                chSubmitted.remove("approval_result");
+                chSubmitted.remove("approved");
+                chSubmitted.remove("approval_comment");
+                if (!chSubmitted.isEmpty()) {
+                    ChangeHistoryContext chContext = ChangeHistoryContext.builder()
+                            .processInstanceId(chProcessId)
+                            .taskInstanceId(taskId)
+                            .stageId(task.getTaskDefinitionKey())
+                            .userId(userId)
+                            .build();
+                    // Record top-level field changes
+                    changeHistoryComponent.recordFieldChanges(chContext, chOldVars, chSubmitted);
+                    // Record sub-table changes
+                    Object chOldSubTables = chOldVars.get("__subTables__");
+                    Object chNewSubTables = chSubmitted.get("__subTables__");
+                    if (chNewSubTables != null) {
+                        recordSubTableChangeHistory(chContext, chOldSubTables, chNewSubTables);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to record change history during task completion: {}", e.getMessage());
+        }
+
         // 任务完成后，检查流程是否还有活动任务，如果没有则流程可能已完成
         // 这是一个补偿机制，防止 ProcessCompletionListener 通知失败导致状态不同步
         try {
@@ -1800,5 +1842,121 @@ public class TaskProcessComponent {
 
     private String extractAssigneeFieldFromSubProcess(Element subProcessElement) {
         return findFirstPropertyValue(subProcessElement, "assigneeField");
+    }
+
+    // ========== Sub-table change history helpers ==========
+
+    @SuppressWarnings("unchecked")
+    private void recordSubTableChangeHistory(ChangeHistoryContext context,
+                                              Object oldSubTablesObj,
+                                              Object newSubTablesObj) {
+        if (newSubTablesObj == null) {
+            return;
+        }
+        try {
+            Map<String, Object> oldMap = oldSubTablesObj instanceof Map
+                    ? (Map<String, Object>) oldSubTablesObj
+                    : java.util.Collections.emptyMap();
+            Map<String, Object> newMap = (Map<String, Object>) newSubTablesObj;
+
+            for (Map.Entry<String, Object> subTableEntry : newMap.entrySet()) {
+                String subTableKey = subTableEntry.getKey();
+                List<Map<String, Object>> newRows = subTableEntry.getValue() instanceof List
+                        ? (List<Map<String, Object>>) subTableEntry.getValue()
+                        : java.util.Collections.emptyList();
+                List<Map<String, Object>> oldRows = oldMap.get(subTableKey) instanceof List
+                        ? (List<Map<String, Object>>) oldMap.get(subTableKey)
+                        : java.util.Collections.emptyList();
+
+                List<SubTableChange> changes = computeSubTableRowChanges(oldRows, newRows);
+                if (!changes.isEmpty()) {
+                    changeHistoryComponent.recordSubTableChanges(
+                            context, subTableKey, changes);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to record sub-table changes during task completion: {}", e.getMessage());
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<SubTableChange> computeSubTableRowChanges(
+            List<Map<String, Object>> oldRows,
+            List<Map<String, Object>> newRows) {
+        List<SubTableChange> changes = new ArrayList<>();
+
+        // Build row lookup maps by row id
+        Map<Object, Map<String, Object>> oldRowMap = new HashMap<>();
+        for (Map<String, Object> row : oldRows) {
+            Object rowId = row.get("id");
+            if (rowId != null) {
+                oldRowMap.put(rowId, row);
+            }
+        }
+        Map<Object, Map<String, Object>> newRowMap = new HashMap<>();
+        for (Map<String, Object> row : newRows) {
+            Object rowId = row.get("id");
+            if (rowId != null) {
+                newRowMap.put(rowId, row);
+            }
+        }
+
+        // Detect ROW_ADD (in new but not in old)
+        for (Map.Entry<Object, Map<String, Object>> entry : newRowMap.entrySet()) {
+            Object rowId = entry.getKey();
+            if (!oldRowMap.containsKey(rowId)) {
+                changes.add(SubTableChange.builder()
+                        .changeType("ROW_ADD")
+                        .rowIdentifier(String.valueOf(rowId))
+                        .oldValues(null)
+                        .newValues(entry.getValue())
+                        .build());
+            }
+        }
+
+        // Detect ROW_DELETE (in old but not in new)
+        for (Map.Entry<Object, Map<String, Object>> entry : oldRowMap.entrySet()) {
+            Object rowId = entry.getKey();
+            if (!newRowMap.containsKey(rowId)) {
+                changes.add(SubTableChange.builder()
+                        .changeType("ROW_DELETE")
+                        .rowIdentifier(String.valueOf(rowId))
+                        .oldValues(entry.getValue())
+                        .newValues(null)
+                        .build());
+            }
+        }
+
+        // Detect ROW_UPDATE (in both but field values differ)
+        for (Map.Entry<Object, Map<String, Object>> entry : newRowMap.entrySet()) {
+            Object rowId = entry.getKey();
+            Map<String, Object> oldRow = oldRowMap.get(rowId);
+            if (oldRow != null) {
+                Map<String, Object> newRow = entry.getValue();
+                Map<String, Object> changedFields = new HashMap<>();
+                Map<String, Object> oldChangedFields = new HashMap<>();
+                boolean hasChanges = false;
+                // Compare all fields except 'id' (the row key)
+                for (Map.Entry<String, Object> field : newRow.entrySet()) {
+                    if ("id".equals(field.getKey())) continue;
+                    Object oldFieldVal = oldRow.get(field.getKey());
+                    if (!java.util.Objects.equals(oldFieldVal, field.getValue())) {
+                        changedFields.put(field.getKey(), field.getValue());
+                        oldChangedFields.put(field.getKey(), oldFieldVal);
+                        hasChanges = true;
+                    }
+                }
+                if (hasChanges) {
+                    changes.add(SubTableChange.builder()
+                            .changeType("ROW_UPDATE")
+                            .rowIdentifier(String.valueOf(rowId))
+                            .oldValues(oldChangedFields)
+                            .newValues(changedFields)
+                            .build());
+                }
+            }
+        }
+
+        return changes;
     }
 }
