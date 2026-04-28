@@ -29,6 +29,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.flowable.engine.HistoryService;
 import org.flowable.engine.TaskService;
 import org.flowable.engine.history.HistoricActivityInstance;
+import org.flowable.engine.history.HistoricProcessInstance;
 import org.flowable.engine.task.Comment;
 import org.flowable.task.api.history.HistoricTaskInstance;
 import org.springframework.http.HttpStatus;
@@ -235,6 +236,13 @@ public class TaskController {
             log.warn("Failed to load Flowable comments for process {}: {}", processInstanceId, e.getMessage());
         }
         
+        // 获取流程实例信息（用于 startEvent 的发起人解析）
+        HistoricProcessInstance processInstance = historyService
+            .createHistoricProcessInstanceQuery()
+            .processInstanceId(processInstanceId)
+            .singleResult();
+        String processStartUserId = processInstance != null ? processInstance.getStartUserId() : null;
+
         // 转换为前端期望的格式
         List<Map<String, Object>> historyList = activities.stream()
             .filter(activity -> "userTask".equals(activity.getActivityType()) || 
@@ -277,10 +285,10 @@ public class TaskController {
                             } else if (deleteReason.contains("delegate") || deleteReason.contains("DELEGATE")) {
                                 operationType = "DELEGATE";
                             } else {
-                                operationType = "APPROVE"; // 默认为 APPROVE
+                                operationType = "APPROVE";
                             }
                         } else {
-                            operationType = "APPROVE"; // 没有 deleteReason 时默认为 APPROVE
+                            operationType = "APPROVE";
                         }
                     } else {
                         operationType = "APPROVE";
@@ -288,7 +296,11 @@ public class TaskController {
                 }
                 item.put("operationType", operationType);
                 
+                // startEvent 在 Flowable 中没有 assignee，使用流程实例的发起人
                 String assignee = activity.getAssignee();
+                if ((assignee == null || assignee.isEmpty()) && "startEvent".equals(activityType)) {
+                    assignee = processStartUserId;
+                }
                 item.put("operatorId", assignee);
                 
                 // 解析用户显示名称
