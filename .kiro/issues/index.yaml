@@ -1150,3 +1150,10 @@
   category: security
   summary: "BpmnActionParser DOM 解析 BPMN 时未禁用 DTD/外部实体，存在 XXE 风险"
   file: "backend/workflow-engine-core/src/main/java/com/workflow/component/BpmnActionParser.java"
+
+- id: "158"
+  status: open
+  severity: minor
+  category: bug
+  summary: "PortalRelationTableServiceImpl.queryTableData 接收 search 参数但未用于过滤，relation table 页面搜索无效"
+  file: "backend/user-portal/src/main/java/com/portal/service/PortalRelationTableServiceImpl.java"

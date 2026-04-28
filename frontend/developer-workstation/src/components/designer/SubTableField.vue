@@ -77,6 +77,8 @@
               :placeholder="col.placeholder || 'Click to search'"
               :search-fields="col.props?.searchFields || []"
               :display-fields="col.props?.displayFields || []"
+              :selected-display-field="col.props?.selectedDisplayField || ''"
+              :filter-conditions="col.props?.filterConditions || []"
               :view-fields="col.props?.viewFields || []"
               :field-defs="col.props?.fieldDefs || []"
               :show-backfill-view="col.props?.showBackfillView !== false"

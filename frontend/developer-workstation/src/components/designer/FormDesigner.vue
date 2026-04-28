@@ -1097,6 +1097,8 @@ function deriveColumnsFromBinding(binding: any, subForms?: Record<string, any>) 
         passProps.lookupConfig = rProps.lookupConfig || '{}'
         passProps.searchFields = lookupPreviewConfig.searchFields
         passProps.displayFields = lookupPreviewConfig.displayFields
+        passProps.selectedDisplayField = lookupPreviewConfig.selectedDisplayField
+        passProps.filterConditions = lookupPreviewConfig.filterConditions
         passProps.viewFields = lookupPreviewConfig.viewFields
         passProps.fieldDefs = lookupPreviewConfig.fieldDefs
         passProps.showBackfillView = lookupPreviewConfig.showBackfillView
@@ -1156,6 +1158,8 @@ function makeLookupPreviewItem(ruleItem: any, config: any) {
     placeholder: ruleItem.props?.placeholder || previewConfig.placeholder,
     searchFields: previewConfig.searchFields,
     displayFields: previewConfig.displayFields,
+    selectedDisplayField: previewConfig.selectedDisplayField,
+    filterConditions: previewConfig.filterConditions,
     viewFields: previewConfig.viewFields,
     fieldDefs: previewConfig.fieldDefs,
     showBackfillView: previewConfig.showBackfillView,
@@ -1172,6 +1176,8 @@ function resolveLookupPreviewConfig(rawLookupConfig: string, explicitConfig?: an
     placeholder: 'Click to search',
     searchFields: lookupConfig.searchFields || [],
     displayFields: lookupConfig.displayFields || [],
+    selectedDisplayField: lookupConfig.selectedDisplayField || lookupConfig.displayField || '',
+    filterConditions: Array.isArray(lookupConfig.filterConditions) ? lookupConfig.filterConditions : [],
     viewFields: lookupConfig.showBackfillView === false
       ? []
       : (savedRelationView?.viewFields || relationViewState.value[bindingId]?.viewFields || []),
@@ -1214,6 +1220,8 @@ function toSubTablePreviewColumns(bindingId: number, rule: any[], config: any) {
           props: {
             searchFields: lookupPreviewConfig.searchFields,
             displayFields: lookupPreviewConfig.displayFields,
+            selectedDisplayField: lookupPreviewConfig.selectedDisplayField,
+            filterConditions: lookupPreviewConfig.filterConditions,
             viewFields: lookupPreviewConfig.viewFields,
             fieldDefs: lookupPreviewConfig.fieldDefs,
             showBackfillView: lookupPreviewConfig.showBackfillView
@@ -1232,6 +1240,8 @@ function toSubTablePreviewColumns(bindingId: number, rule: any[], config: any) {
           props: {
             searchFields: lookupPreviewConfig.searchFields,
             displayFields: lookupPreviewConfig.displayFields,
+            selectedDisplayField: lookupPreviewConfig.selectedDisplayField,
+            filterConditions: lookupPreviewConfig.filterConditions,
             viewFields: lookupPreviewConfig.viewFields,
             fieldDefs: lookupPreviewConfig.fieldDefs,
             showBackfillView: lookupPreviewConfig.showBackfillView

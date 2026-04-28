@@ -2531,6 +2531,8 @@ const deriveColumnsFromBinding = (binding: any, subForms?: Record<string, any>, 
         passProps.searchFields = lookupCfg.searchFields || dbCfg?.searchFields || []
         passProps.displayField = lookupCfg.displayFields?.[0] || dbCfg?.displayField || ''
         passProps.displayFields = lookupCfg.displayFields || []
+        passProps.selectedDisplayField = lookupCfg.selectedDisplayField || lookupCfg.displayField || ''
+        passProps.filterConditions = Array.isArray(lookupCfg.filterConditions) ? lookupCfg.filterConditions : []
         passProps.viewFields = lookupCfg.showBackfillView === false
           ? []
           : (relationView?.viewFields || dbCfg?.viewFields || [])
@@ -2638,6 +2640,8 @@ function buildLookupColumnProps(rawLookupConfig: unknown): Record<string, any> {
     searchFields: lookupCfg.searchFields || [],
     displayField: lookupCfg.displayFields?.[0] || '',
     displayFields: lookupCfg.displayFields || [],
+    selectedDisplayField: lookupCfg.selectedDisplayField || lookupCfg.displayField || '',
+    filterConditions: Array.isArray(lookupCfg.filterConditions) ? lookupCfg.filterConditions : [],
     viewFields: lookupCfg.showBackfillView === false ? [] : (relationView?.viewFields || []),
     showBackfillView: lookupCfg.showBackfillView !== false
   }
@@ -2697,6 +2701,8 @@ const extractFieldsRecursive = (items: any[]): FormField[] => {
         _lookupSearchFields: (lookupCfg.searchFields?.length ? lookupCfg.searchFields : null) || dbCfg?.searchFields || [],
         _lookupDisplayField: (lookupCfg.displayFields?.[0]) || dbCfg?.displayField || '',
         _lookupDisplayFields: lookupCfg.displayFields || [],
+        _lookupSelectedDisplayField: lookupCfg.selectedDisplayField || lookupCfg.displayField || '',
+        _lookupFilterConditions: Array.isArray(lookupCfg.filterConditions) ? lookupCfg.filterConditions : [],
         _lookupViewFields: resolvedViewFields
       }
       fields.push(field)

@@ -300,6 +300,8 @@
           :search-fields="col.props?.searchFields || []"
           :display-field="col.props?.displayField || ''"
           :display-fields="col.props?.displayFields || []"
+          :selected-display-field="col.props?.selectedDisplayField || ''"
+          :filter-conditions="col.props?.filterConditions || []"
           :view-fields="col.props?.viewFields || []"
           :placeholder="col.placeholder || col.label"
         />

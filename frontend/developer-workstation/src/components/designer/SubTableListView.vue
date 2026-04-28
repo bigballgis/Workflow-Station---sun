@@ -131,6 +131,8 @@
               :placeholder="getLookupPreviewConfig(column).placeholder"
               :search-fields="getLookupPreviewConfig(column).searchFields"
               :display-fields="getLookupPreviewConfig(column).displayFields"
+              :selected-display-field="getLookupPreviewConfig(column).selectedDisplayField"
+              :filter-conditions="getLookupPreviewConfig(column).filterConditions"
               :view-fields="getLookupPreviewConfig(column).viewFields"
               :field-defs="getLookupPreviewConfig(column).fieldDefs"
               :show-backfill-view="getLookupPreviewConfig(column).showBackfillView"
@@ -255,6 +257,8 @@ interface LookupPreviewConfig {
   placeholder: string
   searchFields: string[]
   displayFields: string[]
+  selectedDisplayField: string
+  filterConditions: any[]
   viewFields: any[]
   fieldDefs: any[]
   showBackfillView: boolean
@@ -428,6 +432,8 @@ const defaultLookupPreviewConfig: LookupPreviewConfig = {
   placeholder: 'Click to search',
   searchFields: [],
   displayFields: [],
+  selectedDisplayField: '',
+  filterConditions: [],
   viewFields: [],
   fieldDefs: [],
   showBackfillView: true

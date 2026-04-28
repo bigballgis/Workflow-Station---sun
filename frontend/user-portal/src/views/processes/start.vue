@@ -916,6 +916,8 @@ const extractFieldsRecursive = (items: any[]): FormField[] => {
         _lookupSearchFields: (lookupCfg.searchFields?.length ? lookupCfg.searchFields : null) || dbCfg?.searchFields || [],
         _lookupDisplayField: (lookupCfg.displayFields?.[0]) || dbCfg?.displayField || '',
         _lookupDisplayFields: lookupCfg.displayFields || [],
+        _lookupSelectedDisplayField: lookupCfg.selectedDisplayField || lookupCfg.displayField || '',
+        _lookupFilterConditions: Array.isArray(lookupCfg.filterConditions) ? lookupCfg.filterConditions : [],
         _lookupViewFields: resolvedViewFields
       }
       fields.push(field)

@@ -52,12 +52,19 @@ export interface LookupViewField {
   visible: boolean
 }
 
+export interface LookupFilterCondition {
+  fieldName: string
+  value: string
+}
+
 const props = defineProps<{
   modelValue?: any
   tableId: number
   searchFields: string[]
   displayField: string
   displayFields?: string[]
+  selectedDisplayField?: string
+  filterConditions?: LookupFilterCondition[]
   viewFields?: LookupViewField[]
   placeholder?: string
   readonly?: boolean
@@ -123,6 +130,7 @@ async function loadAllData() {
         keyword: '',
         searchFields: props.searchFields || [],
         displayField: props.displayField || '',
+        filterConditions: props.filterConditions || [],
         limit: 200
       }),
       (!effectiveViewFields.value.length)
@@ -150,7 +158,7 @@ function handleFocus() {
 }
 
 function handleSelect(row: Record<string, any>) {
-  const displayVal = props.displayField ? row[props.displayField] : Object.values(row)[0]
+  const displayVal = getDisplayValue(row)
   searchKeyword.value = String(displayVal ?? '')
   selectedRow.value = row
   emit('update:modelValue', row)
@@ -169,7 +177,7 @@ function handleClear() {
 function initFromModelValue(val: any) {
   if (val && typeof val === 'object' && Object.keys(val).length > 0) {
     selectedRow.value = val
-    const displayVal = props.displayField ? val[props.displayField] : Object.values(val)[0]
+    const displayVal = getDisplayValue(val)
     searchKeyword.value = String(displayVal ?? '')
     // Also emit select so FormRenderer populates lookupSelectedData for the view display
     emit('select', val)
@@ -179,12 +187,26 @@ function initFromModelValue(val: any) {
   }
 }
 
+function getDisplayValue(row: Record<string, any>) {
+  const displayField = props.selectedDisplayField || props.displayField
+  return displayField ? row[displayField] : Object.values(row)[0]
+}
+
 // Watch for external modelValue changes (e.g. form data loaded after mount)
 watch(() => props.modelValue, (val) => {
   if (!selectedRow.value && val && typeof val === 'object' && Object.keys(val).length > 0) {
     initFromModelValue(val)
   }
 })
+
+watch(
+  () => [props.tableId, props.searchFields, props.displayField, props.filterConditions],
+  () => {
+    allRows.value = []
+    dataLoaded.value = false
+  },
+  { deep: true }
+)
 
 function onClickOutside(e: MouseEvent) {
   if (wrapperRef.value && !wrapperRef.value.contains(e.target as Node)) {

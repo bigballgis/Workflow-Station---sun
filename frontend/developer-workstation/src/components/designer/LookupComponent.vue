@@ -6,6 +6,8 @@
       :placeholder="placeholder || previewConfig.placeholder"
       :search-fields="previewConfig.searchFields"
       :display-fields="previewConfig.displayFields"
+      :selected-display-field="previewConfig.selectedDisplayField"
+      :filter-conditions="previewConfig.filterConditions"
       :view-fields="previewConfig.viewFields"
       :field-defs="previewConfig.fieldDefs"
       :show-backfill-view="previewConfig.showBackfillView"
@@ -59,6 +61,8 @@ const previewConfig = computed(() => {
     placeholder: 'Click to search',
     searchFields: config.searchFields || [],
     displayFields,
+    selectedDisplayField: config.selectedDisplayField || config.displayField || '',
+    filterConditions: Array.isArray(config.filterConditions) ? config.filterConditions : [],
     viewFields: config.showBackfillView === false
       ? []
       : displayFields.map((fieldName: string, index: number) => ({

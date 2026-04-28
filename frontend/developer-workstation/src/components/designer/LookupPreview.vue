@@ -89,12 +89,19 @@ interface FieldDef {
   description?: string
 }
 
+interface LookupFilterCondition {
+  fieldName: string
+  value: string
+}
+
 const props = withDefaults(defineProps<{
   modelValue?: any
   label: string
   placeholder?: string
   searchFields: string[]
   displayFields: string[]
+  selectedDisplayField?: string
+  filterConditions?: LookupFilterCondition[]
   viewFields: ViewField[]
   fieldDefs: FieldDef[]
   showBackfillView?: boolean
@@ -161,6 +168,11 @@ const mockRows = computed(() => {
         }
       }
     }
+    for (const condition of props.filterConditions || []) {
+      if (condition.fieldName && !(condition.fieldName in row)) {
+        row[condition.fieldName] = condition.value
+      }
+    }
     rows.push(row)
   }
   return rows
@@ -168,13 +180,22 @@ const mockRows = computed(() => {
 
 const filteredResults = computed(() => {
   const kw = searchKeyword.value?.trim().toLowerCase()
-  if (!kw) return mockRows.value
+  const fixedFilteredRows = applyFixedFilters(mockRows.value)
+  if (!kw) return fixedFilteredRows
   const fields = props.searchFields?.length ? props.searchFields : []
-  if (fields.length === 0) return mockRows.value
-  return mockRows.value.filter(row =>
+  if (fields.length === 0) return fixedFilteredRows
+  return fixedFilteredRows.filter(row =>
     fields.some(f => row[f] != null && String(row[f]).toLowerCase().includes(kw))
   )
 })
+
+function applyFixedFilters(rows: Record<string, any>[]) {
+  const conditions = props.filterConditions?.filter(condition => condition.fieldName && condition.value !== '') || []
+  if (conditions.length === 0) return rows
+  return rows.filter(row =>
+    conditions.every(condition => String(row[condition.fieldName] ?? '') === String(condition.value))
+  )
+}
 
 function getMockValue(dataType: string, index: number): string {
   const type = (dataType || '').toUpperCase()
@@ -188,7 +209,7 @@ function getMockValue(dataType: string, index: number): string {
 }
 
 function getPrimaryDisplayField() {
-  return props.displayFields?.[0] || visibleColumns.value[0]?.prop || props.searchFields?.[0] || ''
+  return props.selectedDisplayField || props.displayFields?.[0] || visibleColumns.value[0]?.prop || props.searchFields?.[0] || ''
 }
 
 function getDisplayText(row: Record<string, any> | null) {
@@ -209,7 +230,7 @@ function normalizeValue(value: any): Record<string, any> | null {
 }
 
 watch(
-  () => [props.modelValue, props.displayFields, props.searchFields, visibleColumns.value],
+  () => [props.modelValue, props.selectedDisplayField, props.displayFields, props.searchFields, visibleColumns.value],
   ([value]) => {
     const nextRow = normalizeValue(value)
     selectedRow.value = nextRow

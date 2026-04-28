@@ -46,11 +46,13 @@ export const relationTableApi = {
     keyword: string
     searchFields: string[]
     displayField: string
+    filterConditions?: Array<{ fieldName: string; value: string }>
     limit?: number
   }) => {
     const query = new URLSearchParams()
     if (params.keyword) query.append('keyword', params.keyword)
     if (params.displayField) query.append('displayField', params.displayField)
+    if (params.filterConditions?.length) query.append('filterConditions', JSON.stringify(params.filterConditions))
     if (params.limit) query.append('limit', String(params.limit))
     params.searchFields?.forEach(f => query.append('searchFields', f))
     return request.get<{ data: Record<string, any>[] }>(`/relation-tables/${tableId}/search?${query.toString()}`)

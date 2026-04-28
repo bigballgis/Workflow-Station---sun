@@ -52,6 +52,8 @@
         :placeholder="item.placeholder"
         :search-fields="item.searchFields"
         :display-fields="item.displayFields"
+        :selected-display-field="item.selectedDisplayField"
+        :filter-conditions="item.filterConditions || []"
         :view-fields="item.viewFields"
         :field-defs="item.fieldDefs"
         :show-backfill-view="item.showBackfillView !== false"

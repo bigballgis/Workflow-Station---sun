@@ -34,6 +34,7 @@ public interface PortalRelationTableService {
      */
     List<Map<String, Object>> searchForLookup(Long tableId, String keyword,
                                                List<String> searchFields, String displayField,
+                                               String filterConditions,
                                                int limit);
 
     /**

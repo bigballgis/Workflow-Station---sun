@@ -1,5 +1,7 @@
 package com.portal.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.platform.common.dto.RelationTableDTO;
 import com.platform.common.enums.RelationTableStatus;
 import com.portal.component.RoleAccessComponent;
@@ -30,6 +32,7 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
 
     private final JdbcTemplate jdbcTemplate;
     private final RoleAccessComponent roleAccessComponent;
+    private final ObjectMapper objectMapper;
 
     @Override
     @Transactional(readOnly = true)
@@ -170,10 +173,14 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
     @Transactional(readOnly = true)
     public List<Map<String, Object>> searchForLookup(Long tableId, String keyword,
                                                       List<String> searchFields, String displayField,
+                                                      String filterConditions,
                                                       int limit) {
         try {
+            int safeLimit = normalizeLimit(limit);
             if (SYSTEM_USER_TABLE_ID.equals(tableId)) {
-                return searchSystemUsersForLookup(keyword, searchFields, limit);
+                List<LookupFilterCondition> filters = parseLookupFilterConditions(
+                        filterConditions, SYSTEM_USER_FIELD_NAMES);
+                return searchSystemUsersForLookup(keyword, searchFields, filters, safeLimit);
             }
 
             String tableName = getPhysicalTableName(tableId);
@@ -182,27 +189,37 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
             }
             tableName = sanitizeIdentifier(tableName);
 
-            // If keyword is empty or no search fields configured, return all rows (up to limit)
-            if (keyword == null || keyword.isBlank() || searchFields == null || searchFields.isEmpty()) {
-                String sql = "SELECT * FROM " + tableName + " LIMIT ?";
-                return jdbcTemplate.queryForList(sql, limit);
+            List<String> allowedFields = getFieldNames(tableId);
+            List<LookupFilterCondition> filters = parseLookupFilterConditions(filterConditions, allowedFields);
+            List<String> predicates = new ArrayList<>();
+            List<Object> params = new ArrayList<>();
+
+            for (LookupFilterCondition filter : filters) {
+                predicates.add(sanitizeIdentifier(filter.fieldName()) + " = ?");
+                params.add(filter.value());
             }
 
-            // Build WHERE clause with ILIKE for each search field
-            List<String> sanitizedFields = searchFields.stream()
-                    .map(this::sanitizeIdentifier).toList();
-            String whereClause = sanitizedFields.stream()
-                    .map(f -> f + " ILIKE ?")
-                    .collect(Collectors.joining(" OR "));
+            if (keyword != null && !keyword.isBlank() && searchFields != null && !searchFields.isEmpty()) {
+                List<String> sanitizedFields = searchFields.stream()
+                        .filter(allowedFields::contains)
+                        .map(this::sanitizeIdentifier)
+                        .toList();
+                if (!sanitizedFields.isEmpty()) {
+                    String keywordClause = sanitizedFields.stream()
+                            .map(f -> f + " ILIKE ?")
+                            .collect(Collectors.joining(" OR "));
+                    predicates.add("(" + keywordClause + ")");
+                    String likePattern = "%" + keyword + "%";
+                    sanitizedFields.forEach(ignored -> params.add(likePattern));
+                }
+            }
 
-            String likePattern = "%" + keyword + "%";
-            Object[] params = new Object[searchFields.size() + 1];
-            Arrays.fill(params, 0, searchFields.size(), likePattern);
-            params[searchFields.size()] = limit;
+            params.add(safeLimit);
 
             String sql = "SELECT * FROM " + tableName
-                    + " WHERE " + whereClause + " LIMIT ?";
-            return jdbcTemplate.queryForList(sql, params);
+                    + (predicates.isEmpty() ? "" : " WHERE " + String.join(" AND ", predicates))
+                    + " LIMIT ?";
+            return jdbcTemplate.queryForList(sql, params.toArray());
         } catch (Exception e) {
             log.warn("Failed to search for lookup in tableId {}: {}", tableId, e.getMessage());
             return Collections.emptyList();
@@ -314,17 +331,28 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
 
     private List<Map<String, Object>> searchSystemUsersForLookup(String keyword,
                                                                  List<String> searchFields,
+                                                                 List<LookupFilterCondition> filters,
                                                                  int limit) {
-        int safeLimit = normalizeLimit(limit);
         String columns = SYSTEM_USER_FIELD_NAMES.stream()
                 .map(this::sanitizeIdentifier)
                 .collect(Collectors.joining(", "));
 
+        List<String> predicates = new ArrayList<>();
+        List<Object> params = new ArrayList<>();
+        predicates.add("deleted = false");
+        predicates.add("status = 'ACTIVE'");
+
+        for (LookupFilterCondition filter : filters) {
+            predicates.add(sanitizeIdentifier(filter.fieldName()) + " = ?");
+            params.add(filter.value());
+        }
+
         if (keyword == null || keyword.isBlank()) {
             String sql = "SELECT " + columns + " FROM " + SYSTEM_USER_TABLE_NAME
-                    + " WHERE deleted = false AND status = 'ACTIVE'"
+                    + " WHERE " + String.join(" AND ", predicates)
                     + " ORDER BY username LIMIT ?";
-            return jdbcTemplate.queryForList(sql, safeLimit);
+            params.add(limit);
+            return jdbcTemplate.queryForList(sql, params.toArray());
         }
 
         List<String> sanitizedFields = systemUserSearchFields(searchFields).stream()
@@ -335,15 +363,34 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
                 .collect(Collectors.joining(" OR "));
 
         String likePattern = "%" + keyword + "%";
-        Object[] params = new Object[sanitizedFields.size() + 1];
-        Arrays.fill(params, 0, sanitizedFields.size(), likePattern);
-        params[sanitizedFields.size()] = safeLimit;
+        sanitizedFields.forEach(ignored -> params.add(likePattern));
+        params.add(limit);
 
         String sql = "SELECT " + columns + " FROM " + SYSTEM_USER_TABLE_NAME
-                + " WHERE deleted = false AND status = 'ACTIVE' AND ("
+                + " WHERE " + String.join(" AND ", predicates) + " AND ("
                 + whereClause + ") ORDER BY username LIMIT ?";
-        return jdbcTemplate.queryForList(sql, params);
+        return jdbcTemplate.queryForList(sql, params.toArray());
     }
+
+    private List<LookupFilterCondition> parseLookupFilterConditions(String raw, List<String> allowedFields) {
+        if (raw == null || raw.isBlank()) {
+            return Collections.emptyList();
+        }
+        try {
+            Set<String> allowed = new HashSet<>(allowedFields);
+            return objectMapper.readValue(raw, new TypeReference<List<LookupFilterCondition>>() {})
+                    .stream()
+                    .filter(condition -> condition.fieldName() != null
+                            && condition.value() != null
+                            && allowed.contains(condition.fieldName()))
+                    .toList();
+        } catch (Exception e) {
+            log.warn("Ignoring invalid lookup filter conditions: {}", e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    private record LookupFilterCondition(String fieldName, String value) {}
 
     private List<String> systemUserSearchFields(List<String> searchFields) {
         if (searchFields == null || searchFields.isEmpty()) {
