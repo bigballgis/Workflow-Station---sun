@@ -791,7 +791,7 @@ public class FunctionUnitManagerComponent {
                 String placeholders = formSourceIds.stream().map(n -> "?").collect(Collectors.joining(","));
                 String sql =
                         "SELECT fd.id as form_id, ftb.id as binding_id, ftb.binding_type, ftb.binding_mode, " +
-                        "       ftb.foreign_key_field, ftb.sort_order, " +
+                        "       ftb.sub_mode, ftb.foreign_key_field, ftb.sort_order, " +
                         "       td.table_name, td.table_type, td.description as table_description " +
                         "FROM dw_form_definitions fd " +
                         "JOIN dw_form_table_bindings ftb ON ftb.form_id = fd.id " +
@@ -804,6 +804,7 @@ public class FunctionUnitManagerComponent {
                             .bindingId(rs.getLong("binding_id"))
                             .bindingType(rs.getString("binding_type"))
                             .bindingMode(rs.getString("binding_mode"))
+                            .subMode(rs.getString("sub_mode"))
                             .foreignKeyField(rs.getString("foreign_key_field"))
                             .sortOrder(rs.getInt("sort_order"))
                             .tableName(rs.getString("table_name"))
@@ -818,7 +819,7 @@ public class FunctionUnitManagerComponent {
                 String placeholders = formNamesForFallback.stream().map(n -> "?").collect(Collectors.joining(","));
                 String sql =
                         "SELECT latest.form_name, ftb.id as binding_id, ftb.binding_type, ftb.binding_mode, " +
-                        "       ftb.foreign_key_field, ftb.sort_order, " +
+                        "       ftb.sub_mode, ftb.foreign_key_field, ftb.sort_order, " +
                         "       td.table_name, td.table_type, td.description as table_description " +
                         "FROM (SELECT DISTINCT ON (form_name) id, form_name, config_json FROM dw_form_definitions " +
                         "      WHERE form_name IN (" + placeholders + ") ORDER BY form_name, id DESC) latest " +
@@ -831,6 +832,7 @@ public class FunctionUnitManagerComponent {
                             .bindingId(rs.getLong("binding_id"))
                             .bindingType(rs.getString("binding_type"))
                             .bindingMode(rs.getString("binding_mode"))
+                            .subMode(rs.getString("sub_mode"))
                             .foreignKeyField(rs.getString("foreign_key_field"))
                             .sortOrder(rs.getInt("sort_order"))
                             .tableName(rs.getString("table_name"))

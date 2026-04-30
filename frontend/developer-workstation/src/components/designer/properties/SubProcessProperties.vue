@@ -101,7 +101,7 @@ import type { BpmnElement, BpmnModeler } from '@/types/bpmn'
 import {
   getBasicProperties,
   setBasicProperties,
-  getExtensionProperties
+  getExtensionProperties,
 } from '@/utils/bpmnExtensions'
 
 const { t } = useI18n()
@@ -151,6 +151,7 @@ const suggestedCollectionVariable = computed(() => {
   const tableName = findInnerUserTaskSubTableName()
   return tableName ? `multiInstance_${tableName}_collection` : ''
 })
+
 
 const hasInnerUserTask = computed(() => {
   modelTick.value

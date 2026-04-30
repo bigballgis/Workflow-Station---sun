@@ -117,6 +117,21 @@ public class MultiInstanceStatusResponse {
          * 子表行ID
          */
         private Long subTableRowId;
+
+        /**
+         * 子表名（来自多实例子任务 extendedProperties.subTableName）
+         */
+        private String subTableName;
+
+        /**
+         * 进度状态列名（来自多实例子流程扩展属性）
+         */
+        private String miTaskStatusField;
+
+        /**
+         * 当前节点列名（来自多实例子流程扩展属性）
+         */
+        private String miTaskCurrentNodeField;
         
         /**
          * 任务创建时间

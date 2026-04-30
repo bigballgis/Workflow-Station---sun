@@ -28,6 +28,7 @@ import org.flowable.common.engine.api.delegate.event.FlowableEntityEvent;
 import org.flowable.task.service.impl.persistence.entity.TaskEntity;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
@@ -84,6 +85,10 @@ public class TaskAssignmentListener implements FlowableEventListener {
     @Autowired
     @Lazy
     private NotificationDispatchHelper notificationDispatchHelper;
+
+    @Autowired
+    @Lazy
+    private JdbcTemplate jdbcTemplate;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private static final ObjectMapper USER_REF_OBJECT_MAPPER = new ObjectMapper();
@@ -259,6 +264,7 @@ public class TaskAssignmentListener implements FlowableEventListener {
             }
 
             if (resolvedType == AssigneeType.MANUAL_ASSIGN) {
+                updateCurrentItemProgress(processVariables, processDefinitionId, taskDefinitionKey, task.getName());
                 applyResolveResult(taskId, task, processInstanceId,
                         resolveManualAssign(taskDefinitionKey, manualAssignVariable, manualAssignBuVariable,
                                 manualAssignRoleVariable, processVariables, initiatorId),
@@ -269,6 +275,7 @@ public class TaskAssignmentListener implements FlowableEventListener {
             if (resolvedType == AssigneeType.ASSIGNEE_FROM_VARIABLE) {
                 String varName = firstNonBlank(assigneeVariable, assigneeValue);
                 TaskAssigneeResolver.ResolveResult vr = resolveAssigneeFromVariable(varName, processVariables);
+                updateCurrentItemProgress(processVariables, processDefinitionId, taskDefinitionKey, task.getName());
                 applyResolveResult(taskId, task, processInstanceId, vr, assigneeTypeRaw);
                 return;
             }
@@ -306,6 +313,7 @@ public class TaskAssignmentListener implements FlowableEventListener {
                     result != null ? result.getCandidateUsers() : "null",
                     result != null ? result.getErrorMessage() : "null");
 
+            updateCurrentItemProgress(processVariables, processDefinitionId, taskDefinitionKey, task.getName());
             applyResolveResult(taskId, task, processInstanceId, result, assigneeTypeRaw);
         } catch (Exception e) {
             log.error("Error handling task assignment for task {}: {}", taskId, e.getMessage(), e);
@@ -738,6 +746,10 @@ public class TaskAssignmentListener implements FlowableEventListener {
                 extendedProps.put("subTableName", subTableName);
             }
 
+            String[] progressCols = resolveMiProgressColumnNames(processDefinitionId, taskDefinitionKey);
+            extendedProps.put("miTaskStatusField", progressCols[0]);
+            extendedProps.put("miTaskCurrentNodeField", progressCols[1]);
+
             String extendedPropertiesJson;
             try {
                 extendedPropertiesJson = objectMapper.writeValueAsString(extendedProps);
@@ -761,6 +773,7 @@ public class TaskAssignmentListener implements FlowableEventListener {
                         .build();
 
                 extendedTaskInfoRepository.save(extInfo);
+                updateSubTableTaskProgress(subTableName, subTableRowId, task.getName(), progressCols[0], progressCols[1]);
                 log.info("Created ExtendedTaskInfo for multi-instance task {}: assignee={}, rowId={}",
                         taskId, assigneeId, subTableRowId);
             } catch (Exception e) {
@@ -922,6 +935,125 @@ public class TaskAssignmentListener implements FlowableEventListener {
         }
         Object value = variables.get(key);
         return value != null ? value.toString() : null;
+    }
+
+    /**
+     * Column names come from SubProcess BPMN extensions {@code miTaskStatusField} / {@code miTaskCurrentNodeField}
+     * (designer) with defaults {@code task_status} / {@code task_current_node}.
+     */
+    private void updateSubTableTaskProgress(String subTableName, Long subTableRowId, String taskName,
+                                            String statusColumn, String currentNodeColumn) {
+        if (subTableName == null || subTableRowId == null) {
+            return;
+        }
+        try {
+            String tableName = requireSafeIdentifier(subTableName);
+            String statusCol = requireSafeIdentifier(statusColumn);
+            String nodeCol = requireSafeIdentifier(currentNodeColumn);
+            boolean hasTaskStatus = columnExists(tableName, statusCol);
+            boolean hasTaskCurrentNode = columnExists(tableName, nodeCol);
+            if (!hasTaskStatus && !hasTaskCurrentNode) {
+                return;
+            }
+
+            StringBuilder sql = new StringBuilder("UPDATE ").append(tableName).append(" SET ");
+            List<Object> params = new ArrayList<>();
+            if (hasTaskStatus) {
+                sql.append(statusCol).append(" = ?, ");
+                params.add("IN_PROGRESS");
+            }
+            if (hasTaskCurrentNode) {
+                sql.append(nodeCol).append(" = ?, ");
+                params.add(taskName);
+            }
+            sql.setLength(sql.length() - 2);
+            sql.append(" WHERE id = ?");
+            params.add(subTableRowId);
+            jdbcTemplate.update(sql.toString(), params.toArray());
+        } catch (Exception e) {
+            log.debug("Skipped updating sub-table task progress for {}#{}: {}",
+                    subTableName, subTableRowId, e.getMessage());
+        }
+    }
+
+    private static final Pattern SAFE_SQL_IDENTIFIER = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
+
+    private String[] resolveMiProgressColumnNames(String processDefinitionId, String taskDefinitionKey) {
+        String statusDefault = "task_status";
+        String nodeDefault = "task_current_node";
+        if (processDefinitionId == null || processDefinitionId.isBlank()
+                || taskDefinitionKey == null || taskDefinitionKey.isBlank()) {
+            return new String[] { statusDefault, nodeDefault };
+        }
+        String st = bpmnActionParser.getMultiInstanceSubProcessExtensionPropertyValue(
+                processDefinitionId, taskDefinitionKey, "miTaskStatusField");
+        String nd = bpmnActionParser.getMultiInstanceSubProcessExtensionPropertyValue(
+                processDefinitionId, taskDefinitionKey, "miTaskCurrentNodeField");
+        return new String[] { safeSqlColumnName(st, statusDefault), safeSqlColumnName(nd, nodeDefault) };
+    }
+
+    private static String safeSqlColumnName(String candidate, String defaultName) {
+        if (candidate == null || candidate.isBlank()) {
+            return defaultName;
+        }
+        String t = candidate.trim();
+        return SAFE_SQL_IDENTIFIER.matcher(t).matches() ? t : defaultName;
+    }
+
+    private void updateCurrentItemProgress(Map<String, Object> processVariables, String processDefinitionId,
+                                           String taskDefinitionKey, String taskName) {
+        if (processVariables == null || processDefinitionId == null || taskDefinitionKey == null) {
+            return;
+        }
+        Object currentItemObj = processVariables.get("currentItem");
+        if (!(currentItemObj instanceof Map<?, ?> currentItem)) {
+            return;
+        }
+        Long rowId = extractLong(currentItem.get("rowId"));
+        if (rowId == null) {
+            rowId = extractLong(currentItem.get("id"));
+        }
+        if (rowId == null) {
+            return;
+        }
+
+        String subTableName = firstNonBlank(
+                bpmnActionParser.getUserTaskExtensionPropertyValue(processDefinitionId, taskDefinitionKey, "subTableName"),
+                bpmnActionParser.getMultiInstanceSubProcessSubTableName(processDefinitionId, taskDefinitionKey)
+        );
+        String[] cols = resolveMiProgressColumnNames(processDefinitionId, taskDefinitionKey);
+        updateSubTableTaskProgress(subTableName, rowId, taskName, cols[0], cols[1]);
+    }
+
+    private Long extractLong(Object value) {
+        if (value instanceof Number n) {
+            return n.longValue();
+        }
+        if (value != null) {
+            try {
+                return Long.parseLong(String.valueOf(value).trim());
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private String requireSafeIdentifier(String identifier) {
+        if (identifier == null || !identifier.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+            throw new IllegalArgumentException("Invalid sub-table name");
+        }
+        return identifier;
+    }
+
+    private boolean columnExists(String tableName, String columnName) {
+        Integer count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.columns " +
+                        "WHERE table_schema = current_schema() AND table_name = ? AND column_name = ?",
+                Integer.class,
+                tableName,
+                columnName);
+        return count != null && count > 0;
     }
 
     @Override

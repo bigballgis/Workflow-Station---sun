@@ -71,7 +71,7 @@ public class MultiInstanceStatusController {
                     .processInstanceId(processInstanceId)
                     .list();
             
-            // 2. 查找多实例父执行（通过变量判断）
+            // 2. 查找多实例父执行（通过变量判断；流程已结束时不存在 runtime execution，将退化为基于 ExtendedTaskInfo 构造响应）
             Execution multiInstanceExecution = null;
             for (Execution execution : executions) {
                 Map<String, Object> variables = runtimeService.getVariables(execution.getId());
@@ -80,29 +80,34 @@ public class MultiInstanceStatusController {
                     break;
                 }
             }
-            
-            if (multiInstanceExecution == null) {
-                log.warn("流程实例 {} 中未找到多实例执行", processInstanceId);
+
+            // 3. 从 Flowable 变量中获取多实例统计信息（如果存在 runtime execution）
+            Integer nrOfInstances = null;
+            Integer nrOfCompletedInstances = null;
+            Integer nrOfActiveInstances = null;
+            if (multiInstanceExecution != null) {
+                Map<String, Object> miVariables = runtimeService.getVariables(multiInstanceExecution.getId());
+                nrOfInstances = (Integer) miVariables.get("nrOfInstances");
+                nrOfCompletedInstances = (Integer) miVariables.get("nrOfCompletedInstances");
+                nrOfActiveInstances = (Integer) miVariables.get("nrOfActiveInstances");
+            }
+
+            // 4. 查询流程实例的所有扩展任务信息
+            List<ExtendedTaskInfo> allTaskInfos = extendedTaskInfoRepository
+                    .findByProcessInstanceIdAndIsDeletedFalse(processInstanceId);
+
+            // 5. 过滤出多实例子任务（通过 extendedProperties 中的 multiInstance 标记）
+            List<ExtendedTaskInfo> multiInstanceTasks = allTaskInfos.stream()
+                    .filter(this::isMultiInstanceTask)
+                    .collect(Collectors.toList());
+
+            if (multiInstanceTasks.isEmpty() && multiInstanceExecution == null) {
+                log.warn("流程实例 {} 中未找到多实例执行或历史多实例任务", processInstanceId);
                 return ResponseEntity.ok(ApiResponse.error(
                         "MULTI_INSTANCE_NOT_FOUND",
                         "流程实例中未找到多实例子流程"
                 ));
             }
-            
-            // 3. 从 Flowable 变量中获取多实例统计信息
-            Map<String, Object> miVariables = runtimeService.getVariables(multiInstanceExecution.getId());
-            Integer nrOfInstances = (Integer) miVariables.get("nrOfInstances");
-            Integer nrOfCompletedInstances = (Integer) miVariables.get("nrOfCompletedInstances");
-            Integer nrOfActiveInstances = (Integer) miVariables.get("nrOfActiveInstances");
-            
-            // 4. 查询流程实例的所有扩展任务信息
-            List<ExtendedTaskInfo> allTaskInfos = extendedTaskInfoRepository
-                    .findByProcessInstanceIdAndIsDeletedFalse(processInstanceId);
-            
-            // 5. 过滤出多实例子任务（通过 extendedProperties 中的 multiInstance 标记）
-            List<ExtendedTaskInfo> multiInstanceTasks = allTaskInfos.stream()
-                    .filter(this::isMultiInstanceTask)
-                    .collect(Collectors.toList());
             
             // 6. 构建子任务详情列表
             List<MultiInstanceStatusResponse.SubTaskDetail> taskDetails = new ArrayList<>();
@@ -111,6 +116,9 @@ public class MultiInstanceStatusController {
                 Long subTableRowId = extProps.containsKey("subTableRowId") 
                         ? ((Number) extProps.get("subTableRowId")).longValue() 
                         : null;
+                String subTableName = extProps.get("subTableName") != null ? String.valueOf(extProps.get("subTableName")) : null;
+                String miTaskStatusField = extProps.get("miTaskStatusField") != null ? String.valueOf(extProps.get("miTaskStatusField")) : null;
+                String miTaskCurrentNodeField = extProps.get("miTaskCurrentNodeField") != null ? String.valueOf(extProps.get("miTaskCurrentNodeField")) : null;
                 
                 MultiInstanceStatusResponse.SubTaskDetail detail = MultiInstanceStatusResponse.SubTaskDetail.builder()
                         .taskId(taskInfo.getTaskId())
@@ -119,6 +127,9 @@ public class MultiInstanceStatusController {
                         .assigneeName(getUserName(taskInfo.getAssignmentTarget()))
                         .status(taskInfo.getStatus())
                         .subTableRowId(subTableRowId)
+                        .subTableName(subTableName)
+                        .miTaskStatusField(miTaskStatusField)
+                        .miTaskCurrentNodeField(miTaskCurrentNodeField)
                         .createdTime(taskInfo.getCreatedTime())
                         .completedTime(taskInfo.getCompletedTime())
                         .completedBy(taskInfo.getCompletedBy())
@@ -134,11 +145,22 @@ public class MultiInstanceStatusController {
                     .count();
             
             // 8. 确定多实例状态
+            // Runtime variables missing (process completed) → derive from ExtendedTaskInfo aggregate
+            if (nrOfInstances == null && !multiInstanceTasks.isEmpty()) {
+                nrOfInstances = multiInstanceTasks.size();
+                nrOfCompletedInstances = (int) multiInstanceTasks.stream()
+                        .filter(t -> "COMPLETED".equalsIgnoreCase(t.getStatus())).count();
+                nrOfActiveInstances = (int) multiInstanceTasks.stream()
+                        .filter(t -> {
+                            String s = t.getStatus();
+                            return s != null && !"COMPLETED".equalsIgnoreCase(s) && !"CANCELLED".equalsIgnoreCase(s);
+                        }).count();
+            }
             String status = determineMultiInstanceStatus(nrOfInstances, nrOfCompletedInstances, cancelledCount);
-            
+
             // 9. 获取多实例活动信息
-            String activityId = multiInstanceExecution.getActivityId();
-            String activityName = getActivityName(processInstanceId, activityId);
+            String activityId = multiInstanceExecution != null ? multiInstanceExecution.getActivityId() : null;
+            String activityName = activityId != null ? getActivityName(processInstanceId, activityId) : null;
             
             // 10. 获取开始和完成时间
             LocalDateTime startedTime = getMultiInstanceStartTime(multiInstanceTasks);

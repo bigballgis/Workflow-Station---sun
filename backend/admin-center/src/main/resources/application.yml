@@ -276,15 +276,21 @@ platform:
           - ${SSO_REDIRECT_ADMIN_PREFIX:http://localhost:3000/admin/sso/callback}
           - ${SSO_REDIRECT_ADMIN_HTTP_PREFIX:http://localhost:3000/admin/sso/callback}
           - http://localhost:3000/admin/sso/callback
+          # Edge on 127.0.0.1 (browser Origin / redirect_uri differ from localhost)
+          - http://127.0.0.1:3000/admin/sso/callback
       portal:
         enabled: true
         redirect-uri-prefixes:
           - ${SSO_REDIRECT_PORTAL_PREFIX:http://localhost:3000/portal/sso/callback}
           - ${SSO_REDIRECT_PORTAL_HTTP_PREFIX:http://localhost:3000/portal/sso/callback}
           - http://localhost:3001/portal/sso/callback
+          - http://127.0.0.1:3000/portal/sso/callback
+          - http://127.0.0.1:3001/portal/sso/callback
       developer-workstation:
         enabled: ${SSO_CLIENT_DEVELOPER_ENABLED:true}
         redirect-uri-prefixes:
           - ${SSO_REDIRECT_DW_PREFIX:http://localhost:3000/dev/sso/callback}
           - ${SSO_REDIRECT_DW_HTTP_PREFIX:http://localhost:3000/dev/sso/callback}
           - http://localhost:3002/dev/sso/callback
+          - http://127.0.0.1:3000/dev/sso/callback
+          - http://127.0.0.1:3102/dev/sso/callback

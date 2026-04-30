@@ -54,7 +54,21 @@ async function onSubmit() {
       })
     })
     if (!res.ok) {
-      error.value = 'Invalid username or password.'
+      let detail = ''
+      try {
+        const body = await res.json()
+        const msg =
+          (body?.message ?? body?.error?.message ?? body?.error?.detail ?? '') as string
+        if (typeof msg === 'string' && msg.trim()) detail = msg.trim()
+        else detail = typeof body?.error === 'string' ? body.error : ''
+      } catch {
+        /* ignore parse */
+      }
+      error.value =
+        detail ||
+        (res.status >= 500
+          ? `Server error (${res.status}). Is Kong/admin-center healthy?`
+          : 'Invalid username or password, or SSO redirect_uri was rejected.')
       return
     }
     const data = (await res.json()) as {

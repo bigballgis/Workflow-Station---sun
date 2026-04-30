@@ -779,6 +779,14 @@ export default {
     multiInstanceMissingInnerTaskWarn: '该子流程内还没有 UserTask。请先拖入一个 UserTask 并绑定子表后再部署。',
     elementVariable: '迭代变量',
     elementVariableTip: '暴露给每个内部任务迭代的变量名（默认：currentItem）',
+    miProgressFieldsDivider: '子表进度列',
+    miTaskStatusField: '子任务状态列名',
+    miTaskStatusFieldTip:
+      '子表每一行上由引擎维护的状态列（如 PENDING / IN_PROGRESS / COMPLETED）。须与关联表字段名及门户列表列配置一致。',
+    miTaskCurrentNodeField: '当前节点列名',
+    miTaskCurrentNodeFieldTip: '记录当前迭代内在办用户任务名称的列；该行子流程全部完成后由引擎清空。',
+    miProgressFieldSelectPlaceholder: '请选择或输入列名',
+    miProgressFieldInvalid: '只能包含字母、数字、下划线，且不能以数字开头',
     // 子表行处理人配置（内部用户任务）
     subTaskConfig: '子任务配置',
     subTaskConfigHint: '这是多实例子流程内的第一个 UserTask。这里配置每一行子任务的办理人字段和打开任务时渲染的表单。',

@@ -1312,56 +1312,80 @@ public class ProcessComponent {
             return;
         }
         Map<String, Object> subTables = (Map<String, Object>) subTablesObj;
-        List<Map<String, Object>> rowsWithId = new ArrayList<>();
-        for (Object v : subTables.values()) {
-            if (!(v instanceof List<?> list)) {
-                continue;
-            }
-            for (Object rowObj : list) {
-                if (rowObj instanceof Map<?, ?> row) {
-                    Object rowId = row.get("id");
-                    if (rowId == null) rowId = ((Map<?, ?>) row).get("rowId");
-                    if (rowId != null) rowsWithId.add((Map<String, Object>) row);
-                }
-            }
-        }
-        if (rowsWithId.isEmpty()) {
-            return;
-        }
+        Map<String, String> bindingTableNames = resolveSubTableBindingTableNames(info);
+
+        // Prefer engine-driven MI status for JSON-backed sub-tables (no physical table required).
+        // This ensures initiator sees accurate PENDING / IN_PROGRESS / COMPLETED and current node.
+        Map<String, Map<Long, MiRowProgress>> miProgressByTable = resolveMiRowProgress(info.getId());
         try {
-            for (Map<String, Object> row : rowsWithId) {
-                Object rowId = row.get("id");
-                if (rowId == null) rowId = row.get("rowId");
-                Long id;
-                if (rowId instanceof Number n) {
-                    id = n.longValue();
-                } else {
-                    try { id = Long.parseLong(String.valueOf(rowId).trim()); } catch (Exception ignored) { continue; }
+            for (Map.Entry<String, Object> subTableEntry : subTables.entrySet()) {
+                String tableName = bindingTableNames.get(subTableEntry.getKey());
+                if (tableName == null || tableName.isBlank() || !(subTableEntry.getValue() instanceof List<?> rows)) {
+                    continue;
                 }
-                List<Map<String, Object>> dbRows = jdbcTemplate.query(
-                        "SELECT * FROM participants WHERE id = ?",
-                        (rs, i) -> {
-                            java.sql.ResultSetMetaData meta = rs.getMetaData();
-                            Map<String, Object> m = new HashMap<>();
-                            for (int c = 1; c <= meta.getColumnCount(); c++) {
-                                m.put(meta.getColumnName(c), rs.getObject(c));
-                            }
-                            return m;
-                        }, id);
-                if (!dbRows.isEmpty()) {
-                    Map<String, Object> dbRow = dbRows.get(0);
-                    String displayName = (String) dbRow.get("assignee_display_name");
-                    String userId = (String) dbRow.get("assignee_user_id");
-                    if (displayName == null && userId != null && !userId.isBlank()) {
-                        displayName = resolveUsernameById(userId);
-                        dbRow.put("assignee_display_name", displayName);
+
+                // Apply MI progress to row JSON first (works even when no physical table exists).
+                Map<Long, MiRowProgress> miProgress = miProgressByTable.getOrDefault(tableName, Collections.emptyMap());
+                if (!miProgress.isEmpty()) {
+                    // Use one entry as the schema source for pending rows too.
+                    MiRowProgress schema = miProgress.values().iterator().next();
+                    for (Object rowObj : rows) {
+                        if (!(rowObj instanceof Map<?, ?> rawRow)) continue;
+                        Map<String, Object> row = (Map<String, Object>) rawRow;
+                        Long id = parseRowId(row);
+                        if (id == null) continue;
+                        MiRowProgress p = miProgress.get(id);
+                        if (p == null) {
+                            // No subtask created for this row yet.
+                            row.put(schema.statusColumn, "PENDING");
+                            row.put(schema.nodeColumn, "-");
+                        } else {
+                            row.put(p.statusColumn, p.status);
+                            row.put(p.nodeColumn, p.currentNode);
+                        }
                     }
-                    // Self-heal: if DB row is still PENDING but engine task is COMPLETED,
-                    // repair the status so the initiator sees the correct state.
-                    repairStaleTaskStatus(dbRow, id);
-                    for (Map.Entry<String, Object> entry : dbRow.entrySet()) {
-                        if (entry.getValue() != null) {
-                            row.put(entry.getKey(), entry.getValue());
+                }
+
+                // Legacy: physical table merge (kept for environments that persist rows in DB).
+                String safeTableName = requireSafeIdentifier(tableName);
+                for (Object rowObj : rows) {
+                    if (!(rowObj instanceof Map<?, ?> rawRow)) {
+                        continue;
+                    }
+                    Map<String, Object> row = (Map<String, Object>) rawRow;
+                    Long id = parseRowId(row);
+                    if (id == null) {
+                        continue;
+                    }
+                    // If this is a JSON-only environment, skip DB merge.
+                    if (!miProgress.isEmpty() && !subTableExists(safeTableName)) {
+                        continue;
+                    }
+                    List<Map<String, Object>> dbRows = jdbcTemplate.query(
+                            "SELECT * FROM " + safeTableName + " WHERE id = ?",
+                            (rs, i) -> {
+                                java.sql.ResultSetMetaData meta = rs.getMetaData();
+                                Map<String, Object> m = new HashMap<>();
+                                for (int c = 1; c <= meta.getColumnCount(); c++) {
+                                    m.put(meta.getColumnName(c), rs.getObject(c));
+                                }
+                                return m;
+                            }, id);
+                    if (!dbRows.isEmpty()) {
+                        Map<String, Object> dbRow = dbRows.get(0);
+                        String displayName = (String) dbRow.get("assignee_display_name");
+                        String userId = (String) dbRow.get("assignee_user_id");
+                        if (displayName == null && userId != null && !userId.isBlank()) {
+                            displayName = resolveUsernameById(userId);
+                            dbRow.put("assignee_display_name", displayName);
+                        }
+                        // Self-heal: if DB row is still PENDING but engine task is COMPLETED,
+                        // repair the status so the initiator sees the correct state.
+                        repairStaleTaskStatus(safeTableName, dbRow, id);
+                        for (Map.Entry<String, Object> entry : dbRow.entrySet()) {
+                            if (entry.getValue() != null) {
+                                row.put(entry.getKey(), entry.getValue());
+                            }
                         }
                     }
                 }
@@ -1371,15 +1395,193 @@ public class ProcessComponent {
         }
     }
 
+    private boolean subTableExists(String tableName) {
+        try {
+            String resolved = jdbcTemplate.queryForObject("SELECT to_regclass(?)::text", String.class, tableName);
+            return resolved != null && !resolved.isBlank();
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private record MiRowProgress(String statusColumn, String nodeColumn, String status, String currentNode) {}
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Map<Long, MiRowProgress>> resolveMiRowProgress(String processInstanceId) {
+        if (processInstanceId == null || processInstanceId.isBlank()) {
+            return Collections.emptyMap();
+        }
+        if (!workflowEngineClient.isAvailable()) {
+            return Collections.emptyMap();
+        }
+        try {
+            Optional<Map<String, Object>> opt = workflowEngineClient.getMultiInstanceStatus(processInstanceId);
+            if (opt.isEmpty()) return Collections.emptyMap();
+            Map<String, Object> data = opt.get();
+            Object tasksObj = data.get("tasks");
+            if (!(tasksObj instanceof List<?> tasks)) return Collections.emptyMap();
+
+            Map<String, Map<Long, List<Map<String, Object>>>> byTableRow = new HashMap<>();
+            for (Object o : tasks) {
+                if (!(o instanceof Map<?, ?> raw)) continue;
+                Map<String, Object> t = (Map<String, Object>) raw;
+                Object rowIdObj = t.get("subTableRowId");
+                Object tableObj = t.get("subTableName");
+                if (!(rowIdObj instanceof Number n) || tableObj == null) continue;
+                Long rowId = n.longValue();
+                String tableName = String.valueOf(tableObj).trim();
+                if (tableName.isEmpty()) continue;
+                byTableRow.computeIfAbsent(tableName, k -> new HashMap<>())
+                        .computeIfAbsent(rowId, k -> new ArrayList<>())
+                        .add(t);
+            }
+
+            Map<String, Map<Long, MiRowProgress>> out = new HashMap<>();
+            for (var e : byTableRow.entrySet()) {
+                String tableName = e.getKey();
+                Map<Long, List<Map<String, Object>>> rows = e.getValue();
+                Map<Long, MiRowProgress> rowProgress = new HashMap<>();
+                for (var re : rows.entrySet()) {
+                    Long rowId = re.getKey();
+                    List<Map<String, Object>> rowTasks = re.getValue();
+                    if (rowTasks == null || rowTasks.isEmpty()) continue;
+
+                    // Determine configured column names (prefer the first record; they are identical per subprocess).
+                    String statusCol = firstNonBlank(stringVal(rowTasks.get(0).get("miTaskStatusField")), "task_status");
+                    String nodeCol = firstNonBlank(stringVal(rowTasks.get(0).get("miTaskCurrentNodeField")), "task_current_node");
+
+                    // Active task: any status not COMPLETED/CANCELLED; pick the latest createdTime if available.
+                    Map<String, Object> active = pickLatestActiveTask(rowTasks);
+                    if (active != null) {
+                        String node = firstNonBlank(stringVal(active.get("taskName")), "-");
+                        rowProgress.put(rowId, new MiRowProgress(statusCol, nodeCol, "IN_PROGRESS", node));
+                    } else {
+                        // Has task records but none active => completed
+                        rowProgress.put(rowId, new MiRowProgress(statusCol, nodeCol, "COMPLETED", "end"));
+                    }
+                }
+                if (!rowProgress.isEmpty()) {
+                    out.put(tableName, rowProgress);
+                }
+            }
+            return out;
+        } catch (Exception e) {
+            log.debug("resolveMiRowProgress skipped: {}", e.getMessage());
+            return Collections.emptyMap();
+        }
+    }
+
+    private static Map<String, Object> pickLatestActiveTask(List<Map<String, Object>> tasks) {
+        Map<String, Object> best = null;
+        Long bestTs = null;
+        for (Map<String, Object> t : tasks) {
+            String st = stringVal(t.get("status"));
+            if ("COMPLETED".equalsIgnoreCase(st) || "CANCELLED".equalsIgnoreCase(st)) {
+                continue;
+            }
+            Long ts = parseEpochMillis(t.get("createdTime"));
+            if (best == null || (ts != null && (bestTs == null || ts > bestTs))) {
+                best = t;
+                bestTs = ts;
+            }
+        }
+        return best;
+    }
+
+    private static Long parseEpochMillis(Object timeObj) {
+        // MultiInstanceStatusResponse returns LocalDateTime serialized by Jackson; we avoid parsing and just keep null.
+        return null;
+    }
+
+    private static String stringVal(Object o) {
+        return o != null ? String.valueOf(o) : null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, String> resolveSubTableBindingTableNames(ProcessInstanceInfo info) {
+        Map<String, String> result = new HashMap<>();
+        String functionUnitRef = firstNonBlank(
+                info.getFunctionUnitCatalogId(),
+                info.getFunctionUnitCode(),
+                info.getProcessDefinitionKey()
+        );
+        if (functionUnitRef == null || functionUnitRef.isBlank()) {
+            return result;
+        }
+        try {
+            Map<String, Object> content = getFunctionUnitContent(functionUnitRef);
+            Object formsObj = content.get("forms");
+            if (!(formsObj instanceof List<?> forms)) {
+                return result;
+            }
+            for (Object formObj : forms) {
+                if (!(formObj instanceof Map<?, ?> form)) {
+                    continue;
+                }
+                Object bindingsObj = form.get("tableBindings");
+                if (!(bindingsObj instanceof List<?> bindings)) {
+                    continue;
+                }
+                for (Object bindingObj : bindings) {
+                    if (!(bindingObj instanceof Map<?, ?> binding)) {
+                        continue;
+                    }
+                    Object bindingType = binding.get("bindingType");
+                    Object bindingId = binding.get("bindingId");
+                    Object tableName = binding.get("tableName");
+                    if ("SUB".equals(String.valueOf(bindingType)) && bindingId != null && tableName != null) {
+                        result.put(String.valueOf(bindingId), String.valueOf(tableName));
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.debug("resolveSubTableBindingTableNames skipped: {}", e.getMessage());
+        }
+        return result;
+    }
+
+    private Long parseRowId(Map<String, Object> row) {
+        Object rowId = row.get("id");
+        if (rowId == null) {
+            rowId = row.get("rowId");
+        }
+        if (rowId instanceof Number n) {
+            return n.longValue();
+        }
+        if (rowId != null) {
+            try {
+                return Long.parseLong(String.valueOf(rowId).trim());
+            } catch (Exception ignored) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
+    }
+
     /**
-     * If participants.task_status is PENDING but the engine's wf_extended_task_info
+     * If a sub-table row task_status is PENDING but the engine's wf_extended_task_info
      * already records the task as COMPLETED, update the DB row to match AND recover
      * the form field values from Flowable's historical execution variables.
      * This self-heals rows that were stuck before the writeBack fix.
      */
-    private void repairStaleTaskStatus(Map<String, Object> dbRow, Long participantId) {
+    private void repairStaleTaskStatus(String tableName, Map<String, Object> dbRow, Long rowId) {
         Object ts = dbRow.get("task_status");
         if (ts != null && !"PENDING".equals(String.valueOf(ts))) {
+            return;
+        }
+        if (!columnExists(tableName, "task_status")) {
             return;
         }
         try {
@@ -1393,7 +1595,7 @@ public class ProcessComponent {
                         m.put("task_id", rs.getString("task_id"));
                         m.put("status", rs.getString("status"));
                         return m;
-                    }, participantId, participantId);
+                    }, rowId, rowId);
 
             String completedTaskId = taskEntries.stream()
                     .filter(e -> "COMPLETED".equals(e.get("status")))
@@ -1405,27 +1607,32 @@ public class ProcessComponent {
             }
 
             // 1. Fix task_status
-            jdbcTemplate.update(
-                    "UPDATE participants SET task_status = 'COMPLETED' WHERE id = ? AND task_status = 'PENDING'",
-                    participantId);
+            StringBuilder statusSql = new StringBuilder("UPDATE ").append(tableName)
+                    .append(" SET task_status = 'COMPLETED'");
+            if (columnExists(tableName, "task_current_node")) {
+                statusSql.append(", task_current_node = NULL");
+                dbRow.put("task_current_node", null);
+            }
+            statusSql.append(" WHERE id = ? AND task_status = 'PENDING'");
+            jdbcTemplate.update(statusSql.toString(), rowId);
             dbRow.put("task_status", "COMPLETED");
 
             // 2. Recover form field values from Flowable execution history.
             //    Cross-table access to ACT_HI_* is intentional — self-healing one-time
             //    repair for rows where writeBackSubTableRow was never called.
-            recoverFormFieldsFromHistory(dbRow, participantId, completedTaskId);
+            recoverFormFieldsFromHistory(tableName, dbRow, rowId, completedTaskId);
 
-            log.info("repairStaleTaskStatus: fixed participant {} → COMPLETED (task {})", participantId, completedTaskId);
+            log.info("repairStaleTaskStatus: fixed {} row {} -> COMPLETED (task {})", tableName, rowId, completedTaskId);
         } catch (Exception e) {
-            log.debug("repairStaleTaskStatus skipped for {}: {}", participantId, e.getMessage());
+            log.debug("repairStaleTaskStatus skipped for {}#{}: {}", tableName, rowId, e.getMessage());
         }
     }
 
     /**
      * Read the Flowable execution-scope variables that were saved when the subtask
-     * was completed, and write matching columns back to the participants table.
+     * was completed, and write matching columns back to the configured sub-table.
      */
-    private void recoverFormFieldsFromHistory(Map<String, Object> dbRow, Long participantId, String taskId) {
+    private void recoverFormFieldsFromHistory(String tableName, Map<String, Object> dbRow, Long rowId, String taskId) {
         try {
             List<String> execIds = jdbcTemplate.query(
                     "SELECT EXECUTION_ID_ FROM ACT_HI_TASKINST WHERE ID_ = ?",
@@ -1442,7 +1649,7 @@ public class ProcessComponent {
                     }, execIds.get(0));
 
             Set<String> validCols = dbRow.keySet();
-            Set<String> skipCols = Set.of("id", "row_version", "task_status", "meeting_id", "sort_order");
+            Set<String> skipCols = Set.of("id", "row_version", "task_status", "task_current_node", "meeting_id", "sort_order");
             Map<String, Object> updates = new HashMap<>();
             for (Map<String, Object> hv : histVars) {
                 String name = (String) hv.get("name");
@@ -1453,7 +1660,7 @@ public class ProcessComponent {
             }
             if (updates.isEmpty()) return;
 
-            StringBuilder sql = new StringBuilder("UPDATE participants SET ");
+            StringBuilder sql = new StringBuilder("UPDATE ").append(tableName).append(" SET ");
             List<Object> params = new ArrayList<>();
             for (Map.Entry<String, Object> entry : updates.entrySet()) {
                 sql.append(entry.getKey()).append(" = ?, ");
@@ -1461,14 +1668,31 @@ public class ProcessComponent {
             }
             sql.setLength(sql.length() - 2);
             sql.append(" WHERE id = ?");
-            params.add(participantId);
+            params.add(rowId);
 
             jdbcTemplate.update(sql.toString(), params.toArray());
             dbRow.putAll(updates);
-            log.info("recoverFormFieldsFromHistory: recovered {} fields for participant {}", updates.size(), participantId);
+            log.info("recoverFormFieldsFromHistory: recovered {} fields for {} row {}", updates.size(), tableName, rowId);
         } catch (Exception e) {
-            log.debug("recoverFormFieldsFromHistory skipped for participant {}: {}", participantId, e.getMessage());
+            log.debug("recoverFormFieldsFromHistory skipped for {}#{}: {}", tableName, rowId, e.getMessage());
         }
+    }
+
+    private String requireSafeIdentifier(String identifier) {
+        if (identifier == null || !identifier.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+            throw new IllegalArgumentException("Invalid table name");
+        }
+        return identifier;
+    }
+
+    private boolean columnExists(String tableName, String columnName) {
+        Integer count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.columns " +
+                        "WHERE table_schema = current_schema() AND table_name = ? AND column_name = ?",
+                Integer.class,
+                tableName,
+                columnName);
+        return count != null && count > 0;
     }
 
     private String resolveUsernameById(String userId) {

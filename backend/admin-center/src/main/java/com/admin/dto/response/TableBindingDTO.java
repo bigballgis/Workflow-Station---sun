@@ -17,6 +17,8 @@ public class TableBindingDTO {
     private Long bindingId;
     private String bindingType;    // "PRIMARY", "SUB", "RELATED"
     private String bindingMode;    // "EDITABLE", "READONLY"
+    /** When bindingType is SUB: FULL (default) or FORM_ONLY (inline / link-form detail only, not standalone list). */
+    private String subMode;
     private String foreignKeyField;
     private Integer sortOrder;
     private String tableName;

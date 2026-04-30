@@ -94,6 +94,44 @@
             />
             <div class="form-tip">{{ t('properties.rowIdVariableTip') }}</div>
           </el-form-item>
+
+          <el-divider content-position="left">{{ t('properties.miProgressFieldsDivider') }}</el-divider>
+          <el-form-item :label="t('properties.miTaskStatusField')">
+            <el-select
+              v-model="miTaskStatusField"
+              filterable
+              allow-create
+              default-first-option
+              clearable
+              :placeholder="t('properties.miProgressFieldSelectPlaceholder')"
+              style="width: 100%"
+              @change="handleMiTaskStatusFieldChange"
+            >
+              <el-option v-for="f in miProgressFieldOptions" :key="f" :label="f" :value="f" />
+            </el-select>
+            <div class="form-tip">{{ t('properties.miTaskStatusFieldTip') }}</div>
+            <div v-if="miStatusFieldInvalid" class="form-error">
+              {{ t('properties.miProgressFieldInvalid') }}
+            </div>
+          </el-form-item>
+          <el-form-item :label="t('properties.miTaskCurrentNodeField')">
+            <el-select
+              v-model="miTaskCurrentNodeField"
+              filterable
+              allow-create
+              default-first-option
+              clearable
+              :placeholder="t('properties.miProgressFieldSelectPlaceholder')"
+              style="width: 100%"
+              @change="handleMiTaskCurrentNodeFieldChange"
+            >
+              <el-option v-for="f in miProgressFieldOptions" :key="f" :label="f" :value="f" />
+            </el-select>
+            <div class="form-tip">{{ t('properties.miTaskCurrentNodeFieldTip') }}</div>
+            <div v-if="miCurrentNodeFieldInvalid" class="form-error">
+              {{ t('properties.miProgressFieldInvalid') }}
+            </div>
+          </el-form-item>
         </el-form>
       </el-collapse-item>
       
@@ -440,6 +478,17 @@ const rowIdVariable = ref('')
 const subTables = ref<TableDefinition[]>([])
 const loadingSubTables = ref(false)
 
+// Multi-instance sub-process row progress columns (stored on parent SubProcess)
+const miTaskStatusField = ref('task_status')
+const miTaskCurrentNodeField = ref('task_current_node')
+const FIELD_NAME_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/
+const miStatusFieldInvalid = computed(() => {
+  return !!miTaskStatusField.value && !FIELD_NAME_RE.test(miTaskStatusField.value.trim())
+})
+const miCurrentNodeFieldInvalid = computed(() => {
+  return !!miTaskCurrentNodeField.value && !FIELD_NAME_RE.test(miTaskCurrentNodeField.value.trim())
+})
+
 /** 顺序流变化时递增，驱动「单入线」校验刷新 */
 const topologyTick = ref(0) // retained for backward compatibility; anchor UI removed
 
@@ -597,6 +646,21 @@ function loadProperties() {
 
   if (isFirstMultiInstanceSubTask.value) {
     ensureSubTaskAssigneeMode()
+    // Read progress columns from parent SubProcess extension properties
+    const parent = getParentMiSubProcessElement()
+    if (parent) {
+      const pExt = getExtensionProperties(parent)
+      const rawSt = pExt?.miTaskStatusField
+      const rawNd = pExt?.miTaskCurrentNodeField
+      miTaskStatusField.value =
+        typeof rawSt === 'string' && rawSt.trim() && FIELD_NAME_RE.test(rawSt.trim())
+          ? rawSt.trim()
+          : 'task_status'
+      miTaskCurrentNodeField.value =
+        typeof rawNd === 'string' && rawNd.trim() && FIELD_NAME_RE.test(rawNd.trim())
+          ? rawNd.trim()
+          : 'task_current_node'
+    }
   }
   
   // Load data based on assignment type
@@ -688,6 +752,20 @@ const assigneeFieldOptions = computed(() => {
   return table?.fieldDefinitions || []
 })
 
+const miProgressFieldOptions = computed(() => {
+  const base = ['task_status', 'task_current_node']
+  const fromTable = (assigneeFieldOptions.value || []).map((f: any) => f.fieldName).filter(Boolean)
+  const seen = new Set<string>()
+  const merged: string[] = []
+  for (const n of [...base, ...fromTable]) {
+    const key = String(n || '').trim()
+    if (!key || seen.has(key)) continue
+    seen.add(key)
+    merged.push(key)
+  }
+  return merged
+})
+
 const assigneeFieldPlaceholder = computed(() => {
   if (!elementSubTableId.value) return t('properties.selectSubTableFirst')
   return t('properties.selectAssigneeField')
@@ -700,6 +778,40 @@ const parentIsMultiInstanceSubProcess = computed(() => {
   if (parentBo.$type !== 'bpmn:SubProcess') return false
   return !!parentBo.loopCharacteristics
 })
+
+function getParentMiSubProcessElement(): any | null {
+  const parent = (props.element as any)?.parent
+  if (!parent) return null
+  const bo = parent?.businessObject
+  if (!bo || bo.$type !== 'bpmn:SubProcess' || !bo.loopCharacteristics) return null
+  return parent
+}
+
+function persistMiProgressFieldProps() {
+  if (!props.modeler || !props.element) return
+  const parent = getParentMiSubProcessElement()
+  if (!parent) return
+  const st = (miTaskStatusField.value || 'task_status').trim()
+  const nd = (miTaskCurrentNodeField.value || 'task_current_node').trim()
+  if (FIELD_NAME_RE.test(st)) {
+    setExtensionProperty(props.modeler, parent, 'miTaskStatusField', st)
+  }
+  if (FIELD_NAME_RE.test(nd)) {
+    setExtensionProperty(props.modeler, parent, 'miTaskCurrentNodeField', nd)
+  }
+}
+
+function handleMiTaskStatusFieldChange() {
+  miTaskStatusField.value = miTaskStatusField.value.trim()
+  if (miStatusFieldInvalid.value) return
+  persistMiProgressFieldProps()
+}
+
+function handleMiTaskCurrentNodeFieldChange() {
+  miTaskCurrentNodeField.value = miTaskCurrentNodeField.value.trim()
+  if (miCurrentNodeFieldInvalid.value) return
+  persistMiProgressFieldProps()
+}
 
 function getElementRefId(ref: any): string {
   return typeof ref === 'string' ? ref : (ref?.id || '')

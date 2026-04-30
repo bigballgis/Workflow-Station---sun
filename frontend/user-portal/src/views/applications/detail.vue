@@ -77,21 +77,50 @@
         </div>
       </div>
 
-      <!-- Section 3: Previous node forms (read-only, displayed in order) -->
-      <template v-for="prevForm in previousForms" :key="prevForm.formId">
+      <!-- Section 3a: Previous node forms shown ABOVE the current form (non-initiator views).
+           Initiator's own My Request keeps current form first; sibling forms render in Section 3b. -->
+      <template v-for="prevForm in previousFormsAbove" :key="prevForm.formId">
         <!-- MI subtask form: no card rendered, only sub-tables (participants etc.) -->
         <template v-if="prevForm.isMiSubTask">
-          <div v-for="binding in prevForm.subTableBindings" :key="binding.bindingId" class="sub-table-section">
-            <SubTableField
-              :title="binding.tableName"
-              :columns="binding.columns"
-              v-model="binding.data"
-              :editable="false"
-              :assignee-field="hasAssignmentData(binding.data) ? 'assignee_user_id' : undefined"
-              :show-task-status="hasTaskStatusData(binding.data)"
-              :show-view-detail="hasSubTaskFormSchema && hasTaskStatusData(binding.data)"
-              @viewDetail="(row: any) => openSubTaskDetailDialog(row)"
-            />
+          <div class="section form-section">
+            <div class="section-header">
+              <el-icon><Document /></el-icon>
+              <span>{{ prevForm.formName }}</span>
+              <el-tag type="info" size="small">{{ t('applicationDetail.completed') }}</el-tag>
+            </div>
+            <div class="section-content">
+              <div v-if="prevForm.fields.length > 0 || prevForm.tabs.length > 0" class="form-container">
+                <FormRenderer
+                  :fields="prevForm.fields"
+                  :tabs="prevForm.tabs"
+                  v-model="formData"
+                  :label-width="prevForm.labelWidth"
+                  :readonly="true"
+                  :subTableBindings="prevForm.subTableBindings"
+                  :linked-sub-table-bindings="linkableSubTableBindings"
+                  @update:subTableData="(id: number, rows: any[]) => { const b = prevForm.subTableBindings.find(x => x.bindingId === id); if (b) b.data = rows }"
+                />
+              </div>
+              <template v-if="unplacedSubTableBindings(prevForm).length > 0">
+                <div
+                  v-for="binding in unplacedSubTableBindings(prevForm)"
+                  :key="binding.bindingId"
+                  class="sub-table-section"
+                >
+                  <SubTableField
+                    :title="binding.tableName"
+                    :columns="binding.columns"
+                    v-model="binding.data"
+                    :editable="false"
+                    :assignee-field="hasAssignmentData(binding.data) ? 'assignee_user_id' : undefined"
+                    :show-task-status="false"
+                    :show-view-detail="hasSubTaskFormSchema && hasTaskStatusData(binding.data)"
+                    :linked-sub-table-bindings="linkableSubTableBindings"
+                    @viewDetail="(row: any) => openSubTaskDetailDialog(row)"
+                  />
+                </div>
+              </template>
+            </div>
           </div>
         </template>
         <div v-else class="section form-section">
@@ -109,6 +138,7 @@
                 :label-width="prevForm.labelWidth"
                 :readonly="true"
                 :subTableBindings="prevForm.subTableBindings"
+                :linked-sub-table-bindings="linkableSubTableBindings"
                 @update:subTableData="(id: number, rows: any[]) => { const b = prevForm.subTableBindings.find(x => x.bindingId === id); if (b) b.data = rows }"
               />
             </div>
@@ -120,8 +150,9 @@
                   v-model="binding.data"
                   :editable="false"
                   :assignee-field="hasAssignmentData(binding.data) ? 'assignee_user_id' : undefined"
-                  :show-task-status="hasTaskStatusData(binding.data)"
+                  :show-task-status="false"
                   :show-view-detail="hasSubTaskFormSchema && hasTaskStatusData(binding.data)"
+                  :linked-sub-table-bindings="linkableSubTableBindings"
                   @viewDetail="(row: any) => openSubTaskDetailDialog(row)"
                 />
               </div>
@@ -146,6 +177,7 @@
               :label-width="formLabelWidth"
               :readonly="true"
               :subTableBindings="subTableBindings"
+              :linked-sub-table-bindings="linkableSubTableBindings"
               @update:subTableData="(id: number, rows: any[]) => { const b = subTableBindings.find(x => x.bindingId === id); if (b) b.data = rows }"
             />
           </div>
@@ -164,14 +196,98 @@
                 v-model="binding.data"
                 :editable="false"
                 :assignee-field="hasAssignmentData(binding.data) ? 'assignee_user_id' : undefined"
-                :show-task-status="hasTaskStatusData(binding.data)"
+                :show-task-status="false"
                 :show-view-detail="hasSubTaskFormSchema && hasTaskStatusData(binding.data)"
+                :linked-sub-table-bindings="linkableSubTableBindings"
                 @viewDetail="(row: any) => openSubTaskDetailDialog(row)"
               />
             </div>
           </template>
         </div>
       </div>
+
+      <!-- Section 3b: Previous node forms shown BELOW the current form (initiator's own My Request).
+           Order: form y (above) → subform → subform_copy (below) per BPMN BFS. -->
+      <template v-for="prevForm in previousFormsBelow" :key="`below-${prevForm.formId}`">
+        <template v-if="prevForm.isMiSubTask">
+          <div class="section form-section">
+            <div class="section-header">
+              <el-icon><Document /></el-icon>
+              <span>{{ prevForm.formName }}</span>
+              <el-tag type="info" size="small">{{ t('applicationDetail.completed') }}</el-tag>
+            </div>
+            <div class="section-content">
+              <div v-if="prevForm.fields.length > 0 || prevForm.tabs.length > 0" class="form-container">
+                <FormRenderer
+                  :fields="prevForm.fields"
+                  :tabs="prevForm.tabs"
+                  v-model="formData"
+                  :label-width="prevForm.labelWidth"
+                  :readonly="true"
+                  :subTableBindings="prevForm.subTableBindings"
+                  :linked-sub-table-bindings="linkableSubTableBindings"
+                  @update:subTableData="(id: number, rows: any[]) => { const b = prevForm.subTableBindings.find(x => x.bindingId === id); if (b) b.data = rows }"
+                />
+              </div>
+              <template v-if="unplacedSubTableBindings(prevForm).length > 0">
+                <div
+                  v-for="binding in unplacedSubTableBindings(prevForm)"
+                  :key="binding.bindingId"
+                  class="sub-table-section"
+                >
+                  <SubTableField
+                    :title="binding.tableName"
+                    :columns="binding.columns"
+                    v-model="binding.data"
+                    :editable="false"
+                    :assignee-field="hasAssignmentData(binding.data) ? 'assignee_user_id' : undefined"
+                    :show-task-status="false"
+                    :show-view-detail="hasSubTaskFormSchema && hasTaskStatusData(binding.data)"
+                    :linked-sub-table-bindings="linkableSubTableBindings"
+                    @viewDetail="(row: any) => openSubTaskDetailDialog(row)"
+                  />
+                </div>
+              </template>
+            </div>
+          </div>
+        </template>
+        <div v-else class="section form-section">
+          <div class="section-header">
+            <el-icon><Document /></el-icon>
+            <span>{{ prevForm.formName }}</span>
+            <el-tag type="info" size="small">{{ t('applicationDetail.completed') }}</el-tag>
+          </div>
+          <div class="section-content">
+            <div v-if="prevForm.fields.length > 0 || prevForm.tabs.length > 0" class="form-container">
+              <FormRenderer
+                :fields="prevForm.fields"
+                :tabs="prevForm.tabs"
+                v-model="formData"
+                :label-width="prevForm.labelWidth"
+                :readonly="true"
+                :subTableBindings="prevForm.subTableBindings"
+                :linked-sub-table-bindings="linkableSubTableBindings"
+                @update:subTableData="(id: number, rows: any[]) => { const b = prevForm.subTableBindings.find(x => x.bindingId === id); if (b) b.data = rows }"
+              />
+            </div>
+            <template v-if="unplacedSubTableBindings(prevForm).length > 0">
+              <div v-for="binding in unplacedSubTableBindings(prevForm)" :key="binding.bindingId" class="sub-table-section">
+                <SubTableField
+                  :title="binding.tableName"
+                  :columns="binding.columns"
+                  v-model="binding.data"
+                  :editable="false"
+                  :assignee-field="hasAssignmentData(binding.data) ? 'assignee_user_id' : undefined"
+                  :show-task-status="false"
+                  :show-view-detail="hasSubTaskFormSchema && hasTaskStatusData(binding.data)"
+                  :linked-sub-table-bindings="linkableSubTableBindings"
+                  @viewDetail="(row: any) => openSubTaskDetailDialog(row)"
+                />
+              </div>
+            </template>
+          </div>
+        </div>
+      </template>
 
       <!-- Change history panel (title and collapse handled internally by ChangeHistoryPanel) -->
       <div class="section change-history-section">
@@ -330,6 +446,25 @@ function collectPlacedBindingIds(fields: any[], tabs: Array<{ fields: any[] }> =
   return ids
 }
 
+// Walk the form rule (raw config tree) and collect every `_bindingId` referenced as a `subTable` node.
+// Used to decide whether an "unplaced" binding (no rule placement) should still be rendered.
+function collectRuleBindingIds(rules: any[]): Set<number> {
+  const ids = new Set<number>()
+  const walk = (items: any[]) => {
+    if (!Array.isArray(items)) return
+    for (const r of items) {
+      if (!r) continue
+      if (r.type === 'subTable') {
+        const id = r._bindingId ?? r.props?._bindingId
+        if (id != null) ids.add(Number(id))
+      }
+      if (Array.isArray(r.children)) walk(r.children)
+    }
+  }
+  walk(rules)
+  return ids
+}
+
 // Lookup config fallback map (from rt_lookup_configs)
 const lookupDbConfigs = ref<Record<string, { tableId: number; searchFields: string[]; displayField: string; viewFields: any[] }>>({})
 
@@ -357,11 +492,23 @@ interface PreviousFormEntry {
   }>
 }
 const previousForms = ref<PreviousFormEntry[]>([])
+// Initiator viewing own My Request: flip the section order so current form (form y) renders first,
+// followed by sibling forms (subform → subform_copy) in BPMN BFS order.
+const initiatorOwnView = ref(false)
+const previousFormsAbove = computed<PreviousFormEntry[]>(() => initiatorOwnView.value ? [] : previousForms.value)
+const previousFormsBelow = computed<PreviousFormEntry[]>(() => initiatorOwnView.value ? previousForms.value : [])
 
 function unplacedSubTableBindings(prevForm: PreviousFormEntry): PreviousFormEntry['subTableBindings'] {
   const placedIds = collectPlacedBindingIds(prevForm.fields, prevForm.tabs)
   return prevForm.subTableBindings.filter(b => !placedIds.has(b.bindingId))
 }
+
+// Link-form columns need access to other bindings as fallback data sources.
+// Keep the contract aligned with `tasks/detail.vue` (linkableSubTableBindings).
+const linkableSubTableBindings = computed<any[]>(() => [
+  ...(subTableBindings.value as any[]),
+  ...previousForms.value.flatMap(form => (form.subTableBindings as any[]))
+])
 
 // Sub-task form detail dialog
 const subTaskDetailVisible = ref(false)
@@ -374,6 +521,21 @@ const currentFormIsMiSubTask = ref(false)
 const showCurrentFormSection = computed(() => !currentFormIsMiSubTask.value || !!snapshotTaskName)
 
 const hasSubTaskFormSchema = computed(() => !!subTaskFormSchema.value)
+
+const getMiRows = (): any[] => [
+  ...subTableBindings.value.flatMap(binding => binding.data || []),
+  ...previousForms.value.flatMap(form => form.subTableBindings.flatMap(binding => binding.data || []))
+]
+
+const hasIncompleteMiRows = (): boolean => {
+  const rows = getMiRows().filter((row: any) => row && row.task_status !== undefined)
+  return rows.length > 0 && rows.some((row: any) => String(row.task_status || '').toUpperCase() !== 'COMPLETED')
+}
+
+const hasCompletedMiRows = (): boolean => {
+  const rows = getMiRows().filter((row: any) => row && row.task_status !== undefined)
+  return rows.length > 0 && rows.every((row: any) => String(row.task_status || '').toUpperCase() === 'COMPLETED')
+}
 
 function hasTaskStatusData(rows: any[]): boolean {
   if (!Array.isArray(rows) || rows.length === 0) return false
@@ -648,6 +810,7 @@ const loadFunctionUnitContent = async (processKey: string) => {
         viewerId.trim() === initiatorId &&
         !snapshotTaskName &&
         !snapshotTime
+      initiatorOwnView.value = useInitiatorFormOnly
 
       if (useInitiatorFormOnly) {
         currentFormInfo = parseBpmnXmlAndGetFirstUserTaskFormInfo(xml)
@@ -701,26 +864,35 @@ const loadFunctionUnitContent = async (processKey: string) => {
       }
 
       // Parse relationViews from configJson BEFORE parseFormConfig so lookup view fields are available
+      let selectedFormConfig: Record<string, any> = {}
       try {
         const cfg = typeof selectedForm.data === 'string' ? JSON.parse(selectedForm.data) : (selectedForm.data || {})
+        selectedFormConfig = cfg
         relationViewConfigs.value = cfg.relationViews || {}
-      } catch { relationViewConfigs.value = {} }
+      } catch {
+        selectedFormConfig = {}
+        relationViewConfigs.value = {}
+      }
 
       parseFormConfig(selectedForm.data)
 
       // Parse subForms from configJson
-      let subForms: Record<string, any> = {}
-      try {
-        const cfg = typeof selectedForm.data === 'string' ? JSON.parse(selectedForm.data) : (selectedForm.data || {})
-        subForms = cfg.subForms || {}
-      } catch {}
-
-      // Load sub-table bindings (SUB and RELATED, not PRIMARY)
+      // Load sub-table bindings (SUB and RELATED, not PRIMARY).
+      // Designer marks FORM_ONLY bindings (e.g. `subtable2` in kk) — they're meant to be embedded
+      // inline (form rule subTable node) or accessed via a LinkForm column on a sibling table.
+      // If neither happens (binding not placed in rule), drop it instead of rendering as fallback.
       const bindings: typeof subTableBindings.value = []
       const tableBindings: any[] = selectedForm.tableBindings || []
+      const selectedFormRuleIds = collectRuleBindingIds(
+        Array.isArray(selectedFormConfig?.rule) ? selectedFormConfig!.rule : []
+      )
       for (const b of tableBindings) {
         if (b.bindingType === 'PRIMARY') continue
-        const columns = deriveColumnsFromBinding(b, subForms)
+        const columns = deriveColumnsFromBinding(b, selectedFormConfig)
+        if (!Array.isArray(columns) || columns.length === 0) continue
+        const placed = selectedFormRuleIds.has(Number(b.bindingId))
+        const isFormOnly = String(b.subMode || '').toUpperCase() === 'FORM_ONLY'
+        if (!placed && isFormOnly) continue
         bindings.push({
           bindingId: b.bindingId,
           bindingType: b.bindingType,
@@ -733,6 +905,7 @@ const loadFunctionUnitContent = async (processKey: string) => {
           data: []
         })
       }
+
       // Restore sub-table data from variables
       // Note: JSON serialization converts keys to string; search by both number and string
       const savedSubTables = formData.value.__subTables__
@@ -790,40 +963,47 @@ const loadFunctionUnitContent = async (processKey: string) => {
         (subTaskFormSchema.value && subTaskFormSchema.value._formName === selectedForm.name)
       )
 
-      // Collect forms bound to nodes before the current one (read-only display); skip when initiator views own application (avoid duplicate application + approval form display)
-      if (content.processes?.length > 0 && !useInitiatorFormOnly) {
-        const prevFormIds = parseBpmnXmlAndGetPreviousFormIds(content.processes[0].data)
+      // Collect additional node forms (read-only display).
+      // Initiator view uses BFS over BPMN graph to keep order y → subform → subform_copy;
+      // other views fall back to topological "previous nodes" listing.
+      if (content.processes?.length > 0) {
+        const prevFormIds = useInitiatorFormOnly
+          ? parseBpmnXmlAndGetAllFormIds(content.processes[0].data)
+          : parseBpmnXmlAndGetPreviousFormIds(content.processes[0].data)
         const collectedPrevForms: PreviousFormEntry[] = []
         const savedSubTables = formData.value.__subTables__
 
         for (const info of prevFormIds) {
           let prevForm: any = null
+          let skipReason: string | null = null
           if (info.formId) {
-            if (info.formId === String(selectedForm.sourceId)) continue
-            prevForm = content.forms.find((f: any) => String(f.sourceId) === info.formId)
+            if (info.formId === String(selectedForm.sourceId)) { skipReason = 'sourceIdEqSelected'; }
+            else prevForm = content.forms.find((f: any) => String(f.sourceId) === info.formId)
           }
-          if (!prevForm && info.formName) {
-            if (info.formName === selectedForm.name) continue
-            prevForm = content.forms.find((f: any) => f.name === info.formName)
+          if (!skipReason && !prevForm && info.formName) {
+            if (info.formName === selectedForm.name) { skipReason = 'formNameEqSelected'; }
+            else prevForm = content.forms.find((f: any) => f.name === info.formName)
           }
-          if (!prevForm && (info as any).taskName) {
-            if ((info as any).taskName === selectedForm.name) continue
-            prevForm = content.forms.find((f: any) => f.name === (info as any).taskName)
+          if (!skipReason && !prevForm && (info as any).taskName) {
+            if ((info as any).taskName === selectedForm.name) { skipReason = 'taskNameEqSelected'; }
+            else prevForm = content.forms.find((f: any) => f.name === (info as any).taskName)
           }
-          if (!prevForm || prevForm.id === selectedForm.id) continue
-          if (collectedPrevForms.some(e => e.formId === String(prevForm.id))) continue
+          if (!skipReason && (!prevForm || prevForm.id === selectedForm.id)) skipReason = !prevForm ? 'noFormMatch' : 'idEqSelected'
+          if (!skipReason && collectedPrevForms.some(e => e.formId === String(prevForm.id))) skipReason = 'duplicate'
           // Skip the subtask form — its content is shown via the Detail button
           // in the participants sub-table. But never skip a form that has sub-table
           // bindings (it carries the participants table needed for display).
-          const isKnownMiSubTaskForm =
+          const isKnownMiSubTaskForm = !skipReason && !!(
             (subTaskFormId.value && String(prevForm.id) === subTaskFormId.value) ||
             (subTaskFormSchema.value && prevForm.name === subTaskFormSchema.value._formName)
-          if (isKnownMiSubTaskForm) {
+          )
+          if (!skipReason && isKnownMiSubTaskForm) {
             const bindings = prevForm.tableBindings || []
             if (!bindings.some((b: any) => b.bindingType !== 'PRIMARY')) {
-              continue
+              skipReason = 'miSubTaskNoNonPrimaryBindings'
             }
           }
+          if (skipReason) continue
 
           const parsedFields: FormField[] = []
           const parsedTabs: FormTab[] = []
@@ -846,15 +1026,24 @@ const loadFunctionUnitContent = async (processKey: string) => {
             }
           } catch {}
 
-          let prevSubForms: Record<string, any> = {}
+          let prevFormConfig: Record<string, any> = {}
           try {
             const cfg = typeof prevForm.data === 'string' ? JSON.parse(prevForm.data) : (prevForm.data || {})
-            prevSubForms = cfg.subForms || {}
+            prevFormConfig = cfg || {}
           } catch {}
           const prevBindings: PreviousFormEntry['subTableBindings'] = []
+          const prevRuleBindingIds = collectRuleBindingIds(
+            Array.isArray(prevFormConfig?.rule) ? prevFormConfig!.rule : []
+          )
           for (const b of (prevForm.tableBindings || [])) {
             if (b.bindingType === 'PRIMARY') continue
-            const cols = deriveColumnsFromBinding(b, prevSubForms)
+            const cols = deriveColumnsFromBinding(b, prevFormConfig)
+            if (!Array.isArray(cols) || cols.length === 0) continue
+            const placed = prevRuleBindingIds.has(Number(b.bindingId))
+            const isFormOnly = String(b.subMode || '').toUpperCase() === 'FORM_ONLY'
+            // Designer-marked FORM_ONLY bindings render only via the form rule or a sibling LinkForm column;
+            // if not placed, drop them so they don't appear as a redundant fallback (e.g. kk's `subtable2`).
+            if (!placed && isFormOnly) continue
             const binding = {
               bindingId: b.bindingId, bindingType: b.bindingType, bindingMode: b.bindingMode,
               foreignKeyField: b.foreignKeyField, tableName: b.tableDisplayName || b.tableName,
@@ -871,8 +1060,10 @@ const loadFunctionUnitContent = async (processKey: string) => {
             formId: String(prevForm.id),
             formName: prevForm.name,
             labelWidth: formLabelWidth.value,
-            fields: isKnownMiSubTaskForm ? [] : parsedFields,
-            tabs: isKnownMiSubTaskForm ? [] : parsedTabs,
+            // MI subtask form should still render its layout (read-only) so initiator sees the full form,
+            // not only the extracted sub-table block.
+            fields: parsedFields,
+            tabs: parsedTabs,
             isMiSubTask: !!isKnownMiSubTaskForm,
             subTableBindings: prevBindings
           })
@@ -1130,6 +1321,145 @@ const parseBpmnXmlAndGetPreviousFormIds = (xml: string): Array<{ formId: string 
   return []
 }
 
+// Parse all userTask-bound forms in BPMN graph order (BFS from startEvent through sequenceFlows
+// then descend into entered subProcesses). Ensures correct topological order so My Request shows
+// y → subform → subform_copy regardless of XML element ordering.
+const parseBpmnXmlAndGetAllFormIds = (xml: string): Array<{ formId: string | null, formName: string | null, taskName: string | null }> => {
+  if (!xml) return []
+  try {
+    const parser = new DOMParser()
+    const doc = parser.parseFromString(xml, 'text/xml')
+    const allElements = doc.getElementsByTagName('*')
+
+    type FlowNode = { id: string; localName: string; el: Element; parentSubProc: string | null }
+    const nodes = new Map<string, FlowNode>()
+    const flows: Array<{ source: string; target: string }> = []
+
+    const localNameOf = (el: Element) => el.localName || el.nodeName.split(':').pop() || ''
+    const getDirectParentSubProcessId = (element: Element): string | null => {
+      let node: Node | null = element.parentNode
+      while (node && node.nodeType === 1) {
+        const el = node as Element
+        const ln = localNameOf(el)
+        if (ln === 'subProcess') return el.getAttribute('id')
+        if (ln === 'process' || ln === 'definitions') return null
+        node = el.parentNode
+      }
+      return null
+    }
+
+    for (let i = 0; i < allElements.length; i++) {
+      const el = allElements[i]
+      const ln = localNameOf(el)
+      if (ln === 'sequenceFlow') {
+        flows.push({ source: el.getAttribute('sourceRef') || '', target: el.getAttribute('targetRef') || '' })
+        continue
+      }
+      const id = el.getAttribute('id')
+      if (!id) continue
+      if (ln === 'userTask' || ln === 'startEvent' || ln === 'endEvent' || ln === 'subProcess'
+          || ln === 'serviceTask' || ln === 'exclusiveGateway' || ln === 'parallelGateway'
+          || ln === 'inclusiveGateway' || ln === 'task' || ln === 'eventBasedGateway'
+          || ln === 'intermediateCatchEvent' || ln === 'intermediateThrowEvent') {
+        nodes.set(id, { id, localName: ln, el, parentSubProc: getDirectParentSubProcessId(el) })
+      }
+    }
+
+    const adj = new Map<string, string[]>()
+    for (const f of flows) {
+      if (!f.source || !f.target) continue
+      if (!adj.has(f.source)) adj.set(f.source, [])
+      adj.get(f.source)!.push(f.target)
+    }
+
+    const startIds: string[] = []
+    for (const [id, n] of nodes) {
+      if (n.localName === 'startEvent' && !n.parentSubProc) startIds.push(id)
+    }
+
+    const collectUserTaskInfo = (el: Element): { formId: string | null; formName: string | null; taskName: string | null } => {
+      const taskName = el.getAttribute('name') || null
+      let formId: string | null = null
+      let formName: string | null = null
+      const props = el.getElementsByTagName('*')
+      for (let j = 0; j < props.length; j++) {
+        const p = props[j]
+        const ln = localNameOf(p)
+        if (ln === 'property' || ln === 'values') {
+          const n = p.getAttribute('name')
+          const v = p.getAttribute('value')
+          if (n === 'formId' && v) formId = v
+          if (n === 'formName' && v) formName = v
+        }
+      }
+      return { formId, formName, taskName }
+    }
+
+    const result: Array<{ formId: string | null, formName: string | null, taskName: string | null }> = []
+    const seenKeys = new Set<string>()
+    const visited = new Set<string>()
+    const queue: string[] = [...startIds]
+    for (const s of startIds) visited.add(s)
+
+    const orderedSubProcessVisits: string[] = []
+    while (queue.length > 0) {
+      const id = queue.shift()!
+      const n = nodes.get(id)
+      if (!n) continue
+      if (n.localName === 'userTask') {
+        const info = collectUserTaskInfo(n.el)
+        const key = info.formId || info.formName || info.taskName || ''
+        if (key && !seenKeys.has(key)) {
+          seenKeys.add(key)
+          result.push(info)
+        }
+      } else if (n.localName === 'subProcess') {
+        orderedSubProcessVisits.push(id)
+      }
+      for (const next of (adj.get(id) || [])) {
+        if (!visited.has(next)) { visited.add(next); queue.push(next) }
+      }
+    }
+
+    // After top-level traversal, descend into each entered subProcess in encounter order
+    // so its inner userTasks (e.g. subform_copy in MI) come after the subProcess's siblings.
+    for (const spId of orderedSubProcessVisits) {
+      const sp = nodes.get(spId)
+      if (!sp) continue
+      const innerStartIds: string[] = []
+      const innerVisited = new Set<string>()
+      for (const [id, n] of nodes) {
+        if (n.parentSubProc === spId && n.localName === 'startEvent') {
+          innerStartIds.push(id)
+          innerVisited.add(id)
+        }
+      }
+      const innerQueue = [...innerStartIds]
+      while (innerQueue.length > 0) {
+        const id = innerQueue.shift()!
+        const n = nodes.get(id)
+        if (!n) continue
+        if (n.localName === 'userTask') {
+          const info = collectUserTaskInfo(n.el)
+          const key = info.formId || info.formName || info.taskName || ''
+          if (key && !seenKeys.has(key)) {
+            seenKeys.add(key)
+            result.push(info)
+          }
+        }
+        for (const next of (adj.get(id) || [])) {
+          if (!innerVisited.has(next)) { innerVisited.add(next); innerQueue.push(next) }
+        }
+      }
+    }
+
+    return result
+  } catch (e) {
+    console.error('Failed to parse BPMN for all formIds:', e)
+    return []
+  }
+}
+
 /** Find the formId (sourceId) of the MI subtask's userTask from BPMN XML. */
 const findMiSubTaskFormIdFromBpmn = (xml: string): string | null => {
   if (!xml) return null
@@ -1141,6 +1471,28 @@ const findMiSubTaskFormIdFromBpmn = (xml: string): string | null => {
     for (let i = 0; i < allElements.length; i++) {
       const el = allElements[i]
       const localName = el.localName || el.nodeName.split(':').pop()
+      if (localName === 'subProcess') {
+        const children = el.getElementsByTagName('*')
+        const isMultiInstanceSubProcess = Array.from(children).some(child => {
+          const childLocal = child.localName || child.nodeName.split(':').pop()
+          return childLocal === 'multiInstanceLoopCharacteristics'
+        })
+        if (!isMultiInstanceSubProcess) continue
+
+        for (let j = 0; j < children.length; j++) {
+          const child = children[j]
+          const childLocal = child.localName || child.nodeName.split(':').pop()
+          if (childLocal !== 'userTask') continue
+          const props = child.getElementsByTagName('*')
+          for (let k = 0; k < props.length; k++) {
+            const p = props[k]
+            const propLocal = p.localName || p.nodeName.split(':').pop()
+            if ((propLocal === 'property' || propLocal === 'values') && p.getAttribute('name') === 'formId') {
+              return p.getAttribute('value')
+            }
+          }
+        }
+      }
       if (localName !== 'userTask') continue
 
       const children = el.getElementsByTagName('*')
@@ -1475,7 +1827,11 @@ const parseBpmnXml = (xml: string) => {
       const pos = positionMap.get(spId)
 
       let spStatus: 'completed' | 'current' | 'pending' = 'pending'
-      if (snapshotActive && completedSnapshotSingleTaskSubProcesses.has(spId)) {
+      if (processInfo.value.status === 'COMPLETED' && hasCompletedMiRows()) {
+        spStatus = 'completed'
+      } else if (hasIncompleteMiRows()) {
+        spStatus = 'current'
+      } else if (snapshotActive && completedSnapshotSingleTaskSubProcesses.has(spId)) {
         spStatus = 'completed'
       } else if (enteredSubProcesses.has(spId)) {
         const childElements = sp.getElementsByTagName('*')
@@ -1795,9 +2151,22 @@ const convertFormCreateRule = (rule: any): FormField | null => {
   return field
 }
 
-// Derive display columns for a sub-table binding based on designed fields
-const deriveColumnsFromBinding = (binding: any, subForms?: Record<string, any>): Array<{ field: string; label: string; type?: string; required?: boolean; options?: Array<{ label: string; value: any }>; props?: Record<string, any> }> => {
-  const subFormRule = subForms?.[binding.bindingId]?.rule
+// Derive display columns for a sub-table binding from the designer config.
+// My Request must only show columns configured in developer-workstation.
+const deriveColumnsFromBinding = (binding: any, formConfig?: Record<string, any>): Array<{ field: string; label: string; type?: string; required?: boolean; options?: Array<{ label: string; value: any }>; props?: Record<string, any> }> => {
+  const listColumns = formConfig?.subListViews?.[binding.bindingId]?.columns
+  if (Array.isArray(listColumns) && listColumns.length > 0) {
+    return listColumns
+      .filter((col: any) => col && col.fieldName)
+      .map((col: any) => ({
+        field: col.fieldName,
+        label: col.columnLabel || col.comment || col.fieldName,
+        type: mapDesignerColumnType(col.dataType, col.columnType),
+        ...(col.linkText || col.componentId ? { props: { linkText: col.linkText, componentId: col.componentId } } : {}),
+      }))
+  }
+
+  const subFormRule = formConfig?.subForms?.[binding.bindingId]?.rule
   if (subFormRule && Array.isArray(subFormRule) && subFormRule.length > 0) {
     return subFormRule.map((r: any) => {
       const rProps = r.props || {}
@@ -1888,6 +2257,18 @@ const deriveColumnsFromBinding = (binding: any, subForms?: Record<string, any>):
     })
   }
   return []
+}
+
+function mapDesignerColumnType(dataType?: string, columnType?: string): string | undefined {
+  if (columnType === 'linkForm') return 'linkForm'
+  if (columnType === 'lookup') return 'lookup'
+  const normalized = String(dataType || '').toUpperCase()
+  if (normalized === 'BIGINT' || normalized === 'INTEGER' || normalized === 'DECIMAL' || normalized === 'NUMBER') return 'number'
+  if (normalized === 'BOOLEAN') return 'switch'
+  if (normalized === 'DATE') return 'date'
+  if (normalized === 'TIMESTAMP' || normalized === 'DATETIME') return 'datetime'
+  if (normalized === 'TEXT') return 'textarea'
+  return 'text'
 }
 
 // Load flow history

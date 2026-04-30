@@ -798,6 +798,27 @@ public class WorkflowEngineClient {
         return Optional.empty();
     }
 
+    /**
+     * 获取多实例子流程状态（按子表行聚合）
+     */
+    public Optional<Map<String, Object>> getMultiInstanceStatus(String processInstanceId) {
+        if (!isAvailable()) {
+            return Optional.empty();
+        }
+        try {
+            String url = workflowEngineUrl + "/api/v1/workflow/multi-instance/" + processInstanceId + "/status";
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                url, HttpMethod.GET, authorizedGetEntity(),
+                new ParameterizedTypeReference<Map<String, Object>>() {});
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()));
+            }
+        } catch (Exception e) {
+            log.warn("Failed to get multi-instance status from workflow engine: {}", e.getMessage());
+        }
+        return Optional.empty();
+    }
+
 
 
     /**

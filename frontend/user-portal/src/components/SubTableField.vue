@@ -19,7 +19,15 @@
       >
         <template #default="scope">
           <!-- Read-only display -->
-          <template v-if="col.type === 'upload'">
+          <template v-if="col.field === 'task_status'">
+            <el-tag
+              :type="scope.row.task_status === 'COMPLETED' ? 'success' : 'warning'"
+              size="small"
+            >
+              {{ formatTaskStatus(scope.row.task_status) }}
+            </el-tag>
+          </template>
+          <template v-else-if="col.type === 'upload'">
             <span
               v-if="scope.row[col.field]"
               class="file-download-link"
@@ -117,7 +125,7 @@
             :type="scope.row.task_status === 'COMPLETED' ? 'success' : 'warning'"
             size="small"
           >
-            {{ scope.row.task_status === 'COMPLETED' ? t('subTable.taskCompleted') : t('subTable.taskPending') }}
+            {{ formatTaskStatus(scope.row.task_status) }}
           </el-tag>
         </template>
       </el-table-column>
@@ -340,6 +348,12 @@ import { onMounted, onBeforeUnmount } from 'vue'
 import { useSubTableWebSocket, type SubTableUpdateMessage } from '@/composables/useSubTableWebSocket'
 
 const { t } = useI18n()
+
+function formatTaskStatus(status: unknown): string {
+  if (status === 'COMPLETED') return t('subTable.taskCompleted')
+  if (status === 'IN_PROGRESS' || status === 'ASSIGNED') return t('subTable.taskInProgress')
+  return t('subTable.taskPending')
+}
 
 /** Sanitize HTML content to prevent XSS */
 function sanitizeHtml(html: string): string {

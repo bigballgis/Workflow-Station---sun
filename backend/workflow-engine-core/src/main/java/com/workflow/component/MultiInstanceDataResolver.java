@@ -42,6 +42,9 @@ public class MultiInstanceDataResolver {
     
     @Autowired
     private ExtendedTaskInfoRepository extendedTaskInfoRepository;
+
+    @Autowired
+    private BpmnActionParser bpmnActionParser;
     
     private final ObjectMapper objectMapper = new ObjectMapper();
     
@@ -202,10 +205,13 @@ public class MultiInstanceDataResolver {
         if (subTableRowId == null || subTableName == null) {
             throw new WorkflowValidationException("Task is missing multi-instance configuration information");
         }
+        String safeSubTableName = requireSafeIdentifier(subTableName);
+        String statusCol = resolveMiNamedColumn(extProps, "miTaskStatusField", "miTaskStatusField", extInfo, "task_status");
+        String nodeCol = resolveMiNamedColumn(extProps, "miTaskCurrentNodeField", "miTaskCurrentNodeField", extInfo, "task_current_node");
         
         // 2. 验证 row_version（先查询当前版本）
         String checkSql = String.format(
-            "SELECT row_version FROM %s WHERE id = ?", subTableName);
+            "SELECT row_version FROM %s WHERE id = ?", safeSubTableName);
         
         Long currentRowVersion;
         try {
@@ -226,19 +232,27 @@ public class MultiInstanceDataResolver {
         }
         
         // 3. 构建 UPDATE SQL（含乐观锁）
-        StringBuilder updateSql = new StringBuilder(String.format("UPDATE %s SET ", subTableName));
+        boolean hasTaskStatus = columnExists(safeSubTableName, statusCol);
+        boolean hasTaskCurrentNode = columnExists(safeSubTableName, nodeCol);
+        StringBuilder updateSql = new StringBuilder(String.format("UPDATE %s SET ", safeSubTableName));
         List<Object> params = new ArrayList<>();
         
         for (Map.Entry<String, Object> entry : formData.entrySet()) {
             if ("id".equals(entry.getKey()) || "row_version".equals(entry.getKey()) 
-                    || "task_status".equals(entry.getKey())) {
+                    || statusCol.equals(entry.getKey())
+                    || nodeCol.equals(entry.getKey())) {
                 continue;
             }
             updateSql.append(entry.getKey()).append(" = ?, ");
             params.add(entry.getValue());
         }
         
-        updateSql.append("task_status = 'COMPLETED', ");
+        if (hasTaskStatus) {
+            updateSql.append(statusCol).append(" = 'COMPLETED', ");
+        }
+        if (hasTaskCurrentNode) {
+            updateSql.append(nodeCol).append(" = NULL, ");
+        }
         updateSql.append("row_version = row_version + 1 ");
         updateSql.append("WHERE id = ? AND row_version = ?");
         params.add(subTableRowId);
@@ -359,6 +373,44 @@ public class MultiInstanceDataResolver {
     private String getStringValue(Map<String, Object> map, String key) {
         Object value = map.get(key);
         return value != null ? value.toString() : null;
+    }
+
+    /**
+     * SubProcess 扩展 {@code miTaskStatusField} / {@code miTaskCurrentNodeField}，或 ExtendedTaskInfo JSON 中的同名键。
+     */
+    private String resolveMiNamedColumn(Map<String, Object> extProps, String extJsonKey, String bpmnPropertyName,
+                                      ExtendedTaskInfo extInfo, String defaultName) {
+        String v = getStringValue(extProps, extJsonKey);
+        if (v != null && v.trim().matches("[A-Za-z_][A-Za-z0-9_]*")) {
+            return v.trim();
+        }
+        String pd = extInfo.getProcessDefinitionId();
+        String tk = extInfo.getTaskDefinitionKey();
+        if (pd != null && tk != null && bpmnActionParser != null) {
+            String fromBpmn = bpmnActionParser.getMultiInstanceSubProcessExtensionPropertyValue(pd, tk, bpmnPropertyName);
+            if (fromBpmn != null && fromBpmn.trim().matches("[A-Za-z_][A-Za-z0-9_]*")) {
+                return fromBpmn.trim();
+            }
+        }
+        return defaultName;
+    }
+
+    private String requireSafeIdentifier(String identifier) {
+        if (identifier == null || !identifier.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+            throw new WorkflowValidationException("Invalid sub-table name");
+        }
+        return identifier;
+    }
+
+    private boolean columnExists(String tableName, String columnName) {
+        Integer count = jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM information_schema.columns " +
+                "WHERE table_schema = current_schema() AND table_name = ? AND column_name = ?",
+            Integer.class,
+            tableName,
+            columnName
+        );
+        return count != null && count > 0;
     }
     
     // ==================== 内部类 ====================

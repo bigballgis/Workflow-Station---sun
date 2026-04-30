@@ -92,6 +92,89 @@ public class BpmnActionParser {
         }
     }
 
+    /**
+     * Resolve the sub-table name for a task inside a multi-instance subprocess.
+     * Some later nodes in the subprocess do not repeat subTableName, so look at
+     * sibling userTasks within the same multi-instance subprocess.
+     */
+    public String getMultiInstanceSubProcessSubTableName(String processDefinitionId, String userTaskElementId) {
+        if (processDefinitionId == null || processDefinitionId.isBlank()
+                || userTaskElementId == null || userTaskElementId.isBlank()) {
+            return null;
+        }
+        try {
+            ProcessDefinition pd = repositoryService.createProcessDefinitionQuery()
+                    .processDefinitionId(processDefinitionId)
+                    .singleResult();
+            if (pd == null) {
+                return null;
+            }
+            String xml = readDeploymentBpmnXml(pd);
+            if (xml == null || xml.isBlank()) {
+                return null;
+            }
+            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+            factory.setNamespaceAware(true);
+            Document doc = factory.newDocumentBuilder().parse(new InputSource(new StringReader(xml)));
+            Element userTask = findUserTaskById(doc.getDocumentElement(), userTaskElementId);
+            if (userTask == null) {
+                return null;
+            }
+            Element parent = findAncestorSubProcess(userTask);
+            if (parent == null || !containsLocalName(parent, "multiInstanceLoopCharacteristics")) {
+                return null;
+            }
+            return findFirstAttributeInTree(parent, "name", "subTableName", "value");
+        } catch (Exception e) {
+            log.debug("getMultiInstanceSubProcessSubTableName {} failed: {}", userTaskElementId, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Read a custom extension property from the multi-instance {@code subProcess} that contains
+     * the given user task (e.g. {@code miTaskStatusField}, {@code miTaskCurrentNodeField}).
+     * <p>Walks the sub-process subtree in DOM order, same strategy as
+     * {@link #getMultiInstanceSubProcessSubTableName}.</p>
+     */
+    public String getMultiInstanceSubProcessExtensionPropertyValue(String processDefinitionId, String userTaskElementId,
+                                                                   String propertyName) {
+        if (processDefinitionId == null || processDefinitionId.isBlank()
+                || userTaskElementId == null || userTaskElementId.isBlank()
+                || propertyName == null || propertyName.isBlank()) {
+            return null;
+        }
+        try {
+            ProcessDefinition pd = repositoryService.createProcessDefinitionQuery()
+                    .processDefinitionId(processDefinitionId)
+                    .singleResult();
+            if (pd == null) {
+                return null;
+            }
+            String xml = readDeploymentBpmnXml(pd);
+            if (xml == null || xml.isBlank()) {
+                return null;
+            }
+            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+            factory.setNamespaceAware(true);
+            Document doc = factory.newDocumentBuilder().parse(new InputSource(new StringReader(xml)));
+            Element userTask = findUserTaskById(doc.getDocumentElement(), userTaskElementId);
+            if (userTask == null) {
+                return null;
+            }
+            Element parent = findAncestorSubProcess(userTask);
+            if (parent == null || !containsLocalName(parent, "multiInstanceLoopCharacteristics")) {
+                return null;
+            }
+            String v = findFirstAttributeInTree(parent, "name", propertyName.trim(), "value");
+            return v != null && !v.isBlank() ? v.trim() : null;
+        } catch (Exception e) {
+            log.debug("getMultiInstanceSubProcessExtensionPropertyValue {} / {} failed: {}",
+                    userTaskElementId, propertyName, e.getMessage());
+            return null;
+        }
+    }
+
     private String readDeploymentBpmnXml(ProcessDefinition pd) throws IOException {
         String resourceName = pd.getResourceName();
         String rn = resourceName != null ? resourceName.toLowerCase() : "";
@@ -323,6 +406,30 @@ public class BpmnActionParser {
             }
         }
         return null;
+    }
+
+    private Element findAncestorSubProcess(Element element) {
+        Node current = element != null ? element.getParentNode() : null;
+        while (current != null) {
+            if (current instanceof Element el && "subProcess".equals(getLocalName(el))) {
+                return el;
+            }
+            current = current.getParentNode();
+        }
+        return null;
+    }
+
+    private boolean containsLocalName(Element root, String localName) {
+        if (root == null || localName == null) return false;
+        if (localName.equals(getLocalName(root))) return true;
+        NodeList children = root.getChildNodes();
+        for (int i = 0; i < children.getLength(); i++) {
+            Node n = children.item(i);
+            if (n instanceof Element && containsLocalName((Element) n, localName)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private String findFirstAttributeInTree(Element root, String attrName, String attrValue, String valueAttrName) {

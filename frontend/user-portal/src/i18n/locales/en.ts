@@ -889,6 +889,7 @@ export default {
     assignmentFailed: 'Assignment failed',
     taskStatus: 'Status',
     taskPending: 'Pending',
+    taskInProgress: 'In Progress',
     taskCompleted: 'Completed',
     viewDetail: 'Detail',
   },

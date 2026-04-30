@@ -861,6 +861,7 @@ export default {
     uploadFailed: '欄位"{field}"上傳失敗',
     taskStatus: '狀態',
     taskPending: '待處理',
+    taskInProgress: '處理中',
     taskCompleted: '已完成',
     viewDetail: '查看詳情',
   },

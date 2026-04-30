@@ -884,6 +884,7 @@ export default {
     assignmentFailed: '分配失败',
     taskStatus: '状态',
     taskPending: '待处理',
+    taskInProgress: '处理中',
     taskCompleted: '已完成',
     viewDetail: '查看详情',
   },

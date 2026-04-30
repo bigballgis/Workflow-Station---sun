@@ -10,6 +10,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -22,8 +23,13 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
  * MultiInstanceDataResolver 单元测试
@@ -46,9 +52,22 @@ class MultiInstanceDataResolverTest {
     
     @Mock
     private ExtendedTaskInfoRepository extendedTaskInfoRepository;
+
+    @Mock
+    private BpmnActionParser bpmnActionParser;
     
     @InjectMocks
     private MultiInstanceDataResolver resolver;
+
+    @BeforeEach
+    void stubInformationSchemaColumnLookup() {
+        lenient().when(jdbcTemplate.queryForObject(
+                contains("information_schema.columns"),
+                eq(Integer.class),
+                any(),
+                any()))
+            .thenReturn(0);
+    }
     
     private static final String TASK_ID = "task-001";
     private static final String PROCESS_INSTANCE_ID = "proc-001";
@@ -140,7 +159,7 @@ class MultiInstanceDataResolverTest {
             // When & Then: 抛出异常
             assertThatThrownBy(() -> resolver.loadSubTaskFormData(TASK_ID))
                 .isInstanceOf(WorkflowValidationException.class)
-                .hasMessage("关联的数据行已不存在");
+                .hasMessage("The associated data row no longer exists");
         }
     }
     
@@ -220,7 +239,7 @@ class MultiInstanceDataResolverTest {
             // When & Then: 抛出异常
             assertThatThrownBy(() -> resolver.loadSubTableRow(SUB_TABLE_NAME, SUB_TABLE_ROW_ID))
                 .isInstanceOf(WorkflowValidationException.class)
-                .hasMessage("关联的数据行已不存在");
+                .hasMessage("The associated data row no longer exists");
         }
     }
     
@@ -279,7 +298,7 @@ class MultiInstanceDataResolverTest {
             // When & Then: 抛出乐观锁异常
             assertThatThrownBy(() -> resolver.writeBackSubTableRow(TASK_ID, formData, 1L))
                 .isInstanceOf(OptimisticLockException.class)
-                .hasMessage("数据已被修改，请刷新后重试");
+                .hasMessage("Data has been modified, please refresh and try again");
         }
         
         @Test
@@ -300,7 +319,7 @@ class MultiInstanceDataResolverTest {
             // When & Then: 抛出验证异常
             assertThatThrownBy(() -> resolver.writeBackSubTableRow(TASK_ID, formData, 1L))
                 .isInstanceOf(WorkflowValidationException.class)
-                .hasMessage("关联的数据行已不存在");
+                .hasMessage("The associated data row no longer exists");
         }
         
         @Test
@@ -327,7 +346,7 @@ class MultiInstanceDataResolverTest {
             // When & Then: 抛出乐观锁异常（而不是数据行删除异常）
             assertThatThrownBy(() -> resolver.writeBackSubTableRow(TASK_ID, formData, 1L))
                 .isInstanceOf(OptimisticLockException.class)
-                .hasMessage("数据已被修改，请刷新后重试");
+                .hasMessage("Data has been modified, please refresh and try again");
         }
     }
     

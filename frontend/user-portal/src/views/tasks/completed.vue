@@ -160,6 +160,12 @@ const viewTask = (task: TaskInfo) => {
   if (task.taskDefinitionKey) {
     query.snapshotTaskDefinitionKey = task.taskDefinitionKey
   }
+  if ((task as any).processInstanceId) {
+    query.processInstanceId = String((task as any).processInstanceId)
+  }
+  if ((task as any).processDefinitionKey) {
+    query.processDefinitionKey = String((task as any).processDefinitionKey)
+  }
   router.push({ path: `/tasks/${task.taskId}`, query })
 }
 

@@ -525,6 +525,10 @@ const userStore = useUserStore()
 const router = useRouter()
 
 const taskId = route.params.id as string
+const fallbackProcessInstanceId = computed(() => {
+  const v = route.query.processInstanceId
+  return typeof v === 'string' && v.trim() ? v.trim() : ''
+})
 
 const loading = ref(true)
 const submitting = ref(false)
@@ -1258,6 +1262,39 @@ const loadTaskDetail = async () => {
     if (status === 404) {
       taskError.value = t('task.notFound')
     } else if (status === 403) {
+      // Completed tasks should still be able to render workflow diagram for process participants.
+      // Fallback to process detail (read-only) when task-level permission is denied.
+      if (fallbackProcessInstanceId.value) {
+        try {
+          const pr = await processApi.getProcessDetail(fallbackProcessInstanceId.value)
+          const p = (pr as any).data || pr
+          if (p) {
+            taskInfo.value = {
+              taskId,
+              id: taskId,
+              taskName: String(route.query.snapshotTaskName || ''),
+              processInstanceId: p.id,
+              processDefinitionKey: p.processDefinitionKey || (route.query.processDefinitionKey as any),
+              variables: p.variables || {}
+            } as any
+            isCompletedTask.value = true
+            formReadOnly.value = true
+            currentNodeId.value = ''
+            if (p.variables) formData.value = p.variables
+            // diagram needs history records + bpmn xml
+            await loadTaskHistory()
+            const key = (taskInfo.value as any).processDefinitionKey
+            if (key) {
+              await loadFunctionUnitContent(String(key))
+            }
+            await loadProcessAndTaskFormData({ ...(taskInfo.value as any), processInstanceId: p.id, id: taskId })
+            loading.value = false
+            return
+          }
+        } catch (e) {
+          console.warn('[detail] Fallback process detail failed:', e)
+        }
+      }
       taskError.value = t('task.noPermission')
     } else {
       taskError.value = t('task.serverError')

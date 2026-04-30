@@ -780,6 +780,15 @@ export default {
     multiInstanceMissingInnerTaskWarn: 'This sub-process contains no UserTask yet. Drop a UserTask inside and bind it to a sub-table before deploying.',
     elementVariable: 'Element Variable',
     elementVariableTip: 'Name of the variable exposed to each inner task iteration (default: currentItem)',
+    miProgressFieldsDivider: 'Sub-table progress columns',
+    miTaskStatusField: 'Sub-task status column',
+    miTaskStatusFieldTip:
+      'Logical column on each sub-table row updated by the engine (e.g. PENDING / IN_PROGRESS / COMPLETED). Must match RelationTable field names and portal list columns.',
+    miTaskCurrentNodeField: 'Current node column',
+    miTaskCurrentNodeFieldTip:
+      'Logical column holding the inner user task name for the active iteration. Cleared when the row completes.',
+    miProgressFieldSelectPlaceholder: 'Select or input a column name',
+    miProgressFieldInvalid: 'Only letters, digits and underscore; must not start with a digit',
     // Element-variable assignee config (inner user task)
     subTaskConfig: 'Sub-Task Config',
     subTaskConfigHint: 'This is the first UserTask inside a multi-instance sub-process. Configure the row assignee field and the form rendered when each sub-task opens here.',
