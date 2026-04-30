@@ -1827,9 +1827,25 @@ const parseBpmnXml = (xml: string) => {
       const pos = positionMap.get(spId)
 
       let spStatus: 'completed' | 'current' | 'pending' = 'pending'
-      if (processInfo.value.status === 'COMPLETED' && hasCompletedMiRows()) {
+      let isMiSubProcess = false
+      const spDescForMi = sp.getElementsByTagName('*')
+      for (let mi = 0; mi < spDescForMi.length; mi++) {
+        const miLocal = spDescForMi[mi].localName || spDescForMi[mi].nodeName.split(':').pop()
+        if (miLocal === 'multiInstanceLoopCharacteristics') {
+          isMiSubProcess = true
+          break
+        }
+      }
+      // Ended process: MI subprocess must show completed (green), not Current Step; Flowable still reports last activity as currentNode.
+      if (
+        processInfo.value.status === 'COMPLETED' &&
+        enteredSubProcesses.has(spId) &&
+        isMiSubProcess
+      ) {
         spStatus = 'completed'
-      } else if (hasIncompleteMiRows()) {
+      } else if (processInfo.value.status === 'COMPLETED' && hasCompletedMiRows()) {
+        spStatus = 'completed'
+      } else if (processInfo.value.status === 'RUNNING' && hasIncompleteMiRows()) {
         spStatus = 'current'
       } else if (snapshotActive && completedSnapshotSingleTaskSubProcesses.has(spId)) {
         spStatus = 'completed'
@@ -1844,7 +1860,11 @@ const parseBpmnXml = (xml: string) => {
           userTaskCount++
           const taskName = childElements[i].getAttribute('name') || ''
           const taskId = childElements[i].getAttribute('id') || ''
-          if (taskName === currentNodeName || taskId === currentNodeName) {
+          // While RUNNING, currentNode match means activities still in this subprocess. When COMPLETED, same name/id is often the last finished task; do not mark as current.
+          if (
+            processInfo.value.status !== 'COMPLETED' &&
+            (taskName === currentNodeName || taskId === currentNodeName)
+          ) {
             hasCurrentChild = true
             break
           }
