@@ -453,9 +453,9 @@ const resourceTypeText = (rt: string | null | undefined): string => {
     case 'RELATION_TABLE':     return [RT, t('menu.tableStructure')].join(sep)
     case 'RELATION_TABLE_ROW': return [RT, t('menu.tableData')].join(sep)
     case 'AUTH':               return 'Auth'
-    case 'BI_DASHBOARD':       return ['BI Management', 'Dashboard Registry'].join(sep)
-    case 'BI_ASSIGNMENT':      return ['BI Management', 'Dashboard Assignment'].join(sep)
-    case 'BI_RBAC':            return ['BI Management', 'RBAC Mapping'].join(sep)
+    case 'BI_DASHBOARD':       return [t('menu.biManagement'), t('menu.biDashboardRegistry')].join(sep)
+    case 'BI_ASSIGNMENT':      return [t('menu.biManagement'), t('menu.biDashboardAssignment')].join(sep)
+    case 'BI_RBAC':            return [t('menu.biManagement'), t('menu.biRbacMapping')].join(sep)
     default:                   return rt || ''
   }
 }

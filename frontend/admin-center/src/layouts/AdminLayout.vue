@@ -57,11 +57,11 @@
             <el-sub-menu index="bi-management" v-if="isSystemAdmin">
               <template #title>
                 <el-icon><DataAnalysis /></el-icon>
-                <span>BI Management</span>
+                <span>{{ t('menu.biManagement') }}</span>
               </template>
-              <el-menu-item index="/bi-management/dashboard-registry">Dashboard Registry</el-menu-item>
-              <el-menu-item index="/bi-management/dashboard-assignment">Dashboard Assignment</el-menu-item>
-              <el-menu-item index="/bi-management/rbac-mapping">RBAC Mapping</el-menu-item>
+              <el-menu-item index="/bi-management/dashboard-registry">{{ t('menu.biDashboardRegistry') }}</el-menu-item>
+              <el-menu-item index="/bi-management/dashboard-assignment">{{ t('menu.biDashboardAssignment') }}</el-menu-item>
+              <el-menu-item index="/bi-management/rbac-mapping">{{ t('menu.biRbacMapping') }}</el-menu-item>
             </el-sub-menu>
 
             <!-- Audit Log - requires audit:read or log:read -->

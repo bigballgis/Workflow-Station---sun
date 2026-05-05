@@ -95,19 +95,19 @@ const routes: RouteRecordRaw[] = [
         path: 'bi-management/dashboard-registry',
         name: 'BiDashboardRegistry',
         component: () => import('@/views/bi-management/DashboardRegistry.vue'),
-        meta: { title: 'Dashboard Registry', icon: 'DataAnalysis', requiresAuth: true, permissions: [] }
+        meta: { titleKey: 'menu.biDashboardRegistry', icon: 'DataAnalysis', requiresAuth: true, permissions: [] }
       },
       {
         path: 'bi-management/dashboard-assignment',
         name: 'BiDashboardAssignment',
         component: () => import('@/views/bi-management/DashboardAssignment.vue'),
-        meta: { title: 'Dashboard Assignment', icon: 'Share', requiresAuth: true, permissions: [] }
+        meta: { titleKey: 'menu.biDashboardAssignment', icon: 'Share', requiresAuth: true, permissions: [] }
       },
       {
         path: 'bi-management/rbac-mapping',
         name: 'BiRbacMapping',
         component: () => import('@/views/bi-management/RbacMapping.vue'),
-        meta: { title: 'RBAC Mapping', icon: 'Connection', requiresAuth: true, permissions: [] }
+        meta: { titleKey: 'menu.biRbacMapping', icon: 'Connection', requiresAuth: true, permissions: [] }
       },
       // ==================== Relation Tables ====================
       {
