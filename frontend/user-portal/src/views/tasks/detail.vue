@@ -183,6 +183,7 @@
                   :columns="binding.columns"
                   v-model="binding.data"
                   :editable="false"
+                  :assignee-field="resolveAssigneeFieldForBinding(binding.columns, binding.tableName)"
                   :show-fill-button="isMiSubTaskMode && isParticipantsBinding(binding)"
                   :fill-button-label="t('task.addParticipantInfoForm')"
                   :linked-sub-table-bindings="linkableSubTableBindings"
@@ -518,6 +519,7 @@ import {
 } from '@/api/processForm'
 import { relationTableApi } from '@/api/relationTable'
 import { isRejectedName } from '@/utils/statusMatcher'
+import { unwrapUserLikeValueToDisplayString, extractUserIdFromCellValue } from '@/components/subTableAddDialogHelpers'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -979,6 +981,39 @@ function isolateMiSubTaskData(taskData: any) {
   formData.value = cleanedFormData
 }
 
+/** Completed-task detail: task header uses assigneeName from engine; sub-table rows may only have user id — align display for the assignee row. */
+function applyTaskAssigneeNameToMatchingSubTableRows(taskData: { assignee?: unknown; assigneeName?: unknown }) {
+  const rawAid = taskData?.assignee
+  const rawAname = taskData?.assigneeName
+  const aid = extractUserIdFromCellValue(rawAid)
+  if (!aid) return
+  const displayName =
+    typeof rawAname === 'string' || typeof rawAname === 'number'
+      ? String(rawAname).trim()
+      : unwrapUserLikeValueToDisplayString(rawAname)
+  if (!displayName || displayName === '-') return
+  const na = aid
+  const apply = (bindings: typeof subTableBindings.value) => {
+    for (const b of bindings) {
+      const af = resolveAssigneeFieldForBinding(b.columns, b.tableName)
+      if (!af) continue
+      for (const r of b.data || []) {
+        if (!r || typeof r !== 'object') continue
+        const rec = r as Record<string, unknown>
+        if (extractUserIdFromCellValue(rec[af]) !== na) continue
+        const dn = rec.assignee_display_name
+        if (dn == null || String(dn).trim() === '') {
+          rec.assignee_display_name = displayName
+        }
+      }
+    }
+  }
+  apply(subTableBindings.value)
+  for (const pf of previousForms.value) {
+    apply(pf.subTableBindings)
+  }
+}
+
 function openMiFillDialog(row: any) {
   miFillDialogData.value = { ...formData.value }
   miFillSubTableBindings.value = cloneSubTableBindings(subTableBindings.value)
@@ -1253,6 +1288,9 @@ const loadTaskDetail = async () => {
           const val = formData.value[key]
           return val != null && val !== '' && val !== false
         })
+      }
+      if (isCompletedTask.value) {
+        applyTaskAssigneeNameToMatchingSubTableRows(data)
       }
     }
   } catch (error: any) {

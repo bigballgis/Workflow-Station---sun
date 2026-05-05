@@ -52,6 +52,14 @@ export interface UserOption {
   username: string
 }
 
+/** Admin-center 用户详情（GET /users/{id} 响应体，字段随版本可能扩展） */
+interface AdminUserDetailPayload {
+  id?: string
+  username?: string
+  displayName?: string
+  fullName?: string
+}
+
 // 用户API - 通过 /api/v1/admin 代理访问 admin-center 后端
 export const userApi = {
   // 搜索用户（用于转办、委托等场景）- 通过 user-portal 后端代理
@@ -73,6 +81,22 @@ export const userApi = {
       }))
     } catch {
       return []
+    }
+  },
+
+  /**
+   * 按用户 ID 解析显示名（与任务详情 assigneeName 数据源一致，供子表等只读场景使用）
+   */
+  getUserSummary: async (userId: string): Promise<UserOption | null> => {
+    const id = String(userId || '').trim()
+    if (!id) return null
+    try {
+      const u = (await adminCenterAxios.get(`/users/${encodeURIComponent(id)}`)) as AdminUserDetailPayload
+      if (!u || (!u.id && !u.username)) return null
+      const name = String(u.displayName || u.fullName || u.username || u.id || id)
+      return { id: String(u.id ?? id), name, username: String(u.username || '') }
+    } catch {
+      return null
     }
   },
 

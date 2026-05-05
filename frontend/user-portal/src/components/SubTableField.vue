@@ -85,25 +85,57 @@
                 <div class="lookup-field readonly">
                   <div v-if="lookupSelectedRow(col, scope.row[col.field])" class="lookup-selected-wrapper">
                     <span class="lookup-selected-tag">
-                      <span class="lookup-selected-text">{{ resolveDisplayValue(col, scope.row[col.field]) }}</span>
+                      <span class="lookup-selected-text">{{ lookupTagDisplayText(col, scope.row[col.field]) }}</span>
                     </span>
                   </div>
                   <span v-else class="lookup-readonly-empty">-</span>
                 </div>
               </div>
               <div
-                v-if="col.props?.showBackfillView !== false && lookupSelectedRow(col, scope.row[col.field]) && lookupDisplayViewFields(col).length > 0"
+                v-if="col.props?.showBackfillView !== false && lookupSelectedRow(col, scope.row[col.field]) && effectiveLookupViewFields(col, scope.row[col.field]).length > 0"
                 class="lookup-view-display"
               >
                 <el-descriptions :column="1" border size="small" direction="horizontal">
                   <el-descriptions-item
-                    v-for="field in lookupDisplayViewFields(col)"
+                    v-for="field in effectiveLookupViewFields(col, scope.row[col.field])"
                     :key="field.fieldName"
                     :label="field.displayLabel || field.fieldName"
                     label-class-name="lookup-view-label"
                     class-name="lookup-view-value"
                   >
-                    {{ lookupSelectedRow(col, scope.row[col.field])?.[field.fieldName] ?? '-' }}
+                    {{ formatUserSnapshotCellValue(lookupSelectedRow(col, scope.row[col.field])?.[field.fieldName]) }}
+                  </el-descriptions-item>
+                </el-descriptions>
+              </div>
+            </div>
+          </template>
+          <template v-else-if="isUserSnapshotLikeObject(scope.row[col.field])">
+            <div class="lookup-preview-wrapper sub-table-lookup-preview">
+              <div class="lookup-form-item">
+                <label class="lookup-label-text">
+                  <el-icon class="lookup-label-icon"><Search /></el-icon>
+                </label>
+                <div class="lookup-field readonly">
+                  <div class="lookup-selected-wrapper">
+                    <span class="lookup-selected-tag">
+                      <span class="lookup-selected-text">{{ userObjectTagDisplayString(scope.row[col.field]) }}</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div
+                v-if="userSnapshotViewFieldsFromRow(scope.row[col.field]).length > 0"
+                class="lookup-view-display"
+              >
+                <el-descriptions :column="1" border size="small" direction="horizontal">
+                  <el-descriptions-item
+                    v-for="field in userSnapshotViewFieldsFromRow(scope.row[col.field])"
+                    :key="field.key"
+                    :label="field.label"
+                    label-class-name="lookup-view-label"
+                    class-name="lookup-view-value"
+                  >
+                    {{ formatUserSnapshotCellValue(getSnapshotField(scope.row[col.field], field.key)) }}
                   </el-descriptions-item>
                 </el-descriptions>
               </div>
@@ -171,7 +203,7 @@
         <template #default="scope">
           <div class="assignee-cell">
             <span v-if="scope.row.assignee_display_name" class="assignee-name">
-              {{ scope.row.assignee_display_name }}
+              {{ formatAssigneeDisplayLabel(scope.row.assignee_display_name) }}
             </span>
             <span v-else-if="assigneeField && scope.row[assigneeField]" class="assignee-name">
               {{ getUserDisplayName(scope.row[assigneeField]) }}
@@ -331,7 +363,7 @@ import { Plus, Document, Loading, Search } from '@element-plus/icons-vue'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import DOMPurify from 'dompurify'
 import SubTableAddDialog from './SubTableAddDialog.vue'
-import { resolveDisplayValue } from './subTableAddDialogHelpers'
+import { resolveDisplayValue, unwrapUserLikeValueToDisplayString, extractUserIdFromCellValue, isUserSnapshotLikeObject, userObjectTagDisplayString, userSnapshotViewFieldsFromRow, formatUserSnapshotCellValue } from './subTableAddDialogHelpers'
 import type { DialogColumn } from './subTableAddDialogHelpers'
 import type { FormField, RowFormulaRule, SubTableValidationConfig } from './formRendererHelpers'
 import { calculateSummary } from './businessLogicEngine'
@@ -435,6 +467,30 @@ function lookupDisplayViewFields(col: Column): Array<{ fieldName: string; displa
   return [...fields]
     .filter((field: any) => field?.visible !== false)
     .sort((a: any, b: any) => (a?.sortOrder ?? 0) - (b?.sortOrder ?? 0))
+}
+
+function effectiveLookupViewFields(col: Column, rawValue: unknown): Array<{ fieldName: string; displayLabel?: string; sortOrder?: number; visible?: boolean }> {
+  const configured = lookupDisplayViewFields(col)
+  if (configured.length > 0) return configured
+  if (isUserSnapshotLikeObject(rawValue)) {
+    return userSnapshotViewFieldsFromRow(rawValue).map(f => ({
+      fieldName: f.key,
+      displayLabel: f.label
+    }))
+  }
+  return []
+}
+
+function lookupTagDisplayText(col: Column, rawValue: unknown): string {
+  if (rawValue != null && isUserSnapshotLikeObject(rawValue)) {
+    return userObjectTagDisplayString(rawValue)
+  }
+  return resolveDisplayValue(col, rawValue)
+}
+
+function getSnapshotField(rowData: unknown, key: string): unknown {
+  if (rowData == null || typeof rowData !== 'object' || Array.isArray(rowData)) return undefined
+  return (rowData as Record<string, unknown>)[key]
 }
 
 const props = defineProps<{
@@ -749,7 +805,7 @@ const userNameCache = ref<Record<string, string>>({})
 function openAssignDialog(row: any, rowIndex: number) {
   currentAssignRow.value = row
   currentAssignRowIndex.value = rowIndex
-  selectedAssigneeId.value = row[props.assigneeField || ''] || ''
+  selectedAssigneeId.value = extractUserIdFromCellValue(row[props.assigneeField || ''] as unknown) || ''
   assignDialogVisible.value = true
 }
 
@@ -774,10 +830,112 @@ async function searchUsers(keyword: string) {
   }
 }
 
-function getUserDisplayName(userId: string): string {
-  if (userNameCache.value[userId]) return userNameCache.value[userId]
-  return userId.startsWith('user-') ? userId.substring(5) : userId
+function getUserDisplayName(userId: unknown): string {
+  if (userId == null || userId === '') return ''
+  if (typeof userId === 'object' && !Array.isArray(userId)) {
+    return unwrapUserLikeValueToDisplayString(userId)
+  }
+  const sid = String(userId)
+  if (userNameCache.value[sid]) return userNameCache.value[sid]
+  return sid.startsWith('user-') ? sid.substring(5) : sid
 }
+
+function formatAssigneeDisplayLabel(raw: unknown): string {
+  if (raw == null || raw === '') return ''
+  if (typeof raw === 'string' || typeof raw === 'number') return String(raw)
+  return unwrapUserLikeValueToDisplayString(raw)
+}
+
+/** Align sub-table assignee column with task detail: resolve display names when only IDs are stored (e.g. completed tasks). */
+const assigneeDisplayHydrateGeneration = ref(0)
+let assigneeDisplayHydrateTimer: ReturnType<typeof setTimeout> | null = null
+
+function scheduleHydrateAssigneeDisplayNames() {
+  const af = props.assigneeField
+  if (!af) return
+  if (assigneeDisplayHydrateTimer) clearTimeout(assigneeDisplayHydrateTimer)
+  assigneeDisplayHydrateTimer = setTimeout(() => {
+    assigneeDisplayHydrateTimer = null
+    void hydrateAssigneeDisplayNamesFromUserDirectory()
+  }, 200)
+}
+
+async function hydrateAssigneeDisplayNamesFromUserDirectory() {
+  const af = props.assigneeField
+  if (!af || !rows.value.length) return
+  const gen = ++assigneeDisplayHydrateGeneration.value
+
+  let changed = false
+  let next = rows.value.map(r => {
+    if (!r || typeof r !== 'object') return r
+    const sid = extractUserIdFromCellValue((r as Record<string, unknown>)[af])
+    if (!sid) return r
+    const existing = r.assignee_display_name
+    if (existing != null && String(existing).trim() !== '') return r
+    const cached = userNameCache.value[sid]
+    if (!cached) return r
+    changed = true
+    return { ...r, assignee_display_name: cached }
+  })
+  if (changed) {
+    rows.value = next
+    emit('update:modelValue', [...next])
+  }
+
+  const idsToFetch = [...new Set(
+    rows.value
+      .map(r => (r && typeof r === 'object' ? extractUserIdFromCellValue((r as Record<string, unknown>)[af]) : ''))
+      .filter(s => s.length > 0)
+  )].filter(sid => {
+    const row = rows.value.find(
+      r => r && extractUserIdFromCellValue((r as Record<string, unknown>)[af]) === sid
+    )
+    if (!row) return false
+    const hasName = row.assignee_display_name != null && String(row.assignee_display_name).trim() !== ''
+    if (hasName) return false
+    return !userNameCache.value[sid]
+  })
+
+  if (idsToFetch.length === 0) return
+
+  await Promise.all(
+    idsToFetch.map(async sid => {
+      try {
+        const info = await userApi.getUserSummary(sid)
+        if (info?.name) {
+          userNameCache.value = { ...userNameCache.value, [sid]: info.name }
+        }
+      } catch {
+        /* ignore */
+      }
+    })
+  )
+
+  if (gen !== assigneeDisplayHydrateGeneration.value) return
+
+  let changed2 = false
+  const merged = rows.value.map(r => {
+    if (!r || typeof r !== 'object') return r
+    const sid = extractUserIdFromCellValue((r as Record<string, unknown>)[af])
+    if (!sid) return r
+    const existing = r.assignee_display_name
+    if (existing != null && String(existing).trim() !== '') return r
+    const cached = userNameCache.value[sid]
+    if (!cached) return r
+    changed2 = true
+    return { ...r, assignee_display_name: cached }
+  })
+  if (changed2) {
+    rows.value = merged
+    emit('update:modelValue', [...merged])
+  }
+}
+
+watch(
+  () => [props.assigneeField, props.modelValue],
+  () => scheduleHydrateAssigneeDisplayNames(),
+  { deep: true, immediate: true }
+)
 
 /**
  * Sub-table row primary key: the engine assignment API requires the relation table's
@@ -975,9 +1133,13 @@ async function confirmAssignment() {
       if (currentAssignRowIndex.value !== null && props.assigneeField) {
         const targetRow = rows.value[currentAssignRowIndex.value]
         targetRow[props.assigneeField] = result.assigneeId
-        const displayName = result.assigneeName || result.assigneeId
+        const rawDisplay = result.assigneeName ?? result.assigneeId
+        const displayName =
+          typeof rawDisplay === 'string' || typeof rawDisplay === 'number'
+            ? String(rawDisplay)
+            : unwrapUserLikeValueToDisplayString(rawDisplay)
         targetRow.assignee_display_name = displayName
-        userNameCache.value[result.assigneeId] = displayName
+        userNameCache.value[String(result.assigneeId)] = displayName
         emit('update:modelValue', [...rows.value])
         emit('assignmentChanged')
       }
@@ -1110,6 +1272,10 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  if (assigneeDisplayHydrateTimer) {
+    clearTimeout(assigneeDisplayHydrateTimer)
+    assigneeDisplayHydrateTimer = null
+  }
   stopPolling()
   stopWebSocketSubscription()
 })
