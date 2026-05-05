@@ -2338,8 +2338,6 @@ const parseBpmnXml = (xml: string) => {
       // SubProcess-internal endEvents stay pending when the subProcess hasn't been entered
       if (parentSpId && !enteredSubProcesses.has(parentSpId)) {
         // keep 'pending'
-      } else if (showCurrentStep && parentSpId && activeMultiInstanceSubProcesses.has(parentSpId)) {
-        status = 'current'
       } else if (parentSpId && completedMultiInstanceSubProcesses.has(parentSpId)) {
         status = 'completed'
         completed.push(id)

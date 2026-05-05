@@ -1994,8 +1994,6 @@ const parseBpmnXml = (xml: string) => {
         status = 'pending'
       } else if (parentSpId && completedSnapshotSingleTaskSubProcesses.has(parentSpId)) {
         status = 'completed'
-      } else if (parentSpId && activeMultiInstanceSubProcesses.has(parentSpId)) {
-        status = 'current'
       } else if (parentSpId && completedMultiInstanceSubProcesses.has(parentSpId)) {
         status = 'completed'
       } else if (completedNodeNames.has(name)) {
