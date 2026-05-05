@@ -296,11 +296,24 @@ function openEditDialog(index: number) {
   }
 }
 
+function linkFormTitleTableName(raw: string): string {
+  return String(raw || '')
+    .trim()
+    .replace(/^ADD\s*\+\s*/i, '')
+    .trim()
+}
+
 function openLinkFormDialog(col: ColumnConfig, row: Record<string, any>) {
-  linkFormDialogTitle.value = col.label || col.props?.linkText || t('linkForm.defaultLinkText')
+  const raw = col.props?.boundSubTableName || props.config.title || ''
+  const tableName = linkFormTitleTableName(raw)
+  linkFormDialogTitle.value = tableName
+    ? t('linkForm.dialogTitleAddTable', { tableName })
+    : t('linkForm.linkedForm')
   linkFormInitialData.value = { ...row }
   linkFormRule.value = col.props?.formRule || props.formRule || []
-  linkFormOption.value = col.props?.formOption || props.formOption || {}
+  const opt = { ...((col.props?.formOption || props.formOption || {}) as Record<string, unknown>) }
+  delete opt.title
+  linkFormOption.value = opt
   linkFormDialogVisible.value = true
 }
 

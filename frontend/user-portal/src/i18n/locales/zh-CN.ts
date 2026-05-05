@@ -851,6 +851,11 @@ export default {
     restore: '恢复',
     discard: '丢弃',
   },
+  linkForm: {
+    defaultLinkText: '详情',
+    linkedForm: '关联表单',
+    dialogTitleAddTable: '添加 {tableName}',
+  },
   subTable: {
     add: '新增',
     edit: '编辑',

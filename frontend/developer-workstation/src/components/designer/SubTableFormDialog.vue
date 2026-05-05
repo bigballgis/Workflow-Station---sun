@@ -76,9 +76,10 @@ const defaultFormOption = {
 }
 
 function buildDialogFormOption(option: Record<string, any> = {}) {
+  const { title: _dropTitle, ...rest } = option || {}
   return {
     ...defaultFormOption,
-    ...option,
+    ...rest,
     resetBtn: false,
     submitBtn: false,
     onSubmit: () => {},

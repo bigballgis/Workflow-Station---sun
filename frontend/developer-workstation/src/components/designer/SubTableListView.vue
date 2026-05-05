@@ -155,7 +155,7 @@
 
     <el-dialog
       v-model="showLinkFormDialog"
-      :title="selectedLinkColumn ? getColumnLabel(selectedLinkColumn) : t('linkForm.linkedForm')"
+      :title="linkFormDialogTitle"
       width="700px"
       destroy-on-close
       :close-on-click-modal="false"
@@ -356,16 +356,24 @@ const isDraggingFromPanel = ref(false)
 type DragPayload = { kind: 'field'; fieldName: string } | { kind: 'linkForm' } | { kind: 'lookup' }
 const dragPayload = ref<DragPayload | null>(null)
 const dragMime = 'application/x-sub-table-list-column'
-const linkFormOption = computed(() => ({
-  resetBtn: false,
-  submitBtn: false,
-  showMsg: true,
-  form: {
-    labelPosition: 'left',
-    labelWidth: '140px',
-  },
-  ...(selectedSubTableFormDesign.value.options || props.formOption || {})
-}))
+const linkFormOption = computed(() => {
+  const saved = { ...((selectedSubTableFormDesign.value.options || props.formOption || {}) as Record<string, unknown>) }
+  // Persisted designer option often includes `title`; form-create renders it inside the dialog and
+  // it may still be the legacy "ADD + …" string — remove so only `el-dialog` shows `linkFormDialogTitle`.
+  delete saved.title
+  return {
+    resetBtn: false,
+    submitBtn: false,
+    showMsg: true,
+    form: {
+      labelPosition: 'left',
+      labelWidth: '140px',
+    },
+    ...saved,
+    resetBtn: false,
+    submitBtn: false,
+  }
+})
 
 const selectedSubTableFormDesign = computed<SubTableFormDesign>(() => {
   const bindingId = selectedLinkColumn.value?.boundSubTableBindingId || props.binding.bindingId
@@ -428,6 +436,32 @@ const getColumnLabel = (column: SubTableListColumnDTO) => {
   return column.comment || column.fieldName
 }
 const getLinkText = (column: SubTableListColumnDTO) => column.linkText || t('linkForm.defaultLinkText')
+
+function getLinkFormBoundTableName(column: SubTableListColumnDTO | null): string {
+  if (!column || !isLinkColumn(column)) {
+    return props.binding.tableName
+  }
+  return (
+    column.boundSubTableName
+    || subTableBindingOptions.value.find(o => o.bindingId === column.boundSubTableBindingId)?.tableName
+    || props.binding.tableName
+  )
+}
+
+/** Legacy titles used "ADD + name"; strip if that prefix was stored on the table display name. */
+function linkFormTitleTableName(raw: string): string {
+  return String(raw || '')
+    .trim()
+    .replace(/^ADD\s*\+\s*/i, '')
+    .trim()
+}
+
+const linkFormDialogTitle = computed(() => {
+  const tableName = linkFormTitleTableName(getLinkFormBoundTableName(selectedLinkColumn.value))
+  if (!tableName) return t('linkForm.linkedForm')
+  return t('linkForm.dialogTitleAddTable', { tableName })
+})
+
 const defaultLookupPreviewConfig: LookupPreviewConfig = {
   placeholder: 'Click to search',
   searchFields: [],

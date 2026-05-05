@@ -1143,6 +1143,7 @@ export default {
     displayFieldPlaceholder: 'Field from form data to display as link content',
     displayFieldTip: 'Leave empty to use link text. Specify a field name from the form, and the link will display that field\'s value.',
     defaultLinkText: 'Details',
+    dialogTitleAddTable: 'Add {tableName}',
     noComponents: 'No link form components',
     fillRequiredFields: 'Please fill in required fields',
     deleteConfirm: 'Are you sure to delete this link form component?',

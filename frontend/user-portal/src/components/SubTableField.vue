@@ -244,7 +244,7 @@
       <div v-if="linkFormDialogVisible" class="link-form-modal-overlay">
         <div ref="linkFormModalPanelRef" class="link-form-modal-panel" role="dialog" aria-modal="true">
           <div class="link-form-modal-header">
-            <span>{{ activeLinkColumn?.label || selectedLinkBinding?.tableName || t('linkForm.linkedForm') }}</span>
+            <span>{{ linkFormModalTitle }}</span>
           </div>
           <div class="link-form-dialog-body">
             <el-alert
@@ -575,6 +575,16 @@ function resolveLinkBindingForColumn(col: Column | null | undefined): SubTableBi
 const selectedLinkBinding = computed(() => {
   const col = activeLinkColumn.value
   return resolveLinkBindingForColumn(col) ?? null
+})
+
+/** Modal title: bound sub-table name + i18n (do not use list column label — avoids stale "ADD + …" text). */
+const linkFormModalTitle = computed(() => {
+  const col = activeLinkColumn.value
+  const fromProp = col?.props?.boundSubTableName ? String(col.props.boundSubTableName).trim() : ''
+  const fromBinding = selectedLinkBinding.value?.tableName ? String(selectedLinkBinding.value.tableName).trim() : ''
+  const tableName = fromProp || fromBinding
+  if (tableName) return t('linkForm.dialogTitleAddTable', { tableName })
+  return t('linkForm.linkedForm')
 })
 
 const linkedFormFields = computed(() => selectedLinkBinding.value?.formFields || [])

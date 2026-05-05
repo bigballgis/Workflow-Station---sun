@@ -856,6 +856,11 @@ export default {
     restore: 'Restore',
     discard: 'Discard',
   },
+  linkForm: {
+    defaultLinkText: 'Details',
+    linkedForm: 'Linked Form',
+    dialogTitleAddTable: 'Add {tableName}',
+  },
   subTable: {
     add: 'Add',
     edit: 'Edit',

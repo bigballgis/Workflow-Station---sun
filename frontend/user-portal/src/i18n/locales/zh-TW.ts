@@ -76,7 +76,10 @@ export default {
     logout: '登出',
     logoutSuccess: '已登出',
     pleaseInput: '請輸入{label}',
-    pleaseSelect: '請選擇{label}'
+    pleaseSelect: '請選擇{label}',
+    yes: '是',
+    no: '否',
+    submit: '提交'
   },
   menu: {
     dashboard: '首頁',
@@ -239,6 +242,15 @@ export default {
     completedSnapshot: '已完成任務快照',
     noTaskForm: '目前階段未綁定任務表單',
     submitTaskForm: '提交',
+    mainTaskInfo: '主任務資訊',
+    yourTaskInfo: '您的任務資訊',
+    loadingFormData: '正在載入表單資料...',
+    loadFormDataFailed: '載入表單資料失敗',
+    confirmSubmit: '確定要提交此任務嗎？',
+    submitSuccess: '任務提交成功',
+    submitFailed: '任務提交失敗',
+    confirmCancel: '確定要取消嗎？未儲存的資料將遺失。',
+    dataModifiedPleaseRefresh: '資料已被修改，請重新整理後重試',
     allParticipantsMustHaveAssignee: '請為子表中每一列點擊「分配」指定處理人後再完成。',
     addParticipantInfoForm: '新增參與者資訊表',
   },
@@ -839,6 +851,11 @@ export default {
     restore: '恢復',
     discard: '捨棄',
   },
+  linkForm: {
+    defaultLinkText: '詳情',
+    linkedForm: '關聯表單',
+    dialogTitleAddTable: '新增 {tableName}',
+  },
   subTable: {
     add: '新增',
     edit: '編輯',
@@ -859,6 +876,16 @@ export default {
     selectUser: '選擇用戶',
     selectDepartment: '選擇部門',
     uploadFailed: '欄位"{field}"上傳失敗',
+    assignee: '處理人',
+    unassigned: '未分配',
+    assign: '分配',
+    reassign: '重新分配',
+    selectAssignee: '選擇處理人',
+    user: '用戶',
+    searchUser: '搜尋用戶',
+    pleaseSelectUser: '請選擇用戶',
+    assignmentSuccess: '分配成功',
+    assignmentFailed: '分配失敗',
     taskStatus: '狀態',
     taskPending: '待處理',
     taskInProgress: '處理中',
@@ -911,5 +938,8 @@ export default {
     serviceUnavailable: '服務暫時不可用，請稍後重試',
     serviceMaintenance: '服務維護中，請稍後重試',
     configError: '請求配置錯誤'
+  },
+  validation: {
+    required: '{field} 為必填項'
   }
 }

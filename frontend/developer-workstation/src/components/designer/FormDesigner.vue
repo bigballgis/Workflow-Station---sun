@@ -1197,6 +1197,9 @@ function toSubTablePreviewColumns(bindingId: number, rule: any[], config: any) {
       if (column.columnType === 'linkForm') {
         const targetBindingId = column.boundSubTableBindingId || bindingId
         const targetFormDesign = getSubTableFormDesign(targetBindingId)
+        const boundSubTableName = column.boundSubTableName
+          || designerSubBindings.value.find(b => b.bindingId === targetBindingId)?.tableName
+          || ''
         return {
           field: column.fieldName || `linkForm:${column.componentId || bindingId}`,
           label: column.columnLabel || column.comment || column.linkText || t('linkForm.defaultLinkText'),
@@ -1206,6 +1209,7 @@ function toSubTablePreviewColumns(bindingId: number, rule: any[], config: any) {
             linkText: column.linkText || t('linkForm.defaultLinkText'),
             formRule: targetFormDesign.rule,
             formOption: targetFormDesign.options,
+            boundSubTableName,
           }
         }
       }

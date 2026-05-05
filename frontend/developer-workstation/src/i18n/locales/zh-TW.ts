@@ -1129,6 +1129,7 @@ export default {
     displayFieldPlaceholder: '從表單資料中讀取作為連結內容',
     displayFieldTip: '留空則使用連結文字。可指定表單中的欄位名，連結將顯示該欄位的值。',
     defaultLinkText: '詳情',
+    dialogTitleAddTable: '新增 {tableName}',
     noComponents: '暫無連結表單元件',
     fillRequiredFields: '請填寫必填欄位',
     deleteConfirm: '確定要刪除該連結表單元件嗎？',

@@ -1137,6 +1137,7 @@ export default {
     displayFieldPlaceholder: '从表单数据中读取作为链接显示内容',
     displayFieldTip: '留空则使用链接文字。可指定表单中的字段名，链接将显示该字段的值。',
     defaultLinkText: '详情',
+    dialogTitleAddTable: '添加 {tableName}',
     noComponents: '暂无链接表单组件',
     fillRequiredFields: '请填写必填字段',
     deleteConfirm: '确定要删除该链接表单组件吗？',
