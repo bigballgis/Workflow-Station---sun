@@ -1,11 +1,12 @@
 <template>
   <div class="page-container">
-    <div class="page-header">
-      <span class="page-title">{{ t('menu.dictionary') }}</span>
-      <el-button type="primary" @click="showCreateDialog">
-        <el-icon><Plus /></el-icon>{{ t('dictionary.createDictionary') }}
-      </el-button>
-    </div>
+    <PageHeader :title="t('menu.dictionary')">
+      <template #actions>
+        <el-button type="primary" @click="showCreateDialog">
+          <el-icon><Plus /></el-icon>{{ t('dictionary.createDictionary') }}
+        </el-button>
+      </template>
+    </PageHeader>
     
     <el-row :gutter="20">
       <el-col :span="10">
@@ -66,81 +67,39 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import PageHeader from '@/components/PageHeader.vue'
 import DictionaryFormDialog from './components/DictionaryFormDialog.vue'
 import DictionaryItemDialog from './components/DictionaryItemDialog.vue'
-import { dictionaryApi, type Dictionary, type DictionaryItem } from '@/api/dictionary'
+import { useDictionary } from '@/composables/modules/useDictionary'
+import { dictionaryTypeKey } from '@/utils/format'
 
 const { t } = useI18n()
 
-const filterText = ref('')
-const loading = ref(false)
-const itemsLoading = ref(false)
-const dictionaries = ref<Dictionary[]>([])
-const selectedDict = ref<Dictionary | null>(null)
-const dictItems = ref<DictionaryItem[]>([])
-const formDialogVisible = ref(false)
-const itemDialogVisible = ref(false)
-const currentDict = ref<Dictionary | null>(null)
-const currentItem = ref<DictionaryItem | null>(null)
-const parentItem = ref<DictionaryItem | null>(null)
+const {
+  filterText,
+  loading,
+  itemsLoading,
+  dictionaries,
+  selectedDict,
+  dictItems,
+  formDialogVisible,
+  itemDialogVisible,
+  currentDict,
+  currentItem,
+  parentItem,
+  filteredDictionaries,
+  fetchDictionaries,
+  fetchDictItems,
+  handleDictSelect,
+  showCreateDialog,
+  showEditDialog,
+  showItemDialog,
+  handleDeleteItem,
+} = useDictionary()
 
-const filteredDictionaries = computed(() => (dictionaries.value || []).filter(d => !filterText.value || d.name.includes(filterText.value) || d.code.includes(filterText.value)))
-const typeText = (type: string) => ({ SYSTEM: t('dictionary.typeSystem'), BUSINESS: t('dictionary.typeBusiness'), CUSTOM: t('dictionary.typeCustom') }[type] || type)
-
-const fetchDictionaries = async () => {
-  loading.value = true
-  try {
-    const result = await dictionaryApi.list()
-    dictionaries.value = Array.isArray(result) ? result : []
-  } catch (e) {
-    console.error('Failed to load dictionaries:', e)
-    dictionaries.value = []
-    ElMessage.error(t('dictionary.loadListFailed'))
-  } finally {
-    loading.value = false
-  }
-}
-
-const fetchDictItems = async () => {
-  if (!selectedDict.value) return
-  itemsLoading.value = true
-  try {
-    dictItems.value = await dictionaryApi.getItems(selectedDict.value.id)
-  } catch (e) {
-    console.error('Failed to load dictionary items:', e)
-    ElMessage.error(t('dictionary.loadItemsFailed'))
-  } finally {
-    itemsLoading.value = false
-  }
-}
-
-const handleDictSelect = (dict: Dictionary | null) => {
-  selectedDict.value = dict
-  if (dict) fetchDictItems()
-}
-
-const showCreateDialog = () => { currentDict.value = null; formDialogVisible.value = true }
-const showEditDialog = (dict: Dictionary) => { currentDict.value = dict; formDialogVisible.value = true }
-const showItemDialog = (item?: DictionaryItem, parent?: DictionaryItem) => {
-  currentItem.value = item || null
-  parentItem.value = parent || null
-  itemDialogVisible.value = true
-}
-
-const handleDeleteItem = async (item: DictionaryItem) => {
-  await ElMessageBox.confirm(t('dictionary.deleteConfirm'), t('dictionary.deleteConfirmTitle'), { type: 'warning' })
-  try {
-    await dictionaryApi.deleteItem(item.id)
-    ElMessage.success(t('dictionary.deleteSuccess'))
-    fetchDictItems()
-  } catch (e) {
-    console.error('Failed to delete item:', e)
-    ElMessage.error(t('dictionary.deleteFailed'))
-  }
-}
+const typeText = (type: string) => t(dictionaryTypeKey(type))
 
 onMounted(fetchDictionaries)
 </script>

@@ -1,11 +1,12 @@
 <template>
   <div class="page-container">
-    <div class="page-header">
-      <span class="page-title">{{ t('menu.roleList') }}</span>
-      <el-button v-if="canWriteRole" type="primary" @click="showCreateDialog">
-        <el-icon><Plus /></el-icon>{{ t('role.createRole') }}
-      </el-button>
-    </div>
+    <PageHeader :title="t('menu.roleList')">
+      <template #actions>
+        <el-button v-if="canWriteRole" type="primary" @click="showCreateDialog">
+          <el-icon><Plus /></el-icon>{{ t('role.createRole') }}
+        </el-button>
+      </template>
+    </PageHeader>
     
     <el-form :inline="true" :model="query" class="search-form">
       <el-form-item :label="t('role.roleType')">
@@ -33,7 +34,7 @@
       <el-table-column prop="code" :label="t('role.roleCode')" min-width="140" />
       <el-table-column prop="type" :label="t('role.roleType')" width="130" align="center">
         <template #default="{ row }">
-          <el-tag :type="typeTagType(row.type) as any" size="small">{{ typeText(row.type) }}</el-tag>
+          <el-tag :type="roleTypeTagType(row.type) as any" size="small">{{ t(roleTypeKey(row.type)) }}</el-tag>
         </template>
       </el-table-column>
       <!-- <el-table-column prop="description" :label="t('role.description')" min-width="150" show-overflow-tooltip /> -->
@@ -65,15 +66,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import PageHeader from '@/components/PageHeader.vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Lock } from '@element-plus/icons-vue'
 import { useRoleStore } from '@/stores/role'
 import { Role } from '@/api/role'
 import { hasPermission, PERMISSIONS } from '@/utils/permission'
+import { roleTypeTagType, roleTypeKey } from '@/utils/format'
 import RoleFormDialog from './components/RoleFormDialog.vue'
 import RoleMembersDialog from './components/RoleMembersDialog.vue'
+import { useTabRefresh } from '@/composables/useTabRefresh'
 
 const { t } = useI18n()
 const roleStore = useRoleStore()
@@ -86,21 +90,6 @@ const query = reactive({ type: '' })
 const formDialogVisible = ref(false)
 const membersDialogVisible = ref(false)
 const currentRole = ref<Role | null>(null)
-
-const typeText = (type: string) => ({ 
-  BU_BOUNDED: t('role.buBounded'), 
-  BU_UNBOUNDED: t('role.buUnbounded'), 
-  BUSINESS: t('role.businessRole'), 
-  ADMIN: t('role.adminRole'), 
-  DEVELOPER: t('role.developerRole') 
-}[type] || type)
-const typeTagType = (type: string) => ({ 
-  BU_BOUNDED: 'warning', 
-  BU_UNBOUNDED: 'success', 
-  BUSINESS: 'success', 
-  ADMIN: 'danger', 
-  DEVELOPER: 'primary' 
-}[type] || 'info')
 
 // 排序：非系统角色在前，系统角色在后
 const sortedRoles = computed(() => {
@@ -123,17 +112,10 @@ const handleDelete = async (role: Role) => {
   ElMessage.success(t('common.success'))
 }
 
-const refreshWhenTabVisible = () => {
-  if (document.visibilityState === 'visible') handleSearch()
-}
+useTabRefresh(handleSearch)
 
 onMounted(() => {
   handleSearch()
-  document.addEventListener('visibilitychange', refreshWhenTabVisible)
-})
-
-onUnmounted(() => {
-  document.removeEventListener('visibilitychange', refreshWhenTabVisible)
 })
 </script>
 

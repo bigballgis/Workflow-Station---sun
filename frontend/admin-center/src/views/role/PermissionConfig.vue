@@ -1,8 +1,6 @@
 <template>
   <div class="page-container">
-    <div class="page-header">
-      <span class="page-title">{{ t('menu.permissionConfig') }}</span>
-    </div>
+    <PageHeader :title="t('menu.permissionConfig')" />
     
     <el-row :gutter="20">
       <el-col :span="8">
@@ -29,7 +27,7 @@
           
           <el-table :data="permissionMatrix" border>
             <el-table-column prop="name" :label="t('permission.resource')" width="200" />
-            <el-table-column v-for="action in actions" :key="action" :label="actionText(action)" width="100" align="center">
+            <el-table-column v-for="action in actions" :key="action" :label="t(permissionActionKey(action))" width="100" align="center">
               <template #default="{ row }">
                 <el-checkbox v-model="row.permissions[action]" :disabled="loading" />
               </template>
@@ -45,9 +43,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import PageHeader from '@/components/PageHeader.vue'
 import { ElMessage } from 'element-plus'
 import { useRoleStore } from '@/stores/role'
 import { Role, roleApi, permissionApi } from '@/api/role'
+import { permissionActionKey } from '@/utils/format'
 
 const { t } = useI18n()
 const roleStore = useRoleStore()
@@ -63,7 +63,7 @@ const filteredRoles = computed(() => roleStore.roles.filter(r => !roleFilter.val
 const permissionMatrix = ref<any[]>([])
 const allPermissions = ref<any[]>([])
 
-const actionText = (action: string) => ({ CREATE: t('permission.create'), READ: t('permission.read'), UPDATE: t('permission.update'), DELETE: t('permission.delete'), EXECUTE: t('permission.execute') }[action] || action)
+
 
 const handleRoleSelect = async (roleId: string) => {
   selectedRoleId.value = roleId

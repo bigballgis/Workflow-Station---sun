@@ -1,16 +1,15 @@
 <template>
   <div class="page-container">
-    <div class="page-header">
-      <span class="page-title">RBAC Mapping</span>
-      <div class="header-actions">
+    <PageHeader title="RBAC Mapping">
+      <template #actions>
         <el-button type="success" @click="showCreateDialog">
           <el-icon><Plus /></el-icon>Create Mapping
         </el-button>
         <el-button type="primary" :loading="syncing" @click="handleSync">
           <el-icon><Refresh /></el-icon>Sync Superset Roles
         </el-button>
-      </div>
-    </div>
+      </template>
+    </PageHeader>
 
     <el-card class="search-card">
       <el-form :inline="true" :model="query" class="search-form">
@@ -160,6 +159,7 @@ import { ref, reactive, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { Refresh, Search, Refresh as RefreshIcon, Plus } from '@element-plus/icons-vue'
+import PageHeader from '@/components/PageHeader.vue'
 import {
   biManagementApi,
   type RbacMappingResponse,
@@ -391,42 +391,6 @@ onMounted(() => {
 </script>
 
 <style scoped lang="scss">
-.page-container {
-  padding: 20px;
-}
-
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-
-  .page-title {
-    font-size: 20px;
-    font-weight: 600;
-    color: #303133;
-  }
-
-  .header-actions {
-    display: flex;
-    gap: 12px;
-  }
-}
-
-.search-card {
-  margin-bottom: 20px;
-
-  .search-form {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-  }
-}
-
-.table-card {
-  // No pagination needed for this page
-}
-
 .role-tag {
   margin-right: 6px;
   margin-bottom: 4px;

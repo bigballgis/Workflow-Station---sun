@@ -1,8 +1,6 @@
 <template>
   <div class="page-container">
-    <div class="page-header">
-      <span class="page-title">{{ t('menu.audit') }}</span>
-    </div>
+    <PageHeader :title="t('menu.audit')" />
 
     <!-- Filter Area -->
     <div class="filter-card">
@@ -284,6 +282,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import PageHeader from '@/components/PageHeader.vue'
 import { ElMessage } from 'element-plus'
 import type { TableInstance } from 'element-plus'
 import { Download, Search, InfoFilled, RefreshRight, VideoPause } from '@element-plus/icons-vue'
@@ -958,12 +957,6 @@ onUnmounted(() => {
   font-size: 13px;
   color: #409eff;
   font-weight: 500;
-}
-
-.pagination-container {
-  margin-top: 14px;
-  display: flex;
-  justify-content: flex-end;
 }
 
 .empty-state {

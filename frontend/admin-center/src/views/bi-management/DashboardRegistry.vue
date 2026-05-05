@@ -1,13 +1,12 @@
 <template>
   <div class="page-container">
-    <div class="page-header">
-      <span class="page-title">Dashboard Registry</span>
-      <div class="header-actions">
+    <PageHeader title="Dashboard Registry">
+      <template #actions>
         <el-button type="primary" :loading="syncing" @click="handleSync">
           <el-icon><Refresh /></el-icon>Sync Dashboards
         </el-button>
-      </div>
-    </div>
+      </template>
+    </PageHeader>
 
     <el-card class="search-card">
       <el-form :inline="true" :model="query" class="search-form">
@@ -122,6 +121,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, Search, Refresh as RefreshIcon } from '@element-plus/icons-vue'
+import PageHeader from '@/components/PageHeader.vue'
 import {
   biManagementApi,
   type DashboardRegistryResponse,
@@ -285,44 +285,4 @@ onMounted(() => {
 })
 </script>
 
-<style scoped lang="scss">
-.page-container {
-  padding: 20px;
-}
 
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-
-  .page-title {
-    font-size: 20px;
-    font-weight: 600;
-    color: #303133;
-  }
-
-  .header-actions {
-    display: flex;
-    gap: 12px;
-  }
-}
-
-.search-card {
-  margin-bottom: 20px;
-
-  .search-form {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-  }
-}
-
-.table-card {
-  .pagination-container {
-    display: flex;
-    justify-content: flex-end;
-    margin-top: 20px;
-  }
-}
-</style>

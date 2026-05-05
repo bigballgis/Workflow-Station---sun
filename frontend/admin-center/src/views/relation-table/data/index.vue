@@ -1,8 +1,6 @@
 <template>
   <div class="page-container">
-    <div class="page-header">
-      <span class="page-title">Table Data Management</span>
-    </div>
+    <PageHeader title="Table Data Management" />
 
     <div class="data-layout">
       <!-- Left: Table list -->
@@ -118,6 +116,7 @@
 import { ref, computed, watch, onMounted, onActivated } from 'vue'
 import { Search, Download, Plus } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import PageHeader from '@/components/PageHeader.vue'
 import {
   relationTableDataApi,
   type RelationTableResponse,
@@ -376,8 +375,6 @@ onActivated(() => {
 
 <style scoped>
 .page-container { padding: 20px; }
-.page-header { margin-bottom: 16px; }
-.page-title { font-size: 20px; font-weight: 600; color: #303133; }
 .data-layout { display: flex; gap: 16px; height: calc(100vh - 140px); }
 .table-list-panel {
   width: 220px; flex-shrink: 0;

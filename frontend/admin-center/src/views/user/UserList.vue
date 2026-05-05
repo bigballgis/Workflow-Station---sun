@@ -1,16 +1,12 @@
 <template>
   <div class="page-container">
-    <div class="page-header">
-      <span class="page-title">{{ t('menu.userList') }}</span>
-      <div class="header-actions" v-if="canWriteUser">
-        <!-- <el-button @click="showImportDialog">
-          <el-icon><Upload /></el-icon>{{ t('user.batchImport') }}
-        </el-button> -->
+    <PageHeader :title="t('menu.userList')">
+      <template v-if="canWriteUser" #actions>
         <el-button type="primary" @click="showCreateDialog">
           <el-icon><Plus /></el-icon>{{ t('user.createUser') }}
         </el-button>
-      </div>
-    </div>
+      </template>
+    </PageHeader>
     
     <el-card class="search-card">
       <el-form :inline="true" :model="query" class="search-form">
@@ -56,7 +52,7 @@
         </el-table-column>
         <el-table-column prop="status" :label="t('common.status')" width="90" align="center">
           <template #default="{ row }">
-            <el-tag :type="statusType(row.status)" size="small">{{ statusText(row.status) }}</el-tag>
+            <el-tag :type="statusTagType(row.status)" size="small">{{ t(userStatusKey(row.status)) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column :label="t('common.actions')" width="200" fixed="right">
@@ -129,234 +125,43 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessage, ElMessageBox } from 'element-plus'
 import { 
-  Plus, Upload, Search, Refresh, ArrowDown, 
+  Plus, Search, Refresh, ArrowDown, 
   CircleCheck, CircleClose, Unlock, Key, Delete 
 } from '@element-plus/icons-vue'
-import { userApi, type User } from '@/api/user'
-import { hasPermission, PERMISSIONS } from '@/utils/permission'
+import { statusTagType, userStatusKey } from '@/utils/format'
+import { useUser } from '@/composables/modules/useUser'
 import UserFormDialog from './components/UserFormDialog.vue'
 import UserDetailDialog from './components/UserDetailDialog.vue'
 import UserImportDialog from './components/UserImportDialog.vue'
+import PageHeader from '@/components/PageHeader.vue'
 
 const { t } = useI18n()
 
-// Permission checks
-const canWriteUser = hasPermission(PERMISSIONS.USER_WRITE)
-const canDeleteUser = hasPermission(PERMISSIONS.USER_DELETE)
-
-// State
-const loading = ref(false)
-const users = ref<User[]>([])
-const total = ref(0)
-
-// Query parameters
-const query = reactive({
-  keyword: '',
-  status: '',
-  page: 1,
-  size: 20
-})
-
-// Dialog state
-const formDialogVisible = ref(false)
-const detailDialogVisible = ref(false)
-const importDialogVisible = ref(false)
-const currentUser = ref<User | null>(null)
-const currentUserId = ref('')
-
-// Status mapping
-const statusType = (status: string): 'success' | 'info' | 'danger' | 'warning' => {
-  const map: Record<string, 'success' | 'info' | 'danger' | 'warning'> = {
-    ACTIVE: 'success',
-    DISABLED: 'info',
-    LOCKED: 'danger',
-    PENDING: 'warning'
-  }
-  return map[status] || 'info'
-}
-
-const statusText = (status: string) => {
-  const map: Record<string, string> = {
-    ACTIVE: t('user.active'),
-    DISABLED: t('user.disabled'),
-    LOCKED: t('user.locked'),
-    PENDING: t('user.pending')
-  }
-  return map[status] || status
-}
-
-
-
-// Query user list
-const handleSearch = async () => {
-  loading.value = true
-  try {
-    const params = {
-      keyword: query.keyword || undefined,
-      status: query.status || undefined,
-      page: query.page - 1,
-      size: query.size
-    }
-    const result = await userApi.list(params)
-    users.value = result.content
-    total.value = result.totalElements
-  } catch (error: any) {
-    ElMessage.error(error.message || t('user.queryFailed'))
-  } finally {
-    loading.value = false
-  }
-}
-
-// Reset query
-const handleReset = () => {
-  Object.assign(query, { keyword: '', status: '', page: 1 })
-  handleSearch()
-}
-
-// Show create dialog
-const showCreateDialog = () => {
-  currentUser.value = null
-  formDialogVisible.value = true
-}
-
-// Show edit dialog
-const showEditDialog = (user: User) => {
-  currentUser.value = user
-  formDialogVisible.value = true
-}
-
-// Show detail dialog
-const showDetailDialog = (user: User) => {
-  currentUserId.value = user.id
-  detailDialogVisible.value = true
-}
-
-// Show import dialog
-const showImportDialog = () => {
-  importDialogVisible.value = true
-}
-
-// Handle dropdown menu command
-const handleCommand = async (user: User, command: string) => {
-  switch (command) {
-    case 'enable':
-      await handleStatusChange(user, 'ACTIVE', t('user.enableUser'))
-      break
-    case 'disable':
-      await handleStatusChange(user, 'DISABLED', t('user.disableUser'))
-      break
-    case 'unlock':
-      await handleStatusChange(user, 'ACTIVE', t('user.unlockUser'))
-      break
-    case 'resetPassword':
-      await handleResetPassword(user)
-      break
-    case 'delete':
-      await handleDelete(user)
-      break
-  }
-}
-
-// Update user status
-const handleStatusChange = async (user: User, status: string, action: string) => {
-  try {
-    await ElMessageBox.confirm(t('user.confirmAction', { action, name: user.fullName }), t('user.hint'), { type: 'warning' })
-    await userApi.updateStatus(user.id, { status: status as any })
-    ElMessage.success(t('user.actionSuccess', { action }))
-    handleSearch()
-  } catch (error: any) {
-    if (error !== 'cancel') {
-      ElMessage.error(error.message || t('user.actionFailed', { action }))
-    }
-  }
-}
-
-// Reset password
-const handleResetPassword = async (user: User) => {
-  try {
-    await ElMessageBox.confirm(t('user.confirmResetPassword', { name: user.fullName }), t('user.hint'), { type: 'warning' })
-    await userApi.resetPassword(user.id)
-    ElMessage.success(t('user.passwordResetNoPlaintext'))
-  } catch (error: any) {
-    if (error !== 'cancel') {
-      ElMessage.error(error.message || t('user.resetPasswordFailed'))
-    }
-  }
-}
-
-// Delete user
-const handleDelete = async (user: User) => {
-  try {
-    await ElMessageBox.confirm(t('user.confirmDeleteUser', { name: user.fullName }), t('user.warning'), {
-      type: 'warning',
-      confirmButtonText: t('user.confirmDelete'),
-      confirmButtonClass: 'el-button--danger'
-    })
-    await userApi.delete(user.id)
-    ElMessage.success(t('user.deleteSuccess'))
-    handleSearch()
-  } catch (error: any) {
-    if (error !== 'cancel') {
-      ElMessage.error(error.message || t('user.deleteFailed'))
-    }
-  }
-}
+const {
+  loading,
+  users,
+  total,
+  query,
+  formDialogVisible,
+  detailDialogVisible,
+  importDialogVisible,
+  currentUser,
+  currentUserId,
+  canWriteUser,
+  canDeleteUser,
+  handleSearch,
+  handleReset,
+  showCreateDialog,
+  showEditDialog,
+  showDetailDialog,
+  showImportDialog,
+  handleCommand,
+} = useUser()
 
 onMounted(() => {
   handleSearch()
 })
 </script>
-
-<style scoped lang="scss">
-.page-container {
-  padding: 20px;
-}
-
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-  
-  .page-title {
-    font-size: 20px;
-    font-weight: 600;
-    color: #303133;
-  }
-  
-  .header-actions {
-    display: flex;
-    gap: 12px;
-  }
-}
-
-.search-card {
-  margin-bottom: 20px;
-  
-  .search-form {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-  }
-}
-
-.table-card {
-  .pagination-container {
-    display: flex;
-    justify-content: flex-end;
-    margin-top: 20px;
-  }
-  
-  .manager-name {
-    color: #409eff;
-  }
-  
-  .no-manager {
-    color: #c0c4cc;
-  }
-}
-</style>

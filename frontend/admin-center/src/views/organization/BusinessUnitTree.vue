@@ -1,11 +1,12 @@
 <template>
   <div class="page-container">
-    <div class="page-header">
-      <span class="page-title">{{ t('menu.organization') }}</span>
-      <el-button type="primary" @click="showCreateDialog()">
-        <el-icon><Plus /></el-icon>{{ t('organization.createBusinessUnit') }}
-      </el-button>
-    </div>
+    <PageHeader :title="t('menu.organization')">
+      <template #actions>
+        <el-button type="primary" @click="showCreateDialog()">
+          <el-icon><Plus /></el-icon>{{ t('organization.createBusinessUnit') }}
+        </el-button>
+      </template>
+    </PageHeader>
     
     <el-row :gutter="20">
       <el-col :span="10">
@@ -132,149 +133,67 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, OfficeBuilding } from '@element-plus/icons-vue'
 import { useOrganizationStore } from '@/stores/organization'
-import { BusinessUnit, organizationApi } from '@/api/organization'
-import { businessUnitApi, type Approver } from '@/api/businessUnit'
 import BusinessUnitFormDialog from './components/BusinessUnitFormDialog.vue'
 import BusinessUnitRolesDialog from './components/BusinessUnitRolesDialog.vue'
 import BusinessUnitApproversDialog from './components/BusinessUnitApproversDialog.vue'
 import BusinessUnitMembersDialog from './components/BusinessUnitMembersDialog.vue'
 import UserDetailDialog from '@/views/user/components/UserDetailDialog.vue'
+import PageHeader from '@/components/PageHeader.vue'
+import { useTabRefresh } from '@/composables/useTabRefresh'
+import { useBusinessUnit } from '@/composables/modules/useBusinessUnit'
 
 const { t } = useI18n()
 const orgStore = useOrganizationStore()
 
-const treeRef = ref()
-const filterText = ref('')
-const selectedBusinessUnit = ref<BusinessUnit | null>(null)
-const businessUnitMembers = ref<any[]>([])
-const businessUnitApprovers = ref<Approver[]>([])
-const dialogVisible = ref(false)
-const rolesDialogVisible = ref(false)
-const approversDialogVisible = ref(false)
-const membersDialogVisible = ref(false)
-const userDetailVisible = ref(false)
-const selectedUserId = ref('')
-const currentBusinessUnit = ref<BusinessUnit | null>(null)
-const parentBusinessUnit = ref<BusinessUnit | null>(null)
-
-const filterNode = (value: string, data: any) => !value || data.name.includes(value)
+const {
+  treeRef,
+  filterText,
+  selectedBusinessUnit,
+  businessUnitMembers,
+  businessUnitApprovers,
+  dialogVisible,
+  rolesDialogVisible,
+  approversDialogVisible,
+  membersDialogVisible,
+  userDetailVisible,
+  selectedUserId,
+  currentBusinessUnit,
+  parentBusinessUnit,
+  filterNode,
+  fetchMembers,
+  fetchApprovers,
+  handleNodeClick,
+  handleNodeDrop,
+  handleFormSuccess,
+  handleDelete,
+  showCreateDialog,
+  showEditDialog,
+  showRolesDialog,
+  showApproversDialog,
+  showMembersDialog,
+  showUserDetail,
+  handleMembersChange,
+  refreshDetail,
+} = useBusinessUnit()
 
 watch(filterText, (val) => treeRef.value?.filter(val))
 
-const handleNodeClick = async (data: BusinessUnit) => {
-  try {
-    const detail = await organizationApi.getById(data.id)
-    selectedBusinessUnit.value = detail
-  } catch (e) {
-    selectedBusinessUnit.value = data
-  }
-  // 并行加载成员和审批人
-  await Promise.all([fetchMembers(), fetchApprovers()])
-}
-
-const fetchMembers = async () => {
-  if (!selectedBusinessUnit.value) return
-  try {
-    const result = await organizationApi.getMembers(selectedBusinessUnit.value.id, { page: 0, size: 50 })
-    businessUnitMembers.value = result.content || []
-  } catch (e) {
-    businessUnitMembers.value = []
-  }
-}
-
-const fetchApprovers = async () => {
-  if (!selectedBusinessUnit.value) return
-  try {
-    businessUnitApprovers.value = await businessUnitApi.getApprovers(selectedBusinessUnit.value.id)
-  } catch (e) {
-    businessUnitApprovers.value = []
-  }
-}
-
-const handleNodeDrop = async (draggingNode: any, dropNode: any, dropType: string) => {
-  const newParentId = dropType === 'inner' ? dropNode.data.id : dropNode.data.parentId
-  await orgStore.moveBusinessUnit(draggingNode.data.id, { newParentId })
-  ElMessage.success(t('common.success'))
-}
-
-const showCreateDialog = (parent?: BusinessUnit) => {
-  currentBusinessUnit.value = null
-  parentBusinessUnit.value = parent || null
-  dialogVisible.value = true
-}
-
-const showEditDialog = async (bu: BusinessUnit) => {
-  try {
-    const detail = await organizationApi.getById(bu.id)
-    currentBusinessUnit.value = detail
-  } catch (e) {
-    currentBusinessUnit.value = bu
-  }
-  parentBusinessUnit.value = null
-  dialogVisible.value = true
-}
-
-const handleFormSuccess = async () => {
-  await orgStore.fetchTree()
-  if (selectedBusinessUnit.value) {
-    try {
-      const detail = await organizationApi.getById(selectedBusinessUnit.value.id)
-      selectedBusinessUnit.value = detail
-    } catch (e) {
-      selectedBusinessUnit.value = null
-    }
-  }
-}
-
-const handleDelete = async (bu: BusinessUnit) => {
-  await ElMessageBox.confirm(t('organization.deleteConfirm'), t('common.confirm'), { type: 'warning' })
-  try {
-    await orgStore.deleteBusinessUnit(bu.id)
-    ElMessage.success(t('common.success'))
-    if (selectedBusinessUnit.value?.id === bu.id) selectedBusinessUnit.value = null
-  } catch (e: any) {
-    ElMessage.error(e.response?.data?.message || t('common.failed'))
-  }
-}
-
-const showRolesDialog = () => { rolesDialogVisible.value = true }
-const showApproversDialog = () => { approversDialogVisible.value = true }
-const showMembersDialog = () => { membersDialogVisible.value = true }
-const handleMembersChange = async () => {
-  await fetchMembers()
-  await orgStore.fetchTree()
-}
-const showUserDetail = (userId: string) => {
-  selectedUserId.value = userId
-  userDetailVisible.value = true
-}
-
 /** 从门户等其它页返回时刷新树与右侧成员，与后端成员/角色变更对齐 */
 const refreshWhenTabVisible = async () => {
-  if (document.visibilityState !== 'visible') return
   await orgStore.fetchTree()
   if (!selectedBusinessUnit.value?.id) return
   await Promise.all([fetchMembers(), fetchApprovers()])
-  try {
-    const detail = await organizationApi.getById(selectedBusinessUnit.value.id)
-    selectedBusinessUnit.value = detail
-  } catch {
-    /* 保持当前选中 */
-  }
+  await refreshDetail()
 }
+
+useTabRefresh(refreshWhenTabVisible)
 
 onMounted(() => {
   orgStore.fetchTree()
-  document.addEventListener('visibilitychange', refreshWhenTabVisible)
-})
-
-onUnmounted(() => {
-  document.removeEventListener('visibilitychange', refreshWhenTabVisible)
 })
 </script>
 

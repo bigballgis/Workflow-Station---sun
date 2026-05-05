@@ -1,9 +1,10 @@
 <template>
   <div class="page-container">
-    <div class="page-header">
-      <span class="page-title">{{ isEdit ? 'Edit Table Structure' : 'Create Table Structure' }}</span>
-      <el-button @click="router.back()">Back</el-button>
-    </div>
+    <PageHeader :title="isEdit ? 'Edit Table Structure' : 'Create Table Structure'">
+      <template #actions>
+        <el-button @click="router.back()">Back</el-button>
+      </template>
+    </PageHeader>
 
     <el-form ref="formRef" :model="form" :rules="rules" label-width="140px" label-position="left" style="max-width: 800px;">
       <el-form-item label="Table Name" prop="tableName">
@@ -91,6 +92,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Plus, Delete } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
+import PageHeader from '@/components/PageHeader.vue'
 import {
   relationTableStructureApi,
   type RelationDataType,

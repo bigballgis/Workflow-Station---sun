@@ -1,8 +1,6 @@
 <template>
   <div class="page-container">
-    <div class="page-header">
-      <span class="page-title">{{ t('user.batchImport') }}</span>
-    </div>
+    <PageHeader :title="t('user.batchImport')" />
     
     <el-card>
       <el-steps :active="step" finish-status="success" align-center>
@@ -79,6 +77,7 @@
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
+import PageHeader from '@/components/PageHeader.vue'
 import { userApi, ImportResult } from '@/api/user'
 
 const { t } = useI18n()

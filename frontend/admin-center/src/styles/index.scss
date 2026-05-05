@@ -27,32 +27,91 @@ html, body, #app {
   --el-button-active-border-color: var(--primary-dark);
 }
 
-// 表格样式
+// 表格样式 — 全局页面布局
 .page-container {
   background-color: #fff;
   padding: 20px;
   border-radius: 4px;
-  
+
   .page-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 20px;
-    
+
     .page-title {
       font-size: 18px;
       font-weight: 600;
       color: #303133;
     }
+
+    .header-actions {
+      display: flex;
+      gap: 12px;
+    }
   }
-  
-  .search-form {
+
+  .search-card {
     margin-bottom: 20px;
+
+    .search-form {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
   }
-  
-  .pagination-container {
-    margin-top: 20px;
+
+  .table-card {
+    .pagination-container {
+      margin-top: 20px;
+      display: flex;
+      justify-content: flex-end;
+    }
+  }
+
+  .tree-card {
+    height: calc(100vh - 180px);
+
+    :deep(.el-card__body) {
+      padding: 16px;
+      height: calc(100% - 20px);
+      display: flex;
+      flex-direction: column;
+    }
+  }
+
+  .detail-card {
+    height: calc(100vh - 180px);
+
+    :deep(.el-card__body) {
+      display: flex;
+      flex-direction: column;
+      height: calc(100% - 60px);
+      overflow: hidden;
+    }
+  }
+
+  .empty-card {
+    height: calc(100vh - 180px);
     display: flex;
-    justify-content: flex-end;
+    align-items: center;
+    justify-content: center;
   }
+}
+
+// 表格列头不换行
+:deep(.no-wrap-header .cell) {
+  white-space: nowrap !important;
+  overflow: visible !important;
+}
+
+// 通用辅助类
+.text-muted { color: #909399; }
+.manager-name { color: #409eff; }
+.no-manager { color: #c0c4cc; }
+.action-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
 }

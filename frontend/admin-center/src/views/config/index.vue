@@ -1,8 +1,6 @@
 <template>
   <div class="page-container">
-    <div class="page-header">
-      <span class="page-title">{{ t('menu.config') }}</span>
-    </div>
+    <PageHeader :title="t('menu.config')" />
     
     <el-tabs v-model="activeTab">
       <el-tab-pane :label="t('config.systemParams')" name="system">
@@ -49,6 +47,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import PageHeader from '@/components/PageHeader.vue'
 import { ElMessage } from 'element-plus'
 import { configApi, type SystemConfig } from '@/api/config'
 

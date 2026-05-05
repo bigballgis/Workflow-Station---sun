@@ -1,8 +1,6 @@
 <template>
   <div class="page-container">
-    <div class="page-header">
-      <span class="page-title">{{ t('permissionRequest.title') }}</span>
-    </div>
+    <PageHeader :title="t('permissionRequest.title')" />
     
     <el-card class="search-card">
       <el-form :inline="true" :model="query" class="search-form">
@@ -98,6 +96,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import PageHeader from '@/components/PageHeader.vue'
 import { ElMessage } from 'element-plus'
 import { Search, Refresh } from '@element-plus/icons-vue'
 import { permissionRequestApi, type PermissionRequest, type PermissionRequestStatus } from '@/api/permissionRequest'
@@ -185,39 +184,3 @@ const handleReset = () => {
 onMounted(handleSearch)
 </script>
 
-<style scoped lang="scss">
-.page-container {
-  padding: 20px;
-}
-
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-  
-  .page-title {
-    font-size: 20px;
-    font-weight: 600;
-    color: #303133;
-  }
-}
-
-.search-card {
-  margin-bottom: 20px;
-  
-  .search-form {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-  }
-}
-
-.table-card {
-  .pagination-container {
-    display: flex;
-    justify-content: flex-end;
-    margin-top: 20px;
-  }
-}
-</style>
