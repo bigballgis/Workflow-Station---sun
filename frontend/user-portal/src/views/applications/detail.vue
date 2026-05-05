@@ -207,7 +207,7 @@
       </div>
 
       <!-- Section 3b: Previous node forms shown BELOW the current form (initiator's own My Request).
-           Order: form y (above) → subform → subform_copy (below) per BPMN BFS. -->
+           Order follows BPMN BFS; only runtime-previous steps (+ MI forms with matching completed history). -->
       <template v-for="prevForm in previousFormsBelow" :key="`below-${prevForm.formId}`">
         <template v-if="prevForm.isMiSubTask">
           <div class="section form-section">
@@ -964,12 +964,56 @@ const loadFunctionUnitContent = async (processKey: string) => {
       )
 
       // Collect additional node forms (read-only display).
-      // Initiator view uses BFS over BPMN graph to keep order y → subform → subform_copy;
-      // other views fall back to topological "previous nodes" listing.
+      // Initiator My Request: preserve global BFS order but only forms before currentNode in BPMN; for
+      // multi-instance sub-task forms (e.g. subform_copy), also require a completed flow-history row
+      // so a wrong currentNode fallback cannot surface future steps early.
+      // Non-initiator: list previous forms from BPMN vs current node only.
       if (content.processes?.length > 0) {
+        const xml = content.processes[0].data
         const prevFormIds = useInitiatorFormOnly
-          ? parseBpmnXmlAndGetAllFormIds(content.processes[0].data)
-          : parseBpmnXmlAndGetPreviousFormIds(content.processes[0].data)
+          ? (() => {
+              const allOrdered = parseBpmnXmlAndGetAllFormIds(xml)
+              const completedKeys = new Set(
+                parseBpmnXmlAndGetPreviousFormIds(xml)
+                  .map(i => i.formId || i.formName || i.taskName || '')
+                  .filter(k => k.length > 0)
+              )
+              let ordered = allOrdered.filter(i =>
+                completedKeys.has(i.formId || i.formName || i.taskName || '')
+              )
+              // MI / nested userTask forms (e.g. kk's subform_copy): if currentNode resolution is wrong,
+              // completedKeys can still include future steps. Require a completed history row whose node
+              // name matches the BPMN userTask name before showing that form in My Request.
+              const normHistName = (s: string | null | undefined) =>
+                (s || '').trim().replace(/\s+/g, ' ')
+              const completedHistoryNames = new Set(
+                historyRecords.value
+                  .filter(h => h.status === 'completed')
+                  .map(h => normHistName(h.nodeName))
+                  .filter(n => n.length > 0)
+              )
+              if (completedHistoryNames.size > 0) {
+                ordered = ordered.filter((info) => {
+                  const prevForm = content.forms.find((f: any) =>
+                    (info.formId && String(f.sourceId) === info.formId) ||
+                    (info.formName && f.name === info.formName) ||
+                    (info.taskName && f.name === info.taskName)
+                  )
+                  const isMiTaskForm =
+                    !!prevForm &&
+                    !!(
+                      (subTaskFormId.value && String(prevForm.id) === subTaskFormId.value) ||
+                      (subTaskFormSchema.value && prevForm.name === subTaskFormSchema.value._formName)
+                    )
+                  if (!isMiTaskForm) return true
+                  const t = normHistName(info.taskName)
+                  if (!t.length) return true
+                  return completedHistoryNames.has(t)
+                })
+              }
+              return ordered
+            })()
+          : parseBpmnXmlAndGetPreviousFormIds(xml)
         const collectedPrevForms: PreviousFormEntry[] = []
         const savedSubTables = formData.value.__subTables__
 
