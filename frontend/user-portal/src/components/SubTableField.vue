@@ -244,7 +244,16 @@
       <div v-if="linkFormDialogVisible" class="link-form-modal-overlay">
         <div ref="linkFormModalPanelRef" class="link-form-modal-panel" role="dialog" aria-modal="true">
           <div class="link-form-modal-header">
-            <span>{{ linkFormModalTitle }}</span>
+            <span class="link-form-modal-title">{{ linkFormModalTitle }}</span>
+            <!-- Native button: el-form :disabled (readonly completed task) injects into el-button via component tree; Teleport does not break that inheritance. -->
+            <button
+              type="button"
+              class="link-form-modal-close"
+              :aria-label="t('common.close')"
+              @click="closeLinkFormDetailDialog"
+            >
+              <el-icon :size="18"><Close /></el-icon>
+            </button>
           </div>
           <div class="link-form-dialog-body">
             <el-alert
@@ -259,7 +268,7 @@
               v-if="selectedLinkBinding && linkedFormFields.length > 0"
               :model="linkedFormData"
               :label-width="linkedFormLabelWidth"
-              label-position="right"
+              label-position="left"
             >
               <el-row :gutter="20">
                 <template v-for="field in linkedFormFields" :key="field.key">
@@ -306,17 +315,6 @@
             />
             <el-empty v-else :description="t('subTable.noData')" :image-size="60" />
           </div>
-          <div class="link-form-modal-footer">
-            <el-button @click="linkFormDialogVisible = false">{{ t('common.cancel') }}</el-button>
-            <el-button
-              v-if="selectedLinkBinding && linkedFormFields.length > 0"
-              type="primary"
-              :disabled="!canEditSelectedLinkBinding"
-              @click="saveLinkedFormData"
-            >
-              {{ t('common.save') }}
-            </el-button>
-          </div>
         </div>
       </div>
     </Teleport>
@@ -359,7 +357,7 @@
 <script setup lang="ts">
 import { ref, watch, computed, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Plus, Document, Loading, Search } from '@element-plus/icons-vue'
+import { Plus, Document, Loading, Search, Close } from '@element-plus/icons-vue'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import DOMPurify from 'dompurify'
 import SubTableAddDialog from './SubTableAddDialog.vue'
@@ -551,6 +549,15 @@ const activeLinkRowIndex = ref<number | null>(null)
 const linkedSubTableRows = ref<any[]>([])
 const linkedFormData = ref<Record<string, any>>({})
 
+/** Designer list views may store "ADD + …"; runtime bindings use display names — align with developer SubTableField. */
+function stripLinkFormBoundTableName(raw?: string): string {
+  return String(raw || '').trim().replace(/^ADD\s*\+\s*/i, '').trim()
+}
+
+function linkFormTableMatchKey(name?: string): string {
+  return normalizeSubTableName(stripLinkFormBoundTableName(String(name || '')).replace(/\s+/g, ''))
+}
+
 /**
  * Multiple bindings can share the same bindingId (prev vs current). `.find` always picked the first;
  * for read-only / snapshot UI (`suppressLinkFormInitialData` false), prefer the first match that
@@ -560,12 +567,34 @@ const linkedFormData = ref<Record<string, any>>({})
 function resolveLinkBindingForColumn(col: Column | null | undefined): SubTableBinding | undefined {
   if (!col) return undefined
   const list = props.linkedSubTableBindings ?? []
-  const matches = list.filter(
-    item =>
-      (col.props?.boundSubTableBindingId != null &&
-        Number(item.bindingId) === Number(col.props.boundSubTableBindingId)) ||
-      (!!col.props?.boundSubTableName && item.tableName === col.props.boundSubTableName)
-  )
+  const boundId = col.props?.boundSubTableBindingId
+  const boundNameRaw = col.props?.boundSubTableName ? String(col.props.boundSubTableName).trim() : ''
+  const boundNameStripped = stripLinkFormBoundTableName(boundNameRaw)
+  const boundKey = linkFormTableMatchKey(boundNameRaw)
+
+  const matches = list.filter(item => {
+    if (boundId != null && Number(item.bindingId) === Number(boundId)) return true
+    if (boundNameRaw && item.tableName === boundNameRaw) return true
+    if (boundKey && linkFormTableMatchKey(item.tableName) === boundKey) return true
+    if (boundNameStripped || boundId != null) {
+      const pid = boundId != null ? Number(boundId) : -2147483648
+      return subTableBindingMatches(
+        {
+          bindingId: pid,
+          tableName: boundNameStripped || boundNameRaw,
+          tableId: null,
+          physicalTableName: undefined
+        },
+        {
+          bindingId: item.bindingId,
+          tableName: item.tableName,
+          tableId: item.tableId ?? null,
+          physicalTableName: item.physicalTableName
+        }
+      )
+    }
+    return false
+  })
   if (matches.length === 0) return undefined
   if (props.suppressLinkFormInitialData) return matches[0]
   const withData = matches.find(m => Array.isArray(m.data) && m.data.length > 0)
@@ -693,6 +722,19 @@ function getSummaryMethod({ columns: tableCols }: { columns: any[] }) {
 }
 
 watch(() => props.modelValue, (v) => { rows.value = v ? [...v] : [] }, { immediate: true, deep: true })
+
+/** Header close only (no footer). When user edited field-based link form, persist before close. */
+function closeLinkFormDetailDialog() {
+  if (
+    canEditSelectedLinkBinding.value &&
+    selectedLinkBinding.value &&
+    linkedFormFields.value.length > 0
+  ) {
+    saveLinkedFormData()
+    return
+  }
+  linkFormDialogVisible.value = false
+}
 
 function handleLinkFormClick(col: Column, row: Record<string, any>, rowIndex: number) {
   activeLinkColumn.value = col
@@ -1581,25 +1623,48 @@ watch(() => props.taskId, () => {
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
 }
 
-.link-form-modal-header,
-.link-form-modal-footer {
+.link-form-modal-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   padding: 12px 16px;
   border-bottom: 1px solid #ebeef5;
-}
-
-.link-form-modal-header {
-  font-weight: 600;
   color: #303133;
 }
 
-.link-form-modal-footer {
-  justify-content: flex-end;
-  gap: 8px;
-  border-top: 1px solid #ebeef5;
-  border-bottom: 0;
+.link-form-modal-title {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+.link-form-modal-close {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #909399;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--el-color-primary);
+    background: var(--el-fill-color-light);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--el-color-primary);
+    outline-offset: 2px;
+  }
 }
 
 .link-form-dialog-body {

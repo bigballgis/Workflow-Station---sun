@@ -368,6 +368,7 @@ import ChangeHistoryPanel from '@/components/ChangeHistoryPanel.vue'
 import { formatDate } from '@/utils/dateFormat'
 import { relationTableApi } from '@/api/relationTable'
 import { isRejectedName } from '@/utils/statusMatcher'
+import { resolveAssigneeFieldForBinding } from '@/utils/subTableAssignment'
 
 const route = useRoute()
 const router = useRouter()
@@ -428,6 +429,9 @@ const subTableBindings = ref<Array<{
   tableDescription: string
   columns: Array<{ field: string; label: string; type?: string }>
   data: any[]
+  subMode?: string
+  formFields?: FormField[]
+  formOptions?: Record<string, any>
 }>>([])
 
 const placedBindingIds = computed((): Set<number> => {
@@ -435,7 +439,14 @@ const placedBindingIds = computed((): Set<number> => {
 })
 
 const bottomSubTableBindings = computed(() =>
-  subTableBindings.value.filter(b => !placedBindingIds.value.has(b.bindingId))
+  subTableBindings.value.filter(b => {
+    if (placedBindingIds.value.has(b.bindingId)) return false
+    // Link Form targets (FORM_ONLY, not embedded in form rule) must still exist in linkableSubTableBindings
+    // but must not render as a standalone empty section below the form.
+    const formOnly = String((b as { subMode?: string }).subMode || '').toUpperCase() === 'FORM_ONLY'
+    if (formOnly) return false
+    return true
+  })
 )
 
 function collectPlacedBindingIds(fields: any[], tabs: Array<{ fields: any[] }> = []): Set<number> {
@@ -495,6 +506,10 @@ interface PreviousFormEntry {
     tableDescription: string
     columns: Array<{ field: string; label: string; type?: string }>
     data: any[]
+    /** When FORM_ONLY and not in form rule, binding exists for Link Form only (no standalone block). */
+    subMode?: string
+    formFields?: FormField[]
+    formOptions?: Record<string, any>
   }>
 }
 const previousForms = ref<PreviousFormEntry[]>([])
@@ -506,7 +521,12 @@ const previousFormsBelow = computed<PreviousFormEntry[]>(() => initiatorOwnView.
 
 function unplacedSubTableBindings(prevForm: PreviousFormEntry): PreviousFormEntry['subTableBindings'] {
   const placedIds = collectPlacedBindingIds(prevForm.fields, prevForm.tabs)
-  return prevForm.subTableBindings.filter(b => !placedIds.has(b.bindingId))
+  return prevForm.subTableBindings.filter(b => {
+    if (placedIds.has(b.bindingId)) return false
+    const formOnly = String((b as { subMode?: string }).subMode || '').toUpperCase() === 'FORM_ONLY'
+    if (formOnly) return false
+    return true
+  })
 }
 
 /** Align with tasks/detail.vue: variables may key __subTables__ by table name or binding id. */
@@ -971,23 +991,17 @@ const loadFunctionUnitContent = async (processKey: string) => {
 
       parseFormConfig(selectedForm.data)
 
-      // Parse subForms from configJson
       // Load sub-table bindings (SUB and RELATED, not PRIMARY).
-      // Designer marks FORM_ONLY bindings (e.g. `subtable2` in kk) — they're meant to be embedded
-      // inline (form rule subTable node) or accessed via a LinkForm column on a sibling table.
-      // If neither happens (binding not placed in rule), drop it instead of rendering as fallback.
+      // FORM_ONLY bindings without a subTable node still join linkableSubTableBindings so Link Form can resolve;
+      // bottomSubTableBindings / unplacedSubTableBindings omit them to avoid empty duplicate sections.
       const bindings: typeof subTableBindings.value = []
       const tableBindings: any[] = selectedForm.tableBindings || []
-      const selectedFormRuleIds = collectRuleBindingIds(
-        Array.isArray(selectedFormConfig?.rule) ? selectedFormConfig!.rule : []
-      )
+      const subFormsPayload = selectedFormConfig.subForms || {}
       for (const b of tableBindings) {
         if (b.bindingType === 'PRIMARY') continue
         const columns = deriveColumnsFromBinding(b, selectedFormConfig)
         if (!Array.isArray(columns) || columns.length === 0) continue
-        const placed = selectedFormRuleIds.has(Number(b.bindingId))
-        const isFormOnly = String(b.subMode || '').toUpperCase() === 'FORM_ONLY'
-        if (!placed && isFormOnly) continue
+        const subFormDesign = resolveSubFormDesign(b, subFormsPayload)
         bindings.push({
           bindingId: b.bindingId,
           tableId: b.tableId != null ? Number(b.tableId) : null,
@@ -998,7 +1012,10 @@ const loadFunctionUnitContent = async (processKey: string) => {
           tableType: b.tableType,
           tableDescription: b.tableDescription,
           columns,
-          data: []
+          data: [],
+          subMode: b.subMode,
+          formFields: subFormDesign.formFields,
+          formOptions: subFormDesign.formOptions
         })
       }
 
@@ -2376,6 +2393,20 @@ const extractFieldsRecursive = (items: any[]): FormField[] => {
   return fields
 }
 
+/** Link Form / sub-table row dialog: same contract as tasks/detail.vue — fields from designer subForm. */
+function resolveSubFormDesign(binding: any, subForms?: Record<string, any>): { formFields: FormField[]; formOptions?: Record<string, any> } {
+  const design =
+    binding.subFormConfig ||
+    subForms?.[binding.bindingId] ||
+    subForms?.[String(binding.bindingId)] ||
+    {}
+  const rule = Array.isArray(design.rule) ? design.rule : []
+  return {
+    formFields: rule.length > 0 ? extractFieldsRecursive(rule) : [],
+    formOptions: design.options
+  }
+}
+
 const isCardRule = (item: any): boolean => ['el-card', 'elCard', 'card'].includes(item.type)
 const getLayoutKey = (item: any, index: number, fallback: string): string =>
   String(item.field || item.name || item.id || `__layout_${fallback}_${index}`)
@@ -2413,6 +2444,37 @@ const convertFormCreateRule = (rule: any): FormField | null => {
   return field
 }
 
+function isSyntheticLookupField(fieldName?: string): boolean {
+  return !fieldName || String(fieldName).startsWith('lookup:')
+}
+
+function isAssigneeLikeLabel(label?: string): boolean {
+  const normalized = String(label || '').trim().toLowerCase()
+  return /assignee|处理人|負責人|经办人|經辦人/.test(normalized)
+}
+
+/** Align with tasks/detail.vue: relation view + lookup config for sub-table list columns. */
+function buildLookupColumnProps(rawLookupConfig: unknown): Record<string, any> {
+  let lookupCfg: any = {}
+  try {
+    lookupCfg = typeof rawLookupConfig === 'string' ? JSON.parse(rawLookupConfig || '{}') : (rawLookupConfig || {})
+  } catch {
+    lookupCfg = {}
+  }
+  const relationView = lookupCfg.bindingId ? relationViewConfigs.value[lookupCfg.bindingId] : undefined
+  return {
+    lookupConfig: typeof rawLookupConfig === 'string' ? rawLookupConfig : JSON.stringify(lookupCfg || {}),
+    tableId: lookupCfg.tableId || 0,
+    searchFields: lookupCfg.searchFields || [],
+    displayField: lookupCfg.displayFields?.[0] || '',
+    displayFields: lookupCfg.displayFields || [],
+    selectedDisplayField: lookupCfg.selectedDisplayField || lookupCfg.displayField || '',
+    filterConditions: Array.isArray(lookupCfg.filterConditions) ? lookupCfg.filterConditions : [],
+    viewFields: lookupCfg.showBackfillView === false ? [] : (relationView?.viewFields || []),
+    showBackfillView: lookupCfg.showBackfillView !== false
+  }
+}
+
 // Derive display columns for a sub-table binding from the designer config.
 // My Request must only show columns configured in developer-workstation.
 const deriveColumnsFromBinding = (binding: any, formConfig?: Record<string, any>): Array<{ field: string; label: string; type?: string; required?: boolean; options?: Array<{ label: string; value: any }>; props?: Record<string, any> }> => {
@@ -2420,14 +2482,67 @@ const deriveColumnsFromBinding = (binding: any, formConfig?: Record<string, any>
     formConfig?.subListViews?.[binding.bindingId]?.columns ||
     formConfig?.subListViews?.[String(binding.bindingId)]?.columns
   if (Array.isArray(listColumns) && listColumns.length > 0) {
+    const subFormRule =
+      binding.subFormConfig?.rule ||
+      formConfig?.subForms?.[binding.bindingId]?.rule ||
+      formConfig?.subForms?.[String(binding.bindingId)]?.rule
+    const ruleByField = new Map(
+      (Array.isArray(subFormRule) ? subFormRule : []).map((ruleItem: any) => [ruleItem?.field, ruleItem])
+    )
+    const assigneeField = resolveAssigneeFieldForBinding(
+      listColumns.filter((c: any) => c?.fieldName).map((c: any) => ({ field: c.fieldName })),
+      binding.tableDisplayName || binding.tableName
+    )
     return listColumns
       .filter((col: any) => col && col.fieldName)
-      .map((col: any) => ({
-        field: col.fieldName,
-        label: col.columnLabel || col.comment || col.fieldName,
-        type: mapDesignerColumnType(col.dataType, col.columnType),
-        ...(col.linkText || col.componentId ? { props: { linkText: col.linkText, componentId: col.componentId } } : {}),
-      }))
+      .map((column: any) => {
+        if (column.columnType === 'linkForm') {
+          return {
+            field: column.fieldName || `linkForm:${column.componentId || binding.bindingId}`,
+            label: column.columnLabel || column.comment || column.linkText || 'Link Form',
+            type: 'linkForm',
+            minWidth: column.minWidth || 120,
+            props: {
+              linkText: column.linkText || 'Details',
+              componentId: column.componentId,
+              boundSubTableBindingId: column.boundSubTableBindingId,
+              boundSubTableName: column.boundSubTableName
+            }
+          }
+        }
+        if (column.columnType === 'lookup') {
+          const label = column.columnLabel || column.comment || 'Lookup'
+          const field =
+            isSyntheticLookupField(column.fieldName) && isAssigneeLikeLabel(label) && assigneeField
+              ? assigneeField
+              : (column.fieldName || `lookup:${binding.bindingId}`)
+          return {
+            field,
+            label,
+            type: 'lookup',
+            minWidth: 260,
+            props: buildLookupColumnProps(column.lookupConfig || '{}')
+          }
+        }
+        const fieldRule = ruleByField.get(column.fieldName)
+        if (fieldRule?.type === 'lookup' || fieldRule?.props?.lookupConfig) {
+          return {
+            field: column.fieldName,
+            label: column.comment || column.columnLabel || fieldRule?.title || column.fieldName,
+            type: 'lookup',
+            minWidth: column.minWidth || 260,
+            props: buildLookupColumnProps(fieldRule?.props?.lookupConfig || '{}')
+          }
+        }
+        return {
+          field: column.fieldName,
+          label: column.columnLabel || column.comment || column.fieldName,
+          type: mapDesignerColumnType(column.dataType, column.columnType),
+          ...(column.linkText || column.componentId
+            ? { props: { linkText: column.linkText, componentId: column.componentId } }
+            : {})
+        }
+      })
   }
 
   const subFormRule =
@@ -2563,16 +2678,12 @@ function buildPreviousFormEntry(
     prevFormConfig = cfg || {}
   } catch { /* ignore */ }
   const prevBindings: PreviousFormEntry['subTableBindings'] = []
-  const prevRuleBindingIds = collectRuleBindingIds(
-    Array.isArray(prevFormConfig?.rule) ? prevFormConfig!.rule : []
-  )
   for (const b of (prevForm.tableBindings || [])) {
     if (b.bindingType === 'PRIMARY') continue
     const cols = deriveColumnsFromBinding(b, prevFormConfig)
     if (!Array.isArray(cols) || cols.length === 0) continue
-    const placed = prevRuleBindingIds.has(Number(b.bindingId))
-    const isFormOnly = String(b.subMode || '').toUpperCase() === 'FORM_ONLY'
-    if (!placed && isFormOnly) continue
+    const prevSubForms = prevFormConfig.subForms || {}
+    const subFormDesign = resolveSubFormDesign(b, prevSubForms)
     const binding = {
       bindingId: b.bindingId,
       tableId: b.tableId != null ? Number(b.tableId) : null,
@@ -2583,7 +2694,10 @@ function buildPreviousFormEntry(
       tableType: b.tableType,
       tableDescription: b.tableDescription,
       columns: cols,
-      data: [] as any[]
+      data: [] as any[],
+      subMode: b.subMode,
+      formFields: subFormDesign.formFields,
+      formOptions: subFormDesign.formOptions
     }
     if (savedSubTables) {
       const saved = getSavedSubTableRowsFromVariables(savedSubTables, {
