@@ -2090,6 +2090,7 @@ const parseBpmnXml = (xml: string) => {
     const showCurrentStep = !isCompletedTask.value
     const currentTaskDefinitionKey = (taskInfo.value as any).taskDefinitionKey || ''
     const currentTaskName = taskInfo.value.taskName || ''
+    const ck = (s: unknown) => String(s ?? '').trim()
     let currentNodeFound = false
 
     // Detect subProcess elements and determine which have been entered
@@ -2119,7 +2120,7 @@ const parseBpmnXml = (xml: string) => {
     const enteredSubProcesses = new Set<string>()
     for (const [spId, sp] of subProcessMap) {
       const spName = sp.getAttribute('name') || ''
-      if (showCurrentStep && ((spName && spName === currentTaskName) || spId === currentTaskName)) {
+      if (showCurrentStep && ((spName && ck(spName) === ck(currentTaskName)) || ck(spId) === ck(currentTaskName))) {
         enteredSubProcesses.add(spId)
         continue
       }
@@ -2133,7 +2134,7 @@ const parseBpmnXml = (xml: string) => {
         if (childLocal !== 'userTask' && childLocal !== 'serviceTask') continue
         const taskName = childElements[i].getAttribute('name') || ''
         const taskId = childElements[i].getAttribute('id') || ''
-        if ((showCurrentStep && taskName === currentTaskName) || historyRecords.value.some(h => h.nodeName === taskName || h.nodeId === taskId)) {
+        if ((showCurrentStep && ck(taskName) === ck(currentTaskName)) || historyRecords.value.some(h => h.nodeName === taskName || h.nodeId === taskId)) {
           enteredSubProcesses.add(spId)
           break
         }
@@ -2155,7 +2156,7 @@ const parseBpmnXml = (xml: string) => {
       }
       if (!isMultiInstance) continue
       const spName = sp.getAttribute('name') || ''
-      if (showCurrentStep && ((spName && spName === currentTaskName) || spId === currentTaskName)) {
+      if (showCurrentStep && ((spName && ck(spName) === ck(currentTaskName)) || ck(spId) === ck(currentTaskName))) {
         activeMultiInstanceSubProcesses.add(spId)
         continue
       }
@@ -2164,7 +2165,8 @@ const parseBpmnXml = (xml: string) => {
         if (childLocal !== 'userTask') continue
         const taskName = spChildren[i].getAttribute('name') || ''
         const taskId = spChildren[i].getAttribute('id') || ''
-        if ((showCurrentStep && (taskName === currentTaskName || taskId === currentTaskName || taskId === currentTaskDefinitionKey)) ||
+        if ((showCurrentStep &&
+            (ck(taskName) === ck(currentTaskName) || ck(taskId) === ck(currentTaskName) || ck(taskId) === ck(currentTaskDefinitionKey))) ||
             (showCurrentStep && historyRecords.value.some(h => h.nodeName === taskName && h.status === 'current'))) {
           activeMultiInstanceSubProcesses.add(spId)
           break
@@ -2205,6 +2207,22 @@ const parseBpmnXml = (xml: string) => {
         completedMultiInstanceSubProcesses.add(spId)
       }
     }
+
+    /** True if element sits inside a subprocess that is an active parallel/sequential MI body (history aggregates all instances — do not trust gateway completion by activity id/name alone). */
+    const isDescendantOfActiveMiSubProcess = (element: Element): boolean => {
+      let node: Node | null = element.parentNode
+      while (node && node.nodeType === 1) {
+        const el = node as Element
+        const localName = el.localName || el.nodeName.split(':').pop()
+        if (localName === 'subProcess') {
+          const sid = el.getAttribute('id') || ''
+          if (sid && activeMultiInstanceSubProcesses.has(sid)) return true
+        }
+        if (localName === 'process' || localName === 'definitions') break
+        node = el.parentNode
+      }
+      return false
+    }
     
     // Parse start events (subprocess-internal starts are pending until the subprocess is entered)
     doc.querySelectorAll('startEvent').forEach((event, index) => {
@@ -2228,34 +2246,58 @@ const parseBpmnXml = (xml: string) => {
       const id = task.getAttribute('id') || `task_${index}`
       const name = task.getAttribute('name') || t('task.taskFallbackName', { index: index + 1 })
       const pos = positionMap.get(id)
-      
+
       let status: 'completed' | 'current' | 'pending' = 'pending'
-      
-      if (isCompletedTask.value && (completedHistoryIds.has(id) || completedNodeNames.has(name) || name === currentTaskName || id === currentTaskName || id === currentTaskDefinitionKey)) {
+
+      const openTaskMatchesThisShape =
+        showCurrentStep &&
+        (ck(name) === ck(currentTaskName) ||
+          ck(id) === ck(currentTaskName) ||
+          ck(id) === ck(currentTaskDefinitionKey) ||
+          ck(name) === ck(currentTaskDefinitionKey))
+
+      if (isCompletedTask.value && (completedHistoryIds.has(id) || completedNodeNames.has(name) || ck(name) === ck(currentTaskName) || ck(id) === ck(currentTaskName) || ck(id) === ck(currentTaskDefinitionKey))) {
         status = 'completed'
         completed.push(id)
-      }
-      // Check if this is the current task
-      else if (showCurrentStep && (name === currentTaskName || id === currentTaskName || id === currentTaskDefinitionKey)) {
+      } else if (openTaskMatchesThisShape) {
         status = 'current'
         currentNodeId.value = id
         currentNodeFound = true
-      } 
-      // Check if completed in history records
-      else if (completedHistoryIds.has(id) || completedNodeNames.has(name)) {
-        status = 'completed'
-        completed.push(id)
       }
-      // If current node not found yet and this node appears in history, mark as completed
-      else if (!currentNodeFound) {
-        // Match history records by node name
-        const historyMatch = historyRecords.value.find(h => h.nodeName === name)
-        if (historyMatch && historyMatch.status === 'completed') {
+      // Check if completed in history records (MI: aggregated history may include sibling executions for same BPMN id)
+      else if (completedHistoryIds.has(id) || completedNodeNames.has(name)) {
+        if (
+          showCurrentStep &&
+          isDescendantOfActiveMiSubProcess(task) &&
+          (ck(id) === ck(currentTaskDefinitionKey) ||
+            ck(name) === ck(currentTaskName) ||
+            ck(id) === ck(currentTaskName) ||
+            ck(name) === ck(currentTaskDefinitionKey))
+        ) {
+          status = 'current'
+          currentNodeId.value = id
+          currentNodeFound = true
+        } else {
           status = 'completed'
           completed.push(id)
         }
       }
-      
+      // If current node not found yet and this node appears in history, mark as completed
+      else if (!currentNodeFound) {
+        const historyMatch = historyRecords.value.find(h => ck(h.nodeName) === ck(name))
+        const sameOpenActivityInMi =
+          showCurrentStep &&
+          isDescendantOfActiveMiSubProcess(task) &&
+          (ck(id) === ck(currentTaskDefinitionKey) ||
+            ck(name) === ck(currentTaskName) ||
+            ck(id) === ck(currentTaskName) ||
+            ck(name) === ck(currentTaskDefinitionKey))
+        if (historyMatch && historyMatch.status === 'completed' && !sameOpenActivityInMi) {
+          status = 'completed'
+          completed.push(id)
+        }
+      }
+
       nodes.push({ id, name, type: 'task', status, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
     })
 
@@ -2276,7 +2318,7 @@ const parseBpmnXml = (xml: string) => {
           userTaskCount++
           const taskName = childElements[i].getAttribute('name') || ''
           const taskId = childElements[i].getAttribute('id') || ''
-          if (showCurrentStep && (taskName === currentTaskName || taskId === currentTaskName || taskId === currentTaskDefinitionKey)) {
+          if (showCurrentStep && (ck(taskName) === ck(currentTaskName) || ck(taskId) === ck(currentTaskName) || ck(taskId) === ck(currentTaskDefinitionKey))) {
             hasCurrentChild = true
             break
           }
@@ -2292,38 +2334,79 @@ const parseBpmnXml = (xml: string) => {
       if (spStatus === 'completed') completed.push(spId)
     }
     
-    // Pre-parse sequence flows (used for subsequent gateway status determination)
-    const earlyFlows: Array<{sourceRef: string, targetRef: string}> = []
-    doc.querySelectorAll('sequenceFlow').forEach(flow => {
+    // Pre-parse sequence flows (localName — works with bpmn:sequenceFlow prefixes)
+    const earlyFlows: Array<{ sourceRef: string; targetRef: string }> = []
+    for (let i = 0; i < allElements.length; i++) {
+      const el = allElements[i]
+      const ln = el.localName || el.nodeName.split(':').pop()
+      if (ln !== 'sequenceFlow') continue
       earlyFlows.push({
-        sourceRef: flow.getAttribute('sourceRef') || '',
-        targetRef: flow.getAttribute('targetRef') || ''
+        sourceRef: el.getAttribute('sourceRef') || '',
+        targetRef: el.getAttribute('targetRef') || ''
       })
-    })
+    }
 
-    // Parse gateways
-    doc.querySelectorAll('exclusiveGateway, parallelGateway, inclusiveGateway').forEach((gateway, index) => {
-      const id = gateway.getAttribute('id') || `gateway_${index}`
+    // Automated activities: fold history into `completed` so join gateways work when gateway coloring is topology-only (todo view).
+    for (let i = 0; i < allElements.length; i++) {
+      const el = allElements[i]
+      const ln = el.localName || el.nodeName.split(':').pop()
+      if (
+        ln !== 'serviceTask' &&
+        ln !== 'scriptTask' &&
+        ln !== 'sendTask' &&
+        ln !== 'receiveTask' &&
+        ln !== 'manualTask' &&
+        ln !== 'businessRuleTask'
+      ) {
+        continue
+      }
+      const aid = el.getAttribute('id')
+      if (!aid) continue
+      const aname = el.getAttribute('name') || ''
+      if (completedHistoryIds.has(aid) || (aname && completedNodeNames.has(aname))) {
+        if (!completed.includes(aid)) completed.push(aid)
+      }
+    }
+
+    let gatewayAutoId = 0
+    for (let gi = 0; gi < allElements.length; gi++) {
+      const gateway = allElements[gi]
+      const gln = gateway.localName || gateway.nodeName.split(':').pop()
+      if (gln !== 'exclusiveGateway' && gln !== 'parallelGateway' && gln !== 'inclusiveGateway') continue
+
+      const id = gateway.getAttribute('id') || `gateway_${gatewayAutoId++}`
       const name = gateway.getAttribute('name') || ''
       const pos = positionMap.get(id)
-      
+
       let status: 'completed' | 'pending' = 'pending'
-      if (completedHistoryIds.has(id) || completedNodeNames.has(name)) {
-        status = 'completed'
-        completed.push(id)
+      const incomingSourceIds = earlyFlows
+        .filter(f => f.targetRef === id)
+        .map(f => f.sourceRef)
+        .filter(Boolean)
+      const allIncomingComplete =
+        incomingSourceIds.length > 0 && incomingSourceIds.every(srcRef => completed.includes(srcRef))
+
+      if (showCurrentStep) {
+        // Todo: Flowable history mixes all MI executions — do not trust gateway activity history.
+        // Join: require every incoming branch satisfied (some() caused false greens when another branch was still active).
+        if (allIncomingComplete) {
+          status = 'completed'
+          completed.push(id)
+        }
       } else {
-        // Check for completed incoming nodes (via sequenceFlow)
-        const incomingSourceIds = earlyFlows.filter(f => f.targetRef === id).map(f => f.sourceRef)
-        const hasCompletedSource = incomingSourceIds.some(srcId => completed.includes(srcId))
-        if (hasCompletedSource) {
+        const underActiveMi = isDescendantOfActiveMiSubProcess(gateway)
+        if (!underActiveMi && (completedHistoryIds.has(id) || completedNodeNames.has(name))) {
+          status = 'completed'
+          completed.push(id)
+        } else if (allIncomingComplete) {
           status = 'completed'
           completed.push(id)
         }
       }
-      
+
       nodes.push({ id, name, type: 'gateway', status, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
-    })
-    
+    }
+
     // Parse end events
     doc.querySelectorAll('endEvent').forEach((event, index) => {
       const id = event.getAttribute('id') || `end_${index}`
