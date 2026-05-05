@@ -172,8 +172,8 @@
                 :label-width="prevForm.labelWidth"
                 :readonly="true"
                 :subTableBindings="prevForm.subTableBindings"
-                :linked-sub-table-bindings="linkableSubTableBindings"
-                :suppress-link-form-initial-data="isMiSubTaskMode && !isCompletedTask"
+                :linked-sub-table-bindings="linkableSubTableBindingsForPrevious(prevForm)"
+                :suppress-link-form-initial-data="false"
               />
             </div>
             <template v-if="previousBottomSubTableBindings(prevForm).length > 0">
@@ -186,8 +186,8 @@
                   :assignee-field="resolveAssigneeFieldForBinding(binding.columns, binding.tableName)"
                   :show-fill-button="isMiSubTaskMode && isParticipantsBinding(binding)"
                   :fill-button-label="t('task.addParticipantInfoForm')"
-                  :linked-sub-table-bindings="linkableSubTableBindings"
-                  :suppress-link-form-initial-data="isMiSubTaskMode && !isCompletedTask"
+                  :linked-sub-table-bindings="linkableSubTableBindingsForPrevious(prevForm)"
+                  :suppress-link-form-initial-data="false"
                   @fillForm="(row: any) => openMiFillDialog(row)"
                   @update:linked-sub-table-data="(bindingId: number, rows: any[]) => syncPreviousLinkedSubTableRows(prevForm, bindingId, rows)"
                 />
@@ -443,6 +443,7 @@
           :readonly="formReadOnly || miFillDialogReadOnly"
           :subTableBindings="miFillSubTableBindings"
           :preview-sub-tables="true"
+          :suppress-link-form-initial-data="isMiSubTaskMode && !isCompletedTask"
           @update:subTableData="syncMiFillSubTableRows"
         />
       </div>
@@ -665,6 +666,19 @@ const linkableSubTableBindings = computed(() => [
   ...previousForms.value.flatMap(form => form.subTableBindings)
 ])
 
+/** Resolve linkForm columns: `.find()` uses first match — prev-form UI must see that form's binding.data, not MI-isolated current binding with same id. */
+function linkableSubTableBindingsForPrevious(prevForm: PreviousFormEntry) {
+  const pid = prevForm.formId
+  const otherPrev = previousForms.value
+    .filter(p => p.formId !== pid)
+    .flatMap(p => p.subTableBindings)
+  return [
+    ...prevForm.subTableBindings,
+    ...subTableBindings.value,
+    ...otherPrev
+  ]
+}
+
 function collectPlacedBindingIds(fields: any[]): Set<number> {
   const ids = new Set<number>()
   const collect = (items: any[]) => items.forEach((f: any) => {
@@ -716,6 +730,51 @@ function cloneSubTableBindings<T extends Array<{ data: any[] }>>(bindings: T): T
   })) as T
 }
 
+/**
+ * Merge sub-table rows by PK (id / rowId). Later rows win on field conflicts.
+ * Used when MI isolation leaves one binding with a single participant row but the same bindingId
+ * still holds all participants in __subTables__ / previousForms — overwrite would drop other rows.
+ */
+function mergeSubTableRowsByRowId(existing: any[] | undefined, incoming: any[]): any[] {
+  const byId = new Map<string, any>()
+  const add = (r: any) => {
+    if (!r || typeof r !== 'object') return
+    const rawId = (r as Record<string, unknown>).id ?? (r as Record<string, unknown>).rowId
+    if (rawId == null || String(rawId).trim() === '') return
+    const k = String(rawId)
+    const cur = byId.get(k)
+    byId.set(k, cur ? { ...cur, ...r } : { ...r })
+  }
+  for (const r of existing || []) add(r)
+  for (const r of incoming || []) add(r)
+  return Array.from(byId.values())
+}
+
+/** After MI isolation, __subTables__ must carry all participants again; current binding only has this MI row. */
+function rebuildIsolatedSubTablesPayload(): Record<string, any> {
+  const subTables: Record<string, any> = {}
+  const ingest = (bindings: typeof subTableBindings.value) => {
+    for (const binding of bindings) {
+      const rows = cloneSubTableRows(Array.isArray(binding.data) ? binding.data : [])
+      const canonical = String(binding.bindingId)
+      const prev = getSavedSubTableRows(subTables, binding)
+      const merged = mergeSubTableRowsByRowId(prev, rows)
+      const out = cloneSubTableRows(merged)
+      subTables[binding.bindingId] = out
+      subTables[canonical] = out
+      if (binding.tableName) {
+        subTables[binding.tableName] = out
+        subTables[normalizeSubTableName(binding.tableName)] = out
+      }
+    }
+  }
+  for (const pf of previousForms.value) {
+    ingest(pf.subTableBindings)
+  }
+  ingest(subTableBindings.value)
+  return subTables
+}
+
 function syncMainSubTableRows(bindingId: number, rows: any[]) {
   const source = subTableBindings.value.find(b => b.bindingId === bindingId)
   if (!source) return
@@ -727,14 +786,18 @@ function syncMainSubTableRows(bindingId: number, rows: any[]) {
     }
   }
   subTableBindings.value.forEach(sync)
-  previousForms.value.forEach(form => form.subTableBindings.forEach(sync))
+  // Never push current-task sub-table edits into previousForms — those are read-only snapshots
+  // (MI isolation + matching bindingIds would wipe other sub-tasks' rows).
 
   const subTables = { ...((formData.value.__subTables__ as Record<string, any>) || {}) }
-  subTables[source.bindingId] = nextRows
-  subTables[String(source.bindingId)] = nextRows
+  const existing = getSavedSubTableRows(subTables, source)
+  const merged = isMiSubTaskMode.value ? mergeSubTableRowsByRowId(existing, nextRows) : nextRows
+  const out = cloneSubTableRows(merged)
+  subTables[source.bindingId] = out
+  subTables[String(source.bindingId)] = out
   if (source.tableName) {
-    subTables[source.tableName] = nextRows
-    subTables[normalizeSubTableName(source.tableName)] = nextRows
+    subTables[source.tableName] = out
+    subTables[normalizeSubTableName(source.tableName)] = out
   }
   formData.value = { ...formData.value, __subTables__: subTables }
   scheduleSubTableAutosave()
@@ -813,6 +876,29 @@ function isParticipantsBinding(binding: { tableName: string }): boolean {
   return tn === 'participants' || tn.endsWith('participants')
 }
 
+/** MI isolation: participant rows match by PK; related sub-table rows match by FK to participant (not by sub-row id). */
+function miRowBelongsToCurrentParticipant(
+  row: any,
+  myRowId: number,
+  binding: { tableName: string; foreignKeyField?: string }
+): boolean {
+  if (!row || typeof row !== 'object') return false
+  if (isParticipantsBinding(binding)) {
+    return Number(row.id) === myRowId || Number(row.rowId) === myRowId
+  }
+  const fk = binding.foreignKeyField
+  if (fk && row[fk] != null && row[fk] !== '' && !Number.isNaN(Number(row[fk]))) {
+    return Number(row[fk]) === myRowId
+  }
+  const fallbackFkKeys = ['participant_id', 'participantId', 'parent_id', 'parentId', 'meeting_participant_id']
+  for (const k of fallbackFkKeys) {
+    if (row[k] != null && row[k] !== '' && !Number.isNaN(Number(row[k])) && Number(row[k]) === myRowId) {
+      return true
+    }
+  }
+  return false
+}
+
 const isMiSubTask = (taskData: any): boolean => {
   const defKey = String(taskData?.taskDefinitionKey || '')
   if (defKey.startsWith('MI_UserTask_')) {
@@ -838,13 +924,16 @@ function buildSubTableSubmitPayload() {
 
   for (const binding of subTableBindings.value) {
     const rows = cloneSubTableRows(Array.isArray(binding.data) ? binding.data : [])
-    subTables[binding.bindingId] = rows
-    subTables[String(binding.bindingId)] = rows
-    subTableData[String(binding.bindingId)] = rows
+    const existing = getSavedSubTableRows(subTables, binding)
+    const merged = isMiSubTaskMode.value ? mergeSubTableRowsByRowId(existing, rows) : rows
+    const out = cloneSubTableRows(merged)
+    subTables[binding.bindingId] = out
+    subTables[String(binding.bindingId)] = out
+    subTableData[String(binding.bindingId)] = out
     if (binding.tableName) {
-      subTables[binding.tableName] = rows
-      subTables[normalizeSubTableName(binding.tableName)] = rows
-      subTableData[binding.tableName] = rows
+      subTables[binding.tableName] = out
+      subTables[normalizeSubTableName(binding.tableName)] = out
+      subTableData[binding.tableName] = out
     }
   }
 
@@ -914,25 +1003,20 @@ function getCurrentFormFieldKeys(): string[] {
 
 function isolateMiSubTaskData(taskData: any) {
   const currentItem = taskData?.variables?._currentItem as { rowId?: number; assigneeId?: string } | undefined
-  if (currentItem?.rowId == null) return
+  if (currentItem?.rowId == null) {
+    return
+  }
 
   const myRowId = Number(currentItem.rowId)
-  if (Number.isNaN(myRowId)) return
+  if (Number.isNaN(myRowId)) {
+    return
+  }
 
-  // Multi-instance data isolation: each sub-task only sees its own participant row.
+  // Multi-instance data isolation: only the **current** task form is scoped to this participant.
+  // Previous-node forms stay read-only with full snapshot (other sub-tasks' sub form2 data must remain visible).
   for (const binding of subTableBindings.value) {
     const rows = Array.isArray(binding.data) ? binding.data : []
-    binding.data = rows.filter(
-      (row: any) => Number(row?.id) === myRowId || Number(row?.rowId) === myRowId
-    )
-  }
-  for (const prevForm of previousForms.value) {
-    for (const binding of prevForm.subTableBindings) {
-      const rows = Array.isArray(binding.data) ? binding.data : []
-      binding.data = rows.filter(
-        (row: any) => Number(row?.id) === myRowId || Number(row?.rowId) === myRowId
-      )
-    }
+    binding.data = rows.filter((row: any) => miRowBelongsToCurrentParticipant(row, myRowId, binding))
   }
 
   const myRow = subTableBindings.value
@@ -978,6 +1062,23 @@ function isolateMiSubTaskData(taskData: any) {
     }
   }
 
+  cleanedFormData.__subTables__ = rebuildIsolatedSubTablesPayload()
+  if (myRow && typeof myRow === 'object') {
+    const rowRec = myRow as Record<string, unknown>
+    const nextRowSub: Record<string, unknown> = {}
+    const rebuilt = cleanedFormData.__subTables__ as Record<string, unknown>
+    for (const binding of subTableBindings.value) {
+      const saved = getSavedSubTableRows(rebuilt, binding)
+      const rows = cloneSubTableRows(Array.isArray(saved) ? saved : [])
+      nextRowSub[binding.bindingId] = rows
+      nextRowSub[String(binding.bindingId)] = rows
+      if (binding.tableName) {
+        nextRowSub[binding.tableName] = rows
+        nextRowSub[normalizeSubTableName(binding.tableName)] = rows
+      }
+    }
+    rowRec.__subTables__ = nextRowSub
+  }
   formData.value = cleanedFormData
 }
 
@@ -1028,11 +1129,14 @@ function syncMiFillSubTableRows(bindingId: number, rows: any[]) {
   target.data = nextRows
 
   const subTables = { ...((miFillDialogData.value.__subTables__ as Record<string, any>) || {}) }
-  subTables[target.bindingId] = nextRows
-  subTables[String(target.bindingId)] = nextRows
+  const existing = getSavedSubTableRows(subTables, target)
+  const merged = mergeSubTableRowsByRowId(existing, nextRows)
+  const out = cloneSubTableRows(merged)
+  subTables[target.bindingId] = out
+  subTables[String(target.bindingId)] = out
   if (target.tableName) {
-    subTables[target.tableName] = nextRows
-    subTables[normalizeSubTableName(target.tableName)] = nextRows
+    subTables[target.tableName] = out
+    subTables[normalizeSubTableName(target.tableName)] = out
   }
   miFillDialogData.value = { ...miFillDialogData.value, __subTables__: subTables }
 }
@@ -1057,20 +1161,20 @@ async function saveMiFillDialog() {
       for (const row of rows) Object.assign(row, miValues)
     }
     for (const b of miFillSubTableBindings.value) mergeIntoRows(b.data)
-    for (const pf of previousForms.value) {
-      for (const b of pf.subTableBindings) mergeIntoRows(b.data)
-    }
   }
 
   for (const binding of miFillSubTableBindings.value) {
     const rows = cloneSubTableRows(Array.isArray(binding.data) ? binding.data : [])
-    subTables[binding.bindingId] = rows
-    subTables[String(binding.bindingId)] = rows
-    subTableData[String(binding.bindingId)] = rows
+    const existing = getSavedSubTableRows(subTables, binding)
+    const merged = mergeSubTableRowsByRowId(existing, rows)
+    const out = cloneSubTableRows(merged)
+    subTables[binding.bindingId] = out
+    subTables[String(binding.bindingId)] = out
+    subTableData[String(binding.bindingId)] = out
     if (binding.tableName) {
-      subTables[binding.tableName] = rows
-      subTables[normalizeSubTableName(binding.tableName)] = rows
-      subTableData[binding.tableName] = rows
+      subTables[binding.tableName] = out
+      subTables[normalizeSubTableName(binding.tableName)] = out
+      subTableData[binding.tableName] = out
     }
   }
 
@@ -2091,6 +2195,7 @@ const parseBpmnXml = (xml: string) => {
     const currentTaskDefinitionKey = (taskInfo.value as any).taskDefinitionKey || ''
     const currentTaskName = taskInfo.value.taskName || ''
     const ck = (s: unknown) => String(s ?? '').trim()
+    const normLabel = (s: unknown) => ck(s).replace(/\s+/g, ' ')
     let currentNodeFound = false
 
     // Detect subProcess elements and determine which have been entered
@@ -2120,7 +2225,7 @@ const parseBpmnXml = (xml: string) => {
     const enteredSubProcesses = new Set<string>()
     for (const [spId, sp] of subProcessMap) {
       const spName = sp.getAttribute('name') || ''
-      if (showCurrentStep && ((spName && ck(spName) === ck(currentTaskName)) || ck(spId) === ck(currentTaskName))) {
+      if (showCurrentStep && ((spName && normLabel(spName) === normLabel(currentTaskName)) || ck(spId) === ck(currentTaskName))) {
         enteredSubProcesses.add(spId)
         continue
       }
@@ -2134,7 +2239,7 @@ const parseBpmnXml = (xml: string) => {
         if (childLocal !== 'userTask' && childLocal !== 'serviceTask') continue
         const taskName = childElements[i].getAttribute('name') || ''
         const taskId = childElements[i].getAttribute('id') || ''
-        if ((showCurrentStep && ck(taskName) === ck(currentTaskName)) || historyRecords.value.some(h => h.nodeName === taskName || h.nodeId === taskId)) {
+        if ((showCurrentStep && normLabel(taskName) === normLabel(currentTaskName)) || historyRecords.value.some(h => h.nodeName === taskName || h.nodeId === taskId)) {
           enteredSubProcesses.add(spId)
           break
         }
@@ -2156,7 +2261,7 @@ const parseBpmnXml = (xml: string) => {
       }
       if (!isMultiInstance) continue
       const spName = sp.getAttribute('name') || ''
-      if (showCurrentStep && ((spName && ck(spName) === ck(currentTaskName)) || ck(spId) === ck(currentTaskName))) {
+      if (showCurrentStep && ((spName && normLabel(spName) === normLabel(currentTaskName)) || ck(spId) === ck(currentTaskName))) {
         activeMultiInstanceSubProcesses.add(spId)
         continue
       }
@@ -2166,12 +2271,50 @@ const parseBpmnXml = (xml: string) => {
         const taskName = spChildren[i].getAttribute('name') || ''
         const taskId = spChildren[i].getAttribute('id') || ''
         if ((showCurrentStep &&
-            (ck(taskName) === ck(currentTaskName) || ck(taskId) === ck(currentTaskName) || ck(taskId) === ck(currentTaskDefinitionKey))) ||
+            (normLabel(taskName) === normLabel(currentTaskName) || ck(taskId) === ck(currentTaskName) || ck(taskId) === ck(currentTaskDefinitionKey))) ||
             (showCurrentStep && historyRecords.value.some(h => h.nodeName === taskName && h.status === 'current'))) {
           activeMultiInstanceSubProcesses.add(spId)
           break
         }
       }
+    }
+
+    // Pin ancestor MI subprocesses for the BPMN activity that maps to this open task. Aggregate portal history mixes
+    // completions from all MI executions — downstream inner endEvent / duplicated activity ids otherwise show completed.
+    if (showCurrentStep && !isCompletedTask.value) {
+      doc.querySelectorAll('userTask').forEach(taskEl => {
+        const uid = ck(taskEl.getAttribute('id'))
+        const unameNorm = normLabel(taskEl.getAttribute('name'))
+        const defKey = ck(currentTaskDefinitionKey)
+        const matchesOpen =
+          unameNorm === normLabel(currentTaskName) ||
+          uid === ck(currentTaskName) ||
+          uid === defKey ||
+          unameNorm === normLabel(defKey)
+        if (!matchesOpen) return
+        let node: Node | null = taskEl.parentNode
+        while (node && node.nodeType === 1) {
+          const el = node as Element
+          const localName = el.localName || el.nodeName.split(':').pop()
+          if (localName === 'subProcess') {
+            const sid = el.getAttribute('id') || ''
+            if (sid && enteredSubProcesses.has(sid)) {
+              const descendants = el.getElementsByTagName('*')
+              let hasMi = false
+              for (let di = 0; di < descendants.length; di++) {
+                const ln = descendants[di].localName || descendants[di].nodeName.split(':').pop()
+                if (ln === 'multiInstanceLoopCharacteristics') {
+                  hasMi = true
+                  break
+                }
+              }
+              if (hasMi) activeMultiInstanceSubProcesses.add(sid)
+            }
+          }
+          if (localName === 'process' || localName === 'definitions') break
+          node = el.parentNode
+        }
+      })
     }
 
     // Completed multi-instance subprocesses: entered MI subprocesses where all child userTasks are done
@@ -2223,7 +2366,101 @@ const parseBpmnXml = (xml: string) => {
       }
       return false
     }
-    
+
+    const earlyFlows: Array<{ sourceRef: string; targetRef: string }> = []
+    for (let i = 0; i < allElements.length; i++) {
+      const el = allElements[i]
+      const ln = el.localName || el.nodeName.split(':').pop()
+      if (ln !== 'sequenceFlow') continue
+      earlyFlows.push({
+        sourceRef: el.getAttribute('sourceRef') || '',
+        targetRef: el.getAttribute('targetRef') || ''
+      })
+    }
+
+    const isUnderGivenSubProcess = (elementRef: Element | null, boundarySpId: string): boolean => {
+      let node: Node | null = elementRef?.parentNode ?? null
+      while (node && node.nodeType === 1) {
+        const wrap = node as Element
+        const ln = wrap.localName || wrap.nodeName.split(':').pop()
+        if (ln === 'subProcess' && ck(wrap.getAttribute('id')) === ck(boundarySpId)) return true
+        if (ln === 'process' || ln === 'definitions') break
+        node = wrap.parentNode
+      }
+      return false
+    }
+
+    const findBpmnElementByIdAny = (nodeId: string): Element | null => {
+      for (let i = 0; i < allElements.length; i++) {
+        const el = allElements[i]
+        if (ck(el.getAttribute('id')) === ck(nodeId)) return el
+      }
+      return null
+    }
+
+    const nearestActiveMiSubProcessAncestorId = (from: Element): string | null => {
+      let node: Node | null = from.parentNode
+      while (node && node.nodeType === 1) {
+        const wrap = node as Element
+        const ln = wrap.localName || wrap.nodeName.split(':').pop()
+        if (ln === 'subProcess') {
+          const sid = ck(wrap.getAttribute('id'))
+          if (sid && activeMultiInstanceSubProcesses.has(sid)) return sid
+        }
+        if (ln === 'process' || ln === 'definitions') break
+        node = wrap.parentNode
+      }
+      return null
+    }
+
+    const isDownstreamUserTaskInsideSameActiveMi = (openTaskId: string, candidateTaskId: string, boundarySpId: string): boolean => {
+      const openEl = findBpmnElementByIdAny(openTaskId)
+      if (!openEl || !isUnderGivenSubProcess(openEl, boundarySpId)) return false
+      if (ck(openTaskId) === ck(candidateTaskId)) return false
+      const queue: string[] = [openTaskId]
+      const visited = new Set<string>()
+      while (queue.length > 0) {
+        const u = queue.shift()!
+        if (visited.has(u)) continue
+        visited.add(u)
+        for (const f of earlyFlows) {
+          if (ck(f.sourceRef) !== ck(u)) continue
+          const tar = ck(f.targetRef)
+          const tarEl = findBpmnElementByIdAny(tar)
+          if (!tarEl || !isUnderGivenSubProcess(tarEl, boundarySpId)) continue
+          const tln = tarEl.localName || tarEl.nodeName.split(':').pop()
+          if (tln === 'userTask' && tar === ck(candidateTaskId)) return true
+          queue.push(tar)
+        }
+      }
+      return false
+    }
+
+    let currentOpenBpmnUserTaskId = ''
+    if (showCurrentStep && !isCompletedTask.value) {
+      doc.querySelectorAll('userTask').forEach(ut => {
+        const uid = ck(ut.getAttribute('id'))
+        if (!uid) return
+        if (uid === ck(currentTaskDefinitionKey)) currentOpenBpmnUserTaskId = uid
+      })
+      if (!currentOpenBpmnUserTaskId) {
+        doc.querySelectorAll('userTask').forEach(ut => {
+          const uid = ck(ut.getAttribute('id'))
+          if (!uid) return
+          const unm = normLabel(ut.getAttribute('name'))
+          if (unm === normLabel(currentTaskName) || uid === ck(currentTaskName)) currentOpenBpmnUserTaskId = uid
+        })
+      }
+    }
+
+    const shouldSuppressSiblingAggregationComplete = (userTaskEl: Element, userTaskBpmnId: string): boolean => {
+      const boundary = nearestActiveMiSubProcessAncestorId(userTaskEl)
+      if (!boundary || !currentOpenBpmnUserTaskId) return false
+      const openId = currentOpenBpmnUserTaskId
+      if (ck(userTaskBpmnId) === ck(openId)) return false
+      return isDownstreamUserTaskInsideSameActiveMi(openId, userTaskBpmnId, boundary)
+    }
+
     // Parse start events (subprocess-internal starts are pending until the subprocess is entered)
     doc.querySelectorAll('startEvent').forEach((event, index) => {
       const id = event.getAttribute('id') || `start_${index}`
@@ -2251,10 +2488,10 @@ const parseBpmnXml = (xml: string) => {
 
       const openTaskMatchesThisShape =
         showCurrentStep &&
-        (ck(name) === ck(currentTaskName) ||
+        (normLabel(name) === normLabel(currentTaskName) ||
           ck(id) === ck(currentTaskName) ||
           ck(id) === ck(currentTaskDefinitionKey) ||
-          ck(name) === ck(currentTaskDefinitionKey))
+          normLabel(name) === normLabel(currentTaskDefinitionKey))
 
       if (isCompletedTask.value && (completedHistoryIds.has(id) || completedNodeNames.has(name) || ck(name) === ck(currentTaskName) || ck(id) === ck(currentTaskName) || ck(id) === ck(currentTaskDefinitionKey))) {
         status = 'completed'
@@ -2270,13 +2507,15 @@ const parseBpmnXml = (xml: string) => {
           showCurrentStep &&
           isDescendantOfActiveMiSubProcess(task) &&
           (ck(id) === ck(currentTaskDefinitionKey) ||
-            ck(name) === ck(currentTaskName) ||
+            normLabel(name) === normLabel(currentTaskName) ||
             ck(id) === ck(currentTaskName) ||
-            ck(name) === ck(currentTaskDefinitionKey))
+            normLabel(name) === normLabel(currentTaskDefinitionKey))
         ) {
           status = 'current'
           currentNodeId.value = id
           currentNodeFound = true
+        } else if (shouldSuppressSiblingAggregationComplete(task, id)) {
+          status = 'pending'
         } else {
           status = 'completed'
           completed.push(id)
@@ -2284,17 +2523,21 @@ const parseBpmnXml = (xml: string) => {
       }
       // If current node not found yet and this node appears in history, mark as completed
       else if (!currentNodeFound) {
-        const historyMatch = historyRecords.value.find(h => ck(h.nodeName) === ck(name))
+        const historyMatch = historyRecords.value.find(h => normLabel(h.nodeName) === normLabel(name))
         const sameOpenActivityInMi =
           showCurrentStep &&
           isDescendantOfActiveMiSubProcess(task) &&
           (ck(id) === ck(currentTaskDefinitionKey) ||
-            ck(name) === ck(currentTaskName) ||
+            normLabel(name) === normLabel(currentTaskName) ||
             ck(id) === ck(currentTaskName) ||
-            ck(name) === ck(currentTaskDefinitionKey))
+            normLabel(name) === normLabel(currentTaskDefinitionKey))
         if (historyMatch && historyMatch.status === 'completed' && !sameOpenActivityInMi) {
-          status = 'completed'
-          completed.push(id)
+          if (shouldSuppressSiblingAggregationComplete(task, id)) {
+            status = 'pending'
+          } else {
+            status = 'completed'
+            completed.push(id)
+          }
         }
       }
 
@@ -2318,12 +2561,17 @@ const parseBpmnXml = (xml: string) => {
           userTaskCount++
           const taskName = childElements[i].getAttribute('name') || ''
           const taskId = childElements[i].getAttribute('id') || ''
-          if (showCurrentStep && (ck(taskName) === ck(currentTaskName) || ck(taskId) === ck(currentTaskName) || ck(taskId) === ck(currentTaskDefinitionKey))) {
+          if (showCurrentStep && (normLabel(taskName) === normLabel(currentTaskName) || ck(taskId) === ck(currentTaskName) || ck(taskId) === ck(currentTaskDefinitionKey))) {
             hasCurrentChild = true
             break
           }
           const historyMatch = historyRecords.value.find(h => h.nodeName === taskName || h.nodeId === taskId)
-          if (!historyMatch || (historyMatch.status !== 'completed' && historyMatch.status !== 'rejected')) {
+          if (
+            activeMultiInstanceSubProcesses.has(spId) &&
+            shouldSuppressSiblingAggregationComplete(childElements[i] as Element, taskId || '')
+          ) {
+            allChildrenDone = false
+          } else if (!historyMatch || (historyMatch.status !== 'completed' && historyMatch.status !== 'rejected')) {
             allChildrenDone = false
           }
         }
@@ -2332,18 +2580,6 @@ const parseBpmnXml = (xml: string) => {
       }
       nodes.push({ id: spId, name, type: 'subprocess', status: spStatus, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
       if (spStatus === 'completed') completed.push(spId)
-    }
-    
-    // Pre-parse sequence flows (localName — works with bpmn:sequenceFlow prefixes)
-    const earlyFlows: Array<{ sourceRef: string; targetRef: string }> = []
-    for (let i = 0; i < allElements.length; i++) {
-      const el = allElements[i]
-      const ln = el.localName || el.nodeName.split(':').pop()
-      if (ln !== 'sequenceFlow') continue
-      earlyFlows.push({
-        sourceRef: el.getAttribute('sourceRef') || '',
-        targetRef: el.getAttribute('targetRef') || ''
-      })
     }
 
     // Automated activities: fold history into `completed` so join gateways work when gateway coloring is topology-only (todo view).
@@ -2421,6 +2657,8 @@ const parseBpmnXml = (xml: string) => {
       // SubProcess-internal endEvents stay pending when the subProcess hasn't been entered
       if (parentSpId && !enteredSubProcesses.has(parentSpId)) {
         // keep 'pending'
+      } else if (parentSpId && activeMultiInstanceSubProcesses.has(parentSpId)) {
+        // MI still executing (another iteration may pollute aggregate history/end activity ids)
       } else if (parentSpId && completedMultiInstanceSubProcesses.has(parentSpId)) {
         status = 'completed'
         completed.push(id)

@@ -30,6 +30,12 @@ const routes: RouteRecordRaw[] = [
     meta: { titleKey: 'login.title', requiresAuth: false }
   },
   {
+    path: '/login',
+    name: 'UnifiedLogin',
+    component: () => import('@/views/login/UnifiedLogin.vue'),
+    meta: { titleKey: 'login.title', requiresAuth: false }
+  },
+  {
     path: '/',
     component: () => import('@/layouts/PortalLayout.vue'),
     redirect: '/dashboard',
@@ -166,9 +172,13 @@ router.beforeEach(async (to, _from, next) => {
   
   if (to.path === '/login') {
     const r = to.query.redirect
-    setSsoReturnPath(typeof r === 'string' ? r : '/dashboard')
-    redirectToUnifiedLogin('portal')
-    return next(false)
+    if (import.meta.env.PROD) {
+      setSsoReturnPath(typeof r === 'string' ? r : '/dashboard')
+      redirectToUnifiedLogin('portal')
+      return next(false)
+    }
+    if (typeof r === 'string') setSsoReturnPath(r)
+    return next()
   }
 
   const token = localStorage.getItem('token')

@@ -43,9 +43,26 @@ export function redirectToUnifiedLogin(_clientId: 'portal') {
     (import.meta.env.BASE_URL || '/') + 'sso/callback',
     window.location.origin
   ).href
-  const u = new URL('/login/', window.location.origin)
+  const state = newSsoState()
+  const externalLoginOrigin = (import.meta.env.VITE_SSO_LOGIN_ORIGIN as string | undefined)
+    ?.trim()
+    .replace(/\/$/, '')
+
+  // Production (or explicit override): separate static login app at origin /login/
+  if (import.meta.env.PROD || externalLoginOrigin) {
+    const origin = externalLoginOrigin || window.location.origin
+    const u = new URL('/login/', origin)
+    u.searchParams.set('client_id', 'portal')
+    u.searchParams.set('redirect_uri', redirectUri)
+    u.searchParams.set('state', state)
+    window.location.href = u.toString()
+    return
+  }
+
+  // Dev: same-origin /portal/login?… so Vite serves the portal bundle and UnifiedLogin.vue (no second dev server).
+  const u = new URL((import.meta.env.BASE_URL || '/') + 'login', window.location.origin)
   u.searchParams.set('client_id', 'portal')
   u.searchParams.set('redirect_uri', redirectUri)
-  u.searchParams.set('state', newSsoState())
+  u.searchParams.set('state', state)
   window.location.href = u.toString()
 }

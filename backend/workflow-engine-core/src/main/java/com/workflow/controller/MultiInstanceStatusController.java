@@ -6,6 +6,7 @@ import com.workflow.dto.response.ApiResponse;
 import com.workflow.dto.response.MultiInstanceStatusResponse;
 import com.workflow.dto.response.SubTableDataResponse;
 import com.workflow.entity.ExtendedTaskInfo;
+import com.workflow.component.BpmnActionParser;
 import com.workflow.repository.ExtendedTaskInfoRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -16,6 +17,7 @@ import org.flowable.engine.RuntimeService;
 import org.flowable.engine.TaskService;
 import org.flowable.engine.runtime.Execution;
 import org.flowable.task.api.Task;
+import org.flowable.task.api.TaskQuery;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -48,6 +50,7 @@ public class MultiInstanceStatusController {
     private final ExtendedTaskInfoRepository extendedTaskInfoRepository;
     private final ObjectMapper objectMapper;
     private final JdbcTemplate jdbcTemplate;
+    private final BpmnActionParser bpmnActionParser;
 
     /**
      * 查询多实例子流程执行状态
@@ -96,9 +99,9 @@ public class MultiInstanceStatusController {
             List<ExtendedTaskInfo> allTaskInfos = extendedTaskInfoRepository
                     .findByProcessInstanceIdAndIsDeletedFalse(processInstanceId);
 
-            // 5. 过滤出多实例子任务（通过 extendedProperties 中的 multiInstance 标记）
+            // 5. 多实例进度：multiInstance 标记，或扩展里已有 subTableRowId（预分配处理人路径曾漏写 multiInstance）
             List<ExtendedTaskInfo> multiInstanceTasks = allTaskInfos.stream()
-                    .filter(this::isMultiInstanceTask)
+                    .filter(this::isIncludedInMultiInstanceStatus)
                     .collect(Collectors.toList());
 
             if (multiInstanceTasks.isEmpty() && multiInstanceExecution == null) {
@@ -113,10 +116,12 @@ public class MultiInstanceStatusController {
             List<MultiInstanceStatusResponse.SubTaskDetail> taskDetails = new ArrayList<>();
             for (ExtendedTaskInfo taskInfo : multiInstanceTasks) {
                 Map<String, Object> extProps = parseExtendedProperties(taskInfo.getExtendedProperties());
-                Long subTableRowId = extProps.containsKey("subTableRowId") 
-                        ? ((Number) extProps.get("subTableRowId")).longValue() 
-                        : null;
-                String subTableName = extProps.get("subTableName") != null ? String.valueOf(extProps.get("subTableName")) : null;
+                Long subTableRowId = parseSubTableRowId(extProps.get("subTableRowId"));
+                String subTableName = extProps.get("subTableName") != null ? String.valueOf(extProps.get("subTableName")).trim() : null;
+                if (subTableName == null || subTableName.isBlank()) {
+                    subTableName = bpmnActionParser.getMultiInstanceSubProcessSubTableName(
+                            taskInfo.getProcessDefinitionId(), taskInfo.getTaskDefinitionKey());
+                }
                 String miTaskStatusField = extProps.get("miTaskStatusField") != null ? String.valueOf(extProps.get("miTaskStatusField")) : null;
                 String miTaskCurrentNodeField = extProps.get("miTaskCurrentNodeField") != null ? String.valueOf(extProps.get("miTaskCurrentNodeField")) : null;
                 
@@ -138,6 +143,10 @@ public class MultiInstanceStatusController {
                 
                 taskDetails.add(detail);
             }
+
+            // 6b. 运行时仍在途的 MI 内 UserTask，若扩展表未建记录（认领前候选人、路径遗漏等），
+            // wf_extended-only 聚合会把该行误判为已全部完成 → 门户 Current Step 显示 end。
+            appendMissingRuntimeMultiInstanceTasks(processInstanceId, taskDetails);
             
             // 7. 统计已取消的实例数
             long cancelledCount = multiInstanceTasks.stream()
@@ -195,6 +204,140 @@ public class MultiInstanceStatusController {
         }
     }
     
+    private static Long parseSubTableRowId(Object raw) {
+        if (raw == null) {
+            return null;
+        }
+        if (raw instanceof Number n) {
+            return n.longValue();
+        }
+        try {
+            return Long.parseLong(String.valueOf(raw).trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /**
+     * 将 Flowable 运行时仍存在、但 {@link ExtendedTaskInfo} 未覆盖的 MI UserTask 并入 tasks，
+     * 供门户按子表行解析 Current Step / 状态（与队列里用户实际看到的节点一致）。
+     */
+    private void appendMissingRuntimeMultiInstanceTasks(String processInstanceId,
+            List<MultiInstanceStatusResponse.SubTaskDetail> taskDetails) {
+        if (taskService == null || processInstanceId == null || processInstanceId.isBlank()) {
+            return;
+        }
+        Set<String> knownIds = taskDetails.stream()
+                .map(MultiInstanceStatusResponse.SubTaskDetail::getTaskId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        TaskQuery tq = taskService.createTaskQuery().processInstanceId(processInstanceId);
+        List<Task> running = tq.list();
+        for (Task task : running) {
+            if (task == null || task.getId() == null || knownIds.contains(task.getId())) {
+                continue;
+            }
+            String pdId = task.getProcessDefinitionId();
+            String defKey = task.getTaskDefinitionKey();
+            if (pdId == null || defKey == null) {
+                continue;
+            }
+            String miScopeTable = bpmnActionParser.getMultiInstanceSubProcessSubTableName(pdId, defKey);
+            if (miScopeTable == null || miScopeTable.isBlank()) {
+                continue;
+            }
+            String execId = task.getExecutionId();
+            if (execId == null) {
+                continue;
+            }
+            Long rowId = parseSubTableRowIdFromExecution(execId);
+            if (rowId == null) {
+                continue;
+            }
+            String subTableName = firstNonBlankTrimmed(
+                    bpmnActionParser.getUserTaskExtensionPropertyValue(pdId, defKey, "subTableName"),
+                    miScopeTable);
+            String miTaskStatusField = bpmnActionParser.getMultiInstanceSubProcessExtensionPropertyValue(
+                    pdId, defKey, "miTaskStatusField");
+            String miTaskCurrentNodeField = bpmnActionParser.getMultiInstanceSubProcessExtensionPropertyValue(
+                    pdId, defKey, "miTaskCurrentNodeField");
+
+            Date createTime = task.getCreateTime();
+            LocalDateTime createdLdt = createTime == null
+                    ? null
+                    : LocalDateTime.ofInstant(createTime.toInstant(), ZoneId.systemDefault());
+
+            MultiInstanceStatusResponse.SubTaskDetail detail = MultiInstanceStatusResponse.SubTaskDetail.builder()
+                    .taskId(task.getId())
+                    .taskName(task.getName())
+                    .assignee(task.getAssignee())
+                    .assigneeName(getUserName(task.getAssignee()))
+                    .status(runtimeRuTaskStatus(task))
+                    .subTableRowId(rowId)
+                    .subTableName(subTableName)
+                    .miTaskStatusField(miTaskStatusField)
+                    .miTaskCurrentNodeField(miTaskCurrentNodeField)
+                    .createdTime(createdLdt)
+                    .completedTime(null)
+                    .completedBy(null)
+                    .completedByName(null)
+                    .build();
+            taskDetails.add(detail);
+            knownIds.add(task.getId());
+        }
+    }
+
+    private Long parseSubTableRowIdFromExecution(String executionId) {
+        Object currentItemObj = runtimeService.getVariable(executionId, "currentItem");
+        if (currentItemObj == null) {
+            currentItemObj = runtimeService.getVariable(executionId, "_currentItem");
+        }
+        if (!(currentItemObj instanceof Map<?, ?> m)) {
+            return null;
+        }
+        Object rowId = m.get("rowId");
+        if (rowId == null) {
+            rowId = m.get("id");
+        }
+        return parseSubTableRowId(rowId);
+    }
+
+    private static String runtimeRuTaskStatus(Task task) {
+        if (task.getAssignee() != null && !task.getAssignee().isBlank()) {
+            return "ASSIGNED";
+        }
+        return "CREATED";
+    }
+
+    private static String firstNonBlankTrimmed(String a, String b) {
+        if (a != null && !a.isBlank()) {
+            return a.trim();
+        }
+        if (b != null && !b.isBlank()) {
+            return b.trim();
+        }
+        return null;
+    }
+
+    /**
+     * 是否纳入多实例状态聚合（MI 标记或参与者子表行 id）
+     */
+    private boolean isIncludedInMultiInstanceStatus(ExtendedTaskInfo taskInfo) {
+        return isMultiInstanceTask(taskInfo) || hasParticipantSubTableRow(taskInfo);
+    }
+
+    private boolean hasParticipantSubTableRow(ExtendedTaskInfo taskInfo) {
+        if (taskInfo.getExtendedProperties() == null || taskInfo.getExtendedProperties().isBlank()) {
+            return false;
+        }
+        try {
+            Map<String, Object> p = parseExtendedProperties(taskInfo.getExtendedProperties());
+            return p.get("subTableRowId") != null;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     /**
      * 判断任务是否为多实例子任务
      */

@@ -411,6 +411,7 @@ interface SubTableBinding {
   tableId?: number | null
   bindingType: string
   bindingMode: string
+  foreignKeyField?: string | null
   tableName: string
   physicalTableName?: string
   tableType: string
@@ -550,15 +551,30 @@ const activeLinkRowIndex = ref<number | null>(null)
 const linkedSubTableRows = ref<any[]>([])
 const linkedFormData = ref<Record<string, any>>({})
 
+/**
+ * Multiple bindings can share the same bindingId (prev vs current). `.find` always picked the first;
+ * for read-only / snapshot UI (`suppressLinkFormInitialData` false), prefer the first match that
+ * already has row data so Details is not blank. MI todo (`suppress` true) keeps the first match
+ * so isolated empty binding wins → blank Details for a new sub-task.
+ */
+function resolveLinkBindingForColumn(col: Column | null | undefined): SubTableBinding | undefined {
+  if (!col) return undefined
+  const list = props.linkedSubTableBindings ?? []
+  const matches = list.filter(
+    item =>
+      (col.props?.boundSubTableBindingId != null &&
+        Number(item.bindingId) === Number(col.props.boundSubTableBindingId)) ||
+      (!!col.props?.boundSubTableName && item.tableName === col.props.boundSubTableName)
+  )
+  if (matches.length === 0) return undefined
+  if (props.suppressLinkFormInitialData) return matches[0]
+  const withData = matches.find(m => Array.isArray(m.data) && m.data.length > 0)
+  return withData ?? matches[0]
+}
+
 const selectedLinkBinding = computed(() => {
   const col = activeLinkColumn.value
-  if (!col) return null
-  const boundId = col.props?.boundSubTableBindingId
-  const boundName = col.props?.boundSubTableName
-  return props.linkedSubTableBindings?.find(binding =>
-    (boundId != null && Number(binding.bindingId) === Number(boundId)) ||
-    (!!boundName && binding.tableName === boundName)
-  ) || null
+  return resolveLinkBindingForColumn(col) ?? null
 })
 
 const linkedFormFields = computed(() => selectedLinkBinding.value?.formFields || [])
@@ -599,6 +615,40 @@ function resolveLinkedFallbackRows(binding?: SubTableBinding): any[] {
   return Array.isArray(sameTableBinding?.data) ? sameTableBinding.data : []
 }
 
+/** When Details uses process-level fallback rows (no row.__subTables__), narrow to this parent participant if child rows carry FKs. */
+function filterLinkedChildRowsForParentRow(
+  parentRow: Record<string, any>,
+  rows: any[],
+  binding?: SubTableBinding
+): any[] {
+  if (!Array.isArray(rows) || rows.length === 0) return rows
+  const parentId = Number(parentRow?.id ?? parentRow?.rowId)
+  if (Number.isNaN(parentId)) return rows
+
+  const fkList: string[] = []
+  if (binding?.foreignKeyField && String(binding.foreignKeyField).trim()) {
+    fkList.push(String(binding.foreignKeyField))
+  }
+  for (const k of ['participant_id', 'participantId', 'parent_id', 'parentId', 'meeting_participant_id']) {
+    if (!fkList.includes(k)) fkList.push(k)
+  }
+
+  const hasAnyFk = rows.some(r => {
+    if (!r || typeof r !== 'object') return false
+    return fkList.some(k => (r as Record<string, unknown>)[k] != null && String((r as Record<string, unknown>)[k]).trim() !== '')
+  })
+  if (!hasAnyFk) return rows
+
+  const filtered = rows.filter(r => {
+    if (!r || typeof r !== 'object') return false
+    return fkList.some(k => {
+      const v = (r as Record<string, unknown>)[k]
+      return v != null && v !== '' && Number(v) === parentId
+    })
+  })
+  return filtered.length > 0 ? filtered : rows
+}
+
 // Assignee column: show when assign buttons are active, OR when data already has assignee values (read-only completed tasks)
 const showAssigneeColumn = computed(() => {
   if (props.showAssignButton && props.assigneeField) return true
@@ -637,17 +687,19 @@ watch(() => props.modelValue, (v) => { rows.value = v ? [...v] : [] }, { immedia
 function handleLinkFormClick(col: Column, row: Record<string, any>, rowIndex: number) {
   activeLinkColumn.value = col
   activeLinkRowIndex.value = rowIndex
-  const binding = props.linkedSubTableBindings?.find(item =>
-    (col.props?.boundSubTableBindingId != null && Number(item.bindingId) === Number(col.props.boundSubTableBindingId)) ||
-    (!!col.props?.boundSubTableName && item.tableName === col.props.boundSubTableName)
-  )
+  const binding = resolveLinkBindingForColumn(col)
   const boundId = col.props?.boundSubTableBindingId
   const boundName = col.props?.boundSubTableName || binding?.tableName
   const rowSub = row?.__subTables__ && typeof row.__subTables__ === 'object' ? (row.__subTables__ as Record<string, any>) : {}
   const saved = (boundId != null ? (rowSub[boundId] ?? rowSub[String(boundId)]) : undefined) ?? (boundName ? (rowSub[boundName] ?? rowSub[String(boundName)]) : undefined)
   const savedRows = Array.isArray(saved) ? saved : []
   const fallbackRows = resolveLinkedFallbackRows(binding)
-  const effectiveSavedRows = props.suppressLinkFormInitialData ? (savedRows.length > 0 ? savedRows : fallbackRows) : savedRows
+  let effectiveSavedRows = props.suppressLinkFormInitialData
+    ? savedRows
+    : (savedRows.length > 0 ? savedRows : fallbackRows)
+  if (!props.suppressLinkFormInitialData && savedRows.length === 0 && effectiveSavedRows.length > 0 && row) {
+    effectiveSavedRows = filterLinkedChildRowsForParentRow(row, effectiveSavedRows, binding)
+  }
   linkedSubTableRows.value = [...effectiveSavedRows]
   linkedFormData.value = buildLinkedFormData({ ...(binding || ({} as any)), data: effectiveSavedRows })
   linkFormDialogVisible.value = true

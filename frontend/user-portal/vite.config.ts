@@ -29,6 +29,13 @@ export default defineConfig({
   server: {
     port: 3001,
     proxy: {
+      // Unified SSO UI (`frontend/login`, base `/login/`, default dev port 3010).
+      // Without this, opening portal on :3001 redirects to /login/ on the same origin and Vite
+      // serves the portal SPA → router bounce /login → redirect loop or blank login.
+      '/login': {
+        target: 'http://localhost:3010',
+        changeOrigin: true
+      },
       '/api/v1/auth': {
         target: 'http://localhost:8082',
         changeOrigin: true,

@@ -86,7 +86,8 @@
             <div class="section-header">
               <el-icon><Document /></el-icon>
               <span>{{ prevForm.formName }}</span>
-              <el-tag type="info" size="small">{{ t('applicationDetail.completed') }}</el-tag>
+              <el-tag v-if="prevForm.isActiveMiSubTaskStep" type="warning" size="small">{{ t('applicationDetail.currentStep') }}</el-tag>
+              <el-tag v-else type="info" size="small">{{ t('applicationDetail.completed') }}</el-tag>
             </div>
             <div class="section-content">
               <div v-if="prevForm.fields.length > 0 || prevForm.tabs.length > 0" class="form-container">
@@ -97,7 +98,7 @@
                   :label-width="prevForm.labelWidth"
                   :readonly="true"
                   :subTableBindings="prevForm.subTableBindings"
-                  :linked-sub-table-bindings="linkableSubTableBindings"
+                  :linked-sub-table-bindings="linkableSubTableBindingsForPrevious(prevForm)"
                   @update:subTableData="(id: number, rows: any[]) => { const b = prevForm.subTableBindings.find(x => x.bindingId === id); if (b) b.data = rows }"
                 />
               </div>
@@ -115,7 +116,7 @@
                     :assignee-field="hasAssignmentData(binding.data) ? 'assignee_user_id' : undefined"
                     :show-task-status="false"
                     :show-view-detail="hasSubTaskFormSchema && hasTaskStatusData(binding.data)"
-                    :linked-sub-table-bindings="linkableSubTableBindings"
+                    :linked-sub-table-bindings="linkableSubTableBindingsForPrevious(prevForm)"
                     @viewDetail="(row: any) => openSubTaskDetailDialog(row)"
                   />
                 </div>
@@ -138,7 +139,7 @@
                 :label-width="prevForm.labelWidth"
                 :readonly="true"
                 :subTableBindings="prevForm.subTableBindings"
-                :linked-sub-table-bindings="linkableSubTableBindings"
+                :linked-sub-table-bindings="linkableSubTableBindingsForPrevious(prevForm)"
                 @update:subTableData="(id: number, rows: any[]) => { const b = prevForm.subTableBindings.find(x => x.bindingId === id); if (b) b.data = rows }"
               />
             </div>
@@ -152,7 +153,7 @@
                   :assignee-field="hasAssignmentData(binding.data) ? 'assignee_user_id' : undefined"
                   :show-task-status="false"
                   :show-view-detail="hasSubTaskFormSchema && hasTaskStatusData(binding.data)"
-                  :linked-sub-table-bindings="linkableSubTableBindings"
+                  :linked-sub-table-bindings="linkableSubTableBindingsForPrevious(prevForm)"
                   @viewDetail="(row: any) => openSubTaskDetailDialog(row)"
                 />
               </div>
@@ -214,7 +215,8 @@
             <div class="section-header">
               <el-icon><Document /></el-icon>
               <span>{{ prevForm.formName }}</span>
-              <el-tag type="info" size="small">{{ t('applicationDetail.completed') }}</el-tag>
+              <el-tag v-if="prevForm.isActiveMiSubTaskStep" type="warning" size="small">{{ t('applicationDetail.currentStep') }}</el-tag>
+              <el-tag v-else type="info" size="small">{{ t('applicationDetail.completed') }}</el-tag>
             </div>
             <div class="section-content">
               <div v-if="prevForm.fields.length > 0 || prevForm.tabs.length > 0" class="form-container">
@@ -225,7 +227,7 @@
                   :label-width="prevForm.labelWidth"
                   :readonly="true"
                   :subTableBindings="prevForm.subTableBindings"
-                  :linked-sub-table-bindings="linkableSubTableBindings"
+                  :linked-sub-table-bindings="linkableSubTableBindingsForPrevious(prevForm)"
                   @update:subTableData="(id: number, rows: any[]) => { const b = prevForm.subTableBindings.find(x => x.bindingId === id); if (b) b.data = rows }"
                 />
               </div>
@@ -243,7 +245,7 @@
                     :assignee-field="hasAssignmentData(binding.data) ? 'assignee_user_id' : undefined"
                     :show-task-status="false"
                     :show-view-detail="hasSubTaskFormSchema && hasTaskStatusData(binding.data)"
-                    :linked-sub-table-bindings="linkableSubTableBindings"
+                    :linked-sub-table-bindings="linkableSubTableBindingsForPrevious(prevForm)"
                     @viewDetail="(row: any) => openSubTaskDetailDialog(row)"
                   />
                 </div>
@@ -266,7 +268,7 @@
                 :label-width="prevForm.labelWidth"
                 :readonly="true"
                 :subTableBindings="prevForm.subTableBindings"
-                :linked-sub-table-bindings="linkableSubTableBindings"
+                :linked-sub-table-bindings="linkableSubTableBindingsForPrevious(prevForm)"
                 @update:subTableData="(id: number, rows: any[]) => { const b = prevForm.subTableBindings.find(x => x.bindingId === id); if (b) b.data = rows }"
               />
             </div>
@@ -280,7 +282,7 @@
                   :assignee-field="hasAssignmentData(binding.data) ? 'assignee_user_id' : undefined"
                   :show-task-status="false"
                   :show-view-detail="hasSubTaskFormSchema && hasTaskStatusData(binding.data)"
-                  :linked-sub-table-bindings="linkableSubTableBindings"
+                  :linked-sub-table-bindings="linkableSubTableBindingsForPrevious(prevForm)"
                   @viewDetail="(row: any) => openSubTaskDetailDialog(row)"
                 />
               </div>
@@ -417,6 +419,7 @@ const formLabelWidth = ref('160px')
 // Sub-table bindings
 const subTableBindings = ref<Array<{
   bindingId: number
+  tableId?: number | null
   bindingType: string
   bindingMode: string
   foreignKeyField: string | null
@@ -479,8 +482,11 @@ interface PreviousFormEntry {
   fields: FormField[]
   tabs: FormTab[]
   isMiSubTask: boolean
+  /** Initiator My Request: MI sub-task userTask is the runtime current step (not in "previous" slice). */
+  isActiveMiSubTaskStep?: boolean
   subTableBindings: Array<{
     bindingId: number
+    tableId?: number | null
     bindingType: string
     bindingMode: string
     foreignKeyField: string | null
@@ -503,12 +509,101 @@ function unplacedSubTableBindings(prevForm: PreviousFormEntry): PreviousFormEntr
   return prevForm.subTableBindings.filter(b => !placedIds.has(b.bindingId))
 }
 
+/** Align with tasks/detail.vue: variables may key __subTables__ by table name or binding id. */
+function normalizeSubTableName(name?: string): string {
+  return String(name || '').trim().toLowerCase()
+}
+
+function getSavedSubTableRowsFromVariables(
+  savedSubTables: Record<string, any> | null | undefined,
+  rawBinding: { bindingId: number; tableName?: string; tableDisplayName?: string }
+): any[] | undefined {
+  if (!savedSubTables || typeof savedSubTables !== 'object') return undefined
+  const keys = [
+    rawBinding.bindingId,
+    String(rawBinding.bindingId),
+    rawBinding.tableDisplayName,
+    rawBinding.tableName,
+    rawBinding.tableName ? normalizeSubTableName(rawBinding.tableName) : '',
+    rawBinding.tableDisplayName ? normalizeSubTableName(rawBinding.tableDisplayName) : ''
+  ]
+  for (const key of keys) {
+    if (key === '' || key == null) continue
+    const v = savedSubTables[key as string]
+    if (Array.isArray(v)) return v
+  }
+  return undefined
+}
+
+/** Merge rows by id/rowId so a sparse MI binding can be united with the full list under another bindingId (copied form). */
+function mergeSubTableRowsByRowId(existing: any[] | undefined, incoming: any[]): any[] {
+  const byId = new Map<string, any>()
+  const add = (r: any) => {
+    if (!r || typeof r !== 'object') return
+    const rawId = (r as Record<string, unknown>).id ?? (r as Record<string, unknown>).rowId
+    if (rawId == null || String(rawId).trim() === '') return
+    const k = String(rawId)
+    const cur = byId.get(k)
+    byId.set(k, cur ? { ...cur, ...r } : { ...r })
+  }
+  for (const r of existing || []) add(r)
+  for (const r of incoming || []) add(r)
+  return Array.from(byId.values())
+}
+
+type SubTableBindingAlignable = { tableId?: number | null; tableName: string; data: any[] }
+
+/**
+ * Copied forms (e.g. subform_copy) get a new bindingId while runtime data still lives under the original key;
+ * MI may only persist one row under the new id — merge all bindings that share tableId (or display name) for My Request.
+ */
+function alignProcessSubTableBindingsBySharedTable() {
+  const all: SubTableBindingAlignable[] = [
+    ...(subTableBindings.value as SubTableBindingAlignable[]),
+    ...previousForms.value.flatMap(f => f.subTableBindings as SubTableBindingAlignable[])
+  ]
+  const groups = new Map<string, SubTableBindingAlignable[]>()
+  for (const b of all) {
+    const key =
+      b.tableId != null && !Number.isNaN(Number(b.tableId))
+        ? `tid:${Number(b.tableId)}`
+        : `tn:${normalizeSubTableName(b.tableName)}`
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key)!.push(b)
+  }
+  for (const group of groups.values()) {
+    if (group.length < 2) continue
+    let merged: any[] = []
+    for (const b of group) {
+      merged = mergeSubTableRowsByRowId(merged, Array.isArray(b.data) ? b.data : [])
+    }
+    if (merged.length === 0) continue
+    const snapshot = merged.map(r => ({ ...r }))
+    for (const b of group) {
+      b.data = snapshot
+    }
+  }
+}
+
 // Link-form columns need access to other bindings as fallback data sources.
 // Keep the contract aligned with `tasks/detail.vue` (linkableSubTableBindings).
 const linkableSubTableBindings = computed<any[]>(() => [
   ...(subTableBindings.value as any[]),
   ...previousForms.value.flatMap(form => (form.subTableBindings as any[]))
 ])
+
+/** Same as tasks/detail.vue: link-form `.find()` must resolve prev-form bindings before current (empty MI slice). */
+function linkableSubTableBindingsForPrevious(prevForm: PreviousFormEntry) {
+  const pid = prevForm.formId
+  const otherPrev = previousForms.value
+    .filter(p => p.formId !== pid)
+    .flatMap(p => p.subTableBindings as any[])
+  return [
+    ...(prevForm.subTableBindings as any[]),
+    ...(subTableBindings.value as any[]),
+    ...otherPrev
+  ]
+}
 
 // Sub-task form detail dialog
 const subTaskDetailVisible = ref(false)
@@ -895,6 +990,7 @@ const loadFunctionUnitContent = async (processKey: string) => {
         if (!placed && isFormOnly) continue
         bindings.push({
           bindingId: b.bindingId,
+          tableId: b.tableId != null ? Number(b.tableId) : null,
           bindingType: b.bindingType,
           bindingMode: b.bindingMode,
           foreignKeyField: b.foreignKeyField,
@@ -907,15 +1003,18 @@ const loadFunctionUnitContent = async (processKey: string) => {
       }
 
       // Restore sub-table data from variables
-      // Note: JSON serialization converts keys to string; search by both number and string
       const savedSubTables = formData.value.__subTables__
       if (savedSubTables && typeof savedSubTables === 'object') {
-        bindings.forEach(binding => {
-          const saved = savedSubTables[binding.bindingId] ?? savedSubTables[String(binding.bindingId)]
-          if (Array.isArray(saved)) {
-            binding.data = saved
-          }
-        })
+        for (const binding of bindings) {
+          const raw = tableBindings.find((x: any) => Number(x.bindingId) === Number(binding.bindingId))
+          if (!raw) continue
+          const saved = getSavedSubTableRowsFromVariables(savedSubTables, {
+            bindingId: raw.bindingId,
+            tableName: raw.tableName,
+            tableDisplayName: raw.tableDisplayName
+          })
+          if (saved) binding.data = saved
+        }
       }
       subTableBindings.value = bindings
 
@@ -970,9 +1069,24 @@ const loadFunctionUnitContent = async (processKey: string) => {
       // Non-initiator: list previous forms from BPMN vs current node only.
       if (content.processes?.length > 0) {
         const xml = content.processes[0].data
+        let initiatorSliceIndex: number | null = null
+        const normHistNameInit = (s: string | null | undefined) =>
+          (s || '').trim().replace(/\s+/g, ' ')
         const prevFormIds = useInitiatorFormOnly
           ? (() => {
               const allOrdered = parseBpmnXmlAndGetAllFormIds(xml)
+              const curRaw = snapshotTaskName || processInfo.value.currentNode || ''
+              const curN = normHistNameInit(curRaw)
+              // Prefer deep BFS index so subprocess userTasks (e.g. subform_copy) are not lost:
+              // shallow parseBpmnXmlAndGetPreviousFormIds never enters MI subprocess, so completedKeys
+              // used to filter them all out.
+              if (curRaw && String(curRaw).trim()) {
+                const idx = findInitiatorCurrentStepIndexInAllOrdered(xml, curRaw, allOrdered)
+                if (idx != null && idx >= 0) {
+                  initiatorSliceIndex = idx
+                  return allOrdered.slice(0, idx)
+                }
+              }
               const completedKeys = new Set(
                 parseBpmnXmlAndGetPreviousFormIds(xml)
                   .map(i => i.formId || i.formName || i.taskName || '')
@@ -981,41 +1095,37 @@ const loadFunctionUnitContent = async (processKey: string) => {
               let ordered = allOrdered.filter(i =>
                 completedKeys.has(i.formId || i.formName || i.taskName || '')
               )
-              // MI / nested userTask forms (e.g. kk's subform_copy): if currentNode resolution is wrong,
-              // completedKeys can still include future steps. Require a completed history row whose node
-              // name matches the BPMN userTask name before showing that form in My Request.
-              const normHistName = (s: string | null | undefined) =>
-                (s || '').trim().replace(/\s+/g, ' ')
-              const completedHistoryNames = new Set(
+              // Shallow-BPMN fallback only: guard MI forms with flow history so a wrong currentNode
+              // cannot surface future steps early.
+              const reachedHistoryNames = new Set(
                 historyRecords.value
-                  .filter(h => h.status === 'completed')
-                  .map(h => normHistName(h.nodeName))
+                  .filter(h => h.status === 'completed' || h.status === 'current')
+                  .map(h => normHistNameInit(h.nodeName))
                   .filter(n => n.length > 0)
               )
-              if (completedHistoryNames.size > 0) {
+              if (reachedHistoryNames.size > 0) {
                 ordered = ordered.filter((info) => {
-                  const prevForm = content.forms.find((f: any) =>
+                  const prevFormGuess = content.forms.find((f: any) =>
                     (info.formId && String(f.sourceId) === info.formId) ||
                     (info.formName && f.name === info.formName) ||
                     (info.taskName && f.name === info.taskName)
                   )
                   const isMiTaskForm =
-                    !!prevForm &&
+                    !!prevFormGuess &&
                     !!(
-                      (subTaskFormId.value && String(prevForm.id) === subTaskFormId.value) ||
-                      (subTaskFormSchema.value && prevForm.name === subTaskFormSchema.value._formName)
+                      (subTaskFormId.value && String(prevFormGuess.id) === subTaskFormId.value) ||
+                      (subTaskFormSchema.value && prevFormGuess.name === subTaskFormSchema.value._formName)
                     )
                   if (!isMiTaskForm) return true
-                  const t = normHistName(info.taskName)
+                  const t = normHistNameInit(info.taskName)
                   if (!t.length) return true
-                  return completedHistoryNames.has(t)
+                  return reachedHistoryNames.has(t)
                 })
               }
               return ordered
             })()
           : parseBpmnXmlAndGetPreviousFormIds(xml)
         const collectedPrevForms: PreviousFormEntry[] = []
-        const savedSubTables = formData.value.__subTables__
 
         for (const info of prevFormIds) {
           let prevForm: any = null
@@ -1049,74 +1159,56 @@ const loadFunctionUnitContent = async (processKey: string) => {
           }
           if (skipReason) continue
 
-          const parsedFields: FormField[] = []
-          const parsedTabs: FormTab[] = []
-          try {
-            const cfg = typeof prevForm.data === 'string' ? JSON.parse(prevForm.data) : (prevForm.data || {})
-            const rules = cfg.rule && Array.isArray(cfg.rule) ? cfg.rule : (Array.isArray(cfg) ? cfg : null)
-            if (rules) {
-              const tabsRule = rules.find((r: any) => r.type === 'el-tabs')
-              if (tabsRule?.children) {
-                for (const tabPane of tabsRule.children) {
-                  if (tabPane.type === 'el-tab-pane' && tabPane.props) {
-                    const tabFields: FormField[] = []
-                    if (tabPane.children) tabFields.push(...extractFieldsRecursive(tabPane.children))
-                    parsedTabs.push({ name: tabPane.props.name || `tab_${parsedTabs.length}`, label: tabPane.props.label || `Tab ${parsedTabs.length + 1}`, fields: tabFields })
-                  }
+          collectedPrevForms.push(
+            buildPreviousFormEntry(prevForm, { isKnownMiSubTask: !!isKnownMiSubTaskForm })
+          )
+        }
+
+        if (
+          useInitiatorFormOnly &&
+          initiatorSliceIndex != null &&
+          processInfo.value.status === 'RUNNING' &&
+          (subTaskFormId.value || subTaskFormSchema.value)
+        ) {
+          const orderedFull = parseBpmnXmlAndGetAllFormIds(xml)
+          const atCur = orderedFull[initiatorSliceIndex]
+          if (atCur) {
+            let curForm = content.forms.find(
+              (f: any) =>
+                (atCur.formId && String(f.sourceId) === atCur.formId) ||
+                (atCur.formName && f.name === atCur.formName) ||
+                (atCur.taskName && f.name === atCur.taskName)
+            )
+            if (!curForm && atCur.formId && content.processes?.[0]?.data) {
+              const miSid = findMiSubTaskFormIdFromBpmn(content.processes[0].data)
+              if (miSid && String(atCur.formId) === String(miSid)) {
+                if (subTaskFormId.value) {
+                  curForm = content.forms.find((f: any) => String(f.id) === subTaskFormId.value)
                 }
-              } else {
-                parsedFields.push(...extractFieldsRecursive(rules))
+                if (!curForm && subTaskFormSchema.value?._formName) {
+                  curForm = content.forms.find((f: any) => f.name === subTaskFormSchema.value._formName)
+                }
               }
             }
-          } catch {}
-
-          let prevFormConfig: Record<string, any> = {}
-          try {
-            const cfg = typeof prevForm.data === 'string' ? JSON.parse(prevForm.data) : (prevForm.data || {})
-            prevFormConfig = cfg || {}
-          } catch {}
-          const prevBindings: PreviousFormEntry['subTableBindings'] = []
-          const prevRuleBindingIds = collectRuleBindingIds(
-            Array.isArray(prevFormConfig?.rule) ? prevFormConfig!.rule : []
-          )
-          for (const b of (prevForm.tableBindings || [])) {
-            if (b.bindingType === 'PRIMARY') continue
-            const cols = deriveColumnsFromBinding(b, prevFormConfig)
-            if (!Array.isArray(cols) || cols.length === 0) continue
-            const placed = prevRuleBindingIds.has(Number(b.bindingId))
-            const isFormOnly = String(b.subMode || '').toUpperCase() === 'FORM_ONLY'
-            // Designer-marked FORM_ONLY bindings render only via the form rule or a sibling LinkForm column;
-            // if not placed, drop them so they don't appear as a redundant fallback (e.g. kk's `subtable2`).
-            if (!placed && isFormOnly) continue
-            const binding = {
-              bindingId: b.bindingId, bindingType: b.bindingType, bindingMode: b.bindingMode,
-              foreignKeyField: b.foreignKeyField, tableName: b.tableDisplayName || b.tableName,
-              tableType: b.tableType, tableDescription: b.tableDescription, columns: cols, data: [] as any[]
+            const matchesMiForm =
+              !!curForm &&
+              !!(
+                (subTaskFormId.value && String(curForm.id) === subTaskFormId.value) ||
+                (subTaskFormSchema.value && curForm.name === subTaskFormSchema.value._formName)
+              )
+            if (matchesMiForm && !collectedPrevForms.some(e => e.formId === String(curForm.id))) {
+              collectedPrevForms.push(
+                buildPreviousFormEntry(curForm, { isKnownMiSubTask: true, isActiveMiSubTaskStep: true })
+              )
             }
-            if (savedSubTables) {
-              const saved = savedSubTables[b.bindingId] ?? savedSubTables[String(b.bindingId)]
-              if (Array.isArray(saved)) binding.data = saved
-            }
-            prevBindings.push(binding)
           }
-
-          collectedPrevForms.push({
-            formId: String(prevForm.id),
-            formName: prevForm.name,
-            labelWidth: formLabelWidth.value,
-            // MI subtask form should still render its layout (read-only) so initiator sees the full form,
-            // not only the extracted sub-table block.
-            fields: parsedFields,
-            tabs: parsedTabs,
-            isMiSubTask: !!isKnownMiSubTaskForm,
-            subTableBindings: prevBindings
-          })
         }
 
         previousForms.value = collectedPrevForms
       } else {
         previousForms.value = []
       }
+      alignProcessSubTableBindingsBySharedTable()
     }
   } catch (error) {
     console.error('Failed to load function unit content:', error)
@@ -1504,6 +1596,68 @@ const parseBpmnXmlAndGetAllFormIds = (xml: string): Array<{ formId: string | nul
   }
 }
 
+/**
+ * Map processInfo.currentNode to an index in parseBpmnXmlAndGetAllFormIds order.
+ * Flowable often exposes taskDefinitionKey (BPMN userTask id) while the UI shows the task "name";
+ * a plain string compare against taskName/formName then misses and subform_copy never appears.
+ */
+function findInitiatorCurrentStepIndexInAllOrdered(
+  xml: string,
+  curRaw: string,
+  allOrdered: Array<{ formId: string | null; formName: string | null; taskName: string | null }>
+): number | null {
+  const norm = (s: string | null | undefined) => (s || '').trim().replace(/\s+/g, ' ')
+  const curTrim = String(curRaw || '').trim()
+  const curN = norm(curRaw)
+  if (!curTrim && !curN) return null
+
+  let idx = allOrdered.findIndex(
+    info =>
+      norm(info.taskName) === curN ||
+      norm(info.formName) === curN ||
+      (info.formId != null && String(info.formId) === curTrim)
+  )
+  if (idx >= 0) return idx
+
+  try {
+    const parser = new DOMParser()
+    const doc = parser.parseFromString(xml, 'text/xml')
+    const allElements = doc.getElementsByTagName('*')
+    for (let i = 0; i < allElements.length; i++) {
+      const el = allElements[i]
+      const localName = el.localName || el.nodeName.split(':').pop()
+      if (localName !== 'userTask') continue
+      const taskDefKey = el.getAttribute('id') || ''
+      const tname = el.getAttribute('name') || ''
+      if (taskDefKey !== curTrim && norm(tname) !== curN) continue
+      let formId: string | null = null
+      let formName: string | null = null
+      const props = el.getElementsByTagName('*')
+      for (let j = 0; j < props.length; j++) {
+        const p = props[j]
+        const ln = p.localName || p.nodeName.split(':').pop()
+        if (ln === 'property' || ln === 'values') {
+          const n = p.getAttribute('name')
+          const v = p.getAttribute('value')
+          if (n === 'formId' && v) formId = v
+          if (n === 'formName' && v) formName = v
+        }
+      }
+      const hit = allOrdered.findIndex(
+        info =>
+          (formId != null && info.formId === formId) ||
+          (formName != null && norm(info.formName) === norm(formName)) ||
+          (norm(info.taskName) === norm(tname) && norm(tname).length > 0)
+      )
+      if (hit >= 0) return hit
+    }
+  } catch {
+    /* ignore */
+  }
+
+  return null
+}
+
 /** Find the formId (sourceId) of the MI subtask's userTask from BPMN XML. */
 const findMiSubTaskFormIdFromBpmn = (xml: string): string | null => {
   if (!xml) return null
@@ -1662,7 +1816,12 @@ const parseBpmnXml = (xml: string) => {
         if (childLocal !== 'userTask' && childLocal !== 'serviceTask') continue
         const taskName = childElements[i].getAttribute('name') || ''
         const taskId = childElements[i].getAttribute('id') || ''
-        if (taskName === currentNodeName || historyRecords.value.some(h => h.nodeName === taskName || h.nodeId === taskId)) {
+        const taskNameNorm = taskName.trim().replace(/\s+/g, ' ')
+        if (
+          taskName === currentNodeName ||
+          (!!normNodeName && taskNameNorm === normNodeName) ||
+          historyRecords.value.some(h => h.nodeName === taskName || h.nodeId === taskId)
+        ) {
           enteredSubProcesses.add(spId)
           break
         }
@@ -1685,7 +1844,8 @@ const parseBpmnXml = (xml: string) => {
         }
         if (!isMultiInstance) continue
         const spName = sp.getAttribute('name') || ''
-        if ((spName && spName === currentNodeName) || spId === currentNodeName) {
+        const sn = spName.trim().replace(/\s+/g, ' ')
+        if ((spName && (!!normNodeName && sn === normNodeName)) || spId === currentNodeName) {
           activeMultiInstanceSubProcesses.add(spId)
           continue
         }
@@ -1694,13 +1854,51 @@ const parseBpmnXml = (xml: string) => {
           if (childLocal !== 'userTask') continue
           const taskName = spChildren[i].getAttribute('name') || ''
           const taskId = spChildren[i].getAttribute('id') || ''
-          if (taskName === currentNodeName || taskId === currentNodeName ||
-              (taskName && nodeStatusMap.get(taskName) === 'current')) {
+          const tn = taskName.trim().replace(/\s+/g, ' ')
+          if (
+            tn === normNodeName ||
+            taskId === currentNodeName.trim() ||
+            taskName === currentNodeName ||
+            (taskName && nodeStatusMap.get(taskName) === 'current')
+          ) {
             activeMultiInstanceSubProcesses.add(spId)
             break
           }
         }
       }
+
+      doc.querySelectorAll('userTask').forEach(taskEl => {
+        const uid = (taskEl.getAttribute('id') || '').trim()
+        const unameNorm = (taskEl.getAttribute('name') || '').trim().replace(/\s+/g, ' ')
+        const curTrim = currentNodeName.trim()
+        const matchesOpen =
+          (!!normNodeName && unameNorm === normNodeName) ||
+          uid === curTrim ||
+          uid === currentNodeName
+        if (!matchesOpen) return
+        let walker: Node | null = taskEl.parentNode
+        while (walker && walker.nodeType === 1) {
+          const wrap = walker as Element
+          const lname = wrap.localName || wrap.nodeName.split(':').pop()
+          if (lname === 'subProcess') {
+            const sid = wrap.getAttribute('id') || ''
+            if (sid && enteredSubProcesses.has(sid)) {
+              const desc = wrap.getElementsByTagName('*')
+              let hasMi = false
+              for (let di = 0; di < desc.length; di++) {
+                const ln = desc[di].localName || desc[di].nodeName.split(':').pop()
+                if (ln === 'multiInstanceLoopCharacteristics') {
+                  hasMi = true
+                  break
+                }
+              }
+              if (hasMi) activeMultiInstanceSubProcesses.add(sid)
+            }
+          }
+          if (lname === 'process' || lname === 'definitions') break
+          walker = wrap.parentNode
+        }
+      })
     }
     // Completed multi-instance subprocesses: entered MI subprocesses where all child userTasks are done
     const completedMultiInstanceSubProcesses = new Set<string>()
@@ -1994,6 +2192,8 @@ const parseBpmnXml = (xml: string) => {
         status = 'pending'
       } else if (parentSpId && completedSnapshotSingleTaskSubProcesses.has(parentSpId)) {
         status = 'completed'
+      } else if (parentSpId && activeMultiInstanceSubProcesses.has(parentSpId)) {
+        status = 'pending'
       } else if (parentSpId && completedMultiInstanceSubProcesses.has(parentSpId)) {
         status = 'completed'
       } else if (completedNodeNames.has(name)) {
@@ -2216,7 +2416,9 @@ const convertFormCreateRule = (rule: any): FormField | null => {
 // Derive display columns for a sub-table binding from the designer config.
 // My Request must only show columns configured in developer-workstation.
 const deriveColumnsFromBinding = (binding: any, formConfig?: Record<string, any>): Array<{ field: string; label: string; type?: string; required?: boolean; options?: Array<{ label: string; value: any }>; props?: Record<string, any> }> => {
-  const listColumns = formConfig?.subListViews?.[binding.bindingId]?.columns
+  const listColumns =
+    formConfig?.subListViews?.[binding.bindingId]?.columns ||
+    formConfig?.subListViews?.[String(binding.bindingId)]?.columns
   if (Array.isArray(listColumns) && listColumns.length > 0) {
     return listColumns
       .filter((col: any) => col && col.fieldName)
@@ -2228,7 +2430,10 @@ const deriveColumnsFromBinding = (binding: any, formConfig?: Record<string, any>
       }))
   }
 
-  const subFormRule = formConfig?.subForms?.[binding.bindingId]?.rule
+  const subFormRule =
+    binding.subFormConfig?.rule ||
+    formConfig?.subForms?.[binding.bindingId]?.rule ||
+    formConfig?.subForms?.[String(binding.bindingId)]?.rule
   if (subFormRule && Array.isArray(subFormRule) && subFormRule.length > 0) {
     return subFormRule.map((r: any) => {
       const rProps = r.props || {}
@@ -2319,6 +2524,88 @@ const deriveColumnsFromBinding = (binding: any, formConfig?: Record<string, any>
     })
   }
   return []
+}
+
+/** Build a read-only PreviousFormEntry from designer form metadata (shared by history + live MI step). */
+function buildPreviousFormEntry(
+  prevForm: any,
+  options: { isKnownMiSubTask: boolean; isActiveMiSubTaskStep?: boolean }
+): PreviousFormEntry {
+  const savedSubTables = formData.value.__subTables__
+  const parsedFields: FormField[] = []
+  const parsedTabs: FormTab[] = []
+  try {
+    const cfg = typeof prevForm.data === 'string' ? JSON.parse(prevForm.data) : (prevForm.data || {})
+    const rules = cfg.rule && Array.isArray(cfg.rule) ? cfg.rule : (Array.isArray(cfg) ? cfg : null)
+    if (rules) {
+      const tabsRule = rules.find((r: any) => r.type === 'el-tabs')
+      if (tabsRule?.children) {
+        for (const tabPane of tabsRule.children) {
+          if (tabPane.type === 'el-tab-pane' && tabPane.props) {
+            const tabFields: FormField[] = []
+            if (tabPane.children) tabFields.push(...extractFieldsRecursive(tabPane.children))
+            parsedTabs.push({
+              name: tabPane.props.name || `tab_${parsedTabs.length}`,
+              label: tabPane.props.label || `Tab ${parsedTabs.length + 1}`,
+              fields: tabFields
+            })
+          }
+        }
+      } else {
+        parsedFields.push(...extractFieldsRecursive(rules))
+      }
+    }
+  } catch { /* ignore */ }
+
+  let prevFormConfig: Record<string, any> = {}
+  try {
+    const cfg = typeof prevForm.data === 'string' ? JSON.parse(prevForm.data) : (prevForm.data || {})
+    prevFormConfig = cfg || {}
+  } catch { /* ignore */ }
+  const prevBindings: PreviousFormEntry['subTableBindings'] = []
+  const prevRuleBindingIds = collectRuleBindingIds(
+    Array.isArray(prevFormConfig?.rule) ? prevFormConfig!.rule : []
+  )
+  for (const b of (prevForm.tableBindings || [])) {
+    if (b.bindingType === 'PRIMARY') continue
+    const cols = deriveColumnsFromBinding(b, prevFormConfig)
+    if (!Array.isArray(cols) || cols.length === 0) continue
+    const placed = prevRuleBindingIds.has(Number(b.bindingId))
+    const isFormOnly = String(b.subMode || '').toUpperCase() === 'FORM_ONLY'
+    if (!placed && isFormOnly) continue
+    const binding = {
+      bindingId: b.bindingId,
+      tableId: b.tableId != null ? Number(b.tableId) : null,
+      bindingType: b.bindingType,
+      bindingMode: b.bindingMode,
+      foreignKeyField: b.foreignKeyField,
+      tableName: b.tableDisplayName || b.tableName,
+      tableType: b.tableType,
+      tableDescription: b.tableDescription,
+      columns: cols,
+      data: [] as any[]
+    }
+    if (savedSubTables) {
+      const saved = getSavedSubTableRowsFromVariables(savedSubTables, {
+        bindingId: b.bindingId,
+        tableName: b.tableName,
+        tableDisplayName: b.tableDisplayName
+      })
+      if (Array.isArray(saved)) binding.data = saved
+    }
+    prevBindings.push(binding)
+  }
+
+  return {
+    formId: String(prevForm.id),
+    formName: prevForm.name,
+    labelWidth: formLabelWidth.value,
+    fields: parsedFields,
+    tabs: parsedTabs,
+    isMiSubTask: options.isKnownMiSubTask,
+    ...(options.isActiveMiSubTaskStep === true ? { isActiveMiSubTaskStep: true } : {}),
+    subTableBindings: prevBindings
+  }
 }
 
 function mapDesignerColumnType(dataType?: string, columnType?: string): string | undefined {

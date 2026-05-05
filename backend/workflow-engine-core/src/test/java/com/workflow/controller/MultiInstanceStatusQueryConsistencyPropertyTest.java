@@ -57,7 +57,8 @@ class MultiInstanceStatusQueryConsistencyPropertyTest {
             null, // taskService not needed for this test
             extendedTaskInfoRepository,
             objectMapper,
-            null  // jdbcTemplate not needed for this test
+            null,  // jdbcTemplate not needed for this test
+            mock(com.workflow.component.BpmnActionParser.class)
         );
         
         // Given: 准备多实例执行场景
@@ -223,7 +224,8 @@ class MultiInstanceStatusQueryConsistencyPropertyTest {
             null,
             extendedTaskInfoRepository,
             objectMapper,
-            null
+            null,
+            mock(com.workflow.component.BpmnActionParser.class)
         );
         
         // Given: 没有多实例执行
@@ -262,7 +264,8 @@ class MultiInstanceStatusQueryConsistencyPropertyTest {
             null,
             extendedTaskInfoRepository,
             objectMapper,
-            null
+            null,
+            mock(com.workflow.component.BpmnActionParser.class)
         );
         
         // Given: 准备多实例执行场景

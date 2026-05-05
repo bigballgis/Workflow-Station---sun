@@ -1,5 +1,6 @@
 package com.workflow.listener;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.workflow.component.BpmnActionParser;
 import com.workflow.entity.ExtendedTaskInfo;
@@ -38,6 +39,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -126,6 +128,14 @@ public class TaskAssignmentListener implements FlowableEventListener {
         if (task.getAssignee() != null && !task.getAssignee().isEmpty()) {
             log.info("Task {} already has assignee: {}", taskId, task.getAssignee());
             notifyNewTask(task.getAssignee(), taskId, task.getName(), processInstanceId);
+            // BPMN often resolves assignee before this listener runs; we still need wf_extended_task_info
+            // with multiInstance + subTableRowId or My Request / MI status API only sees completed historic rows.
+            try {
+                ensureMultiInstanceExtendedTaskForPreassignedTask(task, taskId, processInstanceId,
+                        processDefinitionId, taskDefinitionKey, null);
+            } catch (Exception e) {
+                log.warn("ensureMultiInstanceExtendedTaskForPreassignedTask failed for {}: {}", taskId, e.getMessage());
+            }
             return;
         }
 
@@ -265,7 +275,7 @@ public class TaskAssignmentListener implements FlowableEventListener {
 
             if (resolvedType == AssigneeType.MANUAL_ASSIGN) {
                 updateCurrentItemProgress(processVariables, processDefinitionId, taskDefinitionKey, task.getName());
-                applyResolveResult(taskId, task, processInstanceId,
+                applyResolveResult(taskId, task, processInstanceId, processDefinitionId, taskDefinitionKey,
                         resolveManualAssign(taskDefinitionKey, manualAssignVariable, manualAssignBuVariable,
                                 manualAssignRoleVariable, processVariables, initiatorId),
                         assigneeTypeRaw);
@@ -276,7 +286,8 @@ public class TaskAssignmentListener implements FlowableEventListener {
                 String varName = firstNonBlank(assigneeVariable, assigneeValue);
                 TaskAssigneeResolver.ResolveResult vr = resolveAssigneeFromVariable(varName, processVariables);
                 updateCurrentItemProgress(processVariables, processDefinitionId, taskDefinitionKey, task.getName());
-                applyResolveResult(taskId, task, processInstanceId, vr, assigneeTypeRaw);
+                applyResolveResult(taskId, task, processInstanceId, processDefinitionId, taskDefinitionKey, vr,
+                        assigneeTypeRaw);
                 return;
             }
 
@@ -314,13 +325,15 @@ public class TaskAssignmentListener implements FlowableEventListener {
                     result != null ? result.getErrorMessage() : "null");
 
             updateCurrentItemProgress(processVariables, processDefinitionId, taskDefinitionKey, task.getName());
-            applyResolveResult(taskId, task, processInstanceId, result, assigneeTypeRaw);
+            applyResolveResult(taskId, task, processInstanceId, processDefinitionId, taskDefinitionKey, result,
+                    assigneeTypeRaw);
         } catch (Exception e) {
             log.error("Error handling task assignment for task {}: {}", taskId, e.getMessage(), e);
         }
     }
 
     private void applyResolveResult(String taskId, TaskEntity task, String processInstanceId,
+                                    String processDefinitionId, String taskDefinitionKey,
                                     TaskAssigneeResolver.ResolveResult result, String assigneeTypeRaw) {
         if (result == null) {
             return;
@@ -330,9 +343,19 @@ public class TaskAssignmentListener implements FlowableEventListener {
             return;
         }
         if (result.getAssignee() != null && !result.getAssignee().isBlank()) {
-            taskService.setAssignee(taskId, result.getAssignee().trim());
-            log.info("Task {} assigned to user: {}", taskId, result.getAssignee());
-            notifyNewTask(result.getAssignee().trim(), taskId, task.getName(), processInstanceId);
+            String resolvedAssignee = result.getAssignee().trim();
+            taskService.setAssignee(taskId, resolvedAssignee);
+            log.info("Task {} assigned to user: {}", taskId, resolvedAssignee);
+            notifyNewTask(resolvedAssignee, taskId, task.getName(), processInstanceId);
+            // BU_ROLE / INITIATOR / … 在创建时 assignee 常为空，此处才 setAssignee；须补写 MI 扩展任务，
+            // 否则 multi-instance status 只有 ELEMENT_VARIABLE 等前一节点记录，门户子表仍显示 COMPLETED/end。
+            try {
+                ensureMultiInstanceExtendedTaskForPreassignedTask(task, taskId, processInstanceId,
+                        processDefinitionId, taskDefinitionKey, resolvedAssignee);
+            } catch (Exception e) {
+                log.warn("ensureMultiInstanceExtendedTaskForPreassignedTask after resolve failed for {}: {}",
+                        taskId, e.getMessage());
+            }
             return;
         }
         List<String> cands = result.getCandidateUsers();
@@ -616,6 +639,143 @@ public class TaskAssignmentListener implements FlowableEventListener {
                 .orElse(initiatorId);
     }
 
+    /**
+     * Flowable often creates MI inner userTasks with assignee already set (BPMN expression).
+     * The early return in {@link #handleTaskCreated} previously skipped ExtendedTaskInfo creation, so
+     * multi-instance status / initiator sub-table progress only saw completed predecessor tasks.
+     */
+    private void ensureMultiInstanceExtendedTaskForPreassignedTask(TaskEntity task, String taskId,
+            String processInstanceId, String processDefinitionId, String taskDefinitionKey,
+            String assigneeOverride) {
+        if (taskDefinitionKey == null || processDefinitionId == null) {
+            return;
+        }
+        String miScopeTable = bpmnActionParser.getMultiInstanceSubProcessSubTableName(
+                processDefinitionId, taskDefinitionKey);
+        if (miScopeTable == null || miScopeTable.isBlank()) {
+            return;
+        }
+        String executionId = task.getExecutionId();
+        if (executionId == null) {
+            return;
+        }
+        Object currentItemObj = runtimeService.getVariable(executionId, "currentItem");
+        if (currentItemObj == null) {
+            currentItemObj = runtimeService.getVariable(executionId, "_currentItem");
+        }
+        if (!(currentItemObj instanceof Map)) {
+            return;
+        }
+        @SuppressWarnings("unchecked")
+        Map<String, Object> currentItem = (Map<String, Object>) currentItemObj;
+
+        Long subTableRowId = extractLong(currentItem.get("rowId"));
+        if (subTableRowId == null) {
+            subTableRowId = extractLong(currentItem.get("id"));
+        }
+        if (subTableRowId == null) {
+            return;
+        }
+        Long subTableRowVersion = extractLong(currentItem.get("rowVersion"));
+
+        String subTableId = null;
+        String subTableName = null;
+        BpmnModel bpmnModel = repositoryService.getBpmnModel(processDefinitionId);
+        if (bpmnModel != null) {
+            FlowElement flowElement = bpmnModel.getFlowElement(taskDefinitionKey);
+            if (flowElement instanceof UserTask userTask) {
+                subTableId = getExtensionProperty(userTask, "subTableId");
+                subTableName = getExtensionProperty(userTask, "subTableName");
+            }
+        }
+        subTableId = firstNonBlank(subTableId,
+                bpmnActionParser.getUserTaskExtensionPropertyValue(processDefinitionId, taskDefinitionKey, "subTableId"));
+        subTableName = firstNonBlank(subTableName,
+                bpmnActionParser.getUserTaskExtensionPropertyValue(processDefinitionId, taskDefinitionKey,
+                        "subTableName"));
+        subTableName = firstNonBlank(subTableName,
+                bpmnActionParser.getMultiInstanceSubProcessSubTableName(processDefinitionId, taskDefinitionKey));
+        if (subTableName == null || subTableName.isBlank()) {
+            subTableName = miScopeTable;
+        }
+
+        String assigneeId = assigneeOverride != null && !assigneeOverride.isBlank()
+                ? normalizeFlowableUserIdValue(assigneeOverride.trim())
+                : normalizeFlowableUserIdValue(task.getAssignee());
+        if (assigneeId == null || assigneeId.isBlank()) {
+            return;
+        }
+
+        String[] progressCols = resolveMiProgressColumnNames(processDefinitionId, taskDefinitionKey);
+        Map<String, Object> extendedProps = new HashMap<>();
+        extendedProps.put("multiInstance", true);
+        extendedProps.put("subTableRowId", subTableRowId);
+        if (subTableRowVersion != null) {
+            extendedProps.put("subTableRowVersion", subTableRowVersion);
+        }
+        if (subTableId != null) {
+            extendedProps.put("subTableId", subTableId);
+        }
+        extendedProps.put("subTableName", subTableName);
+        extendedProps.put("miTaskStatusField", progressCols[0]);
+        extendedProps.put("miTaskCurrentNodeField", progressCols[1]);
+
+        Optional<ExtendedTaskInfo> existingOpt = extendedTaskInfoRepository.findByTaskIdAndIsDeletedFalse(taskId);
+        Map<String, Object> merged = new HashMap<>();
+        if (existingOpt.isPresent() && existingOpt.get().getExtendedProperties() != null
+                && !existingOpt.get().getExtendedProperties().isBlank()) {
+            try {
+                Map<String, Object> cur = objectMapper.readValue(
+                        existingOpt.get().getExtendedProperties(),
+                        new TypeReference<Map<String, Object>>() {});
+                if (cur != null) {
+                    merged.putAll(cur);
+                }
+            } catch (Exception e) {
+                log.debug("ensureMI preassigned: reset extended JSON for task {}: {}", taskId, e.getMessage());
+            }
+        }
+        merged.putAll(extendedProps);
+
+        String extendedPropertiesJson;
+        try {
+            extendedPropertiesJson = objectMapper.writeValueAsString(merged);
+        } catch (Exception e) {
+            log.error("Failed to serialize extendedProperties for preassigned MI task {}: {}", taskId, e.getMessage());
+            return;
+        }
+
+        if (existingOpt.isPresent()) {
+            ExtendedTaskInfo ext = existingOpt.get();
+            ext.setExtendedProperties(extendedPropertiesJson);
+            ext.setTaskName(task.getName());
+            ext.setTaskDefinitionKey(taskDefinitionKey);
+            ext.setProcessDefinitionId(processDefinitionId);
+            if (!"COMPLETED".equalsIgnoreCase(ext.getStatus()) && !"CANCELLED".equalsIgnoreCase(ext.getStatus())) {
+                ext.setStatus("ASSIGNED");
+            }
+            ext.setAssignmentTarget(assigneeId);
+            extendedTaskInfoRepository.save(ext);
+        } else {
+            ExtendedTaskInfo extInfo = ExtendedTaskInfo.builder()
+                    .taskId(taskId)
+                    .processInstanceId(processInstanceId)
+                    .processDefinitionId(processDefinitionId)
+                    .taskDefinitionKey(taskDefinitionKey)
+                    .taskName(task.getName())
+                    .assignmentType(AssignmentType.USER)
+                    .assignmentTarget(assigneeId)
+                    .status("ASSIGNED")
+                    .createdTime(LocalDateTime.now())
+                    .extendedProperties(extendedPropertiesJson)
+                    .build();
+            extendedTaskInfoRepository.save(extInfo);
+        }
+        updateSubTableTaskProgress(subTableName, subTableRowId, task.getName(), progressCols[0], progressCols[1]);
+        log.info("Ensured ExtendedTaskInfo for preassigned MI task {}: rowId={}, subTable={}",
+                taskId, subTableRowId, subTableName);
+    }
+
     private void handleElementVariableAssignment(TaskEntity task, String taskId,
                                                  String processInstanceId,
                                                  String processDefinitionId,
@@ -625,6 +785,9 @@ public class TaskAssignmentListener implements FlowableEventListener {
 
             String executionId = task.getExecutionId();
             Object currentItemObj = runtimeService.getVariable(executionId, "currentItem");
+            if (currentItemObj == null) {
+                currentItemObj = runtimeService.getVariable(executionId, "_currentItem");
+            }
 
             if (currentItemObj == null) {
                 log.warn("currentItem variable is null for task {}, task will remain CREATED", taskId);
@@ -691,6 +854,9 @@ public class TaskAssignmentListener implements FlowableEventListener {
                 subTableName = firstNonBlank(subTableName,
                         bpmnActionParser.getUserTaskExtensionPropertyValue(processDefinitionId, taskDefinitionKey,
                                 "subTableName"));
+                // Later userTasks in the same MI subprocess often omit subTableName — inherit from sibling nodes.
+                subTableName = firstNonBlank(subTableName,
+                        bpmnActionParser.getMultiInstanceSubProcessSubTableName(processDefinitionId, taskDefinitionKey));
                 assigneeFieldFromBpmn = firstNonBlank(assigneeFieldFromBpmn,
                         bpmnActionParser.getUserTaskExtensionPropertyValue(processDefinitionId, taskDefinitionKey,
                                 "assigneeField"));
@@ -1006,6 +1172,9 @@ public class TaskAssignmentListener implements FlowableEventListener {
             return;
         }
         Object currentItemObj = processVariables.get("currentItem");
+        if (currentItemObj == null) {
+            currentItemObj = processVariables.get("_currentItem");
+        }
         if (!(currentItemObj instanceof Map<?, ?> currentItem)) {
             return;
         }

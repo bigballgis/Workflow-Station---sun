@@ -1324,29 +1324,11 @@ public class ProcessComponent {
                     continue;
                 }
 
-                // Apply MI progress to row JSON first (works even when no physical table exists).
-                Map<Long, MiRowProgress> miProgress = miProgressByTable.getOrDefault(tableName, Collections.emptyMap());
-                if (!miProgress.isEmpty()) {
-                    // Use one entry as the schema source for pending rows too.
-                    MiRowProgress schema = miProgress.values().iterator().next();
-                    for (Object rowObj : rows) {
-                        if (!(rowObj instanceof Map<?, ?> rawRow)) continue;
-                        Map<String, Object> row = (Map<String, Object>) rawRow;
-                        Long id = parseRowId(row);
-                        if (id == null) continue;
-                        MiRowProgress p = miProgress.get(id);
-                        if (p == null) {
-                            // No subtask created for this row yet.
-                            row.put(schema.statusColumn, "PENDING");
-                            row.put(schema.nodeColumn, "-");
-                        } else {
-                            row.put(p.statusColumn, p.status);
-                            row.put(p.nodeColumn, p.currentNode);
-                        }
-                    }
-                }
+                Map<Long, MiRowProgress> miProgress = lookupMiProgressForDesignerTable(miProgressByTable, tableName);
 
-                // Legacy: physical table merge (kept for environments that persist rows in DB).
+                // Legacy: physical table merge first (assignee, persisted field values). DB may still hold stale
+                // task_status / task_current_node after a participant advances — those columns must not win over
+                // the engine; MI overlay applied below overwrites them.
                 String safeTableName = requireSafeIdentifier(tableName);
                 for (Object rowObj : rows) {
                     if (!(rowObj instanceof Map<?, ?> rawRow)) {
@@ -1357,7 +1339,6 @@ public class ProcessComponent {
                     if (id == null) {
                         continue;
                     }
-                    // If this is a JSON-only environment, skip DB merge.
                     if (!miProgress.isEmpty() && !subTableExists(safeTableName)) {
                         continue;
                     }
@@ -1379,13 +1360,30 @@ public class ProcessComponent {
                             displayName = resolveUsernameById(userId);
                             dbRow.put("assignee_display_name", displayName);
                         }
-                        // Self-heal: if DB row is still PENDING but engine task is COMPLETED,
-                        // repair the status so the initiator sees the correct state.
                         repairStaleTaskStatus(safeTableName, dbRow, id);
                         for (Map.Entry<String, Object> entry : dbRow.entrySet()) {
                             if (entry.getValue() != null) {
                                 row.put(entry.getKey(), entry.getValue());
                             }
+                        }
+                    }
+                }
+
+                // Engine-driven MI status last so initiator My Request matches runtime tasks (not stale DB columns).
+                if (!miProgress.isEmpty()) {
+                    MiRowProgress schema = miProgress.values().iterator().next();
+                    for (Object rowObj : rows) {
+                        if (!(rowObj instanceof Map<?, ?> rawRow)) continue;
+                        Map<String, Object> row = (Map<String, Object>) rawRow;
+                        Long id = parseRowId(row);
+                        if (id == null) continue;
+                        MiRowProgress p = miProgress.get(id);
+                        if (p == null) {
+                            row.put(schema.statusColumn, "PENDING");
+                            row.put(schema.nodeColumn, "-");
+                        } else {
+                            row.put(p.statusColumn, p.status);
+                            row.put(p.nodeColumn, p.currentNode);
                         }
                     }
                 }
@@ -1405,6 +1403,51 @@ public class ProcessComponent {
     }
 
     private record MiRowProgress(String statusColumn, String nodeColumn, String status, String currentNode) {}
+
+    private Map<Long, MiRowProgress> lookupMiProgressForDesignerTable(
+            Map<String, Map<Long, MiRowProgress>> byTable,
+            String designerTableName) {
+        if (designerTableName == null || designerTableName.isBlank()) {
+            return Collections.emptyMap();
+        }
+        Map<Long, MiRowProgress> direct = byTable.get(designerTableName);
+        if (direct != null && !direct.isEmpty()) {
+            return direct;
+        }
+        for (Map.Entry<String, Map<Long, MiRowProgress>> e : byTable.entrySet()) {
+            if (e.getKey() != null && designerTableName.equalsIgnoreCase(e.getKey())) {
+                return e.getValue();
+            }
+        }
+        String norm = normalizeMiTableKey(designerTableName);
+        for (Map.Entry<String, Map<Long, MiRowProgress>> e : byTable.entrySet()) {
+            if (e.getKey() != null && normalizeMiTableKey(e.getKey()).equals(norm)) {
+                return e.getValue();
+            }
+        }
+        if (byTable.size() == 1) {
+            return byTable.values().iterator().next();
+        }
+        return Collections.emptyMap();
+    }
+
+    private static String normalizeMiTableKey(String s) {
+        return s == null ? "" : s.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private static Long parseMiSubTaskRowId(Object rowIdObj) {
+        if (rowIdObj instanceof Number n) {
+            return n.longValue();
+        }
+        if (rowIdObj != null) {
+            try {
+                return Long.parseLong(String.valueOf(rowIdObj).trim());
+            } catch (Exception ignored) {
+                return null;
+            }
+        }
+        return null;
+    }
 
     @SuppressWarnings("unchecked")
     private Map<String, Map<Long, MiRowProgress>> resolveMiRowProgress(String processInstanceId) {
@@ -1427,11 +1470,10 @@ public class ProcessComponent {
                 Map<String, Object> t = (Map<String, Object>) raw;
                 Object rowIdObj = t.get("subTableRowId");
                 Object tableObj = t.get("subTableName");
-                if (!(rowIdObj instanceof Number n) || tableObj == null) continue;
-                Long rowId = n.longValue();
-                String tableName = String.valueOf(tableObj).trim();
-                if (tableName.isEmpty()) continue;
-                byTableRow.computeIfAbsent(tableName, k -> new HashMap<>())
+                Long rowId = parseMiSubTaskRowId(rowIdObj);
+                String tn = tableObj != null ? String.valueOf(tableObj).trim() : "";
+                if (rowId == null || tn.isEmpty()) continue;
+                byTableRow.computeIfAbsent(tn, k -> new HashMap<>())
                         .computeIfAbsent(rowId, k -> new ArrayList<>())
                         .add(t);
             }
@@ -1473,23 +1515,46 @@ public class ProcessComponent {
 
     private static Map<String, Object> pickLatestActiveTask(List<Map<String, Object>> tasks) {
         Map<String, Object> best = null;
-        Long bestTs = null;
+        LocalDateTime bestTime = null;
         for (Map<String, Object> t : tasks) {
             String st = stringVal(t.get("status"));
             if ("COMPLETED".equalsIgnoreCase(st) || "CANCELLED".equalsIgnoreCase(st)) {
                 continue;
             }
-            Long ts = parseEpochMillis(t.get("createdTime"));
-            if (best == null || (ts != null && (bestTs == null || ts > bestTs))) {
+            LocalDateTime ct = parseMiStatusCreatedTime(t.get("createdTime"));
+            if (best == null) {
                 best = t;
-                bestTs = ts;
+                bestTime = ct;
+                continue;
+            }
+            if (ct != null && bestTime != null && ct.isAfter(bestTime)) {
+                best = t;
+                bestTime = ct;
+            } else if (ct != null && bestTime == null) {
+                best = t;
+                bestTime = ct;
+            } else if (ct == null && bestTime == null) {
+                best = t;
             }
         }
         return best;
     }
 
-    private static Long parseEpochMillis(Object timeObj) {
-        // MultiInstanceStatusResponse returns LocalDateTime serialized by Jackson; we avoid parsing and just keep null.
+    /** API Map 中 createdTime 可能为 LocalDateTime 或 ISO 字符串 */
+    private static LocalDateTime parseMiStatusCreatedTime(Object raw) {
+        if (raw == null) {
+            return null;
+        }
+        if (raw instanceof LocalDateTime ldt) {
+            return ldt;
+        }
+        if (raw instanceof String s && !s.isBlank()) {
+            try {
+                return LocalDateTime.parse(s.trim());
+            } catch (Exception ignored) {
+                return null;
+            }
+        }
         return null;
     }
 
@@ -1529,7 +1594,11 @@ public class ProcessComponent {
                     Object bindingType = binding.get("bindingType");
                     Object bindingId = binding.get("bindingId");
                     Object tableName = binding.get("tableName");
-                    if ("SUB".equals(String.valueOf(bindingType)) && bindingId != null && tableName != null) {
+                    // SUB and RELATED both participate in __subTables__ (designer + MI write-back).
+                    // RELATED-only bindings were previously skipped, so initiator My Request never merged
+                    // physical row data into variables and sub-task filled columns appeared empty.
+                    String bt = bindingType != null ? String.valueOf(bindingType) : "";
+                    if (("SUB".equals(bt) || "RELATED".equals(bt)) && bindingId != null && tableName != null) {
                         result.put(String.valueOf(bindingId), String.valueOf(tableName));
                     }
                 }
