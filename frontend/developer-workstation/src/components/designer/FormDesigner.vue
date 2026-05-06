@@ -712,7 +712,22 @@ function mergeSubTableListColumns(
         if (column?.columnType === 'linkForm') return hydrateLinkFormColumn(column)
         if (column?.columnType === 'lookup') return hydrateLookupColumn(column)
         const field = fieldByName.get(column?.fieldName)
-        return field ? { ...field, comment: column.comment || column.displayLabel || field.comment } : null
+        if (field) {
+          return { ...field, comment: column.comment || column.displayLabel || field.comment }
+        }
+        // Keep columns that exist only in configJson (e.g. server dw_sub_table view config was cleared
+        // or field names temporarily out of sync) — otherwise merge drops everything and save wipes subListViews.
+        if (column?.fieldName) {
+          return {
+            fieldName: column.fieldName,
+            dataType: column.dataType || 'VARCHAR',
+            nullable: column.nullable !== false,
+            isPrimaryKey: !!column.isPrimaryKey,
+            comment: column.displayLabel || column.comment || column.fieldName,
+            columnType: 'field' as const,
+          } as SubTableListColumnDTO
+        }
+        return null
       })
       .filter(Boolean) as SubTableListColumnDTO[]
     return mergedColumns
@@ -2424,7 +2439,10 @@ async function handleSaveForm(isManual = false) {
         const state = subTableViewState.value[binding.bindingId]
         const existing = (selectedForm.value!.configJson?.subListViews || {})[binding.bindingId]
         const existingColumns = Array.isArray(existing?.columns) ? existing.columns : []
-        const stateLoaded = !!state && ((state.allFields?.length || 0) > 0 || (state.viewFields?.length || 0) > 0)
+        // Only treat list state as "ready" when we have columns in memory. allFields alone is not enough:
+        // after a bad merge, viewFields can be empty while allFields is populated — saving would otherwise
+        // persist { columns: [] } and wipe configJson.subListViews.
+        const stateLoaded = !!state && (state.viewFields?.length || 0) > 0
         if (columns.length === 0 && existingColumns.length > 0 && !stateLoaded) {
           // The list-view tab can mount before its async config load finishes; preserve saved columns.
           subListViews[binding.bindingId] = existing
