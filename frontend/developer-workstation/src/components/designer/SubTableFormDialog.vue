@@ -12,6 +12,7 @@
       <form-create
         v-if="formCreateMounted"
         v-model="formData"
+        locale="en"
         :rule="formRule"
         :option="formOption"
       />
@@ -71,6 +72,11 @@ const defaultFormOption = {
   form: {
     labelPosition: 'left',
     labelWidth: '140px',
+  },
+  language: {
+    en: {
+      clickToUpload: t('form.clickToUpload'),
+    },
   },
   onSubmit: () => {}, // We handle save manually
 }

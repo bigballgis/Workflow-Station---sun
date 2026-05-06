@@ -303,6 +303,8 @@ export default {
     dateTimePicker: 'Date Time Picker',
     fileUpload: 'File Upload',
     fileUploadTip: 'Supported formats: jpg/png/pdf/docx/xlsx, max 10MB',
+    /** form-create fcUpload button (overrides library default Chinese fallback) */
+    clickToUpload: 'Click to upload',
     yes: 'Yes',
     no: 'No',
     // Binding types

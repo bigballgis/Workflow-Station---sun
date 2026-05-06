@@ -139,7 +139,12 @@
             </span>
           </template>
           <div class="fc-designer-wrapper">
-            <fc-designer ref="designerRef" :config="designerConfig" height="calc(100vh - 260px)" />
+            <fc-designer
+              ref="designerRef"
+              :locale="fcDesignerEnLocale"
+              :config="designerConfig"
+              height="calc(100vh - 260px)"
+            />
           </div>
         </el-tab-pane>
         <el-tab-pane
@@ -174,6 +179,7 @@
                 <div class="fc-designer-wrapper">
                   <fc-designer
                     :ref="(el: any) => setSubDesignerRef(el, index)"
+                    :locale="fcDesignerEnLocale"
                     :config="designerConfig"
                     height="calc(100vh - 320px)"
                   />
@@ -204,6 +210,7 @@
           <div v-else class="fc-designer-wrapper">
             <fc-designer
               :ref="(el: any) => setSubDesignerRef(el, index)"
+              :locale="fcDesignerEnLocale"
               :config="designerConfig"
               height="calc(100vh - 260px)"
             />
@@ -474,6 +481,7 @@ import { lookupStore } from './lookupStore'
 import api from '@/api'
 import { BUILT_IN_TEMPLATES, type FormTemplate } from './formTemplates'
 import { subTableViewApi, type SubTableFieldDTO, type SubTableViewConfig } from '@/api/subTableView'
+import fcDesignerEnLocale from '@form-create/designer/locale/en.js'
 
 const { t } = useI18n()
 
@@ -790,7 +798,7 @@ function getSubTableFormDesign(bindingId: number): { rule: any[]; options: any }
       }
     }
   } catch {}
-  return subFormCache.value[bindingId] || { rule: saved.rule || [], options: saved.options || defaultFormOption }
+  return subFormCache.value[bindingId] || { rule: saved.rule || [], options: saved.options || defaultFormOption.value }
 }
 
 function getSubTableFormRule(bindingId: number): any[] {
@@ -988,22 +996,95 @@ const designerConfig = computed(() => ({
   fieldReadonly: false,
 }))
 
-// Default form options — label left-aligned
-const defaultFormOption = { form: { labelPosition: 'left' } }
+// Default form options — label left-aligned; locale + language so fcUpload `t('clickToUpload')` is English
+const defaultFormOption = computed(() => ({
+  form: { labelPosition: 'left' },
+  language: {
+    en: {
+      clickToUpload: t('form.clickToUpload'),
+    },
+  },
+}))
 
 // Sub-table tabs default to form design
 const subTableActiveTab = ref('form')
 
-// Preview options - plain object (not ref, form-create expects a reactive object)
-const previewOption = {
+// Preview option: mutable flags + form-create English strings (library defaults to zh-cn without `locale` / `language`)
+const previewOptionState = reactive({
   submitBtn: false,
   resetBtn: false,
-}
+})
+const previewOption = computed(() => ({
+  ...previewOptionState,
+  language: {
+    en: {
+      clickToUpload: t('form.clickToUpload'),
+    },
+  },
+}))
 
 const getPreviewOption = (): Record<string, any> => ({
   submitBtn: false,
   resetBtn: false,
+  language: {
+    en: {
+      clickToUpload: t('form.clickToUpload'),
+    },
+  },
 })
+
+/** Deep-clone form rules so we do not mutate Pinia / API payloads in place. */
+function cloneFormRules(rules: any[]): any[] {
+  if (!Array.isArray(rules) || rules.length === 0) return []
+  try {
+    return JSON.parse(JSON.stringify(rules))
+  } catch {
+    return rules.slice()
+  }
+}
+
+/**
+ * fc-upload button text is `t('clickToUpload') || uploadText || '点击上传'`.
+ * Legacy saved rules omit uploadText; inject so the hardcoded Chinese fallback never shows.
+ */
+function injectUploadButtonLabels(rules: any[]): void {
+  const text = t('form.clickToUpload')
+  const walk = (items: any[]) => {
+    for (const r of items) {
+      if (!r || typeof r !== 'object') continue
+      if (r.type === 'upload') {
+        r.props = r.props || {}
+        if (r.props.uploadText == null || r.props.uploadText === '') {
+          r.props.uploadText = text
+        }
+      }
+      if (Array.isArray(r.children) && r.children.length) walk(r.children)
+    }
+  }
+  walk(rules)
+}
+
+/** Merge persisted form-create options with English defaults (esp. language.clickToUpload). */
+function mergeLoadedFormOptions(stored: Record<string, any> | undefined): Record<string, any> {
+  const base = defaultFormOption.value
+  if (!stored || Object.keys(stored).length === 0) {
+    return { ...base }
+  }
+  return {
+    ...base,
+    ...stored,
+    form: { ...base.form, ...(stored.form || {}) },
+    language: {
+      ...(base.language as Record<string, unknown>),
+      ...(stored.language || {}),
+      en: {
+        ...((base.language as { en?: Record<string, string> })?.en || {}),
+        ...((stored.language as { en?: Record<string, string> } | undefined)?.en || {}),
+        clickToUpload: t('form.clickToUpload'),
+      },
+    },
+  }
+}
 
 const formTypeLabel = (type: string) => {
   const map: Record<string, string> = { PROCESS: t('form.processForm'), TASK: t('form.taskForm'), ACTION: t('form.actionForm') }
@@ -1621,6 +1702,7 @@ function fieldToFormRule(field: FieldDefinition): any {
           limit: 1,
           multiple: false,
           listType: 'text',
+          uploadText: t('form.clickToUpload'),
           tip: t('form.fileUploadTip')
         }
       }
@@ -1736,7 +1818,9 @@ async function handleConfirmImportFields() {
         }
 
         if (newRules.length > 0) {
-          targetRef.setRule([...currentRules, ...newRules])
+          const merged = [...currentRules, ...newRules]
+          injectUploadButtonLabels(merged)
+          targetRef.setRule(merged)
         }
       }
 
@@ -1768,7 +1852,9 @@ async function handleConfirmImportFields() {
       }
 
       if (newRules.length > 0) {
-        targetRef.setRule([...currentRules, ...newRules])
+        const merged = [...currentRules, ...newRules]
+        injectUploadButtonLabels(merged)
+        targetRef.setRule(merged)
         ElMessage.success(t('form.importedSuccess', { count: newRules.length }))
       }
     }
@@ -2017,11 +2103,17 @@ function handleSelectForm(row: FormDefinition) {
       if (designerRef.value) {
         const config = row.configJson || {}
         try {
-          designerRef.value.setRule(config.rule && config.rule.length ? config.rule : [])
-          designerRef.value.setOption(config.options && Object.keys(config.options).length ? config.options : defaultFormOption)
+          const rules = cloneFormRules(config.rule && config.rule.length ? config.rule : [])
+          injectUploadButtonLabels(rules)
+          designerRef.value.setRule(rules)
+          designerRef.value.setOption(
+            mergeLoadedFormOptions(
+              config.options && Object.keys(config.options).length ? config.options : undefined
+            )
+          )
         } catch (e) {
           console.error('Failed to load main form config:', e)
-          try { designerRef.value.setRule([]); designerRef.value.setOption(defaultFormOption) } catch {}
+          try { designerRef.value.setRule([]); designerRef.value.setOption({ ...defaultFormOption.value }) } catch {}
         }
         // Start auto-save polling after designer is loaded
         setupAutoSavePolling()
@@ -2040,8 +2132,14 @@ function loadSubDesigners(row: FormDefinition) {
         if (subRef) {
           const subConfig = subForms[binding.bindingId] || {}
           try {
-            subRef.setRule(subConfig.rule && subConfig.rule.length ? subConfig.rule : [])
-            subRef.setOption(subConfig.options && Object.keys(subConfig.options).length ? subConfig.options : defaultFormOption)
+            const rules = cloneFormRules(subConfig.rule && subConfig.rule.length ? subConfig.rule : [])
+            injectUploadButtonLabels(rules)
+            subRef.setRule(rules)
+            subRef.setOption(
+              mergeLoadedFormOptions(
+                subConfig.options && Object.keys(subConfig.options).length ? subConfig.options : undefined
+              )
+            )
           } catch {}
         }
       }, 150)
@@ -2088,8 +2186,14 @@ function handleTabChange(tabName: string) {
         const cached = subFormCache.value[bindingId]
         const subConfig = cached || subForms[bindingId] || {}
         try {
-          subRef.setRule(subConfig.rule && subConfig.rule.length ? subConfig.rule : [])
-          subRef.setOption(subConfig.options && Object.keys(subConfig.options).length ? subConfig.options : defaultFormOption)
+          const rules = cloneFormRules(subConfig.rule && subConfig.rule.length ? subConfig.rule : [])
+          injectUploadButtonLabels(rules)
+          subRef.setRule(rules)
+          subRef.setOption(
+            mergeLoadedFormOptions(
+              subConfig.options && Object.keys(subConfig.options).length ? subConfig.options : undefined
+            )
+          )
         } catch {}
       }
     }, 100)
@@ -2579,7 +2683,7 @@ function handlePreview() {
   previewTableRows.value = {}
 
   // Sync label position from designer option
-  Object.assign(previewOption, {
+  Object.assign(previewOptionState, {
     submitBtn: false,
     resetBtn: false,
   })

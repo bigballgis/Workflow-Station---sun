@@ -15,7 +15,15 @@ public enum RelationDataType {
     BOOLEAN("BOOLEAN", "Boolean"),
     DATE("DATE", "Date"),
     TIMESTAMP("TIMESTAMP", "Timestamp"),
-    TEXT("TEXT", "Text");
+    TEXT("TEXT", "Text"),
+    /** JSON payload (aligns with developer-workstation {@code DataType.JSON}) */
+    JSON("JSON", "JSON"),
+    /** Time-of-day (aligns with {@code DataType.TIME}) */
+    TIME("TIME", "Time"),
+    /** Raw binary (aligns with {@code DataType.BYTEA}) */
+    BYTEA("BYTEA", "Binary"),
+    /** File path / URL (aligns with {@code DataType.FILE}) */
+    FILE("FILE", "File");
 
     private final String code;
     private final String displayName;

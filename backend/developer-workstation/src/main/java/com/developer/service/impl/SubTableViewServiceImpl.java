@@ -4,6 +4,7 @@ import com.developer.entity.FormTableBinding;
 import com.developer.entity.SubTableViewConfig;
 import com.developer.entity.SubTableViewField;
 import com.developer.entity.TableDefinition;
+import com.developer.enums.DataType;
 import com.developer.repository.FormTableBindingRepository;
 import com.developer.repository.SubTableViewConfigRepository;
 import com.developer.repository.TableDefinitionRepository;
@@ -94,7 +95,7 @@ public class SubTableViewServiceImpl implements SubTableViewService {
                 .map(f -> RelationFieldDTO.builder()
                         .id(f.getId())
                         .fieldName(f.getFieldName())
-                        .dataType(RelationDataType.valueOf(f.getDataType().name()))
+                        .dataType(toRelationDataType(f.getDataType()))
                         .length(f.getLength())
                         .precision(f.getPrecision())
                         .scale(f.getScale())
@@ -157,7 +158,7 @@ public class SubTableViewServiceImpl implements SubTableViewService {
                         .map(f -> RelationFieldDTO.builder()
                                 .id(f.getId())
                                 .fieldName(f.getFieldName())
-                                .dataType(RelationDataType.valueOf(f.getDataType().name()))
+                                .dataType(toRelationDataType(f.getDataType()))
                                 .length(f.getLength())
                                 .precision(f.getPrecision())
                                 .scale(f.getScale())
@@ -189,5 +190,21 @@ public class SubTableViewServiceImpl implements SubTableViewService {
                 .toList();
 
         return new ViewConfigDTO(config.getId(), bindingId, tableId, viewFieldDTOs);
+    }
+
+    /**
+     * Maps designer {@link DataType} to shared {@link RelationDataType}. Unchecked
+     * failures here run inside {@code @Transactional} and would mark the transaction
+     * rollback-only even if the caller catches — so unknown types fall back to VARCHAR.
+     */
+    private static RelationDataType toRelationDataType(DataType dt) {
+        if (dt == null) {
+            return RelationDataType.VARCHAR;
+        }
+        try {
+            return RelationDataType.valueOf(dt.name());
+        } catch (IllegalArgumentException ex) {
+            return RelationDataType.VARCHAR;
+        }
     }
 }

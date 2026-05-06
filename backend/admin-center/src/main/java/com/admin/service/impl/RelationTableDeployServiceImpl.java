@@ -360,6 +360,10 @@ public class RelationTableDeployServiceImpl implements RelationTableDeployServic
             case DATE -> "DATE";
             case TIMESTAMP -> "TIMESTAMP";
             case TEXT -> "TEXT";
+            case JSON -> "JSONB";
+            case TIME -> "TIME";
+            case BYTEA -> "BYTEA";
+            case FILE -> "VARCHAR(" + (field.getLength() != null ? field.getLength() : 500) + ")";
         };
     }
 
@@ -373,6 +377,10 @@ public class RelationTableDeployServiceImpl implements RelationTableDeployServic
             case BOOLEAN -> "false";
             case DATE -> "CURRENT_DATE";
             case TIMESTAMP -> "CURRENT_TIMESTAMP";
+            case JSON -> "'{}'::jsonb";
+            case TIME -> "'00:00:00'::time";
+            case BYTEA -> "''::bytea";
+            case FILE -> "''";
         };
     }
 

@@ -165,6 +165,7 @@
         <form-create
           v-if="formCreateMounted"
           v-model="linkFormData"
+          locale="en"
           :rule="selectedSubTableFormDesign.rule"
           :option="linkFormOption"
         />
@@ -366,6 +367,11 @@ const linkFormOption = computed(() => {
     form: {
       labelPosition: 'left',
       labelWidth: '140px',
+    },
+    language: {
+      en: {
+        clickToUpload: t('form.clickToUpload'),
+      },
     },
     ...saved,
     resetBtn: false,

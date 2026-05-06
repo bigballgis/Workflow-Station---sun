@@ -4,6 +4,7 @@
       <form-create
         v-if="item.rule.length"
         v-model="previewModel"
+        locale="en"
         :rule="item.rule"
         :option="previewOption"
         :key="'preview-form-' + item.modelKey"
