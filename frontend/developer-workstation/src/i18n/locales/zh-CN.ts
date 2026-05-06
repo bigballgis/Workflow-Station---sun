@@ -340,7 +340,7 @@ export default {
     dateTimePicker: '日期时间选择器',
     fileUpload: '文件上传',
     fileUploadTip: '支持格式：jpg/png/pdf/docx/xlsx，最大 10MB',
-    clickToUpload: '点击上传',
+    clickToUpload: '上传',
     yes: '是',
     no: '否',
     // Binding types
