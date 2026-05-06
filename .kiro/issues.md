@@ -3,14 +3,14 @@
 > **详细信息已迁移到 `.kiro/issues/index.yaml`**
 > 本文件仅保留统计摘要和当前待处理清单。
 
-## 统计 (截至 2026-04-27)
+## 统计 (截至 2026-05-06)
 
 | 状态 | 数量 |
 |------|------|
-| ✅ Fixed | **150** |
-| 🔓 Open | **6** |
+| ✅ Fixed | **151** |
+| 🔓 Open | **7** |
 | ⏸️ Wontfix | **1** |
-| **总计** | **157** |
+| **总计** | **159** |
 
 按严重度的分布见 `index.yaml` 各条目的 `severity` 字段。
 
@@ -26,6 +26,7 @@
 | 155 | quality | user-portal subTablePositionControl.property.test.ts 未注册 Element Plus 导致 Vitest unhandled errors |
 | 156 | quality | user-portal vue-tsc 在当前工具链下启动失败，无法执行类型检查 |
 | 157 | security | BpmnActionParser DOM 解析 BPMN 时未禁用 DTD/外部实体，存在 XXE 风险 |
+| 158 | bug | user-portal PortalRelationTableServiceImpl.queryTableData 接收 search 参数但未用于过滤 |
 
 ### Wontfix
 

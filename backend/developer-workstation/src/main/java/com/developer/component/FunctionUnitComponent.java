@@ -10,6 +10,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 功能单元组件接口
@@ -65,6 +66,21 @@ public interface FunctionUnitComponent {
      * 获取版本历史
      */
     List<VersionResponse> getVersionHistory(Long functionUnitId);
+
+    /**
+     * 回滚到指定历史版本
+     */
+    FunctionUnit rollback(Long functionUnitId, Long versionId);
+
+    /**
+     * 比较两个版本的快照差异
+     */
+    Map<String, Object> compareVersions(Long functionUnitId, Long versionId1, Long versionId2);
+
+    /**
+     * 导出指定历史版本的快照内容
+     */
+    byte[] exportVersion(Long functionUnitId, Long versionId);
     
     /**
      * 检查名称是否存在

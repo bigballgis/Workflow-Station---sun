@@ -14,6 +14,7 @@ import com.developer.entity.FunctionUnitDevGroupAssignment;
 import com.developer.repository.*;
 import com.developer.security.FunctionUnitWorkspaceAccessService;
 import com.developer.security.WorkspaceAccessAction;
+import com.developer.component.VersionComponent;
 import com.developer.util.XmlEncodingUtil;
 import com.developer.service.UserDisplayNameService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -58,6 +59,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     private final UserDisplayNameService userDisplayNameService;
     private final FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService;
     private final FunctionUnitDevGroupAssignmentRepository functionUnitDevGroupAssignmentRepository;
+    private final VersionComponent versionComponent;
     
     public FunctionUnitComponentImpl(
             FunctionUnitRepository functionUnitRepository,
@@ -71,7 +73,8 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
             ObjectMapper objectMapper,
             UserDisplayNameService userDisplayNameService,
             FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService,
-            FunctionUnitDevGroupAssignmentRepository functionUnitDevGroupAssignmentRepository) {
+            FunctionUnitDevGroupAssignmentRepository functionUnitDevGroupAssignmentRepository,
+            VersionComponent versionComponent) {
         this.functionUnitRepository = functionUnitRepository;
         this.processDefinitionRepository = processDefinitionRepository;
         this.tableDefinitionRepository = tableDefinitionRepository;
@@ -84,6 +87,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         this.userDisplayNameService = userDisplayNameService;
         this.functionUnitWorkspaceAccessService = functionUnitWorkspaceAccessService;
         this.functionUnitDevGroupAssignmentRepository = functionUnitDevGroupAssignmentRepository;
+        this.versionComponent = versionComponent;
     }
     
     /**
@@ -736,7 +740,44 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
                 })
                 .toList();
     }
-    
+
+    @Override
+    @Transactional
+    public FunctionUnit rollback(Long functionUnitId, Long versionId) {
+        functionUnitWorkspaceAccessService.assertCanAccess(functionUnitId, WorkspaceAccessAction.MODIFY);
+        return versionComponent.rollback(functionUnitId, versionId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<String, Object> compareVersions(Long functionUnitId, Long versionId1, Long versionId2) {
+        functionUnitWorkspaceAccessService.assertCanAccess(functionUnitId, WorkspaceAccessAction.VIEW);
+        assertVersionBelongsToFunctionUnit(functionUnitId, versionId1);
+        assertVersionBelongsToFunctionUnit(functionUnitId, versionId2);
+        return versionComponent.compare(versionId1, versionId2);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public byte[] exportVersion(Long functionUnitId, Long versionId) {
+        functionUnitWorkspaceAccessService.assertCanAccess(functionUnitId, WorkspaceAccessAction.VIEW);
+        assertVersionBelongsToFunctionUnit(functionUnitId, versionId);
+        return versionComponent.exportVersion(versionId);
+    }
+
+    /**
+     * 防越权：确认版本归属于当前 functionUnit，避免 A 用户通过其他 functionUnitId 反查 B 的版本。
+     */
+    private void assertVersionBelongsToFunctionUnit(Long functionUnitId, Long versionId) {
+        Version version = versionComponent.getById(versionId);
+        if (version.getFunctionUnit() == null
+                || !functionUnitId.equals(version.getFunctionUnit().getId())) {
+            throw new DeveloperBusinessException(
+                    "BIZ_VERSION_MISMATCH",
+                    "Version " + versionId + " does not belong to function unit " + functionUnitId);
+        }
+    }
+
     private String resolveUserDisplayName(String userId) {
         return userDisplayNameService.resolve(userId);
     }

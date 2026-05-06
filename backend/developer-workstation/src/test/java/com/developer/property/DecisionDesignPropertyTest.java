@@ -92,7 +92,8 @@ public class DecisionDesignPropertyTest {
                 new ObjectMapper(),
                 mock(UserDisplayNameService.class),
                 mock(FunctionUnitWorkspaceAccessService.class),
-                functionUnitDevGroupAssignmentRepository
+                functionUnitDevGroupAssignmentRepository,
+                mock(com.developer.component.VersionComponent.class)
         );
 
         idGenerator = new AtomicLong(1L);
@@ -708,7 +709,8 @@ public class DecisionDesignPropertyTest {
                 new ObjectMapper(),
                 mock(UserDisplayNameService.class),
                 mock(FunctionUnitWorkspaceAccessService.class),
-                cloneDevGroupRepo
+                cloneDevGroupRepo,
+                mock(com.developer.component.VersionComponent.class)
         );
 
         // Mock: functionUnitRepository.save returns the entity with an ID

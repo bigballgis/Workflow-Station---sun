@@ -52,7 +52,8 @@ public class DecisionTableActionPropertyTest {
                 new ObjectMapper(),
                 mock(UserDisplayNameService.class),
                 mock(FunctionUnitWorkspaceAccessService.class),
-                devGroupAssignmentRepository
+                devGroupAssignmentRepository,
+                mock(com.developer.component.VersionComponent.class)
         );
         idGenerator = new AtomicLong(1L);
     }

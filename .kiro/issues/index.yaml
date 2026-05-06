@@ -1157,3 +1157,11 @@
   category: bug
   summary: "PortalRelationTableServiceImpl.queryTableData 接收 search 参数但未用于过滤，relation table 页面搜索无效"
   file: "backend/user-portal/src/main/java/com/portal/service/PortalRelationTableServiceImpl.java"
+
+- id: "159"
+  status: fixed
+  fixed_at: "2026-05-06"
+  severity: major
+  category: bug
+  summary: "developer-workstation 版本管理前端调用 /function-units/{id}/versions/compare 与 /versions/{versionId}/export，但后端缺少对应路由映射"
+  file: "frontend/developer-workstation/src/api/functionUnit.ts; backend/developer-workstation/src/main/java/com/developer/controller/FunctionUnitController.java"

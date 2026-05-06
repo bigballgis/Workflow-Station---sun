@@ -138,6 +138,16 @@ public class VersionComponentImpl implements VersionComponent {
         if (!targetVersion.getFunctionUnit().getId().equals(functionUnitId)) {
             throw new DeveloperBusinessException("BIZ_VERSION_MISMATCH", "Version does not belong to this function unit");
         }
+
+        // 方案 B：禁止回滚到当前活跃版本（既无意义，也会触发不必要的 unique 冲突路径）
+        String currentVersionNumber = functionUnit.getCurrentVersion();
+        if (currentVersionNumber != null
+                && currentVersionNumber.equals(targetVersion.getVersionNumber())) {
+            throw new DeveloperBusinessException(
+                    "BIZ_ROLLBACK_TO_CURRENT",
+                    "Target version " + targetVersion.getVersionNumber()
+                            + " is already the current active version, rollback is not needed.");
+        }
         
         try {
             // 先创建当前状态的版本作为备份
@@ -150,6 +160,15 @@ public class VersionComponentImpl implements VersionComponent {
                     .publishedBy(getCurrentOperator())
                     .build();
             versionRepository.save(backup);
+
+            // 方案 A：两阶段清空。
+            // Hibernate 的 ActionQueue 默认顺序是 INSERT 先于 DELETE，
+            // 若直接在 restoreFromSnapshot 内部 clear()+add()，会用同样的
+            // (function_unit_id, name) 组合先 INSERT 新行，再 DELETE 旧行，
+            // 触发 uk_action_name_fu / uk_table_name_fu / uk_form_name_fu / uk_decision_fu_key
+            // 等唯一约束冲突。这里先把所有受唯一约束的子集合 clear 后强制 flush，
+            // 让孤儿 DELETE 立刻落库，再交给 restoreFromSnapshot 重建。
+            clearChildCollectionsAndFlush(functionUnit);
             
             // 恢复目标版本的内容
             Map<String, Object> snapshot = objectMapper.readValue(targetVersion.getSnapshotData(), Map.class);
@@ -170,8 +189,40 @@ public class VersionComponentImpl implements VersionComponent {
             functionUnit.setStatus(FunctionUnitStatus.DRAFT);
             
             return functionUnitRepository.save(functionUnit);
+        } catch (DeveloperBusinessException e) {
+            throw e;
         } catch (Exception e) {
+            log.error("Rollback failed, functionUnitId={}, versionId={}", functionUnitId, versionId, e);
             throw new DeveloperBusinessException("SYS_ROLLBACK_ERROR", "Rollback failed: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 清空 FunctionUnit 下所有携带 (function_unit_id, *) 唯一约束的子集合，
+     * 并立即 flush 让 DELETE 在 INSERT 之前落库，避免 Hibernate 默认的
+     * INSERT-before-DELETE 顺序导致的唯一约束冲突。
+     */
+    private void clearChildCollectionsAndFlush(FunctionUnit functionUnit) {
+        boolean dirty = false;
+        if (!functionUnit.getActionDefinitions().isEmpty()) {
+            functionUnit.getActionDefinitions().clear();
+            dirty = true;
+        }
+        if (!functionUnit.getFormDefinitions().isEmpty()) {
+            functionUnit.getFormDefinitions().clear();
+            dirty = true;
+        }
+        if (!functionUnit.getDecisionDefinitions().isEmpty()) {
+            functionUnit.getDecisionDefinitions().clear();
+            dirty = true;
+        }
+        if (!functionUnit.getTableDefinitions().isEmpty()) {
+            // tableDefinitions 同样带 uk_table_name_fu，下游 fieldDefinitions 通过 ON DELETE CASCADE 清理
+            functionUnit.getTableDefinitions().clear();
+            dirty = true;
+        }
+        if (dirty) {
+            functionUnitRepository.saveAndFlush(functionUnit);
         }
     }
     

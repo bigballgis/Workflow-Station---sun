@@ -90,7 +90,7 @@ public class FunctionUnitIconPropertyTest {
         FunctionUnitComponent component = new FunctionUnitComponentImpl(
                 functionUnitRepository, processRepo, tableRepo, formRepo, 
                 actionRepo, mock(com.developer.repository.DecisionDefinitionRepository.class), versionRepo, iconRepository, objectMapper, userDisplayNameService,
-                workspaceAccessService, devGroupAssignmentRepository);
+                workspaceAccessService, devGroupAssignmentRepository, mock(com.developer.component.VersionComponent.class));
         
         // Create function unit with icon
         FunctionUnitRequest request = new FunctionUnitRequest();
@@ -146,7 +146,7 @@ public class FunctionUnitIconPropertyTest {
         FunctionUnitComponent component = new FunctionUnitComponentImpl(
                 functionUnitRepository, processRepo, tableRepo, formRepo, 
                 actionRepo, mock(com.developer.repository.DecisionDefinitionRepository.class), versionRepo, iconRepository, objectMapper, userDisplayNameService,
-                workspaceAccessService, devGroupAssignmentRepository);
+                workspaceAccessService, devGroupAssignmentRepository, mock(com.developer.component.VersionComponent.class));
         
         // Create function unit without icon
         FunctionUnitRequest request = new FunctionUnitRequest();

@@ -15,10 +15,13 @@ import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 功能单元控制器
@@ -108,6 +111,39 @@ public class FunctionUnitController extends BaseController {
     @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<List<VersionResponse>>> getVersions(@PathVariable Long id) {
         return handleRequest(() -> functionUnitComponent.getVersionHistory(id));
+    }
+
+    @PostMapping("/{id}/versions/{versionId}/rollback")
+    @Operation(summary = "Rollback to history version")
+    @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
+    public ResponseEntity<ApiResponse<FunctionUnit>> rollback(
+            @PathVariable Long id,
+            @PathVariable Long versionId) {
+        return handleRequest(() -> functionUnitComponent.rollback(id, versionId));
+    }
+
+    @GetMapping("/{id}/versions/compare")
+    @Operation(summary = "Compare two versions of a function unit")
+    @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> compareVersions(
+            @PathVariable Long id,
+            @RequestParam Long versionId1,
+            @RequestParam Long versionId2) {
+        return handleRequest(() -> functionUnitComponent.compareVersions(id, versionId1, versionId2));
+    }
+
+    @GetMapping("/{id}/versions/{versionId}/export")
+    @Operation(summary = "Export the snapshot data of a specific version")
+    @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
+    public ResponseEntity<byte[]> exportVersion(
+            @PathVariable Long id,
+            @PathVariable Long versionId) {
+        byte[] payload = functionUnitComponent.exportVersion(id, versionId);
+        String filename = "function-unit-" + id + "-version-" + versionId + ".json";
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_JSON)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                .body(payload);
     }
 
     @GetMapping("/{id}/dev-groups")

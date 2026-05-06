@@ -72,7 +72,8 @@ class DecisionTableActionValidationTest {
                 objectMapper,
                 userDisplayNameService,
                 functionUnitWorkspaceAccessService,
-                functionUnitDevGroupAssignmentRepository
+                functionUnitDevGroupAssignmentRepository,
+                org.mockito.Mockito.mock(com.developer.component.VersionComponent.class)
         );
     }
 

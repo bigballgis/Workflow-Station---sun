@@ -50,7 +50,8 @@ public class BpmnDmnCrossReferencePropertyTest {
                 new ObjectMapper(),
                 mock(UserDisplayNameService.class),
                 mock(com.developer.security.FunctionUnitWorkspaceAccessService.class),
-                devGroupAssignmentRepository
+                devGroupAssignmentRepository,
+                mock(com.developer.component.VersionComponent.class)
         );
         idGenerator = new AtomicLong(1L);
     }

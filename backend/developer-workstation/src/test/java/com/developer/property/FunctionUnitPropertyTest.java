@@ -9,7 +9,6 @@ import com.developer.repository.*;
 import com.developer.security.FunctionUnitWorkspaceAccessService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import net.jqwik.api.*;
-import org.mockito.Mockito;
 
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
@@ -42,7 +41,7 @@ public class FunctionUnitPropertyTest {
         when(devGroupAssignmentRepository.findByFunctionUnitId(anyLong())).thenReturn(java.util.Collections.emptyList());
         return new FunctionUnitComponentImpl(
                 repository, processRepo, tableRepo, formRepo, actionRepo, mock(com.developer.repository.DecisionDefinitionRepository.class), versionRepo, iconRepo, objectMapper, userDisplayNameService,
-                workspaceAccessService, devGroupAssignmentRepository);
+                workspaceAccessService, devGroupAssignmentRepository, mock(com.developer.component.VersionComponent.class));
     }
     
     /**
