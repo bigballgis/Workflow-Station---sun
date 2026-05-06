@@ -75,6 +75,7 @@ export default {
     endDate: '结束日期',
     logout: '退出登录',
     logoutSuccess: '已退出登录',
+    empty: '-',
     pleaseInput: '请输入{label}',
     pleaseSelect: '请选择{label}',
     yes: '是',
@@ -253,6 +254,8 @@ export default {
     dataModifiedPleaseRefresh: '数据已被修改，请刷新后重试',
     allParticipantsMustHaveAssignee: '请为子表中每一行点击「分配」指定处理人后再完成。',
     addParticipantInfoForm: '添加参与者信息表',
+    noFormBound: '无绑定表单',
+    userOptionFormat: '{name}（{username}）',
   },
   process: {
     title: '新建申请',

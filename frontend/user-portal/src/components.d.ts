@@ -8,6 +8,8 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     ActionButtons: typeof import('./components/ActionButtons.vue')['default']
+    ActionDialog: typeof import('./components/tasks/ActionDialog.vue')['default']
+    ApproveDialog: typeof import('./components/tasks/ApproveDialog.vue')['default']
     BuBoundedRoleReminder: typeof import('./components/BuBoundedRoleReminder.vue')['default']
     CalendarWidget: typeof import('./components/widgets/CalendarWidget.vue')['default']
     ChangeHistoryPanel: typeof import('./components/ChangeHistoryPanel.vue')['default']
@@ -76,9 +78,11 @@ declare module 'vue' {
     ElUpload: typeof import('element-plus/es')['ElUpload']
     FieldRenderer: typeof import('./components/FieldRenderer.vue')['default']
     FileUploader: typeof import('./components/FileUploader.vue')['default']
+    FormPopupDialog: typeof import('./components/tasks/FormPopupDialog.vue')['default']
     FormRenderer: typeof import('./components/FormRenderer.vue')['default']
     LookupField: typeof import('./components/lookup/LookupField.vue')['default']
     LookupViewDisplay: typeof import('./components/lookup/LookupViewDisplay.vue')['default']
+    MiFillDialog: typeof import('./components/tasks/MiFillDialog.vue')['default']
     N8nActionDialog: typeof import('./components/N8nActionDialog.vue')['default']
     NotificationBadge: typeof import('./components/NotificationBadge.vue')['default']
     NotificationsWidget: typeof import('./components/widgets/NotificationsWidget.vue')['default']
@@ -94,7 +98,11 @@ declare module 'vue' {
     SubTableAddDialog: typeof import('./components/SubTableAddDialog.vue')['default']
     SubTableField: typeof import('./components/SubTableField.vue')['default']
     SubTaskForm: typeof import('./components/SubTaskForm.vue')['default']
+    TaskActionBar: typeof import('./components/tasks/TaskActionBar.vue')['default']
+    TaskBasicInfo: typeof import('./components/tasks/TaskBasicInfo.vue')['default']
+    TaskHistorySection: typeof import('./components/tasks/TaskHistorySection.vue')['default']
     TaskOverviewWidget: typeof import('./components/widgets/TaskOverviewWidget.vue')['default']
+    TaskSnapshotSection: typeof import('./components/tasks/TaskSnapshotSection.vue')['default']
     UserProfileDropdown: typeof import('./components/UserProfileDropdown.vue')['default']
     WorkspaceContextBar: typeof import('./components/WorkspaceContextBar.vue')['default']
   }

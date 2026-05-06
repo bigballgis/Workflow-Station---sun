@@ -1,0 +1,39 @@
+<template>
+  <el-dialog v-model="visible" :title="title" width="500px">
+    <el-form :model="formData" label-width="80px">
+      <el-form-item :label="$t('task.comment')">
+        <el-input v-model="formData.comment" type="textarea" :rows="4" :placeholder="$t('task.commentPlaceholder')" />
+      </el-form-item>
+    </el-form>
+    <template #footer>
+      <el-button @click="visible = false">{{ $t('common.cancel') }}</el-button>
+      <el-button type="primary" @click="$emit('confirm')" :loading="submitting">{{ $t('common.confirm') }}</el-button>
+    </template>
+  </el-dialog>
+</template>
+
+<script setup lang="ts">
+import { ref, watch } from 'vue'
+
+const props = defineProps<{
+  modelValue: boolean
+  title: string
+  formData: { comment: string }
+  submitting: boolean
+}>()
+
+const emit = defineEmits<{
+  (e: 'update:modelValue', value: boolean): void
+  (e: 'confirm'): void
+}>()
+
+const visible = ref(props.modelValue)
+
+watch(() => props.modelValue, (val) => {
+  visible.value = val
+})
+
+watch(visible, (val) => {
+  emit('update:modelValue', val)
+})
+</script>

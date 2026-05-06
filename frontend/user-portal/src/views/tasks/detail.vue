@@ -34,36 +34,7 @@
     <!-- Main content -->
     <div v-else class="content-sections">
       <!-- Section 1: Basic info -->
-      <div class="section info-section">
-        <div class="section-header">
-          <el-icon><InfoFilled /></el-icon>
-          <span>{{ t('task.basicInfo') }}</span>
-        </div>
-        <div class="section-content">
-          <el-descriptions :column="3" border>
-            <el-descriptions-item :label="t('task.taskName')">
-              {{ taskInfo.taskName || '-' }}
-            </el-descriptions-item>
-            <el-descriptions-item :label="t('task.processName')">
-              {{ taskInfo.processDefinitionName || '-' }}
-            </el-descriptions-item>
-            <el-descriptions-item :label="t('task.initiator')">
-              {{ taskInfo.initiatorName || '-' }}
-            </el-descriptions-item>
-            <el-descriptions-item :label="t('task.createTime')">
-              {{ formatDate(taskInfo.createTime) }}
-            </el-descriptions-item>
-            <el-descriptions-item :label="t('task.dueDate')">
-              <span :class="{ 'overdue': taskInfo.isOverdue }">
-                {{ taskInfo.dueDate ? formatDate(taskInfo.dueDate) : '-' }}
-              </span>
-            </el-descriptions-item>
-            <el-descriptions-item :label="t('task.currentAssignee')">
-              {{ getCurrentAssigneeDisplay() }}
-            </el-descriptions-item>
-          </el-descriptions>
-        </div>
-      </div>
+      <TaskBasicInfo :task-info="taskInfo" :format-date="formatDate" :get-current-assignee-display="getCurrentAssigneeDisplay" />
 
       <!-- Section 2: Process diagram -->
       <div class="section workflow-section">
@@ -123,7 +94,7 @@
           <span>{{ selectedNodeId }}</span>
         </div>
         <div class="section-content">
-          <el-empty :description="`No Form Bound`" />
+          <el-empty :description="t('task.noFormBound')" />
           <div style="text-align: center; margin-top: 8px;">
             <el-button size="small" @click="clearNodeSelection">{{ t('common.back') }}</el-button>
           </div>
@@ -258,20 +229,7 @@
       </div>
 
       <!-- Task 17.3: Completed task snapshot comparison view -->
-      <div v-if="isCompletedTask && completedFormData?.snapshot" class="section snapshot-section">
-        <div class="section-header">
-          <el-icon><Document /></el-icon>
-          <span>{{ t('task.completedSnapshot') }}</span>
-        </div>
-        <div class="section-content">
-          <SnapshotDiffRenderer
-            :snapshot-values="completedFormData.snapshot.fieldValues || {}"
-            :live-values="completedFormData.liveValues || {}"
-            :fields="formFields.length > 0 ? formFields : (formTabs.flatMap(tab => tab.fields) || [])"
-            :show-live-values="completedFormData.showLiveValues ?? true"
-          />
-        </div>
-      </div>
+      <TaskSnapshotSection :is-completed-task="isCompletedTask" :completed-form-data="completedFormData" :form-fields="formFields" :form-tabs="formTabs" />
 
       <!-- Task 19.2: Change history panel (title and collapse handled internally by ChangeHistoryPanel) -->
       <div v-if="taskInfo.processInstanceId" class="section change-history-section">
@@ -283,121 +241,17 @@
       </div>
 
       <!-- Section 4: Flow history -->
-      <div class="section history-section">
-        <div class="section-header">
-          <el-icon><Clock /></el-icon>
-          <span>{{ t('task.flowHistory') }}</span>
-        </div>
-        <div class="section-content">
-          <el-alert v-if="historyError" :title="historyError" type="warning" show-icon :closable="false" />
-          <ProcessHistory
-            v-else-if="historyRecords.length > 0"
-            :records="historyRecords.filter(r => !r.activityType?.includes('Gateway'))"
-            :show-header="false"
-            :show-refresh="false"
-            collapsible
-            :default-visible-count="1"
-          />
-          <el-empty v-else :description="t('task.noFlowHistory')" />
-        </div>
-      </div>
+      <TaskHistorySection :history-records="historyRecords" :history-error="historyError" />
 
       <!-- Section 5: Action buttons (hidden for completed tasks) -->
-      <div v-if="!isCompletedTask" class="section action-section">
-        <div class="action-buttons">
-          <div class="left-actions">
-            <el-button @click="$router.back()">{{ t('task.backToList') }}</el-button>
-          </div>
-          <div class="right-actions">
-            <el-button
-              v-if="showImplicitSaveAction"
-              type="primary"
-              :loading="savingTaskForm"
-              @click="saveCurrentTaskForm"
-            >
-              {{ t('common.save') }}
-            </el-button>
-            <!-- Show custom buttons when custom Actions are configured -->
-            <template v-if="taskInfo.actions && taskInfo.actions.length > 0">
-              <el-button
-                v-for="action in taskInfo.actions"
-                :key="action.actionId"
-                :type="getButtonType(action.buttonColor)"
-                @click="handleCustomAction(action)"
-              >
-                <el-icon v-if="action.icon"><component :is="getIconComponent(action.icon)" /></el-icon>
-                {{ getActionLabel(action) }}
-              </el-button>
-            </template>
-            <!-- Show default approval buttons when no custom Actions are configured -->
-            <template v-else-if="taskInfo.actions === undefined || taskInfo.actions === null">
-              <el-button type="success" @click="handleApprove">
-                <el-icon><Check /></el-icon> {{ t('task.approve') }}
-              </el-button>
-              <el-button type="danger" @click="handleReject">
-                <el-icon><Close /></el-icon> {{ t('task.reject') }}
-              </el-button>
-            </template>
-            <!-- Transfer, delegate, urge always shown -->
-            <el-button @click="handleDelegate">
-              <el-icon><User /></el-icon> {{ t('task.delegate') }}
-            </el-button>
-            <el-button @click="handleTransfer">
-              <el-icon><Switch /></el-icon> {{ t('task.transfer') }}
-            </el-button>
-            <el-button type="warning" @click="handleUrge">
-              <el-icon><Bell /></el-icon> {{ t('task.urge') }}
-            </el-button>
-          </div>
-        </div>
-      </div>
+      <TaskActionBar :is-completed-task="isCompletedTask" :show-implicit-save-action="showImplicitSaveAction" :saving-task-form="savingTaskForm" :actions="taskInfo.actions" :get-button-type="getButtonType" :get-icon-component="getIconComponent" :get-action-label="getActionLabel" @save="saveCurrentTaskForm" @custom-action="handleCustomAction" @approve="handleApprove" @reject="handleReject" @delegate="handleDelegate" @transfer="handleTransfer" @urge="handleUrge" />
     </div>
 
     <!-- Approval dialog -->
-    <el-dialog v-model="approveDialogVisible" :title="approveDialogTitle" width="500px">
-      <el-form :model="approveForm" label-width="80px">
-        <el-form-item :label="t('task.comment')">
-          <el-input v-model="approveForm.comment" type="textarea" :rows="4" :placeholder="t('task.commentPlaceholder')" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="approveDialogVisible = false">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary" @click="submitApprove" :loading="submitting">{{ t('common.confirm') }}</el-button>
-      </template>
-    </el-dialog>
+    <ApproveDialog v-model="approveDialogVisible" :title="approveDialogTitle" :form-data="approveForm" :submitting="submitting" @confirm="submitApprove" />
 
     <!-- Delegate/Transfer dialog -->
-    <el-dialog v-model="actionDialogVisible" :title="actionDialogTitle" width="500px" @opened="onActionDialogOpened" class="task-action-dialog">
-      <el-form :model="actionForm" label-width="120px" label-position="left" class="task-action-form">
-        <el-form-item :label="t('task.targetUser')" v-show="currentAction !== 'urge'">
-          <el-select 
-            v-model="actionForm.targetUserId" 
-            :placeholder="t('task.selectUser')" 
-            :teleported="false"
-            style="width: 100%;"
-          >
-            <el-option
-              v-for="user in userOptions"
-              :key="user.id"
-              :label="user.name + ' (' + user.username + ')'"
-              :value="user.id"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item :label="currentAction === 'urge' ? t('task.urgeMessage') : t('task.reasonDescription')" class="task-action-reason-item">
-          <el-input 
-            v-model="actionForm.reason" 
-            type="textarea" 
-            :rows="5" 
-            :placeholder="currentAction === 'urge' ? t('task.urgeMessagePlaceholder') : t('task.reasonPlaceholder')" 
-          />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="actionDialogVisible = false">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary" @click="submitAction" :loading="submitting">{{ t('common.confirm') }}</el-button>
-      </template>
-    </el-dialog>
+    <ActionDialog v-model="actionDialogVisible" :title="actionDialogTitle" :current-action="currentAction" :form-data="actionForm" :user-options="userOptions" :submitting="submitting" @confirm="submitAction" @opened="onActionDialogOpened" />
 
     <!-- N8N Action dialog -->
     <N8nActionDialog
@@ -410,107 +264,51 @@
     />
 
     <!-- Form popup dialog -->
-    <el-dialog v-model="formPopupVisible" :title="formPopupTitle" :width="formPopupWidth" append-to-body>
-      <div v-if="formPopupFields.length > 0 || formPopupTabs.length > 0" class="form-popup-container">
-        <FormRenderer
-          :fields="formPopupFields"
-          :tabs="formPopupTabs"
-          v-model="formPopupData"
-          :label-width="formPopupLabelWidth"
-          :readonly="formPopupReadOnly"
-        />
-      </div>
-      <el-empty v-else :description="t('task.noFormData')" />
-      <template #footer>
-        <el-button @click="formPopupVisible = false">{{ t('common.cancel') }}</el-button>
-        <el-button v-if="!formPopupReadOnly" type="primary" @click="submitFormPopup" :loading="submitting">
-          {{ t('common.submit') }}
-        </el-button>
-      </template>
-    </el-dialog>
+    <FormPopupDialog v-model="formPopupVisible" :title="formPopupTitle" :width="formPopupWidth" :fields="formPopupFields" :tabs="formPopupTabs" :form-data="formPopupData" @update:form-data="val => formPopupData = { ...formPopupData, ...val }" :label-width="formPopupLabelWidth" :readonly="formPopupReadOnly" :submitting="submitting" @submit="submitFormPopup" />
 
     <!-- MI subtask fill-form dialog -->
-    <el-dialog
-      v-model="miFillDialogVisible"
-      :title="currentFormName || t('task.taskForm')"
-      width="600px"
-      destroy-on-close
-    >
-      <div v-if="formFields.length > 0 || formTabs.length > 0" class="form-popup-container">
-        <FormRenderer
-          :fields="formFields"
-          :tabs="formTabs"
-          v-model="miFillDialogData"
-          :label-width="formLabelWidth"
-          :readonly="formReadOnly || miFillDialogReadOnly"
-          :subTableBindings="miFillSubTableBindings"
-          :preview-sub-tables="true"
-          :suppress-link-form-initial-data="isMiSubTaskMode && !isCompletedTask"
-          :show-link-form-dialog-footer="!isCompletedTask && !formReadOnly && !miFillDialogReadOnly"
-          @update:subTableData="syncMiFillSubTableRows"
-        />
-      </div>
-      <el-empty v-else :description="t('task.noFormData')" />
-      <template #footer>
-        <el-button @click="miFillDialogVisible = false">{{ t('common.cancel') }}</el-button>
-        <el-button v-if="!formReadOnly && !miFillDialogReadOnly" type="primary" @click="saveMiFillDialog">
-          {{ t('common.confirm') }}
-        </el-button>
-      </template>
-    </el-dialog>
+    <MiFillDialog v-model="miFillDialogVisible" :title="currentFormName || t('task.taskForm')" :fields="formFields" :tabs="formTabs" :form-data="miFillDialogData" @update:form-data="val => miFillDialogData = { ...miFillDialogData, ...val }" :label-width="formLabelWidth" :form-read-only="formReadOnly" :dialog-read-only="miFillDialogReadOnly" :sub-table-bindings="miFillSubTableBindings" :is-mi-sub-task-mode="isMiSubTaskMode" :is-completed-task="isCompletedTask" @update:sub-table-data="syncMiFillSubTableRows" @confirm="saveMiFillDialog" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onBeforeUnmount, nextTick, markRaw, computed } from 'vue'
+import { ref, reactive, onMounted, onBeforeUnmount, nextTick, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
-import { 
-  ArrowLeft, 
-  ArrowDown,
-  InfoFilled, 
-  Share, 
-  Document, 
-  Clock, 
-  Bell, 
-  Check, 
-  Close, 
-  User, 
-  Switch,
-  CircleCheck,
-  CircleClose,
-  Files,
-  Warning
-} from '@element-plus/icons-vue'
+import { ArrowLeft } from '@element-plus/icons-vue'
 import { 
   getTaskDetail, 
   getTaskHistory, 
-  completeTask, 
-  delegateTask, 
-  transferTask, 
-  urgeTask,
   TaskInfo, 
   TaskHistoryInfo,
   TaskActionInfo
 } from '@/api/task'
 import { processApi } from '@/api/process'
-import { useUserStore } from '@/stores/user'
-import { userApi, type UserOption } from '@/api/user'
 import ProcessDiagram, { type ProcessNode, type ProcessFlow } from '@/components/ProcessDiagram.vue'
 import ProcessHistory, { type HistoryRecord } from '@/components/ProcessHistory.vue'
 import FormRenderer, { type FormField, type FormTab } from '@/components/FormRenderer.vue'
 import SubTableField from '@/components/SubTableField.vue'
 import N8nActionDialog from '@/components/N8nActionDialog.vue'
-import type { ActionDefinition } from '@/components/N8nActionDialog.vue'
-import { applyAutoFill } from '@/utils/n8nAutoFillEngine'
 import {
   resolveAssigneeFieldForBinding,
   allSubTableRowsHaveAssignee
 } from '@/utils/subTableAssignment'
 import dayjs from 'dayjs'
-import SnapshotDiffRenderer from '@/components/SnapshotDiffRenderer.vue'
 import ChangeHistoryPanel from '@/components/ChangeHistoryPanel.vue'
+import TaskBasicInfo from '@/components/tasks/TaskBasicInfo.vue'
+import ApproveDialog from '@/components/tasks/ApproveDialog.vue'
+import ActionDialog from '@/components/tasks/ActionDialog.vue'
+import FormPopupDialog from '@/components/tasks/FormPopupDialog.vue'
+import MiFillDialog from '@/components/tasks/MiFillDialog.vue'
+import TaskSnapshotSection from '@/components/tasks/TaskSnapshotSection.vue'
+import TaskHistorySection from '@/components/tasks/TaskHistorySection.vue'
+import TaskActionBar from '@/components/tasks/TaskActionBar.vue'
+import { useTaskForm } from '@/composables/tasks/useTaskForm'
+import { useBpmnParser } from '@/composables/tasks/useBpmnParser'
+import { useTaskDisplay } from '@/composables/tasks/useTaskDisplay'
+import { useTaskActions } from '@/composables/tasks/useTaskActions'
+import { useCustomActions } from '@/composables/tasks/useCustomActions'
 import {
   getProcessFormData,
   submitProcessFormUpdate,
@@ -522,12 +320,10 @@ import {
   type CompletedTaskFormData,
 } from '@/api/processForm'
 import { relationTableApi } from '@/api/relationTable'
-import { isRejectedName } from '@/utils/statusMatcher'
 import { unwrapUserLikeValueToDisplayString, extractUserIdFromCellValue } from '@/components/subTableAddDialogHelpers'
 
 const { t } = useI18n()
 const route = useRoute()
-const userStore = useUserStore()
 const router = useRouter()
 
 const taskId = route.params.id as string
@@ -538,24 +334,30 @@ const fallbackProcessInstanceId = computed(() => {
 
 const loading = ref(true)
 const submitting = ref(false)
-const savingTaskForm = ref(false)
 const taskInfo = ref<Partial<TaskInfo>>({})
 const effectiveTaskId = computed(() => {
   const currentTaskId = (taskInfo.value as Record<string, unknown>)?.taskId
   return typeof currentTaskId === 'string' && currentTaskId.trim().length > 0 ? currentTaskId : taskId
 })
 
+// Display helpers
+const taskDisplay = useTaskDisplay(taskInfo as any)
+const {
+  getHistoryStatus,
+  getHistoryAction,
+  formatDate,
+  getCurrentAssigneeDisplay,
+  getPriorityLabel,
+  getPriorityType,
+  getButtonType,
+  getActionLabel,
+  getIconComponent
+} = taskDisplay
+
 // Error state
 const taskError = ref<string | null>(null)
 const processError = ref<string | null>(null)
 const historyError = ref<string | null>(null)
-
-// Process diagram data
-const processNodes = ref<ProcessNode[]>([])
-const processFlows = ref<ProcessFlow[]>([])
-const currentNodeId = ref('')
-const completedNodeIds = ref<string[]>([])
-const bpmnXml = ref('')
 
 // Node-to-form mapping for diagram click interaction
 const selectedNodeId = ref<string | null>(null)
@@ -572,14 +374,6 @@ const selectedNodeForm = computed<NodeFormInfo | null>(() => {
   if (!selectedNodeId.value) return null
   return nodeFormMap.value.get(selectedNodeId.value) ?? null
 })
-
-// Form data
-const formFields = ref<FormField[]>([])
-const formTabs = ref<FormTab[]>([])
-const formData = ref<Record<string, any>>({})
-const currentFormName = ref('')
-const formReadOnly = ref(false)
-const formLabelWidth = ref('160px')
 
 // Previous node forms (read-only display, ordered)
 interface PreviousFormEntry {
@@ -919,90 +713,6 @@ const miFillDialogData = ref<Record<string, any>>({})
 const miFillSubTableBindings = ref<typeof subTableBindings.value>([])
 const miFilled = ref(false)
 const miFillDialogReadOnly = ref(false)
-let subTableAutosaveTimer: ReturnType<typeof setTimeout> | null = null
-
-function buildSubTableSubmitPayload() {
-  const subTables: Record<string, any> = { ...((formData.value.__subTables__ as Record<string, any>) || {}) }
-  const subTableData: Record<string, Array<Record<string, unknown>>> = {}
-
-  for (const binding of subTableBindings.value) {
-    const rows = cloneSubTableRows(Array.isArray(binding.data) ? binding.data : [])
-    const existing = getSavedSubTableRows(subTables, binding)
-    const merged = isMiSubTaskMode.value ? mergeSubTableRowsByRowId(existing, rows) : rows
-    const out = cloneSubTableRows(merged)
-    subTables[binding.bindingId] = out
-    subTables[String(binding.bindingId)] = out
-    subTableData[String(binding.bindingId)] = out
-    if (binding.tableName) {
-      subTables[binding.tableName] = out
-      subTables[normalizeSubTableName(binding.tableName)] = out
-      subTableData[binding.tableName] = out
-    }
-  }
-
-  return {
-    formData: { __subTables__: subTables },
-    subTableData
-  }
-}
-
-function buildCurrentTaskFormSubmitPayload() {
-  const subTablePayload = buildSubTableSubmitPayload()
-  return {
-    formData: {
-      ...formData.value,
-      ...subTablePayload.formData
-    },
-    subTableData: subTablePayload.subTableData,
-    baselineValues: taskFormDTO.value?.fieldValues || {}
-  }
-}
-
-async function saveCurrentTaskForm() {
-  if (formReadOnly.value || !effectiveTaskId.value) return
-  savingTaskForm.value = true
-  try {
-    await apiSubmitTaskForm(effectiveTaskId.value, buildCurrentTaskFormSubmitPayload())
-    ElMessage.success(t('task.operationSuccess'))
-  } catch (error) {
-    console.error('[TaskForm] save failed:', error)
-    ElMessage.error(t('task.operationFailed'))
-  } finally {
-    savingTaskForm.value = false
-  }
-}
-
-function scheduleSubTableAutosave() {
-  if (formReadOnly.value || isCompletedTask.value || isMiSubTaskMode.value) return
-  if (!effectiveTaskId.value) return
-  if (subTableAutosaveTimer) clearTimeout(subTableAutosaveTimer)
-
-  subTableAutosaveTimer = setTimeout(async () => {
-    subTableAutosaveTimer = null
-    try {
-      await apiSubmitTaskForm(effectiveTaskId.value, {
-        ...buildSubTableSubmitPayload(),
-        baselineValues: {}
-      })
-    } catch (error) {
-      console.error('[SubTable] autosave failed:', error)
-      ElMessage.error(t('task.operationFailed'))
-    }
-  }, 400)
-}
-
-function getCurrentFormFieldKeys(): string[] {
-  const keys = new Set<string>()
-  formFields.value.forEach((f: any) => {
-    if (f?.key) keys.add(String(f.key))
-  })
-  formTabs.value.forEach((tab: any) => {
-    ;(tab?.fields || []).forEach((f: any) => {
-      if (f?.key) keys.add(String(f.key))
-    })
-  })
-  return Array.from(keys)
-}
 
 function isolateMiSubTaskData(taskData: any) {
   const currentItem = taskData?.variables?._currentItem as { rowId?: number; assigneeId?: string } | undefined
@@ -1201,24 +911,6 @@ async function saveMiFillDialog() {
   }
 }
 
-/** Validate on "Assign Participants" node only: every sub-table row must be assigned (aligns with backend Task_AssignParticipants + buildParticipantsCollection) */
-function validateSubTableAssigneesForComplete(): boolean {
-  const tdk = (taskInfo.value as { taskDefinitionKey?: string }).taskDefinitionKey || ''
-  if (tdk !== 'Task_AssignParticipants') {
-    return true
-  }
-  for (const b of subTableBindings.value) {
-    const af = resolveAssigneeFieldForBinding(b.columns, b.tableName)
-    if (!af) continue
-    const rows = b.data || []
-    if (!allSubTableRowsHaveAssignee(rows, af)) {
-      ElMessage.warning(t('task.allParticipantsMustHaveAssignee'))
-      return false
-    }
-  }
-  return true
-}
-
 // Lookup config fallback map (from rt_lookup_configs)
 const lookupDbConfigs = ref<Record<string, { tableId: number; searchFields: string[]; displayField: string; viewFields: any[] }>>({})
 
@@ -1246,27 +938,11 @@ const actionForm = reactive({
 // User search
 const userOptions = ref<any[]>([])
 const userSearchLoading = ref(false)
-const searchUsers = async (keyword: string) => {
-  userSearchLoading.value = true
-  try {
-    const result = await userApi.searchUsers(keyword || '')
-    console.log('[detail] searchUsers result:', result, 'length:', result.length)
-    // Assign new array directly to ensure reactivity is triggered
-    userOptions.value = [...result]
-    console.log('[detail] userOptions.value after assign:', userOptions.value.length)
-  } catch (e) {
-    console.error('Failed to search users:', e)
-    userOptions.value = []
-  } finally {
-    userSearchLoading.value = false
-  }
-}
 
-const onActionDialogOpened = () => {
-  if (currentAction.value !== 'urge') {
-    searchUsers('')
-  }
-}
+// ========== useTaskActions composable ==========
+
+// composable blocks moved below (after loadTaskDetail)
+
 
 // ── Node click handlers for diagram ──────────────────────────────────────
 const handleNodeClick = (node: ProcessNode) => {
@@ -1283,20 +959,11 @@ const clearNodeSelection = () => {
 }
 
 // Form popup state
-const formPopupVisible = ref(false)
-const formPopupTitle = ref('')
-const formPopupFields = ref<FormField[]>([])
-const formPopupTabs = ref<FormTab[]>([])
-const formPopupData = ref<Record<string, any>>({})
-const formPopupReadOnly = ref(false)
-const formPopupWidth = ref('800px')
-const formPopupLabelWidth = ref('160px')
-const currentFormPopupAction = ref<TaskActionInfo | null>(null)
 
-// N8N Action dialog state
-const n8nActionDialogVisible = ref(false)
-const n8nActionDefinition = ref<ActionDefinition>({ id: 0 })
-const n8nInitialData = ref<Record<string, any> | undefined>(undefined)
+// ========== useCustomActions composable ==========
+
+// Form popup state
+// (n8n/form popup state now provided by useCustomActions below)
 
 // Task 17: Process Form / Task Form separation state
 const processFormData = ref<ProcessFormData | null>(null)
@@ -1319,6 +986,12 @@ const showImplicitSaveAction = computed(() =>
 // Task 17.3: Completed task snapshot
 const completedFormData = ref<CompletedTaskFormData | null>(null)
 const isCompletedTask = ref(false)
+
+const bpmnParser = useBpmnParser({ taskInfo: taskInfo as any, historyRecords, isCompletedTask })
+const { processNodes, processFlows, completedNodeIds, currentNodeId, bpmnXml, parseBpmnXml, parseBpmnXmlAndGetFormId, parseBpmnXmlAndGetPreviousFormIds } = bpmnParser
+
+const taskForm = useTaskForm({ subTableBindings, isMiSubTaskMode, isCompletedTask, effectiveTaskId, taskFormDTO: taskFormDTO as any })
+const { formFields, formTabs, formData, currentFormName, formReadOnly, formLabelWidth, savingTaskForm, saveCurrentTaskForm, scheduleSubTableAutosave, getCurrentFormFieldKeys, clearAutosaveTimer: clearFormAutosaveTimer } = taskForm
 
 // Task 17.4: Return_To_Requester state
 const isReturnToRequester = ref(false)
@@ -1449,6 +1122,70 @@ const loadTaskDetail = async () => {
     loading.value = false
   }
 }
+
+const taskActions = useTaskActions({
+  taskId,
+  taskInfo: taskInfo as any,
+  subTableBindings,
+  formData,
+  submitting,
+  approveDialogVisible,
+  approveDialogTitle,
+  currentApproveAction,
+  approveForm,
+  actionDialogVisible,
+  actionDialogTitle,
+  currentAction,
+  actionForm,
+  userOptions,
+  userSearchLoading,
+  loadTaskDetail
+})
+const {
+  validateSubTableAssigneesForComplete,
+  searchUsers,
+  onActionDialogOpened,
+  handleApprove,
+  handleReject,
+  handleDelegate,
+  handleTransfer,
+  handleUrge,
+  submitApprove,
+  submitAction
+} = taskActions
+
+const customActions = useCustomActions({
+  taskInfo: taskInfo as any,
+  subTableBindings,
+  formData,
+  submitting,
+  saveCurrentTaskForm,
+  validateSubTableAssigneesForComplete,
+  approveDialogVisible,
+  approveDialogTitle,
+  currentApproveAction,
+  approveForm,
+  loadTaskDetail
+})
+const {
+  n8nActionDialogVisible,
+  n8nActionDefinition,
+  n8nInitialData,
+  formPopupVisible,
+  formPopupTitle,
+  formPopupFields,
+  formPopupTabs,
+  formPopupData,
+  formPopupReadOnly,
+  formPopupWidth,
+  formPopupLabelWidth,
+  currentFormPopupAction: currentFormPopupActionRef,
+  handleCustomAction,
+  handleN8nActionExecuted,
+  openFormPopup,
+  submitFormPopup
+} = customActions
+
 
 const loadTaskHistory = async () => {
   historyError.value = null
@@ -1971,757 +1708,7 @@ const handleProcessFormSubmit = async () => {
   }
 }
 
-// Parse BPMN XML and get the current node formId and formName
-const parseBpmnXmlAndGetFormId = (xml: string): { formId: string | null, formName: string | null, readOnly: boolean } => {
-  if (!xml) return { formId: null, formName: null, readOnly: false }
-  
-  try {
-    const parser = new DOMParser()
-    const doc = parser.parseFromString(xml, 'text/xml')
-    const currentTaskDefinitionKey = (taskInfo.value as any).taskDefinitionKey || ''
-    const currentTaskName = taskInfo.value.taskName || ''
-    
-    console.log('[BPMN] matching task: taskDefinitionKey=', currentTaskDefinitionKey, 'taskName=', currentTaskName)
-    
-    // Find all userTask nodes
-    const allElements = doc.getElementsByTagName('*')
-    
-    for (let i = 0; i < allElements.length; i++) {
-      const el = allElements[i]
-      const localName = el.localName || el.nodeName.split(':').pop()
-      
-      if (localName === 'userTask') {
-        const bpmnId = el.getAttribute('id') || ''
-        const bpmnName = el.getAttribute('name') || ''
-        
-        // Prefer matching by taskDefinitionKey (BPMN element id), then by taskName
-        const isMatch = (currentTaskDefinitionKey && bpmnId === currentTaskDefinitionKey)
-          || (!currentTaskDefinitionKey && bpmnName === currentTaskName)
-        
-        console.log('[BPMN] userTask id=', bpmnId, 'name=', bpmnName, 'isMatch=', isMatch)
-        
-        if (isMatch) {
-          // Find formId, formName, and formReadOnly properties
-          let formId: string | null = null
-          let formName: string | null = null
-          let readOnly = false
-          
-          const taskProps = el.getElementsByTagName('*')
-          for (let j = 0; j < taskProps.length; j++) {
-            const prop = taskProps[j]
-            const propLocalName = prop.localName || prop.nodeName.split(':').pop()
-            
-            if (propLocalName === 'property' || propLocalName === 'values') {
-              const name = prop.getAttribute('name')
-              const value = prop.getAttribute('value')
-              
-              if (name === 'formId' && value) {
-                formId = value
-              }
-              if (name === 'formName' && value) {
-                formName = value
-              }
-              if (name === 'formReadOnly' && value === 'true') {
-                readOnly = true
-              }
-            }
-          }
-          
-          console.log('[BPMN] matched userTask, formId=', formId, 'formName=', formName, 'readOnly=', readOnly)
-          return { formId, formName, readOnly }
-        }
-      }
-    }
-    console.warn('[BPMN] no userTask matched for taskDefinitionKey=', currentTaskDefinitionKey, 'taskName=', currentTaskName)
-  } catch (error) {
-    console.error('Failed to parse BPMN for formId:', error)
-  }
-  
-  return { formId: null, formName: null, readOnly: false }
-}
-
-// Parse BPMN XML: return form info bound to all nodes before the current one, in topological order (deduplicated)
-const parseBpmnXmlAndGetPreviousFormIds = (xml: string): Array<{ formId: string | null, formName: string | null, taskName: string | null }> => {
-  if (!xml) return []
-  try {
-    const parser = new DOMParser()
-    const doc = parser.parseFromString(xml, 'text/xml')
-    const allElements = doc.getElementsByTagName('*')
-    const currentTaskDefinitionKey = (taskInfo.value as any).taskDefinitionKey || ''
-    const currentTaskName = taskInfo.value.taskName || ''
-
-    // Collect all userTasks and sequenceFlows
-    const tasks = new Map<string, { name: string; formId: string | null; formName: string | null }>()
-    const flows: Array<{ source: string; target: string }> = []
-
-    for (let i = 0; i < allElements.length; i++) {
-      const el = allElements[i]
-      const localName = el.localName || el.nodeName.split(':').pop()
-      if (localName === 'userTask') {
-        const id = el.getAttribute('id') || ''
-        const name = el.getAttribute('name') || ''
-        let formId: string | null = null
-        let formName: string | null = null
-        const props = el.getElementsByTagName('*')
-        for (let j = 0; j < props.length; j++) {
-          const p = props[j]
-          const ln = p.localName || p.nodeName.split(':').pop()
-          if (ln === 'property' || ln === 'values') {
-            const n = p.getAttribute('name'), v = p.getAttribute('value')
-            if (n === 'formId' && v) formId = v
-            if (n === 'formName' && v) formName = v
-          }
-        }
-        tasks.set(id, { name, formId, formName })
-      } else if (localName === 'sequenceFlow') {
-        flows.push({ source: el.getAttribute('sourceRef') || '', target: el.getAttribute('targetRef') || '' })
-      }
-    }
-
-    // Find the current node id
-    let currentId = ''
-    for (const [id, info] of tasks) {
-      const isMatch = (currentTaskDefinitionKey && id === currentTaskDefinitionKey)
-        || (!currentTaskDefinitionKey && info.name === currentTaskName)
-      if (isMatch) { currentId = id; break }
-    }
-    if (!currentId) return []
-
-    // Reverse BFS: find all nodes that can reach currentId (i.e. predecessor nodes), in order
-    const reverseAdj = new Map<string, string[]>()
-    for (const f of flows) {
-      if (!reverseAdj.has(f.target)) reverseAdj.set(f.target, [])
-      reverseAdj.get(f.target)!.push(f.source)
-    }
-
-    // Forward BFS from start to currentId, collecting userTasks on the path (in visit order)
-    const forwardAdj = new Map<string, string[]>()
-    for (const f of flows) {
-      if (!forwardAdj.has(f.source)) forwardAdj.set(f.source, [])
-      forwardAdj.get(f.source)!.push(f.target)
-    }
-
-    // Find startEvent
-    let startId = ''
-    for (let i = 0; i < allElements.length; i++) {
-      const el = allElements[i]
-      if ((el.localName || el.nodeName.split(':').pop()) === 'startEvent') {
-        startId = el.getAttribute('id') || ''
-        break
-      }
-    }
-
-    // BFS from start, collecting userTasks encountered before reaching currentId
-    const visited = new Set<string>()
-    const queue: string[] = [startId]
-    const orderedPrevTaskIds: string[] = []
-    visited.add(startId)
-
-    while (queue.length > 0) {
-      const node = queue.shift()!
-      if (node === currentId) break
-      if (tasks.has(node) && node !== currentId) {
-        orderedPrevTaskIds.push(node)
-      }
-      for (const next of (forwardAdj.get(node) || [])) {
-        if (!visited.has(next)) {
-          visited.add(next)
-          queue.push(next)
-        }
-      }
-    }
-
-    // Return in order, deduplicated (each formId/formName appears only once)
-    const result: Array<{ formId: string | null, formName: string | null, taskName: string | null }> = []
-    const seenKeys = new Set<string>()
-    for (const taskId of orderedPrevTaskIds) {
-      const info = tasks.get(taskId)
-      if (!info) continue
-      // Prefer formId, then formName, finally taskName as fallback key
-      const key = info.formId || info.formName || info.name || ''
-      if (!key || seenKeys.has(key)) continue
-      seenKeys.add(key)
-      result.push({ formId: info.formId, formName: info.formName, taskName: info.name || null })
-    }
-    return result
-  } catch (e) {
-    console.error('Failed to parse BPMN for previous formIds:', e)
-  }
-  return []
-}
-
-// Parse BPMN XML
-const parseBpmnXml = (xml: string) => {
-  if (!xml) return
-  try {
-    currentNodeId.value = ''
-    const parser = new DOMParser()
-    const doc = parser.parseFromString(xml, 'text/xml')
-    const nodes: ProcessNode[] = []
-    const flows: ProcessFlow[] = []
-    const completed: string[] = []
-    
-    // Parse position info
-    const positionMap = new Map()
-    doc.querySelectorAll('BPMNShape, bpmndi\\:BPMNShape').forEach(shape => {
-      const bpmnElement = shape.getAttribute('bpmnElement')
-      const bounds = shape.querySelector('Bounds, dc\\:Bounds')
-      if (bpmnElement && bounds) {
-        positionMap.set(bpmnElement, {
-          x: parseFloat(bounds.getAttribute('x') || '0'),
-          y: parseFloat(bounds.getAttribute('y') || '0'),
-          width: parseFloat(bounds.getAttribute('width') || '100'),
-          height: parseFloat(bounds.getAttribute('height') || '80')
-        })
-      }
-    })
-    
-    // Get completed node IDs from history records
-    const completedHistoryIds = new Set<string>()
-    const completedNodeNames = new Set<string>()
-    
-    // Collect all completed node IDs and names
-    historyRecords.value.forEach(record => {
-      if (record.nodeId && record.status === 'completed') {
-        completedHistoryIds.add(record.nodeId)
-      }
-      if (record.nodeName && record.status === 'completed') {
-        completedNodeNames.add(record.nodeName)
-      }
-    })
-    
-    // Check for approval or rejection operations
-    const hasApproval = historyRecords.value.some(h => h.status === 'completed' && h.nodeName.includes('Approval'))
-    const hasRejection = historyRecords.value.some(h => h.status === 'rejected')
-    
-    const showCurrentStep = !isCompletedTask.value
-    const currentTaskDefinitionKey = (taskInfo.value as any).taskDefinitionKey || ''
-    const currentTaskName = taskInfo.value.taskName || ''
-    const ck = (s: unknown) => String(s ?? '').trim()
-    const normLabel = (s: unknown) => ck(s).replace(/\s+/g, ' ')
-    let currentNodeFound = false
-
-    // Detect subProcess elements and determine which have been entered
-    const getParentSubProcessId = (element: Element): string | null => {
-      let node: Node | null = element.parentNode
-      while (node && node.nodeType === 1) {
-        const el = node as Element
-        const localName = el.localName || el.nodeName.split(':').pop()
-        if (localName === 'subProcess') return el.getAttribute('id')
-        if (localName === 'process' || localName === 'definitions') return null
-        node = el.parentNode
-      }
-      return null
-    }
-
-    const subProcessMap = new Map<string, Element>()
-    const allElements = doc.getElementsByTagName('*')
-    for (let i = 0; i < allElements.length; i++) {
-      const el = allElements[i]
-      const localName = el.localName || el.nodeName.split(':').pop()
-      if (localName === 'subProcess') {
-        const spId = el.getAttribute('id')
-        if (spId) subProcessMap.set(spId, el)
-      }
-    }
-
-    const enteredSubProcesses = new Set<string>()
-    for (const [spId, sp] of subProcessMap) {
-      const spName = sp.getAttribute('name') || ''
-      if (showCurrentStep && ((spName && normLabel(spName) === normLabel(currentTaskName)) || ck(spId) === ck(currentTaskName))) {
-        enteredSubProcesses.add(spId)
-        continue
-      }
-      if (spName && historyRecords.value.some(h => h.nodeName === spName)) {
-        enteredSubProcesses.add(spId)
-        continue
-      }
-      const childElements = sp.getElementsByTagName('*')
-      for (let i = 0; i < childElements.length; i++) {
-        const childLocal = childElements[i].localName || childElements[i].nodeName.split(':').pop()
-        if (childLocal !== 'userTask' && childLocal !== 'serviceTask') continue
-        const taskName = childElements[i].getAttribute('name') || ''
-        const taskId = childElements[i].getAttribute('id') || ''
-        if ((showCurrentStep && normLabel(taskName) === normLabel(currentTaskName)) || historyRecords.value.some(h => h.nodeName === taskName || h.nodeId === taskId)) {
-          enteredSubProcesses.add(spId)
-          break
-        }
-      }
-    }
-
-    // Detect active multi-instance subprocesses whose child tasks are still running
-    const activeMultiInstanceSubProcesses = new Set<string>()
-    for (const [spId, sp] of subProcessMap) {
-      if (!enteredSubProcesses.has(spId)) continue
-      const spChildren = sp.getElementsByTagName('*')
-      let isMultiInstance = false
-      for (let i = 0; i < spChildren.length; i++) {
-        const childLocal = spChildren[i].localName || spChildren[i].nodeName.split(':').pop()
-        if (childLocal === 'multiInstanceLoopCharacteristics') {
-          isMultiInstance = true
-          break
-        }
-      }
-      if (!isMultiInstance) continue
-      const spName = sp.getAttribute('name') || ''
-      if (showCurrentStep && ((spName && normLabel(spName) === normLabel(currentTaskName)) || ck(spId) === ck(currentTaskName))) {
-        activeMultiInstanceSubProcesses.add(spId)
-        continue
-      }
-      for (let i = 0; i < spChildren.length; i++) {
-        const childLocal = spChildren[i].localName || spChildren[i].nodeName.split(':').pop()
-        if (childLocal !== 'userTask') continue
-        const taskName = spChildren[i].getAttribute('name') || ''
-        const taskId = spChildren[i].getAttribute('id') || ''
-        if ((showCurrentStep &&
-            (normLabel(taskName) === normLabel(currentTaskName) || ck(taskId) === ck(currentTaskName) || ck(taskId) === ck(currentTaskDefinitionKey))) ||
-            (showCurrentStep && historyRecords.value.some(h => h.nodeName === taskName && h.status === 'current'))) {
-          activeMultiInstanceSubProcesses.add(spId)
-          break
-        }
-      }
-    }
-
-    // Pin ancestor MI subprocesses for the BPMN activity that maps to this open task. Aggregate portal history mixes
-    // completions from all MI executions — downstream inner endEvent / duplicated activity ids otherwise show completed.
-    if (showCurrentStep && !isCompletedTask.value) {
-      doc.querySelectorAll('userTask').forEach(taskEl => {
-        const uid = ck(taskEl.getAttribute('id'))
-        const unameNorm = normLabel(taskEl.getAttribute('name'))
-        const defKey = ck(currentTaskDefinitionKey)
-        const matchesOpen =
-          unameNorm === normLabel(currentTaskName) ||
-          uid === ck(currentTaskName) ||
-          uid === defKey ||
-          unameNorm === normLabel(defKey)
-        if (!matchesOpen) return
-        let node: Node | null = taskEl.parentNode
-        while (node && node.nodeType === 1) {
-          const el = node as Element
-          const localName = el.localName || el.nodeName.split(':').pop()
-          if (localName === 'subProcess') {
-            const sid = el.getAttribute('id') || ''
-            if (sid && enteredSubProcesses.has(sid)) {
-              const descendants = el.getElementsByTagName('*')
-              let hasMi = false
-              for (let di = 0; di < descendants.length; di++) {
-                const ln = descendants[di].localName || descendants[di].nodeName.split(':').pop()
-                if (ln === 'multiInstanceLoopCharacteristics') {
-                  hasMi = true
-                  break
-                }
-              }
-              if (hasMi) activeMultiInstanceSubProcesses.add(sid)
-            }
-          }
-          if (localName === 'process' || localName === 'definitions') break
-          node = el.parentNode
-        }
-      })
-    }
-
-    // Completed multi-instance subprocesses: entered MI subprocesses where all child userTasks are done
-    const completedMultiInstanceSubProcesses = new Set<string>()
-    for (const [spId, sp] of subProcessMap) {
-      if (!enteredSubProcesses.has(spId)) continue
-      if (activeMultiInstanceSubProcesses.has(spId)) continue
-      const spChildren = sp.getElementsByTagName('*')
-      let isMultiInstance = false
-      for (let i = 0; i < spChildren.length; i++) {
-        const childLocal = spChildren[i].localName || spChildren[i].nodeName.split(':').pop()
-        if (childLocal === 'multiInstanceLoopCharacteristics') {
-          isMultiInstance = true
-          break
-        }
-      }
-      if (!isMultiInstance) continue
-      let allDone = true
-      let userTaskCount = 0
-      for (let i = 0; i < spChildren.length; i++) {
-        const childLocal = spChildren[i].localName || spChildren[i].nodeName.split(':').pop()
-        if (childLocal !== 'userTask') continue
-        userTaskCount++
-        const taskName = spChildren[i].getAttribute('name') || ''
-        const taskId = spChildren[i].getAttribute('id') || ''
-        const historyMatch = historyRecords.value.find(h => h.nodeName === taskName || h.nodeId === taskId)
-        if (!historyMatch || (historyMatch.status !== 'completed' && historyMatch.status !== 'rejected')) {
-          allDone = false
-          break
-        }
-      }
-      if (userTaskCount > 0 && allDone) {
-        completedMultiInstanceSubProcesses.add(spId)
-      }
-    }
-
-    /** True if element sits inside a subprocess that is an active parallel/sequential MI body (history aggregates all instances — do not trust gateway completion by activity id/name alone). */
-    const isDescendantOfActiveMiSubProcess = (element: Element): boolean => {
-      let node: Node | null = element.parentNode
-      while (node && node.nodeType === 1) {
-        const el = node as Element
-        const localName = el.localName || el.nodeName.split(':').pop()
-        if (localName === 'subProcess') {
-          const sid = el.getAttribute('id') || ''
-          if (sid && activeMultiInstanceSubProcesses.has(sid)) return true
-        }
-        if (localName === 'process' || localName === 'definitions') break
-        node = el.parentNode
-      }
-      return false
-    }
-
-    const earlyFlows: Array<{ sourceRef: string; targetRef: string }> = []
-    for (let i = 0; i < allElements.length; i++) {
-      const el = allElements[i]
-      const ln = el.localName || el.nodeName.split(':').pop()
-      if (ln !== 'sequenceFlow') continue
-      earlyFlows.push({
-        sourceRef: el.getAttribute('sourceRef') || '',
-        targetRef: el.getAttribute('targetRef') || ''
-      })
-    }
-
-    const isUnderGivenSubProcess = (elementRef: Element | null, boundarySpId: string): boolean => {
-      let node: Node | null = elementRef?.parentNode ?? null
-      while (node && node.nodeType === 1) {
-        const wrap = node as Element
-        const ln = wrap.localName || wrap.nodeName.split(':').pop()
-        if (ln === 'subProcess' && ck(wrap.getAttribute('id')) === ck(boundarySpId)) return true
-        if (ln === 'process' || ln === 'definitions') break
-        node = wrap.parentNode
-      }
-      return false
-    }
-
-    const findBpmnElementByIdAny = (nodeId: string): Element | null => {
-      for (let i = 0; i < allElements.length; i++) {
-        const el = allElements[i]
-        if (ck(el.getAttribute('id')) === ck(nodeId)) return el
-      }
-      return null
-    }
-
-    const nearestActiveMiSubProcessAncestorId = (from: Element): string | null => {
-      let node: Node | null = from.parentNode
-      while (node && node.nodeType === 1) {
-        const wrap = node as Element
-        const ln = wrap.localName || wrap.nodeName.split(':').pop()
-        if (ln === 'subProcess') {
-          const sid = ck(wrap.getAttribute('id'))
-          if (sid && activeMultiInstanceSubProcesses.has(sid)) return sid
-        }
-        if (ln === 'process' || ln === 'definitions') break
-        node = wrap.parentNode
-      }
-      return null
-    }
-
-    const isDownstreamUserTaskInsideSameActiveMi = (openTaskId: string, candidateTaskId: string, boundarySpId: string): boolean => {
-      const openEl = findBpmnElementByIdAny(openTaskId)
-      if (!openEl || !isUnderGivenSubProcess(openEl, boundarySpId)) return false
-      if (ck(openTaskId) === ck(candidateTaskId)) return false
-      const queue: string[] = [openTaskId]
-      const visited = new Set<string>()
-      while (queue.length > 0) {
-        const u = queue.shift()!
-        if (visited.has(u)) continue
-        visited.add(u)
-        for (const f of earlyFlows) {
-          if (ck(f.sourceRef) !== ck(u)) continue
-          const tar = ck(f.targetRef)
-          const tarEl = findBpmnElementByIdAny(tar)
-          if (!tarEl || !isUnderGivenSubProcess(tarEl, boundarySpId)) continue
-          const tln = tarEl.localName || tarEl.nodeName.split(':').pop()
-          if (tln === 'userTask' && tar === ck(candidateTaskId)) return true
-          queue.push(tar)
-        }
-      }
-      return false
-    }
-
-    let currentOpenBpmnUserTaskId = ''
-    if (showCurrentStep && !isCompletedTask.value) {
-      doc.querySelectorAll('userTask').forEach(ut => {
-        const uid = ck(ut.getAttribute('id'))
-        if (!uid) return
-        if (uid === ck(currentTaskDefinitionKey)) currentOpenBpmnUserTaskId = uid
-      })
-      if (!currentOpenBpmnUserTaskId) {
-        doc.querySelectorAll('userTask').forEach(ut => {
-          const uid = ck(ut.getAttribute('id'))
-          if (!uid) return
-          const unm = normLabel(ut.getAttribute('name'))
-          if (unm === normLabel(currentTaskName) || uid === ck(currentTaskName)) currentOpenBpmnUserTaskId = uid
-        })
-      }
-    }
-
-    const shouldSuppressSiblingAggregationComplete = (userTaskEl: Element, userTaskBpmnId: string): boolean => {
-      const boundary = nearestActiveMiSubProcessAncestorId(userTaskEl)
-      if (!boundary || !currentOpenBpmnUserTaskId) return false
-      const openId = currentOpenBpmnUserTaskId
-      if (ck(userTaskBpmnId) === ck(openId)) return false
-      return isDownstreamUserTaskInsideSameActiveMi(openId, userTaskBpmnId, boundary)
-    }
-
-    // Parse start events (subprocess-internal starts are pending until the subprocess is entered)
-    doc.querySelectorAll('startEvent').forEach((event, index) => {
-      const id = event.getAttribute('id') || `start_${index}`
-      const pos = positionMap.get(id)
-      const parentSpId = getParentSubProcessId(event)
-      let startStatus: 'completed' | 'current' | 'pending' = 'completed'
-      if (parentSpId && !enteredSubProcesses.has(parentSpId)) {
-        startStatus = 'pending'
-      } else if (showCurrentStep && parentSpId && activeMultiInstanceSubProcesses.has(parentSpId)) {
-        startStatus = 'current'
-      }
-      nodes.push({ id, name: event.getAttribute('name') || t('task.startNode'), type: 'start', status: startStatus, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
-      if (startStatus === 'completed') {
-        completed.push(id)
-      }
-    })
-    
-    // Parse user tasks
-    doc.querySelectorAll('userTask').forEach((task, index) => {
-      const id = task.getAttribute('id') || `task_${index}`
-      const name = task.getAttribute('name') || t('task.taskFallbackName', { index: index + 1 })
-      const pos = positionMap.get(id)
-
-      let status: 'completed' | 'current' | 'pending' = 'pending'
-
-      const openTaskMatchesThisShape =
-        showCurrentStep &&
-        (normLabel(name) === normLabel(currentTaskName) ||
-          ck(id) === ck(currentTaskName) ||
-          ck(id) === ck(currentTaskDefinitionKey) ||
-          normLabel(name) === normLabel(currentTaskDefinitionKey))
-
-      if (isCompletedTask.value && (completedHistoryIds.has(id) || completedNodeNames.has(name) || ck(name) === ck(currentTaskName) || ck(id) === ck(currentTaskName) || ck(id) === ck(currentTaskDefinitionKey))) {
-        status = 'completed'
-        completed.push(id)
-      } else if (openTaskMatchesThisShape) {
-        status = 'current'
-        currentNodeId.value = id
-        currentNodeFound = true
-      }
-      // Check if completed in history records (MI: aggregated history may include sibling executions for same BPMN id)
-      else if (completedHistoryIds.has(id) || completedNodeNames.has(name)) {
-        if (
-          showCurrentStep &&
-          isDescendantOfActiveMiSubProcess(task) &&
-          (ck(id) === ck(currentTaskDefinitionKey) ||
-            normLabel(name) === normLabel(currentTaskName) ||
-            ck(id) === ck(currentTaskName) ||
-            normLabel(name) === normLabel(currentTaskDefinitionKey))
-        ) {
-          status = 'current'
-          currentNodeId.value = id
-          currentNodeFound = true
-        } else if (shouldSuppressSiblingAggregationComplete(task, id)) {
-          status = 'pending'
-        } else {
-          status = 'completed'
-          completed.push(id)
-        }
-      }
-      // If current node not found yet and this node appears in history, mark as completed
-      else if (!currentNodeFound) {
-        const historyMatch = historyRecords.value.find(h => normLabel(h.nodeName) === normLabel(name))
-        const sameOpenActivityInMi =
-          showCurrentStep &&
-          isDescendantOfActiveMiSubProcess(task) &&
-          (ck(id) === ck(currentTaskDefinitionKey) ||
-            normLabel(name) === normLabel(currentTaskName) ||
-            ck(id) === ck(currentTaskName) ||
-            normLabel(name) === normLabel(currentTaskDefinitionKey))
-        if (historyMatch && historyMatch.status === 'completed' && !sameOpenActivityInMi) {
-          if (shouldSuppressSiblingAggregationComplete(task, id)) {
-            status = 'pending'
-          } else {
-            status = 'completed'
-            completed.push(id)
-          }
-        }
-      }
-
-      nodes.push({ id, name, type: 'task', status, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
-    })
-
-    // Parse subProcess elements
-    for (const [spId, sp] of subProcessMap) {
-      const name = sp.getAttribute('name') || ''
-      const pos = positionMap.get(spId)
-
-      let spStatus: 'completed' | 'current' | 'pending' = 'pending'
-      if (enteredSubProcesses.has(spId)) {
-        const childElements = sp.getElementsByTagName('*')
-        let hasCurrentChild = false
-        let allChildrenDone = true
-        let userTaskCount = 0
-        for (let i = 0; i < childElements.length; i++) {
-          const childLocal = childElements[i].localName || childElements[i].nodeName.split(':').pop()
-          if (childLocal !== 'userTask') continue
-          userTaskCount++
-          const taskName = childElements[i].getAttribute('name') || ''
-          const taskId = childElements[i].getAttribute('id') || ''
-          if (showCurrentStep && (normLabel(taskName) === normLabel(currentTaskName) || ck(taskId) === ck(currentTaskName) || ck(taskId) === ck(currentTaskDefinitionKey))) {
-            hasCurrentChild = true
-            break
-          }
-          const historyMatch = historyRecords.value.find(h => h.nodeName === taskName || h.nodeId === taskId)
-          if (
-            activeMultiInstanceSubProcesses.has(spId) &&
-            shouldSuppressSiblingAggregationComplete(childElements[i] as Element, taskId || '')
-          ) {
-            allChildrenDone = false
-          } else if (!historyMatch || (historyMatch.status !== 'completed' && historyMatch.status !== 'rejected')) {
-            allChildrenDone = false
-          }
-        }
-        if (!userTaskCount) allChildrenDone = false
-        spStatus = hasCurrentChild ? 'current' : allChildrenDone ? 'completed' : (showCurrentStep ? 'current' : 'pending')
-      }
-      nodes.push({ id: spId, name, type: 'subprocess', status: spStatus, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
-      if (spStatus === 'completed') completed.push(spId)
-    }
-
-    // Automated activities: fold history into `completed` so join gateways work when gateway coloring is topology-only (todo view).
-    for (let i = 0; i < allElements.length; i++) {
-      const el = allElements[i]
-      const ln = el.localName || el.nodeName.split(':').pop()
-      if (
-        ln !== 'serviceTask' &&
-        ln !== 'scriptTask' &&
-        ln !== 'sendTask' &&
-        ln !== 'receiveTask' &&
-        ln !== 'manualTask' &&
-        ln !== 'businessRuleTask'
-      ) {
-        continue
-      }
-      const aid = el.getAttribute('id')
-      if (!aid) continue
-      const aname = el.getAttribute('name') || ''
-      if (completedHistoryIds.has(aid) || (aname && completedNodeNames.has(aname))) {
-        if (!completed.includes(aid)) completed.push(aid)
-      }
-    }
-
-    let gatewayAutoId = 0
-    for (let gi = 0; gi < allElements.length; gi++) {
-      const gateway = allElements[gi]
-      const gln = gateway.localName || gateway.nodeName.split(':').pop()
-      if (gln !== 'exclusiveGateway' && gln !== 'parallelGateway' && gln !== 'inclusiveGateway') continue
-
-      const id = gateway.getAttribute('id') || `gateway_${gatewayAutoId++}`
-      const name = gateway.getAttribute('name') || ''
-      const pos = positionMap.get(id)
-
-      let status: 'completed' | 'pending' = 'pending'
-      const incomingSourceIds = earlyFlows
-        .filter(f => f.targetRef === id)
-        .map(f => f.sourceRef)
-        .filter(Boolean)
-      const allIncomingComplete =
-        incomingSourceIds.length > 0 && incomingSourceIds.every(srcRef => completed.includes(srcRef))
-
-      if (showCurrentStep) {
-        // Todo: Flowable history mixes all MI executions — do not trust gateway activity history.
-        // Join: require every incoming branch satisfied (some() caused false greens when another branch was still active).
-        if (allIncomingComplete) {
-          status = 'completed'
-          completed.push(id)
-        }
-      } else {
-        const underActiveMi = isDescendantOfActiveMiSubProcess(gateway)
-        if (!underActiveMi && (completedHistoryIds.has(id) || completedNodeNames.has(name))) {
-          status = 'completed'
-          completed.push(id)
-        } else if (allIncomingComplete) {
-          status = 'completed'
-          completed.push(id)
-        }
-      }
-
-      nodes.push({ id, name, type: 'gateway', status, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
-    }
-
-    // Parse end events
-    doc.querySelectorAll('endEvent').forEach((event, index) => {
-      const id = event.getAttribute('id') || `end_${index}`
-      const name = event.getAttribute('name') || t('task.endNode')
-      const pos = positionMap.get(id)
-      const parentSpId = getParentSubProcessId(event)
-      
-      // Check if end node should be marked as completed
-      let status: 'completed' | 'current' | 'pending' | 'rejected' = 'pending'
-      const isRejectedEnd = isRejectedName(name)
-
-      // SubProcess-internal endEvents stay pending when the subProcess hasn't been entered
-      if (parentSpId && !enteredSubProcesses.has(parentSpId)) {
-        // keep 'pending'
-      } else if (parentSpId && activeMultiInstanceSubProcesses.has(parentSpId)) {
-        // MI still executing (another iteration may pollute aggregate history/end activity ids)
-      } else if (parentSpId && completedMultiInstanceSubProcesses.has(parentSpId)) {
-        status = 'completed'
-        completed.push(id)
-      } else if (completedHistoryIds.has(id) || completedNodeNames.has(name)) {
-        // Rejected end nodes use red, others use green
-        status = isRejectedEnd ? 'rejected' : 'completed'
-        completed.push(id)
-      } else {
-        // Match history records by node name
-        const historyMatch = historyRecords.value.find(h => h.nodeName === name && h.status === 'completed')
-        if (historyMatch) {
-          status = isRejectedEnd ? 'rejected' : 'completed'
-          completed.push(id)
-        } else if (hasApproval && !currentNodeFound) {
-          // If there are completed approvals and no current task, determine by end node name
-          if (name.toLowerCase().includes('approved') || name.toLowerCase().includes('Approved')) {
-            status = 'completed'
-            completed.push(id)
-          }
-        } else if (hasRejection && !currentNodeFound) {
-          // If there are rejection operations, mark rejected end nodes as red
-          if (isRejectedEnd) {
-            status = 'rejected'
-            completed.push(id)
-          }
-        }
-      }
-      
-      nodes.push({ id, name, type: 'end', status, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
-    })
-    
-    // Parse connector waypoints
-    const waypointsMap = new Map()
-    doc.querySelectorAll('BPMNEdge, bpmndi\\:BPMNEdge').forEach(edge => {
-      const bpmnElement = edge.getAttribute('bpmnElement')
-      if (bpmnElement) {
-        const waypoints: Array<{x: number, y: number}> = []
-        edge.querySelectorAll('waypoint, di\\:waypoint').forEach(wp => {
-          waypoints.push({ x: parseFloat(wp.getAttribute('x') || '0'), y: parseFloat(wp.getAttribute('y') || '0') })
-        })
-        if (waypoints.length > 0) waypointsMap.set(bpmnElement, waypoints)
-      }
-    })
-    
-    // Parse sequence flows
-    doc.querySelectorAll('sequenceFlow').forEach((flow, index) => {
-      const id = flow.getAttribute('id') || `flow_${index}`
-      flows.push({ id, sourceRef: flow.getAttribute('sourceRef') || '', targetRef: flow.getAttribute('targetRef') || '', name: flow.getAttribute('name') || '', waypoints: waypointsMap.get(id) })
-    })
-    
-    processNodes.value = nodes
-    processFlows.value = flows
-    completedNodeIds.value = completed
-    
-  } catch (error) {
-    console.error('Failed to parse BPMN XML:', error)
-  }
-}
-
-// Parse form configuration
+// ===== BPMN parsing functions moved to useBpmnParser composable =====
 const parseFormConfig = (configStr: string) => {
   if (!configStr) return
   try {
@@ -3098,519 +2085,17 @@ const convertFormCreateRule = (rule: any): FormField | null => {
   return field
 }
 
-const getHistoryStatus = (operationType: string): 'completed' | 'current' | 'pending' | 'rejected' => {
-  const map: Record<string, 'completed' | 'current' | 'pending' | 'rejected'> = {
-    'SUBMIT': 'completed',
-    'APPROVE': 'completed',
-    'REJECT': 'rejected',
-    'DELEGATE': 'completed',
-    'TRANSFER': 'completed',
-    'CLAIM': 'completed',
-    'PENDING': 'current'
-  }
-  return map[operationType] || 'completed'
-}
+// display helpers moved to useTaskDisplay composable
+// action handlers moved to useTaskActions composable
 
-const getHistoryAction = (operationType: string): 'approve' | 'reject' | 'transfer' | 'delegate' | 'withdraw' | 'submit' | undefined => {
-  const map: Record<string, 'approve' | 'reject' | 'transfer' | 'delegate' | 'withdraw' | 'submit'> = {
-    'SUBMIT': 'submit',
-    'APPROVE': 'approve',
-    'REJECT': 'reject',
-    'TRANSFER': 'transfer',
-    'DELEGATE': 'delegate',
-  }
-  return map[operationType]
-}
-
-const formatDate = (date?: string | number[]) => {
-  if (!date) return '-'
-  if (Array.isArray(date)) {
-    const [year, month, day, hour = 0, minute = 0, second = 0] = date
-    const d = dayjs(new Date(year, month - 1, day, hour, minute, second))
-    return d.isValid() ? d.format('YYYY-MM-DD HH:mm') : '-'
-  }
-  const d = dayjs(date)
-  return d.isValid() ? d.format('YYYY-MM-DD HH:mm') : '-'
-}
-
-const getCurrentAssigneeDisplay = () => {
-  if (taskInfo.value.assigneeName) {
-    return taskInfo.value.assigneeName
-  }
-  if (taskInfo.value.assignee) {
-    return taskInfo.value.assignee
-  }
-  if (taskInfo.value.candidateUsers) {
-    const candidates = taskInfo.value.candidateUsers.split(',')
-    if (candidates.length === 1) {
-      return candidates[0]
-    }
-    return `${candidates.join(' / ')} (${t('task.anyApprove')})`
-  }
-  return '-'
-}
-
-const getPriorityLabel = (priority?: string) => {
-  const map: Record<string, string> = {
-    'URGENT': t('task.urgent'),
-    'HIGH': t('task.high'),
-    'NORMAL': t('task.normal'),
-    'LOW': t('task.low')
-  }
-  return map[priority || ''] || priority || t('task.normal')
-}
-
-const getPriorityType = (priority?: string): 'danger' | 'warning' | 'info' | 'success' => {
-  const map: Record<string, 'danger' | 'warning' | 'info' | 'success'> = {
-    'URGENT': 'danger',
-    'HIGH': 'warning',
-    'NORMAL': 'info',
-    'LOW': 'success'
-  }
-  return map[priority || ''] || 'info'
-}
-
-const handleApprove = () => {
-  if (!validateSubTableAssigneesForComplete()) return
-  currentApproveAction.value = 'APPROVE'
-  approveDialogTitle.value = t('task.approve')
-  approveForm.comment = ''
-  approveDialogVisible.value = true
-}
-
-const handleReject = () => {
-  currentApproveAction.value = 'REJECT'
-  approveDialogTitle.value = t('task.reject')
-  approveForm.comment = ''
-  approveDialogVisible.value = true
-}
-
-const handleDelegate = () => {
-  currentAction.value = 'delegate'
-  actionDialogTitle.value = t('task.delegate')
-  actionForm.targetUserId = ''
-  actionForm.reason = ''
-  userOptions.value = []
-  actionDialogVisible.value = true
-}
-
-const handleTransfer = () => {
-  currentAction.value = 'transfer'
-  actionDialogTitle.value = t('task.transfer')
-  actionForm.targetUserId = ''
-  actionForm.reason = ''
-  userOptions.value = []
-  actionDialogVisible.value = true
-}
-
-const handleUrge = () => {
-  currentAction.value = 'urge'
-  actionDialogTitle.value = t('task.urge')
-  actionForm.reason = ''
-  actionDialogVisible.value = true
-}
-
-const submitApprove = async () => {
-  if (currentApproveAction.value === 'APPROVE' && !validateSubTableAssigneesForComplete()) {
-    return
-  }
-  submitting.value = true
-  try {
-    // Set process variables based on approval action
-    const variables: Record<string, any> = {}
-    
-    if (currentApproveAction.value === 'APPROVE') {
-      variables.approval_result = 'approved'
-      variables.approved = true
-    } else if (currentApproveAction.value === 'REJECT') {
-      variables.approval_result = 'rejected'
-      variables.approved = false
-    }
-    
-    // Add approval comment
-    if (approveForm.comment) {
-      variables.approval_comment = approveForm.comment
-    }
-    
-    // Collect current form data (e.g. additional_information in Approval Form)
-    const currentFormData: Record<string, any> = {}
-    for (const key of Object.keys(formData.value)) {
-      // Exclude system fields and fields already in the start form; only collect current approval form fields
-      if (!key.startsWith('__') && !variables[key]) {
-        currentFormData[key] = formData.value[key]
-      }
-    }
-
-    // Multi-instance: backend buildParticipantsCollection relies on __subTables__ (keyed by table name "participants" or bindingId)
-    const mergedSub: Record<string, any> = { ...(formData.value.__subTables__ || {}) }
-    for (const b of subTableBindings.value) {
-      mergedSub[b.bindingId] = b.data
-      mergedSub[String(b.bindingId)] = b.data
-      if (b.tableName) {
-        mergedSub[b.tableName] = b.data
-        mergedSub[normalizeSubTableName(b.tableName)] = b.data
-      }
-    }
-    const participantsBinding = subTableBindings.value.find(
-      b => b.tableName === 'participants' || resolveAssigneeFieldForBinding(b.columns, b.tableName)
-    )
-    if (participantsBinding) {
-      mergedSub.participants = participantsBinding.data
-    }
-    currentFormData.__subTables__ = mergedSub
-
-    // Merge form data into variables to ensure backend saves do not lose data
-    Object.assign(variables, currentFormData)
-
-    console.log('[submitApprove] formData.value keys:', Object.keys(formData.value))
-    console.log('[submitApprove] currentFormData:', JSON.stringify(currentFormData))
-    console.log('[submitApprove] variables:', JSON.stringify(variables))
-
-    await completeTask(taskId, {
-      taskId: taskId,
-      action: currentApproveAction.value,
-      comment: approveForm.comment,
-      variables: variables,
-      formData: currentFormData
-    })
-    ElMessage.success(t('task.operationSuccess'))
-    approveDialogVisible.value = false
-    router.push('/tasks')
-  } catch (error) {
-    ElMessage.error(t('task.operationFailed'))
-  } finally {
-    submitting.value = false
-  }
-}
-
-const submitAction = async () => {
-  if (currentAction.value !== 'urge' && !actionForm.targetUserId) {
-    ElMessage.warning(t('task.selectUser'))
-    return
-  }
-  
-  submitting.value = true
-  try {
-    if (currentAction.value === 'delegate') {
-      await delegateTask(taskId, actionForm.targetUserId, actionForm.reason)
-      ElMessage.success(t('task.delegateSuccess'))
-    } else if (currentAction.value === 'transfer') {
-      await transferTask(taskId, actionForm.targetUserId, actionForm.reason)
-      ElMessage.success(t('task.transferSuccess'))
-    } else if (currentAction.value === 'urge') {
-      await urgeTask(taskId, actionForm.reason)
-      ElMessage.success(t('task.urgeSuccess'))
-    }
-    actionDialogVisible.value = false
-    if (currentAction.value === 'transfer') {
-      router.push('/tasks')
-    } else {
-      loadTaskDetail()
-    }
-  } catch (error) {
-    ElMessage.error(t('task.operationFailed'))
-  } finally {
-    submitting.value = false
-  }
-}
-
-// Handle custom action buttons
-const handleCustomAction = (action: TaskActionInfo) => {
-  console.log('Custom action clicked:', action)
-  
-  // Handle different action types based on actionType
-  const actionType = (action.actionType || '').trim().toUpperCase()
-  switch (actionType) {
-    case 'SAVE':
-      saveCurrentTaskForm()
-      break
-
-    case 'APPROVE':
-      if (!validateSubTableAssigneesForComplete()) return
-      currentApproveAction.value = 'APPROVE'
-      approveDialogTitle.value = action.actionName
-      approveForm.comment = ''
-      approveDialogVisible.value = true
-      break
-
-    // Designer "submit/complete" actions (e.g. "Complete Assignment", "Submit Meeting" on task nodes) follow the same completion flow as APPROVE
-    case 'PROCESS_SUBMIT':
-      if (!validateSubTableAssigneesForComplete()) return
-      currentApproveAction.value = 'APPROVE'
-      approveDialogTitle.value = action.actionName
-      approveForm.comment = ''
-      approveDialogVisible.value = true
-      break
-    
-    case 'REJECT':
-      currentApproveAction.value = 'REJECT'
-      approveDialogTitle.value = action.actionName
-      approveForm.comment = ''
-      approveDialogVisible.value = true
-      break
-    
-    case 'FORM_POPUP':
-      // Parse configJson to get formId
-      try {
-        const config = action.configJson ? JSON.parse(action.configJson) : {}
-        console.log('Form popup config:', config)
-        openFormPopup(action, config)
-      } catch (error) {
-        console.error('Failed to parse configJson:', error)
-        ElMessage.error(t('task.configParseFailed'))
-      }
-      break
-    
-    case 'N8N_ACTION':
-      // Parse configJson, auto-collect data based on inputMapping sourceType
-      const n8nAutoData: Record<string, any> = {}
-      try {
-        const n8nConfig = action.configJson ? JSON.parse(action.configJson) : {}
-        const n8nInputMapping = n8nConfig.inputMapping || []
-        for (const param of n8nInputMapping) {
-          if (param.sourceType === 'sub_table' && param.sourceBindingId && param.sourceField) {
-            const targetBinding = subTableBindings.value.find(b => 
-              b.bindingId === param.sourceBindingId || String(b.bindingId) === String(param.sourceBindingId)
-            )
-            if (targetBinding) {
-              const files: string[] = []
-              for (const row of targetBinding.data) {
-                const val = row[param.sourceField]
-                if (val) {
-                  if (typeof val === 'string') {
-                    files.push(val)
-                  } else if (Array.isArray(val)) {
-                    val.forEach((f: any) => files.push(f.url || f.response?.url || f.name || String(f)))
-                  } else if (val.url) {
-                    files.push(val.url)
-                  }
-                }
-              }
-              if (files.length > 0) {
-                n8nAutoData[param.paramName] = files
-              }
-            }
-          }
-        }
-      } catch (e) {
-        console.error('Failed to parse N8N action config for auto-fill:', e)
-      }
-      n8nActionDefinition.value = {
-        id: Number(action.actionId) || 0,
-        actionName: action.actionName,
-        configJson: action.configJson
-      }
-      n8nInitialData.value = Object.keys(n8nAutoData).length > 0 ? n8nAutoData : undefined
-      n8nActionDialogVisible.value = true
-      break
-    
-    default:
-      ElMessage.warning(t('task.unknownActionType', { type: action.actionType }))
-  }
-}
-
-// N8N Action execution callback
-const handleN8nActionExecuted = (data: Record<string, any> | null) => {
-  try {
-    const n8nOutput = data?.outputData || data
-    if (!n8nOutput) return
-
-    const configJson = n8nActionDefinition.value?.configJson
-      ? JSON.parse(n8nActionDefinition.value.configJson)
-      : null
-
-    const frontendOutputMapping = configJson?.frontendOutputMapping
-    if (!frontendOutputMapping || !Array.isArray(frontendOutputMapping) || frontendOutputMapping.length === 0) {
-      return
-    }
-
-    const result = applyAutoFill(n8nOutput, frontendOutputMapping, subTableBindings.value, formData.value)
-
-    subTableBindings.value = result.updatedBindings as typeof subTableBindings.value
-    formData.value = result.updatedFormData
-
-    if (result.filledCount > 0) {
-      ElMessage.success(t('processStart.n8nAutoFillSuccess', { count: result.filledCount }))
-    }
-  } catch (e) {
-    console.error('[handleN8nActionExecuted] Error:', e)
-  }
-}
-
-// Open form popup
-const openFormPopup = async (action: TaskActionInfo, config: any) => {
-  try {
-    currentFormPopupAction.value = action
-    formPopupTitle.value = config.popupTitle || action.actionName
-    formPopupWidth.value = config.popupWidth || '800px'
-    formPopupReadOnly.value = config.readOnly === true || config.readOnly === 'true'
-    formPopupData.value = {}
-    
-    // Get form configuration
-    if (config.formId) {
-      // Get form config from function unit content
-      const functionUnitId = taskInfo.value.processDefinitionKey
-      if (functionUnitId) {
-        try {
-          const res = await processApi.getFunctionUnitContents(functionUnitId, 'FORM')
-          const forms = res.data || []
-          
-          // Find the matching form
-          const formContent = forms.find((f: any) => {
-            // Try matching by source_id
-            return f.sourceId === String(config.formId) || f.contentName === config.formName
-          })
-          
-          if (formContent && formContent.contentData) {
-            // Parse form configuration
-            const formConfig = typeof formContent.contentData === 'string' 
-              ? JSON.parse(formContent.contentData) 
-              : formContent.contentData
-            
-            // Use same parsing logic as the main form
-            parseFormPopupConfig(formConfig)
-            formPopupVisible.value = true
-          } else {
-            ElMessage.error(t('task.formNotFound', { name: config.formName || config.formId }))
-          }
-        } catch (error) {
-          console.error('Failed to load form:', error)
-          ElMessage.error(t('task.formLoadFailed'))
-        }
-      }
-    } else {
-      ElMessage.error(t('task.formMissingId'))
-    }
-  } catch (error) {
-    console.error('Failed to open form popup:', error)
-    ElMessage.error(t('task.formOpenFailed'))
-  }
-}
-
-// Parse form popup config - reuse parseFormConfig logic
-const parseFormPopupConfig = (configInput: any) => {
-  try {
-    // Ensure config is an object (may be passed as string)
-    const config = typeof configInput === 'string' ? JSON.parse(configInput) : configInput
-    console.log('parseFormPopupConfig: type of config =', typeof config, ', keys =', Object.keys(config || {}))
-    
-    const rules = config.rule && Array.isArray(config.rule) ? config.rule : (Array.isArray(config) ? config : null)
-    if (rules) {
-      console.log('Form popup rules count:', rules.length)
-      rules.forEach((r: any, i: number) => {
-        console.log(`Rule[${i}]: type=${r.type}, field=${r.field}, hasOptions=${!!r.options}, optionsCount=${r.options?.length || 0}`)
-      })
-      
-      // Extract labelWidth config
-      if (config.options?.form?.labelWidth) {
-        formPopupLabelWidth.value = config.options.form.labelWidth
-      }
-      
-      // Check for el-tabs structure
-      const tabsRule = rules.find((r: any) => r.type === 'el-tabs' || r.type === 'ElTabPane' || r.type === 'el-tab-pane')
-      
-      if (tabsRule && tabsRule.children && Array.isArray(tabsRule.children)) {
-        const tabs: FormTab[] = []
-        for (const tabPane of tabsRule.children) {
-          if ((tabPane.type === 'el-tab-pane' || tabPane.type === 'ElTabPane') && tabPane.props) {
-            const tabName = tabPane.props.name || `tab_${tabs.length}`
-            const tabLabel = tabPane.props.label || `Tab ${tabs.length + 1}`
-            const tabFields: FormField[] = []
-            if (tabPane.children && Array.isArray(tabPane.children)) {
-              for (const item of tabPane.children) {
-                if (item.field) {
-                  const field = convertFormCreateRule(item)
-                  if (field) tabFields.push(field)
-                }
-                if (item.children && Array.isArray(item.children)) {
-                  tabFields.push(...extractFieldsRecursive(item.children))
-                }
-              }
-            }
-            tabs.push({ name: tabName, label: tabLabel, fields: tabFields })
-          }
-        }
-        formPopupTabs.value = tabs
-        formPopupFields.value = []
-      } else {
-        formPopupTabs.value = []
-        formPopupFields.value = extractFieldsRecursive(rules)
-      }
-      
-      console.log('Popup fields result:', formPopupFields.value.map(f => ({ key: f.key, type: f.type, hasOptions: !!f.options, optionsCount: f.options?.length })))
-    } else {
-      console.warn('parseFormPopupConfig: no rules found in config')
-    }
-  } catch (error) {
-    console.error('Failed to parse form popup config:', error)
-  }
-}
-
-// Submit form popup
-const submitFormPopup = async () => {
-  try {
-    submitting.value = true
-    
-    // TODO: Handle form data based on action type
-    // May need to call different APIs or update process variables
-    
-    ElMessage.success(t('task.formSubmitSuccess'))
-    formPopupVisible.value = false
-    
-    // Refresh task details
-    await loadTaskDetail()
-  } catch (error) {
-    console.error('Failed to submit form popup:', error)
-    ElMessage.error(t('task.formSubmitFailed'))
-  } finally {
-    submitting.value = false
-  }
-}
-
-// Get button type (Element Plus type)
-const getButtonType = (buttonColor?: string): 'primary' | 'success' | 'warning' | 'danger' | 'info' | '' => {
-  const colorMap: Record<string, 'primary' | 'success' | 'warning' | 'danger' | 'info'> = {
-    'primary': 'primary',
-    'success': 'success',
-    'warning': 'warning',
-    'danger': 'danger',
-    'info': 'info'
-  }
-  return colorMap[buttonColor || ''] || 'primary'
-}
-
-function getActionLabel(action: TaskActionInfo): string {
-  return (action.actionType || '').trim().toUpperCase() === 'SAVE' ? t('common.save') : action.actionName
-}
-
-// Get icon component
-const getIconComponent = (iconName?: string) => {
-  if (!iconName) return null
-  
-  const iconMap: Record<string, any> = {
-    'check': markRaw(Check),
-    'check-circle': markRaw(CircleCheck),
-    'times-circle': markRaw(CircleClose),
-    'close': markRaw(Close),
-    'file-alt': markRaw(Files),
-    'files': markRaw(Files),
-    'warning': markRaw(Warning),
-    'bell': markRaw(Bell),
-    'user': markRaw(User)
-  }
-  
-  return iconMap[iconName] || markRaw(Check)
-}
+// custom action handlers moved to useCustomActions composable
 
 onMounted(() => {
   loadTaskDetail()
 })
 
 onBeforeUnmount(() => {
-  if (subTableAutosaveTimer) {
-    clearTimeout(subTableAutosaveTimer)
-    subTableAutosaveTimer = null
-  }
+  clearFormAutosaveTimer()
 })
 </script>
 

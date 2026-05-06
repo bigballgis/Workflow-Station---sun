@@ -75,6 +75,7 @@ export default {
     endDate: '結束日期',
     logout: '登出',
     logoutSuccess: '已登出',
+    empty: '-',
     pleaseInput: '請輸入{label}',
     pleaseSelect: '請選擇{label}',
     yes: '是',
@@ -253,6 +254,8 @@ export default {
     dataModifiedPleaseRefresh: '資料已被修改，請重新整理後重試',
     allParticipantsMustHaveAssignee: '請為子表中每一列點擊「分配」指定處理人後再完成。',
     addParticipantInfoForm: '新增參與者資訊表',
+    noFormBound: '無綁定表單',
+    userOptionFormat: '{name}（{username}）',
   },
   process: {
     title: '新建申請',
