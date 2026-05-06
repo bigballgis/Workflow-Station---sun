@@ -221,6 +221,7 @@
               :task-id="effectiveTaskId"
               :allow-sub-table-assign="allowSubTableAssignForCurrentTask"
               :suppress-link-form-initial-data="isMiSubTaskMode && !isCompletedTask"
+              :show-link-form-dialog-footer="!isCompletedTask && !formReadOnly"
               @update:subTableData="syncMainSubTableRows"
             />
           </div>
@@ -246,6 +247,7 @@
                 :fill-button-label="isParticipantsBinding(binding) ? t('task.addParticipantInfoForm') : undefined"
                 :linked-sub-table-bindings="linkableSubTableBindings"
                 :suppress-link-form-initial-data="isMiSubTaskMode && !isCompletedTask"
+                :show-link-form-dialog-footer="!isCompletedTask && !formReadOnly"
                 @update:model-value="(rows: any[]) => syncMainSubTableRows(binding.bindingId, rows)"
                 @update:linked-sub-table-data="syncMainSubTableRows"
                 @fillForm="(row: any) => openMiFillDialog(row)"
@@ -444,6 +446,7 @@
           :subTableBindings="miFillSubTableBindings"
           :preview-sub-tables="true"
           :suppress-link-form-initial-data="isMiSubTaskMode && !isCompletedTask"
+          :show-link-form-dialog-footer="!isCompletedTask && !formReadOnly && !miFillDialogReadOnly"
           @update:subTableData="syncMiFillSubTableRows"
         />
       </div>

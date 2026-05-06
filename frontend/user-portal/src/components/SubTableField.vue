@@ -311,9 +311,29 @@
               :model-value="linkedSubTableRows"
               :editable="canEditSelectedLinkBinding"
               :linked-sub-table-bindings="linkedSubTableBindings"
+              :show-link-form-dialog-footer="showLinkFormDialogFooter"
               @update:model-value="handleLinkedSubTableUpdate"
             />
             <el-empty v-else :description="t('subTable.noData')" :image-size="60" />
+          </div>
+          <div
+            v-if="showLinkFormDetailActionFooter"
+            class="link-form-modal-footer"
+          >
+            <button
+              type="button"
+              class="link-form-modal-footer-btn link-form-modal-footer-btn--secondary"
+              @click="closeLinkFormDetailDialog"
+            >
+              {{ t('common.cancel') }}
+            </button>
+            <button
+              type="button"
+              class="link-form-modal-footer-btn link-form-modal-footer-btn--primary"
+              @click="saveLinkedFormData"
+            >
+              {{ t('common.save') }}
+            </button>
           </div>
         </div>
       </div>
@@ -355,7 +375,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed, nextTick } from 'vue'
+import { ref, watch, computed, nextTick, withDefaults } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Plus, Document, Loading, Search, Close } from '@element-plus/icons-vue'
 import { ElMessageBox, ElMessage } from 'element-plus'
@@ -492,7 +512,7 @@ function getSnapshotField(rowData: unknown, key: string): unknown {
   return (rowData as Record<string, unknown>)[key]
 }
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   title: string
   columns: Column[]
   modelValue?: any[]
@@ -520,7 +540,11 @@ const props = defineProps<{
   fillButtonLabel?: string
   linkedSubTableBindings?: SubTableBinding[]
   suppressLinkFormInitialData?: boolean
-}>()
+  /** Task To Do only: show Cancel/Save on Link Form detail (completed / My Request omit). */
+  showLinkFormDialogFooter?: boolean
+}>(), {
+  showLinkFormDialogFooter: false
+})
 
 const emit = defineEmits<{
   (e: 'update:modelValue', val: any[]): void
@@ -548,6 +572,8 @@ const activeLinkColumn = ref<Column | null>(null)
 const activeLinkRowIndex = ref<number | null>(null)
 const linkedSubTableRows = ref<any[]>([])
 const linkedFormData = ref<Record<string, any>>({})
+/** When footer is shown (To Do), restore on Cancel/X without persisting to parent row. */
+const linkFormDialogSnapshot = ref<{ linkedFormData: Record<string, any>; linkedSubTableRows: any[] } | null>(null)
 
 /** Designer list views may store "ADD + …"; runtime bindings use display names — align with developer SubTableField. */
 function stripLinkFormBoundTableName(raw?: string): string {
@@ -622,6 +648,15 @@ const linkedFormLabelWidth = computed(() => {
   return typeof width === 'string' && width.trim() ? width : '125px'
 })
 const canEditSelectedLinkBinding = computed(() => !!(props.editable && selectedLinkBinding.value?.bindingMode === 'EDITABLE'))
+
+/** Field-layout link form only; grid fallback has no footer. */
+const showLinkFormDetailActionFooter = computed(
+  () =>
+    !!props.showLinkFormDialogFooter &&
+    canEditSelectedLinkBinding.value &&
+    !!selectedLinkBinding.value &&
+    linkedFormFields.value.length > 0
+)
 
 function normalizeSubTableName(name?: string): string {
   return String(name || '').trim().toLowerCase()
@@ -723,8 +758,18 @@ function getSummaryMethod({ columns: tableCols }: { columns: any[] }) {
 
 watch(() => props.modelValue, (v) => { rows.value = v ? [...v] : [] }, { immediate: true, deep: true })
 
-/** Header close only (no footer). When user edited field-based link form, persist before close. */
+/** Header close / Cancel: with To Do footer, discard edits; otherwise auto-save field link form when editable. */
 function closeLinkFormDetailDialog() {
+  if (showLinkFormDetailActionFooter.value) {
+    const snap = linkFormDialogSnapshot.value
+    if (snap) {
+      linkedFormData.value = JSON.parse(JSON.stringify(snap.linkedFormData)) as Record<string, any>
+      linkedSubTableRows.value = JSON.parse(JSON.stringify(snap.linkedSubTableRows)) as any[]
+    }
+    linkFormDialogVisible.value = false
+    linkFormDialogSnapshot.value = null
+    return
+  }
   if (
     canEditSelectedLinkBinding.value &&
     selectedLinkBinding.value &&
@@ -754,6 +799,21 @@ function handleLinkFormClick(col: Column, row: Record<string, any>, rowIndex: nu
   }
   linkedSubTableRows.value = [...effectiveSavedRows]
   linkedFormData.value = buildLinkedFormData({ ...(binding || ({} as any)), data: effectiveSavedRows })
+  const bindingForFooter = resolveLinkBindingForColumn(col)
+  const formFieldsLen = bindingForFooter?.formFields?.length ?? 0
+  const useDetailFooter =
+    !!props.showLinkFormDialogFooter &&
+    props.editable &&
+    bindingForFooter?.bindingMode === 'EDITABLE' &&
+    formFieldsLen > 0
+  if (useDetailFooter) {
+    linkFormDialogSnapshot.value = {
+      linkedFormData: JSON.parse(JSON.stringify(linkedFormData.value)) as Record<string, any>,
+      linkedSubTableRows: JSON.parse(JSON.stringify(linkedSubTableRows.value)) as any[]
+    }
+  } else {
+    linkFormDialogSnapshot.value = null
+  }
   linkFormDialogVisible.value = true
 }
 
@@ -780,6 +840,7 @@ function saveLinkedFormData() {
   const linkRowIndex = activeLinkRowIndex.value
   const col = activeLinkColumn.value
   if (linkRowIndex == null || !col) {
+    linkFormDialogSnapshot.value = null
     linkFormDialogVisible.value = false
     return
   }
@@ -809,6 +870,7 @@ function saveLinkedFormData() {
   })
 
   emit('update:modelValue', nextMainRows)
+  linkFormDialogSnapshot.value = null
   linkFormDialogVisible.value = false
 }
 
@@ -1671,6 +1733,50 @@ watch(() => props.taskId, () => {
   min-height: 160px;
   padding: 16px;
   overflow: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.link-form-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-shrink: 0;
+  padding: 12px 16px;
+  border-top: 1px solid #ebeef5;
+  background: #fafafa;
+}
+
+.link-form-modal-footer-btn {
+  min-width: 88px;
+  padding: 8px 20px;
+  font-size: 14px;
+  line-height: 1.5;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.link-form-modal-footer-btn--secondary {
+  border-color: #dcdfe6;
+  color: #606266;
+  background: #fff;
+
+  &:hover {
+    color: var(--el-color-primary);
+    border-color: var(--el-color-primary-light-5);
+  }
+}
+
+.link-form-modal-footer-btn--primary {
+  color: #fff;
+  background: var(--el-color-primary);
+  border-color: var(--el-color-primary);
+
+  &:hover {
+    background: var(--el-color-primary-light-3);
+    border-color: var(--el-color-primary-light-3);
+  }
 }
 
 .linked-form-card {
