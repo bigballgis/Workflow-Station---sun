@@ -2,6 +2,7 @@ package com.developer.component;
 
 import com.developer.dto.FormDefinitionRequest;
 import com.developer.dto.FormTableBindingRequest;
+import com.developer.dto.FormTableBindingResponse;
 import com.developer.dto.ValidationResult;
 import com.developer.entity.FormDefinition;
 import com.developer.entity.FormTableBinding;
@@ -58,9 +59,9 @@ public interface FormDesignComponent {
     // ========== 表绑定管理方法 ==========
     
     /**
-     * 创建表单表绑定
+     * 创建表单表绑定并返回可直接序列化的 DTO（避免事务外访问 LAZY 的 form/table 关联）。
      */
-    FormTableBinding createBinding(Long formId, FormTableBindingRequest request);
+    FormTableBindingResponse createBinding(Long formId, FormTableBindingRequest request);
     
     /**
      * 更新表单表绑定

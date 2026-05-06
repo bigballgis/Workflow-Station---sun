@@ -1040,6 +1040,7 @@ export default {
     unauthorized: '登录已失效或凭证无效，请重新登录',
     invalidParams: '请求参数无效',
     notFound: '资源不存在',
+    conflict: '资源已存在或与当前状态冲突',
     businessError: '业务处理失败',
     serverError: '服务器内部错误',
     serviceUnavailable: '服务暂时不可用，请稍后再试',

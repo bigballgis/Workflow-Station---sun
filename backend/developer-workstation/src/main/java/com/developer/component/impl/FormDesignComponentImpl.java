@@ -3,6 +3,7 @@ package com.developer.component.impl;
 import com.developer.component.FormDesignComponent;
 import com.developer.dto.FormDefinitionRequest;
 import com.developer.dto.FormTableBindingRequest;
+import com.developer.dto.FormTableBindingResponse;
 import com.developer.dto.ValidationResult;
 import com.developer.entity.FieldDefinition;
 import com.developer.entity.FormDefinition;
@@ -253,7 +254,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
     
     @Override
     @Transactional
-    public FormTableBinding createBinding(Long formId, FormTableBindingRequest request) {
+    public FormTableBindingResponse createBinding(Long formId, FormTableBindingRequest request) {
         FormDefinition form = getById(formId);
         
         // Deployed Relation Table binding (RELATED type with relationTableId)
@@ -303,7 +304,13 @@ public class FormDesignComponentImpl implements FormDesignComponent {
                     ? BindingMode.EDITABLE 
                     : BindingMode.READONLY;
         }
-        
+
+        // SUB 未传 subMode 时与前端「Full mode」默认一致，避免 DB 中 sub_mode 为空而列表仍按 FULL 展示
+        SubMode effectiveSubMode = request.getSubMode();
+        if (request.getBindingType() == BindingType.SUB && effectiveSubMode == null) {
+            effectiveSubMode = SubMode.FULL;
+        }
+
         // 计算排序顺序
         int sortOrder = request.getSortOrder() != null 
                 ? request.getSortOrder() 
@@ -322,7 +329,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         binding = formTableBindingRepository.save(binding);
 
         // Auto-create default sub-table list view for SUB bindings with FULL mode
-        if (request.getBindingType() == BindingType.SUB && request.getSubMode() != SubMode.FORM_ONLY) {
+        if (request.getBindingType() == BindingType.SUB && effectiveSubMode != SubMode.FORM_ONLY) {
             try {
                 var viewConfig = subTableViewService.createDefaultViewConfig(binding.getId());
                 binding.setSubListViewId(viewConfig.getId());
@@ -334,10 +341,15 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         }
 
         // Set sub mode
-        binding.setSubMode(request.getSubMode());
-        binding = formTableBindingRepository.save(binding);
+        if (request.getBindingType() == BindingType.SUB) {
+            binding.setSubMode(effectiveSubMode);
+            binding = formTableBindingRepository.save(binding);
+        }
 
-        return binding;
+        var reloadedOpt = formTableBindingRepository.findByIdWithTable(binding.getId());
+        FormTableBinding out = reloadedOpt.orElse(binding);
+        String relationName = resolveRelationTableName(out);
+        return FormTableBindingResponse.fromPersisted(out, formId, isRelationTable ? null : table, relationName);
     }
     
     @Override
@@ -374,8 +386,12 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         if (request.getSortOrder() != null) {
             binding.setSortOrder(request.getSortOrder());
         }
-        
-        return formTableBindingRepository.save(binding);
+        if (request.getSubMode() != null) {
+            binding.setSubMode(request.getSubMode());
+        }
+
+        binding = formTableBindingRepository.save(binding);
+        return formTableBindingRepository.findByIdWithTable(binding.getId()).orElse(binding);
     }
     
     @Override

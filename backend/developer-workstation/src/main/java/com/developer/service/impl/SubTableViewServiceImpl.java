@@ -73,7 +73,7 @@ public class SubTableViewServiceImpl implements SubTableViewService {
     @Override
     @Transactional
     public SubTableViewConfig createDefaultViewConfig(Long bindingId) {
-        FormTableBinding binding = bindingRepository.findById(bindingId)
+        FormTableBinding binding = bindingRepository.findByIdWithTable(bindingId)
                 .orElseThrow(() -> new IllegalArgumentException("Binding not found: " + bindingId));
 
         // Check if config already exists

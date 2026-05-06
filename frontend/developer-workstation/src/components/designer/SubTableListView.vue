@@ -362,8 +362,6 @@ const linkFormOption = computed(() => {
   // it may still be the legacy "ADD + …" string — remove so only `el-dialog` shows `linkFormDialogTitle`.
   delete saved.title
   return {
-    resetBtn: false,
-    submitBtn: false,
     showMsg: true,
     form: {
       labelPosition: 'left',

@@ -103,8 +103,8 @@
           v-if="bindingForm.bindingType === 'SUB'"
         >
           <el-radio-group v-model="bindingForm.subMode">
-            <el-radio value="FULL">{{ t('tableBinding.subModeFull') }}</el-radio>
-            <el-radio value="FORM_ONLY">{{ t('tableBinding.subModeFormOnly') }}</el-radio>
+            <el-radio :value="'FULL'">{{ t('tableBinding.subModeFull') }}</el-radio>
+            <el-radio :value="'FORM_ONLY'">{{ t('tableBinding.subModeFormOnly') }}</el-radio>
           </el-radio-group>
           <div class="form-item-tip">{{ t('tableBinding.subModeTip') }}</div>
         </el-form-item>
@@ -134,8 +134,8 @@
         
         <el-form-item :label="t('tableBinding.bindingMode')" prop="bindingMode">
           <el-radio-group v-model="bindingForm.bindingMode" :disabled="bindingForm.bindingType === 'RELATED'">
-            <el-radio value="EDITABLE">{{ t('tableBinding.editable') }}</el-radio>
-            <el-radio value="READONLY">{{ t('tableBinding.readOnly') }}</el-radio>
+            <el-radio :value="'EDITABLE'">{{ t('tableBinding.editable') }}</el-radio>
+            <el-radio :value="'READONLY'">{{ t('tableBinding.readOnly') }}</el-radio>
           </el-radio-group>
         </el-form-item>
         
@@ -178,6 +178,7 @@ import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'elem
 import { useI18n } from 'vue-i18n'
 import { functionUnitApi, type TableBinding, type TableBindingRequest, type TableDefinition, type BindingType } from '@/api/functionUnit'
 import { relationTableBindingApi, type RelationTableDTO } from '@/api/relationTable'
+import { pickHttpErrorBodyMessage, resolveUserFacingHttpMessage } from '@/utils/httpErrorMessage'
 
 const { t } = useI18n()
 
@@ -218,7 +219,8 @@ function makeEmptyBindingForm(): TableBindingRequest {
     tableId: undefined as unknown as number,
     bindingType: defaultType,
     bindingMode: defaultType === 'PRIMARY' ? 'EDITABLE' : 'READONLY',
-    foreignKeyField: undefined
+    foreignKeyField: undefined,
+    subMode: defaultType === 'SUB' ? 'FULL' : undefined
   }
 }
 
@@ -367,6 +369,11 @@ async function loadBindings() {
 function handleBindingTypeChange() {
   bindingForm.value.tableId = undefined as unknown as number
   bindingForm.value.foreignKeyField = undefined
+  if (bindingForm.value.bindingType === 'SUB') {
+    bindingForm.value.subMode = bindingForm.value.subMode || 'FULL'
+  } else {
+    bindingForm.value.subMode = undefined
+  }
   // RELATED type must be READONLY
   if (bindingForm.value.bindingType === 'RELATED') {
     bindingForm.value.bindingMode = 'READONLY'
@@ -409,7 +416,8 @@ function handleEdit(binding: TableBinding) {
     bindingType: binding.bindingType,
     bindingMode: binding.bindingMode,
     foreignKeyField: binding.foreignKeyField,
-    sortOrder: binding.sortOrder
+    sortOrder: binding.sortOrder,
+    subMode: binding.bindingType === 'SUB' ? (binding.subMode || 'FULL') : undefined
   }
   showAddDialog.value = true
 }
@@ -433,11 +441,25 @@ async function handleDelete(binding: TableBinding) {
   }
 }
 
+/** 从响应体取出业务错误码（platform.common 与手写 JSON） */
+function extractBindingErrorCode(data: unknown): string | undefined {
+  if (!data || typeof data !== 'object') return undefined
+  const o = data as Record<string, unknown>
+  const nested = o.error
+  if (nested && typeof nested === 'object') {
+    const e = nested as Record<string, unknown>
+    const c = e.code ?? e.errorCode
+    if (typeof c === 'string' && c.trim()) return c.trim()
+  }
+  const top = o.code ?? o.errorCode
+  if (typeof top === 'string' && top.trim()) return top.trim()
+  return undefined
+}
+
 /** 把后端业务错误码映射成对用户友好的提示 */
 function mapBackendError(err: any): string {
-  const body = err?.response?.data
-  const code = body?.code || body?.errorCode
-  const message = body?.message
+  const data = err?.response?.data
+  const code = extractBindingErrorCode(data)
   const codeMap: Record<string, string> = {
     SUB_REQUIRES_PRIMARY: t('tableBinding.primaryFirstHint'),
     PRIMARY_BINDING_EXISTS: t('tableBinding.primaryBindingExists'),
@@ -446,10 +468,17 @@ function mapBackendError(err: any): string {
     SUB_BINDING_REQUIRES_SUB_TABLE: t('tableBinding.subBindingRequiresSubTable'),
     SUB_REQUIRES_FOREIGN_KEY: t('tableBinding.foreignKeyRequired'),
     INVALID_FOREIGN_KEY: t('tableBinding.invalidForeignKey'),
-    RELATED_BINDING_REQUIRES_RELATION_TABLE: t('tableBinding.relatedBindingRequiresRelationTable')
+    RELATED_BINDING_REQUIRES_RELATION_TABLE: t('tableBinding.relatedBindingRequiresRelationTable'),
+    SYS_INTERNAL_ERROR: t('api.serverError'),
+    RES_NOT_FOUND: t('api.notFound'),
+    VAL_INVALID_INPUT: t('api.invalidParams')
   }
   if (code && codeMap[code]) return codeMap[code]
-  return message || t('tableBinding.operationFailed')
+
+  const fromBody = pickHttpErrorBodyMessage(data)
+  if (fromBody) return fromBody
+
+  return resolveUserFacingHttpMessage(err, t)
 }
 
 // Submit form
