@@ -33,6 +33,7 @@ import {
   switchWorkspace,
   saveTokens,
   saveUser,
+  USER_ID_KEY,
   type UserInfo,
   type WorkspaceContextOption
 } from '@/api/auth'
@@ -79,7 +80,7 @@ async function onSwitch(c: WorkspaceContextOption) {
       saveTokens(resp.accessToken, resp.refreshToken)
       saveUser(resp.user)
       user.value = resp.user
-      localStorage.setItem('userId', resp.user.userId)
+      localStorage.setItem(USER_ID_KEY, resp.user.userId)
       ElMessage.success(t('workspace.switched'))
       window.location.reload()
     }

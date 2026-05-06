@@ -16,6 +16,40 @@ const authRequest = axios.create({
   headers: { 'Content-Type': 'application/json' }
 })
 
+/** Per-app keys so DW / Portal / Admin on the same origin do not clobber each other's sessions */
+export const TOKEN_KEY = 'ws_ac_access_token'
+export const REFRESH_TOKEN_KEY = 'ws_ac_refresh_token'
+export const USER_KEY = 'ws_ac_user'
+export const USER_ID_KEY = 'ws_ac_user_id'
+export const USERNAME_KEY = 'ws_ac_username'
+
+function migrateLegacyAdminAuthStorage(): void {
+  try {
+    if (typeof localStorage === 'undefined') return
+    if (localStorage.getItem(TOKEN_KEY)) return
+    const legacyToken = localStorage.getItem('token')
+    if (!legacyToken) return
+    localStorage.setItem(TOKEN_KEY, legacyToken)
+    const rt = localStorage.getItem('refreshToken')
+    if (rt) localStorage.setItem(REFRESH_TOKEN_KEY, rt)
+    const u = localStorage.getItem('user')
+    if (u) localStorage.setItem(USER_KEY, u)
+    const uid = localStorage.getItem('userId')
+    if (uid) localStorage.setItem(USER_ID_KEY, uid)
+    const uname = localStorage.getItem('username')
+    if (uname) localStorage.setItem(USERNAME_KEY, uname)
+    localStorage.removeItem('token')
+    localStorage.removeItem('refreshToken')
+    localStorage.removeItem('user')
+    localStorage.removeItem('userId')
+    localStorage.removeItem('username')
+  } catch {
+    /* ignore */
+  }
+}
+
+migrateLegacyAdminAuthStorage()
+
 export interface LoginRequest {
   username: string
   password: string
@@ -73,7 +107,7 @@ export const login = async (data: LoginRequest): Promise<LoginResponse> => {
  * Logout and invalidate token.
  */
 export const logout = async (): Promise<void> => {
-  const token = localStorage.getItem('token')
+  const token = localStorage.getItem(TOKEN_KEY)
   if (token) {
     try {
       await authRequest.post('/logout', null, {
@@ -103,7 +137,7 @@ export const exchangeSsoCode = async (code: string, state?: string): Promise<Log
  * Get current user info.
  */
 export const getCurrentUser = async (): Promise<UserInfo> => {
-  const token = localStorage.getItem('token')
+  const token = localStorage.getItem(TOKEN_KEY)
   const response = await authRequest.get<UserInfo>('/me', {
     headers: { Authorization: `Bearer ${token}` }
   })
@@ -122,7 +156,7 @@ export const changePassword = async (data: { oldPassword: string; newPassword: s
  * Validate token.
  */
 export const validateToken = async (): Promise<boolean> => {
-  const token = localStorage.getItem('token')
+  const token = localStorage.getItem(TOKEN_KEY)
   if (!token) return false
   
   try {
@@ -135,10 +169,7 @@ export const validateToken = async (): Promise<boolean> => {
   }
 }
 
-// Token storage helpers
-export const TOKEN_KEY = 'token'
-export const REFRESH_TOKEN_KEY = 'refreshToken'
-export const USER_KEY = 'user'
+// Token storage helpers (keys exported at top of file)
 
 export const saveTokens = (accessToken: string, refreshToken: string) => {
   localStorage.setItem(TOKEN_KEY, accessToken)
@@ -168,8 +199,8 @@ export const clearAuth = () => {
   localStorage.removeItem(TOKEN_KEY)
   localStorage.removeItem(REFRESH_TOKEN_KEY)
   localStorage.removeItem(USER_KEY)
-  localStorage.removeItem('userId')
-  localStorage.removeItem('username')
+  localStorage.removeItem(USER_ID_KEY)
+  localStorage.removeItem(USERNAME_KEY)
 }
 
 export const isAuthenticated = (): boolean => {

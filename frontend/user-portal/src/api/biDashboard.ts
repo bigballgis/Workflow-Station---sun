@@ -1,5 +1,5 @@
 import axios, { AxiosRequestConfig } from 'axios'
-import { TOKEN_KEY } from './auth'
+import { TOKEN_KEY, USER_KEY, USER_ID_KEY } from './auth'
 
 export interface UserDashboardResponse {
   dashboardId: string
@@ -38,9 +38,9 @@ adminCenterService.interceptors.request.use((config) => {
   if (token) {
     config.headers['Authorization'] = `Bearer ${token}`
   }
-  let userId = localStorage.getItem('userId')
+  let userId = localStorage.getItem(USER_ID_KEY)
   if (!userId) {
-    const userStr = localStorage.getItem('user')
+    const userStr = localStorage.getItem(USER_KEY)
     if (userStr) {
       try {
         const user = JSON.parse(userStr)

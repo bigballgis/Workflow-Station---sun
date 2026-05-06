@@ -5,7 +5,7 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { exchangeSsoCode, saveTokens, saveUser } from '@/api/auth'
+import { exchangeSsoCode, saveTokens, saveUser, USER_ID_KEY, USERNAME_KEY } from '@/api/auth'
 import { consumeSsoReturnPath, redirectToUnifiedLogin } from '@/utils/sso'
 import { ElMessage } from 'element-plus'
 
@@ -23,8 +23,8 @@ onMounted(async () => {
     const resp = await exchangeSsoCode(code, typeof route.query.state === 'string' ? route.query.state : undefined)
     saveTokens(resp.accessToken, resp.refreshToken)
     saveUser(resp.user)
-    localStorage.setItem('userId', resp.user.userId)
-    localStorage.setItem('username', resp.user.username || resp.user.displayName || resp.user.userId)
+    localStorage.setItem(USER_ID_KEY, resp.user.userId)
+    localStorage.setItem(USERNAME_KEY, resp.user.username || resp.user.displayName || resp.user.userId)
     const dest = consumeSsoReturnPath('/dashboard')
     await router.replace(dest)
   } catch {

@@ -37,6 +37,7 @@ import {
   exchangeSsoCode,
   saveTokens,
   saveUser,
+  USER_ID_KEY,
   type LoginResponse,
   type WorkspaceContextOption
 } from '@/api/auth'
@@ -56,7 +57,7 @@ function completeLogin(response: LoginResponse) {
   if (!response.accessToken || !response.refreshToken || !response.user) return
   saveTokens(response.accessToken, response.refreshToken)
   saveUser(response.user)
-  localStorage.setItem('userId', response.user.userId)
+  localStorage.setItem(USER_ID_KEY, response.user.userId)
   const dest =
     response.user?.portalAccessMode === 'PERMISSION_SELF_SERVICE_ONLY' ? '/permissions' : '/dashboard'
   router.replace(consumeSsoReturnPath(dest))

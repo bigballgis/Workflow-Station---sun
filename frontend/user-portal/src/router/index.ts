@@ -6,6 +6,8 @@ import {
   listWorkspaceContexts,
   reconcilePortalWorkspaceSession,
   saveUser,
+  TOKEN_KEY,
+  USER_ID_KEY,
   type UserInfo
 } from '@/api/auth'
 import i18n from '@/i18n'
@@ -181,7 +183,7 @@ router.beforeEach(async (to, _from, next) => {
     return next()
   }
 
-  const token = localStorage.getItem('token')
+  const token = localStorage.getItem(TOKEN_KEY)
   if (to.meta.requiresAuth !== false && !token && to.path !== '/sso/callback') {
     setSsoReturnPath(to.fullPath)
     redirectToUnifiedLogin('portal')
@@ -203,7 +205,7 @@ router.beforeEach(async (to, _from, next) => {
         const fresh = await getCurrentUser()
         const merged = applyWorkspaceAwarePortalAccess(fresh, contexts.length > 0)
         saveUser(merged)
-        localStorage.setItem('userId', merged.userId)
+        localStorage.setItem(USER_ID_KEY, merged.userId)
       } catch {
         // 保持缓存
       }

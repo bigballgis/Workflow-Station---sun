@@ -5,7 +5,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import { changePassword, clearAuth, getCurrentUser, getUser, saveUser } from '@/api/auth'
+import { changePassword, clearAuth, getCurrentUser, getUser, saveUser, USER_KEY, USERNAME_KEY } from '@/api/auth'
 import { getChangePasswordFailureMessage } from '@/utils/changePasswordError'
 import { redirectToUnifiedLogin } from '@/utils/sso'
 
@@ -82,7 +82,7 @@ export function useProfile() {
         userInfo.value = fresh
       } catch (error) {
         console.error('Failed to load user info:', error)
-        const storedUser = localStorage.getItem('user')
+        const storedUser = localStorage.getItem(USER_KEY)
         if (storedUser) {
           try { userInfo.value = JSON.parse(storedUser) }
           catch { userInfo.value = getUser() }
@@ -93,9 +93,9 @@ export function useProfile() {
           const legacy = localStorage.getItem('userInfo')
           if (legacy) {
             try { userInfo.value = JSON.parse(legacy) }
-            catch { userInfo.value = { username: localStorage.getItem('username') || 'User' } }
+            catch { userInfo.value = { username: localStorage.getItem(USERNAME_KEY) || 'User' } }
           } else {
-            userInfo.value = { username: localStorage.getItem('username') || 'User' }
+            userInfo.value = { username: localStorage.getItem(USERNAME_KEY) || 'User' }
           }
         }
       }

@@ -143,7 +143,8 @@ import {
   getStoredUser,
   listWorkspaceContexts,
   reconcilePortalWorkspaceSession,
-  saveUser
+  saveUser,
+  USER_ID_KEY
 } from '@/api/auth'
 import UserProfileDropdown from '@/components/UserProfileDropdown.vue'
 import NotificationBadge from '@/components/NotificationBadge.vue'
@@ -176,7 +177,7 @@ const showFullPortal = computed(
 const checkBiDashboards = async () => {
   try {
     const storedUser = getStoredUser()
-    const userId = storedUser?.userId || localStorage.getItem('userId')
+    const userId = storedUser?.userId || localStorage.getItem(USER_ID_KEY)
     if (userId) {
       const dashboards = await biDashboardApi.getUserDashboards(
         userId,
@@ -205,7 +206,7 @@ async function syncPortalAccessFromServer() {
     const hasCtx = (workspaceContextCount.value ?? 0) > 0
     const merged = applyWorkspaceAwarePortalAccess(u, hasCtx)
     saveUser(merged)
-    localStorage.setItem('userId', merged.userId)
+    localStorage.setItem(USER_ID_KEY, merged.userId)
     portalAccessMode.value = merged.portalAccessMode
   } catch {
     portalAccessMode.value = getStoredUser()?.portalAccessMode

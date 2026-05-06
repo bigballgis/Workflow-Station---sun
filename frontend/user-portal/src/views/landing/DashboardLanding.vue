@@ -76,7 +76,7 @@ import {
   type UserDashboardResponse,
   type GuestTokenResponse,
 } from '@/api/biDashboard'
-import { getStoredUser } from '@/api/auth'
+import { getStoredUser, USER_ID_KEY, USER_KEY } from '@/api/auth'
 
 // NOTE: Install required package: npm install @superset-ui/embedded-sdk
 // import { embedDashboard } from '@superset-ui/embedded-sdk'
@@ -98,9 +98,9 @@ function getContainerId(dashboardId: string): string {
 }
 
 function getUserId(): string {
-  const userId = localStorage.getItem('userId')
+  const userId = localStorage.getItem(USER_ID_KEY)
   if (userId) return userId
-  const userStr = localStorage.getItem('user')
+  const userStr = localStorage.getItem(USER_KEY)
   if (userStr) {
     try {
       const user = JSON.parse(userStr)

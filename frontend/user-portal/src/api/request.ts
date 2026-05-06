@@ -1,6 +1,6 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
 import { ElMessage } from 'element-plus'
-import { refreshToken as refreshAuthToken, REFRESH_TOKEN_KEY, TOKEN_KEY, clearAuth } from './auth'
+import { refreshToken as refreshAuthToken, REFRESH_TOKEN_KEY, TOKEN_KEY, USER_KEY, USER_ID_KEY, clearAuth } from './auth'
 import i18n from '@/i18n'
 import { pickHttpErrorBodyMessage } from '@/utils/httpErrorMessage'
 import { redirectToUnifiedLogin, setSsoReturnPath } from '@/utils/sso'
@@ -37,10 +37,10 @@ service.interceptors.request.use(
     }
     
     // 添加用户ID头 - 从存储的用户对象中获取
-    let userId = localStorage.getItem('userId')
+    let userId = localStorage.getItem(USER_ID_KEY)
     if (!userId) {
       // 尝试从 user 对象中获取
-      const userStr = localStorage.getItem('user')
+      const userStr = localStorage.getItem(USER_KEY)
       if (userStr) {
         try {
           const user = JSON.parse(userStr)

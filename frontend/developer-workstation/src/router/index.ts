@@ -3,6 +3,7 @@ import type { RouteRecordRaw } from 'vue-router'
 import { hasAnyRole } from '@/utils/permission'
 import i18n from '@/i18n'
 import { redirectToUnifiedLogin, setSsoReturnPath } from '@/utils/sso'
+import { TOKEN_KEY } from '@/api/auth'
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -81,7 +82,7 @@ router.beforeEach(async (to, _from, next) => {
   }
 
   if (to.path === '/sso/callback') {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem(TOKEN_KEY)
     if (token) {
       const { getUser } = await import('@/api/auth')
       const user = getUser()
@@ -97,7 +98,7 @@ router.beforeEach(async (to, _from, next) => {
   // 检查需要认证的路由
   const requiresAuth = to.matched.some(record => record.meta.requiresAuth)
   if (requiresAuth) {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem(TOKEN_KEY)
     if (!token) {
       setSsoReturnPath(to.fullPath)
       redirectToUnifiedLogin('developer-workstation')

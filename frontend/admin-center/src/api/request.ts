@@ -1,6 +1,6 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
 import { ElMessage } from 'element-plus'
-import { refreshToken as refreshAuthToken, REFRESH_TOKEN_KEY, TOKEN_KEY, clearAuth } from './auth'
+import { refreshToken as refreshAuthToken, REFRESH_TOKEN_KEY, TOKEN_KEY, USER_ID_KEY, USERNAME_KEY, clearAuth } from './auth'
 import i18n from '@/i18n'
 import { pickHttpErrorBodyMessage } from '@/utils/httpErrorMessage'
 import { redirectToUnifiedLogin, setSsoReturnPath } from '@/utils/sso'
@@ -31,11 +31,11 @@ request.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
-    const userId = localStorage.getItem('userId')
+    const userId = localStorage.getItem(USER_ID_KEY)
     if (userId) {
       config.headers['X-User-Id'] = userId
     }
-    const username = localStorage.getItem('username') || userId
+    const username = localStorage.getItem(USERNAME_KEY) || userId
     if (username) {
       config.headers['X-Username'] = username
     }

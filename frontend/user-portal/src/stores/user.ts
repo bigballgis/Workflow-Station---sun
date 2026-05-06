@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { TOKEN_KEY } from '@/api/auth'
 
 export interface UserInfo {
   id: string
@@ -11,7 +12,7 @@ export interface UserInfo {
 }
 
 export const useUserStore = defineStore('user', () => {
-  const token = ref<string>(localStorage.getItem('token') || '')
+  const token = ref<string>(localStorage.getItem(TOKEN_KEY) || '')
   const userInfo = ref<UserInfo | null>(null)
 
   const isLoggedIn = computed(() => !!token.value)
@@ -20,7 +21,7 @@ export const useUserStore = defineStore('user', () => {
 
   const setToken = (newToken: string) => {
     token.value = newToken
-    localStorage.setItem('token', newToken)
+    localStorage.setItem(TOKEN_KEY, newToken)
   }
 
   const setUserInfo = (info: UserInfo) => {
@@ -44,7 +45,7 @@ export const useUserStore = defineStore('user', () => {
   const logout = () => {
     token.value = ''
     userInfo.value = null
-    localStorage.removeItem('token')
+    localStorage.removeItem(TOKEN_KEY)
   }
 
   return {

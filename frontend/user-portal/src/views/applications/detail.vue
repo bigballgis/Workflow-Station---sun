@@ -369,6 +369,7 @@ import { formatDate } from '@/utils/dateFormat'
 import { relationTableApi } from '@/api/relationTable'
 import { isRejectedName } from '@/utils/statusMatcher'
 import { resolveAssigneeFieldForBinding } from '@/utils/subTableAssignment'
+import { USER_ID_KEY, USER_KEY } from '@/api/auth'
 
 const route = useRoute()
 const router = useRouter()
@@ -383,9 +384,9 @@ const snapshotTaskDefinitionKey = route.query.snapshotTaskDefinitionKey as strin
 
 /** Consistent with request interceptor; used to determine if the initiator is viewing their own application */
 function getPortalUserId(): string | null {
-  let userId = localStorage.getItem('userId')
+  let userId = localStorage.getItem(USER_ID_KEY)
   if (!userId) {
-    const userStr = localStorage.getItem('user')
+    const userStr = localStorage.getItem(USER_KEY)
     if (userStr) {
       try {
         const user = JSON.parse(userStr)
