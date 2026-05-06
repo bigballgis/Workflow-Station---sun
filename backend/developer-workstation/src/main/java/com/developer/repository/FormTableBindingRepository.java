@@ -18,15 +18,23 @@ import java.util.Optional;
 public interface FormTableBindingRepository extends JpaRepository<FormTableBinding, Long> {
     
     /**
+     * 按绑定 ID 查询并 JOIN FETCH table + form。
+     * 组装 {@link com.developer.dto.FormTableBindingResponse} 时会调用 {@code getTable*()} 与 {@code getFormId()}，
+     * 二者均可能触及 LAZY 关联；事务外或 OSIV 关闭时必须事先初始化，否则 LazyInitializationException → 500。
+     */
+    @Query("SELECT b FROM FormTableBinding b LEFT JOIN FETCH b.table LEFT JOIN FETCH b.form WHERE b.id = :id")
+    Optional<FormTableBinding> findByIdWithTable(@Param("id") Long id);
+    
+    /**
      * 按表单ID查询所有绑定，按排序顺序排列
      */
     @Query("SELECT b FROM FormTableBinding b WHERE b.form.id = :formId ORDER BY b.sortOrder")
     List<FormTableBinding> findByFormIdOrderBySortOrder(@Param("formId") Long formId);
     
     /**
-     * 按表单ID查询所有绑定，同时加载表信息
+     * 按表单 ID 查询所有绑定，同时加载 table 与 form（与 DTO 组装所需字段一致）。
      */
-    @Query("SELECT b FROM FormTableBinding b LEFT JOIN FETCH b.table WHERE b.form.id = :formId ORDER BY b.sortOrder")
+    @Query("SELECT b FROM FormTableBinding b LEFT JOIN FETCH b.table LEFT JOIN FETCH b.form WHERE b.form.id = :formId ORDER BY b.sortOrder")
     List<FormTableBinding> findByFormIdWithTable(@Param("formId") Long formId);
     
     /**

@@ -108,7 +108,8 @@ public class FormDesignController {
             @PathVariable Long formId) {
         List<FormTableBinding> bindings = formDesignComponent.getBindings(formId);
         List<FormTableBindingResponse> result = bindings.stream()
-                .map(b -> FormTableBindingResponse.fromEntity(b, formDesignComponent.resolveRelationTableName(b)))
+                .map(b -> FormTableBindingResponse.fromEntity(
+                        b, formDesignComponent.resolveRelationTableName(b), formId))
                 .toList();
         return ResponseEntity.ok(ApiResponse.success(result));
     }
@@ -120,9 +121,8 @@ public class FormDesignController {
             @PathVariable Long functionUnitId,
             @PathVariable Long formId,
             @Valid @RequestBody FormTableBindingRequest request) {
-        FormTableBinding binding = formDesignComponent.createBinding(formId, request);
-        return ResponseEntity.ok(ApiResponse.success(
-                FormTableBindingResponse.fromEntity(binding, formDesignComponent.resolveRelationTableName(binding))));
+        FormTableBindingResponse dto = formDesignComponent.createBinding(formId, request);
+        return ResponseEntity.ok(ApiResponse.success(dto));
     }
     
     @PutMapping("/{formId}/bindings/{bindingId}")
@@ -134,7 +134,9 @@ public class FormDesignController {
             @PathVariable Long bindingId,
             @Valid @RequestBody FormTableBindingRequest request) {
         FormTableBinding binding = formDesignComponent.updateBinding(bindingId, request);
-        return ResponseEntity.ok(ApiResponse.success(FormTableBindingResponse.fromEntity(binding)));
+        return ResponseEntity.ok(ApiResponse.success(
+                FormTableBindingResponse.fromEntity(
+                        binding, formDesignComponent.resolveRelationTableName(binding), formId)));
     }
     
     @DeleteMapping("/{formId}/bindings/{bindingId}")

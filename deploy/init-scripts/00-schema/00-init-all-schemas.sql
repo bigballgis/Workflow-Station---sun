@@ -56,5 +56,7 @@ COMMIT;
 \i /docker-entrypoint-initdb.d/00-schema/28-dw-function-unit-dev-groups.sql
 \i /docker-entrypoint-initdb.d/00-schema/30-widen-flowable-identitylink-columns.sql
 \i /docker-entrypoint-initdb.d/00-schema/31-widen-flowable-act-hi-comment-columns.sql
+\i /docker-entrypoint-initdb.d/00-schema/32-add-dw-form-table-binding-subview-columns.sql
+\i /docker-entrypoint-initdb.d/00-schema/33-dw-sub-table-view-tables.sql
 
 \echo 'All schemas created successfully.'

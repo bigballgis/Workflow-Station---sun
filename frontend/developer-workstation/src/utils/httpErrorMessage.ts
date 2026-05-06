@@ -1,3 +1,19 @@
+function flattenUnknownDetails(details: unknown): string | undefined {
+  if (details == null) return undefined
+  if (typeof details === 'string' && details.trim().length > 0) return details.trim()
+  if (typeof details === 'object' && details !== null && !Array.isArray(details)) {
+    const vals = Object.values(details as Record<string, unknown>).flatMap(v =>
+      Array.isArray(v) ? v : [v]
+    )
+    const parts = vals
+      .map(v => (typeof v === 'string' ? v : v != null ? String(v) : ''))
+      .map(s => s.trim())
+      .filter(Boolean)
+    if (parts.length) return parts.join('; ')
+  }
+  return undefined
+}
+
 /**
  * 从 HTTP 错误响应体提取用户可读文案。
  * 兼容：ApiResponse.error、RFC 7807、校验 details、纯字符串 body。
@@ -6,37 +22,44 @@ export function pickHttpErrorBodyMessage(data: unknown): string | undefined {
   if (data == null || data === '') return undefined
   if (typeof data === 'string') {
     const s = data.trim()
-    return s.length > 0 ? s : undefined
+    if (!s) return undefined
+    if (s.startsWith('{') || s.startsWith('[')) {
+      try {
+        return pickHttpErrorBodyMessage(JSON.parse(s) as unknown)
+      } catch {
+        /* 非 JSON 则当作纯文案 */
+      }
+    }
+    return s
   }
   if (typeof data !== 'object') return undefined
   const o = data as Record<string, unknown>
 
   const err = o.error
-  if (typeof err === 'string' && err.trim().length > 0) return err.trim()
+
+  // ① platform / developer ApiResponse：error 为对象，优先取其 message + details
   if (err && typeof err === 'object') {
     const e = err as Record<string, unknown>
-    if (typeof e.message === 'string' && e.message.trim().length > 0) return e.message.trim()
+    const msg =
+      typeof e.message === 'string' && e.message.trim().length > 0 ? e.message.trim() : undefined
+    const det = flattenUnknownDetails(e.details) ?? flattenUnknownDetails(o.details)
+    if (msg && det && !msg.includes(det)) return `${msg} (${det})`
+    if (msg) return msg
+    if (det) return det
   }
 
+  // ② 网关 / Spring / 手写 JSON：顶层 message（如 {\"error\":\"FORBIDDEN\",\"message\":\"...\"}）
   if (typeof o.message === 'string' && o.message.trim().length > 0) return o.message.trim()
+
+  // ③ error 仅为字符串常量时最后再当文案（此前会盖住 ②）
+  if (typeof err === 'string' && err.trim().length > 0) return err.trim()
 
   if (typeof o.detail === 'string' && o.detail.trim().length > 0) return o.detail.trim()
   if (typeof o.title === 'string' && o.title.trim().length > 0) return o.title.trim()
 
-  const det = o.details
-  if (det != null) {
-    if (typeof det === 'string' && det.trim().length > 0) return det.trim()
-    if (typeof det === 'object' && det !== null && !Array.isArray(det)) {
-      const vals = Object.values(det as Record<string, unknown>).flatMap(v =>
-        Array.isArray(v) ? v : [v]
-      )
-      const parts = vals
-        .map(v => (typeof v === 'string' ? v : v != null ? String(v) : ''))
-        .map(s => s.trim())
-        .filter(Boolean)
-      if (parts.length) return parts.join('; ')
-    }
-  }
+  const detRoot = flattenUnknownDetails(o.details)
+  if (detRoot) return detRoot
+
   return undefined
 }
 
@@ -57,6 +80,7 @@ export function resolveUserFacingHttpMessage(error: unknown, t: (key: string) =>
   if (status === 403) return t('api.noPermission')
   if (status === 400) return t('api.invalidParams')
   if (status === 404) return t('api.notFound')
+  if (status === 409) return t('api.conflict')
   if (status === 422) return t('api.businessError')
   if (status === 429) return t('api.tooManyRequests')
   if (status === 500) return t('api.serverError')

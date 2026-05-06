@@ -1036,6 +1036,7 @@ export default {
     unauthorized: '登入已失效或憑證無效，請重新登入',
     invalidParams: '請求參數無效',
     notFound: '資源不存在',
+    conflict: '資源已存在或與目前狀態衝突',
     businessError: '業務處理失敗',
     serverError: '伺服器內部錯誤',
     serviceUnavailable: '服務暫時無法使用，請稍後再試',

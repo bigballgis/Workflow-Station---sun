@@ -1042,6 +1042,7 @@ export default {
     unauthorized: 'Your session has expired or credentials are invalid. Please sign in again.',
     invalidParams: 'Invalid request parameters',
     notFound: 'Resource not found',
+    conflict: 'Resource already exists or conflicts with current state',
     businessError: 'Business rule violation',
     serverError: 'Internal server error',
     serviceUnavailable: 'Service temporarily unavailable, please try again later',
