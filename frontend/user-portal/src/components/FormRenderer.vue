@@ -50,6 +50,7 @@
                                 :polling-interval="subTablePollingInterval"
                                 :linked-sub-table-bindings="linkableSubTableBindings"
                                 :suppress-link-form-initial-data="suppressLinkFormInitialData"
+                                :show-link-form-dialog-footer="showLinkFormDialogFooter"
                                 @update:model-value="(rows: any[]) => handleSubTableUpdate(child._bindingId!, rows)"
                                 @update:linked-sub-table-data="handleSubTableUpdate"
                                 style="margin-bottom: 16px;"
@@ -134,6 +135,7 @@
                       :polling-interval="subTablePollingInterval"
                       :linked-sub-table-bindings="linkableSubTableBindings"
                       :suppress-link-form-initial-data="suppressLinkFormInitialData"
+                      :show-link-form-dialog-footer="showLinkFormDialogFooter"
                       @update:model-value="(rows: any[]) => handleSubTableUpdate(field._bindingId!, rows)"
                       @update:linked-sub-table-data="handleSubTableUpdate"
                       style="margin-bottom: 16px;"
@@ -235,6 +237,7 @@
                             :polling-interval="subTablePollingInterval"
                             :linked-sub-table-bindings="linkableSubTableBindings"
                             :suppress-link-form-initial-data="suppressLinkFormInitialData"
+                            :show-link-form-dialog-footer="showLinkFormDialogFooter"
                             @update:model-value="(rows: any[]) => handleSubTableUpdate(child._bindingId!, rows)"
                             @update:linked-sub-table-data="handleSubTableUpdate"
                             style="margin-bottom: 16px;"
@@ -319,6 +322,7 @@
                   :polling-interval="subTablePollingInterval"
                   :linked-sub-table-bindings="linkableSubTableBindings"
                   :suppress-link-form-initial-data="suppressLinkFormInitialData"
+                  :show-link-form-dialog-footer="showLinkFormDialogFooter"
                   @update:model-value="(rows: any[]) => handleSubTableUpdate(field._bindingId!, rows)"
                   @update:linked-sub-table-data="handleSubTableUpdate"
                   style="margin-bottom: 16px;"
@@ -453,6 +457,8 @@ interface Props {
   allowSubTableAssign?: boolean
   /** In MI todo mode, link-form Details should open blank instead of reusing row-level historical child data. */
   suppressLinkFormInitialData?: boolean
+  /** Task To Do only: Link Form field-layout detail shows Cancel/Save (completed / My Request use header close only). */
+  showLinkFormDialogFooter?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -467,6 +473,7 @@ const props = withDefaults(defineProps<Props>(), {
   previewSubTables: false,
   allowSubTableAssign: true,
   suppressLinkFormInitialData: false,
+  showLinkFormDialogFooter: false,
 })
 
 const emit = defineEmits<{
