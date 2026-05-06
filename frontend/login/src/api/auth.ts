@@ -4,6 +4,10 @@
  * 类型定义 + fetch 封装。替代 App.vue 中内联的 fetch() 调用。
  */
 
+import i18n from '@/i18n'
+
+const t = i18n.global.t
+
 // ==================== 类型定义 ====================
 
 /** SSO 登录请求 */
@@ -61,7 +65,7 @@ export async function login(req: LoginRequest): Promise<LoginResult> {
       }),
     })
   } catch {
-    return { ok: false, error: 'Network error.' }
+    return { ok: false, error: t('login.error.network') }
   }
 
   if (!res.ok) {
@@ -70,7 +74,7 @@ export async function login(req: LoginRequest): Promise<LoginResult> {
 
   const data: LoginResponse = await res.json()
   if (!data.authorizationCode || !data.redirectUri) {
-    return { ok: false, error: 'Invalid login response.' }
+    return { ok: false, error: t('login.error.invalidResponse') }
   }
 
   return { ok: true, data }
@@ -92,7 +96,7 @@ async function parseErrorResponse(res: Response): Promise<string> {
   }
   if (detail) return detail
   if (res.status >= 500) {
-    return `Server error (${res.status}). Is Kong/admin-center healthy?`
+    return t('login.error.serverError', { status: res.status })
   }
-  return 'Invalid username or password, or SSO redirect_uri was rejected.'
+  return t('login.error.invalidCredentials')
 }

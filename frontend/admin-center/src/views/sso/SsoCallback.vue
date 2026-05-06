@@ -1,5 +1,5 @@
 <template>
-  <div class="sso-callback">正在完成登录…</div>
+  <div class="sso-callback">Completing sign-in…</div>
 </template>
 
 <script setup lang="ts">
@@ -15,7 +15,7 @@ const router = useRouter()
 onMounted(async () => {
   const code = typeof route.query.code === 'string' ? route.query.code : ''
   if (!code) {
-    ElMessage.error('缺少授权码')
+    ElMessage.error('Missing authorization code')
     redirectToUnifiedLogin('admin')
     return
   }
@@ -28,7 +28,7 @@ onMounted(async () => {
     const dest = consumeSsoReturnPath('/dashboard')
     await router.replace(dest)
   } catch {
-    ElMessage.error('登录失败')
+    ElMessage.error('Login failed')
     redirectToUnifiedLogin('admin')
   }
 })

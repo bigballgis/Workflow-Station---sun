@@ -6,6 +6,7 @@
  */
 
 import { ref, type Ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { login, type LoginResult } from '@/api/auth'
 
 export function useLogin(
@@ -13,6 +14,7 @@ export function useLogin(
   redirectUri: Ref<string>,
   state: Ref<string>
 ) {
+  const { t } = useI18n()
   const username = ref('')
   const password = ref('')
   const loading = ref(false)
@@ -22,7 +24,7 @@ export function useLogin(
     error.value = ''
 
     if (!clientId.value || !redirectUri.value) {
-      error.value = 'Missing client_id or redirect_uri parameter.'
+      error.value = t('login.error.missingParams')
       return
     }
 
