@@ -80,44 +80,21 @@
       </el-tab-pane>
     </el-tabs>
     
-    <el-dialog v-model="showImportDialog" :title="t('functionUnit.importPackage')" width="500px">
-      <el-upload drag :auto-upload="false" accept=".zip" :limit="1" ref="importUploadRef" :on-change="handleImportFileChange">
-        <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
-        <div class="el-upload__text">{{ t('functionUnit.dragPackageHere') }}<em>{{ t('functionUnit.clickToUpload') }}</em></div>
-        <template #tip>
-          <div class="el-upload__tip">{{ t('functionUnit.zipFormatTip') }}</div>
-        </template>
-      </el-upload>
-      <template #footer>
-        <el-button @click="showImportDialog = false">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary" :loading="importLoading" :disabled="!importFile" @click="handleStartImport">{{ t('functionUnit.startImport') }}</el-button>
-      </template>
-    </el-dialog>
+    <!-- Import Dialog (extracted) -->
+    <FunctionUnitImportDialog
+      v-model="showImportDialog"
+      :import-loading="importLoading"
+      :import-file="importFile"
+      @file-change="handleImportFileChange"
+      @start-import="handleStartImport"
+    />
     
-    <el-dialog v-model="showDeployDialogVisible" :title="t('functionUnit.deployFunctionUnit')" width="500px">
-      <el-form label-width="160px" label-position="left">
-        <el-form-item :label="t('functionUnit.targetEnvironment')">
-          <el-select v-model="deployForm.environment" style="width: 100%">
-            <el-option :label="t('functionUnit.envDev')" value="DEV" />
-            <el-option :label="t('functionUnit.envTest')" value="TEST" />
-            <el-option :label="t('functionUnit.envStaging')" value="STAGING" />
-            <el-option :label="t('functionUnit.envProd')" value="PROD" />
-          </el-select>
-        </el-form-item>
-        <el-form-item :label="t('functionUnit.deployStrategy')">
-          <el-select v-model="deployForm.strategy" style="width: 100%">
-            <el-option :label="t('functionUnit.strategyFull')" value="FULL" />
-            <el-option :label="t('functionUnit.strategyIncremental')" value="INCREMENTAL" />
-            <el-option :label="t('functionUnit.strategyCanary')" value="CANARY" />
-            <el-option :label="t('functionUnit.strategyBlueGreen')" value="BLUE_GREEN" />
-          </el-select>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showDeployDialogVisible = false">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary" @click="handleDeploy">{{ t('functionUnit.confirmDeploy') }}</el-button>
-      </template>
-    </el-dialog>
+    <!-- Deploy Dialog (extracted) -->
+    <FunctionUnitDeployDialog
+      v-model="showDeployDialogVisible"
+      :deploy-form="deployForm"
+      @deploy="handleDeploy"
+    />
     
     <!-- Access Config Dialog -->
     <AccessConfigDialog
@@ -205,6 +182,8 @@ import { Plus } from '@element-plus/icons-vue'
 import PageHeader from '@/components/PageHeader.vue'
 import DeleteConfirmDialog from './components/DeleteConfirmDialog.vue'
 import AccessConfigDialog from './components/AccessConfigDialog.vue'
+import FunctionUnitImportDialog from './components/FunctionUnitImportDialog.vue'
+import FunctionUnitDeployDialog from './components/FunctionUnitDeployDialog.vue'
 import { functionUnitStatusType, functionUnitStatusKey, deployStatusType, formatDate } from '@/utils/format'
 import { useFunctionUnit } from '@/composables/modules/useFunctionUnit'
 

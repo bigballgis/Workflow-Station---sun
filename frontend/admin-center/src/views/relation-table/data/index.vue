@@ -189,8 +189,7 @@ const isRowDisabled = (row: RelationTableDataRow): boolean => {
 const fetchTables = async () => {
   tableListLoading.value = true
   try {
-    const res: any = await relationTableDataApi.getDeployedTables()
-    tables.value = res?.data ?? res ?? []
+    tables.value = await relationTableDataApi.getDeployedTables()
     console.debug('[fetchTables] deployed tables:', tables.value.map(t => ({
       id: t.id,
       tableName: t.tableName,
@@ -218,19 +217,23 @@ const fetchData = async () => {
   try {
     const params: Record<string, any> = { page: currentPage.value - 1, size: pageSize.value }
     if (searchKeyword.value) params.search = searchKeyword.value
-    const res: any = await relationTableDataApi.queryData(selectedTableId.value, params)
-    const pageData = res?.data ?? res
+    const pageData = await relationTableDataApi.queryData(selectedTableId.value, params)
     dataRows.value = pageData?.content || []
     totalElements.value = pageData?.totalElements || 0
   } catch (e: any) {
     dataRows.value = []
+    totalElements.value = 0
+    // Interceptor already shows ElMessage.error for HTTP errors — only set inline alert
     const apiMsg = e?.response?.data?.error?.message || e?.response?.data?.message
     const traceId = e?.response?.data?.error?.traceId || e?.response?.data?.traceId
     const msg = apiMsg || e?.message || 'Failed to load data'
-    const display = traceId ? `${msg} (traceId: ${traceId})` : msg
-    fetchDataError.value = display
-    ElMessage.error(`Data load failed: ${msg}`)
-    console.error('[fetchData] error for tableId', selectedTableId.value, e)
+    fetchDataError.value = traceId ? `Data load failed: ${msg} (traceId: ${traceId})` : `Data load failed: ${msg}`
+    console.error('[fetchData] error', {
+      tableId: selectedTableId.value,
+      params: { page: currentPage.value - 1, size: pageSize.value, search: searchKeyword.value || undefined },
+      status: e?.response?.status,
+      body: e?.response?.data,
+    })
   } finally {
     dataLoading.value = false
   }
@@ -286,7 +289,8 @@ const handleSaveRecord = async () => {
     dialogVisible.value = false
     fetchData()
   } catch (e: any) {
-    ElMessage.error(e?.message || 'Save failed')
+    const apiMsg = e?.response?.data?.error?.message || e?.response?.data?.message
+    ElMessage.error(apiMsg || e?.message || 'Save failed')
   } finally {
     saving.value = false
   }

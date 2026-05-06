@@ -72,6 +72,16 @@ export const relationTableStatusType = (status: string): TagType =>
 export const assignmentTargetTagType = (type: string): TagType =>
   ({ USER: 'primary', ROLE: 'success', BUSINESS_UNIT: 'warning' } as Record<string, TagType>)[type] || 'info'
 
+/** BI 看板注册表状态（ACTIVE / MANUAL_INACTIVE / AUTO_INACTIVE）→ Tag type */
+export const biDashboardStatusTagType = (
+  status: string
+): 'success' | 'warning' | 'danger' | 'info' | 'primary' =>
+  ({
+    ACTIVE: 'success',
+    MANUAL_INACTIVE: 'warning',
+    AUTO_INACTIVE: 'info',
+  } as Record<string, 'success' | 'warning' | 'danger' | 'info' | 'primary'>)[status] ?? 'info'
+
 
 // ==================== 状态 → i18n key 映射 ====================
 
@@ -121,6 +131,14 @@ export const layoutModeKey = (mode: string) =>
     MULTI: 'bi.assignment.layoutModeMulti',
     WIDGET: 'bi.assignment.layoutModeWidget',
   }[mode] || mode)
+
+/** BI 看板注册表状态 → i18n key（bi.dashboard.status*） */
+export const biDashboardStatusKey = (status: string) =>
+  ({
+    ACTIVE: 'bi.dashboard.statusActive',
+    MANUAL_INACTIVE: 'bi.dashboard.statusManualInactive',
+    AUTO_INACTIVE: 'bi.dashboard.statusAutoInactive',
+  }[status] || status)
 
 
 // ==================== 日期时间格式化 ====================

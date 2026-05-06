@@ -1,34 +1,34 @@
 <template>
   <div class="page-container">
-    <PageHeader title="Dashboard Registry">
+    <PageHeader :title="t('bi.dashboard.pageTitle')">
       <template #actions>
         <el-button type="primary" :loading="syncing" @click="handleSync">
-          <el-icon><Refresh /></el-icon>Sync Dashboards
+          <el-icon><Refresh /></el-icon>{{ t('bi.dashboard.syncDashboards') }}
         </el-button>
       </template>
     </PageHeader>
 
     <el-card class="search-card">
       <el-form :inline="true" :model="query" class="search-form">
-        <el-form-item label="Title">
-          <el-input v-model="query.title" placeholder="Search dashboard title" clearable style="width: 200px" />
+        <el-form-item :label="t('bi.dashboard.searchTitle')">
+          <el-input v-model="query.title" :placeholder="t('bi.dashboard.searchTitlePlaceholder')" clearable style="width: 200px" />
         </el-form-item>
-        <el-form-item label="Tags">
-          <el-input v-model="query.tags" placeholder="Search tags" clearable style="width: 160px" />
+        <el-form-item :label="t('bi.dashboard.searchTags')">
+          <el-input v-model="query.tags" :placeholder="t('bi.dashboard.searchTagsPlaceholder')" clearable style="width: 160px" />
         </el-form-item>
-        <el-form-item label="Status">
-          <el-select v-model="query.status" placeholder="Select status" clearable style="width: 140px">
-            <el-option label="Active" value="ACTIVE" />
-            <el-option label="Manual Inactive" value="MANUAL_INACTIVE" />
-            <el-option label="Auto Inactive" value="AUTO_INACTIVE" />
+        <el-form-item :label="t('bi.dashboard.filterStatus')">
+          <el-select v-model="query.status" :placeholder="t('bi.dashboard.filterStatusPlaceholder')" clearable style="width: 140px">
+            <el-option :label="t('bi.dashboard.statusActive')" value="ACTIVE" />
+            <el-option :label="t('bi.dashboard.statusManualInactive')" value="MANUAL_INACTIVE" />
+            <el-option :label="t('bi.dashboard.statusAutoInactive')" value="AUTO_INACTIVE" />
           </el-select>
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleSearch">
-            <el-icon><Search /></el-icon>Search
+            <el-icon><Search /></el-icon>{{ t('common.search') }}
           </el-button>
           <el-button @click="handleReset">
-            <el-icon><RefreshIcon /></el-icon>Reset
+            <el-icon><RefreshIcon /></el-icon>{{ t('common.reset') }}
           </el-button>
         </el-form-item>
       </el-form>
@@ -36,47 +36,50 @@
 
     <el-card class="table-card">
       <el-table :data="dashboards" v-loading="loading" stripe border table-layout="auto" style="width: 100%">
-        <el-table-column prop="dashboardTitle" label="Dashboard Title" min-width="180" show-overflow-tooltip />
-        <el-table-column prop="embedId" label="Embed ID" min-width="160" show-overflow-tooltip />
-        <el-table-column prop="supersetDashboardUuid" label="Superset UUID" min-width="160" show-overflow-tooltip />
-        <el-table-column prop="tags" label="Tags" min-width="120" show-overflow-tooltip>
+        <el-table-column prop="dashboardTitle" :label="t('bi.dashboard.colDashboardTitle')" min-width="180" show-overflow-tooltip />
+        <el-table-column prop="embedId" :label="t('bi.dashboard.colEmbedId')" min-width="160" show-overflow-tooltip />
+        <el-table-column prop="supersetDashboardUuid" :label="t('bi.dashboard.colSupersetUuid')" min-width="160" show-overflow-tooltip />
+        <el-table-column prop="tags" :label="t('bi.dashboard.colTags')" min-width="120" show-overflow-tooltip>
           <template #default="{ row }">
             <span v-if="row.tags">{{ row.tags }}</span>
             <span v-else style="color: #c0c4cc">-</span>
           </template>
         </el-table-column>
-        <el-table-column label="Default Landing" width="150" align="center">
+        <el-table-column :label="t('bi.dashboard.colDefaultLanding')" width="150" align="center">
           <template #default="{ row }">
-            <el-tag v-if="row.isDefaultLanding" type="success" size="small">Yes</el-tag>
-            <el-tag v-else type="info" size="small">No</el-tag>
+            <el-tag v-if="row.isDefaultLanding" type="success" size="small">{{ t('bi.dashboard.yes') }}</el-tag>
+            <el-tag v-else type="info" size="small">{{ t('bi.dashboard.no') }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="Status" width="110" align="center">
+        <el-table-column :label="t('bi.dashboard.colStatus')" width="110" align="center">
           <template #default="{ row }">
-            <el-tag :type="statusTagType(row.status)" size="small">{{ statusText(row.status) }}</el-tag>
+            <el-tag
+              :type="biDashboardStatusTagType(row.status) as 'success' | 'warning' | 'info'"
+              size="small"
+            >{{ t(biDashboardStatusKey(row.status)) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="lastSyncedAt" label="Last Synced" min-width="170" show-overflow-tooltip />
-        <el-table-column label="Actions" width="220" fixed="right" align="center">
+        <el-table-column prop="lastSyncedAt" :label="t('bi.dashboard.colLastSynced')" min-width="170" show-overflow-tooltip />
+        <el-table-column :label="t('bi.dashboard.colActions')" width="220" fixed="right" align="center">
           <template #default="{ row }">
             <div style="display: flex; align-items: center; justify-content: center; flex-wrap: nowrap; white-space: nowrap; gap: 4px;">
-              <el-button link type="primary" size="small" @click="showEditDialog(row)">Edit</el-button>
+              <el-button link type="primary" size="small" @click="showEditDialog(row)">{{ t('bi.dashboard.edit') }}</el-button>
               <el-button
                 v-if="row.status === 'ACTIVE'"
                 link type="warning" size="small"
                 @click="handleToggleStatus(row)"
-              >Disable</el-button>
+              >{{ t('bi.dashboard.disable') }}</el-button>
               <el-button
                 v-else-if="row.status === 'MANUAL_INACTIVE'"
                 link type="success" size="small"
                 @click="handleToggleStatus(row)"
-              >Enable</el-button>
+              >{{ t('bi.dashboard.enable') }}</el-button>
               <el-button
                 v-else
                 link type="info" size="small"
                 disabled
-              >Enable</el-button>
-              <el-button link type="danger" size="small" @click="handleDelete(row)">Delete</el-button>
+              >{{ t('bi.dashboard.enable') }}</el-button>
+              <el-button link type="danger" size="small" @click="handleDelete(row)">{{ t('bi.dashboard.delete') }}</el-button>
             </div>
           </template>
         </el-table-column>
@@ -95,194 +98,32 @@
       </div>
     </el-card>
 
-    <!-- Edit Dialog -->
-    <el-dialog v-model="editDialogVisible" title="Edit Dashboard" width="500px" destroy-on-close>
-      <el-form :model="editForm" label-width="140px">
-        <el-form-item label="Dashboard Title">
-          <span>{{ editForm.dashboardTitle }}</span>
-        </el-form-item>
-        <el-form-item label="Tags">
-          <el-input v-model="editForm.tags" placeholder="Separate multiple tags with commas" />
-        </el-form-item>
-        <el-form-item label="Default Landing">
-          <el-switch v-model="editForm.isDefaultLanding" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="editDialogVisible = false">Cancel</el-button>
-        <el-button type="primary" :loading="editLoading" @click="handleEditSubmit">OK</el-button>
-      </template>
-    </el-dialog>
+    <DashboardEditDialog
+      v-model="editDialogVisible"
+      :edit-form="editForm"
+      :edit-loading="editLoading"
+      @submit="handleEditSubmit"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, Search, Refresh as RefreshIcon } from '@element-plus/icons-vue'
 import PageHeader from '@/components/PageHeader.vue'
-import {
-  biManagementApi,
-  type DashboardRegistryResponse,
-  type DashboardStatus,
-  type DashboardListParams
-} from '@/api/biManagement'
+import { useBiDashboard } from '@/composables/modules/useBiDashboard'
+import { biDashboardStatusKey, biDashboardStatusTagType } from '@/utils/format'
+import DashboardEditDialog from './components/DashboardEditDialog.vue'
 
 const { t } = useI18n()
 
-// State
-const loading = ref(false)
-const syncing = ref(false)
-const editLoading = ref(false)
-const dashboards = ref<DashboardRegistryResponse[]>([])
-const total = ref(0)
+const {
+  loading, syncing, editLoading, dashboards, total, query,
+  editDialogVisible, editForm,
+  handleSearch, handleReset, handleSync,
+  showEditDialog, handleEditSubmit, handleToggleStatus, handleDelete,
+} = useBiDashboard()
 
-// Query
-const query = reactive<DashboardListParams & { page: number; size: number }>({
-  title: '',
-  tags: '',
-  status: undefined,
-  page: 1,
-  size: 20
-})
-
-// Edit dialog
-const editDialogVisible = ref(false)
-const editForm = reactive({
-  id: '',
-  dashboardTitle: '',
-  tags: '',
-  isDefaultLanding: false
-})
-
-// Status helpers
-const statusTagType = (status: DashboardStatus) => {
-  const map: Record<DashboardStatus, 'success' | 'danger' | 'warning' | 'info'> = {
-    ACTIVE: 'success',
-    MANUAL_INACTIVE: 'danger',
-    AUTO_INACTIVE: 'warning'
-  }
-  return map[status] || ('info' as const)
-}
-
-const statusText = (status: DashboardStatus): string => {
-  const map: Record<DashboardStatus, string> = {
-    ACTIVE: 'Active',
-    MANUAL_INACTIVE: 'Manual Inactive',
-    AUTO_INACTIVE: 'Auto Inactive'
-  }
-  return map[status] || status
-}
-
-// Fetch dashboard list
-const handleSearch = async () => {
-  loading.value = true
-  try {
-    const params: DashboardListParams = {
-      title: query.title || undefined,
-      tags: query.tags || undefined,
-      status: query.status || undefined,
-      page: query.page - 1,
-      size: query.size
-    }
-    const result = await biManagementApi.dashboard.list(params)
-    dashboards.value = result.content
-    total.value = result.totalElements
-  } catch (error: any) {
-    ElMessage.error(error.message || t('bi.dashboard.queryFailed'))
-  } finally {
-    loading.value = false
-  }
-}
-
-// Reset query
-const handleReset = () => {
-  Object.assign(query, { title: '', tags: '', status: undefined, page: 1 })
-  handleSearch()
-}
-
-// Sync dashboards
-const handleSync = async () => {
-  syncing.value = true
-  try {
-    const result = await biManagementApi.dashboard.sync()
-    ElMessage.success(
-      t('bi.dashboard.syncSuccess', { created: result.created, updated: result.updated, autoInactivated: result.autoInactivated })
-    )
-    handleSearch()
-  } catch (error: any) {
-    ElMessage.error(error.message || t('bi.dashboard.syncFailed'))
-  } finally {
-    syncing.value = false
-  }
-}
-
-// Edit dialog
-const showEditDialog = (row: DashboardRegistryResponse) => {
-  editForm.id = row.id
-  editForm.dashboardTitle = row.dashboardTitle
-  editForm.tags = row.tags || ''
-  editForm.isDefaultLanding = row.isDefaultLanding
-  editDialogVisible.value = true
-}
-
-const handleEditSubmit = async () => {
-  editLoading.value = true
-  try {
-    await biManagementApi.dashboard.update(editForm.id, {
-      tags: editForm.tags || undefined,
-      isDefaultLanding: editForm.isDefaultLanding
-    })
-    ElMessage.success(t('bi.dashboard.updateSuccess'))
-    editDialogVisible.value = false
-    handleSearch()
-  } catch (error: any) {
-    ElMessage.error(error.message || t('bi.dashboard.updateFailed'))
-  } finally {
-    editLoading.value = false
-  }
-}
-
-// Toggle status (enable/disable)
-const handleToggleStatus = async (row: DashboardRegistryResponse) => {
-  const isActive = row.status === 'ACTIVE'
-  const action = isActive ? 'disable' : 'enable'
-  const newStatus: DashboardStatus = isActive ? 'MANUAL_INACTIVE' : 'ACTIVE'
-
-  try {
-    await ElMessageBox.confirm(`Are you sure you want to ${action} "${row.dashboardTitle}"?`, 'Confirm', { type: 'warning' })
-    await biManagementApi.dashboard.updateStatus(row.id, { status: newStatus })
-    ElMessage.success(t('bi.dashboard.statusChangeSuccess', { action: action.charAt(0).toUpperCase() + action.slice(1) }))
-    handleSearch()
-  } catch (error: any) {
-    if (error !== 'cancel') {
-      ElMessage.error(error.message || t('bi.dashboard.statusChangeFailed', { action }))
-    }
-  }
-}
-
-// Delete dashboard
-const handleDelete = async (row: DashboardRegistryResponse) => {
-  try {
-    await ElMessageBox.confirm(
-      `Are you sure you want to delete "${row.dashboardTitle}"? Deletion will fail if there are associated assignments.`,
-      'Warning',
-      { type: 'warning', confirmButtonText: 'Delete', confirmButtonClass: 'el-button--danger' }
-    )
-    await biManagementApi.dashboard.delete(row.id)
-    ElMessage.success(t('bi.dashboard.deleteSuccess'))
-    handleSearch()
-  } catch (error: any) {
-    if (error !== 'cancel') {
-      ElMessage.error(error.message || t('bi.dashboard.deleteFailed'))
-    }
-  }
-}
-
-onMounted(() => {
-  handleSearch()
-})
+onMounted(() => { handleSearch() })
 </script>
-
-
