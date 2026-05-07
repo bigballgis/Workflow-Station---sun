@@ -293,19 +293,29 @@
           style="width: 100%"
         />
 
-        <!-- lookup -->
-        <LookupField
+        <!-- lookup (+ backfill view, same pattern as FormRenderer) -->
+        <div
           v-else-if="col.type === 'lookup'"
-          v-model="formData[col.field]"
-          :table-id="Number(col.props?.tableId || 0)"
-          :search-fields="col.props?.searchFields || []"
-          :display-field="col.props?.displayField || ''"
-          :display-fields="col.props?.displayFields || []"
-          :selected-display-field="col.props?.selectedDisplayField || ''"
-          :filter-conditions="col.props?.filterConditions || []"
-          :view-fields="col.props?.viewFields || []"
-          :placeholder="col.placeholder || col.label"
-        />
+          class="lookup-field-wrapper"
+        >
+          <LookupField
+            v-model="formData[col.field]"
+            :table-id="Number(col.props?.tableId || 0)"
+            :search-fields="col.props?.searchFields || []"
+            :display-field="col.props?.displayField || ''"
+            :display-fields="col.props?.displayFields || []"
+            :selected-display-field="col.props?.selectedDisplayField || ''"
+            :filter-conditions="col.props?.filterConditions || []"
+            :view-fields="col.props?.viewFields || []"
+            :placeholder="col.placeholder || col.label"
+            @view-fields-loaded="(fields: any[]) => onLookupViewFieldsLoaded(col.field, fields)"
+          />
+          <LookupViewDisplay
+            v-if="col.props?.showBackfillView !== false && isLookupRowSelected(formData[col.field])"
+            :selected-data="formData[col.field]"
+            :view-fields="effectiveLookupViewFieldsForDialog(col)"
+          />
+        </div>
 
         <!-- user — remote search select (consistent with FieldRenderer) -->
         <el-select
@@ -373,6 +383,7 @@ import type { DialogColumn } from './subTableAddDialogHelpers'
 import type { RowFormulaRule, ValidationRule } from './formRendererHelpers'
 import { evaluateFormula, validateField } from './businessLogicEngine'
 import LookupField from './lookup/LookupField.vue'
+import LookupViewDisplay from './lookup/LookupViewDisplay.vue'
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -398,6 +409,27 @@ const formRef = ref<FormInstance>()
 const formData = ref<Record<string, any>>({})
 const uploadNames = ref<Record<string, string>>({})
 const dialogKey = ref(0)
+/** View-field metadata for lookup backfill (from column props or LookupField API load). */
+const lookupLoadedViewFields = ref<Record<string, any[]>>({})
+
+function isLookupRowSelected(val: unknown): boolean {
+  return (
+    val != null &&
+    typeof val === 'object' &&
+    !Array.isArray(val) &&
+    Object.keys(val as Record<string, unknown>).length > 0
+  )
+}
+
+function effectiveLookupViewFieldsForDialog(col: DialogColumn): any[] {
+  const fromCol = col.props?.viewFields
+  if (Array.isArray(fromCol) && fromCol.length > 0) return fromCol as any[]
+  return lookupLoadedViewFields.value[col.field] || []
+}
+
+function onLookupViewFieldsLoaded(field: string, fields: any[]) {
+  lookupLoadedViewFields.value = { ...lookupLoadedViewFields.value, [field]: fields }
+}
 
 // ─── Signature canvas state ───────────────────────────────────────────────────
 const signatureCanvasRefs = ref<Record<string, HTMLCanvasElement>>({})
@@ -603,6 +635,7 @@ function initDialogFormState(trigger: 'open' | 'data-change') {
   if (trigger === 'open') dialogKey.value += 1
   uploadNames.value = {}
   columnErrors.value = {}
+  lookupLoadedViewFields.value = {}
   // Fetch department tree if any column is of type 'department'
   if (props.columns.some(c => c.type === 'department')) {
     fetchDepartmentTree()
@@ -653,6 +686,7 @@ function handleClose() {
   // can leak previous values between different row edits. We explicitly reset our model.
   uploadNames.value = {}
   columnErrors.value = {}
+  lookupLoadedViewFields.value = {}
   formData.value = buildInitialRow(props.columns)
   formRef.value?.clearValidate()
   emit('update:visible', false)
@@ -727,6 +761,10 @@ function clearUpload(col: DialogColumn) {
   border: 1px solid #ccc;
   border-radius: 4px;
   overflow: hidden;
+  width: 100%;
+}
+
+.lookup-field-wrapper {
   width: 100%;
 }
 </style>

@@ -1122,6 +1122,8 @@ const deriveColumnsFromBinding = (binding: any, subForms?: Record<string, any>):
         type = 'transfer'
       } else if (r.type === 'cascader') {
         type = 'cascader'
+      } else if (r.type === 'lookup') {
+        type = 'lookup'
       } else {
         type = r.type as any
       }
@@ -1148,6 +1150,28 @@ const deriveColumnsFromBinding = (binding: any, subForms?: Record<string, any>):
       if (rProps.props !== undefined) passProps.labelProps = rProps.props
       // cascader: map props.props to cascaderProps if not already set
       if (type === 'cascader' && rProps.props && !passProps.cascaderProps) passProps.cascaderProps = rProps.props
+
+      // lookup — align with tasks/detail.vue SubTableAddDialog / LookupField props
+      if (type === 'lookup') {
+        let lookupCfg: any = {}
+        try {
+          const raw = rProps.lookupConfig
+          lookupCfg = typeof raw === 'string' ? JSON.parse(raw || '{}') : (raw || {})
+        } catch { lookupCfg = {} }
+        const dbCfg = lookupDbConfigs.value[r.field]
+        const relationView = lookupCfg.bindingId ? relationViewConfigs.value[lookupCfg.bindingId] : undefined
+        passProps.lookupConfig = rProps.lookupConfig || '{}'
+        passProps.tableId = lookupCfg.tableId || dbCfg?.tableId || 0
+        passProps.searchFields = lookupCfg.searchFields || dbCfg?.searchFields || []
+        passProps.displayField = lookupCfg.displayFields?.[0] || dbCfg?.displayField || ''
+        passProps.displayFields = lookupCfg.displayFields || []
+        passProps.selectedDisplayField = lookupCfg.selectedDisplayField || lookupCfg.displayField || ''
+        passProps.filterConditions = Array.isArray(lookupCfg.filterConditions) ? lookupCfg.filterConditions : []
+        passProps.viewFields = lookupCfg.showBackfillView === false
+          ? []
+          : (relationView?.viewFields || dbCfg?.viewFields || [])
+        passProps.showBackfillView = lookupCfg.showBackfillView !== false
+      }
 
       // Sync options into props.options so SubTableAddDialog can read from col.props?.options
       if (options) passProps.options = options
