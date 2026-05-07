@@ -75,6 +75,9 @@
                 </el-button>
                 <template #dropdown>
                   <el-dropdown-menu>
+                    <el-dropdown-item command="rename">
+                      {{ t('form.renameForm') }}
+                    </el-dropdown-item>
                     <el-dropdown-item v-if="row.formType === 'TASK'" command="copy">
                       {{ t('form.copyForm') }}
                     </el-dropdown-item>
@@ -123,6 +126,7 @@
           <el-button @click="handleImportFieldsToDesigner" :disabled="!selectedForm.boundTableId && (!selectedForm.tableBindings || selectedForm.tableBindings.length === 0)">
             <el-icon><Connection /></el-icon> {{ t('form.importTableFields') }}
           </el-button>
+          <el-button @click="openRenameDialog(selectedForm)">{{ t('form.renameForm') }}</el-button>
           <el-button @click="handleManageBindings(selectedForm)">{{ t('form.manageBindings') }}</el-button>
           <el-button @click="handleBindNode(selectedForm)">{{ t('form.bindProcessNode') }}</el-button>
           <el-button @click="handlePreview">{{ t('common.preview') }}</el-button>
@@ -298,6 +302,23 @@
       </template>
     </el-dialog>
 
+    <!-- Rename form dialog -->
+    <el-dialog v-model="showRenameDialog" :title="t('form.renameFormTitle')" width="500px">
+      <el-form label-width="100px" label-position="left">
+        <el-form-item :label="t('form.formNameLabel')" required>
+          <el-input
+            v-model="renameFormName"
+            :placeholder="t('form.enterFormName')"
+            @keyup.enter="handleConfirmRename"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showRenameDialog = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" :loading="renaming" @click="handleConfirmRename">{{ t('common.confirm') }}</el-button>
+      </template>
+    </el-dialog>
+
     <!-- Preview dialog -->
     <el-dialog v-model="showPreviewDialog" :title="t('form.previewTitle')" width="900px" destroy-on-close>
       <div class="preview-container">
@@ -468,6 +489,7 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ArrowLeft, ArrowDown, Plus, Refresh, Connection, Loading, CircleCheck } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import type { TabPaneName } from 'element-plus'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
 import type { FormDefinition, FieldDefinition, TableBinding, BindingType, FormType } from '@/api/functionUnit'
 import { functionUnitApi } from '@/api/functionUnit'
@@ -511,8 +533,12 @@ const loading = ref(false)
 const selectedForm = ref<FormDefinition | null>(null)
 const designerRef = ref<any>(null)
 const showCreateDialog = ref(false)
+const showRenameDialog = ref(false)
 const showPreviewDialog = ref(false)
 const showBindDialog = ref(false)
+const renaming = ref(false)
+const renameFormName = ref('')
+const renameTargetForm = ref<FormDefinition | null>(null)
 const previewData = ref({})
 const previewRule = ref<any[]>([])
 const previewSubBindings = ref<Array<{
@@ -523,7 +549,9 @@ const previewSubBindings = ref<Array<{
   tableType: string
   tableDescription: string
   rule: any[]
+  option?: any
   columns: any[]
+  subMode?: string
 }>>([])
 const previewSubData = ref<Record<number, any>>({})
 const previewTableRows = ref<Record<number, any[]>>({})
@@ -2147,7 +2175,7 @@ function loadSubDesigners(row: FormDefinition) {
   })
 }
 
-function handleTabChange(tabName: string) {
+function handleTabChange(tabName: TabPaneName) {
   if (tabName === 'main') return
   const bindingId = Number(tabName)
   const index = designerSubBindings.value.findIndex(b => b.bindingId === bindingId)
@@ -2374,6 +2402,9 @@ function validateFieldNames(fieldNames: string[]): string[] {
 /** 列表「更多」：复制 / 表绑定 / 绑定节点 */
 function onFormListMoreAction(command: string, row: FormDefinition) {
   switch (command) {
+    case 'rename':
+      openRenameDialog(row)
+      break
     case 'copy':
       void handleCopyForm(row)
       break
@@ -2385,6 +2416,45 @@ function onFormListMoreAction(command: string, row: FormDefinition) {
       break
     default:
       break
+  }
+}
+
+function openRenameDialog(form: FormDefinition) {
+  renameTargetForm.value = form
+  renameFormName.value = form.formName
+  showRenameDialog.value = true
+}
+
+async function handleConfirmRename() {
+  const target = renameTargetForm.value
+  const nextName = renameFormName.value.trim()
+  if (!target) return
+  if (!nextName) {
+    ElMessage.warning(t('form.formNameRequired'))
+    return
+  }
+  if (nextName === target.formName) {
+    showRenameDialog.value = false
+    return
+  }
+  renaming.value = true
+  try {
+    await store.updateForm(props.functionUnitId, target.id, {
+      formName: nextName,
+      formType: target.formType,
+      description: target.description,
+      configJson: target.configJson || {}
+    })
+    await loadForms()
+    if (selectedForm.value?.id === target.id) {
+      selectedForm.value = { ...selectedForm.value, formName: nextName }
+    }
+    ElMessage.success(t('form.renameFormSuccess'))
+    showRenameDialog.value = false
+  } catch (e: any) {
+    ElMessage.error(e.response?.data?.message || t('form.renameFormFailed'))
+  } finally {
+    renaming.value = false
   }
 }
 
@@ -2693,7 +2763,7 @@ function handlePreview() {
   const nonPrimary = (selectedForm.value.tableBindings || []).filter((b: TableBinding) => b.bindingType !== 'PRIMARY')
 
   // Build a map of bindingId -> binding info for quick lookup
-  const bindingMap = new Map<number, { bindingId: number; bindingType: string; bindingMode: string; tableName: string; tableType: string; tableDescription: string; rule: any[]; option?: any; columns: any[] }>()
+  const bindingMap = new Map<number, { bindingId: number; bindingType: string; bindingMode: string; tableName: string; tableType: string; tableDescription: string; rule: any[]; option?: any; columns: any[]; subMode?: string }>()
   nonPrimary.forEach((b: TableBinding) => {
     const bindingId = b.id as number
     const index = designerSubBindings.value.findIndex(d => d.bindingId === bindingId)

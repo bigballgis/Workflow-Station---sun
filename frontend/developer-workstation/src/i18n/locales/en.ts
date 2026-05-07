@@ -349,7 +349,12 @@ export default {
     // Copy task form
     copyForm: 'Copy',
     copyFormSuccess: 'Form copied successfully',
-    copyFormFailed: 'Failed to copy form'
+    copyFormFailed: 'Failed to copy form',
+    renameForm: 'Rename',
+    renameFormTitle: 'Rename Form',
+    renameFormSuccess: 'Form renamed successfully',
+    renameFormFailed: 'Failed to rename form',
+    formNameRequired: 'Please enter form name'
   },
   action: {
     title: 'Action Designer',

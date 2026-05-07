@@ -384,7 +384,12 @@ export default {
     // Copy task form
     copyForm: '复制',
     copyFormSuccess: '表单复制成功',
-    copyFormFailed: '表单复制失败'
+    copyFormFailed: '表单复制失败',
+    renameForm: '重命名',
+    renameFormTitle: '重命名表单',
+    renameFormSuccess: '表单重命名成功',
+    renameFormFailed: '表单重命名失败',
+    formNameRequired: '请输入表单名称'
   },
   action: {
     title: '动作设计器',
