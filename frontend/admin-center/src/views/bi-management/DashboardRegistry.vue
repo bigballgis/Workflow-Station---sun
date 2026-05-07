@@ -108,7 +108,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted, onActivated } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Refresh, Search, Refresh as RefreshIcon } from '@element-plus/icons-vue'
 import PageHeader from '@/components/PageHeader.vue'
@@ -126,4 +126,5 @@ const {
 } = useBiDashboard()
 
 onMounted(() => { handleSearch() })
+onActivated(() => { handleSearch() })
 </script>

@@ -15,6 +15,7 @@ import com.developer.repository.*;
 import com.developer.security.FunctionUnitWorkspaceAccessService;
 import com.developer.security.WorkspaceAccessAction;
 import com.developer.component.VersionComponent;
+import com.developer.util.BpmnIdRewriter;
 import com.developer.util.XmlEncodingUtil;
 import com.developer.service.UserDisplayNameService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -350,14 +351,9 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
                 .build();
         cloned = functionUnitRepository.save(cloned);
         
-        // 克隆流程定义
-        if (source.getProcessDefinition() != null) {
-            ProcessDefinition clonedProcess = ProcessDefinition.builder()
-                    .functionUnit(cloned)
-                    .bpmnXml(source.getProcessDefinition().getBpmnXml())
-                    .build();
-            processDefinitionRepository.save(clonedProcess);
-        }
+        // 克隆顺序：先克隆 ProcessDefinition 引用的所有依赖（表/表单/动作），
+        // 收集旧 ID → 新 ID 映射，最后再写入流程定义并重写 BPMN 中的 ID 引用。
+        // 否则 BPMN 仍会引用源功能单元的 subTableId / formId / actionIds，导致部署校验失败。
         
         // 克隆表定义
         Map<Long, TableDefinition> tableMapping = new HashMap<>();
@@ -404,19 +400,58 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
             }
         }
         
-        // 克隆表单定义（包含 TableBindings）
+        // 克隆表单定义（包含 TableBindings），收集 form id 映射
+        Map<Long, Long> formIdMapping = new HashMap<>();
         for (FormDefinition sourceForm : source.getFormDefinitions()) {
-            cloneForm(sourceForm, cloned, tableMapping);
+            FormDefinition clonedForm = cloneForm(sourceForm, cloned, tableMapping);
+            formIdMapping.put(sourceForm.getId(), clonedForm.getId());
         }
         
-        // 克隆动作定义
+        // 克隆动作定义，收集 action id 映射
+        Map<Long, Long> actionIdMapping = new HashMap<>();
         for (ActionDefinition sourceAction : source.getActionDefinitions()) {
-            cloneAction(sourceAction, cloned);
+            ActionDefinition clonedAction = cloneAction(sourceAction, cloned);
+            actionIdMapping.put(sourceAction.getId(), clonedAction.getId());
         }
         
         // 克隆决策定义
         for (DecisionDefinition sourceDecision : source.getDecisionDefinitions()) {
             cloneDecision(sourceDecision, cloned);
+        }
+        
+        // 克隆流程定义（最后执行，并重写 BPMN 中的 ID 引用）
+        if (source.getProcessDefinition() != null) {
+            // 旧 ID → 新 ID 映射（兜底用）
+            Map<Long, Long> tableIdMapping = new HashMap<>();
+            for (Map.Entry<Long, TableDefinition> entry : tableMapping.entrySet()) {
+                tableIdMapping.put(entry.getKey(), entry.getValue().getId());
+            }
+            // 克隆侧 名字 → 新 ID 映射（优先用，可纠正源 BPMN 中 ID 与名字不一致的脏数据）。
+            // 名字直接复用，因为 cloneTable / cloneForm 会保留源侧名字。
+            Map<String, Long> clonedTableNameToId = new HashMap<>();
+            for (TableDefinition clonedTable : tableMapping.values()) {
+                clonedTableNameToId.put(clonedTable.getTableName(), clonedTable.getId());
+            }
+            Map<String, Long> clonedFormNameToId = new HashMap<>();
+            for (FormDefinition sourceForm : source.getFormDefinitions()) {
+                Long clonedFormId = formIdMapping.get(sourceForm.getId());
+                if (clonedFormId != null) {
+                    clonedFormNameToId.put(sourceForm.getFormName(), clonedFormId);
+                }
+            }
+            String rewrittenBpmn = BpmnIdRewriter.rewrite(
+                    source.getProcessDefinition().getBpmnXml(),
+                    tableIdMapping,
+                    formIdMapping,
+                    actionIdMapping,
+                    clonedTableNameToId,
+                    clonedFormNameToId);
+            ProcessDefinition clonedProcess = ProcessDefinition.builder()
+                    .functionUnit(cloned)
+                    .functionUnitVersionId(cloned.getId())
+                    .bpmnXml(rewrittenBpmn)
+                    .build();
+            processDefinitionRepository.save(clonedProcess);
         }
         
         return cloned;
@@ -1035,7 +1070,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         return tableDefinitionRepository.save(cloned);
     }
     
-    private void cloneForm(FormDefinition source, FunctionUnit target, Map<Long, TableDefinition> tableMapping) {
+    private FormDefinition cloneForm(FormDefinition source, FunctionUnit target, Map<Long, TableDefinition> tableMapping) {
         FormDefinition cloned = FormDefinition.builder()
                 .functionUnit(target)
                 .formName(source.getFormName())
@@ -1065,10 +1100,10 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
             }
         }
         
-        formDefinitionRepository.save(cloned);
+        return formDefinitionRepository.save(cloned);
     }
     
-    private void cloneAction(ActionDefinition source, FunctionUnit target) {
+    private ActionDefinition cloneAction(ActionDefinition source, FunctionUnit target) {
         ActionDefinition cloned = ActionDefinition.builder()
                 .functionUnit(target)
                 .actionName(source.getActionName())
@@ -1079,7 +1114,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
                 .description(source.getDescription())
                 .isDefault(source.getIsDefault())
                 .build();
-        actionDefinitionRepository.save(cloned);
+        return actionDefinitionRepository.save(cloned);
     }
     
     private void cloneDecision(DecisionDefinition source, FunctionUnit target) {

@@ -85,5 +85,5 @@ export function useDashboard() {
     chart?.dispose()
   })
 
-  return { systemChartRef, statsLoading, activitiesLoading, trendsLoading, statsCards, activities }
+  return { systemChartRef, statsLoading, activitiesLoading, trendsLoading, statsCards, activities, loadStats, loadActivities }
 }

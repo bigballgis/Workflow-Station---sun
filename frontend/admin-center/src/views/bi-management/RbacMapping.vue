@@ -97,7 +97,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted, onActivated } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Plus, Search, Refresh as RefreshIcon } from '@element-plus/icons-vue'
 import PageHeader from '@/components/PageHeader.vue'
@@ -119,6 +119,7 @@ const {
 } = useBiRbac()
 
 onMounted(() => { handleSearch() })
+onActivated(() => { handleSearch() })
 </script>
 
 <style scoped lang="scss">

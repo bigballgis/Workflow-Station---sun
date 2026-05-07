@@ -1165,3 +1165,41 @@
   category: bug
   summary: "developer-workstation 版本管理前端调用 /function-units/{id}/versions/compare 与 /versions/{versionId}/export，但后端缺少对应路由映射"
   file: "frontend/developer-workstation/src/api/functionUnit.ts; backend/developer-workstation/src/main/java/com/developer/controller/FunctionUnitController.java"
+
+- id: "160"
+  status: fixed
+  fixed_at: "2026-05-07"
+  severity: major
+  category: bug
+  summary: "FunctionUnitComponentImpl.clone 创建 ProcessDefinition 时未设置 functionUnitVersionId，违反 dw_process_definitions.function_unit_version_id NOT NULL 约束，clone 接口 500"
+  file: "backend/developer-workstation/src/main/java/com/developer/component/impl/FunctionUnitComponentImpl.java"
+
+- id: "163"
+  status: fixed
+  fixed_at: "2026-05-07"
+  severity: major
+  category: bug
+  summary: "FunctionUnitComponentImpl.clone 仅复制 BPMN XML 而未重写 subTableId/formId/actionIds，导致克隆后 deploy 报 SUBTABLE_WRONG_FUNCTION_UNIT / FORM_WRONG_FUNCTION_UNIT"
+  file: "backend/developer-workstation/src/main/java/com/developer/component/impl/FunctionUnitComponentImpl.java; backend/developer-workstation/src/main/java/com/developer/util/BpmnIdRewriter.java"
+
+- id: "161"
+  status: open
+  severity: major
+  category: bug
+  summary: "ExportImportComponentImpl.importPackage 创建 ProcessDefinition 时未设置 functionUnitVersionId，导入带流程的 function unit 时会因 NOT NULL 约束失败"
+  file: "backend/developer-workstation/src/main/java/com/developer/component/impl/ExportImportComponentImpl.java"
+
+- id: "162"
+  status: open
+  severity: major
+  category: bug
+  summary: "DeploymentService.deployFunctionUnit 创建 ProcessDefinition 时未显式设置 functionUnitVersionId，依赖 cascade save 行为；BPMN 部署到 Flowable 后入库会因 NOT NULL 约束失败"
+  file: "backend/developer-workstation/src/main/java/com/developer/service/DeploymentService.java"
+
+- id: "164"
+  status: fixed
+  fixed_at: "2026-05-07"
+  severity: major
+  category: bug
+  summary: "FunctionUnitComponentImpl.clone 重写 BPMN ID 仅按旧 ID 兜底，无法纠正源 BPMN 中 subTableId/formId 与 subTableName/formName 不一致的脏数据，克隆后 deploy 报 INVALID_TABLE_TYPE / ASSIGNEE_FIELD_NOT_FOUND；BpmnIdRewriter 增加按名字优先解析（块内 subTableName/tableName/formName 命中时使用克隆侧同名实体 ID，否则旧 ID 兜底）"
+  file: "backend/developer-workstation/src/main/java/com/developer/util/BpmnIdRewriter.java; backend/developer-workstation/src/main/java/com/developer/component/impl/FunctionUnitComponentImpl.java"

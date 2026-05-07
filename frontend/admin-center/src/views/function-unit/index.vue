@@ -176,7 +176,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted, onActivated } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Plus } from '@element-plus/icons-vue'
 import PageHeader from '@/components/PageHeader.vue'
@@ -206,6 +206,11 @@ const {
 } = useFunctionUnit()
 
 onMounted(() => {
+  fetchFunctionUnits()
+})
+
+// Re-fetch when navigating back (keep-alive reactivation)
+onActivated(() => {
   fetchFunctionUnits()
 })
 </script>

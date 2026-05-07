@@ -189,6 +189,7 @@
 </template>
 
 <script setup lang="ts">
+import { onMounted, onActivated } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Download, Search, InfoFilled, RefreshRight, VideoPause } from '@element-plus/icons-vue'
 import PageHeader from '@/components/PageHeader.vue'
@@ -218,6 +219,11 @@ const {
   handleSelectionChange, clearSelection,
   showDetail, getPreviewContent,
 } = useAudit()
+
+// Re-fetch when navigating back (keep-alive reactivation)
+onActivated(() => {
+  handleSearch()
+})
 </script>
 
 <style scoped>

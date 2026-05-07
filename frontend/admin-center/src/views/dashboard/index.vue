@@ -38,14 +38,17 @@
 
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
+import { onActivated } from 'vue'
 import { useDashboard } from '@/composables/modules/useDashboard'
 
 const { t } = useI18n()
 
 const {
   systemChartRef, statsLoading, activitiesLoading, trendsLoading,
-  statsCards, activities,
+  statsCards, activities, loadStats, loadActivities,
 } = useDashboard()
+
+onActivated(() => { loadStats(); loadActivities() })
 </script>
 
 <style scoped lang="scss">

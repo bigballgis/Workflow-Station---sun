@@ -45,6 +45,7 @@
 </template>
 
 <script setup lang="ts">
+import { onActivated } from 'vue'
 import { useI18n } from 'vue-i18n'
 import PageHeader from '@/components/PageHeader.vue'
 import { useConfig } from '@/composables/modules/useConfig'
@@ -52,8 +53,10 @@ import { useConfig } from '@/composables/modules/useConfig'
 const { t } = useI18n()
 
 const {
-  activeTab, systemConfig, businessConfig, saveConfig,
+  activeTab, systemConfig, businessConfig, saveConfig, loadConfigs,
 } = useConfig()
+
+onActivated(() => { loadConfigs() })
 </script>
 
 <style scoped>
