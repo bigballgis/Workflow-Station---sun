@@ -134,7 +134,7 @@
     />
 
     <!-- Deploy Dialog -->
-    <el-dialog v-model="showDeployDialog" :title="t('functionUnit.deploy')" width="500px">
+    <el-dialog v-model="showDeployDialog" :title="t('functionUnit.deploy')" width="500px" @closed="cleanupDeployDialogState">
       <el-form :model="deployForm" label-width="120px" label-position="left">
         <el-form-item :label="t('functionUnit.autoEnable')">
           <el-switch v-model="deployForm.autoEnable" />
@@ -434,12 +434,15 @@ function stopDeployPolling() {
   }
 }
 
-function closeDeployDialog() {
-  showDeployDialog.value = false
-  // Reset deploy status so next open can redeploy
+/** Clears deploy UI state whenever the dialog finishes closing (X, overlay, Esc, or footer Close). */
+function cleanupDeployDialogState() {
   deployStatus.value = null
   deployForm.changeLog = ''
   stopDeployPolling()
+}
+
+function closeDeployDialog() {
+  showDeployDialog.value = false
 }
 
 async function handleAiDataApplied() {

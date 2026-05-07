@@ -15,11 +15,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.core.task.SyncTaskExecutor;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -121,7 +123,7 @@ class DeploymentComponentMultiInstanceValidationTest {
     }
     
     @Test
-    @DisplayName("当多实例配置验证失败时应抛出 DeveloperBusinessException")
+    @DisplayName("当多实例配置验证失败时 persistUpdate 中的部署状态应为 FAILED")
     void shouldThrowBusinessExceptionWhenValidationFails() {
         // Given: 功能单元存在但多实例配置无效
         FunctionUnit functionUnit = new FunctionUnit();
@@ -149,18 +151,17 @@ class DeploymentComponentMultiInstanceValidationTest {
         
         // When: 执行部署
         DeployResponse response = deploymentComponent.deployToAdminCenter(FUNCTION_UNIT_ID, request);
-        
-        // Then: 部署应该失败
-        // Wait for async execution to complete
-        try {
-            Thread.sleep(1000);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-        
-        assertEquals(DeployResponse.DeployStatus.FAILED, response.getStatus());
-        assertTrue(response.getMessage().contains("MULTI_INSTANCE_VALIDATION_FAILED") || 
-                   response.getMessage().contains("多实例配置验证失败"));
+
+        // Then: HTTP 即时响应仅为「进行中」快照（真实环境与网关兼容）；最终结果写在 persistUpdate 中供轮询
+        assertEquals(DeployResponse.DeployStatus.DEPLOYING, response.getStatus());
+
+        ArgumentCaptor<DeployResponse> updateCaptor = ArgumentCaptor.forClass(DeployResponse.class);
+        verify(deploymentJobService, timeout(5000).atLeastOnce())
+                .persistUpdate(eq(FUNCTION_UNIT_ID), nullable(String.class), updateCaptor.capture());
+        List<DeployResponse> updates = updateCaptor.getAllValues();
+        DeployResponse finalSnapshot = updates.get(updates.size() - 1);
+        assertEquals(DeployResponse.DeployStatus.FAILED, finalSnapshot.getStatus());
+        assertNotNull(finalSnapshot.getMessage());
     }
     
     @Test

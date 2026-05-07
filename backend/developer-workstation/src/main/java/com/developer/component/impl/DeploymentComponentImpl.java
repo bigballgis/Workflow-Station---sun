@@ -118,6 +118,9 @@ public class DeploymentComponentImpl implements DeploymentComponent {
 
         deploymentJobService.persistNew(deploymentId, functionUnitId, targetUrl, response);
 
+        // POST 返回与异步任务分离的快照，避免 MVC 序列化与后台线程并发修改同一 DeployResponse（损坏 JSON / Kong upstream error）。
+        DeployResponse responseBodyForClient = snapshotDeployResponseForClient(response);
+
         SecurityContext securityContext = SecurityContextHolder.getContext();
         Locale currentLocale = org.springframework.context.i18n.LocaleContextHolder.getLocale();
         final String authHeader = outboundAuth.orElse(null);
@@ -134,7 +137,35 @@ public class DeploymentComponentImpl implements DeploymentComponent {
             }
         });
 
-        return response;
+        return responseBodyForClient;
+    }
+
+    /**
+     * Deep-copy deploy payload for the synchronous POST body only. The async worker mutates its own {@code DeployResponse}.
+     */
+    private static DeployResponse snapshotDeployResponseForClient(DeployResponse src) {
+        List<DeployResponse.DeployStep> stepsSnapshot = null;
+        if (src.getSteps() != null) {
+            stepsSnapshot = new ArrayList<>();
+            for (DeployResponse.DeployStep step : src.getSteps()) {
+                stepsSnapshot.add(DeployResponse.DeployStep.builder()
+                        .name(step.getName())
+                        .status(step.getStatus())
+                        .message(step.getMessage())
+                        .completedAt(step.getCompletedAt())
+                        .build());
+            }
+        }
+        return DeployResponse.builder()
+                .deploymentId(src.getDeploymentId())
+                .status(src.getStatus())
+                .message(src.getMessage())
+                .progress(src.getProgress())
+                .steps(stepsSnapshot)
+                .deployedAt(src.getDeployedAt())
+                .versionNumber(src.getVersionNumber())
+                .changeLog(src.getChangeLog())
+                .build();
     }
 
     private void executeDeployment(Long functionUnitId,
