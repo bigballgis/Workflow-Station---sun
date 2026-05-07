@@ -110,35 +110,57 @@ describe('Property 3: update:subTableData emitted on inline row change', () => {
   })
 })
 
-describe('Property 4: Bottom-render fallback contains exactly unplaced bindings', () => {
-  /**
-   * Validates: Requirements 3.1, 3.2
-   *
-   * For any set of subTableBindings and any form rule array, the bottom-rendered
-   * binding list should contain exactly those bindings whose bindingId does not
-   * appear in any subTable placeholder in the rule array.
-   */
-  it('bottomSubTableBindings contains exactly the bindings not referenced by any subTable rule', () => {
+/** Mirrors process start page: keep only placed subTable bindings + linkForm-linked closures (no bottom orphan section). */
+function computeNeededSubTableBindingIds(
+  placed: Set<number>,
+  allBindings: Array<{ bindingId: number; columns?: Array<{ type?: string; props?: Record<string, any> }> }>
+): Set<number> {
+  const needed = new Set<number>(placed)
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const b of allBindings) {
+      if (!needed.has(b.bindingId)) continue
+      for (const col of b.columns || []) {
+        if (col.type === 'linkForm') {
+          const boundId = col.props?.boundSubTableBindingId
+          if (boundId != null) {
+            const n = Number(boundId)
+            if (!needed.has(n)) {
+              needed.add(n)
+              changed = true
+            }
+          }
+        }
+      }
+    }
+  }
+  return needed
+}
+
+describe('Property 4: Start page keeps only designer-placed bindings (+ linkForm closure)', () => {
+  it('filtered set is exactly placed ids plus targets of linkForm on kept bindings', () => {
     fc.assert(
       fc.property(
-        fc.array(fc.integer({ min: 1, max: 20 }), { minLength: 1, maxLength: 10 }),
-        fc.array(fc.integer({ min: 1, max: 20 }), { maxLength: 5 }),
-        (allIds, placedIds) => {
-          const uniqueAll = [...new Set(allIds)]
-          const uniquePlaced = [...new Set(placedIds)].filter(id => uniqueAll.includes(id))
+        fc.uniqueArray(fc.integer({ min: 1, max: 30 }), { minLength: 2, maxLength: 15 }),
+        (uniqueAll) => {
+          const placedRoot = uniqueAll[0]
+          const linkTarget = uniqueAll[1]
           const bindings = uniqueAll.map(id => ({
             bindingId: id,
-            bindingMode: 'EDITABLE',
-            tableName: `T${id}`,
-            columns: [],
+            columns:
+              id === placedRoot
+                ? [{ type: 'linkForm', props: { boundSubTableBindingId: linkTarget } }]
+                : [],
             data: [],
           }))
-          const placedSet = new Set(uniquePlaced)
-          // Simulate bottomSubTableBindings computed: filter out placed bindings
-          const bottom = bindings.filter(b => !placedSet.has(b.bindingId))
-          expect(bottom.map(b => b.bindingId).sort((a, b) => a - b)).toEqual(
-            uniqueAll.filter(id => !placedSet.has(id)).sort((a, b) => a - b),
-          )
+          const needed = computeNeededSubTableBindingIds(new Set([placedRoot]), bindings)
+          expect(needed.has(placedRoot)).toBe(true)
+          expect(needed.has(linkTarget)).toBe(true)
+          const noise = uniqueAll.filter(id => id !== placedRoot && id !== linkTarget)
+          for (const id of noise) {
+            expect(needed.has(id)).toBe(false)
+          }
         },
       ),
       { numRuns: 100 },
@@ -146,22 +168,13 @@ describe('Property 4: Bottom-render fallback contains exactly unplaced bindings'
   })
 })
 
-describe('Property 5: Submission payload includes all sub-table data regardless of placement', () => {
+describe('Property 5: Submission payload includes sub-table data for every binding kept on the start form', () => {
   /**
-   * Validates: Requirements 5.2
-   *
-   * For any form submission where some sub-tables are placed inline and others
-   * are bottom-rendered, the __subTables__ payload should contain the row data
-   * for every binding, whether placed or not.
-   *
-   * The serialization logic (from start.vue handleSubmit / handleSaveDraft):
+   * start.vue keeps only designer-placed bindings (+ linkForm closure). Serialization:
    *   __subTables__: Object.fromEntries(subTableBindings.map(b => [b.bindingId, b.data]))
-   *
-   * This iterates ALL subTableBindings regardless of placement, so both inline
-   * and bottom-rendered bindings must appear in the payload.
+   * Payload keys match that filtered list (same as visible sub-tables / portal UX).
    */
-  it('__subTables__ payload contains data for every binding regardless of inline vs bottom placement', () => {
-    // Replicate the serialization function used in start.vue handleSubmit / handleSaveDraft
+  it('__subTables__ contains exactly the bindings present in subTableBindings ref', () => {
     const serializeSubTables = (
       subTableBindings: Array<{ bindingId: number; data: any[] }>
     ): Record<string, any[]> =>
@@ -169,42 +182,21 @@ describe('Property 5: Submission payload includes all sub-table data regardless 
 
     fc.assert(
       fc.property(
-        // Generate a set of unique binding IDs (1–50)
         fc.uniqueArray(fc.integer({ min: 1, max: 50 }), { minLength: 1, maxLength: 10 }),
-        // For each binding, generate some row data
         fc.array(fc.array(fc.record({ val: fc.string() }), { maxLength: 5 }), { minLength: 1, maxLength: 10 }),
-        // A subset of those IDs are "placed inline" (the rest are bottom-rendered)
-        fc.array(fc.integer({ min: 1, max: 50 }), { maxLength: 5 }),
-        (allIds, rowDataSets, placedIds) => {
-          // Build bindings — each has its own row data
+        (allIds, rowDataSets) => {
           const bindings = allIds.map((id, i) => ({
             bindingId: id,
             data: rowDataSets[i % rowDataSets.length] ?? [],
           }))
 
-          // The placed set (intersection with allIds, as in the real app)
-          const placedSet = new Set(placedIds.filter(id => allIds.includes(id)))
-
-          // Serialize using the same logic as start.vue
           const payload = serializeSubTables(bindings)
 
-          // Every binding must appear in the payload, regardless of placement
           for (const binding of bindings) {
-            const key = String(binding.bindingId)
-            expect(Object.prototype.hasOwnProperty.call(payload, binding.bindingId) ||
-                   Object.prototype.hasOwnProperty.call(payload, key)).toBe(true)
-            // The data must match exactly
-            const stored = payload[binding.bindingId] ?? payload[key]
+            const stored = payload[binding.bindingId] ?? payload[String(binding.bindingId)]
             expect(stored).toEqual(binding.data)
           }
-
-          // Placed bindings are not excluded — they must also be present
-          for (const id of placedSet) {
-            const binding = bindings.find(b => b.bindingId === id)
-            if (!binding) continue
-            const stored = payload[id] ?? payload[String(id)]
-            expect(stored).toEqual(binding.data)
-          }
+          expect(Object.keys(payload).length).toBe(bindings.length)
         },
       ),
       { numRuns: 100 },

@@ -112,24 +112,6 @@
             />
           </div>
           <el-empty v-else :description="t('processStart.noFormConfig')" />
-
-          <!-- Sub-tables (SUB / RELATED bindings)
-               Only render when the form config places at least one subTable placeholder.
-               If designer removes subTable placeholders, user portal should not force-show bindings. -->
-          <template v-if="hasSubTablePlaceholder && bottomSubTableBindings.length > 0">
-            <div
-              v-for="binding in bottomSubTableBindings"
-              :key="binding.bindingId"
-              class="sub-table-section"
-            >
-              <SubTableField
-                :title="binding.tableName"
-                :columns="binding.columns"
-                v-model="binding.data"
-                :editable="binding.bindingMode === 'EDITABLE'"
-              />
-            </div>
-          </template>
         </div>
       </div>
 
@@ -204,7 +186,6 @@ import { processApi } from '@/api/process'
 import ProcessDiagram, { type ProcessNode, type ProcessFlow } from '@/components/ProcessDiagram.vue'
 import ProcessHistory, { type HistoryRecord } from '@/components/ProcessHistory.vue'
 import FormRenderer, { type FormField, type FormTab } from '@/components/FormRenderer.vue'
-import SubTableField from '@/components/SubTableField.vue'
 import N8nActionDialog from '@/components/N8nActionDialog.vue'
 import type { ActionDefinition } from '@/components/N8nActionDialog.vue'
 import { applyAutoFill } from '@/utils/n8nAutoFillEngine'
@@ -282,11 +263,40 @@ const placedBindingIds = computed((): Set<number> => {
   return ids
 })
 
-const bottomSubTableBindings = computed(() =>
-  subTableBindings.value.filter(b => !placedBindingIds.value.has(b.bindingId))
-)
-
-const hasSubTablePlaceholder = computed(() => placedBindingIds.value.size > 0)
+/**
+ * Same closure rule as developer-workstation FormDesigner preview: only SUB/RELATED
+ * bindings that are explicitly placed (subTable rule) or required by linkForm columns
+ * on an included binding are kept — never show “orphan” bindings at page bottom.
+ */
+function computeNeededSubTableBindingIds(
+  placed: Set<number>,
+  allBindings: Array<{
+    bindingId: number
+    columns?: Array<{ type?: string; props?: Record<string, any> }>
+  }>
+): Set<number> {
+  const needed = new Set<number>(placed)
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const b of allBindings) {
+      if (!needed.has(b.bindingId)) continue
+      for (const col of b.columns || []) {
+        if (col.type === 'linkForm') {
+          const boundId = col.props?.boundSubTableBindingId
+          if (boundId != null) {
+            const n = Number(boundId)
+            if (!needed.has(n)) {
+              needed.add(n)
+              changed = true
+            }
+          }
+        }
+      }
+    }
+  }
+  return needed
+}
 
 // Lookup config fallback map (from rt_lookup_configs)
 const lookupDbConfigs = ref<Record<string, { tableId: number; searchFields: string[]; displayField: string; viewFields: any[] }>>({})
@@ -452,8 +462,9 @@ const loadFunctionUnitContent = async () => {
         }
       }
 
-      subTableBindings.value = bindings
-      console.log('[start] subTableBindings built:', bindings.map(b => ({ id: b.bindingId, cols: b.columns.length })))
+      const neededBindingIds = computeNeededSubTableBindingIds(placedBindingIds.value, bindings)
+      subTableBindings.value = bindings.filter(b => neededBindingIds.has(b.bindingId))
+      console.log('[start] subTableBindings built (designer-placed + linkForm closure):', subTableBindings.value.map(b => ({ id: b.bindingId, cols: b.columns.length })))
     }
     
     // 初始化流转记录（新流程，只有开始节点）
@@ -1140,6 +1151,7 @@ const deriveColumnsFromBinding = (binding: any, subForms?: Record<string, any>):
         'action', 'accept', 'multiple', 'precision', 'min', 'max', 'rows', 'maxlength', 'fileNameTargetField',
         'isRange', 'valueFormat', 'startPlaceholder', 'endPlaceholder', 'treeData', 'checkStrictly',
         'showAlpha', 'allowHalf', 'step', 'cascaderProps', 'leftTitle', 'rightTitle',
+        'boundSubTableBindingId',
       ]
       for (const key of propKeys) {
         if (rProps[key] !== undefined) passProps[key] = rProps[key]
@@ -1509,10 +1521,6 @@ onMounted(() => {
   .form-section {
     .form-container {
       width: 100%;
-    }
-
-    .sub-table-section {
-      margin-top: 16px;
     }
   }
   

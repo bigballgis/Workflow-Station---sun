@@ -657,7 +657,12 @@ const initFormData = () => {
   setTimeout(() => { isInternalUpdate = false }, 0)
   // Element Plus AsyncValidator resolves as micro-tasks after nextTick;
   // use setTimeout (macro-task) to guarantee clearValidate runs last.
-  setTimeout(() => formRef.value?.clearValidate(), 0)
+  setTimeout(() => {
+    const el = formRef.value
+    if (el && typeof (el as { clearValidate?: () => void }).clearValidate === 'function') {
+      el.clearValidate()
+    }
+  }, 0)
 }
 
 // ---------------------------------------------------------------------------
