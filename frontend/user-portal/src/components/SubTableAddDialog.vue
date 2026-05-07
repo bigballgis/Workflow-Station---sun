@@ -643,11 +643,11 @@ function initDialogFormState(trigger: 'open' | 'data-change') {
   if (props.mode === 'edit' && props.initialData) {
     // Deep-clone to avoid mutating the original row
     formData.value = { ...buildInitialRow(props.columns), ...JSON.parse(JSON.stringify(props.initialData)) }
-    // Back-fill upload file names from URL
+    // Back-fill upload file names from URL (prefer originalName query param if present)
     for (const col of props.columns) {
       if (col.type === 'upload' && formData.value[col.field]) {
         const url: string = formData.value[col.field]
-        uploadNames.value[col.field] = url.split('/').pop() || url
+        uploadNames.value[col.field] = extractFilenameFromUrl(url)
       }
     }
   } else {
@@ -658,6 +658,23 @@ function initDialogFormState(trigger: 'open' | 'data-change') {
   nextTick(() => {
     formRef.value?.clearValidate()
   })
+}
+
+function extractFilenameFromUrl(url: string): string {
+  if (!url) return ''
+  try {
+    const parsed = new URL(url, window.location.origin)
+    const fromQuery = parsed.searchParams.get('originalName')
+      || parsed.searchParams.get('fileName')
+      || parsed.searchParams.get('filename')
+      || parsed.searchParams.get('name')
+    if (fromQuery) return decodeURIComponent(fromQuery)
+    const pathPart = parsed.pathname.split('/').pop() || url
+    return decodeURIComponent(pathPart)
+  } catch {
+    const [pathPart] = String(url).split('?')
+    return decodeURIComponent(pathPart.split('/').pop() || url)
+  }
 }
 
 // Initialise / reset form whenever dialog opens

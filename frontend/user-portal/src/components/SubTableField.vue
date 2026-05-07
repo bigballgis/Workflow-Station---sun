@@ -888,8 +888,20 @@ function handleLinkedSubTableUpdate(rows: any[]) {
 function getFilenameFromUrl(url: string, savedName?: string): string {
   if (savedName) return savedName
   if (!url) return 'unknown file'
-  const last = url.split('/').pop()
-  return last || 'unknown file'
+  try {
+    const parsed = new URL(url, window.location.origin)
+    const fromQuery = parsed.searchParams.get('originalName')
+      || parsed.searchParams.get('fileName')
+      || parsed.searchParams.get('filename')
+      || parsed.searchParams.get('name')
+    if (fromQuery) return decodeURIComponent(fromQuery)
+    const pathPart = parsed.pathname.split('/').pop()
+    return pathPart || 'unknown file'
+  } catch {
+    const [pathPart] = String(url).split('?')
+    const last = pathPart.split('/').pop()
+    return last || 'unknown file'
+  }
 }
 
 /** Click filename to trigger download, using fetch+Blob to avoid new tab navigation */

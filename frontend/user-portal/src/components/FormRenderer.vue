@@ -96,6 +96,7 @@
                               <FieldRenderer
                                 :field="child"
                                 :model-value="formData[child.key]"
+                                :form-data="formData"
                                 :readonly="readonly"
                                 :disabled="engineFieldStates.get(child.key)?.disabled || false"
                                 :visible="engineVisibility.get(child.key) ?? true"
@@ -185,6 +186,7 @@
                     <FieldRenderer
                       :field="field"
                       :model-value="formData[field.key]"
+                      :form-data="formData"
                       :readonly="readonly"
                       :disabled="engineFieldStates.get(field.key)?.disabled || false"
                       :visible="engineVisibility.get(field.key) ?? true"
@@ -283,6 +285,7 @@
                           <FieldRenderer
                             :field="child"
                             :model-value="formData[child.key]"
+                            :form-data="formData"
                             :readonly="readonly"
                             :disabled="engineFieldStates.get(child.key)?.disabled || false"
                             :visible="engineVisibility.get(child.key) ?? true"
@@ -372,6 +375,7 @@
                 <FieldRenderer
                   :field="field"
                   :model-value="formData[field.key]"
+                  :form-data="formData"
                   :readonly="readonly"
                   :disabled="engineFieldStates.get(field.key)?.disabled || false"
                   :visible="engineVisibility.get(field.key) ?? true"

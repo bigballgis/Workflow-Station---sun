@@ -485,6 +485,7 @@ import {
   watch,
   inject,
 } from 'vue'
+import type { Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Upload } from '@element-plus/icons-vue'
 import DOMPurify from 'dompurify'
@@ -504,6 +505,7 @@ const { t } = useI18n()
 interface Props {
   field: FormField
   modelValue: any
+  formData?: Record<string, any>
   readonly?: boolean
   disabled?: boolean
   visible?: boolean
@@ -729,8 +731,8 @@ const departmentTreeData = ref<DepartmentNode[]>([])
 const departmentLoading = ref(false)
 
 // Use injected shared cache from FormRenderer if available (Req 27)
-const sharedDepartmentData = inject<typeof departmentTreeData>('departmentTreeData', undefined)
-const sharedDepartmentLoading = inject<typeof departmentLoading>('departmentTreeLoading', undefined)
+const sharedDepartmentData = inject<Ref<DepartmentNode[]> | undefined>('departmentTreeData')
+const sharedDepartmentLoading = inject<Ref<boolean> | undefined>('departmentTreeLoading')
 
 /** Recursively find a node by id to resolve display name */
 function findDepartmentName(
@@ -790,13 +792,34 @@ const resolvedUploadUrl = computed(() => {
 // Upload file list (local state for display)
 const fileList = ref<Array<{ name: string; url: string; uid?: number }>>([])
 
+function extractFileNameFromUrl(url: string): string {
+  if (!url) return ''
+  try {
+    const parsed = new URL(url, window.location.origin)
+    const fromQuery = parsed.searchParams.get('originalName')
+      || parsed.searchParams.get('fileName')
+      || parsed.searchParams.get('filename')
+      || parsed.searchParams.get('name')
+    if (fromQuery) return decodeURIComponent(fromQuery)
+    const pathPart = parsed.pathname.split('/').pop() || url
+    return decodeURIComponent(pathPart)
+  } catch {
+    const [pathPart] = String(url).split('?')
+    return decodeURIComponent(pathPart.split('/').pop() || url)
+  }
+}
+
 // Initialise file list from modelValue when it's a URL string
 watch(
   () => props.modelValue,
   (val) => {
     if (props.field.type === 'upload' && val && fileList.value.length === 0) {
       const url = String(val)
-      const fileName = decodeURIComponent(url.split('/').pop() || url)
+      const targetField = (props.field as any).fileNameTargetField
+      const targetName = targetField ? props.formData?.[targetField] : undefined
+      const fileName = (typeof targetName === 'string' && targetName.trim().length > 0)
+        ? targetName
+        : extractFileNameFromUrl(url)
       fileList.value = [{ name: fileName, url }]
     }
   },
