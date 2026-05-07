@@ -11,6 +11,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { storeToRefs } from 'pinia'
 import { type FunctionUnit, type Deployment, type DeletePreviewResponse } from '@/api/functionUnit'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
+import { pickHttpErrorBodyMessage } from '@/utils/httpErrorMessage'
 
 export function useFunctionUnit() {
   const { t } = useI18n()
@@ -177,8 +178,9 @@ export function useFunctionUnit() {
     try {
       await store.setEnabled(unit.id, enabled)
       ElMessage.success(enabled ? t('functionUnit.enabledSuccess') : t('functionUnit.disabledSuccess'))
-    } catch {
-      ElMessage.error(t('common.failed'))
+    } catch (e: unknown) {
+      const msg = pickHttpErrorBodyMessage((e as { response?: { data?: unknown } })?.response?.data)
+      ElMessage.error(msg || t('common.failed'))
       unit.enabled = !enabled
     } finally {
       unit._enabledLoading = false
@@ -221,7 +223,10 @@ export function useFunctionUnit() {
       await store.batchSetEnabled(selectedUnits.value.map(u => u.id), true)
       ElMessage.success(t('functionUnit.enabledSuccess'))
       fetchFunctionUnits()
-    } catch { ElMessage.error(t('common.failed')) }
+    } catch (e: unknown) {
+      const msg = pickHttpErrorBodyMessage((e as { response?: { data?: unknown } })?.response?.data)
+      ElMessage.error(msg || t('common.failed'))
+    }
   }
 
   const handleBatchDisable = async () => {

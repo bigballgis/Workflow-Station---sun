@@ -83,10 +83,10 @@ public class FunctionUnitImportController {
                 return ResponseEntity.badRequest().body(result);
             }
             
-            String name = (String) manifest.get("name");
-            String code = (String) manifest.get("code");
-            String version = (String) manifest.get("version");
-            String description = (String) manifest.get("description");
+            String name = trimToNull((String) manifest.get("name"));
+            String code = trimToNull((String) manifest.get("code"));
+            String version = trimToNull((String) manifest.get("version"));
+            String description = trimToNull((String) manifest.get("description"));
             
             // 构建导入请求
             FunctionUnitImportRequest importRequest = FunctionUnitImportRequest.builder()
@@ -223,9 +223,9 @@ public class FunctionUnitImportController {
                 functionUnit = functionUnitManager.validateFunctionUnit(id, userId);
             }
             
-            // 获取部署参数
-            Boolean autoEnable = (Boolean) request.getOrDefault("autoEnable", true);
-            Boolean deployToFlowable = (Boolean) request.getOrDefault("deployToFlowable", true);
+            // 获取部署参数（键存在且值为 null 时 getOrDefault 不会回落默认值，需单独规范化）
+            boolean autoEnable = booleanRequestSetting(request, "autoEnable", true);
+            boolean deployToFlowable = booleanRequestSetting(request, "deployToFlowable", true);
             
             // 部署流程到 Flowable 引擎
             ProcessDeploymentComponent.ProcessDeploymentResult processResult = null;
@@ -286,6 +286,9 @@ public class FunctionUnitImportController {
                     log.warn("Failed to create deployment record for audit: {}", e.getMessage());
                     // 即使创建部署记录失败，也不影响功能单元的部署
                 }
+
+                // 强制补齐启用：避免 disableOtherVersions 误判 / 会话脏数据导致仍为 disabled
+                functionUnitManager.finalizeOneClickDeployEnable(id, userId);
                 
                 result.put("status", "SUCCESS");
                 result.put("functionUnitId", id);
@@ -664,5 +667,36 @@ public class FunctionUnitImportController {
             result.put("error", e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(result);
         }
+    }
+
+    /** JSON Map 中的布尔字段（兼容 Boolean / String；键缺失或显式 null 时使用默认值） */
+    private static boolean booleanRequestSetting(Map<String, Object> body, String key, boolean defaultIfAbsentOrNull) {
+        if (!body.containsKey(key)) {
+            return defaultIfAbsentOrNull;
+        }
+        Object v = body.get(key);
+        if (v == null) {
+            return defaultIfAbsentOrNull;
+        }
+        if (v instanceof Boolean b) {
+            return b;
+        }
+        if (v instanceof String s) {
+            String t = s.trim();
+            if (t.isEmpty()) {
+                return defaultIfAbsentOrNull;
+            }
+            return Boolean.parseBoolean(t);
+        }
+        return defaultIfAbsentOrNull;
+    }
+
+    /** Manifest 字段入库前去首尾空白，避免 deploy 阶段 disableOtherVersions 版本比对误判 */
+    private static String trimToNull(String s) {
+        if (s == null) {
+            return null;
+        }
+        String t = s.trim();
+        return t.isEmpty() ? null : t;
     }
 }

@@ -258,10 +258,10 @@ class FunctionUnitVersionManagementProperties {
         when(functionUnitRepository.findByCodeAndVersion(code, version))
                 .thenReturn(Optional.of(unit));
         
-        // When & Then: 激活应该失败
+        // When & Then: 激活应该失败（消息随 locale 可能为中/英文，断言稳定 errorCode）
         assertThatThrownBy(() -> component.activateVersion(code, version, "test-operator"))
                 .isInstanceOf(AdminBusinessException.class)
-                .hasMessageContaining("仅已部署");
+                .satisfies(ex -> assertThat(((AdminBusinessException) ex).getErrorCode()).isEqualTo("INVALID_STATUS"));
     }
 
     // ==================== Property 7b: 非最高已部署版本不可激活 ====================
@@ -285,7 +285,7 @@ class FunctionUnitVersionManagementProperties {
         
         assertThatThrownBy(() -> component.activateVersion(code, lowerVersion, "test-operator"))
                 .isInstanceOf(AdminBusinessException.class)
-                .hasMessageContaining("最高语义版本");
+                .satisfies(ex -> assertThat(((AdminBusinessException) ex).getErrorCode()).isEqualTo("NOT_MAX_DEPLOYED_VERSION"));
         
         verify(functionUnitRepository, never()).save(any(FunctionUnit.class));
     }

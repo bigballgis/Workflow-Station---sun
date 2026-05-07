@@ -35,6 +35,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
@@ -1590,7 +1591,8 @@ public class FunctionUnitManagerComponent {
         
         for (FunctionUnit unit : allVersions) {
             // 如果不是要保持启用的版本，且当前是启用状态，则禁用
-            if (!unit.getVersion().equals(enabledVersion) && unit.isEnabled()) {
+            // 使用 trim 比对：manifest / 路径变量与入库 version 若存在首尾空白，勿误判为「其他版本」而把当前部署行关掉
+            if (!shouldKeepVersionEnabled(unit, enabledVersion) && unit.isEnabled()) {
                 unit.setEnabled(false);
                 functionUnitRepository.save(unit);
                 disabledVersions.add(unit.getVersion());
@@ -1605,6 +1607,52 @@ public class FunctionUnitManagerComponent {
                 disabledVersions.size(), code, disabledVersions);
         
         return disabledVersions;
+    }
+
+    /**
+     * 在 {@link #disableOtherVersions(String, String, String)} 中判断某条记录是否为「应保持启用」的版本。
+     * <p>{@code keepEnabledVersion == null} 表示导入前「关掉同一 code 下所有已启用行」（随后插入新版本）；此时应对每一行返回 false。
+     */
+    private static boolean shouldKeepVersionEnabled(FunctionUnit unit, String keepEnabledVersion) {
+        if (keepEnabledVersion == null) {
+            return false;
+        }
+        String v = unit.getVersion();
+        if (v == null) {
+            return false;
+        }
+        return v.trim().equals(keepEnabledVersion.trim());
+    }
+
+    /**
+     * 工作站「一键部署」链路末尾补齐启用状态：禁用同 code 其他版本后，将<strong>本次部署</strong>的行设为启用。
+     * <p>若存在更高「已部署」语义版本，仍启用当前行并记告警（与设计器发布预期一致；门户发起请以业务规则为准）。
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public FunctionUnit finalizeOneClickDeployEnable(String functionUnitId, String operatorId) {
+        FunctionUnit unit = functionUnitRepository.findById(functionUnitId)
+                .orElseThrow(() -> new FunctionUnitNotFoundException(functionUnitId));
+
+        if (unit.getStatus() != FunctionUnitStatus.DEPLOYED) {
+            throw new AdminBusinessException("INVALID_STATUS",
+                    "Cannot finalize enable: function unit is not DEPLOYED (status=" + unit.getStatus() + ")");
+        }
+
+        Optional<FunctionUnit> maxDeployed = pickMaxSemverAmongDeployed(unit.getCode());
+        if (maxDeployed.isEmpty()) {
+            throw new AdminBusinessException("NO_DEPLOYED", "No deployed version exists for code: " + unit.getCode());
+        }
+        if (!maxDeployed.get().getId().equals(unit.getId())) {
+            log.warn(
+                    "One-click deploy: enabling {}:{} for operator {} while higher deployed semver exists ({})",
+                    unit.getCode(), unit.getVersion(), operatorId, maxDeployed.get().getVersion());
+        }
+
+        disableOtherVersions(unit.getCode(), unit.getVersion(), operatorId);
+        FunctionUnit fresh = functionUnitRepository.findById(functionUnitId)
+                .orElseThrow(() -> new FunctionUnitNotFoundException(functionUnitId));
+        fresh.setEnabled(true);
+        return functionUnitRepository.save(fresh);
     }
     
     /**

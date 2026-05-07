@@ -12,8 +12,19 @@ export const useFunctionUnitStore = defineStore('functionUnit', () => {
   const fetchFunctionUnits = async () => {
     loading.value = true
     try {
-      const result = await functionUnitApi.list()
-      functionUnits.value = deduplicateByCode(result.content)
+      const pageSize = 100
+      const raw: FunctionUnit[] = []
+      let page = 0
+      let totalPages = 1
+      let guard = 0
+      while (page < totalPages && guard++ < 500) {
+        const result = await functionUnitApi.list(undefined, page, pageSize)
+        raw.push(...result.content)
+        totalPages = result.totalPages
+        page++
+      }
+
+      functionUnits.value = deduplicateByCode(raw)
     } finally {
       loading.value = false
     }
