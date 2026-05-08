@@ -1,10 +1,14 @@
 package com.developer.component.impl;
 
+import com.developer.component.VersionComponent;
+import com.developer.dto.FunctionUnitRequest;
 import com.developer.dto.ValidationResult;
 import com.developer.entity.FunctionUnit;
+import com.developer.entity.ProcessDefinition;
 import com.developer.entity.Version;
 import com.developer.enums.FunctionUnitStatus;
 import com.developer.repository.*;
+import com.developer.util.XmlEncodingUtil;
 import com.developer.security.FunctionUnitWorkspaceAccessService;
 import com.developer.security.WorkspaceAccessAction;
 import com.developer.service.UserDisplayNameService;
@@ -28,6 +32,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import org.mockito.ArgumentCaptor;
 
 /**
  * 测试 FunctionUnitComponentImpl 的操作者信息获取功能
@@ -69,6 +74,9 @@ class FunctionUnitComponentImplTest {
 
     @Mock
     private FunctionUnitDevGroupAssignmentRepository functionUnitDevGroupAssignmentRepository;
+
+    @Mock
+    private VersionComponent versionComponent;
     
     @InjectMocks
     private FunctionUnitComponentImpl functionUnitComponent;
@@ -80,6 +88,44 @@ class FunctionUnitComponentImplTest {
         lenient().doNothing().when(functionUnitWorkspaceAccessService)
                 .assertCanAccess(any(Long.class), any(WorkspaceAccessAction.class));
         lenient().when(functionUnitWorkspaceAccessService.visibleFunctionUnitIds()).thenReturn(null);
+    }
+
+    @Test
+    void create_shouldPersistInitialProcessDefinitionWithUniqueProcessIdFromCode() {
+        when(functionUnitRepository.existsByName("New Unit")).thenReturn(false);
+        when(functionUnitRepository.existsByCode(any())).thenReturn(false);
+
+        when(functionUnitRepository.save(any(FunctionUnit.class))).thenAnswer(invocation -> {
+            FunctionUnit fu = invocation.getArgument(0);
+            fu.setId(99L);
+            return fu;
+        });
+        when(processDefinitionRepository.save(any(ProcessDefinition.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        FunctionUnitRequest request = new FunctionUnitRequest();
+        request.setName("New Unit");
+        request.setDescription("d");
+
+        FunctionUnit created = functionUnitComponent.create(request);
+
+        assertNotNull(created);
+        assertEquals(99L, created.getId());
+        assertNotNull(created.getCode());
+        assertTrue(created.getCode().startsWith("fu-"));
+
+        ArgumentCaptor<FunctionUnit> fuCaptor = ArgumentCaptor.forClass(FunctionUnit.class);
+        verify(functionUnitRepository).save(fuCaptor.capture());
+        String expectedProcessId = fuCaptor.getValue().getCode();
+
+        ArgumentCaptor<ProcessDefinition> pdCaptor = ArgumentCaptor.forClass(ProcessDefinition.class);
+        verify(processDefinitionRepository).save(pdCaptor.capture());
+        ProcessDefinition saved = pdCaptor.getValue();
+        assertEquals(99L, saved.getFunctionUnitVersionId());
+        assertSame(created, saved.getFunctionUnit());
+
+        String decoded = XmlEncodingUtil.smartDecode(saved.getBpmnXml());
+        assertTrue(decoded.contains("<bpmn:process id=\"" + expectedProcessId + "\""));
+        assertTrue(decoded.contains("bpmnElement=\"" + expectedProcessId + "\""));
     }
     
     /**

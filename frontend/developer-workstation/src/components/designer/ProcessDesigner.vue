@@ -106,8 +106,12 @@ const currentZoom = ref(1)
 let bpmnModeler: any = null
 let autoSaveTimer: ReturnType<typeof setTimeout> | null = null
 
-// Default empty BPMN diagram
-const defaultBpmnXml = `<?xml version="1.0" encoding="UTF-8"?>
+/** Fallback when no saved BPMN yet (legacy units): unique process id per function unit. */
+function defaultBpmnXml(processElementId: string) {
+  const safeId = /^[a-zA-Z][a-zA-Z0-9_.-]*$/.test(processElementId)
+    ? processElementId
+    : `Process_${props.functionUnitId}`
+  return `<?xml version="1.0" encoding="UTF-8"?>
 <bpmn:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
   xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
@@ -115,7 +119,7 @@ const defaultBpmnXml = `<?xml version="1.0" encoding="UTF-8"?>
   xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
   id="Definitions_1"
   targetNamespace="http://bpmn.io/schema/bpmn">
-  <bpmn:process id="Process_1" isExecutable="true">
+  <bpmn:process id="${safeId}" isExecutable="true">
     <bpmn:startEvent id="StartEvent_1" name="Start">
       <bpmn:outgoing>Flow_1</bpmn:outgoing>
     </bpmn:startEvent>
@@ -125,7 +129,7 @@ const defaultBpmnXml = `<?xml version="1.0" encoding="UTF-8"?>
     <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="EndEvent_1" />
   </bpmn:process>
   <bpmndi:BPMNDiagram id="BPMNDiagram_1">
-    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="${safeId}">
       <bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1">
         <dc:Bounds x="180" y="160" width="36" height="36" />
         <bpmndi:BPMNLabel>
@@ -145,6 +149,7 @@ const defaultBpmnXml = `<?xml version="1.0" encoding="UTF-8"?>
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>
 </bpmn:definitions>`
+}
 
 async function initModeler() {
   if (!canvasRef.value) return
@@ -167,7 +172,8 @@ async function initModeler() {
 
     // Load existing process or default
     await store.fetchProcess(props.functionUnitId)
-    const xml = store.process?.bpmnXml || defaultBpmnXml
+    const fallbackProcessId = `Process_${props.functionUnitId}`
+    const xml = store.process?.bpmnXml || defaultBpmnXml(fallbackProcessId)
     
     console.log('Loading BPMN XML:', xml)
     

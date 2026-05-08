@@ -1,0 +1,73 @@
+package com.developer.util;
+
+import java.util.Locale;
+import java.util.Objects;
+import java.util.regex.Pattern;
+
+/**
+ * 新建功能单元时的最小可执行 BPMN 模板（单起点 → 单终点）。
+ * {@code process} 元素 id 使用功能单元唯一编码等业务标识，避免全局重复的 {@code Process_1}。
+ */
+public final class MinimalBpmnTemplate {
+
+    private static final Pattern SAFE_XML_ID = Pattern.compile("[a-zA-Z][a-zA-Z0-9_.\\-]*");
+
+    private static final String XML_TEMPLATE = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <bpmn:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+              xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+              xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+              xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+              id="Definitions_1"
+              targetNamespace="http://bpmn.io/schema/bpmn">
+              <bpmn:process id="%s" isExecutable="true">
+                <bpmn:startEvent id="StartEvent_1" name="Start">
+                  <bpmn:outgoing>Flow_1</bpmn:outgoing>
+                </bpmn:startEvent>
+                <bpmn:endEvent id="EndEvent_1" name="End">
+                  <bpmn:incoming>Flow_1</bpmn:incoming>
+                </bpmn:endEvent>
+                <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="EndEvent_1" />
+              </bpmn:process>
+              <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+                <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="%s">
+                  <bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1">
+                    <dc:Bounds x="180" y="160" width="36" height="36" />
+                    <bpmndi:BPMNLabel>
+                      <dc:Bounds x="187" y="203" width="22" height="14" />
+                    </bpmndi:BPMNLabel>
+                  </bpmndi:BPMNShape>
+                  <bpmndi:BPMNShape id="EndEvent_1_di" bpmnElement="EndEvent_1">
+                    <dc:Bounds x="400" y="160" width="36" height="36" />
+                    <bpmndi:BPMNLabel>
+                      <dc:Bounds x="407" y="203" width="22" height="14" />
+                    </bpmndi:BPMNLabel>
+                  </bpmndi:BPMNShape>
+                  <bpmndi:BPMNEdge id="Flow_1_di" bpmnElement="Flow_1">
+                    <di:waypoint x="216" y="178" />
+                    <di:waypoint x="400" y="178" />
+                  </bpmndi:BPMNEdge>
+                </bpmndi:BPMNPlane>
+              </bpmndi:BPMNDiagram>
+            </bpmn:definitions>
+            """.stripIndent();
+
+    private MinimalBpmnTemplate() {
+    }
+
+    /**
+     * @param processElementId BPMN process 元素 id，须为合法 XML Name（如功能单元 {@code code}）
+     */
+    public static String build(String processElementId) {
+        String id = Objects.requireNonNull(processElementId, "processElementId").trim();
+        if (id.isEmpty()) {
+            throw new IllegalArgumentException("processElementId cannot be blank");
+        }
+        if (!SAFE_XML_ID.matcher(id).matches()) {
+            throw new IllegalArgumentException(
+                    "processElementId must match BPMN/XML id rules (letter-first, alphanumeric._-): " + id);
+        }
+        return String.format(Locale.ROOT, XML_TEMPLATE, id, id);
+    }
+}

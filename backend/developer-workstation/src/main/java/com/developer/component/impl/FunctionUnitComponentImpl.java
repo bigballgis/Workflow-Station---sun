@@ -16,6 +16,7 @@ import com.developer.security.FunctionUnitWorkspaceAccessService;
 import com.developer.security.WorkspaceAccessAction;
 import com.developer.component.VersionComponent;
 import com.developer.util.BpmnIdRewriter;
+import com.developer.util.MinimalBpmnTemplate;
 import com.developer.util.XmlEncodingUtil;
 import com.developer.service.UserDisplayNameService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -138,7 +139,17 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
             functionUnit.setIcon(icon);
         }
         
-        return functionUnitRepository.save(functionUnit);
+        functionUnit = functionUnitRepository.save(functionUnit);
+
+        String initialBpmnXml = MinimalBpmnTemplate.build(functionUnit.getCode());
+        ProcessDefinition initialProcess = ProcessDefinition.builder()
+                .functionUnit(functionUnit)
+                .functionUnitVersionId(functionUnit.getId())
+                .bpmnXml(XmlEncodingUtil.encode(initialBpmnXml))
+                .build();
+        processDefinitionRepository.save(initialProcess);
+
+        return functionUnit;
     }
     
     /**
