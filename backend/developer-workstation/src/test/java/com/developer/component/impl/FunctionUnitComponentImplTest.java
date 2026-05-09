@@ -111,7 +111,7 @@ class FunctionUnitComponentImplTest {
         assertNotNull(created);
         assertEquals(99L, created.getId());
         assertNotNull(created.getCode());
-        assertTrue(created.getCode().startsWith("fu-"));
+        assertTrue(created.getCode().startsWith("new-unit-"));
 
         ArgumentCaptor<FunctionUnit> fuCaptor = ArgumentCaptor.forClass(FunctionUnit.class);
         verify(functionUnitRepository).save(fuCaptor.capture());

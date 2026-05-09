@@ -289,7 +289,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
         // 创建功能单元
         FunctionUnit functionUnit = FunctionUnit.builder()
                 .name(name)
-                .code(code != null ? code : generateImportCode()) // Use code from manifest or generate new one
+                .code(code != null ? code : generateImportCode(name)) // Use code from manifest or generate new one
                 .description(description)
                 .currentVersion(version)
                 .deployedAt(Instant.now()) // Set deployed_at to avoid null constraint violation
@@ -695,7 +695,8 @@ public class ExportImportComponentImpl implements ExportImportComponent {
     /**
      * 生成导入时的唯一编码
      */
-    private String generateImportCode() {
+    private String generateImportCode(String functionUnitName) {
+        String prefix = normalizeCodePrefix(functionUnitName);
         String datePart = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
         SecureRandom random = new SecureRandom();
         String chars = "abcdefghijklmnopqrstuvwxyz0123456789";
@@ -705,12 +706,87 @@ public class ExportImportComponentImpl implements ExportImportComponent {
             for (int i = 0; i < 6; i++) {
                 randomPart.append(chars.charAt(random.nextInt(chars.length())));
             }
-            String code = "fu-" + datePart + "-" + randomPart;
+            String code = prefix + "-" + datePart + "-" + randomPart;
             if (!functionUnitRepository.existsByCode(code)) {
                 return code;
             }
         }
-        return "fu-" + datePart + "-" + System.currentTimeMillis() % 1000000;
+        return prefix + "-" + datePart + "-" + (System.currentTimeMillis() % 1000000);
+    }
+
+    /**
+     * 与 FunctionUnit 创建逻辑保持一致的前缀清洗规则（Flowable/BPMN XML Name 约束 + 总长度约束）。
+     */
+    private String normalizeCodePrefix(String name) {
+        final int maxPrefixLen = 34;
+
+        if (name == null) {
+            return "fu";
+        }
+        String raw = name.trim();
+        if (raw.isEmpty()) {
+            return "fu";
+        }
+
+        StringBuilder out = new StringBuilder();
+        char prev = 0;
+        for (int i = 0; i < raw.length(); i++) {
+            char c = raw.charAt(i);
+            char mapped;
+            if (Character.isLetterOrDigit(c)) {
+                mapped = Character.toLowerCase(c);
+            } else if (c == '_' || c == '-' || c == '.') {
+                mapped = c;
+            } else if (Character.isWhitespace(c)) {
+                mapped = '-';
+            } else {
+                continue;
+            }
+            if ((mapped == '-' || mapped == '_' || mapped == '.') && mapped == prev) {
+                continue;
+            }
+            out.append(mapped);
+            prev = mapped;
+            if (out.length() >= maxPrefixLen + 8) {
+                break;
+            }
+        }
+
+        String s = out.toString();
+        s = s.replaceAll("^[-_.]+", "").replaceAll("[-_.]+$", "");
+        if (s.isEmpty()) {
+            return "fu";
+        }
+
+        char first = s.charAt(0);
+        boolean firstOk = (first >= 'a' && first <= 'z') || first == '_';
+        if (!firstOk) {
+            s = "fu-" + s;
+        }
+        s = s.replaceAll("^[-_.]+", "");
+        if (s.isEmpty()) {
+            return "fu";
+        }
+
+        if (s.length() > maxPrefixLen) {
+            s = s.substring(0, maxPrefixLen);
+            s = s.replaceAll("[-_.]+$", "");
+            if (s.isEmpty()) {
+                return "fu";
+            }
+        }
+
+        if (s.length() >= 3 && s.regionMatches(true, 0, "xml", 0, 3)) {
+            s = "fu-" + s;
+            if (s.length() > maxPrefixLen) {
+                s = s.substring(0, maxPrefixLen).replaceAll("[-_.]+$", "");
+                if (s.isEmpty()) {
+                    return "fu";
+                }
+            }
+        }
+
+        return s;
     }
     
     private Map<String, Object> serializeField(FieldDefinition field) {

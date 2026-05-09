@@ -124,7 +124,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         }
         
         // 生成唯一编码
-        String code = generateUniqueCode();
+        String code = generateUniqueCode(request.getName());
         
         FunctionUnit functionUnit = FunctionUnit.builder()
                 .name(request.getName())
@@ -154,9 +154,12 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     
     /**
      * 生成唯一的功能单元编码
-     * 格式：fu-{yyyyMMdd}-{random6chars}
+     * 格式：{functionUnitName}-{yyyyMMdd}-{random6chars}
+     *
+     * 注意：prefix 会做安全清洗，仅保留 [a-z0-9-]，且避免为空或以数字开头导致的 BPMN 兼容性问题。
      */
-    private String generateUniqueCode() {
+    private String generateUniqueCode(String functionUnitName) {
+        String prefix = normalizeCodePrefix(functionUnitName);
         String datePart = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
         SecureRandom random = new SecureRandom();
         String chars = "abcdefghijklmnopqrstuvwxyz0123456789";
@@ -166,13 +169,102 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
             for (int i = 0; i < 6; i++) {
                 randomPart.append(chars.charAt(random.nextInt(chars.length())));
             }
-            String code = "fu-" + datePart + "-" + randomPart;
+            String code = prefix + "-" + datePart + "-" + randomPart;
             if (!functionUnitRepository.existsByCode(code)) {
                 return code;
             }
         }
         // 极端情况下使用时间戳
-        return "fu-" + datePart + "-" + System.currentTimeMillis() % 1000000;
+        return prefix + "-" + datePart + "-" + (System.currentTimeMillis() % 1000000);
+    }
+
+    /**
+     * 将 FunctionUnit name 归一化为可用作 code/processId 的前缀。
+     *
+     * Flowable/BPMN 实际约束（按 XML Name / xsd:ID 的安全子集）：
+     * - 首字符必须是 [a-z_]（避免数字开头）
+     * - 后续字符仅允许 [a-z0-9_.-]
+     * - 结果用于 `<bpmn:process id="...">`，同时写入 dw_function_units.code（length=50），因此会截断以保证总长度不超 50。
+     */
+    private String normalizeCodePrefix(String name) {
+        // Reserve space for "-yyyyMMdd-random6" => 1 + 8 + 1 + 6 = 16 chars
+        // total length limit is 50 => prefix max length is 34
+        final int maxPrefixLen = 34;
+
+        if (name == null) {
+            return "fu";
+        }
+        String raw = name.trim();
+        if (raw.isEmpty()) {
+            return "fu";
+        }
+
+        StringBuilder out = new StringBuilder();
+        char prev = 0;
+        for (int i = 0; i < raw.length(); i++) {
+            char c = raw.charAt(i);
+            char mapped;
+            if (Character.isLetterOrDigit(c)) {
+                mapped = Character.toLowerCase(c);
+            } else if (c == '_' || c == '-' || c == '.') {
+                mapped = c;
+            } else if (Character.isWhitespace(c)) {
+                mapped = '-';
+            } else {
+                continue;
+            }
+            // collapse repeating separators
+            if ((mapped == '-' || mapped == '_' || mapped == '.') && mapped == prev) {
+                continue;
+            }
+            out.append(mapped);
+            prev = mapped;
+            if (out.length() >= maxPrefixLen + 8) {
+                // avoid excessive work on very long names; we'll truncate later anyway
+                break;
+            }
+        }
+
+        String s = out.toString();
+        // trim separators on both ends
+        s = s.replaceAll("^[-_.]+", "").replaceAll("[-_.]+$", "");
+        if (s.isEmpty()) {
+            return "fu";
+        }
+
+        // XML Name: first char must be letter or '_' (we restrict to [a-z_])
+        char first = s.charAt(0);
+        boolean firstOk = (first >= 'a' && first <= 'z') || first == '_';
+        if (!firstOk) {
+            s = "fu-" + s;
+        }
+        // avoid leading separators after prefixing
+        s = s.replaceAll("^[-_.]+", "");
+        if (s.isEmpty()) {
+            return "fu";
+        }
+
+        // keep within prefix budget (leave room for date+random suffix)
+        if (s.length() > maxPrefixLen) {
+            s = s.substring(0, maxPrefixLen);
+            s = s.replaceAll("[-_.]+$", "");
+            if (s.isEmpty()) {
+                return "fu";
+            }
+        }
+
+        // extra safety: if starts with "xml" (case-insensitive) it may confuse tooling; prefix it
+        if (s.length() >= 3 && s.regionMatches(true, 0, "xml", 0, 3)) {
+            s = "fu-" + s;
+            if (s.length() > maxPrefixLen) {
+                s = s.substring(0, maxPrefixLen).replaceAll("[-_.]+$", "");
+                if (s.isEmpty()) {
+                    return "fu";
+                }
+            }
+        }
+
+        return s;
     }
     
     @Override
@@ -355,7 +447,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         // 创建新的功能单元（生成新的唯一编码）
         FunctionUnit cloned = FunctionUnit.builder()
                 .name(newName)
-                .code(generateUniqueCode())
+                .code(generateUniqueCode(newName))
                 .description(source.getDescription())
                 .icon(source.getIcon())
                 .status(FunctionUnitStatus.DRAFT)

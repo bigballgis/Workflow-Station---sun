@@ -33,7 +33,7 @@ public class FunctionUnit {
     
     /**
      * 功能单元唯一编码（英文标识符，用于系统间交互）
-     * 格式：fu-{timestamp}-{random}，如 fu-20260112-a1b2c3
+     * 格式：{functionUnitName}-{yyyyMMdd}-{random6chars}，如 test-20260112-a1b2c3
      */
     @Column(name = "code", nullable = false, unique = true, length = 50)
     private String code;
