@@ -117,15 +117,7 @@
     <el-dialog v-model="showCreateDialog" :title="t('functionUnit.create')" width="500px">
       <el-form ref="createFormRef" :model="createForm" :rules="formRules" label-width="100px" label-position="left">
         <el-form-item :label="t('functionUnit.icon')">
-          <div class="icon-select-wrapper" @click="showIconSelector = true">
-            <IconPreview 
-              :icon-id="createForm.iconId" 
-              :svg-content="selectedIcon?.svgContent"
-              size="medium" 
-              clickable 
-            />
-            <span class="icon-select-hint">{{ createForm.iconId ? t('icon.clickToChange') : t('icon.clickToSelect') }}</span>
-          </div>
+          <IconUploadField v-model="createForm.iconId" size="medium" />
         </el-form-item>
         <el-form-item :label="t('functionUnit.name')" prop="name">
           <el-input v-model="createForm.name" />
@@ -158,13 +150,6 @@
       </template>
     </el-dialog>
 
-    <!-- Icon Selector -->
-    <IconSelector 
-      v-model="createForm.iconId" 
-      :visible="showIconSelector" 
-      @update:visible="showIconSelector = $event"
-      @select="selectedIcon = $event"
-    />
   </div>
 </template>
 
@@ -176,9 +161,8 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox, type FormInstance } from 'element-plus'
 import { Search, Plus } from '@element-plus/icons-vue'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
-import type { FunctionUnit, FunctionUnitResponse } from '@/api/functionUnit'
-import IconPreview from '@/components/icon/IconPreview.vue'
-import IconSelector from '@/components/icon/IconSelector.vue'
+import type { FunctionUnitResponse } from '@/api/functionUnit'
+import IconUploadField from '@/components/icon/IconUploadField.vue'
 import FunctionUnitCard from '@/components/function-unit/FunctionUnitCard.vue'
 import { getTags, setTags, getAllAvailableTags, matchesTags } from '@/utils/tagStorage'
 import { isAuthenticated } from '@/api/auth'
@@ -199,9 +183,6 @@ const createForm = reactive({
   iconId: null as number | null,
   tags: [] as string[]
 })
-const showIconSelector = ref(false)
-const selectedIcon = ref<any>(null)
-
 const formRules = computed(() => ({
   name: [{ required: true, message: t('common.inputPlaceholder'), trigger: 'blur' }]
 }))
@@ -260,7 +241,7 @@ async function handleCreate() {
   const result = await store.create({
     name: createForm.name,
     description: createForm.description,
-    iconId: createForm.iconId
+    iconId: createForm.iconId ?? undefined
   })
   // Save tags for the new function unit
   if (result && createForm.tags.length > 0) {
@@ -272,7 +253,6 @@ async function handleCreate() {
   createForm.description = ''
   createForm.iconId = null
   createForm.tags = []
-  selectedIcon.value = null
   loadData()
 }
 
@@ -339,23 +319,6 @@ onMounted(() => {
 
 .empty-state {
   padding: 60px 0;
-}
-
-.icon-select-wrapper {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  cursor: pointer;
-  
-  &:hover .icon-select-hint {
-    color: #DB0011;
-  }
-}
-
-.icon-select-hint {
-  font-size: 12px;
-  color: #909399;
-  transition: color 0.2s;
 }
 
 .pagination-wrapper {

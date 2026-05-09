@@ -42,12 +42,6 @@ const routes: RouteRecordRaw[] = [
         meta: { titleKey: 'functionUnit.edit', requiredRoles: ['TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER'] }
       },
       {
-        path: 'icons',
-        name: 'IconLibrary',
-        component: () => import('@/views/icon/IconLibrary.vue'),
-        meta: { titleKey: 'icon.title' }
-      },
-      {
         path: 'profile',
         name: 'Profile',
         component: () => import('@/views/profile/index.vue'),

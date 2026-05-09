@@ -75,11 +75,7 @@
     <el-dialog v-model="showEditDialog" :title="t('functionUnit.settings')" width="500px">
       <el-form :model="editForm" label-width="100px" label-position="left">
         <el-form-item :label="t('functionUnit.icon')">
-          <div class="icon-edit-row">
-            <IconPreview :icon-id="editForm.iconId" size="large" />
-            <el-button @click="showIconSelectorForEdit = true">{{ t('functionUnit.changeIcon') }}</el-button>
-            <el-button v-if="editForm.iconId" link type="danger" @click="editForm.iconId = undefined">{{ t('icon.clear') }}</el-button>
-          </div>
+          <IconUploadField v-model="editForm.iconId" size="large" />
         </el-form-item>
         <el-form-item :label="t('functionUnit.name')" required>
           <el-input v-model="editForm.name" :placeholder="t('functionUnit.namePlaceholder')" />
@@ -117,14 +113,6 @@
         <el-button @click="showValidationDialog = false">{{ t('common.close') }}</el-button>
       </template>
     </el-dialog>
-
-    <!-- Icon Selector for edit dialog -->
-    <IconSelector 
-      :model-value="editForm.iconId" 
-      :visible="showIconSelectorForEdit" 
-      @update:visible="showIconSelectorForEdit = $event"
-      @select="handleIconSelectForEdit"
-    />
 
     <AiPanel
       :function-unit-id="functionUnitId"
@@ -238,7 +226,7 @@ import DecisionList from '@/components/designer/DecisionList.vue'
 import LinkFormComponentDesigner from '@/components/designer/LinkFormComponentDesigner.vue'
 import VersionManager from '@/components/version/VersionManager.vue'
 import IconPreview from '@/components/icon/IconPreview.vue'
-import IconSelector from '@/components/icon/IconSelector.vue'
+import IconUploadField from '@/components/icon/IconUploadField.vue'
 import AiPanel from '@/components/ai/AiPanel.vue'
 
 const { t } = useI18n()
@@ -257,7 +245,6 @@ const showEditDialog = ref(false)
 const showDeployDialog = ref(false)
 const validationResult = ref<ValidationResult | null>(null)
 const showAiPanel = ref(false)
-const showIconSelectorForEdit = ref(false)
 const deployStatus = ref<DeployResponse | null>(null)
 const deployPollingTimer = ref<number | null>(null)
 
@@ -269,7 +256,7 @@ const deployForm = reactive({
 const editForm = reactive({
   name: '',
   description: '',
-  iconId: undefined as number | undefined
+  iconId: undefined as number | null | undefined
 })
 
 const statusTagType = (status?: string): 'primary' | 'success' | 'warning' | 'info' | 'danger' => {
@@ -303,7 +290,7 @@ async function handleSaveEdit() {
     await store.update(functionUnitId.value, {
       name: editForm.name,
       description: editForm.description,
-      iconId: editForm.iconId
+      iconId: editForm.iconId ?? undefined
     })
     ElMessage.success(t('functionUnit.saveSuccess'))
     showEditDialog.value = false
@@ -313,10 +300,6 @@ async function handleSaveEdit() {
   } finally {
     saving.value = false
   }
-}
-
-function handleIconSelectForEdit(icon: any) {
-  editForm.iconId = icon?.id ?? undefined
 }
 
 async function handleValidate() {
@@ -494,12 +477,6 @@ function translateStep(text: string) {
   border-radius: 4px;
   font-size: 12px;
   color: #666;
-}
-
-.icon-edit-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
 }
 
 .deploy-status {
