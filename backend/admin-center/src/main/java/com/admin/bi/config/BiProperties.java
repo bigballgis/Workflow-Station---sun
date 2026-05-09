@@ -31,7 +31,7 @@ public class BiProperties {
          * Superset 元数据表所在 PostgreSQL schema（与 Flask-SQLAlchemy / Superset 安装一致）。
          * 默认 {@code public}；若 Superset 使用独立 schema（如 {@code superset}），通过环境变量 {@code SUPERSET_DB_SCHEMA} 覆盖。
          */
-        private String dbSchema = "public";
+        private String dbSchema = "superset";
         /** Superset 管理员用户名（环境变量：BI_SUPERSET_ADMIN_USERNAME） */
         private String adminUsername;
         /** Superset 管理员密码（环境变量：BI_SUPERSET_ADMIN_PASSWORD） */
