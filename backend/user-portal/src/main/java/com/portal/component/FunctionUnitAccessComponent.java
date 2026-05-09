@@ -102,7 +102,7 @@ public class FunctionUnitAccessComponent {
             
             if (response.getBody() != null) {
                 Map<String, Object> payload = ApiResponseBodyUnwrap.unwrapDataMap(response.getBody());
-                Boolean enabled = (Boolean) payload.get("enabled");
+                Boolean enabled = parseEnabledFlag(payload.get("enabled"));
                 log.info("Function unit {} enabled status: {}", functionUnitIdOrCode, enabled);
                 // 默认为 true（如果字段不存在）
                 return enabled == null || enabled;
@@ -296,7 +296,7 @@ public class FunctionUnitAccessComponent {
             String unitId = (String) unit.get("id");
             
             // 检查功能单元是否启用
-            Boolean enabled = (Boolean) unit.get("enabled");
+            Boolean enabled = parseEnabledFlag(unit.get("enabled"));
             if (enabled != null && !enabled) {
                 log.debug("Function unit {} is disabled, skipping", unitId);
                 continue;
@@ -482,6 +482,34 @@ public class FunctionUnitAccessComponent {
         return false;
     }
     
+    /**
+     * 解析 admin-center 返回的 enabled 字段（兼容 Boolean / Number / String），异常类型视为 null（即未禁用）。
+     */
+    private static Boolean parseEnabledFlag(Object raw) {
+        if (raw == null) {
+            return null;
+        }
+        if (raw instanceof Boolean b) {
+            return b;
+        }
+        if (raw instanceof Number n) {
+            return n.intValue() != 0;
+        }
+        if (raw instanceof String s) {
+            String t = s.trim();
+            if (t.isEmpty()) {
+                return null;
+            }
+            if ("1".equals(t) || "true".equalsIgnoreCase(t)) {
+                return true;
+            }
+            if ("0".equals(t) || "false".equalsIgnoreCase(t)) {
+                return false;
+            }
+        }
+        return null;
+    }
+
     private static class CachedData<T> {
         final T data;
         final long timestamp;

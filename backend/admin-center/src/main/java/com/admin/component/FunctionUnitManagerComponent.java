@@ -590,7 +590,14 @@ public class FunctionUnitManagerComponent {
         if (results.isEmpty()) {
             throw new FunctionUnitNotFoundException("Function unit not found for process definition key: " + processKey);
         }
-        // 取最新部署的记录（列表已按 createdAt DESC 排序）
+        // 列表按 content.createdAt DESC：最新一条可能挂在「已禁用」的旧目录版本上。
+        // 门户待办/分配仍用 processDefinitionKey 解析目录时，应优先解析到仍启用的目录行，避免误报 disabled。
+        for (FunctionUnitContent c : results) {
+            FunctionUnit fu = c.getFunctionUnit();
+            if (fu != null && Boolean.TRUE.equals(fu.getEnabled())) {
+                return fu;
+            }
+        }
         return results.get(0).getFunctionUnit();
     }
     
