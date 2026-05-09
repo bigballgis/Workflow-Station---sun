@@ -91,7 +91,6 @@ declare module 'vue' {
     InlineDocumentViewer: typeof import('./components/ai/InlineDocumentViewer.vue')['default']
     LinkageConfigurator: typeof import('./components/designer/LinkageConfigurator.vue')['default']
     LinkFormBindingSelect: typeof import('./components/designer/LinkFormBindingSelect.vue')['default']
-    LinkFormComponentDesigner: typeof import('./components/designer/LinkFormComponentDesigner.vue')['default']
     LinkFormPlaceholderWidget: typeof import('./components/designer/LinkFormPlaceholderWidget.vue')['default']
     LookupBindingSelect: typeof import('./components/designer/LookupBindingSelect.vue')['default']
     LookupComponent: typeof import('./components/designer/LookupComponent.vue')['default']

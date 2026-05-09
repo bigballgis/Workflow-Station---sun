@@ -1,6 +1,5 @@
 package com.developer.service.impl;
 
-import com.developer.dto.LinkFormComponentRequest;
 import com.developer.dto.LinkFormComponentResponse;
 import com.developer.dto.LinkFormDataRequest;
 import com.developer.dto.LinkFormDataResponse;
@@ -39,50 +38,6 @@ public class LinkFormComponentServiceImpl implements LinkFormComponentService {
         return components.stream()
                 .map(this::toResponseWithFormName)
                 .collect(Collectors.toList());
-    }
-    
-    @Override
-    public LinkFormComponentResponse getComponentById(Long id) {
-        LinkFormComponent component = componentRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("LinkFormComponent not found: " + id));
-        return toResponseWithFormName(component);
-    }
-    
-    @Override
-    @Transactional
-    public LinkFormComponentResponse createComponent(Long functionUnitId, LinkFormComponentRequest request) {
-        LinkFormComponent component = LinkFormComponentRequest.toEntity(request, functionUnitId);
-        component = componentRepository.save(component);
-        log.info("Created LinkFormComponent: id={}, name={}", component.getId(), component.getComponentName());
-        return toResponseWithFormName(component);
-    }
-    
-    @Override
-    @Transactional
-    public LinkFormComponentResponse updateComponent(Long id, LinkFormComponentRequest request) {
-        LinkFormComponent component = componentRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("LinkFormComponent not found: " + id));
-        
-        component.setComponentName(request.getComponentName());
-        component.setLinkedFormId(request.getLinkedFormId());
-        component.setDisplayField(request.getDisplayField());
-        component.setLinkText(request.getLinkText() != null ? request.getLinkText() : "详情");
-        component.setColumnLabel(request.getColumnLabel());
-        if (request.getSortOrder() != null) {
-            component.setSortOrder(request.getSortOrder());
-        }
-        component.setConfigJson(request.getConfigJson());
-        
-        component = componentRepository.save(component);
-        log.info("Updated LinkFormComponent: id={}, name={}", component.getId(), component.getComponentName());
-        return toResponseWithFormName(component);
-    }
-    
-    @Override
-    @Transactional
-    public void deleteComponent(Long id) {
-        componentRepository.deleteById(id);
-        log.info("Deleted LinkFormComponent: id={}", id);
     }
     
     @Override

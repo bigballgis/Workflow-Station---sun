@@ -103,7 +103,6 @@ export default {
     forms: '表单设计',
     actionDesign: '动作设计',
     decisions: '决策设计',
-    linkFormDesign: '链接表单设计',
     filterByTags: '按标签筛选',
     selectTags: '选择标签',
     noData: '暂无功能单元',

@@ -18,16 +18,6 @@ apiAxios.interceptors.request.use(config => {
   return config
 })
 
-export interface LinkFormComponentRequest {
-  componentName: string
-  linkedFormId: number
-  displayField?: string
-  linkText?: string
-  columnLabel?: string
-  sortOrder?: number
-  configJson?: string
-}
-
 export interface LinkFormComponentResponse {
   id: number
   functionUnitId: number
@@ -63,26 +53,6 @@ export const linkFormComponentApi = {
     apiAxios.get<any, { data: LinkFormComponentResponse[] }>(
       `/api/v1/function-units/${functionUnitId}/link-form-components`
     ),
-
-  getComponent: (functionUnitId: number, id: number) =>
-    apiAxios.get<any, { data: LinkFormComponentResponse }>(
-      `/api/v1/function-units/${functionUnitId}/link-form-components/${id}`
-    ),
-
-  create: (functionUnitId: number, data: LinkFormComponentRequest) =>
-    apiAxios.post<any, { data: LinkFormComponentResponse }>(
-      `/api/v1/function-units/${functionUnitId}/link-form-components`,
-      data
-    ),
-
-  update: (functionUnitId: number, id: number, data: LinkFormComponentRequest) =>
-    apiAxios.put<any, { data: LinkFormComponentResponse }>(
-      `/api/v1/function-units/${functionUnitId}/link-form-components/${id}`,
-      data
-    ),
-
-  delete: (functionUnitId: number, id: number) =>
-    apiAxios.delete(`/api/v1/function-units/${functionUnitId}/link-form-components/${id}`),
 
   saveFormData: (functionUnitId: number, data: LinkFormDataRequest) =>
     apiAxios.post<any, { data: LinkFormDataResponse }>(

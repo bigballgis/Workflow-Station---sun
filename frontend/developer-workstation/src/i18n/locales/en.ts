@@ -103,7 +103,6 @@ export default {
     forms: 'Form Design',
     actionDesign: 'Action Design',
     decisions: 'Decision Design',
-    linkFormDesign: 'Link Form Design',
     filterByTags: 'Filter by Tags',
     selectTags: 'Select Tags',
     noData: 'No function units',
