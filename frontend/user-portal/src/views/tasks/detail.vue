@@ -76,12 +76,20 @@
         <div class="section-content">
           <div v-if="selectedNodeForm.fields.length > 0 || selectedNodeForm.tabs.length > 0" class="form-container">
             <FormRenderer
-              :fields="selectedNodeForm.fields"
-              :tabs="selectedNodeForm.tabs"
-              :model-value="selectedNodeForm.values"
+              :fields="selectedNodeForm.isCurrentTask ? formFields : selectedNodeForm.fields"
+              :tabs="selectedNodeForm.isCurrentTask ? formTabs : selectedNodeForm.tabs"
+              :model-value="selectedNodeForm.isCurrentTask ? formData : selectedNodeForm.values"
+              @update:model-value="val => { if (selectedNodeForm.isCurrentTask) formData = { ...formData, ...val } }"
               :label-width="formLabelWidth"
-              :readonly="true"
-              :subTableBindings="selectedNodeForm.subTableBindings"
+              :readonly="selectedNodeForm.isCurrentTask ? formReadOnly : true"
+              :subTableBindings="selectedNodeForm.isCurrentTask ? subTableBindings : selectedNodeForm.subTableBindings"
+              :linked-sub-table-bindings="selectedNodeForm.isCurrentTask ? linkableSubTableBindings : undefined"
+              :preview-sub-tables="selectedNodeForm.isCurrentTask ? isMiSubTaskMode : true"
+              :task-id="selectedNodeForm.isCurrentTask ? effectiveTaskId : undefined"
+              :allow-sub-table-assign="selectedNodeForm.isCurrentTask ? allowSubTableAssignForCurrentTask : false"
+              :suppress-link-form-initial-data="selectedNodeForm.isCurrentTask ? (isMiSubTaskMode && !isCompletedTask) : true"
+              :show-link-form-dialog-footer="selectedNodeForm.isCurrentTask ? (!isCompletedTask && !formReadOnly) : false"
+              @update:subTableData="(bindingId, rows) => { if (selectedNodeForm.isCurrentTask) syncMainSubTableRows(bindingId, rows) }"
             />
           </div>
           <el-empty v-else :description="t('task.noFormData')" />
