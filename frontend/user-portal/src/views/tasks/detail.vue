@@ -128,7 +128,7 @@
 
       <!-- Section 3: Form data (hide normal task form card when previewing a selected node) -->
       <div
-        v-if="!selectedNodeId && (!isMiSubTaskMode || bottomSubTableBindings.length > 0 || formFields.length > 0 || formTabs.length > 0)"
+        v-if="!selectedNodeId && (!isMiSubTaskMode || formFields.length > 0 || formTabs.length > 0)"
         class="section form-section"
       >
         <div class="section-header">
@@ -154,35 +154,7 @@
               @update:subTableData="syncMainSubTableRows"
             />
           </div>
-          <el-empty v-else-if="!bottomSubTableBindings.length" :description="t('task.noFormData')" />
-
-          <!-- Sub-tables (SUB / RELATED bindings) -->
-          <template v-if="bottomSubTableBindings.length > 0">
-            <div
-              v-for="binding in bottomSubTableBindings"
-              :key="binding.bindingId"
-              class="sub-table-section"
-            >
-              <SubTableField
-                :title="binding.tableName"
-                :columns="binding.columns"
-                v-model="binding.data"
-                :editable="!isMiSubTaskMode && !formReadOnly && binding.bindingMode === 'EDITABLE'"
-                :task-id="effectiveTaskId"
-                :assignee-field="resolveAssigneeFieldForBinding(binding.columns, binding.tableName)"
-                :show-assign-button="allowSubTableAssignForCurrentTask && !!effectiveTaskId && !!resolveAssigneeFieldForBinding(binding.columns, binding.tableName)"
-                :can-assign="allowSubTableAssignForCurrentTask && !formReadOnly && binding.bindingMode === 'EDITABLE' && !!effectiveTaskId && !!resolveAssigneeFieldForBinding(binding.columns, binding.tableName)"
-                :show-fill-button="isMiSubTaskMode && !formReadOnly"
-                :fill-button-label="isParticipantsBinding(binding) ? t('task.addParticipantInfoForm') : undefined"
-                :linked-sub-table-bindings="linkableSubTableBindings"
-                :suppress-link-form-initial-data="isMiSubTaskMode && !isCompletedTask"
-                :show-link-form-dialog-footer="!isCompletedTask && !formReadOnly"
-                @update:model-value="(rows: any[]) => syncMainSubTableRows(binding.bindingId, rows)"
-                @update:linked-sub-table-data="syncMainSubTableRows"
-                @fillForm="(row: any) => openMiFillDialog(row)"
-              />
-            </div>
-          </template>
+          <el-empty :description="t('task.noFormData')" />
         </div>
       </div>
 
@@ -375,28 +347,6 @@ const subTableBindings = ref<Array<{
   data: any[]
 }>>([])
 
-const placedBindingIds = computed((): Set<number> => {
-  const ids = new Set<number>()
-  const collect = (fields: any[]) => fields.forEach((f: any) => {
-    if (f.type === 'subTable' && f._bindingId != null) ids.add(f._bindingId)
-    if (Array.isArray(f.children)) collect(f.children)
-  })
-  collect(formFields.value)
-  formTabs.value.forEach((tab: any) => collect(tab.fields))
-  return ids
-})
-
-function collectLinkBoundBindingIds(bindings: Array<{ columns?: Array<{ type?: string; props?: Record<string, any> }> }>): Set<number> {
-  const ids = new Set<number>()
-  bindings.forEach(binding => {
-    binding.columns?.forEach(column => {
-      const boundId = column.type === 'linkForm' ? column.props?.boundSubTableBindingId : null
-      if (boundId != null) ids.add(Number(boundId))
-    })
-  })
-  return ids
-}
-
 function resolveSubFormDesign(binding: any, subForms?: Record<string, any>): { formFields: FormField[]; formOptions?: Record<string, any> } {
   const design =
     binding.subFormConfig ||
@@ -409,12 +359,6 @@ function resolveSubFormDesign(binding: any, subForms?: Record<string, any>): { f
     formOptions: design.options
   }
 }
-
-const linkBoundBindingIds = computed(() => collectLinkBoundBindingIds(subTableBindings.value))
-
-const bottomSubTableBindings = computed(() =>
-  subTableBindings.value.filter(b => !placedBindingIds.value.has(b.bindingId) && !linkBoundBindingIds.value.has(b.bindingId))
-)
 
 const linkableSubTableBindings = computed(() => [
   ...subTableBindings.value,
@@ -900,7 +844,7 @@ const hasConfiguredSaveAction = computed(() =>
   (taskInfo.value.actions || []).some(action => (action.actionType || '').trim().toUpperCase() === 'SAVE')
 )
 const showImplicitSaveAction = computed(() =>
-  !formReadOnly.value && !hasConfiguredSaveAction.value
+  false
 )
 
 // Task 17.3: Completed task snapshot
