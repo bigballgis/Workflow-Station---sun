@@ -299,10 +299,10 @@ export const functionUnitApi = {
   createAction: (functionUnitId: number, data: Partial<ActionDefinition>) =>
     functionUnitAxios.post<any, { data: ActionDefinition }>(`/api/v1/function-units/${functionUnitId}/actions`, data),
   
-  updateAction: (functionUnitId: number, actionId: number, data: Partial<ActionDefinition>) =>
+  updateAction: (functionUnitId: number, actionId: string | number, data: Partial<ActionDefinition>) =>
     functionUnitAxios.put<any, { data: ActionDefinition }>(`/api/v1/function-units/${functionUnitId}/actions/${actionId}`, data),
   
-  deleteAction: (functionUnitId: number, actionId: number) =>
+  deleteAction: (functionUnitId: number, actionId: string | number) =>
     functionUnitAxios.delete(`/api/v1/function-units/${functionUnitId}/actions/${actionId}`),
 
   // Process Definition
@@ -345,7 +345,7 @@ export const functionUnitApi = {
     functionUnitAxios.get<any, { data: ForeignKeyDTO[] }>(`/api/v1/function-units/${functionUnitId}/tables/foreign-keys`),
 
   // Action test
-  testAction: (functionUnitId: number, actionId: number, testData: any) =>
+  testAction: (functionUnitId: number, actionId: string | number, testData: any) =>
     functionUnitAxios.post<any, { data: any }>(`/api/v1/function-units/${functionUnitId}/actions/${actionId}/test`, testData),
 
   // Process validation

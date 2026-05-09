@@ -1,96 +1,23 @@
 <template>
   <div class="form-designer">
     <!-- Form list view -->
-    <div class="form-list-view" v-if="!selectedForm">
-      <div class="designer-toolbar">
-        <el-button type="primary" @click="showCreateDialog = true">
-          <el-icon><Plus /></el-icon> {{ t('form.createForm') }}
-        </el-button>
-        <el-button @click="loadForms" :loading="loading">
-          <el-icon><Refresh /></el-icon> {{ t('common.refresh') }}
-        </el-button>
-        <el-button @click="handleImportFromTable" :disabled="store.tables.length === 0">
-          <el-icon><Connection /></el-icon> {{ t('form.importFields') }}
-        </el-button>
-      </div>
-      
-      <el-table :data="store.forms" v-loading="loading" stripe @row-click="handleSelectForm">
-        <el-table-column prop="formName" :label="t('form.formName')" />
-        <el-table-column prop="formType" :label="t('form.formType')" width="120">
-          <template #default="{ row }">
-            <el-tag :type="row.formType === 'PROCESS' ? 'primary' : 'info'">
-              {{ formTypeLabel(row.formType) }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="boundTableId" :label="t('form.boundTable')" width="180">
-          <template #default="{ row }">
-            <template v-if="getPrimaryBinding(row)">
-              <el-tag type="success" size="small">
-                {{ getPrimaryBinding(row)!.tableName }}
-              </el-tag>
-              <el-tag v-if="getSubBindingsCount(row) > 0" type="info" size="small" style="margin-left: 4px;">
-                +{{ getSubBindingsCount(row) }}
-              </el-tag>
-            </template>
-            <el-tag v-else-if="row.boundTableId" type="success" size="small">
-              {{ getTableName(row.boundTableId) }}
-            </el-tag>
-            <span v-else class="text-muted">{{ t('form.notBound') }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="boundNodeId" :label="t('form.boundNode')" min-width="180">
-          <template #default="{ row }">
-            <div class="bound-nodes">
-              <template v-if="getFormBoundNodes(row.id).length > 0">
-                <el-tag 
-                  v-for="node in getFormBoundNodes(row.id)" 
-                  :key="node.nodeId"
-                  :type="node.readOnly ? 'info' : 'success'" 
-                  size="small"
-                  class="node-tag"
-                >
-                  {{ node.nodeName }}{{ node.readOnly ? `(${t('form.readOnly')})` : '' }}
-                </el-tag>
-              </template>
-              <span v-else class="text-muted">{{ t('form.notBound') }}</span>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column prop="description" :label="t('table.description')" show-overflow-tooltip />
-        <el-table-column
-          :label="t('common.actions')"
-          width="200"
-          fixed="right"
-          align="left"
-        >
-          <template #default="{ row }">
-            <div class="action-buttons">
-              <el-button link type="primary" @click.stop="handleSelectForm(row)">{{ t('common.edit') }}</el-button>
-              <el-button link type="danger" @click.stop="handleDeleteForm(row)">{{ t('common.delete') }}</el-button>
-              <el-dropdown trigger="click" @command="(cmd) => onFormListMoreAction(cmd, row)">
-                <el-button link type="primary" @click.stop>
-                  {{ t('common.more') }}
-                  <el-icon class="action-more-icon"><ArrowDown /></el-icon>
-                </el-button>
-                <template #dropdown>
-                  <el-dropdown-menu>
-                    <el-dropdown-item command="rename">
-                      {{ t('form.renameForm') }}
-                    </el-dropdown-item>
-                    <el-dropdown-item v-if="row.formType === 'TASK'" command="copy">
-                      {{ t('form.copyForm') }}
-                    </el-dropdown-item>
-                    <el-dropdown-item command="bindings">{{ t('form.editBindings') }}</el-dropdown-item>
-                    <el-dropdown-item command="bindNode">{{ t('form.boundNode') }}</el-dropdown-item>
-                  </el-dropdown-menu>
-                </template>
-              </el-dropdown>
-            </div>
-          </template>
-        </el-table-column>
-      </el-table>
-    </div>
+    <FormListSidebar
+      v-if="!selectedForm"
+      :forms="store.forms"
+      :loading="loading"
+      :has-tables="store.tables.length > 0"
+      :form-type-label="formTypeLabel"
+      :get-primary-binding="getPrimaryBinding"
+      :get-sub-bindings-count="getSubBindingsCount"
+      :get-table-name="getTableName"
+      :get-form-bound-nodes="getFormBoundNodes"
+      @create="showCreateDialog = true"
+      @refresh="loadForms"
+      @import-from-table="handleImportFromTable"
+      @select-form="handleSelectForm"
+      @delete-form="handleDeleteForm"
+      @more-action="onFormListMoreAction"
+    />
 
     <!-- Form designer view -->
     <div class="form-editor-view" v-else>
@@ -246,78 +173,26 @@
     </div>
 
     <!-- Create form dialog -->
-    <el-dialog v-model="showCreateDialog" :title="t('form.createFormTitle')" width="500px">
-      <el-form :model="createForm" label-width="100px" label-position="left">
-        <el-form-item :label="t('form.formNameLabel')" required>
-          <el-input v-model="createForm.formName" :placeholder="t('form.enterFormName')" />
-        </el-form-item>
-        <el-form-item :label="t('form.formTypeLabel')">
-          <div v-if="store.forms.some((f) => f.formType === 'PROCESS')" class="form-item-tip" style="margin-bottom: 8px;">
-            {{ t('form.processFormLimitHint') }}
-          </div>
-          <el-select v-model="createForm.formType" style="width: 100%" @change="handleCreateFormTypeChange">
-            <el-option
-              :label="t('form.processForm')"
-              value="PROCESS"
-              :disabled="store.forms.some((f) => f.formType === 'PROCESS')"
-            />
-            <el-option :label="t('form.taskForm')" value="TASK" />
-            <el-option :label="t('form.actionForm')" value="ACTION" />
-          </el-select>
-        </el-form-item>
-        <el-form-item v-if="createForm.formType === 'TASK'" :label="t('form.stageBinding')" required>
-          <el-select
-            v-model="createFormStageIds"
-            multiple
-            :placeholder="t('form.stageBindingPlaceholder')"
-            style="width: 100%"
-          >
-            <el-option
-              v-for="node in createDialogProcessNodes"
-              :key="node.id"
-              :label="node.name"
-              :value="node.id"
-            />
-          </el-select>
-          <div class="form-item-tip">{{ t('form.stageBindingHint') }}</div>
-        </el-form-item>
-        <el-form-item :label="t('form.bindTableLabel')">
-          <el-select v-model="createForm.boundTableId" :placeholder="t('form.selectTableToBind')" style="width: 100%" clearable>
-            <el-option 
-              v-for="table in store.tables" 
-              :key="table.id" 
-              :label="`${table.tableName} (${tableTypeLabel(table.tableType)})`" 
-              :value="table.id" 
-            />
-          </el-select>
-          <div class="form-item-tip">{{ t('form.bindTableHint') }}</div>
-        </el-form-item>
-        <el-form-item :label="t('form.descriptionLabel')">
-          <el-input v-model="createForm.description" type="textarea" :rows="3" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showCreateDialog = false">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary" @click="handleCreateForm">{{ t('common.confirm') }}</el-button>
-      </template>
-    </el-dialog>
+    <FormCreateDialog
+      v-model="showCreateDialog"
+      :create-form="createForm"
+      :forms="store.forms"
+      :tables="store.tables"
+      :create-dialog-process-nodes="createDialogProcessNodes"
+      v-model:stage-ids="createFormStageIds"
+      :table-type-label="tableTypeLabel"
+      :handle-create-form-type-change="handleCreateFormTypeChange"
+      @confirm="handleCreateForm"
+    />
 
     <!-- Rename form dialog -->
-    <el-dialog v-model="showRenameDialog" :title="t('form.renameFormTitle')" width="500px">
-      <el-form label-width="100px" label-position="left">
-        <el-form-item :label="t('form.formNameLabel')" required>
-          <el-input
-            v-model="renameFormName"
-            :placeholder="t('form.enterFormName')"
-            @keyup.enter="handleConfirmRename"
-          />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showRenameDialog = false">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary" :loading="renaming" @click="handleConfirmRename">{{ t('common.confirm') }}</el-button>
-      </template>
-    </el-dialog>
+    <FormRenameDialog
+      v-model="showRenameDialog"
+      v-model:form-name="renameFormName"
+      :loading="renaming"
+      :title="t('form.renameFormTitle')"
+      @confirm="handleConfirmRename"
+    />
 
     <!-- Preview dialog -->
     <el-dialog v-model="showPreviewDialog" :title="t('form.previewTitle')" width="900px" destroy-on-close>
@@ -334,39 +209,17 @@
     </el-dialog>
 
     <!-- Bind node dialog -->
-    <el-dialog v-model="showBindDialog" :title="t('form.bindNodeTitle')" width="650px" :key="bindDialogKey">
-      <div class="bind-dialog-content">
-        <el-alert type="info" :closable="false" style="margin-bottom: 16px;">
-          {{ t('form.bindNodeHint') }}
-        </el-alert>
-        <div v-if="processNodes.length" class="node-list">
-          <div v-for="node in processNodes" :key="`${node.id}-${bindDialogKey}`" class="node-item">
-            <el-checkbox 
-              :model-value="isNodeSelected(node.id)"
-              @change="toggleNodeSelection(node.id, node.name, $event as boolean)"
-              :key="`checkbox-${node.id}-${bindDialogKey}`"
-            />
-            <div class="node-icon" :class="node.type"></div>
-            <div class="node-info">
-              <div class="node-name">{{ node.name }}</div>
-              <div class="node-type">{{ nodeTypeLabel(node.type) }}</div>
-            </div>
-            <el-checkbox 
-              v-if="isNodeSelected(node.id)"
-              :model-value="isNodeReadOnly(node.id)"
-              @change="setNodeReadOnly(node.id, $event as boolean)"
-            >
-              {{ t('form.readOnly') }}
-            </el-checkbox>
-          </div>
-        </div>
-        <el-empty v-else :description="t('form.noNodesAvailable')" />
-      </div>
-      <template #footer>
-        <el-button @click="showBindDialog = false">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary" @click="handleConfirmBind">{{ t('common.confirm') }}</el-button>
-      </template>
-    </el-dialog>
+    <FormNodeBindDialog
+      v-model="showBindDialog"
+      :process-nodes="processNodes"
+      :bind-dialog-key="bindDialogKey"
+      :is-node-selected="isNodeSelected"
+      :is-node-read-only="isNodeReadOnly"
+      :toggle-node-selection="toggleNodeSelection"
+      :set-node-read-only="setNodeReadOnly"
+      :node-type-label="nodeTypeLabel"
+      @confirm="handleConfirmBind"
+    />
 
     <!-- Import fields from table dialog -->
     <el-dialog v-model="showImportFieldsDialog" :title="t('form.importFieldsTitle')" width="800px">
@@ -487,7 +340,12 @@
 import { ref, reactive, onMounted, nextTick, computed, provide, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, ArrowDown, Plus, Refresh, Connection, Loading, CircleCheck } from '@element-plus/icons-vue'
+import { useFormAutoSave } from '@/composables/modules/useFormAutoSave'
+import { useFormLabels } from '@/composables/modules/useFormLabels'
+import { useFormActions } from '@/composables/modules/useFormActions'
+import { parseLookupConfig, getMockValueForType, derivePreviewColumns } from '@/utils/formPreview'
+import { cloneFormRules, injectUploadButtonLabels, mergeLoadedFormOptions, getRuleChildren, collectSubTableRules, isCardRule, getLayoutLabel } from '@/utils/formDesigner'
+import { ArrowLeft, Connection, Loading, CircleCheck } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { TabPaneName } from 'element-plus'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
@@ -495,6 +353,10 @@ import type { FormDefinition, FieldDefinition, TableBinding, BindingType, FormTy
 import { functionUnitApi } from '@/api/functionUnit'
 import { relationTableBindingApi, type RelationFieldDTO } from '@/api/relationTable'
 import TableBindingManager from './TableBindingManager.vue'
+import FormRenameDialog from './form-designer/FormRenameDialog.vue'
+import FormCreateDialog from './form-designer/FormCreateDialog.vue'
+import FormNodeBindDialog from './form-designer/FormNodeBindDialog.vue'
+import FormListSidebar from './form-designer/FormListSidebar.vue'
 import RelationTableView from './RelationTableView.vue'
 import SubTableListView from './SubTableListView.vue'
 import FormPreviewItems from './FormPreviewItems.vue'
@@ -536,9 +398,20 @@ const showCreateDialog = ref(false)
 const showRenameDialog = ref(false)
 const showPreviewDialog = ref(false)
 const showBindDialog = ref(false)
-const renaming = ref(false)
 const renameFormName = ref('')
 const renameTargetForm = ref<FormDefinition | null>(null)
+
+// Form CRUD actions composable
+const { renaming, handleDeleteForm, handleConfirmRename, handleCopyForm } = useFormActions({
+  functionUnitId: props.functionUnitId,
+  store: store as any,
+  renameTargetForm,
+  renameFormName,
+  showRenameDialog,
+  selectedForm,
+  loadForms,
+  t,
+})
 const previewData = ref({})
 const previewRule = ref<any[]>([])
 const previewSubBindings = ref<Array<{
@@ -557,7 +430,20 @@ const previewSubData = ref<Record<number, any>>({})
 const previewTableRows = ref<Record<number, any[]>>({})
 const autoSaving = ref(false)
 const lastAutoSaveTime = ref<Date | null>(null)
-let autoSaveTimer: ReturnType<typeof setTimeout> | null = null
+// Note: autoSaveTimer, lastDesignerState, pollTimerRef moved to useFormAutoSave composable
+
+// relationViewState must be declared before useFormAutoSave (TDZ)
+const relationViewState = ref<Record<number, { allFields: any[]; viewFields: any[] }>>({})
+
+const { formatAutoSaveTime, scheduleAutoSave, setupAutoSavePolling, cleanupAutoSavePolling } = useFormAutoSave({
+  selectedForm,
+  designerRef,
+  handleSaveForm,
+  relationViewState,
+  t,
+  autoSaving,
+  lastAutoSaveTime,
+})
 
 // Link form components loaded from API (for LinkForm widget binding selection)
 const linkFormComponents = ref<Array<{
@@ -578,8 +464,6 @@ const previewItems = ref<FormPreviewItem[]>([])
 const subDesignerRefs = ref<any[]>([])
 // Relation table view refs (keyed by bindingId)
 const relationTableViewRefs = ref<Record<number, any>>({})
-// Relation table view state (keyed by bindingId)
-const relationViewState = ref<Record<number, { allFields: any[]; viewFields: any[] }>>({})
 // Sub-table list view refs (keyed by bindingId)
 const subTableListViewRefs = ref<Record<number, any>>({})
 // Sub-table list view state (keyed by bindingId)
@@ -1062,89 +946,8 @@ const getPreviewOption = (): Record<string, any> => ({
 })
 
 /** Deep-clone form rules so we do not mutate Pinia / API payloads in place. */
-function cloneFormRules(rules: any[]): any[] {
-  if (!Array.isArray(rules) || rules.length === 0) return []
-  try {
-    return JSON.parse(JSON.stringify(rules))
-  } catch {
-    return rules.slice()
-  }
-}
-
-/**
- * fc-upload button text is `t('clickToUpload') || uploadText || '点击上传'`.
- * Legacy saved rules omit uploadText; inject so the hardcoded Chinese fallback never shows.
- */
-function injectUploadButtonLabels(rules: any[]): void {
-  const text = t('form.clickToUpload')
-  const walk = (items: any[]) => {
-    for (const r of items) {
-      if (!r || typeof r !== 'object') continue
-      if (r.type === 'upload') {
-        r.props = r.props || {}
-        if (r.props.uploadText == null || r.props.uploadText === '') {
-          r.props.uploadText = text
-        }
-      }
-      if (Array.isArray(r.children) && r.children.length) walk(r.children)
-    }
-  }
-  walk(rules)
-}
-
-/** Merge persisted form-create options with English defaults (esp. language.clickToUpload). */
-function mergeLoadedFormOptions(stored: Record<string, any> | undefined): Record<string, any> {
-  const base = defaultFormOption.value
-  if (!stored || Object.keys(stored).length === 0) {
-    return { ...base }
-  }
-  return {
-    ...base,
-    ...stored,
-    form: { ...base.form, ...(stored.form || {}) },
-    language: {
-      ...(base.language as Record<string, unknown>),
-      ...(stored.language || {}),
-      en: {
-        ...((base.language as { en?: Record<string, string> })?.en || {}),
-        ...((stored.language as { en?: Record<string, string> } | undefined)?.en || {}),
-        clickToUpload: t('form.clickToUpload'),
-      },
-    },
-  }
-}
-
-const formTypeLabel = (type: string) => {
-  const map: Record<string, string> = { PROCESS: t('form.processForm'), TASK: t('form.taskForm'), ACTION: t('form.actionForm') }
-  return map[type] || type
-}
-
-const nodeTypeLabel = (type: string) => {
-  const map: Record<string, string> = { 
-    userTask: t('form.nodeTypeUserTask'), 
-    serviceTask: t('form.nodeTypeServiceTask'),
-    startEvent: t('form.nodeTypeStartEvent'),
-    endEvent: t('form.nodeTypeEndEvent')
-  }
-  return map[type] || type
-}
-
-const tableTypeLabel = (type: string) => {
-  const map: Record<string, string> = { MAIN: t('table.mainTable'), SUB: t('table.subTable'), ACTION: t('table.actionTable'), RELATION: t('table.relationTable') }
-  return map[type] || type
-}
-
-// Binding type label
-const bindingTypeLabel = (type: BindingType): string => {
-  const map: Record<BindingType, string> = { PRIMARY: t('form.bindingTypePrimary'), SUB: t('form.bindingTypeSub'), RELATED: t('form.bindingTypeRelated') }
-  return map[type] || type
-}
-
-// Binding type tag color
-const bindingTypeTag = (type: BindingType): 'primary' | 'success' | 'warning' | 'info' => {
-  const map: Record<BindingType, 'primary' | 'success' | 'warning' | 'info'> = { PRIMARY: 'primary', SUB: 'success', RELATED: 'warning' }
-  return map[type] || 'info'
-}
+// Label / type mapping composable
+const { formTypeLabel, nodeTypeLabel, tableTypeLabel, bindingTypeLabel, bindingTypeTag, getFormComponentType } = useFormLabels(t)
 
 // Get binding info for the currently selected import table
 function getImportTableBinding(): TableBinding | undefined {
@@ -1155,16 +958,7 @@ function getImportTableBinding(): TableBinding | undefined {
 /**
  * Generate mock value based on data type for relation table preview
  */
-function getMockValueForType(dataType: string): string {
-  const type = (dataType || '').toUpperCase()
-  if (type.includes('INT') || type === 'BIGINT') return '1'
-  if (type.includes('DECIMAL') || type.includes('NUMERIC') || type.includes('FLOAT') || type.includes('DOUBLE')) return '100.00'
-  if (type === 'BOOLEAN' || type === 'BOOL') return 'true'
-  if (type === 'DATE') return '2026-01-01'
-  if (type.includes('TIMESTAMP') || type === 'DATETIME') return '2026-01-01 00:00:00'
-  if (type.includes('TIME')) return '00:00:00'
-  return 'Sample'
-}
+// Pure preview utilities moved to @/utils/formPreview.ts
 
 /**
  * Derive columns from sub-form binding rule (supports all 15 field types)
@@ -1239,15 +1033,6 @@ function deriveColumnsFromBinding(binding: any, subForms?: Record<string, any>) 
     })
   }
   return []
-}
-
-function parseLookupConfig(raw?: string): any {
-  if (!raw) return {}
-  try {
-    return JSON.parse(raw)
-  } catch {
-    return {}
-  }
 }
 
 function getRelationFieldDefs(bindingId?: number, config: any = {}) {
@@ -1391,32 +1176,7 @@ function toSubTablePreviewColumns(bindingId: number, rule: any[], config: any) {
 /**
  * Derive preview columns for sub-table based on table type
  */
-function derivePreviewColumns(tableType: string): Array<{ field: string; label: string; type?: string }> {
-  const defaults: Record<string, Array<{ field: string; label: string; type?: string }>> = {
-    'SUB': [
-      { field: 'item_name', label: t('preview.itemName') },
-      { field: 'quantity', label: t('preview.quantity'), type: 'number' },
-      { field: 'unit_price', label: t('preview.unitPrice'), type: 'number' },
-      { field: 'amount', label: t('preview.amount'), type: 'number' },
-      { field: 'remark', label: t('preview.remark') }
-    ],
-    'ACTION': [
-      { field: 'action_type', label: t('preview.actionType') },
-      { field: 'action_result', label: t('preview.actionResult') },
-      { field: 'comment', label: t('preview.comment') },
-      { field: 'operator', label: t('preview.operator') },
-      { field: 'action_time', label: t('preview.actionTime'), type: 'date' }
-    ],
-    'RELATION': [
-      { field: 'file_name', label: t('preview.fileName') },
-      { field: 'file_type', label: t('preview.fileType') },
-      { field: 'file_url', label: t('preview.fileUrl') },
-      { field: 'upload_time', label: t('preview.uploadTime'), type: 'date' },
-      { field: 'remark', label: t('preview.remark') }
-    ]
-  }
-  return defaults[tableType] || [{ field: 'value', label: t('preview.value') }]
-}
+// Preview utilities moved to @/utils/formPreview.ts
 
 /**
  * Get table name by table ID
@@ -1480,24 +1240,6 @@ async function handleBindingUpdate() {
       console.error('[FormDesigner] Failed to update bindings:', e)
     }
   }
-}
-
-/**
- * Get form component type by data type
- */
-function getFormComponentType(dataType: string): string {
-  const typeMap: Record<string, string> = {
-    'VARCHAR': t('form.inputBox'),
-    'TEXT': t('form.textArea'),
-    'INTEGER': t('form.numberInput'),
-    'BIGINT': t('form.numberInput'),
-    'DECIMAL': t('form.numberInput'),
-    'BOOLEAN': t('form.switch'),
-    'DATE': t('form.datePicker'),
-    'TIMESTAMP': t('form.dateTimePicker'),
-    'FILE': t('form.fileUpload')
-  }
-  return typeMap[dataType] || t('form.inputBox')
 }
 
 /**
@@ -1847,7 +1589,7 @@ async function handleConfirmImportFields() {
 
         if (newRules.length > 0) {
           const merged = [...currentRules, ...newRules]
-          injectUploadButtonLabels(merged)
+          injectUploadButtonLabels(merged, t('form.clickToUpload'))
           targetRef.setRule(merged)
         }
       }
@@ -1881,7 +1623,7 @@ async function handleConfirmImportFields() {
 
       if (newRules.length > 0) {
         const merged = [...currentRules, ...newRules]
-        injectUploadButtonLabels(merged)
+          injectUploadButtonLabels(merged, t('form.clickToUpload'))
         targetRef.setRule(merged)
         ElMessage.success(t('form.importedSuccess', { count: newRules.length }))
       }
@@ -2132,11 +1874,13 @@ function handleSelectForm(row: FormDefinition) {
         const config = row.configJson || {}
         try {
           const rules = cloneFormRules(config.rule && config.rule.length ? config.rule : [])
-          injectUploadButtonLabels(rules)
+          injectUploadButtonLabels(rules, t('form.clickToUpload'))
           designerRef.value.setRule(rules)
           designerRef.value.setOption(
             mergeLoadedFormOptions(
-              config.options && Object.keys(config.options).length ? config.options : undefined
+              config.options && Object.keys(config.options).length ? config.options : undefined,
+              defaultFormOption.value,
+              t('form.clickToUpload')
             )
           )
         } catch (e) {
@@ -2161,11 +1905,13 @@ function loadSubDesigners(row: FormDefinition) {
           const subConfig = subForms[binding.bindingId] || {}
           try {
             const rules = cloneFormRules(subConfig.rule && subConfig.rule.length ? subConfig.rule : [])
-            injectUploadButtonLabels(rules)
+          injectUploadButtonLabels(rules, t('form.clickToUpload'))
             subRef.setRule(rules)
             subRef.setOption(
               mergeLoadedFormOptions(
-                subConfig.options && Object.keys(subConfig.options).length ? subConfig.options : undefined
+                subConfig.options && Object.keys(subConfig.options).length ? subConfig.options : undefined,
+                defaultFormOption.value,
+                t('form.clickToUpload')
               )
             )
           } catch {}
@@ -2215,11 +1961,13 @@ function handleTabChange(tabName: TabPaneName) {
         const subConfig = cached || subForms[bindingId] || {}
         try {
           const rules = cloneFormRules(subConfig.rule && subConfig.rule.length ? subConfig.rule : [])
-          injectUploadButtonLabels(rules)
+          injectUploadButtonLabels(rules, t('form.clickToUpload'))
           subRef.setRule(rules)
           subRef.setOption(
             mergeLoadedFormOptions(
-              subConfig.options && Object.keys(subConfig.options).length ? subConfig.options : undefined
+              subConfig.options && Object.keys(subConfig.options).length ? subConfig.options : undefined,
+              defaultFormOption.value,
+              t('form.clickToUpload')
             )
           )
         } catch {}
@@ -2301,35 +2049,7 @@ const checkDuplicateBinding = (selectedId: number, currentRuleIndex: number): bo
   }
 }
 
-function getRuleChildren(item: any): any[] {
-  const childSources = [
-    item?.children,
-    item?.props?.children,
-    item?.props?.list,
-    item?.props?.items,
-    item?.props?.fields,
-  ]
-  return childSources.find(children => Array.isArray(children)) || []
-}
-
-function collectSubTableRules(items: any[]): any[] {
-  const result: any[] = []
-  for (const item of items || []) {
-    if (!item) continue
-    if (item.type === 'subTable') result.push(item)
-    const children = getRuleChildren(item)
-    if (children.length) result.push(...collectSubTableRules(children))
-  }
-  return result
-}
-
-function isCardRule(item: any): boolean {
-  return ['el-card', 'elCard', 'card'].includes(item?.type)
-}
-
-function getLayoutLabel(item: any): string {
-  return String(item?.title || item?.props?.header || item?.props?.title || '')
-}
+// Rule tree helpers moved to @/utils/formDesigner.ts
 
 /**
  * Handle sub-table binding selection change — check for duplicates and warn
@@ -2425,53 +2145,7 @@ function openRenameDialog(form: FormDefinition) {
   showRenameDialog.value = true
 }
 
-async function handleConfirmRename() {
-  const target = renameTargetForm.value
-  const nextName = renameFormName.value.trim()
-  if (!target) return
-  if (!nextName) {
-    ElMessage.warning(t('form.formNameRequired'))
-    return
-  }
-  if (nextName === target.formName) {
-    showRenameDialog.value = false
-    return
-  }
-  renaming.value = true
-  try {
-    await store.updateForm(props.functionUnitId, target.id, {
-      formName: nextName,
-      formType: target.formType,
-      description: target.description,
-      configJson: target.configJson || {}
-    })
-    await loadForms()
-    if (selectedForm.value?.id === target.id) {
-      selectedForm.value = { ...selectedForm.value, formName: nextName }
-    }
-    ElMessage.success(t('form.renameFormSuccess'))
-    showRenameDialog.value = false
-  } catch (e: any) {
-    ElMessage.error(e.response?.data?.message || t('form.renameFormFailed'))
-  } finally {
-    renaming.value = false
-  }
-}
-
-/** Copy a TASK form */
-async function handleCopyForm(form: FormDefinition) {
-  try {
-    const res = await functionUnitApi.copyTaskForm(props.functionUnitId, form.id)
-    ElMessage.success(t('form.copyFormSuccess'))
-    await loadForms()
-    // Open the new form for editing
-    if (res?.data) {
-      selectedForm.value = res.data
-    }
-  } catch (e: any) {
-    ElMessage.error(e.response?.data?.message || t('form.copyFormFailed'))
-  }
-}
+// Form CRUD actions moved to useFormActions composable
 
 /** Get current form fields from the designer for field permission config */
 const currentFormFields = computed(() => {
@@ -2668,40 +2342,6 @@ async function handleSaveForm(isManual = false) {
     if (!isManual) {
       autoSaving.value = false
     }
-  }
-}
-
-function scheduleAutoSave() {
-  if (autoSaveTimer) {
-    clearTimeout(autoSaveTimer)
-  }
-  autoSaveTimer = setTimeout(() => {
-    console.log('[FormDesigner] Auto-save triggered')
-    handleSaveForm(false)
-  }, 2000)
-}
-
-function formatAutoSaveTime(time: Date): string {
-  const now = new Date()
-  const diff = Math.floor((now.getTime() - time.getTime()) / 1000)
-  if (diff < 60) {
-    return t('process.justNow')
-  } else if (diff < 3600) {
-    const minutes = Math.floor(diff / 60)
-    return t('process.minutesAgo', { count: minutes })
-  } else {
-    return time.toLocaleTimeString()
-  }
-}
-
-async function handleDeleteForm(row: FormDefinition) {
-  await ElMessageBox.confirm(t('form.deleteConfirm'), t('form.deleteTitle'), { type: 'warning' })
-  try {
-    await store.deleteForm(props.functionUnitId, row.id)
-    ElMessage.success(t('form.deleteSuccess'))
-    loadForms()
-  } catch (e: any) {
-    ElMessage.error(e.response?.data?.message || t('form.deleteFailed'))
   }
 }
 
@@ -3266,72 +2906,12 @@ async function updateBpmnFormBindings(
   console.log('[FormDesigner] Process saved successfully')
 }
 
-// Track last known designer state for change detection
-const lastDesignerState = ref<string>('')
-const pollTimerRef = ref<ReturnType<typeof setInterval> | null>(null)
-
-function cleanupAutoSavePolling() {
-  if (pollTimerRef.value) {
-    clearInterval(pollTimerRef.value)
-    pollTimerRef.value = null
-  }
-  lastDesignerState.value = ''
-}
-
-function setupAutoSavePolling() {
-  cleanupAutoSavePolling()
-
-  if (!selectedForm.value || !designerRef.value) {
-    console.log('[FormDesigner] Auto-save polling skipped: no form or designer ref')
-    return
-  }
-
-  // Initialize the state tracker with current rule
-  try {
-    lastDesignerState.value = JSON.stringify(designerRef.value.getRule() || [])
-    console.log('[FormDesigner] Auto-save polling started, initial state length:', lastDesignerState.value.length)
-  } catch {
-    lastDesignerState.value = ''
-  }
-
-  // Poll for changes every 1 second (faster detection than 2s)
-  pollTimerRef.value = setInterval(() => {
-    if (!selectedForm.value || autoSaving.value) return
-    try {
-      const currentRule = JSON.stringify(designerRef.value?.getRule() || [])
-      if (currentRule !== lastDesignerState.value) {
-        lastDesignerState.value = currentRule
-        console.log('[FormDesigner] Change detected, scheduling auto-save')
-        scheduleAutoSave()
-      }
-    } catch {}
-  }, 1000)
-}
-
 onMounted(() => {
   loadForms()
   loadDataTableColumns()
   loadCreateDialogProcessNodes()
 })
 
-onUnmounted(() => {
-  if (autoSaveTimer) {
-    clearTimeout(autoSaveTimer)
-    autoSaveTimer = null
-  }
-  cleanupAutoSavePolling()
-})
-
-// Watch relationViewState for changes (auto-save for relation table views)
-watch(
-  relationViewState,
-  () => {
-    if (selectedForm.value) {
-      scheduleAutoSave()
-    }
-  },
-  { deep: true }
-)
 </script>
 
 
@@ -3340,38 +2920,15 @@ watch(
   height: 100%;
 }
 
-.form-list-view {
-  padding: 0;
-}
-
-.designer-toolbar {
-  margin-bottom: 16px;
-}
-
-.text-muted {
-  color: #909399;
-  font-size: 12px;
-}
-
-.bound-nodes {
+.form-editor-view {
+  height: 100%;
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.node-tag {
-  margin: 0;
+  flex-direction: column;
 }
 
 .bound-nodes-header {
   display: flex;
   gap: 4px;
-}
-
-.form-editor-view {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
 }
 
 .editor-header {
@@ -3542,64 +3099,7 @@ watch(
   }
 }
 
-.bind-dialog-content {
-  .node-list {
-    max-height: 350px;
-    overflow-y: auto;
-  }
-  
-  .node-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px;
-    border: 1px solid #e6e6e6;
-    border-radius: 4px;
-    margin-bottom: 8px;
-    cursor: pointer;
-    transition: all 0.2s;
-    
-    &:hover {
-      border-color: #DB0011;
-      background-color: rgba(219, 0, 17, 0.02);
-    }
-    
-    &.selected {
-      border-color: #DB0011;
-      background-color: rgba(219, 0, 17, 0.08);
-    }
-    
-    .node-icon {
-      width: 32px;
-      height: 32px;
-      border-radius: 4px;
-      
-      &.userTask { background-color: #409EFF; }
-      &.serviceTask { background-color: #67C23A; }
-      &.startEvent { background-color: #00A651; border-radius: 50%; }
-      &.endEvent { background-color: #DB0011; border-radius: 50%; }
-    }
-    
-    .node-info {
-      flex: 1;
-      
-      .node-name {
-        font-weight: 500;
-        margin-bottom: 2px;
-      }
-      
-      .node-type {
-        font-size: 12px;
-        color: #909399;
-      }
-    }
-    
-    .check-icon {
-      color: #DB0011;
-      font-size: 20px;
-    }
-  }
-}
+
 
 .import-fields-dialog {
   .field-selection {
@@ -3642,18 +3142,7 @@ watch(
   margin-left: 8px;
 }
 
-.action-buttons {
-  display: inline-flex;
-  flex-wrap: nowrap;
-  align-items: center;
-  gap: 2px;
-  white-space: nowrap;
-}
 
-.action-more-icon {
-  margin-left: 2px;
-  vertical-align: middle;
-}
 
 .bind-table-dialog {
   .table-option {

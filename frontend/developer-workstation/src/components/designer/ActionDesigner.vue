@@ -405,90 +405,24 @@
     </div>
 
     <!-- Create Action Dialog -->
-    <el-dialog v-model="showCreateDialog" :title="t('action.createActionTitle')" width="500px">
-      <el-form :model="createForm" label-width="120px" label-position="left">
-        <el-form-item :label="t('action.actionName')" required>
-          <el-input v-model="createForm.actionName" />
-        </el-form-item>
-        <el-form-item :label="t('action.actionType')">
-          <el-select v-model="createForm.actionType">
-            <el-option-group :label="t('action.approvalOperations')">
-              <el-option :label="t('action.approve')" value="APPROVE" />
-              <el-option :label="t('action.reject')" value="REJECT" />
-              <el-option :label="t('action.transfer')" value="TRANSFER" />
-              <el-option :label="t('action.delegate')" value="DELEGATE" />
-              <el-option :label="t('action.rollback')" value="ROLLBACK" />
-              <el-option :label="t('action.withdraw')" value="WITHDRAW" />
-            </el-option-group>
-            <el-option-group :label="t('action.processOperations')">
-              <el-option :label="t('action.saveDraft')" value="SAVE" />
-              <el-option :label="t('action.processSubmit')" value="PROCESS_SUBMIT" />
-              <el-option :label="t('action.processReject')" value="PROCESS_REJECT" />
-              <el-option :label="t('action.composite')" value="COMPOSITE" />
-            </el-option-group>
-            <el-option-group :label="t('action.customOperations')">
-              <el-option :label="t('action.apiCall')" value="API_CALL" />
-              <el-option :label="t('action.formPopup')" value="FORM_POPUP" />
-              <el-option :label="t('action.customScript')" value="CUSTOM_SCRIPT" />
-              <el-option :label="t('action.n8nAction')" value="N8N_ACTION" />
-            </el-option-group>
-          </el-select>
-        </el-form-item>
-        <el-form-item :label="t('action.description')">
-          <el-input v-model="createForm.description" type="textarea" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showCreateDialog = false">{{ t('action.cancel') }}</el-button>
-        <el-button type="primary" @click="handleCreateAction">{{ t('action.confirm') }}</el-button>
-      </template>
-    </el-dialog>
+    <ActionCreateDialog
+      v-model="showCreateDialog"
+      :create-form="createForm"
+      @confirm="handleCreateAction"
+    />
 
     <!-- Test Action Dialog -->
-    <el-dialog v-model="showTestDialog" :title="t('action.testActionTitle')" width="600px">
-      <div v-if="testActionType === 'N8N_ACTION' && testInputMapping.length > 0" style="margin-bottom: 12px;">
-        <el-switch v-model="testRawJsonMode" :active-text="t('action.rawJson')" :inactive-text="t('action.structuredInput')" />
-      </div>
-      <el-form v-if="testActionType === 'N8N_ACTION' && testInputMapping.length > 0 && !testRawJsonMode" label-width="120px" label-position="left">
-        <el-form-item
-          v-for="param in testInputMapping"
-          :key="param.paramName"
-          :label="param.paramLabel || param.paramName"
-          :required="param.required"
-        >
-          <el-input
-            v-if="param.paramType === 'string' || !param.paramType"
-            v-model="testStructuredData[param.paramName]"
-            :placeholder="param.paramName"
-          />
-          <el-input-number
-            v-else-if="param.paramType === 'number'"
-            v-model="testStructuredData[param.paramName]"
-            controls-position="right"
-          />
-          <el-switch
-            v-else-if="param.paramType === 'boolean'"
-            v-model="testStructuredData[param.paramName]"
-          />
-          <el-input
-            v-else
-            v-model="testStructuredData[param.paramName]"
-            :placeholder="param.paramName"
-          />
-        </el-form-item>
-      </el-form>
-      <el-form v-else label-width="120px" label-position="left">
-        <el-form-item :label="t('action.testData')">
-          <el-input v-model="testData" type="textarea" :rows="5" :placeholder="t('action.testDataPlaceholder')" />
-        </el-form-item>
-      </el-form>
-      <el-divider>{{ t('action.executionResult') }}</el-divider>
-      <pre class="test-result">{{ testResult }}</pre>
-      <template #footer>
-        <el-button @click="showTestDialog = false">{{ t('action.close') }}</el-button>
-        <el-button type="primary" @click="executeTest" :loading="testing">{{ t('action.executeTest') }}</el-button>
-      </template>
-    </el-dialog>
+    <ActionTestDialog
+      v-model="showTestDialog"
+      :test-action-type="testActionType"
+      :test-input-mapping="testInputMapping"
+      v-model:test-raw-json-mode="testRawJsonMode"
+      :test-structured-data="testStructuredData"
+      v-model:test-data="testData"
+      :test-result="testResult"
+      :testing="testing"
+      @execute-test="executeTest"
+    />
   </div>
 </template>
 
@@ -497,6 +431,8 @@ import { ref, reactive, onMounted, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ArrowLeft, Refresh } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import ActionCreateDialog from './action-designer/ActionCreateDialog.vue'
+import ActionTestDialog from './action-designer/ActionTestDialog.vue'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
 import { functionUnitApi, type ActionDefinition } from '@/api/functionUnit'
 import { n8nApi, type N8nConfig, type N8nWorkflow } from '@/api/n8n'
@@ -778,7 +714,7 @@ function parseActionIds(value: string): Array<string | number> {
   
   try {
     // 尝试作为JSON解析（数字ID格式）
-    const result = JSON.parse(value) as number[]
+    const result = JSON.parse(value) as Array<string | number>
     console.log('[ActionDesigner] Parsed as JSON:', value, '->', result)
     return result
   } catch (e) {
@@ -792,6 +728,10 @@ function parseActionIds(value: string): Array<string | number> {
     console.log('[ActionDesigner] Parsed as String IDs:', value, '->', stringIds)
     return stringIds
   }
+}
+
+function actionIdsListIncludes(list: Array<string | number>, actionId: string | number): boolean {
+  return list.some(id => String(id) === String(actionId))
 }
 
 /**
@@ -960,7 +900,7 @@ function removeActionFromAllNodes(xmlDoc: Document, actionId: string | number) {
 /**
  * 添加动作到流程全局
  */
-function addActionToProcess(xmlDoc: Document, actionId: number, actionName: string) {
+function addActionToProcess(xmlDoc: Document, actionId: string | number, actionName: string) {
   const process = xmlDoc.querySelector('process')
   if (!process) return
   
@@ -986,8 +926,8 @@ function addActionToProcess(xmlDoc: Document, actionId: number, actionName: stri
   
   if (actionIdsProp) {
     const value = actionIdsProp.getAttribute('value')
-    const actionIds = value ? JSON.parse(value) as number[] : []
-    if (!actionIds.includes(actionId)) {
+    const actionIds = value ? (JSON.parse(value) as Array<string | number>) : []
+    if (!actionIdsListIncludes(actionIds, actionId)) {
       actionIds.push(actionId)
       actionIdsProp.setAttribute('value', JSON.stringify(actionIds))
     }
@@ -1016,7 +956,7 @@ function addActionToProcess(xmlDoc: Document, actionId: number, actionName: stri
 /**
  * 添加动作到指定节点
  */
-function addActionToNode(xmlDoc: Document, nodeId: string, actionId: number, actionName: string) {
+function addActionToNode(xmlDoc: Document, nodeId: string, actionId: string | number, actionName: string) {
   const task = xmlDoc.querySelector(`userTask[id="${nodeId}"]`)
   if (!task) return
   
@@ -1042,8 +982,8 @@ function addActionToNode(xmlDoc: Document, nodeId: string, actionId: number, act
   
   if (actionIdsProp) {
     const value = actionIdsProp.getAttribute('value')
-    const actionIds = value ? JSON.parse(value) as number[] : []
-    if (!actionIds.includes(actionId)) {
+    const actionIds = value ? (JSON.parse(value) as Array<string | number>) : []
+    if (!actionIdsListIncludes(actionIds, actionId)) {
       actionIds.push(actionId)
       actionIdsProp.setAttribute('value', JSON.stringify(actionIds))
     }
@@ -1261,17 +1201,6 @@ onMounted(loadActions)
   flex: 1;
   font-size: 18px;
   font-weight: bold;
-}
-
-.test-result {
-  background-color: #f5f7fa;
-  padding: 12px;
-  border-radius: 4px;
-  max-height: 200px;
-  overflow: auto;
-  font-family: monospace;
-  font-size: 12px;
-  white-space: pre-wrap;
 }
 
 .bound-nodes {

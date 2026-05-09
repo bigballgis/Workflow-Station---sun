@@ -58,19 +58,18 @@
     </el-drawer>
 
     <!-- Import XML Dialog -->
-    <el-dialog v-model="showImportDialog" :title="t('process.importBpmnXml')" width="600px">
-      <el-input v-model="importXml" type="textarea" :rows="15" :placeholder="t('process.pasteBpmnXml')" />
-      <template #footer>
-        <el-button @click="showImportDialog = false">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary" @click="handleImportXML">{{ t('process.import') }}</el-button>
-      </template>
-    </el-dialog>
+    <ProcessImportDialog
+      v-model="showImportDialog"
+      v-model:import-xml="importXml"
+      @import="handleImportXML"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick, shallowRef } from 'vue'
 import { useI18n } from 'vue-i18n'
+import ProcessImportDialog from './process-designer/ProcessImportDialog.vue'
 import { ZoomIn, ZoomOut, Monitor, RefreshLeft, RefreshRight, Loading, CircleCheck } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useFunctionUnitStore } from '@/stores/functionUnit'

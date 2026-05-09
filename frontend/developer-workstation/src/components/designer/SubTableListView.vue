@@ -146,12 +146,10 @@
     </div>
 
     <!-- Preview dialog -->
-    <el-dialog v-model="showPreview" :title="t('common.preview')" width="800px" destroy-on-close>
-      <el-table :data="previewFieldRows" border style="width: 100%;">
-        <el-table-column prop="label" :label="t('subTableView.displayLabel')" min-width="200" />
-        <el-table-column prop="value" :label="t('subTableView.previewValue')" min-width="200" />
-      </el-table>
-    </el-dialog>
+    <SubTablePreviewDialog
+      v-model="showPreview"
+      :preview-field-rows="previewFieldRows"
+    />
 
     <el-dialog
       v-model="showLinkFormDialog"
@@ -179,47 +177,14 @@
       </template>
     </el-dialog>
 
-    <el-dialog
-      v-model="showActionColumnConfig"
-      :title="editingActionColumnType === 'lookup' ? 'Lookup' : t('linkForm.componentName')"
-      width="420px"
-    >
-      <el-form v-if="editingActionColumnType === 'linkForm'" :model="linkColumnConfig" label-width="120px" label-position="left">
-        <el-form-item :label="t('linkForm.boundSubTable')">
-          <el-select
-            v-model="linkColumnConfig.boundSubTableBindingId"
-            :placeholder="t('linkForm.selectSubTable')"
-            filterable
-            style="width: 100%"
-          >
-            <el-option
-              v-for="subTable in subTableBindingOptions"
-              :key="subTable.bindingId"
-              :label="subTable.tableName"
-              :value="subTable.bindingId"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item :label="t('linkForm.columnLabel')">
-          <el-input v-model="linkColumnConfig.columnLabel" :placeholder="t('linkForm.columnLabelPlaceholder')" />
-        </el-form-item>
-        <el-form-item :label="t('linkForm.linkText')">
-          <el-input v-model="linkColumnConfig.linkText" :placeholder="t('linkForm.linkTextPlaceholder')" />
-        </el-form-item>
-      </el-form>
-      <el-form v-else :model="lookupColumnConfig" label-width="120px" label-position="left">
-        <el-form-item :label="t('linkForm.columnLabel')">
-          <el-input v-model="lookupColumnConfig.columnLabel" :placeholder="t('linkForm.columnLabelPlaceholder')" />
-        </el-form-item>
-        <el-form-item label="Lookup Config">
-          <LookupBindingSelect v-model="lookupColumnConfig.lookupConfig" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showActionColumnConfig = false">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary" @click="saveActionColumnConfig">{{ t('common.save') }}</el-button>
-      </template>
-    </el-dialog>
+    <SubTableColumnConfigDialog
+      :show-action-column-config="showActionColumnConfig"
+      :editing-action-column-type="editingActionColumnType"
+      :link-column-config="linkColumnConfig"
+      :lookup-column-config="lookupColumnConfig"
+      :sub-table-binding-options="subTableBindingOptions"
+      @save="saveActionColumnConfig"
+    />
   </div>
 </template>
 
@@ -230,7 +195,8 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { subTableViewApi, type SubTableFieldDTO } from '@/api/subTableView'
 import { linkFormComponentApi } from '@/api/linkFormComponent'
-import LookupBindingSelect from './LookupBindingSelect.vue'
+import SubTablePreviewDialog from './sub-table-list/SubTablePreviewDialog.vue'
+import SubTableColumnConfigDialog from './sub-table-list/SubTableColumnConfigDialog.vue'
 import LookupPreview from './LookupPreview.vue'
 
 interface LinkFormComponentInfo {

@@ -128,12 +128,12 @@ export const useFunctionUnitStore = defineStore('functionUnit', () => {
     return res.data
   }
 
-  async function updateAction(functionUnitId: number, actionId: number, data: Partial<ActionDefinition>) {
+  async function updateAction(functionUnitId: number, actionId: string | number, data: Partial<ActionDefinition>) {
     const res = await functionUnitApi.updateAction(functionUnitId, actionId, data)
     return res.data
   }
 
-  async function deleteAction(functionUnitId: number, actionId: number) {
+  async function deleteAction(functionUnitId: number, actionId: string | number) {
     await functionUnitApi.deleteAction(functionUnitId, actionId)
   }
 

@@ -1,0 +1,81 @@
+<template>
+  <el-dialog :model-value="modelValue" @update:model-value="$emit('update:modelValue', $event)" :title="$t('action.testActionTitle')" width="600px" destroy-on-close>
+    <div v-if="testActionType === 'N8N_ACTION' && testInputMapping.length > 0" style="margin-bottom: 12px;">
+      <el-switch :model-value="testRawJsonMode" @update:model-value="$emit('update:testRawJsonMode', $event)" :active-text="$t('action.rawJson')" :inactive-text="$t('action.structuredInput')" />
+    </div>
+    <el-form v-if="testActionType === 'N8N_ACTION' && testInputMapping.length > 0 && !testRawJsonMode" label-width="120px" label-position="left">
+      <el-form-item
+        v-for="param in testInputMapping"
+        :key="param.paramName"
+        :label="param.paramLabel || param.paramName"
+        :required="param.required"
+      >
+        <el-input
+          v-if="param.paramType === 'string' || !param.paramType"
+          v-model="testStructuredData[param.paramName]"
+          :placeholder="param.paramName"
+        />
+        <el-input-number
+          v-else-if="param.paramType === 'number'"
+          v-model="testStructuredData[param.paramName]"
+          controls-position="right"
+        />
+        <el-switch
+          v-else-if="param.paramType === 'boolean'"
+          v-model="testStructuredData[param.paramName]"
+        />
+        <el-input
+          v-else
+          v-model="testStructuredData[param.paramName]"
+          :placeholder="param.paramName"
+        />
+      </el-form-item>
+    </el-form>
+    <el-form v-else label-width="120px" label-position="left">
+      <el-form-item :label="$t('action.testData')">
+        <el-input :model-value="testData" @update:model-value="$emit('update:testData', $event)" type="textarea" :rows="5" :placeholder="$t('action.testDataPlaceholder')" />
+      </el-form-item>
+    </el-form>
+    <el-divider>{{ $t('action.executionResult') }}</el-divider>
+    <pre class="test-result">{{ testResult }}</pre>
+    <template #footer>
+      <el-button @click="$emit('update:modelValue', false)">{{ $t('action.close') }}</el-button>
+      <el-button type="primary" @click="$emit('executeTest')" :loading="testing">{{ $t('action.executeTest') }}</el-button>
+    </template>
+  </el-dialog>
+</template>
+
+<script setup lang="ts">
+defineProps<{
+  modelValue: boolean
+  testActionType: string
+  testInputMapping: Array<{ paramName: string; paramLabel: string; paramType: string; required: boolean }>
+  testRawJsonMode: boolean
+  testStructuredData: Record<string, any>
+  testData: string
+  testResult: string
+  testing: boolean
+}>()
+
+defineEmits<{
+  'update:modelValue': [value: boolean]
+  'update:testRawJsonMode': [value: boolean]
+  'update:testData': [value: string]
+  executeTest: []
+}>()
+</script>
+
+<style lang="scss" scoped>
+.test-result {
+  background: #f5f7fa;
+  border: 1px solid #e6e6e6;
+  border-radius: 4px;
+  padding: 12px;
+  min-height: 60px;
+  max-height: 200px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  font-size: 13px;
+  font-family: monospace;
+}
+</style>
