@@ -126,48 +126,6 @@
         </el-collapse>
       </div>
 
-      <!-- Section 3: Previous node forms (read-only, displayed in order) -->
-      <template v-for="prevForm in previousForms" :key="prevForm.formId">
-        <div v-if="!selectedNodeId" class="section form-section">
-          <div class="section-header">
-            <el-icon><Document /></el-icon>
-            <span>{{ prevForm.formName }}</span>
-            <el-tag type="info" size="small">{{ t('task.readonly') }}</el-tag>
-          </div>
-          <div class="section-content">
-            <div v-if="prevForm.fields.length > 0 || prevForm.tabs.length > 0" class="form-container">
-              <FormRenderer
-                :fields="prevForm.fields"
-                :tabs="prevForm.tabs"
-                v-model="formData"
-                :label-width="prevForm.labelWidth"
-                :readonly="true"
-                :subTableBindings="prevForm.subTableBindings"
-                :linked-sub-table-bindings="linkableSubTableBindingsForPrevious(prevForm)"
-                :suppress-link-form-initial-data="false"
-              />
-            </div>
-            <template v-if="previousBottomSubTableBindings(prevForm).length > 0">
-              <div v-for="binding in previousBottomSubTableBindings(prevForm)" :key="binding.bindingId" class="sub-table-section">
-                <SubTableField
-                  :title="binding.tableName"
-                  :columns="binding.columns"
-                  v-model="binding.data"
-                  :editable="false"
-                  :assignee-field="resolveAssigneeFieldForBinding(binding.columns, binding.tableName)"
-                  :show-fill-button="isMiSubTaskMode && isParticipantsBinding(binding)"
-                  :fill-button-label="t('task.addParticipantInfoForm')"
-                  :linked-sub-table-bindings="linkableSubTableBindingsForPrevious(prevForm)"
-                  :suppress-link-form-initial-data="false"
-                  @fillForm="(row: any) => openMiFillDialog(row)"
-                  @update:linked-sub-table-data="(bindingId: number, rows: any[]) => syncPreviousLinkedSubTableRows(prevForm, bindingId, rows)"
-                />
-              </div>
-            </template>
-          </div>
-        </div>
-      </template>
-
       <!-- Section 3: Form data (hide normal task form card when previewing a selected node) -->
       <div
         v-if="!selectedNodeId && (!isMiSubTaskMode || bottomSubTableBindings.length > 0 || formFields.length > 0 || formTabs.length > 0)"
@@ -463,38 +421,6 @@ const linkableSubTableBindings = computed(() => [
   ...previousForms.value.flatMap(form => form.subTableBindings)
 ])
 
-/** Resolve linkForm columns: `.find()` uses first match — prev-form UI must see that form's binding.data, not MI-isolated current binding with same id. */
-function linkableSubTableBindingsForPrevious(prevForm: PreviousFormEntry) {
-  const pid = prevForm.formId
-  const otherPrev = previousForms.value
-    .filter(p => p.formId !== pid)
-    .flatMap(p => p.subTableBindings)
-  return [
-    ...prevForm.subTableBindings,
-    ...subTableBindings.value,
-    ...otherPrev
-  ]
-}
-
-function collectPlacedBindingIds(fields: any[]): Set<number> {
-  const ids = new Set<number>()
-  const collect = (items: any[]) => items.forEach((f: any) => {
-    if (f.type === 'subTable' && f._bindingId != null) ids.add(f._bindingId)
-    if (Array.isArray(f.children)) collect(f.children)
-  })
-  collect(fields)
-  return ids
-}
-
-function previousBottomSubTableBindings(prevForm: PreviousFormEntry) {
-  const ids = collectPlacedBindingIds([
-    ...(prevForm.fields || []),
-    ...(prevForm.tabs || []).flatMap(tab => tab.fields || [])
-  ])
-  const linkBoundIds = collectLinkBoundBindingIds(prevForm.subTableBindings)
-  return prevForm.subTableBindings.filter(binding => !ids.has(binding.bindingId) && !linkBoundIds.has(binding.bindingId))
-}
-
 function normalizeSubTableName(name?: string): string {
   return String(name || '').trim().toLowerCase()
 }
@@ -598,12 +524,6 @@ function syncMainSubTableRows(bindingId: number, rows: any[]) {
   }
   formData.value = { ...formData.value, __subTables__: subTables }
   scheduleSubTableAutosave()
-}
-
-function syncPreviousLinkedSubTableRows(prevForm: PreviousFormEntry, bindingId: number, rows: any[]) {
-  const source = prevForm.subTableBindings.find(binding => binding.bindingId === bindingId)
-  if (!source) return
-  source.data = Array.isArray(rows) ? rows : []
 }
 
 function getSavedSubTableRows(savedSubTables: any, binding: { bindingId: number; tableName: string }): any[] | undefined {

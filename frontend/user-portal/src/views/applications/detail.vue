@@ -77,91 +77,6 @@
         </div>
       </div>
 
-      <!-- Section 3a: Previous node forms shown ABOVE the current form (non-initiator views).
-           Initiator's own My Request keeps current form first; sibling forms render in Section 3b. -->
-      <template v-for="prevForm in previousFormsAbove" :key="prevForm.formId">
-        <!-- MI subtask form: no card rendered, only sub-tables (participants etc.) -->
-        <template v-if="prevForm.isMiSubTask">
-          <div class="section form-section">
-            <div class="section-header">
-              <el-icon><Document /></el-icon>
-              <span>{{ prevForm.formName }}</span>
-              <el-tag v-if="prevForm.isActiveMiSubTaskStep" type="warning" size="small">{{ t('applicationDetail.currentStep') }}</el-tag>
-              <el-tag v-else type="info" size="small">{{ t('applicationDetail.completed') }}</el-tag>
-            </div>
-            <div class="section-content">
-              <div v-if="prevForm.fields.length > 0 || prevForm.tabs.length > 0" class="form-container">
-                <FormRenderer
-                  :fields="prevForm.fields"
-                  :tabs="prevForm.tabs"
-                  v-model="formData"
-                  :label-width="prevForm.labelWidth"
-                  :readonly="true"
-                  :subTableBindings="prevForm.subTableBindings"
-                  :linked-sub-table-bindings="linkableSubTableBindingsForPrevious(prevForm)"
-                  @update:subTableData="(id: number, rows: any[]) => { const b = prevForm.subTableBindings.find(x => x.bindingId === id); if (b) b.data = rows }"
-                />
-              </div>
-              <template v-if="unplacedSubTableBindings(prevForm).length > 0">
-                <div
-                  v-for="binding in unplacedSubTableBindings(prevForm)"
-                  :key="binding.bindingId"
-                  class="sub-table-section"
-                >
-                  <SubTableField
-                    :title="binding.tableName"
-                    :columns="binding.columns"
-                    v-model="binding.data"
-                    :editable="false"
-                    :assignee-field="hasAssignmentData(binding.data) ? 'assignee_user_id' : undefined"
-                    :show-task-status="false"
-                    :show-view-detail="hasSubTaskFormSchema && hasTaskStatusData(binding.data)"
-                    :linked-sub-table-bindings="linkableSubTableBindingsForPrevious(prevForm)"
-                    @viewDetail="(row: any) => openSubTaskDetailDialog(row)"
-                  />
-                </div>
-              </template>
-            </div>
-          </div>
-        </template>
-        <div v-else class="section form-section">
-          <div class="section-header">
-            <el-icon><Document /></el-icon>
-            <span>{{ prevForm.formName }}</span>
-            <el-tag type="info" size="small">{{ t('applicationDetail.completed') }}</el-tag>
-          </div>
-          <div class="section-content">
-            <div v-if="prevForm.fields.length > 0 || prevForm.tabs.length > 0" class="form-container">
-              <FormRenderer
-                :fields="prevForm.fields"
-                :tabs="prevForm.tabs"
-                v-model="formData"
-                :label-width="prevForm.labelWidth"
-                :readonly="true"
-                :subTableBindings="prevForm.subTableBindings"
-                :linked-sub-table-bindings="linkableSubTableBindingsForPrevious(prevForm)"
-                @update:subTableData="(id: number, rows: any[]) => { const b = prevForm.subTableBindings.find(x => x.bindingId === id); if (b) b.data = rows }"
-              />
-            </div>
-            <template v-if="unplacedSubTableBindings(prevForm).length > 0">
-              <div v-for="binding in unplacedSubTableBindings(prevForm)" :key="binding.bindingId" class="sub-table-section">
-                <SubTableField
-                  :title="binding.tableName"
-                  :columns="binding.columns"
-                  v-model="binding.data"
-                  :editable="false"
-                  :assignee-field="hasAssignmentData(binding.data) ? 'assignee_user_id' : undefined"
-                  :show-task-status="false"
-                  :show-view-detail="hasSubTaskFormSchema && hasTaskStatusData(binding.data)"
-                  :linked-sub-table-bindings="linkableSubTableBindingsForPrevious(prevForm)"
-                  @viewDetail="(row: any) => openSubTaskDetailDialog(row)"
-                />
-              </div>
-            </template>
-          </div>
-        </div>
-      </template>
-
       <!-- Form data (Completed Tasks renders the same form as To Do, but readonly) -->
       <div v-if="showCurrentFormSection" class="section form-section">
         <div class="section-header">
@@ -206,90 +121,6 @@
           </template>
         </div>
       </div>
-
-      <!-- Section 3b: Previous node forms shown BELOW the current form (initiator's own My Request).
-           Order follows BPMN BFS; only runtime-previous steps (+ MI forms with matching completed history). -->
-      <template v-for="prevForm in previousFormsBelow" :key="`below-${prevForm.formId}`">
-        <template v-if="prevForm.isMiSubTask">
-          <div class="section form-section">
-            <div class="section-header">
-              <el-icon><Document /></el-icon>
-              <span>{{ prevForm.formName }}</span>
-              <el-tag v-if="prevForm.isActiveMiSubTaskStep" type="warning" size="small">{{ t('applicationDetail.currentStep') }}</el-tag>
-              <el-tag v-else type="info" size="small">{{ t('applicationDetail.completed') }}</el-tag>
-            </div>
-            <div class="section-content">
-              <div v-if="prevForm.fields.length > 0 || prevForm.tabs.length > 0" class="form-container">
-                <FormRenderer
-                  :fields="prevForm.fields"
-                  :tabs="prevForm.tabs"
-                  v-model="formData"
-                  :label-width="prevForm.labelWidth"
-                  :readonly="true"
-                  :subTableBindings="prevForm.subTableBindings"
-                  :linked-sub-table-bindings="linkableSubTableBindingsForPrevious(prevForm)"
-                  @update:subTableData="(id: number, rows: any[]) => { const b = prevForm.subTableBindings.find(x => x.bindingId === id); if (b) b.data = rows }"
-                />
-              </div>
-              <template v-if="unplacedSubTableBindings(prevForm).length > 0">
-                <div
-                  v-for="binding in unplacedSubTableBindings(prevForm)"
-                  :key="binding.bindingId"
-                  class="sub-table-section"
-                >
-                  <SubTableField
-                    :title="binding.tableName"
-                    :columns="binding.columns"
-                    v-model="binding.data"
-                    :editable="false"
-                    :assignee-field="hasAssignmentData(binding.data) ? 'assignee_user_id' : undefined"
-                    :show-task-status="false"
-                    :show-view-detail="hasSubTaskFormSchema && hasTaskStatusData(binding.data)"
-                    :linked-sub-table-bindings="linkableSubTableBindingsForPrevious(prevForm)"
-                    @viewDetail="(row: any) => openSubTaskDetailDialog(row)"
-                  />
-                </div>
-              </template>
-            </div>
-          </div>
-        </template>
-        <div v-else class="section form-section">
-          <div class="section-header">
-            <el-icon><Document /></el-icon>
-            <span>{{ prevForm.formName }}</span>
-            <el-tag type="info" size="small">{{ t('applicationDetail.completed') }}</el-tag>
-          </div>
-          <div class="section-content">
-            <div v-if="prevForm.fields.length > 0 || prevForm.tabs.length > 0" class="form-container">
-              <FormRenderer
-                :fields="prevForm.fields"
-                :tabs="prevForm.tabs"
-                v-model="formData"
-                :label-width="prevForm.labelWidth"
-                :readonly="true"
-                :subTableBindings="prevForm.subTableBindings"
-                :linked-sub-table-bindings="linkableSubTableBindingsForPrevious(prevForm)"
-                @update:subTableData="(id: number, rows: any[]) => { const b = prevForm.subTableBindings.find(x => x.bindingId === id); if (b) b.data = rows }"
-              />
-            </div>
-            <template v-if="unplacedSubTableBindings(prevForm).length > 0">
-              <div v-for="binding in unplacedSubTableBindings(prevForm)" :key="binding.bindingId" class="sub-table-section">
-                <SubTableField
-                  :title="binding.tableName"
-                  :columns="binding.columns"
-                  v-model="binding.data"
-                  :editable="false"
-                  :assignee-field="hasAssignmentData(binding.data) ? 'assignee_user_id' : undefined"
-                  :show-task-status="false"
-                  :show-view-detail="hasSubTaskFormSchema && hasTaskStatusData(binding.data)"
-                  :linked-sub-table-bindings="linkableSubTableBindingsForPrevious(prevForm)"
-                  @viewDetail="(row: any) => openSubTaskDetailDialog(row)"
-                />
-              </div>
-            </template>
-          </div>
-        </div>
-      </template>
 
       <!-- Change history panel (title and collapse handled internally by ChangeHistoryPanel) -->
       <div class="section change-history-section">
@@ -514,21 +345,6 @@ interface PreviousFormEntry {
   }>
 }
 const previousForms = ref<PreviousFormEntry[]>([])
-// Initiator viewing own My Request: flip the section order so current form (form y) renders first,
-// followed by sibling forms (subform → subform_copy) in BPMN BFS order.
-const initiatorOwnView = ref(false)
-const previousFormsAbove = computed<PreviousFormEntry[]>(() => initiatorOwnView.value ? [] : previousForms.value)
-const previousFormsBelow = computed<PreviousFormEntry[]>(() => initiatorOwnView.value ? previousForms.value : [])
-
-function unplacedSubTableBindings(prevForm: PreviousFormEntry): PreviousFormEntry['subTableBindings'] {
-  const placedIds = collectPlacedBindingIds(prevForm.fields, prevForm.tabs)
-  return prevForm.subTableBindings.filter(b => {
-    if (placedIds.has(b.bindingId)) return false
-    const formOnly = String((b as { subMode?: string }).subMode || '').toUpperCase() === 'FORM_ONLY'
-    if (formOnly) return false
-    return true
-  })
-}
 
 /** Align with tasks/detail.vue: variables may key __subTables__ by table name or binding id. */
 function normalizeSubTableName(name?: string): string {
@@ -614,18 +430,6 @@ const linkableSubTableBindings = computed<any[]>(() => [
 ])
 
 /** Same as tasks/detail.vue: link-form `.find()` must resolve prev-form bindings before current (empty MI slice). */
-function linkableSubTableBindingsForPrevious(prevForm: PreviousFormEntry) {
-  const pid = prevForm.formId
-  const otherPrev = previousForms.value
-    .filter(p => p.formId !== pid)
-    .flatMap(p => p.subTableBindings as any[])
-  return [
-    ...(prevForm.subTableBindings as any[]),
-    ...(subTableBindings.value as any[]),
-    ...otherPrev
-  ]
-}
-
 // Sub-task form detail dialog
 const subTaskDetailVisible = ref(false)
 const subTaskDetailTitle = ref('')
@@ -926,7 +730,6 @@ const loadFunctionUnitContent = async (processKey: string) => {
         viewerId.trim() === initiatorId &&
         !snapshotTaskName &&
         !snapshotTime
-      initiatorOwnView.value = useInitiatorFormOnly
 
       if (useInitiatorFormOnly) {
         currentFormInfo = parseBpmnXmlAndGetFirstUserTaskFormInfo(xml)
