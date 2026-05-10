@@ -72,179 +72,23 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch } from 'vue'
+import { ref, watch, toRef } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
-import { userApi, type User } from '@/api/user'
+import type { FormInstance } from 'element-plus'
+import { useUserForm } from '@/composables/modules/useUserForm'
 
-const { t } = useI18n()
-
-const props = defineProps<{ modelValue: boolean; user: User | null }>()
+const props = defineProps<{ modelValue: boolean; user: any | null }>()
 const emit = defineEmits(['update:modelValue', 'success'])
-
+const { t } = useI18n()
 const formRef = ref<FormInstance>()
-const loading = ref(false)
-const userSearchLoading = ref(false)
-const userOptions = ref<{ id: string; fullName: string; username: string }[]>([])
-const isEdit = computed(() => !!props.user)
 
-const form = reactive({
-  username: '',
-  fullName: '',
-  email: '',
-  employeeId: '',
-  position: '',
-  entityManagerId: '',
-  functionManagerId: '',
-  initialPassword: ''
-})
+const { form, rules, loading, userSearchLoading, userOptions, isEdit, initForm, searchUsers, submit }
+  = useUserForm({ user: toRef(props, 'user'), onSuccess: () => { emit('update:modelValue', false); emit('success') } })
 
-const rules = computed<FormRules>(() => ({
-  username: [
-    { required: true, message: t('user.usernamePlaceholder'), trigger: 'blur' },
-    { min: 3, max: 50, message: t('user.usernamePlaceholder'), trigger: 'blur' }
-  ],
-  fullName: [{ required: true, message: t('user.fullNamePlaceholder'), trigger: 'blur' }],
-  email: [
-    { required: true, message: t('user.emailPlaceholder'), trigger: 'blur' },
-    { type: 'email', message: t('user.emailPlaceholder'), trigger: 'blur' }
-  ],
-  initialPassword: [
-    { required: true, message: t('user.initialPasswordPlaceholder'), trigger: 'blur' },
-    { min: 8, message: t('user.initialPasswordPlaceholder'), trigger: 'blur' }
-  ]
-}))
-
-watch(() => props.modelValue, (val) => {
-  if (val) {
-    loadDefaultUsers() // 加载默认用户列表
-    if (props.user) {
-      Object.assign(form, {
-        username: props.user.username,
-        fullName: props.user.fullName,
-        email: props.user.email,
-        employeeId: props.user.employeeId || '',
-        position: props.user.position || '',
-        entityManagerId: (props.user as any).entityManagerId || '',
-        functionManagerId: (props.user as any).functionManagerId || '',
-        initialPassword: ''
-      })
-      // 加载已选管理者信息
-      loadSelectedManagers()
-    } else {
-      Object.assign(form, {
-        username: '', fullName: '', email: '',
-        employeeId: '', position: '',
-        entityManagerId: '', functionManagerId: '',
-        initialPassword: ''
-      })
-    }
-  }
-})
-
-const loadSelectedManagers = async () => {
-  const managerIds = [form.entityManagerId, form.functionManagerId].filter(Boolean)
-  if (managerIds.length === 0) return
-  
-  try {
-    const managers: { id: string; fullName: string; username: string }[] = []
-    for (const id of managerIds) {
-      const user = await userApi.getById(id)
-      if (user) {
-        managers.push({
-          id: user.id,
-          fullName: user.fullName,
-          username: user.username
-        })
-      }
-    }
-    // 合并已选管理者到选项列表（去重）
-    const existingIds = new Set(userOptions.value.map(u => u.id))
-    for (const mgr of managers) {
-      if (!existingIds.has(mgr.id)) {
-        userOptions.value.push(mgr)
-      }
-    }
-  } catch (error) {
-    console.error('Failed to load managers:', error)
-  }
-}
-
-// 加载默认用户列表（前3个）
-const loadDefaultUsers = async () => {
-  userSearchLoading.value = true
-  try {
-    const res = await userApi.list({ page: 0, size: 3 })
-    userOptions.value = (res.content || []).map((u) => ({
-      id: u.id,
-      fullName: u.fullName,
-      username: u.username
-    }))
-  } catch (error) {
-    console.error('Failed to load default users:', error)
-    userOptions.value = []
-  } finally {
-    userSearchLoading.value = false
-  }
-}
-
-const searchUsers = async (query: string) => {
-  // 如果没有输入，显示默认的前3个用户
-  if (!query) {
-    await loadDefaultUsers()
-    return
-  }
-  
-  userSearchLoading.value = true
-  try {
-    const res = await userApi.list({ keyword: query, page: 0, size: 20 })
-    userOptions.value = (res.content || []).map((u) => ({
-      id: u.id,
-      fullName: u.fullName,
-      username: u.username
-    }))
-  } catch (error) {
-    console.error('Failed to search users:', error)
-    userOptions.value = []
-  } finally {
-    userSearchLoading.value = false
-  }
-}
+watch(() => props.modelValue, async (val) => { if (val) await initForm() })
 
 const handleSubmit = async () => {
-  const valid = await formRef.value?.validate()
-  if (!valid) return
-  
-  loading.value = true
-  try {
-    if (isEdit.value) {
-      await userApi.update(props.user!.id, {
-        fullName: form.fullName,
-        email: form.email,
-        employeeId: form.employeeId || undefined,
-        position: form.position || undefined,
-        entityManagerId: form.entityManagerId || undefined,
-        functionManagerId: form.functionManagerId || undefined
-      })
-    } else {
-      await userApi.create({
-        username: form.username,
-        fullName: form.fullName,
-        email: form.email,
-        employeeId: form.employeeId || undefined,
-        position: form.position || undefined,
-        entityManagerId: form.entityManagerId || undefined,
-        functionManagerId: form.functionManagerId || undefined,
-        initialPassword: form.initialPassword
-      })
-    }
-    ElMessage.success(t('common.success'))
-    emit('update:modelValue', false)
-    emit('success')
-  } catch (error: any) {
-    ElMessage.error(error.message || t('common.failed'))
-  } finally {
-    loading.value = false
-  }
+  if (!await formRef.value?.validate()) return
+  await submit()
 }
 </script>

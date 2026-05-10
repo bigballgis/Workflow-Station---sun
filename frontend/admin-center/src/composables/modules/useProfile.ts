@@ -3,7 +3,10 @@
  */
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessage } from 'element-plus'
+import { AppErrorCode } from '@/types/errors'
+import { errorTranslator } from '@/utils/errorTranslator'
+import { logger } from '@/utils/logger'
+import { notifyError, notifySuccess } from '@/utils/notify'
 import type { FormInstance, FormRules } from 'element-plus'
 import { changePassword, clearAuth, getCurrentUser, getUser, saveUser, USER_KEY, USERNAME_KEY } from '@/api/auth'
 import { getChangePasswordFailureMessage } from '@/utils/changePasswordError'
@@ -81,7 +84,7 @@ export function useProfile() {
         saveUser(fresh)
         userInfo.value = fresh
       } catch (error) {
-        console.error('Failed to load user info:', error)
+        logger.error('profile', 'Failed to load user info:', error)
         const storedUser = localStorage.getItem(USER_KEY)
         if (storedUser) {
           try { userInfo.value = JSON.parse(storedUser) }
@@ -111,12 +114,12 @@ export function useProfile() {
       changingPassword.value = true
       try {
         await changePassword({ oldPassword: passwordForm.oldPassword, newPassword: passwordForm.newPassword })
-        ElMessage.success(t('profile.passwordChanged'))
+        notifySuccess(t('profile.passwordChanged'))
         passwordFormRef.value?.resetFields()
         clearAuth()
         redirectToUnifiedLogin('admin')
       } catch (error: unknown) {
-        ElMessage.error(getChangePasswordFailureMessage(error, t))
+        notifyError(t(errorTranslator(AppErrorCode.PROFILE_PASSWORD_CHANGE_FAILED)))
       } finally {
         changingPassword.value = false
       }

@@ -23,7 +23,7 @@
       </el-table-column>
       <el-table-column :label="t('common.operation')" min-width="80" fixed="right">
         <template #default="{ row }">
-          <el-button link type="danger" @click="handleRemove(row)">{{ t('common.delete') }}</el-button>
+          <el-button link type="danger" @click="removeMember(row)">{{ t('common.delete') }}</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -58,120 +58,26 @@
       </el-form>
       <template #footer>
         <el-button @click="showAddDialog = false">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary" :loading="addLoading" @click="handleAdd">{{ t('common.confirm') }}</el-button>
+        <el-button type="primary" :loading="addLoading" @click="addMember">{{ t('common.confirm') }}</el-button>
       </template>
     </el-dialog>
   </el-dialog>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch } from 'vue'
+import { watch, toRef } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { virtualGroupApi, type VirtualGroupMember } from '@/api/virtualGroup'
-import { userApi, type User } from '@/api/user'
-
-const { t } = useI18n()
+import { useVirtualGroupMembers } from '@/composables/modules/useVirtualGroupMembers'
 
 const props = defineProps<{ modelValue: boolean; group: any }>()
 const emit = defineEmits(['update:modelValue'])
+const { t } = useI18n()
 
-const loading = ref(false)
-const members = ref<VirtualGroupMember[]>([])
-const showAddDialog = ref(false)
-const addLoading = ref(false)
-const searchLoading = ref(false)
-const userOptions = ref<User[]>([])
-const newMember = reactive({ userId: '', role: 'MEMBER' as const })
+const { loading, members, showAddDialog, addLoading, searchLoading, userOptions, newMember,
+  loadMembers, openAddDialog, loadDefaultUsers, searchUsers, addMember, removeMember }
+  = useVirtualGroupMembers(toRef(props, 'group'))
 
-watch(() => props.modelValue, async (val) => {
-  if (val && props.group) {
-    await loadMembers()
-  }
-})
-
-const loadMembers = async () => {
-  if (!props.group) return
-  loading.value = true
-  try {
-    members.value = await virtualGroupApi.getMembers(props.group.id)
-  } catch (error: any) {
-    console.error('Failed to load members:', error)
-    members.value = []
-  } finally {
-    loading.value = false
-  }
-}
-
-const openAddDialog = () => {
-  newMember.userId = ''
-  newMember.role = 'MEMBER'
-  userOptions.value = []
-  showAddDialog.value = true
-}
-
-const loadDefaultUsers = async () => {
-  if (userOptions.value.length > 0) return
-  searchLoading.value = true
-  try {
-    const result = await userApi.list({ size: 20 })
-    userOptions.value = result.content
-  } catch (error) {
-    console.error('Failed to load users:', error)
-  } finally {
-    searchLoading.value = false
-  }
-}
-
-const searchUsers = async (query: string) => {
-  if (!query) {
-    await loadDefaultUsers()
-    return
-  }
-  searchLoading.value = true
-  try {
-    const result = await userApi.list({ keyword: query, size: 20 })
-    userOptions.value = result.content
-  } catch (error) {
-    console.error('Failed to search users:', error)
-  } finally {
-    searchLoading.value = false
-  }
-}
-
-const handleRemove = async (member: VirtualGroupMember) => {
-  try {
-    await ElMessageBox.confirm(t('common.confirm'), t('common.confirm'), { type: 'warning' })
-    await virtualGroupApi.removeMember(props.group.id, member.userId)
-    await loadMembers()
-    ElMessage.success(t('common.success'))
-  } catch (error: any) {
-    if (error !== 'cancel') {
-      ElMessage.error(error.message || t('common.failed'))
-    }
-  }
-}
-
-const handleAdd = async () => {
-  if (!newMember.userId) {
-    ElMessage.warning(t('role.selectUser'))
-    return
-  }
-  addLoading.value = true
-  try {
-    await virtualGroupApi.addMember(props.group.id, {
-      userId: newMember.userId,
-      role: newMember.role
-    })
-    showAddDialog.value = false
-    await loadMembers()
-    ElMessage.success(t('common.success'))
-  } catch (error: any) {
-    ElMessage.error(error.message || t('common.failed'))
-  } finally {
-    addLoading.value = false
-  }
-}
+watch(() => props.modelValue, async (val) => { if (val && props.group) await loadMembers() })
 </script>
 
 <style scoped>

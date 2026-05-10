@@ -7,9 +7,10 @@
 
 import { ref, reactive, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { logger } from '@/utils/logger'
+import { notifyConfirm, notifyError, notifySuccess, notifyWarning } from '@/utils/notify'
 import { storeToRefs } from 'pinia'
-import { type FunctionUnit, type Deployment, type DeletePreviewResponse } from '@/api/functionUnit'
+import { functionUnitApi, type FunctionUnit, type Deployment, type DeletePreviewResponse } from '@/api/functionUnit'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
 import { pickHttpErrorBodyMessage } from '@/utils/httpErrorMessage'
 
@@ -73,8 +74,8 @@ export function useFunctionUnit() {
         _enabledLoading: false
       }))
     } catch (e) {
-      console.error('Failed to load function units:', e)
-      ElMessage.error(t('functionUnit.loadFailed'))
+      logger.error('functionUnit', 'Failed to load function units:', e)
+      notifyError(t('functionUnit.loadFailed'))
     }
   }
 
@@ -83,7 +84,7 @@ export function useFunctionUnit() {
     try {
       await store.fetchDeployments()
     } catch (e) {
-      console.error('Failed to load deployments:', e)
+      logger.error('functionUnit', 'Failed to load deployments:', e)
     } finally {
       deploymentsLoading.value = false
     }
@@ -111,10 +112,10 @@ export function useFunctionUnit() {
     showVersionsDialogVisible.value = true
     versionsLoading.value = true
     try {
-      versionList.value = await store.getAllVersions(unit.code)
+      versionList.value = await functionUnitApi.getAllVersions(unit.code)
     } catch (e) {
-      console.error('Failed to load versions:', e)
-      ElMessage.error(t('functionUnit.loadFailed'))
+      logger.error('functionUnit', 'Failed to load versions:', e)
+      notifyError(t('functionUnit.loadFailed'))
     } finally {
       versionsLoading.value = false
     }
@@ -125,37 +126,37 @@ export function useFunctionUnit() {
   const handleDeploy = async () => {
     if (!currentUnit.value) return
     try {
-      await store.createDeployment(currentUnit.value.id, deployForm.environment, deployForm.strategy)
-      ElMessage.success(t('functionUnit.deploySubmitted'))
+      await functionUnitApi.createDeployment(currentUnit.value.id, deployForm.environment, deployForm.strategy)
+      notifySuccess(t('functionUnit.deploySubmitted'))
       showDeployDialogVisible.value = false
       fetchFunctionUnits()
     } catch (e) {
-      console.error('Failed to create deployment:', e)
-      ElMessage.error(t('functionUnit.deployFailed'))
+      logger.error('functionUnit', 'Failed to create deployment:', e)
+      notifyError(t('functionUnit.deployFailed'))
     }
   }
 
   // ==================== Rollback ====================
 
   const handleRollback = async (unit: FunctionUnit) => {
-    await ElMessageBox.confirm(
+    await notifyConfirm(
       t('functionUnit.rollbackConfirm', { name: unit.name }),
       t('common.confirm'),
       { type: 'warning' }
     )
     try {
-      const deploymentHistory = await store.getDeploymentHistory(unit.id)
+      const deploymentHistory = await functionUnitApi.getDeploymentHistory(unit.id)
       const lastDeployment = deploymentHistory.find(d => d.status === 'COMPLETED')
       if (lastDeployment) {
-        await store.rollbackDeployment(lastDeployment.id, t('functionUnit.manualRollback'))
-        ElMessage.success(t('functionUnit.rollbackSuccess'))
+        await functionUnitApi.rollbackDeployment(lastDeployment.id, t('functionUnit.manualRollback'))
+        notifySuccess(t('functionUnit.rollbackSuccess'))
         fetchFunctionUnits()
       } else {
-        ElMessage.warning(t('functionUnit.noRollbackRecord'))
+        notifyWarning(t('functionUnit.noRollbackRecord'))
       }
     } catch (e) {
-      console.error('Failed to rollback:', e)
-      ElMessage.error(t('functionUnit.rollbackFailed'))
+      logger.error('functionUnit', 'Failed to rollback:', e)
+      notifyError(t('functionUnit.rollbackFailed'))
     }
   }
 
@@ -164,7 +165,7 @@ export function useFunctionUnit() {
   const handleEnabledChange = async (unit: FunctionUnit & { _enabledLoading?: boolean }, enabled: boolean) => {
     if (!enabled) {
       try {
-        await ElMessageBox.confirm(
+        await notifyConfirm(
           t('functionUnit.disableConfirmMessage', { name: unit.name }),
           t('functionUnit.confirmDisable'),
           { type: 'warning' }
@@ -177,10 +178,10 @@ export function useFunctionUnit() {
     unit._enabledLoading = true
     try {
       await store.setEnabled(unit.id, enabled)
-      ElMessage.success(enabled ? t('functionUnit.enabledSuccess') : t('functionUnit.disabledSuccess'))
+      notifySuccess(enabled ? t('functionUnit.enabledSuccess') : t('functionUnit.disabledSuccess'))
     } catch (e: unknown) {
       const msg = pickHttpErrorBodyMessage((e as { response?: { data?: unknown } })?.response?.data)
-      ElMessage.error(msg || t('common.failed'))
+      notifyError(msg || t('common.failed'))
       unit.enabled = !enabled
     } finally {
       unit._enabledLoading = false
@@ -192,10 +193,10 @@ export function useFunctionUnit() {
   const handleDeleteClick = async (unit: FunctionUnit) => {
     deleteTargetUnit.value = unit
     try {
-      deletePreview.value = await store.getDeletePreview(unit.id)
+      deletePreview.value = await functionUnitApi.getDeletePreview(unit.id)
       showDeleteDialogVisible.value = true
     } catch {
-      ElMessage.error(t('functionUnit.getDeletePreviewFailed'))
+      notifyError(t('functionUnit.getDeletePreviewFailed'))
     }
   }
 
@@ -203,12 +204,12 @@ export function useFunctionUnit() {
     if (!deleteTargetUnit.value) return
     try {
       await store.deleteFunctionUnit(deleteTargetUnit.value.id)
-      ElMessage.success(t('functionUnit.deleteSuccess'))
+      notifySuccess(t('functionUnit.deleteSuccess'))
       showDeleteDialogVisible.value = false
       fetchFunctionUnits()
-    } catch (e: any) {
-      console.error('Failed to delete:', e)
-      ElMessage.error(e.response?.data?.message || t('functionUnit.deleteFailed'))
+    } catch {
+      logger.error('functionUnit', 'Failed to delete:', e)
+      notifyError(e.response?.data?.message || t('functionUnit.deleteFailed'))
     }
   }
 
@@ -221,34 +222,34 @@ export function useFunctionUnit() {
   const handleBatchEnable = async () => {
     try {
       await store.batchSetEnabled(selectedUnits.value.map(u => u.id), true)
-      ElMessage.success(t('functionUnit.enabledSuccess'))
+      notifySuccess(t('functionUnit.enabledSuccess'))
       fetchFunctionUnits()
     } catch (e: unknown) {
       const msg = pickHttpErrorBodyMessage((e as { response?: { data?: unknown } })?.response?.data)
-      ElMessage.error(msg || t('common.failed'))
+      notifyError(msg || t('common.failed'))
     }
   }
 
   const handleBatchDisable = async () => {
     try {
-      await ElMessageBox.confirm(t('functionUnit.batchDisableConfirm'), t('common.confirm'), { type: 'warning' })
+      await notifyConfirm(t('functionUnit.batchDisableConfirm'), t('common.confirm'), { type: 'warning' })
       await store.batchSetEnabled(selectedUnits.value.map(u => u.id), false)
-      ElMessage.success(t('functionUnit.disabledSuccess'))
+      notifySuccess(t('functionUnit.disabledSuccess'))
       fetchFunctionUnits()
     } catch (e) {
-      if ((e as string) !== 'cancel') ElMessage.error(t('common.failed'))
+      if ((e as string) !== 'cancel') notifyError(t('common.failed'))
     }
   }
 
   const handleBatchDelete = async () => {
     const ids = selectedUnits.value.map(u => u.id)
     try {
-      await ElMessageBox.confirm(t('functionUnit.batchDeleteConfirm', { count: ids.length }), t('common.confirm'), { type: 'warning' })
+      await notifyConfirm(t('functionUnit.batchDeleteConfirm', { count: ids.length }), t('common.confirm'), { type: 'warning' })
       await store.batchDelete(ids)
-      ElMessage.success(t('functionUnit.deleteSuccess'))
+      notifySuccess(t('functionUnit.deleteSuccess'))
       fetchFunctionUnits()
     } catch (e) {
-      if ((e as string) !== 'cancel') ElMessage.error(t('common.failed'))
+      if ((e as string) !== 'cancel') notifyError(t('common.failed'))
     }
   }
 
@@ -256,9 +257,9 @@ export function useFunctionUnit() {
 
   const handleViewLog = async (deployment: Deployment) => {
     try {
-      logDeployment.value = await store.getDeployment(deployment.id)
+      logDeployment.value = await functionUnitApi.getDeployment(deployment.id)
       showLogDialogVisible.value = true
-    } catch { ElMessage.error(t('common.failed')) }
+    } catch { notifyError(t('common.failed')) }
   }
 
   // ==================== Version Compare ====================
@@ -281,20 +282,20 @@ export function useFunctionUnit() {
       const reader = new FileReader()
       reader.onload = async () => {
         const base64 = (reader.result as string).split(',')[1]
-        const result = await store.importPackage(importFile.value!.name, base64)
+        const result = await functionUnitApi.import(importFile.value!.name, base64)
         if (result.success) {
-          ElMessage.success(t('functionUnit.importSuccess'))
+          notifySuccess(t('functionUnit.importSuccess'))
           showImportDialog.value = false
           importFile.value = null
           fetchFunctionUnits()
         } else {
-          ElMessage.error(result.message || t('functionUnit.importFailed'))
+          notifyError(result.message || t('functionUnit.importFailed'))
         }
         importLoading.value = false
       }
       reader.readAsDataURL(importFile.value)
     } catch {
-      ElMessage.error(t('functionUnit.importFailed'))
+      notifyError(t('functionUnit.importFailed'))
       importLoading.value = false
     }
   }

@@ -163,3 +163,19 @@ export const permissionActionKey = (action: string) =>
     DELETE: 'permission.delete',
     EXECUTE: 'permission.execute',
   }[action] || action)
+
+// ==================== Role display helpers ====================
+
+export const ROLE_TYPE_LABELS: Record<string, string> = {
+  BU_BOUNDED: 'BU Bounded', BU_UNBOUNDED: 'BU Unbounded', BUSINESS: 'Business', ADMIN: 'Admin', DEVELOPER: 'Developer',
+}
+
+export const roleTypeDisplayLabel = (type: string) => ROLE_TYPE_LABELS[type] ?? type
+
+export const roleTagType = (type?: string): TagType => {
+  if (type === 'BU_BOUNDED') return 'warning'
+  if (type === 'BU_UNBOUNDED' || type === 'BUSINESS') return 'success'
+  if (type === 'ADMIN') return 'danger'
+  if (type === 'DEVELOPER') return 'primary'
+  return 'info'
+}

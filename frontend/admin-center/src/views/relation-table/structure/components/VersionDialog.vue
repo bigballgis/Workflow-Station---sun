@@ -85,7 +85,7 @@ const handleRollback = async (version: RelationTableVersionResponse) => {
     ElMessage.success(`Rolled back to v${version.versionNumber}`)
     emit('update:modelValue', false)
     emit('rollback-success')
-  } catch (e: any) {
+  } catch (e: unknown) {
     if (e !== 'cancel') {
       console.error('Rollback failed:', e)
     }

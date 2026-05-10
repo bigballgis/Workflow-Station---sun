@@ -3,7 +3,9 @@
  */
 import { ref, reactive, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessage } from 'element-plus'
+import { AppErrorCode } from '@/types/errors'
+import { errorTranslator } from '@/utils/errorTranslator'
+import { notifyError } from '@/utils/notify'
 import { permissionRequestApi, type PermissionRequest, type PermissionRequestStatus } from '@/api/permissionRequest'
 
 export function usePermissionRequest() {
@@ -61,8 +63,8 @@ export function usePermissionRequest() {
       const result = await permissionRequestApi.list(params)
       requests.value = result.content
       total.value = result.totalElements
-    } catch (error: any) {
-      ElMessage.error(error.message || t('common.failed'))
+    } catch {
+      notifyError(t(errorTranslator(AppErrorCode.PERMISSION_REQUEST_FAILED)))
     } finally { loading.value = false }
   }
 

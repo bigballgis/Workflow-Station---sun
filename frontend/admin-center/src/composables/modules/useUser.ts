@@ -4,16 +4,18 @@
  * 封装 UserList.vue 的所有 API 调用和业务逻辑。
  * 组件仅保留 template + 调用此 composable。
  *
- * 所有 ElMessage / ElMessageBox 调用均在此处处理。
+ * 所有 notify* / notifyConfirm 调用均在此处处理。
  */
 
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { notifyConfirm, notifyError, notifySuccess } from '@/utils/notify'
 import type { User } from '@/api/user'
+import { userApi } from '@/api/user'
 import { useUserStore } from '@/stores/user'
-import { hasPermission, PERMISSIONS } from '@/utils/permission'
+import { pickHttpErrorBodyMessage } from '@/utils/httpErrorMessage'
 import { usePagination } from '@/composables/usePagination'
+import { hasPermission, PERMISSIONS } from '@/utils/permission'
 
 export function useUser() {
   const { t } = useI18n()
@@ -94,17 +96,17 @@ export function useUser() {
 
   const handleStatusChange = async (user: User, status: string, action: string) => {
     try {
-      await ElMessageBox.confirm(
+      await notifyConfirm(
         t('user.confirmAction', { action, name: user.fullName }),
         t('user.hint'),
         { type: 'warning' },
       )
-      await store.updateStatus(user.id, status as 'ACTIVE' | 'DISABLED' | 'LOCKED')
-      ElMessage.success(t('user.actionSuccess', { action }))
+      await userApi.updateStatus(user.id, { status: status as 'ACTIVE' | 'DISABLED' | 'LOCKED' })
+      notifySuccess(t('user.actionSuccess', { action }))
       handleSearch()
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (error !== 'cancel') {
-        ElMessage.error(error.message || t('user.actionFailed', { action }))
+        notifyError(error.message || t('user.actionFailed', { action }))
       }
     }
   }
@@ -113,16 +115,16 @@ export function useUser() {
 
   const handleResetPassword = async (user: User) => {
     try {
-      await ElMessageBox.confirm(
+      await notifyConfirm(
         t('user.confirmResetPassword', { name: user.fullName }),
         t('user.hint'),
         { type: 'warning' },
       )
-      await store.resetPassword(user.id)
-      ElMessage.success(t('user.passwordResetNoPlaintext'))
-    } catch (error: any) {
+      await userApi.resetPassword(user.id)
+      notifySuccess(t('user.passwordResetNoPlaintext'))
+    } catch (error: unknown) {
       if (error !== 'cancel') {
-        ElMessage.error(error.message || t('user.resetPasswordFailed'))
+        notifyError(error.message || t('user.resetPasswordFailed'))
       }
     }
   }
@@ -131,7 +133,7 @@ export function useUser() {
 
   const handleDelete = async (user: User) => {
     try {
-      await ElMessageBox.confirm(
+      await notifyConfirm(
         t('user.confirmDeleteUser', { name: user.fullName }),
         t('user.warning'),
         {
@@ -140,12 +142,12 @@ export function useUser() {
           confirmButtonClass: 'el-button--danger',
         },
       )
-      await store.deleteUser(user.id)
-      ElMessage.success(t('user.deleteSuccess'))
+      await userApi.delete(user.id)
+      notifySuccess(t('user.deleteSuccess'))
       handleSearch()
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (error !== 'cancel') {
-        ElMessage.error(error.message || t('user.deleteFailed'))
+        notifyError(error.message || t('user.deleteFailed'))
       }
     }
   }

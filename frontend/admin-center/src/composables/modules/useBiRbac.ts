@@ -3,7 +3,9 @@
  */
 import { ref, reactive, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { AppErrorCode } from '@/types/errors'
+import { errorTranslator } from '@/utils/errorTranslator'
+import { notifyConfirm, notifyError, notifySuccess } from '@/utils/notify'
 import type { FormRules } from 'element-plus'
 import {
   biManagementApi,
@@ -60,8 +62,8 @@ export function useBiRbac() {
         roleType: query.roleType || undefined
       }
       mappings.value = await biManagementApi.rbac.listMappings(params)
-    } catch (error: any) {
-      ElMessage.error(error.message || t('bi.rbac.queryFailed'))
+    } catch {
+      notifyError(t(errorTranslator(AppErrorCode.BI_RBAC_QUERY_FAILED)))
     } finally { loading.value = false }
   }
 
@@ -71,17 +73,17 @@ export function useBiRbac() {
     syncing.value = true
     try {
       const result = await biManagementApi.rbac.syncSupersetRoles()
-      ElMessage.success(t('bi.rbac.syncSuccess', { created: result.created, updated: result.updated, autoInactivated: result.autoInactivated }))
+      notifySuccess(t('bi.rbac.syncSuccess', { created: result.created, updated: result.updated, autoInactivated: result.autoInactivated }))
       handleSearch()
-    } catch (error: any) {
-      ElMessage.error(error.message || t('bi.rbac.syncFailed'))
+    } catch {
+      notifyError(t(errorTranslator(AppErrorCode.BI_RBAC_SYNC_FAILED)))
     } finally { syncing.value = false }
   }
 
   const loadSupersetRoles = async () => {
     supersetRolesLoading.value = true
     try { allSupersetRoles.value = await biManagementApi.rbac.listSupersetRoles() }
-    catch (error: any) { ElMessage.error(error.message || t('bi.rbac.loadSupersetRolesFailed')) }
+    catch { notifyError(t(errorTranslator(AppErrorCode.BI_RBAC_LOAD_SUPERSET_FAILED))) }
     finally { supersetRolesLoading.value = false }
   }
 
@@ -97,11 +99,11 @@ export function useBiRbac() {
     editLoading.value = true
     try {
       await biManagementApi.rbac.updateMapping(editForm.sysRoleId, { supersetRoleIds: editForm.selectedRoleIds })
-      ElMessage.success(t('bi.rbac.updateSuccess'))
+      notifySuccess(t('bi.rbac.updateSuccess'))
       editDialogVisible.value = false
       handleSearch()
-    } catch (error: any) {
-      ElMessage.error(error.message || t('bi.rbac.updateFailed'))
+    } catch {
+      notifyError(t(errorTranslator(AppErrorCode.BI_RBAC_UPDATE_FAILED)))
     } finally { editLoading.value = false }
   }
 
@@ -114,14 +116,14 @@ export function useBiRbac() {
   const loadUnmappedRoles = async () => {
     unmappedRolesLoading.value = true
     try { unmappedRoles.value = await biManagementApi.rbac.listUnmappedRoles() }
-    catch (error: any) { ElMessage.error(error.message || t('bi.rbac.loadUnmappedRolesFailed')) }
+    catch { notifyError(t(errorTranslator(AppErrorCode.BI_RBAC_LOAD_UNMAPPED_FAILED))) }
     finally { unmappedRolesLoading.value = false }
   }
 
   const loadCreateSupersetRoles = async () => {
     createSupersetRolesLoading.value = true
     try { createAllSupersetRoles.value = await biManagementApi.rbac.listSupersetRoles() }
-    catch (error: any) { ElMessage.error(error.message || t('bi.rbac.loadSupersetRolesFailed')) }
+    catch { notifyError(t(errorTranslator(AppErrorCode.BI_RBAC_LOAD_SUPERSET_FAILED))) }
     finally { createSupersetRolesLoading.value = false }
   }
 
@@ -132,26 +134,26 @@ export function useBiRbac() {
     createLoading.value = true
     try {
       await biManagementApi.rbac.createMapping({ sysRoleId: createForm.sysRoleId, supersetRoleIds: createForm.supersetRoleIds })
-      ElMessage.success(t('bi.rbac.createSuccess'))
+      notifySuccess(t('bi.rbac.createSuccess'))
       createDialogVisible.value = false
       handleSearch()
-    } catch (error: any) {
-      ElMessage.error(error.message || t('bi.rbac.createFailed'))
+    } catch {
+      notifyError(t(errorTranslator(AppErrorCode.BI_RBAC_CREATE_FAILED)))
     } finally { createLoading.value = false }
   }
 
   const handleDelete = async (row: RbacMappingResponse) => {
     try {
-      await ElMessageBox.confirm(
+      await notifyConfirm(
         t('bi.rbac.confirmDeleteMsg', { name: row.sysRoleName }),
         t('bi.rbac.confirmDelete'), { confirmButtonText: t('bi.rbac.delete'), cancelButtonText: t('bi.rbac.cancel'), type: 'warning' }
       )
       await biManagementApi.rbac.deleteMapping(row.sysRoleId)
-      ElMessage.success(t('bi.rbac.deleteSuccess'))
+      notifySuccess(t('bi.rbac.deleteSuccess'))
       handleSearch()
-    } catch (error: any) {
+    } catch {
       if (error === 'cancel' || error?.toString?.() === 'cancel') return
-      ElMessage.error(error.message || t('bi.rbac.deleteFailed'))
+      notifyError(t(errorTranslator(AppErrorCode.BI_RBAC_DELETE_FAILED)))
     }
   }
 

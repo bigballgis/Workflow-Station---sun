@@ -3,7 +3,9 @@
  */
 import { ref, reactive, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { AppErrorCode } from '@/types/errors'
+import { errorTranslator } from '@/utils/errorTranslator'
+import { notifyConfirm, notifyError, notifySuccess } from '@/utils/notify'
 import {
   biManagementApi,
   type DashboardRegistryResponse,
@@ -37,8 +39,8 @@ export function useBiDashboard() {
       const result = await biManagementApi.dashboard.list(params)
       dashboards.value = result.content
       total.value = result.totalElements
-    } catch (error: any) {
-      ElMessage.error(error.message || t('bi.dashboard.queryFailed'))
+    } catch {
+      notifyError(t(errorTranslator(AppErrorCode.BI_DASHBOARD_QUERY_FAILED)))
     } finally { loading.value = false }
   }
 
@@ -51,10 +53,10 @@ export function useBiDashboard() {
     syncing.value = true
     try {
       const result = await biManagementApi.dashboard.sync()
-      ElMessage.success(t('bi.dashboard.syncSuccess', { created: result.created, updated: result.updated, autoInactivated: result.autoInactivated }))
+      notifySuccess(t('bi.dashboard.syncSuccess', { created: result.created, updated: result.updated, autoInactivated: result.autoInactivated }))
       handleSearch()
-    } catch (error: any) {
-      ElMessage.error(error.message || t('bi.dashboard.syncFailed'))
+    } catch {
+      notifyError(t(errorTranslator(AppErrorCode.BI_DASHBOARD_SYNC_FAILED)))
     } finally { syncing.value = false }
   }
 
@@ -68,11 +70,11 @@ export function useBiDashboard() {
     editLoading.value = true
     try {
       await biManagementApi.dashboard.update(editForm.id, { tags: editForm.tags || undefined, isDefaultLanding: editForm.isDefaultLanding })
-      ElMessage.success(t('bi.dashboard.updateSuccess'))
+      notifySuccess(t('bi.dashboard.updateSuccess'))
       editDialogVisible.value = false
       handleSearch()
-    } catch (error: any) {
-      ElMessage.error(error.message || t('bi.dashboard.updateFailed'))
+    } catch {
+      notifyError(t(errorTranslator(AppErrorCode.BI_DASHBOARD_UPDATE_FAILED)))
     } finally { editLoading.value = false }
   }
 
@@ -81,29 +83,29 @@ export function useBiDashboard() {
     const action = isActive ? 'disable' : 'enable'
     const newStatus: DashboardStatus = isActive ? 'MANUAL_INACTIVE' : 'ACTIVE'
     try {
-      await ElMessageBox.confirm(
+      await notifyConfirm(
         isActive ? t('bi.dashboard.confirmDisableMsg', { title: row.dashboardTitle }) : t('bi.dashboard.confirmEnableMsg', { title: row.dashboardTitle }),
         isActive ? t('bi.dashboard.confirmDisable') : t('bi.dashboard.confirmEnable'), { type: 'warning' }
       )
       await biManagementApi.dashboard.updateStatus(row.id, { status: newStatus })
-      ElMessage.success(t('bi.dashboard.statusChangeSuccess', { action: action.charAt(0).toUpperCase() + action.slice(1) }))
+      notifySuccess(t('bi.dashboard.statusChangeSuccess', { action: action.charAt(0).toUpperCase() + action.slice(1) }))
       handleSearch()
-    } catch (error: any) {
-      if (error !== 'cancel') ElMessage.error(error.message || t('bi.dashboard.statusChangeFailed', { action }))
+    } catch {
+      if (error !== 'cancel') notifyError(t(errorTranslator(AppErrorCode.BI_DASHBOARD_STATUS_CHANGE_FAILED)))
     }
   }
 
   const handleDelete = async (row: DashboardRegistryResponse) => {
     try {
-      await ElMessageBox.confirm(
+      await notifyConfirm(
         t('bi.dashboard.confirmDeleteMsg', { title: row.dashboardTitle }),
         t('bi.dashboard.confirmDelete'), { type: 'warning', confirmButtonText: t('bi.dashboard.delete'), confirmButtonClass: 'el-button--danger' }
       )
       await biManagementApi.dashboard.delete(row.id)
-      ElMessage.success(t('bi.dashboard.deleteSuccess'))
+      notifySuccess(t('bi.dashboard.deleteSuccess'))
       handleSearch()
-    } catch (error: any) {
-      if (error !== 'cancel') ElMessage.error(error.message || t('bi.dashboard.deleteFailed'))
+    } catch {
+      if (error !== 'cancel') notifyError(t(errorTranslator(AppErrorCode.BI_DASHBOARD_DELETE_FAILED)))
     }
   }
 

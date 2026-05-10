@@ -108,237 +108,29 @@
 
       <template #footer>
         <el-button @click="showAddRole = false">Cancel</el-button>
-        <el-button type="primary" :loading="addLoading" @click="handleAddRole">Confirm</el-button>
+        <el-button type="primary" :loading="adding" @click="handleAddRole">Confirm</el-button>
       </template>
     </el-dialog>
   </el-dialog>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { watch, toRef } from 'vue'
 import { Plus } from '@element-plus/icons-vue'
-import { relationTableStructureApi, type RelationTableAccess } from '@/api/relationTable'
-import { roleApi, type Role, type RoleType } from '@/api/role'
-import { businessUnitApi, type BusinessUnit } from '@/api/businessUnit'
+import { useRelationTableAccessConfig } from '@/composables/modules/useRelationTableAccessConfig'
 
-const props = defineProps<{
-  modelValue: boolean
-  tableId?: number
-  tableName?: string
-}>()
+const props = defineProps<{ modelValue: boolean; tableId?: number; tableName?: string }>()
+const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()
 
-const emit = defineEmits<{
-  'update:modelValue': [value: boolean]
-}>()
+const {
+  loading, accessList, allRoles,
+  showAddRole, adding, addRoleTab, selectedBuRoleIds, selectedSystemRoleIds,
+  assignedIds, systemRoleOptions,
+  resolveRoleName, resolveRoleTagType, resolveRoleTypeLabel, formatDate,
+  loadAccessList, loadAllRoles, openAddDialog, handleAddRole, handleRemove,
+} = useRelationTableAccessConfig(toRef(props, 'tableId'))
 
-// ---- main dialog ----
-const loading = ref(false)
-const accessList = ref<RelationTableAccess[]>([])
-
-// ---- all roles cache (for display in table) ----
-const allRoles = ref<Role[]>([])
-const rolesLoading = ref(false)
-const allRolesMap = computed(() => {
-  const m = new Map<string, Role>()
-  allRoles.value.forEach(r => m.set(r.id, r))
-  return m
-})
-
-// ---- add role sub-dialog ----
-const showAddRole = ref(false)
-const addLoading = ref(false)
-const addRoleTab = ref<'system' | 'bu'>('bu')
-
-// system tab
-const selectedSystemRoleIds = ref<string[]>([])
-
-// BU tab
-const selectedBuId = ref<string | null>(null)
-const selectedBuRoleId = ref('')
-const buCascaderOptions = ref<BusinessUnit[]>([])
-const buRoles = ref<Role[]>([])
-const buRolesLoading = ref(false)
-
-const buCascaderProps = {
-  value: 'id',
-  label: 'name',
-  children: 'children',
-  checkStrictly: true,
-  emitPath: false,
-}
-
-// ---- computed ----
-const assignedIds = computed(() => new Set(accessList.value.map(a => a.targetId)))
-
-const availableSystemRoles = computed(() =>
-  allRoles.value.filter(r =>
-    r.status === 'ACTIVE' &&
-    r.type !== 'BU_BOUNDED' &&
-    !assignedIds.value.has(r.id)
-  )
-)
-
-const availableBuRoles = computed(() =>
-  buRoles.value.filter(r => !assignedIds.value.has(r.id))
-)
-
-
-// ---- display helpers ----
-const ROLE_TYPE_LABELS: Record<string, string> = {
-  BU_BOUNDED: 'BU Bounded',
-  BU_UNBOUNDED: 'BU Unbounded',
-  BUSINESS: 'Business',
-  ADMIN: 'Admin',
-  DEVELOPER: 'Developer',
-}
-
-const roleTypeDisplayLabel = (type: RoleType) => ROLE_TYPE_LABELS[type] ?? type
-
-const resolveRoleName = (roleId: string) =>
-  allRolesMap.value.get(roleId)?.name ?? roleId
-
-const resolveRoleTypeLabel = (roleId: string) => {
-  const type = allRolesMap.value.get(roleId)?.type
-  return type ? (ROLE_TYPE_LABELS[type] ?? type) : '—'
-}
-
-const resolveRoleTagType = (roleId: string): '' | 'success' | 'warning' | 'danger' | 'info' => {
-  const type = allRolesMap.value.get(roleId)?.type
-  if (type === 'BU_BOUNDED') return 'warning'
-  if (type === 'BU_UNBOUNDED' || type === 'BUSINESS') return 'success'
-  if (type === 'ADMIN') return 'danger'
-  if (type === 'DEVELOPER') return 'info'
-  return ''
-}
-
-const formatDate = (d: string) => (d ? new Date(d).toLocaleString('zh-CN') : '')
-
-// ---- fetch ----
-const fetchAccessConfig = async () => {
-  if (!props.tableId) return
-  loading.value = true
-  try {
-    accessList.value = await relationTableStructureApi.getAccessConfig(props.tableId)
-  } catch (e) {
-    console.error('Failed to load access config:', e)
-  } finally {
-    loading.value = false
-  }
-}
-
-const fetchAllRoles = async () => {
-  if (allRoles.value.length > 0) return
-  rolesLoading.value = true
-  try {
-    allRoles.value = await roleApi.list()
-  } catch (e) {
-    console.error('Failed to load roles:', e)
-  } finally {
-    rolesLoading.value = false
-  }
-}
-
-const fetchBuTree = async () => {
-  if (buCascaderOptions.value.length > 0) return
-  try {
-    buCascaderOptions.value = await businessUnitApi.getTree()
-  } catch (e) {
-    console.error('Failed to load BU tree:', e)
-  }
-}
-
-// ---- add role ----
-const openAddDialog = async () => {
-  resetAddForm()
-  showAddRole.value = true
-  // Wait for roles so we can pre-select all of them once the list is ready.
-  // fetchAllRoles is idempotent (cache-guarded), so this is safe to call here.
-  await fetchAllRoles()
-  selectedSystemRoleIds.value = availableSystemRoles.value.map(r => r.id)
-  fetchBuTree()
-}
-
-const resetAddForm = () => {
-  addRoleTab.value = 'bu'
-  selectedSystemRoleIds.value = []  // watchEffect will re-populate all available roles
-  selectedBuId.value = null
-  selectedBuRoleId.value = ''
-  buRoles.value = []
-}
-
-const handleBuChange = async (buId: string | null) => {
-  selectedBuRoleId.value = ''
-  buRoles.value = []
-  if (!buId) return
-  buRolesLoading.value = true
-  try {
-    buRoles.value = await businessUnitApi.getBoundRoles(buId)
-  } catch (e) {
-    console.error('Failed to load BU roles:', e)
-  } finally {
-    buRolesLoading.value = false
-  }
-}
-
-const handleAddRole = async () => {
-  if (!props.tableId) return
-
-  if (addRoleTab.value === 'system') {
-    const roleIds = selectedSystemRoleIds.value.filter(id => !assignedIds.value.has(id))
-    if (roleIds.length === 0) {
-      ElMessage.warning('Please select at least one role')
-      return
-    }
-    addLoading.value = true
-    try {
-      await Promise.all(roleIds.map(id => relationTableStructureApi.addAccess(props.tableId!, id)))
-      ElMessage.success(`Added ${roleIds.length} role(s)`)
-      showAddRole.value = false
-      await fetchAccessConfig()
-    } catch (e: any) {
-      ElMessage.error(e?.response?.data?.error?.message || e?.response?.data?.message || 'Failed to add access')
-    } finally {
-      addLoading.value = false
-    }
-  } else {
-    const roleId = selectedBuRoleId.value
-    if (!roleId) {
-      ElMessage.warning('Please select a role')
-      return
-    }
-    addLoading.value = true
-    try {
-      await relationTableStructureApi.addAccess(props.tableId, roleId)
-      ElMessage.success('Access added')
-      showAddRole.value = false
-      await fetchAccessConfig()
-    } catch (e: any) {
-      ElMessage.error(e?.response?.data?.error?.message || e?.response?.data?.message || 'Failed to add access')
-    } finally {
-      addLoading.value = false
-    }
-  }
-}
-
-const handleRemove = async (access: RelationTableAccess) => {
-  if (!props.tableId) return
-  try {
-    await ElMessageBox.confirm('Remove this role access?', 'Confirm', { type: 'warning' })
-    await relationTableStructureApi.removeAccess(props.tableId, access.id)
-    ElMessage.success('Access removed')
-    await fetchAccessConfig()
-  } catch (e: any) {
-    if (e !== 'cancel') console.error('Failed to remove access:', e)
-  }
-}
-
-watch(() => props.modelValue, val => {
-  if (val) {
-    fetchAccessConfig()
-    fetchAllRoles()
-  }
-})
+watch(() => props.modelValue, val => { if (val) { loadAccessList(); loadAllRoles() } })
 </script>
 
 <style scoped>

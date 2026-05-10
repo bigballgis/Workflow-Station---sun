@@ -1,3 +1,4 @@
+import { PageResult } from '@/types/common'
 import { get, post, put, del } from './request'
 
 // ==================== 类型定义 ====================
@@ -68,14 +69,6 @@ export interface ConfigSyncResult {
   syncedCount: number
   failedCount: number
   errors: string[]
-}
-
-export interface PageResult<T> {
-  content: T[]
-  totalElements: number
-  totalPages: number
-  size: number
-  number: number
 }
 
 // ==================== 配置 CRUD API ====================

@@ -62,7 +62,7 @@
                   <el-table-column prop="roleCode" :label="t('user.roleCode')" width="160" />
                   <el-table-column :label="t('common.operation')" width="100" align="center">
                     <template #default="{ row }">
-                      <el-button type="danger" link size="small" @click="handleRemoveBuRole(row)">
+                      <el-button type="danger" link size="small" @click="removeBuRole(row)">
                         {{ t('user.removeBuRole') }}
                       </el-button>
                     </template>
@@ -123,7 +123,7 @@
     </div>
     <template #footer>
       <el-button @click="$emit('update:modelValue', false)">{{ t('common.close') }}</el-button>
-      <el-button type="warning" @click="handleResetPassword">{{ t('user.resetPassword') }}</el-button>
+      <el-button type="warning" @click="resetPassword">{{ t('user.resetPassword') }}</el-button>
     </template>
 
     <el-dialog
@@ -181,204 +181,24 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { watch, toRef } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import {
-  userApi,
-  type UserDetail,
-  type UserBusinessUnitMembership,
-  type UserVirtualGroupMembership,
-  type UserBusinessUnitRole
-} from '@/api/user'
-import { listAssignableBuBoundedRoles, type BuBoundedRole } from '@/api/taskAssignment'
-
-const { t } = useI18n()
+import { useUserDetail } from '@/composables/modules/useUserDetail'
 
 const props = defineProps<{ modelValue: boolean; userId: string }>()
 defineEmits(['update:modelValue'])
+const { t } = useI18n()
 
-const loading = ref(false)
-const detailActiveTab = ref<'portal' | 'platform'>('portal')
-const user = ref<UserDetail | null>(null)
-const businessUnits = ref<UserBusinessUnitMembership[]>([])
-const portalVirtualGroups = ref<UserVirtualGroupMembership[]>([])
-const platformVirtualGroups = ref<UserVirtualGroupMembership[]>([])
-const platformRoles = ref<{ id: string; name: string; code: string; type: string }[]>([])
-const buRoles = ref<UserBusinessUnitRole[]>([])
-
-const getPlatformRoleTagType = (type?: string) => {
-  if (type === 'BU_BOUNDED') return 'warning'
-  if (type === 'BU_UNBOUNDED') return 'success'
-  if (type === 'ADMIN') return 'danger'
-  if (type === 'DEVELOPER') return 'primary'
-  return 'info'
-}
-
-const assignDialogVisible = ref(false)
-const assignRoleLoading = ref(false)
-const assignSubmitting = ref(false)
-const assignRoleOptions = ref<BuBoundedRole[]>([])
-const assignRoleLoaded = ref(false)
-const assignForm = reactive({ businessUnitId: '', roleId: '' })
-
-const buRoleGroups = computed(() => {
-  const map = new Map<
-    string,
-    { businessUnitId: string; businessUnitName: string; rows: UserBusinessUnitRole[] }
-  >()
-  for (const r of buRoles.value) {
-    const key = r.businessUnitId
-    if (!map.has(key)) {
-      map.set(key, {
-        businessUnitId: key,
-        businessUnitName: r.businessUnitName || key,
-        rows: []
-      })
-    }
-    map.get(key)!.rows.push(r)
-  }
-  return [...map.values()]
-})
-
-const statusType = (status: string): 'success' | 'info' | 'danger' | 'warning' => {
-  const map: Record<string, 'success' | 'info' | 'danger' | 'warning'> = { ACTIVE: 'success', DISABLED: 'info', LOCKED: 'danger', PENDING: 'warning' }
-  return map[status] || 'info'
-}
-
-const statusText = (status: string) => {
-  const map: Record<string, string> = { 
-    ACTIVE: t('user.active'), 
-    DISABLED: t('user.disabled'), 
-    LOCKED: t('user.locked'), 
-    PENDING: t('user.pending') 
-  }
-  return map[status] || status
-}
-
-const formatDate = (dateStr: string) => {
-  if (!dateStr) return '-'
-  return new Date(dateStr).toLocaleString('zh-CN', {
-    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
-  })
-}
-
-const reloadBuRoles = async () => {
-  if (!props.userId) return
-  buRoles.value = await userApi.getBusinessUnitRoles(props.userId)
-}
-
-const resetAssignDialog = () => {
-  assignForm.businessUnitId = ''
-  assignForm.roleId = ''
-  assignRoleOptions.value = []
-  assignRoleLoaded.value = false
-}
-
-const onAssignBuChange = async () => {
-  const buId = assignForm.businessUnitId
-  assignForm.roleId = ''
-  assignRoleOptions.value = []
-  assignRoleLoaded.value = false
-  if (!buId) return
-  assignRoleLoading.value = true
-  try {
-    const assignable = await listAssignableBuBoundedRoles(buId)
-    const taken = new Set(
-      buRoles.value.filter((r) => r.businessUnitId === buId).map((r) => r.roleId)
-    )
-    assignRoleOptions.value = assignable.filter((r) => !taken.has(r.id))
-  } catch (error: any) {
-    ElMessage.error(error.message || t('common.failed'))
-  } finally {
-    assignRoleLoading.value = false
-    assignRoleLoaded.value = true
-  }
-}
-
-const openAssignBuRole = async () => {
-  if (!businessUnits.value.length) {
-    ElMessage.warning(t('user.assignBuRoleNeedMembership'))
-    return
-  }
-  resetAssignDialog()
-  assignForm.businessUnitId = businessUnits.value[0]!.id
-  assignDialogVisible.value = true
-  await onAssignBuChange()
-}
-
-const submitAssignBuRole = async () => {
-  if (!user.value || !assignForm.businessUnitId || !assignForm.roleId) {
-    ElMessage.warning(t('user.selectRoleForBu'))
-    return
-  }
-  assignSubmitting.value = true
-  try {
-    await userApi.assignBusinessUnitRole(user.value.id, assignForm.businessUnitId, assignForm.roleId)
-    ElMessage.success(t('common.success'))
-    assignDialogVisible.value = false
-    await reloadBuRoles()
-  } catch (error: any) {
-    ElMessage.error(error.message || t('common.failed'))
-  } finally {
-    assignSubmitting.value = false
-  }
-}
-
-const handleRemoveBuRole = async (row: UserBusinessUnitRole) => {
-  if (!user.value) return
-  const roleLabel = row.roleName || row.roleCode || row.roleId
-  try {
-    await ElMessageBox.confirm(
-      t('user.confirmRemoveBuRole', { role: roleLabel }),
-      t('common.confirm'),
-      { type: 'warning' }
-    )
-    await userApi.removeBusinessUnitRole(user.value.id, row.businessUnitId, row.roleId)
-    ElMessage.success(t('common.success'))
-    await reloadBuRoles()
-  } catch (error: any) {
-    if (error !== 'cancel') ElMessage.error(error.message || t('common.failed'))
-  }
-}
+const { loading, detailActiveTab, user, businessUnits, portalVirtualGroups, platformVirtualGroups,
+  platformRoles, buRoles, buRoleGroups, assignDialogVisible, assignRoleLoading, assignSubmitting,
+  assignRoleOptions, assignRoleLoaded, assignForm,
+  getPlatformRoleTagType, statusType, statusText, formatDate,
+  loadDetail, onAssignBuChange, openAssignBuRole, submitAssignBuRole, removeBuRole, resetPassword,
+} = useUserDetail(toRef(props, 'userId'))
 
 watch(() => props.modelValue, async (val) => {
-  if (val && props.userId) {
-    detailActiveTab.value = 'portal'
-    loading.value = true
-    try {
-      const [userData, buData, portalVg, platformVg, platRoles, ubrData] = await Promise.all([
-        userApi.getById(props.userId),
-        userApi.getBusinessUnits(props.userId),
-        userApi.getVirtualGroups(props.userId, 'PORTAL'),
-        userApi.getVirtualGroups(props.userId, 'ADMIN'),
-        userApi.getRoles(props.userId, 'ADMIN'),
-        userApi.getBusinessUnitRoles(props.userId)
-      ])
-      user.value = userData
-      businessUnits.value = buData
-      portalVirtualGroups.value = portalVg
-      platformVirtualGroups.value = platformVg
-      platformRoles.value = platRoles || []
-      buRoles.value = ubrData
-    } catch (error: any) {
-      ElMessage.error(error.message || t('common.failed'))
-    } finally {
-      loading.value = false
-    }
-  }
+  if (val && props.userId) { detailActiveTab.value = 'portal'; await loadDetail() }
 })
-
-const handleResetPassword = async () => {
-  if (!user.value) return
-  try {
-    await ElMessageBox.confirm(t('user.resetPassword') + ` - ${user.value.fullName}?`, t('common.confirm'), { type: 'warning' })
-    await userApi.resetPassword(user.value.id)
-    ElMessage.success(t('user.passwordResetNoPlaintext'))
-  } catch (error: any) {
-    if (error !== 'cancel') ElMessage.error(error.message || t('common.failed'))
-  }
-}
 </script>
 
 <style scoped lang="scss">

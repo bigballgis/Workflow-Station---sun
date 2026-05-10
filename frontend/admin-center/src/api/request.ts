@@ -1,5 +1,6 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
-import { ElMessage } from 'element-plus'
+import { notifyError, notifyWarning } from '@/utils/notify'
+import { ApiError, httpCodeToErrorCode } from '@/types/errors'
 import { refreshToken as refreshAuthToken, REFRESH_TOKEN_KEY, TOKEN_KEY, USER_ID_KEY, USERNAME_KEY, clearAuth } from './auth'
 import i18n from '@/i18n'
 import { pickHttpErrorBodyMessage } from '@/utils/httpErrorMessage'
@@ -89,57 +90,61 @@ request.interceptors.response.use(
         }
       } else {
         clearAuth()
-        ElMessage.warning(i18n.global.t('api.unauthorized'))
+        notifyWarning(i18n.global.t('api.unauthorized'))
         setSsoReturnPath(window.location.pathname + window.location.search)
         redirectToUnifiedLogin('admin')
-        return Promise.reject(error)
+        return Promise.reject(new ApiError(httpCodeToErrorCode(401), 401, undefined))
       }
     }
 
     if (error.response) {
       const { status, data } = error.response
       const errorMsg = pickHttpErrorBodyMessage(data)
+      const code = httpCodeToErrorCode(status)
+      let userMsg: string
       
       switch (status) {
         case 400:
-          ElMessage.error(errorMsg || i18n.global.t('api.invalidParams'))
+          userMsg = errorMsg || i18n.global.t('api.invalidParams')
           break
         case 403:
-          ElMessage.error(errorMsg || i18n.global.t('api.noPermission'))
+          userMsg = errorMsg || i18n.global.t('api.noPermission')
           break
         case 404:
-          ElMessage.error(errorMsg || i18n.global.t('api.notFound'))
+          userMsg = errorMsg || i18n.global.t('api.notFound')
           break
         case 409: {
-          const apiErr = (data as any)?.error
-          const msg409 = apiErr?.message || apiErr?.code || errorMsg || i18n.global.t('api.conflict')
-          ElMessage.error(msg409)
+          const apiErr = (data as Record<string, unknown>)?.error as Record<string, unknown> | undefined
+          userMsg = (apiErr?.message || apiErr?.code || errorMsg || i18n.global.t('api.conflict')) as string
           break
         }
         case 422:
-          ElMessage.error(errorMsg || i18n.global.t('api.businessError'))
+          userMsg = errorMsg || i18n.global.t('api.businessError')
           break
         case 429:
-          ElMessage.error(errorMsg || i18n.global.t('api.tooManyRequests'))
+          userMsg = errorMsg || i18n.global.t('api.tooManyRequests')
           break
         case 500:
-          ElMessage.error(errorMsg || i18n.global.t('api.serverError'))
+          userMsg = errorMsg || i18n.global.t('api.serverError')
           break
         case 502:
-          ElMessage.error(i18n.global.t('api.serviceUnavailable'))
+          userMsg = i18n.global.t('api.serviceUnavailable')
           break
         case 503:
-          ElMessage.error(i18n.global.t('api.serviceMaintenance'))
+          userMsg = i18n.global.t('api.serviceMaintenance')
           break
         default:
-          ElMessage.error(errorMsg || `${i18n.global.t('api.requestFailed')} (${status})`)
+          userMsg = errorMsg || `${i18n.global.t('api.requestFailed')} (${status})`
       }
+      notifyError(userMsg)
+      return Promise.reject(new ApiError(code, status, errorMsg))
     } else if (error.request) {
-      ElMessage.error(i18n.global.t('api.networkError'))
+      notifyError(i18n.global.t('api.networkError'))
+      return Promise.reject(new ApiError('NETWORK_ERROR', 0))
     } else {
-      ElMessage.error(i18n.global.t('api.configError'))
+      notifyError(i18n.global.t('api.configError'))
+      return Promise.reject(new ApiError('CONFIG_ERROR', 0))
     }
-    return Promise.reject(error)
   }
 )
 

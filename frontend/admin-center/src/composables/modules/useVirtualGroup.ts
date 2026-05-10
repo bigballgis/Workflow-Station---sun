@@ -7,8 +7,10 @@
 
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { AppErrorCode } from '@/types/errors'
+import { errorTranslator } from '@/utils/errorTranslator'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
-import { ElMessage } from 'element-plus'
+import { notifyError, notifySuccess } from '@/utils/notify'
 import type { VirtualGroup } from '@/api/virtualGroup'
 import { storeToRefs } from 'pinia'
 import { useVirtualGroupStore } from '@/stores/virtualGroup'
@@ -31,7 +33,7 @@ export function useVirtualGroup() {
     try {
       await store.fetchGroups()
     } catch (e) {
-      ElMessage.error(t('common.failed'))
+      notifyError(t(errorTranslator(AppErrorCode.VIRTUAL_GROUP_LOAD_FAILED)))
     }
   }
 
@@ -64,15 +66,20 @@ export function useVirtualGroup() {
 
   // ==================== Delete ====================
 
-  const { handleDelete } = useConfirmDelete(
+  const { handleDelete: deleteById } = useConfirmDelete(
     (id: string) => store.deleteGroup(id),
     {
       confirmMessage: t('common.confirm'),
-      successMessage: t('common.success'),
-      errorMessage: t('common.failed'),
       onSuccess: fetchGroups,
     }
   )
+
+  const handleDelete = async (id: string) => {
+    const r = await deleteById(id)
+    if (r.cancelled) return
+    if (r.ok) notifySuccess(t('common.success'))
+    else notifyError(t(errorTranslator(r.code || AppErrorCode.VIRTUAL_GROUP_LOAD_FAILED)))
+  }
 
   // ==================== Return ====================
 

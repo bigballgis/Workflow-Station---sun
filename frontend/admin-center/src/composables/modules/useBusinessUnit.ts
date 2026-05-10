@@ -4,12 +4,12 @@
  * 封装 BusinessUnitTree.vue 的所有 API 调用和业务逻辑。
  * 组件仅保留 template + 调用此 composable + useTabRefresh。
  *
- * 所有 ElMessage / ElMessageBox 调用均在此处处理。
+ * 所有 notify* / notifyConfirm 调用均在此处处理。
  */
 
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { notifyConfirm, notifyError, notifySuccess } from '@/utils/notify'
 import { useOrganizationStore } from '@/stores/organization'
 import { type BusinessUnit, organizationApi } from '@/api/organization'
 import { businessUnitApi, type Approver } from '@/api/businessUnit'
@@ -79,7 +79,7 @@ export function useBusinessUnit() {
   const handleNodeDrop = async (draggingNode: any, dropNode: any, dropType: string) => {
     const newParentId = dropType === 'inner' ? dropNode.data.id : dropNode.data.parentId
     await orgStore.moveBusinessUnit(draggingNode.data.id, { newParentId })
-    ElMessage.success(t('common.success'))
+    notifySuccess(t('common.success'))
   }
 
   // ==================== Dialog Actions ====================
@@ -125,13 +125,13 @@ export function useBusinessUnit() {
   }
 
   const handleDelete = async (bu: BusinessUnit) => {
-    await ElMessageBox.confirm(t('organization.deleteConfirm'), t('common.confirm'), { type: 'warning' })
+    await notifyConfirm(t('organization.deleteConfirm'), t('common.confirm'), { type: 'warning' })
     try {
       await orgStore.deleteBusinessUnit(bu.id)
-      ElMessage.success(t('common.success'))
+      notifySuccess(t('common.success'))
       if (selectedBusinessUnit.value?.id === bu.id) selectedBusinessUnit.value = null
-    } catch (e: any) {
-      ElMessage.error(e.response?.data?.message || t('common.failed'))
+    } catch {
+      notifyError(e.response?.data?.message || t('common.failed'))
     }
   }
 

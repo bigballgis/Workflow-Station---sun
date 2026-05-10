@@ -1,3 +1,4 @@
+import { PageResult } from '@/types/common'
 import { get, post, put, del } from './request'
 
 export interface User {
@@ -52,14 +53,6 @@ export interface UserQuery {
   status?: string
   page?: number
   size?: number
-}
-
-export interface PageResult<T> {
-  content: T[]
-  totalElements: number
-  totalPages: number
-  size: number
-  number: number
 }
 
 export interface CreateUserRequest {

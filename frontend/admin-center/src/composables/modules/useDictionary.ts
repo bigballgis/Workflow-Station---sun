@@ -7,8 +7,11 @@
 
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { AppErrorCode } from '@/types/errors'
+import { errorTranslator } from '@/utils/errorTranslator'
 import { useConfirmDelete } from '@/composables/useConfirmDelete'
-import { ElMessage } from 'element-plus'
+import { logger } from '@/utils/logger'
+import { notifyError, notifySuccess } from '@/utils/notify'
 import { storeToRefs } from 'pinia'
 import { useDictionaryStore } from '@/stores/dictionary'
 import type { Dictionary, DictionaryItem } from '@/api/dictionary'
@@ -47,8 +50,8 @@ export function useDictionary() {
     try {
       await store.fetchDictionaries()
     } catch (e) {
-      console.error('Failed to load dictionaries:', e)
-      ElMessage.error(t('dictionary.loadListFailed'))
+      logger.error('dictionary', 'Failed to load dictionaries:', e)
+      notifyError(t(errorTranslator(AppErrorCode.DICTIONARY_LOAD_LIST_FAILED)))
     }
   }
 
@@ -58,8 +61,8 @@ export function useDictionary() {
     try {
       dictItems.value = await store.fetchItems(selectedDict.value.id)
     } catch (e) {
-      console.error('Failed to load dictionary items:', e)
-      ElMessage.error(t('dictionary.loadItemsFailed'))
+      logger.error('dictionary', 'Failed to load dictionary items:', e)
+      notifyError(t(errorTranslator(AppErrorCode.DICTIONARY_LOAD_ITEMS_FAILED)))
     } finally {
       itemsLoading.value = false
     }
@@ -95,13 +98,16 @@ export function useDictionary() {
     {
       confirmMessage: t('dictionary.deleteConfirm'),
       confirmTitle: t('dictionary.deleteConfirmTitle'),
-      successMessage: t('dictionary.deleteSuccess'),
-      errorMessage: t('dictionary.deleteFailed'),
       onSuccess: fetchDictItems,
     }
   )
 
-  const handleDeleteItem = (item: DictionaryItem) => deleteById(item.id)
+  const handleDeleteItem = async (item: DictionaryItem) => {
+    const r = await deleteById(item.id)
+    if (r.cancelled) return
+    if (r.ok) notifySuccess(t('dictionary.deleteSuccess'))
+    else notifyError(t(errorTranslator(r.code || AppErrorCode.DICTIONARY_LOAD_ITEMS_FAILED)))
+  }
 
   // ==================== Return ====================
 

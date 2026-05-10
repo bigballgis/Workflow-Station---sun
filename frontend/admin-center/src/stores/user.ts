@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { userApi, type User, type UserQuery, type PageResult, type UserDetail, type CreateUserRequest, type UpdateUserRequest } from '@/api/user'
+import { userApi, type User, type UserQuery, type PageResult, type UserDetail } from '@/api/user'
 
 export const useUserStore = defineStore('user', () => {
   const users = ref<User[]>([])
@@ -28,28 +28,5 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
-  const createUser = async (data: CreateUserRequest) => {
-    return await userApi.create(data)
-  }
-
-  const updateUser = async (id: string, data: UpdateUserRequest) => {
-    await userApi.update(id, data)
-  }
-
-  const deleteUser = async (id: string) => {
-    await userApi.delete(id)
-  }
-
-  const updateStatus = async (id: string, status: 'ACTIVE' | 'DISABLED' | 'LOCKED', reason?: string) => {
-    await userApi.updateStatus(id, { status, reason })
-  }
-
-  const resetPassword = async (id: string) => {
-    return await userApi.resetPassword(id)
-  }
-
-  return { 
-    users, total, loading, currentUser, 
-    fetchUsers, fetchUserDetail, createUser, updateUser, deleteUser, updateStatus, resetPassword 
-  }
+  return { users, total, loading, currentUser, fetchUsers, fetchUserDetail }
 })

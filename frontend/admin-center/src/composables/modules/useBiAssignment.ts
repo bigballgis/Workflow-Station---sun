@@ -7,7 +7,10 @@
 
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { AppErrorCode } from '@/types/errors'
+import { errorTranslator } from '@/utils/errorTranslator'
+import { logger } from '@/utils/logger'
+import { notifyConfirm, notifyError, notifySuccess } from '@/utils/notify'
 import { useBiManagementStore } from '@/stores/biManagement'
 import { usePagination } from '@/composables/usePagination'
 import type {
@@ -69,7 +72,7 @@ export function useBiAssignment() {
 
   const handleDelete = async (row: DashboardAssignmentResponse) => {
     try {
-      await ElMessageBox.confirm(
+      await notifyConfirm(
         t('bi.assignment.deleteConfirm', { title: row.dashboardTitle, target: row.targetName }),
         t('bi.assignment.deleteConfirmTitle'),
         {
@@ -80,12 +83,12 @@ export function useBiAssignment() {
         }
       )
       await store.deleteAssignment(row.id)
-      ElMessage.success(t('bi.assignment.deleteSuccess'))
+      notifySuccess(t('bi.assignment.deleteSuccess'))
       handleSearch()
     } catch (error) {
       if (error !== 'cancel') {
-        console.error('assignment delete failed', error)
-        ElMessage.error(t('bi.assignment.deleteFailed'))
+        logger.error('biAssignment', 'assignment delete failed', error)
+        notifyError(t(errorTranslator(AppErrorCode.BI_ASSIGNMENT_DELETE_FAILED)))
       }
     }
   }

@@ -1,4 +1,5 @@
 import request from './request'
+import type { PageResult } from '@/types/common'
 
 // ==================== 类型定义 ====================
 
@@ -84,14 +85,6 @@ export interface AuditQueryRequest {
   ipAddress?: string
   startTime?: string
   endTime?: string
-}
-
-export interface PageResult<T> {
-  content: T[]
-  totalElements: number
-  totalPages: number
-  size: number
-  number: number
 }
 
 export interface AnomalyDetectionResult {

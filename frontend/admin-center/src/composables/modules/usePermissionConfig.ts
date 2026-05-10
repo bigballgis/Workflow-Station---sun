@@ -3,7 +3,10 @@
  */
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessage } from 'element-plus'
+import { AppErrorCode } from '@/types/errors'
+import { errorTranslator } from '@/utils/errorTranslator'
+import { logger } from '@/utils/logger'
+import { notifyError, notifySuccess } from '@/utils/notify'
 import { useRoleStore } from '@/stores/role'
 import { roleApi, permissionApi, type Role } from '@/api/role'
 
@@ -44,8 +47,8 @@ export function usePermissionConfig() {
         }
       })
     } catch (error) {
-      console.error('Failed to load role permissions:', error)
-      ElMessage.error(t('permission.loadRolePermissionFailed'))
+      logger.error('permissionConfig', 'Failed to load role permissions:', error)
+      notifyError(t(errorTranslator(AppErrorCode.PERMISSION_LOAD_ROLE_FAILED)))
     } finally { loading.value = false }
   }
 
@@ -60,10 +63,10 @@ export function usePermissionConfig() {
           actions: Object.entries(item.permissions).filter(([_, enabled]) => enabled).map(([action]) => action)
         }))
       await roleApi.updatePermissions(selectedRole.value.id, permissions)
-      ElMessage.success(t('common.success'))
+      notifySuccess(t('common.success'))
     } catch (error) {
-      console.error('Failed to save permissions:', error)
-      ElMessage.error(t('permission.savePermissionFailed'))
+      logger.error('permissionConfig', 'Failed to save permissions:', error)
+      notifyError(t(errorTranslator(AppErrorCode.PERMISSION_SAVE_FAILED)))
     } finally { loading.value = false }
   }
 
@@ -71,8 +74,8 @@ export function usePermissionConfig() {
     await roleStore.fetchRoles()
     try { allPermissions.value = await permissionApi.getTree() }
     catch (error) {
-      console.error('Failed to load permissions:', error)
-      ElMessage.error(t('permission.loadPermissionListFailed'))
+      logger.error('permissionConfig', 'Failed to load permissions:', error)
+      notifyError(t(errorTranslator(AppErrorCode.PERMISSION_LOAD_LIST_FAILED)))
     }
   })
 

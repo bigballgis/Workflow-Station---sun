@@ -1,3 +1,4 @@
+import { PageResult } from '@/types/common'
 import { get } from './request'
 
 export type PermissionRequestType = 'VIRTUAL_GROUP' | 'BUSINESS_UNIT_ROLE'
@@ -31,14 +32,6 @@ export interface PermissionRequestQuery {
   endDate?: string
   page?: number
   size?: number
-}
-
-export interface PageResult<T> {
-  content: T[]
-  totalElements: number
-  totalPages: number
-  size: number
-  number: number
 }
 
 export const permissionRequestApi = {

@@ -3,7 +3,10 @@
  */
 import { ref, reactive, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessage } from 'element-plus'
+import { AppErrorCode } from '@/types/errors'
+import { errorTranslator } from '@/utils/errorTranslator'
+import { logger } from '@/utils/logger'
+import { notifyError, notifySuccess } from '@/utils/notify'
 import { configApi } from '@/api/config'
 
 export function useConfig() {
@@ -27,7 +30,7 @@ export function useConfig() {
         if (config.configKey === 'task.assignRule') businessConfig.taskAssignRule = config.configValue || 'ROUND_ROBIN'
       })
     } catch (e) {
-      console.error('Failed to load configs:', e)
+      logger.error('config', 'Failed to load configs:', e)
     } finally {
       loading.value = false
     }
@@ -47,10 +50,10 @@ export function useConfig() {
           configApi.update('task.assignRule', { configValue: businessConfig.taskAssignRule })
         ])
       }
-      ElMessage.success(type === 'system' ? t('config.systemSaveSuccess') : t('config.businessSaveSuccess'))
+      notifySuccess(type === 'system' ? t('config.systemSaveSuccess') : t('config.businessSaveSuccess'))
     } catch (e) {
-      console.error('Failed to save config:', e)
-      ElMessage.error(t('config.saveFailed'))
+      logger.error('config', 'Failed to save config:', e)
+      notifyError(t(errorTranslator(AppErrorCode.CONFIG_SAVE_FAILED)))
     }
   }
 

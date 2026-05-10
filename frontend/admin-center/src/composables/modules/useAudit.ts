@@ -7,8 +7,10 @@
 
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { AppErrorCode } from '@/types/errors'
+import { errorTranslator } from '@/utils/errorTranslator'
 import { storeToRefs } from 'pinia'
-import { ElMessage } from 'element-plus'
+import { notifyError, notifySuccess } from '@/utils/notify'
 import type { TableInstance } from 'element-plus'
 import DOMPurify from 'dompurify'
 import { exportAuditLogs, type AuditLog } from '@/api/audit'
@@ -338,10 +340,10 @@ export function useAudit() {
       exporting.value = true
       try {
         await exportAuditLogs(store.buildQueryRequest())
-        ElMessage.success(t('common.success'))
+        notifySuccess(t('common.success'))
         exportDialogVisible.value = false
       } catch (e) {
-        ElMessage.error(t('common.failed'))
+        notifyError(t(errorTranslator(AppErrorCode.AUDIT_EXPORT_FAILED)))
       } finally {
         exporting.value = false
       }

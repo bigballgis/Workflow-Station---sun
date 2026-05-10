@@ -71,69 +71,22 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessage, type UploadInstance, type UploadFile, type UploadRawFile } from 'element-plus'
+import type { UploadInstance, UploadFile, UploadRawFile } from 'element-plus'
 import { Upload, Download } from '@element-plus/icons-vue'
 import DOMPurify from 'dompurify'
-import { userApi, type ImportResult } from '@/api/user'
+import { useUserImport } from '@/composables/modules/useUserImport'
 
 const { t } = useI18n()
-
 defineProps<{ modelValue: boolean }>()
 const emit = defineEmits(['update:modelValue', 'success'])
-
 const uploadRef = ref<UploadInstance>()
-const loading = ref(false)
-const selectedFile = ref<File | null>(null)
-const importResult = ref<ImportResult | null>(null)
 
-const handleFileChange = (file: UploadFile) => {
-  if (file.raw) {
-    if (file.raw.size > 5 * 1024 * 1024) {
-      ElMessage.error(t('user.fileSizeExceeded'))
-      uploadRef.value?.clearFiles()
-      return
-    }
-    selectedFile.value = file.raw
-    importResult.value = null
-  }
-}
+const { loading, selectedFile, importResult, validateFile, downloadTemplate, doImport }
+  = useUserImport(() => emit('success'))
 
-const handleExceed = () => {
-  ElMessage.warning(t('user.onlyOneFile'))
-}
-
-const handleDownloadTemplate = async () => {
-  try {
-    const blob = await userApi.exportTemplate()
-    const url = window.URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = t('user.templateFileName')
-    link.click()
-    window.URL.revokeObjectURL(url)
-  } catch (error: any) {
-    ElMessage.error(error.message || t('user.downloadTemplateFailed'))
-  }
-}
-
-const handleImport = async () => {
-  if (!selectedFile.value) return
-  
-  loading.value = true
-  try {
-    importResult.value = await userApi.batchImport(selectedFile.value)
-    if (importResult.value.success > 0) {
-      emit('success')
-    }
-    if (importResult.value.failed === 0) {
-      ElMessage.success(t('user.importSuccessResult'))
-    }
-  } catch (error: any) {
-    ElMessage.error(error.message || t('user.importFailed'))
-  } finally {
-    loading.value = false
-  }
-}
+const handleFileChange = (file: UploadFile) => { if (file.raw) validateFile(file.raw) || uploadRef.value?.clearFiles() }
+const handleDownloadTemplate = () => downloadTemplate()
+const handleImport = () => doImport()
 </script>
 
 <style scoped lang="scss">

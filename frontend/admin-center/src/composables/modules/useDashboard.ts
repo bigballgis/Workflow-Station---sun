@@ -3,6 +3,7 @@
  */
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { logger } from '@/utils/logger'
 import * as echarts from 'echarts'
 import { getStats, getRecentActivities, getUserTrends, type DashboardStats, type RecentActivity, type UserTrend } from '@/api/dashboard'
 
@@ -41,21 +42,21 @@ export function useDashboard() {
   const loadStats = async () => {
     statsLoading.value = true
     try { stats.value = await getStats() }
-    catch (e) { console.error('Failed to load stats:', e) }
+    catch (e) { logger.error('dashboard', 'Failed to load stats:', e) }
     finally { statsLoading.value = false }
   }
 
   const loadActivities = async () => {
     activitiesLoading.value = true
     try { activities.value = await getRecentActivities(10) }
-    catch (e) { console.error('Failed to load activities:', e) }
+    catch (e) { logger.error('dashboard', 'Failed to load activities:', e) }
     finally { activitiesLoading.value = false }
   }
 
   const loadTrends = async () => {
     trendsLoading.value = true
     try { trends.value = await getUserTrends(7); updateChart() }
-    catch (e) { console.error('Failed to load trends:', e) }
+    catch (e) { logger.error('dashboard', 'Failed to load trends:', e) }
     finally { trendsLoading.value = false }
   }
 

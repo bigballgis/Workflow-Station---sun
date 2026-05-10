@@ -1,3 +1,4 @@
+import { PageResult } from '@/types/common'
 import { get, post, put, del } from './request'
 
 // ==================== 类型定义 ====================
@@ -93,14 +94,6 @@ export interface RelationTableAuditLog {
 }
 
 /** 分页结果 */
-export interface PageResult<T> {
-  content: T[]
-  totalElements: number
-  totalPages: number
-  size: number
-  number: number
-}
-
 // ==================== 请求类型 ====================
 
 /** 字段定义请求（创建） */

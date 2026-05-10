@@ -67,7 +67,7 @@ const handleSubmit = async () => {
   try {
     const data = {
       name: form.name,
-      type: form.type as any,
+      type: form.type as string,
       description: form.description,
       adGroup: form.adGroup || undefined
     }

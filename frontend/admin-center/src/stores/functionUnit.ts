@@ -23,7 +23,6 @@ export const useFunctionUnitStore = defineStore('functionUnit', () => {
         totalPages = result.totalPages
         page++
       }
-
       functionUnits.value = deduplicateByCode(raw)
     } finally {
       loading.value = false
@@ -43,9 +42,7 @@ export const useFunctionUnitStore = defineStore('functionUnit', () => {
   const setEnabled = async (id: string, enabled: boolean) => {
     await functionUnitApi.setEnabled(id, enabled)
     const unit = functionUnits.value.find(u => u.id === id)
-    if (unit) {
-      unit.enabled = enabled
-    }
+    if (unit) unit.enabled = enabled
   }
 
   const deleteFunctionUnit = async (id: string) => {
@@ -56,9 +53,7 @@ export const useFunctionUnitStore = defineStore('functionUnit', () => {
   const batchSetEnabled = async (ids: string[], enabled: boolean) => {
     await functionUnitApi.batchSetEnabled(ids, enabled)
     for (const unit of functionUnits.value) {
-      if (ids.includes(unit.id)) {
-        unit.enabled = enabled
-      }
+      if (ids.includes(unit.id)) unit.enabled = enabled
     }
   }
 
@@ -67,51 +62,9 @@ export const useFunctionUnitStore = defineStore('functionUnit', () => {
     functionUnits.value = functionUnits.value.filter(u => !ids.includes(u.id))
   }
 
-  const createDeployment = async (id: string, env: string, strategy = 'FULL') => {
-    return await functionUnitApi.createDeployment(id, env, strategy)
-  }
-
-  const rollbackDeployment = async (deploymentId: string, reason: string) => {
-    return await functionUnitApi.rollbackDeployment(deploymentId, reason)
-  }
-
-  const getDeploymentHistory = async (id: string) => {
-    return await functionUnitApi.getDeploymentHistory(id)
-  }
-
-  const getAllVersions = async (code: string) => {
-    return await functionUnitApi.getAllVersions(code)
-  }
-
-  const getDeletePreview = async (id: string) => {
-    return await functionUnitApi.getDeletePreview(id)
-  }
-
-  const importPackage = async (fileName: string, fileContent: string) => {
-    return await functionUnitApi.import({ fileName, fileContent })
-  }
-
-  const getDeployment = async (deploymentId: string) => {
-    return await functionUnitApi.getDeployment(deploymentId)
-  }
-
   return {
-    functionUnits,
-    deployments,
-    loading,
-    deploymentsLoading,
-    fetchFunctionUnits,
-    fetchDeployments,
-    setEnabled,
-    deleteFunctionUnit,
-    batchSetEnabled,
-    batchDelete,
-    createDeployment,
-    rollbackDeployment,
-    getDeploymentHistory,
-    getAllVersions,
-    getDeletePreview,
-    importPackage,
-    getDeployment,
+    functionUnits, deployments, loading, deploymentsLoading,
+    fetchFunctionUnits, fetchDeployments,
+    setEnabled, deleteFunctionUnit, batchSetEnabled, batchDelete,
   }
 })

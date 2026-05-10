@@ -11,12 +11,11 @@
  */
 
 import { ref, reactive, type Ref } from 'vue'
-import { ElMessage } from 'element-plus'
 
 export interface PaginationQuery {
   page: number
   size: number
-  [key: string]: any
+  [key: string]: unknown
 }
 
 export interface PaginationResult<T> {
@@ -46,6 +45,7 @@ export function usePagination<TQuery extends PaginationQuery, TItem>(
   const data = ref<TItem[]>([]) as Ref<TItem[]>
   const total = ref(0)
   const loading = ref(false)
+  const error = ref<string | null>(null)
 
   const defaultQuery = {
     page: 1,
@@ -72,8 +72,9 @@ export function usePagination<TQuery extends PaginationQuery, TItem>(
       const result = await fetchFn(params)
       data.value = result.content
       total.value = result.totalElements
-    } catch (error: any) {
-      ElMessage.error(error.message || errorMessage)
+    } catch (err: unknown) {
+      const e = err as { message?: string; code?: string }
+      error.value = e.message || e.code || errorMessage
     } finally {
       loading.value = false
     }
@@ -91,6 +92,7 @@ export function usePagination<TQuery extends PaginationQuery, TItem>(
     data,
     total,
     loading,
+    error,
     query,
     handleSearch,
     handleReset,

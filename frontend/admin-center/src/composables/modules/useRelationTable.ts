@@ -3,17 +3,23 @@
  *
  * 封装 relation-table/structure/index.vue 页面的所有 API 调用和业务逻辑。
  * 组件仅保留 template + 调用此 composable。
+ *
+ * 所有 notify* 调用均在此处处理。错误通过 AppErrorCode 标准化。
  */
 
 import { ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { useI18n } from 'vue-i18n'
+import { notifyConfirm, notifyError, notifySuccess } from '@/utils/notify'
+import { AppErrorCode, createError } from '@/types/errors'
+import { errorTranslator } from '@/utils/errorTranslator'
 import { useRelationTableStore } from '@/stores/relationTable'
 import type { RelationTableResponse } from '@/api/relationTable'
 
 export function useRelationTable() {
   const router = useRouter()
+  const { t } = useI18n()
   const store = useRelationTableStore()
   const { tableList, loading } = storeToRefs(store)
 
@@ -25,6 +31,10 @@ export function useRelationTable() {
   const showVersionDialog = ref(false)
   const showAccessDialog = ref(false)
   const showCompareDialog = ref(false)
+
+  // ==================== Helpers ====================
+
+  const terr = (code: string) => t(errorTranslator(code))
 
   // ==================== Data Fetching ====================
 
@@ -38,9 +48,10 @@ export function useRelationTable() {
     enableLoadingMap.value = { ...enableLoadingMap.value, [row.id]: true }
     try {
       await store.setEnabled(row.id, val)
-      ElMessage.success(val ? 'Enabled' : 'Disabled')
+      notifySuccess(t(val ? 'relationTable.enabled' : 'relationTable.disabled'))
     } catch {
       row.enabled = !val
+      notifyError(terr(AppErrorCode.RELATION_TABLE_TOGGLE_FAILED))
     } finally {
       enableLoadingMap.value = { ...enableLoadingMap.value, [row.id]: false }
     }
@@ -50,9 +61,10 @@ export function useRelationTable() {
     portalLoadingMap.value = { ...portalLoadingMap.value, [row.id]: true }
     try {
       await store.setPortalVisibility(row.id, val)
-      ElMessage.success(val ? 'Portal visible' : 'Portal hidden')
+      notifySuccess(t(val ? 'relationTable.portalVisible' : 'relationTable.portalHidden'))
     } catch {
       row.portalVisible = !val
+      notifyError(terr(AppErrorCode.RELATION_TABLE_TOGGLE_FAILED))
     } finally {
       portalLoadingMap.value = { ...portalLoadingMap.value, [row.id]: false }
     }
@@ -85,17 +97,17 @@ export function useRelationTable() {
 
   const handleDeploy = async (row: RelationTableResponse) => {
     try {
-      await ElMessageBox.confirm(
-        `Deploy table "${row.tableName}" to database?`,
-        'Confirm Deploy',
+      await notifyConfirm(
+        t('relationTable.confirmDeployMsg', { name: row.tableName }),
+        t('relationTable.confirmDeploy'),
         { type: 'warning' }
       )
       await store.deployTable(row.id)
-      ElMessage.success('Deployed successfully')
+      notifySuccess(t('relationTable.deployedSuccessfully'))
       store.fetchTableList()
-    } catch (e: any) {
+    } catch (e) {
       if (e !== 'cancel') {
-        console.error('Deploy failed:', e)
+        notifyError(terr(AppErrorCode.RELATION_TABLE_DEPLOY_FAILED))
       }
     }
   }
@@ -104,17 +116,17 @@ export function useRelationTable() {
 
   const handleDelete = async (row: RelationTableResponse) => {
     try {
-      await ElMessageBox.confirm(
-        `Delete table "${row.tableName}"? This action cannot be undone.`,
-        'Confirm Delete',
+      await notifyConfirm(
+        t('relationTable.confirmDeleteMsg', { name: row.tableName }),
+        t('relationTable.confirmDelete'),
         { type: 'warning' }
       )
       await store.deleteTable(row.id)
-      ElMessage.success('Deleted successfully')
+      notifySuccess(t('relationTable.deletedSuccessfully'))
       store.fetchTableList()
-    } catch (e: any) {
+    } catch (e) {
       if (e !== 'cancel') {
-        console.error('Delete failed:', e)
+        notifyError(terr(AppErrorCode.RELATION_TABLE_DELETE_FAILED))
       }
     }
   }
