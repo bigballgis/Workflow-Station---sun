@@ -21,7 +21,9 @@
     >
       <!-- 拖拽上传 -->
       <template v-if="drag">
-        <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
+        <el-icon class="el-icon--upload">
+          <UploadFilled />
+        </el-icon>
         <div class="el-upload__text">
           {{ $t('upload.dragText') }}
           <em>{{ $t('upload.clickText') }}</em>
@@ -30,7 +32,10 @@
 
       <!-- 按钮上传 -->
       <template v-else-if="listType === 'text'">
-        <el-button type="primary" :disabled="disabled || readonly">
+        <el-button
+          type="primary"
+          :disabled="disabled || readonly"
+        >
           <el-icon><Upload /></el-icon>
           {{ buttonText || $t('upload.selectFile') }}
         </el-button>
@@ -43,19 +48,31 @@
 
       <!-- 提示信息 -->
       <template #tip>
-        <div class="el-upload__tip" v-if="showTip">
+        <div
+          v-if="showTip"
+          class="el-upload__tip"
+        >
           {{ tipText || defaultTipText }}
         </div>
       </template>
 
       <!-- 文件列表项 -->
       <template #file="{ file }">
-        <div class="file-item" :class="{ 'is-error': file.status === 'fail' }">
+        <div
+          class="file-item"
+          :class="{ 'is-error': file.status === 'fail' }"
+        >
           <el-icon class="file-icon">
             <component :is="getFileIcon(file.name)" />
           </el-icon>
-          <span class="file-name" :title="file.name">{{ file.name }}</span>
-          <span class="file-size" v-if="file.size">{{ formatFileSize(file.size) }}</span>
+          <span
+            class="file-name"
+            :title="file.name"
+          >{{ file.name }}</span>
+          <span
+            v-if="file.size"
+            class="file-size"
+          >{{ formatFileSize(file.size) }}</span>
           <div class="file-actions">
             <el-button
               v-if="file.status === 'success'"

@@ -1,37 +1,90 @@
 <template>
-  <el-dialog :model-value="modelValue" @update:model-value="$emit('update:modelValue', $event)" :title="isEdit ? t('role.editRole') : t('role.createRole')" width="500px">
-    <el-form ref="formRef" :model="form" :rules="rules" label-width="auto" label-position="left">
-      <el-form-item :label="t('role.roleName')" prop="name">
+  <el-dialog
+    :model-value="modelValue"
+    :title="isEdit ? t('role.editRole') : t('role.createRole')"
+    width="500px"
+    @update:model-value="$emit('update:modelValue', $event)"
+  >
+    <el-form
+      ref="formRef"
+      :model="form"
+      :rules="rules"
+      label-width="auto"
+      label-position="left"
+    >
+      <el-form-item
+        :label="t('role.roleName')"
+        prop="name"
+      >
         <el-input v-model="form.name" />
       </el-form-item>
-      <el-form-item :label="t('role.roleCode')" prop="code">
-        <el-input v-model="form.code" :disabled="isEdit" />
+      <el-form-item
+        :label="t('role.roleCode')"
+        prop="code"
+      >
+        <el-input
+          v-model="form.code"
+          :disabled="isEdit"
+        />
       </el-form-item>
-      <el-form-item :label="t('role.roleType')" prop="type">
-        <el-select v-model="form.type" :placeholder="t('role.selectRoleType')" style="width: 100%">
-          <el-option :label="t('role.buBounded')" value="BU_BOUNDED">
+      <el-form-item
+        :label="t('role.roleType')"
+        prop="type"
+      >
+        <el-select
+          v-model="form.type"
+          :placeholder="t('role.selectRoleType')"
+          style="width: 100%"
+        >
+          <el-option
+            :label="t('role.buBounded')"
+            value="BU_BOUNDED"
+          >
             <span>{{ t('role.buBounded') }}</span>
             <span style="color: #909399; font-size: 12px; margin-left: 8px;">{{ t('role.buBoundedDesc') }}</span>
           </el-option>
-          <el-option :label="t('role.buUnbounded')" value="BU_UNBOUNDED">
+          <el-option
+            :label="t('role.buUnbounded')"
+            value="BU_UNBOUNDED"
+          >
             <span>{{ t('role.buUnbounded') }}</span>
             <span style="color: #909399; font-size: 12px; margin-left: 8px;">{{ t('role.buUnboundedDesc') }}</span>
           </el-option>
         </el-select>
       </el-form-item>
-      <el-form-item v-if="isEdit" :label="t('common.status')" prop="status">
+      <el-form-item
+        v-if="isEdit"
+        :label="t('common.status')"
+        prop="status"
+      >
         <el-radio-group v-model="form.status">
-          <el-radio label="ACTIVE">{{ t('common.enabled') }}</el-radio>
-          <el-radio label="INACTIVE">{{ t('common.disabled') }}</el-radio>
+          <el-radio label="ACTIVE">
+            {{ t('common.enabled') }}
+          </el-radio>
+          <el-radio label="INACTIVE">
+            {{ t('common.disabled') }}
+          </el-radio>
         </el-radio-group>
       </el-form-item>
       <el-form-item :label="t('role.description')">
-        <el-input v-model="form.description" type="textarea" :rows="3" />
+        <el-input
+          v-model="form.description"
+          type="textarea"
+          :rows="3"
+        />
       </el-form-item>
     </el-form>
     <template #footer>
-      <el-button @click="$emit('update:modelValue', false)">{{ t('common.cancel') }}</el-button>
-      <el-button type="primary" :loading="loading" @click="handleSubmit">{{ t('common.confirm') }}</el-button>
+      <el-button @click="$emit('update:modelValue', false)">
+        {{ t('common.cancel') }}
+      </el-button>
+      <el-button
+        type="primary"
+        :loading="loading"
+        @click="handleSubmit"
+      >
+        {{ t('common.confirm') }}
+      </el-button>
     </template>
   </el-dialog>
 </template>

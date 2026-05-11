@@ -1,7 +1,13 @@
 <template>
-  <el-dropdown @command="handleCommand" trigger="click" :hide-on-click="false">
+  <el-dropdown
+    trigger="click"
+    :hide-on-click="false"
+    @command="handleCommand"
+  >
     <div class="user-info">
-      <el-avatar :size="32">{{ userName.charAt(0) }}</el-avatar>
+      <el-avatar :size="32">
+        {{ userName.charAt(0) }}
+      </el-avatar>
       <span class="user-name">{{ userName }}</span>
       <el-icon><ArrowDown /></el-icon>
     </div>
@@ -9,11 +15,19 @@
       <el-dropdown-menu class="user-profile-dropdown">
         <!-- User Basic Info -->
         <div class="profile-header">
-          <el-avatar :size="48">{{ userName.charAt(0) }}</el-avatar>
+          <el-avatar :size="48">
+            {{ userName.charAt(0) }}
+          </el-avatar>
           <div class="profile-info">
-            <div class="profile-name">{{ userName }}</div>
-            <div class="profile-email">{{ userEmail }}</div>
-            <div class="profile-context-hint">{{ t('profile.adminDropdownSubtitle') }}</div>
+            <div class="profile-name">
+              {{ userName }}
+            </div>
+            <div class="profile-email">
+              {{ userEmail }}
+            </div>
+            <div class="profile-context-hint">
+              {{ t('profile.adminDropdownSubtitle') }}
+            </div>
           </div>
         </div>
         
@@ -27,14 +41,31 @@
             <el-icon><Connection /></el-icon>
             {{ t('profile.virtualGroups') }}
           </div>
-          <div v-if="loading" class="section-loading">
-            <el-icon class="is-loading"><Loading /></el-icon>
+          <div
+            v-if="loading"
+            class="section-loading"
+          >
+            <el-icon class="is-loading">
+              <Loading />
+            </el-icon>
           </div>
-          <div v-else-if="virtualGroups.length === 0" class="section-empty">
+          <div
+            v-else-if="virtualGroups.length === 0"
+            class="section-empty"
+          >
             {{ t('profile.noVirtualGroups') }}
           </div>
-          <div v-else class="section-content">
-            <el-tag v-for="vg in virtualGroups" :key="vg.groupId" size="small" type="success" class="item-tag">
+          <div
+            v-else
+            class="section-content"
+          >
+            <el-tag
+              v-for="vg in virtualGroups"
+              :key="vg.groupId"
+              size="small"
+              type="success"
+              class="item-tag"
+            >
               {{ vg.groupName }}
             </el-tag>
           </div>
@@ -46,14 +77,31 @@
             <el-icon><Key /></el-icon>
             {{ t('profile.roles') }}
           </div>
-          <div v-if="loading" class="section-loading">
-            <el-icon class="is-loading"><Loading /></el-icon>
+          <div
+            v-if="loading"
+            class="section-loading"
+          >
+            <el-icon class="is-loading">
+              <Loading />
+            </el-icon>
           </div>
-          <div v-else-if="roles.length === 0" class="section-empty">
+          <div
+            v-else-if="roles.length === 0"
+            class="section-empty"
+          >
             {{ t('profile.noRoles') }}
           </div>
-          <div v-else class="section-content">
-            <el-tag v-for="role in roles" :key="role.id" size="small" :type="getRoleTagType(role.type)" class="item-tag">
+          <div
+            v-else
+            class="section-content"
+          >
+            <el-tag
+              v-for="role in roles"
+              :key="role.id"
+              size="small"
+              :type="getRoleTagType(role.type)"
+              class="item-tag"
+            >
               {{ role.name }}
             </el-tag>
           </div>
@@ -70,7 +118,10 @@
           <el-icon><Setting /></el-icon>
           {{ t('menu.config') }}
         </el-dropdown-item>
-        <el-dropdown-item command="logout" divided>
+        <el-dropdown-item
+          command="logout"
+          divided
+        >
           <el-icon><SwitchButton /></el-icon>
           {{ t('common.logout') }}
         </el-dropdown-item>

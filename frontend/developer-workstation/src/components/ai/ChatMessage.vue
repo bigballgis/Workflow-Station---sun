@@ -1,15 +1,36 @@
 <template>
-  <div class="chat-message" :class="[`chat-message--${message.role.toLowerCase()}`]">
+  <div
+    class="chat-message"
+    :class="[`chat-message--${message.role.toLowerCase()}`]"
+  >
     <div class="chat-message__avatar">
-      <el-avatar v-if="message.role === 'USER'" :size="32" icon="User" />
-      <el-avatar v-else :size="32" class="chat-message__avatar--ai">AI</el-avatar>
+      <el-avatar
+        v-if="message.role === 'USER'"
+        :size="32"
+        icon="User"
+      />
+      <el-avatar
+        v-else
+        :size="32"
+        class="chat-message__avatar--ai"
+      >
+        AI
+      </el-avatar>
     </div>
     <div class="chat-message__body">
       <div class="chat-message__content">
-        <span class="chat-message__text" v-text="message.content" />
-        <span v-if="isStreaming" class="chat-message__cursor">▊</span>
+        <span
+          class="chat-message__text"
+          v-text="message.content"
+        />
+        <span
+          v-if="isStreaming"
+          class="chat-message__cursor"
+        >▊</span>
       </div>
-      <div class="chat-message__time">{{ formattedTime }}</div>
+      <div class="chat-message__time">
+        {{ formattedTime }}
+      </div>
     </div>
   </div>
 </template>

@@ -1,6 +1,10 @@
 <template>
   <div class="phase-indicator">
-    <el-steps :active="activeIndex" finish-status="success" align-center>
+    <el-steps
+      :active="activeIndex"
+      finish-status="success"
+      align-center
+    >
       <el-step
         v-for="phase in phases"
         :key="phase.key"

@@ -2,38 +2,93 @@
   <div class="delegations-page">
     <div class="page-header">
       <h1>{{ t('delegation.title') }}</h1>
-      <el-button type="primary" @click="showCreateDialog">{{ t('delegation.create') }}</el-button>
+      <el-button
+        type="primary"
+        @click="showCreateDialog"
+      >
+        {{ t('delegation.create') }}
+      </el-button>
     </div>
 
     <el-tabs v-model="activeTab">
-      <el-tab-pane :label="t('delegation.myDelegations')" name="my">
+      <el-tab-pane
+        :label="t('delegation.myDelegations')"
+        name="my"
+      >
         <div class="portal-card">
-          <el-table :data="delegationList" stripe style="width: 100%;">
-            <el-table-column prop="delegateId" :label="t('delegation.delegateTo')" min-width="120" show-overflow-tooltip />
-            <el-table-column prop="delegationType" :label="t('delegation.delegationType')" min-width="120" show-overflow-tooltip>
+          <el-table
+            :data="delegationList"
+            stripe
+            style="width: 100%;"
+          >
+            <el-table-column
+              prop="delegateId"
+              :label="t('delegation.delegateTo')"
+              min-width="120"
+              show-overflow-tooltip
+            />
+            <el-table-column
+              prop="delegationType"
+              :label="t('delegation.delegationType')"
+              min-width="120"
+              show-overflow-tooltip
+            >
               <template #default="{ row }">
                 {{ t(`delegation.${row.delegationType.toLowerCase()}`) }}
               </template>
             </el-table-column>
-            <el-table-column prop="startTime" :label="t('delegation.startTime')" min-width="160" show-overflow-tooltip />
-            <el-table-column prop="endTime" :label="t('delegation.endTime')" min-width="160" show-overflow-tooltip />
-            <el-table-column prop="status" :label="t('delegation.status')" min-width="100">
+            <el-table-column
+              prop="startTime"
+              :label="t('delegation.startTime')"
+              min-width="160"
+              show-overflow-tooltip
+            />
+            <el-table-column
+              prop="endTime"
+              :label="t('delegation.endTime')"
+              min-width="160"
+              show-overflow-tooltip
+            />
+            <el-table-column
+              prop="status"
+              :label="t('delegation.status')"
+              min-width="100"
+            >
               <template #default="{ row }">
-                <el-tag :type="getStatusType(row.status)" size="small">
+                <el-tag
+                  :type="getStatusType(row.status)"
+                  size="small"
+                >
                   {{ t(`delegation.${row.status.toLowerCase()}`) }}
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column :label="t('common.actions')" min-width="200" fixed="right">
+            <el-table-column
+              :label="t('common.actions')"
+              min-width="200"
+              fixed="right"
+            >
               <template #default="{ row }">
                 <div style="white-space: nowrap; display: flex; gap: 4px; align-items: center; flex-wrap: nowrap;">
-                  <el-button v-if="row.status === 'ACTIVE'" size="small" @click="handleSuspend(row)">
+                  <el-button
+                    v-if="row.status === 'ACTIVE'"
+                    size="small"
+                    @click="handleSuspend(row)"
+                  >
                     {{ t('delegation.suspend') }}
                   </el-button>
-                  <el-button v-if="row.status === 'SUSPENDED'" size="small" @click="handleResume(row)">
+                  <el-button
+                    v-if="row.status === 'SUSPENDED'"
+                    size="small"
+                    @click="handleResume(row)"
+                  >
                     {{ t('delegation.resume') }}
                   </el-button>
-                  <el-button type="danger" size="small" @click="handleDelete(row)">
+                  <el-button
+                    type="danger"
+                    size="small"
+                    @click="handleDelete(row)"
+                  >
                     {{ t('common.delete') }}
                   </el-button>
                 </div>
@@ -43,55 +98,143 @@
         </div>
       </el-tab-pane>
 
-      <el-tab-pane :label="t('delegation.proxyTasks')" name="proxy">
+      <el-tab-pane
+        :label="t('delegation.proxyTasks')"
+        name="proxy"
+      >
         <div class="portal-card">
           <el-empty :description="t('delegation.noProxyTasks')" />
         </div>
       </el-tab-pane>
 
-      <el-tab-pane :label="t('delegation.auditRecords')" name="audit">
+      <el-tab-pane
+        :label="t('delegation.auditRecords')"
+        name="audit"
+      >
         <div class="portal-card">
-          <el-table :data="auditList" stripe style="width: 100%;">
-            <el-table-column prop="operationType" :label="t('delegation.operationType')" min-width="150" show-overflow-tooltip />
-            <el-table-column prop="delegatorId" :label="t('delegation.delegator')" min-width="120" show-overflow-tooltip />
-            <el-table-column prop="delegateId" :label="t('delegation.delegate')" min-width="120" show-overflow-tooltip />
-            <el-table-column prop="operationResult" :label="t('delegation.result')" min-width="100" show-overflow-tooltip />
-            <el-table-column prop="createdAt" :label="t('delegation.time')" min-width="160" show-overflow-tooltip />
+          <el-table
+            :data="auditList"
+            stripe
+            style="width: 100%;"
+          >
+            <el-table-column
+              prop="operationType"
+              :label="t('delegation.operationType')"
+              min-width="150"
+              show-overflow-tooltip
+            />
+            <el-table-column
+              prop="delegatorId"
+              :label="t('delegation.delegator')"
+              min-width="120"
+              show-overflow-tooltip
+            />
+            <el-table-column
+              prop="delegateId"
+              :label="t('delegation.delegate')"
+              min-width="120"
+              show-overflow-tooltip
+            />
+            <el-table-column
+              prop="operationResult"
+              :label="t('delegation.result')"
+              min-width="100"
+              show-overflow-tooltip
+            />
+            <el-table-column
+              prop="createdAt"
+              :label="t('delegation.time')"
+              min-width="160"
+              show-overflow-tooltip
+            />
           </el-table>
         </div>
       </el-tab-pane>
     </el-tabs>
 
     <!-- 创建委托对话框 -->
-    <el-dialog v-model="createDialogVisible" :title="t('delegation.create')" width="500px">
-      <el-form :model="createForm" label-width="130px" label-position="left">
+    <el-dialog
+      v-model="createDialogVisible"
+      :title="t('delegation.create')"
+      width="500px"
+    >
+      <el-form
+        :model="createForm"
+        label-width="130px"
+        label-position="left"
+      >
         <el-form-item :label="t('delegation.delegateTo')">
-          <el-select v-model="createForm.delegateId" filterable :placeholder="t('delegation.selectDelegate')" style="width: 100%;">
-            <el-option label="Li Si" value="user_2" />
-            <el-option label="Wang Wu" value="user_3" />
+          <el-select
+            v-model="createForm.delegateId"
+            filterable
+            :placeholder="t('delegation.selectDelegate')"
+            style="width: 100%;"
+          >
+            <el-option
+              label="Li Si"
+              value="user_2"
+            />
+            <el-option
+              label="Wang Wu"
+              value="user_3"
+            />
           </el-select>
         </el-form-item>
         <el-form-item :label="t('delegation.delegationType')">
-          <el-select v-model="createForm.delegationType" style="width: 100%;">
-            <el-option value="ALL" :label="t('delegation.all')" />
-            <el-option value="PARTIAL" :label="t('delegation.partial')" />
-            <el-option value="TEMPORARY" :label="t('delegation.temporary')" />
-            <el-option value="URGENT" :label="t('delegation.urgent')" />
+          <el-select
+            v-model="createForm.delegationType"
+            style="width: 100%;"
+          >
+            <el-option
+              value="ALL"
+              :label="t('delegation.all')"
+            />
+            <el-option
+              value="PARTIAL"
+              :label="t('delegation.partial')"
+            />
+            <el-option
+              value="TEMPORARY"
+              :label="t('delegation.temporary')"
+            />
+            <el-option
+              value="URGENT"
+              :label="t('delegation.urgent')"
+            />
           </el-select>
         </el-form-item>
         <el-form-item :label="t('delegation.startTime')">
-          <el-date-picker v-model="createForm.startTime" type="datetime" style="width: 100%;" />
+          <el-date-picker
+            v-model="createForm.startTime"
+            type="datetime"
+            style="width: 100%;"
+          />
         </el-form-item>
         <el-form-item :label="t('delegation.endTime')">
-          <el-date-picker v-model="createForm.endTime" type="datetime" style="width: 100%;" />
+          <el-date-picker
+            v-model="createForm.endTime"
+            type="datetime"
+            style="width: 100%;"
+          />
         </el-form-item>
         <el-form-item :label="t('delegation.reason')">
-          <el-input v-model="createForm.reason" type="textarea" :rows="3" />
+          <el-input
+            v-model="createForm.reason"
+            type="textarea"
+            :rows="3"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="createDialogVisible = false">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary" @click="submitCreate">{{ t('common.confirm') }}</el-button>
+        <el-button @click="createDialogVisible = false">
+          {{ t('common.cancel') }}
+        </el-button>
+        <el-button
+          type="primary"
+          @click="submitCreate"
+        >
+          {{ t('common.confirm') }}
+        </el-button>
       </template>
     </el-dialog>
   </div>

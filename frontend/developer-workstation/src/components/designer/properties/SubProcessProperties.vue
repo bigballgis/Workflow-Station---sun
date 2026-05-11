@@ -2,46 +2,81 @@
   <div class="subprocess-properties">
     <el-collapse v-model="activeGroups">
       <!-- Basic info -->
-      <el-collapse-item :title="t('properties.basic')" name="basic">
-        <el-form label-position="top" size="small">
+      <el-collapse-item
+        :title="t('properties.basic')"
+        name="basic"
+      >
+        <el-form
+          label-position="top"
+          size="small"
+        >
           <el-form-item :label="t('properties.taskId')">
-            <el-input :model-value="basicProps.id" disabled />
+            <el-input
+              :model-value="basicProps.id"
+              disabled
+            />
           </el-form-item>
           <el-form-item :label="t('properties.subProcessName')">
             <el-input
               v-model="subProcessName"
-              @change="updateBasicProp('name', subProcessName)"
               :placeholder="t('properties.subProcessNamePlaceholder')"
+              @change="updateBasicProp('name', subProcessName)"
             />
           </el-form-item>
         </el-form>
       </el-collapse-item>
 
       <!-- Multi-instance config (the main event for this element) -->
-      <el-collapse-item :title="t('properties.multiInstanceConfig')" name="multiInstance">
-        <el-form label-position="top" size="small">
+      <el-collapse-item
+        :title="t('properties.multiInstanceConfig')"
+        name="multiInstance"
+      >
+        <el-form
+          label-position="top"
+          size="small"
+        >
           <el-form-item :label="t('properties.enableMultiInstance')">
-            <el-switch v-model="multiInstance" @change="handleMultiInstanceToggle" />
-            <div class="form-tip">{{ t('properties.multiInstanceSubProcessTip') }}</div>
+            <el-switch
+              v-model="multiInstance"
+              @change="handleMultiInstanceToggle"
+            />
+            <div class="form-tip">
+              {{ t('properties.multiInstanceSubProcessTip') }}
+            </div>
           </el-form-item>
 
           <template v-if="multiInstance">
             <el-form-item :label="t('properties.executionMode')">
-              <el-radio-group v-model="sequential" @change="handleSequentialChange">
-                <el-radio :value="false">{{ t('properties.parallelMode') }}</el-radio>
-                <el-radio :value="true">{{ t('properties.sequentialMode') }}</el-radio>
+              <el-radio-group
+                v-model="sequential"
+                @change="handleSequentialChange"
+              >
+                <el-radio :value="false">
+                  {{ t('properties.parallelMode') }}
+                </el-radio>
+                <el-radio :value="true">
+                  {{ t('properties.sequentialMode') }}
+                </el-radio>
               </el-radio-group>
-              <div class="form-tip">{{ t('properties.executionModeTip') }}</div>
+              <div class="form-tip">
+                {{ t('properties.executionModeTip') }}
+              </div>
             </el-form-item>
 
-            <el-form-item :label="t('properties.collectionVariable')" required>
+            <el-form-item
+              :label="t('properties.collectionVariable')"
+              required
+            >
               <el-input
                 v-model="collectionVariable"
-                @change="handleCollectionVariableChange"
                 :placeholder="collectionVariablePlaceholder"
+                @change="handleCollectionVariableChange"
               >
                 <template #append>
-                  <el-tooltip :content="t('properties.collectionVariableSyncHint')" placement="top">
+                  <el-tooltip
+                    :content="t('properties.collectionVariableSyncHint')"
+                    placement="top"
+                  >
                     <el-button
                       :disabled="!suggestedCollectionVariable"
                       @click="applySuggestedCollectionVariable"
@@ -51,11 +86,19 @@
                   </el-tooltip>
                 </template>
               </el-input>
-              <div class="form-tip">{{ t('properties.subProcessCollectionVariableTip') }}</div>
-              <div v-if="collectionVarInvalid" class="form-error">
+              <div class="form-tip">
+                {{ t('properties.subProcessCollectionVariableTip') }}
+              </div>
+              <div
+                v-if="collectionVarInvalid"
+                class="form-error"
+              >
                 {{ t('properties.collectionVariableInvalid') }}
               </div>
-              <div v-if="suggestedCollectionVariable && suggestedCollectionVariable !== collectionVariable" class="form-tip">
+              <div
+                v-if="suggestedCollectionVariable && suggestedCollectionVariable !== collectionVariable"
+                class="form-tip"
+              >
                 {{ t('properties.collectionVariableSuggestion', { name: suggestedCollectionVariable }) }}
               </div>
             </el-form-item>
@@ -63,19 +106,23 @@
             <el-form-item :label="t('properties.elementVariable')">
               <el-input
                 v-model="elementVariable"
-                @change="handleElementVariableChange"
                 placeholder="currentItem"
+                @change="handleElementVariableChange"
               />
-              <div class="form-tip">{{ t('properties.elementVariableTip') }}</div>
+              <div class="form-tip">
+                {{ t('properties.elementVariableTip') }}
+              </div>
             </el-form-item>
 
             <el-form-item :label="t('properties.completionCondition')">
               <el-input
                 v-model="completionCondition"
-                @change="handleCompletionConditionChange"
                 placeholder="${nrOfCompletedInstances/nrOfInstances == 1}"
+                @change="handleCompletionConditionChange"
               />
-              <div class="form-tip">{{ t('properties.completionConditionTip') }}</div>
+              <div class="form-tip">
+                {{ t('properties.completionConditionTip') }}
+              </div>
             </el-form-item>
 
             <el-alert
@@ -85,7 +132,9 @@
               show-icon
               style="margin-top: 8px;"
             >
-              <template #title>{{ t('properties.multiInstanceMissingInnerTaskWarn') }}</template>
+              <template #title>
+                {{ t('properties.multiInstanceMissingInnerTaskWarn') }}
+              </template>
             </el-alert>
           </template>
         </el-form>

@@ -5,7 +5,11 @@
     :style="{ backgroundColor: modelValue }"
     :title="modelValue"
   />
-  <span v-else class="color-swatch-preview color-swatch-empty" title="No color">-</span>
+  <span
+    v-else
+    class="color-swatch-preview color-swatch-empty"
+    title="No color"
+  >-</span>
 </template>
 
 <script setup lang="ts">

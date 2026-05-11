@@ -1,8 +1,17 @@
 <template>
-  <div class="action-buttons" :class="{ 'is-fixed': fixed }">
-    <div class="button-container" :class="align">
+  <div
+    class="action-buttons"
+    :class="{ 'is-fixed': fixed }"
+  >
+    <div
+      class="button-container"
+      :class="align"
+    >
       <!-- 主要操作按钮 -->
-      <template v-for="action in primaryActions" :key="action.key">
+      <template
+        v-for="action in primaryActions"
+        :key="action.key"
+      >
         <el-button
           v-if="!action.hidden"
           :type="action.type || 'primary'"
@@ -16,7 +25,10 @@
       </template>
 
       <!-- 次要操作按钮 -->
-      <template v-for="action in secondaryActions" :key="action.key">
+      <template
+        v-for="action in secondaryActions"
+        :key="action.key"
+      >
         <el-button
           v-if="!action.hidden"
           :type="action.type || 'default'"
@@ -38,7 +50,9 @@
       >
         <el-button :disabled="loading">
           {{ $t('common.more') }}
-          <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+          <el-icon class="el-icon--right">
+            <ArrowDown />
+          </el-icon>
         </el-button>
         <template #dropdown>
           <el-dropdown-menu>
@@ -49,7 +63,9 @@
               :disabled="action.disabled"
               :divided="action.divided"
             >
-              <el-icon v-if="action.icon"><component :is="action.icon" /></el-icon>
+              <el-icon v-if="action.icon">
+                <component :is="action.icon" />
+              </el-icon>
               {{ action.label }}
             </el-dropdown-item>
           </el-dropdown-menu>
@@ -73,8 +89,15 @@
       width="500px"
       :close-on-click-modal="false"
     >
-      <el-form ref="commentFormRef" :model="commentForm" :rules="commentRules">
-        <el-form-item :label="$t('task.comment')" prop="comment">
+      <el-form
+        ref="commentFormRef"
+        :model="commentForm"
+        :rules="commentRules"
+      >
+        <el-form-item
+          :label="$t('task.comment')"
+          prop="comment"
+        >
           <el-input
             v-model="commentForm.comment"
             type="textarea"
@@ -84,7 +107,10 @@
             show-word-limit
           />
         </el-form-item>
-        <el-form-item v-if="showSignature" :label="$t('task.signature')">
+        <el-form-item
+          v-if="showSignature"
+          :label="$t('task.signature')"
+        >
           <div class="signature-area">
             <canvas
               ref="signatureCanvas"
@@ -97,8 +123,11 @@
               @touchstart="startDrawingTouch"
               @touchmove="drawTouch"
               @touchend="stopDrawing"
-            ></canvas>
-            <el-button size="small" @click="clearSignature">
+            />
+            <el-button
+              size="small"
+              @click="clearSignature"
+            >
               {{ $t('common.clear') }}
             </el-button>
           </div>
@@ -125,8 +154,15 @@
       width="500px"
       :close-on-click-modal="false"
     >
-      <el-form ref="transferFormRef" :model="transferForm" :rules="transferRules">
-        <el-form-item :label="$t('task.transferTo')" prop="targetUserId">
+      <el-form
+        ref="transferFormRef"
+        :model="transferForm"
+        :rules="transferRules"
+      >
+        <el-form-item
+          :label="$t('task.transferTo')"
+          prop="targetUserId"
+        >
           <el-select
             v-model="transferForm.targetUserId"
             filterable
@@ -143,7 +179,10 @@
             />
           </el-select>
         </el-form-item>
-        <el-form-item :label="$t('task.reason')" prop="reason">
+        <el-form-item
+          :label="$t('task.reason')"
+          prop="reason"
+        >
           <el-input
             v-model="transferForm.reason"
             type="textarea"

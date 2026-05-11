@@ -2,14 +2,36 @@
   <div class="unified-login-wrap">
     <div class="unified-login-card">
       <h1>Workflow Platform</h1>
-      <p class="sub">Unified Sign-In</p>
+      <p class="sub">
+        Unified Sign-In
+      </p>
       <form @submit.prevent="onSubmit">
         <label>Username</label>
-        <input v-model="username" type="text" autocomplete="username" required />
+        <input
+          v-model="username"
+          type="text"
+          autocomplete="username"
+          required
+        >
         <label>Password</label>
-        <input v-model="password" type="password" autocomplete="current-password" required />
-        <p v-if="error" class="err">{{ error }}</p>
-        <button type="submit" :disabled="loading">{{ loading ? 'Signing in...' : 'Sign In' }}</button>
+        <input
+          v-model="password"
+          type="password"
+          autocomplete="current-password"
+          required
+        >
+        <p
+          v-if="error"
+          class="err"
+        >
+          {{ error }}
+        </p>
+        <button
+          type="submit"
+          :disabled="loading"
+        >
+          {{ loading ? 'Signing in...' : 'Sign In' }}
+        </button>
       </form>
     </div>
   </div>

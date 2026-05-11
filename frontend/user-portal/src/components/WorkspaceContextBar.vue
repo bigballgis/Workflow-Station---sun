@@ -1,10 +1,26 @@
 <template>
-  <div v-if="showBar" class="workspace-context-bar">
-    <span class="ctx-text" :title="fullTitle">{{ label }}</span>
-    <el-dropdown v-if="user?.workspaceSwitcherVisible" trigger="click" @command="onSwitch">
-      <el-button type="primary" link class="ctx-switch">
+  <div
+    v-if="showBar"
+    class="workspace-context-bar"
+  >
+    <span
+      class="ctx-text"
+      :title="fullTitle"
+    >{{ label }}</span>
+    <el-dropdown
+      v-if="user?.workspaceSwitcherVisible"
+      trigger="click"
+      @command="onSwitch"
+    >
+      <el-button
+        type="primary"
+        link
+        class="ctx-switch"
+      >
         {{ t('workspace.switch') }}
-        <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+        <el-icon class="el-icon--right">
+          <ArrowDown />
+        </el-icon>
       </el-button>
       <template #dropdown>
         <el-dropdown-menu>

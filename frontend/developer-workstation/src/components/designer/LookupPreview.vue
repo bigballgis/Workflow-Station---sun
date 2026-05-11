@@ -1,19 +1,37 @@
 <template>
-  <div class="lookup-preview-wrapper" @click="handleWrapperClick">
+  <div
+    class="lookup-preview-wrapper"
+    @click="handleWrapperClick"
+  >
     <div class="lookup-form-item">
       <label class="lookup-label-text">
         <el-icon class="lookup-label-icon"><Search /></el-icon>
         {{ label }}
       </label>
-      <div class="lookup-field" :class="{ readonly }" @click="handleFieldClick" ref="fieldRef">
+      <div
+        ref="fieldRef"
+        class="lookup-field"
+        :class="{ readonly }"
+        @click="handleFieldClick"
+      >
         <!-- Selected value: input container with inner tag -->
-        <div v-if="selectedRow" class="lookup-selected-wrapper">
+        <div
+          v-if="selectedRow"
+          class="lookup-selected-wrapper"
+        >
           <span class="lookup-selected-tag">
             <span class="lookup-selected-text">{{ searchKeyword }}</span>
-            <el-icon v-if="!readonly" class="lookup-selected-close" @click.stop="handleClear"><Close /></el-icon>
+            <el-icon
+              v-if="!readonly"
+              class="lookup-selected-close"
+              @click.stop="handleClear"
+            ><Close /></el-icon>
           </span>
         </div>
-        <span v-else-if="readonly" class="lookup-readonly-empty">-</span>
+        <span
+          v-else-if="readonly"
+          class="lookup-readonly-empty"
+        >-</span>
         <!-- Search input (hidden when a value is selected) -->
         <el-input
           v-else
@@ -28,8 +46,8 @@
     <Teleport to="body">
       <div
         v-if="dropdownVisible"
-        class="lookup-dropdown-panel"
         ref="dropdownRef"
+        class="lookup-dropdown-panel"
         :style="dropdownStyle"
         @mousedown.stop
         @click.stop
@@ -37,9 +55,9 @@
         <el-table
           :data="filteredResults"
           size="small"
-          @row-click="handleSelect"
           highlight-current-row
           max-height="260"
+          @row-click="handleSelect"
         >
           <el-table-column
             v-for="col in visibleColumns"
@@ -49,13 +67,26 @@
             min-width="120"
           />
         </el-table>
-        <div v-if="filteredResults.length === 0" class="lookup-no-data">No data</div>
+        <div
+          v-if="filteredResults.length === 0"
+          class="lookup-no-data"
+        >
+          No data
+        </div>
       </div>
     </Teleport>
 
     <!-- View display after selection -->
-    <div v-if="showBackfillView && selectedRow && displayViewFields.length > 0" class="lookup-view-display">
-      <el-descriptions :column="1" border size="small" direction="horizontal">
+    <div
+      v-if="showBackfillView && selectedRow && displayViewFields.length > 0"
+      class="lookup-view-display"
+    >
+      <el-descriptions
+        :column="1"
+        border
+        size="small"
+        direction="horizontal"
+      >
         <el-descriptions-item
           v-for="field in displayViewFields"
           :key="field.fieldName"

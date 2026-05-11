@@ -1,13 +1,22 @@
 <template>
   <div class="page-container">
     <div class="card">
-      <div class="flex-between" style="margin-bottom: 16px;">
-        <div class="flex" style="align-items: center; gap: 16px;">
+      <div
+        class="flex-between"
+        style="margin-bottom: 16px;"
+      >
+        <div
+          class="flex"
+          style="align-items: center; gap: 16px;"
+        >
           <el-button @click="router.back()">
             <el-icon><ArrowLeft /></el-icon>
             {{ t('common.back') }}
           </el-button>
-          <el-tooltip :content="store.current?.description || t('functionUnit.noDescription')" placement="bottom">
+          <el-tooltip
+            :content="store.current?.description || t('functionUnit.noDescription')"
+            placement="bottom"
+          >
             <IconPreview 
               :icon-id="store.current?.icon?.id" 
               size="large" 
@@ -17,12 +26,18 @@
           <el-tag :type="statusTagType(store.current?.status)">
             {{ statusLabel(store.current?.status) }}
           </el-tag>
-          <span v-if="store.current?.currentVersion" class="version-badge">
+          <span
+            v-if="store.current?.currentVersion"
+            class="version-badge"
+          >
             v{{ store.current.currentVersion }}
           </span>
         </div>
         <div>
-          <el-button type="primary" @click="showAiPanel = true">
+          <el-button
+            type="primary"
+            @click="showAiPanel = true"
+          >
             <el-icon><MagicStick /></el-icon>
             {{ t('ai.panel.generateButton') }}
           </el-button>
@@ -30,84 +45,201 @@
             <el-icon><Setting /></el-icon>
             {{ t('functionUnit.settings') }}
           </el-button>
-          <el-button @click="handleExport" :loading="exporting">
+          <el-button
+            :loading="exporting"
+            @click="handleExport"
+          >
             <el-icon><Download /></el-icon>
             {{ t('common.export') }}
           </el-button>
-          <el-button @click="handleValidate" :loading="validating">{{ t('functionUnit.validate') }}</el-button>
-          <el-button type="success" @click="handlePublish" :disabled="store.current?.status === 'PUBLISHED'">
+          <el-button
+            :loading="validating"
+            @click="handleValidate"
+          >
+            {{ t('functionUnit.validate') }}
+          </el-button>
+          <el-button
+            type="success"
+            :disabled="store.current?.status === 'PUBLISHED'"
+            @click="handlePublish"
+          >
             {{ t('functionUnit.publish') }}
           </el-button>
-          <el-button type="warning" @click="showDeployDialog = true">
+          <el-button
+            type="warning"
+            @click="showDeployDialog = true"
+          >
             <el-icon><Upload /></el-icon>
             {{ t('functionUnit.deploy') }}
           </el-button>
-
         </div>
       </div>
 
-      <el-tabs v-model="activeTab" type="border-card">
-        <el-tab-pane :label="t('functionUnit.process')" name="process">
-          <ProcessDesigner v-if="activeTab === 'process'" :function-unit-id="functionUnitId" />
+      <el-tabs
+        v-model="activeTab"
+        type="border-card"
+      >
+        <el-tab-pane
+          :label="t('functionUnit.process')"
+          name="process"
+        >
+          <ProcessDesigner
+            v-if="activeTab === 'process'"
+            :function-unit-id="functionUnitId"
+          />
         </el-tab-pane>
-        <el-tab-pane :label="t('functionUnit.tables')" name="tables">
-          <TableDesigner v-if="activeTab === 'tables'" :function-unit-id="functionUnitId" />
+        <el-tab-pane
+          :label="t('functionUnit.tables')"
+          name="tables"
+        >
+          <TableDesigner
+            v-if="activeTab === 'tables'"
+            :function-unit-id="functionUnitId"
+          />
         </el-tab-pane>
-        <el-tab-pane :label="t('functionUnit.forms')" name="forms">
-          <FormDesigner v-if="activeTab === 'forms'" :function-unit-id="functionUnitId" />
+        <el-tab-pane
+          :label="t('functionUnit.forms')"
+          name="forms"
+        >
+          <FormDesigner
+            v-if="activeTab === 'forms'"
+            :function-unit-id="functionUnitId"
+          />
         </el-tab-pane>
-        <el-tab-pane :label="t('functionUnit.actionDesign')" name="actions">
-          <ActionDesigner v-if="activeTab === 'actions'" :function-unit-id="functionUnitId" />
+        <el-tab-pane
+          :label="t('functionUnit.actionDesign')"
+          name="actions"
+        >
+          <ActionDesigner
+            v-if="activeTab === 'actions'"
+            :function-unit-id="functionUnitId"
+          />
         </el-tab-pane>
-        <el-tab-pane :label="t('functionUnit.decisions')" name="decisions">
-          <DecisionList v-if="activeTab === 'decisions'" :function-unit-id="functionUnitId" />
+        <el-tab-pane
+          :label="t('functionUnit.decisions')"
+          name="decisions"
+        >
+          <DecisionList
+            v-if="activeTab === 'decisions'"
+            :function-unit-id="functionUnitId"
+          />
         </el-tab-pane>
-        <el-tab-pane :label="t('version.title')" name="versions">
-          <VersionManager v-if="activeTab === 'versions'" :function-unit-id="functionUnitId" />
+        <el-tab-pane
+          :label="t('version.title')"
+          name="versions"
+        >
+          <VersionManager
+            v-if="activeTab === 'versions'"
+            :function-unit-id="functionUnitId"
+          />
         </el-tab-pane>
       </el-tabs>
     </div>
 
     <!-- Edit Function Unit Dialog -->
-    <el-dialog v-model="showEditDialog" :title="t('functionUnit.settings')" width="500px">
-      <el-form :model="editForm" label-width="100px" label-position="left">
+    <el-dialog
+      v-model="showEditDialog"
+      :title="t('functionUnit.settings')"
+      width="500px"
+    >
+      <el-form
+        :model="editForm"
+        label-width="100px"
+        label-position="left"
+      >
         <el-form-item :label="t('functionUnit.icon')">
-          <IconUploadField v-model="editForm.iconId" size="large" />
+          <IconUploadField
+            v-model="editForm.iconId"
+            size="large"
+          />
         </el-form-item>
-        <el-form-item :label="t('functionUnit.name')" required>
-          <el-input v-model="editForm.name" :placeholder="t('functionUnit.namePlaceholder')" />
+        <el-form-item
+          :label="t('functionUnit.name')"
+          required
+        >
+          <el-input
+            v-model="editForm.name"
+            :placeholder="t('functionUnit.namePlaceholder')"
+          />
         </el-form-item>
         <el-form-item :label="t('functionUnit.description')">
-          <el-input v-model="editForm.description" type="textarea" :rows="3" :placeholder="t('functionUnit.descriptionPlaceholder')" />
+          <el-input
+            v-model="editForm.description"
+            type="textarea"
+            :rows="3"
+            :placeholder="t('functionUnit.descriptionPlaceholder')"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showEditDialog = false">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary" @click="handleSaveEdit" :loading="saving">{{ t('common.save') }}</el-button>
+        <el-button @click="showEditDialog = false">
+          {{ t('common.cancel') }}
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="saving"
+          @click="handleSaveEdit"
+        >
+          {{ t('common.save') }}
+        </el-button>
       </template>
     </el-dialog>
 
     <!-- Validation Result Dialog -->
-    <el-dialog v-model="showValidationDialog" :title="t('functionUnit.validationResult')" width="500px">
+    <el-dialog
+      v-model="showValidationDialog"
+      :title="t('functionUnit.validationResult')"
+      width="500px"
+    >
       <div v-if="validationResult">
-        <el-result v-if="validationResult.valid" icon="success" :title="t('functionUnit.validationPassed')" :sub-title="t('functionUnit.validationPassedDesc')" />
+        <el-result
+          v-if="validationResult.valid"
+          icon="success"
+          :title="t('functionUnit.validationPassed')"
+          :sub-title="t('functionUnit.validationPassedDesc')"
+        />
         <div v-else>
-          <el-alert v-if="validationResult.errors?.length" type="error" :closable="false" style="margin-bottom: 12px;">
-            <template #title>{{ t('functionUnit.validationErrors') }} ({{ validationResult.errors.length }})</template>
+          <el-alert
+            v-if="validationResult.errors?.length"
+            type="error"
+            :closable="false"
+            style="margin-bottom: 12px;"
+          >
+            <template #title>
+              {{ t('functionUnit.validationErrors') }} ({{ validationResult.errors.length }})
+            </template>
             <ul style="margin: 8px 0 0 0; padding-left: 20px;">
-              <li v-for="(err, i) in validationResult.errors" :key="i">{{ err }}</li>
+              <li
+                v-for="(err, i) in validationResult.errors"
+                :key="i"
+              >
+                {{ err }}
+              </li>
             </ul>
           </el-alert>
-          <el-alert v-if="validationResult.warnings?.length" type="warning" :closable="false">
-            <template #title>{{ t('functionUnit.validationWarnings') }} ({{ validationResult.warnings.length }})</template>
+          <el-alert
+            v-if="validationResult.warnings?.length"
+            type="warning"
+            :closable="false"
+          >
+            <template #title>
+              {{ t('functionUnit.validationWarnings') }} ({{ validationResult.warnings.length }})
+            </template>
             <ul style="margin: 8px 0 0 0; padding-left: 20px;">
-              <li v-for="(warn, i) in validationResult.warnings" :key="i">{{ warn }}</li>
+              <li
+                v-for="(warn, i) in validationResult.warnings"
+                :key="i"
+              >
+                {{ warn }}
+              </li>
             </ul>
           </el-alert>
         </div>
       </div>
       <template #footer>
-        <el-button @click="showValidationDialog = false">{{ t('common.close') }}</el-button>
+        <el-button @click="showValidationDialog = false">
+          {{ t('common.close') }}
+        </el-button>
       </template>
     </el-dialog>
 
@@ -119,22 +251,43 @@
     />
 
     <!-- Deploy Dialog -->
-    <el-dialog v-model="showDeployDialog" :title="t('functionUnit.deploy')" width="500px" @closed="cleanupDeployDialogState">
-      <el-form :model="deployForm" label-width="120px" label-position="left">
+    <el-dialog
+      v-model="showDeployDialog"
+      :title="t('functionUnit.deploy')"
+      width="500px"
+      @closed="cleanupDeployDialogState"
+    >
+      <el-form
+        :model="deployForm"
+        label-width="120px"
+        label-position="left"
+      >
         <el-form-item :label="t('functionUnit.autoEnable')">
           <el-switch v-model="deployForm.autoEnable" />
           <span style="margin-left: 12px; color: #909399; font-size: 12px;">{{ t('functionUnit.autoEnableHint') }}</span>
         </el-form-item>
         <el-form-item :label="t('functionUnit.changeLog')">
-          <el-input v-model="deployForm.changeLog" type="textarea" :placeholder="t('functionUnit.changeLogPlaceholder')" :rows="3" />
+          <el-input
+            v-model="deployForm.changeLog"
+            type="textarea"
+            :placeholder="t('functionUnit.changeLogPlaceholder')"
+            :rows="3"
+          />
         </el-form-item>
       </el-form>
-      <el-alert type="info" :closable="false" style="margin-bottom: 16px;">
+      <el-alert
+        type="info"
+        :closable="false"
+        style="margin-bottom: 16px;"
+      >
         {{ t('functionUnit.deployInfo') }}
       </el-alert>
       
       <!-- Deploy Status -->
-      <div v-if="deployStatus" class="deploy-status">
+      <div
+        v-if="deployStatus"
+        class="deploy-status"
+      >
         <el-divider>{{ t('functionUnit.deployStatusTitle') }}</el-divider>
         <div class="status-header">
           <el-tag :type="getDeployStatusType(deployStatus.status)">
@@ -164,40 +317,78 @@
         >
           {{ t('functionUnit.versionCreatedButDeployFailed', { version: deployStatus.versionNumber }) }}
         </el-alert>
-        <div v-if="deployStatus.status === 'SUCCESS' && deployStatus.versionNumber" class="version-info">
+        <div
+          v-if="deployStatus.status === 'SUCCESS' && deployStatus.versionNumber"
+          class="version-info"
+        >
           {{ t('functionUnit.newVersion', { version: deployStatus.versionNumber }) }}
         </div>
-        <div v-if="deployStatus.steps?.length" class="deploy-steps">
-          <div v-for="step in deployStatus.steps" :key="step.name" class="step-item">
-            <el-icon v-if="step.status === 'SUCCESS'" color="#67c23a"><CircleCheck /></el-icon>
-            <el-icon v-else-if="step.status === 'FAILED'" color="#f56c6c"><CircleClose /></el-icon>
-            <el-icon v-else-if="step.status === 'RUNNING'" color="#409eff"><Loading /></el-icon>
-            <el-icon v-else color="#909399"><Clock /></el-icon>
+        <div
+          v-if="deployStatus.steps?.length"
+          class="deploy-steps"
+        >
+          <div
+            v-for="step in deployStatus.steps"
+            :key="step.name"
+            class="step-item"
+          >
+            <el-icon
+              v-if="step.status === 'SUCCESS'"
+              color="#67c23a"
+            >
+              <CircleCheck />
+            </el-icon>
+            <el-icon
+              v-else-if="step.status === 'FAILED'"
+              color="#f56c6c"
+            >
+              <CircleClose />
+            </el-icon>
+            <el-icon
+              v-else-if="step.status === 'RUNNING'"
+              color="#409eff"
+            >
+              <Loading />
+            </el-icon>
+            <el-icon
+              v-else
+              color="#909399"
+            >
+              <Clock />
+            </el-icon>
             <span>{{ translateStep(step.name) }}</span>
-            <span v-if="step.message" class="step-message">{{ translateStep(step.message) }}</span>
+            <span
+              v-if="step.message"
+              class="step-message"
+            >{{ translateStep(step.message) }}</span>
           </div>
         </div>
-        <div v-if="deployStatus.message && deployStatus.status === 'FAILED'" class="error-message">
+        <div
+          v-if="deployStatus.message && deployStatus.status === 'FAILED'"
+          class="error-message"
+        >
           {{ deployStatus.message }}
         </div>
       </div>
       
       <template #footer>
-        <el-button @click="closeDeployDialog">{{ t('common.close') }}</el-button>
+        <el-button @click="closeDeployDialog">
+          {{ t('common.close') }}
+        </el-button>
         <el-button 
           v-if="!deployStatus || (deployStatus.status !== 'SUCCESS' && deployStatus.status !== 'FAILED')"
           type="primary" 
-          @click="handleDeploy" 
-          :loading="deploying"
+          :loading="deploying" 
           :disabled="deployStatus?.status === 'DEPLOYING'"
+          @click="handleDeploy"
         >
           {{ deploying ? t('functionUnit.deploying') : t('functionUnit.startDeploy') }}
         </el-button>
         <el-button 
           v-if="deployStatus?.status === 'FAILED'"
           type="primary" 
-          @click="handleDeploy" 
-          :loading="deploying"
+          :loading="deploying" 
+          @click="handleDeploy"
         >
           {{ t('functionUnit.redeploy') }}
         </el-button>

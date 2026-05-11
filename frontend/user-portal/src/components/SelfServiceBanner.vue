@@ -1,11 +1,22 @@
 <template>
-  <div v-if="visible" class="self-service-banner" role="status">
-    <el-icon class="banner-icon"><InfoFilled /></el-icon>
+  <div
+    v-if="visible"
+    class="self-service-banner"
+    role="status"
+  >
+    <el-icon class="banner-icon">
+      <InfoFilled />
+    </el-icon>
     <div class="banner-text">
       <span class="banner-title">{{ t('portalSelfService.bannerTitle') }}</span>
       <span class="banner-desc">{{ t('portalSelfService.bannerDesc') }}</span>
     </div>
-    <el-button type="primary" size="small" plain @click="goPermissions">
+    <el-button
+      type="primary"
+      size="small"
+      plain
+      @click="goPermissions"
+    >
       {{ t('portalSelfService.goPermissions') }}
     </el-button>
   </div>

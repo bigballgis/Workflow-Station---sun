@@ -1,9 +1,28 @@
 <template>
-  <el-dialog :model-value="modelValue" @update:model-value="$emit('update:modelValue', $event)" :title="$t('process.importBpmnXml')" width="600px" destroy-on-close>
-    <el-input :model-value="importXml" @update:model-value="$emit('update:importXml', $event)" type="textarea" :rows="15" :placeholder="$t('process.pasteBpmnXml')" />
+  <el-dialog
+    :model-value="modelValue"
+    :title="$t('process.importBpmnXml')"
+    width="600px"
+    destroy-on-close
+    @update:model-value="$emit('update:modelValue', $event)"
+  >
+    <el-input
+      :model-value="importXml"
+      type="textarea"
+      :rows="15"
+      :placeholder="$t('process.pasteBpmnXml')"
+      @update:model-value="$emit('update:importXml', $event)"
+    />
     <template #footer>
-      <el-button @click="$emit('update:modelValue', false)">{{ $t('common.cancel') }}</el-button>
-      <el-button type="primary" @click="$emit('import')">{{ $t('process.import') }}</el-button>
+      <el-button @click="$emit('update:modelValue', false)">
+        {{ $t('common.cancel') }}
+      </el-button>
+      <el-button
+        type="primary"
+        @click="$emit('import')"
+      >
+        {{ $t('process.import') }}
+      </el-button>
     </template>
   </el-dialog>
 </template>

@@ -1,5 +1,10 @@
 <template>
-  <el-dialog v-model="visible" :title="t('bi.rbac.editDialogTitle')" width="560px" destroy-on-close>
+  <el-dialog
+    v-model="visible"
+    :title="t('bi.rbac.editDialogTitle')"
+    width="560px"
+    destroy-on-close
+  >
     <el-form label-width="140px">
       <el-form-item :label="t('bi.rbac.colSystemRole')">
         <span>{{ editForm.sysRoleName }}</span>
@@ -22,12 +27,24 @@
             :value="role.supersetRoleId"
           />
         </el-select>
-        <el-empty v-if="!supersetRolesLoading && activeSupersetRoles.length === 0" :description="t('bi.rbac.noSupersetRoles')" :image-size="60" />
+        <el-empty
+          v-if="!supersetRolesLoading && activeSupersetRoles.length === 0"
+          :description="t('bi.rbac.noSupersetRoles')"
+          :image-size="60"
+        />
       </el-form-item>
     </el-form>
     <template #footer>
-      <el-button @click="visible = false">{{ t('bi.rbac.cancel') }}</el-button>
-      <el-button type="primary" :loading="editLoading" @click="emit('submit')">{{ t('bi.rbac.ok') }}</el-button>
+      <el-button @click="visible = false">
+        {{ t('bi.rbac.cancel') }}
+      </el-button>
+      <el-button
+        type="primary"
+        :loading="editLoading"
+        @click="emit('submit')"
+      >
+        {{ t('bi.rbac.ok') }}
+      </el-button>
     </template>
   </el-dialog>
 </template>

@@ -114,10 +114,10 @@ export function evaluateCondition(
 
   switch (condition.operator) {
     case 'equals':
-      // eslint-disable-next-line eqeqeq
+       
       return fieldValue == conditionValue
     case 'not-equals':
-      // eslint-disable-next-line eqeqeq
+       
       return fieldValue != conditionValue
     case 'contains': {
       if (typeof fieldValue === 'string' && conditionValue != null) {
@@ -253,7 +253,7 @@ export function processLinkage(
         const optionVal = option[filterField]
         switch (filterOperator) {
           case 'equals':
-            // eslint-disable-next-line eqeqeq
+             
             return optionVal == sourceValue
           case 'contains': {
             if (typeof optionVal === 'string' && sourceValue != null) {
@@ -448,11 +448,11 @@ export function validateCrossFields(
         valid = Number(valA) < Number(valB)
         break
       case 'equals':
-        // eslint-disable-next-line eqeqeq
+         
         valid = valA == valB
         break
       case 'not-equals':
-        // eslint-disable-next-line eqeqeq
+         
         valid = valA != valB
         break
       case 'date-after': {
@@ -972,7 +972,7 @@ export class BusinessLogicEngine {
           )
           return true
         }
-        // eslint-disable-next-line eqeqeq
+         
         return formData[condRule.field] == condRule.value
       })
 

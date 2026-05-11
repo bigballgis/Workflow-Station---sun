@@ -1,8 +1,23 @@
 <template>
   <div class="validation-rule-list">
-    <div v-for="(rule, idx) in rules" :key="idx" class="rule-row">
-      <el-select v-model="rule.type" :placeholder="t('businessLogic.ruleType')" size="small" style="width: 120px" @change="onTypeChange(idx)">
-        <el-option v-for="rt in ruleTypes" :key="rt.value" :label="rt.label" :value="rt.value" />
+    <div
+      v-for="(rule, idx) in rules"
+      :key="idx"
+      class="rule-row"
+    >
+      <el-select
+        v-model="rule.type"
+        :placeholder="t('businessLogic.ruleType')"
+        size="small"
+        style="width: 120px"
+        @change="onTypeChange(idx)"
+      >
+        <el-option
+          v-for="rt in ruleTypes"
+          :key="rt.value"
+          :label="rt.label"
+          :value="rt.value"
+        />
       </el-select>
       <el-input
         v-if="rule.type === 'pattern'"
@@ -12,9 +27,21 @@
         style="width: 160px"
       />
       <template v-if="rule.type === 'number'">
-        <el-input-number v-model="rule.min" :placeholder="t('businessLogic.minValue')" size="small" style="width: 100px" :controls="false" />
+        <el-input-number
+          v-model="rule.min"
+          :placeholder="t('businessLogic.minValue')"
+          size="small"
+          style="width: 100px"
+          :controls="false"
+        />
         <span>-</span>
-        <el-input-number v-model="rule.max" :placeholder="t('businessLogic.maxValue')" size="small" style="width: 100px" :controls="false" />
+        <el-input-number
+          v-model="rule.max"
+          :placeholder="t('businessLogic.maxValue')"
+          size="small"
+          style="width: 100px"
+          :controls="false"
+        />
       </template>
       <el-input
         v-model="rule.message"
@@ -22,9 +49,21 @@
         size="small"
         style="width: 180px"
       />
-      <el-button link type="danger" size="small" @click="removeRule(idx)">{{ t('common.delete') }}</el-button>
+      <el-button
+        link
+        type="danger"
+        size="small"
+        @click="removeRule(idx)"
+      >
+        {{ t('common.delete') }}
+      </el-button>
     </div>
-    <el-button size="small" @click="addRule">{{ t('businessLogic.addRule') }}</el-button>
+    <el-button
+      size="small"
+      @click="addRule"
+    >
+      {{ t('businessLogic.addRule') }}
+    </el-button>
   </div>
 </template>
 

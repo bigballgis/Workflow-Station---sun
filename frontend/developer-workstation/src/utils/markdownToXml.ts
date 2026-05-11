@@ -39,7 +39,7 @@ export function markdownToXml(markdown: string): XmlNode[] {
 
   // Protect 4-space indented code blocks (consecutive lines starting with 4+ spaces or tab,
   // preceded by a blank line or start of string)
-  processed = processed.replace(/(^|\n\s*\n)((?:(?:    |\t).+\n?)+)/g, (_match, prefix, code) => {
+  processed = processed.replace(/(^|\n\s*\n)((?:(?: {4}|\t).+\n?)+)/g, (_match, prefix, code) => {
     const index = codeBlocks.length
     codeBlocks.push(code)
     return `${prefix}%%CODEBLOCK_${index}%%`
@@ -59,7 +59,7 @@ export function markdownToXml(markdown: string): XmlNode[] {
 
   const sections: ParsedSection[] = []
   let currentSection: ParsedSection | null = null
-  let preambleLines: string[] = []
+  const preambleLines: string[] = []
   let hasPreamble = false
 
   for (const line of lines) {

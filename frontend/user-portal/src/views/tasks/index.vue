@@ -6,77 +6,185 @@
 
     <!-- 筛选条件 -->
     <div class="portal-card filter-card">
-      <el-form :inline="true" :model="filterForm">
+      <el-form
+        :inline="true"
+        :model="filterForm"
+      >
         <el-form-item :label="t('task.assignmentType')">
-          <el-select v-model="filterForm.assignmentTypes" multiple clearable :placeholder="t('common.all')" style="width: 200px;">
-            <el-option value="USER" :label="t('task.user')" />
-            <el-option value="VIRTUAL_GROUP" :label="t('task.virtualGroup')" />
-            <el-option value="DEPT_ROLE" :label="t('task.deptRole')" />
-            <el-option value="DELEGATED" :label="t('task.delegated')" />
+          <el-select
+            v-model="filterForm.assignmentTypes"
+            multiple
+            clearable
+            :placeholder="t('common.all')"
+            style="width: 200px;"
+          >
+            <el-option
+              value="USER"
+              :label="t('task.user')"
+            />
+            <el-option
+              value="VIRTUAL_GROUP"
+              :label="t('task.virtualGroup')"
+            />
+            <el-option
+              value="DEPT_ROLE"
+              :label="t('task.deptRole')"
+            />
+            <el-option
+              value="DELEGATED"
+              :label="t('task.delegated')"
+            />
           </el-select>
         </el-form-item>
         <el-form-item :label="t('task.priority')">
-          <el-select v-model="filterForm.priorities" multiple clearable :placeholder="t('common.all')" style="width: 160px;">
-            <el-option value="URGENT" :label="t('task.urgent')" />
-            <el-option value="HIGH" :label="t('task.high')" />
-            <el-option value="NORMAL" :label="t('task.normal')" />
-            <el-option value="LOW" :label="t('task.low')" />
+          <el-select
+            v-model="filterForm.priorities"
+            multiple
+            clearable
+            :placeholder="t('common.all')"
+            style="width: 160px;"
+          >
+            <el-option
+              value="URGENT"
+              :label="t('task.urgent')"
+            />
+            <el-option
+              value="HIGH"
+              :label="t('task.high')"
+            />
+            <el-option
+              value="NORMAL"
+              :label="t('task.normal')"
+            />
+            <el-option
+              value="LOW"
+              :label="t('task.low')"
+            />
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-input v-model="filterForm.keyword" :placeholder="t('common.search')" clearable style="width: 200px;">
+          <el-input
+            v-model="filterForm.keyword"
+            :placeholder="t('common.search')"
+            clearable
+            style="width: 200px;"
+          >
             <template #prefix>
               <el-icon><Search /></el-icon>
             </template>
           </el-input>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="handleSearch">{{ t('common.search') }}</el-button>
-          <el-button @click="handleReset">{{ t('common.reset') }}</el-button>
+          <el-button
+            type="primary"
+            @click="handleSearch"
+          >
+            {{ t('common.search') }}
+          </el-button>
+          <el-button @click="handleReset">
+            {{ t('common.reset') }}
+          </el-button>
         </el-form-item>
       </el-form>
     </div>
 
     <!-- 任务列表 -->
     <div class="portal-card">
-      <el-table :data="taskList" v-loading="loading" stripe @selection-change="handleSelectionChange" table-layout="fixed">
-        <el-table-column type="selection" width="50" />
-        <el-table-column prop="taskName" :label="t('task.taskName')" min-width="160">
+      <el-table
+        v-loading="loading"
+        :data="taskList"
+        stripe
+        table-layout="fixed"
+        @selection-change="handleSelectionChange"
+      >
+        <el-table-column
+          type="selection"
+          width="50"
+        />
+        <el-table-column
+          prop="taskName"
+          :label="t('task.taskName')"
+          min-width="160"
+        >
           <template #default="{ row }">
-            <el-link type="primary" @click="viewTask(row)">{{ row.taskName }}</el-link>
+            <el-link
+              type="primary"
+              @click="viewTask(row)"
+            >
+              {{ row.taskName }}
+            </el-link>
           </template>
         </el-table-column>
-        <el-table-column prop="processDefinitionName" :label="t('task.processName')" min-width="140" show-overflow-tooltip />
-        <el-table-column prop="assignmentType" :label="t('task.assignmentType')" width="130" :show-overflow-tooltip="false" class-name="no-wrap-header">
+        <el-table-column
+          prop="processDefinitionName"
+          :label="t('task.processName')"
+          min-width="140"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="assignmentType"
+          :label="t('task.assignmentType')"
+          width="130"
+          :show-overflow-tooltip="false"
+          class-name="no-wrap-header"
+        >
           <template #default="{ row }">
-            <el-tag :class="['assignment-tag', getAssignmentClass(row)]" size="small">
+            <el-tag
+              :class="['assignment-tag', getAssignmentClass(row)]"
+              size="small"
+            >
               {{ t(`task.${getAssignmentKey(row)}`) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="initiatorName" :label="t('task.initiator')" width="100" show-overflow-tooltip>
+        <el-table-column
+          prop="initiatorName"
+          :label="t('task.initiator')"
+          width="100"
+          show-overflow-tooltip
+        >
           <template #default="{ row }">
             {{ row.initiatorName || '-' }}
           </template>
         </el-table-column>
-        <el-table-column prop="priority" :label="t('task.priority')" width="80">
+        <el-table-column
+          prop="priority"
+          :label="t('task.priority')"
+          width="80"
+        >
           <template #default="{ row }">
-            <el-tag :class="['priority-tag', getPriorityClass(row.priority)]" size="small">
+            <el-tag
+              :class="['priority-tag', getPriorityClass(row.priority)]"
+              size="small"
+            >
               {{ getPriorityLabel(row.priority) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="createTime" :label="t('task.createTime')" width="150">
+        <el-table-column
+          prop="createTime"
+          :label="t('task.createTime')"
+          width="150"
+        >
           <template #default="{ row }">
             {{ formatDate(row.createTime) }}
           </template>
         </el-table-column>
-        <el-table-column prop="dueDate" :label="t('task.dueDate')" width="130">
+        <el-table-column
+          prop="dueDate"
+          :label="t('task.dueDate')"
+          width="130"
+        >
           <template #default="{ row }">
             <span :class="{ 'overdue': row.isOverdue }">
               {{ row.dueDate ? formatDate(row.dueDate) : '-' }}
             </span>
-            <el-tag v-if="row.isOverdue" type="danger" size="small" style="margin-left: 4px;">
+            <el-tag
+              v-if="row.isOverdue"
+              type="danger"
+              size="small"
+              style="margin-left: 4px;"
+            >
               {{ t('task.overdue') }}
             </el-tag>
           </template>
@@ -84,9 +192,17 @@
       </el-table>
 
       <!-- 批量操作 -->
-      <div class="batch-actions" v-if="selectedTasks.length > 0">
+      <div
+        v-if="selectedTasks.length > 0"
+        class="batch-actions"
+      >
         <span>{{ t('task.selected', { count: selectedTasks.length }) }}</span>
-        <el-button size="small" @click="handleBatchUrge">{{ t('task.batchUrge') }}</el-button>
+        <el-button
+          size="small"
+          @click="handleBatchUrge"
+        >
+          {{ t('task.batchUrge') }}
+        </el-button>
       </div>
 
       <el-pagination
@@ -95,23 +211,53 @@
         :total="pagination.total"
         :page-sizes="[10, 20, 50, 100]"
         layout="total, sizes, prev, pager, next, jumper"
+        style="margin-top: 16px; justify-content: flex-end;"
         @size-change="handleSizeChange"
         @current-change="handlePageChange"
-        style="margin-top: 16px; justify-content: flex-end;"
       />
     </div>
 
     <!-- 委托/转办/催办对话框 -->
-    <el-dialog v-model="actionDialogVisible" :title="actionDialogTitle" width="500px" class="task-action-dialog">
-      <el-form :model="actionForm" label-width="120px" label-position="left" class="task-action-form">
-        <el-form-item :label="t('task.targetUser')" v-if="currentAction !== 'urge' && currentAction !== 'batchUrge'">
-          <el-select v-model="actionForm.targetUserId" filterable :placeholder="t('task.selectUser')" style="width: 100%;">
-            <el-option label="Li Si" value="user_2" />
-            <el-option label="Wang Wu" value="user_3" />
-            <el-option label="Zhao Liu" value="user_4" />
+    <el-dialog
+      v-model="actionDialogVisible"
+      :title="actionDialogTitle"
+      width="500px"
+      class="task-action-dialog"
+    >
+      <el-form
+        :model="actionForm"
+        label-width="120px"
+        label-position="left"
+        class="task-action-form"
+      >
+        <el-form-item
+          v-if="currentAction !== 'urge' && currentAction !== 'batchUrge'"
+          :label="t('task.targetUser')"
+        >
+          <el-select
+            v-model="actionForm.targetUserId"
+            filterable
+            :placeholder="t('task.selectUser')"
+            style="width: 100%;"
+          >
+            <el-option
+              label="Li Si"
+              value="user_2"
+            />
+            <el-option
+              label="Wang Wu"
+              value="user_3"
+            />
+            <el-option
+              label="Zhao Liu"
+              value="user_4"
+            />
           </el-select>
         </el-form-item>
-        <el-form-item :label="currentAction === 'urge' || currentAction === 'batchUrge' ? t('task.urgeMessage') : t('task.reasonDescription')" class="task-action-reason-item">
+        <el-form-item
+          :label="currentAction === 'urge' || currentAction === 'batchUrge' ? t('task.urgeMessage') : t('task.reasonDescription')"
+          class="task-action-reason-item"
+        >
           <el-input 
             v-model="actionForm.reason" 
             type="textarea" 
@@ -121,8 +267,15 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="actionDialogVisible = false">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary" @click="submitAction">{{ t('common.confirm') }}</el-button>
+        <el-button @click="actionDialogVisible = false">
+          {{ t('common.cancel') }}
+        </el-button>
+        <el-button
+          type="primary"
+          @click="submitAction"
+        >
+          {{ t('common.confirm') }}
+        </el-button>
       </template>
     </el-dialog>
   </div>

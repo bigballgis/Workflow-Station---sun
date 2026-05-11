@@ -1,29 +1,52 @@
 <template>
   <div class="process-properties">
     <el-collapse v-model="activeGroups">
-      <el-collapse-item :title="t('properties.basic')" name="basic">
-        <el-form label-position="top" size="small">
+      <el-collapse-item
+        :title="t('properties.basic')"
+        name="basic"
+      >
+        <el-form
+          label-position="top"
+          size="small"
+        >
           <el-form-item :label="t('properties.processId')">
-            <el-input v-model="processId" @change="updateProcessId" :placeholder="t('properties.processIdPlaceholder')" />
+            <el-input
+              v-model="processId"
+              :placeholder="t('properties.processIdPlaceholder')"
+              @change="updateProcessId"
+            />
           </el-form-item>
           <el-form-item :label="t('properties.processName')">
-            <el-input v-model="processName" @change="updateProcessName" :placeholder="t('properties.processNamePlaceholder')" />
+            <el-input
+              v-model="processName"
+              :placeholder="t('properties.processNamePlaceholder')"
+              @change="updateProcessName"
+            />
           </el-form-item>
           <el-form-item :label="t('properties.isExecutable')">
-            <el-switch v-model="isExecutable" @change="updateExecutable" />
+            <el-switch
+              v-model="isExecutable"
+              @change="updateExecutable"
+            />
           </el-form-item>
         </el-form>
       </el-collapse-item>
       
-      <el-collapse-item :title="t('properties.documentation')" name="documentation">
-        <el-form label-position="top" size="small">
+      <el-collapse-item
+        :title="t('properties.documentation')"
+        name="documentation"
+      >
+        <el-form
+          label-position="top"
+          size="small"
+        >
           <el-form-item :label="t('properties.processDescription')">
             <el-input 
               v-model="documentation" 
               type="textarea" 
               :rows="4"
-              @change="updateDocumentation"
               :placeholder="t('properties.processDescriptionPlaceholder')"
+              @change="updateDocumentation"
             />
           </el-form-item>
         </el-form>

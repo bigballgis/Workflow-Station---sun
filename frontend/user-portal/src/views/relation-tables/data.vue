@@ -1,11 +1,18 @@
 <template>
   <div class="relation-table-data">
     <div class="page-header">
-      <el-button @click="$router.push('/relation-tables')" text>
+      <el-button
+        text
+        @click="$router.push('/relation-tables')"
+      >
         <el-icon><ArrowLeft /></el-icon> Back
       </el-button>
       <h2>{{ tableName }}</h2>
-      <el-button type="primary" @click="handleExport" :loading="exporting">
+      <el-button
+        type="primary"
+        :loading="exporting"
+        @click="handleExport"
+      >
         <el-icon><Download /></el-icon> Export CSV
       </el-button>
     </div>
@@ -24,7 +31,13 @@
       </el-input>
     </div>
 
-    <el-table :data="rows" v-loading="loading" size="small" border stripe>
+    <el-table
+      v-loading="loading"
+      :data="rows"
+      size="small"
+      border
+      stripe
+    >
       <el-table-column
         v-for="col in columns"
         :key="col"
@@ -35,7 +48,10 @@
       />
     </el-table>
 
-    <div class="pagination-bar" v-if="total > 0">
+    <div
+      v-if="total > 0"
+      class="pagination-bar"
+    >
       <el-pagination
         v-model:current-page="currentPage"
         v-model:page-size="pageSize"
@@ -47,7 +63,10 @@
       />
     </div>
 
-    <el-empty v-if="rows.length === 0 && !loading" description="No data" />
+    <el-empty
+      v-if="rows.length === 0 && !loading"
+      description="No data"
+    />
   </div>
 </template>
 

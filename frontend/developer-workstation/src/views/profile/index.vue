@@ -7,7 +7,10 @@
         </div>
       </template>
 
-      <div class="profile-content" v-loading="loading">
+      <div
+        v-loading="loading"
+        class="profile-content"
+      >
         <div class="avatar-section">
           <el-avatar :size="100">
             {{ (userInfo?.displayName || userInfo?.username || 'U').charAt(0).toUpperCase() }}
@@ -15,14 +18,25 @@
           <h2>{{ userInfo?.displayName || userInfo?.username || t('user.username') }}</h2>
         </div>
 
-        <el-alert type="info" :closable="false" show-icon class="studio-alert">
+        <el-alert
+          type="info"
+          :closable="false"
+          show-icon
+          class="studio-alert"
+        >
           {{ t('profile.studioIntro') }}
         </el-alert>
 
         <el-divider />
 
-        <h4 class="subsection-title">{{ t('profile.sectionAccount') }}</h4>
-        <el-descriptions :column="2" border class="subsection-block">
+        <h4 class="subsection-title">
+          {{ t('profile.sectionAccount') }}
+        </h4>
+        <el-descriptions
+          :column="2"
+          border
+          class="subsection-block"
+        >
           <el-descriptions-item :label="t('user.username')">
             {{ userInfo?.username || '-' }}
           </el-descriptions-item>
@@ -53,7 +67,10 @@
         label-width="100px"
         label-position="left"
       >
-        <el-form-item :label="t('profile.currentPassword')" prop="oldPassword">
+        <el-form-item
+          :label="t('profile.currentPassword')"
+          prop="oldPassword"
+        >
           <el-input 
             v-model="passwordForm.oldPassword" 
             type="password" 
@@ -62,7 +79,10 @@
             @blur="passwordFormRef?.validateField('newPassword')"
           />
         </el-form-item>
-        <el-form-item :label="t('profile.newPassword')" prop="newPassword">
+        <el-form-item
+          :label="t('profile.newPassword')"
+          prop="newPassword"
+        >
           <el-input 
             v-model="passwordForm.newPassword" 
             type="password" 
@@ -71,7 +91,10 @@
             @input="passwordFormRef?.validateField('confirmPassword')"
           />
         </el-form-item>
-        <el-form-item :label="t('profile.confirmPassword')" prop="confirmPassword">
+        <el-form-item
+          :label="t('profile.confirmPassword')"
+          prop="confirmPassword"
+        >
           <el-input
             v-model="passwordForm.confirmPassword"
             type="password"
@@ -80,7 +103,11 @@
           />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="handleChangePassword" :loading="changingPassword">
+          <el-button
+            type="primary"
+            :loading="changingPassword"
+            @click="handleChangePassword"
+          >
             {{ t('profile.changePassword') }}
           </el-button>
         </el-form-item>

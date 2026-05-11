@@ -1,7 +1,9 @@
 <template>
   <div class="node-properties-panel">
     <div class="panel-header">
-      <el-icon v-if="elementIcon"><component :is="elementIcon" /></el-icon>
+      <el-icon v-if="elementIcon">
+        <component :is="elementIcon" />
+      </el-icon>
       <span class="panel-title">{{ panelTitle }}</span>
     </div>
     
@@ -68,16 +70,25 @@
       />
       
       <!-- Other element basic properties -->
-      <div v-else class="basic-properties">
-        <el-form label-position="top" size="small">
+      <div
+        v-else
+        class="basic-properties"
+      >
+        <el-form
+          label-position="top"
+          size="small"
+        >
           <el-form-item label="ID">
-            <el-input :model-value="basicProps.id" disabled />
+            <el-input
+              :model-value="basicProps.id"
+              disabled
+            />
           </el-form-item>
           <el-form-item :label="t('properties.name')">
             <el-input 
               :model-value="basicProps.name" 
-              @update:model-value="updateName"
               :placeholder="t('properties.namePlaceholder')"
+              @update:model-value="updateName"
             />
           </el-form-item>
         </el-form>

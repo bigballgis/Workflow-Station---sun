@@ -3,11 +3,19 @@
     v-model="visible"
     :title="title"
     width="500px"
-    @opened="$emit('opened')"
     class="task-action-dialog"
+    @opened="$emit('opened')"
   >
-    <el-form :model="formData" label-width="120px" label-position="left" class="task-action-form">
-      <el-form-item :label="$t('task.targetUser')" v-show="currentAction !== 'urge'">
+    <el-form
+      :model="formData"
+      label-width="120px"
+      label-position="left"
+      class="task-action-form"
+    >
+      <el-form-item
+        v-show="currentAction !== 'urge'"
+        :label="$t('task.targetUser')"
+      >
         <el-select
           v-model="formData.targetUserId"
           :placeholder="$t('task.selectUser')"
@@ -35,8 +43,16 @@
       </el-form-item>
     </el-form>
     <template #footer>
-      <el-button @click="visible = false">{{ $t('common.cancel') }}</el-button>
-      <el-button type="primary" @click="$emit('confirm')" :loading="submitting">{{ $t('common.confirm') }}</el-button>
+      <el-button @click="visible = false">
+        {{ $t('common.cancel') }}
+      </el-button>
+      <el-button
+        type="primary"
+        :loading="submitting"
+        @click="$emit('confirm')"
+      >
+        {{ $t('common.confirm') }}
+      </el-button>
     </template>
   </el-dialog>
 </template>

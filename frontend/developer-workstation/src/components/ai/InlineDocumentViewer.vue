@@ -1,23 +1,48 @@
 <template>
   <div class="inline-doc-viewer">
     <!-- Collapsed state -->
-    <div v-if="!expanded" class="inline-doc-viewer__collapsed" @click="expanded = true">
+    <div
+      v-if="!expanded"
+      class="inline-doc-viewer__collapsed"
+      @click="expanded = true"
+    >
       <span class="inline-doc-viewer__label">{{ docLabel }}</span>
-      <el-button size="small" text type="primary">{{ t('ai.doc.expand') }}</el-button>
+      <el-button
+        size="small"
+        text
+        type="primary"
+      >
+        {{ t('ai.doc.expand') }}
+      </el-button>
     </div>
 
     <!-- Expanded state -->
-    <div v-else class="inline-doc-viewer__expanded" :style="{ maxHeight: maxHeight + 'px' }">
+    <div
+      v-else
+      class="inline-doc-viewer__expanded"
+      :style="{ maxHeight: maxHeight + 'px' }"
+    >
       <div class="inline-doc-viewer__header">
         <span class="inline-doc-viewer__label">{{ docLabel }}</span>
         <ViewModeToggle v-model="viewMode" />
-        <el-button size="small" text type="primary" @click="expanded = false">
+        <el-button
+          size="small"
+          text
+          type="primary"
+          @click="expanded = false"
+        >
           {{ t('ai.doc.collapse') }}
         </el-button>
       </div>
       <div class="inline-doc-viewer__body">
-        <XmlTreeView v-show="viewMode === 'xml'" :content="content" />
-        <MarkdownRenderer v-show="viewMode === 'markdown'" :content="content" />
+        <XmlTreeView
+          v-show="viewMode === 'xml'"
+          :content="content"
+        />
+        <MarkdownRenderer
+          v-show="viewMode === 'markdown'"
+          :content="content"
+        />
       </div>
     </div>
   </div>

@@ -8,19 +8,32 @@
     @update:model-value="handleVisibilityChange"
   >
     <!-- Workflow Info -->
-    <div class="n8n-workflow-info" v-if="workflowName">
-      <el-descriptions :column="1" border size="small">
+    <div
+      v-if="workflowName"
+      class="n8n-workflow-info"
+    >
+      <el-descriptions
+        :column="1"
+        border
+        size="small"
+      >
         <el-descriptions-item :label="t('n8nAction.workflowName')">
           {{ workflowName }}
         </el-descriptions-item>
-        <el-descriptions-item v-if="workflowDescription" :label="t('n8nAction.workflowDescription')">
+        <el-descriptions-item
+          v-if="workflowDescription"
+          :label="t('n8nAction.workflowDescription')"
+        >
           {{ workflowDescription }}
         </el-descriptions-item>
       </el-descriptions>
     </div>
 
     <!-- Input Form (initial state) -->
-    <div v-if="state === 'initial'" class="n8n-input-form">
+    <div
+      v-if="state === 'initial'"
+      class="n8n-input-form"
+    >
       <el-form
         v-if="inputMappingList.length > 0"
         ref="formRef"
@@ -74,25 +87,52 @@
           />
         </el-form-item>
       </el-form>
-      <el-empty v-else :description="t('n8nAction.noInputParams')" :image-size="60" />
+      <el-empty
+        v-else
+        :description="t('n8nAction.noInputParams')"
+        :image-size="60"
+      />
     </div>
 
     <!-- Executing state -->
-    <div v-else-if="state === 'executing'" class="n8n-executing">
-      <el-result icon="info" :title="t('n8nAction.executing')">
+    <div
+      v-else-if="state === 'executing'"
+      class="n8n-executing"
+    >
+      <el-result
+        icon="info"
+        :title="t('n8nAction.executing')"
+      >
         <template #extra>
-          <el-progress :percentage="50" :indeterminate="true" status="warning" />
+          <el-progress
+            :percentage="50"
+            :indeterminate="true"
+            status="warning"
+          />
         </template>
       </el-result>
     </div>
 
     <!-- Success state -->
-    <div v-else-if="state === 'success'" class="n8n-result">
-      <el-result icon="success" :title="t('n8nAction.success')">
+    <div
+      v-else-if="state === 'success'"
+      class="n8n-result"
+    >
+      <el-result
+        icon="success"
+        :title="t('n8nAction.success')"
+      >
         <template #extra>
-          <div v-if="resultData && Object.keys(resultData).length > 0" class="result-data">
+          <div
+            v-if="resultData && Object.keys(resultData).length > 0"
+            class="result-data"
+          >
             <h4>{{ t('n8nAction.resultData') }}</h4>
-            <el-descriptions :column="1" border size="small">
+            <el-descriptions
+              :column="1"
+              border
+              size="small"
+            >
               <el-descriptions-item
                 v-for="(value, key) in resultData"
                 :key="String(key)"
@@ -102,13 +142,20 @@
               </el-descriptions-item>
             </el-descriptions>
           </div>
-          <el-empty v-else :description="t('n8nAction.noResultData')" :image-size="40" />
+          <el-empty
+            v-else
+            :description="t('n8nAction.noResultData')"
+            :image-size="40"
+          />
         </template>
       </el-result>
     </div>
 
     <!-- Failed/Timeout state -->
-    <div v-else-if="state === 'failed' || state === 'timeout'" class="n8n-error">
+    <div
+      v-else-if="state === 'failed' || state === 'timeout'"
+      class="n8n-error"
+    >
       <el-result
         icon="error"
         :title="state === 'timeout' ? t('n8nAction.timeout') : t('n8nAction.failed')"
@@ -124,28 +171,49 @@
       <div class="dialog-footer">
         <!-- Initial state: Execute + Close -->
         <template v-if="state === 'initial'">
-          <el-button @click="handleClose">{{ t('n8nAction.close') }}</el-button>
-          <el-button type="primary" @click="handleExecute">
+          <el-button @click="handleClose">
+            {{ t('n8nAction.close') }}
+          </el-button>
+          <el-button
+            type="primary"
+            @click="handleExecute"
+          >
             {{ t('n8nAction.execute') }}
           </el-button>
         </template>
 
         <!-- Executing state: disabled button -->
         <template v-else-if="state === 'executing'">
-          <el-button type="primary" :loading="true" disabled>
+          <el-button
+            type="primary"
+            :loading="true"
+            disabled
+          >
             {{ t('n8nAction.executing') }}
           </el-button>
         </template>
 
         <!-- Success state: Close -->
         <template v-else-if="state === 'success'">
-          <el-button type="primary" @click="handleClose">{{ t('n8nAction.close') }}</el-button>
+          <el-button
+            type="primary"
+            @click="handleClose"
+          >
+            {{ t('n8nAction.close') }}
+          </el-button>
         </template>
 
         <!-- Failed/Timeout state: Retry + Close -->
         <template v-else>
-          <el-button @click="handleClose">{{ t('n8nAction.close') }}</el-button>
-          <el-button type="primary" @click="handleRetry">{{ t('n8nAction.retry') }}</el-button>
+          <el-button @click="handleClose">
+            {{ t('n8nAction.close') }}
+          </el-button>
+          <el-button
+            type="primary"
+            @click="handleRetry"
+          >
+            {{ t('n8nAction.retry') }}
+          </el-button>
         </template>
       </div>
     </template>

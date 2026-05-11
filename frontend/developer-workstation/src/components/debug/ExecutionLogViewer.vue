@@ -1,44 +1,109 @@
 <template>
   <div class="execution-log-viewer">
     <div class="log-toolbar">
-      <el-input v-model="searchText" :placeholder="t('debug.searchLog')" size="small" clearable style="width: 200px;">
+      <el-input
+        v-model="searchText"
+        :placeholder="t('debug.searchLog')"
+        size="small"
+        clearable
+        style="width: 200px;"
+      >
         <template #prefix>
           <el-icon><Search /></el-icon>
         </template>
       </el-input>
-      <el-select v-model="levelFilter" :placeholder="t('debug.logLevel')" size="small" clearable style="width: 120px;">
-        <el-option :label="t('debug.all')" value="" />
-        <el-option :label="t('debug.info')" value="info" />
-        <el-option :label="t('debug.success')" value="success" />
-        <el-option :label="t('debug.warning')" value="warning" />
-        <el-option :label="t('debug.error')" value="error" />
+      <el-select
+        v-model="levelFilter"
+        :placeholder="t('debug.logLevel')"
+        size="small"
+        clearable
+        style="width: 120px;"
+      >
+        <el-option
+          :label="t('debug.all')"
+          value=""
+        />
+        <el-option
+          :label="t('debug.info')"
+          value="info"
+        />
+        <el-option
+          :label="t('debug.success')"
+          value="success"
+        />
+        <el-option
+          :label="t('debug.warning')"
+          value="warning"
+        />
+        <el-option
+          :label="t('debug.error')"
+          value="error"
+        />
       </el-select>
-      <el-checkbox v-model="autoScroll" size="small">{{ t('debug.autoScroll') }}</el-checkbox>
-      <el-button size="small" @click="handleClear">
+      <el-checkbox
+        v-model="autoScroll"
+        size="small"
+      >
+        {{ t('debug.autoScroll') }}
+      </el-checkbox>
+      <el-button
+        size="small"
+        @click="handleClear"
+      >
         <el-icon><Delete /></el-icon> {{ t('debug.clear') }}
       </el-button>
-      <el-button size="small" @click="handleExport">
+      <el-button
+        size="small"
+        @click="handleExport"
+      >
         <el-icon><Download /></el-icon> {{ t('debug.export') }}
       </el-button>
     </div>
 
-    <div ref="logContainerRef" class="log-container">
-      <div v-for="(log, index) in filteredLogs" :key="index" class="log-item" :class="log.level">
+    <div
+      ref="logContainerRef"
+      class="log-container"
+    >
+      <div
+        v-for="(log, index) in filteredLogs"
+        :key="index"
+        class="log-item"
+        :class="log.level"
+      >
         <span class="log-time">{{ formatTime(log.timestamp) }}</span>
-        <el-tag :type="levelTagType(log.level)" size="small" class="log-level">
+        <el-tag
+          :type="levelTagType(log.level)"
+          size="small"
+          class="log-level"
+        >
           {{ levelLabel(log.level) }}
         </el-tag>
-        <span v-if="log.nodeName" class="log-node">[{{ log.nodeName }}]</span>
+        <span
+          v-if="log.nodeName"
+          class="log-node"
+        >[{{ log.nodeName }}]</span>
         <span class="log-message">{{ log.message }}</span>
-        <el-button v-if="log.variables" link size="small" @click="showVariables(log)">
+        <el-button
+          v-if="log.variables"
+          link
+          size="small"
+          @click="showVariables(log)"
+        >
           <el-icon><View /></el-icon>
         </el-button>
       </div>
-      <el-empty v-if="!filteredLogs.length" :description="t('debug.noLogs')" />
+      <el-empty
+        v-if="!filteredLogs.length"
+        :description="t('debug.noLogs')"
+      />
     </div>
 
     <!-- Variables Dialog -->
-    <el-dialog v-model="showVariablesDialog" :title="t('debug.variablesSnapshot')" width="500px">
+    <el-dialog
+      v-model="showVariablesDialog"
+      :title="t('debug.variablesSnapshot')"
+      width="500px"
+    >
       <pre class="variables-preview">{{ JSON.stringify(selectedLogVariables, null, 2) }}</pre>
     </el-dialog>
   </div>

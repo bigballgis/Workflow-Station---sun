@@ -13,58 +13,121 @@
     <div class="binding-list">
       <div class="binding-header">
         <span class="title">{{ t('tableBinding.title') }}</span>
-        <el-button type="primary" size="small" @click="showAddDialog = true">
+        <el-button
+          type="primary"
+          size="small"
+          @click="showAddDialog = true"
+        >
           <el-icon><Plus /></el-icon> {{ t('tableBinding.addBinding') }}
         </el-button>
       </div>
       
-      <el-table :data="bindings" size="small" v-loading="loading">
-        <el-table-column prop="tableName" :label="t('tableBinding.tableName')" min-width="120">
+      <el-table
+        v-loading="loading"
+        :data="bindings"
+        size="small"
+      >
+        <el-table-column
+          prop="tableName"
+          :label="t('tableBinding.tableName')"
+          min-width="120"
+        >
           <template #default="{ row }">
             <span>{{ row.tableName || getTableName(row.tableId) }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="bindingType" :label="t('tableBinding.bindingType')" width="100">
+        <el-table-column
+          prop="bindingType"
+          :label="t('tableBinding.bindingType')"
+          width="100"
+        >
           <template #default="{ row }">
-            <el-tag :type="bindingTypeTag(row.bindingType)" size="small">
+            <el-tag
+              :type="bindingTypeTag(row.bindingType)"
+              size="small"
+            >
               {{ bindingTypeLabel(row.bindingType) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="bindingMode" :label="t('tableBinding.mode')" width="80">
+        <el-table-column
+          prop="bindingMode"
+          :label="t('tableBinding.mode')"
+          width="80"
+        >
           <template #default="{ row }">
-            <el-tag :type="row.bindingMode === 'EDITABLE' ? 'success' : 'info'" size="small">
+            <el-tag
+              :type="row.bindingMode === 'EDITABLE' ? 'success' : 'info'"
+              size="small"
+            >
               {{ row.bindingMode === 'EDITABLE' ? t('tableBinding.editable') : t('tableBinding.readOnly') }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="foreignKeyField" :label="t('tableBinding.foreignKeyField')" width="120">
+        <el-table-column
+          prop="foreignKeyField"
+          :label="t('tableBinding.foreignKeyField')"
+          width="120"
+        >
           <template #default="{ row }">
             <span v-if="row.foreignKeyField">{{ row.foreignKeyField }}</span>
-            <span v-else class="text-muted">-</span>
+            <span
+              v-else
+              class="text-muted"
+            >-</span>
           </template>
         </el-table-column>
-        <el-table-column prop="subMode" :label="t('tableBinding.subMode')" width="130">
+        <el-table-column
+          prop="subMode"
+          :label="t('tableBinding.subMode')"
+          width="130"
+        >
           <template #default="{ row }">
             <span v-if="row.bindingType === 'SUB'">
-              <el-tag :type="row.subMode === 'FULL' ? 'success' : 'info'" size="small">
+              <el-tag
+                :type="row.subMode === 'FULL' ? 'success' : 'info'"
+                size="small"
+              >
                 {{ row.subMode === 'FULL' ? t('tableBinding.subModeFull') : t('tableBinding.subModeFormOnly') }}
               </el-tag>
             </span>
-            <span v-else class="text-muted">-</span>
+            <span
+              v-else
+              class="text-muted"
+            >-</span>
           </template>
         </el-table-column>
-        <el-table-column :label="t('tableBinding.operations')" width="120">
+        <el-table-column
+          :label="t('tableBinding.operations')"
+          width="120"
+        >
           <template #default="{ row }">
-            <el-button link type="primary" size="small" @click="handleEdit(row)">{{ t('common.edit') }}</el-button>
-            <el-button link type="danger" size="small" @click="handleDelete(row)" :disabled="row.bindingType === 'PRIMARY'">
+            <el-button
+              link
+              type="primary"
+              size="small"
+              @click="handleEdit(row)"
+            >
+              {{ t('common.edit') }}
+            </el-button>
+            <el-button
+              link
+              type="danger"
+              size="small"
+              :disabled="row.bindingType === 'PRIMARY'"
+              @click="handleDelete(row)"
+            >
               {{ t('common.delete') }}
             </el-button>
           </template>
         </el-table-column>
       </el-table>
       
-      <el-empty v-if="bindings.length === 0 && !loading" :description="t('tableBinding.noBindings')" :image-size="60" />
+      <el-empty
+        v-if="bindings.length === 0 && !loading"
+        :description="t('tableBinding.noBindings')"
+        :image-size="60"
+      />
     </div>
 
     <!-- Add/Edit binding dialog -->
@@ -74,7 +137,13 @@
       width="500px"
       @close="resetForm"
     >
-      <el-form :model="bindingForm" :rules="formRules" ref="formRef" label-width="120px" label-position="left">
+      <el-form
+        ref="formRef"
+        :model="bindingForm"
+        :rules="formRules"
+        label-width="120px"
+        label-position="left"
+      >
         <!-- Must-add-primary-first hint -->
         <el-alert
           v-if="needsPrimaryFirst && !editingBinding"
@@ -83,33 +152,66 @@
           show-icon
           style="margin-bottom: 12px;"
         >
-          <template #title>{{ t('tableBinding.primaryFirstHint') }}</template>
+          <template #title>
+            {{ t('tableBinding.primaryFirstHint') }}
+          </template>
         </el-alert>
 
-        <el-form-item :label="t('tableBinding.bindingType')" prop="bindingType">
-          <el-select v-model="bindingForm.bindingType" style="width: 100%" :disabled="!!editingBinding && editingBinding.bindingType === 'PRIMARY'" @change="handleBindingTypeChange">
-            <el-option :label="t('tableBinding.primaryTable')" value="PRIMARY" :disabled="hasPrimaryBinding && bindingForm.bindingType !== 'PRIMARY'" />
-            <el-option :label="t('tableBinding.subTable')" value="SUB" :disabled="needsPrimaryFirst" />
-            <el-option :label="t('tableBinding.relatedTable')" value="RELATED" />
+        <el-form-item
+          :label="t('tableBinding.bindingType')"
+          prop="bindingType"
+        >
+          <el-select
+            v-model="bindingForm.bindingType"
+            style="width: 100%"
+            :disabled="!!editingBinding && editingBinding.bindingType === 'PRIMARY'"
+            @change="handleBindingTypeChange"
+          >
+            <el-option
+              :label="t('tableBinding.primaryTable')"
+              value="PRIMARY"
+              :disabled="hasPrimaryBinding && bindingForm.bindingType !== 'PRIMARY'"
+            />
+            <el-option
+              :label="t('tableBinding.subTable')"
+              value="SUB"
+              :disabled="needsPrimaryFirst"
+            />
+            <el-option
+              :label="t('tableBinding.relatedTable')"
+              value="RELATED"
+            />
           </el-select>
-          <div v-if="bindingForm.bindingType === 'RELATED' && !editingBinding" class="form-item-tip">
+          <div
+            v-if="bindingForm.bindingType === 'RELATED' && !editingBinding"
+            class="form-item-tip"
+          >
             {{ t('tableBinding.relatedForLookupHint') }}
           </div>
         </el-form-item>
 
         <!-- Sub binding mode (only show for SUB type) -->
         <el-form-item
-          :label="t('tableBinding.subMode')"
           v-if="bindingForm.bindingType === 'SUB'"
+          :label="t('tableBinding.subMode')"
         >
           <el-radio-group v-model="bindingForm.subMode">
-            <el-radio :value="'FULL'">{{ t('tableBinding.subModeFull') }}</el-radio>
-            <el-radio :value="'FORM_ONLY'">{{ t('tableBinding.subModeFormOnly') }}</el-radio>
+            <el-radio :value="'FULL'">
+              {{ t('tableBinding.subModeFull') }}
+            </el-radio>
+            <el-radio :value="'FORM_ONLY'">
+              {{ t('tableBinding.subModeFormOnly') }}
+            </el-radio>
           </el-radio-group>
-          <div class="form-item-tip">{{ t('tableBinding.subModeTip') }}</div>
+          <div class="form-item-tip">
+            {{ t('tableBinding.subModeTip') }}
+          </div>
         </el-form-item>
 
-        <el-form-item :label="t('tableBinding.selectTable')" prop="tableId">
+        <el-form-item
+          :label="t('tableBinding.selectTable')"
+          prop="tableId"
+        >
           <el-select 
             v-model="bindingForm.tableId" 
             :placeholder="selectTablePlaceholder" 
@@ -132,17 +234,27 @@
           </el-select>
         </el-form-item>
         
-        <el-form-item :label="t('tableBinding.bindingMode')" prop="bindingMode">
-          <el-radio-group v-model="bindingForm.bindingMode" :disabled="bindingForm.bindingType === 'RELATED'">
-            <el-radio :value="'EDITABLE'">{{ t('tableBinding.editable') }}</el-radio>
-            <el-radio :value="'READONLY'">{{ t('tableBinding.readOnly') }}</el-radio>
+        <el-form-item
+          :label="t('tableBinding.bindingMode')"
+          prop="bindingMode"
+        >
+          <el-radio-group
+            v-model="bindingForm.bindingMode"
+            :disabled="bindingForm.bindingType === 'RELATED'"
+          >
+            <el-radio :value="'EDITABLE'">
+              {{ t('tableBinding.editable') }}
+            </el-radio>
+            <el-radio :value="'READONLY'">
+              {{ t('tableBinding.readOnly') }}
+            </el-radio>
           </el-radio-group>
         </el-form-item>
         
         <el-form-item 
-          :label="t('tableBinding.foreignKeyField')" 
+          v-if="bindingForm.bindingType === 'SUB'" 
+          :label="t('tableBinding.foreignKeyField')"
           prop="foreignKeyField"
-          v-if="bindingForm.bindingType === 'SUB'"
         >
           <el-select 
             v-model="bindingForm.foreignKeyField" 
@@ -157,13 +269,21 @@
               :value="field.fieldName" 
             />
           </el-select>
-          <div class="form-item-tip">{{ t('tableBinding.foreignKeyTip') }}</div>
+          <div class="form-item-tip">
+            {{ t('tableBinding.foreignKeyTip') }}
+          </div>
         </el-form-item>
       </el-form>
       
       <template #footer>
-        <el-button @click="showAddDialog = false">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary" @click="handleSubmit" :loading="submitting">
+        <el-button @click="showAddDialog = false">
+          {{ t('common.cancel') }}
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="submitting"
+          @click="handleSubmit"
+        >
           {{ editingBinding ? t('common.save') : t('tableBinding.add') }}
         </el-button>
       </template>

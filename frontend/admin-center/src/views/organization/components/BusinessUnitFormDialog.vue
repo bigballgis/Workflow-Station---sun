@@ -1,22 +1,62 @@
 <template>
-  <el-dialog :model-value="modelValue" @update:model-value="$emit('update:modelValue', $event)" :title="isEdit ? t('organization.editBusinessUnit') : t('organization.createBusinessUnit')" width="500px">
-    <el-form ref="formRef" :model="form" :rules="rules" label-width="auto" label-position="left">
-      <el-form-item :label="t('organization.businessUnitName')" prop="name">
+  <el-dialog
+    :model-value="modelValue"
+    :title="isEdit ? t('organization.editBusinessUnit') : t('organization.createBusinessUnit')"
+    width="500px"
+    @update:model-value="$emit('update:modelValue', $event)"
+  >
+    <el-form
+      ref="formRef"
+      :model="form"
+      :rules="rules"
+      label-width="auto"
+      label-position="left"
+    >
+      <el-form-item
+        :label="t('organization.businessUnitName')"
+        prop="name"
+      >
         <el-input v-model="form.name" />
       </el-form-item>
-      <el-form-item :label="t('organization.businessUnitCode')" prop="code">
-        <el-input v-model="form.code" :disabled="isEdit" />
+      <el-form-item
+        :label="t('organization.businessUnitCode')"
+        prop="code"
+      >
+        <el-input
+          v-model="form.code"
+          :disabled="isEdit"
+        />
       </el-form-item>
       <el-form-item :label="t('organization.parentBusinessUnit')">
-        <el-tree-select v-model="form.parentId" :data="orgStore.businessUnitTree" :props="{ label: 'name', children: 'children' }" node-key="id" clearable check-strictly :disabled="!!parent" style="width: 100%" />
+        <el-tree-select
+          v-model="form.parentId"
+          :data="orgStore.businessUnitTree"
+          :props="{ label: 'name', children: 'children' }"
+          node-key="id"
+          clearable
+          check-strictly
+          :disabled="!!parent"
+          style="width: 100%"
+        />
       </el-form-item>
       <el-form-item :label="t('common.sort')">
-        <el-input-number v-model="form.sortOrder" :min="0" />
+        <el-input-number
+          v-model="form.sortOrder"
+          :min="0"
+        />
       </el-form-item>
     </el-form>
     <template #footer>
-      <el-button @click="$emit('update:modelValue', false)">{{ t('common.cancel') }}</el-button>
-      <el-button type="primary" :loading="loading" @click="handleSubmit">{{ t('common.confirm') }}</el-button>
+      <el-button @click="$emit('update:modelValue', false)">
+        {{ t('common.cancel') }}
+      </el-button>
+      <el-button
+        type="primary"
+        :loading="loading"
+        @click="handleSubmit"
+      >
+        {{ t('common.confirm') }}
+      </el-button>
     </template>
   </el-dialog>
 </template>

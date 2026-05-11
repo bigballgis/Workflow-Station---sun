@@ -1,31 +1,62 @@
 <template>
-  <div class="process-diagram" ref="containerRef">
-    <div ref="canvasRef" class="bpmn-canvas"></div>
+  <div
+    ref="containerRef"
+    class="process-diagram"
+  >
+    <div
+      ref="canvasRef"
+      class="bpmn-canvas"
+    />
     <div class="diagram-bottom-bar">
-      <div class="diagram-legend" v-if="showLegend">
+      <div
+        v-if="showLegend"
+        class="diagram-legend"
+      >
         <div class="legend-item">
-          <span class="legend-dot completed"></span>
+          <span class="legend-dot completed" />
           <span>{{ t('diagram.completed') }}</span>
         </div>
-        <div v-if="showCurrentStep" class="legend-item">
-          <span class="legend-dot current"></span>
+        <div
+          v-if="showCurrentStep"
+          class="legend-item"
+        >
+          <span class="legend-dot current" />
           <span>{{ t('diagram.currentStep') }}</span>
         </div>
         <div class="legend-item">
-          <span class="legend-dot rejected"></span>
+          <span class="legend-dot rejected" />
           <span>{{ t('diagram.rejected') }}</span>
         </div>
         <div class="legend-item">
-          <span class="legend-dot pending"></span>
+          <span class="legend-dot pending" />
           <span>{{ t('diagram.pending') }}</span>
         </div>
       </div>
-      <div class="diagram-toolbar" v-if="showToolbar">
+      <div
+        v-if="showToolbar"
+        class="diagram-toolbar"
+      >
         <el-button-group>
-          <el-button :icon="ZoomIn" @click="zoomIn" :title="t('diagram.zoomIn')" />
-          <el-button :icon="ZoomOut" @click="zoomOut" :title="t('diagram.zoomOut')" />
-          <el-button :icon="RefreshRight" @click="resetZoom" :title="t('diagram.reset')" />
-          <el-button :icon="FullScreen" @click="fitViewport" :title="t('diagram.fitViewport')" />
+          <el-button
+            :icon="ZoomIn"
+            :title="t('diagram.zoomIn')"
+            @click="zoomIn"
+          />
+          <el-button
+            :icon="ZoomOut"
+            :title="t('diagram.zoomOut')"
+            @click="zoomOut"
+          />
+          <el-button
+            :icon="RefreshRight"
+            :title="t('diagram.reset')"
+            @click="resetZoom"
+          />
+          <el-button
+            :icon="FullScreen"
+            :title="t('diagram.fitViewport')"
+            @click="fitViewport"
+          />
         </el-button-group>
         <span class="zoom-level">{{ Math.round(zoomLevel * 100) }}%</span>
       </div>

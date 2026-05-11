@@ -2,25 +2,53 @@
   <div class="gateway-properties">
     <el-collapse v-model="activeGroups">
       <!-- Basic info -->
-      <el-collapse-item :title="t('properties.basic')" name="basic">
-        <el-form label-position="top" size="small">
+      <el-collapse-item
+        :title="t('properties.basic')"
+        name="basic"
+      >
+        <el-form
+          label-position="top"
+          size="small"
+        >
           <el-form-item :label="t('properties.gatewayId')">
-            <el-input :model-value="basicProps.id" disabled />
+            <el-input
+              :model-value="basicProps.id"
+              disabled
+            />
           </el-form-item>
           <el-form-item :label="t('properties.gatewayType')">
-            <el-input :model-value="gatewayTypeLabel" disabled />
+            <el-input
+              :model-value="gatewayTypeLabel"
+              disabled
+            />
           </el-form-item>
           <el-form-item :label="t('properties.gatewayName')">
-            <el-input v-model="gatewayName" @change="updateBasicProp('name', gatewayName)" :placeholder="t('properties.gatewayNamePlaceholder')" />
+            <el-input
+              v-model="gatewayName"
+              :placeholder="t('properties.gatewayNamePlaceholder')"
+              @change="updateBasicProp('name', gatewayName)"
+            />
           </el-form-item>
         </el-form>
       </el-collapse-item>
       
       <!-- Exclusive gateway config -->
-      <el-collapse-item v-if="isExclusive" :title="t('properties.branchConfig')" name="branch">
-        <el-form label-position="top" size="small">
+      <el-collapse-item
+        v-if="isExclusive"
+        :title="t('properties.branchConfig')"
+        name="branch"
+      >
+        <el-form
+          label-position="top"
+          size="small"
+        >
           <el-form-item :label="t('properties.defaultBranch')">
-            <el-select v-model="defaultFlow" @change="updateDefaultFlow" :placeholder="t('properties.selectDefaultBranch')" clearable>
+            <el-select
+              v-model="defaultFlow"
+              :placeholder="t('properties.selectDefaultBranch')"
+              clearable
+              @change="updateDefaultFlow"
+            >
               <el-option 
                 v-for="flow in outgoingFlows" 
                 :key="flow.id" 
@@ -28,30 +56,57 @@
                 :value="flow.id" 
               />
             </el-select>
-            <div class="form-tip">{{ t('properties.defaultBranchTip') }}</div>
+            <div class="form-tip">
+              {{ t('properties.defaultBranchTip') }}
+            </div>
           </el-form-item>
           
           <div class="branch-list">
-            <div class="branch-title">{{ t('properties.outgoingBranches') }}</div>
-            <div v-for="flow in outgoingFlows" :key="flow.id" class="branch-item">
+            <div class="branch-title">
+              {{ t('properties.outgoingBranches') }}
+            </div>
+            <div
+              v-for="flow in outgoingFlows"
+              :key="flow.id"
+              class="branch-item"
+            >
               <div class="branch-name">
-                <el-tag v-if="flow.id === defaultFlow" type="success" size="small">{{ t('properties.defaultTag') }}</el-tag>
+                <el-tag
+                  v-if="flow.id === defaultFlow"
+                  type="success"
+                  size="small"
+                >
+                  {{ t('properties.defaultTag') }}
+                </el-tag>
                 {{ flow.name || flow.id }}
               </div>
               <div class="branch-condition">
                 {{ flow.conditionExpression || t('properties.noCondition') }}
               </div>
             </div>
-            <el-empty v-if="!outgoingFlows.length" :description="t('properties.noOutgoingBranches')" :image-size="60" />
+            <el-empty
+              v-if="!outgoingFlows.length"
+              :description="t('properties.noOutgoingBranches')"
+              :image-size="60"
+            />
           </div>
         </el-form>
       </el-collapse-item>
       
       <!-- Parallel gateway info -->
-      <el-collapse-item v-if="isParallel" :title="t('properties.gatewayInfo')" name="info">
+      <el-collapse-item
+        v-if="isParallel"
+        :title="t('properties.gatewayInfo')"
+        name="info"
+      >
         <div class="gateway-info">
-          <el-alert type="info" :closable="false">
-            <template #title>{{ t('properties.parallelGatewayTitle') }}</template>
+          <el-alert
+            type="info"
+            :closable="false"
+          >
+            <template #title>
+              {{ t('properties.parallelGatewayTitle') }}
+            </template>
             <p>{{ t('properties.parallelGatewayDesc') }}</p>
             <ul>
               <li>{{ t('properties.parallelGatewayBranch') }}</li>
@@ -62,10 +117,19 @@
       </el-collapse-item>
       
       <!-- Inclusive gateway info -->
-      <el-collapse-item v-if="isInclusive" :title="t('properties.gatewayInfo')" name="info">
+      <el-collapse-item
+        v-if="isInclusive"
+        :title="t('properties.gatewayInfo')"
+        name="info"
+      >
         <div class="gateway-info">
-          <el-alert type="info" :closable="false">
-            <template #title>{{ t('properties.inclusiveGatewayTitle') }}</template>
+          <el-alert
+            type="info"
+            :closable="false"
+          >
+            <template #title>
+              {{ t('properties.inclusiveGatewayTitle') }}
+            </template>
             <p>{{ t('properties.inclusiveGatewayDesc') }}</p>
             <ul>
               <li>{{ t('properties.inclusiveGatewayBranch') }}</li>
@@ -76,10 +140,19 @@
       </el-collapse-item>
       
       <!-- Event-based gateway info -->
-      <el-collapse-item v-if="isEventBased" :title="t('properties.gatewayInfo')" name="info">
+      <el-collapse-item
+        v-if="isEventBased"
+        :title="t('properties.gatewayInfo')"
+        name="info"
+      >
         <div class="gateway-info">
-          <el-alert type="info" :closable="false">
-            <template #title>{{ t('properties.eventBasedGatewayTitle') }}</template>
+          <el-alert
+            type="info"
+            :closable="false"
+          >
+            <template #title>
+              {{ t('properties.eventBasedGatewayTitle') }}
+            </template>
             <p>{{ t('properties.eventBasedGatewayDesc') }}</p>
             <ul>
               <li>{{ t('properties.eventBasedGatewayBranch') }}</li>
@@ -91,10 +164,19 @@
       </el-collapse-item>
       
       <!-- Complex gateway info -->
-      <el-collapse-item v-if="isComplex" :title="t('properties.gatewayInfo')" name="info">
+      <el-collapse-item
+        v-if="isComplex"
+        :title="t('properties.gatewayInfo')"
+        name="info"
+      >
         <div class="gateway-info">
-          <el-alert type="info" :closable="false">
-            <template #title>{{ t('properties.complexGatewayTitle') }}</template>
+          <el-alert
+            type="info"
+            :closable="false"
+          >
+            <template #title>
+              {{ t('properties.complexGatewayTitle') }}
+            </template>
             <p>{{ t('properties.complexGatewayDesc') }}</p>
             <ul>
               <li>{{ t('properties.complexGatewayBranch') }}</li>

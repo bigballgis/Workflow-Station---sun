@@ -2,16 +2,35 @@
   <div class="user-task-properties">
     <el-collapse v-model="activeGroups">
       <!-- Basic info -->
-      <el-collapse-item :title="t('properties.basic')" name="basic">
-        <el-form label-position="top" size="small">
+      <el-collapse-item
+        :title="t('properties.basic')"
+        name="basic"
+      >
+        <el-form
+          label-position="top"
+          size="small"
+        >
           <el-form-item :label="t('properties.taskId')">
-            <el-input :model-value="basicProps.id" disabled />
+            <el-input
+              :model-value="basicProps.id"
+              disabled
+            />
           </el-form-item>
           <el-form-item :label="t('properties.taskName')">
-            <el-input v-model="taskName" @change="updateBasicProp('name', taskName)" :placeholder="t('properties.taskName')" />
+            <el-input
+              v-model="taskName"
+              :placeholder="t('properties.taskName')"
+              @change="updateBasicProp('name', taskName)"
+            />
           </el-form-item>
           <el-form-item :label="t('properties.taskDescription')">
-            <el-input v-model="taskDescription" type="textarea" :rows="2" @change="updateExtProp('description', taskDescription)" :placeholder="t('properties.taskDescription')" />
+            <el-input
+              v-model="taskDescription"
+              type="textarea"
+              :rows="2"
+              :placeholder="t('properties.taskDescription')"
+              @change="updateExtProp('description', taskDescription)"
+            />
           </el-form-item>
         </el-form>
       </el-collapse-item>
@@ -22,12 +41,25 @@
         :title="t('properties.subTaskConfig')"
         name="subTask"
       >
-        <el-form label-position="top" size="small">
-          <el-alert type="info" :closable="false" show-icon style="margin-bottom: 8px;">
-            <template #title>{{ t('properties.subTaskConfigHint') }}</template>
+        <el-form
+          label-position="top"
+          size="small"
+        >
+          <el-alert
+            type="info"
+            :closable="false"
+            show-icon
+            style="margin-bottom: 8px;"
+          >
+            <template #title>
+              {{ t('properties.subTaskConfigHint') }}
+            </template>
           </el-alert>
 
-          <el-form-item :label="t('properties.subTableIdField')" required>
+          <el-form-item
+            :label="t('properties.subTableIdField')"
+            required
+          >
             <el-select
               v-model="elementSubTableId"
               :placeholder="t('properties.selectSubTable')"
@@ -47,11 +79,19 @@
           </el-form-item>
 
           <el-form-item :label="t('properties.subTableNameField')">
-            <el-input v-model="elementSubTableName" disabled />
-            <div class="form-tip">{{ t('properties.subTableNameAutoFilledTip') }}</div>
+            <el-input
+              v-model="elementSubTableName"
+              disabled
+            />
+            <div class="form-tip">
+              {{ t('properties.subTableNameAutoFilledTip') }}
+            </div>
           </el-form-item>
 
-          <el-form-item :label="t('properties.assigneeFieldLabel')" required>
+          <el-form-item
+            :label="t('properties.assigneeFieldLabel')"
+            required
+          >
             <el-select
               v-model="assigneeField"
               :placeholder="assigneeFieldPlaceholder"
@@ -69,33 +109,49 @@
                 :value="field.fieldName"
               />
             </el-select>
-            <div class="form-tip">{{ t('properties.subTaskAssigneeFieldTip') }}</div>
+            <div class="form-tip">
+              {{ t('properties.subTaskAssigneeFieldTip') }}
+            </div>
           </el-form-item>
 
-          <el-form-item :label="t('properties.subTaskForm')" required>
+          <el-form-item
+            :label="t('properties.subTaskForm')"
+            required
+          >
             <el-select
               v-model="formId"
-              @change="handleFormChange"
               :placeholder="t('properties.selectSubTaskForm')"
               clearable
               filterable
               style="width: 100%"
+              @change="handleFormChange"
             >
-              <el-option v-for="form in forms" :key="form.id" :label="form.formName" :value="form.id" />
+              <el-option
+                v-for="form in forms"
+                :key="form.id"
+                :label="form.formName"
+                :value="form.id"
+              />
             </el-select>
-            <div class="form-tip">{{ t('properties.subTaskFormTip') }}</div>
+            <div class="form-tip">
+              {{ t('properties.subTaskFormTip') }}
+            </div>
           </el-form-item>
 
           <el-form-item :label="t('properties.rowIdVariableLabel')">
             <el-input
               v-model="rowIdVariable"
-              @change="updateExtProp('rowIdVariable', rowIdVariable)"
               placeholder="currentItem.rowId"
+              @change="updateExtProp('rowIdVariable', rowIdVariable)"
             />
-            <div class="form-tip">{{ t('properties.rowIdVariableTip') }}</div>
+            <div class="form-tip">
+              {{ t('properties.rowIdVariableTip') }}
+            </div>
           </el-form-item>
 
-          <el-divider content-position="left">{{ t('properties.miProgressFieldsDivider') }}</el-divider>
+          <el-divider content-position="left">
+            {{ t('properties.miProgressFieldsDivider') }}
+          </el-divider>
           <el-form-item :label="t('properties.miTaskStatusField')">
             <el-select
               v-model="miTaskStatusField"
@@ -107,10 +163,20 @@
               style="width: 100%"
               @change="handleMiTaskStatusFieldChange"
             >
-              <el-option v-for="f in miProgressFieldOptions" :key="f" :label="f" :value="f" />
+              <el-option
+                v-for="f in miProgressFieldOptions"
+                :key="f"
+                :label="f"
+                :value="f"
+              />
             </el-select>
-            <div class="form-tip">{{ t('properties.miTaskStatusFieldTip') }}</div>
-            <div v-if="miStatusFieldInvalid" class="form-error">
+            <div class="form-tip">
+              {{ t('properties.miTaskStatusFieldTip') }}
+            </div>
+            <div
+              v-if="miStatusFieldInvalid"
+              class="form-error"
+            >
               {{ t('properties.miProgressFieldInvalid') }}
             </div>
           </el-form-item>
@@ -125,10 +191,20 @@
               style="width: 100%"
               @change="handleMiTaskCurrentNodeFieldChange"
             >
-              <el-option v-for="f in miProgressFieldOptions" :key="f" :label="f" :value="f" />
+              <el-option
+                v-for="f in miProgressFieldOptions"
+                :key="f"
+                :label="f"
+                :value="f"
+              />
             </el-select>
-            <div class="form-tip">{{ t('properties.miTaskCurrentNodeFieldTip') }}</div>
-            <div v-if="miCurrentNodeFieldInvalid" class="form-error">
+            <div class="form-tip">
+              {{ t('properties.miTaskCurrentNodeFieldTip') }}
+            </div>
+            <div
+              v-if="miCurrentNodeFieldInvalid"
+              class="form-error"
+            >
               {{ t('properties.miProgressFieldInvalid') }}
             </div>
           </el-form-item>
@@ -136,45 +212,114 @@
       </el-collapse-item>
       
       <!-- Assignee config -->
-      <el-collapse-item v-if="!isFirstMultiInstanceSubTask" :title="t('properties.assigneeConfig')" name="assignee">
-        <el-form label-position="top" size="small">
+      <el-collapse-item
+        v-if="!isFirstMultiInstanceSubTask"
+        :title="t('properties.assigneeConfig')"
+        name="assignee"
+      >
+        <el-form
+          label-position="top"
+          size="small"
+        >
           <el-form-item :label="t('properties.assigneeType')">
-            <el-select v-model="assigneeType" @change="handleAssigneeTypeChange">
+            <el-select
+              v-model="assigneeType"
+              @change="handleAssigneeTypeChange"
+            >
               <el-option-group :label="t('properties.directAssignment')">
-                <el-option :label="t('properties.initiator')" value="INITIATOR" />
-                <el-option :label="t('properties.entityManager')" value="ENTITY_MANAGER" />
-                <el-option :label="t('properties.functionManager')" value="FUNCTION_MANAGER" />
+                <el-option
+                  :label="t('properties.initiator')"
+                  value="INITIATOR"
+                />
+                <el-option
+                  :label="t('properties.entityManager')"
+                  value="ENTITY_MANAGER"
+                />
+                <el-option
+                  :label="t('properties.functionManager')"
+                  value="FUNCTION_MANAGER"
+                />
               </el-option-group>
               <el-option-group :label="t('properties.convergedAssignee')">
-                <el-option :label="t('properties.hierarchyRole')" value="HIERARCHY_ROLE" />
-                <el-option :label="t('properties.buRoleConverged')" value="BU_ROLE" />
-                <el-option :label="t('properties.manualAssignType')" value="MANUAL_ASSIGN" />
-                <el-option :label="t('properties.assigneeFromVariableType')" value="ASSIGNEE_FROM_VARIABLE" />
-                <el-option :label="t('properties.elementVariableType')" value="ELEMENT_VARIABLE" />
+                <el-option
+                  :label="t('properties.hierarchyRole')"
+                  value="HIERARCHY_ROLE"
+                />
+                <el-option
+                  :label="t('properties.buRoleConverged')"
+                  value="BU_ROLE"
+                />
+                <el-option
+                  :label="t('properties.manualAssignType')"
+                  value="MANUAL_ASSIGN"
+                />
+                <el-option
+                  :label="t('properties.assigneeFromVariableType')"
+                  value="ASSIGNEE_FROM_VARIABLE"
+                />
+                <el-option
+                  :label="t('properties.elementVariableType')"
+                  value="ELEMENT_VARIABLE"
+                />
               </el-option-group>
               <el-option-group :label="t('properties.legacyBpmnAssignee')">
-                <el-option :label="t('properties.currentBuRole')" value="CURRENT_BU_ROLE" />
-                <el-option :label="t('properties.currentParentBuRole')" value="CURRENT_PARENT_BU_ROLE" />
-                <el-option :label="t('properties.initiatorBuRoleOption')" value="INITIATOR_BU_ROLE" />
-                <el-option :label="t('properties.initiatorParentBuRole')" value="INITIATOR_PARENT_BU_ROLE" />
-                <el-option :label="t('properties.fixedBuRole')" value="FIXED_BU_ROLE" />
+                <el-option
+                  :label="t('properties.currentBuRole')"
+                  value="CURRENT_BU_ROLE"
+                />
+                <el-option
+                  :label="t('properties.currentParentBuRole')"
+                  value="CURRENT_PARENT_BU_ROLE"
+                />
+                <el-option
+                  :label="t('properties.initiatorBuRoleOption')"
+                  value="INITIATOR_BU_ROLE"
+                />
+                <el-option
+                  :label="t('properties.initiatorParentBuRole')"
+                  value="INITIATOR_PARENT_BU_ROLE"
+                />
+                <el-option
+                  :label="t('properties.fixedBuRole')"
+                  value="FIXED_BU_ROLE"
+                />
               </el-option-group>
             </el-select>
           </el-form-item>
 
-          <div v-if="assigneeType === 'BU_UNBOUNDED_ROLE'" class="claim-tip">
-            <el-alert type="warning" :closable="false" show-icon>
-              <template #title>{{ t('properties.buUnboundedDeprecated') }}</template>
+          <div
+            v-if="assigneeType === 'BU_UNBOUNDED_ROLE'"
+            class="claim-tip"
+          >
+            <el-alert
+              type="warning"
+              :closable="false"
+              show-icon
+            >
+              <template #title>
+                {{ t('properties.buUnboundedDeprecated') }}
+              </template>
             </el-alert>
           </div>
           
           <!-- Display current assignment label -->
-          <div v-if="assigneeLabel" class="assignee-label">
-            <el-tag type="info" size="small">{{ assigneeLabel }}</el-tag>
+          <div
+            v-if="assigneeLabel"
+            class="assignee-label"
+          >
+            <el-tag
+              type="info"
+              size="small"
+            >
+              {{ assigneeLabel }}
+            </el-tag>
           </div>
           
           <!-- Business unit selector (FIXED_BU_ROLE / BU_ROLE) -->
-          <el-form-item v-if="needsBuForRole" :label="t('properties.selectBusinessUnit')">
+          <el-form-item
+            v-if="needsBuForRole"
+            :label="t('properties.selectBusinessUnit')"
+          >
             <el-tree-select
               v-model="businessUnitId"
               :data="businessUnits"
@@ -186,12 +331,17 @@
               filterable
               @change="handleBusinessUnitChange"
             />
-            <div class="form-tip">{{ t('properties.selectBusinessUnitTip') }}</div>
+            <div class="form-tip">
+              {{ t('properties.selectBusinessUnitTip') }}
+            </div>
           </el-form-item>
           
           <!-- Role selector (required for 6 role types) -->
           <!-- FIXED_BU_ROLE requires selecting business unit first before selecting role -->
-          <el-form-item v-if="showRoleSelector" :label="t('properties.selectRole')">
+          <el-form-item
+            v-if="showRoleSelector"
+            :label="t('properties.selectRole')"
+          >
             <el-select
               v-model="roleId"
               :loading="loadingRoles"
@@ -210,15 +360,17 @@
                 <span style="color: #909399; margin-left: 8px;">({{ role.code }})</span>
               </el-option>
             </el-select>
-            <div class="form-tip">{{ roleSelectTip }}</div>
+            <div class="form-tip">
+              {{ roleSelectTip }}
+            </div>
           </el-form-item>
 
           <template v-if="assigneeType === 'MANUAL_ASSIGN'">
             <el-form-item :label="t('properties.manualAssignVariable')">
               <el-input
                 v-model="manualAssignVariable"
-                @change="updateExtProp('manualAssignVariable', manualAssignVariable)"
                 :placeholder="t('properties.manualAssignVariableHint')"
+                @change="updateExtProp('manualAssignVariable', manualAssignVariable)"
               />
             </el-form-item>
             <el-form-item :label="t('properties.manualAssignBuVariable')">
@@ -235,11 +387,14 @@
             </el-form-item>
           </template>
 
-          <el-form-item v-if="assigneeType === 'ASSIGNEE_FROM_VARIABLE'" :label="t('properties.assigneeVariableField')">
+          <el-form-item
+            v-if="assigneeType === 'ASSIGNEE_FROM_VARIABLE'"
+            :label="t('properties.assigneeVariableField')"
+          >
             <el-input
               v-model="assigneeVariableName"
-              @change="updateExtProp('assigneeVariable', assigneeVariableName)"
               :placeholder="t('properties.assigneeVariableHint')"
+              @change="updateExtProp('assigneeVariable', assigneeVariableName)"
             />
           </el-form-item>
 
@@ -263,13 +418,28 @@
               </el-select>
             </el-form-item>
             <el-form-item :label="t('properties.subTableNameField')">
-              <el-input v-model="elementSubTableName" disabled />
-              <div class="form-tip">{{ t('properties.subTableNameAutoFilledTip') }}</div>
+              <el-input
+                v-model="elementSubTableName"
+                disabled
+              />
+              <div class="form-tip">
+                {{ t('properties.subTableNameAutoFilledTip') }}
+              </div>
             </el-form-item>
-            <el-alert type="info" :closable="false" show-icon style="margin-bottom: 8px;">
-              <template #title>{{ t('properties.elementVariableRuntimeHint') }}</template>
+            <el-alert
+              type="info"
+              :closable="false"
+              show-icon
+              style="margin-bottom: 8px;"
+            >
+              <template #title>
+                {{ t('properties.elementVariableRuntimeHint') }}
+              </template>
             </el-alert>
-            <el-form-item :label="t('properties.assigneeFieldLabel')" required>
+            <el-form-item
+              :label="t('properties.assigneeFieldLabel')"
+              required
+            >
               <el-select
                 v-model="assigneeField"
                 :placeholder="assigneeFieldPlaceholder"
@@ -287,21 +457,32 @@
                   :value="field.fieldName"
                 />
               </el-select>
-              <div class="form-tip">{{ t('properties.assigneeFieldTip') }}</div>
+              <div class="form-tip">
+                {{ t('properties.assigneeFieldTip') }}
+              </div>
             </el-form-item>
             <el-form-item :label="t('properties.rowIdVariableLabel')">
               <el-input
                 v-model="rowIdVariable"
-                @change="updateExtProp('rowIdVariable', rowIdVariable)"
                 placeholder="currentItem.rowId"
+                @change="updateExtProp('rowIdVariable', rowIdVariable)"
               />
-              <div class="form-tip">{{ t('properties.rowIdVariableTip') }}</div>
+              <div class="form-tip">
+                {{ t('properties.rowIdVariableTip') }}
+              </div>
             </el-form-item>
           </template>
           
           <!-- Claim type tip -->
-          <div v-if="needsClaim" class="claim-tip">
-            <el-alert type="info" :closable="false" show-icon>
+          <div
+            v-if="needsClaim"
+            class="claim-tip"
+          >
+            <el-alert
+              type="info"
+              :closable="false"
+              show-icon
+            >
               <template #title>
                 {{ t('properties.claimRequired') }}
               </template>
@@ -309,64 +490,152 @@
           </div>
           
           <el-form-item :label="t('properties.candidateUsers')">
-            <el-input v-model="candidateUsers" @change="updateExtProp('candidateUsers', candidateUsers)" :placeholder="t('properties.candidateUsersPlaceholder')" />
+            <el-input
+              v-model="candidateUsers"
+              :placeholder="t('properties.candidateUsersPlaceholder')"
+              @change="updateExtProp('candidateUsers', candidateUsers)"
+            />
           </el-form-item>
           
           <el-form-item :label="t('properties.candidateGroups')">
-            <el-input v-model="candidateGroups" @change="updateExtProp('candidateGroups', candidateGroups)" :placeholder="t('properties.candidateGroupsPlaceholder')" />
+            <el-input
+              v-model="candidateGroups"
+              :placeholder="t('properties.candidateGroupsPlaceholder')"
+              @change="updateExtProp('candidateGroups', candidateGroups)"
+            />
           </el-form-item>
         </el-form>
       </el-collapse-item>
       
       <!-- Form binding -->
-      <el-collapse-item v-if="!isFirstMultiInstanceSubTask" :title="t('properties.form')" name="form">
-        <el-form label-position="top" size="small">
+      <el-collapse-item
+        v-if="!isFirstMultiInstanceSubTask"
+        :title="t('properties.form')"
+        name="form"
+      >
+        <el-form
+          label-position="top"
+          size="small"
+        >
           <el-form-item :label="t('properties.bindForm')">
-            <el-select v-model="formId" @change="handleFormChange" :placeholder="t('properties.selectForm')" clearable>
-              <el-option v-for="form in forms" :key="form.id" :label="form.formName" :value="form.id" />
+            <el-select
+              v-model="formId"
+              :placeholder="t('properties.selectForm')"
+              clearable
+              @change="handleFormChange"
+            >
+              <el-option
+                v-for="form in forms"
+                :key="form.id"
+                :label="form.formName"
+                :value="form.id"
+              />
             </el-select>
           </el-form-item>
-          <div v-if="formId" class="form-preview-link">
-            <el-button link type="primary" size="small">{{ t('common.preview') }}</el-button>
+          <div
+            v-if="formId"
+            class="form-preview-link"
+          >
+            <el-button
+              link
+              type="primary"
+              size="small"
+            >
+              {{ t('common.preview') }}
+            </el-button>
           </div>
         </el-form>
       </el-collapse-item>
       
       <!-- Action binding -->
-      <el-collapse-item :title="t('properties.actions')" name="actions">
-        <el-form label-position="top" size="small">
+      <el-collapse-item
+        :title="t('properties.actions')"
+        name="actions"
+      >
+        <el-form
+          label-position="top"
+          size="small"
+        >
           <el-form-item :label="t('properties.availableActions')">
-            <el-select v-model="actionIds" @change="handleActionsChange" :placeholder="t('properties.selectActions')" multiple clearable>
-              <el-option v-for="action in actions" :key="action.id" :label="action.actionName" :value="action.id">
+            <el-select
+              v-model="actionIds"
+              :placeholder="t('properties.selectActions')"
+              multiple
+              clearable
+              @change="handleActionsChange"
+            >
+              <el-option
+                v-for="action in actions"
+                :key="action.id"
+                :label="action.actionName"
+                :value="action.id"
+              >
                 <span>{{ action.actionName }}</span>
-                <el-tag size="small" style="margin-left: 8px;">{{ actionTypeLabel(action.actionType) }}</el-tag>
+                <el-tag
+                  size="small"
+                  style="margin-left: 8px;"
+                >
+                  {{ actionTypeLabel(action.actionType) }}
+                </el-tag>
               </el-option>
             </el-select>
           </el-form-item>
-          <div v-if="actionIds.length > 0" class="selected-actions">
-            <div class="form-tip">{{ actionIds.length }}</div>
+          <div
+            v-if="actionIds.length > 0"
+            class="selected-actions"
+          >
+            <div class="form-tip">
+              {{ actionIds.length }}
+            </div>
           </div>
         </el-form>
       </el-collapse-item>
       
       <!-- Timeout config -->
-      <el-collapse-item :title="t('properties.timeout')" name="timeout">
-        <el-form label-position="top" size="small">
+      <el-collapse-item
+        :title="t('properties.timeout')"
+        name="timeout"
+      >
+        <el-form
+          label-position="top"
+          size="small"
+        >
           <el-form-item :label="t('properties.enableTimeout')">
-            <el-switch v-model="timeoutEnabled" @change="updateExtProp('timeoutEnabled', timeoutEnabled)" />
+            <el-switch
+              v-model="timeoutEnabled"
+              @change="updateExtProp('timeoutEnabled', timeoutEnabled)"
+            />
           </el-form-item>
           
           <template v-if="timeoutEnabled">
             <el-form-item :label="t('properties.timeoutDuration')">
-              <el-input v-model="timeoutDuration" @change="updateExtProp('timeoutDuration', timeoutDuration)" :placeholder="t('properties.timeoutDurationPlaceholder')" />
-              <div class="form-tip">{{ t('properties.timeoutDurationHint') }}</div>
+              <el-input
+                v-model="timeoutDuration"
+                :placeholder="t('properties.timeoutDurationPlaceholder')"
+                @change="updateExtProp('timeoutDuration', timeoutDuration)"
+              />
+              <div class="form-tip">
+                {{ t('properties.timeoutDurationHint') }}
+              </div>
             </el-form-item>
             
             <el-form-item :label="t('properties.timeoutAction')">
-              <el-select v-model="timeoutAction" @change="updateExtProp('timeoutAction', timeoutAction)">
-                <el-option :label="t('properties.notify')" value="remind" />
-                <el-option :label="t('properties.autoComplete')" value="approve" />
-                <el-option :label="t('properties.autoComplete')" value="reject" />
+              <el-select
+                v-model="timeoutAction"
+                @change="updateExtProp('timeoutAction', timeoutAction)"
+              >
+                <el-option
+                  :label="t('properties.notify')"
+                  value="remind"
+                />
+                <el-option
+                  :label="t('properties.autoComplete')"
+                  value="approve"
+                />
+                <el-option
+                  :label="t('properties.autoComplete')"
+                  value="reject"
+                />
               </el-select>
             </el-form-item>
           </template>
@@ -379,30 +648,64 @@
         :title="t('properties.multiInstanceConfig')"
         name="multiInstance"
       >
-        <el-form label-position="top" size="small">
-          <el-alert type="info" :closable="false" show-icon>
-            <template #title>{{ t('properties.userTaskMultiInstanceHint') }}</template>
+        <el-form
+          label-position="top"
+          size="small"
+        >
+          <el-alert
+            type="info"
+            :closable="false"
+            show-icon
+          >
+            <template #title>
+              {{ t('properties.userTaskMultiInstanceHint') }}
+            </template>
           </el-alert>
-          <el-form-item :label="t('properties.enableMultiInstance')" style="margin-top: 8px;">
-            <el-switch v-model="multiInstance" @change="updateExtProp('multiInstance', multiInstance)" />
+          <el-form-item
+            :label="t('properties.enableMultiInstance')"
+            style="margin-top: 8px;"
+          >
+            <el-switch
+              v-model="multiInstance"
+              @change="updateExtProp('multiInstance', multiInstance)"
+            />
           </el-form-item>
           
           <template v-if="multiInstance">
             <el-form-item :label="t('properties.executionMode')">
-              <el-radio-group v-model="sequential" @change="updateExtProp('sequential', sequential)">
-                <el-radio :value="false">{{ t('properties.parallelMode') }}</el-radio>
-                <el-radio :value="true">{{ t('properties.sequentialMode') }}</el-radio>
+              <el-radio-group
+                v-model="sequential"
+                @change="updateExtProp('sequential', sequential)"
+              >
+                <el-radio :value="false">
+                  {{ t('properties.parallelMode') }}
+                </el-radio>
+                <el-radio :value="true">
+                  {{ t('properties.sequentialMode') }}
+                </el-radio>
               </el-radio-group>
             </el-form-item>
             
             <el-form-item :label="t('properties.collectionVariable')">
-              <el-input v-model="collection" @change="updateExtProp('collection', collection)" :placeholder="t('properties.collectionVariablePlaceholder')" />
-              <div class="form-tip">{{ t('properties.collectionVariableTip') }}</div>
+              <el-input
+                v-model="collection"
+                :placeholder="t('properties.collectionVariablePlaceholder')"
+                @change="updateExtProp('collection', collection)"
+              />
+              <div class="form-tip">
+                {{ t('properties.collectionVariableTip') }}
+              </div>
             </el-form-item>
             
             <el-form-item :label="t('properties.completionCondition')">
-              <el-input v-model="completionCondition" @change="updateExtProp('completionCondition', completionCondition)" placeholder="${nrOfCompletedInstances/nrOfInstances >= 0.5}" />
-              <div class="form-tip">{{ t('properties.completionConditionTip') }}</div>
+              <el-input
+                v-model="completionCondition"
+                placeholder="${nrOfCompletedInstances/nrOfInstances >= 0.5}"
+                @change="updateExtProp('completionCondition', completionCondition)"
+              />
+              <div class="form-tip">
+                {{ t('properties.completionConditionTip') }}
+              </div>
             </el-form-item>
           </template>
         </el-form>

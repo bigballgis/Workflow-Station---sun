@@ -1,9 +1,27 @@
 <template>
-  <el-dialog :model-value="modelValue" @update:model-value="$emit('update:modelValue', $event)" :title="$t('action.testActionTitle')" width="600px" destroy-on-close>
-    <div v-if="testActionType === 'N8N_ACTION' && testInputMapping.length > 0" style="margin-bottom: 12px;">
-      <el-switch :model-value="testRawJsonMode" @update:model-value="$emit('update:testRawJsonMode', $event)" :active-text="$t('action.rawJson')" :inactive-text="$t('action.structuredInput')" />
+  <el-dialog
+    :model-value="modelValue"
+    :title="$t('action.testActionTitle')"
+    width="600px"
+    destroy-on-close
+    @update:model-value="$emit('update:modelValue', $event)"
+  >
+    <div
+      v-if="testActionType === 'N8N_ACTION' && testInputMapping.length > 0"
+      style="margin-bottom: 12px;"
+    >
+      <el-switch
+        :model-value="testRawJsonMode"
+        :active-text="$t('action.rawJson')"
+        :inactive-text="$t('action.structuredInput')"
+        @update:model-value="$emit('update:testRawJsonMode', $event)"
+      />
     </div>
-    <el-form v-if="testActionType === 'N8N_ACTION' && testInputMapping.length > 0 && !testRawJsonMode" label-width="120px" label-position="left">
+    <el-form
+      v-if="testActionType === 'N8N_ACTION' && testInputMapping.length > 0 && !testRawJsonMode"
+      label-width="120px"
+      label-position="left"
+    >
       <el-form-item
         v-for="param in testInputMapping"
         :key="param.paramName"
@@ -31,16 +49,34 @@
         />
       </el-form-item>
     </el-form>
-    <el-form v-else label-width="120px" label-position="left">
+    <el-form
+      v-else
+      label-width="120px"
+      label-position="left"
+    >
       <el-form-item :label="$t('action.testData')">
-        <el-input :model-value="testData" @update:model-value="$emit('update:testData', $event)" type="textarea" :rows="5" :placeholder="$t('action.testDataPlaceholder')" />
+        <el-input
+          :model-value="testData"
+          type="textarea"
+          :rows="5"
+          :placeholder="$t('action.testDataPlaceholder')"
+          @update:model-value="$emit('update:testData', $event)"
+        />
       </el-form-item>
     </el-form>
     <el-divider>{{ $t('action.executionResult') }}</el-divider>
     <pre class="test-result">{{ testResult }}</pre>
     <template #footer>
-      <el-button @click="$emit('update:modelValue', false)">{{ $t('action.close') }}</el-button>
-      <el-button type="primary" @click="$emit('executeTest')" :loading="testing">{{ $t('action.executeTest') }}</el-button>
+      <el-button @click="$emit('update:modelValue', false)">
+        {{ $t('action.close') }}
+      </el-button>
+      <el-button
+        type="primary"
+        :loading="testing"
+        @click="$emit('executeTest')"
+      >
+        {{ $t('action.executeTest') }}
+      </el-button>
     </template>
   </el-dialog>
 </template>

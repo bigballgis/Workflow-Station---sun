@@ -1,35 +1,88 @@
 <template>
   <div class="linkage-configurator">
-    <div v-for="(rule, idx) in rules" :key="idx" class="linkage-row">
-      <el-form size="small" label-width="100px">
+    <div
+      v-for="(rule, idx) in rules"
+      :key="idx"
+      class="linkage-row"
+    >
+      <el-form
+        size="small"
+        label-width="100px"
+      >
         <el-form-item :label="t('businessLogic.sourceField')">
-          <el-select v-model="rule.sourceField" :placeholder="t('businessLogic.selectField')" style="width: 160px">
-            <el-option v-for="f in fields" :key="f" :label="f" :value="f" />
+          <el-select
+            v-model="rule.sourceField"
+            :placeholder="t('businessLogic.selectField')"
+            style="width: 160px"
+          >
+            <el-option
+              v-for="f in fields"
+              :key="f"
+              :label="f"
+              :value="f"
+            />
           </el-select>
         </el-form-item>
         <el-form-item :label="t('businessLogic.targetField')">
-          <el-select v-model="rule.targetField" :placeholder="t('businessLogic.selectField')" style="width: 160px">
-            <el-option v-for="f in fields" :key="f" :label="f" :value="f" />
+          <el-select
+            v-model="rule.targetField"
+            :placeholder="t('businessLogic.selectField')"
+            style="width: 160px"
+          >
+            <el-option
+              v-for="f in fields"
+              :key="f"
+              :label="f"
+              :value="f"
+            />
           </el-select>
         </el-form-item>
         <el-form-item :label="t('businessLogic.linkageType')">
-          <el-select v-model="rule.linkageType" style="width: 180px">
-            <el-option value="option-filtering" :label="t('businessLogic.optionFiltering')" />
-            <el-option value="value-auto-fill" :label="t('businessLogic.valueAutoFill')" />
-            <el-option value="field-state-change" :label="t('businessLogic.fieldStateChange')" />
+          <el-select
+            v-model="rule.linkageType"
+            style="width: 180px"
+          >
+            <el-option
+              value="option-filtering"
+              :label="t('businessLogic.optionFiltering')"
+            />
+            <el-option
+              value="value-auto-fill"
+              :label="t('businessLogic.valueAutoFill')"
+            />
+            <el-option
+              value="field-state-change"
+              :label="t('businessLogic.fieldStateChange')"
+            />
           </el-select>
         </el-form-item>
 
         <!-- option-filtering config -->
         <template v-if="rule.linkageType === 'option-filtering'">
           <el-form-item :label="t('businessLogic.filterField')">
-            <el-input v-model="filterConfig(rule).filterField" :placeholder="t('businessLogic.filterFieldPlaceholder')" style="width: 160px" />
+            <el-input
+              v-model="filterConfig(rule).filterField"
+              :placeholder="t('businessLogic.filterFieldPlaceholder')"
+              style="width: 160px"
+            />
           </el-form-item>
           <el-form-item :label="t('businessLogic.filterOperator')">
-            <el-select v-model="filterConfig(rule).filterOperator" style="width: 120px">
-              <el-option value="equals" label="equals" />
-              <el-option value="contains" label="contains" />
-              <el-option value="in" label="in" />
+            <el-select
+              v-model="filterConfig(rule).filterOperator"
+              style="width: 120px"
+            >
+              <el-option
+                value="equals"
+                label="equals"
+              />
+              <el-option
+                value="contains"
+                label="contains"
+              />
+              <el-option
+                value="in"
+                label="in"
+              />
             </el-select>
           </el-form-item>
         </template>
@@ -57,9 +110,21 @@
           </el-form-item>
         </template>
       </el-form>
-      <el-button link type="danger" size="small" @click="removeRule(idx)">{{ t('common.delete') }}</el-button>
+      <el-button
+        link
+        type="danger"
+        size="small"
+        @click="removeRule(idx)"
+      >
+        {{ t('common.delete') }}
+      </el-button>
     </div>
-    <el-button size="small" @click="addRule">{{ t('businessLogic.addLinkage') }}</el-button>
+    <el-button
+      size="small"
+      @click="addRule"
+    >
+      {{ t('businessLogic.addLinkage') }}
+    </el-button>
   </div>
 </template>
 

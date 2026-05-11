@@ -13,7 +13,10 @@
       :rules="formRules"
       label-width="120px"
     >
-      <el-form-item :label="t('bi.assignment.formDashboard')" prop="dashboardId">
+      <el-form-item
+        :label="t('bi.assignment.formDashboard')"
+        prop="dashboardId"
+      >
         <el-select
           v-model="form.dashboardId"
           :placeholder="t('bi.assignment.placeholderSelectDashboard')"
@@ -30,7 +33,10 @@
           />
         </el-select>
       </el-form-item>
-      <el-form-item :label="t('bi.assignment.formTargetType')" prop="targetType">
+      <el-form-item
+        :label="t('bi.assignment.formTargetType')"
+        prop="targetType"
+      >
         <el-select
           v-model="form.targetType"
           :placeholder="t('bi.assignment.placeholderSelectTargetType')"
@@ -46,7 +52,10 @@
           />
         </el-select>
       </el-form-item>
-      <el-form-item :label="t('bi.assignment.formTarget')" prop="targetId">
+      <el-form-item
+        :label="t('bi.assignment.formTarget')"
+        prop="targetId"
+      >
         <el-select
           v-if="form.targetType === 'USER'"
           v-model="form.targetId"
@@ -82,7 +91,10 @@
           />
         </el-select>
       </el-form-item>
-      <el-form-item :label="t('bi.assignment.formLayoutMode')" prop="layoutMode">
+      <el-form-item
+        :label="t('bi.assignment.formLayoutMode')"
+        prop="layoutMode"
+      >
         <el-select
           v-model="form.layoutMode"
           :placeholder="t('bi.assignment.placeholderSelectLayoutMode')"
@@ -96,16 +108,30 @@
           />
         </el-select>
       </el-form-item>
-      <el-form-item :label="t('bi.assignment.formDisplayOrder')" prop="displayOrder">
-        <el-input-number v-model="form.displayOrder" :min="0" :max="9999" style="width: 100%" />
+      <el-form-item
+        :label="t('bi.assignment.formDisplayOrder')"
+        prop="displayOrder"
+      >
+        <el-input-number
+          v-model="form.displayOrder"
+          :min="0"
+          :max="9999"
+          style="width: 100%"
+        />
       </el-form-item>
       <el-form-item :label="t('bi.assignment.formDefault')">
         <el-switch v-model="form.isDefault" />
       </el-form-item>
     </el-form>
     <template #footer>
-      <el-button @click="onDialogVisible(false)">{{ t('common.cancel') }}</el-button>
-      <el-button type="primary" :loading="submitLoading" @click="handleSubmit">
+      <el-button @click="onDialogVisible(false)">
+        {{ t('common.cancel') }}
+      </el-button>
+      <el-button
+        type="primary"
+        :loading="submitLoading"
+        @click="handleSubmit"
+      >
         {{ t('common.confirm') }}
       </el-button>
     </template>

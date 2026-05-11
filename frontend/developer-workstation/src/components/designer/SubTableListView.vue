@@ -1,25 +1,47 @@
 <template>
   <div class="relation-table-view sub-table-list-view">
     <!-- Left: Table columns and extend action panel -->
-    <div class="columns-panel" v-if="columnsPanelOpen">
+    <div
+      v-if="columnsPanelOpen"
+      class="columns-panel"
+    >
       <div class="panel-section">
         <div class="columns-panel-header">
           <div class="columns-panel-title">
-            <el-icon style="margin-right: 6px;"><Menu /></el-icon>
+            <el-icon style="margin-right: 6px;">
+              <Menu />
+            </el-icon>
             <span>{{ t('subTableView.tableColumns') }}</span>
           </div>
-          <el-icon class="columns-panel-close" @click="columnsPanelOpen = false"><Close /></el-icon>
+          <el-icon
+            class="columns-panel-close"
+            @click="columnsPanelOpen = false"
+          >
+            <Close />
+          </el-icon>
         </div>
-        <div class="columns-panel-table-name">{{ binding.tableName }}</div>
+        <div class="columns-panel-table-name">
+          {{ binding.tableName }}
+        </div>
         <div class="columns-panel-search">
-          <el-input v-model="fieldSearchKeyword" placeholder="Search" clearable size="small">
-            <template #prefix><el-icon><Search /></el-icon></template>
+          <el-input
+            v-model="fieldSearchKeyword"
+            placeholder="Search"
+            clearable
+            size="small"
+          >
+            <template #prefix>
+              <el-icon><Search /></el-icon>
+            </template>
           </el-input>
         </div>
-        <div class="columns-field-list" v-loading="loadingFields">
+        <div
+          v-loading="loadingFields"
+          class="columns-field-list"
+        >
           <div
-            v-if="!loadingFields"
             v-for="field in filteredAvailableFields"
+            v-if="!loadingFields"
             :key="field.fieldName"
             class="field-item"
             :class="{ active: isFieldInView(field.fieldName), dragging: dragSourceKey === field.fieldName }"
@@ -28,17 +50,25 @@
             @dragend="onDragEnd"
             @click="addFieldToView(field)"
           >
-            <el-icon class="field-icon"><component :is="getFieldIcon(field.dataType)" /></el-icon>
+            <el-icon class="field-icon">
+              <component :is="getFieldIcon(field.dataType)" />
+            </el-icon>
             <span class="field-name">{{ field.comment || field.fieldName }}</span>
           </div>
-          <el-empty v-if="!loadingFields && filteredAvailableFields.length === 0" description="No fields" :image-size="40" />
+          <el-empty
+            v-if="!loadingFields && filteredAvailableFields.length === 0"
+            description="No fields"
+            :image-size="40"
+          />
         </div>
       </div>
 
       <div class="panel-section extend-action-section">
         <div class="columns-panel-header">
           <div class="columns-panel-title">
-            <el-icon style="margin-right: 6px;"><Operation /></el-icon>
+            <el-icon style="margin-right: 6px;">
+              <Operation />
+            </el-icon>
             <span>{{ t('subTableView.extendAction') }}</span>
           </div>
         </div>
@@ -51,7 +81,9 @@
             @dragend="onDragEnd"
             @click="addLinkFormToView"
           >
-            <el-icon class="field-icon"><Link /></el-icon>
+            <el-icon class="field-icon">
+              <Link />
+            </el-icon>
             <span class="field-name">Link Form</span>
           </div>
           <div
@@ -62,7 +94,9 @@
             @dragend="onDragEnd"
             @click="addLookupToView"
           >
-            <el-icon class="field-icon"><Search /></el-icon>
+            <el-icon class="field-icon">
+              <Search />
+            </el-icon>
             <span class="field-name">Lookup</span>
           </div>
         </div>
@@ -70,29 +104,52 @@
     </div>
 
     <!-- Toggle button when collapsed -->
-    <div v-else class="columns-toggle" @click="columnsPanelOpen = true">
+    <div
+      v-else
+      class="columns-toggle"
+      @click="columnsPanelOpen = true"
+    >
       <el-icon><DArrowRight /></el-icon>
     </div>
 
     <div class="list-view-workspace">
       <!-- Right: Data grid -->
-      <div class="data-grid-panel"
+      <div
+        class="data-grid-panel"
         @dragover.prevent="onGridDragOver"
         @drop="onGridDrop"
       >
         <!-- Toolbar with Preview and Clear -->
-        <div class="grid-toolbar" v-if="viewColumns.length > 0">
+        <div
+          v-if="viewColumns.length > 0"
+          class="grid-toolbar"
+        >
           <div class="toolbar-left">
             <span class="field-count">{{ viewColumns.length }} {{ t('subTableView.columns') }}</span>
           </div>
           <div class="toolbar-right">
-            <el-button size="small" @click="handlePreview">{{ t('common.preview') }}</el-button>
-            <el-button size="small" type="danger" plain @click="handleClear">{{ t('common.clear') }}</el-button>
+            <el-button
+              size="small"
+              @click="handlePreview"
+            >
+              {{ t('common.preview') }}
+            </el-button>
+            <el-button
+              size="small"
+              type="danger"
+              plain
+              @click="handleClear"
+            >
+              {{ t('common.clear') }}
+            </el-button>
           </div>
         </div>
 
         <!-- Column headers (draggable) -->
-        <div class="column-headers" v-if="viewColumns.length > 0">
+        <div
+          v-if="viewColumns.length > 0"
+          class="column-headers"
+        >
           <div
             v-for="(column, index) in viewColumns"
             :key="getColumnKey(column)"
@@ -107,15 +164,29 @@
           >
             <span class="col-name">{{ getColumnLabel(column) }}</span>
             <span class="col-actions">
-              <el-icon v-if="isConfigurableActionColumn(column)" class="col-edit" @click.stop="openActionColumnConfig(column, index)"><EditPen /></el-icon>
-              <el-icon class="col-remove" @click.stop="removeField(index)"><Close /></el-icon>
+              <el-icon
+                v-if="isConfigurableActionColumn(column)"
+                class="col-edit"
+                @click.stop="openActionColumnConfig(column, index)"
+              ><EditPen /></el-icon>
+              <el-icon
+                class="col-remove"
+                @click.stop="removeField(index)"
+              ><Close /></el-icon>
             </span>
           </div>
         </div>
 
         <!-- Data row (mock) -->
-        <div class="data-row" v-if="viewColumns.length > 0">
-          <div v-for="column in viewColumns" :key="getColumnKey(column)" class="data-cell">
+        <div
+          v-if="viewColumns.length > 0"
+          class="data-row"
+        >
+          <div
+            v-for="column in viewColumns"
+            :key="getColumnKey(column)"
+            class="data-cell"
+          >
             <el-link
               v-if="isLinkColumn(column)"
               type="primary"
@@ -141,7 +212,11 @@
           </div>
         </div>
 
-        <el-empty v-if="viewColumns.length === 0" :description="t('subTableView.noFieldsImported')" :image-size="60" />
+        <el-empty
+          v-if="viewColumns.length === 0"
+          :description="t('subTableView.noFieldsImported')"
+          :image-size="60"
+        />
       </div>
     </div>
 
@@ -159,7 +234,10 @@
       :close-on-click-modal="false"
       @closed="handleLinkFormDialogClosed"
     >
-      <div v-if="selectedSubTableFormDesign.rule && selectedSubTableFormDesign.rule.length" class="link-form-dialog-body">
+      <div
+        v-if="selectedSubTableFormDesign.rule && selectedSubTableFormDesign.rule.length"
+        class="link-form-dialog-body"
+      >
         <form-create
           v-if="formCreateMounted"
           v-model="linkFormData"
@@ -168,10 +246,20 @@
           :option="linkFormOption"
         />
       </div>
-      <el-empty v-else :description="t('subTable.noFormDesign')" :image-size="60" />
+      <el-empty
+        v-else
+        :description="t('subTable.noFormDesign')"
+        :image-size="60"
+      />
       <template #footer>
-        <el-button @click="showLinkFormDialog = false">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary" @click="handleLinkFormSave" :loading="savingLinkForm">
+        <el-button @click="showLinkFormDialog = false">
+          {{ t('common.cancel') }}
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="savingLinkForm"
+          @click="handleLinkFormSave"
+        >
           {{ t('common.save') }}
         </el-button>
       </template>

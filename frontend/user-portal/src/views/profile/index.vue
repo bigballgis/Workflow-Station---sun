@@ -7,19 +7,30 @@
         </div>
       </template>
 
-      <div class="profile-content" v-loading="loading">
+      <div
+        v-loading="loading"
+        class="profile-content"
+      >
         <div class="avatar-section">
           <el-avatar :size="100">
             {{ (userInfo?.displayName || userInfo?.username || 'U').charAt(0).toUpperCase() }}
           </el-avatar>
           <h2>{{ userInfo?.displayName || userInfo?.username || t('user.username') }}</h2>
-          <p class="workspace-line">{{ workspaceLine }}</p>
+          <p class="workspace-line">
+            {{ workspaceLine }}
+          </p>
         </div>
 
         <el-divider />
 
-        <h4 class="subsection-title">{{ t('profile.sectionAccount') }}</h4>
-        <el-descriptions :column="2" border class="subsection-block">
+        <h4 class="subsection-title">
+          {{ t('profile.sectionAccount') }}
+        </h4>
+        <el-descriptions
+          :column="2"
+          border
+          class="subsection-block"
+        >
           <el-descriptions-item :label="t('user.username')">
             {{ userInfo?.username || '-' }}
           </el-descriptions-item>
@@ -36,33 +47,67 @@
 
         <el-divider />
 
-        <h4 class="subsection-title">{{ t('profile.sectionWorkspace') }}</h4>
-        <el-alert type="info" :closable="false" show-icon class="hint-alert">
+        <h4 class="subsection-title">
+          {{ t('profile.sectionWorkspace') }}
+        </h4>
+        <el-alert
+          type="info"
+          :closable="false"
+          show-icon
+          class="hint-alert"
+        >
           {{ t('profile.workspaceHint') }}
         </el-alert>
-        <el-descriptions :column="1" border class="subsection-block">
+        <el-descriptions
+          :column="1"
+          border
+          class="subsection-block"
+        >
           <el-descriptions-item :label="t('profile.workspaceCurrent')">
             <template v-if="workspaceContextText">
               {{ workspaceContextText }}
             </template>
-            <span v-else class="empty-text">{{ t('profile.noWorkspaceSelected') }}</span>
+            <span
+              v-else
+              class="empty-text"
+            >{{ t('profile.noWorkspaceSelected') }}</span>
           </el-descriptions-item>
         </el-descriptions>
 
         <el-divider />
 
-        <h4 class="subsection-title">{{ t('profile.sectionMembership') }}</h4>
-        <el-alert type="success" :closable="false" show-icon class="hint-alert">
+        <h4 class="subsection-title">
+          {{ t('profile.sectionMembership') }}
+        </h4>
+        <el-alert
+          type="success"
+          :closable="false"
+          show-icon
+          class="hint-alert"
+        >
           {{ t('profile.membershipRolesHint') }}
         </el-alert>
-        <el-descriptions :column="1" border class="subsection-block">
+        <el-descriptions
+          :column="1"
+          border
+          class="subsection-block"
+        >
           <el-descriptions-item :label="t('profile.sectionBuRolePairs')">
-            <ul v-if="buBoundedRoles.length" class="ubr-list">
-              <li v-for="(row, idx) in buBoundedRoles" :key="`${row.role?.id}-${idx}`">
+            <ul
+              v-if="buBoundedRoles.length"
+              class="ubr-list"
+            >
+              <li
+                v-for="(row, idx) in buBoundedRoles"
+                :key="`${row.role?.id}-${idx}`"
+              >
                 {{ formatUbrLine(row) }}
               </li>
             </ul>
-            <span v-else class="empty-text">{{ t('profile.noBuRoleAssignments') }}</span>
+            <span
+              v-else
+              class="empty-text"
+            >{{ t('profile.noBuRoleAssignments') }}</span>
           </el-descriptions-item>
         </el-descriptions>
       </div>
@@ -81,7 +126,10 @@
         :rules="passwordRules"
         label-width="100px"
       >
-        <el-form-item :label="t('profile.currentPassword')" prop="oldPassword">
+        <el-form-item
+          :label="t('profile.currentPassword')"
+          prop="oldPassword"
+        >
           <el-input
             v-model="passwordForm.oldPassword"
             type="password"
@@ -90,7 +138,10 @@
             @blur="passwordFormRef?.validateField('newPassword')"
           />
         </el-form-item>
-        <el-form-item :label="t('profile.newPassword')" prop="newPassword">
+        <el-form-item
+          :label="t('profile.newPassword')"
+          prop="newPassword"
+        >
           <el-input
             v-model="passwordForm.newPassword"
             type="password"
@@ -99,7 +150,10 @@
             @input="passwordFormRef?.validateField('confirmPassword')"
           />
         </el-form-item>
-        <el-form-item :label="t('profile.confirmPassword')" prop="confirmPassword">
+        <el-form-item
+          :label="t('profile.confirmPassword')"
+          prop="confirmPassword"
+        >
           <el-input
             v-model="passwordForm.confirmPassword"
             type="password"
@@ -108,7 +162,11 @@
           />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="handleChangePassword" :loading="changingPassword">
+          <el-button
+            type="primary"
+            :loading="changingPassword"
+            @click="handleChangePassword"
+          >
             {{ t('profile.changePassword') }}
           </el-button>
         </el-form-item>

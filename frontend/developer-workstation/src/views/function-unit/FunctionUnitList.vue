@@ -23,9 +23,18 @@
             style="width: 120px;"
             @change="handleSearch"
           >
-            <el-option :label="t('functionUnit.draft')" value="DRAFT" />
-            <el-option :label="t('functionUnit.published')" value="PUBLISHED" />
-            <el-option :label="t('functionUnit.archived')" value="ARCHIVED" />
+            <el-option
+              :label="t('functionUnit.draft')"
+              value="DRAFT"
+            />
+            <el-option
+              :label="t('functionUnit.published')"
+              value="PUBLISHED"
+            />
+            <el-option
+              :label="t('functionUnit.archived')"
+              value="ARCHIVED"
+            />
           </el-select>
           <el-select
             v-model="searchForm.tags"
@@ -43,27 +52,55 @@
               :value="tag" 
             />
           </el-select>
-          <el-button @click="handleSearch">{{ t('common.search') }}</el-button>
-          <span class="result-count" v-if="filteredList.length !== store.list.length">
+          <el-button @click="handleSearch">
+            {{ t('common.search') }}
+          </el-button>
+          <span
+            v-if="filteredList.length !== store.list.length"
+            class="result-count"
+          >
             {{ t('functionUnit.showingResults', { count: filteredList.length, total: store.list.length }) }}
           </span>
         </div>
-        <el-button v-if="permissions.canCreate()" type="primary" @click="showCreateDialog = true">
+        <el-button
+          v-if="permissions.canCreate()"
+          type="primary"
+          @click="showCreateDialog = true"
+        >
           <el-icon><Plus /></el-icon>
           {{ t('functionUnit.create') }}
         </el-button>
       </div>
 
       <!-- Loading Skeleton -->
-      <div v-if="store.loading" class="function-unit-grid">
-        <div v-for="i in 6" :key="i" class="skeleton-card">
+      <div
+        v-if="store.loading"
+        class="function-unit-grid"
+      >
+        <div
+          v-for="i in 6"
+          :key="i"
+          class="skeleton-card"
+        >
           <el-skeleton animated>
             <template #template>
-              <el-skeleton-item variant="image" style="height: 120px;" />
+              <el-skeleton-item
+                variant="image"
+                style="height: 120px;"
+              />
               <div style="padding: 16px;">
-                <el-skeleton-item variant="h3" style="width: 60%;" />
-                <el-skeleton-item variant="text" style="margin-top: 8px;" />
-                <el-skeleton-item variant="text" style="width: 80%; margin-top: 4px;" />
+                <el-skeleton-item
+                  variant="h3"
+                  style="width: 60%;"
+                />
+                <el-skeleton-item
+                  variant="text"
+                  style="margin-top: 8px;"
+                />
+                <el-skeleton-item
+                  variant="text"
+                  style="width: 80%; margin-top: 4px;"
+                />
               </div>
             </template>
           </el-skeleton>
@@ -71,23 +108,38 @@
       </div>
 
       <!-- Empty State -->
-      <div v-else-if="store.list.length === 0" class="empty-state">
+      <div
+        v-else-if="store.list.length === 0"
+        class="empty-state"
+      >
         <el-empty :description="t('functionUnit.noData')">
-          <el-button v-if="permissions.canCreate()" type="primary" @click="showCreateDialog = true">
+          <el-button
+            v-if="permissions.canCreate()"
+            type="primary"
+            @click="showCreateDialog = true"
+          >
             {{ t('functionUnit.create') }}
           </el-button>
         </el-empty>
       </div>
 
       <!-- No Results State -->
-      <div v-else-if="filteredList.length === 0" class="empty-state">
+      <div
+        v-else-if="filteredList.length === 0"
+        class="empty-state"
+      >
         <el-empty :description="t('functionUnit.noResults')">
-          <el-button @click="clearFilters">{{ t('functionUnit.clearFilters') }}</el-button>
+          <el-button @click="clearFilters">
+            {{ t('functionUnit.clearFilters') }}
+          </el-button>
         </el-empty>
       </div>
 
       <!-- Grid Layout -->
-      <div v-else class="function-unit-grid">
+      <div
+        v-else
+        class="function-unit-grid"
+      >
         <FunctionUnitCard
           v-for="item in filteredList"
           :key="item.id"
@@ -114,16 +166,39 @@
     </div>
 
     <!-- Create Dialog -->
-    <el-dialog v-model="showCreateDialog" :title="t('functionUnit.create')" width="500px">
-      <el-form ref="createFormRef" :model="createForm" :rules="formRules" label-width="100px" label-position="left">
+    <el-dialog
+      v-model="showCreateDialog"
+      :title="t('functionUnit.create')"
+      width="500px"
+    >
+      <el-form
+        ref="createFormRef"
+        :model="createForm"
+        :rules="formRules"
+        label-width="100px"
+        label-position="left"
+      >
         <el-form-item :label="t('functionUnit.icon')">
-          <IconUploadField v-model="createForm.iconId" size="medium" />
+          <IconUploadField
+            v-model="createForm.iconId"
+            size="medium"
+          />
         </el-form-item>
-        <el-form-item :label="t('functionUnit.name')" prop="name">
+        <el-form-item
+          :label="t('functionUnit.name')"
+          prop="name"
+        >
           <el-input v-model="createForm.name" />
         </el-form-item>
-        <el-form-item :label="t('functionUnit.description')" prop="description">
-          <el-input v-model="createForm.description" type="textarea" :rows="3" />
+        <el-form-item
+          :label="t('functionUnit.description')"
+          prop="description"
+        >
+          <el-input
+            v-model="createForm.description"
+            type="textarea"
+            :rows="3"
+          />
         </el-form-item>
         <el-form-item :label="t('functionUnit.tags')">
           <el-select
@@ -145,11 +220,17 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showCreateDialog = false">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary" @click="handleCreate">{{ t('common.confirm') }}</el-button>
+        <el-button @click="showCreateDialog = false">
+          {{ t('common.cancel') }}
+        </el-button>
+        <el-button
+          type="primary"
+          @click="handleCreate"
+        >
+          {{ t('common.confirm') }}
+        </el-button>
       </template>
     </el-dialog>
-
   </div>
 </template>
 

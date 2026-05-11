@@ -1,15 +1,38 @@
 <template>
-  <div class="xml-tree-node" :style="{ paddingLeft: depth * 16 + 'px' }">
-    <div class="xml-tree-node__header" @click="handleClick">
-      <span v-if="isParent" class="xml-tree-node__arrow" :class="{ 'is-expanded': isExpanded }">
+  <div
+    class="xml-tree-node"
+    :style="{ paddingLeft: depth * 16 + 'px' }"
+  >
+    <div
+      class="xml-tree-node__header"
+      @click="handleClick"
+    >
+      <span
+        v-if="isParent"
+        class="xml-tree-node__arrow"
+        :class="{ 'is-expanded': isExpanded }"
+      >
         <el-icon><ArrowRight /></el-icon>
       </span>
-      <span v-else class="xml-tree-node__leaf-icon" />
-      <span v-if="isParent || node.tagName !== 'content'" class="xml-tree-node__title">{{ node.title }}</span>
+      <span
+        v-else
+        class="xml-tree-node__leaf-icon"
+      />
+      <span
+        v-if="isParent || node.tagName !== 'content'"
+        class="xml-tree-node__title"
+      >{{ node.title }}</span>
     </div>
     <template v-if="isParent && isExpanded">
-      <div v-if="node.content" class="xml-tree-node__content" :style="{ paddingLeft: (depth + 1) * 16 + 'px' }">
-        <div class="xml-tree-node__rich-text" v-html="renderedContent"></div>
+      <div
+        v-if="node.content"
+        class="xml-tree-node__content"
+        :style="{ paddingLeft: (depth + 1) * 16 + 'px' }"
+      >
+        <div
+          class="xml-tree-node__rich-text"
+          v-html="renderedContent"
+        />
       </div>
       <XmlTreeNode
         v-for="child in node.children"
@@ -20,8 +43,15 @@
         @toggle="$emit('toggle', $event)"
       />
     </template>
-    <div v-else-if="!isParent && node.content" class="xml-tree-node__content" :style="{ paddingLeft: (depth + 1) * 16 + 'px' }">
-      <div class="xml-tree-node__rich-text" v-html="renderedContent"></div>
+    <div
+      v-else-if="!isParent && node.content"
+      class="xml-tree-node__content"
+      :style="{ paddingLeft: (depth + 1) * 16 + 'px' }"
+    >
+      <div
+        class="xml-tree-node__rich-text"
+        v-html="renderedContent"
+      />
     </div>
   </div>
 </template>

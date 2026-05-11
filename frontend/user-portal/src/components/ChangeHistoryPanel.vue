@@ -1,28 +1,59 @@
 <template>
-  <el-collapse v-model="sectionExpandedNames" class="ch-root-collapse">
+  <el-collapse
+    v-model="sectionExpandedNames"
+    class="ch-root-collapse"
+  >
     <el-collapse-item name="history">
       <template #title>
         <div class="ch-collapse-title">
-          <el-icon class="ch-title-icon"><Document /></el-icon>
+          <el-icon class="ch-title-icon">
+            <Document />
+          </el-icon>
           <span class="ch-collapse-title-text">{{ t('changeHistory.title') }}</span>
         </div>
       </template>
 
       <div class="change-history-panel-inner">
-        <div v-if="loading" class="loading-state">
-          <el-skeleton animated :count="3">
+        <div
+          v-if="loading"
+          class="loading-state"
+        >
+          <el-skeleton
+            animated
+            :count="3"
+          >
             <template #template>
-              <el-skeleton-item variant="text" style="width: 80%; margin-bottom: 12px;" />
+              <el-skeleton-item
+                variant="text"
+                style="width: 80%; margin-bottom: 12px;"
+              />
             </template>
           </el-skeleton>
         </div>
-        <div v-else-if="error" class="error-state">
-          <el-alert :title="error" type="warning" show-icon :closable="false" />
+        <div
+          v-else-if="error"
+          class="error-state"
+        >
+          <el-alert
+            :title="error"
+            type="warning"
+            show-icon
+            :closable="false"
+          />
         </div>
-        <div v-else-if="records.length === 0" class="empty-state">
-          <el-empty :description="t('changeHistory.noRecords')" :image-size="80" />
+        <div
+          v-else-if="records.length === 0"
+          class="empty-state"
+        >
+          <el-empty
+            :description="t('changeHistory.noRecords')"
+            :image-size="80"
+          />
         </div>
-        <el-timeline v-else class="change-timeline">
+        <el-timeline
+          v-else
+          class="change-timeline"
+        >
           <el-timeline-item
             v-for="(batch, batchIndex) in groupedBatches"
             :key="batchIndex"
@@ -53,15 +84,31 @@
                       >
                         <span class="value value--primary">{{ batch.displayOperator }}</span>
                       </el-tooltip>
-                      <span v-else class="value value--primary">{{ batch.displayOperator }}</span>
+                      <span
+                        v-else
+                        class="value value--primary"
+                      >{{ batch.displayOperator }}</span>
                     </span>
-                    <span v-if="batch.taskInstanceId" class="task-line">
+                    <span
+                      v-if="batch.taskInstanceId"
+                      class="task-line"
+                    >
                       <span class="label">{{ t('changeHistory.relatedTask') }}</span>
-                      <el-tooltip :content="batch.taskInstanceId" placement="top">
-                        <el-tag size="small" type="info" class="task-tag">{{ batch.taskDisplayLabel }}</el-tag>
+                      <el-tooltip
+                        :content="batch.taskInstanceId"
+                        placement="top"
+                      >
+                        <el-tag
+                          size="small"
+                          type="info"
+                          class="task-tag"
+                        >{{ batch.taskDisplayLabel }}</el-tag>
                       </el-tooltip>
                     </span>
-                    <span v-if="batch.displayStage || batch.stageId" class="stage-line">
+                    <span
+                      v-if="batch.displayStage || batch.stageId"
+                      class="stage-line"
+                    >
                       <span class="label">{{ t('changeHistory.stage') }}</span>
                       <el-tooltip
                         v-if="batch.stageTooltip"
@@ -77,18 +124,33 @@
                     </span>
                   </div>
                   <div class="batch-summary">
-                    <el-tag size="small" effect="plain">{{ t('changeHistory.batchChanges', { count: batch.rows.length }) }}</el-tag>
-                    <el-icon v-if="batch.concurrent" class="concurrent-icon" color="#e6a23c">
+                    <el-tag
+                      size="small"
+                      effect="plain"
+                    >
+                      {{ t('changeHistory.batchChanges', { count: batch.rows.length }) }}
+                    </el-tag>
+                    <el-icon
+                      v-if="batch.concurrent"
+                      class="concurrent-icon"
+                      color="#e6a23c"
+                    >
                       <Warning />
                     </el-icon>
-                    <el-tooltip v-if="batch.concurrent" :content="t('changeHistory.concurrentWarning')">
+                    <el-tooltip
+                      v-if="batch.concurrent"
+                      :content="t('changeHistory.concurrentWarning')"
+                    >
                       <span class="concurrent-text">{{ t('changeHistory.concurrentWarning') }}</span>
                     </el-tooltip>
                   </div>
                 </div>
               </div>
 
-              <div v-show="isBatchTableOpen(batchIndex)" class="batch-table-wrap">
+              <div
+                v-show="isBatchTableOpen(batchIndex)"
+                class="batch-table-wrap"
+              >
                 <el-table
                   :data="batch.rows"
                   border
@@ -97,30 +159,61 @@
                   class="batch-table"
                   :empty-text="t('changeHistory.noRecords')"
                 >
-                  <el-table-column :label="t('changeHistory.colChangeType')" min-width="120" show-overflow-tooltip>
+                  <el-table-column
+                    :label="t('changeHistory.colChangeType')"
+                    min-width="120"
+                    show-overflow-tooltip
+                  >
                     <template #default="{ row }">
-                      <el-tag :type="getChangeTypeTag(row.changeType)" size="small">
+                      <el-tag
+                        :type="getChangeTypeTag(row.changeType)"
+                        size="small"
+                      >
                         {{ getChangeTypeLabel(row.changeType) }}
                       </el-tag>
                     </template>
                   </el-table-column>
-                  <el-table-column :label="t('changeHistory.colField')" min-width="200" show-overflow-tooltip>
+                  <el-table-column
+                    :label="t('changeHistory.colField')"
+                    min-width="200"
+                    show-overflow-tooltip
+                  >
                     <template #default="{ row }">
                       {{ fieldLocationLabel(row) }}
                     </template>
                   </el-table-column>
-                  <el-table-column :label="t('changeHistory.colOldValue')" min-width="160" show-overflow-tooltip>
+                  <el-table-column
+                    :label="t('changeHistory.colOldValue')"
+                    min-width="160"
+                    show-overflow-tooltip
+                  >
                     <template #default="{ row }">
-                      <span v-if="row.changeType === 'PROCESS_INITIATION'" class="cell-muted">—</span>
-                      <span v-else class="cell-old">{{ formatDisplayValue(row.oldValue) }}</span>
+                      <span
+                        v-if="row.changeType === 'PROCESS_INITIATION'"
+                        class="cell-muted"
+                      >—</span>
+                      <span
+                        v-else
+                        class="cell-old"
+                      >{{ formatDisplayValue(row.oldValue) }}</span>
                     </template>
                   </el-table-column>
-                  <el-table-column :label="t('changeHistory.colNewValue')" min-width="160" show-overflow-tooltip>
+                  <el-table-column
+                    :label="t('changeHistory.colNewValue')"
+                    min-width="160"
+                    show-overflow-tooltip
+                  >
                     <template #default="{ row }">
-                      <span v-if="row.changeType === 'PROCESS_INITIATION'" class="cell-muted">
+                      <span
+                        v-if="row.changeType === 'PROCESS_INITIATION'"
+                        class="cell-muted"
+                      >
                         {{ t('changeHistory.processStarted') }}
                       </span>
-                      <span v-else class="cell-new">{{ formatDisplayValue(row.newValue) }}</span>
+                      <span
+                        v-else
+                        class="cell-new"
+                      >{{ formatDisplayValue(row.newValue) }}</span>
                     </template>
                   </el-table-column>
                 </el-table>

@@ -1,19 +1,31 @@
 <template>
-  <template v-for="(item, idx) in items" :key="idx">
-    <div v-if="item.kind === 'fields'" class="form-preview-wrapper">
+  <template
+    v-for="(item, idx) in items"
+    :key="idx"
+  >
+    <div
+      v-if="item.kind === 'fields'"
+      class="form-preview-wrapper"
+    >
       <form-create
         v-if="item.rule.length"
+        :key="'preview-form-' + item.modelKey"
         v-model="previewModel"
         locale="en"
         :rule="item.rule"
         :option="previewOption"
-        :key="'preview-form-' + item.modelKey"
       />
     </div>
 
-    <div v-else-if="item.kind === 'subTable'" class="sub-table-preview-item">
+    <div
+      v-else-if="item.kind === 'subTable'"
+      class="sub-table-preview-item"
+    >
       <div class="sub-preview-header">
-        <el-tag :type="item.binding.bindingType === 'SUB' ? 'success' : 'warning'" size="small">
+        <el-tag
+          :type="item.binding.bindingType === 'SUB' ? 'success' : 'warning'"
+          size="small"
+        >
           {{ item.binding.bindingType === 'SUB' ? t('tableBinding.subTableType') : t('tableBinding.relationTableType') }}
         </el-tag>
         <span class="sub-preview-title">{{ item.binding.tableName }}</span>
@@ -21,11 +33,11 @@
       <SubTableField
         v-if="item.binding.columns && item.binding.columns.length"
         :config="{ title: item.binding.tableName, columns: item.binding.columns }"
-        :modelValue="previewTableRows[item.binding.bindingId]"
+        :model-value="previewTableRows[item.binding.bindingId]"
         :editable="true"
-        :formRule="item.binding.rule"
-        :formOption="item.binding.option"
-        @update:modelValue="(rows: any[]) => updateTableRows(item.binding.bindingId, rows)"
+        :form-rule="item.binding.rule"
+        :form-option="item.binding.option"
+        @update:model-value="(rows: any[]) => updateTableRows(item.binding.bindingId, rows)"
       />
       <el-empty
         v-else
@@ -35,19 +47,33 @@
       />
     </div>
 
-    <div v-else-if="item.kind === 'relationTable'" class="relation-preview-wrapper">
+    <div
+      v-else-if="item.kind === 'relationTable'"
+      class="relation-preview-wrapper"
+    >
       <el-table
         :data="item.fields"
         border
         size="small"
         class="relation-preview-table"
       >
-        <el-table-column prop="label" :label="' '" min-width="200" />
-        <el-table-column prop="value" :label="' '" min-width="200" />
+        <el-table-column
+          prop="label"
+          :label="' '"
+          min-width="200"
+        />
+        <el-table-column
+          prop="value"
+          :label="' '"
+          min-width="200"
+        />
       </el-table>
     </div>
 
-    <div v-else-if="item.kind === 'lookup'" class="lookup-preview-item">
+    <div
+      v-else-if="item.kind === 'lookup'"
+      class="lookup-preview-item"
+    >
       <LookupPreview
         :label="item.label"
         :placeholder="item.placeholder"
@@ -61,13 +87,20 @@
       />
     </div>
 
-    <el-card v-else-if="item.kind === 'card'" shadow="never" class="form-preview-card">
-      <template v-if="item.title" #header>
+    <el-card
+      v-else-if="item.kind === 'card'"
+      shadow="never"
+      class="form-preview-card"
+    >
+      <template
+        v-if="item.title"
+        #header
+      >
         <span class="form-preview-card-title">{{ item.title }}</span>
       </template>
       <FormPreviewItems
-        :items="item.items"
         v-model:preview-data="previewModel"
+        :items="item.items"
         :preview-option="previewOption"
         :preview-table-rows="previewTableRows"
         @update:preview-table-rows="emit('update:previewTableRows', $event)"

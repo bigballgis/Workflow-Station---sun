@@ -1,10 +1,26 @@
 <template>
-  <div class="sub-table-placeholder-widget" :class="`is-${state}`" @click.stop="onWidgetClick">
+  <div
+    class="sub-table-placeholder-widget"
+    :class="`is-${state}`"
+    @click.stop="onWidgetClick"
+  >
     <!-- 图标 + 状态文字 -->
     <el-icon><Grid /></el-icon>
-    <span v-if="state === 'valid'" class="binding-name">{{ displayName }}</span>
-    <span v-else-if="state === 'unconfigured'" class="hint-text">{{ t('designer.subTablePlaceholderUnconfigured') }}</span>
-    <el-tag v-else type="warning" size="small">{{ t('designer.subTablePlaceholderStale') }}</el-tag>
+    <span
+      v-if="state === 'valid'"
+      class="binding-name"
+    >{{ displayName }}</span>
+    <span
+      v-else-if="state === 'unconfigured'"
+      class="hint-text"
+    >{{ t('designer.subTablePlaceholderUnconfigured') }}</span>
+    <el-tag
+      v-else
+      type="warning"
+      size="small"
+    >
+      {{ t('designer.subTablePlaceholderStale') }}
+    </el-tag>
 
     <!-- 跳转按钮（仅 valid 状态显示） -->
     <el-button

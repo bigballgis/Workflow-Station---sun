@@ -1,6 +1,9 @@
 <template>
   <div class="notifications-widget">
-    <div class="notifications-list" v-if="notifications.length > 0">
+    <div
+      v-if="notifications.length > 0"
+      class="notifications-list"
+    >
       <div
         v-for="notification in notifications"
         :key="notification.id"
@@ -8,22 +11,43 @@
         :class="{ unread: !notification.read }"
         @click="handleClick(notification)"
       >
-        <div class="notification-icon" :class="notification.type">
+        <div
+          class="notification-icon"
+          :class="notification.type"
+        >
           <el-icon>
             <component :is="getIcon(notification.type)" />
           </el-icon>
         </div>
         <div class="notification-content">
-          <div class="notification-title">{{ notification.title }}</div>
-          <div class="notification-time">{{ formatTime(notification.createdAt) }}</div>
+          <div class="notification-title">
+            {{ notification.title }}
+          </div>
+          <div class="notification-time">
+            {{ formatTime(notification.createdAt) }}
+          </div>
         </div>
-        <el-badge v-if="!notification.read" is-dot class="unread-dot" />
+        <el-badge
+          v-if="!notification.read"
+          is-dot
+          class="unread-dot"
+        />
       </div>
     </div>
-    <el-empty v-else :description="$t('notification.noNotifications')" :image-size="60" />
+    <el-empty
+      v-else
+      :description="$t('notification.noNotifications')"
+      :image-size="60"
+    />
     
-    <div class="widget-footer" v-if="notifications.length > 0">
-      <el-link type="primary" @click="goToNotifications">
+    <div
+      v-if="notifications.length > 0"
+      class="widget-footer"
+    >
+      <el-link
+        type="primary"
+        @click="goToNotifications"
+      >
         {{ $t('common.more') }}
       </el-link>
     </div>

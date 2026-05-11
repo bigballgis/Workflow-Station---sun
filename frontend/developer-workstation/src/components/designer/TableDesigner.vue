@@ -1,56 +1,138 @@
 <template>
   <div class="table-designer">
     <div class="designer-toolbar">
-      <el-button type="primary" @click="showCreateDialog = true">{{ t('table.title') }}</el-button>
-      <el-button @click="loadTables" :loading="loading">
+      <el-button
+        type="primary"
+        @click="showCreateDialog = true"
+      >
+        {{ t('table.title') }}
+      </el-button>
+      <el-button
+        :loading="loading"
+        @click="loadTables"
+      >
         <el-icon><Refresh /></el-icon> {{ t('common.refresh') }}
       </el-button>
-      <el-button @click="showRelationDialog = true" :disabled="store.tables.length < 2">{{ t('table.relations') }}</el-button>
-      <el-button @click="handleValidate">{{ t('table.validateTables') }}</el-button>
+      <el-button
+        :disabled="store.tables.length < 2"
+        @click="showRelationDialog = true"
+      >
+        {{ t('table.relations') }}
+      </el-button>
+      <el-button @click="handleValidate">
+        {{ t('table.validateTables') }}
+      </el-button>
     </div>
     
-    <div class="table-list" v-if="!selectedTable">
-      <el-table :data="store.tables" v-loading="loading" stripe @row-click="handleSelectTable">
-        <el-table-column prop="tableName" :label="t('table.tableName')" min-width="150" show-overflow-tooltip />
-        <el-table-column prop="tableType" :label="t('table.tableType')" min-width="120">
+    <div
+      v-if="!selectedTable"
+      class="table-list"
+    >
+      <el-table
+        v-loading="loading"
+        :data="store.tables"
+        stripe
+        @row-click="handleSelectTable"
+      >
+        <el-table-column
+          prop="tableName"
+          :label="t('table.tableName')"
+          min-width="150"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="tableType"
+          :label="t('table.tableType')"
+          min-width="120"
+        >
           <template #default="{ row }">
             <el-tag :type="row.tableType === 'MAIN' ? 'primary' : 'info'">
               {{ tableTypeLabel(row.tableType) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="description" :label="t('table.description')" min-width="200" show-overflow-tooltip />
-        <el-table-column :label="t('table.fieldCount')" min-width="100">
-          <template #default="{ row }">{{ row.fieldDefinitions?.length || 0 }}</template>
-        </el-table-column>
-        <el-table-column :label="t('table.relations')" min-width="100">
+        <el-table-column
+          prop="description"
+          :label="t('table.description')"
+          min-width="200"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          :label="t('table.fieldCount')"
+          min-width="100"
+        >
           <template #default="{ row }">
-            <el-tag v-if="getTableRelations(row.id).length" type="success" size="small">
-              {{ getTableRelations(row.id).length }}
-            </el-tag>
-            <span v-else class="text-muted">-</span>
+            {{ row.fieldDefinitions?.length || 0 }}
           </template>
         </el-table-column>
-        <el-table-column :label="t('common.actions')" min-width="150">
+        <el-table-column
+          :label="t('table.relations')"
+          min-width="100"
+        >
           <template #default="{ row }">
-            <el-button link type="primary" @click.stop="handleSelectTable(row)">{{ t('common.edit') }}</el-button>
-            <el-button link type="danger" @click.stop="handleDeleteTable(row)">{{ t('common.delete') }}</el-button>
+            <el-tag
+              v-if="getTableRelations(row.id).length"
+              type="success"
+              size="small"
+            >
+              {{ getTableRelations(row.id).length }}
+            </el-tag>
+            <span
+              v-else
+              class="text-muted"
+            >-</span>
+          </template>
+        </el-table-column>
+        <el-table-column
+          :label="t('common.actions')"
+          min-width="150"
+        >
+          <template #default="{ row }">
+            <el-button
+              link
+              type="primary"
+              @click.stop="handleSelectTable(row)"
+            >
+              {{ t('common.edit') }}
+            </el-button>
+            <el-button
+              link
+              type="danger"
+              @click.stop="handleDeleteTable(row)"
+            >
+              {{ t('common.delete') }}
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
     </div>
 
-    <div class="table-editor" v-else>
+    <div
+      v-else
+      class="table-editor"
+    >
       <div class="editor-header">
         <el-button @click="handleBackToList">
           <el-icon><ArrowLeft /></el-icon> {{ t('table.backToList') }}
         </el-button>
         <span class="table-name">{{ selectedTable.tableName }}</span>
-        <el-button type="primary" @click="handleSaveTable">{{ t('table.save') }}</el-button>
-        <el-button @click="handleGenerateDDL">{{ t('table.ddlPreview') }}</el-button>
+        <el-button
+          type="primary"
+          @click="handleSaveTable"
+        >
+          {{ t('table.save') }}
+        </el-button>
+        <el-button @click="handleGenerateDDL">
+          {{ t('table.ddlPreview') }}
+        </el-button>
       </div>
       
-      <el-form :model="selectedTable" label-width="140px" label-position="left" style="max-width: 640px; margin-bottom: 20px;">
+      <el-form
+        :model="selectedTable"
+        label-width="140px"
+        label-position="left"
+        style="max-width: 640px; margin-bottom: 20px;"
+      >
         <el-form-item :label="t('table.tableName')">
           <el-input v-model="selectedTable.tableName" />
         </el-form-item>
@@ -59,180 +141,476 @@
         </el-form-item>
         <el-form-item :label="t('table.tableType')">
           <el-select v-model="selectedTable.tableType">
-            <el-option :label="t('table.mainTable')" value="MAIN" />
-            <el-option :label="t('table.subTable')" value="SUB" />
-            <el-option :label="t('table.actionTable')" value="ACTION" />
-            <el-option :label="t('table.relationTable')" value="RELATION" />
+            <el-option
+              :label="t('table.mainTable')"
+              value="MAIN"
+            />
+            <el-option
+              :label="t('table.subTable')"
+              value="SUB"
+            />
+            <el-option
+              :label="t('table.actionTable')"
+              value="ACTION"
+            />
+            <el-option
+              :label="t('table.relationTable')"
+              value="RELATION"
+            />
           </el-select>
         </el-form-item>
         <el-form-item :label="t('table.description')">
-          <el-input v-model="selectedTable.description" type="textarea" />
+          <el-input
+            v-model="selectedTable.description"
+            type="textarea"
+          />
         </el-form-item>
       </el-form>
 
       <h4>{{ t('table.fields') }}</h4>
-      <el-button size="small" @click="handleAddField" style="margin-top: 8px; margin-bottom: 10px;">{{ t('table.addField') }}</el-button>
-      <el-table :data="selectedTable.fieldDefinitions" size="small" border row-key="__uid">
-        <el-table-column width="50" align="center">
-          <template #header>⇅</template>
+      <el-button
+        size="small"
+        style="margin-top: 8px; margin-bottom: 10px;"
+        @click="handleAddField"
+      >
+        {{ t('table.addField') }}
+      </el-button>
+      <el-table
+        :data="selectedTable.fieldDefinitions"
+        size="small"
+        border
+        row-key="__uid"
+      >
+        <el-table-column
+          width="50"
+          align="center"
+        >
+          <template #header>
+            ⇅
+          </template>
           <template #default="{ $index }">
             <div style="display: flex; flex-direction: column; align-items: center; gap: 2px;">
-              <el-button v-if="$index > 0" link size="small" @click="moveFieldUp($index)">↑</el-button>
-              <el-button v-if="$index < selectedTable.fieldDefinitions.length - 1" link size="small" @click="moveFieldDown($index)">↓</el-button>
+              <el-button
+                v-if="$index > 0"
+                link
+                size="small"
+                @click="moveFieldUp($index)"
+              >
+                ↑
+              </el-button>
+              <el-button
+                v-if="$index < selectedTable.fieldDefinitions.length - 1"
+                link
+                size="small"
+                @click="moveFieldDown($index)"
+              >
+                ↓
+              </el-button>
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="fieldName" :label="t('table.fieldName')" min-width="120">
+        <el-table-column
+          prop="fieldName"
+          :label="t('table.fieldName')"
+          min-width="120"
+        >
           <template #default="{ row }">
-            <el-input v-model="row.fieldName" size="small" />
+            <el-input
+              v-model="row.fieldName"
+              size="small"
+            />
           </template>
         </el-table-column>
-        <el-table-column prop="dataType" :label="t('table.dataType')" min-width="100">
+        <el-table-column
+          prop="dataType"
+          :label="t('table.dataType')"
+          min-width="100"
+        >
           <template #default="{ row }">
-            <el-select v-model="row.dataType" size="small">
-              <el-option label="VARCHAR" value="VARCHAR" />
-              <el-option label="INTEGER" value="INTEGER" />
-              <el-option label="BIGINT" value="BIGINT" />
-              <el-option label="DECIMAL" value="DECIMAL" />
-              <el-option label="BOOLEAN" value="BOOLEAN" />
-              <el-option label="DATE" value="DATE" />
-              <el-option label="TIMESTAMP" value="TIMESTAMP" />
-              <el-option label="TEXT" value="TEXT" />
-              <el-option label="FILE" value="FILE" />
+            <el-select
+              v-model="row.dataType"
+              size="small"
+            >
+              <el-option
+                label="VARCHAR"
+                value="VARCHAR"
+              />
+              <el-option
+                label="INTEGER"
+                value="INTEGER"
+              />
+              <el-option
+                label="BIGINT"
+                value="BIGINT"
+              />
+              <el-option
+                label="DECIMAL"
+                value="DECIMAL"
+              />
+              <el-option
+                label="BOOLEAN"
+                value="BOOLEAN"
+              />
+              <el-option
+                label="DATE"
+                value="DATE"
+              />
+              <el-option
+                label="TIMESTAMP"
+                value="TIMESTAMP"
+              />
+              <el-option
+                label="TEXT"
+                value="TEXT"
+              />
+              <el-option
+                label="FILE"
+                value="FILE"
+              />
             </el-select>
           </template>
         </el-table-column>
-        <el-table-column prop="length" :label="t('table.length')" min-width="92">
+        <el-table-column
+          prop="length"
+          :label="t('table.length')"
+          min-width="92"
+        >
           <template #default="{ row }">
-            <el-input-number v-model="row.length" size="small" :min="0" controls-position="right" />
+            <el-input-number
+              v-model="row.length"
+              size="small"
+              :min="0"
+              controls-position="right"
+            />
           </template>
         </el-table-column>
-        <el-table-column prop="nullable" :label="t('table.nullable')" min-width="63" align="center">
+        <el-table-column
+          prop="nullable"
+          :label="t('table.nullable')"
+          min-width="63"
+          align="center"
+        >
           <template #default="{ row }">
             <el-checkbox v-model="row.nullable" />
           </template>
         </el-table-column>
-        <el-table-column prop="isPrimaryKey" :label="t('table.primaryKey')" min-width="68" align="center">
+        <el-table-column
+          prop="isPrimaryKey"
+          :label="t('table.primaryKey')"
+          min-width="68"
+          align="center"
+        >
           <template #default="{ row }">
             <el-checkbox v-model="row.isPrimaryKey" />
           </template>
         </el-table-column>
-        <el-table-column prop="defaultValue" :label="t('table.defaultValue')" min-width="120">
+        <el-table-column
+          prop="defaultValue"
+          :label="t('table.defaultValue')"
+          min-width="120"
+        >
           <template #default="{ row }">
-            <el-input v-model="row.defaultValue" size="small" :placeholder="t('common.inputPlaceholder')" />
+            <el-input
+              v-model="row.defaultValue"
+              size="small"
+              :placeholder="t('common.inputPlaceholder')"
+            />
           </template>
         </el-table-column>
-        <el-table-column prop="isUnique" :label="t('table.isUnique')" min-width="68" align="center">
+        <el-table-column
+          prop="isUnique"
+          :label="t('table.isUnique')"
+          min-width="68"
+          align="center"
+        >
           <template #default="{ row }">
             <el-checkbox v-model="row.isUnique" />
           </template>
         </el-table-column>
-        <el-table-column v-if="hasDecimalFields" prop="precision" :label="t('table.precision')" min-width="92">
+        <el-table-column
+          v-if="hasDecimalFields"
+          prop="precision"
+          :label="t('table.precision')"
+          min-width="92"
+        >
           <template #default="{ row }">
-            <el-input-number v-if="row.dataType === 'DECIMAL'" v-model="row.precision" size="small" :min="1" :max="38" controls-position="right" />
-            <span v-else class="text-muted">-</span>
+            <el-input-number
+              v-if="row.dataType === 'DECIMAL'"
+              v-model="row.precision"
+              size="small"
+              :min="1"
+              :max="38"
+              controls-position="right"
+            />
+            <span
+              v-else
+              class="text-muted"
+            >-</span>
           </template>
         </el-table-column>
-        <el-table-column v-if="hasDecimalFields" prop="scale" :label="t('table.scale')" min-width="92">
+        <el-table-column
+          v-if="hasDecimalFields"
+          prop="scale"
+          :label="t('table.scale')"
+          min-width="92"
+        >
           <template #default="{ row }">
-            <el-input-number v-if="row.dataType === 'DECIMAL'" v-model="row.scale" size="small" :min="0" :max="20" controls-position="right" />
-            <span v-else class="text-muted">-</span>
+            <el-input-number
+              v-if="row.dataType === 'DECIMAL'"
+              v-model="row.scale"
+              size="small"
+              :min="0"
+              :max="20"
+              controls-position="right"
+            />
+            <span
+              v-else
+              class="text-muted"
+            >-</span>
           </template>
         </el-table-column>
-        <el-table-column prop="description" :label="t('table.description')" min-width="270">
+        <el-table-column
+          prop="description"
+          :label="t('table.description')"
+          min-width="270"
+        >
           <template #default="{ row }">
-            <el-input v-model="row.description" size="small" />
+            <el-input
+              v-model="row.description"
+              size="small"
+            />
           </template>
         </el-table-column>
-        <el-table-column :label="t('table.operation')" min-width="90" align="center">
+        <el-table-column
+          :label="t('table.operation')"
+          min-width="90"
+          align="center"
+        >
           <template #default="{ $index }">
-            <el-button link type="danger" @click="handleRemoveField($index)">{{ t('table.delete') }}</el-button>
+            <el-button
+              link
+              type="danger"
+              @click="handleRemoveField($index)"
+            >
+              {{ t('table.delete') }}
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
     </div>
 
     <!-- Create Table Dialog -->
-    <el-dialog v-model="showCreateDialog" :title="t('table.title')" width="500px">
-      <el-form :model="createForm" label-width="100px" label-position="left">
-        <el-form-item :label="t('table.tableName')" required>
+    <el-dialog
+      v-model="showCreateDialog"
+      :title="t('table.title')"
+      width="500px"
+    >
+      <el-form
+        :model="createForm"
+        label-width="100px"
+        label-position="left"
+      >
+        <el-form-item
+          :label="t('table.tableName')"
+          required
+        >
           <el-input v-model="createForm.tableName" />
         </el-form-item>
         <el-form-item :label="t('table.tableType')">
           <el-select v-model="createForm.tableType">
-            <el-option :label="t('table.mainTable')" value="MAIN" />
-            <el-option :label="t('table.subTable')" value="SUB" />
-            <el-option :label="t('table.actionTable')" value="ACTION" />
-            <el-option :label="t('table.relationTable')" value="RELATION" />
+            <el-option
+              :label="t('table.mainTable')"
+              value="MAIN"
+            />
+            <el-option
+              :label="t('table.subTable')"
+              value="SUB"
+            />
+            <el-option
+              :label="t('table.actionTable')"
+              value="ACTION"
+            />
+            <el-option
+              :label="t('table.relationTable')"
+              value="RELATION"
+            />
           </el-select>
         </el-form-item>
         <el-form-item :label="t('table.description')">
-          <el-input v-model="createForm.description" type="textarea" />
+          <el-input
+            v-model="createForm.description"
+            type="textarea"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showCreateDialog = false">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary" @click="handleCreateTable">{{ t('common.confirm') }}</el-button>
+        <el-button @click="showCreateDialog = false">
+          {{ t('common.cancel') }}
+        </el-button>
+        <el-button
+          type="primary"
+          @click="handleCreateTable"
+        >
+          {{ t('common.confirm') }}
+        </el-button>
       </template>
     </el-dialog>
 
     <!-- DDL Dialog -->
-    <el-dialog v-model="showDDLDialog" :title="t('table.ddlPreview')" width="700px">
-      <el-select v-model="ddlDialect" style="margin-bottom: 16px;">
-        <el-option label="PostgreSQL" value="POSTGRESQL" />
-        <el-option label="MySQL" value="MYSQL" />
-        <el-option label="Oracle" value="ORACLE" />
+    <el-dialog
+      v-model="showDDLDialog"
+      :title="t('table.ddlPreview')"
+      width="700px"
+    >
+      <el-select
+        v-model="ddlDialect"
+        style="margin-bottom: 16px;"
+      >
+        <el-option
+          label="PostgreSQL"
+          value="POSTGRESQL"
+        />
+        <el-option
+          label="MySQL"
+          value="MYSQL"
+        />
+        <el-option
+          label="Oracle"
+          value="ORACLE"
+        />
       </el-select>
-      <el-input v-model="ddlContent" type="textarea" :rows="15" readonly />
+      <el-input
+        v-model="ddlContent"
+        type="textarea"
+        :rows="15"
+        readonly
+      />
       <template #footer>
-        <el-button @click="handleCopyDDL">{{ t('table.copy') }}</el-button>
-        <el-button @click="showDDLDialog = false">{{ t('table.close') }}</el-button>
+        <el-button @click="handleCopyDDL">
+          {{ t('table.copy') }}
+        </el-button>
+        <el-button @click="showDDLDialog = false">
+          {{ t('table.close') }}
+        </el-button>
       </template>
     </el-dialog>
 
     <!-- Relation Config Dialog -->
-    <el-dialog v-model="showRelationDialog" :title="t('table.relationConfig')" width="800px">
+    <el-dialog
+      v-model="showRelationDialog"
+      :title="t('table.relationConfig')"
+      width="800px"
+    >
       <div class="relation-config">
-        <el-alert type="info" :closable="false" style="margin-bottom: 16px;">
+        <el-alert
+          type="info"
+          :closable="false"
+          style="margin-bottom: 16px;"
+        >
           {{ t('table.relationConfigHint') }}
         </el-alert>
         
         <div class="relation-list">
-          <div v-for="(rel, index) in relations" :key="index" class="relation-item">
-            <el-select v-model="rel.sourceTableId" :placeholder="t('table.sourceTable')" style="width: 150px;">
-              <el-option v-for="t in store.tables" :key="t.id" :label="t.tableName" :value="t.id" />
+          <div
+            v-for="(rel, index) in relations"
+            :key="index"
+            class="relation-item"
+          >
+            <el-select
+              v-model="rel.sourceTableId"
+              :placeholder="t('table.sourceTable')"
+              style="width: 150px;"
+            >
+              <el-option
+                v-for="t in store.tables"
+                :key="t.id"
+                :label="t.tableName"
+                :value="t.id"
+              />
             </el-select>
-            <el-select v-model="rel.sourceFieldName" :placeholder="t('table.sourceField')" style="width: 120px;" 
-                       :disabled="!rel.sourceTableId">
-              <el-option v-for="f in getTableFields(rel.sourceTableId)" :key="f.fieldName" 
-                         :label="f.fieldName" :value="f.fieldName" />
+            <el-select
+              v-model="rel.sourceFieldName"
+              :placeholder="t('table.sourceField')"
+              style="width: 120px;" 
+              :disabled="!rel.sourceTableId"
+            >
+              <el-option
+                v-for="f in getTableFields(rel.sourceTableId)"
+                :key="f.fieldName" 
+                :label="f.fieldName"
+                :value="f.fieldName"
+              />
             </el-select>
-            <el-select v-model="rel.relationType" :placeholder="t('table.relationType')" style="width: 120px;">
-              <el-option :label="t('table.oneToOne')" value="ONE_TO_ONE" />
-              <el-option :label="t('table.oneToMany')" value="ONE_TO_MANY" />
-              <el-option :label="t('table.manyToMany')" value="MANY_TO_MANY" />
+            <el-select
+              v-model="rel.relationType"
+              :placeholder="t('table.relationType')"
+              style="width: 120px;"
+            >
+              <el-option
+                :label="t('table.oneToOne')"
+                value="ONE_TO_ONE"
+              />
+              <el-option
+                :label="t('table.oneToMany')"
+                value="ONE_TO_MANY"
+              />
+              <el-option
+                :label="t('table.manyToMany')"
+                value="MANY_TO_MANY"
+              />
             </el-select>
-            <el-select v-model="rel.targetTableId" :placeholder="t('table.targetTable')" style="width: 150px;">
-              <el-option v-for="t in store.tables" :key="t.id" :label="t.tableName" :value="t.id" />
+            <el-select
+              v-model="rel.targetTableId"
+              :placeholder="t('table.targetTable')"
+              style="width: 150px;"
+            >
+              <el-option
+                v-for="t in store.tables"
+                :key="t.id"
+                :label="t.tableName"
+                :value="t.id"
+              />
             </el-select>
-            <el-select v-model="rel.targetFieldName" :placeholder="t('table.targetField')" style="width: 120px;"
-                       :disabled="!rel.targetTableId">
-              <el-option v-for="f in getTableFields(rel.targetTableId)" :key="f.fieldName" 
-                         :label="f.fieldName" :value="f.fieldName" />
+            <el-select
+              v-model="rel.targetFieldName"
+              :placeholder="t('table.targetField')"
+              style="width: 120px;"
+              :disabled="!rel.targetTableId"
+            >
+              <el-option
+                v-for="f in getTableFields(rel.targetTableId)"
+                :key="f.fieldName" 
+                :label="f.fieldName"
+                :value="f.fieldName"
+              />
             </el-select>
-            <el-button link type="danger" @click="removeRelation(index)">
+            <el-button
+              link
+              type="danger"
+              @click="removeRelation(index)"
+            >
               <el-icon><Delete /></el-icon>
             </el-button>
           </div>
         </div>
         
-        <el-button @click="addRelation" style="margin-top: 12px;">
+        <el-button
+          style="margin-top: 12px;"
+          @click="addRelation"
+        >
           <el-icon><Plus /></el-icon> {{ t('table.addRelation') }}
         </el-button>
       </div>
       <template #footer>
-        <el-button @click="showRelationDialog = false">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary" @click="handleSaveRelations">{{ t('table.save') }}</el-button>
+        <el-button @click="showRelationDialog = false">
+          {{ t('common.cancel') }}
+        </el-button>
+        <el-button
+          type="primary"
+          @click="handleSaveRelations"
+        >
+          {{ t('table.save') }}
+        </el-button>
       </template>
     </el-dialog>
   </div>

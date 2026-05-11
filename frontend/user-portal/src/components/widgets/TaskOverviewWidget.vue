@@ -2,28 +2,55 @@
   <div class="task-overview-widget">
     <div class="stat-grid">
       <div class="stat-item pending">
-        <div class="stat-value">{{ stats.pending }}</div>
-        <div class="stat-label">{{ $t('dashboard.pendingTasks') }}</div>
+        <div class="stat-value">
+          {{ stats.pending }}
+        </div>
+        <div class="stat-label">
+          {{ $t('dashboard.pendingTasks') }}
+        </div>
       </div>
       <div class="stat-item overdue">
-        <div class="stat-value">{{ stats.overdue }}</div>
-        <div class="stat-label">{{ $t('dashboard.overdueTasks') }}</div>
+        <div class="stat-value">
+          {{ stats.overdue }}
+        </div>
+        <div class="stat-label">
+          {{ $t('dashboard.overdueTasks') }}
+        </div>
       </div>
       <div class="stat-item completed">
         <div class="stat-value">
-          <router-link to="/tasks/completed" class="stat-link">{{ stats.completedToday }}</router-link>
+          <router-link
+            to="/tasks/completed"
+            class="stat-link"
+          >
+            {{ stats.completedToday }}
+          </router-link>
         </div>
-        <div class="stat-label">{{ $t('dashboard.completedToday') }}</div>
+        <div class="stat-label">
+          {{ $t('dashboard.completedToday') }}
+        </div>
       </div>
       <div class="stat-item urgent">
-        <div class="stat-value">{{ stats.urgent }}</div>
-        <div class="stat-label">{{ $t('dashboard.urgentTasks') }}</div>
+        <div class="stat-value">
+          {{ stats.urgent }}
+        </div>
+        <div class="stat-label">
+          {{ $t('dashboard.urgentTasks') }}
+        </div>
       </div>
     </div>
-    <div class="task-list" v-if="recentTasks.length > 0">
+    <div
+      v-if="recentTasks.length > 0"
+      class="task-list"
+    >
       <div class="list-header">
         <span>{{ $t('task.title') }}</span>
-        <el-link type="primary" @click="goToTasks">{{ $t('common.more') }}</el-link>
+        <el-link
+          type="primary"
+          @click="goToTasks"
+        >
+          {{ $t('common.more') }}
+        </el-link>
       </div>
       <div
         v-for="task in recentTasks"
@@ -32,7 +59,10 @@
         @click="goToTask(task.id)"
       >
         <span class="task-name">{{ task.name }}</span>
-        <el-tag :type="getPriorityType(task.priority)" size="small">
+        <el-tag
+          :type="getPriorityType(task.priority)"
+          size="small"
+        >
           {{ task.priority }}
         </el-tag>
       </div>

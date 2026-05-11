@@ -1,13 +1,12 @@
 <template>
   <Teleport to="body">
-
     <Transition :name="isDetached ? '' : 'ai-panel-slide'">
       <div
         v-if="visible"
+        ref="panelRef"
         class="ai-panel"
         :class="{ 'ai-panel--detached': isDetached }"
         :style="panelStyle"
-        ref="panelRef"
       >
         <!-- Header -->
         <div
@@ -20,8 +19,17 @@
           </span>
           <div class="ai-panel__header-actions">
             <!-- Task 17.4: Session history dropdown -->
-            <el-dropdown v-if="ready" trigger="click" @command="handleSessionSwitch">
-              <el-button :icon="Clock" circle size="small" :title="t('ai.panel.sessionHistory')" />
+            <el-dropdown
+              v-if="ready"
+              trigger="click"
+              @command="handleSessionSwitch"
+            >
+              <el-button
+                :icon="Clock"
+                circle
+                size="small"
+                :title="t('ai.panel.sessionHistory')"
+              />
               <template #dropdown>
                 <el-dropdown-menu>
                   <el-dropdown-item
@@ -31,11 +39,26 @@
                     :class="{ 'is-active': s.sessionId === currentSessionId }"
                   >
                     <span class="ai-panel__session-time">{{ formatTime(s.createdAt) }}</span>
-                    <el-tag size="small" :type="s.status === 'ACTIVE' ? 'success' : 'info'">{{ s.status }}</el-tag>
-                    <el-tag size="small">{{ s.mode }}</el-tag>
-                    <el-tag size="small" type="warning">{{ s.currentPhase }}</el-tag>
+                    <el-tag
+                      size="small"
+                      :type="s.status === 'ACTIVE' ? 'success' : 'info'"
+                    >
+                      {{ s.status }}
+                    </el-tag>
+                    <el-tag size="small">
+                      {{ s.mode }}
+                    </el-tag>
+                    <el-tag
+                      size="small"
+                      type="warning"
+                    >
+                      {{ s.currentPhase }}
+                    </el-tag>
                   </el-dropdown-item>
-                  <el-dropdown-item v-if="sortedSessions.length === 0" disabled>
+                  <el-dropdown-item
+                    v-if="sortedSessions.length === 0"
+                    disabled
+                  >
                     {{ t('ai.panel.sessionHistory') }}
                   </el-dropdown-item>
                 </el-dropdown-menu>
@@ -59,10 +82,20 @@
         </div>
 
         <!-- Lock Conflict Overlay -->
-        <div v-if="lockConflict" class="ai-panel__lock-overlay">
-          <el-icon :size="48" color="#E6A23C"><Lock /></el-icon>
+        <div
+          v-if="lockConflict"
+          class="ai-panel__lock-overlay"
+        >
+          <el-icon
+            :size="48"
+            color="#E6A23C"
+          >
+            <Lock />
+          </el-icon>
           <div class="ai-panel__lock-info">
-            <p class="ai-panel__lock-title">{{ t('ai.panel.lockTitle') }}</p>
+            <p class="ai-panel__lock-title">
+              {{ t('ai.panel.lockTitle') }}
+            </p>
             <p class="ai-panel__lock-detail">
               {{ t('ai.panel.lockUser') }}<strong>{{ conflictLockInfo?.userName || t('ai.panel.unknownUser') }}</strong>
             </p>
@@ -70,13 +103,19 @@
               {{ t('ai.panel.lockTime') }}{{ formatTime(conflictLockInfo?.lockedAt) }}
             </p>
           </div>
-          <el-button type="warning" @click="handleRequestForceUnlock">
+          <el-button
+            type="warning"
+            @click="handleRequestForceUnlock"
+          >
             {{ t('ai.panel.requestForceUnlock') }}
           </el-button>
         </div>
 
         <!-- Main Content -->
-        <div v-else-if="ready" class="ai-panel__body">
+        <div
+          v-else-if="ready"
+          class="ai-panel__body"
+        >
           <div class="ai-panel__chat">
             <ChatDialog
               ref="chatDialogRef"
@@ -94,18 +133,33 @@
             />
           </div>
           <div class="ai-panel__doc">
-            <DocumentPanel ref="documentPanelRef" :function-unit-id="functionUnitId" />
+            <DocumentPanel
+              ref="documentPanelRef"
+              :function-unit-id="functionUnitId"
+            />
           </div>
         </div>
 
         <!-- Loading -->
-        <div v-else class="ai-panel__loading">
-          <el-icon class="is-loading" :size="32"><Loading /></el-icon>
+        <div
+          v-else
+          class="ai-panel__loading"
+        >
+          <el-icon
+            class="is-loading"
+            :size="32"
+          >
+            <Loading />
+          </el-icon>
           <span>{{ t('ai.panel.initializing') }}</span>
         </div>
 
         <!-- Resize handle for detached mode -->
-        <div v-if="isDetached" class="ai-panel__resize-handle" @mousedown="onResizeMouseDown" />
+        <div
+          v-if="isDetached"
+          class="ai-panel__resize-handle"
+          @mousedown="onResizeMouseDown"
+        />
       </div>
     </Transition>
   </Teleport>

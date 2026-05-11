@@ -1,11 +1,35 @@
 <template>
   <div class="condition-builder">
-    <div v-for="(cond, idx) in conditions" :key="idx" class="condition-row">
-      <el-select v-model="cond.field" :placeholder="t('businessLogic.selectField')" size="small" style="width: 140px">
-        <el-option v-for="f in fields" :key="f" :label="f" :value="f" />
+    <div
+      v-for="(cond, idx) in conditions"
+      :key="idx"
+      class="condition-row"
+    >
+      <el-select
+        v-model="cond.field"
+        :placeholder="t('businessLogic.selectField')"
+        size="small"
+        style="width: 140px"
+      >
+        <el-option
+          v-for="f in fields"
+          :key="f"
+          :label="f"
+          :value="f"
+        />
       </el-select>
-      <el-select v-model="cond.operator" :placeholder="t('businessLogic.selectOperator')" size="small" style="width: 130px">
-        <el-option v-for="op in operators" :key="op.value" :label="op.label" :value="op.value" />
+      <el-select
+        v-model="cond.operator"
+        :placeholder="t('businessLogic.selectOperator')"
+        size="small"
+        style="width: 130px"
+      >
+        <el-option
+          v-for="op in operators"
+          :key="op.value"
+          :label="op.label"
+          :value="op.value"
+        />
       </el-select>
       <el-input
         v-if="!noValueOperators.includes(cond.operator)"
@@ -14,13 +38,36 @@
         size="small"
         style="width: 120px"
       />
-      <el-select v-if="idx < conditions.length - 1" v-model="cond.logic" size="small" style="width: 80px">
-        <el-option label="AND" value="AND" />
-        <el-option label="OR" value="OR" />
+      <el-select
+        v-if="idx < conditions.length - 1"
+        v-model="cond.logic"
+        size="small"
+        style="width: 80px"
+      >
+        <el-option
+          label="AND"
+          value="AND"
+        />
+        <el-option
+          label="OR"
+          value="OR"
+        />
       </el-select>
-      <el-button link type="danger" size="small" @click="removeCondition(idx)">{{ t('common.delete') }}</el-button>
+      <el-button
+        link
+        type="danger"
+        size="small"
+        @click="removeCondition(idx)"
+      >
+        {{ t('common.delete') }}
+      </el-button>
     </div>
-    <el-button size="small" @click="addCondition">{{ t('businessLogic.addCondition') }}</el-button>
+    <el-button
+      size="small"
+      @click="addCondition"
+    >
+      {{ t('businessLogic.addCondition') }}
+    </el-button>
   </div>
 </template>
 

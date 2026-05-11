@@ -1,26 +1,72 @@
 <template>
-  <el-dialog :model-value="modelValue" @update:model-value="$emit('update:modelValue', $event)" :title="isEdit ? t('dictionary.editDictTitle') : t('dictionary.createDictTitle')" width="500px">
-    <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
-      <el-form-item :label="t('dictionary.dictName')" prop="name">
+  <el-dialog
+    :model-value="modelValue"
+    :title="isEdit ? t('dictionary.editDictTitle') : t('dictionary.createDictTitle')"
+    width="500px"
+    @update:model-value="$emit('update:modelValue', $event)"
+  >
+    <el-form
+      ref="formRef"
+      :model="form"
+      :rules="rules"
+      label-width="100px"
+    >
+      <el-form-item
+        :label="t('dictionary.dictName')"
+        prop="name"
+      >
         <el-input v-model="form.name" />
       </el-form-item>
-      <el-form-item :label="t('dictionary.dictCode')" prop="code">
-        <el-input v-model="form.code" :disabled="isEdit" />
+      <el-form-item
+        :label="t('dictionary.dictCode')"
+        prop="code"
+      >
+        <el-input
+          v-model="form.code"
+          :disabled="isEdit"
+        />
       </el-form-item>
-      <el-form-item :label="t('dictionary.dictType')" prop="type">
-        <el-select v-model="form.type" :disabled="isEdit">
-          <el-option :label="t('dictionary.typeSystemDict')" value="SYSTEM" />
-          <el-option :label="t('dictionary.typeBusinessDict')" value="BUSINESS" />
-          <el-option :label="t('dictionary.typeCustomDict')" value="CUSTOM" />
+      <el-form-item
+        :label="t('dictionary.dictType')"
+        prop="type"
+      >
+        <el-select
+          v-model="form.type"
+          :disabled="isEdit"
+        >
+          <el-option
+            :label="t('dictionary.typeSystemDict')"
+            value="SYSTEM"
+          />
+          <el-option
+            :label="t('dictionary.typeBusinessDict')"
+            value="BUSINESS"
+          />
+          <el-option
+            :label="t('dictionary.typeCustomDict')"
+            value="CUSTOM"
+          />
         </el-select>
       </el-form-item>
       <el-form-item :label="t('common.description')">
-        <el-input v-model="form.description" type="textarea" :rows="3" />
+        <el-input
+          v-model="form.description"
+          type="textarea"
+          :rows="3"
+        />
       </el-form-item>
     </el-form>
     <template #footer>
-      <el-button @click="$emit('update:modelValue', false)">{{ t('common.cancel') }}</el-button>
-      <el-button type="primary" :loading="loading" @click="handleSubmit">{{ t('common.confirm') }}</el-button>
+      <el-button @click="$emit('update:modelValue', false)">
+        {{ t('common.cancel') }}
+      </el-button>
+      <el-button
+        type="primary"
+        :loading="loading"
+        @click="handleSubmit"
+      >
+        {{ t('common.confirm') }}
+      </el-button>
     </template>
   </el-dialog>
 </template>

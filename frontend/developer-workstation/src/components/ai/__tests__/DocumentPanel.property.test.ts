@@ -21,7 +21,7 @@ describe('Property 6: View mode preserved on version/tab switch', () => {
         fc.array(fc.constantFrom(...actions), { minLength: 1, maxLength: 10 }),
         (initialMode: ViewMode, switches: readonly (typeof actions[number])[]) => {
           // Simulate DocumentPanel state
-          let viewMode: ViewMode = initialMode
+          const viewMode: ViewMode = initialMode
 
           for (const action of switches) {
             // Neither tab switch nor version switch should change viewMode

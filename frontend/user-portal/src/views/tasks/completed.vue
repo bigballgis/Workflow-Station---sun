@@ -6,9 +6,17 @@
 
     <!-- 筛选条件 -->
     <div class="portal-card filter-card">
-      <el-form :inline="true" :model="filterForm">
+      <el-form
+        :inline="true"
+        :model="filterForm"
+      >
         <el-form-item :label="t('task.processName')">
-          <el-input v-model="filterForm.keyword" :placeholder="t('common.search')" clearable style="width: 200px;">
+          <el-input
+            v-model="filterForm.keyword"
+            :placeholder="t('common.search')"
+            clearable
+            style="width: 200px;"
+          >
             <template #prefix>
               <el-icon><Search /></el-icon>
             </template>
@@ -25,40 +33,88 @@
           />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="handleSearch">{{ t('common.search') }}</el-button>
-          <el-button @click="handleReset">{{ t('common.reset') }}</el-button>
+          <el-button
+            type="primary"
+            @click="handleSearch"
+          >
+            {{ t('common.search') }}
+          </el-button>
+          <el-button @click="handleReset">
+            {{ t('common.reset') }}
+          </el-button>
         </el-form-item>
       </el-form>
     </div>
 
     <!-- 任务列表 -->
     <div class="portal-card">
-      <el-table :data="taskList" v-loading="loading" stripe table-layout="auto">
-        <el-table-column prop="taskName" :label="t('task.taskName')" min-width="160" show-overflow-tooltip>
+      <el-table
+        v-loading="loading"
+        :data="taskList"
+        stripe
+        table-layout="auto"
+      >
+        <el-table-column
+          prop="taskName"
+          :label="t('task.taskName')"
+          min-width="160"
+          show-overflow-tooltip
+        >
           <template #default="{ row }">
-            <el-link type="primary" @click="viewTask(row)">{{ row.taskName }}</el-link>
+            <el-link
+              type="primary"
+              @click="viewTask(row)"
+            >
+              {{ row.taskName }}
+            </el-link>
           </template>
         </el-table-column>
-        <el-table-column prop="processDefinitionName" :label="t('task.processName')" min-width="140" show-overflow-tooltip />
-        <el-table-column prop="action" :label="t('task.action')" width="130">
+        <el-table-column
+          prop="processDefinitionName"
+          :label="t('task.processName')"
+          min-width="140"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="action"
+          :label="t('task.action')"
+          width="130"
+        >
           <template #default="{ row }">
-            <el-tag v-if="!row.multiInstanceSubTask" :type="getActionTagType(row.action)" size="small" style="white-space: nowrap;">
+            <el-tag
+              v-if="!row.multiInstanceSubTask"
+              :type="getActionTagType(row.action)"
+              size="small"
+              style="white-space: nowrap;"
+            >
               {{ t(`action.${row.action || 'completed'}`) }}
             </el-tag>
             <span v-else>-</span>
           </template>
         </el-table-column>
-        <el-table-column prop="createTime" :label="t('task.createTime')" width="160">
+        <el-table-column
+          prop="createTime"
+          :label="t('task.createTime')"
+          width="160"
+        >
           <template #default="{ row }">
             <span style="white-space: nowrap;">{{ formatDate(row.createTime) }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="completedTime" :label="t('task.completedTime')" width="160">
+        <el-table-column
+          prop="completedTime"
+          :label="t('task.completedTime')"
+          width="160"
+        >
           <template #default="{ row }">
             <span style="white-space: nowrap;">{{ formatDate(row.completedTime) }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="durationInMillis" :label="t('task.duration')" width="100">
+        <el-table-column
+          prop="durationInMillis"
+          :label="t('task.duration')"
+          width="100"
+        >
           <template #default="{ row }">
             <span style="white-space: nowrap;">{{ formatDuration(row.durationInMillis) }}</span>
           </template>
@@ -71,9 +127,9 @@
         :total="pagination.total"
         :page-sizes="[10, 20, 50, 100]"
         layout="total, sizes, prev, pager, next, jumper"
+        style="margin-top: 16px; justify-content: flex-end;"
         @size-change="handleSizeChange"
         @current-change="handlePageChange"
-        style="margin-top: 16px; justify-content: flex-end;"
       />
     </div>
   </div>

@@ -54,7 +54,7 @@ describe('Property 1: evaluateVisibility handle semantic correctness', () => {
         engine.onFieldChange('trigger', actualValue, formData)
 
         const visible = engine.isFieldVisible('target')
-        // eslint-disable-next-line eqeqeq
+         
         const allMatch = actualValue == conditionValue
         const expected = handle ? allMatch : !allMatch
 

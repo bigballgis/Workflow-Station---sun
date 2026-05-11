@@ -2,18 +2,25 @@
   <div class="sub-table-field">
     <div class="sub-table-header">
       <span class="title">{{ config.title || t('subTable.defaultTitle') }}</span>
-      <div class="actions" v-if="editable">
-        <el-button type="primary" size="small" @click="handleAdd">
+      <div
+        v-if="editable"
+        class="actions"
+      >
+        <el-button
+          type="primary"
+          size="small"
+          @click="handleAdd"
+        >
           <el-icon><Plus /></el-icon> {{ t('common.add') }}
         </el-button>
       </div>
     </div>
 
     <el-table
+      v-loading="loading"
       :data="tableData"
       size="small"
       border
-      v-loading="loading"
       :max-height="config.maxHeight || 300"
     >
       <el-table-column
@@ -27,17 +34,31 @@
         <template #default="scope">
           <!-- colorPicker -->
           <template v-if="col.type === 'colorPicker'">
-            <span v-if="scope.row[col.field]" class="color-swatch" :style="{ backgroundColor: scope.row[col.field] }" :title="scope.row[col.field]" />
+            <span
+              v-if="scope.row[col.field]"
+              class="color-swatch"
+              :style="{ backgroundColor: scope.row[col.field] }"
+              :title="scope.row[col.field]"
+            />
             <span v-else>-</span>
           </template>
           <!-- editor -->
           <template v-else-if="col.type === 'editor'">
-            <span v-if="scope.row[col.field]" v-html="sanitizeHtml(scope.row[col.field])" class="editor-preview" />
+            <span
+              v-if="scope.row[col.field]"
+              class="editor-preview"
+              v-html="sanitizeHtml(scope.row[col.field])"
+            />
             <span v-else>-</span>
           </template>
           <!-- signature -->
           <template v-else-if="col.type === 'signature'">
-            <img v-if="scope.row[col.field]" :src="scope.row[col.field]" class="signature-preview" alt="Signature" />
+            <img
+              v-if="scope.row[col.field]"
+              :src="scope.row[col.field]"
+              class="signature-preview"
+              alt="Signature"
+            >
             <span v-else>-</span>
           </template>
           <!-- transfer -->
@@ -50,12 +71,25 @@
           </template>
           <!-- rate -->
           <template v-else-if="col.type === 'rate'">
-            <el-rate v-if="scope.row[col.field] != null" :model-value="Number(scope.row[col.field])" :max="col.props?.max || 5" disabled style="display: inline-flex;" />
+            <el-rate
+              v-if="scope.row[col.field] != null"
+              :model-value="Number(scope.row[col.field])"
+              :max="col.props?.max || 5"
+              disabled
+              style="display: inline-flex;"
+            />
             <span v-else>-</span>
           </template>
           <!-- slider -->
           <template v-else-if="col.type === 'slider'">
-            <el-slider v-if="scope.row[col.field] != null" :model-value="Number(scope.row[col.field])" :min="col.props?.min ?? 0" :max="col.props?.max ?? 100" disabled style="width: 100%; padding: 0 10px;" />
+            <el-slider
+              v-if="scope.row[col.field] != null"
+              :model-value="Number(scope.row[col.field])"
+              :min="col.props?.min ?? 0"
+              :max="col.props?.max ?? 100"
+              disabled
+              style="width: 100%; padding: 0 10px;"
+            />
             <span v-else>-</span>
           </template>
           <!-- password -->
@@ -64,7 +98,11 @@
           </template>
           <!-- link form action -->
           <template v-else-if="col.type === 'linkForm'">
-            <el-link type="primary" :underline="false" @click.stop="openLinkFormDialog(col, scope.row)">
+            <el-link
+              type="primary"
+              :underline="false"
+              @click.stop="openLinkFormDialog(col, scope.row)"
+            >
               {{ col.props?.linkText || t('linkForm.defaultLinkText') }}
             </el-link>
           </template>
@@ -90,20 +128,44 @@
         </template>
       </el-table-column>
 
-      <el-table-column :label="t('common.operation')" width="120" v-if="editable">
+      <el-table-column
+        v-if="editable"
+        :label="t('common.operation')"
+        width="120"
+      >
         <template #default="scope">
-          <el-button link type="primary" size="small" @click="openEditDialog(scope.$index)">{{ t('common.edit') }}</el-button>
-          <el-button link type="danger" size="small" @click="handleDelete(scope.$index)">{{ t('common.delete') }}</el-button>
+          <el-button
+            link
+            type="primary"
+            size="small"
+            @click="openEditDialog(scope.$index)"
+          >
+            {{ t('common.edit') }}
+          </el-button>
+          <el-button
+            link
+            type="danger"
+            size="small"
+            @click="handleDelete(scope.$index)"
+          >
+            {{ t('common.delete') }}
+          </el-button>
         </template>
       </el-table-column>
 
       <template #empty>
-        <el-empty :description="t('common.noData')" :image-size="40" />
+        <el-empty
+          :description="t('common.noData')"
+          :image-size="40"
+        />
       </template>
     </el-table>
 
     <!-- 分页 -->
-    <div class="pagination-wrapper" v-if="config.pagination && total > (config.pageSize || 10)">
+    <div
+      v-if="config.pagination && total > (config.pageSize || 10)"
+      class="pagination-wrapper"
+    >
       <el-pagination
         v-model:current-page="currentPage"
         :page-size="config.pageSize || 10"
@@ -120,7 +182,7 @@
       :visible="formDialogVisible"
       :title="config.title || t('subTable.defaultTitle')"
       :mode="dialogMode"
-      :initialData="dialogInitialData"
+      :initial-data="dialogInitialData"
       :rule="formRule"
       :option="formOption"
       @update:visible="formDialogVisible = $event"
@@ -133,7 +195,7 @@
       :visible="simpleDialogVisible"
       :columns="dialogColumns"
       :mode="dialogMode"
-      :initialData="dialogInitialData"
+      :initial-data="dialogInitialData"
       @update:visible="simpleDialogVisible = $event"
       @save="handleDialogSave"
     />
@@ -143,7 +205,7 @@
       :visible="linkFormDialogVisible"
       :title="linkFormDialogTitle"
       mode="edit"
-      :initialData="linkFormInitialData"
+      :initial-data="linkFormInitialData"
       :rule="linkFormRule"
       :option="linkFormOption"
       @update:visible="linkFormDialogVisible = $event"

@@ -15,45 +15,98 @@
       />
       
       <template v-else>
-        <el-tabs v-model="activeTab" @tab-change="handleTabChange">
-          <el-tab-pane :label="t('approval.pendingList')" name="pending">
-            <el-empty v-if="pendingList.length === 0 && !loading" :description="t('approval.noPendingApprovals')" />
+        <el-tabs
+          v-model="activeTab"
+          @tab-change="handleTabChange"
+        >
+          <el-tab-pane
+            :label="t('approval.pendingList')"
+            name="pending"
+          >
+            <el-empty
+              v-if="pendingList.length === 0 && !loading"
+              :description="t('approval.noPendingApprovals')"
+            />
             
-            <el-table v-else :data="pendingList" stripe v-loading="loading">
-              <el-table-column prop="applicantId" :label="t('permission.beneficiaryColumn')" width="150">
+            <el-table
+              v-else
+              v-loading="loading"
+              :data="pendingList"
+              stripe
+            >
+              <el-table-column
+                prop="applicantId"
+                :label="t('permission.beneficiaryColumn')"
+                width="150"
+              >
                 <template #default="{ row }">
                   {{ getApplicantDisplay(row) }}
                 </template>
               </el-table-column>
-              <el-table-column :label="t('permission.submittedByColumn')" width="130" show-overflow-tooltip>
+              <el-table-column
+                :label="t('permission.submittedByColumn')"
+                width="130"
+                show-overflow-tooltip
+              >
                 <template #default="{ row }">
                   {{ getSubmitterDisplay(row) }}
                 </template>
               </el-table-column>
-              <el-table-column prop="requestType" :label="t('permission.requestType')" width="140">
+              <el-table-column
+                prop="requestType"
+                :label="t('permission.requestType')"
+                width="140"
+              >
                 <template #default="{ row }">
-                  <el-tag :type="getRequestTypeTag(row.requestType)" size="small">
+                  <el-tag
+                    :type="getRequestTypeTag(row.requestType)"
+                    size="small"
+                  >
                     {{ getRequestTypeLabel(row.requestType) }}
                   </el-tag>
                 </template>
               </el-table-column>
-              <el-table-column :label="t('permission.requestTarget')" min-width="180">
+              <el-table-column
+                :label="t('permission.requestTarget')"
+                min-width="180"
+              >
                 <template #default="{ row }">
                   {{ getTargetName(row) }}
                 </template>
               </el-table-column>
-              <el-table-column prop="reason" :label="t('permission.reason')" min-width="200" show-overflow-tooltip />
-              <el-table-column prop="createdAt" :label="t('permission.applyTime')" width="160">
+              <el-table-column
+                prop="reason"
+                :label="t('permission.reason')"
+                min-width="200"
+                show-overflow-tooltip
+              />
+              <el-table-column
+                prop="createdAt"
+                :label="t('permission.applyTime')"
+                width="160"
+              >
                 <template #default="{ row }">
                   {{ formatDateTime(row.createdAt) }}
                 </template>
               </el-table-column>
-              <el-table-column :label="t('common.actions')" width="180" fixed="right">
+              <el-table-column
+                :label="t('common.actions')"
+                width="180"
+                fixed="right"
+              >
                 <template #default="{ row }">
-                  <el-button type="success" size="small" @click="showApproveDialog(row)">
+                  <el-button
+                    type="success"
+                    size="small"
+                    @click="showApproveDialog(row)"
+                  >
                     {{ t('approval.approve') }}
                   </el-button>
-                  <el-button type="danger" size="small" @click="showRejectDialog(row)">
+                  <el-button
+                    type="danger"
+                    size="small"
+                    @click="showRejectDialog(row)"
+                  >
                     {{ t('approval.reject') }}
                   </el-button>
                 </template>
@@ -61,41 +114,86 @@
             </el-table>
           </el-tab-pane>
           
-          <el-tab-pane :label="t('approval.historyList')" name="history">
-            <el-empty v-if="historyList.length === 0 && !historyLoading" :description="t('approval.noApprovalHistory')" />
+          <el-tab-pane
+            :label="t('approval.historyList')"
+            name="history"
+          >
+            <el-empty
+              v-if="historyList.length === 0 && !historyLoading"
+              :description="t('approval.noApprovalHistory')"
+            />
             
-            <el-table v-else :data="historyList" stripe v-loading="historyLoading">
-              <el-table-column prop="applicantId" :label="t('permission.beneficiaryColumn')" width="150">
+            <el-table
+              v-else
+              v-loading="historyLoading"
+              :data="historyList"
+              stripe
+            >
+              <el-table-column
+                prop="applicantId"
+                :label="t('permission.beneficiaryColumn')"
+                width="150"
+              >
                 <template #default="{ row }">
                   {{ getApplicantDisplay(row) }}
                 </template>
               </el-table-column>
-              <el-table-column :label="t('permission.submittedByColumn')" width="130" show-overflow-tooltip>
+              <el-table-column
+                :label="t('permission.submittedByColumn')"
+                width="130"
+                show-overflow-tooltip
+              >
                 <template #default="{ row }">
                   {{ getSubmitterDisplay(row) }}
                 </template>
               </el-table-column>
-              <el-table-column prop="requestType" :label="t('permission.requestType')" width="140">
+              <el-table-column
+                prop="requestType"
+                :label="t('permission.requestType')"
+                width="140"
+              >
                 <template #default="{ row }">
-                  <el-tag :type="getRequestTypeTag(row.requestType)" size="small">
+                  <el-tag
+                    :type="getRequestTypeTag(row.requestType)"
+                    size="small"
+                  >
                     {{ getRequestTypeLabel(row.requestType) }}
                   </el-tag>
                 </template>
               </el-table-column>
-              <el-table-column :label="t('permission.requestTarget')" min-width="180">
+              <el-table-column
+                :label="t('permission.requestTarget')"
+                min-width="180"
+              >
                 <template #default="{ row }">
                   {{ getTargetName(row) }}
                 </template>
               </el-table-column>
-              <el-table-column prop="status" :label="t('permission.status')" width="100">
+              <el-table-column
+                prop="status"
+                :label="t('permission.status')"
+                width="100"
+              >
                 <template #default="{ row }">
-                  <el-tag :type="getStatusTag(row.status)" size="small">
+                  <el-tag
+                    :type="getStatusTag(row.status)"
+                    size="small"
+                  >
                     {{ getStatusLabel(row.status) }}
                   </el-tag>
                 </template>
               </el-table-column>
-              <el-table-column prop="approverComment" :label="t('approval.comment')" min-width="150" show-overflow-tooltip />
-              <el-table-column prop="approvedAt" :label="t('approval.processedAt')" width="160">
+              <el-table-column
+                prop="approverComment"
+                :label="t('approval.comment')"
+                min-width="150"
+                show-overflow-tooltip
+              />
+              <el-table-column
+                prop="approvedAt"
+                :label="t('approval.processedAt')"
+                width="160"
+              >
                 <template #default="{ row }">
                   {{ formatDateTime(row.approvedAt) }}
                 </template>
@@ -107,7 +205,11 @@
     </div>
 
     <!-- 批准对话框 -->
-    <el-dialog v-model="approveDialogVisible" :title="t('approval.approveTitle')" width="500px">
+    <el-dialog
+      v-model="approveDialogVisible"
+      :title="t('approval.approveTitle')"
+      width="500px"
+    >
       <div class="approval-info">
         <p><strong>{{ t('approval.applicant') }}:</strong> {{ getApplicantDisplay(currentRequest) }}</p>
         <p><strong>{{ t('permission.requestType') }}:</strong> {{ getRequestTypeLabel(currentRequest?.requestType) }}</p>
@@ -115,28 +217,61 @@
         <p><strong>{{ t('permission.reason') }}:</strong> {{ currentRequest?.reason }}</p>
       </div>
       <el-form-item :label="t('approval.comment')">
-        <el-input v-model="approveComment" type="textarea" :rows="3" :placeholder="t('approval.commentPlaceholder')" />
+        <el-input
+          v-model="approveComment"
+          type="textarea"
+          :rows="3"
+          :placeholder="t('approval.commentPlaceholder')"
+        />
       </el-form-item>
       <template #footer>
-        <el-button @click="approveDialogVisible = false">{{ t('common.cancel') }}</el-button>
-        <el-button type="success" @click="handleApprove" :loading="submitting">{{ t('approval.approve') }}</el-button>
+        <el-button @click="approveDialogVisible = false">
+          {{ t('common.cancel') }}
+        </el-button>
+        <el-button
+          type="success"
+          :loading="submitting"
+          @click="handleApprove"
+        >
+          {{ t('approval.approve') }}
+        </el-button>
       </template>
     </el-dialog>
 
     <!-- 拒绝对话框 -->
-    <el-dialog v-model="rejectDialogVisible" :title="t('approval.rejectTitle')" width="500px">
+    <el-dialog
+      v-model="rejectDialogVisible"
+      :title="t('approval.rejectTitle')"
+      width="500px"
+    >
       <div class="approval-info">
         <p><strong>{{ t('approval.applicant') }}:</strong> {{ getApplicantDisplay(currentRequest) }}</p>
         <p><strong>{{ t('permission.requestType') }}:</strong> {{ getRequestTypeLabel(currentRequest?.requestType) }}</p>
         <p><strong>{{ t('permission.requestTarget') }}:</strong> {{ getTargetName(currentRequest) }}</p>
         <p><strong>{{ t('permission.reason') }}:</strong> {{ currentRequest?.reason }}</p>
       </div>
-      <el-form-item :label="t('approval.rejectReason')" required>
-        <el-input v-model="rejectComment" type="textarea" :rows="3" :placeholder="t('approval.rejectReasonPlaceholder')" />
+      <el-form-item
+        :label="t('approval.rejectReason')"
+        required
+      >
+        <el-input
+          v-model="rejectComment"
+          type="textarea"
+          :rows="3"
+          :placeholder="t('approval.rejectReasonPlaceholder')"
+        />
       </el-form-item>
       <template #footer>
-        <el-button @click="rejectDialogVisible = false">{{ t('common.cancel') }}</el-button>
-        <el-button type="danger" @click="handleReject" :loading="submitting">{{ t('approval.reject') }}</el-button>
+        <el-button @click="rejectDialogVisible = false">
+          {{ t('common.cancel') }}
+        </el-button>
+        <el-button
+          type="danger"
+          :loading="submitting"
+          @click="handleReject"
+        >
+          {{ t('approval.reject') }}
+        </el-button>
       </template>
     </el-dialog>
   </div>

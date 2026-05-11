@@ -1,12 +1,31 @@
 <template>
   <div class="formula-editor">
-    <div v-for="(rule, idx) in formulas" :key="idx" class="formula-row">
-      <el-form-item :label="t('businessLogic.targetField')" size="small">
-        <el-select v-model="rule.targetField" :placeholder="t('businessLogic.selectField')" style="width: 140px">
-          <el-option v-for="f in fields" :key="f" :label="f" :value="f" />
+    <div
+      v-for="(rule, idx) in formulas"
+      :key="idx"
+      class="formula-row"
+    >
+      <el-form-item
+        :label="t('businessLogic.targetField')"
+        size="small"
+      >
+        <el-select
+          v-model="rule.targetField"
+          :placeholder="t('businessLogic.selectField')"
+          style="width: 140px"
+        >
+          <el-option
+            v-for="f in fields"
+            :key="f"
+            :label="f"
+            :value="f"
+          />
         </el-select>
       </el-form-item>
-      <el-form-item :label="t('businessLogic.expression')" size="small">
+      <el-form-item
+        :label="t('businessLogic.expression')"
+        size="small"
+      >
         <el-input
           v-model="rule.expression"
           :placeholder="t('businessLogic.expressionPlaceholder')"
@@ -22,11 +41,25 @@
           type="info"
           class="field-tag"
           @click="insertField(idx, f)"
-        >{{ f }}</el-tag>
+        >
+          {{ f }}
+        </el-tag>
       </div>
-      <el-button link type="danger" size="small" @click="removeFormula(idx)">{{ t('common.delete') }}</el-button>
+      <el-button
+        link
+        type="danger"
+        size="small"
+        @click="removeFormula(idx)"
+      >
+        {{ t('common.delete') }}
+      </el-button>
     </div>
-    <el-button size="small" @click="addFormula">{{ t('businessLogic.addFormula') }}</el-button>
+    <el-button
+      size="small"
+      @click="addFormula"
+    >
+      {{ t('businessLogic.addFormula') }}
+    </el-button>
   </div>
 </template>
 

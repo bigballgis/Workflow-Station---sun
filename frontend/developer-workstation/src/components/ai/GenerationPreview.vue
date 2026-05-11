@@ -1,5 +1,8 @@
 <template>
-  <el-card class="generation-preview" shadow="hover">
+  <el-card
+    class="generation-preview"
+    shadow="hover"
+  >
     <template #header>
       <div class="generation-preview__header">
         <span class="generation-preview__title">{{ t('ai.preview.title') }}</span>
@@ -7,13 +10,21 @@
     </template>
 
     <!-- Task 16.1: Streaming indicator -->
-    <div v-if="props.isStreaming" class="generation-preview__streaming">
-      <el-icon class="is-loading"><Loading /></el-icon>
+    <div
+      v-if="props.isStreaming"
+      class="generation-preview__streaming"
+    >
+      <el-icon class="is-loading">
+        <Loading />
+      </el-icon>
       <span>{{ t('ai.preview.generating') }}</span>
     </div>
 
     <!-- Task 15.2: Quality Score Display -->
-    <div v-if="previewData.qualityScore" class="generation-preview__quality">
+    <div
+      v-if="previewData.qualityScore"
+      class="generation-preview__quality"
+    >
       <div class="generation-preview__quality-row">
         <el-progress
           type="dashboard"
@@ -41,8 +52,14 @@
       >
         {{ t('ai.quality.lowScoreWarning') }}
       </el-alert>
-      <ul v-if="previewData.qualityScore.suggestions.length" class="generation-preview__suggestions">
-        <li v-for="(suggestion, idx) in previewData.qualityScore.suggestions" :key="idx">
+      <ul
+        v-if="previewData.qualityScore.suggestions.length"
+        class="generation-preview__suggestions"
+      >
+        <li
+          v-for="(suggestion, idx) in previewData.qualityScore.suggestions"
+          :key="idx"
+        >
           {{ suggestion }}
         </li>
       </ul>
@@ -50,45 +67,74 @@
 
     <div class="generation-preview__summary">
       <!-- Task 17.2: Tabs for MODIFY mode diff preview -->
-      <el-tabs v-if="props.mode === 'MODIFY' && props.diffResult" v-model="previewTab" class="generation-preview__tabs">
-        <el-tab-pane :label="t('ai.preview.summary')" name="summary" />
-        <el-tab-pane :label="t('ai.preview.diff')" name="diff" />
+      <el-tabs
+        v-if="props.mode === 'MODIFY' && props.diffResult"
+        v-model="previewTab"
+        class="generation-preview__tabs"
+      >
+        <el-tab-pane
+          :label="t('ai.preview.summary')"
+          name="summary"
+        />
+        <el-tab-pane
+          :label="t('ai.preview.diff')"
+          name="diff"
+        />
       </el-tabs>
 
       <!-- Summary tab (default) -->
       <template v-if="previewTab === 'summary' || !props.diffResult || props.mode !== 'MODIFY'">
-      <el-descriptions :column="2" border size="small">
-        <el-descriptions-item :label="t('ai.preview.tables')">
-          {{ t('ai.preview.tablesSummary', { count: previewData.tableCount, fields: previewData.totalFieldCount }) }}
-        </el-descriptions-item>
-        <el-descriptions-item :label="t('ai.preview.forms')">
-          {{ t('ai.preview.formsSummary', { count: previewData.formCount }) }}
-        </el-descriptions-item>
-        <el-descriptions-item :label="t('ai.preview.actions')">
-          {{ t('ai.preview.actionsSummary', { count: previewData.actionCount }) }}
-        </el-descriptions-item>
-        <el-descriptions-item :label="t('ai.preview.process')">
-          {{ t('ai.preview.processSummary', { nodes: previewData.processNodeCount, gateways: previewData.processGatewayCount }) }}
-        </el-descriptions-item>
-        <el-descriptions-item :label="t('ai.preview.decisions')">
-          {{ previewData.decisionCount }}
-        </el-descriptions-item>
-        <el-descriptions-item :label="t('ai.preview.tableRelations')">
-          {{ previewData.tableRelationCount }}
-        </el-descriptions-item>
-      </el-descriptions>
+        <el-descriptions
+          :column="2"
+          border
+          size="small"
+        >
+          <el-descriptions-item :label="t('ai.preview.tables')">
+            {{ t('ai.preview.tablesSummary', { count: previewData.tableCount, fields: previewData.totalFieldCount }) }}
+          </el-descriptions-item>
+          <el-descriptions-item :label="t('ai.preview.forms')">
+            {{ t('ai.preview.formsSummary', { count: previewData.formCount }) }}
+          </el-descriptions-item>
+          <el-descriptions-item :label="t('ai.preview.actions')">
+            {{ t('ai.preview.actionsSummary', { count: previewData.actionCount }) }}
+          </el-descriptions-item>
+          <el-descriptions-item :label="t('ai.preview.process')">
+            {{ t('ai.preview.processSummary', { nodes: previewData.processNodeCount, gateways: previewData.processGatewayCount }) }}
+          </el-descriptions-item>
+          <el-descriptions-item :label="t('ai.preview.decisions')">
+            {{ previewData.decisionCount }}
+          </el-descriptions-item>
+          <el-descriptions-item :label="t('ai.preview.tableRelations')">
+            {{ previewData.tableRelationCount }}
+          </el-descriptions-item>
+        </el-descriptions>
 
-      <div v-if="previewData.actionTypes.length" class="generation-preview__tags">
-        <span class="generation-preview__label">{{ t('ai.preview.actionTypes') }}</span>
-        <el-tag v-for="actionType in previewData.actionTypes" :key="actionType" size="small" type="info" class="generation-preview__tag">
-          {{ actionType }}
-        </el-tag>
-      </div>
+        <div
+          v-if="previewData.actionTypes.length"
+          class="generation-preview__tags"
+        >
+          <span class="generation-preview__label">{{ t('ai.preview.actionTypes') }}</span>
+          <el-tag
+            v-for="actionType in previewData.actionTypes"
+            :key="actionType"
+            size="small"
+            type="info"
+            class="generation-preview__tag"
+          >
+            {{ actionType }}
+          </el-tag>
+        </div>
 
-      <div v-if="previewData.iconSvg" class="generation-preview__icon">
-        <span class="generation-preview__label">{{ t('ai.preview.iconPreview') }}</span>
-        <div class="generation-preview__icon-box" v-html="sanitizedIconSvg" />
-      </div>
+        <div
+          v-if="previewData.iconSvg"
+          class="generation-preview__icon"
+        >
+          <span class="generation-preview__label">{{ t('ai.preview.iconPreview') }}</span>
+          <div
+            class="generation-preview__icon-box"
+            v-html="sanitizedIconSvg"
+          />
+        </div>
       </template>
 
       <!-- Task 17.2: Diff tab -->
@@ -96,27 +142,72 @@
         <div class="generation-preview__diff-summary">
           {{ t('ai.diff.summary', { added: props.diffResult.added.length, modified: props.diffResult.modified.length, deleted: props.diffResult.removed.length }) }}
         </div>
-        <div v-for="item in props.diffResult.added" :key="'add-'+item.type+'-'+item.name" class="generation-preview__diff-item generation-preview__diff-item--added">
-          <el-tag type="success" size="small">+</el-tag>
+        <div
+          v-for="item in props.diffResult.added"
+          :key="'add-'+item.type+'-'+item.name"
+          class="generation-preview__diff-item generation-preview__diff-item--added"
+        >
+          <el-tag
+            type="success"
+            size="small"
+          >
+            +
+          </el-tag>
           <span>{{ item.type }}: {{ item.name }}</span>
         </div>
-        <div v-for="item in props.diffResult.removed" :key="'rm-'+item.type+'-'+item.name" class="generation-preview__diff-item generation-preview__diff-item--removed">
-          <el-tag type="danger" size="small">-</el-tag>
+        <div
+          v-for="item in props.diffResult.removed"
+          :key="'rm-'+item.type+'-'+item.name"
+          class="generation-preview__diff-item generation-preview__diff-item--removed"
+        >
+          <el-tag
+            type="danger"
+            size="small"
+          >
+            -
+          </el-tag>
           <span>{{ item.type }}: {{ item.name }}</span>
         </div>
-        <div v-for="item in props.diffResult.modified" :key="'mod-'+item.type+'-'+item.name" class="generation-preview__diff-item generation-preview__diff-item--modified">
-          <el-tag type="warning" size="small">~</el-tag>
+        <div
+          v-for="item in props.diffResult.modified"
+          :key="'mod-'+item.type+'-'+item.name"
+          class="generation-preview__diff-item generation-preview__diff-item--modified"
+        >
+          <el-tag
+            type="warning"
+            size="small"
+          >
+            ~
+          </el-tag>
           <span>{{ item.type }}: {{ item.name }}</span>
-          <ul v-if="item.changes?.length" class="generation-preview__diff-changes">
-            <li v-for="(c, ci) in item.changes" :key="ci">{{ c }}</li>
+          <ul
+            v-if="item.changes?.length"
+            class="generation-preview__diff-changes"
+          >
+            <li
+              v-for="(c, ci) in item.changes"
+              :key="ci"
+            >
+              {{ c }}
+            </li>
           </ul>
         </div>
       </template>
     </div>
 
     <!-- Task 16.1: Skeleton for unreached parts during streaming -->
-    <el-skeleton v-if="props.isStreaming && !previewData.formCount" :rows="2" animated class="generation-preview__skeleton" />
-    <el-skeleton v-if="props.isStreaming && !previewData.processNodeCount && !previewData.processGatewayCount" :rows="1" animated class="generation-preview__skeleton" />
+    <el-skeleton
+      v-if="props.isStreaming && !previewData.formCount"
+      :rows="2"
+      animated
+      class="generation-preview__skeleton"
+    />
+    <el-skeleton
+      v-if="props.isStreaming && !previewData.processNodeCount && !previewData.processGatewayCount"
+      :rows="1"
+      animated
+      class="generation-preview__skeleton"
+    />
 
     <!-- Task 15.1: Detailed Preview Collapse Area -->
     <el-collapse class="generation-preview__details">
@@ -128,7 +219,12 @@
           class="preview-detail__table"
         >
           <div class="preview-detail__entity-header">
-            <el-tag size="small" type="primary">{{ table.tableType || 'TABLE' }}</el-tag>
+            <el-tag
+              size="small"
+              type="primary"
+            >
+              {{ table.tableType || 'TABLE' }}
+            </el-tag>
             <span class="preview-detail__entity-name">
               <!-- Task 15.3: AI Explanation Tooltip for table name -->
               <el-tooltip
@@ -141,7 +237,10 @@
               <span v-else>{{ table.tableName }}</span>
             </span>
           </div>
-          <div v-if="table.fieldDefinitions?.length" class="preview-detail__fields">
+          <div
+            v-if="table.fieldDefinitions?.length"
+            class="preview-detail__fields"
+          >
             <el-tag
               v-for="(field, fIdx) in table.fieldDefinitions"
               :key="field.fieldName"
@@ -167,7 +266,9 @@
           :key="'form-' + fmIdx"
           class="preview-detail__form"
         >
-          <el-tag size="small">{{ form.formType }}</el-tag>
+          <el-tag size="small">
+            {{ form.formType }}
+          </el-tag>
           <span class="preview-detail__entity-name">
             <!-- Task 15.3: AI Explanation Tooltip for form -->
             <el-tooltip
@@ -179,7 +280,10 @@
             </el-tooltip>
             <span v-else>{{ form.formName }}</span>
           </span>
-          <span v-if="form.tableBindings?.length" class="preview-detail__binding">
+          <span
+            v-if="form.tableBindings?.length"
+            class="preview-detail__binding"
+          >
             → {{ form.tableBindings.map((b: any) => b.tableName).join(', ') }}
           </span>
         </div>
@@ -187,8 +291,16 @@
     </el-collapse>
 
     <div class="generation-preview__actions">
-      <el-button type="primary" :disabled="!props.isGenerationComplete" @click="emit('apply')">{{ t('ai.preview.apply') }}</el-button>
-      <el-button @click="emit('regenerate')">{{ t('ai.preview.regenerate') }}</el-button>
+      <el-button
+        type="primary"
+        :disabled="!props.isGenerationComplete"
+        @click="emit('apply')"
+      >
+        {{ t('ai.preview.apply') }}
+      </el-button>
+      <el-button @click="emit('regenerate')">
+        {{ t('ai.preview.regenerate') }}
+      </el-button>
     </div>
   </el-card>
 </template>

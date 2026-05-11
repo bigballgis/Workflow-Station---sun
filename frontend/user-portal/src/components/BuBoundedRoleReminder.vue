@@ -8,24 +8,43 @@
     :show-close="false"
   >
     <div class="reminder-content">
-      <el-alert type="warning" :closable="false" show-icon>
+      <el-alert
+        type="warning"
+        :closable="false"
+        show-icon
+      >
         <template #title>
           <span>{{ t('reminder.message') }}</span>
         </template>
       </el-alert>
 
       <div class="role-list">
-        <div v-for="role in unactivatedRoles" :key="role.id" class="role-item">
-          <el-tag type="warning">{{ role.name }}</el-tag>
+        <div
+          v-for="role in unactivatedRoles"
+          :key="role.id"
+          class="role-item"
+        >
+          <el-tag type="warning">
+            {{ role.name }}
+          </el-tag>
         </div>
       </div>
     </div>
 
     <template #footer>
       <div class="dialog-footer">
-        <el-button @click="handleRemindLater">{{ t('reminder.remindLater') }}</el-button>
-        <el-button @click="handleDontRemind">{{ t('reminder.dontRemind') }}</el-button>
-        <el-button type="primary" @click="handleApplyNow">{{ t('reminder.applyNow') }}</el-button>
+        <el-button @click="handleRemindLater">
+          {{ t('reminder.remindLater') }}
+        </el-button>
+        <el-button @click="handleDontRemind">
+          {{ t('reminder.dontRemind') }}
+        </el-button>
+        <el-button
+          type="primary"
+          @click="handleApplyNow"
+        >
+          {{ t('reminder.applyNow') }}
+        </el-button>
       </div>
     </template>
   </el-dialog>

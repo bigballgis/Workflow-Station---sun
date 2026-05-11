@@ -2,14 +2,21 @@
   <div class="page-container">
     <PageHeader :title="t('bi.assignment.pageTitle')">
       <template #actions>
-        <el-button type="primary" @click="showCreateDialog">
+        <el-button
+          type="primary"
+          @click="showCreateDialog"
+        >
           <el-icon><Plus /></el-icon>{{ t('bi.assignment.newAssignment') }}
         </el-button>
       </template>
     </PageHeader>
 
     <el-card class="search-card">
-      <el-form :inline="true" :model="query" class="search-form">
+      <el-form
+        :inline="true"
+        :model="query"
+        class="search-form"
+      >
         <el-form-item :label="t('bi.assignment.filterTargetType')">
           <el-select
             v-model="query.targetType"
@@ -34,7 +41,10 @@
           />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="handleSearch">
+          <el-button
+            type="primary"
+            @click="handleSearch"
+          >
             <el-icon><Search /></el-icon>{{ t('common.search') }}
           </el-button>
           <el-button @click="handleReset">
@@ -45,16 +55,32 @@
     </el-card>
 
     <el-card class="table-card">
-      <el-table :data="assignments" v-loading="loading" stripe border table-layout="auto" style="width: 100%">
+      <el-table
+        v-loading="loading"
+        :data="assignments"
+        stripe
+        border
+        table-layout="auto"
+        style="width: 100%"
+      >
         <el-table-column
           prop="dashboardTitle"
           :label="t('bi.assignment.colDashboardTitle')"
           min-width="180"
           show-overflow-tooltip
         />
-        <el-table-column :label="t('bi.assignment.colTargetType')" width="130" align="center">
+        <el-table-column
+          :label="t('bi.assignment.colTargetType')"
+          width="130"
+          align="center"
+        >
           <template #default="{ row }">
-            <el-tag :type="assignmentTargetTagType(row.targetType)" size="small">{{ t(assignmentTargetTypeKey(row.targetType)) }}</el-tag>
+            <el-tag
+              :type="assignmentTargetTagType(row.targetType)"
+              size="small"
+            >
+              {{ t(assignmentTargetTypeKey(row.targetType)) }}
+            </el-tag>
           </template>
         </el-table-column>
         <el-table-column
@@ -63,7 +89,11 @@
           width="150"
           show-overflow-tooltip
         />
-        <el-table-column :label="t('bi.assignment.colLayoutMode')" width="130" align="center">
+        <el-table-column
+          :label="t('bi.assignment.colLayoutMode')"
+          width="130"
+          align="center"
+        >
           <template #default="{ row }">
             {{ t(layoutModeKey(row.layoutMode)) }}
           </template>
@@ -74,17 +104,52 @@
           width="120"
           align="center"
         />
-        <el-table-column :label="t('bi.assignment.colDefault')" width="80" align="center">
+        <el-table-column
+          :label="t('bi.assignment.colDefault')"
+          width="80"
+          align="center"
+        >
           <template #default="{ row }">
-            <el-tag v-if="row.isDefault" type="success" size="small">{{ t('bi.assignment.defaultYes') }}</el-tag>
-            <el-tag v-else type="info" size="small">{{ t('bi.assignment.defaultNo') }}</el-tag>
+            <el-tag
+              v-if="row.isDefault"
+              type="success"
+              size="small"
+            >
+              {{ t('bi.assignment.defaultYes') }}
+            </el-tag>
+            <el-tag
+              v-else
+              type="info"
+              size="small"
+            >
+              {{ t('bi.assignment.defaultNo') }}
+            </el-tag>
           </template>
         </el-table-column>
-        <el-table-column :label="t('bi.assignment.colActions')" width="140" fixed="right" align="center">
+        <el-table-column
+          :label="t('bi.assignment.colActions')"
+          width="140"
+          fixed="right"
+          align="center"
+        >
           <template #default="{ row }">
             <div class="action-cell">
-              <el-button link type="primary" size="small" @click="showEditDialog(row)">{{ t('common.edit') }}</el-button>
-              <el-button link type="danger" size="small" @click="handleDelete(row)">{{ t('common.delete') }}</el-button>
+              <el-button
+                link
+                type="primary"
+                size="small"
+                @click="showEditDialog(row)"
+              >
+                {{ t('common.edit') }}
+              </el-button>
+              <el-button
+                link
+                type="danger"
+                size="small"
+                @click="handleDelete(row)"
+              >
+                {{ t('common.delete') }}
+              </el-button>
             </div>
           </template>
         </el-table-column>

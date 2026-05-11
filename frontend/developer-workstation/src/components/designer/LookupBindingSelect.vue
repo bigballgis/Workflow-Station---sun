@@ -241,7 +241,10 @@ watch(selectedBindingId, (val) => {
           :value="b.bindingId"
           :label="b.tableDescription ? `${b.tableName} (${b.tableDescription})` : b.tableName"
         />
-        <template v-if="relationBindings.length === 0" #empty>
+        <template
+          v-if="relationBindings.length === 0"
+          #empty
+        >
           <span class="el-select-dropdown__empty">No relation tables bound</span>
         </template>
       </el-select>
@@ -320,9 +323,19 @@ watch(selectedBindingId, (val) => {
       <div class="lookup-field-group">
         <div class="lookup-label-row">
           <label class="lookup-label">Fixed Filters</label>
-          <el-button link type="primary" size="small" @click="addFilterCondition">Add</el-button>
+          <el-button
+            link
+            type="primary"
+            size="small"
+            @click="addFilterCondition"
+          >
+            Add
+          </el-button>
         </div>
-        <div v-if="filterConditions.length === 0" class="lookup-empty-hint">
+        <div
+          v-if="filterConditions.length === 0"
+          class="lookup-empty-hint"
+        >
           Optional: pre-filter rows by exact field value before lookup search.
         </div>
         <div
@@ -351,7 +364,14 @@ watch(selectedBindingId, (val) => {
             clearable
             @input="handleFilterConditionChange"
           />
-          <el-button link type="danger" size="small" @click="removeFilterCondition(index)">Remove</el-button>
+          <el-button
+            link
+            type="danger"
+            size="small"
+            @click="removeFilterCondition(index)"
+          >
+            Remove
+          </el-button>
         </div>
       </div>
 

@@ -2,24 +2,216 @@
   <div class="sub-table-field">
     <div class="sub-table-header">
       <span class="title">{{ title }}</span>
-      <el-button v-if="editable" type="primary" size="small" @click="handleAdd">
+      <el-button
+        v-if="editable"
+        type="primary"
+        size="small"
+        @click="handleAdd"
+      >
         <el-icon><Plus /></el-icon> {{ t('subTable.add') }}
       </el-button>
     </div>
 
     <div class="sub-table-scroll-wrapper">
-    <el-table :data="rows" size="small" border :max-height="400" v-loading="loading" style="width: 100%" :show-summary="hasSummary" :summary-method="getSummaryMethod">
-      <el-table-column
-        v-for="col in columns"
-        :key="col.field"
-        :prop="col.field"
-        :label="col.label"
-        :min-width="columnMinWidth(col)"
-        :show-overflow-tooltip="false"
+      <el-table
+        v-loading="loading"
+        :data="rows"
+        size="small"
+        border
+        :max-height="400"
+        style="width: 100%"
+        :show-summary="hasSummary"
+        :summary-method="getSummaryMethod"
       >
-        <template #default="scope">
-          <!-- Read-only display -->
-          <template v-if="col.field === 'task_status'">
+        <el-table-column
+          v-for="col in columns"
+          :key="col.field"
+          :prop="col.field"
+          :label="col.label"
+          :min-width="columnMinWidth(col)"
+          :show-overflow-tooltip="false"
+        >
+          <template #default="scope">
+            <!-- Read-only display -->
+            <template v-if="col.field === 'task_status'">
+              <el-tag
+                :type="scope.row.task_status === 'COMPLETED' ? 'success' : 'warning'"
+                size="small"
+              >
+                {{ formatTaskStatus(scope.row.task_status) }}
+              </el-tag>
+            </template>
+            <template v-else-if="col.type === 'upload'">
+              <span
+                v-if="scope.row[col.field]"
+                class="file-download-link"
+                :class="{ downloading: downloadingKeys[scope.$index + '_' + col.field] }"
+                @click="downloadFile(scope.row[col.field], uploadNames[scope.$index + '_' + col.field], scope.$index, col.field)"
+              >
+                <el-icon
+                  v-if="downloadingKeys[scope.$index + '_' + col.field]"
+                  class="is-loading"
+                ><Loading /></el-icon>
+                <el-icon v-else><Document /></el-icon>
+                {{ getFilenameFromUrl(scope.row[col.field], uploadNames[scope.$index + '_' + col.field]) }}
+              </span>
+              <span
+                v-else
+                class="no-file"
+              >-</span>
+            </template>
+            <template v-else-if="col.type === 'colorPicker'">
+              <span
+                v-if="scope.row[col.field]"
+                class="color-swatch"
+                :style="{ backgroundColor: scope.row[col.field] }"
+                :title="scope.row[col.field]"
+              />
+              <span v-else>-</span>
+            </template>
+            <template v-else-if="col.type === 'editor'">
+              <span
+                v-if="scope.row[col.field]"
+                class="editor-preview"
+                v-html="sanitizeHtml(scope.row[col.field])"
+              />
+              <span v-else>-</span>
+            </template>
+            <template v-else-if="col.type === 'signature'">
+              <img
+                v-if="scope.row[col.field]"
+                :src="scope.row[col.field]"
+                class="signature-preview"
+                alt="Signature"
+              >
+              <span v-else>-</span>
+            </template>
+            <template v-else-if="col.type === 'slider'">
+              <el-slider
+                v-if="scope.row[col.field] != null"
+                :model-value="Number(scope.row[col.field])"
+                :min="col.props?.min ?? 0"
+                :max="col.props?.max ?? 100"
+                disabled
+                style="width: 100%; padding: 0 10px;"
+              />
+              <span v-else>-</span>
+            </template>
+            <template v-else-if="col.type === 'password'">
+              <span>••••••</span>
+            </template>
+            <template v-else-if="col.type === 'rate'">
+              <el-rate
+                v-if="scope.row[col.field] != null"
+                :model-value="Number(scope.row[col.field])"
+                :max="col.props?.max || 5"
+                disabled
+                style="display: inline-flex;"
+              />
+              <span v-else>-</span>
+            </template>
+            <template v-else-if="col.type === 'lookup'">
+              <div class="lookup-preview-wrapper sub-table-lookup-preview">
+                <div class="lookup-form-item">
+                  <label class="lookup-label-text">
+                    <el-icon class="lookup-label-icon"><Search /></el-icon>
+                  </label>
+                  <div class="lookup-field readonly">
+                    <div
+                      v-if="lookupSelectedRow(col, scope.row[col.field])"
+                      class="lookup-selected-wrapper"
+                    >
+                      <span class="lookup-selected-tag">
+                        <span class="lookup-selected-text">{{ lookupTagDisplayText(col, scope.row[col.field]) }}</span>
+                      </span>
+                    </div>
+                    <span
+                      v-else
+                      class="lookup-readonly-empty"
+                    >-</span>
+                  </div>
+                </div>
+                <div
+                  v-if="col.props?.showBackfillView !== false && lookupSelectedRow(col, scope.row[col.field]) && effectiveLookupViewFields(col, scope.row[col.field]).length > 0"
+                  class="lookup-view-display"
+                >
+                  <el-descriptions
+                    :column="1"
+                    border
+                    size="small"
+                    direction="horizontal"
+                  >
+                    <el-descriptions-item
+                      v-for="field in effectiveLookupViewFields(col, scope.row[col.field])"
+                      :key="field.fieldName"
+                      :label="field.displayLabel || field.fieldName"
+                      label-class-name="lookup-view-label"
+                      class-name="lookup-view-value"
+                    >
+                      {{ formatUserSnapshotCellValue(lookupSelectedRow(col, scope.row[col.field])?.[field.fieldName]) }}
+                    </el-descriptions-item>
+                  </el-descriptions>
+                </div>
+              </div>
+            </template>
+            <template v-else-if="isUserSnapshotLikeObject(scope.row[col.field])">
+              <div class="lookup-preview-wrapper sub-table-lookup-preview">
+                <div class="lookup-form-item">
+                  <label class="lookup-label-text">
+                    <el-icon class="lookup-label-icon"><Search /></el-icon>
+                  </label>
+                  <div class="lookup-field readonly">
+                    <div class="lookup-selected-wrapper">
+                      <span class="lookup-selected-tag">
+                        <span class="lookup-selected-text">{{ userObjectTagDisplayString(scope.row[col.field]) }}</span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div
+                  v-if="userSnapshotViewFieldsFromRow(scope.row[col.field]).length > 0"
+                  class="lookup-view-display"
+                >
+                  <el-descriptions
+                    :column="1"
+                    border
+                    size="small"
+                    direction="horizontal"
+                  >
+                    <el-descriptions-item
+                      v-for="field in userSnapshotViewFieldsFromRow(scope.row[col.field])"
+                      :key="field.key"
+                      :label="field.label"
+                      label-class-name="lookup-view-label"
+                      class-name="lookup-view-value"
+                    >
+                      {{ formatUserSnapshotCellValue(getSnapshotField(scope.row[col.field], field.key)) }}
+                    </el-descriptions-item>
+                  </el-descriptions>
+                </div>
+              </div>
+            </template>
+            <template v-else-if="col.type === 'linkForm'">
+              <el-link
+                type="primary"
+                :underline="false"
+                @click="handleLinkFormClick(col, scope.row, scope.$index)"
+              >
+                {{ col.props?.linkText || t('linkForm.defaultLinkText') }}
+              </el-link>
+            </template>
+            <span v-else>{{ resolveDisplayValue(col, scope.row[col.field]) }}</span>
+          </template>
+        </el-table-column>
+
+        <!-- Task status column (multi-instance subtask completion) -->
+        <el-table-column
+          v-if="showTaskStatus"
+          :label="t('subTable.taskStatus')"
+          width="120"
+          align="center"
+        >
+          <template #default="scope">
             <el-tag
               :type="scope.row.task_status === 'COMPLETED' ? 'success' : 'warning'"
               size="small"
@@ -27,212 +219,124 @@
               {{ formatTaskStatus(scope.row.task_status) }}
             </el-tag>
           </template>
-          <template v-else-if="col.type === 'upload'">
-            <span
-              v-if="scope.row[col.field]"
-              class="file-download-link"
-              :class="{ downloading: downloadingKeys[scope.$index + '_' + col.field] }"
-              @click="downloadFile(scope.row[col.field], uploadNames[scope.$index + '_' + col.field], scope.$index, col.field)"
+        </el-table-column>
+
+        <el-table-column
+          v-if="editable"
+          :label="t('common.operation')"
+          width="120"
+        >
+          <template #default="scope">
+            <el-button
+              link
+              type="primary"
+              size="small"
+              @click="openEditDialog(scope.$index)"
             >
-              <el-icon v-if="downloadingKeys[scope.$index + '_' + col.field]" class="is-loading"><Loading /></el-icon>
-              <el-icon v-else><Document /></el-icon>
-              {{ getFilenameFromUrl(scope.row[col.field], uploadNames[scope.$index + '_' + col.field]) }}
-            </span>
-            <span v-else class="no-file">-</span>
-          </template>
-          <template v-else-if="col.type === 'colorPicker'">
-            <span v-if="scope.row[col.field]" class="color-swatch" :style="{ backgroundColor: scope.row[col.field] }" :title="scope.row[col.field]" />
-            <span v-else>-</span>
-          </template>
-          <template v-else-if="col.type === 'editor'">
-            <span v-if="scope.row[col.field]" v-html="sanitizeHtml(scope.row[col.field])" class="editor-preview" />
-            <span v-else>-</span>
-          </template>
-          <template v-else-if="col.type === 'signature'">
-            <img v-if="scope.row[col.field]" :src="scope.row[col.field]" class="signature-preview" alt="Signature" />
-            <span v-else>-</span>
-          </template>
-          <template v-else-if="col.type === 'slider'">
-            <el-slider
-              v-if="scope.row[col.field] != null"
-              :model-value="Number(scope.row[col.field])"
-              :min="col.props?.min ?? 0"
-              :max="col.props?.max ?? 100"
-              disabled
-              style="width: 100%; padding: 0 10px;"
-            />
-            <span v-else>-</span>
-          </template>
-          <template v-else-if="col.type === 'password'">
-            <span>••••••</span>
-          </template>
-          <template v-else-if="col.type === 'rate'">
-            <el-rate
-              v-if="scope.row[col.field] != null"
-              :model-value="Number(scope.row[col.field])"
-              :max="col.props?.max || 5"
-              disabled
-              style="display: inline-flex;"
-            />
-            <span v-else>-</span>
-          </template>
-          <template v-else-if="col.type === 'lookup'">
-            <div class="lookup-preview-wrapper sub-table-lookup-preview">
-              <div class="lookup-form-item">
-                <label class="lookup-label-text">
-                  <el-icon class="lookup-label-icon"><Search /></el-icon>
-                </label>
-                <div class="lookup-field readonly">
-                  <div v-if="lookupSelectedRow(col, scope.row[col.field])" class="lookup-selected-wrapper">
-                    <span class="lookup-selected-tag">
-                      <span class="lookup-selected-text">{{ lookupTagDisplayText(col, scope.row[col.field]) }}</span>
-                    </span>
-                  </div>
-                  <span v-else class="lookup-readonly-empty">-</span>
-                </div>
-              </div>
-              <div
-                v-if="col.props?.showBackfillView !== false && lookupSelectedRow(col, scope.row[col.field]) && effectiveLookupViewFields(col, scope.row[col.field]).length > 0"
-                class="lookup-view-display"
-              >
-                <el-descriptions :column="1" border size="small" direction="horizontal">
-                  <el-descriptions-item
-                    v-for="field in effectiveLookupViewFields(col, scope.row[col.field])"
-                    :key="field.fieldName"
-                    :label="field.displayLabel || field.fieldName"
-                    label-class-name="lookup-view-label"
-                    class-name="lookup-view-value"
-                  >
-                    {{ formatUserSnapshotCellValue(lookupSelectedRow(col, scope.row[col.field])?.[field.fieldName]) }}
-                  </el-descriptions-item>
-                </el-descriptions>
-              </div>
-            </div>
-          </template>
-          <template v-else-if="isUserSnapshotLikeObject(scope.row[col.field])">
-            <div class="lookup-preview-wrapper sub-table-lookup-preview">
-              <div class="lookup-form-item">
-                <label class="lookup-label-text">
-                  <el-icon class="lookup-label-icon"><Search /></el-icon>
-                </label>
-                <div class="lookup-field readonly">
-                  <div class="lookup-selected-wrapper">
-                    <span class="lookup-selected-tag">
-                      <span class="lookup-selected-text">{{ userObjectTagDisplayString(scope.row[col.field]) }}</span>
-                    </span>
-                  </div>
-                </div>
-              </div>
-              <div
-                v-if="userSnapshotViewFieldsFromRow(scope.row[col.field]).length > 0"
-                class="lookup-view-display"
-              >
-                <el-descriptions :column="1" border size="small" direction="horizontal">
-                  <el-descriptions-item
-                    v-for="field in userSnapshotViewFieldsFromRow(scope.row[col.field])"
-                    :key="field.key"
-                    :label="field.label"
-                    label-class-name="lookup-view-label"
-                    class-name="lookup-view-value"
-                  >
-                    {{ formatUserSnapshotCellValue(getSnapshotField(scope.row[col.field], field.key)) }}
-                  </el-descriptions-item>
-                </el-descriptions>
-              </div>
-            </div>
-          </template>
-          <template v-else-if="col.type === 'linkForm'">
-            <el-link type="primary" :underline="false" @click="handleLinkFormClick(col, scope.row, scope.$index)">
-              {{ col.props?.linkText || t('linkForm.defaultLinkText') }}
-            </el-link>
-          </template>
-          <span v-else>{{ resolveDisplayValue(col, scope.row[col.field]) }}</span>
-        </template>
-      </el-table-column>
-
-      <!-- Task status column (multi-instance subtask completion) -->
-      <el-table-column v-if="showTaskStatus" :label="t('subTable.taskStatus')" width="120" align="center">
-        <template #default="scope">
-          <el-tag
-            :type="scope.row.task_status === 'COMPLETED' ? 'success' : 'warning'"
-            size="small"
-          >
-            {{ formatTaskStatus(scope.row.task_status) }}
-          </el-tag>
-        </template>
-      </el-table-column>
-
-      <el-table-column v-if="editable" :label="t('common.operation')" width="120">
-        <template #default="scope">
-          <el-button link type="primary" size="small" @click="openEditDialog(scope.$index)">{{ t('subTable.edit') }}</el-button>
-          <el-button link type="danger" size="small" @click="deleteRow(scope.$index)">{{ t('subTable.delete') }}</el-button>
-        </template>
-      </el-table-column>
-
-      <!-- View subtask detail button (read-only mode) -->
-      <el-table-column v-if="showViewDetail" :label="t('subTable.actions')" width="100" align="center">
-        <template #default="scope">
-          <el-button
-            link
-            type="primary"
-            size="small"
-            :disabled="scope.row.task_status !== 'COMPLETED'"
-            @click="emit('viewDetail', scope.row, scope.$index)"
-          >
-            {{ t('subTable.viewDetail') }}
-          </el-button>
-        </template>
-      </el-table-column>
-
-      <!-- Fill form button for multi-instance subtask (todo mode) -->
-      <el-table-column v-if="showFillButton" :label="t('subTable.actions')" :min-width="fillButtonLabel ? 200 : 100" align="center">
-        <template #default="scope">
-          <el-button
-            link
-            type="primary"
-            size="small"
-            @click="emit('fillForm', scope.row, scope.$index)"
-          >
-            {{ fillButtonLabel || t('subTable.add') }}
-          </el-button>
-        </template>
-      </el-table-column>
-
-      <!-- Multi-instance assignment column -->
-      <el-table-column v-if="showAssigneeColumn" :label="t('subTable.assignee')" width="180">
-        <template #default="scope">
-          <div class="assignee-cell">
-            <span v-if="scope.row.assignee_display_name" class="assignee-name">
-              {{ formatAssigneeDisplayLabel(scope.row.assignee_display_name) }}
-            </span>
-            <span v-else-if="assigneeField && scope.row[assigneeField]" class="assignee-name">
-              {{ getUserDisplayName(scope.row[assigneeField]) }}
-            </span>
-            <span v-else class="text-muted">{{ t('subTable.unassigned') }}</span>
-            <el-button 
-              v-if="canAssign"
-              link 
-              type="primary" 
-              size="small" 
-              @click="openAssignDialog(scope.row, scope.$index)"
-              class="assign-btn">
-              {{ scope.row[assigneeField] ? t('subTable.reassign') : t('subTable.assign') }}
+              {{ t('subTable.edit') }}
             </el-button>
-          </div>
-        </template>
-      </el-table-column>
+            <el-button
+              link
+              type="danger"
+              size="small"
+              @click="deleteRow(scope.$index)"
+            >
+              {{ t('subTable.delete') }}
+            </el-button>
+          </template>
+        </el-table-column>
 
-      <template #empty>
-        <el-empty :description="t('subTable.noData')" :image-size="40" />
-      </template>
-    </el-table>
+        <!-- View subtask detail button (read-only mode) -->
+        <el-table-column
+          v-if="showViewDetail"
+          :label="t('subTable.actions')"
+          width="100"
+          align="center"
+        >
+          <template #default="scope">
+            <el-button
+              link
+              type="primary"
+              size="small"
+              :disabled="scope.row.task_status !== 'COMPLETED'"
+              @click="emit('viewDetail', scope.row, scope.$index)"
+            >
+              {{ t('subTable.viewDetail') }}
+            </el-button>
+          </template>
+        </el-table-column>
+
+        <!-- Fill form button for multi-instance subtask (todo mode) -->
+        <el-table-column
+          v-if="showFillButton"
+          :label="t('subTable.actions')"
+          :min-width="fillButtonLabel ? 200 : 100"
+          align="center"
+        >
+          <template #default="scope">
+            <el-button
+              link
+              type="primary"
+              size="small"
+              @click="emit('fillForm', scope.row, scope.$index)"
+            >
+              {{ fillButtonLabel || t('subTable.add') }}
+            </el-button>
+          </template>
+        </el-table-column>
+
+        <!-- Multi-instance assignment column -->
+        <el-table-column
+          v-if="showAssigneeColumn"
+          :label="t('subTable.assignee')"
+          width="180"
+        >
+          <template #default="scope">
+            <div class="assignee-cell">
+              <span
+                v-if="scope.row.assignee_display_name"
+                class="assignee-name"
+              >
+                {{ formatAssigneeDisplayLabel(scope.row.assignee_display_name) }}
+              </span>
+              <span
+                v-else-if="assigneeField && scope.row[assigneeField]"
+                class="assignee-name"
+              >
+                {{ getUserDisplayName(scope.row[assigneeField]) }}
+              </span>
+              <span
+                v-else
+                class="text-muted"
+              >{{ t('subTable.unassigned') }}</span>
+              <el-button 
+                v-if="canAssign"
+                link 
+                type="primary" 
+                size="small" 
+                class="assign-btn"
+                @click="openAssignDialog(scope.row, scope.$index)"
+              >
+                {{ scope.row[assigneeField] ? t('subTable.reassign') : t('subTable.assign') }}
+              </el-button>
+            </div>
+          </template>
+        </el-table-column>
+
+        <template #empty>
+          <el-empty
+            :description="t('subTable.noData')"
+            :image-size="40"
+          />
+        </template>
+      </el-table>
     </div>
 
     <SubTableAddDialog
       :visible="dialogVisible"
       :columns="editableColumns"
       :mode="dialogMode"
-      :initialData="dialogInitialData"
+      :initial-data="dialogInitialData"
       :row-formulas="rowFormulas"
       :column-validation-rules="validationConfig?.columnRules"
       :upload-url="uploadUrl"
@@ -241,8 +345,16 @@
     />
 
     <Teleport to="body">
-      <div v-if="linkFormDialogVisible" class="link-form-modal-overlay">
-        <div ref="linkFormModalPanelRef" class="link-form-modal-panel" role="dialog" aria-modal="true">
+      <div
+        v-if="linkFormDialogVisible"
+        class="link-form-modal-overlay"
+      >
+        <div
+          ref="linkFormModalPanelRef"
+          class="link-form-modal-panel"
+          role="dialog"
+          aria-modal="true"
+        >
           <div class="link-form-modal-header">
             <span class="link-form-modal-title">{{ linkFormModalTitle }}</span>
             <!-- Native button: el-form :disabled (readonly completed task) injects into el-button via component tree; Teleport does not break that inheritance. -->
@@ -252,7 +364,9 @@
               :aria-label="t('common.close')"
               @click="closeLinkFormDetailDialog"
             >
-              <el-icon :size="18"><Close /></el-icon>
+              <el-icon :size="18">
+                <Close />
+              </el-icon>
             </button>
           </div>
           <div class="link-form-dialog-body">
@@ -271,15 +385,35 @@
               label-position="left"
             >
               <el-row :gutter="20">
-                <template v-for="field in linkedFormFields" :key="field.key">
-                  <el-col v-if="field.type === 'card'" :span="field.span || 24">
-                    <el-card shadow="never" class="linked-form-card">
-                      <template v-if="field.label" #header>
+                <template
+                  v-for="field in linkedFormFields"
+                  :key="field.key"
+                >
+                  <el-col
+                    v-if="field.type === 'card'"
+                    :span="field.span || 24"
+                  >
+                    <el-card
+                      shadow="never"
+                      class="linked-form-card"
+                    >
+                      <template
+                        v-if="field.label"
+                        #header
+                      >
                         <span>{{ field.label }}</span>
                       </template>
                       <el-row :gutter="20">
-                        <el-col v-for="child in field.children || []" :key="child.key" :span="child.span || 24">
-                          <el-form-item :label="child.label" :prop="child.key" :required="child.required">
+                        <el-col
+                          v-for="child in field.children || []"
+                          :key="child.key"
+                          :span="child.span || 24"
+                        >
+                          <el-form-item
+                            :label="child.label"
+                            :prop="child.key"
+                            :required="child.required"
+                          >
                             <FieldRenderer
                               :field="child"
                               :model-value="linkedFormData[child.key]"
@@ -291,8 +425,15 @@
                       </el-row>
                     </el-card>
                   </el-col>
-                  <el-col v-else :span="field.span || 24">
-                    <el-form-item :label="field.label" :prop="field.key" :required="field.required">
+                  <el-col
+                    v-else
+                    :span="field.span || 24"
+                  >
+                    <el-form-item
+                      :label="field.label"
+                      :prop="field.key"
+                      :required="field.required"
+                    >
                       <FieldRenderer
                         :field="field"
                         :model-value="linkedFormData[field.key]"
@@ -314,7 +455,11 @@
               :show-link-form-dialog-footer="showLinkFormDialogFooter"
               @update:model-value="handleLinkedSubTableUpdate"
             />
-            <el-empty v-else :description="t('subTable.noData')" :image-size="60" />
+            <el-empty
+              v-else
+              :description="t('subTable.noData')"
+              :image-size="60"
+            />
           </div>
           <div
             v-if="showLinkFormDetailActionFooter"
@@ -344,7 +489,8 @@
       v-model="assignDialogVisible" 
       :title="t('subTable.selectAssignee')" 
       width="500px"
-      @opened="onAssignDialogOpened">
+      @opened="onAssignDialogOpened"
+    >
       <el-form label-width="100px">
         <el-form-item :label="t('subTable.user')">
           <el-select 
@@ -354,7 +500,8 @@
             remote
             :remote-method="searchUsers"
             :loading="userSearchLoading"
-            style="width: 100%;">
+            style="width: 100%;"
+          >
             <el-option
               v-for="user in userOptions"
               :key="user.id"
@@ -365,8 +512,14 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="assignDialogVisible = false">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary" @click="confirmAssignment" :loading="assigning">
+        <el-button @click="assignDialogVisible = false">
+          {{ t('common.cancel') }}
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="assigning"
+          @click="confirmAssignment"
+        >
           {{ t('common.confirm') }}
         </el-button>
       </template>

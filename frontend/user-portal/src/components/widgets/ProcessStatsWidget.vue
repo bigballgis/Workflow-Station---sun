@@ -1,6 +1,9 @@
 <template>
   <div class="process-stats-widget">
-    <div class="chart-container" ref="chartRef"></div>
+    <div
+      ref="chartRef"
+      class="chart-container"
+    />
     <div class="stats-summary">
       <div class="summary-item">
         <span class="label">{{ $t('dashboard.initiatedProcesses') }}</span>

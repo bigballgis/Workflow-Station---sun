@@ -1,5 +1,8 @@
 <template>
-  <el-container class="main-layout" direction="vertical">
+  <el-container
+    class="main-layout"
+    direction="vertical"
+  >
     <el-header class="header">
       <div class="logo">
         <span class="logo-text">{{ t('app.name') }}</span>

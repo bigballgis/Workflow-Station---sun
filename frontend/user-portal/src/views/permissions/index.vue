@@ -3,55 +3,117 @@
     <div class="page-header">
       <h1>{{ t('permission.title') }}</h1>
       <div class="page-header-actions">
-        <el-button type="primary" @click="showApplyDialog">{{ t('permission.applyPermission') }}</el-button>
-        <el-button type="danger" plain @click="openRemovePermissionDialog">{{ t('permission.removePermission') }}</el-button>
+        <el-button
+          type="primary"
+          @click="showApplyDialog"
+        >
+          {{ t('permission.applyPermission') }}
+        </el-button>
+        <el-button
+          type="danger"
+          plain
+          @click="openRemovePermissionDialog"
+        >
+          {{ t('permission.removePermission') }}
+        </el-button>
       </div>
     </div>
 
     <div class="portal-card my-bu-roles-card">
-      <h2 class="section-title">{{ t('permission.myBuRoles') }}</h2>
+      <h2 class="section-title">
+        {{ t('permission.myBuRoles') }}
+      </h2>
       <el-empty
         v-if="myBuRoles.length === 0 && !loadingMyBuRoles"
         :description="t('permission.noMyBuRoles')"
       />
-      <el-table v-else :data="myBuRoles" stripe v-loading="loadingMyBuRoles">
-        <el-table-column :label="t('permission.businessUnit')" min-width="160">
+      <el-table
+        v-else
+        v-loading="loadingMyBuRoles"
+        :data="myBuRoles"
+        stripe
+      >
+        <el-table-column
+          :label="t('permission.businessUnit')"
+          min-width="160"
+        >
           <template #default="{ row }">
             {{ row.businessUnitName || row.businessUnitId || '-' }}
           </template>
         </el-table-column>
-        <el-table-column :label="t('permission.role')" min-width="140">
+        <el-table-column
+          :label="t('permission.role')"
+          min-width="140"
+        >
           <template #default="{ row }">
             {{ row.roleName || row.roleId || '-' }}
           </template>
         </el-table-column>
-        <el-table-column :label="t('permission.assignedAt')" width="180">
+        <el-table-column
+          :label="t('permission.assignedAt')"
+          width="180"
+        >
           <template #default="{ row }">
             {{ formatDateTime(row.assignedAt || row.createdAt) }}
           </template>
         </el-table-column>
       </el-table>
-      <p class="table-foot-hint">{{ t('permission.requestRemoveBuRoleHint') }}</p>
+      <p class="table-foot-hint">
+        {{ t('permission.requestRemoveBuRoleHint') }}
+      </p>
     </div>
 
     <div class="portal-card exit-bu-card">
-      <h2 class="section-title">{{ t('exitRole.title') }}</h2>
-      <p class="section-sub">{{ t('exitRole.subtitle') }}</p>
-      <el-alert type="info" show-icon :closable="false" class="info-alert">
+      <h2 class="section-title">
+        {{ t('exitRole.title') }}
+      </h2>
+      <p class="section-sub">
+        {{ t('exitRole.subtitle') }}
+      </p>
+      <el-alert
+        type="info"
+        show-icon
+        :closable="false"
+        class="info-alert"
+      >
         {{ t('exitRole.portalNoVirtualGroup') }}
       </el-alert>
       <el-empty
         v-if="!loadingExitBu && exitBuRows.length === 0"
         :description="t('exitRole.noMemberships')"
       />
-      <el-table v-else :data="exitBuRows" stripe v-loading="loadingExitBu">
-        <el-table-column prop="businessUnitName" :label="t('exitRole.businessUnit')" min-width="200" />
-        <el-table-column prop="joinedAt" :label="t('exitRole.joinTime')" width="180">
-          <template #default="{ row }">{{ formatDateTime(row.joinedAt) }}</template>
-        </el-table-column>
-        <el-table-column :label="t('common.actions')" width="200" fixed="right">
+      <el-table
+        v-else
+        v-loading="loadingExitBu"
+        :data="exitBuRows"
+        stripe
+      >
+        <el-table-column
+          prop="businessUnitName"
+          :label="t('exitRole.businessUnit')"
+          min-width="200"
+        />
+        <el-table-column
+          prop="joinedAt"
+          :label="t('exitRole.joinTime')"
+          width="180"
+        >
           <template #default="{ row }">
-            <el-button type="danger" link size="small" @click="openExitBuDialog(row)">
+            {{ formatDateTime(row.joinedAt) }}
+          </template>
+        </el-table-column>
+        <el-table-column
+          :label="t('common.actions')"
+          width="200"
+          fixed="right"
+        >
+          <template #default="{ row }">
+            <el-button
+              type="danger"
+              link
+              size="small"
+              @click="openExitBuDialog(row)"
+            >
               {{ t('exitRole.requestExitBu') }}
             </el-button>
           </template>
@@ -61,48 +123,100 @@
 
     <!-- 我的申请 -->
     <div class="portal-card request-lists-card">
-      <h2 class="section-title">{{ t('permission.sectionMyRequests') }}</h2>
-      <el-tabs v-model="myRequestTab" class="list-tabs">
+      <h2 class="section-title">
+        {{ t('permission.sectionMyRequests') }}
+      </h2>
+      <el-tabs
+        v-model="myRequestTab"
+        class="list-tabs"
+      >
         <el-tab-pane name="inProgress">
           <template #label>
             <span>{{ t('permission.tabInProgress') }}</span>
-            <el-badge v-if="pendingCount > 0" :value="pendingCount" class="tab-badge" />
+            <el-badge
+              v-if="pendingCount > 0"
+              :value="pendingCount"
+              class="tab-badge"
+            />
           </template>
-          <el-empty v-if="pendingList.length === 0 && !loadingPending" :description="t('permission.noPendingRequests')" />
-          <el-table v-else :data="pendingList" stripe v-loading="loadingPending">
-            <el-table-column prop="requestType" :label="t('permission.requestType')" width="160">
+          <el-empty
+            v-if="pendingList.length === 0 && !loadingPending"
+            :description="t('permission.noPendingRequests')"
+          />
+          <el-table
+            v-else
+            v-loading="loadingPending"
+            :data="pendingList"
+            stripe
+          >
+            <el-table-column
+              prop="requestType"
+              :label="t('permission.requestType')"
+              width="160"
+            >
               <template #default="{ row }">
-                <el-tag :type="getRequestTypeTag(row.requestType)" size="small">
+                <el-tag
+                  :type="getRequestTypeTag(row.requestType)"
+                  size="small"
+                >
                   {{ getRequestTypeLabel(row.requestType) }}
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column :label="t('permission.requestTarget')" min-width="150">
+            <el-table-column
+              :label="t('permission.requestTarget')"
+              min-width="150"
+            >
               <template #default="{ row }">
                 {{ getTargetName(row) }}
               </template>
             </el-table-column>
-            <el-table-column :label="t('permission.beneficiaryColumn')" width="130" show-overflow-tooltip>
+            <el-table-column
+              :label="t('permission.beneficiaryColumn')"
+              width="130"
+              show-overflow-tooltip
+            >
               <template #default="{ row }">
                 {{ row.applicantUsername || row.applicantId || '-' }}
               </template>
             </el-table-column>
-            <el-table-column :label="t('permission.submittedByColumn')" width="120" show-overflow-tooltip>
+            <el-table-column
+              :label="t('permission.submittedByColumn')"
+              width="120"
+              show-overflow-tooltip
+            >
               <template #default="{ row }">
                 <span v-if="row.submittedByUserId && row.submittedByUserId !== row.applicantId">
                   {{ row.submittedByUsername || row.submittedByUserId }}
-                  <el-tag size="small" type="info" class="proxy-tag">{{ t('permission.proxyBadge') }}</el-tag>
+                  <el-tag
+                    size="small"
+                    type="info"
+                    class="proxy-tag"
+                  >{{ t('permission.proxyBadge') }}</el-tag>
                 </span>
                 <span v-else>{{ t('permission.selfBeneficiary') }}</span>
               </template>
             </el-table-column>
-            <el-table-column prop="reason" :label="t('permission.reason')" min-width="150" show-overflow-tooltip />
-            <el-table-column prop="createdAt" :label="t('permission.applyTime')" width="160">
+            <el-table-column
+              prop="reason"
+              :label="t('permission.reason')"
+              min-width="150"
+              show-overflow-tooltip
+            />
+            <el-table-column
+              prop="createdAt"
+              :label="t('permission.applyTime')"
+              width="160"
+            >
               <template #default="{ row }">
                 {{ formatDateTime(row.createdAt) }}
               </template>
             </el-table-column>
-            <el-table-column :label="t('common.actions')" width="150" fixed="right">
+            <el-table-column
+              :label="t('common.actions')"
+              width="150"
+              fixed="right"
+            >
               <template #default="{ row }">
                 <el-button
                   v-if="canCancelAsBeneficiary(row)"
@@ -118,27 +232,56 @@
           </el-table>
         </el-tab-pane>
 
-        <el-tab-pane :label="t('permission.tabCompleted')" name="completed">
-          <el-empty v-if="historyList.length === 0 && !loadingHistory" :description="t('permission.noRequests')" />
-          <el-table v-else :data="historyList" stripe v-loading="loadingHistory">
-            <el-table-column prop="requestType" :label="t('permission.requestType')" width="140">
+        <el-tab-pane
+          :label="t('permission.tabCompleted')"
+          name="completed"
+        >
+          <el-empty
+            v-if="historyList.length === 0 && !loadingHistory"
+            :description="t('permission.noRequests')"
+          />
+          <el-table
+            v-else
+            v-loading="loadingHistory"
+            :data="historyList"
+            stripe
+          >
+            <el-table-column
+              prop="requestType"
+              :label="t('permission.requestType')"
+              width="140"
+            >
               <template #default="{ row }">
-                <el-tag :type="getRequestTypeTag(row.requestType)" size="small">
+                <el-tag
+                  :type="getRequestTypeTag(row.requestType)"
+                  size="small"
+                >
                   {{ getRequestTypeLabel(row.requestType) }}
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column :label="t('permission.requestTarget')" min-width="180">
+            <el-table-column
+              :label="t('permission.requestTarget')"
+              min-width="180"
+            >
               <template #default="{ row }">
                 {{ getTargetName(row) }}
               </template>
             </el-table-column>
-            <el-table-column :label="t('permission.beneficiaryColumn')" width="120" show-overflow-tooltip>
+            <el-table-column
+              :label="t('permission.beneficiaryColumn')"
+              width="120"
+              show-overflow-tooltip
+            >
               <template #default="{ row }">
                 {{ row.applicantUsername || row.applicantId || '-' }}
               </template>
             </el-table-column>
-            <el-table-column :label="t('permission.submittedByColumn')" width="110" show-overflow-tooltip>
+            <el-table-column
+              :label="t('permission.submittedByColumn')"
+              width="110"
+              show-overflow-tooltip
+            >
               <template #default="{ row }">
                 <span v-if="row.submittedByUserId && row.submittedByUserId !== row.applicantId">
                   {{ row.submittedByUsername || row.submittedByUserId }}
@@ -146,21 +289,46 @@
                 <span v-else>—</span>
               </template>
             </el-table-column>
-            <el-table-column prop="reason" :label="t('permission.reason')" min-width="150" show-overflow-tooltip />
-            <el-table-column prop="status" :label="t('permission.status')" width="100">
+            <el-table-column
+              prop="reason"
+              :label="t('permission.reason')"
+              min-width="150"
+              show-overflow-tooltip
+            />
+            <el-table-column
+              prop="status"
+              :label="t('permission.status')"
+              width="100"
+            >
               <template #default="{ row }">
-                <el-tag :type="getStatusType(row.status)" size="small">
+                <el-tag
+                  :type="getStatusType(row.status)"
+                  size="small"
+                >
                   {{ getStatusLabel(row.status) }}
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="approverComment" :label="t('approval.comment')" min-width="150" show-overflow-tooltip />
-            <el-table-column prop="createdAt" :label="t('permission.applyTime')" width="160">
+            <el-table-column
+              prop="approverComment"
+              :label="t('approval.comment')"
+              min-width="150"
+              show-overflow-tooltip
+            />
+            <el-table-column
+              prop="createdAt"
+              :label="t('permission.applyTime')"
+              width="160"
+            >
               <template #default="{ row }">
                 {{ formatDateTime(row.createdAt) }}
               </template>
             </el-table-column>
-            <el-table-column prop="updatedAt" :label="t('permission.approvedAt')" width="160">
+            <el-table-column
+              prop="updatedAt"
+              :label="t('permission.approvedAt')"
+              width="160"
+            >
               <template #default="{ row }">
                 {{ formatDateTime(row.updatedAt) }}
               </template>
@@ -171,53 +339,110 @@
     </div>
 
     <!-- 审批（仅审批人可见） -->
-    <div v-if="isApprover" class="portal-card request-lists-card approval-lists-card">
-      <h2 class="section-title">{{ t('permission.sectionApprovals') }}</h2>
-      <el-tabs v-model="approvalTab" class="list-tabs" @tab-change="onApprovalTabChange">
+    <div
+      v-if="isApprover"
+      class="portal-card request-lists-card approval-lists-card"
+    >
+      <h2 class="section-title">
+        {{ t('permission.sectionApprovals') }}
+      </h2>
+      <el-tabs
+        v-model="approvalTab"
+        class="list-tabs"
+        @tab-change="onApprovalTabChange"
+      >
         <el-tab-pane name="pendingApproval">
           <template #label>
             <span>{{ t('permission.tabPendingApproval') }}</span>
-            <el-badge v-if="approvalPendingCount > 0" :value="approvalPendingCount" class="tab-badge" />
+            <el-badge
+              v-if="approvalPendingCount > 0"
+              :value="approvalPendingCount"
+              class="tab-badge"
+            />
           </template>
           <el-empty
             v-if="approverPendingList.length === 0 && !loadingApproverPending"
             :description="t('approval.noPendingApprovals')"
           />
-          <el-table v-else :data="approverPendingList" stripe v-loading="loadingApproverPending">
-            <el-table-column prop="applicantId" :label="t('permission.beneficiaryColumn')" width="150">
+          <el-table
+            v-else
+            v-loading="loadingApproverPending"
+            :data="approverPendingList"
+            stripe
+          >
+            <el-table-column
+              prop="applicantId"
+              :label="t('permission.beneficiaryColumn')"
+              width="150"
+            >
               <template #default="{ row }">
                 {{ getApplicantDisplay(row) }}
               </template>
             </el-table-column>
-            <el-table-column :label="t('permission.submittedByColumn')" width="130" show-overflow-tooltip>
+            <el-table-column
+              :label="t('permission.submittedByColumn')"
+              width="130"
+              show-overflow-tooltip
+            >
               <template #default="{ row }">
                 {{ getSubmitterDisplay(row) }}
               </template>
             </el-table-column>
-            <el-table-column prop="requestType" :label="t('permission.requestType')" width="140">
+            <el-table-column
+              prop="requestType"
+              :label="t('permission.requestType')"
+              width="140"
+            >
               <template #default="{ row }">
-                <el-tag :type="getRequestTypeTag(row.requestType)" size="small">
+                <el-tag
+                  :type="getRequestTypeTag(row.requestType)"
+                  size="small"
+                >
                   {{ getRequestTypeLabel(row.requestType) }}
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column :label="t('permission.requestTarget')" min-width="180">
+            <el-table-column
+              :label="t('permission.requestTarget')"
+              min-width="180"
+            >
               <template #default="{ row }">
                 {{ getTargetName(row) }}
               </template>
             </el-table-column>
-            <el-table-column prop="reason" :label="t('permission.reason')" min-width="200" show-overflow-tooltip />
-            <el-table-column prop="createdAt" :label="t('permission.applyTime')" width="160">
+            <el-table-column
+              prop="reason"
+              :label="t('permission.reason')"
+              min-width="200"
+              show-overflow-tooltip
+            />
+            <el-table-column
+              prop="createdAt"
+              :label="t('permission.applyTime')"
+              width="160"
+            >
               <template #default="{ row }">
                 {{ formatDateTime(row.createdAt) }}
               </template>
             </el-table-column>
-            <el-table-column :label="t('common.actions')" width="180" fixed="right">
+            <el-table-column
+              :label="t('common.actions')"
+              width="180"
+              fixed="right"
+            >
               <template #default="{ row }">
-                <el-button type="success" size="small" @click="showApproveDialog(row)">
+                <el-button
+                  type="success"
+                  size="small"
+                  @click="showApproveDialog(row)"
+                >
                   {{ t('approval.approve') }}
                 </el-button>
-                <el-button type="danger" size="small" @click="showRejectDialog(row)">
+                <el-button
+                  type="danger"
+                  size="small"
+                  @click="showRejectDialog(row)"
+                >
                   {{ t('approval.reject') }}
                 </el-button>
               </template>
@@ -225,43 +450,85 @@
           </el-table>
         </el-tab-pane>
 
-        <el-tab-pane :label="t('permission.tabApprovalHistory')" name="approvalHistory">
+        <el-tab-pane
+          :label="t('permission.tabApprovalHistory')"
+          name="approvalHistory"
+        >
           <el-empty
             v-if="approverHistoryList.length === 0 && !loadingApproverHistory"
             :description="t('approval.noApprovalHistory')"
           />
-          <el-table v-else :data="approverHistoryList" stripe v-loading="loadingApproverHistory">
-            <el-table-column prop="applicantId" :label="t('permission.beneficiaryColumn')" width="150">
+          <el-table
+            v-else
+            v-loading="loadingApproverHistory"
+            :data="approverHistoryList"
+            stripe
+          >
+            <el-table-column
+              prop="applicantId"
+              :label="t('permission.beneficiaryColumn')"
+              width="150"
+            >
               <template #default="{ row }">
                 {{ getApplicantDisplay(row) }}
               </template>
             </el-table-column>
-            <el-table-column :label="t('permission.submittedByColumn')" width="130" show-overflow-tooltip>
+            <el-table-column
+              :label="t('permission.submittedByColumn')"
+              width="130"
+              show-overflow-tooltip
+            >
               <template #default="{ row }">
                 {{ getSubmitterDisplay(row) }}
               </template>
             </el-table-column>
-            <el-table-column prop="requestType" :label="t('permission.requestType')" width="140">
+            <el-table-column
+              prop="requestType"
+              :label="t('permission.requestType')"
+              width="140"
+            >
               <template #default="{ row }">
-                <el-tag :type="getRequestTypeTag(row.requestType)" size="small">
+                <el-tag
+                  :type="getRequestTypeTag(row.requestType)"
+                  size="small"
+                >
                   {{ getRequestTypeLabel(row.requestType) }}
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column :label="t('permission.requestTarget')" min-width="180">
+            <el-table-column
+              :label="t('permission.requestTarget')"
+              min-width="180"
+            >
               <template #default="{ row }">
                 {{ getTargetName(row) }}
               </template>
             </el-table-column>
-            <el-table-column prop="status" :label="t('permission.status')" width="100">
+            <el-table-column
+              prop="status"
+              :label="t('permission.status')"
+              width="100"
+            >
               <template #default="{ row }">
-                <el-tag :type="getStatusType(row.status)" size="small">
+                <el-tag
+                  :type="getStatusType(row.status)"
+                  size="small"
+                >
                   {{ getStatusLabel(row.status) }}
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="approverComment" :label="t('approval.comment')" min-width="150" show-overflow-tooltip />
-            <el-table-column prop="approvedAt" :label="t('approval.processedAt')" width="160">
+            <el-table-column
+              prop="approverComment"
+              :label="t('approval.comment')"
+              min-width="150"
+              show-overflow-tooltip
+            />
+            <el-table-column
+              prop="approvedAt"
+              :label="t('approval.processedAt')"
+              width="160"
+            >
               <template #default="{ row }">
                 {{ formatDateTime(row.approvedAt || row.updatedAt) }}
               </template>
@@ -272,7 +539,11 @@
     </div>
 
     <!-- 批准 / 拒绝（审批人） -->
-    <el-dialog v-model="approveDialogVisible" :title="t('approval.approveTitle')" width="500px">
+    <el-dialog
+      v-model="approveDialogVisible"
+      :title="t('approval.approveTitle')"
+      width="500px"
+    >
       <div class="approval-dialog-info">
         <p><strong>{{ t('approval.applicant') }}:</strong> {{ getApplicantDisplay(currentApproverRequest) }}</p>
         <p><strong>{{ t('permission.requestType') }}:</strong> {{ getRequestTypeLabel(currentApproverRequest?.requestType) }}</p>
@@ -280,40 +551,83 @@
         <p><strong>{{ t('permission.reason') }}:</strong> {{ currentApproverRequest?.reason }}</p>
       </div>
       <el-form-item :label="t('approval.comment')">
-        <el-input v-model="approveComment" type="textarea" :rows="3" :placeholder="t('approval.commentPlaceholder')" />
+        <el-input
+          v-model="approveComment"
+          type="textarea"
+          :rows="3"
+          :placeholder="t('approval.commentPlaceholder')"
+        />
       </el-form-item>
       <template #footer>
-        <el-button @click="approveDialogVisible = false">{{ t('common.cancel') }}</el-button>
-        <el-button type="success" :loading="submittingApproval" @click="handleApprove">
+        <el-button @click="approveDialogVisible = false">
+          {{ t('common.cancel') }}
+        </el-button>
+        <el-button
+          type="success"
+          :loading="submittingApproval"
+          @click="handleApprove"
+        >
           {{ t('approval.approve') }}
         </el-button>
       </template>
     </el-dialog>
 
-    <el-dialog v-model="rejectDialogVisible" :title="t('approval.rejectTitle')" width="500px">
+    <el-dialog
+      v-model="rejectDialogVisible"
+      :title="t('approval.rejectTitle')"
+      width="500px"
+    >
       <div class="approval-dialog-info">
         <p><strong>{{ t('approval.applicant') }}:</strong> {{ getApplicantDisplay(currentApproverRequest) }}</p>
         <p><strong>{{ t('permission.requestType') }}:</strong> {{ getRequestTypeLabel(currentApproverRequest?.requestType) }}</p>
         <p><strong>{{ t('permission.requestTarget') }}:</strong> {{ getTargetName(currentApproverRequest) }}</p>
         <p><strong>{{ t('permission.reason') }}:</strong> {{ currentApproverRequest?.reason }}</p>
       </div>
-      <el-form-item :label="t('approval.rejectReason')" required>
-        <el-input v-model="rejectComment" type="textarea" :rows="3" :placeholder="t('approval.rejectReasonPlaceholder')" />
+      <el-form-item
+        :label="t('approval.rejectReason')"
+        required
+      >
+        <el-input
+          v-model="rejectComment"
+          type="textarea"
+          :rows="3"
+          :placeholder="t('approval.rejectReasonPlaceholder')"
+        />
       </el-form-item>
       <template #footer>
-        <el-button @click="rejectDialogVisible = false">{{ t('common.cancel') }}</el-button>
-        <el-button type="danger" :loading="submittingApproval" @click="handleReject">
+        <el-button @click="rejectDialogVisible = false">
+          {{ t('common.cancel') }}
+        </el-button>
+        <el-button
+          type="danger"
+          :loading="submittingApproval"
+          @click="handleReject"
+        >
           {{ t('approval.reject') }}
         </el-button>
       </template>
     </el-dialog>
 
     <!-- 申请权限对话框 -->
-    <el-dialog v-model="applyDialogVisible" :title="t('permission.applyPermission')" width="600px">
-      <el-form :model="applyForm" label-width="120px" label-position="left" class="apply-form">
+    <el-dialog
+      v-model="applyDialogVisible"
+      :title="t('permission.applyPermission')"
+      width="600px"
+    >
+      <el-form
+        :model="applyForm"
+        label-width="120px"
+        label-position="left"
+        class="apply-form"
+      >
         <!-- 申请类型选择 -->
         <el-form-item :label="t('permission.applyType')">
-          <el-tag type="primary" size="large">{{ t('permission.joinBusinessUnit') }}</el-tag>
+          <el-tag
+            type="primary"
+            size="large"
+          >
+            {{ t('permission.joinBusinessUnit') }}
+          </el-tag>
         </el-form-item>
 
         <el-form-item :label="t('permission.beneficiary')">
@@ -336,11 +650,16 @@
               :value="u.userId"
             />
           </el-select>
-          <div class="form-hint">{{ t('permission.beneficiaryHint') }}</div>
+          <div class="form-hint">
+            {{ t('permission.beneficiaryHint') }}
+          </div>
         </el-form-item>
 
         <!-- 加入业务单元 -->
-        <el-form-item :label="t('permission.businessUnit')" required>
+        <el-form-item
+          :label="t('permission.businessUnit')"
+          required
+        >
           <el-select 
             v-model="applyForm.businessUnitId" 
             :placeholder="t('permission.selectBusinessUnit')" 
@@ -348,8 +667,8 @@
             filterable 
             :loading="loadingBusinessUnits"
             :disabled="!loadingBusinessUnits && applicableBusinessUnits.length === 0"
-            @change="onBusinessUnitChange"
             :teleported="false"
+            @change="onBusinessUnitChange"
           >
             <el-option
               v-for="bu in applicableBusinessUnits"
@@ -358,12 +677,18 @@
               :value="bu.id"
             />
           </el-select>
-          <div v-if="!loadingBusinessUnits && applicableBusinessUnits.length === 0" class="form-hint">
+          <div
+            v-if="!loadingBusinessUnits && applicableBusinessUnits.length === 0"
+            class="form-hint"
+          >
             {{ t('permission.noApplicableBusinessUnits') }}
           </div>
         </el-form-item>
 
-        <el-form-item :label="t('permission.role')" required>
+        <el-form-item
+          :label="t('permission.role')"
+          required
+        >
           <el-select
             v-model="applyForm.roleId"
             :placeholder="t('permission.selectRole')"
@@ -380,18 +705,37 @@
               :value="role.id"
             />
           </el-select>
-          <div v-if="applyForm.businessUnitId && !loadingRoles && eligibleRoles.length === 0" class="form-hint">
+          <div
+            v-if="applyForm.businessUnitId && !loadingRoles && eligibleRoles.length === 0"
+            class="form-hint"
+          >
             {{ t('permission.noEligibleRoles') }}
           </div>
         </el-form-item>
 
-        <el-form-item :label="t('permission.reason')" required>
-          <el-input v-model="applyForm.reason" type="textarea" :rows="3" :placeholder="t('permission.reasonPlaceholder')" />
+        <el-form-item
+          :label="t('permission.reason')"
+          required
+        >
+          <el-input
+            v-model="applyForm.reason"
+            type="textarea"
+            :rows="3"
+            :placeholder="t('permission.reasonPlaceholder')"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="applyDialogVisible = false">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary" @click="submitApply" :loading="submitting">{{ t('common.confirm') }}</el-button>
+        <el-button @click="applyDialogVisible = false">
+          {{ t('common.cancel') }}
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="submitting"
+          @click="submitApply"
+        >
+          {{ t('common.confirm') }}
+        </el-button>
       </template>
     </el-dialog>
 
@@ -403,10 +747,18 @@
       destroy-on-close
       class="remove-permission-dialog"
     >
-      <el-alert type="info" :closable="false" show-icon class="remove-permission-alert">
+      <el-alert
+        type="info"
+        :closable="false"
+        show-icon
+        class="remove-permission-alert"
+      >
         {{ t('permission.removePermissionIntro') }}
       </el-alert>
-      <el-form label-position="top" class="apply-form removal-form">
+      <el-form
+        label-position="top"
+        class="apply-form removal-form"
+      >
         <el-form-item :label="t('permission.beneficiary')">
           <el-select
             v-model="removalBeneficiaryUserId"
@@ -427,26 +779,49 @@
               :value="u.userId"
             />
           </el-select>
-          <div class="form-hint">{{ t('permission.beneficiaryHint') }}</div>
+          <div class="form-hint">
+            {{ t('permission.beneficiaryHint') }}
+          </div>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" plain :loading="loadingRemovalOptions" @click="loadRemovalOptions">
+          <el-button
+            type="primary"
+            plain
+            :loading="loadingRemovalOptions"
+            @click="loadRemovalOptions"
+          >
             {{ removalPayload ? t('permission.removalReload') : t('permission.removalLoadOptions') }}
           </el-button>
-          <span v-if="selectedRemovalKeys.length" class="selected-count">
+          <span
+            v-if="selectedRemovalKeys.length"
+            class="selected-count"
+          >
             {{ t('permission.removalSelectedCount', { n: selectedRemovalKeys.length }) }}
           </span>
         </el-form-item>
       </el-form>
 
-      <div v-loading="loadingRemovalOptions" class="removal-options-body">
+      <div
+        v-loading="loadingRemovalOptions"
+        class="removal-options-body"
+      >
         <template v-if="removalPayload && !loadingRemovalOptions">
-          <el-empty v-if="totalRemovableCount === 0" :description="t('permission.removalEmpty')" />
+          <el-empty
+            v-if="totalRemovableCount === 0"
+            :description="t('permission.removalEmpty')"
+          />
           <template v-else>
-            <h4 v-if="removalPayload.functionUnitGroups.length" class="removal-section-title">
+            <h4
+              v-if="removalPayload.functionUnitGroups.length"
+              class="removal-section-title"
+            >
               {{ t('permission.removalFunctionUnitSection') }}
             </h4>
-            <el-collapse v-if="removalPayload.functionUnitGroups.length" v-model="activeFuCollapseNames" class="fu-collapse">
+            <el-collapse
+              v-if="removalPayload.functionUnitGroups.length"
+              v-model="activeFuCollapseNames"
+              class="fu-collapse"
+            >
               <el-collapse-item
                 v-for="g in removalPayload.functionUnitGroups"
                 :key="g.functionUnitId"
@@ -461,12 +836,19 @@
                       @click.stop
                     />
                     <span class="fu-title-text">{{ g.functionUnitName || g.functionUnitId }}</span>
-                    <el-tag v-if="g.functionUnitCode" size="small" type="info" class="fu-code-tag">
+                    <el-tag
+                      v-if="g.functionUnitCode"
+                      size="small"
+                      type="info"
+                      class="fu-code-tag"
+                    >
                       {{ t('permission.removalFunctionUnitCode') }}: {{ g.functionUnitCode }}
                     </el-tag>
                   </div>
                 </template>
-                <p class="fu-select-all-hint">{{ t('permission.removalSelectAllInFu') }}</p>
+                <p class="fu-select-all-hint">
+                  {{ t('permission.removalSelectAllInFu') }}
+                </p>
                 <div class="assignment-rows">
                   <el-checkbox
                     v-for="a in g.assignments"
@@ -482,11 +864,29 @@
             </el-collapse>
 
             <template v-if="removalPayload.otherAssignments.length">
-              <h4 class="removal-section-title other-title">{{ t('permission.removalOtherSection') }}</h4>
-              <p class="other-hint">{{ t('permission.removalOtherHint') }}</p>
+              <h4 class="removal-section-title other-title">
+                {{ t('permission.removalOtherSection') }}
+              </h4>
+              <p class="other-hint">
+                {{ t('permission.removalOtherHint') }}
+              </p>
               <div class="other-actions">
-                <el-button text type="primary" size="small" @click="toggleOtherAll(true)">{{ t('common.all') }}</el-button>
-                <el-button text type="info" size="small" @click="toggleOtherAll(false)">{{ t('common.clear') }}</el-button>
+                <el-button
+                  text
+                  type="primary"
+                  size="small"
+                  @click="toggleOtherAll(true)"
+                >
+                  {{ t('common.all') }}
+                </el-button>
+                <el-button
+                  text
+                  type="info"
+                  size="small"
+                  @click="toggleOtherAll(false)"
+                >
+                  {{ t('common.clear') }}
+                </el-button>
               </div>
               <div class="assignment-rows">
                 <el-checkbox
@@ -504,8 +904,14 @@
         </template>
       </div>
 
-      <el-form label-position="top" class="apply-form">
-        <el-form-item :label="t('permission.reason')" required>
+      <el-form
+        label-position="top"
+        class="apply-form"
+      >
+        <el-form-item
+          :label="t('permission.reason')"
+          required
+        >
           <el-input
             v-model="removePermissionReason"
             type="textarea"
@@ -513,10 +919,14 @@
             :placeholder="t('permission.reasonPlaceholder')"
           />
         </el-form-item>
-        <p class="batch-note">{{ t('permission.removalBatchNote') }}</p>
+        <p class="batch-note">
+          {{ t('permission.removalBatchNote') }}
+        </p>
       </el-form>
       <template #footer>
-        <el-button @click="removePermissionDialogVisible = false">{{ t('common.cancel') }}</el-button>
+        <el-button @click="removePermissionDialogVisible = false">
+          {{ t('common.cancel') }}
+        </el-button>
         <el-button
           type="danger"
           :loading="submittingRemovalBatch"
@@ -529,7 +939,12 @@
     </el-dialog>
 
     <!-- 申请退出业务单元 -->
-    <el-dialog v-model="exitBuDialogVisible" :title="t('exitRole.requestExitBuTitle')" width="520px" destroy-on-close>
+    <el-dialog
+      v-model="exitBuDialogVisible"
+      :title="t('exitRole.requestExitBuTitle')"
+      width="520px"
+      destroy-on-close
+    >
       <el-form label-position="top">
         <el-form-item :label="t('permission.beneficiary')">
           <el-select
@@ -550,15 +965,33 @@
               :value="u.userId"
             />
           </el-select>
-          <div class="form-hint">{{ t('permission.beneficiaryHint') }}</div>
+          <div class="form-hint">
+            {{ t('permission.beneficiaryHint') }}
+          </div>
         </el-form-item>
-        <el-form-item :label="t('permission.reason')" required>
-          <el-input v-model="exitBuForm.reason" type="textarea" :rows="3" :placeholder="t('permission.reasonPlaceholder')" />
+        <el-form-item
+          :label="t('permission.reason')"
+          required
+        >
+          <el-input
+            v-model="exitBuForm.reason"
+            type="textarea"
+            :rows="3"
+            :placeholder="t('permission.reasonPlaceholder')"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="exitBuDialogVisible = false">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary" :loading="exitBuSubmitting" @click="submitExitBu">{{ t('common.confirm') }}</el-button>
+        <el-button @click="exitBuDialogVisible = false">
+          {{ t('common.cancel') }}
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="exitBuSubmitting"
+          @click="submitExitBu"
+        >
+          {{ t('common.confirm') }}
+        </el-button>
       </template>
     </el-dialog>
   </div>

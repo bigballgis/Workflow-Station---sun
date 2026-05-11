@@ -1,7 +1,10 @@
 <template>
   <div class="page-header">
     <span class="page-title">{{ title }}</span>
-    <div v-if="$slots.actions" class="header-actions">
+    <div
+      v-if="$slots.actions"
+      class="header-actions"
+    >
       <slot name="actions" />
     </div>
   </div>

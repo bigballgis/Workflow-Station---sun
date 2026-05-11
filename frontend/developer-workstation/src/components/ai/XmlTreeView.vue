@@ -2,8 +2,20 @@
   <div class="xml-tree-view">
     <template v-if="!parseError">
       <div class="xml-tree-view__toolbar">
-        <el-button text size="small" @click="expandAll">{{ t('ai.doc.expandAll') }}</el-button>
-        <el-button text size="small" @click="collapseAll">{{ t('ai.doc.collapseAll') }}</el-button>
+        <el-button
+          text
+          size="small"
+          @click="expandAll"
+        >
+          {{ t('ai.doc.expandAll') }}
+        </el-button>
+        <el-button
+          text
+          size="small"
+          @click="collapseAll"
+        >
+          {{ t('ai.doc.collapseAll') }}
+        </el-button>
       </div>
       <div class="xml-tree-view__tree">
         <XmlTreeNode
@@ -17,7 +29,9 @@
       </div>
     </template>
     <template v-else>
-      <div class="xml-tree-view__error">{{ t('ai.doc.parseError') }}</div>
+      <div class="xml-tree-view__error">
+        {{ t('ai.doc.parseError') }}
+      </div>
       <pre class="xml-tree-view__fallback">{{ content }}</pre>
     </template>
   </div>

@@ -12,12 +12,20 @@
       :show-file-list="false"
       :on-change="handleFileChange"
     >
-      <el-button type="primary" :loading="uploading">
+      <el-button
+        type="primary"
+        :loading="uploading"
+      >
         <el-icon><Upload /></el-icon>
         {{ t('icon.uploadIcon') }}
       </el-button>
     </el-upload>
-    <el-button v-if="modelValue != null" link type="danger" @click="handleClear">
+    <el-button
+      v-if="modelValue != null"
+      link
+      type="danger"
+      @click="handleClear"
+    >
       {{ t('icon.clear') }}
     </el-button>
   </div>

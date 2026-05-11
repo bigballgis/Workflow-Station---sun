@@ -1,6 +1,9 @@
 <template>
   <div class="process-history">
-    <div class="history-header" v-if="showHeader">
+    <div
+      v-if="showHeader"
+      class="history-header"
+    >
       <span class="title">{{ $t('process.history') }}</span>
       <el-button
         v-if="showRefresh"
@@ -20,44 +23,71 @@
         :hollow="record.status === 'pending'"
         placement="top"
       >
-        <el-card shadow="never" class="history-card">
+        <el-card
+          shadow="never"
+          class="history-card"
+        >
           <div class="card-header">
             <span class="node-name">{{ record.nodeName }}</span>
-            <el-tag :type="getStatusTagType(record.status)" size="small">
+            <el-tag
+              :type="getStatusTagType(record.status)"
+              size="small"
+            >
               {{ getStatusText(record.status) }}
             </el-tag>
           </div>
 
           <div class="card-content">
-            <div class="info-row" v-if="record.assigneeName">
+            <div
+              v-if="record.assigneeName"
+              class="info-row"
+            >
               <span class="label">{{ $t('task.assignee') }}:</span>
               <span class="value">
-                <el-avatar :size="20" class="avatar">
+                <el-avatar
+                  :size="20"
+                  class="avatar"
+                >
                   {{ record.assigneeName.charAt(0) }}
                 </el-avatar>
                 {{ record.assigneeName }}
               </span>
             </div>
 
-            <div class="info-row" v-if="record.action">
+            <div
+              v-if="record.action"
+              class="info-row"
+            >
               <span class="label">{{ $t('task.action') }}:</span>
-              <span class="value action-text" :class="record.action">
+              <span
+                class="value action-text"
+                :class="record.action"
+              >
                 {{ getActionText(record.action) }}
               </span>
             </div>
 
-            <div class="info-row" v-if="record.comment">
+            <div
+              v-if="record.comment"
+              class="info-row"
+            >
               <span class="label">{{ $t('task.comment') }}:</span>
               <span class="value comment">{{ record.comment }}</span>
             </div>
 
-            <div class="info-row" v-if="record.duration">
+            <div
+              v-if="record.duration"
+              class="info-row"
+            >
               <span class="label">{{ $t('task.duration') }}:</span>
               <span class="value">{{ formatDuration(record.duration) }}</span>
             </div>
 
             <!-- 附件列表 -->
-            <div class="attachments" v-if="record.attachments?.length">
+            <div
+              v-if="record.attachments?.length"
+              class="attachments"
+            >
               <span class="label">{{ $t('common.attachments') }}:</span>
               <div class="attachment-list">
                 <el-link
@@ -75,21 +105,37 @@
           </div>
 
           <!-- 签名图片 -->
-          <div class="signature" v-if="record.signatureUrl">
-            <img :src="record.signatureUrl" alt="Signature" />
+          <div
+            v-if="record.signatureUrl"
+            class="signature"
+          >
+            <img
+              :src="record.signatureUrl"
+              alt="Signature"
+            >
           </div>
         </el-card>
       </el-timeline-item>
     </el-timeline>
 
-    <div v-if="canToggle" class="toggle-history">
-      <el-link type="primary" :underline="false" @click="expanded = !expanded">
+    <div
+      v-if="canToggle"
+      class="toggle-history"
+    >
+      <el-link
+        type="primary"
+        :underline="false"
+        @click="expanded = !expanded"
+      >
         <el-icon><ArrowDown v-if="!expanded" /><ArrowUp v-else /></el-icon>
         {{ expanded ? t('process.collapseHistory') : t('process.expandHistory', { count: hiddenCount }) }}
       </el-link>
     </div>
 
-    <el-empty v-else-if="records.length === 0" :description="$t('common.noData')" />
+    <el-empty
+      v-else-if="records.length === 0"
+      :description="$t('common.noData')"
+    />
   </div>
 </template>
 

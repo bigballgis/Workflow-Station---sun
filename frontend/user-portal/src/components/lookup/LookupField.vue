@@ -1,10 +1,21 @@
 <template>
-  <div class="lookup-field" ref="wrapperRef">
+  <div
+    ref="wrapperRef"
+    class="lookup-field"
+  >
     <!-- Selected value: input container with inner tag -->
-    <div v-if="selectedRow" class="lookup-selected-wrapper" :class="{ 'is-readonly': readonly }">
+    <div
+      v-if="selectedRow"
+      class="lookup-selected-wrapper"
+      :class="{ 'is-readonly': readonly }"
+    >
       <span class="lookup-selected-tag">
         <span class="lookup-selected-text">{{ searchKeyword }}</span>
-        <el-icon v-if="!readonly" class="lookup-selected-close" @click.stop="handleClear"><Close /></el-icon>
+        <el-icon
+          v-if="!readonly"
+          class="lookup-selected-close"
+          @click.stop="handleClear"
+        ><Close /></el-icon>
       </span>
     </div>
     <!-- Search input (hidden when a value is selected or in readonly mode) -->
@@ -15,16 +26,22 @@
       @focus="handleFocus"
     />
     <!-- Readonly empty state -->
-    <span v-else class="lookup-readonly-empty">-</span>
+    <span
+      v-else
+      class="lookup-readonly-empty"
+    >-</span>
 
-    <div v-if="dropdownVisible" class="lookup-dropdown">
+    <div
+      v-if="dropdownVisible"
+      class="lookup-dropdown"
+    >
       <el-table
+        v-loading="loading"
         :data="filteredResults"
         size="small"
-        v-loading="loading"
-        @row-click="handleSelect"
         highlight-current-row
         max-height="260"
+        @row-click="handleSelect"
       >
         <el-table-column
           v-for="col in visibleColumns"

@@ -12,7 +12,10 @@
     >
       <!-- Tab layout mode -->
       <template v-if="hasTabs">
-        <el-tabs v-model="activeTab" type="border-card">
+        <el-tabs
+          v-model="activeTab"
+          type="border-card"
+        >
           <el-tab-pane
             v-for="(tab, tabIdx) in tabs"
             :key="`tab-${tabIdx}-${String(tab.name)}`"
@@ -20,17 +23,32 @@
             :name="tab.name"
           >
             <el-row :gutter="20">
-              <template v-for="field in tab.fields" :key="field.key">
+              <template
+                v-for="field in tab.fields"
+                :key="field.key"
+              >
                 <template v-if="field.type === 'card'">
                   <el-col :span="field.span || 24">
-                    <el-card shadow="never" class="form-layout-card">
-                      <template v-if="field.label" #header>
+                    <el-card
+                      shadow="never"
+                      class="form-layout-card"
+                    >
+                      <template
+                        v-if="field.label"
+                        #header
+                      >
                         <span class="form-layout-card-title">{{ field.label }}</span>
                       </template>
                       <el-row :gutter="20">
-                        <template v-for="child in field.children || []" :key="child.key">
+                        <template
+                          v-for="child in field.children || []"
+                          :key="child.key"
+                        >
                           <template v-if="child.type === 'subTable'">
-                            <el-col :span="24" style="padding: 0;">
+                            <el-col
+                              :span="24"
+                              style="padding: 0;"
+                            >
                               <SubTableField
                                 v-if="resolveBinding(child._bindingId)"
                                 :title="resolveBinding(child._bindingId)!.tableName"
@@ -51,15 +69,18 @@
                                 :linked-sub-table-bindings="linkableSubTableBindings"
                                 :suppress-link-form-initial-data="suppressLinkFormInitialData"
                                 :show-link-form-dialog-footer="showLinkFormDialogFooter"
+                                style="margin-bottom: 16px;"
                                 @update:model-value="(rows: any[]) => handleSubTableUpdate(child._bindingId!, rows)"
                                 @update:linked-sub-table-data="handleSubTableUpdate"
-                                style="margin-bottom: 16px;"
                               />
                             </el-col>
                           </template>
                           <template v-else-if="child.type === 'lookup'">
                             <el-col :span="child.span || 24">
-                              <el-form-item :prop="child.key" class="lookup-form-item">
+                              <el-form-item
+                                :prop="child.key"
+                                class="lookup-form-item"
+                              >
                                 <template #label>
                                   <span class="lookup-label-text">
                                     <el-icon class="lookup-label-icon"><Search /></el-icon>
@@ -91,8 +112,16 @@
                               </el-form-item>
                             </el-col>
                           </template>
-                          <el-col v-else :span="child.span || 24" v-show="engineVisibility.get(child.key) ?? true">
-                            <el-form-item :label="child.label" :prop="child.key" :required="child.required">
+                          <el-col
+                            v-else
+                            v-show="engineVisibility.get(child.key) ?? true"
+                            :span="child.span || 24"
+                          >
+                            <el-form-item
+                              :label="child.label"
+                              :prop="child.key"
+                              :required="child.required"
+                            >
                               <FieldRenderer
                                 :field="child"
                                 :model-value="formData[child.key]"
@@ -116,7 +145,10 @@
                   </el-col>
                 </template>
                 <template v-else-if="field.type === 'subTable'">
-                  <el-col :span="24" style="padding: 0;">
+                  <el-col
+                    :span="24"
+                    style="padding: 0;"
+                  >
                     <SubTableField
                       v-if="resolveBinding(field._bindingId)"
                       :title="resolveBinding(field._bindingId)!.tableName"
@@ -137,15 +169,18 @@
                       :linked-sub-table-bindings="linkableSubTableBindings"
                       :suppress-link-form-initial-data="suppressLinkFormInitialData"
                       :show-link-form-dialog-footer="showLinkFormDialogFooter"
+                      style="margin-bottom: 16px;"
                       @update:model-value="(rows: any[]) => handleSubTableUpdate(field._bindingId!, rows)"
                       @update:linked-sub-table-data="handleSubTableUpdate"
-                      style="margin-bottom: 16px;"
                     />
                   </el-col>
                 </template>
                 <template v-else-if="field.type === 'lookup'">
                   <el-col :span="field.span || 24">
-                    <el-form-item :prop="field.key" class="lookup-form-item">
+                    <el-form-item
+                      :prop="field.key"
+                      class="lookup-form-item"
+                    >
                       <template #label>
                         <span class="lookup-label-text">
                           <el-icon class="lookup-label-icon"><Search /></el-icon>
@@ -177,7 +212,11 @@
                     </el-form-item>
                   </el-col>
                 </template>
-                <el-col v-else :span="field.span || 24" v-show="engineVisibility.get(field.key) ?? true">
+                <el-col
+                  v-else
+                  v-show="engineVisibility.get(field.key) ?? true"
+                  :span="field.span || 24"
+                >
                   <el-form-item
                     :label="field.label"
                     :prop="field.key"
@@ -209,17 +248,32 @@
       <!-- Flat layout mode -->
       <template v-else>
         <el-row :gutter="20">
-          <template v-for="field in fields" :key="field.key">
+          <template
+            v-for="field in fields"
+            :key="field.key"
+          >
             <template v-if="field.type === 'card'">
               <el-col :span="field.span || 24">
-                <el-card shadow="never" class="form-layout-card">
-                  <template v-if="field.label" #header>
+                <el-card
+                  shadow="never"
+                  class="form-layout-card"
+                >
+                  <template
+                    v-if="field.label"
+                    #header
+                  >
                     <span class="form-layout-card-title">{{ field.label }}</span>
                   </template>
                   <el-row :gutter="20">
-                    <template v-for="child in field.children || []" :key="child.key">
+                    <template
+                      v-for="child in field.children || []"
+                      :key="child.key"
+                    >
                       <template v-if="child.type === 'subTable'">
-                        <el-col :span="24" style="padding: 0;">
+                        <el-col
+                          :span="24"
+                          style="padding: 0;"
+                        >
                           <SubTableField
                             v-if="resolveBinding(child._bindingId)"
                             :title="resolveBinding(child._bindingId)!.tableName"
@@ -240,15 +294,18 @@
                             :linked-sub-table-bindings="linkableSubTableBindings"
                             :suppress-link-form-initial-data="suppressLinkFormInitialData"
                             :show-link-form-dialog-footer="showLinkFormDialogFooter"
+                            style="margin-bottom: 16px;"
                             @update:model-value="(rows: any[]) => handleSubTableUpdate(child._bindingId!, rows)"
                             @update:linked-sub-table-data="handleSubTableUpdate"
-                            style="margin-bottom: 16px;"
                           />
                         </el-col>
                       </template>
                       <template v-else-if="child.type === 'lookup'">
                         <el-col :span="child.span || 24">
-                          <el-form-item :prop="child.key" class="lookup-form-item">
+                          <el-form-item
+                            :prop="child.key"
+                            class="lookup-form-item"
+                          >
                             <template #label>
                               <span class="lookup-label-text">
                                 <el-icon class="lookup-label-icon"><Search /></el-icon>
@@ -280,8 +337,16 @@
                           </el-form-item>
                         </el-col>
                       </template>
-                      <el-col v-else :span="child.span || 24" v-show="engineVisibility.get(child.key) ?? true">
-                        <el-form-item :label="child.label" :prop="child.key" :required="child.required">
+                      <el-col
+                        v-else
+                        v-show="engineVisibility.get(child.key) ?? true"
+                        :span="child.span || 24"
+                      >
+                        <el-form-item
+                          :label="child.label"
+                          :prop="child.key"
+                          :required="child.required"
+                        >
                           <FieldRenderer
                             :field="child"
                             :model-value="formData[child.key]"
@@ -305,7 +370,10 @@
               </el-col>
             </template>
             <template v-else-if="field.type === 'subTable'">
-              <el-col :span="24" style="padding: 0;">
+              <el-col
+                :span="24"
+                style="padding: 0;"
+              >
                 <SubTableField
                   v-if="resolveBinding(field._bindingId)"
                   :title="resolveBinding(field._bindingId)!.tableName"
@@ -326,15 +394,18 @@
                   :linked-sub-table-bindings="linkableSubTableBindings"
                   :suppress-link-form-initial-data="suppressLinkFormInitialData"
                   :show-link-form-dialog-footer="showLinkFormDialogFooter"
+                  style="margin-bottom: 16px;"
                   @update:model-value="(rows: any[]) => handleSubTableUpdate(field._bindingId!, rows)"
                   @update:linked-sub-table-data="handleSubTableUpdate"
-                  style="margin-bottom: 16px;"
                 />
               </el-col>
             </template>
             <template v-else-if="field.type === 'lookup'">
               <el-col :span="field.span || 24">
-                <el-form-item :prop="field.key" class="lookup-form-item">
+                <el-form-item
+                  :prop="field.key"
+                  class="lookup-form-item"
+                >
                   <template #label>
                     <span class="lookup-label-text">
                       <el-icon class="lookup-label-icon"><Search /></el-icon>
@@ -366,7 +437,11 @@
                 </el-form-item>
               </el-col>
             </template>
-            <el-col v-else :span="field.span || 24" v-show="engineVisibility.get(field.key) ?? true">
+            <el-col
+              v-else
+              v-show="engineVisibility.get(field.key) ?? true"
+              :span="field.span || 24"
+            >
               <el-form-item
                 :label="field.label"
                 :prop="field.key"

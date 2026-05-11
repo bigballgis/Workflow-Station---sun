@@ -15,7 +15,10 @@
 
     <el-container class="admin-body">
       <!-- Left sidebar menu -->
-      <el-aside :width="isCollapse ? '64px' : '260px'" class="admin-aside">
+      <el-aside
+        :width="isCollapse ? '64px' : '260px'"
+        class="admin-aside"
+      >
         <el-scrollbar>
           <el-menu
             :default-active="activeMenu"
@@ -27,61 +30,115 @@
             <!-- Dashboard - everyone -->
             <el-menu-item index="/dashboard">
               <el-icon><Odometer /></el-icon>
-              <template #title>{{ t('menu.dashboard') }}</template>
+              <template #title>
+                {{ t('menu.dashboard') }}
+              </template>
             </el-menu-item>
             
             <!-- User Management - requires user:read -->
-            <el-menu-item index="/user/list" v-if="canReadUser">
+            <el-menu-item
+              v-if="canReadUser"
+              index="/user/list"
+            >
               <el-icon><User /></el-icon>
-              <template #title>{{ t('menu.userManagement') }}</template>
+              <template #title>
+                {{ t('menu.userManagement') }}
+              </template>
             </el-menu-item>
             
             <!-- Entitlement Management - sub-menu -->
-            <el-sub-menu index="entitlement" v-if="canReadUser || canReadRole">
+            <el-sub-menu
+              v-if="canReadUser || canReadRole"
+              index="entitlement"
+            >
               <template #title>
                 <el-icon><Lock /></el-icon>
                 <span>{{ t('menu.entitlementManagement') }}</span>
               </template>
-              <el-menu-item index="/organization" v-if="canReadUser">{{ t('menu.organization') }}</el-menu-item>
-              <el-menu-item index="/virtual-group" v-if="canReadUser">{{ t('menu.virtualGroup') }}</el-menu-item>
-              <el-menu-item index="/role" v-if="canReadRole">{{ t('menu.roleManagement') }}</el-menu-item>
+              <el-menu-item
+                v-if="canReadUser"
+                index="/organization"
+              >
+                {{ t('menu.organization') }}
+              </el-menu-item>
+              <el-menu-item
+                v-if="canReadUser"
+                index="/virtual-group"
+              >
+                {{ t('menu.virtualGroup') }}
+              </el-menu-item>
+              <el-menu-item
+                v-if="canReadRole"
+                index="/role"
+              >
+                {{ t('menu.roleManagement') }}
+              </el-menu-item>
             </el-sub-menu>
             
             <!-- Function Unit - requires system:admin -->
-            <el-menu-item index="/function-unit" v-if="isSystemAdmin">
+            <el-menu-item
+              v-if="isSystemAdmin"
+              index="/function-unit"
+            >
               <el-icon><Box /></el-icon>
-              <template #title>{{ t('menu.functionUnit') }}</template>
+              <template #title>
+                {{ t('menu.functionUnit') }}
+              </template>
             </el-menu-item>
             
             <!-- BI Management - requires system:admin -->
-            <el-sub-menu index="bi-management" v-if="isSystemAdmin">
+            <el-sub-menu
+              v-if="isSystemAdmin"
+              index="bi-management"
+            >
               <template #title>
                 <el-icon><DataAnalysis /></el-icon>
                 <span>{{ t('menu.biManagement') }}</span>
               </template>
-              <el-menu-item index="/bi-management/dashboard-registry">{{ t('menu.biDashboardRegistry') }}</el-menu-item>
-              <el-menu-item index="/bi-management/dashboard-assignment">{{ t('menu.biDashboardAssignment') }}</el-menu-item>
-              <el-menu-item index="/bi-management/rbac-mapping">{{ t('menu.biRbacMapping') }}</el-menu-item>
+              <el-menu-item index="/bi-management/dashboard-registry">
+                {{ t('menu.biDashboardRegistry') }}
+              </el-menu-item>
+              <el-menu-item index="/bi-management/dashboard-assignment">
+                {{ t('menu.biDashboardAssignment') }}
+              </el-menu-item>
+              <el-menu-item index="/bi-management/rbac-mapping">
+                {{ t('menu.biRbacMapping') }}
+              </el-menu-item>
             </el-sub-menu>
 
             <!-- Audit Log - requires audit:read or log:read -->
-            <el-menu-item index="/audit" v-if="canReadAudit">
+            <el-menu-item
+              v-if="canReadAudit"
+              index="/audit"
+            >
               <el-icon><Document /></el-icon>
-              <template #title>{{ t('menu.audit') }}</template>
+              <template #title>
+                {{ t('menu.audit') }}
+              </template>
             </el-menu-item>
 
             <!-- Relation Tables - requires system:admin -->
-            <el-sub-menu index="relation-tables" v-if="isSystemAdmin">
+            <el-sub-menu
+              v-if="isSystemAdmin"
+              index="relation-tables"
+            >
               <template #title>
                 <el-icon><Grid /></el-icon>
                 <span>{{ t('menu.relationTables') }}</span>
               </template>
-              <el-menu-item index="/relation-tables/structure">{{ t('menu.tableStructure') }}</el-menu-item>
-              <el-menu-item index="/relation-tables/data">{{ t('menu.tableData') }}</el-menu-item>
+              <el-menu-item index="/relation-tables/structure">
+                {{ t('menu.tableStructure') }}
+              </el-menu-item>
+              <el-menu-item index="/relation-tables/data">
+                {{ t('menu.tableData') }}
+              </el-menu-item>
             </el-sub-menu>
           </el-menu>
         </el-scrollbar>
-        <div class="collapse-btn" @click="toggleCollapse">
+        <div
+          class="collapse-btn"
+          @click="toggleCollapse"
+        >
           <el-icon :size="20">
             <Fold v-if="!isCollapse" />
             <Expand v-else />
@@ -92,9 +149,15 @@
       <!-- Main content area -->
       <el-main class="admin-main">
         <router-view v-slot="{ Component, route }">
-          <transition name="fade" mode="out-in">
+          <transition
+            name="fade"
+            mode="out-in"
+          >
             <keep-alive>
-              <component :is="Component" :key="route.path" />
+              <component
+                :is="Component"
+                :key="route.path"
+              />
             </keep-alive>
           </transition>
         </router-view>

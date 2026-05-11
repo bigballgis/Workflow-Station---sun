@@ -46,18 +46,18 @@ app.use(FcDesigner.formCreate)
 FcDesigner.component('SubTableBindingSelect', SubTableBindingSelect)
 
 // Register SubTablePlaceholderWidget as the canvas renderer for 'subTable' type
-FcDesigner.component('subTable', SubTablePlaceholderWidget)
+FcDesigner.component('SubTable', SubTablePlaceholderWidget)
 
 // Register LinkFormPlaceholderWidget as the canvas renderer for 'linkForm' type
-FcDesigner.component('linkForm', LinkFormPlaceholderWidget)
+FcDesigner.component('LinkForm', LinkFormPlaceholderWidget)
 FcDesigner.component('LinkFormBindingSelect', LinkFormBindingSelect)
 
 // Register custom field components so form-create can render them in canvas & preview
-FcDesigner.component('editor', FcEditor)
-FcDesigner.component('transfer', FcTransfer)
-FcDesigner.component('cascader', FcCascader)
-FcDesigner.component('slider', FcSlider)
-FcDesigner.component('lookup', LookupComponent)
+FcDesigner.component('Editor', FcEditor)
+FcDesigner.component('Transfer', FcTransfer)
+FcDesigner.component('Cascader', FcCascader)
+FcDesigner.component('Slider', FcSlider)
+FcDesigner.component('Lookup', LookupComponent)
 FcDesigner.component('LookupBindingSelect', LookupBindingSelect)
 
 // Register the subTable drag rule so it appears in the designer left menu

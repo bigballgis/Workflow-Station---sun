@@ -1,13 +1,25 @@
 <template>
-  <el-dialog v-model="visible" :title="t('audit.logDetail')" width="800px">
-    <div class="log-detail" v-if="log">
+  <el-dialog
+    v-model="visible"
+    :title="t('audit.logDetail')"
+    width="800px"
+  >
+    <div
+      v-if="log"
+      class="log-detail"
+    >
       <!-- Basic Info Section -->
       <div class="detail-section section-basic">
-        <div class="section-title">{{ t('audit.basicInfo') }}</div>
+        <div class="section-title">
+          {{ t('audit.basicInfo') }}
+        </div>
         <div class="detail-grid">
           <div class="detail-row">
             <span class="detail-label">{{ t('audit.actionType') }}</span>
-            <span class="detail-value"><el-tag :type="actionType(log.action)" size="small">{{ actionText(log.action) }}</el-tag></span>
+            <span class="detail-value"><el-tag
+              :type="actionType(log.action)"
+              size="small"
+            >{{ actionText(log.action) }}</el-tag></span>
           </div>
           <div class="detail-row">
             <span class="detail-label">{{ t('audit.operator') }}</span>
@@ -49,7 +61,10 @@
             <span class="detail-label">{{ t('audit.time') }}</span>
             <span class="detail-value">{{ formatTime(log.createdAt) }}</span>
           </div>
-          <div class="detail-row" v-if="log.errorMessage">
+          <div
+            v-if="log.errorMessage"
+            class="detail-row"
+          >
             <span class="detail-label">{{ t('audit.errorMessage') }}</span>
             <span class="detail-value result-danger">{{ log.errorMessage }}</span>
           </div>
@@ -57,30 +72,66 @@
       </div>
 
       <!-- Before Change Section -->
-      <div class="detail-section section-before" v-if="beforeData !== null">
+      <div
+        v-if="beforeData !== null"
+        class="detail-section section-before"
+      >
         <div class="section-title">
           {{ t('audit.oldValue') }}
-          <span class="section-badge" v-if="actionCategory(log.action) === 'delete'">{{ t('audit.fullRecord') }}</span>
-          <span class="section-badge badge-diff" v-if="actionCategory(log.action) === 'update'">{{ t('audit.changedFieldsOnly') }}</span>
+          <span
+            v-if="actionCategory(log.action) === 'delete'"
+            class="section-badge"
+          >{{ t('audit.fullRecord') }}</span>
+          <span
+            v-if="actionCategory(log.action) === 'update'"
+            class="section-badge badge-diff"
+          >{{ t('audit.changedFieldsOnly') }}</span>
         </div>
         <div class="json-container">
-          <pre class="json-content" :class="{ collapsed: !beforeExpanded }" v-html="formatJsonHighlight(beforeData, beforeCompare)"></pre>
-          <el-button class="expand-btn" link type="primary" @click="beforeExpanded = !beforeExpanded">
+          <pre
+            class="json-content"
+            :class="{ collapsed: !beforeExpanded }"
+            v-html="formatJsonHighlight(beforeData, beforeCompare)"
+          />
+          <el-button
+            class="expand-btn"
+            link
+            type="primary"
+            @click="beforeExpanded = !beforeExpanded"
+          >
             {{ beforeExpanded ? t('common.collapse') : t('common.expand') }}
           </el-button>
         </div>
       </div>
 
       <!-- After Change Section -->
-      <div class="detail-section section-after" v-if="afterData !== null">
+      <div
+        v-if="afterData !== null"
+        class="detail-section section-after"
+      >
         <div class="section-title">
           {{ t('audit.newValue') }}
-          <span class="section-badge" v-if="actionCategory(log.action) === 'create'">{{ t('audit.fullRecord') }}</span>
-          <span class="section-badge badge-diff" v-if="actionCategory(log.action) === 'update'">{{ t('audit.changedFieldsOnly') }}</span>
+          <span
+            v-if="actionCategory(log.action) === 'create'"
+            class="section-badge"
+          >{{ t('audit.fullRecord') }}</span>
+          <span
+            v-if="actionCategory(log.action) === 'update'"
+            class="section-badge badge-diff"
+          >{{ t('audit.changedFieldsOnly') }}</span>
         </div>
         <div class="json-container">
-          <pre class="json-content" :class="{ collapsed: !afterExpanded }" v-html="formatJsonHighlight(afterData, afterCompare)"></pre>
-          <el-button class="expand-btn" link type="primary" @click="afterExpanded = !afterExpanded">
+          <pre
+            class="json-content"
+            :class="{ collapsed: !afterExpanded }"
+            v-html="formatJsonHighlight(afterData, afterCompare)"
+          />
+          <el-button
+            class="expand-btn"
+            link
+            type="primary"
+            @click="afterExpanded = !afterExpanded"
+          >
             {{ afterExpanded ? t('common.collapse') : t('common.expand') }}
           </el-button>
         </div>

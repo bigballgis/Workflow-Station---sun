@@ -1,64 +1,142 @@
 <template>
   <el-dialog
     :model-value="modelValue"
-    @update:model-value="emit('update:modelValue', $event)"
     :title="'Version Compare - ' + (tableName || '')"
     width="950px"
+    @update:model-value="emit('update:modelValue', $event)"
     @opened="init"
   >
     <div style="display: flex; gap: 16px; margin-bottom: 16px;">
       <div style="flex: 1;">
         <span style="margin-right: 8px;">From:</span>
-        <el-select v-model="leftVersion" placeholder="Select version" style="width: 200px;" @change="computeDiff">
-          <el-option v-for="v in versions" :key="v.id" :label="'v' + v.versionNumber" :value="v.id" />
+        <el-select
+          v-model="leftVersion"
+          placeholder="Select version"
+          style="width: 200px;"
+          @change="computeDiff"
+        >
+          <el-option
+            v-for="v in versions"
+            :key="v.id"
+            :label="'v' + v.versionNumber"
+            :value="v.id"
+          />
         </el-select>
       </div>
       <div style="flex: 1;">
         <span style="margin-right: 8px;">To:</span>
-        <el-select v-model="rightVersion" placeholder="Select version" style="width: 200px;" @change="computeDiff">
-          <el-option v-for="v in versions" :key="v.id" :label="'v' + v.versionNumber" :value="v.id" />
+        <el-select
+          v-model="rightVersion"
+          placeholder="Select version"
+          style="width: 200px;"
+          @change="computeDiff"
+        >
+          <el-option
+            v-for="v in versions"
+            :key="v.id"
+            :label="'v' + v.versionNumber"
+            :value="v.id"
+          />
         </el-select>
       </div>
     </div>
 
-    <el-table :data="diffRows" stripe v-loading="loading" empty-text="Select two versions to compare" border>
-      <el-table-column label="Field Name" prop="fieldName" width="160" />
-      <el-table-column label="Change" width="100" align="center">
+    <el-table
+      v-loading="loading"
+      :data="diffRows"
+      stripe
+      empty-text="Select two versions to compare"
+      border
+    >
+      <el-table-column
+        label="Field Name"
+        prop="fieldName"
+        width="160"
+      />
+      <el-table-column
+        label="Change"
+        width="100"
+        align="center"
+      >
         <template #default="{ row }">
-          <el-tag v-if="row.change === 'added'" type="success" size="small">Added</el-tag>
-          <el-tag v-else-if="row.change === 'removed'" type="danger" size="small">Removed</el-tag>
-          <el-tag v-else-if="row.change === 'modified'" type="warning" size="small">Modified</el-tag>
-          <el-tag v-else type="info" size="small">Unchanged</el-tag>
+          <el-tag
+            v-if="row.change === 'added'"
+            type="success"
+            size="small"
+          >
+            Added
+          </el-tag>
+          <el-tag
+            v-else-if="row.change === 'removed'"
+            type="danger"
+            size="small"
+          >
+            Removed
+          </el-tag>
+          <el-tag
+            v-else-if="row.change === 'modified'"
+            type="warning"
+            size="small"
+          >
+            Modified
+          </el-tag>
+          <el-tag
+            v-else
+            type="info"
+            size="small"
+          >
+            Unchanged
+          </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="From" min-width="300">
+      <el-table-column
+        label="From"
+        min-width="300"
+      >
         <template #default="{ row }">
-          <span v-if="row.left" :style="row.change === 'removed' ? 'color: #F56C6C;' : ''">
+          <span
+            v-if="row.left"
+            :style="row.change === 'removed' ? 'color: #F56C6C;' : ''"
+          >
             {{ row.left.dataType }}{{ row.left.length ? '(' + row.left.length + ')' : '' }}
             {{ row.left.nullable ? ', nullable' : ', NOT NULL' }}
             {{ row.left.isPrimaryKey ? ', PK' : '' }}
             {{ row.left.defaultValue ? ', default=' + row.left.defaultValue : '' }}
             {{ row.left.comment ? ' — ' + row.left.comment : '' }}
           </span>
-          <span v-else style="color: #ccc;">—</span>
+          <span
+            v-else
+            style="color: #ccc;"
+          >—</span>
         </template>
       </el-table-column>
-      <el-table-column label="To" min-width="300">
+      <el-table-column
+        label="To"
+        min-width="300"
+      >
         <template #default="{ row }">
-          <span v-if="row.right" :style="row.change === 'added' ? 'color: #67C23A;' : ''">
+          <span
+            v-if="row.right"
+            :style="row.change === 'added' ? 'color: #67C23A;' : ''"
+          >
             {{ row.right.dataType }}{{ row.right.length ? '(' + row.right.length + ')' : '' }}
             {{ row.right.nullable ? ', nullable' : ', NOT NULL' }}
             {{ row.right.isPrimaryKey ? ', PK' : '' }}
             {{ row.right.defaultValue ? ', default=' + row.right.defaultValue : '' }}
             {{ row.right.comment ? ' — ' + row.right.comment : '' }}
           </span>
-          <span v-else style="color: #ccc;">—</span>
+          <span
+            v-else
+            style="color: #ccc;"
+          >—</span>
         </template>
       </el-table-column>
     </el-table>
 
     <template #footer>
-      <el-button @click="emit('update:modelValue', false)">Close</el-button>
+      <el-button @click="emit('update:modelValue', false)">
+        Close
+      </el-button>
     </template>
   </el-dialog>
 </template>

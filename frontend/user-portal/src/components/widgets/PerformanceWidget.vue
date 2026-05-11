@@ -24,9 +24,13 @@
               transform="rotate(-90 50 50)"
             />
           </svg>
-          <div class="score-value">{{ overallScore }}</div>
+          <div class="score-value">
+            {{ overallScore }}
+          </div>
         </div>
-        <div class="score-label">{{ t('widget.overallScore') }}</div>
+        <div class="score-label">
+          {{ t('widget.overallScore') }}
+        </div>
       </div>
     </div>
 

@@ -94,7 +94,9 @@
             v-for="opt in (col.props?.options ?? col.options ?? [])"
             :key="opt.value"
             :value="opt.value"
-          >{{ opt.label }}</el-radio>
+          >
+            {{ opt.label }}
+          </el-radio>
         </el-radio-group>
 
         <!-- checkbox -->
@@ -106,7 +108,9 @@
             v-for="opt in (col.props?.options ?? col.options ?? [])"
             :key="opt.value"
             :value="opt.value"
-          >{{ opt.label }}</el-checkbox>
+          >
+            {{ opt.label }}
+          </el-checkbox>
         </el-checkbox-group>
 
         <!-- password -->
@@ -186,7 +190,10 @@
         />
 
         <!-- upload -->
-        <div v-else-if="col.type === 'upload'" style="display: flex; flex-direction: column; gap: 4px;">
+        <div
+          v-else-if="col.type === 'upload'"
+          style="display: flex; flex-direction: column; gap: 4px;"
+        >
           <el-upload
             :action="col.props?.action && col.props.action !== '/' ? col.props.action : (uploadUrl || '/api/v1/upload')"
             :accept="col.props?.accept || '.jpg,.jpeg,.png,.pdf,.docx,.xlsx'"
@@ -194,7 +201,10 @@
             :on-success="(res: any, file: any) => handleUploadSuccess(res, file, col)"
             :on-error="() => handleUploadError(col)"
           >
-            <el-button size="small" type="primary">
+            <el-button
+              size="small"
+              type="primary"
+            >
               <el-icon><Upload /></el-icon> {{ t('subTable.upload') }}
             </el-button>
           </el-upload>
@@ -236,7 +246,10 @@
         />
 
         <!-- editor (rich text — wangeditor, consistent with FieldRenderer) -->
-        <div v-else-if="col.type === 'editor'" class="sub-table-editor-wrapper">
+        <div
+          v-else-if="col.type === 'editor'"
+          class="sub-table-editor-wrapper"
+        >
           <Toolbar
             :editor="editorInstances[col.field]"
             :default-config="{}"
@@ -254,7 +267,10 @@
         </div>
 
         <!-- signature (base64 image URL input) -->
-        <div v-else-if="col.type === 'signature'" style="width: 100%;">
+        <div
+          v-else-if="col.type === 'signature'"
+          style="width: 100%;"
+        >
           <canvas
             :ref="(el: any) => { if (el) signatureCanvasRefs[col.field] = el }"
             class="signature-canvas"
@@ -267,7 +283,12 @@
             @touchend="endSign(col.field)"
           />
           <div style="margin-top: 4px;">
-            <el-button size="small" @click="clearSignature(col.field)">{{ t('fieldRenderer.clear') }}</el-button>
+            <el-button
+              size="small"
+              @click="clearSignature(col.field)"
+            >
+              {{ t('fieldRenderer.clear') }}
+            </el-button>
           </div>
         </div>
 
@@ -364,8 +385,15 @@
     </el-form>
 
     <template #footer>
-      <el-button @click="handleClose">{{ t('common.cancel') }}</el-button>
-      <el-button type="primary" @click="handleSave">{{ t('common.save') }}</el-button>
+      <el-button @click="handleClose">
+        {{ t('common.cancel') }}
+      </el-button>
+      <el-button
+        type="primary"
+        @click="handleSave"
+      >
+        {{ t('common.save') }}
+      </el-button>
     </template>
   </el-dialog>
 </template>

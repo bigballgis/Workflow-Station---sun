@@ -2,51 +2,110 @@
   <div class="task-detail-page">
     <!-- Page header -->
     <div class="page-header">
-      <el-button :icon="ArrowLeft" @click="$router.back()">{{ t('common.back') }}</el-button>
+      <el-button
+        :icon="ArrowLeft"
+        @click="$router.back()"
+      >
+        {{ t('common.back') }}
+      </el-button>
       <h1>{{ taskInfo.taskName || t('task.detail') }}</h1>
-      <el-tag :type="getPriorityType(taskInfo.priority)" size="small">
+      <el-tag
+        :type="getPriorityType(taskInfo.priority)"
+        size="small"
+      >
         {{ getPriorityLabel(taskInfo.priority) }}
       </el-tag>
-      <el-tag v-if="taskInfo.isOverdue" type="danger" size="small">{{ t('task.overdue') }}</el-tag>
+      <el-tag
+        v-if="taskInfo.isOverdue"
+        type="danger"
+        size="small"
+      >
+        {{ t('task.overdue') }}
+      </el-tag>
     </div>
 
     <!-- Loading state -->
-    <div v-if="loading" class="skeleton-content">
-      <el-skeleton animated :count="3">
+    <div
+      v-if="loading"
+      class="skeleton-content"
+    >
+      <el-skeleton
+        animated
+        :count="3"
+      >
         <template #template>
-          <el-skeleton-item variant="rect" style="height: 120px; margin-bottom: 20px;" />
-          <el-skeleton-item variant="rect" style="height: 300px; margin-bottom: 20px;" />
-          <el-skeleton-item variant="rect" style="height: 200px;" />
+          <el-skeleton-item
+            variant="rect"
+            style="height: 120px; margin-bottom: 20px;"
+          />
+          <el-skeleton-item
+            variant="rect"
+            style="height: 300px; margin-bottom: 20px;"
+          />
+          <el-skeleton-item
+            variant="rect"
+            style="height: 200px;"
+          />
         </template>
       </el-skeleton>
     </div>
 
     <!-- Task loading error -->
-    <div v-else-if="taskError" class="error-content">
-      <el-result icon="warning" :title="taskError">
+    <div
+      v-else-if="taskError"
+      class="error-content"
+    >
+      <el-result
+        icon="warning"
+        :title="taskError"
+      >
         <template #extra>
-          <el-button type="primary" @click="$router.back()">{{ t('common.back') }}</el-button>
-          <el-button @click="loadTaskDetail">{{ t('common.reset') }}</el-button>
+          <el-button
+            type="primary"
+            @click="$router.back()"
+          >
+            {{ t('common.back') }}
+          </el-button>
+          <el-button @click="loadTaskDetail">
+            {{ t('common.reset') }}
+          </el-button>
         </template>
       </el-result>
     </div>
 
     <!-- Main content -->
-    <div v-else class="content-sections">
+    <div
+      v-else
+      class="content-sections"
+    >
       <!-- Section 1: Basic info -->
-      <TaskBasicInfo :task-info="taskInfo" :format-date="formatDate" :get-current-assignee-display="getCurrentAssigneeDisplay" />
+      <TaskBasicInfo
+        :task-info="taskInfo"
+        :format-date="formatDate"
+        :get-current-assignee-display="getCurrentAssigneeDisplay"
+      />
 
       <!-- Section 2: Process diagram -->
       <div class="section workflow-section">
         <div class="section-header">
           <el-icon><Share /></el-icon>
           <span>{{ t('task.workflowDiagram') }}</span>
-          <el-tag v-if="!isCompletedTask" type="warning" size="small">
+          <el-tag
+            v-if="!isCompletedTask"
+            type="warning"
+            size="small"
+          >
             {{ taskInfo.taskName || t('task.pending') }}
           </el-tag>
         </div>
         <div class="section-content">
-          <el-alert v-if="processError" :title="processError" type="warning" show-icon :closable="false" />
+          <el-alert
+            v-if="processError"
+            :title="processError"
+            type="warning"
+            show-icon
+            :closable="false"
+          />
           <ProcessDiagram
             v-else-if="bpmnXml || processNodes.length > 0"
             :nodes="processNodes"
@@ -60,43 +119,76 @@
             :show-current-step="!isCompletedTask"
             @node-click="handleNodeClick"
           />
-          <el-empty v-else :description="t('task.noProcessDefinition')" />
+          <el-empty
+            v-else
+            :description="t('task.noProcessDefinition')"
+          />
         </div>
       </div>
 
       <!-- Selected node form (click a node in the diagram to show its form) -->
-      <div v-if="selectedNodeId && selectedNodeForm" class="section form-section">
+      <div
+        v-if="selectedNodeId && selectedNodeForm"
+        class="section form-section"
+      >
         <div class="section-header">
           <el-icon><Document /></el-icon>
           <span>{{ selectedNodeForm.formName }}</span>
-          <el-tag v-if="selectedNodeForm.isCurrentTask && !isCompletedTask" type="warning" size="small">{{ t('task.currentStep') }}</el-tag>
-          <el-tag v-else type="info" size="small">{{ t('task.readonly') }}</el-tag>
-          <el-button size="small" @click="clearNodeSelection" style="margin-left: auto;">{{ t('common.back') }}</el-button>
+          <el-tag
+            v-if="selectedNodeForm.isCurrentTask && !isCompletedTask"
+            type="warning"
+            size="small"
+          >
+            {{ t('task.currentStep') }}
+          </el-tag>
+          <el-tag
+            v-else
+            type="info"
+            size="small"
+          >
+            {{ t('task.readonly') }}
+          </el-tag>
+          <el-button
+            size="small"
+            style="margin-left: auto;"
+            @click="clearNodeSelection"
+          >
+            {{ t('common.back') }}
+          </el-button>
         </div>
         <div class="section-content">
-          <div v-if="selectedNodeForm.fields.length > 0 || selectedNodeForm.tabs.length > 0" class="form-container">
+          <div
+            v-if="selectedNodeForm.fields.length > 0 || selectedNodeForm.tabs.length > 0"
+            class="form-container"
+          >
             <FormRenderer
               :fields="selectedNodeForm.isCurrentTask ? formFields : selectedNodeForm.fields"
               :tabs="selectedNodeForm.isCurrentTask ? formTabs : selectedNodeForm.tabs"
               :model-value="selectedNodeForm.isCurrentTask ? formData : selectedNodeForm.values"
-              @update:model-value="val => { if (selectedNodeForm.isCurrentTask) formData = { ...formData, ...val } }"
               :label-width="formLabelWidth"
               :readonly="selectedNodeForm.isCurrentTask ? formReadOnly : true"
-              :subTableBindings="selectedNodeForm.isCurrentTask ? subTableBindings : selectedNodeForm.subTableBindings"
+              :sub-table-bindings="selectedNodeForm.isCurrentTask ? subTableBindings : selectedNodeForm.subTableBindings"
               :linked-sub-table-bindings="selectedNodeForm.isCurrentTask ? linkableSubTableBindings : undefined"
               :preview-sub-tables="selectedNodeForm.isCurrentTask ? isMiSubTaskMode : true"
               :task-id="selectedNodeForm.isCurrentTask ? effectiveTaskId : undefined"
               :allow-sub-table-assign="selectedNodeForm.isCurrentTask ? allowSubTableAssignForCurrentTask : false"
               :suppress-link-form-initial-data="selectedNodeForm.isCurrentTask ? (isMiSubTaskMode && !isCompletedTask) : true"
               :show-link-form-dialog-footer="selectedNodeForm.isCurrentTask ? (!isCompletedTask && !formReadOnly) : false"
-              @update:subTableData="(bindingId, rows) => { if (selectedNodeForm.isCurrentTask) syncMainSubTableRows(bindingId, rows) }"
+              @update:model-value="val => { if (selectedNodeForm.isCurrentTask) formData = { ...formData, ...val } }"
+              @update:sub-table-data="(bindingId, rows) => { if (selectedNodeForm.isCurrentTask) syncMainSubTableRows(bindingId, rows) }"
             />
           </div>
-          <el-empty v-else :description="t('task.noFormData')" />
+          <el-empty
+            v-else
+            :description="t('task.noFormData')"
+          />
         </div>
       </div>
       <!-- Node selected but no form bound -->
-      <div v-else-if="selectedNodeId && !selectedNodeForm" class="section form-section">
+      <div
+        v-else-if="selectedNodeId && !selectedNodeForm"
+        class="section form-section"
+      >
         <div class="section-header">
           <el-icon><Document /></el-icon>
           <span>{{ selectedNodeId }}</span>
@@ -104,28 +196,50 @@
         <div class="section-content">
           <el-empty :description="t('task.noFormBound')" />
           <div style="text-align: center; margin-top: 8px;">
-            <el-button size="small" @click="clearNodeSelection">{{ t('common.back') }}</el-button>
+            <el-button
+              size="small"
+              @click="clearNodeSelection"
+            >
+              {{ t('common.back') }}
+            </el-button>
           </div>
         </div>
       </div>
 
       <!-- Task 17.1 / 17.4: Collapsible Process Form panel -->
-      <div v-if="showProcessFormPanel && processFormData" class="section process-form-section">
+      <div
+        v-if="showProcessFormPanel && processFormData"
+        class="section process-form-section"
+      >
         <el-collapse v-model="processFormCollapse">
-          <el-collapse-item :title="isReturnToRequester ? t('process.processForm') : t('process.processFormReadonly')" name="processForm">
+          <el-collapse-item
+            :title="isReturnToRequester ? t('process.processForm') : t('process.processFormReadonly')"
+            name="processForm"
+          >
             <div class="section-content">
               <FormRenderer
                 v-if="processFormFields.length > 0 || processFormTabs.length > 0"
                 :fields="processFormFields"
                 :tabs="processFormTabs"
                 :model-value="processFormValues"
-                @update:model-value="val => processFormValues = { ...processFormValues, ...val }"
                 :label-width="formLabelWidth"
                 :readonly="!processFormEditable"
+                @update:model-value="val => processFormValues = { ...processFormValues, ...val }"
               />
-              <el-empty v-else :description="t('task.noFormData')" />
-              <div v-if="processFormEditable" class="process-form-actions" style="margin-top: 16px; text-align: right;">
-                <el-button type="primary" @click="handleProcessFormSubmit" :loading="submitting">
+              <el-empty
+                v-else
+                :description="t('task.noFormData')"
+              />
+              <div
+                v-if="processFormEditable"
+                class="process-form-actions"
+                style="margin-top: 16px; text-align: right;"
+              >
+                <el-button
+                  type="primary"
+                  :loading="submitting"
+                  @click="handleProcessFormSubmit"
+                >
                   {{ t('common.submit') }}
                 </el-button>
               </div>
@@ -144,22 +258,25 @@
           <span>{{ currentFormName || t('task.taskForm') }}</span>
         </div>
         <div class="section-content">
-          <div v-if="formFields.length > 0 || formTabs.length > 0" class="form-container">
+          <div
+            v-if="formFields.length > 0 || formTabs.length > 0"
+            class="form-container"
+          >
             <FormRenderer
               :fields="formFields"
               :tabs="formTabs"
               :model-value="formData"
-              @update:model-value="val => formData = { ...formData, ...val }"
               :label-width="formLabelWidth"
               :readonly="formReadOnly"
-              :subTableBindings="subTableBindings"
+              :sub-table-bindings="subTableBindings"
               :linked-sub-table-bindings="linkableSubTableBindings"
               :preview-sub-tables="isMiSubTaskMode"
               :task-id="effectiveTaskId"
               :allow-sub-table-assign="allowSubTableAssignForCurrentTask"
               :suppress-link-form-initial-data="isMiSubTaskMode && !isCompletedTask"
               :show-link-form-dialog-footer="!isCompletedTask && !formReadOnly"
-              @update:subTableData="syncMainSubTableRows"
+              @update:model-value="val => formData = { ...formData, ...val }"
+              @update:sub-table-data="syncMainSubTableRows"
             />
           </div>
           <el-empty :description="t('task.noFormData')" />
@@ -167,10 +284,18 @@
       </div>
 
       <!-- Task 17.3: Completed task snapshot comparison view -->
-      <TaskSnapshotSection :is-completed-task="isCompletedTask" :completed-form-data="completedFormData" :form-fields="formFields" :form-tabs="formTabs" />
+      <TaskSnapshotSection
+        :is-completed-task="isCompletedTask"
+        :completed-form-data="completedFormData"
+        :form-fields="formFields"
+        :form-tabs="formTabs"
+      />
 
       <!-- Task 19.2: Change history panel (title and collapse handled internally by ChangeHistoryPanel) -->
-      <div v-if="taskInfo.processInstanceId" class="section change-history-section">
+      <div
+        v-if="taskInfo.processInstanceId"
+        class="section change-history-section"
+      >
         <ChangeHistoryPanel
           :process-instance-id="taskInfo.processInstanceId"
           :snapshot-time="completedHistorySnapshotTime"
@@ -179,17 +304,47 @@
       </div>
 
       <!-- Section 4: Flow history -->
-      <TaskHistorySection :history-records="historyRecords" :history-error="historyError" />
+      <TaskHistorySection
+        :history-records="historyRecords"
+        :history-error="historyError"
+      />
 
       <!-- Section 5: Action buttons (hidden for completed tasks) -->
-      <TaskActionBar :is-completed-task="isCompletedTask" :show-implicit-save-action="showImplicitSaveAction" :saving-task-form="savingTaskForm" :actions="taskInfo.actions" :get-button-type="getButtonType" :get-icon-component="getIconComponent" :get-action-label="getActionLabel" @save="saveCurrentTaskForm" @custom-action="handleCustomAction" @approve="handleApprove" @reject="handleReject" @delegate="handleDelegate" @transfer="handleTransfer" @urge="handleUrge" />
+      <TaskActionBar
+        :is-completed-task="isCompletedTask"
+        :show-implicit-save-action="showImplicitSaveAction"
+        :saving-task-form="savingTaskForm"
+        :actions="taskInfo.actions"
+        :get-button-type="getButtonType"
+        :get-icon-component="getIconComponent"
+        :get-action-label="getActionLabel"
+        @save="saveCurrentTaskForm"
+        @custom-action="handleCustomAction"
+        @approve="handleApprove"
+@reject="handleReject" @delegate="handleDelegate" @transfer="handleTransfer" @urge="handleUrge"
+      />
     </div>
 
     <!-- Approval dialog -->
-    <ApproveDialog v-model="approveDialogVisible" :title="approveDialogTitle" :form-data="approveForm" :submitting="submitting" @confirm="submitApprove" />
+    <ApproveDialog
+      v-model="approveDialogVisible"
+      :title="approveDialogTitle"
+      :form-data="approveForm"
+      :submitting="submitting"
+      @confirm="submitApprove"
+    />
 
     <!-- Delegate/Transfer dialog -->
-    <ActionDialog v-model="actionDialogVisible" :title="actionDialogTitle" :current-action="currentAction" :form-data="actionForm" :user-options="userOptions" :submitting="submitting" @confirm="submitAction" @opened="onActionDialogOpened" />
+    <ActionDialog
+      v-model="actionDialogVisible"
+      :title="actionDialogTitle"
+      :current-action="currentAction"
+      :form-data="actionForm"
+      :user-options="userOptions"
+      :submitting="submitting"
+      @confirm="submitAction"
+      @opened="onActionDialogOpened"
+    />
 
     <!-- N8N Action dialog -->
     <N8nActionDialog
@@ -202,10 +357,34 @@
     />
 
     <!-- Form popup dialog -->
-    <FormPopupDialog v-model="formPopupVisible" :title="formPopupTitle" :width="formPopupWidth" :fields="formPopupFields" :tabs="formPopupTabs" :form-data="formPopupData" @update:form-data="val => formPopupData = { ...formPopupData, ...val }" :label-width="formPopupLabelWidth" :readonly="formPopupReadOnly" :submitting="submitting" @submit="submitFormPopup" />
+    <FormPopupDialog
+      v-model="formPopupVisible"
+      :title="formPopupTitle"
+      :width="formPopupWidth"
+      :fields="formPopupFields"
+      :tabs="formPopupTabs"
+      :form-data="formPopupData"
+      :label-width="formPopupLabelWidth"
+      :readonly="formPopupReadOnly"
+      :submitting="submitting"
+      @update:form-data="val => formPopupData = { ...formPopupData, ...val }"
+@submit="submitFormPopup"
+    />
 
     <!-- MI subtask fill-form dialog -->
-    <MiFillDialog v-model="miFillDialogVisible" :title="currentFormName || t('task.taskForm')" :fields="formFields" :tabs="formTabs" :form-data="miFillDialogData" @update:form-data="val => miFillDialogData = { ...miFillDialogData, ...val }" :label-width="formLabelWidth" :form-read-only="formReadOnly" :dialog-read-only="miFillDialogReadOnly" :sub-table-bindings="miFillSubTableBindings" :is-mi-sub-task-mode="isMiSubTaskMode" :is-completed-task="isCompletedTask" @update:sub-table-data="syncMiFillSubTableRows" @confirm="saveMiFillDialog" />
+    <MiFillDialog
+      v-model="miFillDialogVisible"
+      :title="currentFormName || t('task.taskForm')"
+      :fields="formFields"
+      :tabs="formTabs"
+      :form-data="miFillDialogData"
+      :label-width="formLabelWidth"
+      :form-read-only="formReadOnly"
+      :dialog-read-only="miFillDialogReadOnly"
+      :sub-table-bindings="miFillSubTableBindings"
+      :is-mi-sub-task-mode="isMiSubTaskMode"
+:is-completed-task="isCompletedTask" @update:form-data="val => miFillDialogData = { ...miFillDialogData, ...val }" @update:sub-table-data="syncMiFillSubTableRows" @confirm="saveMiFillDialog"
+    />
   </div>
 </template>
 

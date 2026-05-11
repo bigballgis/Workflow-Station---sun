@@ -23,24 +23,49 @@
           :value="user.id"
         />
       </el-select>
-      <el-button type="primary" @click="addApprover" :disabled="!selectedUserId">
+      <el-button
+        type="primary"
+        :disabled="!selectedUserId"
+        @click="addApprover"
+      >
         {{ t('organization.addApprover') }}
       </el-button>
     </div>
 
-    <el-table :data="approvers" v-loading="loading" stripe style="margin-top: 16px">
-      <el-table-column prop="userFullName" :label="t('user.fullName')" />
-      <el-table-column prop="userName" :label="t('user.username')" />
-      <el-table-column :label="t('common.operation')" width="100">
+    <el-table
+      v-loading="loading"
+      :data="approvers"
+      stripe
+      style="margin-top: 16px"
+    >
+      <el-table-column
+        prop="userFullName"
+        :label="t('user.fullName')"
+      />
+      <el-table-column
+        prop="userName"
+        :label="t('user.username')"
+      />
+      <el-table-column
+        :label="t('common.operation')"
+        width="100"
+      >
         <template #default="{ row }">
-          <el-button link type="danger" @click="removeApprover(row)">
+          <el-button
+            link
+            type="danger"
+            @click="removeApprover(row)"
+          >
             {{ t('common.delete') }}
           </el-button>
         </template>
       </el-table-column>
     </el-table>
 
-    <el-empty v-if="!loading && approvers.length === 0" :description="t('organization.noApprovers')" />
+    <el-empty
+      v-if="!loading && approvers.length === 0"
+      :description="t('organization.noApprovers')"
+    />
   </el-dialog>
 </template>
 

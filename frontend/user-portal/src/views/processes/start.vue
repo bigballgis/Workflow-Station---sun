@@ -2,64 +2,149 @@
   <div class="process-start-page">
     <!-- 页面头部 -->
     <div class="page-header">
-      <el-button :icon="ArrowLeft" @click="$router.back()">{{ t('processStart.back') }}</el-button>
+      <el-button
+        :icon="ArrowLeft"
+        @click="$router.back()"
+      >
+        {{ t('processStart.back') }}
+      </el-button>
       <h1>{{ functionUnitName || t('processStart.startProcess') }}</h1>
-      <el-tag v-if="functionUnitVersion" type="info" size="small">v{{ functionUnitVersion }}</el-tag>
+      <el-tag
+        v-if="functionUnitVersion"
+        type="info"
+        size="small"
+      >
+        v{{ functionUnitVersion }}
+      </el-tag>
     </div>
 
     <!-- 加载状态 -->
-    <div v-if="loading" class="skeleton-content">
-      <el-skeleton animated :count="3">
+    <div
+      v-if="loading"
+      class="skeleton-content"
+    >
+      <el-skeleton
+        animated
+        :count="3"
+      >
         <template #template>
-          <el-skeleton-item variant="rect" style="height: 300px; margin-bottom: 20px;" />
-          <el-skeleton-item variant="rect" style="height: 400px; margin-bottom: 20px;" />
-          <el-skeleton-item variant="rect" style="height: 200px;" />
+          <el-skeleton-item
+            variant="rect"
+            style="height: 300px; margin-bottom: 20px;"
+          />
+          <el-skeleton-item
+            variant="rect"
+            style="height: 400px; margin-bottom: 20px;"
+          />
+          <el-skeleton-item
+            variant="rect"
+            style="height: 200px;"
+          />
         </template>
       </el-skeleton>
     </div>
     
     <!-- 功能单元已禁用状态 -->
-    <div v-else-if="isDisabled" class="disabled-state">
-      <el-result icon="warning" :title="t('processStart.disabledTitle')" :sub-title="t('processStart.disabledSubtitle')">
+    <div
+      v-else-if="isDisabled"
+      class="disabled-state"
+    >
+      <el-result
+        icon="warning"
+        :title="t('processStart.disabledTitle')"
+        :sub-title="t('processStart.disabledSubtitle')"
+      >
         <template #extra>
-          <el-button type="primary" @click="$router.back()">{{ t('processStart.back') }}</el-button>
-          <el-button @click="$router.push('/processes')">{{ t('processStart.viewOtherProcesses') }}</el-button>
+          <el-button
+            type="primary"
+            @click="$router.back()"
+          >
+            {{ t('processStart.back') }}
+          </el-button>
+          <el-button @click="$router.push('/processes')">
+            {{ t('processStart.viewOtherProcesses') }}
+          </el-button>
         </template>
       </el-result>
     </div>
     
     <!-- 访问被拒绝状态 -->
-    <div v-else-if="isAccessDenied" class="access-denied-state">
-      <el-result icon="error" :title="t('processStart.accessDeniedTitle')" :sub-title="t('processStart.accessDeniedSubtitle')">
+    <div
+      v-else-if="isAccessDenied"
+      class="access-denied-state"
+    >
+      <el-result
+        icon="error"
+        :title="t('processStart.accessDeniedTitle')"
+        :sub-title="t('processStart.accessDeniedSubtitle')"
+      >
         <template #extra>
-          <el-button type="primary" @click="$router.back()">{{ t('processStart.back') }}</el-button>
-          <el-button @click="$router.push('/processes')">{{ t('processStart.viewOtherProcesses') }}</el-button>
+          <el-button
+            type="primary"
+            @click="$router.back()"
+          >
+            {{ t('processStart.back') }}
+          </el-button>
+          <el-button @click="$router.push('/processes')">
+            {{ t('processStart.viewOtherProcesses') }}
+          </el-button>
         </template>
       </el-result>
     </div>
     
     <!-- 加载错误状态 -->
-    <div v-else-if="loadError" class="error-state">
-      <el-result icon="error" :title="t('processStart.loadFailedTitle')" :sub-title="loadError">
+    <div
+      v-else-if="loadError"
+      class="error-state"
+    >
+      <el-result
+        icon="error"
+        :title="t('processStart.loadFailedTitle')"
+        :sub-title="loadError"
+      >
         <template #extra>
-          <el-button type="primary" @click="loadFunctionUnitContent">{{ t('processStart.reload') }}</el-button>
-          <el-button @click="$router.back()">{{ t('processStart.back') }}</el-button>
+          <el-button
+            type="primary"
+            @click="loadFunctionUnitContent"
+          >
+            {{ t('processStart.reload') }}
+          </el-button>
+          <el-button @click="$router.back()">
+            {{ t('processStart.back') }}
+          </el-button>
         </template>
       </el-result>
     </div>
 
     <!-- 无 PROCESS form 警告状态 -->
-    <div v-else-if="noProcessForm" class="no-process-form-state">
-      <el-result icon="warning" :title="t('process.noProcessFormTitle')" :sub-title="t('process.noProcessForm')">
+    <div
+      v-else-if="noProcessForm"
+      class="no-process-form-state"
+    >
+      <el-result
+        icon="warning"
+        :title="t('process.noProcessFormTitle')"
+        :sub-title="t('process.noProcessForm')"
+      >
         <template #extra>
-          <el-button type="primary" @click="$router.back()">{{ t('processStart.back') }}</el-button>
-          <el-button @click="$router.push('/processes')">{{ t('processStart.viewOtherProcesses') }}</el-button>
+          <el-button
+            type="primary"
+            @click="$router.back()"
+          >
+            {{ t('processStart.back') }}
+          </el-button>
+          <el-button @click="$router.push('/processes')">
+            {{ t('processStart.viewOtherProcesses') }}
+          </el-button>
         </template>
       </el-result>
     </div>
     
     <!-- 正常内容 -->
-    <div v-else class="content-sections">
+    <div
+      v-else
+      class="content-sections"
+    >
       <el-alert
         v-if="workspaceStartBlocked"
         type="warning"
@@ -67,7 +152,9 @@
         :closable="false"
         class="workspace-guard-alert"
       >
-        <template #title>{{ t('processStart.workspaceGuardTitle') }}</template>
+        <template #title>
+          {{ t('processStart.workspaceGuardTitle') }}
+        </template>
         {{ t('processStart.workspaceGuardHint') }}
       </el-alert>
       <!-- 第一部分：实时工作流程图 -->
@@ -75,7 +162,12 @@
         <div class="section-header">
           <el-icon><Share /></el-icon>
           <span>{{ t('processStart.workflowDiagram') }}</span>
-          <el-tag type="success" size="small">{{ t('processStart.startNodeTag') }}</el-tag>
+          <el-tag
+            type="success"
+            size="small"
+          >
+            {{ t('processStart.startNodeTag') }}
+          </el-tag>
         </div>
         <div class="section-content">
           <ProcessDiagram
@@ -88,7 +180,10 @@
             :show-toolbar="true"
             :show-legend="true"
           />
-          <el-empty v-else :description="t('processStart.noProcessDefinition')" />
+          <el-empty
+            v-else
+            :description="t('processStart.noProcessDefinition')"
+          />
         </div>
       </div>
 
@@ -99,19 +194,25 @@
           <span>{{ currentFormName || t('processStart.applicationForm') }}</span>
         </div>
         <div class="section-content">
-          <div v-if="formFields.length > 0 || formTabs.length > 0" class="form-container">
+          <div
+            v-if="formFields.length > 0 || formTabs.length > 0"
+            class="form-container"
+          >
             <FormRenderer
               ref="formRendererRef"
+              v-model="formData"
               :fields="formFields"
               :tabs="formTabs"
-              v-model="formData"
               :label-width="formLabelWidth"
               :label-position="formLabelPosition"
-              :subTableBindings="subTableBindings"
-              @update:subTableData="(id: number, rows: any[]) => { const b = subTableBindings.find(x => x.bindingId === id); if (b) b.data = rows }"
+              :sub-table-bindings="subTableBindings"
+              @update:sub-table-data="(id: number, rows: any[]) => { const b = subTableBindings.find(x => x.bindingId === id); if (b) b.data = rows }"
             />
           </div>
-          <el-empty v-else :description="t('processStart.noFormConfig')" />
+          <el-empty
+            v-else
+            :description="t('processStart.noFormConfig')"
+          />
         </div>
       </div>
 
@@ -134,10 +235,15 @@
       <div class="section action-section">
         <div class="action-buttons">
           <div class="left-actions">
-            <el-button @click="handleSaveDraft" :loading="savingDraft">
+            <el-button
+              :loading="savingDraft"
+              @click="handleSaveDraft"
+            >
               <el-icon><FolderOpened /></el-icon> {{ t('processStart.saveDraft') }}
             </el-button>
-            <el-button @click="$router.back()">{{ t('processStart.cancel') }}</el-button>
+            <el-button @click="$router.back()">
+              {{ t('processStart.cancel') }}
+            </el-button>
           </div>
           <div class="right-actions">
             <el-button 
@@ -145,8 +251,8 @@
               :key="action.id"
               :type="action.type || 'default'"
               :disabled="workspaceStartBlocked && isSubmitLikeAction(action)"
-              @click="handleAction(action)"
               :loading="submitting && currentAction === action.id"
+              @click="handleAction(action)"
             >
               {{ action.label }}
             </el-button>
@@ -154,8 +260,8 @@
               v-if="availableActions.length === 0"
               type="primary" 
               :disabled="workspaceStartBlocked"
-              @click="handleSubmit"
               :loading="submitting"
+              @click="handleSubmit"
             >
               <el-icon><Promotion /></el-icon> {{ t('processStart.submit') }}
             </el-button>

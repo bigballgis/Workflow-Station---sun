@@ -7,8 +7,14 @@
         class="action-item"
         @click="handleAction(action)"
       >
-        <div class="action-icon" :style="{ background: action.bgColor }">
-          <el-icon :size="20" :color="action.color">
+        <div
+          class="action-icon"
+          :style="{ background: action.bgColor }"
+        >
+          <el-icon
+            :size="20"
+            :color="action.color"
+          >
             <component :is="action.icon" />
           </el-icon>
         </div>

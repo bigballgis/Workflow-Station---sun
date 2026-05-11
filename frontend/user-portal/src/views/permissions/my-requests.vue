@@ -5,34 +5,90 @@
     </div>
 
     <div class="portal-card">
-      <el-table :data="requests" stripe v-loading="loading">
-        <el-table-column prop="requestType" :label="t('permission.requestType')" width="140">
+      <el-table
+        v-loading="loading"
+        :data="requests"
+        stripe
+      >
+        <el-table-column
+          prop="requestType"
+          :label="t('permission.requestType')"
+          width="140"
+        >
           <template #default="{ row }">
-            <el-tag :type="row.requestType === 'VIRTUAL_GROUP' ? 'success' : 'primary'" size="small">
+            <el-tag
+              :type="row.requestType === 'VIRTUAL_GROUP' ? 'success' : 'primary'"
+              size="small"
+            >
               {{ row.requestType === 'VIRTUAL_GROUP' ? t('permission.virtualGroupJoin') : t('permission.businessUnitRole') }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="targetName" :label="t('permission.requestTarget')" min-width="150" show-overflow-tooltip />
-        <el-table-column prop="roleNames" :label="t('permission.role')" min-width="150">
+        <el-table-column
+          prop="targetName"
+          :label="t('permission.requestTarget')"
+          min-width="150"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="roleNames"
+          :label="t('permission.role')"
+          min-width="150"
+        >
           <template #default="{ row }">
             <template v-if="row.roleNames?.length">
-              <el-tag v-for="role in row.roleNames" :key="role" size="small" style="margin-right: 4px">{{ role }}</el-tag>
+              <el-tag
+                v-for="role in row.roleNames"
+                :key="role"
+                size="small"
+                style="margin-right: 4px"
+              >
+                {{ role }}
+              </el-tag>
             </template>
             <span v-else>-</span>
           </template>
         </el-table-column>
-        <el-table-column prop="reason" :label="t('permission.reason')" min-width="150" show-overflow-tooltip />
-        <el-table-column prop="status" :label="t('permission.status')" width="100">
+        <el-table-column
+          prop="reason"
+          :label="t('permission.reason')"
+          min-width="150"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="status"
+          :label="t('permission.status')"
+          width="100"
+        >
           <template #default="{ row }">
-            <el-tag :type="statusType(row.status)" size="small">{{ statusText(row.status) }}</el-tag>
+            <el-tag
+              :type="statusType(row.status)"
+              size="small"
+            >
+              {{ statusText(row.status) }}
+            </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="approverComment" :label="t('permission.approverComment')" min-width="150" show-overflow-tooltip />
-        <el-table-column prop="createdAt" :label="t('permission.applyTime')" width="160">
-          <template #default="{ row }">{{ formatDate(row.createdAt) }}</template>
+        <el-table-column
+          prop="approverComment"
+          :label="t('permission.approverComment')"
+          min-width="150"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="createdAt"
+          :label="t('permission.applyTime')"
+          width="160"
+        >
+          <template #default="{ row }">
+            {{ formatDate(row.createdAt) }}
+          </template>
         </el-table-column>
-        <el-table-column :label="t('common.actions')" width="100" fixed="right">
+        <el-table-column
+          :label="t('common.actions')"
+          width="100"
+          fixed="right"
+        >
           <template #default="{ row }">
             <el-button
               v-if="row.status === 'PENDING' && canCancelRow(row)"

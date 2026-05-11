@@ -1,46 +1,95 @@
 <template>
-  <div class="function-unit-card" @click="handleClick">
+  <div
+    class="function-unit-card"
+    @click="handleClick"
+  >
     <!-- Status Badge - Top Right -->
-    <el-tag class="status-badge" :type="statusType" size="small">{{ statusLabel }}</el-tag>
+    <el-tag
+      class="status-badge"
+      :type="statusType"
+      size="small"
+    >
+      {{ statusLabel }}
+    </el-tag>
     
     <!-- Icon Area - Larger -->
     <div class="card-icon">
-      <IconPreview :icon-id="item.iconId" size="large" />
+      <IconPreview
+        :icon-id="item.iconId"
+        size="large"
+      />
     </div>
     
     <!-- Content Area -->
     <div class="card-content">
-      <h3 class="card-title">{{ item.name }}</h3>
-      <p class="card-description-preview" v-if="item.description">{{ item.description }}</p>
-      <div class="card-tags" v-if="tags.length > 0">
+      <h3 class="card-title">
+        {{ item.name }}
+      </h3>
+      <p
+        v-if="item.description"
+        class="card-description-preview"
+      >
+        {{ item.description }}
+      </p>
+      <div
+        v-if="tags.length > 0"
+        class="card-tags"
+      >
         <el-tag 
           v-for="tag in displayTags" 
           :key="tag" 
           size="small"
           effect="plain"
-        >{{ tag }}</el-tag>
+        >
+          {{ tag }}
+        </el-tag>
         <el-tag 
           v-if="extraTagCount > 0" 
           size="small" 
           type="info"
           effect="plain"
-        >+{{ extraTagCount }}</el-tag>
+        >
+          +{{ extraTagCount }}
+        </el-tag>
       </div>
     </div>
 
     <!-- Hover Overlay with Description -->
     <div class="card-overlay">
-      <p class="card-description" v-if="item.description">{{ item.description }}</p>
-      <div class="card-actions" @click.stop>
-        <el-button v-if="permissions.canEdit()" size="small" type="primary" @click="$emit('edit', item)">
+      <p
+        v-if="item.description"
+        class="card-description"
+      >
+        {{ item.description }}
+      </p>
+      <div
+        class="card-actions"
+        @click.stop
+      >
+        <el-button
+          v-if="permissions.canEdit()"
+          size="small"
+          type="primary"
+          @click="$emit('edit', item)"
+        >
           <el-icon><Edit /></el-icon>
           {{ t('common.edit') }}
         </el-button>
-        <el-button v-if="permissions.canClone()" size="small" type="warning" @click="$emit('clone', item)">
+        <el-button
+          v-if="permissions.canClone()"
+          size="small"
+          type="warning"
+          @click="$emit('clone', item)"
+        >
           <el-icon><CopyDocument /></el-icon>
           {{ t('functionUnit.clone') }}
         </el-button>
-        <el-button v-if="permissions.canDelete()" size="small" type="danger" @click="$emit('delete', item)">
+        <el-button
+          v-if="permissions.canDelete()"
+          size="small"
+          type="danger"
+          @click="$emit('delete', item)"
+        >
           <el-icon><Delete /></el-icon>
           {{ t('common.delete') }}
         </el-button>

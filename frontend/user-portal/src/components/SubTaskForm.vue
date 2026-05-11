@@ -1,19 +1,31 @@
 <template>
   <div class="sub-task-form">
-    <el-card v-if="loading" v-loading="loading" :body-style="{ padding: '60px' }">
-      <div style="text-align: center; color: #909399;">{{ t('task.loadingFormData') }}</div>
+    <el-card
+      v-if="loading"
+      v-loading="loading"
+      :body-style="{ padding: '60px' }"
+    >
+      <div style="text-align: center; color: #909399;">
+        {{ t('task.loadingFormData') }}
+      </div>
     </el-card>
 
     <template v-else-if="formData">
       <!-- 主任务信息区域（只读，灰色背景） -->
-      <el-card class="main-task-section" shadow="never">
+      <el-card
+        class="main-task-section"
+        shadow="never"
+      >
         <template #header>
           <div class="section-header">
             <el-icon><Document /></el-icon>
             <span>{{ t('task.mainTaskInfo') }}</span>
           </div>
         </template>
-        <el-descriptions :column="2" border>
+        <el-descriptions
+          :column="2"
+          border
+        >
           <el-descriptions-item
             v-for="field in formData.mainFormFields"
             :key="field.name"
@@ -25,7 +37,10 @@
       </el-card>
 
       <!-- 子任务表单区域（可编辑，蓝色标题） -->
-      <el-card class="sub-task-section" shadow="never">
+      <el-card
+        class="sub-task-section"
+        shadow="never"
+      >
         <template #header>
           <div class="section-header sub-task-header">
             <el-icon><Edit /></el-icon>
@@ -62,7 +77,11 @@
           </el-row>
 
           <el-form-item class="form-actions">
-            <el-button type="primary" :loading="submitting" @click="handleSubmit">
+            <el-button
+              type="primary"
+              :loading="submitting"
+              @click="handleSubmit"
+            >
               {{ t('common.submit') }}
             </el-button>
             <el-button @click="handleCancel">
@@ -73,7 +92,10 @@
       </el-card>
     </template>
 
-    <el-empty v-else :description="t('task.noFormData')" />
+    <el-empty
+      v-else
+      :description="t('task.noFormData')"
+    />
   </div>
 </template>
 

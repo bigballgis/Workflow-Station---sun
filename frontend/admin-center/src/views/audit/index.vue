@@ -4,34 +4,94 @@
 
     <!-- Filter Area -->
     <div class="filter-card">
-      <el-form :inline="true" :model="query" class="search-form">
+      <el-form
+        :inline="true"
+        :model="query"
+        class="search-form"
+      >
         <el-form-item :label="t('audit.actionType')">
-          <el-select v-model="query.action" clearable :placeholder="t('common.selectPlaceholder')" style="width: 120px">
-            <el-option label="Create" value="CREATE" />
-            <el-option label="Update" value="UPDATE" />
-            <el-option label="Delete" value="DELETE" />
-            <el-option label="Query"  value="QUERY"  />
+          <el-select
+            v-model="query.action"
+            clearable
+            :placeholder="t('common.selectPlaceholder')"
+            style="width: 120px"
+          >
+            <el-option
+              label="Create"
+              value="CREATE"
+            />
+            <el-option
+              label="Update"
+              value="UPDATE"
+            />
+            <el-option
+              label="Delete"
+              value="DELETE"
+            />
+            <el-option
+              label="Query"
+              value="QUERY"
+            />
           </el-select>
         </el-form-item>
         <el-form-item :label="t('audit.resourceType')">
-          <el-select v-model="query.resourceType" clearable :placeholder="t('common.selectPlaceholder')" style="width: 180px">
-            <el-option v-for="rt in resourceTypes" :key="rt" :label="resourceTypeText(rt)" :value="rt" />
+          <el-select
+            v-model="query.resourceType"
+            clearable
+            :placeholder="t('common.selectPlaceholder')"
+            style="width: 180px"
+          >
+            <el-option
+              v-for="rt in resourceTypes"
+              :key="rt"
+              :label="resourceTypeText(rt)"
+              :value="rt"
+            />
           </el-select>
         </el-form-item>
         <el-form-item :label="t('audit.operator')">
-          <el-input v-model="query.username" clearable :placeholder="t('audit.usernamePlaceholder')" style="width: 120px" @keyup.enter="handleSearch" />
+          <el-input
+            v-model="query.username"
+            clearable
+            :placeholder="t('audit.usernamePlaceholder')"
+            style="width: 120px"
+            @keyup.enter="handleSearch"
+          />
         </el-form-item>
         <el-form-item :label="t('audit.result')">
-          <el-select v-model="query.result" clearable :placeholder="t('common.selectPlaceholder')" style="width: 100px">
-            <el-option :label="t('audit.success')" value="SUCCESS" />
-            <el-option :label="t('audit.failed')" value="FAILED" />
+          <el-select
+            v-model="query.result"
+            clearable
+            :placeholder="t('common.selectPlaceholder')"
+            style="width: 100px"
+          >
+            <el-option
+              :label="t('audit.success')"
+              value="SUCCESS"
+            />
+            <el-option
+              :label="t('audit.failed')"
+              value="FAILED"
+            />
           </el-select>
         </el-form-item>
         <el-form-item :label="t('audit.ipAddress')">
-          <el-input v-model="query.ipAddress" clearable placeholder="IP" style="width: 130px" @keyup.enter="handleSearch" />
+          <el-input
+            v-model="query.ipAddress"
+            clearable
+            placeholder="IP"
+            style="width: 130px"
+            @keyup.enter="handleSearch"
+          />
         </el-form-item>
         <el-form-item :label="t('audit.resourceId')">
-          <el-input v-model="query.resourceId" clearable :placeholder="t('audit.resourceId')" style="width: 120px" @keyup.enter="handleSearch" />
+          <el-input
+            v-model="query.resourceId"
+            clearable
+            :placeholder="t('audit.resourceId')"
+            style="width: 120px"
+            @keyup.enter="handleSearch"
+          />
         </el-form-item>
         <el-form-item :label="t('audit.dateRange')">
           <el-date-picker
@@ -45,11 +105,22 @@
           />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="handleSearch" :loading="loading">
+          <el-button
+            type="primary"
+            :loading="loading"
+            @click="handleSearch"
+          >
             <el-icon><Search /></el-icon>{{ t('common.search') }}
           </el-button>
-          <el-button @click="handleReset">{{ t('common.reset') }}</el-button>
-          <el-button type="primary" :loading="exporting" style="margin-left: 8px" @click="openExportDialog">
+          <el-button @click="handleReset">
+            {{ t('common.reset') }}
+          </el-button>
+          <el-button
+            type="primary"
+            :loading="exporting"
+            style="margin-left: 8px"
+            @click="openExportDialog"
+          >
             <el-icon><Download /></el-icon>{{ t('common.export') }}
           </el-button>
           <el-tooltip
@@ -63,7 +134,10 @@
               @click="toggleAutoRefresh"
             >
               <el-icon v-if="autoRefreshPaused"><VideoPause /></el-icon>
-              <el-icon v-else class="spin-icon"><RefreshRight /></el-icon>
+              <el-icon
+                v-else
+                class="spin-icon"
+              ><RefreshRight /></el-icon>
               <span class="auto-refresh-countdown">
                 {{ autoRefreshPaused ? t('audit.paused') : t('audit.autoRefreshIn', { n: refreshCountdown }) }}
               </span>
@@ -74,35 +148,74 @@
     </div>
 
     <!-- Batch Actions Bar -->
-    <div v-if="selectedRows.length > 0" class="batch-bar">
+    <div
+      v-if="selectedRows.length > 0"
+      class="batch-bar"
+    >
       <span class="batch-info">{{ t('audit.selectedCount', { n: selectedRows.length }) }}</span>
-      <el-button size="small" type="primary" plain @click="handleBatchExportCsv">
+      <el-button
+        size="small"
+        type="primary"
+        plain
+        @click="handleBatchExportCsv"
+      >
         <el-icon><Download /></el-icon>{{ t('audit.batchExport') }}
       </el-button>
-      <el-button size="small" @click="clearSelection">{{ t('common.cancel') }}</el-button>
+      <el-button
+        size="small"
+        @click="clearSelection"
+      >
+        {{ t('common.cancel') }}
+      </el-button>
     </div>
 
     <el-table
       ref="tableRef"
-      :data="sortedLogs"
       v-loading="loading"
+      :data="sortedLogs"
       stripe
       size="small"
       highlight-current-row
-      @sort-change="handleSortChange"
-      @selection-change="handleSelectionChange"
       style="width: 100%"
       :header-cell-style="{ background: '#f5f7fa', whiteSpace: 'nowrap' }"
+      @sort-change="handleSortChange"
+      @selection-change="handleSelectionChange"
     >
-      <el-table-column type="selection" width="40" />
-      <el-table-column prop="action" :label="t('audit.actionType')" min-width="110" sortable="custom">
+      <el-table-column
+        type="selection"
+        width="40"
+      />
+      <el-table-column
+        prop="action"
+        :label="t('audit.actionType')"
+        min-width="110"
+        sortable="custom"
+      >
         <template #default="{ row }">
-          <el-tag size="small" class="action-tag" style="white-space: nowrap">{{ actionText(row.action) }}</el-tag>
+          <el-tag
+            size="small"
+            class="action-tag"
+            style="white-space: nowrap"
+          >
+            {{ actionText(row.action) }}
+          </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="resourceType" :label="t('audit.resourceType')" min-width="220" sortable="custom" class-name="resource-type-cell">
+      <el-table-column
+        prop="resourceType"
+        :label="t('audit.resourceType')"
+        min-width="220"
+        sortable="custom"
+        class-name="resource-type-cell"
+      >
         <template #default="{ row }">
-          <el-tooltip v-if="row.action === 'DATA_QUERIED' && (row.resourceType || row.resourceId)" placement="top" effect="light" :show-after="300" :enterable="false">
+          <el-tooltip
+            v-if="row.action === 'DATA_QUERIED' && (row.resourceType || row.resourceId)"
+            placement="top"
+            effect="light"
+            :show-after="300"
+            :enterable="false"
+          >
             <template #content>
               <div style="font-size:12px;max-width:220px">
                 <div><b>{{ t('audit.resourceType') }}:</b> {{ resourceTypeText(row.resourceType) || '-' }}</div>
@@ -114,35 +227,95 @@
           <span v-else>{{ resourceTypeText(row.resourceType) || '' }}</span>
         </template>
       </el-table-column>
-      <el-table-column prop="username" :label="t('audit.operator')" min-width="130" sortable="custom" show-overflow-tooltip />
-      <el-table-column prop="ipAddress" :label="t('audit.ipAddress')" min-width="150" sortable="custom" show-overflow-tooltip />
-      <el-table-column prop="result" :label="t('audit.result')" min-width="100" sortable="custom" show-overflow-tooltip>
+      <el-table-column
+        prop="username"
+        :label="t('audit.operator')"
+        min-width="130"
+        sortable="custom"
+        show-overflow-tooltip
+      />
+      <el-table-column
+        prop="ipAddress"
+        :label="t('audit.ipAddress')"
+        min-width="150"
+        sortable="custom"
+        show-overflow-tooltip
+      />
+      <el-table-column
+        prop="result"
+        :label="t('audit.result')"
+        min-width="100"
+        sortable="custom"
+        show-overflow-tooltip
+      >
         <template #default="{ row }">
           <el-tag
             :type="row.result === 'SUCCESS' ? 'success' : row.result === 'PENDING' ? 'warning' : 'danger'"
-            size="small" style="white-space: nowrap">
+            size="small"
+            style="white-space: nowrap"
+          >
             {{ row.result === 'SUCCESS' ? t('audit.success') : row.result === 'PENDING' ? t('audit.pending') : t('audit.failed') }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="duration" :label="t('audit.duration')" min-width="100" sortable="custom" show-overflow-tooltip>
-        <template #default="{ row }"><span style="white-space: nowrap">{{ row.duration }}ms</span></template>
-      </el-table-column>
-      <el-table-column prop="createdAt" :label="t('audit.time')" min-width="220" sortable="custom" show-overflow-tooltip>
-        <template #default="{ row }"><span style="white-space: nowrap">{{ formatTime(row.createdAt) }}</span></template>
-      </el-table-column>
-      <el-table-column :label="t('common.actions')" width="80" fixed="right">
+      <el-table-column
+        prop="duration"
+        :label="t('audit.duration')"
+        min-width="100"
+        sortable="custom"
+        show-overflow-tooltip
+      >
         <template #default="{ row }">
-          <el-tooltip :content="getPreviewContent(row)" placement="left" :show-after="300" effect="light" :enterable="false">
-            <el-button link type="primary" @click="showDetail(row)">{{ t('common.view') }}</el-button>
+          <span style="white-space: nowrap">{{ row.duration }}ms</span>
+        </template>
+      </el-table-column>
+      <el-table-column
+        prop="createdAt"
+        :label="t('audit.time')"
+        min-width="220"
+        sortable="custom"
+        show-overflow-tooltip
+      >
+        <template #default="{ row }">
+          <span style="white-space: nowrap">{{ formatTime(row.createdAt) }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column
+        :label="t('common.actions')"
+        width="80"
+        fixed="right"
+      >
+        <template #default="{ row }">
+          <el-tooltip
+            :content="getPreviewContent(row)"
+            placement="left"
+            :show-after="300"
+            effect="light"
+            :enterable="false"
+          >
+            <el-button
+              link
+              type="primary"
+              @click="showDetail(row)"
+            >
+              {{ t('common.view') }}
+            </el-button>
           </el-tooltip>
         </template>
       </el-table-column>
     </el-table>
 
-    <div v-if="!loading && logs.length === 0" class="empty-state">
+    <div
+      v-if="!loading && logs.length === 0"
+      class="empty-state"
+    >
       <el-empty :description="t('audit.emptyText')">
-        <el-button type="primary" @click="handleReset">{{ t('audit.resetFilter') }}</el-button>
+        <el-button
+          type="primary"
+          @click="handleReset"
+        >
+          {{ t('audit.resetFilter') }}
+        </el-button>
       </el-empty>
     </div>
 
@@ -161,12 +334,12 @@
     <!-- Export Dialog (extracted to AuditExportDialog.vue) -->
     <AuditExportDialog
       v-model="exportDialogVisible"
-      :total="total"
-      :exporting="exporting"
-      :export-fields="ALL_EXPORT_FIELDS"
       v-model:selected-fields="selectedExportFields"
       v-model:select-all="exportSelectAll"
       v-model:indeterminate="exportIndeterminate"
+      :total="total"
+      :exporting="exporting"
+      :export-fields="ALL_EXPORT_FIELDS"
       @export="doExport"
     />
 

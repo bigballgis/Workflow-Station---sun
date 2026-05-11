@@ -1,17 +1,43 @@
 <template>
-  <el-dialog :model-value="modelValue" @update:model-value="$emit('update:modelValue', $event)" :title="isEdit ? t('dictionary.editItem') : t('dictionary.addItemTitle')" width="500px">
-    <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
-      <el-form-item :label="t('dictionary.displayName')" prop="label">
+  <el-dialog
+    :model-value="modelValue"
+    :title="isEdit ? t('dictionary.editItem') : t('dictionary.addItemTitle')"
+    width="500px"
+    @update:model-value="$emit('update:modelValue', $event)"
+  >
+    <el-form
+      ref="formRef"
+      :model="form"
+      :rules="rules"
+      label-width="100px"
+    >
+      <el-form-item
+        :label="t('dictionary.displayName')"
+        prop="label"
+      >
         <el-input v-model="form.label" />
       </el-form-item>
-      <el-form-item :label="t('dictionary.dictValue')" prop="value">
-        <el-input v-model="form.value" :disabled="isEdit" />
+      <el-form-item
+        :label="t('dictionary.dictValue')"
+        prop="value"
+      >
+        <el-input
+          v-model="form.value"
+          :disabled="isEdit"
+        />
       </el-form-item>
       <el-form-item :label="t('dictionary.dictSort')">
-        <el-input-number v-model="form.sortOrder" :min="0" />
+        <el-input-number
+          v-model="form.sortOrder"
+          :min="0"
+        />
       </el-form-item>
       <el-form-item :label="t('dictionary.dictStatus')">
-        <el-switch v-model="form.status" active-value="ACTIVE" inactive-value="INACTIVE" />
+        <el-switch
+          v-model="form.status"
+          active-value="ACTIVE"
+          inactive-value="INACTIVE"
+        />
       </el-form-item>
       <el-form-item :label="t('dictionary.translations')">
         <el-tabs type="border-card">
@@ -28,8 +54,16 @@
       </el-form-item>
     </el-form>
     <template #footer>
-      <el-button @click="$emit('update:modelValue', false)">{{ t('common.cancel') }}</el-button>
-      <el-button type="primary" :loading="loading" @click="handleSubmit">{{ t('common.confirm') }}</el-button>
+      <el-button @click="$emit('update:modelValue', false)">
+        {{ t('common.cancel') }}
+      </el-button>
+      <el-button
+        type="primary"
+        :loading="loading"
+        @click="handleSubmit"
+      >
+        {{ t('common.confirm') }}
+      </el-button>
     </template>
   </el-dialog>
 </template>

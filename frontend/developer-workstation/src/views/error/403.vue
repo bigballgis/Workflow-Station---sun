@@ -1,12 +1,25 @@
 <template>
   <div class="error-page">
     <div class="error-content">
-      <div class="error-code">403</div>
-      <div class="error-message">{{ t('error.forbidden') }}</div>
-      <div class="error-description">{{ t('error.forbiddenDesc') }}</div>
+      <div class="error-code">
+        403
+      </div>
+      <div class="error-message">
+        {{ t('error.forbidden') }}
+      </div>
+      <div class="error-description">
+        {{ t('error.forbiddenDesc') }}
+      </div>
       <div class="error-actions">
-        <el-button type="primary" @click="goBack">{{ t('error.goBack') }}</el-button>
-        <el-button @click="goHome">{{ t('error.backHome') }}</el-button>
+        <el-button
+          type="primary"
+          @click="goBack"
+        >
+          {{ t('error.goBack') }}
+        </el-button>
+        <el-button @click="goHome">
+          {{ t('error.backHome') }}
+        </el-button>
       </div>
     </div>
   </div>

@@ -43,7 +43,10 @@ const subBindings = computed(() => allSubBindings.value.filter(b => b.bindingTyp
       :value="b.id"
       :label="b.tableDescription ? `${b.tableName}（${b.tableDescription}）` : b.tableName"
     />
-    <template v-if="subBindings.length === 0" #empty>
+    <template
+      v-if="subBindings.length === 0"
+      #empty
+    >
       <span class="el-select-dropdown__empty">{{ t('designer.subTableSelectEmpty') }}</span>
     </template>
   </el-select>

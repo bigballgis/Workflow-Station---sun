@@ -1,62 +1,158 @@
 <template>
   <div class="variable-monitor">
     <div class="monitor-toolbar">
-      <el-input v-model="searchText" :placeholder="t('debug.searchVariables')" size="small" clearable style="width: 200px;">
+      <el-input
+        v-model="searchText"
+        :placeholder="t('debug.searchVariables')"
+        size="small"
+        clearable
+        style="width: 200px;"
+      >
         <template #prefix>
           <el-icon><Search /></el-icon>
         </template>
       </el-input>
-      <el-button size="small" @click="handleRefresh">
+      <el-button
+        size="small"
+        @click="handleRefresh"
+      >
         <el-icon><Refresh /></el-icon> {{ t('common.refresh') }}
       </el-button>
-      <el-button size="small" @click="handleExport">
+      <el-button
+        size="small"
+        @click="handleExport"
+      >
         <el-icon><Download /></el-icon> {{ t('common.export') }}
       </el-button>
     </div>
 
     <div class="variable-list">
-      <el-table :data="filteredVariables" size="small" stripe max-height="400">
-        <el-table-column prop="name" :label="t('debug.variableName')" width="150" />
-        <el-table-column prop="type" :label="t('common.type')" width="100">
+      <el-table
+        :data="filteredVariables"
+        size="small"
+        stripe
+        max-height="400"
+      >
+        <el-table-column
+          prop="name"
+          :label="t('debug.variableName')"
+          width="150"
+        />
+        <el-table-column
+          prop="type"
+          :label="t('common.type')"
+          width="100"
+        >
           <template #default="{ row }">
-            <el-tag size="small" :type="typeTagType(row.type)">{{ row.type }}</el-tag>
+            <el-tag
+              size="small"
+              :type="typeTagType(row.type)"
+            >
+              {{ row.type }}
+            </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="value" :label="t('debug.value')" min-width="200">
+        <el-table-column
+          prop="value"
+          :label="t('debug.value')"
+          min-width="200"
+        >
           <template #default="{ row }">
-            <div v-if="editingKey === row.name && editable" class="edit-value">
-              <el-input v-model="editValue" size="small" @keyup.enter="saveEdit(row.name)" />
-              <el-button size="small" type="primary" @click="saveEdit(row.name)">{{ t('common.save') }}</el-button>
-              <el-button size="small" @click="cancelEdit">{{ t('common.cancel') }}</el-button>
+            <div
+              v-if="editingKey === row.name && editable"
+              class="edit-value"
+            >
+              <el-input
+                v-model="editValue"
+                size="small"
+                @keyup.enter="saveEdit(row.name)"
+              />
+              <el-button
+                size="small"
+                type="primary"
+                @click="saveEdit(row.name)"
+              >
+                {{ t('common.save') }}
+              </el-button>
+              <el-button
+                size="small"
+                @click="cancelEdit"
+              >
+                {{ t('common.cancel') }}
+              </el-button>
             </div>
-            <div v-else class="value-display" @dblclick="startEdit(row)">
-              <span v-if="row.type === 'object'" class="object-value">
-                <el-button link size="small" @click="expandObject(row)">
+            <div
+              v-else
+              class="value-display"
+              @dblclick="startEdit(row)"
+            >
+              <span
+                v-if="row.type === 'object'"
+                class="object-value"
+              >
+                <el-button
+                  link
+                  size="small"
+                  @click="expandObject(row)"
+                >
                   {{ row.expanded ? t('debug.collapse') : t('debug.expand') }} ({{ Object.keys(row.rawValue).length }} {{ t('debug.items') }})
                 </el-button>
               </span>
-              <span v-else-if="row.type === 'array'" class="array-value">
-                <el-button link size="small" @click="expandObject(row)">
+              <span
+                v-else-if="row.type === 'array'"
+                class="array-value"
+              >
+                <el-button
+                  link
+                  size="small"
+                  @click="expandObject(row)"
+                >
                   {{ row.expanded ? t('debug.collapse') : t('debug.expand') }} [{{ row.rawValue.length }} {{ t('debug.items') }}]
                 </el-button>
               </span>
-              <span v-else :class="['value', row.type]">{{ row.value }}</span>
-              <el-icon v-if="editable" class="edit-icon"><Edit /></el-icon>
+              <span
+                v-else
+                :class="['value', row.type]"
+              >{{ row.value }}</span>
+              <el-icon
+                v-if="editable"
+                class="edit-icon"
+              >
+                <Edit />
+              </el-icon>
             </div>
           </template>
         </el-table-column>
-        <el-table-column :label="t('common.actions')" width="80" v-if="editable">
+        <el-table-column
+          v-if="editable"
+          :label="t('common.actions')"
+          width="80"
+        >
           <template #default="{ row }">
-            <el-button link type="primary" size="small" @click="startEdit(row)">{{ t('common.edit') }}</el-button>
+            <el-button
+              link
+              type="primary"
+              size="small"
+              @click="startEdit(row)"
+            >
+              {{ t('common.edit') }}
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
 
-      <el-empty v-if="!filteredVariables.length" :description="t('debug.noVariableData')" />
+      <el-empty
+        v-if="!filteredVariables.length"
+        :description="t('debug.noVariableData')"
+      />
     </div>
 
     <!-- Object/Array Detail Dialog -->
-    <el-dialog v-model="showDetailDialog" :title="t('debug.variableDetail', { name: detailVariable?.name })" width="600px">
+    <el-dialog
+      v-model="showDetailDialog"
+      :title="t('debug.variableDetail', { name: detailVariable?.name })"
+      width="600px"
+    >
       <pre class="json-preview">{{ JSON.stringify(detailVariable?.rawValue, null, 2) }}</pre>
     </el-dialog>
   </div>

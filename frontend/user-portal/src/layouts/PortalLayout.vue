@@ -4,7 +4,11 @@
     <el-header class="portal-header">
       <div class="header-left">
         <div class="logo">
-          <img src="/logo.svg" alt="Logo" class="logo-img" />
+          <img
+            src="/logo.svg"
+            alt="Logo"
+            class="logo-img"
+          >
           <span class="logo-text">{{ t('app.name') }}</span>
         </div>
       </div>
@@ -22,22 +26,39 @@
 
     <el-container class="portal-main">
       <!-- 左侧菜单 -->
-      <el-aside :width="isCollapsed ? '64px' : '260px'" class="portal-aside">
+      <el-aside
+        :width="isCollapsed ? '64px' : '260px'"
+        class="portal-aside"
+      >
         <el-menu
           :default-active="activeMenu"
           :collapse="isCollapsed"
           :router="true"
           class="portal-menu"
         >
-          <el-menu-item v-if="showFullPortal" index="/dashboard">
+          <el-menu-item
+            v-if="showFullPortal"
+            index="/dashboard"
+          >
             <el-icon><HomeFilled /></el-icon>
-            <template #title>{{ t('menu.dashboard') }}</template>
+            <template #title>
+              {{ t('menu.dashboard') }}
+            </template>
           </el-menu-item>
-          <el-menu-item v-if="showFullPortal && hasBiDashboards" index="/bi-dashboard">
+          <el-menu-item
+            v-if="showFullPortal && hasBiDashboards"
+            index="/bi-dashboard"
+          >
             <el-icon><DataAnalysis /></el-icon>
-            <template #title>BI Dashboard</template>
+            <template #title>
+              BI Dashboard
+            </template>
           </el-menu-item>
-          <el-menu-item v-if="showFullPortal" index="/tasks" class="menu-item-tasks">
+          <el-menu-item
+            v-if="showFullPortal"
+            index="/tasks"
+            class="menu-item-tasks"
+          >
             <el-badge
               :value="pendingTaskCount"
               :max="99"
@@ -60,23 +81,46 @@
               </span>
             </template>
           </el-menu-item>
-          <el-menu-item v-if="showFullPortal" index="/tasks/completed">
+          <el-menu-item
+            v-if="showFullPortal"
+            index="/tasks/completed"
+          >
             <el-icon><Finished /></el-icon>
-            <template #title>{{ t('menu.completedTasks') }}</template>
+            <template #title>
+              {{ t('menu.completedTasks') }}
+            </template>
           </el-menu-item>
-          <el-menu-item v-if="showFullPortal" index="/processes">
+          <el-menu-item
+            v-if="showFullPortal"
+            index="/processes"
+          >
             <el-icon><Plus /></el-icon>
-            <template #title>{{ t('menu.processes') }}</template>
+            <template #title>
+              {{ t('menu.processes') }}
+            </template>
           </el-menu-item>
-          <el-menu-item v-if="showFullPortal" index="/my-applications">
+          <el-menu-item
+            v-if="showFullPortal"
+            index="/my-applications"
+          >
             <el-icon><Document /></el-icon>
-            <template #title>{{ t('menu.myApplications') }}</template>
+            <template #title>
+              {{ t('menu.myApplications') }}
+            </template>
           </el-menu-item>
-          <el-menu-item v-if="showFullPortal" index="/delegations">
+          <el-menu-item
+            v-if="showFullPortal"
+            index="/delegations"
+          >
             <el-icon><Share /></el-icon>
-            <template #title>{{ t('menu.delegations') }}</template>
+            <template #title>
+              {{ t('menu.delegations') }}
+            </template>
           </el-menu-item>
-          <el-menu-item index="/permissions" class="menu-item-permissions">
+          <el-menu-item
+            index="/permissions"
+            class="menu-item-permissions"
+          >
             <el-badge
               :value="pendingApprovalCount"
               :max="99"
@@ -99,12 +143,20 @@
               </span>
             </template>
           </el-menu-item>
-          <el-menu-item v-if="showFullPortal" index="/relation-tables">
+          <el-menu-item
+            v-if="showFullPortal"
+            index="/relation-tables"
+          >
             <el-icon><Grid /></el-icon>
-            <template #title>Relation Tables</template>
+            <template #title>
+              Relation Tables
+            </template>
           </el-menu-item>
         </el-menu>
-        <div class="collapse-btn" @click="toggleCollapse">
+        <div
+          class="collapse-btn"
+          @click="toggleCollapse"
+        >
           <el-icon :size="20">
             <Fold v-if="!isCollapsed" />
             <Expand v-else />
@@ -115,7 +167,10 @@
       <!-- 主内容区 -->
       <el-main class="portal-content">
         <router-view v-slot="{ Component }">
-          <transition name="fade" mode="out-in">
+          <transition
+            name="fade"
+            mode="out-in"
+          >
             <keep-alive :include="cachedViews">
               <component :is="Component" />
             </keep-alive>

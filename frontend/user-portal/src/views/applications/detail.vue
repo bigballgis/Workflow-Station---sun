@@ -3,26 +3,60 @@
     <!-- Page header -->
     <div class="page-header">
       <div class="header-left">
-        <el-button :icon="ArrowLeft" @click="$router.back()">{{ t('applicationDetail.back') }}</el-button>
+        <el-button
+          :icon="ArrowLeft"
+          @click="$router.back()"
+        >
+          {{ t('applicationDetail.back') }}
+        </el-button>
         <h1>{{ processInfo.processDefinitionName || t('applicationDetail.applicationDetail') }}</h1>
-        <el-tag :type="getStatusType(processInfo.status)" size="small">{{ getStatusLabel(processInfo.status) }}</el-tag>
+        <el-tag
+          :type="getStatusType(processInfo.status)"
+          size="small"
+        >
+          {{ getStatusLabel(processInfo.status) }}
+        </el-tag>
       </div>
-      <el-button :icon="Refresh" @click="loadProcessDetail" :loading="loading">{{ t('applicationDetail.refresh') }}</el-button>
+      <el-button
+        :icon="Refresh"
+        :loading="loading"
+        @click="loadProcessDetail"
+      >
+        {{ t('applicationDetail.refresh') }}
+      </el-button>
     </div>
 
     <!-- Loading state -->
-    <div v-if="loading" class="skeleton-content">
-      <el-skeleton animated :count="3">
+    <div
+      v-if="loading"
+      class="skeleton-content"
+    >
+      <el-skeleton
+        animated
+        :count="3"
+      >
         <template #template>
-          <el-skeleton-item variant="rect" style="height: 120px; margin-bottom: 20px;" />
-          <el-skeleton-item variant="rect" style="height: 300px; margin-bottom: 20px;" />
-          <el-skeleton-item variant="rect" style="height: 200px;" />
+          <el-skeleton-item
+            variant="rect"
+            style="height: 120px; margin-bottom: 20px;"
+          />
+          <el-skeleton-item
+            variant="rect"
+            style="height: 300px; margin-bottom: 20px;"
+          />
+          <el-skeleton-item
+            variant="rect"
+            style="height: 200px;"
+          />
         </template>
       </el-skeleton>
     </div>
 
     <!-- Main content -->
-    <div v-else class="content-sections">
+    <div
+      v-else
+      class="content-sections"
+    >
       <!-- Section 1: Basic info -->
       <div class="section info-section">
         <div class="section-header">
@@ -30,7 +64,10 @@
           <span>{{ t('applicationDetail.basicInfo') }}</span>
         </div>
         <div class="section-content">
-          <el-descriptions :column="3" border>
+          <el-descriptions
+            :column="3"
+            border
+          >
             <el-descriptions-item :label="t('applicationDetail.processTitle')">
               {{ processInfo.businessKey || processInfo.processDefinitionName || '-' }}
             </el-descriptions-item>
@@ -58,7 +95,10 @@
         <div class="section-header">
           <el-icon><Share /></el-icon>
           <span>{{ t('applicationDetail.workflowDiagram') }}</span>
-          <el-tag :type="getNodeStatusType(processInfo.status)" size="small">
+          <el-tag
+            :type="getNodeStatusType(processInfo.status)"
+            size="small"
+          >
             {{ processInfo.currentNode || t('applicationDetail.pending') }}
           </el-tag>
         </div>
@@ -73,31 +113,43 @@
             :show-toolbar="true"
             :show-legend="true"
           />
-          <el-empty v-else :description="t('applicationDetail.noProcessDefinition')" />
+          <el-empty
+            v-else
+            :description="t('applicationDetail.noProcessDefinition')"
+          />
         </div>
       </div>
 
       <!-- Form data (Completed Tasks renders the same form as To Do, but readonly) -->
-      <div v-if="showCurrentFormSection" class="section form-section">
+      <div
+        v-if="showCurrentFormSection"
+        class="section form-section"
+      >
         <div class="section-header">
           <el-icon><Document /></el-icon>
           <span>{{ currentFormName || t('applicationDetail.applicationForm') }}</span>
         </div>
         <div class="section-content">
-          <div v-if="formFields.length > 0 || formTabs.length > 0" class="form-container">
+          <div
+            v-if="formFields.length > 0 || formTabs.length > 0"
+            class="form-container"
+          >
             <FormRenderer
               :key="`app-form-${processId}`"
+              v-model="formData"
               :fields="formFields"
               :tabs="formTabs"
-              v-model="formData"
               :label-width="formLabelWidth"
               :readonly="true"
-              :subTableBindings="subTableBindings"
+              :sub-table-bindings="subTableBindings"
               :linked-sub-table-bindings="linkableSubTableBindings"
-              @update:subTableData="(id: number, rows: any[]) => { const b = subTableBindings.find(x => x.bindingId === id); if (b) b.data = rows }"
+              @update:sub-table-data="(id: number, rows: any[]) => { const b = subTableBindings.find(x => x.bindingId === id); if (b) b.data = rows }"
             />
           </div>
-          <el-empty v-else :description="t('applicationDetail.noFormData')" />
+          <el-empty
+            v-else
+            :description="t('applicationDetail.noFormData')"
+          />
 
           <!-- Sub-tables (SUB / RELATED bindings) -->
           <template v-if="bottomSubTableBindings.length > 0">
@@ -107,15 +159,15 @@
               class="sub-table-section"
             >
               <SubTableField
+                v-model="binding.data"
                 :title="binding.tableName"
                 :columns="binding.columns"
-                v-model="binding.data"
                 :editable="false"
                 :assignee-field="hasAssignmentData(binding.data) ? 'assignee_user_id' : undefined"
                 :show-task-status="false"
                 :show-view-detail="hasSubTaskFormSchema && hasTaskStatusData(binding.data)"
                 :linked-sub-table-bindings="linkableSubTableBindings"
-                @viewDetail="(row: any) => openSubTaskDetailDialog(row)"
+                @view-detail="(row: any) => openSubTaskDetailDialog(row)"
               />
             </div>
           </template>
@@ -149,32 +201,53 @@
         width="600px"
         destroy-on-close
       >
-        <div v-if="subTaskDetailFields.length > 0" class="form-container">
+        <div
+          v-if="subTaskDetailFields.length > 0"
+          class="form-container"
+        >
           <FormRenderer
+            v-model="subTaskDetailData"
             :fields="subTaskDetailFields"
             :tabs="[]"
-            v-model="subTaskDetailData"
             label-width="160px"
             :readonly="true"
           />
         </div>
-        <el-empty v-else :description="t('applicationDetail.noFormData')" />
+        <el-empty
+          v-else
+          :description="t('applicationDetail.noFormData')"
+        />
         <template #footer>
-          <el-button @click="subTaskDetailVisible = false">{{ t('applicationDetail.close') }}</el-button>
+          <el-button @click="subTaskDetailVisible = false">
+            {{ t('applicationDetail.close') }}
+          </el-button>
         </template>
       </el-dialog>
 
       <!-- Section 5: Action buttons -->
-      <div v-if="processInfo.status === 'RUNNING'" class="section action-section">
+      <div
+        v-if="processInfo.status === 'RUNNING'"
+        class="section action-section"
+      >
         <div class="action-buttons">
           <div class="left-actions">
-            <el-button @click="$router.back()">{{ t('applicationDetail.back') }}</el-button>
+            <el-button @click="$router.back()">
+              {{ t('applicationDetail.back') }}
+            </el-button>
           </div>
           <div class="right-actions">
-            <el-button type="warning" @click="handleUrge" :loading="urging">
+            <el-button
+              type="warning"
+              :loading="urging"
+              @click="handleUrge"
+            >
               <el-icon><Bell /></el-icon> {{ t('applicationDetail.urge') }}
             </el-button>
-            <el-button type="danger" @click="handleWithdraw" :loading="withdrawing">
+            <el-button
+              type="danger"
+              :loading="withdrawing"
+              @click="handleWithdraw"
+            >
               <el-icon><RefreshLeft /></el-icon> {{ t('applicationDetail.withdraw') }}
             </el-button>
           </div>

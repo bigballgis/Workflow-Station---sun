@@ -1,7 +1,10 @@
 <template>
   <div class="n8n-task-properties">
     <!-- N8N Connection Config -->
-    <el-form-item :label="t('properties.n8nConfigId')" :error="validationErrors.configId">
+    <el-form-item
+      :label="t('properties.n8nConfigId')"
+      :error="validationErrors.configId"
+    >
       <el-select
         v-model="n8nConfig.configId"
         :placeholder="t('properties.n8nConfigPlaceholder')"
@@ -36,7 +39,10 @@
     </el-form-item>
 
     <!-- Webhook URL -->
-    <el-form-item :label="t('properties.n8nWebhookUrl')" :error="validationErrors.webhookUrl">
+    <el-form-item
+      :label="t('properties.n8nWebhookUrl')"
+      :error="validationErrors.webhookUrl"
+    >
       <el-input
         v-model="n8nConfig.webhookUrl"
         :placeholder="t('properties.n8nWebhookUrlPlaceholder')"
@@ -69,12 +75,25 @@
     <div class="mapping-section">
       <div class="mapping-header">
         <span>{{ t('properties.n8nInputMapping') }}</span>
-        <el-button type="primary" link size="small" @click="addInputMapping">
+        <el-button
+          type="primary"
+          link
+          size="small"
+          @click="addInputMapping"
+        >
           + {{ t('common.add') }}
         </el-button>
       </div>
-      <el-table :data="n8nConfig.inputMapping" size="small" border v-if="n8nConfig.inputMapping.length > 0">
-        <el-table-column :label="t('properties.n8nMappingSource')" min-width="120">
+      <el-table
+        v-if="n8nConfig.inputMapping.length > 0"
+        :data="n8nConfig.inputMapping"
+        size="small"
+        border
+      >
+        <el-table-column
+          :label="t('properties.n8nMappingSource')"
+          min-width="120"
+        >
           <template #default="{ row, $index }">
             <el-input
               v-model="row.source"
@@ -84,7 +103,10 @@
             />
           </template>
         </el-table-column>
-        <el-table-column :label="t('properties.n8nMappingTarget')" min-width="120">
+        <el-table-column
+          :label="t('properties.n8nMappingTarget')"
+          min-width="120"
+        >
           <template #default="{ row, $index }">
             <el-input
               v-model="row.target"
@@ -94,9 +116,17 @@
             />
           </template>
         </el-table-column>
-        <el-table-column width="50" align="center">
+        <el-table-column
+          width="50"
+          align="center"
+        >
           <template #default="{ $index }">
-            <el-button type="danger" link size="small" @click="removeInputMapping($index)">
+            <el-button
+              type="danger"
+              link
+              size="small"
+              @click="removeInputMapping($index)"
+            >
               ✕
             </el-button>
           </template>
@@ -108,12 +138,25 @@
     <div class="mapping-section">
       <div class="mapping-header">
         <span>{{ t('properties.n8nOutputMapping') }}</span>
-        <el-button type="primary" link size="small" @click="addOutputMapping">
+        <el-button
+          type="primary"
+          link
+          size="small"
+          @click="addOutputMapping"
+        >
           + {{ t('common.add') }}
         </el-button>
       </div>
-      <el-table :data="n8nConfig.outputMapping" size="small" border v-if="n8nConfig.outputMapping.length > 0">
-        <el-table-column :label="t('properties.n8nMappingSource')" min-width="120">
+      <el-table
+        v-if="n8nConfig.outputMapping.length > 0"
+        :data="n8nConfig.outputMapping"
+        size="small"
+        border
+      >
+        <el-table-column
+          :label="t('properties.n8nMappingSource')"
+          min-width="120"
+        >
           <template #default="{ row, $index }">
             <el-input
               v-model="row.source"
@@ -123,7 +166,10 @@
             />
           </template>
         </el-table-column>
-        <el-table-column :label="t('properties.n8nMappingTarget')" min-width="120">
+        <el-table-column
+          :label="t('properties.n8nMappingTarget')"
+          min-width="120"
+        >
           <template #default="{ row, $index }">
             <el-input
               v-model="row.target"
@@ -133,9 +179,17 @@
             />
           </template>
         </el-table-column>
-        <el-table-column width="50" align="center">
+        <el-table-column
+          width="50"
+          align="center"
+        >
           <template #default="{ $index }">
-            <el-button type="danger" link size="small" @click="removeOutputMapping($index)">
+            <el-button
+              type="danger"
+              link
+              size="small"
+              @click="removeOutputMapping($index)"
+            >
               ✕
             </el-button>
           </template>

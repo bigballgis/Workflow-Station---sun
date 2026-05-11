@@ -5,25 +5,37 @@
     width="600px"
     destroy-on-close
   >
-    <div v-if="fields.length > 0 || tabs.length > 0" class="form-popup-container">
+    <div
+      v-if="fields.length > 0 || tabs.length > 0"
+      class="form-popup-container"
+    >
       <FormRenderer
         :fields="fields"
         :tabs="tabs"
         :model-value="formData"
-        @update:model-value="emit('update:formData', $event)"
         :label-width="labelWidth"
         :readonly="computedReadOnly"
-        :subTableBindings="subTableBindings"
+        :sub-table-bindings="subTableBindings"
         :preview-sub-tables="true"
         :suppress-link-form-initial-data="isMiSubTaskMode && !isCompletedTask"
         :show-link-form-dialog-footer="!isCompletedTask && !computedReadOnly"
-        @update:subTableData="(bindingId: number, rows: any[]) => emit('update:subTableData', bindingId, rows)"
+        @update:model-value="emit('update:formData', $event)"
+        @update:sub-table-data="(bindingId: number, rows: any[]) => emit('update:subTableData', bindingId, rows)"
       />
     </div>
-    <el-empty v-else :description="$t('task.noFormData')" />
+    <el-empty
+      v-else
+      :description="$t('task.noFormData')"
+    />
     <template #footer>
-      <el-button @click="visible = false">{{ $t('common.cancel') }}</el-button>
-      <el-button v-if="!computedReadOnly" type="primary" @click="emit('confirm')">
+      <el-button @click="visible = false">
+        {{ $t('common.cancel') }}
+      </el-button>
+      <el-button
+        v-if="!computedReadOnly"
+        type="primary"
+        @click="emit('confirm')"
+      >
         {{ $t('common.confirm') }}
       </el-button>
     </template>

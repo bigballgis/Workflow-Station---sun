@@ -15,47 +15,80 @@
             <el-col :span="8">
               <div class="stat-item">
                 <div class="stat-number">
-                  <router-link to="/tasks" class="stat-link">{{ taskOverview.pendingCount }}</router-link>
+                  <router-link
+                    to="/tasks"
+                    class="stat-link"
+                  >
+                    {{ taskOverview.pendingCount }}
+                  </router-link>
                 </div>
-                <div class="stat-label">{{ t('dashboard.pendingTasks') }}</div>
+                <div class="stat-label">
+                  {{ t('dashboard.pendingTasks') }}
+                </div>
               </div>
             </el-col>
             <el-col :span="8">
               <div class="stat-item">
-                <div class="stat-number error">{{ taskOverview.overdueCount }}</div>
-                <div class="stat-label">{{ t('dashboard.overdueTasks') }}</div>
+                <div class="stat-number error">
+                  {{ taskOverview.overdueCount }}
+                </div>
+                <div class="stat-label">
+                  {{ t('dashboard.overdueTasks') }}
+                </div>
               </div>
             </el-col>
             <el-col :span="8">
               <div class="stat-item">
                 <div class="stat-number success">
-                  <router-link to="/tasks/completed" class="stat-link">{{ taskOverview.completedTodayCount }}</router-link>
+                  <router-link
+                    to="/tasks/completed"
+                    class="stat-link"
+                  >
+                    {{ taskOverview.completedTodayCount }}
+                  </router-link>
                 </div>
-                <div class="stat-label">{{ t('dashboard.completedToday') }}</div>
+                <div class="stat-label">
+                  {{ t('dashboard.completedToday') }}
+                </div>
               </div>
             </el-col>
           </el-row>
           <el-divider />
           <div class="card-header">
-            <span class="card-title team-title-link" @click="openTeamRequestsDialog">{{ t('dashboard.teamTaskOverview') }}</span>
+            <span
+              class="card-title team-title-link"
+              @click="openTeamRequestsDialog"
+            >{{ t('dashboard.teamTaskOverview') }}</span>
           </div>
           <el-row :gutter="16">
             <el-col :span="8">
               <div class="stat-item small">
-                <div class="stat-value">{{ taskOverview.teamPendingCount }}</div>
-                <div class="stat-label">{{ t('dashboard.teamPendingTasks') }}</div>
+                <div class="stat-value">
+                  {{ taskOverview.teamPendingCount }}
+                </div>
+                <div class="stat-label">
+                  {{ t('dashboard.teamPendingTasks') }}
+                </div>
               </div>
             </el-col>
             <el-col :span="8">
               <div class="stat-item small">
-                <div class="stat-value error">{{ taskOverview.teamOverdueCount }}</div>
-                <div class="stat-label">{{ t('dashboard.teamOverdueTasks') }}</div>
+                <div class="stat-value error">
+                  {{ taskOverview.teamOverdueCount }}
+                </div>
+                <div class="stat-label">
+                  {{ t('dashboard.teamOverdueTasks') }}
+                </div>
               </div>
             </el-col>
             <el-col :span="8">
               <div class="stat-item small">
-                <div class="stat-value success">{{ taskOverview.teamCompletedTodayCount }}</div>
-                <div class="stat-label">{{ t('dashboard.teamCompletedToday') }}</div>
+                <div class="stat-value success">
+                  {{ taskOverview.teamCompletedTodayCount }}
+                </div>
+                <div class="stat-label">
+                  {{ t('dashboard.teamCompletedToday') }}
+                </div>
               </div>
             </el-col>
           </el-row>
@@ -71,20 +104,32 @@
           <el-row :gutter="16">
             <el-col :span="8">
               <div class="stat-item">
-                <div class="stat-number">{{ processOverview.initiatedCount }}</div>
-                <div class="stat-label">{{ t('dashboard.initiatedProcesses') }}</div>
+                <div class="stat-number">
+                  {{ processOverview.initiatedCount }}
+                </div>
+                <div class="stat-label">
+                  {{ t('dashboard.initiatedProcesses') }}
+                </div>
               </div>
             </el-col>
             <el-col :span="8">
               <div class="stat-item">
-                <div class="stat-number warning">{{ processOverview.inProgressCount }}</div>
-                <div class="stat-label">{{ t('dashboard.inProgressProcesses') }}</div>
+                <div class="stat-number warning">
+                  {{ processOverview.inProgressCount }}
+                </div>
+                <div class="stat-label">
+                  {{ t('dashboard.inProgressProcesses') }}
+                </div>
               </div>
             </el-col>
             <el-col :span="8">
               <div class="stat-item">
-                <div class="stat-number success">{{ processOverview.completedThisMonthCount }}</div>
-                <div class="stat-label">{{ t('dashboard.completedThisMonth') }}</div>
+                <div class="stat-number success">
+                  {{ processOverview.completedThisMonthCount }}
+                </div>
+                <div class="stat-label">
+                  {{ t('dashboard.completedThisMonth') }}
+                </div>
               </div>
             </el-col>
           </el-row>
@@ -101,7 +146,10 @@
       </el-col>
     </el-row>
 
-    <el-row :gutter="20" style="margin-top: 20px;">
+    <el-row
+      :gutter="20"
+      style="margin-top: 20px;"
+    >
       <!-- 快捷操作 -->
       <el-col :span="8">
         <div class="portal-card">
@@ -109,24 +157,64 @@
             <span class="card-title">{{ t('dashboard.quickActions') }}</span>
           </div>
           <div class="quick-actions">
-            <div class="action-item" @click="$router.push('/processes')">
-              <el-icon :size="24" color="var(--hsbc-red)"><Plus /></el-icon>
+            <div
+              class="action-item"
+              @click="$router.push('/processes')"
+            >
+              <el-icon
+                :size="24"
+                color="var(--hsbc-red)"
+              >
+                <Plus />
+              </el-icon>
               <span>{{ t('menu.processes') }}</span>
             </div>
-            <div class="action-item" @click="$router.push('/tasks')">
-              <el-icon :size="24" color="var(--info-blue)"><List /></el-icon>
+            <div
+              class="action-item"
+              @click="$router.push('/tasks')"
+            >
+              <el-icon
+                :size="24"
+                color="var(--info-blue)"
+              >
+                <List />
+              </el-icon>
               <span>{{ t('menu.tasks') }}</span>
             </div>
-            <div class="action-item" @click="$router.push('/my-applications')">
-              <el-icon :size="24" color="var(--success-green)"><Document /></el-icon>
+            <div
+              class="action-item"
+              @click="$router.push('/my-applications')"
+            >
+              <el-icon
+                :size="24"
+                color="var(--success-green)"
+              >
+                <Document />
+              </el-icon>
               <span>{{ t('menu.myApplications') }}</span>
             </div>
-            <div class="action-item" @click="$router.push('/delegations')">
-              <el-icon :size="24" color="var(--warning-orange)"><Share /></el-icon>
+            <div
+              class="action-item"
+              @click="$router.push('/delegations')"
+            >
+              <el-icon
+                :size="24"
+                color="var(--warning-orange)"
+              >
+                <Share />
+              </el-icon>
               <span>{{ t('menu.delegations') }}</span>
             </div>
-            <div class="action-item" @click="$router.push('/permissions')">
-              <el-icon :size="24" color="#722ed1"><Key /></el-icon>
+            <div
+              class="action-item"
+              @click="$router.push('/permissions')"
+            >
+              <el-icon
+                :size="24"
+                color="#722ed1"
+              >
+                <Key />
+              </el-icon>
               <span>{{ t('menu.permissions') }}</span>
             </div>
           </div>
@@ -179,10 +267,20 @@
         <div class="portal-card">
           <div class="card-header">
             <span class="card-title">{{ t('dashboard.recentTasks') }}</span>
-            <el-button type="primary" link @click="$router.push('/tasks')">{{ t('dashboard.viewAll') }}</el-button>
+            <el-button
+              type="primary"
+              link
+              @click="$router.push('/tasks')"
+            >
+              {{ t('dashboard.viewAll') }}
+            </el-button>
           </div>
           <div class="recent-tasks">
-            <div v-for="task in recentTasks" :key="task.taskId" class="task-item">
+            <div
+              v-for="task in recentTasks"
+              :key="task.taskId"
+              class="task-item"
+            >
               <div class="task-info">
                 <span class="task-name">{{ task.taskName }}</span>
                 <span class="task-process">{{ task.processDefinitionName }}</span>
@@ -194,7 +292,10 @@
                 {{ getPriorityLabel(task.priority) }}
               </el-tag>
             </div>
-            <el-empty v-if="recentTasks.length === 0" :description="t('dashboard.noTasks')" />
+            <el-empty
+              v-if="recentTasks.length === 0"
+              :description="t('dashboard.noTasks')"
+            />
           </div>
         </div>
       </el-col>
@@ -208,60 +309,141 @@
       destroy-on-close
     >
       <div class="team-summary">
-        <div class="team-summary-item" @click="switchTeamTab('all')">
-          <div class="team-summary-value">{{ teamRequests.overallCount }}</div>
-          <div class="team-summary-label">{{ t('dashboard.overallRequests') }}</div>
+        <div
+          class="team-summary-item"
+          @click="switchTeamTab('all')"
+        >
+          <div class="team-summary-value">
+            {{ teamRequests.overallCount }}
+          </div>
+          <div class="team-summary-label">
+            {{ t('dashboard.overallRequests') }}
+          </div>
         </div>
-        <div class="team-summary-item running" @click="switchTeamTab('RUNNING')">
-          <div class="team-summary-value">{{ teamRequests.runningCount }}</div>
-          <div class="team-summary-label">{{ t('dashboard.runningRequests') }}</div>
+        <div
+          class="team-summary-item running"
+          @click="switchTeamTab('RUNNING')"
+        >
+          <div class="team-summary-value">
+            {{ teamRequests.runningCount }}
+          </div>
+          <div class="team-summary-label">
+            {{ t('dashboard.runningRequests') }}
+          </div>
         </div>
-        <div class="team-summary-item completed" @click="switchTeamTab('COMPLETED')">
-          <div class="team-summary-value">{{ teamRequests.completedCount }}</div>
-          <div class="team-summary-label">{{ t('dashboard.completedRequests') }}</div>
+        <div
+          class="team-summary-item completed"
+          @click="switchTeamTab('COMPLETED')"
+        >
+          <div class="team-summary-value">
+            {{ teamRequests.completedCount }}
+          </div>
+          <div class="team-summary-label">
+            {{ t('dashboard.completedRequests') }}
+          </div>
         </div>
-        <div class="team-summary-item withdrawn" @click="switchTeamTab('WITHDRAWN')">
-          <div class="team-summary-value">{{ teamRequests.withdrawnCount }}</div>
-          <div class="team-summary-label">{{ t('dashboard.withdrawnRequests') }}</div>
+        <div
+          class="team-summary-item withdrawn"
+          @click="switchTeamTab('WITHDRAWN')"
+        >
+          <div class="team-summary-value">
+            {{ teamRequests.withdrawnCount }}
+          </div>
+          <div class="team-summary-label">
+            {{ t('dashboard.withdrawnRequests') }}
+          </div>
         </div>
       </div>
 
-      <el-tabs v-model="teamActiveTab" @tab-change="handleTeamTabChange">
-        <el-tab-pane :label="t('dashboard.overallRequests')" name="all" />
-        <el-tab-pane :label="t('dashboard.runningRequests')" name="RUNNING" />
-        <el-tab-pane :label="t('dashboard.completedRequests')" name="COMPLETED" />
-        <el-tab-pane :label="t('dashboard.withdrawnRequests')" name="WITHDRAWN" />
+      <el-tabs
+        v-model="teamActiveTab"
+        @tab-change="handleTeamTabChange"
+      >
+        <el-tab-pane
+          :label="t('dashboard.overallRequests')"
+          name="all"
+        />
+        <el-tab-pane
+          :label="t('dashboard.runningRequests')"
+          name="RUNNING"
+        />
+        <el-tab-pane
+          :label="t('dashboard.completedRequests')"
+          name="COMPLETED"
+        />
+        <el-tab-pane
+          :label="t('dashboard.withdrawnRequests')"
+          name="WITHDRAWN"
+        />
       </el-tabs>
 
-      <el-table :data="teamRequests.content" v-loading="teamLoading" stripe table-layout="fixed">
-        <el-table-column prop="businessKey" :label="t('application.processTitle')" min-width="180" show-overflow-tooltip>
+      <el-table
+        v-loading="teamLoading"
+        :data="teamRequests.content"
+        stripe
+        table-layout="fixed"
+      >
+        <el-table-column
+          prop="businessKey"
+          :label="t('application.processTitle')"
+          min-width="180"
+          show-overflow-tooltip
+        >
           <template #default="{ row }">
             {{ row.businessKey || row.processDefinitionName }}
           </template>
         </el-table-column>
-        <el-table-column prop="startUserName" :label="t('dashboard.initiator')" min-width="100" show-overflow-tooltip>
+        <el-table-column
+          prop="startUserName"
+          :label="t('dashboard.initiator')"
+          min-width="100"
+          show-overflow-tooltip
+        >
           <template #default="{ row }">
             {{ row.startUserName || '-' }}
           </template>
         </el-table-column>
-        <el-table-column prop="currentNode" :label="t('application.currentStep')" min-width="120" show-overflow-tooltip>
+        <el-table-column
+          prop="currentNode"
+          :label="t('application.currentStep')"
+          min-width="120"
+          show-overflow-tooltip
+        >
           <template #default="{ row }">
             {{ row.currentNode || '-' }}
           </template>
         </el-table-column>
-        <el-table-column prop="currentAssignee" :label="t('application.currentAssignee')" min-width="100" show-overflow-tooltip>
+        <el-table-column
+          prop="currentAssignee"
+          :label="t('application.currentAssignee')"
+          min-width="100"
+          show-overflow-tooltip
+        >
           <template #default="{ row }">
             {{ row.currentAssignee || '-' }}
           </template>
         </el-table-column>
-        <el-table-column prop="startTime" :label="t('application.startTime')" width="160">
+        <el-table-column
+          prop="startTime"
+          :label="t('application.startTime')"
+          width="160"
+        >
           <template #default="{ row }">
             {{ formatDate(row.startTime) }}
           </template>
         </el-table-column>
-        <el-table-column prop="status" :label="t('application.status')" width="90" align="center">
+        <el-table-column
+          prop="status"
+          :label="t('application.status')"
+          width="90"
+          align="center"
+        >
           <template #default="{ row }">
-            <el-tag :type="getTeamStatusType(row.status)" size="small" effect="light">
+            <el-tag
+              :type="getTeamStatusType(row.status)"
+              size="small"
+              effect="light"
+            >
               {{ getTeamStatusLabel(row.status) }}
             </el-tag>
           </template>

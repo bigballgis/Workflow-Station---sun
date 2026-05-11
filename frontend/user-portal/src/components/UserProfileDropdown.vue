@@ -1,7 +1,13 @@
 <template>
-  <el-dropdown @command="handleCommand" trigger="click" :hide-on-click="false">
+  <el-dropdown
+    trigger="click"
+    :hide-on-click="false"
+    @command="handleCommand"
+  >
     <div class="user-info">
-      <el-avatar :size="32">{{ userName.charAt(0) }}</el-avatar>
+      <el-avatar :size="32">
+        {{ userName.charAt(0) }}
+      </el-avatar>
       <span class="user-name">{{ userName }}</span>
       <el-icon><ArrowDown /></el-icon>
     </div>
@@ -9,12 +15,22 @@
       <el-dropdown-menu class="user-profile-dropdown">
         <!-- User Basic Info -->
         <div class="profile-header">
-          <el-avatar :size="48">{{ userName.charAt(0) }}</el-avatar>
+          <el-avatar :size="48">
+            {{ userName.charAt(0) }}
+          </el-avatar>
           <div class="profile-info">
-            <div class="profile-name">{{ userName }}</div>
-            <div class="profile-email">{{ userEmail }}</div>
-            <div class="profile-workspace">{{ t('profile.dropdownWorkspace') }}：{{ workspaceSummary }}</div>
-            <div class="profile-hint">{{ t('profile.dropdownOrgHint') }}</div>
+            <div class="profile-name">
+              {{ userName }}
+            </div>
+            <div class="profile-email">
+              {{ userEmail }}
+            </div>
+            <div class="profile-workspace">
+              {{ t('profile.dropdownWorkspace') }}：{{ workspaceSummary }}
+            </div>
+            <div class="profile-hint">
+              {{ t('profile.dropdownOrgHint') }}
+            </div>
           </div>
         </div>
         
@@ -26,18 +42,35 @@
             <el-icon><Key /></el-icon>
             {{ t('profile.sectionBuRolePairs') }}
           </div>
-          <div v-if="loading" class="section-loading">
-            <el-icon class="is-loading"><Loading /></el-icon>
+          <div
+            v-if="loading"
+            class="section-loading"
+          >
+            <el-icon class="is-loading">
+              <Loading />
+            </el-icon>
           </div>
-          <div v-else-if="buBoundedRoles.length === 0" class="section-empty">
+          <div
+            v-else-if="buBoundedRoles.length === 0"
+            class="section-empty"
+          >
             {{ t('profile.noBuRoleAssignments') }}
           </div>
-          <ul v-else class="ubr-lines">
-            <li v-for="(row, idx) in buBoundedRoles" :key="`${row.role?.id}-${idx}`" class="ubr-line">
+          <ul
+            v-else
+            class="ubr-lines"
+          >
+            <li
+              v-for="(row, idx) in buBoundedRoles"
+              :key="`${row.role?.id}-${idx}`"
+              class="ubr-line"
+            >
               {{ formatUbrLine(row) }}
             </li>
           </ul>
-          <div class="section-hint-inline">{{ t('profile.sectionBuRolePairsHint') }}</div>
+          <div class="section-hint-inline">
+            {{ t('profile.sectionBuRolePairsHint') }}
+          </div>
         </div>
 
         <!-- 门户顶栏下拉仅展示“工作台(U BR)”信息，避免信息噪音；完整权限/成员详情见 Profile/Permissions 页面 -->
@@ -53,7 +86,10 @@
           <el-icon><Setting /></el-icon>
           {{ t('menu.settings') }}
         </el-dropdown-item>
-        <el-dropdown-item command="logout" divided>
+        <el-dropdown-item
+          command="logout"
+          divided
+        >
           <el-icon><SwitchButton /></el-icon>
           {{ t('common.logout') }}
         </el-dropdown-item>

@@ -1,19 +1,37 @@
 <template>
-  <el-dialog v-model="visible" :title="title" :width="width" append-to-body>
-    <div v-if="fields.length > 0 || tabs.length > 0" class="form-popup-container">
+  <el-dialog
+    v-model="visible"
+    :title="title"
+    :width="width"
+    append-to-body
+  >
+    <div
+      v-if="fields.length > 0 || tabs.length > 0"
+      class="form-popup-container"
+    >
       <FormRenderer
         :fields="fields"
         :tabs="tabs"
         :model-value="formData"
-        @update:model-value="emit('update:formData', $event)"
         :label-width="labelWidth"
         :readonly="readonly"
+        @update:model-value="emit('update:formData', $event)"
       />
     </div>
-    <el-empty v-else :description="$t('task.noFormData')" />
+    <el-empty
+      v-else
+      :description="$t('task.noFormData')"
+    />
     <template #footer>
-      <el-button @click="visible = false">{{ $t('common.cancel') }}</el-button>
-      <el-button v-if="!readonly" type="primary" @click="emit('submit')" :loading="submitting">
+      <el-button @click="visible = false">
+        {{ $t('common.cancel') }}
+      </el-button>
+      <el-button
+        v-if="!readonly"
+        type="primary"
+        :loading="submitting"
+        @click="emit('submit')"
+      >
         {{ $t('common.submit') }}
       </el-button>
     </template>

@@ -2,21 +2,50 @@
   <div class="notifications-page">
     <div class="page-header">
       <h1>{{ t('notification.title') }}</h1>
-      <el-button @click="handleMarkAllAsRead">{{ t('notification.markAllAsRead') }}</el-button>
+      <el-button @click="handleMarkAllAsRead">
+        {{ t('notification.markAllAsRead') }}
+      </el-button>
     </div>
 
     <div class="portal-card">
-      <el-tabs v-model="activeTab" @tab-change="handleTabChange">
-        <el-tab-pane :label="`${t('notification.unread')} (${store.unreadCount})`" name="unread" />
-        <el-tab-pane :label="t('notification.all')" name="all" />
-        <el-tab-pane :label="t('notification.system')" name="system" />
-        <el-tab-pane :label="t('notification.task')" name="task" />
-        <el-tab-pane :label="t('notification.process')" name="process" />
-        <el-tab-pane :label="t('notification.permission')" name="permission" />
-        <el-tab-pane :label="t('notification.approval')" name="approval" />
+      <el-tabs
+        v-model="activeTab"
+        @tab-change="handleTabChange"
+      >
+        <el-tab-pane
+          :label="`${t('notification.unread')} (${store.unreadCount})`"
+          name="unread"
+        />
+        <el-tab-pane
+          :label="t('notification.all')"
+          name="all"
+        />
+        <el-tab-pane
+          :label="t('notification.system')"
+          name="system"
+        />
+        <el-tab-pane
+          :label="t('notification.task')"
+          name="task"
+        />
+        <el-tab-pane
+          :label="t('notification.process')"
+          name="process"
+        />
+        <el-tab-pane
+          :label="t('notification.permission')"
+          name="permission"
+        />
+        <el-tab-pane
+          :label="t('notification.approval')"
+          name="approval"
+        />
       </el-tabs>
 
-      <div v-loading="store.loading" class="notification-list">
+      <div
+        v-loading="store.loading"
+        class="notification-list"
+      >
         <div
           v-for="item in store.notifications"
           :key="item.id"
@@ -24,28 +53,54 @@
           @click="handleClick(item)"
         >
           <div class="notification-icon">
-            <el-icon :size="24" :color="getIconColor(item.type)">
+            <el-icon
+              :size="24"
+              :color="getIconColor(item.type)"
+            >
               <component :is="getIcon(item.type)" />
             </el-icon>
           </div>
           <div class="notification-content">
-            <div class="notification-title">{{ item.title }}</div>
-            <div class="notification-desc">{{ item.content }}</div>
-            <div class="notification-time">{{ formatTime(item.createdAt) }}</div>
+            <div class="notification-title">
+              {{ item.title }}
+            </div>
+            <div class="notification-desc">
+              {{ item.content }}
+            </div>
+            <div class="notification-time">
+              {{ formatTime(item.createdAt) }}
+            </div>
           </div>
           <div class="notification-actions">
-            <el-button v-if="!item.isRead" type="primary" link size="small" @click.stop="handleMarkAsRead(item)">
+            <el-button
+              v-if="!item.isRead"
+              type="primary"
+              link
+              size="small"
+              @click.stop="handleMarkAsRead(item)"
+            >
               {{ t('notification.markAsRead') }}
             </el-button>
-            <el-button type="danger" link size="small" @click.stop="handleDelete(item)">
+            <el-button
+              type="danger"
+              link
+              size="small"
+              @click.stop="handleDelete(item)"
+            >
               {{ t('notification.delete') }}
             </el-button>
           </div>
         </div>
-        <el-empty v-if="!store.loading && store.notifications.length === 0" :description="t('notification.noNotifications')" />
+        <el-empty
+          v-if="!store.loading && store.notifications.length === 0"
+          :description="t('notification.noNotifications')"
+        />
       </div>
 
-      <div v-if="store.total > pageSize" class="pagination-wrapper">
+      <div
+        v-if="store.total > pageSize"
+        class="pagination-wrapper"
+      >
         <el-pagination
           v-model:current-page="currentPage"
           :page-size="pageSize"

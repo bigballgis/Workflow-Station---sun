@@ -2,61 +2,127 @@
   <div class="relation-binding-panel">
     <div class="panel-header">
       <span class="title">Relation Table Bindings</span>
-      <el-button type="primary" size="small" @click="showAddDialog = true">
+      <el-button
+        type="primary"
+        size="small"
+        @click="showAddDialog = true"
+      >
         <el-icon><Plus /></el-icon> Add Binding
       </el-button>
     </div>
 
-    <el-table :data="bindings" size="small" v-loading="loading">
-      <el-table-column prop="displayName" label="Table" min-width="120">
+    <el-table
+      v-loading="loading"
+      :data="bindings"
+      size="small"
+    >
+      <el-table-column
+        prop="displayName"
+        label="Table"
+        min-width="120"
+      >
         <template #default="{ row }">
           <span>{{ row.displayName || row.tableName }}</span>
         </template>
       </el-table-column>
-      <el-table-column prop="bindingType" label="Type" width="100">
+      <el-table-column
+        prop="bindingType"
+        label="Type"
+        width="100"
+      >
         <template #default="{ row }">
-          <el-tag type="warning" size="small">{{ row.bindingType }}</el-tag>
+          <el-tag
+            type="warning"
+            size="small"
+          >
+            {{ row.bindingType }}
+          </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="View" width="80">
+      <el-table-column
+        label="View"
+        width="80"
+      >
         <template #default="{ row }">
-          <el-button link type="primary" size="small" @click="handleViewDesign(row)" :disabled="!row.viewConfigId">
+          <el-button
+            link
+            type="primary"
+            size="small"
+            :disabled="!row.viewConfigId"
+            @click="handleViewDesign(row)"
+          >
             Design
           </el-button>
         </template>
       </el-table-column>
-      <el-table-column label="Actions" width="80">
+      <el-table-column
+        label="Actions"
+        width="80"
+      >
         <template #default="{ row }">
-          <el-button link type="danger" size="small" @click="handleUnbind(row)">
+          <el-button
+            link
+            type="danger"
+            size="small"
+            @click="handleUnbind(row)"
+          >
             Unbind
           </el-button>
         </template>
       </el-table-column>
     </el-table>
 
-    <el-empty v-if="bindings.length === 0 && !loading" description="No relation table bindings" :image-size="60" />
+    <el-empty
+      v-if="bindings.length === 0 && !loading"
+      description="No relation table bindings"
+      :image-size="60"
+    />
 
     <!-- Add binding dialog -->
-    <el-dialog v-model="showAddDialog" title="Add Relation Table Binding" width="500px">
-      <el-table :data="availableTables" size="small" v-loading="loadingTables">
-        <el-table-column prop="displayName" label="Table Name" min-width="120">
+    <el-dialog
+      v-model="showAddDialog"
+      title="Add Relation Table Binding"
+      width="500px"
+    >
+      <el-table
+        v-loading="loadingTables"
+        :data="availableTables"
+        size="small"
+      >
+        <el-table-column
+          prop="displayName"
+          label="Table Name"
+          min-width="120"
+        >
           <template #default="{ row }">
             <span>{{ row.displayName || row.tableName }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="status" label="Status" width="100">
+        <el-table-column
+          prop="status"
+          label="Status"
+          width="100"
+        >
           <template #default="{ row }">
-            <el-tag type="success" size="small">{{ row.status }}</el-tag>
+            <el-tag
+              type="success"
+              size="small"
+            >
+              {{ row.status }}
+            </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="Action" width="80">
+        <el-table-column
+          label="Action"
+          width="80"
+        >
           <template #default="{ row }">
             <el-button
               type="primary"
               size="small"
-              @click="handleBind(row)"
               :disabled="isBound(row.id)"
               :loading="bindingTableId === row.id"
+              @click="handleBind(row)"
             >
               {{ isBound(row.id) ? 'Bound' : 'Bind' }}
             </el-button>
@@ -64,7 +130,9 @@
         </el-table-column>
       </el-table>
       <template #footer>
-        <el-button @click="showAddDialog = false">Close</el-button>
+        <el-button @click="showAddDialog = false">
+          Close
+        </el-button>
       </template>
     </el-dialog>
   </div>

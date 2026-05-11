@@ -5,7 +5,13 @@
       <span>{{ $t('task.flowHistory') }}</span>
     </div>
     <div class="section-content">
-      <el-alert v-if="historyError" :title="historyError" type="warning" show-icon :closable="false" />
+      <el-alert
+        v-if="historyError"
+        :title="historyError"
+        type="warning"
+        show-icon
+        :closable="false"
+      />
       <ProcessHistory
         v-else-if="historyRecords.length > 0"
         :records="filteredRecords"
@@ -14,7 +20,10 @@
         collapsible
         :default-visible-count="1"
       />
-      <el-empty v-else :description="$t('task.noFlowHistory')" />
+      <el-empty
+        v-else
+        :description="$t('task.noFlowHistory')"
+      />
     </div>
   </div>
 </template>

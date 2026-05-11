@@ -8,25 +8,48 @@
     class="danger-dialog"
   >
     <div class="warning-content">
-      <el-alert type="error" :closable="false" show-icon>
+      <el-alert
+        type="error"
+        :closable="false"
+        show-icon
+      >
         <template #title>
           <strong>{{ functionUnit?.name }}</strong>
         </template>
         <div class="alert-content">
           <p>{{ t('functionUnit.deleteWarning') }}</p>
           <ul class="delete-list">
-            <li v-if="preview?.formCount"><el-icon><Document /></el-icon> {{ preview.formCount }} {{ t('form.title') }}</li>
-            <li v-if="preview?.processCount"><el-icon><Connection /></el-icon> {{ preview.processCount }} {{ t('process.title') }}</li>
-            <li v-if="preview?.dataTableCount"><el-icon><Grid /></el-icon> {{ preview.dataTableCount }} {{ t('table.title') }}</li>
-            <li v-if="preview?.accessConfigCount"><el-icon><Lock /></el-icon> {{ preview.accessConfigCount }} {{ t('functionUnit.accessConfig') }}</li>
-            <li v-if="preview?.deploymentCount"><el-icon><Upload /></el-icon> {{ preview.deploymentCount }} {{ t('functionUnit.deploy') }}</li>
-            <li v-if="preview?.dependencyCount"><el-icon><Link /></el-icon> {{ preview.dependencyCount }}</li>
+            <li v-if="preview?.formCount">
+              <el-icon><Document /></el-icon> {{ preview.formCount }} {{ t('form.title') }}
+            </li>
+            <li v-if="preview?.processCount">
+              <el-icon><Connection /></el-icon> {{ preview.processCount }} {{ t('process.title') }}
+            </li>
+            <li v-if="preview?.dataTableCount">
+              <el-icon><Grid /></el-icon> {{ preview.dataTableCount }} {{ t('table.title') }}
+            </li>
+            <li v-if="preview?.accessConfigCount">
+              <el-icon><Lock /></el-icon> {{ preview.accessConfigCount }} {{ t('functionUnit.accessConfig') }}
+            </li>
+            <li v-if="preview?.deploymentCount">
+              <el-icon><Upload /></el-icon> {{ preview.deploymentCount }} {{ t('functionUnit.deploy') }}
+            </li>
+            <li v-if="preview?.dependencyCount">
+              <el-icon><Link /></el-icon> {{ preview.dependencyCount }}
+            </li>
           </ul>
         </div>
       </el-alert>
       
-      <div v-if="preview?.hasRunningInstances" class="running-instances-warning">
-        <el-alert type="warning" :closable="false" show-icon>
+      <div
+        v-if="preview?.hasRunningInstances"
+        class="running-instances-warning"
+      >
+        <el-alert
+          type="warning"
+          :closable="false"
+          show-icon
+        >
           <template #title>
             <strong>{{ t('common.error') }}</strong>
           </template>
@@ -34,21 +57,29 @@
         </el-alert>
       </div>
       
-      <div v-else class="confirm-input">
+      <div
+        v-else
+        class="confirm-input"
+      >
         <p>{{ t('functionUnit.deleteWarning') }} <strong class="highlight-name">{{ functionUnit?.name }}</strong></p>
         <el-input
           v-model="confirmName"
           :placeholder="t('functionUnit.inputNameToConfirm')"
           @input="handleNameInput"
         />
-        <p v-if="confirmName && !nameMatches" class="error-hint">
+        <p
+          v-if="confirmName && !nameMatches"
+          class="error-hint"
+        >
           <el-icon><Warning /></el-icon> {{ t('common.error') }}
         </p>
       </div>
     </div>
     
     <template #footer>
-      <el-button @click="handleCancel">{{ t('common.cancel') }}</el-button>
+      <el-button @click="handleCancel">
+        {{ t('common.cancel') }}
+      </el-button>
       <el-button
         type="danger"
         :disabled="!canDelete"

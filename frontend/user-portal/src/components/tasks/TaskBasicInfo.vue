@@ -5,7 +5,10 @@
       <span>{{ $t('task.basicInfo') }}</span>
     </div>
     <div class="section-content">
-      <el-descriptions :column="3" border>
+      <el-descriptions
+        :column="3"
+        border
+      >
         <el-descriptions-item :label="$t('task.taskName')">
           {{ taskInfo.taskName || $t('common.empty') }}
         </el-descriptions-item>

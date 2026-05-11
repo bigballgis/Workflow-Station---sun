@@ -1,10 +1,19 @@
 <template>
   <div class="error-page">
     <div class="error-content">
-      <div class="error-code">404</div>
-      <div class="error-message">{{ t('error.notFound') }}</div>
-      <div class="error-description">{{ t('error.notFoundDesc') }}</div>
-      <el-button type="primary" @click="goHome">
+      <div class="error-code">
+        404
+      </div>
+      <div class="error-message">
+        {{ t('error.notFound') }}
+      </div>
+      <div class="error-description">
+        {{ t('error.notFoundDesc') }}
+      </div>
+      <el-button
+        type="primary"
+        @click="goHome"
+      >
         {{ t('error.backHome') }}
       </el-button>
     </div>

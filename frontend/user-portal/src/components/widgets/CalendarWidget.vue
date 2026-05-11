@@ -2,21 +2,30 @@
   <div class="calendar-widget">
     <el-calendar v-model="currentDate">
       <template #date-cell="{ data }">
-        <div class="calendar-cell" :class="{ 'has-tasks': hasTasksOnDate(data.day) }">
+        <div
+          class="calendar-cell"
+          :class="{ 'has-tasks': hasTasksOnDate(data.day) }"
+        >
           <span class="date-number">{{ data.day.split('-')[2] }}</span>
-          <div class="task-dots" v-if="hasTasksOnDate(data.day)">
+          <div
+            v-if="hasTasksOnDate(data.day)"
+            class="task-dots"
+          >
             <span
               v-for="(task, index) in getTasksOnDate(data.day).slice(0, 3)"
               :key="index"
               class="task-dot"
               :class="task.priority"
-            ></span>
+            />
           </div>
         </div>
       </template>
     </el-calendar>
 
-    <div class="selected-date-tasks" v-if="selectedDateTasks.length > 0">
+    <div
+      v-if="selectedDateTasks.length > 0"
+      class="selected-date-tasks"
+    >
       <div class="tasks-header">
         <span>{{ t('dashboard.calendarTasksForDate', { date: formatSelectedDate }) }}</span>
         <span class="task-count">{{ t('dashboard.calendarTaskCount', { count: selectedDateTasks.length }) }}</span>
@@ -28,7 +37,10 @@
           class="task-item"
           @click="goToTask(task.id)"
         >
-          <span class="task-priority" :class="task.priority"></span>
+          <span
+            class="task-priority"
+            :class="task.priority"
+          />
           <span class="task-name">{{ task.name }}</span>
           <span class="task-time">{{ task.dueTime }}</span>
         </div>

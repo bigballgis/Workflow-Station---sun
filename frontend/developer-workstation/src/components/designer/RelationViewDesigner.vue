@@ -2,37 +2,84 @@
   <div class="relation-view-designer">
     <div class="designer-header">
       <span class="title">View Designer - {{ tableName }}</span>
-      <el-button type="primary" size="small" @click="handleSave" :loading="saving">
+      <el-button
+        type="primary"
+        size="small"
+        :loading="saving"
+        @click="handleSave"
+      >
         Save
       </el-button>
     </div>
 
-    <div class="field-list" v-loading="loading">
-      <el-table :data="viewFields" size="small" row-key="fieldName">
-        <el-table-column label="Visible" width="70">
+    <div
+      v-loading="loading"
+      class="field-list"
+    >
+      <el-table
+        :data="viewFields"
+        size="small"
+        row-key="fieldName"
+      >
+        <el-table-column
+          label="Visible"
+          width="70"
+        >
           <template #default="{ row }">
             <el-checkbox v-model="row.visible" />
           </template>
         </el-table-column>
-        <el-table-column prop="fieldName" label="Field Name" min-width="120" />
-        <el-table-column label="Display Label" min-width="140">
+        <el-table-column
+          prop="fieldName"
+          label="Field Name"
+          min-width="120"
+        />
+        <el-table-column
+          label="Display Label"
+          min-width="140"
+        >
           <template #default="{ row }">
-            <el-input v-model="row.displayLabel" size="small" placeholder="Display label" />
+            <el-input
+              v-model="row.displayLabel"
+              size="small"
+              placeholder="Display label"
+            />
           </template>
         </el-table-column>
-        <el-table-column label="Column Width" width="120">
+        <el-table-column
+          label="Column Width"
+          width="120"
+        >
           <template #default="{ row }">
-            <el-input-number v-model="row.columnWidth" size="small" :min="50" :max="500" :step="10" />
+            <el-input-number
+              v-model="row.columnWidth"
+              size="small"
+              :min="50"
+              :max="500"
+              :step="10"
+            />
           </template>
         </el-table-column>
-        <el-table-column label="Sort Order" width="100">
+        <el-table-column
+          label="Sort Order"
+          width="100"
+        >
           <template #default="{ row }">
-            <el-input-number v-model="row.sortOrder" size="small" :min="0" :max="100" />
+            <el-input-number
+              v-model="row.sortOrder"
+              size="small"
+              :min="0"
+              :max="100"
+            />
           </template>
         </el-table-column>
       </el-table>
 
-      <el-empty v-if="viewFields.length === 0 && !loading" description="No fields available" :image-size="60" />
+      <el-empty
+        v-if="viewFields.length === 0 && !loading"
+        description="No fields available"
+        :image-size="60"
+      />
     </div>
   </div>
 </template>

@@ -1,6 +1,8 @@
 <template>
   <div class="sso-callback">
-    <p v-if="!workspaceDialogVisible">{{ t('common.loading') }}…</p>
+    <p v-if="!workspaceDialogVisible">
+      {{ t('common.loading') }}…
+    </p>
     <el-dialog
       v-model="workspaceDialogVisible"
       :title="t('login.selectWorkspaceTitle')"
@@ -8,8 +10,13 @@
       :close-on-click-modal="false"
       append-to-body
     >
-      <p class="workspace-hint">{{ t('login.selectWorkspaceHint') }}</p>
-      <el-radio-group v-model="selectedWorkspaceIndex" class="workspace-radio-group">
+      <p class="workspace-hint">
+        {{ t('login.selectWorkspaceHint') }}
+      </p>
+      <el-radio-group
+        v-model="selectedWorkspaceIndex"
+        class="workspace-radio-group"
+      >
         <el-radio
           v-for="(c, idx) in workspaceOptions"
           :key="idx"
@@ -20,7 +27,11 @@
         </el-radio>
       </el-radio-group>
       <template #footer>
-        <el-button type="primary" :loading="confirmLoading" @click="confirmWorkspace">
+        <el-button
+          type="primary"
+          :loading="confirmLoading"
+          @click="confirmWorkspace"
+        >
           {{ t('login.confirmWorkspace') }}
         </el-button>
       </template>

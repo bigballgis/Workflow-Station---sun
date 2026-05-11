@@ -20,16 +20,27 @@
     />
 
     <!-- Form designer view -->
-    <div class="form-editor-view" v-else>
+    <div
+      v-else
+      class="form-editor-view"
+    >
       <div class="editor-header">
         <el-button @click="handleBackToList">
           <el-icon><ArrowLeft /></el-icon> {{ t('form.backToList') }}
         </el-button>
         <span class="form-name">{{ selectedForm.formName }}</span>
-        <el-tag v-if="selectedForm.boundTableId" type="success" size="small" class="bound-table-tag">
+        <el-tag
+          v-if="selectedForm.boundTableId"
+          type="success"
+          size="small"
+          class="bound-table-tag"
+        >
           {{ t('form.boundTableLabel') }}: {{ getTableName(selectedForm.boundTableId) }}
         </el-tag>
-        <div class="bound-nodes-header" v-if="getFormBoundNodes(selectedForm.id).length > 0">
+        <div
+          v-if="getFormBoundNodes(selectedForm.id).length > 0"
+          class="bound-nodes-header"
+        >
           <el-tag 
             v-for="node in getFormBoundNodes(selectedForm.id)" 
             :key="node.nodeId"
@@ -41,31 +52,61 @@
         </div>
         <div class="header-actions">
           <div class="auto-save-status">
-            <span v-if="autoSaving" class="auto-saving">
+            <span
+              v-if="autoSaving"
+              class="auto-saving"
+            >
               <el-icon class="is-loading"><Loading /></el-icon>
               {{ t('form.autoSaving') }}
             </span>
-            <span v-else-if="lastAutoSaveTime" class="auto-saved">
+            <span
+              v-else-if="lastAutoSaveTime"
+              class="auto-saved"
+            >
               <el-icon><CircleCheck /></el-icon>
               {{ t('form.autoSaved') }} {{ formatAutoSaveTime(lastAutoSaveTime) }}
             </span>
           </div>
-          <el-button @click="handleImportFieldsToDesigner" :disabled="!selectedForm.boundTableId && (!selectedForm.tableBindings || selectedForm.tableBindings.length === 0)">
+          <el-button
+            :disabled="!selectedForm.boundTableId && (!selectedForm.tableBindings || selectedForm.tableBindings.length === 0)"
+            @click="handleImportFieldsToDesigner"
+          >
             <el-icon><Connection /></el-icon> {{ t('form.importTableFields') }}
           </el-button>
-          <el-button @click="openRenameDialog(selectedForm)">{{ t('form.renameForm') }}</el-button>
-          <el-button @click="handleManageBindings(selectedForm)">{{ t('form.manageBindings') }}</el-button>
-          <el-button @click="handleBindNode(selectedForm)">{{ t('form.bindProcessNode') }}</el-button>
-          <el-button @click="handlePreview">{{ t('common.preview') }}</el-button>
-          <el-button type="primary" @click="handleSaveForm(true)">{{ t('common.save') }}</el-button>
+          <el-button @click="openRenameDialog(selectedForm)">
+            {{ t('form.renameForm') }}
+          </el-button>
+          <el-button @click="handleManageBindings(selectedForm)">
+            {{ t('form.manageBindings') }}
+          </el-button>
+          <el-button @click="handleBindNode(selectedForm)">
+            {{ t('form.bindProcessNode') }}
+          </el-button>
+          <el-button @click="handlePreview">
+            {{ t('common.preview') }}
+          </el-button>
+          <el-button
+            type="primary"
+            @click="handleSaveForm(true)"
+          >
+            {{ t('common.save') }}
+          </el-button>
         </div>
       </div>
       
-      <el-tabs v-model="activeDesignerTab" class="designer-tabs" @tab-change="handleTabChange">
+      <el-tabs
+        v-model="activeDesignerTab"
+        class="designer-tabs"
+        @tab-change="handleTabChange"
+      >
         <el-tab-pane name="main">
           <template #label>
             <span>
-              <el-tag type="primary" size="small" style="margin-right: 6px;">{{ t('form.mainTable') }}</el-tag>
+              <el-tag
+                type="primary"
+                size="small"
+                style="margin-right: 6px;"
+              >{{ t('form.mainTable') }}</el-tag>
               {{ selectedForm.formName }}
             </span>
           </template>
@@ -85,7 +126,11 @@
         >
           <template #label>
             <span>
-              <el-tag :type="binding.bindingType === 'SUB' ? 'success' : 'warning'" size="small" style="margin-right: 6px;">
+              <el-tag
+                :type="binding.bindingType === 'SUB' ? 'success' : 'warning'"
+                size="small"
+                style="margin-right: 6px;"
+              >
                 {{ binding.bindingType === 'SUB' ? t('tableBinding.subTableType') : t('tableBinding.relationTableType') }}
               </el-tag>
               {{ binding.tableName }}
@@ -104,9 +149,18 @@
             @update:available-fields="(val: any) => updateRelationViewAllFields(binding.bindingId, val)"
           />
           <!-- Sub Table: show form designer with List View tab (FORM_ONLY has no list view) -->
-          <div v-else-if="binding.bindingType === 'SUB'" class="sub-table-design-wrapper">
-            <el-tabs v-model="subTableActiveTab" @tab-change="(tabName: any) => handleSubTableInnerTabChange(tabName, binding)">
-              <el-tab-pane :label="t('subTableView.formDesign')" name="form">
+          <div
+            v-else-if="binding.bindingType === 'SUB'"
+            class="sub-table-design-wrapper"
+          >
+            <el-tabs
+              v-model="subTableActiveTab"
+              @tab-change="(tabName: any) => handleSubTableInnerTabChange(tabName, binding)"
+            >
+              <el-tab-pane
+                :label="t('subTableView.formDesign')"
+                name="form"
+              >
                 <div class="fc-designer-wrapper">
                   <fc-designer
                     :ref="(el: any) => setSubDesignerRef(el, index)"
@@ -116,7 +170,11 @@
                   />
                 </div>
               </el-tab-pane>
-              <el-tab-pane v-if="binding.subMode !== 'FORM_ONLY'" :label="t('subTableView.listView')" name="listView">
+              <el-tab-pane
+                v-if="binding.subMode !== 'FORM_ONLY'"
+                :label="t('subTableView.listView')"
+                name="listView"
+              >
                 <SubTableListView
                   :ref="(el: any) => setSubTableListViewRef(el, binding.bindingId)"
                   :binding="binding"
@@ -138,7 +196,10 @@
             </el-tabs>
           </div>
           <!-- Sub Table (non-SUB fallback, should not happen) -->
-          <div v-else class="fc-designer-wrapper">
+          <div
+            v-else
+            class="fc-designer-wrapper"
+          >
             <fc-designer
               :ref="(el: any) => setSubDesignerRef(el, index)"
               :locale="fcDesignerEnLocale"
@@ -150,21 +211,49 @@
       </el-tabs>
 
       <!-- Field Permission Configuration (TASK forms only) -->
-      <div v-if="selectedForm.formType === 'TASK'" class="field-permission-section" style="margin-top: 16px;">
-        <el-divider content-position="left">{{ t('form.fieldPermission') }}</el-divider>
-        <el-table :data="currentFormFields" size="small" max-height="300" border>
-          <el-table-column prop="field" :label="t('form.fieldName')" width="200" />
-          <el-table-column prop="title" label="Label" width="200" />
-          <el-table-column :label="t('form.fieldPermission')" width="180">
+      <div
+        v-if="selectedForm.formType === 'TASK'"
+        class="field-permission-section"
+        style="margin-top: 16px;"
+      >
+        <el-divider content-position="left">
+          {{ t('form.fieldPermission') }}
+        </el-divider>
+        <el-table
+          :data="currentFormFields"
+          size="small"
+          max-height="300"
+          border
+        >
+          <el-table-column
+            prop="field"
+            :label="t('form.fieldName')"
+            width="200"
+          />
+          <el-table-column
+            prop="title"
+            label="Label"
+            width="200"
+          />
+          <el-table-column
+            :label="t('form.fieldPermission')"
+            width="180"
+          >
             <template #default="{ row }">
               <el-select
                 :model-value="getFieldPermission(row.field)"
-                @update:model-value="setFieldPermission(row.field, $event)"
                 size="small"
                 style="width: 100%"
+                @update:model-value="setFieldPermission(row.field, $event)"
               >
-                <el-option :label="t('form.fieldPermissionEditable')" value="EDITABLE" />
-                <el-option :label="t('form.fieldPermissionReadonly')" value="READONLY" />
+                <el-option
+                  :label="t('form.fieldPermissionEditable')"
+                  value="EDITABLE"
+                />
+                <el-option
+                  :label="t('form.fieldPermissionReadonly')"
+                  value="READONLY"
+                />
               </el-select>
             </template>
           </el-table-column>
@@ -175,11 +264,11 @@
     <!-- Create form dialog -->
     <FormCreateDialog
       v-model="showCreateDialog"
+      v-model:stage-ids="createFormStageIds"
       :create-form="createForm"
       :forms="store.forms"
       :tables="store.tables"
       :create-dialog-process-nodes="createDialogProcessNodes"
-      v-model:stage-ids="createFormStageIds"
       :table-type-label="tableTypeLabel"
       :handle-create-form-type-change="handleCreateFormTypeChange"
       @confirm="handleCreateForm"
@@ -195,7 +284,12 @@
     />
 
     <!-- Preview dialog -->
-    <el-dialog v-model="showPreviewDialog" :title="t('form.previewTitle')" width="900px" destroy-on-close>
+    <el-dialog
+      v-model="showPreviewDialog"
+      :title="t('form.previewTitle')"
+      width="900px"
+      destroy-on-close
+    >
       <div class="preview-container">
         <FormPreviewItems
           v-if="previewItems.length > 0"
@@ -204,7 +298,10 @@
           :items="previewItems"
           :preview-option="previewOption"
         />
-        <el-empty v-else :description="t('form.noFormContent')" />
+        <el-empty
+          v-else
+          :description="t('form.noFormContent')"
+        />
       </div>
     </el-dialog>
 
@@ -222,19 +319,42 @@
     />
 
     <!-- Import fields from table dialog -->
-    <el-dialog v-model="showImportFieldsDialog" :title="t('form.importFieldsTitle')" width="800px">
+    <el-dialog
+      v-model="showImportFieldsDialog"
+      :title="t('form.importFieldsTitle')"
+      width="800px"
+    >
       <div class="import-fields-dialog">
-        <el-alert type="info" :closable="false" style="margin-bottom: 16px;">
+        <el-alert
+          type="info"
+          :closable="false"
+          style="margin-bottom: 16px;"
+        >
           {{ t('form.importFieldsHint') }}
-          <span v-if="formBindings.length > 0" style="display: block; margin-top: 4px;">
+          <span
+            v-if="formBindings.length > 0"
+            style="display: block; margin-top: 4px;"
+          >
             {{ t('form.importFieldsHintWithBindings', { count: formBindings.length }) }}
           </span>
         </el-alert>
         
-        <el-form label-width="120px" label-position="left" style="margin-bottom: 16px;">
+        <el-form
+          label-width="120px"
+          label-position="left"
+          style="margin-bottom: 16px;"
+        >
           <el-form-item :label="t('form.selectTable')">
-            <el-select v-model="importTableId" :placeholder="t('form.selectTable')" style="width: 100%;" @change="handleTableChange">
-              <el-option-group v-if="formBindings.length > 0" :label="t('form.boundTables')">
+            <el-select
+              v-model="importTableId"
+              :placeholder="t('form.selectTable')"
+              style="width: 100%;"
+              @change="handleTableChange"
+            >
+              <el-option-group
+                v-if="formBindings.length > 0"
+                :label="t('form.boundTables')"
+              >
                 <el-option 
                   v-for="binding in formBindings" 
                   :key="binding.tableId" 
@@ -243,7 +363,10 @@
                 >
                   <div class="table-option-with-binding">
                     <span>{{ binding.tableName || getTableName(binding.tableId) }}</span>
-                    <el-tag size="small" :type="bindingTypeTag(binding.bindingType)">
+                    <el-tag
+                      size="small"
+                      :type="bindingTypeTag(binding.bindingType)"
+                    >
                       {{ bindingTypeLabel(binding.bindingType) }}
                     </el-tag>
                   </div>
@@ -261,7 +384,10 @@
           </el-form-item>
         </el-form>
         
-        <div v-if="importTableId" class="field-selection">
+        <div
+          v-if="importTableId"
+          class="field-selection"
+        >
           <div class="field-header">
             <el-checkbox 
               :model-value="isAllFieldsSelected" 
@@ -271,12 +397,21 @@
               {{ t('form.selectAll') }}
             </el-checkbox>
             <span class="field-count">{{ t('form.selectedCount', { count: selectedImportFields.length, total: availableFields.length }) }}</span>
-            <el-tag v-if="getImportTableBinding()" size="small" :type="bindingTypeTag(getImportTableBinding()!.bindingType)" style="margin-left: 8px;">
+            <el-tag
+              v-if="getImportTableBinding()"
+              size="small"
+              :type="bindingTypeTag(getImportTableBinding()!.bindingType)"
+              style="margin-left: 8px;"
+            >
               {{ bindingTypeLabel(getImportTableBinding()!.bindingType) }}
             </el-tag>
           </div>
           
-          <el-table :data="availableFields" size="small" max-height="300">
+          <el-table
+            :data="availableFields"
+            size="small"
+            max-height="300"
+          >
             <el-table-column width="50">
               <template #default="{ row }">
                 <el-checkbox 
@@ -285,22 +420,50 @@
                 />
               </template>
             </el-table-column>
-            <el-table-column prop="fieldName" :label="t('form.fieldName')" width="150" />
-            <el-table-column prop="dataType" :label="t('form.dataType')" width="100" />
-            <el-table-column :label="t('form.formComponent')" width="120">
+            <el-table-column
+              prop="fieldName"
+              :label="t('form.fieldName')"
+              width="150"
+            />
+            <el-table-column
+              prop="dataType"
+              :label="t('form.dataType')"
+              width="100"
+            />
+            <el-table-column
+              :label="t('form.formComponent')"
+              width="120"
+            >
               <template #default="{ row }">
-                <el-tag size="small">{{ getFormComponentType(row.dataType) }}</el-tag>
+                <el-tag size="small">
+                  {{ getFormComponentType(row.dataType) }}
+                </el-tag>
               </template>
             </el-table-column>
-            <el-table-column :label="t('form.sourceTable')" width="120" v-if="formBindings.length > 0">
+            <el-table-column
+              v-if="formBindings.length > 0"
+              :label="t('form.sourceTable')"
+              width="120"
+            >
               <template #default>
                 <span class="source-table">{{ getTableName(importTableId!) }}</span>
               </template>
             </el-table-column>
-            <el-table-column prop="description" :label="t('table.description')" show-overflow-tooltip />
-            <el-table-column prop="nullable" :label="t('form.required')" width="60">
+            <el-table-column
+              prop="description"
+              :label="t('table.description')"
+              show-overflow-tooltip
+            />
+            <el-table-column
+              prop="nullable"
+              :label="t('form.required')"
+              width="60"
+            >
               <template #default="{ row }">
-                <el-tag :type="row.nullable ? 'info' : 'danger'" size="small">
+                <el-tag
+                  :type="row.nullable ? 'info' : 'danger'"
+                  size="small"
+                >
                   {{ row.nullable ? t('form.no') : t('form.yes') }}
                 </el-tag>
               </template>
@@ -308,18 +471,32 @@
           </el-table>
         </div>
         
-        <el-empty v-else :description="t('form.selectTableFirst')" />
+        <el-empty
+          v-else
+          :description="t('form.selectTableFirst')"
+        />
       </div>
       <template #footer>
-        <el-button @click="showImportFieldsDialog = false">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary" @click="handleConfirmImportFields" :disabled="selectedImportFields.length === 0">
+        <el-button @click="showImportFieldsDialog = false">
+          {{ t('common.cancel') }}
+        </el-button>
+        <el-button
+          type="primary"
+          :disabled="selectedImportFields.length === 0"
+          @click="handleConfirmImportFields"
+        >
           {{ t('form.importButton', { count: selectedImportFields.length }) }}
         </el-button>
       </template>
     </el-dialog>
 
     <!-- Manage table bindings dialog -->
-    <el-dialog v-model="showBindingManagerDialog" :title="t('form.manageBindingsTitle')" width="700px" destroy-on-close>
+    <el-dialog
+      v-model="showBindingManagerDialog"
+      :title="t('form.manageBindingsTitle')"
+      width="700px"
+      destroy-on-close
+    >
       <TableBindingManager 
         v-if="bindingManagerForm"
         ref="bindingManagerRef"
@@ -330,7 +507,9 @@
         @update="handleBindingUpdate"
       />
       <template #footer>
-        <el-button @click="showBindingManagerDialog = false">{{ t('form.closeButton') }}</el-button>
+        <el-button @click="showBindingManagerDialog = false">
+          {{ t('form.closeButton') }}
+        </el-button>
       </template>
     </el-dialog>
   </div>

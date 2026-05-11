@@ -1,9 +1,25 @@
 <template>
-  <div class="link-form-placeholder-widget" :class="`is-${state}`" @click.stop="onWidgetClick">
+  <div
+    class="link-form-placeholder-widget"
+    :class="`is-${state}`"
+    @click.stop="onWidgetClick"
+  >
     <el-icon><Link /></el-icon>
-    <span v-if="state === 'valid'" class="component-name">{{ displayName }}</span>
-    <span v-else-if="state === 'unconfigured'" class="hint-text">{{ t('designer.linkFormPlaceholderUnconfigured') }}</span>
-    <el-tag v-else type="warning" size="small">{{ t('designer.linkFormPlaceholderStale') }}</el-tag>
+    <span
+      v-if="state === 'valid'"
+      class="component-name"
+    >{{ displayName }}</span>
+    <span
+      v-else-if="state === 'unconfigured'"
+      class="hint-text"
+    >{{ t('designer.linkFormPlaceholderUnconfigured') }}</span>
+    <el-tag
+      v-else
+      type="warning"
+      size="small"
+    >
+      {{ t('designer.linkFormPlaceholderStale') }}
+    </el-tag>
   </div>
 </template>
 

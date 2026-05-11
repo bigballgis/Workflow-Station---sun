@@ -2,7 +2,10 @@
   <div class="page-container">
     <PageHeader :title="t('menu.organization')">
       <template #actions>
-        <el-button type="primary" @click="showCreateDialog()">
+        <el-button
+          type="primary"
+          @click="showCreateDialog()"
+        >
           <el-icon><Plus /></el-icon>{{ t('organization.createBusinessUnit') }}
         </el-button>
       </template>
@@ -11,7 +14,12 @@
     <el-row :gutter="20">
       <el-col :span="10">
         <el-card class="tree-card">
-          <el-input v-model="filterText" :placeholder="t('organization.searchBusinessUnit')" clearable class="search-input">
+          <el-input
+            v-model="filterText"
+            :placeholder="t('organization.searchBusinessUnit')"
+            clearable
+            class="search-input"
+          >
             <template #prefix>
               <el-icon><Search /></el-icon>
             </template>
@@ -33,18 +41,45 @@
               <template #default="{ node, data }">
                 <div class="tree-node">
                   <div class="node-content">
-                    <el-icon class="node-icon"><OfficeBuilding /></el-icon>
+                    <el-icon class="node-icon">
+                      <OfficeBuilding />
+                    </el-icon>
                     <span class="node-label">{{ node.label }}</span>
-                    <el-tag v-if="data.memberCount" size="small" type="info" class="member-tag">{{ data.memberCount }} {{ t('role.people') }}</el-tag>
+                    <el-tag
+                      v-if="data.memberCount"
+                      size="small"
+                      type="info"
+                      class="member-tag"
+                    >
+                      {{ data.memberCount }} {{ t('role.people') }}
+                    </el-tag>
                   </div>
                   <div class="node-actions">
-                    <el-button link type="primary" size="small" @click.stop="showCreateDialog(data)" :title="t('organization.createBusinessUnit')">
+                    <el-button
+                      link
+                      type="primary"
+                      size="small"
+                      :title="t('organization.createBusinessUnit')"
+                      @click.stop="showCreateDialog(data)"
+                    >
                       <el-icon><Plus /></el-icon>
                     </el-button>
-                    <el-button link type="primary" size="small" @click.stop="showEditDialog(data)" :title="t('common.edit')">
+                    <el-button
+                      link
+                      type="primary"
+                      size="small"
+                      :title="t('common.edit')"
+                      @click.stop="showEditDialog(data)"
+                    >
                       <el-icon><Edit /></el-icon>
                     </el-button>
-                    <el-button link type="danger" size="small" @click.stop="handleDelete(data)" :title="t('common.delete')">
+                    <el-button
+                      link
+                      type="danger"
+                      size="small"
+                      :title="t('common.delete')"
+                      @click.stop="handleDelete(data)"
+                    >
                       <el-icon><Delete /></el-icon>
                     </el-button>
                   </div>
@@ -56,79 +91,187 @@
       </el-col>
       
       <el-col :span="14">
-        <el-card v-if="selectedBusinessUnit" class="detail-card">
+        <el-card
+          v-if="selectedBusinessUnit"
+          class="detail-card"
+        >
           <template #header>
             <div class="detail-header">
               <div class="header-left">
                 <span class="header-title">{{ selectedBusinessUnit.name }}</span>
-                <el-tag :type="selectedBusinessUnit.status === 'ACTIVE' ? 'success' : 'info'" size="small">
+                <el-tag
+                  :type="selectedBusinessUnit.status === 'ACTIVE' ? 'success' : 'info'"
+                  size="small"
+                >
                   {{ selectedBusinessUnit.status === 'ACTIVE' ? t('common.enabled') : t('common.disabled') }}
                 </el-tag>
               </div>
               <div class="header-actions">
-                <el-button type="primary" size="small" @click="showMembersDialog">{{ t('organization.members') }}</el-button>
-                <el-button type="primary" size="small" @click="showRolesDialog">{{ t('organization.eligibleRoles') }}</el-button>
-                <el-button type="primary" size="small" @click="showApproversDialog">{{ t('organization.approvers') }}</el-button>
+                <el-button
+                  type="primary"
+                  size="small"
+                  @click="showMembersDialog"
+                >
+                  {{ t('organization.members') }}
+                </el-button>
+                <el-button
+                  type="primary"
+                  size="small"
+                  @click="showRolesDialog"
+                >
+                  {{ t('organization.eligibleRoles') }}
+                </el-button>
+                <el-button
+                  type="primary"
+                  size="small"
+                  @click="showApproversDialog"
+                >
+                  {{ t('organization.approvers') }}
+                </el-button>
               </div>
             </div>
           </template>
-          <el-descriptions :column="2" border>
-            <el-descriptions-item :label="t('organization.businessUnitCode')">{{ selectedBusinessUnit.code }}</el-descriptions-item>
-            <el-descriptions-item :label="t('organization.parentBusinessUnit')">{{ selectedBusinessUnit.parentName || t('common.noData') }}</el-descriptions-item>
-            <el-descriptions-item :label="t('organization.memberCount')">{{ selectedBusinessUnit.memberCount || 0 }} {{ t('role.people') }}</el-descriptions-item>
+          <el-descriptions
+            :column="2"
+            border
+          >
+            <el-descriptions-item :label="t('organization.businessUnitCode')">
+              {{ selectedBusinessUnit.code }}
+            </el-descriptions-item>
+            <el-descriptions-item :label="t('organization.parentBusinessUnit')">
+              {{ selectedBusinessUnit.parentName || t('common.noData') }}
+            </el-descriptions-item>
+            <el-descriptions-item :label="t('organization.memberCount')">
+              {{ selectedBusinessUnit.memberCount || 0 }} {{ t('role.people') }}
+            </el-descriptions-item>
           </el-descriptions>
           
           <!-- 成员和审批人两列布局 -->
-          <el-row :gutter="20" class="lists-section">
-            <el-col :span="12" class="list-col">
+          <el-row
+            :gutter="20"
+            class="lists-section"
+          >
+            <el-col
+              :span="12"
+              class="list-col"
+            >
               <div class="section-header">
                 <h4>{{ t('organization.members') }}</h4>
               </div>
               <div class="list-container">
                 <el-scrollbar>
-                  <el-table :data="businessUnitMembers" stripe size="small" :show-header="businessUnitMembers.length > 0">
-                    <el-table-column :label="t('user.username')" min-width="100">
+                  <el-table
+                    :data="businessUnitMembers"
+                    stripe
+                    size="small"
+                    :show-header="businessUnitMembers.length > 0"
+                  >
+                    <el-table-column
+                      :label="t('user.username')"
+                      min-width="100"
+                    >
                       <template #default="{ row }">
-                        <el-button link type="primary" @click="showUserDetail(row.id)">{{ row.username }}</el-button>
+                        <el-button
+                          link
+                          type="primary"
+                          @click="showUserDetail(row.id)"
+                        >
+                          {{ row.username }}
+                        </el-button>
                       </template>
                     </el-table-column>
-                    <el-table-column prop="fullName" :label="t('user.fullName')" min-width="80" />
+                    <el-table-column
+                      prop="fullName"
+                      :label="t('user.fullName')"
+                      min-width="80"
+                    />
                   </el-table>
-                  <el-empty v-if="businessUnitMembers.length === 0" :description="t('common.noData')" :image-size="50" />
+                  <el-empty
+                    v-if="businessUnitMembers.length === 0"
+                    :description="t('common.noData')"
+                    :image-size="50"
+                  />
                 </el-scrollbar>
               </div>
             </el-col>
-            <el-col :span="12" class="list-col">
+            <el-col
+              :span="12"
+              class="list-col"
+            >
               <div class="section-header">
                 <h4>{{ t('organization.approvers') }}</h4>
               </div>
               <div class="list-container">
                 <el-scrollbar>
-                  <el-table :data="businessUnitApprovers" stripe size="small" :show-header="businessUnitApprovers.length > 0">
-                    <el-table-column :label="t('user.username')" min-width="100">
+                  <el-table
+                    :data="businessUnitApprovers"
+                    stripe
+                    size="small"
+                    :show-header="businessUnitApprovers.length > 0"
+                  >
+                    <el-table-column
+                      :label="t('user.username')"
+                      min-width="100"
+                    >
                       <template #default="{ row }">
-                        <el-button link type="primary" @click="showUserDetail(row.userId)">{{ row.userName }}</el-button>
+                        <el-button
+                          link
+                          type="primary"
+                          @click="showUserDetail(row.userId)"
+                        >
+                          {{ row.userName }}
+                        </el-button>
                       </template>
                     </el-table-column>
-                    <el-table-column prop="userFullName" :label="t('user.fullName')" min-width="80" />
+                    <el-table-column
+                      prop="userFullName"
+                      :label="t('user.fullName')"
+                      min-width="80"
+                    />
                   </el-table>
-                  <el-empty v-if="businessUnitApprovers.length === 0" :description="t('organization.noApprovers')" :image-size="50" />
+                  <el-empty
+                    v-if="businessUnitApprovers.length === 0"
+                    :description="t('organization.noApprovers')"
+                    :image-size="50"
+                  />
                 </el-scrollbar>
               </div>
             </el-col>
           </el-row>
         </el-card>
-        <el-card v-else class="empty-card">
+        <el-card
+          v-else
+          class="empty-card"
+        >
           <el-empty :description="t('common.noData')" />
         </el-card>
       </el-col>
     </el-row>
     
-    <BusinessUnitFormDialog v-model="dialogVisible" :businessUnit="currentBusinessUnit" :parent="parentBusinessUnit" @success="handleFormSuccess" />
-    <BusinessUnitRolesDialog v-model="rolesDialogVisible" :businessUnit="selectedBusinessUnit" />
-    <BusinessUnitApproversDialog v-model="approversDialogVisible" :businessUnit="selectedBusinessUnit" @success="fetchApprovers" />
-    <BusinessUnitMembersDialog v-model="membersDialogVisible" :businessUnit="selectedBusinessUnit" @success="handleMembersChange" />
-    <UserDetailDialog v-model="userDetailVisible" :userId="selectedUserId" />
+    <BusinessUnitFormDialog
+      v-model="dialogVisible"
+      :business-unit="currentBusinessUnit"
+      :parent="parentBusinessUnit"
+      @success="handleFormSuccess"
+    />
+    <BusinessUnitRolesDialog
+      v-model="rolesDialogVisible"
+      :business-unit="selectedBusinessUnit"
+    />
+    <BusinessUnitApproversDialog
+      v-model="approversDialogVisible"
+      :business-unit="selectedBusinessUnit"
+      @success="fetchApprovers"
+    />
+    <BusinessUnitMembersDialog
+      v-model="membersDialogVisible"
+      :business-unit="selectedBusinessUnit"
+      @success="handleMembersChange"
+    />
+    <UserDetailDialog
+      v-model="userDetailVisible"
+      :user-id="selectedUserId"
+    />
   </div>
 </template>
 

@@ -1,7 +1,10 @@
 <template>
   <div class="chat-dialog">
     <!-- Top: Phase Indicator -->
-    <PhaseIndicator :current-phase="phase" :completed-phases="completedPhases" />
+    <PhaseIndicator
+      :current-phase="phase"
+      :completed-phases="completedPhases"
+    />
 
     <!-- Task 16.2: Multi-step generation progress indicator -->
     <el-steps
@@ -22,35 +25,82 @@
     <!-- Middle: Message List -->
     <div class="chat-dialog__messages">
       <!-- Template selection when no messages -->
-      <div v-if="messages.length === 0 && !isStreaming" class="chat-dialog__templates">
-        <p class="chat-dialog__templates-title">{{ t('ai.template.selectTitle') }}</p>
+      <div
+        v-if="messages.length === 0 && !isStreaming"
+        class="chat-dialog__templates"
+      >
+        <p class="chat-dialog__templates-title">
+          {{ t('ai.template.selectTitle') }}
+        </p>
         <el-row :gutter="12">
-          <el-col v-for="tpl in templates" :key="tpl.id" :span="12">
-            <el-card shadow="hover" class="chat-dialog__template-card" @click="applyTemplate(tpl)">
+          <el-col
+            v-for="tpl in templates"
+            :key="tpl.id"
+            :span="12"
+          >
+            <el-card
+              shadow="hover"
+              class="chat-dialog__template-card"
+              @click="applyTemplate(tpl)"
+            >
               <template #header>
                 <div class="chat-dialog__template-header">
                   <el-icon><component :is="tpl.icon" /></el-icon>
                   <span>{{ t(tpl.nameKey) }}</span>
                 </div>
               </template>
-              <p class="chat-dialog__template-desc">{{ t(tpl.descriptionKey) }}</p>
+              <p class="chat-dialog__template-desc">
+                {{ t(tpl.descriptionKey) }}
+              </p>
             </el-card>
           </el-col>
         </el-row>
       </div>
 
       <!-- Task 16.4: Draft restoration alert -->
-      <el-alert v-if="hasDraft" type="info" :closable="false" class="chat-dialog__draft-alert">
+      <el-alert
+        v-if="hasDraft"
+        type="info"
+        :closable="false"
+        class="chat-dialog__draft-alert"
+      >
         {{ t('ai.draft.found') }}
-        <el-button size="small" type="primary" @click="restoreDraft">{{ t('ai.draft.restore') }}</el-button>
-        <el-button size="small" @click="dismissDraft">{{ t('ai.draft.dismiss') }}</el-button>
+        <el-button
+          size="small"
+          type="primary"
+          @click="restoreDraft"
+        >
+          {{ t('ai.draft.restore') }}
+        </el-button>
+        <el-button
+          size="small"
+          @click="dismissDraft"
+        >
+          {{ t('ai.draft.dismiss') }}
+        </el-button>
       </el-alert>
 
       <!-- Task 17.1: Generation draft restoration alert -->
-      <el-alert v-if="hasGenerationDraft" type="info" :closable="false" class="chat-dialog__draft-alert">
+      <el-alert
+        v-if="hasGenerationDraft"
+        type="info"
+        :closable="false"
+        class="chat-dialog__draft-alert"
+      >
         {{ t('ai.draft.found') }}
-        <el-button size="small" type="primary" @click="restoreGenerationDraft">{{ t('ai.draft.restore') }}</el-button>
-        <el-button size="small" @click="dismissGenerationDraft">{{ t('ai.draft.dismiss') }}</el-button>
+        <el-button
+          size="small"
+          type="primary"
+          @click="restoreGenerationDraft"
+        >
+          {{ t('ai.draft.restore') }}
+        </el-button>
+        <el-button
+          size="small"
+          @click="dismissGenerationDraft"
+        >
+          {{ t('ai.draft.dismiss') }}
+        </el-button>
       </el-alert>
 
       <ChatMessage
@@ -75,7 +125,10 @@
       />
 
       <!-- Generation Preview -->
-      <div v-if="previewData && generatedData" class="chat-dialog__preview">
+      <div
+        v-if="previewData && generatedData"
+        class="chat-dialog__preview"
+      >
         <GenerationPreview
           :preview-data="previewData"
           :generated-data="generatedData"
@@ -89,14 +142,24 @@
       </div>
 
       <!-- Task 17.3: Undo button with countdown -->
-      <div v-if="showUndoButton" class="chat-dialog__undo">
-        <el-button type="warning" size="small" @click="handleUndo">
+      <div
+        v-if="showUndoButton"
+        class="chat-dialog__undo"
+      >
+        <el-button
+          type="warning"
+          size="small"
+          @click="handleUndo"
+        >
           {{ t('ai.undo.button') }} ({{ undoCountdown }}s)
         </el-button>
       </div>
 
       <!-- Validation Errors -->
-      <div v-if="validationErrors.length" class="chat-dialog__validation">
+      <div
+        v-if="validationErrors.length"
+        class="chat-dialog__validation"
+      >
         <el-alert
           :title="t('ai.chat.validationFailed')"
           type="error"
@@ -104,7 +167,10 @@
           show-icon
         >
           <ul class="chat-dialog__error-list">
-            <li v-for="(err, idx) in validationErrors" :key="idx">
+            <li
+              v-for="(err, idx) in validationErrors"
+              :key="idx"
+            >
               <span class="chat-dialog__error-type">[{{ err.errorType }}]</span>
               <span class="chat-dialog__error-path">{{ err.fieldPath }}</span>
               {{ err.description }}
@@ -114,7 +180,10 @@
       </div>
 
       <!-- Validation Warnings -->
-      <div v-if="validationWarnings.length" class="chat-dialog__validation">
+      <div
+        v-if="validationWarnings.length"
+        class="chat-dialog__validation"
+      >
         <el-alert
           :title="t('ai.chat.validationWarnings')"
           type="warning"
@@ -123,7 +192,10 @@
           @close="validationWarnings = []"
         >
           <ul class="chat-dialog__error-list">
-            <li v-for="(warn, idx) in validationWarnings" :key="idx">
+            <li
+              v-for="(warn, idx) in validationWarnings"
+              :key="idx"
+            >
               <span class="chat-dialog__error-type chat-dialog__error-type--warning">[{{ warn.errorType }}]</span>
               <span class="chat-dialog__error-path">{{ warn.fieldPath }}</span>
               {{ warn.description }}
@@ -133,7 +205,10 @@
       </div>
 
       <!-- Error Alert with Retry -->
-      <div v-if="error" class="chat-dialog__error">
+      <div
+        v-if="error"
+        class="chat-dialog__error"
+      >
         <el-alert
           :title="errorMessage"
           type="warning"
@@ -141,7 +216,12 @@
           show-icon
         >
           <template #default>
-            <el-button v-if="canRetry" size="small" type="primary" @click="handleRetry">
+            <el-button
+              v-if="canRetry"
+              size="small"
+              type="primary"
+              @click="handleRetry"
+            >
               {{ t('ai.chat.retry') }}
             </el-button>
           </template>
@@ -149,18 +229,37 @@
       </div>
 
       <!-- Task 16.4: N8N Degradation Panel -->
-      <div v-if="degradationInfo" class="chat-dialog__degradation">
-        <el-alert type="error" :closable="false" show-icon>
-          <template #title>{{ t('ai.degradation.title') }}</template>
+      <div
+        v-if="degradationInfo"
+        class="chat-dialog__degradation"
+      >
+        <el-alert
+          type="error"
+          :closable="false"
+          show-icon
+        >
+          <template #title>
+            {{ t('ai.degradation.title') }}
+          </template>
           <template #default>
-            <p v-if="degradationInfo.lastSuccessTime" class="chat-dialog__degradation-time">
+            <p
+              v-if="degradationInfo.lastSuccessTime"
+              class="chat-dialog__degradation-time"
+            >
               {{ t('ai.degradation.lastSuccess', { time: formatRelativeTime(degradationInfo.lastSuccessTime) }) }}
             </p>
             <div class="chat-dialog__degradation-actions">
-              <el-button size="small" @click="saveDraftToLocalStorage">
+              <el-button
+                size="small"
+                @click="saveDraftToLocalStorage"
+              >
                 {{ t('ai.degradation.saveDraft') }}
               </el-button>
-              <el-button size="small" type="primary" @click="navigateToManualCreate">
+              <el-button
+                size="small"
+                type="primary"
+                @click="navigateToManualCreate"
+              >
                 {{ t('ai.degradation.manualCreate') }}
               </el-button>
             </div>
@@ -169,8 +268,14 @@
       </div>
 
       <!-- Phase Complete: Enter Next Phase Button -->
-      <div v-if="showPhaseCompleteBtn" class="chat-dialog__phase-action">
-        <el-button type="success" @click="handleNextPhase">
+      <div
+        v-if="showPhaseCompleteBtn"
+        class="chat-dialog__phase-action"
+      >
+        <el-button
+          type="success"
+          @click="handleNextPhase"
+        >
           {{ t('ai.chat.nextPhase') }}
         </el-button>
       </div>
@@ -180,13 +285,29 @@
     </div>
 
     <!-- Task 16.3: Regenerate scope selector (MODIFY mode only) -->
-    <div v-if="props.mode === 'MODIFY'" class="chat-dialog__scope">
-      <el-button text size="small" @click="showScopeSelector = !showScopeSelector">
+    <div
+      v-if="props.mode === 'MODIFY'"
+      class="chat-dialog__scope"
+    >
+      <el-button
+        text
+        size="small"
+        @click="showScopeSelector = !showScopeSelector"
+      >
         {{ t('ai.chat.regenerateScope') }}
         <el-icon><ArrowDown v-if="!showScopeSelector" /><ArrowUp v-else /></el-icon>
       </el-button>
-      <el-checkbox-group v-if="showScopeSelector" v-model="selectedScopes" class="chat-dialog__scope-group">
-        <el-checkbox v-for="scope in SCOPE_OPTIONS" :key="scope" :value="scope" size="small">
+      <el-checkbox-group
+        v-if="showScopeSelector"
+        v-model="selectedScopes"
+        class="chat-dialog__scope-group"
+      >
+        <el-checkbox
+          v-for="scope in SCOPE_OPTIONS"
+          :key="scope"
+          :value="scope"
+          size="small"
+        >
           {{ t(`ai.scope.${scopeKeyMap[scope]}`) }}
         </el-checkbox>
       </el-checkbox-group>

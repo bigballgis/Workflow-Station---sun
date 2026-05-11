@@ -23,25 +23,56 @@
           :value="user.id"
         />
       </el-select>
-      <el-button type="primary" @click="addMember" :disabled="!selectedUserId">
+      <el-button
+        type="primary"
+        :disabled="!selectedUserId"
+        @click="addMember"
+      >
         {{ t('role.addMember') }}
       </el-button>
     </div>
 
-    <el-table :data="members" v-loading="loading" stripe style="margin-top: 16px" max-height="400">
-      <el-table-column prop="username" :label="t('user.username')" width="120" />
-      <el-table-column prop="fullName" :label="t('user.fullName')" width="120" />
-      <el-table-column prop="email" :label="t('user.email')" />
-      <el-table-column :label="t('common.operation')" width="100">
+    <el-table
+      v-loading="loading"
+      :data="members"
+      stripe
+      style="margin-top: 16px"
+      max-height="400"
+    >
+      <el-table-column
+        prop="username"
+        :label="t('user.username')"
+        width="120"
+      />
+      <el-table-column
+        prop="fullName"
+        :label="t('user.fullName')"
+        width="120"
+      />
+      <el-table-column
+        prop="email"
+        :label="t('user.email')"
+      />
+      <el-table-column
+        :label="t('common.operation')"
+        width="100"
+      >
         <template #default="{ row }">
-          <el-button link type="danger" @click="removeMember(row)">
+          <el-button
+            link
+            type="danger"
+            @click="removeMember(row)"
+          >
             {{ t('common.delete') }}
           </el-button>
         </template>
       </el-table-column>
     </el-table>
 
-    <el-empty v-if="!loading && members.length === 0" :description="t('common.noData')" />
+    <el-empty
+      v-if="!loading && members.length === 0"
+      :description="t('common.noData')"
+    />
   </el-dialog>
 </template>
 

@@ -6,29 +6,79 @@
 
     <el-tabs v-model="activeTab">
       <!-- 虚拟组成员 -->
-      <el-tab-pane :label="t('memberManagement.virtualGroupMembers')" name="virtualGroup">
+      <el-tab-pane
+        :label="t('memberManagement.virtualGroupMembers')"
+        name="virtualGroup"
+      >
         <div class="portal-card">
           <div class="filter-row">
-            <el-select v-model="selectedVirtualGroup" :placeholder="t('memberManagement.selectVirtualGroup')" 
-                       style="width: 300px" filterable @change="loadVirtualGroupMembers">
-              <el-option v-for="group in managedVirtualGroups" :key="group.id" :label="group.name" :value="group.id" />
+            <el-select
+              v-model="selectedVirtualGroup"
+              :placeholder="t('memberManagement.selectVirtualGroup')" 
+              style="width: 300px"
+              filterable
+              @change="loadVirtualGroupMembers"
+            >
+              <el-option
+                v-for="group in managedVirtualGroups"
+                :key="group.id"
+                :label="group.name"
+                :value="group.id"
+              />
             </el-select>
           </div>
           
-          <el-empty v-if="!selectedVirtualGroup" :description="t('memberManagement.selectVirtualGroup')" />
-          <el-empty v-else-if="!loadingVG && virtualGroupMembers.length === 0" :description="t('memberManagement.noMembers')" />
+          <el-empty
+            v-if="!selectedVirtualGroup"
+            :description="t('memberManagement.selectVirtualGroup')"
+          />
+          <el-empty
+            v-else-if="!loadingVG && virtualGroupMembers.length === 0"
+            :description="t('memberManagement.noMembers')"
+          />
           
-          <el-table v-else :data="virtualGroupMembers" stripe v-loading="loadingVG">
-            <el-table-column prop="fullName" :label="t('memberManagement.memberName')" width="150">
-              <template #default="{ row }">{{ row.fullName || row.username }}</template>
-            </el-table-column>
-            <el-table-column prop="username" :label="t('memberManagement.username')" width="150" />
-            <el-table-column prop="joinedAt" :label="t('memberManagement.joinTime')" width="160">
-              <template #default="{ row }">{{ formatDate(row.joinedAt) }}</template>
-            </el-table-column>
-            <el-table-column :label="t('common.actions')" width="100">
+          <el-table
+            v-else
+            v-loading="loadingVG"
+            :data="virtualGroupMembers"
+            stripe
+          >
+            <el-table-column
+              prop="fullName"
+              :label="t('memberManagement.memberName')"
+              width="150"
+            >
               <template #default="{ row }">
-                <el-button type="danger" link size="small" @click="removeVGMember(row)">{{ t('memberManagement.remove') }}</el-button>
+                {{ row.fullName || row.username }}
+              </template>
+            </el-table-column>
+            <el-table-column
+              prop="username"
+              :label="t('memberManagement.username')"
+              width="150"
+            />
+            <el-table-column
+              prop="joinedAt"
+              :label="t('memberManagement.joinTime')"
+              width="160"
+            >
+              <template #default="{ row }">
+                {{ formatDate(row.joinedAt) }}
+              </template>
+            </el-table-column>
+            <el-table-column
+              :label="t('common.actions')"
+              width="100"
+            >
+              <template #default="{ row }">
+                <el-button
+                  type="danger"
+                  link
+                  size="small"
+                  @click="removeVGMember(row)"
+                >
+                  {{ t('memberManagement.remove') }}
+                </el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -36,33 +86,87 @@
       </el-tab-pane>
 
       <!-- 业务单元成员 -->
-      <el-tab-pane :label="t('memberManagement.businessUnitMembers')" name="businessUnit">
+      <el-tab-pane
+        :label="t('memberManagement.businessUnitMembers')"
+        name="businessUnit"
+      >
         <div class="portal-card">
           <div class="filter-row">
-            <el-select v-model="selectedBusinessUnit" :placeholder="t('memberManagement.selectBusinessUnit')" 
-                       style="width: 300px" filterable @change="loadBusinessUnitMembers">
-              <el-option v-for="bu in managedBusinessUnits" :key="bu.id" :label="bu.name" :value="bu.id" />
+            <el-select
+              v-model="selectedBusinessUnit"
+              :placeholder="t('memberManagement.selectBusinessUnit')" 
+              style="width: 300px"
+              filterable
+              @change="loadBusinessUnitMembers"
+            >
+              <el-option
+                v-for="bu in managedBusinessUnits"
+                :key="bu.id"
+                :label="bu.name"
+                :value="bu.id"
+              />
             </el-select>
           </div>
           
-          <el-empty v-if="!selectedBusinessUnit" :description="t('memberManagement.selectBusinessUnit')" />
-          <el-empty v-else-if="!loadingBU && businessUnitMembers.length === 0" :description="t('memberManagement.noMembers')" />
+          <el-empty
+            v-if="!selectedBusinessUnit"
+            :description="t('memberManagement.selectBusinessUnit')"
+          />
+          <el-empty
+            v-else-if="!loadingBU && businessUnitMembers.length === 0"
+            :description="t('memberManagement.noMembers')"
+          />
           
-          <el-table v-else :data="businessUnitMembers" stripe v-loading="loadingBU">
-            <el-table-column prop="fullName" :label="t('memberManagement.memberName')" width="150">
-              <template #default="{ row }">{{ row.fullName || row.username }}</template>
-            </el-table-column>
-            <el-table-column prop="username" :label="t('memberManagement.username')" width="150" />
-            <el-table-column prop="roles" :label="t('memberManagement.roles')" min-width="200">
+          <el-table
+            v-else
+            v-loading="loadingBU"
+            :data="businessUnitMembers"
+            stripe
+          >
+            <el-table-column
+              prop="fullName"
+              :label="t('memberManagement.memberName')"
+              width="150"
+            >
               <template #default="{ row }">
-                <el-tag v-for="role in row.roles" :key="role.id" size="small" style="margin-right: 4px">
+                {{ row.fullName || row.username }}
+              </template>
+            </el-table-column>
+            <el-table-column
+              prop="username"
+              :label="t('memberManagement.username')"
+              width="150"
+            />
+            <el-table-column
+              prop="roles"
+              :label="t('memberManagement.roles')"
+              min-width="200"
+            >
+              <template #default="{ row }">
+                <el-tag
+                  v-for="role in row.roles"
+                  :key="role.id"
+                  size="small"
+                  style="margin-right: 4px"
+                >
                   {{ role.name }}
-                  <el-icon class="remove-role-icon" @click.stop="removeBURole(row, role)"><Close /></el-icon>
+                  <el-icon
+                    class="remove-role-icon"
+                    @click.stop="removeBURole(row, role)"
+                  >
+                    <Close />
+                  </el-icon>
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="joinedAt" :label="t('memberManagement.joinTime')" width="160">
-              <template #default="{ row }">{{ formatDate(row.joinedAt) }}</template>
+            <el-table-column
+              prop="joinedAt"
+              :label="t('memberManagement.joinTime')"
+              width="160"
+            >
+              <template #default="{ row }">
+                {{ formatDate(row.joinedAt) }}
+              </template>
             </el-table-column>
           </el-table>
         </div>

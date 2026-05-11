@@ -4,45 +4,94 @@
   <div class="process-designer">
     <div class="designer-toolbar">
       <el-button-group>
-        <el-button @click="handleZoomIn" :disabled="!modelerReady">
+        <el-button
+          :disabled="!modelerReady"
+          @click="handleZoomIn"
+        >
           <el-icon><ZoomIn /></el-icon>
         </el-button>
-        <el-button @click="handleZoomOut" :disabled="!modelerReady">
+        <el-button
+          :disabled="!modelerReady"
+          @click="handleZoomOut"
+        >
           <el-icon><ZoomOut /></el-icon>
         </el-button>
-        <el-button @click="handleFitViewport" :disabled="!modelerReady">{{ t('process.fitCanvas') }}</el-button>
-        <el-button @click="handleUndo" :disabled="!modelerReady">
+        <el-button
+          :disabled="!modelerReady"
+          @click="handleFitViewport"
+        >
+          {{ t('process.fitCanvas') }}
+        </el-button>
+        <el-button
+          :disabled="!modelerReady"
+          @click="handleUndo"
+        >
           <el-icon><RefreshLeft /></el-icon>
         </el-button>
-        <el-button @click="handleRedo" :disabled="!modelerReady">
+        <el-button
+          :disabled="!modelerReady"
+          @click="handleRedo"
+        >
           <el-icon><RefreshRight /></el-icon>
         </el-button>
       </el-button-group>
       <div class="auto-save-status">
-        <span v-if="autoSaving" class="auto-saving">
+        <span
+          v-if="autoSaving"
+          class="auto-saving"
+        >
           <el-icon class="is-loading"><Loading /></el-icon>
           {{ t('process.autoSaving') }}
         </span>
-        <span v-else-if="lastAutoSaveTime" class="auto-saved">
+        <span
+          v-else-if="lastAutoSaveTime"
+          class="auto-saved"
+        >
           <el-icon><CircleCheck /></el-icon>
           {{ t('process.autoSaved') }} {{ formatAutoSaveTime(lastAutoSaveTime) }}
         </span>
       </div>
       <el-button-group>
-        <el-button @click="handleValidate" :disabled="!modelerReady">{{ t('process.validate') }}</el-button>
-        <el-button @click="handleExportSVG" :disabled="!modelerReady">{{ t('process.exportSVG') }}</el-button>
-        <el-button @click="handleExportXML" :disabled="!modelerReady">{{ t('process.exportXML') }}</el-button>
-        <el-button @click="showDebugPanel = !showDebugPanel" :type="showDebugPanel ? 'primary' : ''">
+        <el-button
+          :disabled="!modelerReady"
+          @click="handleValidate"
+        >
+          {{ t('process.validate') }}
+        </el-button>
+        <el-button
+          :disabled="!modelerReady"
+          @click="handleExportSVG"
+        >
+          {{ t('process.exportSVG') }}
+        </el-button>
+        <el-button
+          :disabled="!modelerReady"
+          @click="handleExportXML"
+        >
+          {{ t('process.exportXML') }}
+        </el-button>
+        <el-button
+          :type="showDebugPanel ? 'primary' : ''"
+          @click="showDebugPanel = !showDebugPanel"
+        >
           <el-icon><Monitor /></el-icon> {{ t('process.debug') }}
         </el-button>
-        <el-button type="primary" @click="handleSave" :loading="saving" :disabled="!modelerReady">
+        <el-button
+          type="primary"
+          :loading="saving"
+          :disabled="!modelerReady"
+          @click="handleSave"
+        >
           {{ t('process.save') }}
         </el-button>
       </el-button-group>
     </div>
     
     <div class="designer-content">
-      <div ref="canvasRef" class="bpmn-canvas"></div>
+      <div
+        ref="canvasRef"
+        class="bpmn-canvas"
+      />
       <div class="properties-panel-container">
         <NodePropertiesPanel 
           v-if="bpmnModelerRef" 
@@ -53,7 +102,12 @@
     </div>
     
     <!-- Debug Panel Drawer -->
-    <el-drawer v-model="showDebugPanel" :title="t('process.processDebug')" direction="btt" size="50%">
+    <el-drawer
+      v-model="showDebugPanel"
+      :title="t('process.processDebug')"
+      direction="btt"
+      size="50%"
+    >
       <ProcessDebugPanel :function-unit-id="functionUnitId" />
     </el-drawer>
 

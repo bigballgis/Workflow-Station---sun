@@ -1,24 +1,46 @@
 <template>
   <div class="relation-table-view">
     <!-- Left: Table columns panel -->
-    <div class="columns-panel" v-if="columnsPanelOpen">
+    <div
+      v-if="columnsPanelOpen"
+      class="columns-panel"
+    >
       <div class="columns-panel-header">
         <div class="columns-panel-title">
-          <el-icon style="margin-right: 6px;"><Menu /></el-icon>
+          <el-icon style="margin-right: 6px;">
+            <Menu />
+          </el-icon>
           <span>Table columns</span>
         </div>
-        <el-icon class="columns-panel-close" @click="columnsPanelOpen = false"><Close /></el-icon>
+        <el-icon
+          class="columns-panel-close"
+          @click="columnsPanelOpen = false"
+        >
+          <Close />
+        </el-icon>
       </div>
-      <div class="columns-panel-table-name">{{ binding.tableName }}</div>
+      <div class="columns-panel-table-name">
+        {{ binding.tableName }}
+      </div>
       <div class="columns-panel-search">
-        <el-input v-model="fieldSearchKeyword" placeholder="Search" clearable size="small">
-          <template #prefix><el-icon><Search /></el-icon></template>
+        <el-input
+          v-model="fieldSearchKeyword"
+          placeholder="Search"
+          clearable
+          size="small"
+        >
+          <template #prefix>
+            <el-icon><Search /></el-icon>
+          </template>
         </el-input>
       </div>
-      <div class="columns-field-list" v-loading="loadingFields">
+      <div
+        v-loading="loadingFields"
+        class="columns-field-list"
+      >
         <div
-          v-if="!loadingFields"
           v-for="field in filteredAvailableFields"
+          v-if="!loadingFields"
           :key="field.fieldName"
           class="field-item"
           :class="{ active: isFieldInView(field.fieldName), dragging: dragSourceField === field.fieldName }"
@@ -27,36 +49,65 @@
           @dragend="onFieldDragEnd"
           @click="addFieldToView(field)"
         >
-          <el-icon class="field-icon"><component :is="getFieldIcon(field.dataType)" /></el-icon>
+          <el-icon class="field-icon">
+            <component :is="getFieldIcon(field.dataType)" />
+          </el-icon>
           <span class="field-name">{{ field.comment || field.fieldName }}</span>
         </div>
-        <el-empty v-if="!loadingFields && filteredAvailableFields.length === 0" description="No fields" :image-size="40" />
+        <el-empty
+          v-if="!loadingFields && filteredAvailableFields.length === 0"
+          description="No fields"
+          :image-size="40"
+        />
       </div>
     </div>
 
     <!-- Toggle button when collapsed -->
-    <div v-else class="columns-toggle" @click="columnsPanelOpen = true">
+    <div
+      v-else
+      class="columns-toggle"
+      @click="columnsPanelOpen = true"
+    >
       <el-icon><DArrowRight /></el-icon>
     </div>
 
     <!-- Right: Data grid -->
-    <div class="data-grid-panel"
+    <div
+      class="data-grid-panel"
       @dragover.prevent="onGridDragOver"
       @drop="onGridDrop"
     >
       <!-- Toolbar with Preview and Clear -->
-      <div class="grid-toolbar" v-if="viewFields.length > 0">
+      <div
+        v-if="viewFields.length > 0"
+        class="grid-toolbar"
+      >
         <div class="toolbar-left">
           <span class="field-count">{{ viewFields.length }} columns</span>
         </div>
         <div class="toolbar-right">
-          <el-button size="small" @click="handlePreview">Preview</el-button>
-          <el-button size="small" type="danger" plain @click="handleClear">Clear</el-button>
+          <el-button
+            size="small"
+            @click="handlePreview"
+          >
+            Preview
+          </el-button>
+          <el-button
+            size="small"
+            type="danger"
+            plain
+            @click="handleClear"
+          >
+            Clear
+          </el-button>
         </div>
       </div>
 
       <!-- Column rows (draggable) -->
-      <div class="column-rows" v-if="viewFields.length > 0">
+      <div
+        v-if="viewFields.length > 0"
+        class="column-rows"
+      >
         <div
           v-for="(field, index) in viewFields"
           :key="field.fieldName"
@@ -71,7 +122,12 @@
         >
           <div class="column-row-label">
             <span class="col-name">{{ field.comment || field.fieldName }}</span>
-            <el-icon class="col-remove" @click.stop="removeField(index)"><Close /></el-icon>
+            <el-icon
+              class="col-remove"
+              @click.stop="removeField(index)"
+            >
+              <Close />
+            </el-icon>
           </div>
           <div class="column-row-value">
             {{ getMockValue(field) }}
@@ -79,14 +135,34 @@
         </div>
       </div>
 
-      <el-empty v-if="viewFields.length === 0" description="No fields imported" />
+      <el-empty
+        v-if="viewFields.length === 0"
+        description="No fields imported"
+      />
     </div>
 
     <!-- Preview dialog -->
-    <el-dialog v-model="showPreview" title="Preview" width="800px" destroy-on-close>
-      <el-table :data="previewFieldRows" border style="width: 100%;">
-        <el-table-column prop="label" :label="' '" min-width="200" />
-        <el-table-column prop="value" :label="' '" min-width="200" />
+    <el-dialog
+      v-model="showPreview"
+      title="Preview"
+      width="800px"
+      destroy-on-close
+    >
+      <el-table
+        :data="previewFieldRows"
+        border
+        style="width: 100%;"
+      >
+        <el-table-column
+          prop="label"
+          :label="' '"
+          min-width="200"
+        />
+        <el-table-column
+          prop="value"
+          :label="' '"
+          min-width="200"
+        />
       </el-table>
     </el-dialog>
   </div>

@@ -7,19 +7,33 @@
         </div>
       </template>
 
-      <div class="profile-content" v-loading="loading">
+      <div
+        v-loading="loading"
+        class="profile-content"
+      >
         <div class="avatar-section">
-          <el-avatar :size="100" :src="userInfo?.avatar || defaultAvatar">
+          <el-avatar
+            :size="100"
+            :src="userInfo?.avatar || defaultAvatar"
+          >
             {{ (userInfo?.displayName || userInfo?.username || 'U').charAt(0).toUpperCase() }}
           </el-avatar>
           <h2>{{ userInfo?.displayName || userInfo?.username || t('user.username') }}</h2>
-          <p class="subtitle">{{ t('profile.sectionAccess') }}</p>
+          <p class="subtitle">
+            {{ t('profile.sectionAccess') }}
+          </p>
         </div>
 
         <el-divider />
 
-        <h4 class="subsection-title">{{ t('profile.sectionAccount') }}</h4>
-        <el-descriptions :column="2" border class="subsection-block">
+        <h4 class="subsection-title">
+          {{ t('profile.sectionAccount') }}
+        </h4>
+        <el-descriptions
+          :column="2"
+          border
+          class="subsection-block"
+        >
           <el-descriptions-item :label="t('user.username')">
             {{ userInfo?.username || '-' }}
           </el-descriptions-item>
@@ -36,35 +50,70 @@
 
         <el-divider />
 
-        <h4 class="subsection-title">{{ t('profile.sectionAccess') }}</h4>
-        <el-alert type="info" :closable="false" show-icon class="hint-alert">
+        <h4 class="subsection-title">
+          {{ t('profile.sectionAccess') }}
+        </h4>
+        <el-alert
+          type="info"
+          :closable="false"
+          show-icon
+          class="hint-alert"
+        >
           {{ t('profile.permissionCodesHint') }}
         </el-alert>
 
         <div class="role-block">
-          <div class="block-label">{{ t('profile.loginRoles') }}</div>
-          <div v-if="(userInfo?.roles?.length || 0) > 0" class="tag-row">
-            <el-tag v-for="r in userInfo?.roles" :key="r" size="small" type="primary" class="item-tag">
+          <div class="block-label">
+            {{ t('profile.loginRoles') }}
+          </div>
+          <div
+            v-if="(userInfo?.roles?.length || 0) > 0"
+            class="tag-row"
+          >
+            <el-tag
+              v-for="r in userInfo?.roles"
+              :key="r"
+              size="small"
+              type="primary"
+              class="item-tag"
+            >
               {{ r }}
             </el-tag>
           </div>
-          <span v-else class="empty-text">{{ t('profile.noRoles') }}</span>
+          <span
+            v-else
+            class="empty-text"
+          >{{ t('profile.noRoles') }}</span>
         </div>
 
         <div class="perm-block">
-          <div class="block-label">{{ t('profile.permissionCodes') }}</div>
+          <div class="block-label">
+            {{ t('profile.permissionCodes') }}
+          </div>
           <template v-if="(userInfo?.permissions?.length || 0) > 0">
             <el-collapse>
-              <el-collapse-item :title="`${t('profile.permissionCodes')} (${userInfo?.permissions?.length})`" name="perms">
+              <el-collapse-item
+                :title="`${t('profile.permissionCodes')} (${userInfo?.permissions?.length})`"
+                name="perms"
+              >
                 <div class="perm-scroll">
-                  <el-tag v-for="p in userInfo?.permissions" :key="p" size="small" type="info" class="perm-tag">
+                  <el-tag
+                    v-for="p in userInfo?.permissions"
+                    :key="p"
+                    size="small"
+                    type="info"
+                    class="perm-tag"
+                  >
                     {{ p }}
                   </el-tag>
                 </div>
               </el-collapse-item>
             </el-collapse>
           </template>
-          <span v-else class="empty-text">{{ t('profile.noPermissionsListed') }}</span>
+          <span
+            v-else
+            class="empty-text"
+          >{{ t('profile.noPermissionsListed') }}</span>
         </div>
       </div>
     </el-card>
@@ -82,7 +131,10 @@
         :rules="passwordRules"
         label-width="100px"
       >
-        <el-form-item :label="t('profile.currentPassword')" prop="oldPassword">
+        <el-form-item
+          :label="t('profile.currentPassword')"
+          prop="oldPassword"
+        >
           <el-input
             v-model="passwordForm.oldPassword"
             type="password"
@@ -91,7 +143,10 @@
             @blur="passwordFormRef?.validateField('newPassword')"
           />
         </el-form-item>
-        <el-form-item :label="t('profile.newPassword')" prop="newPassword">
+        <el-form-item
+          :label="t('profile.newPassword')"
+          prop="newPassword"
+        >
           <el-input
             v-model="passwordForm.newPassword"
             type="password"
@@ -100,7 +155,10 @@
             @input="passwordFormRef?.validateField('confirmPassword')"
           />
         </el-form-item>
-        <el-form-item :label="t('profile.confirmPassword')" prop="confirmPassword">
+        <el-form-item
+          :label="t('profile.confirmPassword')"
+          prop="confirmPassword"
+        >
           <el-input
             v-model="passwordForm.confirmPassword"
             type="password"
@@ -109,7 +167,11 @@
           />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="handleChangePassword" :loading="changingPassword">
+          <el-button
+            type="primary"
+            :loading="changingPassword"
+            @click="handleChangePassword"
+          >
             {{ t('profile.changePassword') }}
           </el-button>
         </el-form-item>

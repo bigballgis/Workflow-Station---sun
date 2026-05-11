@@ -76,7 +76,9 @@
             v-for="opt in (col.props?.options ?? col.options ?? [])"
             :key="opt.value"
             :value="opt.value"
-          >{{ opt.label }}</el-radio>
+          >
+            {{ opt.label }}
+          </el-radio>
         </el-radio-group>
 
         <!-- checkbox -->
@@ -88,7 +90,9 @@
             v-for="opt in (col.props?.options ?? col.options ?? [])"
             :key="opt.value"
             :value="opt.value"
-          >{{ opt.label }}</el-checkbox>
+          >
+            {{ opt.label }}
+          </el-checkbox>
         </el-checkbox-group>
 
         <!-- password -->
@@ -151,7 +155,10 @@
         />
 
         <!-- upload -->
-        <div v-else-if="col.type === 'upload'" style="display: flex; flex-direction: column; gap: 4px;">
+        <div
+          v-else-if="col.type === 'upload'"
+          style="display: flex; flex-direction: column; gap: 4px;"
+        >
           <el-upload
             :action="col.props?.action && col.props.action !== '/' ? col.props.action : '/api/v1/upload'"
             :accept="col.props?.accept || '.jpg,.jpeg,.png,.pdf,.docx,.xlsx'"
@@ -159,7 +166,10 @@
             :on-success="(res: any, file: any) => handleUploadSuccess(res, file, col)"
             :on-error="() => handleUploadError(col)"
           >
-            <el-button size="small" type="primary">
+            <el-button
+              size="small"
+              type="primary"
+            >
               <el-icon><Upload /></el-icon> Upload
             </el-button>
           </el-upload>
@@ -221,7 +231,10 @@
         />
 
         <!-- signature (base64 image URL input) -->
-        <div v-else-if="col.type === 'signature'" style="width: 100%;">
+        <div
+          v-else-if="col.type === 'signature'"
+          style="width: 100%;"
+        >
           <canvas
             :ref="(el: any) => { if (el) signatureCanvasRefs[col.field] = el }"
             class="signature-canvas"
@@ -231,7 +244,12 @@
             @mouseleave="endSign(col.field)"
           />
           <div style="margin-top: 4px;">
-            <el-button size="small" @click="clearSignature(col.field)">Clear</el-button>
+            <el-button
+              size="small"
+              @click="clearSignature(col.field)"
+            >
+              Clear
+            </el-button>
           </div>
         </div>
 
@@ -274,8 +292,15 @@
     </el-form>
 
     <template #footer>
-      <el-button @click="handleClose">Cancel</el-button>
-      <el-button type="primary" @click="handleSave">Save</el-button>
+      <el-button @click="handleClose">
+        Cancel
+      </el-button>
+      <el-button
+        type="primary"
+        @click="handleSave"
+      >
+        Save
+      </el-button>
     </template>
   </el-dialog>
 </template>

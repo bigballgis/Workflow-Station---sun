@@ -29,7 +29,11 @@
           :value="role.id"
         />
       </el-select>
-      <el-button type="primary" @click="bindRole" :disabled="!selectedRoleId || isSystemGroup">
+      <el-button
+        type="primary"
+        :disabled="!selectedRoleId || isSystemGroup"
+        @click="bindRole"
+      >
         {{ boundRole ? t('virtualGroup.replaceRole') : t('virtualGroup.bindRole') }}
       </el-button>
     </div>
@@ -44,15 +48,18 @@
       <template #default>
         <div class="bound-role-info">
           <span class="role-name">{{ boundRole.roleName }}</span>
-          <el-tag size="small" :type="boundRole.roleType === 'BU_BOUNDED' ? 'warning' : 'success'">
+          <el-tag
+            size="small"
+            :type="boundRole.roleType === 'BU_BOUNDED' ? 'warning' : 'success'"
+          >
             {{ getRoleTypeLabel(boundRole.roleType) }}
           </el-tag>
           <el-button 
             v-if="!isSystemGroup"
             link 
             type="danger" 
-            @click="unbindRole" 
-            style="margin-left: 16px"
+            style="margin-left: 16px" 
+            @click="unbindRole"
           >
             {{ t('virtualGroup.unbindRole') }}
           </el-button>
@@ -60,9 +67,16 @@
       </template>
     </el-alert>
 
-    <el-empty v-else :description="t('virtualGroup.noRoleBound')" style="margin-top: 16px" />
+    <el-empty
+      v-else
+      :description="t('virtualGroup.noRoleBound')"
+      style="margin-top: 16px"
+    />
 
-    <div class="role-type-hint" style="margin-top: 16px; color: #909399; font-size: 13px;">
+    <div
+      class="role-type-hint"
+      style="margin-top: 16px; color: #909399; font-size: 13px;"
+    >
       <p>{{ t('virtualGroup.roleTypeHint') }}</p>
       <ul style="margin: 8px 0 0 20px; padding: 0;">
         <li><strong>{{ t('role.buBounded') }}</strong>: {{ t('virtualGroup.buBoundedHint') }}</li>

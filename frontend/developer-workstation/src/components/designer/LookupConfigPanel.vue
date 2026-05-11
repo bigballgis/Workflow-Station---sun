@@ -1,8 +1,17 @@
 <template>
   <div class="lookup-config-panel">
-    <el-form label-width="120px" label-position="top" size="small">
+    <el-form
+      label-width="120px"
+      label-position="top"
+      size="small"
+    >
       <el-form-item label="Relation Table">
-        <el-select v-model="config.tableId" placeholder="Select bound table" style="width: 100%" @change="handleTableChange">
+        <el-select
+          v-model="config.tableId"
+          placeholder="Select bound table"
+          style="width: 100%"
+          @change="handleTableChange"
+        >
           <el-option
             v-for="view in boundViews"
             :key="view.tableId"
@@ -13,7 +22,11 @@
       </el-form-item>
 
       <el-form-item label="View Config">
-        <el-select v-model="config.viewConfigId" placeholder="Select view config" style="width: 100%">
+        <el-select
+          v-model="config.viewConfigId"
+          placeholder="Select view config"
+          style="width: 100%"
+        >
           <el-option
             v-for="view in boundViews"
             :key="view.viewConfigId"
@@ -25,7 +38,12 @@
       </el-form-item>
 
       <el-form-item label="Search Fields">
-        <el-select v-model="searchFieldList" multiple placeholder="Select search fields" style="width: 100%">
+        <el-select
+          v-model="searchFieldList"
+          multiple
+          placeholder="Select search fields"
+          style="width: 100%"
+        >
           <el-option
             v-for="field in availableFields"
             :key="field.fieldName"
@@ -36,7 +54,11 @@
       </el-form-item>
 
       <el-form-item label="Display Field">
-        <el-select v-model="config.displayField" placeholder="Select display field" style="width: 100%">
+        <el-select
+          v-model="config.displayField"
+          placeholder="Select display field"
+          style="width: 100%"
+        >
           <el-option
             v-for="field in availableFields"
             :key="field.fieldName"
@@ -47,7 +69,13 @@
       </el-form-item>
 
       <el-form-item>
-        <el-button type="primary" @click="handleSave" :loading="saving">Save Config</el-button>
+        <el-button
+          type="primary"
+          :loading="saving"
+          @click="handleSave"
+        >
+          Save Config
+        </el-button>
       </el-form-item>
     </el-form>
   </div>

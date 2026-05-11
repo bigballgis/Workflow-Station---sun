@@ -1,20 +1,45 @@
 <template>
-  <el-dialog :model-value="modelValue" @update:model-value="$emit('update:modelValue', $event)" :title="$t('form.bindNodeTitle')" width="650px" :key="bindDialogKey" destroy-on-close>
+  <el-dialog
+    :key="bindDialogKey"
+    :model-value="modelValue"
+    :title="$t('form.bindNodeTitle')"
+    width="650px"
+    destroy-on-close
+    @update:model-value="$emit('update:modelValue', $event)"
+  >
     <div class="bind-dialog-content">
-      <el-alert type="info" :closable="false" style="margin-bottom: 16px;">
+      <el-alert
+        type="info"
+        :closable="false"
+        style="margin-bottom: 16px;"
+      >
         {{ $t('form.bindNodeHint') }}
       </el-alert>
-      <div v-if="processNodes.length" class="node-list">
-        <div v-for="node in processNodes" :key="`${node.id}-${bindDialogKey}`" class="node-item">
+      <div
+        v-if="processNodes.length"
+        class="node-list"
+      >
+        <div
+          v-for="node in processNodes"
+          :key="`${node.id}-${bindDialogKey}`"
+          class="node-item"
+        >
           <el-checkbox 
+            :key="`checkbox-${node.id}-${bindDialogKey}`"
             :model-value="isNodeSelected(node.id)"
             @change="toggleNodeSelection(node.id, node.name, $event as boolean)"
-            :key="`checkbox-${node.id}-${bindDialogKey}`"
           />
-          <div class="node-icon" :class="node.type"></div>
+          <div
+            class="node-icon"
+            :class="node.type"
+          />
           <div class="node-info">
-            <div class="node-name">{{ node.name }}</div>
-            <div class="node-type">{{ nodeTypeLabel(node.type) }}</div>
+            <div class="node-name">
+              {{ node.name }}
+            </div>
+            <div class="node-type">
+              {{ nodeTypeLabel(node.type) }}
+            </div>
           </div>
           <el-checkbox 
             v-if="isNodeSelected(node.id)"
@@ -25,11 +50,21 @@
           </el-checkbox>
         </div>
       </div>
-      <el-empty v-else :description="$t('form.noNodesAvailable')" />
+      <el-empty
+        v-else
+        :description="$t('form.noNodesAvailable')"
+      />
     </div>
     <template #footer>
-      <el-button @click="$emit('update:modelValue', false)">{{ $t('common.cancel') }}</el-button>
-      <el-button type="primary" @click="$emit('confirm')">{{ $t('common.confirm') }}</el-button>
+      <el-button @click="$emit('update:modelValue', false)">
+        {{ $t('common.cancel') }}
+      </el-button>
+      <el-button
+        type="primary"
+        @click="$emit('confirm')"
+      >
+        {{ $t('common.confirm') }}
+      </el-button>
     </template>
   </el-dialog>
 </template>

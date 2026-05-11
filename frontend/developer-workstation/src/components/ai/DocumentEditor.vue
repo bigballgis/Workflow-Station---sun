@@ -1,12 +1,22 @@
 <template>
   <div class="document-editor">
     <!-- AI new version banner -->
-    <div v-if="hasNewAiVersion" class="document-editor__banner">
+    <div
+      v-if="hasNewAiVersion"
+      class="document-editor__banner"
+    >
       <span>{{ t('ai.doc.aiNewVersion') }}</span>
-      <el-button size="small" type="primary" @click="handleLoadNewVersion">
+      <el-button
+        size="small"
+        type="primary"
+        @click="handleLoadNewVersion"
+      >
         {{ t('ai.doc.loadNewVersion') }}
       </el-button>
-      <el-button size="small" @click="hasNewAiVersion = false">
+      <el-button
+        size="small"
+        @click="hasNewAiVersion = false"
+      >
         {{ t('ai.doc.keepEditing') }}
       </el-button>
     </div>

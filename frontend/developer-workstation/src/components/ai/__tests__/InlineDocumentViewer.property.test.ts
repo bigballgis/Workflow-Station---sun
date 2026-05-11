@@ -22,7 +22,7 @@ describe('Property 7: View mode independence across instances', () => {
         (initialA: ViewMode, initialB: ViewMode, newModeA: ViewMode) => {
           // Simulate two independent InlineDocumentViewer instances
           let viewModeA: ViewMode = initialA
-          let viewModeB: ViewMode = initialB
+          const viewModeB: ViewMode = initialB
 
           // Change view mode on instance A
           viewModeA = newModeA

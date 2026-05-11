@@ -1,28 +1,80 @@
 <template>
-  <el-dialog :model-value="modelValue" @update:model-value="$emit('update:modelValue', $event)" :title="isEdit ? t('virtualGroup.edit') : t('virtualGroup.create')" width="500px">
-    <el-form ref="formRef" :model="form" :rules="rules" label-width="auto" label-position="left">
-      <el-form-item :label="t('common.name')" prop="name">
-        <el-input v-model="form.name" :disabled="isSystemGroup" />
+  <el-dialog
+    :model-value="modelValue"
+    :title="isEdit ? t('virtualGroup.edit') : t('virtualGroup.create')"
+    width="500px"
+    @update:model-value="$emit('update:modelValue', $event)"
+  >
+    <el-form
+      ref="formRef"
+      :model="form"
+      :rules="rules"
+      label-width="auto"
+      label-position="left"
+    >
+      <el-form-item
+        :label="t('common.name')"
+        prop="name"
+      >
+        <el-input
+          v-model="form.name"
+          :disabled="isSystemGroup"
+        />
       </el-form-item>
-      <el-form-item :label="t('common.code')" prop="code">
-        <el-input v-model="form.code" :disabled="isEdit" />
+      <el-form-item
+        :label="t('common.code')"
+        prop="code"
+      >
+        <el-input
+          v-model="form.code"
+          :disabled="isEdit"
+        />
       </el-form-item>
-      <el-form-item :label="t('common.type')" prop="type">
-        <el-select v-model="form.type" :disabled="isSystemGroup">
-          <el-option :label="t('virtualGroup.typeCustom')" value="CUSTOM" />
-          <el-option v-if="isSystemGroup" :label="t('virtualGroup.typeSystem')" value="SYSTEM" />
+      <el-form-item
+        :label="t('common.type')"
+        prop="type"
+      >
+        <el-select
+          v-model="form.type"
+          :disabled="isSystemGroup"
+        >
+          <el-option
+            :label="t('virtualGroup.typeCustom')"
+            value="CUSTOM"
+          />
+          <el-option
+            v-if="isSystemGroup"
+            :label="t('virtualGroup.typeSystem')"
+            value="SYSTEM"
+          />
         </el-select>
       </el-form-item>
       <el-form-item :label="t('virtualGroup.adGroup')">
-        <el-input v-model="form.adGroup" :placeholder="t('virtualGroup.adGroupPlaceholder')" />
+        <el-input
+          v-model="form.adGroup"
+          :placeholder="t('virtualGroup.adGroupPlaceholder')"
+        />
       </el-form-item>
       <el-form-item :label="t('common.description')">
-        <el-input v-model="form.description" type="textarea" :rows="3" :disabled="isSystemGroup" />
+        <el-input
+          v-model="form.description"
+          type="textarea"
+          :rows="3"
+          :disabled="isSystemGroup"
+        />
       </el-form-item>
     </el-form>
     <template #footer>
-      <el-button @click="$emit('update:modelValue', false)">{{ t('common.cancel') }}</el-button>
-      <el-button type="primary" :loading="loading" @click="handleSubmit">{{ t('common.confirm') }}</el-button>
+      <el-button @click="$emit('update:modelValue', false)">
+        {{ t('common.cancel') }}
+      </el-button>
+      <el-button
+        type="primary"
+        :loading="loading"
+        @click="handleSubmit"
+      >
+        {{ t('common.confirm') }}
+      </el-button>
     </template>
   </el-dialog>
 </template>

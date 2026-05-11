@@ -8,7 +8,10 @@
     @closed="handleClosed"
   >
     <!-- Sub-table form preview (form-create based on designed rule) -->
-    <div v-if="formRule && formRule.length" class="sub-table-form-preview">
+    <div
+      v-if="formRule && formRule.length"
+      class="sub-table-form-preview"
+    >
       <form-create
         v-if="formCreateMounted"
         v-model="formData"
@@ -16,18 +19,34 @@
         :rule="formRule"
         :option="formOption"
       />
-      <div v-else class="form-loading">
-        <el-icon class="is-loading"><Loading /></el-icon>
+      <div
+        v-else
+        class="form-loading"
+      >
+        <el-icon class="is-loading">
+          <Loading />
+        </el-icon>
         <span>{{ t('common.loading') }}...</span>
       </div>
     </div>
 
     <!-- Fallback: if no rule defined, show message -->
-    <el-empty v-else :description="t('subTable.noFormDesign')" :image-size="60" />
+    <el-empty
+      v-else
+      :description="t('subTable.noFormDesign')"
+      :image-size="60"
+    />
 
     <template #footer>
-      <el-button @click="handleClose">{{ t('common.cancel') }}</el-button>
-      <el-button type="primary" @click="handleSave">{{ t('common.save') }}</el-button>
+      <el-button @click="handleClose">
+        {{ t('common.cancel') }}
+      </el-button>
+      <el-button
+        type="primary"
+        @click="handleSave"
+      >
+        {{ t('common.save') }}
+      </el-button>
     </template>
   </el-dialog>
 </template>

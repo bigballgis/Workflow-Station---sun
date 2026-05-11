@@ -1,12 +1,21 @@
 <template>
-  <div class="dashboard-landing" v-loading="loading">
+  <div
+    v-loading="loading"
+    class="dashboard-landing"
+  >
     <!-- Empty state -->
-    <div v-if="!loading && dashboards.length === 0" class="empty-state">
+    <div
+      v-if="!loading && dashboards.length === 0"
+      class="empty-state"
+    >
       <el-empty description="No dashboards available" />
     </div>
 
     <!-- SINGLE mode: full-screen single dashboard -->
-    <div v-else-if="layoutMode === 'SINGLE' && dashboards.length > 0" class="single-layout">
+    <div
+      v-else-if="layoutMode === 'SINGLE' && dashboards.length > 0"
+      class="single-layout"
+    >
       <div
         :id="getContainerId(dashboards[0].dashboardId)"
         class="superset-container"
@@ -14,8 +23,15 @@
     </div>
 
     <!-- MULTI mode: tabs -->
-    <div v-else-if="layoutMode === 'MULTI'" class="multi-layout">
-      <el-tabs v-model="activeTab" type="border-card" @tab-change="handleTabChange">
+    <div
+      v-else-if="layoutMode === 'MULTI'"
+      class="multi-layout"
+    >
+      <el-tabs
+        v-model="activeTab"
+        type="border-card"
+        @tab-change="handleTabChange"
+      >
         <el-tab-pane
           v-for="db in dashboards"
           :key="db.dashboardId"
@@ -31,7 +47,10 @@
     </div>
 
     <!-- WIDGET mode: grid cards -->
-    <div v-else-if="layoutMode === 'WIDGET'" class="widget-layout">
+    <div
+      v-else-if="layoutMode === 'WIDGET'"
+      class="widget-layout"
+    >
       <div class="widget-grid">
         <div
           v-for="db in dashboards"
@@ -43,8 +62,18 @@
             <span class="widget-title">{{ db.dashboardTitle }}</span>
           </div>
           <div class="widget-card-body">
-            <p v-if="db.description" class="widget-desc">{{ db.description }}</p>
-            <el-icon :size="32" color="var(--text-placeholder)"><DataAnalysis /></el-icon>
+            <p
+              v-if="db.description"
+              class="widget-desc"
+            >
+              {{ db.description }}
+            </p>
+            <el-icon
+              :size="32"
+              color="var(--text-placeholder)"
+            >
+              <DataAnalysis />
+            </el-icon>
             <span class="widget-hint">Click to view full dashboard</span>
           </div>
         </div>

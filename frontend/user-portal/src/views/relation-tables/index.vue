@@ -7,7 +7,9 @@
     <div class="data-layout">
       <!-- Left: Table list -->
       <div class="table-list-panel">
-        <div class="panel-title">Available Tables</div>
+        <div class="panel-title">
+          Available Tables
+        </div>
         <div style="padding: 6px 8px;">
           <el-input
             v-model="tableSearchKeyword"
@@ -21,9 +23,9 @@
           </el-input>
         </div>
         <el-menu
+          v-loading="tableListLoading"
           :default-active="selectedTableId ? String(selectedTableId) : ''"
           @select="handleSelectTable"
-          v-loading="tableListLoading"
         >
           <el-menu-item
             v-for="t in filteredTables"
@@ -33,7 +35,11 @@
             <span>{{ t.displayName || t.tableName }}</span>
           </el-menu-item>
         </el-menu>
-        <el-empty v-if="!tableListLoading && filteredTables.length === 0" description="No tables available" :image-size="60" />
+        <el-empty
+          v-if="!tableListLoading && filteredTables.length === 0"
+          description="No tables available"
+          :image-size="60"
+        />
       </div>
 
       <!-- Right: Data grid -->
@@ -52,12 +58,21 @@
                 <el-icon><Search /></el-icon>
               </template>
             </el-input>
-            <el-button type="primary" @click="handleExport" :loading="exporting">
+            <el-button
+              type="primary"
+              :loading="exporting"
+              @click="handleExport"
+            >
               <el-icon><Download /></el-icon> Export CSV
             </el-button>
           </div>
 
-          <el-table :data="dataRows" stripe v-loading="dataLoading" style="width: 100%;">
+          <el-table
+            v-loading="dataLoading"
+            :data="dataRows"
+            stripe
+            style="width: 100%;"
+          >
             <el-table-column
               v-for="col in columns"
               :key="col"
@@ -86,7 +101,10 @@
             @size-change="handleSizeChange"
           />
         </template>
-        <el-empty v-else description="Select a table from the left panel" />
+        <el-empty
+          v-else
+          description="Select a table from the left panel"
+        />
       </div>
     </div>
   </div>

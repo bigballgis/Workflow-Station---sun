@@ -1,13 +1,27 @@
 <template>
   <div class="draggable-dashboard">
-    <div class="dashboard-toolbar" v-if="editable">
-      <el-button type="primary" :icon="Plus" @click="showWidgetSelector = true">
+    <div
+      v-if="editable"
+      class="dashboard-toolbar"
+    >
+      <el-button
+        type="primary"
+        :icon="Plus"
+        @click="showWidgetSelector = true"
+      >
         {{ $t('dashboard.addWidget') }}
       </el-button>
-      <el-button :icon="Setting" @click="showLayoutSettings = true">
+      <el-button
+        :icon="Setting"
+        @click="showLayoutSettings = true"
+      >
         {{ $t('dashboard.layoutSettings') }}
       </el-button>
-      <el-button type="success" :icon="Check" @click="saveLayout">
+      <el-button
+        type="success"
+        :icon="Check"
+        @click="saveLayout"
+      >
         {{ $t('common.save') }}
       </el-button>
       <el-button @click="resetLayout">
@@ -16,8 +30,8 @@
     </div>
 
     <div 
-      class="dashboard-grid"
       ref="gridRef"
+      class="dashboard-grid"
       :style="{ gridTemplateColumns: `repeat(${columns}, 1fr)` }"
     >
       <div
@@ -35,7 +49,10 @@
         @dragover.prevent="handleDragOver($event, widget)"
         @drop="handleDrop($event, widget)"
       >
-        <div class="widget-header" v-if="editable">
+        <div
+          v-if="editable"
+          class="widget-header"
+        >
           <span class="widget-title">{{ widget.title }}</span>
           <div class="widget-actions">
             <el-button
@@ -67,7 +84,7 @@
           v-if="editable"
           class="resize-handle"
           @mousedown="startResize($event, widget)"
-        ></div>
+        />
       </div>
     </div>
 
@@ -84,7 +101,9 @@
           class="widget-option"
           @click="addWidget(type)"
         >
-          <el-icon :size="32"><component :is="type.icon" /></el-icon>
+          <el-icon :size="32">
+            <component :is="type.icon" />
+          </el-icon>
           <span class="widget-name">{{ type.name }}</span>
           <span class="widget-desc">{{ type.description }}</span>
         </div>
@@ -99,13 +118,31 @@
     >
       <el-form label-width="100px">
         <el-form-item :label="$t('dashboard.columns')">
-          <el-slider v-model="columns" :min="6" :max="24" :step="1" show-input />
+          <el-slider
+            v-model="columns"
+            :min="6"
+            :max="24"
+            :step="1"
+            show-input
+          />
         </el-form-item>
         <el-form-item :label="$t('dashboard.rowHeight')">
-          <el-slider v-model="rowHeight" :min="50" :max="200" :step="10" show-input />
+          <el-slider
+            v-model="rowHeight"
+            :min="50"
+            :max="200"
+            :step="10"
+            show-input
+          />
         </el-form-item>
         <el-form-item :label="$t('dashboard.gap')">
-          <el-slider v-model="gap" :min="5" :max="30" :step="5" show-input />
+          <el-slider
+            v-model="gap"
+            :min="5"
+            :max="30"
+            :step="5"
+            show-input
+          />
         </el-form-item>
       </el-form>
     </el-dialog>
@@ -116,20 +153,38 @@
       :title="$t('dashboard.editWidget')"
       width="500px"
     >
-      <el-form v-if="editingWidget" label-width="100px">
+      <el-form
+        v-if="editingWidget"
+        label-width="100px"
+      >
         <el-form-item :label="$t('dashboard.widgetTitle')">
           <el-input v-model="editingWidget.title" />
         </el-form-item>
         <el-form-item :label="$t('dashboard.widgetWidth')">
-          <el-slider v-model="editingWidget.colSpan" :min="1" :max="columns" />
+          <el-slider
+            v-model="editingWidget.colSpan"
+            :min="1"
+            :max="columns"
+          />
         </el-form-item>
         <el-form-item :label="$t('dashboard.widgetHeight')">
-          <el-slider v-model="editingWidget.rowSpan" :min="1" :max="6" />
+          <el-slider
+            v-model="editingWidget.rowSpan"
+            :min="1"
+            :max="6"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showWidgetEditor = false">{{ $t('common.cancel') }}</el-button>
-        <el-button type="primary" @click="saveWidgetEdit">{{ $t('common.confirm') }}</el-button>
+        <el-button @click="showWidgetEditor = false">
+          {{ $t('common.cancel') }}
+        </el-button>
+        <el-button
+          type="primary"
+          @click="saveWidgetEdit"
+        >
+          {{ $t('common.confirm') }}
+        </el-button>
       </template>
     </el-dialog>
   </div>

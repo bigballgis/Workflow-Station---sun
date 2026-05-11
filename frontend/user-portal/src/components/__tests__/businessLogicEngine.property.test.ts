@@ -71,10 +71,10 @@ describe('Property 2: Condition visibility evaluation correctness', () => {
         const fieldValue = formData[condition.field]
 
         if (condition.operator === 'equals') {
-          // eslint-disable-next-line eqeqeq
+           
           expect(result).toBe(fieldValue == condition.value)
         } else if (condition.operator === 'not-equals') {
-          // eslint-disable-next-line eqeqeq
+           
           expect(result).toBe(fieldValue != condition.value)
         }
       }),
@@ -110,11 +110,11 @@ describe('Property 3: Condition operator evaluation correctness', () => {
         const formData = { f: a }
 
         expect(evaluateCondition({ field: 'f', operator: 'equals', value: b }, formData))
-          // eslint-disable-next-line eqeqeq
+           
           .toBe(a == b)
 
         expect(evaluateCondition({ field: 'f', operator: 'not-equals', value: b }, formData))
-          // eslint-disable-next-line eqeqeq
+           
           .toBe(a != b)
 
         expect(evaluateCondition({ field: 'f', operator: 'greater-than', value: b }, formData))
@@ -518,9 +518,9 @@ describe('Property 9: Cross-field validation operator correctness', () => {
         switch (operator) {
           case 'greater-than': expectedValid = a > b; break
           case 'less-than': expectedValid = a < b; break
-          // eslint-disable-next-line eqeqeq
+           
           case 'equals': expectedValid = a == b; break
-          // eslint-disable-next-line eqeqeq
+           
           case 'not-equals': expectedValid = a != b; break
         }
 

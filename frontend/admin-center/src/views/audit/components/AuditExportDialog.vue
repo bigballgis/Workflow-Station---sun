@@ -1,27 +1,59 @@
 <template>
-  <el-dialog v-model="visible" :title="t('common.export')" width="480px">
+  <el-dialog
+    v-model="visible"
+    :title="t('common.export')"
+    width="480px"
+  >
     <div class="export-dialog-body">
       <div class="export-stat">
         <el-icon><InfoFilled /></el-icon>
         <span>{{ t('audit.exportEstimate', { n: total }) }}</span>
       </div>
-      <div class="export-fields-label">{{ t('audit.exportSelectFields') }}</div>
+      <div class="export-fields-label">
+        {{ t('audit.exportSelectFields') }}
+      </div>
       <div class="export-fields">
-        <el-checkbox v-model="selectAll" :indeterminate="indeterminate" @change="handleSelectAll">
+        <el-checkbox
+          v-model="selectAll"
+          :indeterminate="indeterminate"
+          @change="handleSelectAll"
+        >
           {{ t('common.all') }}
         </el-checkbox>
         <el-divider style="margin: 8px 0" />
-        <el-checkbox-group v-model="selectedFields" @change="handleFieldChange">
-          <el-checkbox v-for="f in exportFields" :key="f.key" :value="f.key">{{ f.label }}</el-checkbox>
+        <el-checkbox-group
+          v-model="selectedFields"
+          @change="handleFieldChange"
+        >
+          <el-checkbox
+            v-for="f in exportFields"
+            :key="f.key"
+            :value="f.key"
+          >
+            {{ f.label }}
+          </el-checkbox>
         </el-checkbox-group>
       </div>
     </div>
     <template #footer>
-      <el-button @click="visible = false">{{ t('common.cancel') }}</el-button>
-      <el-button type="primary" plain :loading="exporting" @click="emit('export', 'csv')" :disabled="selectedFields.length === 0">
+      <el-button @click="visible = false">
+        {{ t('common.cancel') }}
+      </el-button>
+      <el-button
+        type="primary"
+        plain
+        :loading="exporting"
+        :disabled="selectedFields.length === 0"
+        @click="emit('export', 'csv')"
+      >
         <el-icon><Download /></el-icon>CSV
       </el-button>
-      <el-button type="primary" :loading="exporting" @click="emit('export', 'excel')" :disabled="selectedFields.length === 0">
+      <el-button
+        type="primary"
+        :loading="exporting"
+        :disabled="selectedFields.length === 0"
+        @click="emit('export', 'excel')"
+      >
         <el-icon><Download /></el-icon>Excel
       </el-button>
     </template>

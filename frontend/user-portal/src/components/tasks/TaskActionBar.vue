@@ -1,8 +1,13 @@
 <template>
-  <div v-if="!isCompletedTask" class="section action-section">
+  <div
+    v-if="!isCompletedTask"
+    class="section action-section"
+  >
     <div class="action-buttons">
       <div class="left-actions">
-        <el-button @click="$router.back()">{{ $t('task.backToList') }}</el-button>
+        <el-button @click="$router.back()">
+          {{ $t('task.backToList') }}
+        </el-button>
       </div>
       <div class="right-actions">
         <el-button
@@ -21,16 +26,24 @@
             :type="getButtonType(action.buttonColor)"
             @click="$emit('customAction', action)"
           >
-            <el-icon v-if="action.icon"><component :is="getIconComponent(action.icon)" /></el-icon>
+            <el-icon v-if="action.icon">
+              <component :is="getIconComponent(action.icon)" />
+            </el-icon>
             {{ getActionLabel(action) }}
           </el-button>
         </template>
         <!-- Show default approval buttons when no custom Actions are configured -->
         <template v-else-if="actions === undefined || actions === null">
-          <el-button type="success" @click="$emit('approve')">
+          <el-button
+            type="success"
+            @click="$emit('approve')"
+          >
             <el-icon><Check /></el-icon> {{ $t('task.approve') }}
           </el-button>
-          <el-button type="danger" @click="$emit('reject')">
+          <el-button
+            type="danger"
+            @click="$emit('reject')"
+          >
             <el-icon><Close /></el-icon> {{ $t('task.reject') }}
           </el-button>
         </template>
@@ -41,7 +54,10 @@
         <el-button @click="$emit('transfer')">
           <el-icon><Switch /></el-icon> {{ $t('task.transfer') }}
         </el-button>
-        <el-button type="warning" @click="$emit('urge')">
+        <el-button
+          type="warning"
+          @click="$emit('urge')"
+        >
           <el-icon><Bell /></el-icon> {{ $t('task.urge') }}
         </el-button>
       </div>

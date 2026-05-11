@@ -1,25 +1,66 @@
 <template>
-  <div class="my-permissions-page" v-loading="loading">
+  <div
+    v-loading="loading"
+    class="my-permissions-page"
+  >
     <div class="page-header">
       <h1>{{ t('permission.permissionView') }}</h1>
     </div>
 
-    <el-alert type="info" show-icon :closable="false" class="page-alert">
+    <el-alert
+      type="info"
+      show-icon
+      :closable="false"
+      class="page-alert"
+    >
       {{ t('permission.portalNoVirtualGroup') }}
     </el-alert>
 
     <div class="portal-card">
       <div class="section">
-        <h3 class="section-title">{{ t('permission.sectionUbrTitle') }}</h3>
-        <p class="section-desc">{{ t('permission.sectionUbrDesc') }}</p>
-        <el-empty v-if="buBoundedRoles.length === 0" :description="t('profile.noBuRoleAssignments')" />
-        <el-table v-else :data="ubrTableRows" :row-key="(r) => r.rowKey" stripe class="ubr-table">
-          <el-table-column prop="businessUnitName" :label="t('permission.businessUnit')" min-width="160" />
-          <el-table-column prop="roleName" :label="t('permission.roleNameCol')" min-width="160" />
-          <el-table-column prop="roleCode" :label="t('permission.roleCodeCol')" width="140" />
-          <el-table-column :label="t('permission.activationCol')" width="120">
+        <h3 class="section-title">
+          {{ t('permission.sectionUbrTitle') }}
+        </h3>
+        <p class="section-desc">
+          {{ t('permission.sectionUbrDesc') }}
+        </p>
+        <el-empty
+          v-if="buBoundedRoles.length === 0"
+          :description="t('profile.noBuRoleAssignments')"
+        />
+        <el-table
+          v-else
+          :data="ubrTableRows"
+          :row-key="(r) => r.rowKey"
+          stripe
+          class="ubr-table"
+        >
+          <el-table-column
+            prop="businessUnitName"
+            :label="t('permission.businessUnit')"
+            min-width="160"
+          />
+          <el-table-column
+            prop="roleName"
+            :label="t('permission.roleNameCol')"
+            min-width="160"
+          />
+          <el-table-column
+            prop="roleCode"
+            :label="t('permission.roleCodeCol')"
+            width="140"
+          />
+          <el-table-column
+            :label="t('permission.activationCol')"
+            width="120"
+          >
             <template #default>
-              <el-tag type="success" size="small">{{ t('permission.activated') }}</el-tag>
+              <el-tag
+                type="success"
+                size="small"
+              >
+                {{ t('permission.activated') }}
+              </el-tag>
             </template>
           </el-table-column>
         </el-table>
@@ -28,17 +69,42 @@
       <el-divider />
 
       <div class="section">
-        <h3 class="section-title">{{ t('permission.buUnbounded') }}</h3>
-        <p class="section-desc">{{ t('permission.sectionUnboundedDesc') }}</p>
-        <el-empty v-if="buUnboundedRoles.length === 0" :description="t('profile.noBuUnboundedRoles')" />
-        <div v-else class="role-list">
-          <el-card v-for="role in buUnboundedRoles" :key="role.id" class="role-card" shadow="hover">
+        <h3 class="section-title">
+          {{ t('permission.buUnbounded') }}
+        </h3>
+        <p class="section-desc">
+          {{ t('permission.sectionUnboundedDesc') }}
+        </p>
+        <el-empty
+          v-if="buUnboundedRoles.length === 0"
+          :description="t('profile.noBuUnboundedRoles')"
+        />
+        <div
+          v-else
+          class="role-list"
+        >
+          <el-card
+            v-for="role in buUnboundedRoles"
+            :key="role.id"
+            class="role-card"
+            shadow="hover"
+          >
             <div class="role-header">
               <span class="role-name">{{ role.name }}</span>
-              <el-tag type="success" size="small">{{ t('permission.buUnbounded') }}</el-tag>
+              <el-tag
+                type="success"
+                size="small"
+              >
+                {{ t('permission.buUnbounded') }}
+              </el-tag>
             </div>
             <div class="role-status">
-              <el-tag type="success" size="small">{{ t('permission.activated') }}</el-tag>
+              <el-tag
+                type="success"
+                size="small"
+              >
+                {{ t('permission.activated') }}
+              </el-tag>
               <span class="status-hint">{{ t('permission.effectivePermissions') }}</span>
             </div>
           </el-card>
@@ -48,13 +114,33 @@
       <el-divider />
 
       <div class="section">
-        <h3 class="section-title">{{ t('permission.myBusinessUnits') }}</h3>
-        <p class="section-desc">{{ t('permission.sectionBuMembershipDesc') }}</p>
-        <el-empty v-if="businessUnits.length === 0" :description="t('permission.noBusinessUnits')" />
-        <el-table v-else :data="businessUnits" stripe>
-          <el-table-column prop="name" :label="t('permission.businessUnit')" />
-          <el-table-column prop="joinedAt" :label="t('exitRole.joinTime')" width="180">
-            <template #default="{ row }">{{ formatDate(row.joinedAt) }}</template>
+        <h3 class="section-title">
+          {{ t('permission.myBusinessUnits') }}
+        </h3>
+        <p class="section-desc">
+          {{ t('permission.sectionBuMembershipDesc') }}
+        </p>
+        <el-empty
+          v-if="businessUnits.length === 0"
+          :description="t('permission.noBusinessUnits')"
+        />
+        <el-table
+          v-else
+          :data="businessUnits"
+          stripe
+        >
+          <el-table-column
+            prop="name"
+            :label="t('permission.businessUnit')"
+          />
+          <el-table-column
+            prop="joinedAt"
+            :label="t('exitRole.joinTime')"
+            width="180"
+          >
+            <template #default="{ row }">
+              {{ formatDate(row.joinedAt) }}
+            </template>
           </el-table-column>
         </el-table>
       </div>

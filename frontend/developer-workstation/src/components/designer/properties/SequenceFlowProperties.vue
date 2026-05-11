@@ -2,30 +2,65 @@
   <div class="sequence-flow-properties">
     <el-collapse v-model="activeGroups">
       <!-- Basic info -->
-      <el-collapse-item :title="t('properties.basic')" name="basic">
-        <el-form label-position="top" size="small">
+      <el-collapse-item
+        :title="t('properties.basic')"
+        name="basic"
+      >
+        <el-form
+          label-position="top"
+          size="small"
+        >
           <el-form-item :label="t('properties.flowId')">
-            <el-input :model-value="basicProps.id" disabled />
+            <el-input
+              :model-value="basicProps.id"
+              disabled
+            />
           </el-form-item>
           <el-form-item :label="t('properties.flowName')">
-            <el-input v-model="flowName" @change="updateBasicProp('name', flowName)" :placeholder="t('properties.flowNamePlaceholder')" />
+            <el-input
+              v-model="flowName"
+              :placeholder="t('properties.flowNamePlaceholder')"
+              @change="updateBasicProp('name', flowName)"
+            />
           </el-form-item>
           <el-form-item :label="t('properties.sourceNode')">
-            <el-input :model-value="sourceRef" disabled />
+            <el-input
+              :model-value="sourceRef"
+              disabled
+            />
           </el-form-item>
           <el-form-item :label="t('properties.targetNode')">
-            <el-input :model-value="targetRef" disabled />
+            <el-input
+              :model-value="targetRef"
+              disabled
+            />
           </el-form-item>
         </el-form>
       </el-collapse-item>
       
       <!-- Condition config -->
-      <el-collapse-item v-if="showCondition" :title="t('properties.conditionConfig')" name="condition">
-        <el-form label-position="top" size="small">
+      <el-collapse-item
+        v-if="showCondition"
+        :title="t('properties.conditionConfig')"
+        name="condition"
+      >
+        <el-form
+          label-position="top"
+          size="small"
+        >
           <el-form-item :label="t('properties.conditionType')">
-            <el-select v-model="conditionType" @change="updateExtProp('conditionType', conditionType)">
-              <el-option :label="t('properties.juelExpression')" value="juel" />
-              <el-option :label="t('properties.script')" value="script" />
+            <el-select
+              v-model="conditionType"
+              @change="updateExtProp('conditionType', conditionType)"
+            >
+              <el-option
+                :label="t('properties.juelExpression')"
+                value="juel"
+              />
+              <el-option
+                :label="t('properties.script')"
+                value="script"
+              />
             </el-select>
           </el-form-item>
           
@@ -34,14 +69,18 @@
               v-model="conditionExpression" 
               type="textarea" 
               :rows="4"
-              @change="updateConditionExpression"
               :placeholder="conditionPlaceholder"
+              @change="updateConditionExpression"
             />
-            <div class="form-tip">{{ conditionTip }}</div>
+            <div class="form-tip">
+              {{ conditionTip }}
+            </div>
           </el-form-item>
           
           <div class="condition-examples">
-            <div class="examples-title">{{ t('properties.commonExpressions') }}</div>
+            <div class="examples-title">
+              {{ t('properties.commonExpressions') }}
+            </div>
             <div 
               v-for="example in conditionExamples" 
               :key="example.expression"
@@ -56,8 +95,15 @@
       </el-collapse-item>
       
       <!-- Non-condition branch info -->
-      <el-collapse-item v-if="!showCondition" :title="t('properties.info')" name="info">
-        <el-alert type="info" :closable="false">
+      <el-collapse-item
+        v-if="!showCondition"
+        :title="t('properties.info')"
+        name="info"
+      >
+        <el-alert
+          type="info"
+          :closable="false"
+        >
           {{ t('properties.flowNoConditionInfo') }}
         </el-alert>
       </el-collapse-item>

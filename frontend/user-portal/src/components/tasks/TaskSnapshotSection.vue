@@ -1,5 +1,8 @@
 <template>
-  <div v-if="isCompletedTask && completedFormData?.snapshot" class="section snapshot-section">
+  <div
+    v-if="isCompletedTask && completedFormData?.snapshot"
+    class="section snapshot-section"
+  >
     <div class="section-header">
       <el-icon><Document /></el-icon>
       <span>{{ $t('task.completedSnapshot') }}</span>

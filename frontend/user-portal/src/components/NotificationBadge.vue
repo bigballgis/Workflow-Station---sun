@@ -1,7 +1,19 @@
 <template>
-  <div class="notification-badge" @click="goToNotifications">
-    <el-badge :value="badgeValue" :hidden="store.unreadCount === 0" :max="99">
-      <el-icon :size="20" color="white"><Bell /></el-icon>
+  <div
+    class="notification-badge"
+    @click="goToNotifications"
+  >
+    <el-badge
+      :value="badgeValue"
+      :hidden="store.unreadCount === 0"
+      :max="99"
+    >
+      <el-icon
+        :size="20"
+        color="white"
+      >
+        <Bell />
+      </el-icon>
     </el-badge>
   </div>
 </template>

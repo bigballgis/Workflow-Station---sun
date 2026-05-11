@@ -6,7 +6,10 @@
 
     <el-row :gutter="20">
       <!-- 常用流程 -->
-      <el-col :span="24" v-if="favoriteProcesses.length > 0">
+      <el-col
+        v-if="favoriteProcesses.length > 0"
+        :span="24"
+      >
         <div class="portal-card">
           <div class="card-header">
             <span class="card-title">{{ t('process.favorites') }}</span>
@@ -18,7 +21,12 @@
               class="process-card"
               @click="startProcess(process)"
             >
-              <el-icon :size="32" color="var(--hsbc-red)"><Document /></el-icon>
+              <el-icon
+                :size="32"
+                color="var(--hsbc-red)"
+              >
+                <Document />
+              </el-icon>
               <span class="process-name">{{ process.name }}</span>
             </div>
           </div>
@@ -43,36 +51,77 @@
             </el-input>
           </div>
           
-          <el-skeleton :loading="loading" animated :count="3">
+          <el-skeleton
+            :loading="loading"
+            animated
+            :count="3"
+          >
             <template #template>
               <div class="process-grid">
-                <el-skeleton-item v-for="i in 6" :key="i" variant="rect" style="height: 120px; border-radius: 8px;" />
+                <el-skeleton-item
+                  v-for="i in 6"
+                  :key="i"
+                  variant="rect"
+                  style="height: 120px; border-radius: 8px;"
+                />
               </div>
             </template>
             <template #default>
-              <div v-if="allProcesses.length === 0" class="empty-state">
+              <div
+                v-if="allProcesses.length === 0"
+                class="empty-state"
+              >
                 <el-empty :description="t('process.noAccessibleProcesses')">
                   <template #image>
-                    <el-icon :size="60" color="#909399"><Lock /></el-icon>
+                    <el-icon
+                      :size="60"
+                      color="#909399"
+                    >
+                      <Lock />
+                    </el-icon>
                   </template>
-                  <el-text type="info" size="small">{{ t('process.contactAdminForAccess') }}</el-text>
+                  <el-text
+                    type="info"
+                    size="small"
+                  >
+                    {{ t('process.contactAdminForAccess') }}
+                  </el-text>
                 </el-empty>
               </div>
-              <div v-else class="process-grid">
+              <div
+                v-else
+                class="process-grid"
+              >
                 <div
                   v-for="process in allProcesses"
                   :key="process.key"
                   class="process-card"
                   @click="startProcess(process)"
                 >
-                  <div v-if="process.icon" class="process-icon-svg" v-html="sanitizeIcon(process.icon)"></div>
-                  <el-icon v-else :size="32" :color="getProcessColor(process.category)">
+                  <div
+                    v-if="process.icon"
+                    class="process-icon-svg"
+                    v-html="sanitizeIcon(process.icon)"
+                  />
+                  <el-icon
+                    v-else
+                    :size="32"
+                    :color="getProcessColor(process.category)"
+                  >
                     <component :is="getProcessIcon(process.category)" />
                   </el-icon>
                   <span class="process-name">{{ process.name }}</span>
-                  <span class="process-version" v-if="process.version">v{{ process.version }}</span>
+                  <span
+                    v-if="process.version"
+                    class="process-version"
+                  >v{{ process.version }}</span>
                   <span class="process-desc">{{ process.description }}</span>
-                  <el-tag v-if="process.isFavorite" size="small" type="warning" class="favorite-tag">
+                  <el-tag
+                    v-if="process.isFavorite"
+                    size="small"
+                    type="warning"
+                    class="favorite-tag"
+                  >
                     <el-icon><Star /></el-icon>
                   </el-tag>
                 </div>

@@ -2,24 +2,58 @@
   <div class="exit-role-page">
     <div class="page-header">
       <h1>{{ t('exitRole.title') }}</h1>
-      <p class="page-sub">{{ t('exitRole.subtitle') }}</p>
+      <p class="page-sub">
+        {{ t('exitRole.subtitle') }}
+      </p>
     </div>
 
-    <el-alert type="info" show-icon :closable="false" class="info-alert">
+    <el-alert
+      type="info"
+      show-icon
+      :closable="false"
+      class="info-alert"
+    >
       {{ t('exitRole.portalNoVirtualGroup') }}
     </el-alert>
 
     <div class="portal-card">
-      <el-empty v-if="!loading && memberships.businessUnits.length === 0" :description="t('exitRole.noMemberships')" />
+      <el-empty
+        v-if="!loading && memberships.businessUnits.length === 0"
+        :description="t('exitRole.noMemberships')"
+      />
 
-      <el-table v-else :data="memberships.businessUnits" stripe v-loading="loading">
-        <el-table-column prop="businessUnitName" :label="t('exitRole.businessUnit')" min-width="200" />
-        <el-table-column prop="joinedAt" :label="t('exitRole.joinTime')" width="160">
-          <template #default="{ row }">{{ formatDate(row.joinedAt) }}</template>
-        </el-table-column>
-        <el-table-column :label="t('common.actions')" width="200" fixed="right">
+      <el-table
+        v-else
+        v-loading="loading"
+        :data="memberships.businessUnits"
+        stripe
+      >
+        <el-table-column
+          prop="businessUnitName"
+          :label="t('exitRole.businessUnit')"
+          min-width="200"
+        />
+        <el-table-column
+          prop="joinedAt"
+          :label="t('exitRole.joinTime')"
+          width="160"
+        >
           <template #default="{ row }">
-            <el-button type="danger" link size="small" @click="openExitBuDialog(row)">
+            {{ formatDate(row.joinedAt) }}
+          </template>
+        </el-table-column>
+        <el-table-column
+          :label="t('common.actions')"
+          width="200"
+          fixed="right"
+        >
+          <template #default="{ row }">
+            <el-button
+              type="danger"
+              link
+              size="small"
+              @click="openExitBuDialog(row)"
+            >
               {{ t('exitRole.requestExitBu') }}
             </el-button>
           </template>
@@ -27,7 +61,12 @@
       </el-table>
     </div>
 
-    <el-dialog v-model="exitDialogVisible" :title="t('exitRole.requestExitBuTitle')" width="520px" destroy-on-close>
+    <el-dialog
+      v-model="exitDialogVisible"
+      :title="t('exitRole.requestExitBuTitle')"
+      width="520px"
+      destroy-on-close
+    >
       <el-form label-position="top">
         <el-form-item :label="t('permission.beneficiary')">
           <el-select
@@ -48,15 +87,33 @@
               :value="u.userId"
             />
           </el-select>
-          <div class="form-hint">{{ t('permission.beneficiaryHint') }}</div>
+          <div class="form-hint">
+            {{ t('permission.beneficiaryHint') }}
+          </div>
         </el-form-item>
-        <el-form-item :label="t('permission.reason')" required>
-          <el-input v-model="exitForm.reason" type="textarea" :rows="3" :placeholder="t('permission.reasonPlaceholder')" />
+        <el-form-item
+          :label="t('permission.reason')"
+          required
+        >
+          <el-input
+            v-model="exitForm.reason"
+            type="textarea"
+            :rows="3"
+            :placeholder="t('permission.reasonPlaceholder')"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="exitDialogVisible = false">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary" :loading="exitSubmitting" @click="submitExitBu">{{ t('common.confirm') }}</el-button>
+        <el-button @click="exitDialogVisible = false">
+          {{ t('common.cancel') }}
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="exitSubmitting"
+          @click="submitExitBu"
+        >
+          {{ t('common.confirm') }}
+        </el-button>
       </template>
     </el-dialog>
   </div>

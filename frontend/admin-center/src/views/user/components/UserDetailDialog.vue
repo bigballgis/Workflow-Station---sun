@@ -1,68 +1,191 @@
 <template>
   <el-dialog 
     :model-value="modelValue" 
-    @update:model-value="$emit('update:modelValue', $event)" 
     :title="t('common.view')" 
-    width="820px"
+    width="820px" 
     destroy-on-close
+    @update:model-value="$emit('update:modelValue', $event)"
   >
-    <div v-loading="loading" class="user-detail">
+    <div
+      v-loading="loading"
+      class="user-detail"
+    >
       <template v-if="user">
-        <el-descriptions :column="2" border>
-          <el-descriptions-item :label="t('user.username')">{{ user.username }}</el-descriptions-item>
-          <el-descriptions-item :label="t('user.fullName')">{{ user.fullName }}</el-descriptions-item>
-          <el-descriptions-item :label="t('user.email')">{{ user.email }}</el-descriptions-item>
-          <el-descriptions-item :label="t('user.employeeId')">{{ user.employeeId || '-' }}</el-descriptions-item>
-          <el-descriptions-item :label="t('user.position')">{{ user.position || '-' }}</el-descriptions-item>
-          <el-descriptions-item :label="t('user.status')">
-            <el-tag :type="statusType(user.status)" size="small">{{ statusText(user.status) }}</el-tag>
+        <el-descriptions
+          :column="2"
+          border
+        >
+          <el-descriptions-item :label="t('user.username')">
+            {{ user.username }}
           </el-descriptions-item>
-          <el-descriptions-item :label="t('user.entityManager')">{{ user.entityManagerName || t('user.notSet') }}</el-descriptions-item>
-          <el-descriptions-item :label="t('user.functionManager')">{{ user.functionManagerName || t('user.notSet') }}</el-descriptions-item>
-          <el-descriptions-item :label="t('common.createTime')">{{ formatDate(user.createdAt) }}</el-descriptions-item>
-          <el-descriptions-item :label="t('user.lastLogin')">{{ user.lastLoginAt ? formatDate(user.lastLoginAt) : '-' }}</el-descriptions-item>
-          <el-descriptions-item :label="t('user.lastLoginIp')" :span="2">{{ user.lastLoginIp || '-' }}</el-descriptions-item>
+          <el-descriptions-item :label="t('user.fullName')">
+            {{ user.fullName }}
+          </el-descriptions-item>
+          <el-descriptions-item :label="t('user.email')">
+            {{ user.email }}
+          </el-descriptions-item>
+          <el-descriptions-item :label="t('user.employeeId')">
+            {{ user.employeeId || '-' }}
+          </el-descriptions-item>
+          <el-descriptions-item :label="t('user.position')">
+            {{ user.position || '-' }}
+          </el-descriptions-item>
+          <el-descriptions-item :label="t('user.status')">
+            <el-tag
+              :type="statusType(user.status)"
+              size="small"
+            >
+              {{ statusText(user.status) }}
+            </el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item :label="t('user.entityManager')">
+            {{ user.entityManagerName || t('user.notSet') }}
+          </el-descriptions-item>
+          <el-descriptions-item :label="t('user.functionManager')">
+            {{ user.functionManagerName || t('user.notSet') }}
+          </el-descriptions-item>
+          <el-descriptions-item :label="t('common.createTime')">
+            {{ formatDate(user.createdAt) }}
+          </el-descriptions-item>
+          <el-descriptions-item :label="t('user.lastLogin')">
+            {{ user.lastLoginAt ? formatDate(user.lastLoginAt) : '-' }}
+          </el-descriptions-item>
+          <el-descriptions-item
+            :label="t('user.lastLoginIp')"
+            :span="2"
+          >
+            {{ user.lastLoginIp || '-' }}
+          </el-descriptions-item>
         </el-descriptions>
 
-        <el-tabs v-model="detailActiveTab" class="detail-tabs">
-          <el-tab-pane :label="t('user.detailTabPortalOrg')" name="portal">
-            <p class="tab-lead">{{ t('user.portalOrgTabHint') }}</p>
+        <el-tabs
+          v-model="detailActiveTab"
+          class="detail-tabs"
+        >
+          <el-tab-pane
+            :label="t('user.detailTabPortalOrg')"
+            name="portal"
+          >
+            <p class="tab-lead">
+              {{ t('user.portalOrgTabHint') }}
+            </p>
 
-            <div class="section-title">{{ t('user.businessUnits') }}</div>
-            <el-table :data="businessUnits" border size="small" v-if="businessUnits.length">
-              <el-table-column prop="name" :label="t('businessUnit.name')" />
-              <el-table-column prop="code" :label="t('businessUnit.code')" width="150" />
-              <el-table-column prop="path" :label="t('businessUnit.path')" show-overflow-tooltip />
+            <div class="section-title">
+              {{ t('user.businessUnits') }}
+            </div>
+            <el-table
+              v-if="businessUnits.length"
+              :data="businessUnits"
+              border
+              size="small"
+            >
+              <el-table-column
+                prop="name"
+                :label="t('businessUnit.name')"
+              />
+              <el-table-column
+                prop="code"
+                :label="t('businessUnit.code')"
+                width="150"
+              />
+              <el-table-column
+                prop="path"
+                :label="t('businessUnit.path')"
+                show-overflow-tooltip
+              />
             </el-table>
-            <el-empty v-else :description="t('user.noBusinessUnits')" :image-size="60" />
-            <div class="section-hint">{{ t('user.businessUnitHint') }}</div>
+            <el-empty
+              v-else
+              :description="t('user.noBusinessUnits')"
+              :image-size="60"
+            />
+            <div class="section-hint">
+              {{ t('user.businessUnitHint') }}
+            </div>
 
-            <div class="section-title">{{ t('user.portalVirtualGroupsSection') }}</div>
-            <el-table :data="portalVirtualGroups" border size="small" v-if="portalVirtualGroups.length">
-              <el-table-column prop="groupName" :label="t('virtualGroup.name')" />
-              <el-table-column prop="groupDescription" :label="t('common.description')" />
-              <el-table-column prop="joinedAt" :label="t('user.joinedAt')" width="170">
-                <template #default="{ row }">{{ formatDate(row.joinedAt) }}</template>
+            <div class="section-title">
+              {{ t('user.portalVirtualGroupsSection') }}
+            </div>
+            <el-table
+              v-if="portalVirtualGroups.length"
+              :data="portalVirtualGroups"
+              border
+              size="small"
+            >
+              <el-table-column
+                prop="groupName"
+                :label="t('virtualGroup.name')"
+              />
+              <el-table-column
+                prop="groupDescription"
+                :label="t('common.description')"
+              />
+              <el-table-column
+                prop="joinedAt"
+                :label="t('user.joinedAt')"
+                width="170"
+              >
+                <template #default="{ row }">
+                  {{ formatDate(row.joinedAt) }}
+                </template>
               </el-table-column>
             </el-table>
-            <el-empty v-else :description="t('user.noPortalVirtualGroups')" :image-size="60" />
-            <div class="section-hint">{{ t('user.portalVirtualGroupHint') }}</div>
+            <el-empty
+              v-else
+              :description="t('user.noPortalVirtualGroups')"
+              :image-size="60"
+            />
+            <div class="section-hint">
+              {{ t('user.portalVirtualGroupHint') }}
+            </div>
 
-            <div class="section-title">{{ t('user.buRoleAssignments') }}</div>
+            <div class="section-title">
+              {{ t('user.buRoleAssignments') }}
+            </div>
             <div class="ubr-toolbar">
-              <el-button type="primary" size="small" @click="openAssignBuRole">
+              <el-button
+                type="primary"
+                size="small"
+                @click="openAssignBuRole"
+              >
                 {{ t('user.assignBuRole') }}
               </el-button>
             </div>
             <template v-if="buRoleGroups.length">
-              <div v-for="g in buRoleGroups" :key="g.businessUnitId" class="ubr-group">
-                <div class="ubr-group-title">{{ g.businessUnitName }}</div>
-                <el-table :data="g.rows" border size="small">
-                  <el-table-column prop="roleName" :label="t('user.roleName')" />
-                  <el-table-column prop="roleCode" :label="t('user.roleCode')" width="160" />
-                  <el-table-column :label="t('common.operation')" width="100" align="center">
+              <div
+                v-for="g in buRoleGroups"
+                :key="g.businessUnitId"
+                class="ubr-group"
+              >
+                <div class="ubr-group-title">
+                  {{ g.businessUnitName }}
+                </div>
+                <el-table
+                  :data="g.rows"
+                  border
+                  size="small"
+                >
+                  <el-table-column
+                    prop="roleName"
+                    :label="t('user.roleName')"
+                  />
+                  <el-table-column
+                    prop="roleCode"
+                    :label="t('user.roleCode')"
+                    width="160"
+                  />
+                  <el-table-column
+                    :label="t('common.operation')"
+                    width="100"
+                    align="center"
+                  >
                     <template #default="{ row }">
-                      <el-button type="danger" link size="small" @click="removeBuRole(row)">
+                      <el-button
+                        type="danger"
+                        link
+                        size="small"
+                        @click="removeBuRole(row)"
+                      >
                         {{ t('user.removeBuRole') }}
                       </el-button>
                     </template>
@@ -70,60 +193,163 @@
                 </el-table>
               </div>
             </template>
-            <el-empty v-else :description="t('user.noBuRoles')" :image-size="60" />
-            <div class="section-hint">{{ t('user.buRoleHint') }}</div>
+            <el-empty
+              v-else
+              :description="t('user.noBuRoles')"
+              :image-size="60"
+            />
+            <div class="section-hint">
+              {{ t('user.buRoleHint') }}
+            </div>
           </el-tab-pane>
 
-          <el-tab-pane :label="t('user.detailTabPlatform')" name="platform">
-            <p class="tab-lead">{{ t('user.platformAccessTabHint') }}</p>
+          <el-tab-pane
+            :label="t('user.detailTabPlatform')"
+            name="platform"
+          >
+            <p class="tab-lead">
+              {{ t('user.platformAccessTabHint') }}
+            </p>
 
-            <div class="section-title">{{ t('user.platformVirtualGroupsSection') }}</div>
-            <el-table :data="platformVirtualGroups" border size="small" v-if="platformVirtualGroups.length">
-              <el-table-column prop="groupName" :label="t('virtualGroup.name')" />
-              <el-table-column prop="groupDescription" :label="t('common.description')" />
-              <el-table-column prop="joinedAt" :label="t('user.joinedAt')" width="170">
-                <template #default="{ row }">{{ formatDate(row.joinedAt) }}</template>
-              </el-table-column>
-            </el-table>
-            <el-empty v-else :description="t('user.noPlatformVirtualGroups')" :image-size="60" />
-            <div class="section-hint">{{ t('user.platformVirtualGroupHint') }}</div>
-
-            <div class="section-title">{{ t('user.platformRolesSection') }}</div>
-            <el-table :data="platformRoles" border size="small" v-if="platformRoles.length">
-              <el-table-column prop="name" :label="t('user.roleName')" />
-              <el-table-column prop="code" :label="t('user.roleCode')" width="160" />
-              <el-table-column prop="type" :label="t('user.roleTypeColumn')" width="130">
+            <div class="section-title">
+              {{ t('user.platformVirtualGroupsSection') }}
+            </div>
+            <el-table
+              v-if="platformVirtualGroups.length"
+              :data="platformVirtualGroups"
+              border
+              size="small"
+            >
+              <el-table-column
+                prop="groupName"
+                :label="t('virtualGroup.name')"
+              />
+              <el-table-column
+                prop="groupDescription"
+                :label="t('common.description')"
+              />
+              <el-table-column
+                prop="joinedAt"
+                :label="t('user.joinedAt')"
+                width="170"
+              >
                 <template #default="{ row }">
-                  <el-tag size="small" :type="getPlatformRoleTagType(row.type)">{{ row.type || '—' }}</el-tag>
+                  {{ formatDate(row.joinedAt) }}
                 </template>
               </el-table-column>
             </el-table>
-            <el-empty v-else :description="t('user.noPlatformRoles')" :image-size="60" />
+            <el-empty
+              v-else
+              :description="t('user.noPlatformVirtualGroups')"
+              :image-size="60"
+            />
+            <div class="section-hint">
+              {{ t('user.platformVirtualGroupHint') }}
+            </div>
+
+            <div class="section-title">
+              {{ t('user.platformRolesSection') }}
+            </div>
+            <el-table
+              v-if="platformRoles.length"
+              :data="platformRoles"
+              border
+              size="small"
+            >
+              <el-table-column
+                prop="name"
+                :label="t('user.roleName')"
+              />
+              <el-table-column
+                prop="code"
+                :label="t('user.roleCode')"
+                width="160"
+              />
+              <el-table-column
+                prop="type"
+                :label="t('user.roleTypeColumn')"
+                width="130"
+              >
+                <template #default="{ row }">
+                  <el-tag
+                    size="small"
+                    :type="getPlatformRoleTagType(row.type)"
+                  >
+                    {{ row.type || '—' }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+            </el-table>
+            <el-empty
+              v-else
+              :description="t('user.noPlatformRoles')"
+              :image-size="60"
+            />
           </el-tab-pane>
         </el-tabs>
 
         <!-- 登录历史 -->
-        <div class="section-title">{{ t('user.loginHistory') }}</div>
-        <el-table :data="user.loginHistory" border size="small" max-height="200" v-if="user.loginHistory?.length">
-          <el-table-column prop="loginTime" :label="t('user.loginTime')" width="170">
-            <template #default="{ row }">{{ formatDate(row.loginTime) }}</template>
-          </el-table-column>
-          <el-table-column prop="ipAddress" :label="t('user.ipAddress')" width="140" />
-          <el-table-column prop="success" :label="t('user.loginStatus')" width="80" align="center">
+        <div class="section-title">
+          {{ t('user.loginHistory') }}
+        </div>
+        <el-table
+          v-if="user.loginHistory?.length"
+          :data="user.loginHistory"
+          border
+          size="small"
+          max-height="200"
+        >
+          <el-table-column
+            prop="loginTime"
+            :label="t('user.loginTime')"
+            width="170"
+          >
             <template #default="{ row }">
-              <el-tag :type="row.success ? 'success' : 'danger'" size="small">
+              {{ formatDate(row.loginTime) }}
+            </template>
+          </el-table-column>
+          <el-table-column
+            prop="ipAddress"
+            :label="t('user.ipAddress')"
+            width="140"
+          />
+          <el-table-column
+            prop="success"
+            :label="t('user.loginStatus')"
+            width="80"
+            align="center"
+          >
+            <template #default="{ row }">
+              <el-tag
+                :type="row.success ? 'success' : 'danger'"
+                size="small"
+              >
                 {{ row.success ? t('common.success') : t('common.failed') }}
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="failureReason" :label="t('user.failureReason')" />
+          <el-table-column
+            prop="failureReason"
+            :label="t('user.failureReason')"
+          />
         </el-table>
-        <el-empty v-else :description="t('user.noLoginHistory')" :image-size="60" />
+        <el-empty
+          v-else
+          :description="t('user.noLoginHistory')"
+          :image-size="60"
+        />
       </template>
     </div>
     <template #footer>
-      <el-button @click="$emit('update:modelValue', false)">{{ t('common.close') }}</el-button>
-      <el-button type="warning" @click="resetPassword">{{ t('user.resetPassword') }}</el-button>
+      <el-button @click="$emit('update:modelValue', false)">
+        {{ t('common.close') }}
+      </el-button>
+      <el-button
+        type="warning"
+        @click="resetPassword"
+      >
+        {{ t('user.resetPassword') }}
+      </el-button>
     </template>
 
     <el-dialog
@@ -167,12 +393,21 @@
           </el-select>
         </el-form-item>
       </el-form>
-      <p v-if="assignRoleLoaded && !assignRoleOptions.length" class="ubr-empty-hint">
+      <p
+        v-if="assignRoleLoaded && !assignRoleOptions.length"
+        class="ubr-empty-hint"
+      >
         {{ t('user.noEligibleRolesForBu') }}
       </p>
       <template #footer>
-        <el-button @click="assignDialogVisible = false">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary" :loading="assignSubmitting" @click="submitAssignBuRole">
+        <el-button @click="assignDialogVisible = false">
+          {{ t('common.cancel') }}
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="assignSubmitting"
+          @click="submitAssignBuRole"
+        >
           {{ t('common.confirm') }}
         </el-button>
       </template>

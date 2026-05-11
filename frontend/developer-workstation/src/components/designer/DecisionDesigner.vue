@@ -2,41 +2,91 @@
   <div class="decision-designer">
     <div class="designer-toolbar">
       <el-button-group>
-        <el-button @click="handleSwitchView" :disabled="!modelerReady">
+        <el-button
+          :disabled="!modelerReady"
+          @click="handleSwitchView"
+        >
           <el-icon><Switch /></el-icon>
           {{ currentView === 'drd' ? t('decision.tableView') : t('decision.drdView') }}
         </el-button>
-        <el-button @click="handleZoomIn" :disabled="!modelerReady">
+        <el-button
+          :disabled="!modelerReady"
+          @click="handleZoomIn"
+        >
           <el-icon><ZoomIn /></el-icon>
         </el-button>
-        <el-button @click="handleZoomOut" :disabled="!modelerReady">
+        <el-button
+          :disabled="!modelerReady"
+          @click="handleZoomOut"
+        >
           <el-icon><ZoomOut /></el-icon>
         </el-button>
       </el-button-group>
       <el-button-group>
-        <el-button @click="handleValidate" :disabled="!modelerReady" :loading="validating">
+        <el-button
+          :disabled="!modelerReady"
+          :loading="validating"
+          @click="handleValidate"
+        >
           {{ t('decision.validate') }}
         </el-button>
-        <el-button @click="handleExportXml" :disabled="!modelerReady">
+        <el-button
+          :disabled="!modelerReady"
+          @click="handleExportXml"
+        >
           {{ t('decision.exportXml') }}
         </el-button>
-        <el-button type="primary" @click="handleSave" :loading="saving" :disabled="!modelerReady">
+        <el-button
+          type="primary"
+          :loading="saving"
+          :disabled="!modelerReady"
+          @click="handleSave"
+        >
           {{ t('decision.save') }}
         </el-button>
       </el-button-group>
     </div>
 
-    <div ref="canvasRef" class="dmn-canvas"></div>
+    <div
+      ref="canvasRef"
+      class="dmn-canvas"
+    />
 
     <!-- Validation results -->
-    <el-dialog v-model="showValidation" :title="t('decision.validate')" width="500px">
-      <el-result v-if="validationResult?.valid" icon="success" :title="t('decision.validationPassed')" />
+    <el-dialog
+      v-model="showValidation"
+      :title="t('decision.validate')"
+      width="500px"
+    >
+      <el-result
+        v-if="validationResult?.valid"
+        icon="success"
+        :title="t('decision.validationPassed')"
+      />
       <template v-else-if="validationResult">
-        <el-alert v-for="(err, i) in validationResult.errors" :key="'e' + i" type="error" :title="err" :closable="false" show-icon class="validation-item" />
-        <el-alert v-for="(warn, i) in validationResult.warnings" :key="'w' + i" type="warning" :title="warn" :closable="false" show-icon class="validation-item" />
+        <el-alert
+          v-for="(err, i) in validationResult.errors"
+          :key="'e' + i"
+          type="error"
+          :title="err"
+          :closable="false"
+          show-icon
+          class="validation-item"
+        />
+        <el-alert
+          v-for="(warn, i) in validationResult.warnings"
+          :key="'w' + i"
+          type="warning"
+          :title="warn"
+          :closable="false"
+          show-icon
+          class="validation-item"
+        />
       </template>
       <template #footer>
-        <el-button @click="showValidation = false">{{ t('common.close') }}</el-button>
+        <el-button @click="showValidation = false">
+          {{ t('common.close') }}
+        </el-button>
       </template>
     </el-dialog>
   </div>

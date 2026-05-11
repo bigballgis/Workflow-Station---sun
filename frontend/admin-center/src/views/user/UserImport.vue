@@ -3,7 +3,11 @@
     <PageHeader :title="t('user.batchImport')" />
     
     <el-card>
-      <el-steps :active="step" finish-status="success" align-center>
+      <el-steps
+        :active="step"
+        finish-status="success"
+        align-center
+      >
         <el-step :title="t('user.stepUploadFile')" />
         <el-step :title="t('user.stepDataPreview')" />
         <el-step :title="t('user.stepImportResult')" />
@@ -19,24 +23,50 @@
               accept=".xlsx,.xls,.csv"
               :on-change="handleFileChange"
             >
-              <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
-              <div class="el-upload__text">{{ t('user.dragFileHere') }}<em>{{ t('user.clickToUpload') }}</em></div>
+              <el-icon class="el-icon--upload">
+                <UploadFilled />
+              </el-icon>
+              <div class="el-upload__text">
+                {{ t('user.dragFileHere') }}<em>{{ t('user.clickToUpload') }}</em>
+              </div>
               <template #tip>
-                <div class="el-upload__tip">{{ t('user.uploadFormatTip') }}</div>
+                <div class="el-upload__tip">
+                  {{ t('user.uploadFormatTip') }}
+                </div>
               </template>
             </el-upload>
-            <el-button type="primary" link @click="downloadTemplate">
+            <el-button
+              type="primary"
+              link
+              @click="downloadTemplate"
+            >
               <el-icon><Download /></el-icon>{{ t('user.importTemplate') }}
             </el-button>
           </div>
         </template>
         
         <template v-if="step === 1">
-          <el-table :data="previewData" max-height="400">
-            <el-table-column type="index" :label="t('common.rowNumber')" width="60" />
-            <el-table-column prop="username" :label="t('user.username')" />
-            <el-table-column prop="realName" :label="t('user.realName')" />
-            <el-table-column prop="email" :label="t('user.email')" />
+          <el-table
+            :data="previewData"
+            max-height="400"
+          >
+            <el-table-column
+              type="index"
+              :label="t('common.rowNumber')"
+              width="60"
+            />
+            <el-table-column
+              prop="username"
+              :label="t('user.username')"
+            />
+            <el-table-column
+              prop="realName"
+              :label="t('user.realName')"
+            />
+            <el-table-column
+              prop="email"
+              :label="t('user.email')"
+            />
           </el-table>
           <div class="preview-info">
             {{ t('user.pendingImportCount', { count: previewData.length }) }}
@@ -44,7 +74,10 @@
         </template>
         
         <template v-if="step === 2">
-          <el-result :icon="importResult.failedCount === 0 ? 'success' : 'warning'" :title="resultTitle">
+          <el-result
+            :icon="importResult.failedCount === 0 ? 'success' : 'warning'"
+            :title="resultTitle"
+          >
             <template #sub-title>
               <div class="result-stats">
                 <span>{{ t('user.totalCount') }}: {{ importResult.totalCount }}</span>
@@ -53,21 +86,59 @@
               </div>
             </template>
             <template #extra>
-              <el-button type="primary" @click="resetImport">{{ t('user.continueImport') }}</el-button>
+              <el-button
+                type="primary"
+                @click="resetImport"
+              >
+                {{ t('user.continueImport') }}
+              </el-button>
             </template>
           </el-result>
           
-          <el-table v-if="importResult.errors.length" :data="importResult.errors" max-height="300">
-            <el-table-column prop="row" :label="t('common.rowNumber')" width="80" />
-            <el-table-column prop="message" :label="t('common.errorMessage')" />
+          <el-table
+            v-if="importResult.errors.length"
+            :data="importResult.errors"
+            max-height="300"
+          >
+            <el-table-column
+              prop="row"
+              :label="t('common.rowNumber')"
+              width="80"
+            />
+            <el-table-column
+              prop="message"
+              :label="t('common.errorMessage')"
+            />
           </el-table>
         </template>
       </div>
       
-      <div class="step-actions" v-if="step < 2">
-        <el-button v-if="step > 0" @click="step--">{{ t('user.prevStep') }}</el-button>
-        <el-button v-if="step === 0" type="primary" :disabled="!selectedFile" @click="parseFile">{{ t('user.nextStep') }}</el-button>
-        <el-button v-if="step === 1" type="primary" :loading="importing" @click="handleImport">{{ t('user.confirmImport') }}</el-button>
+      <div
+        v-if="step < 2"
+        class="step-actions"
+      >
+        <el-button
+          v-if="step > 0"
+          @click="step--"
+        >
+          {{ t('user.prevStep') }}
+        </el-button>
+        <el-button
+          v-if="step === 0"
+          type="primary"
+          :disabled="!selectedFile"
+          @click="parseFile"
+        >
+          {{ t('user.nextStep') }}
+        </el-button>
+        <el-button
+          v-if="step === 1"
+          type="primary"
+          :loading="importing"
+          @click="handleImport"
+        >
+          {{ t('user.confirmImport') }}
+        </el-button>
       </div>
     </el-card>
   </div>

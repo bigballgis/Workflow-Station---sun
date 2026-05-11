@@ -1,25 +1,69 @@
 <template>
   <div class="snapshot-diff-renderer">
-    <el-table :data="diffRows" border stripe>
-      <el-table-column :label="t('snapshotDiff.fieldName')" prop="label" min-width="150" />
-      <el-table-column :label="t('snapshotDiff.snapshotValue')" min-width="200">
+    <el-table
+      :data="diffRows"
+      border
+      stripe
+    >
+      <el-table-column
+        :label="t('snapshotDiff.fieldName')"
+        prop="label"
+        min-width="150"
+      />
+      <el-table-column
+        :label="t('snapshotDiff.snapshotValue')"
+        min-width="200"
+      >
         <template #default="{ row }">
-          <span v-if="row.changed" class="snapshot-value changed">
+          <span
+            v-if="row.changed"
+            class="snapshot-value changed"
+          >
             <del>{{ formatValue(row.snapshotValue) }}</del>
           </span>
-          <span v-else class="snapshot-value">{{ formatValue(row.snapshotValue) }}</span>
+          <span
+            v-else
+            class="snapshot-value"
+          >{{ formatValue(row.snapshotValue) }}</span>
         </template>
       </el-table-column>
-      <el-table-column v-if="showLiveValues" :label="t('snapshotDiff.liveValue')" min-width="200">
+      <el-table-column
+        v-if="showLiveValues"
+        :label="t('snapshotDiff.liveValue')"
+        min-width="200"
+      >
         <template #default="{ row }">
-          <span v-if="row.changed" class="live-value changed">{{ formatValue(row.liveValue) }}</span>
-          <span v-else class="live-value">{{ formatValue(row.liveValue) }}</span>
+          <span
+            v-if="row.changed"
+            class="live-value changed"
+          >{{ formatValue(row.liveValue) }}</span>
+          <span
+            v-else
+            class="live-value"
+          >{{ formatValue(row.liveValue) }}</span>
         </template>
       </el-table-column>
-      <el-table-column v-if="showLiveValues" :label="t('snapshotDiff.changed')" width="100" align="center">
+      <el-table-column
+        v-if="showLiveValues"
+        :label="t('snapshotDiff.changed')"
+        width="100"
+        align="center"
+      >
         <template #default="{ row }">
-          <el-tag v-if="row.changed" type="warning" size="small">{{ t('snapshotDiff.changed') }}</el-tag>
-          <el-tag v-else type="info" size="small">{{ t('snapshotDiff.unchanged') }}</el-tag>
+          <el-tag
+            v-if="row.changed"
+            type="warning"
+            size="small"
+          >
+            {{ t('snapshotDiff.changed') }}
+          </el-tag>
+          <el-tag
+            v-else
+            type="info"
+            size="small"
+          >
+            {{ t('snapshotDiff.unchanged') }}
+          </el-tag>
         </template>
       </el-table-column>
     </el-table>

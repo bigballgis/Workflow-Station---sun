@@ -39,7 +39,10 @@ const allComponents = computed(() => props.components?.length ? props.components
       :value="c.id"
       :label="c.linkedFormName ? `${c.componentName} → ${c.linkedFormName}` : c.componentName"
     />
-    <template v-if="allComponents.length === 0" #empty>
+    <template
+      v-if="allComponents.length === 0"
+      #empty
+    >
       <span class="el-select-dropdown__empty">{{ t('designer.linkFormSelectEmpty') }}</span>
     </template>
   </el-select>

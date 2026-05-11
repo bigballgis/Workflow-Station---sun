@@ -4,9 +4,7 @@
  * 类型定义 + fetch 封装。替代 App.vue 中内联的 fetch() 调用。
  */
 
-import i18n from '@/i18n'
-
-const t = i18n.global.t
+import { AppErrorCode, type StructuredError } from '@/types/errors'
 
 // ==================== 类型定义 ====================
 
@@ -40,7 +38,7 @@ export interface LoginErrorBody {
 /** 登录结果（联合类型，避免 try/catch 嵌套） */
 export type LoginResult =
   | { ok: true; data: LoginResponse }
-  | { ok: false; error: string }
+  | { ok: false; error: StructuredError }
 
 // ==================== API 调用 ====================
 
@@ -65,7 +63,7 @@ export async function login(req: LoginRequest): Promise<LoginResult> {
       }),
     })
   } catch {
-    return { ok: false, error: t('login.error.network') }
+    return { ok: false, error: { code: AppErrorCode.LOGIN_NETWORK_ERROR } }
   }
 
   if (!res.ok) {
@@ -74,7 +72,7 @@ export async function login(req: LoginRequest): Promise<LoginResult> {
 
   const data: LoginResponse = await res.json()
   if (!data.authorizationCode || !data.redirectUri) {
-    return { ok: false, error: t('login.error.invalidResponse') }
+    return { ok: false, error: { code: AppErrorCode.LOGIN_INVALID_RESPONSE } }
   }
 
   return { ok: true, data }
@@ -82,7 +80,7 @@ export async function login(req: LoginRequest): Promise<LoginResult> {
 
 // ==================== 内部工具 ====================
 
-async function parseErrorResponse(res: Response): Promise<string> {
+async function parseErrorResponse(res: Response): Promise<StructuredError> {
   let detail = ''
   try {
     const body: LoginErrorBody = await res.json()
@@ -94,9 +92,8 @@ async function parseErrorResponse(res: Response): Promise<string> {
   } catch {
     /* body 不是 JSON */
   }
-  if (detail) return detail
   if (res.status >= 500) {
-    return t('login.error.serverError', { status: res.status })
+    return { code: AppErrorCode.LOGIN_SERVER_ERROR, details: { status: res.status, detail } }
   }
-  return t('login.error.invalidCredentials')
+  return { code: AppErrorCode.LOGIN_INVALID_CREDENTIALS, details: detail ? { detail } : undefined }
 }

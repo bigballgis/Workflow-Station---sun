@@ -1,7 +1,13 @@
 <template>
   <div class="document-panel">
-    <el-tabs v-model="activeTab" @tab-change="handleTabChange">
-      <el-tab-pane :label="t('ai.doc.requirements')" name="REQUIREMENTS">
+    <el-tabs
+      v-model="activeTab"
+      @tab-change="handleTabChange"
+    >
+      <el-tab-pane
+        :label="t('ai.doc.requirements')"
+        name="REQUIREMENTS"
+      >
         <div class="document-panel__body">
           <div class="document-panel__content">
             <template v-if="requirementsContent">
@@ -26,14 +32,29 @@
                 </div>
               </div>
               <div class="document-panel__doc">
-                <XmlTreeView v-show="viewMode === 'xml'" :content="requirementsContent" />
-                <MarkdownRenderer v-show="viewMode === 'markdown'" :content="requirementsContent" />
+                <XmlTreeView
+                  v-show="viewMode === 'xml'"
+                  :content="requirementsContent"
+                />
+                <MarkdownRenderer
+                  v-show="viewMode === 'markdown'"
+                  :content="requirementsContent"
+                />
               </div>
             </template>
-            <el-empty v-else :description="t('ai.doc.noRequirements')" :image-size="60" />
+            <el-empty
+              v-else
+              :description="t('ai.doc.noRequirements')"
+              :image-size="60"
+            />
           </div>
-          <div v-if="reqSidebarOpen && requirementsVersions.length" class="document-panel__sidebar">
-            <div class="document-panel__sidebar-title">{{ t('ai.doc.versionHistory') }}</div>
+          <div
+            v-if="reqSidebarOpen && requirementsVersions.length"
+            class="document-panel__sidebar"
+          >
+            <div class="document-panel__sidebar-title">
+              {{ t('ai.doc.versionHistory') }}
+            </div>
             <div
               v-for="v in requirementsVersions"
               :key="v.version"
@@ -43,13 +64,19 @@
             >
               <span class="document-panel__version-num">v{{ v.version }}</span>
               <span class="document-panel__version-time">{{ formatTime(v.createdAt) }}</span>
-              <span v-if="v.summary" class="document-panel__version-summary">{{ v.summary }}</span>
+              <span
+                v-if="v.summary"
+                class="document-panel__version-summary"
+              >{{ v.summary }}</span>
             </div>
           </div>
         </div>
       </el-tab-pane>
 
-      <el-tab-pane :label="t('ai.doc.design')" name="DESIGN">
+      <el-tab-pane
+        :label="t('ai.doc.design')"
+        name="DESIGN"
+      >
         <div class="document-panel__body">
           <div class="document-panel__content">
             <template v-if="designContent">
@@ -74,14 +101,29 @@
                 </div>
               </div>
               <div class="document-panel__doc">
-                <XmlTreeView v-show="viewMode === 'xml'" :content="designContent" />
-                <MarkdownRenderer v-show="viewMode === 'markdown'" :content="designContent" />
+                <XmlTreeView
+                  v-show="viewMode === 'xml'"
+                  :content="designContent"
+                />
+                <MarkdownRenderer
+                  v-show="viewMode === 'markdown'"
+                  :content="designContent"
+                />
               </div>
             </template>
-            <el-empty v-else :description="t('ai.doc.noDesign')" :image-size="60" />
+            <el-empty
+              v-else
+              :description="t('ai.doc.noDesign')"
+              :image-size="60"
+            />
           </div>
-          <div v-if="designSidebarOpen && designVersions.length" class="document-panel__sidebar">
-            <div class="document-panel__sidebar-title">{{ t('ai.doc.versionHistory') }}</div>
+          <div
+            v-if="designSidebarOpen && designVersions.length"
+            class="document-panel__sidebar"
+          >
+            <div class="document-panel__sidebar-title">
+              {{ t('ai.doc.versionHistory') }}
+            </div>
             <div
               v-for="v in designVersions"
               :key="v.version"
@@ -91,7 +133,10 @@
             >
               <span class="document-panel__version-num">v{{ v.version }}</span>
               <span class="document-panel__version-time">{{ formatTime(v.createdAt) }}</span>
-              <span v-if="v.summary" class="document-panel__version-summary">{{ v.summary }}</span>
+              <span
+                v-if="v.summary"
+                class="document-panel__version-summary"
+              >{{ v.summary }}</span>
             </div>
           </div>
         </div>

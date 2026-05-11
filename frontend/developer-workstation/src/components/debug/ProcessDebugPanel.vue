@@ -3,16 +3,31 @@
     <div class="debug-header">
       <h3>{{ t('process.processDebug') }}</h3>
       <div class="debug-actions">
-        <el-button type="primary" @click="handleStartDebug" :loading="starting" :disabled="isDebugging">
+        <el-button
+          type="primary"
+          :loading="starting"
+          :disabled="isDebugging"
+          @click="handleStartDebug"
+        >
           <el-icon><VideoPlay /></el-icon> {{ t('debug.startDebug') }}
         </el-button>
-        <el-button @click="handleStepOver" :disabled="!isDebugging || !isPaused">
+        <el-button
+          :disabled="!isDebugging || !isPaused"
+          @click="handleStepOver"
+        >
           <el-icon><Right /></el-icon> {{ t('debug.stepOver') }}
         </el-button>
-        <el-button @click="handleContinue" :disabled="!isDebugging || !isPaused">
+        <el-button
+          :disabled="!isDebugging || !isPaused"
+          @click="handleContinue"
+        >
           <el-icon><DArrowRight /></el-icon> {{ t('debug.continue') }}
         </el-button>
-        <el-button type="danger" @click="handleStopDebug" :disabled="!isDebugging">
+        <el-button
+          type="danger"
+          :disabled="!isDebugging"
+          @click="handleStopDebug"
+        >
           <el-icon><VideoPause /></el-icon> {{ t('debug.stop') }}
         </el-button>
       </div>
@@ -21,22 +36,50 @@
     <div class="debug-content">
       <div class="debug-left">
         <el-tabs v-model="activeTab">
-          <el-tab-pane :label="t('debug.variableMonitor')" name="variables">
-            <VariableMonitor :variables="currentVariables" :editable="isPaused" @update="handleVariableUpdate" />
+          <el-tab-pane
+            :label="t('debug.variableMonitor')"
+            name="variables"
+          >
+            <VariableMonitor
+              :variables="currentVariables"
+              :editable="isPaused"
+              @update="handleVariableUpdate"
+            />
           </el-tab-pane>
-          <el-tab-pane :label="t('debug.executionLog')" name="logs">
+          <el-tab-pane
+            :label="t('debug.executionLog')"
+            name="logs"
+          >
             <ExecutionLogViewer :logs="executionLogs" />
           </el-tab-pane>
-          <el-tab-pane :label="t('debug.breakpoints')" name="breakpoints">
+          <el-tab-pane
+            :label="t('debug.breakpoints')"
+            name="breakpoints"
+          >
             <div class="breakpoint-list">
-              <div v-for="bp in breakpoints" :key="bp.nodeId" class="breakpoint-item">
-                <el-checkbox v-model="bp.enabled" @change="handleBreakpointToggle(bp)" />
+              <div
+                v-for="bp in breakpoints"
+                :key="bp.nodeId"
+                class="breakpoint-item"
+              >
+                <el-checkbox
+                  v-model="bp.enabled"
+                  @change="handleBreakpointToggle(bp)"
+                />
                 <span class="node-name">{{ bp.nodeName }}</span>
-                <el-button link type="danger" size="small" @click="removeBreakpoint(bp.nodeId)">
+                <el-button
+                  link
+                  type="danger"
+                  size="small"
+                  @click="removeBreakpoint(bp.nodeId)"
+                >
                   <el-icon><Delete /></el-icon>
                 </el-button>
               </div>
-              <el-empty v-if="!breakpoints.length" :description="t('debug.noBreakpoints')" />
+              <el-empty
+                v-if="!breakpoints.length"
+                :description="t('debug.noBreakpoints')"
+              />
             </div>
           </el-tab-pane>
         </el-tabs>
@@ -46,26 +89,49 @@
         <div class="execution-status">
           <div class="status-item">
             <span class="label">{{ t('debug.statusLabel') }}:</span>
-            <el-tag :type="statusTagType">{{ statusText }}</el-tag>
+            <el-tag :type="statusTagType">
+              {{ statusText }}
+            </el-tag>
           </div>
-          <div class="status-item" v-if="currentNode">
+          <div
+            v-if="currentNode"
+            class="status-item"
+          >
             <span class="label">{{ t('debug.currentNode') }}:</span>
             <span class="value">{{ currentNode.name }}</span>
           </div>
-          <div class="status-item" v-if="executionTime">
+          <div
+            v-if="executionTime"
+            class="status-item"
+          >
             <span class="label">{{ t('debug.executionTime') }}:</span>
             <span class="value">{{ executionTime }}ms</span>
           </div>
         </div>
 
-        <div class="input-variables" v-if="!isDebugging">
+        <div
+          v-if="!isDebugging"
+          class="input-variables"
+        >
           <h4>{{ t('debug.inputVariables') }}</h4>
-          <el-form label-position="top" size="small">
-            <el-form-item v-for="(value, key) in inputVariables" :key="key" :label="key">
+          <el-form
+            label-position="top"
+            size="small"
+          >
+            <el-form-item
+              v-for="(value, key) in inputVariables"
+              :key="key"
+              :label="key"
+            >
               <el-input v-model="inputVariables[key]" />
             </el-form-item>
           </el-form>
-          <el-button size="small" @click="addInputVariable">{{ t('debug.addVariable') }}</el-button>
+          <el-button
+            size="small"
+            @click="addInputVariable"
+          >
+            {{ t('debug.addVariable') }}
+          </el-button>
         </div>
       </div>
     </div>

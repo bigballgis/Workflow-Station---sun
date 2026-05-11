@@ -1,6 +1,9 @@
 <template>
   <!-- 占满表单项内容区，否则 el-select 等 width:100% 会相对收缩父级计算，出现仅显示箭头 -->
-  <div v-show="visible" class="field-renderer-root">
+  <div
+    v-show="visible"
+    class="field-renderer-root"
+  >
     <!-- text / input -->
     <template v-if="field.type === 'text' || field.type === 'input'">
       <el-input
@@ -274,7 +277,9 @@
         clearable
         @update:model-value="onUpdate"
       >
-        <template #prepend>{{ field.currency || '¥' }}</template>
+        <template #prepend>
+          {{ field.currency || '¥' }}
+        </template>
       </el-input>
     </template>
 
@@ -320,9 +325,16 @@
 
     <!-- editor (Task 6.2) -->
     <template v-else-if="field.type === 'editor'">
-      <div v-if="readonly && modelValue" v-html="sanitize(modelValue)" class="editor-readonly" />
+      <div
+        v-if="readonly && modelValue"
+        class="editor-readonly"
+        v-html="sanitize(modelValue)"
+      />
       <span v-else-if="readonly">-</span>
-      <div v-else class="editor-wrapper">
+      <div
+        v-else
+        class="editor-wrapper"
+      >
         <Toolbar
           :editor="editorInstance"
           :default-config="editorToolbarConfig"
@@ -347,9 +359,12 @@
         :src="modelValue"
         class="signature-preview"
         :alt="t('fieldRenderer.signature')"
-      />
+      >
       <span v-else-if="readonly">-</span>
-      <div v-else class="signature-pad">
+      <div
+        v-else
+        class="signature-pad"
+      >
         <canvas
           ref="signatureCanvasRef"
           class="signature-canvas"
@@ -362,10 +377,18 @@
           @touchend.prevent="onSigUp"
         />
         <div class="signature-actions">
-          <el-button size="small" :disabled="disabled || signatureHistory.length === 0" @click="undoSignature">
+          <el-button
+            size="small"
+            :disabled="disabled || signatureHistory.length === 0"
+            @click="undoSignature"
+          >
             {{ t('fieldRenderer.undo') }}
           </el-button>
-          <el-button size="small" :disabled="disabled" @click="clearSignature">
+          <el-button
+            size="small"
+            :disabled="disabled"
+            @click="clearSignature"
+          >
             {{ t('fieldRenderer.clear') }}
           </el-button>
         </div>
@@ -401,7 +424,10 @@
         :on-remove="onUploadRemove"
         list-type="text"
       >
-        <el-button type="primary" :disabled="disabled">
+        <el-button
+          type="primary"
+          :disabled="disabled"
+        >
           <el-icon><Upload /></el-icon>
           {{ t('upload.selectFile') }}
         </el-button>
@@ -412,7 +438,11 @@
         </template>
       </el-upload>
       <div v-else>
-        <a v-if="modelValue" :href="modelValue" target="_blank">
+        <a
+          v-if="modelValue"
+          :href="modelValue"
+          target="_blank"
+        >
           {{ fileList[0]?.name || modelValue }}
         </a>
         <span v-else>-</span>
@@ -441,7 +471,10 @@
 
     <!-- department (Task 6.4) -->
     <template v-else-if="field.type === 'department'">
-      <span v-if="readonly" class="readonly-text">
+      <span
+        v-if="readonly"
+        class="readonly-text"
+      >
         {{ departmentDisplayName || modelValue || '-' }}
       </span>
       <el-tree-select

@@ -1211,3 +1211,10 @@
   category: bug
   summary: "FormDesigner 前端缺少表单重命名入口，Task Form 复制后生成 *_copy 无法在 UI 中修改名称；新增列表“更多→重命名”与编辑页“重命名”对话框，调用现有 updateForm 接口完成改名"
   file: "frontend/developer-workstation/src/components/designer/FormDesigner.vue; frontend/developer-workstation/src/i18n/locales/zh-CN.ts; frontend/developer-workstation/src/i18n/locales/zh-TW.ts; frontend/developer-workstation/src/i18n/locales/en.ts"
+
+- id: "166"
+  status: open
+  severity: major
+  category: quality
+  summary: "frontend/admin-center：package.json 的 lint 调用 eslint 但未声明依赖（本地 eslint: command not found）；vue-tsc --noEmit 约 140 条诊断且 vite build 未跑类型检查；若干 composables 在 catch 块引用未绑定标识符（如 useBiDashboard/useBiRbac 的 error、useBusinessUnit/useFunctionUnit 的 e），存在运行时 ReferenceError 风险"
+  file: "frontend/admin-center/package.json; frontend/admin-center/src/composables/modules/useBiDashboard.ts; frontend/admin-center/vite.config.ts"

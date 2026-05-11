@@ -1,15 +1,41 @@
 <template>
-  <el-dialog v-model="visible" :title="t('functionUnit.importPackage')" width="500px">
-    <el-upload drag :auto-upload="false" accept=".zip" :limit="1" ref="importUploadRef" :on-change="emitFileChange">
-      <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
-      <div class="el-upload__text">{{ t('functionUnit.dragPackageHere') }}<em>{{ t('functionUnit.clickToUpload') }}</em></div>
+  <el-dialog
+    v-model="visible"
+    :title="t('functionUnit.importPackage')"
+    width="500px"
+  >
+    <el-upload
+      ref="importUploadRef"
+      drag
+      :auto-upload="false"
+      accept=".zip"
+      :limit="1"
+      :on-change="emitFileChange"
+    >
+      <el-icon class="el-icon--upload">
+        <UploadFilled />
+      </el-icon>
+      <div class="el-upload__text">
+        {{ t('functionUnit.dragPackageHere') }}<em>{{ t('functionUnit.clickToUpload') }}</em>
+      </div>
       <template #tip>
-        <div class="el-upload__tip">{{ t('functionUnit.zipFormatTip') }}</div>
+        <div class="el-upload__tip">
+          {{ t('functionUnit.zipFormatTip') }}
+        </div>
       </template>
     </el-upload>
     <template #footer>
-      <el-button @click="visible = false">{{ t('common.cancel') }}</el-button>
-      <el-button type="primary" :loading="importLoading" :disabled="!importFile" @click="emit('startImport')">{{ t('functionUnit.startImport') }}</el-button>
+      <el-button @click="visible = false">
+        {{ t('common.cancel') }}
+      </el-button>
+      <el-button
+        type="primary"
+        :loading="importLoading"
+        :disabled="!importFile"
+        @click="emit('startImport')"
+      >
+        {{ t('functionUnit.startImport') }}
+      </el-button>
     </template>
   </el-dialog>
 </template>

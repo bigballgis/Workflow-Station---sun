@@ -1,6 +1,14 @@
 <template>
-  <div class="lookup-view-display" v-if="selectedData && displayFields.length > 0">
-    <el-descriptions :column="1" border size="small" direction="horizontal">
+  <div
+    v-if="selectedData && displayFields.length > 0"
+    class="lookup-view-display"
+  >
+    <el-descriptions
+      :column="1"
+      border
+      size="small"
+      direction="horizontal"
+    >
       <el-descriptions-item
         v-for="field in displayFields"
         :key="field.fieldName"

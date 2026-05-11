@@ -1,19 +1,38 @@
 <template>
-  <el-dialog v-model="visible" :title="t('bi.dashboard.editDialogTitle')" width="500px" destroy-on-close>
-    <el-form :model="editForm" label-width="140px">
+  <el-dialog
+    v-model="visible"
+    :title="t('bi.dashboard.editDialogTitle')"
+    width="500px"
+    destroy-on-close
+  >
+    <el-form
+      :model="editForm"
+      label-width="140px"
+    >
       <el-form-item :label="t('bi.dashboard.colDashboardTitle')">
         <span>{{ editForm.dashboardTitle }}</span>
       </el-form-item>
       <el-form-item :label="t('bi.dashboard.colTags')">
-        <el-input v-model="editForm.tags" :placeholder="t('bi.dashboard.tagsPlaceholder')" />
+        <el-input
+          v-model="editForm.tags"
+          :placeholder="t('bi.dashboard.tagsPlaceholder')"
+        />
       </el-form-item>
       <el-form-item :label="t('bi.dashboard.defaultLanding')">
         <el-switch v-model="editForm.isDefaultLanding" />
       </el-form-item>
     </el-form>
     <template #footer>
-      <el-button @click="visible = false">{{ t('bi.dashboard.cancel') }}</el-button>
-      <el-button type="primary" :loading="editLoading" @click="emit('submit')">{{ t('bi.dashboard.ok') }}</el-button>
+      <el-button @click="visible = false">
+        {{ t('bi.dashboard.cancel') }}
+      </el-button>
+      <el-button
+        type="primary"
+        :loading="editLoading"
+        @click="emit('submit')"
+      >
+        {{ t('bi.dashboard.ok') }}
+      </el-button>
     </template>
   </el-dialog>
 </template>

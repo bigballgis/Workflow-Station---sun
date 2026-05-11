@@ -5,41 +5,91 @@
     </div>
 
     <div class="portal-card">
-      <el-tabs v-model="activeTab" @tab-change="handleTabChange">
-        <el-tab-pane :label="t('common.all')" name="all" />
-        <el-tab-pane :label="t('application.running')" name="RUNNING" />
-        <el-tab-pane :label="t('application.completed')" name="COMPLETED" />
-        <el-tab-pane :label="t('application.withdrawn')" name="WITHDRAWN" />
-        <el-tab-pane :label="t('application.rejected')" name="REJECTED" />
+      <el-tabs
+        v-model="activeTab"
+        @tab-change="handleTabChange"
+      >
+        <el-tab-pane
+          :label="t('common.all')"
+          name="all"
+        />
+        <el-tab-pane
+          :label="t('application.running')"
+          name="RUNNING"
+        />
+        <el-tab-pane
+          :label="t('application.completed')"
+          name="COMPLETED"
+        />
+        <el-tab-pane
+          :label="t('application.withdrawn')"
+          name="WITHDRAWN"
+        />
+        <el-tab-pane
+          :label="t('application.rejected')"
+          name="REJECTED"
+        />
         <el-tab-pane name="DRAFT">
           <template #label>
             <span>{{ t('application.draftBox') }}</span>
-            <el-badge v-if="draftCount > 0" :value="draftCount" :max="99" class="draft-badge" />
+            <el-badge
+              v-if="draftCount > 0"
+              :value="draftCount"
+              :max="99"
+              class="draft-badge"
+            />
           </template>
         </el-tab-pane>
       </el-tabs>
 
       <!-- 草稿列表 -->
       <template v-if="activeTab === 'DRAFT'">
-        <el-table :data="draftList" v-loading="loading" stripe>
-          <el-table-column prop="processDefinitionName" :label="t('application.processType')" min-width="200">
+        <el-table
+          v-loading="loading"
+          :data="draftList"
+          stripe
+        >
+          <el-table-column
+            prop="processDefinitionName"
+            :label="t('application.processType')"
+            min-width="200"
+          >
             <template #default="{ row }">
-              <el-link type="primary" @click="continueDraft(row)">
+              <el-link
+                type="primary"
+                @click="continueDraft(row)"
+              >
                 {{ row.processDefinitionName }}
               </el-link>
             </template>
           </el-table-column>
-          <el-table-column prop="updatedAt" :label="t('application.saveTime')" width="180">
+          <el-table-column
+            prop="updatedAt"
+            :label="t('application.saveTime')"
+            width="180"
+          >
             <template #default="{ row }">
               {{ formatDate(row.updatedAt) }}
             </template>
           </el-table-column>
-          <el-table-column :label="t('common.actions')" width="180" fixed="right">
+          <el-table-column
+            :label="t('common.actions')"
+            width="180"
+            fixed="right"
+          >
             <template #default="{ row }">
-              <el-button type="primary" size="small" @click="continueDraft(row)">
+              <el-button
+                type="primary"
+                size="small"
+                @click="continueDraft(row)"
+              >
                 {{ t('application.continueFilling') }}
               </el-button>
-              <el-button type="danger" size="small" @click="handleDeleteDraft(row)">
+              <el-button
+                type="danger"
+                size="small"
+                @click="handleDeleteDraft(row)"
+              >
                 {{ t('common.delete') }}
               </el-button>
             </template>
@@ -49,49 +99,106 @@
 
       <!-- 申请列表 -->
       <template v-else>
-        <el-table :data="applicationList" v-loading="loading" stripe class="application-table" table-layout="fixed">
-          <el-table-column prop="businessKey" :label="t('application.processTitle')" min-width="200">
+        <el-table
+          v-loading="loading"
+          :data="applicationList"
+          stripe
+          class="application-table"
+          table-layout="fixed"
+        >
+          <el-table-column
+            prop="businessKey"
+            :label="t('application.processTitle')"
+            min-width="200"
+          >
             <template #default="{ row }">
-              <el-link type="primary" @click="viewDetail(row)">
+              <el-link
+                type="primary"
+                @click="viewDetail(row)"
+              >
                 {{ row.businessKey || row.processDefinitionName }}
               </el-link>
             </template>
           </el-table-column>
           <!-- Process Type column hidden -->
-          <el-table-column prop="currentNode" :label="t('application.currentStep')" min-width="120" show-overflow-tooltip>
+          <el-table-column
+            prop="currentNode"
+            :label="t('application.currentStep')"
+            min-width="120"
+            show-overflow-tooltip
+          >
             <template #default="{ row }">
               {{ row.currentNode || '-' }}
             </template>
           </el-table-column>
-          <el-table-column prop="currentAssignee" :label="t('application.currentAssignee')" min-width="100" show-overflow-tooltip>
+          <el-table-column
+            prop="currentAssignee"
+            :label="t('application.currentAssignee')"
+            min-width="100"
+            show-overflow-tooltip
+          >
             <template #default="{ row }">
               {{ row.currentAssignee || '-' }}
             </template>
           </el-table-column>
-          <el-table-column prop="startTime" :label="t('application.startTime')" width="160">
+          <el-table-column
+            prop="startTime"
+            :label="t('application.startTime')"
+            width="160"
+          >
             <template #default="{ row }">
               {{ formatDate(row.startTime) }}
             </template>
           </el-table-column>
-          <el-table-column prop="status" :label="t('application.status')" width="90" align="center">
+          <el-table-column
+            prop="status"
+            :label="t('application.status')"
+            width="90"
+            align="center"
+          >
             <template #default="{ row }">
-              <el-tag :type="getStatusType(row.status)" size="small" effect="light">
+              <el-tag
+                :type="getStatusType(row.status)"
+                size="small"
+                effect="light"
+              >
                 {{ getStatusLabel(row.status) }}
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column :label="t('common.actions')" width="120" fixed="right" align="center">
+          <el-table-column
+            :label="t('common.actions')"
+            width="120"
+            fixed="right"
+            align="center"
+          >
             <template #default="{ row }">
-              <div class="action-buttons" v-if="row.status === 'RUNNING'">
-                <el-button type="warning" size="small" link @click="handleUrge(row)">
+              <div
+                v-if="row.status === 'RUNNING'"
+                class="action-buttons"
+              >
+                <el-button
+                  type="warning"
+                  size="small"
+                  link
+                  @click="handleUrge(row)"
+                >
                   {{ t('application.urge') }}
                 </el-button>
                 <el-divider direction="vertical" />
-                <el-button type="danger" size="small" link @click="handleWithdraw(row)">
+                <el-button
+                  type="danger"
+                  size="small"
+                  link
+                  @click="handleWithdraw(row)"
+                >
                   {{ t('application.withdraw') }}
                 </el-button>
               </div>
-              <span v-else class="no-action">-</span>
+              <span
+                v-else
+                class="no-action"
+              >-</span>
             </template>
           </el-table-column>
         </el-table>

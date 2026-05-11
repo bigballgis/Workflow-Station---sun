@@ -1,19 +1,48 @@
 <template>
   <div class="sub-table-validation-editor">
-    <el-form size="small" label-width="100px">
+    <el-form
+      size="small"
+      label-width="100px"
+    >
       <el-form-item :label="t('businessLogic.minRows')">
-        <el-input-number v-model="config.minRows" :min="0" :controls="false" style="width: 120px" @change="emitUpdate" />
+        <el-input-number
+          v-model="config.minRows"
+          :min="0"
+          :controls="false"
+          style="width: 120px"
+          @change="emitUpdate"
+        />
       </el-form-item>
       <el-form-item :label="t('businessLogic.maxRows')">
-        <el-input-number v-model="config.maxRows" :min="0" :controls="false" style="width: 120px" @change="emitUpdate" />
+        <el-input-number
+          v-model="config.maxRows"
+          :min="0"
+          :controls="false"
+          style="width: 120px"
+          @change="emitUpdate"
+        />
       </el-form-item>
     </el-form>
 
-    <el-divider content-position="left">{{ t('businessLogic.columnValidation') }}</el-divider>
-    <div v-for="col in columns" :key="col" class="column-section">
+    <el-divider content-position="left">
+      {{ t('businessLogic.columnValidation') }}
+    </el-divider>
+    <div
+      v-for="col in columns"
+      :key="col"
+      class="column-section"
+    >
       <div class="column-header">
-        <el-tag size="small">{{ col }}</el-tag>
-        <el-button size="small" link @click="addColumnRule(col)">{{ t('businessLogic.addRule') }}</el-button>
+        <el-tag size="small">
+          {{ col }}
+        </el-tag>
+        <el-button
+          size="small"
+          link
+          @click="addColumnRule(col)"
+        >
+          {{ t('businessLogic.addRule') }}
+        </el-button>
       </div>
       <ValidationRuleList
         v-if="columnRules[col] && columnRules[col].length > 0"

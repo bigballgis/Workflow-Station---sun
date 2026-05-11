@@ -2,26 +2,60 @@
   <div class="page-container">
     <PageHeader title="Table Structure">
       <template #actions>
-        <el-button type="primary" @click="router.push('/relation-tables/structure/create')">
+        <el-button
+          type="primary"
+          @click="router.push('/relation-tables/structure/create')"
+        >
           <el-icon><Plus /></el-icon>Create Table
         </el-button>
       </template>
     </PageHeader>
 
-    <el-table :data="tableList" stripe v-loading="loading">
-      <el-table-column prop="tableName" label="Name" min-width="140" />
-      <el-table-column prop="displayName" label="Display Name" min-width="140" />
-      <el-table-column prop="currentVersion" label="Version" width="90" align="center">
+    <el-table
+      v-loading="loading"
+      :data="tableList"
+      stripe
+    >
+      <el-table-column
+        prop="tableName"
+        label="Name"
+        min-width="140"
+      />
+      <el-table-column
+        prop="displayName"
+        label="Display Name"
+        min-width="140"
+      />
+      <el-table-column
+        prop="currentVersion"
+        label="Version"
+        width="90"
+        align="center"
+      >
         <template #default="{ row }">
           v{{ row.currentVersion }}
         </template>
       </el-table-column>
-      <el-table-column prop="status" label="Status" width="110" align="center">
+      <el-table-column
+        prop="status"
+        label="Status"
+        width="110"
+        align="center"
+      >
         <template #default="{ row }">
-          <el-tag :type="statusTagType(row.status)" size="small">{{ row.status }}</el-tag>
+          <el-tag
+            :type="statusTagType(row.status)"
+            size="small"
+          >
+            {{ row.status }}
+          </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="Enable" width="80" align="center">
+      <el-table-column
+        label="Enable"
+        width="80"
+        align="center"
+      >
         <template #default="{ row }">
           <el-switch
             v-model="row.enabled"
@@ -30,7 +64,11 @@
           />
         </template>
       </el-table-column>
-      <el-table-column label="Portal Visibility" width="130" align="center">
+      <el-table-column
+        label="Portal Visibility"
+        width="130"
+        align="center"
+      >
         <template #default="{ row }">
           <el-switch
             v-model="row.portalVisible"
@@ -40,28 +78,90 @@
           />
         </template>
       </el-table-column>
-      <el-table-column prop="createdAt" label="Created At" width="170">
+      <el-table-column
+        prop="createdAt"
+        label="Created At"
+        width="170"
+      >
         <template #default="{ row }">
           {{ formatDate(row.createdAt) }}
         </template>
       </el-table-column>
-      <el-table-column prop="createdBy" label="Created By" width="120" />
-      <el-table-column prop="updatedAt" label="Updated At" width="170">
+      <el-table-column
+        prop="createdBy"
+        label="Created By"
+        width="120"
+      />
+      <el-table-column
+        prop="updatedAt"
+        label="Updated At"
+        width="170"
+      >
         <template #default="{ row }">
           {{ formatDate(row.updatedAt) }}
         </template>
       </el-table-column>
-      <el-table-column prop="updatedBy" label="Updated By" width="120" />
-      <el-table-column label="Actions" width="450" fixed="right">
+      <el-table-column
+        prop="updatedBy"
+        label="Updated By"
+        width="120"
+      />
+      <el-table-column
+        label="Actions"
+        width="450"
+        fixed="right"
+      >
         <template #default="{ row }">
           <div style="display: flex; align-items: center; flex-wrap: nowrap; white-space: nowrap;">
-            <el-button link type="warning" @click="handleEdit(row)">Edit</el-button>
-            <el-button link type="danger" @click="handleDelete(row)">Delete</el-button>
-            <el-button link type="primary" @click="handleDeploy(row)">Deploy</el-button>
-            <el-button link type="danger" @click="handleRollback(row)">Rollback</el-button>
-            <el-button link type="primary" @click="handleVersions(row)">Version</el-button>
-            <el-button link type="info" @click="handleCompare(row)">Compare</el-button>
-            <el-button link type="primary" @click="handleAccess(row)">Access</el-button>
+            <el-button
+              link
+              type="warning"
+              @click="handleEdit(row)"
+            >
+              Edit
+            </el-button>
+            <el-button
+              link
+              type="danger"
+              @click="handleDelete(row)"
+            >
+              Delete
+            </el-button>
+            <el-button
+              link
+              type="primary"
+              @click="handleDeploy(row)"
+            >
+              Deploy
+            </el-button>
+            <el-button
+              link
+              type="danger"
+              @click="handleRollback(row)"
+            >
+              Rollback
+            </el-button>
+            <el-button
+              link
+              type="primary"
+              @click="handleVersions(row)"
+            >
+              Version
+            </el-button>
+            <el-button
+              link
+              type="info"
+              @click="handleCompare(row)"
+            >
+              Compare
+            </el-button>
+            <el-button
+              link
+              type="primary"
+              @click="handleAccess(row)"
+            >
+              Access
+            </el-button>
           </div>
         </template>
       </el-table-column>

@@ -5,9 +5,16 @@
     width="600px"
     @open="fetchRoles"
   >
-    <div class="hint-text">{{ t('organization.eligibleRolesDesc') }}</div>
+    <div class="hint-text">
+      {{ t('organization.eligibleRolesDesc') }}
+    </div>
     <div class="roles-header">
-      <el-select v-model="selectedRoleId" :placeholder="t('common.selectPlaceholder')" filterable style="width: 300px">
+      <el-select
+        v-model="selectedRoleId"
+        :placeholder="t('common.selectPlaceholder')"
+        filterable
+        style="width: 300px"
+      >
         <el-option
           v-for="role in availableRoles"
           :key="role.id"
@@ -15,17 +22,39 @@
           :value="role.id"
         />
       </el-select>
-      <el-button type="primary" @click="bindRole" :disabled="!selectedRoleId">
+      <el-button
+        type="primary"
+        :disabled="!selectedRoleId"
+        @click="bindRole"
+      >
         {{ t('common.add') }}
       </el-button>
     </div>
 
-    <el-table :data="boundRoles" v-loading="loading" stripe style="margin-top: 16px">
-      <el-table-column prop="name" :label="t('role.roleName')" />
-      <el-table-column prop="code" :label="t('role.roleCode')" />
-      <el-table-column :label="t('common.operation')" width="100">
+    <el-table
+      v-loading="loading"
+      :data="boundRoles"
+      stripe
+      style="margin-top: 16px"
+    >
+      <el-table-column
+        prop="name"
+        :label="t('role.roleName')"
+      />
+      <el-table-column
+        prop="code"
+        :label="t('role.roleCode')"
+      />
+      <el-table-column
+        :label="t('common.operation')"
+        width="100"
+      >
         <template #default="{ row }">
-          <el-button link type="danger" @click="unbindRole(row)">
+          <el-button
+            link
+            type="danger"
+            @click="unbindRole(row)"
+          >
             {{ t('common.delete') }}
           </el-button>
         </template>

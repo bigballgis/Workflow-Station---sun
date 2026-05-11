@@ -1,14 +1,18 @@
 <template>
   <el-dialog 
     :model-value="modelValue" 
-    @update:model-value="$emit('update:modelValue', $event)" 
     :title="t('user.batchImportUsers')" 
-    width="600px"
+    width="600px" 
     destroy-on-close
+    @update:model-value="$emit('update:modelValue', $event)"
   >
     <div class="import-container">
       <div class="import-tips">
-        <el-alert type="info" :closable="false" show-icon>
+        <el-alert
+          type="info"
+          :closable="false"
+          show-icon
+        >
           <template #title>
             <span>{{ t('user.importTip') }}</span>
           </template>
@@ -25,15 +29,25 @@
           accept=".xlsx,.xls"
           drag
         >
-          <el-icon class="el-icon--upload"><Upload /></el-icon>
-          <div class="el-upload__text" v-html="DOMPurify.sanitize(t('user.dragFileOrClick'))"></div>
+          <el-icon class="el-icon--upload">
+            <Upload />
+          </el-icon>
+          <div
+            class="el-upload__text"
+            v-html="DOMPurify.sanitize(t('user.dragFileOrClick'))"
+          />
           <template #tip>
-            <div class="el-upload__tip">{{ t('user.uploadFileLimitTip') }}</div>
+            <div class="el-upload__tip">
+              {{ t('user.uploadFileLimitTip') }}
+            </div>
           </template>
         </el-upload>
       </div>
 
-      <div v-if="importResult" class="import-result">
+      <div
+        v-if="importResult"
+        class="import-result"
+      >
         <el-result 
           :icon="importResult.failed === 0 ? 'success' : 'warning'" 
           :title="importResult.failed === 0 ? t('user.importSuccessResult') : t('user.importPartialResult')"
@@ -42,16 +56,40 @@
             <div class="result-summary">
               <span>{{ t('user.totalRecords', { count: importResult.total }) }}</span>
               <span class="success">{{ t('user.successRecords', { count: importResult.success }) }}</span>
-              <span class="failed" v-if="importResult.failed > 0">{{ t('user.failedRecords', { count: importResult.failed }) }}</span>
+              <span
+                v-if="importResult.failed > 0"
+                class="failed"
+              >{{ t('user.failedRecords', { count: importResult.failed }) }}</span>
             </div>
           </template>
         </el-result>
 
-        <el-table v-if="importResult.errors?.length" :data="importResult.errors" border size="small" max-height="200">
-          <el-table-column prop="row" :label="t('common.rowNumber')" width="70" />
-          <el-table-column prop="field" :label="t('common.field')" width="100" />
-          <el-table-column prop="value" :label="t('common.value')" width="120" />
-          <el-table-column prop="message" :label="t('common.errorMessage')" />
+        <el-table
+          v-if="importResult.errors?.length"
+          :data="importResult.errors"
+          border
+          size="small"
+          max-height="200"
+        >
+          <el-table-column
+            prop="row"
+            :label="t('common.rowNumber')"
+            width="70"
+          />
+          <el-table-column
+            prop="field"
+            :label="t('common.field')"
+            width="100"
+          />
+          <el-table-column
+            prop="value"
+            :label="t('common.value')"
+            width="120"
+          />
+          <el-table-column
+            prop="message"
+            :label="t('common.errorMessage')"
+          />
         </el-table>
       </div>
     </div>
@@ -60,8 +98,15 @@
       <el-button @click="handleDownloadTemplate">
         <el-icon><Download /></el-icon>{{ t('user.downloadTemplate') }}
       </el-button>
-      <el-button @click="$emit('update:modelValue', false)">{{ t('common.cancel') }}</el-button>
-      <el-button type="primary" :loading="loading" :disabled="!selectedFile" @click="handleImport">
+      <el-button @click="$emit('update:modelValue', false)">
+        {{ t('common.cancel') }}
+      </el-button>
+      <el-button
+        type="primary"
+        :loading="loading"
+        :disabled="!selectedFile"
+        @click="handleImport"
+      >
         {{ t('user.startImport') }}
       </el-button>
     </template>

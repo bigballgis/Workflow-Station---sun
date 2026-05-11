@@ -1,5 +1,7 @@
 <template>
-  <div class="sso-callback">Completing sign-in…</div>
+  <div class="sso-callback">
+    Completing sign-in…
+  </div>
 </template>
 
 <script setup lang="ts">

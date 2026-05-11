@@ -1,5 +1,8 @@
 <template>
-  <div class="markdown-renderer" v-html="sanitizedHtml"></div>
+  <div
+    class="markdown-renderer"
+    v-html="sanitizedHtml"
+  />
 </template>
 
 <script setup lang="ts">

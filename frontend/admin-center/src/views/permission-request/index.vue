@@ -3,19 +3,51 @@
     <PageHeader :title="t('permissionRequest.title')" />
     
     <el-card class="search-card">
-      <el-form :inline="true" :model="query" class="search-form">
+      <el-form
+        :inline="true"
+        :model="query"
+        class="search-form"
+      >
         <el-form-item :label="t('permissionRequest.status')">
-          <el-select v-model="query.status" :placeholder="t('permissionRequest.filterByStatus')" clearable style="width: 140px">
-            <el-option :label="t('permissionRequest.pending')" value="PENDING" />
-            <el-option :label="t('permissionRequest.approved')" value="APPROVED" />
-            <el-option :label="t('permissionRequest.rejected')" value="REJECTED" />
-            <el-option :label="t('permissionRequest.cancelled')" value="CANCELLED" />
+          <el-select
+            v-model="query.status"
+            :placeholder="t('permissionRequest.filterByStatus')"
+            clearable
+            style="width: 140px"
+          >
+            <el-option
+              :label="t('permissionRequest.pending')"
+              value="PENDING"
+            />
+            <el-option
+              :label="t('permissionRequest.approved')"
+              value="APPROVED"
+            />
+            <el-option
+              :label="t('permissionRequest.rejected')"
+              value="REJECTED"
+            />
+            <el-option
+              :label="t('permissionRequest.cancelled')"
+              value="CANCELLED"
+            />
           </el-select>
         </el-form-item>
         <el-form-item :label="t('permissionRequest.requestType')">
-          <el-select v-model="query.requestType" :placeholder="t('permissionRequest.filterByType')" clearable style="width: 160px">
-            <el-option :label="t('permissionRequest.virtualGroup')" value="VIRTUAL_GROUP" />
-            <el-option :label="t('permissionRequest.businessUnitRole')" value="BUSINESS_UNIT_ROLE" />
+          <el-select
+            v-model="query.requestType"
+            :placeholder="t('permissionRequest.filterByType')"
+            clearable
+            style="width: 160px"
+          >
+            <el-option
+              :label="t('permissionRequest.virtualGroup')"
+              value="VIRTUAL_GROUP"
+            />
+            <el-option
+              :label="t('permissionRequest.businessUnitRole')"
+              value="BUSINESS_UNIT_ROLE"
+            />
           </el-select>
         </el-form-item>
         <el-form-item :label="t('common.dateRange')">
@@ -29,7 +61,10 @@
           />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="handleSearch">
+          <el-button
+            type="primary"
+            @click="handleSearch"
+          >
             <el-icon><Search /></el-icon>{{ t('common.search') }}
           </el-button>
           <el-button @click="handleReset">
@@ -40,41 +75,108 @@
     </el-card>
     
     <el-card class="table-card">
-      <el-table :data="requests" v-loading="loading" stripe border>
-        <el-table-column prop="applicantName" :label="t('permissionRequest.applicant')" width="120">
+      <el-table
+        v-loading="loading"
+        :data="requests"
+        stripe
+        border
+      >
+        <el-table-column
+          prop="applicantName"
+          :label="t('permissionRequest.applicant')"
+          width="120"
+        >
           <template #default="{ row }">
             {{ row.applicantName || row.applicantUsername }}
           </template>
         </el-table-column>
-        <el-table-column prop="requestType" :label="t('permissionRequest.requestType')" width="140">
+        <el-table-column
+          prop="requestType"
+          :label="t('permissionRequest.requestType')"
+          width="140"
+        >
           <template #default="{ row }">
-            <el-tag :type="row.requestType === 'VIRTUAL_GROUP' ? 'success' : 'primary'" size="small">
+            <el-tag
+              :type="row.requestType === 'VIRTUAL_GROUP' ? 'success' : 'primary'"
+              size="small"
+            >
               {{ row.requestType === 'VIRTUAL_GROUP' ? t('permissionRequest.virtualGroup') : t('permissionRequest.businessUnitRole') }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="targetName" :label="t('permissionRequest.target')" min-width="150" show-overflow-tooltip />
-        <el-table-column prop="roleNames" :label="t('permissionRequest.roles')" min-width="150">
+        <el-table-column
+          prop="targetName"
+          :label="t('permissionRequest.target')"
+          min-width="150"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="roleNames"
+          :label="t('permissionRequest.roles')"
+          min-width="150"
+        >
           <template #default="{ row }">
             <template v-if="row.roleNames?.length">
-              <el-tag v-for="role in row.roleNames" :key="role" size="small" style="margin-right: 4px">{{ role }}</el-tag>
+              <el-tag
+                v-for="role in row.roleNames"
+                :key="role"
+                size="small"
+                style="margin-right: 4px"
+              >
+                {{ role }}
+              </el-tag>
             </template>
             <span v-else>-</span>
           </template>
         </el-table-column>
-        <el-table-column prop="reason" :label="t('permissionRequest.reason')" min-width="150" show-overflow-tooltip />
-        <el-table-column prop="status" :label="t('permissionRequest.status')" width="100">
+        <el-table-column
+          prop="reason"
+          :label="t('permissionRequest.reason')"
+          min-width="150"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="status"
+          :label="t('permissionRequest.status')"
+          width="100"
+        >
           <template #default="{ row }">
-            <el-tag :type="statusType(row.status)" size="small">{{ statusText(row.status) }}</el-tag>
+            <el-tag
+              :type="statusType(row.status)"
+              size="small"
+            >
+              {{ statusText(row.status) }}
+            </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="approverName" :label="t('permissionRequest.approver')" width="100" />
-        <el-table-column prop="approverComment" :label="t('permissionRequest.approverComment')" min-width="150" show-overflow-tooltip />
-        <el-table-column prop="createdAt" :label="t('permissionRequest.createdAt')" width="160">
-          <template #default="{ row }">{{ formatDate(row.createdAt) }}</template>
+        <el-table-column
+          prop="approverName"
+          :label="t('permissionRequest.approver')"
+          width="100"
+        />
+        <el-table-column
+          prop="approverComment"
+          :label="t('permissionRequest.approverComment')"
+          min-width="150"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="createdAt"
+          :label="t('permissionRequest.createdAt')"
+          width="160"
+        >
+          <template #default="{ row }">
+            {{ formatDate(row.createdAt) }}
+          </template>
         </el-table-column>
-        <el-table-column prop="approvedAt" :label="t('permissionRequest.approvedAt')" width="160">
-          <template #default="{ row }">{{ row.approvedAt ? formatDate(row.approvedAt) : '-' }}</template>
+        <el-table-column
+          prop="approvedAt"
+          :label="t('permissionRequest.approvedAt')"
+          width="160"
+        >
+          <template #default="{ row }">
+            {{ row.approvedAt ? formatDate(row.approvedAt) : '-' }}
+          </template>
         </el-table-column>
       </el-table>
       
