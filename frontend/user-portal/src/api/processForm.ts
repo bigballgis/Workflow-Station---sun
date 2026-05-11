@@ -31,6 +31,7 @@ export interface TaskFormData {
   fieldValues: Record<string, unknown>
   subTableBindings: SubTableBindingData[]
   processFormRef: ProcessFormData
+  formReadOnly?: boolean
 }
 
 export interface TaskFormSnapshot {

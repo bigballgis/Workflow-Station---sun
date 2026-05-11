@@ -97,6 +97,9 @@ public class TaskFormComponent {
         String formName = formDefinition.get("formName") != null
                 ? (String) formDefinition.get("formName")
                 : "Task Form";
+        Boolean formReadOnly = formDefinition.get("readOnly") instanceof Boolean
+                ? (Boolean) formDefinition.get("readOnly")
+                : false;
 
         // Get field values from process variables (subset based on fieldPermissions keys)
         Map<String, Object> fieldValues = extractFieldSubset(allVariables, fieldPermissions.keySet());
@@ -110,6 +113,7 @@ public class TaskFormComponent {
                 .fieldValues(fieldValues)
                 .subTableBindings(Collections.emptyList())
                 .processFormRef(processFormRef)
+                .formReadOnly(formReadOnly)
                 .build();
     }
 
@@ -642,7 +646,7 @@ public class TaskFormComponent {
         try {
             List<Map<String, Object>> rows = jdbcTemplate.query(
                     """
-                            SELECT fd.form_name, fd.config_json, fd.field_permissions
+                            SELECT fd.form_name, fd.config_json, fd.field_permissions, b.read_only
                             FROM dw_form_stage_bindings b
                             INNER JOIN dw_form_definitions fd ON fd.id = b.form_id
                             WHERE b.stage_id = ?
@@ -662,6 +666,7 @@ public class TaskFormComponent {
         form.put("formName", rs.getString("form_name"));
         form.put("configJson", readJsonObjectMap(rs, "config_json"));
         form.put("fieldPermissions", readJsonStringMap(rs, "field_permissions"));
+        form.put("readOnly", rs.getBoolean("read_only"));
         return form;
     }
 

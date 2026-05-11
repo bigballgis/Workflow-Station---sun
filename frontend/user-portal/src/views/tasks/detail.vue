@@ -1673,6 +1673,10 @@ const loadProcessAndTaskFormData = async (taskData: any) => {
         const tfData = (tfRes as any).data || tfRes
         if (tfData) {
           taskFormDTO.value = tfData
+          // FormStageBinding readOnly flag takes highest priority
+          if (tfData.formReadOnly === true) {
+            formReadOnly.value = true
+          }
           if (tfData.formName) {
             currentFormName.value = tfData.formName
           }

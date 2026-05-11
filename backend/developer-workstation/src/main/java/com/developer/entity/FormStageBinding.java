@@ -37,6 +37,10 @@ public class FormStageBinding {
     @Column(name = "stage_name", length = 255)
     private String stageName;
 
+    @Column(name = "read_only", nullable = false)
+    @Builder.Default
+    private Boolean readOnly = false;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

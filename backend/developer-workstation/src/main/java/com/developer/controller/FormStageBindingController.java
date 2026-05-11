@@ -49,6 +49,7 @@ public class FormStageBindingController {
         form.put("formName", def.getFormName());
         form.put("configJson", def.getConfigJson() != null ? def.getConfigJson() : Map.of());
         form.put("fieldPermissions", def.getFieldPermissions() != null ? def.getFieldPermissions() : Map.of());
+        form.put("readOnly", binding.getReadOnly() != null ? binding.getReadOnly() : false);
         Map<String, Object> data = new HashMap<>();
         data.put("form", form);
         return ResponseEntity.ok(ApiResponse.success(data));

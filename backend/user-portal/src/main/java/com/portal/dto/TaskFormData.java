@@ -21,4 +21,5 @@ public class TaskFormData {
     private Map<String, Object> fieldValues;
     private List<SubTableBindingData> subTableBindings;
     private ProcessFormData processFormRef;
+    private Boolean formReadOnly;
 }

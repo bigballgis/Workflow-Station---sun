@@ -427,11 +427,11 @@
           style="width: 100%"
         />
 
-        <!-- fallback (readonly) -->
-        <span v-if="col.readonly" class="ro-value">{{ formData[col.field] || '-' }}</span>
-        <!-- fallback -->
+        <!-- fallback (readonly) — only for types NOT handled above -->
+        <span v-if="col.readonly && col.type && !HANDLED_TYPES.has(col.type)" class="ro-value">{{ formData[col.field] || '-' }}</span>
+        <!-- fallback — only for types NOT handled above -->
         <el-input
-          v-if="!col.readonly"
+          v-if="!col.readonly && col.type && !HANDLED_TYPES.has(col.type)"
           v-model="formData[col.field]"
           :placeholder="col.placeholder || col.label"
           clearable
@@ -472,6 +472,16 @@ import LookupViewDisplay from './lookup/LookupViewDisplay.vue'
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const { t } = useI18n()
+
+/** All field types that have explicit rendering above the fallback.
+ *  The fallback el-input / readonly span must NOT render for these types
+ *  to avoid double controls for the same field. */
+const HANDLED_TYPES = new Set([
+  'text', 'textarea', 'number', 'select', 'radio', 'checkbox',
+  'password', 'timerange', 'treeselect', 'tree', 'switch', 'date',
+  'datetime', 'upload', 'colorPicker', 'rate', 'slider', 'editor',
+  'signature', 'transfer', 'cascader', 'lookup', 'user', 'department',
+])
 
 /** Sanitize HTML content to prevent XSS */
 function sanitizeHtml(html: string): string {
