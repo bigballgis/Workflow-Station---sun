@@ -69,9 +69,21 @@
                                 :linked-sub-table-bindings="linkableSubTableBindings"
                                 :suppress-link-form-initial-data="suppressLinkFormInitialData"
                                 :show-link-form-dialog-footer="showLinkFormDialogFooter"
+                                :show-task-status="subTableShowTaskStatusInitiator(child)"
+                                :show-view-detail="subTableShowViewDetailInitiator(child)"
                                 style="margin-bottom: 16px;"
                                 @update:model-value="(rows: any[]) => handleSubTableUpdate(child._bindingId!, rows)"
                                 @update:linked-sub-table-data="handleSubTableUpdate"
+                                @view-detail="(row: any) => emit('viewSubtaskDetail', row)"
+                              />
+                              <SubTableInlineForm
+                                v-if="resolveBinding(child._bindingId) && subTableMode(child) === 'formBelowTable'"
+                                :title="resolveBinding(child._bindingId)!.tableName"
+                                :fields="resolveInlineFormFields(child)"
+                                :current-row="getCurrentRowForInlineForm(child)"
+                                :readonly="readonly"
+                                :label-width="labelWidth"
+                                @update:row="(row: Record<string, any>) => handleInlineFormUpdate(child, row)"
                               />
                             </el-col>
                           </template>
@@ -169,9 +181,21 @@
                       :linked-sub-table-bindings="linkableSubTableBindings"
                       :suppress-link-form-initial-data="suppressLinkFormInitialData"
                       :show-link-form-dialog-footer="showLinkFormDialogFooter"
+                      :show-task-status="subTableShowTaskStatusInitiator(field)"
+                      :show-view-detail="subTableShowViewDetailInitiator(field)"
                       style="margin-bottom: 16px;"
                       @update:model-value="(rows: any[]) => handleSubTableUpdate(field._bindingId!, rows)"
                       @update:linked-sub-table-data="handleSubTableUpdate"
+                      @view-detail="(row: any) => emit('viewSubtaskDetail', row)"
+                    />
+                    <SubTableInlineForm
+                      v-if="resolveBinding(field._bindingId) && subTableMode(field) === 'formBelowTable'"
+                      :title="resolveBinding(field._bindingId)!.tableName"
+                      :fields="resolveInlineFormFields(field)"
+                      :current-row="getCurrentRowForInlineForm(field)"
+                      :readonly="readonly"
+                      :label-width="labelWidth"
+                      @update:row="(row: Record<string, any>) => handleInlineFormUpdate(field, row)"
                     />
                   </el-col>
                 </template>
@@ -294,9 +318,21 @@
                             :linked-sub-table-bindings="linkableSubTableBindings"
                             :suppress-link-form-initial-data="suppressLinkFormInitialData"
                             :show-link-form-dialog-footer="showLinkFormDialogFooter"
+                            :show-task-status="subTableShowTaskStatusInitiator(child)"
+                            :show-view-detail="subTableShowViewDetailInitiator(child)"
                             style="margin-bottom: 16px;"
                             @update:model-value="(rows: any[]) => handleSubTableUpdate(child._bindingId!, rows)"
                             @update:linked-sub-table-data="handleSubTableUpdate"
+                            @view-detail="(row: any) => emit('viewSubtaskDetail', row)"
+                          />
+                          <SubTableInlineForm
+                            v-if="resolveBinding(child._bindingId) && subTableMode(child) === 'formBelowTable'"
+                            :title="resolveBinding(child._bindingId)!.tableName"
+                            :fields="resolveInlineFormFields(child)"
+                            :current-row="getCurrentRowForInlineForm(child)"
+                            :readonly="readonly"
+                            :label-width="labelWidth"
+                            @update:row="(row: Record<string, any>) => handleInlineFormUpdate(child, row)"
                           />
                         </el-col>
                       </template>
@@ -394,9 +430,21 @@
                   :linked-sub-table-bindings="linkableSubTableBindings"
                   :suppress-link-form-initial-data="suppressLinkFormInitialData"
                   :show-link-form-dialog-footer="showLinkFormDialogFooter"
+                  :show-task-status="subTableShowTaskStatusInitiator(field)"
+                  :show-view-detail="subTableShowViewDetailInitiator(field)"
                   style="margin-bottom: 16px;"
                   @update:model-value="(rows: any[]) => handleSubTableUpdate(field._bindingId!, rows)"
                   @update:linked-sub-table-data="handleSubTableUpdate"
+                  @view-detail="(row: any) => emit('viewSubtaskDetail', row)"
+                />
+                <SubTableInlineForm
+                  v-if="resolveBinding(field._bindingId) && subTableMode(field) === 'formBelowTable'"
+                  :title="resolveBinding(field._bindingId)!.tableName"
+                  :fields="resolveInlineFormFields(field)"
+                  :current-row="getCurrentRowForInlineForm(field)"
+                  :readonly="readonly"
+                  :label-width="labelWidth"
+                  @update:row="(row: Record<string, any>) => handleInlineFormUpdate(field, row)"
                 />
               </el-col>
             </template>
@@ -480,14 +528,20 @@ import { ElMessageBox } from 'element-plus'
 import { Upload, Search } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import SubTableField from './SubTableField.vue'
+import SubTableInlineForm from './SubTableInlineForm.vue'
 import LookupField from './lookup/LookupField.vue'
 import LookupViewDisplay from './lookup/LookupViewDisplay.vue'
 import FieldRenderer from './FieldRenderer.vue'
 import { BusinessLogicEngine } from './businessLogicEngine'
 import { userApi } from '@/api/user'
 import { resolveAssigneeFieldForBinding } from '@/utils/subTableAssignment'
-import type { FormField, FormTab, FormBusinessLogicConfig } from './formRendererHelpers'
-import { extractFieldsRecursive } from './formRendererHelpers'
+import type {
+  FormField,
+  FormTab,
+  FormBusinessLogicConfig,
+  PortalViewContext
+} from './formRendererHelpers'
+import { extractFieldsRecursive, resolveSubTableDisplayMode } from './formRendererHelpers'
 
 export type { FormField, FormTab }
 
@@ -509,6 +563,12 @@ interface SubTableBinding {
   data: any[]
   formFields?: FormField[]
   formOptions?: Record<string, any>
+  /**
+   * Per-binding portalViews loaded from form configJson.subTablePortalViews[bindingId].
+   * Used as the fallback when a placed `subTable` rule node has no `props.portalViews`,
+   * and as the primary source for unplaced bindings (e.g. sub-tables accessed only via Link Form).
+   */
+  portalViews?: Partial<import('./formRendererHelpers').SubTablePortalViews> | null
 }
 
 interface Props {
@@ -538,6 +598,23 @@ interface Props {
   suppressLinkFormInitialData?: boolean
   /** Task To Do only: Link Form field-layout detail shows Cancel/Save (completed / My Request use header close only). */
   showLinkFormDialogFooter?: boolean
+  /**
+   * Portal view context — drives how subTable nodes are rendered based on their `portalViews` config:
+   * - `assigneeTodo`: To Do detail page (办理人待办)
+   * - `initiatorRequest`: My Request / process detail page (发起人我的申请)
+   * Defaults to `assigneeTodo` for safety; consumers should pass the value matching their route.
+   */
+  viewContext?: PortalViewContext
+  /**
+   * When `viewContext` is `initiatorRequest`, Completed Tasks snapshot treats task-status rows
+   * like `applicationDetail` (only COMPLETED rows count for Details visibility heuristics).
+   */
+  initiatorSnapshotMode?: boolean
+  /**
+   * Current MI participant row id (typically `variables._currentItem.rowId`). When set, the
+   * inline form-below-table binds to that row; otherwise it falls back to the first sub-table row.
+   */
+  currentMiRowId?: number | string | null
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -553,12 +630,16 @@ const props = withDefaults(defineProps<Props>(), {
   allowSubTableAssign: true,
   suppressLinkFormInitialData: false,
   showLinkFormDialogFooter: false,
+  viewContext: 'assigneeTodo',
+  initiatorSnapshotMode: false,
+  currentMiRowId: null,
 })
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: Record<string, any>): void
   (e: 'change', key: string, value: any): void
   (e: 'update:subTableData', bindingId: number, rows: any[]): void
+  (e: 'viewSubtaskDetail', row: any): void
 }>()
 
 // ---------------------------------------------------------------------------
@@ -629,6 +710,286 @@ function showSubTableAssignColumn(bindingId?: number): boolean {
     return false
   }
   return !!(props.taskId && subTableAssigneeField(bindingId))
+}
+
+// ---------------------------------------------------------------------------
+// Portal-views driven rendering helpers (designer → Portal contract)
+// ---------------------------------------------------------------------------
+/**
+ * Effective sub-table display mode at the current view context. Returns one of:
+ *   - 'tableOnly': just the SubTableField, nothing else
+ *   - 'formBelowTable': SubTableField + inline form below (binds to current row)
+ *   - 'summaryWithLinkFormModal': SubTableField; Details modal flow handled by existing
+ *      Link Form column logic inside SubTableField (no inline form below)
+ *
+ * Resolution precedence:
+ *   1. Rule-level `field.portalViews` (set on the SubTable widget in the main form designer)
+ *   2. Binding-level `binding.portalViews` (set on the sub-table tab → "portalViews" bar)
+ *   3. DEFAULT_PORTAL_VIEWS — tableOnly + mirrorTodo (preserves legacy behavior)
+ */
+function subTableMode(field: FormField): 'tableOnly' | 'formBelowTable' | 'summaryWithLinkFormModal' {
+  if (field.portalViews) {
+    return resolveSubTableDisplayMode(field.portalViews, props.viewContext)
+  }
+  const binding = resolveBinding(field._bindingId)
+  return resolveSubTableDisplayMode(binding?.portalViews ?? undefined, props.viewContext)
+}
+
+function effectiveInitiatorRequestPortalMode(field: FormField): string | undefined {
+  const ir = field.portalViews?.initiatorRequest
+  if (typeof ir === 'string' && ir.length > 0) return ir
+  const binding = resolveBinding(field._bindingId)
+  const bir = binding?.portalViews?.initiatorRequest
+  return typeof bir === 'string' ? bir : undefined
+}
+
+/** Aligns with application-detail heuristics for MI / snapshot task-status rows. */
+function bindingHasMiTaskStatusRowsForInitiator(rows: any[]): boolean {
+  if (!Array.isArray(rows) || rows.length === 0) return false
+  if (props.initiatorSnapshotMode) {
+    return rows.some(r => r && r.task_status === 'COMPLETED')
+  }
+  return rows.some(r => r && r.task_status !== undefined)
+}
+
+function subTableShowTaskStatusInitiator(field: FormField): boolean {
+  if (props.viewContext !== 'initiatorRequest') return false
+  if (subTableMode(field) !== 'summaryWithLinkFormModal') return false
+  const binding = resolveBinding(field._bindingId)
+  return bindingHasMiTaskStatusRowsForInitiator(binding?.data || [])
+}
+
+function subTableShowViewDetailInitiator(field: FormField): boolean {
+  if (props.viewContext !== 'initiatorRequest') return false
+  if (subTableMode(field) !== 'summaryWithLinkFormModal') return false
+  const binding = resolveBinding(field._bindingId)
+  if (!binding) return false
+  const mode = effectiveInitiatorRequestPortalMode(field)
+  const rows = binding.data || []
+  if (mode === 'summaryWithLinkFormModal') {
+    return bindingHasMiTaskStatusRowsForInitiator(rows)
+  }
+  if (mode === 'tableOnly' || mode === 'mirrorTodo') return false
+  return bindingHasMiTaskStatusRowsForInitiator(rows)
+}
+
+/**
+ * Resolve the effective form-source config from rule-level or binding-level portalViews.
+ * Rule-level wins (more specific); binding-level is the per-binding default; finally
+ * fall back to `subForm` for legacy/unconfigured forms.
+ */
+function resolveAssigneeTodoFormSource(field: FormField): {
+  type: 'subForm' | 'linkForm' | 'formId'
+  formId?: number | string | null
+} {
+  const placed = field.portalViews?.assigneeTodoFormSource
+  if (placed && typeof placed === 'object' && placed.type) return placed
+  const binding = resolveBinding(field._bindingId)
+  const bindingLevel = (binding?.portalViews as any)?.assigneeTodoFormSource
+  if (bindingLevel && typeof bindingLevel === 'object' && bindingLevel.type) return bindingLevel
+  return { type: 'subForm', formId: null }
+}
+
+/**
+ * For a placed sub-table `field`, resolve which Link Form column on the binding's
+ * list view drives the inline form-below-table when `assigneeTodoFormSource.type === 'linkForm'`,
+ * then return that column's target sub-table binding.
+ *
+ * Selection precedence:
+ *   1. Explicit `assigneeTodoFormSource.linkFormColumnId` (designer pick) — matches the
+ *      column whose `props.componentId` equals the configured id.
+ *   2. Legacy fallback — the first `type='linkForm'` column on the binding.
+ *
+ * Returns null when no Link Form column is configured or the target binding isn't loaded;
+ * caller falls back to the binding's own subForm in that case.
+ */
+function findLinkFormTargetBinding(field: FormField): SubTableBinding | null {
+  const binding = resolveBinding(field._bindingId)
+  if (!binding) return null
+  const cols = Array.isArray(binding.columns) ? binding.columns : []
+  const source = resolveAssigneeTodoFormSource(field)
+  const picked = source.linkFormColumnId
+  const pickedKey = picked != null && String(picked).trim() !== '' ? String(picked) : null
+
+  // Helper: read `componentId` off a column regardless of whether it's nested under
+  // `props` (live designer state) or hoisted directly (some serialized shapes).
+  const componentIdOf = (col: any): string | null => {
+    const cid = col?.props?.componentId ?? col?.componentId
+    return cid != null ? String(cid) : null
+  }
+  const targetBindingIdOf = (col: any): number | null => {
+    const t = col?.props?.boundSubTableBindingId ?? col?.boundSubTableBindingId
+    return t != null ? Number(t) : null
+  }
+
+  if (pickedKey) {
+    for (const col of cols) {
+      if (!col || col.type !== 'linkForm') continue
+      if (componentIdOf(col) !== pickedKey) continue
+      const targetId = targetBindingIdOf(col)
+      if (targetId == null) continue
+      const target = resolveBinding(targetId)
+      if (target) return target
+    }
+    // Picked id no longer exists (e.g. column was removed) — fall through to legacy first-match.
+  }
+
+  for (const col of cols) {
+    if (!col || col.type !== 'linkForm') continue
+    const targetId = targetBindingIdOf(col)
+    if (targetId == null) continue
+    const target = resolveBinding(targetId)
+    if (target) return target
+  }
+  return null
+}
+
+/**
+ * Decide which binding's data should actually back the inline form-below-table.
+ * - `subForm` (or unsupported `formId`): keep the field's own binding.
+ * - `linkForm`: switch to the Link Form's target binding so the inline form mirrors
+ *   exactly what would show in the Link Form modal — keeping designer and runtime
+ *   contracts aligned. Falls back to the own binding when no Link Form column exists,
+ *   so a misconfiguration never produces an empty section.
+ */
+function resolveInlineFormSourceBinding(field: FormField): SubTableBinding | null {
+  const own = resolveBinding(field._bindingId)
+  if (!own) return null
+  const source = resolveAssigneeTodoFormSource(field)
+  if (source.type === 'linkForm') {
+    const target = findLinkFormTargetBinding(field)
+    if (target) return target
+  }
+  // `formId` is not yet runtime-resolved here (would need cross-form schema lookup); fall through.
+  return own
+}
+
+/**
+ * Resolve the form schema for the inline form-below-table. Per the designer contract:
+ *   - `subForm` (default): use the binding's own `formFields`
+ *   - `linkForm`: use the Link Form target binding's `formFields`
+ *   - `formId`: not yet runtime-supported; falls back to `subForm`
+ */
+function resolveInlineFormFields(field: FormField): FormField[] {
+  const source = resolveInlineFormSourceBinding(field)
+  if (!source) return []
+  return Array.isArray(source.formFields) ? source.formFields : []
+}
+
+/** FK candidates used to align a child (linkForm target) row to a parent row. */
+function resolveLinkFkCandidates(target: SubTableBinding): string[] {
+  const list: string[] = []
+  const explicit = (target as any).foreignKeyField
+  if (explicit && String(explicit).trim()) list.push(String(explicit))
+  // Same heuristic used by SubTableField's Link Form modal so designer/runtime agree.
+  for (const k of ['participant_id', 'participantId', 'parent_id', 'parentId']) {
+    if (!list.includes(k)) list.push(k)
+  }
+  return list
+}
+
+/**
+ * Find the "current row" for inline form-below-table binding.
+ *
+ * For `subForm` source (own binding):
+ *   1. If `currentMiRowId` is provided, prefer the matching row (handles MI sub-task).
+ *   2. Else fall back to the single available row (普通单任务 single-row table).
+ *
+ * For `linkForm` source (target binding, e.g. subtable2):
+ *   1. If `currentMiRowId` is provided, find the target row whose FK === parent rowId.
+ *   2. Else if target has a single row, use it.
+ *   3. Else `null` — host renders with empty defaults; first edit creates a new row.
+ */
+function getCurrentRowForInlineForm(field: FormField): Record<string, any> | null {
+  const own = resolveBinding(field._bindingId)
+  if (!own) return null
+  const target = resolveInlineFormSourceBinding(field) ?? own
+  const isLinkTarget = target.bindingId !== own.bindingId
+  const rows = Array.isArray(target.data) ? target.data : []
+  const parentId = props.currentMiRowId
+
+  if (isLinkTarget && parentId != null && String(parentId).trim() !== '') {
+    const fkList = resolveLinkFkCandidates(target)
+    const match = rows.find(r => {
+      if (!r || typeof r !== 'object') return false
+      const rec = r as Record<string, unknown>
+      return fkList.some(k => {
+        const v = rec[k]
+        return v != null && v !== '' && String(v) === String(parentId)
+      })
+    })
+    if (match) return { ...(match as Record<string, any>) }
+    if (rows.length === 1) return { ...(rows[0] as Record<string, any>) }
+    return null
+  }
+
+  // subForm path: row identity is the row's own id/rowId
+  if (parentId != null && String(parentId).trim() !== '') {
+    const match = rows.find(r => {
+      if (!r || typeof r !== 'object') return false
+      const rec = r as Record<string, unknown>
+      return String(rec.id ?? rec.rowId ?? '') === String(parentId)
+    })
+    if (match) return { ...(match as Record<string, any>) }
+  }
+  if (rows.length === 1) return { ...(rows[0] as Record<string, any>) }
+  return null
+}
+
+/**
+ * When the inline form below is edited, merge the new values back into the matching
+ * row in the EFFECTIVE source binding (own binding for `subForm`, link target for
+ * `linkForm`) and emit `update:subTableData` so the host (tasks/detail or
+ * applications/detail) can persist it via the existing data flow.
+ *
+ * When no matching child row exists in the link-target binding yet, a fresh row is
+ * appended and the FK column is populated with `currentMiRowId` so persistence stays
+ * within the existing dw_table_data → child-rows pipeline.
+ */
+function handleInlineFormUpdate(field: FormField, mergedRow: Record<string, any>) {
+  const own = resolveBinding(field._bindingId)
+  if (!own) return
+  const target = resolveInlineFormSourceBinding(field) ?? own
+  const isLinkTarget = target.bindingId !== own.bindingId
+  const rows = Array.isArray(target.data) ? target.data.map(r => ({ ...(r as Record<string, any>) })) : []
+  const parentId = props.currentMiRowId
+
+  let idx = -1
+  if (isLinkTarget && parentId != null && String(parentId).trim() !== '') {
+    const fkList = resolveLinkFkCandidates(target)
+    idx = rows.findIndex(r => {
+      if (!r || typeof r !== 'object') return false
+      const rec = r as Record<string, unknown>
+      return fkList.some(k => {
+        const v = rec[k]
+        return v != null && v !== '' && String(v) === String(parentId)
+      })
+    })
+  } else if (isLinkTarget && rows.length === 1) {
+    idx = 0
+  } else if (parentId != null && String(parentId).trim() !== '') {
+    idx = rows.findIndex(r => {
+      if (!r || typeof r !== 'object') return false
+      const rec = r as Record<string, unknown>
+      return String(rec.id ?? rec.rowId ?? '') === String(parentId)
+    })
+  } else if (rows.length === 1) {
+    idx = 0
+  }
+
+  if (idx >= 0) {
+    rows[idx] = { ...rows[idx], ...mergedRow }
+  } else {
+    const fresh: Record<string, any> = { ...mergedRow }
+    if (isLinkTarget && parentId != null && String(parentId).trim() !== '') {
+      // Seed the FK so the new child row aligns with the parent participant.
+      const explicit = (target as any).foreignKeyField
+      const fkField = explicit && String(explicit).trim() ? String(explicit) : 'parent_id'
+      if (fresh[fkField] == null || fresh[fkField] === '') fresh[fkField] = parentId
+    }
+    rows.push(fresh)
+  }
+  handleSubTableUpdate(target.bindingId, rows)
 }
 
 // Lookup selected data state

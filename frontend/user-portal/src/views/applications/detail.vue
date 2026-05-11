@@ -143,6 +143,9 @@
               :readonly="true"
               :sub-table-bindings="subTableBindings"
               :linked-sub-table-bindings="linkableSubTableBindings"
+              view-context="initiatorRequest"
+              :initiator-snapshot-mode="!!snapshotTaskName"
+              @view-subtask-detail="openSubTaskDetailDialog"
               @update:sub-table-data="(id: number, rows: any[]) => { const b = subTableBindings.find(x => x.bindingId === id); if (b) b.data = rows }"
             />
           </div>
@@ -164,10 +167,22 @@
                 :columns="binding.columns"
                 :editable="false"
                 :assignee-field="hasAssignmentData(binding.data) ? 'assignee_user_id' : undefined"
-                :show-task-status="false"
-                :show-view-detail="hasSubTaskFormSchema && hasTaskStatusData(binding.data)"
+                :show-task-status="shouldShowBindingTaskStatus(binding)"
+                :show-view-detail="shouldShowBindingDetailsModal(binding)"
                 :linked-sub-table-bindings="linkableSubTableBindings"
                 @view-detail="(row: any) => openSubTaskDetailDialog(row)"
+              />
+              <!--
+                Unplaced binding's "form below table" — driven by binding-level portalViews.initiatorRequest
+                (with mirrorTodo falling through to assigneeTodo). Read-only because My Request is a
+                snapshot view of the initiator's request.
+              -->
+              <SubTableInlineForm
+                v-if="shouldShowBindingFormBelow(binding)"
+                :title="binding.tableName"
+                :fields="binding.formFields || []"
+                :current-row="binding.data && binding.data.length === 1 ? binding.data[0] : null"
+                :readonly="true"
               />
             </div>
           </template>
@@ -211,6 +226,7 @@
             :tabs="[]"
             label-width="160px"
             :readonly="true"
+            view-context="initiatorRequest"
           />
         </div>
         <el-empty
@@ -268,6 +284,7 @@ import ProcessDiagram, { type ProcessNode, type ProcessFlow } from '@/components
 import ProcessHistory, { type HistoryRecord } from '@/components/ProcessHistory.vue'
 import FormRenderer, { type FormField, type FormTab } from '@/components/FormRenderer.vue'
 import SubTableField from '@/components/SubTableField.vue'
+import SubTableInlineForm from '@/components/SubTableInlineForm.vue'
 import ChangeHistoryPanel from '@/components/ChangeHistoryPanel.vue'
 import { formatDate } from '@/utils/dateFormat'
 import { relationTableApi } from '@/api/relationTable'
@@ -337,6 +354,8 @@ const subTableBindings = ref<Array<{
   subMode?: string
   formFields?: FormField[]
   formOptions?: Record<string, any>
+  // Per-binding portalViews loaded from form configJson.subTablePortalViews[bindingId].
+  portalViews?: Record<string, any> | null
 }>>([])
 
 const placedBindingIds = computed((): Set<number> => {
@@ -415,6 +434,7 @@ interface PreviousFormEntry {
     subMode?: string
     formFields?: FormField[]
     formOptions?: Record<string, any>
+    portalViews?: Record<string, any> | null
   }>
 }
 const previousForms = ref<PreviousFormEntry[]>([])
@@ -466,23 +486,55 @@ type SubTableBindingAlignable = { tableId?: number | null; tableName: string; da
 /**
  * Copied forms (e.g. subform_copy) get a new bindingId while runtime data still lives under the original key;
  * MI may only persist one row under the new id — merge all bindings that share tableId (or display name) for My Request.
+ *
+ * Previous logic bucketed only by `tid:*` OR `tn:*`. When one form binding had `tableId` and another did not
+ * (same relation table, different form metadata), they landed in separate groups and `length < 2` skipped merge —
+ * common when the process advances (e.g. assignment step) and the current form uses a new binding row while
+ * `__subTables__` keys still match an earlier step. Union-find merges by equal numeric tableId OR equal normalized
+ * display name, then a column-overlap pass fills bindings that still have no rows.
  */
 function alignProcessSubTableBindingsBySharedTable() {
   const all: SubTableBindingAlignable[] = [
     ...(subTableBindings.value as SubTableBindingAlignable[]),
     ...previousForms.value.flatMap(f => f.subTableBindings as SubTableBindingAlignable[])
   ]
-  const groups = new Map<string, SubTableBindingAlignable[]>()
-  for (const b of all) {
-    const key =
-      b.tableId != null && !Number.isNaN(Number(b.tableId))
-        ? `tid:${Number(b.tableId)}`
-        : `tn:${normalizeSubTableName(b.tableName)}`
-    if (!groups.has(key)) groups.set(key, [])
-    groups.get(key)!.push(b)
+  if (all.length === 0) return
+
+  const parent = all.map((_, i) => i)
+  const find = (i: number): number => {
+    if (parent[i] !== i) parent[i] = find(parent[i])
+    return parent[i]
   }
-  for (const group of groups.values()) {
-    if (group.length < 2) continue
+  const union = (i: number, j: number) => {
+    const ri = find(i)
+    const rj = find(j)
+    if (ri !== rj) parent[ri] = rj
+  }
+
+  for (let i = 0; i < all.length; i++) {
+    for (let j = i + 1; j < all.length; j++) {
+      const a = all[i]!
+      const b = all[j]!
+      const tnA = normalizeSubTableName(a.tableName)
+      const tnB = normalizeSubTableName(b.tableName)
+      const tidA = a.tableId != null && !Number.isNaN(Number(a.tableId)) ? Number(a.tableId) : null
+      const tidB = b.tableId != null && !Number.isNaN(Number(b.tableId)) ? Number(b.tableId) : null
+      if (tidA != null && tidB != null && tidA === tidB) {
+        union(i, j)
+      } else if (tnA.length > 0 && tnA === tnB) {
+        union(i, j)
+      }
+    }
+  }
+
+  const byRoot = new Map<number, SubTableBindingAlignable[]>()
+  for (let i = 0; i < all.length; i++) {
+    const r = find(i)
+    if (!byRoot.has(r)) byRoot.set(r, [])
+    byRoot.get(r)!.push(all[i]!)
+  }
+
+  for (const group of byRoot.values()) {
     let merged: any[] = []
     for (const b of group) {
       merged = mergeSubTableRowsByRowId(merged, Array.isArray(b.data) ? b.data : [])
@@ -491,6 +543,55 @@ function alignProcessSubTableBindingsBySharedTable() {
     const snapshot = merged.map(r => ({ ...r }))
     for (const b of group) {
       b.data = snapshot
+    }
+  }
+
+  backfillEmptySubTableBindingsFromVariables()
+}
+
+/**
+ * When `__subTables__` keys do not match any bindingId/table label on the current form, merge-by-table may still
+ * leave an empty `data` array. Pick a saved row list whose first row shares enough column names with the binding's
+ * list-view columns (conservative threshold) so initiator My Request shows prior-step sub-table rows.
+ */
+function backfillEmptySubTableBindingsFromVariables() {
+  const saved = formData.value.__subTables__
+  if (!saved || typeof saved !== 'object') return
+
+  const all = [
+    ...subTableBindings.value,
+    ...previousForms.value.flatMap(f => f.subTableBindings)
+  ]
+
+  for (const b of all) {
+    if (Array.isArray(b.data) && b.data.length > 0) continue
+    const cols = (b as { columns?: Array<{ field?: string }> }).columns
+    const fieldSet = new Set(
+      (cols || [])
+        .map(c => c?.field)
+        .filter((f): f is string => typeof f === 'string' && f.length > 0)
+    )
+    if (fieldSet.size === 0) continue
+
+    let best: any[] | null = null
+    let bestScore = 0
+    for (const val of Object.values(saved)) {
+      if (!Array.isArray(val) || val.length === 0) continue
+      const row0 = val[0]
+      if (!row0 || typeof row0 !== 'object') continue
+      let score = 0
+      for (const k of Object.keys(row0 as object)) {
+        if (fieldSet.has(k)) score++
+      }
+      const threshold =
+        fieldSet.size <= 2 ? 1 : Math.min(fieldSet.size, Math.max(2, Math.ceil(fieldSet.size * 0.25)))
+      if (score >= threshold && score > bestScore) {
+        bestScore = score
+        best = val
+      }
+    }
+    if (best) {
+      b.data = best.map((r: any) => (r && typeof r === 'object' ? { ...r } : r))
     }
   }
 }
@@ -510,10 +611,48 @@ const subTaskDetailFields = ref<FormField[]>([])
 const subTaskDetailData = ref<Record<string, any>>({})
 const subTaskFormSchema = ref<any>(null)
 const subTaskFormId = ref<string | null>(null)
-const currentFormIsMiSubTask = ref(false)
-const showCurrentFormSection = computed(() => !currentFormIsMiSubTask.value || !!snapshotTaskName)
+/** My Request always shows the form section; current node + portalViews drive MI summary vs full layout. */
+const showCurrentFormSection = computed(() => true)
 
 const hasSubTaskFormSchema = computed(() => !!subTaskFormSchema.value)
+
+/**
+ * Decide whether a bottom (unplaced) sub-table binding should expose a "Details" link
+ * that opens the sub-task form modal. Per the designer-driven contract:
+ *   - Explicit binding-level `initiatorRequest=summaryWithLinkFormModal` → always show
+ *   - Explicit binding-level `tableOnly` or `mirrorTodo` → never show summary modal
+ *   - No binding-level config → legacy heuristic preserved (hasSubTaskFormSchema && hasTaskStatusData)
+ */
+function shouldShowBindingDetailsModal(binding: { portalViews?: any; data?: any[] }): boolean {
+  const mode = binding?.portalViews?.initiatorRequest
+  if (mode === 'summaryWithLinkFormModal') return hasTaskStatusData(binding.data || [])
+  if (mode === 'tableOnly' || mode === 'mirrorTodo') return false
+  return hasSubTaskFormSchema.value && hasTaskStatusData(binding.data || [])
+}
+
+/** Task status column for unplaced bindings; aligns with placed sub-tables in FormRenderer (summary MI view). */
+function shouldShowBindingTaskStatus(binding: { portalViews?: any; data?: any[] }): boolean {
+  const mode = binding?.portalViews?.initiatorRequest
+  if (mode === 'summaryWithLinkFormModal') return hasTaskStatusData(binding.data || [])
+  if (mode === 'tableOnly' || mode === 'mirrorTodo') return false
+  return hasSubTaskFormSchema.value && hasTaskStatusData(binding.data || [])
+}
+
+/**
+ * Decide whether to render an inline form below an unplaced sub-table in My Request.
+ * Mirrors the rendering rule used by FormRenderer for placed sub-tables: `formBelowTable`
+ * (either explicitly via initiatorRequest, or via mirrorTodo → assigneeTodo). When the
+ * binding has no portalViews configured, defaults to NO inline form (legacy behavior).
+ */
+function shouldShowBindingFormBelow(binding: { portalViews?: any; formFields?: any[] }): boolean {
+  const pv = binding?.portalViews
+  if (!pv || typeof pv !== 'object') return false
+  const initiator = pv.initiatorRequest
+  if (initiator === 'tableOnly') return false
+  if (initiator === 'summaryWithLinkFormModal') return false
+  // mirrorTodo (default) → follow assigneeTodo
+  return pv.assigneeTodo === 'formBelowTable' && Array.isArray(binding.formFields) && binding.formFields.length > 0
+}
 
 const getMiRows = (): any[] => [
   ...subTableBindings.value.flatMap(binding => binding.data || []),
@@ -790,7 +929,11 @@ const loadFunctionUnitContent = async (processKey: string) => {
     }
     
     let currentFormInfo: { formId: string | null, formName: string | null } = { formId: null, formName: null }
-    /** Initiator viewing their own application (non-task snapshot): only show the first userTask form, avoiding showing approval node forms as the application form */
+    /**
+     * Initiator My Request: still use dedicated BFS for `previousForms` (MI subprocess), but the
+     * **main** form always follows the current BPMN userTask — including MI subtask (`subform_copy`)
+     * and later approval steps — so it matches the designer’s per-node portalViews.
+     */
     let useInitiatorFormOnly = false
 
     if (content.processes?.length > 0) {
@@ -804,12 +947,7 @@ const loadFunctionUnitContent = async (processKey: string) => {
         !snapshotTaskName &&
         !snapshotTime
 
-      if (useInitiatorFormOnly) {
-        currentFormInfo = parseBpmnXmlAndGetFirstUserTaskFormInfo(xml)
-        // When parsing fails, keep empty; fall back to forms[0] below to avoid reverting to current node and selecting the approval form
-      } else {
-        currentFormInfo = parseBpmnXmlAndGetFormId(xml)
-      }
+      currentFormInfo = parseBpmnXmlAndGetFormId(xml)
       bpmnXml.value = xml
       parseBpmnXml(xml)
     }
@@ -874,11 +1012,16 @@ const loadFunctionUnitContent = async (processKey: string) => {
       const bindings: typeof subTableBindings.value = []
       const tableBindings: any[] = selectedForm.tableBindings || []
       const subFormsPayload = selectedFormConfig.subForms || {}
+      const subTablePortalViewsPayload = selectedFormConfig.subTablePortalViews || {}
       for (const b of tableBindings) {
         if (b.bindingType === 'PRIMARY') continue
         const columns = deriveColumnsFromBinding(b, selectedFormConfig)
         if (!Array.isArray(columns) || columns.length === 0) continue
         const subFormDesign = resolveSubFormDesign(b, subFormsPayload)
+        const bindingPortalViews =
+          subTablePortalViewsPayload[b.bindingId]
+          ?? subTablePortalViewsPayload[String(b.bindingId)]
+          ?? null
         bindings.push({
           bindingId: b.bindingId,
           tableId: b.tableId != null ? Number(b.tableId) : null,
@@ -892,7 +1035,8 @@ const loadFunctionUnitContent = async (processKey: string) => {
           data: [],
           subMode: b.subMode,
           formFields: subFormDesign.formFields,
-          formOptions: subFormDesign.formOptions
+          formOptions: subFormDesign.formOptions,
+          portalViews: bindingPortalViews
         })
       }
 
@@ -950,11 +1094,6 @@ const loadFunctionUnitContent = async (processKey: string) => {
           }
         }
       }
-
-      currentFormIsMiSubTask.value = !!(
-        (subTaskFormId.value && String(selectedForm.id) === subTaskFormId.value) ||
-        (subTaskFormSchema.value && subTaskFormSchema.value._formName === selectedForm.name)
-      )
 
       // Collect additional node forms (read-only display).
       // Initiator My Request: preserve global BFS order but only forms before currentNode in BPMN; for
@@ -1171,81 +1310,6 @@ const parseBpmnXmlAndGetFormId = (xml: string): { formId: string | null, formNam
     console.error('Failed to parse BPMN for formId:', error)
   }
   
-  return { formId: null, formName: null }
-}
-
-/** BFS from startEvent to find the first userTask-bound form (initiator application content) */
-const parseBpmnXmlAndGetFirstUserTaskFormInfo = (xml: string): { formId: string | null, formName: string | null } => {
-  if (!xml) return { formId: null, formName: null }
-  try {
-    const parser = new DOMParser()
-    const doc = parser.parseFromString(xml, 'text/xml')
-    const allElements = doc.getElementsByTagName('*')
-    const tasks = new Map<string, { name: string; formId: string | null; formName: string | null }>()
-    const flows: Array<{ source: string; target: string }> = []
-
-    for (let i = 0; i < allElements.length; i++) {
-      const el = allElements[i]
-      const localName = el.localName || el.nodeName.split(':').pop()
-      if (localName === 'userTask') {
-        const id = el.getAttribute('id') || ''
-        const name = el.getAttribute('name') || ''
-        let formId: string | null = null
-        let formName: string | null = null
-        const props = el.getElementsByTagName('*')
-        for (let j = 0; j < props.length; j++) {
-          const p = props[j]
-          const ln = p.localName || p.nodeName.split(':').pop()
-          if (ln === 'property' || ln === 'values') {
-            const n = p.getAttribute('name')
-            const v = p.getAttribute('value')
-            if (n === 'formId' && v) formId = v
-            if (n === 'formName' && v) formName = v
-          }
-        }
-        tasks.set(id, { name, formId, formName })
-      } else if (localName === 'sequenceFlow') {
-        flows.push({ source: el.getAttribute('sourceRef') || '', target: el.getAttribute('targetRef') || '' })
-      }
-    }
-
-    let startId = ''
-    for (let i = 0; i < allElements.length; i++) {
-      const el = allElements[i]
-      if ((el.localName || el.nodeName.split(':').pop()) === 'startEvent') {
-        startId = el.getAttribute('id') || ''
-        break
-      }
-    }
-
-    const forwardAdj = new Map<string, string[]>()
-    for (const f of flows) {
-      if (!forwardAdj.has(f.source)) forwardAdj.set(f.source, [])
-      forwardAdj.get(f.source)!.push(f.target)
-    }
-
-    if (!startId) return { formId: null, formName: null }
-
-    const visited = new Set<string>()
-    const queue: string[] = [startId]
-    visited.add(startId)
-
-    while (queue.length > 0) {
-      const node = queue.shift()!
-      if (tasks.has(node)) {
-        const info = tasks.get(node)!
-        return { formId: info.formId, formName: info.formName }
-      }
-      for (const next of forwardAdj.get(node) || []) {
-        if (!visited.has(next)) {
-          visited.add(next)
-          queue.push(next)
-        }
-      }
-    }
-  } catch (e) {
-    console.error('Failed to parse BPMN for first user task form:', e)
-  }
   return { formId: null, formName: null }
 }
 
@@ -2587,7 +2651,12 @@ function buildPreviousFormEntry(
     const cols = deriveColumnsFromBinding(b, prevFormConfig)
     if (!Array.isArray(cols) || cols.length === 0) continue
     const prevSubForms = prevFormConfig.subForms || {}
+    const prevSubTablePortalViews = prevFormConfig.subTablePortalViews || {}
     const subFormDesign = resolveSubFormDesign(b, prevSubForms)
+    const bindingPortalViews =
+      prevSubTablePortalViews[b.bindingId]
+      ?? prevSubTablePortalViews[String(b.bindingId)]
+      ?? null
     const binding = {
       bindingId: b.bindingId,
       tableId: b.tableId != null ? Number(b.tableId) : null,
@@ -2601,7 +2670,8 @@ function buildPreviousFormEntry(
       data: [] as any[],
       subMode: b.subMode,
       formFields: subFormDesign.formFields,
-      formOptions: subFormDesign.formOptions
+      formOptions: subFormDesign.formOptions,
+      portalViews: bindingPortalViews
     }
     if (savedSubTables) {
       const saved = getSavedSubTableRowsFromVariables(savedSubTables, {

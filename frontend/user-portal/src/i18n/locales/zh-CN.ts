@@ -865,6 +865,8 @@ export default {
     delete: '删除',
     actions: '操作',
     noData: '暂无数据',
+    formBelowTableTitle: '子任务表单',
+    formBelowTableEmpty: '当前子任务未配置表单字段',
     deleteConfirm: '确定要删除此记录吗？',
     summary: '合计',
     minRowsError: '至少需要 {min} 行，当前 {actual} 行',

@@ -870,6 +870,8 @@ export default {
     delete: 'Delete',
     actions: 'Actions',
     noData: 'No Data',
+    formBelowTableTitle: 'Sub-task form',
+    formBelowTableEmpty: 'This sub-task has no form fields configured',
     deleteConfirm: 'Are you sure to delete this record?',
     summary: 'Summary',
     minRowsError: 'Minimum {min} row(s) required, got {actual}',

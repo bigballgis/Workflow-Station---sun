@@ -16,6 +16,7 @@ import i18n from './i18n'
 import './styles/index.scss'
 import SubTablePlaceholderWidget from './components/designer/SubTablePlaceholderWidget.vue'
 import SubTableBindingSelect from './components/designer/SubTableBindingSelect.vue'
+import SubTablePortalViewsEditor from './components/designer/SubTablePortalViewsEditor.vue'
 import LinkFormPlaceholderWidget from './components/designer/LinkFormPlaceholderWidget.vue'
 import LinkFormBindingSelect from './components/designer/LinkFormBindingSelect.vue'
 import { FcEditor, FcTransfer, FcCascader, FcSlider } from './components/designer/fc-custom-fields'
@@ -44,6 +45,8 @@ app.use(FcDesigner.formCreate)
 // Register SubTableBindingSelect into both designerForm (props panel) and formCreate (canvas)
 // FcDesigner.component() calls addComponent() which registers to both instances
 FcDesigner.component('SubTableBindingSelect', SubTableBindingSelect)
+// Register portalViews editor (used in the sub-table component's property panel)
+FcDesigner.component('SubTablePortalViewsEditor', SubTablePortalViewsEditor)
 
 // Register SubTablePlaceholderWidget as the canvas renderer for 'subTable' type
 FcDesigner.component('SubTable', SubTablePlaceholderWidget)
@@ -74,14 +77,25 @@ FcDesigner.addDragRule({
   only: false,
   handleBtn: true,
   languageKey: [],
-  // When loading a saved rule, copy top-level _bindingId into props so the config panel can read it
+  // When loading a saved rule, copy top-level _bindingId into props so the config panel can read it,
+  // and seed default portalViews when missing (legacy rules treated as "tableOnly" so behavior is preserved).
   loadRule(rule: any) {
     rule.props = rule.props || {}
     if (rule._bindingId !== undefined) {
       rule.props._bindingId = rule._bindingId
     }
+    // Backward-compat default: legacy forms without portalViews → tableOnly + mirrorTodo
+    // (matches today's runtime where no nested form-below-table is rendered).
+    if (!rule.props.portalViews || typeof rule.props.portalViews !== 'object') {
+      rule.props.portalViews = {
+        assigneeTodo: 'tableOnly',
+        assigneeTodoFormSource: { type: 'subForm', formId: null, linkFormColumnId: null },
+        initiatorRequest: 'mirrorTodo'
+      }
+    }
   },
-  // When saving/exporting, move props._bindingId back to top-level _bindingId
+  // When saving/exporting, move props._bindingId back to top-level _bindingId.
+  // portalViews stays inside rule.props so the runtime can read it.
   parseRule(rule: any) {
     if (rule.props && rule.props._bindingId !== undefined) {
       rule._bindingId = rule.props._bindingId
@@ -102,7 +116,15 @@ FcDesigner.addDragRule({
       type: 'subTable',
       _bindingId: null,
       title: 'Sub-Table',
-      props: { _bindingId: null }
+      props: {
+        _bindingId: null,
+        // Default = simple sub-table; multi-instance flows switch to form-below / linkForm / summary in the panel.
+        portalViews: {
+          assigneeTodo: 'tableOnly',
+          assigneeTodoFormSource: { type: 'subForm', formId: null, linkFormColumnId: null },
+          initiatorRequest: 'mirrorTodo'
+        }
+      }
     }
   },
   props() {
@@ -112,6 +134,14 @@ FcDesigner.addDragRule({
         field: '_bindingId',
         title: 'Sub Table Binding',
         props: {}
+      },
+      {
+        type: 'SubTablePortalViewsEditor',
+        field: 'portalViews',
+        title: '',
+        props: {
+          showSectionHeading: false
+        }
       }
     ]
   }

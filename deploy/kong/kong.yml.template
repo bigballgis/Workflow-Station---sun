@@ -19,6 +19,9 @@ services:
         preserve_host: false
 
   # --- developer-workstation ---
+  # url host must be the Docker Compose / K8s Service DNS name (not an IP). Kong resolves it to
+  # an A record at runtime; stale IPs after pod/container recreate are mitigated in DEV via
+  # KONG_DNS_VALID_TTL in docker-compose.dev.yml.
   # 同一路径前缀的多条路由：具体路径必须列在 /api/v1 通配之前，保证 /api/v1/auth/* 等到正确上游
   - name: developer-workstation-service
     url: http://developer-workstation:8080

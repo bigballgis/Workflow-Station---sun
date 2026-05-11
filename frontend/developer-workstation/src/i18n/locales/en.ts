@@ -331,6 +331,26 @@ export default {
     subTableSelectEmpty: 'No Sub Tables available',
     subTablePlaceholderUnconfigured: 'No Sub Table selected',
     subTablePlaceholderStale: 'Binding stale',
+    // Sub-Table portal display (user-portal To Do / My Request) — SubTablePortalViewsEditor
+    portalViews: {
+      sectionTitle: 'Portal Views',
+      // Fold header for sub-table prop row (main.ts uses empty title for this field).
+      sidePanelCollapseTitle: 'Portal views — click to expand',
+      toDoDisplay: 'To Do Display',
+      toDoFormSource: 'To Do Form Source',
+      linkFormName: 'Link Form Name',
+      myRequestsDisplay: 'My Requests Display',
+      optTodoFormBelow: 'Form below table',
+      optTodoTableOnly: 'Table only',
+      optSourceSubForm: 'Sub-form (row)',
+      optSourceLinkForm: 'Link Form column',
+      optInitiatorMirrorTodo: 'Same as To Do',
+      optInitiatorSummaryModal: 'Summary list + link/details',
+      optInitiatorTableOnly: 'Table only',
+      linkFormColumnPlaceholder: 'Choose a Link Form column',
+      linkFormColumnEmpty: 'No Link Form column for this form\'s sub-tables',
+      linkFormScopeFallback: 'No Link Form column on this sub-table list — showing columns from other sub-tables.'
+    },
     linkFormSelectPlaceholder: 'Select Link Form',
     linkFormSelectEmpty: 'No Link Form components available',
     linkFormPlaceholderUnconfigured: 'No Link Form selected',

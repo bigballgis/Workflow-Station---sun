@@ -1218,3 +1218,10 @@
   category: quality
   summary: "frontend/admin-center：package.json 的 lint 调用 eslint 但未声明依赖（本地 eslint: command not found）；vue-tsc --noEmit 约 140 条诊断且 vite build 未跑类型检查；若干 composables 在 catch 块引用未绑定标识符（如 useBiDashboard/useBiRbac 的 error、useBusinessUnit/useFunctionUnit 的 e），存在运行时 ReferenceError 风险"
   file: "frontend/admin-center/package.json; frontend/admin-center/src/composables/modules/useBiDashboard.ts; frontend/admin-center/vite.config.ts"
+
+- id: "167"
+  status: open
+  severity: minor
+  category: quality
+  summary: "frontend/developer-workstation 三语 locale 不一致：zh-TW 缺失 form.linkFormPlaceholderStale / form.linkFormPlaceholderUnconfigured / form.linkFormSelectEmpty / form.linkFormSelectPlaceholder / tableBinding.subMode / tableBinding.subModeFormOnly / tableBinding.subModeFull / tableBinding.subModeTip 共 8 个 key，被 i18n-locale-key-consistency 测试持续标红"
+  file: "frontend/developer-workstation/src/i18n/locales/zh-TW.ts"

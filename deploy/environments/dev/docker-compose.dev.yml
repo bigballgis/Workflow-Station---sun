@@ -334,6 +334,12 @@ services:
       KONG_PROXY_LISTEN: "0.0.0.0:8000"
       KONG_ADMIN_LISTEN: "0.0.0.0:8001"
       KONG_NGINX_PROXY_CLIENT_MAX_BODY_SIZE: "100m"
+      # Kong `services[].url` uses Compose service hostnames (not literal IPs). Nginx error logs
+      # still print the resolved A record. Recreated containers get new IPs — cap DNS TTL in DEV
+      # so upstream addresses refresh within a few seconds without restarting Kong.
+      # See: https://docs.konghq.com/gateway/latest/reference/configuration/#dns_valid_ttl
+      KONG_DNS_ORDER: "LAST,A,SRV,CNAME"
+      KONG_DNS_VALID_TTL: "5"
       # Environment variables used by entrypoint script for sed replacement
       JWT_SECRET: ${JWT_SECRET}
       REDIS_HOST: redis

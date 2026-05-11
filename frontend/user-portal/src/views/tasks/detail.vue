@@ -174,6 +174,8 @@
               :allow-sub-table-assign="selectedNodeForm.isCurrentTask ? allowSubTableAssignForCurrentTask : false"
               :suppress-link-form-initial-data="selectedNodeForm.isCurrentTask ? (isMiSubTaskMode && !isCompletedTask) : true"
               :show-link-form-dialog-footer="selectedNodeForm.isCurrentTask ? (!isCompletedTask && !formReadOnly) : false"
+              view-context="assigneeTodo"
+              :current-mi-row-id="currentMiRowId"
               @update:model-value="val => { if (selectedNodeForm.isCurrentTask) formData = { ...formData, ...val } }"
               @update:sub-table-data="(bindingId, rows) => { if (selectedNodeForm.isCurrentTask) syncMainSubTableRows(bindingId, rows) }"
             />
@@ -275,6 +277,8 @@
               :allow-sub-table-assign="allowSubTableAssignForCurrentTask"
               :suppress-link-form-initial-data="isMiSubTaskMode && !isCompletedTask"
               :show-link-form-dialog-footer="!isCompletedTask && !formReadOnly"
+              view-context="assigneeTodo"
+              :current-mi-row-id="currentMiRowId"
               @update:model-value="val => formData = { ...formData, ...val }"
               @update:sub-table-data="syncMainSubTableRows"
             />
@@ -512,6 +516,7 @@ interface PreviousFormEntry {
     columns: Array<{ field: string; label: string; type?: string; props?: Record<string, any> }>
     formFields?: FormField[]
     formOptions?: Record<string, any>
+    portalViews?: Record<string, any> | null
     data: any[]
   }>
 }
@@ -531,6 +536,10 @@ const subTableBindings = ref<Array<{
   columns: Array<{ field: string; label: string; type?: string; props?: Record<string, any> }>
   formFields?: FormField[]
   formOptions?: Record<string, any>
+  // Per-binding portalViews loaded from form configJson.subTablePortalViews[bindingId].
+  // Used as fallback for SubTable rule nodes without portalViews on rule.props, and as the
+  // primary source for unplaced bindings (e.g. accessed only via Link Form).
+  portalViews?: Record<string, any> | null
   data: any[]
 }>>([])
 
@@ -757,6 +766,19 @@ const isMiSubTask = (taskData: any): boolean => {
 }
 
 const isMiSubTaskMode = ref(false)
+
+/**
+ * Row id of the MI participant for the current task. Read from `_currentItem.rowId`
+ * (Flowable injects this when expanding the multi-instance collection). Used by
+ * FormRenderer's "form below table" mode to bind to the participant's row.
+ * `null` when not in MI mode.
+ */
+const currentMiRowId = computed<number | string | null>(() => {
+  const vars = (taskInfo.value as any)?.variables
+  const ci = vars?._currentItem || vars?.currentItem
+  const rowId = ci?.rowId
+  return rowId != null && String(rowId).trim() !== '' ? rowId : null
+})
 
 // MI subtask fill-form dialog state
 const miFillDialogVisible = ref(false)
@@ -1352,10 +1374,13 @@ const loadFunctionUnitContent = async (processKey: string) => {
       // Parse subForms from configJson
       let subForms: Record<string, any> = {}
       let formConfigForSubTables: Record<string, any> = {}
+      let subTablePortalViews: Record<string, any> = {}
       try {
         const cfg = typeof selectedForm.data === 'string' ? JSON.parse(selectedForm.data) : (selectedForm.data || {})
         formConfigForSubTables = cfg
         subForms = cfg.subForms || {}
+        // Per-binding portal display config (configured in FormDesigner's sub-table tab).
+        subTablePortalViews = cfg.subTablePortalViews || {}
       } catch {}
 
       // Load sub-table bindings for this form (SUB and RELATED, not PRIMARY)
@@ -1366,6 +1391,10 @@ const loadFunctionUnitContent = async (processKey: string) => {
         if (b.bindingType === 'PRIMARY') continue
         const columns = deriveColumnsFromBinding(b, subForms, formConfigForSubTables)
         const subFormDesign = resolveSubFormDesign(b, subForms)
+        // Per-binding portalViews lookup tolerates both numeric and string keys
+        // (JSON.parse always yields strings, but designer code may have stored numeric keys).
+        const bindingPortalViews =
+          subTablePortalViews[b.bindingId] ?? subTablePortalViews[String(b.bindingId)] ?? null
         bindings.push({
           bindingId: b.bindingId,
           tableId: b.tableId ?? null,
@@ -1379,6 +1408,7 @@ const loadFunctionUnitContent = async (processKey: string) => {
           columns,
           formFields: subFormDesign.formFields,
           formOptions: subFormDesign.formOptions,
+          portalViews: bindingPortalViews,
           data: []
         })
       }
@@ -1464,22 +1494,27 @@ const loadFunctionUnitContent = async (processKey: string) => {
           // Parse sub-table bindings
           let prevSubForms: Record<string, any> = {}
           let prevConfigForSubTables: Record<string, any> = {}
+          let prevSubTablePortalViews: Record<string, any> = {}
           try {
             const cfg = typeof prevForm.data === 'string' ? JSON.parse(prevForm.data) : (prevForm.data || {})
             prevConfigForSubTables = cfg
             prevSubForms = cfg.subForms || {}
+            prevSubTablePortalViews = cfg.subTablePortalViews || {}
           } catch {}
           const prevBindings: PreviousFormEntry['subTableBindings'] = []
           for (const b of (prevForm.tableBindings || [])) {
             if (b.bindingType === 'PRIMARY') continue
             const cols = deriveColumnsFromBinding(b, prevSubForms, prevConfigForSubTables)
             const subFormDesign = resolveSubFormDesign(b, prevSubForms)
+            const bindingPortalViews =
+              prevSubTablePortalViews[b.bindingId] ?? prevSubTablePortalViews[String(b.bindingId)] ?? null
             const binding = {
               bindingId: b.bindingId, tableId: b.tableId ?? null, bindingType: b.bindingType, bindingMode: b.bindingMode,
               foreignKeyField: b.foreignKeyField, tableName: b.tableDisplayName || b.tableName, physicalTableName: b.tableName,
               tableType: b.tableType, tableDescription: b.tableDescription, columns: cols,
               formFields: subFormDesign.formFields,
               formOptions: subFormDesign.formOptions,
+              portalViews: bindingPortalViews,
               data: [] as any[]
             }
             if (savedSubTables) {

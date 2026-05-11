@@ -153,6 +153,21 @@
             v-else-if="binding.bindingType === 'SUB'"
             class="sub-table-design-wrapper"
           >
+            <!--
+              Per-binding portalViews. Lets designers configure user-portal display for
+              sub-tables that are *not* placed on the main form canvas (e.g. accessed only
+              via a Link Form column on another sub-table's list view).
+              Persists into selectedForm.configJson.subTablePortalViews[binding.bindingId].
+            -->
+            <div class="sub-table-portal-views-bar">
+              <SubTablePortalViewsEditor
+                :model-value="getBindingPortalViews(binding.bindingId)"
+                :binding-id="binding.bindingId"
+                :link-form-columns-by-binding="designerLinkFormColumnsMap"
+                show-section-heading
+                @update:model-value="(val: any) => updateBindingPortalViews(binding.bindingId, val)"
+              />
+            </div>
             <el-tabs
               v-model="subTableActiveTab"
               @tab-change="(tabName: any) => handleSubTableInnerTabChange(tabName, binding)"
@@ -538,6 +553,7 @@ import FormNodeBindDialog from './form-designer/FormNodeBindDialog.vue'
 import FormListSidebar from './form-designer/FormListSidebar.vue'
 import RelationTableView from './RelationTableView.vue'
 import SubTableListView from './SubTableListView.vue'
+import SubTablePortalViewsEditor from './SubTablePortalViewsEditor.vue'
 import FormPreviewItems from './FormPreviewItems.vue'
 import type { FormPreviewItem } from './formPreviewTypes'
 import { lookupStore } from './lookupStore'
@@ -649,6 +665,41 @@ const subTableListViewRefs = ref<Record<number, any>>({})
 const subTableViewState = ref<Record<number, { allFields: SubTableFieldDTO[]; viewFields: SubTableListColumnDTO[] }>>({})
 // In-memory cache: persists sub form rules across tab switches (tabs unmount when not active)
 const subFormCache = ref<Record<number, { rule: any[]; options: any }>>({})
+
+/**
+ * Per-binding portalViews configuration. Stored in selectedForm.configJson.subTablePortalViews
+ * and surfaced as the small editor above each sub-table tab's inner tabs. Lets designers
+ * configure user-portal display for sub-tables that have no widget on the main canvas
+ * (e.g. a sub-table accessed only via Link Form from another sub-table's list view).
+ */
+type PortalViewsValue = {
+  assigneeTodo: 'formBelowTable' | 'tableOnly'
+  assigneeTodoFormSource?: { type: 'subForm' | 'linkForm' | 'formId'; formId?: number | string | null; linkFormColumnId?: number | string | null }
+  initiatorRequest: 'mirrorTodo' | 'summaryWithLinkFormModal' | 'tableOnly'
+}
+const subTablePortalViewsState = ref<Record<number, PortalViewsValue>>({})
+
+const DEFAULT_BINDING_PORTAL_VIEWS: PortalViewsValue = {
+  assigneeTodo: 'tableOnly',
+  assigneeTodoFormSource: { type: 'subForm', formId: null, linkFormColumnId: null },
+  initiatorRequest: 'mirrorTodo'
+}
+
+function getBindingPortalViews(bindingId: number): PortalViewsValue {
+  return (
+    subTablePortalViewsState.value[bindingId]
+    || (selectedForm.value?.configJson?.subTablePortalViews?.[bindingId] as PortalViewsValue | undefined)
+    || { ...DEFAULT_BINDING_PORTAL_VIEWS, assigneeTodoFormSource: { ...DEFAULT_BINDING_PORTAL_VIEWS.assigneeTodoFormSource! } }
+  )
+}
+
+function updateBindingPortalViews(bindingId: number, val: PortalViewsValue) {
+  subTablePortalViewsState.value = {
+    ...subTablePortalViewsState.value,
+    [bindingId]: val
+  }
+  scheduleAutoSave()
+}
 
 function setSubTableListViewRef(el: any, bindingId: number) {
   if (el) {
@@ -945,6 +996,89 @@ provide('linkFormComponents', () => linkFormComponents.value.map(c => ({
   componentName: c.componentName,
   linkedFormName: c.linkedFormName,
 })))
+
+/**
+ * Expose every Link Form column on every SUB binding's list view so that
+ * SubTablePortalViewsEditor can let designers PICK which Link Form column drives
+ * `assigneeTodoFormSource.type='linkForm'` (rather than silently picking the first).
+ *
+ * Source precedence per binding:
+ *   1. `subTableViewState[bindingId].viewFields` — live, reflects unsaved edits in the list-view tab
+ *   2. `selectedForm.configJson.subListViews[bindingId].columns` — last persisted snapshot
+ *
+ * Output shape is grouped by source binding id so the editor can scope the picker
+ * to a specific binding when invoked from the binding-level bar.
+ */
+type DesignerLinkFormColumnInfo = {
+  /**
+   * Stable per-column identifier persisted in portalViews.
+   * - Negative number: a "generic" Link Form column auto-keyed to a binding
+   *   (`-bindingId`, see SubTableListView.vue#genericLinkFormComponentId).
+   * - Positive number: an id from `dw_link_form_components` (curated link form widget).
+   * - String: fieldName fallback when no componentId is available
+   *   (e.g. `linkForm:-5`).
+   */
+  componentId: number | string
+  /** SUB binding that OWNS this list view column. */
+  sourceBindingId: number
+  sourceBindingName: string
+  /** SUB binding the Link Form column targets — its form schema is what would render below. */
+  boundSubTableBindingId: number | null
+  boundSubTableName: string | null
+  columnLabel: string
+  linkText: string
+}
+
+/** Return true if a column "looks like" a Link Form column across the various shapes we've
+ *  seen in saved forms — direct designer output uses `columnType:'linkForm'`, older forms
+ *  may carry `dataType:'LINK_FORM'`, and some persisted shapes only have `fieldName` like
+ *  `linkForm:-5`. Accept any of these so the picker doesn't miss real columns. */
+function isLinkFormListColumn(c: any): boolean {
+  if (!c || typeof c !== 'object') return false
+  if (c.columnType === 'linkForm') return true
+  if (typeof c.dataType === 'string' && c.dataType.toUpperCase() === 'LINK_FORM') return true
+  if (typeof c.fieldName === 'string' && c.fieldName.startsWith('linkForm:')) return true
+  if (c.componentId != null && (c.boundSubTableBindingId != null || c.linkedFormId != null)) return true
+  return false
+}
+
+function computeDesignerLinkFormColumns(): Record<number, DesignerLinkFormColumnInfo[]> {
+  const result: Record<number, DesignerLinkFormColumnInfo[]> = {}
+  const subs = designerSubBindings.value.filter(b => b.bindingType === 'SUB')
+  const configListViews = selectedForm.value?.configJson?.subListViews || {}
+  for (const b of subs) {
+    const liveCols = subTableViewState.value[b.bindingId]?.viewFields
+    const savedEntry = configListViews[b.bindingId] ?? configListViews[String(b.bindingId)]
+    const savedCols = (savedEntry as any)?.columns
+    const cols = Array.isArray(liveCols) && liveCols.length > 0 ? liveCols : (savedCols || [])
+    const linkCols: DesignerLinkFormColumnInfo[] = []
+    for (const c of cols) {
+      if (!isLinkFormListColumn(c)) continue
+      const rawCid = (c as any).componentId
+      const componentId = rawCid != null ? Number(rawCid) : NaN
+      const stableId: number | string | null = Number.isFinite(componentId) && componentId !== 0
+        ? componentId
+        : ((c as any).fieldName ? String((c as any).fieldName) : null)
+      if (stableId == null) continue
+      linkCols.push({
+        componentId: stableId,
+        sourceBindingId: b.bindingId,
+        sourceBindingName: b.tableDisplayName || b.tableName,
+        boundSubTableBindingId: (c as any).boundSubTableBindingId ?? null,
+        boundSubTableName: (c as any).boundSubTableName ?? null,
+        columnLabel: (c as any).columnLabel || (c as any).comment || (c as any).linkText || `linkForm:${stableId}`,
+        linkText: (c as any).linkText || ''
+      })
+    }
+    if (linkCols.length > 0) result[b.bindingId] = linkCols
+  }
+  return result
+}
+
+/** Reactive map used by the binding-level portalViews bar (prop) and inject for fc-designer panels. */
+const designerLinkFormColumnsMap = computed(computeDesignerLinkFormColumns)
+
+provide('designerLinkFormColumns', () => designerLinkFormColumnsMap.value)
 
 // Sync relation bindings and formId to lookupStore for fc-designer property panel components
 watch([() => selectedForm.value?.id, designerSubBindings, () => store.tables], () => {
@@ -2006,6 +2140,9 @@ function handleSelectForm(row: FormDefinition) {
   subFormCache.value = {}
   subTableListViewRefs.value = {}
   subTableViewState.value = {}
+  // Seed per-binding portalViews from previously saved configJson so the editor reflects
+  // persisted values immediately when the user opens any sub-table tab.
+  subTablePortalViewsState.value = { ...((row.configJson?.subTablePortalViews as Record<number, PortalViewsValue> | undefined) || {}) }
   activeDesignerTab.value = 'main'
   subTableActiveTab.value = 'form'
 
@@ -2495,7 +2632,14 @@ async function handleSaveForm(isManual = false) {
       }
     })
 
-    const nextConfig = { rule, options, subForms, relationViews, subListViews }
+    // Collect per-binding portalViews — start from previously saved config so untouched
+    // bindings keep their settings, then overlay anything the designer edited in this session.
+    const subTablePortalViews: Record<number, PortalViewsValue> = {
+      ...(selectedForm.value.configJson?.subTablePortalViews || {}),
+      ...subTablePortalViewsState.value
+    }
+
+    const nextConfig = { rule, options, subForms, relationViews, subListViews, subTablePortalViews }
     const updated = await store.updateForm(props.functionUnitId, selectedForm.value.id, {
       formName: selectedForm.value.formName,
       formType: selectedForm.value.formType,
@@ -3100,6 +3244,18 @@ onMounted(() => {
 <style lang="scss" scoped>
 .form-designer {
   height: 100%;
+}
+
+.sub-table-portal-views-bar {
+  padding: 8px 12px;
+  margin: 0 0 8px 0;
+  background: var(--el-fill-color-light);
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 4px;
+
+  :deep(.portal-views-editor) {
+    width: 100%;
+  }
 }
 
 .form-editor-view {

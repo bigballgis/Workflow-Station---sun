@@ -865,6 +865,8 @@ export default {
     delete: '刪除',
     actions: '操作',
     noData: '暫無資料',
+    formBelowTableTitle: '子任務表單',
+    formBelowTableEmpty: '當前子任務未設定表單欄位',
     deleteConfirm: '確定要刪除此記錄嗎？',
     summary: '合計',
     minRowsError: '至少需要 {min} 列，目前 {actual} 列',

@@ -3,6 +3,38 @@
  * the Vue component (which uses <script setup>) and unit/property tests.
  */
 
+/**
+ * Sub-table portal display strategy. Designed in developer-workstation's
+ * FormDesigner (Sub-Table property panel → "Portal Display") and consumed
+ * by user-portal's FormRenderer to decide rendering per page (To Do vs My Request).
+ */
+export type SubTableAssigneeTodoMode = 'formBelowTable' | 'tableOnly'
+export type SubTableInitiatorRequestMode = 'mirrorTodo' | 'summaryWithLinkFormModal' | 'tableOnly'
+export type SubTableFormSourceType = 'subForm' | 'linkForm' | 'formId'
+
+export interface SubTablePortalViews {
+  assigneeTodo: SubTableAssigneeTodoMode
+  assigneeTodoFormSource?: {
+    type: SubTableFormSourceType
+    formId?: number | string | null
+    /**
+     * When `type='linkForm'`, identifies WHICH Link Form column on the sub-table's
+     * list view should drive the inline form-below-table. Matched against the
+     * `componentId` of `dw_link_form_components`. Unset → runtime falls back to the
+     * first Link Form column it finds on the binding (legacy behavior).
+     */
+    linkFormColumnId?: number | string | null
+  }
+  initiatorRequest: SubTableInitiatorRequestMode
+}
+
+/**
+ * View context driving how FormRenderer resolves portalViews on subTable nodes.
+ * - `assigneeTodo`: To Do detail page (办理人待办)
+ * - `initiatorRequest`: My Request / process instance detail (发起人我的申请)
+ */
+export type PortalViewContext = 'assigneeTodo' | 'initiatorRequest'
+
 export interface FormField {
   key: string
   label: string
@@ -34,7 +66,44 @@ export interface FormField {
   uploadAccept?: string
   uploadLimit?: number
   _bindingId?: number  // set when type === 'subTable'
+  /** Designer-driven portal display strategy; only present when type === 'subTable'. */
+  portalViews?: SubTablePortalViews
   children?: FormField[] // set for layout containers such as card
+}
+
+/**
+ * Default portalViews applied when a subTable rule node carries no `props.portalViews`
+ * (i.e. legacy forms designed before this feature). Keeps current runtime behavior:
+ * just render the sub-table, no nested form-below, no Details modal forced.
+ */
+export const DEFAULT_PORTAL_VIEWS: SubTablePortalViews = Object.freeze({
+  assigneeTodo: 'tableOnly',
+  assigneeTodoFormSource: { type: 'subForm', formId: null },
+  initiatorRequest: 'mirrorTodo'
+})
+
+/**
+ * Resolve the effective display mode at a given view context.
+ * - In My Request, `mirrorTodo` falls through to the assigneeTodo mode.
+ * - Missing portalViews falls back to DEFAULT_PORTAL_VIEWS ("tableOnly" everywhere).
+ *
+ * Accepts `Partial<SubTablePortalViews>` so callers can pass binding-level fragments
+ * (loaded from form configJson) without normalizing first; missing properties fall
+ * through to DEFAULT_PORTAL_VIEWS values.
+ */
+export function resolveSubTableDisplayMode(
+  portalViews: Partial<SubTablePortalViews> | undefined | null,
+  context: PortalViewContext
+): SubTableAssigneeTodoMode | 'summaryWithLinkFormModal' {
+  const pv = portalViews && typeof portalViews === 'object' ? portalViews : DEFAULT_PORTAL_VIEWS
+  if (context === 'assigneeTodo') {
+    return pv.assigneeTodo === 'tableOnly' ? 'tableOnly' : 'formBelowTable'
+  }
+  // initiatorRequest
+  if (pv.initiatorRequest === 'summaryWithLinkFormModal') return 'summaryWithLinkFormModal'
+  if (pv.initiatorRequest === 'tableOnly') return 'tableOnly'
+  // mirrorTodo (default) → fall through to assigneeTodo
+  return pv.assigneeTodo === 'tableOnly' ? 'tableOnly' : 'formBelowTable'
 }
 
 export interface FormTab {
@@ -60,11 +129,13 @@ export function extractFieldsRecursive(
     const props = item.props as Record<string, unknown> | undefined
     const bindingId = item._bindingId ?? props?._bindingId
     if (item.type === 'subTable' && bindingId != null) {
+      const rawPv = props?.portalViews as Partial<SubTablePortalViews> | undefined
       fields.push({
         key: `__subTable_${bindingId}`,
         label: '',
         type: 'subTable',
         _bindingId: Number(bindingId),
+        portalViews: normalizePortalViews(rawPv),
         span: 24
       })
     } else if (isCardRule(item)) {
@@ -90,6 +161,42 @@ export function extractFieldsRecursive(
 
 function isCardRule(item: Record<string, unknown>): boolean {
   return item.type === 'el-card' || item.type === 'elCard' || item.type === 'card'
+}
+
+/**
+ * Coerce arbitrary `props.portalViews` into a typed object with safe defaults.
+ * Missing or malformed input falls back to DEFAULT_PORTAL_VIEWS (tableOnly + mirrorTodo)
+ * so legacy forms preserve current behavior.
+ */
+function normalizePortalViews(input: Partial<SubTablePortalViews> | undefined | null): SubTablePortalViews {
+  if (!input || typeof input !== 'object') {
+    return { ...DEFAULT_PORTAL_VIEWS, assigneeTodoFormSource: { ...DEFAULT_PORTAL_VIEWS.assigneeTodoFormSource! } }
+  }
+  const assigneeTodo: SubTableAssigneeTodoMode =
+    input.assigneeTodo === 'formBelowTable' ? 'formBelowTable' : 'tableOnly'
+  let initiatorRequest: SubTableInitiatorRequestMode
+  if (input.initiatorRequest === 'summaryWithLinkFormModal') {
+    initiatorRequest = 'summaryWithLinkFormModal'
+  } else if (input.initiatorRequest === 'tableOnly') {
+    initiatorRequest = 'tableOnly'
+  } else {
+    initiatorRequest = 'mirrorTodo'
+  }
+  const srcType: SubTableFormSourceType =
+    input.assigneeTodoFormSource?.type === 'linkForm'
+      ? 'linkForm'
+      : input.assigneeTodoFormSource?.type === 'formId'
+        ? 'formId'
+        : 'subForm'
+  const formId = input.assigneeTodoFormSource?.formId ?? null
+  // Preserve the designer's Link Form column pick so runtime resolution can target
+  // a specific column instead of falling back to the first match.
+  const linkFormColumnId = input.assigneeTodoFormSource?.linkFormColumnId ?? null
+  return {
+    assigneeTodo,
+    assigneeTodoFormSource: { type: srcType, formId, linkFormColumnId },
+    initiatorRequest
+  }
 }
 
 function getLayoutKey(item: Record<string, unknown>, index: number, fallback: string): string {
