@@ -44,6 +44,7 @@ COMMIT;
 \i /docker-entrypoint-initdb.d/00-schema/16-add-decision-and-relations-tables.sql
 \i /docker-entrypoint-initdb.d/00-schema/17-add-lock-version-to-user-portal-tables.sql
 \i /docker-entrypoint-initdb.d/00-schema/18-add-lock-version-to-form-definitions.sql
+\i /docker-entrypoint-initdb.d/00-schema/18-add-read-only-to-form-stage-bindings.sql
 \i /docker-entrypoint-initdb.d/00-schema/19-add-up-change-history.sql
 \i /docker-entrypoint-initdb.d/00-schema/20-add-members-table.sql
 \i /docker-entrypoint-initdb.d/00-schema/21-add-rt-relation-tables.sql
@@ -54,9 +55,11 @@ COMMIT;
 \i /docker-entrypoint-initdb.d/00-schema/26-add-dw-deployment-jobs.sql
 \i /docker-entrypoint-initdb.d/00-schema/27-add-up-process-instance-catalog-pin.sql
 \i /docker-entrypoint-initdb.d/00-schema/28-dw-function-unit-dev-groups.sql
+\i /docker-entrypoint-initdb.d/00-schema/29-up-permission-request-submitted-by.sql
 \i /docker-entrypoint-initdb.d/00-schema/30-widen-flowable-identitylink-columns.sql
 \i /docker-entrypoint-initdb.d/00-schema/31-widen-flowable-act-hi-comment-columns.sql
 \i /docker-entrypoint-initdb.d/00-schema/32-add-dw-form-table-binding-subview-columns.sql
 \i /docker-entrypoint-initdb.d/00-schema/33-dw-sub-table-view-tables.sql
+\i /docker-entrypoint-initdb.d/00-schema/34-dw-link-form-components.sql
 
 \echo 'All schemas created successfully.'

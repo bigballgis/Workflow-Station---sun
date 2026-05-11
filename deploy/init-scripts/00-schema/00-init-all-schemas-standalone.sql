@@ -40,6 +40,7 @@ COMMIT;
 \i 00-schema/16-add-decision-and-relations-tables.sql
 \i 00-schema/17-add-lock-version-to-user-portal-tables.sql
 \i 00-schema/18-add-lock-version-to-form-definitions.sql
+\i 00-schema/18-add-read-only-to-form-stage-bindings.sql
 \i 00-schema/19-add-up-change-history.sql
 \i 00-schema/20-add-members-table.sql
 \i 00-schema/21-add-rt-relation-tables.sql
@@ -53,5 +54,8 @@ COMMIT;
 \i 00-schema/29-up-permission-request-submitted-by.sql
 \i 00-schema/30-widen-flowable-identitylink-columns.sql
 \i 00-schema/31-widen-flowable-act-hi-comment-columns.sql
+\i 00-schema/32-add-dw-form-table-binding-subview-columns.sql
+\i 00-schema/33-dw-sub-table-view-tables.sql
+\i 00-schema/34-dw-link-form-components.sql
 
 \echo '=== All schemas created successfully ==='

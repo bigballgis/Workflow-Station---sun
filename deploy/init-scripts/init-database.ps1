@@ -77,6 +77,7 @@ $migrations = @(
     "00-schema/16-add-decision-and-relations-tables.sql",
     "00-schema/17-add-lock-version-to-user-portal-tables.sql",
     "00-schema/18-add-lock-version-to-form-definitions.sql",
+    "00-schema/18-add-read-only-to-form-stage-bindings.sql",
     "00-schema/19-add-up-change-history.sql",
     "00-schema/20-add-members-table.sql",
     "00-schema/21-add-rt-relation-tables.sql",
@@ -91,7 +92,8 @@ $migrations = @(
     "00-schema/30-widen-flowable-identitylink-columns.sql",
     "00-schema/31-widen-flowable-act-hi-comment-columns.sql",
     "00-schema/32-add-dw-form-table-binding-subview-columns.sql",
-    "00-schema/33-dw-sub-table-view-tables.sql"
+    "00-schema/33-dw-sub-table-view-tables.sql",
+    "00-schema/34-dw-link-form-components.sql"
 )
 foreach ($m in $migrations) {
     $path = Join-Path $ScriptDir $m
