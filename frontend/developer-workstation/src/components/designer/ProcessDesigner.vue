@@ -141,6 +141,11 @@ import { findLastTaskAssigneeTopologyViolations } from '@/utils/bpmnAssigneeTopo
 // @ts-ignore - bpmn-js types
 import BpmnModeler from 'bpmn-js/lib/Modeler'
 
+// bpmn-js CSS must be imported in JS for Vite bundling compatibility
+import 'bpmn-js/dist/assets/diagram-js.css'
+import 'bpmn-js/dist/assets/bpmn-js.css'
+import 'bpmn-js/dist/assets/bpmn-font/css/bpmn-embedded.css'
+
 const { t } = useI18n()
 const props = defineProps<{ functionUnitId: number }>()
 
@@ -550,9 +555,6 @@ onUnmounted(() => {
 
 <style>
 /* Global styles for bpmn-js */
-@import 'bpmn-js/dist/assets/diagram-js.css';
-@import 'bpmn-js/dist/assets/bpmn-js.css';
-@import 'bpmn-js/dist/assets/bpmn-font/css/bpmn-embedded.css';
 
 /* Palette styles */
 .djs-palette {

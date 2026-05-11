@@ -71,6 +71,11 @@ import { ZoomIn, ZoomOut, RefreshRight, FullScreen } from '@element-plus/icons-v
 // @ts-ignore
 import NavigatedViewer from 'bpmn-js/lib/NavigatedViewer'
 
+// bpmn-js CSS must be imported in JS for Vite bundling compatibility
+import 'bpmn-js/dist/assets/diagram-js.css'
+import 'bpmn-js/dist/assets/bpmn-js.css'
+import 'bpmn-js/dist/assets/bpmn-font/css/bpmn-embedded.css'
+
 const { t } = useI18n()
 
 export interface ProcessNode {
@@ -421,10 +426,6 @@ defineExpose({ zoomIn, zoomOut, resetZoom, fitViewport })
 
 <!-- bpmn-js requires global (non-scoped) CSS -->
 <style>
-@import 'bpmn-js/dist/assets/diagram-js.css';
-@import 'bpmn-js/dist/assets/bpmn-js.css';
-@import 'bpmn-js/dist/assets/bpmn-font/css/bpmn-embedded.css';
-
 /* Hide the bpmn-js logo/watermark */
 .bjs-powered-by { display: none !important; }
 
