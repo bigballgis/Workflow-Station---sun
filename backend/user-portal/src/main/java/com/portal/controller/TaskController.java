@@ -205,7 +205,8 @@ public class TaskController {
             @PathVariable Long rowId,
             @RequestBody @Valid SubTableRowAssignRequest request,
             @CurrentUserId String userId) {
-        Map<String, Object> data = taskProcessComponent.assignSubTableRow(taskId, rowId, request.getAssigneeId(), userId,
+        Map<String, Object> data = taskProcessComponent.assignSubTableRow(taskId, rowId, request.getRowKey(),
+                request.getAssigneeId(), userId,
                 SecurityContextUtils.getCurrentUsername().orElse(null));
         return ApiResponse.success(data);
     }

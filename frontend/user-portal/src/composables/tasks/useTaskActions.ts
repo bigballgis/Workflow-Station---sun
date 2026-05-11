@@ -32,8 +32,6 @@ export function useTaskActions(options: {
   const router = useRouter()
 
   function validateSubTableAssigneesForComplete(): boolean {
-    const tdk = (options.taskInfo.value as { taskDefinitionKey?: string }).taskDefinitionKey || ''
-    if (tdk !== 'Task_AssignParticipants') return true
     for (const b of options.subTableBindings.value) {
       const af = resolveAssigneeFieldForBinding(b.columns, b.tableName)
       if (!af) continue

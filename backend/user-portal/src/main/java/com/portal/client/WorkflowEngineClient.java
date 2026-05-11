@@ -623,6 +623,14 @@ public class WorkflowEngineClient {
      * 分配子表行处理人（多实例子流程前置任务）
      */
     public Optional<Map<String, Object>> assignSubTableRow(String taskId, long rowId, String assigneeId) {
+        return assignSubTableRow(taskId, rowId, assigneeId, null);
+    }
+
+    /**
+     * @param rowKey 联合主键时必填（路径 rowId 可为占位，引擎以 body 为准）
+     */
+    public Optional<Map<String, Object>> assignSubTableRow(String taskId, long rowId, String assigneeId,
+                                                           Map<String, Object> rowKey) {
         if (!isAvailable()) {
             return Optional.empty();
         }
@@ -631,6 +639,9 @@ public class WorkflowEngineClient {
 
             Map<String, Object> request = new HashMap<>();
             request.put("assigneeId", assigneeId);
+            if (rowKey != null && !rowKey.isEmpty()) {
+                request.put("rowKey", rowKey);
+            }
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);

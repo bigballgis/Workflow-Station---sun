@@ -1115,6 +1115,30 @@ watch(
   { deep: true, immediate: true }
 )
 
+const ROW_KEY_MERGE_SEP = '\u001f'
+
+/**
+ * Stable key matching {@link com.platform.common.jdbc.SubTableRowKeySupport#canonicalRowKeyString}
+ * for server-provided {@code rowKey} on sub-table sync payloads.
+ */
+function canonicalRowKeyFromPayload(r: Record<string, unknown>): string | null {
+  const rk = r.rowKey
+  if (rk && typeof rk === 'object' && !Array.isArray(rk)) {
+    const o = rk as Record<string, unknown>
+    return Object.keys(o)
+      .sort()
+      .map(k => `${k}=${o[k]}`)
+      .join(ROW_KEY_MERGE_SEP)
+  }
+  return null
+}
+
+function resolveSubTableRowMergeKey(row: Record<string, unknown> | null | undefined): string | number | null {
+  const c = canonicalRowKeyFromPayload(row || {})
+  if (c != null && c !== '') return c
+  return resolveSubTableRowPk(row)
+}
+
 /**
  * Sub-table row primary key: the engine assignment API requires the relation table's
  * numeric PK (e.g. participants.id). Also handles participant_id / case variants /
@@ -1226,6 +1250,13 @@ async function confirmAssignment() {
 
   const row = currentAssignRow.value as Record<string, unknown> | null | undefined
   const rowPk = resolveSubTableRowPk(row)
+  const rowKeyRaw =
+    row && typeof row === 'object' ? (row as Record<string, unknown>).rowKey : undefined
+  const rowKeyForAssign =
+    rowKeyRaw && typeof rowKeyRaw === 'object' && !Array.isArray(rowKeyRaw)
+      ? (rowKeyRaw as Record<string, unknown>)
+      : undefined
+
   let effectiveTaskId = props.taskId
   let meetingHints: { topic?: string; location?: string; organizerName?: string } | undefined
   let rowIdNum = rowPk != null ? Number(rowPk) : NaN
@@ -1251,7 +1282,22 @@ async function confirmAssignment() {
   assigning.value = true
   try {
     let response: unknown
-    if (!Number.isNaN(rowIdNum)) {
+    if (rowKeyForAssign != null && Object.keys(rowKeyForAssign).length > 0) {
+      response = await assignSubTableRow(
+        props.taskId,
+        0,
+        selectedAssigneeId.value,
+        rowKeyForAssign
+      )
+      if (effectiveTaskId !== props.taskId) {
+        response = await assignSubTableRow(
+          effectiveTaskId,
+          0,
+          selectedAssigneeId.value,
+          rowKeyForAssign
+        )
+      }
+    } else if (!Number.isNaN(rowIdNum)) {
       response = await assignSubTableRow(
         props.taskId,
         rowIdNum,
@@ -1373,12 +1419,12 @@ async function refreshSubTableData() {
       const refreshedRows = result.rows as Array<Record<string, any>>
       const refreshedByPk = new Map<string | number, Record<string, any>>()
       for (const r of refreshedRows) {
-        const pk = resolveSubTableRowPk(r)
+        const pk = resolveSubTableRowMergeKey(r)
         if (pk != null && pk !== '') refreshedByPk.set(pk, r)
       }
 
       const updatedRows = rows.value.map((existingRow, idx) => {
-        const pk = resolveSubTableRowPk(existingRow)
+        const pk = resolveSubTableRowMergeKey(existingRow as Record<string, unknown>)
         const refreshedRow =
           (pk != null && refreshedByPk.get(pk)) ||
           null
@@ -1388,7 +1434,7 @@ async function refreshSubTableData() {
         // Fallback: if no PKs are available, only merge by index when both sides exist.
         // This is safer than "undefined id" matching.
         const byIndex = refreshedRows[idx]
-        if (pk == null && byIndex && resolveSubTableRowPk(byIndex) == null) {
+        if (pk == null && byIndex && resolveSubTableRowMergeKey(byIndex) == null) {
           return { ...existingRow, ...byIndex }
         }
         return existingRow

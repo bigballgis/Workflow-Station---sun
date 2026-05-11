@@ -807,8 +807,8 @@ public class TaskController {
             taskId, rowId, request.getAssigneeId());
         
         try {
-            SubTableAssignmentHandler.AssignmentResponse handlerResponse = 
-                subTableAssignmentHandler.assign(taskId, rowId, request.getAssigneeId());
+            SubTableAssignmentHandler.AssignmentResponse handlerResponse =
+                subTableAssignmentHandler.assign(taskId, rowId, request.getRowKey(), request.getAssigneeId());
             
             AssignSubTableRowResponse response = AssignSubTableRowResponse.builder()
                 .success(handlerResponse.isSuccess())

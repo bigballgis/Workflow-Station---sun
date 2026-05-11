@@ -7,6 +7,7 @@ import com.workflow.dto.response.SubTableDataResponse;
 import com.workflow.entity.ExtendedTaskInfo;
 import com.workflow.enums.AssignmentType;
 import com.workflow.repository.ExtendedTaskInfoRepository;
+import com.workflow.component.BpmnActionParser;
 import org.flowable.engine.RuntimeService;
 import org.flowable.engine.TaskService;
 import org.flowable.engine.runtime.Execution;
@@ -23,6 +24,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -30,6 +32,7 @@ import java.util.*;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;
 import static org.mockito.Mockito.lenient;
 
@@ -57,6 +60,9 @@ class MultiInstanceStatusControllerTest {
     @Mock
     private JdbcTemplate jdbcTemplate;
 
+    @Mock
+    private BpmnActionParser bpmnActionParser;
+
     @InjectMocks
     private MultiInstanceStatusController controller;
 
@@ -79,6 +85,20 @@ class MultiInstanceStatusControllerTest {
     void setUp() {
         processInstanceId = "process-instance-001";
         multiInstanceTasks = new ArrayList<>();
+        lenient().when(bpmnActionParser.getMultiInstanceSubProcessSubTableName(anyString(), anyString()))
+                .thenReturn("fu_participants");
+        lenient().when(bpmnActionParser.getUserTaskExtensionPropertyValue(anyString(), anyString(), anyString()))
+                .thenReturn(null);
+        lenient().when(bpmnActionParser.getMultiInstanceSubProcessExtensionPropertyValue(anyString(), anyString(), anyString()))
+                .thenReturn(null);
+        lenient().when(jdbcTemplate.query(
+                argThat((String sql) -> sql != null && sql.contains("PRIMARY KEY")),
+                any(RowMapper.class),
+                anyString()))
+                .thenReturn(Collections.singletonList("id"));
+        lenient().when(taskService.createTaskQuery()).thenReturn(taskQuery);
+        lenient().when(taskQuery.processInstanceId(anyString())).thenReturn(taskQuery);
+        lenient().when(taskQuery.list()).thenReturn(Collections.emptyList());
     }
 
     @Nested
@@ -121,6 +141,7 @@ class MultiInstanceStatusControllerTest {
                     .thenAnswer(invocation -> {
                         Map<String, Object> props = new HashMap<>();
                         props.put("multiInstance", true);
+                        props.put("subTableName", "fu_participants");
                         props.put("subTableRowId", 101);
                         return props;
                     });
@@ -301,7 +322,7 @@ class MultiInstanceStatusControllerTest {
                 .assignmentTarget(assignee)
                 .status(status)
                 .createdTime(LocalDateTime.now().minusHours(2))
-                .extendedProperties("{\"multiInstance\":true,\"subTableRowId\":" + rowId + "}")
+                .extendedProperties("{\"multiInstance\":true,\"subTableName\":\"fu_participants\",\"subTableRowId\":" + rowId + "}")
                 .build();
     }
 
@@ -328,6 +349,7 @@ class MultiInstanceStatusControllerTest {
                     String json = invocation.getArgument(0);
                     Map<String, Object> props = new HashMap<>();
                     props.put("multiInstance", true);
+                    props.put("subTableName", "fu_participants");
                     
                     // 简单解析 subTableRowId
                     if (json.contains("subTableRowId")) {
@@ -370,14 +392,10 @@ class MultiInstanceStatusControllerTest {
             
             when(runtimeService.getVariables(processInstanceId)).thenReturn(processVariables);
             
-            // 准备子表数据
-            List<Map<String, Object>> subTableRows = new ArrayList<>();
-            subTableRows.add(createSubTableRow(101L, "张三", "138xxxx1234"));
-            subTableRows.add(createSubTableRow(102L, "李四", "138xxxx5678"));
-            subTableRows.add(createSubTableRow(103L, "王五", "138xxxx9012"));
-            
-            // 使用 doReturn().when() 语法来避免严格的参数匹配
-            doReturn(subTableRows).when(jdbcTemplate).queryForList(anyString(), (Object) any(), (Object) any(), (Object) any());
+            doReturn(createSubTableRow(101L, "张三", "138xxxx1234"))
+                    .doReturn(createSubTableRow(102L, "李四", "138xxxx5678"))
+                    .doReturn(createSubTableRow(103L, "王五", "138xxxx9012"))
+                    .when(jdbcTemplate).queryForMap(anyString(), any(Object[].class));
             
             // 准备扩展任务信息
             ExtendedTaskInfo task1 = createMultiInstanceTask("task-001", "user-001", "COMPLETED", 101L);
@@ -511,11 +529,9 @@ class MultiInstanceStatusControllerTest {
             
             when(runtimeService.getVariables(processInstanceId)).thenReturn(processVariables);
             
-            List<Map<String, Object>> subTableRows = new ArrayList<>();
-            subTableRows.add(createSubTableRow(101L, "张三", "138xxxx1234"));
-            subTableRows.add(createSubTableRow(102L, "李四", "138xxxx5678"));
-            
-            doReturn(subTableRows).when(jdbcTemplate).queryForList(anyString(), (Object) any(), (Object) any());
+            doReturn(createSubTableRow(101L, "张三", "138xxxx1234"))
+                    .doReturn(createSubTableRow(102L, "李四", "138xxxx5678"))
+                    .when(jdbcTemplate).queryForMap(anyString(), any(Object[].class));
             
             // 只有第一行有对应的任务信息
             ExtendedTaskInfo task1 = createMultiInstanceTask("task-001", "user-001", "COMPLETED", 101L);

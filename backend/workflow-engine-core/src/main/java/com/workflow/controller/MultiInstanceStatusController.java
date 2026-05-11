@@ -2,6 +2,8 @@ package com.workflow.controller;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.platform.common.jdbc.PostgresPhysicalTablePrimaryKeys;
+import com.platform.common.jdbc.SubTableRowKeySupport;
 import com.workflow.dto.response.ApiResponse;
 import com.workflow.dto.response.MultiInstanceStatusResponse;
 import com.workflow.dto.response.SubTableDataResponse;
@@ -116,11 +118,29 @@ public class MultiInstanceStatusController {
             List<MultiInstanceStatusResponse.SubTaskDetail> taskDetails = new ArrayList<>();
             for (ExtendedTaskInfo taskInfo : multiInstanceTasks) {
                 Map<String, Object> extProps = parseExtendedProperties(taskInfo.getExtendedProperties());
-                Long subTableRowId = parseSubTableRowId(extProps.get("subTableRowId"));
                 String subTableName = extProps.get("subTableName") != null ? String.valueOf(extProps.get("subTableName")).trim() : null;
                 if (subTableName == null || subTableName.isBlank()) {
                     subTableName = bpmnActionParser.getMultiInstanceSubProcessSubTableName(
                             taskInfo.getProcessDefinitionId(), taskInfo.getTaskDefinitionKey());
+                }
+                List<String> pkCols = tryResolvePkColumns(subTableName);
+                Map<String, Object> subTableRowKey = null;
+                Long subTableRowId = null;
+                if (pkCols != null) {
+                    subTableRowKey = SubTableRowKeySupport.rowKeyFromExtendedProps(extProps, pkCols);
+                    if (subTableRowKey == null && pkCols.size() == 1) {
+                        subTableRowId = parseSubTableRowId(extProps.get("subTableRowId"));
+                        if (subTableRowId != null) {
+                            subTableRowKey = new LinkedHashMap<>(Map.of(pkCols.get(0), subTableRowId));
+                        }
+                    } else if (subTableRowKey != null && pkCols.size() == 1) {
+                        Object v = subTableRowKey.get(pkCols.get(0));
+                        if (v instanceof Number n) {
+                            subTableRowId = n.longValue();
+                        }
+                    }
+                } else {
+                    subTableRowId = parseSubTableRowId(extProps.get("subTableRowId"));
                 }
                 String miTaskStatusField = extProps.get("miTaskStatusField") != null ? String.valueOf(extProps.get("miTaskStatusField")) : null;
                 String miTaskCurrentNodeField = extProps.get("miTaskCurrentNodeField") != null ? String.valueOf(extProps.get("miTaskCurrentNodeField")) : null;
@@ -132,6 +152,7 @@ public class MultiInstanceStatusController {
                         .assigneeName(getUserName(taskInfo.getAssignmentTarget()))
                         .status(taskInfo.getStatus())
                         .subTableRowId(subTableRowId)
+                        .subTableRowKey(subTableRowKey)
                         .subTableName(subTableName)
                         .miTaskStatusField(miTaskStatusField)
                         .miTaskCurrentNodeField(miTaskCurrentNodeField)
@@ -250,13 +271,21 @@ public class MultiInstanceStatusController {
             if (execId == null) {
                 continue;
             }
-            Long rowId = parseSubTableRowIdFromExecution(execId);
-            if (rowId == null) {
-                continue;
-            }
             String subTableName = firstNonBlankTrimmed(
                     bpmnActionParser.getUserTaskExtensionPropertyValue(pdId, defKey, "subTableName"),
                     miScopeTable);
+            Long rowId = null;
+            Map<String, Object> rowKey = null;
+            List<String> pkCols = tryResolvePkColumns(subTableName);
+            if (pkCols != null) {
+                rowKey = parseRowKeyFromExecution(execId, pkCols);
+                if (rowKey != null && pkCols.size() == 1 && rowKey.get(pkCols.get(0)) instanceof Number) {
+                    rowId = ((Number) rowKey.get(pkCols.get(0))).longValue();
+                }
+            }
+            if (rowKey == null) {
+                continue;
+            }
             String miTaskStatusField = bpmnActionParser.getMultiInstanceSubProcessExtensionPropertyValue(
                     pdId, defKey, "miTaskStatusField");
             String miTaskCurrentNodeField = bpmnActionParser.getMultiInstanceSubProcessExtensionPropertyValue(
@@ -274,6 +303,7 @@ public class MultiInstanceStatusController {
                     .assigneeName(getUserName(task.getAssignee()))
                     .status(runtimeRuTaskStatus(task))
                     .subTableRowId(rowId)
+                    .subTableRowKey(rowKey)
                     .subTableName(subTableName)
                     .miTaskStatusField(miTaskStatusField)
                     .miTaskCurrentNodeField(miTaskCurrentNodeField)
@@ -287,19 +317,32 @@ public class MultiInstanceStatusController {
         }
     }
 
-    private Long parseSubTableRowIdFromExecution(String executionId) {
+    private List<String> tryResolvePkColumns(String subTableName) {
+        if (jdbcTemplate == null) {
+            return null;
+        }
+        if (subTableName == null || !subTableName.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+            return null;
+        }
+        try {
+            return PostgresPhysicalTablePrimaryKeys.resolvePrimaryKeyColumns(jdbcTemplate, subTableName);
+        } catch (Exception e) {
+            log.debug("MI status/sub-table: could not resolve PK columns for {}: {}", subTableName, e.getMessage());
+            return null;
+        }
+    }
+
+    private Map<String, Object> parseRowKeyFromExecution(String executionId, List<String> pkCols) {
         Object currentItemObj = runtimeService.getVariable(executionId, "currentItem");
         if (currentItemObj == null) {
             currentItemObj = runtimeService.getVariable(executionId, "_currentItem");
         }
-        if (!(currentItemObj instanceof Map<?, ?> m)) {
+        if (!(currentItemObj instanceof Map<?, ?>)) {
             return null;
         }
-        Object rowId = m.get("rowId");
-        if (rowId == null) {
-            rowId = m.get("id");
-        }
-        return parseSubTableRowId(rowId);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> typed = (Map<String, Object>) currentItemObj;
+        return SubTableRowKeySupport.rowKeyFromCurrentItem(typed, pkCols);
     }
 
     private static String runtimeRuTaskStatus(Task task) {
@@ -332,6 +375,9 @@ public class MultiInstanceStatusController {
         }
         try {
             Map<String, Object> p = parseExtendedProperties(taskInfo.getExtendedProperties());
+            if (p.get("subTableRowKey") != null) {
+                return true;
+            }
             return p.get("subTableRowId") != null;
         } catch (Exception e) {
             return false;
@@ -490,10 +536,19 @@ public class MultiInstanceStatusController {
                         "未找到多实例配置信息"
                 ));
             }
-            
-            // 4. 获取集合变量（包含所有子表行ID）
+            if (!subTableName.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+                log.warn("非法子表名（跳过查询）: {}", subTableName);
+                return ResponseEntity.ok(ApiResponse.error(
+                        "INVALID_SUBTABLE_NAME",
+                        "子表配置无效"
+                ));
+            }
+            List<String> pkCols = PostgresPhysicalTablePrimaryKeys.resolvePrimaryKeyColumns(jdbcTemplate, subTableName);
+            String pkWhere = SubTableRowKeySupport.buildPkWhereClause(pkCols);
+
+            // 4. 获取集合变量（元素含 rowKey 和/或 rowId）
             @SuppressWarnings("unchecked")
-            List<Map<String, Object>> collectionData = 
+            List<Map<String, Object>> collectionData =
                     (List<Map<String, Object>>) processVariables.get(collectionVariableName);
             
             if (collectionData == null || collectionData.isEmpty()) {
@@ -507,54 +562,51 @@ public class MultiInstanceStatusController {
                 ));
             }
             
-            // 5. 查询所有子表数据行
-            List<Long> rowIds = collectionData.stream()
-                    .map(item -> ((Number) item.get("rowId")).longValue())
-                    .collect(Collectors.toList());
-            
-            // 构建查询SQL
-            String placeholders = rowIds.stream()
-                    .map(id -> "?")
-                    .collect(Collectors.joining(","));
-            String sql = String.format("SELECT * FROM %s WHERE id IN (%s)", subTableName, placeholders);
-            
-            List<Map<String, Object>> subTableRows = jdbcTemplate.queryForList(sql, rowIds.toArray());
-            
-            // 6. 查询所有子任务的状态信息
-            List<ExtendedTaskInfo> allTaskInfos = extendedTaskInfoRepository
-                    .findByProcessInstanceIdAndIsDeletedFalse(processInstanceId);
-            
-            // 过滤出多实例子任务
-            Map<Long, ExtendedTaskInfo> rowIdToTaskInfo = new HashMap<>();
-            for (ExtendedTaskInfo taskInfo : allTaskInfos) {
-                if (isMultiInstanceTask(taskInfo)) {
-                    Map<String, Object> extProps = parseExtendedProperties(taskInfo.getExtendedProperties());
-                    Long subTableRowId = extProps.containsKey("subTableRowId") 
-                            ? ((Number) extProps.get("subTableRowId")).longValue() 
-                            : null;
-                    if (subTableRowId != null) {
-                        rowIdToTaskInfo.put(subTableRowId, taskInfo);
-                    }
+            List<Map<String, Object>> resolvedRowKeys = new ArrayList<>();
+            for (Map<String, Object> item : collectionData) {
+                Map<String, Object> rk = SubTableRowKeySupport.rowKeyFromCurrentItem(item, pkCols);
+                if (rk != null) {
+                    resolvedRowKeys.add(rk);
                 }
             }
             
-            // 7. 构建响应数据
+            List<ExtendedTaskInfo> allTaskInfos = extendedTaskInfoRepository
+                    .findByProcessInstanceIdAndIsDeletedFalse(processInstanceId);
+            
+            Map<String, ExtendedTaskInfo> rowKeyToTaskInfo = new HashMap<>();
+            for (ExtendedTaskInfo taskInfo : allTaskInfos) {
+                if (!isMultiInstanceTask(taskInfo)) {
+                    continue;
+                }
+                Map<String, Object> extProps = parseExtendedProperties(taskInfo.getExtendedProperties());
+                Map<String, Object> rk = SubTableRowKeySupport.rowKeyFromExtendedProps(extProps, pkCols);
+                if (rk != null) {
+                    rowKeyToTaskInfo.put(SubTableRowKeySupport.canonicalRowKeyString(pkCols, rk), taskInfo);
+                }
+            }
+            
             List<SubTableDataResponse.SubTableRow> rows = new ArrayList<>();
-            for (Map<String, Object> rowData : subTableRows) {
-                Long rowId = ((Number) rowData.get("id")).longValue();
-                ExtendedTaskInfo taskInfo = rowIdToTaskInfo.get(rowId);
+            String selectSql = "SELECT * FROM " + subTableName + " WHERE " + pkWhere;
+            for (Map<String, Object> rk : resolvedRowKeys) {
+                Map<String, Object> rowData;
+                try {
+                    rowData = jdbcTemplate.queryForMap(selectSql, SubTableRowKeySupport.orderedPkParams(pkCols, rk));
+                } catch (org.springframework.dao.EmptyResultDataAccessException e) {
+                    log.warn("子表行不存在: table={}, rowKey={}", subTableName, rk);
+                    continue;
+                }
+                String canon = SubTableRowKeySupport.canonicalRowKeyString(pkCols, rk);
+                ExtendedTaskInfo taskInfo = rowKeyToTaskInfo.get(canon);
                 
                 String assignee = null;
                 String assigneeName = null;
-                String status = "PENDING"; // 默认状态
+                String status = "PENDING";
                 
                 if (taskInfo != null) {
                     assignee = taskInfo.getAssignmentTarget();
                     assigneeName = getUserName(assignee);
                     status = taskInfo.getStatus();
                 } else {
-                    // 如果没有对应的任务信息，尝试从子表数据中获取 assignee
-                    // 假设子表中有 assignee 字段（根据设计文档，处理人字段名可能不同）
                     for (Map.Entry<String, Object> entry : rowData.entrySet()) {
                         String fieldName = entry.getKey().toLowerCase();
                         if (fieldName.contains("assignee") || fieldName.contains("handler")) {
@@ -568,8 +620,14 @@ public class MultiInstanceStatusController {
                     }
                 }
                 
+                Long legacyId = null;
+                if (pkCols.size() == 1 && rk.get(pkCols.get(0)) instanceof Number) {
+                    legacyId = ((Number) rk.get(pkCols.get(0))).longValue();
+                }
+                
                 SubTableDataResponse.SubTableRow row = SubTableDataResponse.SubTableRow.builder()
-                        .id(rowId)
+                        .id(legacyId)
+                        .rowKey(new LinkedHashMap<>(rk))
                         .data(rowData)
                         .assignee(assignee)
                         .assigneeName(assigneeName)
@@ -579,7 +637,6 @@ public class MultiInstanceStatusController {
                 rows.add(row);
             }
             
-            // 8. 构建响应
             SubTableDataResponse response = SubTableDataResponse.builder()
                     .taskId(taskId)
                     .subTableName(subTableName)

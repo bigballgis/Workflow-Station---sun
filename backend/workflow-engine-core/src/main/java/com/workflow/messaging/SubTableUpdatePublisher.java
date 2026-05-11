@@ -8,6 +8,7 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 
 /**
  * Publisher for sub-table update events via WebSocket
@@ -31,6 +32,14 @@ public class SubTableUpdatePublisher {
      * @param status Updated status (optional)
      */
     public void publishUpdate(String taskId, Long rowId, String assigneeId, String status) {
+        publishUpdate(taskId, rowId, null, assigneeId, status);
+    }
+
+    /**
+     * @param rowKey optional full primary key map (composite supported); {@code rowId} remains for backward-compatible clients
+     */
+    public void publishUpdate(String taskId, Long rowId, Map<String, Object> rowKey,
+                              String assigneeId, String status) {
         if (messagingTemplate == null) {
             log.warn("WebSocket messaging template not available, skipping update publication");
             return;
@@ -39,17 +48,18 @@ public class SubTableUpdatePublisher {
         SubTableUpdateMessage message = SubTableUpdateMessage.builder()
                 .taskId(taskId)
                 .rowId(rowId)
+                .rowKey(rowKey)
                 .assigneeId(assigneeId)
                 .status(status)
                 .timestamp(LocalDateTime.now().toString())
                 .build();
 
         String topic = String.format("/topic/tasks/%s/sub-table-updates", taskId);
-        
+
         try {
             messagingTemplate.convertAndSend(topic, message);
-            log.debug("Published sub-table update to topic {}: rowId={}, assigneeId={}, status={}", 
-                    topic, rowId, assigneeId, status);
+            log.debug("Published sub-table update to topic {}: rowId={}, rowKey={}, assigneeId={}, status={}",
+                    topic, rowId, rowKey, assigneeId, status);
         } catch (Exception e) {
             log.error("Failed to publish sub-table update to topic {}: {}", topic, e.getMessage(), e);
         }
@@ -63,6 +73,7 @@ public class SubTableUpdatePublisher {
     public static class SubTableUpdateMessage {
         private String taskId;
         private Long rowId;
+        private Map<String, Object> rowKey;
         private String assigneeId;
         private String status;
         private String timestamp;

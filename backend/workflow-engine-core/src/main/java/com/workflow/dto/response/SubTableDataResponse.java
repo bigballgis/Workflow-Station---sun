@@ -50,6 +50,11 @@ public class SubTableDataResponse {
          * 行ID
          */
         private Long id;
+
+        /**
+         * 物理表主键列→值（联合主键时非空；单列数值主键时通常与 {@link #id} 一致）
+         */
+        private Map<String, Object> rowKey;
         
         /**
          * 行数据（包含所有字段）

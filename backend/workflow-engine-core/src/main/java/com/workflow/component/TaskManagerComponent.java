@@ -2507,21 +2507,21 @@ public class TaskManagerComponent {
                 Map<String, Object> extProps = parseExtendedProps(extendedTaskInfo);
                 String subTableName = extProps.get("subTableName") != null
                         ? String.valueOf(extProps.get("subTableName")) : null;
-                Long subTableRowId = toLong(extProps.get("subTableRowId"));
-                
-                if (subTableRowId == null || subTableName == null) {
-                    log.warn("多实例子任务缺少 subTableRowId/subTableName, 跳过回写: taskId={}", taskId);
+                Map<String, Object> rowKey = multiInstanceDataResolver.tryResolveSubTableRowKey(subTableName, extProps);
+
+                if (rowKey == null || subTableName == null) {
+                    log.warn("多实例子任务缺少 subTableRowKey/subTableName, 跳过回写: taskId={}", taskId);
                     return;
                 }
 
                 if (!multiInstanceDataResolver.subTableExists(subTableName)
                         && variables.containsKey("__subTables__")) {
-                    log.info("多实例子任务使用变量型子表，跳过物理表回写: taskId={}, subTableName={}, rowId={}",
-                            taskId, subTableName, subTableRowId);
+                    log.info("多实例子任务使用变量型子表，跳过物理表回写: taskId={}, subTableName={}, rowKey={}",
+                            taskId, subTableName, rowKey);
                     return;
                 }
-                
-                Map<String, Object> currentRow = multiInstanceDataResolver.loadSubTableRow(subTableName, subTableRowId);
+
+                Map<String, Object> currentRow = multiInstanceDataResolver.loadSubTableRow(subTableName, rowKey);
                 rowVersion = currentRow.get("row_version") instanceof Number n ? n.longValue() : 0L;
                 
                 formData = new HashMap<>();
@@ -2592,29 +2592,30 @@ public class TaskManagerComponent {
             com.fasterxml.jackson.databind.ObjectMapper objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
             Map<String, Object> props = objectMapper.readValue(extendedProperties, Map.class);
             
-            Object rowIdObj = props.get("subTableRowId");
-            if (rowIdObj == null) {
-                log.warn("无法从 extendedProperties 中获取 subTableRowId: taskId={}", taskId);
+            Map<String, Object> rowKey = multiInstanceDataResolver.tryResolveSubTableRowKey(
+                    props.get("subTableName") != null ? String.valueOf(props.get("subTableName")).trim() : null,
+                    props);
+            Long rowId = toLong(props.get("subTableRowId"));
+            if (rowKey == null && rowId == null) {
+                log.warn("无法从 extendedProperties 中解析子表行键: taskId={}", taskId);
                 return;
             }
-            
-            Long rowId = ((Number) rowIdObj).longValue();
-            
+
             // 获取主任务 ID（从流程实例中查找前置任务）
             String processInstanceId = extendedTaskInfo.getProcessInstanceId();
             String mainTaskId = findMainTaskIdForMultiInstance(processInstanceId);
-            
+
             if (mainTaskId != null) {
-                updatePublisher.publishUpdate(mainTaskId, rowId, null, "COMPLETED");
-                log.debug("WebSocket 更新通知已发布: mainTaskId={}, rowId={}", mainTaskId, rowId);
+                updatePublisher.publishUpdate(mainTaskId, rowId, rowKey, null, "COMPLETED");
+                log.debug("WebSocket 更新通知已发布: mainTaskId={}, rowId={}, rowKey={}", mainTaskId, rowId, rowKey);
             }
-            
+
         } catch (Exception e) {
             // WebSocket 发布失败不应影响主流程
             log.warn("发布 WebSocket 更新通知失败: taskId={}", taskId, e);
         }
     }
-    
+
     /**
      * 查找多实例子流程的主任务 ID
      * 通过查询流程实例的历史任务，找到多实例子流程之前的任务
@@ -2629,14 +2630,14 @@ public class TaskManagerComponent {
                 .orderByHistoricActivityInstanceStartTime()
                 .desc()
                 .list();
-            
+
             // 找到第一个非多实例子任务（即主任务）
             for (HistoricActivityInstance activity : activities) {
                 String taskId = activity.getTaskId();
                 if (taskId != null) {
                     Optional<ExtendedTaskInfo> extInfoOpt = extendedTaskInfoRepository
                         .findByTaskIdAndIsDeletedFalse(taskId);
-                    
+
                     if (extInfoOpt.isPresent()) {
                         ExtendedTaskInfo extInfo = extInfoOpt.get();
                         if (!isMultiInstanceSubTask(extInfo)) {
@@ -2645,14 +2646,14 @@ public class TaskManagerComponent {
                     }
                 }
             }
-            
+
             return null;
         } catch (Exception e) {
             log.warn("查找主任务 ID 失败: processInstanceId={}", processInstanceId, e);
             return null;
         }
     }
-    
+
     /**
      * 检测下一节点是否为多实例子流程，如果是则注入子表数据
      * 

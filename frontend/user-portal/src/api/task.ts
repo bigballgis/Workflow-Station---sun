@@ -202,13 +202,22 @@ export interface AssignSubTableRowResponse {
   message?: string
 }
 
-export function assignSubTableRow(taskId: string, rowId: number, assigneeId: string) {
+export function assignSubTableRow(
+  taskId: string,
+  rowId: number,
+  assigneeId: string,
+  rowKey?: Record<string, unknown>
+) {
   const config: AxiosRequestConfig & { skipGlobalErrorHandler?: boolean } = {
     skipGlobalErrorHandler: true
   }
+  const body: Record<string, unknown> = { assigneeId }
+  if (rowKey != null && Object.keys(rowKey).length > 0) {
+    body.rowKey = rowKey
+  }
   return request.post<AssignSubTableRowResponse | { data: AssignSubTableRowResponse }>(
     `/tasks/${taskId}/sub-table-rows/${rowId}/assign`,
-    { assigneeId },
+    body,
     config
   )
 }
@@ -262,7 +271,9 @@ export function getSubTaskFormData(taskId: string) {
 
 // Get main task sub-table data (for real-time sync)
 export interface SubTableRowStatus {
-  id: number
+  id?: number
+  /** 物理表主键（联合主键时为多列） */
+  rowKey?: Record<string, unknown>
   assignee?: string
   assigneeName?: string
   status?: string

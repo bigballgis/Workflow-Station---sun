@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 多实例子流程执行状态响应
@@ -117,6 +118,11 @@ public class MultiInstanceStatusResponse {
          * 子表行ID
          */
         private Long subTableRowId;
+
+        /**
+         * 子表物理行主键（联合主键时为多列；与引擎 extended_properties.subTableRowKey 一致）
+         */
+        private Map<String, Object> subTableRowKey;
 
         /**
          * 子表名（来自多实例子任务 extendedProperties.subTableName）

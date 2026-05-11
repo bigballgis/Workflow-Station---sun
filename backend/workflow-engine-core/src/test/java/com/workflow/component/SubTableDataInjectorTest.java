@@ -13,6 +13,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -56,7 +57,11 @@ class SubTableDataInjectorTest {
     
     @BeforeEach
     void setUp() {
-        // 初始化设置（如果需要）
+        lenient().when(jdbcTemplate.query(
+                contains("constraint_type"),
+                any(RowMapper.class),
+                eq(SUB_TABLE_NAME)))
+                .thenReturn(List.of("id"));
     }
     
     @Test
@@ -129,7 +134,7 @@ class SubTableDataInjectorTest {
         
         // 验证数据库查询被调用
         verify(jdbcTemplate).queryForList(
-            contains("SELECT id"),
+            contains(SUB_TABLE_NAME),
             eq(MAIN_RECORD_ID)
         );
     }

@@ -2,6 +2,8 @@ package com.workflow.component;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.platform.common.jdbc.PostgresPhysicalTablePrimaryKeys;
+import com.platform.common.jdbc.SubTableRowKeySupport;
 import com.workflow.client.AdminCenterClient;
 import com.workflow.entity.ExtendedTaskInfo;
 import com.workflow.exception.WorkflowBusinessException;
@@ -17,7 +19,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -71,14 +76,18 @@ public class SubTableAssignmentHandler {
      * @throws WorkflowBusinessException 业务异常时
      */
     public AssignmentResponse assign(String taskId, Long rowId, String assigneeId) {
+        return assign(taskId, rowId, null, assigneeId);
+    }
+
+    public AssignmentResponse assign(String taskId, Long rowId, Map<String, Object> rowKey, String assigneeId) {
         log.info("开始分配子表行处理人: taskId={}, rowId={}, assigneeId={}", taskId, rowId, assigneeId);
-        
+
         // 1. 验证任务存在
         Task task = taskService.createTaskQuery().taskId(taskId).singleResult();
         if (task == null) {
             throw new WorkflowValidationException("Task not found: " + taskId);
         }
-        
+
         // 2. 从任务扩展属性或流程定义中获取子表配置
         SubTableConfig config = getSubTableConfig(task);
         if (config == null) {
@@ -87,39 +96,56 @@ public class SubTableAssignmentHandler {
                 "Task is not configured with sub-table information, cannot assign handler"
             );
         }
-        
-        log.debug("获取到子表配置: subTableName={}, assigneeField={}, foreignKey={}", 
+
+        List<String> pkCols = PostgresPhysicalTablePrimaryKeys.resolvePrimaryKeyColumns(jdbcTemplate,
+                requireSafeIdentifier(config.getSubTableName()));
+        Map<String, Object> resolvedRowKey;
+        try {
+            resolvedRowKey = SubTableRowKeySupport.resolveRowKeyForAssign(rowId, rowKey, pkCols);
+        } catch (IllegalArgumentException e) {
+            throw new WorkflowValidationException(e.getMessage());
+        }
+        if (resolvedRowKey == null) {
+            throw new WorkflowValidationException("Could not resolve sub-table row primary key");
+        }
+
+        log.debug("获取到子表配置: subTableName={}, assigneeField={}, foreignKey={}",
             config.getSubTableName(), config.getAssigneeField(), config.getForeignKey());
-        
-        // 3. 验证 rowId 属于当前任务关联的主表记录
-        if (!verifyRowBelongsToTask(config, rowId, task)) {
+
+        // 3. 验证 row 属于当前任务关联的主表记录
+        if (!verifyRowBelongsToTask(config, resolvedRowKey, task)) {
             throw new WorkflowValidationException(
-                String.format("Sub-table row %d does not belong to the main table record associated with current task", rowId)
+                String.format("Sub-table row %s does not belong to the main table record associated with current task",
+                        resolvedRowKey)
             );
         }
-        
+
         // 4. 验证 assigneeId 对应的用户存在且未禁用
         validateUser(assigneeId);
-        
+
         // 5. 更新子表 assigneeField
-        updateSubTableAssignee(config.getSubTableName(), config.getAssigneeField(), rowId, assigneeId);
-        
+        updateSubTableAssignee(config.getSubTableName(), config.getAssigneeField(), resolvedRowKey, assigneeId);
+
         // 6. 获取用户名称并返回分配结果
         String assigneeName = getUserName(assigneeId);
-        
+
+        Long legacyRowId = pkCols.size() == 1 && resolvedRowKey.get(pkCols.get(0)) instanceof Number
+                ? ((Number) resolvedRowKey.get(pkCols.get(0))).longValue()
+                : rowId;
+
         AssignmentResponse response = AssignmentResponse.builder()
             .success(true)
-            .rowId(rowId)
+            .rowId(legacyRowId)
             .assigneeId(assigneeId)
             .assigneeName(assigneeName)
             .build();
-        
-        log.info("子表行处理人分配成功: taskId={}, rowId={}, assigneeId={}, assigneeName={}", 
-            taskId, rowId, assigneeId, assigneeName);
-        
+
+        log.info("子表行处理人分配成功: taskId={}, rowKey={}, assigneeId={}, assigneeName={}",
+            taskId, resolvedRowKey, assigneeId, assigneeName);
+
         // 7. 发布 WebSocket 更新通知
-        publishWebSocketUpdate(taskId, rowId, assigneeId);
-        
+        publishWebSocketUpdate(taskId, resolvedRowKey, assigneeId);
+
         return response;
     }
     
@@ -233,33 +259,46 @@ public class SubTableAssignmentHandler {
         }
     }
     
+    private String requireSafeIdentifier(String identifier) {
+        if (identifier == null || !identifier.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+            throw new IllegalArgumentException("Invalid SQL identifier: " + identifier);
+        }
+        return identifier;
+    }
+
     /**
      * 验证子表行是否属于当前任务关联的主表记录
      */
-    private boolean verifyRowBelongsToTask(SubTableConfig config, Long rowId, Task task) {
+    private boolean verifyRowBelongsToTask(SubTableConfig config, Map<String, Object> rowKey, Task task) {
         if (config.getForeignKey() == null || config.getMainRecordId() == null) {
             // 如果没有配置外键信息，跳过验证（假设配置正确）
-            log.warn("子表配置缺少外键信息，跳过归属验证: taskId={}, rowId={}", task.getId(), rowId);
+            log.warn("子表配置缺少外键信息，跳过归属验证: taskId={}, rowKey={}", task.getId(), rowKey);
             return true;
         }
-        
+
         try {
+            String subTable = requireSafeIdentifier(config.getSubTableName());
+            List<String> pkCols = PostgresPhysicalTablePrimaryKeys.resolvePrimaryKeyColumns(jdbcTemplate, subTable);
+            String fk = requireSafeIdentifier(config.getForeignKey());
+            String pkWhere = SubTableRowKeySupport.buildPkWhereClause(pkCols);
             String sql = String.format(
-                "SELECT COUNT(*) FROM %s WHERE id = ? AND %s = ?",
-                config.getSubTableName(),
-                config.getForeignKey()
+                "SELECT COUNT(*) FROM %s WHERE %s AND %s = ?",
+                subTable,
+                pkWhere,
+                fk
             );
-            
+            List<Object> params = new ArrayList<>(Arrays.asList(SubTableRowKeySupport.orderedPkParams(pkCols, rowKey)));
+            params.add(config.getMainRecordId());
+
             Integer count = jdbcTemplate.queryForObject(
-                sql, 
-                Integer.class, 
-                rowId, 
-                config.getMainRecordId()
+                sql,
+                Integer.class,
+                params.toArray()
             );
-            
+
             return count != null && count > 0;
         } catch (Exception e) {
-            log.error("验证子表行归属失败: taskId={}, rowId={}", task.getId(), rowId, e);
+            log.error("验证子表行归属失败: taskId={}, rowKey={}", task.getId(), rowKey, e);
             throw new WorkflowBusinessException(
                 "SUBTABLE_VERIFICATION_FAILED",
                 "验证子表行归属时发生错误: " + e.getMessage(),
@@ -305,28 +344,37 @@ public class SubTableAssignmentHandler {
     /**
      * 更新子表的 assigneeField 字段
      */
-    private void updateSubTableAssignee(String subTableName, String assigneeField, Long rowId, String assigneeId) {
+    private void updateSubTableAssignee(String subTableName, String assigneeField,
+                                        Map<String, Object> rowKey, String assigneeId) {
         try {
+            String table = requireSafeIdentifier(subTableName);
+            String field = requireSafeIdentifier(assigneeField);
+            List<String> pkCols = PostgresPhysicalTablePrimaryKeys.resolvePrimaryKeyColumns(jdbcTemplate, table);
+            String pkWhere = SubTableRowKeySupport.buildPkWhereClause(pkCols);
             String sql = String.format(
-                "UPDATE %s SET %s = ? WHERE id = ?",
-                subTableName,
-                assigneeField
+                "UPDATE %s SET %s = ? WHERE %s",
+                table,
+                field,
+                pkWhere
             );
-            
-            int updated = jdbcTemplate.update(sql, assigneeId, rowId);
-            
+            List<Object> params = new ArrayList<>();
+            params.add(assigneeId);
+            params.addAll(Arrays.asList(SubTableRowKeySupport.orderedPkParams(pkCols, rowKey)));
+
+            int updated = jdbcTemplate.update(sql, params.toArray());
+
             if (updated == 0) {
                 throw new WorkflowValidationException(
-                    String.format("子表行不存在或已被删除: rowId=%d", rowId)
+                    String.format("子表行不存在或已被删除: rowKey=%s", rowKey)
                 );
             }
-            
-            log.debug("子表 assigneeField 更新成功: subTableName={}, rowId={}, assigneeId={}", 
-                subTableName, rowId, assigneeId);
+
+            log.debug("子表 assigneeField 更新成功: subTableName={}, rowKey={}, assigneeId={}",
+                subTableName, rowKey, assigneeId);
         } catch (WorkflowValidationException e) {
             throw e;
         } catch (Exception e) {
-            log.error("更新子表 assigneeField 失败: subTableName={}, rowId={}", subTableName, rowId, e);
+            log.error("更新子表 assigneeField 失败: subTableName={}, rowKey={}", subTableName, rowKey, e);
             throw new WorkflowBusinessException(
                 "SUBTABLE_UPDATE_FAILED",
                 "更新子表处理人字段时发生错误: " + e.getMessage(),
@@ -362,14 +410,21 @@ public class SubTableAssignmentHandler {
     /**
      * 发布 WebSocket 更新通知
      */
-    private void publishWebSocketUpdate(String taskId, Long rowId, String assigneeId) {
+    private void publishWebSocketUpdate(String taskId, Map<String, Object> rowKey, String assigneeId) {
         if (updatePublisher != null) {
             try {
-                updatePublisher.publishUpdate(taskId, rowId, assigneeId, null);
-                log.debug("WebSocket 更新通知已发布: taskId={}, rowId={}", taskId, rowId);
+                Long rowId = null;
+                if (rowKey != null && rowKey.size() == 1) {
+                    Object v = rowKey.values().iterator().next();
+                    if (v instanceof Number) {
+                        rowId = ((Number) v).longValue();
+                    }
+                }
+                updatePublisher.publishUpdate(taskId, rowId, rowKey, assigneeId, null);
+                log.debug("WebSocket 更新通知已发布: taskId={}, rowKey={}", taskId, rowKey);
             } catch (Exception e) {
                 // WebSocket 发布失败不应影响主流程
-                log.warn("发布 WebSocket 更新通知失败: taskId={}, rowId={}", taskId, rowId, e);
+                log.warn("发布 WebSocket 更新通知失败: taskId={}, rowKey={}", taskId, rowKey, e);
             }
         }
     }

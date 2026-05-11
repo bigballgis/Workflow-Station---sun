@@ -95,6 +95,14 @@
             <version>3.0.2</version>
         </dependency>
 
+        <!-- JdbcTemplate for PostgresPhysicalTablePrimaryKeys (provided: consumers use starter-jdbc/jpa) -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-jdbc</artifactId>
+            <version>6.1.1</version>
+            <scope>provided</scope>
+        </dependency>
+
         <!-- Testing -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>

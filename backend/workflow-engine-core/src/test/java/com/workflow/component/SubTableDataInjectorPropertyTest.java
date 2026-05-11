@@ -4,6 +4,7 @@ import net.jqwik.api.*;
 import org.flowable.engine.RuntimeService;
 import org.mockito.ArgumentCaptor;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -58,6 +59,12 @@ public class SubTableDataInjectorPropertyTest {
             throw new RuntimeException("Failed to inject dependencies", e);
         }
         
+        when(jdbcTemplate.query(
+                contains("constraint_type"),
+                any(RowMapper.class),
+                eq(scenario.subTableName)))
+                .thenReturn(List.of("id"));
+
         // 模拟数据库查询返回子表数据
         when(jdbcTemplate.queryForList(anyString(), eq(scenario.mainRecordId)))
             .thenReturn(scenario.subTableRows);

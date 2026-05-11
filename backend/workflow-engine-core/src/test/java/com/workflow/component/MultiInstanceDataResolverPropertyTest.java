@@ -8,6 +8,7 @@ import net.jqwik.api.*;
 import org.flowable.engine.RuntimeService;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -84,7 +85,7 @@ class MultiInstanceDataResolverPropertyTest {
             
             // 验证 JDBC 查询只访问了指定的 rowId
             verify(jdbcTemplate, atLeastOnce()).queryForMap(
-                contains("WHERE id = ?"),
+                contains(subTableName),
                 eq(subTask.rowId)
             );
         }
@@ -213,7 +214,7 @@ class MultiInstanceDataResolverPropertyTest {
             
             // 验证 UPDATE 被调用，且包含乐观锁条件
             verify(jdbcTemplate).update(
-                contains("WHERE id = ? AND row_version = ?"),
+                argThat((String sql) -> sql.contains("WHERE ") && sql.contains(" AND row_version = ?")),
                 any(Object[].class)
             );
         } else {
@@ -221,7 +222,7 @@ class MultiInstanceDataResolverPropertyTest {
             // When & Then: 抛出乐观锁异常
             assertThatThrownBy(() -> resolver.writeBackSubTableRow(taskId, formData, expectedVersion))
                 .isInstanceOf(OptimisticLockException.class)
-                .hasMessage("数据已被修改，请刷新后重试");
+                .hasMessage("Data has been modified, please refresh and try again");
             
             // 验证 UPDATE 没有被调用
             verify(jdbcTemplate, never()).update(anyString(), any(Object[].class));
@@ -308,7 +309,7 @@ class MultiInstanceDataResolverPropertyTest {
         // When & Then: loadSubTableRow 抛出异常
         assertThatThrownBy(() -> resolver.loadSubTableRow(subTableName, subTableRowId))
             .isInstanceOf(WorkflowValidationException.class)
-            .hasMessage("关联的数据行已不存在");
+            .hasMessage("The associated data row no longer exists");
         
         // Given: 准备 ExtendedTaskInfo（用于 writeBackSubTableRow）
         ExtendedTaskInfo extInfo = createExtendedTaskInfo(taskId, subTableRowId, subTableName);
@@ -324,7 +325,7 @@ class MultiInstanceDataResolverPropertyTest {
         // When & Then: writeBackSubTableRow 抛出异常
         assertThatThrownBy(() -> resolver.writeBackSubTableRow(taskId, formData, 1L))
             .isInstanceOf(WorkflowValidationException.class)
-            .hasMessage("关联的数据行已不存在");
+            .hasMessage("The associated data row no longer exists");
     }
     
     // ==================== 辅助方法 ====================
@@ -445,6 +446,12 @@ class MultiInstanceDataResolverPropertyTest {
                 MultiInstanceDataResolver.class.getDeclaredField("extendedTaskInfoRepository");
             extendedTaskInfoRepositoryField.setAccessible(true);
             extendedTaskInfoRepositoryField.set(resolver, extendedTaskInfoRepository);
+
+            lenient().when(jdbcTemplate.query(
+                    contains("constraint_type"),
+                    any(RowMapper.class),
+                    any()))
+                    .thenReturn(java.util.List.of("id"));
         } catch (Exception e) {
             throw new RuntimeException("Failed to inject mocks", e);
         }

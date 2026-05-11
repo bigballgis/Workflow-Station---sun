@@ -20,6 +20,8 @@ import com.portal.repository.ProcessHistoryRepository;
 import com.portal.repository.ProcessInstanceRepository;
 import com.portal.repository.ActionDefinitionRepository;
 import com.portal.service.PortalWorkspaceAuthService;
+import com.platform.common.jdbc.PostgresPhysicalTablePrimaryKeys;
+import com.platform.common.jdbc.SubTableRowKeySupport;
 import com.platform.common.util.ApiResponseBodyUnwrap;
 import com.platform.security.util.SecurityContextUtils;
 import com.portal.util.PortalUserSecurityUtils;
@@ -1316,7 +1318,7 @@ public class ProcessComponent {
 
         // Prefer engine-driven MI status for JSON-backed sub-tables (no physical table required).
         // This ensures initiator sees accurate PENDING / IN_PROGRESS / COMPLETED and current node.
-        Map<String, Map<Long, MiRowProgress>> miProgressByTable = resolveMiRowProgress(info.getId());
+        Map<String, Map<String, MiRowProgress>> miProgressByTable = resolveMiRowProgress(info.getId());
         try {
             for (Map.Entry<String, Object> subTableEntry : subTables.entrySet()) {
                 String tableName = bindingTableNames.get(subTableEntry.getKey());
@@ -1324,26 +1326,36 @@ public class ProcessComponent {
                     continue;
                 }
 
-                Map<Long, MiRowProgress> miProgress = lookupMiProgressForDesignerTable(miProgressByTable, tableName);
+                Map<String, MiRowProgress> miProgress = lookupMiProgressForDesignerTable(miProgressByTable, tableName);
+
+                String safeTableName = requireSafeIdentifier(tableName);
+                List<String> pkCols;
+                try {
+                    pkCols = PostgresPhysicalTablePrimaryKeys.resolvePrimaryKeyColumns(jdbcTemplate, safeTableName);
+                } catch (Exception e) {
+                    log.debug("enrichSubTablesWithAssignmentData: skip table {} (PK): {}", safeTableName, e.getMessage());
+                    continue;
+                }
 
                 // Legacy: physical table merge first (assignee, persisted field values). DB may still hold stale
                 // task_status / task_current_node after a participant advances — those columns must not win over
                 // the engine; MI overlay applied below overwrites them.
-                String safeTableName = requireSafeIdentifier(tableName);
                 for (Object rowObj : rows) {
                     if (!(rowObj instanceof Map<?, ?> rawRow)) {
                         continue;
                     }
                     Map<String, Object> row = (Map<String, Object>) rawRow;
-                    Long id = parseRowId(row);
-                    if (id == null) {
+                    Map<String, Object> rowKey = SubTableRowKeySupport.rowKeyFromVariableRow(row, pkCols);
+                    if (rowKey == null) {
                         continue;
                     }
                     if (!miProgress.isEmpty() && !subTableExists(safeTableName)) {
                         continue;
                     }
+                    String where = SubTableRowKeySupport.buildPkWhereClause(pkCols);
+                    Object[] args = SubTableRowKeySupport.orderedPkParams(pkCols, rowKey);
                     List<Map<String, Object>> dbRows = jdbcTemplate.query(
-                            "SELECT * FROM " + safeTableName + " WHERE id = ?",
+                            "SELECT * FROM " + safeTableName + " WHERE " + where,
                             (rs, i) -> {
                                 java.sql.ResultSetMetaData meta = rs.getMetaData();
                                 Map<String, Object> m = new HashMap<>();
@@ -1351,7 +1363,7 @@ public class ProcessComponent {
                                     m.put(meta.getColumnName(c), rs.getObject(c));
                                 }
                                 return m;
-                            }, id);
+                            }, args);
                     if (!dbRows.isEmpty()) {
                         Map<String, Object> dbRow = dbRows.get(0);
                         String displayName = (String) dbRow.get("assignee_display_name");
@@ -1360,7 +1372,7 @@ public class ProcessComponent {
                             displayName = resolveUsernameById(userId);
                             dbRow.put("assignee_display_name", displayName);
                         }
-                        repairStaleTaskStatus(safeTableName, dbRow, id);
+                        repairStaleTaskStatus(safeTableName, dbRow, rowKey, pkCols);
                         for (Map.Entry<String, Object> entry : dbRow.entrySet()) {
                             if (entry.getValue() != null) {
                                 row.put(entry.getKey(), entry.getValue());
@@ -1373,11 +1385,16 @@ public class ProcessComponent {
                 if (!miProgress.isEmpty()) {
                     MiRowProgress schema = miProgress.values().iterator().next();
                     for (Object rowObj : rows) {
-                        if (!(rowObj instanceof Map<?, ?> rawRow)) continue;
+                        if (!(rowObj instanceof Map<?, ?> rawRow)) {
+                            continue;
+                        }
                         Map<String, Object> row = (Map<String, Object>) rawRow;
-                        Long id = parseRowId(row);
-                        if (id == null) continue;
-                        MiRowProgress p = miProgress.get(id);
+                        Map<String, Object> rowKey = SubTableRowKeySupport.rowKeyFromVariableRow(row, pkCols);
+                        if (rowKey == null) {
+                            continue;
+                        }
+                        String canon = SubTableRowKeySupport.canonicalRowKeyString(pkCols, rowKey);
+                        MiRowProgress p = miProgress.get(canon);
                         if (p == null) {
                             row.put(schema.statusColumn, "PENDING");
                             row.put(schema.nodeColumn, "-");
@@ -1404,23 +1421,23 @@ public class ProcessComponent {
 
     private record MiRowProgress(String statusColumn, String nodeColumn, String status, String currentNode) {}
 
-    private Map<Long, MiRowProgress> lookupMiProgressForDesignerTable(
-            Map<String, Map<Long, MiRowProgress>> byTable,
+    private Map<String, MiRowProgress> lookupMiProgressForDesignerTable(
+            Map<String, Map<String, MiRowProgress>> byTable,
             String designerTableName) {
         if (designerTableName == null || designerTableName.isBlank()) {
             return Collections.emptyMap();
         }
-        Map<Long, MiRowProgress> direct = byTable.get(designerTableName);
+        Map<String, MiRowProgress> direct = byTable.get(designerTableName);
         if (direct != null && !direct.isEmpty()) {
             return direct;
         }
-        for (Map.Entry<String, Map<Long, MiRowProgress>> e : byTable.entrySet()) {
+        for (Map.Entry<String, Map<String, MiRowProgress>> e : byTable.entrySet()) {
             if (e.getKey() != null && designerTableName.equalsIgnoreCase(e.getKey())) {
                 return e.getValue();
             }
         }
         String norm = normalizeMiTableKey(designerTableName);
-        for (Map.Entry<String, Map<Long, MiRowProgress>> e : byTable.entrySet()) {
+        for (Map.Entry<String, Map<String, MiRowProgress>> e : byTable.entrySet()) {
             if (e.getKey() != null && normalizeMiTableKey(e.getKey()).equals(norm)) {
                 return e.getValue();
             }
@@ -1435,22 +1452,8 @@ public class ProcessComponent {
         return s == null ? "" : s.trim().toLowerCase(Locale.ROOT);
     }
 
-    private static Long parseMiSubTaskRowId(Object rowIdObj) {
-        if (rowIdObj instanceof Number n) {
-            return n.longValue();
-        }
-        if (rowIdObj != null) {
-            try {
-                return Long.parseLong(String.valueOf(rowIdObj).trim());
-            } catch (Exception ignored) {
-                return null;
-            }
-        }
-        return null;
-    }
-
     @SuppressWarnings("unchecked")
-    private Map<String, Map<Long, MiRowProgress>> resolveMiRowProgress(String processInstanceId) {
+    private Map<String, Map<String, MiRowProgress>> resolveMiRowProgress(String processInstanceId) {
         if (processInstanceId == null || processInstanceId.isBlank()) {
             return Collections.emptyMap();
         }
@@ -1459,47 +1462,70 @@ public class ProcessComponent {
         }
         try {
             Optional<Map<String, Object>> opt = workflowEngineClient.getMultiInstanceStatus(processInstanceId);
-            if (opt.isEmpty()) return Collections.emptyMap();
+            if (opt.isEmpty()) {
+                return Collections.emptyMap();
+            }
             Map<String, Object> data = opt.get();
             Object tasksObj = data.get("tasks");
-            if (!(tasksObj instanceof List<?> tasks)) return Collections.emptyMap();
+            if (!(tasksObj instanceof List<?> tasks)) {
+                return Collections.emptyMap();
+            }
 
-            Map<String, Map<Long, List<Map<String, Object>>>> byTableRow = new HashMap<>();
+            Map<String, Map<String, List<Map<String, Object>>>> byTableRow = new HashMap<>();
             for (Object o : tasks) {
-                if (!(o instanceof Map<?, ?> raw)) continue;
+                if (!(o instanceof Map<?, ?> raw)) {
+                    continue;
+                }
+                @SuppressWarnings("unchecked")
                 Map<String, Object> t = (Map<String, Object>) raw;
-                Object rowIdObj = t.get("subTableRowId");
                 Object tableObj = t.get("subTableName");
-                Long rowId = parseMiSubTaskRowId(rowIdObj);
                 String tn = tableObj != null ? String.valueOf(tableObj).trim() : "";
-                if (rowId == null || tn.isEmpty()) continue;
+                if (tn.isEmpty()) {
+                    continue;
+                }
+                List<String> pkCols;
+                try {
+                    pkCols = PostgresPhysicalTablePrimaryKeys.resolvePrimaryKeyColumns(jdbcTemplate, tn);
+                } catch (Exception e) {
+                    continue;
+                }
+                @SuppressWarnings("unchecked")
+                Map<String, Object> rowKey = t.get("subTableRowKey") instanceof Map<?, ?>
+                        ? SubTableRowKeySupport.normalizeStringKeyMap((Map<?, ?>) t.get("subTableRowKey"))
+                        : null;
+                if (rowKey == null || !SubTableRowKeySupport.isComplete(pkCols, rowKey)) {
+                    rowKey = SubTableRowKeySupport.rowKeyFromExtendedProps(t, pkCols);
+                }
+                if (rowKey == null) {
+                    continue;
+                }
+                String canon = SubTableRowKeySupport.canonicalRowKeyString(pkCols, rowKey);
                 byTableRow.computeIfAbsent(tn, k -> new HashMap<>())
-                        .computeIfAbsent(rowId, k -> new ArrayList<>())
+                        .computeIfAbsent(canon, k -> new ArrayList<>())
                         .add(t);
             }
 
-            Map<String, Map<Long, MiRowProgress>> out = new HashMap<>();
+            Map<String, Map<String, MiRowProgress>> out = new HashMap<>();
             for (var e : byTableRow.entrySet()) {
                 String tableName = e.getKey();
-                Map<Long, List<Map<String, Object>>> rows = e.getValue();
-                Map<Long, MiRowProgress> rowProgress = new HashMap<>();
+                Map<String, List<Map<String, Object>>> rows = e.getValue();
+                Map<String, MiRowProgress> rowProgress = new HashMap<>();
                 for (var re : rows.entrySet()) {
-                    Long rowId = re.getKey();
+                    String rowCanon = re.getKey();
                     List<Map<String, Object>> rowTasks = re.getValue();
-                    if (rowTasks == null || rowTasks.isEmpty()) continue;
+                    if (rowTasks == null || rowTasks.isEmpty()) {
+                        continue;
+                    }
 
-                    // Determine configured column names (prefer the first record; they are identical per subprocess).
                     String statusCol = firstNonBlank(stringVal(rowTasks.get(0).get("miTaskStatusField")), "task_status");
                     String nodeCol = firstNonBlank(stringVal(rowTasks.get(0).get("miTaskCurrentNodeField")), "task_current_node");
 
-                    // Active task: any status not COMPLETED/CANCELLED; pick the latest createdTime if available.
                     Map<String, Object> active = pickLatestActiveTask(rowTasks);
                     if (active != null) {
                         String node = firstNonBlank(stringVal(active.get("taskName")), "-");
-                        rowProgress.put(rowId, new MiRowProgress(statusCol, nodeCol, "IN_PROGRESS", node));
+                        rowProgress.put(rowCanon, new MiRowProgress(statusCol, nodeCol, "IN_PROGRESS", node));
                     } else {
-                        // Has task records but none active => completed
-                        rowProgress.put(rowId, new MiRowProgress(statusCol, nodeCol, "COMPLETED", "end"));
+                        rowProgress.put(rowCanon, new MiRowProgress(statusCol, nodeCol, "COMPLETED", "end"));
                     }
                 }
                 if (!rowProgress.isEmpty()) {
@@ -1609,24 +1635,6 @@ public class ProcessComponent {
         return result;
     }
 
-    private Long parseRowId(Map<String, Object> row) {
-        Object rowId = row.get("id");
-        if (rowId == null) {
-            rowId = row.get("rowId");
-        }
-        if (rowId instanceof Number n) {
-            return n.longValue();
-        }
-        if (rowId != null) {
-            try {
-                return Long.parseLong(String.valueOf(rowId).trim());
-            } catch (Exception ignored) {
-                return null;
-            }
-        }
-        return null;
-    }
-
     private String firstNonBlank(String... values) {
         if (values == null) {
             return null;
@@ -1645,7 +1653,8 @@ public class ProcessComponent {
      * the form field values from Flowable's historical execution variables.
      * This self-heals rows that were stuck before the writeBack fix.
      */
-    private void repairStaleTaskStatus(String tableName, Map<String, Object> dbRow, Long rowId) {
+    private void repairStaleTaskStatus(String tableName, Map<String, Object> dbRow, Map<String, Object> rowKey,
+                                       List<String> pkCols) {
         Object ts = dbRow.get("task_status");
         if (ts != null && !"PENDING".equals(String.valueOf(ts))) {
             return;
@@ -1653,12 +1662,17 @@ public class ProcessComponent {
         if (!columnExists(tableName, "task_status")) {
             return;
         }
+        if (pkCols.size() != 1 || !(rowKey.get(pkCols.get(0)) instanceof Number)) {
+            return;
+        }
+        long rowId = ((Number) rowKey.get(pkCols.get(0))).longValue();
+        String pkColumn = pkCols.get(0);
         try {
             List<Map<String, Object>> taskEntries = jdbcTemplate.query(
                     "SELECT e.task_id, e.status FROM wf_extended_task_info e "
-                    + "WHERE e.is_deleted = false "
-                    + "AND (e.extended_properties LIKE '%\"subTableRowId\":' || ? || ',%' "
-                    + "  OR e.extended_properties LIKE '%\"subTableRowId\":' || ? || '}%')",
+                            + "WHERE e.is_deleted = false "
+                            + "AND (e.extended_properties LIKE '%\"subTableRowId\":' || ? || ',%' "
+                            + "  OR e.extended_properties LIKE '%\"subTableRowId\":' || ? || '}%')",
                     (rs, i) -> {
                         Map<String, Object> m = new HashMap<>();
                         m.put("task_id", rs.getString("task_id"));
@@ -1682,18 +1696,16 @@ public class ProcessComponent {
                 statusSql.append(", task_current_node = NULL");
                 dbRow.put("task_current_node", null);
             }
-            statusSql.append(" WHERE id = ? AND task_status = 'PENDING'");
+            statusSql.append(" WHERE ").append(pkColumn).append(" = ? AND task_status = 'PENDING'");
             jdbcTemplate.update(statusSql.toString(), rowId);
             dbRow.put("task_status", "COMPLETED");
 
             // 2. Recover form field values from Flowable execution history.
-            //    Cross-table access to ACT_HI_* is intentional — self-healing one-time
-            //    repair for rows where writeBackSubTableRow was never called.
-            recoverFormFieldsFromHistory(tableName, dbRow, rowId, completedTaskId);
+            recoverFormFieldsFromHistory(tableName, dbRow, rowKey, pkCols, completedTaskId);
 
             log.info("repairStaleTaskStatus: fixed {} row {} -> COMPLETED (task {})", tableName, rowId, completedTaskId);
         } catch (Exception e) {
-            log.debug("repairStaleTaskStatus skipped for {}#{}: {}", tableName, rowId, e.getMessage());
+            log.debug("repairStaleTaskStatus skipped for {}#{}: {}", tableName, rowKey, e.getMessage());
         }
     }
 
@@ -1701,12 +1713,15 @@ public class ProcessComponent {
      * Read the Flowable execution-scope variables that were saved when the subtask
      * was completed, and write matching columns back to the configured sub-table.
      */
-    private void recoverFormFieldsFromHistory(String tableName, Map<String, Object> dbRow, Long rowId, String taskId) {
+    private void recoverFormFieldsFromHistory(String tableName, Map<String, Object> dbRow, Map<String, Object> rowKey,
+                                              List<String> pkCols, String taskId) {
         try {
             List<String> execIds = jdbcTemplate.query(
                     "SELECT EXECUTION_ID_ FROM ACT_HI_TASKINST WHERE ID_ = ?",
                     (rs, i) -> rs.getString(1), taskId);
-            if (execIds.isEmpty()) return;
+            if (execIds.isEmpty()) {
+                return;
+            }
 
             List<Map<String, Object>> histVars = jdbcTemplate.query(
                     "SELECT NAME_, TEXT_ FROM ACT_HI_VARINST WHERE EXECUTION_ID_ = ? AND TEXT_ IS NOT NULL",
@@ -1718,7 +1733,11 @@ public class ProcessComponent {
                     }, execIds.get(0));
 
             Set<String> validCols = dbRow.keySet();
-            Set<String> skipCols = Set.of("id", "row_version", "task_status", "task_current_node", "meeting_id", "sort_order");
+            Set<String> skipCols = new HashSet<>(List.of(
+                    "row_version", "task_status", "task_current_node", "meeting_id", "sort_order"));
+            for (String pk : pkCols) {
+                skipCols.add(pk);
+            }
             Map<String, Object> updates = new HashMap<>();
             for (Map<String, Object> hv : histVars) {
                 String name = (String) hv.get("name");
@@ -1727,7 +1746,9 @@ public class ProcessComponent {
                     updates.put(name, value);
                 }
             }
-            if (updates.isEmpty()) return;
+            if (updates.isEmpty()) {
+                return;
+            }
 
             StringBuilder sql = new StringBuilder("UPDATE ").append(tableName).append(" SET ");
             List<Object> params = new ArrayList<>();
@@ -1736,14 +1757,14 @@ public class ProcessComponent {
                 params.add(entry.getValue());
             }
             sql.setLength(sql.length() - 2);
-            sql.append(" WHERE id = ?");
-            params.add(rowId);
+            sql.append(" WHERE ").append(SubTableRowKeySupport.buildPkWhereClause(pkCols));
+            params.addAll(Arrays.asList(SubTableRowKeySupport.orderedPkParams(pkCols, rowKey)));
 
             jdbcTemplate.update(sql.toString(), params.toArray());
             dbRow.putAll(updates);
-            log.info("recoverFormFieldsFromHistory: recovered {} fields for {} row {}", updates.size(), tableName, rowId);
+            log.info("recoverFormFieldsFromHistory: recovered {} fields for {} rowKey {}", updates.size(), tableName, rowKey);
         } catch (Exception e) {
-            log.debug("recoverFormFieldsFromHistory skipped for {}#{}: {}", tableName, rowId, e.getMessage());
+            log.debug("recoverFormFieldsFromHistory skipped for {} {}: {}", tableName, rowKey, e.getMessage());
         }
     }
 

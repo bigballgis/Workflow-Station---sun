@@ -23,4 +23,9 @@ public class AssignSubTableRowRequest {
      */
     @NotBlank(message = "处理人用户ID不能为空")
     private String assigneeId;
+
+    /**
+     * 联合主键时必须提供；单列主键可与路径 rowId 二选一。
+     */
+    private java.util.Map<String, Object> rowKey;
 }

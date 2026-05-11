@@ -1,5 +1,7 @@
 package com.portal.component;
 
+import com.platform.common.jdbc.PostgresPhysicalTablePrimaryKeys;
+import com.platform.common.jdbc.SubTableRowKeySupport;
 import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.TaskCompleteRequest;
 import com.portal.dto.TaskInfo;
@@ -29,12 +31,17 @@ import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.StringReader;
 import java.time.LocalDateTime;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * 任务处理组件
@@ -269,12 +276,18 @@ public class TaskProcessComponent {
      */
     @Transactional
     public Map<String, Object> assignSubTableRow(String taskId, Long rowId, String assigneeId, String userId) {
-        return assignSubTableRow(taskId, rowId, assigneeId, userId, null);
+        return assignSubTableRow(taskId, rowId, null, assigneeId, userId, null);
     }
 
     @Transactional
     public Map<String, Object> assignSubTableRow(String taskId, Long rowId, String assigneeId, String userId,
                                                  String portalUsername) {
+        return assignSubTableRow(taskId, rowId, null, assigneeId, userId, portalUsername);
+    }
+
+    @Transactional
+    public Map<String, Object> assignSubTableRow(String taskId, Long rowId, Map<String, Object> rowKey, String assigneeId,
+                                                 String userId, String portalUsername) {
         if (!workflowEngineClient.isAvailable()) {
             throw new IllegalStateException("Flowable engine unavailable, please check if workflow-engine-core service is running");
         }
@@ -293,7 +306,8 @@ public class TaskProcessComponent {
             claimTask(taskId, userId, portalUsername);
         }
 
-        Optional<Map<String, Object>> result = workflowEngineClient.assignSubTableRow(taskId, rowId, assigneeId);
+        long pathRowId = rowId != null ? rowId : 0L;
+        Optional<Map<String, Object>> result = workflowEngineClient.assignSubTableRow(taskId, pathRowId, assigneeId, rowKey);
         if (result.isEmpty()) {
             throw new PortalException("500", "Failed to assign sub-table row: " + taskId);
         }
@@ -333,7 +347,7 @@ public class TaskProcessComponent {
             }
         }
         updateAssigneeDisplayName(participantTable, rowId, assigneeId);
-        return assignSubTableRow(taskId, rowId, assigneeId, userId, portalUsername);
+        return assignSubTableRow(taskId, rowId, null, assigneeId, userId, portalUsername);
     }
 
     private Long resolveParticipantRowIdByIdentity(String participantTable, String email, String name, String department) {
@@ -1514,54 +1528,61 @@ public class TaskProcessComponent {
                 return;
             }
 
-            // 2. outgoing 节点内容是 sequenceFlow id，需要先解析 sequenceFlow.targetRef
+            // 2. 沿 sequenceFlow / 网关等向前广度优先搜索，直到找到「多实例」subProcess
+            //（避免 UserTask → Gateway → SubProcess 时仅直连目标导致漏注入）
             List<String> outgoingFlowIds = getDirectChildTextValues(taskElement, "outgoing");
             if (outgoingFlowIds.isEmpty()) {
                 log.debug("[MI] No outgoing flow found for task {}", taskDefinitionKey);
                 return;
             }
 
+            Deque<String> frontier = new ArrayDeque<>();
+            Set<String> visited = new HashSet<>();
             for (String flowId : outgoingFlowIds) {
-                Element sequenceFlow = findElementByLocalNameAndId(document, "sequenceFlow", flowId);
-                String targetRef = sequenceFlow != null ? sequenceFlow.getAttribute("targetRef") : null;
-                if (targetRef == null || targetRef.isBlank()) {
-                    log.debug("[MI] SequenceFlow {} has no targetRef", flowId);
-                    continue;
-                }
-
-                // 3. 检查目标节点是否为多实例 SubProcess
-                Element subProcess = findElementByLocalNameAndId(document, "subProcess", targetRef);
-                if (subProcess == null) {
-                    log.debug("[MI] Target {} is not a subProcess", targetRef);
-                    continue;
-                }
-
-                Element loopCharacteristics = firstDirectChild(subProcess, "multiInstanceLoopCharacteristics");
-                if (loopCharacteristics == null) {
-                    log.debug("[MI] Target subProcess {} is not multi-instance", targetRef);
-                    continue;
-                }
-
-                // 4. 从 loopCharacteristics 提取 collection 变量名（兼容属性和子元素两种写法）
-                String collectionVariableName = extractFlowableCollection(loopCharacteristics);
-                if (collectionVariableName == null || collectionVariableName.isBlank()) {
-                    log.warn("[MI] SubProcess {} has no flowable:collection configuration", targetRef);
-                    continue;
-                }
-
-                // 5. 从 SubProcess 内部的 UserTask 提取 assigneeField
-                String assigneeField = extractAssigneeFieldFromSubProcess(subProcess);
-                if (assigneeField == null || assigneeField.isBlank()) {
-                    log.warn("[MI] No assigneeField found in subProcess {} inner UserTask", targetRef);
-                    continue;
-                }
-
-                // 6. 从 __subTables__ 构建集合变量
-                buildMiCollectionVariable(variables, collectionVariableName, assigneeField);
-                return;
+                enqueueSequenceFlowTargets(document, flowId, frontier);
             }
 
-            log.debug("[MI] No outgoing multi-instance subProcess found for task {}", taskDefinitionKey);
+            while (!frontier.isEmpty()) {
+                String nodeId = frontier.poll();
+                if (nodeId == null || nodeId.isBlank()) {
+                    continue;
+                }
+                if (!visited.add(nodeId)) {
+                    continue;
+                }
+
+                Element subProcess = findElementByLocalNameAndId(document, "subProcess", nodeId);
+                if (subProcess != null) {
+                    Element loopCharacteristics = firstDirectChild(subProcess, "multiInstanceLoopCharacteristics");
+                    if (loopCharacteristics != null) {
+                        String collectionVariableName = extractFlowableCollection(loopCharacteristics);
+                        if (collectionVariableName == null || collectionVariableName.isBlank()) {
+                            log.warn("[MI] SubProcess {} has no flowable:collection configuration", nodeId);
+                            continue;
+                        }
+                        String assigneeField = extractAssigneeFieldFromSubProcess(subProcess);
+                        if (assigneeField == null || assigneeField.isBlank()) {
+                            log.warn("[MI] No assigneeField found in subProcess {} inner UserTask", nodeId);
+                            continue;
+                        }
+                        buildMiCollectionVariable(variables, collectionVariableName, assigneeField);
+                        return;
+                    }
+                    for (String outFlow : getDirectChildTextValues(subProcess, "outgoing")) {
+                        enqueueSequenceFlowTargets(document, outFlow, frontier);
+                    }
+                    continue;
+                }
+
+                Element flowNode = findElementByBpmnId(document, nodeId);
+                if (flowNode != null) {
+                    for (String outFlow : getDirectChildTextValues(flowNode, "outgoing")) {
+                        enqueueSequenceFlowTargets(document, outFlow, frontier);
+                    }
+                }
+            }
+
+            log.debug("[MI] No reachable multi-instance subProcess found from task {}", taskDefinitionKey);
         } catch (Exception e) {
             log.warn("[MI] injectMiCollectionFromBpmn failed for processDefinitionKey={}, taskDefinitionKey={}: {}",
                     processDefinitionKey, taskDefinitionKey, e.getMessage());
@@ -1571,7 +1592,8 @@ public class TaskProcessComponent {
     /**
      * 从 __subTables__ 构建多实例集合变量。
      * collectionVariableName 格式：multiInstance_{subTableName}_collection
-     * 每个元素：{ rowId, [assigneeField]: assigneeValue }
+     * 表在 PG 中有主键时：每行必须从表单数据解析出完整主键（{@link SubTableRowKeySupport#rowKeyFromVariableRow}），否则该行不入集合并打日志；
+     * 仅当无法从目录解析主键列（退化）时，才用 rowId / 行下标区分行。
      */
     @SuppressWarnings("unchecked")
     private void buildMiCollectionVariable(Map<String, Object> variables, String collectionVariableName,
@@ -1602,32 +1624,78 @@ public class TaskProcessComponent {
             return;
         }
 
+        String miSubTableName = parseSubTableNameFromMiCollectionVariable(collectionVariableName);
+
         List<Map<String, Object>> collection = new java.util.ArrayList<>();
         List<Integer> emptyAssigneeRows = new java.util.ArrayList<>();
-        java.util.Set<String> seenRows = new java.util.LinkedHashSet<>();
+        java.util.Set<String> seenRowKeys = new java.util.LinkedHashSet<>();
+        List<String> pkCols = null;
+        if (miSubTableName != null && miSubTableName.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+            try {
+                pkCols = PostgresPhysicalTablePrimaryKeys.resolvePrimaryKeyColumns(jdbcTemplate, miSubTableName);
+            } catch (Exception e) {
+                log.debug("[MI] PK resolve skipped for {}: {}", miSubTableName, e.getMessage());
+            }
+        }
+        int skippedUnmappedPk = 0;
         for (int i = 0; i < allRows.size(); i++) {
             Map<String, Object> row = allRows.get(i);
-            Object rowId = row.get("rowId");
-            if (rowId == null) rowId = row.get("id");
-            Object assigneeValue = row.get(assigneeField);
+            Map<String, Object> rowKey = null;
+            if (pkCols != null) {
+                rowKey = SubTableRowKeySupport.rowKeyFromVariableRow(row, pkCols);
+                if (rowKey == null) {
+                    skippedUnmappedPk++;
+                    log.warn(
+                            "[MI] Row {} omitted from '{}': sub-table row does not contain values for primary key columns {} (available keys: {})",
+                            i + 1,
+                            collectionVariableName,
+                            pkCols,
+                            row.keySet());
+                    continue;
+                }
+            }
+            Object rowId = null;
+            if (rowKey != null && pkCols != null && pkCols.size() == 1) {
+                rowId = rowKey.get(pkCols.get(0));
+            } else if (pkCols == null) {
+                rowId = row.get("rowId");
+            }
+            Object assigneeValue = SubTableRowKeySupport.getRowValueIgnoreCase(row, assigneeField);
             String assigneeText = assigneeValue != null ? String.valueOf(assigneeValue).trim() : "";
             if (assigneeText.isEmpty()) {
                 emptyAssigneeRows.add(i + 1);
                 continue;
             }
-            String rowKey = rowId != null
-                    ? "row:" + String.valueOf(rowId).trim()
-                    : "assignee:" + assigneeText;
-            if (!seenRows.add(rowKey)) {
+            String dedupKey;
+            if (rowKey != null) {
+                dedupKey = SubTableRowKeySupport.canonicalRowKeyString(pkCols, rowKey);
+            } else if (rowId != null) {
+                dedupKey = "row:" + String.valueOf(rowId).trim();
+            } else {
+                dedupKey = "idx:" + i;
+            }
+            if (!seenRowKeys.add(dedupKey)) {
+                log.debug("[MI] Duplicate row identity skipped for collection {}: {}", collectionVariableName, dedupKey);
                 continue;
             }
 
             Map<String, Object> item = new HashMap<>();
-            item.put("rowId", rowId != null ? rowId : null);
-            // assigneeField 字段的值存入集合元素，供 Flowable 多实例 assigneeExpression 使用
+            if (rowKey != null) {
+                item.put("rowKey", new LinkedHashMap<>(rowKey));
+            }
+            if (rowId instanceof Number) {
+                item.put("rowId", ((Number) rowId).longValue());
+            } else if (rowId != null && pkCols != null && pkCols.size() == 1) {
+                item.put("rowId", rowId);
+            }
             item.put(assigneeField, assigneeText);
 
             collection.add(item);
+        }
+
+        if (skippedUnmappedPk > 0) {
+            log.warn("[MI] {} row(s) omitted from '{}' because PK values were missing in form data; collection size={}",
+                    skippedUnmappedPk, collectionVariableName, collection.size());
         }
 
         if (!emptyAssigneeRows.isEmpty()) {
@@ -1639,6 +1707,52 @@ public class TaskProcessComponent {
         variables.put(collectionVariableName, collection);
         log.info("[MI] Built collection '{}' with {} items, assigneeField='{}'",
                 collectionVariableName, collection.size(), assigneeField);
+    }
+
+    /**
+     * {@code multiInstance_{subTableName}_collection} → physical sub-table name.
+     */
+    private static String parseSubTableNameFromMiCollectionVariable(String collectionVariableName) {
+        if (collectionVariableName == null
+                || !collectionVariableName.startsWith("multiInstance_")
+                || !collectionVariableName.endsWith("_collection")) {
+            return null;
+        }
+        return collectionVariableName.substring(
+                "multiInstance_".length(),
+                collectionVariableName.length() - "_collection".length());
+    }
+
+    private void enqueueSequenceFlowTargets(Document document, String flowId, Deque<String> frontier) {
+        if (document == null || flowId == null || flowId.isBlank()) {
+            return;
+        }
+        Element sequenceFlow = findElementByLocalNameAndId(document, "sequenceFlow", flowId);
+        if (sequenceFlow == null) {
+            sequenceFlow = findElementByBpmnId(document, flowId);
+        }
+        if (sequenceFlow == null) {
+            log.debug("[MI] sequenceFlow id={} not found", flowId);
+            return;
+        }
+        String targetRef = sequenceFlow.getAttribute("targetRef");
+        if (targetRef != null && !targetRef.isBlank()) {
+            frontier.add(targetRef);
+        }
+    }
+
+    private static Element findElementByBpmnId(Document document, String id) {
+        if (document == null || id == null || id.isBlank()) {
+            return null;
+        }
+        NodeList nodes = document.getElementsByTagNameNS("*", "*");
+        for (int i = 0; i < nodes.getLength(); i++) {
+            Node n = nodes.item(i);
+            if (n instanceof Element e && id.equals(e.getAttribute("id"))) {
+                return e;
+            }
+        }
+        return null;
     }
 
     // ==================== BPMN XML 解析辅助方法 ====================

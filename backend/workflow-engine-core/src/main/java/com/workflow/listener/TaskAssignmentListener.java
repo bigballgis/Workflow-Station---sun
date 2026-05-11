@@ -2,6 +2,8 @@ package com.workflow.listener;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.platform.common.jdbc.PostgresPhysicalTablePrimaryKeys;
+import com.platform.common.jdbc.SubTableRowKeySupport;
 import com.workflow.component.BpmnActionParser;
 import com.workflow.entity.ExtendedTaskInfo;
 import com.workflow.enums.AssignmentType;
@@ -669,15 +671,6 @@ public class TaskAssignmentListener implements FlowableEventListener {
         @SuppressWarnings("unchecked")
         Map<String, Object> currentItem = (Map<String, Object>) currentItemObj;
 
-        Long subTableRowId = extractLong(currentItem.get("rowId"));
-        if (subTableRowId == null) {
-            subTableRowId = extractLong(currentItem.get("id"));
-        }
-        if (subTableRowId == null) {
-            return;
-        }
-        Long subTableRowVersion = extractLong(currentItem.get("rowVersion"));
-
         String subTableId = null;
         String subTableName = null;
         BpmnModel bpmnModel = repositoryService.getBpmnModel(processDefinitionId);
@@ -699,6 +692,23 @@ public class TaskAssignmentListener implements FlowableEventListener {
             subTableName = miScopeTable;
         }
 
+        List<String> pkColsPre;
+        Map<String, Object> rowKeyPre;
+        try {
+            pkColsPre = PostgresPhysicalTablePrimaryKeys.resolvePrimaryKeyColumns(jdbcTemplate,
+                    requireSafeIdentifier(subTableName));
+            rowKeyPre = SubTableRowKeySupport.rowKeyFromCurrentItem(currentItem, pkColsPre);
+        } catch (Exception e) {
+            log.debug("ensureMI preassigned: skip task {}, could not resolve row key: {}", taskId, e.getMessage());
+            return;
+        }
+        if (rowKeyPre == null) {
+            return;
+        }
+        final List<String> pkCols = pkColsPre;
+        final Map<String, Object> rowKey = rowKeyPre;
+        Long subTableRowVersion = extractLong(currentItem.get("rowVersion"));
+
         String assigneeId = assigneeOverride != null && !assigneeOverride.isBlank()
                 ? normalizeFlowableUserIdValue(assigneeOverride.trim())
                 : normalizeFlowableUserIdValue(task.getAssignee());
@@ -709,7 +719,10 @@ public class TaskAssignmentListener implements FlowableEventListener {
         String[] progressCols = resolveMiProgressColumnNames(processDefinitionId, taskDefinitionKey);
         Map<String, Object> extendedProps = new HashMap<>();
         extendedProps.put("multiInstance", true);
-        extendedProps.put("subTableRowId", subTableRowId);
+        extendedProps.put("subTableRowKey", rowKey);
+        if (pkCols.size() == 1 && rowKey.get(pkCols.get(0)) instanceof Number) {
+            extendedProps.put("subTableRowId", ((Number) rowKey.get(pkCols.get(0))).longValue());
+        }
         if (subTableRowVersion != null) {
             extendedProps.put("subTableRowVersion", subTableRowVersion);
         }
@@ -771,9 +784,9 @@ public class TaskAssignmentListener implements FlowableEventListener {
                     .build();
             extendedTaskInfoRepository.save(extInfo);
         }
-        updateSubTableTaskProgress(subTableName, subTableRowId, task.getName(), progressCols[0], progressCols[1]);
-        log.info("Ensured ExtendedTaskInfo for preassigned MI task {}: rowId={}, subTable={}",
-                taskId, subTableRowId, subTableName);
+        updateSubTableTaskProgress(subTableName, rowKey, task.getName(), progressCols[0], progressCols[1]);
+        log.info("Ensured ExtendedTaskInfo for preassigned MI task {}: rowKey={}, subTable={}",
+                taskId, rowKey, subTableName);
     }
 
     private void handleElementVariableAssignment(TaskEntity task, String taskId,
@@ -802,24 +815,8 @@ public class TaskAssignmentListener implements FlowableEventListener {
             @SuppressWarnings("unchecked")
             Map<String, Object> currentItem = (Map<String, Object>) currentItemObj;
 
-            Object rowIdObj = currentItem.get("rowId");
             Object rowVersionObj = currentItem.get("rowVersion");
-
-            Long subTableRowId = null;
             Long subTableRowVersion = null;
-
-            if (rowIdObj != null) {
-                if (rowIdObj instanceof Number) {
-                    subTableRowId = ((Number) rowIdObj).longValue();
-                } else {
-                    try {
-                        subTableRowId = Long.parseLong(String.valueOf(rowIdObj));
-                    } catch (NumberFormatException e) {
-                        log.warn("Invalid rowId format in currentItem for task {}: {}", taskId, rowIdObj);
-                    }
-                }
-            }
-
             if (rowVersionObj != null) {
                 if (rowVersionObj instanceof Number) {
                     subTableRowVersion = ((Number) rowVersionObj).longValue();
@@ -862,6 +859,27 @@ public class TaskAssignmentListener implements FlowableEventListener {
                                 "assigneeField"));
             }
 
+            if (subTableName == null || subTableName.isBlank()) {
+                log.warn("subTableName missing for MI ELEMENT_VARIABLE task {}, task will remain CREATED", taskId);
+                return;
+            }
+            List<String> pkColsEv;
+            Map<String, Object> rowKeyEv;
+            try {
+                pkColsEv = PostgresPhysicalTablePrimaryKeys.resolvePrimaryKeyColumns(jdbcTemplate,
+                        requireSafeIdentifier(subTableName));
+                rowKeyEv = SubTableRowKeySupport.rowKeyFromCurrentItem(currentItem, pkColsEv);
+            } catch (Exception e) {
+                log.warn("Could not resolve row key for task {}: {}", taskId, e.getMessage());
+                return;
+            }
+            if (rowKeyEv == null) {
+                log.warn("currentItem missing rowKey / PK values for task {}, task will remain CREATED", taskId);
+                return;
+            }
+            final List<String> pkCols = pkColsEv;
+            final Map<String, Object> rowKey = rowKeyEv;
+
             // 与门户 buildParticipantsCollection、子表列名对齐：优先 BPMN assigneeField，其次 assigneeId，再次 assignee_user_id
             Object assigneeIdObj = null;
             if (assigneeFieldFromBpmn != null && !assigneeFieldFromBpmn.isBlank()) {
@@ -899,8 +917,9 @@ public class TaskAssignmentListener implements FlowableEventListener {
 
             Map<String, Object> extendedProps = new HashMap<>();
             extendedProps.put("multiInstance", true);
-            if (subTableRowId != null) {
-                extendedProps.put("subTableRowId", subTableRowId);
+            extendedProps.put("subTableRowKey", rowKey);
+            if (pkCols.size() == 1 && rowKey.get(pkCols.get(0)) instanceof Number) {
+                extendedProps.put("subTableRowId", ((Number) rowKey.get(pkCols.get(0))).longValue());
             }
             if (subTableRowVersion != null) {
                 extendedProps.put("subTableRowVersion", subTableRowVersion);
@@ -939,9 +958,9 @@ public class TaskAssignmentListener implements FlowableEventListener {
                         .build();
 
                 extendedTaskInfoRepository.save(extInfo);
-                updateSubTableTaskProgress(subTableName, subTableRowId, task.getName(), progressCols[0], progressCols[1]);
-                log.info("Created ExtendedTaskInfo for multi-instance task {}: assignee={}, rowId={}",
-                        taskId, assigneeId, subTableRowId);
+                updateSubTableTaskProgress(subTableName, rowKey, task.getName(), progressCols[0], progressCols[1]);
+                log.info("Created ExtendedTaskInfo for multi-instance task {}: assignee={}, rowKey={}",
+                        taskId, assigneeId, rowKey);
             } catch (Exception e) {
                 log.error("Failed to save ExtendedTaskInfo for task {}: {}", taskId, e.getMessage(), e);
             }
@@ -1107,13 +1126,16 @@ public class TaskAssignmentListener implements FlowableEventListener {
      * Column names come from SubProcess BPMN extensions {@code miTaskStatusField} / {@code miTaskCurrentNodeField}
      * (designer) with defaults {@code task_status} / {@code task_current_node}.
      */
-    private void updateSubTableTaskProgress(String subTableName, Long subTableRowId, String taskName,
+    private void updateSubTableTaskProgress(String subTableName, Map<String, Object> rowKey, String taskName,
                                             String statusColumn, String currentNodeColumn) {
-        if (subTableName == null || subTableRowId == null) {
+        if (subTableName == null || rowKey == null || rowKey.isEmpty()) {
             return;
         }
         try {
             String tableName = requireSafeIdentifier(subTableName);
+            List<String> pkCols = PostgresPhysicalTablePrimaryKeys.resolvePrimaryKeyColumns(jdbcTemplate, tableName);
+            String pkWhere = SubTableRowKeySupport.buildPkWhereClause(pkCols);
+            Object[] pkArgs = SubTableRowKeySupport.orderedPkParams(pkCols, rowKey);
             String statusCol = requireSafeIdentifier(statusColumn);
             String nodeCol = requireSafeIdentifier(currentNodeColumn);
             boolean hasTaskStatus = columnExists(tableName, statusCol);
@@ -1133,12 +1155,12 @@ public class TaskAssignmentListener implements FlowableEventListener {
                 params.add(taskName);
             }
             sql.setLength(sql.length() - 2);
-            sql.append(" WHERE id = ?");
-            params.add(subTableRowId);
+            sql.append(" WHERE ").append(pkWhere);
+            params.addAll(Arrays.asList(pkArgs));
             jdbcTemplate.update(sql.toString(), params.toArray());
         } catch (Exception e) {
-            log.debug("Skipped updating sub-table task progress for {}#{}: {}",
-                    subTableName, subTableRowId, e.getMessage());
+            log.debug("Skipped updating sub-table task progress for {} / rowKey={}: {}",
+                    subTableName, rowKey, e.getMessage());
         }
     }
 
@@ -1175,23 +1197,33 @@ public class TaskAssignmentListener implements FlowableEventListener {
         if (currentItemObj == null) {
             currentItemObj = processVariables.get("_currentItem");
         }
-        if (!(currentItemObj instanceof Map<?, ?> currentItem)) {
+        if (!(currentItemObj instanceof Map<?, ?> currentItemRaw)) {
             return;
         }
-        Long rowId = extractLong(currentItem.get("rowId"));
-        if (rowId == null) {
-            rowId = extractLong(currentItem.get("id"));
-        }
-        if (rowId == null) {
-            return;
-        }
+        @SuppressWarnings("unchecked")
+        Map<String, Object> currentItem = (Map<String, Object>) currentItemRaw;
 
         String subTableName = firstNonBlank(
                 bpmnActionParser.getUserTaskExtensionPropertyValue(processDefinitionId, taskDefinitionKey, "subTableName"),
                 bpmnActionParser.getMultiInstanceSubProcessSubTableName(processDefinitionId, taskDefinitionKey)
         );
+        if (subTableName == null || subTableName.isBlank()) {
+            return;
+        }
+        Map<String, Object> rowKey;
+        try {
+            List<String> pkCols = PostgresPhysicalTablePrimaryKeys.resolvePrimaryKeyColumns(jdbcTemplate,
+                    requireSafeIdentifier(subTableName));
+            rowKey = SubTableRowKeySupport.rowKeyFromCurrentItem(currentItem, pkCols);
+        } catch (Exception e) {
+            return;
+        }
+        if (rowKey == null) {
+            return;
+        }
+
         String[] cols = resolveMiProgressColumnNames(processDefinitionId, taskDefinitionKey);
-        updateSubTableTaskProgress(subTableName, rowId, taskName, cols[0], cols[1]);
+        updateSubTableTaskProgress(subTableName, rowKey, taskName, cols[0], cols[1]);
     }
 
     private Long extractLong(Object value) {
