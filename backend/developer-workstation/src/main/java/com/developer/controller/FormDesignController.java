@@ -171,4 +171,14 @@ public class FormDesignController {
         return ResponseEntity.ok(ApiResponse.success(copied));
     }
 
+    @PostMapping("/{formId}/copy-to-task")
+    @Operation(summary = "Copy a Process Form to a Task Form (full content copy, formType changed to TASK)")
+    @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
+    public ResponseEntity<ApiResponse<FormDefinition>> copyProcessToTaskForm(
+            @PathVariable Long functionUnitId,
+            @PathVariable Long formId) {
+        FormDefinition copied = formDesignComponent.copyProcessToTaskForm(formId);
+        return ResponseEntity.ok(ApiResponse.success(copied));
+    }
+
 }

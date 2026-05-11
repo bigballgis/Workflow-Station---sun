@@ -22,6 +22,19 @@
       <el-button @click="handleValidate">
         {{ t('table.validateTables') }}
       </el-button>
+      <el-button
+        :loading="importing"
+        @click="handleImportClick"
+      >
+        {{ t('table.importTemplate') }}
+      </el-button>
+      <input
+        ref="fileInputRef"
+        type="file"
+        accept=".json"
+        style="display: none"
+        @change="handleImportFile"
+      />
     </div>
     
     <div
@@ -94,6 +107,13 @@
               @click.stop="handleSelectTable(row)"
             >
               {{ t('common.edit') }}
+            </el-button>
+            <el-button
+              link
+              type="success"
+              @click.stop="handleExportTable(row)"
+            >
+              {{ t('table.exportTemplate') }}
             </el-button>
             <el-button
               link
@@ -315,16 +335,6 @@
               size="small"
               :placeholder="t('common.inputPlaceholder')"
             />
-          </template>
-        </el-table-column>
-        <el-table-column
-          prop="isUnique"
-          :label="t('table.isUnique')"
-          min-width="68"
-          align="center"
-        >
-          <template #default="{ row }">
-            <el-checkbox v-model="row.isUnique" />
           </template>
         </el-table-column>
         <el-table-column
@@ -649,6 +659,8 @@ const ddlContent = ref('')
 const createForm = reactive({ tableName: '', tableType: 'MAIN', description: '' })
 const relations = ref<TableRelation[]>([])
 const foreignKeys = ref<ForeignKeyDTO[]>([])
+const importing = ref(false)
+const fileInputRef = ref<HTMLInputElement | null>(null)
 
 const NAME_REGEX = /^[a-zA-Z][a-zA-Z0-9_]*$/
 
@@ -762,6 +774,24 @@ async function handleSaveTable() {
     ElMessage.warning(t('table.invalidFieldName', { name: invalidField.fieldName }))
     return
   }
+  // Validate PK-Nullable constraint
+  const pkFields = selectedTable.value.fieldDefinitions.filter(
+    f => f.isPrimaryKey && f.fieldName && f.fieldName.trim()
+  )
+  if (pkFields.length === 1) {
+    // 只有一个主键：该字段的Nullable必须为未勾选
+    if (pkFields[0].nullable !== false) {
+      ElMessage.warning(t('table.pkNotNullable'))
+      return
+    }
+  } else if (pkFields.length >= 2) {
+    // 联合主键：至少有一个主键字段的Nullable不能勾选
+    const notNullableCount = pkFields.filter(f => f.nullable !== true).length
+    if (notNullableCount === 0) {
+      ElMessage.warning(t('table.compositePkNotNullable'))
+      return
+    }
+  }
   try {
     // 转换数据格式：将 fieldDefinitions 转换为 fields
     // 后端期望的是 TableDefinitionRequest，包含 fields 而不是 fieldDefinitions
@@ -776,7 +806,6 @@ async function handleSaveTable() {
         nullable: f.nullable !== undefined ? f.nullable : true,
         defaultValue: f.defaultValue,
         isPrimaryKey: f.isPrimaryKey || false,
-        isUnique: (f as any).isUnique || false,
         description: f.description,
         sortOrder: index
       }))
@@ -834,6 +863,124 @@ async function handleDeleteTable(row: TableDefinition) {
     loadTables()
   } catch (e: any) {
     ElMessage.error(e.response?.data?.message || t('common.error'))
+  }
+}
+
+// ─── Export / Import ────────────────────────────────────────────────────────
+
+const EXPORT_FORMAT = 'workflow-station-table-template'
+const EXPORT_VERSION = 1
+
+interface TableTemplate {
+  format: string
+  version: number
+  tableName: string
+  tableDisplayName?: string
+  tableType: string
+  description?: string
+  fieldDefinitions: Omit<FieldDefinition, 'id'>[]
+}
+
+function handleExportTable(row: TableDefinition) {
+  const template: TableTemplate = {
+    format: EXPORT_FORMAT,
+    version: EXPORT_VERSION,
+    tableName: row.tableName,
+    tableDisplayName: row.tableDisplayName,
+    tableType: row.tableType,
+    description: row.description,
+    fieldDefinitions: (row.fieldDefinitions || []).map(f => ({
+      fieldName: f.fieldName,
+      dataType: f.dataType,
+      length: f.length,
+      precision: f.precision,
+      scale: f.scale,
+      nullable: f.nullable,
+      isPrimaryKey: f.isPrimaryKey,
+      defaultValue: f.defaultValue,
+      description: f.description,
+    })),
+  }
+  const json = JSON.stringify(template, null, 2)
+  const blob = new Blob([json], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${row.tableName}.table-template.json`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+  ElMessage.success(t('table.exportSuccess'))
+}
+
+function handleImportClick() {
+  fileInputRef.value?.click()
+}
+
+async function handleImportFile(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+
+  importing.value = true
+  try {
+    const text = await file.text()
+    const template: TableTemplate = JSON.parse(text)
+
+    // Validate format
+    if (template.format !== EXPORT_FORMAT) {
+      ElMessage.warning(t('table.importInvalidFormat'))
+      return
+    }
+    if (!template.tableName || !validateName(template.tableName)) {
+      ElMessage.warning(t('table.invalidTableName'))
+      return
+    }
+    if (!template.fieldDefinitions || !Array.isArray(template.fieldDefinitions)) {
+      ElMessage.warning(t('table.importNoFields'))
+      return
+    }
+
+    // Build create request
+    const requestData = {
+      tableName: template.tableName,
+      tableDisplayName: template.tableDisplayName,
+      tableType: template.tableType || 'MAIN',
+      description: template.description,
+      fields: template.fieldDefinitions
+        .filter(f => f.fieldName && f.fieldName.trim())
+        .map((f, index) => ({
+          fieldName: f.fieldName,
+          dataType: f.dataType || 'VARCHAR',
+          length: f.length,
+          precision: f.precision,
+          scale: f.scale,
+          nullable: f.nullable !== undefined ? f.nullable : true,
+          defaultValue: f.defaultValue,
+          isPrimaryKey: f.isPrimaryKey || false,
+          description: f.description,
+          sortOrder: index,
+        })),
+    }
+
+    await store.createTable(props.functionUnitId, requestData as any)
+    ElMessage.success(t('table.importSuccess'))
+    loadTables()
+  } catch (e: any) {
+    if (e instanceof SyntaxError) {
+      ElMessage.error(t('table.importParseError'))
+    } else {
+      const msg = e.response?.data?.error?.message
+        || e.response?.data?.message
+        || e.message
+        || t('common.error')
+      ElMessage.error(msg)
+    }
+  } finally {
+    importing.value = false
+    // Reset file input so the same file can be re-imported
+    if (input) input.value = ''
   }
 }
 

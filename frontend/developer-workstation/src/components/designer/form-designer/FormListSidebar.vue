@@ -154,6 +154,12 @@
                   >
                     {{ $t('form.copyForm') }}
                   </el-dropdown-item>
+                  <el-dropdown-item
+                    v-if="row.formType === 'PROCESS'"
+                    command="copy-to-task"
+                  >
+                    {{ $t('form.copyProcessToTaskForm') }}
+                  </el-dropdown-item>
                   <el-dropdown-item command="bindings">
                     {{ $t('form.editBindings') }}
                   </el-dropdown-item>

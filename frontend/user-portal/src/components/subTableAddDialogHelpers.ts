@@ -38,6 +38,7 @@ export interface DialogColumn {
   label: string
   type?: ColumnType
   required?: boolean
+  readonly?: boolean
   placeholder?: string
   minWidth?: number
   options?: Array<{ label: string; value: string | number }>

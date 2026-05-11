@@ -253,7 +253,16 @@ export default {
     precision: '精度',
     scale: '小數位',
     invalidTableName: '表名必須以字母開頭，只能包含字母、數字和底線',
-    invalidFieldName: '欄位名 "{name}" 無效，必須以字母開頭，只能包含字母、數字和底線'
+    invalidFieldName: '欄位名 "{name}" 無效，必須以字母開頭，只能包含字母、數字和底線',
+    pkNotNullable: '主鍵欄位不能勾選「可空」，請取消勾選後儲存',
+    compositePkNotNullable: '聯合主鍵中至少需要有一個欄位不勾選「可空」',
+    exportTemplate: '匯出範本',
+    importTemplate: '匯入範本',
+    exportSuccess: '範本匯出成功',
+    importSuccess: '範本匯入成功',
+    importInvalidFormat: '匯入失敗：檔案格式不正確，請使用匯出的範本檔案',
+    importParseError: '匯入失敗：JSON 解析錯誤，請檢查檔案內容',
+    importNoFields: '匯入失敗：範本中沒有欄位定義'
   },
   form: {
     title: '表單設計器',
@@ -381,6 +390,10 @@ export default {
     copyForm: '複製',
     copyFormSuccess: '表單複製成功',
     copyFormFailed: '表單複製失敗',
+    // Copy process form to task form
+    copyProcessToTaskForm: '複製為任務表單',
+    copyProcessToTaskFormSuccess: '流程表單已成功複製為任務表單',
+    copyProcessToTaskFormFailed: '流程表單複製為任務表單失敗',
     renameForm: '重新命名',
     renameFormTitle: '重新命名表單',
     renameFormSuccess: '表單重新命名成功',

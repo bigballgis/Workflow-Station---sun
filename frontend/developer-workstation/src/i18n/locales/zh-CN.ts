@@ -253,7 +253,16 @@ export default {
     precision: '精度',
     scale: '小数位',
     invalidTableName: '表名必须以字母开头，只能包含字母、数字和下划线',
-    invalidFieldName: '字段名 "{name}" 无效，必须以字母开头，只能包含字母、数字和下划线'
+    invalidFieldName: '字段名 "{name}" 无效，必须以字母开头，只能包含字母、数字和下划线',
+    pkNotNullable: '主键字段不能勾选"可空"，请取消勾选后保存',
+    compositePkNotNullable: '联合主键中至少需要有一个字段不勾选"可空"',
+    exportTemplate: '导出模板',
+    importTemplate: '导入模板',
+    exportSuccess: '模板导出成功',
+    importSuccess: '模板导入成功',
+    importInvalidFormat: '导入失败：文件格式不正确，请使用导出的模板文件',
+    importParseError: '导入失败：JSON 解析错误，请检查文件内容',
+    importNoFields: '导入失败：模板中没有字段定义'
   },
   form: {
     title: '表单设计器',
@@ -384,6 +393,10 @@ export default {
     copyForm: '复制',
     copyFormSuccess: '表单复制成功',
     copyFormFailed: '表单复制失败',
+    // Copy process form to task form
+    copyProcessToTaskForm: '复制为任务表单',
+    copyProcessToTaskFormSuccess: '流程表单已成功复制为任务表单',
+    copyProcessToTaskFormFailed: '流程表单复制为任务表单失败',
     renameForm: '重命名',
     renameFormTitle: '重命名表单',
     renameFormSuccess: '表单重命名成功',

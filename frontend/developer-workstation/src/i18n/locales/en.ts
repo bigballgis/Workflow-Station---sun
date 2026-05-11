@@ -216,7 +216,16 @@ export default {
     precision: 'Precision',
     scale: 'Scale',
     invalidTableName: 'Table name must start with a letter and contain only letters, digits, and underscores',
-    invalidFieldName: 'Field name "{name}" is invalid. Must start with a letter and contain only letters, digits, and underscores'
+    invalidFieldName: 'Field name "{name}" is invalid. Must start with a letter and contain only letters, digits, and underscores',
+    pkNotNullable: 'Primary key field cannot be nullable. Please uncheck "Nullable" before saving.',
+    compositePkNotNullable: 'At least one field in the composite primary key must not be nullable.',
+    exportTemplate: 'Export Template',
+    importTemplate: 'Import Template',
+    exportSuccess: 'Template exported successfully',
+    importSuccess: 'Template imported successfully',
+    importInvalidFormat: 'Import failed: invalid file format. Please use an exported template file.',
+    importParseError: 'Import failed: JSON parse error. Please check the file content.',
+    importNoFields: 'Import failed: no field definitions in template'
   },
   form: {
     title: 'Form Designer',
@@ -349,6 +358,10 @@ export default {
     copyForm: 'Copy',
     copyFormSuccess: 'Form copied successfully',
     copyFormFailed: 'Failed to copy form',
+    // Copy process form to task form
+    copyProcessToTaskForm: 'Copy to Task Form',
+    copyProcessToTaskFormSuccess: 'Process form copied to Task form successfully',
+    copyProcessToTaskFormFailed: 'Failed to copy process form to task form',
     renameForm: 'Rename',
     renameFormTitle: 'Rename Form',
     renameFormSuccess: 'Form renamed successfully',

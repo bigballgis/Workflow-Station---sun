@@ -99,6 +99,13 @@ public interface FormDesignComponent {
     FormDefinition copyTaskForm(Long sourceFormId);
     
     /**
+     * Copy Process Form to Task Form
+     * Deep copy configJson and fieldPermissions, clear stageBindings,
+     * change formType to TASK, generate new ID
+     */
+    FormDefinition copyProcessToTaskForm(Long sourceFormId);
+    
+    /**
      * 获取 FunctionUnit 所有 Data_Table 列名
      * 查询所有 TableDefinition → FieldDefinition 列名
      */

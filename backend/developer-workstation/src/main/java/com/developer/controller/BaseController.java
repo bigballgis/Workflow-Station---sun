@@ -3,6 +3,8 @@ package com.developer.controller;
 import com.developer.dto.ApiResponse;
 import com.developer.dto.ErrorResponse;
 import com.developer.dto.ValidationResult;
+import com.developer.exception.DeveloperBusinessException;
+import com.developer.exception.ResourceNotFoundException;
 import com.developer.validation.InputValidator;
 import com.developer.validation.SecurityInputValidator;
 import com.platform.common.exception.GlobalExceptionHandler;
@@ -242,11 +244,40 @@ public abstract class BaseController {
      * @return ResponseEntity with appropriate error response
      */
     protected <T> ResponseEntity<ApiResponse<T>> handleError(Exception e) {
+        // Forward DeveloperBusinessException with its actual message, code, and suggestion
+        // so the frontend can display meaningful errors instead of "Request processing failed"
+        if (e instanceof DeveloperBusinessException dbe) {
+            ErrorResponse error = ErrorResponse.builder()
+                    .code(dbe.getErrorCode() != null ? dbe.getErrorCode() : "BIZ_ERROR")
+                    .message(dbe.getMessage())
+                    .suggestion(dbe.getSuggestion())
+                    .timestamp(Instant.now())
+                    .traceId(UUID.randomUUID().toString())
+                    .build();
+            String code = dbe.getErrorCode();
+            HttpStatus httpStatus = HttpStatus.BAD_REQUEST;
+            if (code != null && code.startsWith("CONFLICT_")) {
+                httpStatus = HttpStatus.CONFLICT;
+            }
+            log.warn("Business exception [{}]: {}", code, dbe.getMessage());
+            return ResponseEntity.status(httpStatus).body(ApiResponse.error(error));
+        }
+        
+        // Forward ResourceNotFoundException with a proper 404
+        if (e instanceof ResourceNotFoundException rnfe) {
+            ErrorResponse error = ErrorResponse.builder()
+                    .code(rnfe.getErrorCode() != null ? rnfe.getErrorCode() : "RESOURCE_NOT_FOUND")
+                    .message(rnfe.getMessage())
+                    .timestamp(Instant.now())
+                    .traceId(UUID.randomUUID().toString())
+                    .build();
+            log.warn("Resource not found: {}", rnfe.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.error(error));
+        }
+        
         // Use global exception handler if available
         if (globalExceptionHandler != null) {
             try {
-                // Note: GlobalExceptionHandler interface may need to be updated to match this signature
-                // For now, we'll handle this locally
                 log.debug("Global exception handler available but interface may need updating");
             } catch (Exception handlerException) {
                 log.error("Global exception handler failed", handlerException);

@@ -80,10 +80,24 @@ export function useFormActions(ctx: FormActionsContext) {
     }
   }
 
+  async function handleCopyProcessToTaskForm(form: FormDefinition) {
+    try {
+      const res = await functionUnitApi.copyProcessToTaskForm(functionUnitId, form.id)
+      ElMessage.success(t('form.copyProcessToTaskFormSuccess'))
+      await loadForms()
+      if (res?.data) {
+        selectedForm.value = res.data
+      }
+    } catch (e: any) {
+      ElMessage.error(e.response?.data?.message || t('form.copyProcessToTaskFormFailed'))
+    }
+  }
+
   return {
     renaming,
     handleDeleteForm,
     handleConfirmRename,
     handleCopyForm,
+    handleCopyProcessToTaskForm,
   }
 }

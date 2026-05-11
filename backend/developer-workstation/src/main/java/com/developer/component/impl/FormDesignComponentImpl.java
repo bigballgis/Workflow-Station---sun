@@ -9,6 +9,8 @@ import com.developer.entity.FieldDefinition;
 import com.developer.entity.FormDefinition;
 import com.developer.entity.FormTableBinding;
 import com.developer.entity.FunctionUnit;
+import com.developer.entity.SubTableViewConfig;
+import com.developer.entity.SubTableViewField;
 import com.developer.entity.TableDefinition;
 import com.developer.enums.BindingMode;
 import com.developer.enums.BindingType;
@@ -20,6 +22,7 @@ import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.FormDefinitionRepository;
 import com.developer.repository.FormTableBindingRepository;
 import com.developer.repository.FunctionUnitRepository;
+import com.developer.repository.SubTableViewConfigRepository;
 import com.developer.repository.TableDefinitionRepository;
 import com.developer.service.SubTableViewService;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -49,6 +52,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
     private final FunctionUnitRepository functionUnitRepository;
     private final TableDefinitionRepository tableDefinitionRepository;
     private final FormTableBindingRepository formTableBindingRepository;
+    private final SubTableViewConfigRepository subTableViewConfigRepository;
     private final ObjectMapper objectMapper;
     private final I18nService i18nService;
     private final JdbcTemplate jdbcTemplate;
@@ -517,6 +521,18 @@ public class FormDesignComponentImpl implements FormDesignComponent {
     public FormDefinition copyTaskForm(Long sourceFormId) {
         FormDefinition source = getById(sourceFormId);
         
+        // Load source bindings before saving the copy
+        List<FormTableBinding> sourceBindings = formTableBindingRepository.findByFormIdWithTable(sourceFormId);
+        
+        // Load source sub-table view configs (bindingId -> SubTableViewConfig)
+        Map<Long, SubTableViewConfig> sourceViewConfigs = new HashMap<>();
+        for (FormTableBinding sb : sourceBindings) {
+            if (sb.getSubListViewId() != null) {
+                subTableViewConfigRepository.findByBindingId(sb.getId())
+                        .ifPresent(cfg -> sourceViewConfigs.put(sb.getId(), cfg));
+            }
+        }
+        
         Map<String, Object> copiedConfig = deepCopyMap(source.getConfigJson());
         Map<String, String> copiedFieldPermissions = source.getFieldPermissions() != null
                 ? new HashMap<>(source.getFieldPermissions()) : new HashMap<>();
@@ -533,7 +549,214 @@ public class FormDesignComponentImpl implements FormDesignComponent {
                 .stageBindings(new ArrayList<>())
                 .build();
         
-        return formDefinitionRepository.save(copy);
+        FormDefinition savedCopy = formDefinitionRepository.save(copy);
+        
+        // Copy all table bindings from source to the new form
+        Map<Long, Long> bindingIdMapping = new HashMap<>(); // oldBindingId -> newBindingId
+        for (FormTableBinding sourceBinding : sourceBindings) {
+            FormTableBinding newBinding = FormTableBinding.builder()
+                    .form(savedCopy)
+                    .table(sourceBinding.getTable())
+                    .relationTableId(sourceBinding.getRelationTableId())
+                    .bindingType(sourceBinding.getBindingType())
+                    .bindingMode(sourceBinding.getBindingMode())
+                    .foreignKeyField(sourceBinding.getForeignKeyField())
+                    .sortOrder(sourceBinding.getSortOrder())
+                    .subMode(sourceBinding.getSubMode())
+                    .build();
+            
+            FormTableBinding savedBinding = formTableBindingRepository.save(newBinding);
+            bindingIdMapping.put(sourceBinding.getId(), savedBinding.getId());
+            
+            // Copy SubTableViewConfig if exists
+            SubTableViewConfig sourceConfig = sourceViewConfigs.get(sourceBinding.getId());
+            if (sourceConfig != null) {
+                List<SubTableViewField> copiedFields = new ArrayList<>();
+                if (sourceConfig.getViewFields() != null) {
+                    for (SubTableViewField sourceField : sourceConfig.getViewFields()) {
+                        SubTableViewField newField = SubTableViewField.builder()
+                                .viewConfig(null) // will be set after config is saved
+                                .fieldName(sourceField.getFieldName())
+                                .displayLabel(sourceField.getDisplayLabel())
+                                .columnWidth(sourceField.getColumnWidth())
+                                .sortOrder(sourceField.getSortOrder())
+                                .visible(sourceField.getVisible())
+                                .build();
+                        copiedFields.add(newField);
+                    }
+                }
+                
+                SubTableViewConfig newConfig = SubTableViewConfig.builder()
+                        .binding(savedBinding)
+                        .viewFields(new ArrayList<>())
+                        .build();
+                SubTableViewConfig savedConfig = subTableViewConfigRepository.save(newConfig);
+                
+                // Set the back-reference and save fields
+                for (SubTableViewField field : copiedFields) {
+                    field.setViewConfig(savedConfig);
+                }
+                savedConfig.setViewFields(copiedFields);
+                savedConfig = subTableViewConfigRepository.save(savedConfig);
+                
+                // Update the binding's subListViewId to point to the new config
+                savedBinding.setSubListViewId(savedConfig.getId());
+                formTableBindingRepository.save(savedBinding);
+            }
+        }
+        
+        // Remap binding IDs in configJson (subForms, subListViews, relationViews)
+        remapBindingIdsInConfig(copiedConfig, bindingIdMapping);
+        savedCopy.setConfigJson(copiedConfig);
+        savedCopy = formDefinitionRepository.save(savedCopy);
+        
+        return savedCopy;
+    }
+
+    @Override
+    @Transactional
+    public FormDefinition copyProcessToTaskForm(Long sourceFormId) {
+        FormDefinition source = getById(sourceFormId);
+        
+        if (source.getFormType() != FormType.PROCESS) {
+            throw new DeveloperBusinessException("INVALID_FORM_TYPE",
+                    i18nService.getMessage("form.copy_process_to_task_only"),
+                    i18nService.getMessage("form.source_must_be_process_form"));
+        }
+        
+        // Load source bindings before saving the copy
+        List<FormTableBinding> sourceBindings = formTableBindingRepository.findByFormIdWithTable(sourceFormId);
+        
+        // Load source sub-table view configs (bindingId -> SubTableViewConfig)
+        Map<Long, SubTableViewConfig> sourceViewConfigs = new HashMap<>();
+        for (FormTableBinding sb : sourceBindings) {
+            if (sb.getSubListViewId() != null) {
+                subTableViewConfigRepository.findByBindingId(sb.getId())
+                        .ifPresent(cfg -> sourceViewConfigs.put(sb.getId(), cfg));
+            }
+        }
+        
+        Map<String, Object> copiedConfig = deepCopyMap(source.getConfigJson());
+        Map<String, String> copiedFieldPermissions = source.getFieldPermissions() != null
+                ? new HashMap<>(source.getFieldPermissions()) : new HashMap<>();
+        
+        // Generate a unique name for the TASK form copy
+        String copyName = source.getFormName() + "_task_copy";
+        
+        FormDefinition copy = FormDefinition.builder()
+                .functionUnit(source.getFunctionUnit())
+                .formName(copyName)
+                .formType(FormType.TASK)  // Changed from PROCESS to TASK
+                .configJson(copiedConfig)
+                .description(source.getDescription())
+                .boundTable(source.getBoundTable())
+                .fieldPermissions(copiedFieldPermissions)
+                .showLiveValues(source.getShowLiveValues())
+                .stageBindings(new ArrayList<>())
+                .build();
+        
+        FormDefinition savedCopy = formDefinitionRepository.save(copy);
+        
+        // Copy all table bindings from source to the new form
+        Map<Long, Long> bindingIdMapping = new HashMap<>(); // oldBindingId -> newBindingId
+        for (FormTableBinding sourceBinding : sourceBindings) {
+            FormTableBinding newBinding = FormTableBinding.builder()
+                    .form(savedCopy)
+                    .table(sourceBinding.getTable())
+                    .relationTableId(sourceBinding.getRelationTableId())
+                    .bindingType(sourceBinding.getBindingType())
+                    .bindingMode(sourceBinding.getBindingMode())
+                    .foreignKeyField(sourceBinding.getForeignKeyField())
+                    .sortOrder(sourceBinding.getSortOrder())
+                    .subMode(sourceBinding.getSubMode())
+                    .build();
+            
+            FormTableBinding savedBinding = formTableBindingRepository.save(newBinding);
+            bindingIdMapping.put(sourceBinding.getId(), savedBinding.getId());
+            
+            // Copy SubTableViewConfig if exists
+            SubTableViewConfig sourceConfig = sourceViewConfigs.get(sourceBinding.getId());
+            if (sourceConfig != null) {
+                List<SubTableViewField> copiedFields = new ArrayList<>();
+                if (sourceConfig.getViewFields() != null) {
+                    for (SubTableViewField sourceField : sourceConfig.getViewFields()) {
+                        SubTableViewField newField = SubTableViewField.builder()
+                                .viewConfig(null) // will be set after config is saved
+                                .fieldName(sourceField.getFieldName())
+                                .displayLabel(sourceField.getDisplayLabel())
+                                .columnWidth(sourceField.getColumnWidth())
+                                .sortOrder(sourceField.getSortOrder())
+                                .visible(sourceField.getVisible())
+                                .build();
+                        copiedFields.add(newField);
+                    }
+                }
+                
+                SubTableViewConfig newConfig = SubTableViewConfig.builder()
+                        .binding(savedBinding)
+                        .viewFields(new ArrayList<>())
+                        .build();
+                SubTableViewConfig savedConfig = subTableViewConfigRepository.save(newConfig);
+                
+                // Set the back-reference and save fields
+                for (SubTableViewField field : copiedFields) {
+                    field.setViewConfig(savedConfig);
+                }
+                savedConfig.setViewFields(copiedFields);
+                savedConfig = subTableViewConfigRepository.save(savedConfig);
+                
+                // Update the binding's subListViewId to point to the new config
+                savedBinding.setSubListViewId(savedConfig.getId());
+                formTableBindingRepository.save(savedBinding);
+            }
+        }
+        
+        // Remap binding IDs in configJson (subForms, subListViews, relationViews)
+        remapBindingIdsInConfig(copiedConfig, bindingIdMapping);
+        savedCopy.setConfigJson(copiedConfig);
+        savedCopy = formDefinitionRepository.save(savedCopy);
+        
+        return savedCopy;
+    }
+
+    /**
+     * Remap binding IDs in configJson fields (subForms, subListViews, relationViews)
+     * from old binding IDs to new binding IDs after copying bindings.
+     */
+    @SuppressWarnings("unchecked")
+    private void remapBindingIdsInConfig(Map<String, Object> configJson, Map<Long, Long> bindingIdMapping) {
+        if (configJson == null || bindingIdMapping.isEmpty()) return;
+        
+        remapMapKeys(configJson, "subForms", bindingIdMapping);
+        remapMapKeys(configJson, "subListViews", bindingIdMapping);
+        remapMapKeys(configJson, "relationViews", bindingIdMapping);
+    }
+    
+    @SuppressWarnings("unchecked")
+    private void remapMapKeys(Map<String, Object> configJson, String fieldName, Map<Long, Long> bindingIdMapping) {
+        Object fieldValue = configJson.get(fieldName);
+        if (!(fieldValue instanceof Map)) return;
+        
+        Map<String, Object> oldMap = (Map<String, Object>) fieldValue;
+        Map<String, Object> newMap = new LinkedHashMap<>();
+        
+        for (Map.Entry<String, Object> entry : oldMap.entrySet()) {
+            try {
+                Long oldId = Long.parseLong(entry.getKey());
+                Long newId = bindingIdMapping.get(oldId);
+                if (newId != null) {
+                    newMap.put(String.valueOf(newId), entry.getValue());
+                } else {
+                    // Keep entry if no mapping found (should not happen for copied bindings)
+                    newMap.put(entry.getKey(), entry.getValue());
+                }
+            } catch (NumberFormatException e) {
+                // Keep non-numeric keys as-is
+                newMap.put(entry.getKey(), entry.getValue());
+            }
+        }
+        
+        configJson.put(fieldName, newMap);
     }
 
     private Map<String, Object> deepCopyMap(Map<String, Object> source) {

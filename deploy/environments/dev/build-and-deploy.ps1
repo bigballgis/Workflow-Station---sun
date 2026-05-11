@@ -288,9 +288,9 @@ if (-not $SkipMaven) {
         # Quote -D... for PowerShell — unquoted `-Dmaven...` is split into a bogus lifecycle phase.
         # maven.clean.failOnError=false: if clean still hits an undeletable file, continue (pre-clean usually fixes it).
         if ($SkipMavenClean) {
-            mvn package '-Dmaven.test.skip=true' '-Dmaven.clean.failOnError=false' -pl $pl -am
+            mvn package '-DskipTests' '-Dmaven.clean.failOnError=false' -pl $pl -am
         } else {
-            mvn clean package '-Dmaven.test.skip=true' '-Dmaven.clean.failOnError=false' -pl $pl -am
+            mvn clean package '-DskipTests' '-Dmaven.clean.failOnError=false' -pl $pl -am
         }
         if ($LASTEXITCODE -ne 0) { throw "Maven build failed" }
         Write-Host "  Maven build complete." -ForegroundColor Green

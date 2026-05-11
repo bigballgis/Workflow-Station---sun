@@ -1918,12 +1918,15 @@ const deriveColumnsFromBinding = (binding: any, subForms?: Record<string, any>, 
       if (options) passProps.options = options
 
       const required = r.validate?.some((v: any) => v.required) || false
+      // form-create uses `disabled` to mark a field as read-only
+      const readonly = r.disabled === true || rProps.disabled === true
 
       return {
         field: r.field,
         label: r.title || r.field,
         type,
         required,
+        ...(readonly ? { readonly } : {}),
         ...(options ? { options } : {}),
         ...(Object.keys(passProps).length > 0 ? { props: passProps } : {}),
       }

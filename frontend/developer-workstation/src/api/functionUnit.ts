@@ -376,6 +376,9 @@ export const functionUnitApi = {
   copyTaskForm: (functionUnitId: number, formId: number) =>
     functionUnitAxios.post<any, { data: FormDefinition }>(`/api/v1/function-units/${functionUnitId}/forms/${formId}/copy`),
 
+  copyProcessToTaskForm: (functionUnitId: number, formId: number) =>
+    functionUnitAxios.post<any, { data: FormDefinition }>(`/api/v1/function-units/${functionUnitId}/forms/${formId}/copy-to-task`),
+
   // Export and Deploy
   exportFunctionUnit: (functionUnitId: number) =>
     functionUnitAxios.get(`/api/v1/function-units/${functionUnitId}/export`, { responseType: 'blob' }),

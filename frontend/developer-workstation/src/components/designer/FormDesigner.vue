@@ -581,7 +581,7 @@ const renameFormName = ref('')
 const renameTargetForm = ref<FormDefinition | null>(null)
 
 // Form CRUD actions composable
-const { renaming, handleDeleteForm, handleConfirmRename, handleCopyForm } = useFormActions({
+const { renaming, handleDeleteForm, handleConfirmRename, handleCopyForm, handleCopyProcessToTaskForm } = useFormActions({
   functionUnitId: props.functionUnitId,
   store: store as any,
   renameTargetForm,
@@ -2306,6 +2306,9 @@ function onFormListMoreAction(command: string, row: FormDefinition) {
       break
     case 'copy':
       void handleCopyForm(row)
+      break
+    case 'copy-to-task':
+      void handleCopyProcessToTaskForm(row)
       break
     case 'bindings':
       handleManageBindings(row)

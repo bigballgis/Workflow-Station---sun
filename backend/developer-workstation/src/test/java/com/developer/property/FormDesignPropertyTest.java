@@ -5,6 +5,7 @@ import com.developer.component.impl.FormDesignComponentImpl;
 import com.developer.repository.FormDefinitionRepository;
 import com.developer.repository.FormTableBindingRepository;
 import com.developer.repository.FunctionUnitRepository;
+import com.developer.repository.SubTableViewConfigRepository;
 import com.developer.repository.TableDefinitionRepository;
 import com.developer.service.SubTableViewService;
 import com.platform.common.i18n.I18nService;
@@ -33,12 +34,14 @@ public class FormDesignPropertyTest {
         FunctionUnitRepository functionUnitRepository = mock(FunctionUnitRepository.class);
         TableDefinitionRepository tableDefinitionRepository = mock(TableDefinitionRepository.class);
         FormTableBindingRepository formTableBindingRepository = mock(FormTableBindingRepository.class);
+        SubTableViewConfigRepository subTableViewConfigRepository = mock(SubTableViewConfigRepository.class);
         ObjectMapper objectMapper = new ObjectMapper();
         I18nService i18nService = mock(I18nService.class);
         JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
         SubTableViewService subTableViewService = mock(SubTableViewService.class);
         FormDesignComponent component = new FormDesignComponentImpl(
-                repository, functionUnitRepository, tableDefinitionRepository, formTableBindingRepository, objectMapper, i18nService, jdbcTemplate, subTableViewService);
+                repository, functionUnitRepository, tableDefinitionRepository, formTableBindingRepository,
+                subTableViewConfigRepository, objectMapper, i18nService, jdbcTemplate, subTableViewService);
         
         assertThat(component).isNotNull();
         assertThat(config).isNotNull();
