@@ -107,6 +107,9 @@ public final class SubTableRowKeySupport {
             Map<String, Object> out = new LinkedHashMap<>();
             for (String c : pkCols) {
                 Object val = getRowValueIgnoreCase(normalized, c);
+                if (val == null && pkCols.size() == 1 && "id".equalsIgnoreCase(c)) {
+                    val = getRowValueIgnoreCase(normalized, "id_idw");
+                }
                 if (val == null) {
                     return null;
                 }
@@ -119,6 +122,9 @@ public final class SubTableRowKeySupport {
             Object v = getRowValueIgnoreCase(currentItem, "rowId");
             if (v == null) {
                 v = getRowValueIgnoreCase(currentItem, col);
+            }
+            if (v == null && "id".equalsIgnoreCase(col)) {
+                v = getRowValueIgnoreCase(currentItem, "id_idw");
             }
             if (v == null) {
                 return null;
@@ -171,6 +177,9 @@ public final class SubTableRowKeySupport {
             Map<String, Object> out = new LinkedHashMap<>();
             for (String c : pkCols) {
                 Object val = getRowValueIgnoreCase(normalized, c);
+                if (val == null && pkCols.size() == 1 && "id".equalsIgnoreCase(c)) {
+                    val = getRowValueIgnoreCase(normalized, "id_idw");
+                }
                 if (val == null) {
                     return null;
                 }
@@ -183,6 +192,10 @@ public final class SubTableRowKeySupport {
             Object v = getRowValueIgnoreCase(row, col);
             if (v == null && pkCols.size() == 1) {
                 v = getRowValueIgnoreCase(row, "rowId");
+            }
+            // Physical PG may expose PK as "id" while designer/json rows use dw_* primary key "id_idw" (e.g. kk subtable).
+            if (v == null && pkCols.size() == 1 && "id".equalsIgnoreCase(col)) {
+                v = getRowValueIgnoreCase(row, "id_idw");
             }
             if (v == null) {
                 return null;

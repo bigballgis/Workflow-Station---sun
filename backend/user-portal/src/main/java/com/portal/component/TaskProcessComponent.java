@@ -1651,7 +1651,8 @@ public class TaskProcessComponent {
                             log.warn("[MI] No assigneeField found in subProcess {} inner UserTask", nodeId);
                             continue;
                         }
-                        buildMiCollectionVariable(variables, collectionVariableName, assigneeField);
+                        String bpmnSubTableName = findFirstPropertyValue(subProcess, "subTableName");
+                        buildMiCollectionVariable(variables, collectionVariableName, assigneeField, bpmnSubTableName);
                         return;
                     }
                     List<String> spOut = getDirectChildTextValues(subProcess, "outgoing");
@@ -1688,7 +1689,8 @@ public class TaskProcessComponent {
 
     /**
      * 从 __subTables__ 构建多实例集合变量。
-     * collectionVariableName 格式：multiInstance_{physicalSubTableName}_collection（须与 PG 物理表名一致以便解析主键）。
+     * collectionVariableName 常为 {@code multiInstance_{subTableName}_collection}；主键优先从 PG / 设计器元数据解析。
+     * 纯 JSON 子表（无物理表）时用 {@code dw_table_definitions} 模糊匹配表名；仍失败时对 {@code __subTables__} 推断单列 {@code id}。
      * <p>
      * __subTables__ 中常有多个 binding 列表；若简单扁平合并，则凡是能凑齐目标表主键列且带有 assignee 的行都会被当成多实例元素
      * （例如多个子表都有列 {@code id}），会在完成前置任务后创建远多于预期的子任务。此处对每个 map 值的列表单独打分，
@@ -1696,7 +1698,7 @@ public class TaskProcessComponent {
      */
     @SuppressWarnings("unchecked")
     private void buildMiCollectionVariable(Map<String, Object> variables, String collectionVariableName,
-                                          String assigneeField) {
+                                          String assigneeField, String bpmnSubTableName) {
         Object subTablesObj = variables.get("__subTables__");
         if (!(subTablesObj instanceof Map)) {
             log.warn("[MI] No __subTables__ found, setting empty collection for {}", collectionVariableName);
@@ -1705,14 +1707,31 @@ public class TaskProcessComponent {
         }
         Map<String, Object> subTables = (Map<String, Object>) subTablesObj;
 
-        String miSubTableName = parseSubTableNameFromMiCollectionVariable(collectionVariableName);
-        MiSubTablePkResult pkResult = resolveMiSubTablePk(miSubTableName);
+        String tokenFromCollectionVar = parseSubTableNameFromMiCollectionVariable(collectionVariableName);
+        MiSubTablePkResult pkResult = resolveMiSubTablePk(tokenFromCollectionVar);
+        if (pkResult == null && bpmnSubTableName != null && !bpmnSubTableName.isBlank()) {
+            String trimmed = bpmnSubTableName.trim();
+            if (tokenFromCollectionVar == null || !trimmed.equalsIgnoreCase(tokenFromCollectionVar)) {
+                pkResult = resolveMiSubTablePk(trimmed);
+            }
+        }
+        if ((pkResult == null || pkResult.pkCols() == null || pkResult.pkCols().isEmpty())
+                && tokenFromCollectionVar == null
+                && collectionVariableName != null
+                && collectionVariableName.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+            pkResult = resolveMiSubTablePk(collectionVariableName.trim());
+        }
+        if ((pkResult == null || pkResult.pkCols() == null || pkResult.pkCols().isEmpty())) {
+            pkResult = inferMiPkFromJsonSubTables(subTables, assigneeField, collectionVariableName);
+        }
+
         if (pkResult == null || pkResult.pkCols() == null || pkResult.pkCols().isEmpty()) {
             log.warn(
-                    "[MI] Cannot resolve primary key for logical table token from '{}' (parsed token='{}'). "
-                            + "No matching physical table in current_schema(), or table has no PK. Setting empty collection.",
+                    "[MI] Cannot resolve primary key for multi-instance collection '{}' (parsed token='{}', bpmnSubTableName='{}'). "
+                            + "No PG table match, designer metadata match, or inferable JSON id column. Setting empty collection.",
                     collectionVariableName,
-                    miSubTableName);
+                    tokenFromCollectionVar,
+                    bpmnSubTableName);
             variables.put(collectionVariableName, List.of());
             return;
         }
@@ -1721,9 +1740,9 @@ public class TaskProcessComponent {
         List<Map<String, Object>> allRows = selectRowsForMiCollection(subTables, pkCols, assigneeField);
         if (allRows.isEmpty()) {
             log.warn(
-                    "[MI] No eligible sub-table rows for '{}' (table={}, pk={}, assigneeField='{}'); setting empty collection",
+                    "[MI] No eligible sub-table rows for '{}' (resolvedTable={}, pk={}, assigneeField='{}'); setting empty collection",
                     collectionVariableName,
-                    miSubTableName,
+                    pkResult.resolvedTable(),
                     pkCols,
                     assigneeField);
             variables.put(collectionVariableName, List.of());
@@ -1787,20 +1806,19 @@ public class TaskProcessComponent {
         }
 
         variables.put(collectionVariableName, collection);
-        log.info("[MI] Built collection '{}' with {} items, assigneeField='{}', logicalToken='{}', physicalTable='{}'",
-                collectionVariableName, collection.size(), assigneeField, miSubTableName, pkResult.physicalTable());
+        log.info("[MI] Built collection '{}' with {} items, assigneeField='{}', collectionVarMiddleToken='{}', resolvedTable='{}'",
+                collectionVariableName, collection.size(), assigneeField, tokenFromCollectionVar, pkResult.resolvedTable());
     }
 
     /**
-     * Result of resolving a BPMN multiInstance_*_collection middle segment to a physical table PK.
+     * Result of resolving MI row identity: Postgres table id, designer table_name, or JSON-inferred sentinel.
      */
-    private record MiSubTablePkResult(String physicalTable, List<String> pkCols) {
+    private record MiSubTablePkResult(String resolvedTable, List<String> pkCols) {
     }
 
     /**
-     * 将 BPMN 集合变量里的逻辑段（如 {@code participants}）解析为当前库中真实物理表及其主键列。
-     * 设计器常生成 {@code multiInstance_participants_collection}，而 PG 实际表名为 {@code rt_xxx_participants}，
-     * 仅靠确切名无法命中 information_schema；因此在精确匹配失败后按表名包含关系在 current_schema 内搜索。
+     * 将 BPMN 集合变量里的逻辑段（如 {@code participants}）解析为主键列名。
+     * 顺序：物理表精确/模糊 →{@code dw_table_definitions} 模糊（纯 JSON 子表常见于仅有设计器元数据而无 PG 表）。
      */
     private MiSubTablePkResult resolveMiSubTablePk(String middleSegment) {
         if (middleSegment == null || middleSegment.isBlank()) {
@@ -1874,7 +1892,61 @@ public class TaskProcessComponent {
             log.debug("[MI] Fuzzy table search failed for token={}: {}", token, e.getMessage());
         }
 
+        if (token.length() >= 4) {
+            try {
+                List<String> designerNames = jdbcTemplate.query(
+                        """
+                                SELECT td.table_name
+                                FROM dw_table_definitions td
+                                WHERE lower(td.table_name) LIKE '%' || lower(?) || '%'
+                                   OR lower(?) LIKE '%' || lower(td.table_name) || '%'
+                                ORDER BY
+                                  CASE WHEN lower(td.table_name) = lower(?) THEN 0 ELSE 1 END,
+                                  length(td.table_name) ASC,
+                                  td.id DESC
+                                LIMIT 24
+                                """,
+                        (rs, i) -> rs.getString(1),
+                        token,
+                        token,
+                        token);
+                Set<String> tried = new HashSet<>();
+                for (String designerTable : designerNames) {
+                    if (designerTable == null || !tried.add(designerTable.toLowerCase(Locale.ROOT))) {
+                        continue;
+                    }
+                    try {
+                        List<String> pk = PostgresPhysicalTablePrimaryKeys.resolvePrimaryKeyColumns(jdbcTemplate, designerTable);
+                        log.info("[MI] Resolved MI token '{}' to designer table '{}' (dw_table_definitions / no physical table required)",
+                                token, designerTable);
+                        return new MiSubTablePkResult(designerTable, pk);
+                    } catch (Exception ignored) {
+                    }
+                }
+            } catch (Exception e) {
+                log.debug("[MI] Designer metadata fuzzy match failed for token={}: {}", token, e.getMessage());
+            }
+        }
+
         return null;
+    }
+
+    /**
+     * 当物理表与设计器表名均无法匹配时：若 {@code __subTables__} 行带非空 {@code id} 与 assignee，则按单列 id 作为行主键（JSON 存储子表）。
+     */
+    private MiSubTablePkResult inferMiPkFromJsonSubTables(Map<String, Object> subTables, String assigneeField,
+                                                          String collectionVariableName) {
+        if (subTables == null || subTables.isEmpty() || assigneeField == null || assigneeField.isBlank()) {
+            return null;
+        }
+        List<String> idPk = List.of("id");
+        List<Map<String, Object>> rows = selectRowsForMiCollection(subTables, idPk, assigneeField);
+        if (rows.isEmpty()) {
+            log.debug("[MI] JSON id inference found no eligible rows for collection '{}'", collectionVariableName);
+            return null;
+        }
+        log.info("[MI] Inferred PK [id] for '{}': {} eligible JSON sub-table row(s)", collectionVariableName, rows.size());
+        return new MiSubTablePkResult("__json_id__", idPk);
     }
 
     /**

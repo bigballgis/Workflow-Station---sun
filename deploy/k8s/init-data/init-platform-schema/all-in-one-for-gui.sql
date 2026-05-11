@@ -2427,6 +2427,14 @@ CREATE TABLE IF NOT EXISTS dw_form_stage_bindings (
 );
 CREATE INDEX IF NOT EXISTS idx_form_stage_bindings_stage_id ON dw_form_stage_bindings(stage_id);
 
+-- =============================================================================
+-- 18-add-read-only-to-form-stage-bindings.sql (sync with deploy/init-scripts/00-schema/)
+-- =============================================================================
+ALTER TABLE dw_form_stage_bindings
+ADD COLUMN IF NOT EXISTS read_only BOOLEAN NOT NULL DEFAULT false;
+
+COMMENT ON COLUMN dw_form_stage_bindings.read_only IS 'Whether the form bound to this stage is read-only';
+
 
 -- =============================================================================
 -- 17-add-lock-version-to-user-portal-tables.sql

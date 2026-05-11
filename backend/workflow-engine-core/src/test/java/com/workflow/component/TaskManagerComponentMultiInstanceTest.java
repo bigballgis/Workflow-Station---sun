@@ -78,6 +78,9 @@ class TaskManagerComponentMultiInstanceTest {
         TaskQuery taskQuery = mock(TaskQuery.class);
         when(taskService.createTaskQuery()).thenReturn(taskQuery);
         when(taskQuery.taskId(anyString())).thenReturn(taskQuery);
+
+        lenient().when(runtimeService.getVariable(eq(PROCESS_INSTANCE_ID), anyString())).thenReturn(null);
+        lenient().when(subTableDataInjector.physicalTableExistsInCurrentSchema(anyString())).thenReturn(true);
     }
     
     /**
@@ -280,6 +283,8 @@ class TaskManagerComponentMultiInstanceTest {
         when(task.getProcessInstanceId()).thenReturn(processInstanceId);
         when(task.getProcessDefinitionId()).thenReturn(processDefinitionId);
         when(task.getTaskDefinitionKey()).thenReturn(taskDefinitionKey);
+        // completeTask 会先跑孤儿发起人修复：无 assignee 时会查 ProcessInstance；未 stub 会 NPE
+        when(task.getAssignee()).thenReturn(USER_ID);
         return task;
     }
     
@@ -329,19 +334,15 @@ class TaskManagerComponentMultiInstanceTest {
         // 设置多实例特性
         MultiInstanceLoopCharacteristics loopCharacteristics = new MultiInstanceLoopCharacteristics();
         loopCharacteristics.setSequential(false);
-        
-        // 设置 collection 和 elementVariable
-        ExtensionElement collectionElement = new ExtensionElement();
-        collectionElement.setName("collection");
-        collectionElement.setNamespace("http://flowable.org/bpmn");
-        collectionElement.setElementText("multiInstance_fu_participants_collection");
-        
+
+        // KK / Flowable 导出常用 flowable:collection 属性 → BpmnModel.inputDataItem（非 extensionElements）
+        loopCharacteristics.setInputDataItem("multiInstance_fu_participants_collection");
+
         ExtensionElement elementVariableElement = new ExtensionElement();
         elementVariableElement.setName("elementVariable");
         elementVariableElement.setNamespace("http://flowable.org/bpmn");
         elementVariableElement.setElementText("currentItem");
-        
-        loopCharacteristics.addExtensionElement(collectionElement);
+
         loopCharacteristics.addExtensionElement(elementVariableElement);
         
         subProcess.setLoopCharacteristics(loopCharacteristics);

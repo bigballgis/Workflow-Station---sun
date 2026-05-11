@@ -31,6 +31,34 @@ public class SubTableDataInjector {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    /**
+     * 当前 schema 下是否存在该名字的物理基表（JSON-only 流程通常不存在与子表设计同名的表）。
+     */
+    public boolean physicalTableExistsInCurrentSchema(String tableName) {
+        if (tableName == null || tableName.isBlank()) {
+            return false;
+        }
+        String t = tableName.trim();
+        if (!t.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+            return false;
+        }
+        try {
+            Integer n = jdbcTemplate.queryForObject(
+                    """
+                            SELECT COUNT(*)::int FROM information_schema.tables
+                            WHERE table_schema = current_schema()
+                              AND table_type = 'BASE TABLE'
+                              AND lower(table_name) = lower(?)
+                            """,
+                    Integer.class,
+                    t);
+            return n != null && n > 0;
+        } catch (Exception e) {
+            log.debug("physicalTableExistsInCurrentSchema failed for {}: {}", tableName, e.getMessage());
+            return false;
+        }
+    }
+
     public void injectSubTableData(
             String processInstanceId,
             String subTableName,

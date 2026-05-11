@@ -8,7 +8,9 @@ public class MissingPhysicalTablePrimaryKeyException extends IllegalStateExcepti
     private final String physicalTableName;
 
     public MissingPhysicalTablePrimaryKeyException(String physicalTableName) {
-        super("Physical table has no primary key in current_schema: " + physicalTableName);
+        super("Physical table has no PRIMARY KEY in PostgreSQL information_schema, "
+                + "and no primary-key fields in dw_field_definitions for dw_table_definitions.table_name='"
+                + physicalTableName + "' (same schema): " + physicalTableName);
         this.physicalTableName = physicalTableName;
     }
 

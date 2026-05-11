@@ -2717,7 +2717,8 @@ public class TaskManagerComponent {
                             subProcess.getId(), processInstanceId);
                         
                         // 5. 提取多实例配置并注入数据
-                        injectMultiInstanceSubTableData(processInstanceId, subProcess, loopCharacteristics);
+                        injectMultiInstanceSubTableData(processDefinitionId, processInstanceId, subProcess,
+                                loopCharacteristics);
                         
                         // 只处理第一个多实例子流程
                         return;
@@ -2733,95 +2734,216 @@ public class TaskManagerComponent {
             // 不抛出异常，避免影响任务完成流程
         }
     }
-    
+
+    /**
+     * 解析多实例输入集合的流程变量名。
+     * <p>设计器 / Flowable 导出常用 {@code <multiInstanceLoopCharacteristics flowable:collection="..." />}，
+     * Flowable 内存模型将其存为 {@link org.flowable.bpmn.model.MultiInstanceLoopCharacteristics#getInputDataItem()}；
+     * {@link com.developer.util.BpmnXmlGenerator} 另一种写法是在 extensionElements 下放 {@code flowable:collection} 子元素，
+     * 二者需同时支持（kk 等流程为前者）。</p>
+     */
+    private String resolveMultiInstanceCollectionVariableName(
+            org.flowable.bpmn.model.MultiInstanceLoopCharacteristics loopCharacteristics) {
+        if (loopCharacteristics == null) {
+            return null;
+        }
+        String fromInput = trimToNull(loopCharacteristics.getInputDataItem());
+        if (fromInput != null) {
+            return fromInput;
+        }
+        Map<String, List<org.flowable.bpmn.model.ExtensionElement>> extensionElements =
+                loopCharacteristics.getExtensionElements();
+        if (extensionElements != null) {
+            List<org.flowable.bpmn.model.ExtensionElement> collectionElements =
+                    extensionElements.get("collection");
+            if (collectionElements != null && !collectionElements.isEmpty()) {
+                String text = trimToNull(collectionElements.get(0).getElementText());
+                if (text != null) {
+                    return text;
+                }
+            }
+        }
+        return null;
+    }
+
     /**
      * 注入多实例子表数据
-     * 从子流程的扩展属性中提取子表配置，调用 SubTableDataInjector 注入数据
+     * 从子流程内部 UserTask 的扩展属性中提取子表配置，调用 SubTableDataInjector 注入数据。
+     * <p>Flowable 内存 {@link org.flowable.bpmn.model.BpmnModel} 常未载入设计器 {@code custom:*} 扩展，
+     * 与 {@link SubTableAssignmentHandler}、{@link TaskAssignmentListener} 一致，在缺失时从已部署 BPMN XML 补读。</p>
      */
-    private void injectMultiInstanceSubTableData(String processInstanceId, 
+    private void injectMultiInstanceSubTableData(String processDefinitionId,
+                                                 String processInstanceId,
                                                  org.flowable.bpmn.model.SubProcess subProcess,
                                                  org.flowable.bpmn.model.MultiInstanceLoopCharacteristics loopCharacteristics) {
         try {
-            // 从 loopCharacteristics 的扩展元素中获取 collection 和 elementVariable
-            Map<String, List<org.flowable.bpmn.model.ExtensionElement>> extensionElements = 
-                loopCharacteristics.getExtensionElements();
-            
-            String collectionVariableName = null;
-            
-            if (extensionElements != null) {
-                List<org.flowable.bpmn.model.ExtensionElement> collectionElements = 
-                    extensionElements.get("collection");
-                if (collectionElements != null && !collectionElements.isEmpty()) {
-                    collectionVariableName = collectionElements.get(0).getElementText();
-                }
-            }
-            
-            if (collectionVariableName == null || collectionVariableName.trim().isEmpty()) {
-                log.warn("多实例子流程缺少 collection 配置: subProcessId={}", subProcess.getId());
+            String collectionVariableName = resolveMultiInstanceCollectionVariableName(loopCharacteristics);
+
+            if (!StringUtils.hasText(collectionVariableName)) {
+                log.warn("多实例子流程缺少 collection 配置（无 flowable:collection / inputDataItem，且无 extensionElements.collection）: subProcessId={}",
+                        subProcess.getId());
                 return;
             }
-            
-            log.info("多实例子流程 collection 变量名: {}", collectionVariableName);
-            
+
+            log.info("多实例子流程 collection 变量名: {}", collectionVariableName.trim());
+
             // 从子流程内部的 UserTask 中提取子表配置
-            List<org.flowable.bpmn.model.FlowElement> flowElements = 
-                (List<org.flowable.bpmn.model.FlowElement>) subProcess.getFlowElements();
-            
+            List<org.flowable.bpmn.model.FlowElement> flowElements =
+                    (List<org.flowable.bpmn.model.FlowElement>) subProcess.getFlowElements();
+
             for (org.flowable.bpmn.model.FlowElement element : flowElements) {
-                if (element instanceof org.flowable.bpmn.model.UserTask) {
-                    org.flowable.bpmn.model.UserTask userTask = 
-                        (org.flowable.bpmn.model.UserTask) element;
-                    
-                    // 从 UserTask 的扩展属性中提取子表配置
-                    Map<String, Object> subTableConfig = extractSubTableConfig(userTask);
-                    
-                    if (subTableConfig != null && !subTableConfig.isEmpty()) {
-                        String subTableName = (String) subTableConfig.get("subTableName");
-                        String assigneeField = (String) subTableConfig.get("assigneeField");
-                        String foreignKeyField = (String) subTableConfig.get("foreignKeyField");
-                        Long mainRecordId = (Long) subTableConfig.get("mainRecordId");
-                        
-                        if (subTableName != null && assigneeField != null) {
-                            log.info("准备注入子表数据: subTableName={}, assigneeField={}, collectionVar={}", 
-                                subTableName, assigneeField, collectionVariableName);
-                            
-                            // 从流程变量中获取主表记录 ID（如果配置中没有）
-                            if (mainRecordId == null) {
-                                mainRecordId = getMainRecordIdFromProcessVariables(processInstanceId);
+                if (element instanceof org.flowable.bpmn.model.UserTask userTask) {
+                    Map<String, Object> modelProps = extractSubTableConfig(userTask);
+                    MiSubTableExtensionConfig cfg = resolveMiSubTableExtensionConfig(
+                            userTask, processDefinitionId, modelProps);
+
+                    if (StringUtils.hasText(cfg.subTableName()) && StringUtils.hasText(cfg.assigneeField())) {
+                        String subTableName = cfg.subTableName().trim();
+                        String assigneeField = cfg.assigneeField().trim();
+                        String foreignKeyField = StringUtils.hasText(cfg.foreignKey())
+                                ? cfg.foreignKey().trim()
+                                : "main_record_id";
+
+                        Long mainRecordId = parseLongFlexible(modelProps != null ? modelProps.get("mainRecordId") : null);
+                        if (mainRecordId == null) {
+                            mainRecordId = getMainRecordIdFromProcessVariables(processInstanceId);
+                        }
+
+                        String collectionVarTrimmed = collectionVariableName.trim();
+
+                        // ① 门户已从 __subTables__ 写入多实例集合（JSON 存储，无物理子表）
+                        try {
+                            Object existingCollection = runtimeService.getVariable(processInstanceId, collectionVarTrimmed);
+                            if (existingCollection instanceof java.util.Collection<?> ec && !ec.isEmpty()) {
+                                log.info("多实例集合 '{}' 已存在 {} 条元素，跳过 SubTableDataInjector（JSON / user-portal 路径）",
+                                        collectionVarTrimmed, ec.size());
+                                return;
                             }
-                            
-                            // 从流程变量中获取外键字段名（如果配置中没有）
-                            if (foreignKeyField == null) {
-                                foreignKeyField = "main_record_id"; // 默认外键字段名
-                            }
-                            
-                            // 调用 SubTableDataInjector 注入数据
-                            subTableDataInjector.injectSubTableData(
+                        } catch (Exception e) {
+                            log.debug("读取多实例集合变量 {} 失败: {}", collectionVarTrimmed, e.getMessage());
+                        }
+
+                        // ② 无物理子表时不应执行 JDBC SELECT，避免 relation does not exist
+                        if (!subTableDataInjector.physicalTableExistsInCurrentSchema(subTableName)) {
+                            log.warn(
+                                    "当前 schema 无物理表 '{}'，且多实例集合 '{}' 为空或未设置；跳过 JDBC 注入。"
+                                            + " 纯 JSON 子表请在门户完成前置任务前写入该集合变量（见 TaskProcessComponent.injectMiCollectionFromBpmn）。",
+                                    subTableName, collectionVarTrimmed);
+                            return;
+                        }
+
+                        log.info("准备注入子表数据: subTableName={}, assigneeField={}, collectionVar={}",
+                                subTableName, assigneeField, collectionVarTrimmed);
+
+                        subTableDataInjector.injectSubTableData(
                                 processInstanceId,
                                 subTableName,
                                 foreignKeyField,
                                 mainRecordId,
                                 assigneeField,
-                                collectionVariableName
-                            );
-                            
-                            log.info("子表数据注入成功: processInstanceId={}, subTableName={}", 
+                                collectionVarTrimmed
+                        );
+
+                        log.info("子表数据注入成功: processInstanceId={}, subTableName={}",
                                 processInstanceId, subTableName);
-                            
-                            // 只处理第一个 UserTask 的配置
-                            return;
-                        }
+
+                        // 只处理第一个带完整配置的 UserTask
+                        return;
                     }
                 }
             }
-            
+
             log.warn("多实例子流程中未找到子表配置: subProcessId={}", subProcess.getId());
-            
+
         } catch (Exception e) {
-            log.error("注入多实例子表数据失败: processInstanceId={}, subProcessId={}", 
-                processInstanceId, subProcess.getId(), e);
-            throw new WorkflowBusinessException("MULTI_INSTANCE_DATA_INJECTION_ERROR", 
-                "注入多实例子表数据失败: " + e.getMessage(), e);
+            log.error("注入多实例子表数据失败: processInstanceId={}, subProcessId={}",
+                    processInstanceId, subProcess.getId(), e);
+            throw new WorkflowBusinessException("MULTI_INSTANCE_DATA_INJECTION_ERROR",
+                    "注入多实例子表数据失败: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 多实例内 UserTask 上声明的子表字段（内存模型 + 已部署 XML 回退）。
+     */
+    private record MiSubTableExtensionConfig(String subTableName, String assigneeField, String foreignKey) {
+    }
+
+    /**
+     * 合并 Flowable 内存中的扩展属性与 {@link BpmnActionParser} 从 BPMN XML 解析的结果。
+     */
+    private MiSubTableExtensionConfig resolveMiSubTableExtensionConfig(
+            org.flowable.bpmn.model.UserTask userTask,
+            String processDefinitionId,
+            Map<String, Object> modelProps) {
+        Map<String, Object> fromModel = modelProps != null ? modelProps : Collections.emptyMap();
+
+        String subTableName = mapStringValue(fromModel, "subTableName");
+        String assigneeField = mapStringValue(fromModel, "assigneeField");
+        String foreignKey = mapStringValue(fromModel, "foreignKey");
+        if (!StringUtils.hasText(foreignKey)) {
+            foreignKey = mapStringValue(fromModel, "foreignKeyField");
+        }
+
+        String utId = userTask.getId();
+        if (bpmnActionParser != null
+                && StringUtils.hasText(processDefinitionId)
+                && StringUtils.hasText(utId)) {
+            if (!StringUtils.hasText(subTableName)) {
+                subTableName = trimToNull(
+                        bpmnActionParser.getUserTaskExtensionPropertyValue(
+                                processDefinitionId, utId, "subTableName"));
+            }
+            if (!StringUtils.hasText(assigneeField)) {
+                assigneeField = trimToNull(
+                        bpmnActionParser.getUserTaskExtensionPropertyValue(
+                                processDefinitionId, utId, "assigneeField"));
+            }
+            if (!StringUtils.hasText(foreignKey)) {
+                foreignKey = trimToNull(
+                        bpmnActionParser.getUserTaskExtensionPropertyValue(
+                                processDefinitionId, utId, "foreignKey"));
+            }
+            if (!StringUtils.hasText(foreignKey)) {
+                foreignKey = trimToNull(
+                        bpmnActionParser.getUserTaskExtensionPropertyValue(
+                                processDefinitionId, utId, "foreignKeyField"));
+            }
+        }
+
+        return new MiSubTableExtensionConfig(subTableName, assigneeField, foreignKey);
+    }
+
+    private static String mapStringValue(Map<String, Object> map, String key) {
+        if (map == null || key == null || !map.containsKey(key)) {
+            return null;
+        }
+        Object v = map.get(key);
+        if (v == null) {
+            return null;
+        }
+        return trimToNull(String.valueOf(v));
+    }
+
+    private static String trimToNull(String s) {
+        if (s == null) {
+            return null;
+        }
+        String t = s.trim();
+        return t.isEmpty() ? null : t;
+    }
+
+    private static Long parseLongFlexible(Object raw) {
+        if (raw == null) {
+            return null;
+        }
+        if (raw instanceof Number n) {
+            return n.longValue();
+        }
+        try {
+            return Long.parseLong(String.valueOf(raw).trim());
+        } catch (NumberFormatException e) {
+            return null;
         }
     }
     
