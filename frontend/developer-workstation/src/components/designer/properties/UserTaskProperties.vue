@@ -532,18 +532,6 @@
               />
             </el-select>
           </el-form-item>
-          <div
-            v-if="formId"
-            class="form-preview-link"
-          >
-            <el-button
-              link
-              type="primary"
-              size="small"
-            >
-              {{ t('common.preview') }}
-            </el-button>
-          </div>
         </el-form>
       </el-collapse-item>
       
@@ -1450,10 +1438,6 @@ onUnmounted(() => {
     color: #909399;
     margin-top: 4px;
     line-height: 1.4;
-  }
-  
-  .form-preview-link {
-    margin-top: -8px;
   }
   
   .assignee-label {
