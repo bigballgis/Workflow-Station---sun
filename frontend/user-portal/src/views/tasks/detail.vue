@@ -1387,6 +1387,14 @@ const loadFunctionUnitContent = async (processKey: string) => {
       const bindings: typeof subTableBindings.value = []
       const tableBindings: any[] = selectedForm.tableBindings || []
       console.log('[SubTable] selectedForm:', selectedForm.name, 'tableBindings:', JSON.stringify(tableBindings))
+
+      // When the PRIMARY table binding has bindingMode READONLY, force form read-only.
+      // (This is set via Form Designer → Manage Table Bindings → Edit → Binding Mode)
+      const primaryBinding = tableBindings.find((b: any) => b.bindingType === 'PRIMARY')
+      if (primaryBinding?.bindingMode === 'READONLY') {
+        formReadOnly.value = true
+      }
+
       for (const b of tableBindings) {
         if (b.bindingType === 'PRIMARY') continue
         const columns = deriveColumnsFromBinding(b, subForms, formConfigForSubTables)
