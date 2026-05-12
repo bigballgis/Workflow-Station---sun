@@ -111,21 +111,12 @@ public class TaskQueryComponent {
                 Map<String, Object> responseBody = result.get();
                 List<Map<String, Object>> tasks = WorkflowEnginePayloadHelper.taskListFromPayload(responseBody);
                 if (tasks != null) {
-                    log.info("Processing {} tasks from Flowable", tasks.size());
+                    log.debug("Processing {} tasks from Flowable", tasks.size());
                     for (Map<String, Object> taskMap : tasks) {
-                        TaskInfo taskInfo = convertMapToTaskInfo(taskMap);
-                        log.info("Checking task {} from process {}", taskInfo.getTaskId(), taskInfo.getProcessInstanceId());
-                        // Filter out tasks from withdrawn processes
-                        if (!isProcessWithdrawn(taskInfo.getProcessInstanceId())) {
-                            allTasks.add(taskInfo);
-                            log.info("Task {} added to list", taskInfo.getTaskId());
-                        } else {
-                            log.info("Filtering out task {} from withdrawn process {}",
-                                taskInfo.getTaskId(), taskInfo.getProcessInstanceId());
-                        }
+                        allTasks.add(convertMapToTaskInfo(taskMap));
                     }
                 }
-                log.info("Found {} tasks from Flowable for user {} (after filtering withdrawn processes)",
+                log.info("Found {} tasks from Flowable for user {} (withdrawn filter applied after merge)",
                     allTasks.size(), userId);
             }
         } catch (Exception e) {
@@ -143,6 +134,18 @@ public class TaskQueryComponent {
             List<TaskInfo> delegatedTasks = queryDelegatedTasks(userId);
             allTasks.addAll(delegatedTasks);
         }
+
+        Set<String> processIds = allTasks.stream()
+                .map(TaskInfo::getProcessInstanceId)
+                .filter(id -> id != null && !id.isBlank())
+                .collect(Collectors.toSet());
+        Set<String> withdrawnProcessIds = findWithdrawnProcessInstanceIds(processIds);
+        allTasks = allTasks.stream()
+                .filter(t -> {
+                    String pid = t.getProcessInstanceId();
+                    return pid == null || pid.isBlank() || !withdrawnProcessIds.contains(pid);
+                })
+                .collect(Collectors.toCollection(ArrayList::new));
 
         // Deduplicate
         allTasks = allTasks.stream()
@@ -214,9 +217,6 @@ public class TaskQueryComponent {
                     if (taskInfo.getTaskId() == null || seen.contains(taskInfo.getTaskId())) {
                         continue;
                     }
-                    if (isProcessWithdrawn(taskInfo.getProcessInstanceId())) {
-                        continue;
-                    }
                     if (taskProcessComponent != null && !taskProcessComponent.canProcessTask(taskInfo, userId, portalUsername)) {
                         log.debug("Fallback merge: skip task {} for user {} (not assignee/candidate/delegation pool)",
                                 taskInfo.getTaskId(), userId);
@@ -232,25 +232,18 @@ public class TaskQueryComponent {
     }
     
     /**
-     * Check if a process instance has been withdrawn.
+     * Single round-trip to local portal DB: which of these process instances are withdrawn.
+     * (Avoids N+1 {@code findById} per task in the hot path.)
      */
-    private boolean isProcessWithdrawn(String processInstanceId) {
-        if (processInstanceId == null || processInstanceId.isEmpty()) {
-            log.debug("Process instance ID is null or empty");
-            return false;
+    private Set<String> findWithdrawnProcessInstanceIds(Collection<String> processInstanceIds) {
+        if (processInstanceIds == null || processInstanceIds.isEmpty()) {
+            return Collections.emptySet();
         }
-        
-        log.debug("Checking if process {} is withdrawn", processInstanceId);
-        Optional<ProcessInstance> optInstance = processInstanceRepository.findById(processInstanceId);
-        if (optInstance.isPresent()) {
-            ProcessInstance instance = optInstance.get();
-            boolean isWithdrawn = "WITHDRAWN".equals(instance.getStatus());
-            log.debug("Process {} status: {}, isWithdrawn: {}", processInstanceId, instance.getStatus(), isWithdrawn);
-            return isWithdrawn;
-        }
-        
-        log.debug("Process {} not found in database", processInstanceId);
-        return false;
+        return processInstanceRepository.findAllById(processInstanceIds).stream()
+                .filter(pi -> "WITHDRAWN".equals(pi.getStatus()))
+                .map(ProcessInstance::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
     }
 
     /**
@@ -824,17 +817,18 @@ public class TaskQueryComponent {
         TaskQueryRequest request = TaskQueryRequest.builder()
                 .userId(userId)
                 .page(0)
-                .size(1000)
+                .size(10_000)
                 .build();
-        
+
         PageResponse<TaskInfo> tasksResponse = queryTasks(request);
         List<TaskInfo> allTasks = tasksResponse.getContent();
+        long totalTodo = tasksResponse.getTotalElements();
 
         LocalDate today = LocalDate.now();
         LocalDateTime todayStart = today.atStartOfDay();
 
         return TaskStatistics.builder()
-                .totalTasks(allTasks.size())
+                .totalTasks(totalTodo)
                 .directTasks(allTasks.stream().filter(t -> "USER".equals(t.getAssignmentType())).count())
                 .groupTasks(allTasks.stream().filter(t -> "VIRTUAL_GROUP".equals(t.getAssignmentType())).count())
                 .deptRoleTasks(allTasks.stream().filter(t -> "DEPT_ROLE".equals(t.getAssignmentType())).count())

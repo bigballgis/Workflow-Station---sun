@@ -412,6 +412,7 @@ import { processApi } from '@/api/process'
 import ProcessDiagram, { type ProcessNode, type ProcessFlow } from '@/components/ProcessDiagram.vue'
 import ProcessHistory, { type HistoryRecord } from '@/components/ProcessHistory.vue'
 import FormRenderer, { type FormField, type FormTab } from '@/components/FormRenderer.vue'
+import { normalizePortalViews } from '@/components/formRendererHelpers'
 import SubTableField from '@/components/SubTableField.vue'
 import N8nActionDialog from '@/components/N8nActionDialog.vue'
 import {
@@ -2366,11 +2367,15 @@ const extractFieldsRecursive = (items: any[]): FormField[] => {
   for (const item of items) {
     const bindingId = item._bindingId ?? item.props?._bindingId
     if (item.type === 'subTable' && bindingId != null) {
+      const rawPv = item.props?.portalViews
+      const hasWidgetPortalViews =
+        rawPv != null && typeof rawPv === 'object' && Object.keys(rawPv).length > 0
       fields.push({
         key: `__subTable_${bindingId}`,
         label: '',
         type: 'subTable',
         _bindingId: Number(bindingId),
+        ...(hasWidgetPortalViews ? { portalViews: normalizePortalViews(rawPv) } : {}),
         span: 24
       })
     } else if (isCardRule(item)) {

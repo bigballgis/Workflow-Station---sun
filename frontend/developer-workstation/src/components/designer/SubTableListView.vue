@@ -145,70 +145,160 @@
           </div>
         </div>
 
-        <!-- Column headers (draggable) -->
-        <div
-          v-if="viewColumns.length > 0"
-          class="column-headers"
-        >
-          <div
-            v-for="(column, index) in viewColumns"
-            :key="getColumnKey(column)"
-            class="column-header"
-            :class="{ 'drag-over': dragOverIndex === index, 'link-column': isLinkColumn(column) }"
-            draggable="true"
-            @dragstart="onColDragStart($event, index)"
-            @dragover.prevent="onColDragOver($event, index)"
-            @dragleave="onColDragLeave"
-            @drop.stop="onColDrop($event, index)"
-            @dragend="onColDragEnd"
-          >
-            <span class="col-name">{{ getColumnLabel(column) }}</span>
-            <span class="col-actions">
-              <el-icon
-                v-if="isConfigurableActionColumn(column)"
-                class="col-edit"
-                @click.stop="openActionColumnConfig(column, index)"
-              ><EditPen /></el-icon>
-              <el-icon
-                class="col-remove"
-                @click.stop="removeField(index)"
-              ><Close /></el-icon>
-            </span>
-          </div>
-        </div>
-
-        <!-- Data row (mock) -->
-        <div
-          v-if="viewColumns.length > 0"
-          class="data-row"
-        >
-          <div
-            v-for="column in viewColumns"
-            :key="getColumnKey(column)"
-            class="data-cell"
-          >
-            <el-link
-              v-if="isLinkColumn(column)"
-              type="primary"
-              :underline="false"
-              @click.stop="openLinkFormDialog(column)"
+        <!-- Column headers + mock row: single preview, or dual To Do / My Requests -->
+        <template v-if="viewColumns.length > 0 && !dualPortalListPreview">
+          <div class="column-headers">
+            <div
+              v-for="(column, index) in viewColumns"
+              :key="getColumnKey(column)"
+              class="column-header"
+              :class="{ 'drag-over': dragOverIndex === index, 'link-column': isLinkColumn(column) }"
+              draggable="true"
+              @dragstart="onColDragStart($event, index)"
+              @dragover.prevent="onColDragOver($event, index)"
+              @dragleave="onColDragLeave"
+              @drop.stop="onColDrop($event, index)"
+              @dragend="onColDragEnd"
             >
-              {{ getLinkText(column) }}
-            </el-link>
-            <LookupPreview
-              v-else-if="isLookupColumn(column)"
-              class="list-view-lookup-preview"
-              :label="''"
-              :placeholder="getLookupPreviewConfig(column).placeholder"
-              :search-fields="getLookupPreviewConfig(column).searchFields"
-              :display-fields="getLookupPreviewConfig(column).displayFields"
-              :selected-display-field="getLookupPreviewConfig(column).selectedDisplayField"
-              :filter-conditions="getLookupPreviewConfig(column).filterConditions"
-              :view-fields="getLookupPreviewConfig(column).viewFields"
-              :field-defs="getLookupPreviewConfig(column).fieldDefs"
-              :show-backfill-view="getLookupPreviewConfig(column).showBackfillView"
-            />
-            <span v-else>{{ getMockValue(column) }}</span>
+              <span class="col-name">{{ getColumnLabel(column) }}</span>
+              <span class="col-actions">
+                <el-icon
+                  v-if="isConfigurableActionColumn(column)"
+                  class="col-edit"
+                  @click.stop="openActionColumnConfig(column, index)"
+                ><EditPen /></el-icon>
+                <el-icon
+                  class="col-remove"
+                  @click.stop="removeField(index)"
+                ><Close /></el-icon>
+              </span>
+            </div>
+          </div>
+          <div class="data-row">
+            <div
+              v-for="column in viewColumns"
+              :key="getColumnKey(column)"
+              class="data-cell"
+            >
+              <el-link
+                v-if="isLinkColumn(column)"
+                type="primary"
+                :underline="false"
+                @click.stop="openLinkFormDialog(column)"
+              >
+                {{ getLinkText(column) }}
+              </el-link>
+              <LookupPreview
+                v-else-if="isLookupColumn(column)"
+                class="list-view-lookup-preview"
+                :label="''"
+                :placeholder="getLookupPreviewConfig(column).placeholder"
+                :search-fields="getLookupPreviewConfig(column).searchFields"
+                :display-fields="getLookupPreviewConfig(column).displayFields"
+                :selected-display-field="getLookupPreviewConfig(column).selectedDisplayField"
+                :filter-conditions="getLookupPreviewConfig(column).filterConditions"
+                :view-fields="getLookupPreviewConfig(column).viewFields"
+                :field-defs="getLookupPreviewConfig(column).fieldDefs"
+                :show-backfill-view="getLookupPreviewConfig(column).showBackfillView"
+              />
+              <span v-else>{{ getMockValue(column) }}</span>
+            </div>
+          </div>
+        </template>
+
+        <div
+          v-else-if="viewColumns.length > 0 && dualPortalListPreview"
+          class="dual-portal-split"
+        >
+          <div
+            v-for="pane in dualPreviewPanes"
+            :key="pane.key"
+            class="portal-preview-pane"
+          >
+            <div class="portal-preview-pane-title">
+              {{ pane.title }}
+            </div>
+            <div class="column-headers">
+              <div
+                v-for="(column, index) in viewColumns"
+                :key="getColumnKey(column) + '-' + pane.key"
+                class="column-header"
+                :class="{ 'drag-over': dragOverIndex === index, 'link-column': isLinkColumn(column) }"
+                draggable="true"
+                @dragstart="onColDragStart($event, index)"
+                @dragover.prevent="onColDragOver($event, index)"
+                @dragleave="onColDragLeave"
+                @drop.stop="onColDrop($event, index)"
+                @dragend="onColDragEnd"
+              >
+                <span class="col-name">{{ getColumnLabel(column) }}</span>
+                <span class="col-actions">
+                  <el-icon
+                    v-if="isConfigurableActionColumn(column)"
+                    class="col-edit"
+                    @click.stop="openActionColumnConfig(column, index)"
+                  ><EditPen /></el-icon>
+                  <el-icon
+                    class="col-remove"
+                    @click.stop="removeField(index)"
+                  ><Close /></el-icon>
+                </span>
+              </div>
+            </div>
+            <div class="data-row">
+              <div
+                v-for="column in viewColumns"
+                :key="getColumnKey(column) + '-' + pane.key + '-cell'"
+                class="data-cell"
+              >
+                <el-link
+                  v-if="isLinkColumn(column)"
+                  type="primary"
+                  :underline="false"
+                  @click.stop="openLinkFormDialog(column)"
+                >
+                  {{ getLinkText(column) }}
+                </el-link>
+                <LookupPreview
+                  v-else-if="isLookupColumn(column)"
+                  class="list-view-lookup-preview"
+                  :label="''"
+                  :placeholder="getLookupPreviewConfig(column).placeholder"
+                  :search-fields="getLookupPreviewConfig(column).searchFields"
+                  :display-fields="getLookupPreviewConfig(column).displayFields"
+                  :selected-display-field="getLookupPreviewConfig(column).selectedDisplayField"
+                  :filter-conditions="getLookupPreviewConfig(column).filterConditions"
+                  :view-fields="getLookupPreviewConfig(column).viewFields"
+                  :field-defs="getLookupPreviewConfig(column).fieldDefs"
+                  :show-backfill-view="pane.key === 'initiator' && initiatorIsSummary
+                    ? false
+                    : (getLookupPreviewConfig(column).showBackfillView !== false)"
+                />
+                <span v-else>{{ getMockValue(column) }}</span>
+              </div>
+            </div>
+            <div
+              v-if="pane.key === 'todo'"
+              class="inline-form-below-preview"
+            >
+              <el-divider content-position="left">
+                {{ t('subTableView.assigneeFormBelowDivider') }}
+              </el-divider>
+              <div class="inline-form-below-body">
+                <form-create
+                  v-if="formRule && formRule.length"
+                  v-model="inlineFormPreviewData"
+                  locale="en"
+                  :rule="formRule"
+                  :option="inlineFormPreviewOption"
+                />
+                <el-empty
+                  v-else
+                  :description="t('subTable.noFormDesign')"
+                  :image-size="48"
+                />
+              </div>
+            </div>
           </div>
         </div>
 
@@ -224,6 +314,7 @@
     <SubTablePreviewDialog
       v-model="showPreview"
       :preview-field-rows="previewFieldRows"
+      :split-preview-rows="splitPreviewRows"
     />
 
     <el-dialog
@@ -356,6 +447,15 @@ const props = defineProps<{
   /** Sub-table form design rendered when a Link Form column is clicked */
   formRule?: any[]
   formOption?: Record<string, unknown>
+  /**
+   * Binding-level portal display (User Portal To Do / My Requests). When To Do is
+   * "form below table" and My Requests is not "same as To Do", the list preview shows
+   * two panes and the preview dialog uses two tabs.
+   */
+  portalViews?: {
+    assigneeTodo: 'formBelowTable' | 'tableOnly'
+    initiatorRequest: 'mirrorTodo' | 'summaryWithLinkFormModal' | 'tableOnly'
+  } | null
 }>()
 
 const emit = defineEmits<{
@@ -367,6 +467,8 @@ const emit = defineEmits<{
 const columnsPanelOpen = ref(true)
 const fieldSearchKeyword = ref('')
 const showPreview = ref(false)
+/** Dummy model for read-only inline form-below preview (assignee pane). */
+const inlineFormPreviewData = ref<Record<string, unknown>>({})
 const loadingFields = ref(false)
 const showLinkFormDialog = ref(false)
 const formCreateMounted = ref(false)
@@ -432,6 +534,42 @@ const linkFormOption = computed(() => {
     submitBtn: false,
   }
 })
+
+/** Read-only form-create option for the assignee "form below table" strip in dual list preview. */
+const inlineFormPreviewOption = computed(() => {
+  const saved = { ...((props.formOption || {}) as Record<string, unknown>) }
+  delete saved.title
+  return {
+    showMsg: true,
+    form: {
+      labelPosition: 'left',
+      labelWidth: '140px',
+      disabled: true,
+    },
+    language: {
+      en: {
+        clickToUpload: t('form.clickToUpload'),
+      },
+    },
+    ...saved,
+    resetBtn: false,
+    submitBtn: false,
+  }
+})
+
+const dualPortalListPreview = computed(() => {
+  const v = props.portalViews
+  if (!v || typeof v !== 'object') return false
+  if (v.assigneeTodo !== 'formBelowTable') return false
+  return v.initiatorRequest === 'summaryWithLinkFormModal' || v.initiatorRequest === 'tableOnly'
+})
+
+const initiatorIsSummary = computed(() => props.portalViews?.initiatorRequest === 'summaryWithLinkFormModal')
+
+const dualPreviewPanes = computed(() => [
+  { key: 'todo' as const, title: t('form.portalViews.toDoDisplay') },
+  { key: 'initiator' as const, title: t('form.portalViews.myRequestsDisplay') },
+])
 
 const selectedSubTableFormDesign = computed<SubTableFormDesign>(() => {
   const bindingId = selectedLinkColumn.value?.boundSubTableBindingId || props.binding.bindingId
@@ -556,12 +694,31 @@ const getMockValue = (field: SubTableFieldDTO): string => {
   return 'Sample'
 }
 
-const previewFieldRows = computed(() => {
+function previewDialogCellValue(f: SubTableListColumnDTO, pane: 'todo' | 'initiator'): string {
+  if (isLinkColumn(f)) return getLinkText(f)
+  if (isLookupColumn(f)) {
+    if (pane === 'initiator' && initiatorIsSummary.value) {
+      return t('subTableView.previewLookupSummaryCell')
+    }
+    return 'Lookup'
+  }
+  return getMockValue(f)
+}
+
+function buildPreviewFieldRows(pane: 'todo' | 'initiator'): Array<{ label: string; value: string }> {
   return viewColumns.value.map(f => ({
     label: getColumnLabel(f),
-    value: isLinkColumn(f) ? getLinkText(f) : isLookupColumn(f) ? 'Lookup' : getMockValue(f)
+    value: previewDialogCellValue(f, pane),
   }))
-})
+}
+
+const previewFieldRows = computed(() => buildPreviewFieldRows('todo'))
+
+const splitPreviewRows = computed(() =>
+  dualPortalListPreview.value
+    ? { todo: buildPreviewFieldRows('todo'), myRequest: buildPreviewFieldRows('initiator') }
+    : null
+)
 
 // --- Field operations ---
 const addFieldToView = (field: SubTableFieldDTO) => {
@@ -988,5 +1145,42 @@ defineExpose({
   min-height: 200px;
   max-height: 60vh;
   overflow-y: auto;
+}
+
+.dual-portal-split {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.portal-preview-pane {
+  border: 1px solid var(--el-border-color-light);
+  border-radius: var(--el-border-radius-base);
+  background: var(--el-fill-color-blank);
+  overflow: hidden;
+}
+
+.portal-preview-pane-title {
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+  background: var(--el-fill-color-light, #f5f7fa);
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+.inline-form-below-preview {
+  border-top: 1px dashed var(--el-border-color);
+  background: var(--el-fill-color-lighter, #fafafa);
+}
+
+.inline-form-below-body {
+  padding: 0 12px 12px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.inline-form-below-body :deep(.form-create) {
+  width: 100%;
 }
 </style>

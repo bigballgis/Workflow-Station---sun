@@ -1150,7 +1150,9 @@ export default {
     displayLabel: '顯示標籤',
     previewValue: '預覽值',
     listFormDesigner: '列表視圖表單設計器',
-    dragLinkFormHint: '可從左側元件面板拖拽 Link Form 到列表視圖'
+    dragLinkFormHint: '可從左側元件面板拖拽 Link Form 到列表視圖',
+    assigneeFormBelowDivider: '辦理人待辦：表格下方的行明細表單（使用者入口預覽）',
+    previewLookupSummaryCell: 'Lookup（我的申請 — 摘要模式為緊湊展示）',
   },
   linkForm: {
     createComponent: '建立連結表單',

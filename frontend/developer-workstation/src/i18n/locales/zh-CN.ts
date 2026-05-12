@@ -1157,7 +1157,9 @@ export default {
     displayLabel: '显示标签',
     previewValue: '预览值',
     listFormDesigner: '列表视图表单设计器',
-    dragLinkFormHint: '可从左侧组件面板拖拽 Link Form 到列表视图'
+    dragLinkFormHint: '可从左侧组件面板拖拽 Link Form 到列表视图',
+    assigneeFormBelowDivider: '办理人待办：表格下方的行明细表单（用户门户预览）',
+    previewLookupSummaryCell: 'Lookup（我的申请 — 摘要模式下为紧凑展示）',
   },
   linkForm: {
     createComponent: '创建链接表单',

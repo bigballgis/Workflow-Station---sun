@@ -1105,7 +1105,7 @@ public class ProcessComponent {
         Map<String, String> userNameCache = new HashMap<>();
         // 列表接口不返回 variables：库内 JSONB 可能含 Jackson 无法序列化的嵌套结构，会在写响应时触发 HttpMessageNotWritableException → SYS_INTERNAL_ERROR
         List<ProcessInstanceInfo> instances = instancePage.getContent().stream()
-                .map(inst -> toProcessInstanceInfo(inst, userNameCache))
+                .map(inst -> toProcessInstanceInfoForList(inst, userNameCache))
                 .peek(info -> info.setVariables(null))
                 .toList();
 
@@ -1119,6 +1119,46 @@ public class ProcessComponent {
         return toProcessInstanceInfo(instance, new HashMap<>());
     }
     
+    /**
+     * 我的申请列表：不逐个调用 workflow-engine 拉运行时任务（避免每行一次 HTTP，列表页极慢）。
+     * 当前处理人展示名由门户库 {@link ProcessInstance#getCurrentAssignee()} + admin-center 解析。
+     */
+    private ProcessInstanceInfo toProcessInstanceInfoForList(ProcessInstance instance, Map<String, String> userNameCache) {
+        String currentAssignee = instance.getCurrentAssignee();
+        String currentAssigneeName = null;
+
+        log.debug("toProcessInstanceInfoForList: processId={}, status={}, currentAssignee from DB={}",
+                instance.getId(), instance.getStatus(), currentAssignee);
+
+        if (currentAssignee != null && !currentAssignee.isEmpty()) {
+            currentAssigneeName = resolveUserDisplayNameCached(currentAssignee, userNameCache);
+        }
+
+        log.debug("toProcessInstanceInfoForList: final currentAssigneeName={}", currentAssigneeName);
+
+        return ProcessInstanceInfo.builder()
+                .id(instance.getId())
+                .processDefinitionId(instance.getProcessDefinitionId())
+                .processDefinitionKey(instance.getProcessDefinitionKey())
+                .processDefinitionName(instance.getProcessDefinitionName())
+                .businessKey(instance.getBusinessKey())
+                .startTime(instance.getStartTime())
+                .endTime(instance.getEndTime())
+                .completedAt(instance.getCompletedAt())
+                .title(instance.getTitle())
+                .status(instance.getStatus())
+                .startUserId(instance.getStartUserId())
+                .startUserName(instance.getStartUserName())
+                .currentNode(instance.getCurrentNode())
+                .currentAssignee(currentAssigneeName)
+                .candidateUsers(instance.getCandidateUsers())
+                .variables(instance.getVariables())
+                .functionUnitCatalogId(instance.getFunctionUnitCatalogId())
+                .functionUnitCode(instance.getFunctionUnitCode())
+                .functionUnitVersionLabel(instance.getFunctionUnitVersionLabel())
+                .build();
+    }
+
     /**
      * 转换实体到DTO（带方法级用户名缓存，避免列表查询 N+1）
      */
@@ -1934,13 +1974,11 @@ public class ProcessComponent {
      */
     public Map<String, Object> getFunctionUnitContent(String userId, String functionUnitIdOrCode) {
         log.info("Getting function unit content for: {}, user: {}", functionUnitIdOrCode, userId);
-        
-        // 解析功能单元 ID（支持 code 或 ID）
+
+        // 必须使用原始 processKey/code/id：先解析再校验会传入已解析 UUID，导致无法按 processKey 清理过期缓存（见 FunctionUnitAccessComponent）
+        functionUnitAccessComponent.checkFunctionUnitAccess(userId, functionUnitIdOrCode);
         String functionUnitId = functionUnitAccessComponent.resolveFunctionUnitId(functionUnitIdOrCode);
         log.info("Resolved function unit ID: {}", functionUnitId);
-        
-        // 检查功能单元访问权限（包含启用状态检查）
-        functionUnitAccessComponent.checkFunctionUnitAccess(userId, functionUnitId);
         
         try {
             String url = adminCenterUrl + "/api/v1/admin/function-units/" + functionUnitId + "/content";

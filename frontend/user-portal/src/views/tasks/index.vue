@@ -292,7 +292,6 @@ import { formatDate } from '@/utils/dateFormat'
 import { usePendingTaskStore } from '@/stores/pendingTask'
 
 const pendingTaskStore = usePendingTaskStore()
-
 const { t } = useI18n()
 const router = useRouter()
 
@@ -335,7 +334,6 @@ const loadTasks = async () => {
     const data = res.data || res
     taskList.value = data.content || []
     pagination.total = data.totalElements || 0
-    void pendingTaskStore.fetchPendingCount()
   } catch (error) {
     console.error('Failed to load tasks:', error)
     taskList.value = []
@@ -404,6 +402,7 @@ const submitAction = async () => {
     }
     actionDialogVisible.value = false
     loadTasks()
+    void pendingTaskStore.fetchPendingCount()
   } catch (error) {
     ElMessage.success(t('common.success'))
     actionDialogVisible.value = false

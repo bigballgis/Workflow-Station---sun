@@ -130,12 +130,19 @@ export function extractFieldsRecursive(
     const bindingId = item._bindingId ?? props?._bindingId
     if (item.type === 'subTable' && bindingId != null) {
       const rawPv = props?.portalViews as Partial<SubTablePortalViews> | undefined
+      // Only attach widget-level portalViews when the designer saved something on the
+      // canvas node. If we always normalize missing props to DEFAULT_PORTAL_VIEWS,
+      // FormRenderer.subTableMode() never falls through to binding.portalViews
+      // (configJson.subTablePortalViews[bindingId]) — "form below table" configured only
+      // on the sub-table binding tab would never show in To Do.
+      const hasWidgetPortalViews =
+        rawPv != null && typeof rawPv === 'object' && Object.keys(rawPv).length > 0
       fields.push({
         key: `__subTable_${bindingId}`,
         label: '',
         type: 'subTable',
         _bindingId: Number(bindingId),
-        portalViews: normalizePortalViews(rawPv),
+        ...(hasWidgetPortalViews ? { portalViews: normalizePortalViews(rawPv) } : {}),
         span: 24
       })
     } else if (isCardRule(item)) {
@@ -168,7 +175,7 @@ function isCardRule(item: Record<string, unknown>): boolean {
  * Missing or malformed input falls back to DEFAULT_PORTAL_VIEWS (tableOnly + mirrorTodo)
  * so legacy forms preserve current behavior.
  */
-function normalizePortalViews(input: Partial<SubTablePortalViews> | undefined | null): SubTablePortalViews {
+export function normalizePortalViews(input: Partial<SubTablePortalViews> | undefined | null): SubTablePortalViews {
   if (!input || typeof input !== 'object') {
     return { ...DEFAULT_PORTAL_VIEWS, assigneeTodoFormSource: { ...DEFAULT_PORTAL_VIEWS.assigneeTodoFormSource! } }
   }

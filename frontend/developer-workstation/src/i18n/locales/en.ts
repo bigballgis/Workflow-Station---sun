@@ -1166,7 +1166,9 @@ export default {
     displayLabel: 'Display Label',
     previewValue: 'Preview Value',
     listFormDesigner: 'List View Form Designer',
-    dragLinkFormHint: 'Drag Link Form from the component panel into the list view'
+    dragLinkFormHint: 'Drag Link Form from the component panel into the list view',
+    assigneeFormBelowDivider: 'Row detail form (assignee — below table in User Portal)',
+    previewLookupSummaryCell: 'Lookup (compact summary in My Requests)',
   },
   linkForm: {
     createComponent: 'Create Link Form',

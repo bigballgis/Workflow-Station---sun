@@ -30,6 +30,10 @@ public class FunctionUnitAccessComponent {
     
     private static final int MAX_CACHE_SIZE = 500;
 
+    /** Lowercase UUID shape: used for function-unit id vs Flowable id heuristics (same as historical resolve logic). */
+    private static final String LOWERCASE_UUID_REGEX =
+            "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+
     private final Map<String, CachedData<Set<String>>> userRolesCache = Collections.synchronizedMap(
             new LinkedHashMap<>(64, 0.75f, true) {
                 @Override
@@ -125,7 +129,7 @@ public class FunctionUnitAccessComponent {
         
         // 如果看起来像 UUID，先验证是否为有效的功能单元 ID
         // 注意：Flowable 7.0 的 processDefinitionId 也是 UUID 格式，不能直接当功能单元 ID 使用
-        if (functionUnitIdOrCode != null && functionUnitIdOrCode.matches("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")) {
+        if (functionUnitIdOrCode != null && functionUnitIdOrCode.matches(LOWERCASE_UUID_REGEX)) {
             try {
                 String verifyUrl = adminCenterUrl + "/api/v1/admin/function-units/" + functionUnitIdOrCode;
                 ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
@@ -249,8 +253,20 @@ public class FunctionUnitAccessComponent {
     public void checkFunctionUnitAccess(String userId, String functionUnitIdOrCode) {
         // 先解析功能单元 ID
         String functionUnitId = resolveFunctionUnitId(functionUnitIdOrCode);
-        
+
         // 首先检查功能单元是否启用
+        if (!isFunctionUnitEnabled(functionUnitId)) {
+            // processDefinitionKey / 目录 code 的解析结果会缓存在 processKeyCache（TTL 5min）。
+            // 管理员禁用旧目录行并启用新版本后，缓存仍可能指向已禁用的 ID，导致待办打开误报 disabled。
+            if (mayResolveViaProcessKeyCache(functionUnitIdOrCode)) {
+                log.info(
+                        "Resolved function unit {} appears disabled; invalidating process-key cache for lookup key [{}] and re-resolving once",
+                        functionUnitId,
+                        functionUnitIdOrCode);
+                clearProcessKeyCache(functionUnitIdOrCode);
+                functionUnitId = resolveFunctionUnitId(functionUnitIdOrCode);
+            }
+        }
         if (!isFunctionUnitEnabled(functionUnitId)) {
             log.warn("Function unit {} is disabled, access denied for user {}", functionUnitId, userId);
             throw new FunctionUnitDisabledException("Function unit is disabled");
@@ -474,6 +490,16 @@ public class FunctionUnitAccessComponent {
         return cached != null && !cached.isExpired();
     }
     
+    /**
+     * 与 {@link #resolveFunctionUnitId} 一致：UUID 形参走「按 id 校验」路径，不使用 processKey 缓存键。
+     */
+    private boolean mayResolveViaProcessKeyCache(String functionUnitIdOrCode) {
+        if (functionUnitIdOrCode == null || functionUnitIdOrCode.isBlank()) {
+            return false;
+        }
+        return !functionUnitIdOrCode.matches(LOWERCASE_UUID_REGEX);
+    }
+
     private boolean hasAnyRole(Set<String> userRoleIds, Set<String> allowedRoleIds) {
         for (String roleId : userRoleIds) {
             if (allowedRoleIds.contains(roleId)) {

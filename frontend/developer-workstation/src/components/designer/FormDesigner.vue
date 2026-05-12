@@ -203,6 +203,7 @@
                   :resolve-lookup-preview-config="resolveLookupPreviewConfig"
                   :form-rule="getSubTableFormRule(binding.bindingId)"
                   :form-option="getSubTableFormOption(binding.bindingId)"
+                  :portal-views="getBindingPortalViews(binding.bindingId)"
                   @update:model-value="(val: any) => updateSubTableViewFields(binding.bindingId, val)"
                   @update:available-fields="(val: any) => updateSubTableViewAllFields(binding.bindingId, val)"
                   @save="handleSubTableViewSave(binding.bindingId)"
