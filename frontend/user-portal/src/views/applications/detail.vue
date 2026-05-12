@@ -169,6 +169,7 @@
                 :assignee-field="hasAssignmentData(binding.data) ? 'assignee_user_id' : undefined"
                 :show-task-status="shouldShowBindingTaskStatus(binding)"
                 :show-view-detail="shouldShowBindingDetailsModal(binding)"
+                :compact-lookup-cells="bindingCompactLookupCells(binding)"
                 :linked-sub-table-bindings="linkableSubTableBindings"
                 @view-detail="(row: any) => openSubTaskDetailDialog(row)"
               />
@@ -283,6 +284,7 @@ import { processApi, type ProcessInstance } from '@/api/process'
 import ProcessDiagram, { type ProcessNode, type ProcessFlow } from '@/components/ProcessDiagram.vue'
 import ProcessHistory, { type HistoryRecord } from '@/components/ProcessHistory.vue'
 import FormRenderer, { type FormField, type FormTab } from '@/components/FormRenderer.vue'
+import { resolveSubTableDisplayMode } from '@/components/formRendererHelpers'
 import SubTableField from '@/components/SubTableField.vue'
 import SubTableInlineForm from '@/components/SubTableInlineForm.vue'
 import ChangeHistoryPanel from '@/components/ChangeHistoryPanel.vue'
@@ -290,6 +292,10 @@ import { formatDate } from '@/utils/dateFormat'
 import { relationTableApi } from '@/api/relationTable'
 import { isRejectedName } from '@/utils/statusMatcher'
 import { resolveAssigneeFieldForBinding } from '@/utils/subTableAssignment'
+import {
+  mergeSubTableRowsByRowId,
+  resolveSubTablePrimaryKeyFields
+} from '@/composables/tasks/shared'
 import { USER_ID_KEY, USER_KEY } from '@/api/auth'
 
 const route = useRoute()
@@ -356,6 +362,8 @@ const subTableBindings = ref<Array<{
   formOptions?: Record<string, any>
   // Per-binding portalViews loaded from form configJson.subTablePortalViews[bindingId].
   portalViews?: Record<string, any> | null
+  /** From dw_field_definitions via admin assembleFunctionUnitContent; drives row merge / PK resolution. */
+  primaryKeyFields?: string[]
 }>>([])
 
 const placedBindingIds = computed((): Set<number> => {
@@ -435,6 +443,7 @@ interface PreviousFormEntry {
     formFields?: FormField[]
     formOptions?: Record<string, any>
     portalViews?: Record<string, any> | null
+    primaryKeyFields?: string[]
   }>
 }
 const previousForms = ref<PreviousFormEntry[]>([])
@@ -465,23 +474,7 @@ function getSavedSubTableRowsFromVariables(
   return undefined
 }
 
-/** Merge rows by id/rowId so a sparse MI binding can be united with the full list under another bindingId (copied form). */
-function mergeSubTableRowsByRowId(existing: any[] | undefined, incoming: any[]): any[] {
-  const byId = new Map<string, any>()
-  const add = (r: any) => {
-    if (!r || typeof r !== 'object') return
-    const rawId = (r as Record<string, unknown>).id ?? (r as Record<string, unknown>).rowId
-    if (rawId == null || String(rawId).trim() === '') return
-    const k = String(rawId)
-    const cur = byId.get(k)
-    byId.set(k, cur ? { ...cur, ...r } : { ...r })
-  }
-  for (const r of existing || []) add(r)
-  for (const r of incoming || []) add(r)
-  return Array.from(byId.values())
-}
-
-type SubTableBindingAlignable = { tableId?: number | null; tableName: string; data: any[] }
+type SubTableBindingAlignable = { tableId?: number | null; tableName: string; data: any[]; primaryKeyFields?: string[] }
 
 /**
  * Copied forms (e.g. subform_copy) get a new bindingId while runtime data still lives under the original key;
@@ -535,9 +528,16 @@ function alignProcessSubTableBindingsBySharedTable() {
   }
 
   for (const group of byRoot.values()) {
+    let pkFields: string[] | undefined
+    for (const b of group) {
+      const pks = (b as SubTableBindingAlignable).primaryKeyFields
+      if (!pkFields?.length && Array.isArray(pks) && pks.length > 0) {
+        pkFields = pks.map(f => String(f).trim()).filter(Boolean)
+      }
+    }
     let merged: any[] = []
     for (const b of group) {
-      merged = mergeSubTableRowsByRowId(merged, Array.isArray(b.data) ? b.data : [])
+      merged = mergeSubTableRowsByRowId(merged, Array.isArray(b.data) ? b.data : [], pkFields)
     }
     if (merged.length === 0) continue
     const snapshot = merged.map(r => ({ ...r }))
@@ -652,6 +652,11 @@ function shouldShowBindingFormBelow(binding: { portalViews?: any; formFields?: a
   if (initiator === 'summaryWithLinkFormModal') return false
   // mirrorTodo (default) → follow assigneeTodo
   return pv.assigneeTodo === 'formBelowTable' && Array.isArray(binding.formFields) && binding.formFields.length > 0
+}
+
+/** Aligns with FormRenderer: summary + Link/Details → compact cells (no inline lookup backfill block). */
+function bindingCompactLookupCells(binding: { portalViews?: any }): boolean {
+  return resolveSubTableDisplayMode(binding.portalViews, 'initiatorRequest') === 'summaryWithLinkFormModal'
 }
 
 const getMiRows = (): any[] => [
@@ -1036,7 +1041,12 @@ const loadFunctionUnitContent = async (processKey: string) => {
           subMode: b.subMode,
           formFields: subFormDesign.formFields,
           formOptions: subFormDesign.formOptions,
-          portalViews: bindingPortalViews
+          portalViews: bindingPortalViews,
+          primaryKeyFields: resolveSubTablePrimaryKeyFields(
+            b.primaryKeyFields,
+            b.bindingId,
+            selectedFormConfig
+          )
         })
       }
 
@@ -2262,8 +2272,8 @@ const parseFormConfig = (configStr: string) => {
   }
 }
 
-// form-create runtime-only nodes. Layout containers such as group/el-row/el-col
-// must be traversed so application detail matches developer workstation preview.
+// form-create runtime-only nodes: do not emit as fields, but children must be traversed
+// (sub-table row layouts use subForm/tableForm wrappers).
 const FC_SKIP_TYPES = new Set(['subForm', 'tableForm', 'tableFormColumn'])
 
 // Recursively extract fields
@@ -2322,7 +2332,7 @@ const extractFieldsRecursive = (items: any[]): FormField[] => {
       }
       fields.push(field)
     } else if (FC_SKIP_TYPES.has(item.type)) {
-      continue
+      // Traverse children only; `continue` would drop nested sub-table row fields.
     } else if (item.field) {
       const field = convertFormCreateRule(item)
       if (field) fields.push(field)
@@ -2671,7 +2681,12 @@ function buildPreviousFormEntry(
       subMode: b.subMode,
       formFields: subFormDesign.formFields,
       formOptions: subFormDesign.formOptions,
-      portalViews: bindingPortalViews
+      portalViews: bindingPortalViews,
+      primaryKeyFields: resolveSubTablePrimaryKeyFields(
+        b.primaryKeyFields,
+        b.bindingId,
+        prevFormConfig
+      )
     }
     if (savedSubTables) {
       const saved = getSavedSubTableRowsFromVariables(savedSubTables, {

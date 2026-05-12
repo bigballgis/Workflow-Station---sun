@@ -110,6 +110,9 @@ public final class SubTableRowKeySupport {
                 if (val == null && pkCols.size() == 1 && "id".equalsIgnoreCase(c)) {
                     val = getRowValueIgnoreCase(normalized, "id_idw");
                 }
+                if (val == null && pkCols.size() == 1 && "id_idw".equalsIgnoreCase(c)) {
+                    val = getRowValueIgnoreCase(normalized, "id");
+                }
                 if (val == null) {
                     return null;
                 }
@@ -125,6 +128,9 @@ public final class SubTableRowKeySupport {
             }
             if (v == null && "id".equalsIgnoreCase(col)) {
                 v = getRowValueIgnoreCase(currentItem, "id_idw");
+            }
+            if (v == null && "id_idw".equalsIgnoreCase(col)) {
+                v = getRowValueIgnoreCase(currentItem, "id");
             }
             if (v == null) {
                 return null;
@@ -180,6 +186,9 @@ public final class SubTableRowKeySupport {
                 if (val == null && pkCols.size() == 1 && "id".equalsIgnoreCase(c)) {
                     val = getRowValueIgnoreCase(normalized, "id_idw");
                 }
+                if (val == null && pkCols.size() == 1 && "id_idw".equalsIgnoreCase(c)) {
+                    val = getRowValueIgnoreCase(normalized, "id");
+                }
                 if (val == null) {
                     return null;
                 }
@@ -196,6 +205,10 @@ public final class SubTableRowKeySupport {
             // Physical PG may expose PK as "id" while designer/json rows use dw_* primary key "id_idw" (e.g. kk subtable).
             if (v == null && pkCols.size() == 1 && "id".equalsIgnoreCase(col)) {
                 v = getRowValueIgnoreCase(row, "id_idw");
+            }
+            // Form sub-table field may be "id" while dw_field_definitions PK is "id_idw" (reverse of above).
+            if (v == null && pkCols.size() == 1 && "id_idw".equalsIgnoreCase(col)) {
+                v = getRowValueIgnoreCase(row, "id");
             }
             if (v == null) {
                 return null;

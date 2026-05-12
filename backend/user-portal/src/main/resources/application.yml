@@ -80,6 +80,10 @@ workflow-engine:
 portal:
   internal:
     api-token: ${PORTAL_INTERNAL_API_TOKEN:}
+  # Browser agent debug → SLF4J (docker logs: grep AGENT_NDJSON). Off by default.
+  debug:
+    agent-ingest:
+      enabled: ${PORTAL_DEBUG_AGENT_INGEST_ENABLED:false}
 
 # JWT Configuration
 jwt:

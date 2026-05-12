@@ -299,6 +299,7 @@ import { relationTableApi } from '@/api/relationTable'
 import { isDisabledMessage } from '@/utils/statusMatcher'
 import { getUser } from '@/api/auth'
 import { isProcessStartBlockedByWorkspace } from '@/utils/workspaceProcessGuard'
+import { resolveSubTablePrimaryKeyFields } from '@/composables/tasks/shared'
 
 const route = useRoute()
 const router = useRouter()
@@ -349,11 +350,14 @@ const formRendererRef = ref<InstanceType<typeof FormRenderer> | null>(null)
 // Sub-table bindings for the start form
 const subTableBindings = ref<Array<{
   bindingId: number
+  tableId?: number | null
   bindingType: string
   bindingMode: string
   tableName: string
   tableType: string
   tableDescription: string
+  /** Designer PK columns from tableBindings (admin-center); avoids hardcoding id/rowId. */
+  primaryKeyFields?: string[]
   columns: Array<{ field: string; label: string; type?: string }>
   data: any[]
 }>>([])
@@ -525,9 +529,11 @@ const loadFunctionUnitContent = async () => {
       
       // Parse subForms from configJson
       let subForms: Record<string, any> = {}
+      let formConfigForPk: Record<string, any> = {}
       try {
         const cfg = typeof selectedForm.data === 'string' ? JSON.parse(selectedForm.data) : (selectedForm.data || {})
         subForms = cfg.subForms || {}
+        formConfigForPk = cfg || {}
       } catch {}
 
       console.log('[start] tableBindings:', selectedForm.tableBindings?.length, 'subForms keys:', Object.keys(subForms))
@@ -536,13 +542,20 @@ const loadFunctionUnitContent = async () => {
       const bindings: typeof subTableBindings.value = []
       for (const b of (selectedForm.tableBindings || [])) {
         if (b.bindingType === 'PRIMARY') continue
+        const tid = (b as { tableId?: number | null }).tableId
         bindings.push({
           bindingId: b.bindingId,
+          tableId: tid != null ? Number(tid) : null,
           bindingType: b.bindingType,
           bindingMode: b.bindingMode,
           tableName: b.tableDisplayName || b.tableName,
           tableType: b.tableType,
           tableDescription: b.tableDescription,
+          primaryKeyFields: resolveSubTablePrimaryKeyFields(
+            (b as { primaryKeyFields?: string[] }).primaryKeyFields,
+            b.bindingId,
+            formConfigForPk
+          ),
           columns: deriveColumnsFromBinding(b, subForms),
           data: []
         })
@@ -557,11 +570,13 @@ const loadFunctionUnitContent = async () => {
           const fakeBinding = { bindingId, subFormConfig: subForm }
           bindings.push({
             bindingId,
+            tableId: null,
             bindingType: 'SUB',
             bindingMode: 'EDITABLE',
             tableName: 'Request Items',
             tableType: 'SUB',
             tableDescription: '',
+            primaryKeyFields: undefined,
             columns: deriveColumnsFromBinding(fakeBinding, subForms),
             data: []
           })
@@ -980,10 +995,8 @@ const parseFormConfig = (configStr: string) => {
   }
 }
 
-// 递归提取字段
-// These are structural/runtime-only form-create nodes. Layout containers must be
-// traversed so user portal keeps the same visible fields and sub-table positions
-// as developer workstation Form Preview.
+// 递归提取字段。form-create 的 subForm/tableForm/tableFormColumn 为包装节点：不生成字段，
+// 但必须落到下方对 `children` 的递归，否则子表行内字段全部丢失。
 const FC_SKIP_TYPES = new Set(['subForm', 'tableForm', 'tableFormColumn'])
 
 const extractFieldsRecursive = (items: any[]): FormField[] => {
@@ -1043,7 +1056,7 @@ const extractFieldsRecursive = (items: any[]): FormField[] => {
       }
       fields.push(field)
     } else if (FC_SKIP_TYPES.has(item.type)) {
-      continue
+      // Traverse children only; `continue` would drop nested sub-table row fields.
     } else if (item.field) {
       const field = convertFormCreateRule(item)
       if (field) fields.push(field)

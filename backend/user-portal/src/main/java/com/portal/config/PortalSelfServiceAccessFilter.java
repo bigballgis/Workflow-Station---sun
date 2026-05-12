@@ -69,6 +69,7 @@ public class PortalSelfServiceAccessFilter extends OncePerRequestFilter {
     private static boolean isAllowedSelfServicePath(String uri) {
         return startsWithAny(uri,
                 "/api/portal/auth/",
+                "/api/portal/debug/",
                 "/api/portal/permissions/",
                 "/api/portal/permission-requests/",
                 "/api/portal/notifications",

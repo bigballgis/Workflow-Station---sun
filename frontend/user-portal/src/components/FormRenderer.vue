@@ -69,22 +69,31 @@
                                 :linked-sub-table-bindings="linkableSubTableBindings"
                                 :suppress-link-form-initial-data="suppressLinkFormInitialData"
                                 :show-link-form-dialog-footer="showLinkFormDialogFooter"
+                                :link-form-click-scroll-to-inline="linkFormScrollToInlineEnabled(child)"
                                 :show-task-status="subTableShowTaskStatusInitiator(child)"
                                 :show-view-detail="subTableShowViewDetailInitiator(child)"
+                                :compact-lookup-cells="subTableCompactLookupCells(child)"
+                                :primary-key-fields="resolveBinding(child._bindingId)?.primaryKeyFields"
                                 style="margin-bottom: 16px;"
                                 @update:model-value="(rows: any[]) => handleSubTableUpdate(child._bindingId!, rows)"
                                 @update:linked-sub-table-data="handleSubTableUpdate"
                                 @view-detail="(row: any) => emit('viewSubtaskDetail', row)"
+                                @link-form-scroll-to-inline="scrollSubTableInlineIntoView(child._bindingId)"
                               />
-                              <SubTableInlineForm
+                              <div
                                 v-if="resolveBinding(child._bindingId) && subTableMode(child) === 'formBelowTable'"
-                                :title="resolveBinding(child._bindingId)!.tableName"
-                                :fields="resolveInlineFormFields(child)"
-                                :current-row="getCurrentRowForInlineForm(child)"
-                                :readonly="readonly"
-                                :label-width="labelWidth"
-                                @update:row="(row: Record<string, any>) => handleInlineFormUpdate(child, row)"
-                              />
+                                class="sub-table-inline-anchor"
+                                :ref="(el) => setSubTableInlineAnchor(child._bindingId, el as HTMLElement | null)"
+                              >
+                                <SubTableInlineForm
+                                  :title="resolveInlineFormTableTitle(child)"
+                                  :fields="resolveInlineFormFields(child)"
+                                  :current-row="getCurrentRowForInlineForm(child)"
+                                  :readonly="readonly"
+                                  :label-width="labelWidth"
+                                  @update:row="(row: Record<string, any>) => handleInlineFormUpdate(child, row)"
+                                />
+                              </div>
                             </el-col>
                           </template>
                           <template v-else-if="child.type === 'lookup'">
@@ -181,22 +190,31 @@
                       :linked-sub-table-bindings="linkableSubTableBindings"
                       :suppress-link-form-initial-data="suppressLinkFormInitialData"
                       :show-link-form-dialog-footer="showLinkFormDialogFooter"
+                      :link-form-click-scroll-to-inline="linkFormScrollToInlineEnabled(field)"
                       :show-task-status="subTableShowTaskStatusInitiator(field)"
                       :show-view-detail="subTableShowViewDetailInitiator(field)"
+                      :compact-lookup-cells="subTableCompactLookupCells(field)"
+                      :primary-key-fields="resolveBinding(field._bindingId)?.primaryKeyFields"
                       style="margin-bottom: 16px;"
                       @update:model-value="(rows: any[]) => handleSubTableUpdate(field._bindingId!, rows)"
                       @update:linked-sub-table-data="handleSubTableUpdate"
                       @view-detail="(row: any) => emit('viewSubtaskDetail', row)"
+                      @link-form-scroll-to-inline="scrollSubTableInlineIntoView(field._bindingId)"
                     />
-                    <SubTableInlineForm
+                    <div
                       v-if="resolveBinding(field._bindingId) && subTableMode(field) === 'formBelowTable'"
-                      :title="resolveBinding(field._bindingId)!.tableName"
-                      :fields="resolveInlineFormFields(field)"
-                      :current-row="getCurrentRowForInlineForm(field)"
-                      :readonly="readonly"
-                      :label-width="labelWidth"
-                      @update:row="(row: Record<string, any>) => handleInlineFormUpdate(field, row)"
-                    />
+                      class="sub-table-inline-anchor"
+                      :ref="(el) => setSubTableInlineAnchor(field._bindingId, el as HTMLElement | null)"
+                    >
+                      <SubTableInlineForm
+                        :title="resolveInlineFormTableTitle(field)"
+                        :fields="resolveInlineFormFields(field)"
+                        :current-row="getCurrentRowForInlineForm(field)"
+                        :readonly="readonly"
+                        :label-width="labelWidth"
+                        @update:row="(row: Record<string, any>) => handleInlineFormUpdate(field, row)"
+                      />
+                    </div>
                   </el-col>
                 </template>
                 <template v-else-if="field.type === 'lookup'">
@@ -318,22 +336,31 @@
                             :linked-sub-table-bindings="linkableSubTableBindings"
                             :suppress-link-form-initial-data="suppressLinkFormInitialData"
                             :show-link-form-dialog-footer="showLinkFormDialogFooter"
+                            :link-form-click-scroll-to-inline="linkFormScrollToInlineEnabled(child)"
                             :show-task-status="subTableShowTaskStatusInitiator(child)"
                             :show-view-detail="subTableShowViewDetailInitiator(child)"
+                            :compact-lookup-cells="subTableCompactLookupCells(child)"
+                            :primary-key-fields="resolveBinding(child._bindingId)?.primaryKeyFields"
                             style="margin-bottom: 16px;"
                             @update:model-value="(rows: any[]) => handleSubTableUpdate(child._bindingId!, rows)"
                             @update:linked-sub-table-data="handleSubTableUpdate"
                             @view-detail="(row: any) => emit('viewSubtaskDetail', row)"
+                            @link-form-scroll-to-inline="scrollSubTableInlineIntoView(child._bindingId)"
                           />
-                          <SubTableInlineForm
+                          <div
                             v-if="resolveBinding(child._bindingId) && subTableMode(child) === 'formBelowTable'"
-                            :title="resolveBinding(child._bindingId)!.tableName"
-                            :fields="resolveInlineFormFields(child)"
-                            :current-row="getCurrentRowForInlineForm(child)"
-                            :readonly="readonly"
-                            :label-width="labelWidth"
-                            @update:row="(row: Record<string, any>) => handleInlineFormUpdate(child, row)"
-                          />
+                            class="sub-table-inline-anchor"
+                            :ref="(el) => setSubTableInlineAnchor(child._bindingId, el as HTMLElement | null)"
+                          >
+                            <SubTableInlineForm
+                              :title="resolveInlineFormTableTitle(child)"
+                              :fields="resolveInlineFormFields(child)"
+                              :current-row="getCurrentRowForInlineForm(child)"
+                              :readonly="readonly"
+                              :label-width="labelWidth"
+                              @update:row="(row: Record<string, any>) => handleInlineFormUpdate(child, row)"
+                            />
+                          </div>
                         </el-col>
                       </template>
                       <template v-else-if="child.type === 'lookup'">
@@ -430,22 +457,31 @@
                   :linked-sub-table-bindings="linkableSubTableBindings"
                   :suppress-link-form-initial-data="suppressLinkFormInitialData"
                   :show-link-form-dialog-footer="showLinkFormDialogFooter"
+                  :link-form-click-scroll-to-inline="linkFormScrollToInlineEnabled(field)"
                   :show-task-status="subTableShowTaskStatusInitiator(field)"
                   :show-view-detail="subTableShowViewDetailInitiator(field)"
+                  :compact-lookup-cells="subTableCompactLookupCells(field)"
+                  :primary-key-fields="resolveBinding(field._bindingId)?.primaryKeyFields"
                   style="margin-bottom: 16px;"
                   @update:model-value="(rows: any[]) => handleSubTableUpdate(field._bindingId!, rows)"
                   @update:linked-sub-table-data="handleSubTableUpdate"
                   @view-detail="(row: any) => emit('viewSubtaskDetail', row)"
+                  @link-form-scroll-to-inline="scrollSubTableInlineIntoView(field._bindingId)"
                 />
-                <SubTableInlineForm
+                <div
                   v-if="resolveBinding(field._bindingId) && subTableMode(field) === 'formBelowTable'"
-                  :title="resolveBinding(field._bindingId)!.tableName"
-                  :fields="resolveInlineFormFields(field)"
-                  :current-row="getCurrentRowForInlineForm(field)"
-                  :readonly="readonly"
-                  :label-width="labelWidth"
-                  @update:row="(row: Record<string, any>) => handleInlineFormUpdate(field, row)"
-                />
+                  class="sub-table-inline-anchor"
+                  :ref="(el) => setSubTableInlineAnchor(field._bindingId, el as HTMLElement | null)"
+                >
+                  <SubTableInlineForm
+                    :title="resolveInlineFormTableTitle(field)"
+                    :fields="resolveInlineFormFields(field)"
+                    :current-row="getCurrentRowForInlineForm(field)"
+                    :readonly="readonly"
+                    :label-width="labelWidth"
+                    @update:row="(row: Record<string, any>) => handleInlineFormUpdate(field, row)"
+                  />
+                </div>
               </el-col>
             </template>
             <template v-else-if="field.type === 'lookup'">
@@ -535,6 +571,7 @@ import FieldRenderer from './FieldRenderer.vue'
 import { BusinessLogicEngine } from './businessLogicEngine'
 import { userApi } from '@/api/user'
 import { resolveAssigneeFieldForBinding } from '@/utils/subTableAssignment'
+import { agentDebugLog } from '@/utils/agentDebugLog'
 import type {
   FormField,
   FormTab,
@@ -569,6 +606,8 @@ interface SubTableBinding {
    * and as the primary source for unplaced bindings (e.g. sub-tables accessed only via Link Form).
    */
   portalViews?: Partial<import('./formRendererHelpers').SubTablePortalViews> | null
+  /** dw_field_definitions PK columns (from admin tableBindings). */
+  primaryKeyFields?: string[]
 }
 
 interface Props {
@@ -735,6 +774,35 @@ function subTableMode(field: FormField): 'tableOnly' | 'formBelowTable' | 'summa
   return resolveSubTableDisplayMode(binding?.portalViews ?? undefined, props.viewContext)
 }
 
+/** 发起人「汇总 + Link/Details」：子表单元格内不展开 lookup / 用户快照明细，与设计师意图一致。 */
+function subTableCompactLookupCells(field: FormField): boolean {
+  if (props.viewContext !== 'initiatorRequest') return false
+  return subTableMode(field) === 'summaryWithLinkFormModal'
+}
+
+/**
+ * 办理人待办 + 表格下内联表单：无论「表单来源」是 subForm 还是 Link 子表，只要列上存在 linkForm，
+ * 点击链接只滚动到下方内联区，不打开 Link 弹层（与设计师 form below table 单一路径一致）。
+ */
+function linkFormScrollToInlineEnabled(field: FormField): boolean {
+  if (props.viewContext !== 'assigneeTodo') return false
+  return subTableMode(field) === 'formBelowTable'
+}
+
+const subTableInlineAnchors = new Map<number, HTMLElement>()
+function setSubTableInlineAnchor(bindingId: number | undefined, el: HTMLElement | null) {
+  if (bindingId == null) return
+  if (el) subTableInlineAnchors.set(bindingId, el)
+  else subTableInlineAnchors.delete(bindingId)
+}
+
+function scrollSubTableInlineIntoView(bindingId: number | undefined) {
+  if (bindingId == null) return
+  nextTick(() => {
+    subTableInlineAnchors.get(bindingId)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  })
+}
+
 function effectiveInitiatorRequestPortalMode(field: FormField): string | undefined {
   const ir = field.portalViews?.initiatorRequest
   if (typeof ir === 'string' && ir.length > 0) return ir
@@ -775,19 +843,55 @@ function subTableShowViewDetailInitiator(field: FormField): boolean {
 
 /**
  * Resolve the effective form-source config from rule-level or binding-level portalViews.
- * Rule-level wins (more specific); binding-level is the per-binding default; finally
- * fall back to `subForm` for legacy/unconfigured forms.
+ * Rule-level wins when it explicitly chooses linkForm/formId; otherwise binding-level
+ * linkForm/formId wins over rule-level default subForm (normalizePortalViews on the
+ * subTable rule often injects type=subForm even when the table binding is linkForm→subtable2).
  */
 function resolveAssigneeTodoFormSource(field: FormField): {
   type: 'subForm' | 'linkForm' | 'formId'
   formId?: number | string | null
+  linkFormColumnId?: number | string | null
 } {
-  const placed = field.portalViews?.assigneeTodoFormSource
-  if (placed && typeof placed === 'object' && placed.type) return placed
   const binding = resolveBinding(field._bindingId)
-  const bindingLevel = (binding?.portalViews as any)?.assigneeTodoFormSource
-  if (bindingLevel && typeof bindingLevel === 'object' && bindingLevel.type) return bindingLevel
-  return { type: 'subForm', formId: null }
+  const bindingLevel = (binding?.portalViews as any)?.assigneeTodoFormSource as
+    | { type?: string; formId?: unknown; linkFormColumnId?: unknown }
+    | undefined
+  const placed = field.portalViews?.assigneeTodoFormSource as
+    | { type?: string; formId?: unknown; linkFormColumnId?: unknown }
+    | undefined
+
+  const fieldType = placed?.type
+  const bindingType = bindingLevel?.type
+
+  if (fieldType === 'linkForm' || fieldType === 'formId') {
+    return placed as {
+      type: 'subForm' | 'linkForm' | 'formId'
+      formId?: number | string | null
+      linkFormColumnId?: number | string | null
+    }
+  }
+  if (bindingType === 'linkForm' || bindingType === 'formId') {
+    return bindingLevel as {
+      type: 'subForm' | 'linkForm' | 'formId'
+      formId?: number | string | null
+      linkFormColumnId?: number | string | null
+    }
+  }
+  if (placed && typeof placed === 'object' && placed.type) {
+    return placed as {
+      type: 'subForm' | 'linkForm' | 'formId'
+      formId?: number | string | null
+      linkFormColumnId?: number | string | null
+    }
+  }
+  if (bindingLevel && typeof bindingLevel === 'object' && bindingLevel.type) {
+    return bindingLevel as {
+      type: 'subForm' | 'linkForm' | 'formId'
+      formId?: number | string | null
+      linkFormColumnId?: number | string | null
+    }
+  }
+  return { type: 'subForm', formId: null, linkFormColumnId: null }
 }
 
 /**
@@ -829,7 +933,17 @@ function findLinkFormTargetBinding(field: FormField): SubTableBinding | null {
       const targetId = targetBindingIdOf(col)
       if (targetId == null) continue
       const target = resolveBinding(targetId)
-      if (target) return target
+      if (target) {
+        // #region agent log
+        agentDebugLog({
+          hypothesisId: 'H2',
+          location: 'FormRenderer.vue:findLinkFormTargetBinding',
+          message: 'link target resolved (picked)',
+          data: { parentBindingId: field._bindingId, targetBindingId: target.bindingId, pickedKey }
+        })
+        // #endregion
+        return target
+      }
     }
     // Picked id no longer exists (e.g. column was removed) — fall through to legacy first-match.
   }
@@ -839,8 +953,34 @@ function findLinkFormTargetBinding(field: FormField): SubTableBinding | null {
     const targetId = targetBindingIdOf(col)
     if (targetId == null) continue
     const target = resolveBinding(targetId)
-    if (target) return target
+    if (target) {
+      // #region agent log
+      agentDebugLog({
+        hypothesisId: 'H2',
+        location: 'FormRenderer.vue:findLinkFormTargetBinding',
+        message: 'link target resolved (first-match)',
+        data: { parentBindingId: field._bindingId, targetBindingId: target.bindingId, targetIdFromCol: targetId }
+      })
+      // #endregion
+      return target
+    }
   }
+  // #region agent log
+  const linkLike = cols.filter((c: any) => c?.type === 'linkForm')
+  agentDebugLog({
+    hypothesisId: 'H2',
+    location: 'FormRenderer.vue:findLinkFormTargetBinding',
+    message: 'no link target',
+    data: {
+      parentBindingId: field._bindingId,
+      colsLen: cols.length,
+      colTypes: cols.map((c: any) => c?.type ?? null),
+      linkColsLen: linkLike.length,
+      boundIdsTried: linkLike.map((c: any) => targetBindingIdOf(c)),
+      bindingMapKeys: [...bindingMap.value.keys()]
+    }
+  })
+  // #endregion
   return null
 }
 
@@ -858,10 +998,57 @@ function resolveInlineFormSourceBinding(field: FormField): SubTableBinding | nul
   const source = resolveAssigneeTodoFormSource(field)
   if (source.type === 'linkForm') {
     const target = findLinkFormTargetBinding(field)
-    if (target) return target
+    if (target) {
+      // #region agent log
+      agentDebugLog({
+        hypothesisId: 'H3',
+        location: 'FormRenderer.vue:resolveInlineFormSourceBinding',
+        message: 'using target (source linkForm)',
+        data: { ownId: own.bindingId, targetId: target.bindingId, viewContext: props.viewContext, mode: subTableMode(field) }
+      })
+      // #endregion
+      return target
+    }
   }
+  // 待办 + 表格下表单：列表上存在 Link Form 列即以内联展示其目标子表（subtable2），避免仅靠绑定 JSON 未写 type=linkForm 时用错主表 subForm。
+  if (props.viewContext === 'assigneeTodo' && subTableMode(field) === 'formBelowTable') {
+    const target = findLinkFormTargetBinding(field)
+    if (target && target.bindingId !== own.bindingId) {
+      // #region agent log
+      agentDebugLog({
+        hypothesisId: 'H3',
+        location: 'FormRenderer.vue:resolveInlineFormSourceBinding',
+        message: 'using target (assigneeTodo formBelow)',
+        data: { ownId: own.bindingId, targetId: target.bindingId, sourceType: source.type }
+      })
+      // #endregion
+      return target
+    }
+  }
+  // #region agent log
+  agentDebugLog({
+    hypothesisId: 'H3',
+    location: 'FormRenderer.vue:resolveInlineFormSourceBinding',
+    message: 'fallback own binding',
+    data: {
+      ownId: own.bindingId,
+      viewContext: props.viewContext,
+      mode: subTableMode(field),
+      sourceType: source.type,
+      assigneeTodoButNoTarget: props.viewContext === 'assigneeTodo' && subTableMode(field) === 'formBelowTable'
+    }
+  })
+  // #endregion
   // `formId` is not yet runtime-resolved here (would need cross-form schema lookup); fall through.
   return own
+}
+
+/** 内联表单标题：与字段/schema 来源一致（linkForm→subtable2 时显示子表名，而非父表）。 */
+function resolveInlineFormTableTitle(field: FormField): string {
+  const src = resolveInlineFormSourceBinding(field)
+  if (src?.tableName) return String(src.tableName)
+  const own = resolveBinding(field._bindingId)
+  return own?.tableName ? String(own.tableName) : ''
 }
 
 /**
@@ -871,9 +1058,26 @@ function resolveInlineFormSourceBinding(field: FormField): SubTableBinding | nul
  *   - `formId`: not yet runtime-supported; falls back to `subForm`
  */
 function resolveInlineFormFields(field: FormField): FormField[] {
+  const mode = subTableMode(field)
   const source = resolveInlineFormSourceBinding(field)
-  if (!source) return []
-  return Array.isArray(source.formFields) ? source.formFields : []
+  const fields = Array.isArray(source?.formFields) ? source!.formFields : []
+  // #region agent log
+  agentDebugLog({
+    hypothesisId: 'H4',
+    location: 'FormRenderer.vue:resolveInlineFormFields',
+    message: 'inline form fields',
+    data: {
+      fieldKey: field.key,
+      placedBindingId: field._bindingId,
+      sourceBindingId: source?.bindingId ?? null,
+      sourceTableName: source?.tableName ?? null,
+      formFieldsLen: fields.length,
+      viewContext: props.viewContext,
+      subTableMode: mode
+    }
+  })
+  // #endregion
+  return fields
 }
 
 /** FK candidates used to align a child (linkForm target) row to a parent row. */
@@ -882,10 +1086,20 @@ function resolveLinkFkCandidates(target: SubTableBinding): string[] {
   const explicit = (target as any).foreignKeyField
   if (explicit && String(explicit).trim()) list.push(String(explicit))
   // Same heuristic used by SubTableField's Link Form modal so designer/runtime agree.
-  for (const k of ['participant_id', 'participantId', 'parent_id', 'parentId']) {
+  for (const k of ['participant_id', 'participantId', 'parent_id', 'parentId', 'id_idw']) {
     if (!list.includes(k)) list.push(k)
   }
   return list
+}
+
+/** Match sub-table row to Flowable multi-instance element id (designer PK e.g. id_idw). */
+function rowMatchesMiElementId(rec: Record<string, unknown>, parentId: string | number): boolean {
+  const keys = ['id', 'rowId', 'id_idw', 'ID', 'RowId'] as const
+  for (const k of keys) {
+    const v = rec[k]
+    if (v != null && v !== '' && String(v) === String(parentId)) return true
+  }
+  return false
 }
 
 /**
@@ -923,12 +1137,12 @@ function getCurrentRowForInlineForm(field: FormField): Record<string, any> | nul
     return null
   }
 
-  // subForm path: row identity is the row's own id/rowId
+  // subForm path: row identity is the row's own PK (id / rowId / id_idw, etc.)
   if (parentId != null && String(parentId).trim() !== '') {
     const match = rows.find(r => {
       if (!r || typeof r !== 'object') return false
       const rec = r as Record<string, unknown>
-      return String(rec.id ?? rec.rowId ?? '') === String(parentId)
+      return rowMatchesMiElementId(rec, parentId)
     })
     if (match) return { ...(match as Record<string, any>) }
   }
@@ -971,7 +1185,7 @@ function handleInlineFormUpdate(field: FormField, mergedRow: Record<string, any>
     idx = rows.findIndex(r => {
       if (!r || typeof r !== 'object') return false
       const rec = r as Record<string, unknown>
-      return String(rec.id ?? rec.rowId ?? '') === String(parentId)
+      return rowMatchesMiElementId(rec, parentId)
     })
   } else if (rows.length === 1) {
     idx = 0

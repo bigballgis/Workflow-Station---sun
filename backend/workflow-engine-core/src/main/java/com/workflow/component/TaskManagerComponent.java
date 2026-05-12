@@ -51,6 +51,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -2525,9 +2526,27 @@ public class TaskManagerComponent {
                 rowVersion = currentRow.get("row_version") instanceof Number n ? n.longValue() : 0L;
                 
                 formData = new HashMap<>();
-                for (String col : currentRow.keySet()) {
-                    if (variables.containsKey(col)) {
-                        formData.put(col, variables.get(col));
+                Set<String> physicalCols = currentRow.keySet();
+                for (Map.Entry<String, Object> e : variables.entrySet()) {
+                    String k = e.getKey();
+                    if (k == null || multiInstanceDataResolver.isSystemVariable(k)) {
+                        continue;
+                    }
+                    if (k.startsWith("multiInstance_")
+                            || "__subTables__".equals(k)
+                            || "formData".equals(k)
+                            || "rowVersion".equals(k)
+                            || "subTableName".equals(k)
+                            || "foreignKey".equals(k)
+                            || "assigneeField".equals(k)
+                            || "mainRecordId".equals(k)
+                            || "currentItem".equals(k)
+                            || "_currentItem".equals(k)) {
+                        continue;
+                    }
+                    String col = multiInstanceDataResolver.resolveSubTablePhysicalColumnKey(subTableName, k, physicalCols);
+                    if (col != null) {
+                        formData.put(col, e.getValue());
                     }
                 }
                 log.info("从 variables 顶层键提取子表列数据: taskId={}, columns={}, rowVersion={}",

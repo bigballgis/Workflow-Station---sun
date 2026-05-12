@@ -132,7 +132,7 @@
                   </div>
                 </div>
                 <div
-                  v-if="col.props?.showBackfillView !== false && lookupSelectedRow(col, scope.row[col.field]) && effectiveLookupViewFields(col, scope.row[col.field]).length > 0"
+                  v-if="!compactLookupCells && col.props?.showBackfillView !== false && lookupSelectedRow(col, scope.row[col.field]) && effectiveLookupViewFields(col, scope.row[col.field]).length > 0"
                   class="lookup-view-display"
                 >
                   <el-descriptions
@@ -169,7 +169,7 @@
                   </div>
                 </div>
                 <div
-                  v-if="userSnapshotViewFieldsFromRow(scope.row[col.field]).length > 0"
+                  v-if="!compactLookupCells && userSnapshotViewFieldsFromRow(scope.row[col.field]).length > 0"
                   class="lookup-view-display"
                 >
                   <el-descriptions
@@ -195,7 +195,7 @@
               <el-link
                 type="primary"
                 :underline="false"
-                @click="handleLinkFormClick(col, scope.row, scope.$index)"
+                @click.prevent="handleLinkFormClick(col, scope.row, scope.$index)"
               >
                 {{ col.props?.linkText || t('linkForm.defaultLinkText') }}
               </el-link>
@@ -453,6 +453,7 @@
               :editable="canEditSelectedLinkBinding"
               :linked-sub-table-bindings="linkedSubTableBindings"
               :show-link-form-dialog-footer="showLinkFormDialogFooter"
+              :primary-key-fields="selectedLinkBinding.primaryKeyFields"
               @update:model-value="handleLinkedSubTableUpdate"
             />
             <el-empty
@@ -588,6 +589,8 @@ interface SubTableBinding {
   tableType: string
   tableDescription: string
   columns: Column[]
+  /** Designer PK field names (from admin tableBindings); preferred over hardcoded id/rowId. */
+  primaryKeyFields?: string[]
   data: any[]
   formFields?: FormField[]
   formOptions?: Record<string, any>
@@ -695,8 +698,24 @@ const props = withDefaults(defineProps<{
   suppressLinkFormInitialData?: boolean
   /** Task To Do only: show Cancel/Save on Link Form detail (completed / My Request omit). */
   showLinkFormDialogFooter?: boolean
+  /**
+   * 办理人待办 + form below table + 表单来源为 Link 子表时：点击链接不打开弹层，由宿主滚动到表格下方内联表单。
+   */
+  linkFormClickScrollToInline?: boolean
+  /**
+   * My Request + 「汇总列表 + Link/Details」：表格内 lookup / 用户快照只显示摘要标签，不在单元格内展开 el-descriptions，
+   * 避免与「详情走 Link 弹层」的设计冲突（否则看起来像待办的 inline 表单区）。
+   */
+  compactLookupCells?: boolean
+  /**
+   * 表设计器在 dw_field_definitions 中标记的主键列名（经 admin-center 随 tableBindings 下发）。
+   * 仅单列时参与 assignment / 行定位；多列主键仍回退到既有 id/rowId 等待办路径。
+   */
+  primaryKeyFields?: string[]
 }>(), {
-  showLinkFormDialogFooter: false
+  showLinkFormDialogFooter: false,
+  linkFormClickScrollToInline: false,
+  compactLookupCells: false
 })
 
 const emit = defineEmits<{
@@ -706,6 +725,7 @@ const emit = defineEmits<{
   (e: 'viewDetail', row: any, index: number): void
   (e: 'fillForm', row: any, index: number): void
   (e: 'update:linkedSubTableData', bindingId: number, rows: any[]): void
+  (e: 'linkFormScrollToInline'): void
 }>()
 
 const rows = ref<any[]>([])
@@ -849,7 +869,8 @@ function filterLinkedChildRowsForParentRow(
   binding?: SubTableBinding
 ): any[] {
   if (!Array.isArray(rows) || rows.length === 0) return rows
-  const parentId = Number(parentRow?.id ?? parentRow?.rowId)
+  const parentPk = resolveSubTableRowPk(parentRow as Record<string, unknown>)
+  const parentId = parentPk != null ? Number(parentPk) : NaN
   if (Number.isNaN(parentId)) return rows
 
   const fkList: string[] = []
@@ -935,6 +956,10 @@ function closeLinkFormDetailDialog() {
 }
 
 function handleLinkFormClick(col: Column, row: Record<string, any>, rowIndex: number) {
+  if (props.linkFormClickScrollToInline) {
+    emit('linkFormScrollToInline')
+    return
+  }
   activeLinkColumn.value = col
   activeLinkRowIndex.value = rowIndex
   const binding = resolveLinkBindingForColumn(col)
@@ -944,11 +969,27 @@ function handleLinkFormClick(col: Column, row: Record<string, any>, rowIndex: nu
   const saved = (boundId != null ? (rowSub[boundId] ?? rowSub[String(boundId)]) : undefined) ?? (boundName ? (rowSub[boundName] ?? rowSub[String(boundName)]) : undefined)
   const savedRows = Array.isArray(saved) ? saved : []
   const fallbackRows = resolveLinkedFallbackRows(binding)
-  let effectiveSavedRows = props.suppressLinkFormInitialData
-    ? savedRows
-    : (savedRows.length > 0 ? savedRows : fallbackRows)
-  if (!props.suppressLinkFormInitialData && savedRows.length === 0 && effectiveSavedRows.length > 0 && row) {
-    effectiveSavedRows = filterLinkedChildRowsForParentRow(row, effectiveSavedRows, binding)
+  /**
+   * MI 待办 `suppressLinkFormInitialData=true` 时仍优先用行内嵌套 `__subTables__`；
+   * 若为空则回退到绑定数据（已在上层做多实例行隔离），并按父行主键收窄子表行，避免空白/错误。
+   * 非 MI 行为不变：无 suppress 时仍可用全量 fallback + 父行过滤。
+   */
+  let effectiveSavedRows: any[] = []
+  if (props.suppressLinkFormInitialData) {
+    if (savedRows.length > 0) {
+      effectiveSavedRows = savedRows
+    } else if (fallbackRows.length > 0) {
+      effectiveSavedRows = row
+        ? filterLinkedChildRowsForParentRow(row, [...fallbackRows], binding)
+        : [...fallbackRows]
+    } else {
+      effectiveSavedRows = []
+    }
+  } else {
+    effectiveSavedRows = savedRows.length > 0 ? savedRows : fallbackRows
+    if (savedRows.length === 0 && effectiveSavedRows.length > 0 && row) {
+      effectiveSavedRows = filterLinkedChildRowsForParentRow(row, effectiveSavedRows, binding)
+    }
   }
   linkedSubTableRows.value = [...effectiveSavedRows]
   linkedFormData.value = buildLinkedFormData({ ...(binding || ({} as any)), data: effectiveSavedRows })
@@ -1293,16 +1334,21 @@ function resolveSubTableRowMergeKey(row: Record<string, unknown> | null | undefi
 }
 
 /**
- * Sub-table row primary key: the engine assignment API requires the relation table's
- * numeric PK (e.g. participants.id). Also handles participant_id / case variants /
- * field names after form serialization.
+ * Sub-table row primary key for assignment APIs and client-side row matching.
+ * Prefers designer single-column PK when provided; otherwise legacy id / rowId / MI heuristics.
  */
 function resolveSubTableRowPk(row: Record<string, unknown> | null | undefined): string | number | null {
   if (!row) return null
   const r = row as Record<string, unknown>
+  const pks = props.primaryKeyFields
+  if (Array.isArray(pks) && pks.length === 1) {
+    const v = r[pks[0]!]
+    if (v != null && v !== '') return v as string | number
+  }
   const candidates: unknown[] = [
     r.id,
     r.rowId,
+    r.id_idw,
     r.participant_id,
     r.participantId,
     (r as { ID?: unknown }).ID,

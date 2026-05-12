@@ -95,6 +95,12 @@ platform:
   sso:
     internal-token: ${SSO_INTERNAL_TOKEN:}
 
+# Agent debug NDJSON from SPA → docker logs (override with PORTAL_DEBUG_AGENT_INGEST_ENABLED=false)
+portal:
+  debug:
+    agent-ingest:
+      enabled: ${PORTAL_DEBUG_AGENT_INGEST_ENABLED:true}
+
 # Logging - reduce verbosity in Docker
 logging:
   level:

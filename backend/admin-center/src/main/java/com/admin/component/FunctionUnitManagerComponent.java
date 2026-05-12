@@ -771,6 +771,39 @@ public class FunctionUnitManagerComponent {
         return fallbackData;
     }
 
+    private static List<String> readTextArrayColumn(java.sql.ResultSet rs, String column) throws java.sql.SQLException {
+        java.sql.Array arr = rs.getArray(column);
+        if (arr == null) {
+            return Collections.emptyList();
+        }
+        Object[] raw = (Object[]) arr.getArray();
+        if (raw == null) {
+            return Collections.emptyList();
+        }
+        List<String> out = new ArrayList<>(raw.length);
+        for (Object o : raw) {
+            if (o != null) {
+                out.add(o.toString());
+            }
+        }
+        return out;
+    }
+
+    private static Long readNullableLong(java.sql.ResultSet rs, String column) throws java.sql.SQLException {
+        Object v = rs.getObject(column);
+        if (v == null) {
+            return null;
+        }
+        if (v instanceof Number n) {
+            return n.longValue();
+        }
+        try {
+            return Long.parseLong(v.toString());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
     /**
      * Attach tableBindings to each form DTO by querying dw_form_table_bindings.
      * Prefers sourceId match; falls back to form_name match for forms without sourceId.
@@ -800,7 +833,10 @@ public class FunctionUnitManagerComponent {
                 String sql =
                         "SELECT fd.id as form_id, ftb.id as binding_id, ftb.binding_type, ftb.binding_mode, " +
                         "       ftb.sub_mode, ftb.foreign_key_field, ftb.sort_order, " +
-                        "       td.table_name, td.table_type, td.description as table_description " +
+                        "       td.id as table_id, td.table_name, td.table_type, td.description as table_description, " +
+                        "       (SELECT array_agg(fd_inner.field_name ORDER BY fd_inner.sort_order NULLS LAST, fd_inner.id) " +
+                        "        FROM dw_field_definitions fd_inner " +
+                        "        WHERE fd_inner.table_id = td.id AND COALESCE(fd_inner.is_primary_key, false) = true) AS primary_key_fields " +
                         "FROM dw_form_definitions fd " +
                         "JOIN dw_form_table_bindings ftb ON ftb.form_id = fd.id " +
                         "JOIN dw_table_definitions td ON td.id = ftb.table_id " +
@@ -810,6 +846,7 @@ public class FunctionUnitManagerComponent {
                     String formId = rs.getString("form_id");
                     TableBindingDTO binding = TableBindingDTO.builder()
                             .bindingId(rs.getLong("binding_id"))
+                            .tableId(readNullableLong(rs, "table_id"))
                             .bindingType(rs.getString("binding_type"))
                             .bindingMode(rs.getString("binding_mode"))
                             .subMode(rs.getString("sub_mode"))
@@ -818,6 +855,7 @@ public class FunctionUnitManagerComponent {
                             .tableName(rs.getString("table_name"))
                             .tableType(rs.getString("table_type"))
                             .tableDescription(rs.getString("table_description"))
+                            .primaryKeyFields(readTextArrayColumn(rs, "primary_key_fields"))
                             .build();
                     bindingsBySourceId.computeIfAbsent(formId, k -> new ArrayList<>()).add(binding);
                 }, formSourceIds.toArray());
@@ -828,7 +866,10 @@ public class FunctionUnitManagerComponent {
                 String sql =
                         "SELECT latest.form_name, ftb.id as binding_id, ftb.binding_type, ftb.binding_mode, " +
                         "       ftb.sub_mode, ftb.foreign_key_field, ftb.sort_order, " +
-                        "       td.table_name, td.table_type, td.description as table_description " +
+                        "       td.id as table_id, td.table_name, td.table_type, td.description as table_description, " +
+                        "       (SELECT array_agg(fd_inner.field_name ORDER BY fd_inner.sort_order NULLS LAST, fd_inner.id) " +
+                        "        FROM dw_field_definitions fd_inner " +
+                        "        WHERE fd_inner.table_id = td.id AND COALESCE(fd_inner.is_primary_key, false) = true) AS primary_key_fields " +
                         "FROM (SELECT DISTINCT ON (form_name) id, form_name, config_json FROM dw_form_definitions " +
                         "      WHERE form_name IN (" + placeholders + ") ORDER BY form_name, id DESC) latest " +
                         "JOIN dw_form_table_bindings ftb ON ftb.form_id = latest.id " +
@@ -838,6 +879,7 @@ public class FunctionUnitManagerComponent {
                     String formName = rs.getString("form_name");
                     TableBindingDTO binding = TableBindingDTO.builder()
                             .bindingId(rs.getLong("binding_id"))
+                            .tableId(readNullableLong(rs, "table_id"))
                             .bindingType(rs.getString("binding_type"))
                             .bindingMode(rs.getString("binding_mode"))
                             .subMode(rs.getString("sub_mode"))
@@ -846,6 +888,7 @@ public class FunctionUnitManagerComponent {
                             .tableName(rs.getString("table_name"))
                             .tableType(rs.getString("table_type"))
                             .tableDescription(rs.getString("table_description"))
+                            .primaryKeyFields(readTextArrayColumn(rs, "primary_key_fields"))
                             .build();
                     bindingsByFormName.computeIfAbsent(formName, k -> new ArrayList<>()).add(binding);
                 }, formNamesForFallback.toArray());

@@ -157,33 +157,13 @@ public class FunctionUnitAccessComponent {
         try {
             // 对参数进行 URL 编码（支持中文）
             String encodedParam = java.net.URLEncoder.encode(functionUnitIdOrCode, java.nio.charset.StandardCharsets.UTF_8);
-            
-            // 首先尝试通过 code 查找功能单元
-            String url = adminCenterUrl + "/api/v1/admin/function-units/code/" + encodedParam + "/latest";
-            log.info("Fetching function unit by code from: {}", url);
-            
-            try {
-                ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                        url,
-                        HttpMethod.GET,
-                        null,
-                        new ParameterizedTypeReference<Map<String, Object>>() {}
-                );
-                
-                if (response.getBody() != null) {
-                    Map<String, Object> payload = ApiResponseBodyUnwrap.unwrapDataMap(response.getBody());
-                    String id = (String) payload.get("id");
-                    log.info("Resolved function unit code {} to ID {}", functionUnitIdOrCode, id);
-                    return id;
-                }
-            } catch (Exception e) {
-                log.warn("Failed to find function unit by code {}, trying by process key: {}", functionUnitIdOrCode, e.getMessage());
-            }
-            
-            // 如果通过 code 找不到，尝试通过流程定义Key查找
+
+            // 待办/流程实例传入的多为 Flowable processDefinitionKey，须优先按流程 Key 解析：
+            // admin-center getFunctionUnitByProcessKey 会优先返回仍启用的目录行。
+            // 若先用 code/latest，可能与流程 Key 同名的「另一包最新版本」且已禁用，误报 Function unit is disabled。
             String processKeyUrl = adminCenterUrl + "/api/v1/admin/function-units/by-process-key/" + encodedParam;
             log.info("Fetching function unit by process key from: {}", processKeyUrl);
-            
+
             try {
                 ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                         processKeyUrl,
@@ -191,20 +171,41 @@ public class FunctionUnitAccessComponent {
                         null,
                         new ParameterizedTypeReference<Map<String, Object>>() {}
                 );
-                
+
                 if (response.getBody() != null) {
                     Map<String, Object> payload = ApiResponseBodyUnwrap.unwrapDataMap(response.getBody());
                     String id = (String) payload.get("id");
                     log.info("Resolved function unit by process key {} to ID {}", functionUnitIdOrCode, id);
-                    // 缓存 process key → function unit ID 映射
                     processKeyCache.put(functionUnitIdOrCode, new CachedData<>(id));
                     return id;
                 }
             } catch (Exception e) {
-                log.warn("Failed to find function unit by process key {}, trying by name: {}", functionUnitIdOrCode, e.getMessage());
+                log.warn("Failed to find function unit by process key {}, trying by code: {}", functionUnitIdOrCode, e.getMessage());
+            }
+
+            // 门户发起列表等处传入的是目录 code，process key 未命中时再按 code 查最新版本
+            String url = adminCenterUrl + "/api/v1/admin/function-units/code/" + encodedParam + "/latest";
+            log.info("Fetching function unit by code from: {}", url);
+
+            try {
+                ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                        url,
+                        HttpMethod.GET,
+                        null,
+                        new ParameterizedTypeReference<Map<String, Object>>() {}
+                );
+
+                if (response.getBody() != null) {
+                    Map<String, Object> payload = ApiResponseBodyUnwrap.unwrapDataMap(response.getBody());
+                    String id = (String) payload.get("id");
+                    log.info("Resolved function unit code {} to ID {}", functionUnitIdOrCode, id);
+                    return id;
+                }
+            } catch (Exception e) {
+                log.warn("Failed to find function unit by code {}, trying by name: {}", functionUnitIdOrCode, e.getMessage());
             }
             
-            // 如果通过流程Key找不到，尝试通过名称搜索
+            // process key / code 均未命中时，再按名称精确匹配搜索
             String searchUrl = adminCenterUrl + "/api/v1/admin/function-units?keyword=" + encodedParam + "&size=1";
             log.info("Searching function unit by name from: {}", searchUrl);
             

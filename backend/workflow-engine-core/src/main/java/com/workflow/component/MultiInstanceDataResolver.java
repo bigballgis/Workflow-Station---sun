@@ -3,6 +3,7 @@ package com.workflow.component;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.platform.common.jdbc.PostgresPhysicalTablePrimaryKeys;
+import com.platform.common.jdbc.SubTablePhysicalColumnResolver;
 import com.platform.common.jdbc.SubTableRowKeySupport;
 import com.workflow.entity.ExtendedTaskInfo;
 import com.workflow.exception.WorkflowBusinessException;
@@ -313,6 +314,13 @@ public class MultiInstanceDataResolver {
                key.equals("nrOfCompletedInstances") ||
                key.equals("loopCounter") ||
                key.startsWith("_");
+    }
+
+    /**
+     * Maps a submitted variable key (field name or designer label/description) to a column on {@code physicalColumns}.
+     */
+    public String resolveSubTablePhysicalColumnKey(String subTableName, String variableKey, Set<String> physicalColumns) {
+        return SubTablePhysicalColumnResolver.resolvePhysicalColumnKey(jdbcTemplate, subTableName, variableKey, physicalColumns);
     }
     
     /**

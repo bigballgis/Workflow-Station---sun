@@ -8,6 +8,7 @@
 | [tech-stack-en.md](./tech-stack-en.md) | Tech stack (English) |
 | [architecture-diagram.md](./architecture-diagram.md) | 部署与模块关系示意 |
 | [schema-and-migration.md](./schema-and-migration.md) | 数据库：`init-scripts` 与 Flyway 双轨说明 |
+| [multi-instance-subtask-fix.md](./multi-instance-subtask-fix.md) | 多实例（JSON 子表）子任务：现象、根因（id vs id_idw）、Portal/引擎修复与 PK 读取说明 |
 | [demo-data-requirements.md](./demo-data-requirements.md) | Demo：英文界面与种子数据约定 |
 | [developer-workstation-workspace-rbac.md](./developer-workstation-workspace-rbac.md) | 设计器：功能单元工作区隔离（Technical Lead / Team Lead / Developer） |
 | [portal-bu-rbac.md](./portal-bu-rbac.md) | 门户：业务单元角色（UBR）、工作台上下文与权限摘要 |

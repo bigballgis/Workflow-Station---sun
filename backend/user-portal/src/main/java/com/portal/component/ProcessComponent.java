@@ -21,6 +21,7 @@ import com.portal.repository.ProcessInstanceRepository;
 import com.portal.repository.ActionDefinitionRepository;
 import com.portal.service.PortalWorkspaceAuthService;
 import com.platform.common.jdbc.PostgresPhysicalTablePrimaryKeys;
+import com.platform.common.jdbc.SubTablePhysicalColumnResolver;
 import com.platform.common.jdbc.SubTableRowKeySupport;
 import com.platform.common.util.ApiResponseBodyUnwrap;
 import com.platform.security.util.SecurityContextUtils;
@@ -1742,8 +1743,13 @@ public class ProcessComponent {
             for (Map<String, Object> hv : histVars) {
                 String name = (String) hv.get("name");
                 Object value = hv.get("value");
-                if (name != null && value != null && validCols.contains(name) && !skipCols.contains(name)) {
-                    updates.put(name, value);
+                if (name == null || value == null) {
+                    continue;
+                }
+                String col = SubTablePhysicalColumnResolver.resolvePhysicalColumnKey(
+                        jdbcTemplate, tableName, name, validCols);
+                if (col != null && !skipCols.contains(col)) {
+                    updates.put(col, value);
                 }
             }
             if (updates.isEmpty()) {

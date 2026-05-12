@@ -38,7 +38,15 @@ export function useTaskForm(options: {
     for (const binding of options.subTableBindings.value) {
       const rows = cloneSubTableRows(Array.isArray(binding.data) ? binding.data : [])
       const existing = getSavedSubTableRows(subTables, binding)
-      const merged = options.isMiSubTaskMode.value ? mergeSubTableRowsByRowId(existing, rows) : rows
+      const merged = options.isMiSubTaskMode.value
+        ? mergeSubTableRowsByRowId(
+            existing,
+            rows,
+            Array.isArray((binding as { primaryKeyFields?: string[] }).primaryKeyFields)
+              ? (binding as { primaryKeyFields?: string[] }).primaryKeyFields
+              : null
+          )
+        : rows
       const out = cloneSubTableRows(merged)
       subTables[binding.bindingId] = out
       subTables[String(binding.bindingId)] = out
