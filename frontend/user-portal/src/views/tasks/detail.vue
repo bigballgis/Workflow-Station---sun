@@ -167,6 +167,7 @@
               :model-value="selectedNodeForm.isCurrentTask ? formData : selectedNodeForm.values"
               :label-width="formLabelWidth"
               :readonly="selectedNodeForm.isCurrentTask ? formReadOnly : true"
+              :primary-read-only="selectedNodeForm.isCurrentTask ? primaryReadOnly : false"
               :sub-table-bindings="selectedNodeForm.isCurrentTask ? subTableBindings : selectedNodeForm.subTableBindings"
               :linked-sub-table-bindings="selectedNodeForm.isCurrentTask ? linkableSubTableBindings : undefined"
               :preview-sub-tables="selectedNodeForm.isCurrentTask ? isMiSubTaskMode : true"
@@ -226,6 +227,7 @@
                 :model-value="processFormValues"
                 :label-width="formLabelWidth"
                 :readonly="!processFormEditable"
+                :primary-read-only="primaryReadOnly"
                 @update:model-value="val => processFormValues = { ...processFormValues, ...val }"
               />
               <el-empty
@@ -270,6 +272,7 @@
               :model-value="formData"
               :label-width="formLabelWidth"
               :readonly="formReadOnly"
+              :primary-read-only="primaryReadOnly"
               :sub-table-bindings="subTableBindings"
               :linked-sub-table-bindings="linkableSubTableBindings"
               :preview-sub-tables="isMiSubTaskMode"
@@ -1061,6 +1064,10 @@ const { formFields, formTabs, formData, currentFormName, formReadOnly, formLabel
 // Task 17.4: Return_To_Requester state
 const isReturnToRequester = ref(false)
 
+// Whether the PRIMARY table binding has bindingMode READONLY.
+// When true, main form fields are disabled but sub-tables retain their own editability.
+const primaryReadOnly = ref(false)
+
 function isCompletedTaskData(taskData: any): boolean {
   return taskData?.endTime != null ||
     taskData?.completedTime != null ||
@@ -1380,11 +1387,12 @@ const loadFunctionUnitContent = async (processKey: string) => {
       const tableBindings: any[] = selectedForm.tableBindings || []
       console.log('[SubTable] selectedForm:', selectedForm.name, 'tableBindings:', JSON.stringify(tableBindings))
 
-      // When the PRIMARY table binding has bindingMode READONLY, force form read-only.
+      // When the PRIMARY table binding has bindingMode READONLY, force primary form fields read-only
+      // without affecting sub-table editability (sub-tables check their own bindingMode).
       // (This is set via Form Designer → Manage Table Bindings → Edit → Binding Mode)
       const primaryBinding = tableBindings.find((b: any) => b.bindingType === 'PRIMARY')
       if (primaryBinding?.bindingMode === 'READONLY') {
-        formReadOnly.value = true
+        primaryReadOnly.value = true
       }
 
       for (const b of tableBindings) {

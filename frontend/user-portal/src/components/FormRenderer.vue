@@ -89,7 +89,7 @@
                                   :title="resolveInlineFormTableTitle(child)"
                                   :fields="resolveInlineFormFields(child)"
                                   :current-row="getCurrentRowForInlineForm(child)"
-                                  :readonly="readonly"
+                                  :readonly="effectiveReadonly"
                                   :label-width="labelWidth"
                                   @update:row="(row: Record<string, any>) => handleInlineFormUpdate(child, row)"
                                 />
@@ -119,7 +119,7 @@
                                     :filter-conditions="(child as any)._lookupFilterConditions || []"
                                     :view-fields="(child as any)._lookupViewFields || []"
                                     :placeholder="child.placeholder"
-                                    :readonly="readonly"
+                                    :readonly="effectiveReadonly"
                                     @select="(row: any) => handleLookupSelect(child.key, row)"
                                     @clear="() => handleLookupClear(child.key)"
                                     @view-fields-loaded="(fields: any[]) => lookupLoadedViewFields[child.key] = fields"
@@ -147,7 +147,7 @@
                                 :field="child"
                                 :model-value="formData[child.key]"
                                 :form-data="formData"
-                                :readonly="readonly"
+                                :readonly="effectiveReadonly"
                                 :disabled="engineFieldStates.get(child.key)?.disabled || false"
                                 :visible="engineVisibility.get(child.key) ?? true"
                                 :options="engineOptions.get(child.key)"
@@ -210,7 +210,7 @@
                         :title="resolveInlineFormTableTitle(field)"
                         :fields="resolveInlineFormFields(field)"
                         :current-row="getCurrentRowForInlineForm(field)"
-                        :readonly="readonly"
+                        :readonly="effectiveReadonly"
                         :label-width="labelWidth"
                         @update:row="(row: Record<string, any>) => handleInlineFormUpdate(field, row)"
                       />
@@ -240,7 +240,7 @@
                           :filter-conditions="(field as any)._lookupFilterConditions || []"
                           :view-fields="(field as any)._lookupViewFields || []"
                           :placeholder="field.placeholder"
-                          :readonly="readonly"
+                          :readonly="effectiveReadonly"
                           @select="(row: any) => handleLookupSelect(field.key, row)"
                           @clear="() => handleLookupClear(field.key)"
                           @view-fields-loaded="(fields: any[]) => lookupLoadedViewFields[field.key] = fields"
@@ -268,7 +268,7 @@
                       :field="field"
                       :model-value="formData[field.key]"
                       :form-data="formData"
-                      :readonly="readonly"
+                      :readonly="effectiveReadonly"
                       :disabled="engineFieldStates.get(field.key)?.disabled || false"
                       :visible="engineVisibility.get(field.key) ?? true"
                       :options="engineOptions.get(field.key)"
@@ -356,7 +356,7 @@
                               :title="resolveInlineFormTableTitle(child)"
                               :fields="resolveInlineFormFields(child)"
                               :current-row="getCurrentRowForInlineForm(child)"
-                              :readonly="readonly"
+                              :readonly="effectiveReadonly"
                               :label-width="labelWidth"
                               @update:row="(row: Record<string, any>) => handleInlineFormUpdate(child, row)"
                             />
@@ -386,7 +386,7 @@
                                 :filter-conditions="(child as any)._lookupFilterConditions || []"
                                 :view-fields="(child as any)._lookupViewFields || []"
                                 :placeholder="child.placeholder"
-                                :readonly="readonly"
+                                :readonly="effectiveReadonly"
                                 @select="(row: any) => handleLookupSelect(child.key, row)"
                                 @clear="() => handleLookupClear(child.key)"
                                 @view-fields-loaded="(fields: any[]) => lookupLoadedViewFields[child.key] = fields"
@@ -414,7 +414,7 @@
                             :field="child"
                             :model-value="formData[child.key]"
                             :form-data="formData"
-                            :readonly="readonly"
+                            :readonly="effectiveReadonly"
                             :disabled="engineFieldStates.get(child.key)?.disabled || false"
                             :visible="engineVisibility.get(child.key) ?? true"
                             :options="engineOptions.get(child.key)"
@@ -477,7 +477,7 @@
                     :title="resolveInlineFormTableTitle(field)"
                     :fields="resolveInlineFormFields(field)"
                     :current-row="getCurrentRowForInlineForm(field)"
-                    :readonly="readonly"
+                    :readonly="effectiveReadonly"
                     :label-width="labelWidth"
                     @update:row="(row: Record<string, any>) => handleInlineFormUpdate(field, row)"
                   />
@@ -507,7 +507,7 @@
                       :filter-conditions="(field as any)._lookupFilterConditions || []"
                       :view-fields="(field as any)._lookupViewFields || []"
                       :placeholder="field.placeholder"
-                      :readonly="readonly"
+                      :readonly="effectiveReadonly"
                       @select="(row: any) => handleLookupSelect(field.key, row)"
                       @clear="() => handleLookupClear(field.key)"
                       @view-fields-loaded="(fields: any[]) => lookupLoadedViewFields[field.key] = fields"
@@ -535,7 +535,7 @@
                   :field="field"
                   :model-value="formData[field.key]"
                   :form-data="formData"
-                  :readonly="readonly"
+                  :readonly="effectiveReadonly"
                   :disabled="engineFieldStates.get(field.key)?.disabled || false"
                   :visible="engineVisibility.get(field.key) ?? true"
                   :options="engineOptions.get(field.key)"
@@ -615,6 +615,9 @@ interface Props {
   tabs?: FormTab[]
   modelValue?: Record<string, any>
   readonly?: boolean
+  /** When true, disables form fields driven by PRIMARY table binding READONLY mode.
+   *  Does NOT affect sub-table editability (sub-tables use their own bindingMode). */
+  primaryReadOnly?: boolean
   labelWidth?: string
   labelPosition?: 'left' | 'right' | 'top'
   size?: 'large' | 'default' | 'small'
@@ -660,6 +663,7 @@ const props = withDefaults(defineProps<Props>(), {
   modelValue: () => ({}),
   tabs: () => [],
   readonly: false,
+  primaryReadOnly: false,
   labelWidth: '160px',
   labelPosition: 'left',
   size: 'default',
@@ -695,6 +699,7 @@ provide('departmentTreeData', departmentTreeData)
 provide('departmentTreeLoading', departmentTreeLoading)
 
 const hasTabs = computed(() => props.tabs && props.tabs.length > 0)
+const effectiveReadonly = computed(() => props.readonly || props.primaryReadOnly)
 const activeTab = ref('')
 
 watch(
