@@ -21,5 +21,12 @@ export const usePendingTaskStore = defineStore('pendingTask', () => {
     }
   }
 
-  return { count, fetchPendingCount }
+  /** 与 /tasks 列表同一次 query 返回的 totalElements 同步角标，避免再打一枪 count 专用请求 */
+  const syncCountFromListTotal = (totalElements: number | undefined) => {
+    if (typeof totalElements === 'number' && !Number.isNaN(totalElements)) {
+      count.value = totalElements
+    }
+  }
+
+  return { count, fetchPendingCount, syncCountFromListTotal }
 })

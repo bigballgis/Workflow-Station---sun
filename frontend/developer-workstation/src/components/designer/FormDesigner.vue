@@ -702,6 +702,46 @@ function updateBindingPortalViews(bindingId: number, val: PortalViewsValue) {
   scheduleAutoSave()
 }
 
+/**
+ * Effective portalViews for a subTable widget in Form Preview: binding-level bar
+ * merged with rule.props.portalViews (canvas widget wins per field).
+ */
+function mergePortalViewsForPreview(ruleItem: any, bindingId: number): PortalViewsValue {
+  const base = getBindingPortalViews(bindingId)
+  const ov = ruleItem?.props?.portalViews
+  if (!ov || typeof ov !== 'object') {
+    // #region agent log
+    fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '552819' }, body: JSON.stringify({ sessionId: '552819', location: 'FormDesigner.vue:mergePortalViewsForPreview', message: 'preview merge: rule has no portalViews overlay', data: { hypothesisId: 'H1', bindingId, baseInitiator: base.initiatorRequest, baseAssignee: base.assigneeTodo }, timestamp: Date.now() }) }).catch(() => {})
+    // #endregion
+    return base
+  }
+  const assigneeTodo: PortalViewsValue['assigneeTodo'] =
+    ov.assigneeTodo === 'formBelowTable'
+      ? 'formBelowTable'
+      : ov.assigneeTodo === 'tableOnly'
+        ? 'tableOnly'
+        : base.assigneeTodo
+  let initiatorRequest: PortalViewsValue['initiatorRequest'] = base.initiatorRequest
+  if (ov.initiatorRequest === 'summaryWithLinkFormModal') initiatorRequest = 'summaryWithLinkFormModal'
+  else if (ov.initiatorRequest === 'tableOnly') initiatorRequest = 'tableOnly'
+  else if (ov.initiatorRequest === 'mirrorTodo') initiatorRequest = 'mirrorTodo'
+  const bSrc = base.assigneeTodoFormSource || { type: 'subForm' as const, formId: null, linkFormColumnId: null }
+  const oSrc = ov.assigneeTodoFormSource && typeof ov.assigneeTodoFormSource === 'object' ? ov.assigneeTodoFormSource : null
+  const mergedOut = {
+    assigneeTodo,
+    initiatorRequest,
+    assigneeTodoFormSource: {
+      type: oSrc?.type === 'linkForm' ? 'linkForm' : 'subForm',
+      formId: (oSrc?.formId ?? bSrc.formId) ?? null,
+      linkFormColumnId: (oSrc?.linkFormColumnId ?? bSrc.linkFormColumnId) ?? null,
+    },
+  }
+  // #region agent log
+  fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '552819' }, body: JSON.stringify({ sessionId: '552819', location: 'FormDesigner.vue:mergePortalViewsForPreview', message: 'preview merge: overlay applied', data: { hypothesisId: 'H1', bindingId, baseInitiator: base.initiatorRequest, ovInitiator: ov.initiatorRequest, mergedInitiator: mergedOut.initiatorRequest, baseAssignee: base.assigneeTodo, ovAssignee: ov.assigneeTodo, mergedAssignee: mergedOut.assigneeTodo }, timestamp: Date.now() }) }).catch(() => {})
+  // #endregion
+  return mergedOut
+}
+
 function setSubTableListViewRef(el: any, bindingId: number) {
   if (el) {
     subTableListViewRefs.value[bindingId] = el
@@ -2841,7 +2881,15 @@ function handlePreview() {
         const binding = localBindingMap.get(Number(itemBindingId))
         console.log('[Preview] Found subTable with bindingId:', itemBindingId, 'binding found:', !!binding)
         if (binding) {
-          items.push({ kind: 'subTable', binding })
+          const mergedPv = mergePortalViewsForPreview(ruleItem, Number(itemBindingId))
+          const dual = mergedPv.initiatorRequest != null && mergedPv.initiatorRequest !== 'mirrorTodo'
+          // #region agent log
+          fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '552819' }, body: JSON.stringify({ sessionId: '552819', location: 'FormDesigner.vue:buildPreviewItems', message: 'subTable preview item pushed', data: { hypothesisId: 'H2', bindingId: itemBindingId, mergedInitiator: mergedPv.initiatorRequest, dual, columnsLen: binding.columns?.length }, timestamp: Date.now() }) }).catch(() => {})
+          // #endregion
+          items.push({
+            kind: 'subTable',
+            binding: { ...binding, portalViews: mergedPv },
+          })
           localBindingMap.delete(Number(itemBindingId))
         }
       } else if (isCardRule(ruleItem) && containsSubTableRule(ruleItem)) {

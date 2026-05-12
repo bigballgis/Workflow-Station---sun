@@ -255,7 +255,10 @@ async function syncPortalAccessFromServer() {
     workspaceContextCount.value = 0
   }
   void pendingApprovalStore.fetchPendingCount()
-  void pendingTaskStore.fetchPendingCount()
+  // 待办列表、首页概览会各自用一次 query/overview 更新角标，避免 layout 再打满 queryTasks。
+  if (route.path !== '/tasks' && route.path !== '/dashboard') {
+    void pendingTaskStore.fetchPendingCount()
+  }
   try {
     const u = await getCurrentUser()
     const hasCtx = (workspaceContextCount.value ?? 0) > 0
@@ -281,7 +284,8 @@ watch(
   () => route.path,
   () => {
     void pendingApprovalStore.fetchPendingCount()
-    void pendingTaskStore.fetchPendingCount()
+    // 待办角标：勿在每次路由切换时调用 queryTasks（全量引擎+过滤），否则与列表页请求叠加会体感极慢。
+    // 初次进入由 onMounted 拉取；进入 /tasks 时由列表 totalElements 同步（pendingTask.syncCountFromListTotal）。
   }
 )
 

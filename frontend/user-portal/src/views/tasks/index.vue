@@ -334,6 +334,7 @@ const loadTasks = async () => {
     const data = res.data || res
     taskList.value = data.content || []
     pagination.total = data.totalElements || 0
+    pendingTaskStore.syncCountFromListTotal(data.totalElements as number | undefined)
   } catch (error) {
     console.error('Failed to load tasks:', error)
     taskList.value = []
@@ -402,7 +403,6 @@ const submitAction = async () => {
     }
     actionDialogVisible.value = false
     loadTasks()
-    void pendingTaskStore.fetchPendingCount()
   } catch (error) {
     ElMessage.success(t('common.success'))
     actionDialogVisible.value = false

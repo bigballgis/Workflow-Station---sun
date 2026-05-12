@@ -4,6 +4,7 @@ import com.platform.security.entity.BusinessUnit;
 import com.platform.security.entity.UserBusinessUnit;
 import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.DashboardOverview;
+import com.portal.dto.PageResponse;
 import com.portal.dto.ProcessInfo;
 import com.portal.dto.TaskInfo;
 import com.portal.dto.TaskQueryRequest;
@@ -18,12 +19,14 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Dashboard组件
@@ -40,31 +43,88 @@ public class DashboardComponent {
     private final ProcessInstanceRepository processInstanceRepository;
 
     /**
+     * 为 true 时，首页「团队任务概览」按 BU 成员逐个调用 queryTasks（极慢，成员多时可打爆引擎）。
+     * 默认 false：团队数字与本人待办一致（不聚合）；生产需要团队汇总时通过环境变量开启。
+     */
+    @Value("${portal.dashboard.team-task-aggregation-enabled:false}")
+    private boolean teamTaskAggregationEnabled;
+
+    @Value("${portal.dashboard.overview-cache-ttl-seconds:0}")
+    private int overviewCacheTtlSeconds;
+
+    @Value("${portal.dashboard.skip-avg-processing-hours:true}")
+    private boolean skipAvgProcessingHoursForOverview;
+
+    private final Map<String, OverviewCacheEntry> overviewCache = new ConcurrentHashMap<>();
+
+    private static final class OverviewCacheEntry {
+        final DashboardOverview overview;
+        final long expiresAtMillis;
+
+        OverviewCacheEntry(DashboardOverview overview, long expiresAtMillis) {
+            this.overview = overview;
+            this.expiresAtMillis = expiresAtMillis;
+        }
+    }
+
+    private String overviewCacheKey(String userId) {
+        String bu = SecurityContextUtils.getCurrentActiveBusinessUnitId().orElse("");
+        return userId + "|" + bu;
+    }
+
+    /**
      * 获取Dashboard概览数据
      */
     public DashboardOverview getDashboardOverview(String userId) {
-        // 获取任务概览
-        DashboardOverview.TaskOverview taskOverview = getTaskOverview(userId);
+        if (overviewCacheTtlSeconds > 0) {
+            String ck = overviewCacheKey(userId);
+            OverviewCacheEntry hit = overviewCache.get(ck);
+            if (hit != null && hit.expiresAtMillis > System.currentTimeMillis()) {
+                return hit.overview;
+            }
+        }
 
-        // 获取流程概览
-        DashboardOverview.ProcessOverview processOverview = getProcessOverview(userId);
+        // 与 queryTasks 并行拉流程统计（均访问 workflow-engine，叠加快照可缩短首屏）
+        CompletableFuture<DashboardOverview.ProcessOverview> processOverviewFuture =
+                CompletableFuture.supplyAsync(() -> getProcessOverview(userId));
 
-        // 获取个人绩效
-        DashboardOverview.PerformanceOverview performanceOverview = getPerformanceOverview(userId);
+        TaskQueryRequest dashTaskRequest = TaskQueryRequest.builder()
+                .userId(userId)
+                .page(0)
+                .size(1000)
+                .sortBy("createTime")
+                .sortDirection("desc")
+                .build();
+        PageResponse<TaskInfo> taskPage = taskQueryComponent.queryTasks(dashTaskRequest);
 
-        // 获取最近任务
-        List<TaskInfo> recentTasks = getRecentTasks(userId, 5);
+        // 与 buildTaskOverviewFromPage 内 history 调用重叠（均为本地 CPU 或轻量逻辑）
+        CompletableFuture<DashboardOverview.PerformanceOverview> performanceFuture =
+                CompletableFuture.supplyAsync(() -> getPerformanceOverview(userId));
+        CompletableFuture<List<ProcessInfo>> recentProcessesFuture =
+                CompletableFuture.supplyAsync(() -> getRecentProcesses(userId, 5));
 
-        // 获取最近流程
-        List<ProcessInfo> recentProcesses = getRecentProcesses(userId, 5);
+        DashboardOverview.TaskOverview taskOverview = buildTaskOverviewFromPage(userId, taskPage);
+        List<TaskInfo> recentTasks = taskPage.getContent().stream().limit(5).toList();
 
-        return DashboardOverview.builder()
+        CompletableFuture.allOf(processOverviewFuture, performanceFuture, recentProcessesFuture).join();
+        DashboardOverview.ProcessOverview processOverview = processOverviewFuture.join();
+        DashboardOverview.PerformanceOverview performanceOverview = performanceFuture.join();
+        List<ProcessInfo> recentProcesses = recentProcessesFuture.join();
+
+        DashboardOverview built = DashboardOverview.builder()
                 .taskOverview(taskOverview)
                 .processOverview(processOverview)
                 .performanceOverview(performanceOverview)
                 .recentTasks(recentTasks)
                 .recentProcesses(recentProcesses)
                 .build();
+
+        if (overviewCacheTtlSeconds > 0) {
+            overviewCache.put(
+                    overviewCacheKey(userId),
+                    new OverviewCacheEntry(built, System.currentTimeMillis() + overviewCacheTtlSeconds * 1000L));
+        }
+        return built;
     }
 
     /**
@@ -73,57 +133,52 @@ public class DashboardComponent {
     public DashboardOverview.TaskOverview getTaskOverview(String userId) {
         TaskQueryRequest request = TaskQueryRequest.builder()
                 .userId(userId)
+                .page(0)
+                .size(1000)
                 .build();
-        
-        var allTasks = taskQueryComponent.queryTasks(request).getContent();
+        PageResponse<TaskInfo> taskPage = taskQueryComponent.queryTasks(request);
+        return buildTaskOverviewFromPage(userId, taskPage);
+    }
 
-        long pendingCount = allTasks.size();
-        long overdueCount = allTasks.stream()
-                .filter(t -> Boolean.TRUE.equals(t.getIsOverdue()))
-                .count();
-        long urgentCount = allTasks.stream()
-                .filter(t -> "URGENT".equals(t.getPriority()) || "CRITICAL".equals(t.getPriority()))
-                .count();
-        long highPriorityCount = allTasks.stream()
-                .filter(t -> "HIGH".equals(t.getPriority()))
-                .count();
-
-        // 从 Flowable 获取今日完成数
-        long completedTodayCount = 0;
-        try {
-            Optional<Map<String, Object>> result = workflowEngineClient.getCompletedTasks(
-                userId, 0, 1000, null, 
-                LocalDate.now().atStartOfDay().toString(), 
-                LocalDateTime.now().toString());
-            if (result.isPresent()) {
-                Object totalElements = result.get().get("totalElements");
-                if (totalElements instanceof Number) {
-                    completedTodayCount = ((Number) totalElements).longValue();
+    private DashboardOverview.TaskOverview buildTaskOverviewFromPage(String userId, PageResponse<TaskInfo> taskPage) {
+        List<TaskInfo> allTasks = taskPage.getContent();
+        long pendingCount = taskPage.getTotalElements();
+        long overdueCount = 0;
+        long urgentCount = 0;
+        long highPriorityCount = 0;
+        for (TaskInfo t : allTasks) {
+            if (t == null) {
+                continue;
+            }
+            if (Boolean.TRUE.equals(t.getIsOverdue())) {
+                overdueCount++;
+            }
+            String p = t.getPriority();
+            if (p != null) {
+                if ("URGENT".equals(p) || "CRITICAL".equals(p)) {
+                    urgentCount++;
+                } else if ("HIGH".equals(p)) {
+                    highPriorityCount++;
                 }
             }
-        } catch (Exception e) {
-            log.warn("Failed to get completed tasks count: {}", e.getMessage());
         }
-        
-        // 平均处理时长（从已完成任务计算）
-        double avgProcessingHours = 2.5; // 默认值
-        try {
-            Optional<Map<String, Object>> result = workflowEngineClient.getCompletedTasks(
-                userId, 0, 100, null, null, null);
-            if (result.isPresent()) {
-                @SuppressWarnings("unchecked")
-                List<Map<String, Object>> content = (List<Map<String, Object>>) result.get().get("content");
-                if (content != null && !content.isEmpty()) {
-                    double totalDuration = content.stream()
-                        .filter(t -> t.get("durationInMillis") != null)
-                        .mapToLong(t -> ((Number) t.get("durationInMillis")).longValue())
-                        .average()
-                        .orElse(0);
-                    avgProcessingHours = totalDuration / (1000 * 60 * 60); // 转换为小时
-                }
-            }
-        } catch (Exception e) {
-            log.warn("Failed to calculate avg processing hours: {}", e.getMessage());
+
+        String completedRangeStart = LocalDate.now().atStartOfDay().toString();
+        String completedRangeEnd = LocalDateTime.now().toString();
+
+        long completedTodayCount;
+        double avgProcessingHours;
+        if (skipAvgProcessingHoursForOverview) {
+            completedTodayCount = fetchCompletedTasksTotalInRange(
+                    userId, completedRangeStart, completedRangeEnd);
+            avgProcessingHours = 2.5;
+        } else {
+            CompletableFuture<Long> completedTodayFuture = CompletableFuture.supplyAsync(() ->
+                    fetchCompletedTasksTotalInRange(userId, completedRangeStart, completedRangeEnd));
+            CompletableFuture<Double> avgHoursFuture = CompletableFuture.supplyAsync(() ->
+                    estimateAvgProcessingHoursFromRecentCompletions(userId));
+            completedTodayCount = completedTodayFuture.join();
+            avgProcessingHours = avgHoursFuture.join();
         }
 
         // Team aggregation logic
@@ -132,9 +187,10 @@ public class DashboardComponent {
         long teamCompletedTodayCount = completedTodayCount;
 
         final int MAX_TEAM_MEMBERS = 20;
-        
-        try {
-            Optional<String> activeBuOpt = SecurityContextUtils.getCurrentActiveBusinessUnitId();
+
+        if (teamTaskAggregationEnabled) {
+            try {
+                Optional<String> activeBuOpt = SecurityContextUtils.getCurrentActiveBusinessUnitId();
             String activeBuId = activeBuOpt.orElse(null);
             if (activeBuId != null) {
                 Set<String> allBuIds = new HashSet<>();
@@ -160,10 +216,12 @@ public class DashboardComponent {
                             try {
                                 TaskQueryRequest memberRequest = TaskQueryRequest.builder()
                                         .userId(memberId)
+                                        .page(0)
+                                        .size(1000)
                                         .build();
-                                var memberTasks = taskQueryComponent.queryTasks(memberRequest).getContent();
-                                memberPending = memberTasks.size();
-                                memberOverdue = memberTasks.stream()
+                                PageResponse<TaskInfo> memberPage = taskQueryComponent.queryTasks(memberRequest);
+                                memberPending = memberPage.getTotalElements();
+                                memberOverdue = memberPage.getContent().stream()
                                         .filter(t -> Boolean.TRUE.equals(t.getIsOverdue()))
                                         .count();
                             } catch (Exception e) {
@@ -209,6 +267,7 @@ public class DashboardComponent {
             teamOverdueCount = overdueCount;
             teamCompletedTodayCount = completedTodayCount;
         }
+        }
 
         return DashboardOverview.TaskOverview.builder()
                 .pendingCount(pendingCount)
@@ -221,6 +280,45 @@ public class DashboardComponent {
                 .teamOverdueCount(teamOverdueCount)
                 .teamCompletedTodayCount(teamCompletedTodayCount)
                 .build();
+    }
+
+    private long fetchCompletedTasksTotalInRange(String userId, String startIso, String endIso) {
+        try {
+            Optional<Map<String, Object>> result = workflowEngineClient.getCompletedTasks(
+                    userId, 0, 1000, null, startIso, endIso);
+            if (result.isPresent()) {
+                Object totalElements = result.get().get("totalElements");
+                if (totalElements instanceof Number) {
+                    return ((Number) totalElements).longValue();
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to get completed tasks count: {}", e.getMessage());
+        }
+        return 0L;
+    }
+
+    /** 基于最近已完成任务样本估算平均处理时长（小时）；失败时返回 2.5 */
+    private double estimateAvgProcessingHoursFromRecentCompletions(String userId) {
+        try {
+            Optional<Map<String, Object>> result = workflowEngineClient.getCompletedTasks(
+                    userId, 0, 100, null, null, null);
+            if (result.isPresent()) {
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> content = (List<Map<String, Object>>) result.get().get("content");
+                if (content != null && !content.isEmpty()) {
+                    double totalDuration = content.stream()
+                            .filter(t -> t.get("durationInMillis") != null)
+                            .mapToLong(t -> ((Number) t.get("durationInMillis")).longValue())
+                            .average()
+                            .orElse(0);
+                    return totalDuration / (1000 * 60 * 60);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to calculate avg processing hours: {}", e.getMessage());
+        }
+        return 2.5;
     }
 
     /**

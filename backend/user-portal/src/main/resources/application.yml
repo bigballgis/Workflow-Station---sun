@@ -80,6 +80,13 @@ workflow-engine:
 portal:
   internal:
     api-token: ${PORTAL_INTERNAL_API_TOKEN:}
+  dashboard:
+    # 首页团队任务汇总：true 时按 BU 成员逐个 queryTasks（成员多时极慢）。默认 false。
+    team-task-aggregation-enabled: ${PORTAL_DASHBOARD_TEAM_TASK_AGGREGATION_ENABLED:false}
+    # 首页 /dashboard/overview 内存缓存（秒）。0=关闭；15～30 可显著减少短时间重复进入首页的引擎压力。
+    overview-cache-ttl-seconds: ${PORTAL_DASHBOARD_OVERVIEW_CACHE_TTL_SECONDS:0}
+    # 为 true 时不请求「平均处理时长」所需的 completed-tasks 样本，减轻引擎调用（avg 展示为默认 2.5）。
+    skip-avg-processing-hours: ${PORTAL_DASHBOARD_SKIP_AVG_PROCESSING_HOURS:true}
   # Browser agent debug → SLF4J (docker logs: grep AGENT_NDJSON). Off by default.
   debug:
     agent-ingest:

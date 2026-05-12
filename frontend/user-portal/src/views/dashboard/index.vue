@@ -1,5 +1,8 @@
 <template>
-  <div class="dashboard-page">
+  <div
+    class="dashboard-page"
+    v-loading="loading"
+  >
     <div class="page-header">
       <h1>{{ t('dashboard.title') }}</h1>
     </div>
@@ -468,8 +471,12 @@ import { useI18n } from 'vue-i18n'
 import { Plus, List, Document, Share, Key } from '@element-plus/icons-vue'
 import { getDashboardOverview, getTeamRequests, TaskOverview, ProcessOverview, PerformanceOverview, TeamRequestsResponse } from '@/api/dashboard'
 import { formatDate } from '@/utils/dateFormat'
+import { usePendingTaskStore } from '@/stores/pendingTask'
 
 const { t } = useI18n()
+const pendingTaskStore = usePendingTaskStore()
+
+const loading = ref(false)
 
 const taskOverview = ref<TaskOverview>({
   pendingCount: 0,
@@ -579,6 +586,7 @@ const getTeamStatusLabel = (status: string) => {
 }
 
 const loadDashboardData = async () => {
+  loading.value = true
   try {
     const res = await getDashboardOverview()
     // API 返回格式: { success: true, data: { taskOverview, processOverview, performanceOverview, recentTasks } }
@@ -588,9 +596,14 @@ const loadDashboardData = async () => {
       processOverview.value = data.processOverview || processOverview.value
       performanceOverview.value = data.performanceOverview || performanceOverview.value
       recentTasks.value = data.recentTasks || []
+      if (data.taskOverview != null && typeof data.taskOverview.pendingCount === 'number') {
+        pendingTaskStore.syncCountFromListTotal(data.taskOverview.pendingCount)
+      }
     }
   } catch (error) {
     console.error('Failed to load dashboard data:', error)
+  } finally {
+    loading.value = false
   }
 }
 

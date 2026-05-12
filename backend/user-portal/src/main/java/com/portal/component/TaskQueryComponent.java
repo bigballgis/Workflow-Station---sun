@@ -28,11 +28,17 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 /**
@@ -88,7 +94,18 @@ public class TaskQueryComponent {
         List<String> assignmentTypes = request.getAssignmentTypes();
         int page = request.getPage() != null ? request.getPage() : 0;
         int size = request.getSize() != null ? request.getSize() : 20;
-        
+
+        boolean includeDelegated = assignmentTypes == null || assignmentTypes.isEmpty()
+                || assignmentTypes.contains("DELEGATED");
+        SecurityContext securityContext = SecurityContextHolder.getContext();
+        ServletRequestAttributes requestAttributes =
+                (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+        CompletableFuture<List<TaskInfo>> delegatedFuture = CompletableFuture.completedFuture(Collections.emptyList());
+        if (includeDelegated) {
+            delegatedFuture = CompletableFuture.supplyAsync(() -> runWithInheritedRequestAndSecurity(
+                    securityContext, requestAttributes, () -> queryDelegatedTasks(userId)));
+        }
+
         List<TaskInfo> allTasks = new ArrayList<>();
 
         // 1. Fetch tasks from Flowable
@@ -129,10 +146,8 @@ public class TaskQueryComponent {
             mergeTasksFromRunningProcessInstancesForUser(userId, allTasks);
         }
 
-        // 2. Query delegated tasks (delegation info stored locally)
-        if (assignmentTypes == null || assignmentTypes.isEmpty() || assignmentTypes.contains("DELEGATED")) {
-            List<TaskInfo> delegatedTasks = queryDelegatedTasks(userId);
-            allTasks.addAll(delegatedTasks);
+        if (includeDelegated) {
+            allTasks.addAll(delegatedFuture.join());
         }
 
         Set<String> processIds = allTasks.stream()
@@ -177,6 +192,13 @@ public class TaskQueryComponent {
         List<TaskInfo> pagedTasks = start < allTasks.size() 
                 ? allTasks.subList(start, end) 
                 : Collections.emptyList();
+
+        // 列表 API 不返回 variables，减轻 JSON 序列化与网络体积（详情走 getTaskById）
+        for (TaskInfo t : pagedTasks) {
+            if (t != null) {
+                t.setVariables(null);
+            }
+        }
 
         return PageResponse.of(pagedTasks, page, size, allTasks.size());
     }
@@ -420,6 +442,77 @@ public class TaskQueryComponent {
     }
 
     /**
+     * 在异步线程中继承当前请求的 Authorization 与安全上下文，供转发 workflow-engine 使用。
+     */
+    private static <T> T runWithInheritedRequestAndSecurity(
+            SecurityContext securityContext,
+            ServletRequestAttributes requestAttributes,
+            Callable<T> action) {
+        try {
+            if (requestAttributes != null) {
+                RequestContextHolder.setRequestAttributes(requestAttributes, true);
+            }
+            SecurityContextHolder.setContext(securityContext);
+            return action.call();
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        } finally {
+            SecurityContextHolder.clearContext();
+            RequestContextHolder.resetRequestAttributes();
+        }
+    }
+
+    /**
+     * 将某委托人的待办转为「受委托人为 assignee」的列表（单委托人；可与其它委托人并行查询）。
+     */
+    private List<TaskInfo> loadDelegatedTasksForDelegator(String delegateUserId, String delegatorId) {
+        List<TaskInfo> delegatedTasks = new ArrayList<>();
+        try {
+            Optional<Map<String, Object>> result = workflowEngineClient.getUserTasks(delegatorId, 0, 1000);
+            if (result.isEmpty()) {
+                return delegatedTasks;
+            }
+            Map<String, Object> responseBody = result.get();
+            List<Map<String, Object>> tasks = WorkflowEnginePayloadHelper.taskListFromPayload(responseBody);
+            if (tasks == null) {
+                return delegatedTasks;
+            }
+            for (Map<String, Object> taskMap : tasks) {
+                TaskInfo taskInfo = convertMapToTaskInfo(taskMap);
+                TaskInfo delegatedTask = TaskInfo.builder()
+                        .taskId(taskInfo.getTaskId())
+                        .taskName(taskInfo.getTaskName())
+                        .description(taskInfo.getDescription())
+                        .processInstanceId(taskInfo.getProcessInstanceId())
+                        .processDefinitionKey(taskInfo.getProcessDefinitionKey())
+                        .processDefinitionName(taskInfo.getProcessDefinitionName())
+                        .bpmnAssigneeType(taskInfo.getBpmnAssigneeType())
+                        .bpmnBusinessUnitId(taskInfo.getBpmnBusinessUnitId())
+                        .assignmentType("DELEGATED")
+                        .assignee(delegateUserId)
+                        .delegatorId(delegatorId)
+                        .delegatorName(delegatorId)
+                        .initiatorId(taskInfo.getInitiatorId())
+                        .initiatorName(taskInfo.getInitiatorName())
+                        .priority(taskInfo.getPriority())
+                        .status(taskInfo.getStatus())
+                        .createTime(taskInfo.getCreateTime())
+                        .dueDate(taskInfo.getDueDate())
+                        .isOverdue(taskInfo.getIsOverdue())
+                        .formKey(taskInfo.getFormKey())
+                        .variables(taskInfo.getVariables())
+                        .build();
+                delegatedTasks.add(delegatedTask);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to get delegated tasks for delegator {}: {}", delegatorId, e.getMessage());
+        }
+        return delegatedTasks;
+    }
+
+    /**
      * Query tasks delegated to a user.
      * 
      * Delegation info is stored in the local database and combined with Flowable task info.
@@ -443,50 +536,23 @@ public class TaskQueryComponent {
                 .map(DelegationRule::getDelegatorId)
                 .collect(Collectors.toSet());
 
-        // Fetch delegator's tasks from Flowable
+        SecurityContext ctx = SecurityContextHolder.getContext();
+        ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+
+        List<CompletableFuture<List<TaskInfo>>> futures = delegatorIds.stream()
+                .map(delegatorId -> CompletableFuture.supplyAsync(() -> runWithInheritedRequestAndSecurity(
+                        ctx, attrs, () -> loadDelegatedTasksForDelegator(userId, delegatorId))))
+                .toList();
+
         List<TaskInfo> delegatedTasks = new ArrayList<>();
-        for (String delegatorId : delegatorIds) {
+        for (CompletableFuture<List<TaskInfo>> f : futures) {
             try {
-                Optional<Map<String, Object>> result = workflowEngineClient.getUserTasks(delegatorId, 0, 100);
-                if (result.isPresent()) {
-                    Map<String, Object> responseBody = result.get();
-                    List<Map<String, Object>> tasks = WorkflowEnginePayloadHelper.taskListFromPayload(responseBody);
-                    if (tasks != null) {
-                        for (Map<String, Object> taskMap : tasks) {
-                            TaskInfo taskInfo = convertMapToTaskInfo(taskMap);
-                            // Mark as delegated task
-                            TaskInfo delegatedTask = TaskInfo.builder()
-                                    .taskId(taskInfo.getTaskId())
-                                    .taskName(taskInfo.getTaskName())
-                                    .description(taskInfo.getDescription())
-                                    .processInstanceId(taskInfo.getProcessInstanceId())
-                                    .processDefinitionKey(taskInfo.getProcessDefinitionKey())
-                                    .processDefinitionName(taskInfo.getProcessDefinitionName())
-                                    .bpmnAssigneeType(taskInfo.getBpmnAssigneeType())
-                                    .bpmnBusinessUnitId(taskInfo.getBpmnBusinessUnitId())
-                                    .assignmentType("DELEGATED")
-                                    .assignee(userId)
-                                    .delegatorId(delegatorId)
-                                    .delegatorName(delegatorId)
-                                    .initiatorId(taskInfo.getInitiatorId())
-                                    .initiatorName(taskInfo.getInitiatorName())
-                                    .priority(taskInfo.getPriority())
-                                    .status(taskInfo.getStatus())
-                                    .createTime(taskInfo.getCreateTime())
-                                    .dueDate(taskInfo.getDueDate())
-                                    .isOverdue(taskInfo.getIsOverdue())
-                                    .formKey(taskInfo.getFormKey())
-                                    .variables(taskInfo.getVariables())
-                                    .build();
-                            delegatedTasks.add(delegatedTask);
-                        }
-                    }
-                }
+                delegatedTasks.addAll(f.join());
             } catch (Exception e) {
-                log.warn("Failed to get delegated tasks for delegator {}: {}", delegatorId, e.getMessage());
+                log.warn("Failed to join delegated task future: {}", e.getMessage());
             }
         }
-        
+
         return delegatedTasks;
     }
 

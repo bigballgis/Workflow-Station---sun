@@ -18,6 +18,57 @@
     </div>
 
     <div
+      v-else-if="item.kind === 'subTable' && item.binding.columns?.length && isDualPortalSubTablePreview(item.binding)"
+      class="sub-table-preview-item"
+    >
+      <div class="sub-preview-header">
+        <el-tag
+          :type="item.binding.bindingType === 'SUB' ? 'success' : 'warning'"
+          size="small"
+        >
+          {{ item.binding.bindingType === 'SUB' ? t('tableBinding.subTableType') : t('tableBinding.relationTableType') }}
+        </el-tag>
+        <span class="sub-preview-title">{{ item.binding.tableName }}</span>
+      </div>
+      <el-tabs
+        :model-value="subTableFormPreviewTabModel(idx)"
+        class="sub-table-form-preview-tabs"
+        @update:model-value="setSubTableFormPreviewTabModel(idx, $event)"
+      >
+        <el-tab-pane
+          :label="t('form.portalViews.toDoDisplay')"
+          name="todo"
+        >
+          <SubTableField
+            :config="{ title: item.binding.tableName, columns: item.binding.columns }"
+            :model-value="previewTableRows[item.binding.bindingId]"
+            :editable="true"
+            :form-rule="item.binding.rule"
+            :form-option="item.binding.option"
+            :preview-show-form-below="item.binding.portalViews?.assigneeTodo === 'formBelowTable'"
+            :preview-lookup-compact="false"
+            @update:model-value="(rows: any[]) => updateTableRows(item.binding.bindingId, rows)"
+          />
+        </el-tab-pane>
+        <el-tab-pane
+          :label="t('form.portalViews.myRequestsDisplay')"
+          name="myRequest"
+        >
+          <SubTableField
+            :config="{ title: item.binding.tableName, columns: item.binding.columns }"
+            :model-value="previewTableRows[item.binding.bindingId]"
+            :editable="true"
+            :form-rule="item.binding.rule"
+            :form-option="item.binding.option"
+            :preview-show-form-below="false"
+            :preview-lookup-compact="initiatorPreviewIsSummary(item.binding)"
+            @update:model-value="(rows: any[]) => updateTableRows(item.binding.bindingId, rows)"
+          />
+        </el-tab-pane>
+      </el-tabs>
+    </div>
+
+    <div
       v-else-if="item.kind === 'subTable'"
       class="sub-table-preview-item"
     >
@@ -110,11 +161,15 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, reactive, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import SubTableField from './SubTableField.vue'
 import LookupPreview from './LookupPreview.vue'
 import type { FormPreviewItem } from './formPreviewTypes'
+import {
+  initiatorPreviewIsSummary,
+  isDualPortalSubTablePreview,
+} from './formPreviewTypes'
 
 defineOptions({ name: 'FormPreviewItems' })
 
@@ -131,6 +186,43 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+
+/** Active tab per item index for dual To Do / My Requests sub-table form preview */
+const subTableFormPreviewTab = reactive<Record<number, string>>({})
+
+function subTableFormPreviewTabModel(idx: number): string {
+  return subTableFormPreviewTab[idx] ?? 'todo'
+}
+function setSubTableFormPreviewTabModel(idx: number, name: string | number) {
+  subTableFormPreviewTab[idx] = String(name)
+}
+
+function logSubTablePreviewBranches(items: FormPreviewItem[]) {
+  const walk = (list: FormPreviewItem[], depth: number) => {
+    list.forEach((item, idx) => {
+      if (item.kind === 'card') {
+        walk(item.items, depth + 1)
+        return
+      }
+      if (item.kind !== 'subTable') return
+      const dual = isDualPortalSubTablePreview(item.binding)
+      const cols = item.binding.columns?.length ?? 0
+      const wouldDualBranch = cols > 0 && dual
+      // #region agent log
+      fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '552819' }, body: JSON.stringify({ sessionId: '552819', location: 'FormPreviewItems.vue:logSubTablePreviewBranches', message: 'FormPreviewItems branch', data: { hypothesisId: 'H3-H4-H5', depth, idx, bindingId: item.binding.bindingId, portalViews: item.binding.portalViews, columnsLen: cols, isDualCalc: dual, wouldDualBranch }, timestamp: Date.now() }) }).catch(() => {})
+      // #endregion
+    })
+  }
+  walk(items, 0)
+}
+
+watch(
+  () => props.items,
+  items => {
+    logSubTablePreviewBranches(items)
+  },
+  { deep: true, immediate: true }
+)
 
 const previewModel = computed({
   get: () => props.previewData,
@@ -176,6 +268,14 @@ function updateTableRows(bindingId: number, rows: any[]) {
 
   :deep(.el-button) {
     margin-right: 10px;
+  }
+}
+
+.sub-table-form-preview-tabs {
+  width: 100%;
+
+  :deep(.el-tabs__content) {
+    padding-top: 10px;
   }
 }
 

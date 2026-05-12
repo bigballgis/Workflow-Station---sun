@@ -119,7 +119,7 @@
               :filter-conditions="col.props?.filterConditions || []"
               :view-fields="col.props?.viewFields || []"
               :field-defs="col.props?.fieldDefs || []"
-              :show-backfill-view="col.props?.showBackfillView !== false"
+              :show-backfill-view="previewLookupCompact ? false : (col.props?.showBackfillView !== false)"
               readonly
             />
           </template>
@@ -160,6 +160,29 @@
         />
       </template>
     </el-table>
+
+    <div
+      v-if="previewShowFormBelow"
+      class="preview-inline-form-below"
+    >
+      <el-divider content-position="left">
+        {{ t('subTableView.assigneeFormBelowDivider') }}
+      </el-divider>
+      <div class="preview-inline-form-body">
+        <form-create
+          v-if="formRule && formRule.length"
+          v-model="previewInlineFormData"
+          locale="en"
+          :rule="formRule"
+          :option="previewInlineFormOption"
+        />
+        <el-empty
+          v-else
+          :description="t('subTable.noFormDesign')"
+          :image-size="48"
+        />
+      </div>
+    </div>
 
     <!-- 分页 -->
     <div
@@ -269,6 +292,10 @@ const props = defineProps<{
   formRule?: any[]
   /** Form-create option from the sub-table form designer */
   formOption?: any
+  /** Form Preview: compact lookup cells (My Requests — summary mode) */
+  previewLookupCompact?: boolean
+  /** Form Preview: show read-only form below table (assignee — form below table) */
+  previewShowFormBelow?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -294,6 +321,28 @@ const linkFormDialogTitle = ref('')
 const linkFormInitialData = ref<Record<string, any> | undefined>(undefined)
 const linkFormRule = ref<any[]>([])
 const linkFormOption = ref<any>({})
+
+const previewInlineFormData = ref<Record<string, unknown>>({})
+const previewInlineFormOption = computed(() => {
+  const saved = { ...((props.formOption || {}) as Record<string, unknown>) }
+  delete saved.title
+  return {
+    showMsg: true,
+    form: {
+      labelPosition: 'left',
+      labelWidth: '140px',
+      disabled: true,
+    },
+    language: {
+      en: {
+        clickToUpload: t('form.clickToUpload'),
+      },
+    },
+    ...saved,
+    resetBtn: false,
+    submitBtn: false,
+  }
+})
 
 // 计算属性：是否可编辑
 const editable = computed(() => props.editable !== false)
@@ -482,6 +531,27 @@ defineExpose({
 
     :deep(.lookup-label-text) {
       display: none;
+    }
+  }
+
+  .preview-inline-form-below {
+    margin-top: 12px;
+    border-top: 1px dashed var(--el-border-color, #dcdfe6);
+    background: var(--el-fill-color-lighter, #fafafa);
+    border-radius: 0 0 4px 4px;
+    margin-left: -12px;
+    margin-right: -12px;
+    margin-bottom: -12px;
+    padding: 0 12px 4px;
+  }
+
+  .preview-inline-form-body {
+    max-height: 280px;
+    overflow-y: auto;
+    padding-bottom: 8px;
+
+    :deep(.form-create) {
+      width: 100%;
     }
   }
 }

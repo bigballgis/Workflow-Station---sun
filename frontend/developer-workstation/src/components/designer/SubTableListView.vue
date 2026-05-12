@@ -278,7 +278,7 @@
               </div>
             </div>
             <div
-              v-if="pane.key === 'todo'"
+              v-if="pane.key === 'todo' && assigneeTodoIsFormBelow"
               class="inline-form-below-preview"
             >
               <el-divider content-position="left">
@@ -560,9 +560,12 @@ const inlineFormPreviewOption = computed(() => {
 const dualPortalListPreview = computed(() => {
   const v = props.portalViews
   if (!v || typeof v !== 'object') return false
-  if (v.assigneeTodo !== 'formBelowTable') return false
-  return v.initiatorRequest === 'summaryWithLinkFormModal' || v.initiatorRequest === 'tableOnly'
+  const init = v.initiatorRequest
+  if (init == null || init === 'mirrorTodo') return false
+  return true
 })
+
+const assigneeTodoIsFormBelow = computed(() => props.portalViews?.assigneeTodo === 'formBelowTable')
 
 const initiatorIsSummary = computed(() => props.portalViews?.initiatorRequest === 'summaryWithLinkFormModal')
 
