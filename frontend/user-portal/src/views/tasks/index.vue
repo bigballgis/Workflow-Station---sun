@@ -88,15 +88,26 @@
       </el-form>
     </div>
 
-    <!-- 任务列表 -->
+    <!-- 任务列表：先渲染表格结构，数据异步填充（加载中仅在空表时提示，翻页时保留上一页数据直至返回） -->
     <div class="portal-card">
       <el-table
-        v-loading="loading"
         :data="taskList"
         stripe
         table-layout="fixed"
         @selection-change="handleSelectionChange"
       >
+        <template #empty>
+          <div
+            v-if="loading"
+            class="tasks-table-empty-loading"
+          >
+            <el-icon class="tasks-table-empty-loading__icon is-loading">
+              <Loading />
+            </el-icon>
+            <span>{{ t('common.loading') }}</span>
+          </div>
+          <span v-else>{{ t('task.noTasks') }}</span>
+        </template>
         <el-table-column
           type="selection"
           width="50"
@@ -210,6 +221,7 @@
         v-model:page-size="pagination.size"
         :total="pagination.total"
         :page-sizes="[10, 20, 50, 100]"
+        :disabled="loading"
         layout="total, sizes, prev, pager, next, jumper"
         style="margin-top: 16px; justify-content: flex-end;"
         @size-change="handleSizeChange"
@@ -286,7 +298,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
-import { Search } from '@element-plus/icons-vue'
+import { Search, Loading } from '@element-plus/icons-vue'
 import { queryTasks, delegateTask, transferTask, urgeTask, batchUrgeTasks, TaskInfo } from '@/api/task'
 import { formatDate } from '@/utils/dateFormat'
 import { usePendingTaskStore } from '@/stores/pendingTask'
@@ -295,7 +307,7 @@ const pendingTaskStore = usePendingTaskStore()
 const { t } = useI18n()
 const router = useRouter()
 
-const loading = ref(false)
+const loading = ref(true)
 const taskList = ref<TaskInfo[]>([])
 const selectedTasks = ref<TaskInfo[]>([])
 
@@ -404,8 +416,12 @@ const submitAction = async () => {
     actionDialogVisible.value = false
     loadTasks()
   } catch (error) {
-    ElMessage.success(t('common.success'))
-    actionDialogVisible.value = false
+    console.error('Task action failed:', error)
+    const msg =
+      (error as { response?: { data?: { message?: string } }; message?: string })?.response?.data?.message
+      ?? (error as { message?: string })?.message
+      ?? t('common.error')
+    ElMessage.error(msg)
   }
 }
 
@@ -516,6 +532,18 @@ onMounted(() => {
     
     .el-form {
       margin-bottom: -18px;
+    }
+  }
+
+  .tasks-table-empty-loading {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-secondary);
+    padding: 24px 0;
+
+    &__icon {
+      font-size: 18px;
     }
   }
   

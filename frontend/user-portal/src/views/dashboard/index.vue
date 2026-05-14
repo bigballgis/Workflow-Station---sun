@@ -1,8 +1,5 @@
 <template>
-  <div
-    class="dashboard-page"
-    v-loading="loading"
-  >
+  <div class="dashboard-page">
     <div class="page-header">
       <h1>{{ t('dashboard.title') }}</h1>
     </div>
@@ -18,7 +15,14 @@
             <el-col :span="8">
               <div class="stat-item">
                 <div class="stat-number">
+                  <el-icon
+                    v-if="loading"
+                    class="is-loading dashboard-inline-loading"
+                  >
+                    <Loading />
+                  </el-icon>
                   <router-link
+                    v-else
                     to="/tasks"
                     class="stat-link"
                   >
@@ -33,7 +37,13 @@
             <el-col :span="8">
               <div class="stat-item">
                 <div class="stat-number error">
-                  {{ taskOverview.overdueCount }}
+                  <el-icon
+                    v-if="loading"
+                    class="is-loading dashboard-inline-loading"
+                  >
+                    <Loading />
+                  </el-icon>
+                  <template v-else>{{ taskOverview.overdueCount }}</template>
                 </div>
                 <div class="stat-label">
                   {{ t('dashboard.overdueTasks') }}
@@ -43,7 +53,14 @@
             <el-col :span="8">
               <div class="stat-item">
                 <div class="stat-number success">
+                  <el-icon
+                    v-if="loading"
+                    class="is-loading dashboard-inline-loading"
+                  >
+                    <Loading />
+                  </el-icon>
                   <router-link
+                    v-else
                     to="/tasks/completed"
                     class="stat-link"
                   >
@@ -67,7 +84,13 @@
             <el-col :span="8">
               <div class="stat-item small">
                 <div class="stat-value">
-                  {{ taskOverview.teamPendingCount }}
+                  <el-icon
+                    v-if="loading"
+                    class="is-loading dashboard-inline-loading-sm"
+                  >
+                    <Loading />
+                  </el-icon>
+                  <template v-else>{{ taskOverview.teamPendingCount }}</template>
                 </div>
                 <div class="stat-label">
                   {{ t('dashboard.teamPendingTasks') }}
@@ -77,7 +100,13 @@
             <el-col :span="8">
               <div class="stat-item small">
                 <div class="stat-value error">
-                  {{ taskOverview.teamOverdueCount }}
+                  <el-icon
+                    v-if="loading"
+                    class="is-loading dashboard-inline-loading-sm"
+                  >
+                    <Loading />
+                  </el-icon>
+                  <template v-else>{{ taskOverview.teamOverdueCount }}</template>
                 </div>
                 <div class="stat-label">
                   {{ t('dashboard.teamOverdueTasks') }}
@@ -87,7 +116,13 @@
             <el-col :span="8">
               <div class="stat-item small">
                 <div class="stat-value success">
-                  {{ taskOverview.teamCompletedTodayCount }}
+                  <el-icon
+                    v-if="loading"
+                    class="is-loading dashboard-inline-loading-sm"
+                  >
+                    <Loading />
+                  </el-icon>
+                  <template v-else>{{ taskOverview.teamCompletedTodayCount }}</template>
                 </div>
                 <div class="stat-label">
                   {{ t('dashboard.teamCompletedToday') }}
@@ -108,7 +143,13 @@
             <el-col :span="8">
               <div class="stat-item">
                 <div class="stat-number">
-                  {{ processOverview.initiatedCount }}
+                  <el-icon
+                    v-if="loading"
+                    class="is-loading dashboard-inline-loading"
+                  >
+                    <Loading />
+                  </el-icon>
+                  <template v-else>{{ processOverview.initiatedCount }}</template>
                 </div>
                 <div class="stat-label">
                   {{ t('dashboard.initiatedProcesses') }}
@@ -118,7 +159,13 @@
             <el-col :span="8">
               <div class="stat-item">
                 <div class="stat-number warning">
-                  {{ processOverview.inProgressCount }}
+                  <el-icon
+                    v-if="loading"
+                    class="is-loading dashboard-inline-loading"
+                  >
+                    <Loading />
+                  </el-icon>
+                  <template v-else>{{ processOverview.inProgressCount }}</template>
                 </div>
                 <div class="stat-label">
                   {{ t('dashboard.inProgressProcesses') }}
@@ -128,7 +175,13 @@
             <el-col :span="8">
               <div class="stat-item">
                 <div class="stat-number success">
-                  {{ processOverview.completedThisMonthCount }}
+                  <el-icon
+                    v-if="loading"
+                    class="is-loading dashboard-inline-loading"
+                  >
+                    <Loading />
+                  </el-icon>
+                  <template v-else>{{ processOverview.completedThisMonthCount }}</template>
                 </div>
                 <div class="stat-label">
                   {{ t('dashboard.completedThisMonth') }}
@@ -140,7 +193,7 @@
           <div class="approval-rate">
             <span>{{ t('dashboard.approvalRate') }}</span>
             <el-progress
-              :percentage="Math.round(processOverview.approvalRate * 100)"
+              :percentage="loading ? 0 : Math.round(processOverview.approvalRate * 100)"
               :stroke-width="10"
               color="var(--success-green)"
             />
@@ -234,7 +287,7 @@
             <div class="score-item">
               <span class="score-label">{{ t('dashboard.efficiencyScore') }}</span>
               <el-progress
-                :percentage="Math.round(performanceOverview.efficiencyScore)"
+                :percentage="loading ? 0 : Math.round(performanceOverview.efficiencyScore)"
                 :stroke-width="8"
                 color="var(--hsbc-red)"
               />
@@ -242,7 +295,7 @@
             <div class="score-item">
               <span class="score-label">{{ t('dashboard.qualityScore') }}</span>
               <el-progress
-                :percentage="Math.round(performanceOverview.qualityScore)"
+                :percentage="loading ? 0 : Math.round(performanceOverview.qualityScore)"
                 :stroke-width="8"
                 color="var(--success-green)"
               />
@@ -250,7 +303,7 @@
             <div class="score-item">
               <span class="score-label">{{ t('dashboard.collaborationScore') }}</span>
               <el-progress
-                :percentage="Math.round(performanceOverview.collaborationScore)"
+                :percentage="loading ? 0 : Math.round(performanceOverview.collaborationScore)"
                 :stroke-width="8"
                 color="var(--info-blue)"
               />
@@ -258,7 +311,18 @@
           </div>
           <div class="rank-info">
             <span>{{ t('dashboard.monthlyRank') }}:</span>
-            <span class="rank-value">
+            <span
+              v-if="loading"
+              class="rank-value rank-loading"
+            >
+              <el-icon class="is-loading dashboard-inline-loading-sm">
+                <Loading />
+              </el-icon>
+            </span>
+            <span
+              v-else
+              class="rank-value"
+            >
               {{ t('dashboard.rankFormat', { rank: performanceOverview.monthlyRank, total: performanceOverview.totalUsers }) }}
             </span>
           </div>
@@ -295,8 +359,17 @@
                 {{ getPriorityLabel(task.priority) }}
               </el-tag>
             </div>
+            <div
+              v-if="loading && recentTasks.length === 0"
+              class="recent-tasks-loading"
+            >
+              <el-icon class="is-loading">
+                <Loading />
+              </el-icon>
+              <span>{{ t('common.loading') }}</span>
+            </div>
             <el-empty
-              v-if="recentTasks.length === 0"
+              v-else-if="recentTasks.length === 0"
               :description="t('dashboard.noTasks')"
             />
           </div>
@@ -381,8 +454,8 @@
       </el-tabs>
 
       <el-table
-        v-loading="teamLoading"
         :data="teamRequests.content"
+        :loading="teamLoading"
         stripe
         table-layout="fixed"
       >
@@ -456,6 +529,7 @@
       <el-pagination
         v-model:current-page="teamPagination.page"
         v-model:page-size="teamPagination.size"
+        :disabled="teamLoading"
         :total="teamRequests.totalElements"
         layout="total, prev, pager, next"
         style="margin-top: 16px; justify-content: flex-end;"
@@ -468,7 +542,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Plus, List, Document, Share, Key } from '@element-plus/icons-vue'
+import { Plus, List, Document, Share, Key, Loading } from '@element-plus/icons-vue'
 import { getDashboardOverview, getTeamRequests, TaskOverview, ProcessOverview, PerformanceOverview, TeamRequestsResponse } from '@/api/dashboard'
 import { formatDate } from '@/utils/dateFormat'
 import { usePendingTaskStore } from '@/stores/pendingTask'
@@ -476,7 +550,7 @@ import { usePendingTaskStore } from '@/stores/pendingTask'
 const { t } = useI18n()
 const pendingTaskStore = usePendingTaskStore()
 
-const loading = ref(false)
+const loading = ref(true)
 
 const taskOverview = ref<TaskOverview>({
   pendingCount: 0,
@@ -660,6 +734,32 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .dashboard-page {
+  .dashboard-inline-loading {
+    font-size: 28px;
+    vertical-align: middle;
+  }
+
+  .dashboard-inline-loading-sm {
+    font-size: 22px;
+    vertical-align: middle;
+  }
+
+  .recent-tasks-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 24px 0;
+    color: var(--text-secondary);
+    font-size: 14px;
+  }
+
+  .rank-loading {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+  }
+
   .page-header {
     margin-bottom: 20px;
     

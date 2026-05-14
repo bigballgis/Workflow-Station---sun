@@ -22,11 +22,8 @@ import com.portal.exception.PortalException;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
-import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -57,6 +54,9 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class TaskQueryComponent {
 
+    /** 委托方待办分页单次拉取条数（避免单次过大响应） */
+    private static final int DELEGATOR_ENGINE_PAGE_SIZE = 200;
+
     private final DelegationRuleRepository delegationRuleRepository;
     private final ProcessInstanceRepository processInstanceRepository;
     private final ProcessHistoryRepository processHistoryRepository;
@@ -78,15 +78,15 @@ public class TaskQueryComponent {
 
     /**
      * Query pending tasks for a user.
-     * 
-     * Retrieves task list from the Flowable engine with multi-dimensional query support.
+     * <p>默认：按请求的 {@code page}/{@code size} 调工作流引擎拉取待办，与 {@link #queryDelegatedTasks}（若适用）并行执行，
+     * 合并后按门户规则过滤、排序，再对合并列表做分页切片。无固定 1000 条上限。
+     * 关键词/优先级等筛选则按 {@code size} 分页循环拉取引擎直至取尽，再查委托后统一过滤。</p>
      */
     public PageResponse<TaskInfo> queryTasks(TaskQueryRequest request) {
-        // Check if the Flowable engine is available
         if (!workflowEngineClient.isAvailable()) {
             throw new IllegalStateException("Flowable engine unavailable, please check if workflow-engine-core service is running");
         }
-        
+
         String userId = request.getUserId();
         if (userId == null || userId.isBlank()) {
             throw new PortalException("401", "Authenticated user id is required for task query");
@@ -95,112 +95,274 @@ public class TaskQueryComponent {
         int page = request.getPage() != null ? request.getPage() : 0;
         int size = request.getSize() != null ? request.getSize() : 20;
 
-        boolean includeDelegated = assignmentTypes == null || assignmentTypes.isEmpty()
-                || assignmentTypes.contains("DELEGATED");
-        SecurityContext securityContext = SecurityContextHolder.getContext();
-        ServletRequestAttributes requestAttributes =
-                (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
-        CompletableFuture<List<TaskInfo>> delegatedFuture = CompletableFuture.completedFuture(Collections.emptyList());
-        if (includeDelegated) {
-            delegatedFuture = CompletableFuture.supplyAsync(() -> runWithInheritedRequestAndSecurity(
-                    securityContext, requestAttributes, () -> queryDelegatedTasks(userId)));
+        if (isDelegatedOnlyAssignmentFilter(assignmentTypes)) {
+            return queryDelegatedTasksOnlyPage(userId, request, page, size);
         }
 
-        List<TaskInfo> allTasks = new ArrayList<>();
+        if (needsFullEngineScanBeforeFilters(request)) {
+            return queryTasksFullEnginePagesThenDelegate(userId, request, assignmentTypes, page, size);
+        }
 
-        // 1. Fetch tasks from Flowable
+        return queryTasksEngineWindowThenDelegate(userId, request, assignmentTypes, page, size);
+    }
+
+    private static boolean isDelegatedOnlyAssignmentFilter(List<String> assignmentTypes) {
+        return assignmentTypes != null
+                && assignmentTypes.size() == 1
+                && "DELEGATED".equalsIgnoreCase(assignmentTypes.get(0));
+    }
+
+    /**
+     * 关键词、优先级等必须在全量引擎待办上过滤；按请求的 {@code size} 分页向引擎取直至取尽（无单次条数上限）。
+     */
+    private boolean needsFullEngineScanBeforeFilters(TaskQueryRequest request) {
+        if (request.getPriorities() != null && !request.getPriorities().isEmpty()) {
+            return true;
+        }
+        if (request.getKeyword() != null && !request.getKeyword().isBlank()) {
+            return true;
+        }
+        if (request.getProcessTypes() != null && !request.getProcessTypes().isEmpty()) {
+            return true;
+        }
+        if (request.getStatuses() != null && !request.getStatuses().isEmpty()) {
+            return true;
+        }
+        if (request.getStartTime() != null || request.getEndTime() != null) {
+            return true;
+        }
+        if (Boolean.TRUE.equals(request.getIncludeOverdue())) {
+            return true;
+        }
+        String sortBy = request.getSortBy();
+        if (sortBy != null && !sortBy.isBlank() && !"createTime".equalsIgnoreCase(sortBy)) {
+            return true;
+        }
+        String sortDir = request.getSortDirection();
+        return sortDir != null && !sortDir.isBlank() && !"desc".equalsIgnoreCase(sortDir);
+    }
+
+    private PageResponse<TaskInfo> queryDelegatedTasksOnlyPage(
+            String userId, TaskQueryRequest request, int page, int size) {
+        List<TaskInfo> allTasks = new ArrayList<>(queryDelegatedTasks(userId));
+        allTasks = applyPortalPostEngineFilters(userId, allTasks);
+        allTasks = applyFilters(allTasks, request);
+        allTasks = applySorting(allTasks, request);
+        int start = page * size;
+        int end = Math.min(start + size, allTasks.size());
+        List<TaskInfo> pagedTasks = start < allTasks.size()
+                ? allTasks.subList(start, end)
+                : Collections.emptyList();
+        clearTaskVariablesForList(pagedTasks);
+        return PageResponse.of(pagedTasks, page, size, allTasks.size());
+    }
+
+    private PageResponse<TaskInfo> queryTasksFullEnginePagesThenDelegate(
+            String userId,
+            TaskQueryRequest request,
+            List<String> assignmentTypes,
+            int page,
+            int size) {
+        boolean includeDelegated = assignmentTypes == null || assignmentTypes.isEmpty()
+                || assignmentTypes.contains("DELEGATED");
+
+        SecurityContext ctx = SecurityContextHolder.getContext();
+        ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+
+        CompletableFuture<List<TaskInfo>> engineAllFuture = CompletableFuture.supplyAsync(() ->
+                runWithInheritedRequestAndSecurity(ctx, attrs,
+                        () -> fetchAllEngineTasksPaged(userId, assignmentTypes, size)));
+
+        CompletableFuture<List<TaskInfo>> delegatedFuture = includeDelegated
+                ? CompletableFuture.supplyAsync(() ->
+                runWithInheritedRequestAndSecurity(ctx, attrs, () -> queryDelegatedTasks(userId)))
+                : CompletableFuture.completedFuture(Collections.emptyList());
+
+        List<TaskInfo> engineTasks = engineAllFuture.join();
+        List<TaskInfo> delegated = delegatedFuture.join();
+
+        List<TaskInfo> allTasks = new ArrayList<>(engineTasks);
+        allTasks.addAll(delegated);
+        allTasks = applyPortalPostEngineFilters(userId, allTasks);
+        allTasks = applyFilters(allTasks, request);
+        allTasks = applySorting(allTasks, request);
+        int start = page * size;
+        int end = Math.min(start + size, allTasks.size());
+        List<TaskInfo> pagedTasks = start < allTasks.size()
+                ? allTasks.subList(start, end)
+                : Collections.emptyList();
+        clearTaskVariablesForList(pagedTasks);
+        return PageResponse.of(pagedTasks, page, size, allTasks.size());
+    }
+
+    /**
+     * 引擎单页拉取结果（含 totalCount，供分页近似用）。
+     */
+    private record EngineWindowResult(List<TaskInfo> tasks, long engineTotal) {
+    }
+
+    /**
+     * 按 {@code page}/{@code size} 向引擎拉一页待办；若为空则尝试发起人 RUNNING 合并路径。
+     */
+    private EngineWindowResult fetchEngineTaskPageWindow(
+            String userId, List<String> assignmentTypes, int page, int size) {
+        List<TaskInfo> engineTasks = new ArrayList<>();
+        long engineTotal = 0L;
         try {
-            // Get virtual groups the user belongs to
             List<String> groupIds = getUserVirtualGroups(userId);
             groupIds = filterVirtualGroupsForActiveWorkspace(userId, groupIds);
-
-            // Determine query method based on assignment type filter
-            boolean includeGroups = assignmentTypes == null || assignmentTypes.isEmpty() 
-                || assignmentTypes.contains("VIRTUAL_GROUP");
-            Optional<Map<String, Object>> result;
-            if (includeGroups) {
-                result = workflowEngineClient.getUserAllVisibleTasks(userId, groupIds, Collections.emptyList(), 0, 1000);
-            } else {
-                result = workflowEngineClient.getUserTasks(userId, 0, 1000);
-            }
-
+            boolean includeGroups = assignmentTypes == null || assignmentTypes.isEmpty()
+                    || assignmentTypes.contains("VIRTUAL_GROUP");
+            Optional<Map<String, Object>> result = includeGroups
+                    ? workflowEngineClient.getUserAllVisibleTasks(userId, groupIds, Collections.emptyList(), page, size)
+                    : workflowEngineClient.getUserTasks(userId, page, size);
             if (result.isPresent()) {
                 Map<String, Object> responseBody = result.get();
+                engineTotal = extractEngineTotalCount(responseBody);
                 List<Map<String, Object>> tasks = WorkflowEnginePayloadHelper.taskListFromPayload(responseBody);
                 if (tasks != null) {
-                    log.debug("Processing {} tasks from Flowable", tasks.size());
                     for (Map<String, Object> taskMap : tasks) {
-                        allTasks.add(convertMapToTaskInfo(taskMap));
+                        engineTasks.add(convertMapToTaskInfo(taskMap));
                     }
                 }
-                log.info("Found {} tasks from Flowable for user {} (withdrawn filter applied after merge)",
-                    allTasks.size(), userId);
             }
         } catch (Exception e) {
             log.error("Failed to query tasks from Flowable: {}", e.getMessage(), e);
             throw new IllegalStateException("Failed to query tasks from Flowable: " + e.getMessage(), e);
         }
 
-        // 1b. 若按用户聚合查询无结果（引擎异常被吞、assignee 未写入等），按本地 RUNNING 实例逐单拉取任务
-        if (allTasks.isEmpty()) {
-            mergeTasksFromRunningProcessInstancesForUser(userId, allTasks);
+        if (engineTasks.isEmpty()) {
+            mergeTasksFromRunningProcessInstancesForUser(userId, engineTasks);
         }
+        return new EngineWindowResult(engineTasks, engineTotal);
+    }
 
-        if (includeDelegated) {
-            allTasks.addAll(delegatedFuture.join());
+    /**
+     * 先按请求的 {@code page}/{@code size} 向引擎拉取待办，再同步拉取委托待办，合并排序后切片（当前页 = 合并列表的第 {@code page} 页）。
+     * 引擎与委托待办在无依赖情况下并行拉取以缩短首屏等待。
+     */
+    private PageResponse<TaskInfo> queryTasksEngineWindowThenDelegate(
+            String userId,
+            TaskQueryRequest request,
+            List<String> assignmentTypes,
+            int page,
+            int size) {
+        boolean includeDelegated = assignmentTypes == null || assignmentTypes.isEmpty()
+                || assignmentTypes.contains("DELEGATED");
+
+        SecurityContext ctx = SecurityContextHolder.getContext();
+        ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+
+        CompletableFuture<EngineWindowResult> engineFuture = CompletableFuture.supplyAsync(() ->
+                runWithInheritedRequestAndSecurity(ctx, attrs,
+                        () -> fetchEngineTaskPageWindow(userId, assignmentTypes, page, size)));
+
+        CompletableFuture<List<TaskInfo>> delegatedFuture = includeDelegated
+                ? CompletableFuture.supplyAsync(() ->
+                runWithInheritedRequestAndSecurity(ctx, attrs, () -> queryDelegatedTasks(userId)))
+                : CompletableFuture.completedFuture(Collections.emptyList());
+
+        EngineWindowResult engineResult = engineFuture.join();
+        List<TaskInfo> engineTasks = engineResult.tasks();
+        long engineTotal = engineResult.engineTotal();
+        List<TaskInfo> delegated = delegatedFuture.join();
+
+        List<TaskInfo> allTasks = new ArrayList<>(engineTasks);
+        allTasks.addAll(delegated);
+        allTasks = applyPortalPostEngineFilters(userId, allTasks);
+        allTasks = applySorting(allTasks, request);
+
+        int start = page * size;
+        int end = Math.min(start + size, allTasks.size());
+        List<TaskInfo> pagedTasks = start < allTasks.size()
+                ? allTasks.subList(start, end)
+                : Collections.emptyList();
+
+        boolean enginePageComplete = engineTasks.size() < size || engineTotal <= (long) (page + 1) * size;
+        long totalElements = enginePageComplete
+                ? allTasks.size()
+                : Math.max(engineTotal + (long) delegated.size(), (long) allTasks.size());
+
+        clearTaskVariablesForList(pagedTasks);
+        return PageResponse.of(pagedTasks, page, size, totalElements);
+    }
+
+    private List<TaskInfo> fetchAllEngineTasksPaged(String userId, List<String> assignmentTypes, int pageSize) {
+        List<String> groupIds = getUserVirtualGroups(userId);
+        groupIds = filterVirtualGroupsForActiveWorkspace(userId, groupIds);
+        boolean includeGroups = assignmentTypes == null || assignmentTypes.isEmpty()
+                || assignmentTypes.contains("VIRTUAL_GROUP");
+        List<TaskInfo> out = new ArrayList<>();
+        for (int p = 0; ; p++) {
+            Optional<Map<String, Object>> result = includeGroups
+                    ? workflowEngineClient.getUserAllVisibleTasks(userId, groupIds, Collections.emptyList(), p, pageSize)
+                    : workflowEngineClient.getUserTasks(userId, p, pageSize);
+            if (result.isEmpty()) {
+                break;
+            }
+            List<Map<String, Object>> tasks = WorkflowEnginePayloadHelper.taskListFromPayload(result.get());
+            if (tasks == null || tasks.isEmpty()) {
+                break;
+            }
+            for (Map<String, Object> taskMap : tasks) {
+                out.add(convertMapToTaskInfo(taskMap));
+            }
+            if (tasks.size() < pageSize) {
+                break;
+            }
         }
+        if (out.isEmpty()) {
+            mergeTasksFromRunningProcessInstancesForUser(userId, out);
+        }
+        return out;
+    }
 
+    private List<TaskInfo> applyPortalPostEngineFilters(String userId, List<TaskInfo> allTasks) {
         Set<String> processIds = allTasks.stream()
                 .map(TaskInfo::getProcessInstanceId)
                 .filter(id -> id != null && !id.isBlank())
                 .collect(Collectors.toSet());
         Set<String> withdrawnProcessIds = findWithdrawnProcessInstanceIds(processIds);
-        allTasks = allTasks.stream()
+        List<TaskInfo> filtered = allTasks.stream()
                 .filter(t -> {
                     String pid = t.getProcessInstanceId();
                     return pid == null || pid.isBlank() || !withdrawnProcessIds.contains(pid);
                 })
                 .collect(Collectors.toCollection(ArrayList::new));
-
-        // Deduplicate
-        allTasks = allTasks.stream()
+        filtered = filtered.stream()
                 .collect(Collectors.toMap(TaskInfo::getTaskId, t -> t, (t1, t2) -> t1))
                 .values()
                 .stream()
                 .collect(Collectors.toList());
-
-        // 仅去掉「发起人对空池且 BPMN 非发起人节点」；不用 canProcessTask 过滤整表（避免候选人 ID 与 JWT 不一致时全员空待办）
         String portalUsername = SecurityContextUtils.getCurrentUsername().orElse(null);
         if (taskProcessComponent != null) {
-            allTasks = allTasks.stream()
+            filtered = filtered.stream()
                     .filter(t -> !taskProcessComponent.shouldHideTaskInTodoList(t, userId, portalUsername))
                     .collect(Collectors.toList());
         }
+        return filterFixedBuRoleTasksForActiveWorkspace(filtered);
+    }
 
-        allTasks = filterFixedBuRoleTasksForActiveWorkspace(allTasks);
+    private static long extractEngineTotalCount(Map<String, Object> responseBody) {
+        if (responseBody == null) {
+            return 0L;
+        }
+        Object tc = responseBody.get("totalCount");
+        if (tc instanceof Number n) {
+            return Math.max(n.longValue(), 0L);
+        }
+        return 0L;
+    }
 
-        // Apply filters
-        allTasks = applyFilters(allTasks, request);
-
-        // Sort
-        allTasks = applySorting(allTasks, request);
-
-        // Paginate
-        int start = page * size;
-        int end = Math.min(start + size, allTasks.size());
-
-        List<TaskInfo> pagedTasks = start < allTasks.size() 
-                ? allTasks.subList(start, end) 
-                : Collections.emptyList();
-
-        // 列表 API 不返回 variables，减轻 JSON 序列化与网络体积（详情走 getTaskById）
-        for (TaskInfo t : pagedTasks) {
+    private static void clearTaskVariablesForList(List<TaskInfo> tasks) {
+        if (tasks == null) {
+            return;
+        }
+        for (TaskInfo t : tasks) {
             if (t != null) {
                 t.setVariables(null);
             }
         }
-
-        return PageResponse.of(pagedTasks, page, size, allTasks.size());
     }
 
     /**
@@ -470,41 +632,47 @@ public class TaskQueryComponent {
     private List<TaskInfo> loadDelegatedTasksForDelegator(String delegateUserId, String delegatorId) {
         List<TaskInfo> delegatedTasks = new ArrayList<>();
         try {
-            Optional<Map<String, Object>> result = workflowEngineClient.getUserTasks(delegatorId, 0, 1000);
-            if (result.isEmpty()) {
-                return delegatedTasks;
-            }
-            Map<String, Object> responseBody = result.get();
-            List<Map<String, Object>> tasks = WorkflowEnginePayloadHelper.taskListFromPayload(responseBody);
-            if (tasks == null) {
-                return delegatedTasks;
-            }
-            for (Map<String, Object> taskMap : tasks) {
-                TaskInfo taskInfo = convertMapToTaskInfo(taskMap);
-                TaskInfo delegatedTask = TaskInfo.builder()
-                        .taskId(taskInfo.getTaskId())
-                        .taskName(taskInfo.getTaskName())
-                        .description(taskInfo.getDescription())
-                        .processInstanceId(taskInfo.getProcessInstanceId())
-                        .processDefinitionKey(taskInfo.getProcessDefinitionKey())
-                        .processDefinitionName(taskInfo.getProcessDefinitionName())
-                        .bpmnAssigneeType(taskInfo.getBpmnAssigneeType())
-                        .bpmnBusinessUnitId(taskInfo.getBpmnBusinessUnitId())
-                        .assignmentType("DELEGATED")
-                        .assignee(delegateUserId)
-                        .delegatorId(delegatorId)
-                        .delegatorName(delegatorId)
-                        .initiatorId(taskInfo.getInitiatorId())
-                        .initiatorName(taskInfo.getInitiatorName())
-                        .priority(taskInfo.getPriority())
-                        .status(taskInfo.getStatus())
-                        .createTime(taskInfo.getCreateTime())
-                        .dueDate(taskInfo.getDueDate())
-                        .isOverdue(taskInfo.getIsOverdue())
-                        .formKey(taskInfo.getFormKey())
-                        .variables(taskInfo.getVariables())
-                        .build();
-                delegatedTasks.add(delegatedTask);
+            for (int p = 0; ; p++) {
+                Optional<Map<String, Object>> result =
+                        workflowEngineClient.getUserTasks(delegatorId, p, DELEGATOR_ENGINE_PAGE_SIZE);
+                if (result.isEmpty()) {
+                    break;
+                }
+                Map<String, Object> responseBody = result.get();
+                List<Map<String, Object>> tasks = WorkflowEnginePayloadHelper.taskListFromPayload(responseBody);
+                if (tasks == null || tasks.isEmpty()) {
+                    break;
+                }
+                for (Map<String, Object> taskMap : tasks) {
+                    TaskInfo taskInfo = convertMapToTaskInfo(taskMap);
+                    TaskInfo delegatedTask = TaskInfo.builder()
+                            .taskId(taskInfo.getTaskId())
+                            .taskName(taskInfo.getTaskName())
+                            .description(taskInfo.getDescription())
+                            .processInstanceId(taskInfo.getProcessInstanceId())
+                            .processDefinitionKey(taskInfo.getProcessDefinitionKey())
+                            .processDefinitionName(taskInfo.getProcessDefinitionName())
+                            .bpmnAssigneeType(taskInfo.getBpmnAssigneeType())
+                            .bpmnBusinessUnitId(taskInfo.getBpmnBusinessUnitId())
+                            .assignmentType("DELEGATED")
+                            .assignee(delegateUserId)
+                            .delegatorId(delegatorId)
+                            .delegatorName(delegatorId)
+                            .initiatorId(taskInfo.getInitiatorId())
+                            .initiatorName(taskInfo.getInitiatorName())
+                            .priority(taskInfo.getPriority())
+                            .status(taskInfo.getStatus())
+                            .createTime(taskInfo.getCreateTime())
+                            .dueDate(taskInfo.getDueDate())
+                            .isOverdue(taskInfo.getIsOverdue())
+                            .formKey(taskInfo.getFormKey())
+                            .variables(taskInfo.getVariables())
+                            .build();
+                    delegatedTasks.add(delegatedTask);
+                }
+                if (tasks.size() < DELEGATOR_ENGINE_PAGE_SIZE) {
+                    break;
+                }
             }
         } catch (Exception e) {
             log.warn("Failed to get delegated tasks for delegator {}: {}", delegatorId, e.getMessage());

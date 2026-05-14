@@ -50,84 +50,79 @@
               </template>
             </el-input>
           </div>
-          
-          <el-skeleton
-            :loading="loading"
-            animated
-            :count="3"
+
+          <!-- 与待办一致：先出卡片结构，首刷用轻量加载而非骨架块 -->
+          <div
+            v-if="loading && allProcesses.length === 0"
+            class="process-list-loading"
           >
-            <template #template>
-              <div class="process-grid">
-                <el-skeleton-item
-                  v-for="i in 6"
-                  :key="i"
-                  variant="rect"
-                  style="height: 120px; border-radius: 8px;"
-                />
-              </div>
-            </template>
-            <template #default>
-              <div
-                v-if="allProcesses.length === 0"
-                class="empty-state"
-              >
-                <el-empty :description="t('process.noAccessibleProcesses')">
-                  <template #image>
-                    <el-icon
-                      :size="60"
-                      color="#909399"
-                    >
-                      <Lock />
-                    </el-icon>
-                  </template>
-                  <el-text
-                    type="info"
-                    size="small"
-                  >
-                    {{ t('process.contactAdminForAccess') }}
-                  </el-text>
-                </el-empty>
-              </div>
-              <div
-                v-else
-                class="process-grid"
-              >
-                <div
-                  v-for="process in allProcesses"
-                  :key="process.key"
-                  class="process-card"
-                  @click="startProcess(process)"
+            <el-icon
+              class="is-loading"
+              :size="28"
+            >
+              <Loading />
+            </el-icon>
+            <span>{{ t('common.loading') }}</span>
+          </div>
+          <div
+            v-else-if="allProcesses.length === 0"
+            class="empty-state"
+          >
+            <el-empty :description="t('process.noAccessibleProcesses')">
+              <template #image>
+                <el-icon
+                  :size="60"
+                  color="#909399"
                 >
-                  <div
-                    v-if="process.icon"
-                    class="process-icon-svg"
-                    v-html="sanitizeIcon(process.icon)"
-                  />
-                  <el-icon
-                    v-else
-                    :size="32"
-                    :color="getProcessColor(process.category)"
-                  >
-                    <component :is="getProcessIcon(process.category)" />
-                  </el-icon>
-                  <span class="process-name">{{ process.name }}</span>
-                  <span
-                    v-if="process.version"
-                    class="process-version"
-                  >v{{ process.version }}</span>
-                  <span class="process-desc">{{ process.description }}</span>
-                  <el-tag
-                    v-if="process.isFavorite"
-                    size="small"
-                    type="warning"
-                    class="favorite-tag"
-                  >
-                    <el-icon><Star /></el-icon>
-                  </el-tag>
-                </div>
-              </div>
-            </template>
-          </el-skeleton>
+                  <Lock />
+                </el-icon>
+              </template>
+              <el-text
+                type="info"
+                size="small"
+              >
+                {{ t('process.contactAdminForAccess') }}
+              </el-text>
+            </el-empty>
+          </div>
+          <div
+            v-else
+            class="process-grid"
+          >
+            <div
+              v-for="process in allProcesses"
+              :key="process.key"
+              class="process-card"
+              @click="startProcess(process)"
+            >
+              <div
+                v-if="process.icon"
+                class="process-icon-svg"
+                v-html="sanitizeIcon(process.icon)"
+              />
+              <el-icon
+                v-else
+                :size="32"
+                :color="getProcessColor(process.category)"
+              >
+                <component :is="getProcessIcon(process.category)" />
+              </el-icon>
+              <span class="process-name">{{ process.name }}</span>
+              <span
+                v-if="process.version"
+                class="process-version"
+              >v{{ process.version }}</span>
+              <span class="process-desc">{{ process.description }}</span>
+              <el-tag
+                v-if="process.isFavorite"
+                size="small"
+                type="warning"
+                class="favorite-tag"
+              >
+                <el-icon><Star /></el-icon>
+              </el-tag>
+            </div>
+          </div>
         </div>
       </el-col>
     </el-row>
@@ -139,7 +134,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
-import { Document, Search, Calendar, Money, ShoppingCart, Location, Clock, Files, Star, Tickets, Lock } from '@element-plus/icons-vue'
+import { Document, Search, Calendar, Money, ShoppingCart, Location, Clock, Files, Star, Tickets, Lock, Loading } from '@element-plus/icons-vue'
 import { processApi, type ProcessDefinition } from '@/api/process'
 import DOMPurify from 'dompurify'
 
@@ -157,7 +152,7 @@ function sanitizeIcon(icon: string): string {
 }
 
 const searchKeyword = ref('')
-const loading = ref(false)
+const loading = ref(true)
 const allProcesses = ref<ProcessDefinition[]>([])
 
 // 收藏的流程
@@ -284,6 +279,17 @@ onMounted(() => {
     }
   }
   
+  .process-list-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    min-height: 200px;
+    color: var(--text-secondary);
+    font-size: 14px;
+  }
+
   .process-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));

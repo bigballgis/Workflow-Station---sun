@@ -18,30 +18,18 @@
       </el-tag>
     </div>
 
-    <!-- 加载状态 -->
+    <!-- 加载状态：与待办一致 — 轻量提示，非整页骨架 -->
     <div
       v-if="loading"
-      class="skeleton-content"
+      class="process-start-loading"
     >
-      <el-skeleton
-        animated
-        :count="3"
+      <el-icon
+        class="is-loading"
+        :size="32"
       >
-        <template #template>
-          <el-skeleton-item
-            variant="rect"
-            style="height: 300px; margin-bottom: 20px;"
-          />
-          <el-skeleton-item
-            variant="rect"
-            style="height: 400px; margin-bottom: 20px;"
-          />
-          <el-skeleton-item
-            variant="rect"
-            style="height: 200px;"
-          />
-        </template>
-      </el-skeleton>
+        <Loading />
+      </el-icon>
+      <span>{{ t('common.loading') }}</span>
     </div>
     
     <!-- 功能单元已禁用状态 -->
@@ -287,7 +275,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, Share, Document, Clock, FolderOpened, Promotion } from '@element-plus/icons-vue'
+import { ArrowLeft, Share, Document, Clock, FolderOpened, Promotion, Loading } from '@element-plus/icons-vue'
 import { processApi } from '@/api/process'
 import ProcessDiagram, { type ProcessNode, type ProcessFlow } from '@/components/ProcessDiagram.vue'
 import ProcessHistory, { type HistoryRecord } from '@/components/ProcessHistory.vue'
@@ -1589,9 +1577,18 @@ onMounted(() => {
     }
   }
   
-  .skeleton-content {
+  .process-start-loading {
     display: flex;
     flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    min-height: 280px;
+    color: var(--text-secondary);
+    font-size: 14px;
+    background: var(--background-white, #fff);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
   }
   
   .error-state {

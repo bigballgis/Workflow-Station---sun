@@ -1,11 +1,21 @@
 <template>
-  <div
-    v-loading="loading"
-    class="dashboard-landing"
-  >
+  <div class="dashboard-landing">
+    <div
+      v-if="loading && dashboards.length === 0"
+      class="landing-loading"
+    >
+      <el-icon
+        class="is-loading"
+        :size="32"
+      >
+        <Loading />
+      </el-icon>
+      <span>{{ t('common.loading') }}</span>
+    </div>
+
     <!-- Empty state -->
     <div
-      v-if="!loading && dashboards.length === 0"
+      v-else-if="!loading && dashboards.length === 0"
       class="empty-state"
     >
       <el-empty description="No dashboards available" />
@@ -99,7 +109,8 @@
 
 <script setup lang="ts">
 import { ref, onMounted, nextTick, onBeforeUnmount } from 'vue'
-import { DataAnalysis } from '@element-plus/icons-vue'
+import { useI18n } from 'vue-i18n'
+import { DataAnalysis, Loading } from '@element-plus/icons-vue'
 import {
   biDashboardApi,
   type UserDashboardResponse,
@@ -109,6 +120,8 @@ import { getStoredUser, USER_ID_KEY, USER_KEY } from '@/api/auth'
 
 // NOTE: Install required package: npm install @superset-ui/embedded-sdk
 // import { embedDashboard } from '@superset-ui/embedded-sdk'
+
+const { t } = useI18n()
 
 const loading = ref(true)
 const dashboards = ref<UserDashboardResponse[]>([])
@@ -353,6 +366,18 @@ onBeforeUnmount(() => {
 .dashboard-landing {
   height: 100%;
   min-height: calc(100vh - var(--header-height) - 40px);
+}
+
+.landing-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  min-height: calc(100vh - var(--header-height) - 40px);
+  color: var(--text-secondary);
+  font-size: 14px;
 }
 
 .empty-state {

@@ -45,10 +45,21 @@
       <!-- 草稿列表 -->
       <template v-if="activeTab === 'DRAFT'">
         <el-table
-          v-loading="loading"
           :data="draftList"
           stripe
         >
+          <template #empty>
+            <div
+              v-if="loading"
+              class="table-empty-loading"
+            >
+              <el-icon class="table-empty-loading__icon is-loading">
+                <Loading />
+              </el-icon>
+              <span>{{ t('common.loading') }}</span>
+            </div>
+            <span v-else>{{ t('application.noDrafts') }}</span>
+          </template>
           <el-table-column
             prop="processDefinitionName"
             :label="t('application.processType')"
@@ -100,12 +111,23 @@
       <!-- 申请列表 -->
       <template v-else>
         <el-table
-          v-loading="loading"
           :data="applicationList"
           stripe
           class="application-table"
           table-layout="fixed"
         >
+          <template #empty>
+            <div
+              v-if="loading"
+              class="table-empty-loading"
+            >
+              <el-icon class="table-empty-loading__icon is-loading">
+                <Loading />
+              </el-icon>
+              <span>{{ t('common.loading') }}</span>
+            </div>
+            <span v-else>{{ t('application.noApplications') }}</span>
+          </template>
           <el-table-column
             prop="businessKey"
             :label="t('application.processTitle')"
@@ -208,6 +230,7 @@
         v-if="activeTab !== 'DRAFT'"
         v-model:current-page="pagination.page"
         v-model:page-size="pagination.size"
+        :disabled="loading"
         :total="pagination.total"
         layout="total, prev, pager, next"
         style="margin-top: 16px; justify-content: flex-end;"
@@ -222,14 +245,14 @@ import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { processApi } from '@/api/process'
+import { Loading } from '@element-plus/icons-vue'
 import { formatDate } from '@/utils/dateFormat'
 
 const { t } = useI18n()
 const router = useRouter()
 
 const activeTab = ref('all')
-const loading = ref(false)
+const loading = ref(true)
 const pagination = reactive({ page: 1, size: 20, total: 0 })
 const applicationList = ref<any[]>([])
 const draftList = ref<any[]>([])
@@ -272,6 +295,7 @@ const loadApplications = async () => {
     console.error('Failed to load applications:', error)
     ElMessage.error(t('application.loadFailed'))
     applicationList.value = []
+    pagination.total = 0
   } finally {
     loading.value = false
   }
@@ -361,12 +385,23 @@ const handleWithdraw = async (row: any) => {
 }
 
 onMounted(() => {
-  loadApplications()
-  loadDraftCount()
+  void Promise.all([loadApplications(), loadDraftCount()])
 })
 </script>
 
 <style lang="scss" scoped>
+.table-empty-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  padding: 24px 0;
+
+  &__icon {
+    font-size: 18px;
+  }
+}
+
 .applications-page {
   .page-header {
     margin-bottom: 20px;

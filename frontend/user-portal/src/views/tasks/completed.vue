@@ -46,14 +46,25 @@
       </el-form>
     </div>
 
-    <!-- 任务列表 -->
+    <!-- 任务列表：与待办一致 — 无整表 v-loading 遮罩，首屏空表显示加载提示，翻页保留旧数据 -->
     <div class="portal-card">
       <el-table
-        v-loading="loading"
         :data="taskList"
         stripe
         table-layout="auto"
       >
+        <template #empty>
+          <div
+            v-if="loading"
+            class="table-empty-loading"
+          >
+            <el-icon class="table-empty-loading__icon is-loading">
+              <Loading />
+            </el-icon>
+            <span>{{ t('common.loading') }}</span>
+          </div>
+          <span v-else>{{ t('task.noCompletedTasks') }}</span>
+        </template>
         <el-table-column
           prop="taskName"
           :label="t('task.taskName')"
@@ -124,6 +135,7 @@
       <el-pagination
         v-model:current-page="pagination.page"
         v-model:page-size="pagination.size"
+        :disabled="loading"
         :total="pagination.total"
         :page-sizes="[10, 20, 50, 100]"
         layout="total, sizes, prev, pager, next, jumper"
@@ -139,14 +151,14 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { Search } from '@element-plus/icons-vue'
+import { Search, Loading } from '@element-plus/icons-vue'
 import { queryCompletedTasks, TaskInfo } from '@/api/task'
 import { formatDate } from '@/utils/dateFormat'
 
 const { t } = useI18n()
 const router = useRouter()
 
-const loading = ref(false)
+const loading = ref(true)
 const taskList = ref<TaskInfo[]>([])
 
 const filterForm = reactive({
@@ -260,6 +272,18 @@ onMounted(() => {
 </script>
 
 <style lang="scss" scoped>
+.table-empty-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  padding: 24px 0;
+
+  &__icon {
+    font-size: 18px;
+  }
+}
+
 .completed-tasks-page {
   .page-header {
     margin-bottom: 20px;

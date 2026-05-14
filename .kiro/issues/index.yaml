@@ -1108,7 +1108,8 @@
   file: "backend/admin-center/src/main/java/com/admin/repository/UserRoleRepository.java"
 
 - id: "152"
-  status: open
+  status: fixed
+  fixed_at: "2026-05-14"
   severity: minor
   category: bug
   summary: "user-portal tasks 页 submitAction 捕获异常后仍弹 success，委托/转办/催办失败时会误导用户"

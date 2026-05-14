@@ -543,15 +543,14 @@ class TaskQueryProperties {
      * Mock Flowable 任务响应
      */
     private void mockFlowableTasksResponse(List<Map<String, Object>> tasks) {
-        Map<String, Object> response = new HashMap<>();
-        Map<String, Object> data = new HashMap<>();
-        data.put("tasks", tasks);
-        response.put("data", data);
-        
+        Map<String, Object> body = new HashMap<>();
+        body.put("tasks", tasks);
+        body.put("totalCount", (long) tasks.size());
+
         when(workflowEngineClient.getUserAllVisibleTasks(anyString(), anyList(), anyList(), anyInt(), anyInt()))
-                .thenReturn(Optional.of(response));
+                .thenReturn(Optional.of(body));
         when(workflowEngineClient.getUserTasks(anyString(), anyInt(), anyInt()))
-                .thenReturn(Optional.of(response));
+                .thenReturn(Optional.of(body));
     }
 
     /**
