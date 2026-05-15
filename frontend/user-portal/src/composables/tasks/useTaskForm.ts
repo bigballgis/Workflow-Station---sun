@@ -7,7 +7,8 @@ import {
   cloneSubTableRows,
   mergeSubTableRowsByRowId,
   getSavedSubTableRows,
-  normalizeSubTableName
+  normalizeSubTableName,
+  flattenNestedSubTableRowsIntoPayload
 } from './shared'
 
 export function useTaskForm(options: {
@@ -33,6 +34,7 @@ export function useTaskForm(options: {
 
   function buildSubTableSubmitPayload() {
     const subTables: Record<string, any> = { ...((formData.value.__subTables__ as Record<string, any>) || {}) }
+    flattenNestedSubTableRowsIntoPayload(subTables as Record<string, unknown>)
     const subTableData: Record<string, Array<Record<string, unknown>>> = {}
 
     for (const binding of options.subTableBindings.value) {

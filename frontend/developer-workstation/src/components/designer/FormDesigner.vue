@@ -710,9 +710,21 @@ function mergePortalViewsForPreview(ruleItem: any, bindingId: number): PortalVie
   const base = getBindingPortalViews(bindingId)
   const ov = ruleItem?.props?.portalViews
   if (!ov || typeof ov !== 'object') {
-    // #region agent log
-    fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '552819' }, body: JSON.stringify({ sessionId: '552819', location: 'FormDesigner.vue:mergePortalViewsForPreview', message: 'preview merge: rule has no portalViews overlay', data: { hypothesisId: 'H1', bindingId, baseInitiator: base.initiatorRequest, baseAssignee: base.assigneeTodo }, timestamp: Date.now() }) }).catch(() => {})
-    // #endregion
+    return base
+  }
+  /** Matches form-create subTable rule defaults (developer-workstation main.ts); not a designer override. */
+  if (
+    'assigneeTodo' in ov &&
+    'initiatorRequest' in ov &&
+    'assigneeTodoFormSource' in ov &&
+    ov.assigneeTodo === 'tableOnly' &&
+    ov.initiatorRequest === 'mirrorTodo' &&
+    ov.assigneeTodoFormSource &&
+    typeof ov.assigneeTodoFormSource === 'object' &&
+    ov.assigneeTodoFormSource.type === 'subForm' &&
+    (ov.assigneeTodoFormSource.formId == null || ov.assigneeTodoFormSource.formId === '') &&
+    (ov.assigneeTodoFormSource.linkFormColumnId == null || ov.assigneeTodoFormSource.linkFormColumnId === '')
+  ) {
     return base
   }
   const assigneeTodo: PortalViewsValue['assigneeTodo'] =
@@ -736,9 +748,6 @@ function mergePortalViewsForPreview(ruleItem: any, bindingId: number): PortalVie
       linkFormColumnId: (oSrc?.linkFormColumnId ?? bSrc.linkFormColumnId) ?? null,
     },
   }
-  // #region agent log
-  fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '552819' }, body: JSON.stringify({ sessionId: '552819', location: 'FormDesigner.vue:mergePortalViewsForPreview', message: 'preview merge: overlay applied', data: { hypothesisId: 'H1', bindingId, baseInitiator: base.initiatorRequest, ovInitiator: ov.initiatorRequest, mergedInitiator: mergedOut.initiatorRequest, baseAssignee: base.assigneeTodo, ovAssignee: ov.assigneeTodo, mergedAssignee: mergedOut.assigneeTodo }, timestamp: Date.now() }) }).catch(() => {})
-  // #endregion
   return mergedOut
 }
 
@@ -2938,10 +2947,6 @@ function handlePreview() {
         console.log('[Preview] Found subTable with bindingId:', itemBindingId, 'binding found:', !!binding)
         if (binding) {
           const mergedPv = mergePortalViewsForPreview(ruleItem, Number(itemBindingId))
-          const dual = mergedPv.initiatorRequest != null && mergedPv.initiatorRequest !== 'mirrorTodo'
-          // #region agent log
-          fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '552819' }, body: JSON.stringify({ sessionId: '552819', location: 'FormDesigner.vue:buildPreviewItems', message: 'subTable preview item pushed', data: { hypothesisId: 'H2', bindingId: itemBindingId, mergedInitiator: mergedPv.initiatorRequest, dual, columnsLen: binding.columns?.length }, timestamp: Date.now() }) }).catch(() => {})
-          // #endregion
           items.push({
             kind: 'subTable',
             binding: { ...binding, portalViews: mergedPv },

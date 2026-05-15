@@ -110,8 +110,10 @@
             :bpmn-xml="bpmnXml"
             :current-node-id="currentNodeId"
             :completed-node-ids="completedNodeIds"
+            :selected-node-id="selectedNodeId ?? ''"
             :show-toolbar="true"
             :show-legend="true"
+            @node-click="handleDiagramNodeClick"
           />
           <el-empty
             v-else
@@ -120,9 +122,118 @@
         </div>
       </div>
 
+      <!-- Click a workflow node to preview that step's bound form (read-only) -->
+      <div
+        v-if="selectedNodeId && selectedNodeForm"
+        class="section form-section"
+      >
+        <div class="section-header">
+          <el-icon><Document /></el-icon>
+          <span>{{ selectedNodeForm.formName }}</span>
+          <el-tag
+            v-if="selectedNodeForm.isCurrentStep"
+            type="warning"
+            size="small"
+          >
+            {{ t('applicationDetail.currentStep') }}
+          </el-tag>
+          <el-tag
+            v-else
+            type="info"
+            size="small"
+          >
+            {{ t('task.readonly') }}
+          </el-tag>
+          <el-button
+            size="small"
+            style="margin-left: auto;"
+            @click="clearDiagramNodeSelection"
+          >
+            {{ t('applicationDetail.back') }}
+          </el-button>
+        </div>
+        <div class="section-content">
+          <div
+            v-if="
+              (selectedNodeForm.isCurrentStep && (formFields.length > 0 || formTabs.length > 0))
+                || (!selectedNodeForm.isCurrentStep && (selectedNodeForm.fields.length > 0 || selectedNodeForm.tabs.length > 0))
+            "
+            class="form-container"
+          >
+            <FormRenderer
+              :key="`diagram-node-${selectedNodeId}-${processId}`"
+              :model-value="selectedNodeForm.isCurrentStep ? formData : selectedNodeForm.values"
+              :fields="selectedNodeForm.isCurrentStep ? formFields : selectedNodeForm.fields"
+              :tabs="selectedNodeForm.isCurrentStep ? formTabs : selectedNodeForm.tabs"
+              :label-width="formLabelWidth"
+              :readonly="true"
+              :sub-table-bindings="
+                selectedNodeForm.isCurrentStep ? subTableBindings : selectedNodeForm.subTableBindings
+              "
+              :linked-sub-table-bindings="diagramSelectedLinkableBindings"
+              view-context="initiatorRequest"
+              :initiator-snapshot-mode="!!snapshotTaskName"
+              @view-subtask-detail="openSubTaskDetailDialog"
+            />
+          </div>
+          <el-empty
+            v-else
+            :description="t('applicationDetail.noFormData')"
+          />
+
+          <template v-if="diagramSelectedBottomSubTables.length > 0">
+            <div
+              v-for="binding in diagramSelectedBottomSubTables"
+              :key="`diag-${binding.bindingId}`"
+              class="sub-table-section"
+            >
+              <SubTableField
+                v-model="binding.data"
+                :title="binding.tableName"
+                :columns="binding.columns"
+                :editable="false"
+                :assignee-field="hasAssignmentData(binding.data) ? 'assignee_user_id' : undefined"
+                :show-task-status="shouldShowBindingTaskStatus(binding)"
+                :show-view-detail="shouldShowBindingDetailsModal(binding)"
+                :compact-lookup-cells="bindingCompactLookupCells(binding)"
+                :linked-sub-table-bindings="diagramSelectedLinkableBindings"
+                @view-detail="(row: any) => openSubTaskDetailDialog(row)"
+              />
+              <SubTableInlineForm
+                v-if="shouldShowBindingFormBelow(binding)"
+                :title="binding.tableName"
+                :fields="binding.formFields || []"
+                :current-row="binding.data && binding.data.length === 1 ? binding.data[0] : null"
+                :readonly="true"
+              />
+            </div>
+          </template>
+        </div>
+      </div>
+      <div
+        v-else-if="selectedNodeId && !selectedNodeForm"
+        class="section form-section"
+      >
+        <div class="section-header">
+          <el-icon><Document /></el-icon>
+          <span>{{ selectedNodeId }}</span>
+        </div>
+        <div class="section-content">
+          <el-empty :description="t('task.noFormBound')" />
+          <div style="text-align: center; margin-top: 8px;">
+            <el-button
+              size="small"
+              @click="clearDiagramNodeSelection"
+            >
+              {{ t('applicationDetail.back') }}
+            </el-button>
+          </div>
+        </div>
+      </div>
+
       <!-- Form data (Completed Tasks renders the same form as To Do, but readonly) -->
       <div
-        v-if="showCurrentFormSection"
+        v-if="showCurrentFormSection && !selectedNodeId"
         class="section form-section"
       >
         <div class="section-header">
@@ -294,7 +405,12 @@ import { isRejectedName } from '@/utils/statusMatcher'
 import { resolveAssigneeFieldForBinding } from '@/utils/subTableAssignment'
 import {
   mergeSubTableRowsByRowId,
-  resolveSubTablePrimaryKeyFields
+  resolveSubTablePrimaryKeyFields,
+  hydrateChildSubTablesFromParentsNestedRows,
+  flattenNestedSubTableRowsIntoPayload,
+  buildBindingIdToRelationTableIdMap,
+  hydrateBindingsRowsFromVariablesBySharedRelationTableId,
+  enrichChildBindingRowsFromParentsNestedSubTables
 } from '@/composables/tasks/shared'
 import { USER_ID_KEY, USER_KEY } from '@/api/auth'
 
@@ -448,6 +564,41 @@ interface PreviousFormEntry {
 }
 const previousForms = ref<PreviousFormEntry[]>([])
 
+// Workflow diagram: click a BPMN node to preview its bound form (My Request)
+interface ApplicationDiagramNodeFormInfo {
+  formName: string
+  /** Matches the process "current" BPMN userTask — reuse main form layout + variables */
+  isCurrentStep: boolean
+  fields: FormField[]
+  tabs: FormTab[]
+  values: Record<string, any>
+  subTableBindings: PreviousFormEntry['subTableBindings']
+}
+
+const selectedNodeId = ref<string | null>(null)
+const nodeFormMap = ref<Map<string, ApplicationDiagramNodeFormInfo>>(new Map())
+
+const selectedNodeForm = computed((): ApplicationDiagramNodeFormInfo | null => {
+  if (!selectedNodeId.value) return null
+  return nodeFormMap.value.get(selectedNodeId.value) ?? null
+})
+
+function handleDiagramNodeClick(node: ProcessNode) {
+  if (!node?.id) {
+    selectedNodeId.value = null
+    return
+  }
+  if (selectedNodeId.value === node.id) {
+    selectedNodeId.value = null
+  } else {
+    selectedNodeId.value = node.id
+  }
+}
+
+function clearDiagramNodeSelection() {
+  selectedNodeId.value = null
+}
+
 /** Align with tasks/detail.vue: variables may key __subTables__ by table name or binding id. */
 function normalizeSubTableName(name?: string): string {
   return String(name || '').trim().toLowerCase()
@@ -487,9 +638,13 @@ type SubTableBindingAlignable = { tableId?: number | null; tableName: string; da
  * display name, then a column-overlap pass fills bindings that still have no rows.
  */
 function alignProcessSubTableBindingsBySharedTable() {
+  const nodeBindings: SubTableBindingAlignable[] = Array.from(nodeFormMap.value.values()).flatMap(
+    info => info.subTableBindings as SubTableBindingAlignable[]
+  )
   const all: SubTableBindingAlignable[] = [
     ...(subTableBindings.value as SubTableBindingAlignable[]),
-    ...previousForms.value.flatMap(f => f.subTableBindings as SubTableBindingAlignable[])
+    ...previousForms.value.flatMap(f => f.subTableBindings as SubTableBindingAlignable[]),
+    ...nodeBindings
   ]
   if (all.length === 0) return
 
@@ -547,6 +702,11 @@ function alignProcessSubTableBindingsBySharedTable() {
   }
 
   backfillEmptySubTableBindingsFromVariables()
+  enrichChildBindingRowsFromParentsNestedSubTables([
+    ...subTableBindings.value,
+    ...previousForms.value.flatMap(f => f.subTableBindings),
+    ...Array.from(nodeFormMap.value.values()).flatMap(n => n.subTableBindings)
+  ])
 }
 
 /**
@@ -560,7 +720,8 @@ function backfillEmptySubTableBindingsFromVariables() {
 
   const all = [
     ...subTableBindings.value,
-    ...previousForms.value.flatMap(f => f.subTableBindings)
+    ...previousForms.value.flatMap(f => f.subTableBindings),
+    ...Array.from(nodeFormMap.value.values()).flatMap(n => n.subTableBindings)
   ]
 
   for (const b of all) {
@@ -602,6 +763,33 @@ const linkableSubTableBindings = computed<any[]>(() => [
   ...(subTableBindings.value as any[]),
   ...previousForms.value.flatMap(form => (form.subTableBindings as any[]))
 ])
+
+/** Link-form fallback when previewing a diagram node's form */
+const diagramSelectedLinkableBindings = computed<any[] | undefined>(() => {
+  const sf = selectedNodeForm.value
+  if (!sf) return undefined
+  if (sf.isCurrentStep) return linkableSubTableBindings.value
+  return [
+    ...(sf.subTableBindings as any[]),
+    ...previousForms.value.flatMap(form => form.subTableBindings as any[])
+  ]
+})
+
+/** Unplaced sub-tables for the diagram-selected form (mirrors bottomSubTableBindings) */
+const diagramSelectedBottomSubTables = computed(() => {
+  const sf = selectedNodeForm.value
+  if (!sf) return []
+  const fields = sf.isCurrentStep ? formFields.value : sf.fields
+  const tabs = sf.isCurrentStep ? formTabs.value : sf.tabs
+  const bindings = sf.isCurrentStep ? subTableBindings.value : sf.subTableBindings
+  const placed = collectPlacedBindingIds(fields, tabs)
+  return bindings.filter((b: { bindingId: number; subMode?: string }) => {
+    if (placed.has(b.bindingId)) return false
+    const formOnly = String(b.subMode || '').toUpperCase() === 'FORM_ONLY'
+    if (formOnly) return false
+    return true
+  })
+})
 
 /** Same as tasks/detail.vue: link-form `.find()` must resolve prev-form bindings before current (empty MI slice). */
 // Sub-task form detail dialog
@@ -853,6 +1041,173 @@ const getSubProcessUserTaskIds = (subProcessId: string): string[] => {
   return []
 }
 
+/**
+ * BPMN userTask / serviceTask / subProcess → bound form metadata for diagram clicks.
+ * Aligns with tasks/detail.vue `nodeFormMap` (My Request is always read-only).
+ */
+function buildApplicationNodeFormMap(content: any) {
+  const newMap = new Map<string, ApplicationDiagramNodeFormInfo>()
+  const bpmnData = content.processes?.[0]?.data as string | undefined
+  const formsList = content.forms as any[] | undefined
+  if (!bpmnData || !formsList?.length) {
+    nodeFormMap.value = newMap
+    return
+  }
+
+  const normLabel = (s: string | null | undefined) => (s || '').trim().replace(/\s+/g, ' ')
+  const curRaw =
+    (snapshotActivityId.value ||
+      snapshotTaskDefinitionKey ||
+      snapshotTaskName ||
+      processInfo.value.currentNode ||
+      '') + ''
+  const curNorm = normLabel(curRaw)
+  const savedSubTables = formData.value.__subTables__
+  const bindingRelationTableMap = buildBindingIdToRelationTableIdMap(formsList)
+
+  try {
+    const parser = new DOMParser()
+    const doc = parser.parseFromString(bpmnData, 'text/xml')
+    const allElements = doc.getElementsByTagName('*')
+    for (let i = 0; i < allElements.length; i++) {
+      const el = allElements[i]!
+      const localName = el.localName || el.nodeName.split(':').pop()
+      if (localName !== 'userTask' && localName !== 'subProcess' && localName !== 'serviceTask') continue
+      const nodeId = el.getAttribute('id') || ''
+      if (!nodeId) continue
+
+      let formId: string | null = null
+      let formName: string | null = null
+      const props = el.getElementsByTagName('*')
+      for (let j = 0; j < props.length; j++) {
+        const p = props[j]!
+        const ln = p.localName || p.nodeName.split(':').pop()
+        if (ln === 'property' || ln === 'values') {
+          const n = p.getAttribute('name')
+          const v = p.getAttribute('value')
+          if (n === 'formId' && v) formId = v
+          if (n === 'formName' && v) formName = v
+        }
+      }
+
+      let matchedForm: any = null
+      if (formId) {
+        matchedForm = formsList.find((f: any) => String(f.sourceId) === formId)
+      }
+      if (!matchedForm && formName) {
+        matchedForm = formsList.find((f: any) => f.name === formName)
+      }
+      if (!matchedForm) continue
+
+      const nodeName = el.getAttribute('name') || nodeId
+      const isCurrentStep =
+        (!!snapshotTaskDefinitionKey && nodeId === String(snapshotTaskDefinitionKey).trim()) ||
+        (!!snapshotActivityId.value && nodeId === String(snapshotActivityId.value).trim()) ||
+        (!!curNorm.length && normLabel(nodeName) === curNorm) ||
+        (!!curRaw.trim() && nodeId === curRaw.trim())
+
+      const nodeFields: FormField[] = []
+      const nodeTabs: FormTab[] = []
+      const nodeBindings: PreviousFormEntry['subTableBindings'] = []
+      try {
+        const cfg = typeof matchedForm.data === 'string' ? JSON.parse(matchedForm.data) : (matchedForm.data || {})
+        const rules = cfg.rule && Array.isArray(cfg.rule) ? cfg.rule : (Array.isArray(cfg) ? cfg : null)
+        if (rules) {
+          const tabsRule = rules.find((r: any) => r.type === 'el-tabs')
+          if (tabsRule?.children) {
+            for (const tabPane of tabsRule.children) {
+              if (tabPane.type === 'el-tab-pane' && tabPane.props) {
+                const tabFields: FormField[] = []
+                if (tabPane.children) tabFields.push(...extractFieldsRecursive(tabPane.children))
+                nodeTabs.push({
+                  name: tabPane.props.name || `tab_${nodeTabs.length}`,
+                  label: tabPane.props.label || `Tab ${nodeTabs.length + 1}`,
+                  fields: tabFields
+                })
+              }
+            }
+          } else {
+            nodeFields.push(...extractFieldsRecursive(rules))
+          }
+        }
+        let subForms: Record<string, any> = {}
+        let configForSubTables: Record<string, any> = {}
+        try {
+          configForSubTables = cfg
+          subForms = cfg.subForms || {}
+        } catch {
+          /* ignore */
+        }
+        const subTablePortalViewsPayload = cfg.subTablePortalViews || {}
+        for (const b of matchedForm.tableBindings || []) {
+          if (b.bindingType === 'PRIMARY') continue
+          const cols = deriveColumnsFromBinding(b, configForSubTables)
+          if (!Array.isArray(cols) || cols.length === 0) continue
+          const subFormDesign = resolveSubFormDesign(b, subForms)
+          const bindingPortalViews =
+            subTablePortalViewsPayload[b.bindingId]
+            ?? subTablePortalViewsPayload[String(b.bindingId)]
+            ?? null
+          const binding = {
+            bindingId: b.bindingId,
+            tableId: b.tableId != null ? Number(b.tableId) : null,
+            bindingType: b.bindingType,
+            bindingMode: b.bindingMode,
+            foreignKeyField: b.foreignKeyField,
+            tableName: b.tableDisplayName || b.tableName,
+            tableType: b.tableType,
+            tableDescription: b.tableDescription,
+            columns: cols,
+            data: [] as any[],
+            subMode: b.subMode,
+            formFields: subFormDesign.formFields,
+            formOptions: subFormDesign.formOptions,
+            portalViews: bindingPortalViews,
+            primaryKeyFields: resolveSubTablePrimaryKeyFields(b.primaryKeyFields, b.bindingId, configForSubTables)
+          }
+          if (savedSubTables && typeof savedSubTables === 'object') {
+            const saved = getSavedSubTableRowsFromVariables(savedSubTables, {
+              bindingId: b.bindingId,
+              tableName: b.tableName,
+              tableDisplayName: b.tableDisplayName
+            })
+            if (saved) binding.data = saved
+          }
+          nodeBindings.push(binding)
+        }
+        hydrateChildSubTablesFromParentsNestedRows(
+          nodeBindings,
+          savedSubTables && typeof savedSubTables === 'object' ? (savedSubTables as Record<string, unknown>) : null,
+          bindingRelationTableMap
+        )
+        if (savedSubTables && typeof savedSubTables === 'object') {
+          hydrateBindingsRowsFromVariablesBySharedRelationTableId(
+            nodeBindings,
+            savedSubTables as Record<string, unknown>,
+            bindingRelationTableMap
+          )
+        }
+        enrichChildBindingRowsFromParentsNestedSubTables(nodeBindings)
+      } catch {
+        /* ignore per-node parse errors */
+      }
+
+      newMap.set(nodeId, {
+        formName: matchedForm.name || nodeName,
+        isCurrentStep,
+        fields: nodeFields,
+        tabs: nodeTabs,
+        values: { ...formData.value },
+        subTableBindings: nodeBindings
+      })
+    }
+  } catch (e) {
+    console.warn('[ApplicationDetail] buildApplicationNodeFormMap failed:', e)
+  }
+
+  nodeFormMap.value = newMap
+}
+
 // Load process details
 const loadProcessDetail = async () => {
   loading.value = true
@@ -906,6 +1261,9 @@ const loadProcessDetail = async () => {
           for (const prevForm of previousForms.value) {
             filterByAssignee(prevForm.subTableBindings)
           }
+          for (const nodeForm of nodeFormMap.value.values()) {
+            filterByAssignee(nodeForm.subTableBindings as typeof subTableBindings.value)
+          }
         }
         hydrateCurrentFormDataFromCompletedSubTaskRows()
       }
@@ -932,7 +1290,9 @@ const loadFunctionUnitContent = async (processKey: string) => {
       console.error('Function unit content error:', content.error)
       return
     }
-    
+
+    selectedNodeId.value = null
+
     let currentFormInfo: { formId: string | null, formName: string | null } = { formId: null, formName: null }
     /**
      * Initiator My Request: still use dedicated BFS for `previousForms` (MI subprocess), but the
@@ -1050,7 +1410,14 @@ const loadFunctionUnitContent = async (processKey: string) => {
         })
       }
 
-      // Restore sub-table data from variables
+      const bindingRelationTableMap = buildBindingIdToRelationTableIdMap(content.forms as any[])
+
+      // Restore sub-table data from variables (promote nested link-form rows so bindings resolve like To Do).
+      if (formData.value.__subTables__ && typeof formData.value.__subTables__ === 'object') {
+        const flattened = JSON.parse(JSON.stringify(formData.value.__subTables__)) as Record<string, unknown>
+        flattenNestedSubTableRowsIntoPayload(flattened)
+        formData.value = { ...formData.value, __subTables__: flattened }
+      }
       const savedSubTables = formData.value.__subTables__
       if (savedSubTables && typeof savedSubTables === 'object') {
         for (const binding of bindings) {
@@ -1063,6 +1430,12 @@ const loadFunctionUnitContent = async (processKey: string) => {
           })
           if (saved) binding.data = saved
         }
+        hydrateBindingsRowsFromVariablesBySharedRelationTableId(
+          bindings,
+          savedSubTables as Record<string, unknown>,
+          bindingRelationTableMap
+        )
+        enrichChildBindingRowsFromParentsNestedSubTables(bindings)
       }
       subTableBindings.value = bindings
 
@@ -1251,7 +1624,14 @@ const loadFunctionUnitContent = async (processKey: string) => {
       } else {
         previousForms.value = []
       }
+
+      buildApplicationNodeFormMap(content)
       alignProcessSubTableBindingsBySharedTable()
+    } else {
+      previousForms.value = []
+      subTableBindings.value = []
+      nodeFormMap.value = new Map()
+      selectedNodeId.value = null
     }
   } catch (error) {
     console.error('Failed to load function unit content:', error)
@@ -1931,6 +2311,115 @@ const parseBpmnXml = (xml: string) => {
       }
     }
 
+    const ckDiag = (s: unknown) => String(s ?? '').trim()
+    const normLabDiag = (s: unknown) => ckDiag(s).replace(/\s+/g, ' ')
+
+    const flowEdgesDiag: Array<{ sourceRef: string; targetRef: string }> = []
+    for (let fi = 0; fi < allElements.length; fi++) {
+      const fln = allElements[fi].localName || allElements[fi].nodeName.split(':').pop()
+      if (fln !== 'sequenceFlow') continue
+      flowEdgesDiag.push({
+        sourceRef: allElements[fi].getAttribute('sourceRef') || '',
+        targetRef: allElements[fi].getAttribute('targetRef') || '',
+      })
+    }
+
+    const findBpmnElementByIdAnyDiag = (nodeId: string): Element | null => {
+      for (let fi = 0; fi < allElements.length; fi++) {
+        if (ckDiag(allElements[fi].getAttribute('id')) === ckDiag(nodeId)) return allElements[fi]
+      }
+      return null
+    }
+
+    const isUnderGivenSubProcessDiag = (elementRef: Element | null, boundarySpId: string): boolean => {
+      let node: Node | null = elementRef?.parentNode ?? null
+      while (node && node.nodeType === 1) {
+        const wrap = node as Element
+        const wln = wrap.localName || wrap.nodeName.split(':').pop()
+        if (wln === 'subProcess' && ckDiag(wrap.getAttribute('id')) === ckDiag(boundarySpId)) return true
+        if (wln === 'process' || wln === 'definitions') break
+        node = wrap.parentNode
+      }
+      return false
+    }
+
+    const nearestActiveMiSubProcessAncestorIdDiag = (from: Element): string | null => {
+      let node: Node | null = from.parentNode
+      while (node && node.nodeType === 1) {
+        const wrap = node as Element
+        const wln = wrap.localName || wrap.nodeName.split(':').pop()
+        if (wln === 'subProcess') {
+          const sid = ckDiag(wrap.getAttribute('id'))
+          if (sid && activeMultiInstanceSubProcesses.has(sid)) return sid
+        }
+        if (wln === 'process' || wln === 'definitions') break
+        node = wrap.parentNode
+      }
+      return null
+    }
+
+    const isDescendantOfActiveMiSubProcessDiag = (element: Element): boolean => {
+      let node: Node | null = element.parentNode
+      while (node && node.nodeType === 1) {
+        const el = node as Element
+        const lnn = el.localName || el.nodeName.split(':').pop()
+        if (lnn === 'subProcess') {
+          const sid = el.getAttribute('id') || ''
+          if (sid && activeMultiInstanceSubProcesses.has(sid)) return true
+        }
+        if (lnn === 'process' || lnn === 'definitions') break
+        node = el.parentNode
+      }
+      return false
+    }
+
+    const isDownstreamUserTaskInsideSameActiveMiDiag = (openTaskId: string, candidateTaskId: string, boundarySpId: string): boolean => {
+      const openEl = findBpmnElementByIdAnyDiag(openTaskId)
+      if (!openEl || !isUnderGivenSubProcessDiag(openEl, boundarySpId)) return false
+      if (ckDiag(openTaskId) === ckDiag(candidateTaskId)) return false
+      const queue: string[] = [openTaskId]
+      const visited = new Set<string>()
+      while (queue.length > 0) {
+        const u = queue.shift()!
+        if (visited.has(u)) continue
+        visited.add(u)
+        for (const f of flowEdgesDiag) {
+          if (ckDiag(f.sourceRef) !== ckDiag(u)) continue
+          const tar = ckDiag(f.targetRef)
+          const tarEl = findBpmnElementByIdAnyDiag(tar)
+          if (!tarEl || !isUnderGivenSubProcessDiag(tarEl, boundarySpId)) continue
+          if ((tarEl.localName || tarEl.nodeName.split(':').pop()) === 'userTask' && tar === ckDiag(candidateTaskId)) return true
+          queue.push(tar)
+        }
+      }
+      return false
+    }
+
+    let currentOpenBpmnUserTaskIdDiag = ''
+    if (processInfo.value.status === 'RUNNING' && !snapshotActive) {
+      const ctk = (snapshotTaskDefinitionKey || '').trim()
+      doc.querySelectorAll('userTask').forEach((ut: Element) => {
+        const uid = ckDiag(ut.getAttribute('id'))
+        if (!uid) return
+        if (ctk && uid === ckDiag(ctk)) currentOpenBpmnUserTaskIdDiag = uid
+      })
+      if (!currentOpenBpmnUserTaskIdDiag) {
+        doc.querySelectorAll('userTask').forEach((ut: Element) => {
+          const uid = ckDiag(ut.getAttribute('id'))
+          if (!uid) return
+          const unm = normLabDiag(ut.getAttribute('name'))
+          if (unm === normLabDiag(currentNodeName) || uid === ckDiag(currentNodeName)) currentOpenBpmnUserTaskIdDiag = uid
+        })
+      }
+    }
+
+    const shouldSuppressSiblingAggregationCompleteDiag = (userTaskEl: Element, userTaskBpmnId: string): boolean => {
+      const boundary = nearestActiveMiSubProcessAncestorIdDiag(userTaskEl)
+      if (!boundary || !currentOpenBpmnUserTaskIdDiag) return false
+      if (ckDiag(userTaskBpmnId) === ckDiag(currentOpenBpmnUserTaskIdDiag)) return false
+      return isDownstreamUserTaskInsideSameActiveMiDiag(currentOpenBpmnUserTaskIdDiag, userTaskBpmnId, boundary)
+    }
+
     // Parse start events (subprocess-internal starts are pending until the subprocess is entered)
     doc.querySelectorAll('startEvent').forEach((event, index) => {
       const id = event.getAttribute('id') || `start_${index}`
@@ -1942,14 +2431,22 @@ const parseBpmnXml = (xml: string) => {
       } else if (parentSpId && completedSnapshotSingleTaskSubProcesses.has(parentSpId)) {
         startStatus = 'completed'
       } else if (parentSpId && activeMultiInstanceSubProcesses.has(parentSpId)) {
-        startStatus = 'current'
+        // Align with todo (useBpmnParser): internal start is completed once MI instance is active
+        startStatus = 'completed'
       }
       nodes.push({ id, name: event.getAttribute('name') || t('task.startNode'), type: 'start', status: startStatus, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
       if (startStatus === 'completed') {
         completed.push(id)
       }
     })
-    
+
+    const completedHistoryIdsForMi = new Set<string>()
+    const completedNodeNamesForMi = new Set<string>()
+    historyRecords.value.forEach(record => {
+      if (record.status === 'completed' && record.nodeId) completedHistoryIdsForMi.add(String(record.nodeId).trim())
+      if (record.status === 'completed' && record.nodeName) completedNodeNamesForMi.add(record.nodeName)
+    })
+
     // Parse user tasks
     doc.querySelectorAll('userTask').forEach((task, index) => {
       const id = task.getAttribute('id') || `task_${index}`
@@ -1958,6 +2455,7 @@ const parseBpmnXml = (xml: string) => {
 
       let status: 'completed' | 'current' | 'pending' | 'rejected' = 'pending'
       const parentSpId = getParentSubProcessId(task)
+      const inActiveMi = !!(parentSpId && activeMultiInstanceSubProcesses.has(parentSpId))
 
       // Prefer status from history records
       const historyStatus = nodeStatusMap.get(name)
@@ -1981,15 +2479,62 @@ const parseBpmnXml = (xml: string) => {
           // Nodes after snapshotTaskName: keep as pending
           status = 'pending'
         }
+      } else if (
+        processInfo.value.status === 'RUNNING'
+        && !snapshotActive
+        && inActiveMi
+      ) {
+        /** Same rules as todo task detail (`useBpmnParser`): current step + downstream suppression inside MI */
+        const ctd = (snapshotTaskDefinitionKey || '').trim()
+        const openTaskMatches =
+          normLabDiag(name) === normLabDiag(currentNodeName)
+          || ckDiag(id) === ckDiag(currentNodeName)
+          || (ctd && (ckDiag(id) === ckDiag(ctd) || normLabDiag(name) === normLabDiag(ctd)))
+
+        if (openTaskMatches) {
+          status = 'current'
+          currentNodeId.value = id
+          foundCurrentNode = true
+        } else if (completedHistoryIdsForMi.has(id) || completedNodeNamesForMi.has(name)) {
+          if (
+            isDescendantOfActiveMiSubProcessDiag(task)
+            && (
+              (ctd && (ckDiag(id) === ckDiag(ctd) || normLabDiag(name) === normLabDiag(ctd)))
+              || normLabDiag(name) === normLabDiag(currentNodeName)
+              || ckDiag(id) === ckDiag(currentNodeName)
+            )
+          ) {
+            status = 'current'
+            currentNodeId.value = id
+            foundCurrentNode = true
+          } else if (shouldSuppressSiblingAggregationCompleteDiag(task, id)) {
+            status = 'pending'
+          } else {
+            status = 'completed'
+            completed.push(id)
+          }
+        } else if (!foundCurrentNode) {
+          const hm = historyRecords.value.find(h => normLabDiag(h.nodeName) === normLabDiag(name))
+          const sameOpenMi =
+            isDescendantOfActiveMiSubProcessDiag(task)
+            && (
+              (ctd && (ckDiag(id) === ckDiag(ctd) || normLabDiag(name) === normLabDiag(ctd)))
+              || normLabDiag(name) === normLabDiag(currentNodeName)
+              || ckDiag(id) === ckDiag(currentNodeName)
+            )
+          if (hm && hm.status === 'completed' && !sameOpenMi) {
+            if (shouldSuppressSiblingAggregationCompleteDiag(task, id)) status = 'pending'
+            else {
+              status = 'completed'
+              completed.push(id)
+            }
+          }
+        }
       } else if (historyStatus) {
         status = historyStatus
         if (status === 'completed' || status === 'rejected') {
           completed.push(id)
         }
-      } else if (parentSpId && activeMultiInstanceSubProcesses.has(parentSpId)) {
-        status = 'current'
-        currentNodeId.value = id
-        foundCurrentNode = true
       } else if (processInfo.value.status === 'COMPLETED') {
         // Process completed: only mark nodes that were actually executed (matched via history records)
         const historyMatch = historyRecords.value.find(h => h.nodeName === name || h.nodeId === id)
@@ -2109,34 +2654,29 @@ const parseBpmnXml = (xml: string) => {
       
       // Determine gateway status from history records
       let status: 'completed' | 'current' | 'pending' = 'pending'
+      const gwIncomingIds = earlyFlows.filter(f => f.targetRef === id).map(f => f.sourceRef)
+      const gwHasCompletedPred = gwIncomingIds.some(srcId => completed.includes(srcId))
+
       if (parentSpId && activeMultiInstanceSubProcesses.has(parentSpId)) {
-        status = 'current'
+        // MI: prefer executed path (green), same as todo — only orange when token is still before any completed predecessor on this diagram
+        status = gwHasCompletedPred ? 'completed' : 'current'
       } else if (snapshotActive) {
         // Snapshot mode: check if the gateway incoming nodes are completed
         if (completedNodeNames.has(name)) {
           status = 'completed'
-        } else {
-          // Check for completed incoming nodes (via sequenceFlow)
-          const incomingSourceIds = earlyFlows.filter(f => f.targetRef === id).map(f => f.sourceRef)
-          const hasCompletedSource = incomingSourceIds.some(srcId => completed.includes(srcId))
-          if (hasCompletedSource) {
-            status = 'completed'
-          }
+        } else if (gwHasCompletedPred) {
+          status = 'completed'
         }
       } else if (completedNodeNames.has(name)) {
         status = 'completed'
       } else if (processInfo.value.status === 'COMPLETED') {
         // Process completed: only mark gateways on the actually executed path
-        const incomingSourceIds = earlyFlows.filter(f => f.targetRef === id).map(f => f.sourceRef)
-        const hasCompletedSource = incomingSourceIds.some(srcId => completed.includes(srcId))
-        if (hasCompletedSource) {
+        if (gwHasCompletedPred) {
           status = 'completed'
         }
       } else {
         // Check for completed incoming nodes (via sequenceFlow)
-        const incomingSourceIds = earlyFlows.filter(f => f.targetRef === id).map(f => f.sourceRef)
-        const hasCompletedSource = incomingSourceIds.some(srcId => completed.includes(srcId))
-        if (hasCompletedSource) {
+        if (gwHasCompletedPred) {
           status = 'completed'
         }
       }

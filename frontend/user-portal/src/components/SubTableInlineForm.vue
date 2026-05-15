@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FieldRenderer from './FieldRenderer.vue'
 import type { FormField } from './formRendererHelpers'
@@ -18,6 +18,8 @@ import type { FormField } from './formRendererHelpers'
  *   - Supports the basic primitive field types provided by FieldRenderer.
  *   - Sub-table-inside-sub-form is intentionally NOT recursed — keeps the row editor flat.
  *   - Validation is delegated to the parent FormRenderer / submit flow.
+ *
+ * Reactivity: parent often hydrates rows in-place; prop reference unchanged — sync via a deep watch.
  */
 
 interface Props {
@@ -35,7 +37,6 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   title: '',
-  currentRow: () => ({}),
   readonly: false,
   labelWidth: '160px'
 })
@@ -47,10 +48,19 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-const rowModel = computed<Record<string, any>>(() => ({ ...(props.currentRow ?? {}) }))
+const rowModel = ref<Record<string, any>>({})
+
+watch(
+  () => props.currentRow,
+  r => {
+    rowModel.value = r != null && typeof r === 'object' ? { ...r } : {}
+  },
+  { immediate: true, deep: true },
+)
 
 function handleFieldUpdate(key: string, value: any) {
   const merged = { ...rowModel.value, [key]: value }
+  rowModel.value = merged
   emit('update:row', merged)
   emit('change', key, value)
 }

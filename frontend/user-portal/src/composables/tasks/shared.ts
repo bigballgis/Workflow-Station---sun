@@ -184,6 +184,59 @@ export function mergeSubTableRowsByRowId(
     }
   }
 
+  /**
+   * Two snapshots may describe the same PK row; a later "list-only" payload often carries {@code ''} / {@code null}
+   * or an empty {@code __subTables__} map and must not wipe richer fields from process start / nested hydration.
+   */
+  const mergeRowSnapshotsPreferFilled = (
+    previous: Record<string, unknown>,
+    incoming: Record<string, unknown>
+  ): Record<string, unknown> => {
+    const out: Record<string, unknown> = { ...previous }
+    for (const [key, val] of Object.entries(incoming)) {
+      if (val === undefined) continue
+
+      if (key === '__subTables__') {
+        const pSub = previous[key]
+        if (val !== null && typeof val === 'object' && !Array.isArray(val)) {
+          const nObj = val as Record<string, unknown>
+          if (Object.keys(nObj).length === 0) {
+            continue
+          }
+          if (pSub !== null && typeof pSub === 'object' && !Array.isArray(pSub)) {
+            out[key] = { ...(pSub as Record<string, unknown>), ...nObj }
+          } else {
+            out[key] = { ...nObj }
+          }
+        } else if (val !== null && val !== undefined) {
+          out[key] = val
+        }
+        continue
+      }
+
+      if (val === null) {
+        const cur = out[key]
+        if (cur !== undefined && cur !== null) continue
+        out[key] = val
+        continue
+      }
+
+      if (typeof val === 'string' && val.trim() === '') {
+        const cur = out[key]
+        if (
+          cur !== undefined &&
+          cur !== null &&
+          !(typeof cur === 'string' && cur.trim() === '')
+        ) {
+          continue
+        }
+      }
+
+      out[key] = val
+    }
+    return out
+  }
+
   const add = (r: any) => {
     if (!r || typeof r !== 'object') return
     const o = r as Record<string, unknown>
@@ -212,7 +265,10 @@ export function mergeSubTableRowsByRowId(
     }
 
     const cur = byId.get(k)
-    byId.set(k, cur ? { ...cur, ...r } : { ...r })
+    byId.set(
+      k,
+      cur ? mergeRowSnapshotsPreferFilled(cur as Record<string, unknown>, o) : { ...r },
+    )
   }
   for (const r of existing || []) add(r)
   for (const r of incoming || []) add(r)
@@ -282,4 +338,653 @@ export function getSavedSubTableRows(subTables: Record<string, any>, binding: {
   if (Array.isArray(byId)) return byId as any[]
   if (binding.tableName && Array.isArray(subTables[binding.tableName])) return subTables[binding.tableName] as any[]
   return undefined
+}
+
+/**
+ * Link Form / 「表格下表单」在编辑态常把子表行只写在 {@code parentRow.__subTables__[childBindingId]}，而流程变量提交
+ * ({@code __subTables__} 顶层 map) 需要同一份行也挂在 {@code __subTables__[childKey]}，待办加载的
+ * {@code getSavedSubTableRows} 才能命中。本函数在原位多轮提升（处理链式嵌套）；入参应为普通 JSON 形态的对象。
+ */
+export function flattenNestedSubTableRowsIntoPayload(subTables: Record<string, unknown>, maxPasses = 8): void {
+  for (let pass = 0; pass < maxPasses; pass++) {
+    let touched = false
+    for (const val of Object.values(subTables)) {
+      if (!Array.isArray(val)) continue
+      for (const row of val) {
+        if (!row || typeof row !== 'object') continue
+        const nest = (row as Record<string, unknown>).__subTables__
+        if (!nest || typeof nest !== 'object') continue
+        for (const [childKey, childVal] of Object.entries(nest)) {
+          if (!Array.isArray(childVal) || childVal.length === 0) continue
+          const prev = subTables[childKey]
+          const prevRows = Array.isArray(prev) ? [...(prev as any[])] : []
+          const merged = mergeSubTableRowsByRowId(prevRows, childVal as any[], null)
+          subTables[childKey] = merged
+          subTables[String(childKey)] = merged
+          touched = true
+        }
+      }
+    }
+    if (!touched) break
+  }
+}
+
+/**
+ * Across BPMN steps the same RelationTable may keep variables under an older {@code bindingId} (e.g. initiator slice "66")
+ * while the current Task Form uses a copied binding id ("90"). Keys in {@code __subTables__} are still keyed by the old id,
+ * so hydrate empty bindings by matching {@code tableId} from designer {@code tableBindings} metadata across all FU forms.
+ */
+export function buildBindingIdToRelationTableIdMap(contentForms: any[] | undefined): Map<number, number | null> {
+  const m = new Map<number, number | null>()
+  for (const f of contentForms || []) {
+    const tbs = (f as { tableBindings?: unknown }).tableBindings as unknown[] | undefined
+    if (!Array.isArray(tbs)) continue
+    for (const tb of tbs) {
+      const raw = tb as { bindingId?: unknown; tableId?: unknown }
+      if (raw?.bindingId == null) continue
+      const bid = Number(raw.bindingId)
+      if (!Number.isFinite(bid)) continue
+      if (m.has(bid)) continue
+      const tid = raw.tableId != null ? Number(raw.tableId) : null
+      m.set(bid, tid != null && Number.isFinite(tid) ? tid : null)
+    }
+  }
+  return m
+}
+
+function extractRowIdentityForTableMatch(row: unknown): string | null {
+  if (!row || typeof row !== 'object') return null
+  const o = row as Record<string, unknown>
+  const candidates = [o.id, o.rowId, o.row_id, (o as Record<string, unknown>).id_idw]
+  for (const c of candidates) {
+    if (c != null && c !== '') return String(c)
+  }
+  return null
+}
+
+function sortSubTableKeysNumericFirst(keysEntries: [string, unknown][]): [string, unknown][] {
+  return [...keysEntries].sort(([a], [b]) => {
+    const na = Number(a)
+    const nb = Number(b)
+    const fa = Number.isFinite(na)
+    const fb = Number.isFinite(nb)
+    if (fa && fb) return na - nb
+    if (fa) return -1
+    if (fb) return 1
+    return String(a).localeCompare(String(b))
+  })
+}
+
+/**
+ * Numeric keys in {@code __subTables__} that are already aligned with another binding's hydrated rows
+ * (same stable row id on first row), even when {@code bindingTableById.get(kid)} is null.
+ */
+function claimedNumericSubTableSliceKeys(
+  bindings: Array<{ bindingId: number; data: any[] }>,
+  savedSubTables: Record<string, unknown>
+): Set<number> {
+  const claimed = new Set<number>()
+  const ordered = sortSubTableKeysNumericFirst(Object.entries(savedSubTables))
+
+  for (const bb of bindings) {
+    if (!Array.isArray(bb.data) || bb.data.length === 0) continue
+    const id0 = extractRowIdentityForTableMatch(bb.data[0])
+    if (id0 == null) continue
+    for (const [key, val] of ordered) {
+      const kid = Number(key)
+      if (!Array.isArray(val) || val.length === 0) continue
+      const idV = extractRowIdentityForTableMatch(val[0])
+      if (idV != null && idV === id0 && Number.isFinite(kid)) {
+        claimed.add(kid)
+        break
+      }
+    }
+  }
+  return claimed
+}
+
+/**
+ * When {@code bindingTableById.get(kid)} is missing for some keys, merge the single numeric slice
+ * not claimed by any sibling binding that already has rows (initiator 64 vs subtable2 66 scenario).
+ */
+function mergeRowsFromSoleUnclaimedNumericSlice(
+  b: { bindingId: number; data: any[] },
+  savedSubTables: Record<string, unknown>,
+  claimedNumericKeys: Set<number>
+): any[] {
+  const candidates: number[] = []
+  for (const [key, val] of Object.entries(savedSubTables)) {
+    const kid = Number(key)
+    if (!Number.isFinite(kid) || kid === b.bindingId) continue
+    if (!Array.isArray(val) || val.length === 0) continue
+    if (claimedNumericKeys.has(kid)) continue
+    candidates.push(kid)
+  }
+  if (candidates.length !== 1) {
+    return []
+  }
+  const onlyKey = candidates[0]!
+  const val = savedSubTables[String(onlyKey)] ?? savedSubTables[onlyKey]
+  return Array.isArray(val) ? [...val] : []
+}
+
+function countNonMetaRowKeys(row: unknown): number {
+  if (!row || typeof row !== 'object') return 0
+  return Object.keys(row as object).filter(k => !k.startsWith('__')).length
+}
+
+/**
+ * Copied BPMN forms → new binding ids; variables keep multiple numeric {@code __subTables__} slices.
+ * {@link mergeRowsFromSoleUnclaimedNumericSlice} yields nothing when 2+ numeric keys remain unclaimed.
+ * For bindings that still have no rows, take the richest unclaimed slice, preferring the slice whose
+ * {@code bindingTableById} tid matches {@code selfTidRaw} when that is known.
+ */
+function mergeRowsFromRichestUnclaimedNumericSlice(
+  b: { bindingId: number },
+  savedSubTables: Record<string, unknown>,
+  claimedNumericKeys: Set<number>,
+  bindingTableById: Map<number, number | null>,
+  selfTidRaw: number | null,
+): any[] {
+  type Cand = { kid: number; val: any[]; score: number; otid: number | null }
+  const all: Cand[] = []
+  for (const [key, val] of Object.entries(savedSubTables)) {
+    const kid = Number(key)
+    if (!Number.isFinite(kid) || kid === b.bindingId) continue
+    if (!Array.isArray(val) || val.length === 0) continue
+    if (claimedNumericKeys.has(kid)) continue
+    const rawTid = bindingTableById.get(kid)
+    const otid =
+      rawTid != null && Number.isFinite(Number(rawTid)) ? Number(rawTid) : null
+    const score = countNonMetaRowKeys(val[0])
+    if (score <= 0) continue
+    all.push({ kid, val, score, otid })
+  }
+  if (all.length === 0) return []
+
+  const tidOk =
+    selfTidRaw != null && Number.isFinite(selfTidRaw) && !Number.isNaN(selfTidRaw)
+  const matched = tidOk ? all.filter(c => c.otid != null && c.otid === selfTidRaw) : []
+  const pool = matched.length > 0 ? matched : all
+  pool.sort((a, b) => b.score - a.score || b.val.length - a.val.length)
+  const pick = pool[0]
+  return pick ? [...pick.val] : []
+}
+
+function buildBindingTableIdMapFromPeers<T extends { bindingId: number; tableId?: number | null }>(
+  peers: T[],
+): Map<number, number | null> {
+  const m = new Map<number, number | null>()
+  for (const b of peers) {
+    const tid = b.tableId != null ? Number(b.tableId) : null
+    if (tid != null && Number.isFinite(tid)) m.set(b.bindingId, tid)
+  }
+  return m
+}
+
+/**
+ * When designer metadata omits {@code tableId} for a binding (common on copied forms), we still
+ * need to know which relation-table slices are already "consumed" by sibling bindings that have rows.
+ * Match hydrated {@code bb.data[0]} to a numeric-key slice in variables by stable row id.
+ */
+function inferFilledRelationTableIds(
+  bindings: Array<{ bindingId: number; tableId?: number | null; data: any[] }>,
+  bindingTableById: Map<number, number | null>,
+  savedSubTables: Record<string, unknown>
+): Set<number> {
+  const filled = new Set<number>()
+  for (const bb of bindings) {
+    if (!Array.isArray(bb.data) || bb.data.length === 0) continue
+    let t = bb.tableId != null ? Number(bb.tableId) : bindingTableById.get(bb.bindingId)
+    if (t != null && Number.isFinite(Number(t))) {
+      filled.add(Number(t))
+      continue
+    }
+    const id0 = extractRowIdentityForTableMatch(bb.data[0])
+    if (id0 == null) continue
+    for (const [key, val] of Object.entries(savedSubTables)) {
+      const kid = Number(key)
+      if (!Number.isFinite(kid) || kid === bb.bindingId) continue
+      if (!Array.isArray(val) || val.length === 0) continue
+      const v0 = val[0]
+      const idV = extractRowIdentityForTableMatch(v0)
+      if (idV != null && idV === id0) {
+        const otid = bindingTableById.get(kid)
+        if (otid != null && Number.isFinite(Number(otid))) {
+          filled.add(Number(otid))
+        }
+        break
+      }
+    }
+  }
+  return filled
+}
+
+/**
+ * Copied BPMN userTask forms (e.g. subform_copy) get new bindingIds; metadata may omit {@code tableId}.
+ * Process variables still use initiator binding ids (64, 66, …). When {@code selfTid} cannot be resolved,
+ * infer the relation table id as the unique tid present in variables that is not already carried by
+ * another binding that has successfully hydrated rows.
+ */
+function inferOrphanRelationTableId(
+  b: { bindingId: number; tableId?: number | null; data: any[] },
+  bindings: Array<{ bindingId: number; tableId?: number | null; data: any[] }>,
+  bindingTableById: Map<number, number | null>,
+  savedSubTables: Record<string, unknown>
+): number | null {
+  const filledTids = inferFilledRelationTableIds(bindings, bindingTableById, savedSubTables)
+
+  const tidsSeenInVariables = new Set<number>()
+  for (const [key, val] of Object.entries(savedSubTables)) {
+    const kid = Number(key)
+    if (!Number.isFinite(kid)) continue
+    if (!Array.isArray(val) || val.length === 0) continue
+    const tid = bindingTableById.get(kid)
+    if (tid != null && Number.isFinite(Number(tid))) {
+      tidsSeenInVariables.add(Number(tid))
+    }
+  }
+
+  const orphan = [...tidsSeenInVariables].filter(t => !filledTids.has(t))
+  if (orphan.length !== 1) {
+    return null
+  }
+  return orphan[0]!
+}
+
+export function hydrateBindingsRowsFromVariablesBySharedRelationTableId<
+  T extends {
+    bindingId: number
+    tableId?: number | null
+    data: any[]
+    primaryKeyFields?: string[] | null | undefined
+  },
+>(
+  bindings: T[],
+  savedSubTables: Record<string, unknown>,
+  bindingTableById: Map<number, number | null>,
+): void {
+  for (const b of bindings) {
+    /**
+     * Same failure mode as {@link hydrateChildSubTablesFromParentsNestedRows}: “thin” rows loaded from a wrong
+     * binding key still count as {@code length > 0}, so we skipped relation-table hydration and never merged the
+     * rich slice keyed by the initiator/copied binding id.
+     */
+    const existing = Array.isArray(b.data) ? b.data : []
+
+    const claimedKeys = claimedNumericSubTableSliceKeys(bindings, savedSubTables)
+
+    let selfTidRaw = b.tableId != null ? Number(b.tableId) : bindingTableById.get(b.bindingId)
+    if (selfTidRaw == null || Number.isNaN(selfTidRaw)) {
+      const inferred = inferOrphanRelationTableId(b, bindings, bindingTableById, savedSubTables)
+      if (inferred != null && Number.isFinite(inferred)) {
+        selfTidRaw = inferred
+      }
+    }
+
+    const chunks: any[] = []
+    if (selfTidRaw != null && !Number.isNaN(selfTidRaw)) {
+      for (const [key, val] of Object.entries(savedSubTables)) {
+        if (!Array.isArray(val) || val.length === 0) continue
+        const kid = Number(key)
+        if (!Number.isFinite(kid) || kid === b.bindingId) continue
+        const otherTid = bindingTableById.get(kid)
+        if (otherTid == null || Number.isNaN(Number(otherTid))) continue
+        if (Number(otherTid) !== selfTidRaw) continue
+        chunks.push(...val)
+      }
+    }
+
+    if (chunks.length === 0) {
+      chunks.push(...mergeRowsFromSoleUnclaimedNumericSlice(b, savedSubTables, claimedKeys))
+    }
+
+    if (chunks.length === 0 && existing.length === 0) {
+      chunks.push(
+        ...mergeRowsFromRichestUnclaimedNumericSlice(
+          b,
+          savedSubTables,
+          claimedKeys,
+          bindingTableById,
+          selfTidRaw != null && !Number.isNaN(Number(selfTidRaw)) ? Number(selfTidRaw) : null,
+        ),
+      )
+    }
+
+    if (chunks.length === 0) continue
+    b.data = cloneSubTableRows(
+      mergeSubTableRowsByRowId(existing, chunks, b.primaryKeyFields ?? null),
+    )
+  }
+}
+
+/**
+ * Walk every top-level row in {@code savedSubTables} and collect distinct nested {@code row.__subTables__[key]}
+ * arrays that match the binding (numeric id, table name, physical name). Used when child rows only exist under
+ * parent rows while the top-level slice for the child binding is thin or missing.
+ */
+export function collectNestedSlicesForBindingFromSubTablesWalk(
+  savedSubTables: Record<string, unknown> | null | undefined,
+  binding: { bindingId: number; tableName: string; physicalTableName?: string },
+): unknown[][] {
+  if (!savedSubTables || typeof savedSubTables !== 'object') return []
+  const candidates: string[] = []
+  const add = (s?: string) => {
+    if (s == null || s === '') return
+    const t = String(s)
+    if (!candidates.includes(t)) candidates.push(t)
+    const n = normalizeSubTableName(s)
+    if (n && n !== t && !candidates.includes(n)) candidates.push(n)
+  }
+  add(String(binding.bindingId))
+  const bid = Number(binding.bindingId)
+  if (Number.isFinite(bid)) add(String(bid))
+  add(binding.tableName)
+  add(binding.physicalTableName)
+
+  const out: unknown[][] = []
+  const seen = new WeakSet<object>()
+  for (const val of Object.values(savedSubTables)) {
+    if (!Array.isArray(val)) continue
+    for (const row of val) {
+      if (!row || typeof row !== 'object') continue
+      const nest = (row as Record<string, unknown>).__subTables__
+      if (!nest || typeof nest !== 'object') continue
+      for (const key of candidates) {
+        const arr = (nest as Record<string, unknown>)[key]
+        if (!Array.isArray(arr) || arr.length === 0) continue
+        if (seen.has(arr as object)) break
+        seen.add(arr as object)
+        out.push(arr)
+        break
+      }
+    }
+  }
+  return out
+}
+
+/**
+ * Flow / MI often mirror a thin row at the top-level slice (name, assignee…) while lookup / id / custom fields
+ * remain only under {@code parentRow.__subTables__[childBindingId|legacyKey]}. Fill missing fields on child rows.
+ */
+export function enrichChildBindingRowsFromParentsNestedSubTables<
+  T extends {
+    bindingId: number
+    tableName?: string
+    physicalTableName?: string
+    tableId?: number | null
+    data: any[]
+    primaryKeyFields?: string[] | null | undefined
+  },
+>(bindings: T[]): void {
+  const countDataKeys = (row: unknown): number => {
+    if (!row || typeof row !== 'object') return 0
+    return Object.keys(row as object).filter(k => !k.startsWith('__')).length
+  }
+
+  /** True when patch can supply non-empty values for keys that are empty/missing on target (same field count ≠ same fields). */
+  const patchCanFillEmptyKeys = (target: unknown, patch: unknown): boolean => {
+    if (!target || typeof target !== 'object' || !patch || typeof patch !== 'object') return false
+    const t = target as Record<string, unknown>
+    const p = patch as Record<string, unknown>
+    for (const [k, val] of Object.entries(p)) {
+      if (k.startsWith('__')) continue
+      if (val === undefined || val === null || val === '') continue
+      const cur = t[k]
+      if (cur === undefined || cur === null || cur === '') return true
+    }
+    return false
+  }
+
+  const mergePatchIntoRow = (
+    target: Record<string, unknown>,
+    patch: Record<string, unknown>,
+  ): boolean => {
+    let changed = false
+    for (const [k, val] of Object.entries(patch)) {
+      if (k.startsWith('__')) continue
+      if (val === undefined || val === null || val === '') continue
+      const cur = target[k]
+      if (cur !== undefined && cur !== null && cur !== '') continue
+      target[k] = val
+      changed = true
+    }
+    return changed
+  }
+
+  const peerMap = buildBindingTableIdMapFromPeers(bindings)
+
+  for (const child of bindings) {
+    if (!Array.isArray(child.data)) child.data = [] as any
+    if (child.data.length === 0) {
+      let incoming: any[] = []
+      for (const parent of bindings) {
+        if (parent.bindingId === child.bindingId) continue
+        incoming.push(
+          ...pullNestedRowsForBindingFromParentRows(
+            {
+              bindingId: child.bindingId,
+              tableName: child.tableName ?? '',
+              physicalTableName: child.physicalTableName,
+              tableId: child.tableId ?? null,
+            },
+            Array.isArray(parent.data) ? parent.data : [],
+            peerMap,
+          ),
+        )
+      }
+      if (incoming.length > 0) {
+        child.data = cloneSubTableRows(
+          mergeSubTableRowsByRowId([], incoming, child.primaryKeyFields ?? null),
+        ) as any
+      }
+    }
+
+    if (!Array.isArray(child.data) || child.data.length === 0) continue
+    for (const parent of bindings) {
+      if (parent.bindingId === child.bindingId) continue
+      const pr0 = Array.isArray(parent.data) && parent.data[0] ? parent.data[0] : null
+      if (!pr0 || typeof pr0 !== 'object') continue
+      const nest = (pr0 as Record<string, unknown>).__subTables__
+      if (!nest || typeof nest !== 'object') continue
+      const sto = nest as Record<string, unknown>
+
+      const tryPatches = (arrays: unknown[]): boolean => {
+        for (const arr of arrays) {
+          if (!Array.isArray(arr) || arr.length === 0) continue
+          const c0 = child.data[0]
+          if (!c0 || typeof c0 !== 'object') continue
+          const patch0 = arr[0]
+          if (!patch0 || typeof patch0 !== 'object') continue
+          const hasMoreKeys = countDataKeys(patch0) > countDataKeys(c0)
+          if (!hasMoreKeys && !patchCanFillEmptyKeys(c0, patch0)) continue
+          let any = false
+          for (let i = 0; i < child.data.length; i++) {
+            const srcRow = arr[Math.min(i, arr.length - 1)]
+            if (!srcRow || typeof srcRow !== 'object') continue
+            if (mergePatchIntoRow(child.data[i] as Record<string, unknown>, srcRow as Record<string, unknown>)) {
+              any = true
+            }
+          }
+          if (any) return true
+        }
+        return false
+      }
+
+      const prioritized: unknown[] = []
+      const d1 = sto[child.bindingId]
+      const d2 = sto[String(child.bindingId)]
+      if (Array.isArray(d1)) prioritized.push(d1)
+      if (Array.isArray(d2) && d1 !== d2) prioritized.push(d2)
+
+      if (tryPatches(prioritized)) break
+
+      const fallback: unknown[] = []
+      for (const v of Object.values(sto)) {
+        if (!Array.isArray(v) || v.length === 0) continue
+        fallback.push(v)
+      }
+      fallback.sort(
+        (a, b) =>
+          countDataKeys((b as any[])[0]) - countDataKeys((a as any[])[0]),
+      )
+      if (tryPatches(fallback)) break
+    }
+  }
+}
+
+/**
+ * Gather child-table rows nested under {@code parentRows[*].__subTables__} for the given child binding.
+ * Exported for FormRenderer inline form-below-table when {@code target.data} is thin/empty but rows nest under
+ * parent rows (e.g. legacy {@code bindingId} keys after BPMN form copy).
+ */
+export function pullNestedRowsForBindingFromParentRows(
+  child: { bindingId: number; tableName: string; physicalTableName?: string; tableId?: number | null },
+  parentRows: any[],
+  bindingTableById?: Map<number, number | null>
+): any[] {
+  const tn = (name?: string) => normalizeSubTableName(name)
+  const out: any[] = []
+  const childTid =
+    child.tableId != null && Number.isFinite(Number(child.tableId))
+      ? Number(child.tableId)
+      : bindingTableById?.get(child.bindingId) ?? null
+
+  for (const row of parentRows) {
+    if (!row || typeof row !== 'object') continue
+    const st = (row as Record<string, unknown>).__subTables__
+    if (!st || typeof st !== 'object') continue
+    const sto = st as Record<string, unknown>
+    const nested =
+      sto[child.bindingId] ??
+      sto[String(child.bindingId)] ??
+      sto[child.tableName] ??
+      sto[tn(child.tableName)] ??
+      (child.physicalTableName ? sto[child.physicalTableName] ?? sto[tn(child.physicalTableName)] : undefined)
+    const rowOutBefore = out.length
+    if (Array.isArray(nested) && nested.length > 0) {
+      out.push(...nested)
+    }
+
+    // Nested maps may still key child rows by an older binding id (initiator / prior userTask).
+    if (bindingTableById != null && childTid != null && Number.isFinite(childTid)) {
+      for (const [k, v] of Object.entries(sto)) {
+        const kid = Number(k)
+        if (!Number.isFinite(kid) || kid === child.bindingId) continue
+        const otid = bindingTableById.get(kid)
+        if (otid == null || Number.isNaN(Number(otid))) continue
+        if (Number(otid) !== Number(childTid)) continue
+        if (Array.isArray(v) && v.length > 0) {
+          out.push(...v)
+        }
+      }
+    }
+
+    // No direct / tableId match on this row: exactly one other numeric-keyed array → sole child slice.
+    if (out.length === rowOutBefore) {
+      const ambiguous: any[][] = []
+      for (const [k, v] of Object.entries(sto)) {
+        const kid = Number(k)
+        if (!Number.isFinite(kid) || kid === child.bindingId) continue
+        if (Array.isArray(v) && v.length > 0) ambiguous.push(v)
+      }
+      if (ambiguous.length === 1) {
+        out.push(...ambiguous[0]!)
+      }
+    }
+  }
+  return out
+}
+
+/**
+ * Pull nested child rows from every peer binding's row payloads (same idea as hydrate, without mutating bindings).
+ */
+export function collectNestedChildRowsFromPeerBindings<
+  T extends {
+    bindingId: number
+    tableName: string
+    physicalTableName?: string
+    tableId?: number | null
+    data: any[]
+  },
+>(
+  target: T,
+  peers: T[],
+  bindingTableById?: Map<number, number | null> | null,
+): any[] {
+  const map =
+    bindingTableById != null
+      ? bindingTableById
+      : (() => {
+          const m = new Map<number, number | null>()
+          for (const b of peers) {
+            const tid = b.tableId != null ? Number(b.tableId) : null
+            if (tid != null && Number.isFinite(tid)) m.set(b.bindingId, tid)
+          }
+          return m
+        })()
+  const acc: any[] = []
+  for (const pb of peers) {
+    if (pb.bindingId === target.bindingId) continue
+    acc.push(
+      ...pullNestedRowsForBindingFromParentRows(
+        target,
+        Array.isArray(pb.data) ? pb.data : [],
+        map,
+      ),
+    )
+  }
+  return acc
+}
+
+export function hydrateChildSubTablesFromParentsNestedRows<
+  T extends {
+    bindingId: number
+    tableName: string
+    physicalTableName?: string
+    tableId?: number | null
+    data: any[]
+    primaryKeyFields?: string[] | null | undefined
+  },
+>(
+  bindings: T[],
+  savedSubTables?: Record<string, unknown> | null,
+  bindingTableById?: Map<number, number | null>
+): void {
+  for (const child of bindings) {
+    /**
+     * Flat {@code __subTables__[childBindingId]} may contain thin placeholder rows (assignee-only).
+     * Previously we skipped nested hydration whenever {@code child.data.length > 0}, so fields that only
+     * exist under {@code parent.__subTables__[childBindingId]} never merged — Link-target inline forms stayed empty.
+     */
+    const existing = Array.isArray(child.data) ? child.data : []
+
+    let mergedIncoming: any[] = []
+    for (const parent of bindings) {
+      if (parent.bindingId === child.bindingId) continue
+      mergedIncoming.push(
+        ...pullNestedRowsForBindingFromParentRows(
+          child,
+          Array.isArray(parent.data) ? parent.data : [],
+          bindingTableById
+        )
+      )
+    }
+
+    if (
+      mergedIncoming.length === 0 &&
+      savedSubTables &&
+      typeof savedSubTables === 'object'
+    ) {
+      const flattened: any[] = []
+      for (const val of Object.values(savedSubTables)) {
+        if (Array.isArray(val)) flattened.push(...val)
+      }
+      mergedIncoming = pullNestedRowsForBindingFromParentRows(child, flattened, bindingTableById)
+    }
+
+    if (mergedIncoming.length === 0) continue
+    const pk = child.primaryKeyFields ?? null
+    child.data = cloneSubTableRows(mergeSubTableRowsByRowId(existing, mergedIncoming, pk))
+  }
 }

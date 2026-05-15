@@ -206,6 +206,83 @@ export function normalizePortalViews(input: Partial<SubTablePortalViews> | undef
   }
 }
 
+/**
+ * Form-create injects a full default {@code props.portalViews} on every subTable widget (see
+ * developer-workstation {@code main.ts} rule). That object must not count as an intentional canvas
+ * override — otherwise it always wins merge over {@code configJson.subTablePortalViews[bindingId]}
+ * (designers often configure display only on the binding bar, especially inside nested sub-forms).
+ *
+ * Partial widgets (e.g. only {@code assigneeTodo: 'tableOnly'}) are treated as explicit overrides.
+ */
+function isImplicitFactorySubTablePortalViews(raw: Partial<SubTablePortalViews> | undefined | null): boolean {
+  if (!raw || typeof raw !== 'object') return false
+  if (!('assigneeTodo' in raw) || !('initiatorRequest' in raw) || !('assigneeTodoFormSource' in raw)) return false
+  if (raw.assigneeTodo !== 'tableOnly') return false
+  if (raw.initiatorRequest !== 'mirrorTodo') return false
+  const fs = raw.assigneeTodoFormSource
+  if (!fs || typeof fs !== 'object') return false
+  if (fs.type !== 'subForm') return false
+  const fid = fs.formId as unknown
+  if (fid != null && fid !== '') return false
+  const lid = fs.linkFormColumnId as unknown
+  if (lid != null && lid !== '') return false
+  return true
+}
+
+/**
+ * Merge canvas `rule.props.portalViews` with `configJson.subTablePortalViews[bindingId]` the same way
+ * developer-workstation {@code FormDesigner.mergePortalViewsForPreview} does — so Portal runtime matches
+ * what designers see after editing only the sub-table binding bar (画布节点仍留着默认 tableOnly 时不再覆盖绑定上的 form below)。
+ */
+export function mergeSubTablePortalViewsForRuntime(
+  widgetPv: Partial<SubTablePortalViews> | undefined,
+  bindingPvRaw: Partial<SubTablePortalViews> | Record<string, unknown> | null | undefined
+): SubTablePortalViews {
+  const base = normalizePortalViews(bindingPvRaw as Partial<SubTablePortalViews> | undefined)
+  if (!widgetPv || typeof widgetPv !== 'object') {
+    return base
+  }
+  if (isImplicitFactorySubTablePortalViews(widgetPv)) {
+    return base
+  }
+
+  const ov = widgetPv
+  const assigneeTodo: SubTableAssigneeTodoMode =
+    ov.assigneeTodo === 'formBelowTable'
+      ? 'formBelowTable'
+      : ov.assigneeTodo === 'tableOnly'
+        ? 'tableOnly'
+        : base.assigneeTodo
+
+  let initiatorRequest = base.initiatorRequest
+  if (ov.initiatorRequest === 'summaryWithLinkFormModal') {
+    initiatorRequest = 'summaryWithLinkFormModal'
+  } else if (ov.initiatorRequest === 'tableOnly') {
+    initiatorRequest = 'tableOnly'
+  } else if (ov.initiatorRequest === 'mirrorTodo') {
+    initiatorRequest = 'mirrorTodo'
+  }
+
+  const bSrc = base.assigneeTodoFormSource
+  const oSrc = ov.assigneeTodoFormSource && typeof ov.assigneeTodoFormSource === 'object' ? ov.assigneeTodoFormSource : null
+  const mergedType: SubTableFormSourceType =
+    oSrc?.type === 'linkForm'
+      ? 'linkForm'
+      : oSrc?.type === 'formId'
+        ? 'formId'
+        : bSrc.type
+
+  return normalizePortalViews({
+    assigneeTodo,
+    initiatorRequest,
+    assigneeTodoFormSource: {
+      type: mergedType,
+      formId: (oSrc?.formId ?? bSrc.formId) ?? null,
+      linkFormColumnId: (oSrc?.linkFormColumnId ?? bSrc.linkFormColumnId) ?? null
+    }
+  })
+}
+
 function getLayoutKey(item: Record<string, unknown>, index: number, fallback: string): string {
   return String(item.field || item.name || item.id || `__layout_${fallback}_${index}`)
 }

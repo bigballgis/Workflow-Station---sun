@@ -1,6 +1,7 @@
 package com.portal.component;
 
 import com.portal.client.WorkflowEngineClient;
+import com.portal.debug.PortalDebugNdjson;
 import com.portal.dto.PageResponse;
 import com.portal.dto.TaskActionInfo;
 import com.portal.dto.TaskInfo;
@@ -70,6 +71,11 @@ public class TaskQueryComponent {
     @Lazy
     @Autowired
     private TaskProcessComponent taskProcessComponent;
+
+    /** Lazy: merge physical relation-table rows into task variables (same as process detail). */
+    @Lazy
+    @Autowired
+    private ProcessComponent processComponent;
 
     @PostConstruct
     public void init() {
@@ -773,7 +779,10 @@ public class TaskQueryComponent {
                                 // Override with local DB variables (more complete, includes __subTables__)
                                 merged.putAll(pi.getVariables());
                                 enrichMissingParticipantRowIdsInSubTables(merged);
+                                processComponent.enrichSubTablesVariablesFromPhysicalTables(processInstanceId, merged);
                                 enrichParticipantAssignmentData(merged);
+                                logSubTablesDiagnostic(taskId, processInstanceId,
+                                        taskInfo.getTaskDefinitionKey(), merged);
                                 taskInfo.setVariables(merged);
                                 log.debug("Merged variables from local DB for process {}, keys: {}", 
                                     processInstanceId, merged.keySet());
@@ -804,6 +813,110 @@ public class TaskQueryComponent {
         }
         
         return Optional.empty();
+    }
+
+    /**
+     * Observability when running in Docker: summarizes {@code __subTables__} variable shape without logging row payloads.
+     */
+    private void logSubTablesDiagnostic(String taskId, String processInstanceId, String taskDefinitionKey,
+                                        Map<String, Object> mergedVariables) {
+        if (mergedVariables == null || mergedVariables.isEmpty()) {
+            return;
+        }
+        Object raw = mergedVariables.get("__subTables__");
+        if (!(raw instanceof Map<?, ?> subMap)) {
+            log.info("[SubTablesDiag] taskId={} procInst={} taskDefKey={} __subTables__ absentOrNonMap",
+                    taskId, processInstanceId, taskDefinitionKey);
+            return;
+        }
+        StringBuilder detail = new StringBuilder();
+        int rowsWithNestedSubTables = 0;
+        int totalRowsAcrossLists = 0;
+        for (Map.Entry<?, ?> en : subMap.entrySet()) {
+            String key = String.valueOf(en.getKey());
+            Object val = en.getValue();
+            if (val instanceof List<?> list) {
+                totalRowsAcrossLists += list.size();
+                detail.append(key).append(":list(n=").append(list.size()).append("); ");
+                for (Object row : list) {
+                    if (!(row instanceof Map<?, ?> rm)) {
+                        continue;
+                    }
+                    Object nested = rm.get("__subTables__");
+                    if (nested instanceof Map<?, ?> nm && !nm.isEmpty()) {
+                        rowsWithNestedSubTables++;
+                    }
+                }
+            } else {
+                detail.append(key).append(":type=").append(val == null ? "null" : val.getClass().getSimpleName()).append("; ");
+            }
+        }
+        log.info("[SubTablesDiag] taskId={} procInst={} taskDefKey={} sliceKeys={} totalRowsAcrossLists={} rowsWithNestedRowSubTables={} {}",
+                taskId, processInstanceId, taskDefinitionKey, subMap.keySet(),
+                totalRowsAcrossLists, rowsWithNestedSubTables, detail);
+        try {
+            Map<String, Object> nd = new LinkedHashMap<>();
+            nd.put("taskId", taskId);
+            nd.put("processInstanceId", processInstanceId);
+            nd.put("taskDefinitionKey", taskDefinitionKey);
+            nd.put("subTableSliceKeys", new ArrayList<>(subMap.keySet()));
+            nd.put("totalRowsAcrossLists", totalRowsAcrossLists);
+            nd.put("rowsWithNestedRowSubTables", rowsWithNestedSubTables);
+            nd.put("subTableSlicesDetail", buildSubTableSliceDiagnosticsDetail(subMap));
+            Object ci = mergedVariables.get("_currentItem");
+            if (ci instanceof Map<?, ?> cim) {
+                Map<String, Object> cis = new LinkedHashMap<>();
+                List<String> ckeys = new ArrayList<>();
+                for (Object k : cim.keySet()) {
+                    ckeys.add(String.valueOf(k));
+                }
+                ckeys.sort(String::compareTo);
+                cis.put("keys", ckeys);
+                cis.put("rowId", cim.get("rowId"));
+                cis.put("id_idw", cim.get("id_idw"));
+                nd.put("_currentItemSummary", cis);
+            }
+            String session = System.getenv("PORTAL_DEBUG_SESSION_ID");
+            PortalDebugNdjson.append(session != null ? session : "",
+                    "TaskQueryComponent.logSubTablesDiagnostic", "merged variables __subTables__ shape", nd);
+        } catch (Exception ignored) {
+        }
+    }
+
+    /**
+     * Keys / counts only — no cell values.
+     */
+    private Map<String, Object> buildSubTableSliceDiagnosticsDetail(Map<?, ?> subMap) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> en : subMap.entrySet()) {
+            String key = String.valueOf(en.getKey());
+            Object val = en.getValue();
+            Map<String, Object> slice = new LinkedHashMap<>();
+            if (val instanceof List<?> list) {
+                slice.put("rowCount", list.size());
+                if (!list.isEmpty() && list.get(0) instanceof Map<?, ?> rm) {
+                    List<String> row0Keys = new ArrayList<>();
+                    for (Object k : rm.keySet()) {
+                        row0Keys.add(String.valueOf(k));
+                    }
+                    row0Keys.sort(String::compareTo);
+                    slice.put("row0FieldKeys", row0Keys);
+                    Object nest = rm.get("__subTables__");
+                    if (nest instanceof Map<?, ?> nm) {
+                        List<String> nk = new ArrayList<>();
+                        for (Object k : nm.keySet()) {
+                            nk.add(String.valueOf(k));
+                        }
+                        nk.sort(String::compareTo);
+                        slice.put("row0NestedSubTableKeys", nk);
+                    }
+                }
+            } else {
+                slice.put("valueType", val == null ? "null" : val.getClass().getSimpleName());
+            }
+            out.put(key, slice);
+        }
+        return out;
     }
 
     /**

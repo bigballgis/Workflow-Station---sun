@@ -89,7 +89,7 @@
                                   :title="resolveInlineFormTableTitle(child)"
                                   :fields="resolveInlineFormFields(child)"
                                   :current-row="getCurrentRowForInlineForm(child)"
-                                  :readonly="readonly || !isSubTableEditable(child._bindingId)"
+                                  :readonly="inlineSubTableFormReadonly(child)"
                                   :label-width="labelWidth"
                                   @update:row="(row: Record<string, any>) => handleInlineFormUpdate(child, row)"
                                 />
@@ -210,7 +210,7 @@
                         :title="resolveInlineFormTableTitle(field)"
                         :fields="resolveInlineFormFields(field)"
                         :current-row="getCurrentRowForInlineForm(field)"
-                        :readonly="readonly || !isSubTableEditable(field._bindingId)"
+                        :readonly="inlineSubTableFormReadonly(field)"
                         :label-width="labelWidth"
                         @update:row="(row: Record<string, any>) => handleInlineFormUpdate(field, row)"
                       />
@@ -356,7 +356,7 @@
                               :title="resolveInlineFormTableTitle(child)"
                               :fields="resolveInlineFormFields(child)"
                               :current-row="getCurrentRowForInlineForm(child)"
-                              :readonly="readonly || !isSubTableEditable(child._bindingId)"
+                              :readonly="inlineSubTableFormReadonly(child)"
                               :label-width="labelWidth"
                               @update:row="(row: Record<string, any>) => handleInlineFormUpdate(child, row)"
                             />
@@ -477,7 +477,7 @@
                     :title="resolveInlineFormTableTitle(field)"
                     :fields="resolveInlineFormFields(field)"
                     :current-row="getCurrentRowForInlineForm(field)"
-                    :readonly="readonly || !isSubTableEditable(field._bindingId)"
+                    :readonly="inlineSubTableFormReadonly(field)"
                     :label-width="labelWidth"
                     @update:row="(row: Record<string, any>) => handleInlineFormUpdate(field, row)"
                   />
@@ -571,14 +571,19 @@ import FieldRenderer from './FieldRenderer.vue'
 import { BusinessLogicEngine } from './businessLogicEngine'
 import { userApi } from '@/api/user'
 import { resolveAssigneeFieldForBinding } from '@/utils/subTableAssignment'
-import { agentDebugLog } from '@/utils/agentDebugLog'
 import type {
   FormField,
   FormTab,
   FormBusinessLogicConfig,
-  PortalViewContext
+  PortalViewContext,
+  SubTablePortalViews
 } from './formRendererHelpers'
-import { extractFieldsRecursive, resolveSubTableDisplayMode } from './formRendererHelpers'
+import {
+  extractFieldsRecursive,
+  mergeSubTablePortalViewsForRuntime,
+  resolveSubTableDisplayMode
+} from './formRendererHelpers'
+import { mergeSubTableRowsByRowId, collectNestedChildRowsFromPeerBindings } from '@/composables/tasks/shared'
 
 export type { FormField, FormTab }
 
@@ -766,17 +771,19 @@ function showSubTableAssignColumn(bindingId?: number): boolean {
  *   - 'summaryWithLinkFormModal': SubTableField; Details modal flow handled by existing
  *      Link Form column logic inside SubTableField (no inline form below)
  *
- * Resolution precedence:
- *   1. Rule-level `field.portalViews` (set on the SubTable widget in the main form designer)
- *   2. Binding-level `binding.portalViews` (set on the sub-table tab → "portalViews" bar)
- *   3. DEFAULT_PORTAL_VIEWS — tableOnly + mirrorTodo (preserves legacy behavior)
+ * Uses the same portalViews merge as developer-workstation form preview — canvas props and
+ * per-binding {@code configJson.subTablePortalViews[bindingId]} combine per field; explicit canvas
+ * `assigneeTodo` / `initiatorRequest` overrides still win when set.
  */
 function subTableMode(field: FormField): 'tableOnly' | 'formBelowTable' | 'summaryWithLinkFormModal' {
-  if (field.portalViews) {
-    return resolveSubTableDisplayMode(field.portalViews, props.viewContext)
-  }
   const binding = resolveBinding(field._bindingId)
-  return resolveSubTableDisplayMode(binding?.portalViews ?? undefined, props.viewContext)
+  const merged = mergeSubTablePortalViewsForRuntime(field.portalViews, binding?.portalViews)
+  return resolveSubTableDisplayMode(merged, props.viewContext)
+}
+
+function mergedPortalViewsForSubTable(field: FormField): SubTablePortalViews {
+  const binding = resolveBinding(field._bindingId)
+  return mergeSubTablePortalViewsForRuntime(field.portalViews, binding?.portalViews)
 }
 
 /** 发起人「汇总 + Link/Details」：子表单元格内不展开 lookup / 用户快照明细，与设计师意图一致。 */
@@ -809,11 +816,8 @@ function scrollSubTableInlineIntoView(bindingId: number | undefined) {
 }
 
 function effectiveInitiatorRequestPortalMode(field: FormField): string | undefined {
-  const ir = field.portalViews?.initiatorRequest
-  if (typeof ir === 'string' && ir.length > 0) return ir
-  const binding = resolveBinding(field._bindingId)
-  const bir = binding?.portalViews?.initiatorRequest
-  return typeof bir === 'string' ? bir : undefined
+  const ir = mergedPortalViewsForSubTable(field).initiatorRequest
+  return typeof ir === 'string' && ir.length > 0 ? ir : undefined
 }
 
 /** Aligns with application-detail heuristics for MI / snapshot task-status rows. */
@@ -846,57 +850,22 @@ function subTableShowViewDetailInitiator(field: FormField): boolean {
   return bindingHasMiTaskStatusRowsForInitiator(rows)
 }
 
-/**
- * Resolve the effective form-source config from rule-level or binding-level portalViews.
- * Rule-level wins when it explicitly chooses linkForm/formId; otherwise binding-level
- * linkForm/formId wins over rule-level default subForm (normalizePortalViews on the
- * subTable rule often injects type=subForm even when the table binding is linkForm→subtable2).
- */
+/** Form-below 「表单来源」— follows merged portal views (aligned with developer-workstation preview). */
 function resolveAssigneeTodoFormSource(field: FormField): {
   type: 'subForm' | 'linkForm' | 'formId'
   formId?: number | string | null
   linkFormColumnId?: number | string | null
 } {
-  const binding = resolveBinding(field._bindingId)
-  const bindingLevel = (binding?.portalViews as any)?.assigneeTodoFormSource as
-    | { type?: string; formId?: unknown; linkFormColumnId?: unknown }
-    | undefined
-  const placed = field.portalViews?.assigneeTodoFormSource as
-    | { type?: string; formId?: unknown; linkFormColumnId?: unknown }
-    | undefined
-
-  const fieldType = placed?.type
-  const bindingType = bindingLevel?.type
-
-  if (fieldType === 'linkForm' || fieldType === 'formId') {
-    return placed as {
-      type: 'subForm' | 'linkForm' | 'formId'
-      formId?: number | string | null
-      linkFormColumnId?: number | string | null
-    }
+  const src = mergedPortalViewsForSubTable(field).assigneeTodoFormSource ?? {
+    type: 'subForm',
+    formId: null,
+    linkFormColumnId: null
   }
-  if (bindingType === 'linkForm' || bindingType === 'formId') {
-    return bindingLevel as {
-      type: 'subForm' | 'linkForm' | 'formId'
-      formId?: number | string | null
-      linkFormColumnId?: number | string | null
-    }
+  return {
+    type: src.type,
+    formId: src.formId ?? null,
+    linkFormColumnId: src.linkFormColumnId ?? null
   }
-  if (placed && typeof placed === 'object' && placed.type) {
-    return placed as {
-      type: 'subForm' | 'linkForm' | 'formId'
-      formId?: number | string | null
-      linkFormColumnId?: number | string | null
-    }
-  }
-  if (bindingLevel && typeof bindingLevel === 'object' && bindingLevel.type) {
-    return bindingLevel as {
-      type: 'subForm' | 'linkForm' | 'formId'
-      formId?: number | string | null
-      linkFormColumnId?: number | string | null
-    }
-  }
-  return { type: 'subForm', formId: null, linkFormColumnId: null }
 }
 
 /**
@@ -939,14 +908,6 @@ function findLinkFormTargetBinding(field: FormField): SubTableBinding | null {
       if (targetId == null) continue
       const target = resolveBinding(targetId)
       if (target) {
-        // #region agent log
-        agentDebugLog({
-          hypothesisId: 'H2',
-          location: 'FormRenderer.vue:findLinkFormTargetBinding',
-          message: 'link target resolved (picked)',
-          data: { parentBindingId: field._bindingId, targetBindingId: target.bindingId, pickedKey }
-        })
-        // #endregion
         return target
       }
     }
@@ -959,33 +920,9 @@ function findLinkFormTargetBinding(field: FormField): SubTableBinding | null {
     if (targetId == null) continue
     const target = resolveBinding(targetId)
     if (target) {
-      // #region agent log
-      agentDebugLog({
-        hypothesisId: 'H2',
-        location: 'FormRenderer.vue:findLinkFormTargetBinding',
-        message: 'link target resolved (first-match)',
-        data: { parentBindingId: field._bindingId, targetBindingId: target.bindingId, targetIdFromCol: targetId }
-      })
-      // #endregion
       return target
     }
   }
-  // #region agent log
-  const linkLike = cols.filter((c: any) => c?.type === 'linkForm')
-  agentDebugLog({
-    hypothesisId: 'H2',
-    location: 'FormRenderer.vue:findLinkFormTargetBinding',
-    message: 'no link target',
-    data: {
-      parentBindingId: field._bindingId,
-      colsLen: cols.length,
-      colTypes: cols.map((c: any) => c?.type ?? null),
-      linkColsLen: linkLike.length,
-      boundIdsTried: linkLike.map((c: any) => targetBindingIdOf(c)),
-      bindingMapKeys: [...bindingMap.value.keys()]
-    }
-  })
-  // #endregion
   return null
 }
 
@@ -1004,14 +941,6 @@ function resolveInlineFormSourceBinding(field: FormField): SubTableBinding | nul
   if (source.type === 'linkForm') {
     const target = findLinkFormTargetBinding(field)
     if (target) {
-      // #region agent log
-      agentDebugLog({
-        hypothesisId: 'H3',
-        location: 'FormRenderer.vue:resolveInlineFormSourceBinding',
-        message: 'using target (source linkForm)',
-        data: { ownId: own.bindingId, targetId: target.bindingId, viewContext: props.viewContext, mode: subTableMode(field) }
-      })
-      // #endregion
       return target
     }
   }
@@ -1019,33 +948,23 @@ function resolveInlineFormSourceBinding(field: FormField): SubTableBinding | nul
   if (props.viewContext === 'assigneeTodo' && subTableMode(field) === 'formBelowTable') {
     const target = findLinkFormTargetBinding(field)
     if (target && target.bindingId !== own.bindingId) {
-      // #region agent log
-      agentDebugLog({
-        hypothesisId: 'H3',
-        location: 'FormRenderer.vue:resolveInlineFormSourceBinding',
-        message: 'using target (assigneeTodo formBelow)',
-        data: { ownId: own.bindingId, targetId: target.bindingId, sourceType: source.type }
-      })
-      // #endregion
       return target
     }
   }
-  // #region agent log
-  agentDebugLog({
-    hypothesisId: 'H3',
-    location: 'FormRenderer.vue:resolveInlineFormSourceBinding',
-    message: 'fallback own binding',
-    data: {
-      ownId: own.bindingId,
-      viewContext: props.viewContext,
-      mode: subTableMode(field),
-      sourceType: source.type,
-      assigneeTodoButNoTarget: props.viewContext === 'assigneeTodo' && subTableMode(field) === 'formBelowTable'
-    }
-  })
-  // #endregion
   // `formId` is not yet runtime-resolved here (would need cross-form schema lookup); fall through.
   return own
+}
+
+/**
+ * 「表格下内联表单」应对齐 Link 目标子表/自身子表的 bindingMode，而不是 {@code primaryReadOnly}
+ * （主表只读时子表仍可编辑 — 与同页的 {@code SubTableField} 一致）。
+ */
+function inlineSubTableFormReadonly(field: FormField): boolean {
+  if (props.readonly) return true
+  const src = resolveInlineFormSourceBinding(field)
+  if (!src) return true
+  if (props.previewSubTables) return false
+  return src.bindingMode !== 'EDITABLE'
 }
 
 /** 内联表单标题：与字段/schema 来源一致（linkForm→subtable2 时显示子表名，而非父表）。 */
@@ -1063,25 +982,8 @@ function resolveInlineFormTableTitle(field: FormField): string {
  *   - `formId`: not yet runtime-supported; falls back to `subForm`
  */
 function resolveInlineFormFields(field: FormField): FormField[] {
-  const mode = subTableMode(field)
   const source = resolveInlineFormSourceBinding(field)
   const fields = Array.isArray(source?.formFields) ? source!.formFields : []
-  // #region agent log
-  agentDebugLog({
-    hypothesisId: 'H4',
-    location: 'FormRenderer.vue:resolveInlineFormFields',
-    message: 'inline form fields',
-    data: {
-      fieldKey: field.key,
-      placedBindingId: field._bindingId,
-      sourceBindingId: source?.bindingId ?? null,
-      sourceTableName: source?.tableName ?? null,
-      formFieldsLen: fields.length,
-      viewContext: props.viewContext,
-      subTableMode: mode
-    }
-  })
-  // #endregion
   return fields
 }
 
@@ -1091,7 +993,7 @@ function resolveLinkFkCandidates(target: SubTableBinding): string[] {
   const explicit = (target as any).foreignKeyField
   if (explicit && String(explicit).trim()) list.push(String(explicit))
   // Same heuristic used by SubTableField's Link Form modal so designer/runtime agree.
-  for (const k of ['participant_id', 'participantId', 'parent_id', 'parentId', 'id_idw']) {
+  for (const k of ['participant_id', 'participantId', 'parent_id', 'parentId', 'meeting_participant_id']) {
     if (!list.includes(k)) list.push(k)
   }
   return list
@@ -1108,6 +1010,72 @@ function rowMatchesMiElementId(rec: Record<string, unknown>, parentId: string | 
 }
 
 /**
+ * Persisted {@code target.data} may be empty/thin while child rows still live under parent rows'
+ * {@code __subTables__}; merge those for inline form-below-table display and save.
+ */
+function mergeRowsForInlineFormTarget(field: FormField): {
+  target: SubTableBinding
+  rows: any[]
+  isLinkTarget: boolean
+} | null {
+  const own = resolveBinding(field._bindingId)
+  if (!own) return null
+  const target = resolveInlineFormSourceBinding(field) ?? own
+  const isLinkTarget = target.bindingId !== own.bindingId
+  const peers = linkableSubTableBindings.value ?? []
+  const nestedFromTarget = collectNestedChildRowsFromPeerBindings(target, peers, null)
+  const pk = target.primaryKeyFields ?? own.primaryKeyFields ?? null
+  /** Table grid uses `own.data`; link-form inline uses `target` — merge both so the row list matches the grid. */
+  let merged = mergeSubTableRowsByRowId(
+    Array.isArray(own.data) ? own.data : [],
+    Array.isArray(target.data) ? target.data : [],
+    pk,
+  )
+  merged = mergeSubTableRowsByRowId(merged, nestedFromTarget, pk)
+  return {
+    target,
+    isLinkTarget,
+    rows: merged.map(r => ({ ...(r as Record<string, any>) })),
+  }
+}
+
+/** Prefer "fat" snapshot rows when many duplicates exist (preview/read-only diagram clicks often defaulted to rows[0] thin placeholders). */
+function scoreInlineRowCompleteness(row: unknown, field: FormField): number {
+  if (!row || typeof row !== 'object') return 0
+  const rec = row as Record<string, unknown>
+  const layoutKeys = resolveInlineFormFields(field).map(f => f.key).filter((k): k is string => typeof k === 'string' && k.length > 0)
+  const keys =
+    layoutKeys.length > 0
+      ? layoutKeys
+      : Object.keys(rec).filter(k => !k.startsWith('__'))
+  let score = 0
+  for (const k of keys) {
+    const v = rec[k]
+    if (v === undefined || v === null) continue
+    if (typeof v === 'string' && v.trim() === '') continue
+    score++
+  }
+  return score
+}
+
+function pickPreferredInlineRow(rows: any[], field: FormField): any | null {
+  if (!rows.length) return null
+  if (rows.length === 1) return rows[0]
+  if (!(effectiveReadonly.value && props.previewSubTables)) return rows[0]
+  let best = rows[0]
+  let bestScore = scoreInlineRowCompleteness(best, field)
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i]
+    const s = scoreInlineRowCompleteness(r, field)
+    if (s > bestScore) {
+      best = r
+      bestScore = s
+    }
+  }
+  return best
+}
+
+/**
  * Find the "current row" for inline form-below-table binding.
  *
  * For `subForm` source (own binding):
@@ -1119,16 +1087,37 @@ function rowMatchesMiElementId(rec: Record<string, unknown>, parentId: string | 
  *   2. Else if target has a single row, use it.
  *   3. Else `null` — host renders with empty defaults; first edit creates a new row.
  */
+function findInlineRowIndexForMi(
+  rows: any[],
+  pack: { target: SubTableBinding; isLinkTarget: boolean },
+  parentId: string | number | null | undefined,
+): number {
+  if (parentId == null || String(parentId).trim() === '') return -1
+  const fkList = resolveLinkFkCandidates(pack.target)
+  let idx = rows.findIndex(r => {
+    if (!r || typeof r !== 'object') return false
+    const rec = r as Record<string, unknown>
+    return fkList.some(k => {
+      const v = rec[k]
+      return v != null && v !== '' && String(v) === String(parentId)
+    })
+  })
+  if (idx >= 0) return idx
+  idx = rows.findIndex(r => {
+    if (!r || typeof r !== 'object') return false
+    return rowMatchesMiElementId(r as Record<string, unknown>, parentId)
+  })
+  return idx
+}
+
 function getCurrentRowForInlineForm(field: FormField): Record<string, any> | null {
-  const own = resolveBinding(field._bindingId)
-  if (!own) return null
-  const target = resolveInlineFormSourceBinding(field) ?? own
-  const isLinkTarget = target.bindingId !== own.bindingId
-  const rows = Array.isArray(target.data) ? target.data : []
+  const pack = mergeRowsForInlineFormTarget(field)
+  if (!pack) return null
+  const { rows, isLinkTarget } = pack
   const parentId = props.currentMiRowId
 
   if (isLinkTarget && parentId != null && String(parentId).trim() !== '') {
-    const fkList = resolveLinkFkCandidates(target)
+    const fkList = resolveLinkFkCandidates(pack.target)
     const match = rows.find(r => {
       if (!r || typeof r !== 'object') return false
       const rec = r as Record<string, unknown>
@@ -1138,21 +1127,17 @@ function getCurrentRowForInlineForm(field: FormField): Record<string, any> | nul
       })
     })
     if (match) return { ...(match as Record<string, any>) }
-    if (rows.length === 1) return { ...(rows[0] as Record<string, any>) }
-    return null
+    const pick = pickPreferredInlineRow(rows, field)
+    return pick ? { ...(pick as Record<string, any>) } : null
   }
 
-  // subForm path: row identity is the row's own PK (id / rowId / id_idw, etc.)
+  // subForm path: MI element id often matches a *parent* FK on this row, not the child row PK (e.g. id=999).
   if (parentId != null && String(parentId).trim() !== '') {
-    const match = rows.find(r => {
-      if (!r || typeof r !== 'object') return false
-      const rec = r as Record<string, unknown>
-      return rowMatchesMiElementId(rec, parentId)
-    })
-    if (match) return { ...(match as Record<string, any>) }
+    const idx = findInlineRowIndexForMi(rows, pack, parentId)
+    if (idx >= 0) return { ...(rows[idx] as Record<string, any>) }
   }
-  if (rows.length === 1) return { ...(rows[0] as Record<string, any>) }
-  return null
+  const pick = pickPreferredInlineRow(rows, field)
+  return pick ? { ...(pick as Record<string, any>) } : null
 }
 
 /**
@@ -1166,11 +1151,9 @@ function getCurrentRowForInlineForm(field: FormField): Record<string, any> | nul
  * within the existing dw_table_data → child-rows pipeline.
  */
 function handleInlineFormUpdate(field: FormField, mergedRow: Record<string, any>) {
-  const own = resolveBinding(field._bindingId)
-  if (!own) return
-  const target = resolveInlineFormSourceBinding(field) ?? own
-  const isLinkTarget = target.bindingId !== own.bindingId
-  const rows = Array.isArray(target.data) ? target.data.map(r => ({ ...(r as Record<string, any>) })) : []
+  const pack = mergeRowsForInlineFormTarget(field)
+  if (!pack) return
+  const { target, rows, isLinkTarget } = pack
   const parentId = props.currentMiRowId
 
   let idx = -1
@@ -1184,15 +1167,16 @@ function handleInlineFormUpdate(field: FormField, mergedRow: Record<string, any>
         return v != null && v !== '' && String(v) === String(parentId)
       })
     })
+    if (idx < 0 && rows.length === 1) idx = 0
   } else if (isLinkTarget && rows.length === 1) {
     idx = 0
   } else if (parentId != null && String(parentId).trim() !== '') {
-    idx = rows.findIndex(r => {
-      if (!r || typeof r !== 'object') return false
-      const rec = r as Record<string, unknown>
-      return rowMatchesMiElementId(rec, parentId)
-    })
+    idx = findInlineRowIndexForMi(rows, pack, parentId)
   } else if (rows.length === 1) {
+    idx = 0
+  }
+
+  if (idx < 0 && rows.length > 0) {
     idx = 0
   }
 
@@ -1206,11 +1190,19 @@ function handleInlineFormUpdate(field: FormField, mergedRow: Record<string, any>
       const fkField = explicit && String(explicit).trim() ? String(explicit) : 'parent_id'
       if (fresh[fkField] == null || fresh[fkField] === '') fresh[fkField] = parentId
     }
+    if (!isLinkTarget && parentId != null && String(parentId).trim() !== '') {
+      const fkList = resolveLinkFkCandidates(target)
+      for (const k of fkList) {
+        if (fresh[k] == null || fresh[k] === '') {
+          fresh[k] = parentId
+          break
+        }
+      }
+    }
     rows.push(fresh)
   }
   handleSubTableUpdate(target.bindingId, rows)
 }
-
 // Lookup selected data state
 const lookupSelectedData = ref<Record<string, Record<string, any>>>({})
 const lookupLoadedViewFields = ref<Record<string, any[]>>({})

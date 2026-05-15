@@ -288,7 +288,11 @@ import { relationTableApi } from '@/api/relationTable'
 import { isDisabledMessage } from '@/utils/statusMatcher'
 import { getUser } from '@/api/auth'
 import { isProcessStartBlockedByWorkspace } from '@/utils/workspaceProcessGuard'
-import { resolveSubTablePrimaryKeyFields } from '@/composables/tasks/shared'
+import {
+  normalizeSubTableName,
+  resolveSubTablePrimaryKeyFields,
+  flattenNestedSubTableRowsIntoPayload
+} from '@/composables/tasks/shared'
 
 const route = useRoute()
 const router = useRouter()
@@ -350,6 +354,23 @@ const subTableBindings = ref<Array<{
   columns: Array<{ field: string; label: string; type?: string }>
   data: any[]
 }>>([])
+
+/** Match task detail / autosave: key __subTables__ by binding id and table display name so downstream forms with new bindingIds can resolve rows. */
+function buildStartFormSubTablesPayload(): Record<string, unknown> {
+  const subTables: Record<string, unknown> = {}
+  for (const b of subTableBindings.value) {
+    const rows = b.data
+    subTables[b.bindingId] = rows
+    subTables[String(b.bindingId)] = rows
+    const tn = String(b.tableName || '').trim()
+    if (tn) {
+      subTables[tn] = rows
+      subTables[normalizeSubTableName(tn)] = rows
+    }
+  }
+  flattenNestedSubTableRowsIntoPayload(subTables)
+  return subTables
+}
 
 const placedBindingIds = computed((): Set<number> => {
   const ids = new Set<number>()
@@ -712,8 +733,10 @@ const loadDraftData = async () => {
       // 恢复子表数据
       // 注意：JSON 序列化后 key 变为 string，需同时用 number 和 string 查找
       if (__subTables__ && typeof __subTables__ === 'object') {
+        const st = JSON.parse(JSON.stringify(__subTables__)) as Record<string, unknown>
+        flattenNestedSubTableRowsIntoPayload(st)
         subTableBindings.value.forEach(binding => {
-          const saved = __subTables__[binding.bindingId] ?? __subTables__[String(binding.bindingId)]
+          const saved = st[binding.bindingId] ?? st[String(binding.bindingId)]
           if (Array.isArray(saved)) {
             binding.data = saved
           }
@@ -1386,9 +1409,7 @@ const handleSaveDraft = async () => {
     // Include sub-table data in draft
     const draftData = {
       ...formData.value,
-      __subTables__: Object.fromEntries(
-        subTableBindings.value.map(b => [b.bindingId, b.data])
-      )
+      __subTables__: buildStartFormSubTablesPayload()
     }
     await processApi.saveDraft(functionUnitCode.value || functionUnitId.value, draftData)
     ElMessage.success(t('processStart.draftSaved'))
@@ -1513,9 +1534,7 @@ const handleSubmit = async () => {
       processDefinitionKey: procKey,
       formData: {
         ...formData.value,
-        __subTables__: Object.fromEntries(
-          subTableBindings.value.map(b => [b.bindingId, b.data])
-        )
+        __subTables__: buildStartFormSubTablesPayload()
       },
       priority: 'NORMAL'
     })

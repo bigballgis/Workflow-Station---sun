@@ -9,7 +9,9 @@ import com.portal.exception.PortalException;
 import com.portal.repository.ProcessInstanceRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,6 +44,11 @@ public class TaskFormComponent {
     private final ObjectMapper objectMapper;
     private final JdbcTemplate jdbcTemplate;
 
+    /** Lazy: merges physical relation-table rows into task-form variable payloads without widening ctor for tests. */
+    @Lazy
+    @Autowired
+    private ProcessComponent processComponent;
+
     @Value("${developer-workstation.url:http://localhost:8091}")
     private String developerWorkstationUrl;
 
@@ -71,6 +78,10 @@ public class TaskFormComponent {
         Map<String, Object> allVariables = processInstance.getVariables() != null
                 ? processInstance.getVariables()
                 : Collections.emptyMap();
+        Map<String, Object> hydratedVariables = new HashMap<>(allVariables);
+        if (processComponent != null) {
+            processComponent.enrichSubTablesVariablesFromPhysicalTables(taskInfo.processInstanceId, hydratedVariables);
+        }
 
         // Get Process Form reference data
         ProcessFormData processFormRef = processFormComponent.getProcessFormData(taskInfo.processInstanceId);
@@ -102,7 +113,12 @@ public class TaskFormComponent {
                 : false;
 
         // Get field values from process variables (subset based on fieldPermissions keys)
-        Map<String, Object> fieldValues = extractFieldSubset(allVariables, fieldPermissions.keySet());
+        Map<String, Object> fieldValues = extractFieldSubset(hydratedVariables, fieldPermissions.keySet());
+        // Mirror persistTaskFormSnapshot: always attach live __subTables__ when present so nested /
+        // copied-task bindings hydrate even if fieldPermissions omits or carries a stale __subTables__ entry.
+        if (hydratedVariables.containsKey("__subTables__")) {
+            fieldValues.put("__subTables__", hydratedVariables.get("__subTables__"));
+        }
 
         return TaskFormData.builder()
                 .taskId(taskId)

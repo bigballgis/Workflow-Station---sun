@@ -3,14 +3,14 @@
 > **详细信息已迁移到 `.kiro/issues/index.yaml`**
 > 本文件仅保留统计摘要和当前待处理清单。
 
-## 统计 (截至 2026-05-14)
+## 统计 (截至 2026-05-15)
 
 | 状态 | 数量 |
 |------|------|
-| ✅ Fixed | **156** |
-| 🔓 Open | **10** |
+| ✅ Fixed | **158** |
+| 🔓 Open | **13** |
 | ⏸️ Wontfix | **1** |
-| **总计** | **167** |
+| **总计** | **172** |
 
 按严重度的分布见 `index.yaml` 各条目的 `severity` 字段。
 
@@ -28,6 +28,7 @@
 | 158 | bug | user-portal PortalRelationTableServiceImpl.queryTableData 接收 search 参数但未用于过滤 |
 | 161 | bug | ExportImportComponentImpl.importPackage 未设置 ProcessDefinition.functionUnitVersionId |
 | 162 | bug | DeploymentService.deployFunctionUnit 未显式设置 ProcessDefinition.functionUnitVersionId |
+| 168 | deploy | dev docker-compose n8n healthcheck 用 curl 但镜像无 curl，容器长期 unhealthy |
 
 ### Wontfix
 

@@ -1,5 +1,9 @@
 # Docker profile configuration for user-portal
 # Overrides default settings for Docker environment
+#
+# Task __subTables__ NDJSON diagnostics (portal container):
+# - PORTAL_DEBUG_NDJSON_FILE=/tmp/my-debug.ndjson  (explicit path; omit to use default /tmp/portal-debug.ndjson when profile is docker)
+# - PORTAL_DEBUG_SESSION_ID=your-session            (optional, correlates with frontend debug sessions)
 
 # Application Configuration (platform-common)
 app:
@@ -94,12 +98,6 @@ management:
 platform:
   sso:
     internal-token: ${SSO_INTERNAL_TOKEN:}
-
-# Agent debug NDJSON from SPA → docker logs (override with PORTAL_DEBUG_AGENT_INGEST_ENABLED=false)
-portal:
-  debug:
-    agent-ingest:
-      enabled: ${PORTAL_DEBUG_AGENT_INGEST_ENABLED:true}
 
 # Logging - reduce verbosity in Docker
 logging:

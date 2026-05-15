@@ -192,16 +192,72 @@ function handleClear() {
 
 // Initialize selectedRow and searchKeyword from modelValue (for saved form data)
 function initFromModelValue(val: any) {
-  if (val && typeof val === 'object' && Object.keys(val).length > 0) {
+  // #region agent log
+  {
+    const kind =
+      val == null || val === ''
+        ? 'empty'
+        : typeof val === 'object'
+          ? 'object'
+          : 'scalar'
+    fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'f16271' },
+      body: JSON.stringify({
+        sessionId: 'f16271',
+        location: 'LookupField.vue:initFromModelValue',
+        message: 'lookup modelValue shape',
+        data: {
+          kind,
+          objKeyCount: typeof val === 'object' && val != null ? Object.keys(val).length : 0,
+        },
+        timestamp: Date.now(),
+        hypothesisId: 'H2',
+      }),
+    }).catch(() => {})
+  }
+  // #endregion
+  if (val == null || val === '') {
+    selectedRow.value = null
+    searchKeyword.value = ''
+    return
+  }
+  // Process variables often persist lookup as a scalar id/string — readonly inline rows otherwise render "-" forever.
+  if (typeof val === 'number' || typeof val === 'bigint' || typeof val === 'boolean') {
+    const scalarRow = buildSyntheticLookupRow(val)
+    selectedRow.value = scalarRow
+    searchKeyword.value = String(getDisplayValue(scalarRow) ?? val ?? '')
+    emit('select', scalarRow)
+    return
+  }
+  if (typeof val === 'string') {
+    const t = val.trim()
+    if (t === '') {
+      selectedRow.value = null
+      searchKeyword.value = ''
+      return
+    }
+    const scalarRow = buildSyntheticLookupRow(t)
+    selectedRow.value = scalarRow
+    searchKeyword.value = String(getDisplayValue(scalarRow) ?? t)
+    emit('select', scalarRow)
+    return
+  }
+  if (typeof val === 'object' && Object.keys(val).length > 0) {
     selectedRow.value = val
     const displayVal = getDisplayValue(val)
     searchKeyword.value = String(displayVal ?? '')
-    // Also emit select so FormRenderer populates lookupSelectedData for the view display
     emit('select', val)
-  } else if (!val) {
-    selectedRow.value = null
-    searchKeyword.value = ''
   }
+}
+
+/** Minimal row shape so getDisplayValue / LookupViewDisplay have stable keys for persisted scalar lookups */
+function buildSyntheticLookupRow(raw: number | bigint | boolean | string): Record<string, any> {
+  const df = props.selectedDisplayField || props.displayField
+  const row: Record<string, any> = {}
+  if (df && String(df).trim()) row[String(df)] = raw
+  if (row.id === undefined) row.id = raw
+  return row
 }
 
 function getDisplayValue(row: Record<string, any>) {
@@ -210,11 +266,13 @@ function getDisplayValue(row: Record<string, any>) {
 }
 
 // Watch for external modelValue changes (e.g. form data loaded after mount)
-watch(() => props.modelValue, (val) => {
-  if (!selectedRow.value && val && typeof val === 'object' && Object.keys(val).length > 0) {
+watch(
+  () => props.modelValue,
+  val => {
     initFromModelValue(val)
-  }
-})
+  },
+  { immediate: true, deep: true },
+)
 
 watch(
   () => [props.tableId, props.searchFields, props.displayField, props.filterConditions],
@@ -233,9 +291,6 @@ function onClickOutside(e: MouseEvent) {
 
 onMounted(() => {
   document.addEventListener('mousedown', onClickOutside)
-
-  // Initialize from existing modelValue (e.g. when loading saved form data)
-  initFromModelValue(props.modelValue)
 
   // Eagerly load view fields so LookupViewDisplay can show them after selection
   if (props.tableId && !effectiveViewFields.value.length) {

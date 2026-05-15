@@ -161,7 +161,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, watch } from 'vue'
+import { computed, reactive } from 'vue'
 import { useI18n } from 'vue-i18n'
 import SubTableField from './SubTableField.vue'
 import LookupPreview from './LookupPreview.vue'
@@ -196,33 +196,6 @@ function subTableFormPreviewTabModel(idx: number): string {
 function setSubTableFormPreviewTabModel(idx: number, name: string | number) {
   subTableFormPreviewTab[idx] = String(name)
 }
-
-function logSubTablePreviewBranches(items: FormPreviewItem[]) {
-  const walk = (list: FormPreviewItem[], depth: number) => {
-    list.forEach((item, idx) => {
-      if (item.kind === 'card') {
-        walk(item.items, depth + 1)
-        return
-      }
-      if (item.kind !== 'subTable') return
-      const dual = isDualPortalSubTablePreview(item.binding)
-      const cols = item.binding.columns?.length ?? 0
-      const wouldDualBranch = cols > 0 && dual
-      // #region agent log
-      fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '552819' }, body: JSON.stringify({ sessionId: '552819', location: 'FormPreviewItems.vue:logSubTablePreviewBranches', message: 'FormPreviewItems branch', data: { hypothesisId: 'H3-H4-H5', depth, idx, bindingId: item.binding.bindingId, portalViews: item.binding.portalViews, columnsLen: cols, isDualCalc: dual, wouldDualBranch }, timestamp: Date.now() }) }).catch(() => {})
-      // #endregion
-    })
-  }
-  walk(items, 0)
-}
-
-watch(
-  () => props.items,
-  items => {
-    logSubTablePreviewBranches(items)
-  },
-  { deep: true, immediate: true }
-)
 
 const previewModel = computed({
   get: () => props.previewData,

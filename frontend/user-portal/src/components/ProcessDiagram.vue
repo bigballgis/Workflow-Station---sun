@@ -180,10 +180,20 @@ const applyStatusColors = () => {
       el.style.stroke = stroke
       el.style.strokeWidth = '2px'
     })
-    // Also handle path shapes (e.g. end event double-circle border)
+    // Path shapes: end event circles, XOR bodies, and inner X strokes (gateways often use stroke-only paths)
     const paths = visual.querySelectorAll('path')
     paths.forEach(path => {
       const el = path as SVGElement
+      if (node.type === 'gateway') {
+        el.style.stroke = stroke
+        el.style.strokeWidth = '2px'
+        const attrFill = path.getAttribute('fill')
+        const isOpenPath = (!el.style.fill || el.style.fill === 'none') && (!attrFill || attrFill === 'none')
+        if (!isOpenPath) {
+          el.style.fill = fill
+        }
+        return
+      }
       if (!el.style.fill || el.style.fill === 'none') return
       el.style.fill = fill
       el.style.stroke = stroke
@@ -348,9 +358,13 @@ watch(() => props.bpmnXml, async (xml) => {
   }
 }, { immediate: false })
 
-watch([() => props.nodes, () => props.completedNodeIds, () => props.currentNodeId, () => props.selectedNodeId], () => {
-  applyStatusColors()
-}, { deep: true })
+watch(
+  [() => props.nodes, () => props.completedNodeIds, () => props.currentNodeId, () => props.selectedNodeId],
+  () => {
+    applyStatusColors()
+  },
+  { deep: true }
+)
 
 onMounted(async () => {
   if (props.bpmnXml) {

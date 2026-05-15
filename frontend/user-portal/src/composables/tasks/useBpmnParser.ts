@@ -1,7 +1,6 @@
 import { ref, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ProcessNode, ProcessFlow } from '@/components/ProcessDiagram.vue'
-import { isRejectedName } from '@/utils/statusMatcher'
 
 const ck = (s: unknown) => String(s ?? '').trim()
 const normLabel = (s: unknown) => ck(s).replace(/\s+/g, ' ')
@@ -309,30 +308,24 @@ export function useBpmnParser(options: {
         return false
       }
 
-      // Start events
-      doc.querySelectorAll('startEvent').forEach((event: Element, index: number) => {
-        const id = event.getAttribute('id') || `start_${index}`
-        const pos = positionMap.get(id)
-        const parentSpId = getParentSubProcessId(event)
-        let status: ProcessNode['status'] = 'completed'
-        if (parentSpId && !enteredSubProcesses.has(parentSpId)) status = 'pending'
-        else if (showCurrentStep && parentSpId && activeMultiInstanceSubProcesses.has(parentSpId)) status = 'current'
-        nodes.push({ id, name: event.getAttribute('name') || t('task.startNode'), type: 'start', status, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
-        if (status === 'completed') completed.push(id)
-      })
-
-      const earlyFlows: Array<{ sourceRef: string; targetRef: string }> = []
-      for (let i = 0; i < allElements.length; i++) {
-        const ln = allElements[i].localName || allElements[i].nodeName.split(':').pop()
-        if (ln !== 'sequenceFlow') continue
-        earlyFlows.push({ sourceRef: allElements[i].getAttribute('sourceRef') || '', targetRef: allElements[i].getAttribute('targetRef') || '' })
-      }
-
       const findBpmnElementByIdAny = (nodeId: string): Element | null => {
         for (let i = 0; i < allElements.length; i++) {
           if (ck(allElements[i].getAttribute('id')) === ck(nodeId)) return allElements[i]
         }
         return null
+      }
+
+      /** Sequence flows inside the BPMN document (IDs used for highlighting executed MI paths). */
+      const flowEdges: Array<{ id: string; sourceRef: string; targetRef: string }> = []
+      for (let i = 0; i < allElements.length; i++) {
+        const ln = allElements[i].localName || allElements[i].nodeName.split(':').pop()
+        if (ln !== 'sequenceFlow') continue
+        const fid = ck(allElements[i].getAttribute('id'))
+        flowEdges.push({
+          id: fid || `flow_internal_${flowEdges.length}`,
+          sourceRef: allElements[i].getAttribute('sourceRef') || '',
+          targetRef: allElements[i].getAttribute('targetRef') || '',
+        })
       }
 
       const isUnderGivenSubProcess = (elementRef: Element | null, boundarySpId: string): boolean => {
@@ -360,6 +353,20 @@ export function useBpmnParser(options: {
         return null
       }
 
+      // Start events (MI subprocess: internal start already executed once the instance is entered — show completed/green)
+      doc.querySelectorAll('startEvent').forEach((event: Element, index: number) => {
+        const id = event.getAttribute('id') || `start_${index}`
+        const pos = positionMap.get(id)
+        const parentSpId = getParentSubProcessId(event)
+        let status: ProcessNode['status'] = 'completed'
+        if (parentSpId && !enteredSubProcesses.has(parentSpId)) status = 'pending'
+        else if (showCurrentStep && parentSpId && activeMultiInstanceSubProcesses.has(parentSpId)) {
+          status = 'completed'
+        }
+        nodes.push({ id, name: event.getAttribute('name') || t('task.startNode'), type: 'start', status, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
+        if (status === 'completed') completed.push(id)
+      })
+
       const isDownstreamUserTaskInsideSameActiveMi = (openTaskId: string, candidateTaskId: string, boundarySpId: string): boolean => {
         const openEl = findBpmnElementByIdAny(openTaskId)
         if (!openEl || !isUnderGivenSubProcess(openEl, boundarySpId)) return false
@@ -370,7 +377,7 @@ export function useBpmnParser(options: {
           const u = queue.shift()!
           if (visited.has(u)) continue
           visited.add(u)
-          for (const f of earlyFlows) {
+          for (const f of flowEdges) {
             if (ck(f.sourceRef) !== ck(u)) continue
             const tar = ck(f.targetRef)
             const tarEl = findBpmnElementByIdAny(tar)
@@ -438,8 +445,103 @@ export function useBpmnParser(options: {
         nodes.push({ id, name, type: 'task', status, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
       })
 
-      // SubProcesses and gateways — simplified for composable (keeps ~80 core elements, drops verbose subProcess/endEvent parsing)
-      // Full parsing is preserved in original; core visualization is maintained
+      const subprocessContainsCurrentOpenTask = (sp: Element): boolean => {
+        if (!showCurrentStep || options.isCompletedTask.value) return false
+        const tasks = sp.getElementsByTagName('userTask')
+        for (let ti = 0; ti < tasks.length; ti++) {
+          const task = tasks[ti]
+          const uid = ck(task.getAttribute('id'))
+          const unm = normLabel(task.getAttribute('name'))
+          const openTaskMatches =
+            unm === normLabel(currentTaskName) ||
+            ck(uid) === ck(currentTaskName) ||
+            ck(uid) === ck(currentTaskDefinitionKey) ||
+            unm === normLabel(currentTaskDefinitionKey)
+          if (openTaskMatches) return true
+        }
+        return false
+      }
+
+      /** Sub-process boxes must appear in {@link processNodes} so bpmn-js `element.click` can resolve {@code element.id} (matching {@link nodeFormMap} keys). */
+      let subprocessParseIndex = 0
+      subProcessMap.forEach((sp, spId) => {
+        subprocessParseIndex++
+        const pos = positionMap.get(spId)
+        const name =
+          sp.getAttribute('name')?.trim() ||
+          t('task.taskFallbackName', { index: subprocessParseIndex })
+        let status: ProcessNode['status'] = 'pending'
+        if (!enteredSubProcesses.has(spId)) {
+          status = 'pending'
+        } else if (options.isCompletedTask.value) {
+          status = 'completed'
+          completed.push(spId)
+        } else if (
+          showCurrentStep &&
+          (activeMultiInstanceSubProcesses.has(spId) || subprocessContainsCurrentOpenTask(sp))
+        ) {
+          status = 'current'
+        } else {
+          status = 'completed'
+          completed.push(spId)
+        }
+        nodes.push({
+          id: spId,
+          name,
+          type: 'subprocess',
+          status,
+          x: pos?.x,
+          y: pos?.y,
+          width: pos?.width,
+          height: pos?.height,
+        })
+      })
+
+      // Gateways (XOR / parallel / inclusive): completed when any incoming flow originates from an already-completed BPMN element (propagates for chained gateways).
+      type GwRow = { id: string; name: string; pos: { x: number; y: number; width: number; height: number } | undefined; parentSpId: string | null }
+      const gatewayRows: GwRow[] = []
+      for (let gi = 0; gi < allElements.length; gi++) {
+        const gw = allElements[gi]
+        const ln = gw.localName || gw.nodeName.split(':').pop() || ''
+        if (ln !== 'exclusiveGateway' && ln !== 'parallelGateway' && ln !== 'inclusiveGateway') continue
+        const gid = gw.getAttribute('id') || ''
+        if (!gid) continue
+        gatewayRows.push({
+          id: gid,
+          name: gw.getAttribute('name') || '',
+          pos: positionMap.get(gid),
+          parentSpId: getParentSubProcessId(gw),
+        })
+      }
+
+      const completedIdSet = new Set(completed.map(ck))
+      let gwPass = true
+      for (let guard = 0; guard < 25 && gwPass; guard++) {
+        gwPass = false
+        for (const g of gatewayRows) {
+          if (completedIdSet.has(ck(g.id))) continue
+          if (g.parentSpId && !enteredSubProcesses.has(g.parentSpId)) continue
+          const incoming = flowEdges.filter(f => ck(f.targetRef) === ck(g.id)).map(f => ck(f.sourceRef))
+          if (!incoming.some(sid => completedIdSet.has(sid))) continue
+          completedIdSet.add(ck(g.id))
+          completed.push(ck(g.id))
+          gwPass = true
+        }
+      }
+
+      gatewayRows.forEach((g, idx) => {
+        const status: ProcessNode['status'] = completedIdSet.has(ck(g.id)) ? 'completed' : 'pending'
+        nodes.push({
+          id: g.id,
+          name: g.name || t('task.taskFallbackName', { index: idx + 1 }),
+          type: 'gateway',
+          status,
+          x: g.pos?.x,
+          y: g.pos?.y,
+          width: g.pos?.width,
+          height: g.pos?.height,
+        })
+      })
 
       // Sequence flows
       const waypointsMap = new Map<string, Array<{ x: number; y: number }>>()

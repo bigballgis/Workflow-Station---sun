@@ -87,10 +87,6 @@ portal:
     overview-cache-ttl-seconds: ${PORTAL_DASHBOARD_OVERVIEW_CACHE_TTL_SECONDS:0}
     # 为 true 时不请求「平均处理时长」所需的 completed-tasks 样本，减轻引擎调用（avg 展示为默认 2.5）。
     skip-avg-processing-hours: ${PORTAL_DASHBOARD_SKIP_AVG_PROCESSING_HOURS:true}
-  # Browser agent debug → SLF4J (docker logs: grep AGENT_NDJSON). Off by default.
-  debug:
-    agent-ingest:
-      enabled: ${PORTAL_DEBUG_AGENT_INGEST_ENABLED:false}
 
 # JWT Configuration
 jwt:

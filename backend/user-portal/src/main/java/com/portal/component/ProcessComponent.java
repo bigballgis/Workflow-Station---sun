@@ -1292,6 +1292,26 @@ public class ProcessComponent {
     }
 
     /**
+     * Merge persisted relation-table columns into {@code variables.__subTables__} rows (same as process detail).
+     * Task detail previously merged PI variables without this step, so MI todo rows often stayed thin until reload elsewhere.
+     */
+    public void enrichSubTablesVariablesFromPhysicalTables(String processInstanceId, Map<String, Object> variables) {
+        if (processInstanceId == null || processInstanceId.isBlank()
+                || variables == null || variables.isEmpty()) {
+            return;
+        }
+        ProcessInstanceInfo synthetic = new ProcessInstanceInfo();
+        synthetic.setId(processInstanceId);
+        synthetic.setVariables(variables);
+        processInstanceRepository.findById(processInstanceId).ifPresent(pi -> {
+            synthetic.setFunctionUnitCatalogId(pi.getFunctionUnitCatalogId());
+            synthetic.setFunctionUnitCode(pi.getFunctionUnitCode());
+            synthetic.setProcessDefinitionKey(pi.getProcessDefinitionKey());
+        });
+        enrichSubTablesWithAssignmentData(synthetic);
+    }
+
+    /**
      * Check whether a portal userId is a participant of the given process.
      * Quick local checks first; falls back to querying the workflow-engine
      * process history to see if the user was ever a task assignee.
@@ -1356,13 +1376,30 @@ public class ProcessComponent {
         }
         Map<String, Object> subTables = (Map<String, Object>) subTablesObj;
         Map<String, String> bindingTableNames = resolveSubTableBindingTableNames(info);
-
-        // Prefer engine-driven MI status for JSON-backed sub-tables (no physical table required).
-        // This ensures initiator sees accurate PENDING / IN_PROGRESS / COMPLETED and current node.
         Map<String, Map<String, MiRowProgress>> miProgressByTable = resolveMiRowProgress(info.getId());
+        enrichSubTablesMapPayload(info, subTables, bindingTableNames, miProgressByTable);
+    }
+
+    /**
+     * Physical-row merge + MI overlay for one {@code __subTables__}-shaped map (top-level or nested under a row).
+     * Recurses into each row's {@code __subTables__} so link-form child slices persisted only under parent rows still hydrate.
+     */
+    @SuppressWarnings("unchecked")
+    private void enrichSubTablesMapPayload(
+            ProcessInstanceInfo info,
+            Map<String, Object> subTables,
+            Map<String, String> bindingTableNames,
+            Map<String, Map<String, MiRowProgress>> miProgressByTable) {
+        if (subTables == null || subTables.isEmpty()) {
+            return;
+        }
         try {
             for (Map.Entry<String, Object> subTableEntry : subTables.entrySet()) {
-                String tableName = bindingTableNames.get(subTableEntry.getKey());
+                String sliceKey = subTableEntry.getKey();
+                String tableName = bindingTableNames.get(sliceKey);
+                if (tableName == null || tableName.isBlank()) {
+                    tableName = bindingTableNames.get(normalizeMiTableKey(sliceKey));
+                }
                 if (tableName == null || tableName.isBlank() || !(subTableEntry.getValue() instanceof List<?> rows)) {
                     continue;
                 }
@@ -1374,7 +1411,7 @@ public class ProcessComponent {
                 try {
                     pkCols = PostgresPhysicalTablePrimaryKeys.resolvePrimaryKeyColumns(jdbcTemplate, safeTableName);
                 } catch (Exception e) {
-                    log.debug("enrichSubTablesWithAssignmentData: skip table {} (PK): {}", safeTableName, e.getMessage());
+                    log.debug("enrichSubTablesMapPayload: skip table {} (PK): {}", safeTableName, e.getMessage());
                     continue;
                 }
 
@@ -1387,38 +1424,43 @@ public class ProcessComponent {
                     }
                     Map<String, Object> row = (Map<String, Object>) rawRow;
                     Map<String, Object> rowKey = SubTableRowKeySupport.rowKeyFromVariableRow(row, pkCols);
-                    if (rowKey == null) {
-                        continue;
+                    boolean canQueryDb = rowKey != null;
+                    if (canQueryDb && !miProgress.isEmpty() && !subTableExists(safeTableName)) {
+                        canQueryDb = false;
                     }
-                    if (!miProgress.isEmpty() && !subTableExists(safeTableName)) {
-                        continue;
-                    }
-                    String where = SubTableRowKeySupport.buildPkWhereClause(pkCols);
-                    Object[] args = SubTableRowKeySupport.orderedPkParams(pkCols, rowKey);
-                    List<Map<String, Object>> dbRows = jdbcTemplate.query(
-                            "SELECT * FROM " + safeTableName + " WHERE " + where,
-                            (rs, i) -> {
-                                java.sql.ResultSetMetaData meta = rs.getMetaData();
-                                Map<String, Object> m = new HashMap<>();
-                                for (int c = 1; c <= meta.getColumnCount(); c++) {
-                                    m.put(meta.getColumnName(c), rs.getObject(c));
+                    if (canQueryDb) {
+                        String where = SubTableRowKeySupport.buildPkWhereClause(pkCols);
+                        Object[] args = SubTableRowKeySupport.orderedPkParams(pkCols, rowKey);
+                        List<Map<String, Object>> dbRows = jdbcTemplate.query(
+                                "SELECT * FROM " + safeTableName + " WHERE " + where,
+                                (rs, i) -> {
+                                    java.sql.ResultSetMetaData meta = rs.getMetaData();
+                                    Map<String, Object> m = new HashMap<>();
+                                    for (int c = 1; c <= meta.getColumnCount(); c++) {
+                                        m.put(meta.getColumnName(c), rs.getObject(c));
+                                    }
+                                    return m;
+                                }, args);
+                        if (!dbRows.isEmpty()) {
+                            Map<String, Object> dbRow = dbRows.get(0);
+                            String displayName = (String) dbRow.get("assignee_display_name");
+                            String userId = (String) dbRow.get("assignee_user_id");
+                            if (displayName == null && userId != null && !userId.isBlank()) {
+                                displayName = resolveUsernameById(userId);
+                                dbRow.put("assignee_display_name", displayName);
+                            }
+                            repairStaleTaskStatus(safeTableName, dbRow, rowKey, pkCols);
+                            for (Map.Entry<String, Object> entry : dbRow.entrySet()) {
+                                if (entry.getValue() != null) {
+                                    row.put(entry.getKey(), entry.getValue());
                                 }
-                                return m;
-                            }, args);
-                    if (!dbRows.isEmpty()) {
-                        Map<String, Object> dbRow = dbRows.get(0);
-                        String displayName = (String) dbRow.get("assignee_display_name");
-                        String userId = (String) dbRow.get("assignee_user_id");
-                        if (displayName == null && userId != null && !userId.isBlank()) {
-                            displayName = resolveUsernameById(userId);
-                            dbRow.put("assignee_display_name", displayName);
-                        }
-                        repairStaleTaskStatus(safeTableName, dbRow, rowKey, pkCols);
-                        for (Map.Entry<String, Object> entry : dbRow.entrySet()) {
-                            if (entry.getValue() != null) {
-                                row.put(entry.getKey(), entry.getValue());
                             }
                         }
+                    }
+                    Object nestedRaw = row.get("__subTables__");
+                    if (nestedRaw instanceof Map<?, ?> nestedMap && !nestedMap.isEmpty()) {
+                        enrichSubTablesMapPayload(
+                                info, (Map<String, Object>) nestedMap, bindingTableNames, miProgressByTable);
                     }
                 }
 
@@ -1447,7 +1489,7 @@ public class ProcessComponent {
                 }
             }
         } catch (Exception e) {
-            log.debug("enrichSubTablesWithAssignmentData skipped: {}", e.getMessage());
+            log.debug("enrichSubTablesMapPayload skipped: {}", e.getMessage());
         }
     }
 
@@ -1666,7 +1708,15 @@ public class ProcessComponent {
                     // physical row data into variables and sub-task filled columns appeared empty.
                     String bt = bindingType != null ? String.valueOf(bindingType) : "";
                     if (("SUB".equals(bt) || "RELATED".equals(bt)) && bindingId != null && tableName != null) {
-                        result.put(String.valueOf(bindingId), String.valueOf(tableName));
+                        String phys = String.valueOf(tableName);
+                        String bid = String.valueOf(bindingId);
+                        result.put(bid, phys);
+                        Object displayName = binding.get("tableDisplayName");
+                        if (displayName != null && !String.valueOf(displayName).isBlank()) {
+                            String label = String.valueOf(displayName).trim();
+                            result.putIfAbsent(label, phys);
+                            result.putIfAbsent(normalizeMiTableKey(label), phys);
+                        }
                     }
                 }
             }

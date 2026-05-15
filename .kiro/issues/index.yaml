@@ -1233,3 +1233,27 @@
   category: deploy
   summary: "deploy/environments/dev/docker-compose.dev.yml 中 n8n healthcheck 使用 curl，但镜像内无 curl，容器长期显示 unhealthy 造成误导"
   file: "deploy/environments/dev/docker-compose.dev.yml"
+
+- id: "169"
+  status: fixed
+  fixed_at: "2026-05-15"
+  severity: major
+  category: bug
+  summary: "user-portal 待办「表单在表格下方」受画布 subTable 出厂默认 portalViews(assigneeTodo=tableOnly) 压制 configJson.subTablePortalViews，嵌套子表单仅配绑定栏时仍走 Link 弹窗；mergeSubTablePortalViewsForRuntime 忽略整套出厂默认值并与 FormDesigner 预览对齐"
+  file: "frontend/user-portal/src/components/formRendererHelpers.ts; frontend/developer-workstation/src/components/designer/FormDesigner.vue"
+
+- id: "170"
+  status: fixed
+  fixed_at: "2026-05-15"
+  severity: major
+  category: bug
+  summary: "user-portal FormRenderer SubTableInlineForm 使用 effectiveReadonly（含 primaryReadOnly），主表只读时误禁用表格下方区域；应与 SubTableField 一致按内联数据源绑定(bindingMode=EDITABLE，含 Link 目标 subtable2)决定是否可编辑"
+  file: "frontend/user-portal/src/components/FormRenderer.vue"
+
+- id: "171"
+  status: fixed
+  fixed_at: "2026-05-14"
+  severity: major
+  category: bug
+  summary: "user-portal 待办任务详情 tasks/detail.vue 未调用 applications/detail.vue 中的 alignProcessSubTableBindingsBySharedTable：发起流程时 __subTables__ 仅按发起步骤 bindingId 写入，克隆表单(subform_copy)后 bindingId 变化则读不到历史行，子表列(id/l/lookup 等)显示为空"
+  file: "frontend/user-portal/src/views/tasks/detail.vue; frontend/user-portal/src/views/processes/start.vue"
