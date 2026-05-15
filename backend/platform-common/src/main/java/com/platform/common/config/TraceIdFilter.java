@@ -28,15 +28,28 @@ public class TraceIdFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
         try {
-            String traceId = request.getHeader(TRACE_ID_HEADER);
-            if (traceId == null || traceId.isBlank()) {
-                traceId = UUID.randomUUID().toString();
-            }
+            String traceId = sanitizeTraceIdForResponse(request.getHeader(TRACE_ID_HEADER));
             MDC.put(MDC_TRACE_ID, traceId);
             response.setHeader(TRACE_ID_HEADER, traceId);
             filterChain.doFilter(request, response);
         } finally {
             MDC.remove(MDC_TRACE_ID);
         }
+    }
+
+    /**
+     * Only allow safe characters in the reflected response header. Newlines or colons from
+     * untrusted clients can corrupt HTTP framing; reverse proxies (e.g. Kong/nginx) may then
+     * report "upstream sent invalid header" and return 502 — especially alongside SSE streams.
+     */
+    static String sanitizeTraceIdForResponse(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return UUID.randomUUID().toString();
+        }
+        String cleaned = raw.replaceAll("[^a-zA-Z0-9._\\-]", "");
+        if (cleaned.isBlank() || cleaned.length() > 128) {
+            return UUID.randomUUID().toString();
+        }
+        return cleaned;
     }
 }

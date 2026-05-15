@@ -1331,6 +1331,7 @@ export default {
       send: '傳送',
       inputFeedback: '輸入修改意見...',
       aiReplying: 'AI 正在回覆中...',
+      thinking: 'AI 正在思考中...',
       inputMessage: '輸入訊息...',
       autoGenerating: '正在基於已有文件自動產生，請稍候...'
     },

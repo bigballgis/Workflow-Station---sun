@@ -140,6 +140,7 @@ import { findLastTaskAssigneeTopologyViolations } from '@/utils/bpmnAssigneeTopo
 
 // @ts-ignore - bpmn-js types
 import BpmnModeler from 'bpmn-js/lib/Modeler'
+import { layoutProcess } from 'bpmn-auto-layout'
 
 // bpmn-js CSS must be imported in JS for Vite bundling compatibility
 import 'bpmn-js/dist/assets/diagram-js.css'
@@ -209,6 +210,19 @@ function defaultBpmnXml(processElementId: string) {
 </bpmn:definitions>`
 }
 
+/** AI / backend may attach an empty BPMNDiagram (plane only). bpmn-js imports it but renders nothing. */
+async function ensureBpmnHasVisualLayout(bpmnXml: string): Promise<string> {
+  if (!bpmnXml || /BPMNShape/i.test(bpmnXml)) {
+    return bpmnXml
+  }
+  try {
+    return await layoutProcess(bpmnXml)
+  } catch (e) {
+    console.warn('bpmn-auto-layout failed, using raw BPMN XML', e)
+    return bpmnXml
+  }
+}
+
 async function initModeler() {
   if (!canvasRef.value) return
   
@@ -231,12 +245,27 @@ async function initModeler() {
     // Load existing process or default
     await store.fetchProcess(props.functionUnitId)
     const fallbackProcessId = `Process_${props.functionUnitId}`
-    const xml = store.process?.bpmnXml || defaultBpmnXml(fallbackProcessId)
-    
+    let xml = store.process?.bpmnXml || defaultBpmnXml(fallbackProcessId)
+    xml = await ensureBpmnHasVisualLayout(xml)
+
     console.log('Loading BPMN XML:', xml)
     
-    const result = await bpmnModeler.importXML(xml)
-    console.log('Import result:', result)
+    try {
+      const result = await bpmnModeler.importXML(xml)
+      console.log('Import result:', result)
+    } catch (importErr: any) {
+      const importMessage = String(importErr?.message || '')
+      const missingDiagram = importMessage.includes('no diagram to display')
+      if (!missingDiagram) {
+        throw importErr
+      }
+
+      // Some AI-generated BPMN XML may contain semantic nodes but no BPMN DI section,
+      // which bpmn-js cannot render directly.
+      console.warn('BPMN XML has no DI diagram info, falling back to default diagram')
+      await bpmnModeler.importXML(defaultBpmnXml(fallbackProcessId))
+      ElMessage.warning(t('process.initializationFailed'))
+    }
     
     // Check if connections exist
     const elementRegistry = bpmnModeler.get('elementRegistry')

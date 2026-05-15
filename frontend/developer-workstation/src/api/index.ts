@@ -136,7 +136,11 @@ api.interceptors.response.use(
           ElMessage.error(errorMsg || i18n.global.t('api.requestFailed'))
       }
     } else {
-      ElMessage.error(i18n.global.t('api.networkError'))
+      // Skip global error message for AI generation endpoints — AiPanel handles its own errors
+      const url = error.config?.url || ''
+      if (!url.includes('/ai-generation/')) {
+        ElMessage.error(i18n.global.t('api.networkError'))
+      }
     }
     return Promise.reject(error)
   }

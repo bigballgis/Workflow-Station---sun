@@ -133,7 +133,12 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
                         request.getFunctionUnitId(), session.getSessionId(),
                         finalContext != null, finalExistingDocuments.size());
 
-                // 6a. 调用 N8N Webhook
+                // 6a. Send session_created event so frontend knows the sessionId
+                aiGenerationService.sendChatEvent(request.getFunctionUnitId(), userId,
+                        AiChatSseEvent.builder().eventType("session")
+                                .data(Map.of("sessionId", session.getSessionId().toString())).build());
+
+                // 6b. 调用 N8N Webhook
                 Map<String, Object> n8nResponse = aiGenerationService.callN8NWebhook(
                         session.getSessionId(), request.getMessage(), request.getPhase(), request.getMode(),
                         finalContext, request.getFunctionUnitId(), finalExistingDocuments,

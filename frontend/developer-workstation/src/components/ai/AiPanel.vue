@@ -130,6 +130,7 @@
               @regenerate="handleRegenerate"
               @send-message="handleSendMessage"
               @document="handleDocumentReceived"
+              @session-created="handleSessionCreated"
             />
           </div>
           <div class="ai-panel__doc">
@@ -599,16 +600,36 @@ async function autoTriggerPhase(phase: AiPhase) {
 
 async function handleApply(data: AiGeneratedData) {
   try {
+    let sessionId = currentSessionId.value
+    if (!sessionId) {
+      // Fallback: refresh sessions from backend in case local state missed SSE "session" event.
+      await sessionComposable.loadSessions(props.functionUnitId)
+      const activeSession = sessionComposable.findActiveSession(props.functionUnitId)
+      if (activeSession?.sessionId) {
+        sessionComposable.setCurrentSession(activeSession)
+        sessionId = activeSession.sessionId
+      }
+    }
+
+    if (!sessionId) {
+      ElMessage.error(t('ai.panel.initFailed'))
+      return
+    }
+
     await aiGenerationApi.applyGeneratedData(props.functionUnitId, {
-      sessionId: currentSessionId.value,
+      sessionId,
       generatedData: data
     })
   } catch (err: any) {
     if (err.response?.status === 422) {
-      const errors: AiValidationError[] = err.response.data?.data?.errors || err.response.data?.errors || []
+      const errors: AiValidationError[] = err.response.data?.error?.details?.errors || []
       chatDialogRef.value?.setValidationErrors(errors)
     } else {
-      ElMessage.error(err.response?.data?.message || err.message || t('ai.panel.applyFailed'))
+      const msg = err.response?.data?.error?.message
+        || err.response?.data?.message
+        || err.message
+        || t('ai.panel.applyFailed')
+      ElMessage.error(msg)
     }
   }
 }
@@ -619,6 +640,18 @@ function handleSendMessage() { /* lock extension handled server-side */ }
 function handleDocumentReceived(docType: string, _content: string) {
   // 收到文档 SSE 事件后，刷新右侧文档面板
   documentPanelRef.value?.refreshDocType(docType as any)
+}
+
+function handleSessionCreated(sessionId: string) {
+  sessionComposable.setCurrentSession({
+    sessionId,
+    functionUnitId: props.functionUnitId,
+    currentPhase: sessionComposable.currentPhase.value,
+    mode: currentMode.value,
+    status: 'ACTIVE',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  })
 }
 
 watch(() => props.visible, (newVal) => {

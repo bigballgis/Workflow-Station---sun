@@ -14,6 +14,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * AI 数据写入服务实现
@@ -24,6 +26,11 @@ import java.util.*;
 @RequiredArgsConstructor
 @Transactional
 public class AiWriteServiceImpl implements AiWriteService {
+    private static final Pattern PROCESS_ID_PATTERN = Pattern.compile(
+            "<(?:bpmn:)?process\\b[^>]*\\bid\\s*=\\s*\"([^\"]+)\"");
+    private static final Pattern DEFINITIONS_OPEN_TAG_PATTERN = Pattern.compile(
+            "<((?:bpmn:)?definitions)\\b([^>]*)>", Pattern.CASE_INSENSITIVE);
+
 
     private final FunctionUnitRepository functionUnitRepository;
     private final IconRepository iconRepository;
@@ -317,6 +324,9 @@ public class AiWriteServiceImpl implements AiWriteService {
         for (Map<String, Object> formData : formDefs) {
             @SuppressWarnings("unchecked")
             Map<String, Object> configJson = (Map<String, Object>) formData.get("configJson");
+            if (configJson == null) {
+                configJson = new HashMap<>();
+            }
 
             FormType formType;
             try {
@@ -426,10 +436,173 @@ public class AiWriteServiceImpl implements AiWriteService {
                 }
             }
 
+            // AI often returns empty configJson or rule: [] — Form Design canvas would be blank.
+            ensureAiFormCreateLayout(configJson, primaryTable);
+
             // Backward compat: set boundTable to the PRIMARY binding's table
             form.setBoundTable(primaryTable);
             functionUnit.getFormDefinitions().add(form);
         }
+    }
+
+    /**
+     * Ensure form-create skeleton and backfill {@code rule} from PRIMARY table fields when AI left rules empty.
+     */
+    @SuppressWarnings("unchecked")
+    private void ensureAiFormCreateLayout(Map<String, Object> configJson, TableDefinition primaryTable) {
+        ensureFormConfigJsonStructure(configJson);
+        Object ruleObj = configJson.get("rule");
+        boolean ruleEmpty = !(ruleObj instanceof List) || ((List<?>) ruleObj).isEmpty();
+        if (!ruleEmpty) {
+            return;
+        }
+        if (primaryTable == null || primaryTable.getFieldDefinitions() == null
+                || primaryTable.getFieldDefinitions().isEmpty()) {
+            return;
+        }
+        List<FieldDefinition> fields = new ArrayList<>(primaryTable.getFieldDefinitions());
+        fields.sort(Comparator.comparingInt(f -> f.getSortOrder() != null ? f.getSortOrder() : 0));
+        List<Map<String, Object>> rules = new ArrayList<>();
+        for (FieldDefinition field : fields) {
+            rules.add(fieldToFormCreateRule(field));
+        }
+        configJson.put("rule", rules);
+        log.info("Backfilled {} form-create rules from table '{}' for AI-generated form",
+                rules.size(), primaryTable.getTableName());
+    }
+
+    @SuppressWarnings("unchecked")
+    private void ensureFormConfigJsonStructure(Map<String, Object> configJson) {
+        if (!(configJson.get("rule") instanceof List)) {
+            configJson.put("rule", new ArrayList<>());
+        }
+        if (!(configJson.get("options") instanceof Map) || ((Map<?, ?>) configJson.get("options")).isEmpty()) {
+            configJson.put("options", defaultFormCreateOptions());
+        }
+        if (!(configJson.get("subForms") instanceof Map)) {
+            configJson.put("subForms", new HashMap<String, Object>());
+        }
+        if (!(configJson.get("subListViews") instanceof Map)) {
+            configJson.put("subListViews", new HashMap<String, Object>());
+        }
+        if (!(configJson.get("relationViews") instanceof Map)) {
+            configJson.put("relationViews", new HashMap<String, Object>());
+        }
+        if (!(configJson.get("subTablePortalViews") instanceof Map)) {
+            configJson.put("subTablePortalViews", new HashMap<String, Object>());
+        }
+    }
+
+    private Map<String, Object> defaultFormCreateOptions() {
+        Map<String, Object> form = new LinkedHashMap<>();
+        form.put("size", "default");
+        form.put("inline", false);
+        form.put("labelWidth", "125px");
+        form.put("labelPosition", "left");
+        form.put("hideRequiredAsterisk", false);
+        Map<String, Object> options = new LinkedHashMap<>();
+        options.put("form", form);
+        options.put("language", Map.of("en", Map.of("clickToUpload", "Upload")));
+        options.put("resetBtn", Map.of("show", false, "innerText", "Reset"));
+        options.put("submitBtn", Map.of("show", true, "innerText", "Submit"));
+        return options;
+    }
+
+    private Map<String, Object> fieldToFormCreateRule(FieldDefinition field) {
+        String title = field.getDescription() != null && !field.getDescription().isBlank()
+                ? field.getDescription()
+                : field.getFieldName();
+        Map<String, Object> rule = new LinkedHashMap<>();
+        rule.put("field", field.getFieldName());
+        rule.put("title", title);
+        Map<String, Object> props = new LinkedHashMap<>();
+        List<Map<String, Object>> validate = new ArrayList<>();
+        rule.put("props", props);
+        rule.put("validate", validate);
+        if (Boolean.FALSE.equals(field.getNullable())) {
+            Map<String, Object> req = new LinkedHashMap<>();
+            req.put("required", true);
+            req.put("message", title + " is required");
+            req.put("trigger", "blur");
+            validate.add(req);
+        }
+        DataType dt = field.getDataType();
+        if (dt == null) {
+            dt = DataType.VARCHAR;
+        }
+        switch (dt) {
+            case VARCHAR -> {
+                rule.put("type", "input");
+                props.put("placeholder", "Enter " + title);
+                if (field.getLength() != null) {
+                    props.put("maxlength", field.getLength());
+                    props.put("showWordLimit", true);
+                } else {
+                    props.put("maxlength", 255);
+                    props.put("showWordLimit", true);
+                }
+            }
+            case TEXT -> {
+                rule.put("type", "input");
+                props.put("type", "textarea");
+                props.put("placeholder", "Enter " + title);
+                props.put("rows", 3);
+            }
+            case INTEGER, BIGINT -> {
+                rule.put("type", "inputNumber");
+                props.put("placeholder", "Enter " + title);
+                props.put("precision", 0);
+            }
+            case DECIMAL -> {
+                rule.put("type", "inputNumber");
+                props.put("placeholder", "Enter " + title);
+                props.put("precision", field.getScale() != null ? field.getScale() : 2);
+            }
+            case BOOLEAN -> {
+                rule.put("type", "switch");
+            }
+            case DATE -> {
+                rule.put("type", "datePicker");
+                props.put("type", "date");
+                props.put("placeholder", "Select " + title);
+                props.put("valueFormat", "YYYY-MM-DD");
+            }
+            case TIME -> {
+                rule.put("type", "datePicker");
+                props.put("type", "time");
+                props.put("placeholder", "Select " + title);
+            }
+            case TIMESTAMP -> {
+                rule.put("type", "datePicker");
+                props.put("type", "datetime");
+                props.put("placeholder", "Select " + title);
+                props.put("valueFormat", "YYYY-MM-DD HH:mm:ss");
+            }
+            case JSON -> {
+                rule.put("type", "input");
+                props.put("type", "textarea");
+                props.put("placeholder", "JSON " + title);
+                props.put("rows", 4);
+            }
+            case FILE -> {
+                rule.put("type", "upload");
+                props.put("action", "/api/v1/upload");
+                props.put("accept", ".jpg,.jpeg,.png,.pdf,.docx,.xlsx");
+                props.put("limit", 1);
+                props.put("multiple", false);
+                props.put("listType", "text");
+            }
+            case BYTEA -> {
+                rule.put("type", "input");
+                props.put("disabled", true);
+                props.put("placeholder", "(binary)");
+            }
+            default -> {
+                rule.put("type", "input");
+                props.put("placeholder", "Enter " + title);
+            }
+        }
+        return rule;
     }
 
     @SuppressWarnings("unchecked")
@@ -439,6 +612,9 @@ public class AiWriteServiceImpl implements AiWriteService {
 
         for (Map<String, Object> actionData : actionDefs) {
             Map<String, Object> configJson = (Map<String, Object>) actionData.get("configJson");
+            if (configJson == null) {
+                configJson = new HashMap<>();
+            }
 
             ActionType actionType;
             try {
@@ -493,6 +669,7 @@ public class AiWriteServiceImpl implements AiWriteService {
 
         String bpmnXml = (String) procData.get("bpmnXml");
         if (bpmnXml == null || bpmnXml.isBlank()) return;
+        bpmnXml = ensureRenderableBpmnDiagram(bpmnXml);
 
         ProcessDefinition processDefinition = ProcessDefinition.builder()
                 .functionUnit(functionUnit)
@@ -501,6 +678,70 @@ public class AiWriteServiceImpl implements AiWriteService {
                 .build();
 
         functionUnit.setProcessDefinition(processDefinition);
+    }
+
+    /**
+     * AI may output BPMN semantic XML without BPMN DI section (BPMNDiagram/BPMNPlane),
+     * which causes bpmn-js to fail with "no diagram to display". Append a minimal DI
+     * section and missing namespaces when needed so the designer can render safely.
+     */
+    private String ensureRenderableBpmnDiagram(String bpmnXml) {
+        String normalized = bpmnXml;
+        if (containsIgnoreCase(normalized, "BPMNDiagram")) {
+            return normalized;
+        }
+
+        String processId = extractProcessId(normalized);
+        if (processId == null || processId.isBlank()) {
+            return normalized;
+        }
+
+        normalized = ensureDiagramNamespaces(normalized);
+        String diagramXml = """
+                <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+                  <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="%s" />
+                </bpmndi:BPMNDiagram>
+                """.formatted(processId);
+
+        if (normalized.contains("</bpmn:definitions>")) {
+            return normalized.replace("</bpmn:definitions>", diagramXml + "\n</bpmn:definitions>");
+        }
+        if (normalized.contains("</definitions>")) {
+            return normalized.replace("</definitions>", diagramXml + "\n</definitions>");
+        }
+        return normalized;
+    }
+
+    private String extractProcessId(String bpmnXml) {
+        Matcher matcher = PROCESS_ID_PATTERN.matcher(bpmnXml);
+        return matcher.find() ? matcher.group(1) : null;
+    }
+
+    private String ensureDiagramNamespaces(String bpmnXml) {
+        Matcher matcher = DEFINITIONS_OPEN_TAG_PATTERN.matcher(bpmnXml);
+        if (!matcher.find()) {
+            return bpmnXml;
+        }
+
+        String tagName = matcher.group(1);
+        String attrs = matcher.group(2);
+        String updatedAttrs = attrs;
+        if (!updatedAttrs.contains("xmlns:bpmndi")) {
+            updatedAttrs += " xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\"";
+        }
+        if (!updatedAttrs.contains("xmlns:dc")) {
+            updatedAttrs += " xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\"";
+        }
+        if (!updatedAttrs.contains("xmlns:di")) {
+            updatedAttrs += " xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\"";
+        }
+
+        String replacement = "<" + tagName + updatedAttrs + ">";
+        return matcher.replaceFirst(Matcher.quoteReplacement(replacement));
+    }
+
+    private boolean containsIgnoreCase(String text, String token) {
+        return text.toLowerCase(Locale.ROOT).contains(token.toLowerCase(Locale.ROOT));
     }
 
     private Integer toInteger(Object value) {

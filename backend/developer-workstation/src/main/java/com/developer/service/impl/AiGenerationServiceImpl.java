@@ -862,11 +862,12 @@ public class AiGenerationServiceImpl implements AiGenerationService {
         emitter.onTimeout(() -> {
             chatEmitters.remove(key);
             log.debug("Chat SSE timed out: functionUnitId={}, userId={}", functionUnitId, userId);
-            emitter.complete();
+            safeComplete(emitter);
         });
         emitter.onError(ex -> {
             log.warn("Chat SSE error for functionUnit {}, userId {}: {}", functionUnitId, userId, ex.getMessage());
             chatEmitters.remove(key);
+            safeComplete(emitter);
         });
 
         chatEmitters.put(key, emitter);
@@ -895,7 +896,7 @@ public class AiGenerationServiceImpl implements AiGenerationService {
                 eventEmitters.remove(functionUnitId, entries);
             }
             log.debug("Event SSE timed out: functionUnitId={}, userId={}", functionUnitId, userId);
-            emitter.complete();
+            safeComplete(emitter);
         });
         emitter.onError(ex -> {
             log.warn("Event SSE error for functionUnit {}, userId {}: {}", functionUnitId, userId, ex.getMessage());
@@ -903,6 +904,7 @@ public class AiGenerationServiceImpl implements AiGenerationService {
             if (entries.isEmpty()) {
                 eventEmitters.remove(functionUnitId, entries);
             }
+            safeComplete(emitter);
         });
 
         entries.add(entry);
@@ -921,7 +923,14 @@ public class AiGenerationServiceImpl implements AiGenerationService {
         try {
             SseEmitter.SseEventBuilder sseEvent = SseEmitter.event().name(event.getEventType());
             if (event.getData() != null) {
-                sseEvent.data(event.getData(), MediaType.APPLICATION_JSON);
+                Object data = event.getData();
+                // Plain strings (token stream, phase name) as text — avoids JSON quoting edge cases
+                // on very large markdown payloads when frontends concatenate raw data lines.
+                if (data instanceof String str) {
+                    sseEvent.data(str, MediaType.TEXT_PLAIN);
+                } else {
+                    sseEvent.data(data, MediaType.APPLICATION_JSON);
+                }
             } else {
                 sseEvent.data("", MediaType.TEXT_PLAIN);
             }
@@ -968,8 +977,22 @@ public class AiGenerationServiceImpl implements AiGenerationService {
         String key = buildChatEmitterKey(functionUnitId, userId);
         SseEmitter emitter = chatEmitters.remove(key);
         if (emitter != null) {
-            emitter.complete();
+            safeComplete(emitter);
             log.debug("Completed chat SSE emitter: functionUnitId={}, userId={}", functionUnitId, userId);
+        }
+    }
+
+    /**
+     * Safely complete an SseEmitter, suppressing IllegalStateException caused by
+     * Spring's async response finalization after the OutputStream was already committed by SSE.
+     */
+    private void safeComplete(SseEmitter emitter) {
+        try {
+            emitter.complete();
+        } catch (IllegalStateException e) {
+            log.debug("Emitter already completed or response committed: {}", e.getMessage());
+        } catch (Exception e) {
+            log.debug("Failed to complete emitter: {}", e.getMessage());
         }
     }
 
@@ -1025,6 +1048,11 @@ public class AiGenerationServiceImpl implements AiGenerationService {
     }
 
     private void validateStatusTransition(AiSessionStatus currentStatus, AiSessionStatus newStatus) {
+        // Idempotent transition: setting the same status again is a no-op.
+        if (currentStatus == newStatus) {
+            return;
+        }
+
         if (currentStatus == AiSessionStatus.ACTIVE
                 && (newStatus == AiSessionStatus.COMPLETED || newStatus == AiSessionStatus.CANCELLED)) {
             return; // Valid transitions

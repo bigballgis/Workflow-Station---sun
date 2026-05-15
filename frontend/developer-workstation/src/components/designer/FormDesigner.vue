@@ -1842,6 +1842,44 @@ function fieldToFormRule(field: FieldDefinition): any {
 }
 
 /**
+ * AI Apply often persists empty {@code rule} or {@code {}} configJson while table bindings exist.
+ * Merge defaults and, when rules are empty, build rules from the PRIMARY-bound table fields (same as manual import).
+ */
+function buildEffectiveMainFormConfig(
+  row: FormDefinition,
+  bindings: { bindingType: string; tableId: number }[]
+): Record<string, any> {
+  const raw = (row.configJson || {}) as Record<string, any>
+  const rawRule = Array.isArray(raw.rule) ? raw.rule : []
+  const base: Record<string, any> = {
+    rule: rawRule,
+    options: mergeLoadedFormOptions(
+      raw.options && Object.keys(raw.options).length ? raw.options : undefined,
+      defaultFormOption.value,
+      t('form.clickToUpload')
+    ),
+    subForms: raw.subForms && typeof raw.subForms === 'object' ? raw.subForms : {},
+    subListViews: raw.subListViews && typeof raw.subListViews === 'object' ? raw.subListViews : {},
+    relationViews: raw.relationViews && typeof raw.relationViews === 'object' ? raw.relationViews : {},
+    subTablePortalViews:
+      raw.subTablePortalViews && typeof raw.subTablePortalViews === 'object' ? raw.subTablePortalViews : {}
+  }
+  if (rawRule.length > 0) {
+    return base
+  }
+  const primary = bindings.find((b) => b.bindingType === 'PRIMARY')
+  const table = primary ? store.tables.find((t) => t.id === primary.tableId) : undefined
+  const fields = table?.fieldDefinitions?.length
+    ? [...table.fieldDefinitions].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+    : []
+  if (fields.length === 0) {
+    return base
+  }
+  base.rule = fields.map((f) => fieldToFormRule(f))
+  return base
+}
+
+/**
  * Confirm importing fields to form designer
  */
 async function handleConfirmImportFields() {
@@ -2172,7 +2210,7 @@ async function loadProcessNodes() {
   }
 }
 
-function handleSelectForm(row: FormDefinition) {
+async function handleSelectForm(row: FormDefinition) {
   // Clean up any existing polling before selecting new form
   cleanupAutoSavePolling()
 
@@ -2187,72 +2225,90 @@ function handleSelectForm(row: FormDefinition) {
   activeDesignerTab.value = 'main'
   subTableActiveTab.value = 'form'
 
-  // Load table bindings
-  functionUnitApi.getFormBindings(props.functionUnitId, row.id)
-    .then(res => {
-      if (selectedForm.value) {
-        selectedForm.value = { ...selectedForm.value, tableBindings: res.data || [] }
-      }
-      // Restore saved relationViewState for RELATED bindings so imported fields survive save
-      const config = row.configJson || {}
-      const savedViews = config.relationViews || {}
-      const initialState: Record<number, { allFields: any[]; viewFields: any[] }> = {}
-      for (const b of (res.data || [])) {
-        if (b.bindingType === 'RELATED') {
-          const id = b.id as number
-          initialState[id] = savedViews[id]
-            ? { allFields: savedViews[id].allFields || [], viewFields: savedViews[id].viewFields || [] }
-            : { allFields: [], viewFields: [] }
-        }
-      }
-      relationViewState.value = initialState
-      const savedSubListViews = config.subListViews || {}
-      const initialSubTableViewState: Record<number, { allFields: SubTableFieldDTO[]; viewFields: SubTableListColumnDTO[] }> = {}
-      for (const b of (res.data || [])) {
-        if (b.bindingType === 'SUB') {
-          const id = b.id as number
-          const saved = savedSubListViews[id]
-          initialSubTableViewState[id] = {
-            allFields: [],
-            viewFields: Array.isArray(saved?.columns) ? saved.columns : []
-          }
-        }
-      }
-      subTableViewState.value = initialSubTableViewState
-      // Load sub designers after bindings are known
-      nextTick(() => setTimeout(() => loadSubDesigners(row), 200))
-    })
-    .catch(() => {})
+  await store.fetchTables(props.functionUnitId)
 
-  // Load main designer and start auto-save polling
+  let bindings: any[] = []
+  try {
+    const res = await functionUnitApi.getFormBindings(props.functionUnitId, row.id)
+    bindings = res.data || []
+  } catch {
+    bindings = []
+  }
+
+  const config = row.configJson || {}
+  const savedViews = config.relationViews || {}
+  const initialState: Record<number, { allFields: any[]; viewFields: any[] }> = {}
+  for (const b of bindings) {
+    if (b.bindingType === 'RELATED') {
+      const id = b.id as number
+      initialState[id] = savedViews[id]
+        ? { allFields: savedViews[id].allFields || [], viewFields: savedViews[id].viewFields || [] }
+        : { allFields: [], viewFields: [] }
+    }
+  }
+  relationViewState.value = initialState
+  const savedSubListViews = config.subListViews || {}
+  const initialSubTableViewState: Record<number, { allFields: SubTableFieldDTO[]; viewFields: SubTableListColumnDTO[] }> = {}
+  for (const b of bindings) {
+    if (b.bindingType === 'SUB') {
+      const id = b.id as number
+      const saved = savedSubListViews[id]
+      initialSubTableViewState[id] = {
+        allFields: [],
+        viewFields: Array.isArray(saved?.columns) ? saved.columns : []
+      }
+    }
+  }
+  subTableViewState.value = initialSubTableViewState
+
+  const effectiveMain = buildEffectiveMainFormConfig(row, bindings)
+  const mergedConfig: Record<string, any> = {
+    ...(row.configJson || {}),
+    ...effectiveMain
+  }
+
+  if (selectedForm.value) {
+    selectedForm.value = {
+      ...selectedForm.value,
+      tableBindings: bindings,
+      configJson: mergedConfig
+    }
+  }
+
   nextTick(() => {
     setTimeout(() => {
-      if (designerRef.value) {
-        const config = row.configJson || {}
-        try {
-          const rules = cloneFormRules(config.rule && config.rule.length ? config.rule : [])
-          injectUploadButtonLabels(rules, t('form.clickToUpload'))
-          designerRef.value.setRule(rules)
-          designerRef.value.setOption(
-            mergeLoadedFormOptions(
-              config.options && Object.keys(config.options).length ? config.options : undefined,
-              defaultFormOption.value,
-              t('form.clickToUpload')
-            )
+      if (!designerRef.value) return
+      try {
+        const rules = cloneFormRules(
+          effectiveMain.rule && effectiveMain.rule.length ? effectiveMain.rule : []
+        )
+        injectUploadButtonLabels(rules, t('form.clickToUpload'))
+        designerRef.value.setRule(rules)
+        designerRef.value.setOption(
+          mergeLoadedFormOptions(
+            effectiveMain.options && Object.keys(effectiveMain.options).length
+              ? effectiveMain.options
+              : undefined,
+            defaultFormOption.value,
+            t('form.clickToUpload')
           )
-        } catch (e) {
-          console.error('Failed to load main form config:', e)
-          try { designerRef.value.setRule([]); designerRef.value.setOption({ ...defaultFormOption.value }) } catch {}
-        }
-        // Start auto-save polling after designer is loaded
-        setupAutoSavePolling()
+        )
+      } catch (e) {
+        console.error('Failed to load main form config:', e)
+        try {
+          designerRef.value.setRule([])
+          designerRef.value.setOption({ ...defaultFormOption.value })
+        } catch {}
       }
+      setupAutoSavePolling()
     }, 100)
   })
+
+  nextTick(() => setTimeout(() => loadSubDesigners(row), 200))
 }
 
 function loadSubDesigners(row: FormDefinition) {
-  const config = row.configJson || {}
+  const config = (selectedForm.value?.configJson || row.configJson || {}) as Record<string, any>
   const subForms = config.subForms || {}
   designerSubBindings.value.forEach((binding, index) => {
     nextTick(() => {

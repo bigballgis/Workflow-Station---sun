@@ -124,6 +124,24 @@
         :is-streaming="true"
       />
 
+      <!-- Thinking indicator (waiting for first response from AI) -->
+      <div
+        v-if="isStreaming && !streamingContent"
+        class="chat-dialog__thinking"
+      >
+        <div class="chat-dialog__thinking-avatar">
+          <el-icon :size="20"><MagicStick /></el-icon>
+        </div>
+        <div class="chat-dialog__thinking-bubble">
+          <span class="chat-dialog__thinking-dots">
+            <span class="dot">●</span>
+            <span class="dot">●</span>
+            <span class="dot">●</span>
+          </span>
+          <span class="chat-dialog__thinking-text">{{ t('ai.chat.thinking') }}</span>
+        </div>
+      </div>
+
       <!-- Generation Preview -->
       <div
         v-if="previewData && generatedData"
@@ -340,7 +358,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount, provide } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Promotion, Grid, Stamp, EditPen, DataAnalysis, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
+import { Promotion, Grid, Stamp, EditPen, DataAnalysis, ArrowDown, ArrowUp, MagicStick } from '@element-plus/icons-vue'
 import PhaseIndicator from './PhaseIndicator.vue'
 import ChatMessage from './ChatMessage.vue'
 import GenerationPreview from './GenerationPreview.vue'
@@ -382,6 +400,7 @@ const emit = defineEmits<{
   regenerate: []
   sendMessage: []
   document: [type: string, content: string]
+  sessionCreated: [sessionId: string]
 }>()
 
 // Chat composable
@@ -403,6 +422,7 @@ const {
   onPhaseComplete,
   onGeneratedData,
   onValidationWarning,
+  onSession,
   setMessages,
   clearCurrentDraft
 } = useAiChat()
@@ -575,6 +595,10 @@ onValidationWarning((warnings: any[]) => {
   scrollToBottom()
 })
 
+onSession((sessionId: string) => {
+  emit('sessionCreated', sessionId)
+})
+
 // Compute GenerationPreviewData from AiGeneratedData
 function computePreviewData(data: AiGeneratedData): GenerationPreviewData {
   const tables = data.tableDefinitions || []
@@ -590,11 +614,13 @@ function computePreviewData(data: AiGeneratedData): GenerationPreviewData {
   let processNodeCount = 0
   let processGatewayCount = 0
   if (process?.bpmnXml) {
-    // Simple counting from BPMN XML
+    // Simple counting from BPMN XML — supports both prefixed (bpmn:tag) and unprefixed (tag) forms
     const xml = process.bpmnXml as string
-    const taskMatches = xml.match(/<bpmn:userTask|<bpmn:serviceTask|<bpmn:scriptTask|<bpmn:startEvent|<bpmn:endEvent|<bpmn:task/g)
+    const nodePattern = /<(?:bpmn:)?(?:userTask|serviceTask|scriptTask|startEvent|endEvent|task)\b/g
+    const gatewayPattern = /<(?:bpmn:)?(?:exclusiveGateway|parallelGateway|inclusiveGateway|eventBasedGateway)\b/g
+    const taskMatches = xml.match(nodePattern)
     processNodeCount = taskMatches ? taskMatches.length : 0
-    const gatewayMatches = xml.match(/<bpmn:exclusiveGateway|<bpmn:parallelGateway|<bpmn:inclusiveGateway|<bpmn:eventBasedGateway/g)
+    const gatewayMatches = xml.match(gatewayPattern)
     processGatewayCount = gatewayMatches ? gatewayMatches.length : 0
   }
 
@@ -998,5 +1024,64 @@ defineExpose({
   color: #909399;
   margin: 0;
   line-height: 1.5;
+}
+
+// Thinking indicator (shows while waiting for AI's first response)
+.chat-dialog__thinking {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 0;
+  animation: fadeIn 0.3s ease;
+
+  &-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #409eff, #6366f1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    flex-shrink: 0;
+  }
+
+  &-bubble {
+    background: #f0f2f5;
+    border-radius: 8px 8px 8px 2px;
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  &-dots {
+    display: inline-flex;
+    gap: 3px;
+
+    .dot {
+      font-size: 6px;
+      color: #909399;
+      animation: bounce 1.4s ease infinite;
+
+      &:nth-child(2) { animation-delay: 0.2s; }
+      &:nth-child(3) { animation-delay: 0.4s; }
+    }
+  }
+
+  &-text {
+    font-size: 13px;
+    color: #909399;
+  }
+}
+
+@keyframes bounce {
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+  40% { transform: translateY(-4px); opacity: 1; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 </style>

@@ -243,9 +243,39 @@ public class GlobalExceptionHandler {
 
     // ==================== 兜底异常 ====================
 
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<ApiResponse<?>> handleIllegalState(
+            IllegalStateException ex, WebRequest request) {
+        // SSE streaming commits the OutputStream — when Spring later tries to
+        // finalize the async response, it hits "getOutputStream() has already been called".
+        // This is a harmless lifecycle artifact; silently return 200.
+        if (isSseResponseAlreadyCommitted(ex)) {
+            log.debug("SSE response already committed, ignoring IllegalStateException: {}", ex.getMessage());
+            return ResponseEntity.ok().build();
+        }
+        // For other IllegalStateExceptions, treat as 500
+        String traceId = generateTraceId();
+        log.error("IllegalStateException [{}]: {}", traceId, ex.getMessage(), ex);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponse.error(ErrorResponse.builder()
+                        .code("SYS_INTERNAL_ERROR")
+                        .message("Internal server error")
+                        .timestamp(Instant.now())
+                        .traceId(traceId)
+                        .path(getPath(request))
+                        .build()));
+    }
+
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<ApiResponse<?>> handleRuntimeException(
             RuntimeException ex, WebRequest request) {
+        // Some servlet containers/framework wrappers rethrow SSE commit artifacts
+        // as RuntimeException (cause chain contains IllegalStateException).
+        if (isSseResponseAlreadyCommitted(ex)) {
+            log.debug("SSE response already committed, ignoring RuntimeException: {}", ex.getMessage());
+            return ResponseEntity.ok().build();
+        }
+
         String traceId = generateTraceId();
         log.error("Unhandled RuntimeException [{}]: {}", traceId, ex.getMessage(), ex);
         
@@ -263,6 +293,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<?>> handleGenericException(
             Exception ex, WebRequest request) {
+        if (isSseResponseAlreadyCommitted(ex)) {
+            log.debug("SSE response already committed, ignoring Exception: {}", ex.getMessage());
+            return ResponseEntity.ok().build();
+        }
+
         String traceId = generateTraceId();
         log.error("Unexpected error [{}]: {}", traceId, ex.getMessage(), ex);
         
@@ -286,5 +321,20 @@ public class GlobalExceptionHandler {
 
     private String getPath(WebRequest request) {
         return request.getDescription(false).replace("uri=", "");
+    }
+
+    /**
+     * Detect SSE async response finalization artifacts in nested exception chains.
+     */
+    private boolean isSseResponseAlreadyCommitted(Throwable ex) {
+        Throwable current = ex;
+        while (current != null) {
+            String message = current.getMessage();
+            if (message != null && message.contains("getOutputStream() has already been called")) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 }

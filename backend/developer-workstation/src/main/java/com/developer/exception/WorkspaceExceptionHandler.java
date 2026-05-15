@@ -3,6 +3,7 @@ package com.developer.exception;
 import com.developer.security.FunctionUnitWorkspaceAccessDeniedException;
 import com.platform.common.dto.ApiResponse;
 import com.platform.common.exception.ErrorResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
@@ -18,6 +19,7 @@ import java.util.UUID;
 
 @RestControllerAdvice
 @Order(Ordered.HIGHEST_PRECEDENCE + 15)
+@Slf4j
 public class WorkspaceExceptionHandler {
 
     private static final Set<String> CONFLICT_ERROR_CODES = Set.of(
@@ -81,5 +83,39 @@ public class WorkspaceExceptionHandler {
                 .path(path)
                 .build();
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.error(errorResponse));
+    }
+
+    /**
+     * Suppress harmless SSE async lifecycle exceptions.
+     * They can surface as IllegalStateException/RuntimeException after response commit.
+     */
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<Void> handleSseIllegalState(IllegalStateException ex) {
+        if (isSseCommittedException(ex)) {
+            log.debug("Suppressing SSE IllegalStateException: {}", ex.getMessage());
+            return ResponseEntity.ok().build();
+        }
+        throw ex;
+    }
+
+    @ExceptionHandler(RuntimeException.class)
+    public ResponseEntity<Void> handleSseRuntime(RuntimeException ex) {
+        if (isSseCommittedException(ex)) {
+            log.debug("Suppressing SSE RuntimeException: {}", ex.getMessage());
+            return ResponseEntity.ok().build();
+        }
+        throw ex;
+    }
+
+    private boolean isSseCommittedException(Throwable ex) {
+        Throwable current = ex;
+        while (current != null) {
+            String message = current.getMessage();
+            if (message != null && message.contains("getOutputStream() has already been called")) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 }

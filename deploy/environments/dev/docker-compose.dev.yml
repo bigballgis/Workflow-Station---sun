@@ -334,6 +334,11 @@ services:
       KONG_PROXY_LISTEN: "0.0.0.0:8000"
       KONG_ADMIN_LISTEN: "0.0.0.0:8001"
       KONG_NGINX_PROXY_CLIENT_MAX_BODY_SIZE: "100m"
+      # Larger buffer for upstream status + headers (default is small). Undersized buffers can
+      # cause nginx inside Kong to mis-parse Spring SSE responses and return 502 with
+      # "upstream sent invalid header" when streaming /api/v1/ai-generation/chat/stream.
+      KONG_NGINX_PROXY_PROXY_BUFFER_SIZE: "32k"
+      KONG_NGINX_PROXY_PROXY_BUFFERS: "64 32k"
       # Kong `services[].url` uses Compose service hostnames (not literal IPs). Nginx error logs
       # still print the resolved A record. Recreated containers get new IPs — cap DNS TTL in DEV
       # so upstream addresses refresh within a few seconds without restarting Kong.

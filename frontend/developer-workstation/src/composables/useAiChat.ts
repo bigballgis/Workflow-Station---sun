@@ -79,6 +79,7 @@ export function useAiChat() {
   let onPhaseCompleteCallback: ((phase: AiPhase) => void) | null = null
   let onGeneratedDataCallback: ((data: any) => void) | null = null
   let onValidationWarningCallback: ((warnings: any[]) => void) | null = null
+  let onSessionCallback: ((sessionId: string) => void) | null = null
 
   function getAuthHeaders(): Record<string, string> {
     const headers: Record<string, string> = {
@@ -198,6 +199,15 @@ export function useAiChat() {
     if (!eventType) return
 
     switch (eventType) {
+      case 'session': {
+        try {
+          const parsed = JSON.parse(eventData)
+          if (parsed.sessionId) {
+            onSessionCallback?.(parsed.sessionId)
+          }
+        } catch { /* ignore */ }
+        break
+      }
       case 'token':
         if (generationStep.value < 1) generationStep.value = 1
         streamingContent.value += eventData
@@ -352,6 +362,10 @@ export function useAiChat() {
     onValidationWarningCallback = cb
   }
 
+  function onSession(cb: (sessionId: string) => void) {
+    onSessionCallback = cb
+  }
+
   function setMessages(msgs: AiMessage[]) {
     messages.value = msgs
   }
@@ -383,6 +397,7 @@ export function useAiChat() {
     onPhaseComplete,
     onGeneratedData,
     onValidationWarning,
+    onSession,
     setMessages,
     clearCurrentDraft
   }

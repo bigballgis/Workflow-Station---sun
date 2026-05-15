@@ -1226,3 +1226,10 @@
   category: quality
   summary: "frontend/developer-workstation 三语 locale 不一致：zh-TW 缺失 form.linkFormPlaceholderStale / form.linkFormPlaceholderUnconfigured / form.linkFormSelectEmpty / form.linkFormSelectPlaceholder / tableBinding.subMode / tableBinding.subModeFormOnly / tableBinding.subModeFull / tableBinding.subModeTip 共 8 个 key，被 i18n-locale-key-consistency 测试持续标红"
   file: "frontend/developer-workstation/src/i18n/locales/zh-TW.ts"
+
+- id: "168"
+  status: open
+  severity: minor
+  category: deploy
+  summary: "deploy/environments/dev/docker-compose.dev.yml 中 n8n healthcheck 使用 curl，但镜像内无 curl，容器长期显示 unhealthy 造成误导"
+  file: "deploy/environments/dev/docker-compose.dev.yml"

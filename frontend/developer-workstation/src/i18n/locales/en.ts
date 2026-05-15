@@ -1343,6 +1343,7 @@ export default {
       send: 'Send',
       inputFeedback: 'Enter feedback...',
       aiReplying: 'AI is replying...',
+      thinking: 'AI is thinking...',
       inputMessage: 'Enter message...',
       autoGenerating: 'Auto-generating based on existing documents, please wait...'
     },

@@ -89,7 +89,7 @@
                                   :title="resolveInlineFormTableTitle(child)"
                                   :fields="resolveInlineFormFields(child)"
                                   :current-row="getCurrentRowForInlineForm(child)"
-                                  :readonly="effectiveReadonly"
+                                  :readonly="readonly || !isSubTableEditable(child._bindingId)"
                                   :label-width="labelWidth"
                                   @update:row="(row: Record<string, any>) => handleInlineFormUpdate(child, row)"
                                 />
@@ -210,7 +210,7 @@
                         :title="resolveInlineFormTableTitle(field)"
                         :fields="resolveInlineFormFields(field)"
                         :current-row="getCurrentRowForInlineForm(field)"
-                        :readonly="effectiveReadonly"
+                        :readonly="readonly || !isSubTableEditable(field._bindingId)"
                         :label-width="labelWidth"
                         @update:row="(row: Record<string, any>) => handleInlineFormUpdate(field, row)"
                       />
@@ -356,7 +356,7 @@
                               :title="resolveInlineFormTableTitle(child)"
                               :fields="resolveInlineFormFields(child)"
                               :current-row="getCurrentRowForInlineForm(child)"
-                              :readonly="effectiveReadonly"
+                              :readonly="readonly || !isSubTableEditable(child._bindingId)"
                               :label-width="labelWidth"
                               @update:row="(row: Record<string, any>) => handleInlineFormUpdate(child, row)"
                             />
@@ -477,7 +477,7 @@
                     :title="resolveInlineFormTableTitle(field)"
                     :fields="resolveInlineFormFields(field)"
                     :current-row="getCurrentRowForInlineForm(field)"
-                    :readonly="effectiveReadonly"
+                    :readonly="readonly || !isSubTableEditable(field._bindingId)"
                     :label-width="labelWidth"
                     @update:row="(row: Record<string, any>) => handleInlineFormUpdate(field, row)"
                   />
