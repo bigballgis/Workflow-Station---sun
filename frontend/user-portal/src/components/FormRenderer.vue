@@ -815,39 +815,18 @@ function scrollSubTableInlineIntoView(bindingId: number | undefined) {
   })
 }
 
-function effectiveInitiatorRequestPortalMode(field: FormField): string | undefined {
-  const ir = mergedPortalViewsForSubTable(field).initiatorRequest
-  return typeof ir === 'string' && ir.length > 0 ? ir : undefined
-}
-
-/** Aligns with application-detail heuristics for MI / snapshot task-status rows. */
-function bindingHasMiTaskStatusRowsForInitiator(rows: any[]): boolean {
-  if (!Array.isArray(rows) || rows.length === 0) return false
-  if (props.initiatorSnapshotMode) {
-    return rows.some(r => r && r.task_status === 'COMPLETED')
-  }
-  return rows.some(r => r && r.task_status !== undefined)
-}
-
 function subTableShowTaskStatusInitiator(field: FormField): boolean {
   if (props.viewContext !== 'initiatorRequest') return false
   if (subTableMode(field) !== 'summaryWithLinkFormModal') return false
-  const binding = resolveBinding(field._bindingId)
-  return bindingHasMiTaskStatusRowsForInitiator(binding?.data || [])
+  // Initiator + summary+Link Form: list columns come from designer `subListViews`; runtime Status/Actions
+  // duplicate MI state and designer Actions/Detail columns (My Request / subform_copy).
+  return false
 }
 
 function subTableShowViewDetailInitiator(field: FormField): boolean {
   if (props.viewContext !== 'initiatorRequest') return false
   if (subTableMode(field) !== 'summaryWithLinkFormModal') return false
-  const binding = resolveBinding(field._bindingId)
-  if (!binding) return false
-  const mode = effectiveInitiatorRequestPortalMode(field)
-  const rows = binding.data || []
-  if (mode === 'summaryWithLinkFormModal') {
-    return bindingHasMiTaskStatusRowsForInitiator(rows)
-  }
-  if (mode === 'tableOnly' || mode === 'mirrorTodo') return false
-  return bindingHasMiTaskStatusRowsForInitiator(rows)
+  return false
 }
 
 /** Form-below 「表单来源」— follows merged portal views (aligned with developer-workstation preview). */

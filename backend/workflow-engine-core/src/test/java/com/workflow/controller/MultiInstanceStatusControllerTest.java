@@ -8,8 +8,10 @@ import com.workflow.entity.ExtendedTaskInfo;
 import com.workflow.enums.AssignmentType;
 import com.workflow.repository.ExtendedTaskInfoRepository;
 import com.workflow.component.BpmnActionParser;
+import org.flowable.engine.HistoryService;
 import org.flowable.engine.RuntimeService;
 import org.flowable.engine.TaskService;
+import org.flowable.engine.history.HistoricProcessInstanceQuery;
 import org.flowable.engine.runtime.Execution;
 import org.flowable.engine.runtime.ExecutionQuery;
 import org.flowable.task.api.Task;
@@ -47,6 +49,12 @@ class MultiInstanceStatusControllerTest {
 
     @Mock
     private RuntimeService runtimeService;
+
+    @Mock
+    private HistoryService historyService;
+
+    @Mock
+    private HistoricProcessInstanceQuery historicProcessInstanceQuery;
 
     @Mock
     private TaskService taskService;
@@ -99,6 +107,9 @@ class MultiInstanceStatusControllerTest {
         lenient().when(taskService.createTaskQuery()).thenReturn(taskQuery);
         lenient().when(taskQuery.processInstanceId(anyString())).thenReturn(taskQuery);
         lenient().when(taskQuery.list()).thenReturn(Collections.emptyList());
+        lenient().when(historyService.createHistoricProcessInstanceQuery()).thenReturn(historicProcessInstanceQuery);
+        lenient().when(historicProcessInstanceQuery.processInstanceId(anyString())).thenReturn(historicProcessInstanceQuery);
+        lenient().when(historicProcessInstanceQuery.singleResult()).thenReturn(null);
     }
 
     @Nested

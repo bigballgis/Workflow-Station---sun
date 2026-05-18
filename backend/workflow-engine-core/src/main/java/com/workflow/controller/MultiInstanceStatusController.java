@@ -15,8 +15,10 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.flowable.engine.HistoryService;
 import org.flowable.engine.RuntimeService;
 import org.flowable.engine.TaskService;
+import org.flowable.engine.history.HistoricProcessInstance;
 import org.flowable.engine.runtime.Execution;
 import org.flowable.task.api.Task;
 import org.flowable.task.api.TaskQuery;
@@ -48,6 +50,7 @@ import java.util.stream.Collectors;
 public class MultiInstanceStatusController {
 
     private final RuntimeService runtimeService;
+    private final HistoryService historyService;
     private final TaskService taskService;
     private final ExtendedTaskInfoRepository extendedTaskInfoRepository;
     private final ObjectMapper objectMapper;
@@ -105,6 +108,20 @@ public class MultiInstanceStatusController {
             List<ExtendedTaskInfo> multiInstanceTasks = allTaskInfos.stream()
                     .filter(this::isIncludedInMultiInstanceStatus)
                     .collect(Collectors.toList());
+
+            // 5b. 流程已结束且无运行时 execution 时，扩展表常被软删除；门户聚合若无记录会误判子表 MI 状态。
+            //     对已结束的流程实例补查「含已删除」的扩展行以重建 MI 任务列表。
+            if (multiInstanceTasks.isEmpty() && multiInstanceExecution == null) {
+                HistoricProcessInstance hip = historyService.createHistoricProcessInstanceQuery()
+                        .processInstanceId(processInstanceId)
+                        .singleResult();
+                if (hip != null && hip.getEndTime() != null) {
+                    allTaskInfos = extendedTaskInfoRepository.findAllByProcessInstanceId(processInstanceId);
+                    multiInstanceTasks = allTaskInfos.stream()
+                            .filter(this::isIncludedInMultiInstanceStatus)
+                            .collect(Collectors.toList());
+                }
+            }
 
             if (multiInstanceTasks.isEmpty() && multiInstanceExecution == null) {
                 log.warn("流程实例 {} 中未找到多实例执行或历史多实例任务", processInstanceId);

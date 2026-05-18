@@ -31,6 +31,11 @@ public interface ExtendedTaskInfoRepository extends JpaRepository<ExtendedTaskIn
     List<ExtendedTaskInfo> findByProcessInstanceIdAndIsDeletedFalse(String processInstanceId);
 
     /**
+     * 流程实例全部扩展任务（含软删除）。流程结束后门户仍可能依赖其中的 MI 元数据重建子表行状态。
+     */
+    List<ExtendedTaskInfo> findAllByProcessInstanceId(String processInstanceId);
+
+    /**
      * 查询用户的直接分配任务
      */
     @Query("SELECT t FROM ExtendedTaskInfo t WHERE t.assignmentType = 'USER' " +

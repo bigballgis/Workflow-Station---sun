@@ -1603,7 +1603,8 @@ public class TaskProcessComponent {
             throw e;
         } catch (Exception e) {
             log.warn("Failed to update process instance assignee for {}: {}", processInstanceId, e.getMessage());
-            rethrowIfRollbackOnlyAfterCatch(e, "UA-RBONLY", "updateProcessInstanceAssignee", processInstanceId);
+            rethrowIfRollbackOnlyAfterCatch(e,
+                    "UA-RBONLY updateProcessInstanceAssignee " + processInstanceId);
         }
     }
 

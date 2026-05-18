@@ -1294,6 +1294,7 @@ public class ProcessComponent {
             synthetic.setFunctionUnitCatalogId(pi.getFunctionUnitCatalogId());
             synthetic.setFunctionUnitCode(pi.getFunctionUnitCode());
             synthetic.setProcessDefinitionKey(pi.getProcessDefinitionKey());
+            synthetic.setStatus(pi.getStatus());
         });
         enrichSubTablesWithAssignmentData(synthetic);
     }
@@ -1363,8 +1364,140 @@ public class ProcessComponent {
         }
         Map<String, Object> subTables = (Map<String, Object>) subTablesObj;
         Map<String, String> bindingTableNames = resolveSubTableBindingTableNames(info);
-        Map<String, Map<String, MiRowProgress>> miProgressByTable = resolveMiRowProgress(info.getId());
+        Map<String, Map<String, MiRowProgress>> miProgressByTable = resolveMiRowProgress(info.getId(), info.getStatus());
         enrichSubTablesMapPayload(info, subTables, bindingTableNames, miProgressByTable);
+    }
+
+    /**
+     * When canonical PK strings differ between variables and wf_extended_task_info (e.g. copied forms /
+     * id vs id_idw), still resolve MI overlay if there is exactly one logical PK value match.
+     */
+    private MiRowProgress lookupMiRowProgressForVariableRow(
+            Map<String, MiRowProgress> miProgress,
+            List<String> pkCols,
+            Map<String, Object> rowKey) {
+        if (miProgress == null || miProgress.isEmpty() || rowKey == null) {
+            return null;
+        }
+        String canon = SubTableRowKeySupport.canonicalRowKeyString(pkCols, rowKey);
+        MiRowProgress hit = miProgress.get(canon);
+        if (hit != null) {
+            return hit;
+        }
+        if (pkCols.size() != 1) {
+            return null;
+        }
+        Long want = normalizeRowKeyLong(pkCols.get(0), rowKey);
+        if (want == null) {
+            return null;
+        }
+        MiRowProgress onlyMatch = null;
+        int matches = 0;
+        for (Map.Entry<String, MiRowProgress> e : miProgress.entrySet()) {
+            Long parsed = parseCanonicalSinglePkSuffixLong(e.getKey());
+            if (parsed != null && parsed.equals(want)) {
+                matches++;
+                onlyMatch = e.getValue();
+            }
+        }
+        return matches == 1 ? onlyMatch : null;
+    }
+
+    private static Long normalizeRowKeyLong(String pkCol, Map<String, Object> rowKey) {
+        Object v = SubTableRowKeySupport.getRowValueIgnoreCase(rowKey, pkCol);
+        return coerceWholeNumber(v);
+    }
+
+    private static Long parseCanonicalSinglePkSuffixLong(String canonKey) {
+        if (canonKey == null || canonKey.isEmpty()) {
+            return null;
+        }
+        int eq = canonKey.lastIndexOf('=');
+        if (eq < 0 || eq >= canonKey.length() - 1) {
+            return null;
+        }
+        return coerceWholeNumber(canonKey.substring(eq + 1));
+    }
+
+    private static Long coerceWholeNumber(Object raw) {
+        if (raw == null) {
+            return null;
+        }
+        if (raw instanceof Number n) {
+            return n.longValue();
+        }
+        try {
+            String s = String.valueOf(raw).trim();
+            if (s.isEmpty()) {
+                return null;
+            }
+            return Long.parseLong(s);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private static boolean isPortalProcessCompleted(ProcessInstanceInfo info) {
+        return info != null && info.getStatus() != null
+                && "COMPLETED".equalsIgnoreCase(info.getStatus().trim());
+    }
+
+    /**
+     * 写入 MI 扩展列的同时镜像门户约定的 {@code task_status}/{@code task_current_node}，
+     * SubTableField / My Request 流程图依赖这两列。
+     */
+    private void applyMiOverlayToVariableRow(Map<String, Object> row, MiRowProgress p) {
+        if (row == null || p == null) {
+            return;
+        }
+        if (p.statusColumn != null && !p.statusColumn.isBlank()) {
+            row.put(p.statusColumn, p.status);
+        }
+        if (p.nodeColumn != null && !p.nodeColumn.isBlank()) {
+            row.put(p.nodeColumn, p.currentNode);
+        }
+        row.put("task_status", mapWorkflowMiStatusToPortalTaskStatus(p.status));
+        row.put("task_current_node",
+                p.currentNode != null && !p.currentNode.isBlank() ? p.currentNode : "-");
+    }
+
+    private static String mapWorkflowMiStatusToPortalTaskStatus(String workflowStatus) {
+        if (workflowStatus == null || workflowStatus.isBlank()) {
+            return "PENDING";
+        }
+        String u = workflowStatus.trim().toUpperCase(Locale.ROOT);
+        if ("COMPLETED".equals(u)) {
+            return "COMPLETED";
+        }
+        if ("CANCELLED".equals(u)) {
+            return "CANCELLED";
+        }
+        if ("IN_PROGRESS".equals(u) || "ASSIGNED".equals(u) || "CREATED".equals(u)) {
+            return "IN_PROGRESS";
+        }
+        return workflowStatus;
+    }
+
+    /**
+     * 流程已归档完成但变量快照/MI API 仍可能遗留进行中占位符时的兜底（常见于扩展任务软删除后）。
+     */
+    private static void normalizeStuckMiParticipantRowForCompletedProcess(Map<String, Object> row) {
+        if (row == null || row.isEmpty()) {
+            return;
+        }
+        Object ts = row.get("task_status");
+        String s = ts != null ? String.valueOf(ts).trim() : "";
+        if ("COMPLETED".equalsIgnoreCase(s) || "CANCELLED".equalsIgnoreCase(s)) {
+            return;
+        }
+        boolean miLike = row.containsKey("assignee_user_id")
+                || row.containsKey("assignee_display_name")
+                || row.containsKey("task_current_node");
+        if (!miLike) {
+            return;
+        }
+        row.put("task_status", "COMPLETED");
+        row.put("task_current_node", "end");
     }
 
     /**
@@ -1456,7 +1589,6 @@ public class ProcessComponent {
 
                 // Engine-driven MI status last so initiator My Request matches runtime tasks (not stale DB columns).
                 if (!miProgress.isEmpty()) {
-                    MiRowProgress schema = miProgress.values().iterator().next();
                     for (Object rowObj : rows) {
                         if (!(rowObj instanceof Map<?, ?> rawRow)) {
                             continue;
@@ -1466,15 +1598,23 @@ public class ProcessComponent {
                         if (rowKey == null) {
                             continue;
                         }
-                        String canon = SubTableRowKeySupport.canonicalRowKeyString(pkCols, rowKey);
-                        MiRowProgress p = miProgress.get(canon);
-                        if (p == null) {
-                            row.put(schema.statusColumn, "PENDING");
-                            row.put(schema.nodeColumn, "-");
-                        } else {
-                            row.put(p.statusColumn, p.status);
-                            row.put(p.nodeColumn, p.currentNode);
+                        MiRowProgress p = lookupMiRowProgressForVariableRow(miProgress, pkCols, rowKey);
+                        // Do not fabricate PENDING when no engine row matches — DB merge / variables may already
+                        // hold COMPLETED for copied forms (subform_copy) or PK-canonical mismatch cases.
+                        if (p != null) {
+                            applyMiOverlayToVariableRow(row, p);
                         }
+                        if (isPortalProcessCompleted(info)) {
+                            normalizeStuckMiParticipantRowForCompletedProcess(row);
+                        }
+                    }
+                } else if (isPortalProcessCompleted(info)) {
+                    for (Object rowObj : rows) {
+                        if (!(rowObj instanceof Map<?, ?> rawRow)) {
+                            continue;
+                        }
+                        Map<String, Object> row = (Map<String, Object>) rawRow;
+                        normalizeStuckMiParticipantRowForCompletedProcess(row);
                     }
                 }
             }
@@ -1526,7 +1666,7 @@ public class ProcessComponent {
     }
 
     @SuppressWarnings("unchecked")
-    private Map<String, Map<String, MiRowProgress>> resolveMiRowProgress(String processInstanceId) {
+    private Map<String, Map<String, MiRowProgress>> resolveMiRowProgress(String processInstanceId, String processInstanceStatus) {
         if (processInstanceId == null || processInstanceId.isBlank()) {
             return Collections.emptyMap();
         }
@@ -1579,6 +1719,8 @@ public class ProcessComponent {
             }
 
             Map<String, Map<String, MiRowProgress>> out = new HashMap<>();
+            boolean processEndedCompleted = processInstanceStatus != null
+                    && "COMPLETED".equalsIgnoreCase(processInstanceStatus.trim());
             for (var e : byTableRow.entrySet()) {
                 String tableName = e.getKey();
                 Map<String, List<Map<String, Object>>> rows = e.getValue();
@@ -1593,12 +1735,17 @@ public class ProcessComponent {
                     String statusCol = firstNonBlank(stringVal(rowTasks.get(0).get("miTaskStatusField")), "task_status");
                     String nodeCol = firstNonBlank(stringVal(rowTasks.get(0).get("miTaskCurrentNodeField")), "task_current_node");
 
-                    Map<String, Object> active = pickLatestActiveTask(rowTasks);
-                    if (active != null) {
-                        String node = firstNonBlank(stringVal(active.get("taskName")), "-");
-                        rowProgress.put(rowCanon, new MiRowProgress(statusCol, nodeCol, "IN_PROGRESS", node));
-                    } else {
+                    if (processEndedCompleted) {
+                        // Runtime is gone; wf_extended_task_info may leave stray non-terminal rows. Never show MI as in-flight.
                         rowProgress.put(rowCanon, new MiRowProgress(statusCol, nodeCol, "COMPLETED", "end"));
+                    } else {
+                        Map<String, Object> active = pickLatestActiveTask(rowTasks);
+                        if (active != null) {
+                            String node = firstNonBlank(stringVal(active.get("taskName")), "-");
+                            rowProgress.put(rowCanon, new MiRowProgress(statusCol, nodeCol, "IN_PROGRESS", node));
+                        } else {
+                            rowProgress.put(rowCanon, new MiRowProgress(statusCol, nodeCol, "COMPLETED", "end"));
+                        }
                     }
                 }
                 if (!rowProgress.isEmpty()) {

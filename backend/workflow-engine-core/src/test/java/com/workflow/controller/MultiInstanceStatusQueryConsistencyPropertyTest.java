@@ -7,7 +7,9 @@ import com.workflow.entity.ExtendedTaskInfo;
 import com.workflow.enums.AssignmentType;
 import com.workflow.repository.ExtendedTaskInfoRepository;
 import net.jqwik.api.*;
+import org.flowable.engine.HistoryService;
 import org.flowable.engine.RuntimeService;
+import org.flowable.engine.history.HistoricProcessInstanceQuery;
 import org.flowable.engine.runtime.Execution;
 import org.flowable.engine.runtime.ExecutionQuery;
 
@@ -49,15 +51,22 @@ class MultiInstanceStatusQueryConsistencyPropertyTest {
     ) {
         // Setup mocks
         RuntimeService runtimeService = mock(RuntimeService.class);
+        HistoryService historyService = mock(HistoryService.class);
+        HistoricProcessInstanceQuery hipQuery = mock(HistoricProcessInstanceQuery.class);
         ExtendedTaskInfoRepository extendedTaskInfoRepository = mock(ExtendedTaskInfoRepository.class);
         ExecutionQuery executionQuery = mock(ExecutionQuery.class);
-        
+
+        when(historyService.createHistoricProcessInstanceQuery()).thenReturn(hipQuery);
+        when(hipQuery.processInstanceId(anyString())).thenReturn(hipQuery);
+        when(hipQuery.singleResult()).thenReturn(null);
+
         MultiInstanceStatusController controller = new MultiInstanceStatusController(
             runtimeService,
-            null, // taskService not needed for this test
+            historyService,
+            null,
             extendedTaskInfoRepository,
             objectMapper,
-            null,  // jdbcTemplate not needed for this test
+            null,
             mock(com.workflow.component.BpmnActionParser.class)
         );
         
@@ -216,19 +225,24 @@ class MultiInstanceStatusQueryConsistencyPropertyTest {
     ) {
         // Setup mocks
         RuntimeService runtimeService = mock(RuntimeService.class);
+        HistoryService historyService = mock(HistoryService.class);
+        HistoricProcessInstanceQuery hipQuery = mock(HistoricProcessInstanceQuery.class);
         ExtendedTaskInfoRepository extendedTaskInfoRepository = mock(ExtendedTaskInfoRepository.class);
         ExecutionQuery executionQuery = mock(ExecutionQuery.class);
-        
+
+        when(historyService.createHistoricProcessInstanceQuery()).thenReturn(hipQuery);
+        when(hipQuery.processInstanceId(anyString())).thenReturn(hipQuery);
+        when(hipQuery.singleResult()).thenReturn(null);
+
         MultiInstanceStatusController controller = new MultiInstanceStatusController(
             runtimeService,
+            historyService,
             null,
             extendedTaskInfoRepository,
             objectMapper,
             null,
             mock(com.workflow.component.BpmnActionParser.class)
         );
-        
-        // Given: 没有多实例执行
         when(runtimeService.createExecutionQuery()).thenReturn(executionQuery);
         when(executionQuery.processInstanceId(processInstanceId)).thenReturn(executionQuery);
         when(executionQuery.list()).thenReturn(Collections.emptyList());
@@ -256,19 +270,24 @@ class MultiInstanceStatusQueryConsistencyPropertyTest {
     ) {
         // Setup mocks
         RuntimeService runtimeService = mock(RuntimeService.class);
+        HistoryService historyService = mock(HistoryService.class);
+        HistoricProcessInstanceQuery hipQuery = mock(HistoricProcessInstanceQuery.class);
         ExtendedTaskInfoRepository extendedTaskInfoRepository = mock(ExtendedTaskInfoRepository.class);
         ExecutionQuery executionQuery = mock(ExecutionQuery.class);
-        
+
+        when(historyService.createHistoricProcessInstanceQuery()).thenReturn(hipQuery);
+        when(hipQuery.processInstanceId(anyString())).thenReturn(hipQuery);
+        when(hipQuery.singleResult()).thenReturn(null);
+
         MultiInstanceStatusController controller = new MultiInstanceStatusController(
             runtimeService,
+            historyService,
             null,
             extendedTaskInfoRepository,
             objectMapper,
             null,
             mock(com.workflow.component.BpmnActionParser.class)
         );
-        
-        // Given: 准备多实例执行场景
         String processInstanceId = scenario.processInstanceId;
         
         when(runtimeService.createExecutionQuery()).thenReturn(executionQuery);

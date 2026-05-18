@@ -206,7 +206,7 @@
 
         <!-- Task status column (multi-instance subtask completion) -->
         <el-table-column
-          v-if="showTaskStatus"
+          v-if="effectiveShowTaskStatus"
           :label="t('subTable.taskStatus')"
           width="120"
           align="center"
@@ -248,7 +248,7 @@
 
         <!-- View subtask detail button (read-only mode) -->
         <el-table-column
-          v-if="showViewDetail"
+          v-if="effectiveShowViewDetail"
           :label="t('subTable.actions')"
           width="100"
           align="center"
@@ -550,6 +550,12 @@ import {
 import { userApi } from '@/api/user'
 import { onMounted, onBeforeUnmount } from 'vue'
 import { useSubTableWebSocket, type SubTableUpdateMessage } from '@/composables/useSubTableWebSocket'
+import {
+  collectNestedChildRowsFromPeerBindings,
+  mergeSubTableRowsByRowId,
+  pullNestedRowsForBindingFromParentRows,
+  stripLinkFormDesignerTableLabel
+} from '@/composables/tasks/shared'
 
 const { t } = useI18n()
 
@@ -718,6 +724,92 @@ const props = withDefaults(defineProps<{
   compactLookupCells: false
 })
 
+function normalizeColumnHeaderLabel(s: string): string {
+  return String(s || '').trim().toLowerCase()
+}
+
+/**
+ * List view already carries MI / task progress (often long i18n labels like "Multi-instance subtask status"
+ * with a field name other than {@code task_status}) — suppress the runtime "Status" column.
+ */
+function columnRepresentsMiOrTaskStatusList(col: Column): boolean {
+  const f = String(col.field || '').toLowerCase()
+  if (f === 'task_status' || f.endsWith('_task_status')) return true
+  if (/\btask[_-]?status\b/i.test(f) || f.includes('taskstatus')) return true
+  const lab = normalizeColumnHeaderLabel(String(col.label || ''))
+  if (!lab) return false
+  if (lab.includes('task status') || lab.includes('subtask status')) return true
+  if (lab.includes('sub-task') && lab.includes('status')) return true
+  if ((lab.includes('multi-instance') || lab.includes('multi instance')) && lab.includes('status')) return true
+  if (lab.includes('multiinstance') && lab.includes('status')) return true
+  return false
+}
+
+/** English/legacy headers often use "Status" while i18n runtime column uses another locale — still one conceptual column. */
+function columnHeaderIsGenericStatusLabel(col: Column): boolean {
+  const lab = normalizeColumnHeaderLabel(String(col.label || ''))
+  return lab === 'status' || lab === '状态' || lab === '狀態'
+}
+
+/**
+ * Row carries Flowable MI task_status; list already has a column whose header reads like a task/MI status
+ * (even when {@link columnRepresentsMiOrTaskStatusList} missed due to unusual wording).
+ */
+function listViewLikelyAlreadyShowsTaskStatus(rowsSample: unknown[]): boolean {
+  const r0 = rowsSample?.[0]
+  if (!r0 || typeof r0 !== 'object') return false
+  if ((r0 as Record<string, unknown>).task_status === undefined) return false
+  if ((props.columns || []).some(columnHeaderIsGenericStatusLabel)) return true
+  return (props.columns || []).some(c => {
+    const lab = normalizeColumnHeaderLabel(String(c.label || ''))
+    if (!lab.includes('status')) return false
+    return /task|subtask|sub-task|multi|instance|parallel|loop|progress|assignee|participant|办理|子任务|多实例|進度|狀態/.test(lab)
+  })
+}
+
+/** Designer list may already include task_status / an "Actions" column; avoid duplicating MI summary extras. */
+const effectiveShowTaskStatus = computed(() => {
+  if (!props.showTaskStatus) return false
+  if (props.columns.some(columnRepresentsMiOrTaskStatusList)) return false
+  const statusHeader = normalizeColumnHeaderLabel(t('subTable.taskStatus'))
+  if (statusHeader && props.columns.some(c => normalizeColumnHeaderLabel(c.label) === statusHeader)) {
+    return false
+  }
+  if (listViewLikelyAlreadyShowsTaskStatus(rows.value)) return false
+  return true
+})
+
+const effectiveShowViewDetail = computed(() => {
+  if (!props.showViewDetail) return false
+  if (props.columns.some(c => String(c.field).toLowerCase() === 'actions')) return false
+  const actionsHeader = normalizeColumnHeaderLabel(t('subTable.actions'))
+  if (actionsHeader && props.columns.some(c => normalizeColumnHeaderLabel(c.label) === actionsHeader)) {
+    return false
+  }
+  /**
+   * Read-only (e.g. My Request): Link Form already provides a row-level Details affordance; the extra
+   * Actions/Detail column duplicates UX for common MI+linkForm list designs.
+   */
+  if (!props.editable && props.columns.some(c => c.type === 'linkForm')) {
+    return false
+  }
+  /** Same locale/header mismatch pattern as Status: designer "Actions" vs i18n. */
+  const r0 = rows.value?.[0]
+  if (
+    !props.editable &&
+    r0 &&
+    typeof r0 === 'object' &&
+    (r0 as Record<string, unknown>).task_status !== undefined &&
+    (props.columns || []).some(c => {
+      const lab = normalizeColumnHeaderLabel(String(c.label || ''))
+      return lab === 'actions' || lab === '操作'
+    })
+  ) {
+    return false
+  }
+  return true
+})
+
 const emit = defineEmits<{
   (e: 'update:modelValue', val: any[]): void
   (e: 'assignmentChanged'): void
@@ -748,13 +840,9 @@ const linkedFormData = ref<Record<string, any>>({})
 /** When footer is shown (To Do), restore on Cancel/X without persisting to parent row. */
 const linkFormDialogSnapshot = ref<{ linkedFormData: Record<string, any>; linkedSubTableRows: any[] } | null>(null)
 
-/** Designer list views may store "ADD + …"; runtime bindings use display names — align with developer SubTableField. */
-function stripLinkFormBoundTableName(raw?: string): string {
-  return String(raw || '').trim().replace(/^ADD\s*\+\s*/i, '').trim()
-}
-
+/** Designer list views may store "ADD + …"; runtime bindings use display names — align with {@link stripLinkFormDesignerTableLabel}. */
 function linkFormTableMatchKey(name?: string): string {
-  return normalizeSubTableName(stripLinkFormBoundTableName(String(name || '')).replace(/\s+/g, ''))
+  return normalizeSubTableName(stripLinkFormDesignerTableLabel(String(name || '')).replace(/\s+/g, ''))
 }
 
 /**
@@ -768,7 +856,7 @@ function resolveLinkBindingForColumn(col: Column | null | undefined): SubTableBi
   const list = props.linkedSubTableBindings ?? []
   const boundId = col.props?.boundSubTableBindingId
   const boundNameRaw = col.props?.boundSubTableName ? String(col.props.boundSubTableName).trim() : ''
-  const boundNameStripped = stripLinkFormBoundTableName(boundNameRaw)
+  const boundNameStripped = stripLinkFormDesignerTableLabel(boundNameRaw)
   const boundKey = linkFormTableMatchKey(boundNameRaw)
 
   const matches = list.filter(item => {
@@ -861,6 +949,59 @@ function resolveLinkedFallbackRows(binding?: SubTableBinding): any[] {
   )
   return Array.isArray(sameTableBinding?.data) ? sameTableBinding.data : []
 }
+
+/** When copied forms / Link merge use a different bindingId than variables, {@link subTableBindingMatches} may miss; score by form field keys vs row keys. */
+function collectLinkTargetFormFieldKeys(binding?: SubTableBinding): Set<string> {
+  const keys = new Set<string>()
+  if (!binding?.formFields?.length) return keys
+  for (const f of binding.formFields) {
+    if (f.type === 'card') {
+      f.children?.forEach(c => {
+        if (typeof c.key === 'string' && c.key) keys.add(c.key)
+      })
+    } else if (typeof f.key === 'string' && f.key) {
+      keys.add(f.key)
+    }
+  }
+  return keys
+}
+
+/** Max overlap score over all rows (row0 is often a MI placeholder; real payload may be at index 1+). */
+function maxFormFieldOverlapScore(rows: any[], fieldKeys: Set<string>): number {
+  if (!Array.isArray(rows) || fieldKeys.size === 0) return -1
+  let best = -1
+  for (const r of rows) {
+    if (!r || typeof r !== 'object') continue
+    let score = 0
+    for (const fk of fieldKeys) {
+      const v = rowValueForLinkedFormField(r as Record<string, any>, fk)
+      if (isPresentLinkedModalValue(v)) score++
+    }
+    if (score > best) best = score
+  }
+  return best
+}
+
+function peerSubTableDataByFormFieldOverlap(binding: SubTableBinding | undefined, peers: SubTableBinding[]): any[] {
+  if (!binding || !peers.length) return []
+  const fieldKeys = collectLinkTargetFormFieldKeys(binding)
+  if (fieldKeys.size === 0) return []
+  const threshold =
+    fieldKeys.size <= 2 ? 1 : Math.min(fieldKeys.size, Math.max(2, Math.ceil(fieldKeys.size * 0.25)))
+
+  let best: any[] = []
+  let bestScore = -1
+  for (const p of peers) {
+    if (!Array.isArray(p.data) || p.data.length === 0) continue
+    const score = maxFormFieldOverlapScore(p.data, fieldKeys)
+    if (score >= threshold && score > bestScore) {
+      bestScore = score
+      best = p.data
+    }
+  }
+  return best
+}
+
 
 /** When Details uses process-level fallback rows (no row.__subTables__), narrow to this parent participant if child rows carry FKs. */
 function filterLinkedChildRowsForParentRow(
@@ -966,9 +1107,39 @@ function handleLinkFormClick(col: Column, row: Record<string, any>, rowIndex: nu
   const boundId = col.props?.boundSubTableBindingId
   const boundName = col.props?.boundSubTableName || binding?.tableName
   const rowSub = row?.__subTables__ && typeof row.__subTables__ === 'object' ? (row.__subTables__ as Record<string, any>) : {}
-  const saved = (boundId != null ? (rowSub[boundId] ?? rowSub[String(boundId)]) : undefined) ?? (boundName ? (rowSub[boundName] ?? rowSub[String(boundName)]) : undefined)
+  let saved: unknown =
+    boundId != null ? rowSub[boundId] ?? rowSub[String(boundId)] : undefined
+  if (!Array.isArray(saved) && boundName) {
+    const raw = String(boundName).trim()
+    const stripped = stripLinkFormDesignerTableLabel(raw)
+    const tryKeys = [raw, stripped].filter((k, i, a) => k && a.indexOf(k) === i)
+    for (const k of tryKeys) {
+      const v = rowSub[k] ?? rowSub[String(k)]
+      if (Array.isArray(v)) {
+        saved = v
+        break
+      }
+    }
+    if (!Array.isArray(saved)) {
+      const want = linkFormTableMatchKey(raw)
+      if (want) {
+        for (const rk of Object.keys(rowSub)) {
+          if (linkFormTableMatchKey(rk) !== want) continue
+          const v = rowSub[rk]
+          if (Array.isArray(v)) {
+            saved = v
+            break
+          }
+        }
+      }
+    }
+  }
   const savedRows = Array.isArray(saved) ? saved : []
-  const fallbackRows = resolveLinkedFallbackRows(binding)
+  const baseFallbackRows = resolveLinkedFallbackRows(binding)
+  const fallbackRows =
+    baseFallbackRows.length > 0
+      ? baseFallbackRows
+      : peerSubTableDataByFormFieldOverlap(binding, props.linkedSubTableBindings ?? [])
   /**
    * MI 待办 `suppressLinkFormInitialData=true` 时仍优先用行内嵌套 `__subTables__`；
    * 若为空则回退到绑定数据（已在上层做多实例行隔离），并按父行主键收窄子表行，避免空白/错误。
@@ -991,6 +1162,99 @@ function handleLinkFormClick(col: Column, row: Record<string, any>, rowIndex: nu
       effectiveSavedRows = filterLinkedChildRowsForParentRow(row, effectiveSavedRows, binding)
     }
   }
+  /**
+   * Parent row.__subTables__[child] may be [{}] / assignee-only placeholders. That makes savedRows non-empty so we
+   * never took binding.data fallback; merge in fallback so Link Form modal matches To Do / variables.
+   */
+  if (
+    binding?.formFields?.length &&
+    fallbackRows.length > 0 &&
+    effectiveSavedRows.length > 0 &&
+    linkFormRowsLackFormPayload(effectiveSavedRows, binding.formFields)
+  ) {
+    effectiveSavedRows = mergeSubTableRowsByRowId(
+      [...effectiveSavedRows],
+      [...fallbackRows],
+      binding.primaryKeyFields ?? null
+    )
+  }
+  if (
+    effectiveSavedRows.length === 0 &&
+    binding &&
+    Array.isArray(props.linkedSubTableBindings) &&
+    props.linkedSubTableBindings.length > 0
+  ) {
+    const nested = collectNestedChildRowsFromPeerBindings(
+      binding,
+      props.linkedSubTableBindings as SubTableBinding[],
+      null
+    )
+    if (nested.length > 0) {
+      effectiveSavedRows = row
+        ? filterLinkedChildRowsForParentRow(row, [...nested], binding)
+        : [...nested]
+    }
+  }
+
+  /** My Request / read-only: child slice often lives only under this parent row's {@code __subTables__} (key variants), not in {@code binding.data}. */
+  if (binding && row && Array.isArray(props.linkedSubTableBindings) && props.linkedSubTableBindings.length > 0) {
+    const peerMap = new Map<number, number | null>()
+    for (const b of props.linkedSubTableBindings) {
+      const tid = b.tableId != null ? Number(b.tableId) : null
+      if (tid != null && Number.isFinite(tid)) peerMap.set(Number(b.bindingId), tid)
+    }
+    const fromClickedParent = pullNestedRowsForBindingFromParentRows(
+      {
+        bindingId: Number(binding.bindingId),
+        tableName: String(binding.tableName ?? ''),
+        physicalTableName: (binding as { physicalTableName?: string }).physicalTableName,
+        tableId: binding.tableId ?? null
+      },
+      [row],
+      peerMap
+    )
+    if (fromClickedParent.length > 0) {
+      effectiveSavedRows = mergeSubTableRowsByRowId(
+        effectiveSavedRows.length > 0 ? [...effectiveSavedRows] : [],
+        fromClickedParent,
+        binding.primaryKeyFields ?? null
+      )
+    }
+  }
+
+  const rowDataKeyCount = (r: unknown) =>
+    r && typeof r === 'object' ? Object.keys(r as object).filter(k => !k.startsWith('__')).length : 0
+  if (
+    binding &&
+    effectiveSavedRows.length > 0 &&
+    rowDataKeyCount(effectiveSavedRows[0]) <= 2 &&
+    Array.isArray(props.linkedSubTableBindings) &&
+    props.linkedSubTableBindings.length > 0
+  ) {
+    const nestedPeers = collectNestedChildRowsFromPeerBindings(
+      binding,
+      props.linkedSubTableBindings as SubTableBinding[],
+      null
+    )
+    if (nestedPeers.length > 0) {
+      effectiveSavedRows = mergeSubTableRowsByRowId(
+        [...effectiveSavedRows],
+        nestedPeers,
+        binding.primaryKeyFields ?? null
+      )
+    }
+  }
+
+  if (row && binding && effectiveSavedRows.length > 0) {
+    const narrowed = filterLinkedChildRowsForParentRow(row, [...effectiveSavedRows], binding)
+    if (narrowed.length > 0) effectiveSavedRows = narrowed
+  }
+
+  if (binding?.formFields?.length && effectiveSavedRows.length > 1) {
+    const pr = promoteBestRowForLinkFormModal(effectiveSavedRows, binding.formFields)
+    effectiveSavedRows = pr.rows
+  }
+
   linkedSubTableRows.value = [...effectiveSavedRows]
   linkedFormData.value = buildLinkedFormData({ ...(binding || ({} as any)), data: effectiveSavedRows })
   const bindingForFooter = resolveLinkBindingForColumn(col)
@@ -1011,19 +1275,106 @@ function handleLinkFormClick(col: Column, row: Record<string, any>, rowIndex: nu
   linkFormDialogVisible.value = true
 }
 
-function buildLinkedFormData(binding?: SubTableBinding): Record<string, any> {
-  const source = binding?.data?.[0] && typeof binding.data[0] === 'object' ? binding.data[0] : {}
-  const next: Record<string, any> = { ...source }
-  binding?.formFields?.forEach(field => {
+function rowValueForLinkedFormField(row: Record<string, any>, key: string): unknown {
+  if (!row || typeof row !== 'object') return undefined
+  if (Object.prototype.hasOwnProperty.call(row, key)) return row[key]
+  const want = key.toLowerCase()
+  const wantNorm = want.replace(/_/g, '')
+  for (const rk of Object.keys(row)) {
+    if (rk.startsWith('__')) continue
+    const rkl = rk.toLowerCase()
+    if (rkl === want) return row[rk]
+    if (wantNorm.length > 0 && rkl.replace(/_/g, '') === wantNorm) return row[rk]
+  }
+  return undefined
+}
+
+function isPresentLinkedModalValue(v: unknown): boolean {
+  if (v === undefined || v === null) return false
+  if (typeof v === 'boolean') return true
+  if (typeof v === 'number') return !Number.isNaN(v)
+  if (typeof v === 'string') return v.trim() !== ''
+  return true
+}
+
+/** Count filled link-form fields on one row (used to pick {@code data[0]} vs a richer sibling row). */
+function scoreRowForLinkedFormFields(row: unknown, formFields?: FormField[]): number {
+  if (!row || typeof row !== 'object' || !formFields?.length) return 0
+  const o = row as Record<string, any>
+  let s = 0
+  for (const field of formFields) {
     if (field.type === 'card') {
-      field.children?.forEach(child => {
-        if (next[child.key] === undefined) next[child.key] = child.defaultValue ?? null
-      })
-    } else if (next[field.key] === undefined) {
-      next[field.key] = field.defaultValue ?? null
+      for (const c of field.children || []) {
+        const v = rowValueForLinkedFormField(o, c.key)
+        if (isPresentLinkedModalValue(v)) s++
+      }
+    } else {
+      const v = rowValueForLinkedFormField(o, field.key)
+      if (isPresentLinkedModalValue(v)) s++
     }
+  }
+  return s
+}
+
+/**
+ * Link detail modal reads binding.data[0] only — if variables merged MI placeholders first, row 0 is empty while
+ * another index holds the real payload; move the best-scoring row to the front without dropping siblings.
+ */
+function promoteBestRowForLinkFormModal(rows: any[], formFields: FormField[] | undefined): { rows: any[]; movedFrom: number | null } {
+  if (!Array.isArray(rows) || rows.length <= 1 || !formFields?.length) return { rows, movedFrom: null }
+  let bestIdx = 0
+  let bestScore = scoreRowForLinkedFormFields(rows[0], formFields)
+  for (let i = 1; i < rows.length; i++) {
+    const sc = scoreRowForLinkedFormFields(rows[i], formFields)
+    if (sc > bestScore) {
+      bestScore = sc
+      bestIdx = i
+    }
+  }
+  if (bestIdx === 0) return { rows, movedFrom: null }
+  const next = [...rows]
+  const [pick] = next.splice(bestIdx, 1)
+  return { rows: [pick, ...next], movedFrom: bestIdx }
+}
+
+/** True when saved nested rows carry no real values for any designer link-form field (placeholders only). */
+function linkFormRowsLackFormPayload(rows: any[], formFields: FormField[] | undefined): boolean {
+  if (!formFields?.length || !Array.isArray(rows) || rows.length === 0) return false
+  const row0 = rows[0]
+  if (!row0 || typeof row0 !== 'object') return true
+  const o = row0 as Record<string, any>
+  const anyFieldFilled = formFields.some(field => {
+    if (field.type === 'card') {
+      return (field.children || []).some(child =>
+        isPresentLinkedModalValue(rowValueForLinkedFormField(o, child.key))
+      )
+    }
+    return isPresentLinkedModalValue(rowValueForLinkedFormField(o, field.key))
   })
-  return next
+  return !anyFieldFilled
+}
+
+function buildLinkedFormData(binding?: SubTableBinding): Record<string, any> {
+  const raw =
+    binding?.data?.[0] && typeof binding.data[0] === 'object'
+      ? (binding.data[0] as Record<string, any>)
+      : {}
+  const next: Record<string, any> = {}
+  if (binding?.formFields?.length) {
+    binding.formFields.forEach(field => {
+      if (field.type === 'card') {
+        field.children?.forEach(child => {
+          const v = rowValueForLinkedFormField(raw, child.key)
+          next[child.key] = isPresentLinkedModalValue(v) ? v : (child.defaultValue ?? null)
+        })
+      } else {
+        const v = rowValueForLinkedFormField(raw, field.key)
+        next[field.key] = isPresentLinkedModalValue(v) ? v : (field.defaultValue ?? null)
+      }
+    })
+    return next
+  }
+  return { ...raw }
 }
 
 function updateLinkedFormField(key: string, value: any) {

@@ -410,7 +410,9 @@ import {
   flattenNestedSubTableRowsIntoPayload,
   buildBindingIdToRelationTableIdMap,
   hydrateBindingsRowsFromVariablesBySharedRelationTableId,
-  enrichChildBindingRowsFromParentsNestedSubTables
+  enrichChildBindingRowsFromParentsNestedSubTables,
+  coerceSubTablesVariableToMap,
+  collectSubTableSliceArraysDeep
 } from '@/composables/tasks/shared'
 import { USER_ID_KEY, USER_KEY } from '@/api/auth'
 
@@ -714,9 +716,71 @@ function alignProcessSubTableBindingsBySharedTable() {
  * leave an empty `data` array. Pick a saved row list whose first row shares enough column names with the binding's
  * list-view columns (conservative threshold) so initiator My Request shows prior-step sub-table rows.
  */
+/** Columns + inline-form field keys used to match variable slices and detect MI placeholder rows. */
+function collectSubTableBindingMatchKeys(b: {
+  columns?: Array<{ field?: string }>
+  formFields?: FormField[]
+}): Set<string> {
+  const fieldSet = new Set<string>()
+  for (const c of b.columns || []) {
+    if (typeof c?.field === 'string' && c.field.length > 0) fieldSet.add(c.field)
+  }
+  const walkFormFields = (fields?: FormField[]) => {
+    if (!Array.isArray(fields)) return
+    for (const f of fields) {
+      if (f.type === 'card') walkFormFields(f.children)
+      else if (typeof f.key === 'string' && f.key.length > 0) fieldSet.add(f.key)
+    }
+  }
+  walkFormFields(b.formFields)
+  return fieldSet
+}
+
+const SUB_TABLE_MI_PLACEHOLDER_KEYS = new Set([
+  'assignee_user_id',
+  'assignee_display_name',
+  'task_status',
+  'task_id',
+  'task_definition_key'
+])
+
+function pickSubTableRowValueIgnoreKeyCase(o: Record<string, unknown>, key: string): unknown {
+  if (Object.prototype.hasOwnProperty.call(o, key)) return o[key]
+  const want = key.toLowerCase()
+  for (const rk of Object.keys(o)) {
+    if (rk.toLowerCase() === want) return o[rk]
+  }
+  return undefined
+}
+
+/**
+ * True when no row carries real values for designer list / sub-form fields (only MI assignment columns, etc.).
+ * Otherwise backfill from variables is skipped and Link Form modal stays blank for My Request.
+ */
+function subTableRowsLackSavedFieldPayload(rows: unknown[] | undefined, fieldKeys: Set<string>): boolean {
+  if (fieldKeys.size === 0) return false
+  if (!Array.isArray(rows) || rows.length === 0) return true
+  const checkKeys = [...fieldKeys].filter(k => !SUB_TABLE_MI_PLACEHOLDER_KEYS.has(k))
+  if (checkKeys.length === 0) return true
+  for (const row of rows) {
+    if (!row || typeof row !== 'object') continue
+    const o = row as Record<string, unknown>
+    for (const k of checkKeys) {
+      const v = pickSubTableRowValueIgnoreKeyCase(o, k)
+      if (v === undefined || v === null || v === '') continue
+      if (typeof v === 'boolean') return false
+      if (typeof v === 'number' && !Number.isNaN(v)) return false
+      if (typeof v === 'string' && v.trim() !== '') return false
+    }
+  }
+  return true
+}
+
 function backfillEmptySubTableBindingsFromVariables() {
-  const saved = formData.value.__subTables__
-  if (!saved || typeof saved !== 'object') return
+  const savedMap = coerceSubTablesVariableToMap(formData.value.__subTables__)
+  if (!savedMap) return
+  formData.value = { ...formData.value, __subTables__: savedMap }
+  const sliceArrays = collectSubTableSliceArraysDeep(savedMap)
 
   const all = [
     ...subTableBindings.value,
@@ -725,30 +789,33 @@ function backfillEmptySubTableBindingsFromVariables() {
   ]
 
   for (const b of all) {
-    if (Array.isArray(b.data) && b.data.length > 0) continue
-    const cols = (b as { columns?: Array<{ field?: string }> }).columns
-    const fieldSet = new Set(
-      (cols || [])
-        .map(c => c?.field)
-        .filter((f): f is string => typeof f === 'string' && f.length > 0)
-    )
-    if (fieldSet.size === 0) continue
+    const fieldKeys = collectSubTableBindingMatchKeys(b as { columns?: Array<{ field?: string }>; formFields?: FormField[] })
+    if (fieldKeys.size === 0) continue
+
+    if (
+      Array.isArray(b.data) &&
+      b.data.length > 0 &&
+      !subTableRowsLackSavedFieldPayload(b.data, fieldKeys)
+    ) {
+      continue
+    }
 
     let best: any[] | null = null
     let bestScore = 0
-    for (const val of Object.values(saved)) {
+    for (const val of sliceArrays) {
       if (!Array.isArray(val) || val.length === 0) continue
       const row0 = val[0]
       if (!row0 || typeof row0 !== 'object') continue
+      const row0KeysLower = new Set(Object.keys(row0 as object).map(k => k.toLowerCase()))
       let score = 0
-      for (const k of Object.keys(row0 as object)) {
-        if (fieldSet.has(k)) score++
+      for (const k of fieldKeys) {
+        if (row0KeysLower.has(k.toLowerCase())) score++
       }
       const threshold =
-        fieldSet.size <= 2 ? 1 : Math.min(fieldSet.size, Math.max(2, Math.ceil(fieldSet.size * 0.25)))
+        fieldKeys.size <= 2 ? 1 : Math.min(fieldKeys.size, Math.max(2, Math.ceil(fieldKeys.size * 0.25)))
       if (score >= threshold && score > bestScore) {
         bestScore = score
-        best = val
+        best = val as any[]
       }
     }
     if (best) {
@@ -813,7 +880,8 @@ const hasSubTaskFormSchema = computed(() => !!subTaskFormSchema.value)
  */
 function shouldShowBindingDetailsModal(binding: { portalViews?: any; data?: any[] }): boolean {
   const mode = binding?.portalViews?.initiatorRequest
-  if (mode === 'summaryWithLinkFormModal') return hasTaskStatusData(binding.data || [])
+  // Match FormRenderer: designer list owns Actions/Detail when initiator uses summary+Link Form.
+  if (mode === 'summaryWithLinkFormModal') return false
   if (mode === 'tableOnly' || mode === 'mirrorTodo') return false
   return hasSubTaskFormSchema.value && hasTaskStatusData(binding.data || [])
 }
@@ -821,7 +889,7 @@ function shouldShowBindingDetailsModal(binding: { portalViews?: any; data?: any[
 /** Task status column for unplaced bindings; aligns with placed sub-tables in FormRenderer (summary MI view). */
 function shouldShowBindingTaskStatus(binding: { portalViews?: any; data?: any[] }): boolean {
   const mode = binding?.portalViews?.initiatorRequest
-  if (mode === 'summaryWithLinkFormModal') return hasTaskStatusData(binding.data || [])
+  if (mode === 'summaryWithLinkFormModal') return false
   if (mode === 'tableOnly' || mode === 'mirrorTodo') return false
   return hasSubTaskFormSchema.value && hasTaskStatusData(binding.data || [])
 }
@@ -1175,6 +1243,17 @@ function buildApplicationNodeFormMap(content: any) {
           }
           nodeBindings.push(binding)
         }
+        mergeLinkFormTargetBindingsInto(nodeBindings, formsList, configForSubTables, subForms)
+        if (savedSubTables && typeof savedSubTables === 'object') {
+          for (const binding of nodeBindings) {
+            const saved = getSavedSubTableRowsFromVariables(savedSubTables, {
+              bindingId: binding.bindingId,
+              tableName: (binding as { physicalTableName?: string }).physicalTableName,
+              tableDisplayName: binding.tableName
+            })
+            if (saved) binding.data = saved
+          }
+        }
         hydrateChildSubTablesFromParentsNestedRows(
           nodeBindings,
           savedSubTables && typeof savedSubTables === 'object' ? (savedSubTables as Record<string, unknown>) : null,
@@ -1217,6 +1296,10 @@ const loadProcessDetail = async () => {
     if (data) {
       processInfo.value = data
       if (data.variables) formData.value = data.variables
+      const stCoerced = coerceSubTablesVariableToMap(formData.value.__subTables__)
+      if (stCoerced) {
+        formData.value = { ...formData.value, __subTables__: stCoerced }
+      }
       
       // Load flow history first
       await loadProcessHistory()
@@ -1410,11 +1493,15 @@ const loadFunctionUnitContent = async (processKey: string) => {
         })
       }
 
+      mergeLinkFormTargetBindingsInto(bindings, content.forms as any[], selectedFormConfig, subFormsPayload)
+
       const bindingRelationTableMap = buildBindingIdToRelationTableIdMap(content.forms as any[])
 
       // Restore sub-table data from variables (promote nested link-form rows so bindings resolve like To Do).
-      if (formData.value.__subTables__ && typeof formData.value.__subTables__ === 'object') {
-        const flattened = JSON.parse(JSON.stringify(formData.value.__subTables__)) as Record<string, unknown>
+      const rawSubTables = coerceSubTablesVariableToMap(formData.value.__subTables__)
+      if (rawSubTables) {
+        formData.value = { ...formData.value, __subTables__: rawSubTables }
+        const flattened = JSON.parse(JSON.stringify(rawSubTables)) as Record<string, unknown>
         flattenNestedSubTableRowsIntoPayload(flattened)
         formData.value = { ...formData.value, __subTables__: flattened }
       }
@@ -1422,14 +1509,18 @@ const loadFunctionUnitContent = async (processKey: string) => {
       if (savedSubTables && typeof savedSubTables === 'object') {
         for (const binding of bindings) {
           const raw = tableBindings.find((x: any) => Number(x.bindingId) === Number(binding.bindingId))
-          if (!raw) continue
           const saved = getSavedSubTableRowsFromVariables(savedSubTables, {
-            bindingId: raw.bindingId,
-            tableName: raw.tableName,
-            tableDisplayName: raw.tableDisplayName
+            bindingId: binding.bindingId,
+            tableName: raw?.tableName ?? (binding as { physicalTableName?: string }).physicalTableName,
+            tableDisplayName: raw?.tableDisplayName ?? binding.tableName
           })
           if (saved) binding.data = saved
         }
+        hydrateChildSubTablesFromParentsNestedRows(
+          bindings,
+          savedSubTables as Record<string, unknown>,
+          bindingRelationTableMap
+        )
         hydrateBindingsRowsFromVariablesBySharedRelationTableId(
           bindings,
           savedSubTables as Record<string, unknown>,
@@ -1576,7 +1667,7 @@ const loadFunctionUnitContent = async (processKey: string) => {
           if (skipReason) continue
 
           collectedPrevForms.push(
-            buildPreviousFormEntry(prevForm, { isKnownMiSubTask: !!isKnownMiSubTaskForm })
+            buildPreviousFormEntry(prevForm, { isKnownMiSubTask: !!isKnownMiSubTaskForm }, content.forms)
           )
         }
 
@@ -1614,7 +1705,7 @@ const loadFunctionUnitContent = async (processKey: string) => {
               )
             if (matchesMiForm && !collectedPrevForms.some(e => e.formId === String(curForm.id))) {
               collectedPrevForms.push(
-                buildPreviousFormEntry(curForm, { isKnownMiSubTask: true, isActiveMiSubTaskStep: true })
+                buildPreviousFormEntry(curForm, { isKnownMiSubTask: true, isActiveMiSubTaskStep: true }, content.forms)
               )
             }
           }
@@ -3163,10 +3254,216 @@ const deriveColumnsFromBinding = (binding: any, formConfig?: Record<string, any>
   return []
 }
 
+/** Owning form JSON for a binding id (any form in the function unit may declare the binding). */
+function findRawBindingInFormsForLinkMerge(
+  forms: any[] | undefined,
+  bindingId: number
+): { raw: any; formConfig: Record<string, any> } | null {
+  if (!forms?.length) return null
+  for (const f of forms) {
+    const list = f.tableBindings || []
+    const hit = list.find((x: any) => Number(x.bindingId) === Number(bindingId))
+    if (hit) {
+      let formConfig: Record<string, any> = {}
+      try {
+        formConfig = typeof f.data === 'string' ? JSON.parse(f.data || '{}') : (f.data || {})
+      } catch {
+        formConfig = {}
+      }
+      return { raw: hit, formConfig }
+    }
+  }
+  return null
+}
+
+function linkTargetHasLocalSchemaForMerge(tid: number, formConfig: Record<string, any>, subForms: Record<string, any>): boolean {
+  const sid = String(tid)
+  const sf = subForms?.[tid] ?? subForms?.[sid]
+  if (sf?.rule && Array.isArray(sf.rule) && sf.rule.length > 0) return true
+  const lv = formConfig?.subListViews?.[tid] ?? formConfig?.subListViews?.[sid]
+  if (lv?.columns && Array.isArray(lv.columns) && lv.columns.length > 0) return true
+  return false
+}
+
+function resolveSubTableSchemaSourceForTargetMerge(
+  tid: number,
+  preferFormConfig: Record<string, any>,
+  preferSubForms: Record<string, any>,
+  contentForms: any[] | undefined
+): {
+  formConfig: Record<string, any>
+  subForms: Record<string, any>
+  origin: 'local' | 'crossForm'
+  sourceFormName?: string
+} | null {
+  if (linkTargetHasLocalSchemaForMerge(tid, preferFormConfig, preferSubForms)) {
+    return { formConfig: preferFormConfig, subForms: preferSubForms, origin: 'local' }
+  }
+  if (!contentForms?.length) return null
+  for (const f of contentForms) {
+    let formConfig: Record<string, any> = {}
+    try {
+      formConfig = typeof f.data === 'string' ? JSON.parse(f.data || '{}') : (f.data || {})
+    } catch {
+      formConfig = {}
+    }
+    const sf = formConfig.subForms || {}
+    if (linkTargetHasLocalSchemaForMerge(tid, formConfig, sf)) {
+      return {
+        formConfig,
+        subForms: sf,
+        origin: 'crossForm',
+        sourceFormName: f.name != null ? String(f.name) : undefined
+      }
+    }
+  }
+  return null
+}
+
+/**
+ * Link Form targets may reference bindings omitted from the active form's tableBindings slice.
+ * Same contract as tasks/detail.vue so Link Form modal / fallback rows resolve on My Request.
+ */
+function mergeLinkFormTargetBindingsInto(
+  bindings: Array<{
+    bindingId: number
+    tableId?: number | null
+    bindingType: string
+    bindingMode: string
+    foreignKeyField: string | null
+    tableName: string
+    physicalTableName?: string
+    tableType: string
+    tableDescription: string
+    columns: Array<{ field: string; label: string; type?: string }>
+    data: any[]
+    subMode?: string
+    formFields?: FormField[]
+    formOptions?: Record<string, any>
+    portalViews?: Record<string, any> | null
+    primaryKeyFields?: string[]
+  }>,
+  contentForms: any[] | undefined,
+  localFormConfig: Record<string, any>,
+  localSubForms: Record<string, any>
+) {
+  const known = new Set(bindings.map(b => Number(b.bindingId)))
+  let changed = true
+  while (changed) {
+    changed = false
+    const targetIds = new Set<number>()
+    const targetNameHint = new Map<number, string | undefined>()
+    for (const b of bindings) {
+      for (const col of b.columns || []) {
+        if ((col as { type?: string }).type !== 'linkForm') continue
+        const rawTid = (col as { props?: { boundSubTableBindingId?: number | string; boundSubTableName?: string } }).props
+          ?.boundSubTableBindingId
+        if (rawTid == null || rawTid === '') continue
+        const n = Number(rawTid)
+        if (Number.isNaN(n)) continue
+        targetIds.add(n)
+        if (!targetNameHint.has(n)) {
+          const nm = (col as { props?: { boundSubTableName?: string } }).props?.boundSubTableName
+          targetNameHint.set(n, nm != null && String(nm).trim() !== '' ? String(nm) : undefined)
+        }
+      }
+    }
+    for (const tid of targetIds) {
+      if (known.has(tid)) continue
+      const found = findRawBindingInFormsForLinkMerge(contentForms, tid)
+      if (found) {
+        const { raw, formConfig } = found
+        if (raw.bindingType === 'PRIMARY') continue
+        const sf = formConfig.subForms || {}
+        const schemaSrc =
+          resolveSubTableSchemaSourceForTargetMerge(tid, formConfig, sf, contentForms) ??
+          ({ formConfig, subForms: sf, origin: 'local' as const })
+        const effFormConfig = schemaSrc.formConfig
+        const effSubForms = schemaSrc.subForms
+        const columns = deriveColumnsFromBinding(raw, effFormConfig)
+        const subFormDesign = resolveSubFormDesign(raw, effSubForms)
+        const stpv = effFormConfig.subTablePortalViews || {}
+        const bindingPortalViews = stpv[raw.bindingId] ?? stpv[String(raw.bindingId)] ?? null
+        bindings.push({
+          bindingId: raw.bindingId,
+          tableId: raw.tableId != null ? Number(raw.tableId) : null,
+          bindingType: raw.bindingType,
+          bindingMode: raw.bindingMode,
+          foreignKeyField: raw.foreignKeyField,
+          tableName: raw.tableDisplayName || raw.tableName,
+          physicalTableName: raw.tableName,
+          tableType: raw.tableType,
+          tableDescription: raw.tableDescription,
+          columns,
+          subMode: raw.subMode,
+          formFields: subFormDesign.formFields,
+          formOptions: subFormDesign.formOptions,
+          portalViews: bindingPortalViews,
+          primaryKeyFields: resolveSubTablePrimaryKeyFields(
+            raw.primaryKeyFields,
+            raw.bindingId,
+            effFormConfig
+          ),
+          data: []
+        })
+        known.add(Number(raw.bindingId))
+        changed = true
+        continue
+      }
+      const syntheticSchema = resolveSubTableSchemaSourceForTargetMerge(
+        tid,
+        localFormConfig,
+        localSubForms,
+        contentForms
+      )
+      if (!syntheticSchema) {
+        continue
+      }
+      const hint = targetNameHint.get(tid)
+      const tableLabel = hint && String(hint).trim() ? String(hint).trim() : `binding_${tid}`
+      const synthetic = {
+        bindingId: tid,
+        tableId: null as number | null,
+        bindingType: 'SUB',
+        bindingMode: 'EDITABLE',
+        foreignKeyField: null as string | null,
+        tableName: tableLabel,
+        physicalTableName: tableLabel,
+        tableType: '',
+        tableDescription: ''
+      }
+      const columns = deriveColumnsFromBinding(synthetic, syntheticSchema.formConfig)
+      const subFormDesign = resolveSubFormDesign(synthetic, syntheticSchema.subForms)
+      const stpvSchema = syntheticSchema.formConfig.subTablePortalViews || {}
+      const bindingPortalViews = stpvSchema[tid] ?? stpvSchema[String(tid)] ?? null
+      bindings.push({
+        bindingId: tid,
+        tableId: null,
+        bindingType: synthetic.bindingType,
+        bindingMode: synthetic.bindingMode,
+        foreignKeyField: synthetic.foreignKeyField,
+        tableName: tableLabel,
+        physicalTableName: synthetic.physicalTableName,
+        tableType: synthetic.tableType,
+        tableDescription: synthetic.tableDescription,
+        columns,
+        formFields: subFormDesign.formFields,
+        formOptions: subFormDesign.formOptions,
+        portalViews: bindingPortalViews,
+        primaryKeyFields: resolveSubTablePrimaryKeyFields(null, tid, syntheticSchema.formConfig),
+        data: []
+      })
+      known.add(tid)
+      changed = true
+    }
+  }
+}
+
 /** Build a read-only PreviousFormEntry from designer form metadata (shared by history + live MI step). */
 function buildPreviousFormEntry(
   prevForm: any,
-  options: { isKnownMiSubTask: boolean; isActiveMiSubTaskStep?: boolean }
+  options: { isKnownMiSubTask: boolean; isActiveMiSubTaskStep?: boolean },
+  allContentForms?: any[]
 ): PreviousFormEntry {
   const savedSubTables = formData.value.__subTables__
   const parsedFields: FormField[] = []
@@ -3241,6 +3538,29 @@ function buildPreviousFormEntry(
       if (Array.isArray(saved)) binding.data = saved
     }
     prevBindings.push(binding)
+  }
+
+  if (allContentForms?.length) {
+    mergeLinkFormTargetBindingsInto(prevBindings, allContentForms, prevFormConfig, prevFormConfig.subForms || {})
+  }
+  if (savedSubTables && typeof savedSubTables === 'object') {
+    for (const binding of prevBindings) {
+      const raw = (prevForm.tableBindings || []).find((x: any) => Number(x.bindingId) === Number(binding.bindingId))
+      const saved = getSavedSubTableRowsFromVariables(savedSubTables, {
+        bindingId: binding.bindingId,
+        tableName: raw?.tableName ?? (binding as { physicalTableName?: string }).physicalTableName,
+        tableDisplayName: raw?.tableDisplayName ?? binding.tableName
+      })
+      if (saved) binding.data = saved
+    }
+    const rtMap = buildBindingIdToRelationTableIdMap(allContentForms || [])
+    hydrateChildSubTablesFromParentsNestedRows(prevBindings as any, savedSubTables as Record<string, unknown>, rtMap)
+    hydrateBindingsRowsFromVariablesBySharedRelationTableId(
+      prevBindings as any,
+      savedSubTables as Record<string, unknown>,
+      rtMap
+    )
+    enrichChildBindingRowsFromParentsNestedSubTables(prevBindings as any)
   }
 
   return {

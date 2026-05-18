@@ -429,6 +429,8 @@ import {
   hydrateBindingsRowsFromVariablesBySharedRelationTableId,
   enrichChildBindingRowsFromParentsNestedSubTables,
   collectNestedSlicesForBindingFromSubTablesWalk,
+  coerceSubTablesVariableToMap,
+  collectSubTableSliceArraysDeep,
 } from '@/composables/tasks/shared'
 import dayjs from 'dayjs'
 import ChangeHistoryPanel from '@/components/ChangeHistoryPanel.vue'
@@ -883,10 +885,67 @@ function refreshNodeFormMapFromFormData(opts?: {
   alignNodeFormMapSubTableBindingsOnly()
 }
 
-/** When no binding key matches variables, pick a saved row list by column overlap with list-view columns. */
+/** When no binding key matches variables, pick a saved row list by column / sub-form field overlap. */
+function collectSubTableBindingMatchKeys(b: {
+  columns?: Array<{ field?: string }>
+  formFields?: FormField[]
+}): Set<string> {
+  const fieldSet = new Set<string>()
+  for (const c of b.columns || []) {
+    if (typeof c?.field === 'string' && c.field.length > 0) fieldSet.add(c.field)
+  }
+  const walkFormFields = (fields?: FormField[]) => {
+    if (!Array.isArray(fields)) return
+    for (const f of fields) {
+      if (f.type === 'card') walkFormFields(f.children)
+      else if (typeof f.key === 'string' && f.key.length > 0) fieldSet.add(f.key)
+    }
+  }
+  walkFormFields(b.formFields)
+  return fieldSet
+}
+
+const SUB_TABLE_MI_PLACEHOLDER_KEYS = new Set([
+  'assignee_user_id',
+  'assignee_display_name',
+  'task_status',
+  'task_id',
+  'task_definition_key'
+])
+
+function pickSubTableRowValueIgnoreKeyCase(o: Record<string, unknown>, key: string): unknown {
+  if (Object.prototype.hasOwnProperty.call(o, key)) return o[key]
+  const want = key.toLowerCase()
+  for (const rk of Object.keys(o)) {
+    if (rk.toLowerCase() === want) return o[rk]
+  }
+  return undefined
+}
+
+function subTableRowsLackSavedFieldPayload(rows: unknown[] | undefined, fieldKeys: Set<string>): boolean {
+  if (fieldKeys.size === 0) return false
+  if (!Array.isArray(rows) || rows.length === 0) return true
+  const checkKeys = [...fieldKeys].filter(k => !SUB_TABLE_MI_PLACEHOLDER_KEYS.has(k))
+  if (checkKeys.length === 0) return true
+  for (const row of rows) {
+    if (!row || typeof row !== 'object') continue
+    const o = row as Record<string, unknown>
+    for (const k of checkKeys) {
+      const v = pickSubTableRowValueIgnoreKeyCase(o, k)
+      if (v === undefined || v === null || v === '') continue
+      if (typeof v === 'boolean') return false
+      if (typeof v === 'number' && !Number.isNaN(v)) return false
+      if (typeof v === 'string' && v.trim() !== '') return false
+    }
+  }
+  return true
+}
+
 function backfillEmptySubTableBindingsFromVariables() {
-  const saved = formData.value.__subTables__
-  if (!saved || typeof saved !== 'object') return
+  const savedMap = coerceSubTablesVariableToMap(formData.value.__subTables__)
+  if (!savedMap) return
+  formData.value = { ...formData.value, __subTables__: savedMap }
+  const sliceArrays = collectSubTableSliceArraysDeep(savedMap)
 
   const all = [
     ...subTableBindings.value,
@@ -895,30 +954,33 @@ function backfillEmptySubTableBindingsFromVariables() {
   ]
 
   for (const b of all) {
-    if (Array.isArray(b.data) && b.data.length > 0) continue
-    const cols = (b as { columns?: Array<{ field?: string }> }).columns
-    const fieldSet = new Set(
-      (cols || [])
-        .map(c => c?.field)
-        .filter((f): f is string => typeof f === 'string' && f.length > 0)
-    )
-    if (fieldSet.size === 0) continue
+    const fieldKeys = collectSubTableBindingMatchKeys(b as { columns?: Array<{ field?: string }>; formFields?: FormField[] })
+    if (fieldKeys.size === 0) continue
+
+    if (
+      Array.isArray(b.data) &&
+      b.data.length > 0 &&
+      !subTableRowsLackSavedFieldPayload(b.data, fieldKeys)
+    ) {
+      continue
+    }
 
     let best: any[] | null = null
     let bestScore = 0
-    for (const val of Object.values(saved)) {
+    for (const val of sliceArrays) {
       if (!Array.isArray(val) || val.length === 0) continue
       const row0 = val[0]
       if (!row0 || typeof row0 !== 'object') continue
+      const row0KeysLower = new Set(Object.keys(row0 as object).map(k => k.toLowerCase()))
       let score = 0
-      for (const k of Object.keys(row0 as object)) {
-        if (fieldSet.has(k)) score++
+      for (const k of fieldKeys) {
+        if (row0KeysLower.has(k.toLowerCase())) score++
       }
       const threshold =
-        fieldSet.size <= 2 ? 1 : Math.min(fieldSet.size, Math.max(2, Math.ceil(fieldSet.size * 0.25)))
+        fieldKeys.size <= 2 ? 1 : Math.min(fieldKeys.size, Math.max(2, Math.ceil(fieldKeys.size * 0.25)))
       if (score >= threshold && score > bestScore) {
         bestScore = score
-        best = val
+        best = val as any[]
       }
     }
     if (best) {
@@ -1556,6 +1618,10 @@ const loadTaskDetail = async () => {
         currentNodeId.value = ''
       }
       if (data.variables) formData.value = data.variables
+      const st0 = coerceSubTablesVariableToMap(formData.value.__subTables__)
+      if (st0) {
+        formData.value = { ...formData.value, __subTables__: st0 }
+      }
       // Load flow history first, as diagram parsing needs history records
       await loadTaskHistory()
       
@@ -1616,6 +1682,10 @@ const loadTaskDetail = async () => {
             formReadOnly.value = true
             currentNodeId.value = ''
             if (p.variables) formData.value = p.variables
+            const stP = coerceSubTablesVariableToMap(formData.value.__subTables__)
+            if (stP) {
+              formData.value = { ...formData.value, __subTables__: stP }
+            }
             // diagram needs history records + bpmn xml
             await loadTaskHistory()
             const key = (taskInfo.value as any).processDefinitionKey
@@ -1874,8 +1944,10 @@ const loadFunctionUnitContent = async (processKey: string) => {
       mergeLinkFormTargetBindingsInto(bindings, content.forms, formConfigForSubTables, subForms)
       const bindingRelationTableMap = buildBindingIdToRelationTableIdMap(content.forms as any[])
       lastBindingRelationTableMap.value = bindingRelationTableMap
-      if (formData.value.__subTables__ && typeof formData.value.__subTables__ === 'object') {
-        const flattened = JSON.parse(JSON.stringify(formData.value.__subTables__)) as Record<string, unknown>
+      const rawSubTables = coerceSubTablesVariableToMap(formData.value.__subTables__)
+      if (rawSubTables) {
+        formData.value = { ...formData.value, __subTables__: rawSubTables }
+        const flattened = JSON.parse(JSON.stringify(rawSubTables)) as Record<string, unknown>
         flattenNestedSubTableRowsIntoPayload(flattened)
         formData.value = { ...formData.value, __subTables__: flattened }
       }

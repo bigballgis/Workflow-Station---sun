@@ -1266,3 +1266,11 @@
   summary: "user-portal 把表单 SUB/RELATED 绑定的 tableName（如 RelationTable 逻辑名 subtable）当作 Postgres 物理表做 JDBC 补齐；无数物理 relation 时报错 relation does not exist，事务进入 aborted，完成任务(APP approve/MI)表现为 UnexpectedRollbackException"
   file: "backend/user-portal/src/main/java/com/portal/component/ProcessComponent.java"
   note: "设计器侧常为 schema + __subTables__ JSON，不等价于同名物理表；补齐前必须 subTableExists。可选后续：published bindings 区分 logical vs physical 表名，或对 FORM_ONLY/纯 JSON 存储显式跳过 JDBC。"
+
+- id: "173"
+  status: fixed
+  fixed_at: "2026-05-18"
+  severity: major
+  category: bug
+  summary: "user-portal 我的申请 My Request(applications/detail) 子表 Link Form Details 不回填待办数据，且发起人汇总视图多两列 Status/Actions：缺与待办一致的 mergeLinkFormTargetBindingsInto + hydrateChildSubTablesFromParentsNestedRows；列表已含 task_status 或表头与同 locale 的 subTable.actions 一致时 SubTableField 仍叠加 MI 快捷列"
+  file: "frontend/user-portal/src/views/applications/detail.vue; frontend/user-portal/src/components/SubTableField.vue"

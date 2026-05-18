@@ -7,6 +7,66 @@ export function normalizeSubTableName(name?: string): string {
   return String(name || '').trim().toLowerCase()
 }
 
+/** Strip designer "ADD + …" prefix; nested {@code parentRow.__subTables__} keys often keep this label. */
+export function stripLinkFormDesignerTableLabel(raw?: string): string {
+  return String(raw || '').trim().replace(/^ADD\s*\+\s*/i, '').trim()
+}
+
+function compactLinkFormTableKey(name: string): string {
+  return normalizeSubTableName(stripLinkFormDesignerTableLabel(name)).replace(/\s+/g, '')
+}
+
+/**
+ * Resolve child sub-table rows under one parent's {@code __subTables__} object (string keys).
+ * Aligns with {@code SubTableField.handleLinkFormClick} lookups: binding id, raw / normalized names,
+ * stripped "ADD + …" labels, and fuzzy key scan when BPMN copy left mismatched keys.
+ */
+function findNestedChildRowsInSto(
+  sto: Record<string, unknown>,
+  child: { bindingId: number; tableName: string; physicalTableName?: string }
+): any[] | null {
+  const tn = (name?: string) => normalizeSubTableName(String(name || ''))
+  const nameRaw = String(child.tableName || '').trim()
+  const nameStripped = stripLinkFormDesignerTableLabel(nameRaw)
+
+  const candidates: unknown[] = [
+    sto[child.bindingId],
+    sto[String(child.bindingId)],
+    sto[nameRaw],
+    sto[tn(nameRaw)]
+  ]
+  if (nameStripped !== nameRaw) {
+    candidates.push(sto[nameStripped], sto[tn(nameStripped)])
+  }
+  if (child.physicalTableName) {
+    const p = String(child.physicalTableName).trim()
+    candidates.push(sto[p], sto[tn(p)])
+  }
+  for (const v of candidates) {
+    if (Array.isArray(v) && v.length > 0) return v as any[]
+  }
+
+  const wantName = compactLinkFormTableKey(nameRaw)
+  if (wantName) {
+    for (const rk of Object.keys(sto)) {
+      if (compactLinkFormTableKey(rk) !== wantName) continue
+      const v = sto[rk]
+      if (Array.isArray(v) && v.length > 0) return v as any[]
+    }
+  }
+  if (child.physicalTableName) {
+    const wantPhys = compactLinkFormTableKey(String(child.physicalTableName))
+    if (wantPhys) {
+      for (const rk of Object.keys(sto)) {
+        if (compactLinkFormTableKey(rk) !== wantPhys) continue
+        const v = sto[rk]
+        if (Array.isArray(v) && v.length > 0) return v as any[]
+      }
+    }
+  }
+  return null
+}
+
 export function subTableBindingMatches(
   target: { bindingId: number; tableName: string; physicalTableName?: string; tableId?: number | null },
   source: { bindingId: number; tableName: string; physicalTableName?: string; tableId?: number | null }
@@ -338,6 +398,59 @@ export function getSavedSubTableRows(subTables: Record<string, any>, binding: {
   if (Array.isArray(byId)) return byId as any[]
   if (binding.tableName && Array.isArray(subTables[binding.tableName])) return subTables[binding.tableName] as any[]
   return undefined
+}
+
+/**
+ * Some gateways / serializers deliver {@code __subTables__} as a JSON string. Without coercion,
+ * portal hydration skips flatten/backfill ({@code typeof === 'object'} gate) and Link Form stays empty.
+ */
+export function coerceSubTablesVariableToMap(raw: unknown): Record<string, unknown> | null {
+  if (raw == null) return null
+  if (typeof raw === 'string') {
+    const t = raw.trim()
+    if (!t) return null
+    try {
+      const parsed = JSON.parse(t) as unknown
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>
+      }
+    } catch {
+      return null
+    }
+    return null
+  }
+  if (typeof raw === 'object' && !Array.isArray(raw)) {
+    return raw as Record<string, unknown>
+  }
+  return null
+}
+
+/**
+ * All {@code Record} values that are non-empty object row arrays, including slices nested under
+ * {@code row.__subTables__} (Link Form persistence). Used when top-level keys alone miss child data.
+ */
+export function collectSubTableSliceArraysDeep(saved: Record<string, unknown>): unknown[][] {
+  const out: unknown[][] = []
+  const seenArrays = new WeakSet<object>()
+  const walkMap = (m: Record<string, unknown>) => {
+    for (const val of Object.values(m)) {
+      if (!Array.isArray(val) || val.length === 0) continue
+      if (seenArrays.has(val)) continue
+      const row0 = val[0]
+      if (!row0 || typeof row0 !== 'object') continue
+      seenArrays.add(val)
+      out.push(val)
+      for (const row of val) {
+        if (!row || typeof row !== 'object') continue
+        const nest = (row as Record<string, unknown>).__subTables__
+        if (nest && typeof nest === 'object' && !Array.isArray(nest)) {
+          walkMap(nest as Record<string, unknown>)
+        }
+      }
+    }
+  }
+  walkMap(saved)
+  return out
 }
 
 /**
@@ -843,7 +956,6 @@ export function pullNestedRowsForBindingFromParentRows(
   parentRows: any[],
   bindingTableById?: Map<number, number | null>
 ): any[] {
-  const tn = (name?: string) => normalizeSubTableName(name)
   const out: any[] = []
   const childTid =
     child.tableId != null && Number.isFinite(Number(child.tableId))
@@ -855,14 +967,9 @@ export function pullNestedRowsForBindingFromParentRows(
     const st = (row as Record<string, unknown>).__subTables__
     if (!st || typeof st !== 'object') continue
     const sto = st as Record<string, unknown>
-    const nested =
-      sto[child.bindingId] ??
-      sto[String(child.bindingId)] ??
-      sto[child.tableName] ??
-      sto[tn(child.tableName)] ??
-      (child.physicalTableName ? sto[child.physicalTableName] ?? sto[tn(child.physicalTableName)] : undefined)
     const rowOutBefore = out.length
-    if (Array.isArray(nested) && nested.length > 0) {
+    const nested = findNestedChildRowsInSto(sto, child)
+    if (nested) {
       out.push(...nested)
     }
 
