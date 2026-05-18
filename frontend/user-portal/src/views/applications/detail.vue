@@ -81,7 +81,7 @@
               {{ formatDate(processInfo.startTime) }}
             </el-descriptions-item>
             <el-descriptions-item :label="t('applicationDetail.currentStep')">
-              {{ processInfo.currentNode || '-' }}
+              {{ displayCurrentStepLabel }}
             </el-descriptions-item>
             <el-descriptions-item :label="t('applicationDetail.currentAssignee')">
               {{ getCurrentAssigneeDisplay() }}
@@ -99,7 +99,7 @@
             :type="getNodeStatusType(processInfo.status)"
             size="small"
           >
-            {{ processInfo.currentNode || t('applicationDetail.pending') }}
+            {{ workflowDiagramBadgeLabel }}
           </el-tag>
         </div>
         <div class="section-content">
@@ -448,6 +448,22 @@ const loading = ref(true)
 const urging = ref(false)
 const withdrawing = ref(false)
 const processInfo = ref<ProcessInstance>({} as ProcessInstance)
+
+/** 已完成等终态下无「当前步骤」；兼容库内仍残留最后一笔活动名的历史数据 */
+const displayCurrentStepLabel = computed(() => {
+  const st = processInfo.value.status
+  if (st === 'COMPLETED') return '-'
+  return processInfo.value.currentNode || '-'
+})
+
+/** 流程图区块角标：终态显示状态文案，运行中显示当前节点或待处理 */
+const workflowDiagramBadgeLabel = computed(() => {
+  const st = processInfo.value.status || ''
+  if (st === 'COMPLETED') return t('applicationDetail.completed')
+  if (st === 'WITHDRAWN') return t('applicationDetail.withdrawn')
+  if (st === 'REJECTED') return t('applicationDetail.rejected')
+  return processInfo.value.currentNode || t('applicationDetail.pending')
+})
 
 // Process diagram data
 const processNodes = ref<ProcessNode[]>([])

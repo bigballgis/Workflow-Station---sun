@@ -364,7 +364,7 @@ public class DashboardComponent {
                         .businessKey(pi.getBusinessKey())
                         .startUserName(pi.getStartUserName())
                         .status(pi.getStatus())
-                        .currentNode(pi.getCurrentNode())
+                        .currentNode("COMPLETED".equals(pi.getStatus()) ? null : pi.getCurrentNode())
                         .currentAssignee(pi.getCurrentAssignee())
                         .startTime(pi.getStartTime())
                         .completedAt(pi.getCompletedAt())

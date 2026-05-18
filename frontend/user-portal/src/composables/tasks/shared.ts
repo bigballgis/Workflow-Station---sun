@@ -211,8 +211,59 @@ function compositePkMergeKey(row: Record<string, unknown>, pkFieldNames: string[
   return `__pk__${parts.join('\u001e')}`
 }
 
+/** Rank for MI dashboard {@code task_status}; higher wins when merging conflicting snapshots. */
+function miTaskStatusRank(raw: string): number {
+  const u = raw.trim().toUpperCase().replace(/\s+/g, '_')
+  if (u === 'COMPLETED' || u === 'CANCELLED') return 3
+  if (u === 'IN_PROGRESS' || u === 'ASSIGNED' || u === 'CREATED' || u === 'ACTIVE') return 2
+  if (u === 'PENDING') return 1
+  return 0
+}
+
+function miTaskStatusIsTerminal(raw: string): boolean {
+  const u = raw.trim().toUpperCase().replace(/\s+/g, '_')
+  return u === 'COMPLETED' || u === 'CANCELLED'
+}
+
+/** When two bindings merge the same PK row, stale IN_PROGRESS must not overwrite COMPLETED. */
+function mergeMiTaskStatusPreferTerminal(prev: unknown, next: unknown): string | undefined {
+  const ps = String(prev ?? '').trim()
+  const ns = String(next ?? '').trim()
+  if (!ps && !ns) return undefined
+  if (!ns) return ps
+  if (!ps) return ns
+  const rp = miTaskStatusRank(ps)
+  const rn = miTaskStatusRank(ns)
+  if (rn > rp) return ns
+  if (rp > rn) return ps
+  return ns
+}
+
+function mergeMiCurrentNodeForTerminal(prevNode: unknown, nextNode: unknown): string | undefined {
+  const p = String(prevNode ?? '').trim()
+  const n = String(nextNode ?? '').trim()
+  const pe = p.toLowerCase() === 'end'
+  const ne = n.toLowerCase() === 'end'
+  if (pe && ne) return p || n
+  if (ne) return n
+  if (pe) return p
+  return n || p || 'end'
+}
+
+function mergeMiCurrentNodeInFlight(prevNode: unknown, nextNode: unknown): string | undefined {
+  const p = String(prevNode ?? '').trim()
+  const n = String(nextNode ?? '').trim()
+  if (!p && !n) return undefined
+  if (!p) return n
+  if (!n) return p
+  return n
+}
+
 /**
  * Merge sub-table rows for the same logical table. Later rows win on field conflicts.
+ *
+ * {@code task_status} / {@code task_current_node} (multi-instance dashboard mirrors) use terminal-wins merge so a stale
+ * {@code IN_PROGRESS} slice cannot overwrite {@code COMPLETED} when bindings align the same physical row.
  *
  * Key resolution order:
  * 1. Designer primary key columns (`pkFieldNames`) when present and all parts are resolvable
@@ -252,9 +303,12 @@ export function mergeSubTableRowsByRowId(
     previous: Record<string, unknown>,
     incoming: Record<string, unknown>
   ): Record<string, unknown> => {
+    const MI_STATUS_KEY = 'task_status'
+    const MI_NODE_KEY = 'task_current_node'
     const out: Record<string, unknown> = { ...previous }
     for (const [key, val] of Object.entries(incoming)) {
       if (val === undefined) continue
+      if (key === MI_STATUS_KEY || key === MI_NODE_KEY) continue
 
       if (key === '__subTables__') {
         const pSub = previous[key]
@@ -294,6 +348,20 @@ export function mergeSubTableRowsByRowId(
 
       out[key] = val
     }
+
+    const mergedStatus = mergeMiTaskStatusPreferTerminal(out[MI_STATUS_KEY], incoming[MI_STATUS_KEY])
+    if (mergedStatus !== undefined) {
+      out[MI_STATUS_KEY] = mergedStatus
+    }
+    const statusStr = String(out[MI_STATUS_KEY] ?? '').trim()
+    const terminal = miTaskStatusIsTerminal(statusStr)
+    const mergedNode = terminal
+      ? mergeMiCurrentNodeForTerminal(out[MI_NODE_KEY], incoming[MI_NODE_KEY])
+      : mergeMiCurrentNodeInFlight(out[MI_NODE_KEY], incoming[MI_NODE_KEY])
+    if (mergedNode !== undefined) {
+      out[MI_NODE_KEY] = mergedNode
+    }
+
     return out
   }
 

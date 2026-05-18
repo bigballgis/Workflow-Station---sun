@@ -98,7 +98,12 @@ public class MultiInstanceStatusResponse {
          * 任务名称
          */
         private String taskName;
-        
+
+        /**
+         * BPMN UserTask id（用于在与任务展示名重复时区分步骤，避免孤儿 CREATED 覆盖已完成步骤）
+         */
+        private String taskDefinitionKey;
+
         /**
          * 处理人用户ID
          */

@@ -1326,9 +1326,8 @@ public class TaskProcessComponent {
                 Boolean isCompleted = (Boolean) status.get("completed");
                 
                 if (Boolean.TRUE.equals(isCompleted)) {
-                    log.info("Process {} is completed after task completion, updating current node", processInstanceId);
-                    String lastActivityName = (String) status.get("lastActivityName");
-                    
+                    log.info("Process {} is completed after task completion, syncing portal process instance", processInstanceId);
+
                     // 更新流程实例状态
                     Optional<ProcessInstance> optInstance = processInstanceRepository.findById(processInstanceId);
                     if (optInstance.isPresent()) {
@@ -1338,7 +1337,7 @@ public class TaskProcessComponent {
                             LocalDateTime finishedAt = LocalDateTime.now();
                             instance.setEndTime(finishedAt);
                             instance.setCompletedAt(finishedAt);
-                            instance.setCurrentNode(lastActivityName != null ? lastActivityName : "Completed");
+                            instance.setCurrentNode(null);
                             instance.setCurrentAssignee(null);
                             processInstanceRepository.save(instance);
                             log.info("Process instance {} updated to COMPLETED with currentNode: {}", 
@@ -1382,6 +1381,7 @@ public class TaskProcessComponent {
                                         LocalDateTime finishedAt = LocalDateTime.now();
                                         instance.setEndTime(finishedAt);
                                         instance.setCompletedAt(finishedAt);
+                                        instance.setCurrentNode(null);
                                     }
                                     
                                     processInstanceRepository.save(instance);

@@ -1274,3 +1274,4 @@
   category: bug
   summary: "user-portal 我的申请 My Request(applications/detail) 子表 Link Form Details 不回填待办数据，且发起人汇总视图多两列 Status/Actions：缺与待办一致的 mergeLinkFormTargetBindingsInto + hydrateChildSubTablesFromParentsNestedRows；列表已含 task_status 或表头与同 locale 的 subTable.actions 一致时 SubTableField 仍叠加 MI 快捷列"
   file: "frontend/user-portal/src/views/applications/detail.vue; frontend/user-portal/src/components/SubTableField.vue"
+  note: "根因之一：父行 __subTables__ 常带设计器标签键（如 ADD + 表名），handleLinkFormClick 已 strip/模糊匹配，但 pullNestedRowsForBindingFromParentRows 原先只试 bindingId/裸表名，拉不到嵌套子表 → 弹窗空。修复在 composables/tasks/shared.ts：stripLinkFormDesignerTableLabel + findNestedChildRowsInSto，与 SubTableField 共用规则；另补同伴 binding 按 formFields 重叠回退、多行时将「表单字段得分最高」行前置（buildLinkedFormData 仅消费 data[0]）。重复 MI 列由 initiatorRequest=summaryWithLinkFormModal 时关闭 SubTableField/详情绑定层 task 列对齐。"

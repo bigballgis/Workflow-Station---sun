@@ -1123,6 +1123,11 @@ public class ProcessComponent {
 
         log.debug("toProcessInstanceInfoForList: final currentAssigneeName={}", currentAssigneeName);
 
+        String currentNode = instance.getCurrentNode();
+        if ("COMPLETED".equals(instance.getStatus())) {
+            currentNode = null;
+        }
+
         return ProcessInstanceInfo.builder()
                 .id(instance.getId())
                 .processDefinitionId(instance.getProcessDefinitionId())
@@ -1136,7 +1141,7 @@ public class ProcessComponent {
                 .status(instance.getStatus())
                 .startUserId(instance.getStartUserId())
                 .startUserName(instance.getStartUserName())
-                .currentNode(instance.getCurrentNode())
+                .currentNode(currentNode)
                 .currentAssignee(currentAssigneeName)
                 .candidateUsers(instance.getCandidateUsers())
                 .variables(instance.getVariables())
@@ -1190,7 +1195,12 @@ public class ProcessComponent {
         }
         
         log.debug("toProcessInstanceInfo: final currentAssigneeName={}", currentAssigneeName);
-        
+
+        String currentNode = instance.getCurrentNode();
+        if ("COMPLETED".equals(instance.getStatus())) {
+            currentNode = null;
+        }
+
         return ProcessInstanceInfo.builder()
                 .id(instance.getId())
                 .processDefinitionId(instance.getProcessDefinitionId())
@@ -1204,7 +1214,7 @@ public class ProcessComponent {
                 .status(instance.getStatus())
                 .startUserId(instance.getStartUserId())
                 .startUserName(instance.getStartUserName())
-                .currentNode(instance.getCurrentNode())
+                .currentNode(currentNode)
                 .currentAssignee(currentAssigneeName)
                 .candidateUsers(instance.getCandidateUsers())
                 .variables(instance.getVariables())
@@ -1683,7 +1693,6 @@ public class ProcessComponent {
             if (!(tasksObj instanceof List<?> tasks)) {
                 return Collections.emptyMap();
             }
-
             Map<String, Map<String, List<Map<String, Object>>>> byTableRow = new HashMap<>();
             for (Object o : tasks) {
                 if (!(o instanceof Map<?, ?> raw)) {
@@ -1735,18 +1744,21 @@ public class ProcessComponent {
                     String statusCol = firstNonBlank(stringVal(rowTasks.get(0).get("miTaskStatusField")), "task_status");
                     String nodeCol = firstNonBlank(stringVal(rowTasks.get(0).get("miTaskCurrentNodeField")), "task_current_node");
 
+                    MiRowProgress computed;
                     if (processEndedCompleted) {
                         // Runtime is gone; wf_extended_task_info may leave stray non-terminal rows. Never show MI as in-flight.
-                        rowProgress.put(rowCanon, new MiRowProgress(statusCol, nodeCol, "COMPLETED", "end"));
+                        computed = new MiRowProgress(statusCol, nodeCol, "COMPLETED", "end");
                     } else {
-                        Map<String, Object> active = pickLatestActiveTask(rowTasks);
+                        List<Map<String, Object>> saneRowTasks = dedupeMiTasksPreferCompletedPerStepKey(rowTasks);
+                        Map<String, Object> active = pickLatestActiveTask(saneRowTasks);
                         if (active != null) {
                             String node = firstNonBlank(stringVal(active.get("taskName")), "-");
-                            rowProgress.put(rowCanon, new MiRowProgress(statusCol, nodeCol, "IN_PROGRESS", node));
+                            computed = new MiRowProgress(statusCol, nodeCol, "IN_PROGRESS", node);
                         } else {
-                            rowProgress.put(rowCanon, new MiRowProgress(statusCol, nodeCol, "COMPLETED", "end"));
+                            computed = new MiRowProgress(statusCol, nodeCol, "COMPLETED", "end");
                         }
                     }
+                    rowProgress.put(rowCanon, computed);
                 }
                 if (!rowProgress.isEmpty()) {
                     out.put(tableName, rowProgress);
@@ -1759,6 +1771,73 @@ public class ProcessComponent {
         }
     }
 
+    /**
+     * 同一子表行可能对同一 BPMN 步骤残留多条扩展任务（已完成 + 孤儿 CREATED/ASSIGNED）。
+     * 若不收敛，门户会把当前节点误判为较早步骤（例如仍显示 sub form1）。
+     */
+    private static List<Map<String, Object>> dedupeMiTasksPreferCompletedPerStepKey(List<Map<String, Object>> tasks) {
+        if (tasks == null || tasks.size() <= 1) {
+            return tasks;
+        }
+        Map<String, List<Map<String, Object>>> byStep = new LinkedHashMap<>();
+        for (Map<String, Object> t : tasks) {
+            String key = miAggregateStepKey(t);
+            byStep.computeIfAbsent(key, k -> new ArrayList<>()).add(t);
+        }
+        List<Map<String, Object>> out = new ArrayList<>(tasks.size());
+        for (List<Map<String, Object>> group : byStep.values()) {
+            boolean hasCompleted = group.stream()
+                    .anyMatch(x -> "COMPLETED".equalsIgnoreCase(stringVal(x.get("status"))));
+            if (hasCompleted) {
+                group.stream()
+                        .filter(x -> "COMPLETED".equalsIgnoreCase(stringVal(x.get("status"))))
+                        .max(Comparator.comparing(x -> {
+                            LocalDateTime done = parseMiStatusLocalDateTime(x.get("completedTime"));
+                            if (done != null) {
+                                return done;
+                            }
+                            LocalDateTime created = parseMiStatusLocalDateTime(x.get("createdTime"));
+                            return created != null ? created : LocalDateTime.MIN;
+                        }))
+                        .ifPresent(out::add);
+            } else {
+                out.addAll(group);
+            }
+        }
+        return out.isEmpty() ? tasks : out;
+    }
+
+    private static String miAggregateStepKey(Map<String, Object> t) {
+        String defKey = stringVal(t.get("taskDefinitionKey"));
+        if (defKey != null && !defKey.isBlank()) {
+            return defKey.trim();
+        }
+        String name = stringVal(t.get("taskName"));
+        if (name != null && !name.isBlank()) {
+            return name.trim().replaceAll("\\s+", " ");
+        }
+        String taskId = stringVal(t.get("taskId"));
+        return taskId != null && !taskId.isBlank() ? taskId.trim() : ("anon:" + System.identityHashCode(t));
+    }
+
+    /** API Map 中 LocalDateTime 可能为 ISO 字符串 */
+    private static LocalDateTime parseMiStatusLocalDateTime(Object raw) {
+        if (raw == null) {
+            return null;
+        }
+        if (raw instanceof LocalDateTime ldt) {
+            return ldt;
+        }
+        if (raw instanceof String s && !s.isBlank()) {
+            try {
+                return LocalDateTime.parse(s.trim());
+            } catch (Exception ignored) {
+                return null;
+            }
+        }
+        return null;
+    }
+
     private static Map<String, Object> pickLatestActiveTask(List<Map<String, Object>> tasks) {
         Map<String, Object> best = null;
         LocalDateTime bestTime = null;
@@ -1767,7 +1846,7 @@ public class ProcessComponent {
             if ("COMPLETED".equalsIgnoreCase(st) || "CANCELLED".equalsIgnoreCase(st)) {
                 continue;
             }
-            LocalDateTime ct = parseMiStatusCreatedTime(t.get("createdTime"));
+            LocalDateTime ct = parseMiStatusLocalDateTime(t.get("createdTime"));
             if (best == null) {
                 best = t;
                 bestTime = ct;
@@ -1784,24 +1863,6 @@ public class ProcessComponent {
             }
         }
         return best;
-    }
-
-    /** API Map 中 createdTime 可能为 LocalDateTime 或 ISO 字符串 */
-    private static LocalDateTime parseMiStatusCreatedTime(Object raw) {
-        if (raw == null) {
-            return null;
-        }
-        if (raw instanceof LocalDateTime ldt) {
-            return ldt;
-        }
-        if (raw instanceof String s && !s.isBlank()) {
-            try {
-                return LocalDateTime.parse(s.trim());
-            } catch (Exception ignored) {
-                return null;
-            }
-        }
-        return null;
     }
 
     private static String stringVal(Object o) {
@@ -2380,17 +2441,12 @@ public class ProcessComponent {
                 LocalDateTime finishedAt = LocalDateTime.now();
                 instance.setEndTime(finishedAt);
                 instance.setCompletedAt(finishedAt);
-                // 保存最后一个节点名称，而不是清空
-                if (lastActivityName != null && !lastActivityName.isEmpty()) {
-                    instance.setCurrentNode(lastActivityName);
-                } else {
-                    instance.setCurrentNode("已完成");
-                }
+                // 已完成流程无「当前步骤」；最后节点见流程历史
+                instance.setCurrentNode(null);
                 // 清空当前处理人
                 instance.setCurrentAssignee(null);
                 processInstanceRepository.save(instance);
-                log.info("Process instance {} marked as COMPLETED with lastNode: {}", 
-                        processId, instance.getCurrentNode());
+                log.info("Process instance {} marked as COMPLETED (current step cleared)", processId);
             } else {
                 log.info("Process instance {} already has status: {}, skipping update", 
                         processId, instance.getStatus());
