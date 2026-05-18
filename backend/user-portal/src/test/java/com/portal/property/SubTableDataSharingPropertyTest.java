@@ -47,7 +47,7 @@ public class SubTableDataSharingPropertyTest {
 
         TaskFormComponent taskFormComponent = new TaskFormComponent(
                 processFormComponent, changeHistoryComponent, processInstanceRepository,
-                mock(WorkflowEngineClient.class), mock(RestTemplate.class), new com.fasterxml.jackson.databind.ObjectMapper(), mock(org.springframework.jdbc.core.JdbcTemplate.class)) {
+                mock(WorkflowEngineClient.class), mock(RestTemplate.class), new com.fasterxml.jackson.databind.ObjectMapper(), mock(org.springframework.jdbc.core.JdbcTemplate.class), com.portal.testsupport.PortalTransactionTestSupport.noopPlatformTransactionManager()) {
             @Override
             protected TaskInfo getTaskInfo(String taskId) {
                 return new TaskInfo(config.taskDefinitionKey, config.processInstanceId);
@@ -133,7 +133,7 @@ public class SubTableDataSharingPropertyTest {
 
         ProcessFormComponent processFormComponent = new ProcessFormComponent(
                 processInstanceRepository, changeHistoryComponent, mock(RestTemplate.class),
-                new ObjectMapper(), mock(JdbcTemplate.class));
+                new ObjectMapper(), mock(JdbcTemplate.class), com.portal.testsupport.PortalTransactionTestSupport.noopPlatformTransactionManager());
         ReflectionTestUtils.setField(processFormComponent, "adminCenterUrl", "http://mock-admin:8090");
 
         // Process instance in RETURN_TO_REQUESTER state (so Process Form submit is allowed)
@@ -174,7 +174,7 @@ public class SubTableDataSharingPropertyTest {
         // Task Form would read from the same savedVariables
         TaskFormComponent taskFormComponent = new TaskFormComponent(
                 processFormComponent, changeHistoryComponent, processInstanceRepository,
-                mock(WorkflowEngineClient.class), mock(RestTemplate.class), new com.fasterxml.jackson.databind.ObjectMapper(), mock(org.springframework.jdbc.core.JdbcTemplate.class));
+                mock(WorkflowEngineClient.class), mock(RestTemplate.class), new com.fasterxml.jackson.databind.ObjectMapper(), mock(org.springframework.jdbc.core.JdbcTemplate.class), com.portal.testsupport.PortalTransactionTestSupport.noopPlatformTransactionManager());
         Map<String, Object> taskView = taskFormComponent.extractFieldSubset(
                 savedVariables, Set.of(subTableKey));
 

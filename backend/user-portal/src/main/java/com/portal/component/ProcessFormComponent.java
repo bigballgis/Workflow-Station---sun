@@ -14,7 +14,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriUtils;
 
@@ -22,6 +24,7 @@ import com.platform.common.util.ApiResponseBodyUnwrap;
 
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Process Form 组件
@@ -37,6 +40,23 @@ public class ProcessFormComponent {
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private final JdbcTemplate jdbcTemplate;
+    private final PlatformTransactionManager platformTransactionManager;
+
+    private volatile TransactionTemplate processFormWriteTxTemplate;
+
+    private TransactionTemplate processFormWriteTx() {
+        TransactionTemplate t = processFormWriteTxTemplate;
+        if (t == null) {
+            synchronized (this) {
+                t = processFormWriteTxTemplate;
+                if (t == null) {
+                    t = new TransactionTemplate(platformTransactionManager);
+                    processFormWriteTxTemplate = t;
+                }
+            }
+        }
+        return t;
+    }
 
     @Value("${admin-center.url:http://localhost:8090}")
     private String adminCenterUrl;
@@ -97,50 +117,61 @@ public class ProcessFormComponent {
      * @param userId            操作用户 ID
      * @param formData          表单数据
      */
-    @Transactional
     public void submitProcessFormUpdate(String processInstanceId, String userId, Map<String, Object> formData) {
         log.info("Submitting process form update for process: {}, user: {}", processInstanceId, userId);
 
-        ProcessInstance processInstance = processInstanceRepository.findById(processInstanceId)
+        ProcessInstance gate = processInstanceRepository.findById(processInstanceId)
                 .orElseThrow(() -> new PortalException("404", "Process instance not found: " + processInstanceId));
 
-        if (!userId.equals(processInstance.getStartUserId())) {
-            log.warn("User {} attempted to update process form for process {} owned by {}", userId, processInstanceId, processInstance.getStartUserId());
+        if (!userId.equals(gate.getStartUserId())) {
+            log.warn("User {} attempted to update process form for process {} owned by {}", userId, processInstanceId, gate.getStartUserId());
             throw new PortalException("403", "Only the process initiator can update the process form");
         }
 
-        // Verify process is in Return_To_Requester state
-        if (!RETURN_TO_REQUESTER.equals(processInstance.getStatus())) {
-            throw new PortalException("403", "Process form can only be updated in Return_To_Requester state. Current state: " + processInstance.getStatus());
+        if (!RETURN_TO_REQUESTER.equals(gate.getStatus())) {
+            throw new PortalException("403", "Process form can only be updated in Return_To_Requester state. Current state: " + gate.getStatus());
         }
 
-        // Get current process variables (old values)
-        Map<String, Object> oldValues = processInstance.getVariables() != null
-                ? new HashMap<>(processInstance.getVariables())
-                : new HashMap<>();
+        AtomicReference<Map<String, Object>> oldValuesRef = new AtomicReference<>();
 
-        // Update process variables with new form data
-        Map<String, Object> updatedVariables = new HashMap<>(oldValues);
-        updatedVariables.putAll(formData);
-        processInstance.setVariables(updatedVariables);
-        processInstanceRepository.save(processInstance);
+        processFormWriteTx().executeWithoutResult(status -> {
+            ProcessInstance processInstance = processInstanceRepository.findById(processInstanceId)
+                    .orElseThrow(() -> new PortalException("404", "Process instance not found: " + processInstanceId));
 
-        log.info("Process variables updated for process: {}", processInstanceId);
+            Map<String, Object> oldValues = processInstance.getVariables() != null
+                    ? new HashMap<>(processInstance.getVariables())
+                    : new HashMap<>();
 
-        // Record Change_History via ChangeHistoryComponent (best-effort)
+            oldValuesRef.set(new HashMap<>(oldValues));
+
+            Map<String, Object> updatedVariables = new HashMap<>(oldValues);
+            updatedVariables.putAll(formData);
+            processInstance.setVariables(updatedVariables);
+            processInstanceRepository.save(processInstance);
+
+            log.info("Process variables updated for process: {}", processInstanceId);
+        });
+
+        Map<String, Object> snapshotOldValues = oldValuesRef.get();
+        if (snapshotOldValues == null) {
+            snapshotOldValues = Collections.emptyMap();
+        }
+
         ChangeHistoryContext context = ChangeHistoryContext.builder()
                 .processInstanceId(processInstanceId)
-                .taskInstanceId(null) // Process Form changes have no task
+                .taskInstanceId(null)
                 .stageId(RETURN_TO_REQUESTER)
                 .userId(userId)
                 .build();
 
-        changeHistoryComponent.recordFieldChanges(context, oldValues, formData);
-
-        // Record sub-table (subform) changes via ChangeHistoryComponent (best-effort)
-        Object oldSubTables = oldValues.get("__subTables__");
-        Object newSubTables = formData.get("__subTables__");
-        recordSubTableChangeHistory(context, oldSubTables, newSubTables);
+        try {
+            changeHistoryComponent.recordFieldChanges(context, snapshotOldValues, formData);
+            recordSubTableChangeHistory(context,
+                    snapshotOldValues.get("__subTables__"),
+                    formData.get("__subTables__"));
+        } catch (RuntimeException ex) {
+            log.warn("process form change-history skipped for {}: {}", processInstanceId, ex.getMessage());
+        }
     }
 
     @SuppressWarnings("unchecked")

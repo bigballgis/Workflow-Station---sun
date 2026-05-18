@@ -8,6 +8,7 @@ import com.portal.entity.ChangeHistory;
 import com.portal.enums.ChangeType;
 import com.portal.repository.ChangeHistoryRepository;
 import com.portal.repository.ProcessInstanceRepository;
+import com.portal.testsupport.PortalTransactionTestSupport;
 import com.platform.security.repository.UserRepository;
 import net.jqwik.api.*;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -64,7 +65,8 @@ public class ChangeHistoryOrderPropertyTest {
                 userRepository,
                 workflowEngineClient,
                 mock(JdbcTemplate.class),
-                new ObjectMapper());
+                new ObjectMapper(),
+                PortalTransactionTestSupport.noopPlatformTransactionManager());
         List<ChangeHistoryRecord> result = component.getChangeHistory(historyList.processInstanceId);
 
         // Verify chronological order

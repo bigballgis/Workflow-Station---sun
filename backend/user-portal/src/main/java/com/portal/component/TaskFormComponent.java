@@ -14,7 +14,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
@@ -25,6 +27,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 /**
@@ -43,6 +46,24 @@ public class TaskFormComponent {
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private final JdbcTemplate jdbcTemplate;
+    private final PlatformTransactionManager platformTransactionManager;
+
+    private volatile TransactionTemplate taskFormWriteTxTemplate;
+
+    /** Single write txn for task-form persistence — avoids UnexpectedRollbackException vs nested listeners/history. */
+    private TransactionTemplate taskFormWriteTx() {
+        TransactionTemplate t = taskFormWriteTxTemplate;
+        if (t == null) {
+            synchronized (this) {
+                t = taskFormWriteTxTemplate;
+                if (t == null) {
+                    t = new TransactionTemplate(platformTransactionManager);
+                    taskFormWriteTxTemplate = t;
+                }
+            }
+        }
+        return t;
+    }
 
     /** Lazy: merges physical relation-table rows into task-form variable payloads without widening ctor for tests. */
     @Lazy
@@ -141,7 +162,6 @@ public class TaskFormComponent {
      * @param userId   操作用户 ID
      * @param formData 表单数据（可能包含只读字段，会被过滤）
      */
-    @Transactional
     public void submitTaskForm(String taskId, String userId, Map<String, Object> formData) {
         submitTaskForm(taskId, userId, formData, null);
     }
@@ -154,7 +174,6 @@ public class TaskFormComponent {
      * @param formData       表单数据（可能包含只读字段，会被过滤）
      * @param baselineValues 基准值（前端加载时的字段快照），用于并发检测；null 表示不检测
      */
-    @Transactional
     public void submitTaskForm(String taskId, String userId, Map<String, Object> formData,
                                Map<String, Object> baselineValues) {
         log.info("Submitting task form for task: {}, user: {}", taskId, userId);
@@ -175,39 +194,40 @@ public class TaskFormComponent {
             return;
         }
 
-        // Get current process variables (old values)
-        ProcessInstance processInstance = processInstanceRepository.findById(taskInfo.processInstanceId)
-                .orElseThrow(() -> new PortalException("404",
-                        "Process instance not found: " + taskInfo.processInstanceId));
+        AtomicReference<Map<String, Object>> snapshotOldVarsRef = new AtomicReference<>();
+        AtomicReference<Set<String>> concurrentFieldsRef = new AtomicReference<>(Set.of());
 
-        Map<String, Object> currentVariables = processInstance.getVariables() != null
-                ? new HashMap<>(processInstance.getVariables())
-                : new HashMap<>();
+        taskFormWriteTx().executeWithoutResult(status -> {
+            ProcessInstance processInstance = processInstanceRepository.findById(taskInfo.processInstanceId)
+                    .orElseThrow(() -> new PortalException("404",
+                            "Process instance not found: " + taskInfo.processInstanceId));
 
-        // Detect concurrent modifications by comparing baseline with current values
-        Set<String> concurrentFields = detectConcurrentModifications(
-                baselineValues, currentVariables, editableData.keySet());
+            Map<String, Object> currentVariables = processInstance.getVariables() != null
+                    ? new HashMap<>(processInstance.getVariables())
+                    : new HashMap<>();
 
-        if (!concurrentFields.isEmpty()) {
-            log.warn("Concurrent modification detected on process {}, task {}, fields: {}, user: {}",
-                    taskInfo.processInstanceId, taskId, concurrentFields, userId);
+            Set<String> concurrentFields = detectConcurrentModifications(
+                    baselineValues, currentVariables, editableData.keySet());
 
-            // Record concurrent modification warnings in Change_History (best-effort)
-            for (String field : concurrentFields) {
-                changeHistoryComponent.recordConcurrentModificationWarning(
-                        taskInfo.processInstanceId, field, "unknown", userId);
+            if (!concurrentFields.isEmpty()) {
+                log.warn("Concurrent modification detected on process {}, task {}, fields: {}, user: {}",
+                        taskInfo.processInstanceId, taskId, concurrentFields, userId);
             }
-        }
 
-        // Update process variables field-by-field (last-write-wins)
-        Map<String, Object> updatedVariables = new HashMap<>(currentVariables);
-        updatedVariables.putAll(editableData);
-        processInstance.setVariables(updatedVariables);
-        processInstanceRepository.save(processInstance);
+            snapshotOldVarsRef.set(new HashMap<>(currentVariables));
+            concurrentFieldsRef.set(Set.copyOf(concurrentFields));
 
-        log.info("Process variables updated for task: {}, fields: {}", taskId, editableData.keySet());
+            Map<String, Object> updatedVariables = new HashMap<>(currentVariables);
+            updatedVariables.putAll(editableData);
+            processInstance.setVariables(updatedVariables);
+            processInstanceRepository.save(processInstance);
 
-        // Record Change_History via ChangeHistoryComponent (best-effort)
+            log.info("Process variables updated for task: {}, fields: {}", taskId, editableData.keySet());
+        });
+
+        /*
+         * Change history runs after the write TransactionTemplate commits so failures cannot mark it rollback-only.
+         */
         ChangeHistoryContext context = ChangeHistoryContext.builder()
                 .processInstanceId(taskInfo.processInstanceId)
                 .taskInstanceId(taskId)
@@ -215,12 +235,27 @@ public class TaskFormComponent {
                 .userId(userId)
                 .build();
 
-        changeHistoryComponent.recordFieldChanges(context, currentVariables, editableData);
+        Map<String, Object> snapshotOldVars = snapshotOldVarsRef.get();
+        if (snapshotOldVars == null) {
+            snapshotOldVars = Collections.emptyMap();
+        }
+        Set<String> concurrentSnapshot = concurrentFieldsRef.get();
+        if (concurrentSnapshot == null) {
+            concurrentSnapshot = Set.of();
+        }
 
-        // Record sub-table (subform) changes via ChangeHistoryComponent (best-effort)
-        Object oldSubTables = currentVariables.get("__subTables__");
-        Object newSubTables = editableData.get("__subTables__");
-        recordSubTableChangeHistory(context, oldSubTables, newSubTables);
+        try {
+            for (String field : concurrentSnapshot) {
+                changeHistoryComponent.recordConcurrentModificationWarning(
+                        taskInfo.processInstanceId, field, "unknown", userId);
+            }
+            changeHistoryComponent.recordFieldChanges(context, snapshotOldVars, editableData);
+            recordSubTableChangeHistory(context,
+                    snapshotOldVars.get("__subTables__"),
+                    editableData.get("__subTables__"));
+        } catch (RuntimeException ex) {
+            log.warn("task form change-history skipped for task {}: {}", taskId, ex.getMessage());
+        }
     }
 
     @SuppressWarnings("unchecked")

@@ -45,7 +45,7 @@ public class ProcessStartValidationPropertyTest {
 
         ProcessFormComponent component = new ProcessFormComponent(
                 processInstanceRepository, changeHistoryComponent, mock(RestTemplate.class),
-                new ObjectMapper(), mock(JdbcTemplate.class));
+                new ObjectMapper(), mock(JdbcTemplate.class), com.portal.testsupport.PortalTransactionTestSupport.noopPlatformTransactionManager());
         ReflectionTestUtils.setField(component, "adminCenterUrl", "http://mock-admin:8090");
 
         // Mock the REST call for form existence check
@@ -111,7 +111,7 @@ public class ProcessStartValidationPropertyTest {
 
         ProcessFormComponent component = new ProcessFormComponent(
                 processInstanceRepository, changeHistoryComponent, mock(RestTemplate.class),
-                new ObjectMapper(), mock(JdbcTemplate.class));
+                new ObjectMapper(), mock(JdbcTemplate.class), com.portal.testsupport.PortalTransactionTestSupport.noopPlatformTransactionManager());
 
         // Mock admin-center URL to a controlled value
         ReflectionTestUtils.setField(component, "adminCenterUrl", "http://mock-admin:8090");
@@ -121,7 +121,7 @@ public class ProcessStartValidationPropertyTest {
         // To test the positive case, we create a testable subclass that overrides the check.
         ProcessFormComponent testableComponent = new ProcessFormComponent(
                 processInstanceRepository, changeHistoryComponent, mock(RestTemplate.class),
-                new ObjectMapper(), mock(JdbcTemplate.class)) {
+                new ObjectMapper(), mock(JdbcTemplate.class), com.portal.testsupport.PortalTransactionTestSupport.noopPlatformTransactionManager()) {
             @Override
             public void validateProcessFormExists(String fuId) {
                 // Simulate: PROCESS form exists for this function unit

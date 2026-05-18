@@ -9,6 +9,7 @@ import com.portal.entity.ChangeHistory;
 import com.portal.enums.ChangeType;
 import com.portal.repository.ChangeHistoryRepository;
 import com.portal.repository.ProcessInstanceRepository;
+import com.portal.testsupport.PortalTransactionTestSupport;
 import net.jqwik.api.*;
 import org.mockito.ArgumentCaptor;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -47,7 +48,8 @@ public class ChangeHistoryCreationPropertyTest {
                 mock(UserRepository.class),
                 mock(WorkflowEngineClient.class),
                 mock(JdbcTemplate.class),
-                new ObjectMapper());
+                new ObjectMapper(),
+                PortalTransactionTestSupport.noopPlatformTransactionManager());
     }
 
     /**

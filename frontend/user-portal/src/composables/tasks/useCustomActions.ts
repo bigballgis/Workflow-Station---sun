@@ -58,6 +58,7 @@ export function useCustomActions(options: {
         options.approveDialogVisible.value = true
         break
       case 'REJECT':
+      case 'PROCESS_REJECT':
         options.currentApproveAction.value = 'REJECT'
         options.approveDialogTitle.value = action.actionName
         options.approveForm.comment = ''

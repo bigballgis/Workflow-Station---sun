@@ -47,7 +47,7 @@ public class TaskFormFallbackPropertyTest {
         // Create a testable TaskFormComponent where fetchTaskFormByStageId returns null (no binding)
         TaskFormComponent component = new TaskFormComponent(
                 processFormComponent, changeHistoryComponent, processInstanceRepository,
-                mock(WorkflowEngineClient.class), mock(RestTemplate.class), new ObjectMapper(), mock(JdbcTemplate.class)) {
+                mock(WorkflowEngineClient.class), mock(RestTemplate.class), new ObjectMapper(), mock(JdbcTemplate.class), com.portal.testsupport.PortalTransactionTestSupport.noopPlatformTransactionManager()) {
             @Override
             protected TaskInfo getTaskInfo(String taskId) {
                 return new TaskInfo(config.taskDefinitionKey, config.processInstanceId);

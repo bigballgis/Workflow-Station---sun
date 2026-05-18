@@ -192,31 +192,6 @@ function handleClear() {
 
 // Initialize selectedRow and searchKeyword from modelValue (for saved form data)
 function initFromModelValue(val: any) {
-  // #region agent log
-  {
-    const kind =
-      val == null || val === ''
-        ? 'empty'
-        : typeof val === 'object'
-          ? 'object'
-          : 'scalar'
-    fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'f16271' },
-      body: JSON.stringify({
-        sessionId: 'f16271',
-        location: 'LookupField.vue:initFromModelValue',
-        message: 'lookup modelValue shape',
-        data: {
-          kind,
-          objKeyCount: typeof val === 'object' && val != null ? Object.keys(val).length : 0,
-        },
-        timestamp: Date.now(),
-        hypothesisId: 'H2',
-      }),
-    }).catch(() => {})
-  }
-  // #endregion
   if (val == null || val === '') {
     selectedRow.value = null
     searchKeyword.value = ''

@@ -1,4 +1,4 @@
-import type { Ref } from 'vue'
+import { unref, type MaybeRef, type Ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
@@ -10,8 +10,14 @@ import {
 } from '@/utils/subTableAssignment'
 import { normalizeSubTableName } from './shared'
 
+function resolveProcessTaskId(source: MaybeRef<string>): string {
+  const v = unref(source)
+  return typeof v === 'string' ? v.trim() : ''
+}
+
 export function useTaskActions(options: {
-  taskId: string
+  /** Flowable task id (prefer backend detail {@link TaskInfo.taskId}, not only route param). */
+  taskId: MaybeRef<string>
   taskInfo: Ref<Record<string, any>>
   subTableBindings: Ref<any[]>
   formData: Ref<Record<string, any>>
@@ -137,8 +143,9 @@ export function useTaskActions(options: {
       }
       currentFormData.__subTables__ = mergedSub
       Object.assign(variables, currentFormData)
-      await completeTask(options.taskId, {
-        taskId: options.taskId,
+      const pid = resolveProcessTaskId(options.taskId)
+      await completeTask(pid, {
+        taskId: pid,
         action: options.currentApproveAction.value,
         comment: options.approveForm.comment,
         variables,
@@ -147,8 +154,9 @@ export function useTaskActions(options: {
       ElMessage.success(t('task.operationSuccess'))
       options.approveDialogVisible.value = false
       router.push('/tasks')
-    } catch {
-      ElMessage.error(t('task.operationFailed'))
+    } catch (e) {
+      console.error('submitApprove failed:', e)
+      // Axios interceptor already showed ApiResponse / HTTP error body; avoid duplicate generic toast.
     } finally {
       options.submitting.value = false
     }
@@ -161,14 +169,15 @@ export function useTaskActions(options: {
     }
     options.submitting.value = true
     try {
+      const pid = resolveProcessTaskId(options.taskId)
       if (options.currentAction.value === 'delegate') {
-        await delegateTask(options.taskId, options.actionForm.targetUserId, options.actionForm.reason)
+        await delegateTask(pid, options.actionForm.targetUserId, options.actionForm.reason)
         ElMessage.success(t('task.delegateSuccess'))
       } else if (options.currentAction.value === 'transfer') {
-        await transferTask(options.taskId, options.actionForm.targetUserId, options.actionForm.reason)
+        await transferTask(pid, options.actionForm.targetUserId, options.actionForm.reason)
         ElMessage.success(t('task.transferSuccess'))
       } else if (options.currentAction.value === 'urge') {
-        await urgeTask(options.taskId, options.actionForm.reason)
+        await urgeTask(pid, options.actionForm.reason)
         ElMessage.success(t('task.urgeSuccess'))
       }
       options.actionDialogVisible.value = false
@@ -177,8 +186,8 @@ export function useTaskActions(options: {
       } else {
         options.loadTaskDetail()
       }
-    } catch {
-      ElMessage.error(t('task.operationFailed'))
+    } catch (e) {
+      console.error('submitAction failed:', e)
     } finally {
       options.submitting.value = false
     }

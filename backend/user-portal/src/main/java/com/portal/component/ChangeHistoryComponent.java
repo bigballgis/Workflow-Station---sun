@@ -13,12 +13,12 @@ import com.portal.repository.ChangeHistoryRepository;
 import com.portal.repository.ProcessInstanceRepository;
 import com.platform.security.entity.User;
 import com.platform.security.repository.UserRepository;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -36,7 +36,6 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class ChangeHistoryComponent {
 
     private final ChangeHistoryRepository changeHistoryRepository;
@@ -45,6 +44,28 @@ public class ChangeHistoryComponent {
     private final WorkflowEngineClient workflowEngineClient;
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
+
+    /** Isolated commits for history writes — failures roll back only this slice (never outer txn). */
+    private final TransactionTemplate requiresNewTx;
+
+    public ChangeHistoryComponent(
+            ChangeHistoryRepository changeHistoryRepository,
+            ProcessInstanceRepository processInstanceRepository,
+            UserRepository userRepository,
+            WorkflowEngineClient workflowEngineClient,
+            JdbcTemplate jdbcTemplate,
+            ObjectMapper objectMapper,
+            PlatformTransactionManager transactionManager) {
+        this.changeHistoryRepository = changeHistoryRepository;
+        this.processInstanceRepository = processInstanceRepository;
+        this.userRepository = userRepository;
+        this.workflowEngineClient = workflowEngineClient;
+        this.jdbcTemplate = jdbcTemplate;
+        this.objectMapper = objectMapper;
+        TransactionTemplate tt = new TransactionTemplate(transactionManager);
+        tt.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        this.requiresNewTx = tt;
+    }
 
     /**
      * Internal/engine variable names that should never appear in user-visible change history.
@@ -60,46 +81,50 @@ public class ChangeHistoryComponent {
      * 记录字段变更
      * 比较 oldValues 和 newValues，为每个变更的字段创建一条 ChangeHistory 记录
      */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordFieldChanges(ChangeHistoryContext context,
                                    Map<String, Object> oldValues,
                                    Map<String, Object> newValues) {
-        try {
-            Instant now = Instant.now();
-            List<ChangeHistory> records = new ArrayList<>();
+        Instant now = Instant.now();
+        List<ChangeHistory> records = new ArrayList<>();
 
-            for (Map.Entry<String, Object> entry : newValues.entrySet()) {
-                String fieldName = entry.getKey();
-                if (isInternalField(fieldName)) {
-                    continue;
-                }
-                Object newValue = entry.getValue();
-                Object oldValue = oldValues.get(fieldName);
-
-                if (!Objects.equals(oldValue, newValue)) {
-                    ChangeHistory record = ChangeHistory.builder()
-                            .processInstanceId(context.getProcessInstanceId())
-                            .taskInstanceId(context.getTaskInstanceId())
-                            .stageId(context.getStageId())
-                            .userId(context.getUserId())
-                            .timestamp(now)
-                            .fieldName(fieldName)
-                            .oldValue(oldValue != null ? oldValue.toString() : null)
-                            .newValue(newValue != null ? newValue.toString() : null)
-                            .changeType(ChangeType.FIELD_UPDATE)
-                            .build();
-                    records.add(record);
-                }
+        for (Map.Entry<String, Object> entry : newValues.entrySet()) {
+            String fieldName = entry.getKey();
+            if (isInternalField(fieldName)) {
+                continue;
             }
+            Object newValue = entry.getValue();
+            Object oldValue = oldValues.get(fieldName);
 
-            if (!records.isEmpty()) {
+            if (!Objects.equals(oldValue, newValue)) {
+                ChangeHistory record = ChangeHistory.builder()
+                        .processInstanceId(context.getProcessInstanceId())
+                        .taskInstanceId(context.getTaskInstanceId())
+                        .stageId(context.getStageId())
+                        .userId(context.getUserId())
+                        .timestamp(now)
+                        .fieldName(fieldName)
+                        .oldValue(oldValue != null ? oldValue.toString() : null)
+                        .newValue(newValue != null ? newValue.toString() : null)
+                        .changeType(ChangeType.FIELD_UPDATE)
+                        .build();
+                records.add(record);
+            }
+        }
+
+        if (records.isEmpty()) {
+            return;
+        }
+
+        requiresNewTx.executeWithoutResult(status -> {
+            try {
                 changeHistoryRepository.saveAll(records);
                 log.debug("Recorded {} field change(s) for process {}", records.size(), context.getProcessInstanceId());
+            } catch (Exception e) {
+                log.warn("Failed to record field changes for process {}: {}",
+                        context.getProcessInstanceId(), e.getMessage());
+                status.setRollbackOnly();
             }
-        } catch (Exception e) {
-            log.warn("Failed to record field changes for process {}: {}",
-                    context.getProcessInstanceId(), e.getMessage());
-        }
+        });
     }
 
     private static boolean isInternalField(String fieldName) {
@@ -111,42 +136,46 @@ public class ChangeHistoryComponent {
     /**
      * 记录子表变更
      */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordSubTableChanges(ChangeHistoryContext context,
                                       String subTableName,
                                       List<SubTableChange> changes) {
-        try {
-            Instant now = Instant.now();
-            List<ChangeHistory> records = new ArrayList<>();
+        Instant now = Instant.now();
+        List<ChangeHistory> records = new ArrayList<>();
 
-            for (SubTableChange change : changes) {
-                ChangeType changeType = mapSubTableChangeType(change.getChangeType());
+        for (SubTableChange change : changes) {
+            ChangeType changeType = mapSubTableChangeType(change.getChangeType());
 
-                ChangeHistory record = ChangeHistory.builder()
-                        .processInstanceId(context.getProcessInstanceId())
-                        .taskInstanceId(context.getTaskInstanceId())
-                        .stageId(context.getStageId())
-                        .userId(context.getUserId())
-                        .timestamp(now)
-                        .fieldName(subTableName)
-                        .oldValue(change.getOldValues() != null ? change.getOldValues().toString() : null)
-                        .newValue(change.getNewValues() != null ? change.getNewValues().toString() : null)
-                        .changeType(changeType)
-                        .subTableName(subTableName)
-                        .rowIdentifier(change.getRowIdentifier())
-                        .build();
-                records.add(record);
-            }
+            ChangeHistory record = ChangeHistory.builder()
+                    .processInstanceId(context.getProcessInstanceId())
+                    .taskInstanceId(context.getTaskInstanceId())
+                    .stageId(context.getStageId())
+                    .userId(context.getUserId())
+                    .timestamp(now)
+                    .fieldName(subTableName)
+                    .oldValue(change.getOldValues() != null ? change.getOldValues().toString() : null)
+                    .newValue(change.getNewValues() != null ? change.getNewValues().toString() : null)
+                    .changeType(changeType)
+                    .subTableName(subTableName)
+                    .rowIdentifier(change.getRowIdentifier())
+                    .build();
+            records.add(record);
+        }
 
-            if (!records.isEmpty()) {
+        if (records.isEmpty()) {
+            return;
+        }
+
+        requiresNewTx.executeWithoutResult(status -> {
+            try {
                 changeHistoryRepository.saveAll(records);
                 log.debug("Recorded {} sub-table change(s) for process {}, table {}",
                         records.size(), context.getProcessInstanceId(), subTableName);
+            } catch (Exception e) {
+                log.warn("Failed to record sub-table changes for process {}, table {}: {}",
+                        context.getProcessInstanceId(), subTableName, e.getMessage());
+                status.setRollbackOnly();
             }
-        } catch (Exception e) {
-            log.warn("Failed to record sub-table changes for process {}, table {}: {}",
-                    context.getProcessInstanceId(), subTableName, e.getMessage());
-        }
+        });
     }
 
     /**
@@ -173,27 +202,29 @@ public class ChangeHistoryComponent {
     /**
      * 记录并发修改警告
      */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordConcurrentModificationWarning(String processInstanceId,
                                                      String fieldName,
                                                      String userId1,
                                                      String userId2) {
-        try {
-            ChangeHistory record = ChangeHistory.builder()
-                    .processInstanceId(processInstanceId)
-                    .userId(userId2)
-                    .timestamp(Instant.now())
-                    .fieldName(fieldName)
-                    .changeType(ChangeType.FIELD_UPDATE)
-                    .isConcurrent(true)
-                    .build();
-            changeHistoryRepository.save(record);
-            log.warn("Concurrent modification detected on process {}, field {}, users: {} and {}",
-                    processInstanceId, fieldName, userId1, userId2);
-        } catch (Exception e) {
-            log.warn("Failed to record concurrent modification warning for process {}: {}",
-                    processInstanceId, e.getMessage());
-        }
+        requiresNewTx.executeWithoutResult(status -> {
+            try {
+                ChangeHistory record = ChangeHistory.builder()
+                        .processInstanceId(processInstanceId)
+                        .userId(userId2)
+                        .timestamp(Instant.now())
+                        .fieldName(fieldName)
+                        .changeType(ChangeType.FIELD_UPDATE)
+                        .isConcurrent(true)
+                        .build();
+                changeHistoryRepository.save(record);
+                log.warn("Concurrent modification detected on process {}, field {}, users: {} and {}",
+                        processInstanceId, fieldName, userId1, userId2);
+            } catch (Exception e) {
+                log.warn("Failed to record concurrent modification warning for process {}: {}",
+                        processInstanceId, e.getMessage());
+                status.setRollbackOnly();
+            }
+        });
     }
 
     private ChangeType mapSubTableChangeType(String changeType) {

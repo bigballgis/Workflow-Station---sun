@@ -42,7 +42,7 @@ public class ResourceNotFoundPropertyTest {
 
         ProcessFormComponent component = new ProcessFormComponent(
                 processInstanceRepository, changeHistoryComponent, mock(RestTemplate.class),
-                new ObjectMapper(), mock(JdbcTemplate.class));
+                new ObjectMapper(), mock(JdbcTemplate.class), com.portal.testsupport.PortalTransactionTestSupport.noopPlatformTransactionManager());
         ReflectionTestUtils.setField(component, "adminCenterUrl", "http://mock-admin:8090");
 
         // Process instance does not exist
@@ -75,7 +75,7 @@ public class ResourceNotFoundPropertyTest {
 
         ProcessFormComponent component = new ProcessFormComponent(
                 processInstanceRepository, changeHistoryComponent, mock(RestTemplate.class),
-                new ObjectMapper(), mock(JdbcTemplate.class));
+                new ObjectMapper(), mock(JdbcTemplate.class), com.portal.testsupport.PortalTransactionTestSupport.noopPlatformTransactionManager());
         ReflectionTestUtils.setField(component, "adminCenterUrl", "http://mock-admin:8090");
 
         when(processInstanceRepository.findById(processInstanceId))
@@ -109,7 +109,7 @@ public class ResourceNotFoundPropertyTest {
 
         TaskFormComponent component = new TaskFormComponent(
                 processFormComponent, changeHistoryComponent, processInstanceRepository,
-                mock(WorkflowEngineClient.class), mock(RestTemplate.class), new com.fasterxml.jackson.databind.ObjectMapper(), mock(org.springframework.jdbc.core.JdbcTemplate.class));
+                mock(WorkflowEngineClient.class), mock(RestTemplate.class), new com.fasterxml.jackson.databind.ObjectMapper(), mock(org.springframework.jdbc.core.JdbcTemplate.class), com.portal.testsupport.PortalTransactionTestSupport.noopPlatformTransactionManager());
         ReflectionTestUtils.setField(component, "developerWorkstationUrl", "http://mock-dw:8091");
 
         // TaskFormComponent.getTaskInfo throws 404 for unknown tasks (Flowable integration pending)
@@ -138,7 +138,7 @@ public class ResourceNotFoundPropertyTest {
 
         TaskFormComponent component = new TaskFormComponent(
                 processFormComponent, changeHistoryComponent, processInstanceRepository,
-                mock(WorkflowEngineClient.class), mock(RestTemplate.class), new com.fasterxml.jackson.databind.ObjectMapper(), mock(org.springframework.jdbc.core.JdbcTemplate.class));
+                mock(WorkflowEngineClient.class), mock(RestTemplate.class), new com.fasterxml.jackson.databind.ObjectMapper(), mock(org.springframework.jdbc.core.JdbcTemplate.class), com.portal.testsupport.PortalTransactionTestSupport.noopPlatformTransactionManager());
         ReflectionTestUtils.setField(component, "developerWorkstationUrl", "http://mock-dw:8091");
 
         assertThatThrownBy(() -> component.getCompletedTaskFormData(taskId))

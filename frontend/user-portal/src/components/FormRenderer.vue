@@ -1116,6 +1116,9 @@ function getCurrentRowForInlineForm(field: FormField): Record<string, any> | nul
   const { rows, isLinkTarget } = pack
   const parentId = props.currentMiRowId
 
+  let result: Record<string, any> | null = null
+  let pickReason = 'none'
+
   if (isLinkTarget && parentId != null && String(parentId).trim() !== '') {
     const fkList = resolveLinkFkCandidates(pack.target)
     const match = rows.find(r => {
@@ -1126,18 +1129,30 @@ function getCurrentRowForInlineForm(field: FormField): Record<string, any> | nul
         return v != null && v !== '' && String(v) === String(parentId)
       })
     })
-    if (match) return { ...(match as Record<string, any>) }
-    const pick = pickPreferredInlineRow(rows, field)
-    return pick ? { ...(pick as Record<string, any>) } : null
+    if (match) {
+      result = { ...(match as Record<string, any>) }
+      pickReason = 'link-fk'
+    } else {
+      const pick = pickPreferredInlineRow(rows, field)
+      result = pick ? { ...(pick as Record<string, any>) } : null
+      pickReason = 'link-fallback-pick'
+    }
+  } else if (parentId != null && String(parentId).trim() !== '') {
+    // subForm path: MI element id often matches a *parent* FK on this row, not the child row PK (e.g. id=999).
+    const idx = findInlineRowIndexForMi(rows, pack, parentId)
+    if (idx >= 0) {
+      result = { ...(rows[idx] as Record<string, any>) }
+      pickReason = 'mi-idx'
+    }
   }
 
-  // subForm path: MI element id often matches a *parent* FK on this row, not the child row PK (e.g. id=999).
-  if (parentId != null && String(parentId).trim() !== '') {
-    const idx = findInlineRowIndexForMi(rows, pack, parentId)
-    if (idx >= 0) return { ...(rows[idx] as Record<string, any>) }
+  if (!result) {
+    const pick = pickPreferredInlineRow(rows, field)
+    result = pick ? { ...(pick as Record<string, any>) } : null
+    pickReason = pickReason === 'none' ? 'pickPreferred' : `${pickReason}+pickPreferred`
   }
-  const pick = pickPreferredInlineRow(rows, field)
-  return pick ? { ...(pick as Record<string, any>) } : null
+
+  return result
 }
 
 /**

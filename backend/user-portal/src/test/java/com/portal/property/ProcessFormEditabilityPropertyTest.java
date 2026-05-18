@@ -45,7 +45,7 @@ public class ProcessFormEditabilityPropertyTest {
 
         ProcessFormComponent component = new ProcessFormComponent(
                 processInstanceRepository, changeHistoryComponent, mock(RestTemplate.class),
-                new ObjectMapper(), mock(JdbcTemplate.class));
+                new ObjectMapper(), mock(JdbcTemplate.class), com.portal.testsupport.PortalTransactionTestSupport.noopPlatformTransactionManager());
         ReflectionTestUtils.setField(component, "adminCenterUrl", "http://mock-admin:8090");
 
         // Build a ProcessInstance with the given state
@@ -93,7 +93,7 @@ public class ProcessFormEditabilityPropertyTest {
 
         ProcessFormComponent component = new ProcessFormComponent(
                 processInstanceRepository, changeHistoryComponent, mock(RestTemplate.class),
-                new ObjectMapper(), mock(JdbcTemplate.class));
+                new ObjectMapper(), mock(JdbcTemplate.class), com.portal.testsupport.PortalTransactionTestSupport.noopPlatformTransactionManager());
         ReflectionTestUtils.setField(component, "adminCenterUrl", "http://mock-admin:8090");
 
         ProcessInstance processInstance = ProcessInstance.builder()
@@ -134,7 +134,7 @@ public class ProcessFormEditabilityPropertyTest {
 
         ProcessFormComponent component = new ProcessFormComponent(
                 processInstanceRepository, changeHistoryComponent, mock(RestTemplate.class),
-                new ObjectMapper(), mock(JdbcTemplate.class));
+                new ObjectMapper(), mock(JdbcTemplate.class), com.portal.testsupport.PortalTransactionTestSupport.noopPlatformTransactionManager());
         ReflectionTestUtils.setField(component, "adminCenterUrl", "http://mock-admin:8090");
 
         ProcessInstance processInstance = ProcessInstance.builder()

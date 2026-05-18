@@ -176,7 +176,7 @@
               :suppress-link-form-initial-data="selectedNodeForm.isCurrentTask ? (isMiSubTaskMode && !isCompletedTask) : false"
               :show-link-form-dialog-footer="selectedNodeForm.isCurrentTask ? (!isCompletedTask && !formReadOnly) : false"
               view-context="assigneeTodo"
-              :current-mi-row-id="selectedNodeForm.isCurrentTask ? currentMiRowId : null"
+              :current-mi-row-id="currentMiRowId"
               @update:model-value="val => { if (selectedNodeForm.isCurrentTask) formData = { ...formData, ...val } }"
               @update:sub-table-data="(bindingId, rows) => { if (selectedNodeForm.isCurrentTask) syncMainSubTableRows(bindingId, rows) }"
             />
@@ -396,7 +396,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onBeforeUnmount, nextTick, computed } from 'vue'
+import { ref, reactive, onMounted, onBeforeUnmount, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
@@ -457,7 +457,6 @@ import {
 } from '@/api/processForm'
 import { relationTableApi } from '@/api/relationTable'
 import { unwrapUserLikeValueToDisplayString, extractUserIdFromCellValue } from '@/components/subTableAddDialogHelpers'
-
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
@@ -839,11 +838,25 @@ function alignProcessSubTableBindingsBySharedTable() {
  * BPM diagram clicks render {@link nodeFormMap}. That map is built in {@link loadFunctionUnitContent}, but
  * {@link loadProcessAndTaskFormData} may merge additional {@code fieldValues}/{@code __subTables__} afterwards —
  * refresh snapshots so historical nodes (e.g. assignment/submit "sub form1") show the same rows as live variables.
+ *
+ * {@code topLevelValuesSource}: when MI isolation has cleared fields on {@link formData} that still belong on
+ * earlier steps (diagram uses {@code selectedNodeForm.values} for read-only nodes), pass the pre-isolate snapshot here.
  */
-function refreshNodeFormMapFromFormData(opts?: { subTablesSource?: Record<string, unknown> | null }) {
+function refreshNodeFormMapFromFormData(opts?: {
+  subTablesSource?: Record<string, unknown> | null
+  topLevelValuesSource?: Record<string, unknown> | null
+}) {
   if (nodeFormMap.value.size === 0) return
+  const valuesBase = (opts?.topLevelValuesSource ?? formData.value) as Record<string, any>
   const raw = opts?.subTablesSource ?? formData.value.__subTables__
-  if (!raw || typeof raw !== 'object') return
+  if (!raw || typeof raw !== 'object') {
+    const nextEarly = new Map<string, NodeFormInfo>()
+    for (const [nodeId, info] of nodeFormMap.value.entries()) {
+      nextEarly.set(nodeId, { ...info, values: { ...valuesBase } })
+    }
+    nodeFormMap.value = nextEarly
+    return
+  }
   const flattened = JSON.parse(JSON.stringify(raw)) as Record<string, unknown>
   flattenNestedSubTableRowsIntoPayload(flattened)
   const rtMap = lastBindingRelationTableMap.value
@@ -862,45 +875,12 @@ function refreshNodeFormMapFromFormData(opts?: { subTablesSource?: Record<string
     enrichChildBindingRowsFromParentsNestedSubTables(bindings as any)
     next.set(nodeId, {
       ...info,
-      values: { ...formData.value },
+      values: { ...valuesBase },
       subTableBindings: bindings,
     })
   }
   nodeFormMap.value = next
   alignNodeFormMapSubTableBindingsOnly()
-  // #region agent log
-  ;(() => {
-    const diag = [...nodeFormMap.value.entries()].map(([nid, info]) => ({
-      nodeId: nid,
-      bindings: info.subTableBindings.map(b => ({
-        bid: b.bindingId,
-        len: Array.isArray(b.data) ? b.data.length : 0,
-        row0Keys:
-          Array.isArray(b.data) && b.data[0] && typeof b.data[0] === 'object'
-            ? Object.keys(b.data[0] as object).filter(k => !k.startsWith('__')).slice(0, 24)
-            : []
-      }))
-    }))
-    fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'f16271' },
-      body: JSON.stringify({
-        sessionId: 'f16271',
-        location: 'detail.vue:refreshNodeFormMapFromFormData:afterAlign',
-        message: 'nodeFormMap subTable rows after refresh + node-only align',
-        data: {
-          nodeCount: nodeFormMap.value.size,
-          diag,
-          subTablesSource: opts?.subTablesSource ? 'mi-full-snapshot' : 'formData',
-          align: 'nodeOnly'
-        },
-        timestamp: Date.now(),
-        hypothesisId: 'H1-nodeRefresh',
-        runId: 'post-fix'
-      })
-    }).catch(() => {})
-  })()
-  // #endregion
 }
 
 /** When no binding key matches variables, pick a saved row list by column overlap with list-view columns. */
@@ -1167,6 +1147,41 @@ function isolateMiSubTaskData(taskData: any) {
   }
 
   const originalFormData = { ...formData.value }
+
+  /** Process variables often carry start-step scalars at top level; MI rows may omit them until persisted on the row. */
+  if (myRow && typeof myRow === 'object') {
+    const rec = myRow as Record<string, any>
+    const seedFieldNames = new Set<string>()
+    for (const binding of subTableBindings.value) {
+      const cols = binding.columns as Array<{ field?: string }> | undefined
+      if (Array.isArray(cols)) {
+        for (const col of cols) {
+          const fk = col?.field
+          if (typeof fk === 'string' && fk.length > 0) seedFieldNames.add(fk)
+        }
+      }
+      const ff = (binding as { formFields?: unknown }).formFields
+      const walk = (arr: unknown) => {
+        if (!Array.isArray(arr)) return
+        for (const f of arr as Array<{ key?: unknown; children?: unknown; fields?: unknown }>) {
+          if (f?.key != null && String(f.key).trim() !== '') seedFieldNames.add(String(f.key))
+          walk(f.children)
+          walk(f.fields)
+        }
+      }
+      walk(ff)
+    }
+    for (const fk of seedFieldNames) {
+      if (fk.startsWith('__')) continue
+      const cur = rec[fk]
+      if (cur != null && cur !== '') continue
+      if (!Object.prototype.hasOwnProperty.call(originalFormData, fk)) continue
+      const seed = originalFormData[fk]
+      if (seed == null || seed === '') continue
+      rec[fk] = seed
+    }
+  }
+
   const cleanedFormData: Record<string, any> = {}
   const systemKeys = Object.keys(originalFormData).filter(
     key =>
@@ -1186,6 +1201,8 @@ function isolateMiSubTaskData(taskData: any) {
   for (const key of formKeys) {
     if (myRow && Object.prototype.hasOwnProperty.call(myRow, key)) {
       cleanedFormData[key] = (myRow as Record<string, any>)[key]
+    } else if (Object.prototype.hasOwnProperty.call(originalFormData, key)) {
+      cleanedFormData[key] = originalFormData[key]
     } else {
       cleanedFormData[key] = null
     }
@@ -1381,7 +1398,7 @@ async function saveMiFillDialog() {
 
   submitting.value = true
   try {
-    await apiSubmitTaskForm(taskId, {
+    await apiSubmitTaskForm(effectiveTaskId.value, {
       formData: nextFormData,
       subTableData,
       baselineValues: taskFormDTO.value?.fieldValues || {}
@@ -1390,7 +1407,7 @@ async function saveMiFillDialog() {
     miFilled.value = true
     miFillDialogVisible.value = false
     ElMessage.success(t('task.operationSuccess'))
-  } catch {
+  } catch (e) {
     ElMessage.error(t('task.operationFailed'))
   } finally {
     submitting.value = false
@@ -1431,30 +1448,6 @@ const userSearchLoading = ref(false)
 
 
 // ── Node click handlers for diagram ──────────────────────────────────────
-function portalDebugToStorage(payload: Record<string, unknown>) {
-  try {
-    sessionStorage.setItem(
-      'portal_debug_f16271_task_detail',
-      JSON.stringify({ ts: Date.now(), sessionId: 'f16271', ...payload }),
-    )
-  } catch {
-    /* quota / private mode */
-  }
-  // #region agent log
-  fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'f16271' },
-    body: JSON.stringify({
-      sessionId: 'f16271',
-      location: 'detail.vue:portalDebugToStorage',
-      message: payload.message ?? 'task-detail-diagnostic',
-      data: payload,
-      timestamp: Date.now(),
-      hypothesisId: String(payload.hypothesisId ?? 'H-click-node'),
-    }),
-  }).catch(() => {})
-  // #endregion
-}
 
 const handleNodeClick = (node: ProcessNode) => {
   if (selectedNodeId.value === node.id) {
@@ -1462,28 +1455,6 @@ const handleNodeClick = (node: ProcessNode) => {
     return
   }
   selectedNodeId.value = node.id
-  nextTick(() => {
-    const nid = selectedNodeId.value
-    const info = nid ? nodeFormMap.value.get(nid) : null
-    portalDebugToStorage({
-      hypothesisId: 'H-click-node',
-      message: 'diagram-node-selected',
-      nodeId: nid,
-      nodeShape: node.type,
-      mapHasEntry: !!info,
-      mapSize: nodeFormMap.value.size,
-      mapKeysHead: [...nodeFormMap.value.keys()].slice(0, 36),
-      bindings:
-        info?.subTableBindings?.map(b => ({
-          bid: b.bindingId,
-          rows: Array.isArray(b.data) ? b.data.length : 0,
-          keys0:
-            Array.isArray(b.data) && b.data[0] && typeof b.data[0] === 'object'
-              ? Object.keys(b.data[0]).filter(k => !k.startsWith('__')).slice(0, 22)
-              : [],
-        })) ?? [],
-    })
-  })
 }
 
 const clearNodeSelection = () => {
@@ -1585,31 +1556,6 @@ const loadTaskDetail = async () => {
         currentNodeId.value = ''
       }
       if (data.variables) formData.value = data.variables
-      // #region agent log
-      ;(() => {
-        const st = formData.value.__subTables__ as Record<string, unknown> | undefined
-        const sample: Record<string, { len: number; row0Keys: string[] }> = {}
-        if (st && typeof st === 'object') {
-          for (const [k, v] of Object.entries(st)) {
-            if (Array.isArray(v) && v.length > 0 && v[0] && typeof v[0] === 'object') {
-              sample[k] = { len: v.length, row0Keys: Object.keys(v[0] as object) }
-            }
-          }
-        }
-        fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'f16271' },
-          body: JSON.stringify({
-            sessionId: 'f16271',
-            location: 'detail.vue:loadTaskDetail:afterVariables',
-            message: '__subTables__ from task detail variables',
-            data: { stKeys: st ? Object.keys(st) : [], sample },
-            timestamp: Date.now(),
-            hypothesisId: 'H1'
-          })
-        }).catch(() => {})
-      })()
-      // #endregion
       // Load flow history first, as diagram parsing needs history records
       await loadTaskHistory()
       
@@ -1623,15 +1569,17 @@ const loadTaskDetail = async () => {
 
       if (isMiSubTask(data)) {
         isMiSubTaskMode.value = true
+        const preIsolateTopLevelForDiagram: Record<string, unknown> = { ...formData.value }
         const miFullSubTablesSnapshot =
           formData.value.__subTables__ && typeof formData.value.__subTables__ === 'object'
             ? (JSON.parse(JSON.stringify(formData.value.__subTables__)) as Record<string, unknown>)
             : null
         isolateMiSubTaskData(data)
         enrichChildBindingRowsFromParentsNestedSubTables(subTableBindings.value)
-        if (miFullSubTablesSnapshot) {
-          refreshNodeFormMapFromFormData({ subTablesSource: miFullSubTablesSnapshot })
-        }
+        refreshNodeFormMapFromFormData({
+          subTablesSource: miFullSubTablesSnapshot ?? undefined,
+          topLevelValuesSource: preIsolateTopLevelForDiagram
+        })
         const formKeys = getCurrentFormFieldKeys()
         miFilled.value = formKeys.some(key => {
           const val = formData.value[key]
@@ -1641,37 +1589,6 @@ const loadTaskDetail = async () => {
       if (isCompletedTask.value) {
         applyTaskAssigneeNameToMatchingSubTableRows(data)
       }
-      // #region agent log
-      ;(() => {
-        const st = formData.value.__subTables__ as Record<string, unknown> | undefined
-        const bindingsSnap = subTableBindings.value.map(b => ({
-          bindingId: b.bindingId,
-          tableName: b.tableName,
-          len: Array.isArray(b.data) ? b.data.length : 0,
-          row0Keys:
-            Array.isArray(b.data) && b.data[0] && typeof b.data[0] === 'object'
-              ? Object.keys(b.data[0] as object)
-              : []
-        }))
-        fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'f16271' },
-          body: JSON.stringify({
-            sessionId: 'f16271',
-            location: 'detail.vue:loadTaskDetail:end',
-            message: 'final formData + subTableBindings after load + MI isolation',
-            data: {
-              isMiMode: isMiSubTaskMode.value,
-              taskDefKey: (data as { taskDefinitionKey?: string })?.taskDefinitionKey,
-              stKeys: st ? Object.keys(st) : [],
-              bindingsSnap
-            },
-            timestamp: Date.now(),
-            hypothesisId: 'H3_H4_H5'
-          })
-        }).catch(() => {})
-      })()
-      // #endregion
     }
   } catch (error: any) {
     console.error('Failed to load task detail:', error)
@@ -1724,7 +1641,7 @@ const loadTaskDetail = async () => {
 }
 
 const taskActions = useTaskActions({
-  taskId,
+  taskId: effectiveTaskId,
   taskInfo: taskInfo as any,
   subTableBindings,
   formData,
@@ -1992,53 +1909,6 @@ const loadFunctionUnitContent = async (processKey: string) => {
         )
       }
       enrichChildBindingRowsFromParentsNestedSubTables(bindings)
-      // #region agent log
-      ;(() => {
-        const saved = savedSubTables && typeof savedSubTables === 'object' ? savedSubTables : null
-        const nestedKeysForBinding = (childBid: number): { hit: boolean; keys: string[] } => {
-          if (!saved) return { hit: false, keys: [] }
-          for (const val of Object.values(saved)) {
-            if (!Array.isArray(val)) continue
-            for (const row of val) {
-              if (!row || typeof row !== 'object') continue
-              const nest = (row as Record<string, unknown>).__subTables__
-              if (!nest || typeof nest !== 'object') continue
-              const arr =
-                (nest as Record<string, unknown>)[childBid] ??
-                (nest as Record<string, unknown>)[String(childBid)]
-              if (Array.isArray(arr) && arr[0] && typeof arr[0] === 'object') {
-                return { hit: true, keys: Object.keys(arr[0] as object).filter(k => !k.startsWith('__')) }
-              }
-            }
-          }
-          return { hit: false, keys: [] }
-        }
-        const bindingDiag = bindings.map(b => {
-          const row0 = Array.isArray(b.data) && b.data[0] && typeof b.data[0] === 'object' ? (b.data[0] as object) : null
-          const nk = nestedKeysForBinding(b.bindingId)
-          return {
-            bid: b.bindingId,
-            tn: normalizeSubTableName(b.tableName),
-            rowLen: Array.isArray(b.data) ? b.data.length : 0,
-            row0Keys: row0 ? Object.keys(row0).filter(k => !k.startsWith('__')) : [],
-            nestedSliceHit: nk.hit,
-            nestedRow0Keys: nk.keys.slice(0, 24)
-          }
-        })
-        fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'f16271' },
-          body: JSON.stringify({
-            sessionId: 'f16271',
-            location: 'detail.vue:loadFU:afterSubTableHydrate',
-            message: 'bindings vs nested __subTables__ under parent rows',
-            data: { bindingDiag },
-            timestamp: Date.now(),
-            hypothesisId: 'H-B-H-E'
-          })
-        }).catch(() => {})
-      })()
-      // #endregion
       // When subForms have no rule, columns are empty causing no columns/assignee inference; infer columns from loaded row data
       bindings.forEach(binding => {
         if ((!binding.columns || binding.columns.length === 0) && binding.data?.length) {
@@ -2326,31 +2196,6 @@ const loadFunctionUnitContent = async (processKey: string) => {
         }
         nodeFormMap.value = newMap
         alignProcessSubTableBindingsBySharedTable()
-        // #region agent log
-        ;(() => {
-          const bindingsSnap = subTableBindings.value.map(b => ({
-            bindingId: b.bindingId,
-            tableName: b.tableName,
-            len: Array.isArray(b.data) ? b.data.length : 0,
-            row0Keys:
-              Array.isArray(b.data) && b.data[0] && typeof b.data[0] === 'object'
-                ? Object.keys(b.data[0] as object)
-                : []
-          }))
-          fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'f16271' },
-            body: JSON.stringify({
-              sessionId: 'f16271',
-              location: 'detail.vue:loadFunctionUnitContent:afterAlign',
-              message: 'subTableBindings after align (before loadProcessAndTaskFormData)',
-              data: { bindingsSnap },
-              timestamp: Date.now(),
-              hypothesisId: 'H3'
-            })
-          }).catch(() => {})
-        })()
-        // #endregion
       } catch (e) {
         console.warn('[NodeFormMap] Failed to build:', e)
         alignProcessSubTableBindingsBySharedTable()
@@ -2372,8 +2217,6 @@ const loadProcessAndTaskFormData = async (taskData: any) => {
   const processInstanceId = taskData.processInstanceId
   const currentTaskId = taskData.id || taskId
   const isCompleted = isCompletedTaskData(taskData) || hasCompletedSnapshotRoute()
-  const miSubTask = isMiSubTask(taskData)
-  try {
 
   // 17.1: Load Process Form data
   if (processInstanceId) {
@@ -2451,48 +2294,7 @@ const loadProcessAndTaskFormData = async (taskData: any) => {
       }
     }
   }
-  } finally {
-    refreshNodeFormMapFromFormData()
-    // #region agent log
-    ;(() => {
-      const tf = taskFormDTO.value as TaskFormDataDTO | null | undefined
-      const fv = tf?.fieldValues as Record<string, unknown> | undefined
-      const st = formData.value.__subTables__ as Record<string, unknown> | undefined
-      const stSample: Record<string, { len: number; row0Keys: string[] }> = {}
-      if (st && typeof st === 'object') {
-        for (const [k, v] of Object.entries(st)) {
-          if (Array.isArray(v) && v.length > 0 && v[0] && typeof v[0] === 'object') {
-            stSample[k] = {
-              len: v.length,
-              row0Keys: Object.keys(v[0] as object).filter(x => !x.startsWith('__')).slice(0, 30)
-            }
-          }
-        }
-      }
-      fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'f16271' },
-        body: JSON.stringify({
-          sessionId: 'f16271',
-          location: 'detail.vue:loadProcessAndTaskFormData:finally',
-          message: 'after loadProcessAndTaskFormData (incl. MI early return)',
-          data: {
-            miSubTask,
-            tfHasConfig: !!tf?.configJson,
-            tfHasFieldPerms: !!tf?.fieldPermissions,
-            tfPermsKeyCount: tf?.fieldPermissions ? Object.keys(tf.fieldPermissions).length : 0,
-            fvKeys: fv ? Object.keys(fv) : [],
-            fvHasSubTables: fv && Object.prototype.hasOwnProperty.call(fv, '__subTables__'),
-            formStKeys: st ? Object.keys(st) : [],
-            stSample
-          },
-          timestamp: Date.now(),
-          hypothesisId: 'H-A-H-D'
-        })
-      }).catch(() => {})
-    })()
-    // #endregion
-  }
+  refreshNodeFormMapFromFormData()
 }
 
 // Parse Process Form config into FormRenderer fields

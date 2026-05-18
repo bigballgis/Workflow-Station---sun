@@ -1104,11 +1104,15 @@ public class TaskProcessComponent {
         if (request.getVariables() != null) {
             variables.putAll(request.getVariables());
         }
-        
-        // Add action
+
+        // Merge explicit form payload before locking outcome variables. Form schemas may reuse names like
+        // "decision" or "approvalStatus"; if we merge formData AFTER setting those keys, user/stale values win
+        // and Flowable completion fails with engine error → PortalException 500.
+        if (request.getFormData() != null) {
+            variables.putAll(request.getFormData());
+        }
+
         variables.put("action", action);
-        
-        // Auto-set decision variable based on action
         if ("APPROVE".equals(action)) {
             variables.put("decision", "yes");
             variables.put("approvalStatus", "APPROVED");
@@ -1118,15 +1122,8 @@ public class TaskProcessComponent {
             variables.put("approvalStatus", "REJECTED");
             log.info("Set decision=no for REJECT action");
         }
-        
-        // Add approver comments
         if (request.getComment() != null && !request.getComment().isEmpty()) {
             variables.put("approverComments", request.getComment());
-        }
-        
-        // Add any additional form data
-        if (request.getFormData() != null) {
-            variables.putAll(request.getFormData());
         }
 
         // 完成审批时前端常只提交增量字段；__subTables__ 往往在 TaskInfo（本地 ProcessInstance 合并）里才有。

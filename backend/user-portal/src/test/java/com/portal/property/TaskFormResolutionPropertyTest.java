@@ -47,7 +47,7 @@ public class TaskFormResolutionPropertyTest {
         // Create a testable TaskFormComponent that overrides getTaskInfo and fetchTaskFormByStageId
         TaskFormComponent component = new TaskFormComponent(
                 processFormComponent, changeHistoryComponent, processInstanceRepository,
-                mock(WorkflowEngineClient.class), mock(RestTemplate.class), new com.fasterxml.jackson.databind.ObjectMapper(), mock(org.springframework.jdbc.core.JdbcTemplate.class)) {
+                mock(WorkflowEngineClient.class), mock(RestTemplate.class), new com.fasterxml.jackson.databind.ObjectMapper(), mock(org.springframework.jdbc.core.JdbcTemplate.class), com.portal.testsupport.PortalTransactionTestSupport.noopPlatformTransactionManager()) {
             @Override
             protected TaskInfo getTaskInfo(String taskId) {
                 // Resolve task info from our config
