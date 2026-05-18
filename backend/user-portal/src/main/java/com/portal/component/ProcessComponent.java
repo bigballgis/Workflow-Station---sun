@@ -183,28 +183,22 @@ public class ProcessComponent {
         // admin-center API 已在 ProcessContentDTO.flowableProcessDefinitionKey 字段返回此值。
         String flowableProcessKey = null;
 
-        log.info("=== [DIAG] startProcess: userId=[{}], processKey=[{}], pin.catalogId=[{}]", userId, processKey, pin.catalogId());
         try {
             Map<String, Object> content = getFunctionUnitContent(pin.catalogId());
-            log.info("=== [DIAG] getFunctionUnitContent returned: keys={}, name={}", content != null ? content.keySet() : "null", content != null ? content.get("name") : "null");
             if (content != null) {
                 if (content.get("name") != null) {
                     processName = (String) content.get("name");
                 }
                 @SuppressWarnings("unchecked")
                 List<Map<String, Object>> processes = (List<Map<String, Object>>) content.get("processes");
-                log.info("=== [DIAG] processes list: {} items", processes != null ? processes.size() : "null");
                 if (processes != null && !processes.isEmpty()) {
                     // 直接从 API 响应获取已部署的 process key（最可靠）
                     Object flowableKeyObj = processes.get(0).get("flowableProcessDefinitionKey");
                     if (flowableKeyObj != null) {
                         flowableProcessKey = flowableKeyObj.toString();
-                        log.info("=== [DIAG] flowableProcessDefinitionKey from API response: [{}]", flowableProcessKey);
                     }
                     Object dataObj = processes.get(0).get("data");
-                    log.info("=== [DIAG] process[0].data type: {}, isNull: {}", dataObj != null ? dataObj.getClass().getName() : "null", dataObj == null);
                     bpmnXml = (String) dataObj;
-                    log.info("=== [DIAG] bpmnXml extracted: length={}", bpmnXml != null ? bpmnXml.length() : 0);
                 }
             }
         } catch (FunctionUnitAccessComponent.FunctionUnitDisabledException | 
@@ -227,25 +221,19 @@ public class ProcessComponent {
         
         // 如果 API 响应中没有 flowableProcessDefinitionKey，则从 BPMN XML 提取
         if (flowableProcessKey == null || flowableProcessKey.isEmpty()) {
-            log.info("=== [DIAG] No flowableProcessDefinitionKey from API, extracting from BPMN XML...");
-            log.info("=== [DIAG] BPMN XML length: {}, first 200 chars: {}", bpmnXml.length(), bpmnXml.substring(0, Math.min(200, bpmnXml.length())));
             flowableProcessKey = extractProcessIdFromBpmn(bpmnXml);
-            log.info("=== [DIAG] Extracted bpmnProcessId from XML: [{}]", flowableProcessKey);
             if (flowableProcessKey == null || flowableProcessKey.isEmpty()) {
                 throw new IllegalStateException("无法从 BPMN XML 中提取 process id，请检查 BPMN 格式是否正确: " + processKey);
             }
         }
 
         // 先部署流程定义（如果尚未部署）
-        log.info("=== [DIAG] Calling deployProcess with key=[{}], bpmnXml length={}", processKey, bpmnXml.length());
         Optional<Map<String, Object>> deployResult = workflowEngineClient.deployProcess(processKey, bpmnXml, processName);
-        log.info("=== [DIAG] Deploy result present: {}, result: {}", deployResult.isPresent(), deployResult.orElse(null));
         if (deployResult.isPresent()) {
             Map<String, Object> deployed = deployResult.get();
             log.info("Process definition deployed: {}", deployed);
             // deployResult 中的 processDefinitionKey 来自 Flowable 的返回值，已验证有效
             Object deployedKey = deployed.get("processDefinitionKey");
-            log.info("=== [DIAG] deployed processDefinitionKey from response: [{}]", deployedKey);
             if (deployedKey != null && !deployedKey.toString().isEmpty()) {
                 flowableProcessKey = deployedKey.toString();
                 log.info("Using actual process definition key from deployment response: [{}]", flowableProcessKey);
@@ -253,7 +241,6 @@ public class ProcessComponent {
         } else {
             throw new IllegalStateException("Process deployment returned empty data: " + processKey);
         }
-        log.info("=== [DIAG] FINAL actualProcessKey to be used for startProcess: [{}]", flowableProcessKey);
 
         // actualProcessKey 是最终用于启动流程的 key（Flowable 使用 BPMN XML 中的 <process id> 作为 key）
         final String actualProcessKey = flowableProcessKey;
@@ -1415,6 +1402,12 @@ public class ProcessComponent {
                     continue;
                 }
 
+                // Designer metadata can imply a PK for a logical name (e.g. MI token "subtable") while no physical
+                // relation exists; SELECT against a missing relation aborts the whole PostgreSQL transaction and
+                // the request later fails with UnexpectedRollbackException despite catch blocks here (see Docker
+                // logs: ERROR relation "subtable" does not exist → current transaction is aborted).
+                final boolean physicalTablePresent = subTableExists(safeTableName);
+
                 // Legacy: physical table merge first (assignee, persisted field values). DB may still hold stale
                 // task_status / task_current_node after a participant advances — those columns must not win over
                 // the engine; MI overlay applied below overwrites them.
@@ -1424,10 +1417,7 @@ public class ProcessComponent {
                     }
                     Map<String, Object> row = (Map<String, Object>) rawRow;
                     Map<String, Object> rowKey = SubTableRowKeySupport.rowKeyFromVariableRow(row, pkCols);
-                    boolean canQueryDb = rowKey != null;
-                    if (canQueryDb && !miProgress.isEmpty() && !subTableExists(safeTableName)) {
-                        canQueryDb = false;
-                    }
+                    boolean canQueryDb = rowKey != null && physicalTablePresent;
                     if (canQueryDb) {
                         String where = SubTableRowKeySupport.buildPkWhereClause(pkCols);
                         Object[] args = SubTableRowKeySupport.orderedPkParams(pkCols, rowKey);

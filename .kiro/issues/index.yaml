@@ -1257,3 +1257,12 @@
   category: bug
   summary: "user-portal 待办任务详情 tasks/detail.vue 未调用 applications/detail.vue 中的 alignProcessSubTableBindingsBySharedTable：发起流程时 __subTables__ 仅按发起步骤 bindingId 写入，克隆表单(subform_copy)后 bindingId 变化则读不到历史行，子表列(id/l/lookup 等)显示为空"
   file: "frontend/user-portal/src/views/tasks/detail.vue; frontend/user-portal/src/views/processes/start.vue"
+
+- id: "172"
+  status: fixed
+  fixed_at: "2026-05-18"
+  severity: major
+  category: bug
+  summary: "user-portal 把表单 SUB/RELATED 绑定的 tableName（如 RelationTable 逻辑名 subtable）当作 Postgres 物理表做 JDBC 补齐；无数物理 relation 时报错 relation does not exist，事务进入 aborted，完成任务(APP approve/MI)表现为 UnexpectedRollbackException"
+  file: "backend/user-portal/src/main/java/com/portal/component/ProcessComponent.java"
+  note: "设计器侧常为 schema + __subTables__ JSON，不等价于同名物理表；补齐前必须 subTableExists。可选后续：published bindings 区分 logical vs physical 表名，或对 FORM_ONLY/纯 JSON 存储显式跳过 JDBC。"

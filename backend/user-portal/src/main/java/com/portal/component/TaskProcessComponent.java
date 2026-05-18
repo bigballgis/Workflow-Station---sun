@@ -20,6 +20,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.dao.DataAccessException;
+
+import jakarta.persistence.OptimisticLockException;
+import org.springframework.transaction.interceptor.TransactionAspectSupport;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -162,6 +167,10 @@ public class TaskProcessComponent {
     public void completeTask(TaskCompleteRequest request, String userId, String portalUsername) {
         String taskId = request.getTaskId();
         TaskInfo task = getTaskOrThrow(taskId);
+        if (isTaskAlreadyClosedInEngineView(task)) {
+            throw new PortalException("409",
+                    "This task is no longer active (it may already be completed). Please refresh your todo list.");
+        }
 
         // 验证用户是否有权限处理任务
         if (!canProcessTask(task, userId, portalUsername)) {
@@ -172,8 +181,10 @@ public class TaskProcessComponent {
         boolean poolStyle = "VIRTUAL_GROUP".equals(task.getAssignmentType()) || "CANDIDATE_USERS".equals(task.getAssignmentType())
                 || "DEPT_ROLE".equals(task.getAssignmentType());
         boolean noAssignee = task.getAssignee() == null || task.getAssignee().isEmpty();
+        boolean poolAutoClaimed = false;
         if (poolStyle && noAssignee && !isEmptyAssignmentPool(task)) {
             log.info("Auto-claiming pool task {} (type {}) for user {}", taskId, task.getAssignmentType(), userId);
+            poolAutoClaimed = true;
             claimTask(taskId, userId, portalUsername);
             task = getTaskOrThrow(taskId); // 认领后刷新任务状态
         } else if (poolStyle && noAssignee && isEmptyAssignmentPool(task)) {
@@ -294,6 +305,10 @@ public class TaskProcessComponent {
         }
 
         TaskInfo task = getTaskOrThrow(taskId);
+        if (isTaskAlreadyClosedInEngineView(task)) {
+            throw new PortalException("409",
+                    "This task is no longer active (it may already be completed). Please refresh your todo list.");
+        }
         if (!canProcessTask(task, userId, portalUsername)) {
             throw new PortalException("403", "You do not have permission to process this task");
         }
@@ -1071,7 +1086,39 @@ public class TaskProcessComponent {
     }
 
     /**
-     * 获取任务或抛出异常
+     * {@link TaskQueryComponent#getTaskById} resolves through workflow-engine {@code getTaskInfo}, which may return a
+     * <strong>historic</strong> row when no runtime execution exists ({@code status=COMPLETED}). Those rows must not
+     * be completed again — Flowable runtime complete would yield "Task not found".
+     */
+    private static boolean isTaskAlreadyClosedInEngineView(TaskInfo task) {
+        if (task == null) {
+            return false;
+        }
+        if (task.getCompletedTime() != null) {
+            return true;
+        }
+        String s = task.getStatus();
+        if (s == null || s.isBlank()) {
+            return false;
+        }
+        String u = s.trim().toUpperCase(Locale.ROOT);
+        return "COMPLETED".equals(u) || "CANCELLED".equals(u) || "TERMINATED".equals(u);
+    }
+
+    private static boolean isEngineTaskInactiveMessage(String engineMessage) {
+        if (engineMessage == null) {
+            return false;
+        }
+        String m = engineMessage.trim();
+        if (m.isEmpty()) {
+            return false;
+        }
+        String low = m.toLowerCase(Locale.ROOT);
+        return low.contains("task not found") || low.contains("task already completed");
+    }
+
+    /**
+     * 获取任务或抛出异常。
      */
     private TaskInfo getTaskOrThrow(String taskId) {
         Optional<TaskInfo> first = taskQueryComponent.getTaskById(taskId);
@@ -1083,6 +1130,26 @@ public class TaskProcessComponent {
             return second.get();
         }
         throw new PortalException("404", "Task not found: " + taskId);
+    }
+
+    /**
+     * Generic catch blocks must not swallow exceptions that already poisoned the Spring transaction;
+     * committing afterward surfaces as UnexpectedRollbackException.
+     */
+    private static boolean isTransactionRollbackOnly() {
+        return TransactionSynchronizationManager.isActualTransactionActive()
+                && TransactionAspectSupport.currentTransactionStatus().isRollbackOnly();
+    }
+
+    private void rethrowIfRollbackOnlyAfterCatch(Exception e, String taskId) {
+        if (!isTransactionRollbackOnly()) {
+            return;
+        }
+        if (e instanceof RuntimeException re) {
+            throw re;
+        }
+        throw new PortalException("500",
+                "Portal data could not be persisted (context: " + taskId + "); please retry or refresh.", e);
     }
 
     /**
@@ -1150,12 +1217,17 @@ public class TaskProcessComponent {
         Map<String, Object> data = result.get();
         if (!Boolean.TRUE.equals(data.get("success"))) {
             String message = data.get("message") != null ? (String) data.get("message") : "Failed to complete task";
+            if (isEngineTaskInactiveMessage(message)) {
+                throw new PortalException("409",
+                        "The task is no longer active in the workflow engine (completed, cancelled, or superseded). "
+                                + "Please refresh your todo list.");
+            }
             throw new PortalException("500", message);
         }
         
         log.info("Task {} completed via Flowable by user {} with action {} (approvalStatus: {})", 
                 taskId, userId, action, variables.get("approvalStatus"));
-        
+
         // 将审批变量同步回本地 ProcessInstance，确保 Completed Tasks / My Requests 能看到
         // 注意：必须创建新的 HashMap 而非原地修改旧 Map，否则 Hibernate 对 JSON 列的脏检测
         // 会因新旧引用相同而误判为"未变更"，导致 UPDATE 语句不被执行
@@ -1170,15 +1242,27 @@ public class TaskProcessComponent {
                     mergedVars.putAll(existingVars);
                 }
                 mergedVars.putAll(variables);
+                taskFormComponent.mergeCompletedTaskSnapshotIntoVariables(
+                        taskId, userId, task.getTaskDefinitionKey(), mergedVars);
                 syncInstance.setVariables(mergedVars);
+
                 processInstanceRepository.save(syncInstance);
-                taskFormComponent.captureTaskFormSnapshot(
-                        taskId, userId, task.getTaskDefinitionKey(), syncProcessId, mergedVars);
+
                 log.info("Synced {} approval variables back to local ProcessInstance {}", 
                         mergedVars.size(), syncProcessId);
             }
+        } catch (PortalException e) {
+            throw e;
+        } catch (DataAccessException e) {
+            log.warn("Data access failure syncing approval variables to local ProcessInstance (task {}): {}",
+                    taskId, e.getMessage());
+            throw e;
+        } catch (OptimisticLockException e) {
+            log.warn("Optimistic lock failure syncing approval variables (task {}): {}", taskId, e.getMessage());
+            throw e;
         } catch (Exception e) {
             log.warn("Failed to sync approval variables to local ProcessInstance: {}", e.getMessage());
+            rethrowIfRollbackOnlyAfterCatch(e, taskId);
         }
 
         // Record Change_History for field and sub-table changes during approval (best-effort)
@@ -1215,8 +1299,19 @@ public class TaskProcessComponent {
                     }
                 }
             }
+        } catch (PortalException e) {
+            throw e;
+        } catch (DataAccessException e) {
+            log.warn("Data access failure recording change history during task completion (task {}): {}",
+                    taskId, e.getMessage());
+            throw e;
+        } catch (OptimisticLockException e) {
+            log.warn("Optimistic lock failure recording change history (task {}): {}", taskId, e.getMessage());
+            throw e;
         } catch (Exception e) {
-            log.warn("Failed to record change history during task completion: {}", e.getMessage());
+            log.warn("Failed to record change history during task completion (task {}): {}",
+                    taskId, e.getMessage());
+            rethrowIfRollbackOnlyAfterCatch(e, taskId);
         }
 
         // 任务完成后，检查流程是否还有活动任务，如果没有则流程可能已完成
@@ -1298,9 +1393,20 @@ public class TaskProcessComponent {
                     }
                 }
             }
+        } catch (PortalException e) {
+            throw e;
+        } catch (DataAccessException e) {
+            log.warn("Data access failure checking process status after task completion (task {}): {}",
+                    taskId, e.getMessage());
+            throw e;
+        } catch (OptimisticLockException e) {
+            log.warn("Optimistic lock failure checking process status after task completion (task {}): {}",
+                    taskId, e.getMessage());
+            throw e;
         } catch (Exception e) {
-            log.warn("Failed to check process status after task completion: {}", e.getMessage());
-            // 不抛出异常，因为这只是一个补偿机制
+            log.warn("Unexpected failure checking process status after task completion (task {}): {}",
+                    taskId, e.getMessage());
+            rethrowIfRollbackOnlyAfterCatch(e, taskId);
         }
     }
 
@@ -1472,7 +1578,7 @@ public class TaskProcessComponent {
         if (processInstanceId == null) {
             return;
         }
-        
+
         try {
             Optional<ProcessInstance> optInstance = processInstanceRepository.findById(processInstanceId);
             if (optInstance.isPresent()) {
@@ -1482,11 +1588,22 @@ public class TaskProcessComponent {
                     instance.setCurrentNode(currentNode);
                 }
                 processInstanceRepository.save(instance);
-                log.info("Updated process instance {} with currentAssignee={}, currentNode={}", 
+                log.info("Updated process instance {} with currentAssignee={}, currentNode={}",
                         processInstanceId, assignee, currentNode);
             }
+        } catch (PortalException e) {
+            throw e;
+        } catch (DataAccessException e) {
+            log.warn("Failed to update process instance assignee (data access) for {}: {}",
+                    processInstanceId, e.getMessage());
+            throw e;
+        } catch (OptimisticLockException e) {
+            log.warn("Failed to update process instance assignee (optimistic lock) for {}: {}",
+                    processInstanceId, e.getMessage());
+            throw e;
         } catch (Exception e) {
-            log.warn("Failed to update process instance assignee: {}", e.getMessage());
+            log.warn("Failed to update process instance assignee for {}: {}", processInstanceId, e.getMessage());
+            rethrowIfRollbackOnlyAfterCatch(e, "UA-RBONLY", "updateProcessInstanceAssignee", processInstanceId);
         }
     }
 

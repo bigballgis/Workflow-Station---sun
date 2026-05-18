@@ -458,6 +458,42 @@ public class TaskFormComponent {
     }
 
     /**
+     * 在完成审批写入前，把 Task Form 字段子集快照以 {@code _snapshot_{taskId}} 并入流程变量。
+     * <p>由调用方对 {@link ProcessInstance} 只做<strong>一次</strong> {@code save}，避免与 {@link ProcessInstance#lockVersion}
+     * 乐观锁冲突（接连两次 UPDATE 同一行易导致 UnexpectedRollback）。</p>
+     *
+     * @param mergedVariables 已合并的流程变量 map（会被原地写入快照键）
+     * @return 快照中包含的表单字段名集合（用于日志）
+     */
+    public Set<String> mergeCompletedTaskSnapshotIntoVariables(String taskId, String userId, String taskDefinitionKey,
+                                                               Map<String, Object> mergedVariables) {
+        if (mergedVariables == null || taskId == null || taskDefinitionKey == null) {
+            return Set.of();
+        }
+        Map<String, Object> formDefinition = fetchTaskFormByStageId(taskDefinitionKey);
+        Map<String, String> fieldPermissions = formDefinition != null
+                ? extractFieldPermissions(formDefinition)
+                : Collections.emptyMap();
+
+        Map<String, Object> fieldValues = extractFieldSubset(mergedVariables, fieldPermissions.keySet());
+        if (mergedVariables.containsKey("__subTables__")) {
+            fieldValues.put("__subTables__", mergedVariables.get("__subTables__"));
+        }
+
+        TaskFormSnapshot snapshot = TaskFormSnapshot.builder()
+                .taskId(taskId)
+                .taskDefinitionKey(taskDefinitionKey)
+                .assignee(userId)
+                .completedAt(Instant.now())
+                .fieldValues(fieldValues)
+                .build();
+
+        mergedVariables.put("_snapshot_" + taskId, snapshotToMap(snapshot));
+        log.debug("Merged snapshot keys into variables for task {}, fields {}", taskId, fieldValues.keySet());
+        return Set.copyOf(fieldValues.keySet());
+    }
+
+    /**
      * Task 完成时捕获快照
      * 获取当前流程变量值（Task Form 字段子集），存储为 _snapshot_{taskId}
      *
@@ -487,44 +523,21 @@ public class TaskFormComponent {
 
     private void persistTaskFormSnapshot(String taskId, String userId, String taskDefinitionKey,
                                          String processInstanceId, Map<String, Object> completedVariables) {
-        // Get Task Form field subset
-        Map<String, Object> formDefinition = fetchTaskFormByStageId(taskDefinitionKey);
-        Map<String, String> fieldPermissions = formDefinition != null
-                ? extractFieldPermissions(formDefinition)
-                : Collections.emptyMap();
-
         ProcessInstance processInstance = processInstanceRepository.findById(processInstanceId)
                 .orElseThrow(() -> new PortalException("404",
                         "Process instance not found: " + processInstanceId));
 
-        Map<String, Object> allVariables = new HashMap<>(
-                processInstance.getVariables() != null ? processInstance.getVariables() : Collections.emptyMap());
-        allVariables.putAll(completedVariables);
-
-        // Get current values for the Task Form's field subset
-        Map<String, Object> fieldValues = extractFieldSubset(allVariables, fieldPermissions.keySet());
-        if (allVariables.containsKey("__subTables__")) {
-            fieldValues.put("__subTables__", allVariables.get("__subTables__"));
+        Map<String, Object> merged = new HashMap<>();
+        if (processInstance.getVariables() != null) {
+            merged.putAll(processInstance.getVariables());
         }
+        merged.putAll(completedVariables != null ? completedVariables : Collections.emptyMap());
 
-        // Create TaskFormSnapshot
-        TaskFormSnapshot snapshot = TaskFormSnapshot.builder()
-                .taskId(taskId)
-                .taskDefinitionKey(taskDefinitionKey)
-                .assignee(userId)
-                .completedAt(Instant.now())
-                .fieldValues(fieldValues)
-                .build();
-
-        // Store as process variable with key _snapshot_{taskId}
-        String snapshotKey = "_snapshot_" + taskId;
-        Map<String, Object> updatedVariables = new HashMap<>(
-                processInstance.getVariables() != null ? processInstance.getVariables() : Collections.emptyMap());
-        updatedVariables.put(snapshotKey, snapshotToMap(snapshot));
-        processInstance.setVariables(updatedVariables);
+        Set<String> snapshotFieldKeys = mergeCompletedTaskSnapshotIntoVariables(taskId, userId, taskDefinitionKey, merged);
+        processInstance.setVariables(merged);
         processInstanceRepository.save(processInstance);
 
-        log.info("Task form snapshot captured for task: {}, fields: {}", taskId, fieldValues.keySet());
+        log.info("Task form snapshot captured for task: {}, fields: {}", taskId, snapshotFieldKeys);
     }
 
     // ==================== Public utility methods for testing ====================
