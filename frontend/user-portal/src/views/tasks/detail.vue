@@ -586,6 +586,42 @@ function normalizeSubTableName(name?: string): string {
   return String(name || '').trim().toLowerCase()
 }
 
+/** Same form / node may place multiple sub-tables backed by identical relation-table metadata — never resolve {@code __subTables__} by display/physical/tableId keys then (everyone steals the same slice). */
+function bindingIdsPreferStrictSubTableLookup(
+  bindings: Array<{ bindingId: number; tableId?: number | null; tableName: string; physicalTableName?: string }>,
+): Set<number> {
+  const ambiguous = new Set<number>()
+  if (!Array.isArray(bindings) || bindings.length <= 1) return ambiguous
+
+  const bump = (m: Map<string, Set<number>>, key: string, bid: number) => {
+    if (!key) return
+    const nk = normalizeSubTableName(key)
+    if (!nk) return
+    let s = m.get(nk)
+    if (!s) {
+      s = new Set()
+      m.set(nk, s)
+    }
+    s.add(bid)
+  }
+
+  const buckets = new Map<string, Set<number>>()
+  for (const b of bindings) {
+    bump(buckets, b.tableName, b.bindingId)
+    if (typeof b.physicalTableName === 'string' && b.physicalTableName.trim())
+      bump(buckets, b.physicalTableName, b.bindingId)
+    if (b.tableId != null && Number.isFinite(Number(b.tableId))) {
+      bump(buckets, `__rtid:${Number(b.tableId)}`, b.bindingId)
+    }
+  }
+  for (const s of buckets.values()) {
+    if (s.size > 1) {
+      for (const id of s) ambiguous.add(id)
+    }
+  }
+  return ambiguous
+}
+
 function subTableBindingMatches(
   target: { bindingId: number; tableName: string; physicalTableName?: string; tableId?: number | null },
   source: { bindingId: number; tableName: string; physicalTableName?: string; tableId?: number | null }
@@ -618,10 +654,11 @@ function cloneSubTableBindings<T extends Array<{ data: any[] }>>(bindings: T): T
 function rebuildIsolatedSubTablesPayload(): Record<string, any> {
   const subTables: Record<string, any> = {}
   const ingest = (bindings: typeof subTableBindings.value) => {
+    const collision = bindingIdsPreferStrictSubTableLookup(bindings)
     for (const binding of bindings) {
       const rows = cloneSubTableRows(Array.isArray(binding.data) ? binding.data : [])
       const canonical = String(binding.bindingId)
-      const prev = getSavedSubTableRows(subTables, binding)
+      const prev = getSavedSubTableRows(subTables, binding, collision.has(binding.bindingId))
       const merged = mergeSubTableRowsByRowId(prev, rows, binding.primaryKeyFields)
       const out = cloneSubTableRows(merged)
       subTables[binding.bindingId] = out
@@ -654,7 +691,8 @@ function syncMainSubTableRows(bindingId: number, rows: any[]) {
   // (MI isolation + matching bindingIds would wipe other sub-tasks' rows).
 
   const subTables = { ...((formData.value.__subTables__ as Record<string, any>) || {}) }
-  const existing = getSavedSubTableRows(subTables, source)
+  const strictSlices = bindingIdsPreferStrictSubTableLookup(subTableBindings.value)
+  const existing = getSavedSubTableRows(subTables, source, strictSlices.has(source.bindingId))
   const merged = isMiSubTaskMode.value
     ? mergeSubTableRowsByRowId(existing, nextRows, source.primaryKeyFields)
     : nextRows
@@ -671,13 +709,21 @@ function syncMainSubTableRows(bindingId: number, rows: any[]) {
 
 function getSavedSubTableRows(
   savedSubTables: any,
-  binding: { bindingId: number; tableName: string; physicalTableName?: string }
+  binding: { bindingId: number; tableName: string; physicalTableName?: string },
+  forbidNameFallback = false,
 ): any[] | undefined {
   if (!savedSubTables || typeof savedSubTables !== 'object') return undefined
+
+  const byBindingId =
+    savedSubTables[binding.bindingId] ?? savedSubTables[String(binding.bindingId)]
+  if (Array.isArray(byBindingId)) {
+    return byBindingId
+  }
+  if (forbidNameFallback) {
+    return undefined
+  }
   const phys = binding.physicalTableName
   const saved =
-    savedSubTables[binding.bindingId] ??
-    savedSubTables[String(binding.bindingId)] ??
     savedSubTables[binding.tableName] ??
     savedSubTables[normalizeSubTableName(binding.tableName)] ??
     (phys ? savedSubTables[phys] ?? savedSubTables[normalizeSubTableName(phys)] : undefined)
@@ -686,8 +732,9 @@ function getSavedSubTableRows(
 
 function applySavedRowsToBindings<T extends Array<{ bindingId: number; tableName: string; data: any[] }>>(bindings: T, savedSubTables: any): T {
   if (!savedSubTables || typeof savedSubTables !== 'object') return bindings
+  const ambiguous = bindingIdsPreferStrictSubTableLookup(bindings)
   bindings.forEach(binding => {
-    const saved = getSavedSubTableRows(savedSubTables, binding)
+    const saved = getSavedSubTableRows(savedSubTables, binding, ambiguous.has(binding.bindingId))
     if (saved) {
       binding.data = cloneSubTableRows(saved)
     }
@@ -733,6 +780,7 @@ function hydrateCurrentSubTablesFromPreviousForms() {
 }
 
 type SubTableBindingAlignable = {
+  bindingId?: number
   tableId?: number | null
   tableName: string
   data: any[]
@@ -762,11 +810,24 @@ function applyUnionFindMergedRowSnapshots(all: SubTableBindingAlignable[]): void
       const tnB = normalizeSubTableName(b.tableName)
       const tidA = a.tableId != null && !Number.isNaN(Number(a.tableId)) ? Number(a.tableId) : null
       const tidB = b.tableId != null && !Number.isNaN(Number(b.tableId)) ? Number(b.tableId) : null
-      if (tidA != null && tidB != null && tidA === tidB) {
-        union(i, j)
-      } else if (tnA.length > 0 && tnA === tnB) {
-        union(i, j)
+      const sameById = tidA != null && tidB != null && tidA === tidB
+      const sameByName = tnA.length > 0 && tnA === tnB
+      if (!sameById && !sameByName) continue
+
+      const bidA = a.bindingId
+      const bidB = b.bindingId
+      if (
+        bidA !== undefined &&
+        bidB !== undefined &&
+        bidA !== bidB &&
+        Array.isArray(a.data) &&
+        Array.isArray(b.data) &&
+        a.data.length > 0 &&
+        b.data.length > 0
+      ) {
+        continue
       }
+      union(i, j)
     }
   }
 
@@ -802,12 +863,13 @@ function applyUnionFindMergedRowSnapshots(all: SubTableBindingAlignable[]): void
  * live {@link subTableBindings} (MI isolation must not be widened by a post-isolate node refresh).
  */
 function alignNodeFormMapSubTableBindingsOnly() {
-  const nodeBindings: SubTableBindingAlignable[] = Array.from(nodeFormMap.value.values()).flatMap(
-    info => info.subTableBindings as SubTableBindingAlignable[]
-  )
-  if (nodeBindings.length === 0) return
-  applyUnionFindMergedRowSnapshots(nodeBindings)
-  enrichChildBindingRowsFromParentsNestedSubTables(nodeBindings as any)
+  if (nodeFormMap.value.size === 0) return
+  nodeFormMap.value.forEach(info => {
+    const chunk = info.subTableBindings as SubTableBindingAlignable[]
+    if (chunk.length === 0) return
+    applyUnionFindMergedRowSnapshots(chunk)
+    enrichChildBindingRowsFromParentsNestedSubTables(chunk as any)
+  })
 }
 
 /**
@@ -816,24 +878,29 @@ function alignNodeFormMapSubTableBindingsOnly() {
  * Includes diagram node bindings so clicking nodes stays consistent.
  */
 function alignProcessSubTableBindingsBySharedTable() {
-  const nodeBindings: SubTableBindingAlignable[] = Array.from(nodeFormMap.value.values()).flatMap(
-    info => info.subTableBindings as SubTableBindingAlignable[]
-  )
-  const all: SubTableBindingAlignable[] = [
-    ...(subTableBindings.value as SubTableBindingAlignable[]),
-    ...previousForms.value.flatMap(f => f.subTableBindings as SubTableBindingAlignable[]),
-    ...nodeBindings
-  ]
-  if (all.length === 0) return
+  const partitions: SubTableBindingAlignable[][] = []
+  if ((subTableBindings.value as SubTableBindingAlignable[]).length > 0) {
+    partitions.push(subTableBindings.value as SubTableBindingAlignable[])
+  }
+  previousForms.value.forEach(f => {
+    if ((f.subTableBindings as SubTableBindingAlignable[]).length > 0) {
+      partitions.push(f.subTableBindings as SubTableBindingAlignable[])
+    }
+  })
+  nodeFormMap.value.forEach(info => {
+    if ((info.subTableBindings as SubTableBindingAlignable[]).length > 0) {
+      partitions.push(info.subTableBindings as SubTableBindingAlignable[])
+    }
+  })
 
-  applyUnionFindMergedRowSnapshots(all)
+  if (partitions.length === 0) return
+
+  partitions.forEach(p => {
+    applyUnionFindMergedRowSnapshots(p)
+    enrichChildBindingRowsFromParentsNestedSubTables(p as any)
+  })
 
   backfillEmptySubTableBindingsFromVariables()
-  enrichChildBindingRowsFromParentsNestedSubTables([
-    ...subTableBindings.value,
-    ...previousForms.value.flatMap(f => f.subTableBindings),
-    ...Array.from(nodeFormMap.value.values()).flatMap(n => n.subTableBindings)
-  ])
 }
 
 /**
@@ -868,8 +935,9 @@ function refreshNodeFormMapFromFormData(opts?: {
       ...b,
       data: [] as PreviousFormEntry['subTableBindings'][0]['data'],
     }))
+    const ambiguousNodeRefresh = bindingIdsPreferStrictSubTableLookup(bindings as any[])
     bindings.forEach(binding => {
-      const saved = getSavedSubTableRows(flattened, binding)
+      const saved = getSavedSubTableRows(flattened, binding, ambiguousNodeRefresh.has(binding.bindingId))
       if (saved) binding.data = cloneSubTableRows(saved)
     })
     hydrateChildSubTablesFromParentsNestedRows(bindings as any, flattened, rtMap.size > 0 ? rtMap : undefined)
@@ -1190,6 +1258,8 @@ function isolateMiSubTaskData(taskData: any) {
     return
   }
 
+  const ambiguousCurrentBindings = bindingIdsPreferStrictSubTableLookup(subTableBindings.value)
+
   // Multi-instance data isolation: only the **current** task form is scoped to this participant.
   // Previous-node forms stay read-only with full snapshot (other sub-tasks' sub form2 data must remain visible).
   for (const binding of subTableBindings.value) {
@@ -1303,9 +1373,10 @@ function isolateMiSubTaskData(taskData: any) {
         : null
 
     for (const binding of subTableBindings.value) {
-      const saved = getSavedSubTableRows(rebuilt, binding)
+      const forbid = ambiguousCurrentBindings.has(binding.bindingId)
+      const saved = getSavedSubTableRows(rebuilt, binding, forbid)
       const rowsFromRebuilt = cloneSubTableRows(Array.isArray(saved) ? saved : [])
-      const fromPrev = getSavedSubTableRows(nextRowSub as any, binding) ?? []
+      const fromPrev = getSavedSubTableRows(nextRowSub as any, binding, forbid) ?? []
       const pk = binding.primaryKeyFields ?? null
 
       // Later operands win merge conflicts — put thin rebuilt first, richer prev/orig/nested last
@@ -1313,7 +1384,7 @@ function isolateMiSubTaskData(taskData: any) {
       merged = mergeSubTableRowsByRowId(merged, fromPrev, pk)
 
       if (origSt) {
-        const origSlice = getSavedSubTableRows(origSt, binding)
+        const origSlice = getSavedSubTableRows(origSt, binding, forbid)
         if (Array.isArray(origSlice) && origSlice.length > 0) {
           const filt = cloneSubTableRows(
             origSlice.filter(
@@ -1349,7 +1420,8 @@ function isolateMiSubTaskData(taskData: any) {
     }
     rowRec.__subTables__ = nextRowSub
     for (const binding of subTableBindings.value) {
-      const nestRows = getSavedSubTableRows(nextRowSub as any, binding)
+      const forbid = ambiguousCurrentBindings.has(binding.bindingId)
+      const nestRows = getSavedSubTableRows(nextRowSub as any, binding, forbid)
       if (nestRows?.length) {
         binding.data = cloneSubTableRows(
           mergeSubTableRowsByRowId(binding.data, nestRows, binding.primaryKeyFields ?? null)
@@ -1358,6 +1430,37 @@ function isolateMiSubTaskData(taskData: any) {
     }
   }
   formData.value = cleanedFormData
+}
+
+/**
+ * {@link enrichChildBindingRowsFromParentsNestedSubTables} unions nested child slices from **every** peer parent
+ * binding; in MI sub-tasks that can resurrect other instances' rows. Re-filter by {@link miRowBelongsToCurrentParticipant}.
+ */
+function applyMiParticipantFilterToCurrentSubTableBindings(myRowId: number) {
+  for (const binding of subTableBindings.value) {
+    const rows = Array.isArray(binding.data) ? binding.data : []
+    binding.data = cloneSubTableRows(rows.filter((row: any) => miRowBelongsToCurrentParticipant(row, myRowId, binding)))
+  }
+}
+
+/** After MI refilter, align {@link formData}.__subTables__ keys for current bindings so autosave/submit matches the grid. */
+function patchFormDataSubTablesFromCurrentBindings() {
+  const tbl: Record<string, any> = { ...((formData.value.__subTables__ as Record<string, any>) || {}) }
+  for (const binding of subTableBindings.value) {
+    const rows = cloneSubTableRows(Array.isArray(binding.data) ? binding.data : [])
+    tbl[binding.bindingId] = rows
+    tbl[String(binding.bindingId)] = rows
+    if (binding.tableName) {
+      tbl[binding.tableName] = rows
+      tbl[normalizeSubTableName(binding.tableName)] = rows
+    }
+    const phys = binding.physicalTableName
+    if (phys) {
+      tbl[phys] = rows
+      tbl[normalizeSubTableName(phys)] = rows
+    }
+  }
+  formData.value = { ...formData.value, __subTables__: tbl }
 }
 
 /** Completed-task detail: task header uses assigneeName from engine; sub-table rows may only have user id — align display for the assignee row. */
@@ -1407,7 +1510,8 @@ function syncMiFillSubTableRows(bindingId: number, rows: any[]) {
   target.data = nextRows
 
   const subTables = { ...((miFillDialogData.value.__subTables__ as Record<string, any>) || {}) }
-  const existing = getSavedSubTableRows(subTables, target)
+  const ambiguousMiDialog = bindingIdsPreferStrictSubTableLookup(miFillSubTableBindings.value)
+  const existing = getSavedSubTableRows(subTables, target, ambiguousMiDialog.has(target.bindingId))
   const merged = mergeSubTableRowsByRowId(existing, nextRows, target.primaryKeyFields)
   const out = cloneSubTableRows(merged)
   subTables[target.bindingId] = out
@@ -1422,6 +1526,7 @@ function syncMiFillSubTableRows(bindingId: number, rows: any[]) {
 async function saveMiFillDialog() {
   const subTables = { ...((miFillDialogData.value.__subTables__ as Record<string, any>) || {}) }
   const subTableData: Record<string, Array<Record<string, unknown>>> = {}
+  const ambiguousMiDialogSave = bindingIdsPreferStrictSubTableLookup(miFillSubTableBindings.value)
 
   // Persist MI form field values into the participant row so that
   // the backend stores the complete row and the Detail dialog in
@@ -1443,7 +1548,7 @@ async function saveMiFillDialog() {
 
   for (const binding of miFillSubTableBindings.value) {
     const rows = cloneSubTableRows(Array.isArray(binding.data) ? binding.data : [])
-    const existing = getSavedSubTableRows(subTables, binding)
+    const existing = getSavedSubTableRows(subTables, binding, ambiguousMiDialogSave.has(binding.bindingId))
     const merged = mergeSubTableRowsByRowId(existing, rows, binding.primaryKeyFields)
     const out = cloneSubTableRows(merged)
     subTables[binding.bindingId] = out
@@ -1642,6 +1747,16 @@ const loadTaskDetail = async () => {
             : null
         isolateMiSubTaskData(data)
         enrichChildBindingRowsFromParentsNestedSubTables(subTableBindings.value)
+        // Enrich re-aggregates nested rows across peer parents — scope again to this MI element (one task ↔ one participant row).
+        const miVarsRef = data?.variables ?? {}
+        const miCiRef = miVarsRef._currentItem || miVarsRef.currentItem
+        const miRawRidRef = miCiRef?.rowId
+        const miRowIdPostEnrich =
+          miRawRidRef != null && String(miRawRidRef).trim() !== '' ? Number(miRawRidRef) : Number.NaN
+        if (!Number.isNaN(miRowIdPostEnrich)) {
+          applyMiParticipantFilterToCurrentSubTableBindings(miRowIdPostEnrich)
+          patchFormDataSubTablesFromCurrentBindings()
+        }
         refreshNodeFormMapFromFormData({
           subTablesSource: miFullSubTablesSnapshot ?? undefined,
           topLevelValuesSource: preIsolateTopLevelForDiagram
@@ -1958,8 +2073,9 @@ const loadFunctionUnitContent = async (processKey: string) => {
       console.log('[SubTable] bindings bindingIds:', bindings.map(b => b.bindingId))
       const savedSubTables = formData.value.__subTables__
       if (savedSubTables && typeof savedSubTables === 'object') {
+        const ambiguousMain = bindingIdsPreferStrictSubTableLookup(bindings)
         bindings.forEach(binding => {
-          const saved = getSavedSubTableRows(savedSubTables, binding)
+          const saved = getSavedSubTableRows(savedSubTables, binding, ambiguousMain.has(binding.bindingId))
           console.log('[SubTable] binding', binding.bindingId, '-> saved:', JSON.stringify(saved))
           if (saved) {
             binding.data = cloneSubTableRows(saved)
@@ -2074,11 +2190,14 @@ const loadFunctionUnitContent = async (processKey: string) => {
               ),
               data: [] as any[]
             }
-            if (savedSubTables) {
-              const saved = getSavedSubTableRows(savedSubTables, binding)
+            prevBindings.push(binding)
+          }
+          const ambiguousPrev = bindingIdsPreferStrictSubTableLookup(prevBindings as any[])
+          if (savedSubTables && typeof savedSubTables === 'object') {
+            for (const binding of prevBindings) {
+              const saved = getSavedSubTableRows(savedSubTables, binding, ambiguousPrev.has(binding.bindingId))
               if (saved) binding.data = cloneSubTableRows(saved)
             }
-            prevBindings.push(binding)
           }
           hydrateChildSubTablesFromParentsNestedRows(
             prevBindings,
@@ -2208,7 +2327,6 @@ const loadFunctionUnitContent = async (processKey: string) => {
                 const subFormDesign = resolveSubFormDesign(b, subForms)
                 const bindingPortalViews =
                   subTablePortalViewsNode[b.bindingId] ?? subTablePortalViewsNode[String(b.bindingId)] ?? null
-                const savedSubTables = formData.value.__subTables__
                 const binding = {
                   bindingId: b.bindingId, tableId: b.tableId ?? null, bindingType: b.bindingType, bindingMode: b.bindingMode,
                   foreignKeyField: b.foreignKeyField, tableName: b.tableDisplayName || b.tableName, physicalTableName: b.tableName,
@@ -2223,17 +2341,14 @@ const loadFunctionUnitContent = async (processKey: string) => {
                   ),
                   data: [] as any[]
                 }
-                if (savedSubTables) {
-                  const saved = getSavedSubTableRows(savedSubTables, binding)
-                  if (saved) binding.data = cloneSubTableRows(saved)
-                }
                 nodeBindings.push(binding)
               }
               mergeLinkFormTargetBindingsInto(nodeBindings as any, content.forms, configForSubTables, subForms)
+              const ambiguousNodeDiagram = bindingIdsPreferStrictSubTableLookup(nodeBindings as any[])
               const _stForNested = formData.value.__subTables__
               if (_stForNested && typeof _stForNested === 'object') {
                 nodeBindings.forEach(binding => {
-                  const saved = getSavedSubTableRows(_stForNested, binding)
+                  const saved = getSavedSubTableRows(_stForNested, binding, ambiguousNodeDiagram.has(binding.bindingId))
                   if (saved) binding.data = cloneSubTableRows(saved)
                 })
               }

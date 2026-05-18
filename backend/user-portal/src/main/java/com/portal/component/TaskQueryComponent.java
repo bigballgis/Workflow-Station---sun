@@ -82,6 +82,34 @@ public class TaskQueryComponent {
     }
 
     /**
+     * Copies Flowable task variables then overlays portal {@link ProcessInstance} snapshot variables (richer payloads
+     * such as {@code __subTables__}). Keeps Flowable-supplied execution-scoped {@code _currentItem}/{@code currentItem}
+     * when present: the portal snapshot is single process-wide JSON and would otherwise overwrite MI iteration context.
+     */
+    private static void mergePortalProcessVariablesPreferringFlowableMiElementItem(
+            Map<String, Object> mergedOut,
+            Map<String, Object> flowableVariables,
+            Map<String, Object> portalProcessVariables) {
+        mergedOut.clear();
+        if (flowableVariables != null) {
+            mergedOut.putAll(flowableVariables);
+        }
+        boolean hadUnderscore = mergedOut.containsKey("_currentItem");
+        Object underscoreVal = mergedOut.get("_currentItem");
+        boolean hadBare = mergedOut.containsKey("currentItem");
+        Object bareVal = mergedOut.get("currentItem");
+        if (portalProcessVariables != null) {
+            mergedOut.putAll(portalProcessVariables);
+        }
+        if (hadUnderscore) {
+            mergedOut.put("_currentItem", underscoreVal);
+        }
+        if (hadBare) {
+            mergedOut.put("currentItem", bareVal);
+        }
+    }
+
+    /**
      * Query pending tasks for a user.
      * <p>默认：按请求的 {@code page}/{@code size} 调工作流引擎拉取待办，与 {@link #queryDelegatedTasks}（若适用）并行执行，
      * 合并后按门户规则过滤、排序，再对合并列表做分页切片。无固定 1000 条上限。
@@ -771,12 +799,9 @@ public class TaskQueryComponent {
                             }
                             if (pi.getVariables() != null) {
                                 Map<String, Object> merged = new java.util.HashMap<>();
-                                // Start with Flowable variables (base fields)
-                                if (taskInfo.getVariables() != null) {
-                                    merged.putAll(taskInfo.getVariables());
-                                }
-                                // Override with local DB variables (more complete, includes __subTables__)
-                                merged.putAll(pi.getVariables());
+                                // Flowable first, then portal snapshot — but do not squash MI element item from engine.
+                                mergePortalProcessVariablesPreferringFlowableMiElementItem(
+                                        merged, taskInfo.getVariables(), pi.getVariables());
                                 enrichMissingParticipantRowIdsInSubTables(merged);
                                 processComponent.enrichSubTablesVariablesFromPhysicalTables(processInstanceId, merged);
                                 enrichParticipantAssignmentData(merged);

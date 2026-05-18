@@ -773,6 +773,68 @@ function inferOrphanRelationTableId(
   return orphan[0]!
 }
 
+/** Resolved from designer / FU metadata only (no orphan infer) — used to detect multiple sub-table placements of the same relation table. */
+function metadataRelationTableId(
+  bb: { bindingId: number; tableId?: number | null },
+  bindingTableById: Map<number, number | null>,
+): number | null {
+  const t = bb.tableId != null ? Number(bb.tableId) : bindingTableById.get(bb.bindingId)
+  return t != null && Number.isFinite(t) ? t : null
+}
+
+/**
+ * When two+ bindings in one form share the same {@code metadataRelationTableId}, do not merge every
+ * {@code __subTables__} slice of that tid into every binding (would duplicate the same rows for sub form1/sub form2).
+ * Assign: own {@code bindingId} slice first, then pair remaining bindings to remaining numeric keys by stable sort.
+ */
+function assignRowsPerBindingForSharedMetadataTid<T extends { bindingId: number; tableId?: number | null; data: any[] }>(
+  tid: number,
+  bindings: T[],
+  bindingTableById: Map<number, number | null>,
+  savedSubTables: Record<string, unknown>,
+): Map<number, any[]> {
+  const peers = bindings.filter(bb => metadataRelationTableId(bb, bindingTableById) === tid)
+  if (peers.length <= 1) return new Map()
+
+  const assignment = new Map<number, any[]>()
+  const usedNumericKeys = new Set<number>()
+
+  for (const bb of [...peers].sort((a, c) => a.bindingId - c.bindingId)) {
+    const own = savedSubTables[bb.bindingId] ?? savedSubTables[String(bb.bindingId)]
+    if (Array.isArray(own) && own.length > 0) {
+      assignment.set(bb.bindingId, [...own])
+      usedNumericKeys.add(bb.bindingId)
+    }
+  }
+
+  const candidateKeysForTid = (): number[] => {
+    const keys: number[] = []
+    for (const [key, val] of Object.entries(savedSubTables)) {
+      const kid = Number(key)
+      if (!Number.isFinite(kid)) continue
+      if (!Array.isArray(val) || val.length === 0) continue
+      const otid = bindingTableById.get(kid)
+      if (otid == null || Number.isNaN(Number(otid))) continue
+      if (Number(otid) !== tid) continue
+      keys.push(kid)
+    }
+    return keys.sort((a, c) => a - c)
+  }
+
+  const orphans = candidateKeysForTid().filter(k => !usedNumericKeys.has(k))
+  const stillNeed = peers.filter(bb => !assignment.has(bb.bindingId)).sort((a, c) => a.bindingId - c.bindingId)
+  for (let i = 0; i < Math.min(stillNeed.length, orphans.length); i++) {
+    const bb = stillNeed[i]!
+    const k = orphans[i]!
+    const val = savedSubTables[k] ?? savedSubTables[String(k)]
+    if (!Array.isArray(val) || val.length === 0) continue
+    assignment.set(bb.bindingId, [...val])
+    usedNumericKeys.add(k)
+  }
+
+  return assignment
+}
+
 export function hydrateBindingsRowsFromVariablesBySharedRelationTableId<
   T extends {
     bindingId: number
@@ -785,6 +847,8 @@ export function hydrateBindingsRowsFromVariablesBySharedRelationTableId<
   savedSubTables: Record<string, unknown>,
   bindingTableById: Map<number, number | null>,
 ): void {
+  const strictAssignmentByTid = new Map<number, Map<number, any[]>>()
+
   for (const b of bindings) {
     /**
      * Same failure mode as {@link hydrateChildSubTablesFromParentsNestedRows}: “thin” rows loaded from a wrong
@@ -803,33 +867,61 @@ export function hydrateBindingsRowsFromVariablesBySharedRelationTableId<
       }
     }
 
+    const metaTid = metadataRelationTableId(b, bindingTableById)
+    const peersWithMetaTid =
+      metaTid != null
+        ? bindings.filter(bb => metadataRelationTableId(bb, bindingTableById) === metaTid).length
+        : 0
+    const multiPlacementSameTid =
+      metaTid != null &&
+      peersWithMetaTid > 1 &&
+      selfTidRaw != null &&
+      !Number.isNaN(selfTidRaw) &&
+      metaTid === selfTidRaw
+
     const chunks: any[] = []
     if (selfTidRaw != null && !Number.isNaN(selfTidRaw)) {
-      for (const [key, val] of Object.entries(savedSubTables)) {
-        if (!Array.isArray(val) || val.length === 0) continue
-        const kid = Number(key)
-        if (!Number.isFinite(kid) || kid === b.bindingId) continue
-        const otherTid = bindingTableById.get(kid)
-        if (otherTid == null || Number.isNaN(Number(otherTid))) continue
-        if (Number(otherTid) !== selfTidRaw) continue
-        chunks.push(...val)
+      if (multiPlacementSameTid) {
+        let mp = strictAssignmentByTid.get(selfTidRaw)
+        if (!mp) {
+          mp = assignRowsPerBindingForSharedMetadataTid(selfTidRaw, bindings, bindingTableById, savedSubTables)
+          strictAssignmentByTid.set(selfTidRaw, mp)
+        }
+        const rowsForB = mp.get(b.bindingId)
+        if (rowsForB && rowsForB.length > 0) {
+          chunks.push(...rowsForB)
+        }
+      } else {
+        for (const [key, val] of Object.entries(savedSubTables)) {
+          if (!Array.isArray(val) || val.length === 0) continue
+          const kid = Number(key)
+          if (!Number.isFinite(kid) || kid === b.bindingId) continue
+          const otherTid = bindingTableById.get(kid)
+          if (otherTid == null || Number.isNaN(Number(otherTid))) continue
+          if (Number(otherTid) !== selfTidRaw) continue
+          chunks.push(...val)
+        }
       }
     }
 
     if (chunks.length === 0) {
-      chunks.push(...mergeRowsFromSoleUnclaimedNumericSlice(b, savedSubTables, claimedKeys))
+      if (!multiPlacementSameTid) {
+        chunks.push(...mergeRowsFromSoleUnclaimedNumericSlice(b, savedSubTables, claimedKeys))
+      }
     }
 
     if (chunks.length === 0 && existing.length === 0) {
-      chunks.push(
-        ...mergeRowsFromRichestUnclaimedNumericSlice(
-          b,
-          savedSubTables,
-          claimedKeys,
-          bindingTableById,
-          selfTidRaw != null && !Number.isNaN(Number(selfTidRaw)) ? Number(selfTidRaw) : null,
-        ),
-      )
+      if (!multiPlacementSameTid) {
+        chunks.push(
+          ...mergeRowsFromRichestUnclaimedNumericSlice(
+            b,
+            savedSubTables,
+            claimedKeys,
+            bindingTableById,
+            selfTidRaw != null && !Number.isNaN(Number(selfTidRaw)) ? Number(selfTidRaw) : null,
+          ),
+        )
+      }
     }
 
     if (chunks.length === 0) continue
