@@ -1192,7 +1192,24 @@ function miRowBelongsToCurrentParticipant(
     return expansionKeyMatchesParticipantRow(row, myRowId)
   }
   const fk = binding.foreignKeyField
-  if (fk && row[fk] != null && row[fk] !== '' && !Number.isNaN(Number(row[fk]))) {
+  const fkStr = fk ? String(fk).trim() : ''
+  /**
+   * Designer metadata often sets {@code foreignKeyField} to the relation table's PK column ({@code id}).
+   * That is the row's own id, not the MI participant row id — comparing it to {@code myRowId} yields false
+   * and incorrectly skips {@code participant_id} / nested-FK fallbacks (see MI subflow subtable2 across nodes).
+   */
+  const fkLooksLikeRowPrimaryKey =
+    (Array.isArray(binding.primaryKeyFields) &&
+      binding.primaryKeyFields.length > 0 &&
+      binding.primaryKeyFields.some(p => String(p).trim() === fkStr)) ||
+    (fkStr.toLowerCase() === 'id' && !isParticipantsBinding(binding))
+  if (
+    fk &&
+    !fkLooksLikeRowPrimaryKey &&
+    row[fk] != null &&
+    row[fk] !== '' &&
+    !Number.isNaN(Number(row[fk]))
+  ) {
     return Number(row[fk]) === myRowId
   }
   const fallbackFkKeys = ['participant_id', 'participantId', 'parent_id', 'parentId', 'meeting_participant_id']
