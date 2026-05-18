@@ -60,6 +60,7 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { Search, Close } from '@element-plus/icons-vue'
 import { relationTableApi } from '@/api/relationTable'
+import { fetchLookupRowByPrimaryKey } from './fetchLookupRowByPrimaryKey'
 
 export interface LookupViewField {
   fieldName: string
@@ -203,6 +204,7 @@ function initFromModelValue(val: any) {
     selectedRow.value = scalarRow
     searchKeyword.value = String(getDisplayValue(scalarRow) ?? val ?? '')
     emit('select', scalarRow)
+    void hydrateScalarFromRelationTable(val)
     return
   }
   if (typeof val === 'string') {
@@ -216,6 +218,7 @@ function initFromModelValue(val: any) {
     selectedRow.value = scalarRow
     searchKeyword.value = String(getDisplayValue(scalarRow) ?? t)
     emit('select', scalarRow)
+    void hydrateScalarFromRelationTable(t)
     return
   }
   if (typeof val === 'object' && Object.keys(val).length > 0) {
@@ -223,6 +226,31 @@ function initFromModelValue(val: any) {
     const displayVal = getDisplayValue(val)
     searchKeyword.value = String(displayVal ?? '')
     emit('select', val)
+  }
+}
+
+/**
+ * 将仅存的主键标量解析为完整行，用于只读标签/回填视图；不写回 modelValue，避免改变流程持久化形态。
+ */
+async function hydrateScalarFromRelationTable(scalar: string | number) {
+  if (!props.tableId) return
+  const want = String(scalar).trim()
+  try {
+    const row = await fetchLookupRowByPrimaryKey(props.tableId, scalar, {
+      searchFields: props.searchFields || [],
+      displayField: props.displayField || '',
+      filterConditions: props.filterConditions || []
+    })
+    if (!row || !Object.keys(row).length) return
+    const cur = props.modelValue
+    if (cur == null || cur === '') return
+    if (typeof cur === 'object') return
+    if (String(cur).trim() !== want) return
+    selectedRow.value = row
+    searchKeyword.value = String(getDisplayValue(row) ?? '')
+    emit('select', row)
+  } catch {
+    /* 保持合成行回退 */
   }
 }
 

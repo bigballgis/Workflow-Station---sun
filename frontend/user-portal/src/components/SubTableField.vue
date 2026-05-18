@@ -118,7 +118,7 @@
                   </label>
                   <div class="lookup-field readonly">
                     <div
-                      v-if="lookupSelectedRow(col, scope.row[col.field])"
+                      v-if="effectiveLookupRowForCell(col, scope.row[col.field])"
                       class="lookup-selected-wrapper"
                     >
                       <span class="lookup-selected-tag">
@@ -132,7 +132,7 @@
                   </div>
                 </div>
                 <div
-                  v-if="!compactLookupCells && col.props?.showBackfillView !== false && lookupSelectedRow(col, scope.row[col.field]) && effectiveLookupViewFields(col, scope.row[col.field]).length > 0"
+                  v-if="shouldShowLookupBackfill(col) && lookupSelectedRow(col, scope.row[col.field]) && effectiveLookupViewFields(col, scope.row[col.field]).length > 0"
                   class="lookup-view-display"
                 >
                   <el-descriptions
@@ -148,7 +148,7 @@
                       label-class-name="lookup-view-label"
                       class-name="lookup-view-value"
                     >
-                      {{ formatUserSnapshotCellValue(lookupSelectedRow(col, scope.row[col.field])?.[field.fieldName]) }}
+                      {{ formatUserSnapshotCellValue(effectiveLookupRowForCell(col, scope.row[col.field])?.[field.fieldName]) }}
                     </el-descriptions-item>
                   </el-descriptions>
                 </div>
@@ -536,6 +536,7 @@ import { ElMessageBox, ElMessage } from 'element-plus'
 import DOMPurify from 'dompurify'
 import SubTableAddDialog from './SubTableAddDialog.vue'
 import { resolveDisplayValue, unwrapUserLikeValueToDisplayString, extractUserIdFromCellValue, isUserSnapshotLikeObject, userObjectTagDisplayString, userSnapshotViewFieldsFromRow, formatUserSnapshotCellValue } from './subTableAddDialogHelpers'
+import { fetchLookupRowByPrimaryKey } from './lookup/fetchLookupRowByPrimaryKey'
 import type { DialogColumn } from './subTableAddDialogHelpers'
 import type { FormField, RowFormulaRule, SubTableValidationConfig } from './formRendererHelpers'
 import { calculateSummary } from './businessLogicEngine'
@@ -662,13 +663,6 @@ function effectiveLookupViewFields(col: Column, rawValue: unknown): Array<{ fiel
   return []
 }
 
-function lookupTagDisplayText(col: Column, rawValue: unknown): string {
-  if (rawValue != null && isUserSnapshotLikeObject(rawValue)) {
-    return userObjectTagDisplayString(rawValue)
-  }
-  return resolveDisplayValue(col, rawValue)
-}
-
 function getSnapshotField(rowData: unknown, key: string): unknown {
   if (rowData == null || typeof rowData !== 'object' || Array.isArray(rowData)) return undefined
   return (rowData as Record<string, unknown>)[key]
@@ -723,6 +717,39 @@ const props = withDefaults(defineProps<{
   linkFormClickScrollToInline: false,
   compactLookupCells: false
 })
+
+/** 子表单元格：主键标量经 {@link fetchLookupRowByPrimaryKey} 解析后的行（缓存），供标签/回填使用。 */
+const lookupHydratedScalar = ref<Record<string, Record<string, any>>>({})
+
+function effectiveLookupRowForCell(col: Column, rawValue: unknown): Record<string, any> | null {
+  const tid = col.props?.tableId
+  if (tid != null && rawValue != null && (typeof rawValue === 'string' || typeof rawValue === 'number')) {
+    const ck = `${Number(tid)}:${String(rawValue).trim()}`
+    const hit = lookupHydratedScalar.value[ck]
+    if (hit) return hit
+  }
+  return lookupSelectedRow(col, rawValue)
+}
+
+/**
+ * 紧凑列表模式下默认不展开回填块；列上显式开启回填视图时仍渲染（与 FormRenderer 设计选项一致）。
+ */
+function shouldShowLookupBackfill(col: Column): boolean {
+  if (col.props?.showBackfillView === false) return false
+  if (col.props?.showBackfillView === true) return true
+  return !props.compactLookupCells
+}
+
+function lookupTagDisplayText(col: Column, rawValue: unknown): string {
+  if (rawValue != null && isUserSnapshotLikeObject(rawValue)) {
+    return userObjectTagDisplayString(rawValue)
+  }
+  const eff = effectiveLookupRowForCell(col, rawValue)
+  if (eff) {
+    return resolveDisplayValue(col, eff)
+  }
+  return resolveDisplayValue(col, rawValue)
+}
 
 function normalizeColumnHeaderLabel(s: string): string {
   return String(s || '').trim().toLowerCase()
@@ -821,6 +848,43 @@ const emit = defineEmits<{
 }>()
 
 const rows = ref<any[]>([])
+
+async function hydrateLookupScalarsInTable() {
+  const tableRows = rows.value || []
+  for (const col of props.columns || []) {
+    if (col.type !== 'lookup') continue
+    const tableId = col.props?.tableId
+    if (tableId == null || !Number.isFinite(Number(tableId))) continue
+    const pk =
+      (typeof (col.props as { primaryKeyField?: string }).primaryKeyField === 'string' &&
+        (col.props as { primaryKeyField?: string }).primaryKeyField) ||
+      (props.primaryKeyFields?.length === 1 ? props.primaryKeyFields[0] : undefined) ||
+      'id'
+    for (const row of tableRows) {
+      const raw = row[col.field]
+      if (raw == null || typeof raw === 'object') continue
+      const ck = `${Number(tableId)}:${String(raw).trim()}`
+      if (lookupHydratedScalar.value[ck]) continue
+      const loaded = await fetchLookupRowByPrimaryKey(Number(tableId), raw, {
+        searchFields: (col.props?.searchFields as string[]) || [],
+        displayField: (col.props?.displayField as string) || '',
+        filterConditions: (col.props?.filterConditions as { fieldName: string; value: string }[]) || [],
+        primaryKeyField: pk
+      })
+      if (loaded) {
+        lookupHydratedScalar.value = { ...lookupHydratedScalar.value, [ck]: loaded }
+      }
+    }
+  }
+}
+
+watch(
+  () => [rows.value, props.columns],
+  () => {
+    void hydrateLookupScalarsInTable()
+  },
+  { deep: true, immediate: true }
+)
 // key = "{rowIndex}_{field}" -> original filename (recorded during current session upload)
 const uploadNames = ref<Record<string, string>>({})
 // Set of keys currently being downloaded
