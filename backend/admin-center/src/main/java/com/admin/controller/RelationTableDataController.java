@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Relation Table 表数据管理 RESTful API
@@ -104,6 +105,8 @@ public class RelationTableDataController {
 
     // ==================== 状态变更 ====================
 
+    private static final Set<String> ALLOWED_STATUSES = Set.of("ACTIVE", "INACTIVE");
+
     @PutMapping("/{tableId}/{rowId}/status")
     @Operation(summary = "变更数据状态", description = "变更数据的 Active/Inactive 状态")
     public ResponseEntity<RelationTableDataRowDTO> changeStatus(
@@ -112,6 +115,10 @@ public class RelationTableDataController {
             @RequestBody Map<String, String> request) {
         String status = request.get("status");
         if (status == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        if (!ALLOWED_STATUSES.contains(status.toUpperCase())) {
+            log.warn("Invalid status change attempt: tableId={}, rowId={}, status={}", tableId, rowId, status);
             return ResponseEntity.badRequest().build();
         }
         log.info("Changing status for table: tableId={}, rowId={}, status={}", tableId, rowId, status);

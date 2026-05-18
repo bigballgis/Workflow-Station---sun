@@ -6,6 +6,7 @@ import com.workflow.dto.response.ApiResponse;
 import com.workflow.dto.response.N8nExecutionResult;
 import com.workflow.entity.N8nExecutionRecord;
 import com.workflow.repository.N8nExecutionRecordRepository;
+import com.platform.common.security.SsrfProtection;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -114,6 +115,7 @@ public class N8nExecutionController {
             return ResponseEntity.badRequest()
                     .body(ApiResponse.error("BAD_REQUEST", "webhookUrl is required"));
         }
+        SsrfProtection.validate(request.getWebhookUrl());
         if (request.getN8nConfigId() == null || request.getN8nConfigId().isBlank()) {
             return ResponseEntity.badRequest()
                     .body(ApiResponse.error("BAD_REQUEST", "n8nConfigId is required"));

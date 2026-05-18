@@ -254,12 +254,13 @@ public class MultiInstanceDataResolver {
         Set<String> pkSet = new HashSet<>(pkCols);
 
         for (Map.Entry<String, Object> entry : formData.entrySet()) {
-            if (pkSet.contains(entry.getKey()) || "row_version".equals(entry.getKey())
-                    || statusCol.equals(entry.getKey())
-                    || nodeCol.equals(entry.getKey())) {
+            String colName = requireSafeIdentifier(entry.getKey());
+            if (pkSet.contains(colName) || "row_version".equals(colName)
+                    || statusCol.equals(colName)
+                    || nodeCol.equals(colName)) {
                 continue;
             }
-            updateSql.append(entry.getKey()).append(" = ?, ");
+            updateSql.append(colName).append(" = ?, ");
             params.add(entry.getValue());
         }
 

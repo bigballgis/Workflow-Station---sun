@@ -9,12 +9,14 @@ import com.admin.dto.response.ConflictDetectionResult;
 import com.admin.dto.response.PermissionCheckResult;
 import com.admin.dto.response.PermissionDelegationResult;
 import com.platform.security.entity.Permission;
+import com.platform.security.util.SecurityContextUtils;
 import com.admin.entity.PermissionConflict;
 import com.admin.repository.PermissionRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -27,6 +29,7 @@ import java.util.Set;
 @RestController
 @RequestMapping("/permissions")
 @RequiredArgsConstructor
+@Slf4j
 @Tag(name = "权限管理", description = "权限查询、检查、委托、冲突解决等接口")
 public class PermissionController {
     
@@ -85,6 +88,15 @@ public class PermissionController {
     @Operation(summary = "创建权限委托")
     public ResponseEntity<PermissionDelegationResult> createDelegation(
             @RequestBody @Valid PermissionDelegationRequest request) {
+        String currentUserId = SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
+        // 防止委托人身份伪造：委托人必须是当前认证用户（super admin 除外）
+        if (!SecurityContextUtils.isSuperAdmin()
+                && !currentUserId.equals(request.getDelegatorId())) {
+            log.warn("createDelegation denied: delegator mismatch (auth={}, requested={})",
+                    currentUserId, request.getDelegatorId());
+            throw new RuntimeException("只能委托自己的权限");
+        }
         PermissionDelegationResult result = delegationComponent.createDelegation(request);
         return ResponseEntity.ok(result);
     }
@@ -93,8 +105,12 @@ public class PermissionController {
     @Operation(summary = "撤销权限委托")
     public ResponseEntity<Void> revokeDelegation(
             @PathVariable String delegationId,
-            @RequestParam String reason,
-            @RequestHeader("X-User-Id") String revokedBy) {
+            @RequestParam String reason) {
+        String revokedBy = SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> {
+                    log.warn("revokeDelegation denied: no authenticated user for delegation {}", delegationId);
+                    return new RuntimeException("未认证用户");
+                });
         delegationComponent.revokeDelegation(delegationId, revokedBy, reason);
         return ResponseEntity.noContent().build();
     }

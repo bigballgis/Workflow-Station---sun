@@ -103,3 +103,7 @@ logging:
 n8n:
   ai-generation:
     webhook-url: ${N8N_AI_GENERATION_WEBHOOK_URL:http://n8n:5678/webhook/ai-function-unit-gen}
+
+# Docker Compose service hostnames resolve to private IPs; allow trusted internal targets only.
+ssrf:
+  allowed-hosts: ${SSRF_ALLOWED_HOSTS:n8n}

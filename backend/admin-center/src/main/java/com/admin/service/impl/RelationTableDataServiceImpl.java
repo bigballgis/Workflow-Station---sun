@@ -676,8 +676,15 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
 
     /**
      * 引用标识符（防止 SQL 注入和保留字冲突）
+     * Validates the identifier matches [a-zA-Z_][a-zA-Z0-9_]* before quoting.
      */
     private String quoteIdentifier(String identifier) {
+        if (identifier == null || identifier.isBlank()) {
+            throw new IllegalArgumentException("SQL identifier must not be null or blank");
+        }
+        if (!identifier.matches("^[a-zA-Z_][a-zA-Z0-9_]*$")) {
+            throw new IllegalArgumentException("Invalid SQL identifier: " + identifier);
+        }
         return "\"" + identifier.replace("\"", "\"\"") + "\"";
     }
 

@@ -170,6 +170,10 @@ n8n:
     webhook-url: ${N8N_AI_GENERATION_WEBHOOK_URL:http://localhost:5678/webhook/ai-function-unit-gen}
     timeout-seconds: ${N8N_AI_GENERATION_TIMEOUT:120}
 
+# Trusted hostnames for configured outbound webhooks (localhost for local n8n, n8n for Docker)
+ssrf:
+  allowed-hosts: ${SSRF_ALLOWED_HOSTS:localhost,n8n}
+
 # AI Generation Lock Configuration
 ai-generation:
   lock:

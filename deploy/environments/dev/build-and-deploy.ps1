@@ -420,6 +420,7 @@ Write-Host "    Login:                http://localhost:$EdgePort/login/"
 Write-Host "    Admin:                http://localhost:$EdgePort/admin/"
 Write-Host "    Portal:               http://localhost:$EdgePort/portal/"
 Write-Host "    Developer:            http://localhost:$EdgePort/dev/"
+Write-Host "    N8N:                  http://localhost:$EdgePort/n8n/"
 Write-Host "    API (via Kong):       http://localhost:$EdgePort/api/"
 Write-Host ""
 
@@ -439,7 +440,8 @@ Write-Host "Infrastructure:" -ForegroundColor Cyan
 Write-Host "  PostgreSQL:             localhost:5432"
 Write-Host "  Redis:                  localhost:6379"
 Write-Host "  Kafka:                  localhost:9092"
-Write-Host "  N8N:                    http://localhost:5678"
+Write-Host "  N8N (edge):             http://localhost:$EdgePort/n8n/"
+Write-Host "  N8N (direct):           http://localhost:5678"
 Write-Host ""
 Write-Host "Commands:" -ForegroundColor DarkGray
 Write-Host "  Logs:   docker compose -f docker-compose.dev.yml --env-file .env logs -f [service]"

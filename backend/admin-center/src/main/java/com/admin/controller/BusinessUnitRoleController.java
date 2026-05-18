@@ -35,6 +35,9 @@ public class BusinessUnitRoleController {
             @PathVariable String unitId,
             @RequestBody Map<String, String> request) {
         String roleId = request.get("roleId");
+        if (roleId == null || roleId.isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
         businessUnitRoleService.bindRole(unitId, roleId);
         return ResponseEntity.ok().build();
     }

@@ -37,6 +37,9 @@ public class VirtualGroupRoleController {
             @PathVariable String groupId,
             @RequestBody Map<String, String> request) {
         String roleId = request.get("roleId");
+        if (roleId == null || roleId.isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
         virtualGroupRoleService.bindRole(groupId, roleId);
         return ResponseEntity.ok().build();
     }

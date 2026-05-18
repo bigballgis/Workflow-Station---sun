@@ -7,6 +7,7 @@ import com.portal.dto.ApiResponse;
 import com.portal.entity.ActionDefinition;
 import com.portal.repository.ActionDefinitionRepository;
 import com.portal.security.CurrentUserId;
+import com.platform.common.security.SsrfProtection;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -99,6 +100,7 @@ public class N8nActionController {
         String n8nConfigId = (String) config.get("n8nConfigId");
         String n8nWorkflowId = (String) config.get("n8nWorkflowId");
         String webhookUrl = (String) config.get("webhookUrl");
+        SsrfProtection.validate(webhookUrl);
         Integer timeoutSeconds = config.get("timeoutSeconds") != null
                 ? ((Number) config.get("timeoutSeconds")).intValue() : 120;
         Object outputMapping = config.get("outputMapping");

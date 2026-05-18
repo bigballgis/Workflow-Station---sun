@@ -25,6 +25,7 @@ import com.developer.enums.AiMode;
 import com.developer.enums.AiPhase;
 import com.developer.enums.AiSessionStatus;
 import com.developer.exception.AiGenerationException;
+import com.platform.common.security.SsrfProtection;
 import com.developer.repository.AiDocumentRepository;
 import com.developer.repository.AiMessageRepository;
 import com.developer.repository.AiSessionRepository;
@@ -55,6 +56,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -79,6 +81,9 @@ public class AiGenerationServiceImpl implements AiGenerationService {
 
     @Value("${n8n.ai-generation.timeout-seconds:120}")
     private int n8nTimeoutSeconds;
+
+    @Value("${ssrf.allowed-hosts:localhost,n8n}")
+    private List<String> ssrfAllowedHosts;
 
     /** Cached N8N RestTemplate (initialized at startup via @PostConstruct) */
     private RestTemplate n8nRestTemplate;
@@ -114,7 +119,13 @@ public class AiGenerationServiceImpl implements AiGenerationService {
         factory.setConnectTimeout(timeoutMs);
         factory.setReadTimeout(timeoutMs);
         this.n8nRestTemplate = new RestTemplate(factory);
-        log.info("Initialized N8N RestTemplate with timeout={}ms", timeoutMs);
+        Set<String> allowedHosts = ssrfAllowedHosts.stream()
+                .map(h -> h.trim().toLowerCase())
+                .filter(h -> !h.isEmpty())
+                .collect(Collectors.toSet());
+        SsrfProtection.validate(n8nWebhookUrl, allowedHosts);
+        log.info("Initialized N8N RestTemplate with timeout={}ms, webhookUrl validated (allowedHosts={})",
+                timeoutMs, allowedHosts);
     }
 
     // ==================== Session Management ====================

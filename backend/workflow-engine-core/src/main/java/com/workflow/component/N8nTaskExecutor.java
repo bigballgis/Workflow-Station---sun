@@ -8,6 +8,7 @@ import com.workflow.dto.response.N8nExecutionResult;
 import com.workflow.entity.N8nExecutionRecord;
 import com.workflow.repository.N8nExecutionRecordRepository;
 import com.workflow.util.N8nVariableMappingUtil;
+import com.platform.common.security.SsrfProtection;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.flowable.bpmn.model.ExtensionElement;
@@ -82,6 +83,7 @@ public class N8nTaskExecutor implements JavaDelegate {
         if (webhookUrl == null || webhookUrl.isBlank()) {
             throw new RuntimeException("N8N webhookUrl is required but not configured on service task");
         }
+        SsrfProtection.validate(webhookUrl);
 
         // 2. 获取 N8N 连接配置（含解密 apiKey）
         Map<String, Object> n8nConfig = adminCenterClient.getN8nConfig(configId);
@@ -163,6 +165,7 @@ public class N8nTaskExecutor implements JavaDelegate {
 
         String configId = request.getN8nConfigId();
         String webhookUrl = request.getWebhookUrl();
+        SsrfProtection.validate(webhookUrl);
         int timeoutSeconds = request.getTimeoutSeconds() != null ? request.getTimeoutSeconds() : 120;
 
         // 获取 N8N 连接配置

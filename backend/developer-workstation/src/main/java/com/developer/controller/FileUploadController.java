@@ -110,12 +110,18 @@ public class FileUploadController {
     public ResponseEntity<org.springframework.core.io.Resource> getFile(
             @PathVariable String filename) {
 
+        // 1. Reject path separators and traversal sequences
+        if (filename.contains("/") || filename.contains("\\") || filename.contains("..")) {
+            return ResponseEntity.badRequest().build();
+        }
+
         try {
             Path basePath = Paths.get(uploadDir).toAbsolutePath().normalize();
             Path filePath = basePath.resolve(filename).normalize();
 
-            // 防止路径遍历攻击
+            // 2. Prevent path traversal attacks
             if (!filePath.startsWith(basePath)) {
+                log.warn("Path traversal attempt blocked: filename={}, resolved={}", filename, filePath);
                 return ResponseEntity.badRequest().build();
             }
 
@@ -146,11 +152,16 @@ public class FileUploadController {
     @DeleteMapping("/files/{filename}")
     @Operation(summary = "Delete file", description = "Delete an uploaded file")
     public ResponseEntity<ApiResponse<Void>> deleteFile(@PathVariable String filename) {
+        // Reject path separators and traversal sequences
+        if (filename.contains("/") || filename.contains("\\") || filename.contains("..")) {
+            return ResponseEntity.badRequest().build();
+        }
         try {
             Path basePath = Paths.get(uploadDir).toAbsolutePath().normalize();
             Path filePath = basePath.resolve(filename).normalize();
 
             if (!filePath.startsWith(basePath)) {
+                log.warn("Path traversal attempt blocked in delete: filename={}", filename);
                 return ResponseEntity.badRequest().build();
             }
 

@@ -113,7 +113,7 @@ public class BpmnActionParser {
             if (xml == null || xml.isBlank()) {
                 return null;
             }
-            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+            DocumentBuilderFactory factory = createSecureDocumentBuilderFactory();
             factory.setNamespaceAware(true);
             Document doc = factory.newDocumentBuilder().parse(new InputSource(new StringReader(xml)));
             Element userTask = findUserTaskById(doc.getDocumentElement(), userTaskElementId);
@@ -155,7 +155,7 @@ public class BpmnActionParser {
             if (xml == null || xml.isBlank()) {
                 return null;
             }
-            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+            DocumentBuilderFactory factory = createSecureDocumentBuilderFactory();
             factory.setNamespaceAware(true);
             Document doc = factory.newDocumentBuilder().parse(new InputSource(new StringReader(xml)));
             Element userTask = findUserTaskById(doc.getDocumentElement(), userTaskElementId);
@@ -326,7 +326,7 @@ public class BpmnActionParser {
             return null;
         }
         try {
-            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+            DocumentBuilderFactory factory = createSecureDocumentBuilderFactory();
             factory.setNamespaceAware(true);
             factory.setIgnoringElementContentWhitespace(false);
             Document doc = factory.newDocumentBuilder().parse(new InputSource(new StringReader(xml)));
@@ -458,7 +458,7 @@ public class BpmnActionParser {
     private List<String> parseActionIdsFromProcessXmlBlockDom(String xml, String propertyName) {
         if (xml == null || !"globalActionIds".equals(propertyName)) return null;
         try {
-            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+            DocumentBuilderFactory factory = createSecureDocumentBuilderFactory();
             factory.setNamespaceAware(true);
             Document doc = factory.newDocumentBuilder().parse(new InputSource(new StringReader(xml)));
             Element root = doc.getDocumentElement();
@@ -568,5 +568,34 @@ public class BpmnActionParser {
             log.error("Error parsing actionIds: " + value, e);
             return null;
         }
+    }
+
+    /**
+     * Create a DocumentBuilderFactory hardened against XXE (XML External Entity) attacks.
+     */
+    private static DocumentBuilderFactory createSecureDocumentBuilderFactory() {
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        factory.setNamespaceAware(true);
+        try {
+            factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+        } catch (Exception e) {
+            log.debug("Failed to set disallow-doctype-decl: {}", e.getMessage());
+        }
+        try {
+            factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
+        } catch (Exception e) {
+            log.debug("Failed to set external-general-entities: {}", e.getMessage());
+        }
+        try {
+            factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+        } catch (Exception e) {
+            log.debug("Failed to set external-parameter-entities: {}", e.getMessage());
+        }
+        try {
+            factory.setXIncludeAware(false);
+        } catch (Exception e) {
+            log.debug("Failed to set XIncludeAware: {}", e.getMessage());
+        }
+        return factory;
     }
 }

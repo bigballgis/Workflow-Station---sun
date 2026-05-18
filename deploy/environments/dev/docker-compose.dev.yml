@@ -114,8 +114,12 @@ services:
       DB_POSTGRESDB_USER: ${POSTGRES_USER:-postgres}
       DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
-      WEBHOOK_URL: ${N8N_WEBHOOK_URL:-http://localhost:5678}
+      # Public URL via edge (http://localhost:3000/n8n/). Do not set N8N_PATH — nginx strips /n8n/ prefix.
+      N8N_EDITOR_BASE_URL: ${N8N_EDITOR_BASE_URL:-http://localhost:3000/n8n/}
+      WEBHOOK_URL: ${N8N_WEBHOOK_URL:-http://localhost:3000/n8n/}
+      N8N_PROXY_HOPS: ${N8N_PROXY_HOPS:-1}
       N8N_PORT: 5678
+      N8N_SECURE_COOKIE: "false"
       N8N_RESTRICT_ENVIRONMENT_VARIABLES_ACCESS: "false"
       N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
       NODE_FUNCTION_ALLOW_EXTERNAL: "pg"
@@ -124,7 +128,7 @@ services:
     volumes:
       - n8n_data:/home/node/.n8n
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:5678/healthz || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:5678/healthz"]
       interval: 30s
       timeout: 10s
       retries: 5
