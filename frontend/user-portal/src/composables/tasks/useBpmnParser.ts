@@ -1,6 +1,7 @@
 import { ref, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ProcessNode, ProcessFlow } from '@/components/ProcessDiagram.vue'
+import { getCachedBpmnDocument } from '@/utils/bpmnParseCache'
 
 const ck = (s: unknown) => String(s ?? '').trim()
 const normLabel = (s: unknown) => ck(s).replace(/\s+/g, ' ')
@@ -21,8 +22,8 @@ export function useBpmnParser(options: {
   function parseBpmnXmlAndGetFormId(xml: string): { formId: string | null; formName: string | null; readOnly: boolean } {
     if (!xml) return { formId: null, formName: null, readOnly: false }
     try {
-      const parser = new DOMParser()
-      const doc = parser.parseFromString(xml, 'text/xml')
+      const doc = getCachedBpmnDocument(xml)
+      if (!doc) return { formId: null, formName: null, readOnly: false }
       const currentTaskDefinitionKey = options.taskInfo.value.taskDefinitionKey || ''
       const currentTaskName = options.taskInfo.value.taskName || ''
       const allElements = doc.getElementsByTagName('*')
@@ -58,8 +59,8 @@ export function useBpmnParser(options: {
   function parseBpmnXmlAndGetPreviousFormIds(xml: string): Array<{ formId: string | null; formName: string | null; taskName: string | null }> {
     if (!xml) return []
     try {
-      const parser = new DOMParser()
-      const doc = parser.parseFromString(xml, 'text/xml')
+      const doc = getCachedBpmnDocument(xml)
+      if (!doc) return []
       const allElements = doc.getElementsByTagName('*')
       const currentTaskDefinitionKey = options.taskInfo.value.taskDefinitionKey || ''
       const currentTaskName = options.taskInfo.value.taskName || ''
@@ -137,8 +138,8 @@ export function useBpmnParser(options: {
     if (!xml) return
     try {
       currentNodeId.value = ''
-      const parser = new DOMParser()
-      const doc = parser.parseFromString(xml, 'text/xml')
+      const doc = getCachedBpmnDocument(xml)
+      if (!doc) return
       const nodes: ProcessNode[] = []
       const flows: ProcessFlow[] = []
       const completed: string[] = []

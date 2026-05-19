@@ -461,6 +461,7 @@ import {
 } from '@/api/processForm'
 import { relationTableApi } from '@/api/relationTable'
 import { unwrapUserLikeValueToDisplayString, extractUserIdFromCellValue } from '@/components/subTableAddDialogHelpers'
+import { clearBpmnParseCache, getCachedBpmnDocument } from '@/utils/bpmnParseCache'
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
@@ -1862,6 +1863,7 @@ function shouldKeepCompletedHistoryItem(item: TaskHistoryInfo): boolean {
 const loadTaskDetail = async () => {
   loading.value = true
   taskError.value = null
+  clearBpmnParseCache()
   try {
     const res = await getTaskDetail(taskId)
     const data = res.data || res
@@ -1877,16 +1879,27 @@ const loadTaskDetail = async () => {
       if (st0) {
         formData.value = { ...formData.value, __subTables__: st0 }
       }
-      // Load flow history first, as diagram parsing needs history records
-      await loadTaskHistory()
-      
-      // Then load function unit content (diagram and forms)
+
+      // Parallel fetch: history (required before BPMN parse), FU content, process/task forms
+      const historyPromise = loadTaskHistory()
+      const fuFetchPromise = data.processDefinitionKey
+        ? processApi
+            .getFunctionUnitContent(data.processDefinitionKey)
+            .then(r => (r as { data?: unknown }).data ?? r)
+            .catch((err: unknown) => {
+              console.error('Failed to prefetch function unit content:', err)
+              return null
+            })
+        : Promise.resolve(null)
+      const formPrefetchPromise = prefetchProcessAndTaskFormData(data)
+
+      await historyPromise
+      const prefetchedFu = await fuFetchPromise
       if (data.processDefinitionKey) {
-        await loadFunctionUnitContent(data.processDefinitionKey)
+        await loadFunctionUnitContent(data.processDefinitionKey, prefetchedFu ?? undefined)
       }
 
-      // Task 17: Load Process Form and Task Form data
-      await loadProcessAndTaskFormData(data)
+      await loadProcessAndTaskFormData(data, await formPrefetchPromise)
 
       if (isMiSubTask(data)) {
         isMiSubTaskMode.value = true
@@ -1950,13 +1963,22 @@ const loadTaskDetail = async () => {
             if (stP) {
               formData.value = { ...formData.value, __subTables__: stP }
             }
-            // diagram needs history records + bpmn xml
-            await loadTaskHistory()
+            const historyPromise = loadTaskHistory()
             const key = (taskInfo.value as any).processDefinitionKey
+            const fuFetchPromise = key
+              ? processApi
+                  .getFunctionUnitContent(String(key))
+                  .then(r => (r as { data?: unknown }).data ?? r)
+                  .catch(() => null)
+              : Promise.resolve(null)
+            const fallbackTask = { ...(taskInfo.value as any), processInstanceId: p.id, id: taskId }
+            const formPrefetchPromise = prefetchProcessAndTaskFormData(fallbackTask)
+            await historyPromise
+            const prefetchedFu = await fuFetchPromise
             if (key) {
-              await loadFunctionUnitContent(String(key))
+              await loadFunctionUnitContent(String(key), prefetchedFu ?? undefined)
             }
-            await loadProcessAndTaskFormData({ ...(taskInfo.value as any), processInstanceId: p.id, id: taskId })
+            await loadProcessAndTaskFormData(fallbackTask, await formPrefetchPromise)
             loading.value = false
             return
           }
@@ -2066,13 +2088,14 @@ const loadTaskHistory = async () => {
   }
 }
 
-// Load function unit content
-const loadFunctionUnitContent = async (processKey: string) => {
+// Load function unit content (optional prefetched payload avoids duplicate HTTP when parallel with history)
+const loadFunctionUnitContent = async (processKey: string, prefetchedContent?: any) => {
   processError.value = null
   try {
-    const response = await processApi.getFunctionUnitContent(processKey)
-    const content = (response as any).data || response
-    if ((content as any).error) {
+    const content: any =
+      prefetchedContent ??
+      (await processApi.getFunctionUnitContent(processKey).then(r => (r as any).data || r))
+    if (content.error) {
       console.error('Function unit content error:', content.error)
       processError.value = t('task.processLoadFailed')
       return
@@ -2375,10 +2398,9 @@ const loadFunctionUnitContent = async (processKey: string) => {
         const newMap = new Map<string, NodeFormInfo>()
         const bpmnData = content.processes[0]?.data
         if (bpmnData) {
-          const parser = new DOMParser()
-          const doc = parser.parseFromString(bpmnData, 'text/xml')
-          const allElements = doc.getElementsByTagName('*')
-          for (let i = 0; i < allElements.length; i++) {
+          const doc = getCachedBpmnDocument(bpmnData)
+          const allElements = doc?.getElementsByTagName('*')
+          if (allElements) for (let i = 0; i < allElements.length; i++) {
             const el = allElements[i]
             const localName = el.localName || el.nodeName.split(':').pop()
             if (localName !== 'userTask' && localName !== 'subProcess' && localName !== 'serviceTask') continue
@@ -2540,85 +2562,99 @@ const loadFunctionUnitContent = async (processKey: string) => {
   }
 }
 
-// Task 17: Load Process Form and Task Form data
-const loadProcessAndTaskFormData = async (taskData: any) => {
+type PrefetchedTaskForms = {
+  pfData: ProcessFormData | null
+  tfData: TaskFormDataDTO | null
+  ctData: CompletedTaskFormData | null
+}
+
+/** Start process + task form HTTP in parallel with history / function-unit fetch. */
+function prefetchProcessAndTaskFormData(taskData: any): Promise<PrefetchedTaskForms> {
   const processInstanceId = taskData.processInstanceId
   const currentTaskId = taskData.id || taskId
   const isCompleted = isCompletedTaskData(taskData) || hasCompletedSnapshotRoute()
 
-  // 17.1: Load Process Form data
-  if (processInstanceId) {
-    try {
-      const pfRes = await getProcessFormData(processInstanceId)
-      const pfData = (pfRes as any).data || pfRes
-      if (pfData) {
-        processFormData.value = pfData
-        processFormValues.value = pfData.fieldValues || {}
+  const pfPromise = processInstanceId
+    ? getProcessFormData(processInstanceId)
+        .then(r => ((r as { data?: ProcessFormData }).data ?? r) as ProcessFormData)
+        .catch((e: unknown) => {
+          console.warn('[detail] Failed to load process form data:', e)
+          return null
+        })
+    : Promise.resolve(null)
 
-        // 17.4: Return_To_Requester state detection
-        if (pfData.processState === 'Return_To_Requester' && pfData.editable) {
-          isReturnToRequester.value = true
-          processFormEditable.value = true
-          processFormCollapse.value = ['processForm'] // Auto-expand
-        }
+  const taskFormPromise = currentTaskId
+    ? (isCompleted ? getCompletedTaskFormData(currentTaskId) : fetchTaskFormData(currentTaskId))
+        .then(r => {
+          if (isCompleted) {
+            return ((r as { data?: CompletedTaskFormData }).data ?? r) as CompletedTaskFormData
+          }
+          return ((r as { data?: TaskFormDataDTO }).data ?? r) as TaskFormDataDTO
+        })
+        .catch((e: unknown) => {
+          console.warn(
+            `[detail] Failed to load ${isCompleted ? 'completed' : 'task'} form data:`,
+            e,
+          )
+          return null
+        })
+    : Promise.resolve(null)
 
-        // Parse Process Form layout
-        if (pfData.configJson) {
-          parseProcessFormConfig(pfData.configJson)
-        }
-      }
-    } catch (e) {
-      console.warn('[detail] Failed to load process form data:', e)
+  return Promise.all([pfPromise, taskFormPromise]).then(([pfData, taskFormRaw]) => ({
+    pfData,
+    tfData: !isCompleted ? (taskFormRaw as TaskFormDataDTO | null) : null,
+    ctData: isCompleted ? (taskFormRaw as CompletedTaskFormData | null) : null,
+  }))
+}
+
+// Task 17: Load Process Form and Task Form data
+const loadProcessAndTaskFormData = async (taskData: any, prefetched?: PrefetchedTaskForms) => {
+  const currentTaskId = taskData.id || taskId
+  const isCompleted = isCompletedTaskData(taskData) || hasCompletedSnapshotRoute()
+  const { pfData, tfData, ctData } = prefetched ?? (await prefetchProcessAndTaskFormData(taskData))
+
+  if (pfData) {
+    processFormData.value = pfData
+    processFormValues.value = pfData.fieldValues || {}
+
+    if (pfData.processState === 'Return_To_Requester' && pfData.editable) {
+      isReturnToRequester.value = true
+      processFormEditable.value = true
+      processFormCollapse.value = ['processForm']
+    }
+
+    if (pfData.configJson) {
+      parseProcessFormConfig(pfData.configJson)
     }
   }
 
-  // 17.2 / 17.3: Load Task Form data
   if (currentTaskId) {
     if (isCompleted) {
-      // 17.3: Completed task — load snapshot
       isCompletedTask.value = true
       formReadOnly.value = true
-      try {
-        const ctRes = await getCompletedTaskFormData(currentTaskId)
-        const ctData = (ctRes as any).data || ctRes
-        if (ctData) {
-          completedFormData.value = ctData
-          applyCompletedSnapshotToForm(ctData)
-        }
-      } catch (e) {
-        console.warn('[detail] Failed to load completed task form data:', e)
+      if (ctData) {
+        completedFormData.value = ctData
+        applyCompletedSnapshotToForm(ctData)
       }
-    } else {
-      // 17.2: Active task — load Task Form
-      try {
-        const tfRes = await fetchTaskFormData(currentTaskId)
-        const tfData = (tfRes as any).data || tfRes
-        if (tfData) {
-          taskFormDTO.value = tfData
-          // FormStageBinding readOnly flag takes highest priority
-          if (tfData.formReadOnly === true) {
-            formReadOnly.value = true
-          }
-          if (tfData.formName) {
-            currentFormName.value = tfData.formName
-          }
-          if (tfData.configJson) {
-            parseFormConfig(tfData.configJson as any)
-          }
-          // Field-level READONLY from Stage Binding — MI tasks included (never skip parsing permissions).
-          if (tfData.configJson && tfData.fieldPermissions) {
-            const perms = Object.values(tfData.fieldPermissions || {})
-            if (perms.length > 0 && perms.every((p: any) => String(p).toUpperCase() === 'READONLY')) {
-              formReadOnly.value = true
-            }
-          }
-          // Task Form values from portal backend — merge for MI too, scoped per participant in {@link mergeIncomingTaskFormFieldValues}.
-          if (tfData.fieldValues) {
-            mergeIncomingTaskFormFieldValues(tfData.fieldValues as Record<string, any>, taskData)
-          }
+    } else if (tfData) {
+      taskFormDTO.value = tfData
+      if (tfData.formReadOnly === true) {
+        formReadOnly.value = true
+      }
+      if (tfData.formName) {
+        currentFormName.value = tfData.formName
+      }
+      if (tfData.configJson) {
+        parseFormConfig(tfData.configJson as any)
+      }
+      if (tfData.configJson && tfData.fieldPermissions) {
+        const perms = Object.values(tfData.fieldPermissions || {})
+        if (perms.length > 0 && perms.every((p: unknown) => String(p).toUpperCase() === 'READONLY')) {
+          formReadOnly.value = true
         }
-      } catch (e) {
-        console.warn('[detail] Failed to load task form data:', e)
+      }
+      if (tfData.fieldValues) {
+        mergeIncomingTaskFormFieldValues(tfData.fieldValues as Record<string, any>, taskData)
       }
     }
   }
@@ -3271,6 +3307,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   clearFormAutosaveTimer()
+  clearBpmnParseCache()
 })
 </script>
 
