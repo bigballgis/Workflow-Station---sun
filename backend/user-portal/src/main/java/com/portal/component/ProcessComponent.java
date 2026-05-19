@@ -26,6 +26,7 @@ import com.platform.common.jdbc.SubTableRowKeySupport;
 import com.platform.common.util.ApiResponseBodyUnwrap;
 import com.platform.security.util.SecurityContextUtils;
 import com.portal.util.PortalUserSecurityUtils;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -44,6 +45,8 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Slf4j
 @Component
@@ -1283,8 +1286,23 @@ public class ProcessComponent {
                 log.warn("getProcessDetail: failed to refresh currentNode from Flowable for process {}: {}", processId, e.getMessage());
             }
         }
-        enrichSubTablesWithAssignmentData(info);
-        
+
+        Map<String, Object> vars = info.getVariables();
+        boolean hasSubTables =
+                vars != null
+                        && vars.get("__subTables__") instanceof Map<?, ?> subMap
+                        && !subMap.isEmpty();
+        Map<String, Map<String, MiRowProgress>> miProgress = Collections.emptyMap();
+        if (hasSubTables || "RUNNING".equals(instance.getStatus())) {
+            miProgress = resolveMiRowProgress(processId, instance.getStatus());
+        }
+        if ("RUNNING".equals(instance.getStatus())) {
+            reconcileCurrentNodeWithMiOverlay(info, miProgress);
+        }
+        if (hasSubTables) {
+            enrichSubTablesWithAssignmentData(info, miProgress);
+        }
+
         return info;
     }
 
@@ -1369,13 +1387,323 @@ public class ProcessComponent {
             return;
         }
         Object subTablesObj = variables.get("__subTables__");
+        if (!(subTablesObj instanceof Map<?, ?> subMap) || subMap.isEmpty()) {
+            return;
+        }
+        enrichSubTablesWithAssignmentData(info, resolveMiRowProgress(info.getId(), info.getStatus()));
+    }
+
+    /**
+     * Uses pre-resolved MI overlay (same snapshot as {@link #enrichSubTablesMapPayload}) so initiator detail avoids a
+     * duplicate workflow-engine MI HTTP round-trip.
+     */
+    @SuppressWarnings("unchecked")
+    private void enrichSubTablesWithAssignmentData(
+            ProcessInstanceInfo info, Map<String, Map<String, MiRowProgress>> miProgressByTable) {
+        Map<String, Object> variables = info.getVariables();
+        if (variables == null || variables.isEmpty()) {
+            return;
+        }
+        Object subTablesObj = variables.get("__subTables__");
         if (!(subTablesObj instanceof Map<?, ?>)) {
             return;
         }
         Map<String, Object> subTables = (Map<String, Object>) subTablesObj;
         Map<String, String> bindingTableNames = resolveSubTableBindingTableNames(info);
-        Map<String, Map<String, MiRowProgress>> miProgressByTable = resolveMiRowProgress(info.getId(), info.getStatus());
         enrichSubTablesMapPayload(info, subTables, bindingTableNames, miProgressByTable);
+        // Numeric bindingIds (64/66) and legacy keys (90/subtable2) share the same MI rows; only slices with a
+        // designer binding name were overlaid above — propagate engine state to every duplicate row in __subTables__.
+        propagateMiOverlayAcrossAllSubTableSlices(subTables, miProgressByTable, info);
+    }
+
+    /**
+     * Apply resolved MI progress to every sub-table row in variables, regardless of {@code __subTables__} slice key.
+     * Fixes initiator My Request when the first merged row comes from an unmapped slice (still showing sub form1).
+     */
+    @SuppressWarnings("unchecked")
+    private void propagateMiOverlayAcrossAllSubTableSlices(
+            Map<String, Object> subTables,
+            Map<String, Map<String, MiRowProgress>> miProgressByTable,
+            ProcessInstanceInfo info) {
+        if (subTables == null || subTables.isEmpty() || miProgressByTable == null || miProgressByTable.isEmpty()) {
+            return;
+        }
+        Map<String, List<String>> pkColsByTable = new HashMap<>();
+        for (String tableName : miProgressByTable.keySet()) {
+            if (tableName == null || tableName.isBlank()) {
+                continue;
+            }
+            try {
+                String safe = requireSafeIdentifier(tableName);
+                pkColsByTable.put(tableName, PostgresPhysicalTablePrimaryKeys.resolvePrimaryKeyColumns(jdbcTemplate, safe));
+            } catch (Exception e) {
+                log.debug("propagateMiOverlay: skip PK for {}: {}", tableName, e.getMessage());
+            }
+        }
+        Map<Long, MiRowProgress> byNumericRowId = buildMiProgressIndexByNumericRowId(miProgressByTable);
+        propagateMiOverlayWalkSubTables(subTables, miProgressByTable, pkColsByTable, byNumericRowId, info);
+    }
+
+    private Map<Long, MiRowProgress> buildMiProgressIndexByNumericRowId(
+            Map<String, Map<String, MiRowProgress>> miProgressByTable) {
+        Map<Long, MiRowProgress> out = new HashMap<>();
+        if (miProgressByTable == null) {
+            return out;
+        }
+        for (Map<String, MiRowProgress> tableMap : miProgressByTable.values()) {
+            if (tableMap == null) {
+                continue;
+            }
+            for (var e : tableMap.entrySet()) {
+                Long id = parseCanonicalSinglePkSuffixLong(e.getKey());
+                if (id == null) {
+                    continue;
+                }
+                out.merge(id, e.getValue(), ProcessComponent::preferMiRowProgressOverlay);
+            }
+        }
+        return out;
+    }
+
+    private static Long extractNumericSubTableRowId(Map<String, Object> row) {
+        if (row == null || row.isEmpty()) {
+            return null;
+        }
+        for (String key : List.of("id", "id_idw", "rowId")) {
+            Long n = coerceWholeNumber(SubTableRowKeySupport.getRowValueIgnoreCase(row, key));
+            if (n != null) {
+                return n;
+            }
+        }
+        Object rawRk = row.get("rowKey");
+        if (rawRk instanceof Map<?, ?> m) {
+            Map<String, Object> rk = SubTableRowKeySupport.normalizeStringKeyMap(m);
+            for (String key : List.of("id", "id_idw", "rowId")) {
+                Long n = coerceWholeNumber(SubTableRowKeySupport.getRowValueIgnoreCase(rk, key));
+                if (n != null) {
+                    return n;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static void normalizeVariableRowPkEnvelope(Map<String, Object> row) {
+        if (row == null || row.isEmpty()) {
+            return;
+        }
+        Long idNum = coerceWholeNumber(SubTableRowKeySupport.getRowValueIgnoreCase(row, "id"));
+        Long idIdwNum = coerceWholeNumber(SubTableRowKeySupport.getRowValueIgnoreCase(row, "id_idw"));
+        if (idNum == null && idIdwNum != null) {
+            row.put("id", idIdwNum);
+        } else if (idNum != null && idIdwNum == null) {
+            row.put("id_idw", idNum);
+        }
+    }
+
+    private static Set<String> miDashboardColumnsToProtect(Map<String, MiRowProgress> miProgress) {
+        Set<String> cols = new LinkedHashSet<>();
+        cols.add("task_status");
+        cols.add("task_current_node");
+        if (miProgress == null) {
+            return cols;
+        }
+        for (MiRowProgress p : miProgress.values()) {
+            if (p == null) {
+                continue;
+            }
+            if (p.statusColumn != null && !p.statusColumn.isBlank()) {
+                cols.add(p.statusColumn.trim());
+            }
+            if (p.nodeColumn != null && !p.nodeColumn.isBlank()) {
+                cols.add(p.nodeColumn.trim());
+            }
+        }
+        return cols;
+    }
+
+    private static boolean isProtectedMiDashboardColumn(Set<String> protectedCols, String columnName) {
+        if (columnName == null || protectedCols == null || protectedCols.isEmpty()) {
+            return false;
+        }
+        for (String p : protectedCols) {
+            if (p != null && p.equalsIgnoreCase(columnName)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void propagateMiOverlayWalkSubTables(
+            Map<String, Object> subTables,
+            Map<String, Map<String, MiRowProgress>> miProgressByTable,
+            Map<String, List<String>> pkColsByTable,
+            Map<Long, MiRowProgress> byNumericRowId,
+            ProcessInstanceInfo info) {
+        for (Object sliceVal : subTables.values()) {
+            if (!(sliceVal instanceof List<?> rows)) {
+                continue;
+            }
+            for (Object rowObj : rows) {
+                if (!(rowObj instanceof Map<?, ?> rawRow)) {
+                    continue;
+                }
+                Map<String, Object> row = (Map<String, Object>) rawRow;
+                normalizeVariableRowPkEnvelope(row);
+                MiRowProgress best = resolveBestMiProgressForVariableRow(row, miProgressByTable, pkColsByTable);
+                if (best == null) {
+                    Long numericId = extractNumericSubTableRowId(row);
+                    if (numericId != null) {
+                        best = byNumericRowId.get(numericId);
+                    }
+                }
+                if (best != null) {
+                    applyMiOverlayToVariableRow(row, best);
+                }
+                if (isPortalProcessCompleted(info)) {
+                    normalizeStuckMiParticipantRowForCompletedProcess(row);
+                }
+                Object nestedRaw = row.get("__subTables__");
+                if (nestedRaw instanceof Map<?, ?> nestedMap && !nestedMap.isEmpty()) {
+                    propagateMiOverlayWalkSubTables(
+                            (Map<String, Object>) nestedMap,
+                            miProgressByTable,
+                            pkColsByTable,
+                            byNumericRowId,
+                            info);
+                }
+            }
+        }
+    }
+
+    private MiRowProgress resolveBestMiProgressForVariableRow(
+            Map<String, Object> row,
+            Map<String, Map<String, MiRowProgress>> miProgressByTable,
+            Map<String, List<String>> pkColsByTable) {
+        MiRowProgress best = null;
+        for (var tableEntry : miProgressByTable.entrySet()) {
+            List<String> pkCols = pkColsByTable.get(tableEntry.getKey());
+            if (pkCols == null || pkCols.isEmpty()) {
+                continue;
+            }
+            Map<String, Object> rowKey = SubTableRowKeySupport.rowKeyFromVariableRow(row, pkCols);
+            if (rowKey == null) {
+                continue;
+            }
+            MiRowProgress p = lookupMiRowProgressForVariableRow(tableEntry.getValue(), pkCols, rowKey);
+            if (p != null) {
+                best = preferMiRowProgressOverlay(best, p);
+            }
+        }
+        return best;
+    }
+
+    private static MiRowProgress preferMiRowProgressOverlay(MiRowProgress a, MiRowProgress b) {
+        if (a == null) {
+            return b;
+        }
+        if (b == null) {
+            return a;
+        }
+        boolean aTerminal = isTerminalMiOverlayProgress(a);
+        boolean bTerminal = isTerminalMiOverlayProgress(b);
+        if (aTerminal && !bTerminal) {
+            return a;
+        }
+        if (bTerminal && !aTerminal) {
+            return b;
+        }
+        int oa = miSubFormOrdinalHint(a.currentNode());
+        int ob = miSubFormOrdinalHint(b.currentNode());
+        if (oa != Integer.MIN_VALUE && ob != Integer.MIN_VALUE && oa != ob) {
+            return ob > oa ? b : a;
+        }
+        return b;
+    }
+
+    private static boolean isTerminalMiOverlayProgress(MiRowProgress p) {
+        if (p == null) {
+            return false;
+        }
+        if (p.status() != null && "COMPLETED".equalsIgnoreCase(p.status().trim())) {
+            return true;
+        }
+        String node = p.currentNode();
+        return node != null && "end".equalsIgnoreCase(node.trim());
+    }
+
+    /**
+     * Parallel MI rows may sit on different user tasks; Flowable / portal DB {@link ProcessInstance#getCurrentNode()}
+     * reflects one arbitrary active task (often {@code tasks.get(0)}). Align headline {@link ProcessInstanceInfo#getCurrentNode()}
+     * with the numerically greatest {@code sub form N} among in-flight MI rows (matches sub-table overlay semantics).
+     */
+    private void reconcileCurrentNodeWithMiOverlay(
+            ProcessInstanceInfo info, Map<String, Map<String, MiRowProgress>> byTable) {
+        if (info == null || byTable == null || byTable.isEmpty()) {
+            return;
+        }
+        String bestNode = null;
+        int bestOrd = Integer.MIN_VALUE;
+        for (Map<String, MiRowProgress> rows : byTable.values()) {
+            if (rows == null || rows.isEmpty()) {
+                continue;
+            }
+            for (MiRowProgress p : rows.values()) {
+                if (p == null || p.currentNode() == null || p.currentNode().isBlank()) {
+                    continue;
+                }
+                String st = p.status();
+                if (st == null || st.isBlank()) {
+                    continue;
+                }
+                String u = st.trim().toUpperCase(Locale.ROOT);
+                if (!("IN_PROGRESS".equals(u) || "ASSIGNED".equals(u) || "CREATED".equals(u))) {
+                    continue;
+                }
+                int ord = miSubFormOrdinalHint(p.currentNode());
+                if (ord == Integer.MIN_VALUE) {
+                    continue;
+                }
+                if (ord > bestOrd) {
+                    bestOrd = ord;
+                    bestNode = p.currentNode();
+                }
+            }
+        }
+        if (bestNode == null || bestOrd == Integer.MIN_VALUE) {
+            return;
+        }
+        String prev = Optional.ofNullable(info.getCurrentNode()).orElse("").trim();
+        int existingOrd = miSubFormOrdinalHint(prev);
+        boolean prevLooksMiSubForm =
+                prev.toLowerCase(Locale.ROOT).replace(" ", "").contains("subform");
+
+        boolean upgrade =
+                (existingOrd != Integer.MIN_VALUE && bestOrd > existingOrd)
+                        || (prevLooksMiSubForm && bestOrd > existingOrd)
+                        || (prevLooksMiSubForm && bestOrd == existingOrd && !bestNode.equalsIgnoreCase(prev));
+        if (!upgrade) {
+            return;
+        }
+        info.setCurrentNode(bestNode);
+    }
+
+    /** Largest N from {@code sub form N} tokens; {@link Integer#MIN_VALUE} if none. */
+    private static int miSubFormOrdinalHint(String name) {
+        if (name == null || name.isBlank()) {
+            return Integer.MIN_VALUE;
+        }
+        Matcher m = Pattern.compile("(?i)\\bsub\\s*form\\s*(\\d+)\\b").matcher(name.trim());
+        int max = Integer.MIN_VALUE;
+        while (m.find()) {
+            try {
+                max = Math.max(max, Integer.parseInt(m.group(1)));
+            } catch (NumberFormatException ignored) {
+                /* ignore */
+            }
+        }
+        return max;
     }
 
     /**
@@ -1410,7 +1738,10 @@ public class ProcessComponent {
                 onlyMatch = e.getValue();
             }
         }
-        return matches == 1 ? onlyMatch : null;
+        if (matches == 1 && onlyMatch != null) {
+            return onlyMatch;
+        }
+        return null;
     }
 
     private static Long normalizeRowKeyLong(String pkCol, Map<String, Object> rowKey) {
@@ -1535,6 +1866,7 @@ public class ProcessComponent {
                 }
 
                 Map<String, MiRowProgress> miProgress = lookupMiProgressForDesignerTable(miProgressByTable, tableName);
+                Set<String> protectedMiCols = miDashboardColumnsToProtect(miProgress);
 
                 String safeTableName = requireSafeIdentifier(tableName);
                 List<String> pkCols;
@@ -1584,9 +1916,15 @@ public class ProcessComponent {
                             }
                             repairStaleTaskStatus(safeTableName, dbRow, rowKey, pkCols);
                             for (Map.Entry<String, Object> entry : dbRow.entrySet()) {
-                                if (entry.getValue() != null) {
-                                    row.put(entry.getKey(), entry.getValue());
+                                if (entry.getValue() == null) {
+                                    continue;
                                 }
+                                // Physical PG may still hold sub form1 after participant advances; engine overlay wins.
+                                if (!protectedMiCols.isEmpty()
+                                        && isProtectedMiDashboardColumn(protectedMiCols, entry.getKey())) {
+                                    continue;
+                                }
+                                row.put(entry.getKey(), entry.getValue());
                             }
                         }
                     }
@@ -1659,14 +1997,54 @@ public class ProcessComponent {
                 return e.getValue();
             }
         }
-        String norm = normalizeMiTableKey(designerTableName);
+        String dn = normalizeMiTableKey(designerTableName);
         for (Map.Entry<String, Map<String, MiRowProgress>> e : byTable.entrySet()) {
-            if (e.getKey() != null && normalizeMiTableKey(e.getKey()).equals(norm)) {
+            if (e.getKey() != null && normalizeMiTableKey(e.getKey()).equals(dn)) {
                 return e.getValue();
             }
         }
-        if (byTable.size() == 1) {
-            return byTable.values().iterator().next();
+        /*
+         * Designer binding labels often suffix the BPMN MI scope token (subtable vs subtable2).
+         * Prefer longest engine-table prefix so unrelated tables never inherit overlay (replaces blind singleton).
+         */
+        Map<String, MiRowProgress> bestPrefix = null;
+        int bestPrefixLen = -1;
+        for (Map.Entry<String, Map<String, MiRowProgress>> e : byTable.entrySet()) {
+            if (e.getKey() == null || e.getValue() == null || e.getValue().isEmpty()) {
+                continue;
+            }
+            String ek = normalizeMiTableKey(e.getKey());
+            if (ek.length() < 8) {
+                continue;
+            }
+            if (dn.startsWith(ek) && dn.length() > ek.length() && ek.length() > bestPrefixLen) {
+                bestPrefixLen = ek.length();
+                bestPrefix = e.getValue();
+            }
+        }
+        if (bestPrefix != null) {
+            return bestPrefix;
+        }
+        /*
+         * Prefixed logical names (dw_* / scope segments) embed the MI token — pick longest engine key contained in dn.
+         */
+        Map<String, MiRowProgress> bestContain = null;
+        int bestContainLen = -1;
+        for (Map.Entry<String, Map<String, MiRowProgress>> e : byTable.entrySet()) {
+            if (e.getKey() == null || e.getValue() == null || e.getValue().isEmpty()) {
+                continue;
+            }
+            String ek = normalizeMiTableKey(e.getKey());
+            if (ek.length() < 8) {
+                continue;
+            }
+            if (dn.contains(ek) && ek.length() > bestContainLen) {
+                bestContainLen = ek.length();
+                bestContain = e.getValue();
+            }
+        }
+        if (bestContain != null) {
+            return bestContain;
         }
         return Collections.emptyMap();
     }
@@ -1764,6 +2142,7 @@ public class ProcessComponent {
                     out.put(tableName, rowProgress);
                 }
             }
+
             return out;
         } catch (Exception e) {
             log.debug("resolveMiRowProgress skipped: {}", e.getMessage());
@@ -1801,7 +2180,9 @@ public class ProcessComponent {
                         }))
                         .ifPresent(out::add);
             } else {
-                out.addAll(group);
+                // Same BPMN step, no terminal COMPLETED snapshot — overlapping extended rows explode candidate count;
+                // a late orphaned CREATED must not outweigh a real ASSIGNED row on a later BPMN step in pickLatestActiveTask.
+                pickRepresentativeOverlappingMiExtendedRow(group).ifPresent(out::add);
             }
         }
         return out.isEmpty() ? tasks : out;
@@ -1818,6 +2199,80 @@ public class ProcessComponent {
         }
         String taskId = stringVal(t.get("taskId"));
         return taskId != null && !taskId.isBlank() ? taskId.trim() : ("anon:" + System.identityHashCode(t));
+    }
+
+    /**
+     * When several {@code wf_extended_task_info} rows collide on the same step key and none are completed,
+     * prefer the row that mirrors what Flowable still keeps as a real workload (assignee/status), not stray CREATED.
+     */
+    private static Optional<Map<String, Object>> pickRepresentativeOverlappingMiExtendedRow(List<Map<String, Object>> group) {
+        if (group == null || group.isEmpty()) {
+            return Optional.empty();
+        }
+        if (group.size() == 1) {
+            return Optional.of(group.get(0));
+        }
+        Map<String, Object> best = group.get(0);
+        for (int i = 1; i < group.size(); i++) {
+            Map<String, Object> cand = group.get(i);
+            if (compareOverlappingMiExtendedRows(cand, best) > 0) {
+                best = cand;
+            }
+        }
+        return Optional.of(best);
+    }
+
+    /**
+     * Higher score ⇒ more authoritative for overlapping extended MI rows sharing a step key or across sequential steps.
+     */
+    private static int miOverlappingExtendedTaskAuthority(Map<String, Object> t) {
+        if (t == null) {
+            return -10_000;
+        }
+        String st = stringVal(t.get("status"));
+        if ("COMPLETED".equalsIgnoreCase(st) || "CANCELLED".equalsIgnoreCase(st)) {
+            return -10_000;
+        }
+        String assignee = stringVal(t.get("assignee"));
+        boolean hasAssignee = assignee != null && !assignee.isBlank();
+        if ("ASSIGNED".equalsIgnoreCase(st) && hasAssignee) {
+            return 500;
+        }
+        if ("IN_PROGRESS".equalsIgnoreCase(st)) {
+            return 450;
+        }
+        if ("CREATED".equalsIgnoreCase(st) && hasAssignee) {
+            return 300;
+        }
+        if ("CREATED".equalsIgnoreCase(st)) {
+            return 100;
+        }
+        return 200;
+    }
+
+    /**
+     * &gt;0 if {@code a} should win over {@code b} when both denote overlapping MI extension noise.
+     */
+    private static int compareOverlappingMiExtendedRows(Map<String, Object> a, Map<String, Object> b) {
+        int ca = miOverlappingExtendedTaskAuthority(a);
+        int cb = miOverlappingExtendedTaskAuthority(b);
+        if (ca != cb) {
+            return Integer.compare(ca, cb);
+        }
+        LocalDateTime ta = parseMiStatusLocalDateTime(a.get("createdTime"));
+        LocalDateTime tb = parseMiStatusLocalDateTime(b.get("createdTime"));
+        if (ta != null && tb != null && !ta.equals(tb)) {
+            return ta.compareTo(tb);
+        }
+        if (ta != null && tb == null) {
+            return 1;
+        }
+        if (ta == null && tb != null) {
+            return -1;
+        }
+        String ida = Objects.toString(stringVal(a.get("taskId")), "");
+        String idb = Objects.toString(stringVal(b.get("taskId")), "");
+        return ida.compareTo(idb);
     }
 
     /** API Map 中 LocalDateTime 可能为 ISO 字符串 */
@@ -1840,25 +2295,26 @@ public class ProcessComponent {
 
     private static Map<String, Object> pickLatestActiveTask(List<Map<String, Object>> tasks) {
         Map<String, Object> best = null;
-        LocalDateTime bestTime = null;
         for (Map<String, Object> t : tasks) {
             String st = stringVal(t.get("status"));
             if ("COMPLETED".equalsIgnoreCase(st) || "CANCELLED".equalsIgnoreCase(st)) {
                 continue;
             }
-            LocalDateTime ct = parseMiStatusLocalDateTime(t.get("createdTime"));
             if (best == null) {
                 best = t;
-                bestTime = ct;
                 continue;
             }
-            if (ct != null && bestTime != null && ct.isAfter(bestTime)) {
+            int cmp = compareOverlappingMiExtendedRows(t, best);
+            if (cmp > 0) {
                 best = t;
-                bestTime = ct;
-            } else if (ct != null && bestTime == null) {
-                best = t;
-                bestTime = ct;
-            } else if (ct == null && bestTime == null) {
+                continue;
+            }
+            if (cmp < 0) {
+                continue;
+            }
+            int ordT = miSubFormOrdinalHint(stringVal(t.get("taskName")));
+            int ordB = miSubFormOrdinalHint(stringVal(best.get("taskName")));
+            if (ordT != Integer.MIN_VALUE && ordB != Integer.MIN_VALUE && ordT > ordB) {
                 best = t;
             }
         }

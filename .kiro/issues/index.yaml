@@ -1284,3 +1284,75 @@
   summary: "user-portal 多实例子流程下不同 BPMN 任务误用同一 _currentItem.rowId（同级子表行被收窄成同一 PK），因 getTaskById 合并 ProcessInstance.variables 时 putAll 覆盖 Flowable 执行级 currentItem/_currentItem"
   file: "backend/user-portal/src/main/java/com/portal/component/TaskQueryComponent.java; frontend/user-portal/src/views/tasks/detail.vue; frontend/user-portal/src/composables/tasks/shared.ts"
   note: "后端：mergePortalProcessVariablesPreferringFlowableMiElementItem 叠加门户快照后恢复引擎侧 _currentItem/currentItem。前端另有 MI 子表隔离与同 metadata tableId 多放置位 hydrate 严格化（同属该缺陷关联改动）。"
+
+- id: "175"
+  status: fixed
+  fixed_at: "2026-05-18"
+  severity: major
+  category: bug
+  summary: "user-portal 多实例子流程同一子任务中，sub form1 填写的子表 subtable2 在后续节点 sub form2 显示为空：miRowBelongsToCurrentParticipant 将 foreignKeyField=id 当作指向参与者行的外键，与子表行主键 row.id 比较失败后直接 return false，未再执行 participant_id 等回退；enrich 后 applyMiParticipantFilter 误丢有数据行"
+  file: "frontend/user-portal/src/views/tasks/detail.vue"
+  note: "修复：当 foreignKeyField 与 primaryKeyFields 中某列同名，或对非 participants 绑定且为 id 时，跳过「外键列 === myRowId」分支，走 fallbackFkKeys 与 expansionKeyMatchesParticipantRow。"
+
+- id: "176"
+  status: fixed
+  fixed_at: "2026-05-19"
+  severity: major
+  category: bug
+  summary: "admin-center Relation Table Structure「Add Role Access」弹窗 BU/System 两个 Tab 空白：AccessConfigDialog 复用 function-unit UI，但 useRelationTableAccessConfig 未实现 BU 树/绑定角色加载且导出变量与模板不一致"
+  file: "frontend/admin-center/src/composables/modules/useRelationTableAccessConfig.ts; frontend/admin-center/src/views/relation-table/structure/components/AccessConfigDialog.vue"
+  note: "对齐 useFunctionUnitAccessConfig：加载 roleApi.list、businessUnitApi.getTree/getBoundRoles，导出 availableSystemRoles/availableBuRoles 等；AccessConfigDialog 解构与模板绑定同步。"
+
+- id: "177"
+  status: fixed
+  fixed_at: "2026-05-19"
+  severity: major
+  category: bug
+  summary: "user-portal MI 待办 sub form1 Link Form 打开 subtable2 时 id 误显示其他参与者行值（如 44）：子表行 id_idw 与父行不匹配时 filterLinkedChildRowsByParentIdIdw 退回全量 rows，再 merge binding 级 fallback 选字段最满行"
+  file: "frontend/user-portal/src/components/SubTableField.vue; frontend/user-portal/src/components/FormRenderer.vue; frontend/user-portal/src/composables/tasks/shared.ts"
+  note: "MI+suppressLinkFormInitialData：仅用父行 __subTables__ 嵌套切片（linkFormNestedOnlyMi），禁止 fallback/deep 合并；按办理人收窄 pickBest；FormRenderer 内联表单同源只读嵌套行。"
+
+- id: "178"
+  status: fixed
+  fixed_at: "2026-05-19"
+  severity: major
+  category: bug
+  summary: "user-portal 我的申请 MI 子表 Current node 串行：后端按子任务行 overlay 正确，前端 enrichChild 用 task_status 误配不同 id 行并 ordinal 合并抬高节点；resync 曾整表替换 binding 数据"
+  file: "frontend/user-portal/src/composables/tasks/shared.ts; frontend/user-portal/src/views/applications/detail.vue; backend/user-portal/src/main/java/com/portal/component/ProcessComponent.java"
+  note: "miParentRowAlignsWithChildRow 仅 id/id_idw/FK 对齐；enrich 不覆盖已有 MI 列；mergeAllSubTableSlices+resync 以 API 变量为准；后端 propagateMiOverlay 全 slice 传播。单测 mergeSubTableRowsMiMerge.test.ts。"
+
+- id: "179"
+  status: fixed
+  fixed_at: "2026-05-19"
+  severity: major
+  category: bug
+  recurrence: pattern
+  related_ids: ["177", "178"]
+  summary: "【复发】user-portal MI 多实例 Link Form / 内联 subtable2：跨 BPMN 节点（sub form1→sub form2）或参与者行 id 与 _currentItem.rowId 不一致时，子表字段未带出、串行、或显示他人数据"
+  file: "frontend/user-portal/src/composables/tasks/shared.ts; frontend/user-portal/src/views/tasks/detail.vue; frontend/user-portal/src/views/applications/detail.vue; frontend/user-portal/src/components/FormRenderer.vue; frontend/user-portal/src/components/SubTableField.vue"
+  note: |
+    同类已修：#177（Link 弹窗 id 串他人）、#178（我的申请 Current node 串行）。本次 2026-05-19：参与者 44053631 在 sub form2 内联 subtable2 空白，e2e_sunqiang 正常。
+    根因（常叠加出现）：
+    1) Flowable _currentItem.rowId 多为设计器 PK（id_idw），列表行仅 SQL id（如 6532）→ findSubTableRowByMiExpansionId 失败，MI suppressLinkFormInitialData 下内联表单当无父行；
+    2) subform_copy 新 bindingId，__subTables__ 仍 keyed 旧 id → 待办 load 后未 mergeAllSubTableSlices / 未 resync；
+    3) foreignKeyField=id 被当成 MI 参与者 FK，miRowBelongsToCurrentParticipant 误过滤（见 commit aaa48059）；
+    4) enrichChild / binding 级 fallback 把其他参与者 slice 合并进来或覆盖 task_current_node。
+    最终修复要点：findMiIsolatedParentRow（隔离后父表仅一行则回退）；tasks/detail resyncMiParticipantSubTablesFromVariables；177 的 linkFormNestedOnlyMi；applications/detail mergeAllSubTableSlices+resync。
+    回归：linkFormMiIsolation.test.ts、mergeSubTableRowsMiMerge.test.ts；手测 3 参与者各走 sub form1→sub form2，核对 subtable2 的 id/sex/age。
+    再发时先查：任务 variables.__subTables__ 各 numeric key、父行 __subTables__[childBindingId]、当前 bindingId 与 tableId 是否一致。
+
+- id: "180"
+  status: fixed
+  fixed_at: "2026-05-19"
+  severity: major
+  category: performance
+  summary: "user-portal 我的申请详情首屏过慢：loading 直至 FU 全量处理（历史步骤 buildPreviousFormEntry×N、全 BPMN 遍历、跨节点子表 align、lookup、流程图）才结束"
+  file: "frontend/user-portal/src/views/applications/detail.vue; frontend/user-portal/src/utils/bpmnParseCache.ts; backend/user-portal/src/main/java/com/portal/component/ProcessComponent.java"
+  note: |
+    现象：发起人（如 e2e_sunqiang）打开 My Request 详情长时间白屏/骨架，主表单与子表迟迟不可交互。
+    根因：loadProcessDetail 中 loading 与 loadFunctionUnitContent 串行重计算绑定——Promise.all(历史, FU) 后仍同步执行 previousForms 循环、alignProcessSubTableBindingsBySharedTable、nodeFormMap、BPMN 多遍解析与 lookup；首屏无必要工作阻塞 paint。
+  修复（2026-05-19，无功能语义变更）：
+    1) 两阶段加载：primary 仅当前表单 parseFormConfig + 子表 hydrate + alignMainSubTableBindingsOnly，随后 loading=false；
+    2) secondary（requestIdleCallback）：await 流程历史 → lookup → previousForms/MI 识别/全量 align → nodeFormMap → 流程图；
+    3) 流程历史不再与 FU 并行阻塞首屏；快照 Completed Tasks 的 assignee 过滤移至 secondary 末尾。
+    若首屏仍慢：profile getProcessDetail（RUNNING+__subTables__ 时 resolveMiRowProgress/getMultiInstanceStatus）与 getFunctionUnitContent 接口耗时。

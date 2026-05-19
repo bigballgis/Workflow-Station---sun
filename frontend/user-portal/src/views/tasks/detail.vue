@@ -431,6 +431,8 @@ import {
   collectNestedSlicesForBindingFromSubTablesWalk,
   coerceSubTablesVariableToMap,
   collectSubTableSliceArraysDeep,
+  scrubMiCorruptLinkChildRowsForParent,
+  mergeAllSubTableSlicesFromVariables,
 } from '@/composables/tasks/shared'
 import dayjs from 'dayjs'
 import ChangeHistoryPanel from '@/components/ChangeHistoryPanel.vue'
@@ -676,6 +678,62 @@ function rebuildIsolatedSubTablesPayload(): Record<string, any> {
   return subTables
 }
 
+function patchMiParentRowsWithNestedChildSlice(
+  parentRows: any[],
+  myRowId: number,
+  childBinding: { bindingId: number; tableName: string },
+  childSlice: any[],
+): any[] {
+  if (!Array.isArray(parentRows)) return parentRows
+  return parentRows.map(row => {
+    if (!row || typeof row !== 'object') return row
+    const rec = row as Record<string, unknown>
+    if (
+      !expansionKeyMatchesParticipantRow(row, myRowId) &&
+      !miRowBelongsToCurrentParticipant(row, myRowId, {
+        tableName: childBinding.tableName,
+        primaryKeyFields: ['id_idw']
+      })
+    ) {
+      return row
+    }
+    const nest = {
+      ...(rec.__subTables__ && typeof rec.__subTables__ === 'object'
+        ? (rec.__subTables__ as Record<string, unknown>)
+        : {})
+    }
+    const slice = cloneSubTableRows(childSlice)
+    nest[childBinding.bindingId] = slice
+    nest[String(childBinding.bindingId)] = slice
+    if (childBinding.tableName) {
+      nest[childBinding.tableName] = slice
+      nest[normalizeSubTableName(childBinding.tableName)] = slice
+    }
+    return { ...rec, __subTables__: nest }
+  })
+}
+
+/** MI link-form child rows must live under {@code parentRow.__subTables__[childBindingId]} for reload / diagram, not only top-level slice. */
+function syncMiLinkChildRowsIntoParentNested(
+  childBinding: { bindingId: number; tableName: string },
+  childRows: any[]
+) {
+  const rid = currentMiRowId.value
+  if (rid == null || String(rid).trim() === '') return
+  const myRowId = Number(rid)
+  if (Number.isNaN(myRowId)) return
+
+  for (const parentBinding of subTableBindings.value) {
+    if (parentBinding.bindingId === childBinding.bindingId) continue
+    parentBinding.data = patchMiParentRowsWithNestedChildSlice(
+      Array.isArray(parentBinding.data) ? parentBinding.data : [],
+      myRowId,
+      childBinding,
+      childRows
+    )
+  }
+}
+
 function syncMainSubTableRows(bindingId: number, rows: any[]) {
   const source = subTableBindings.value.find(b => b.bindingId === bindingId)
   if (!source) return
@@ -703,6 +761,27 @@ function syncMainSubTableRows(bindingId: number, rows: any[]) {
     subTables[source.tableName] = out
     subTables[normalizeSubTableName(source.tableName)] = out
   }
+
+  if (isMiSubTaskMode.value) {
+    syncMiLinkChildRowsIntoParentNested(
+      { bindingId: source.bindingId, tableName: source.tableName },
+      out
+    )
+    const ambiguous = bindingIdsPreferStrictSubTableLookup(subTableBindings.value)
+    for (const parentBinding of subTableBindings.value) {
+      if (parentBinding.bindingId === source.bindingId) continue
+      const parentRows = cloneSubTableRows(
+        Array.isArray(parentBinding.data) ? parentBinding.data : []
+      )
+      subTables[parentBinding.bindingId] = parentRows
+      subTables[String(parentBinding.bindingId)] = parentRows
+      if (parentBinding.tableName) {
+        subTables[parentBinding.tableName] = parentRows
+        subTables[normalizeSubTableName(parentBinding.tableName)] = parentRows
+      }
+    }
+  }
+
   formData.value = { ...formData.value, __subTables__: subTables }
   scheduleSubTableAutosave()
 }
@@ -1460,6 +1539,60 @@ function applyMiParticipantFilterToCurrentSubTableBindings(myRowId: number) {
   }
 }
 
+/**
+ * After MI isolation + task-form merge, copied-form binding ids may still miss {@code __subTables__} slices that
+ * hold prior-step link-child fields (sub form1 → subtable2). Re-hydrate from the full variables snapshot and
+ * nest link-child rows under the participant parent row for inline form-below-table.
+ */
+function resyncMiParticipantSubTablesFromVariables(
+  myRowId: number,
+  subTablesSource?: Record<string, unknown> | null,
+) {
+  const savedMap = coerceSubTablesVariableToMap(subTablesSource ?? formData.value.__subTables__)
+  if (!savedMap) return
+
+  const flattened = JSON.parse(JSON.stringify(savedMap)) as Record<string, unknown>
+  flattenNestedSubTableRowsIntoPayload(flattened)
+  scrubMiCorruptLinkChildRowsForParent(flattened, myRowId)
+
+  const rtMap = lastBindingRelationTableMap.value
+  const ambiguous = bindingIdsPreferStrictSubTableLookup(subTableBindings.value)
+
+  for (const binding of subTableBindings.value) {
+    const byKey = getSavedSubTableRows(flattened, binding, ambiguous.has(binding.bindingId)) ?? []
+    const allSlices = mergeAllSubTableSlicesFromVariables(flattened, binding.primaryKeyFields ?? null)
+    const scoped = [...byKey, ...allSlices].filter(
+      (row: unknown) =>
+        expansionKeyMatchesParticipantRow(row, myRowId) ||
+        miRowBelongsToCurrentParticipant(row, myRowId, binding),
+    )
+    const existing = Array.isArray(binding.data) ? binding.data : []
+    binding.data = cloneSubTableRows(
+      mergeSubTableRowsByRowId(existing, scoped, binding.primaryKeyFields ?? null),
+    )
+  }
+
+  hydrateChildSubTablesFromParentsNestedRows(
+    subTableBindings.value,
+    flattened,
+    rtMap.size > 0 ? rtMap : undefined,
+  )
+  hydrateBindingsRowsFromVariablesBySharedRelationTableId(subTableBindings.value, flattened, rtMap)
+  enrichChildBindingRowsFromParentsNestedSubTables(subTableBindings.value)
+  applyMiParticipantFilterToCurrentSubTableBindings(myRowId)
+
+  for (const binding of subTableBindings.value) {
+    const rows = Array.isArray(binding.data) ? binding.data : []
+    if (rows.length > 0) {
+      syncMiLinkChildRowsIntoParentNested(
+        { bindingId: binding.bindingId, tableName: binding.tableName },
+        cloneSubTableRows(rows),
+      )
+    }
+  }
+  patchFormDataSubTablesFromCurrentBindings()
+}
+
 /** After MI refilter, align {@link formData}.__subTables__ keys for current bindings so autosave/submit matches the grid. */
 function patchFormDataSubTablesFromCurrentBindings() {
   const tbl: Record<string, any> = { ...((formData.value.__subTables__ as Record<string, any>) || {}) }
@@ -1771,8 +1904,7 @@ const loadTaskDetail = async () => {
         const miRowIdPostEnrich =
           miRawRidRef != null && String(miRawRidRef).trim() !== '' ? Number(miRawRidRef) : Number.NaN
         if (!Number.isNaN(miRowIdPostEnrich)) {
-          applyMiParticipantFilterToCurrentSubTableBindings(miRowIdPostEnrich)
-          patchFormDataSubTablesFromCurrentBindings()
+          resyncMiParticipantSubTablesFromVariables(miRowIdPostEnrich, miFullSubTablesSnapshot)
         }
         refreshNodeFormMapFromFormData({
           subTablesSource: miFullSubTablesSnapshot ?? undefined,
@@ -1939,9 +2071,7 @@ const loadFunctionUnitContent = async (processKey: string) => {
   processError.value = null
   try {
     const response = await processApi.getFunctionUnitContent(processKey)
-    console.log('[FU] raw response keys:', Object.keys(response as any))
     const content = (response as any).data || response
-    console.log('[FU] content keys:', Object.keys(content as any), 'forms count:', (content as any).forms?.length)
     if ((content as any).error) {
       console.error('Function unit content error:', content.error)
       processError.value = t('task.processLoadFailed')
@@ -1969,14 +2099,12 @@ const loadFunctionUnitContent = async (processKey: string) => {
         )
         if (matchedForm) {
           selectedForm = matchedForm
-          console.log('Matched form by sourceId:', currentFormInfo.formId, '->', selectedForm.name)
         } else {
           // If sourceId match fails, try matching by formName
           if (currentFormInfo.formName) {
             const matchedByName = content.forms.find((f: any) => f.name === currentFormInfo.formName)
             if (matchedByName) {
               selectedForm = matchedByName
-              console.log('Matched form by name:', currentFormInfo.formName)
             }
           }
         }
@@ -1989,7 +2117,6 @@ const loadFunctionUnitContent = async (processKey: string) => {
       }
       
       currentFormName.value = selectedForm.name
-      console.log('[Form] selected form:', selectedForm.name, 'sourceId:', selectedForm.sourceId, 'formId from BPMN:', currentFormInfo.formId, 'readOnly:', currentFormInfo.readOnly)
 
       // Load lookup configs from rt_lookup_configs before parsing form
       lookupDbConfigs.value = {}
@@ -2032,7 +2159,6 @@ const loadFunctionUnitContent = async (processKey: string) => {
       // Load sub-table bindings for this form (SUB and RELATED, not PRIMARY)
       const bindings: typeof subTableBindings.value = []
       const tableBindings: any[] = selectedForm.tableBindings || []
-      console.log('[SubTable] selectedForm:', selectedForm.name, 'tableBindings:', JSON.stringify(tableBindings))
 
       // When the PRIMARY table binding has bindingMode READONLY, force primary form fields read-only
       // without affecting sub-table editability (sub-tables check their own bindingMode).
@@ -2078,28 +2204,26 @@ const loadFunctionUnitContent = async (processKey: string) => {
       lastBindingRelationTableMap.value = bindingRelationTableMap
       const rawSubTables = coerceSubTablesVariableToMap(formData.value.__subTables__)
       if (rawSubTables) {
-        formData.value = { ...formData.value, __subTables__: rawSubTables }
         const flattened = JSON.parse(JSON.stringify(rawSubTables)) as Record<string, unknown>
         flattenNestedSubTableRowsIntoPayload(flattened)
+        const ciLoad = (formData.value._currentItem ?? formData.value.currentItem) as
+          | { rowId?: string | number }
+          | undefined
+        const ridLoad = ciLoad?.rowId
+        if (ridLoad != null && String(ridLoad).trim() !== '') {
+          scrubMiCorruptLinkChildRowsForParent(flattened, ridLoad)
+        }
         formData.value = { ...formData.value, __subTables__: flattened }
       }
-      console.log('[SubTable] bindings to render:', bindings.length, bindings.map(b => b.tableName))
-      // Note: JSON serialization converts keys to string; search by both number and string
-      console.log('[SubTable] formData.value keys:', Object.keys(formData.value))
-      console.log('[SubTable] formData.value.__subTables__:', JSON.stringify(formData.value.__subTables__))
-      console.log('[SubTable] bindings bindingIds:', bindings.map(b => b.bindingId))
       const savedSubTables = formData.value.__subTables__
       if (savedSubTables && typeof savedSubTables === 'object') {
         const ambiguousMain = bindingIdsPreferStrictSubTableLookup(bindings)
         bindings.forEach(binding => {
           const saved = getSavedSubTableRows(savedSubTables, binding, ambiguousMain.has(binding.bindingId))
-          console.log('[SubTable] binding', binding.bindingId, '-> saved:', JSON.stringify(saved))
           if (saved) {
             binding.data = cloneSubTableRows(saved)
           }
         })
-      } else {
-        console.warn('[SubTable] no __subTables__ found in formData.value')
       }
       hydrateChildSubTablesFromParentsNestedRows(
         bindings,
@@ -2668,8 +2792,6 @@ const deriveColumnsFromBinding = (binding: any, subForms?: Record<string, any>, 
         type = r.type as any
       }
 
-      console.log(`[deriveColumns] field=${r.field} r.type=${r.type} → type=${type}`)
-
       // Collect options from rule.options or rule.props.options
       const rawOptions = r.options || rProps.options
       const options = rawOptions
@@ -3119,7 +3241,6 @@ const convertFormCreateRule = (rule: any): FormField | null => {
     } else {
       field.options = rawOptions.map((opt: any) => ({ label: opt.label || opt.value, value: opt.value }))
     }
-    console.log(`Field ${rule.field} options:`, JSON.stringify(field.options))
   }
   if (rule.type === 'cascader') { field.cascaderProps = rule.props?.props || rule.props?.cascaderProps }
   if (rule.type === 'input' && rule.props?.type === 'textarea') { field.type = 'textarea'; field.rows = rule.props?.rows || 3 }
@@ -3136,7 +3257,6 @@ const convertFormCreateRule = (rule: any): FormField | null => {
   if (rule.type === 'userSelect' || rule.type === 'user') {
     field.type = 'user'
   }
-  console.log(`convertFormCreateRule: field=${rule.field}, type=${field.type}, hasOptions=${!!field.options}`)
   return field
 }
 

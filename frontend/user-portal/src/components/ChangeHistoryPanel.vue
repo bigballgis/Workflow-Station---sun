@@ -486,7 +486,12 @@ watch(() => [props.processInstanceId, props.snapshotTime, props.taskInstanceId],
 })
 
 onMounted(() => {
-  loadHistory()
+  // Defer below-the-fold history so My Request detail can paint form + sub-tables first.
+  if (typeof requestIdleCallback === 'function') {
+    requestIdleCallback(() => loadHistory(), { timeout: 2500 })
+  } else {
+    setTimeout(() => loadHistory(), 50)
+  }
 })
 </script>
 

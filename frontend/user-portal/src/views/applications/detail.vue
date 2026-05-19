@@ -103,8 +103,13 @@
           </el-tag>
         </div>
         <div class="section-content">
+          <el-skeleton
+            v-if="!diagramReady && bpmnXml"
+            animated
+            :rows="4"
+          />
           <ProcessDiagram
-            v-if="bpmnXml || processNodes.length > 0"
+            v-else-if="diagramReady && (bpmnXml || processNodes.length > 0)"
             :nodes="processNodes"
             :flows="processFlows"
             :bpmn-xml="bpmnXml"
@@ -116,7 +121,7 @@
             @node-click="handleDiagramNodeClick"
           />
           <el-empty
-            v-else
+            v-else-if="diagramReady"
             :description="t('applicationDetail.noProcessDefinition')"
           />
         </div>
@@ -173,7 +178,7 @@
               :linked-sub-table-bindings="diagramSelectedLinkableBindings"
               view-context="initiatorRequest"
               :initiator-snapshot-mode="!!snapshotTaskName"
-              @view-subtask-detail="openSubTaskDetailDialog"
+              @view-subtask-detail="(row: any, sib?: any[]) => openSubTaskDetailDialog(row, sib)"
             />
           </div>
           <el-empty
@@ -197,7 +202,7 @@
                 :show-view-detail="shouldShowBindingDetailsModal(binding)"
                 :compact-lookup-cells="bindingCompactLookupCells(binding)"
                 :linked-sub-table-bindings="diagramSelectedLinkableBindings"
-                @view-detail="(row: any) => openSubTaskDetailDialog(row)"
+                @view-detail="(row: any) => openSubTaskDetailDialog(row, binding.data)"
               />
               <SubTableInlineForm
                 v-if="shouldShowBindingFormBelow(binding)"
@@ -256,7 +261,7 @@
               :linked-sub-table-bindings="linkableSubTableBindings"
               view-context="initiatorRequest"
               :initiator-snapshot-mode="!!snapshotTaskName"
-              @view-subtask-detail="openSubTaskDetailDialog"
+              @view-subtask-detail="(row: any, sib?: any[]) => openSubTaskDetailDialog(row, sib)"
               @update:sub-table-data="(id: number, rows: any[]) => { const b = subTableBindings.find(x => x.bindingId === id); if (b) b.data = rows }"
             />
           </div>
@@ -282,7 +287,7 @@
                 :show-view-detail="shouldShowBindingDetailsModal(binding)"
                 :compact-lookup-cells="bindingCompactLookupCells(binding)"
                 :linked-sub-table-bindings="linkableSubTableBindings"
-                @view-detail="(row: any) => openSubTaskDetailDialog(row)"
+                @view-detail="(row: any) => openSubTaskDetailDialog(row, binding.data)"
               />
               <!--
                 Unplaced binding's "form below table" — driven by binding-level portalViews.initiatorRequest
@@ -405,6 +410,7 @@ import { isRejectedName } from '@/utils/statusMatcher'
 import { resolveAssigneeFieldForBinding } from '@/utils/subTableAssignment'
 import {
   mergeSubTableRowsByRowId,
+  mergeAllSubTableSlicesFromVariables,
   resolveSubTablePrimaryKeyFields,
   hydrateChildSubTablesFromParentsNestedRows,
   flattenNestedSubTableRowsIntoPayload,
@@ -415,6 +421,7 @@ import {
   collectSubTableSliceArraysDeep
 } from '@/composables/tasks/shared'
 import { USER_ID_KEY, USER_KEY } from '@/api/auth'
+import { clearBpmnParseCache, getCachedBpmnDocument } from '@/utils/bpmnParseCache'
 
 const route = useRoute()
 const router = useRouter()
@@ -471,6 +478,28 @@ const processFlows = ref<ProcessFlow[]>([])
 const currentNodeId = ref('')
 const completedNodeIds = ref<string[]>([])
 const bpmnXml = ref('')
+/** Heavy BPMN node/flow parse is deferred so form + sub-tables can paint first. */
+const diagramReady = ref(false)
+let diagramParseScheduled = false
+
+function scheduleParseApplicationBpmnDiagram(xml: string) {
+  if (!xml) {
+    diagramReady.value = true
+    return
+  }
+  if (diagramParseScheduled) return
+  diagramParseScheduled = true
+  const run = () => {
+    diagramParseScheduled = false
+    parseBpmnXml(xml)
+    diagramReady.value = true
+  }
+  if (typeof requestIdleCallback === 'function') {
+    requestIdleCallback(run, { timeout: 1500 })
+  } else {
+    setTimeout(run, 0)
+  }
+}
 
 // Form data
 const formFields = ref<FormField[]>([])
@@ -602,6 +631,7 @@ const selectedNodeForm = computed((): ApplicationDiagramNodeFormInfo | null => {
 })
 
 function handleDiagramNodeClick(node: ProcessNode) {
+  ensureApplicationNodeFormMapBuilt()
   if (!node?.id) {
     selectedNodeId.value = null
     return
@@ -624,7 +654,8 @@ function normalizeSubTableName(name?: string): string {
 
 function getSavedSubTableRowsFromVariables(
   savedSubTables: Record<string, any> | null | undefined,
-  rawBinding: { bindingId: number; tableName?: string; tableDisplayName?: string }
+  rawBinding: { bindingId: number; tableName?: string; tableDisplayName?: string },
+  primaryKeyFields?: string[] | null
 ): any[] | undefined {
   if (!savedSubTables || typeof savedSubTables !== 'object') return undefined
   const keys = [
@@ -635,15 +666,32 @@ function getSavedSubTableRowsFromVariables(
     rawBinding.tableName ? normalizeSubTableName(rawBinding.tableName) : '',
     rawBinding.tableDisplayName ? normalizeSubTableName(rawBinding.tableDisplayName) : ''
   ]
+  const seenArrays = new Set<any>()
+  const chunks: any[][] = []
   for (const key of keys) {
     if (key === '' || key == null) continue
     const v = savedSubTables[key as string]
-    if (Array.isArray(v)) return v
+    if (!Array.isArray(v) || v.length === 0 || seenArrays.has(v)) continue
+    seenArrays.add(v)
+    chunks.push(v)
   }
-  return undefined
+  if (chunks.length === 0) return undefined
+  if (chunks.length === 1) return chunks[0]
+  let merged: any[] = []
+  for (const chunk of chunks) {
+    merged = mergeSubTableRowsByRowId(merged, chunk, primaryKeyFields ?? null)
+  }
+  return merged
 }
 
-type SubTableBindingAlignable = { tableId?: number | null; tableName: string; data: any[]; primaryKeyFields?: string[] }
+type SubTableBindingAlignable = {
+  bindingId?: number
+  tableId?: number | null
+  tableName: string
+  data: any[]
+  primaryKeyFields?: string[]
+  physicalTableName?: string
+}
 
 /**
  * Copied forms (e.g. subform_copy) get a new bindingId while runtime data still lives under the original key;
@@ -655,15 +703,8 @@ type SubTableBindingAlignable = { tableId?: number | null; tableName: string; da
  * `__subTables__` keys still match an earlier step. Union-find merges by equal numeric tableId OR equal normalized
  * display name, then a column-overlap pass fills bindings that still have no rows.
  */
-function alignProcessSubTableBindingsBySharedTable() {
-  const nodeBindings: SubTableBindingAlignable[] = Array.from(nodeFormMap.value.values()).flatMap(
-    info => info.subTableBindings as SubTableBindingAlignable[]
-  )
-  const all: SubTableBindingAlignable[] = [
-    ...(subTableBindings.value as SubTableBindingAlignable[]),
-    ...previousForms.value.flatMap(f => f.subTableBindings as SubTableBindingAlignable[]),
-    ...nodeBindings
-  ]
+/** Union-find merge of row snapshots across bindings that share tableId or display name. */
+function applyUnionFindMergeToBindingList(all: SubTableBindingAlignable[]) {
   if (all.length === 0) return
 
   const parent = all.map((_, i) => i)
@@ -718,6 +759,72 @@ function alignProcessSubTableBindingsBySharedTable() {
       b.data = snapshot
     }
   }
+}
+
+function backfillSubTableBindingsFromVariables(bindings: SubTableBindingAlignable[]) {
+  const savedMap = coerceSubTablesVariableToMap(formData.value.__subTables__)
+  if (!savedMap || bindings.length === 0) return
+  formData.value = { ...formData.value, __subTables__: savedMap }
+  const sliceArrays = collectSubTableSliceArraysDeep(savedMap)
+
+  for (const b of bindings) {
+    const fieldKeys = collectSubTableBindingMatchKeys(b as { columns?: Array<{ field?: string }>; formFields?: FormField[] })
+    if (fieldKeys.size === 0) continue
+
+    if (
+      Array.isArray(b.data) &&
+      b.data.length > 0 &&
+      !subTableRowsLackSavedFieldPayload(b.data, fieldKeys)
+    ) {
+      continue
+    }
+
+    let best: any[] | null = null
+    let bestScore = 0
+    for (const val of sliceArrays) {
+      if (!Array.isArray(val) || val.length === 0) continue
+      const row0 = val[0]
+      if (!row0 || typeof row0 !== 'object') continue
+      const row0KeysLower = new Set(Object.keys(row0 as object).map(k => k.toLowerCase()))
+      let score = 0
+      for (const k of fieldKeys) {
+        if (row0KeysLower.has(k.toLowerCase())) score++
+      }
+      const threshold =
+        fieldKeys.size <= 2 ? 1 : Math.min(fieldKeys.size, Math.max(2, Math.ceil(fieldKeys.size * 0.25)))
+      if (score >= threshold && score > bestScore) {
+        bestScore = score
+        best = val as any[]
+      }
+    }
+    if (best) {
+      b.data = best.map((r: any) => (r && typeof r === 'object' ? { ...r } : r))
+    }
+  }
+}
+
+/** Fast path: current form bindings only — enough for first paint on initiator My Request. */
+function alignMainSubTableBindingsOnly() {
+  const main = subTableBindings.value as SubTableBindingAlignable[]
+  if (main.length === 0) return
+  applyUnionFindMergeToBindingList(main)
+  enrichChildBindingRowsFromParentsNestedSubTables(subTableBindings.value)
+  resyncMiDashboardFieldsFromVariablesOnBindings(main)
+  backfillSubTableBindingsFromVariables(main)
+}
+
+function alignProcessSubTableBindingsBySharedTable() {
+  const nodeBindings: SubTableBindingAlignable[] = Array.from(nodeFormMap.value.values()).flatMap(
+    info => info.subTableBindings as SubTableBindingAlignable[]
+  )
+  const all: SubTableBindingAlignable[] = [
+    ...(subTableBindings.value as SubTableBindingAlignable[]),
+    ...previousForms.value.flatMap(f => f.subTableBindings as SubTableBindingAlignable[]),
+    ...nodeBindings
+  ]
+  if (all.length === 0) return
+
+  applyUnionFindMergeToBindingList(all)
 
   backfillEmptySubTableBindingsFromVariables()
   enrichChildBindingRowsFromParentsNestedSubTables([
@@ -725,6 +832,40 @@ function alignProcessSubTableBindingsBySharedTable() {
     ...previousForms.value.flatMap(f => f.subTableBindings),
     ...Array.from(nodeFormMap.value.values()).flatMap(n => n.subTableBindings)
   ])
+  resyncMiDashboardFieldsFromVariablesOnBindings(all)
+}
+
+/**
+ * After hydrate/enrich passes, re-merge each binding from {@code __subTables__} so MI columns match
+ * backend overlay (sub form2) — intermediate steps may have frozen stale task_current_node on row 0.
+ */
+function resyncMiDashboardFieldsFromVariablesOnBindings(all: SubTableBindingAlignable[]) {
+  const savedSubTables = formData.value.__subTables__
+  if (!savedSubTables || typeof savedSubTables !== 'object') return
+  const allSlicesMerged = mergeAllSubTableSlicesFromVariables(
+    savedSubTables as Record<string, unknown>,
+    undefined
+  )
+  for (const b of all) {
+    const pk = b.primaryKeyFields ?? null
+    const bindingSaved = getSavedSubTableRowsFromVariables(
+      savedSubTables as Record<string, any>,
+      {
+        bindingId: Number(b.bindingId ?? 0),
+        tableName: b.physicalTableName ?? b.tableName,
+        tableDisplayName: b.tableName
+      },
+      pk
+    )
+    const fromVariables = mergeSubTableRowsByRowId(
+      allSlicesMerged,
+      bindingSaved ?? [],
+      pk
+    )
+    if (fromVariables.length === 0 && !(Array.isArray(b.data) && b.data.length > 0)) continue
+    // Variables (backend MI overlay) win over binding rows polluted by enrich.
+    b.data = mergeSubTableRowsByRowId(Array.isArray(b.data) ? b.data : [], fromVariables, pk)
+  }
 }
 
 /**
@@ -954,7 +1095,60 @@ function hasTaskStatusData(rows: any[]): boolean {
   return rows.some(r => r && r.task_status !== undefined)
 }
 
-function openSubTaskDetailDialog(row: any) {
+/**
+ * MI / assignee sub-table rows: process-level {@link formData} may contain another participant's link-form
+ * fields (last writer). Never treat that as this row's Detail payload unless the row is terminal.
+ */
+function isMultiInstanceStyleSubTableRow(row: any): boolean {
+  if (!row || typeof row !== 'object') return false
+  if (row.task_status !== undefined && row.task_status !== null) return true
+  if (row.task_id != null && String(row.task_id).trim() !== '') return true
+  if (row.task_definition_key != null && String(row.task_definition_key).trim() !== '') return true
+  if (row.assignee_user_id != null && String(row.assignee_user_id).trim() !== '') return true
+  return false
+}
+
+/**
+ * Rows considered for MI / variable-merge decisions. Prefer the emitting sub-table's `data`
+ * so we do not mix unrelated bindings from {@link getMiRows}.
+ */
+function resolveSubTaskSiblingRows(siblingRowsOverride?: any[] | null): any[] {
+  if (Array.isArray(siblingRowsOverride)) return siblingRowsOverride
+  return getMiRows()
+}
+
+/**
+ * Merge process variables only when safe: terminal MI rows (legacy payload on variables), or non-MI rows.
+ * Open MI participants — including bare relation rows that only have `id` beside completed siblings — must not
+ * inherit another row's submission from {@link formData.value}.
+ */
+function shouldMergeProcessVariablesIntoSubTaskDetailRow(row: any, siblingRowsOverride?: any[] | null): boolean {
+  const ts = String(row.task_status ?? '').toUpperCase()
+  if (ts === 'COMPLETED' || ts === 'REJECTED') return true
+
+  const siblings = resolveSubTaskSiblingRows(siblingRowsOverride)
+  const processUsesPerRowTaskStatus = siblings.some(
+    (r: any) => r && r.task_status !== undefined && r.task_status !== null
+  )
+  if (processUsesPerRowTaskStatus) return false
+
+  // Same sub-table has 2+ rows: instance-level variables often hold the last submitter only (API may omit task_status).
+  if (siblings.length >= 2) return false
+
+  if (isMultiInstanceStyleSubTableRow(row)) return false
+
+  const hasMiSibling = siblings.some(
+    (r: any) => r && r !== row && isMultiInstanceStyleSubTableRow(r)
+  )
+  if (hasMiSibling && row && typeof row === 'object') {
+    const pk = row.id
+    if (pk != null && pk !== '') return false
+  }
+
+  return true
+}
+
+function openSubTaskDetailDialog(row: any, siblingRowsOverride?: any[] | null) {
   if (!subTaskFormSchema.value) return
   const schema = subTaskFormSchema.value
   const fields = extractFieldsRecursive(
@@ -964,11 +1158,14 @@ function openSubTaskDetailDialog(row: any) {
 
   const mergedData: Record<string, any> = { ...row }
   // Fallback: for MI form fields absent from the row, use process-level variables.
-  // This covers data saved before the row-level merge was introduced.
-  for (const f of fields) {
-    if (f.key && (mergedData[f.key] === undefined || mergedData[f.key] === null)) {
-      if (formData.value[f.key] !== undefined) {
-        mergedData[f.key] = formData.value[f.key]
+  // Legacy saves only; never for open MI rows — variables often mirror another participant's submission.
+  const allowVarFallback = shouldMergeProcessVariablesIntoSubTaskDetailRow(row, siblingRowsOverride)
+  if (allowVarFallback) {
+    for (const f of fields) {
+      if (f.key && (mergedData[f.key] === undefined || mergedData[f.key] === null)) {
+        if (formData.value[f.key] !== undefined) {
+          mergedData[f.key] = formData.value[f.key]
+        }
       }
     }
   }
@@ -1101,8 +1298,8 @@ const findNextNodeName = (taskName: string): string | null => {
 const getSubProcessUserTaskIds = (subProcessId: string): string[] => {
   if (!bpmnXml.value || !subProcessId) return []
   try {
-    const parser = new DOMParser()
-    const doc = parser.parseFromString(bpmnXml.value, 'text/xml')
+    const doc = getCachedBpmnDocument(bpmnXml.value)
+    if (!doc) return []
     const allElements = doc.getElementsByTagName('*')
     for (let i = 0; i < allElements.length; i++) {
       const el = allElements[i]
@@ -1129,6 +1326,336 @@ const getSubProcessUserTaskIds = (subProcessId: string): string[] => {
  * BPMN userTask / serviceTask / subProcess → bound form metadata for diagram clicks.
  * Aligns with tasks/detail.vue `nodeFormMap` (My Request is always read-only).
  */
+let pendingNodeFormMapContent: any | null = null
+let nodeFormMapBuildScheduled = false
+
+/** Diagram node preview map is expensive; build after first paint or on first node click. */
+function scheduleBuildApplicationNodeFormMap(content: any) {
+  pendingNodeFormMapContent = content
+  if (nodeFormMapBuildScheduled) return
+  nodeFormMapBuildScheduled = true
+  const run = () => {
+    nodeFormMapBuildScheduled = false
+    const payload = pendingNodeFormMapContent
+    pendingNodeFormMapContent = null
+    if (payload) buildApplicationNodeFormMap(payload)
+  }
+  if (typeof requestIdleCallback === 'function') {
+    requestIdleCallback(run, { timeout: 2500 })
+  } else {
+    setTimeout(run, 0)
+  }
+}
+
+function ensureApplicationNodeFormMapBuilt() {
+  if (nodeFormMap.value.size > 0) return
+  if (pendingNodeFormMapContent) {
+    const payload = pendingNodeFormMapContent
+    pendingNodeFormMapContent = null
+    nodeFormMapBuildScheduled = false
+    buildApplicationNodeFormMap(payload)
+  }
+}
+
+type ApplicationDetailSecondaryCtx = {
+  content: any
+  useInitiatorFormOnly: boolean
+  bpmnAllOrderedForms: Array<{ formId: string | null; formName: string | null; taskName: string | null }>
+  bindingRelationTableMap: Map<number, number | null>
+  selectedForm: any
+  lookupSourceId: number | null
+}
+
+let pendingApplicationDetailSecondary: ApplicationDetailSecondaryCtx | null = null
+let applicationDetailSecondaryScheduled = false
+
+async function loadApplicationDetailLookupConfigs(selectedForm: any) {
+  lookupDbConfigs.value = {}
+  if (selectedForm?.sourceId == null) return
+  try {
+    const lcRes = await relationTableApi.getLookupConfigs(Number(selectedForm.sourceId))
+    if (!lcRes?.data) return
+    for (const lc of lcRes.data) {
+      let sf: string[] = []
+      try {
+        sf =
+          typeof lc.searchFields === 'string'
+            ? JSON.parse(lc.searchFields || '[]')
+            : lc.searchFields || []
+      } catch {
+        sf = []
+      }
+      lookupDbConfigs.value[lc.componentId] = {
+        tableId: lc.tableId,
+        searchFields: sf,
+        displayField: lc.displayField || '',
+        viewFields: lc.viewFields || []
+      }
+    }
+  } catch (e: unknown) {
+    console.warn('[app] Failed to load lookup configs:', e)
+  }
+}
+
+async function runApplicationDetailSecondary(ctx: ApplicationDetailSecondaryCtx) {
+  const { content, useInitiatorFormOnly, bindingRelationTableMap, selectedForm } = ctx
+  let bpmnAllOrderedForms = ctx.bpmnAllOrderedForms
+  let miSubTaskFormSourceId: string | null = null
+
+  if (content.processes?.length > 0) {
+    const xml = content.processes[0].data as string
+    if (bpmnAllOrderedForms.length === 0) {
+      bpmnAllOrderedForms = parseBpmnXmlAndGetAllFormIds(xml)
+    }
+    miSubTaskFormSourceId = findMiSubTaskFormIdFromBpmn(xml)
+
+    subTaskFormSchema.value = null
+    subTaskFormId.value = null
+    if (content.forms?.length > 1) {
+      let detected = false
+      if (miSubTaskFormSourceId) {
+        const taskForm = content.forms.find((f: any) => String(f.sourceId) === miSubTaskFormSourceId)
+        if (taskForm) {
+          try {
+            const cfg = typeof taskForm.data === 'string' ? JSON.parse(taskForm.data) : (taskForm.data || {})
+            cfg._formName = taskForm.name
+            subTaskFormSchema.value = cfg
+            subTaskFormId.value = String(taskForm.id)
+            detected = true
+          } catch { /* ignore parse errors */ }
+        }
+      }
+      if (!detected) {
+        const taskForm = content.forms.find(
+          (f: any) => f.id !== selectedForm.id && f.name !== selectedForm.name
+        )
+        if (taskForm) {
+          try {
+            const cfg = typeof taskForm.data === 'string' ? JSON.parse(taskForm.data) : (taskForm.data || {})
+            cfg._formName = taskForm.name
+            subTaskFormSchema.value = cfg
+          } catch { /* ignore parse errors */ }
+        }
+      }
+    }
+
+    const normHistNameInit = (s: string | null | undefined) => (s || '').trim().replace(/\s+/g, ' ')
+    let initiatorSliceIndex: number | null = null
+    const prevFormIds = useInitiatorFormOnly
+      ? (() => {
+          const allOrdered =
+            bpmnAllOrderedForms.length > 0 ? bpmnAllOrderedForms : parseBpmnXmlAndGetAllFormIds(xml)
+          const curRaw = snapshotTaskName || processInfo.value.currentNode || ''
+          const curN = normHistNameInit(curRaw)
+          if (curRaw && String(curRaw).trim()) {
+            const idx = findInitiatorCurrentStepIndexInAllOrdered(xml, curRaw, allOrdered)
+            if (idx != null && idx >= 0) {
+              initiatorSliceIndex = idx
+              return allOrdered.slice(0, idx)
+            }
+          }
+          const completedKeys = new Set(
+            parseBpmnXmlAndGetPreviousFormIds(xml)
+              .map(i => i.formId || i.formName || i.taskName || '')
+              .filter(k => k.length > 0)
+          )
+          let ordered = allOrdered.filter(i =>
+            completedKeys.has(i.formId || i.formName || i.taskName || '')
+          )
+          const reachedHistoryNames = new Set(
+            historyRecords.value
+              .filter(h => h.status === 'completed' || h.status === 'current')
+              .map(h => normHistNameInit(h.nodeName))
+              .filter(n => n.length > 0)
+          )
+          if (reachedHistoryNames.size > 0) {
+            ordered = ordered.filter(info => {
+              const prevFormGuess = content.forms.find(
+                (f: any) =>
+                  (info.formId && String(f.sourceId) === info.formId) ||
+                  (info.formName && f.name === info.formName) ||
+                  (info.taskName && f.name === info.taskName)
+              )
+              const isMiTaskForm =
+                !!prevFormGuess &&
+                !!(
+                  (subTaskFormId.value && String(prevFormGuess.id) === subTaskFormId.value) ||
+                  (subTaskFormSchema.value && prevFormGuess.name === subTaskFormSchema.value._formName)
+                )
+              if (!isMiTaskForm) return true
+              const t = normHistNameInit(info.taskName)
+              if (!t.length) return true
+              return reachedHistoryNames.has(t)
+            })
+          }
+          return ordered
+        })()
+      : parseBpmnXmlAndGetPreviousFormIds(xml)
+
+    const collectedPrevForms: PreviousFormEntry[] = []
+    for (const info of prevFormIds) {
+      let prevForm: any = null
+      let skipReason: string | null = null
+      if (info.formId) {
+        if (info.formId === String(selectedForm.sourceId)) {
+          skipReason = 'sourceIdEqSelected'
+        } else prevForm = content.forms.find((f: any) => String(f.sourceId) === info.formId)
+      }
+      if (!skipReason && !prevForm && info.formName) {
+        if (info.formName === selectedForm.name) {
+          skipReason = 'formNameEqSelected'
+        } else prevForm = content.forms.find((f: any) => f.name === info.formName)
+      }
+      if (!skipReason && !prevForm && (info as { taskName?: string }).taskName) {
+        const tn = (info as { taskName?: string }).taskName
+        if (tn === selectedForm.name) {
+          skipReason = 'taskNameEqSelected'
+        } else prevForm = content.forms.find((f: any) => f.name === tn)
+      }
+      if (!skipReason && (!prevForm || prevForm.id === selectedForm.id)) {
+        skipReason = !prevForm ? 'noFormMatch' : 'idEqSelected'
+      }
+      if (!skipReason && collectedPrevForms.some(e => e.formId === String(prevForm.id))) {
+        skipReason = 'duplicate'
+      }
+      const isKnownMiSubTaskForm = !skipReason && !!(
+        (subTaskFormId.value && String(prevForm.id) === subTaskFormId.value) ||
+        (subTaskFormSchema.value && prevForm.name === subTaskFormSchema.value._formName)
+      )
+      if (!skipReason && isKnownMiSubTaskForm) {
+        const bindings = prevForm.tableBindings || []
+        if (!bindings.some((b: any) => b.bindingType !== 'PRIMARY')) {
+          skipReason = 'miSubTaskNoNonPrimaryBindings'
+        }
+      }
+      if (skipReason) continue
+
+      collectedPrevForms.push(
+        buildPreviousFormEntry(
+          prevForm,
+          { isKnownMiSubTask: !!isKnownMiSubTaskForm },
+          content.forms,
+          bindingRelationTableMap
+        )
+      )
+    }
+
+    if (
+      useInitiatorFormOnly &&
+      initiatorSliceIndex != null &&
+      processInfo.value.status === 'RUNNING' &&
+      (subTaskFormId.value || subTaskFormSchema.value)
+    ) {
+      const orderedFull =
+        bpmnAllOrderedForms.length > 0 ? bpmnAllOrderedForms : parseBpmnXmlAndGetAllFormIds(xml)
+      const atCur = orderedFull[initiatorSliceIndex]
+      if (atCur) {
+        let curForm = content.forms.find(
+          (f: any) =>
+            (atCur.formId && String(f.sourceId) === atCur.formId) ||
+            (atCur.formName && f.name === atCur.formName) ||
+            (atCur.taskName && f.name === atCur.taskName)
+        )
+        if (!curForm && atCur.formId && miSubTaskFormSourceId && String(atCur.formId) === String(miSubTaskFormSourceId)) {
+          if (subTaskFormId.value) {
+            curForm = content.forms.find((f: any) => String(f.id) === subTaskFormId.value)
+          }
+          if (!curForm && subTaskFormSchema.value?._formName) {
+            curForm = content.forms.find((f: any) => f.name === subTaskFormSchema.value._formName)
+          }
+        }
+        const matchesMiForm =
+          !!curForm &&
+          !!(
+            (subTaskFormId.value && String(curForm.id) === subTaskFormId.value) ||
+            (subTaskFormSchema.value && curForm.name === subTaskFormSchema.value._formName)
+          )
+        if (matchesMiForm && !collectedPrevForms.some(e => e.formId === String(curForm.id))) {
+          collectedPrevForms.push(
+            buildPreviousFormEntry(
+              curForm,
+              { isKnownMiSubTask: true, isActiveMiSubTaskStep: true },
+              content.forms,
+              bindingRelationTableMap
+            )
+          )
+        }
+      }
+    }
+
+    previousForms.value = collectedPrevForms
+  } else {
+    previousForms.value = []
+  }
+
+  alignProcessSubTableBindingsBySharedTable()
+  scheduleBuildApplicationNodeFormMap(content)
+  if (bpmnXml.value) {
+    scheduleParseApplicationBpmnDiagram(bpmnXml.value)
+  } else {
+    diagramReady.value = true
+  }
+
+  if (snapshotTaskName) {
+    const viewerId = getPortalUserId()
+    if (viewerId) {
+      const filterByAssignee = (bindings: typeof subTableBindings.value) => {
+        for (const binding of bindings) {
+          if (binding.data && binding.data.length > 0 && hasAssignmentData(binding.data)) {
+            const filtered = binding.data.filter(
+              (row: any) => row.assignee_user_id === viewerId && row.task_status === 'COMPLETED'
+            )
+            if (filtered.length > 0) {
+              binding.data = filtered
+            } else {
+              const byAssignee = binding.data.filter((row: any) => row.assignee_user_id === viewerId)
+              if (byAssignee.length > 0) {
+                binding.data = byAssignee
+              }
+            }
+          }
+        }
+      }
+      filterByAssignee(subTableBindings.value)
+      for (const prevForm of previousForms.value) {
+        filterByAssignee(prevForm.subTableBindings)
+      }
+      for (const nodeForm of nodeFormMap.value.values()) {
+        filterByAssignee(nodeForm.subTableBindings as typeof subTableBindings.value)
+      }
+    }
+    hydrateCurrentFormDataFromCompletedSubTaskRows()
+  }
+}
+
+function scheduleApplicationDetailSecondary(historyPromise: Promise<void>) {
+  const ctx = pendingApplicationDetailSecondary
+  if (!ctx) return
+  pendingApplicationDetailSecondary = null
+  if (applicationDetailSecondaryScheduled) return
+  applicationDetailSecondaryScheduled = true
+  const run = async () => {
+    applicationDetailSecondaryScheduled = false
+    try {
+      await historyPromise
+      if (ctx.lookupSourceId != null) {
+        await loadApplicationDetailLookupConfigs(ctx.selectedForm)
+      }
+      await runApplicationDetailSecondary(ctx)
+    } catch (e) {
+      console.error('[ApplicationDetail] secondary load failed:', e)
+    }
+  }
+  const kick = () => {
+    void run()
+  }
+  if (typeof requestIdleCallback === 'function') {
+    requestIdleCallback(kick, { timeout: 800 })
+  } else {
+    setTimeout(kick, 0)
+  }
+}
+
 function buildApplicationNodeFormMap(content: any) {
   const newMap = new Map<string, ApplicationDiagramNodeFormInfo>()
   const bpmnData = content.processes?.[0]?.data as string | undefined
@@ -1150,8 +1677,11 @@ function buildApplicationNodeFormMap(content: any) {
   const bindingRelationTableMap = buildBindingIdToRelationTableIdMap(formsList)
 
   try {
-    const parser = new DOMParser()
-    const doc = parser.parseFromString(bpmnData, 'text/xml')
+    const doc = getCachedBpmnDocument(bpmnData)
+    if (!doc) {
+      nodeFormMap.value = newMap
+      return
+    }
     const allElements = doc.getElementsByTagName('*')
     for (let i = 0; i < allElements.length; i++) {
       const el = allElements[i]!
@@ -1250,11 +1780,15 @@ function buildApplicationNodeFormMap(content: any) {
             primaryKeyFields: resolveSubTablePrimaryKeyFields(b.primaryKeyFields, b.bindingId, configForSubTables)
           }
           if (savedSubTables && typeof savedSubTables === 'object') {
-            const saved = getSavedSubTableRowsFromVariables(savedSubTables, {
-              bindingId: b.bindingId,
-              tableName: b.tableName,
-              tableDisplayName: b.tableDisplayName
-            })
+            const saved = getSavedSubTableRowsFromVariables(
+              savedSubTables,
+              {
+                bindingId: b.bindingId,
+                tableName: b.tableName,
+                tableDisplayName: b.tableDisplayName
+              },
+              binding.primaryKeyFields
+            )
             if (saved) binding.data = saved
           }
           nodeBindings.push(binding)
@@ -1262,11 +1796,15 @@ function buildApplicationNodeFormMap(content: any) {
         mergeLinkFormTargetBindingsInto(nodeBindings, formsList, configForSubTables, subForms)
         if (savedSubTables && typeof savedSubTables === 'object') {
           for (const binding of nodeBindings) {
-            const saved = getSavedSubTableRowsFromVariables(savedSubTables, {
-              bindingId: binding.bindingId,
-              tableName: (binding as { physicalTableName?: string }).physicalTableName,
-              tableDisplayName: binding.tableName
-            })
+            const saved = getSavedSubTableRowsFromVariables(
+              savedSubTables,
+              {
+                bindingId: binding.bindingId,
+                tableName: (binding as { physicalTableName?: string }).physicalTableName,
+                tableDisplayName: binding.tableName
+              },
+              binding.primaryKeyFields
+            )
             if (saved) binding.data = saved
           }
         }
@@ -1306,6 +1844,13 @@ function buildApplicationNodeFormMap(content: any) {
 // Load process details
 const loadProcessDetail = async () => {
   loading.value = true
+  diagramReady.value = false
+  diagramParseScheduled = false
+  clearBpmnParseCache()
+  pendingNodeFormMapContent = null
+  nodeFormMapBuildScheduled = false
+  pendingApplicationDetailSecondary = null
+  applicationDetailSecondaryScheduled = false
   try {
     const res = await processApi.getProcessDetail(processId)
     const data = res.data || res
@@ -1316,58 +1861,30 @@ const loadProcessDetail = async () => {
       if (stCoerced) {
         formData.value = { ...formData.value, __subTables__: stCoerced }
       }
-      
-      // Load flow history first
-      await loadProcessHistory()
-      
-      // Then load function unit content (including BPMN parsing)
-      if (data.processDefinitionKey) {
+
+      const processKey = data.processDefinitionKey
+      const historyPromise = loadProcessHistory()
+      const fuFetchPromise = processKey
+        ? processApi.getFunctionUnitContent(processKey).then(r => r.data || r).catch(err => {
+            console.error('Failed to fetch function unit content:', err)
+            return null
+          })
+        : Promise.resolve(null)
+
+      const prefetchedFu = await fuFetchPromise
+
+      if (processKey && prefetchedFu) {
         try {
-          await loadFunctionUnitContent(data.processDefinitionKey)
+          await loadFunctionUnitContent(processKey, prefetchedFu)
         } catch (error) {
           console.error('Failed to load function unit content, but continuing:', error)
         }
+        scheduleApplicationDetailSecondary(historyPromise)
+      } else {
+        await historyPromise
       }
 
-      // MI sub-task data isolation for completed task view:
-      // When a sub-task assignee views the process from Completed Tasks,
-      // filter sub-table rows to only show their COMPLETED row(s).
-      // This handles the case where the same person is assigned multiple sub-tasks:
-      // only the row whose task was actually completed is shown.
-      if (snapshotTaskName) {
-        const viewerId = getPortalUserId()
-        if (viewerId) {
-          const filterByAssignee = (bindings: typeof subTableBindings.value) => {
-            for (const binding of bindings) {
-              if (binding.data && binding.data.length > 0 && hasAssignmentData(binding.data)) {
-                const filtered = binding.data.filter(
-                  (row: any) => row.assignee_user_id === viewerId && row.task_status === 'COMPLETED'
-                )
-                if (filtered.length > 0) {
-                  binding.data = filtered
-                } else {
-                  const byAssignee = binding.data.filter(
-                    (row: any) => row.assignee_user_id === viewerId
-                  )
-                  if (byAssignee.length > 0) {
-                    binding.data = byAssignee
-                  }
-                }
-              }
-            }
-          }
-          filterByAssignee(subTableBindings.value)
-          for (const prevForm of previousForms.value) {
-            filterByAssignee(prevForm.subTableBindings)
-          }
-          for (const nodeForm of nodeFormMap.value.values()) {
-            filterByAssignee(nodeForm.subTableBindings as typeof subTableBindings.value)
-          }
-        }
-        hydrateCurrentFormDataFromCompletedSubTaskRows()
-      }
-
-      // Completed Tasks is a readonly snapshot of the completed task itself; do not advance the diagram to the next active node.
+      // Completed Tasks: do not advance the diagram to the next active node.
       if (snapshotTaskName) {
         currentNodeId.value = ''
       }
@@ -1377,14 +1894,18 @@ const loadProcessDetail = async () => {
     ElMessage.error(t('applicationDetail.loadFailed'))
   } finally {
     loading.value = false
+    if (!diagramReady.value && !diagramParseScheduled && !bpmnXml.value) {
+      diagramReady.value = true
+    }
   }
 }
 
-// Load function unit content
-const loadFunctionUnitContent = async (processKey: string) => {
+// Load function unit content (optional prefetched payload avoids duplicate HTTP when parallel with history)
+const loadFunctionUnitContent = async (processKey: string, prefetchedContent?: any) => {
   try {
-    const response = await processApi.getFunctionUnitContent(processKey)
-    const content = response.data || response
+    const content =
+      prefetchedContent ??
+      (await processApi.getFunctionUnitContent(processKey).then(r => r.data || r))
     if (content.error) {
       console.error('Function unit content error:', content.error)
       return
@@ -1413,7 +1934,6 @@ const loadFunctionUnitContent = async (processKey: string) => {
 
       currentFormInfo = parseBpmnXmlAndGetFormId(xml)
       bpmnXml.value = xml
-      parseBpmnXml(xml)
     }
     
     if (content.forms?.length > 0) {      // Select the correct form based on the current node formId
@@ -1444,23 +1964,12 @@ const loadFunctionUnitContent = async (processKey: string) => {
       
       currentFormName.value = selectedForm.name
 
-      // Load lookup configs from rt_lookup_configs before parsing form
-      lookupDbConfigs.value = {}
-      if (selectedForm.sourceId) {
-        try {
-          const lcRes = await relationTableApi.getLookupConfigs(Number(selectedForm.sourceId))
-          for (const lc of (lcRes.data || [])) {
-            let sf: string[] = []
-            try { sf = typeof lc.searchFields === 'string' ? JSON.parse(lc.searchFields || '[]') : (lc.searchFields || []) } catch { sf = [] }
-            lookupDbConfigs.value[lc.componentId] = { tableId: lc.tableId, searchFields: sf, displayField: lc.displayField || '', viewFields: lc.viewFields || [] }
-          }
-        } catch (e) { console.warn('[app] Failed to load lookup configs:', e) }
-      }
-
-      // Parse relationViews from configJson BEFORE parseFormConfig so lookup view fields are available
       let selectedFormConfig: Record<string, any> = {}
       try {
-        const cfg = typeof selectedForm.data === 'string' ? JSON.parse(selectedForm.data) : (selectedForm.data || {})
+        const cfg =
+          typeof selectedForm.data === 'string'
+            ? JSON.parse(selectedForm.data)
+            : (selectedForm.data || {})
         selectedFormConfig = cfg
         relationViewConfigs.value = cfg.relationViews || {}
       } catch {
@@ -1516,20 +2025,22 @@ const loadFunctionUnitContent = async (processKey: string) => {
       // Restore sub-table data from variables (promote nested link-form rows so bindings resolve like To Do).
       const rawSubTables = coerceSubTablesVariableToMap(formData.value.__subTables__)
       if (rawSubTables) {
+        flattenNestedSubTableRowsIntoPayload(rawSubTables as Record<string, unknown>)
         formData.value = { ...formData.value, __subTables__: rawSubTables }
-        const flattened = JSON.parse(JSON.stringify(rawSubTables)) as Record<string, unknown>
-        flattenNestedSubTableRowsIntoPayload(flattened)
-        formData.value = { ...formData.value, __subTables__: flattened }
       }
       const savedSubTables = formData.value.__subTables__
       if (savedSubTables && typeof savedSubTables === 'object') {
         for (const binding of bindings) {
           const raw = tableBindings.find((x: any) => Number(x.bindingId) === Number(binding.bindingId))
-          const saved = getSavedSubTableRowsFromVariables(savedSubTables, {
-            bindingId: binding.bindingId,
-            tableName: raw?.tableName ?? (binding as { physicalTableName?: string }).physicalTableName,
-            tableDisplayName: raw?.tableDisplayName ?? binding.tableName
-          })
+          const saved = getSavedSubTableRowsFromVariables(
+            savedSubTables,
+            {
+              bindingId: binding.bindingId,
+              tableName: raw?.tableName ?? (binding as { physicalTableName?: string }).physicalTableName,
+              tableDisplayName: raw?.tableDisplayName ?? binding.tableName
+            },
+            binding.primaryKeyFields
+          )
           if (saved) binding.data = saved
         }
         hydrateChildSubTablesFromParentsNestedRows(
@@ -1545,196 +2056,19 @@ const loadFunctionUnitContent = async (processKey: string) => {
         enrichChildBindingRowsFromParentsNestedSubTables(bindings)
       }
       subTableBindings.value = bindings
+      alignMainSubTableBindingsOnly()
 
-      // Detect multi-instance subtask form.
-      // Primary: use BPMN (userTask with multiInstanceLoopCharacteristics) for accurate identification.
-      // Fallback: pick the form different from selectedForm (for Detail dialog only, not for filtering).
-      subTaskFormSchema.value = null
-      subTaskFormId.value = null
-      if (content.forms?.length > 1) {
-        let detected = false
-        if (content.processes?.length > 0) {
-          const miFormSourceId = findMiSubTaskFormIdFromBpmn(content.processes[0].data)
-          if (miFormSourceId) {
-            const taskForm = content.forms.find((f: any) => String(f.sourceId) === miFormSourceId)
-            if (taskForm) {
-              try {
-                const cfg = typeof taskForm.data === 'string' ? JSON.parse(taskForm.data) : (taskForm.data || {})
-                cfg._formName = taskForm.name
-                subTaskFormSchema.value = cfg
-                subTaskFormId.value = String(taskForm.id)
-                detected = true
-              } catch { /* ignore parse errors */ }
-            }
-          }
-        }
-        if (!detected) {
-          const taskForm = content.forms.find((f: any) =>
-            f.id !== selectedForm.id && f.name !== selectedForm.name
-          )
-          if (taskForm) {
-            try {
-              const cfg = typeof taskForm.data === 'string' ? JSON.parse(taskForm.data) : (taskForm.data || {})
-              cfg._formName = taskForm.name
-              subTaskFormSchema.value = cfg
-              // Do NOT set subTaskFormId here — the fallback detection can pick the
-              // wrong form (e.g. main form when selectedForm is already the subtask form),
-              // so we only use this for the Detail dialog, never for filtering previousForms.
-            } catch { /* ignore parse errors */ }
-          }
-        }
+      pendingApplicationDetailSecondary = {
+        content,
+        useInitiatorFormOnly,
+        bpmnAllOrderedForms: [],
+        bindingRelationTableMap,
+        selectedForm,
+        lookupSourceId:
+          selectedForm.sourceId != null ? Number(selectedForm.sourceId) : null
       }
-
-      // Collect additional node forms (read-only display).
-      // Initiator My Request: preserve global BFS order but only forms before currentNode in BPMN; for
-      // multi-instance sub-task forms (e.g. subform_copy), also require a completed flow-history row
-      // so a wrong currentNode fallback cannot surface future steps early.
-      // Non-initiator: list previous forms from BPMN vs current node only.
-      if (content.processes?.length > 0) {
-        const xml = content.processes[0].data
-        let initiatorSliceIndex: number | null = null
-        const normHistNameInit = (s: string | null | undefined) =>
-          (s || '').trim().replace(/\s+/g, ' ')
-        const prevFormIds = useInitiatorFormOnly
-          ? (() => {
-              const allOrdered = parseBpmnXmlAndGetAllFormIds(xml)
-              const curRaw = snapshotTaskName || processInfo.value.currentNode || ''
-              const curN = normHistNameInit(curRaw)
-              // Prefer deep BFS index so subprocess userTasks (e.g. subform_copy) are not lost:
-              // shallow parseBpmnXmlAndGetPreviousFormIds never enters MI subprocess, so completedKeys
-              // used to filter them all out.
-              if (curRaw && String(curRaw).trim()) {
-                const idx = findInitiatorCurrentStepIndexInAllOrdered(xml, curRaw, allOrdered)
-                if (idx != null && idx >= 0) {
-                  initiatorSliceIndex = idx
-                  return allOrdered.slice(0, idx)
-                }
-              }
-              const completedKeys = new Set(
-                parseBpmnXmlAndGetPreviousFormIds(xml)
-                  .map(i => i.formId || i.formName || i.taskName || '')
-                  .filter(k => k.length > 0)
-              )
-              let ordered = allOrdered.filter(i =>
-                completedKeys.has(i.formId || i.formName || i.taskName || '')
-              )
-              // Shallow-BPMN fallback only: guard MI forms with flow history so a wrong currentNode
-              // cannot surface future steps early.
-              const reachedHistoryNames = new Set(
-                historyRecords.value
-                  .filter(h => h.status === 'completed' || h.status === 'current')
-                  .map(h => normHistNameInit(h.nodeName))
-                  .filter(n => n.length > 0)
-              )
-              if (reachedHistoryNames.size > 0) {
-                ordered = ordered.filter((info) => {
-                  const prevFormGuess = content.forms.find((f: any) =>
-                    (info.formId && String(f.sourceId) === info.formId) ||
-                    (info.formName && f.name === info.formName) ||
-                    (info.taskName && f.name === info.taskName)
-                  )
-                  const isMiTaskForm =
-                    !!prevFormGuess &&
-                    !!(
-                      (subTaskFormId.value && String(prevFormGuess.id) === subTaskFormId.value) ||
-                      (subTaskFormSchema.value && prevFormGuess.name === subTaskFormSchema.value._formName)
-                    )
-                  if (!isMiTaskForm) return true
-                  const t = normHistNameInit(info.taskName)
-                  if (!t.length) return true
-                  return reachedHistoryNames.has(t)
-                })
-              }
-              return ordered
-            })()
-          : parseBpmnXmlAndGetPreviousFormIds(xml)
-        const collectedPrevForms: PreviousFormEntry[] = []
-
-        for (const info of prevFormIds) {
-          let prevForm: any = null
-          let skipReason: string | null = null
-          if (info.formId) {
-            if (info.formId === String(selectedForm.sourceId)) { skipReason = 'sourceIdEqSelected'; }
-            else prevForm = content.forms.find((f: any) => String(f.sourceId) === info.formId)
-          }
-          if (!skipReason && !prevForm && info.formName) {
-            if (info.formName === selectedForm.name) { skipReason = 'formNameEqSelected'; }
-            else prevForm = content.forms.find((f: any) => f.name === info.formName)
-          }
-          if (!skipReason && !prevForm && (info as any).taskName) {
-            if ((info as any).taskName === selectedForm.name) { skipReason = 'taskNameEqSelected'; }
-            else prevForm = content.forms.find((f: any) => f.name === (info as any).taskName)
-          }
-          if (!skipReason && (!prevForm || prevForm.id === selectedForm.id)) skipReason = !prevForm ? 'noFormMatch' : 'idEqSelected'
-          if (!skipReason && collectedPrevForms.some(e => e.formId === String(prevForm.id))) skipReason = 'duplicate'
-          // Skip the subtask form — its content is shown via the Detail button
-          // in the participants sub-table. But never skip a form that has sub-table
-          // bindings (it carries the participants table needed for display).
-          const isKnownMiSubTaskForm = !skipReason && !!(
-            (subTaskFormId.value && String(prevForm.id) === subTaskFormId.value) ||
-            (subTaskFormSchema.value && prevForm.name === subTaskFormSchema.value._formName)
-          )
-          if (!skipReason && isKnownMiSubTaskForm) {
-            const bindings = prevForm.tableBindings || []
-            if (!bindings.some((b: any) => b.bindingType !== 'PRIMARY')) {
-              skipReason = 'miSubTaskNoNonPrimaryBindings'
-            }
-          }
-          if (skipReason) continue
-
-          collectedPrevForms.push(
-            buildPreviousFormEntry(prevForm, { isKnownMiSubTask: !!isKnownMiSubTaskForm }, content.forms)
-          )
-        }
-
-        if (
-          useInitiatorFormOnly &&
-          initiatorSliceIndex != null &&
-          processInfo.value.status === 'RUNNING' &&
-          (subTaskFormId.value || subTaskFormSchema.value)
-        ) {
-          const orderedFull = parseBpmnXmlAndGetAllFormIds(xml)
-          const atCur = orderedFull[initiatorSliceIndex]
-          if (atCur) {
-            let curForm = content.forms.find(
-              (f: any) =>
-                (atCur.formId && String(f.sourceId) === atCur.formId) ||
-                (atCur.formName && f.name === atCur.formName) ||
-                (atCur.taskName && f.name === atCur.taskName)
-            )
-            if (!curForm && atCur.formId && content.processes?.[0]?.data) {
-              const miSid = findMiSubTaskFormIdFromBpmn(content.processes[0].data)
-              if (miSid && String(atCur.formId) === String(miSid)) {
-                if (subTaskFormId.value) {
-                  curForm = content.forms.find((f: any) => String(f.id) === subTaskFormId.value)
-                }
-                if (!curForm && subTaskFormSchema.value?._formName) {
-                  curForm = content.forms.find((f: any) => f.name === subTaskFormSchema.value._formName)
-                }
-              }
-            }
-            const matchesMiForm =
-              !!curForm &&
-              !!(
-                (subTaskFormId.value && String(curForm.id) === subTaskFormId.value) ||
-                (subTaskFormSchema.value && curForm.name === subTaskFormSchema.value._formName)
-              )
-            if (matchesMiForm && !collectedPrevForms.some(e => e.formId === String(curForm.id))) {
-              collectedPrevForms.push(
-                buildPreviousFormEntry(curForm, { isKnownMiSubTask: true, isActiveMiSubTaskStep: true }, content.forms)
-              )
-            }
-          }
-        }
-
-        previousForms.value = collectedPrevForms
-      } else {
-        previousForms.value = []
-      }
-
-      buildApplicationNodeFormMap(content)
-      alignProcessSubTableBindingsBySharedTable()
     } else {
+      diagramReady.value = true
       previousForms.value = []
       subTableBindings.value = []
       nodeFormMap.value = new Map()
@@ -1750,8 +2084,8 @@ const parseBpmnXmlAndGetFormId = (xml: string): { formId: string | null, formNam
   if (!xml) return { formId: null, formName: null }
   
   try {
-    const parser = new DOMParser()
-    const doc = parser.parseFromString(xml, 'text/xml')
+    const doc = getCachedBpmnDocument(xml)
+    if (!doc) return { formId: null, formName: null }
     // Snapshot mode (from Completed Tasks): use snapshotTaskName; otherwise use currentNode
     const currentNodeName = snapshotActivityId.value || snapshotTaskDefinitionKey || snapshotTaskName || processInfo.value.currentNode || ''
     
@@ -1814,8 +2148,8 @@ const parseBpmnXmlAndGetFormId = (xml: string): { formId: string | null, formNam
 const parseBpmnXmlAndGetPreviousFormIds = (xml: string): Array<{ formId: string | null, formName: string | null, taskName: string | null }> => {
   if (!xml) return []
   try {
-    const parser = new DOMParser()
-    const doc = parser.parseFromString(xml, 'text/xml')
+    const doc = getCachedBpmnDocument(xml)
+    if (!doc) return []
     const allElements = doc.getElementsByTagName('*')
     const currentNodeName = snapshotTaskName || processInfo.value.currentNode || ''
 
@@ -1918,8 +2252,8 @@ const parseBpmnXmlAndGetPreviousFormIds = (xml: string): Array<{ formId: string 
 const parseBpmnXmlAndGetAllFormIds = (xml: string): Array<{ formId: string | null, formName: string | null, taskName: string | null }> => {
   if (!xml) return []
   try {
-    const parser = new DOMParser()
-    const doc = parser.parseFromString(xml, 'text/xml')
+    const doc = getCachedBpmnDocument(xml)
+    if (!doc) return []
     const allElements = doc.getElementsByTagName('*')
 
     type FlowNode = { id: string; localName: string; el: Element; parentSubProc: string | null }
@@ -2075,8 +2409,8 @@ function findInitiatorCurrentStepIndexInAllOrdered(
   if (idx >= 0) return idx
 
   try {
-    const parser = new DOMParser()
-    const doc = parser.parseFromString(xml, 'text/xml')
+    const doc = getCachedBpmnDocument(xml)
+    if (!doc) return null
     const allElements = doc.getElementsByTagName('*')
     for (let i = 0; i < allElements.length; i++) {
       const el = allElements[i]
@@ -2117,8 +2451,8 @@ function findInitiatorCurrentStepIndexInAllOrdered(
 const findMiSubTaskFormIdFromBpmn = (xml: string): string | null => {
   if (!xml) return null
   try {
-    const parser = new DOMParser()
-    const doc = parser.parseFromString(xml, 'text/xml')
+    const doc = getCachedBpmnDocument(xml)
+    if (!doc) return null
     const allElements = doc.getElementsByTagName('*')
 
     for (let i = 0; i < allElements.length; i++) {
@@ -2184,8 +2518,8 @@ const findMiSubTaskFormIdFromBpmn = (xml: string): string | null => {
 const parseBpmnXml = (xml: string) => {
   if (!xml) return
   try {
-    const parser = new DOMParser()
-    const doc = parser.parseFromString(xml, 'text/xml')
+    const doc = getCachedBpmnDocument(xml)
+    if (!doc) return
     const nodes: ProcessNode[] = []
     const flows: ProcessFlow[] = []
     const completed: string[] = []
@@ -2765,8 +3099,8 @@ const parseBpmnXml = (xml: string) => {
       const gwHasCompletedPred = gwIncomingIds.some(srcId => completed.includes(srcId))
 
       if (parentSpId && activeMultiInstanceSubProcesses.has(parentSpId)) {
-        // MI: prefer executed path (green), same as todo — only orange when token is still before any completed predecessor on this diagram
-        status = gwHasCompletedPred ? 'completed' : 'current'
+        // MI: match `useBpmnParser` — gateways are never "current" (orange); gray until an incoming node is completed, then green.
+        status = gwHasCompletedPred ? 'completed' : 'pending'
       } else if (snapshotActive) {
         // Snapshot mode: check if the gateway incoming nodes are completed
         if (completedNodeNames.has(name)) {
@@ -3479,33 +3813,13 @@ function mergeLinkFormTargetBindingsInto(
 function buildPreviousFormEntry(
   prevForm: any,
   options: { isKnownMiSubTask: boolean; isActiveMiSubTaskStep?: boolean },
-  allContentForms?: any[]
+  allContentForms?: any[],
+  bindingRelationTableMap?: Map<number, number | null>,
 ): PreviousFormEntry {
   const savedSubTables = formData.value.__subTables__
+  // My Request only consumes previousForms[*].subTableBindings (align / link-form); skip rule walks.
   const parsedFields: FormField[] = []
   const parsedTabs: FormTab[] = []
-  try {
-    const cfg = typeof prevForm.data === 'string' ? JSON.parse(prevForm.data) : (prevForm.data || {})
-    const rules = cfg.rule && Array.isArray(cfg.rule) ? cfg.rule : (Array.isArray(cfg) ? cfg : null)
-    if (rules) {
-      const tabsRule = rules.find((r: any) => r.type === 'el-tabs')
-      if (tabsRule?.children) {
-        for (const tabPane of tabsRule.children) {
-          if (tabPane.type === 'el-tab-pane' && tabPane.props) {
-            const tabFields: FormField[] = []
-            if (tabPane.children) tabFields.push(...extractFieldsRecursive(tabPane.children))
-            parsedTabs.push({
-              name: tabPane.props.name || `tab_${parsedTabs.length}`,
-              label: tabPane.props.label || `Tab ${parsedTabs.length + 1}`,
-              fields: tabFields
-            })
-          }
-        }
-      } else {
-        parsedFields.push(...extractFieldsRecursive(rules))
-      }
-    }
-  } catch { /* ignore */ }
 
   let prevFormConfig: Record<string, any> = {}
   try {
@@ -3546,11 +3860,15 @@ function buildPreviousFormEntry(
       )
     }
     if (savedSubTables) {
-      const saved = getSavedSubTableRowsFromVariables(savedSubTables, {
-        bindingId: b.bindingId,
-        tableName: b.tableName,
-        tableDisplayName: b.tableDisplayName
-      })
+      const saved = getSavedSubTableRowsFromVariables(
+        savedSubTables,
+        {
+          bindingId: b.bindingId,
+          tableName: b.tableName,
+          tableDisplayName: b.tableDisplayName
+        },
+        binding.primaryKeyFields
+      )
       if (Array.isArray(saved)) binding.data = saved
     }
     prevBindings.push(binding)
@@ -3562,14 +3880,19 @@ function buildPreviousFormEntry(
   if (savedSubTables && typeof savedSubTables === 'object') {
     for (const binding of prevBindings) {
       const raw = (prevForm.tableBindings || []).find((x: any) => Number(x.bindingId) === Number(binding.bindingId))
-      const saved = getSavedSubTableRowsFromVariables(savedSubTables, {
-        bindingId: binding.bindingId,
-        tableName: raw?.tableName ?? (binding as { physicalTableName?: string }).physicalTableName,
-        tableDisplayName: raw?.tableDisplayName ?? binding.tableName
-      })
+      const saved = getSavedSubTableRowsFromVariables(
+        savedSubTables,
+        {
+          bindingId: binding.bindingId,
+          tableName: raw?.tableName ?? (binding as { physicalTableName?: string }).physicalTableName,
+          tableDisplayName: raw?.tableDisplayName ?? binding.tableName
+        },
+        binding.primaryKeyFields
+      )
       if (saved) binding.data = saved
     }
-    const rtMap = buildBindingIdToRelationTableIdMap(allContentForms || [])
+    const rtMap =
+      bindingRelationTableMap ?? buildBindingIdToRelationTableIdMap(allContentForms || [])
     hydrateChildSubTablesFromParentsNestedRows(prevBindings as any, savedSubTables as Record<string, unknown>, rtMap)
     hydrateBindingsRowsFromVariablesBySharedRelationTableId(
       prevBindings as any,

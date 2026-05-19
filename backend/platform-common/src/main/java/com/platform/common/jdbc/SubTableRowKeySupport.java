@@ -1,11 +1,9 @@
 package com.platform.common.jdbc;
 
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -16,6 +14,76 @@ public final class SubTableRowKeySupport {
     private static final char UNIT_SEP = '\u001f';
 
     private SubTableRowKeySupport() {
+    }
+
+    /** @return parsed long or null if not a finite whole number */
+    private static Long tryWholeNumber(Object raw) {
+        if (raw == null) {
+            return null;
+        }
+        if (raw instanceof Number n) {
+            double d = n.doubleValue();
+            if (Double.isNaN(d) || Double.isInfinite(d)) {
+                return null;
+            }
+            return n.longValue();
+        }
+        try {
+            String s = String.valueOf(raw).trim();
+            if (s.isEmpty()) {
+                return null;
+            }
+            return Long.parseLong(s);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private static Object firstNonNull(Object... xs) {
+        if (xs == null) {
+            return null;
+        }
+        for (Object x : xs) {
+            if (x != null) {
+                return x;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * When {@code id}/{@code id_idw} holds a designer placeholder (non-numeric) but DW surrogate / {@code rowId} carries the
+     * bigint PK, substitute so MI overlay keys ({@code id=8778}) and fuzzy PK parsing succeed.
+     */
+    private static void substituteNumericPkIfPlaceholder(
+            Map<String, Object> rowKey, Map<String, Object> row, Map<String, Object> nestedNorm, List<String> pkCols) {
+        if (rowKey == null || pkCols.size() != 1) {
+            return;
+        }
+        String c = pkCols.get(0);
+        Object cur = rowKey.get(c);
+        if (tryWholeNumber(cur) != null) {
+            return;
+        }
+        Object alt = null;
+        if ("id".equalsIgnoreCase(c)) {
+            alt = firstNonNull(
+                    getRowValueIgnoreCase(row, "id_idw"),
+                    nestedNorm != null ? getRowValueIgnoreCase(nestedNorm, "id_idw") : null,
+                    nestedNorm != null ? getRowValueIgnoreCase(nestedNorm, "id") : null,
+                    getRowValueIgnoreCase(row, "rowId"),
+                    nestedNorm != null ? getRowValueIgnoreCase(nestedNorm, "rowId") : null);
+        } else if ("id_idw".equalsIgnoreCase(c)) {
+            alt = firstNonNull(
+                    getRowValueIgnoreCase(row, "id"),
+                    nestedNorm != null ? getRowValueIgnoreCase(nestedNorm, "id") : null,
+                    nestedNorm != null ? getRowValueIgnoreCase(nestedNorm, "id_idw") : null,
+                    getRowValueIgnoreCase(row, "rowId"),
+                    nestedNorm != null ? getRowValueIgnoreCase(nestedNorm, "rowId") : null);
+        }
+        if (tryWholeNumber(alt) != null) {
+            rowKey.put(c, alt);
+        }
     }
 
     /** Resolve {@code key} on row map with exact match, then case-insensitive key match (form vs PG lowercased column). */
@@ -182,18 +250,52 @@ public final class SubTableRowKeySupport {
             Map<String, Object> normalized = normalizeStringKeyMap(m);
             Map<String, Object> out = new LinkedHashMap<>();
             for (String c : pkCols) {
-                Object val = getRowValueIgnoreCase(normalized, c);
-                if (val == null && pkCols.size() == 1 && "id".equalsIgnoreCase(c)) {
-                    val = getRowValueIgnoreCase(normalized, "id_idw");
+                Object nestedVal = getRowValueIgnoreCase(normalized, c);
+                if (nestedVal == null && pkCols.size() == 1 && "id".equalsIgnoreCase(c)) {
+                    nestedVal = getRowValueIgnoreCase(normalized, "id_idw");
                 }
-                if (val == null && pkCols.size() == 1 && "id_idw".equalsIgnoreCase(c)) {
-                    val = getRowValueIgnoreCase(normalized, "id");
+                if (nestedVal == null && pkCols.size() == 1 && "id_idw".equalsIgnoreCase(c)) {
+                    nestedVal = getRowValueIgnoreCase(normalized, "id");
                 }
+
+                Object envelopeVal = getRowValueIgnoreCase(row, c);
+                if (envelopeVal == null && pkCols.size() == 1 && "id".equalsIgnoreCase(c)) {
+                    envelopeVal = getRowValueIgnoreCase(row, "id_idw");
+                }
+                if (envelopeVal == null && pkCols.size() == 1 && "id_idw".equalsIgnoreCase(c)) {
+                    envelopeVal = getRowValueIgnoreCase(row, "id");
+                }
+                if (envelopeVal == null && pkCols.size() == 1) {
+                    envelopeVal = getRowValueIgnoreCase(row, "rowId");
+                }
+
+                /*
+                 * Prefer envelope PK when it parses as a whole number — matches frontend mergeSubTableRowsByRowId /
+                 * rowValueForPkFieldSingle (top-level row before nested rowKey). Copied MI rows (subform_copy) often
+                 * retain a stale numeric id inside nested rowKey while the authoritative persisted id sits on the row.
+                 */
+                Object val;
+                if (pkCols.size() == 1
+                        && ("id".equalsIgnoreCase(c) || "id_idw".equalsIgnoreCase(c))) {
+                    Long nestedNum = tryWholeNumber(nestedVal);
+                    Long envNum = tryWholeNumber(envelopeVal);
+                    if (envNum != null) {
+                        val = envelopeVal;
+                    } else if (nestedNum != null) {
+                        val = nestedVal;
+                    } else {
+                        val = nestedVal != null ? nestedVal : envelopeVal;
+                    }
+                } else {
+                    val = nestedVal != null ? nestedVal : envelopeVal;
+                }
+
                 if (val == null) {
                     return null;
                 }
                 out.put(c, val);
             }
+            substituteNumericPkIfPlaceholder(out, row, normalized, pkCols);
             return out;
         }
         Map<String, Object> out = new LinkedHashMap<>();
@@ -215,6 +317,7 @@ public final class SubTableRowKeySupport {
             }
             out.put(col, v);
         }
+        substituteNumericPkIfPlaceholder(out, row, null, pkCols);
         return out;
     }
 

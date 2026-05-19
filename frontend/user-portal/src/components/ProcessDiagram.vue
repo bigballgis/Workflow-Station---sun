@@ -161,7 +161,11 @@ const applyStatusColors = () => {
     if (node.status === 'rejected') {
       fill = '#ffebee'
       stroke = '#f44336'
-    } else if (showCurrentStep.value && (node.id === props.currentNodeId || node.status === 'current')) {
+    } else if (
+      showCurrentStep.value
+      && node.type !== 'gateway'
+      && (node.id === props.currentNodeId || node.status === 'current')
+    ) {
       fill = '#fff3e0'
       stroke = '#FF6600'
     } else if (props.completedNodeIds.includes(node.id) || node.status === 'completed') {

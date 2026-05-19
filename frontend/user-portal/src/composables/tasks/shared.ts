@@ -256,7 +256,84 @@ function mergeMiCurrentNodeInFlight(prevNode: unknown, nextNode: unknown): strin
   if (!p && !n) return undefined
   if (!p) return n
   if (!n) return p
+  if (p === n) return p
+  const oP = miSubFormOrdinalHint(p)
+  const oN = miSubFormOrdinalHint(n)
+  if (oP !== null && oN !== null) {
+    return oN >= oP ? n : p
+  }
   return n
+}
+
+/**
+ * When consolidating two payloads for the same PK row (e.g. multiple subTable bindings merged in My Requests),
+ * prefer the incumbent node if the competitor slice carries fewer MI snapshot signals — otherwise a stale slice
+ * merged second overwrites the correct overlay (e.g. sub form2 reverting to sub form1).
+ */
+function mergeMiCurrentNodePreferPrevious(prevNode: unknown, nextNode: unknown): string | undefined {
+  const p = String(prevNode ?? '').trim()
+  const n = String(nextNode ?? '').trim()
+  if (!p && !n) return undefined
+  if (!p) return n
+  if (!n) return p
+  return p
+}
+
+/** Heuristic richness: which snapshot likely came from fuller portal/backend MI hydration vs a thin duplicate binding. */
+function miDashboardSliceRichness(rec: Record<string, unknown>): number {
+  let s = 0
+  const au = rec['assignee_user_id']
+  if (au !== undefined && au !== null && String(au).trim() !== '') s += 4
+  const ad = rec['assignee_display_name']
+  if (ad !== undefined && ad !== null && String(ad).trim() !== '') s += 3
+  const tk = rec['task_definition_key'] ?? rec['taskDefinitionKey']
+  if (tk !== undefined && tk !== null && String(tk).trim() !== '') s += 2
+  const ti = rec['task_id'] ?? rec['taskId']
+  if (ti !== undefined && ti !== null && String(ti).trim() !== '') s += 2
+  const st = rec['task_status']
+  if (st !== undefined && st !== null && String(st).trim() !== '') s += 1
+  const node = rec['task_current_node']
+  if (node !== undefined && node !== null && String(node).trim() !== '') s += 1
+  return s
+}
+
+/** Count non-empty non-meta fields as a coarse tie-breaker when MI slice richness ties. */
+function roughNonEmptyFieldCount(rec: Record<string, unknown>): number {
+  let c = 0
+  for (const [key, val] of Object.entries(rec)) {
+    if (key.startsWith('__')) continue
+    if (val === undefined || val === null) continue
+    if (typeof val === 'string' && val.trim() === '') continue
+    c++
+    if (c > 999) break
+  }
+  return c
+}
+
+/** True when incoming has strictly fewer NON-MI meta keys and every incoming key exists on prior (duplicate binding slim row). */
+function incomingIsStrictNonMiKeySubset(
+  prior: Record<string, unknown>,
+  incoming: Record<string, unknown>,
+): boolean {
+  const meta = (k: string) =>
+    k.startsWith('__') || k === 'task_status' || k === 'task_current_node'
+  const prevKeys = [...Object.keys(prior)].filter(k => !meta(k))
+  const incKeys = [...Object.keys(incoming)].filter(k => !meta(k))
+  if (incKeys.length === 0 || incKeys.length >= prevKeys.length) {
+    return false
+  }
+  const prevSet = new Set(prevKeys)
+  return incKeys.every(k => prevSet.has(k))
+}
+
+/** e.g. "sub form2" → 2; unrelated labels → null */
+function miSubFormOrdinalHint(raw: unknown): number | null {
+  const m = /\bsub\s*form\s*(\d+)\b/i.exec(String(raw ?? '').trim())
+  if (!m) {
+    return null
+  }
+  const n = Number.parseInt(m[1], 10)
+  return Number.isFinite(n) ? n : null
 }
 
 /**
@@ -355,9 +432,30 @@ export function mergeSubTableRowsByRowId(
     }
     const statusStr = String(out[MI_STATUS_KEY] ?? '').trim()
     const terminal = miTaskStatusIsTerminal(statusStr)
-    const mergedNode = terminal
-      ? mergeMiCurrentNodeForTerminal(out[MI_NODE_KEY], incoming[MI_NODE_KEY])
-      : mergeMiCurrentNodeInFlight(out[MI_NODE_KEY], incoming[MI_NODE_KEY])
+    const rp = miDashboardSliceRichness(previous) * 512 + roughNonEmptyFieldCount(previous)
+    const ri = miDashboardSliceRichness(incoming) * 512 + roughNonEmptyFieldCount(incoming)
+    let mergedNode: string | undefined
+    if (terminal) {
+      mergedNode = mergeMiCurrentNodeForTerminal(out[MI_NODE_KEY], incoming[MI_NODE_KEY])
+    } else {
+      const oAccum = miSubFormOrdinalHint(out[MI_NODE_KEY])
+      const oIncoming = miSubFormOrdinalHint(incoming[MI_NODE_KEY])
+      // Furthest BPMN sub form step wins over slice richness (thin id row vs fat id_idw-only stale row).
+      if (oAccum !== null && oIncoming !== null && oIncoming !== oAccum) {
+        mergedNode =
+          oIncoming > oAccum
+            ? String(incoming[MI_NODE_KEY] ?? '').trim()
+            : String(out[MI_NODE_KEY] ?? '').trim()
+      } else if (ri > rp) {
+        mergedNode = mergeMiCurrentNodeInFlight(out[MI_NODE_KEY], incoming[MI_NODE_KEY])
+      } else if (rp > ri) {
+        mergedNode = mergeMiCurrentNodePreferPrevious(out[MI_NODE_KEY], incoming[MI_NODE_KEY])
+      } else if (incomingIsStrictNonMiKeySubset(previous, incoming)) {
+        mergedNode = mergeMiCurrentNodePreferPrevious(out[MI_NODE_KEY], incoming[MI_NODE_KEY])
+      } else {
+        mergedNode = mergeMiCurrentNodeInFlight(out[MI_NODE_KEY], incoming[MI_NODE_KEY])
+      }
+    }
     if (mergedNode !== undefined) {
       out[MI_NODE_KEY] = mergedNode
     }
@@ -401,6 +499,26 @@ export function mergeSubTableRowsByRowId(
   for (const r of existing || []) add(r)
   for (const r of incoming || []) add(r)
   return Array.from(byId.values())
+}
+
+/**
+ * Merge every array value under {@code variables.__subTables__} (all binding-id / label keys).
+ * Backend MI overlay may live only under a sibling slice (e.g. original binding id) while the UI
+ * binding for a copied form (subform_copy) reads a different key — per-binding lookup alone is stale.
+ */
+export function mergeAllSubTableSlicesFromVariables(
+  savedSubTables: Record<string, unknown> | null | undefined,
+  pkFieldNames?: string[] | null,
+): any[] {
+  if (!savedSubTables || typeof savedSubTables !== 'object') return []
+  const seenArrays = new Set<unknown>()
+  let merged: any[] = []
+  for (const v of Object.values(savedSubTables)) {
+    if (!Array.isArray(v) || v.length === 0 || seenArrays.has(v)) continue
+    seenArrays.add(v)
+    merged = mergeSubTableRowsByRowId(merged, v as any[], pkFieldNames ?? null)
+  }
+  return merged
 }
 
 /**
@@ -526,6 +644,91 @@ export function collectSubTableSliceArraysDeep(saved: Record<string, unknown>): 
  * ({@code __subTables__} 顶层 map) 需要同一份行也挂在 {@code __subTables__[childKey]}，待办加载的
  * {@code getSavedSubTableRows} 才能命中。本函数在原位多轮提升（处理链式嵌套）；入参应为普通 JSON 形态的对象。
  */
+function normalizeFkIdForMatchLocal(v: unknown): string | null {
+  if (v === undefined || v === null) return null
+  const s = String(v).trim()
+  return s === '' ? null : s
+}
+
+const MI_LINK_CHILD_SCALAR_KEYS = new Set([
+  'id',
+  'id_idw',
+  'assignee',
+  'task_status',
+  'task_current_node',
+  'participant_id',
+  'parent_id'
+])
+
+function miLinkChildRowHasFormPayload(rec: Record<string, unknown>): boolean {
+  for (const [k, v] of Object.entries(rec)) {
+    if (k.startsWith('__') || MI_LINK_CHILD_SCALAR_KEYS.has(k)) continue
+    if (v === undefined || v === null) continue
+    if (typeof v === 'string' && v.trim() === '') continue
+    return true
+  }
+  return false
+}
+
+function repairMiCorruptLinkChildRowId(
+  rec: Record<string, unknown>,
+  parentKey: string
+): Record<string, unknown> {
+  const n = Number(parentKey)
+  const fixedId = Number.isFinite(n) && String(n) === parentKey ? n : parentKey
+  return { ...rec, id: fixedId }
+}
+
+/**
+ * MI link-child rows may carry another participant's stale {@code id} while {@code id_idw} matches the parent
+ * expansion key (runtime: id=44, id_idw=88). Thin placeholders are dropped; rows with real form payload keep
+ * sex/age/etc. and get {@code id} aligned to the parent expansion key.
+ */
+export function scrubMiCorruptLinkChildRowsForParent(
+  subTables: Record<string, unknown>,
+  parentIdIdw: string | number
+): void {
+  const key = normalizeFkIdForMatchLocal(parentIdIdw)
+  if (key == null) return
+
+  const repairSlice = (rows: unknown[]): unknown[] => {
+    const out: unknown[] = []
+    for (const row of rows) {
+      if (!row || typeof row !== 'object') {
+        out.push(row)
+        continue
+      }
+      const rec = row as Record<string, unknown>
+      const cidw = normalizeFkIdForMatchLocal(rec.id_idw)
+      const cid = normalizeFkIdForMatchLocal(rec.id)
+      if (cidw === key && cid != null && cid !== key) {
+        if (miLinkChildRowHasFormPayload(rec)) {
+          const repaired = repairMiCorruptLinkChildRowId(rec, key)
+          const nest = repaired.__subTables__
+          if (nest && typeof nest === 'object' && !Array.isArray(nest)) {
+            scrubMiCorruptLinkChildRowsForParent(nest as Record<string, unknown>, parentIdIdw)
+          }
+          out.push(repaired)
+        }
+        continue
+      }
+      const nest = rec.__subTables__
+      if (nest && typeof nest === 'object' && !Array.isArray(nest)) {
+        scrubMiCorruptLinkChildRowsForParent(nest as Record<string, unknown>, parentIdIdw)
+      }
+      out.push(rec)
+    }
+    return out
+  }
+
+  for (const [sliceKey, val] of Object.entries(subTables)) {
+    if (!Array.isArray(val)) continue
+    const cleaned = repairSlice(val)
+    subTables[sliceKey] = cleaned
+    subTables[String(sliceKey)] = cleaned
+  }
+}
+
 export function flattenNestedSubTableRowsIntoPayload(subTables: Record<string, unknown>, maxPasses = 8): void {
   for (let pass = 0; pass < maxPasses; pass++) {
     let touched = false
@@ -976,6 +1179,63 @@ export function collectNestedSlicesForBindingFromSubTablesWalk(
   return out
 }
 
+function normalizeMiLinkMatchId(v: unknown): string | null {
+  if (v === undefined || v === null) return null
+  const s = String(v).trim()
+  return s === '' ? null : s
+}
+
+/**
+ * MI parent row ↔ child binding row pairing for nested {@code __subTables__} patch.
+ * Must be the same multi-instance element — never match on shared {@code task_status} alone (all active rows are IN_PROGRESS).
+ */
+export function miParentRowAlignsWithChildRow(
+  parentRow: Record<string, unknown>,
+  childRow: Record<string, unknown>,
+): boolean {
+  const parentIdIdw = normalizeMiLinkMatchId(parentRow.id_idw)
+  const childIdIdw = normalizeMiLinkMatchId(childRow.id_idw)
+  if (parentIdIdw && childIdIdw && parentIdIdw === childIdIdw) return true
+
+  const parentId = normalizeMiLinkMatchId(parentRow.id)
+  const childId = normalizeMiLinkMatchId(childRow.id)
+  if (parentId && childId && parentId === childId) return true
+
+  const parentPk =
+    parentRow.id_idw
+    ?? parentRow.rowId
+    ?? parentRow.participant_id
+    ?? parentRow.participantId
+    ?? parentRow.id
+  const parentPkNorm = normalizeMiLinkMatchId(parentPk)
+  if (!parentPkNorm) return false
+
+  for (const fk of [
+    'id_idw',
+    'participant_id',
+    'participantId',
+    'parent_id',
+    'parentId',
+    'meeting_participant_id',
+  ]) {
+    const cv = normalizeMiLinkMatchId(childRow[fk])
+    if (cv && cv === parentPkNorm) return true
+  }
+  return false
+}
+
+/**
+ * MI nested link-form slices often split placeholder ({@code id}, {@code task_status}) and real fields across
+ * multiple objects in the same array — fold into one row for modal / binding hydration.
+ */
+export function collapseSubTableRowsPreferFilled(rows: any[]): any[] {
+  if (!Array.isArray(rows) || rows.length === 0) return []
+  if (rows.length === 1) return [...rows]
+  // Same participant split across placeholder + payload fragments; first-non-empty used to
+  // freeze stale task_current_node (sub form1) — use MI-aware row merge instead.
+  return mergeSubTableRowsByRowId([], rows, ['id'])
+}
+
 /**
  * Flow / MI often mirror a thin row at the top-level slice (name, assignee…) while lookup / id / custom fields
  * remain only under {@code parentRow.__subTables__[childBindingId|legacyKey]}. Fill missing fields on child rows.
@@ -990,25 +1250,6 @@ export function enrichChildBindingRowsFromParentsNestedSubTables<
     primaryKeyFields?: string[] | null | undefined
   },
 >(bindings: T[]): void {
-  const countDataKeys = (row: unknown): number => {
-    if (!row || typeof row !== 'object') return 0
-    return Object.keys(row as object).filter(k => !k.startsWith('__')).length
-  }
-
-  /** True when patch can supply non-empty values for keys that are empty/missing on target (same field count ≠ same fields). */
-  const patchCanFillEmptyKeys = (target: unknown, patch: unknown): boolean => {
-    if (!target || typeof target !== 'object' || !patch || typeof patch !== 'object') return false
-    const t = target as Record<string, unknown>
-    const p = patch as Record<string, unknown>
-    for (const [k, val] of Object.entries(p)) {
-      if (k.startsWith('__')) continue
-      if (val === undefined || val === null || val === '') continue
-      const cur = t[k]
-      if (cur === undefined || cur === null || cur === '') return true
-    }
-    return false
-  }
-
   const mergePatchIntoRow = (
     target: Record<string, unknown>,
     patch: Record<string, unknown>,
@@ -1017,6 +1258,21 @@ export function enrichChildBindingRowsFromParentsNestedSubTables<
     for (const [k, val] of Object.entries(patch)) {
       if (k.startsWith('__')) continue
       if (val === undefined || val === null || val === '') continue
+      if (k === 'task_status' || k === 'task_current_node') {
+        const cur = target[k]
+        if (cur !== undefined && cur !== null && String(cur).trim() !== '') continue
+        if (k === 'task_status') {
+          const merged = mergeMiTaskStatusPreferTerminal(undefined, val)
+          if (merged !== undefined) {
+            target[k] = merged
+            changed = true
+          }
+        } else {
+          target[k] = val
+          changed = true
+        }
+        continue
+      }
       const cur = target[k]
       if (cur !== undefined && cur !== null && cur !== '') continue
       target[k] = val
@@ -1055,55 +1311,103 @@ export function enrichChildBindingRowsFromParentsNestedSubTables<
 
     if (!Array.isArray(child.data) || child.data.length === 0) continue
     for (const parent of bindings) {
-      if (parent.bindingId === child.bindingId) continue
-      const pr0 = Array.isArray(parent.data) && parent.data[0] ? parent.data[0] : null
-      if (!pr0 || typeof pr0 !== 'object') continue
-      const nest = (pr0 as Record<string, unknown>).__subTables__
-      if (!nest || typeof nest !== 'object') continue
-      const sto = nest as Record<string, unknown>
-
-      const tryPatches = (arrays: unknown[]): boolean => {
-        for (const arr of arrays) {
-          if (!Array.isArray(arr) || arr.length === 0) continue
-          const c0 = child.data[0]
-          if (!c0 || typeof c0 !== 'object') continue
-          const patch0 = arr[0]
-          if (!patch0 || typeof patch0 !== 'object') continue
-          const hasMoreKeys = countDataKeys(patch0) > countDataKeys(c0)
-          if (!hasMoreKeys && !patchCanFillEmptyKeys(c0, patch0)) continue
-          let any = false
-          for (let i = 0; i < child.data.length; i++) {
-            const srcRow = arr[Math.min(i, arr.length - 1)]
-            if (!srcRow || typeof srcRow !== 'object') continue
-            if (mergePatchIntoRow(child.data[i] as Record<string, unknown>, srcRow as Record<string, unknown>)) {
-              any = true
+      if (parent.bindingId === child.bindingId || !Array.isArray(parent.data)) continue
+      for (const parentRow of parent.data) {
+        if (!parentRow || typeof parentRow !== 'object') continue
+        const nested = pullNestedRowsForBindingFromParentRows(
+          {
+            bindingId: child.bindingId,
+            tableName: child.tableName ?? '',
+            physicalTableName: child.physicalTableName,
+            tableId: child.tableId ?? null,
+          },
+          [parentRow],
+          peerMap,
+        )
+        if (nested.length === 0) continue
+        const collapsed = collapseSubTableRowsPreferFilled(nested)
+        for (const patch of collapsed) {
+          if (!patch || typeof patch !== 'object') continue
+          for (let ci = 0; ci < child.data.length; ci++) {
+            const childRow = child.data[ci]
+            if (!childRow || typeof childRow !== 'object') continue
+            if (
+              !miParentRowAlignsWithChildRow(
+                parentRow as Record<string, unknown>,
+                childRow as Record<string, unknown>,
+              )
+            ) {
+              continue
             }
+            mergePatchIntoRow(child.data[ci] as Record<string, unknown>, patch as Record<string, unknown>)
           }
-          if (any) return true
         }
-        return false
       }
-
-      const prioritized: unknown[] = []
-      const d1 = sto[child.bindingId]
-      const d2 = sto[String(child.bindingId)]
-      if (Array.isArray(d1)) prioritized.push(d1)
-      if (Array.isArray(d2) && d1 !== d2) prioritized.push(d2)
-
-      if (tryPatches(prioritized)) break
-
-      const fallback: unknown[] = []
-      for (const v of Object.values(sto)) {
-        if (!Array.isArray(v) || v.length === 0) continue
-        fallback.push(v)
-      }
-      fallback.sort(
-        (a, b) =>
-          countDataKeys((b as any[])[0]) - countDataKeys((a as any[])[0]),
-      )
-      if (tryPatches(fallback)) break
     }
   }
+}
+
+/** Match a sub-table row to Flowable MI expansion id ({@code _currentItem.rowId} / designer {@code id_idw}). */
+export function rowMatchesMiExpansionId(
+  rec: Record<string, unknown>,
+  miRowId: string | number,
+): boolean {
+  const pid = String(miRowId).trim()
+  if (!pid) return false
+  for (const k of ['id_idw', 'rowId', 'id', 'ID', 'RowId'] as const) {
+    const v = rec[k]
+    if (v != null && v !== '' && String(v) === pid) return true
+  }
+  return false
+}
+
+/** Rows in a link-child binding slice that belong to the given MI parent participant row. */
+export function pickMiLinkChildRowsForParent(
+  parentRow: Record<string, unknown>,
+  candidateRows: unknown[],
+  primaryKeyFields?: string[] | null,
+): any[] {
+  if (!Array.isArray(candidateRows) || candidateRows.length === 0) return []
+  const matched = candidateRows.filter(
+    r =>
+      r &&
+      typeof r === 'object' &&
+      miParentRowAlignsWithChildRow(parentRow, r as Record<string, unknown>),
+  )
+  if (matched.length === 0) return []
+  const collapsed = collapseSubTableRowsPreferFilled(matched)
+  return mergeSubTableRowsByRowId([], collapsed, primaryKeyFields ?? null)
+}
+
+/** Find the participant row in a sub-table binding for the current MI sub-task. */
+export function findSubTableRowByMiExpansionId(
+  rows: unknown[],
+  miRowId: string | number | null | undefined,
+): Record<string, unknown> | null {
+  if (miRowId == null || String(miRowId).trim() === '') return null
+  if (!Array.isArray(rows)) return null
+  for (const row of rows) {
+    if (row && typeof row === 'object' && rowMatchesMiExpansionId(row as Record<string, unknown>, miRowId)) {
+      return row as Record<string, unknown>
+    }
+  }
+  return null
+}
+
+/**
+ * MI assignee todo: after {@link isolateMiSubTaskData} the parent sub-table usually has exactly one row for this
+ * participant, but {@code _currentItem.rowId} may be the designer PK ({@code id_idw}) while the hydrated row only
+ * exposes SQL {@code id} (e.g. 6532) — strict expansion match fails and link-form inline subtable2 stays empty.
+ */
+export function findMiIsolatedParentRow(
+  rows: unknown[],
+  miRowId: string | number | null | undefined,
+): Record<string, unknown> | null {
+  const matched = findSubTableRowByMiExpansionId(rows, miRowId)
+  if (matched) return matched
+  if (!Array.isArray(rows) || rows.length !== 1) return null
+  const only = rows[0]
+  return only && typeof only === 'object' ? (only as Record<string, unknown>) : null
 }
 
 /**

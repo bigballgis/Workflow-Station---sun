@@ -553,6 +553,7 @@ import { onMounted, onBeforeUnmount } from 'vue'
 import { useSubTableWebSocket, type SubTableUpdateMessage } from '@/composables/useSubTableWebSocket'
 import {
   collectNestedChildRowsFromPeerBindings,
+  collapseSubTableRowsPreferFilled,
   mergeSubTableRowsByRowId,
   pullNestedRowsForBindingFromParentRows,
   stripLinkFormDesignerTableLabel
@@ -1066,6 +1067,299 @@ function peerSubTableDataByFormFieldOverlap(binding: SubTableBinding | undefined
   return best
 }
 
+/** Lowercase trimmed string for FK equality (8778 ↔ "8778"; UUID case-insensitive). */
+function normalizeFkIdForMatch(v: unknown): string | null {
+  if (v == null || v === '') return null
+  if (typeof v === 'object') return null
+  const s = String(v).trim()
+  if (!s) return null
+  return s.toLowerCase()
+}
+
+function buildFkListForChildMatch(binding?: SubTableBinding): string[] {
+  const fkList: string[] = []
+  if (binding?.foreignKeyField && String(binding.foreignKeyField).trim()) {
+    fkList.push(String(binding.foreignKeyField))
+  }
+  for (const k of [
+    'participant_id',
+    'participantId',
+    'parent_id',
+    'parentId',
+    'id_idw',
+    'meeting_participant_id',
+    'user_id',
+    'userId',
+    'assignee_id',
+    'assigneeId',
+    'owner_id',
+    'ownerId'
+  ]) {
+    if (!fkList.includes(k)) fkList.push(k)
+  }
+  return fkList
+}
+
+function rowHasAnyFkColumn(r: unknown, fkList: string[]): boolean {
+  if (!r || typeof r !== 'object') return false
+  const o = r as Record<string, unknown>
+  return fkList.some(k => o[k] != null && String(o[k]).trim() !== '')
+}
+
+function rowMatchesParentFk(r: unknown, parentIds: Set<string>, fkList: string[]): boolean {
+  if (!r || typeof r !== 'object' || parentIds.size === 0) return false
+  const o = r as Record<string, unknown>
+  for (const k of fkList) {
+    const nv = normalizeFkIdForMatch(o[k])
+    if (nv != null && parentIds.has(nv)) return true
+  }
+  return false
+}
+
+/**
+ * When designer FK column names are absent from {@link buildFkListForChildMatch}, child rows may still store the
+ * parent MI id or assignee user id in arbitrary scalar fields — pick rows that reference any {@code parentIds} value.
+ */
+function shallowScalarMatchesAnyParentId(r: unknown, parentIds: Set<string>): boolean {
+  if (!r || typeof r !== 'object' || parentIds.size === 0) return false
+  for (const [k, v] of Object.entries(r as Record<string, unknown>)) {
+    if (k.startsWith('__')) continue
+    const nv = normalizeFkIdForMatch(v)
+    if (nv != null && parentIds.has(nv)) return true
+  }
+  return false
+}
+
+function rowMatchesParentForLinkModal(
+  r: unknown,
+  parentIds: Set<string>,
+  fkList: string[],
+  allowShallowFallback: boolean
+): boolean {
+  if (rowMatchesParentFk(r, parentIds, fkList)) return true
+  if (!allowShallowFallback) return false
+  return shallowScalarMatchesAnyParentId(r, parentIds)
+}
+
+/**
+ * Sub-table / MI **row** identity only (relation id, row id, Flowable participant columns on the row).
+ * Omits portal-user ids from assignee snapshots — multiple MI instances often share the same assignee UUID; including it
+ * in parent id sets makes every instance match the same link-form child row (runtime: same firstChildIds for two rows).
+ */
+function collectSubTableScopedParentIdsForLinkMatch(
+  parentRow: Record<string, unknown> | null | undefined
+): Set<string> {
+  const out = new Set<string>()
+  const add = (v: unknown) => {
+    const n = normalizeFkIdForMatch(v)
+    if (n != null) out.add(n)
+  }
+  if (!parentRow || typeof parentRow !== 'object') return out
+  const pk = resolveSubTableRowPk(parentRow)
+  add(pk)
+  /**
+   * MI parent rows often carry a duplicated main-form scalar in {@code row.id} (e.g. "uuoo") shared by every
+   * instance while the relation PK is {@code id_idw} / designer PK (8778 vs 4554). Including {@code row.id} in the
+   * scoped set makes shallow FK fallback match the same wrong child row for every Details click.
+   */
+  if (shouldIncludeMiParentRowIdInLinkMatch(parentRow as Record<string, unknown>)) {
+    add(parentRow.id)
+  }
+  add(parentRow.id_idw)
+  add((parentRow as { id_idw_id?: unknown }).id_idw_id)
+  for (const pkf of props.primaryKeyFields ?? []) {
+    if (typeof pkf === 'string' && pkf.trim()) add(parentRow[pkf.trim()])
+  }
+  add(parentRow.rowId)
+  add(parentRow.participant_id)
+  add(parentRow.participantId)
+  return out
+}
+
+function narrowRowsByParentIdSetWithFk(rows: any[], pid: Set<string>, fkList: string[]): any[] {
+  if (pid.size === 0) return []
+  let filtered = rows.filter(r => rowMatchesParentFk(r, pid, fkList))
+  if (filtered.length === 0) {
+    filtered = rows.filter(r => shallowScalarMatchesAnyParentId(r, pid))
+  }
+  return filtered
+}
+
+function countLinkFormFields(formFields?: FormField[]): number {
+  if (!formFields?.length) return 0
+  let n = 0
+  for (const f of formFields) {
+    if (f.type === 'card') n += (f.children || []).length
+    else n++
+  }
+  return n
+}
+
+function isMiStyleParentRowForLinkForm(parentRow: Record<string, unknown> | null | undefined): boolean {
+  if (!parentRow || typeof parentRow !== 'object') return false
+  return (
+    parentRow.task_status !== undefined
+    && parentRow.task_status !== null
+    && String(parentRow.task_status).trim() !== ''
+  )
+}
+
+function parentChildTaskStatusesMatch(parentRow: Record<string, any>, childRow: unknown): boolean {
+  const ps = String(parentRow.task_status ?? '').trim().toUpperCase()
+  if (!ps) return true
+  const cs = String((childRow as { task_status?: unknown })?.task_status ?? '').trim().toUpperCase()
+  return !!cs && ps === cs
+}
+
+/** MI Details: never pick another participant's link-form row purely because it has more filled fields. */
+function filterLinkedChildRowsByMiTaskStatus(parentRow: Record<string, any>, rows: any[]): any[] {
+  if (!isMiStyleParentRowForLinkForm(parentRow) || !Array.isArray(rows) || rows.length === 0) return rows
+  const matched = rows.filter(r => parentChildTaskStatusesMatch(parentRow, r))
+  if (matched.length > 0) return matched
+  if (isTerminalMiParticipantRow(parentRow)) return []
+  return rows
+}
+
+/**
+ * MI link child (subtable2): {@code id_idw} may match parent while {@code id} still holds another
+ * participant's scalar (e.g. id=44, id_idw=88). Reject when selecting rows to display or save.
+ */
+function miLinkFormChildRowMatchesParent(
+  parentRow: Record<string, unknown>,
+  childRow: unknown,
+  binding?: SubTableBinding
+): boolean {
+  if (!childRow || typeof childRow !== 'object') return false
+  if (!isMiStyleParentRowForLinkForm(parentRow)) return true
+  const parentKey =
+    normalizeFkIdForMatch(parentRow.id_idw)
+    ?? normalizeFkIdForMatch(resolveSubTableRowPk(parentRow))
+  if (parentKey == null) return true
+  const rec = childRow as Record<string, unknown>
+  const fkList = buildFkListForChildMatch(binding)
+  for (const k of fkList) {
+    const v = rec[k]
+    if (v != null && v !== '' && normalizeFkIdForMatch(v) === parentKey) return true
+  }
+  const childId = normalizeFkIdForMatch(rec.id)
+  const childIdIdw = normalizeFkIdForMatch(rec.id_idw)
+  if (childIdIdw === parentKey) {
+    return childId == null || childId === parentKey
+  }
+  if (childId === parentKey) return true
+  return false
+}
+
+function filterRowsByMiLinkFormParent(
+  parentRow: Record<string, any>,
+  rows: any[],
+  binding?: SubTableBinding
+): any[] {
+  if (!isMiStyleParentRowForLinkForm(parentRow) || !Array.isArray(rows) || rows.length === 0) return rows
+  return rows.filter(r => miLinkFormChildRowMatchesParent(parentRow, r, binding))
+}
+
+/** Parent MI sub-table row id ({@code id_idw} e.g. 8778 / 4554) is the stable key for link-form child rows. */
+function filterLinkedChildRowsByParentIdIdw(parentRow: Record<string, any>, rows: any[]): any[] {
+  const want = normalizeFkIdForMatch(parentRow.id_idw)
+  if (!want) return rows
+  const matched = rows.filter(r => normalizeFkIdForMatch(r?.id_idw) === want)
+  if (matched.length > 0) return matched
+  // Child link rows often carry their own id_idw (not the parent's). For MI, "no match" must not mean "all rows".
+  if (isMiStyleParentRowForLinkForm(parentRow)) return []
+  return rows
+}
+
+function filterLinkedChildRowsByParentAssignee(parentRow: Record<string, any>, rows: any[]): any[] {
+  const af = props.assigneeField
+  if (!af || !isMiStyleParentRowForLinkForm(parentRow) || !Array.isArray(rows) || rows.length === 0) {
+    return rows
+  }
+  const pa = extractUserIdFromCellValue(parentRow[af.trim()])
+  if (!pa) return rows
+  const matched = rows.filter(r => {
+    const ca = extractUserIdFromCellValue((r as Record<string, unknown>)[af.trim()])
+    return ca && ca === pa
+  })
+  return matched.length > 0 ? matched : rows
+}
+
+/** Collapse split nested slices without mixing another MI participant's {@code task_status} / payload. */
+function collapseMiLinkFormRowsForParent(parentRow: Record<string, any>, rows: any[]): any[] {
+  if (!Array.isArray(rows) || rows.length === 0) return []
+  if (rows.length === 1) return [...rows]
+  let pool = filterLinkedChildRowsByParentIdIdw(parentRow, rows)
+  const statusPool = filterLinkedChildRowsByMiTaskStatus(parentRow, pool)
+  if (statusPool.length > 0) {
+    pool = statusPool
+  } else if (isTerminalMiParticipantRow(parentRow)) {
+    return pool.length > 0 ? [...pool] : []
+  }
+  if (pool.length <= 1) return [...pool]
+  return collapseSubTableRowsPreferFilled(pool)
+}
+
+function scoreLinkedChildRowForParent(
+  parentRow: Record<string, any>,
+  childRow: unknown,
+  binding?: SubTableBinding,
+  fkList?: string[],
+  scopedIds?: Set<string>
+): number {
+  if (!childRow || typeof childRow !== 'object') return -1
+  const fkListLocal = fkList ?? buildFkListForChildMatch(binding)
+  const scoped = scopedIds ?? collectSubTableScopedParentIdsForLinkMatch(parentRow as Record<string, unknown>)
+  const fieldScore = scoreRowForLinkedFormFields(childRow, binding?.formFields)
+  const totalFields = countLinkFormFields(binding?.formFields)
+  let score = fieldScore * 10
+  if (totalFields > 1 && fieldScore > 0 && fieldScore < totalFields) score -= 200
+  if (rowMatchesParentFk(childRow, scoped, fkListLocal)) score += 100
+  else if (shallowScalarMatchesAnyParentId(childRow, scoped)) score += 10
+  const ps = String(parentRow.task_status ?? '').trim().toUpperCase()
+  const cs = String((childRow as { task_status?: unknown }).task_status ?? '').trim().toUpperCase()
+  if (isMiStyleParentRowForLinkForm(parentRow as Record<string, unknown>)) {
+    if (ps && cs) score += ps === cs ? 500 : -1000
+  } else if (ps && cs && ps === cs) {
+    score += 50
+  }
+  const af = props.assigneeField
+  if (typeof af === 'string' && af.trim()) {
+    const pa = extractUserIdFromCellValue(parentRow[af.trim()])
+    const ca = extractUserIdFromCellValue((childRow as Record<string, unknown>)[af.trim()])
+    if (pa && ca && pa === ca) score += 80
+  }
+  const parentIdIdw = normalizeFkIdForMatch(parentRow.id_idw)
+  const childIdIdw = normalizeFkIdForMatch((childRow as Record<string, unknown>).id_idw)
+  if (parentIdIdw && childIdIdw && parentIdIdw === childIdIdw) score += 800
+  return score
+}
+
+function pickBestLinkedChildRowsForParentRow(
+  parentRow: Record<string, any>,
+  rows: any[],
+  binding?: SubTableBinding
+): any[] {
+  if (!Array.isArray(rows) || rows.length === 0) return []
+  let candidates = filterRowsByMiLinkFormParent(parentRow, rows, binding)
+  candidates = filterLinkedChildRowsByParentAssignee(parentRow, candidates)
+  candidates = filterLinkedChildRowsByParentIdIdw(parentRow, candidates)
+  const scoped = filterLinkedChildRowsByMiTaskStatus(parentRow, candidates)
+  if (scoped.length > 0) {
+    candidates = scoped
+  } else if (isTerminalMiParticipantRow(parentRow)) {
+    candidates = filterLinkedChildRowsByParentIdIdw(parentRow, rows)
+    if (candidates.length === 0) return []
+  }
+  if (candidates.length === 1) return candidates
+  const fkList = buildFkListForChildMatch(binding)
+  const scopedIds = collectSubTableScopedParentIdsForLinkMatch(parentRow as Record<string, unknown>)
+  const ranked = [...candidates].sort(
+    (a, b) =>
+      scoreLinkedChildRowForParent(parentRow, b, binding, fkList, scopedIds)
+      - scoreLinkedChildRowForParent(parentRow, a, binding, fkList, scopedIds)
+  )
+  return ranked[0] != null ? [ranked[0]] : []
+}
 
 /** When Details uses process-level fallback rows (no row.__subTables__), narrow to this parent participant if child rows carry FKs. */
 function filterLinkedChildRowsForParentRow(
@@ -1074,32 +1368,175 @@ function filterLinkedChildRowsForParentRow(
   binding?: SubTableBinding
 ): any[] {
   if (!Array.isArray(rows) || rows.length === 0) return rows
-  const parentPk = resolveSubTableRowPk(parentRow as Record<string, unknown>)
-  const parentId = parentPk != null ? Number(parentPk) : NaN
-  if (Number.isNaN(parentId)) return rows
+  const scopedIds = collectSubTableScopedParentIdsForLinkMatch(parentRow as Record<string, unknown>)
+  const fullIds = collectParentIdsForChildFkMatch(parentRow as Record<string, unknown>)
+  if (scopedIds.size === 0 && fullIds.size === 0) return rows
 
-  const fkList: string[] = []
-  if (binding?.foreignKeyField && String(binding.foreignKeyField).trim()) {
-    fkList.push(String(binding.foreignKeyField))
+  const fkList = buildFkListForChildMatch(binding)
+  let filtered: any[] = []
+  if (scopedIds.size > 0) {
+    filtered = narrowRowsByParentIdSetWithFk(rows, scopedIds, fkList)
   }
-  for (const k of ['participant_id', 'participantId', 'parent_id', 'parentId', 'meeting_participant_id']) {
-    if (!fkList.includes(k)) fkList.push(k)
+  if (filtered.length === 0 && fullIds.size > 0) {
+    filtered = narrowRowsByParentIdSetWithFk(rows, fullIds, fkList)
+  }
+  if (filtered.length === 0) {
+    filtered = isMiStyleParentRowForLinkForm(parentRow) ? [] : rows
   }
 
-  const hasAnyFk = rows.some(r => {
-    if (!r || typeof r !== 'object') return false
-    return fkList.some(k => (r as Record<string, unknown>)[k] != null && String((r as Record<string, unknown>)[k]).trim() !== '')
-  })
-  if (!hasAnyFk) return rows
+  const miScoped = filterLinkedChildRowsByMiTaskStatus(parentRow, filtered.length > 0 ? filtered : rows)
+  if (miScoped.length > 0 && miScoped.length < (filtered.length > 0 ? filtered : rows).length) {
+    filtered = miScoped
+  }
 
-  const filtered = rows.filter(r => {
-    if (!r || typeof r !== 'object') return false
-    return fkList.some(k => {
-      const v = (r as Record<string, unknown>)[k]
-      return v != null && v !== '' && Number(v) === parentId
-    })
-  })
-  return filtered.length > 0 ? filtered : rows
+  if (isMiStyleParentRowForLinkForm(parentRow)) {
+    const pool = filtered.length > 0 ? filtered : rows
+    filtered = filterRowsByMiLinkFormParent(parentRow, pool, binding)
+  }
+
+  if (binding?.formFields?.length) {
+    const needsPick =
+      filtered.length > 1
+      || linkFormRowsLackFormPayload(filtered, binding.formFields)
+    if (needsPick) {
+      const pickSource = filterLinkedChildRowsByMiTaskStatus(parentRow, rows)
+      const best = pickBestLinkedChildRowsForParentRow(
+        parentRow,
+        pickSource.length > 0 ? pickSource : rows,
+        binding
+      )
+      if (best.length > 0) {
+        const bestScore = scoreRowForLinkedFormFields(best[0], binding.formFields)
+        const curScore = scoreRowForLinkedFormFields(filtered[0], binding.formFields)
+        if (filtered.length > 1 || bestScore > curScore) return best
+      }
+    }
+  }
+  return filtered.length > 1
+    ? pickBestLinkedChildRowsForParentRow(parentRow, filtered, binding)
+    : filtered
+}
+
+/** MI rows may duplicate a main-form scalar in {@code row.id}; omit it from FK sets when relation PK differs. */
+function shouldIncludeMiParentRowIdInLinkMatch(parentRow: Record<string, unknown>): boolean {
+  const isMiParent =
+    parentRow.task_status !== undefined
+    && parentRow.task_status !== null
+    && String(parentRow.task_status).trim() !== ''
+  if (!isMiParent) return true
+  const pk = resolveSubTableRowPk(parentRow)
+  const rowIdNorm = normalizeFkIdForMatch(parentRow.id)
+  const pkNorm = normalizeFkIdForMatch(pk)
+  return rowIdNorm != null && pkNorm != null && rowIdNorm === pkNorm
+}
+
+/** Parent MI row id variants child FK columns may reference (string-normalized; avoids Number(uuid) → NaN). */
+function collectParentIdsForChildFkMatch(parentRow: Record<string, unknown> | null | undefined): Set<string> {
+  const out = new Set<string>()
+  const add = (v: unknown) => {
+    const n = normalizeFkIdForMatch(v)
+    if (n != null) out.add(n)
+  }
+  if (!parentRow || typeof parentRow !== 'object') return out
+  add(resolveSubTableRowPk(parentRow))
+  if (shouldIncludeMiParentRowIdInLinkMatch(parentRow)) {
+    add(parentRow.id)
+  }
+  add(parentRow.id_idw)
+  for (const pkf of props.primaryKeyFields ?? []) {
+    if (typeof pkf === 'string' && pkf.trim()) add(parentRow[pkf.trim()])
+  }
+  add(parentRow.rowId)
+  add(parentRow.participant_id)
+  add(parentRow.participantId)
+  add(parentRow.user_id)
+  add(parentRow.userId)
+  add(parentRow.assignee_id)
+  add(parentRow.assigneeId)
+  const part = parentRow.participant
+  if (part && typeof part === 'object') {
+    const po = part as Record<string, unknown>
+    add(po.id)
+    add(po.userId)
+    add(po.user_id)
+  }
+  /**
+   * Child link-form rows often FK to portal user id (UUID) from the MI assignee snapshot, not the sub-table row id.
+   * {@link extractUserIdFromCellValue} matches task/detail hydration used elsewhere in this component.
+   */
+  const af = props.assigneeField
+  if (typeof af === 'string' && af.trim()) {
+    add(extractUserIdFromCellValue(parentRow[af.trim()]))
+  }
+  for (const nestKey of ['assignee', 'assignee_user', 'owner', 'user', 'handler']) {
+    const v = parentRow[nestKey]
+    if (v && typeof v === 'object' && !Array.isArray(v)) {
+      const o = v as Record<string, unknown>
+      add(o.id)
+      add(o.userId)
+      add(o.user_id)
+    }
+  }
+  return out
+}
+
+/** When several link-form child rows are concatenated, put the row keyed to {@code parentRow} first — {@link buildLinkedFormData} only uses index 0. */
+function preferLinkedChildRowMatchingParent(
+  parentRow: Record<string, any>,
+  rows: any[],
+  binding?: SubTableBinding
+): any[] {
+  if (!Array.isArray(rows) || rows.length <= 1 || !parentRow || typeof parentRow !== 'object') return rows
+  const scopedIds = collectSubTableScopedParentIdsForLinkMatch(parentRow as Record<string, unknown>)
+  const fullIds = collectParentIdsForChildFkMatch(parentRow as Record<string, unknown>)
+  if (scopedIds.size === 0 && fullIds.size === 0) return rows
+
+  const fkList = buildFkListForChildMatch(binding)
+  const findWith = (pid: Set<string>): number => {
+    if (pid.size === 0) return -1
+    let i = rows.findIndex(r => rowMatchesParentFk(r, pid, fkList))
+    if (i < 0) i = rows.findIndex(r => shallowScalarMatchesAnyParentId(r, pid))
+    return i
+  }
+  let matchIdx = findWith(scopedIds)
+  if (matchIdx < 0) matchIdx = findWith(fullIds)
+  if (matchIdx <= 0) return rows
+  const next = [...rows]
+  const [hit] = next.splice(matchIdx, 1)
+  return [hit, ...next]
+}
+
+/**
+ * When child rows expose FK columns to the parent MI row, keep rows whose FK matches any of
+ * {@link collectParentIdsForChildFkMatch}. Returns {@code null} if no FK column is present (caller unchanged).
+ */
+function strictChildRowsForParentByFk(
+  parentRow: Record<string, any>,
+  rows: any[],
+  binding?: SubTableBinding
+): any[] | null {
+  if (!Array.isArray(rows) || rows.length === 0 || !parentRow || typeof parentRow !== 'object') return null
+  const scopedIds = collectSubTableScopedParentIdsForLinkMatch(parentRow as Record<string, unknown>)
+  const fullIds = collectParentIdsForChildFkMatch(parentRow as Record<string, unknown>)
+  if (scopedIds.size === 0 && fullIds.size === 0) return null
+
+  const fkList = buildFkListForChildMatch(binding)
+  const hasAnyFk = rows.some(r => rowHasAnyFkColumn(r, fkList))
+
+  const matchWith = (pid: Set<string>): any[] => {
+    if (pid.size === 0) return []
+    let m = rows.filter(r => rowMatchesParentFk(r, pid, fkList))
+    if (m.length === 0) m = rows.filter(r => shallowScalarMatchesAnyParentId(r, pid))
+    return m
+  }
+
+  let matched = matchWith(scopedIds)
+  if (matched.length === 0) matched = matchWith(fullIds)
+
+  if (matched.length === 0) return null
+  if (!hasAnyFk && rows.length > 1 && matched.length === rows.length) return null
+
+  return matched
 }
 
 // Assignee column: show when assign buttons are active, OR when data already has assignee values (read-only completed tasks)
@@ -1160,6 +1597,157 @@ function closeLinkFormDetailDialog() {
   linkFormDialogVisible.value = false
 }
 
+/** MI / assignee list: completed rows often lose nested {@code __subTables__} in API — must use legacy fallback + merge. */
+function isTerminalMiParticipantRow(r: Record<string, any> | undefined | null): boolean {
+  if (!r || typeof r !== 'object') return false
+  const ts = String((r as { task_status?: unknown }).task_status ?? '')
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, '_')
+  if (
+    ts === 'COMPLETED'
+    || ts === 'CANCELLED'
+    || ts === 'REJECTED'
+    || ts === 'WITHDRAWN'
+    || ts === 'COMPLETE'
+  ) {
+    return true
+  }
+  const node = String((r as { task_current_node?: unknown }).task_current_node ?? '').trim().toLowerCase()
+  if (node === 'end') return true
+  return false
+}
+
+function buildLinkFormPeerMap(): Map<number, number | null> {
+  const peerMap = new Map<number, number | null>()
+  for (const b of props.linkedSubTableBindings ?? []) {
+    const tid = b.tableId != null ? Number(b.tableId) : null
+    if (tid != null && Number.isFinite(tid)) peerMap.set(Number(b.bindingId), tid)
+  }
+  return peerMap
+}
+
+/** Merge every nested slice on the parent row that targets this link-form binding (all key variants). */
+function collectNestedSavedRowsForLinkForm(
+  rowSub: Record<string, any>,
+  binding: SubTableBinding | undefined,
+  boundId: unknown,
+  boundName: string | undefined
+): any[] {
+  const seenArr = new Set<any>()
+  const chunks: any[][] = []
+  const addArr = (v: unknown) => {
+    if (!Array.isArray(v) || v.length === 0 || seenArr.has(v)) return
+    seenArr.add(v)
+    chunks.push(v as any[])
+  }
+  if (boundId != null) {
+    addArr(rowSub[boundId as string | number])
+    addArr(rowSub[String(boundId)])
+  }
+  if (boundName) {
+    const raw = String(boundName).trim()
+    const stripped = stripLinkFormDesignerTableLabel(raw)
+    for (const k of [raw, stripped]) addArr(rowSub[k])
+    const want = linkFormTableMatchKey(raw)
+    for (const rk of Object.keys(rowSub)) {
+      if (linkFormTableMatchKey(rk) === want) addArr(rowSub[rk])
+    }
+  }
+  let merged: any[] = []
+  for (const chunk of chunks) {
+    merged = mergeSubTableRowsByRowId(merged, chunk, binding?.primaryKeyFields ?? null)
+  }
+  return merged
+}
+
+function linkFormBindingDef(binding: SubTableBinding) {
+  return {
+    bindingId: Number(binding.bindingId),
+    tableName: String(binding.tableName ?? ''),
+    physicalTableName: (binding as { physicalTableName?: string }).physicalTableName,
+    tableId: binding.tableId ?? null
+  }
+}
+
+/** Child rows may store the real link-form payload only under their own {@code __subTables__} (COMPLETED MI). */
+function enrichLinkFormRowsFromNestedSubTables(
+  rows: any[],
+  binding: SubTableBinding,
+  peerMap: Map<number, number | null>
+): any[] {
+  const def = linkFormBindingDef(binding)
+  return rows.map(r => {
+    if (!r || typeof r !== 'object') return r
+    const fromSelf = pullNestedRowsForBindingFromParentRows(def, [r], peerMap)
+    if (fromSelf.length === 0) return r
+    const merged = mergeSubTableRowsByRowId([r], fromSelf, binding.primaryKeyFields ?? null)
+    return merged[0] ?? r
+  })
+}
+
+/**
+ * BFS under {@code __subTables__} trees — COMPLETED MI rows often store link-form fields only on deeply nested slices
+ * while every top-level key on the parent row references the same thin placeholder array (runtime: savedRowsLen=1, no sex/age).
+ */
+function deepCollectLinkFormFieldRows(root: unknown, binding: SubTableBinding, maxDepth = 10): any[] {
+  const hits: any[] = []
+  const seen = new Set<object>()
+  const ff = binding.formFields
+  if (!ff?.length) return hits
+
+  const consider = (obj: object) => {
+    if (seen.has(obj)) return
+    seen.add(obj)
+    const rec = obj as Record<string, unknown>
+    const hasNonIdField = ff.some(field => {
+      if (field.type === 'card') {
+        return (field.children || []).some(c => {
+          if (c.key === 'id') return false
+          return isPresentLinkedModalValue(rowValueForLinkedFormField(rec, c.key))
+        })
+      }
+      if (field.key === 'id') return false
+      return isPresentLinkedModalValue(rowValueForLinkedFormField(rec, field.key))
+    })
+    if (hasNonIdField && scoreRowForLinkedFormFields(rec, ff) > 0) hits.push(rec)
+  }
+
+  const walk = (node: unknown, depth: number) => {
+    if (depth > maxDepth || node == null) return
+    if (Array.isArray(node)) {
+      for (const el of node) {
+        if (el && typeof el === 'object') {
+          consider(el)
+          const nest = (el as Record<string, unknown>).__subTables__
+          if (nest && typeof nest === 'object') walk(nest, depth + 1)
+        }
+      }
+      return
+    }
+    if (typeof node === 'object') {
+      for (const v of Object.values(node as Record<string, unknown>)) walk(v, depth + 1)
+    }
+  }
+  walk(root, 0)
+  return hits
+}
+
+function resolveLinkFormFieldValueForModal(field: FormField, raw: unknown): unknown {
+  if (!isPresentLinkedModalValue(raw)) return field.defaultValue ?? null
+  if (field.type === 'number') {
+    if (typeof raw === 'number') return Number.isNaN(raw) ? (field.defaultValue ?? null) : raw
+    if (typeof raw === 'string') {
+      const t = raw.trim()
+      if (t === '') return field.defaultValue ?? null
+      const n = Number(t)
+      return Number.isNaN(n) ? (field.defaultValue ?? null) : n
+    }
+    return field.defaultValue ?? null
+  }
+  return raw
+}
+
 function handleLinkFormClick(col: Column, row: Record<string, any>, rowIndex: number) {
   if (props.linkFormClickScrollToInline) {
     emit('linkFormScrollToInline')
@@ -1171,34 +1759,57 @@ function handleLinkFormClick(col: Column, row: Record<string, any>, rowIndex: nu
   const boundId = col.props?.boundSubTableBindingId
   const boundName = col.props?.boundSubTableName || binding?.tableName
   const rowSub = row?.__subTables__ && typeof row.__subTables__ === 'object' ? (row.__subTables__ as Record<string, any>) : {}
-  let saved: unknown =
-    boundId != null ? rowSub[boundId] ?? rowSub[String(boundId)] : undefined
-  if (!Array.isArray(saved) && boundName) {
-    const raw = String(boundName).trim()
-    const stripped = stripLinkFormDesignerTableLabel(raw)
-    const tryKeys = [raw, stripped].filter((k, i, a) => k && a.indexOf(k) === i)
-    for (const k of tryKeys) {
-      const v = rowSub[k] ?? rowSub[String(k)]
-      if (Array.isArray(v)) {
-        saved = v
-        break
-      }
+  const miIsolateTodo = !!(
+    props.suppressLinkFormInitialData
+    && row
+    && isMiStyleParentRowForLinkForm(row as Record<string, unknown>)
+  )
+  let linkFormNestedOnlyMi = false
+  let savedRows: any[] = []
+  if (miIsolateTodo && binding) {
+    let nestedOnly = collectNestedSavedRowsForLinkForm(rowSub, binding, boundId, boundName)
+    if (nestedOnly.length > 1) {
+      nestedOnly = collapseMiLinkFormRowsForParent(row, nestedOnly)
     }
-    if (!Array.isArray(saved)) {
-      const want = linkFormTableMatchKey(raw)
-      if (want) {
-        for (const rk of Object.keys(rowSub)) {
-          if (linkFormTableMatchKey(rk) !== want) continue
-          const v = rowSub[rk]
-          if (Array.isArray(v)) {
-            saved = v
-            break
-          }
-        }
+    if (nestedOnly.length > 0) {
+      linkFormNestedOnlyMi = true
+      savedRows = filterLinkedChildRowsByParentAssignee(row, nestedOnly)
+      if (savedRows.length > 1) {
+        const picked = pickBestLinkedChildRowsForParentRow(row, savedRows, binding)
+        if (picked.length > 0) savedRows = picked
       }
     }
   }
-  const savedRows = Array.isArray(saved) ? saved : []
+  if (!linkFormNestedOnlyMi) {
+    savedRows = collectNestedSavedRowsForLinkForm(rowSub, binding, boundId, boundName)
+    if (savedRows.length > 1) {
+      savedRows = collapseMiLinkFormRowsForParent(row, savedRows)
+    }
+    if (binding && row) {
+      const peerMap = buildLinkFormPeerMap()
+      const fromParent = pullNestedRowsForBindingFromParentRows(
+        linkFormBindingDef(binding),
+        [row],
+        peerMap.size > 0 ? peerMap : undefined
+      )
+      if (fromParent.length > 0) {
+        savedRows = mergeSubTableRowsByRowId(savedRows, fromParent, binding.primaryKeyFields ?? null)
+      }
+      if (savedRows.length > 1) {
+        const picked = pickBestLinkedChildRowsForParentRow(row, savedRows, binding)
+        if (picked.length > 0) savedRows = picked
+      }
+    }
+  }
+  /**
+   * My Request (read-only): parent row has no real nested link-form payload for this binding — do not merge in
+   * binding-wide / peer fallback rows then "promote best", or another MI participant's values show in the modal.
+   */
+  const readOnlyIsolateLinkForm =
+    !props.editable &&
+    !isTerminalMiParticipantRow(row) &&
+    (savedRows.length === 0 ||
+      !!(binding?.formFields?.length && linkFormRowsLackFormPayload(savedRows, binding.formFields)))
   const baseFallbackRows = resolveLinkedFallbackRows(binding)
   const fallbackRows =
     baseFallbackRows.length > 0
@@ -1211,12 +1822,29 @@ function handleLinkFormClick(col: Column, row: Record<string, any>, rowIndex: nu
    */
   let effectiveSavedRows: any[] = []
   if (props.suppressLinkFormInitialData) {
-    if (savedRows.length > 0) {
+    if (linkFormNestedOnlyMi) {
+      effectiveSavedRows = [...savedRows]
+    } else if (miIsolateTodo) {
+      // Parent row has no nested slice: do not fall back to global __subTables__[90] (other participants).
+      effectiveSavedRows = savedRows.length > 0 ? savedRows : []
+    } else if (savedRows.length > 0) {
       effectiveSavedRows = savedRows
     } else if (fallbackRows.length > 0) {
       effectiveSavedRows = row
         ? filterLinkedChildRowsForParentRow(row, [...fallbackRows], binding)
         : [...fallbackRows]
+    } else {
+      effectiveSavedRows = []
+    }
+  } else if (readOnlyIsolateLinkForm && row) {
+    if (fallbackRows.length > 0) {
+      const narrowed = filterLinkedChildRowsForParentRow(row, [...fallbackRows], binding)
+      effectiveSavedRows =
+        narrowed.length > 0 &&
+        fallbackRows.length > 1 &&
+        narrowed.length === fallbackRows.length
+          ? []
+          : narrowed
     } else {
       effectiveSavedRows = []
     }
@@ -1231,6 +1859,9 @@ function handleLinkFormClick(col: Column, row: Record<string, any>, rowIndex: nu
    * never took binding.data fallback; merge in fallback so Link Form modal matches To Do / variables.
    */
   if (
+    !miIsolateTodo &&
+    !linkFormNestedOnlyMi &&
+    !readOnlyIsolateLinkForm &&
     binding?.formFields?.length &&
     fallbackRows.length > 0 &&
     effectiveSavedRows.length > 0 &&
@@ -1243,6 +1874,9 @@ function handleLinkFormClick(col: Column, row: Record<string, any>, rowIndex: nu
     )
   }
   if (
+    !miIsolateTodo &&
+    !linkFormNestedOnlyMi &&
+    !readOnlyIsolateLinkForm &&
     effectiveSavedRows.length === 0 &&
     binding &&
     Array.isArray(props.linkedSubTableBindings) &&
@@ -1261,7 +1895,13 @@ function handleLinkFormClick(col: Column, row: Record<string, any>, rowIndex: nu
   }
 
   /** My Request / read-only: child slice often lives only under this parent row's {@code __subTables__} (key variants), not in {@code binding.data}. */
-  if (binding && row && Array.isArray(props.linkedSubTableBindings) && props.linkedSubTableBindings.length > 0) {
+  if (
+    !linkFormNestedOnlyMi
+    && binding
+    && row
+    && Array.isArray(props.linkedSubTableBindings)
+    && props.linkedSubTableBindings.length > 0
+  ) {
     const peerMap = new Map<number, number | null>()
     for (const b of props.linkedSubTableBindings) {
       const tid = b.tableId != null ? Number(b.tableId) : null
@@ -1280,7 +1920,7 @@ function handleLinkFormClick(col: Column, row: Record<string, any>, rowIndex: nu
     if (fromClickedParent.length > 0) {
       effectiveSavedRows = mergeSubTableRowsByRowId(
         effectiveSavedRows.length > 0 ? [...effectiveSavedRows] : [],
-        fromClickedParent,
+        collapseMiLinkFormRowsForParent(row, fromClickedParent),
         binding.primaryKeyFields ?? null
       )
     }
@@ -1289,6 +1929,9 @@ function handleLinkFormClick(col: Column, row: Record<string, any>, rowIndex: nu
   const rowDataKeyCount = (r: unknown) =>
     r && typeof r === 'object' ? Object.keys(r as object).filter(k => !k.startsWith('__')).length : 0
   if (
+    !miIsolateTodo &&
+    !linkFormNestedOnlyMi &&
+    !readOnlyIsolateLinkForm &&
     binding &&
     effectiveSavedRows.length > 0 &&
     rowDataKeyCount(effectiveSavedRows[0]) <= 2 &&
@@ -1310,17 +1953,196 @@ function handleLinkFormClick(col: Column, row: Record<string, any>, rowIndex: nu
   }
 
   if (row && binding && effectiveSavedRows.length > 0) {
+    const idIdwScoped = filterLinkedChildRowsByParentIdIdw(row, effectiveSavedRows)
+    if (idIdwScoped.length > 0) {
+      effectiveSavedRows = isMiStyleParentRowForLinkForm(row as Record<string, unknown>)
+        ? filterRowsByMiLinkFormParent(row, idIdwScoped, binding)
+        : idIdwScoped
+    }
+  }
+
+  if (!linkFormNestedOnlyMi && row && binding && effectiveSavedRows.length > 0) {
     const narrowed = filterLinkedChildRowsForParentRow(row, [...effectiveSavedRows], binding)
     if (narrowed.length > 0) effectiveSavedRows = narrowed
   }
 
-  if (binding?.formFields?.length && effectiveSavedRows.length > 1) {
-    const pr = promoteBestRowForLinkFormModal(effectiveSavedRows, binding.formFields)
+  if (!props.editable && row && binding && effectiveSavedRows.length > 1) {
+    effectiveSavedRows = preferLinkedChildRowMatchingParent(row, effectiveSavedRows, binding)
+  }
+
+  if (!props.editable && row && binding && effectiveSavedRows.length > 1) {
+    const strict = strictChildRowsForParentByFk(row, effectiveSavedRows, binding)
+    if (
+      strict !== null
+      && strict.length > 0
+      && !linkFormRowsLackFormPayload(strict, binding.formFields)
+    ) {
+      effectiveSavedRows = strict
+    }
+  }
+
+  if (
+    !miIsolateTodo
+    && !linkFormNestedOnlyMi
+    && row
+    && binding?.formFields?.length
+    && (effectiveSavedRows.length === 0 || linkFormRowsLackFormPayload(effectiveSavedRows, binding.formFields))
+  ) {
+    const statusPool = filterLinkedChildRowsByMiTaskStatus(row, fallbackRows)
+    const pkPool = filterLinkedChildRowsForParentRow(
+      row,
+      statusPool.length > 0 ? statusPool : fallbackRows,
+      binding
+    )
+    if (savedRows.length > 0 && pkPool.length > 0) {
+      effectiveSavedRows = mergeSubTableRowsByRowId(
+        [...savedRows],
+        pkPool,
+        binding.primaryKeyFields ?? null
+      )
+    }
+    if (
+      effectiveSavedRows.length === 0
+      || linkFormRowsLackFormPayload(effectiveSavedRows, binding.formFields)
+    ) {
+      const pool = mergeSubTableRowsByRowId(
+        [],
+        [...effectiveSavedRows, ...savedRows, ...fallbackRows],
+        binding.primaryKeyFields ?? null
+      )
+      const pickPool = pool.length > 0 ? pool : [...effectiveSavedRows, ...savedRows, ...fallbackRows]
+      const miPool = filterLinkedChildRowsByMiTaskStatus(row, pickPool)
+      const scopedPool = filterLinkedChildRowsForParentRow(
+        row,
+        miPool.length > 0 ? miPool : pickPool,
+        binding
+      )
+      const candidates =
+        scopedPool.length > 0 ? scopedPool : (miPool.length > 0 ? miPool : pickPool)
+      const best = pickBestLinkedChildRowsForParentRow(row, candidates, binding)
+      if (best.length > 0) {
+        const bestScore = scoreRowForLinkedFormFields(best[0], binding.formFields)
+        const curScore =
+          effectiveSavedRows.length > 0
+            ? scoreRowForLinkedFormFields(effectiveSavedRows[0], binding.formFields)
+            : 0
+        const miOk =
+          !isMiStyleParentRowForLinkForm(row as Record<string, unknown>)
+          || parentChildTaskStatusesMatch(row, best[0])
+        if (miOk && bestScore > curScore) effectiveSavedRows = best
+      }
+    }
+  }
+
+  /**
+   * {@link buildLinkedFormData} only reads {@code data[0]}. For editable tables we promote so the richest row is first;
+   * readonly + completed MI row must do the same when {@code effectiveSavedRows} still has multiple rows (placeholders
+   * from other iterations often sort first). Readonly + non-terminal uses {@link readOnlyIsolateLinkForm} instead.
+   */
+  const shouldPromoteForReadonlyTerminal =
+    !props.editable
+    && !!binding?.formFields?.length
+    && effectiveSavedRows.length > 1
+    && isTerminalMiParticipantRow(row)
+  if (
+    binding?.formFields?.length
+    && effectiveSavedRows.length > 1
+    && (props.editable || shouldPromoteForReadonlyTerminal)
+  ) {
+    const pr = promoteBestRowForLinkFormModal(effectiveSavedRows, binding.formFields, row, binding)
     effectiveSavedRows = pr.rows
   }
 
+  if (binding && effectiveSavedRows.length > 1 && isTerminalMiParticipantRow(row)) {
+    effectiveSavedRows = collapseMiLinkFormRowsForParent(row, effectiveSavedRows)
+  }
+  if (binding && effectiveSavedRows.length > 0) {
+    const peerMap = buildLinkFormPeerMap()
+    if (!linkFormNestedOnlyMi) {
+      effectiveSavedRows = enrichLinkFormRowsFromNestedSubTables(effectiveSavedRows, binding, peerMap)
+    }
+    if (
+      !linkFormNestedOnlyMi
+      && row
+      && binding.formFields?.length
+      && linkFormRowsLackFormPayload(effectiveSavedRows, binding.formFields)
+    ) {
+      const fromParent = pullNestedRowsForBindingFromParentRows(
+        linkFormBindingDef(binding),
+        [row],
+        peerMap.size > 0 ? peerMap : undefined
+      )
+      if (fromParent.length > 0) {
+        const parentScoped = filterLinkedChildRowsByMiTaskStatus(row, fromParent)
+        const collapsed = collapseMiLinkFormRowsForParent(
+          row,
+          parentScoped.length > 0 ? parentScoped : fromParent
+        )
+        const merged = mergeSubTableRowsByRowId(
+          [...effectiveSavedRows],
+          collapsed,
+          binding.primaryKeyFields ?? null
+        )
+        if (merged.length > 0) {
+          effectiveSavedRows = pickBestLinkedChildRowsForParentRow(row, merged, binding)
+        }
+      }
+      if (linkFormRowsLackFormPayload(effectiveSavedRows, binding.formFields)) {
+        const deepRoots: unknown[] = [row?.__subTables__, ...effectiveSavedRows.map(r => r?.__subTables__)]
+        for (const fb of fallbackRows) {
+          deepRoots.push(fb?.__subTables__)
+        }
+        let deepHits: any[] = []
+        for (const root of deepRoots) {
+          deepHits = mergeSubTableRowsByRowId(
+            deepHits,
+            deepCollectLinkFormFieldRows(root, binding),
+            binding.primaryKeyFields ?? null
+          )
+        }
+        if (deepHits.length > 0) {
+          const statusScoped = filterLinkedChildRowsByMiTaskStatus(row, deepHits)
+          const scoped = filterLinkedChildRowsForParentRow(
+            row,
+            statusScoped.length > 0 ? statusScoped : deepHits,
+            binding
+          )
+          const pickPool = scoped.length > 0 ? scoped : (statusScoped.length > 0 ? statusScoped : deepHits)
+          const best = pickBestLinkedChildRowsForParentRow(row, pickPool, binding)
+          if (best.length > 0) {
+            const curScore = scoreRowForLinkedFormFields(effectiveSavedRows[0], binding.formFields)
+            const bestScore = scoreRowForLinkedFormFields(best[0], binding.formFields)
+            const stillLacking = linkFormRowsLackFormPayload(effectiveSavedRows, binding.formFields)
+            if (bestScore > curScore || (stillLacking && bestScore > 0)) {
+              effectiveSavedRows = best
+            }
+          }
+        }
+      }
+    }
+  }
   linkedSubTableRows.value = [...effectiveSavedRows]
   linkedFormData.value = buildLinkedFormData({ ...(binding || ({} as any)), data: effectiveSavedRows })
+  if (row && binding?.formFields?.length && !linkFormNestedOnlyMi) {
+    const idField = binding.formFields.find(f => f.key === 'id' && f.type !== 'card')
+    if (idField) {
+      const cur = linkedFormData.value.id
+      const invalid =
+        cur === null
+        || cur === undefined
+        || cur === ''
+        || (idField.type === 'number' && typeof cur === 'string' && Number.isNaN(Number(String(cur).trim())))
+      if (invalid) {
+        const parentId = row.id_idw ?? resolveSubTableRowPk(row as Record<string, unknown>)
+        if (parentId != null && parentId !== '') {
+          linkedFormData.value = {
+            ...linkedFormData.value,
+            id: resolveLinkFormFieldValueForModal(idField, parentId)
+          }
+        }
+      }
+    }
+  }
   const bindingForFooter = resolveLinkBindingForColumn(col)
   const formFieldsLen = bindingForFooter?.formFields?.length ?? 0
   const useDetailFooter =
@@ -1361,6 +2183,20 @@ function isPresentLinkedModalValue(v: unknown): boolean {
   return true
 }
 
+function isPresentLinkedFormFieldValue(field: FormField, v: unknown): boolean {
+  if (!isPresentLinkedModalValue(v)) return false
+  if (field.type === 'number' || field.type === 'inputNumber') {
+    if (typeof v === 'number') return !Number.isNaN(v)
+    if (typeof v === 'string') {
+      const t = v.trim()
+      if (t === '') return false
+      return !Number.isNaN(Number(t))
+    }
+    return false
+  }
+  return true
+}
+
 /** Count filled link-form fields on one row (used to pick {@code data[0]} vs a richer sibling row). */
 function scoreRowForLinkedFormFields(row: unknown, formFields?: FormField[]): number {
   if (!row || typeof row !== 'object' || !formFields?.length) return 0
@@ -1370,11 +2206,11 @@ function scoreRowForLinkedFormFields(row: unknown, formFields?: FormField[]): nu
     if (field.type === 'card') {
       for (const c of field.children || []) {
         const v = rowValueForLinkedFormField(o, c.key)
-        if (isPresentLinkedModalValue(v)) s++
+        if (isPresentLinkedFormFieldValue(c, v)) s++
       }
     } else {
       const v = rowValueForLinkedFormField(o, field.key)
-      if (isPresentLinkedModalValue(v)) s++
+      if (isPresentLinkedFormFieldValue(field, v)) s++
     }
   }
   return s
@@ -1384,11 +2220,50 @@ function scoreRowForLinkedFormFields(row: unknown, formFields?: FormField[]): nu
  * Link detail modal reads binding.data[0] only — if variables merged MI placeholders first, row 0 is empty while
  * another index holds the real payload; move the best-scoring row to the front without dropping siblings.
  */
-function promoteBestRowForLinkFormModal(rows: any[], formFields: FormField[] | undefined): { rows: any[]; movedFrom: number | null } {
+function promoteBestRowForLinkFormModal(
+  rows: any[],
+  formFields: FormField[] | undefined,
+  parentRow?: Record<string, any> | null,
+  binding?: SubTableBinding
+): { rows: any[]; movedFrom: number | null } {
   if (!Array.isArray(rows) || rows.length <= 1 || !formFields?.length) return { rows, movedFrom: null }
-  let bestIdx = 0
-  let bestScore = scoreRowForLinkedFormFields(rows[0], formFields)
-  for (let i = 1; i < rows.length; i++) {
+
+  const fkList = binding ? buildFkListForChildMatch(binding) : []
+  const scopedIds =
+    parentRow && typeof parentRow === 'object'
+      ? collectSubTableScopedParentIdsForLinkMatch(parentRow as Record<string, unknown>)
+      : new Set<string>()
+  const fullIds =
+    parentRow && typeof parentRow === 'object'
+      ? collectParentIdsForChildFkMatch(parentRow as Record<string, unknown>)
+      : new Set<string>()
+  const collectMatchingIdx = (pid: Set<string>): number[] => {
+    const idx: number[] = []
+    if (pid.size > 0) {
+      rows.forEach((r, i) => {
+        if (rowMatchesParentForLinkModal(r, pid, fkList, true)) idx.push(i)
+      })
+    }
+    return idx
+  }
+  let matchingIdx = collectMatchingIdx(scopedIds)
+  if (matchingIdx.length === 0) matchingIdx = collectMatchingIdx(fullIds)
+
+  if (matchingIdx.length === 1) {
+    const idx = matchingIdx[0]!
+    if (idx === 0) return { rows, movedFrom: null }
+    const next = [...rows]
+    const [pick] = next.splice(idx, 1)
+    return { rows: [pick, ...next], movedFrom: idx }
+  }
+
+  const candidateIndices =
+    matchingIdx.length > 1 ? matchingIdx : rows.map((_, i) => i)
+
+  let bestIdx = candidateIndices[0]!
+  let bestScore = scoreRowForLinkedFormFields(rows[bestIdx], formFields)
+  for (let k = 1; k < candidateIndices.length; k++) {
+    const i = candidateIndices[k]!
     const sc = scoreRowForLinkedFormFields(rows[i], formFields)
     if (sc > bestScore) {
       bestScore = sc
@@ -1406,16 +2281,10 @@ function linkFormRowsLackFormPayload(rows: any[], formFields: FormField[] | unde
   if (!formFields?.length || !Array.isArray(rows) || rows.length === 0) return false
   const row0 = rows[0]
   if (!row0 || typeof row0 !== 'object') return true
-  const o = row0 as Record<string, any>
-  const anyFieldFilled = formFields.some(field => {
-    if (field.type === 'card') {
-      return (field.children || []).some(child =>
-        isPresentLinkedModalValue(rowValueForLinkedFormField(o, child.key))
-      )
-    }
-    return isPresentLinkedModalValue(rowValueForLinkedFormField(o, field.key))
-  })
-  return !anyFieldFilled
+  const score = scoreRowForLinkedFormFields(row0, formFields)
+  if (score === 0) return true
+  const total = countLinkFormFields(formFields)
+  return total > 1 && score < total
 }
 
 function buildLinkedFormData(binding?: SubTableBinding): Record<string, any> {
@@ -1429,11 +2298,11 @@ function buildLinkedFormData(binding?: SubTableBinding): Record<string, any> {
       if (field.type === 'card') {
         field.children?.forEach(child => {
           const v = rowValueForLinkedFormField(raw, child.key)
-          next[child.key] = isPresentLinkedModalValue(v) ? v : (child.defaultValue ?? null)
+          next[child.key] = resolveLinkFormFieldValueForModal(child, v)
         })
       } else {
         const v = rowValueForLinkedFormField(raw, field.key)
-        next[field.key] = isPresentLinkedModalValue(v) ? v : (field.defaultValue ?? null)
+        next[field.key] = resolveLinkFormFieldValueForModal(field, v)
       }
     })
     return next
@@ -1460,6 +2329,22 @@ function saveLinkedFormData() {
 
   const currentRows = linkedSubTableRows.value.length > 0 ? [...linkedSubTableRows.value] : [{}]
   currentRows[0] = { ...currentRows[0], ...linkedFormData.value }
+  const parentRow = linkRowIndex != null ? rows.value[linkRowIndex] : null
+  if (parentRow && isMiStyleParentRowForLinkForm(parentRow as Record<string, unknown>)) {
+    const parentKey =
+      normalizeFkIdForMatch(parentRow.id_idw)
+      ?? normalizeFkIdForMatch(resolveSubTableRowPk(parentRow as Record<string, unknown>))
+    if (parentKey != null) {
+      const curId = normalizeFkIdForMatch(currentRows[0]?.id)
+      if (curId == null || curId !== parentKey) {
+        const n = Number(parentKey)
+        currentRows[0] = {
+          ...currentRows[0],
+          id: Number.isFinite(n) && String(n) === parentKey ? n : parentKey
+        }
+      }
+    }
+  }
   linkedSubTableRows.value = [...currentRows]
 
   const nextMainRows = rows.value.map((r, idx) => {

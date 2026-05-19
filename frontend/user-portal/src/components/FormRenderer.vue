@@ -77,7 +77,7 @@
                                 style="margin-bottom: 16px;"
                                 @update:model-value="(rows: any[]) => handleSubTableUpdate(child._bindingId!, rows)"
                                 @update:linked-sub-table-data="handleSubTableUpdate"
-                                @view-detail="(row: any) => emit('viewSubtaskDetail', row)"
+                                @view-detail="(row: any) => emit('viewSubtaskDetail', row, resolveBinding(child._bindingId)?.data)"
                                 @link-form-scroll-to-inline="scrollSubTableInlineIntoView(child._bindingId)"
                               />
                               <div
@@ -198,7 +198,7 @@
                       style="margin-bottom: 16px;"
                       @update:model-value="(rows: any[]) => handleSubTableUpdate(field._bindingId!, rows)"
                       @update:linked-sub-table-data="handleSubTableUpdate"
-                      @view-detail="(row: any) => emit('viewSubtaskDetail', row)"
+                      @view-detail="(row: any) => emit('viewSubtaskDetail', row, resolveBinding(field._bindingId)?.data)"
                       @link-form-scroll-to-inline="scrollSubTableInlineIntoView(field._bindingId)"
                     />
                     <div
@@ -344,7 +344,7 @@
                             style="margin-bottom: 16px;"
                             @update:model-value="(rows: any[]) => handleSubTableUpdate(child._bindingId!, rows)"
                             @update:linked-sub-table-data="handleSubTableUpdate"
-                            @view-detail="(row: any) => emit('viewSubtaskDetail', row)"
+                            @view-detail="(row: any) => emit('viewSubtaskDetail', row, resolveBinding(child._bindingId)?.data)"
                             @link-form-scroll-to-inline="scrollSubTableInlineIntoView(child._bindingId)"
                           />
                           <div
@@ -465,7 +465,7 @@
                   style="margin-bottom: 16px;"
                   @update:model-value="(rows: any[]) => handleSubTableUpdate(field._bindingId!, rows)"
                   @update:linked-sub-table-data="handleSubTableUpdate"
-                  @view-detail="(row: any) => emit('viewSubtaskDetail', row)"
+                  @view-detail="(row: any) => emit('viewSubtaskDetail', row, resolveBinding(field._bindingId)?.data)"
                   @link-form-scroll-to-inline="scrollSubTableInlineIntoView(field._bindingId)"
                 />
                 <div
@@ -583,7 +583,13 @@ import {
   mergeSubTablePortalViewsForRuntime,
   resolveSubTableDisplayMode
 } from './formRendererHelpers'
-import { mergeSubTableRowsByRowId, collectNestedChildRowsFromPeerBindings } from '@/composables/tasks/shared'
+import {
+  mergeSubTableRowsByRowId,
+  collectNestedChildRowsFromPeerBindings,
+  pullNestedRowsForBindingFromParentRows,
+  findMiIsolatedParentRow,
+  pickMiLinkChildRowsForParent
+} from '@/composables/tasks/shared'
 
 export type { FormField, FormTab }
 
@@ -687,7 +693,8 @@ const emit = defineEmits<{
   (e: 'update:modelValue', value: Record<string, any>): void
   (e: 'change', key: string, value: any): void
   (e: 'update:subTableData', bindingId: number, rows: any[]): void
-  (e: 'viewSubtaskDetail', row: any): void
+  /** Optional `siblingRows`: that sub-table's row list only (not all bindings). My Request Detail merge uses it. */
+  (e: 'viewSubtaskDetail', row: any, siblingRows?: any[]): void
 }>()
 
 // ---------------------------------------------------------------------------
@@ -992,6 +999,15 @@ function rowMatchesMiElementId(rec: Record<string, unknown>, parentId: string | 
  * Persisted {@code target.data} may be empty/thin while child rows still live under parent rows'
  * {@code __subTables__}; merge those for inline form-below-table display and save.
  */
+function buildBindingTableIdMap(peers: SubTableBinding[]): Map<number, number | null> {
+  const m = new Map<number, number | null>()
+  for (const b of peers) {
+    const tid = b.tableId != null ? Number(b.tableId) : null
+    if (tid != null && Number.isFinite(tid)) m.set(b.bindingId, tid)
+  }
+  return m
+}
+
 function mergeRowsForInlineFormTarget(field: FormField): {
   target: SubTableBinding
   rows: any[]
@@ -1002,8 +1018,53 @@ function mergeRowsForInlineFormTarget(field: FormField): {
   const target = resolveInlineFormSourceBinding(field) ?? own
   const isLinkTarget = target.bindingId !== own.bindingId
   const peers = linkableSubTableBindings.value ?? []
-  const nestedFromTarget = collectNestedChildRowsFromPeerBindings(target, peers, null)
   const pk = target.primaryKeyFields ?? own.primaryKeyFields ?? null
+  const parentId = props.currentMiRowId
+  const miIsolate =
+    props.suppressLinkFormInitialData
+    && parentId != null
+    && String(parentId).trim() !== ''
+    && isLinkTarget
+
+  if (miIsolate) {
+    const parentRow = findMiIsolatedParentRow(
+      Array.isArray(own.data) ? own.data : [],
+      parentId
+    )
+    if (parentRow) {
+      const peerMap = buildBindingTableIdMap(peers)
+      const nestedOnly = pullNestedRowsForBindingFromParentRows(
+        {
+          bindingId: target.bindingId,
+          tableName: target.tableName,
+          physicalTableName: target.physicalTableName,
+          tableId: target.tableId ?? null
+        },
+        [parentRow],
+        peerMap
+      )
+      let rows = nestedOnly.map(r => ({ ...(r as Record<string, any>) }))
+      const topLevel = Array.isArray(target.data) ? target.data : []
+      const topForParent = pickMiLinkChildRowsForParent(
+        parentRow,
+        topLevel,
+        pk,
+      )
+      if (topForParent.length > 0) {
+        rows = mergeSubTableRowsByRowId(rows, topForParent, pk).map(r => ({
+          ...(r as Record<string, any>)
+        }))
+      }
+      return {
+        target,
+        isLinkTarget,
+        rows
+      }
+    }
+    return { target, isLinkTarget, rows: [] }
+  }
+
+  const nestedFromTarget = collectNestedChildRowsFromPeerBindings(target, peers, null)
   /** Table grid uses `own.data`; link-form inline uses `target` — merge both so the row list matches the grid. */
   let merged = mergeSubTableRowsByRowId(
     Array.isArray(own.data) ? own.data : [],
@@ -1098,23 +1159,54 @@ function getCurrentRowForInlineForm(field: FormField): Record<string, any> | nul
   let result: Record<string, any> | null = null
   let pickReason = 'none'
 
-  if (isLinkTarget && parentId != null && String(parentId).trim() !== '') {
-    const fkList = resolveLinkFkCandidates(pack.target)
-    const match = rows.find(r => {
-      if (!r || typeof r !== 'object') return false
-      const rec = r as Record<string, unknown>
-      return fkList.some(k => {
-        const v = rec[k]
-        return v != null && v !== '' && String(v) === String(parentId)
+  const miLinkIsolate =
+    props.suppressLinkFormInitialData
+    && parentId != null
+    && String(parentId).trim() !== ''
+    && isLinkTarget
+
+  if (miLinkIsolate) {
+    if (rows.length === 1) {
+      result = { ...(rows[0] as Record<string, any>) }
+      pickReason = 'mi-nested-only'
+    } else if (rows.length === 0) {
+      result = {}
+      pickReason = 'mi-nested-empty'
+    }
+  } else if (isLinkTarget && parentId != null && String(parentId).trim() !== '') {
+    const own = resolveBinding(field._bindingId)
+    const parentRow = own
+      ? findMiIsolatedParentRow(Array.isArray(own.data) ? own.data : [], parentId)
+      : null
+    if (parentRow) {
+      const aligned = pickMiLinkChildRowsForParent(
+        parentRow,
+        rows,
+        pack.target.primaryKeyFields ?? null
+      )
+      if (aligned.length > 0) {
+        result = { ...(aligned[0] as Record<string, any>) }
+        pickReason = 'mi-link-parent-align'
+      }
+    }
+    if (!result) {
+      const fkList = resolveLinkFkCandidates(pack.target)
+      const match = rows.find(r => {
+        if (!r || typeof r !== 'object') return false
+        const rec = r as Record<string, unknown>
+        return fkList.some(k => {
+          const v = rec[k]
+          return v != null && v !== '' && String(v) === String(parentId)
+        })
       })
-    })
-    if (match) {
-      result = { ...(match as Record<string, any>) }
-      pickReason = 'link-fk'
-    } else {
-      const pick = pickPreferredInlineRow(rows, field)
-      result = pick ? { ...(pick as Record<string, any>) } : null
-      pickReason = 'link-fallback-pick'
+      if (match) {
+        result = { ...(match as Record<string, any>) }
+        pickReason = 'link-fk'
+      } else if (!props.suppressLinkFormInitialData) {
+        const pick = pickPreferredInlineRow(rows, field)
+        result = pick ? { ...(pick as Record<string, any>) } : null
+        pickReason = 'link-fallback-pick'
+      }
     }
   } else if (parentId != null && String(parentId).trim() !== '') {
     // subForm path: MI element id often matches a *parent* FK on this row, not the child row PK (e.g. id=999).
@@ -1125,7 +1217,7 @@ function getCurrentRowForInlineForm(field: FormField): Record<string, any> | nul
     }
   }
 
-  if (!result) {
+  if (!result && !miLinkIsolate) {
     const pick = pickPreferredInlineRow(rows, field)
     result = pick ? { ...(pick as Record<string, any>) } : null
     pickReason = pickReason === 'none' ? 'pickPreferred' : `${pickReason}+pickPreferred`

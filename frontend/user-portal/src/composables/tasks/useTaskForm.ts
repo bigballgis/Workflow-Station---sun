@@ -8,7 +8,8 @@ import {
   mergeSubTableRowsByRowId,
   getSavedSubTableRows,
   normalizeSubTableName,
-  flattenNestedSubTableRowsIntoPayload
+  flattenNestedSubTableRowsIntoPayload,
+  scrubMiCorruptLinkChildRowsForParent
 } from './shared'
 
 export function useTaskForm(options: {
@@ -35,6 +36,15 @@ export function useTaskForm(options: {
   function buildSubTableSubmitPayload() {
     const subTables: Record<string, any> = { ...((formData.value.__subTables__ as Record<string, any>) || {}) }
     flattenNestedSubTableRowsIntoPayload(subTables as Record<string, unknown>)
+    if (options.isMiSubTaskMode.value) {
+      const ci = (formData.value._currentItem ?? formData.value.currentItem) as
+        | { rowId?: string | number; rowKey?: { id?: string | number } }
+        | undefined
+      const parentIdIdw = ci?.rowId ?? ci?.rowKey?.id
+      if (parentIdIdw != null && String(parentIdIdw).trim() !== '') {
+        scrubMiCorruptLinkChildRowsForParent(subTables as Record<string, unknown>, parentIdIdw)
+      }
+    }
     const subTableData: Record<string, Array<Record<string, unknown>>> = {}
 
     for (const binding of options.subTableBindings.value) {
