@@ -9,11 +9,17 @@ import com.admin.enums.FunctionUnitStatus;
 import com.admin.exception.AdminBusinessException;
 import com.admin.exception.FunctionUnitNotFoundException;
 import com.platform.common.dto.ApiResponse;
+import com.platform.common.dto.UserPrincipal;
 import net.jqwik.api.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 
 import java.time.Instant;
+import java.util.Collections;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -103,14 +109,33 @@ class FunctionUnitControllerPropertyTest {
         when(mgr.setEnabled(anyString(), anyBoolean(), anyString(), anyString()))
                 .thenThrow(new FunctionUnitNotFoundException(unitId));
 
+        // Set up SecurityContext for SecurityContextUtils.getCurrentUserId()
+        setupMockSecurityContext("test-operator");
+
         var controller = createController(mgr);
         var request = new com.admin.dto.request.SetEnabledRequest(true);
         ResponseEntity<ApiResponse<FunctionUnitInfo>> response =
-                controller.setEnabled(unitId, request, "test-operator");
+                controller.setEnabled(unitId, request);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().isSuccess()).isFalse();
+    }
+
+    /**
+     * Helper to set up a mock SecurityContext so SecurityContextUtils.getCurrentUserId() works.
+     */
+    private void setupMockSecurityContext(String userId) {
+        UserPrincipal principal = UserPrincipal.builder()
+                .userId(userId)
+                .username("test-user")
+                .roles(Collections.emptyList())
+                .permissions(Collections.emptyList())
+                .build();
+        Authentication auth = new UsernamePasswordAuthenticationToken(principal, null, Collections.emptyList());
+        SecurityContext context = SecurityContextHolder.createEmptyContext();
+        context.setAuthentication(auth);
+        SecurityContextHolder.setContext(context);
     }
 
     /**

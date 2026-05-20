@@ -34,7 +34,9 @@ public class AuthSsoExchangeController {
     private final DeveloperSsoExchangeService developerSsoExchangeService;
 
     @PostMapping("/exchange")
-    public ResponseEntity<LoginResponse> exchange(@RequestBody SsoExchangeBody body, HttpServletRequest httpRequest) {
+    public ResponseEntity<LoginResponse> exchange(@RequestBody SsoExchangeBody body,
+                                                  HttpServletRequest httpRequest,
+                                                  HttpServletResponse response) {
         if (body == null || body.getCode() == null || body.getCode().isBlank()) {
             return ResponseEntity.badRequest().build();
         }
@@ -52,7 +54,7 @@ public class AuthSsoExchangeController {
             user.setLastLoginAt(LocalDateTime.now());
             user.setLastLoginIp(getClientIpAddress(httpRequest));
             userRepository.save(user);
-            return ResponseEntity.ok(developerSsoExchangeService.issueSession(user));
+            return ResponseEntity.ok(developerSsoExchangeService.issueSession(user, response));
         } catch (IllegalArgumentException | IllegalStateException e) {
             log.warn("Developer SSO exchange failed: {}", e.getMessage());
             return ResponseEntity.badRequest().build();

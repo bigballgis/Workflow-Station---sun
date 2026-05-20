@@ -29,8 +29,10 @@ public class BiGuestTokenController {
     @Operation(summary = "获取 Guest Token", description = "验证用户 Dashboard 分配权限并获取 Superset Guest Token")
     public ResponseEntity<GuestTokenResponse> getGuestToken(
             @RequestBody @Valid GuestTokenRequest request) {
-        log.info("User {} requesting guest token for dashboard {}", SecurityContextUtils.getCurrentUserId(), request.getDashboardId());
-        GuestTokenResponse response = guestTokenService.getGuestToken(SecurityContextUtils.getCurrentUserId(), request);
+        String userId = SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
+        log.info("User {} requesting guest token for dashboard {}", userId, request.getDashboardId());
+        GuestTokenResponse response = guestTokenService.getGuestToken(userId, request);
         return ResponseEntity.ok(response);
     }
 }

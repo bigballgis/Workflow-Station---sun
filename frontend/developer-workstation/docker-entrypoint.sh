@@ -9,7 +9,8 @@ fi
 
 # Replace environment variables in nginx config template
 # IMPORTANT: Only substitute our custom variables, NOT nginx's own $host, $uri, etc.
-envsubst '${KONG_PROXY_URL}' < /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf
+: "${HSTS_STS_HEADER:=}"
+envsubst '${KONG_PROXY_URL} ${HSTS_STS_HEADER}' < /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf
 
 echo "nginx config: KONG_PROXY_URL=$KONG_PROXY_URL"
 

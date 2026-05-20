@@ -1,5 +1,4 @@
 import axios, { AxiosRequestConfig } from 'axios'
-import { TOKEN_KEY, USER_KEY, USER_ID_KEY } from './auth'
 
 export interface UserDashboardResponse {
   dashboardId: string
@@ -24,6 +23,7 @@ export interface GuestTokenRequest {
 /**
  * Dedicated axios instance for admin-center BI APIs.
  * Routes through /api/v1/admin/ which is the Kong route to admin-center backend.
+ * Auth via httpOnly cookie (withCredentials: true).
  */
 const adminCenterService = axios.create({
   baseURL: '/api/v1/admin',
@@ -32,24 +32,6 @@ const adminCenterService = axios.create({
   headers: {
     'Content-Type': 'application/json'
   }
-})
-
-let userId = localStorage.getItem(USER_ID_KEY)
-  if (!userId) {
-    const userStr = localStorage.getItem(USER_KEY)
-    if (userStr) {
-      try {
-        const user = JSON.parse(userStr)
-        userId = user.userId || user.id
-      } catch (e) {
-        // ignore
-      }
-    }
-  }
-  if (userId) {
-    config.headers['X-User-Id'] = userId
-  }
-  return config
 })
 
 adminCenterService.interceptors.response.use(
