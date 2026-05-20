@@ -1356,3 +1356,39 @@
     2) secondary（requestIdleCallback）：await 流程历史 → lookup → previousForms/MI 识别/全量 align → nodeFormMap → 流程图；
     3) 流程历史不再与 FU 并行阻塞首屏；快照 Completed Tasks 的 assignee 过滤移至 secondary 末尾。
     若首屏仍慢：profile getProcessDetail（RUNNING+__subTables__ 时 resolveMiRowProgress/getMultiInstanceStatus）与 getFunctionUnitContent 接口耗时。
+
+- id: "1360"
+  status: fixed
+  fixed_at: "2026-05-19"
+  severity: major
+  category: bug
+  summary: "我的申请 RequestItems 子表字段呈纯文本，与发起流程控件样式不一致（subListViews 未合并 subForm 列类型）"
+  file: "frontend/user-portal/src/views/applications/detail.vue; frontend/user-portal/src/components/SubTableField.vue; frontend/user-portal/src/views/processes/start.vue"
+  note: |
+    根因：applications/detail deriveColumnsFromBinding 在存在 subListViews 时仅用 DB dataType 映射为 text/switch，未像 tasks/detail、process/start 一样合并 subForm 的 type/options/props；Is Urgent 等显示为 true 字符串；formBelowTable 时底部内联表单判断未走 resolveSubTableDisplayMode。
+    修复：subListViews 列与 subFormColumns 合并；shouldShowBindingFormBelow 使用 resolveSubTableDisplayMode；SubTableField 只读 switch 用 el-switch；start 绑定加载 subTablePortalViews。
+
+- id: "1361"
+  status: fixed
+  fixed_at: "2026-05-19"
+  severity: major
+  category: bug
+  summary: "采购流程 First Review 设计为发起人办理但待办为空（BPMN 缺 assigneeType，Flowable 未写 assignee）"
+  file: "deploy/init-scripts/13-procurement-workflow/02-create-bpmn-process.sql; deploy/init-scripts/13-procurement-workflow/05-fix-bpmn-assignee-initiator.sql"
+  note: |
+    根因：发起时部署的 BPMN（如目录 1.0.7）无 assigneeType=INITIATOR，TaskAssignmentListener 跳过指派，act_ru_task.assignee_ 为空；
+    引擎 taskAssignee 查询与门户 canProcessTask/shouldHideTaskInTodoList 均无法匹配发起人。
+    修复：02 脚本为 Task_SubmitRequest、Activity_1wf0eko 补 INITIATOR；05 迁移补丁目录 BPMN 并 UPDATE 运行中 First Review 的 assignee_ 为 start_user_id_。
+
+- id: "1362"
+  status: fixed
+  fixed_at: "2026-05-20"
+  severity: major
+  category: bug
+  summary: "采购发起 RequestItems 仅 1 行，我的申请显示 2 行（薄行 description 被 mergeAllSubTableSlices 并入）"
+  file: "frontend/user-portal/src/composables/tasks/shared.ts; frontend/user-portal/src/views/applications/detail.vue; frontend/user-portal/src/views/processes/start.vue"
+  note: |
+    根因：My Request 的 resyncMiDashboardFieldsFromVariablesOnBindings 对非 MI 流程仍 mergeAllSubTableSlicesFromVariables，
+    将 __subTables__ 其它切片/嵌套提升的薄行（仅 description 等）与完整行合并为第二行。
+    修复：非 MI 变量仅按 binding 切片 hydrate；dropSubsumedSubTableRows/normalizeSubTableRowsForBinding 剔除被子集行；
+    发起提交 __subTables__ 前同样规范化。

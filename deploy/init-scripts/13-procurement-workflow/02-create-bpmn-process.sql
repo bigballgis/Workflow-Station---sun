@@ -59,6 +59,8 @@ BEGIN
     <bpmn:userTask id="Task_SubmitRequest" name="Submit Request">
       <bpmn:extensionElements>
         <custom_1:properties>
+          <custom_1:property name="assigneeType" value="INITIATOR"/>
+          <custom_1:property name="assigneeLabel" value="Process Initiator"/>
           <custom_1:values name="actionIds" value="[%1$s]"/>
           <custom_1:values name="actionNames" value="[&amp;#34;Submit Request&amp;#34;]"/>
           
@@ -120,8 +122,8 @@ BEGIN
     <bpmn:userTask id="Activity_1wf0eko" name="First Review">
       <bpmn:extensionElements>
         <custom_1:properties>
-          
-          
+          <custom_1:property name="assigneeType" value="INITIATOR"/>
+          <custom_1:property name="assigneeLabel" value="Process Initiator"/>
           <custom_1:values name="actionIds" value="[%3$s,%4$s]"/>
           <custom_1:values name="actionNames" value="[&quot;Approve First&quot;,&quot;Rejected First&quot;]"/>
           

@@ -521,6 +521,130 @@ export function mergeAllSubTableSlicesFromVariables(
   return merged
 }
 
+const SUB_TABLE_ROW_META_KEYS = new Set([
+  '__subTables__',
+  'rowKey',
+  'task_status',
+  'task_current_node',
+  'task_id',
+  'task_definition_key',
+  'assignee_user_id',
+  'assignee_display_name',
+  'participant_id',
+  'parent_id',
+])
+
+/** True when a row carries MI dashboard columns (assignee / per-row task status). */
+export function isSubTableMiDashboardRow(row: Record<string, unknown> | null | undefined): boolean {
+  if (!row) return false
+  if (row.task_status !== undefined && row.task_status !== null) return true
+  if (row.task_id != null && String(row.task_id).trim() !== '') return true
+  if (row.task_definition_key != null && String(row.task_definition_key).trim() !== '') return true
+  if (row.assignee_user_id != null && String(row.assignee_user_id).trim() !== '') return true
+  return false
+}
+
+export function subTableVariablesIncludeMiRows(
+  savedSubTables: Record<string, unknown> | null | undefined,
+): boolean {
+  if (!savedSubTables || typeof savedSubTables !== 'object') return false
+  for (const arr of collectSubTableSliceArraysDeep(savedSubTables)) {
+    for (const row of arr) {
+      if (row && typeof row === 'object' && isSubTableMiDashboardRow(row as Record<string, unknown>)) {
+        return true
+      }
+    }
+  }
+  return false
+}
+
+function countSubstantiveSubTableRowFields(row: Record<string, unknown>): number {
+  let n = 0
+  for (const [k, v] of Object.entries(row)) {
+    if (SUB_TABLE_ROW_META_KEYS.has(k) || k.startsWith('__')) continue
+    if (v === undefined || v === null) continue
+    if (typeof v === 'string' && v.trim() === '') continue
+    if (typeof v === 'boolean') {
+      n++
+      continue
+    }
+    if (typeof v === 'number' && !Number.isNaN(v)) {
+      n++
+      continue
+    }
+    if (Array.isArray(v) && v.length > 0) {
+      n++
+      continue
+    }
+    if (typeof v === 'object') {
+      n++
+      continue
+    }
+    if (String(v).trim() !== '') n++
+  }
+  return n
+}
+
+function subTableRowFieldValuesEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true
+  if (a == null || b == null) return false
+  return String(a).trim() === String(b).trim()
+}
+
+/** True when every populated business field on {@code thin} matches {@code fat} (strict subset). */
+function isSubTableRowSubsetOf(
+  thin: Record<string, unknown>,
+  fat: Record<string, unknown>,
+): boolean {
+  let thinPopulated = 0
+  for (const [k, v] of Object.entries(thin)) {
+    if (SUB_TABLE_ROW_META_KEYS.has(k) || k.startsWith('__')) continue
+    if (v === undefined || v === null) continue
+    if (typeof v === 'string' && v.trim() === '') continue
+    thinPopulated++
+    if (!subTableRowFieldValuesEqual(v, fat[k])) return false
+  }
+  if (thinPopulated === 0) return false
+  return countSubstantiveSubTableRowFields(fat) > thinPopulated
+}
+
+/**
+ * Drop ghost rows produced when {@link mergeAllSubTableSlicesFromVariables} or nested {@code __subTables__}
+ * flattening pulls a thin slice (e.g. only {@code description}) into the same binding as a full row.
+ */
+export function dropSubsumedSubTableRows(rows: any[] | undefined | null): any[] {
+  if (!Array.isArray(rows) || rows.length <= 1) return Array.isArray(rows) ? [...rows] : []
+  const keep: any[] = []
+  for (let i = 0; i < rows.length; i++) {
+    const a = rows[i]
+    if (!a || typeof a !== 'object') continue
+    const aRec = a as Record<string, unknown>
+    if (countSubstantiveSubTableRowFields(aRec) === 0) continue
+    let subsumed = false
+    for (let j = 0; j < rows.length; j++) {
+      if (i === j) continue
+      const b = rows[j]
+      if (!b || typeof b !== 'object') continue
+      if (isSubTableRowSubsetOf(aRec, b as Record<string, unknown>)) {
+        subsumed = true
+        break
+      }
+    }
+    if (!subsumed) keep.push(a)
+  }
+  return keep
+}
+
+/** Remove vacuous rows and strict subsets before persisting or binding hydration. */
+export function normalizeSubTableRowsForBinding(rows: any[] | undefined | null): any[] {
+  return dropSubsumedSubTableRows(
+    (Array.isArray(rows) ? rows : []).filter(r => {
+      if (!r || typeof r !== 'object') return false
+      return countSubstantiveSubTableRowFields(r as Record<string, unknown>) > 0
+    }),
+  )
+}
+
 /**
  * Prefer API {@code primaryKeyFields} (admin-center / dw_field_definitions); if missing, infer from
  * designer sub-list columns marked {@code isPrimaryKey}, then subForm rules — never a fixed column name.

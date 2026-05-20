@@ -291,7 +291,8 @@ import { isProcessStartBlockedByWorkspace } from '@/utils/workspaceProcessGuard'
 import {
   normalizeSubTableName,
   resolveSubTablePrimaryKeyFields,
-  flattenNestedSubTableRowsIntoPayload
+  flattenNestedSubTableRowsIntoPayload,
+  normalizeSubTableRowsForBinding
 } from '@/composables/tasks/shared'
 
 const route = useRoute()
@@ -352,6 +353,7 @@ const subTableBindings = ref<Array<{
   /** Designer PK columns from tableBindings (admin-center); avoids hardcoding id/rowId. */
   primaryKeyFields?: string[]
   columns: Array<{ field: string; label: string; type?: string }>
+  portalViews?: Record<string, unknown> | null
   data: any[]
 }>>([])
 
@@ -359,7 +361,7 @@ const subTableBindings = ref<Array<{
 function buildStartFormSubTablesPayload(): Record<string, unknown> {
   const subTables: Record<string, unknown> = {}
   for (const b of subTableBindings.value) {
-    const rows = b.data
+    const rows = normalizeSubTableRowsForBinding(Array.isArray(b.data) ? b.data : [])
     subTables[b.bindingId] = rows
     subTables[String(b.bindingId)] = rows
     const tn = String(b.tableName || '').trim()
@@ -549,10 +551,15 @@ const loadFunctionUnitContent = async () => {
       console.log('[start] tableBindings:', selectedForm.tableBindings?.length, 'subForms keys:', Object.keys(subForms))
 
       // Load sub-table bindings (SUB / RELATED, skip PRIMARY)
+      const subTablePortalViewsPayload = formConfigForPk.subTablePortalViews || {}
       const bindings: typeof subTableBindings.value = []
       for (const b of (selectedForm.tableBindings || [])) {
         if (b.bindingType === 'PRIMARY') continue
         const tid = (b as { tableId?: number | null }).tableId
+        const bindingPortalViews =
+          subTablePortalViewsPayload[b.bindingId]
+          ?? subTablePortalViewsPayload[String(b.bindingId)]
+          ?? null
         bindings.push({
           bindingId: b.bindingId,
           tableId: tid != null ? Number(tid) : null,
@@ -567,6 +574,7 @@ const loadFunctionUnitContent = async () => {
             formConfigForPk
           ),
           columns: deriveColumnsFromBinding(b, subForms),
+          portalViews: bindingPortalViews,
           data: []
         })
       }
@@ -738,7 +746,7 @@ const loadDraftData = async () => {
         subTableBindings.value.forEach(binding => {
           const saved = st[binding.bindingId] ?? st[String(binding.bindingId)]
           if (Array.isArray(saved)) {
-            binding.data = saved
+            binding.data = normalizeSubTableRowsForBinding(saved)
           }
         })
       }

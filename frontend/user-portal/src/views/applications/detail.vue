@@ -411,6 +411,8 @@ import { resolveAssigneeFieldForBinding } from '@/utils/subTableAssignment'
 import {
   mergeSubTableRowsByRowId,
   mergeAllSubTableSlicesFromVariables,
+  subTableVariablesIncludeMiRows,
+  dropSubsumedSubTableRows,
   resolveSubTablePrimaryKeyFields,
   hydrateChildSubTablesFromParentsNestedRows,
   flattenNestedSubTableRowsIntoPayload,
@@ -676,12 +678,13 @@ function getSavedSubTableRowsFromVariables(
     chunks.push(v)
   }
   if (chunks.length === 0) return undefined
-  if (chunks.length === 1) return chunks[0]
-  let merged: any[] = []
-  for (const chunk of chunks) {
-    merged = mergeSubTableRowsByRowId(merged, chunk, primaryKeyFields ?? null)
+  let merged: any[] = chunks.length === 1 ? [...chunks[0]!] : []
+  if (chunks.length > 1) {
+    for (const chunk of chunks) {
+      merged = mergeSubTableRowsByRowId(merged, chunk, primaryKeyFields ?? null)
+    }
   }
-  return merged
+  return dropSubsumedSubTableRows(merged)
 }
 
 type SubTableBindingAlignable = {
@@ -842,10 +845,11 @@ function alignProcessSubTableBindingsBySharedTable() {
 function resyncMiDashboardFieldsFromVariablesOnBindings(all: SubTableBindingAlignable[]) {
   const savedSubTables = formData.value.__subTables__
   if (!savedSubTables || typeof savedSubTables !== 'object') return
-  const allSlicesMerged = mergeAllSubTableSlicesFromVariables(
-    savedSubTables as Record<string, unknown>,
-    undefined
-  )
+  const savedMap = savedSubTables as Record<string, unknown>
+  const useAllSlices = subTableVariablesIncludeMiRows(savedMap)
+  const allSlicesMerged = useAllSlices
+    ? mergeAllSubTableSlicesFromVariables(savedMap, undefined)
+    : []
   for (const b of all) {
     const pk = b.primaryKeyFields ?? null
     const bindingSaved = getSavedSubTableRowsFromVariables(
@@ -857,14 +861,14 @@ function resyncMiDashboardFieldsFromVariablesOnBindings(all: SubTableBindingAlig
       },
       pk
     )
-    const fromVariables = mergeSubTableRowsByRowId(
-      allSlicesMerged,
-      bindingSaved ?? [],
-      pk
-    )
+    const fromVariables = useAllSlices
+      ? mergeSubTableRowsByRowId(allSlicesMerged, bindingSaved ?? [], pk)
+      : (bindingSaved ?? [])
     if (fromVariables.length === 0 && !(Array.isArray(b.data) && b.data.length > 0)) continue
     // Variables (backend MI overlay) win over binding rows polluted by enrich.
-    b.data = mergeSubTableRowsByRowId(Array.isArray(b.data) ? b.data : [], fromVariables, pk)
+    b.data = dropSubsumedSubTableRows(
+      mergeSubTableRowsByRowId(Array.isArray(b.data) ? b.data : [], fromVariables, pk)
+    )
   }
 }
 
@@ -1058,13 +1062,8 @@ function shouldShowBindingTaskStatus(binding: { portalViews?: any; data?: any[] 
  * binding has no portalViews configured, defaults to NO inline form (legacy behavior).
  */
 function shouldShowBindingFormBelow(binding: { portalViews?: any; formFields?: any[] }): boolean {
-  const pv = binding?.portalViews
-  if (!pv || typeof pv !== 'object') return false
-  const initiator = pv.initiatorRequest
-  if (initiator === 'tableOnly') return false
-  if (initiator === 'summaryWithLinkFormModal') return false
-  // mirrorTodo (default) → follow assigneeTodo
-  return pv.assigneeTodo === 'formBelowTable' && Array.isArray(binding.formFields) && binding.formFields.length > 0
+  if (!Array.isArray(binding.formFields) || binding.formFields.length === 0) return false
+  return resolveSubTableDisplayMode(binding.portalViews, 'initiatorRequest') === 'formBelowTable'
 }
 
 /** Aligns with FormRenderer: summary + Link/Details → compact cells (no inline lookup backfill block). */
@@ -3412,81 +3411,16 @@ function buildLookupColumnProps(rawLookupConfig: unknown): Record<string, any> {
 }
 
 // Derive display columns for a sub-table binding from the designer config.
-// My Request must only show columns configured in developer-workstation.
+// List-view column order comes from subListViews; control types/options come from subForm (same as process start / task detail).
 const deriveColumnsFromBinding = (binding: any, formConfig?: Record<string, any>): Array<{ field: string; label: string; type?: string; required?: boolean; options?: Array<{ label: string; value: any }>; props?: Record<string, any> }> => {
-  const listColumns =
-    formConfig?.subListViews?.[binding.bindingId]?.columns ||
-    formConfig?.subListViews?.[String(binding.bindingId)]?.columns
-  if (Array.isArray(listColumns) && listColumns.length > 0) {
-    const subFormRule =
-      binding.subFormConfig?.rule ||
-      formConfig?.subForms?.[binding.bindingId]?.rule ||
-      formConfig?.subForms?.[String(binding.bindingId)]?.rule
-    const ruleByField = new Map(
-      (Array.isArray(subFormRule) ? subFormRule : []).map((ruleItem: any) => [ruleItem?.field, ruleItem])
-    )
-    const assigneeField = resolveAssigneeFieldForBinding(
-      listColumns.filter((c: any) => c?.fieldName).map((c: any) => ({ field: c.fieldName })),
-      binding.tableDisplayName || binding.tableName
-    )
-    return listColumns
-      .filter((col: any) => col && col.fieldName)
-      .map((column: any) => {
-        if (column.columnType === 'linkForm') {
-          return {
-            field: column.fieldName || `linkForm:${column.componentId || binding.bindingId}`,
-            label: column.columnLabel || column.comment || column.linkText || 'Link Form',
-            type: 'linkForm',
-            minWidth: column.minWidth || 120,
-            props: {
-              linkText: column.linkText || 'Details',
-              componentId: column.componentId,
-              boundSubTableBindingId: column.boundSubTableBindingId,
-              boundSubTableName: column.boundSubTableName
-            }
-          }
-        }
-        if (column.columnType === 'lookup') {
-          const label = column.columnLabel || column.comment || 'Lookup'
-          const field =
-            isSyntheticLookupField(column.fieldName) && isAssigneeLikeLabel(label) && assigneeField
-              ? assigneeField
-              : (column.fieldName || `lookup:${binding.bindingId}`)
-          return {
-            field,
-            label,
-            type: 'lookup',
-            minWidth: 260,
-            props: buildLookupColumnProps(column.lookupConfig || '{}')
-          }
-        }
-        const fieldRule = ruleByField.get(column.fieldName)
-        if (fieldRule?.type === 'lookup' || fieldRule?.props?.lookupConfig) {
-          return {
-            field: column.fieldName,
-            label: column.comment || column.columnLabel || fieldRule?.title || column.fieldName,
-            type: 'lookup',
-            minWidth: column.minWidth || 260,
-            props: buildLookupColumnProps(fieldRule?.props?.lookupConfig || '{}')
-          }
-        }
-        return {
-          field: column.fieldName,
-          label: column.columnLabel || column.comment || column.fieldName,
-          type: mapDesignerColumnType(column.dataType, column.columnType),
-          ...(column.linkText || column.componentId
-            ? { props: { linkText: column.linkText, componentId: column.componentId } }
-            : {})
-        }
-      })
-  }
-
   const subFormRule =
     binding.subFormConfig?.rule ||
     formConfig?.subForms?.[binding.bindingId]?.rule ||
     formConfig?.subForms?.[String(binding.bindingId)]?.rule
-  if (subFormRule && Array.isArray(subFormRule) && subFormRule.length > 0) {
-    return subFormRule.map((r: any) => {
+
+  const subFormColumns =
+    subFormRule && Array.isArray(subFormRule) && subFormRule.length > 0
+      ? subFormRule.map((r: any) => {
       const rProps = r.props || {}
       let type: string | undefined
 
@@ -3600,8 +3534,76 @@ const deriveColumnsFromBinding = (binding: any, formConfig?: Record<string, any>
         ...(Object.keys(passProps).length > 0 ? { props: passProps } : {}),
       }
     })
+      : []
+
+  const listColumns =
+    formConfig?.subListViews?.[binding.bindingId]?.columns ||
+    formConfig?.subListViews?.[String(binding.bindingId)]?.columns
+
+  if (Array.isArray(listColumns) && listColumns.length > 0) {
+    const ruleByField = new Map(
+      (Array.isArray(subFormRule) ? subFormRule : []).map((ruleItem: any) => [ruleItem?.field, ruleItem])
+    )
+    const subFormColumnByField = new Map(subFormColumns.map(col => [col.field, col]))
+    const assigneeField = resolveAssigneeFieldForBinding(
+      subFormColumns as Array<{ field?: string }>,
+      binding.tableDisplayName || binding.tableName
+    )
+    return listColumns
+      .filter((col: any) => col && col.fieldName)
+      .map((column: any) => {
+        if (column.columnType === 'linkForm') {
+          return {
+            field: column.fieldName || `linkForm:${column.componentId || binding.bindingId}`,
+            label: column.columnLabel || column.comment || column.linkText || 'Link Form',
+            type: 'linkForm',
+            minWidth: column.minWidth || 120,
+            props: {
+              linkText: column.linkText || 'Details',
+              componentId: column.componentId,
+              boundSubTableBindingId: column.boundSubTableBindingId,
+              boundSubTableName: column.boundSubTableName
+            }
+          }
+        }
+        if (column.columnType === 'lookup') {
+          const label = column.columnLabel || column.comment || 'Lookup'
+          const field =
+            isSyntheticLookupField(column.fieldName) && isAssigneeLikeLabel(label) && assigneeField
+              ? assigneeField
+              : (column.fieldName || `lookup:${binding.bindingId}`)
+          return {
+            field,
+            label,
+            type: 'lookup',
+            minWidth: 260,
+            props: buildLookupColumnProps(column.lookupConfig || '{}')
+          }
+        }
+
+        const fieldRule = ruleByField.get(column.fieldName)
+        const baseColumn = subFormColumnByField.get(column.fieldName)
+        if (fieldRule?.type === 'lookup' || fieldRule?.props?.lookupConfig || baseColumn?.type === 'lookup') {
+          return {
+            ...(baseColumn || {}),
+            field: column.fieldName,
+            label: column.comment || column.columnLabel || baseColumn?.label || fieldRule?.title || column.fieldName,
+            type: 'lookup',
+            minWidth: column.minWidth || baseColumn?.minWidth || 260,
+            props: buildLookupColumnProps(fieldRule?.props?.lookupConfig || baseColumn?.props?.lookupConfig || '{}')
+          }
+        }
+
+        return {
+          ...(baseColumn || {}),
+          field: column.fieldName,
+          label: column.comment || column.columnLabel || baseColumn?.label || column.fieldName,
+          minWidth: column.minWidth || baseColumn?.minWidth || 100
+        }
+      })
   }
-  return []
+
+  return subFormColumns
 }
 
 /** Owning form JSON for a binding id (any form in the function unit may declare the binding). */
@@ -3912,18 +3914,6 @@ function buildPreviousFormEntry(
     ...(options.isActiveMiSubTaskStep === true ? { isActiveMiSubTaskStep: true } : {}),
     subTableBindings: prevBindings
   }
-}
-
-function mapDesignerColumnType(dataType?: string, columnType?: string): string | undefined {
-  if (columnType === 'linkForm') return 'linkForm'
-  if (columnType === 'lookup') return 'lookup'
-  const normalized = String(dataType || '').toUpperCase()
-  if (normalized === 'BIGINT' || normalized === 'INTEGER' || normalized === 'DECIMAL' || normalized === 'NUMBER') return 'number'
-  if (normalized === 'BOOLEAN') return 'switch'
-  if (normalized === 'DATE') return 'date'
-  if (normalized === 'TIMESTAMP' || normalized === 'DATETIME') return 'datetime'
-  if (normalized === 'TEXT') return 'textarea'
-  return 'text'
 }
 
 // Load flow history

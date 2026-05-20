@@ -882,7 +882,11 @@ async function loadSubTableViewConfig(bindingId: number, binding: any) {
     }
 
     const savedListDesigner = (selectedForm.value.configJson?.subListViews || {})[bindingId] || {}
-    const mergedViewFields = mergeSubTableListColumns(viewFields, savedListDesigner)
+    const liveColumns = subTableViewState.value[bindingId]?.viewFields
+    const listConfigForMerge = liveColumns?.length
+      ? { ...savedListDesigner, columns: liveColumns }
+      : savedListDesigner
+    const mergedViewFields = mergeSubTableListColumns(viewFields, listConfigForMerge)
     subTableViewState.value[bindingId] = {
       allFields: availableFields,
       viewFields: mergedViewFields
@@ -891,11 +895,66 @@ async function loadSubTableViewConfig(bindingId: number, binding: any) {
     console.error('[FormDesigner] Failed to load sub-table view config:', e)
     // Initialize with empty state
     const savedListDesigner = (selectedForm.value.configJson?.subListViews || {})[bindingId] || {}
-    const mergedViewFields = mergeSubTableListColumns([], savedListDesigner)
+    const liveColumns = subTableViewState.value[bindingId]?.viewFields
+    const listConfigForMerge = liveColumns?.length
+      ? { ...savedListDesigner, columns: liveColumns }
+      : savedListDesigner
+    const mergedViewFields = mergeSubTableListColumns([], listConfigForMerge)
     subTableViewState.value[bindingId] = {
       allFields: [],
       viewFields: mergedViewFields
     }
+  }
+}
+
+function getSubTableListViewBaseColumns(bindingId: number): SubTableListColumnDTO[] {
+  const live = subTableViewState.value[bindingId]?.viewFields
+  if (live?.length) return live
+  const saved = (selectedForm.value?.configJson?.subListViews || {})[bindingId]?.columns
+  return Array.isArray(saved) ? saved : []
+}
+
+/** Append new table/form fields to list view columns without removing link/lookup/action columns. */
+function appendSubTableListFieldColumns(
+  existingColumns: SubTableListColumnDTO[],
+  newFields: SubTableFieldDTO[]
+): SubTableListColumnDTO[] {
+  const existingFieldNames = new Set(
+    existingColumns
+      .filter(c => !c.columnType || c.columnType === 'field')
+      .map(c => c.fieldName)
+  )
+  const merged = [...existingColumns]
+  for (const field of newFields) {
+    if (!field.fieldName || existingFieldNames.has(field.fieldName)) continue
+    merged.push({ ...field, columnType: 'field' })
+    existingFieldNames.add(field.fieldName)
+  }
+  return merged
+}
+
+function subTableFieldColumnsFromFormRule(rule: any[]): SubTableFieldDTO[] {
+  if (!Array.isArray(rule)) return []
+  return rule
+    .filter(r => r?.field && r.type !== 'subTable')
+    .map(r => ({
+      fieldName: r.field,
+      dataType: 'VARCHAR',
+      nullable: true,
+      isPrimaryKey: false,
+      comment: r.title || r.field,
+    }))
+}
+
+function syncSubTableListViewFromFormRules(bindingId: number, rule: any[]) {
+  const newFields = subTableFieldColumnsFromFormRule(rule)
+  if (!newFields.length) return
+  const state = subTableViewState.value[bindingId] || { allFields: [], viewFields: [] }
+  const merged = appendSubTableListFieldColumns(getSubTableListViewBaseColumns(bindingId), newFields)
+  if (merged.length === getSubTableListViewBaseColumns(bindingId).length) return
+  subTableViewState.value = {
+    ...subTableViewState.value,
+    [bindingId]: { ...state, viewFields: merged }
   }
 }
 
@@ -1961,13 +2020,6 @@ async function handleConfirmImportFields() {
       const bindingId = importTableId.value
         ? getBindingIdForTable(importTableId.value)
         : Number(activeDesignerTab.value)
-      if (bindingId) {
-        subTableViewState.value = {
-          ...subTableViewState.value,
-          [bindingId]: { allFields: allSubFields, viewFields: subFields }
-        }
-      }
-
       // Also import to sub-table form designer
       const rules = selectedImportFields.value.map(fieldToFormRule)
 
@@ -1992,6 +2044,16 @@ async function handleConfirmImportFields() {
           const merged = [...currentRules, ...newRules]
           injectUploadButtonLabels(merged, t('form.clickToUpload'))
           targetRef.setRule(merged)
+        }
+      }
+
+      if (bindingId) {
+        const state = subTableViewState.value[bindingId] || { allFields: [], viewFields: [] }
+        const baseColumns = getSubTableListViewBaseColumns(bindingId)
+        const mergedViewFields = appendSubTableListFieldColumns(baseColumns, subFields)
+        subTableViewState.value = {
+          ...subTableViewState.value,
+          [bindingId]: { allFields: allSubFields, viewFields: mergedViewFields }
         }
       }
 
@@ -2682,6 +2744,15 @@ async function handleSaveForm(isManual = false) {
         // Tab never visited — preserve previously saved data
         const existing = (selectedForm.value!.configJson?.subForms || {})[binding.bindingId]
         if (existing) subForms[binding.bindingId] = existing
+      }
+    })
+
+    // Incrementally add sub-form fields to list view columns (preserve link/lookup columns).
+    designerSubBindings.value.forEach((binding) => {
+      if (binding.bindingType !== 'SUB') return
+      const subForm = subForms[binding.bindingId]
+      if (subForm?.rule?.length) {
+        syncSubTableListViewFromFormRules(binding.bindingId, subForm.rule)
       }
     })
 

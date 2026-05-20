@@ -12,6 +12,7 @@
 | `02-create-bpmn-process.sql` | BPMN 流程定义（base64 XML） |
 | `03-form-table-bindings.sql` | Form-Table 绑定 + subForms rule（30个控件） |
 | `04-add-new-subtable-fields.sql` | ~~已废弃~~ 仅旧数据库迁移用，新环境无需执行 |
+| `05-fix-bpmn-assignee-initiator.sql` | 为 Submit/First Review 补 `assigneeType=INITIATOR`；修复无 assignee 的运行中 First Review |
 
 ## 执行顺序
 

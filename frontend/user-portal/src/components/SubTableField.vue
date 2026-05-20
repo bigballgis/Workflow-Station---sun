@@ -100,6 +100,12 @@
             <template v-else-if="col.type === 'password'">
               <span>••••••</span>
             </template>
+            <template v-else-if="col.type === 'switch'">
+              <el-switch
+                :model-value="scope.row[col.field] === true || scope.row[col.field] === 'true' || scope.row[col.field] === 1 || scope.row[col.field] === '1'"
+                disabled
+              />
+            </template>
             <template v-else-if="col.type === 'rate'">
               <el-rate
                 v-if="scope.row[col.field] != null"
