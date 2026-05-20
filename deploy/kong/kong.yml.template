@@ -230,6 +230,15 @@ plugins:
       bandwidth_metrics: true
       upstream_health_metrics: true
 
+  # --- HSTS (production only — uncomment and set TLS before enabling) ---
+  # HSTS tells browsers to only use HTTPS for this domain. Only enable in production
+  # environments with valid TLS certificates. Enabling on HTTP breaks browser access.
+  # - name: response-transformer
+  #   config:
+  #     add:
+  #       headers:
+  #         - "Strict-Transport-Security:max-age=31536000; includeSubDomains"
+
   # --- 登录端点路由级限流 (10/分钟) ---
   - name: rate-limiting
     route: admin-auth-login-route

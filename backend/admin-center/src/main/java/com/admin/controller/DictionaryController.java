@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import com.platform.security.util.SecurityContextUtils;
 
 @Slf4j
 @RestController
@@ -35,8 +36,9 @@ public class DictionaryController {
     @PostMapping
     @Operation(summary = "创建字典")
     public ResponseEntity<Dictionary> createDictionary(
-            @Valid @RequestBody DictionaryCreateRequest request,
-            @RequestHeader("X-User-Id") String userId) {
+            @Valid @RequestBody DictionaryCreateRequest request) {
+        String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         Dictionary dictionary = dictionaryManager.createDictionary(request, userId);
         return ResponseEntity.status(HttpStatus.CREATED).body(dictionary);
     }
@@ -72,8 +74,9 @@ public class DictionaryController {
     @Operation(summary = "更新字典")
     public ResponseEntity<Dictionary> updateDictionary(
             @PathVariable String id,
-            @Valid @RequestBody DictionaryUpdateRequest request,
-            @RequestHeader("X-User-Id") String userId) {
+            @Valid @RequestBody DictionaryUpdateRequest request) {
+        String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         return ResponseEntity.ok(dictionaryManager.updateDictionary(id, request, userId));
     }
     
@@ -87,14 +90,18 @@ public class DictionaryController {
     @PostMapping("/{id}/activate")
     @Operation(summary = "启用字典")
     public ResponseEntity<Dictionary> activateDictionary(
-            @PathVariable String id, @RequestHeader("X-User-Id") String userId) {
+            @PathVariable String id) {
+        String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         return ResponseEntity.ok(dictionaryManager.activateDictionary(id, userId));
     }
     
     @PostMapping("/{id}/deactivate")
     @Operation(summary = "禁用字典")
     public ResponseEntity<Dictionary> deactivateDictionary(
-            @PathVariable String id, @RequestHeader("X-User-Id") String userId) {
+            @PathVariable String id) {
+        String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         return ResponseEntity.ok(dictionaryManager.deactivateDictionary(id, userId));
     }
     
@@ -110,8 +117,9 @@ public class DictionaryController {
     @Operation(summary = "创建字典项")
     public ResponseEntity<DictionaryItem> createDictionaryItem(
             @PathVariable String dictionaryId,
-            @Valid @RequestBody DictionaryItemRequest request,
-            @RequestHeader("X-User-Id") String userId) {
+            @Valid @RequestBody DictionaryItemRequest request) {
+        String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(dictionaryManager.createDictionaryItem(dictionaryId, request, userId));
     }
@@ -140,15 +148,18 @@ public class DictionaryController {
     @Operation(summary = "更新字典项")
     public ResponseEntity<DictionaryItem> updateDictionaryItem(
             @PathVariable String itemId,
-            @Valid @RequestBody DictionaryItemRequest request,
-            @RequestHeader("X-User-Id") String userId) {
+            @Valid @RequestBody DictionaryItemRequest request) {
+        String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         return ResponseEntity.ok(dictionaryManager.updateDictionaryItem(itemId, request, userId));
     }
     
     @DeleteMapping("/items/{itemId}")
     @Operation(summary = "删除字典项")
     public ResponseEntity<Void> deleteDictionaryItem(
-            @PathVariable String itemId, @RequestHeader("X-User-Id") String userId) {
+            @PathVariable String itemId) {
+        String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         dictionaryManager.deleteDictionaryItem(itemId, userId);
         return ResponseEntity.noContent().build();
     }
@@ -157,8 +168,9 @@ public class DictionaryController {
     @Operation(summary = "更新字典项翻译")
     public ResponseEntity<Void> updateItemTranslations(
             @PathVariable String itemId,
-            @RequestBody Map<String, String> translations,
-            @RequestHeader("X-User-Id") String userId) {
+            @RequestBody Map<String, String> translations) {
+        String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         dictionaryManager.updateItemTranslations(itemId, translations, userId);
         return ResponseEntity.ok().build();
     }
@@ -175,8 +187,9 @@ public class DictionaryController {
     @Operation(summary = "回滚到指定版本")
     public ResponseEntity<Dictionary> rollbackToVersion(
             @PathVariable String dictionaryId,
-            @PathVariable Integer version,
-            @RequestHeader("X-User-Id") String userId) {
+            @PathVariable Integer version) {
+        String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         return ResponseEntity.ok(dictionaryManager.rollbackToVersion(dictionaryId, version, userId));
     }
 }

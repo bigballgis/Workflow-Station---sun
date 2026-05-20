@@ -5,10 +5,12 @@ import com.developer.dto.MemberResponse;
 import com.developer.dto.MemberUpdateRequest;
 import com.developer.entity.Member;
 import com.developer.repository.MemberRepository;
+import com.platform.security.util.SecurityContextUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -39,6 +41,12 @@ public class MemberService {
             // Validate unique constraints
             validateUniqueConstraints(request.getUsername(), request.getEmail(), null);
             
+            // Only admins can assign non-default roles
+            String assignedRole = request.getRole();
+            if (assignedRole != null && !assignedRole.isEmpty()) {
+                requireAdminPrivilege("assign role to member");
+            }
+            
             // Create member entity
             Member member = Member.builder()
                     .username(request.getUsername())
@@ -47,7 +55,7 @@ public class MemberService {
                     .employeeId(request.getEmployeeId())
                     .businessUnitId(request.getBusinessUnitId())
                     .businessUnitName(request.getBusinessUnitName())
-                    .role(request.getRole())
+                    .role(assignedRole)
                     .active(true)
                     .createdBy(currentUserId)
                     .updatedBy(currentUserId)
@@ -252,9 +260,11 @@ public class MemberService {
             member.setBusinessUnitName(request.getBusinessUnitName());
         }
         if (StringUtils.hasText(request.getRole())) {
+            requireAdminPrivilege("change member role");
             member.setRole(request.getRole());
         }
         if (request.getActive() != null) {
+            requireAdminPrivilege("change member active status");
             member.setActive(request.getActive());
         }
         member.setUpdatedBy(currentUserId);
@@ -276,8 +286,21 @@ public class MemberService {
                 .active(member.getActive())
                 .createdAt(member.getCreatedAt())
                 .updatedAt(member.getUpdatedAt())
-                .createdBy(member.getCreatedBy())
-                .updatedBy(member.getUpdatedBy())
                 .build();
+    }
+
+    /**
+     * Require admin or super-admin privilege for a sensitive operation.
+     * Throws AccessDeniedException if the current user lacks the required role.
+     */
+    private void requireAdminPrivilege(String operation) {
+        boolean isAdmin = SecurityContextUtils.isSuperAdmin()
+                || SecurityContextUtils.hasRole("ADMIN");
+        if (!isAdmin) {
+            log.warn("Unauthorized attempt to {} by user: {}",
+                    operation, SecurityContextUtils.getCurrentUsername().orElse("unknown"));
+            throw new AccessDeniedException(
+                    "Only administrators can " + operation + ". Current user lacks ADMIN role.");
+        }
     }
 }

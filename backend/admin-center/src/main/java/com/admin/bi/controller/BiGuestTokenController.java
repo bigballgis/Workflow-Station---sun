@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import com.platform.security.util.SecurityContextUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -27,10 +28,9 @@ public class BiGuestTokenController {
     @PostMapping
     @Operation(summary = "获取 Guest Token", description = "验证用户 Dashboard 分配权限并获取 Superset Guest Token")
     public ResponseEntity<GuestTokenResponse> getGuestToken(
-            @RequestHeader("X-User-Id") String userId,
             @RequestBody @Valid GuestTokenRequest request) {
-        log.info("User {} requesting guest token for dashboard {}", userId, request.getDashboardId());
-        GuestTokenResponse response = guestTokenService.getGuestToken(userId, request);
+        log.info("User {} requesting guest token for dashboard {}", SecurityContextUtils.getCurrentUserId(), request.getDashboardId());
+        GuestTokenResponse response = guestTokenService.getGuestToken(SecurityContextUtils.getCurrentUserId(), request);
         return ResponseEntity.ok(response);
     }
 }

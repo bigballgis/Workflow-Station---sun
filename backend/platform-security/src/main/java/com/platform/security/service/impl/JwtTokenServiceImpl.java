@@ -71,8 +71,6 @@ public class JwtTokenServiceImpl implements JwtTokenService {
                 .subject(userId)
                 .claim(CLAIM_USER_ID, userId)
                 .claim(CLAIM_USERNAME, username)
-                .claim(CLAIM_EMAIL, email)
-                .claim(CLAIM_DISPLAY_NAME, displayName)
                 .claim(CLAIM_ROLES, roles != null ? roles : Collections.emptyList())
                 .claim(CLAIM_PERMISSIONS, permissions != null ? permissions : Collections.emptyList())
                 .claim(CLAIM_LANGUAGE, language != null ? language : "zh_CN")

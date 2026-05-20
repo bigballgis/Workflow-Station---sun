@@ -10,6 +10,7 @@ import com.platform.security.entity.Permission;
 import com.admin.entity.PermissionChangeHistory;
 import com.platform.security.entity.Role;
 import com.platform.security.entity.UserRole;
+import com.platform.security.util.SecurityContextUtils;
 import com.admin.enums.RoleType;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -148,8 +149,9 @@ public class RoleController {
     public ResponseEntity<Void> addMember(
             @PathVariable String roleId,
             @PathVariable String userId,
-            @RequestParam(required = false) String reason,
-            @RequestHeader("X-User-Id") String operatedBy) {
+            @RequestParam(required = false) String reason) {
+        String operatedBy = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         roleMemberManager.assignRoleToUser(userId, roleId, operatedBy, reason);
         return ResponseEntity.ok().build();
     }
@@ -159,8 +161,9 @@ public class RoleController {
     public ResponseEntity<Void> removeMember(
             @PathVariable String roleId,
             @PathVariable String userId,
-            @RequestParam(required = false) String reason,
-            @RequestHeader("X-User-Id") String operatedBy) {
+            @RequestParam(required = false) String reason) {
+        String operatedBy = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         roleMemberManager.removeRoleFromUser(userId, roleId, operatedBy, reason);
         return ResponseEntity.noContent().build();
     }
@@ -169,8 +172,9 @@ public class RoleController {
     @Operation(summary = "批量添加角色成员")
     public ResponseEntity<BatchRoleMemberResult> batchAddMembers(
             @PathVariable String roleId,
-            @RequestBody @Valid BatchRoleMemberRequest request,
-            @RequestHeader("X-User-Id") String operatedBy) {
+            @RequestBody @Valid BatchRoleMemberRequest request) {
+        String operatedBy = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         request.setRoleId(roleId);
         BatchRoleMemberResult result = roleMemberManager.batchAddMembers(request, operatedBy);
         return ResponseEntity.ok(result);
@@ -180,8 +184,9 @@ public class RoleController {
     @Operation(summary = "批量移除角色成员")
     public ResponseEntity<BatchRoleMemberResult> batchRemoveMembers(
             @PathVariable String roleId,
-            @RequestBody @Valid BatchRoleMemberRequest request,
-            @RequestHeader("X-User-Id") String operatedBy) {
+            @RequestBody @Valid BatchRoleMemberRequest request) {
+        String operatedBy = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         request.setRoleId(roleId);
         BatchRoleMemberResult result = roleMemberManager.batchRemoveMembers(request, operatedBy);
         return ResponseEntity.ok(result);

@@ -33,6 +33,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class RoleMemberManagerComponent {
     
+    // DOS 防护: 批量操作用户数量限制
+    private static final int MAX_BATCH_USERS = 500;
+
     private final RoleRepository roleRepository;
     private final UserRepository userRepository;
     private final UserRoleRepository userRoleRepository;
@@ -113,7 +116,13 @@ public class RoleMemberManagerComponent {
         BatchRoleMemberResult result = BatchRoleMemberResult.builder()
                 .total(request.getUserIds().size())
                 .build();
-        
+
+        // 防止 DOS 攻击: 限制批量操作用户数量
+        if (request.getUserIds().size() > MAX_BATCH_USERS) {
+            throw new AdminBusinessException("USER_COUNT_EXCEEDED",
+                    "批量操作用户数量超过限制: " + request.getUserIds().size() + ", 最大 " + MAX_BATCH_USERS);
+        }
+
         for (String userId : request.getUserIds()) {
             try {
                 // 验证用户存在
@@ -172,7 +181,13 @@ public class RoleMemberManagerComponent {
         BatchRoleMemberResult result = BatchRoleMemberResult.builder()
                 .total(request.getUserIds().size())
                 .build();
-        
+
+        // 防止 DOS 攻击: 限制批量操作用户数量
+        if (request.getUserIds().size() > MAX_BATCH_USERS) {
+            throw new AdminBusinessException("USER_COUNT_EXCEEDED",
+                    "批量操作用户数量超过限制: " + request.getUserIds().size() + ", 最大 " + MAX_BATCH_USERS);
+        }
+
         for (String userId : request.getUserIds()) {
             try {
                 // 查找用户角色关联

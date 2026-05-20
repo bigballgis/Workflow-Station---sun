@@ -18,6 +18,7 @@ import com.admin.exception.AdminBusinessException;
 import com.admin.service.FunctionUnitAccessService;
 import com.platform.common.dto.ApiResponse;
 import com.platform.common.resource.AbstractBaseController;
+import com.platform.security.util.SecurityContextUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -50,6 +51,9 @@ import java.util.stream.Collectors;
 @Tag(name = "功能单元管理", description = "功能包导入、部署管理和版本查询接口")
 public class FunctionUnitController extends AbstractBaseController {
     
+    // DOS 防护: 批量操作 ID 数量限制
+    private static final int MAX_BATCH_IDS = 100;
+
     private final FunctionUnitManagerComponent functionUnitManager;
     private final DeploymentManagerComponent deploymentManager;
     private final FunctionUnitAccessService accessService;
@@ -73,8 +77,9 @@ public class FunctionUnitController extends AbstractBaseController {
     @PostMapping("/import")
     @Operation(summary = "导入功能包", description = "导入功能包文件")
     public ResponseEntity<ImportResult> importFunctionPackage(
-            @Valid @RequestBody FunctionUnitImportRequest request,
-            @Parameter(description = "导入者ID") @RequestHeader("X-User-Id") String importerId) {
+            @Valid @RequestBody FunctionUnitImportRequest request) {
+        String importerId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         log.info("Importing function package: {}", request.getFileName());
         ImportResult result = functionUnitManager.importFunctionPackage(request, importerId);
         return ResponseEntity.status(result.isSuccess() ? HttpStatus.CREATED : HttpStatus.BAD_REQUEST).body(result);
@@ -173,8 +178,9 @@ public class FunctionUnitController extends AbstractBaseController {
     @Operation(summary = "切换启用状态", description = "切换功能单元的启用/禁用状态")
     public ResponseEntity<ApiResponse<FunctionUnitInfo>> setEnabled(
             @Parameter(description = "功能单元ID") @PathVariable String id,
-            @RequestBody @Valid com.admin.dto.request.SetEnabledRequest request,
-            @Parameter(description = "操作人ID") @RequestHeader(value = "X-User-Id", required = false) String operatorId) {
+            @RequestBody @Valid com.admin.dto.request.SetEnabledRequest request) {
+        String operatorId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         log.info("Setting enabled status for function unit {}: {}", id, request.getEnabled());
         return handleRequest(() -> {
             String op = operatorId != null && !operatorId.isBlank() ? operatorId : "system";
@@ -188,9 +194,17 @@ public class FunctionUnitController extends AbstractBaseController {
     @PutMapping("/batch/enabled")
     @Operation(summary = "批量启用/禁用", description = "批量切换功能单元的启用/禁用状态")
     public ResponseEntity<ApiResponse<List<FunctionUnitInfo>>> batchSetEnabled(
-            @RequestBody @Valid com.admin.dto.request.BatchEnabledRequest request,
-            @Parameter(description = "操作人ID") @RequestHeader(value = "X-User-Id", required = false) String operatorId) {
+            @RequestBody @Valid com.admin.dto.request.BatchEnabledRequest request) {
+        String operatorId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         log.info("Batch setting enabled={} for {} function units", request.getEnabled(), request.getIds().size());
+
+        // 防止 DOS 攻击: 限制批量操作 ID 数量
+        if (request.getIds().size() > MAX_BATCH_IDS) {
+            throw new AdminBusinessException("ID_COUNT_EXCEEDED",
+                    "批量操作 ID 数量超过限制: " + request.getIds().size() + ", 最大 " + MAX_BATCH_IDS);
+        }
+
         String op = operatorId != null && !operatorId.isBlank() ? operatorId : "system";
         return handleRequest(() -> request.getIds().stream()
                 .map(id -> {
@@ -205,6 +219,13 @@ public class FunctionUnitController extends AbstractBaseController {
     public ResponseEntity<ApiResponse<Void>> batchDelete(
             @RequestBody @Valid com.admin.dto.request.BatchDeleteRequest request) {
         log.info("Batch deleting {} function units", request.getIds().size());
+
+        // 防止 DOS 攻击: 限制批量操作 ID 数量
+        if (request.getIds().size() > MAX_BATCH_IDS) {
+            throw new AdminBusinessException("ID_COUNT_EXCEEDED",
+                    "批量操作 ID 数量超过限制: " + request.getIds().size() + ", 最大 " + MAX_BATCH_IDS);
+        }
+
         return handleRequest(() -> {
             for (String id : request.getIds()) {
                 accessService.deleteAllAccessConfigs(id);
@@ -227,8 +248,9 @@ public class FunctionUnitController extends AbstractBaseController {
     @PostMapping("/{id}/validate")
     @Operation(summary = "验证功能单元", description = "将功能单元标记为已验证")
     public ResponseEntity<FunctionUnitInfo> validateFunctionUnit(
-            @Parameter(description = "功能单元ID") @PathVariable String id,
-            @Parameter(description = "验证者ID") @RequestHeader("X-User-Id") String validatorId) {
+            @Parameter(description = "功能单元ID") @PathVariable String id) {
+        String validatorId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         log.info("Validating function unit: {}", id);
         FunctionUnit unit = functionUnitManager.validateFunctionUnit(id, validatorId);
         return ResponseEntity.ok(FunctionUnitInfo.fromEntity(unit));
@@ -262,8 +284,9 @@ public class FunctionUnitController extends AbstractBaseController {
     public ResponseEntity<FunctionUnitDeployment> createDeployment(
             @Parameter(description = "功能单元ID") @PathVariable String id,
             @Parameter(description = "目标环境") @RequestParam DeploymentEnvironment environment,
-            @Parameter(description = "部署策略") @RequestParam(defaultValue = "FULL") DeploymentStrategy strategy,
-            @Parameter(description = "部署者ID") @RequestHeader("X-User-Id") String deployerId) {
+            @Parameter(description = "部署策略") @RequestParam(defaultValue = "FULL") DeploymentStrategy strategy) {
+        String deployerId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         log.info("Creating deployment for function unit {} to {}", id, environment);
         FunctionUnitDeployment deployment = deploymentManager.createDeployment(id, environment, strategy, deployerId);
         return ResponseEntity.status(HttpStatus.CREATED).body(deployment);
@@ -291,8 +314,9 @@ public class FunctionUnitController extends AbstractBaseController {
     @Operation(summary = "回滚部署", description = "回滚已部署的功能单元")
     public ResponseEntity<FunctionUnitDeployment> rollbackDeployment(
             @Parameter(description = "部署ID") @PathVariable String deploymentId,
-            @Parameter(description = "操作者ID") @RequestHeader("X-User-Id") String operatorId,
             @Parameter(description = "回滚原因") @RequestParam String reason) {
+        String operatorId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         log.info("Rolling back deployment: {}", deploymentId);
         FunctionUnitDeployment deployment = deploymentManager.rollbackDeployment(deploymentId, operatorId, reason);
         return ResponseEntity.ok(deployment);
@@ -302,8 +326,9 @@ public class FunctionUnitController extends AbstractBaseController {
     @Operation(summary = "取消部署", description = "取消待执行的部署")
     public ResponseEntity<FunctionUnitDeployment> cancelDeployment(
             @Parameter(description = "部署ID") @PathVariable String deploymentId,
-            @Parameter(description = "操作者ID") @RequestHeader("X-User-Id") String operatorId,
             @Parameter(description = "取消原因") @RequestParam String reason) {
+        String operatorId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         log.info("Cancelling deployment: {}", deploymentId);
         FunctionUnitDeployment deployment = deploymentManager.cancelDeployment(deploymentId, operatorId, reason);
         return ResponseEntity.ok(deployment);
@@ -343,8 +368,9 @@ public class FunctionUnitController extends AbstractBaseController {
     @Operation(summary = "审批通过", description = "审批通过部署请求")
     public ResponseEntity<FunctionUnitApproval> approveDeployment(
             @Parameter(description = "审批ID") @PathVariable String approvalId,
-            @Parameter(description = "审批者ID") @RequestHeader("X-User-Id") String approverId,
             @Parameter(description = "审批意见") @RequestParam(required = false) String comment) {
+        String approverId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         log.info("Approving deployment: {}", approvalId);
         FunctionUnitApproval approval = deploymentManager.approveDeployment(approvalId, approverId, comment);
         return ResponseEntity.ok(approval);
@@ -354,8 +380,9 @@ public class FunctionUnitController extends AbstractBaseController {
     @Operation(summary = "审批拒绝", description = "拒绝部署请求")
     public ResponseEntity<FunctionUnitApproval> rejectDeployment(
             @Parameter(description = "审批ID") @PathVariable String approvalId,
-            @Parameter(description = "审批者ID") @RequestHeader("X-User-Id") String approverId,
             @Parameter(description = "拒绝原因") @RequestParam String comment) {
+        String approverId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         log.info("Rejecting deployment: {}", approvalId);
         FunctionUnitApproval approval = deploymentManager.rejectDeployment(approvalId, approverId, comment);
         return ResponseEntity.ok(approval);
@@ -363,8 +390,9 @@ public class FunctionUnitController extends AbstractBaseController {
     
     @GetMapping("/approvals/pending")
     @Operation(summary = "获取待审批列表", description = "获取当前用户待审批的部署列表")
-    public ResponseEntity<List<FunctionUnitApproval>> getPendingApprovals(
-            @Parameter(description = "审批者ID") @RequestHeader("X-User-Id") String approverId) {
+    public ResponseEntity<List<FunctionUnitApproval>> getPendingApprovals() {
+        String approverId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         log.info("Getting pending approvals for: {}", approverId);
         List<FunctionUnitApproval> approvals = deploymentManager.getPendingApprovals(approverId);
         return ResponseEntity.ok(approvals);
@@ -417,8 +445,9 @@ public class FunctionUnitController extends AbstractBaseController {
     @Operation(summary = "创建新版本", description = "基于现有版本创建新版本")
     public ResponseEntity<FunctionUnitInfo> createNewVersion(
             @Parameter(description = "源功能单元ID") @PathVariable String id,
-            @Parameter(description = "新版本号") @RequestParam String newVersion,
-            @Parameter(description = "创建者ID") @RequestHeader("X-User-Id") String creatorId) {
+            @Parameter(description = "新版本号") @RequestParam String newVersion) {
+        String creatorId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         log.info("Creating new version {} from {}", newVersion, id);
         FunctionUnit unit = functionUnitManager.createNewVersion(id, newVersion, creatorId);
         return ResponseEntity.status(HttpStatus.CREATED).body(FunctionUnitInfo.fromEntity(unit));

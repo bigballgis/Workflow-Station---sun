@@ -46,6 +46,13 @@ public class DataTableManagerComponent {
     // 允许的连接类型
     private static final Set<String> ALLOWED_JOIN_TYPES = Set.of("INNER", "LEFT", "RIGHT", "FULL");
 
+    // DOS 防护: 集合大小限制
+    private static final int MAX_SELECT_FIELDS = 100;
+    private static final int MAX_INSERT_COLUMNS = 200;
+    private static final int MAX_UPDATE_COLUMNS = 200;
+    private static final int MAX_WHERE_CONDITIONS = 50;
+    private static final int MAX_JOIN_CONDITIONS = 10;
+
     /**
      * 查询数据表记录
      * 
@@ -259,6 +266,12 @@ public class DataTableManagerComponent {
             errors.add(new WorkflowValidationException.ValidationError("tableName", "表名格式不正确: " + request.getTableName(), request.getTableName()));
         }
         
+        // 防止 DOS 攻击: 限制查询字段数量
+        if (request.getSelectFields() != null && request.getSelectFields().size() > MAX_SELECT_FIELDS) {
+            errors.add(new WorkflowValidationException.ValidationError("selectFields",
+                    "查询字段数量超过限制: " + request.getSelectFields().size() + ", 最大 " + MAX_SELECT_FIELDS, request.getSelectFields().size()));
+        }
+
         // 验证字段名
         if (request.getSelectFields() != null) {
             for (String field : request.getSelectFields()) {
@@ -267,7 +280,19 @@ public class DataTableManagerComponent {
                 }
             }
         }
-        
+
+        // 防止 DOS 攻击: 限制 WHERE 条件数量
+        if (request.getWhereConditions() != null && request.getWhereConditions().size() > MAX_WHERE_CONDITIONS) {
+            errors.add(new WorkflowValidationException.ValidationError("whereConditions",
+                    "WHERE 条件数量超过限制: " + request.getWhereConditions().size() + ", 最大 " + MAX_WHERE_CONDITIONS, request.getWhereConditions().size()));
+        }
+
+        // 防止 DOS 攻击: 限制 JOIN 数量
+        if (request.getJoinConditions() != null && request.getJoinConditions().size() > MAX_JOIN_CONDITIONS) {
+            errors.add(new WorkflowValidationException.ValidationError("joinConditions",
+                    "JOIN 条件数量超过限制: " + request.getJoinConditions().size() + ", 最大 " + MAX_JOIN_CONDITIONS, request.getJoinConditions().size()));
+        }
+
         // 验证排序参数
         if (StringUtils.hasText(request.getOrderBy()) && !isValidName(request.getOrderBy())) {
             errors.add(new WorkflowValidationException.ValidationError("orderBy", "排序字段名格式不正确: " + request.getOrderBy(), request.getOrderBy()));
@@ -311,6 +336,12 @@ public class DataTableManagerComponent {
             errors.add(new WorkflowValidationException.ValidationError("data", "插入数据不能为空", request.getData()));
         }
         
+        // 防止 DOS 攻击: 限制插入列数量
+        if (request.getData() != null && request.getData().size() > MAX_INSERT_COLUMNS) {
+            errors.add(new WorkflowValidationException.ValidationError("data",
+                    "插入列数量超过限制: " + request.getData().size() + ", 最大 " + MAX_INSERT_COLUMNS, request.getData().size()));
+        }
+
         // 验证字段名
         if (request.getData() != null) {
             for (String field : request.getData().keySet()) {
@@ -347,6 +378,18 @@ public class DataTableManagerComponent {
             errors.add(new WorkflowValidationException.ValidationError("whereConditions", "更新条件不能为空", request.getWhereConditions()));
         }
         
+        // 防止 DOS 攻击: 限制更新列数量
+        if (request.getUpdateData() != null && request.getUpdateData().size() > MAX_UPDATE_COLUMNS) {
+            errors.add(new WorkflowValidationException.ValidationError("updateData",
+                    "SET 子句数量超过限制: " + request.getUpdateData().size() + ", 最大 " + MAX_UPDATE_COLUMNS, request.getUpdateData().size()));
+        }
+
+        // 防止 DOS 攻击: 限制 WHERE 条件数量
+        if (request.getWhereConditions() != null && request.getWhereConditions().size() > MAX_WHERE_CONDITIONS) {
+            errors.add(new WorkflowValidationException.ValidationError("whereConditions",
+                    "WHERE 条件数量超过限制: " + request.getWhereConditions().size() + ", 最大 " + MAX_WHERE_CONDITIONS, request.getWhereConditions().size()));
+        }
+
         // 验证字段名
         if (request.getUpdateData() != null) {
             for (String field : request.getUpdateData().keySet()) {
@@ -387,6 +430,12 @@ public class DataTableManagerComponent {
             errors.add(new WorkflowValidationException.ValidationError("whereConditions", "删除条件不能为空", request.getWhereConditions()));
         }
         
+        // 防止 DOS 攻击: 限制 WHERE 条件数量
+        if (request.getWhereConditions() != null && request.getWhereConditions().size() > MAX_WHERE_CONDITIONS) {
+            errors.add(new WorkflowValidationException.ValidationError("whereConditions",
+                    "WHERE 条件数量超过限制: " + request.getWhereConditions().size() + ", 最大 " + MAX_WHERE_CONDITIONS, request.getWhereConditions().size()));
+        }
+
         // 验证字段名
         if (request.getWhereConditions() != null) {
             for (String field : request.getWhereConditions().keySet()) {

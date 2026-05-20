@@ -7,6 +7,7 @@ import com.admin.dto.request.VirtualGroupCreateRequest;
 import com.admin.dto.request.VirtualGroupMemberRequest;
 import com.admin.dto.response.*;
 import com.admin.service.VirtualGroupTaskService;
+import com.platform.security.util.SecurityContextUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -118,8 +119,9 @@ public class VirtualGroupController {
     @GetMapping("/{groupId}/tasks")
     @Operation(summary = "获取虚拟组任务", description = "获取分配给虚拟组的任务列表")
     public ResponseEntity<List<GroupTaskInfo>> getGroupTasks(
-            @Parameter(description = "虚拟组ID") @PathVariable String groupId,
-            @Parameter(description = "当前用户ID") @RequestHeader("X-User-Id") String userId) {
+            @Parameter(description = "虚拟组ID") @PathVariable String groupId) {
+        String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         log.info("Getting tasks for virtual group: {} by user: {}", groupId, userId);
         List<GroupTaskInfo> tasks = virtualGroupTaskService.getGroupTasks(groupId, userId);
         return ResponseEntity.ok(tasks);
@@ -127,8 +129,9 @@ public class VirtualGroupController {
     
     @GetMapping("/my-tasks")
     @Operation(summary = "获取用户可见的组任务", description = "获取当前用户可见的所有虚拟组任务")
-    public ResponseEntity<List<GroupTaskInfo>> getUserVisibleGroupTasks(
-            @Parameter(description = "当前用户ID") @RequestHeader("X-User-Id") String userId) {
+    public ResponseEntity<List<GroupTaskInfo>> getUserVisibleGroupTasks() {
+        String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         log.info("Getting visible group tasks for user: {}", userId);
         List<GroupTaskInfo> tasks = virtualGroupTaskService.getUserVisibleGroupTasks(userId);
         return ResponseEntity.ok(tasks);
@@ -151,8 +154,9 @@ public class VirtualGroupController {
     public ResponseEntity<Void> claimTask(
             @Parameter(description = "虚拟组ID") @PathVariable String groupId,
             @Parameter(description = "任务ID") @PathVariable String taskId,
-            @Parameter(description = "当前用户ID") @RequestHeader("X-User-Id") String userId,
             @RequestBody(required = false) TaskClaimRequest request) {
+        String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         log.info("User {} claiming task {} from group {}", userId, taskId, groupId);
         
         TaskClaimRequest claimRequest = request != null ? request : new TaskClaimRequest();
@@ -167,8 +171,9 @@ public class VirtualGroupController {
     @Operation(summary = "委托任务", description = "将任务委托给其他用户")
     public ResponseEntity<Void> delegateTask(
             @Parameter(description = "任务ID") @PathVariable String taskId,
-            @Parameter(description = "当前用户ID") @RequestHeader("X-User-Id") String userId,
             @Valid @RequestBody TaskDelegationRequest request) {
+        String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         log.info("User {} delegating task {} to {}", userId, taskId, request.getToUserId());
         
         request.setTaskId(taskId);

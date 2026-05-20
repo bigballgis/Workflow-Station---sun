@@ -6,6 +6,7 @@ import com.admin.bi.dto.response.DashboardRegistryResponse;
 import com.admin.bi.dto.response.SyncResultResponse;
 import com.admin.bi.enums.DashboardStatus;
 import com.admin.bi.service.BiDashboardRegistryService;
+import com.platform.security.util.SecurityContextUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -30,8 +31,9 @@ public class BiDashboardRegistryController {
 
     @PostMapping("/sync")
     @Operation(summary = "手动同步 Dashboard", description = "立即执行一次 Sync_Operation 并返回同步结果摘要")
-    public ResponseEntity<SyncResultResponse> syncDashboards(
-            @RequestHeader("X-User-Id") String userId) {
+    public ResponseEntity<SyncResultResponse> syncDashboards() {
+        String userId = SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         log.info("User {} triggered manual dashboard sync", userId);
         SyncResultResponse result = dashboardRegistryService.syncDashboards();
         return ResponseEntity.ok(result);
@@ -59,8 +61,9 @@ public class BiDashboardRegistryController {
     @Operation(summary = "更新本地扩展字段", description = "仅允许更新 Tags 和 Is_Default_Landing")
     public ResponseEntity<DashboardRegistryResponse> updateDashboard(
             @PathVariable String id,
-            @RequestBody @Valid DashboardRegistryUpdateRequest request,
-            @RequestHeader("X-User-Id") String userId) {
+            @RequestBody @Valid DashboardRegistryUpdateRequest request) {
+        String userId = SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         log.info("User {} updating dashboard {}", userId, id);
         DashboardRegistryResponse response = dashboardRegistryService.updateDashboard(id, request);
         return ResponseEntity.ok(response);
@@ -70,8 +73,9 @@ public class BiDashboardRegistryController {
     @Operation(summary = "切换 Dashboard 状态", description = "启用（MANUAL_INACTIVE → ACTIVE）或禁用（ACTIVE → MANUAL_INACTIVE）")
     public ResponseEntity<DashboardRegistryResponse> updateDashboardStatus(
             @PathVariable String id,
-            @RequestBody @Valid DashboardStatusUpdateRequest request,
-            @RequestHeader("X-User-Id") String userId) {
+            @RequestBody @Valid DashboardStatusUpdateRequest request) {
+        String userId = SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         log.info("User {} changing dashboard {} status to {}", userId, id, request.getStatus());
         DashboardRegistryResponse response;
         if (request.getStatus() == DashboardStatus.ACTIVE) {
@@ -85,8 +89,9 @@ public class BiDashboardRegistryController {
     @DeleteMapping("/{id}")
     @Operation(summary = "删除 Dashboard", description = "有关联分配时拒绝删除")
     public ResponseEntity<Void> deleteDashboard(
-            @PathVariable String id,
-            @RequestHeader("X-User-Id") String userId) {
+            @PathVariable String id) {
+        String userId = SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         log.info("User {} deleting dashboard {}", userId, id);
         dashboardRegistryService.deleteDashboard(id);
         return ResponseEntity.noContent().build();

@@ -219,6 +219,12 @@ data:
           latency_metrics: true
           bandwidth_metrics: true
           upstream_health_metrics: true
+      # --- HSTS (pre-production with HTTPS) ---
+      - name: response-transformer
+        config:
+          add:
+            headers:
+              - "Strict-Transport-Security:max-age=31536000; includeSubDomains"
       # --- 登录端点路由级限流 (10/分钟) ---
       - name: rate-limiting
         route: admin-auth-login-route

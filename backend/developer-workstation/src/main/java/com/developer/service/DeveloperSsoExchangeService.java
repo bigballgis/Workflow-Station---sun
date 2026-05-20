@@ -6,6 +6,8 @@ import com.platform.security.dto.UserEffectiveRole;
 import com.platform.security.service.UserRoleService;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -37,7 +39,7 @@ public class DeveloperSsoExchangeService {
     @Value("${jwt.expiration:2592000000}")
     private long jwtExpiration;
 
-    public LoginResponse issueSession(User user) {
+    public LoginResponse issueSession(User user, HttpServletResponse response) {
         List<UserEffectiveRole> effectiveRoles = userRoleService.getEffectiveRolesForUser(user.getId().toString());
         List<String> roles = effectiveRoles.stream()
                 .map(UserEffectiveRole::getRoleCode)
@@ -50,6 +52,24 @@ public class DeveloperSsoExchangeService {
         List<LoginResponse.RoleWithSource> rolesWithSources = buildRolesWithSources(effectiveRoles);
         String accessToken = generateToken(user, roles, permissions);
         String refreshToken = generateRefreshToken(user.getId());
+        
+        // Set httpOnly cookies for access token and refresh token
+        Cookie accessTokenCookie = new Cookie("access_token", accessToken);
+        accessTokenCookie.setHttpOnly(true);
+        accessTokenCookie.setSecure(false);
+        accessTokenCookie.setPath("/");
+        accessTokenCookie.setMaxAge((int)(jwtExpiration / 1000));
+        accessTokenCookie.setAttribute("SameSite", "Lax");
+        response.addCookie(accessTokenCookie);
+
+        Cookie refreshTokenCookie = new Cookie("refresh_token", refreshToken);
+        refreshTokenCookie.setHttpOnly(true);
+        refreshTokenCookie.setSecure(false);
+        refreshTokenCookie.setPath("/");
+        refreshTokenCookie.setMaxAge(7 * 24 * 60 * 60);
+        refreshTokenCookie.setAttribute("SameSite", "Lax");
+        response.addCookie(refreshTokenCookie);
+        
         return LoginResponse.builder()
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
@@ -93,12 +113,6 @@ public class DeveloperSsoExchangeService {
         return Jwts.builder()
                 .subject(user.getId().toString())
                 .claim("username", user.getUsername())
-                .claim("email", user.getEmail())
-                .claim("displayName", user.getFullName() != null && !user.getFullName().isEmpty()
-                        ? user.getFullName()
-                        : (user.getDisplayName() != null && !user.getDisplayName().isEmpty()
-                        ? user.getDisplayName()
-                        : user.getUsername()))
                 .claim("roles", roles)
                 .claim("permissions", permissions)
                 .claim("language", user.getLanguage())

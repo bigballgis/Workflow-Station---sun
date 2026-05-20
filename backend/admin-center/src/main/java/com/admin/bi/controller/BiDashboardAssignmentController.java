@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import com.platform.security.util.SecurityContextUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -32,9 +33,8 @@ public class BiDashboardAssignmentController {
     @PostMapping
     @Operation(summary = "创建分配记录", description = "将 Dashboard 分配给 User、Role 或 Business Unit")
     public ResponseEntity<DashboardAssignmentResponse> createAssignment(
-            @RequestBody @Valid DashboardAssignmentCreateRequest request,
-            @RequestHeader("X-User-Id") String userId) {
-        log.info("User {} creating assignment for dashboard {}", userId, request.getDashboardId());
+            @RequestBody @Valid DashboardAssignmentCreateRequest request) {
+        log.info("User {} creating assignment for dashboard {}", SecurityContextUtils.getCurrentUserId(), request.getDashboardId());
         DashboardAssignmentResponse response = assignmentService.createAssignment(request);
         return ResponseEntity.ok(response);
     }
@@ -53,9 +53,8 @@ public class BiDashboardAssignmentController {
     @Operation(summary = "更新分配记录", description = "更新指定分配记录的字段")
     public ResponseEntity<DashboardAssignmentResponse> updateAssignment(
             @PathVariable String id,
-            @RequestBody @Valid DashboardAssignmentCreateRequest request,
-            @RequestHeader("X-User-Id") String userId) {
-        log.info("User {} updating assignment {}", userId, id);
+            @RequestBody @Valid DashboardAssignmentCreateRequest request) {
+        log.info("User {} updating assignment {}", SecurityContextUtils.getCurrentUserId(), id);
         DashboardAssignmentResponse response = assignmentService.updateAssignment(id, request);
         return ResponseEntity.ok(response);
     }
@@ -63,9 +62,8 @@ public class BiDashboardAssignmentController {
     @DeleteMapping("/{id}")
     @Operation(summary = "删除分配记录", description = "删除指定的分配记录")
     public ResponseEntity<Void> deleteAssignment(
-            @PathVariable String id,
-            @RequestHeader("X-User-Id") String userId) {
-        log.info("User {} deleting assignment {}", userId, id);
+            @PathVariable String id) {
+        log.info("User {} deleting assignment {}", SecurityContextUtils.getCurrentUserId(), id);
         assignmentService.deleteAssignment(id);
         return ResponseEntity.noContent().build();
     }

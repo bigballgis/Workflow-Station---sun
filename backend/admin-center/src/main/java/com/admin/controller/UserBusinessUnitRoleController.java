@@ -22,6 +22,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import com.platform.security.util.SecurityContextUtils;
+
 /**
  * 用户业务单元角色分配控制器
  */
@@ -68,8 +70,9 @@ public class UserBusinessUnitRoleController {
     @Operation(summary = "分配业务单元角色给用户")
     public ResponseEntity<Void> assignRole(
             @PathVariable String userId,
-            @RequestBody @Valid UserBusinessUnitRoleAssignRequest request,
-            @RequestHeader(value = "X-User-Id", required = false) String operatedBy) {
+            @RequestBody @Valid UserBusinessUnitRoleAssignRequest request) {
+        String operatedBy = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         userBusinessUnitRoleManagerComponent.assign(
                 userId, request.getBusinessUnitId(), request.getRoleId(), operatedBy);
         return ResponseEntity.ok().build();
@@ -80,8 +83,9 @@ public class UserBusinessUnitRoleController {
     public ResponseEntity<Void> removeRole(
             @PathVariable String userId,
             @PathVariable String businessUnitId,
-            @PathVariable String roleId,
-            @RequestHeader(value = "X-User-Id", required = false) String operatedBy) {
+            @PathVariable String roleId) {
+        String operatedBy = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         userBusinessUnitRoleManagerComponent.remove(userId, businessUnitId, roleId, operatedBy);
         return ResponseEntity.ok().build();
     }

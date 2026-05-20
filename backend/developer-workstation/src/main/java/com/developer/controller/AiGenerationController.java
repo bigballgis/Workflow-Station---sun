@@ -21,6 +21,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import com.platform.security.util.SecurityContextUtils;
 import com.developer.entity.AiDocument;
 import com.developer.enums.AiDocumentType;
 import com.developer.enums.AiPhase;
@@ -45,8 +46,9 @@ public class AiGenerationController extends BaseController {
     @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @Operation(summary = "SSE chat stream")
     @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
-    public SseEmitter chatStream(@Valid @RequestBody AiChatRequest request,
-                                 @RequestHeader(value = "X-User-Id", required = false) String userId) {
+    public SseEmitter chatStream(@Valid @RequestBody AiChatRequest request) {
+        String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         log.info("Chat stream request for functionUnitId={}, userId={}", request.getFunctionUnitId(), userId);
         return aiGenerationComponent.chatStream(request, userId);
     }
@@ -54,8 +56,9 @@ public class AiGenerationController extends BaseController {
     @GetMapping(value = "/events/{functionUnitId}", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @Operation(summary = "SSE event stream")
     @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
-    public SseEmitter eventStream(@PathVariable Long functionUnitId,
-                                  @RequestHeader(value = "X-User-Id", required = false) String userId) {
+    public SseEmitter eventStream(@PathVariable Long functionUnitId) {
+        String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         log.info("Event stream registered for functionUnitId={}, userId={}", functionUnitId, userId);
         return aiGenerationComponent.registerEventEmitter(functionUnitId, userId);
     }
@@ -64,8 +67,9 @@ public class AiGenerationController extends BaseController {
     @Operation(summary = "Acquire edit lock")
     @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
     public ResponseEntity<ApiResponse<LockInfoResponse>> acquireLock(
-            @PathVariable Long functionUnitId,
-            @RequestHeader(value = "X-User-Id", required = false) String userId) {
+            @PathVariable Long functionUnitId) {
+        String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         // 不使用 handleRequest：AiLockConflictException 等需交由 AiExceptionHandler 映射 HTTP 状态码
         return ResponseEntity.ok(ApiResponse.success(aiGenerationComponent.acquireLock(functionUnitId, userId)));
     }
@@ -74,8 +78,9 @@ public class AiGenerationController extends BaseController {
     @Operation(summary = "Release edit lock")
     @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
     public ResponseEntity<ApiResponse<Void>> releaseLock(
-            @PathVariable Long functionUnitId,
-            @RequestHeader(value = "X-User-Id", required = false) String userId) {
+            @PathVariable Long functionUnitId) {
+        String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         return handleRequest(() -> {
             aiGenerationComponent.releaseLock(functionUnitId, userId);
             return null;
@@ -86,8 +91,9 @@ public class AiGenerationController extends BaseController {
     @Operation(summary = "Request force unlock")
     @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
     public ResponseEntity<ApiResponse<Void>> requestForceUnlock(
-            @PathVariable Long functionUnitId,
-            @RequestHeader(value = "X-User-Id", required = false) String userId) {
+            @PathVariable Long functionUnitId) {
+        String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         return handleRequest(() -> {
             aiGenerationComponent.requestForceUnlock(functionUnitId, userId);
             return null;
@@ -99,8 +105,9 @@ public class AiGenerationController extends BaseController {
     @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
     public ResponseEntity<ApiResponse<Void>> respondForceUnlock(
             @PathVariable Long functionUnitId,
-            @RequestBody ForceUnlockResponseRequest request,
-            @RequestHeader(value = "X-User-Id", required = false) String userId) {
+            @RequestBody ForceUnlockResponseRequest request) {
+        String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         return handleRequest(() -> {
             aiGenerationComponent.respondForceUnlock(functionUnitId, userId, request.isAccept());
             return null;
@@ -163,8 +170,9 @@ public class AiGenerationController extends BaseController {
     @Operation(summary = "Save user-edited document")
     @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
     public ResponseEntity<ApiResponse<AiDocument>> saveDocument(
-            @Valid @RequestBody SaveDocumentRequest request,
-            @RequestHeader(value = "X-User-Id", required = false) String userId) {
+            @Valid @RequestBody SaveDocumentRequest request) {
+        String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         return handleRequest(() -> aiGenerationComponent.saveDocument(
                 request.getFunctionUnitId(), request.getDocumentType(), request.getContent(), userId));
     }
@@ -174,8 +182,9 @@ public class AiGenerationController extends BaseController {
     @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
     public ResponseEntity<ApiResponse<Void>> applyGeneratedData(
             @PathVariable Long functionUnitId,
-            @Valid @RequestBody ApplyGeneratedDataRequest request,
-            @RequestHeader(value = "X-User-Id", required = false) String userId) {
+            @Valid @RequestBody ApplyGeneratedDataRequest request) {
+        String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         aiGenerationComponent.applyGeneratedData(functionUnitId, request, userId);
         return ResponseEntity.ok(ApiResponse.success());
     }

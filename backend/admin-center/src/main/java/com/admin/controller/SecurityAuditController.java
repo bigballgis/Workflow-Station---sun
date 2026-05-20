@@ -28,6 +28,8 @@ import java.io.ByteArrayOutputStream;
 import java.time.Instant;
 import java.util.List;
 
+import com.platform.security.util.SecurityContextUtils;
+
 @Slf4j
 @RestController
 @RequestMapping("/security")
@@ -54,24 +56,27 @@ public class SecurityAuditController {
     @PutMapping("/policies/password")
     @Operation(summary = "更新密码策略")
     public ResponseEntity<SecurityPolicy> updatePasswordPolicy(
-            @Valid @RequestBody PasswordPolicyConfig config,
-            @RequestHeader("X-User-Id") String userId) {
+            @Valid @RequestBody PasswordPolicyConfig config) {
+        String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         return ResponseEntity.ok(securityAuditComponent.createOrUpdatePolicy("PASSWORD", config, userId));
     }
     
     @PutMapping("/policies/login")
     @Operation(summary = "更新登录策略")
     public ResponseEntity<SecurityPolicy> updateLoginPolicy(
-            @Valid @RequestBody LoginPolicyConfig config,
-            @RequestHeader("X-User-Id") String userId) {
+            @Valid @RequestBody LoginPolicyConfig config) {
+        String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         return ResponseEntity.ok(securityAuditComponent.createOrUpdatePolicy("LOGIN", config, userId));
     }
     
     @PutMapping("/policies/session")
     @Operation(summary = "更新会话策略")
     public ResponseEntity<SecurityPolicy> updateSessionPolicy(
-            @Valid @RequestBody SessionPolicyConfig config,
-            @RequestHeader("X-User-Id") String userId) {
+            @Valid @RequestBody SessionPolicyConfig config) {
+        String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         return ResponseEntity.ok(securityAuditComponent.createOrUpdatePolicy("SESSION", config, userId));
     }
     

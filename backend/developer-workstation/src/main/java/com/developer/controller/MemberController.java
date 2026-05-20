@@ -21,6 +21,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
+import com.platform.security.util.SecurityContextUtils;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -49,8 +50,10 @@ public class MemberController extends BaseController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Internal server error")
     })
     public ResponseEntity<ApiResponse<MemberResponse>> createMember(
-            @Valid @RequestBody MemberRequest request,
-            @RequestHeader(value = "X-User-Id", defaultValue = "system") String currentUserId) {
+            @Valid @RequestBody MemberRequest request) {
+        
+        String currentUserId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         
         log.info("Creating member with username: {} by user: {}", request.getUsername(), currentUserId);
         
@@ -152,8 +155,10 @@ public class MemberController extends BaseController {
     })
     public ResponseEntity<ApiResponse<MemberResponse>> updateMember(
             @Parameter(description = "Member ID", required = true) @PathVariable Long id,
-            @Valid @RequestBody MemberUpdateRequest request,
-            @RequestHeader(value = "X-User-Id", defaultValue = "system") String currentUserId) {
+            @Valid @RequestBody MemberUpdateRequest request) {
+        
+        String currentUserId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         
         log.info("Updating member with ID: {} by user: {}", id, currentUserId);
         
@@ -197,8 +202,10 @@ public class MemberController extends BaseController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "Internal server error")
     })
     public ResponseEntity<ApiResponse<Void>> deleteMember(
-            @Parameter(description = "Member ID", required = true) @PathVariable Long id,
-            @RequestHeader(value = "X-User-Id", defaultValue = "system") String currentUserId) {
+            @Parameter(description = "Member ID", required = true) @PathVariable Long id) {
+        
+        String currentUserId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         
         log.info("Deleting member with ID: {} by user: {}", id, currentUserId);
         

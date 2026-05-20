@@ -1,51 +1,52 @@
 package com.admin;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Disabled("Development-only test — disable before deploying to production")
 public class BCryptTest {
+
+    private static final BCryptPasswordEncoder ENCODER = new BCryptPasswordEncoder();
+
     @Test
     public void testBCrypt() {
-        BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
-        String password = "test123";
-        String hash = encoder.encode(password);
-        System.out.println("Password: " + password);
+        String password = System.getProperty("test.password", "test-password-not-set");
+        String hash = ENCODER.encode(password);
         System.out.println("New Hash: " + hash);
-        System.out.println("New Hash Matches: " + encoder.matches(password, hash));
-        
+        System.out.println("New Hash Matches: " + ENCODER.matches(password, hash));
+
         // Test with the hash in database
         String dbHash = "$2a$10$dXJ3SW6G7P50lGmMkkmwe.20cQQubK3.HZWzG3YB1tlRy.fqvM/BG";
         System.out.println("DB Hash: " + dbHash);
-        System.out.println("DB Hash matches test123: " + encoder.matches(password, dbHash));
-        System.out.println("DB Hash matches password: " + encoder.matches("password", dbHash));
+        System.out.println("DB Hash matches test password: " + ENCODER.matches(password, dbHash));
+        System.out.println("DB Hash matches password: " + ENCODER.matches("password", dbHash));
     }
-    
+
     @Test
     public void testAdmin123Password() {
-        BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
-        String password = "admin123";
-        
+        String password = System.getProperty("test.admin.password", "admin-password-not-set");
+
         // Test with the hash from database
         String dbHash = "$2a$10$XMfQkI8Q4i2ZOLcl.V5RH.SoLTbPpfsxbv0YG21jRr8F7zhNouMle";
-        System.out.println("Testing admin123 password:");
-        System.out.println("Password: " + password);
+        System.out.println("Testing admin password:");
         System.out.println("DB Hash: " + dbHash);
         System.out.println("Hash Length: " + dbHash.length());
-        
-        boolean matches = encoder.matches(password, dbHash);
+
+        boolean matches = ENCODER.matches(password, dbHash);
         System.out.println("Matches: " + matches);
-        
+
         // Generate new hash for comparison
-        String newHash = encoder.encode(password);
+        String newHash = ENCODER.encode(password);
         System.out.println("New Hash: " + newHash);
-        System.out.println("New Hash Matches: " + encoder.matches(password, newHash));
-        
+        System.out.println("New Hash Matches: " + ENCODER.matches(password, newHash));
+
         // Print SQL to update database
         System.out.println("\n=== SQL to update database ===");
         System.out.println("UPDATE sys_users SET password_hash = '" + newHash + "';");
-        
-        assertTrue(matches, "admin123 should match the DB hash");
+
+        assertTrue(matches, "admin password should match the DB hash");
     }
 }

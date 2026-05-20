@@ -35,6 +35,8 @@ import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
+import com.platform.security.util.SecurityContextUtils;
+
 /**
  * 功能单元导入控制器
  * 支持从开发者工作站直接上传ZIP文件
@@ -59,8 +61,9 @@ public class FunctionUnitImportController {
     @Operation(summary = "导入功能单元", description = "上传ZIP文件导入功能单元")
     public ResponseEntity<Map<String, Object>> importFunctionUnit(
             @Parameter(description = "功能单元ZIP包") @RequestParam("file") MultipartFile file,
-            @Parameter(description = "冲突处理策略") @RequestParam(defaultValue = "OVERWRITE") String conflictStrategy,
-            @RequestHeader(value = "X-User-Id", defaultValue = "system") String userId) {
+            @Parameter(description = "冲突处理策略") @RequestParam(defaultValue = "OVERWRITE") String conflictStrategy) {
+        String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         
         log.info("Importing function unit from file: {}", file.getOriginalFilename());
         
@@ -207,8 +210,9 @@ public class FunctionUnitImportController {
     @Operation(summary = "部署功能单元", description = "将功能单元部署到指定环境，并将流程定义部署到 Flowable 引擎")
     public ResponseEntity<Map<String, Object>> deployFunctionUnit(
             @Parameter(description = "功能单元ID") @PathVariable String id,
-            @RequestBody Map<String, Object> request,
-            @RequestHeader(value = "X-User-Id", defaultValue = "system") String userId) {
+            @RequestBody Map<String, Object> request) {
+        String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         
         log.info("Deploying function unit: {}", id);
         
@@ -449,8 +453,9 @@ public class FunctionUnitImportController {
     @PostMapping("/{id}/enable")
     @Operation(summary = "启用功能单元")
     public ResponseEntity<Map<String, Object>> enableFunctionUnit(
-            @PathVariable String id,
-            @RequestHeader(value = "X-User-Id", defaultValue = "system") String userId) {
+            @PathVariable String id) {
+        String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         log.info("Enabling function unit: {}", id);
         
         Map<String, Object> result = new HashMap<>();
@@ -600,8 +605,9 @@ public class FunctionUnitImportController {
     @Operation(summary = "激活指定版本", description = "仅允许目标为已部署（DEPLOYED）且为该 code 下已部署中的最高语义版本；成功后禁用同 code 其他版本")
     public ResponseEntity<Map<String, Object>> activateVersion(
             @Parameter(description = "功能单元代码") @PathVariable String code,
-            @Parameter(description = "目标版本号") @PathVariable String version,
-            @RequestHeader(value = "X-User-Id", defaultValue = "system") String userId) {
+            @Parameter(description = "目标版本号") @PathVariable String version) {
+        String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         
         log.info("Activating version {} for function unit code: {}", version, code);
         

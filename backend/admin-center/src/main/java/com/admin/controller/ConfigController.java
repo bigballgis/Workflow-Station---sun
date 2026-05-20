@@ -16,6 +16,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import com.platform.security.util.SecurityContextUtils;
 
 @Slf4j
 @RestController
@@ -31,8 +32,9 @@ public class ConfigController {
     @PostMapping
     @Operation(summary = "创建配置")
     public ResponseEntity<SystemConfig> createConfig(
-            @Valid @RequestBody ConfigCreateRequest request,
-            @RequestHeader("X-User-Id") String userId) {
+            @Valid @RequestBody ConfigCreateRequest request) {
+        String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(configManager.createConfig(request, userId));
     }
@@ -71,8 +73,9 @@ public class ConfigController {
     @Operation(summary = "更新配置")
     public ResponseEntity<SystemConfig> updateConfig(
             @PathVariable String configKey,
-            @Valid @RequestBody ConfigUpdateRequest request,
-            @RequestHeader("X-User-Id") String userId) {
+            @Valid @RequestBody ConfigUpdateRequest request) {
+        String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         return ResponseEntity.ok(configManager.updateConfig(configKey, request, userId));
     }
     
@@ -96,8 +99,9 @@ public class ConfigController {
     @Operation(summary = "回滚配置")
     public ResponseEntity<SystemConfig> rollbackConfig(
             @PathVariable String configKey,
-            @PathVariable Integer version,
-            @RequestHeader("X-User-Id") String userId) {
+            @PathVariable Integer version) {
+        String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         return ResponseEntity.ok(configManager.rollbackConfig(configKey, version, userId));
     }
     
@@ -126,8 +130,9 @@ public class ConfigController {
     public ResponseEntity<ConfigSyncResult> syncConfigs(
             @PathVariable String sourceEnv,
             @PathVariable String targetEnv,
-            @RequestBody List<String> configKeys,
-            @RequestHeader("X-User-Id") String userId) {
+            @RequestBody List<String> configKeys) {
+        String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         return ResponseEntity.ok(configManager.syncConfigs(sourceEnv, targetEnv, configKeys, userId));
     }
 }

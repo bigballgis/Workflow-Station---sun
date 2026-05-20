@@ -12,7 +12,9 @@ import com.platform.common.i18n.I18nService;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -49,7 +51,7 @@ public class AuthController {
     private long jwtExpiration;
 
     @PostMapping("/login")
-    public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request, HttpServletRequest httpRequest) {
+    public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request, HttpServletRequest httpRequest, HttpServletResponse response) {
         String ipAddress = getClientIpAddress(httpRequest);
         log.debug("Login attempt for user: {} from {}", request.getUsername(), ipAddress);
         
@@ -98,6 +100,23 @@ public class AuthController {
             String accessToken = generateToken(user, roles, permissions);
             String refreshToken = generateRefreshToken(user.getId());
             
+            // Set httpOnly cookies for access token and refresh token
+            Cookie accessTokenCookie = new Cookie("access_token", accessToken);
+            accessTokenCookie.setHttpOnly(true);
+            accessTokenCookie.setSecure(false);
+            accessTokenCookie.setPath("/");
+            accessTokenCookie.setMaxAge((int)(jwtExpiration / 1000));
+            accessTokenCookie.setAttribute("SameSite", "Lax");
+            response.addCookie(accessTokenCookie);
+
+            Cookie refreshTokenCookie = new Cookie("refresh_token", refreshToken);
+            refreshTokenCookie.setHttpOnly(true);
+            refreshTokenCookie.setSecure(false);
+            refreshTokenCookie.setPath("/");
+            refreshTokenCookie.setMaxAge(7 * 24 * 60 * 60);
+            refreshTokenCookie.setAttribute("SameSite", "Lax");
+            response.addCookie(refreshTokenCookie);
+            
             log.info("User {} logged in successfully", request.getUsername());
             
             return ResponseEntity.ok(LoginResponse.builder()
@@ -135,7 +154,7 @@ public class AuthController {
     }
 
     @PostMapping("/refresh")
-    public ResponseEntity<Map<String, Object>> refresh(@RequestBody Map<String, String> request) {
+    public ResponseEntity<Map<String, Object>> refresh(@RequestBody Map<String, String> request, HttpServletResponse response) {
         String refreshToken = request.get("refreshToken");
         if (refreshToken == null || refreshToken.isBlank()) {
             return ResponseEntity.badRequest().build();
@@ -161,6 +180,24 @@ public class AuthController {
             
             String newAccessToken = generateToken(user, roles, permissions);
             String newRefreshToken = generateRefreshToken(user.getId());
+            
+            // Set httpOnly cookies for new tokens
+            Cookie accessTokenCookie = new Cookie("access_token", newAccessToken);
+            accessTokenCookie.setHttpOnly(true);
+            accessTokenCookie.setSecure(false);
+            accessTokenCookie.setPath("/");
+            accessTokenCookie.setMaxAge((int)(jwtExpiration / 1000));
+            accessTokenCookie.setAttribute("SameSite", "Lax");
+            response.addCookie(accessTokenCookie);
+
+            Cookie refreshTokenCookie = new Cookie("refresh_token", newRefreshToken);
+            refreshTokenCookie.setHttpOnly(true);
+            refreshTokenCookie.setSecure(false);
+            refreshTokenCookie.setPath("/");
+            refreshTokenCookie.setMaxAge(7 * 24 * 60 * 60);
+            refreshTokenCookie.setAttribute("SameSite", "Lax");
+            response.addCookie(refreshTokenCookie);
+            
             return ResponseEntity.ok(Map.of(
                     "accessToken", newAccessToken,
                     "refreshToken", newRefreshToken,
@@ -277,12 +314,6 @@ public class AuthController {
         return Jwts.builder()
                 .subject(user.getId().toString())
                 .claim("username", user.getUsername())
-                .claim("email", user.getEmail())
-                .claim("displayName", user.getFullName() != null && !user.getFullName().isEmpty() 
-                    ? user.getFullName() 
-                    : (user.getDisplayName() != null && !user.getDisplayName().isEmpty() 
-                        ? user.getDisplayName() 
-                        : user.getUsername()))
                 .claim("roles", roles)
                 .claim("permissions", permissions)
                 .claim("language", user.getLanguage())

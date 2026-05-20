@@ -20,6 +20,8 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+import com.platform.security.util.SecurityContextUtils;
+
 @Slf4j
 @RestController
 @RequestMapping("/logs")
@@ -129,8 +131,9 @@ public class LogController {
     @Operation(summary = "更新保留策略")
     public ResponseEntity<LogRetentionPolicy> updateRetentionPolicy(
             @PathVariable String id,
-            @Valid @RequestBody RetentionPolicyRequest request,
-            @RequestHeader("X-User-Id") String userId) {
+            @Valid @RequestBody RetentionPolicyRequest request) {
+        String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         return ResponseEntity.ok(logManager.updateRetentionPolicy(id, request, userId));
     }
     

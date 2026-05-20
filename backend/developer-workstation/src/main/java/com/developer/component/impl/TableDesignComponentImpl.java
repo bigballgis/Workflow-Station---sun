@@ -31,6 +31,9 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class TableDesignComponentImpl implements TableDesignComponent {
     
+    // DOS 防护: 字段定义数量限制
+    private static final int MAX_FIELD_DEFINITIONS = 200;
+
     private final TableDefinitionRepository tableDefinitionRepository;
     private final FieldDefinitionRepository fieldDefinitionRepository;
     private final ForeignKeyRepository foreignKeyRepository;
@@ -63,6 +66,11 @@ public class TableDesignComponentImpl implements TableDesignComponent {
         
         // 添加字段
         if (request.getFields() != null) {
+            // 防止 DOS 攻击: 限制字段定义数量
+            if (request.getFields().size() > MAX_FIELD_DEFINITIONS) {
+                throw new DeveloperBusinessException("FIELD_COUNT_EXCEEDED",
+                        "字段定义数量超过限制: " + request.getFields().size() + ", 最大 " + MAX_FIELD_DEFINITIONS);
+            }
             int sortOrder = 0;
             for (FieldDefinitionRequest fieldRequest : request.getFields()) {
                 FieldDefinition field = createField(tableDefinition, fieldRequest, sortOrder++);
@@ -99,6 +107,11 @@ public class TableDesignComponentImpl implements TableDesignComponent {
         fieldDefinitionRepository.flush();
         
         if (request.getFields() != null && !request.getFields().isEmpty()) {
+            // 防止 DOS 攻击: 限制字段定义数量
+            if (request.getFields().size() > MAX_FIELD_DEFINITIONS) {
+                throw new DeveloperBusinessException("FIELD_COUNT_EXCEEDED",
+                        "字段定义数量超过限制: " + request.getFields().size() + ", 最大 " + MAX_FIELD_DEFINITIONS);
+            }
             int sortOrder = 0;
             for (FieldDefinitionRequest fieldRequest : request.getFields()) {
                 // Skip fields with empty name or null dataType

@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import com.platform.security.util.SecurityContextUtils;
 
 @Slf4j
 @RestController
@@ -87,16 +88,18 @@ public class SystemMonitorController {
     @PostMapping("/alerts/{alertId}/acknowledge")
     @Operation(summary = "确认告警")
     public ResponseEntity<Alert> acknowledgeAlert(
-            @PathVariable String alertId,
-            @RequestHeader("X-User-Id") String userId) {
+            @PathVariable String alertId) {
+        String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         return ResponseEntity.ok(monitorComponent.acknowledgeAlert(alertId, userId));
     }
     
     @PostMapping("/alerts/{alertId}/resolve")
     @Operation(summary = "解决告警")
     public ResponseEntity<Alert> resolveAlert(
-            @PathVariable String alertId,
-            @RequestHeader("X-User-Id") String userId) {
+            @PathVariable String alertId) {
+        String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException("未认证用户"));
         return ResponseEntity.ok(monitorComponent.resolveAlert(alertId, userId));
     }
 }
