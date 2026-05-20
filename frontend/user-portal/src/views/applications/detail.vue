@@ -408,6 +408,7 @@ import { formatDate } from '@/utils/dateFormat'
 import { relationTableApi } from '@/api/relationTable'
 import { isRejectedName } from '@/utils/statusMatcher'
 import { resolveAssigneeFieldForBinding } from '@/utils/subTableAssignment'
+import { mergeListViewFieldColumn } from '@/components/subTableAddDialogHelpers'
 import {
   mergeSubTableRowsByRowId,
   mergeAllSubTableSlicesFromVariables,
@@ -3594,12 +3595,7 @@ const deriveColumnsFromBinding = (binding: any, formConfig?: Record<string, any>
           }
         }
 
-        return {
-          ...(baseColumn || {}),
-          field: column.fieldName,
-          label: column.comment || column.columnLabel || baseColumn?.label || column.fieldName,
-          minWidth: column.minWidth || baseColumn?.minWidth || 100
-        }
+        return mergeListViewFieldColumn(column, baseColumn, fieldRule)
       })
   }
 

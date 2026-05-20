@@ -460,7 +460,7 @@ import {
   type CompletedTaskFormData,
 } from '@/api/processForm'
 import { relationTableApi } from '@/api/relationTable'
-import { unwrapUserLikeValueToDisplayString, extractUserIdFromCellValue } from '@/components/subTableAddDialogHelpers'
+import { unwrapUserLikeValueToDisplayString, extractUserIdFromCellValue, mergeListViewFieldColumn, inferColumnTypeFromFieldAndValue } from '@/components/subTableAddDialogHelpers'
 import { clearBpmnParseCache, getCachedBpmnDocument } from '@/utils/bpmnParseCache'
 const { t } = useI18n()
 const route = useRoute()
@@ -2266,11 +2266,17 @@ const loadFunctionUnitContent = async (processKey: string, prefetchedContent?: a
         if ((!binding.columns || binding.columns.length === 0) && binding.data?.length) {
           const row0 = binding.data[0]
           if (row0 && typeof row0 === 'object') {
-            binding.columns = Object.keys(row0).map(k => ({
-              field: k,
-              label: k,
-              type: 'text' as const
-            }))
+            binding.columns = Object.keys(row0).map(k => {
+              const inferred = inferColumnTypeFromFieldAndValue(k, row0[k])
+              if (inferred === 'upload') {
+                return mergeListViewFieldColumn(
+                  { fieldName: k, comment: k, dataType: 'FILE' },
+                  { field: k, label: k },
+                  null,
+                )
+              }
+              return { field: k, label: k, type: 'text' as const }
+            })
           }
         }
       })
@@ -2953,12 +2959,7 @@ const deriveColumnsFromBinding = (binding: any, subForms?: Record<string, any>, 
         }
       }
 
-      return {
-        ...(baseColumn || {}),
-        field: column.fieldName,
-        label: column.comment || column.columnLabel || baseColumn?.label || column.fieldName,
-        minWidth: column.minWidth || baseColumn?.minWidth || 100
-      }
+      return mergeListViewFieldColumn(column, baseColumn, fieldRule)
     })
     return mappedOut
   }

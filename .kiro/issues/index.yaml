@@ -1405,3 +1405,41 @@
     导致 designer 表绑定 READONLY 在门户仍显示 Add/Edit/Delete；inlineSubTableFormReadonly 同样被 previewSubTables 绕过。
     另：loadProcessAndTaskFormData 中 parseFormConfig 在节点 formReadOnly 之后可能把 formReadOnly 重置为 false。
     修复：子表可编辑仅看 bindingMode===EDITABLE 且非整表 readonly；节点只读在 parseFormConfig 前后保持 OR 合并。
+
+- id: "1364"
+  status: fixed
+  fixed_at: "2026-05-20"
+  severity: major
+  category: bug
+  summary: "MI 子任务 attachment 子表 file 列显示 API URL 而非文件名且不可下载"
+  file: "frontend/user-portal/src/components/subTableAddDialogHelpers.ts; SubTableField.vue; views/tasks/detail.vue; views/applications/detail.vue"
+  note: |
+    根因：deriveColumnsFromBinding 使用 subListViews 列时未将 dataType=FILE 映射为 type=upload；无 schema 时从行数据推断列全部为 text；SubTableAddDialog 对无 type 字段默认渲染 el-input。
+    修复：mergeListViewFieldColumn/isUploadColumn/normalizeSubTableColumns 推断 upload；Add Record 弹窗与表格统一走上传控件；行推断 fallback 识别 file 字段。
+
+- id: "1365"
+  status: fixed
+  fixed_at: "2026-05-20"
+  severity: major
+  category: bug
+  summary: "developer-workstation Form Preview 子表 +Add 点击无响应（Add 弹层被预览 Dialog 遮罩盖住）"
+  file: "frontend/developer-workstation/src/components/designer/SubTableField.vue; SubTableFormDialog.vue; SubTableAddDialog.vue; SubTableNestedModalShell.vue; nestedDialogZIndex.ts"
+  note: |
+    根因：Form Preview 使用 el-dialog(z-index=2000)，子表 Add/Edit 仍用嵌套 el-dialog，弹层渲染在预览遮罩下方，点击看似无反应。
+    修复：新增 SubTableNestedModalShell + nestedDialogZIndex 将子表弹层 Teleport 到 body 并动态抬高 z-index；SubTableField 统一 Teleport 挂载 Add/Form 对话框；
+    延迟 setTimeout(0) 打开避免同次点击触发遮罩关闭；补全 SubTableAddDialog.onShellClosed。
+    二次修复（2026-05-20）：Form Preview 内 inject 仍不可靠——改为 FormDesigner 在 Preview Dialog 外渲染 SubTableFormDialog/SubTableAddDialog（provide/inject 委托）；
+    Preview Dialog 设 modal=false；SubTableNestedModalShell 改用 Element Plus useZIndex().nextZIndex()；Add 按钮改用 mousedown 触发。
+    三次修复（卡死）：Add 打开对话框时与表格下方内联 form-create 共用同一 formRule 引用，叠加 SubTableFormDialog 对 rule 的 deep watch，form-create 互写 rule 触发无限更新循环；
+    修复：openRowDialog 深拷贝 rule/option；对话框打开时隐藏内联 form-create；移除 rule deep watch，仅在 visible 时 cloneFormRules；Preview 模式不再挂载 SubTableField 本地 Teleport 对话框。
+
+- id: "1366"
+  status: fixed
+  fixed_at: "2026-05-21"
+  severity: major
+  category: bug
+  summary: "developer-workstation Form Preview「Row detail form」在 assigneeTodoFormSource=linkForm(subtable2) 时仍展示父表 subtable 表单"
+  file: "frontend/developer-workstation/src/components/designer/formPreviewTypes.ts; FormPreviewItems.vue; SubTableField.vue; SubTableListView.vue"
+  note: |
+    根因：Form Preview / 列表视图预览在 formBelowTable 模式下始终使用当前 binding 的 formRule，未按 portalViews.assigneeTodoFormSource 解析 Link Form 目标子表（与 user-portal FormRenderer.resolveInlineFormSourceBinding 不一致）。
+    修复：新增 resolveInlineFormBelowDesign；SubTableField 支持 previewInlineFormRule/Option；FormPreviewItems 与 SubTableListView 待办预览区传入解析后的 subtable2 schema。

@@ -41,7 +41,7 @@
                 {{ formatTaskStatus(scope.row.task_status) }}
               </el-tag>
             </template>
-            <template v-else-if="col.type === 'upload'">
+            <template v-else-if="isUploadColumn(col, scope.row[col.field])">
               <span
                 v-if="scope.row[col.field]"
                 class="file-download-link"
@@ -541,7 +541,7 @@ import { Plus, Document, Loading, Search, Close } from '@element-plus/icons-vue'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import DOMPurify from 'dompurify'
 import SubTableAddDialog from './SubTableAddDialog.vue'
-import { resolveDisplayValue, unwrapUserLikeValueToDisplayString, extractUserIdFromCellValue, isUserSnapshotLikeObject, userObjectTagDisplayString, userSnapshotViewFieldsFromRow, formatUserSnapshotCellValue } from './subTableAddDialogHelpers'
+import { resolveDisplayValue, unwrapUserLikeValueToDisplayString, extractUserIdFromCellValue, isUserSnapshotLikeObject, userObjectTagDisplayString, userSnapshotViewFieldsFromRow, formatUserSnapshotCellValue, isUploadColumn, normalizeSubTableColumns } from './subTableAddDialogHelpers'
 import { fetchLookupRowByPrimaryKey } from './lookup/fetchLookupRowByPrimaryKey'
 import type { DialogColumn } from './subTableAddDialogHelpers'
 import type { FormField, RowFormulaRule, SubTableValidationConfig } from './formRendererHelpers'
@@ -1554,7 +1554,12 @@ const showAssigneeColumn = computed(() => {
   )
 })
 
-const editableColumns = computed(() => props.columns.filter(col => col.type !== 'linkForm'))
+const editableColumns = computed(() =>
+  normalizeSubTableColumns(
+    props.columns.filter(col => col.type !== 'linkForm'),
+    rows.value,
+  ),
+)
 
 // Summary row support
 const hasSummary = computed(() => (props.summaryColumns?.length ?? 0) > 0)

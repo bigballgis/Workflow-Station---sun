@@ -36,10 +36,10 @@
         :error="columnErrors[col.field]?.join('; ')"
       >
         <!-- text (readonly) -->
-        <span v-if="col.readonly && (!col.type || col.type === 'text')" class="ro-value">{{ resolveDisplayValue(col, formData[col.field]) }}</span>
+        <span v-if="col.readonly && (!col.type || col.type === 'text') && !isUploadColumn(col, formData[col.field])" class="ro-value">{{ resolveDisplayValue(col, formData[col.field]) }}</span>
         <!-- text -->
         <el-input
-          v-if="!col.readonly && (!col.type || col.type === 'text')"
+          v-if="!col.readonly && (!col.type || col.type === 'text') && !isUploadColumn(col, formData[col.field])"
           v-model="formData[col.field]"
           :placeholder="col.placeholder || col.label"
           :maxlength="col.props?.maxlength"
@@ -216,13 +216,13 @@
         />
 
         <!-- upload (readonly) -->
-        <span v-if="col.readonly && col.type === 'upload'" class="ro-value">
+        <span v-if="col.readonly && isUploadColumn(col, formData[col.field])" class="ro-value">
           <a v-if="formData[col.field]" :href="formData[col.field]" target="_blank" class="upload-download-link">{{ getFilenameFromUrl(formData[col.field], uploadNames[col.field]) }}</a>
           <span v-else>-</span>
         </span>
         <!-- upload -->
         <div
-          v-if="!col.readonly && col.type === 'upload'"
+          v-if="!col.readonly && isUploadColumn(col, formData[col.field])"
           style="display: flex; flex-direction: column; gap: 4px;"
         >
           <el-upload
@@ -461,7 +461,7 @@ import type { FormInstance } from 'element-plus'
 import { ElMessage } from 'element-plus'
 import { Editor, Toolbar } from '@wangeditor/editor-for-vue'
 import '@wangeditor/editor/dist/css/style.css'
-import { buildInitialRow, buildRules, resolveDisplayValue } from './subTableAddDialogHelpers'
+import { buildInitialRow, buildRules, resolveDisplayValue, isUploadColumn } from './subTableAddDialogHelpers'
 import type { DialogColumn } from './subTableAddDialogHelpers'
 import type { RowFormulaRule, ValidationRule } from './formRendererHelpers'
 import { evaluateFormula, validateField } from './businessLogicEngine'
@@ -748,7 +748,7 @@ function initDialogFormState(trigger: 'open' | 'data-change') {
     formData.value = { ...buildInitialRow(props.columns), ...JSON.parse(JSON.stringify(props.initialData)) }
     // Back-fill upload file names from URL (prefer originalName query param if present)
     for (const col of props.columns) {
-      if (col.type === 'upload' && formData.value[col.field]) {
+      if (isUploadColumn(col, formData.value[col.field]) && formData.value[col.field]) {
         const url: string = formData.value[col.field]
         uploadNames.value[col.field] = extractFilenameFromUrl(url)
       }

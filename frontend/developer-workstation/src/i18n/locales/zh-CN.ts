@@ -66,7 +66,10 @@ export default {
     operation: '操作',
     deleteSuccess: '删除成功',
     confirmTitle: '提示',
-    more: '更多'
+    more: '更多',
+    downloading: '正在下载文件...',
+    downloadFailed: '文件下载失败，请重试',
+    fileNotFound: '文件不存在'
   },
   sidebar: {
     collapse: '收起侧边栏',

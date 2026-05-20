@@ -66,7 +66,10 @@ export default {
     operation: 'Operation',
     deleteSuccess: 'Deleted successfully',
     confirmTitle: 'Confirm',
-    more: 'More'
+    more: 'More',
+    downloading: 'Downloading file...',
+    downloadFailed: 'Download failed, please try again',
+    fileNotFound: 'File not found'
   },
   sidebar: {
     collapse: 'Collapse sidebar',
