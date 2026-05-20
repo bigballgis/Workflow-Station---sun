@@ -1,9 +1,22 @@
 <template>
+  <Teleport to="body">
+    <div
+      v-if="visible"
+      class="sub-table-add-dialog-backdrop"
+      role="presentation"
+      aria-hidden="true"
+      :style="{ zIndex: backdropZIndex }"
+      @click="handleClose"
+    />
+  </Teleport>
   <el-dialog
     :model-value="visible"
     :title="title || (mode === 'edit' ? 'Edit Record' : 'Add Record')"
     width="600px"
     :close-on-click-modal="false"
+    :modal="false"
+    append-to-body
+    :z-index="dialogZIndex"
     @update:model-value="handleClose"
     @close="handleClose"
   >
@@ -313,6 +326,19 @@ import { ElMessage } from 'element-plus'
 import { buildInitialRow, buildRules } from './subTableAddDialogHelpers'
 import type { DialogColumn } from './subTableAddDialogHelpers'
 
+const NESTED_DIALOG_Z = 3010
+const dialogZIndex = ref(NESTED_DIALOG_Z)
+const backdropZIndex = computed(() => dialogZIndex.value - 1)
+
+function refreshDialogZIndex() {
+  let maxZ = 2000
+  document.querySelectorAll('.el-overlay').forEach((el) => {
+    const z = Number.parseInt(window.getComputedStyle(el).zIndex || '0', 10)
+    if (z > maxZ) maxZ = z
+  })
+  dialogZIndex.value = Math.max(NESTED_DIALOG_Z, maxZ + 10)
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const props = defineProps<{
@@ -385,6 +411,7 @@ watch(
   () => props.visible,
   (open) => {
     if (!open) return
+    refreshDialogZIndex()
     uploadNames.value = {}
     if (props.mode === 'edit' && props.initialData) {
       // Deep-clone to avoid mutating the original row
@@ -450,6 +477,15 @@ function clearUpload(col: DialogColumn) {
 </style>
 
 <style>
+.sub-table-add-dialog-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+}
+
 /* 强制颜色选择器面板显示在 dialog 之上 */
 .sub-table-color-popper {
   z-index: 99999 !important;

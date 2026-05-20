@@ -1,9 +1,23 @@
 <template>
+  <!-- Backdrop on body: nested under Form Preview dialog; ancestor transform breaks fixed overlays -->
+  <Teleport to="body">
+    <div
+      v-if="visible"
+      class="sub-table-form-dialog-backdrop"
+      role="presentation"
+      aria-hidden="true"
+      :style="{ zIndex: backdropZIndex }"
+      @click="handleClose"
+    />
+  </Teleport>
   <el-dialog
     :model-value="visible"
     :title="title || (mode === 'edit' ? t('common.edit') : t('common.add'))"
     width="700px"
     :close-on-click-modal="false"
+    :modal="false"
+    append-to-body
+    :z-index="dialogZIndex"
     @update:model-value="handleClose"
     @closed="handleClosed"
   >
@@ -52,7 +66,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick } from 'vue'
+import { ref, watch, nextTick, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Loading } from '@element-plus/icons-vue'
 
@@ -82,6 +96,20 @@ const { t } = useI18n()
 
 const formData = ref<Record<string, any>>({})
 const formCreateMounted = ref(false)
+
+/** Stack above Form Preview / other open el-dialog overlays (see user-portal SubTableAddDialog). */
+const NESTED_DIALOG_Z = 3010
+const dialogZIndex = ref(NESTED_DIALOG_Z)
+const backdropZIndex = computed(() => dialogZIndex.value - 1)
+
+function refreshDialogZIndex() {
+  let maxZ = 2000
+  document.querySelectorAll('.el-overlay').forEach((el) => {
+    const z = Number.parseInt(window.getComputedStyle(el).zIndex || '0', 10)
+    if (z > maxZ) maxZ = z
+  })
+  dialogZIndex.value = Math.max(NESTED_DIALOG_Z, maxZ + 10)
+}
 
 // Default form-create option for sub-table forms
 const defaultFormOption = {
@@ -118,6 +146,7 @@ watch(
   () => [props.visible, props.initialData],
   ([open, data]) => {
     if (open) {
+      refreshDialogZIndex()
       formCreateMounted.value = false
       // Reset form data
       if (props.mode === 'edit' && data) {
@@ -171,6 +200,17 @@ watch(
   { immediate: true, deep: true }
 )
 </script>
+
+<style>
+.sub-table-form-dialog-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+}
+</style>
 
 <style scoped>
 .sub-table-form-preview {
