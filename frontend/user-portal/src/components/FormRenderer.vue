@@ -634,6 +634,7 @@ interface Props {
   size?: 'large' | 'default' | 'small'
   subTableBindings?: SubTableBinding[]
   linkedSubTableBindings?: SubTableBinding[]
+  /** MI / diagram preview: row-picking heuristics only; does not override table binding editability. */
   previewSubTables?: boolean
   uploadUrl?: string
   // Task 7.2: BusinessLogicEngine config
@@ -746,10 +747,15 @@ const resolveBinding = (id?: number) => {
   return binding
 }
 
+function isBindingModeEditable(bindingMode: string | undefined | null): boolean {
+  return String(bindingMode ?? '').trim().toUpperCase() === 'EDITABLE'
+}
+
+/** Sub-table CRUD follows developer-workstation table binding mode; whole-form readonly wins via {@link Props.readonly}. */
 function isSubTableEditable(bindingId?: number): boolean {
   const binding = resolveBinding(bindingId)
   if (!binding || props.readonly) return false
-  return props.previewSubTables || binding.bindingMode === 'EDITABLE'
+  return isBindingModeEditable(binding.bindingMode)
 }
 
 function subTableAssigneeField(bindingId?: number): string | undefined {
@@ -949,8 +955,7 @@ function inlineSubTableFormReadonly(field: FormField): boolean {
   if (props.readonly) return true
   const src = resolveInlineFormSourceBinding(field)
   if (!src) return true
-  if (props.previewSubTables) return false
-  return src.bindingMode !== 'EDITABLE'
+  return !isBindingModeEditable(src.bindingMode)
 }
 
 /** 内联表单标题：与字段/schema 来源一致（linkForm→subtable2 时显示子表名，而非父表）。 */

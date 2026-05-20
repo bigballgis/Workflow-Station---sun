@@ -1392,3 +1392,16 @@
     将 __subTables__ 其它切片/嵌套提升的薄行（仅 description 等）与完整行合并为第二行。
     修复：非 MI 变量仅按 binding 切片 hydrate；dropSubsumedSubTableRows/normalizeSubTableRowsForBinding 剔除被子集行；
     发起提交 __subTables__ 前同样规范化。
+
+- id: "1363"
+  status: fixed
+  fixed_at: "2026-05-20"
+  severity: major
+  category: bug
+  summary: "待办 MI 子任务忽略表绑定 READONLY（previewSubTables 强制子表可编辑）"
+  file: "frontend/user-portal/src/components/FormRenderer.vue; frontend/user-portal/src/views/tasks/detail.vue"
+  note: |
+    根因：tasks/detail 对 MI 传入 preview-sub-tables=true，FormRenderer.isSubTableEditable 用 previewSubTables||bindingMode===EDITABLE，
+    导致 designer 表绑定 READONLY 在门户仍显示 Add/Edit/Delete；inlineSubTableFormReadonly 同样被 previewSubTables 绕过。
+    另：loadProcessAndTaskFormData 中 parseFormConfig 在节点 formReadOnly 之后可能把 formReadOnly 重置为 false。
+    修复：子表可编辑仅看 bindingMode===EDITABLE 且非整表 readonly；节点只读在 parseFormConfig 前后保持 OR 合并。

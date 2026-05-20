@@ -2638,7 +2638,8 @@ const loadProcessAndTaskFormData = async (taskData: any, prefetched?: Prefetched
       }
     } else if (tfData) {
       taskFormDTO.value = tfData
-      if (tfData.formReadOnly === true) {
+      const taskFormNodeReadOnly = tfData.formReadOnly === true
+      if (taskFormNodeReadOnly) {
         formReadOnly.value = true
       }
       if (tfData.formName) {
@@ -2646,6 +2647,9 @@ const loadProcessAndTaskFormData = async (taskData: any, prefetched?: Prefetched
       }
       if (tfData.configJson) {
         parseFormConfig(tfData.configJson as any)
+      }
+      if (taskFormNodeReadOnly) {
+        formReadOnly.value = true
       }
       if (tfData.configJson && tfData.fieldPermissions) {
         const perms = Object.values(tfData.fieldPermissions || {})
@@ -2756,8 +2760,11 @@ const parseFormConfig = (configStr: string) => {
         formFields.value = extractFieldsRecursive(rules)
       }
     }
-    // Check if form is read-only
-    formReadOnly.value = config.formReadOnly === true || config.formReadOnly === 'true'
+    // Check if form is read-only (never clear node/BPMN/task-form readonly already applied)
+    formReadOnly.value =
+      formReadOnly.value === true
+      || config.formReadOnly === true
+      || config.formReadOnly === 'true'
   } catch (error) {
     console.error('Failed to parse form config:', error)
   }
