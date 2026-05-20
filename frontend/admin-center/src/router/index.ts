@@ -3,7 +3,6 @@ import { canAccessRoute, PERMISSIONS } from '@/utils/permission'
 import { ElMessage } from 'element-plus'
 import i18n from '@/i18n'
 import { redirectToUnifiedLogin, setSsoReturnPath } from '@/utils/sso'
-import { TOKEN_KEY } from '@/api/auth'
 
 // Extend route meta type
 declare module 'vue-router' {
@@ -158,13 +157,6 @@ router.beforeEach((to, _from, next) => {
   if (to.path === '/login') {
     const r = to.query.redirect
     setSsoReturnPath(typeof r === 'string' ? r : '/dashboard')
-    redirectToUnifiedLogin('admin')
-    return next(false)
-  }
-
-  const token = localStorage.getItem(TOKEN_KEY)
-  if (to.path !== '/sso/callback' && !token) {
-    setSsoReturnPath(to.fullPath)
     redirectToUnifiedLogin('admin')
     return next(false)
   }

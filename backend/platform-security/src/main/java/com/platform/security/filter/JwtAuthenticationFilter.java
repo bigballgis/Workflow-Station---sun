@@ -5,6 +5,7 @@ import com.platform.common.dto.UserPrincipal;
 import com.platform.security.service.JwtTokenService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -35,14 +36,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                     HttpServletResponse response, 
                                     FilterChain filterChain) throws ServletException, IOException {
         
-        String authHeader = request.getHeader(PlatformConstants.HEADER_AUTHORIZATION);
+        String token = extractToken(request);
         
-        if (authHeader == null || !authHeader.startsWith(PlatformConstants.HEADER_BEARER_PREFIX)) {
+        if (token == null) {
             filterChain.doFilter(request, response);
             return;
         }
-        
-        String token = authHeader.substring(PlatformConstants.HEADER_BEARER_PREFIX.length());
         
         try {
             if (jwtTokenService.validateToken(token)) {
@@ -78,6 +77,22 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
         
         filterChain.doFilter(request, response);
+    }
+
+    private String extractToken(HttpServletRequest request) {
+        String bearerToken = request.getHeader(PlatformConstants.HEADER_AUTHORIZATION);
+        if (bearerToken != null && bearerToken.startsWith(PlatformConstants.HEADER_BEARER_PREFIX)) {
+            return bearerToken.substring(PlatformConstants.HEADER_BEARER_PREFIX.length());
+        }
+        // Fallback: read from httpOnly cookie
+        if (request.getCookies() != null) {
+            for (Cookie cookie : request.getCookies()) {
+                if ("access_token".equals(cookie.getName())) {
+                    return cookie.getValue();
+                }
+            }
+        }
+        return null;
     }
     
     @Override

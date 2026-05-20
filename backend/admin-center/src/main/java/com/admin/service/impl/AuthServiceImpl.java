@@ -10,6 +10,8 @@ import com.platform.security.config.JwtProperties;
 import com.platform.security.dto.UserEffectiveRole;
 import com.platform.security.service.JwtTokenService;
 import com.platform.security.service.UserRoleService;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -35,7 +37,7 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
-    public LoginResponse login(LoginRequest request, String ipAddress, String userAgent) {
+    public LoginResponse login(LoginRequest request, String ipAddress, String userAgent, HttpServletResponse response) {
         log.debug("Login attempt for user: {}", request.getUsername());
         
         User user = userRepository.findByUsername(request.getUsername())
@@ -103,6 +105,10 @@ public class AuthServiceImpl implements AuthService {
                 roles, permissions, user.getLanguage());
         String refreshToken = jwtTokenService.generateRefreshToken(user.getId());
         
+        // Set httpOnly cookies for access token and refresh token
+        setAuthCookie(response, "access_token", accessToken, (int)(jwtProperties.getExpirationMs() / 1000));
+        setAuthCookie(response, "refresh_token", refreshToken, 7 * 24 * 60 * 60);
+        
         log.info("User {} logged in successfully from {}", request.getUsername(), ipAddress);
         
         return LoginResponse.builder()
@@ -126,7 +132,7 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
-    public LoginResponse issueSsoSession(String userId, String ipAddress, String userAgent) {
+    public LoginResponse issueSsoSession(String userId, String ipAddress, String userAgent, HttpServletResponse response) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
@@ -169,6 +175,10 @@ public class AuthServiceImpl implements AuthService {
                 roles, permissions, user.getLanguage());
         String refreshToken = jwtTokenService.generateRefreshToken(user.getId());
 
+        // Set httpOnly cookies for access token and refresh token
+        setAuthCookie(response, "access_token", accessToken, (int)(jwtProperties.getExpirationMs() / 1000));
+        setAuthCookie(response, "refresh_token", refreshToken, 7 * 24 * 60 * 60);
+
         log.info("User {} SSO session issued from {}", user.getUsername(), ipAddress);
 
         return LoginResponse.builder()
@@ -196,7 +206,7 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    public LoginResponse refreshLogin(String refreshToken) {
+    public LoginResponse refreshLogin(String refreshToken, HttpServletResponse response) {
         try {
             if (!jwtTokenService.validateToken(refreshToken)) {
                 throw new RuntimeException("Invalid or expired refresh token");
@@ -222,6 +232,10 @@ public class AuthServiceImpl implements AuthService {
                     user.getId(), user.getUsername(), user.getEmail(), displayName,
                     roles, permissions, user.getLanguage());
             String newRefreshToken = jwtTokenService.generateRefreshToken(user.getId());
+
+            // Set httpOnly cookies for new tokens
+            setAuthCookie(response, "access_token", accessToken, (int)(jwtProperties.getExpirationMs() / 1000));
+            setAuthCookie(response, "refresh_token", newRefreshToken, 7 * 24 * 60 * 60);
 
             return LoginResponse.builder()
                     .accessToken(accessToken)
@@ -398,5 +412,15 @@ public class AuthServiceImpl implements AuthService {
             log.warn("Failed to get role names: {}", e.getMessage());
             return Map.of();
         }
+    }
+
+    private void setAuthCookie(HttpServletResponse response, String name, String value, int maxAge) {
+        Cookie cookie = new Cookie(name, value);
+        cookie.setHttpOnly(true);
+        cookie.setSecure(false);  // false for dev HTTP
+        cookie.setPath("/");
+        cookie.setMaxAge(maxAge);
+        cookie.setAttribute("SameSite", "Lax");
+        response.addCookie(cookie);
     }
 }

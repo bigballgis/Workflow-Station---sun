@@ -2,6 +2,7 @@ package com.admin.service;
 
 import com.admin.dto.request.LoginRequest;
 import com.admin.dto.response.LoginResponse;
+import jakarta.servlet.http.HttpServletResponse;
 
 /**
  * 认证服务接口
@@ -11,7 +12,7 @@ public interface AuthService {
     /**
      * 用户登录
      */
-    LoginResponse login(LoginRequest request, String ipAddress, String userAgent);
+    LoginResponse login(LoginRequest request, String ipAddress, String userAgent, HttpServletResponse response);
     
     /**
      * 用户登出
@@ -21,7 +22,7 @@ public interface AuthService {
     /**
      * 刷新会话：吊销旧 refresh token 并签发新的 access + refresh（轮换）。
      */
-    LoginResponse refreshLogin(String refreshToken);
+    LoginResponse refreshLogin(String refreshToken, HttpServletResponse response);
     
     /**
      * 获取当前用户信息
@@ -46,5 +47,5 @@ public interface AuthService {
     /**
      * 统一登录（SSO）已校验身份后，为本系统签发会话（须具备管理端访问角色）。
      */
-    LoginResponse issueSsoSession(String userId, String ipAddress, String userAgent);
+    LoginResponse issueSsoSession(String userId, String ipAddress, String userAgent, HttpServletResponse response);
 }

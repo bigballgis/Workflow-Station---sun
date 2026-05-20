@@ -8,7 +8,9 @@ import com.portal.dto.LoginRequest;
 import com.portal.dto.LoginResponse;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -55,9 +57,9 @@ public class PortalSessionIssuerService {
     /**
      * 密码已校验且用户已持久化（含 lastLogin）后调用；{@link LoginRequest} 中 workspace 字段用于多条 UBR 场景。
      */
-    public ResponseEntity<LoginResponse> issuePortalSession(User user, LoginRequest request, HttpServletRequest httpRequest) {
+    public ResponseEntity<LoginResponse> issuePortalSession(User user, LoginRequest request, HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
         return issuePortalSession(user, request.getWorkspaceBusinessUnitId(), request.getWorkspaceRoleId(), httpRequest,
-                user.getUsername());
+                httpResponse, user.getUsername());
     }
 
     /**
@@ -65,7 +67,7 @@ public class PortalSessionIssuerService {
      */
     public ResponseEntity<LoginResponse> issuePortalSession(User user, String workspaceBusinessUnitId,
                                                              String workspaceRoleId, HttpServletRequest httpRequest,
-                                                             String logUsername) {
+                                                             HttpServletResponse httpResponse, String logUsername) {
         try {
             String userId = user.getId();
             List<PortalWorkspaceAuthService.WorkspaceContextRow> wctx = portalWorkspaceAuthService.listWorkspaceContexts(userId);
@@ -109,6 +111,10 @@ public class PortalSessionIssuerService {
             String portalAccessMode = portalAccessModeForWorkspace(wctx);
             String accessToken = generateToken(user, bundle.roles, bundle.permissions, activeBu, activeRoleId, portalAccessMode);
             String refreshToken = generateRefreshToken(userId, activeBu, activeRoleId, portalAccessMode);
+
+            // Set httpOnly cookies for access token and refresh token
+            setAuthCookie(httpResponse, "access_token", accessToken, (int)(jwtExpiration / 1000));
+            setAuthCookie(httpResponse, "refresh_token", refreshToken, 7 * 24 * 60 * 60);
 
             log.info("User {} portal session issued", logUsername);
 
@@ -300,5 +306,15 @@ public class PortalSessionIssuerService {
             }
         }
         return permissions.stream().distinct().toList();
+    }
+
+    private void setAuthCookie(HttpServletResponse response, String name, String value, int maxAge) {
+        Cookie cookie = new Cookie(name, value);
+        cookie.setHttpOnly(true);
+        cookie.setSecure(false);  // false for dev HTTP
+        cookie.setPath("/");
+        cookie.setMaxAge(maxAge);
+        cookie.setAttribute("SameSite", "Lax");
+        response.addCookie(cookie);
     }
 }

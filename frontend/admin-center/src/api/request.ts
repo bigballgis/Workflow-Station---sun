@@ -1,7 +1,7 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
-import { notifyError, notifyWarning } from '@/utils/notify'
+import { notifyError } from '@/utils/notify'
 import { ApiError, httpCodeToErrorCode } from '@/types/errors'
-import { refreshToken as refreshAuthToken, REFRESH_TOKEN_KEY, TOKEN_KEY, USER_ID_KEY, USERNAME_KEY, clearAuth } from './auth'
+import { refreshToken as refreshAuthToken, USER_ID_KEY, USERNAME_KEY, clearAuth } from './auth'
 import i18n from '@/i18n'
 import { pickHttpErrorBodyMessage } from '@/utils/httpErrorMessage'
 import { redirectToUnifiedLogin, setSsoReturnPath } from '@/utils/sso'
@@ -23,15 +23,12 @@ const processQueue = (error: any, token: string | null = null) => {
 const request: AxiosInstance = axios.create({
   baseURL: '/api/v1/admin',
   timeout: 30000,
+  withCredentials: true,
   headers: { 'Content-Type': 'application/json' }
 })
 
 request.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem(TOKEN_KEY)
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
     const userId = localStorage.getItem(USER_ID_KEY)
     if (userId) {
       config.headers['X-User-Id'] = userId
@@ -50,7 +47,7 @@ request.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config
     
-    // Handle 401 errors with token refresh
+    // Handle 401 errors with token refresh (cookie-based)
     if (error.response?.status === 401 && !originalRequest._retry) {
       if (isRefreshing) {
         // Queue the request while refreshing
@@ -65,35 +62,21 @@ request.interceptors.response.use(
       originalRequest._retry = true
       isRefreshing = true
 
-      const storedRefreshToken = localStorage.getItem(REFRESH_TOKEN_KEY)
-      
-      if (storedRefreshToken) {
-        try {
-          const response = await refreshAuthToken(storedRefreshToken)
-          const newToken = response.accessToken
-          localStorage.setItem(TOKEN_KEY, newToken)
-          if (response.refreshToken) {
-            localStorage.setItem(REFRESH_TOKEN_KEY, response.refreshToken)
-          }
-          
-          processQueue(null, newToken)
-          originalRequest.headers.Authorization = `Bearer ${newToken}`
-          return request(originalRequest)
-        } catch (refreshError) {
-          processQueue(refreshError, null)
-          clearAuth()
-          setSsoReturnPath(window.location.pathname + window.location.search)
-          redirectToUnifiedLogin('admin')
-          return Promise.reject(refreshError)
-        } finally {
-          isRefreshing = false
-        }
-      } else {
+      try {
+        const response = await refreshAuthToken()
+        const newToken = response.accessToken
+
+        processQueue(null, newToken)
+        originalRequest.headers.Authorization = `Bearer ${newToken}`
+        return request(originalRequest)
+      } catch (refreshError) {
+        processQueue(refreshError, null)
         clearAuth()
-        notifyWarning(i18n.global.t('api.unauthorized'))
         setSsoReturnPath(window.location.pathname + window.location.search)
         redirectToUnifiedLogin('admin')
-        return Promise.reject(new ApiError(httpCodeToErrorCode(401), 401, undefined))
+        return Promise.reject(refreshError)
+      } finally {
+        isRefreshing = false
       }
     }
 

@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import type { AiMessage, AiChatRequest, AiPhase, AiGeneratedData, GenerationPreviewData } from '@/types/aiGeneration'
 import { AI_CHAT_STREAM_URL } from '@/api/aiGeneration'
-import { getUser, TOKEN_KEY } from '@/api/auth'
+import { getUser } from '@/api/auth'
 
 /** Draft data structure stored in localStorage */
 export interface AiGenerationDraft {
@@ -84,10 +84,6 @@ export function useAiChat() {
   function getAuthHeaders(): Record<string, string> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json'
-    }
-    const token = localStorage.getItem(TOKEN_KEY)
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`
     }
     const user = getUser()
     if (user?.userId) {

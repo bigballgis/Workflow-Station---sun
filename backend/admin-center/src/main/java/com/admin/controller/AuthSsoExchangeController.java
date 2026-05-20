@@ -6,6 +6,7 @@ import com.admin.service.PlatformSsoService;
 import com.admin.dto.sso.SsoRedeemRequest;
 import com.admin.dto.sso.SsoRedeemResponse;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,7 +33,8 @@ public class AuthSsoExchangeController {
     @PostMapping("/exchange")
     public ResponseEntity<LoginResponse> exchange(
             @RequestBody SsoExchangeBody body,
-            HttpServletRequest httpRequest) {
+            HttpServletRequest httpRequest,
+            HttpServletResponse httpResponse) {
         if (body == null || body.getCode() == null || body.getCode().isBlank()) {
             return ResponseEntity.badRequest().build();
         }
@@ -41,7 +43,7 @@ public class AuthSsoExchangeController {
                     redeemRequest(body.getCode()));
             String ip = getClientIpAddress(httpRequest);
             String ua = httpRequest.getHeader("User-Agent");
-            LoginResponse session = authService.issueSsoSession(redeemed.getUserId(), ip, ua);
+            LoginResponse session = authService.issueSsoSession(redeemed.getUserId(), ip, ua, httpResponse);
             return ResponseEntity.ok(session);
         } catch (IllegalArgumentException e) {
             log.debug("Admin SSO exchange failed: {}", e.getMessage());

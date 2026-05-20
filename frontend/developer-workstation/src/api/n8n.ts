@@ -1,5 +1,4 @@
 import axios from 'axios'
-import { TOKEN_KEY } from './auth'
 
 /**
  * N8N API module for developer-workstation
@@ -8,15 +7,8 @@ import { TOKEN_KEY } from './auth'
 
 const adminCenterAxios = axios.create({
   baseURL: '/api/v1/admin',
-  timeout: 30000
-})
-
-adminCenterAxios.interceptors.request.use(config => {
-  const token = localStorage.getItem(TOKEN_KEY)
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
-  }
-  return config
+  timeout: 30000,
+  withCredentials: true
 })
 
 adminCenterAxios.interceptors.response.use(

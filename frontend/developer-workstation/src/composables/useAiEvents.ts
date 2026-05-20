@@ -1,6 +1,6 @@
 import { ref, type Ref } from 'vue'
 import { AI_EVENT_STREAM_URL } from '@/api/aiGeneration'
-import { getUser, TOKEN_KEY } from '@/api/auth'
+import { getUser } from '@/api/auth'
 
 /**
  * Composable for managing independent SSE long connection for async events.
@@ -19,10 +19,6 @@ export function useAiEvents(functionUnitId: Ref<number>) {
 
   function getAuthHeaders(): Record<string, string> {
     const headers: Record<string, string> = {}
-    const token = localStorage.getItem(TOKEN_KEY)
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`
-    }
     const user = getUser()
     if (user?.userId) {
       headers['X-User-Id'] = user.userId

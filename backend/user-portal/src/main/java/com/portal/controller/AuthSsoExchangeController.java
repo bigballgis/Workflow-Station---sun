@@ -8,6 +8,7 @@ import com.portal.dto.LoginResponse;
 import com.portal.dto.SsoExchangeRequest;
 import com.portal.service.PortalSessionIssuerService;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -41,7 +42,8 @@ public class AuthSsoExchangeController {
     @PostMapping("/exchange")
     public ResponseEntity<LoginResponse> exchange(
             @Valid @RequestBody SsoExchangeRequest body,
-            HttpServletRequest httpRequest) {
+            HttpServletRequest httpRequest,
+            HttpServletResponse httpResponse) {
         try {
             String userId = resolveUserId(body.getCode());
             User user = userRepository.findById(userId)
@@ -67,6 +69,7 @@ public class AuthSsoExchangeController {
                     body.getWorkspaceBusinessUnitId(),
                     body.getWorkspaceRoleId(),
                     httpRequest,
+                    httpResponse,
                     user.getUsername());
 
             LoginResponse responseBody = response.getBody();

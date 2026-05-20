@@ -16,7 +16,9 @@ import com.platform.security.repository.UserRepository;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -70,7 +72,7 @@ public class AuthController {
     private long jwtExpiration;
 
     @PostMapping("/login")
-    public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request, HttpServletRequest httpRequest) {
+    public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request, HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
         String ipAddress = getClientIpAddress(httpRequest);
         log.info("Login attempt for user: {} from {}", request.getUsername(), ipAddress);
         
@@ -109,7 +111,7 @@ public class AuthController {
             user.setLastLoginIp(ipAddress);
             userRepository.save(user);
 
-            return portalSessionIssuerService.issuePortalSession(user, request, httpRequest);
+            return portalSessionIssuerService.issuePortalSession(user, request, httpRequest, httpResponse);
         } catch (RuntimeException e) {
             log.warn("Login failed: {}", e.getMessage());
             return ResponseEntity.badRequest().body(LoginResponse.builder()
@@ -128,7 +130,7 @@ public class AuthController {
     }
 
     @PostMapping("/refresh")
-    public ResponseEntity<Map<String, Object>> refresh(@RequestBody Map<String, String> request) {
+    public ResponseEntity<Map<String, Object>> refresh(@RequestBody Map<String, String> request, HttpServletResponse httpResponse) {
         String refreshToken = request.get("refreshToken");
         if (refreshToken == null || refreshToken.isBlank()) {
             return ResponseEntity.badRequest().build();
@@ -167,6 +169,24 @@ public class AuthController {
             LoginBundle bundle = buildRolesAndPermissions(user, activeBu, activeRoleId);
             String newAccessToken = generateToken(user, bundle.roles, bundle.permissions, activeBu, activeRoleId, portalAccessMode);
             String newRefreshToken = generateRefreshToken(userId, activeBu, activeRoleId, portalAccessMode);
+
+            // Set httpOnly cookies for new tokens
+            Cookie accessTokenCookie = new Cookie("access_token", newAccessToken);
+            accessTokenCookie.setHttpOnly(true);
+            accessTokenCookie.setSecure(false);
+            accessTokenCookie.setPath("/");
+            accessTokenCookie.setMaxAge((int)(jwtExpiration / 1000));
+            accessTokenCookie.setAttribute("SameSite", "Lax");
+            httpResponse.addCookie(accessTokenCookie);
+
+            Cookie refreshTokenCookie = new Cookie("refresh_token", newRefreshToken);
+            refreshTokenCookie.setHttpOnly(true);
+            refreshTokenCookie.setSecure(false);
+            refreshTokenCookie.setPath("/");
+            refreshTokenCookie.setMaxAge(7 * 24 * 60 * 60);
+            refreshTokenCookie.setAttribute("SameSite", "Lax");
+            httpResponse.addCookie(refreshTokenCookie);
+
             return ResponseEntity.ok(Map.of(
                     "accessToken", newAccessToken,
                     "refreshToken", newRefreshToken,

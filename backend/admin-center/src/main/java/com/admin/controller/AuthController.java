@@ -5,6 +5,7 @@ import com.admin.dto.request.LoginRequest;
 import com.admin.dto.response.LoginResponse;
 import com.admin.service.AuthService;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,7 +31,8 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(
             @Valid @RequestBody LoginRequest request,
-            HttpServletRequest httpRequest) {
+            HttpServletRequest httpRequest,
+            HttpServletResponse httpResponse) {
         
         String ipAddress = getClientIpAddress(httpRequest);
         String userAgent = httpRequest.getHeader("User-Agent");
@@ -38,7 +40,7 @@ public class AuthController {
         log.debug("Login request from IP: {}", ipAddress);
         
         try {
-            LoginResponse response = authService.login(request, ipAddress, userAgent);
+            LoginResponse response = authService.login(request, ipAddress, userAgent, httpResponse);
             return ResponseEntity.ok(response);
         } catch (RuntimeException e) {
             log.warn("Login failed for user {}: {}", request.getUsername(), e.getMessage());
@@ -70,7 +72,8 @@ public class AuthController {
      */
     @PostMapping("/refresh")
     public ResponseEntity<LoginResponse> refresh(
-            @RequestBody Map<String, String> request) {
+            @RequestBody Map<String, String> request,
+            HttpServletResponse httpResponse) {
         
         String refreshToken = request.get("refreshToken");
         if (refreshToken == null || refreshToken.isBlank()) {
@@ -78,7 +81,7 @@ public class AuthController {
         }
         
         try {
-            return ResponseEntity.ok(authService.refreshLogin(refreshToken));
+            return ResponseEntity.ok(authService.refreshLogin(refreshToken, httpResponse));
         } catch (RuntimeException e) {
             return ResponseEntity.status(401).build();
         }

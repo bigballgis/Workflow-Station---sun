@@ -10,6 +10,7 @@ import axios from 'axios'
 const authRequest = axios.create({
   baseURL: '/api/portal/auth',
   timeout: 30000,
+  withCredentials: true,
   headers: { 'Content-Type': 'application/json' }
 })
 
@@ -20,25 +21,8 @@ export const USER_KEY = 'ws_up_user'
 export const USER_ID_KEY = 'ws_up_user_id'
 
 function migrateLegacyPortalAuthStorage(): void {
-  try {
-    if (typeof localStorage === 'undefined') return
-    if (localStorage.getItem(TOKEN_KEY)) return
-    const legacyToken = localStorage.getItem('token')
-    if (!legacyToken) return
-    localStorage.setItem(TOKEN_KEY, legacyToken)
-    const rt = localStorage.getItem('refreshToken')
-    if (rt) localStorage.setItem(REFRESH_TOKEN_KEY, rt)
-    const u = localStorage.getItem('user')
-    if (u) localStorage.setItem(USER_KEY, u)
-    const uid = localStorage.getItem('userId')
-    if (uid) localStorage.setItem(USER_ID_KEY, uid)
-    localStorage.removeItem('token')
-    localStorage.removeItem('refreshToken')
-    localStorage.removeItem('user')
-    localStorage.removeItem('userId')
-  } catch {
-    /* ignore */
-  }
+  // With httpOnly cookies, token migration from localStorage is no longer needed.
+  // Only user profile data (USER_KEY, USER_ID_KEY) is kept in localStorage.
 }
 
 migrateLegacyPortalAuthStorage()
@@ -129,52 +113,38 @@ export const login = async (data: LoginRequest): Promise<LoginResponse> => {
 }
 
 export const logout = async (): Promise<void> => {
-  const token = localStorage.getItem(TOKEN_KEY)
-  if (token) {
-    try {
-      await authRequest.post('/logout', null, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-    } catch {
-      // Ignore logout errors, still clear local storage
-    }
+  try {
+    await authRequest.post('/logout')
+  } catch {
+    // Ignore logout errors, still clear local storage
   }
 }
 
-export const refreshToken = async (refreshToken: string): Promise<TokenResponse> => {
-  const response = await authRequest.post<TokenResponse>('/refresh', { refreshToken })
+export const refreshToken = async (refreshToken?: string): Promise<TokenResponse> => {
+  const response = await authRequest.post<TokenResponse>('/refresh', refreshToken ? { refreshToken } : {})
   return response.data
 }
 
 export const getCurrentUser = async (): Promise<UserInfo> => {
-  const token = localStorage.getItem(TOKEN_KEY)
-  const response = await authRequest.get<UserInfo>('/me', {
-    headers: { Authorization: `Bearer ${token}` }
-  })
+  const response = await authRequest.get<UserInfo>('/me')
   return response.data
 }
 
 export const listWorkspaceContexts = async (): Promise<WorkspaceContextOption[]> => {
-  const token = localStorage.getItem(TOKEN_KEY)
-  const response = await authRequest.get<WorkspaceContextOption[]>('/workspace-contexts', {
-    headers: { Authorization: `Bearer ${token}` }
-  })
+  const response = await authRequest.get<WorkspaceContextOption[]>('/workspace-contexts')
   return response.data
 }
 
 export const switchWorkspace = async (businessUnitId: string, roleId: string): Promise<LoginResponse> => {
-  const token = localStorage.getItem(TOKEN_KEY)
   const response = await authRequest.post<LoginResponse>(
     '/switch-workspace',
-    { businessUnitId, roleId },
-    { headers: { Authorization: `Bearer ${token}` } }
+    { businessUnitId, roleId }
   )
   return response.data
 }
 
-export const saveTokens = (accessToken: string, refreshToken: string) => {
-  localStorage.setItem(TOKEN_KEY, accessToken)
-  localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken)
+export const saveTokens = (_accessToken: string, _refreshToken: string) => {
+  // Tokens are now httpOnly cookies — no localStorage storage needed
 }
 
 export const saveUser = (user: UserInfo) => {
@@ -212,14 +182,13 @@ export function applyWorkspaceAwarePortalAccess(
 }
 
 export const clearAuth = () => {
-  localStorage.removeItem(TOKEN_KEY)
-  localStorage.removeItem(REFRESH_TOKEN_KEY)
   localStorage.removeItem(USER_KEY)
   localStorage.removeItem(USER_ID_KEY)
 }
 
 export const isAuthenticated = (): boolean => {
-  return !!localStorage.getItem(TOKEN_KEY)
+  // Auth via httpOnly cookie — check for cached user profile as indicator
+  return !!getStoredUser()
 }
 
 /**
@@ -227,10 +196,9 @@ export const isAuthenticated = (): boolean => {
  * Security 仍按 JWT 拦截非白名单接口。若库中已有工作台，用第一条 UBR 调用 switch-workspace 换发 FULL token。
  */
 export async function reconcilePortalWorkspaceSession(): Promise<boolean> {
-  if (!localStorage.getItem(TOKEN_KEY)) {
-    return false
-  }
+  // Auth via httpOnly cookie — proceed if we have cached user info
   const stored = getStoredUser()
+  if (!stored) return false
   const needReconcile =
     stored?.portalAccessMode === 'PERMISSION_SELF_SERVICE_ONLY' ||
     !stored?.activeBusinessUnitId?.trim() ||

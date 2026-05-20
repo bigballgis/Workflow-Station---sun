@@ -1,6 +1,5 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { TOKEN_KEY } from '@/api/auth'
 
 export interface UserInfo {
   id: string
@@ -12,16 +11,17 @@ export interface UserInfo {
 }
 
 export const useUserStore = defineStore('user', () => {
-  const token = ref<string>(localStorage.getItem(TOKEN_KEY) || '')
+  // Token no longer stored in localStorage — httpOnly cookies handle auth
+  const token = ref<string>('')
   const userInfo = ref<UserInfo | null>(null)
 
-  const isLoggedIn = computed(() => !!token.value)
+  const isLoggedIn = computed(() => !!userInfo.value)
   const userName = computed(() => userInfo.value?.name || '')
   const userRoles = computed(() => userInfo.value?.roles || [])
 
-  const setToken = (newToken: string) => {
-    token.value = newToken
-    localStorage.setItem(TOKEN_KEY, newToken)
+  const setToken = (_newToken: string) => {
+    // No-op: tokens are now httpOnly cookies, not managed by JS
+    token.value = ''
   }
 
   const setUserInfo = (info: UserInfo) => {
@@ -45,7 +45,6 @@ export const useUserStore = defineStore('user', () => {
   const logout = () => {
     token.value = ''
     userInfo.value = null
-    localStorage.removeItem(TOKEN_KEY)
   }
 
   return {

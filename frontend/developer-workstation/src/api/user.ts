@@ -1,17 +1,11 @@
 import axios from 'axios'
-import { TOKEN_KEY } from './auth'
+import { TOKEN_KEY, getUser } from './auth'
 
 const workstationAuthAxios = axios.create({
   baseURL: '/api/v1/auth',
   timeout: 30000,
+  withCredentials: true,
   headers: { 'Content-Type': 'application/json' }
-})
-workstationAuthAxios.interceptors.request.use(config => {
-  const token = localStorage.getItem(TOKEN_KEY)
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
-  }
-  return config
 })
 workstationAuthAxios.interceptors.response.use(
   response => response.data,
@@ -25,15 +19,8 @@ workstationAuthAxios.interceptors.response.use(
 
 const adminCenterAxios = axios.create({
   baseURL: '/api/v1/admin',
-  timeout: 30000
-})
-
-adminCenterAxios.interceptors.request.use(config => {
-  const token = localStorage.getItem(TOKEN_KEY)
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
-  }
-  return config
+  timeout: 30000,
+  withCredentials: true
 })
 
 adminCenterAxios.interceptors.response.use(

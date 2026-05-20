@@ -29,15 +29,8 @@ export interface UserRole {
 // 创建独立的 axios 实例访问 admin-center（通过 /api/v1/admin 代理）
 const adminCenterAxios = axios.create({
   baseURL: '/api/v1/admin',
-  timeout: 30000
-})
-
-adminCenterAxios.interceptors.request.use(config => {
-  const token = localStorage.getItem(TOKEN_KEY)
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
-  }
-  return config
+  timeout: 30000,
+  withCredentials: true
 })
 
 adminCenterAxios.interceptors.response.use(

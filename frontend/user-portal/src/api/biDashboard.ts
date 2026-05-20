@@ -28,17 +28,13 @@ export interface GuestTokenRequest {
 const adminCenterService = axios.create({
   baseURL: '/api/v1/admin',
   timeout: 60000,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json'
   }
 })
 
-adminCenterService.interceptors.request.use((config) => {
-  const token = localStorage.getItem(TOKEN_KEY)
-  if (token) {
-    config.headers['Authorization'] = `Bearer ${token}`
-  }
-  let userId = localStorage.getItem(USER_ID_KEY)
+let userId = localStorage.getItem(USER_ID_KEY)
   if (!userId) {
     const userStr = localStorage.getItem(USER_KEY)
     if (userStr) {

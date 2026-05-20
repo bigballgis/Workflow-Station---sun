@@ -1,6 +1,6 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
-import { refreshToken as refreshAuthToken, REFRESH_TOKEN_KEY, TOKEN_KEY, clearAuth, getUser } from './auth'
+import { refreshToken as refreshAuthToken, clearAuth, getUser } from './auth'
 import i18n from '@/i18n'
 import { pickHttpErrorBodyMessage } from '@/utils/httpErrorMessage'
 import { redirectToUnifiedLogin, setSsoReturnPath } from '@/utils/sso'
@@ -21,16 +21,12 @@ const processQueue = (error: any, token: string | null = null) => {
 
 const api = axios.create({
   baseURL: '/api/v1',
-  timeout: 30000
+  timeout: 30000,
+  withCredentials: true
 })
 
 api.interceptors.request.use(
   config => {
-    const token = localStorage.getItem(TOKEN_KEY)
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
-    
     // Add X-User-Id request header for backend permission check
     const user = getUser()
     if (user && user.userId) {
@@ -52,8 +48,7 @@ api.interceptors.response.use(
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject })
-        }).then(token => {
-          originalRequest.headers.Authorization = `Bearer ${token}`
+        }).then(() => {
           return api(originalRequest)
         }).catch(err => Promise.reject(err))
       }
@@ -61,35 +56,19 @@ api.interceptors.response.use(
       originalRequest._retry = true
       isRefreshing = true
 
-      const storedRefreshToken = localStorage.getItem(REFRESH_TOKEN_KEY)
-      
-      if (storedRefreshToken) {
-        try {
-          const tokenResponse = await refreshAuthToken(storedRefreshToken)
-          const newToken = tokenResponse.accessToken
-          localStorage.setItem(TOKEN_KEY, newToken)
-          if (tokenResponse.refreshToken) {
-            localStorage.setItem(REFRESH_TOKEN_KEY, tokenResponse.refreshToken)
-          }
-          
-          processQueue(null, newToken)
-          originalRequest.headers.Authorization = `Bearer ${newToken}`
-          return api(originalRequest)
-        } catch (refreshError) {
-          processQueue(refreshError, null)
-          clearAuth()
-          setSsoReturnPath(window.location.pathname + window.location.search)
-          redirectToUnifiedLogin('developer-workstation')
-          return Promise.reject(refreshError)
-        } finally {
-          isRefreshing = false
-        }
-      } else {
+      try {
+        await refreshAuthToken()
+        // refresh_token cookie auto-sent by the browser; backend sets new access_token cookie
+        processQueue(null, null)
+        return api(originalRequest)
+      } catch (refreshError) {
+        processQueue(refreshError, null)
         clearAuth()
-        ElMessage.warning(i18n.global.t('api.unauthorized'))
         setSsoReturnPath(window.location.pathname + window.location.search)
         redirectToUnifiedLogin('developer-workstation')
-        return Promise.reject(error)
+        return Promise.reject(refreshError)
+      } finally {
+        isRefreshing = false
       }
     }
 
@@ -101,10 +80,9 @@ api.interceptors.response.use(
           ElMessage.error(errorMsg || i18n.global.t('api.unauthorized'))
           break
         case 403:
-          // 403 may indicate not logged in or insufficient permissions
-          const token = localStorage.getItem(TOKEN_KEY)
-          if (!token) {
-            // No token, clear auth and redirect to login page
+          // 403 indicates insufficient permissions; if no user stored, redirect to login
+          const user = getUser()
+          if (!user) {
             clearAuth()
             setSsoReturnPath(window.location.pathname + window.location.search)
             redirectToUnifiedLogin('developer-workstation')

@@ -1,7 +1,6 @@
 import { ref, onUnmounted } from 'vue'
 import { Client } from '@stomp/stompjs'
 import SockJS from 'sockjs-client'
-import { TOKEN_KEY } from '@/api/auth'
 
 export interface SubTableUpdateMessage {
   taskId: string
@@ -17,19 +16,10 @@ export function useSubTableWebSocket() {
   let currentSubscription: any = null
 
   function connect() {
-    const token = localStorage.getItem(TOKEN_KEY)
-    if (!token) {
-      console.warn('No auth token found, cannot connect WebSocket')
-      return
-    }
-
+    // Auth via httpOnly cookie — browser auto-sends with same-origin WebSocket
     client = new Client({
       webSocketFactory: () => new SockJS('/api/workflow/ws/sub-table-updates'),
-      connectHeaders: {
-        Authorization: `Bearer ${token}`
-      },
       debug: (str) => {
-        // Only log errors in production
         if (import.meta.env.DEV) {
           console.log('[SubTable WS]', str)
         }
@@ -59,7 +49,6 @@ export function useSubTableWebSocket() {
     if (!client || !client.connected) {
       console.warn('[SubTable WS] Client not connected, attempting to connect...')
       connect()
-      // Wait for connection and retry subscription
       setTimeout(() => {
         if (client && client.connected) {
           performSubscription(taskId, onMessage)
@@ -74,7 +63,6 @@ export function useSubTableWebSocket() {
   function performSubscription(taskId: string, onMessage: (message: SubTableUpdateMessage) => void) {
     if (!client) return
 
-    // Unsubscribe from previous topic if exists
     if (currentSubscription) {
       currentSubscription.unsubscribe()
       currentSubscription = null
@@ -110,7 +98,6 @@ export function useSubTableWebSocket() {
     }
   }
 
-  // Auto cleanup on component unmount
   onUnmounted(() => {
     disconnect()
   })

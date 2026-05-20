@@ -191,10 +191,8 @@ const fileList = ref<UploadUserFile[]>([])
 const previewVisible = ref(false)
 const previewUrl = ref('')
 
-// 上传请求头
-const uploadHeaders = computed(() => ({
-  Authorization: `Bearer ${localStorage.getItem(TOKEN_KEY) || ''}`
-}))
+// 上传请求头 — cookies auto-send with withCredentials
+const uploadHeaders = computed(() => ({}))
 
 // 接受的文件类型
 const acceptTypes = computed(() => {

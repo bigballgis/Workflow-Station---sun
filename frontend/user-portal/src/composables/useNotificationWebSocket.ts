@@ -1,7 +1,6 @@
 import { ref } from 'vue'
 import { Client } from '@stomp/stompjs'
 import SockJS from 'sockjs-client'
-import { TOKEN_KEY } from '@/api/auth'
 import type { NotificationData } from '@/api/notification'
 
 export function useNotificationWebSocket(onMessage: (notification: NotificationData) => void) {
@@ -9,14 +8,9 @@ export function useNotificationWebSocket(onMessage: (notification: NotificationD
   let client: Client | null = null
 
   const connect = () => {
-    const token = localStorage.getItem(TOKEN_KEY)
-    if (!token) return
-
+    // Auth via httpOnly cookie — browser auto-sends with same-origin WebSocket
     client = new Client({
       webSocketFactory: () => new SockJS('/api/portal/ws/notifications'),
-      connectHeaders: {
-        Authorization: `Bearer ${token}`
-      },
       reconnectDelay: 5000,
       heartbeatIncoming: 10000,
       heartbeatOutgoing: 10000,

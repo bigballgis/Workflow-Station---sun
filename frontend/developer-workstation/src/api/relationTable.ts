@@ -1,17 +1,14 @@
 import axios from 'axios'
-import { TOKEN_KEY, getUser } from './auth'
+import { getUser } from './auth'
 
 // Create axios instance for relation table API
 const relationTableAxios = axios.create({
   baseURL: '/api/v1',
-  timeout: 30000
+  timeout: 30000,
+  withCredentials: true
 })
 
 relationTableAxios.interceptors.request.use(config => {
-  const token = localStorage.getItem(TOKEN_KEY)
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
-  }
   const user = getUser()
   if (user && user.userId) {
     config.headers['X-User-Id'] = user.userId

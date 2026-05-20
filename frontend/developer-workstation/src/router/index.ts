@@ -3,7 +3,6 @@ import type { RouteRecordRaw } from 'vue-router'
 import { hasAnyRole } from '@/utils/permission'
 import i18n from '@/i18n'
 import { redirectToUnifiedLogin, setSsoReturnPath } from '@/utils/sso'
-import { TOKEN_KEY } from '@/api/auth'
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -76,14 +75,12 @@ router.beforeEach(async (to, _from, next) => {
   }
 
   if (to.path === '/sso/callback') {
-    const token = localStorage.getItem(TOKEN_KEY)
-    if (token) {
-      const { getUser } = await import('@/api/auth')
-      const user = getUser()
-      if (user) {
-        next('/')
-        return
-      }
+    // Auth checked via httpOnly cookie — getUser reads from localStorage user profile
+    const { getUser } = await import('@/api/auth')
+    const user = getUser()
+    if (user) {
+      next('/')
+      return
     }
     next()
     return
@@ -92,13 +89,7 @@ router.beforeEach(async (to, _from, next) => {
   // 检查需要认证的路由
   const requiresAuth = to.matched.some(record => record.meta.requiresAuth)
   if (requiresAuth) {
-    const token = localStorage.getItem(TOKEN_KEY)
-    if (!token) {
-      setSsoReturnPath(to.fullPath)
-      redirectToUnifiedLogin('developer-workstation')
-      return next(false)
-    }
-
+    // Auth checked via httpOnly cookie — if no valid cookie, API calls will 401 and redirect to login
     const { getUser } = await import('@/api/auth')
     const user = getUser()
     if (!user) {

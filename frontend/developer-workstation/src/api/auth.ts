@@ -10,6 +10,7 @@ import axios from 'axios'
 const authRequest = axios.create({
   baseURL: '/api/v1/auth',
   timeout: 30000,
+  withCredentials: true,
   headers: { 'Content-Type': 'application/json' }
 })
 
@@ -26,16 +27,16 @@ export const USER_ID_KEY = 'ws_dw_user_id'
 function migrateLegacyDwAuthStorage(): void {
   try {
     if (typeof localStorage === 'undefined') return
-    if (localStorage.getItem(TOKEN_KEY)) return
-    const legacyToken = localStorage.getItem('token')
-    if (!legacyToken) return
-    localStorage.setItem(TOKEN_KEY, legacyToken)
-    const rt = localStorage.getItem('refreshToken')
-    if (rt) localStorage.setItem(REFRESH_TOKEN_KEY, rt)
+    // Only migrate user profile data (not tokens — tokens are httpOnly cookies now)
     const u = localStorage.getItem('user')
-    if (u) localStorage.setItem(USER_KEY, u)
+    if (u && !localStorage.getItem(USER_KEY)) {
+      localStorage.setItem(USER_KEY, u)
+    }
     const uid = localStorage.getItem('userId')
-    if (uid) localStorage.setItem(USER_ID_KEY, uid)
+    if (uid && !localStorage.getItem(USER_ID_KEY)) {
+      localStorage.setItem(USER_ID_KEY, uid)
+    }
+    // Clean up legacy token storage (migrated to httpOnly cookies)
     localStorage.removeItem('token')
     localStorage.removeItem('refreshToken')
     localStorage.removeItem('user')
@@ -99,34 +100,26 @@ export const exchangeSsoCode = async (code: string, state?: string): Promise<Log
 }
 
 export const logout = async (): Promise<void> => {
-  const token = localStorage.getItem(TOKEN_KEY)
-  if (token) {
-    try {
-      await authRequest.post('/logout', null, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-    } catch (e) {
-      console.warn('Logout request failed:', e)
-    }
+  try {
+    await authRequest.post('/logout')
+  } catch (e) {
+    console.warn('Logout request failed:', e)
   }
 }
 
-export const refreshToken = async (refreshToken: string): Promise<TokenResponse> => {
-  const response = await authRequest.post<TokenResponse>('/refresh', { refreshToken })
+export const refreshToken = async (): Promise<TokenResponse> => {
+  const response = await authRequest.post<TokenResponse>('/refresh')
   return response.data
 }
 
 export const getCurrentUser = async (): Promise<UserInfo> => {
-  const token = localStorage.getItem(TOKEN_KEY)
-  const response = await authRequest.get<UserInfo>('/me', {
-    headers: { Authorization: `Bearer ${token}` }
-  })
+  const response = await authRequest.get<UserInfo>('/me')
   return response.data
 }
 
-export const saveTokens = (accessToken: string, refreshToken: string) => {
-  localStorage.setItem(TOKEN_KEY, accessToken)
-  localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken)
+// saveTokens is a no-op: access/refresh tokens are now managed via httpOnly cookies
+export const saveTokens = (_accessToken?: string, _refreshToken?: string) => {
+  // no-op: cookies are auto-set by the backend
 }
 
 export const saveUser = (user: UserInfo) => {
@@ -149,12 +142,11 @@ export const getStoredUser = (): UserInfo | null => {
 export const getUser = getStoredUser
 
 export const clearAuth = () => {
-  localStorage.removeItem(TOKEN_KEY)
-  localStorage.removeItem(REFRESH_TOKEN_KEY)
   localStorage.removeItem(USER_KEY)
   localStorage.removeItem(USER_ID_KEY)
 }
 
+// isAuthenticated now returns true; actual auth is enforced by cookie presence on API calls
 export const isAuthenticated = (): boolean => {
-  return !!localStorage.getItem(TOKEN_KEY)
+  return true
 }

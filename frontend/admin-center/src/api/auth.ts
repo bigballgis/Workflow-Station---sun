@@ -13,6 +13,7 @@ import axios from 'axios'
 const authRequest = axios.create({
   baseURL: '/api/v1/admin/auth',
   timeout: 30000,
+  withCredentials: true,
   headers: { 'Content-Type': 'application/json' }
 })
 
@@ -24,28 +25,8 @@ export const USER_ID_KEY = 'ws_ac_user_id'
 export const USERNAME_KEY = 'ws_ac_username'
 
 function migrateLegacyAdminAuthStorage(): void {
-  try {
-    if (typeof localStorage === 'undefined') return
-    if (localStorage.getItem(TOKEN_KEY)) return
-    const legacyToken = localStorage.getItem('token')
-    if (!legacyToken) return
-    localStorage.setItem(TOKEN_KEY, legacyToken)
-    const rt = localStorage.getItem('refreshToken')
-    if (rt) localStorage.setItem(REFRESH_TOKEN_KEY, rt)
-    const u = localStorage.getItem('user')
-    if (u) localStorage.setItem(USER_KEY, u)
-    const uid = localStorage.getItem('userId')
-    if (uid) localStorage.setItem(USER_ID_KEY, uid)
-    const uname = localStorage.getItem('username')
-    if (uname) localStorage.setItem(USERNAME_KEY, uname)
-    localStorage.removeItem('token')
-    localStorage.removeItem('refreshToken')
-    localStorage.removeItem('user')
-    localStorage.removeItem('userId')
-    localStorage.removeItem('username')
-  } catch {
-    /* ignore */
-  }
+  // With httpOnly cookies, token migration from localStorage is no longer needed.
+  // Only user profile data (USER_KEY, USER_ID_KEY, USERNAME_KEY) is kept in localStorage.
 }
 
 migrateLegacyAdminAuthStorage()
@@ -107,23 +88,18 @@ export const login = async (data: LoginRequest): Promise<LoginResponse> => {
  * Logout and invalidate token.
  */
 export const logout = async (): Promise<void> => {
-  const token = localStorage.getItem(TOKEN_KEY)
-  if (token) {
-    try {
-      await authRequest.post('/logout', null, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-    } catch {
-      // Ignore logout errors, still clear local storage
-    }
+  try {
+    await authRequest.post('/logout')
+  } catch {
+    // Ignore logout errors, still clear local storage
   }
 }
 
 /**
  * Refresh access token using refresh token.
  */
-export const refreshToken = async (refreshToken: string): Promise<LoginResponse> => {
-  const response = await authRequest.post<LoginResponse>('/refresh', { refreshToken })
+export const refreshToken = async (refreshToken?: string): Promise<LoginResponse> => {
+  const response = await authRequest.post<LoginResponse>('/refresh', refreshToken ? { refreshToken } : {})
   return response.data
 }
 
@@ -137,32 +113,21 @@ export const exchangeSsoCode = async (code: string, state?: string): Promise<Log
  * Get current user info.
  */
 export const getCurrentUser = async (): Promise<UserInfo> => {
-  const token = localStorage.getItem(TOKEN_KEY)
-  const response = await authRequest.get<UserInfo>('/me', {
-    headers: { Authorization: `Bearer ${token}` }
-  })
+  const response = await authRequest.get<UserInfo>('/me')
   return response.data
 }
 
 /** 修改密码（须走 /api/v1/admin/auth，勿使用 /api/v1/auth，避免被网关转发到设计器服务） */
 export const changePassword = async (data: { oldPassword: string; newPassword: string }): Promise<void> => {
-  const token = localStorage.getItem(TOKEN_KEY)
-  await authRequest.post('/change-password', data, {
-    headers: { Authorization: `Bearer ${token}` }
-  })
+  await authRequest.post('/change-password', data)
 }
 
 /**
  * Validate token.
  */
 export const validateToken = async (): Promise<boolean> => {
-  const token = localStorage.getItem(TOKEN_KEY)
-  if (!token) return false
-  
   try {
-    const response = await authRequest.get<boolean>('/validate', {
-      headers: { Authorization: `Bearer ${token}` }
-    })
+    const response = await authRequest.get<boolean>('/validate')
     return response.data
   } catch {
     return false
@@ -171,9 +136,8 @@ export const validateToken = async (): Promise<boolean> => {
 
 // Token storage helpers (keys exported at top of file)
 
-export const saveTokens = (accessToken: string, refreshToken: string) => {
-  localStorage.setItem(TOKEN_KEY, accessToken)
-  localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken)
+export const saveTokens = (_accessToken: string, _refreshToken: string) => {
+  // Tokens are now managed via httpOnly cookies — no localStorage writes needed
 }
 
 export const saveUser = (user: UserInfo) => {
@@ -198,11 +162,8 @@ export const getUser = getStoredUser
 export const clearAuth = () => {
   localStorage.removeItem(TOKEN_KEY)
   localStorage.removeItem(REFRESH_TOKEN_KEY)
-  localStorage.removeItem(USER_KEY)
-  localStorage.removeItem(USER_ID_KEY)
-  localStorage.removeItem(USERNAME_KEY)
 }
 
 export const isAuthenticated = (): boolean => {
-  return !!localStorage.getItem(TOKEN_KEY)
+  return !!localStorage.getItem(USER_KEY)
 }

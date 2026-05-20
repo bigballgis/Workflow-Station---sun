@@ -1,6 +1,6 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
 import { ElMessage } from 'element-plus'
-import { refreshToken as refreshAuthToken, REFRESH_TOKEN_KEY, TOKEN_KEY, USER_KEY, USER_ID_KEY, clearAuth } from './auth'
+import { refreshToken as refreshAuthToken, USER_KEY, USER_ID_KEY, clearAuth } from './auth'
 import i18n from '@/i18n'
 import { pickHttpErrorBodyMessage } from '@/utils/httpErrorMessage'
 import { redirectToUnifiedLogin, setSsoReturnPath } from '@/utils/sso'
@@ -23,6 +23,7 @@ const processQueue = (error: unknown, token: string | null = null) => {
 const service: AxiosInstance = axios.create({
   baseURL: '/api/portal',
   timeout: 600000, // 10 minutes - N8N workflows (e.g. AI invoice recognition) can take several minutes
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json'
   }
@@ -31,11 +32,6 @@ const service: AxiosInstance = axios.create({
 // 请求拦截器
 service.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem(TOKEN_KEY)
-    if (token) {
-      config.headers['Authorization'] = `Bearer ${token}`
-    }
-    
     // 添加用户ID头 - 从存储的用户对象中获取
     let userId = localStorage.getItem(USER_ID_KEY)
     if (!userId) {
@@ -91,35 +87,21 @@ service.interceptors.response.use(
       originalRequest._retry = true
       isRefreshing = true
 
-      const storedRefreshToken = localStorage.getItem(REFRESH_TOKEN_KEY)
-      
-      if (storedRefreshToken) {
-        try {
-          const tokenResponse = await refreshAuthToken(storedRefreshToken)
-          const newToken = tokenResponse.accessToken
-          localStorage.setItem(TOKEN_KEY, newToken)
-          if (tokenResponse.refreshToken) {
-            localStorage.setItem(REFRESH_TOKEN_KEY, tokenResponse.refreshToken)
-          }
-          
-          processQueue(null, newToken)
-          originalRequest.headers.Authorization = `Bearer ${newToken}`
-          return service(originalRequest)
-        } catch (refreshError) {
-          processQueue(refreshError, null)
-          clearAuth()
-          setSsoReturnPath(window.location.pathname + window.location.search)
-          redirectToUnifiedLogin('portal')
-          return Promise.reject(refreshError)
-        } finally {
-          isRefreshing = false
-        }
-      } else {
+      try {
+        const tokenResponse = await refreshAuthToken()
+        const newToken = tokenResponse.accessToken
+
+        processQueue(null, newToken)
+        originalRequest.headers.Authorization = `Bearer ${newToken}`
+        return service(originalRequest)
+      } catch (refreshError) {
+        processQueue(refreshError, null)
         clearAuth()
-        ElMessage.warning(i18n.global.t('api.unauthorized'))
         setSsoReturnPath(window.location.pathname + window.location.search)
         redirectToUnifiedLogin('portal')
-        return Promise.reject(error)
+        return Promise.reject(refreshError)
+      } finally {
+        isRefreshing = false
       }
     }
     

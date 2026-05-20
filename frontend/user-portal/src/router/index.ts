@@ -183,15 +183,8 @@ router.beforeEach(async (to, _from, next) => {
     return next()
   }
 
-  const token = localStorage.getItem(TOKEN_KEY)
-  if (to.meta.requiresAuth !== false && !token && to.path !== '/sso/callback') {
-    setSsoReturnPath(to.fullPath)
-    redirectToUnifiedLogin('portal')
-    return next(false)
-  }
-
-  // 补录 UBR 后须换发 JWT（reconcile），否则仅改 localStorage 仍被 PortalSelfServiceAccessFilter 拦截
-  if (token && to.path !== '/sso/callback' && to.path !== '/403') {
+  // Auth checked via httpOnly cookie — let API calls handle 401 redirect
+  if (to.meta.requiresAuth !== false && to.path !== '/sso/callback') {
     await reconcilePortalWorkspaceSession()
     const cached = getStoredUser()
     if (cached?.portalAccessMode === 'PERMISSION_SELF_SERVICE_ONLY') {

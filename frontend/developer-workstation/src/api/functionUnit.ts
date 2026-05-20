@@ -1,19 +1,15 @@
 import axios from 'axios'
-import { TOKEN_KEY, getUser } from './auth'
+import { getUser } from './auth'
 import i18n from '@/i18n'
 
 // Create a separate axios instance for function unit API
 const functionUnitAxios = axios.create({
   baseURL: '',
-  timeout: 30000
+  timeout: 30000,
+  withCredentials: true
 })
 
 functionUnitAxios.interceptors.request.use(config => {
-  const token = localStorage.getItem(TOKEN_KEY)
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
-  }
-  
   // Add X-User-Id request header for backend permission check
   const user = getUser()
   if (user && user.userId) {
@@ -53,9 +49,10 @@ functionUnitAxios.interceptors.response.use(
     
     // Handle 403 Forbidden
     if (response?.status === 403) {
-      const { TOKEN_KEY, clearAuth } = await import('./auth')
-      const token = localStorage.getItem(TOKEN_KEY)
-      if (!token) {
+      const { clearAuth } = await import('./auth')
+      const { getStoredUser } = await import('./auth')
+      const user = getStoredUser()
+      if (!user) {
         clearAuth()
         const { redirectToUnifiedLogin } = await import('@/utils/sso')
         redirectToUnifiedLogin('developer-workstation')
