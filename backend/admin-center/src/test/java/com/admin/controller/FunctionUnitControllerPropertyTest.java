@@ -35,7 +35,9 @@ class FunctionUnitControllerPropertyTest {
         return new FunctionUnitController(
                 mgr,
                 mock(com.admin.component.DeploymentManagerComponent.class),
-                mock(com.admin.service.FunctionUnitAccessService.class));
+                mock(com.admin.component.ProcessDeploymentComponent.class),
+                mock(com.admin.service.FunctionUnitAccessService.class),
+                mock(com.admin.service.UserReferenceResolver.class));
     }
 
     // ── Property 4: Admin Center API unified response format ──────────

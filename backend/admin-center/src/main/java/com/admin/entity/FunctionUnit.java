@@ -131,10 +131,18 @@ public class FunctionUnit {
     private Set<FunctionUnitContent> contents = new HashSet<>();
     
     /**
-     * 检查功能单元是否可以部署
+     * 检查功能单元是否可以部署（须先通过验证）
      */
     public boolean isDeployable() {
-        return status == FunctionUnitStatus.VALIDATED || status == FunctionUnitStatus.DEPLOYED;
+        return status == FunctionUnitStatus.VALIDATED
+                || status == FunctionUnitStatus.DEPLOYED;
+    }
+
+    /**
+     * 检查功能单元是否可以执行验证
+     */
+    public boolean isValidatable() {
+        return status == FunctionUnitStatus.DRAFT;
     }
     
     /**
@@ -165,6 +173,22 @@ public class FunctionUnit {
         return code + ":" + version;
     }
     
+    /**
+     * 标记为草稿状态（导入或恢复后）
+     */
+    public void markAsDraft() {
+        this.status = FunctionUnitStatus.DRAFT;
+        this.enabled = false;
+    }
+
+    /**
+     * 标记为已归档
+     */
+    public void markAsArchived() {
+        this.status = FunctionUnitStatus.ARCHIVED;
+        this.enabled = false;
+    }
+
     /**
      * 标记为已验证
      */

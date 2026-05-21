@@ -210,6 +210,10 @@
                 :fields="binding.formFields || []"
                 :current-row="binding.data && binding.data.length === 1 ? binding.data[0] : null"
                 :readonly="true"
+                :sub-table-bindings="
+                  selectedNodeForm.isCurrentStep ? subTableBindings : selectedNodeForm.subTableBindings
+                "
+                :linked-sub-table-bindings="diagramSelectedLinkableBindings"
               />
             </div>
           </template>
@@ -300,6 +304,8 @@
                 :fields="binding.formFields || []"
                 :current-row="binding.data && binding.data.length === 1 ? binding.data[0] : null"
                 :readonly="true"
+                :sub-table-bindings="subTableBindings"
+                :linked-sub-table-bindings="linkableSubTableBindings"
               />
             </div>
           </template>
@@ -343,6 +349,8 @@
             :tabs="[]"
             label-width="160px"
             :readonly="true"
+            :sub-table-bindings="subTaskDetailSubTableBindings"
+            :linked-sub-table-bindings="subTaskDetailLinkableBindings"
             view-context="initiatorRequest"
           />
         </div>
@@ -408,7 +416,15 @@ import { formatDate } from '@/utils/dateFormat'
 import { relationTableApi } from '@/api/relationTable'
 import { isRejectedName } from '@/utils/statusMatcher'
 import { resolveAssigneeFieldForBinding } from '@/utils/subTableAssignment'
-import { mergeListViewFieldColumn } from '@/components/subTableAddDialogHelpers'
+import {
+  mergeListViewFieldColumn,
+  deriveColumnsFromRelationFieldDefinitions,
+  buildRelationTableFieldIndexFromDataTables,
+  resolveSubTableSchemaByTableId,
+  defaultAttachmentListColumns,
+  SHARED_ATTACHMENT_RELATION_TABLE_ID,
+  type RelationFieldDef,
+} from '@/components/subTableAddDialogHelpers'
 import {
   mergeSubTableRowsByRowId,
   mergeAllSubTableSlicesFromVariables,
@@ -421,7 +437,13 @@ import {
   hydrateBindingsRowsFromVariablesBySharedRelationTableId,
   enrichChildBindingRowsFromParentsNestedSubTables,
   coerceSubTablesVariableToMap,
-  collectSubTableSliceArraysDeep
+  collectSubTableSliceArraysDeep,
+  cloneSubTableRows,
+  pullNestedRowsForBindingFromParentRows,
+  applySharedAttachmentFinalizeAndMaterialize,
+  isSharedAttachmentFileBinding,
+  isMiParticipantScopedSubTableBinding,
+  filterRowsForMiParticipantSubTableBinding,
 } from '@/composables/tasks/shared'
 import { USER_ID_KEY, USER_KEY } from '@/api/auth'
 import { clearBpmnParseCache, getCachedBpmnDocument } from '@/utils/bpmnParseCache'
@@ -532,6 +554,30 @@ const subTableBindings = ref<Array<{
   primaryKeyFields?: string[]
 }>>([])
 
+/** Cached from loadFunctionUnitContent — shared attachment slice merge (parity with tasks/detail.vue). */
+const lastBindingRelationTableMap = ref<Map<number, number | null>>(new Map())
+
+function applySharedAttachmentHydrationToAllBindings(
+  topLevelValues?: Record<string, unknown> | null,
+  flattened?: Record<string, unknown> | null,
+) {
+  const tv = (topLevelValues ?? formData.value) as Record<string, unknown>
+  const flat =
+    flattened ??
+    coerceSubTablesVariableToMap(formData.value.__subTables__)
+  const opts = {
+    flattened: flat,
+    bindingTableById: lastBindingRelationTableMap.value,
+  }
+  applySharedAttachmentFinalizeAndMaterialize(subTableBindings.value, tv, opts)
+  for (const pf of previousForms.value) {
+    applySharedAttachmentFinalizeAndMaterialize(pf.subTableBindings, tv, opts)
+  }
+  for (const info of nodeFormMap.value.values()) {
+    applySharedAttachmentFinalizeAndMaterialize(info.subTableBindings, tv, opts)
+  }
+}
+
 const placedBindingIds = computed((): Set<number> => {
   return collectPlacedBindingIds(formFields.value, formTabs.value)
 })
@@ -579,6 +625,10 @@ function collectRuleBindingIds(rules: any[]): Set<number> {
 
 // Lookup config fallback map (from rt_lookup_configs)
 const lookupDbConfigs = ref<Record<string, { tableId: number; searchFields: string[]; displayField: string; viewFields: any[] }>>({})
+
+/** Function unit forms + relation-table field index — schema fallback parity with tasks/detail.vue */
+let cachedContentForms: any[] = []
+let cachedRelationTableFieldIndex = new Map<number, RelationFieldDef[]>()
 
 // Relation view configs from configJson (designed in developer-workstation)
 const relationViewConfigs = ref<Record<string, { viewFields: any[]; allFields: any[] }>>({})
@@ -726,6 +776,16 @@ function applyUnionFindMergeToBindingList(all: SubTableBindingAlignable[]) {
     for (let j = i + 1; j < all.length; j++) {
       const a = all[i]!
       const b = all[j]!
+      if (
+        isSharedAttachmentFileBinding(
+          a as { columns?: Array<{ field?: string }>; foreignKeyField?: string | null; tableName?: string; physicalTableName?: string; tableId?: number | null },
+        ) ||
+        isSharedAttachmentFileBinding(
+          b as { columns?: Array<{ field?: string }>; foreignKeyField?: string | null; tableName?: string; physicalTableName?: string; tableId?: number | null },
+        )
+      ) {
+        continue
+      }
       const tnA = normalizeSubTableName(a.tableName)
       const tnB = normalizeSubTableName(b.tableName)
       const tidA = a.tableId != null && !Number.isNaN(Number(a.tableId)) ? Number(a.tableId) : null
@@ -772,6 +832,9 @@ function backfillSubTableBindingsFromVariables(bindings: SubTableBindingAlignabl
   const sliceArrays = collectSubTableSliceArraysDeep(savedMap)
 
   for (const b of bindings) {
+    if (isSharedAttachmentFileBinding(b as { columns?: Array<{ field?: string }>; foreignKeyField?: string | null; tableName?: string; physicalTableName?: string; tableId?: number | null })) {
+      continue
+    }
     const fieldKeys = collectSubTableBindingMatchKeys(b as { columns?: Array<{ field?: string }>; formFields?: FormField[] })
     if (fieldKeys.size === 0) continue
 
@@ -808,13 +871,57 @@ function backfillSubTableBindingsFromVariables(bindings: SubTableBindingAlignabl
 }
 
 /** Fast path: current form bindings only — enough for first paint on initiator My Request. */
+/** Resolve list columns for a binding, including sibling-form / dataTables fallbacks (binding 104 empty subListViews). */
+function isPortalSharedAttachmentTableBinding(b: {
+  bindingId?: number
+  tableId?: number | null
+  tableName?: string
+  foreignKeyField?: string | null
+}): boolean {
+  const tableIdNum = b.tableId != null ? Number(b.tableId) : NaN
+  const tn = normalizeSubTableName(String(b.tableName ?? ''))
+  if (Number.isFinite(tableIdNum) && tableIdNum === SHARED_ATTACHMENT_RELATION_TABLE_ID) return true
+  if (tn === 'attachment') return true
+  return String(b.foreignKeyField ?? '').trim().toLowerCase() === 'main_id' && tn === 'attachment'
+}
+
+function resolveSubTableBindingColumnsForPortal(
+  b: {
+    bindingId?: number
+    tableId?: number | null
+    tableName?: string
+    foreignKeyField?: string | null
+  },
+  formConfig: Record<string, any>,
+  contentForms?: any[] | null,
+): ReturnType<typeof deriveColumnsFromBinding> {
+  let columns = deriveColumnsFromBinding(b, formConfig)
+  const tableIdNum = b.tableId != null ? Number(b.tableId) : NaN
+  const forms = contentForms ?? cachedContentForms
+  if ((!Array.isArray(columns) || columns.length === 0) && Number.isFinite(tableIdNum) && forms.length > 0) {
+    const alt = resolveSubTableSchemaByTableId(tableIdNum, forms, b.bindingId)
+    if (alt) {
+      columns = deriveColumnsFromBinding({ ...b, bindingId: alt.bindingId }, alt.formConfig)
+    }
+    if ((!columns || columns.length === 0) && cachedRelationTableFieldIndex.has(tableIdNum)) {
+      columns = deriveColumnsFromRelationFieldDefinitions(cachedRelationTableFieldIndex.get(tableIdNum)!)
+    }
+  }
+  if ((!columns || columns.length === 0) && isPortalSharedAttachmentTableBinding(b)) {
+    columns = defaultAttachmentListColumns()
+  }
+  return Array.isArray(columns) ? columns : []
+}
+
 function alignMainSubTableBindingsOnly() {
   const main = subTableBindings.value as SubTableBindingAlignable[]
   if (main.length === 0) return
+  applySharedAttachmentHydrationToAllBindings()
   applyUnionFindMergeToBindingList(main)
   enrichChildBindingRowsFromParentsNestedSubTables(subTableBindings.value)
   resyncMiDashboardFieldsFromVariablesOnBindings(main)
   backfillSubTableBindingsFromVariables(main)
+  applySharedAttachmentHydrationToAllBindings()
 }
 
 function alignProcessSubTableBindingsBySharedTable() {
@@ -828,6 +935,7 @@ function alignProcessSubTableBindingsBySharedTable() {
   ]
   if (all.length === 0) return
 
+  applySharedAttachmentHydrationToAllBindings()
   applyUnionFindMergeToBindingList(all)
 
   backfillEmptySubTableBindingsFromVariables()
@@ -837,6 +945,7 @@ function alignProcessSubTableBindingsBySharedTable() {
     ...Array.from(nodeFormMap.value.values()).flatMap(n => n.subTableBindings)
   ])
   resyncMiDashboardFieldsFromVariablesOnBindings(all)
+  applySharedAttachmentHydrationToAllBindings()
 }
 
 /**
@@ -862,6 +971,24 @@ function resyncMiDashboardFieldsFromVariablesOnBindings(all: SubTableBindingAlig
       },
       pk
     )
+    if (isSharedAttachmentFileBinding(b as { columns?: Array<{ field?: string }>; foreignKeyField?: string | null; tableName?: string; physicalTableName?: string; tableId?: number | null })) {
+      continue
+    }
+    if (
+      isMiParticipantScopedSubTableBinding(
+        b as { columns?: Array<{ field?: string }>; foreignKeyField?: string | null; tableName?: string },
+      )
+    ) {
+      const fromOwnSlice = bindingSaved ?? []
+      if (fromOwnSlice.length === 0 && !(Array.isArray(b.data) && b.data.length > 0)) continue
+      b.data = dropSubsumedSubTableRows(
+        filterRowsForMiParticipantSubTableBinding(
+          mergeSubTableRowsByRowId(fromOwnSlice, Array.isArray(b.data) ? b.data : [], pk),
+          b as { columns?: Array<{ field?: string }>; tableName?: string },
+        ),
+      )
+      continue
+    }
     const fromVariables = useAllSlices
       ? mergeSubTableRowsByRowId(allSlicesMerged, bindingSaved ?? [], pk)
       : (bindingSaved ?? [])
@@ -951,6 +1078,9 @@ function backfillEmptySubTableBindingsFromVariables() {
   ]
 
   for (const b of all) {
+    if (isSharedAttachmentFileBinding(b as { columns?: Array<{ field?: string }>; foreignKeyField?: string | null; tableName?: string; physicalTableName?: string; tableId?: number | null })) {
+      continue
+    }
     const fieldKeys = collectSubTableBindingMatchKeys(b as { columns?: Array<{ field?: string }>; formFields?: FormField[] })
     if (fieldKeys.size === 0) continue
 
@@ -1026,6 +1156,28 @@ const subTaskDetailVisible = ref(false)
 const subTaskDetailTitle = ref('')
 const subTaskDetailFields = ref<FormField[]>([])
 const subTaskDetailData = ref<Record<string, any>>({})
+const subTaskDetailSubTableBindings = ref<Array<{
+  bindingId: number
+  tableId?: number | null
+  bindingType: string
+  bindingMode: string
+  foreignKeyField: string | null
+  tableName: string
+  physicalTableName?: string
+  tableType: string
+  tableDescription: string
+  columns: Array<{ field: string; label: string; type?: string }>
+  data: any[]
+  subMode?: string
+  formFields?: FormField[]
+  formOptions?: Record<string, any>
+  portalViews?: Record<string, any> | null
+  primaryKeyFields?: string[]
+}>>([])
+const subTaskDetailLinkableBindings = computed(() => [
+  ...subTaskDetailSubTableBindings.value,
+  ...linkableSubTableBindings.value,
+])
 const subTaskFormSchema = ref<any>(null)
 const subTaskFormId = ref<string | null>(null)
 /** My Request always shows the form section; current node + portalViews drive MI summary vs full layout. */
@@ -1148,6 +1300,84 @@ function shouldMergeProcessVariablesIntoSubTaskDetailRow(row: any, siblingRowsOv
   return true
 }
 
+/** Build sub-table bindings for a nested form (MI sub-task / Link Form target) — parity with main form load path. */
+function buildSubTableBindingsForForm(
+  formMeta: { tableBindings?: any[] },
+  formConfig: Record<string, any>,
+  parentRow?: Record<string, any> | null,
+): typeof subTaskDetailSubTableBindings.value {
+  const bindings: typeof subTaskDetailSubTableBindings.value = []
+  const subFormsPayload = formConfig.subForms || {}
+  const subTablePortalViewsPayload = formConfig.subTablePortalViews || {}
+  for (const b of formMeta.tableBindings || []) {
+    if (b.bindingType === 'PRIMARY') continue
+    const columns = deriveColumnsFromBinding(b, formConfig)
+    if (!Array.isArray(columns) || columns.length === 0) continue
+    const subFormDesign = resolveSubFormDesign(b, subFormsPayload)
+    const bindingPortalViews =
+      subTablePortalViewsPayload[b.bindingId]
+      ?? subTablePortalViewsPayload[String(b.bindingId)]
+      ?? null
+    bindings.push({
+      bindingId: b.bindingId,
+      tableId: b.tableId != null ? Number(b.tableId) : null,
+      bindingType: b.bindingType,
+      bindingMode: b.bindingMode,
+      foreignKeyField: b.foreignKeyField,
+      tableName: b.tableDisplayName || b.tableName,
+      physicalTableName: b.tableName,
+      tableType: b.tableType,
+      tableDescription: b.tableDescription,
+      columns,
+      data: [] as any[],
+      subMode: b.subMode,
+      formFields: subFormDesign.formFields,
+      formOptions: subFormDesign.formOptions,
+      portalViews: bindingPortalViews,
+      primaryKeyFields: resolveSubTablePrimaryKeyFields(
+        b.primaryKeyFields,
+        b.bindingId,
+        formConfig,
+      ),
+    })
+  }
+  mergeLinkFormTargetBindingsInto(
+    bindings,
+    cachedContentForms,
+    formConfig,
+    subFormsPayload,
+  )
+  const rtMap = buildBindingIdToRelationTableIdMap(cachedContentForms)
+  if (parentRow && typeof parentRow === 'object') {
+    for (const binding of bindings) {
+      const nested = pullNestedRowsForBindingFromParentRows(
+        {
+          bindingId: binding.bindingId,
+          tableName: binding.tableName,
+          physicalTableName: binding.physicalTableName,
+          tableId: binding.tableId ?? null,
+        },
+        [parentRow],
+        rtMap.size > 0 ? rtMap : undefined,
+      )
+      if (nested.length > 0) {
+        binding.data = cloneSubTableRows(nested)
+      }
+    }
+    enrichChildBindingRowsFromParentsNestedSubTables(bindings)
+  }
+  for (const binding of bindings) {
+    if (Array.isArray(binding.data) && binding.data.length > 0) continue
+    const peer = linkableSubTableBindings.value.find(
+      x => Number(x.bindingId) === Number(binding.bindingId),
+    )
+    if (peer?.data?.length) {
+      binding.data = cloneSubTableRows(peer.data)
+    }
+  }
+  return bindings
+}
+
 function openSubTaskDetailDialog(row: any, siblingRowsOverride?: any[] | null) {
   if (!subTaskFormSchema.value) return
   const schema = subTaskFormSchema.value
@@ -1155,6 +1385,17 @@ function openSubTaskDetailDialog(row: any, siblingRowsOverride?: any[] | null) {
     schema.rule && Array.isArray(schema.rule) ? schema.rule : (Array.isArray(schema) ? schema : [])
   )
   subTaskDetailFields.value = fields
+
+  const formMeta =
+    (subTaskFormId.value
+      ? cachedContentForms.find((f: any) => String(f.id) === subTaskFormId.value)
+      : null)
+    ?? (schema._formName
+      ? cachedContentForms.find((f: any) => f.name === schema._formName)
+      : null)
+  subTaskDetailSubTableBindings.value = formMeta
+    ? buildSubTableBindingsForForm(formMeta, schema, row)
+    : []
 
   const mergedData: Record<string, any> = { ...row }
   // Fallback: for MI form fields absent from the row, use process-level variables.
@@ -1675,6 +1916,7 @@ function buildApplicationNodeFormMap(content: any) {
   const curNorm = normLabel(curRaw)
   const savedSubTables = formData.value.__subTables__
   const bindingRelationTableMap = buildBindingIdToRelationTableIdMap(formsList)
+  lastBindingRelationTableMap.value = bindingRelationTableMap
 
   try {
     const doc = getCachedBpmnDocument(bpmnData)
@@ -1755,7 +1997,10 @@ function buildApplicationNodeFormMap(content: any) {
         const subTablePortalViewsPayload = cfg.subTablePortalViews || {}
         for (const b of matchedForm.tableBindings || []) {
           if (b.bindingType === 'PRIMARY') continue
-          const cols = deriveColumnsFromBinding(b, configForSubTables)
+          let cols = resolveSubTableBindingColumnsForPortal(b, configForSubTables, formsList)
+          if ((!Array.isArray(cols) || cols.length === 0) && isPortalSharedAttachmentTableBinding(b)) {
+            cols = defaultAttachmentListColumns()
+          }
           if (!Array.isArray(cols) || cols.length === 0) continue
           const subFormDesign = resolveSubFormDesign(b, subForms)
           const bindingPortalViews =
@@ -1769,6 +2014,7 @@ function buildApplicationNodeFormMap(content: any) {
             bindingMode: b.bindingMode,
             foreignKeyField: b.foreignKeyField,
             tableName: b.tableDisplayName || b.tableName,
+            physicalTableName: b.tableName,
             tableType: b.tableType,
             tableDescription: b.tableDescription,
             columns: cols,
@@ -1821,6 +2067,13 @@ function buildApplicationNodeFormMap(content: any) {
           )
         }
         enrichChildBindingRowsFromParentsNestedSubTables(nodeBindings)
+        applySharedAttachmentFinalizeAndMaterialize(nodeBindings, formData.value as Record<string, unknown>, {
+          flattened:
+            savedSubTables && typeof savedSubTables === 'object'
+              ? (savedSubTables as Record<string, unknown>)
+              : null,
+          bindingTableById: bindingRelationTableMap,
+        })
       } catch {
         /* ignore per-node parse errors */
       }
@@ -1937,6 +2190,8 @@ const loadFunctionUnitContent = async (processKey: string, prefetchedContent?: a
     }
     
     if (content.forms?.length > 0) {      // Select the correct form based on the current node formId
+      cachedContentForms = content.forms || []
+      cachedRelationTableFieldIndex = buildRelationTableFieldIndexFromDataTables(content.dataTables)
       let selectedForm = content.forms[0] // Default to first
       
       // Prefer matching formId to sourceId (original form ID)
@@ -1988,7 +2243,10 @@ const loadFunctionUnitContent = async (processKey: string, prefetchedContent?: a
       const subTablePortalViewsPayload = selectedFormConfig.subTablePortalViews || {}
       for (const b of tableBindings) {
         if (b.bindingType === 'PRIMARY') continue
-        const columns = deriveColumnsFromBinding(b, selectedFormConfig)
+        let columns = resolveSubTableBindingColumnsForPortal(b, selectedFormConfig, content.forms)
+        if ((!Array.isArray(columns) || columns.length === 0) && isPortalSharedAttachmentTableBinding(b)) {
+          columns = defaultAttachmentListColumns()
+        }
         if (!Array.isArray(columns) || columns.length === 0) continue
         const subFormDesign = resolveSubFormDesign(b, subFormsPayload)
         const bindingPortalViews =
@@ -2002,6 +2260,7 @@ const loadFunctionUnitContent = async (processKey: string, prefetchedContent?: a
           bindingMode: b.bindingMode,
           foreignKeyField: b.foreignKeyField,
           tableName: b.tableDisplayName || b.tableName,
+          physicalTableName: b.tableName,
           tableType: b.tableType,
           tableDescription: b.tableDescription,
           columns,
@@ -2021,6 +2280,7 @@ const loadFunctionUnitContent = async (processKey: string, prefetchedContent?: a
       mergeLinkFormTargetBindingsInto(bindings, content.forms as any[], selectedFormConfig, subFormsPayload)
 
       const bindingRelationTableMap = buildBindingIdToRelationTableIdMap(content.forms as any[])
+      lastBindingRelationTableMap.value = bindingRelationTableMap
 
       // Restore sub-table data from variables (promote nested link-form rows so bindings resolve like To Do).
       const rawSubTables = coerceSubTablesVariableToMap(formData.value.__subTables__)
@@ -3336,10 +3596,21 @@ function resolveSubFormDesign(binding: any, subForms?: Record<string, any>): { f
     subForms?.[binding.bindingId] ||
     subForms?.[String(binding.bindingId)] ||
     {}
-  const rule = Array.isArray(design.rule) ? design.rule : []
+  let rule = Array.isArray(design.rule) ? design.rule : []
+  let options = design.options
+  if (rule.length === 0 && binding.tableId != null && Number.isFinite(Number(binding.tableId))) {
+    const alt = resolveSubTableSchemaByTableId(Number(binding.tableId), cachedContentForms, binding.bindingId)
+    if (alt) {
+      const altDesign = alt.subForms[alt.bindingId] ?? alt.subForms[String(alt.bindingId)] ?? {}
+      if (Array.isArray(altDesign.rule) && altDesign.rule.length > 0) {
+        rule = altDesign.rule
+        options = altDesign.options ?? options
+      }
+    }
+  }
   return {
     formFields: rule.length > 0 ? extractFieldsRecursive(rule) : [],
-    formOptions: design.options
+    formOptions: options
   }
 }
 
@@ -3599,6 +3870,27 @@ const deriveColumnsFromBinding = (binding: any, formConfig?: Record<string, any>
       })
   }
 
+  const tableId = binding.tableId != null ? Number(binding.tableId) : NaN
+  if (Number.isFinite(tableId) && cachedContentForms.length > 0) {
+    const alt = resolveSubTableSchemaByTableId(tableId, cachedContentForms, binding.bindingId)
+    if (alt) {
+      const fromAlt = deriveColumnsFromBinding(
+        { ...binding, bindingId: alt.bindingId },
+        alt.formConfig,
+      )
+      if (fromAlt.length > 0) return fromAlt
+    }
+    const tableFields = cachedRelationTableFieldIndex.get(tableId)
+    if (tableFields?.length) {
+      const fromTable = deriveColumnsFromRelationFieldDefinitions(tableFields)
+      if (fromTable.length > 0) return fromTable
+    }
+  }
+
+  if (isPortalSharedAttachmentTableBinding(binding)) {
+    return defaultAttachmentListColumns()
+  }
+
   return subFormColumns
 }
 
@@ -3827,7 +4119,7 @@ function buildPreviousFormEntry(
   const prevBindings: PreviousFormEntry['subTableBindings'] = []
   for (const b of (prevForm.tableBindings || [])) {
     if (b.bindingType === 'PRIMARY') continue
-    const cols = deriveColumnsFromBinding(b, prevFormConfig)
+    const cols = resolveSubTableBindingColumnsForPortal(b, prevFormConfig, allContentForms)
     if (!Array.isArray(cols) || cols.length === 0) continue
     const prevSubForms = prevFormConfig.subForms || {}
     const prevSubTablePortalViews = prevFormConfig.subTablePortalViews || {}
@@ -3843,6 +4135,7 @@ function buildPreviousFormEntry(
       bindingMode: b.bindingMode,
       foreignKeyField: b.foreignKeyField,
       tableName: b.tableDisplayName || b.tableName,
+      physicalTableName: b.tableName,
       tableType: b.tableType,
       tableDescription: b.tableDescription,
       columns: cols,
@@ -3898,6 +4191,10 @@ function buildPreviousFormEntry(
       rtMap
     )
     enrichChildBindingRowsFromParentsNestedSubTables(prevBindings as any)
+    applySharedAttachmentFinalizeAndMaterialize(prevBindings, formData.value as Record<string, unknown>, {
+      flattened: savedSubTables as Record<string, unknown>,
+      bindingTableById: rtMap,
+    })
   }
 
   return {

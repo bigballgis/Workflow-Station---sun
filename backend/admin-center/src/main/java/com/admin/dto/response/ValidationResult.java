@@ -51,6 +51,28 @@ public class ValidationResult {
      * 表单配置验证结果
      */
     private boolean formConfigValid;
+
+    /**
+     * 依赖验证结果
+     */
+    @Builder.Default
+    private boolean dependenciesValid = true;
+
+    /**
+     * Flowable 引擎试部署结果
+     */
+    @Builder.Default
+    private boolean engineDeployValid = true;
+
+    /**
+     * 被验证的功能单元 ID
+     */
+    private String functionUnitId;
+
+    /**
+     * 校验完成后的功能单元状态（DRAFT 或 VALIDATED）
+     */
+    private String status;
     
     /**
      * 验证错误列表

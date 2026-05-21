@@ -9,7 +9,7 @@ export interface FunctionUnit {
   code: string
   version: string
   description?: string
-  status: 'DRAFT' | 'VALIDATED' | 'DEPLOYED' | 'DEPRECATED'
+  status: 'DRAFT' | 'VALIDATED' | 'DEPLOYED' | 'DEPRECATED' | 'ARCHIVED'
   enabled?: boolean
   packagePath?: string
   importedAt?: string
@@ -19,6 +19,7 @@ export interface FunctionUnit {
   environment?: string
   createdAt: string
   updatedAt: string
+  updatedBy?: string
 }
 
 export interface Deployment {
@@ -29,7 +30,7 @@ export interface Deployment {
   functionUnitVersion?: string
   environment: 'DEVELOPMENT' | 'TESTING' | 'STAGING' | 'PRODUCTION'
   strategy: 'FULL' | 'INCREMENTAL' | 'CANARY' | 'BLUE_GREEN'
-  status: 'PENDING' | 'APPROVED' | 'EXECUTING' | 'COMPLETED' | 'FAILED' | 'ROLLED_BACK' | 'CANCELLED'
+  status: 'PENDING' | 'APPROVED' | 'EXECUTING' | 'DEPLOYING' | 'SUCCESS' | 'COMPLETED' | 'FAILED' | 'ROLLED_BACK' | 'CANCELLED'
   deployedBy: string
   deployedByName?: string
   deployedAt?: string
@@ -75,8 +76,28 @@ export interface ImportResult {
   functionUnitCode?: string
   functionUnitVersion?: string
   message?: string
+  errorMessage?: string
   errors?: string[]
   warnings?: string[]
+}
+
+export interface ValidationError {
+  type: string
+  field: string
+  message: string
+}
+
+export interface FunctionUnitValidationResult {
+  valid: boolean
+  bpmnSyntaxValid?: boolean
+  formConfigValid?: boolean
+  dataTableValid?: boolean
+  dependenciesValid?: boolean
+  engineDeployValid?: boolean
+  functionUnitId?: string
+  status?: string
+  errors: ValidationError[]
+  warnings: string[]
 }
 
 export interface ValidationResult {
@@ -154,6 +175,10 @@ export const functionUnitApi = {
   list: (status?: string, page = 0, size = 20) =>
     get<PageResult<FunctionUnit>>('/function-units', { params: { status, page, size } }),
 
+  // 获取已归档的功能单元列表
+  listArchived: (page = 0, size = 20) =>
+    get<PageResult<FunctionUnit>>('/function-units/archived', { params: { page, size } }),
+
   // 根据ID获取功能单元
   getById: (id: string) =>
     get<FunctionUnit>(`/function-units/${id}`),
@@ -166,9 +191,17 @@ export const functionUnitApi = {
   validate: (data: ImportRequest) =>
     post<ValidationResult>('/function-units/validate', data),
 
-  // 删除功能单元
+  // 删除（归档）功能单元
   delete: (id: string) =>
     del<void>(`/function-units/${id}`),
+
+  // 恢复已归档的功能单元
+  restore: (id: string) =>
+    post<FunctionUnit>(`/function-units/${id}/restore`),
+
+  // 一键部署到用户门户
+  deploy: (id: string) =>
+    post<FunctionUnit>(`/function-units/${id}/deploy`),
 
   // 获取删除预览
   getDeletePreview: (id: string) =>
@@ -178,9 +211,9 @@ export const functionUnitApi = {
   setEnabled: (id: string, enabled: boolean) =>
     put<EnabledResponse>(`/function-units/${id}/enabled`, { enabled }),
 
-  // 验证功能单元（标记为已验证）
+  // 验证功能单元（结构/依赖/引擎试部署，通过后变为 VALIDATED）
   validateUnit: (id: string) =>
-    post<FunctionUnit>(`/function-units/${id}/validate`),
+    post<FunctionUnitValidationResult>(`/function-units/${id}/validate`),
 
   // 废弃功能单元
   deprecate: (id: string) =>

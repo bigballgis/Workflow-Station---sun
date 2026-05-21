@@ -381,6 +381,156 @@ export function mergeListViewFieldColumn(
   }
 }
 
+export type RelationFieldDef = {
+  fieldName?: string
+  description?: string
+  comment?: string
+  dataType?: string
+  sortOrder?: number
+}
+
+/** Map dw_field_definitions / dataTables dataType to portal sub-table column type (aligns with developer-workstation preview). */
+export function mapRelationFieldDataTypeToColumnType(dataType: string): ColumnType | undefined {
+  const dt = (dataType || '').toUpperCase()
+  if (dt === 'FILE') return 'upload'
+  if (
+    dt.includes('INT')
+    || dt === 'BIGINT'
+    || dt.includes('DECIMAL')
+    || dt.includes('NUMERIC')
+    || dt.includes('FLOAT')
+    || dt.includes('DOUBLE')
+  ) {
+    return 'number'
+  }
+  if (dt === 'DATE') return 'date'
+  if (dt.includes('TIMESTAMP') || dt === 'DATETIME') return 'datetime'
+  if (dt === 'BOOLEAN' || dt === 'BOOL') return 'switch'
+  return undefined
+}
+
+/** KK / shared attachment table (dw_table_definitions.id = 74) when designer subListViews are empty on copied forms. */
+export const SHARED_ATTACHMENT_RELATION_TABLE_ID = 74
+
+export function defaultAttachmentListColumns(): DialogColumn[] {
+  return [
+    { field: 'id', label: 'id', minWidth: 100 },
+    { field: 'main_id', label: 'main_id', minWidth: 100 },
+    mergeListViewFieldColumn(
+      { fieldName: 'file', comment: 'file', dataType: 'FILE' },
+      { field: 'file', label: 'file', minWidth: 180 },
+      null,
+    ),
+  ]
+}
+
+/** Fallback columns from relation-table field definitions when subListViews / subForm are empty (e.g. attachment on copied forms). */
+export function deriveColumnsFromRelationFieldDefinitions(fields: RelationFieldDef[]): DialogColumn[] {
+  return [...fields]
+    .sort((a, b) => (Number(a.sortOrder) || 0) - (Number(b.sortOrder) || 0))
+    .map(f => {
+      const fieldName = String(f.fieldName ?? '').trim()
+      if (!fieldName) return null
+      const type = mapRelationFieldDataTypeToColumnType(String(f.dataType ?? ''))
+      const label = String(f.description || f.comment || fieldName)
+      if (type === 'upload') {
+        return mergeListViewFieldColumn(
+          { fieldName, comment: label, dataType: 'FILE' },
+          { field: fieldName, label, minWidth: 180 },
+          null,
+        )
+      }
+      return {
+        field: fieldName,
+        label,
+        ...(type ? { type } : {}),
+        minWidth: 100,
+      }
+    })
+    .filter((col): col is DialogColumn => col != null)
+}
+
+/** Index relation-table field definitions from function-unit {@code dataTables} content items. */
+export function buildRelationTableFieldIndexFromDataTables(
+  dataTables: unknown[] | undefined | null,
+): Map<number, RelationFieldDef[]> {
+  const out = new Map<number, RelationFieldDef[]>()
+  if (!Array.isArray(dataTables)) return out
+  for (const item of dataTables) {
+    if (!item || typeof item !== 'object') continue
+    const rec = item as Record<string, unknown>
+    let parsed: Record<string, unknown> = {}
+    try {
+      const raw = rec.data
+      parsed =
+        typeof raw === 'string'
+          ? JSON.parse(raw || '{}')
+          : raw && typeof raw === 'object'
+            ? (raw as Record<string, unknown>)
+            : {}
+    } catch {
+      continue
+    }
+    const fields = (parsed.fieldDefinitions ?? parsed.fields) as RelationFieldDef[] | undefined
+    if (!Array.isArray(fields) || fields.length === 0) continue
+    const tid = Number(parsed.id ?? parsed.tableId ?? rec.sourceId)
+    if (Number.isFinite(tid)) out.set(tid, fields)
+  }
+  return out
+}
+
+function formHasSubTableSchemaForBinding(
+  formConfig: Record<string, unknown>,
+  subForms: Record<string, unknown>,
+  bindingId: number | string,
+): boolean {
+  const sid = String(bindingId)
+  const sf = (subForms[bindingId] ?? subForms[sid]) as { rule?: unknown[] } | undefined
+  if (sf?.rule && Array.isArray(sf.rule) && sf.rule.length > 0) return true
+  const subListViews = formConfig.subListViews as Record<string, { columns?: unknown[] }> | undefined
+  const lv = subListViews?.[bindingId] ?? subListViews?.[sid]
+  return !!(lv?.columns && Array.isArray(lv.columns) && lv.columns.length > 0)
+}
+
+/**
+ * Copied BPMN forms often assign a new bindingId with empty subListViews while another form in the same FU
+ * already configured list/subForm schema for the same physical table ({@code tableId}).
+ */
+export function resolveSubTableSchemaByTableId(
+  tableId: number,
+  contentForms: unknown[] | undefined | null,
+  excludeBindingId?: number | null,
+): { formConfig: Record<string, any>; subForms: Record<string, any>; bindingId: number } | null {
+  if (!Number.isFinite(tableId) || !Array.isArray(contentForms)) return null
+  for (const f of contentForms) {
+    if (!f || typeof f !== 'object') continue
+    const form = f as Record<string, unknown>
+    let formConfig: Record<string, any> = {}
+    try {
+      const raw = form.data
+      formConfig =
+        typeof raw === 'string'
+          ? JSON.parse(raw || '{}')
+          : raw && typeof raw === 'object'
+            ? (raw as Record<string, any>)
+            : {}
+    } catch {
+      continue
+    }
+    const subForms = (formConfig.subForms || {}) as Record<string, any>
+    const tbs = (form.tableBindings || []) as Array<{ bindingId?: number | string; tableId?: number | null }>
+    for (const b of tbs) {
+      if (b?.tableId == null || Number(b.tableId) !== Number(tableId)) continue
+      const bid = b.bindingId
+      if (bid == null || bid === '') continue
+      if (excludeBindingId != null && Number(bid) === Number(excludeBindingId)) continue
+      if (!formHasSubTableSchemaForBinding(formConfig, subForms, bid)) continue
+      return { formConfig, subForms, bindingId: Number(bid) }
+    }
+  }
+  return null
+}
+
 /** Upgrade inferred/plain-text columns to upload when field metadata or sample values indicate FILE storage. */
 export function normalizeSubTableColumns(
   columns: DialogColumn[],

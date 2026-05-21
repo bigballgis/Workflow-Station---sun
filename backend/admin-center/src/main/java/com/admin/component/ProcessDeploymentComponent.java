@@ -115,6 +115,70 @@ public class ProcessDeploymentComponent {
     }
 
     /**
+     * 试部署流程到 Flowable 以验证 BPMN 可部署性，成功后立即清理部署记录，不写入功能单元状态。
+     */
+    public ProcessDeploymentResult dryRunDeployFunctionUnitProcess(String functionUnitId) {
+        log.info("Dry-run deploying process for function unit: {}", functionUnitId);
+
+        FunctionUnit functionUnit = functionUnitRepository.findById(functionUnitId)
+                .orElseThrow(() -> new AdminBusinessException("FUNCTION_UNIT_NOT_FOUND",
+                        "功能单元不存在: " + functionUnitId));
+
+        List<FunctionUnitContent> processContents = contentRepository
+                .findByFunctionUnitIdAndContentType(functionUnitId, ContentType.PROCESS);
+
+        if (processContents.isEmpty()) {
+            return ProcessDeploymentResult.noProcess(functionUnitId);
+        }
+
+        if (!workflowEngineClient.isAvailable()) {
+            return ProcessDeploymentResult.engineUnavailable(functionUnitId);
+        }
+
+        List<String> errors = new java.util.ArrayList<>();
+        List<String> deploymentIdsToCleanup = new java.util.ArrayList<>();
+
+        for (FunctionUnitContent processContent : processContents) {
+            try {
+                String bpmnXml = processContent.getContentData();
+                String processKey = extractProcessKey(bpmnXml, functionUnit.getCode());
+                String processName = functionUnit.getName() + " - " + processContent.getContentName() + " (validate)";
+
+                Optional<WorkflowEngineClient.ProcessDeploymentResult> result =
+                        workflowEngineClient.deployProcess(processKey, bpmnXml, processName);
+
+                if (result.isPresent() && result.get().isSuccess()) {
+                    if (result.get().getDeploymentId() != null) {
+                        deploymentIdsToCleanup.add(result.get().getDeploymentId());
+                    }
+                    log.info("Dry-run process deploy OK: {}", processContent.getContentName());
+                } else {
+                    String errorMsg = result.map(WorkflowEngineClient.ProcessDeploymentResult::getMessage)
+                            .orElse("部署失败");
+                    errors.add(processContent.getContentName() + ": " + errorMsg);
+                    log.error("Dry-run failed for process: {}", processContent.getContentName());
+                }
+            } catch (Exception e) {
+                errors.add(processContent.getContentName() + ": " + e.getMessage());
+                log.error("Dry-run error for process: {}", processContent.getContentName(), e);
+            }
+        }
+
+        for (String deploymentId : deploymentIdsToCleanup) {
+            try {
+                workflowEngineClient.deleteProcessDefinition(deploymentId, true);
+            } catch (Exception e) {
+                log.warn("Failed to cleanup dry-run deployment {}: {}", deploymentId, e.getMessage());
+            }
+        }
+
+        if (errors.isEmpty()) {
+            return ProcessDeploymentResult.success(functionUnitId, Map.of());
+        }
+        return ProcessDeploymentResult.failure(functionUnitId, errors);
+    }
+
+    /**
      * 从 BPMN XML 中提取流程 Key
      */
     private String extractProcessKey(String bpmnXml, String defaultKey) {

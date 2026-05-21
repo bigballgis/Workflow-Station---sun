@@ -5,7 +5,7 @@ package com.admin.enums;
  */
 public enum FunctionUnitStatus {
     /**
-     * 草稿 - 刚导入，未验证
+     * 草稿 - 刚导入或从归档恢复，待部署
      */
     DRAFT,
     
@@ -22,5 +22,10 @@ public enum FunctionUnitStatus {
     /**
      * 已废弃 - 不再使用
      */
-    DEPRECATED
+    DEPRECATED,
+
+    /**
+     * 已归档 - 从功能单元列表删除后保留，可恢复
+     */
+    ARCHIVED
 }

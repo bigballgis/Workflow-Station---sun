@@ -18,6 +18,8 @@ import com.admin.enums.DependencyType;
 import com.admin.enums.FunctionUnitStatus;
 import com.admin.exception.AdminBusinessException;
 import com.admin.exception.FunctionUnitNotFoundException;
+import com.admin.entity.ActionDefinition;
+import com.admin.repository.ActionDefinitionRepository;
 import com.admin.repository.FunctionUnitAccessRepository;
 import com.admin.repository.FunctionUnitContentRepository;
 import com.admin.repository.FunctionUnitDependencyRepository;
@@ -40,6 +42,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
 import com.platform.common.version.SemanticVersion;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -61,6 +64,9 @@ public class FunctionUnitManagerComponent {
     private final FunctionUnitDependencyRepository dependencyRepository;
     private final FunctionUnitContentRepository contentRepository;
     private final FunctionUnitAccessRepository accessRepository;
+    private final FunctionUnitValidationComponent validationComponent;
+    private final FunctionUnitPackageParser packageParser;
+    private final ActionDefinitionRepository actionDefinitionRepository;
     private final org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
     private final RestTemplate restTemplate;
@@ -88,39 +94,43 @@ public class FunctionUnitManagerComponent {
                 return ImportResult.validationFailed(validationResult.getErrors());
             }
             
-            // 2. 解析功能包内容
-            FunctionPackageContent packageContent = parsePackageContent(request);
-            
+            // 2. 解析功能包内容（支持 Developer Workstation 导出的 ZIP）
+            FunctionUnitPackageParser.ParsedImportPackage parsed = parseImportRequest(request);
+            FunctionPackageContent packageContent = parsed.getPackageContent();
+
             // 3. 检查版本是否已存在
             if (functionUnitRepository.existsByCodeAndVersion(packageContent.getCode(), packageContent.getVersion())) {
-                if (!request.isOverwrite()) {
-                    return ImportResult.failure("Function unit version already exists: " + packageContent.getCode() + ":" + packageContent.getVersion());
+                boolean shouldOverwrite = request.isOverwrite()
+                        || functionUnitRepository.findByCodeAndVersion(packageContent.getCode(), packageContent.getVersion())
+                        .map(u -> u.getStatus() == FunctionUnitStatus.ARCHIVED)
+                        .orElse(false);
+                if (!shouldOverwrite) {
+                    return ImportResult.failure("Function unit version already exists: "
+                            + packageContent.getCode() + ":" + packageContent.getVersion()
+                            + "（请勾选覆盖或先删除归档版本）");
                 }
-                // 删除已存在的版本
                 deleteExistingVersion(packageContent.getCode(), packageContent.getVersion());
+            }
+
+            if (parsed.getIconSvg() != null && request.getIconSvg() == null) {
+                request.setIconSvg(parsed.getIconSvg());
             }
             
             // 4. 检测依赖冲突
             List<ImportResult.DependencyConflict> conflicts = detectConflicts(packageContent);
             
-            // 5. 如果启用新版本，自动禁用同一 code 的其他版本
-            boolean enableNewVersion = request.getEnableOnImport() != null ? request.getEnableOnImport() : true;
-            if (enableNewVersion) {
-                List<String> disabledVersions = disableOtherVersions(packageContent.getCode(), null, importerId);
-                if (!disabledVersions.isEmpty()) {
-                    log.info("Auto-disabled {} version(s) of {}: {}", 
-                            disabledVersions.size(), packageContent.getCode(), disabledVersions);
-                }
-            }
-            
-            // 6. 创建功能单元
-            FunctionUnit functionUnit = createFunctionUnit(packageContent, request, importerId, enableNewVersion);
+            // 5. 创建功能单元（导入后为 DRAFT 状态，未启用，需验证后部署）
+            FunctionUnit functionUnit = createFunctionUnit(packageContent, request, importerId);
             
             // 7. 保存依赖关系
             saveDependencies(functionUnit, packageContent.getDependencies());
             
-            // 8. 保存内容
+            // 8. 保存内容（流程、表）及表单
             saveContents(functionUnit, packageContent.getContents());
+            if (parsed.getForms() != null) {
+                saveContents(functionUnit, parsed.getForms());
+            }
+            saveImportedActions(functionUnit.getId(), parsed.getActions());
             
             log.info("Function package imported successfully: {}", functionUnit.getId());
             
@@ -306,9 +316,50 @@ public class FunctionUnitManagerComponent {
     }
     
     /**
-     * 解析功能包内容
+     * 解析导入请求：优先按 ZIP（Base64）解析 Developer Workstation 导出包。
      */
-    private FunctionPackageContent parsePackageContent(FunctionUnitImportRequest request) {
+    private FunctionUnitPackageParser.ParsedImportPackage parseImportRequest(FunctionUnitImportRequest request)
+            throws IOException {
+        if (request.getFileContent() != null && !request.getFileContent().isBlank()
+                && request.getFileName() != null
+                && request.getFileName().toLowerCase().endsWith(".zip")) {
+            try {
+                FunctionUnitPackageParser.ParsedImportPackage parsed =
+                        packageParser.parseBase64Zip(request.getFileContent());
+                FunctionPackageContent content = parsed.getPackageContent();
+                if (content.getCode() == null || content.getCode().isBlank()) {
+                    content.setCode(extractCodeFromFileName(request.getFileName()));
+                }
+                if (content.getName() == null || content.getName().isBlank()) {
+                    content.setName(request.getName() != null ? request.getName() : content.getCode());
+                }
+                if (request.getCode() != null && !request.getCode().isBlank()) {
+                    content.setCode(request.getCode());
+                }
+                if (request.getVersion() != null && !request.getVersion().isBlank()) {
+                    content.setVersion(request.getVersion());
+                }
+                if (request.getDescription() != null) {
+                    content.setDescription(request.getDescription());
+                }
+                return parsed;
+            } catch (IllegalArgumentException e) {
+                log.warn("Base64 zip decode failed, falling back to legacy parser: {}", e.getMessage());
+            }
+        }
+        FunctionPackageContent legacy = parsePackageContentLegacy(request);
+        return FunctionUnitPackageParser.ParsedImportPackage.builder()
+                .packageContent(legacy)
+                .forms(List.of())
+                .actions(List.of())
+                .iconSvg(request.getIconSvg())
+                .build();
+    }
+
+    /**
+     * 旧版解析（非 ZIP 或纯 BPMN 文本）
+     */
+    private FunctionPackageContent parsePackageContentLegacy(FunctionUnitImportRequest request) {
         // 优先使用请求中的code，如果没有则从文件名提取
         String code = request.getCode() != null && !request.getCode().isEmpty() 
                 ? request.getCode() 
@@ -367,8 +418,7 @@ public class FunctionUnitManagerComponent {
      */
     private FunctionUnit createFunctionUnit(FunctionPackageContent packageContent, 
                                             FunctionUnitImportRequest request, 
-                                            String importerId,
-                                            boolean enabled) {
+                                            String importerId) {
         String checksum = calculateChecksum(request.getFileContent());
         
         FunctionUnit functionUnit = FunctionUnit.builder()
@@ -381,7 +431,7 @@ public class FunctionUnitManagerComponent {
                 .packageSize(request.getFileContent() != null ? (long) request.getFileContent().length() : 0L)
                 .checksum(checksum)
                 .status(FunctionUnitStatus.DRAFT)
-                .enabled(enabled)
+                .enabled(false)
                 .importedAt(Instant.now())
                 .importedBy(importerId)
                 .deployedAt(Instant.now())
@@ -422,9 +472,59 @@ public class FunctionUnitManagerComponent {
                     .contentPath(content.getContentPath())
                     .contentData(content.getContentData())
                     .checksum(contentChecksum)
+                    .sourceId(content.getSourceId())
                     .build();
             contentRepository.save(unitContent);
         }
+    }
+
+    private void saveImportedActions(String functionUnitId, List<Map<String, Object>> actions) {
+        if (actions == null || actions.isEmpty()) {
+            return;
+        }
+        actionDefinitionRepository.deleteByFunctionUnitId(functionUnitId);
+        for (Map<String, Object> actionData : actions) {
+            try {
+                String actionName = actionData.get("actionName") != null
+                        ? String.valueOf(actionData.get("actionName")) : null;
+                String actionType = actionData.get("actionType") != null
+                        ? String.valueOf(actionData.get("actionType")) : null;
+                if (actionName == null || actionType == null) {
+                    continue;
+                }
+                Map<String, Object> configJson = resolveActionConfigJson(actionData.get("configJson"));
+                ActionDefinition actionDef = ActionDefinition.builder()
+                        .functionUnitId(functionUnitId)
+                        .actionName(actionName)
+                        .actionType(actionType)
+                        .description(actionData.get("description") != null
+                                ? String.valueOf(actionData.get("description")) : null)
+                        .configJson(configJson)
+                        .icon(actionData.get("icon") != null ? String.valueOf(actionData.get("icon")) : null)
+                        .buttonColor(actionData.get("buttonColor") != null
+                                ? String.valueOf(actionData.get("buttonColor")) : null)
+                        .isDefault(Boolean.TRUE.equals(actionData.get("isDefault")))
+                        .build();
+                actionDefinitionRepository.save(actionDef);
+            } catch (Exception e) {
+                log.warn("Failed to save imported action: {}", e.getMessage());
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> resolveActionConfigJson(Object configJsonObj) {
+        if (configJsonObj instanceof Map<?, ?> map) {
+            return (Map<String, Object>) map;
+        }
+        if (configJsonObj instanceof String s && !s.isBlank()) {
+            try {
+                return objectMapper.readValue(s, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+            } catch (Exception e) {
+                log.warn("Failed to parse action config_json string: {}", e.getMessage());
+            }
+        }
+        return Map.of();
     }
     
     /**
@@ -477,6 +577,7 @@ public class FunctionUnitManagerComponent {
             contentRepository.deleteByFunctionUnitId(unit.getId());
             // 删除相关依赖
             dependencyRepository.deleteByFunctionUnitId(unit.getId());
+            actionDefinitionRepository.deleteByFunctionUnitId(unit.getId());
             // 删除功能单元
             functionUnitRepository.delete(unit);
             // 强制刷新，确保删除操作在后续插入之前完成
@@ -917,7 +1018,14 @@ public class FunctionUnitManagerComponent {
      * 获取功能单元列表（分页）
      */
     public Page<FunctionUnit> listFunctionUnits(Pageable pageable) {
-        return functionUnitRepository.findAll(pageable);
+        return functionUnitRepository.findByStatusNot(FunctionUnitStatus.ARCHIVED, pageable);
+    }
+    
+    /**
+     * 获取已归档的功能单元列表（分页）
+     */
+    public Page<FunctionUnit> listArchivedFunctionUnits(Pageable pageable) {
+        return functionUnitRepository.findByStatus(FunctionUnitStatus.ARCHIVED, pageable);
     }
     
     /**
@@ -935,18 +1043,28 @@ public class FunctionUnitManagerComponent {
     }
     
     /**
-     * 验证功能单元
+     * 验证功能单元：执行结构/依赖/引擎试部署检查，通过后标记为 VALIDATED
      */
     @Transactional
-    public FunctionUnit validateFunctionUnit(String id, String validatorId) {
+    public ValidationResult validateFunctionUnit(String id, String validatorId) {
         FunctionUnit functionUnit = getFunctionUnitById(id);
-        
-        if (functionUnit.getStatus() != FunctionUnitStatus.DRAFT) {
+
+        if (!functionUnit.isValidatable()) {
             throw new AdminBusinessException("INVALID_STATUS", "Only draft function units can be validated");
         }
-        
+
+        ValidationResult result = validationComponent.validate(id);
+        result.setFunctionUnitId(id);
+        result.setStatus(FunctionUnitStatus.DRAFT.name());
+
+        if (!result.isValid()) {
+            return result;
+        }
+
         functionUnit.markAsValidated(validatorId);
-        return functionUnitRepository.save(functionUnit);
+        functionUnitRepository.save(functionUnit);
+        result.setStatus(FunctionUnitStatus.VALIDATED.name());
+        return result;
     }
     
     /**
@@ -1373,6 +1491,7 @@ public class FunctionUnitManagerComponent {
         private String contentName;
         private String contentPath;
         private String contentData;
+        private String sourceId;
     }
     
     // ==================== 删除和启用/禁用功能 ====================
@@ -1440,7 +1559,66 @@ public class FunctionUnitManagerComponent {
     }
     
     /**
-     * 级联删除功能单元及其所有关联内容
+     * 归档功能单元（按 code 归档全部版本，并从用户门户移除可见性）
+     */
+    @Transactional
+    public void archiveFunctionUnitByCode(String functionUnitId) {
+        FunctionUnit unit = getFunctionUnitById(functionUnitId);
+
+        if (unit.getStatus() == FunctionUnitStatus.ARCHIVED) {
+            log.info("Function unit already archived: {}", functionUnitId);
+            return;
+        }
+
+        if (hasRunningInstances(functionUnitId)) {
+            throw new AdminBusinessException("HAS_RUNNING_INSTANCES",
+                    "Cannot archive: there are running process instances");
+        }
+
+        String code = unit.getCode();
+        List<FunctionUnit> allVersions = functionUnitRepository.findAllByCodeOrderByVersionDesc(code);
+        log.info("Archiving function unit code {} ({} version(s))", code, allVersions.size());
+
+        for (FunctionUnit version : allVersions) {
+            if (version.getStatus() == FunctionUnitStatus.ARCHIVED) {
+                continue;
+            }
+            version.markAsArchived();
+            functionUnitRepository.save(version);
+        }
+
+        log.info("Function unit archived successfully: code={}", code);
+    }
+
+    /**
+     * 恢复已归档的功能单元（恢复该 code 下全部 ARCHIVED 版本为 DRAFT）
+     */
+    @Transactional
+    public FunctionUnit restoreFunctionUnit(String functionUnitId) {
+        FunctionUnit unit = getFunctionUnitById(functionUnitId);
+        if (unit.getStatus() != FunctionUnitStatus.ARCHIVED) {
+            throw new AdminBusinessException("INVALID_STATUS", "Only archived function units can be restored");
+        }
+
+        String code = unit.getCode();
+        List<FunctionUnit> archivedVersions = functionUnitRepository.findByCodeAndStatus(code, FunctionUnitStatus.ARCHIVED);
+        if (archivedVersions.isEmpty()) {
+            throw new AdminBusinessException("NOT_FOUND", "No archived versions found for code: " + code);
+        }
+
+        FunctionUnit toRestore = archivedVersions.stream()
+                .max(this::compareBySemver)
+                .orElse(unit);
+        for (FunctionUnit version : archivedVersions) {
+            version.markAsDraft();
+            functionUnitRepository.save(version);
+        }
+        log.info("Restored function unit {} ({} version(s)) to DRAFT", code, archivedVersions.size());
+        return functionUnitRepository.findById(toRestore.getId()).orElse(toRestore);
+    }
+
+    /**
+     * 级联删除功能单元及其所有关联内容（保留供内部/测试使用；对外 DELETE 走归档）
      */
     @Transactional
     public void deleteFunctionUnitCascade(String functionUnitId) {

@@ -3,6 +3,8 @@
  * Pure helpers — no reactive state, no Vue/API dependencies.
  */
 
+import { resolveAssigneeFieldForBinding } from '@/utils/subTableAssignment'
+
 export function normalizeSubTableName(name?: string): string {
   return String(name || '').trim().toLowerCase()
 }
@@ -528,11 +530,659 @@ const SUB_TABLE_ROW_META_KEYS = new Set([
   'task_current_node',
   'task_id',
   'task_definition_key',
+  'assignee',
   'assignee_user_id',
   'assignee_display_name',
   'participant_id',
   'parent_id',
 ])
+
+/** Runtime / MI dashboard keys that must not become inferred sub-table columns or leak into non-MI bindings. */
+export function isSubTableRowMetaField(key: string): boolean {
+  if (!key || key.startsWith('__')) return true
+  return SUB_TABLE_ROW_META_KEYS.has(key)
+}
+
+/** True when designer schema declares this binding as a multi-instance participant dashboard (not a plain related table). */
+export function isMiDashboardSubTableBinding(binding: {
+  columns?: Array<{ field?: string }> | null
+  tableName?: string
+}): boolean {
+  const cols = binding.columns ?? []
+  if (cols.some(c => c?.field === 'task_status' || c?.field === 'task_current_node')) return true
+  const assigneeField = resolveAssigneeFieldForBinding(cols, binding.tableName)
+  if (assigneeField && cols.some(c => c?.field === assigneeField)) return true
+  const tn = (binding.tableName || '').toLowerCase()
+  return tn === 'participants' || tn.endsWith('participants')
+}
+
+const SHARED_PROCESS_SUB_TABLE_FK = new Set([
+  'main_id',
+  'mainid',
+  'process_id',
+  'processid',
+  'main_record_id',
+])
+
+const MI_PARTICIPANT_SUB_TABLE_FK = new Set([
+  'id_idw',
+  'participant_id',
+  'parent_id',
+  'meeting_participant_id',
+])
+
+/**
+ * True when sub-table rows are scoped to one MI participant (assignee dashboard, link-form child, etc.).
+ * False for process-level tables keyed to the main form (e.g. attachment.main_id) — those rows are shared by every MI sub-task.
+ */
+export function isMiParticipantScopedSubTableBinding(binding: {
+  columns?: Array<{ field?: string }> | null
+  tableName?: string
+  foreignKeyField?: string | null
+}): boolean {
+  if (isMiDashboardSubTableBinding(binding)) return true
+  const fk = String(binding.foreignKeyField || '').trim().toLowerCase()
+  if (!fk) return false
+  if (SHARED_PROCESS_SUB_TABLE_FK.has(fk)) return false
+  if (MI_PARTICIPANT_SUB_TABLE_FK.has(fk)) return true
+  // Link-form child rows often FK via generic {@code id} to the parent MI row.
+  if (fk === 'id') return true
+  return false
+}
+
+/**
+ * Merge {@code __subTables__} slices that belong to one relation table (by designer {@code tableId} / table name),
+ * without pulling unrelated MI participant slices (subtable id 343 must not appear on attachment).
+ */
+export function mergeSubTableSlicesForRelationTableId(
+  savedSubTables: Record<string, unknown> | null | undefined,
+  tableId: number,
+  bindingTableById: Map<number, number | null>,
+  pkFieldNames?: string[] | null,
+  tableName?: string | null,
+  physicalTableName?: string | null,
+): any[] {
+  if (!savedSubTables || typeof savedSubTables !== 'object') return []
+  if (!Number.isFinite(tableId)) return []
+
+  const seenArrays = new Set<unknown>()
+  let merged: any[] = []
+
+  const ingest = (val: unknown) => {
+    if (!Array.isArray(val) || val.length === 0 || seenArrays.has(val)) return
+    seenArrays.add(val)
+    merged = mergeSubTableRowsByRowId(merged, val as any[], pkFieldNames ?? null)
+  }
+
+  for (const label of [tableName, physicalTableName]) {
+    if (label == null || String(label).trim() === '') continue
+    const t = String(label).trim()
+    ingest(savedSubTables[t])
+    ingest(savedSubTables[normalizeSubTableName(t)])
+  }
+
+  for (const [key, val] of Object.entries(savedSubTables)) {
+    const kid = Number(key)
+    if (!Number.isFinite(kid)) continue
+    const otherTid = bindingTableById.get(kid)
+    if (otherTid == null || Number.isNaN(Number(otherTid))) continue
+    if (Number(otherTid) !== tableId) continue
+    ingest(val)
+  }
+
+  return merged
+}
+
+/**
+ * Deep walk {@code row.__subTables__} chains for slices keyed by binding id / table name
+ * (attachment rows often persist only under MI parent rows until flattened).
+ */
+export function collectAllNestedSlicesForBindingDeep(
+  savedSubTables: Record<string, unknown> | null | undefined,
+  binding: { bindingId: number; tableName: string; physicalTableName?: string },
+): unknown[][] {
+  if (!savedSubTables || typeof savedSubTables !== 'object') return []
+
+  const candidates: string[] = []
+  const add = (s?: string) => {
+    if (s == null || s === '') return
+    const t = String(s)
+    if (!candidates.includes(t)) candidates.push(t)
+    const n = normalizeSubTableName(s)
+    if (n && n !== t && !candidates.includes(n)) candidates.push(n)
+  }
+  add(String(binding.bindingId))
+  const bid = Number(binding.bindingId)
+  if (Number.isFinite(bid)) add(String(bid))
+  add(binding.tableName)
+  add(binding.physicalTableName)
+
+  const out: unknown[][] = []
+  const seen = new WeakSet<object>()
+
+  const ingestNest = (nest: Record<string, unknown>) => {
+    for (const key of candidates) {
+      const arr = nest[key]
+      if (!Array.isArray(arr) || arr.length === 0) continue
+      if (seen.has(arr as object)) continue
+      seen.add(arr as object)
+      out.push(arr)
+    }
+  }
+
+  const walkRows = (rows: unknown[]) => {
+    for (const row of rows) {
+      if (!row || typeof row !== 'object') continue
+      const nest = (row as Record<string, unknown>).__subTables__
+      if (!nest || typeof nest !== 'object') continue
+      ingestNest(nest as Record<string, unknown>)
+      for (const val of Object.values(nest)) {
+        if (Array.isArray(val)) walkRows(val)
+      }
+    }
+  }
+
+  for (const val of Object.values(savedSubTables)) {
+    if (Array.isArray(val)) walkRows(val)
+  }
+  return out
+}
+
+/** Top-level + nested slices for one shared process sub-table (attachment.main_id, etc.). */
+export function mergeAllSlicesForSharedProcessSubTableBinding(
+  savedSubTables: Record<string, unknown> | null | undefined,
+  binding: {
+    bindingId: number
+    tableId?: number | null
+    tableName?: string
+    physicalTableName?: string
+    primaryKeyFields?: string[] | null
+  },
+  bindingTableById: Map<number, number | null>,
+  options?: { omitNestedSlices?: boolean },
+): any[] {
+  if (!savedSubTables || typeof savedSubTables !== 'object') return []
+
+  const pk = binding.primaryKeyFields ?? null
+  let merged: any[] = []
+  const ingest = (rows: unknown) => {
+    if (!Array.isArray(rows) || rows.length === 0) return
+    merged = mergeSubTableRowsByRowId(merged, rows as any[], pk)
+  }
+
+  const own =
+    savedSubTables[binding.bindingId] ?? savedSubTables[String(binding.bindingId)]
+  ingest(own)
+
+  const tableIdRaw =
+    binding.tableId != null ? Number(binding.tableId) : bindingTableById.get(binding.bindingId)
+  if (tableIdRaw != null && Number.isFinite(tableIdRaw)) {
+    ingest(
+      mergeSubTableSlicesForRelationTableId(
+        savedSubTables,
+        Number(tableIdRaw),
+        bindingTableById,
+        pk,
+        binding.tableName,
+        binding.physicalTableName,
+      ),
+    )
+    for (const [bid, tid] of bindingTableById.entries()) {
+      if (Number(tid) !== Number(tableIdRaw)) continue
+      const slice = savedSubTables[bid] ?? savedSubTables[String(bid)]
+      ingest(slice)
+    }
+  }
+
+  for (const label of [binding.tableName, binding.physicalTableName]) {
+    if (label == null || String(label).trim() === '') continue
+    ingest(savedSubTables[String(label).trim()])
+    ingest(savedSubTables[normalizeSubTableName(String(label))])
+  }
+
+  if (!options?.omitNestedSlices) {
+    for (const chunk of collectAllNestedSlicesForBindingDeep(savedSubTables, {
+      bindingId: binding.bindingId,
+      tableName: binding.tableName ?? '',
+      physicalTableName: binding.physicalTableName,
+    })) {
+      ingest(chunk)
+    }
+
+    if (tableIdRaw != null && Number.isFinite(tableIdRaw)) {
+      for (const [bid, tid] of bindingTableById.entries()) {
+        if (Number(tid) !== Number(tableIdRaw) || bid === binding.bindingId) continue
+        for (const chunk of collectAllNestedSlicesForBindingDeep(savedSubTables, {
+          bindingId: bid,
+          tableName: binding.tableName ?? '',
+          physicalTableName: binding.physicalTableName,
+        })) {
+          ingest(chunk)
+        }
+      }
+    }
+  }
+
+  return merged
+}
+
+function pickNonEmptyAttachmentFile(row: unknown): boolean {
+  if (!row || typeof row !== 'object') return false
+  const file = (row as Record<string, unknown>).file
+  if (file == null || String(file).trim() === '' || String(file).trim() === '-') return false
+  return true
+}
+
+/** Resolve legacy scalar upload persisted on sub form1 link-form instead of __subTables__[103/104]. */
+export function resolveLegacyAttachmentFileUrl(
+  topLevelFormData: Record<string, unknown> | null | undefined,
+): string | null {
+  if (!topLevelFormData) return null
+  for (const key of ['fileupload', 'file']) {
+    const raw = topLevelFormData[key]
+    if (raw == null) continue
+    const s = String(raw).trim()
+    if (!s || s === '-') continue
+    return s
+  }
+  return null
+}
+
+export function isSharedAttachmentFileBinding(binding: {
+  bindingId?: number
+  tableId?: number | null
+  tableName?: string
+  physicalTableName?: string
+  foreignKeyField?: string | null
+  columns?: Array<{ field?: string }> | null
+}): boolean {
+  const tn = normalizeSubTableName(binding.tableName ?? binding.physicalTableName ?? '')
+  if (tn === 'attachment') return true
+  if (binding.tableId != null && Number(binding.tableId) === 74) return true
+  const fk = String(binding.foreignKeyField ?? '').trim().toLowerCase()
+  if (fk !== 'main_id') return false
+  const cols = binding.columns ?? []
+  return cols.some(c => String(c?.field ?? '').trim() === 'file')
+}
+
+/**
+ * When sub form1 saved link-form {@code fileupload} as a top-level scalar but never wrote attachment rows
+ * into {@code __subTables__}, synthesize one shared row for binding 103/104 on load/save.
+ */
+export function materializeSharedAttachmentRowsFromProcessScalars(
+  topLevelFormData: Record<string, unknown> | null | undefined,
+  binding: {
+    bindingId?: number
+    tableId?: number | null
+    tableName?: string
+    physicalTableName?: string
+    foreignKeyField?: string | null
+    columns?: Array<{ field?: string }> | null
+    primaryKeyFields?: string[] | null
+  },
+  existingRows: any[] | null | undefined,
+): any[] {
+  if (!isSharedAttachmentFileBinding(binding)) {
+    return Array.isArray(existingRows) ? [...existingRows] : []
+  }
+  const rows = Array.isArray(existingRows) ? [...existingRows] : []
+  if (rows.some(pickNonEmptyAttachmentFile)) return rows
+  const fileUrl = resolveLegacyAttachmentFileUrl(topLevelFormData)
+  if (!fileUrl) return rows
+  const idHint = topLevelFormData?.id ?? topLevelFormData?.mainRecordId
+  const synthetic: Record<string, unknown> = {
+    id: idHint != null && String(idHint).trim() !== '' ? idHint : `legacy-fileupload-${Date.now()}`,
+    main_id: '',
+    file: fileUrl,
+  }
+  return mergeSubTableRowsByRowId(rows, [synthetic], binding.primaryKeyFields ?? null)
+}
+
+export type SharedAttachmentBindingLike = {
+  bindingId?: number
+  tableId?: number | null
+  tableName?: string
+  physicalTableName?: string
+  foreignKeyField?: string | null
+  columns?: Array<{ field?: string }> | null
+  primaryKeyFields?: string[] | null
+  data: any[]
+}
+
+/**
+ * Shared attachment (103/104 / main_id FK): merge slices, drop MI leaks, materialize legacy {@code fileupload}.
+ * Used by To Do and My Request for parity.
+ */
+export function applySharedAttachmentFinalizeAndMaterialize<
+  T extends SharedAttachmentBindingLike,
+>(
+  bindings: T[],
+  topLevelValues: Record<string, unknown> | null | undefined,
+  options?: {
+    flattened?: Record<string, unknown> | null
+    bindingTableById?: Map<number, number | null>
+  },
+): void {
+  const rtMap = options?.bindingTableById ?? new Map<number, number | null>()
+  const flat = options?.flattened ?? null
+  const foreignSubTableRowIds =
+    flat != null ? collectForeignSubTableRowIdsFromVariables(flat, rtMap) : undefined
+  const filterContext: SharedProcessSubTableFilterContext | undefined =
+    foreignSubTableRowIds && foreignSubTableRowIds.size > 0
+      ? { foreignSubTableRowIds }
+      : undefined
+  for (const binding of bindings) {
+    if (isMiParticipantScopedSubTableBinding(binding)) continue
+    if (!isSharedAttachmentFileBinding(binding)) continue
+    if (flat) {
+      const merged = mergeAllSlicesForSharedProcessSubTableBinding(
+        flat,
+        binding as {
+          bindingId: number
+          tableId?: number | null
+          tableName?: string
+          physicalTableName?: string
+          primaryKeyFields?: string[] | null
+        },
+        rtMap,
+        { omitNestedSlices: true },
+      )
+      let canonical = merged
+      if (canonical.length === 0) {
+        const bid = binding.bindingId
+        const keysToTry = new Set<string | number>()
+        for (const key of [bid, String(bid), binding.tableName, binding.physicalTableName, 'attachment']) {
+          if (key == null || String(key).trim() === '') continue
+          keysToTry.add(key)
+          keysToTry.add(normalizeSubTableName(String(key)))
+        }
+        const tableIdRaw =
+          binding.tableId != null ? Number(binding.tableId) : rtMap.get(Number(binding.bindingId))
+        if (tableIdRaw != null && Number.isFinite(tableIdRaw)) {
+          for (const [sibBid, tid] of rtMap.entries()) {
+            if (Number(tid) !== Number(tableIdRaw)) continue
+            keysToTry.add(sibBid)
+            keysToTry.add(String(sibBid))
+          }
+        }
+        for (const key of keysToTry) {
+          const slice = flat[key as string] ?? flat[normalizeSubTableName(String(key))]
+          if (Array.isArray(slice) && slice.length > 0) {
+            canonical = mergeSubTableRowsByRowId(
+              canonical,
+              slice as any[],
+              binding.primaryKeyFields ?? null,
+            )
+          }
+        }
+      }
+      if (canonical.length > 0) {
+        binding.data = mergeSubTableRowsByRowId([], canonical, binding.primaryKeyFields ?? null)
+      }
+    }
+    binding.data = finalizeSharedProcessSubTableBindingRows(binding.data, binding, filterContext)
+    binding.data = materializeSharedAttachmentRowsFromProcessScalars(
+      topLevelValues ?? undefined,
+      binding,
+      binding.data,
+    )
+  }
+}
+
+function sharedBindingRowHasNonIdColumnData(
+  rec: Record<string, unknown>,
+  colFields: Set<string>,
+): boolean {
+  const fields =
+    colFields.size > 0
+      ? [...colFields].filter(f => f !== 'id')
+      : Object.keys(rec).filter(k => k !== 'id' && !isSubTableRowMetaField(k))
+  if (fields.length === 0) return false
+  return fields.some(f => {
+    const v = rec[f]
+    return v != null && v !== '' && !(typeof v === 'string' && v.trim() === '')
+  })
+}
+
+/** Row ids from MI / subtable slices — must not appear as attachment.id (separate tables, unrelated PKs). */
+export type SharedProcessSubTableFilterContext = {
+  foreignSubTableRowIds?: Set<string>
+}
+
+function isAttachmentBindingSliceKey(
+  key: string,
+  bindingTableById: Map<number, number | null>,
+): boolean {
+  const n = normalizeSubTableName(key)
+  if (n === 'attachment') return true
+  const kid = Number(key)
+  if (Number.isFinite(kid) && (kid === 103 || kid === 104)) return true
+  if (!Number.isFinite(kid)) return false
+  const tid = bindingTableById.get(kid)
+  return tid === 74
+}
+
+/** MI participant / subtable slices — row ids here must not appear on attachment.id. */
+function isMiSubTableParticipantSliceKey(
+  key: string,
+  bindingTableById: Map<number, number | null>,
+): boolean {
+  const n = normalizeSubTableName(key)
+  if (n === 'subtable' || n === 'subtable2' || n === 'participants') return true
+  const kid = Number(key)
+  if (!Number.isFinite(kid)) return false
+  const tid = bindingTableById.get(kid)
+  return tid === 20 || tid === 21
+}
+
+function addRowIdToForeignSet(row: unknown, ids: Set<string>): void {
+  if (!row || typeof row !== 'object') return
+  const id = (row as Record<string, unknown>).id
+  if (id != null && String(id).trim() !== '') ids.add(String(id).trim())
+}
+
+function collectForeignSubTableRowIdsFromRowWalk(
+  rows: unknown[],
+  ids: Set<string>,
+  bindingTableById: Map<number, number | null>,
+): void {
+  for (const row of rows) {
+    if (!row || typeof row !== 'object') continue
+    addRowIdToForeignSet(row, ids)
+    const rec = row as Record<string, unknown>
+    const nest = rec.__subTables__
+    if (!nest || typeof nest !== 'object') continue
+    for (const [childKey, childVal] of Object.entries(nest as Record<string, unknown>)) {
+      if (!Array.isArray(childVal)) continue
+      if (isAttachmentBindingSliceKey(childKey, bindingTableById)) continue
+      collectForeignSubTableRowIdsFromRowWalk(childVal, ids, bindingTableById)
+    }
+  }
+}
+
+/**
+ * Collect row ids from MI / subtable participant slices only (not every non-attachment key).
+ * Used to drop attachment rows that reused a subtable participant id (e.g. 666 + name).
+ */
+export function collectForeignSubTableRowIdsFromVariables(
+  savedSubTables: Record<string, unknown> | null | undefined,
+  bindingTableById: Map<number, number | null>,
+): Set<string> {
+  const ids = new Set<string>()
+  if (!savedSubTables || typeof savedSubTables !== 'object') return ids
+
+  for (const [key, val] of Object.entries(savedSubTables)) {
+    if (!Array.isArray(val)) continue
+    if (isAttachmentBindingSliceKey(key, bindingTableById)) continue
+    if (isMiSubTableParticipantSliceKey(key, bindingTableById)) {
+      collectForeignSubTableRowIdsFromRowWalk(val, ids, bindingTableById)
+      continue
+    }
+    for (const row of val) {
+      if (!row || typeof row !== 'object') continue
+      const rec = row as Record<string, unknown>
+      if (isSubTableMiDashboardRow(rec)) addRowIdToForeignSet(row, ids)
+      const nest = rec.__subTables__
+      if (!nest || typeof nest !== 'object') continue
+      for (const [childKey, childVal] of Object.entries(nest as Record<string, unknown>)) {
+        if (!Array.isArray(childVal)) continue
+        if (isMiSubTableParticipantSliceKey(childKey, bindingTableById)) {
+          collectForeignSubTableRowIdsFromRowWalk(childVal, ids, bindingTableById)
+        }
+      }
+    }
+  }
+  return ids
+}
+
+function isLeakedForeignRowOnSharedAttachment(
+  rec: Record<string, unknown>,
+  colFields: Set<string>,
+  foreignSubTableRowIds?: Set<string>,
+): boolean {
+  if (isSubTableMiDashboardRow(rec)) return true
+
+  const rowId = rec.id != null ? String(rec.id).trim() : ''
+  if (rowId && foreignSubTableRowIds?.has(rowId)) return true
+
+  // Backend MI overlay may stamp id_idw on persisted attachment rows — not a subtable leak.
+  if (pickNonEmptyAttachmentFile(rec)) {
+    if (rec.name != null && String(rec.name).trim() !== '' && !colFields.has('name')) {
+      return true
+    }
+    return false
+  }
+
+  if (rec.id_idw != null && String(rec.id_idw).trim() !== '' && !colFields.has('id_idw')) {
+    return true
+  }
+
+  if (rec.name != null && String(rec.name).trim() !== '' && !colFields.has('name')) {
+    return true
+  }
+
+  return false
+}
+
+/** Drop attachment-shaped rows (id + file only) that leaked into an MI / subtable binding grid. */
+export function filterRowsForMiParticipantSubTableBinding(
+  rows: any[] | undefined | null,
+  binding: {
+    columns?: Array<{ field?: string }> | null
+    tableName?: string
+  },
+): any[] {
+  if (!Array.isArray(rows) || rows.length === 0) return []
+  const colFields = new Set(
+    (binding.columns ?? [])
+      .map(c => (c?.field != null ? String(c.field).trim() : ''))
+      .filter(Boolean),
+  )
+  return rows
+    .filter(row => {
+      if (!row || typeof row !== 'object') return false
+      const rec = row as Record<string, unknown>
+      if (colFields.has('file')) return true
+      if (!pickNonEmptyAttachmentFile(row)) return true
+      if (isSubTableMiDashboardRow(rec)) return true
+      const name = rec.name
+      if (name != null && String(name).trim() !== '') return true
+      if (rec.id_idw != null && String(rec.id_idw).trim() !== '') return true
+      return false
+    })
+}
+
+/**
+ * Drop MI participant / foreign binding rows that leaked into a process-level shared sub-table (e.g. attachment.main_id).
+ */
+export function filterRowsForSharedProcessSubTableBinding(
+  rows: any[] | undefined | null,
+  binding: {
+    columns?: Array<{ field?: string }> | null
+    foreignKeyField?: string | null
+    tableName?: string
+    physicalTableName?: string
+    tableId?: number | null
+  },
+  filterContext?: SharedProcessSubTableFilterContext,
+): any[] {
+  if (!Array.isArray(rows) || rows.length === 0) return []
+  if (isMiParticipantScopedSubTableBinding(binding)) {
+    return filterRowsForMiParticipantSubTableBinding(rows, binding)
+  }
+
+  const colFields = new Set(
+    (binding.columns ?? [])
+      .map(c => (c?.field != null ? String(c.field).trim() : ''))
+      .filter(Boolean),
+  )
+  const attachmentBinding = isSharedAttachmentFileBinding(binding)
+  const foreignIds = filterContext?.foreignSubTableRowIds
+
+  return rows.filter(row => {
+    if (!row || typeof row !== 'object') return false
+    const rec = row as Record<string, unknown>
+
+    if (attachmentBinding && isLeakedForeignRowOnSharedAttachment(rec, colFields, foreignIds)) {
+      return false
+    }
+
+    if (!attachmentBinding && isSubTableMiDashboardRow(rec)) return false
+
+    if (!attachmentBinding && rec.id_idw != null && String(rec.id_idw).trim() !== '' && !colFields.has('id_idw')) {
+      return false
+    }
+
+    if (!attachmentBinding && rec.name != null && String(rec.name).trim() !== '' && !colFields.has('name')) {
+      return false
+    }
+
+    const hasOwnData = sharedBindingRowHasNonIdColumnData(rec, colFields)
+    if (hasOwnData) return true
+
+    if (isSubTableMiDashboardRow(rec)) return false
+
+    if (rec.id_idw != null && String(rec.id_idw).trim() !== '' && !colFields.has('id_idw')) {
+      return false
+    }
+
+    if (rec.name != null && String(rec.name).trim() !== '' && !colFields.has('name')) {
+      return false
+    }
+
+    return true
+  })
+}
+
+/** Strip meta, drop foreign MI rows, and collapse id-only ghosts for shared process sub-tables. */
+export function finalizeSharedProcessSubTableBindingRows(
+  rows: any[] | undefined | null,
+  binding: {
+    columns?: Array<{ field?: string }> | null
+    foreignKeyField?: string | null
+    tableName?: string
+    physicalTableName?: string
+    tableId?: number | null
+  },
+  filterContext?: SharedProcessSubTableFilterContext,
+): any[] {
+  const cleaned = filterRowsForSharedProcessSubTableBinding(rows, binding, filterContext).map(row =>
+    row && typeof row === 'object'
+      ? stripSubTableRowMetaFields(row as Record<string, unknown>)
+      : row,
+  )
+  return dropSubsumedSubTableRows(cleaned)
+}
+
+/** Remove MI / runtime meta fields from a sub-table row (non-MI bindings after hydration). */
+export function stripSubTableRowMetaFields(row: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(row)) {
+    if (isSubTableRowMetaField(k)) continue
+    out[k] = v
+  }
+  return out
+}
 
 /** True when a row carries MI dashboard columns (assignee / per-row task status). */
 export function isSubTableMiDashboardRow(row: Record<string, unknown> | null | undefined): boolean {
@@ -1177,6 +1827,22 @@ export function hydrateBindingsRowsFromVariablesBySharedRelationTableId<
   const strictAssignmentByTid = new Map<number, Map<number, any[]>>()
 
   for (const b of bindings) {
+    // attachment (main_id / table 74): shared across bindings 103+104 — handled by applySharedAttachmentFinalizeAndMaterialize.
+    if (
+      isSharedAttachmentFileBinding(
+        b as {
+          bindingId?: number
+          tableId?: number | null
+          tableName?: string
+          physicalTableName?: string
+          foreignKeyField?: string | null
+          columns?: Array<{ field?: string }> | null
+        },
+      )
+    ) {
+      continue
+    }
+
     /**
      * Same failure mode as {@link hydrateChildSubTablesFromParentsNestedRows}: “thin” rows loaded from a wrong
      * binding key still count as {@code length > 0}, so we skipped relation-table hydration and never merged the
@@ -1374,13 +2040,21 @@ export function enrichChildBindingRowsFromParentsNestedSubTables<
     primaryKeyFields?: string[] | null | undefined
   },
 >(bindings: T[]): void {
+  const childAllowsMiMeta = new Map<number, boolean>()
+  for (const child of bindings) {
+    childAllowsMiMeta.set(child.bindingId, isMiDashboardSubTableBinding(child))
+  }
+
   const mergePatchIntoRow = (
     target: Record<string, unknown>,
     patch: Record<string, unknown>,
+    allowMiMeta: boolean,
   ): boolean => {
     let changed = false
     for (const [k, val] of Object.entries(patch)) {
-      if (k.startsWith('__')) continue
+      if (isSubTableRowMetaField(k)) {
+        if (!allowMiMeta) continue
+      }
       if (val === undefined || val === null || val === '') continue
       if (k === 'task_status' || k === 'task_current_node') {
         const cur = target[k]
@@ -1408,6 +2082,20 @@ export function enrichChildBindingRowsFromParentsNestedSubTables<
   const peerMap = buildBindingTableIdMapFromPeers(bindings)
 
   for (const child of bindings) {
+    if (
+      isSharedAttachmentFileBinding(
+        child as {
+          bindingId?: number
+          tableId?: number | null
+          tableName?: string
+          physicalTableName?: string
+          foreignKeyField?: string | null
+          columns?: Array<{ field?: string }> | null
+        },
+      )
+    ) {
+      continue
+    }
     if (!Array.isArray(child.data)) child.data = [] as any
     if (child.data.length === 0) {
       let incoming: any[] = []
@@ -1463,7 +2151,11 @@ export function enrichChildBindingRowsFromParentsNestedSubTables<
             ) {
               continue
             }
-            mergePatchIntoRow(child.data[ci] as Record<string, unknown>, patch as Record<string, unknown>)
+            mergePatchIntoRow(
+              child.data[ci] as Record<string, unknown>,
+              patch as Record<string, unknown>,
+              childAllowsMiMeta.get(child.bindingId) === true,
+            )
           }
         }
       }

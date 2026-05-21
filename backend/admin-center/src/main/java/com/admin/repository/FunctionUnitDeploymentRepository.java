@@ -63,13 +63,17 @@ public interface FunctionUnitDeploymentRepository extends JpaRepository<Function
             @Param("environment") DeploymentEnvironment environment);
     
     /**
-     * 分页查询部署记录
+     * 分页查询部署记录（含功能单元信息）
      */
-    @Query("SELECT d FROM FunctionUnitDeployment d WHERE " +
+    @Query(value = "SELECT d FROM FunctionUnitDeployment d JOIN FETCH d.functionUnit fu WHERE " +
            "(:functionUnitId IS NULL OR d.functionUnit.id = :functionUnitId) AND " +
            "(:environment IS NULL OR d.environment = :environment) AND " +
            "(:status IS NULL OR d.status = :status) " +
-           "ORDER BY d.createdAt DESC")
+           "ORDER BY d.createdAt DESC",
+           countQuery = "SELECT COUNT(d) FROM FunctionUnitDeployment d WHERE " +
+           "(:functionUnitId IS NULL OR d.functionUnit.id = :functionUnitId) AND " +
+           "(:environment IS NULL OR d.environment = :environment) AND " +
+           "(:status IS NULL OR d.status = :status)")
     Page<FunctionUnitDeployment> findByConditions(
             @Param("functionUnitId") String functionUnitId,
             @Param("environment") DeploymentEnvironment environment,

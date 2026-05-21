@@ -19,6 +19,7 @@ export function pickHttpErrorBodyMessage(data: unknown): string | undefined {
   }
 
   if (typeof o.message === 'string' && o.message.trim().length > 0) return o.message.trim()
+  if (typeof o.errorMessage === 'string' && o.errorMessage.trim().length > 0) return o.errorMessage.trim()
 
   if (typeof o.detail === 'string' && o.detail.trim().length > 0) return o.detail.trim()
   if (typeof o.title === 'string' && o.title.trim().length > 0) return o.title.trim()
