@@ -29,6 +29,8 @@ data:
   SECURITY_LOGIN_MAX_FAILED_ATTEMPTS: "5"
   SECURITY_PASSWORD_MIN_LENGTH: "8"
   SECURITY_SESSION_TIMEOUT_MINUTES: "30"
+  # admin-center Admin UI「重置密码」后的明文（application.yml: admin.user.reset-password）；生产建议改 Secret
+  USER_RESET_PASSWORD: "password"
   SERVER_PORT: "8080"
   SPRING_DATASOURCE_URL: "jdbc:postgresql://hkl25243602.hc.cloud.hk.hsbc:25011/hmhkdev?currentSchema=hmwfst"
   SPRING_DATASOURCE_USERNAME: "hmhkodev1"

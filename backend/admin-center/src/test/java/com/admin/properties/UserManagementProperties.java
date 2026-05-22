@@ -252,8 +252,10 @@ public class UserManagementProperties {
             @ForAll("validEmails") String email,
             @ForAll("validPasswords") String password) {
         
-        // Given: Username already exists
-        when(userRepository.existsByUsername(existingUsername)).thenReturn(true);
+        // Given: Active user already has this username
+        User activeUser = createUser("active-id", existingUsername, "active@example.com", "Active User");
+        activeUser.setDeleted(false);
+        when(userRepository.findByUsername(existingUsername)).thenReturn(Optional.of(activeUser));
         
         // When/Then: Creating user with existing username should throw
         UserCreateRequest request = new UserCreateRequest();
@@ -266,6 +268,37 @@ public class UserManagementProperties {
         
         // And: No user should be saved
         verify(userRepository, never()).save(any(User.class));
+    }
+
+    /**
+     * Soft-deleted username can be re-created by reactivating the same row.
+     */
+    @Property(tries = 50)
+    @Label("Feature: user-management, Property: Reactivate soft-deleted username")
+    void reactivateSoftDeletedUsername(
+            @ForAll("validUsernames") String username,
+            @ForAll("validEmails") String email,
+            @ForAll("validFullNames") String fullName,
+            @ForAll("validPasswords") String password) {
+        User deletedUser = createUser("deleted-id", username, "old@example.com", "Old Name");
+        deletedUser.setDeleted(true);
+        when(userRepository.findByUsername(username)).thenReturn(Optional.of(deletedUser));
+        when(userRepository.existsByEmailExcludingUser(email, deletedUser.getId())).thenReturn(false);
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        UserCreateRequest request = new UserCreateRequest();
+        request.setUsername(username);
+        request.setEmail(email);
+        request.setFullName(fullName);
+        request.setInitialPassword(password);
+
+        userManagerComponent.createUser(request);
+
+        assertThat(deletedUser.getDeleted()).isFalse();
+        assertThat(deletedUser.getEmail()).isEqualTo(email);
+        assertThat(deletedUser.getFullName()).isEqualTo(fullName);
+        assertThat(deletedUser.getStatus()).isEqualTo(UserStatus.ACTIVE);
+        verify(userRepository).save(deletedUser);
     }
     
     // ==================== Property 6: Email Uniqueness ====================
@@ -294,7 +327,7 @@ public class UserManagementProperties {
         
         assertThatThrownBy(() -> userManagerComponent.createUser(request))
                 .isInstanceOf(AdminBusinessException.class)
-                .hasMessageContaining("邮箱已被使用");
+                .hasMessageContaining("Email already in use");
         
         // And: No user should be saved
         verify(userRepository, never()).save(any(User.class));
@@ -318,7 +351,7 @@ public class UserManagementProperties {
         // Given: Existing user
         User existingUser = createUser(userId, "olduser", "old@example.com", "Old Name");
         when(userRepository.findById(userId)).thenReturn(Optional.of(existingUser));
-        when(userRepository.existsByEmail(newEmail)).thenReturn(false);
+        when(userRepository.existsByEmailExcludingUser(newEmail, userId)).thenReturn(false);
         
         // Capture the saved user
         User[] savedUser = new User[1];
@@ -354,7 +387,7 @@ public class UserManagementProperties {
         // Given: Existing user with different email
         User existingUser = createUser(userId, "testuser", "original@example.com", "Test User");
         when(userRepository.findById(userId)).thenReturn(Optional.of(existingUser));
-        when(userRepository.existsByEmail(existingEmail)).thenReturn(true);
+        when(userRepository.existsByEmailExcludingUser(existingEmail, userId)).thenReturn(true);
         
         // When/Then: Updating to existing email should throw
         UserUpdateRequest request = new UserUpdateRequest();
@@ -362,7 +395,7 @@ public class UserManagementProperties {
         
         assertThatThrownBy(() -> userManagerComponent.updateUser(userId, request))
                 .isInstanceOf(AdminBusinessException.class)
-                .hasMessageContaining("邮箱已被使用");
+                .hasMessageContaining("Email already in use");
     }
     
     // ==================== Helper Methods ====================

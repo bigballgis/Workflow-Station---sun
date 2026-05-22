@@ -1478,6 +1478,17 @@
     根因：My Request 三条展示路径（SubTableInlineForm 表格下内联、Link Form 弹窗、MI Detail 弹窗）仅用 FieldRenderer，故意跳过 type=subTable；Detail 弹窗 FormRenderer 未传 sub-table-bindings；applications/detail 缺 resolveSubTableSchemaByTableId 列 schema 回退。
     修复：新增 PortalFormFields 统一 subTable/card/ primitive 渲染；SubTableInlineForm/Link Form/FormRenderer 传入 bindings；openSubTaskDetailDialog 构建 MI 子表单 bindings；applications/detail 对齐 tasks/detail schema 回退；新增 alwaysApply 规则 portal-design-parity.mdc 约束 Designer→Portal 结构 parity。
 
+- id: "1371"
+  status: fixed
+  fixed_at: "2026-05-22"
+  severity: major
+  category: bug
+  summary: "Admin Center 软删除用户后无法用相同用户名重新创建（existsByUsername 含已删行）"
+  file: "backend/admin-center/src/main/java/com/admin/component/UserManagerComponent.java; repository/UserRepository.java"
+  note: |
+    根因：deleteUser 仅软删除（deleted=true），createUser 用 existsByUsername/existsByEmail 未排除已删用户，且 username 有 DB 唯一约束无法 INSERT 新行。
+    修复：唯一性检查仅针对未删除用户；创建时若命中软删记录则 reactivateSoftDeletedUser 复用原 userId 并恢复字段；更新邮箱改用 existsByEmailExcludingUser。
+
 - id: "1370"
   status: fixed
   fixed_at: "2026-05-22"

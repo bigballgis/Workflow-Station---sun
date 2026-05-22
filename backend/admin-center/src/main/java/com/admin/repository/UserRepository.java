@@ -30,14 +30,18 @@ public interface UserRepository extends JpaRepository<User, String> {
     Optional<User> findByEmail(String email);
     
     /**
-     * 检查用户名是否存在
+     * 检查用户名是否已被未删除用户使用
      */
-    boolean existsByUsername(String username);
+    @Query("SELECT COUNT(u) > 0 FROM User u WHERE u.username = :username " +
+           "AND (u.deleted = false OR u.deleted IS NULL)")
+    boolean existsByUsername(@Param("username") String username);
     
     /**
-     * 检查邮箱是否存在
+     * 检查邮箱是否已被未删除用户使用
      */
-    boolean existsByEmail(String email);
+    @Query("SELECT COUNT(u) > 0 FROM User u WHERE u.email = :email " +
+           "AND (u.deleted = false OR u.deleted IS NULL)")
+    boolean existsByEmail(@Param("email") String email);
     
     /**
      * 根据状态查找用户

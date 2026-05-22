@@ -69,6 +69,14 @@
         <el-button
           v-if="permissions.canEdit()"
           size="small"
+          @click="$emit('settings', item)"
+        >
+          <el-icon><Setting /></el-icon>
+          {{ t('functionUnit.setting') }}
+        </el-button>
+        <el-button
+          v-if="permissions.canEdit()"
+          size="small"
           type="primary"
           @click="$emit('edit', item)"
         >
@@ -101,7 +109,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Edit, CopyDocument, Delete } from '@element-plus/icons-vue'
+import { Edit, CopyDocument, Delete, Setting } from '@element-plus/icons-vue'
 import IconPreview from '@/components/icon/IconPreview.vue'
 import type { FunctionUnitResponse } from '@/api/functionUnit'
 import { permissions } from '@/utils/permission'
@@ -117,6 +125,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'click', item: FunctionUnitResponse): void
   (e: 'edit', item: FunctionUnitResponse): void
+  (e: 'settings', item: FunctionUnitResponse): void
   (e: 'clone', item: FunctionUnitResponse): void
   (e: 'delete', item: FunctionUnitResponse): void
 }>()

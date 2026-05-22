@@ -65,7 +65,7 @@
         <el-button
           v-if="permissions.canCreate()"
           type="primary"
-          @click="showCreateDialog = true"
+          @click="openCreateDialog"
         >
           <el-icon><Plus /></el-icon>
           {{ t('functionUnit.create') }}
@@ -116,7 +116,7 @@
           <el-button
             v-if="permissions.canCreate()"
             type="primary"
-            @click="showCreateDialog = true"
+            @click="openCreateDialog"
           >
             {{ t('functionUnit.create') }}
           </el-button>
@@ -147,6 +147,7 @@
           :tags="getItemTags(item.id)"
           @click="handleEdit"
           @edit="handleEdit"
+          @settings="handleSettings"
           @clone="handleClone"
           @delete="handleDelete"
         />
@@ -165,44 +166,50 @@
       </div>
     </div>
 
-    <!-- Create Dialog -->
+    <!-- Create / Settings Dialog -->
     <el-dialog
-      v-model="showCreateDialog"
-      :title="t('functionUnit.create')"
+      v-model="showFormDialog"
+      :title="formDialogTitle"
       width="500px"
+      @closed="handleFormDialogClosed"
     >
       <el-form
-        ref="createFormRef"
-        :model="createForm"
+        ref="formRef"
+        :model="basicForm"
         :rules="formRules"
         label-width="100px"
         label-position="left"
       >
         <el-form-item :label="t('functionUnit.icon')">
           <IconUploadField
-            v-model="createForm.iconId"
+            v-model="basicForm.iconId"
             size="medium"
           />
         </el-form-item>
         <el-form-item
           :label="t('functionUnit.name')"
           prop="name"
+          required
         >
-          <el-input v-model="createForm.name" />
+          <el-input
+            v-model="basicForm.name"
+            :placeholder="t('functionUnit.namePlaceholder')"
+          />
         </el-form-item>
         <el-form-item
           :label="t('functionUnit.description')"
           prop="description"
         >
           <el-input
-            v-model="createForm.description"
+            v-model="basicForm.description"
             type="textarea"
             :rows="3"
+            :placeholder="t('functionUnit.descriptionPlaceholder')"
           />
         </el-form-item>
         <el-form-item :label="t('functionUnit.tags')">
           <el-select
-            v-model="createForm.tags"
+            v-model="basicForm.tags"
             multiple
             filterable
             allow-create
@@ -220,14 +227,15 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showCreateDialog = false">
+        <el-button @click="showFormDialog = false">
           {{ t('common.cancel') }}
         </el-button>
         <el-button
           type="primary"
-          @click="handleCreate"
+          :loading="formSubmitting"
+          @click="handleFormSubmit"
         >
-          {{ t('common.confirm') }}
+          {{ formDialogMode === 'create' ? t('common.confirm') : t('common.save') }}
         </el-button>
       </template>
     </el-dialog>
@@ -256,17 +264,42 @@ const store = useFunctionUnitStore()
 
 const searchForm = reactive({ name: '', status: '', tags: [] as string[] })
 const pagination = reactive({ page: 1, size: 20 })
-const showCreateDialog = ref(false)
-const createFormRef = ref<FormInstance>()
-const createForm = reactive({ 
+const showFormDialog = ref(false)
+const formDialogMode = ref<'create' | 'settings'>('create')
+const settingsItemId = ref<number | null>(null)
+const formSubmitting = ref(false)
+const formRef = ref<FormInstance>()
+const basicForm = reactive({ 
   name: '', 
   description: '', 
   iconId: null as number | null,
   tags: [] as string[]
 })
+const formDialogTitle = computed(() =>
+  formDialogMode.value === 'create' ? t('functionUnit.create') : t('functionUnit.settings')
+)
 const formRules = computed(() => ({
-  name: [{ required: true, message: t('common.inputPlaceholder'), trigger: 'blur' }]
+  name: [{ required: true, message: t('functionUnit.enterName'), trigger: 'blur' }]
 }))
+
+function resetBasicForm() {
+  basicForm.name = ''
+  basicForm.description = ''
+  basicForm.iconId = null
+  basicForm.tags = []
+}
+
+function openCreateDialog() {
+  formDialogMode.value = 'create'
+  settingsItemId.value = null
+  resetBasicForm()
+  showFormDialog.value = true
+}
+
+function handleFormDialogClosed() {
+  formRef.value?.resetFields()
+  settingsItemId.value = null
+}
 
 // Get all available tags for filter dropdown
 const availableTags = computed(() => getAllAvailableTags())
@@ -317,24 +350,45 @@ function handleEdit(item: FunctionUnitResponse) {
   router.push(`/function-units/${item.id}`)
 }
 
-async function handleCreate() {
-  await createFormRef.value?.validate()
-  const result = await store.create({
-    name: createForm.name,
-    description: createForm.description,
-    iconId: createForm.iconId ?? undefined
-  })
-  // Save tags for the new function unit
-  if (result && createForm.tags.length > 0) {
-    setTags(result.id, createForm.tags)
+function handleSettings(item: FunctionUnitResponse) {
+  formDialogMode.value = 'settings'
+  settingsItemId.value = item.id
+  basicForm.name = item.name
+  basicForm.description = item.description ?? ''
+  basicForm.iconId = item.iconId ?? null
+  basicForm.tags = [...getTags(item.id)]
+  showFormDialog.value = true
+}
+
+async function handleFormSubmit() {
+  await formRef.value?.validate()
+  formSubmitting.value = true
+  try {
+    const payload = {
+      name: basicForm.name.trim(),
+      description: basicForm.description?.trim() || undefined,
+      iconId: basicForm.iconId ?? undefined
+    }
+    if (formDialogMode.value === 'create') {
+      const result = await store.create(payload)
+      if (result) {
+        setTags(result.id, basicForm.tags)
+      }
+      ElMessage.success(t('functionUnit.createSuccess'))
+    } else if (settingsItemId.value != null) {
+      await store.update(settingsItemId.value, payload)
+      setTags(settingsItemId.value, basicForm.tags)
+      ElMessage.success(t('functionUnit.saveSuccess'))
+    }
+    showFormDialog.value = false
+    resetBasicForm()
+    loadData()
+  } catch (e: unknown) {
+    const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message
+    ElMessage.error(message || t('functionUnit.saveFailed'))
+  } finally {
+    formSubmitting.value = false
   }
-  ElMessage.success(t('functionUnit.createSuccess'))
-  showCreateDialog.value = false
-  createForm.name = ''
-  createForm.description = ''
-  createForm.iconId = null
-  createForm.tags = []
-  loadData()
 }
 
 async function handleClone(item: FunctionUnitResponse) {

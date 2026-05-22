@@ -44,7 +44,7 @@ alwaysApply: true
 1. 修改前备份当前配置的关键值
 2. 变更 application.yml → 检查所有环境配置（dev/sit/uat/prod）
 3. 变更 Docker/K8s → 更新 BUILD_GUIDE.md
-4. 变更环境变量 → 检查 docker-compose 和 K8s configmap/secret
+4. 变更环境变量 → 检查 docker-compose 和 K8s configmap/secret（必做同步见 deploy/CONFIG_SYNC.md）
 5. 变更端口/context-path → 更新 Kong 路由和 Healthcheck 路径
 ```
 

@@ -113,6 +113,7 @@ export default {
     clearFilters: '清除筛选',
     showingResults: '显示 {count} / {total} 个结果',
     settings: '功能单元设置',
+    setting: '设置',
     namePlaceholder: '功能单元名称',
     descriptionPlaceholder: '功能单元描述',
     changeIcon: '更换图标',

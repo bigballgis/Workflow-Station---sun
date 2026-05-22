@@ -113,6 +113,7 @@ export default {
     clearFilters: '清除篩選',
     showingResults: '顯示 {count} / {total} 個結果',
     settings: '功能單元設定',
+    setting: '設定',
     namePlaceholder: '功能單元名稱',
     descriptionPlaceholder: '功能單元描述',
     changeIcon: '更換圖示',

@@ -759,6 +759,8 @@ PostgreSQL(公司) ── N8N(K8S) (独立数据库 n8n_{env})
 
 ## 12. 环境变量完整清单
 
+> **Docker dev 与 K8s 同步**：新增或修改环境变量时，除下表外须按 [deploy/CONFIG_SYNC.md](deploy/CONFIG_SYNC.md) 同步 `deploy/environments/dev/.env`、`docker-compose.dev.yml` 与 `deploy/k8s/config_map|secret/<Environment>/`。Agent 见 `.cursor/rules/docker-k8s-config-sync.mdc`。
+
 ### 12.1 后端通用环境变量
 
 | 变量名 | 说明 | 示例值 |
@@ -775,6 +777,7 @@ PostgreSQL(公司) ── N8N(K8S) (独立数据库 n8n_{env})
 | `JWT_EXPIRATION` | JWT 过期时间(ms) | `86400000` |
 | `JWT_REFRESH_EXPIRATION` | 刷新令牌过期时间(ms) | `604800000` |
 | `ENCRYPTION_SECRET_KEY` | AES-256 加密密钥 | 32 字节字符串 |
+| `USER_RESET_PASSWORD` | admin-center 用户管理「重置密码」后的明文（仅注入服务端，不在 UI 展示） | dev Docker: `.env`；K8s: `deploy/k8s/config_map/<Environment>/configmap-workflow-platform-config.yml`（preprod 默认 `password`） |
 | `CORS_ALLOWED_ORIGINS` | CORS 允许的源 | `http://localhost:3000,...` |
 | `SWAGGER_ENABLED` | 是否启用 Swagger | `true` / `false` |
 

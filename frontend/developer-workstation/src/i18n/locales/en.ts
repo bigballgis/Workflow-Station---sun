@@ -113,6 +113,7 @@ export default {
     clearFilters: 'Clear Filters',
     showingResults: 'Showing {count} / {total} results',
     settings: 'Function Unit Settings',
+    setting: 'Settings',
     namePlaceholder: 'Function unit name',
     descriptionPlaceholder: 'Function unit description',
     changeIcon: 'Change Icon',
