@@ -1,6 +1,6 @@
-## 17-kk (Function Unit `kk`) init script generator
+## 17-kk (Function Unit `Multi-Instance Subtask Demo`) init script generator
 
-This folder contains a **generator** that exports the current `kk` snapshot from the dev database into a runnable SQL init script.
+This folder contains a **generator** that exports the current `Multi-Instance Subtask Demo` (`fu-20260422-23tfag`) snapshot from the dev database into a runnable SQL init script.
 
 ### Files
 

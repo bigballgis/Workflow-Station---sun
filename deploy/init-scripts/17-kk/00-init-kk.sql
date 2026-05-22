@@ -5,7 +5,7 @@ DO $cleanup$
 DECLARE v_fu_id bigint;
 BEGIN
   SELECT id INTO v_fu_id FROM dw_function_units
-  WHERE id = 5 OR code = 'fu-20260422-23tfag' OR name = 'kk'
+  WHERE id = 5 OR code = 'fu-20260422-23tfag' OR name = 'Multi-Instance Subtask Demo'
   ORDER BY id LIMIT 1;
 
   IF v_fu_id IS NULL THEN
@@ -92,7 +92,7 @@ BEGIN
 END $cleanup$;
 
 
-INSERT INTO dw_function_units (id, code, name, description, icon_id, status, current_version, version, is_active, enabled, deployed_at, previous_version_id, lock_version, created_by, created_at, updated_by, updated_at) VALUES (5,'fu-20260422-23tfag','kk','',NULL,'PUBLISHED','1.0.70','1.0.0',true,true,NULL,NULL,71,'system','2026-04-22 08:05:05.253178','system','2026-05-20 08:48:27.422157');
+INSERT INTO dw_function_units (id, code, name, description, icon_id, status, current_version, version, is_active, enabled, deployed_at, previous_version_id, lock_version, created_by, created_at, updated_by, updated_at) VALUES (5,'fu-20260422-23tfag','Multi-Instance Subtask Demo','',NULL,'PUBLISHED','1.0.70','1.0.0',true,true,NULL,NULL,71,'system','2026-04-22 08:05:05.253178','system','2026-05-22 04:03:09.166761');
 
 INSERT INTO dw_table_definitions (id, function_unit_id, table_name, table_display_name, table_type, description, created_at, updated_at) VALUES (19,5,'Test',NULL,'MAIN','','2026-04-22 08:19:06.833421','2026-04-22 08:19:06.833421');
 INSERT INTO dw_table_definitions (id, function_unit_id, table_name, table_display_name, table_type, description, created_at, updated_at) VALUES (20,5,'subtable',NULL,'SUB','','2026-04-22 10:51:35.874693','2026-04-22 10:51:35.874693');
@@ -176,16 +176,16 @@ VALUES (6, 5, 5, 'PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPGJwbW46ZG
 --     (inlined from deploy/init-scripts/17-kk/01-add-save-action.sql)
 -- ---------------------------------------------------------------------------
 -- =============================================================================
--- Patch: Add SAVE action to Function Unit "kk" (developer catalog)
+-- Patch: Add SAVE action to Function Unit "Multi-Instance Subtask Demo" (developer catalog)
 --
 -- What it does:
---   1) Locate target function unit by code='kk' OR name='kk' in dw_function_units
+--   1) Locate target function unit by code='fu-20260422-23tfag' in dw_function_units
 --   2) Insert a SAVE action definition if missing
 --   3) Append the SAVE action ID to every userTask's actionIds in dw_process_definitions.bpmn_xml
 --
 -- Notes:
 --   - This patch targets dw_* tables (developer-workstation source-of-truth in dev).
---   - kk's dw_process_definitions.bpmn_xml may be Base64; this patch detects and
+--   - This function unit's dw_process_definitions.bpmn_xml may be Base64; this patch detects and
 --     edits the decoded XML, then writes back in the original encoding.
 -- =============================================================================
 
@@ -201,12 +201,13 @@ BEGIN
   -- 1) Resolve Function Unit
   SELECT id INTO v_fu_id
   FROM dw_function_units
-  WHERE code = 'kk' OR name = 'kk'
+  WHERE code = 'fu-20260422-23tfag'
+     OR name IN ('Multi-Instance Subtask Demo', 'kk')
   ORDER BY id DESC
   LIMIT 1;
 
   IF v_fu_id IS NULL THEN
-    RAISE EXCEPTION 'Function unit "kk" not found in dw_function_units (by code/name).';
+    RAISE EXCEPTION 'Function unit fu-20260422-23tfag (Multi-Instance Subtask Demo) not found in dw_function_units.';
   END IF;
 
   -- 2) Ensure SAVE action exists
@@ -299,7 +300,7 @@ BEGIN
       updated_at = CURRENT_TIMESTAMP
   WHERE function_unit_id = v_fu_id;
 
-  RAISE NOTICE 'Patched FU kk (fu_id=%): SAVE action id=% inserted/ensured, BPMN actionIds updated.', v_fu_id, v_save_action;
+  RAISE NOTICE 'Patched FU Multi-Instance Subtask Demo (fu_id=%): SAVE action id=% inserted/ensured, BPMN actionIds updated.', v_fu_id, v_save_action;
 END $patch$;
 
 

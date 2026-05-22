@@ -2,7 +2,7 @@ Param(
   [string]$Conn = "postgresql://platform_dev:dev_password_123@localhost:5432/workflow_platform_dev",
   [string]$Output = "deploy/init-scripts/17-kk/00-init-kk.sql",
   [string]$FuCode = "fu-20260422-23tfag",
-  [string]$FuName = "kk"
+  [string]$FuName = "Multi-Instance Subtask Demo"
 )
 
 $ErrorActionPreference = "Stop"
