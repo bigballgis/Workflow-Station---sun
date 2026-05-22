@@ -171,11 +171,11 @@ foreach ($f in $meetingParticipantScripts) {
 }
 
 Write-Step "Step 5d/6: Loading Function Unit Multi-Instance Subtask Demo..."
-$kkInit = Join-Path $ScriptDir "17-kk/00-init-kk.sql"
-if (Test-Path $kkInit) {
-    if (-not (Exec-Sql -File $kkInit -Desc "00-init-kk.sql")) { exit 1 }
+$miSubtaskDemoInit = Join-Path $ScriptDir "17-Multi-Instance-Subtask-Demo/00-init-kk.sql"
+if (Test-Path $miSubtaskDemoInit) {
+    if (-not (Exec-Sql -File $miSubtaskDemoInit -Desc "00-init-kk.sql")) { exit 1 }
 } else {
-    Write-Host "  SKIP: kk init script not found at $kkInit" -ForegroundColor Yellow
+    Write-Host "  SKIP: Multi-Instance Subtask Demo init script not found at $miSubtaskDemoInit" -ForegroundColor Yellow
 }
 
 Write-Step "Step 6/6: Finished."

@@ -126,11 +126,11 @@ done
 
 echo ""
 echo "[5d/6] Loading Function Unit Multi-Instance Subtask Demo..."
-if [ -f /docker-entrypoint-initdb.d/17-kk/00-init-kk.sql ]; then
+if [ -f /docker-entrypoint-initdb.d/17-Multi-Instance-Subtask-Demo/00-init-kk.sql ]; then
   echo "  Running 00-init-kk.sql..."
-  $PSQL -f /docker-entrypoint-initdb.d/17-kk/00-init-kk.sql
+  $PSQL -f /docker-entrypoint-initdb.d/17-Multi-Instance-Subtask-Demo/00-init-kk.sql
 else
-  echo "  ERROR: kk init script not found at /docker-entrypoint-initdb.d/17-kk/00-init-kk.sql"
+  echo "  ERROR: Multi-Instance Subtask Demo init script not found at /docker-entrypoint-initdb.d/17-Multi-Instance-Subtask-Demo/00-init-kk.sql"
   exit 1
 fi
 

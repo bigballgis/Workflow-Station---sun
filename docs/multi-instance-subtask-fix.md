@@ -40,7 +40,7 @@
 - **`injectMiCollectionFromBpmn:miFound`**：BPMN 与 collection、assignee 配置 **正常可读**。
 - **`buildMiCollectionVariable`** 报 **`no_eligible_rows`**：**`selectRowsForMiCollection` 打分始终为 0**（任一子表绑定列表均无「同时具备有效主键列 + assignee」的行）。
 
-KK 样板数据中（见 `deploy/init-scripts/17-kk/00-init-kk.sql`）：
+Multi-Instance Subtask Demo 样板数据中（见 `deploy/init-scripts/17-Multi-Instance-Subtask-Demo/00-init-kk.sql`）：
 
 - 设计器 **`subtable`** 的 **PK 字段名为 `id_idw`**（`dw_field_definitions.is_primary_key`）。
 - 子表表单字段也是 **`id_idw`**，JSON 行里自然也是该 key。
