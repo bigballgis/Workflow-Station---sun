@@ -15,9 +15,7 @@ From repo root:
 .\deploy\init-scripts\17-kk\generate-kk-init.ps1
 ```
 
-It generates:
-
-- `deploy/init-scripts/17-kk/00-init-kk.sql`
+It generates `deploy/init-scripts/17-kk/00-init-kk.sql` — **developer-workstation catalog only** (`dw_*` plus lookup-related `rt_*` metadata). It does **not** seed admin users, `rt_table_access`, or dev-specific audit user IDs (`created_by` / `updated_by` are normalized to `system`).
 
 You can then apply it:
 
