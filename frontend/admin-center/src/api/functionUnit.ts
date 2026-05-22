@@ -1,4 +1,5 @@
 import { PageResult } from '@/types/common'
+import { unwrapApiData } from '@/utils/apiResponse'
 import { get, post, put, del } from './request'
 
 // ==================== 类型定义 ====================
@@ -212,8 +213,10 @@ export const functionUnitApi = {
     put<EnabledResponse>(`/function-units/${id}/enabled`, { enabled }),
 
   // 验证功能单元（结构/依赖/引擎试部署，通过后变为 VALIDATED）
-  validateUnit: (id: string) =>
-    post<FunctionUnitValidationResult>(`/function-units/${id}/validate`),
+  validateUnit: async (id: string) =>
+    unwrapApiData<FunctionUnitValidationResult>(
+      await post<unknown>(`/function-units/${id}/validate`)
+    ),
 
   // 废弃功能单元
   deprecate: (id: string) =>

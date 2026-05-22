@@ -1050,7 +1050,8 @@ public class FunctionUnitManagerComponent {
         FunctionUnit functionUnit = getFunctionUnitById(id);
 
         if (!functionUnit.isValidatable()) {
-            throw new AdminBusinessException("INVALID_STATUS", "Only draft function units can be validated");
+            throw new AdminBusinessException("INVALID_STATUS",
+                    "仅草稿状态的功能单元可以验证（当前状态: " + functionUnit.getStatus() + "）");
         }
 
         ValidationResult result = validationComponent.validate(id);

@@ -3,6 +3,7 @@
     v-model="visible"
     :title="t('functionUnit.importPackage')"
     width="500px"
+    destroy-on-close
   >
     <el-upload
       ref="importUploadRef"

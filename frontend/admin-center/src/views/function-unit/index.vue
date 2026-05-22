@@ -4,7 +4,7 @@
       <template #actions>
         <el-button
           type="primary"
-          @click="showImportDialog = true"
+          @click="openImportDialog"
         >
           <el-icon><Upload /></el-icon>{{ t('common.import') }}
         </el-button>
@@ -438,6 +438,7 @@ const {
   handleDeleteClick, handleDeleteConfirm,
   handleSelectionChange, handleBatchEnable, handleBatchDisable,   handleBatchDelete,
   handleCompareVersion,
+  openImportDialog,
   handleImportFileChange, handleStartImport,
 } = useFunctionUnit()
 

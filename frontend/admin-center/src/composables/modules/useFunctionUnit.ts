@@ -12,6 +12,7 @@ import { notifyConfirm, notifyError, notifySuccess, notifyWarning } from '@/util
 import { storeToRefs } from 'pinia'
 import { functionUnitApi, type FunctionUnit, type Deployment, type DeletePreviewResponse, type FunctionUnitValidationResult } from '@/api/functionUnit'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
+import { ApiError } from '@/types/errors'
 import { pickHttpErrorBodyMessage } from '@/utils/httpErrorMessage'
 
 export function useFunctionUnit() {
@@ -151,8 +152,11 @@ export function useFunctionUnit() {
       }
     } catch (e: unknown) {
       logger.error('functionUnit', 'Failed to validate:', e)
-      const msg = pickHttpErrorBodyMessage((e as { response?: { data?: unknown } })?.response?.data)
-      notifyError(msg || t('functionUnit.validateFailed'))
+      // HTTP 错误已由 request 拦截器 toast；此处仅补充 ApiError 文案（拦截器已展示则不再重复）
+      if (!(e instanceof ApiError)) {
+        const msg = pickHttpErrorBodyMessage((e as { response?: { data?: unknown } })?.response?.data)
+        notifyError(msg || t('functionUnit.validateFailed'))
+      }
     } finally {
       validateLoadingId.value = null
     }
@@ -342,6 +346,19 @@ export function useFunctionUnit() {
 
   // ==================== Import ====================
 
+  const resetImportDialog = () => {
+    importFile.value = null
+  }
+
+  const openImportDialog = () => {
+    resetImportDialog()
+    showImportDialog.value = true
+  }
+
+  watch(showImportDialog, (open) => {
+    if (!open) resetImportDialog()
+  })
+
   const handleImportFileChange = (file: any) => {
     importFile.value = file?.raw || null
   }
@@ -362,7 +379,7 @@ export function useFunctionUnit() {
           if (result.success) {
             notifySuccess(t('functionUnit.importSuccess'))
             showImportDialog.value = false
-            importFile.value = null
+            resetImportDialog()
             fetchFunctionUnits()
           } else {
             notifyError(result.errorMessage || t('functionUnit.importFailed'))
@@ -430,6 +447,7 @@ export function useFunctionUnit() {
     handleBatchDisable,
     handleBatchDelete,
     handleCompareVersion,
+    openImportDialog,
     handleImportFileChange,
     handleStartImport,
   }
