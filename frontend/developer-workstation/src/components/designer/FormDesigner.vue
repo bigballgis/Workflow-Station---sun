@@ -1147,16 +1147,23 @@ function getSubTableFormOption(bindingId: number): any {
 const designerSubBindings = computed(() => {
   if (!selectedForm.value) return []
   const nonPrimary = (selectedForm.value.tableBindings || []).filter((b: TableBinding) => b.bindingType !== 'PRIMARY')
-  return nonPrimary.map((b: TableBinding) => ({
-    bindingId: b.id as number,
-    bindingType: b.bindingType,
-    bindingMode: b.bindingMode,
-    tableName: getTableName(b.tableId, b.tableName),
-    tableId: b.tableId,
-    tableType: (store.tables.find(t => t.id === b.tableId)?.tableType) || (b.bindingType === 'RELATED' ? 'RELATION' : ''),
-    tableDescription: (store.tables.find(t => t.id === b.tableId)?.description) || '',
-    subMode: b.subMode,
-  }))
+  return nonPrimary.map((b: TableBinding) => {
+    const tableInStore = store.tables.find(t => t.id === b.tableId)
+    return {
+      bindingId: b.id as number,
+      bindingType: b.bindingType,
+      bindingMode: b.bindingMode,
+      // tableName 保留「display name 优先」语义以兼容历史 tab/option 显示路径（见 issue 1372）。
+      tableName: getTableName(b.tableId, b.tableName),
+      // 显式暴露 tableDisplayName，让下游模板可以「tableDisplayName || tableName」自行选择，
+      // 避免 tableName 同时承担技术名与显示名两种语义造成下游误用（见 issue 1373）。
+      tableDisplayName: tableInStore?.tableDisplayName || undefined,
+      tableId: b.tableId,
+      tableType: tableInStore?.tableType || (b.bindingType === 'RELATED' ? 'RELATION' : ''),
+      tableDescription: tableInStore?.description || '',
+      subMode: b.subMode,
+    }
+  })
 })
 
 // Provide subBindings to SubTablePlaceholderWidget via inject

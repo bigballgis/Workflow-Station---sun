@@ -382,17 +382,17 @@ const filteredAvailableTables = computed(() => {
   if (bt === 'PRIMARY') {
     return props.tables
       .filter(t => t.tableType === 'MAIN')
-      .map(t => ({ id: t.id, displayLabel: `${t.tableName} (${tableTypeLabel(t.tableType)})`, fieldDefinitions: t.fieldDefinitions }))
+      .map(t => ({ id: t.id, displayLabel: `${t.tableDisplayName || t.tableName} (${tableTypeLabel(t.tableType)})`, fieldDefinitions: t.fieldDefinitions }))
   }
   if (bt === 'SUB') {
     return props.tables
       .filter(t => t.tableType === 'SUB')
-      .map(t => ({ id: t.id, displayLabel: `${t.tableName} (${tableTypeLabel(t.tableType)})`, fieldDefinitions: t.fieldDefinitions }))
+      .map(t => ({ id: t.id, displayLabel: `${t.tableDisplayName || t.tableName} (${tableTypeLabel(t.tableType)})`, fieldDefinitions: t.fieldDefinitions }))
   }
   // RELATED：列出本功能单元的 RELATION 表 + 管理中心已部署的关联表
   const localRelation = props.tables
     .filter(t => t.tableType === 'RELATION')
-    .map(t => ({ id: t.id, displayLabel: `${t.tableName} (${tableTypeLabel(t.tableType)})`, fieldDefinitions: t.fieldDefinitions }))
+    .map(t => ({ id: t.id, displayLabel: `${t.tableDisplayName || t.tableName} (${tableTypeLabel(t.tableType)})`, fieldDefinitions: t.fieldDefinitions }))
   const deployedLabel = t('tableBinding.deployedRelationTable')
   const remote = deployedRelationTables.value.map(r => ({
     id: toRelationTableOptionId(r.id), // negative ID to distinguish from local tables
