@@ -18,6 +18,7 @@ import com.developer.service.DeploymentJobService;
 import com.platform.common.constant.PlatformConstants;
 import com.platform.common.i18n.I18nService;
 import com.platform.security.util.SecurityContextUtils;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -344,17 +345,36 @@ public class DeploymentComponentImpl implements DeploymentComponent {
 
     /**
      * 从当前 HTTP 请求解析出站 Authorization（异步线程中需在进入异步前由调用方传入，此处仅作兜底尝试）。
+     * 与 {@link com.platform.security.filter.JwtAuthenticationFilter} 一致：优先 Authorization 头，其次 access_token Cookie。
      */
     private Optional<String> resolveOutboundAuthorizationHeader() {
         var attrs = RequestContextHolder.getRequestAttributes();
-        if (attrs instanceof ServletRequestAttributes servletAttrs) {
-            HttpServletRequest httpRequest = servletAttrs.getRequest();
-            String auth = httpRequest.getHeader(PlatformConstants.HEADER_AUTHORIZATION);
-            if (auth != null && !auth.isBlank()) {
-                return Optional.of(auth.trim());
-            }
+        if (!(attrs instanceof ServletRequestAttributes servletAttrs)) {
+            return Optional.empty();
+        }
+        HttpServletRequest httpRequest = servletAttrs.getRequest();
+        String auth = httpRequest.getHeader(PlatformConstants.HEADER_AUTHORIZATION);
+        if (auth != null && !auth.isBlank()) {
+            return Optional.of(auth.trim());
+        }
+        String tokenFromCookie = extractAccessTokenFromCookie(httpRequest);
+        if (tokenFromCookie != null && !tokenFromCookie.isBlank()) {
+            return Optional.of(PlatformConstants.HEADER_BEARER_PREFIX + tokenFromCookie.trim());
         }
         return Optional.empty();
+    }
+
+    private static String extractAccessTokenFromCookie(HttpServletRequest request) {
+        Cookie[] cookies = request.getCookies();
+        if (cookies == null) {
+            return null;
+        }
+        for (Cookie cookie : cookies) {
+            if ("access_token".equals(cookie.getName())) {
+                return cookie.getValue();
+            }
+        }
+        return null;
     }
 
     private void updateStep(List<DeployResponse.DeployStep> steps, String name, String status, String message) {

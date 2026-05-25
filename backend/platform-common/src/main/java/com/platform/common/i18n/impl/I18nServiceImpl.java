@@ -44,13 +44,45 @@ public class I18nServiceImpl implements I18nService {
     
     @Override
     public String getMessage(String key, Locale locale, Object... args) {
-        try {
-            Locale effectiveLocale = isSupported(locale) ? locale : Locale.ENGLISH;
-            return messageSource.getMessage(key, args, effectiveLocale);
-        } catch (Exception e) {
-            log.warn("Message not found for key: {} in locale: {}", key, locale);
-            return key;
+        Locale primary = normalizeLocale(locale);
+        String message = lookupMessage(key, args, primary);
+        if (message != null) {
+            return message;
         }
+        if (!Locale.ENGLISH.equals(primary)) {
+            message = lookupMessage(key, args, Locale.ENGLISH);
+            if (message != null) {
+                return message;
+            }
+        }
+        log.warn("Message not found for key: {} in locale: {}", key, primary);
+        return key;
+    }
+
+    private String lookupMessage(String key, Object[] args, Locale locale) {
+        try {
+            return messageSource.getMessage(key, args, null, locale);
+        } catch (Exception e) {
+            log.debug("Message lookup failed for key {} locale {}: {}", key, locale, e.toString());
+            return null;
+        }
+    }
+
+    /**
+     * Map user language codes (e.g. zh_CN from DB) and Accept-Language variants to supported bundles.
+     */
+    private Locale normalizeLocale(Locale locale) {
+        if (locale == null || !isSupported(locale)) {
+            return Locale.ENGLISH;
+        }
+        String language = locale.getLanguage();
+        if ("zh_cn".equalsIgnoreCase(language) && locale.getCountry().isEmpty()) {
+            return Locale.SIMPLIFIED_CHINESE;
+        }
+        if ("zh_tw".equalsIgnoreCase(language) && locale.getCountry().isEmpty()) {
+            return Locale.TRADITIONAL_CHINESE;
+        }
+        return locale;
     }
     
     @Override
