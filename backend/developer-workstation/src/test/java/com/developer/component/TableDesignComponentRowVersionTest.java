@@ -56,6 +56,9 @@ class TableDesignComponentRowVersionTest {
     
     @Mock
     private I18nService i18nService;
+
+    @Mock
+    private com.developer.util.DeveloperWorkstationSequenceSynchronizer sequenceSynchronizer;
     
     private TableDesignComponent tableDesignComponent;
     
@@ -68,7 +71,8 @@ class TableDesignComponentRowVersionTest {
             functionUnitRepository,
             formDefinitionRepository,
             formTableBindingRepository,
-            i18nService
+            i18nService,
+            sequenceSynchronizer
         );
     }
     

@@ -51,6 +51,11 @@ public class DeveloperWorkstationSequenceSynchronizer {
         }
     }
 
+    /** 将 dw_field_definitions 序列与 MAX(id) 对齐（表保存 delete+reinsert 前调用）。 */
+    public void synchronizeFieldDefinitions() {
+        synchronizeTable("dw_field_definitions");
+    }
+
     void synchronizeTable(String tableName) {
         try {
             Boolean exists = jdbcTemplate.queryForObject(

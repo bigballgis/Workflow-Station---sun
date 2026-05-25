@@ -36,7 +36,8 @@ public class TableDesignPropertyTest {
         I18nService i18nService = mock(I18nService.class);
         
         TableDesignComponent component = new TableDesignComponentImpl(
-                tableRepo, fieldRepo, fkRepo, functionUnitRepo, formRepo, formTableBindingRepo, i18nService);
+                tableRepo, fieldRepo, fkRepo, functionUnitRepo, formRepo, formTableBindingRepo, i18nService,
+                mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class));
         
         assertThat(component).isNotNull();
         assertThat(tableName).matches("tbl_[a-z]+");
@@ -60,7 +61,8 @@ public class TableDesignPropertyTest {
         I18nService i18nService = mock(I18nService.class);
         
         TableDesignComponent component = new TableDesignComponentImpl(
-                tableRepo, fieldRepo, fkRepo, functionUnitRepo, formRepo, formTableBindingRepo, i18nService);
+                tableRepo, fieldRepo, fkRepo, functionUnitRepo, formRepo, formTableBindingRepo, i18nService,
+                mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class));
         
         assertThat(component).isNotNull();
         assertThat(dialect).isNotNull();
