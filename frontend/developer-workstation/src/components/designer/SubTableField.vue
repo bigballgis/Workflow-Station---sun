@@ -36,10 +36,10 @@
           <!-- upload / file (first: avoid falling through to plain text for stored URLs) -->
           <template v-if="isUploadColumn(col, scope.row[col.field])">
             <span
-              v-if="scope.row[col.field]"
+              v-if="resolveRowUploadUrl(scope.row, col)"
               class="file-download-link"
               :class="{ downloading: downloadingKeys[scope.$index + '_' + col.field] }"
-              @click.stop="downloadFile(scope.row[col.field], uploadNames[scope.$index + '_' + col.field], scope.$index, col.field)"
+              @click.stop="downloadFile(resolveRowUploadUrl(scope.row, col)!, uploadNames[scope.$index + '_' + col.field], scope.$index, col.field)"
             >
               <el-icon
                 v-if="downloadingKeys[scope.$index + '_' + col.field]"
@@ -50,7 +50,7 @@
               <el-icon v-else>
                 <Document />
               </el-icon>
-              {{ getFilenameFromUrl(scope.row[col.field], uploadNames[scope.$index + '_' + col.field]) }}
+              {{ getFilenameFromUrl(resolveRowUploadUrl(scope.row, col) || '', uploadNames[scope.$index + '_' + col.field]) }}
             </span>
             <span
               v-else
@@ -145,7 +145,7 @@
               :view-fields="col.props?.viewFields || []"
               :field-defs="col.props?.fieldDefs || []"
               :show-backfill-view="previewLookupCompact ? false : (col.props?.showBackfillView !== false)"
-              readonly
+              :readonly="!editable"
             />
           </template>
           <!-- default -->
@@ -188,6 +188,7 @@
 
     <div
       v-if="previewShowFormBelow"
+      ref="inlineFormBelowRef"
       class="preview-inline-form-below"
     >
       <el-divider content-position="left">
@@ -225,6 +226,23 @@
     </div>
 
     <Teleport
+      to="body"
+    >
+      <SubTableFormDialog
+        :visible="linkFormDialogVisible"
+        :title="linkFormDialogTitle"
+        mode="edit"
+        :read-only="!editable"
+        :hide-footer="!editable"
+        :initial-data="linkFormInitialData"
+        :rule="linkFormRule"
+        :option="linkFormOption"
+        @update:visible="linkFormDialogVisible = $event"
+        @save="handleLinkFormSave"
+      />
+    </Teleport>
+
+    <Teleport
       v-if="!previewDialogHost"
       to="body"
     >
@@ -235,6 +253,7 @@
         :initial-data="dialogInitialData"
         :rule="formRule"
         :option="formOption"
+        :columns="dialogColumns"
         @update:visible="formDialogVisible = $event"
         @save="handleDialogSave"
       />
@@ -247,23 +266,12 @@
         @update:visible="simpleDialogVisible = $event"
         @save="handleDialogSave"
       />
-
-      <SubTableFormDialog
-        :visible="linkFormDialogVisible"
-        :title="linkFormDialogTitle"
-        mode="edit"
-        :initial-data="linkFormInitialData"
-        :rule="linkFormRule"
-        :option="linkFormOption"
-        @update:visible="linkFormDialogVisible = $event"
-        @save="handleLinkFormSave"
-      />
     </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, inject } from 'vue'
+import { ref, computed, watch, inject, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Plus, Loading, Document } from '@element-plus/icons-vue'
 import { ElMessageBox, ElMessage } from 'element-plus'
@@ -273,15 +281,20 @@ import SubTableFormDialog from './SubTableFormDialog.vue'
 import LookupPreview from './LookupPreview.vue'
 import type { DialogColumn } from './subTableAddDialogHelpers'
 import {
+  alignUploadFieldsToColumns,
   getFilenameFromUrl,
   isUploadColumn,
   normalizeSubTableColumns,
+  normalizeUploadFieldsInRow,
   resolveFileFetchUrl,
+  resolveUploadCellUrl,
 } from './uploadFieldUtils'
-import { PREVIEW_SUBTABLE_DIALOG_KEY } from './previewSubTableDialog'
+import { collectUploadRulesFromTree } from '@/utils/formDesigner'
+import { PREVIEW_SUBTABLE_DIALOG_KEY, PREVIEW_MY_REQUESTS_ACTIVE_KEY } from './previewSubTableDialog'
 
 const { t } = useI18n()
 const previewDialogHost = inject(PREVIEW_SUBTABLE_DIALOG_KEY, null)
+const previewMyRequestsActive = inject(PREVIEW_MY_REQUESTS_ACTIVE_KEY, undefined)
 const hideInlineFormForRowDialog = computed(
   () => previewDialogHost?.rowDialogOpen.value === true,
 )
@@ -332,6 +345,8 @@ const props = defineProps<{
   previewLookupCompact?: boolean
   /** Form Preview: show read-only form below table (assignee — form below table) */
   previewShowFormBelow?: boolean
+  /** Form Preview (To Do): Link Form Details scrolls to inline form instead of opening modal */
+  previewLinkFormScrollToInline?: boolean
   /** Form Preview: override schema for form-below strip (linkForm → target sub-table) */
   previewInlineFormRule?: any[]
   previewInlineFormOption?: any
@@ -364,6 +379,7 @@ const linkFormRule = ref<any[]>([])
 const linkFormOption = ref<any>({})
 
 const previewInlineFormData = ref<Record<string, unknown>>({})
+const inlineFormBelowRef = ref<HTMLElement | null>(null)
 const effectiveInlineFormRule = computed(
   () => (props.previewInlineFormRule?.length ? props.previewInlineFormRule : props.formRule) || [],
 )
@@ -391,8 +407,11 @@ const previewInlineFormOption = computed(() => {
   }
 })
 
-// 计算属性：是否可编辑
-const editable = computed(() => props.editable !== false)
+// 计算属性：是否可编辑（Form Preview My Requests 全局只读覆盖 props.editable）
+const editable = computed(() => {
+  if (previewMyRequestsActive?.value === true) return false
+  return props.editable !== false
+})
 
 // 计算属性：显示的列（FILE / file 字段归一为 upload，便于文件名展示与下载）
 const displayColumns = computed(() =>
@@ -429,7 +448,7 @@ watch(() => props.modelValue, (newVal) => {
     newVal.forEach((row: Record<string, unknown>, rowIndex: number) => {
       for (const col of displayColumns.value) {
         if (!isUploadColumn(col, row[col.field])) continue
-        const url = row[col.field]
+        const url = resolveUploadCellUrl(row[col.field])
         if (!url) continue
         nextNames[`${rowIndex}_${col.field}`] = getFilenameFromUrl(String(url))
       }
@@ -438,10 +457,14 @@ watch(() => props.modelValue, (newVal) => {
   }
 }, { immediate: true, deep: true })
 
+function resolveRowUploadUrl(row: Record<string, unknown>, col: ColumnConfig): string | null {
+  return resolveUploadCellUrl(row[col.field])
+}
+
 function rememberUploadNamesForRow(rowIndex: number, rowData: Record<string, any>) {
   for (const col of displayColumns.value) {
     if (!isUploadColumn(col, rowData[col.field])) continue
-    const url = rowData[col.field]
+    const url = resolveUploadCellUrl(rowData[col.field])
     if (!url) continue
     const target = col.props?.fileNameTargetField as string | undefined
     const saved = (target && rowData[target] != null ? String(rowData[target]) : undefined)
@@ -542,6 +565,14 @@ function linkFormTitleTableName(raw: string): string {
 }
 
 function openLinkFormDialog(col: ColumnConfig, row: Record<string, any>) {
+  if (props.previewLinkFormScrollToInline) {
+    previewInlineFormData.value = { ...row }
+    nextTick(() => {
+      inlineFormBelowRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+    return
+  }
+
   const raw = col.props?.boundSubTableName || props.config.title || ''
   const tableName = linkFormTitleTableName(raw)
   linkFormDialogTitle.value = tableName
@@ -551,6 +582,12 @@ function openLinkFormDialog(col: ColumnConfig, row: Record<string, any>) {
   linkFormRule.value = col.props?.formRule || props.formRule || []
   const opt = { ...((col.props?.formOption || props.formOption || {}) as Record<string, unknown>) }
   delete opt.title
+  if (!editable.value) {
+    opt.form = {
+      ...((opt.form as Record<string, unknown>) || {}),
+      disabled: true,
+    }
+  }
   linkFormOption.value = opt
   linkFormDialogVisible.value = true
 }
@@ -562,15 +599,21 @@ function handleLinkFormSave(rowData: Record<string, any>) {
 
 // Dialog 保存回调
 function handleDialogSave(rowData: Record<string, any>) {
+  const savedRow = { ...rowData }
+  if (hasFormRule.value && props.formRule?.length) {
+    const uploadRuleFields = collectUploadRulesFromTree(props.formRule).map((r) => r.field)
+    alignUploadFieldsToColumns(savedRow, displayColumns.value, uploadRuleFields)
+  }
+  normalizeUploadFieldsInRow(savedRow, displayColumns.value)
   if (dialogMode.value === 'add') {
     const rowIndex = tableData.value.length
-    tableData.value.push(rowData)
-    rememberUploadNamesForRow(rowIndex, rowData)
-    emit('add', rowData)
+    tableData.value.push(savedRow)
+    rememberUploadNamesForRow(rowIndex, savedRow)
+    emit('add', savedRow)
   } else if (dialogMode.value === 'edit' && editingRowIndex.value !== null) {
-    tableData.value[editingRowIndex.value] = rowData
-    rememberUploadNamesForRow(editingRowIndex.value, rowData)
-    emit('edit', rowData, editingRowIndex.value)
+    tableData.value[editingRowIndex.value] = savedRow
+    rememberUploadNamesForRow(editingRowIndex.value, savedRow)
+    emit('edit', savedRow, editingRowIndex.value)
   }
   total.value = tableData.value.length
   emit('update:modelValue', [...tableData.value])

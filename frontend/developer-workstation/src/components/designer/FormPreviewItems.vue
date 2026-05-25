@@ -9,11 +9,11 @@
     >
       <form-create
         v-if="item.rule.length"
-        :key="'preview-form-' + item.modelKey"
+        :key="'preview-form-' + item.modelKey + (isMyRequestsPreview ? '-ro' : '-ed')"
         v-model="previewModel"
         locale="en"
         :rule="item.rule"
-        :option="previewOption"
+        :option="effectivePreviewOption"
       />
     </div>
 
@@ -49,6 +49,7 @@
             :preview-inline-form-rule="inlineFormBelowForBinding(item.binding).rule"
             :preview-inline-form-option="inlineFormBelowForBinding(item.binding).option"
             :preview-show-form-below="item.binding.portalViews?.assigneeTodo === 'formBelowTable'"
+            :preview-link-form-scroll-to-inline="item.binding.portalViews?.assigneeTodo === 'formBelowTable'"
             :preview-lookup-compact="false"
             @update:model-value="(rows: any[]) => updateTableRows(item.binding.bindingId, rows)"
           />
@@ -61,7 +62,7 @@
           <SubTableField
             :config="{ title: item.binding.tableName, columns: item.binding.columns }"
             :model-value="previewTableRows[item.binding.bindingId]"
-            :editable="true"
+            :editable="false"
             :form-rule="item.binding.rule"
             :form-option="item.binding.option"
             :preview-show-form-below="false"
@@ -89,9 +90,10 @@
         v-if="hasSubTablePreviewSurface(item.binding)"
         :config="{ title: item.binding.tableName, columns: item.binding.columns || [] }"
         :model-value="previewTableRows[item.binding.bindingId]"
-        :editable="true"
+        :editable="!isMyRequestsPreview"
         :form-rule="item.binding.rule"
         :form-option="item.binding.option"
+        :preview-lookup-compact="isMyRequestsPreview"
         @update:model-value="(rows: any[]) => updateTableRows(item.binding.bindingId, rows)"
       />
       <el-empty
@@ -139,6 +141,7 @@
         :view-fields="item.viewFields"
         :field-defs="item.fieldDefs"
         :show-backfill-view="item.showBackfillView !== false"
+        :readonly="isMyRequestsPreview"
       />
     </div>
 
@@ -165,8 +168,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive } from 'vue'
+import { computed, inject, reactive, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import {
+  PREVIEW_MY_REQUESTS_ACTIVE_KEY,
+  PREVIEW_RESOLVE_SUBTABLE_FORM_KEY,
+} from './previewSubTableDialog'
 import SubTableField from './SubTableField.vue'
 import LookupPreview from './LookupPreview.vue'
 import type { FormPreviewItem, PreviewSubTableBinding } from './formPreviewTypes'
@@ -193,6 +200,9 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
+const resolveSubTableFormDesign = inject(PREVIEW_RESOLVE_SUBTABLE_FORM_KEY, undefined)
+const previewMyRequestsGlobal = inject(PREVIEW_MY_REQUESTS_ACTIVE_KEY, undefined)
+
 /** Active tab per item index for dual To Do / My Requests sub-table form preview */
 const subTableFormPreviewTab = reactive<Record<number, string>>({})
 
@@ -203,13 +213,45 @@ function setSubTableFormPreviewTabModel(idx: number, name: string | number) {
   subTableFormPreviewTab[idx] = String(name)
 }
 
+/** My Requests tab active on a dual-portal sub-table in this preview tree. */
+const myRequestsPreviewActive = computed(() =>
+  Object.values(subTableFormPreviewTab).some((tab) => tab === 'myRequest'),
+)
+
+watch(
+  myRequestsPreviewActive,
+  (active) => {
+    if (previewMyRequestsGlobal) previewMyRequestsGlobal.value = active
+  },
+  { immediate: true },
+)
+
+const isMyRequestsPreview = computed(
+  () => myRequestsPreviewActive.value || previewMyRequestsGlobal?.value === true,
+)
+
+const effectivePreviewOption = computed(() => {
+  if (!isMyRequestsPreview.value) return props.previewOption
+  const baseForm =
+    props.previewOption.form && typeof props.previewOption.form === 'object'
+      ? props.previewOption.form
+      : {}
+  return {
+    ...props.previewOption,
+    form: {
+      ...baseForm,
+      disabled: true,
+    },
+  }
+})
+
 const previewModel = computed({
   get: () => props.previewData,
   set: (value: Record<string, any>) => emit('update:previewData', value),
 })
 
 function inlineFormBelowForBinding(binding: PreviewSubTableBinding) {
-  return resolvePreviewInlineFormBelowDesign(binding)
+  return resolvePreviewInlineFormBelowDesign(binding, resolveSubTableFormDesign)
 }
 
 function updateTableRows(bindingId: number, rows: any[]) {

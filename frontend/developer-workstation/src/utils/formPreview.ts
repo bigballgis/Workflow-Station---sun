@@ -3,6 +3,10 @@
  * Pure functions for form preview — no Vue reactivity dependency.
  */
 
+import { isLikelyFileStorageFieldName, buildMockPreviewFileUrl } from '@/components/designer/uploadFieldUtils'
+
+export { buildMockPreviewFileUrl }
+
 /**
  * Parse a JSON lookup configuration string, returning {} on failure.
  */
@@ -26,7 +30,46 @@ export function getMockValueForType(dataType: string): string {
   if (type === 'DATE') return '2026-01-01'
   if (type.includes('TIMESTAMP') || type === 'DATETIME') return '2026-01-01 00:00:00'
   if (type.includes('TIME')) return '00:00:00'
+  if (type === 'FILE') return 'sample-document.pdf'
   return 'Sample'
+}
+
+/** One demo row for Form Preview sub-tables (includes clickable mock file URLs). */
+export function buildPreviewSampleRow(
+  columns: Array<{ field: string; type?: string; props?: Record<string, unknown> }>,
+): Record<string, unknown> {
+  const row: Record<string, unknown> = {}
+  for (const col of columns) {
+    const field = col.field
+    if (!field || col.type === 'linkForm' || col.type === 'lookup') continue
+    if (col.type === 'upload' || isLikelyFileStorageFieldName(field)) {
+      const fileName = 'sample-document.pdf'
+      row[field] = buildMockPreviewFileUrl(fileName)
+      const nameTarget = col.props?.fileNameTargetField
+      if (typeof nameTarget === 'string' && nameTarget.trim()) {
+        row[nameTarget] = fileName
+      }
+      continue
+    }
+    if (col.type === 'number') {
+      row[field] = field === 'id' || field === 'main_id' ? 4 : 1
+      continue
+    }
+    if (col.type === 'switch') {
+      row[field] = true
+      continue
+    }
+    if (col.type === 'date') {
+      row[field] = '2026-01-01'
+      continue
+    }
+    if (col.type === 'datetime') {
+      row[field] = '2026-01-01 00:00:00'
+      continue
+    }
+    row[field] = getMockValueForType(String(col.type || 'VARCHAR'))
+  }
+  return row
 }
 
 /**

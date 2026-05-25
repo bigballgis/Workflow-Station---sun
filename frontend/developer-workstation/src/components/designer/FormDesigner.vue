@@ -331,6 +331,7 @@
       :initial-data="previewRowDialog.initialData"
       :rule="previewRowDialog.formRule"
       :option="previewRowDialog.formOption"
+      :columns="previewRowDialog.columns"
       @update:visible="onPreviewRowDialogVisibleChange"
       @save="handlePreviewRowDialogSave"
     />
@@ -584,6 +585,8 @@ import type { FormPreviewItem } from './formPreviewTypes'
 import SubTableFormDialog from './SubTableFormDialog.vue'
 import SubTableAddDialog from './SubTableAddDialog.vue'
 import {
+  PREVIEW_MY_REQUESTS_ACTIVE_KEY,
+  PREVIEW_RESOLVE_SUBTABLE_FORM_KEY,
   PREVIEW_SUBTABLE_DIALOG_KEY,
   type PreviewSubTableRowDialogOpen,
 } from './previewSubTableDialog'
@@ -667,6 +670,9 @@ const previewRowDialog = reactive({
   onSave: null as PreviewSubTableRowDialogOpen['onSave'] | null,
 })
 
+const previewMyRequestsActive = ref(false)
+provide(PREVIEW_MY_REQUESTS_ACTIVE_KEY, previewMyRequestsActive)
+
 provide(PREVIEW_SUBTABLE_DIALOG_KEY, {
   rowDialogOpen: toRef(previewRowDialog, 'visible'),
   openRowDialog(payload: PreviewSubTableRowDialogOpen) {
@@ -693,6 +699,7 @@ watch(showPreviewDialog, (open) => {
   if (open) return
   previewRowDialog.visible = false
   previewRowDialog.onSave = null
+  previewMyRequestsActive.value = false
 })
 
 function onPreviewRowDialogVisibleChange(visible: boolean) {
@@ -1151,6 +1158,8 @@ function getSubTableFormRule(bindingId: number): any[] {
 function getSubTableFormOption(bindingId: number): any {
   return getSubTableFormDesign(bindingId).options
 }
+
+provide(PREVIEW_RESOLVE_SUBTABLE_FORM_KEY, getSubTableFormDesign)
 
 // Non-PRIMARY bindings for tabs（RELATED 用于 Lookup，也需要显示在设计器里配置视图字段）
 const designerSubBindings = computed(() => {
@@ -1641,12 +1650,16 @@ function derivePreviewColumnsFromTable(bindingId: number) {
   const fields = (table as { fieldDefinitions?: Array<Record<string, unknown>> } | undefined)?.fieldDefinitions || []
   return [...fields]
     .sort((a, b) => (Number(a.sortOrder) || 0) - (Number(b.sortOrder) || 0))
-    .map((f) => ({
-      field: String(f.fieldName ?? ''),
-      label: String(f.description || f.comment || f.fieldName || ''),
-      type: mapDataTypeToPreviewColumnType(String(f.dataType ?? '')),
-      minWidth: 100,
-    }))
+    .map((f) => {
+      const type = mapDataTypeToPreviewColumnType(String(f.dataType ?? ''))
+      return {
+        field: String(f.fieldName ?? ''),
+        label: String(f.description || f.comment || f.fieldName || ''),
+        type,
+        minWidth: type === 'upload' ? 180 : 100,
+        ...(type === 'upload' ? { props: { action: '/api/v1/upload' } } : {}),
+      }
+    })
     .filter((col) => col.field.length > 0)
 }
 
@@ -1672,6 +1685,8 @@ function toSubTablePreviewColumns(bindingId: number, rule: any[], config: any) {
             formRule: targetFormDesign.rule,
             formOption: targetFormDesign.options,
             boundSubTableName,
+            boundSubTableBindingId: targetBindingId,
+            componentId: column.componentId,
           }
         }
       }
@@ -1717,14 +1732,22 @@ function toSubTablePreviewColumns(bindingId: number, rule: any[], config: any) {
       const colType = fieldRule?.type === 'upload'
         ? 'upload'
         : mapDataTypeToPreviewColumnType(String(column.dataType ?? column.fieldType ?? ''))
+      const uploadProps = colType === 'upload'
+        ? {
+            action: fieldRule?.props?.action || '/api/v1/upload',
+            ...(fieldRule?.props?.accept ? { accept: fieldRule.props.accept } : {}),
+            ...(fieldRule?.props?.multiple != null ? { multiple: fieldRule.props.multiple } : {}),
+            ...(fieldRule?.props?.fileNameTargetField
+              ? { fileNameTargetField: fieldRule.props.fileNameTargetField }
+              : {}),
+          }
+        : null
       return {
         field: column.fieldName,
         label: column.comment || column.columnLabel || fieldRule?.title || column.fieldName,
         type: colType,
         minWidth: colType === 'upload' ? 180 : 100,
-        ...(colType === 'upload' && fieldRule?.props
-          ? { props: { action: fieldRule.props.action, accept: fieldRule.props.accept, multiple: fieldRule.props.multiple, fileNameTargetField: fieldRule.props.fileNameTargetField } }
-          : {}),
+        ...(uploadProps ? { props: uploadProps } : {}),
       }
     })
   }
@@ -3067,8 +3090,8 @@ function handlePreview() {
       rule = subFormCache.value[bindingId]?.rule || subForms[bindingId]?.rule || []
       option = subFormCache.value[bindingId]?.options || subForms[bindingId]?.options || {}
     }
-    previewTableRows.value[bindingId] = []
     const columns = toSubTablePreviewColumns(bindingId, rule, config)
+    previewTableRows.value[bindingId] = []
     bindingMap.set(bindingId, {
       bindingId,
       bindingType: b.bindingType,

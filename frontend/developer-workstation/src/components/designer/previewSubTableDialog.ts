@@ -18,3 +18,14 @@ export interface PreviewSubTableDialogHost {
 
 export const PREVIEW_SUBTABLE_DIALOG_KEY: InjectionKey<PreviewSubTableDialogHost> =
   Symbol('previewSubTableDialog')
+
+export type PreviewResolveSubTableFormDesign = (
+  bindingId: number,
+) => { rule: any[]; options?: any }
+
+export const PREVIEW_RESOLVE_SUBTABLE_FORM_KEY: InjectionKey<PreviewResolveSubTableFormDesign> =
+  Symbol('previewResolveSubTableFormDesign')
+
+/** Form Preview: true while any dual-portal sub-table tab is My Requests Display. */
+export const PREVIEW_MY_REQUESTS_ACTIVE_KEY: InjectionKey<Ref<boolean>> =
+  Symbol('previewMyRequestsActive')

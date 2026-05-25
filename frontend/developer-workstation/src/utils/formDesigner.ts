@@ -35,6 +35,113 @@ export function injectUploadButtonLabels(rules: any[], uploadText: string): void
   walk(rules)
 }
 
+import {
+  applyUploadFileDisplayMeta,
+  extractUploadNameFromResponse,
+  extractUploadUrlFromResponse,
+  getFilenameFromUrl,
+  syncFormCreateUploadFieldValue,
+} from '@/components/designer/uploadFieldUtils'
+
+/**
+ * Collect upload rules from a form-create rule tree (including nested layout children).
+ */
+export function collectUploadRulesFromTree(rules: any[]): Array<{ field: string; type: 'upload'; props?: Record<string, unknown> }> {
+  const out: Array<{ field: string; type: 'upload'; props?: Record<string, unknown> }> = []
+  const walk = (items: any[]) => {
+    for (const r of items || []) {
+      if (!r || typeof r !== 'object') continue
+      if (r.type === 'upload' && r.field) {
+        out.push({ field: String(r.field), type: 'upload', props: r.props })
+      }
+      const children = getRuleChildren(r)
+      if (children.length) walk(children)
+    }
+  }
+  walk(rules)
+  return out
+}
+
+/**
+ * Wire form-create upload rules so successful uploads persist URL strings on formData.
+ * form-create requires assigning file.url in onSuccess — otherwise v-model stays empty.
+ */
+export function injectPreviewUploadHandlers(
+  rules: any[],
+  formData: { value: Record<string, unknown> },
+  uploadSession?: { value: Record<string, { url: string; name?: string }> },
+): void {
+  const walk = (items: any[]) => {
+    for (const r of items) {
+      if (!r || typeof r !== 'object') continue
+      if (r.type === 'upload' && r.field) {
+        r.props = r.props || {}
+        if (!r.props.uploadType) r.props.uploadType = 'file'
+        if (!r.props.action || r.props.action === '/') r.props.action = '/api/v1/upload'
+        const field = String(r.field)
+        const nameTarget = r.props.fileNameTargetField as string | undefined
+
+        r.props.onSuccess = (
+          res: unknown,
+          file?: { url?: string; name?: string; value?: unknown; response?: unknown },
+        ) => {
+          const url = extractUploadUrlFromResponse(res)
+          const displayName = extractUploadNameFromResponse(res, file) || (url ? getFilenameFromUrl(url) : '')
+          if (file && url && displayName) {
+            applyUploadFileDisplayMeta(file, url, displayName)
+          }
+          if (url && uploadSession) {
+            uploadSession.value = {
+              ...uploadSession.value,
+              [field]: { url, name: displayName },
+            }
+          }
+          if (nameTarget && displayName) {
+            formData.value[nameTarget] = displayName
+          }
+        }
+        // fcUpload handleChange runs after onSuccess and may emit a bare URL (UUID display name).
+        // Sync formData once here — not in onSuccess — to avoid double re-render / filename flash.
+        r.props.onChange = (
+          file?: { url?: string; name?: string; value?: unknown; response?: unknown; status?: string },
+          fileList?: Array<{ url?: string; name?: string; value?: unknown; response?: unknown; status?: string }>,
+        ) => {
+          if (file?.status !== 'success') return
+          const src = file
+            || (fileList || []).slice().reverse().find((f) => f.status === 'success')
+          if (!src) return
+          const url = extractUploadUrlFromResponse(src.response) || String(src.url || '').trim()
+          if (!url) return
+          const displayName = extractUploadNameFromResponse(src.response, src) || getFilenameFromUrl(url)
+          applyUploadFileDisplayMeta(src, url, displayName)
+          syncFormCreateUploadFieldValue(formData, field, url, displayName)
+          if (uploadSession) {
+            uploadSession.value = {
+              ...uploadSession.value,
+              [field]: { url, name: displayName },
+            }
+          }
+          if (nameTarget && displayName) {
+            formData.value[nameTarget] = displayName
+          }
+        }
+        r.props.onRemove = () => {
+          formData.value[field] = []
+          if (uploadSession) {
+            const next = { ...uploadSession.value }
+            delete next[field]
+            uploadSession.value = next
+          }
+          if (nameTarget) formData.value[nameTarget] = ''
+        }
+      }
+      const children = getRuleChildren(r)
+      if (children.length) walk(children)
+    }
+  }
+  walk(rules)
+}
+
 /**
  * Get children from any known nesting pattern in a form rule item.
  */

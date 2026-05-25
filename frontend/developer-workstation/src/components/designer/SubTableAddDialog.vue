@@ -312,7 +312,7 @@ import { ElMessage } from 'element-plus'
 import { buildInitialRow, buildRules } from './subTableAddDialogHelpers'
 import type { DialogColumn } from './subTableAddDialogHelpers'
 import SubTableNestedModalShell from './SubTableNestedModalShell.vue'
-import { getFilenameFromUrl } from './uploadFieldUtils'
+import { getFilenameFromUrl, extractUploadUrlFromResponse, normalizeUploadFieldsInRow } from './uploadFieldUtils'
 
 const props = defineProps<{
   visible: boolean
@@ -418,12 +418,14 @@ async function handleSave() {
   if (!formRef.value) return
   const valid = await formRef.value.validate().catch(() => false)
   if (!valid) return
-  emit('save', { ...formData.value })
+  const row = { ...formData.value }
+  normalizeUploadFieldsInRow(row, props.columns)
+  emit('save', row)
   visibleModel.value = false
 }
 
 function handleUploadSuccess(res: any, file: any, col: DialogColumn) {
-  const url: string = res?.data?.url || ''
+  const url = extractUploadUrlFromResponse(res)
   formData.value[col.field] = url
   uploadNames.value = { ...uploadNames.value, [col.field]: file.name }
   const target = col.props?.fileNameTargetField

@@ -1188,7 +1188,7 @@ export default {
     previewValue: '预览值',
     listFormDesigner: '列表视图表单设计器',
     dragLinkFormHint: '可从左侧组件面板拖拽 Link Form 到列表视图',
-    assigneeFormBelowDivider: '办理人待办：表格下方的行明细表单（用户门户预览）',
+    assigneeFormBelowDivider: '表格下方表单',
     previewLookupSummaryCell: 'Lookup（我的申请 — 摘要模式下为紧凑展示）',
   },
   linkForm: {
