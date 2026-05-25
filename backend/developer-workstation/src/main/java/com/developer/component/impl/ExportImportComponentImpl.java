@@ -14,12 +14,14 @@ import com.developer.repository.*;
 import com.developer.security.FunctionUnitWorkspaceAccessService;
 import com.developer.security.WorkspaceAccessAction;
 import com.developer.util.BpmnLastTaskAssigneeTopologyValidator;
+import com.developer.util.BpmnIdRewriter;
 import com.developer.util.XmlEncodingUtil;
 import com.developer.validation.DmnXmlParser;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.platform.security.util.SecurityContextUtils;
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -56,10 +58,14 @@ public class ExportImportComponentImpl implements ExportImportComponent {
     private final DecisionDefinitionRepository decisionDefinitionRepository;
     private final DmnXmlParser dmnXmlParser;
     private final FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService;
+    private final FunctionUnitDevGroupAssignmentRepository functionUnitDevGroupAssignmentRepository;
+    private final EntityManager entityManager;
     private final ObjectMapper objectMapper;
     
     @Value("${platform.version:1.0.0}")
     private String platformVersion;
+
+    private record ResolvedImportIdentity(String name, String code, boolean skipped, String skipMessage) {}
 
     /**
      * 获取当前操作者
@@ -258,88 +264,85 @@ public class ExportImportComponentImpl implements ExportImportComponent {
         String code = (String) manifest.get("code");
         String version = (String) manifest.get("version");
         String description = (String) manifest.get("description");
-        
-        // 检查冲突
-        boolean exists = functionUnitRepository.existsByName(name);
-        if (exists) {
-            switch (conflictStrategy) {
-                case "SKIP":
-                    result.put("status", "SKIPPED");
-                    result.put("message", "Function unit already exists, skipped");
-                    return result;
-                case "OVERWRITE":
-                    FunctionUnit existing = functionUnitRepository.findByName(name).orElse(null);
-                    if (existing != null) {
-                        functionUnitRepository.delete(existing);
-                    }
-                    break;
-                case "RENAME":
-                    name = name + "_imported_" + System.currentTimeMillis();
-                    break;
-                default:
-                    throw new DeveloperBusinessException("BIZ_INVALID_STRATEGY", "Invalid conflict strategy");
-            }
-        }
 
-        if (packageData.containsKey("process")) {
-            String bpmnXml = (String) packageData.get("process");
-            assertLastTaskAssigneeTopologyOrThrow(bpmnXml);
+        ResolvedImportIdentity resolved = resolveImportIdentity(name, code, conflictStrategy);
+        if (resolved.skipped()) {
+            result.put("status", "SKIPPED");
+            result.put("message", resolved.skipMessage());
+            return result;
         }
-        
+        name = resolved.name();
+        code = resolved.code();
+
         // 创建功能单元
         FunctionUnit functionUnit = FunctionUnit.builder()
                 .name(name)
-                .code(code != null ? code : generateImportCode(name)) // Use code from manifest or generate new one
+                .code(code)
                 .description(description)
                 .currentVersion(version)
                 .deployedAt(Instant.now()) // Set deployed_at to avoid null constraint violation
                 .build();
         functionUnit = functionUnitRepository.save(functionUnit);
-        
-        // 导入流程 - 使用Base64编码存储
-        if (packageData.containsKey("process")) {
-            String bpmnXml = (String) packageData.get("process");
-            ProcessDefinition process = ProcessDefinition.builder()
-                    .functionUnit(functionUnit)
-                    .bpmnXml(XmlEncodingUtil.encode(bpmnXml))
-                    .build();
-            processDefinitionRepository.save(process);
-        }
-        
-        // 导入表定义
+
+        Map<Long, Long> tableIdMapping = new HashMap<>();
+        Map<String, Long> importedTableNameToId = new HashMap<>();
         if (packageData.containsKey("tables")) {
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> tables = (List<Map<String, Object>>) packageData.get("tables");
             for (Map<String, Object> tableData : tables) {
-                importTable(functionUnit, tableData);
+                TableDefinition table = importTable(functionUnit, tableData);
+                recordSourceIdMapping(tableData.get("tableId"), table.getId(), tableIdMapping);
+                importedTableNameToId.put(table.getTableName(), table.getId());
             }
         }
-        
-        // 导入表单定义
+
+        Map<Long, Long> formIdMapping = new HashMap<>();
+        Map<String, Long> importedFormNameToId = new HashMap<>();
         if (packageData.containsKey("forms")) {
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> forms = (List<Map<String, Object>>) packageData.get("forms");
             for (Map<String, Object> formData : forms) {
-                importForm(functionUnit, formData);
+                FormDefinition form = importForm(functionUnit, formData);
+                recordSourceIdMapping(formData.get("formId"), form.getId(), formIdMapping);
+                importedFormNameToId.put(form.getFormName(), form.getId());
             }
         }
-        
-        // 导入动作定义
+
+        Map<Long, Long> actionIdMapping = new HashMap<>();
         if (packageData.containsKey("actions")) {
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> actions = (List<Map<String, Object>>) packageData.get("actions");
             for (Map<String, Object> actionData : actions) {
-                importAction(functionUnit, actionData);
+                ActionDefinition action = importAction(functionUnit, actionData);
+                recordSourceIdMapping(actionData.get("actionId"), action.getId(), actionIdMapping);
             }
         }
-        
-        // 导入决策定义（DMN XML）
+
         if (packageData.containsKey("decisions")) {
             @SuppressWarnings("unchecked")
             List<String> decisions = (List<String>) packageData.get("decisions");
             for (String dmnXml : decisions) {
                 importDecision(functionUnit, dmnXml);
             }
+        }
+
+        // 流程在表/表单/动作导入后再写入，并重写 BPMN 中的旧 ID 引用（与 clone 一致）
+        if (packageData.containsKey("process")) {
+            String bpmnXml = (String) packageData.get("process");
+            String rewrittenBpmn = BpmnIdRewriter.rewrite(
+                    bpmnXml,
+                    tableIdMapping,
+                    formIdMapping,
+                    actionIdMapping,
+                    importedTableNameToId,
+                    importedFormNameToId);
+            assertLastTaskAssigneeTopologyOrThrow(XmlEncodingUtil.smartDecode(rewrittenBpmn));
+            ProcessDefinition process = ProcessDefinition.builder()
+                    .functionUnit(functionUnit)
+                    .functionUnitVersionId(functionUnit.getId())
+                    .bpmnXml(XmlEncodingUtil.encode(rewrittenBpmn))
+                    .build();
+            processDefinitionRepository.save(process);
         }
         
         result.put("status", "SUCCESS");
@@ -349,7 +352,13 @@ public class ExportImportComponentImpl implements ExportImportComponent {
         return result;
     }
     
-    private void importTable(FunctionUnit functionUnit, Map<String, Object> tableData) {
+    private void recordSourceIdMapping(Object sourceIdObj, Long newId, Map<Long, Long> mapping) {
+        if (sourceIdObj instanceof Number sourceId && newId != null) {
+            mapping.put(sourceId.longValue(), newId);
+        }
+    }
+
+    private TableDefinition importTable(FunctionUnit functionUnit, Map<String, Object> tableData) {
         TableDefinition table = TableDefinition.builder()
                 .functionUnit(functionUnit)
                 .tableName((String) tableData.get("tableName"))
@@ -362,23 +371,31 @@ public class ExportImportComponentImpl implements ExportImportComponent {
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> fields = (List<Map<String, Object>>) tableData.get("fields");
         if (fields != null) {
-            for (Map<String, Object> fieldData : fields) {
+            for (int i = 0; i < fields.size(); i++) {
+                Map<String, Object> fieldData = fields.get(i);
+                Integer sortOrder = fieldData.get("sortOrder") instanceof Number number
+                        ? number.intValue()
+                        : i;
+                Boolean nullable = fieldData.get("nullable") instanceof Boolean boolVal ? boolVal : true;
+                Boolean isPrimaryKey = fieldData.get("isPrimaryKey") instanceof Boolean pkVal ? pkVal : false;
                 FieldDefinition field = FieldDefinition.builder()
                         .tableDefinition(table)
                         .fieldName((String) fieldData.get("fieldName"))
                         .dataType(DataType.valueOf((String) fieldData.get("dataType")))
                         .length(fieldData.get("length") != null ? ((Number) fieldData.get("length")).intValue() : null)
-                        .nullable((Boolean) fieldData.get("nullable"))
-                        .isPrimaryKey((Boolean) fieldData.get("isPrimaryKey"))
+                        .nullable(nullable)
+                        .isPrimaryKey(isPrimaryKey)
+                        .sortOrder(sortOrder)
                         .build();
                 table.getFieldDefinitions().add(field);
             }
             tableDefinitionRepository.save(table);
         }
+        return table;
     }
     
     @SuppressWarnings("unchecked")
-    private void importForm(FunctionUnit functionUnit, Map<String, Object> formData) {
+    private FormDefinition importForm(FunctionUnit functionUnit, Map<String, Object> formData) {
         Map<String, Object> configJsonMap = null;
         Object configJsonObj = formData.get("configJson");
         if (configJsonObj instanceof Map) {
@@ -394,13 +411,13 @@ public class ExportImportComponentImpl implements ExportImportComponent {
                 .functionUnit(functionUnit)
                 .formName((String) formData.get("formName"))
                 .formType(FormType.valueOf((String) formData.get("formType")))
-                .configJson(configJsonMap)
+                .configJson(configJsonMap != null ? configJsonMap : new HashMap<>())
                 .build();
-        formDefinitionRepository.save(form);
+        return formDefinitionRepository.save(form);
     }
     
     @SuppressWarnings("unchecked")
-    private void importAction(FunctionUnit functionUnit, Map<String, Object> actionData) {
+    private ActionDefinition importAction(FunctionUnit functionUnit, Map<String, Object> actionData) {
         Map<String, Object> configJsonMap = null;
         Object configJsonObj = actionData.get("configJson");
         if (configJsonObj instanceof Map) {
@@ -416,9 +433,9 @@ public class ExportImportComponentImpl implements ExportImportComponent {
                 .functionUnit(functionUnit)
                 .actionName((String) actionData.get("actionName"))
                 .actionType(ActionType.valueOf((String) actionData.get("actionType")))
-                .configJson(configJsonMap)
+                .configJson(configJsonMap != null ? configJsonMap : new HashMap<>())
                 .build();
-        actionDefinitionRepository.save(action);
+        return actionDefinitionRepository.save(action);
     }
 
     /**
@@ -537,8 +554,20 @@ public class ExportImportComponentImpl implements ExportImportComponent {
             if (functionUnitRepository.existsByName(name)) {
                 Map<String, Object> conflict = new HashMap<>();
                 conflict.put("type", "FUNCTION_UNIT");
+                conflict.put("field", "name");
                 conflict.put("name", name);
                 conflict.put("message", "Function unit name already exists");
+                conflicts.add(conflict);
+            }
+
+            Object codeVal = descriptor.get("code");
+            if (codeVal instanceof String importCode && !importCode.isBlank()
+                    && functionUnitRepository.existsByCode(importCode)) {
+                Map<String, Object> conflict = new HashMap<>();
+                conflict.put("type", "FUNCTION_UNIT");
+                conflict.put("field", "code");
+                conflict.put("code", importCode);
+                conflict.put("message", "Function unit code already exists");
                 conflicts.add(conflict);
             }
             
@@ -685,6 +714,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
     
     private Map<String, Object> serializeTable(TableDefinition table) {
         Map<String, Object> map = new HashMap<>();
+        map.put("tableId", table.getId());
         map.put("tableName", table.getTableName());
         map.put("tableType", table.getTableType().name());
         map.put("description", table.getDescription());
@@ -692,6 +722,71 @@ public class ExportImportComponentImpl implements ExportImportComponent {
         return map;
     }
     
+    private ResolvedImportIdentity resolveImportIdentity(String manifestName, String manifestCode, String conflictStrategy) {
+        String name = manifestName;
+        String manifestCodeNormalized = manifestCode != null && !manifestCode.isBlank() ? manifestCode : null;
+        boolean nameExists = functionUnitRepository.existsByName(name);
+        boolean codeExists = manifestCodeNormalized != null && functionUnitRepository.existsByCode(manifestCodeNormalized);
+
+        switch (conflictStrategy) {
+            case "SKIP" -> {
+                if (nameExists) {
+                    return new ResolvedImportIdentity(name, manifestCodeNormalized, true,
+                            "Function unit already exists, skipped");
+                }
+                if (codeExists) {
+                    return new ResolvedImportIdentity(name, manifestCodeNormalized, true,
+                            "Function unit code already exists, skipped");
+                }
+            }
+            case "OVERWRITE" -> {
+                if (nameExists) {
+                    deleteExistingFunctionUnitForImport(functionUnitRepository.findByName(name).orElse(null));
+                } else if (codeExists) {
+                    deleteExistingFunctionUnitForImport(functionUnitRepository.findByCode(manifestCodeNormalized).orElse(null));
+                }
+            }
+            case "RENAME" -> {
+                if (nameExists) {
+                    name = manifestName + "_imported_" + System.currentTimeMillis();
+                }
+            }
+            default -> throw new DeveloperBusinessException("BIZ_INVALID_STRATEGY", "Invalid conflict strategy");
+        }
+
+        String code = resolveUniqueImportCode(name, manifestCodeNormalized, conflictStrategy, nameExists, codeExists);
+        return new ResolvedImportIdentity(name, code, false, null);
+    }
+
+    private String resolveUniqueImportCode(
+            String resolvedName,
+            String manifestCode,
+            String conflictStrategy,
+            boolean nameConflict,
+            boolean codeConflict) {
+        if ("RENAME".equals(conflictStrategy) && (nameConflict || codeConflict)) {
+            return generateImportCode(resolvedName);
+        }
+        if ("OVERWRITE".equals(conflictStrategy) && manifestCode != null && !functionUnitRepository.existsByCode(manifestCode)) {
+            return manifestCode;
+        }
+        if (manifestCode != null && !functionUnitRepository.existsByCode(manifestCode)) {
+            return manifestCode;
+        }
+        return generateImportCode(resolvedName);
+    }
+
+    private void deleteExistingFunctionUnitForImport(FunctionUnit existing) {
+        if (existing == null || existing.getId() == null) {
+            return;
+        }
+        Long functionUnitId = existing.getId();
+        functionUnitDevGroupAssignmentRepository.deleteByFunctionUnitId(functionUnitId);
+        functionUnitRepository.deleteById(functionUnitId);
+        entityManager.flush();
+        entityManager.clear();
+    }
+
     /**
      * 生成导入时的唯一编码
      */
@@ -796,6 +891,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
         map.put("length", field.getLength());
         map.put("nullable", field.getNullable());
         map.put("isPrimaryKey", field.getIsPrimaryKey());
+        map.put("sortOrder", field.getSortOrder());
         return map;
     }
     
@@ -810,6 +906,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
     
     private Map<String, Object> serializeAction(ActionDefinition action) {
         Map<String, Object> map = new HashMap<>();
+        map.put("actionId", action.getId());
         map.put("actionName", action.getActionName());
         map.put("actionType", action.getActionType().name());
         map.put("configJson", action.getConfigJson());

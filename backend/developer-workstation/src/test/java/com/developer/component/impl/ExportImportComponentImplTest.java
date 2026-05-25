@@ -1,6 +1,10 @@
 package com.developer.component.impl;
 
+import com.developer.entity.FunctionUnit;
+import com.developer.entity.ProcessDefinition;
+import com.developer.entity.TableDefinition;
 import com.developer.repository.*;
+import com.developer.util.XmlEncodingUtil;
 import com.developer.security.FunctionUnitWorkspaceAccessService;
 import com.developer.validation.DmnXmlParser;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -65,6 +69,12 @@ class ExportImportComponentImplTest {
 
     @Mock
     private FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService;
+
+    @Mock
+    private FunctionUnitDevGroupAssignmentRepository functionUnitDevGroupAssignmentRepository;
+
+    @Mock
+    private jakarta.persistence.EntityManager entityManager;
     
     @InjectMocks
     private ExportImportComponentImpl exportImportComponent;
@@ -164,6 +174,8 @@ class ExportImportComponentImplTest {
                 decisionDefinitionRepository,
                 dmnXmlParser,
                 mock(FunctionUnitWorkspaceAccessService.class),
+                mock(FunctionUnitDevGroupAssignmentRepository.class),
+                mock(jakarta.persistence.EntityManager.class),
                 om);
 
         byte[] zip = zipSingleEntry("manifest.json", "{\"name\":\"FU_ManifestOnly\",\"code\":\"c1\"}");
@@ -188,6 +200,8 @@ class ExportImportComponentImplTest {
                 decisionDefinitionRepository,
                 dmnXmlParser,
                 mock(FunctionUnitWorkspaceAccessService.class),
+                mock(FunctionUnitDevGroupAssignmentRepository.class),
+                mock(jakarta.persistence.EntityManager.class),
                 om);
 
         byte[] zip = zipSingleEntry("metadata.json", "{\"name\":\"FU_LegacyMeta\"}");
@@ -195,6 +209,128 @@ class ExportImportComponentImplTest {
 
         Map<String, Object> res = impl.validateImportPackage(file);
         assertTrue((Boolean) res.get("valid"), () -> String.valueOf(res.get("errors")));
+    }
+
+    @Test
+    void importFunctionUnit_renameStrategy_generatesNewCodeWhenCodeAlreadyExists() throws Exception {
+        ObjectMapper om = new ObjectMapper();
+        ExportImportComponentImpl impl = new ExportImportComponentImpl(
+                functionUnitRepository,
+                processDefinitionRepository,
+                tableDefinitionRepository,
+                formDefinitionRepository,
+                actionDefinitionRepository,
+                decisionDefinitionRepository,
+                dmnXmlParser,
+                functionUnitWorkspaceAccessService,
+                functionUnitDevGroupAssignmentRepository,
+                entityManager,
+                om);
+
+        String existingCode = "fu-20260422-23tfag";
+        when(functionUnitRepository.existsByName("kk")).thenReturn(true);
+        when(functionUnitRepository.existsByCode(existingCode)).thenReturn(true);
+        when(functionUnitRepository.existsByCode(org.mockito.ArgumentMatchers.argThat(
+                candidate -> candidate != null && !candidate.equals(existingCode)))).thenReturn(false);
+        when(functionUnitRepository.save(any(FunctionUnit.class))).thenAnswer(invocation -> {
+            FunctionUnit saved = invocation.getArgument(0);
+            saved.setId(99L);
+            return saved;
+        });
+
+        byte[] zip = zipSingleEntry("manifest.json",
+                "{\"name\":\"kk\",\"code\":\"" + existingCode + "\",\"version\":\"1.0.0\"}");
+        MockMultipartFile file = new MockMultipartFile("file", "fu.zip", "application/zip", zip);
+
+        Map<String, Object> result = impl.importFunctionUnit(file, "RENAME");
+
+        assertEquals("SUCCESS", result.get("status"));
+        org.mockito.ArgumentCaptor<FunctionUnit> captor = org.mockito.ArgumentCaptor.forClass(FunctionUnit.class);
+        verify(functionUnitRepository).save(captor.capture());
+        FunctionUnit saved = captor.getValue();
+        assertTrue(saved.getName().startsWith("kk_imported_"));
+        assertNotEquals(existingCode, saved.getCode());
+    }
+
+    @Test
+    void importFunctionUnit_rewritesBpmnIdsAfterImport() throws Exception {
+        ObjectMapper om = new ObjectMapper();
+        ExportImportComponentImpl impl = new ExportImportComponentImpl(
+                functionUnitRepository,
+                processDefinitionRepository,
+                tableDefinitionRepository,
+                formDefinitionRepository,
+                actionDefinitionRepository,
+                decisionDefinitionRepository,
+                dmnXmlParser,
+                functionUnitWorkspaceAccessService,
+                functionUnitDevGroupAssignmentRepository,
+                entityManager,
+                om);
+
+        when(functionUnitRepository.existsByName("ImportedFU")).thenReturn(false);
+        when(functionUnitRepository.existsByCode(any())).thenReturn(false);
+        when(functionUnitRepository.save(any(FunctionUnit.class))).thenAnswer(invocation -> {
+            FunctionUnit saved = invocation.getArgument(0);
+            saved.setId(100L);
+            return saved;
+        });
+        when(tableDefinitionRepository.save(any(TableDefinition.class))).thenAnswer(invocation -> {
+            TableDefinition saved = invocation.getArgument(0);
+            saved.setId(200L);
+            return saved;
+        });
+        when(formDefinitionRepository.save(any())).thenAnswer(invocation -> {
+            var saved = invocation.getArgument(0, com.developer.entity.FormDefinition.class);
+            saved.setId(300L);
+            return saved;
+        });
+
+        String bpmn = """
+                <?xml version="1.0"?>
+                <bpmn:definitions>
+                  <bpmn:userTask id="MI_Task">
+                    <bpmn:extensionElements>
+                      <custom:properties>
+                        <custom:property name="subTableName" value="participants" />
+                        <custom:property name="subTableId" value="13" />
+                        <custom:property name="formName" value="MainForm" />
+                        <custom:property name="formId" value="11" />
+                      </custom:properties>
+                    </bpmn:extensionElements>
+                  </bpmn:userTask>
+                </bpmn:definitions>
+                """;
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        try (ZipOutputStream zos = new ZipOutputStream(baos)) {
+            zos.putNextEntry(new ZipEntry("manifest.json"));
+            zos.write("{\"name\":\"ImportedFU\",\"code\":\"imported-fu\",\"version\":\"1.0.0\"}".getBytes(StandardCharsets.UTF_8));
+            zos.closeEntry();
+            zos.putNextEntry(new ZipEntry("tables/table_0.json"));
+            zos.write("{\"tableId\":13,\"tableName\":\"participants\",\"tableType\":\"SUB\",\"fields\":[{\"fieldName\":\"assignee\",\"dataType\":\"VARCHAR\",\"sortOrder\":0}]}".getBytes(StandardCharsets.UTF_8));
+            zos.closeEntry();
+            zos.putNextEntry(new ZipEntry("forms/form_0.json"));
+            zos.write("{\"formId\":11,\"formName\":\"MainForm\",\"formType\":\"PROCESS\",\"configJson\":{}}".getBytes(StandardCharsets.UTF_8));
+            zos.closeEntry();
+            zos.putNextEntry(new ZipEntry("process/process.bpmn"));
+            zos.write(bpmn.getBytes(StandardCharsets.UTF_8));
+            zos.closeEntry();
+        }
+
+        MockMultipartFile file = new MockMultipartFile("file", "fu.zip", "application/zip", baos.toByteArray());
+        Map<String, Object> result = impl.importFunctionUnit(file, "RENAME");
+        assertEquals("SUCCESS", result.get("status"));
+
+        org.mockito.ArgumentCaptor<ProcessDefinition> processCaptor =
+                org.mockito.ArgumentCaptor.forClass(ProcessDefinition.class);
+        verify(processDefinitionRepository).save(processCaptor.capture());
+        String savedBpmn = XmlEncodingUtil.smartDecode(processCaptor.getValue().getBpmnXml());
+        assertTrue(savedBpmn.contains("subTableId") && savedBpmn.contains("200"),
+                () -> "Expected rewritten subTableId=200 in: " + savedBpmn);
+        assertTrue(savedBpmn.contains("formId") && savedBpmn.contains("300"),
+                () -> "Expected rewritten formId=300 in: " + savedBpmn);
+        assertFalse(savedBpmn.contains("value=\"13\""));
+        assertFalse(savedBpmn.contains("value=\"11\""));
     }
 
     private static byte[] zipSingleEntry(String entryName, String utf8Content) throws Exception {

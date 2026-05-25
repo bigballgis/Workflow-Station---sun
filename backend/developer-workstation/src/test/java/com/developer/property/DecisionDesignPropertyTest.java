@@ -839,6 +839,8 @@ public class DecisionDesignPropertyTest {
                             exportDecisionRepo,
                             realParser,
                             mock(FunctionUnitWorkspaceAccessService.class),
+                            mock(FunctionUnitDevGroupAssignmentRepository.class),
+                            mock(jakarta.persistence.EntityManager.class),
                             new ObjectMapper()
                     );
 
@@ -959,6 +961,8 @@ public class DecisionDesignPropertyTest {
                             skipDecisionRepo,
                             realParser,
                             mock(FunctionUnitWorkspaceAccessService.class),
+                            mock(FunctionUnitDevGroupAssignmentRepository.class),
+                            mock(jakarta.persistence.EntityManager.class),
                             new ObjectMapper()
                     );
 
@@ -1026,6 +1030,8 @@ public class DecisionDesignPropertyTest {
                             overwriteDecisionRepo,
                             realParser,
                             mock(FunctionUnitWorkspaceAccessService.class),
+                            mock(FunctionUnitDevGroupAssignmentRepository.class),
+                            mock(jakarta.persistence.EntityManager.class),
                             new ObjectMapper()
                     );
 
@@ -1043,7 +1049,7 @@ public class DecisionDesignPropertyTest {
                     .isEqualTo("SUCCESS");
 
             // Verify the existing FU was deleted
-            verify(overwriteFuRepo).delete(existingFu);
+            verify(overwriteFuRepo).deleteById(existingFu.getId());
 
             // Verify a new decision was saved (the imported one)
             verify(overwriteDecisionRepo).save(any(DecisionDefinition.class));

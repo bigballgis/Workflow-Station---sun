@@ -90,6 +90,7 @@ declare module 'vue' {
     FormRenameDialog: typeof import('./components/designer/form-designer/FormRenameDialog.vue')['default']
     FormulaEditor: typeof import('./components/designer/FormulaEditor.vue')['default']
     FunctionUnitCard: typeof import('./components/function-unit/FunctionUnitCard.vue')['default']
+    FunctionUnitImportDialog: typeof import('./components/function-unit/FunctionUnitImportDialog.vue')['default']
     GatewayProperties: typeof import('./components/designer/properties/GatewayProperties.vue')['default']
     GenerationPreview: typeof import('./components/ai/GenerationPreview.vue')['default']
     IconPreview: typeof import('./components/icon/IconPreview.vue')['default']

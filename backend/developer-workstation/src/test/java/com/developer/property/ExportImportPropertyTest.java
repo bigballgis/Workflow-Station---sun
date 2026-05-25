@@ -36,7 +36,10 @@ public class ExportImportPropertyTest {
         ExportImportComponent component = new ExportImportComponentImpl(
                 repository, processRepo, tableRepo, formRepo, actionRepo,
                 mock(DecisionDefinitionRepository.class), mock(com.developer.validation.DmnXmlParser.class),
-                mock(FunctionUnitWorkspaceAccessService.class), objectMapper);
+                mock(FunctionUnitWorkspaceAccessService.class),
+                mock(FunctionUnitDevGroupAssignmentRepository.class),
+                mock(jakarta.persistence.EntityManager.class),
+                objectMapper);
         
         // 创建模拟功能单元
         FunctionUnit fu = new FunctionUnit();
@@ -68,7 +71,10 @@ public class ExportImportPropertyTest {
         ExportImportComponent component = new ExportImportComponentImpl(
                 repository, processRepo, tableRepo, formRepo, actionRepo,
                 mock(DecisionDefinitionRepository.class), mock(com.developer.validation.DmnXmlParser.class),
-                mock(FunctionUnitWorkspaceAccessService.class), objectMapper);
+                mock(FunctionUnitWorkspaceAccessService.class),
+                mock(FunctionUnitDevGroupAssignmentRepository.class),
+                mock(jakarta.persistence.EntityManager.class),
+                objectMapper);
         
         // 模拟已存在同名功能单元
         when(repository.existsByName(name)).thenReturn(true);

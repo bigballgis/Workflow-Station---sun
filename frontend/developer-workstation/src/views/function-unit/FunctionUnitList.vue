@@ -62,14 +62,31 @@
             {{ t('functionUnit.showingResults', { count: filteredList.length, total: store.list.length }) }}
           </span>
         </div>
-        <el-button
-          v-if="permissions.canCreate()"
-          type="primary"
-          @click="openCreateDialog"
-        >
-          <el-icon><Plus /></el-icon>
-          {{ t('functionUnit.create') }}
-        </el-button>
+        <div class="filter-actions">
+          <el-button
+            v-if="permissions.canCreate()"
+            @click="showImportDialog = true"
+          >
+            <el-icon><Upload /></el-icon>
+            {{ t('common.import') }}
+          </el-button>
+          <el-button
+            :disabled="store.list.length === 0"
+            :loading="exporting"
+            @click="openExportDialog"
+          >
+            <el-icon><Download /></el-icon>
+            {{ t('common.export') }}
+          </el-button>
+          <el-button
+            v-if="permissions.canCreate()"
+            type="primary"
+            @click="openCreateDialog"
+          >
+            <el-icon><Plus /></el-icon>
+            {{ t('functionUnit.create') }}
+          </el-button>
+        </div>
       </div>
 
       <!-- Loading Skeleton -->
@@ -239,6 +256,51 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- Import Dialog -->
+    <FunctionUnitImportDialog
+      v-model="showImportDialog"
+      @imported="loadData"
+    />
+
+    <!-- Export Dialog -->
+    <el-dialog
+      v-model="showExportDialog"
+      :title="t('functionUnit.exportSelectTitle')"
+      width="480px"
+      @open="initExportSelection"
+    >
+      <el-form label-width="100px">
+        <el-form-item :label="t('functionUnit.name')">
+          <el-select
+            v-model="exportTargetId"
+            filterable
+            :placeholder="t('functionUnit.exportSelectPlaceholder')"
+            style="width: 100%;"
+          >
+            <el-option
+              v-for="item in store.list"
+              :key="item.id"
+              :label="item.name"
+              :value="item.id"
+            />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showExportDialog = false">
+          {{ t('common.cancel') }}
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="exporting"
+          :disabled="exportTargetId == null"
+          @click="handleExport"
+        >
+          {{ t('common.export') }}
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -248,11 +310,12 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox, type FormInstance } from 'element-plus'
-import { Search, Plus } from '@element-plus/icons-vue'
+import { Search, Plus, Upload, Download } from '@element-plus/icons-vue'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
-import type { FunctionUnitResponse } from '@/api/functionUnit'
+import { functionUnitApi, type FunctionUnitResponse } from '@/api/functionUnit'
 import IconUploadField from '@/components/icon/IconUploadField.vue'
 import FunctionUnitCard from '@/components/function-unit/FunctionUnitCard.vue'
+import FunctionUnitImportDialog from '@/components/function-unit/FunctionUnitImportDialog.vue'
 import { getTags, setTags, getAllAvailableTags, matchesTags } from '@/utils/tagStorage'
 import { isAuthenticated } from '@/api/auth'
 import { permissions } from '@/utils/permission'
@@ -265,6 +328,10 @@ const store = useFunctionUnitStore()
 const searchForm = reactive({ name: '', status: '', tags: [] as string[] })
 const pagination = reactive({ page: 1, size: 20 })
 const showFormDialog = ref(false)
+const showImportDialog = ref(false)
+const showExportDialog = ref(false)
+const exporting = ref(false)
+const exportTargetId = ref<number | null>(null)
 const formDialogMode = ref<'create' | 'settings'>('create')
 const settingsItemId = ref<number | null>(null)
 const formSubmitting = ref(false)
@@ -405,6 +472,46 @@ async function handleDelete(item: FunctionUnitResponse) {
   loadData()
 }
 
+function openExportDialog() {
+  if (store.list.length === 0) return
+  showExportDialog.value = true
+}
+
+function initExportSelection() {
+  if (filteredList.value.length === 1) {
+    exportTargetId.value = filteredList.value[0].id
+  } else if (store.list.length === 1) {
+    exportTargetId.value = store.list[0].id
+  } else {
+    exportTargetId.value = null
+  }
+}
+
+async function handleExport() {
+  if (exportTargetId.value == null) return
+  const target = store.list.find(item => item.id === exportTargetId.value)
+  exporting.value = true
+  try {
+    const response = await functionUnitApi.exportFunctionUnit(exportTargetId.value)
+    const blob = new Blob([response as BlobPart], { type: 'application/zip' })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `function-unit-${target?.name || exportTargetId.value}.zip`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+    ElMessage.success(t('functionUnit.exportSuccess'))
+    showExportDialog.value = false
+  } catch (e: unknown) {
+    const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message
+    ElMessage.error(message || t('functionUnit.exportFailed'))
+  } finally {
+    exporting.value = false
+  }
+}
+
 onMounted(() => {
   // Check if logged in
   if (isAuthenticated()) {
@@ -428,6 +535,13 @@ onMounted(() => {
 }
 
 .filter-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.filter-actions {
   display: flex;
   align-items: center;
   gap: 12px;

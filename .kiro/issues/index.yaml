@@ -1184,11 +1184,15 @@
   file: "backend/developer-workstation/src/main/java/com/developer/component/impl/FunctionUnitComponentImpl.java; backend/developer-workstation/src/main/java/com/developer/util/BpmnIdRewriter.java"
 
 - id: "161"
-  status: open
+  status: fixed
+  fixed_at: "2026-05-25"
   severity: major
   category: bug
-  summary: "ExportImportComponentImpl.importPackage 创建 ProcessDefinition 时未设置 functionUnitVersionId，导入带流程的 function unit 时会因 NOT NULL 约束失败"
+  summary: "ExportImportComponentImpl 重新导入功能单元失败（code 冲突 / functionUnitVersionId / sort_order 等）"
   file: "backend/developer-workstation/src/main/java/com/developer/component/impl/ExportImportComponentImpl.java"
+  note: |
+    根因：RENAME 只改 name 不改 code 导致 dw_function_units_code_key 冲突；OVERWRITE delete 未 flush；ProcessDefinition 缺 functionUnitVersionId；FieldDefinition 缺 sort_order。
+    修复：resolveImportIdentity + resolveUniqueImportCode；deleteById + flush/clear；导入流程设 functionUnitVersionId；字段 sort_order 回退为索引；导出/导入补齐 sortOrder。
 
 - id: "162"
   status: open
