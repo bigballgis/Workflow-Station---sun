@@ -2651,6 +2651,25 @@ CREATE INDEX IF NOT EXISTS idx_rt_audit_time ON rt_audit_logs(operated_at);
 COMMENT ON TABLE rt_audit_logs IS 'Audit log for Relation Table data changes';
 COMMENT ON COLUMN rt_audit_logs.action IS 'ADD / UPDATE / DELETE / STATUS_CHANGE';
 
+-- 5b. Row Data (rt_table_data_rows) — JSON storage, no per-table physical tables
+CREATE TABLE IF NOT EXISTS rt_table_data_rows (
+    id          BIGSERIAL       PRIMARY KEY,
+    table_id    BIGINT          NOT NULL REFERENCES rt_table_definitions(id) ON DELETE CASCADE,
+    row_id      VARCHAR(100)    NOT NULL,
+    data        JSONB           NOT NULL DEFAULT '{}',
+    status      VARCHAR(20)     NOT NULL DEFAULT 'ACTIVE',
+    created_at  TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by  VARCHAR(64),
+    updated_at  TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by  VARCHAR(64),
+    CONSTRAINT uk_rt_data_rows_table_row UNIQUE (table_id, row_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_rt_data_rows_table_id ON rt_table_data_rows(table_id);
+CREATE INDEX IF NOT EXISTS idx_rt_data_rows_table_status ON rt_table_data_rows(table_id, status);
+
+COMMENT ON TABLE rt_table_data_rows IS 'Relation Table row data stored as JSON';
+
 -- 6. View Configs (rt_view_configs)
 CREATE TABLE IF NOT EXISTS rt_view_configs (
     id                  BIGSERIAL       PRIMARY KEY,

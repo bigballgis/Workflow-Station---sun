@@ -60,55 +60,16 @@ public class RelationTableDeployServiceImpl implements RelationTableDeployServic
 
         List<RelationFieldDefinition> fields = tableDefinition.getFieldDefinitions();
         if (fields == null || fields.isEmpty()) {
-            // Legacy table: was deployed before rt_field_definitions was introduced.
-            // Auto-repair by reconstructing field definitions from the physical table schema.
-            if (tableDefinition.getCurrentVersion() > 0 && physicalTableExists(tableDefinition.getTableName())) {
-                log.info("Legacy table '{}' has no rt_field_definitions; auto-repairing from physical schema",
-                        tableDefinition.getTableName());
-                fields = repairFieldDefinitionsFromPhysical(tableDefinition);
-                if (fields.isEmpty()) {
-                    throw new RelationTableDeploymentException(
-                            "表 '" + tableDefinition.getTableName() + "' 没有定义任何字段");
-                }
-            } else {
-                throw new RelationTableDeploymentException(
-                        "表 '" + tableDefinition.getTableName() + "' 没有定义任何字段");
-            }
+            throw new RelationTableDeploymentException(
+                    "表 '" + tableDefinition.getTableName() + "' 没有定义任何字段");
         }
 
         // 自动补齐审计字段（如果尚未定义）
         ensureAuditFields(tableDefinition, fields);
 
         boolean isFirstDeploy = tableDefinition.getCurrentVersion() == 0;
-
-        try {
-            if (isFirstDeploy) {
-                // 检查物理表是否已存在（可能是上次部署失败后遗留的）
-                boolean tableExists = physicalTableExists(tableDefinition.getTableName());
-                if (!tableExists) {
-                    String createDdl = generateCreateTableDdl(tableDefinition.getTableName(), fields);
-                    log.info("Executing CREATE TABLE DDL for table: {}", tableDefinition.getTableName());
-                    jdbcTemplate.execute(createDdl);
-                } else {
-                    log.info("Physical table '{}' already exists, applying ALTER TABLE instead", tableDefinition.getTableName());
-                    List<String> alterDdls = generateAlterTableDdlFromPhysical(tableDefinition.getTableName(), fields);
-                    for (String ddl : alterDdls) {
-                        log.info("Executing ALTER TABLE DDL: {}", ddl);
-                        jdbcTemplate.execute(ddl);
-                    }
-                }
-            } else {
-                List<String> alterDdls = generateAlterTableDdl(tableDefinition.getTableName(), fields);
-                for (String ddl : alterDdls) {
-                    log.info("Executing ALTER TABLE DDL: {}", ddl);
-                    jdbcTemplate.execute(ddl);
-                }
-            }
-        } catch (Exception e) {
-            log.error("DDL execution failed for table '{}': {}", tableDefinition.getTableName(), e.getMessage(), e);
-            throw new RelationTableDeploymentException(
-                    "部署表 '" + tableDefinition.getTableName() + "' 失败: " + e.getMessage(), e);
-        }
+        // 行数据存 rt_table_data_rows (JSONB)，部署仅更新结构元数据与版本快照，不执行 CREATE/ALTER TABLE
+        log.info("Deploying relation table metadata (JSON row storage): table={}", tableDefinition.getTableName());
 
         // 创建版本快照
         int newVersion = tableDefinition.getCurrentVersion() + 1;

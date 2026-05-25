@@ -60,6 +60,14 @@ BEGIN
         AND relation_table_id IS NOT NULL
         AND relation_table_id > 0
     );
+  DELETE FROM rt_table_data_rows
+    WHERE table_id IN (
+      SELECT DISTINCT relation_table_id
+      FROM dw_form_table_bindings
+      WHERE form_id IN (SELECT id FROM dw_form_definitions WHERE function_unit_id = v_fu_id)
+        AND relation_table_id IS NOT NULL
+        AND relation_table_id > 0
+    );
   DELETE FROM rt_field_definitions
     WHERE table_id IN (
       SELECT DISTINCT relation_table_id
@@ -160,6 +168,17 @@ INSERT INTO rt_field_definitions (id, table_id, field_name, data_type, length, p
 INSERT INTO rt_field_definitions (id, table_id, field_name, data_type, length, precision_value, scale, nullable, is_primary_key, default_value, comment, sort_order) VALUES (6,1,'updated_by','VARCHAR',64,NULL,NULL,true,false,NULL,'Updated By',5) ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO rt_table_versions (id, table_id, version_number, snapshot_data, deployed_by, deployed_at, change_log) VALUES (1,1,1,'[{"id":1,"fieldName":"id","dataType":"INTEGER","length":255,"precision":null,"scale":null,"nullable":true,"isPrimaryKey":false,"defaultValue":null,"comment":"id","sortOrder":0},{"id":2,"fieldName":"name","dataType":"VARCHAR","length":255,"precision":null,"scale":null,"nullable":true,"isPrimaryKey":false,"defaultValue":null,"comment":"name","sortOrder":1},{"id":3,"fieldName":"created_at","dataType":"TIMESTAMP","length":null,"precision":null,"scale":null,"nullable":true,"isPrimaryKey":false,"defaultValue":null,"comment":"Created At","sortOrder":2},{"id":4,"fieldName":"created_by","dataType":"VARCHAR","length":64,"precision":null,"scale":null,"nullable":true,"isPrimaryKey":false,"defaultValue":null,"comment":"Created By","sortOrder":3},{"id":5,"fieldName":"updated_at","dataType":"TIMESTAMP","length":null,"precision":null,"scale":null,"nullable":true,"isPrimaryKey":false,"defaultValue":null,"comment":"Updated At","sortOrder":4},{"id":6,"fieldName":"updated_by","dataType":"VARCHAR","length":64,"precision":null,"scale":null,"nullable":true,"isPrimaryKey":false,"defaultValue":null,"comment":"Updated By","sortOrder":5}]','system','2026-04-27 15:35:28.698345','Initial deployment') ON CONFLICT (id) DO NOTHING;
+
+-- Sample row data in rt_table_data_rows (JSONB). Do NOT create a physical table named "test".
+INSERT INTO rt_table_data_rows (table_id, row_id, data, status, created_by, updated_by)
+VALUES
+  (1, '1', '{"id": 1, "name": "Sample A"}'::jsonb, 'ACTIVE', 'system', 'system'),
+  (1, '2', '{"id": 2, "name": "Sample B"}'::jsonb, 'ACTIVE', 'system', 'system')
+ON CONFLICT (table_id, row_id) DO UPDATE SET
+  data = EXCLUDED.data,
+  status = EXCLUDED.status,
+  updated_by = EXCLUDED.updated_by,
+  updated_at = CURRENT_TIMESTAMP;
 
 -- (no rt_view_configs linked to kk bindings)
 

@@ -10,7 +10,7 @@
 --   • Platform security history: login audit, member change logs, virtual-group
 --     task history, permission requests (portal-facing)
 --   • Admin-center audit / logs / password history (not users or roles)
---   • Relation-table row audit (rt_audit_logs)
+--   • Relation-table JSON rows + row audit (rt_table_data_rows, rt_audit_logs)
 --   • Flowable runtime + history: DROP all public.act_* / public.flw_* (not TRUNCATE —
 --     truncating clears act_ge_property and leaves tables empty, which breaks Flowable
 --     startup with NPE in ProcessDbSchemaManager.schemaUpdate)
@@ -73,9 +73,10 @@ TRUNCATE TABLE
 RESTART IDENTITY CASCADE;
 
 -- ---------------------------------------------------------------------------
--- 5) Relation-table data change audit
+-- 5) Relation-table JSON row data + change audit
 -- ---------------------------------------------------------------------------
 TRUNCATE TABLE
+    rt_table_data_rows,
     rt_audit_logs
 RESTART IDENTITY CASCADE;
 

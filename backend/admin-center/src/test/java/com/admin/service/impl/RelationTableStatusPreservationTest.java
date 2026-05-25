@@ -128,7 +128,7 @@ class RelationTableStatusPreservationTest {
         ObjectMapper objectMapper = realObjectMapper();
 
         RelationTableDataServiceImpl dataService = new RelationTableDataServiceImpl(
-                tableRepo, versionRepo, auditService, jdbcTemplate, objectMapper, mockSchemaResolver());
+                tableRepo, versionRepo, auditService, jdbcTemplate, objectMapper);
 
         // Build a DEPLOYED + enabled=true table
         RelationTableDefinition deployedEnabledTable = buildTableDefinition(
@@ -176,7 +176,7 @@ class RelationTableStatusPreservationTest {
         ObjectMapper objectMapper = realObjectMapper();
 
         RelationTableDataServiceImpl dataService = new RelationTableDataServiceImpl(
-                tableRepo, versionRepo, auditService, jdbcTemplate, objectMapper, mockSchemaResolver());
+                tableRepo, versionRepo, auditService, jdbcTemplate, objectMapper);
 
         // Build a DEPLOYED table
         RelationTableDefinition deployedTable = buildTableDefinition(

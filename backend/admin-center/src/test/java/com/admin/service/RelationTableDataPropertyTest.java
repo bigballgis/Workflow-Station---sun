@@ -45,7 +45,6 @@ class RelationTableDataPropertyTest {
     private RelationTableAuditService auditService;
     private JdbcTemplate jdbcTemplate;
     private ObjectMapper objectMapper;
-    private DatabaseSchemaResolver schemaResolver;
     private RelationTableDataServiceImpl service;
 
     @BeforeTry
@@ -55,10 +54,8 @@ class RelationTableDataPropertyTest {
         auditService = mock(RelationTableAuditService.class);
         jdbcTemplate = mock(JdbcTemplate.class);
         objectMapper = new ObjectMapper();
-        schemaResolver = mock(DatabaseSchemaResolver.class);
-        when(schemaResolver.getSchema()).thenReturn("public");
         service = new RelationTableDataServiceImpl(
-                tableDefinitionRepository, versionRepository, auditService, jdbcTemplate, objectMapper, schemaResolver);
+                tableDefinitionRepository, versionRepository, auditService, jdbcTemplate, objectMapper);
     }
 
     // ==================== Arbitraries ====================

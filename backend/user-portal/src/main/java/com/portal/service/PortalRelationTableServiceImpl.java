@@ -23,6 +23,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class PortalRelationTableServiceImpl implements PortalRelationTableService {
 
+    private static final String DATA_ROWS_TABLE = "rt_table_data_rows";
     private static final Long SYSTEM_USER_TABLE_ID = -1_000_000_001L;
     private static final String SYSTEM_USER_TABLE_NAME = "sys_users";
     private static final List<String> SYSTEM_USER_FIELD_NAMES = List.of(
@@ -92,31 +93,23 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
                 return PageResponse.of(Collections.emptyList(), page, size, 0);
             }
 
-            // Get physical table name
-            String tableName = getPhysicalTableName(tableId);
-            if (tableName == null) {
-                return PageResponse.of(Collections.emptyList(), page, size, 0);
+            if (SYSTEM_USER_TABLE_ID.equals(tableId)) {
+                return querySystemUserTableData(page, size);
             }
-            tableName = sanitizeIdentifier(tableName);
 
-            // Get field names for the table
-            List<String> fieldNames = getFieldNames(tableId).stream()
-                    .map(this::sanitizeIdentifier).toList();
-            if (fieldNames.isEmpty()) {
+            if (!isDeployedRelationTable(tableId)) {
                 return PageResponse.of(Collections.emptyList(), page, size, 0);
             }
 
-            String columns = String.join(", ", fieldNames);
-
-            // Count total
-            String countSql = "SELECT COUNT(*) FROM " + tableName;
-            Long total = jdbcTemplate.queryForObject(countSql, Long.class);
+            Long total = jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM " + DATA_ROWS_TABLE + " WHERE table_id = ?",
+                    Long.class, tableId);
             if (total == null) total = 0L;
 
-            // Query data with pagination
-            String dataSql = "SELECT " + columns + " FROM " + tableName
-                    + " LIMIT ? OFFSET ?";
-            List<Map<String, Object>> rows = jdbcTemplate.queryForList(dataSql, size, page * size);
+            List<Map<String, Object>> rows = jdbcTemplate.query(
+                    "SELECT data FROM " + DATA_ROWS_TABLE + " WHERE table_id = ? ORDER BY id LIMIT ? OFFSET ?",
+                    (rs, rowNum) -> parseJsonRow(rs.getString("data")),
+                    tableId, size, page * size);
 
             return PageResponse.of(rows, page, size, total);
         } catch (Exception e) {
@@ -134,28 +127,28 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
             return "";
         }
 
-        String tableName = getPhysicalTableName(tableId);
-        if (tableName == null) {
+        if (SYSTEM_USER_TABLE_ID.equals(tableId)) {
+            return exportSystemUserCsv(userId, maxRows);
+        }
+
+        if (!isDeployedRelationTable(tableId)) {
             log.warn("Export CSV table not found: {}", tableId);
             return "";
         }
-        tableName = sanitizeIdentifier(tableName);
 
-        List<String> fieldNames = getFieldNames(tableId).stream()
-                .map(this::sanitizeIdentifier).toList();
+        List<String> fieldNames = getFieldNames(tableId);
         if (fieldNames.isEmpty()) {
             return "";
         }
 
         try {
-            String columns = String.join(", ", fieldNames);
-            String sql = "SELECT " + columns + " FROM " + tableName + " LIMIT ?";
-            List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, maxRows);
+            List<Map<String, Object>> rows = jdbcTemplate.query(
+                    "SELECT data FROM " + DATA_ROWS_TABLE + " WHERE table_id = ? ORDER BY id LIMIT ?",
+                    (rs, rowNum) -> parseJsonRow(rs.getString("data")),
+                    tableId, maxRows);
 
             StringBuilder csv = new StringBuilder();
-            // Header
             csv.append(String.join(",", fieldNames)).append("\n");
-            // Data rows
             for (Map<String, Object> row : rows) {
                 csv.append(fieldNames.stream()
                         .map(f -> escapeCsvValue(row.get(f)))
@@ -167,6 +160,45 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
             log.warn("Failed to export CSV for tableId {}: {}", tableId, e.getMessage());
             return "";
         }
+    }
+
+    private String exportSystemUserCsv(String userId, int maxRows) {
+        Set<String> userRoleIds = getUserRoleIds(userId);
+        if (!hasAccess(SYSTEM_USER_TABLE_ID, userRoleIds)) {
+            log.warn("Export CSV access denied for user {} on system user table", userId);
+            return "";
+        }
+        String tableName = sanitizeIdentifier(SYSTEM_USER_TABLE_NAME);
+        List<String> fieldNames = SYSTEM_USER_FIELD_NAMES.stream().map(this::sanitizeIdentifier).toList();
+        try {
+            String columns = String.join(", ", fieldNames);
+            String sql = "SELECT " + columns + " FROM " + tableName + " LIMIT ?";
+            List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, maxRows);
+            StringBuilder csv = new StringBuilder();
+            csv.append(String.join(",", SYSTEM_USER_FIELD_NAMES)).append("\n");
+            for (Map<String, Object> row : rows) {
+                csv.append(SYSTEM_USER_FIELD_NAMES.stream()
+                        .map(f -> escapeCsvValue(row.get(f)))
+                        .collect(Collectors.joining(","))
+                ).append("\n");
+            }
+            return csv.toString();
+        } catch (Exception e) {
+            log.warn("Failed to export system user CSV: {}", e.getMessage());
+            return "";
+        }
+    }
+
+    private PageResponse<Map<String, Object>> querySystemUserTableData(int page, int size) {
+        String tableName = sanitizeIdentifier(SYSTEM_USER_TABLE_NAME);
+        List<String> fieldNames = SYSTEM_USER_FIELD_NAMES.stream().map(this::sanitizeIdentifier).toList();
+        String columns = String.join(", ", fieldNames);
+        Long total = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM " + tableName, Long.class);
+        if (total == null) total = 0L;
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+                "SELECT " + columns + " FROM " + tableName + " LIMIT ? OFFSET ?",
+                size, page * size);
+        return PageResponse.of(rows, page, size, total);
     }
 
     @Override
@@ -183,19 +215,21 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
                 return searchSystemUsersForLookup(keyword, searchFields, filters, safeLimit);
             }
 
-            String tableName = getPhysicalTableName(tableId);
-            if (tableName == null) {
+            if (!isDeployedRelationTable(tableId)) {
                 return Collections.emptyList();
             }
-            tableName = sanitizeIdentifier(tableName);
 
             List<String> allowedFields = getFieldNames(tableId);
             List<LookupFilterCondition> filters = parseLookupFilterConditions(filterConditions, allowedFields);
             List<String> predicates = new ArrayList<>();
             List<Object> params = new ArrayList<>();
+            params.add(tableId);
 
             for (LookupFilterCondition filter : filters) {
-                predicates.add(sanitizeIdentifier(filter.fieldName()) + " = ?");
+                if (!allowedFields.contains(filter.fieldName())) {
+                    continue;
+                }
+                predicates.add("data->>'" + sanitizeIdentifier(filter.fieldName()) + "' = ?");
                 params.add(filter.value());
             }
 
@@ -206,7 +240,7 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
                         .toList();
                 if (!sanitizedFields.isEmpty()) {
                     String keywordClause = sanitizedFields.stream()
-                            .map(f -> f + " ILIKE ?")
+                            .map(f -> "data->>'" + f + "' ILIKE ?")
                             .collect(Collectors.joining(" OR "));
                     predicates.add("(" + keywordClause + ")");
                     String likePattern = "%" + keyword + "%";
@@ -215,11 +249,10 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
             }
 
             params.add(safeLimit);
-
-            String sql = "SELECT * FROM " + tableName
-                    + (predicates.isEmpty() ? "" : " WHERE " + String.join(" AND ", predicates))
-                    + " LIMIT ?";
-            return jdbcTemplate.queryForList(sql, params.toArray());
+            String sql = "SELECT data FROM " + DATA_ROWS_TABLE + " WHERE table_id = ?"
+                    + (predicates.isEmpty() ? "" : " AND " + String.join(" AND ", predicates))
+                    + " ORDER BY id LIMIT ?";
+            return jdbcTemplate.query(sql, (rs, rowNum) -> parseJsonRow(rs.getString("data")), params.toArray());
         } catch (Exception e) {
             log.warn("Failed to search for lookup in tableId {}: {}", tableId, e.getMessage());
             return Collections.emptyList();
@@ -470,15 +503,27 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
         return count != null && count > 0;
     }
 
-    private String getPhysicalTableName(Long tableId) {
-        if (SYSTEM_USER_TABLE_ID.equals(tableId)) {
-            return SYSTEM_USER_TABLE_NAME;
+    private boolean isDeployedRelationTable(Long tableId) {
+        if (tableId == null || SYSTEM_USER_TABLE_ID.equals(tableId)) {
+            return false;
         }
-        String sql = "SELECT table_name FROM rt_table_definitions WHERE id = ? AND status = ?";
-        List<String> names = jdbcTemplate.query(sql,
-                (rs, rowNum) -> rs.getString("table_name"),
-                tableId, RelationTableStatus.DEPLOYED.getCode());
-        return names.isEmpty() ? null : names.get(0);
+        Integer count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM rt_table_definitions WHERE id = ? AND status = ? AND enabled = true",
+                Integer.class, tableId, RelationTableStatus.DEPLOYED.getCode());
+        return count != null && count > 0;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> parseJsonRow(String json) {
+        if (json == null || json.isBlank()) {
+            return new LinkedHashMap<>();
+        }
+        try {
+            return objectMapper.readValue(json, new TypeReference<LinkedHashMap<String, Object>>() {});
+        } catch (Exception e) {
+            log.warn("Failed to parse relation table row JSON: {}", e.getMessage());
+            return new LinkedHashMap<>();
+        }
     }
 
     private List<String> getFieldNames(Long tableId) {

@@ -1514,3 +1514,14 @@
   note: |
     根因：sys_action_definitions.config_json 为 jsonb，但 ActionDefinition.configJson 为 String，Hibernate 以 varchar 绑定 INSERT 失败，导入事务回滚。
     修复：configJson 改为 Map<String, Object> + @JdbcTypeCode(SqlTypes.JSON)；saveImportedActions 与 ImportController 解析 manifest 中的 configJson（Map 或 JSON 字符串）后再 persist。
+
+- id: "1371"
+  status: fixed
+  fixed_at: "2026-05-25"
+  severity: major
+  category: bug
+  summary: "Relation Table 数据应存 JSON (rt_table_data_rows)，不应创建 per-table 物理表"
+  file: "backend/admin-center/.../RelationTableDataServiceImpl.java; RelationTableDeployServiceImpl.java; backend/user-portal/.../PortalRelationTableServiceImpl.java; deploy/init-scripts/00-schema/21-add-rt-relation-tables.sql"
+  note: |
+    根因：此前误将 demo init 与 DataService 按物理表 (CREATE TABLE test) 处理；Relation Table 行数据统一 JSONB 存 rt_table_data_rows，部署仅更新结构元数据/版本快照。
+    修复：撤销 init 中 CREATE TABLE test；新增 rt_table_data_rows；DataService/Portal 改查 JSON 行；Deploy 移除 DDL；删除 dev 库中误建的 test 物理表。

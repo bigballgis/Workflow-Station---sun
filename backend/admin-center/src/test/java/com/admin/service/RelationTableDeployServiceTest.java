@@ -129,11 +129,11 @@ class RelationTableDeployServiceTest {
     // ==================== Deploy Tests ====================
 
     @Nested
-    @DisplayName("deploy() - First Deploy (CREATE TABLE)")
+    @DisplayName("deploy() - First Deploy (metadata snapshot)")
     class FirstDeployTests {
 
         @Test
-        @DisplayName("Should execute CREATE TABLE DDL and create version 1 on first deploy")
+        @DisplayName("Should create version 1 on first deploy without physical DDL")
         void shouldCreateTableOnFirstDeploy() throws JsonProcessingException {
             RelationTableDefinition table = buildTableDefinition(1L, "test_table", 0);
             RelationFieldDefinition pkField = buildPrimaryKeyField(table, "id", 0);
@@ -153,8 +153,8 @@ class RelationTableDeployServiceTest {
 
                 RelationTableResponse result = service.deploy(1L);
 
-                // Verify DDL was executed (CREATE TABLE)
-                verify(jdbcTemplate).execute(argThat((String ddl) -> ddl.contains("CREATE TABLE")));
+                // JSON 存储模式：部署不执行 CREATE TABLE DDL
+                verify(jdbcTemplate, never()).execute(anyString());
 
                 // Verify version was created
                 ArgumentCaptor<RelationTableVersion> versionCaptor = ArgumentCaptor.forClass(RelationTableVersion.class);
@@ -193,12 +193,12 @@ class RelationTableDeployServiceTest {
     }
 
     @Nested
-    @DisplayName("deploy() - Incremental Deploy (ALTER TABLE)")
+    @DisplayName("deploy() - Incremental Deploy (metadata only)")
     class IncrementalDeployTests {
 
         @Test
-        @DisplayName("Should execute ALTER TABLE DDL for incremental deploy with added/dropped/modified columns")
-        void shouldAlterTableOnIncrementalDeploy() throws JsonProcessingException {
+        @DisplayName("Should create new version snapshot on incremental deploy without DDL")
+        void shouldCreateVersionOnIncrementalDeploy() throws JsonProcessingException {
             RelationTableDefinition table = buildTableDefinition(1L, "existing_table", 1);
             table.setStatus(RelationTableStatus.DEPLOYED);
 
@@ -218,9 +218,6 @@ class RelationTableDeployServiceTest {
             RelationTableVersion latestVersion = buildVersion(table, 1, "snapshot_v1");
 
             when(tableDefinitionRepository.findById(1L)).thenReturn(Optional.of(table));
-            when(tableDefinitionRepository.findByTableName("existing_table")).thenReturn(Optional.of(table));
-            when(versionRepository.findLatestVersion(1L)).thenReturn(Optional.of(latestVersion));
-            when(objectMapper.readValue(eq("snapshot_v1"), any(TypeReference.class))).thenReturn(previousFields);
             when(objectMapper.writeValueAsString(any())).thenReturn("[{\"fieldName\":\"id\"},{\"fieldName\":\"name\"},{\"fieldName\":\"email\"}]");
             when(versionRepository.save(any(RelationTableVersion.class)))
                     .thenAnswer(inv -> inv.getArgument(0));
@@ -233,8 +230,7 @@ class RelationTableDeployServiceTest {
 
                 RelationTableResponse result = service.deploy(1L);
 
-                // Verify ALTER TABLE DDLs were executed (ADD email, DROP age)
-                verify(jdbcTemplate, atLeastOnce()).execute(anyString());
+                verify(jdbcTemplate, never()).execute(anyString());
 
                 // Verify version incremented to 2
                 ArgumentCaptor<RelationTableVersion> versionCaptor = ArgumentCaptor.forClass(RelationTableVersion.class);
@@ -249,34 +245,7 @@ class RelationTableDeployServiceTest {
         }
     }
 
-    // ==================== Deploy Failure Tests ====================
-
-    @Nested
-    @DisplayName("deploy() - DDL Execution Failure")
-    class DeployFailureTests {
-
-        @Test
-        @DisplayName("Should throw RelationTableDeploymentException when DDL execution fails")
-        void shouldThrowWhenDdlFails() {
-            RelationTableDefinition table = buildTableDefinition(1L, "fail_table", 0);
-            RelationFieldDefinition field = buildField(table, "name", RelationDataType.VARCHAR, 0);
-            table.getFieldDefinitions().add(field);
-
-            when(tableDefinitionRepository.findById(1L)).thenReturn(Optional.of(table));
-            doThrow(new RuntimeException("DDL syntax error"))
-                    .when(jdbcTemplate).execute(anyString());
-
-            assertThatThrownBy(() -> service.deploy(1L))
-                    .isInstanceOf(RelationTableDeploymentException.class)
-                    .hasMessageContaining("部署表")
-                    .hasMessageContaining("fail_table")
-                    .hasMessageContaining("失败");
-
-            // Verify no version was created and no status update
-            verify(versionRepository, never()).save(any());
-            verify(tableDefinitionRepository, never()).save(any());
-        }
-    }
+    // Deploy no longer executes DDL — failure tests removed (JSON row storage model)
 
     // ==================== Rollback Tests ====================
 
