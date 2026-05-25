@@ -284,6 +284,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
     @Override
     @Transactional
     public Map<String, Object> importFunctionUnit(MultipartFile file, String conflictStrategy) {
+        sequenceSynchronizer.synchronizeAll();
         Map<String, Object> result = new HashMap<>();
         Map<String, Object> packageData = parseImportPackage(file);
         
