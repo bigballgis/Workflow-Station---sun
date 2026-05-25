@@ -89,8 +89,14 @@ public class FunctionUnitIconPropertyTest {
         
         FunctionUnitComponent component = new FunctionUnitComponentImpl(
                 functionUnitRepository, processRepo, tableRepo, formRepo, 
-                actionRepo, mock(com.developer.repository.DecisionDefinitionRepository.class), versionRepo, iconRepository, objectMapper, userDisplayNameService,
-                workspaceAccessService, devGroupAssignmentRepository, mock(com.developer.component.VersionComponent.class));
+                actionRepo,
+                mock(com.developer.repository.DecisionDefinitionRepository.class),
+                mock(com.developer.repository.FormTableBindingRepository.class),
+                mock(com.developer.repository.FormStageBindingRepository.class),
+                mock(com.developer.repository.TableRelationRepository.class),
+                mock(com.developer.repository.SubTableViewConfigRepository.class),
+                versionRepo, iconRepository, objectMapper, userDisplayNameService,
+                workspaceAccessService, devGroupAssignmentRepository, mock(com.developer.component.VersionComponent.class), mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class));
         
         // Create function unit with icon
         FunctionUnitRequest request = new FunctionUnitRequest();
@@ -145,8 +151,14 @@ public class FunctionUnitIconPropertyTest {
         
         FunctionUnitComponent component = new FunctionUnitComponentImpl(
                 functionUnitRepository, processRepo, tableRepo, formRepo, 
-                actionRepo, mock(com.developer.repository.DecisionDefinitionRepository.class), versionRepo, iconRepository, objectMapper, userDisplayNameService,
-                workspaceAccessService, devGroupAssignmentRepository, mock(com.developer.component.VersionComponent.class));
+                actionRepo,
+                mock(com.developer.repository.DecisionDefinitionRepository.class),
+                mock(com.developer.repository.FormTableBindingRepository.class),
+                mock(com.developer.repository.FormStageBindingRepository.class),
+                mock(com.developer.repository.TableRelationRepository.class),
+                mock(com.developer.repository.SubTableViewConfigRepository.class),
+                versionRepo, iconRepository, objectMapper, userDisplayNameService,
+                workspaceAccessService, devGroupAssignmentRepository, mock(com.developer.component.VersionComponent.class), mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class));
         
         // Create function unit without icon
         FunctionUnitRequest request = new FunctionUnitRequest();

@@ -1514,3 +1514,25 @@
   note: |
     根因：sys_action_definitions.config_json 为 jsonb，但 ActionDefinition.configJson 为 String，Hibernate 以 varchar 绑定 INSERT 失败，导入事务回滚。
     修复：configJson 改为 Map<String, Object> + @JdbcTypeCode(SqlTypes.JSON)；saveImportedActions 与 ImportController 解析 manifest 中的 configJson（Map 或 JSON 字符串）后再 persist。
+
+- id: "1371"
+  status: fixed
+  fixed_at: "2026-05-25"
+  severity: major
+  category: bug
+  summary: "Developer Workstation Clone 因 dw_* BIGSERIAL 序列落后于 MAX(id) 主键冲突，前端无错误提示"
+  file: "DeveloperWorkstationSequenceSynchronizer.java; FunctionUnitComponentImpl.java; ExportImportComponentImpl.java; FunctionUnitList.vue"
+  note: |
+    根因：(1) init/导入写入较大 id 后 PostgreSQL 序列未推进，clone 插入主键冲突；(2) 首轮修复在 @Transactional clone 内用 EntityManager 同步序列，查询不存在的 dw_sub_table_view_columns 导致事务 aborted → 500 SYS_REQUEST_PROCESSING_ERROR；handleClone 无 catch 时静默失败。
+    修复：DeveloperWorkstationSequenceSynchronizer 改为 JdbcTemplate + NOT_SUPPORTED 独立执行、information_schema 表存在检查、正确表名 dw_sub_table_view_fields；clone/import 前对齐序列；FunctionUnitList 展示错误。
+
+- id: "1372"
+  status: fixed
+  fixed_at: "2026-05-25"
+  severity: major
+  category: bug
+  summary: "Function Unit Clone 未复制 relationTableId / 未重写 configJson bindingId，导致 Unknown Table 与 subTablePlaceholderStale"
+  file: "FunctionUnitComponentImpl.java"
+  note: |
+    根因：cloneForm 遗漏 RELATED 的 relationTableId、subMode、stageBindings、fieldPermissions；新 binding ID 未回写 configJson；TableRelation 未克隆。
+    修复：clone 显式加载表/表单/关系；逐条 save binding 并 FormConfigJsonBindingIdRewriter remap；复制 stageBindings、SubTableViewConfig、TableRelation。

@@ -65,6 +65,15 @@ class ExportImportComponentImplTest {
     private DecisionDefinitionRepository decisionDefinitionRepository;
 
     @Mock
+    private FormTableBindingRepository formTableBindingRepository;
+
+    @Mock
+    private FormStageBindingRepository formStageBindingRepository;
+
+    @Mock
+    private TableRelationRepository tableRelationRepository;
+
+    @Mock
     private DmnXmlParser dmnXmlParser;
 
     @Mock
@@ -75,6 +84,9 @@ class ExportImportComponentImplTest {
 
     @Mock
     private jakarta.persistence.EntityManager entityManager;
+
+    @Mock
+    private com.developer.util.DeveloperWorkstationSequenceSynchronizer sequenceSynchronizer;
     
     @InjectMocks
     private ExportImportComponentImpl exportImportComponent;
@@ -172,11 +184,15 @@ class ExportImportComponentImplTest {
                 formDefinitionRepository,
                 actionDefinitionRepository,
                 decisionDefinitionRepository,
+                mock(FormTableBindingRepository.class),
+                mock(FormStageBindingRepository.class),
+                mock(TableRelationRepository.class),
                 dmnXmlParser,
                 mock(FunctionUnitWorkspaceAccessService.class),
                 mock(FunctionUnitDevGroupAssignmentRepository.class),
                 mock(jakarta.persistence.EntityManager.class),
-                om);
+                om,
+                mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class));
 
         byte[] zip = zipSingleEntry("manifest.json", "{\"name\":\"FU_ManifestOnly\",\"code\":\"c1\"}");
         MockMultipartFile file = new MockMultipartFile("file", "fu.zip", "application/zip", zip);
@@ -198,11 +214,15 @@ class ExportImportComponentImplTest {
                 formDefinitionRepository,
                 actionDefinitionRepository,
                 decisionDefinitionRepository,
+                mock(FormTableBindingRepository.class),
+                mock(FormStageBindingRepository.class),
+                mock(TableRelationRepository.class),
                 dmnXmlParser,
                 mock(FunctionUnitWorkspaceAccessService.class),
                 mock(FunctionUnitDevGroupAssignmentRepository.class),
                 mock(jakarta.persistence.EntityManager.class),
-                om);
+                om,
+                mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class));
 
         byte[] zip = zipSingleEntry("metadata.json", "{\"name\":\"FU_LegacyMeta\"}");
         MockMultipartFile file = new MockMultipartFile("file", "fu.zip", "application/zip", zip);
@@ -221,11 +241,15 @@ class ExportImportComponentImplTest {
                 formDefinitionRepository,
                 actionDefinitionRepository,
                 decisionDefinitionRepository,
+                formTableBindingRepository,
+                formStageBindingRepository,
+                tableRelationRepository,
                 dmnXmlParser,
                 functionUnitWorkspaceAccessService,
                 functionUnitDevGroupAssignmentRepository,
                 entityManager,
-                om);
+                om,
+                mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class));
 
         String existingCode = "fu-20260422-23tfag";
         when(functionUnitRepository.existsByName("kk")).thenReturn(true);
@@ -262,11 +286,15 @@ class ExportImportComponentImplTest {
                 formDefinitionRepository,
                 actionDefinitionRepository,
                 decisionDefinitionRepository,
+                formTableBindingRepository,
+                formStageBindingRepository,
+                tableRelationRepository,
                 dmnXmlParser,
                 functionUnitWorkspaceAccessService,
                 functionUnitDevGroupAssignmentRepository,
                 entityManager,
-                om);
+                om,
+                mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class));
 
         when(functionUnitRepository.existsByName("ImportedFU")).thenReturn(false);
         when(functionUnitRepository.existsByCode(any())).thenReturn(false);
@@ -284,6 +312,15 @@ class ExportImportComponentImplTest {
             var saved = invocation.getArgument(0, com.developer.entity.FormDefinition.class);
             saved.setId(300L);
             return saved;
+        });
+        when(formDefinitionRepository.findById(300L)).thenAnswer(invocation -> {
+            com.developer.entity.FormDefinition form = com.developer.entity.FormDefinition.builder()
+                    .id(300L)
+                    .formName("MainForm")
+                    .formType(com.developer.enums.FormType.PROCESS)
+                    .configJson(new java.util.HashMap<>())
+                    .build();
+            return java.util.Optional.of(form);
         });
 
         String bpmn = """
@@ -331,6 +368,117 @@ class ExportImportComponentImplTest {
                 () -> "Expected rewritten formId=300 in: " + savedBpmn);
         assertFalse(savedBpmn.contains("value=\"13\""));
         assertFalse(savedBpmn.contains("value=\"11\""));
+    }
+
+    @Test
+    void importFunctionUnit_remapsBindingIdsInConfigJson() throws Exception {
+        ObjectMapper om = new ObjectMapper();
+        ExportImportComponentImpl impl = new ExportImportComponentImpl(
+                functionUnitRepository,
+                processDefinitionRepository,
+                tableDefinitionRepository,
+                formDefinitionRepository,
+                actionDefinitionRepository,
+                decisionDefinitionRepository,
+                formTableBindingRepository,
+                formStageBindingRepository,
+                tableRelationRepository,
+                dmnXmlParser,
+                functionUnitWorkspaceAccessService,
+                functionUnitDevGroupAssignmentRepository,
+                entityManager,
+                om,
+                mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class));
+
+        when(functionUnitRepository.existsByName("BindingFU")).thenReturn(false);
+        when(functionUnitRepository.existsByCode(any())).thenReturn(false);
+        when(functionUnitRepository.save(any(FunctionUnit.class))).thenAnswer(invocation -> {
+            FunctionUnit saved = invocation.getArgument(0);
+            saved.setId(10L);
+            return saved;
+        });
+        when(tableDefinitionRepository.save(any(TableDefinition.class))).thenAnswer(invocation -> {
+            TableDefinition saved = invocation.getArgument(0);
+            saved.setId(20L);
+            return saved;
+        });
+        when(tableDefinitionRepository.getReferenceById(20L)).thenAnswer(invocation ->
+                TableDefinition.builder().id(20L).tableName("Main").build());
+        when(formDefinitionRepository.save(any())).thenAnswer(invocation -> {
+            var saved = invocation.getArgument(0, com.developer.entity.FormDefinition.class);
+            if (saved.getId() == null) {
+                saved.setId(30L);
+            }
+            return saved;
+        });
+        when(formDefinitionRepository.findById(30L)).thenAnswer(invocation -> {
+            com.developer.entity.FormDefinition form = com.developer.entity.FormDefinition.builder()
+                    .id(30L)
+                    .formName("MainForm")
+                    .formType(com.developer.enums.FormType.PROCESS)
+                    .configJson(new java.util.HashMap<>(Map.of("subForms", new java.util.HashMap<>(Map.of("101", Map.of("title", "Sub"))))))
+                    .build();
+            return java.util.Optional.of(form);
+        });
+        when(formTableBindingRepository.save(any())).thenAnswer(invocation -> {
+            com.developer.entity.FormTableBinding binding = invocation.getArgument(0);
+            binding.setId(501L);
+            return binding;
+        });
+
+        String formJson = """
+                {
+                  "formId": 11,
+                  "formName": "MainForm",
+                  "formType": "PROCESS",
+                  "boundTableName": "Main",
+                  "configJson": {
+                    "subForms": { "101": { "title": "Sub" } },
+                    "relationViews": { "101": { "columns": [] } }
+                  },
+                  "tableBindings": [
+                    {
+                      "bindingId": 101,
+                      "bindingType": "SUB",
+                      "bindingMode": "EDITABLE",
+                      "tableName": "Main",
+                      "foreignKeyField": "main_id",
+                      "sortOrder": 1,
+                      "subMode": "FULL"
+                    }
+                  ],
+                  "stageBindings": [
+                    { "stageId": "Task_1", "stageName": "Review", "readOnly": false }
+                  ]
+                }
+                """;
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        try (ZipOutputStream zos = new ZipOutputStream(baos)) {
+            zos.putNextEntry(new ZipEntry("manifest.json"));
+            zos.write("{\"name\":\"BindingFU\",\"code\":\"binding-fu\",\"version\":\"1.0.0\"}".getBytes(StandardCharsets.UTF_8));
+            zos.closeEntry();
+            zos.putNextEntry(new ZipEntry("tables/table_0.json"));
+            zos.write("{\"tableId\":13,\"tableName\":\"Main\",\"tableType\":\"MAIN\",\"fields\":[{\"fieldName\":\"id\",\"dataType\":\"BIGINT\",\"sortOrder\":0}]}".getBytes(StandardCharsets.UTF_8));
+            zos.closeEntry();
+            zos.putNextEntry(new ZipEntry("forms/form_0.json"));
+            zos.write(formJson.getBytes(StandardCharsets.UTF_8));
+            zos.closeEntry();
+        }
+
+        MockMultipartFile file = new MockMultipartFile("file", "fu.zip", "application/zip", baos.toByteArray());
+        Map<String, Object> result = impl.importFunctionUnit(file, "RENAME");
+        assertEquals("SUCCESS", result.get("status"));
+
+        org.mockito.ArgumentCaptor<com.developer.entity.FormDefinition> formCaptor =
+                org.mockito.ArgumentCaptor.forClass(com.developer.entity.FormDefinition.class);
+        verify(formDefinitionRepository, org.mockito.Mockito.atLeastOnce()).save(formCaptor.capture());
+        com.developer.entity.FormDefinition finalForm = formCaptor.getAllValues().get(formCaptor.getAllValues().size() - 1);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> subForms = (Map<String, Object>) finalForm.getConfigJson().get("subForms");
+        assertTrue(subForms.containsKey("501"), () -> "Expected remapped binding key 501, got: " + subForms.keySet());
+        assertFalse(subForms.containsKey("101"));
+        verify(formTableBindingRepository).save(any());
+        verify(tableRelationRepository, never()).save(any());
     }
 
     private static byte[] zipSingleEntry(String entryName, String utf8Content) throws Exception {

@@ -51,8 +51,14 @@ public class FunctionUnitPropertyTest {
         FunctionUnitDevGroupAssignmentRepository devGroupAssignmentRepository = mock(FunctionUnitDevGroupAssignmentRepository.class);
         when(devGroupAssignmentRepository.findByFunctionUnitId(anyLong())).thenReturn(java.util.Collections.emptyList());
         return new FunctionUnitComponentImpl(
-                repository, processRepo, tableRepo, formRepo, actionRepo, mock(com.developer.repository.DecisionDefinitionRepository.class), versionRepo, iconRepo, objectMapper, userDisplayNameService,
-                workspaceAccessService, devGroupAssignmentRepository, mock(com.developer.component.VersionComponent.class));
+                repository, processRepo, tableRepo, formRepo, actionRepo,
+                mock(com.developer.repository.DecisionDefinitionRepository.class),
+                mock(com.developer.repository.FormTableBindingRepository.class),
+                mock(com.developer.repository.FormStageBindingRepository.class),
+                mock(com.developer.repository.TableRelationRepository.class),
+                mock(com.developer.repository.SubTableViewConfigRepository.class),
+                versionRepo, iconRepo, objectMapper, userDisplayNameService,
+                workspaceAccessService, devGroupAssignmentRepository, mock(com.developer.component.VersionComponent.class), mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class));
     }
     
     /**
@@ -176,13 +182,19 @@ public class FunctionUnitPropertyTest {
         FunctionUnitWorkspaceAccessService workspaceAccessService = mock(FunctionUnitWorkspaceAccessService.class);
         FunctionUnitDevGroupAssignmentRepository devGroupAssignmentRepository = mock(FunctionUnitDevGroupAssignmentRepository.class);
         when(devGroupAssignmentRepository.findByFunctionUnitId(anyLong())).thenReturn(java.util.Collections.emptyList());
+        com.developer.repository.TableRelationRepository relationRepo =
+                mock(com.developer.repository.TableRelationRepository.class);
 
         FunctionUnitComponent component = new FunctionUnitComponentImpl(
                 repository, processRepo, tableRepo, formRepo, actionRepo,
                 mock(com.developer.repository.DecisionDefinitionRepository.class),
+                mock(com.developer.repository.FormTableBindingRepository.class),
+                mock(com.developer.repository.FormStageBindingRepository.class),
+                relationRepo,
+                mock(com.developer.repository.SubTableViewConfigRepository.class),
                 versionRepo, iconRepo, objectMapper, userDisplayNameService,
                 workspaceAccessService, devGroupAssignmentRepository,
-                mock(com.developer.component.VersionComponent.class));
+                mock(com.developer.component.VersionComponent.class), mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class));
 
         // 原始功能单元 + 流程定义
         FunctionUnit original = new FunctionUnit();
@@ -199,6 +211,9 @@ public class FunctionUnitPropertyTest {
 
         when(repository.findById(1L)).thenReturn(Optional.of(original));
         when(repository.existsByName(cloneName)).thenReturn(false);
+        when(tableRepo.findByFunctionUnitIdWithFields(1L)).thenReturn(java.util.Collections.emptyList());
+        when(formRepo.findByFunctionUnitIdWithBindings(1L)).thenReturn(java.util.Collections.emptyList());
+        when(relationRepo.findByFunctionUnitId(1L)).thenReturn(java.util.Collections.emptyList());
 
         final long[] nextId = {2L};
         when(repository.save(any(FunctionUnit.class))).thenAnswer(invocation -> {
@@ -241,13 +256,23 @@ public class FunctionUnitPropertyTest {
         FunctionUnitWorkspaceAccessService workspaceAccessService = mock(FunctionUnitWorkspaceAccessService.class);
         FunctionUnitDevGroupAssignmentRepository devGroupAssignmentRepository = mock(FunctionUnitDevGroupAssignmentRepository.class);
         when(devGroupAssignmentRepository.findByFunctionUnitId(anyLong())).thenReturn(java.util.Collections.emptyList());
+        com.developer.repository.FormTableBindingRepository bindingRepo =
+                mock(com.developer.repository.FormTableBindingRepository.class);
+        com.developer.repository.FormStageBindingRepository stageRepo =
+                mock(com.developer.repository.FormStageBindingRepository.class);
+        com.developer.repository.TableRelationRepository relationRepo =
+                mock(com.developer.repository.TableRelationRepository.class);
 
         FunctionUnitComponent component = new FunctionUnitComponentImpl(
                 repository, processRepo, tableRepo, formRepo, actionRepo,
                 mock(com.developer.repository.DecisionDefinitionRepository.class),
+                bindingRepo,
+                stageRepo,
+                relationRepo,
+                mock(com.developer.repository.SubTableViewConfigRepository.class),
                 versionRepo, iconRepo, objectMapper, userDisplayNameService,
                 workspaceAccessService, devGroupAssignmentRepository,
-                mock(com.developer.component.VersionComponent.class));
+                mock(com.developer.component.VersionComponent.class), mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class));
 
         // 源功能单元：含 1 sub 表（id=13）、1 表单（id=11）、1 动作（id=12），
         // BPMN 中 subTableId=13 / formId=11 / actionIds=[12]
@@ -309,6 +334,11 @@ public class FunctionUnitPropertyTest {
 
         when(repository.findById(1L)).thenReturn(Optional.of(original));
         when(repository.existsByName(cloneName)).thenReturn(false);
+        when(tableRepo.findByFunctionUnitIdWithFields(1L)).thenReturn(original.getTableDefinitions());
+        when(formRepo.findByFunctionUnitIdWithBindings(1L)).thenReturn(original.getFormDefinitions());
+        when(relationRepo.findByFunctionUnitId(1L)).thenReturn(new ArrayList<>());
+        when(bindingRepo.findByFormIdWithTable(11L)).thenReturn(new ArrayList<>());
+        when(stageRepo.findByFormId(11L)).thenReturn(new ArrayList<>());
 
         final long[] nextFuId = {2L};
         when(repository.save(any(FunctionUnit.class))).thenAnswer(invocation -> {

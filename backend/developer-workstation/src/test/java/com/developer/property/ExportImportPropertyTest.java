@@ -32,14 +32,20 @@ public class ExportImportPropertyTest {
         TableDefinitionRepository tableRepo = mock(TableDefinitionRepository.class);
         FormDefinitionRepository formRepo = mock(FormDefinitionRepository.class);
         ActionDefinitionRepository actionRepo = mock(ActionDefinitionRepository.class);
+        DecisionDefinitionRepository decisionRepo = mock(DecisionDefinitionRepository.class);
         ObjectMapper objectMapper = new ObjectMapper();
         ExportImportComponent component = new ExportImportComponentImpl(
                 repository, processRepo, tableRepo, formRepo, actionRepo,
-                mock(DecisionDefinitionRepository.class), mock(com.developer.validation.DmnXmlParser.class),
+                decisionRepo,
+                mock(FormTableBindingRepository.class),
+                mock(FormStageBindingRepository.class),
+                mock(TableRelationRepository.class),
+                mock(com.developer.validation.DmnXmlParser.class),
                 mock(FunctionUnitWorkspaceAccessService.class),
                 mock(FunctionUnitDevGroupAssignmentRepository.class),
                 mock(jakarta.persistence.EntityManager.class),
-                objectMapper);
+                objectMapper,
+                mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class));
         
         // 创建模拟功能单元
         FunctionUnit fu = new FunctionUnit();
@@ -49,6 +55,10 @@ public class ExportImportPropertyTest {
         fu.setStatus(FunctionUnitStatus.DRAFT);
         
         when(repository.findById(1L)).thenReturn(Optional.of(fu));
+        when(tableRepo.findByFunctionUnitIdWithFields(1L)).thenReturn(java.util.List.of());
+        when(formRepo.findByFunctionUnitIdWithBindings(1L)).thenReturn(java.util.List.of());
+        when(actionRepo.findByFunctionUnitId(1L)).thenReturn(java.util.List.of());
+        when(decisionRepo.findByFunctionUnitId(1L)).thenReturn(java.util.List.of());
         
         // 导出
         byte[] exportedData = component.exportFunctionUnit(1L);
@@ -67,14 +77,20 @@ public class ExportImportPropertyTest {
         TableDefinitionRepository tableRepo = mock(TableDefinitionRepository.class);
         FormDefinitionRepository formRepo = mock(FormDefinitionRepository.class);
         ActionDefinitionRepository actionRepo = mock(ActionDefinitionRepository.class);
+        DecisionDefinitionRepository decisionRepo = mock(DecisionDefinitionRepository.class);
         ObjectMapper objectMapper = new ObjectMapper();
         ExportImportComponent component = new ExportImportComponentImpl(
                 repository, processRepo, tableRepo, formRepo, actionRepo,
-                mock(DecisionDefinitionRepository.class), mock(com.developer.validation.DmnXmlParser.class),
+                decisionRepo,
+                mock(FormTableBindingRepository.class),
+                mock(FormStageBindingRepository.class),
+                mock(TableRelationRepository.class),
+                mock(com.developer.validation.DmnXmlParser.class),
                 mock(FunctionUnitWorkspaceAccessService.class),
                 mock(FunctionUnitDevGroupAssignmentRepository.class),
                 mock(jakarta.persistence.EntityManager.class),
-                objectMapper);
+                objectMapper,
+                mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class));
         
         // 模拟已存在同名功能单元
         when(repository.existsByName(name)).thenReturn(true);
