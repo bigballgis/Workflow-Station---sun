@@ -492,6 +492,59 @@ function formHasSubTableSchemaForBinding(
   return !!(lv?.columns && Array.isArray(lv.columns) && lv.columns.length > 0)
 }
 
+export type SubListViewColumn = {
+  fieldName?: string
+  columnType?: string
+  dataType?: string
+  [key: string]: unknown
+}
+
+function isLinkFormListColumn(c: SubListViewColumn): boolean {
+  if (!c || typeof c !== 'object') return false
+  if (c.columnType === 'linkForm') return true
+  if (typeof c.dataType === 'string' && c.dataType.toUpperCase() === 'LINK_FORM') return true
+  if (typeof c.fieldName === 'string' && c.fieldName.startsWith('linkForm:')) return true
+  return false
+}
+
+function countListViewDataColumns(cols: SubListViewColumn[]): number {
+  return cols.filter(c => c?.fieldName && !isLinkFormListColumn(c)).length
+}
+
+/**
+ * Resolve designer list-view columns for a binding. When a binding id was recreated, {@code subListViews}
+ * may contain only a PK stub under the new id while {@code subForms} still has the full field set —
+ * fall back to sub-form columns (same as process start) instead of rendering a single-column table.
+ */
+export function resolveSubListViewColumnsForBinding(
+  formConfig: Record<string, unknown> | null | undefined,
+  bindingId: number | string,
+  subFormFieldNames: readonly string[] = [],
+): SubListViewColumn[] | null {
+  if (!formConfig || typeof formConfig !== 'object') return null
+  const stv = formConfig.subListViews as Record<string, { columns?: SubListViewColumn[] }> | undefined
+  if (!stv || typeof stv !== 'object') return null
+  const sid = String(bindingId)
+  const direct = stv[bindingId]?.columns ?? stv[sid]?.columns
+  if (!Array.isArray(direct) || direct.length === 0) return null
+
+  const subFormCount = subFormFieldNames.length
+  if (subFormCount === 0) return direct
+
+  const dataColCount = countListViewDataColumns(direct)
+  const covered = new Set(
+    direct
+      .filter(c => c?.fieldName && !isLinkFormListColumn(c))
+      .map(c => String(c.fieldName)),
+  )
+  const coversAllSubForm = subFormFieldNames.every(f => covered.has(f))
+  if (coversAllSubForm) return direct
+  // Intentional partial list (designer picked 2+ columns but not every sub-form field)
+  if (dataColCount >= 2) return direct
+  // Stale stub under a new binding id — prefer sub-form column derivation
+  return null
+}
+
 /**
  * Copied BPMN forms often assign a new bindingId with empty subListViews while another form in the same FU
  * already configured list/subForm schema for the same physical table ({@code tableId}).

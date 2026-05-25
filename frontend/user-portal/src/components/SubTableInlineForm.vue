@@ -18,12 +18,14 @@ interface Props {
   labelWidth?: string
   subTableBindings?: PortalSubTableBindingLite[]
   linkedSubTableBindings?: PortalSubTableBindingLite[]
+  suppressLinkOnlyStandaloneSubTables?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   title: '',
   readonly: false,
   labelWidth: '160px',
+  suppressLinkOnlyStandaloneSubTables: false,
 })
 
 const emit = defineEmits<{
@@ -77,6 +79,7 @@ const cardTitle = computed(() =>
           :sub-table-bindings="subTableBindings"
           :linked-sub-table-bindings="linkedSubTableBindings"
           :parent-row="currentRow"
+          :suppress-link-only-standalone-sub-tables="suppressLinkOnlyStandaloneSubTables"
           @update:field="handleFieldUpdate"
         />
       </el-row>

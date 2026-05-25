@@ -336,6 +336,235 @@ export function parseFormConfigToTabs(configStr: string): FormTab[] {
   }
 }
 
+/** Minimal binding shape for link-form target / placement helpers. */
+export interface SubTableBindingLinkRef {
+  bindingId: number
+  columns?: Array<{ type?: string; props?: Record<string, unknown> }>
+  subMode?: string
+}
+
+/**
+ * Walk form-create `rule` and collect every `subTable` node's `_bindingId`
+ * (canvas placement — designer explicitly dragged the widget).
+ */
+export function collectRuleBindingIds(rules: unknown[]): Set<number> {
+  const ids = new Set<number>()
+  const walk = (items: unknown[]) => {
+    if (!Array.isArray(items)) return
+    for (const r of items) {
+      if (!r || typeof r !== 'object') continue
+      const item = r as Record<string, unknown>
+      if (item.type === 'subTable') {
+        const props = item.props as Record<string, unknown> | undefined
+        const id = item._bindingId ?? props?._bindingId
+        if (id != null) ids.add(Number(id))
+      }
+      if (Array.isArray(item.children)) walk(item.children)
+    }
+  }
+  walk(rules)
+  return ids
+}
+
+function normalizeSubTableBindingName(name?: string): string {
+  return String(name || '').trim().toLowerCase().replace(/\s+/g, '')
+}
+
+/** Collect binding ids referenced by `linkForm` columns (Link Form modal / inline targets). */
+export function collectLinkFormTargetBindingIds(
+  bindings: SubTableBindingLinkRef[]
+): Set<number> {
+  const targets = new Set<number>()
+  const nameToId = new Map<string, number>()
+  for (const b of bindings) {
+    const binding = b as SubTableBindingLinkRef & { tableName?: string; physicalTableName?: string }
+    if (binding.tableName) {
+      nameToId.set(normalizeSubTableBindingName(binding.tableName), b.bindingId)
+    }
+    if (binding.physicalTableName) {
+      nameToId.set(normalizeSubTableBindingName(binding.physicalTableName), b.bindingId)
+    }
+  }
+  for (const b of bindings) {
+    for (const col of b.columns || []) {
+      const colAny = col as {
+        type?: string
+        field?: string
+        props?: Record<string, unknown>
+        boundSubTableBindingId?: unknown
+        boundSubTableName?: string
+      }
+      const isLinkCol =
+        col?.type === 'linkForm'
+        || (typeof colAny.field === 'string' && colAny.field.startsWith('linkForm:'))
+      if (!isLinkCol) continue
+      const raw = colAny.props?.boundSubTableBindingId ?? colAny.boundSubTableBindingId
+      if (raw != null && raw !== '') {
+        const n = Number(raw)
+        if (Number.isFinite(n)) targets.add(n)
+      }
+      const name = colAny.props?.boundSubTableName ?? colAny.boundSubTableName
+      if (name != null && String(name).trim()) {
+        const id = nameToId.get(normalizeSubTableBindingName(String(name)))
+        if (id != null) targets.add(id)
+      }
+    }
+  }
+  return targets
+}
+
+/** Designer stores Link Form columns in {@code configJson.subListViews} — API columns may omit them. */
+export function collectLinkFormTargetBindingIdsFromSubListViews(
+  formConfig: Record<string, unknown> | null | undefined
+): Set<number> {
+  const targets = new Set<number>()
+  const stv = formConfig?.subListViews as Record<string, { columns?: unknown[] }> | undefined
+  if (!stv || typeof stv !== 'object') return targets
+  for (const entry of Object.values(stv)) {
+    if (!entry || typeof entry !== 'object') continue
+    const cols = (entry as { columns?: unknown[] }).columns
+    if (!Array.isArray(cols)) continue
+    for (const col of cols) {
+      if (!col || typeof col !== 'object') continue
+      const c = col as Record<string, unknown>
+      const isLink =
+        c.columnType === 'linkForm'
+        || c.type === 'linkForm'
+        || (typeof c.fieldName === 'string' && String(c.fieldName).startsWith('linkForm:'))
+      if (!isLink) continue
+      const raw =
+        c.boundSubTableBindingId
+        ?? (c.props as Record<string, unknown> | undefined)?.boundSubTableBindingId
+      if (raw != null && raw !== '') {
+        const n = Number(raw)
+        if (Number.isFinite(n)) targets.add(n)
+      }
+    }
+  }
+  return targets
+}
+
+/** Union of runtime binding columns + designer {@code subListViews} link-form metadata. */
+export function collectAllLinkFormTargetBindingIds(
+  bindings: SubTableBindingLinkRef[],
+  formConfig?: Record<string, unknown> | null
+): Set<number> {
+  const merged = collectLinkFormTargetBindingIds(bindings)
+  for (const id of collectLinkFormTargetBindingIdsFromSubListViews(formConfig)) {
+    merged.add(id)
+  }
+  return merged
+}
+
+/**
+ * Same closure as developer-workstation FormDesigner preview / process start:
+ * placed sub-tables plus link-form targets reachable from them.
+ */
+export function computeNeededSubTableBindingIds(
+  placed: Set<number>,
+  allBindings: SubTableBindingLinkRef[]
+): Set<number> {
+  const needed = new Set<number>(placed)
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const b of allBindings) {
+      if (!needed.has(b.bindingId)) continue
+      for (const col of b.columns || []) {
+        if (col?.type !== 'linkForm') continue
+        const raw = col.props?.boundSubTableBindingId
+        if (raw == null || raw === '') continue
+        const n = Number(raw)
+        if (Number.isFinite(n) && !needed.has(n)) {
+          needed.add(n)
+          changed = true
+        }
+      }
+    }
+  }
+  return needed
+}
+
+/**
+ * My Request / initiatorRequest: suppress duplicate standalone tables for bindings that
+ * exist only for Link Form modals — even when a stale canvas {@code subTable} node remains in rule JSON.
+ */
+export function shouldSuppressStandaloneSubTableInInitiatorRequest(
+  bindingId: number,
+  bindings: SubTableBindingLinkRef[],
+  portalViews?: Partial<SubTablePortalViews> | null,
+  nativeBindingIds?: ReadonlySet<number> | null,
+  formConfig?: Record<string, unknown> | null
+): boolean {
+  const id = Number(bindingId)
+  const binding = bindings.find(b => Number(b.bindingId) === id)
+  if (String(binding?.subMode || '').toUpperCase() === 'FORM_ONLY') return true
+  if (nativeBindingIds && nativeBindingIds.size > 0 && !nativeBindingIds.has(id)) return true
+  if (!collectAllLinkFormTargetBindingIds(bindings, formConfig).has(id)) return false
+  const pv = normalizePortalViews(
+    portalViews ?? (binding?.portalViews as Partial<SubTablePortalViews> | undefined)
+  )
+  return pv.initiatorRequest !== 'tableOnly'
+}
+
+/** @deprecated Prefer {@link shouldSuppressStandaloneSubTableInInitiatorRequest}. */
+export function isLinkOnlyStandaloneSubTableBinding(
+  bindingId: number,
+  formRule: unknown[],
+  bindings: SubTableBindingLinkRef[]
+): boolean {
+  const binding = bindings.find(b => Number(b.bindingId) === Number(bindingId))
+  if (shouldSuppressStandaloneSubTableInInitiatorRequest(bindingId, bindings, binding?.portalViews)) {
+    const placed = collectRuleBindingIds(formRule)
+    return !placed.has(Number(bindingId))
+  }
+  return false
+}
+
+/**
+ * Remove {@code subTable} FormFields that must not render as standalone tables on My Request.
+ * Recurses into card children.
+ */
+export function filterLinkOnlyStandaloneSubTableFields(
+  fields: FormField[],
+  bindings: SubTableBindingLinkRef[],
+  _formRule: unknown[],
+  nativeBindingIds?: ReadonlySet<number> | null,
+  formConfig?: Record<string, unknown> | null
+): FormField[] {
+  return fields
+    .map(field => {
+      if (field.type === 'card' && Array.isArray(field.children)) {
+        return {
+          ...field,
+          children: filterLinkOnlyStandaloneSubTableFields(
+            field.children,
+            bindings,
+            _formRule,
+            nativeBindingIds,
+            formConfig
+          )
+        }
+      }
+      return field
+    })
+    .filter(field => {
+      if (field.type !== 'subTable' || field._bindingId == null) return true
+      const binding = bindings.find(b => Number(b.bindingId) === Number(field._bindingId))
+      const merged = mergeSubTablePortalViewsForRuntime(
+        field.portalViews,
+        binding?.portalViews as Partial<SubTablePortalViews> | undefined
+      )
+      return !shouldSuppressStandaloneSubTableInInitiatorRequest(
+        field._bindingId,
+        bindings,
+        merged,
+        nativeBindingIds,
+        formConfig
+      )
+    })
+}
+
 // ---------------------------------------------------------------------------
 // Business Logic Config types — configJson 完整结构与子类型
 // 所有新增字段均为可选（optional），确保旧版 configJson 向后兼容

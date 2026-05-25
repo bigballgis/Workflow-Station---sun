@@ -176,6 +176,14 @@
                 selectedNodeForm.isCurrentStep ? subTableBindings : selectedNodeForm.subTableBindings
               "
               :linked-sub-table-bindings="diagramSelectedLinkableBindings"
+              :native-sub-table-binding-ids="
+                selectedNodeForm.isCurrentStep
+                  ? mainFormNativeSubTableBindingIds
+                  : selectedNodeForm.nativeSubTableBindingIds
+              "
+              :form-config="
+                selectedNodeForm.isCurrentStep ? mainFormConfig : selectedNodeForm.formConfig
+              "
               view-context="initiatorRequest"
               :initiator-snapshot-mode="!!snapshotTaskName"
               @view-subtask-detail="(row: any, sib?: any[]) => openSubTaskDetailDialog(row, sib)"
@@ -214,6 +222,7 @@
                   selectedNodeForm.isCurrentStep ? subTableBindings : selectedNodeForm.subTableBindings
                 "
                 :linked-sub-table-bindings="diagramSelectedLinkableBindings"
+                suppress-link-only-standalone-sub-tables
               />
             </div>
           </template>
@@ -263,6 +272,8 @@
               :readonly="true"
               :sub-table-bindings="subTableBindings"
               :linked-sub-table-bindings="linkableSubTableBindings"
+              :native-sub-table-binding-ids="mainFormNativeSubTableBindingIds"
+              :form-config="mainFormConfig"
               view-context="initiatorRequest"
               :initiator-snapshot-mode="!!snapshotTaskName"
               @view-subtask-detail="(row: any, sib?: any[]) => openSubTaskDetailDialog(row, sib)"
@@ -306,6 +317,7 @@
                 :readonly="true"
                 :sub-table-bindings="subTableBindings"
                 :linked-sub-table-bindings="linkableSubTableBindings"
+                suppress-link-only-standalone-sub-tables
               />
             </div>
           </template>
@@ -408,7 +420,14 @@ import { processApi, type ProcessInstance } from '@/api/process'
 import ProcessDiagram, { type ProcessNode, type ProcessFlow } from '@/components/ProcessDiagram.vue'
 import ProcessHistory, { type HistoryRecord } from '@/components/ProcessHistory.vue'
 import FormRenderer, { type FormField, type FormTab } from '@/components/FormRenderer.vue'
-import { normalizePortalViews, resolveSubTableDisplayMode } from '@/components/formRendererHelpers'
+import {
+  normalizePortalViews,
+  resolveSubTableDisplayMode,
+  collectLinkFormTargetBindingIds,
+  collectAllLinkFormTargetBindingIds,
+  collectLinkFormTargetBindingIdsFromSubListViews,
+  filterLinkOnlyStandaloneSubTableFields,
+} from '@/components/formRendererHelpers'
 import SubTableField from '@/components/SubTableField.vue'
 import SubTableInlineForm from '@/components/SubTableInlineForm.vue'
 import ChangeHistoryPanel from '@/components/ChangeHistoryPanel.vue'
@@ -421,6 +440,7 @@ import {
   deriveColumnsFromRelationFieldDefinitions,
   buildRelationTableFieldIndexFromDataTables,
   resolveSubTableSchemaByTableId,
+  resolveSubListViewColumnsForBinding,
   defaultAttachmentListColumns,
   SHARED_ATTACHMENT_RELATION_TABLE_ID,
   type RelationFieldDef,
@@ -582,16 +602,34 @@ const placedBindingIds = computed((): Set<number> => {
   return collectPlacedBindingIds(formFields.value, formTabs.value)
 })
 
-const bottomSubTableBindings = computed(() =>
-  subTableBindings.value.filter(b => {
-    if (placedBindingIds.value.has(b.bindingId)) return false
-    // Link Form targets (FORM_ONLY, not embedded in form rule) must still exist in linkableSubTableBindings
-    // but must not render as a standalone empty section below the form.
-    const formOnly = String((b as { subMode?: string }).subMode || '').toUpperCase() === 'FORM_ONLY'
-    if (formOnly) return false
-    return true
-  })
-)
+/** Binding ids from the active form's tableBindings (not merge-only link targets). */
+const mainFormNativeSubTableBindingIds = ref<number[]>([])
+
+/** Cached designer config for the active main form (subListViews, subTablePortalViews, rule). */
+const mainFormConfig = ref<Record<string, any>>({})
+
+function shouldRenderBottomUnplacedSubTable(
+  binding: { bindingId: number; subMode?: string; portalViews?: Record<string, unknown> | null },
+  placed: Set<number>,
+  bindings: Array<{ bindingId: number; subMode?: string; columns?: Array<{ type?: string; props?: Record<string, unknown> }>; portalViews?: Record<string, unknown> | null }>,
+  nativeBindingIds: ReadonlySet<number>,
+  formConfig?: Record<string, unknown> | null,
+): boolean {
+  if (placed.has(binding.bindingId)) return false
+  if (String(binding.subMode || '').toUpperCase() === 'FORM_ONLY') return false
+  if (!nativeBindingIds.has(Number(binding.bindingId))) return false
+  const linkTargets = collectAllLinkFormTargetBindingIds(bindings, formConfig)
+  if (linkTargets.has(Number(binding.bindingId))) return false
+  return true
+}
+
+const bottomSubTableBindings = computed(() => {
+  const nativeIds = new Set(mainFormNativeSubTableBindingIds.value.map(Number))
+  const placed = placedBindingIds.value
+  return subTableBindings.value.filter(b =>
+    shouldRenderBottomUnplacedSubTable(b, placed, subTableBindings.value, nativeIds, mainFormConfig.value),
+  )
+})
 
 function collectPlacedBindingIds(fields: any[], tabs: Array<{ fields: any[] }> = []): Set<number> {
   const ids = new Set<number>()
@@ -601,25 +639,6 @@ function collectPlacedBindingIds(fields: any[], tabs: Array<{ fields: any[] }> =
   })
   collect(fields)
   tabs.forEach(tab => collect(tab.fields))
-  return ids
-}
-
-// Walk the form rule (raw config tree) and collect every `_bindingId` referenced as a `subTable` node.
-// Used to decide whether an "unplaced" binding (no rule placement) should still be rendered.
-function collectRuleBindingIds(rules: any[]): Set<number> {
-  const ids = new Set<number>()
-  const walk = (items: any[]) => {
-    if (!Array.isArray(items)) return
-    for (const r of items) {
-      if (!r) continue
-      if (r.type === 'subTable') {
-        const id = r._bindingId ?? r.props?._bindingId
-        if (id != null) ids.add(Number(id))
-      }
-      if (Array.isArray(r.children)) walk(r.children)
-    }
-  }
-  walk(rules)
   return ids
 }
 
@@ -673,6 +692,10 @@ interface ApplicationDiagramNodeFormInfo {
   tabs: FormTab[]
   values: Record<string, any>
   subTableBindings: PreviousFormEntry['subTableBindings']
+  /** tableBindings on this BPMN form — excludes merge-only link targets. */
+  nativeSubTableBindingIds: number[]
+  /** Designer configJson for link-form suppression (subListViews). */
+  formConfig: Record<string, any>
 }
 
 const selectedNodeId = ref<string | null>(null)
@@ -1142,12 +1165,18 @@ const diagramSelectedBottomSubTables = computed(() => {
   const tabs = sf.isCurrentStep ? formTabs.value : sf.tabs
   const bindings = sf.isCurrentStep ? subTableBindings.value : sf.subTableBindings
   const placed = collectPlacedBindingIds(fields, tabs)
-  return bindings.filter((b: { bindingId: number; subMode?: string }) => {
-    if (placed.has(b.bindingId)) return false
-    const formOnly = String(b.subMode || '').toUpperCase() === 'FORM_ONLY'
-    if (formOnly) return false
-    return true
-  })
+  const nativeIds = new Set(
+    (sf.isCurrentStep ? mainFormNativeSubTableBindingIds.value : sf.nativeSubTableBindingIds).map(Number),
+  )
+  return bindings.filter((b: { bindingId: number; subMode?: string }) =>
+    shouldRenderBottomUnplacedSubTable(
+      b,
+      placed,
+      bindings as any[],
+      nativeIds,
+      sf.isCurrentStep ? mainFormConfig.value : sf.formConfig,
+    ),
+  )
 })
 
 /** Same as tasks/detail.vue: link-form `.find()` must resolve prev-form bindings before current (empty MI slice). */
@@ -1347,6 +1376,7 @@ function buildSubTableBindingsForForm(
     formConfig,
     subFormsPayload,
   )
+  stripLinkOnlySubTableFieldsFromBindings(bindings, subFormsPayload, formConfig.rule, formConfig)
   const rtMap = buildBindingIdToRelationTableIdMap(cachedContentForms)
   if (parentRow && typeof parentRow === 'object') {
     for (const binding of bindings) {
@@ -1381,10 +1411,8 @@ function buildSubTableBindingsForForm(
 function openSubTaskDetailDialog(row: any, siblingRowsOverride?: any[] | null) {
   if (!subTaskFormSchema.value) return
   const schema = subTaskFormSchema.value
-  const fields = extractFieldsRecursive(
+  const formRules =
     schema.rule && Array.isArray(schema.rule) ? schema.rule : (Array.isArray(schema) ? schema : [])
-  )
-  subTaskDetailFields.value = fields
 
   const formMeta =
     (subTaskFormId.value
@@ -1397,12 +1425,21 @@ function openSubTaskDetailDialog(row: any, siblingRowsOverride?: any[] | null) {
     ? buildSubTableBindingsForForm(formMeta, schema, row)
     : []
 
+  const rawFields = extractFieldsRecursive(formRules)
+  subTaskDetailFields.value = filterLinkOnlyStandaloneSubTableFields(
+    rawFields,
+    subTaskDetailSubTableBindings.value,
+    formRules,
+    undefined,
+    schema,
+  )
+
   const mergedData: Record<string, any> = { ...row }
   // Fallback: for MI form fields absent from the row, use process-level variables.
   // Legacy saves only; never for open MI rows — variables often mirror another participant's submission.
   const allowVarFallback = shouldMergeProcessVariablesIntoSubTaskDetailRow(row, siblingRowsOverride)
   if (allowVarFallback) {
-    for (const f of fields) {
+    for (const f of rawFields) {
       if (f.key && (mergedData[f.key] === undefined || mergedData[f.key] === null)) {
         if (formData.value[f.key] !== undefined) {
           mergedData[f.key] = formData.value[f.key]
@@ -1965,6 +2002,11 @@ function buildApplicationNodeFormMap(content: any) {
       const nodeFields: FormField[] = []
       const nodeTabs: FormTab[] = []
       const nodeBindings: PreviousFormEntry['subTableBindings'] = []
+      const nativeSubTableBindingIds = (matchedForm.tableBindings || [])
+        .filter((b: { bindingType?: string }) => b.bindingType !== 'PRIMARY')
+        .map((b: { bindingId?: number }) => Number(b.bindingId))
+        .filter((n: number) => Number.isFinite(n))
+      let configForSubTables: Record<string, any> = {}
       try {
         const cfg = typeof matchedForm.data === 'string' ? JSON.parse(matchedForm.data) : (matchedForm.data || {})
         const rules = cfg.rule && Array.isArray(cfg.rule) ? cfg.rule : (Array.isArray(cfg) ? cfg : null)
@@ -1987,7 +2029,6 @@ function buildApplicationNodeFormMap(content: any) {
           }
         }
         let subForms: Record<string, any> = {}
-        let configForSubTables: Record<string, any> = {}
         try {
           configForSubTables = cfg
           subForms = cfg.subForms || {}
@@ -2040,6 +2081,7 @@ function buildApplicationNodeFormMap(content: any) {
           nodeBindings.push(binding)
         }
         mergeLinkFormTargetBindingsInto(nodeBindings, formsList, configForSubTables, subForms)
+        stripLinkOnlySubTableFieldsFromBindings(nodeBindings, subForms, configForSubTables.rule, configForSubTables)
         if (savedSubTables && typeof savedSubTables === 'object') {
           for (const binding of nodeBindings) {
             const saved = getSavedSubTableRowsFromVariables(
@@ -2074,6 +2116,32 @@ function buildApplicationNodeFormMap(content: any) {
               : null,
           bindingTableById: bindingRelationTableMap,
         })
+
+        const formRulesForFilter =
+          cfg.rule && Array.isArray(cfg.rule) ? cfg.rule : (Array.isArray(cfg) ? cfg : [])
+        const nativeIdSet = new Set(nativeSubTableBindingIds)
+        if (formRulesForFilter.length > 0 && nodeBindings.length > 0) {
+          if (nodeFields.length > 0) {
+            const filtered = filterLinkOnlyStandaloneSubTableFields(
+              nodeFields,
+              nodeBindings,
+              formRulesForFilter,
+              nativeIdSet,
+              configForSubTables,
+            )
+            nodeFields.length = 0
+            nodeFields.push(...filtered)
+          }
+          for (const tab of nodeTabs) {
+            tab.fields = filterLinkOnlyStandaloneSubTableFields(
+              tab.fields,
+              nodeBindings,
+              formRulesForFilter,
+              nativeIdSet,
+              configForSubTables,
+            )
+          }
+        }
       } catch {
         /* ignore per-node parse errors */
       }
@@ -2084,7 +2152,9 @@ function buildApplicationNodeFormMap(content: any) {
         fields: nodeFields,
         tabs: nodeTabs,
         values: { ...formData.value },
-        subTableBindings: nodeBindings
+        subTableBindings: nodeBindings,
+        nativeSubTableBindingIds,
+        formConfig: configForSubTables,
       })
     }
   } catch (e) {
@@ -2239,6 +2309,11 @@ const loadFunctionUnitContent = async (processKey: string, prefetchedContent?: a
       // bottomSubTableBindings / unplacedSubTableBindings omit them to avoid empty duplicate sections.
       const bindings: typeof subTableBindings.value = []
       const tableBindings: any[] = selectedForm.tableBindings || []
+      mainFormNativeSubTableBindingIds.value = tableBindings
+        .filter((b: { bindingType?: string }) => b.bindingType !== 'PRIMARY')
+        .map((b: { bindingId?: number }) => Number(b.bindingId))
+        .filter((n: number) => Number.isFinite(n))
+      mainFormConfig.value = selectedFormConfig
       const subFormsPayload = selectedFormConfig.subForms || {}
       const subTablePortalViewsPayload = selectedFormConfig.subTablePortalViews || {}
       for (const b of tableBindings) {
@@ -2278,6 +2353,7 @@ const loadFunctionUnitContent = async (processKey: string, prefetchedContent?: a
       }
 
       mergeLinkFormTargetBindingsInto(bindings, content.forms as any[], selectedFormConfig, subFormsPayload)
+      stripLinkOnlySubTableFieldsFromBindings(bindings, subFormsPayload, selectedFormConfig.rule, selectedFormConfig)
 
       const bindingRelationTableMap = buildBindingIdToRelationTableIdMap(content.forms as any[])
       lastBindingRelationTableMap.value = bindingRelationTableMap
@@ -2316,6 +2392,7 @@ const loadFunctionUnitContent = async (processKey: string, prefetchedContent?: a
         enrichChildBindingRowsFromParentsNestedSubTables(bindings)
       }
       subTableBindings.value = bindings
+      applyLinkOnlySubTableFieldFilterToMainForm(selectedFormConfig)
       alignMainSubTableBindingsOnly()
 
       pendingApplicationDetailSecondary = {
@@ -3517,23 +3594,31 @@ const parseFormConfig = (configStr: string) => {
 // (sub-table row layouts use subForm/tableForm wrappers).
 const FC_SKIP_TYPES = new Set(['subForm', 'tableForm', 'tableFormColumn'])
 
-// Recursively extract fields
-const extractFieldsRecursive = (items: any[]): FormField[] => {
+// Recursively extract fields.
+// `skipSubTable`: when traversing subForm/tableForm wrappers on the main canvas, do not promote
+// nested subTable widgets (e.g. link-form target subtable2) to the page-level field list.
+const extractFieldsRecursive = (
+  items: any[],
+  ctx: { skipSubTable?: boolean } = {},
+): FormField[] => {
   const fields: FormField[] = []
   for (const item of items) {
     const bindingId = item._bindingId ?? item.props?._bindingId
     if (item.type === 'subTable' && bindingId != null) {
-      const rawPv = item.props?.portalViews
-      const hasWidgetPortalViews =
-        rawPv != null && typeof rawPv === 'object' && Object.keys(rawPv).length > 0
-      fields.push({
-        key: `__subTable_${bindingId}`,
-        label: '',
-        type: 'subTable',
-        _bindingId: Number(bindingId),
-        ...(hasWidgetPortalViews ? { portalViews: normalizePortalViews(rawPv) } : {}),
-        span: 24,
-      })
+      if (!ctx.skipSubTable) {
+        const rawPv = item.props?.portalViews
+        const hasWidgetPortalViews =
+          rawPv != null && typeof rawPv === 'object' && Object.keys(rawPv).length > 0
+        fields.push({
+          key: `__subTable_${bindingId}`,
+          label: '',
+          type: 'subTable',
+          _bindingId: Number(bindingId),
+          ...(hasWidgetPortalViews ? { portalViews: normalizePortalViews(rawPv) } : {}),
+          span: 24,
+        })
+      }
+      continue
     } else if (isCardRule(item)) {
       fields.push({
         key: getLayoutKey(item, fields.length, 'card'),
@@ -3541,7 +3626,7 @@ const extractFieldsRecursive = (items: any[]): FormField[] => {
         type: 'card',
         span: item.col?.span || 24,
         children: item.children && Array.isArray(item.children)
-          ? extractFieldsRecursive(item.children)
+          ? extractFieldsRecursive(item.children, ctx)
           : [],
       } as any)
       continue
@@ -3583,7 +3668,8 @@ const extractFieldsRecursive = (items: any[]): FormField[] => {
       if (field) fields.push(field)
     }
     if (item.children && Array.isArray(item.children)) {
-      fields.push(...extractFieldsRecursive(item.children))
+      const childCtx = FC_SKIP_TYPES.has(item.type) ? { skipSubTable: true } : ctx
+      fields.push(...extractFieldsRecursive(item.children, childCtx))
     }
   }
   return fields
@@ -3808,9 +3894,11 @@ const deriveColumnsFromBinding = (binding: any, formConfig?: Record<string, any>
     })
       : []
 
-  const listColumns =
-    formConfig?.subListViews?.[binding.bindingId]?.columns ||
-    formConfig?.subListViews?.[String(binding.bindingId)]?.columns
+  const listColumns = resolveSubListViewColumnsForBinding(
+    formConfig,
+    binding.bindingId,
+    subFormColumns.map(c => c.field),
+  )
 
   if (Array.isArray(listColumns) && listColumns.length > 0) {
     const ruleByField = new Map(
@@ -3961,6 +4049,50 @@ function resolveSubTableSchemaSourceForTargetMerge(
 }
 
 /**
+ * Link Form targets (e.g. subtable2) keep {@code formFields} for modals but drop duplicate
+ * {@code subTable} widgets when the designer did not place them on the sub-form canvas.
+ */
+function stripLinkOnlySubTableFieldsFromBindings(
+  bindings: Array<{ bindingId: number; formFields?: FormField[] }>,
+  subForms: Record<string, unknown>,
+  mainFormRule?: unknown[],
+  formConfig?: Record<string, unknown> | null,
+) {
+  for (const b of bindings) {
+    if (!Array.isArray(b.formFields) || b.formFields.length === 0) continue
+    const design = (subForms?.[b.bindingId] ?? subForms?.[String(b.bindingId)] ?? {}) as {
+      rule?: unknown[]
+    }
+    const rule = Array.isArray(design.rule) && design.rule.length > 0
+      ? design.rule
+      : (Array.isArray(mainFormRule) ? mainFormRule : [])
+    b.formFields = filterLinkOnlyStandaloneSubTableFields(b.formFields, bindings, rule, undefined, formConfig)
+  }
+}
+
+/** Drop link-only sub-table widgets from the main form field tree once bindings are loaded. */
+function applyLinkOnlySubTableFieldFilterToMainForm(formConfig: Record<string, any>) {
+  const rules = Array.isArray(formConfig?.rule) ? formConfig.rule : []
+  const bindings = subTableBindings.value
+  const nativeIdSet = new Set(mainFormNativeSubTableBindingIds.value.map(Number))
+  if (formFields.value.length > 0) {
+    formFields.value = filterLinkOnlyStandaloneSubTableFields(
+      formFields.value,
+      bindings,
+      rules,
+      nativeIdSet,
+      formConfig,
+    )
+  }
+  if (formTabs.value.length > 0) {
+    formTabs.value = formTabs.value.map(tab => ({
+      ...tab,
+      fields: filterLinkOnlyStandaloneSubTableFields(tab.fields, bindings, rules, nativeIdSet, formConfig),
+    }))
+  }
+}
+
+/**
  * Link Form targets may reference bindings omitted from the active form's tableBindings slice.
  * Same contract as tasks/detail.vue so Link Form modal / fallback rows resolve on My Request.
  */
@@ -4007,6 +4139,9 @@ function mergeLinkFormTargetBindingsInto(
           targetNameHint.set(n, nm != null && String(nm).trim() !== '' ? String(nm) : undefined)
         }
       }
+    }
+    for (const tid of collectLinkFormTargetBindingIdsFromSubListViews(localFormConfig)) {
+      targetIds.add(tid)
     }
     for (const tid of targetIds) {
       if (known.has(tid)) continue
@@ -4167,6 +4302,12 @@ function buildPreviousFormEntry(
 
   if (allContentForms?.length) {
     mergeLinkFormTargetBindingsInto(prevBindings, allContentForms, prevFormConfig, prevFormConfig.subForms || {})
+    stripLinkOnlySubTableFieldsFromBindings(
+      prevBindings,
+      prevFormConfig.subForms || {},
+      prevFormConfig.rule,
+      prevFormConfig,
+    )
   }
   if (savedSubTables && typeof savedSubTables === 'object') {
     for (const binding of prevBindings) {

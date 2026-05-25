@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   deriveColumnsFromRelationFieldDefinitions,
   resolveSubTableSchemaByTableId,
+  resolveSubListViewColumnsForBinding,
   defaultAttachmentListColumns,
 } from '../subTableAddDialogHelpers'
 
@@ -60,5 +61,37 @@ describe('subTableSchemaResolution', () => {
     const alt = resolveSubTableSchemaByTableId(74, contentForms, 104)
     expect(alt?.bindingId).toBe(103)
     expect(alt?.formConfig.subListViews?.['103']?.columns?.length).toBe(3)
+  })
+
+  it('resolveSubListViewColumnsForBinding rejects PK-only stub when subForm has more fields', () => {
+    const formConfig = {
+      subListViews: {
+        64: { columns: [{ fieldName: 'id_idw', columnType: 'field', comment: 'id' }] },
+        62: {
+          columns: [
+            { fieldName: 'id', columnType: 'field' },
+            { fieldName: 'name', columnType: 'field' },
+            { fieldName: 'assignee', columnType: 'field' },
+          ],
+        },
+      },
+    }
+    const subFormFields = ['id_idw', 'name', 'assignee']
+    expect(resolveSubListViewColumnsForBinding(formConfig, 64, subFormFields)).toBeNull()
+  })
+
+  it('resolveSubListViewColumnsForBinding keeps intentional multi-column designer list', () => {
+    const formConfig = {
+      subListViews: {
+        64: {
+          columns: [
+            { fieldName: 'id_idw', columnType: 'field' },
+            { fieldName: 'name', columnType: 'field' },
+          ],
+        },
+      },
+    }
+    const cols = resolveSubListViewColumnsForBinding(formConfig, 64, ['id_idw', 'name', 'assignee'])
+    expect(cols?.map(c => c.fieldName)).toEqual(['id_idw', 'name'])
   })
 })

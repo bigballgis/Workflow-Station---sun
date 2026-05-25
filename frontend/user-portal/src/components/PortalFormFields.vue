@@ -6,7 +6,11 @@
  */
 import FieldRenderer from './FieldRenderer.vue'
 import SubTableField from './SubTableField.vue'
+import { computed } from 'vue'
 import type { FormField } from './formRendererHelpers'
+import {
+  filterLinkOnlyStandaloneSubTableFields,
+} from './formRendererHelpers'
 import { pullNestedRowsForBindingFromParentRows } from '@/composables/tasks/shared'
 
 export interface PortalSubTableBindingLite {
@@ -31,12 +35,15 @@ const props = withDefaults(
     parentRow?: Record<string, unknown> | null
     showLinkFormDialogFooter?: boolean
     compactLookupCells?: boolean
+    /** My Request: omit link-form target sub-tables from inline / modal field lists. */
+    suppressLinkOnlyStandaloneSubTables?: boolean
   }>(),
   {
     readonly: false,
     editable: false,
     showLinkFormDialogFooter: false,
     compactLookupCells: false,
+    suppressLinkOnlyStandaloneSubTables: false,
   },
 )
 
@@ -45,6 +52,12 @@ const emit = defineEmits<{
 }>()
 
 defineOptions({ name: 'PortalFormFields' })
+
+const displayFields = computed(() => {
+  if (!props.suppressLinkOnlyStandaloneSubTables) return props.fields
+  const pool = [...(props.linkedSubTableBindings ?? []), ...(props.subTableBindings ?? [])]
+  return filterLinkOnlyStandaloneSubTableFields(props.fields, pool, [])
+})
 
 function resolveBinding(bindingId?: number): PortalSubTableBindingLite | undefined {
   if (bindingId == null) return undefined
@@ -80,7 +93,7 @@ function onFieldUpdate(key: string, val: unknown) {
 
 <template>
   <template
-    v-for="field in fields"
+    v-for="field in displayFields"
     :key="field.key"
   >
     <el-col

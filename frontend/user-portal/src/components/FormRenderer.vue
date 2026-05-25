@@ -50,7 +50,7 @@
                               style="padding: 0;"
                             >
                               <SubTableField
-                                v-if="resolveBinding(child._bindingId)"
+                                v-if="resolveBinding(child._bindingId) && shouldRenderPlacedSubTableField(child)"
                                 :title="resolveBinding(child._bindingId)!.tableName"
                                 :columns="resolveBinding(child._bindingId)!.columns"
                                 :model-value="resolveBinding(child._bindingId)!.data"
@@ -93,6 +93,7 @@
                                   :label-width="labelWidth"
                                   :sub-table-bindings="subTableBindings"
                                   :linked-sub-table-bindings="linkableSubTableBindings"
+                                  :suppress-link-only-standalone-sub-tables="viewContext === 'initiatorRequest'"
                                   @update:row="(row: Record<string, any>) => handleInlineFormUpdate(child, row)"
                                 />
                               </div>
@@ -173,7 +174,7 @@
                     style="padding: 0;"
                   >
                     <SubTableField
-                      v-if="resolveBinding(field._bindingId)"
+                      v-if="resolveBinding(field._bindingId) && shouldRenderPlacedSubTableField(field)"
                       :title="resolveBinding(field._bindingId)!.tableName"
                       :columns="resolveBinding(field._bindingId)!.columns"
                       :model-value="resolveBinding(field._bindingId)!.data"
@@ -216,6 +217,7 @@
                         :label-width="labelWidth"
                         :sub-table-bindings="subTableBindings"
                         :linked-sub-table-bindings="linkableSubTableBindings"
+                        :suppress-link-only-standalone-sub-tables="viewContext === 'initiatorRequest'"
                         @update:row="(row: Record<string, any>) => handleInlineFormUpdate(field, row)"
                       />
                     </div>
@@ -364,6 +366,7 @@
                               :label-width="labelWidth"
                               :sub-table-bindings="subTableBindings"
                               :linked-sub-table-bindings="linkableSubTableBindings"
+                              :suppress-link-only-standalone-sub-tables="viewContext === 'initiatorRequest'"
                               @update:row="(row: Record<string, any>) => handleInlineFormUpdate(child, row)"
                             />
                           </div>
@@ -444,7 +447,7 @@
                 style="padding: 0;"
               >
                 <SubTableField
-                  v-if="resolveBinding(field._bindingId)"
+                  v-if="resolveBinding(field._bindingId) && shouldRenderPlacedSubTableField(field)"
                   :title="resolveBinding(field._bindingId)!.tableName"
                   :columns="resolveBinding(field._bindingId)!.columns"
                   :model-value="resolveBinding(field._bindingId)!.data"
@@ -487,6 +490,7 @@
                     :label-width="labelWidth"
                     :sub-table-bindings="subTableBindings"
                     :linked-sub-table-bindings="linkableSubTableBindings"
+                    :suppress-link-only-standalone-sub-tables="viewContext === 'initiatorRequest'"
                     @update:row="(row: Record<string, any>) => handleInlineFormUpdate(field, row)"
                   />
                 </div>
@@ -589,7 +593,8 @@ import type {
 import {
   extractFieldsRecursive,
   mergeSubTablePortalViewsForRuntime,
-  resolveSubTableDisplayMode
+  resolveSubTableDisplayMode,
+  shouldSuppressStandaloneSubTableInInitiatorRequest,
 } from './formRendererHelpers'
 import {
   mergeSubTableRowsByRowId,
@@ -677,6 +682,10 @@ interface Props {
    * inline form-below-table binds to that row; otherwise it falls back to the first sub-table row.
    */
   currentMiRowId?: number | string | null
+  /** Binding ids declared on this form's tableBindings (excludes merge-only link targets). */
+  nativeSubTableBindingIds?: number[]
+  /** Designer configJson — used to resolve link-form targets from {@code subListViews}. */
+  formConfig?: Record<string, unknown> | null
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -805,6 +814,25 @@ function subTableMode(field: FormField): 'tableOnly' | 'formBelowTable' | 'summa
 function mergedPortalViewsForSubTable(field: FormField): SubTablePortalViews {
   const binding = resolveBinding(field._bindingId)
   return mergeSubTablePortalViewsForRuntime(field.portalViews, binding?.portalViews)
+}
+
+/** My Request: link-form targets (e.g. subtable2) render only via Link Form modal, not duplicate tables. */
+function shouldRenderPlacedSubTableField(field: FormField): boolean {
+  if (props.viewContext !== 'initiatorRequest') return true
+  if (field._bindingId == null) return true
+  const binding = resolveBinding(field._bindingId)
+  if (!binding) return false
+  const merged = mergeSubTablePortalViewsForRuntime(field.portalViews, binding?.portalViews)
+  const nativeIds = props.nativeSubTableBindingIds?.length
+    ? new Set(props.nativeSubTableBindingIds.map(Number))
+    : null
+  return !shouldSuppressStandaloneSubTableInInitiatorRequest(
+    field._bindingId,
+    linkableSubTableBindings.value ?? [],
+    merged,
+    nativeIds,
+    props.formConfig,
+  )
 }
 
 /** 发起人「汇总 + Link/Details」：子表单元格内不展开 lookup / 用户快照明细，与设计师意图一致。 */

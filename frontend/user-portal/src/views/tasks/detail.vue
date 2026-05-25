@@ -469,7 +469,7 @@ import {
   type CompletedTaskFormData,
 } from '@/api/processForm'
 import { relationTableApi } from '@/api/relationTable'
-import { unwrapUserLikeValueToDisplayString, extractUserIdFromCellValue, mergeListViewFieldColumn, inferColumnTypeFromFieldAndValue, deriveColumnsFromRelationFieldDefinitions, buildRelationTableFieldIndexFromDataTables, resolveSubTableSchemaByTableId, defaultAttachmentListColumns, SHARED_ATTACHMENT_RELATION_TABLE_ID, type RelationFieldDef } from '@/components/subTableAddDialogHelpers'
+import { unwrapUserLikeValueToDisplayString, extractUserIdFromCellValue, mergeListViewFieldColumn, inferColumnTypeFromFieldAndValue, deriveColumnsFromRelationFieldDefinitions, buildRelationTableFieldIndexFromDataTables, resolveSubTableSchemaByTableId, resolveSubListViewColumnsForBinding, defaultAttachmentListColumns, SHARED_ATTACHMENT_RELATION_TABLE_ID, type RelationFieldDef } from '@/components/subTableAddDialogHelpers'
 import { clearBpmnParseCache, getCachedBpmnDocument } from '@/utils/bpmnParseCache'
 const { t } = useI18n()
 const route = useRoute()
@@ -3006,10 +3006,6 @@ const deriveColumnsFromBinding = (binding: any, subForms?: Record<string, any>, 
     subForms?.[binding.bindingId]?.rule ||
     subForms?.[String(binding.bindingId)]?.rule
 
-  const listColumns =
-    config?.subListViews?.[binding.bindingId]?.columns ||
-    config?.subListViews?.[String(binding.bindingId)]?.columns
-
   const subFormColumns =
     subFormRule && Array.isArray(subFormRule) && subFormRule.length > 0
       ? subFormRule.map((r: any) => {
@@ -3127,6 +3123,12 @@ const deriveColumnsFromBinding = (binding: any, subForms?: Record<string, any>, 
       }
     })
       : []
+
+  const listColumns = resolveSubListViewColumnsForBinding(
+    config,
+    binding.bindingId,
+    subFormColumns.map(c => c.field),
+  )
 
   // 与 applications/detail 一致：只要有「列表视图」列（含 linkForm），即使用之；不能强依赖 subForm 行布局存在，否则 Link 列不会进运行时而无法解析 subtable2。
   if (Array.isArray(listColumns) && listColumns.length > 0) {
