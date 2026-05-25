@@ -300,7 +300,15 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     public void delete(Long id) {
         functionUnitWorkspaceAccessService.assertCanAccess(id, WorkspaceAccessAction.DELETE);
         FunctionUnit functionUnit = getById(id);
+        if (functionUnit.getStatus() != FunctionUnitStatus.ARCHIVED) {
+            functionUnit.setStatus(FunctionUnitStatus.ARCHIVED);
+            functionUnitRepository.save(functionUnit);
+            log.info("Archived function unit id={}, name={}", id, functionUnit.getName());
+            return;
+        }
+        functionUnitDevGroupAssignmentRepository.deleteByFunctionUnitId(id);
         functionUnitRepository.delete(functionUnit);
+        log.info("Permanently deleted archived function unit id={}", id);
     }
     
     @Override
