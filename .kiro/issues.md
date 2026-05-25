@@ -7,10 +7,10 @@
 
 | 状态 | 数量 |
 |------|------|
-| ✅ Fixed | **188** |
+| ✅ Fixed | **189** |
 | 🔓 Open | **12** |
 | ⏸️ Wontfix | **1** |
-| **总计** | **201** |
+| **总计** | **202** |
 
 按严重度的分布见 `index.yaml` 各条目的 `severity` 字段。
 
@@ -45,9 +45,9 @@
 
 | 主记录 | 场景 | 相关 |
 |--------|------|------|
-| **#179** | MI 待办/申请：Link Form、表格下内联 **subtable2** 跨节点不带数、空白、id 串人、Current node 串行 | #177、#178 |
+| **#179** | MI 待办/申请：Link Form、表格下内联 **subtable2** 跨节点不带数、空白、id 串人、Current node 串行 | #177、#178、#1383 |
 
-详情与根因清单见 `index.yaml` 中 `id: "179"`（`recurrence: pattern`）。改 `shared.ts` / `tasks/detail.vue` / `FormRenderer.vue` / `SubTableField.vue` 时优先跑上述单测并做三参与者手测。
+详情与根因清单见 `index.yaml` 中 `id: "179"`（`recurrence: pattern`）。改 `shared.ts` / `tasks/detail.vue` / `FormRenderer.vue` / `SubTableField.vue` 时优先跑上述单测并做三参与者手测；最新一例（#1383）是当前参与者打开 sub form1 时 inline subtable2 被预填上一参与者的输入，根因在 `isolateMiSubTaskData` 重建 myRow.__subTables__ 时遗漏 MI 过滤、且 `syncMiLinkChildRowsIntoParentNested` 在空数据时不回写残留。
 
 ---
 

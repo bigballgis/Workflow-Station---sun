@@ -1677,3 +1677,22 @@
   severity: major
   category: bug
   summary: "admin-center 的 useBiDashboard 在 catch 中引用未定义 error，导致状态切换或删除失败时前端二次报错"
+
+- id: "1383"
+  status: fixed
+  fixed_at: "2026-05-25"
+  severity: major
+  category: bug
+  summary: "user-portal MI 子任务 To Do：完成第一个子任务后打开第二个子任务 sub form1，subtable2 inline 表单被预填了上一子任务输入的 age/sex"
+  file: |
+    frontend/user-portal/src/views/tasks/detail.vue
+  note: |
+    复现：Multi-Instance Subtask Demo（17-Multi-Instance-Subtask-Demo），e2e_lina 登录 user-portal → To Do → 完成参与者 1 的 sub form1（subtable2 中填 age/sex）→ 打开参与者 2 的 sub form1，发现 subtable2 inline 表单被默认填上了参与者 1 的 age/sex，应当显示空表单等待参与者 2 自行填写。
+    根因：tasks/detail.vue `isolateMiSubTaskData` 在重建当前参与者 myRow.__subTables__ 时（line ~1618 起的内层循环），把 `rebuildIsolatedSubTablesPayload`（混入 `previousForms.value` 中其它参与者已完成节点的 subTableBindings）和 myRow 原有 nested `__subTables__` 直接 merge 进 `nextRowSub[binding.bindingId]`，但 **没有按 `rowBelongsToCurrentMiScope` 过滤**。结果 participant 2 的 myRow.__subTables__["30"]（subtable2，binding 30，foreignKeyField=id）里残留了 participant 1 的 {id:232, age, sex} 行。随后 FormRenderer `mergeRowsForInlineFormTarget` 在 miIsolate 分支调用 `pullNestedRowsForBindingFromParentRows(target=binding30, [parentRow])` 读取 parentRow.__subTables__["30"]，拿到 participant 1 的行；`getCurrentRowForInlineForm` 在 `rows.length === 1` 时直接将其作为 inline form 的 currentRow（pickReason='mi-nested-only'）。同一份 `nextRowSub` 还会通过紧随其后的二次循环（line ~1657）回流到 binding 30.data，虽然 `resyncMiParticipantSubTablesFromVariables` 末尾的 `applyMiParticipantFilterToCurrentSubTableBindings` 会再次过滤 binding.data，但 `syncMiLinkChildRowsIntoParentNested` 仅在 `rows.length > 0` 时回写 parentRow.__subTables__，因此一旦 binding.data 被过滤为空，parentRow.__subTables__["30"] 中残留的 participant 1 行就再也得不到清理，FormRenderer 仍读到泄漏数据。
+    修复：
+      1) `isolateMiSubTaskData` 内层 binding 循环里，在 `merged = mergeSubTableRowsByRowId(...)` 之后、写回 `nextRowSub[bindingId]` 之前，对 MI participant-scoped binding 增加 `rowBelongsToCurrentMiScope` 过滤；这样 myRow.__subTables__ 中只保留属于当前参与者的行，inline form 的初始 rows 不会再借参与者 1 的行。`cleanedFormData.__subTables__`（持久化用，第 1600 行已是 `rebuildIsolatedSubTablesPayload` 全量 snapshot）保持不变，确保提交时不会丢失其他参与者已经保存的子表数据。
+      2) `resyncMiParticipantSubTablesFromVariables` 末尾的 `syncMiLinkChildRowsIntoParentNested` 调用条件放宽为「MI participant-scoped binding 即便 binding.data 为空也参与一次回写」，使得 parentRow.__subTables__ 中针对当前参与者的旧脏数据被强制刷成空切片，作为深度防御层。
+    验证：
+      - `npx vitest run src/composables/tasks/__tests__/linkFormMiIsolation.test.ts src/composables/tasks/__tests__/mergeSubTableRowsMiMerge.test.ts src/composables/tasks/__tests__/subTableRowMetaFields.test.ts` 全部通过（39/39）。
+      - `cd frontend/user-portal && npm run build` 成功。
+      - `docker compose -f docker-compose.dev.yml --env-file .env up -d --build user-portal-frontend` 后 platform-user-portal-frontend-dev / platform-user-portal-dev 正常启动。

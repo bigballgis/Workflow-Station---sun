@@ -1645,7 +1645,18 @@ function isolateMiSubTaskData(taskData: any) {
         }
       }
 
-      const rows = cloneSubTableRows(merged)
+      /**
+       * {@code rowsFromRebuilt} carries previous-form snapshots (other participants' submitted rows) and
+       * {@code fromPrev} is cloned from raw {@code variables.__subTables__} where slices may pool every
+       * MI participant's data. Without filtering, the current participant's {@code __subTables__} (and the
+       * link-form inline subtable2) would surface other sub-tasks' rows — see MI Subtask Demo where
+       * sub form1 of participant 2 was pre-filled with participant 1's age/sex values.
+       */
+      const scopedMerged = isMiParticipantScopedSubTableBinding(binding)
+        ? merged.filter((row: any) => rowBelongsToCurrentMiScope(row, myRowId, binding))
+        : merged
+
+      const rows = cloneSubTableRows(scopedMerged)
       nextRowSub[binding.bindingId] = rows
       nextRowSub[String(binding.bindingId)] = rows
       if (binding.tableName) {
@@ -1739,7 +1750,12 @@ function resyncMiParticipantSubTablesFromVariables(
 
   for (const binding of subTableBindings.value) {
     const rows = Array.isArray(binding.data) ? binding.data : []
-    if (rows.length > 0) {
+    /**
+     * MI link-form child bindings (e.g. subtable2) must be synced even when their MI-filtered slice is
+     * empty — otherwise stale rows from other participants linger under parentRow.__subTables__ and
+     * pre-fill the inline link form on first open (MI Subtask Demo, sub form1 of participant 2).
+     */
+    if (rows.length > 0 || isMiParticipantScopedSubTableBinding(binding)) {
       syncMiLinkChildRowsIntoParentNested(
         { bindingId: binding.bindingId, tableName: binding.tableName },
         cloneSubTableRows(rows),
