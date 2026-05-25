@@ -397,11 +397,11 @@
                 <el-option 
                   v-for="binding in formBindings" 
                   :key="binding.tableId" 
-                  :label="`${binding.tableName || getTableName(binding.tableId)} (${bindingTypeLabel(binding.bindingType)})`" 
+                  :label="`${getTableName(binding.tableId, binding.tableName)} (${bindingTypeLabel(binding.bindingType)})`" 
                   :value="binding.tableId"
                 >
                   <div class="table-option-with-binding">
-                    <span>{{ binding.tableName || getTableName(binding.tableId) }}</span>
+                    <span>{{ getTableName(binding.tableId, binding.tableName) }}</span>
                     <el-tag
                       size="small"
                       :type="bindingTypeTag(binding.bindingType)"
@@ -1151,7 +1151,7 @@ const designerSubBindings = computed(() => {
     bindingId: b.id as number,
     bindingType: b.bindingType,
     bindingMode: b.bindingMode,
-    tableName: b.tableName || getTableName(b.tableId),
+    tableName: getTableName(b.tableId, b.tableName),
     tableId: b.tableId,
     tableType: (store.tables.find(t => t.id === b.tableId)?.tableType) || (b.bindingType === 'RELATED' ? 'RELATION' : ''),
     tableDescription: (store.tables.find(t => t.id === b.tableId)?.description) || '',
@@ -1255,7 +1255,7 @@ function computeDesignerLinkFormColumns(): Record<number, DesignerLinkFormColumn
       linkCols.push({
         componentId: stableId,
         sourceBindingId: b.bindingId,
-        sourceBindingName: b.tableDisplayName || b.tableName,
+        sourceBindingName: b.tableName,
         boundSubTableBindingId: (c as any).boundSubTableBindingId ?? null,
         boundSubTableName: (c as any).boundSubTableName ?? null,
         columnLabel: (c as any).columnLabel || (c as any).comment || (c as any).linkText || `linkForm:${stableId}`,
@@ -1723,9 +1723,9 @@ function toSubTablePreviewColumns(bindingId: number, rule: any[], config: any) {
 /**
  * Get table name by table ID
  */
-function getTableName(tableId: number): string {
+function getTableName(tableId: number, fallback?: string): string {
   const table = store.tables.find(t => t.id === tableId)
-  return table?.tableDisplayName || table?.tableName || t('form.unknownTable')
+  return table?.tableDisplayName || table?.tableName || fallback || t('form.unknownTable')
 }
 
 /**
@@ -3054,7 +3054,7 @@ function handlePreview() {
       bindingId,
       bindingType: b.bindingType,
       bindingMode: b.bindingMode,
-      tableName: b.tableName || getTableName(b.tableId),
+      tableName: getTableName(b.tableId, b.tableName),
       tableType: (store.tables.find(t => t.id === b.tableId)?.tableType) || (b.bindingType === 'RELATED' ? 'RELATION' : ''),
       tableDescription: (store.tables.find(t => t.id === b.tableId)?.description) || '',
       rule,

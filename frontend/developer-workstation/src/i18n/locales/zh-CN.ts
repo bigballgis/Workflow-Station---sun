@@ -253,6 +253,7 @@ export default {
     relationTable: '关联表',
     addField: '添加字段',
     fieldName: '字段名',
+    fieldDisplayName: '显示名称',
     dataType: '数据类型',
     length: '长度',
     nullable: '可空',

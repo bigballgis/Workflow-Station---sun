@@ -216,6 +216,7 @@ export default {
     relationTable: 'Relation Table',
     addField: 'Add Field',
     fieldName: 'Field Name',
+    fieldDisplayName: 'Display Name',
     dataType: 'Data Type',
     length: 'Length',
     nullable: 'Nullable',

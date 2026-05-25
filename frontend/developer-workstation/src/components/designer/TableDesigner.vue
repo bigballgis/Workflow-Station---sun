@@ -230,6 +230,18 @@
           </template>
         </el-table-column>
         <el-table-column
+          prop="description"
+          :label="t('table.fieldDisplayName')"
+          min-width="180"
+        >
+          <template #default="{ row }">
+            <el-input
+              v-model="row.description"
+              size="small"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column
           prop="fieldName"
           :label="t('table.fieldName')"
           min-width="120"
@@ -377,18 +389,6 @@
               v-else
               class="text-muted"
             >-</span>
-          </template>
-        </el-table-column>
-        <el-table-column
-          prop="description"
-          :label="t('table.description')"
-          min-width="270"
-        >
-          <template #default="{ row }">
-            <el-input
-              v-model="row.description"
-              size="small"
-            />
           </template>
         </el-table-column>
         <el-table-column
@@ -798,6 +798,9 @@ async function handleSaveTable() {
     const fields = (selectedTable.value.fieldDefinitions || [])
       .filter(f => f.fieldName && f.fieldName.trim()) // 过滤空字段名
       .map((f: any, index: number) => ({
+        // Preserve original id so backend can diff fieldName / description (Display Name)
+        // and propagate renames to Form Designer rule + fieldPermissions.
+        id: f.id,
         fieldName: f.fieldName,
         dataType: f.dataType, // 确保 dataType 是有效的枚举值
         length: f.length,

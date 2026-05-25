@@ -13,7 +13,9 @@ import com.developer.enums.DataType;
 import com.developer.enums.DatabaseDialect;
 import com.developer.exception.DeveloperBusinessException;
 import com.developer.exception.ResourceNotFoundException;
+import com.developer.entity.FormDefinition;
 import com.developer.repository.*;
+import com.developer.service.FormConfigFieldRenamer;
 import com.platform.common.i18n.I18nService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -92,7 +94,19 @@ public class TableDesignComponentImpl implements TableDesignComponent {
                     i18nService.getMessage("table.name_exists", request.getTableName()),
                     i18nService.getMessage("table.use_other_name"));
         }
-        
+
+        // 在删除旧字段前，按 id 快照 (fieldName, description)，供保存后与请求做 diff
+        // 以便把字段重命名 / Display Name 变更同步到所有引用此表的 Form rule + fieldPermissions。
+        Map<Long, OldFieldSnapshot> originals = new HashMap<>();
+        for (FieldDefinition existing : tableDefinition.getFieldDefinitions()) {
+            if (existing.getId() == null) continue;
+            originals.put(existing.getId(), new OldFieldSnapshot(
+                    existing.getFieldName(),
+                    existing.getDescription()
+            ));
+        }
+        Long functionUnitId = tableDefinition.getFunctionUnit().getId();
+
         // 更新表基本信息
         tableDefinition.setTableName(request.getTableName());
         tableDefinition.setTableDisplayName(request.getTableDisplayName());
@@ -130,11 +144,53 @@ public class TableDesignComponentImpl implements TableDesignComponent {
         
         TableDefinition saved = tableDefinitionRepository.save(tableDefinition);
         tableDefinitionRepository.flush();
-        
+
+        // 计算字段重命名 / Display Name 变更，同步到该 FunctionUnit 的所有相关 Form。
+        List<FormConfigFieldRenamer.Rename> renames = computeRenames(originals, request.getFields());
+        if (!renames.isEmpty()) {
+            propagateFieldRenamesToForms(functionUnitId, saved, renames);
+        }
+
         // Reload with fields to ensure consistent state for serialization
         return tableDefinitionRepository.findByIdWithFields(saved.getId())
                 .orElse(saved);
     }
+
+    /** 在事务内：扫描该 FunctionUnit 下所有表单，重写引用该表的 rule.field / rule.title 与 fieldPermissions。 */
+    private void propagateFieldRenamesToForms(Long functionUnitId,
+                                              TableDefinition table,
+                                              List<FormConfigFieldRenamer.Rename> renames) {
+        List<FormDefinition> forms = formDefinitionRepository.findByFunctionUnitIdWithBindings(functionUnitId);
+        List<FormDefinition> dirty = FormConfigFieldRenamer.apply(table, forms, renames);
+        if (dirty.isEmpty()) return;
+        formDefinitionRepository.saveAll(dirty);
+        log.info("Propagated {} field rename(s) on table {} to {} form(s)",
+                renames.size(), table.getId(), dirty.size());
+    }
+
+    private List<FormConfigFieldRenamer.Rename> computeRenames(
+            Map<Long, OldFieldSnapshot> originals,
+            List<FieldDefinitionRequest> incoming) {
+        if (originals.isEmpty() || incoming == null || incoming.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<FormConfigFieldRenamer.Rename> out = new ArrayList<>();
+        for (FieldDefinitionRequest f : incoming) {
+            if (f == null || f.getId() == null) continue;
+            OldFieldSnapshot orig = originals.get(f.getId());
+            if (orig == null) continue;
+            String oldName = orig.fieldName();
+            String newName = f.getFieldName();
+            String oldDesc = orig.description();
+            String newDesc = f.getDescription();
+            if (oldName == null || oldName.isBlank()) continue;
+            if (Objects.equals(oldName, newName) && Objects.equals(oldDesc, newDesc)) continue;
+            out.add(new FormConfigFieldRenamer.Rename(oldName, newName, oldDesc, newDesc));
+        }
+        return out;
+    }
+
+    private record OldFieldSnapshot(String fieldName, String description) {}
     
     @Override
     @Transactional

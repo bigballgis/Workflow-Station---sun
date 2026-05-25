@@ -1,5 +1,6 @@
 package com.portal.client;
 
+import com.platform.common.constant.PlatformConstants;
 import com.platform.common.util.ApiResponseBodyUnwrap;
 
 import lombok.RequiredArgsConstructor;
@@ -15,6 +16,7 @@ import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -76,17 +78,42 @@ public class WorkflowEngineClient {
 
     /**
      * workflow-engine 对 /api/v1/** 要求已认证 JWT（与门户共用 {@code JWT_SECRET}）。
-     * 将当前 HTTP 请求的 {@code Authorization} 原样转发；无请求上下文时不加头（如定时任务可能 403）。
+     *
+     * <p>解析顺序与 {@link com.platform.security.filter.JwtAuthenticationFilter#extractToken} 一致：
+     * 优先 {@code Authorization} 头；若缺失则回退到 {@code access_token} httpOnly Cookie，
+     * 并合成 {@code Authorization: Bearer <token>} 转发给 workflow-engine（跨服务调用不会自动带 cookie）。
+     *
+     * <p>无请求上下文时（如定时任务）不加头 —— 此时调用受保护接口会拿到 403，由调用方处理。
      */
     private void forwardInboundAuthorization(HttpHeaders headers) {
         var attrs = RequestContextHolder.getRequestAttributes();
-        if (attrs instanceof ServletRequestAttributes servletAttrs) {
-            HttpServletRequest request = servletAttrs.getRequest();
-            String auth = request.getHeader(HttpHeaders.AUTHORIZATION);
-            if (auth != null && !auth.isBlank()) {
-                headers.set(HttpHeaders.AUTHORIZATION, auth);
+        if (!(attrs instanceof ServletRequestAttributes servletAttrs)) {
+            return;
+        }
+        HttpServletRequest request = servletAttrs.getRequest();
+        String auth = request.getHeader(PlatformConstants.HEADER_AUTHORIZATION);
+        if (auth != null && !auth.isBlank()) {
+            headers.set(PlatformConstants.HEADER_AUTHORIZATION, auth.trim());
+            return;
+        }
+        String cookieToken = extractAccessTokenFromCookie(request);
+        if (cookieToken != null && !cookieToken.isBlank()) {
+            headers.set(PlatformConstants.HEADER_AUTHORIZATION,
+                    PlatformConstants.HEADER_BEARER_PREFIX + cookieToken.trim());
+        }
+    }
+
+    private static String extractAccessTokenFromCookie(HttpServletRequest request) {
+        Cookie[] cookies = request.getCookies();
+        if (cookies == null) {
+            return null;
+        }
+        for (Cookie cookie : cookies) {
+            if ("access_token".equals(cookie.getName())) {
+                return cookie.getValue();
             }
         }
+        return null;
     }
 
     /** 从 Engine 返回的 JSON 响应体里提取业务 message 字段 */

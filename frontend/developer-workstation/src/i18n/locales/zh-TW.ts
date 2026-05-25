@@ -253,6 +253,7 @@ export default {
     relationTable: '關聯表',
     addField: '新增欄位',
     fieldName: '欄位名',
+    fieldDisplayName: '顯示名稱',
     dataType: '資料類型',
     length: '長度',
     nullable: '可空',

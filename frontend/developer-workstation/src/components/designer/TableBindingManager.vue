@@ -33,7 +33,7 @@
           min-width="120"
         >
           <template #default="{ row }">
-            <span>{{ row.tableName || getTableName(row.tableId) }}</span>
+            <span>{{ getTableName(row.tableId, row.tableName) }}</span>
           </template>
         </el-table-column>
         <el-table-column
@@ -439,9 +439,9 @@ function isTableBound(tableId: number): boolean {
 }
 
 // Get table name by ID
-function getTableName(tableId: number): string {
+function getTableName(tableId: number, fallback?: string): string {
   const table = props.tables.find(t => t.id === tableId)
-  return table?.tableDisplayName || table?.tableName || t('tableBinding.unknownTable')
+  return table?.tableDisplayName || table?.tableName || fallback || t('tableBinding.unknownTable')
 }
 
 // Binding type label

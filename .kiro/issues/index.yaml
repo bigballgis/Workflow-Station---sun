@@ -1525,3 +1525,14 @@
   note: |
     根因：此前误将 demo init 与 DataService 按物理表 (CREATE TABLE test) 处理；Relation Table 行数据统一 JSONB 存 rt_table_data_rows，部署仅更新结构元数据/版本快照。
     修复：撤销 init 中 CREATE TABLE test；新增 rt_table_data_rows；DataService/Portal 改查 JSON 行；Deploy 移除 DDL；删除 dev 库中误建的 test 物理表。
+
+- id: "1372"
+  status: fixed
+  fixed_at: "2026-05-25"
+  severity: minor
+  category: bug
+  summary: "Developer Workstation Form Design 的 Sub Table / Relation Table tab 显示技术表名，未使用 Table Design 中的 Table Display Name"
+  file: "frontend/developer-workstation/src/components/designer/FormDesigner.vue; TableBindingManager.vue"
+  note: |
+    根因：tab 标签直接读取 binding.tableName（后端 FormTableBinding 返回 table.tableName 技术名）；getTableName() 虽会查 store.tables.tableDisplayName，但 `b.tableName || getTableName(...)` 的优先级把 displayName 盖掉了。
+    修复：getTableName(tableId, fallback?) 调整为「优先 tableDisplayName → tableName → fallback → unknown」；FormDesigner 与 TableBindingManager 中所有 tab/option/列引用统一调用 getTableName(b.tableId, b.tableName)。
