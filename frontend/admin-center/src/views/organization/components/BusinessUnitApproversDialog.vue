@@ -26,7 +26,7 @@
       <el-button
         type="primary"
         :disabled="!selectedUserId"
-        @click="addApprover"
+        @click="handleAddApprover"
       >
         {{ t('organization.addApprover') }}
       </el-button>
@@ -54,7 +54,7 @@
           <el-button
             link
             type="danger"
-            @click="removeApprover(row)"
+            @click="handleRemoveApprover(row)"
           >
             {{ t('common.delete') }}
           </el-button>
@@ -77,6 +77,7 @@ import type { BusinessUnit } from '@/api/businessUnit'
 
 const props = defineProps<{ businessUnit: BusinessUnit | null }>()
 const visible = defineModel<boolean>({ default: false })
+const emit = defineEmits(['success'])
 const { t } = useI18n()
 
 const {
@@ -87,6 +88,18 @@ const {
 const onDialogOpen = () => {
   fetchApprovers()
   resetDialog()
+}
+
+const handleAddApprover = async () => {
+  if (await addApprover()) {
+    emit('success')
+  }
+}
+
+const handleRemoveApprover = async (row: Parameters<typeof removeApprover>[0]) => {
+  if (await removeApprover(row)) {
+    emit('success')
+  }
 }
 
 watch(() => props.businessUnit, () => { if (visible.value) fetchApprovers() })

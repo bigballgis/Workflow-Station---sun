@@ -60,7 +60,7 @@ export function useBusinessUnitMembers(businessUnit: Ref<BusinessUnit | null>) {
   }
 
   const addMember = async () => {
-    if (!businessUnit.value || !selectedUserId.value) return
+    if (!businessUnit.value || !selectedUserId.value) return false
     try {
       await businessUnitApi.addMember(businessUnit.value.id, selectedUserId.value)
       notifySuccess(t('common.success'))
@@ -68,8 +68,10 @@ export function useBusinessUnitMembers(businessUnit: Ref<BusinessUnit | null>) {
       searchResults.value = []
       defaultUsersLoaded.value = false
       await fetchMembers()
+      return true
     } catch {
       notifyError(terr(AppErrorCode.BUSINESS_UNIT_OPERATION_FAILED))
+      return false
     }
   }
 
@@ -78,8 +80,10 @@ export function useBusinessUnitMembers(businessUnit: Ref<BusinessUnit | null>) {
       await businessUnitApi.removeMember(businessUnit.value!.id, member.id)
       notifySuccess(t('common.success'))
       await fetchMembers()
+      return true
     } catch {
       notifyError(terr(AppErrorCode.BUSINESS_UNIT_OPERATION_FAILED))
+      return false
     }
   }
 

@@ -1640,3 +1640,34 @@
           • dataType 变更不强制改写画布节点 type，避免抹掉自定义控件。
       - 单元测试 FormConfigFieldRenamerTest 共 12 个用例：PRIMARY rule、SUB subForms、children 递归、仅 Display Name 变更、不相关绑定不动、Display Name 清空回退、length 同步 input+VARCHAR、length 不同步 select、dataType 变更不翻转 type、scale 同步 inputNumber+DECIMAL、nullable true→false 追加 required、nullable false→true 移除 required（保留其他校验）。
     部署：mvn package developer-workstation + `docker compose up -d --build developer-workstation`，容器 Tomcat 14.584s 启动成功。
+
+- id: "1380"
+  status: fixed
+  fixed_at: "2026-05-25"
+  severity: minor
+  category: bug
+  summary: "user-portal 待办详情未将普通 subtable 的 assignee 字段识别为办理人列，导致子表显示未分配"
+  file: |
+    frontend/user-portal/src/utils/subTableAssignment.ts;
+    frontend/user-portal/src/utils/__tests__/subTableAssignment.test.ts
+  note: |
+    根因：任务详情与 FormRenderer 统一通过 resolveAssigneeFieldForBinding() 推断子表办理人字段；该函数只识别 assignee_user_id / assigneeId / assignee_id 和 participants 表名回退，未覆盖普通 subtable 中直接存为 `assignee` 用户对象的场景，导致 assignee 列未被识别，SubTableField 最终落到“unassigned”展示。
+    修复：在优先字段列表中精确加入 `assignee`，不扩大模糊匹配范围，也不改 lookup 配置或后端返回契约；补充 subTableAssignment.test.ts 覆盖 generic subtable 的 `assignee` 识别和 participants 既有回退。
+    验证：`npx vitest run "src/utils/__tests__/subTableAssignment.test.ts"` 通过；`npm run build` 通过；`docker compose -f docker-compose.dev.yml --env-file .env up -d --build user-portal-frontend` 后容器正常启动。
+
+- id: "1381"
+  status: fixed
+  fixed_at: "2026-05-25"
+  severity: minor
+  category: bug
+  summary: "admin-center 组织页在对话框内增删 Approvers/Members 后右侧列表不即时刷新"
+  file: |
+    frontend/admin-center/src/views/organization/components/BusinessUnitApproversDialog.vue;
+    frontend/admin-center/src/composables/modules/useBusinessUnitApprovers.ts;
+    frontend/admin-center/src/views/organization/components/BusinessUnitMembersDialog.vue;
+    frontend/admin-center/src/composables/modules/useBusinessUnitMembers.ts;
+    frontend/admin-center/src/composables/__tests__/businessUnitDialogRefresh.test.ts
+  note: |
+    根因：BusinessUnitTree 右侧详情卡片依赖 `<BusinessUnitApproversDialog @success="fetchApprovers">` 与 `<BusinessUnitMembersDialog @success="handleMembersChange">` 回刷列表，但两个 dialog 在 add/remove 成功后都没有 emit `success`；结果弹窗内部列表刷新了，页面右侧列表仍保持旧数据，必须手动刷新页签。
+    修复：让 useBusinessUnitApprovers / useBusinessUnitMembers 的 add/remove 方法返回布尔成功标记；两个 dialog 在操作成功后显式 emit `success`，复用父页现有刷新逻辑，避免改 API 或 lookup 配置。
+    验证：`npx vitest run "src/composables/__tests__/businessUnitDialogRefresh.test.ts"` 通过；`npm run build` 通过；`docker compose -f docker-compose.dev.yml --env-file .env up -d --build admin-center-frontend` 后容器正常启动。

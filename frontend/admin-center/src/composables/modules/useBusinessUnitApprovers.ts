@@ -66,7 +66,7 @@ export function useBusinessUnitApprovers(businessUnit: Ref<BusinessUnit | null>)
   }
 
   const addApprover = async () => {
-    if (!businessUnit.value || !selectedUserId.value) return
+    if (!businessUnit.value || !selectedUserId.value) return false
     try {
       await businessUnitApi.addApprover(businessUnit.value.id, selectedUserId.value)
       notifySuccess(t('common.success'))
@@ -74,21 +74,25 @@ export function useBusinessUnitApprovers(businessUnit: Ref<BusinessUnit | null>)
       searchResults.value = []
       defaultUsersLoaded.value = false
       await fetchApprovers()
+      return true
     } catch {
       notifyError(terr(AppErrorCode.BUSINESS_UNIT_OPERATION_FAILED))
+      return false
     }
   }
 
   const removeApprover = async (approver: Approver) => {
     try {
       await notifyConfirm(t('common.confirm'), t('common.confirm'), { type: 'warning' })
-    } catch { return }
+    } catch { return false }
     try {
       await businessUnitApi.removeApprover(approver.id)
       notifySuccess(t('common.success'))
       await fetchApprovers()
+      return true
     } catch {
       notifyError(terr(AppErrorCode.BUSINESS_UNIT_OPERATION_FAILED))
+      return false
     }
   }
 

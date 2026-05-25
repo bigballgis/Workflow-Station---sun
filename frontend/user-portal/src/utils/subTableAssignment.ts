@@ -6,7 +6,7 @@ export function inferAssigneeFieldFromColumns(
   columns: Array<{ field?: string } | null | undefined>
 ): string | undefined {
   if (!columns?.length) return undefined
-  const priority = ['assignee_user_id', 'assigneeUserId', 'assignee_id', 'assigneeId']
+  const priority = ['assignee_user_id', 'assigneeUserId', 'assignee_id', 'assigneeId', 'assignee']
   for (const name of priority) {
     if (columns.some(c => c && (c as { field?: string }).field === name)) {
       return name

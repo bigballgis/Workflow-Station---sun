@@ -26,7 +26,7 @@
       <el-button
         type="primary"
         :disabled="!selectedUserId"
-        @click="addMember"
+        @click="handleAddMember"
       >
         {{ t('role.addMember') }}
       </el-button>
@@ -61,7 +61,7 @@
           <el-button
             link
             type="danger"
-            @click="removeMember(row)"
+            @click="handleRemoveMember(row)"
           >
             {{ t('common.delete') }}
           </el-button>
@@ -95,6 +95,18 @@ const {
 const onDialogOpen = () => {
   fetchMembers()
   resetDialog()
+}
+
+const handleAddMember = async () => {
+  if (await addMember()) {
+    emit('success')
+  }
+}
+
+const handleRemoveMember = async (row: Parameters<typeof removeMember>[0]) => {
+  if (await removeMember(row)) {
+    emit('success')
+  }
 }
 
 watch(() => props.businessUnit, () => { if (visible.value) fetchMembers() })
