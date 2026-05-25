@@ -8,9 +8,9 @@
 | 状态 | 数量 |
 |------|------|
 | ✅ Fixed | **189** |
-| 🔓 Open | **12** |
+| 🔓 Open | **13** |
 | ⏸️ Wontfix | **1** |
-| **总计** | **202** |
+| **总计** | **203** |
 
 按严重度的分布见 `index.yaml` 各条目的 `severity` 字段。
 
@@ -32,6 +32,7 @@
 | 167 | quality | frontend/developer-workstation 三语 locale key 不一致 |
 | 168 | deploy | dev docker-compose n8n healthcheck 用 curl 但镜像无 curl，容器长期 unhealthy |
 | 1373 | security | user-portal 流程详情接口在未登录时仍可直接读取流程实例详情 |
+| 1383 | bug | user-portal MI 子任务 To Do 的 subtable2 inline 表单串用上一参与者数据 |
 
 ### Wontfix
 

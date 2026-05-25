@@ -1679,8 +1679,6 @@
   summary: "admin-center 的 useBiDashboard 在 catch 中引用未定义 error，导致状态切换或删除失败时前端二次报错"
 
 - id: "1383"
-  status: fixed
-  fixed_at: "2026-05-25"
   severity: major
   category: bug
   summary: "user-portal MI 子任务 To Do：完成第一个子任务后打开第二个子任务 sub form1，subtable2 inline 表单被预填了上一子任务输入的 age/sex"
@@ -1696,3 +1694,10 @@
       - `npx vitest run src/composables/tasks/__tests__/linkFormMiIsolation.test.ts src/composables/tasks/__tests__/mergeSubTableRowsMiMerge.test.ts src/composables/tasks/__tests__/subTableRowMetaFields.test.ts` 全部通过（39/39）。
       - `cd frontend/user-portal && npm run build` 成功。
       - `docker compose -f docker-compose.dev.yml --env-file .env up -d --build user-portal-frontend` 后 platform-user-portal-frontend-dev / platform-user-portal-dev 正常启动。
+
+- id: "1384"
+  status: fixed
+  fixed_at: "2026-05-25"
+  severity: major
+  category: security
+  summary: "developer-workstation 容器入口仍以 root 直接启动 Java 进程，未满足非 root 运行约束"

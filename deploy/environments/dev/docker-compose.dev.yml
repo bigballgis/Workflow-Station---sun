@@ -310,11 +310,7 @@ services:
       SWAGGER_ENABLED: ${SWAGGER_ENABLED:-true}
       SPRING_FLYWAY_ENABLED: false
       SSO_INTERNAL_TOKEN: ${SSO_INTERNAL_TOKEN:-dev-sso-internal-token-change-me}
-      FILE_UPLOAD_DIR: /app/uploads
       FILE_UPLOAD_BASE_URL: /api/v1/upload/files
-    volumes:
-      - ./logs:/app/logs
-      - developer_workstation_uploads:/app/uploads
     networks:
       - platform-dev-network
     restart: unless-stopped
@@ -475,7 +471,6 @@ services:
 volumes:
   postgres_dev_data:
   redis_dev_data:
-  developer_workstation_uploads:
   n8n_data:
 
 networks:

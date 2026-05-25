@@ -1,29 +1,24 @@
 package com.developer.controller;
 
+import com.developer.component.FileUploadComponent;
 import com.developer.dto.ApiResponse;
 import com.developer.dto.ErrorResponse;
+import com.developer.entity.UploadedFile;
+import com.developer.exception.DeveloperBusinessException;
+import com.developer.exception.ResourceNotFoundException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.UrlResource;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.Resource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.UUID;
-import java.net.URLEncoder;
 
 /**
  * 文件上传控制器
@@ -32,19 +27,11 @@ import java.net.URLEncoder;
 @RestController
 @RequestMapping("/upload")
 @Slf4j
+@RequiredArgsConstructor
 @Tag(name = "File Upload", description = "File upload and download operations")
 public class FileUploadController {
 
-    private static final List<String> ALLOWED_EXTENSIONS =
-            Arrays.asList(".jpg", ".jpeg", ".png", ".gif", ".pdf", ".doc", ".docx", ".xls", ".xlsx");
-
-    private static final long MAX_FILE_SIZE_BYTES = 10L * 1024 * 1024; // 10MB
-
-    @Value("${file.upload.dir:uploads}")
-    private String uploadDir;
-
-    @Value("${file.upload.base-url:/api/v1/upload/files}")
-    private String baseUrl;
+    private final FileUploadComponent fileUploadComponent;
 
     /**
      * 上传单个文件
@@ -53,48 +40,10 @@ public class FileUploadController {
     @Operation(summary = "Upload file", description = "Supports jpg/png/pdf/docx/xlsx, max 10MB")
     public ResponseEntity<ApiResponse<Map<String, Object>>> upload(
             @RequestParam("file") MultipartFile file) {
-
-        if (file.isEmpty()) {
-            return ResponseEntity.badRequest().body(errorResponse("FILE_EMPTY", "File must not be empty"));
-        }
-
-        if (file.getSize() > MAX_FILE_SIZE_BYTES) {
-            return ResponseEntity.badRequest().body(errorResponse("FILE_TOO_LARGE", "File size must not exceed 10MB"));
-        }
-
-        String originalFilename = file.getOriginalFilename();
-        if (originalFilename == null || originalFilename.isBlank()) {
-            return ResponseEntity.badRequest().body(errorResponse("INVALID_FILENAME", "Invalid filename"));
-        }
-
-        String extension = getExtension(originalFilename).toLowerCase();
-        if (!ALLOWED_EXTENSIONS.contains(extension)) {
-            return ResponseEntity.badRequest().body(
-                    errorResponse("UNSUPPORTED_TYPE", "Unsupported file type, allowed: " + String.join(", ", ALLOWED_EXTENSIONS)));
-        }
-
         try {
-            Path uploadPath = Paths.get(uploadDir).toAbsolutePath().normalize();
-            Files.createDirectories(uploadPath);
-
-            String storedName = UUID.randomUUID() + extension;
-            Path targetPath = uploadPath.resolve(storedName);
-            Files.copy(file.getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING);
-
-            // Preserve original filename for UI display/download while keeping storage name opaque.
-            String encodedOriginalName = URLEncoder.encode(originalFilename, StandardCharsets.UTF_8);
-            String fileUrl = baseUrl + "/" + storedName + "?originalName=" + encodedOriginalName;
-
-            Map<String, Object> result = new HashMap<>();
-            result.put("id", storedName);
-            result.put("name", originalFilename);
-            result.put("url", fileUrl);
-            result.put("size", file.getSize());
-            result.put("type", file.getContentType());
-
-            log.info("File uploaded: {} -> {}", originalFilename, storedName);
-            return ResponseEntity.ok(ApiResponse.success(result));
-
+            return ResponseEntity.ok(ApiResponse.success(fileUploadComponent.upload(file)));
+        } catch (DeveloperBusinessException e) {
+            return ResponseEntity.badRequest().body(errorResponse(e.getErrorCode(), e.getMessage()));
         } catch (IOException e) {
             log.error("File upload failed: {}", e.getMessage(), e);
             return ResponseEntity.internalServerError()
@@ -107,42 +56,23 @@ public class FileUploadController {
      */
     @GetMapping("/files/{filename}")
     @Operation(summary = "Get file", description = "Access uploaded file by filename, supports inline preview")
-    public ResponseEntity<org.springframework.core.io.Resource> getFile(
+    public ResponseEntity<Resource> getFile(
             @PathVariable String filename) {
 
-        // 1. Reject path separators and traversal sequences
         if (filename.contains("/") || filename.contains("\\") || filename.contains("..")) {
             return ResponseEntity.badRequest().build();
         }
 
         try {
-            Path basePath = Paths.get(uploadDir).toAbsolutePath().normalize();
-            Path filePath = basePath.resolve(filename).normalize();
-
-            // 2. Prevent path traversal attacks
-            if (!filePath.startsWith(basePath)) {
-                log.warn("Path traversal attempt blocked: filename={}, resolved={}", filename, filePath);
-                return ResponseEntity.badRequest().build();
-            }
-
-            UrlResource resource = new UrlResource(filePath.toUri());
-            if (!resource.exists() || !resource.isReadable()) {
-                return ResponseEntity.notFound().build();
-            }
-
-            String contentType = Files.probeContentType(filePath);
-            if (contentType == null) {
-                contentType = "application/octet-stream";
-            }
+            UploadedFile file = fileUploadComponent.getFile(filename);
+            String contentType = file.getContentType() != null ? file.getContentType() : "application/octet-stream";
 
             return ResponseEntity.ok()
                     .header("Content-Type", contentType)
                     .header("Content-Disposition", "inline; filename=\"" + filename + "\"")
-                    .body(resource);
-
-        } catch (IOException e) {
-            log.error("File retrieval failed: {}", e.getMessage(), e);
-            return ResponseEntity.internalServerError().build();
+                    .body(new ByteArrayResource(file.getContent()));
+        } catch (ResourceNotFoundException e) {
+            return ResponseEntity.notFound().build();
         }
     }
 
@@ -152,37 +82,15 @@ public class FileUploadController {
     @DeleteMapping("/files/{filename}")
     @Operation(summary = "Delete file", description = "Delete an uploaded file")
     public ResponseEntity<ApiResponse<Void>> deleteFile(@PathVariable String filename) {
-        // Reject path separators and traversal sequences
         if (filename.contains("/") || filename.contains("\\") || filename.contains("..")) {
             return ResponseEntity.badRequest().build();
         }
         try {
-            Path basePath = Paths.get(uploadDir).toAbsolutePath().normalize();
-            Path filePath = basePath.resolve(filename).normalize();
-
-            if (!filePath.startsWith(basePath)) {
-                log.warn("Path traversal attempt blocked in delete: filename={}", filename);
-                return ResponseEntity.badRequest().build();
-            }
-
-            boolean deleted = Files.deleteIfExists(filePath);
-            if (deleted) {
-                log.info("File deleted: {}", filename);
-                return ResponseEntity.ok(ApiResponse.success(null));
-            } else {
-                return ResponseEntity.notFound().build();
-            }
-
-        } catch (IOException e) {
-            log.error("File deletion failed: {}", e.getMessage(), e);
-            return ResponseEntity.internalServerError()
-                    .body(errorResponse("DELETE_FAILED", "File deletion failed"));
+            fileUploadComponent.deleteFile(filename);
+            return ResponseEntity.ok(ApiResponse.success(null));
+        } catch (ResourceNotFoundException e) {
+            return ResponseEntity.notFound().build();
         }
-    }
-
-    private String getExtension(String filename) {
-        int dotIndex = filename.lastIndexOf('.');
-        return dotIndex >= 0 ? filename.substring(dotIndex) : "";
     }
 
     private <T> ApiResponse<T> errorResponse(String code, String message) {

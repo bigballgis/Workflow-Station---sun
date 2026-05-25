@@ -31,6 +31,12 @@ spec:
         app.kubernetes.io/name: developer-workstation
         app.kubernetes.io/instance: developer-workstation
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        fsGroupChangePolicy: OnRootMismatch
       imagePullSecrets:
       - name: nexus3
       containers:
@@ -45,9 +51,6 @@ spec:
         ports:
         - containerPort: 8080
           name: http
-        volumeMounts:
-        - name: uploads-storage
-          mountPath: /app/uploads
         resources:
           requests:
             memory: "512Mi"
@@ -71,25 +74,6 @@ spec:
           periodSeconds: 5
           timeoutSeconds: 3
           failureThreshold: 3
-      volumes:
-      - name: uploads-storage
-        persistentVolumeClaim:
-          claimName: developer-workstation-uploads-pvc
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: developer-workstation-uploads-pvc
-  namespace: __NAMESPACE__
-  labels:
-    app: developer-workstation
-spec:
-  storageClassName: pwx-standard
-  accessModes:
-  - ReadWriteOnce
-  resources:
-    requests:
-      storage: 10Gi
 ---
 apiVersion: v1
 kind: Service

@@ -1495,10 +1495,9 @@ spring:
       max-file-size: 10MB
       max-request-size: 10MB
 
-# 文件上传目录
+# 文件上传配置
 file:
   upload:
-    dir: ${FILE_UPLOAD_DIR:uploads}
     base-url: ${FILE_UPLOAD_BASE_URL:/api/v1/upload/files}
 
 # 安全配置 (单一 security: 键，包含所有子配置)
@@ -1643,7 +1642,6 @@ management:
 | `AI_GENERATION_FORCE_UNLOCK_TIMEOUT` | AI 强制解锁超时 (秒) | 60 |
 | `AI_GENERATION_CONTEXT_MAX_SIZE` | AI 上下文最大字节数 | 102400 |
 | `SWAGGER_ENABLED` | Swagger 开关 | true (生产环境设 false) |
-| `FILE_UPLOAD_DIR` | 文件上传目录 | uploads |
 | `FILE_UPLOAD_BASE_URL` | 文件访问基础 URL | /api/v1/upload/files |
 | `LOG_LEVEL_ROOT` | 根日志级别 | INFO |
 | `LOG_LEVEL_PLATFORM` | 平台日志级别 | DEBUG |

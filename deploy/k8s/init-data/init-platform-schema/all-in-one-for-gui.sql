@@ -1424,8 +1424,24 @@ CREATE TABLE IF NOT EXISTS dw_versions (
 
 CREATE INDEX IF NOT EXISTS idx_dw_versions_fu ON dw_versions(function_unit_id);
 
+-- 11. Uploaded Files Table (dw_uploaded_files)
 -- =====================================================
--- 11. Operation Logs Table (dw_operation_logs)
+CREATE TABLE IF NOT EXISTS dw_uploaded_files (
+    id BIGSERIAL PRIMARY KEY,
+    stored_name VARCHAR(150) NOT NULL UNIQUE,
+    original_name VARCHAR(255) NOT NULL,
+    content_type VARCHAR(255),
+    file_size BIGINT NOT NULL,
+    content BYTEA NOT NULL,
+    created_by VARCHAR(64),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    lock_version BIGINT NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_dw_uploaded_files_created_at ON dw_uploaded_files(created_at DESC);
+
+-- =====================================================
+-- 12. Operation Logs Table (dw_operation_logs)
 -- =====================================================
 CREATE TABLE IF NOT EXISTS dw_operation_logs (
     id BIGSERIAL PRIMARY KEY,
@@ -1459,6 +1475,8 @@ COMMENT ON TABLE dw_form_table_bindings IS 'Form-table binding relationships';
 COMMENT ON TABLE dw_action_definitions IS 'Action/button definitions';
 COMMENT ON COLUMN dw_action_definitions.action_type IS 'Valid types: PROCESS_SUBMIT, APPROVE, REJECT, N8N_ACTION, FORM_POPUP, API_CALL';
 COMMENT ON TABLE dw_versions IS 'Function unit version history';
+COMMENT ON TABLE dw_uploaded_files IS 'Database-backed uploaded files';
+COMMENT ON COLUMN dw_uploaded_files.stored_name IS 'Opaque filename token exposed in /api/v1/upload/files/{storedName}';
 COMMENT ON TABLE dw_operation_logs IS 'Operation audit logs';
 
 -- =====================================================
