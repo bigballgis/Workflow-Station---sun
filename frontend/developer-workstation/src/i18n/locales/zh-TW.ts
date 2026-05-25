@@ -127,6 +127,7 @@ export default {
     createSuccess: '建立成功',
     publishSuccess: '發佈成功',
     cloneSuccess: '複製成功',
+    cloneFailed: '複製失敗',
     deleteSuccess: '刪除成功',
     enterChangeLog: '輸入變更日誌',
     publishTitle: '發佈功能單元',

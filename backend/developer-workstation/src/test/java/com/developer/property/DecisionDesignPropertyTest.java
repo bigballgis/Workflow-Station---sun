@@ -87,13 +87,18 @@ public class DecisionDesignPropertyTest {
                 mock(FormDefinitionRepository.class),
                 mock(ActionDefinitionRepository.class),
                 mock(DecisionDefinitionRepository.class),
+                mock(FormTableBindingRepository.class),
+                mock(FormStageBindingRepository.class),
+                mock(TableRelationRepository.class),
+                mock(SubTableViewConfigRepository.class),
                 mock(VersionRepository.class),
                 mock(IconRepository.class),
                 new ObjectMapper(),
                 mock(UserDisplayNameService.class),
                 mock(FunctionUnitWorkspaceAccessService.class),
                 functionUnitDevGroupAssignmentRepository,
-                mock(com.developer.component.VersionComponent.class)
+                mock(com.developer.component.VersionComponent.class),
+                mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class)
         );
 
         idGenerator = new AtomicLong(1L);
@@ -704,13 +709,18 @@ public class DecisionDesignPropertyTest {
                 mock(FormDefinitionRepository.class),
                 mock(ActionDefinitionRepository.class),
                 decisionDefRepo,
+                mock(FormTableBindingRepository.class),
+                mock(FormStageBindingRepository.class),
+                mock(TableRelationRepository.class),
+                mock(SubTableViewConfigRepository.class),
                 mock(VersionRepository.class),
                 mock(IconRepository.class),
                 new ObjectMapper(),
                 mock(UserDisplayNameService.class),
                 mock(FunctionUnitWorkspaceAccessService.class),
                 cloneDevGroupRepo,
-                mock(com.developer.component.VersionComponent.class)
+                mock(com.developer.component.VersionComponent.class),
+                mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class)
         );
 
         // Mock: functionUnitRepository.save returns the entity with an ID
@@ -825,23 +835,40 @@ public class DecisionDesignPropertyTest {
             // Set up ExportImportComponentImpl with mocked repos and real DmnXmlParser
             FunctionUnitRepository exportFuRepo = mock(FunctionUnitRepository.class);
             DecisionDefinitionRepository exportDecisionRepo = mock(DecisionDefinitionRepository.class);
+            TableDefinitionRepository exportTableRepo = mock(TableDefinitionRepository.class);
+            FormDefinitionRepository exportFormRepo = mock(FormDefinitionRepository.class);
+            ActionDefinitionRepository exportActionRepo = mock(ActionDefinitionRepository.class);
+            TableRelationRepository exportRelationRepo = mock(TableRelationRepository.class);
             DmnXmlParser realParser = new DmnXmlParser();
 
             when(exportFuRepo.findById(functionUnitId)).thenReturn(Optional.of(functionUnit));
+            when(exportTableRepo.findByFunctionUnitIdWithFields(functionUnitId))
+                    .thenReturn(functionUnit.getTableDefinitions());
+            when(exportFormRepo.findByFunctionUnitIdWithBindings(functionUnitId))
+                    .thenReturn(functionUnit.getFormDefinitions());
+            when(exportActionRepo.findByFunctionUnitId(functionUnitId))
+                    .thenReturn(functionUnit.getActionDefinitions());
+            when(exportDecisionRepo.findByFunctionUnitId(functionUnitId))
+                    .thenReturn(functionUnit.getDecisionDefinitions());
+            when(exportRelationRepo.findByFunctionUnitId(functionUnitId)).thenReturn(new ArrayList<>());
 
             com.developer.component.impl.ExportImportComponentImpl exportImportComponent =
                     new com.developer.component.impl.ExportImportComponentImpl(
                             exportFuRepo,
                             mock(ProcessDefinitionRepository.class),
-                            mock(TableDefinitionRepository.class),
-                            mock(FormDefinitionRepository.class),
-                            mock(ActionDefinitionRepository.class),
+                            exportTableRepo,
+                            exportFormRepo,
+                            exportActionRepo,
                             exportDecisionRepo,
+                            mock(FormTableBindingRepository.class),
+                            mock(FormStageBindingRepository.class),
+                            exportRelationRepo,
                             realParser,
                             mock(FunctionUnitWorkspaceAccessService.class),
                             mock(FunctionUnitDevGroupAssignmentRepository.class),
                             mock(jakarta.persistence.EntityManager.class),
-                            new ObjectMapper()
+                            new ObjectMapper(),
+                            mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class)
                     );
 
             // Step 1: Export to ZIP
@@ -959,11 +986,15 @@ public class DecisionDesignPropertyTest {
                             mock(FormDefinitionRepository.class),
                             mock(ActionDefinitionRepository.class),
                             skipDecisionRepo,
+                            mock(FormTableBindingRepository.class),
+                            mock(FormStageBindingRepository.class),
+                            mock(TableRelationRepository.class),
                             realParser,
                             mock(FunctionUnitWorkspaceAccessService.class),
                             mock(FunctionUnitDevGroupAssignmentRepository.class),
                             mock(jakarta.persistence.EntityManager.class),
-                            new ObjectMapper()
+                            new ObjectMapper(),
+                            mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class)
                     );
 
             // Build a ZIP with one decision
@@ -1028,11 +1059,15 @@ public class DecisionDesignPropertyTest {
                             mock(FormDefinitionRepository.class),
                             mock(ActionDefinitionRepository.class),
                             overwriteDecisionRepo,
+                            mock(FormTableBindingRepository.class),
+                            mock(FormStageBindingRepository.class),
+                            mock(TableRelationRepository.class),
                             realParser,
                             mock(FunctionUnitWorkspaceAccessService.class),
                             mock(FunctionUnitDevGroupAssignmentRepository.class),
                             mock(jakarta.persistence.EntityManager.class),
-                            new ObjectMapper()
+                            new ObjectMapper(),
+                            mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class)
                     );
 
             // Build a ZIP with one decision

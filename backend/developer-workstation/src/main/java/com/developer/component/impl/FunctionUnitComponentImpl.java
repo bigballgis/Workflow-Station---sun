@@ -16,9 +16,13 @@ import com.developer.security.FunctionUnitWorkspaceAccessService;
 import com.developer.security.WorkspaceAccessAction;
 import com.developer.component.VersionComponent;
 import com.developer.util.BpmnIdRewriter;
+import com.developer.util.DeveloperWorkstationSequenceSynchronizer;
+import com.developer.util.FormConfigJsonBindingIdRewriter;
 import com.developer.util.MinimalBpmnTemplate;
 import com.developer.util.XmlEncodingUtil;
 import com.developer.service.UserDisplayNameService;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.criteria.Predicate;
 import com.platform.security.util.SecurityContextUtils;
@@ -55,6 +59,10 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     private final FormDefinitionRepository formDefinitionRepository;
     private final ActionDefinitionRepository actionDefinitionRepository;
     private final DecisionDefinitionRepository decisionDefinitionRepository;
+    private final FormTableBindingRepository formTableBindingRepository;
+    private final FormStageBindingRepository formStageBindingRepository;
+    private final TableRelationRepository tableRelationRepository;
+    private final SubTableViewConfigRepository subTableViewConfigRepository;
     private final VersionRepository versionRepository;
     private final IconRepository iconRepository;
     private final ObjectMapper objectMapper;
@@ -62,6 +70,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     private final FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService;
     private final FunctionUnitDevGroupAssignmentRepository functionUnitDevGroupAssignmentRepository;
     private final VersionComponent versionComponent;
+    private final DeveloperWorkstationSequenceSynchronizer sequenceSynchronizer;
     
     public FunctionUnitComponentImpl(
             FunctionUnitRepository functionUnitRepository,
@@ -70,19 +79,28 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
             FormDefinitionRepository formDefinitionRepository,
             ActionDefinitionRepository actionDefinitionRepository,
             DecisionDefinitionRepository decisionDefinitionRepository,
+            FormTableBindingRepository formTableBindingRepository,
+            FormStageBindingRepository formStageBindingRepository,
+            TableRelationRepository tableRelationRepository,
+            SubTableViewConfigRepository subTableViewConfigRepository,
             VersionRepository versionRepository,
             IconRepository iconRepository,
             ObjectMapper objectMapper,
             UserDisplayNameService userDisplayNameService,
             FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService,
             FunctionUnitDevGroupAssignmentRepository functionUnitDevGroupAssignmentRepository,
-            VersionComponent versionComponent) {
+            VersionComponent versionComponent,
+            DeveloperWorkstationSequenceSynchronizer sequenceSynchronizer) {
         this.functionUnitRepository = functionUnitRepository;
         this.processDefinitionRepository = processDefinitionRepository;
         this.tableDefinitionRepository = tableDefinitionRepository;
         this.formDefinitionRepository = formDefinitionRepository;
         this.actionDefinitionRepository = actionDefinitionRepository;
         this.decisionDefinitionRepository = decisionDefinitionRepository;
+        this.formTableBindingRepository = formTableBindingRepository;
+        this.formStageBindingRepository = formStageBindingRepository;
+        this.tableRelationRepository = tableRelationRepository;
+        this.subTableViewConfigRepository = subTableViewConfigRepository;
         this.versionRepository = versionRepository;
         this.iconRepository = iconRepository;
         this.objectMapper = objectMapper;
@@ -90,6 +108,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         this.functionUnitWorkspaceAccessService = functionUnitWorkspaceAccessService;
         this.functionUnitDevGroupAssignmentRepository = functionUnitDevGroupAssignmentRepository;
         this.versionComponent = versionComponent;
+        this.sequenceSynchronizer = sequenceSynchronizer;
     }
     
     /**
@@ -444,6 +463,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('TECH_LEAD', 'TEAM_LEAD')")
     public FunctionUnit clone(Long id, String newName) {
         functionUnitWorkspaceAccessService.assertCanAccess(id, WorkspaceAccessAction.MODIFY);
+        sequenceSynchronizer.synchronizeAll();
         if (functionUnitRepository.existsByName(newName)) {
             throw new DeveloperBusinessException("CONFLICT_NAME_EXISTS", 
                     "Function unit name already exists: " + newName,
@@ -451,6 +471,9 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         }
         
         FunctionUnit source = getById(id);
+        List<TableDefinition> sourceTables = tableDefinitionRepository.findByFunctionUnitIdWithFields(id);
+        List<FormDefinition> sourceForms = formDefinitionRepository.findByFunctionUnitIdWithBindings(id);
+        List<TableRelation> sourceRelations = tableRelationRepository.findByFunctionUnitId(id);
         
         // 创建新的功能单元（生成新的唯一编码）
         FunctionUnit cloned = FunctionUnit.builder()
@@ -468,7 +491,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         
         // 克隆表定义
         Map<Long, TableDefinition> tableMapping = new HashMap<>();
-        for (TableDefinition sourceTable : source.getTableDefinitions()) {
+        for (TableDefinition sourceTable : sourceTables) {
             TableDefinition clonedTable = cloneTable(sourceTable, cloned);
             tableMapping.put(sourceTable.getId(), clonedTable);
         }
@@ -482,7 +505,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
             }
             clonedFieldLookup.put(entry.getKey(), fieldMap);
         }
-        for (TableDefinition sourceTable : source.getTableDefinitions()) {
+        for (TableDefinition sourceTable : sourceTables) {
             if (sourceTable.getForeignKeys() != null) {
                 TableDefinition clonedTable = tableMapping.get(sourceTable.getId());
                 for (ForeignKey sourceFk : sourceTable.getForeignKeys()) {
@@ -510,10 +533,12 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
                 tableDefinitionRepository.save(clonedTable);
             }
         }
+
+        cloneTableRelations(sourceRelations, cloned, tableMapping);
         
         // 克隆表单定义（包含 TableBindings），收集 form id 映射
         Map<Long, Long> formIdMapping = new HashMap<>();
-        for (FormDefinition sourceForm : source.getFormDefinitions()) {
+        for (FormDefinition sourceForm : sourceForms) {
             FormDefinition clonedForm = cloneForm(sourceForm, cloned, tableMapping);
             formIdMapping.put(sourceForm.getId(), clonedForm.getId());
         }
@@ -544,7 +569,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
                 clonedTableNameToId.put(clonedTable.getTableName(), clonedTable.getId());
             }
             Map<String, Long> clonedFormNameToId = new HashMap<>();
-            for (FormDefinition sourceForm : source.getFormDefinitions()) {
+            for (FormDefinition sourceForm : sourceForms) {
                 Long clonedFormId = formIdMapping.get(sourceForm.getId());
                 if (clonedFormId != null) {
                     clonedFormNameToId.put(sourceForm.getFormName(), clonedFormId);
@@ -1181,37 +1206,130 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         return tableDefinitionRepository.save(cloned);
     }
     
+    private void cloneTableRelations(List<TableRelation> sourceRelations,
+                                     FunctionUnit cloned,
+                                     Map<Long, TableDefinition> tableMapping) {
+        for (TableRelation sourceRelation : sourceRelations) {
+            TableDefinition sourceTable = tableMapping.get(sourceRelation.getSourceTableId());
+            TableDefinition targetTable = tableMapping.get(sourceRelation.getTargetTableId());
+            if (sourceTable == null || targetTable == null) {
+                log.warn("Skipping table relation clone: sourceTableId={}, targetTableId={}",
+                        sourceRelation.getSourceTableId(), sourceRelation.getTargetTableId());
+                continue;
+            }
+            TableRelation clonedRelation = TableRelation.builder()
+                    .functionUnit(cloned)
+                    .sourceTableId(sourceTable.getId())
+                    .sourceFieldName(sourceRelation.getSourceFieldName())
+                    .relationType(sourceRelation.getRelationType())
+                    .targetTableId(targetTable.getId())
+                    .targetFieldName(sourceRelation.getTargetFieldName())
+                    .build();
+            tableRelationRepository.save(clonedRelation);
+        }
+    }
+
     private FormDefinition cloneForm(FormDefinition source, FunctionUnit target, Map<Long, TableDefinition> tableMapping) {
+        Map<String, Object> configJson = deepCopyMap(source.getConfigJson());
+        Map<String, String> fieldPermissions = source.getFieldPermissions() != null
+                ? new HashMap<>(source.getFieldPermissions()) : new HashMap<>();
+
         FormDefinition cloned = FormDefinition.builder()
                 .functionUnit(target)
                 .formName(source.getFormName())
                 .formType(source.getFormType())
-                .configJson(source.getConfigJson() != null ? new HashMap<>(source.getConfigJson()) : new HashMap<>())
+                .configJson(configJson != null ? configJson : new HashMap<>())
                 .description(source.getDescription())
+                .fieldPermissions(fieldPermissions)
+                .showLiveValues(source.getShowLiveValues())
                 .build();
-        
+
         if (source.getBoundTable() != null && tableMapping.containsKey(source.getBoundTable().getId())) {
             cloned.setBoundTable(tableMapping.get(source.getBoundTable().getId()));
         }
-        
-        // 克隆 FormTableBindings
-        if (source.getTableBindings() != null) {
-            for (FormTableBinding sourceBinding : source.getTableBindings()) {
-                TableDefinition clonedTable = sourceBinding.getTable() != null
-                        ? tableMapping.get(sourceBinding.getTable().getId()) : null;
-                FormTableBinding clonedBinding = FormTableBinding.builder()
-                        .form(cloned)
-                        .table(clonedTable)
-                        .bindingType(sourceBinding.getBindingType())
-                        .bindingMode(sourceBinding.getBindingMode())
-                        .foreignKeyField(sourceBinding.getForeignKeyField())
-                        .sortOrder(sourceBinding.getSortOrder())
-                        .build();
-                cloned.getTableBindings().add(clonedBinding);
-            }
+
+        FormDefinition savedForm = formDefinitionRepository.save(cloned);
+
+        Map<Long, Long> bindingIdMapping = new HashMap<>();
+        List<FormTableBinding> sourceBindings = formTableBindingRepository.findByFormIdWithTable(source.getId());
+        for (FormTableBinding sourceBinding : sourceBindings) {
+            TableDefinition clonedTable = sourceBinding.getTable() != null
+                    ? tableMapping.get(sourceBinding.getTable().getId()) : null;
+            FormTableBinding clonedBinding = FormTableBinding.builder()
+                    .form(savedForm)
+                    .table(clonedTable)
+                    .relationTableId(sourceBinding.getRelationTableId())
+                    .bindingType(sourceBinding.getBindingType())
+                    .bindingMode(sourceBinding.getBindingMode())
+                    .foreignKeyField(sourceBinding.getForeignKeyField())
+                    .sortOrder(sourceBinding.getSortOrder())
+                    .subMode(sourceBinding.getSubMode())
+                    .build();
+            FormTableBinding savedBinding = formTableBindingRepository.save(clonedBinding);
+            bindingIdMapping.put(sourceBinding.getId(), savedBinding.getId());
+            cloneSubTableViewConfigIfPresent(sourceBinding, savedBinding);
         }
-        
-        return formDefinitionRepository.save(cloned);
+
+        for (FormStageBinding sourceStage : formStageBindingRepository.findByFormId(source.getId())) {
+            FormStageBinding clonedStage = FormStageBinding.builder()
+                    .form(savedForm)
+                    .stageId(sourceStage.getStageId())
+                    .stageName(sourceStage.getStageName())
+                    .readOnly(sourceStage.getReadOnly())
+                    .build();
+            formStageBindingRepository.save(clonedStage);
+        }
+
+        if (configJson != null) {
+            FormConfigJsonBindingIdRewriter.remapBindingIds(configJson, bindingIdMapping);
+            savedForm.setConfigJson(configJson);
+            savedForm = formDefinitionRepository.save(savedForm);
+        }
+
+        return savedForm;
+    }
+
+    private void cloneSubTableViewConfigIfPresent(FormTableBinding sourceBinding, FormTableBinding savedBinding) {
+        subTableViewConfigRepository.findByBindingId(sourceBinding.getId()).ifPresent(sourceConfig -> {
+            List<SubTableViewField> copiedFields = new ArrayList<>();
+            if (sourceConfig.getViewFields() != null) {
+                for (SubTableViewField sourceField : sourceConfig.getViewFields()) {
+                    copiedFields.add(SubTableViewField.builder()
+                            .fieldName(sourceField.getFieldName())
+                            .displayLabel(sourceField.getDisplayLabel())
+                            .columnWidth(sourceField.getColumnWidth())
+                            .sortOrder(sourceField.getSortOrder())
+                            .visible(sourceField.getVisible())
+                            .build());
+                }
+            }
+            SubTableViewConfig newConfig = SubTableViewConfig.builder()
+                    .binding(savedBinding)
+                    .viewFields(new ArrayList<>())
+                    .build();
+            SubTableViewConfig savedConfig = subTableViewConfigRepository.save(newConfig);
+            for (SubTableViewField field : copiedFields) {
+                field.setViewConfig(savedConfig);
+            }
+            savedConfig.setViewFields(copiedFields);
+            savedConfig = subTableViewConfigRepository.save(savedConfig);
+            savedBinding.setSubListViewId(savedConfig.getId());
+            formTableBindingRepository.save(savedBinding);
+        });
+    }
+
+    private Map<String, Object> deepCopyMap(Map<String, Object> source) {
+        if (source == null) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(
+                    objectMapper.writeValueAsString(source),
+                    new TypeReference<Map<String, Object>>() {});
+        } catch (JsonProcessingException e) {
+            throw new DeveloperBusinessException("SYS_JSON_ERROR",
+                    "Failed to deep copy form configJson: " + e.getMessage());
+        }
     }
     
     private ActionDefinition cloneAction(ActionDefinition source, FunctionUnit target) {

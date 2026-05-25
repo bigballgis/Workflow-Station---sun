@@ -25,6 +25,7 @@ import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.SubTableViewConfigRepository;
 import com.developer.repository.TableDefinitionRepository;
 import com.developer.service.SubTableViewService;
+import com.developer.util.FormConfigJsonBindingIdRewriter;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -605,8 +606,8 @@ public class FormDesignComponentImpl implements FormDesignComponent {
             }
         }
         
-        // Remap binding IDs in configJson (subForms, subListViews, relationViews)
-        remapBindingIdsInConfig(copiedConfig, bindingIdMapping);
+        // Remap binding IDs in configJson (subForms, subListViews, relationViews, subTablePortalViews)
+        FormConfigJsonBindingIdRewriter.remapBindingIds(copiedConfig, bindingIdMapping);
         savedCopy.setConfigJson(copiedConfig);
         savedCopy = formDefinitionRepository.save(savedCopy);
         
@@ -711,52 +712,12 @@ public class FormDesignComponentImpl implements FormDesignComponent {
             }
         }
         
-        // Remap binding IDs in configJson (subForms, subListViews, relationViews)
-        remapBindingIdsInConfig(copiedConfig, bindingIdMapping);
+        // Remap binding IDs in configJson (subForms, subListViews, relationViews, subTablePortalViews)
+        FormConfigJsonBindingIdRewriter.remapBindingIds(copiedConfig, bindingIdMapping);
         savedCopy.setConfigJson(copiedConfig);
         savedCopy = formDefinitionRepository.save(savedCopy);
         
         return savedCopy;
-    }
-
-    /**
-     * Remap binding IDs in configJson fields (subForms, subListViews, relationViews)
-     * from old binding IDs to new binding IDs after copying bindings.
-     */
-    @SuppressWarnings("unchecked")
-    private void remapBindingIdsInConfig(Map<String, Object> configJson, Map<Long, Long> bindingIdMapping) {
-        if (configJson == null || bindingIdMapping.isEmpty()) return;
-        
-        remapMapKeys(configJson, "subForms", bindingIdMapping);
-        remapMapKeys(configJson, "subListViews", bindingIdMapping);
-        remapMapKeys(configJson, "relationViews", bindingIdMapping);
-    }
-    
-    @SuppressWarnings("unchecked")
-    private void remapMapKeys(Map<String, Object> configJson, String fieldName, Map<Long, Long> bindingIdMapping) {
-        Object fieldValue = configJson.get(fieldName);
-        if (!(fieldValue instanceof Map)) return;
-        
-        Map<String, Object> oldMap = (Map<String, Object>) fieldValue;
-        Map<String, Object> newMap = new LinkedHashMap<>();
-        
-        for (Map.Entry<String, Object> entry : oldMap.entrySet()) {
-            try {
-                Long oldId = Long.parseLong(entry.getKey());
-                Long newId = bindingIdMapping.get(oldId);
-                if (newId != null) {
-                    newMap.put(String.valueOf(newId), entry.getValue());
-                } else {
-                    // Keep entry if no mapping found (should not happen for copied bindings)
-                    newMap.put(entry.getKey(), entry.getValue());
-                }
-            } catch (NumberFormatException e) {
-                // Keep non-numeric keys as-is
-                newMap.put(entry.getKey(), entry.getValue());
-            }
-        }
-        
-        configJson.put(fieldName, newMap);
     }
 
     private Map<String, Object> deepCopyMap(Map<String, Object> source) {

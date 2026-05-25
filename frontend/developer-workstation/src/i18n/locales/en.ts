@@ -127,6 +127,7 @@ export default {
     createSuccess: 'Created successfully',
     publishSuccess: 'Published successfully',
     cloneSuccess: 'Cloned successfully',
+    cloneFailed: 'Clone failed',
     deleteSuccess: 'Deleted successfully',
     enterChangeLog: 'Enter change log',
     publishTitle: 'Publish Function Unit',

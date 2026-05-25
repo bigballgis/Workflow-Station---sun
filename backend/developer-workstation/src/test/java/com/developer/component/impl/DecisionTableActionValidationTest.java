@@ -67,13 +67,18 @@ class DecisionTableActionValidationTest {
                 formDefinitionRepository,
                 actionDefinitionRepository,
                 decisionDefinitionRepository,
+                org.mockito.Mockito.mock(FormTableBindingRepository.class),
+                org.mockito.Mockito.mock(FormStageBindingRepository.class),
+                org.mockito.Mockito.mock(TableRelationRepository.class),
+                org.mockito.Mockito.mock(SubTableViewConfigRepository.class),
                 versionRepository,
                 iconRepository,
                 objectMapper,
                 userDisplayNameService,
                 functionUnitWorkspaceAccessService,
                 functionUnitDevGroupAssignmentRepository,
-                org.mockito.Mockito.mock(com.developer.component.VersionComponent.class)
+                org.mockito.Mockito.mock(com.developer.component.VersionComponent.class),
+                org.mockito.Mockito.mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class)
         );
     }
 

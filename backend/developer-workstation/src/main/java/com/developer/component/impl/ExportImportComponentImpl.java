@@ -5,8 +5,11 @@ import com.developer.dto.ExportManifest;
 import com.developer.dto.ValidationResult;
 import com.developer.entity.*;
 import com.developer.enums.ActionType;
+import com.developer.enums.BindingMode;
+import com.developer.enums.BindingType;
 import com.developer.enums.DataType;
 import com.developer.enums.FormType;
+import com.developer.enums.SubMode;
 import com.developer.enums.TableType;
 import com.developer.exception.DeveloperBusinessException;
 import com.developer.exception.ResourceNotFoundException;
@@ -15,6 +18,8 @@ import com.developer.security.FunctionUnitWorkspaceAccessService;
 import com.developer.security.WorkspaceAccessAction;
 import com.developer.util.BpmnLastTaskAssigneeTopologyValidator;
 import com.developer.util.BpmnIdRewriter;
+import com.developer.util.DeveloperWorkstationSequenceSynchronizer;
+import com.developer.util.FormConfigJsonBindingIdRewriter;
 import com.developer.util.XmlEncodingUtil;
 import com.developer.validation.DmnXmlParser;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -56,11 +61,15 @@ public class ExportImportComponentImpl implements ExportImportComponent {
     private final FormDefinitionRepository formDefinitionRepository;
     private final ActionDefinitionRepository actionDefinitionRepository;
     private final DecisionDefinitionRepository decisionDefinitionRepository;
+    private final FormTableBindingRepository formTableBindingRepository;
+    private final FormStageBindingRepository formStageBindingRepository;
+    private final TableRelationRepository tableRelationRepository;
     private final DmnXmlParser dmnXmlParser;
     private final FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService;
     private final FunctionUnitDevGroupAssignmentRepository functionUnitDevGroupAssignmentRepository;
     private final EntityManager entityManager;
     private final ObjectMapper objectMapper;
+    private final DeveloperWorkstationSequenceSynchronizer sequenceSynchronizer;
     
     @Value("${platform.version:1.0.0}")
     private String platformVersion;
@@ -94,6 +103,19 @@ public class ExportImportComponentImpl implements ExportImportComponent {
         functionUnitWorkspaceAccessService.assertCanAccess(functionUnitId, WorkspaceAccessAction.VIEW);
         FunctionUnit functionUnit = functionUnitRepository.findById(functionUnitId)
                 .orElseThrow(() -> new ResourceNotFoundException("FunctionUnit", functionUnitId));
+
+        List<TableDefinition> tables = tableDefinitionRepository.findByFunctionUnitIdWithFields(functionUnitId);
+        List<FormDefinition> forms = formDefinitionRepository.findByFunctionUnitIdWithBindings(functionUnitId);
+        List<ActionDefinition> actions = actionDefinitionRepository.findByFunctionUnitId(functionUnitId);
+        List<DecisionDefinition> decisions = decisionDefinitionRepository.findByFunctionUnitId(functionUnitId);
+        List<TableRelation> tableRelations = tableRelationRepository.findByFunctionUnitId(functionUnitId);
+        Map<Long, String> tableIdToName = tables.stream()
+                .collect(Collectors.toMap(TableDefinition::getId, TableDefinition::getTableName));
+        Map<Long, List<FormStageBinding>> stageBindingsByFormId = new HashMap<>();
+        for (FormDefinition form : forms) {
+            stageBindingsByFormId.put(form.getId(), formStageBindingRepository.findByFormId(form.getId()));
+        }
+        ProcessDefinition processDefinition = functionUnit.getProcessDefinition();
         
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
              ZipOutputStream zos = new ZipOutputStream(baos)) {
@@ -108,9 +130,8 @@ public class ExportImportComponentImpl implements ExportImportComponent {
             
             // 导出流程定义 - 解码Base64后导出原始XML
             String processFile = null;
-            if (functionUnit.getProcessDefinition() != null) {
-                String bpmnXml = XmlEncodingUtil.smartDecode(
-                        functionUnit.getProcessDefinition().getBpmnXml());
+            if (processDefinition != null) {
+                String bpmnXml = XmlEncodingUtil.smartDecode(processDefinition.getBpmnXml());
                 processFile = "process/process.bpmn";
                 byte[] processData = bpmnXml.getBytes(StandardCharsets.UTF_8);
                 fileContents.put(processFile, processData);
@@ -119,20 +140,32 @@ public class ExportImportComponentImpl implements ExportImportComponent {
             
             // 导出表定义
             int tableIndex = 0;
-            for (TableDefinition table : functionUnit.getTableDefinitions()) {
+            for (TableDefinition table : tables) {
                 String fileName = "tables/table_" + tableIndex + ".json";
-                byte[] data = objectMapper.writeValueAsBytes(serializeTable(table));
+                byte[] data = objectMapper.writeValueAsBytes(serializeTable(table, tableIdToName));
                 fileContents.put(fileName, data);
                 addZipEntry(zos, fileName, data);
                 tableFiles.add(fileName);
                 tableIndex++;
             }
+
+            // 导出表关系
+            if (!tableRelations.isEmpty()) {
+                String relationsFile = "relations/table_relations.json";
+                List<Map<String, Object>> relationPayload = tableRelations.stream()
+                        .map(rel -> serializeTableRelation(rel, tableIdToName))
+                        .toList();
+                byte[] relationsData = objectMapper.writeValueAsBytes(relationPayload);
+                fileContents.put(relationsFile, relationsData);
+                addZipEntry(zos, relationsFile, relationsData);
+            }
             
             // 导出表单定义
             int formIndex = 0;
-            for (FormDefinition form : functionUnit.getFormDefinitions()) {
+            for (FormDefinition form : forms) {
                 String fileName = "forms/form_" + formIndex + ".json";
-                byte[] data = objectMapper.writeValueAsBytes(serializeForm(form));
+                byte[] data = objectMapper.writeValueAsBytes(
+                        serializeForm(form, stageBindingsByFormId.getOrDefault(form.getId(), List.of())));
                 fileContents.put(fileName, data);
                 addZipEntry(zos, fileName, data);
                 formFiles.add(fileName);
@@ -141,7 +174,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
             
             // 导出动作定义
             int actionIndex = 0;
-            for (ActionDefinition action : functionUnit.getActionDefinitions()) {
+            for (ActionDefinition action : actions) {
                 String fileName = "actions/action_" + actionIndex + ".json";
                 byte[] data = objectMapper.writeValueAsBytes(serializeAction(action));
                 fileContents.put(fileName, data);
@@ -153,7 +186,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
             // 导出决策定义（DMN XML 格式）
             List<String> decisionFiles = new ArrayList<>();
             int decisionIndex = 0;
-            for (DecisionDefinition decision : functionUnit.getDecisionDefinitions()) {
+            for (DecisionDefinition decision : decisions) {
                 String fileName = "decisions/decision_" + decisionIndex + ".dmn";
                 byte[] data = decision.getDmnXml() != null ? 
                         decision.getDmnXml().getBytes(StandardCharsets.UTF_8) : new byte[0];
@@ -251,6 +284,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
     @Override
     @Transactional
     public Map<String, Object> importFunctionUnit(MultipartFile file, String conflictStrategy) {
+        sequenceSynchronizer.synchronizeAll();
         Map<String, Object> result = new HashMap<>();
         Map<String, Object> packageData = parseImportPackage(file);
         
@@ -286,6 +320,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
 
         Map<Long, Long> tableIdMapping = new HashMap<>();
         Map<String, Long> importedTableNameToId = new HashMap<>();
+        Map<String, Map<String, FieldDefinition>> importedFieldLookup = new HashMap<>();
         if (packageData.containsKey("tables")) {
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> tables = (List<Map<String, Object>>) packageData.get("tables");
@@ -293,18 +328,45 @@ public class ExportImportComponentImpl implements ExportImportComponent {
                 TableDefinition table = importTable(functionUnit, tableData);
                 recordSourceIdMapping(tableData.get("tableId"), table.getId(), tableIdMapping);
                 importedTableNameToId.put(table.getTableName(), table.getId());
+                Map<String, FieldDefinition> fieldByName = new HashMap<>();
+                for (FieldDefinition field : table.getFieldDefinitions()) {
+                    fieldByName.put(field.getFieldName(), field);
+                }
+                importedFieldLookup.put(table.getTableName(), fieldByName);
             }
+            importForeignKeys(tables, importedTableNameToId, importedFieldLookup);
+        }
+
+        if (packageData.containsKey("tableRelations")) {
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> tableRelations = (List<Map<String, Object>>) packageData.get("tableRelations");
+            importTableRelations(functionUnit, tableRelations, importedTableNameToId);
         }
 
         Map<Long, Long> formIdMapping = new HashMap<>();
         Map<String, Long> importedFormNameToId = new HashMap<>();
+        List<Map<String, Object>> formDataList = new ArrayList<>();
         if (packageData.containsKey("forms")) {
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> forms = (List<Map<String, Object>>) packageData.get("forms");
+            formDataList.addAll(forms);
             for (Map<String, Object> formData : forms) {
-                FormDefinition form = importForm(functionUnit, formData);
+                FormDefinition form = importFormShell(functionUnit, formData, importedTableNameToId);
                 recordSourceIdMapping(formData.get("formId"), form.getId(), formIdMapping);
                 importedFormNameToId.put(form.getFormName(), form.getId());
+            }
+            for (Map<String, Object> formData : formDataList) {
+                Object sourceFormIdObj = formData.get("formId");
+                if (!(sourceFormIdObj instanceof Number sourceFormId)) {
+                    continue;
+                }
+                Long newFormId = formIdMapping.get(sourceFormId.longValue());
+                if (newFormId == null) {
+                    continue;
+                }
+                FormDefinition form = formDefinitionRepository.findById(newFormId)
+                        .orElseThrow(() -> new ResourceNotFoundException("FormDefinition", newFormId));
+                finalizeFormImport(form, formData, importedTableNameToId);
             }
         }
 
@@ -345,6 +407,9 @@ public class ExportImportComponentImpl implements ExportImportComponent {
             processDefinitionRepository.save(process);
         }
         
+        sequenceSynchronizer.synchronizeAll();
+        entityManager.flush();
+
         result.put("status", "SUCCESS");
         result.put("functionUnitId", functionUnit.getId());
         result.put("name", functionUnit.getName());
@@ -363,6 +428,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
                 .functionUnit(functionUnit)
                 .tableName((String) tableData.get("tableName"))
                 .tableType(TableType.valueOf((String) tableData.get("tableType")))
+                .tableDisplayName((String) tableData.get("tableDisplayName"))
                 .description((String) tableData.get("description"))
                 .build();
         table = tableDefinitionRepository.save(table);
@@ -378,13 +444,19 @@ public class ExportImportComponentImpl implements ExportImportComponent {
                         : i;
                 Boolean nullable = fieldData.get("nullable") instanceof Boolean boolVal ? boolVal : true;
                 Boolean isPrimaryKey = fieldData.get("isPrimaryKey") instanceof Boolean pkVal ? pkVal : false;
+                Boolean isUnique = fieldData.get("isUnique") instanceof Boolean uniqueVal ? uniqueVal : false;
                 FieldDefinition field = FieldDefinition.builder()
                         .tableDefinition(table)
                         .fieldName((String) fieldData.get("fieldName"))
                         .dataType(DataType.valueOf((String) fieldData.get("dataType")))
                         .length(fieldData.get("length") != null ? ((Number) fieldData.get("length")).intValue() : null)
+                        .precision(fieldData.get("precision") != null ? ((Number) fieldData.get("precision")).intValue() : null)
+                        .scale(fieldData.get("scale") != null ? ((Number) fieldData.get("scale")).intValue() : null)
                         .nullable(nullable)
+                        .defaultValue((String) fieldData.get("defaultValue"))
                         .isPrimaryKey(isPrimaryKey)
+                        .isUnique(isUnique)
+                        .description((String) fieldData.get("description"))
                         .sortOrder(sortOrder)
                         .build();
                 table.getFieldDefinitions().add(field);
@@ -393,42 +465,227 @@ public class ExportImportComponentImpl implements ExportImportComponent {
         }
         return table;
     }
-    
-    @SuppressWarnings("unchecked")
-    private FormDefinition importForm(FunctionUnit functionUnit, Map<String, Object> formData) {
-        Map<String, Object> configJsonMap = null;
-        Object configJsonObj = formData.get("configJson");
-        if (configJsonObj instanceof Map) {
-            configJsonMap = (Map<String, Object>) configJsonObj;
-        } else if (configJsonObj instanceof String) {
-            try {
-                configJsonMap = objectMapper.readValue((String) configJsonObj, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
-            } catch (Exception e) {
-                log.warn("Failed to parse form configJson string: {}", e.getMessage());
+
+    private void importForeignKeys(List<Map<String, Object>> tables,
+                                   Map<String, Long> importedTableNameToId,
+                                   Map<String, Map<String, FieldDefinition>> importedFieldLookup) {
+        for (Map<String, Object> tableData : tables) {
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> foreignKeys = (List<Map<String, Object>>) tableData.get("foreignKeys");
+            if (foreignKeys == null || foreignKeys.isEmpty()) {
+                continue;
+            }
+            String tableName = (String) tableData.get("tableName");
+            Long tableId = importedTableNameToId.get(tableName);
+            if (tableId == null) {
+                continue;
+            }
+            TableDefinition table = tableDefinitionRepository.findByIdWithFields(tableId)
+                    .orElseThrow(() -> new ResourceNotFoundException("TableDefinition", tableId));
+            Map<String, FieldDefinition> fieldByName = importedFieldLookup.getOrDefault(tableName, Map.of());
+            for (Map<String, Object> fkData : foreignKeys) {
+                String fieldName = (String) fkData.get("fieldName");
+                String refTableName = (String) fkData.get("refTableName");
+                String refFieldName = (String) fkData.get("refFieldName");
+                FieldDefinition field = fieldByName.get(fieldName);
+                Map<String, FieldDefinition> refFieldByName = importedFieldLookup.getOrDefault(refTableName, Map.of());
+                FieldDefinition refField = refFieldByName.get(refFieldName);
+                Long refTableId = importedTableNameToId.get(refTableName);
+                if (field == null || refField == null || refTableId == null) {
+                    log.warn("Skipping foreign key import for {}.{} -> {}.{} (missing field/table)",
+                            tableName, fieldName, refTableName, refFieldName);
+                    continue;
+                }
+                TableDefinition refTable = tableDefinitionRepository.getReferenceById(refTableId);
+                ForeignKey foreignKey = ForeignKey.builder()
+                        .tableDefinition(table)
+                        .fieldDefinition(field)
+                        .refTableDefinition(refTable)
+                        .refFieldDefinition(refField)
+                        .onDelete(fkData.get("onDelete") instanceof String onDelete ? onDelete : "NO ACTION")
+                        .onUpdate(fkData.get("onUpdate") instanceof String onUpdate ? onUpdate : "NO ACTION")
+                        .build();
+                table.getForeignKeys().add(foreignKey);
+            }
+            if (!table.getForeignKeys().isEmpty()) {
+                tableDefinitionRepository.save(table);
             }
         }
+    }
+
+    private void importTableRelations(FunctionUnit functionUnit,
+                                      List<Map<String, Object>> tableRelations,
+                                      Map<String, Long> importedTableNameToId) {
+        for (Map<String, Object> relationData : tableRelations) {
+            String sourceTableName = (String) relationData.get("sourceTableName");
+            String targetTableName = (String) relationData.get("targetTableName");
+            Long sourceTableId = importedTableNameToId.get(sourceTableName);
+            Long targetTableId = importedTableNameToId.get(targetTableName);
+            if (sourceTableId == null || targetTableId == null) {
+                log.warn("Skipping table relation import {} -> {} (table not found)",
+                        sourceTableName, targetTableName);
+                continue;
+            }
+            TableRelation relation = TableRelation.builder()
+                    .functionUnit(functionUnit)
+                    .sourceTableId(sourceTableId)
+                    .sourceFieldName((String) relationData.get("sourceFieldName"))
+                    .relationType((String) relationData.get("relationType"))
+                    .targetTableId(targetTableId)
+                    .targetFieldName((String) relationData.get("targetFieldName"))
+                    .build();
+            tableRelationRepository.save(relation);
+        }
+    }
+    
+    @SuppressWarnings("unchecked")
+    private FormDefinition importFormShell(FunctionUnit functionUnit,
+                                             Map<String, Object> formData,
+                                             Map<String, Long> importedTableNameToId) {
+        Map<String, Object> configJsonMap = parseConfigJsonObject(formData.get("configJson"));
+        Map<String, String> fieldPermissions = parseFieldPermissions(formData.get("fieldPermissions"));
+        Boolean showLiveValues = formData.get("showLiveValues") instanceof Boolean boolVal ? boolVal : true;
+
         FormDefinition form = FormDefinition.builder()
                 .functionUnit(functionUnit)
                 .formName((String) formData.get("formName"))
                 .formType(FormType.valueOf((String) formData.get("formType")))
+                .description((String) formData.get("description"))
                 .configJson(configJsonMap != null ? configJsonMap : new HashMap<>())
+                .fieldPermissions(fieldPermissions)
+                .showLiveValues(showLiveValues)
                 .build();
+
+        String boundTableName = (String) formData.get("boundTableName");
+        if (boundTableName != null && importedTableNameToId.containsKey(boundTableName)) {
+            form.setBoundTable(tableDefinitionRepository.getReferenceById(importedTableNameToId.get(boundTableName)));
+        }
+
         return formDefinitionRepository.save(form);
+    }
+
+    @SuppressWarnings("unchecked")
+    private void finalizeFormImport(FormDefinition form,
+                                    Map<String, Object> formData,
+                                    Map<String, Long> importedTableNameToId) {
+        Map<Long, Long> bindingIdMapping = importFormTableBindings(form, formData, importedTableNameToId);
+
+        Map<String, Object> configJson = parseConfigJsonObject(formData.get("configJson"));
+        if (configJson == null) {
+            configJson = form.getConfigJson() != null ? new HashMap<>(form.getConfigJson()) : new HashMap<>();
+        } else {
+            configJson = new HashMap<>(configJson);
+        }
+        FormConfigJsonBindingIdRewriter.remapBindingIds(configJson, bindingIdMapping);
+        form.setConfigJson(configJson);
+
+        importFormStageBindings(form, formData);
+        formDefinitionRepository.save(form);
+    }
+
+    private Map<Long, Long> importFormTableBindings(FormDefinition form,
+                                                    Map<String, Object> formData,
+                                                    Map<String, Long> importedTableNameToId) {
+        Map<Long, Long> bindingIdMapping = new HashMap<>();
+        Object bindingsObj = formData.get("tableBindings");
+        if (!(bindingsObj instanceof List<?> bindingsList)) {
+            return bindingIdMapping;
+        }
+        for (Object bindingObj : bindingsList) {
+            if (!(bindingObj instanceof Map<?, ?> bindingMapRaw)) {
+                continue;
+            }
+            @SuppressWarnings("unchecked")
+            Map<String, Object> bindingData = (Map<String, Object>) bindingMapRaw;
+            BindingType bindingType = BindingType.valueOf((String) bindingData.get("bindingType"));
+            BindingMode bindingMode = BindingMode.valueOf((String) bindingData.get("bindingMode"));
+
+            TableDefinition table = null;
+            String tableName = (String) bindingData.get("tableName");
+            if (tableName != null && importedTableNameToId.containsKey(tableName)) {
+                table = tableDefinitionRepository.getReferenceById(importedTableNameToId.get(tableName));
+            }
+
+            Long relationTableId = bindingData.get("relationTableId") instanceof Number number
+                    ? number.longValue() : null;
+            Integer sortOrder = bindingData.get("sortOrder") instanceof Number number
+                    ? number.intValue() : null;
+            SubMode subMode = bindingData.get("subMode") instanceof String subModeStr
+                    ? SubMode.valueOf(subModeStr) : null;
+
+            FormTableBinding binding = FormTableBinding.builder()
+                    .form(form)
+                    .table(table)
+                    .relationTableId(relationTableId)
+                    .bindingType(bindingType)
+                    .bindingMode(bindingMode)
+                    .foreignKeyField((String) bindingData.get("foreignKeyField"))
+                    .sortOrder(sortOrder)
+                    .subMode(subMode)
+                    .build();
+            FormTableBinding savedBinding = formTableBindingRepository.save(binding);
+
+            if (bindingData.get("bindingId") instanceof Number sourceBindingId) {
+                bindingIdMapping.put(sourceBindingId.longValue(), savedBinding.getId());
+            }
+        }
+        return bindingIdMapping;
+    }
+
+    private void importFormStageBindings(FormDefinition form, Map<String, Object> formData) {
+        Object stageBindingsObj = formData.get("stageBindings");
+        if (!(stageBindingsObj instanceof List<?> stageBindingsList)) {
+            return;
+        }
+        for (Object stageObj : stageBindingsList) {
+            if (!(stageObj instanceof Map<?, ?> stageMapRaw)) {
+                continue;
+            }
+            @SuppressWarnings("unchecked")
+            Map<String, Object> stageData = (Map<String, Object>) stageMapRaw;
+            Boolean readOnly = stageData.get("readOnly") instanceof Boolean boolVal ? boolVal : false;
+            FormStageBinding stageBinding = FormStageBinding.builder()
+                    .form(form)
+                    .stageId((String) stageData.get("stageId"))
+                    .stageName((String) stageData.get("stageName"))
+                    .readOnly(readOnly)
+                    .build();
+            form.getStageBindings().add(stageBinding);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> parseConfigJsonObject(Object configJsonObj) {
+        if (configJsonObj instanceof Map<?, ?> map) {
+            return new HashMap<>((Map<String, Object>) map);
+        }
+        if (configJsonObj instanceof String str && !str.isBlank()) {
+            try {
+                return objectMapper.readValue(str, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+            } catch (Exception e) {
+                log.warn("Failed to parse configJson string: {}", e.getMessage());
+            }
+        }
+        return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, String> parseFieldPermissions(Object fieldPermissionsObj) {
+        if (fieldPermissionsObj instanceof Map<?, ?> map) {
+            Map<String, String> result = new HashMap<>();
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                if (entry.getKey() != null && entry.getValue() != null) {
+                    result.put(String.valueOf(entry.getKey()), String.valueOf(entry.getValue()));
+                }
+            }
+            return result;
+        }
+        return new HashMap<>();
     }
     
     @SuppressWarnings("unchecked")
     private ActionDefinition importAction(FunctionUnit functionUnit, Map<String, Object> actionData) {
-        Map<String, Object> configJsonMap = null;
-        Object configJsonObj = actionData.get("configJson");
-        if (configJsonObj instanceof Map) {
-            configJsonMap = (Map<String, Object>) configJsonObj;
-        } else if (configJsonObj instanceof String) {
-            try {
-                configJsonMap = objectMapper.readValue((String) configJsonObj, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
-            } catch (Exception e) {
-                log.warn("Failed to parse action configJson string: {}", e.getMessage());
-            }
-        }
+        Map<String, Object> configJsonMap = parseConfigJsonObject(actionData.get("configJson"));
         ActionDefinition action = ActionDefinition.builder()
                 .functionUnit(functionUnit)
                 .actionName((String) actionData.get("actionName"))
@@ -664,6 +921,12 @@ public class ExportImportComponentImpl implements ExportImportComponent {
                 }
             }
             result.put("tables", tables);
+
+            // 解析表关系
+            if (rawFiles.containsKey("relations/table_relations.json")) {
+                result.put("tableRelations", objectMapper.readValue(
+                        rawFiles.get("relations/table_relations.json"), List.class));
+            }
             
             // 解析表单定义
             List<Map<String, Object>> forms = new ArrayList<>();
@@ -712,13 +975,41 @@ public class ExportImportComponentImpl implements ExportImportComponent {
         return result;
     }
     
-    private Map<String, Object> serializeTable(TableDefinition table) {
+    private Map<String, Object> serializeTable(TableDefinition table, Map<Long, String> tableIdToName) {
         Map<String, Object> map = new HashMap<>();
         map.put("tableId", table.getId());
         map.put("tableName", table.getTableName());
+        map.put("tableDisplayName", table.getTableDisplayName());
         map.put("tableType", table.getTableType().name());
         map.put("description", table.getDescription());
         map.put("fields", table.getFieldDefinitions().stream().map(this::serializeField).toList());
+        if (table.getForeignKeys() != null && !table.getForeignKeys().isEmpty()) {
+            map.put("foreignKeys", table.getForeignKeys().stream()
+                    .map(fk -> serializeForeignKey(fk, tableIdToName))
+                    .toList());
+        }
+        return map;
+    }
+
+    private Map<String, Object> serializeForeignKey(ForeignKey foreignKey, Map<Long, String> tableIdToName) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("fieldName", foreignKey.getFieldDefinition().getFieldName());
+        Long refTableId = foreignKey.getRefTableDefinition() != null
+                ? foreignKey.getRefTableDefinition().getId() : null;
+        map.put("refTableName", refTableId != null ? tableIdToName.get(refTableId) : null);
+        map.put("refFieldName", foreignKey.getRefFieldDefinition().getFieldName());
+        map.put("onDelete", foreignKey.getOnDelete());
+        map.put("onUpdate", foreignKey.getOnUpdate());
+        return map;
+    }
+
+    private Map<String, Object> serializeTableRelation(TableRelation relation, Map<Long, String> tableIdToName) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("sourceTableName", tableIdToName.get(relation.getSourceTableId()));
+        map.put("sourceFieldName", relation.getSourceFieldName());
+        map.put("relationType", relation.getRelationType());
+        map.put("targetTableName", tableIdToName.get(relation.getTargetTableId()));
+        map.put("targetFieldName", relation.getTargetFieldName());
         return map;
     }
     
@@ -889,18 +1180,58 @@ public class ExportImportComponentImpl implements ExportImportComponent {
         map.put("fieldName", field.getFieldName());
         map.put("dataType", field.getDataType().name());
         map.put("length", field.getLength());
+        map.put("precision", field.getPrecision());
+        map.put("scale", field.getScale());
         map.put("nullable", field.getNullable());
+        map.put("defaultValue", field.getDefaultValue());
         map.put("isPrimaryKey", field.getIsPrimaryKey());
+        map.put("isUnique", field.getIsUnique());
+        map.put("description", field.getDescription());
         map.put("sortOrder", field.getSortOrder());
         return map;
     }
     
-    private Map<String, Object> serializeForm(FormDefinition form) {
+    private Map<String, Object> serializeForm(FormDefinition form, List<FormStageBinding> stageBindings) {
         Map<String, Object> map = new HashMap<>();
-        map.put("formId", form.getId());  // 原始 dw_form_definitions.id，用于 admin center 的 sourceId 匹配
+        map.put("formId", form.getId());
         map.put("formName", form.getFormName());
         map.put("formType", form.getFormType().name());
+        map.put("description", form.getDescription());
+        map.put("boundTableName", form.getBoundTableName());
+        map.put("showLiveValues", form.getShowLiveValues());
+        map.put("fieldPermissions", form.getFieldPermissions());
         map.put("configJson", form.getConfigJson());
+        if (form.getTableBindings() != null && !form.getTableBindings().isEmpty()) {
+            map.put("tableBindings", form.getTableBindings().stream()
+                    .map(this::serializeFormTableBinding)
+                    .toList());
+        }
+        if (stageBindings != null && !stageBindings.isEmpty()) {
+            map.put("stageBindings", stageBindings.stream().map(this::serializeFormStageBinding).toList());
+        }
+        return map;
+    }
+
+    private Map<String, Object> serializeFormTableBinding(FormTableBinding binding) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("bindingId", binding.getId());
+        map.put("bindingType", binding.getBindingType().name());
+        map.put("bindingMode", binding.getBindingMode().name());
+        map.put("tableName", binding.getTableName());
+        map.put("relationTableId", binding.getRelationTableId());
+        map.put("foreignKeyField", binding.getForeignKeyField());
+        map.put("sortOrder", binding.getSortOrder());
+        if (binding.getSubMode() != null) {
+            map.put("subMode", binding.getSubMode().name());
+        }
+        return map;
+    }
+
+    private Map<String, Object> serializeFormStageBinding(FormStageBinding stageBinding) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("stageId", stageBinding.getStageId());
+        map.put("stageName", stageBinding.getStageName());
+        map.put("readOnly", stageBinding.getReadOnly());
         return map;
     }
     

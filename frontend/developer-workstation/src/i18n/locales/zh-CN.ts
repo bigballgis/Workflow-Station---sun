@@ -127,6 +127,7 @@ export default {
     createSuccess: '创建成功',
     publishSuccess: '发布成功',
     cloneSuccess: '克隆成功',
+    cloneFailed: '克隆失败',
     deleteSuccess: '删除成功',
     enterChangeLog: '输入变更日志',
     publishTitle: '发布功能单元',

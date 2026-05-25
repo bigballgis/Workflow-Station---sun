@@ -320,6 +320,7 @@ import { getTags, setTags, getAllAvailableTags, matchesTags } from '@/utils/tagS
 import { isAuthenticated } from '@/api/auth'
 import { permissions } from '@/utils/permission'
 import { redirectToUnifiedLogin } from '@/utils/sso'
+import { resolveUserFacingHttpMessage } from '@/utils/httpErrorMessage'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -459,10 +460,21 @@ async function handleFormSubmit() {
 }
 
 async function handleClone(item: FunctionUnitResponse) {
-  const { value } = await ElMessageBox.prompt(t('functionUnit.enterNewName'), t('functionUnit.cloneTitle'))
-  await store.clone(item.id, value)
-  ElMessage.success(t('functionUnit.cloneSuccess'))
-  loadData()
+  try {
+    const { value } = await ElMessageBox.prompt(t('functionUnit.enterNewName'), t('functionUnit.cloneTitle'))
+    if (!value?.trim()) {
+      ElMessage.warning(t('functionUnit.enterNewName'))
+      return
+    }
+    await store.clone(item.id, value.trim())
+    ElMessage.success(t('functionUnit.cloneSuccess'))
+    loadData()
+  } catch (e: unknown) {
+    if (e === 'cancel' || (e as { message?: string })?.message === 'cancel') {
+      return
+    }
+    ElMessage.error(resolveUserFacingHttpMessage(e, t) || t('functionUnit.cloneFailed'))
+  }
 }
 
 async function handleDelete(item: FunctionUnitResponse) {

@@ -47,13 +47,18 @@ public class DecisionTableActionPropertyTest {
                 mock(FormDefinitionRepository.class),
                 mock(ActionDefinitionRepository.class),
                 mock(DecisionDefinitionRepository.class),
+                mock(FormTableBindingRepository.class),
+                mock(FormStageBindingRepository.class),
+                mock(TableRelationRepository.class),
+                mock(SubTableViewConfigRepository.class),
                 mock(VersionRepository.class),
                 mock(IconRepository.class),
                 new ObjectMapper(),
                 mock(UserDisplayNameService.class),
                 mock(FunctionUnitWorkspaceAccessService.class),
                 devGroupAssignmentRepository,
-                mock(com.developer.component.VersionComponent.class)
+                mock(com.developer.component.VersionComponent.class),
+                mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class)
         );
         idGenerator = new AtomicLong(1L);
     }

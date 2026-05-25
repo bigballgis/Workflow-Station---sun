@@ -1568,3 +1568,25 @@
   note: |
     根因：user-portal 前端已使用 httpOnly cookie（withCredentials）登录，申请详情请求通常没有 Authorization 头；WorkflowEngineClient 内部转调 workflow-engine 时只原样转发 Authorization，导致 /api/v1/tasks 与历史接口落成未认证请求并返回 403，ProcessComponent.getProcessDetail() 无法补全 currentNode/currentAssignee。
     修复：forwardInboundAuthorization 优先转发 Authorization，缺失时回退读取 access_token cookie 并补成 Bearer 头；补充单元测试覆盖 header 转发与 cookie 回退两条路径。
+
+- id: "1376"
+  status: fixed
+  fixed_at: "2026-05-25"
+  severity: major
+  category: bug
+  summary: "Developer Workstation Clone/Import 因 dw_* BIGSERIAL 序列落后于 MAX(id) 主键冲突"
+  file: "DeveloperWorkstationSequenceSynchronizer.java; FunctionUnitComponentImpl.java; ExportImportComponentImpl.java; FunctionUnitList.vue"
+  note: |
+    根因：init/导入写入较大 id 后 PostgreSQL 序列未推进，clone/import 插入主键冲突；Import 仅在导入结束后同步序列，插入阶段仍失败。
+    修复：DeveloperWorkstationSequenceSynchronizer 在 clone/import 开始前对齐序列；FunctionUnitList 展示 clone 错误。
+
+- id: "1377"
+  status: fixed
+  fixed_at: "2026-05-25"
+  severity: major
+  category: bug
+  summary: "Function Unit Clone/Import 未复制 relationTableId / 未重写 configJson bindingId，导致 Unknown Table 与 subTablePlaceholderStale"
+  file: "FunctionUnitComponentImpl.java; ExportImportComponentImpl.java"
+  note: |
+    根因：cloneForm/import 遗漏 RELATED 的 relationTableId、stageBindings、TableRelation 等；新 binding ID 未回写 configJson。
+    修复：clone/import 显式加载关系数据；逐条 save binding 并 FormConfigJsonBindingIdRewriter remap configJson。
