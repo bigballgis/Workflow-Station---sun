@@ -10,7 +10,6 @@ import {
   normalizeSubTableName,
   flattenNestedSubTableRowsIntoPayload,
   scrubMiCorruptLinkChildRowsForParent,
-  materializeSharedAttachmentRowsFromProcessScalars,
 } from './shared'
 
 export function useTaskForm(options: {
@@ -60,20 +59,7 @@ export function useTaskForm(options: {
               : null
           )
         : rows
-      let out = cloneSubTableRows(merged)
-      out = materializeSharedAttachmentRowsFromProcessScalars(
-        formData.value as Record<string, unknown>,
-        binding as {
-          bindingId?: number
-          tableId?: number | null
-          tableName?: string
-          physicalTableName?: string
-          foreignKeyField?: string | null
-          columns?: Array<{ field?: string }> | null
-          primaryKeyFields?: string[] | null
-        },
-        out,
-      )
+      const out = cloneSubTableRows(merged)
       subTables[binding.bindingId] = out
       subTables[String(binding.bindingId)] = out
       subTableData[String(binding.bindingId)] = out

@@ -773,21 +773,6 @@ function pickNonEmptyAttachmentFile(row: unknown): boolean {
   return true
 }
 
-/** Resolve legacy scalar upload persisted on sub form1 link-form instead of __subTables__[103/104]. */
-export function resolveLegacyAttachmentFileUrl(
-  topLevelFormData: Record<string, unknown> | null | undefined,
-): string | null {
-  if (!topLevelFormData) return null
-  for (const key of ['fileupload', 'file']) {
-    const raw = topLevelFormData[key]
-    if (raw == null) continue
-    const s = String(raw).trim()
-    if (!s || s === '-') continue
-    return s
-  }
-  return null
-}
-
 export function isSharedAttachmentFileBinding(binding: {
   bindingId?: number
   tableId?: number | null
@@ -805,39 +790,6 @@ export function isSharedAttachmentFileBinding(binding: {
   return cols.some(c => String(c?.field ?? '').trim() === 'file')
 }
 
-/**
- * When sub form1 saved link-form {@code fileupload} as a top-level scalar but never wrote attachment rows
- * into {@code __subTables__}, synthesize one shared row for binding 103/104 on load/save.
- */
-export function materializeSharedAttachmentRowsFromProcessScalars(
-  topLevelFormData: Record<string, unknown> | null | undefined,
-  binding: {
-    bindingId?: number
-    tableId?: number | null
-    tableName?: string
-    physicalTableName?: string
-    foreignKeyField?: string | null
-    columns?: Array<{ field?: string }> | null
-    primaryKeyFields?: string[] | null
-  },
-  existingRows: any[] | null | undefined,
-): any[] {
-  if (!isSharedAttachmentFileBinding(binding)) {
-    return Array.isArray(existingRows) ? [...existingRows] : []
-  }
-  const rows = Array.isArray(existingRows) ? [...existingRows] : []
-  if (rows.some(pickNonEmptyAttachmentFile)) return rows
-  const fileUrl = resolveLegacyAttachmentFileUrl(topLevelFormData)
-  if (!fileUrl) return rows
-  const idHint = topLevelFormData?.id ?? topLevelFormData?.mainRecordId
-  const synthetic: Record<string, unknown> = {
-    id: idHint != null && String(idHint).trim() !== '' ? idHint : `legacy-fileupload-${Date.now()}`,
-    main_id: '',
-    file: fileUrl,
-  }
-  return mergeSubTableRowsByRowId(rows, [synthetic], binding.primaryKeyFields ?? null)
-}
-
 export type SharedAttachmentBindingLike = {
   bindingId?: number
   tableId?: number | null
@@ -850,14 +802,15 @@ export type SharedAttachmentBindingLike = {
 }
 
 /**
- * Shared attachment (103/104 / main_id FK): merge slices, drop MI leaks, materialize legacy {@code fileupload}.
+ * Shared attachment bindings: merge {@code __subTables__} slices, drop MI leaks.
+ * Primary-table scalars are never projected into sub-table rows.
  * Used by To Do and My Request for parity.
  */
 export function applySharedAttachmentFinalizeAndMaterialize<
   T extends SharedAttachmentBindingLike,
 >(
   bindings: T[],
-  topLevelValues: Record<string, unknown> | null | undefined,
+  _topLevelValues?: Record<string, unknown> | null | undefined,
   options?: {
     flattened?: Record<string, unknown> | null
     bindingTableById?: Map<number, number | null>
@@ -921,11 +874,6 @@ export function applySharedAttachmentFinalizeAndMaterialize<
       }
     }
     binding.data = finalizeSharedProcessSubTableBindingRows(binding.data, binding, filterContext)
-    binding.data = materializeSharedAttachmentRowsFromProcessScalars(
-      topLevelValues ?? undefined,
-      binding,
-      binding.data,
-    )
   }
 }
 

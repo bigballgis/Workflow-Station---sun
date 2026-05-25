@@ -11,7 +11,6 @@ import {
   mergeAllSlicesForSharedProcessSubTableBinding,
   buildBindingIdToRelationTableIdMap,
   stripSubTableRowMetaFields,
-  materializeSharedAttachmentRowsFromProcessScalars,
   applySharedAttachmentFinalizeAndMaterialize,
   collectForeignSubTableRowIdsFromVariables,
   hydrateBindingsRowsFromVariablesBySharedRelationTableId,
@@ -398,7 +397,7 @@ describe('subTableRowMetaFields', () => {
     ]))
   })
 
-  it('materializeSharedAttachmentRowsFromProcessScalars synthesizes row from legacy fileupload scalar', () => {
+  it('applySharedAttachmentFinalizeAndMaterialize does not project primary fileupload into attachment rows', () => {
     const binding = {
       bindingId: 104,
       tableId: 74,
@@ -406,38 +405,36 @@ describe('subTableRowMetaFields', () => {
       foreignKeyField: 'main_id',
       columns: [{ field: 'id' }, { field: 'main_id' }, { field: 'file' }],
       primaryKeyFields: ['id'],
+      data: [] as any[],
     }
-    const formData = {
-      id: 343,
-      fileupload: '/api/v1/upload/files/99029219.pdf?originalName=invoice.pdf',
-    }
-    const out = materializeSharedAttachmentRowsFromProcessScalars(formData, binding, [])
-    expect(out).toHaveLength(1)
-    expect(out[0]).toMatchObject({
-      id: 343,
-      main_id: '',
-      file: '/api/v1/upload/files/99029219.pdf?originalName=invoice.pdf',
-    })
+    applySharedAttachmentFinalizeAndMaterialize(
+      [binding],
+      {
+        id: 343,
+        fileupload: '/api/v1/upload/files/99029219.pdf?originalName=invoice.pdf',
+      },
+    )
+    expect(binding.data).toEqual([])
   })
 
-  it('materializeSharedAttachmentRowsFromProcessScalars is no-op when rows already have file', () => {
+  it('applySharedAttachmentFinalizeAndMaterialize keeps existing attachment rows when primary fileupload is set', () => {
     const binding = {
       bindingId: 104,
       tableId: 74,
       tableName: 'attachment',
       foreignKeyField: 'main_id',
       columns: [{ field: 'file' }],
+      primaryKeyFields: ['id'],
+      data: [{ id: 1, main_id: '19', file: '/api/v1/upload/files/a.pdf' }],
     }
-    const existing = [{ id: 1, main_id: '19', file: '/api/v1/upload/files/a.pdf' }]
-    const out = materializeSharedAttachmentRowsFromProcessScalars(
-      { fileupload: '/api/v1/upload/files/b.pdf' },
-      binding,
-      existing,
+    applySharedAttachmentFinalizeAndMaterialize(
+      [binding],
+      { fileupload: '/api/v1/upload/files/b.pdf?originalName=other.pdf' },
     )
-    expect(out).toEqual(existing)
+    expect(binding.data).toEqual([{ id: 1, main_id: '19', file: '/api/v1/upload/files/a.pdf' }])
   })
 
-  it('applySharedAttachmentFinalizeAndMaterialize drops MI rows and materializes legacy fileupload', () => {
+  it('applySharedAttachmentFinalizeAndMaterialize drops MI rows without projecting primary fileupload', () => {
     const bindings = [
       {
         bindingId: 104,
@@ -453,12 +450,7 @@ describe('subTableRowMetaFields', () => {
       id: 343,
       fileupload: '/api/v1/upload/files/x.pdf?originalName=a.pdf',
     })
-    expect(bindings[0]!.data).toHaveLength(1)
-    expect(bindings[0]!.data[0]).toMatchObject({
-      id: 343,
-      file: '/api/v1/upload/files/x.pdf?originalName=a.pdf',
-    })
-    expect(bindings[0]!.data[0]).not.toHaveProperty('name')
+    expect(bindings[0]!.data).toEqual([])
   })
 
   it('applySharedAttachmentFinalizeAndMaterialize replaces thin per-binding slice with full shared merge', () => {

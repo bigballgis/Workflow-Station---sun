@@ -440,7 +440,6 @@ import {
   isMiParticipantScopedSubTableBinding,
   stripSubTableRowMetaFields,
   finalizeSharedProcessSubTableBindingRows,
-  materializeSharedAttachmentRowsFromProcessScalars,
   applySharedAttachmentFinalizeAndMaterialize,
   isSharedAttachmentFileBinding,
 } from '@/composables/tasks/shared'
@@ -830,23 +829,7 @@ function rehydrateSharedProcessSubTableBindings(
     savedSubTablesSource ?? formData.value.__subTables__,
   )
 
-  const applyMaterializeFromScalars = (bindings: typeof subTableBindings.value) => {
-    for (const binding of bindings) {
-      if (isMiParticipantScopedSubTableBinding(binding)) continue
-      if (!isSharedAttachmentFileBinding(binding)) continue
-      binding.data = materializeSharedAttachmentRowsFromProcessScalars(
-        formData.value as Record<string, unknown>,
-        binding,
-        binding.data,
-      )
-    }
-  }
-
   if (!savedMap) {
-    applyMaterializeFromScalars(subTableBindings.value)
-    for (const pf of previousForms.value) {
-      applyMaterializeFromScalars(pf.subTableBindings)
-    }
     patchFormDataSubTablesFromCurrentBindings()
     return
   }
@@ -865,21 +848,12 @@ function rehydrateSharedProcessSubTableBindings(
           ? mergeSubTableRowsByRowId(existing, merged, binding.primaryKeyFields ?? null)
           : existing
       binding.data = finalizeSharedProcessSubTableBindingRows(combined, binding)
-      binding.data = materializeSharedAttachmentRowsFromProcessScalars(
-        formData.value as Record<string, unknown>,
-        binding,
-        binding.data,
-      )
     }
   }
 
   applyTo(subTableBindings.value)
   for (const pf of previousForms.value) {
     applyTo(pf.subTableBindings)
-  }
-  applyMaterializeFromScalars(subTableBindings.value)
-  for (const pf of previousForms.value) {
-    applyMaterializeFromScalars(pf.subTableBindings)
   }
   for (const info of nodeFormMap.value.values()) {
     rehydrateSharedAttachmentBindings(
