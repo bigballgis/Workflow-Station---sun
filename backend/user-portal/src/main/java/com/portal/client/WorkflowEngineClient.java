@@ -109,7 +109,10 @@ public class WorkflowEngineClient {
             return null;
         }
         for (Cookie cookie : cookies) {
-            if ("access_token".equals(cookie.getName())) {
+            if (cookie != null
+                    && "access_token".equals(cookie.getName())
+                    && cookie.getValue() != null
+                    && !cookie.getValue().isBlank()) {
                 return cookie.getValue();
             }
         }

@@ -1536,3 +1536,35 @@
   note: |
     根因：tab 标签直接读取 binding.tableName（后端 FormTableBinding 返回 table.tableName 技术名）；getTableName() 虽会查 store.tables.tableDisplayName，但 `b.tableName || getTableName(...)` 的优先级把 displayName 盖掉了。
     修复：getTableName(tableId, fallback?) 调整为「优先 tableDisplayName → tableName → fallback → unknown」；FormDesigner 与 TableBindingManager 中所有 tab/option/列引用统一调用 getTableName(b.tableId, b.tableName)。
+
+- id: "1373"
+  status: open
+  severity: critical
+  category: security
+  summary: "user-portal 流程详情接口在未登录时仍可直接读取流程实例详情"
+  file: "backend/user-portal/src/main/java/com/portal/controller/ProcessController.java"
+  note: |
+    现状：GET /api/portal/processes/{processId} 在 @CurrentUserId 解析为 null 时仍返回 ApiResponse.success(detail)；只有 userId != null 时才校验参与者身份。
+    风险：匿名请求可枚举并读取流程详情（发起人、流程定义、变量等），属于越权信息泄露。
+
+- id: "1374"
+  status: fixed
+  fixed_at: "2026-05-25"
+  severity: major
+  category: bug
+  summary: "user-portal 待办详情将当前节点 actionIds 错误回退为整个流程全部动作，导致底部出现一堆业务按钮"
+  file: "backend/user-portal/src/main/java/com/portal/service/TaskActionService.java; backend/user-portal/src/main/java/com/portal/repository/ActionDefinitionRepository.java; frontend/user-portal/src/components/tasks/TaskActionBar.vue"
+  note: |
+    根因：workflow-engine 对任务 fc9c03ba-5810-11f1-b548-eeb0347a2f07 只返回 actionIds=[19,20]，但 TaskActionService 先按 sys_action_definitions(UUID) 查不到后，错误回退到 findByProcessDefinitionKey(processDefinitionKey)，把流程 DigitalLendingProcessV2 下的 15 个动作全部查出；TaskActionBar 随后逐个渲染为底部按钮。
+    修复：删除“按流程 key 拉整条流程动作”的回退，只按当前节点 actionIds 精确解析动作定义；缺失项仅回退到 dw_action_definitions，并按请求 actionIds 顺序返回。补充 TaskActionServiceTest 覆盖纯 dw、混合来源和空结果三条路径；运行时验证接口现仅返回 2 个动作。
+
+- id: "1375"
+  status: fixed
+  fixed_at: "2026-05-25"
+  severity: major
+  category: bug
+  summary: "user-portal 申请详情页在 cookie 登录态下未向 workflow-engine 转发 access_token，导致 Current Step/Assignee 为空"
+  file: "backend/user-portal/src/main/java/com/portal/client/WorkflowEngineClient.java; backend/user-portal/src/test/java/com/portal/client/WorkflowEngineClientTest.java"
+  note: |
+    根因：user-portal 前端已使用 httpOnly cookie（withCredentials）登录，申请详情请求通常没有 Authorization 头；WorkflowEngineClient 内部转调 workflow-engine 时只原样转发 Authorization，导致 /api/v1/tasks 与历史接口落成未认证请求并返回 403，ProcessComponent.getProcessDetail() 无法补全 currentNode/currentAssignee。
+    修复：forwardInboundAuthorization 优先转发 Authorization，缺失时回退读取 access_token cookie 并补成 Bearer 头；补充单元测试覆盖 header 转发与 cookie 回退两条路径。

@@ -57,10 +57,9 @@ public class TaskActionService {
             
             log.info("Found {} action IDs for task {}: {}", actionIds.size(), taskId, actionIds);
             
-            // 3. 从数据库获取action定义
-            // 同时传入 processDefinitionKey 用于回退查找
-            String processDefinitionKey = (String) data.get("processDefinitionKey");
-            return fetchActionDefinitions(actionIds, processDefinitionKey);
+            // 3. 仅解析当前节点 actionIds 对应的动作定义；不能回退为整条流程的全部动作，
+            // 否则待办详情会把其它节点动作也渲染成底部按钮。
+            return fetchActionDefinitions(actionIds);
             
         } catch (Exception e) {
             log.error("Error getting task actions for task: " + taskId, e);
@@ -94,38 +93,65 @@ public class TaskActionService {
         return out;
     }
 
-    private List<TaskActionInfo> fetchActionDefinitions(List<String> actionIds, String processDefinitionKey) {
+    private List<TaskActionInfo> fetchActionDefinitions(List<String> actionIds) {
         try {
             log.info("Fetching {} action definitions from database", actionIds.size());
-            
-            List<ActionDefinition> actions = actionDefinitionRepository.findAllById(actionIds);
-            
-            // Fallback 1: BPMN stores dw_action_definitions IDs (integers like 17,18,23),
-            // but sys_action_definitions uses UUID IDs. When direct ID lookup fails,
-            // resolve the function unit from processDefinitionKey and return all its actions.
-            if (actions.isEmpty() && processDefinitionKey != null) {
-                log.info("Direct ID lookup returned empty, falling back to process key lookup: {}", processDefinitionKey);
-                actions = actionDefinitionRepository.findByProcessDefinitionKey(processDefinitionKey);
-                log.info("Fallback found {} actions for processDefinitionKey {}", actions.size(), processDefinitionKey);
+
+            Map<String, ActionDefinition> actionsById = new LinkedHashMap<>();
+            List<ActionDefinition> directMatches = actionDefinitionRepository.findAllById(actionIds);
+            for (ActionDefinition action : directMatches) {
+                if (action != null && action.getId() != null) {
+                    actionsById.put(action.getId(), action);
+                }
             }
-            
-            // Fallback 2: 直接从 dw_action_definitions 表查找（BPMN 中的 actionIds 来自此表）
-            if (actions.isEmpty()) {
-                log.info("sys_action_definitions lookup returned empty, falling back to dw_action_definitions for IDs: {}", actionIds);
-                actions = actionDefinitionRepository.findFromDwByIds(actionIds);
-                log.info("dw_action_definitions fallback found {} actions", actions.size());
+
+            List<String> missingIds = actionIds.stream()
+                    .filter(Objects::nonNull)
+                    .map(String::trim)
+                    .filter(id -> !id.isEmpty())
+                    .distinct()
+                    .filter(id -> !actionsById.containsKey(id))
+                    .toList();
+
+            if (!missingIds.isEmpty()) {
+                log.info("Direct ID lookup missing {} actions, falling back to dw_action_definitions for IDs: {}",
+                        missingIds.size(), missingIds);
+                List<ActionDefinition> dwMatches = actionDefinitionRepository.findFromDwByIds(missingIds);
+                for (ActionDefinition action : dwMatches) {
+                    if (action != null && action.getId() != null) {
+                        actionsById.putIfAbsent(action.getId(), action);
+                    }
+                }
             }
-            
-            if (actions.isEmpty()) {
+
+            if (actionsById.isEmpty()) {
                 log.warn("No action definitions found for IDs: {}", actionIds);
                 return Collections.emptyList();
             }
-            
-            log.info("Found {} action definitions", actions.size());
-            
-            return actions.stream()
-                .map(this::toTaskActionInfo)
-                .collect(Collectors.toList());
+
+            List<String> unresolvedIds = actionIds.stream()
+                    .filter(Objects::nonNull)
+                    .map(String::trim)
+                    .filter(id -> !id.isEmpty())
+                    .distinct()
+                    .filter(id -> !actionsById.containsKey(id))
+                    .toList();
+            if (!unresolvedIds.isEmpty()) {
+                log.warn("Could not resolve action definitions for IDs: {}", unresolvedIds);
+            }
+
+            List<TaskActionInfo> orderedActions = actionIds.stream()
+                    .filter(Objects::nonNull)
+                    .map(String::trim)
+                    .filter(id -> !id.isEmpty())
+                    .distinct()
+                    .map(actionsById::get)
+                    .filter(Objects::nonNull)
+                    .map(this::toTaskActionInfo)
+                    .collect(Collectors.toList());
+
+            log.info("Resolved {} action definitions from requested actionIds", orderedActions.size());
+            return orderedActions;
                 
         } catch (Exception e) {
             log.error("Error fetching action definitions from database", e);
