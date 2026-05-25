@@ -14,6 +14,7 @@ import com.developer.enums.DatabaseDialect;
 import com.developer.exception.DeveloperBusinessException;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.*;
+import com.developer.util.DeveloperWorkstationSequenceSynchronizer;
 import com.platform.common.i18n.I18nService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,6 +39,7 @@ public class TableDesignComponentImpl implements TableDesignComponent {
     private final FormDefinitionRepository formDefinitionRepository;
     private final FormTableBindingRepository formTableBindingRepository;
     private final I18nService i18nService;
+    private final DeveloperWorkstationSequenceSynchronizer sequenceSynchronizer;
     
     @Override
     @Transactional
@@ -63,6 +65,7 @@ public class TableDesignComponentImpl implements TableDesignComponent {
         
         // 添加字段
         if (request.getFields() != null) {
+            sequenceSynchronizer.synchronizeFieldDefinitions();
             int sortOrder = 0;
             for (FieldDefinitionRequest fieldRequest : request.getFields()) {
                 FieldDefinition field = createField(tableDefinition, fieldRequest, sortOrder++);
@@ -99,6 +102,8 @@ public class TableDesignComponentImpl implements TableDesignComponent {
         fieldDefinitionRepository.flush();
         
         if (request.getFields() != null && !request.getFields().isEmpty()) {
+            // 导入/init 脚本若写入较大 id 而未推进序列，delete+reinsert 会触发主键冲突
+            sequenceSynchronizer.synchronizeFieldDefinitions();
             int sortOrder = 0;
             for (FieldDefinitionRequest fieldRequest : request.getFields()) {
                 // Skip fields with empty name or null dataType
