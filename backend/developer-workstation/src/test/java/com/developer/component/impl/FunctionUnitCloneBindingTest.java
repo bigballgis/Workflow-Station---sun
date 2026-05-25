@@ -89,6 +89,7 @@ class FunctionUnitCloneBindingTest {
                 .relationTableId(999L).foreignKeyField("user_id").sortOrder(1).build();
 
         Map<String, Object> configJson = new HashMap<>();
+        configJson.put("rule", List.of(Map.of("type", "subTable", "_bindingId", 101, "title", "Canvas Sub")));
         configJson.put("subForms", new LinkedHashMap<>(Map.of("101", Map.of("title", "Main sub"))));
         configJson.put("relationViews", new LinkedHashMap<>(Map.of("102", Map.of("columns", List.of()))));
 
@@ -154,5 +155,8 @@ class FunctionUnitCloneBindingTest {
         Map<String, Object> relationViews = (Map<String, Object>) finalForm.getConfigJson().get("relationViews");
         assertTrue(relationViews.containsKey("502"));
         assertFalse(relationViews.containsKey("102"));
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rule = (List<Map<String, Object>>) finalForm.getConfigJson().get("rule");
+        assertEquals(501L, ((Number) rule.get(0).get("_bindingId")).longValue());
     }
 }

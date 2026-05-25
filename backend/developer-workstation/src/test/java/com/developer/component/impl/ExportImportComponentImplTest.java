@@ -433,6 +433,9 @@ class ExportImportComponentImplTest {
                   "formType": "PROCESS",
                   "boundTableName": "Main",
                   "configJson": {
+                    "rule": [
+                      { "type": "subTable", "_bindingId": 101, "title": "Sub Table", "props": {} }
+                    ],
                     "subForms": { "101": { "title": "Sub" } },
                     "relationViews": { "101": { "columns": [] } }
                   },
@@ -477,6 +480,9 @@ class ExportImportComponentImplTest {
         Map<String, Object> subForms = (Map<String, Object>) finalForm.getConfigJson().get("subForms");
         assertTrue(subForms.containsKey("501"), () -> "Expected remapped binding key 501, got: " + subForms.keySet());
         assertFalse(subForms.containsKey("101"));
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rule = (List<Map<String, Object>>) finalForm.getConfigJson().get("rule");
+        assertEquals(501L, ((Number) rule.get(0).get("_bindingId")).longValue());
         verify(formTableBindingRepository).save(any());
         verify(tableRelationRepository, never()).save(any());
     }
