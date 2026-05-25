@@ -41,10 +41,12 @@ import { computed, inject, onMounted, getCurrentInstance } from 'vue'
 // Icons are globally registered in main.ts via ElementPlusIconsVue
 // No need for local imports, which can cause circular dependency issues in production build
 import { useI18n } from 'vue-i18n'
+import { normalizeBindingId } from '@/utils/bindingDisplayHelpers'
 
 interface DesignerSubBinding {
   id: number
   tableName: string
+  tableDisplayName?: string
   tableDescription: string
   bindingType: string
 }
@@ -97,22 +99,23 @@ onMounted(() => {
 const injectedSubBindings = inject<() => DesignerSubBinding[]>('designerSubBindings', () => [])
 
 const subBindings = computed(() => props.subBindings ?? injectedSubBindings())
-const bindingId = computed(() => props._bindingId ?? props.bindingId ?? null)
+const bindingId = computed(() => normalizeBindingId(props._bindingId ?? props.bindingId ?? null))
 
 type PlaceholderState = 'unconfigured' | 'valid' | 'stale'
 
 const state = computed((): PlaceholderState => {
-  if (!bindingId.value) return 'unconfigured'
+  if (bindingId.value == null) return 'unconfigured'
   const found = subBindings.value.find(b => b.id === bindingId.value)
   return found ? 'valid' : 'stale'
 })
 
 const displayName = computed(() => {
-  if (state.value !== 'valid') return null
+  if (state.value !== 'valid' || bindingId.value == null) return null
   const binding = subBindings.value.find(b => b.id === bindingId.value)!
+  const label = binding.tableDisplayName || binding.tableName
   return binding.tableDescription
-    ? `${binding.tableName}（${binding.tableDescription}）`
-    : binding.tableName
+    ? `${label}（${binding.tableDescription}）`
+    : label
 })
 </script>
 

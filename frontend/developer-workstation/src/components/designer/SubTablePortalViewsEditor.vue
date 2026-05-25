@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, inject } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { resolveBindingDisplayName } from '@/utils/bindingDisplayHelpers'
 
 /**
  * User-facing labels are translated via `form.portalViews.*`.
@@ -204,6 +205,26 @@ function updateInitiatorRequest(val: InitiatorRequestMode) {
   })
 }
 
+const injectedSubBindings = inject<() => Array<{
+  id: number
+  tableName: string
+  tableDisplayName?: string
+  tableId?: number
+}>>('designerSubBindings', () => [])
+
+function resolveBoundSubTableLabel(col: DesignerLinkFormColumnInfo): string {
+  if (col.boundSubTableName) return col.boundSubTableName
+  return resolveBindingDisplayName(
+    col.boundSubTableBindingId,
+    injectedSubBindings().map(b => ({
+      bindingId: b.id,
+      tableName: b.tableName,
+      tableDisplayName: b.tableDisplayName,
+      tableId: b.tableId,
+    })),
+  )
+}
+
 function getLinkFormColumnLabel(col: DesignerLinkFormColumnInfo, forcePrefix = false): string {
   const left = col.columnLabel || `linkForm:${col.componentId}`
   // A Link Form column whose `boundSubTableBindingId` equals its source binding is the
@@ -214,7 +235,7 @@ function getLinkFormColumnLabel(col: DesignerLinkFormColumnInfo, forcePrefix = f
   const target =
     selfReferential
       ? ''
-      : (col.boundSubTableName || (col.boundSubTableBindingId != null ? `#${col.boundSubTableBindingId}` : ''))
+      : resolveBoundSubTableLabel(col)
   // Show the source binding prefix in two cases:
   //   1. Editor is invoked without a specific bindingId (rule-level form-create panel)
   //   2. Picker is in fallback mode (scoped lookup empty → cross-binding pool shown)

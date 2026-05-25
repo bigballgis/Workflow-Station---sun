@@ -373,6 +373,7 @@ import { Search, Close, Menu, DArrowRight, EditPen, Calendar, Document, Coin, Sw
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { subTableViewApi, type SubTableFieldDTO } from '@/api/subTableView'
+import { resolveBindingDisplayName } from '@/utils/bindingDisplayHelpers'
 import { linkFormComponentApi } from '@/api/linkFormComponent'
 import SubTablePreviewDialog from './sub-table-list/SubTablePreviewDialog.vue'
 import SubTableColumnConfigDialog from './sub-table-list/SubTableColumnConfigDialog.vue'
@@ -654,13 +655,18 @@ const getColumnLabel = (column: SubTableListColumnDTO) => {
 }
 const getLinkText = (column: SubTableListColumnDTO) => column.linkText || t('linkForm.defaultLinkText')
 
+function resolveSubTableBindingDisplayName(bindingId: unknown): string {
+  return resolveBindingDisplayName(bindingId, subTableBindingOptions.value)
+}
+
 function getLinkFormBoundTableName(column: SubTableListColumnDTO | null): string {
   if (!column || !isLinkColumn(column)) {
-    return props.binding.tableName
+    return props.binding.tableDisplayName || props.binding.tableName
   }
   return (
     column.boundSubTableName
-    || subTableBindingOptions.value.find(o => o.bindingId === column.boundSubTableBindingId)?.tableName
+    || resolveSubTableBindingDisplayName(column.boundSubTableBindingId)
+    || props.binding.tableDisplayName
     || props.binding.tableName
   )
 }
@@ -971,7 +977,11 @@ function saveActionColumnConfig() {
       boundSubTableBindingId: linkColumnConfig.value.boundSubTableBindingId || props.binding.bindingId,
       boundSubTableName: subTableBindingOptions.value.find(
         option => option.bindingId === linkColumnConfig.value.boundSubTableBindingId
-      )?.tableName
+      )?.tableDisplayName
+        || subTableBindingOptions.value.find(
+          option => option.bindingId === linkColumnConfig.value.boundSubTableBindingId
+        )?.tableName
+        || resolveSubTableBindingDisplayName(linkColumnConfig.value.boundSubTableBindingId)
   }
   emit('update:modelValue', columns)
   emit('save')
