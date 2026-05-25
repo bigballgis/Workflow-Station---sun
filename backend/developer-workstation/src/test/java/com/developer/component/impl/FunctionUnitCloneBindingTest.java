@@ -3,7 +3,10 @@ package com.developer.component.impl;
 import com.developer.entity.FormDefinition;
 import com.developer.entity.FormTableBinding;
 import com.developer.entity.FunctionUnit;
+import com.developer.entity.ProcessDefinition;
 import com.developer.entity.TableDefinition;
+import com.developer.util.BpmnProcessIdRewriter;
+import com.developer.util.XmlEncodingUtil;
 import com.developer.enums.BindingMode;
 import com.developer.enums.BindingType;
 import com.developer.enums.FormType;
@@ -98,6 +101,25 @@ class FunctionUnitCloneBindingTest {
                 .configJson(configJson).showLiveValues(true).build();
         sourceForm.setTableBindings(List.of(primaryBinding, relatedBinding));
 
+        String sourceBpmn = """
+                <?xml version="1.0"?>
+                <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI">
+                  <bpmn:process id="Process_1_xx" isExecutable="true">
+                    <bpmn:startEvent id="StartEvent_1" />
+                  </bpmn:process>
+                  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+                    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_1_xx" />
+                  </bpmndi:BPMNDiagram>
+                </bpmn:definitions>
+                """;
+        ProcessDefinition sourceProcess = ProcessDefinition.builder()
+                .id(50L)
+                .functionUnit(source)
+                .bpmnXml(sourceBpmn)
+                .build();
+        source.setProcessDefinition(sourceProcess);
+
         when(functionUnitRepository.findById(1L)).thenReturn(Optional.of(source));
         when(functionUnitRepository.existsByName("Cloned")).thenReturn(false);
         when(functionUnitRepository.save(any(FunctionUnit.class))).thenAnswer(inv -> {
@@ -134,6 +156,18 @@ class FunctionUnitCloneBindingTest {
         });
 
         component.clone(1L, "Cloned");
+
+        ArgumentCaptor<FunctionUnit> functionUnitCaptor = ArgumentCaptor.forClass(FunctionUnit.class);
+        verify(functionUnitRepository).save(functionUnitCaptor.capture());
+        String clonedCode = functionUnitCaptor.getValue().getCode();
+        assertNotNull(clonedCode);
+        assertFalse(clonedCode.isBlank());
+
+        ArgumentCaptor<ProcessDefinition> processCaptor = ArgumentCaptor.forClass(ProcessDefinition.class);
+        verify(processDefinitionRepository).save(processCaptor.capture());
+        String clonedBpmn = XmlEncodingUtil.smartDecode(processCaptor.getValue().getBpmnXml());
+        assertEquals(clonedCode, BpmnProcessIdRewriter.extractProcessId(clonedBpmn));
+        assertFalse(clonedBpmn.contains("Process_1_xx"));
 
         ArgumentCaptor<FormTableBinding> bindingCaptor = ArgumentCaptor.forClass(FormTableBinding.class);
         verify(formTableBindingRepository, times(2)).save(bindingCaptor.capture());

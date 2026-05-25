@@ -16,6 +16,7 @@ import com.developer.security.FunctionUnitWorkspaceAccessService;
 import com.developer.security.WorkspaceAccessAction;
 import com.developer.component.VersionComponent;
 import com.developer.util.BpmnIdRewriter;
+import com.developer.util.BpmnProcessIdRewriter;
 import com.developer.util.DeveloperWorkstationSequenceSynchronizer;
 import com.developer.util.FormConfigJsonBindingIdRewriter;
 import com.developer.util.MinimalBpmnTemplate;
@@ -582,6 +583,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
                     actionIdMapping,
                     clonedTableNameToId,
                     clonedFormNameToId);
+            rewrittenBpmn = BpmnProcessIdRewriter.rewriteToFunctionUnitCode(rewrittenBpmn, cloned.getCode());
             ProcessDefinition clonedProcess = ProcessDefinition.builder()
                     .functionUnit(cloned)
                     .functionUnitVersionId(cloned.getId())

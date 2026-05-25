@@ -18,6 +18,7 @@ import com.developer.security.FunctionUnitWorkspaceAccessService;
 import com.developer.security.WorkspaceAccessAction;
 import com.developer.util.BpmnLastTaskAssigneeTopologyValidator;
 import com.developer.util.BpmnIdRewriter;
+import com.developer.util.BpmnProcessIdRewriter;
 import com.developer.util.DeveloperWorkstationSequenceSynchronizer;
 import com.developer.util.FormConfigJsonBindingIdRewriter;
 import com.developer.util.XmlEncodingUtil;
@@ -398,6 +399,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
                     actionIdMapping,
                     importedTableNameToId,
                     importedFormNameToId);
+            rewrittenBpmn = BpmnProcessIdRewriter.rewriteToFunctionUnitCode(rewrittenBpmn, functionUnit.getCode());
             assertLastTaskAssigneeTopologyOrThrow(XmlEncodingUtil.smartDecode(rewrittenBpmn));
             ProcessDefinition process = ProcessDefinition.builder()
                     .functionUnit(functionUnit)

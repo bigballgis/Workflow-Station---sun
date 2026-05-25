@@ -4,6 +4,7 @@ import com.developer.entity.FunctionUnit;
 import com.developer.entity.ProcessDefinition;
 import com.developer.entity.TableDefinition;
 import com.developer.repository.*;
+import com.developer.util.BpmnProcessIdRewriter;
 import com.developer.util.XmlEncodingUtil;
 import com.developer.security.FunctionUnitWorkspaceAccessService;
 import com.developer.validation.DmnXmlParser;
@@ -325,17 +326,23 @@ class ExportImportComponentImplTest {
 
         String bpmn = """
                 <?xml version="1.0"?>
-                <bpmn:definitions>
-                  <bpmn:userTask id="MI_Task">
-                    <bpmn:extensionElements>
-                      <custom:properties>
-                        <custom:property name="subTableName" value="participants" />
-                        <custom:property name="subTableId" value="13" />
-                        <custom:property name="formName" value="MainForm" />
-                        <custom:property name="formId" value="11" />
-                      </custom:properties>
-                    </bpmn:extensionElements>
-                  </bpmn:userTask>
+                <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI">
+                  <bpmn:process id="Process_1_xx" isExecutable="true">
+                    <bpmn:userTask id="MI_Task">
+                      <bpmn:extensionElements>
+                        <custom:properties>
+                          <custom:property name="subTableName" value="participants" />
+                          <custom:property name="subTableId" value="13" />
+                          <custom:property name="formName" value="MainForm" />
+                          <custom:property name="formId" value="11" />
+                        </custom:properties>
+                      </bpmn:extensionElements>
+                    </bpmn:userTask>
+                  </bpmn:process>
+                  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+                    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_1_xx" />
+                  </bpmndi:BPMNDiagram>
                 </bpmn:definitions>
                 """;
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -358,6 +365,13 @@ class ExportImportComponentImplTest {
         Map<String, Object> result = impl.importFunctionUnit(file, "RENAME");
         assertEquals("SUCCESS", result.get("status"));
 
+        org.mockito.ArgumentCaptor<FunctionUnit> functionUnitCaptor =
+                org.mockito.ArgumentCaptor.forClass(FunctionUnit.class);
+        verify(functionUnitRepository).save(functionUnitCaptor.capture());
+        String importedCode = functionUnitCaptor.getValue().getCode();
+        assertNotNull(importedCode);
+        assertFalse(importedCode.isBlank());
+
         org.mockito.ArgumentCaptor<ProcessDefinition> processCaptor =
                 org.mockito.ArgumentCaptor.forClass(ProcessDefinition.class);
         verify(processDefinitionRepository).save(processCaptor.capture());
@@ -368,6 +382,8 @@ class ExportImportComponentImplTest {
                 () -> "Expected rewritten formId=300 in: " + savedBpmn);
         assertFalse(savedBpmn.contains("value=\"13\""));
         assertFalse(savedBpmn.contains("value=\"11\""));
+        assertEquals(importedCode, BpmnProcessIdRewriter.extractProcessId(savedBpmn));
+        assertFalse(savedBpmn.contains("Process_1_xx"));
     }
 
     @Test
