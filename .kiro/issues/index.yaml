@@ -1790,3 +1790,59 @@
     根因：门户库 current_assignee 存 userId/username，列表接口依赖 HTTP 调 admin-center 解析姓名，失败时回退为原始 ID。
     修复：新增 UserDisplayNameResolver，通过本地 sys_users（UserRepository）批量解析 fullName；My Requests 与 Dashboard 团队申请列表均走该路径。
     验证：UserDisplayNameResolverTest 通过；mvn package user-portal；docker compose up -d --build user-portal。
+
+- id: "1389"
+  status: fixed
+  fixed_at: "2026-05-25"
+  severity: major
+  category: quality
+  summary: "User Portal My Requests 在 BPMN 当前节点为 MI 子任务表单时，会把表单元数据中"已绑定但未放置在画布"的 SUB / RELATED binding 渲染为底部独立子表，违反 portal-design-parity（DW Form Preview 只渲染画布 rule 节点 + 显式 link-form 目标），表现为 subtable2 A 以及一个 stale subForms 残留的无标题表多出现 2 张"
+  file: |
+    frontend/user-portal/src/views/applications/detail.vue
+  note: |
+    复现：以流程发起人登入 User Portal → My Requests 打开 Multi-Instance Subtask Demo 当前在 `sub form1` MI 子任务阶段的实例，详情页主表单下出现 2 张"凭空多出来"的子表（一张无标题 id/sex/age，一张 `subtable2 A` id/sex/age）。设计器 Form Preview 弹窗里不存在这两张表。
+    根因：
+      1) `applications/detail.vue` 的 `shouldRenderBottomUnplacedSubTable` 把"未在 `rule` 中放置 + 不是 link-form target + 不是 FORM_ONLY + native binding"全部当作"未放置兜底子表"渲染到主表单下方；
+      2) 该兜底逻辑与 `frontend/developer-workstation/src/components/designer/FormDesigner.vue:buildPreviewItems` 的语义不一致 —— Form Preview 只渲染 canvas `rule` 中的 `subTable` 节点（及通过 `subListViews` 列声明的 link-form 目标），不会渲染未放置的 binding；
+      3) 当本例中设计器后续编辑误删了 `subListViews["69"]` 里指向 binding 30 的 `linkForm:-69` 列时，`collectAllLinkFormTargetBindingIds` 拿不到 30，30 直接走到兜底渲染分支 → "subtable2 A" 多出；同时 `bindingType=RELATED` 的 binding 39（仅作为 `lookup2` 字段的查找源）也被兜底，叠加上一次设计器留下来的 stale `subForms["39"].rule=[id/sex/age]` 被 `deriveColumnsFromBinding` 当作列源，渲染成无标题表。
+    修复（portal-design-parity 主修复）：
+      将 `shouldRenderBottomUnplacedSubTable` 改为始终返回 `false`，并在文档注释中明确：User Portal 必须与 DW Form Preview 一致；保留参数签名以便未来按需重新放开特定 gate。`bottomSubTableBindings` 与 `diagramSelectedBottomSubTables` 因此恒为空数组，模板 `v-if` 自动跳过整段"未放置子表"区域 —— 与 Form Preview 完全对齐。同步清理无用 imports（`collectLinkFormTargetBindingIds`、`collectAllLinkFormTargetBindingIds`）。
+    验证：
+      - `cd frontend/user-portal && npm run build` 成功；ReadLints 对 detail.vue 无新增告警。
+      - 重建 user-portal-frontend 容器，浏览器刷新 My Requests，2 张多余子表消失；画布内已放置的 binding 69（subTable A）/ 104（attachment A）渲染不变；流程节点切换到 MI 子任务、主流程节点均一致。
+      - DW Form Designer 内打开同一 form 的 Form Preview 弹窗，仍只看到画布上的 subTable 与 link-form 目标 —— 与 Portal 现状已一致。
+    后续建议（独立 issue，未在本条记录）：
+      - Designer 删除 `linkForm` 列时应级联清理 `subTablePortalViews` 中指向已不存在 columnId 的 `linkFormColumnId`、以及与之关联的孤儿 binding，避免"语义意图保留、载体丢失"的中间态。
+      - Designer 在某 binding 从 SUB 改为 RELATED（或反过来）时应重置该 binding 对应的 `subForms` 入口，避免 stale `subForms` 被运行时当成列源。
+
+- id: "1390"
+  status: fixed
+  fixed_at: "2026-05-25"
+  severity: major
+  category: bug
+  summary: "User Portal 子表行内联表单 / Link Form 弹窗 / SubTaskForm 中，lookup 字段（如 sys_users 类型 assignee）的对象值被渲染成 `[object Object]`，且回填视图（LookupViewDisplay backfill panel）不显示 —— FieldRenderer.vue 缺少 `lookup` 分支，落入默认 `<el-input>` 兜底；同时未携带 `_lookupShowBackfillView` 与 `LookupViewDisplay` 渲染契约。与 1387/1388 互补（1387 修了 SubTableField 单元格内 lookup tag、1388 修了 My Requests 列表的 currentAssignee，本条修内联行表单 / Link Form 弹窗 / SubTaskForm 走 FieldRenderer 的 lookup 渲染路径）"
+  file: |
+    frontend/user-portal/src/components/FieldRenderer.vue
+    frontend/user-portal/src/views/tasks/detail.vue
+    frontend/user-portal/src/views/applications/detail.vue
+  note: |
+    复现：以 `e2e_lina` 登入 User Portal → To Do 打开 Multi-Instance Subtask Demo `sub form1` 待办，画布上 `subtable A`（binding 69，portalViews.assigneeTodo=`formBelowTable`）下方的内联行表单中：`id=45`、`name=45` 正常显示，但 `assignee` 字段渲染为 `[object Object]`；即使前一步修好显示，回填视图（LookupViewDisplay 多字段列表）也不出现 —— 而 `lookupConfig.showBackfillView=true` 已在 Designer 里开启。Completed Tasks 详情页（同样路由到 `/tasks/{id}` → `tasks/detail.vue`）存在同样问题。
+    根因：
+      1) `applications/detail.vue` / `tasks/detail.vue` 的 `extractFieldsRecursive` 在遇到 `type === 'lookup'` 字段时，会解析 `props.lookupConfig` 并在 FormField 上写入 `_lookupTableId`、`_lookupSearchFields`、`_lookupDisplayField`、`_lookupDisplayFields`、`_lookupSelectedDisplayField`、`_lookupFilterConditions`、`_lookupViewFields`，但**没有携带 `_lookupShowBackfillView`** —— Backfill 标志只在 `convertFormCreateRule` 路径（主表单顶层字段）下挂到 `passProps.showBackfillView` 上，子表行 / 内联子表单 / Link Form 弹窗使用的是 `extractFieldsRecursive` 输出，于是 Backfill 元数据丢失。
+      2) `FormRenderer.vue` 主模板在顶层显式有 `v-else-if="field.type === 'lookup'"` 分支，直接渲染 `<LookupField>` + `<LookupViewDisplay>`，并维护 `lookupSelectedData` / `lookupLoadedViewFields` 这两个本地状态。
+      3) 但 `PortalFormFields.vue`（子表行内联表单、Link Form 弹窗）与 `SubTaskForm.vue`（MI 子任务）都将"非 subTable / 非 card"字段统一交给 `FieldRenderer.vue` 渲染，而 `FieldRenderer.vue` 历史上**没有** `lookup` 模板分支 —— 落到 `<template v-else>` 默认 `<el-input :model-value="modelValue">` 上。
+      4) 流程引擎写回 `__subTables__["66"][i].assignee` 时保留了完整 LinkedHashMap（`{id, email, username, full_name, display_name, ...}`），前端拿到的就是一个 JS Object；当它被 `<el-input>` 的 `:model-value` 接收，Element Plus 内部走 `value = String(modelValue)`，于是显示 `[object Object]`。
+    与上游冲突合并：
+      origin 上同时落地的 1387/1388 在 `FieldRenderer.vue` 已加入基础 `lookup` 分支（含 `:lookup-config` 透传到 `LookupField`，由 1387 引入的 `getLookupSelectedDisplayFieldFromProps` 消费），但 LookupViewDisplay 仅在 `_lookupViewFields?.length && lookupSelectedRow` 时显示、且 `lookupSelectedRow` 仅在 `@select` 触发时更新 —— 已保存 Map 值（`__subTables__` 中的 assignee 对象）首次打开页面不会触发 `@select`，回填面板仍不显示；同时 `_lookupShowBackfillView` 未携带，无法尊重 `showBackfillView=false`。
+    修复（叠加在 1387/1388 之上）：
+      1) `extractFieldsRecursive`（`tasks/detail.vue`、`applications/detail.vue`）在生成 lookup FormField 时新增 `_lookupShowBackfillView: lookupCfg.showBackfillView !== false`。
+      2) `FieldRenderer.vue` 在保留上游 lookup 分支结构（含 `:lookup-config` 透传、`Number(_lookupTableId||0)` 防御）基础上：
+         - 引入本地 `lookupLoadedViewFields` + `effectiveLookupViewFields` 计算属性（优先 `_lookupViewFields`，否则回退到 LookupField 通过 `@view-fields-loaded` 自动加载的列表）。
+         - `LookupViewDisplay` 的 `v-if` 改为 `lookupShowBackfillView && lookupSelectedRow`，`view-fields` 改为 `effectiveLookupViewFields`。
+         - 新增 `watch(modelValue, immediate: true, deep: true)`：当 `modelValue` 为对象（来自 `__subTables__` 持久化的完整 row Map）时直接作为 `lookupSelectedRow`；为 `null`/`''` 时清空 —— 保证首次进入页面、未触发 `@select` 时回填视图也能显示。
+         - `@select` / `@clear` / `@view-fields-loaded` 都走具名 handler `onLookupSelect` / `onLookupClear` / `onLookupViewFieldsLoaded`，便于将来扩展。
+      3) 该修复同时一并覆盖 `PortalFormFields`（子表行内联表单 / Link Form 弹窗）与 `SubTaskForm`（MI 子任务）内的 lookup 字段。
+    验证：
+      - `npm run -s test -- --run src/components/__tests__/fieldRenderer.property.test.ts src/components/__tests__/fieldRendererUserSearch.property.test.ts` 全部通过（16 tests）。
+      - `npm run build` 成功；ReadLints 对 FieldRenderer.vue / tasks/detail.vue / applications/detail.vue 无新增告警。
+      - 重建 `user-portal-frontend` 容器并刷新浏览器后，`subtable A` 行内联表单的 assignee 字段显示为按 `selectedDisplayField` 的可读文本（如 username 或 full_name），下方按 sys_users `viewFields`（id / username / display_name / full_name / email / employee_id / status / language）渲染回填视图；Completed Tasks 详情同步修复。

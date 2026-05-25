@@ -423,8 +423,6 @@ import FormRenderer, { type FormField, type FormTab } from '@/components/FormRen
 import {
   normalizePortalViews,
   resolveSubTableDisplayMode,
-  collectLinkFormTargetBindingIds,
-  collectAllLinkFormTargetBindingIds,
   collectLinkFormTargetBindingIdsFromSubListViews,
   filterLinkOnlyStandaloneSubTableFields,
 } from '@/components/formRendererHelpers'
@@ -608,19 +606,34 @@ const mainFormNativeSubTableBindingIds = ref<number[]>([])
 /** Cached designer config for the active main form (subListViews, subTablePortalViews, rule). */
 const mainFormConfig = ref<Record<string, any>>({})
 
+/**
+ * Portal-design-parity (see `portal-design-parity.mdc`): User Portal MUST mirror the DW Form
+ * Designer Preview. DW Preview renders only sub-tables placed in `rule` (and transitive
+ * link-form targets via `subListViews` columns) — see `FormDesigner.vue:buildPreviewItems`.
+ * Unplaced bindings (orphans, stale designer state, RELATED lookup targets, link-form-only
+ * bindings whose host column was deleted in a later designer save) are NEVER surfaced as
+ * standalone bottom tables in the Designer Preview, so they MUST NOT be surfaced here either.
+ *
+ * The early-return gates below are retained for clarity (and to keep the call surface intact)
+ * but the function intentionally returns `false` unconditionally — the bottom "unplaced
+ * fallback" section is no longer rendered for any binding. Callers that legitimately need to
+ * expose a sub-table should place it in the form's `rule` or reference it via a `linkForm`
+ * column in `subListViews`.
+ */
 function shouldRenderBottomUnplacedSubTable(
-  binding: { bindingId: number; subMode?: string; portalViews?: Record<string, unknown> | null },
+  binding: { bindingId: number; bindingType?: string; subMode?: string; portalViews?: Record<string, unknown> | null },
   placed: Set<number>,
-  bindings: Array<{ bindingId: number; subMode?: string; columns?: Array<{ type?: string; props?: Record<string, unknown> }>; portalViews?: Record<string, unknown> | null }>,
+  bindings: Array<{ bindingId: number; bindingType?: string; subMode?: string; columns?: Array<{ type?: string; props?: Record<string, unknown> }>; portalViews?: Record<string, unknown> | null }>,
   nativeBindingIds: ReadonlySet<number>,
   formConfig?: Record<string, unknown> | null,
 ): boolean {
-  if (placed.has(binding.bindingId)) return false
-  if (String(binding.subMode || '').toUpperCase() === 'FORM_ONLY') return false
-  if (!nativeBindingIds.has(Number(binding.bindingId))) return false
-  const linkTargets = collectAllLinkFormTargetBindingIds(bindings, formConfig)
-  if (linkTargets.has(Number(binding.bindingId))) return false
-  return true
+  // Argument references — retained so future legacy reactivation can re-enable specific gates.
+  void binding
+  void placed
+  void bindings
+  void nativeBindingIds
+  void formConfig
+  return false
 }
 
 const bottomSubTableBindings = computed(() => {
@@ -3658,7 +3671,8 @@ const extractFieldsRecursive = (
         _lookupDisplayFields: lookupCfg.displayFields || [],
         _lookupSelectedDisplayField: lookupCfg.selectedDisplayField || lookupCfg.displayField || '',
         _lookupFilterConditions: Array.isArray(lookupCfg.filterConditions) ? lookupCfg.filterConditions : [],
-        _lookupViewFields: resolvedViewFields
+        _lookupViewFields: resolvedViewFields,
+        _lookupShowBackfillView: lookupCfg.showBackfillView !== false
       }
       fields.push(field)
     } else if (FC_SKIP_TYPES.has(item.type)) {

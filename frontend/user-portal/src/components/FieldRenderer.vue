@@ -494,7 +494,14 @@
       />
     </template>
 
-    <!-- lookup (sub-form inline / portal fields with _lookup* metadata) -->
+    <!--
+      lookup — match FormRenderer's top-level branch so PortalFormFields / SubTableInlineForm
+      / SubTaskForm don't fall through to the default <el-input>, which stringifies the
+      assignee object as "[object Object]". Backfill view (LookupViewDisplay) is rendered
+      below the field when `lookupConfig.showBackfillView !== false` (carried via
+      `_lookupShowBackfillView` from extractFieldsRecursive); falls back to runtime-loaded
+      view fields when designer did not configure them.
+    -->
     <template v-else-if="field.type === 'lookup'">
       <div class="lookup-field-wrapper">
         <LookupField
@@ -508,15 +515,16 @@
           :lookup-config="(field as any)._lookupConfig"
           :view-fields="(field as any)._lookupViewFields || []"
           :placeholder="field.placeholder"
-          :readonly="readonly || isDisabled"
+          :readonly="isDisabled"
           @update:model-value="onUpdate"
-          @select="(row: Record<string, unknown>) => { lookupSelectedRow = row }"
-          @clear="() => { lookupSelectedRow = null }"
+          @select="(row: Record<string, any>) => onLookupSelect(row)"
+          @clear="onLookupClear"
+          @view-fields-loaded="(vfs: any[]) => onLookupViewFieldsLoaded(vfs)"
         />
         <LookupViewDisplay
-          v-if="lookupSelectedRow && (field as any)._lookupViewFields?.length"
+          v-if="lookupShowBackfillView && lookupSelectedRow"
           :selected-data="lookupSelectedRow"
-          :view-fields="(field as any)._lookupViewFields || []"
+          :view-fields="effectiveLookupViewFields"
         />
       </div>
     </template>
@@ -589,14 +597,59 @@ const emit = defineEmits<{
   (e: 'search:users', query: string, fieldKey: string): void
 }>()
 
-const lookupSelectedRow = ref<Record<string, unknown> | null>(null)
-
 const isDisabled = computed(() => props.readonly || props.disabled)
 
 function onUpdate(value: any) {
   if (props.readonly) return
   emit('update:modelValue', value)
 }
+
+// ---------------------------------------------------------------------------
+// Lookup state — mirrors FormRenderer's lookupSelectedData / lookupLoadedViewFields
+// so the LookupViewDisplay backfill panel shows up inside SubTableInlineForm /
+// Link Form modal / SubTaskForm (which all go through FieldRenderer, not FormRenderer).
+// ---------------------------------------------------------------------------
+const lookupSelectedRow = ref<Record<string, any> | null>(null)
+const lookupLoadedViewFields = ref<any[]>([])
+
+const lookupShowBackfillView = computed<boolean>(() => {
+  if (props.field.type !== 'lookup') return false
+  return (props.field as any)._lookupShowBackfillView !== false
+})
+
+const effectiveLookupViewFields = computed(() => {
+  const configured = (props.field as any)._lookupViewFields
+  if (Array.isArray(configured) && configured.length > 0) return configured
+  return lookupLoadedViewFields.value
+})
+
+function onLookupSelect(row: Record<string, any>) {
+  lookupSelectedRow.value = row && typeof row === 'object' ? row : null
+}
+
+function onLookupClear() {
+  lookupSelectedRow.value = null
+}
+
+function onLookupViewFieldsLoaded(vfs: any[]) {
+  lookupLoadedViewFields.value = Array.isArray(vfs) ? vfs : []
+}
+
+watch(
+  () => [props.modelValue, props.field?.type] as const,
+  ([val, type]) => {
+    if (type !== 'lookup') {
+      lookupSelectedRow.value = null
+      return
+    }
+    if (val && typeof val === 'object' && !Array.isArray(val) && Object.keys(val).length > 0) {
+      lookupSelectedRow.value = val as Record<string, any>
+    } else if (val == null || val === '') {
+      lookupSelectedRow.value = null
+    }
+  },
+  { immediate: true, deep: true },
+)
 
 // ---------------------------------------------------------------------------
 // Resolved options — linkage override takes priority (Task 6.1)
@@ -1003,5 +1056,10 @@ onBeforeUnmount(() => {
 .readonly-text {
   color: #606266;
   line-height: 32px;
+}
+
+.lookup-field-wrapper {
+  width: 100%;
+  min-width: 0;
 }
 </style>
