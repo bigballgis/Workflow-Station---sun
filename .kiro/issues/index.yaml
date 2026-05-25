@@ -1590,3 +1590,53 @@
   note: |
     根因：cloneForm/import 遗漏 RELATED 的 relationTableId、stageBindings、TableRelation 等；新 binding ID 未回写 configJson。
     修复：clone/import 显式加载关系数据；逐条 save binding 并 FormConfigJsonBindingIdRewriter remap configJson。
+
+- id: "1378"
+  status: fixed
+  fixed_at: "2026-05-25"
+  severity: minor
+  category: bug
+  summary: "SubTableListView 的 Link Form 列「Bound Sub Table」下拉框未优先显示 Table Display Name"
+  file: |
+    frontend/developer-workstation/src/components/designer/FormDesigner.vue;
+    frontend/developer-workstation/src/components/designer/SubTableListView.vue;
+    frontend/developer-workstation/src/components/designer/sub-table-list/SubTableColumnConfigDialog.vue;
+    frontend/developer-workstation/src/components/designer/TableBindingManager.vue
+  note: |
+    根因：Bound Sub Table 下拉框 (SubTableColumnConfigDialog) 使用 `subTable.tableName`；该字段虽由 issue 1372 的 `getTableName(b.tableId, b.tableName)` 注入「display-name-preferring」值，但 tableName 同时承担技术名/显示名两种语义，下游模板无法明确表达「优先 Display Name」；TableBindingManager 选择表的下拉框完全没考虑 tableDisplayName。
+    修复：
+      - SubTableBindingOption 接口新增显式 `tableDisplayName?: string` 与 `tableId?: number`。
+      - FormDesigner.designerSubBindings 显式填充 tableDisplayName（来自 store.tables）。
+      - SubTableColumnConfigDialog 模板改为 `:label="subTable.tableDisplayName || subTable.tableName"`。
+      - SubTableListView fallback 选项与 binding prop 类型也补齐 tableDisplayName。
+      - TableBindingManager 的「Select Table」下拉 displayLabel 由 `${t.tableName}` 改为 `${t.tableDisplayName || t.tableName}`。
+    部署：vite build + `docker compose up -d --build developer-workstation-frontend`。
+
+- id: "1379"
+  status: fixed
+  fixed_at: "2026-05-25"
+  severity: minor
+  category: quality
+  summary: "Table Design Fields 列首位显示 Display Name；字段 fieldName/description/length/scale/nullable 变更自动同步到 Form 画布"
+  file: |
+    frontend/developer-workstation/src/components/designer/TableDesigner.vue;
+    frontend/developer-workstation/src/i18n/locales/{en,zh-CN,zh-TW}.ts;
+    backend/developer-workstation/src/main/java/com/developer/dto/FieldDefinitionRequest.java;
+    backend/developer-workstation/src/main/java/com/developer/component/impl/TableDesignComponentImpl.java;
+    backend/developer-workstation/src/main/java/com/developer/service/FormConfigFieldRenamer.java;
+    backend/developer-workstation/src/test/java/com/developer/service/FormConfigFieldRenamerTest.java
+  note: |
+    需求：Table Design 中字段第一栏改为 Display Name（沿用 description 列存储，新增 i18n key `table.fieldDisplayName`）；字段变更后，所有引用该表的 Form 画布 rule 自动同步。
+    实现（折中硬同步策略）：
+      - 前端 TableDesigner 把 description 列移到字段名前一位并重标 Display Name；保存请求按 sortOrder 携带原始 field id 以便后端做 diff。
+      - 后端 FieldDefinitionRequest 增加可选 `id`；TableDesignComponentImpl.update 在删除旧字段前按 id 快照 (fieldName, description, dataType, length, scale, nullable)，保存后计算 FieldChange 列表。
+      - service/FormConfigFieldRenamer：按 PRIMARY 绑定 + 遗留 boundTable 遍历 configJson.rule（递归 children）；按 SUB/RELATED 绑定遍历 configJson.subForms[bindingId].rule；root configJson 复制一份再 setConfigJson 以确保 Hibernate `@JdbcTypeCode(SqlTypes.JSON)` dirty tracking。
+      - 同步规则（守门避免抹掉设计师手工调整）：
+          • field/title 同步：无条件（按 description || fieldName 回写 title）；
+          • props.maxlength：仅当节点 type=="input" 且 newDataType=="VARCHAR" 时同步 length；
+          • props.precision：仅当节点 type=="inputNumber" 且 newDataType=="DECIMAL" 时同步 scale；
+          • validate.required：根据 nullable 增删 required 校验项，其它校验项不被触动；
+          • fieldPermissions Map 以 fieldName 为 key 重映射；
+          • dataType 变更不强制改写画布节点 type，避免抹掉自定义控件。
+      - 单元测试 FormConfigFieldRenamerTest 共 12 个用例：PRIMARY rule、SUB subForms、children 递归、仅 Display Name 变更、不相关绑定不动、Display Name 清空回退、length 同步 input+VARCHAR、length 不同步 select、dataType 变更不翻转 type、scale 同步 inputNumber+DECIMAL、nullable true→false 追加 required、nullable false→true 移除 required（保留其他校验）。
+    部署：mvn package developer-workstation + `docker compose up -d --build developer-workstation`，容器 Tomcat 14.584s 启动成功。

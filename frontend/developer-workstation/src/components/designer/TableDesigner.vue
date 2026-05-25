@@ -48,6 +48,12 @@
         @row-click="handleSelectTable"
       >
         <el-table-column
+          prop="tableDisplayName"
+          :label="t('table.tableDisplayName')"
+          min-width="180"
+          show-overflow-tooltip
+        />
+        <el-table-column
           prop="tableName"
           :label="t('table.tableName')"
           min-width="150"

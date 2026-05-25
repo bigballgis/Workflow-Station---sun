@@ -392,6 +392,9 @@ interface LinkFormComponentInfo {
 interface SubTableBindingOption {
   bindingId: number
   tableName: string
+  /** Table Display Name 来自 dw_table_definitions.tableDisplayName，渲染优先于 tableName。 */
+  tableDisplayName?: string
+  tableId?: number
   tableDescription?: string
 }
 
@@ -431,6 +434,7 @@ const props = defineProps<{
     bindingType: string
     bindingMode: string
     tableName: string
+    tableDisplayName?: string
     tableId: number
     tableType: string
     tableDescription: string
@@ -491,11 +495,13 @@ const genericLookupKey = computed(() => `lookup:${props.binding.bindingId || 0}`
 
 // All available fields: prefer prop (parent-managed), fall back to locally loaded
 const allFields = computed(() => props.availableFields?.length ? props.availableFields : localAvailableFields.value)
-const subTableBindingOptions = computed(() => {
+const subTableBindingOptions = computed<SubTableBindingOption[]>(() => {
   if (props.subTableBindings?.length) return props.subTableBindings
   return [{
     bindingId: props.binding.bindingId,
     tableName: props.binding.tableName,
+    tableDisplayName: props.binding.tableDisplayName,
+    tableId: props.binding.tableId,
     tableDescription: props.binding.tableDescription
   }]
 })

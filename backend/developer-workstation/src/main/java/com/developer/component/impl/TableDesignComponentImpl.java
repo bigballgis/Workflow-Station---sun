@@ -7,13 +7,13 @@ import com.developer.dto.TableDefinitionRequest;
 import com.developer.dto.ValidationResult;
 import com.developer.entity.FieldDefinition;
 import com.developer.entity.ForeignKey;
+import com.developer.entity.FormDefinition;
 import com.developer.entity.FunctionUnit;
 import com.developer.entity.TableDefinition;
 import com.developer.enums.DataType;
 import com.developer.enums.DatabaseDialect;
 import com.developer.exception.DeveloperBusinessException;
 import com.developer.exception.ResourceNotFoundException;
-import com.developer.entity.FormDefinition;
 import com.developer.repository.*;
 import com.developer.service.FormConfigFieldRenamer;
 import com.developer.util.DeveloperWorkstationSequenceSynchronizer;
@@ -105,7 +105,11 @@ public class TableDesignComponentImpl implements TableDesignComponent {
             if (existing.getId() == null) continue;
             originals.put(existing.getId(), new OldFieldSnapshot(
                     existing.getFieldName(),
-                    existing.getDescription()
+                    existing.getDescription(),
+                    existing.getDataType() != null ? existing.getDataType().name() : null,
+                    existing.getLength(),
+                    existing.getScale(),
+                    existing.getNullable()
             ));
         }
         Long functionUnitId = tableDefinition.getFunctionUnit().getId();
@@ -150,10 +154,11 @@ public class TableDesignComponentImpl implements TableDesignComponent {
         TableDefinition saved = tableDefinitionRepository.save(tableDefinition);
         tableDefinitionRepository.flush();
 
-        // 计算字段重命名 / Display Name 变更，同步到该 FunctionUnit 的所有相关 Form。
-        List<FormConfigFieldRenamer.Rename> renames = computeRenames(originals, request.getFields());
-        if (!renames.isEmpty()) {
-            propagateFieldRenamesToForms(functionUnitId, saved, renames);
+        // 计算字段变更（fieldName/description/dataType/length/scale/nullable），
+        // 同步到该 FunctionUnit 的所有相关 Form 画布与字段权限。
+        List<FormConfigFieldRenamer.FieldChange> changes = computeFieldChanges(originals, request.getFields());
+        if (!changes.isEmpty()) {
+            propagateFieldChangesToForms(functionUnitId, saved, changes);
         }
 
         // Reload with fields to ensure consistent state for serialization
@@ -161,41 +166,64 @@ public class TableDesignComponentImpl implements TableDesignComponent {
                 .orElse(saved);
     }
 
-    /** 在事务内：扫描该 FunctionUnit 下所有表单，重写引用该表的 rule.field / rule.title 与 fieldPermissions。 */
-    private void propagateFieldRenamesToForms(Long functionUnitId,
+    /** 在事务内：扫描该 FunctionUnit 下所有表单，按字段变更同步 rule.field/title/props/validate 与 fieldPermissions。 */
+    private void propagateFieldChangesToForms(Long functionUnitId,
                                               TableDefinition table,
-                                              List<FormConfigFieldRenamer.Rename> renames) {
+                                              List<FormConfigFieldRenamer.FieldChange> changes) {
         List<FormDefinition> forms = formDefinitionRepository.findByFunctionUnitIdWithBindings(functionUnitId);
-        List<FormDefinition> dirty = FormConfigFieldRenamer.apply(table, forms, renames);
+        List<FormDefinition> dirty = FormConfigFieldRenamer.apply(table, forms, changes);
         if (dirty.isEmpty()) return;
         formDefinitionRepository.saveAll(dirty);
-        log.info("Propagated {} field rename(s) on table {} to {} form(s)",
-                renames.size(), table.getId(), dirty.size());
+        log.info("Propagated {} field change(s) on table {} to {} form(s)",
+                changes.size(), table.getId(), dirty.size());
     }
 
-    private List<FormConfigFieldRenamer.Rename> computeRenames(
+    private List<FormConfigFieldRenamer.FieldChange> computeFieldChanges(
             Map<Long, OldFieldSnapshot> originals,
             List<FieldDefinitionRequest> incoming) {
         if (originals.isEmpty() || incoming == null || incoming.isEmpty()) {
             return Collections.emptyList();
         }
-        List<FormConfigFieldRenamer.Rename> out = new ArrayList<>();
+        List<FormConfigFieldRenamer.FieldChange> out = new ArrayList<>();
         for (FieldDefinitionRequest f : incoming) {
             if (f == null || f.getId() == null) continue;
             OldFieldSnapshot orig = originals.get(f.getId());
             if (orig == null) continue;
             String oldName = orig.fieldName();
-            String newName = f.getFieldName();
-            String oldDesc = orig.description();
-            String newDesc = f.getDescription();
             if (oldName == null || oldName.isBlank()) continue;
-            if (Objects.equals(oldName, newName) && Objects.equals(oldDesc, newDesc)) continue;
-            out.add(new FormConfigFieldRenamer.Rename(oldName, newName, oldDesc, newDesc));
+            FormConfigFieldRenamer.FieldChange ch = new FormConfigFieldRenamer.FieldChange(
+                    oldName,
+                    f.getFieldName(),
+                    orig.description(),
+                    f.getDescription(),
+                    orig.dataType(),
+                    f.getDataType() != null ? f.getDataType().name() : null,
+                    orig.length(),
+                    f.getLength(),
+                    orig.scale(),
+                    f.getScale(),
+                    orig.nullable(),
+                    f.getNullable()
+            );
+            // 若所有维度都未变，则不产出 FieldChange
+            if (!ch.fieldNameChanged()
+                    && !ch.descriptionChanged()
+                    && !ch.lengthChanged()
+                    && !ch.scaleChanged()
+                    && !ch.nullableChanged()) {
+                continue;
+            }
+            out.add(ch);
         }
         return out;
     }
 
-    private record OldFieldSnapshot(String fieldName, String description) {}
+    private record OldFieldSnapshot(String fieldName,
+                                    String description,
+                                    String dataType,
+                                    Integer length,
+                                    Integer scale,
+                                    Boolean nullable) {}
     
     @Override
     @Transactional

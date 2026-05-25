@@ -22,7 +22,7 @@
           <el-option
             v-for="subTable in subTableBindingOptions"
             :key="subTable.bindingId"
-            :label="subTable.tableName"
+            :label="subTable.tableDisplayName || subTable.tableName"
             :value="subTable.bindingId"
           />
         </el-select>
