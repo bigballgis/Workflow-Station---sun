@@ -466,9 +466,27 @@ async function handleClone(item: FunctionUnitResponse) {
 }
 
 async function handleDelete(item: FunctionUnitResponse) {
-  await ElMessageBox.confirm(t('functionUnit.deleteConfirm'), t('functionUnit.confirmTitle'), { type: 'warning' })
+  const isArchived = item.status === 'ARCHIVED'
+  if (isArchived) {
+    await ElMessageBox.confirm(
+      t('functionUnit.deletePermanentConfirm', { name: item.name }),
+      t('functionUnit.deletePermanentTitle'),
+      {
+        type: 'error',
+        confirmButtonText: t('functionUnit.deletePermanentConfirmButton'),
+        cancelButtonText: t('common.cancel'),
+        confirmButtonClass: 'el-button--danger',
+      }
+    )
+  } else {
+    await ElMessageBox.confirm(
+      t('functionUnit.archiveConfirm', { name: item.name }),
+      t('functionUnit.archiveTitle'),
+      { type: 'warning' }
+    )
+  }
   await store.remove(item.id)
-  ElMessage.success(t('functionUnit.deleteSuccess'))
+  ElMessage.success(isArchived ? t('functionUnit.deletePermanentSuccess') : t('functionUnit.archiveSuccess'))
   loadData()
 }
 

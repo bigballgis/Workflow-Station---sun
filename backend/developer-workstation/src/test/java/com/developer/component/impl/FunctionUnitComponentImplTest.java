@@ -298,4 +298,40 @@ class FunctionUnitComponentImplTest {
         assertEquals(FunctionUnitStatus.PUBLISHED, result.getStatus());
         verify(versionRepository).save(any(Version.class));
     }
+
+    @Test
+    void delete_nonArchivedFunctionUnit_shouldArchiveInsteadOfDelete() {
+        FunctionUnit functionUnit = FunctionUnit.builder()
+                .id(1L)
+                .name("kk")
+                .code("kk-20260101-abc123")
+                .status(FunctionUnitStatus.PUBLISHED)
+                .build();
+        when(functionUnitRepository.findById(1L)).thenReturn(Optional.of(functionUnit));
+        when(functionUnitRepository.save(functionUnit)).thenReturn(functionUnit);
+
+        functionUnitComponent.delete(1L);
+
+        assertEquals(FunctionUnitStatus.ARCHIVED, functionUnit.getStatus());
+        verify(functionUnitRepository).save(functionUnit);
+        verify(functionUnitRepository, never()).delete(any(FunctionUnit.class));
+        verify(functionUnitDevGroupAssignmentRepository, never()).deleteByFunctionUnitId(any());
+    }
+
+    @Test
+    void delete_archivedFunctionUnit_shouldPermanentlyDelete() {
+        FunctionUnit functionUnit = FunctionUnit.builder()
+                .id(2L)
+                .name("kk")
+                .code("kk-20260101-abc123")
+                .status(FunctionUnitStatus.ARCHIVED)
+                .build();
+        when(functionUnitRepository.findById(2L)).thenReturn(Optional.of(functionUnit));
+
+        functionUnitComponent.delete(2L);
+
+        verify(functionUnitDevGroupAssignmentRepository).deleteByFunctionUnitId(2L);
+        verify(functionUnitRepository).delete(functionUnit);
+        verify(functionUnitRepository, never()).save(any(FunctionUnit.class));
+    }
 }

@@ -55,7 +55,8 @@ public class FunctionUnitController extends BaseController {
     }
     
     @DeleteMapping("/{id}")
-    @Operation(summary = "Delete function unit")
+    @Operation(summary = "Archive or permanently delete function unit",
+            description = "Non-archived units are marked ARCHIVED; archived units are permanently deleted")
     @RequireDeveloperPermission("FUNCTION_UNIT_DELETE")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
         return handleRequest(() -> {
