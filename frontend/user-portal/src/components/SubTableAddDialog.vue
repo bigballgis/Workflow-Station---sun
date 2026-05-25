@@ -374,15 +374,17 @@
             :search-fields="col.props?.searchFields || []"
             :display-field="col.props?.displayField || ''"
             :display-fields="col.props?.displayFields || []"
-            :selected-display-field="col.props?.selectedDisplayField || ''"
+            :selected-display-field="getLookupSelectedDisplayField(col)"
             :filter-conditions="col.props?.filterConditions || []"
+            :lookup-config="col.props?.lookupConfig"
             :view-fields="col.props?.viewFields || []"
             :placeholder="col.placeholder || col.label"
+            @select="(row: Record<string, any>) => onLookupSelect(col.field, row)"
             @view-fields-loaded="(fields: any[]) => onLookupViewFieldsLoaded(col.field, fields)"
           />
           <LookupViewDisplay
-            v-if="col.props?.showBackfillView !== false && isLookupRowSelected(formData[col.field])"
-            :selected-data="formData[col.field]"
+            v-if="col.props?.showBackfillView !== false && effectiveLookupSelectedRow(col.field)"
+            :selected-data="effectiveLookupSelectedRow(col.field)"
             :view-fields="effectiveLookupViewFieldsForDialog(col)"
           />
         </div>
@@ -461,7 +463,7 @@ import type { FormInstance } from 'element-plus'
 import { ElMessage } from 'element-plus'
 import { Editor, Toolbar } from '@wangeditor/editor-for-vue'
 import '@wangeditor/editor/dist/css/style.css'
-import { buildInitialRow, buildRules, resolveDisplayValue, isUploadColumn } from './subTableAddDialogHelpers'
+import { buildInitialRow, buildRules, resolveDisplayValue, isUploadColumn, getLookupSelectedDisplayField } from './subTableAddDialogHelpers'
 import type { DialogColumn } from './subTableAddDialogHelpers'
 import type { RowFormulaRule, ValidationRule } from './formRendererHelpers'
 import { evaluateFormula, validateField } from './businessLogicEngine'
@@ -514,6 +516,8 @@ const uploadNames = ref<Record<string, string>>({})
 const dialogKey = ref(0)
 /** View-field metadata for lookup backfill (from column props or LookupField API load). */
 const lookupLoadedViewFields = ref<Record<string, any[]>>({})
+/** Hydrated lookup row for backfill when modelValue is still a scalar PK (matches FormRenderer). */
+const lookupSelectedData = ref<Record<string, Record<string, unknown>>>({})
 
 function isLookupRowSelected(val: unknown): boolean {
   return (
@@ -532,6 +536,18 @@ function effectiveLookupViewFieldsForDialog(col: DialogColumn): any[] {
 
 function onLookupViewFieldsLoaded(field: string, fields: any[]) {
   lookupLoadedViewFields.value = { ...lookupLoadedViewFields.value, [field]: fields }
+}
+
+function onLookupSelect(field: string, row: Record<string, unknown>) {
+  lookupSelectedData.value = { ...lookupSelectedData.value, [field]: row }
+}
+
+function effectiveLookupSelectedRow(field: string): Record<string, unknown> | null {
+  const fromSelect = lookupSelectedData.value[field]
+  if (fromSelect && Object.keys(fromSelect).length > 0) return fromSelect
+  const val = formData.value[field]
+  if (isLookupRowSelected(val)) return val as Record<string, unknown>
+  return null
 }
 
 // ─── Signature canvas state ───────────────────────────────────────────────────
@@ -739,6 +755,7 @@ function initDialogFormState(trigger: 'open' | 'data-change') {
   uploadNames.value = {}
   columnErrors.value = {}
   lookupLoadedViewFields.value = {}
+  lookupSelectedData.value = {}
   // Fetch department tree if any column is of type 'department'
   if (props.columns.some(c => c.type === 'department')) {
     fetchDepartmentTree()
@@ -807,6 +824,7 @@ function handleClose() {
   uploadNames.value = {}
   columnErrors.value = {}
   lookupLoadedViewFields.value = {}
+  lookupSelectedData.value = {}
   formData.value = buildInitialRow(props.columns)
   formRef.value?.clearValidate()
   emit('update:visible', false)

@@ -494,6 +494,33 @@
       />
     </template>
 
+    <!-- lookup (sub-form inline / portal fields with _lookup* metadata) -->
+    <template v-else-if="field.type === 'lookup'">
+      <div class="lookup-field-wrapper">
+        <LookupField
+          :model-value="modelValue"
+          :table-id="Number((field as any)._lookupTableId || 0)"
+          :search-fields="(field as any)._lookupSearchFields || []"
+          :display-field="(field as any)._lookupDisplayField || ''"
+          :display-fields="(field as any)._lookupDisplayFields || []"
+          :selected-display-field="(field as any)._lookupSelectedDisplayField || ''"
+          :filter-conditions="(field as any)._lookupFilterConditions || []"
+          :lookup-config="(field as any)._lookupConfig"
+          :view-fields="(field as any)._lookupViewFields || []"
+          :placeholder="field.placeholder"
+          :readonly="readonly || isDisabled"
+          @update:model-value="onUpdate"
+          @select="(row: Record<string, unknown>) => { lookupSelectedRow = row }"
+          @clear="() => { lookupSelectedRow = null }"
+        />
+        <LookupViewDisplay
+          v-if="lookupSelectedRow && (field as any)._lookupViewFields?.length"
+          :selected-data="lookupSelectedRow"
+          :view-fields="(field as any)._lookupViewFields || []"
+        />
+      </div>
+    </template>
+
     <!-- default fallback -->
     <template v-else>
       <el-input
@@ -526,6 +553,8 @@ import { Editor, Toolbar } from '@wangeditor/editor-for-vue'
 import '@wangeditor/editor/dist/css/style.css'
 import type { FormField } from './formRendererHelpers'
 import api from '@/api/request'
+import LookupField from './lookup/LookupField.vue'
+import LookupViewDisplay from './lookup/LookupViewDisplay.vue'
 
 // ---------------------------------------------------------------------------
 // i18n
@@ -559,6 +588,8 @@ const emit = defineEmits<{
   (e: 'upload:remove', file: any, fieldKey: string): void
   (e: 'search:users', query: string, fieldKey: string): void
 }>()
+
+const lookupSelectedRow = ref<Record<string, unknown> | null>(null)
 
 const isDisabled = computed(() => props.readonly || props.disabled)
 

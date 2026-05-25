@@ -20,6 +20,7 @@ import com.portal.repository.ProcessHistoryRepository;
 import com.portal.repository.ProcessInstanceRepository;
 import com.portal.repository.ActionDefinitionRepository;
 import com.portal.service.PortalWorkspaceAuthService;
+import com.portal.service.UserDisplayNameResolver;
 import com.platform.common.jdbc.PostgresPhysicalTablePrimaryKeys;
 import com.platform.common.jdbc.SubTablePhysicalColumnResolver;
 import com.platform.common.jdbc.SubTableRowKeySupport;
@@ -67,6 +68,7 @@ public class ProcessComponent {
     private final JdbcTemplate jdbcTemplate;
     private final MeetingParticipantVariablesPersistence meetingParticipantVariablesPersistence;
     private final TaskFormComponent taskFormComponent;
+    private final UserDisplayNameResolver userDisplayNameResolver;
 
     @jakarta.persistence.PersistenceContext
     private jakarta.persistence.EntityManager entityManager;
@@ -300,7 +302,7 @@ public class ProcessComponent {
         log.info("Process started via Flowable: {}", flowableProcessInstanceId);
         
         // 立即保存流程实例到本地数据库（状态为 RUNNING），防止 ProcessCompletionListener 回调时找不到记录
-        String startUserDisplayName = resolveUserDisplayName(userId);
+        String startUserDisplayName = userDisplayNameResolver.resolve(userId);
         ProcessInstance processInstance = ProcessInstance.builder()
                 .id(flowableProcessInstanceId)
                 .processInstanceId(flowableProcessInstanceId)
@@ -401,7 +403,7 @@ public class ProcessComponent {
                                         if (currentAssigneeName == null || currentAssigneeName.isEmpty()) {
                                             // 如果没有名称，解析用户ID为名称
                                             if (currentAssigneeId != null && !currentAssigneeId.isEmpty()) {
-                                                currentAssigneeName = resolveUserDisplayName(currentAssigneeId);
+                                                currentAssigneeName = userDisplayNameResolver.resolve(currentAssigneeId);
                                             }
                                         }
                                         
@@ -999,56 +1001,17 @@ public class ProcessComponent {
     }
     
     /**
-     * 带缓存的用户显示名称解析，避免同一批次内重复 HTTP 调用
+     * 带缓存的用户显示名称解析，避免同一批次内重复 DB 查询
      */
     private String resolveUserDisplayNameCached(String userId, Map<String, String> cache) {
-        if (userId == null || userId.isEmpty()) {
-            return null;
-        }
-        return cache.computeIfAbsent(userId, this::resolveUserDisplayName);
+        return userDisplayNameResolver.resolveCached(userId, cache);
     }
     
     /**
      * 解析用户显示名称
-     * 优先级: fullName > displayName > username > userId
      */
     private String resolveUserDisplayName(String userId) {
-        if (userId == null || userId.isEmpty()) {
-            return null;
-        }
-        
-        try {
-            String userUrl = adminCenterUrl + "/api/v1/admin/users/" + userId;
-            
-            @SuppressWarnings("unchecked")
-            Map<String, Object> rawUser = restTemplate.getForObject(userUrl, Map.class);
-            Map<String, Object> userInfo = ApiResponseBodyUnwrap.unwrapDataMap(rawUser);
-            
-            if (userInfo != null && !userInfo.isEmpty()) {
-                // 优先使用 fullName
-                String fullName = (String) userInfo.get("fullName");
-                if (fullName != null && !fullName.isEmpty()) {
-                    return fullName;
-                }
-                
-                // 其次使用 displayName
-                String displayName = (String) userInfo.get("displayName");
-                if (displayName != null && !displayName.isEmpty()) {
-                    return displayName;
-                }
-                
-                // 再次使用 username
-                String username = (String) userInfo.get("username");
-                if (username != null && !username.isEmpty()) {
-                    return username;
-                }
-            }
-        } catch (Exception e) {
-            log.warn("Failed to resolve user display name for {}: {}", userId, e.getMessage());
-        }
-        
-        // 最后回退到使用 userId
-        return userId;
+        return userDisplayNameResolver.resolve(userId);
     }
     
     /**
@@ -1092,9 +1055,15 @@ public class ProcessComponent {
             instancePage = processInstanceRepository.findByStartUserIdOrderByStartTimeDesc(userId, pageable);
         }
 
-        Map<String, String> userNameCache = new HashMap<>();
+        List<ProcessInstance> pageContent = instancePage.getContent();
+        Set<String> assigneeKeys = pageContent.stream()
+                .map(ProcessInstance::getCurrentAssignee)
+                .filter(a -> a != null && !a.isEmpty())
+                .map(String::trim)
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        Map<String, String> userNameCache = userDisplayNameResolver.resolveBatch(assigneeKeys);
         // 列表接口不返回 variables：库内 JSONB 可能含 Jackson 无法序列化的嵌套结构，会在写响应时触发 HttpMessageNotWritableException → SYS_INTERNAL_ERROR
-        List<ProcessInstanceInfo> instances = instancePage.getContent().stream()
+        List<ProcessInstanceInfo> instances = pageContent.stream()
                 .map(inst -> toProcessInstanceInfoForList(inst, userNameCache))
                 .peek(info -> info.setVariables(null))
                 .toList();
@@ -1121,7 +1090,9 @@ public class ProcessComponent {
                 instance.getId(), instance.getStatus(), currentAssignee);
 
         if (currentAssignee != null && !currentAssignee.isEmpty()) {
-            currentAssigneeName = resolveUserDisplayNameCached(currentAssignee, userNameCache);
+            currentAssigneeName = userNameCache.getOrDefault(
+                    currentAssignee.trim(),
+                    userDisplayNameResolver.resolveCached(currentAssignee, userNameCache));
         }
 
         log.debug("toProcessInstanceInfoForList: final currentAssigneeName={}", currentAssigneeName);

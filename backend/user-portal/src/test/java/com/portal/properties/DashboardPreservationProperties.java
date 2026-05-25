@@ -66,7 +66,8 @@ class DashboardPreservationProperties {
         UserBusinessUnitRepository userBusinessUnitRepository = Mockito.mock(UserBusinessUnitRepository.class);
         ProcessInstanceRepository processInstanceRepository = Mockito.mock(ProcessInstanceRepository.class);
         DashboardComponent dashboardComponent = new DashboardComponent(taskQueryComponent, workflowEngineClient,
-                businessUnitRepository, userBusinessUnitRepository, processInstanceRepository);
+                businessUnitRepository, userBusinessUnitRepository, processInstanceRepository,
+                Mockito.mock(com.portal.service.UserDisplayNameResolver.class));
 
         // Generate tasks with random overdue flags
         Random rng = new Random(userId.hashCode() + taskCount);
@@ -142,7 +143,8 @@ class DashboardPreservationProperties {
         UserBusinessUnitRepository userBusinessUnitRepository = Mockito.mock(UserBusinessUnitRepository.class);
         ProcessInstanceRepository processInstanceRepository = Mockito.mock(ProcessInstanceRepository.class);
         DashboardComponent dashboardComponent = new DashboardComponent(taskQueryComponent, workflowEngineClient,
-                businessUnitRepository, userBusinessUnitRepository, processInstanceRepository);
+                businessUnitRepository, userBusinessUnitRepository, processInstanceRepository,
+                Mockito.mock(com.portal.service.UserDisplayNameResolver.class));
 
         Map<String, Object> statsData = new HashMap<>();
         statsData.put("initiatedCount", initiatedCount);
@@ -192,7 +194,8 @@ class DashboardPreservationProperties {
         UserBusinessUnitRepository userBusinessUnitRepository1 = Mockito.mock(UserBusinessUnitRepository.class);
         ProcessInstanceRepository processInstanceRepository1 = Mockito.mock(ProcessInstanceRepository.class);
         DashboardComponent dashboardComponent = new DashboardComponent(taskQueryComponent, workflowEngineClient,
-                businessUnitRepository1, userBusinessUnitRepository1, processInstanceRepository1);
+                businessUnitRepository1, userBusinessUnitRepository1, processInstanceRepository1,
+                Mockito.mock(com.portal.service.UserDisplayNameResolver.class));
 
         when(workflowEngineClient.getProcessStatistics(eq(userId)))
                 .thenThrow(new RuntimeException("Engine unavailable"));
@@ -233,7 +236,8 @@ class DashboardPreservationProperties {
         UserBusinessUnitRepository userBusinessUnitRepository2 = Mockito.mock(UserBusinessUnitRepository.class);
         ProcessInstanceRepository processInstanceRepository2 = Mockito.mock(ProcessInstanceRepository.class);
         DashboardComponent dashboardComponent = new DashboardComponent(taskQueryComponent, workflowEngineClient,
-                businessUnitRepository2, userBusinessUnitRepository2, processInstanceRepository2);
+                businessUnitRepository2, userBusinessUnitRepository2, processInstanceRepository2,
+                Mockito.mock(com.portal.service.UserDisplayNameResolver.class));
 
         // Act
         DashboardOverview.PerformanceOverview perfOverview = dashboardComponent.getPerformanceOverview(userId);
@@ -286,7 +290,8 @@ class DashboardPreservationProperties {
         UserBusinessUnitRepository userBusinessUnitRepository3 = Mockito.mock(UserBusinessUnitRepository.class);
         ProcessInstanceRepository processInstanceRepository3 = Mockito.mock(ProcessInstanceRepository.class);
         DashboardComponent dashboardComponent = new DashboardComponent(taskQueryComponent, workflowEngineClient,
-                businessUnitRepository3, userBusinessUnitRepository3, processInstanceRepository3);
+                businessUnitRepository3, userBusinessUnitRepository3, processInstanceRepository3,
+                Mockito.mock(com.portal.service.UserDisplayNameResolver.class));
 
         // Generate expected tasks
         List<TaskInfo> expectedTasks = new ArrayList<>();

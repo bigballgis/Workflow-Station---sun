@@ -61,6 +61,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { Search, Close } from '@element-plus/icons-vue'
 import { relationTableApi } from '@/api/relationTable'
 import { fetchLookupRowByPrimaryKey } from './fetchLookupRowByPrimaryKey'
+import { getLookupSelectedDisplayFieldFromProps, resolveLookupCellTagText } from '../subTableAddDialogHelpers'
 
 export interface LookupViewField {
   fieldName: string
@@ -82,6 +83,7 @@ const props = defineProps<{
   displayField: string
   displayFields?: string[]
   selectedDisplayField?: string
+  lookupConfig?: string | Record<string, unknown>
   filterConditions?: LookupFilterCondition[]
   viewFields?: LookupViewField[]
   placeholder?: string
@@ -202,23 +204,23 @@ function initFromModelValue(val: any) {
   if (typeof val === 'number' || typeof val === 'bigint' || typeof val === 'boolean') {
     const scalarRow = buildSyntheticLookupRow(val)
     selectedRow.value = scalarRow
-    searchKeyword.value = String(getDisplayValue(scalarRow) ?? val ?? '')
+    searchKeyword.value = String(getDisplayValue(scalarRow) || '')
     emit('select', scalarRow)
     void hydrateScalarFromRelationTable(val)
     return
   }
   if (typeof val === 'string') {
-    const t = val.trim()
-    if (t === '') {
+    const trimmed = val.trim()
+    if (trimmed === '') {
       selectedRow.value = null
       searchKeyword.value = ''
       return
     }
-    const scalarRow = buildSyntheticLookupRow(t)
+    const scalarRow = buildSyntheticLookupRow(trimmed)
     selectedRow.value = scalarRow
-    searchKeyword.value = String(getDisplayValue(scalarRow) ?? t)
+    searchKeyword.value = String(getDisplayValue(scalarRow) || '')
     emit('select', scalarRow)
-    void hydrateScalarFromRelationTable(t)
+    void hydrateScalarFromRelationTable(trimmed)
     return
   }
   if (typeof val === 'object' && Object.keys(val).length > 0) {
@@ -254,18 +256,25 @@ async function hydrateScalarFromRelationTable(scalar: string | number) {
   }
 }
 
-/** Minimal row shape so getDisplayValue / LookupViewDisplay have stable keys for persisted scalar lookups */
+function primaryDisplayField(): string {
+  return getLookupSelectedDisplayFieldFromProps(props)
+}
+
+function refreshSearchKeywordFromSelectedRow() {
+  if (!selectedRow.value) return
+  searchKeyword.value = String(getDisplayValue(selectedRow.value) ?? '')
+}
+
+/** Minimal row shape for persisted scalar PK — do not copy PK into selectedDisplayField column. */
 function buildSyntheticLookupRow(raw: number | bigint | boolean | string): Record<string, any> {
-  const df = props.selectedDisplayField || props.displayField
-  const row: Record<string, any> = {}
-  if (df && String(df).trim()) row[String(df)] = raw
-  if (row.id === undefined) row.id = raw
+  const pk = String(props.searchFields?.[0] || 'id').trim() || 'id'
+  const row: Record<string, any> = { [pk]: raw }
+  if (pk !== 'id') row.id = raw
   return row
 }
 
 function getDisplayValue(row: Record<string, any>) {
-  const displayField = props.selectedDisplayField || props.displayField
-  return displayField ? row[displayField] : Object.values(row)[0]
+  return resolveLookupCellTagText(props, row)
 }
 
 // Watch for external modelValue changes (e.g. form data loaded after mount)
@@ -284,6 +293,18 @@ watch(
     dataLoaded.value = false
   },
   { deep: true }
+)
+
+watch(
+  () => [
+    props.selectedDisplayField,
+    props.displayField,
+    props.displayFields,
+    props.lookupConfig,
+  ],
+  () => {
+    refreshSearchKeywordFromSelectedRow()
+  },
 )
 
 function onClickOutside(e: MouseEvent) {

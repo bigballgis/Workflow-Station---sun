@@ -1758,3 +1758,35 @@
       - `mvn -pl backend/platform-security,backend/user-portal,backend/admin-center,backend/developer-workstation,backend/workflow-engine-core -am package -DskipTests` 成功。
       - `docker compose -f docker-compose.dev.yml --env-file .env up -d --build user-portal admin-center developer-workstation workflow-engine` 后四容器全部 healthy，启动日志无 ERROR。
       - 三端独立 cookie 后，浏览器 DevTools 应能同时看到 `up_access_token` + `dw_access_token` + `ac_access_token` 三份，互不覆盖。
+
+- id: "1387"
+  status: fixed
+  fixed_at: "2026-05-25"
+  severity: major
+  category: bug
+  summary: "User Portal 子表 lookup assignee 忽略 selectedDisplayField=username，标签/编辑框仍显示 UUID"
+  file: |
+    frontend/user-portal/src/components/subTableAddDialogHelpers.ts;
+    frontend/user-portal/src/components/lookup/LookupField.vue;
+    frontend/user-portal/src/components/SubTableField.vue;
+    frontend/user-portal/src/views/processes/start.vue;
+    frontend/user-portal/src/components/__tests__/subTableFieldConsistency.property.test.ts
+  note: |
+    根因（Multi-Instance Subtask Demo / form 16 binding 64）：流程变量仅存 assignee 主键 UUID；resolveLookupCellTagText 在 props 缺少显式 selectedDisplayField 时回退到 searchFields[0]=id，hydrate 后仍优先渲染 PK；LookupField initFromModelValue 在合成行无 username 时用 ?? 回退原始 UUID。
+    修复：getLookupSelectedDisplayFieldFromProps 优先非 PK 的 displayFields；resolveLookupCellTagText 仅在 designer 显式配置 PK 为展示字段时才显示 id；LookupField 去掉 UUID 回退；start.vue deriveColumnsFromBinding 末尾 enrichLookupColumnPropsFromSubFormRule 合并 subForm lookupConfig。
+    验证：subTableFieldConsistency.property.test.ts 13 项通过；npm run build；docker compose up -d --build user-portal-frontend。
+
+- id: "1388"
+  status: fixed
+  fixed_at: "2026-05-25"
+  severity: major
+  category: bug
+  summary: "User Portal My Requests Current Assignee 列显示 UUID/工号而非用户全名"
+  file: |
+    backend/user-portal/src/main/java/com/portal/service/UserDisplayNameResolver.java;
+    backend/user-portal/src/main/java/com/portal/component/ProcessComponent.java;
+    backend/user-portal/src/main/java/com/portal/component/DashboardComponent.java
+  note: |
+    根因：门户库 current_assignee 存 userId/username，列表接口依赖 HTTP 调 admin-center 解析姓名，失败时回退为原始 ID。
+    修复：新增 UserDisplayNameResolver，通过本地 sys_users（UserRepository）批量解析 fullName；My Requests 与 Dashboard 团队申请列表均走该路径。
+    验证：UserDisplayNameResolverTest 通过；mvn package user-portal；docker compose up -d --build user-portal。

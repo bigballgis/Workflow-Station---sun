@@ -13,6 +13,7 @@ import com.portal.entity.ProcessInstance;
 import com.portal.repository.BusinessUnitRepository;
 import com.portal.repository.ProcessInstanceRepository;
 import com.portal.repository.UserBusinessUnitRepository;
+import com.portal.service.UserDisplayNameResolver;
 import com.platform.security.util.SecurityContextUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -41,6 +42,7 @@ public class DashboardComponent {
     private final BusinessUnitRepository businessUnitRepository;
     private final UserBusinessUnitRepository userBusinessUnitRepository;
     private final ProcessInstanceRepository processInstanceRepository;
+    private final UserDisplayNameResolver userDisplayNameResolver;
 
     /**
      * 为 true 时，首页「团队任务概览」按 BU 成员逐个调用 queryTasks（极慢，成员多时可打爆引擎）。
@@ -357,18 +359,32 @@ public class DashboardComponent {
             resultPage = processInstanceRepository.findByStartUserIdInAndStatusOrderByStartTimeDesc(teamMemberIds, status, pageable);
         }
 
-        List<TeamRequestsResponse.TeamRequestItem> items = resultPage.getContent().stream()
-                .map(pi -> TeamRequestsResponse.TeamRequestItem.builder()
+        List<ProcessInstance> pageContent = resultPage.getContent();
+        Set<String> assigneeKeys = pageContent.stream()
+                .map(ProcessInstance::getCurrentAssignee)
+                .filter(a -> a != null && !a.isBlank())
+                .map(String::trim)
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        Map<String, String> assigneeNames = userDisplayNameResolver.resolveBatch(assigneeKeys);
+
+        List<TeamRequestsResponse.TeamRequestItem> items = pageContent.stream()
+                .map(pi -> {
+                    String rawAssignee = pi.getCurrentAssignee();
+                    String displayAssignee = rawAssignee != null && !rawAssignee.isBlank()
+                            ? assigneeNames.getOrDefault(rawAssignee.trim(), rawAssignee.trim())
+                            : null;
+                    return TeamRequestsResponse.TeamRequestItem.builder()
                         .id(pi.getId())
                         .processDefinitionName(pi.getProcessDefinitionName())
                         .businessKey(pi.getBusinessKey())
                         .startUserName(pi.getStartUserName())
                         .status(pi.getStatus())
                         .currentNode("COMPLETED".equals(pi.getStatus()) ? null : pi.getCurrentNode())
-                        .currentAssignee(pi.getCurrentAssignee())
+                        .currentAssignee(displayAssignee)
                         .startTime(pi.getStartTime())
                         .completedAt(pi.getCompletedAt())
-                        .build())
+                        .build();
+                })
                 .toList();
 
         return TeamRequestsResponse.builder()

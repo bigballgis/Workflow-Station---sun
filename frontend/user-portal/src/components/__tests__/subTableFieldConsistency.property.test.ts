@@ -3,6 +3,7 @@ import * as fc from 'fast-check'
 import {
   buildInitialRow,
   resolveDisplayValue,
+  resolveLookupCellTagText,
   type DialogColumn,
   type ColumnType,
 } from '../subTableAddDialogHelpers'
@@ -158,6 +159,117 @@ describe('Property 3: buildInitialRow covers all types', () => {
       ),
       { numRuns: 100 },
     )
+  })
+})
+
+describe('Lookup selected display field', () => {
+  it('resolveDisplayValue prefers selectedDisplayField over displayFields[0]', () => {
+    const col: DialogColumn = {
+      field: 'assignee',
+      label: 'assignee',
+      type: 'lookup',
+      props: {
+        displayFields: ['id', 'username'],
+        selectedDisplayField: 'username',
+      },
+    }
+    expect(resolveDisplayValue(col, { id: 'user-e2e-lina', username: 'e2e lina' })).toBe('e2e lina')
+  })
+
+  it('getLookupSelectedDisplayField reads selectedDisplayField from lookupConfig JSON', () => {
+    const col: DialogColumn = {
+      field: 'assignee',
+      label: 'assignee',
+      type: 'lookup',
+      props: {
+        lookupConfig: JSON.stringify({
+          displayFields: ['id', 'username'],
+          selectedDisplayField: 'username',
+        }),
+        displayFields: ['id'],
+      },
+    }
+    expect(resolveDisplayValue(col, { id: 'user-e2e-lina', username: 'e2e lina' })).toBe('e2e lina')
+  })
+
+  it('resolveLookupCellTagText reads selectedDisplayField only from lookupConfig on props', () => {
+    const props = {
+      lookupConfig: JSON.stringify({
+        displayFields: ['id', 'username'],
+        selectedDisplayField: 'username',
+        searchFields: ['id'],
+      }),
+      displayFields: ['id', 'username'],
+      displayField: 'id',
+    }
+    expect(
+      resolveLookupCellTagText(props, { id: 'user-e2e-lina', username: 'e2e lina' }),
+    ).toBe('e2e lina')
+  })
+
+  it('resolveLookupCellTagText prefers username over PK when props only carry lookupConfig', () => {
+    const props = {
+      lookupConfig: JSON.stringify({
+        searchFields: ['id'],
+        displayFields: ['username'],
+        selectedDisplayField: 'username',
+      }),
+      searchFields: ['id'],
+    }
+    const hydrated = {
+      id: 'c9c70955-37cb-4d17-b3f7-2e01ddd34bab',
+      username: '45201959',
+    }
+    expect(resolveLookupCellTagText(props, hydrated)).toBe('45201959')
+  })
+
+  it('resolveLookupCellTagText does not treat PK as display when selectedDisplayField missing', () => {
+    const props = {
+      lookupConfig: JSON.stringify({
+        searchFields: ['id'],
+        displayFields: ['username'],
+      }),
+      searchFields: ['id'],
+    }
+    expect(
+      resolveLookupCellTagText(props, {
+        id: 'c9c70955-37cb-4d17-b3f7-2e01ddd34bab',
+        username: '45201959',
+      }),
+    ).toBe('45201959')
+  })
+
+  it('resolveLookupCellTagText returns dash for scalar-only synthetic row until hydrated', () => {
+    const props = {
+      lookupConfig: JSON.stringify({
+        searchFields: ['id'],
+        displayFields: ['username'],
+        selectedDisplayField: 'username',
+      }),
+      searchFields: ['id'],
+    }
+    expect(
+      resolveLookupCellTagText(props, { id: 'c9c70955-37cb-4d17-b3f7-2e01ddd34bab' }),
+    ).toBe('-')
+  })
+
+  it('resolveLookupCellTagText uses username when cell stores full user snapshot object', () => {
+    const props = {
+      lookupConfig: JSON.stringify({
+        searchFields: ['id'],
+        displayFields: ['username'],
+        selectedDisplayField: 'username',
+      }),
+      searchFields: ['id'],
+    }
+    const row = {
+      id: 'c9c70955-37cb-4d17-b3f7-2e01ddd34bab',
+      username: '45201959',
+      full_name: '45201959',
+      email: '45201959@qq.com',
+      status: 'ACTIVE',
+    }
+    expect(resolveLookupCellTagText(props, row)).toBe('45201959')
   })
 })
 

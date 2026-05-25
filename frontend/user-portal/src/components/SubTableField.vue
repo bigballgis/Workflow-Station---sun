@@ -494,7 +494,7 @@ import { Plus, Document, Loading, Search, Close } from '@element-plus/icons-vue'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import DOMPurify from 'dompurify'
 import SubTableAddDialog from './SubTableAddDialog.vue'
-import { resolveDisplayValue, unwrapUserLikeValueToDisplayString, extractUserIdFromCellValue, isUserSnapshotLikeObject, userObjectTagDisplayString, userSnapshotViewFieldsFromRow, formatUserSnapshotCellValue, isUploadColumn, normalizeSubTableColumns } from './subTableAddDialogHelpers'
+import { resolveDisplayValue, getLookupSelectedDisplayField, resolveLookupCellTagText, parseLookupConfig, unwrapUserLikeValueToDisplayString, extractUserIdFromCellValue, isUserSnapshotLikeObject, userObjectTagDisplayString, userSnapshotViewFieldsFromRow, formatUserSnapshotCellValue, isUploadColumn, normalizeSubTableColumns } from './subTableAddDialogHelpers'
 import { fetchLookupRowByPrimaryKey } from './lookup/fetchLookupRowByPrimaryKey'
 import type { DialogColumn } from './subTableAddDialogHelpers'
 import type { FormField, RowFormulaRule, SubTableValidationConfig } from './formRendererHelpers'
@@ -589,19 +589,15 @@ function columnMinWidth(col: Column): number {
 }
 
 function getLookupPrimaryDisplayField(col: Column): string {
-  const displayFields = col.props?.displayFields
-  if (Array.isArray(displayFields) && displayFields.length > 0) return String(displayFields[0])
-  if (typeof col.props?.displayField === 'string' && col.props.displayField) return col.props.displayField
-  const searchFields = col.props?.searchFields
-  if (Array.isArray(searchFields) && searchFields.length > 0) return String(searchFields[0])
-  return ''
+  return getLookupSelectedDisplayField(col as DialogColumn)
 }
 
 function lookupSelectedRow(col: Column, rawValue: unknown): Record<string, any> | null {
   if (rawValue == null || rawValue === '') return null
   if (typeof rawValue === 'object' && !Array.isArray(rawValue)) return rawValue as Record<string, any>
-  const displayField = getLookupPrimaryDisplayField(col)
-  return displayField ? { [displayField]: rawValue } : { value: rawValue }
+  const cfg = parseLookupConfig(col.props?.lookupConfig)
+  const pk = String(col.props?.searchFields?.[0] || cfg.searchFields?.[0] || 'id').trim() || 'id'
+  return { [pk]: rawValue }
 }
 
 function lookupDisplayViewFields(col: Column): Array<{ fieldName: string; displayLabel?: string; sortOrder?: number; visible?: boolean }> {
@@ -702,12 +698,16 @@ function shouldShowLookupBackfill(col: Column): boolean {
 }
 
 function lookupTagDisplayText(col: Column, rawValue: unknown): string {
+  const eff = effectiveLookupRowForCell(col, rawValue)
+  // Lookup columns must honor designer selectedDisplayField — never userObjectTagDisplayString (always id).
+  if (col.type === 'lookup' && eff) {
+    return resolveLookupCellTagText(col.props ?? null, eff)
+  }
   if (rawValue != null && isUserSnapshotLikeObject(rawValue)) {
     return userObjectTagDisplayString(rawValue)
   }
-  const eff = effectiveLookupRowForCell(col, rawValue)
   if (eff) {
-    return resolveDisplayValue(col, eff)
+    return resolveLookupCellTagText(col.props ?? null, eff)
   }
   return resolveDisplayValue(col, rawValue)
 }

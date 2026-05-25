@@ -22,6 +22,7 @@ import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
@@ -61,7 +62,8 @@ class DashboardTaskOverviewBugConditionProperties {
     void setUp() {
         MockitoAnnotations.openMocks(this);
         dashboardComponent = new DashboardComponent(taskQueryComponent, workflowEngineClient,
-                businessUnitRepository, userBusinessUnitRepository, processInstanceRepository);
+                businessUnitRepository, userBusinessUnitRepository, processInstanceRepository,
+                mock(com.portal.service.UserDisplayNameResolver.class));
         random = new Random();
     }
 

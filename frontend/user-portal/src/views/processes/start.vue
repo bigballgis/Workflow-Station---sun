@@ -294,6 +294,14 @@ import {
   flattenNestedSubTableRowsIntoPayload,
   normalizeSubTableRowsForBinding
 } from '@/composables/tasks/shared'
+import {
+  buildLookupColumnProps,
+  enrichLookupColumnPropsFromSubFormRule,
+  mergeListViewFieldColumn,
+  parseLookupConfig,
+  resolveSubListViewColumnsForBinding,
+} from '@/components/subTableAddDialogHelpers'
+import { resolveAssigneeFieldForBinding } from '@/utils/subTableAssignment'
 
 const route = useRoute()
 const router = useRouter()
@@ -573,7 +581,7 @@ const loadFunctionUnitContent = async () => {
             b.bindingId,
             formConfigForPk
           ),
-          columns: deriveColumnsFromBinding(b, subForms),
+          columns: deriveColumnsFromBinding(b, subForms, formConfigForPk),
           portalViews: bindingPortalViews,
           data: []
         })
@@ -595,7 +603,7 @@ const loadFunctionUnitContent = async () => {
             tableType: 'SUB',
             tableDescription: '',
             primaryKeyFields: undefined,
-            columns: deriveColumnsFromBinding(fakeBinding, subForms),
+            columns: deriveColumnsFromBinding(fakeBinding, subForms, formConfigForPk),
             data: []
           })
         }
@@ -1217,138 +1225,216 @@ const convertFormCreateRule = (rule: any): FormField | null => {
   return field
 }
 
+function isSyntheticLookupField(fieldName?: string): boolean {
+  return !fieldName || String(fieldName).startsWith('lookup:')
+}
+
+function isAssigneeLikeLabel(label?: string): boolean {
+  const normalized = String(label || '').trim().toLowerCase()
+  return /assignee|处理人|負責人|经办人|經辦人/.test(normalized)
+}
+
 // Derive display columns for a sub-table binding based on table type
-const deriveColumnsFromBinding = (binding: any, subForms?: Record<string, any>): Array<{ field: string; label: string; type?: string; required?: boolean; options?: Array<{ label: string; value: any }>; props?: Record<string, any> }> => {
-  // First try to use subFormConfig directly from the binding (provided by backend from dw_form_definitions.config_json)
-  // Fall back to subForms lookup from form config data
+const deriveColumnsFromBinding = (
+  binding: any,
+  subForms?: Record<string, any>,
+  formConfig?: Record<string, any>,
+): Array<{ field: string; label: string; type?: string; required?: boolean; options?: Array<{ label: string; value: any }>; props?: Record<string, any> }> => {
   const subFormRule =
     binding.subFormConfig?.rule ||
     subForms?.[binding.bindingId]?.rule ||
     subForms?.[String(binding.bindingId)]?.rule
-  console.log('[deriveColumns] bindingId:', binding.bindingId,
-    'subFormConfig rule len:', binding.subFormConfig?.rule?.length,
-    'subForms keys:', subForms ? Object.keys(subForms) : [],
-    'subFormRule len:', subFormRule?.length)
-  if (subFormRule && Array.isArray(subFormRule) && subFormRule.length > 0) {
-    return subFormRule.map((r: any) => {
-      const rProps = r.props || {}
-      let type: string | undefined
 
-      if (r.type === 'input') {
-        if (rProps.type === 'textarea') type = 'textarea'
-        else if (rProps.type === 'password') type = 'password'
-        else type = 'text'
-      } else if (r.type === 'inputNumber') {
-        type = 'number'
-      } else if (r.type === 'select') {
-        type = 'select'
-      } else if (r.type === 'radio') {
-        type = 'radio'
-      } else if (r.type === 'switch') {
-        type = 'switch'
-      } else if (r.type === 'datePicker') {
-        type = rProps.type === 'datetime' ? 'datetime' : 'date'
-      } else if (r.type === 'timePicker') {
-        type = rProps.isRange === true ? 'timerange' : 'time'
-      } else if (r.type === 'treeSelect') {
-        type = 'treeselect'
-      } else if (r.type === 'elTreeSelect') {
-        type = 'treeselect'
-      } else if (r.type === 'tree') {
-        type = 'tree'
-      } else if (r.type === 'upload') {
-        type = 'upload'
-      } else if (r.type === 'userSelect' || r.type === 'user') {
-        type = 'user'
-      } else if (r.type === 'departmentSelect' || r.type === 'department') {
-        type = 'department'
-      } else if (r.type === 'colorPicker') {
-        type = 'colorPicker'
-      } else if (r.type === 'rate') {
-        type = 'rate'
-      } else if (r.type === 'slider') {
-        type = 'slider'
-      } else if (r.type === 'editor') {
-        type = 'editor'
-      } else if (r.type === 'signature') {
-        type = 'signature'
-      } else if (r.type === 'transfer') {
-        type = 'transfer'
-      } else if (r.type === 'cascader') {
-        type = 'cascader'
-      } else if (r.type === 'lookup') {
-        type = 'lookup'
-      } else {
-        type = r.type as any
+  const subFormColumns =
+    subFormRule && Array.isArray(subFormRule) && subFormRule.length > 0
+      ? subFormRule.map((r: any) => {
+        const rProps = r.props || {}
+        let type: string | undefined
+
+        if (r.type === 'input') {
+          if (rProps.type === 'textarea') type = 'textarea'
+          else if (rProps.type === 'password') type = 'password'
+          else type = 'text'
+        } else if (r.type === 'inputNumber') {
+          type = 'number'
+        } else if (r.type === 'select') {
+          type = 'select'
+        } else if (r.type === 'radio') {
+          type = 'radio'
+        } else if (r.type === 'switch') {
+          type = 'switch'
+        } else if (r.type === 'datePicker') {
+          type = rProps.type === 'datetime' ? 'datetime' : 'date'
+        } else if (r.type === 'timePicker') {
+          type = rProps.isRange === true ? 'timerange' : 'time'
+        } else if (r.type === 'treeSelect' || r.type === 'elTreeSelect') {
+          type = 'treeselect'
+        } else if (r.type === 'tree') {
+          type = 'tree'
+        } else if (r.type === 'upload') {
+          type = 'upload'
+        } else if (r.type === 'userSelect' || r.type === 'user') {
+          type = 'user'
+        } else if (r.type === 'departmentSelect' || r.type === 'department') {
+          type = 'department'
+        } else if (r.type === 'colorPicker') {
+          type = 'colorPicker'
+        } else if (r.type === 'rate') {
+          type = 'rate'
+        } else if (r.type === 'slider') {
+          type = 'slider'
+        } else if (r.type === 'editor') {
+          type = 'editor'
+        } else if (r.type === 'signature') {
+          type = 'signature'
+        } else if (r.type === 'transfer') {
+          type = 'transfer'
+        } else if (r.type === 'cascader') {
+          type = 'cascader'
+        } else if (r.type === 'lookup') {
+          type = 'lookup'
+        } else {
+          type = r.type as any
+        }
+
+        const rawOptions = r.options || rProps.options
+        const options = rawOptions
+          ? (type === 'cascader' ? rawOptions : rawOptions.map((o: any) => ({ label: o.label ?? o.value, value: o.value })))
+          : undefined
+
+        const passProps: Record<string, any> = {}
+        const propKeys = [
+          'action', 'accept', 'multiple', 'precision', 'min', 'max', 'rows', 'maxlength', 'fileNameTargetField',
+          'isRange', 'valueFormat', 'startPlaceholder', 'endPlaceholder', 'treeData', 'checkStrictly',
+          'showAlpha', 'allowHalf', 'step', 'cascaderProps', 'leftTitle', 'rightTitle',
+          'boundSubTableBindingId',
+        ]
+        for (const key of propKeys) {
+          if (rProps[key] !== undefined) passProps[key] = rProps[key]
+        }
+        if (rProps.data !== undefined) passProps.treeData = rProps.data
+        if (rProps.nodeKey !== undefined) passProps.nodeKey = rProps.nodeKey
+        if (rProps.showCheckbox !== undefined) passProps.showCheckbox = rProps.showCheckbox
+        if (rProps.props !== undefined) passProps.labelProps = rProps.props
+        if (type === 'cascader' && rProps.props && !passProps.cascaderProps) passProps.cascaderProps = rProps.props
+
+        if (type === 'lookup') {
+          const dbCfg = lookupDbConfigs.value[r.field]
+          const lookupCfg = parseLookupConfig(rProps.lookupConfig)
+          const relationView = lookupCfg.bindingId ? relationViewConfigs.value[lookupCfg.bindingId] : undefined
+          Object.assign(
+            passProps,
+            buildLookupColumnProps(rProps.lookupConfig || '{}', {
+              dbCfg,
+              relationViewFields: relationView?.viewFields as Array<Record<string, unknown>> | undefined,
+            }),
+          )
+          if (typeof rProps.selectedDisplayField === 'string' && rProps.selectedDisplayField.trim() !== '') {
+            passProps.selectedDisplayField = rProps.selectedDisplayField.trim()
+            passProps._lookupSelectedDisplayField = rProps.selectedDisplayField.trim()
+          }
+        }
+
+        if (options) passProps.options = options
+
+        const required = r.validate?.some((v: any) => v.required) || false
+        const readonly = r.disabled === true || rProps.disabled === true
+
+        return {
+          field: r.field,
+          label: r.title || r.field,
+          type,
+          required,
+          ...(readonly ? { readonly } : {}),
+          ...(options ? { options } : {}),
+          ...(Object.keys(passProps).length > 0 ? { props: passProps } : {}),
+        }
+      })
+      : []
+
+  const config = formConfig || {}
+  const listColumns = resolveSubListViewColumnsForBinding(
+    config,
+    binding.bindingId,
+    subFormColumns.map(col => col.field),
+  )
+
+  if (Array.isArray(listColumns) && listColumns.length > 0) {
+    const ruleByField = new Map(
+      (Array.isArray(subFormRule) ? subFormRule : []).map((ruleItem: any) => [ruleItem?.field, ruleItem]),
+    )
+    const subFormColumnByField = new Map(subFormColumns.map(col => [col.field, col]))
+    const assigneeField = resolveAssigneeFieldForBinding(
+      subFormColumns as Array<{ field?: string }>,
+      binding.tableDisplayName || binding.tableName,
+    )
+    return enrichLookupColumnPropsFromSubFormRule(
+      listColumns.map((column: any) => {
+      if (column.columnType === 'linkForm') {
+        return {
+          field: column.fieldName || `linkForm:${column.componentId || binding.bindingId}`,
+          label: column.columnLabel || column.comment || column.linkText || 'Link Form',
+          type: 'linkForm',
+          minWidth: column.minWidth || 120,
+          props: {
+            linkText: column.linkText || 'Details',
+            componentId: column.componentId,
+            boundSubTableBindingId: column.boundSubTableBindingId,
+            boundSubTableName: column.boundSubTableName,
+          },
+        }
+      }
+      if (column.columnType === 'lookup') {
+        const label = column.columnLabel || column.comment || 'Lookup'
+        const field =
+          isSyntheticLookupField(column.fieldName) && isAssigneeLikeLabel(label) && assigneeField
+            ? assigneeField
+            : (column.fieldName || `lookup:${binding.bindingId}`)
+        const listLookupCfg = parseLookupConfig(column.lookupConfig || '{}')
+        const relationView = listLookupCfg.bindingId
+          ? relationViewConfigs.value[listLookupCfg.bindingId]
+          : undefined
+        return {
+          field,
+          label,
+          type: 'lookup',
+          minWidth: 260,
+          props: buildLookupColumnProps(column.lookupConfig || '{}', {
+            relationViewFields: relationView?.viewFields as Array<Record<string, unknown>> | undefined,
+          }),
+        }
       }
 
-      // Collect options from rule.options or rule.props.options
-      const rawOptions = r.options || rProps.options
-      const options = rawOptions
-        ? (type === 'cascader' ? rawOptions : rawOptions.map((o: any) => ({ label: o.label ?? o.value, value: o.value })))
-        : undefined
-
-      // Pass through relevant props
-      const passProps: Record<string, any> = {}
-      const propKeys = [
-        'action', 'accept', 'multiple', 'precision', 'min', 'max', 'rows', 'maxlength', 'fileNameTargetField',
-        'isRange', 'valueFormat', 'startPlaceholder', 'endPlaceholder', 'treeData', 'checkStrictly',
-        'showAlpha', 'allowHalf', 'step', 'cascaderProps', 'leftTitle', 'rightTitle',
-        'boundSubTableBindingId',
-      ]
-      for (const key of propKeys) {
-        if (rProps[key] !== undefined) passProps[key] = rProps[key]
-      }
-      if (rProps.data !== undefined) passProps.treeData = rProps.data
-      if (rProps.nodeKey !== undefined) passProps.nodeKey = rProps.nodeKey
-      if (rProps.showCheckbox !== undefined) passProps.showCheckbox = rProps.showCheckbox
-      if (rProps.props !== undefined) passProps.labelProps = rProps.props
-      // cascader: map props.props to cascaderProps if not already set
-      if (type === 'cascader' && rProps.props && !passProps.cascaderProps) passProps.cascaderProps = rProps.props
-
-      // lookup — align with tasks/detail.vue SubTableAddDialog / LookupField props
-      if (type === 'lookup') {
-        let lookupCfg: any = {}
-        try {
-          const raw = rProps.lookupConfig
-          lookupCfg = typeof raw === 'string' ? JSON.parse(raw || '{}') : (raw || {})
-        } catch { lookupCfg = {} }
-        const dbCfg = lookupDbConfigs.value[r.field]
-        const relationView = lookupCfg.bindingId ? relationViewConfigs.value[lookupCfg.bindingId] : undefined
-        passProps.lookupConfig = rProps.lookupConfig || '{}'
-        passProps.tableId = lookupCfg.tableId || dbCfg?.tableId || 0
-        passProps.searchFields = lookupCfg.searchFields || dbCfg?.searchFields || []
-        passProps.displayField = lookupCfg.displayFields?.[0] || dbCfg?.displayField || ''
-        passProps.displayFields = lookupCfg.displayFields || []
-        passProps.selectedDisplayField = lookupCfg.selectedDisplayField || lookupCfg.displayField || ''
-        passProps.filterConditions = Array.isArray(lookupCfg.filterConditions) ? lookupCfg.filterConditions : []
-        passProps.viewFields = lookupCfg.showBackfillView === false
-          ? []
-          : (relationView?.viewFields || dbCfg?.viewFields || [])
-        passProps.showBackfillView = lookupCfg.showBackfillView !== false
+      const fieldRule = ruleByField.get(column.fieldName)
+      const baseColumn = subFormColumnByField.get(column.fieldName)
+      if (fieldRule?.type === 'lookup' || fieldRule?.props?.lookupConfig || baseColumn?.type === 'lookup') {
+        const rawCfg = fieldRule?.props?.lookupConfig || baseColumn?.props?.lookupConfig || '{}'
+        const mergedLookupCfg = parseLookupConfig(rawCfg)
+        const dbCfg = lookupDbConfigs.value[column.fieldName]
+        const relationView = mergedLookupCfg.bindingId
+          ? relationViewConfigs.value[mergedLookupCfg.bindingId]
+          : undefined
+        return {
+          ...(baseColumn || {}),
+          field: column.fieldName,
+          label: column.comment || column.columnLabel || baseColumn?.label || fieldRule?.title || column.fieldName,
+          type: 'lookup',
+          minWidth: column.minWidth || baseColumn?.minWidth || 260,
+          placeholder: fieldRule?.props?.placeholder || baseColumn?.placeholder,
+          props: buildLookupColumnProps(rawCfg, {
+            dbCfg,
+            relationViewFields: relationView?.viewFields as Array<Record<string, unknown>> | undefined,
+          }),
+        }
       }
 
-      // Sync options into props.options so SubTableAddDialog can read from col.props?.options
-      if (options) passProps.options = options
-
-      const required = r.validate?.some((v: any) => v.required) || false
-      // form-create uses `disabled` to mark a field as read-only
-      const readonly = r.disabled === true || rProps.disabled === true
-
-      const col = {
-        field: r.field,
-        label: r.title || r.field,
-        type,
-        required,
-        ...(readonly ? { readonly } : {}),
-        ...(options ? { options } : {}),
-        ...(Object.keys(passProps).length > 0 ? { props: passProps } : {}),
-      }
-      console.log('[deriveColumns]', col.field, col.type, 'options:', col.options?.length, 'props.options:', col.props?.options?.length, 'props.treeData:', col.props?.treeData?.length)
-      return col
-    })
+      return mergeListViewFieldColumn(column, baseColumn, fieldRule)
+    }),
+      subFormRule,
+    )
   }
-  return []
+
+  return enrichLookupColumnPropsFromSubFormRule(subFormColumns, subFormRule)
 }
 
 // 初始化流转记录
