@@ -364,6 +364,26 @@ public class UserManagementProperties {
                 .isInstanceOf(AdminBusinessException.class)
                 .hasMessageContaining("邮箱已被使用");
     }
+
+    @Example
+    @Label("Feature: user-management, Deleted users release username and email for reuse")
+    void deletingUserReleasesUniqueFields() {
+        String userId = UUID.randomUUID().toString();
+        User existingUser = createUser(userId, "reusable_user", "reusable@example.com", "Reusable User");
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(existingUser));
+        when(userRepository.isUserAdmin(userId)).thenReturn(false);
+
+        userManagerComponent.deleteUser(userId);
+
+        verify(userRepository).save(argThat(user ->
+                Boolean.TRUE.equals(user.getDeleted())
+                        && user.getDeletedAt() != null
+                        && "system".equals(user.getDeletedBy())
+                        && user.getStatus() == UserStatus.INACTIVE
+                        && ("__deleted__" + userId).equals(user.getUsername())
+                        && ("__deleted__" + userId + "@deleted.local").equals(user.getEmail())));
+    }
     
     // ==================== Helper Methods ====================
     

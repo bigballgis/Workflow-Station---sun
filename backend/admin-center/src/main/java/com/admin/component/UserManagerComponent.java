@@ -252,14 +252,15 @@ public class UserManagerComponent {
                 throw new AdminBusinessException("USER_005", "Cannot delete the last administrator");
             }
             
-            // 软删除 - 不改变状态，只设置删除标记
-            // 如果必须改变状态，使用 INACTIVE（数据库约束允许）
-            // 但通常软删除只需要设置 deleted=true 即可
+            // 软删除时同时释放唯一字段占用，允许后续重新创建同名账号
             user.setDeleted(true);
             user.setDeletedAt(LocalDateTime.now());
             user.setDeletedBy(getCurrentUserId());
-            // 保持原有状态，不强制修改状态
-            // 如果需要禁用，可以单独调用状态更新接口
+            user.setStatus(UserStatus.INACTIVE);
+            user.setUsername(buildDeletedUsername(userId));
+            if (user.getEmail() != null && !user.getEmail().isBlank()) {
+                user.setEmail(buildDeletedEmail(userId));
+            }
             
             userRepository.save(user);
             
@@ -297,6 +298,14 @@ public class UserManagerComponent {
             // 如果检查失败，为了安全起见，不允许删除
             return true;
         }
+    }
+
+    private String buildDeletedUsername(String userId) {
+        return "__deleted__" + userId;
+    }
+
+    private String buildDeletedEmail(String userId) {
+        return "__deleted__" + userId + "@deleted.local";
     }
     
     /**

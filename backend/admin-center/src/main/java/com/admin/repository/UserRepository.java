@@ -20,24 +20,28 @@ import java.util.Optional;
 public interface UserRepository extends JpaRepository<User, String> {
     
     /**
-     * 根据用户名查找用户
+     * 根据用户名查找未删除用户
      */
-    Optional<User> findByUsername(String username);
+    @Query("SELECT u FROM User u WHERE u.username = :username AND (u.deleted = false OR u.deleted IS NULL)")
+    Optional<User> findByUsername(@Param("username") String username);
     
     /**
-     * 根据邮箱查找用户
+     * 根据邮箱查找未删除用户
      */
-    Optional<User> findByEmail(String email);
+    @Query("SELECT u FROM User u WHERE u.email = :email AND (u.deleted = false OR u.deleted IS NULL)")
+    Optional<User> findByEmail(@Param("email") String email);
     
     /**
-     * 检查用户名是否存在
+     * 检查未删除用户中用户名是否存在
      */
-    boolean existsByUsername(String username);
+    @Query("SELECT COUNT(u) > 0 FROM User u WHERE u.username = :username AND (u.deleted = false OR u.deleted IS NULL)")
+    boolean existsByUsername(@Param("username") String username);
     
     /**
-     * 检查邮箱是否存在
+     * 检查未删除用户中邮箱是否存在
      */
-    boolean existsByEmail(String email);
+    @Query("SELECT COUNT(u) > 0 FROM User u WHERE u.email = :email AND (u.deleted = false OR u.deleted IS NULL)")
+    boolean existsByEmail(@Param("email") String email);
     
     /**
      * 根据状态查找用户
