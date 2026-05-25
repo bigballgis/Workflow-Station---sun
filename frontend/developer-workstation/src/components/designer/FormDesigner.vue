@@ -562,6 +562,7 @@ import { useFormAutoSave } from '@/composables/modules/useFormAutoSave'
 import { useFormLabels } from '@/composables/modules/useFormLabels'
 import { useFormActions } from '@/composables/modules/useFormActions'
 import { parseLookupConfig, getMockValueForType, derivePreviewColumns } from '@/utils/formPreview'
+import { resolveBindingDisplayName } from '@/utils/bindingDisplayHelpers'
 import { cloneFormRules, injectUploadButtonLabels, mergeLoadedFormOptions, getRuleChildren, collectSubTableRules, isCardRule, getLayoutLabel } from '@/utils/formDesigner'
 import { ArrowLeft, Connection, Loading, CircleCheck } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -1116,14 +1117,22 @@ function hydrateLinkFormColumn(column: any): SubTableListColumnDTO {
     columnLabel: column.columnLabel ?? component?.columnLabel,
     linkText: column.linkText || component?.linkText || t('linkForm.defaultLinkText'),
     boundSubTableBindingId: column.boundSubTableBindingId,
-    boundSubTableName: column.boundSubTableName
+    boundSubTableName: column.boundSubTableName || resolveDesignerBindingDisplayName(column.boundSubTableBindingId) || undefined
   }
+}
+
+function resolveDesignerBindingDisplayName(bindingId: unknown): string {
+  return resolveBindingDisplayName(bindingId, designerSubBindings.value, (tableId) => {
+    const table = store.tables.find(t => t.id === tableId)
+    return table?.tableDisplayName || table?.tableName
+  })
 }
 
 function getSubTableFormDesign(bindingId: number): { rule: any[]; options: any } {
   const index = designerSubBindings.value.findIndex(b => b.bindingId === bindingId)
   const subRef = index >= 0 ? subDesignerRefs.value[index] : null
-  const saved = (selectedForm.value?.configJson?.subForms || {})[bindingId] || {}
+  const subForms = selectedForm.value?.configJson?.subForms || {}
+  const saved = subForms[bindingId] || subForms[String(bindingId)] || {}
   try {
     if (subRef) {
       return {
@@ -1171,6 +1180,8 @@ const designerSubBindings = computed(() => {
 provide('designerSubBindings', () => designerSubBindings.value.map(b => ({
   id: b.bindingId,
   tableName: b.tableName,
+  tableDisplayName: b.tableDisplayName,
+  tableId: b.tableId,
   tableDescription: b.tableDescription,
   bindingType: b.bindingType,
 })))
@@ -1264,7 +1275,9 @@ function computeDesignerLinkFormColumns(): Record<number, DesignerLinkFormColumn
         sourceBindingId: b.bindingId,
         sourceBindingName: b.tableName,
         boundSubTableBindingId: (c as any).boundSubTableBindingId ?? null,
-        boundSubTableName: (c as any).boundSubTableName ?? null,
+        boundSubTableName: (c as any).boundSubTableName
+          || resolveDesignerBindingDisplayName((c as any).boundSubTableBindingId)
+          || null,
         columnLabel: (c as any).columnLabel || (c as any).comment || (c as any).linkText || `linkForm:${stableId}`,
         linkText: (c as any).linkText || ''
       })
@@ -1648,8 +1661,7 @@ function toSubTablePreviewColumns(bindingId: number, rule: any[], config: any) {
         const targetBindingId = column.boundSubTableBindingId || bindingId
         const targetFormDesign = getSubTableFormDesign(targetBindingId)
         const boundSubTableName = column.boundSubTableName
-          || designerSubBindings.value.find(b => b.bindingId === targetBindingId)?.tableName
-          || ''
+          || resolveDesignerBindingDisplayName(targetBindingId)
         return {
           field: column.fieldName || `linkForm:${column.componentId || bindingId}`,
           label: column.columnLabel || column.comment || column.linkText || t('linkForm.defaultLinkText'),

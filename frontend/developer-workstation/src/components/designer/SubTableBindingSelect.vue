@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { inject, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { normalizeBindingId } from '@/utils/bindingDisplayHelpers'
 
 interface DesignerSubBinding {
   id: number
   tableName: string
+  tableDisplayName?: string
   tableDescription: string
   bindingType: string
 }
@@ -28,11 +30,12 @@ const allSubBindings = computed(() => props.subBindings?.length ? props.subBindi
 
 // Only show SUB type bindings for sub-table widget binding selection
 const subBindings = computed(() => allSubBindings.value.filter(b => b.bindingType === 'SUB'))
+const normalizedModelValue = computed(() => normalizeBindingId(props.modelValue))
 </script>
 
 <template>
   <el-select
-    :model-value="modelValue"
+    :model-value="normalizedModelValue"
     clearable
     :placeholder="t('designer.subTableSelectPlaceholder')"
     @change="emit('update:modelValue', $event ?? null)"
@@ -41,7 +44,9 @@ const subBindings = computed(() => allSubBindings.value.filter(b => b.bindingTyp
       v-for="b in subBindings"
       :key="b.id"
       :value="b.id"
-      :label="b.tableDescription ? `${b.tableName}（${b.tableDescription}）` : b.tableName"
+      :label="b.tableDescription
+        ? `${b.tableDisplayName || b.tableName}（${b.tableDescription}）`
+        : (b.tableDisplayName || b.tableName)"
     />
     <template
       v-if="subBindings.length === 0"
