@@ -651,7 +651,9 @@ export default {
     formDefinition: '表单定义',
     processDefinition: '流程定义',
     rollbackTitle: '回滚确认',
-    rollbackConfirmDetail: '确定要从版本 {currentVersion} 回滚到版本 {targetVersion} 吗？此操作不可撤销，可能影响现有数据。'
+    rollbackConfirmDetail: '确定要从版本 {currentVersion} 回滚到版本 {targetVersion} 吗？此操作不可撤销，可能影响现有数据。',
+    currentActive: '当前',
+    cannotRollbackToCurrent: '版本 {version} 已是当前活跃版本，无法回滚到该版本。'
   },
   properties: {
     basic: '基本信息',

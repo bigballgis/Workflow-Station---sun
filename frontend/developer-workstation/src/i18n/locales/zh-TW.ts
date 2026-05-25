@@ -648,7 +648,9 @@ export default {
     formDefinition: '表單定義',
     processDefinition: '流程定義',
     rollbackTitle: '回滾確認',
-    rollbackConfirmDetail: '確定要從版本 {currentVersion} 回滾到版本 {targetVersion} 嗎？此操作不可撤銷，可能影響現有資料。'
+    rollbackConfirmDetail: '確定要從版本 {currentVersion} 回滾到版本 {targetVersion} 嗎？此操作不可撤銷，可能影響現有資料。',
+    currentActive: '目前',
+    cannotRollbackToCurrent: '版本 {version} 已是目前活躍版本，無法回滾到該版本。'
   },
   properties: {
     basic: '基本資訊',

@@ -42,6 +42,9 @@ class VersionComponentImplTest {
     
     @Mock
     private ObjectMapper objectMapper;
+
+    @Mock
+    private com.developer.util.DeveloperWorkstationSequenceSynchronizer sequenceSynchronizer;
     
     @InjectMocks
     private VersionComponentImpl versionComponent;

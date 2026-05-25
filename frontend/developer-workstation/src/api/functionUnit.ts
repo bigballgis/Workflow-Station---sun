@@ -234,7 +234,8 @@ export interface Version {
   changeLog?: string
   createdBy: string
   createdAt: string
-  snapshotData: string
+  current?: boolean
+  snapshotData?: string
 }
 
 export const functionUnitApi = {

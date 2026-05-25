@@ -3,13 +3,26 @@
     <el-table
       v-loading="loading"
       :data="store.versions"
+      row-key="id"
       stripe
     >
       <el-table-column
         prop="versionNumber"
         :label="t('version.versionNumber')"
         min-width="120"
-      />
+      >
+        <template #default="{ row }">
+          <span>{{ row.versionNumber }}</span>
+          <el-tag
+            v-if="row.current"
+            type="success"
+            size="small"
+            style="margin-left: 8px;"
+          >
+            {{ t('version.currentActive') }}
+          </el-tag>
+        </template>
+      </el-table-column>
       <el-table-column
         prop="createdBy"
         :label="t('version.publisher')"
@@ -41,6 +54,7 @@
             <el-button
               link
               type="warning"
+              :disabled="row.current"
               @click="handleRollback(row)"
             >
               {{ t('common.rollback') }}
@@ -324,10 +338,26 @@ const diffLabel = (type: string) => {
 async function loadVersions() {
   loading.value = true
   try {
-    await store.fetchVersions(props.functionUnitId)
+    await Promise.all([
+      store.fetchVersions(props.functionUnitId),
+      store.fetchById(props.functionUnitId)
+    ])
   } finally {
     loading.value = false
   }
+}
+
+function resolveApiError(e: any): string {
+  return e?.response?.data?.error?.message
+    || e?.response?.data?.message
+    || t('common.error')
+}
+
+function activeVersionNumber(): string {
+  return store.current?.currentVersion
+    || store.versions.find(v => v.current)?.versionNumber
+    || store.versions?.[0]?.versionNumber
+    || '?'
 }
 
 function handleCompare(row: any) {
@@ -355,15 +385,19 @@ async function doCompare() {
     const res = await functionUnitApi.compareVersions?.(props.functionUnitId, compareVersion1.value, compareVersion2.value)
     compareResult.value = res?.data || {}
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.message || t('common.error'))
+    ElMessage.error(resolveApiError(e))
   } finally {
     comparing.value = false
   }
 }
 
 async function handleRollback(row: any) {
+  if (row.current) {
+    ElMessage.warning(t('version.cannotRollbackToCurrent', { version: row.versionNumber }))
+    return
+  }
   const targetVersion = row.versionNumber
-  const currentVersion = store.versions?.[0]?.versionNumber || '?'
+  const currentVersion = activeVersionNumber()
   await ElMessageBox.confirm(
     t('version.rollbackConfirmDetail', { targetVersion, currentVersion }),
     t('version.rollbackTitle'),
@@ -376,9 +410,9 @@ async function handleRollback(row: any) {
   try {
     await store.rollback(props.functionUnitId, row.id)
     ElMessage.success(t('common.success'))
-    loadVersions()
+    await loadVersions()
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.message || t('common.error'))
+    ElMessage.error(resolveApiError(e))
   }
 }
 

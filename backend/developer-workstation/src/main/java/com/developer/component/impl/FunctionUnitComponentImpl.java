@@ -902,10 +902,13 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     @Transactional(readOnly = true)
     public List<VersionResponse> getVersionHistory(Long functionUnitId) {
         functionUnitWorkspaceAccessService.assertCanAccess(functionUnitId, WorkspaceAccessAction.VIEW);
+        FunctionUnit functionUnit = functionUnitRepository.findById(functionUnitId)
+                .orElseThrow(() -> new ResourceNotFoundException("FunctionUnit", functionUnitId));
+        String activeVersionNumber = functionUnit.getCurrentVersion();
         return versionRepository.findByFunctionUnitIdOrderByPublishedAtDesc(functionUnitId)
                 .stream()
                 .map(v -> {
-                    VersionResponse resp = VersionResponse.from(v);
+                    VersionResponse resp = VersionResponse.from(v, activeVersionNumber);
                     resp.setCreatedBy(resolveUserDisplayName(v.getPublishedBy()));
                     return resp;
                 })

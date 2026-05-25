@@ -25,7 +25,9 @@ public class VersionPropertyTest {
         VersionRepository repository = mock(VersionRepository.class);
         FunctionUnitRepository functionUnitRepository = mock(FunctionUnitRepository.class);
         ObjectMapper objectMapper = new ObjectMapper();
-        VersionComponent component = new VersionComponentImpl(repository, functionUnitRepository, objectMapper);
+        VersionComponent component = new VersionComponentImpl(
+                repository, functionUnitRepository, objectMapper,
+                mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class));
         
         assertThat(component).isNotNull();
         assertThat(versionNumber).matches("\\d+\\.\\d+\\.\\d+");

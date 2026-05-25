@@ -11,6 +11,7 @@ import com.developer.exception.DeveloperBusinessException;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.VersionRepository;
+import com.developer.util.DeveloperWorkstationSequenceSynchronizer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.platform.security.util.SecurityContextUtils;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +35,7 @@ public class VersionComponentImpl implements VersionComponent {
     private final VersionRepository versionRepository;
     private final FunctionUnitRepository functionUnitRepository;
     private final ObjectMapper objectMapper;
+    private final DeveloperWorkstationSequenceSynchronizer sequenceSynchronizer;
     
     /**
      * 获取当前操作者
@@ -150,6 +152,9 @@ public class VersionComponentImpl implements VersionComponent {
         }
         
         try {
+            // import/init/上次 rollback 可能写入较大 id 而未推进序列，须在任何 INSERT 前对齐
+            sequenceSynchronizer.synchronizeAll();
+
             // 先创建当前状态的版本作为备份
             String backupVersion = calculateNextVersion(functionUnit.getCurrentVersion());
             Version backup = Version.builder()
@@ -159,7 +164,7 @@ public class VersionComponentImpl implements VersionComponent {
                     .snapshotData(createSnapshot(functionUnit))
                     .publishedBy(getCurrentOperator())
                     .build();
-            versionRepository.save(backup);
+            versionRepository.saveAndFlush(backup);
 
             // 方案 A：两阶段清空。
             // Hibernate 的 ActionQueue 默认顺序是 INSERT 先于 DELETE，
@@ -170,9 +175,15 @@ public class VersionComponentImpl implements VersionComponent {
             // 让孤儿 DELETE 立刻落库，再交给 restoreFromSnapshot 重建。
             clearChildCollectionsAndFlush(functionUnit);
             
+            // 须在「同一事务连接」内 sync，才能看见刚 flush 的 backup 与已删子表
+            sequenceSynchronizer.synchronizeAllInTransaction();
+            
             // 恢复目标版本的内容
             Map<String, Object> snapshot = objectMapper.readValue(targetVersion.getSnapshotData(), Map.class);
             restoreFromSnapshot(functionUnit, snapshot);
+            functionUnitRepository.saveAndFlush(functionUnit);
+            
+            sequenceSynchronizer.synchronizeVersions();
             
             // 创建回滚后的新版本
             String newVersion = calculateNextVersion(backupVersion);
@@ -183,7 +194,7 @@ public class VersionComponentImpl implements VersionComponent {
                     .snapshotData(targetVersion.getSnapshotData())
                     .publishedBy(getCurrentOperator())
                     .build();
-            versionRepository.save(rollbackVersion);
+            versionRepository.saveAndFlush(rollbackVersion);
             
             functionUnit.setCurrentVersion(newVersion);
             functionUnit.setStatus(FunctionUnitStatus.DRAFT);

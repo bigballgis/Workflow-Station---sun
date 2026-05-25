@@ -458,7 +458,8 @@ public class DecisionDesignPropertyTest {
             VersionComponentImpl versionComponent = new VersionComponentImpl(
                     mock(VersionRepository.class),
                     mock(FunctionUnitRepository.class),
-                    objectMapper
+                    objectMapper,
+                    mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class)
             );
 
             // Build a fresh FunctionUnit to restore into

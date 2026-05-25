@@ -43,6 +43,7 @@ public class DeveloperWorkstationSequenceSynchronizer {
 
     /**
      * 同步所有已知 dw_* 表的 id 序列（表不存在或无序列时跳过）。
+     * 在独立连接执行，适合 import/clone 等「尚无本事务内未提交写入」的场景。
      */
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void synchronizeAll() {
@@ -51,9 +52,25 @@ public class DeveloperWorkstationSequenceSynchronizer {
         }
     }
 
+    /**
+     * 与调用方同一 JDBC 事务内对齐序列，能看见本事务已 flush、尚未 commit 的行。
+     * rollback 等「先删/插再 restore」流程必须用此方法，否则 NOT_SUPPORTED 会把序列设回旧 MAX。
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void synchronizeAllInTransaction() {
+        for (String table : DW_TABLES_WITH_ID) {
+            synchronizeTable(table);
+        }
+    }
+
     /** 将 dw_field_definitions 序列与 MAX(id) 对齐（表保存 delete+reinsert 前调用）。 */
     public void synchronizeFieldDefinitions() {
         synchronizeTable("dw_field_definitions");
+    }
+
+    /** 将 dw_versions 序列与 MAX(id) 对齐。 */
+    public void synchronizeVersions() {
+        synchronizeTable("dw_versions");
     }
 
     void synchronizeTable(String tableName) {

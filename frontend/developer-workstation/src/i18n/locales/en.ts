@@ -655,7 +655,9 @@ export default {
     formDefinition: 'Form Definition',
     processDefinition: 'Process Definition',
     rollbackTitle: 'Rollback Confirmation',
-    rollbackConfirmDetail: 'Are you sure you want to rollback from version {currentVersion} to version {targetVersion}? This operation cannot be undone and may affect existing data.'
+    rollbackConfirmDetail: 'Are you sure you want to rollback from version {currentVersion} to version {targetVersion}? This operation cannot be undone and may affect existing data.',
+    currentActive: 'Current',
+    cannotRollbackToCurrent: 'Version {version} is already the active version and cannot be rolled back to.'
   },
   properties: {
     basic: 'Basic Info',
