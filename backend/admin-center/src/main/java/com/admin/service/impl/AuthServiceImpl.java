@@ -106,8 +106,9 @@ public class AuthServiceImpl implements AuthService {
         String refreshToken = jwtTokenService.generateRefreshToken(user.getId());
         
         // Set httpOnly cookies for access token and refresh token
-        setAuthCookie(response, "access_token", accessToken, (int)(jwtProperties.getExpirationMs() / 1000));
-        setAuthCookie(response, "refresh_token", refreshToken, 7 * 24 * 60 * 60);
+        // 使用服务特有 cookie 名（如 ac_access_token），避免三端在同源下相互覆盖。详见 JwtProperties#cookieNames。
+        setAuthCookie(response, jwtProperties.getPrimaryCookieName(), accessToken, (int)(jwtProperties.getExpirationMs() / 1000));
+        setAuthCookie(response, jwtProperties.getRefreshCookieName(), refreshToken, 7 * 24 * 60 * 60);
         
         log.info("User {} logged in successfully from {}", request.getUsername(), ipAddress);
         
@@ -176,8 +177,9 @@ public class AuthServiceImpl implements AuthService {
         String refreshToken = jwtTokenService.generateRefreshToken(user.getId());
 
         // Set httpOnly cookies for access token and refresh token
-        setAuthCookie(response, "access_token", accessToken, (int)(jwtProperties.getExpirationMs() / 1000));
-        setAuthCookie(response, "refresh_token", refreshToken, 7 * 24 * 60 * 60);
+        // 使用服务特有 cookie 名（如 ac_access_token），避免三端在同源下相互覆盖。详见 JwtProperties#cookieNames。
+        setAuthCookie(response, jwtProperties.getPrimaryCookieName(), accessToken, (int)(jwtProperties.getExpirationMs() / 1000));
+        setAuthCookie(response, jwtProperties.getRefreshCookieName(), refreshToken, 7 * 24 * 60 * 60);
 
         log.info("User {} SSO session issued from {}", user.getUsername(), ipAddress);
 
@@ -234,8 +236,9 @@ public class AuthServiceImpl implements AuthService {
             String newRefreshToken = jwtTokenService.generateRefreshToken(user.getId());
 
             // Set httpOnly cookies for new tokens
-            setAuthCookie(response, "access_token", accessToken, (int)(jwtProperties.getExpirationMs() / 1000));
-            setAuthCookie(response, "refresh_token", newRefreshToken, 7 * 24 * 60 * 60);
+            // 使用服务特有 cookie 名（如 ac_access_token），避免三端在同源下相互覆盖。详见 JwtProperties#cookieNames。
+            setAuthCookie(response, jwtProperties.getPrimaryCookieName(), accessToken, (int)(jwtProperties.getExpirationMs() / 1000));
+            setAuthCookie(response, jwtProperties.getRefreshCookieName(), newRefreshToken, 7 * 24 * 60 * 60);
 
             return LoginResponse.builder()
                     .accessToken(accessToken)

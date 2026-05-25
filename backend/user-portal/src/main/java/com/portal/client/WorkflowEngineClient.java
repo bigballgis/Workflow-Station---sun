@@ -21,6 +21,7 @@ import jakarta.servlet.http.HttpServletRequest;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.platform.security.config.JwtProperties;
 import com.platform.security.util.SecurityContextUtils;
 
 import java.util.HashMap;
@@ -41,6 +42,7 @@ import java.util.Optional;
 public class WorkflowEngineClient {
 
     private final RestTemplate restTemplate;
+    private final JwtProperties jwtProperties;
 
     @Value("${workflow-engine.url:http://localhost:8081}")
     private String workflowEngineUrl;
@@ -80,7 +82,8 @@ public class WorkflowEngineClient {
      * workflow-engine 对 /api/v1/** 要求已认证 JWT（与门户共用 {@code JWT_SECRET}）。
      *
      * <p>解析顺序与 {@link com.platform.security.filter.JwtAuthenticationFilter#extractToken} 一致：
-     * 优先 {@code Authorization} 头；若缺失则回退到 {@code access_token} httpOnly Cookie，
+     * 优先 {@code Authorization} 头；若缺失则回退到 {@code platform.security.jwt.cookie-names}
+     * 配置的 httpOnly Cookie（user-portal 写出的是 {@code up_access_token}），
      * 并合成 {@code Authorization: Bearer <token>} 转发给 workflow-engine（跨服务调用不会自动带 cookie）。
      *
      * <p>无请求上下文时（如定时任务）不加头 —— 此时调用受保护接口会拿到 403，由调用方处理。
@@ -103,17 +106,23 @@ public class WorkflowEngineClient {
         }
     }
 
-    private static String extractAccessTokenFromCookie(HttpServletRequest request) {
+    private String extractAccessTokenFromCookie(HttpServletRequest request) {
         Cookie[] cookies = request.getCookies();
         if (cookies == null) {
             return null;
         }
-        for (Cookie cookie : cookies) {
-            if (cookie != null
-                    && "access_token".equals(cookie.getName())
-                    && cookie.getValue() != null
-                    && !cookie.getValue().isBlank()) {
-                return cookie.getValue();
+        List<String> names = jwtProperties.getCookieNames();
+        if (names == null || names.isEmpty()) {
+            names = List.of("access_token");
+        }
+        for (String name : names) {
+            for (Cookie cookie : cookies) {
+                if (cookie != null
+                        && name.equals(cookie.getName())
+                        && cookie.getValue() != null
+                        && !cookie.getValue().isBlank()) {
+                    return cookie.getValue();
+                }
             }
         }
         return null;

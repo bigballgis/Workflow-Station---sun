@@ -58,7 +58,7 @@ class JwtFilterPreservationPropertyTest {
         when(mockRedisTemplate.hasKey(anyString())).thenReturn(false);
 
         this.jwtTokenService = new JwtTokenServiceImpl(jwtProperties, mockRedisTemplate);
-        this.jwtAuthenticationFilter = new JwtAuthenticationFilter(jwtTokenService);
+        this.jwtAuthenticationFilter = new JwtAuthenticationFilter(jwtTokenService, jwtProperties);
     }
 
     /**

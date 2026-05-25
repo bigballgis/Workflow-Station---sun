@@ -61,7 +61,9 @@ public class JwtAuthBugConditionPropertyTest {
      * Create the platform-security JwtAuthenticationFilter using the standard JwtTokenService.
      */
     private JwtAuthenticationFilter createPlatformFilter() {
-        return new JwtAuthenticationFilter(createJwtTokenService());
+        JwtProperties props = new JwtProperties();
+        props.setSecret(JWT_SECRET);
+        return new JwtAuthenticationFilter(createJwtTokenService(), props);
     }
 
     private SecretKey getSigningKey() {

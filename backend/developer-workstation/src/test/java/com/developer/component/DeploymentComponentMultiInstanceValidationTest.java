@@ -77,7 +77,8 @@ class DeploymentComponentMultiInstanceValidationTest {
             i18nService,
             new SyncTaskExecutor(),
             deploymentJobService,
-            functionUnitWorkspaceAccessService
+            functionUnitWorkspaceAccessService,
+            new com.platform.security.config.JwtProperties()
         );
         
         // Setup default i18n messages

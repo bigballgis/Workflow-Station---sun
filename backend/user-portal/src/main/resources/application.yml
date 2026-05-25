@@ -104,6 +104,12 @@ platform:
       secret: ${JWT_SECRET:your-256-bit-secret-key-for-development-only}
       expiration-ms: ${JWT_EXPIRATION:86400000}
       refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION:604800000}
+      # 服务自有 cookie 名，避免与 admin-center / developer-workstation 在同源 localhost:3000 下互相覆盖工作台 claim。
+      # 列表首项是本服务写出 Cookie 的名字；其它项用于读取（兼容老客户端 / 转发场景）。
+      cookie-names:
+        - up_access_token
+        - access_token
+      refresh-cookie-name: up_refresh_token
       issuer: platform
       validate-issuer: false
   encryption:

@@ -1,5 +1,6 @@
 package com.portal.controller;
 
+import com.platform.security.config.JwtProperties;
 import com.platform.security.dto.UserEffectiveRole;
 import com.platform.security.entity.User;
 import com.platform.security.model.UserStatus;
@@ -64,6 +65,7 @@ public class AuthController {
     private final JwtTokenService jwtTokenService;
     private final PortalWorkspaceAuthService portalWorkspaceAuthService;
     private final PortalSessionIssuerService portalSessionIssuerService;
+    private final JwtProperties jwtProperties;
     
     @Value("${jwt.secret}")
     private String jwtSecret;
@@ -171,7 +173,8 @@ public class AuthController {
             String newRefreshToken = generateRefreshToken(userId, activeBu, activeRoleId, portalAccessMode);
 
             // Set httpOnly cookies for new tokens
-            Cookie accessTokenCookie = new Cookie("access_token", newAccessToken);
+            // 使用服务特有 cookie 名（如 up_access_token），避免三端在同源下相互覆盖。详见 JwtProperties#cookieNames。
+            Cookie accessTokenCookie = new Cookie(jwtProperties.getPrimaryCookieName(), newAccessToken);
             accessTokenCookie.setHttpOnly(true);
             accessTokenCookie.setSecure(false);
             accessTokenCookie.setPath("/");
@@ -179,7 +182,7 @@ public class AuthController {
             accessTokenCookie.setAttribute("SameSite", "Lax");
             httpResponse.addCookie(accessTokenCookie);
 
-            Cookie refreshTokenCookie = new Cookie("refresh_token", newRefreshToken);
+            Cookie refreshTokenCookie = new Cookie(jwtProperties.getRefreshCookieName(), newRefreshToken);
             refreshTokenCookie.setHttpOnly(true);
             refreshTokenCookie.setSecure(false);
             refreshTokenCookie.setPath("/");

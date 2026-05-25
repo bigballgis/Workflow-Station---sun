@@ -1,6 +1,7 @@
 package com.portal.service;
 
 import com.platform.common.i18n.I18nService;
+import com.platform.security.config.JwtProperties;
 import com.platform.security.dto.UserEffectiveRole;
 import com.platform.security.entity.User;
 import com.platform.security.service.UserRoleService;
@@ -47,6 +48,7 @@ public class PortalSessionIssuerService {
     private final UserRoleService userRoleService;
     private final I18nService i18nService;
     private final PortalWorkspaceAuthService portalWorkspaceAuthService;
+    private final JwtProperties jwtProperties;
 
     @Value("${jwt.secret}")
     private String jwtSecret;
@@ -113,8 +115,9 @@ public class PortalSessionIssuerService {
             String refreshToken = generateRefreshToken(userId, activeBu, activeRoleId, portalAccessMode);
 
             // Set httpOnly cookies for access token and refresh token
-            setAuthCookie(httpResponse, "access_token", accessToken, (int)(jwtExpiration / 1000));
-            setAuthCookie(httpResponse, "refresh_token", refreshToken, 7 * 24 * 60 * 60);
+            // 使用服务特有 cookie 名（如 up_access_token），避免三端在同源下相互覆盖。详见 JwtProperties#cookieNames。
+            setAuthCookie(httpResponse, jwtProperties.getPrimaryCookieName(), accessToken, (int)(jwtExpiration / 1000));
+            setAuthCookie(httpResponse, jwtProperties.getRefreshCookieName(), refreshToken, 7 * 24 * 60 * 60);
 
             log.info("User {} portal session issued", logUsername);
 

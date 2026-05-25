@@ -105,6 +105,14 @@ platform:
       secret: ${JWT_SECRET:your-256-bit-secret-key-for-development-only}
       expiration-ms: ${JWT_EXPIRATION:86400000}
       refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION:604800000}
+      # 引擎不签发 cookie，但接收三端代理过来的 REST / WebSocket 请求；
+      # 需同时识别 up_/ac_/dw_ 前缀的 access cookie，避免按浏览器随机选中的同源 cookie 鉴权失败。
+      cookie-names:
+        - up_access_token
+        - dw_access_token
+        - ac_access_token
+        - access_token
+      refresh-cookie-name: access_token
       issuer: platform
       validate-issuer: false
   encryption:

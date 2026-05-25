@@ -17,6 +17,7 @@ import com.developer.security.WorkspaceAccessAction;
 import com.developer.service.DeploymentJobService;
 import com.platform.common.constant.PlatformConstants;
 import com.platform.common.i18n.I18nService;
+import com.platform.security.config.JwtProperties;
 import com.platform.security.util.SecurityContextUtils;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
@@ -55,6 +56,7 @@ public class DeploymentComponentImpl implements DeploymentComponent {
     private final TaskExecutor taskExecutor;
     private final DeploymentJobService deploymentJobService;
     private final FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService;
+    private final JwtProperties jwtProperties;
 
     @Value("${admin-center.url:http://localhost:8090}")
     private String defaultAdminCenterUrl;
@@ -76,7 +78,8 @@ public class DeploymentComponentImpl implements DeploymentComponent {
             @Qualifier("deploymentTaskExecutor")
             TaskExecutor taskExecutor,
             DeploymentJobService deploymentJobService,
-            FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService) {
+            FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService,
+            JwtProperties jwtProperties) {
         this.functionUnitRepository = functionUnitRepository;
         this.exportImportComponent = exportImportComponent;
         this.restTemplate = restTemplate;
@@ -87,6 +90,7 @@ public class DeploymentComponentImpl implements DeploymentComponent {
                 : new org.springframework.core.task.SimpleAsyncTaskExecutor("deploy-");
         this.deploymentJobService = deploymentJobService;
         this.functionUnitWorkspaceAccessService = functionUnitWorkspaceAccessService;
+        this.jwtProperties = jwtProperties;
     }
 
     @Override
@@ -345,7 +349,10 @@ public class DeploymentComponentImpl implements DeploymentComponent {
 
     /**
      * 从当前 HTTP 请求解析出站 Authorization（异步线程中需在进入异步前由调用方传入，此处仅作兜底尝试）。
-     * 与 {@link com.platform.security.filter.JwtAuthenticationFilter} 一致：优先 Authorization 头，其次 access_token Cookie。
+     * 与 {@link com.platform.security.filter.JwtAuthenticationFilter} 一致：优先 Authorization 头，其次 access cookie。
+     * <p>
+     * 历史上写死 {@code access_token}；三端为避免 cookie 互相覆盖现已按服务名拆分（如 {@code dw_access_token}），
+     * 故按 {@link JwtProperties#getCookieNames()} 顺序匹配以兼容本服务名 + 备用名（详见 JwtProperties 注释）。
      */
     private Optional<String> resolveOutboundAuthorizationHeader() {
         var attrs = RequestContextHolder.getRequestAttributes();
@@ -364,14 +371,23 @@ public class DeploymentComponentImpl implements DeploymentComponent {
         return Optional.empty();
     }
 
-    private static String extractAccessTokenFromCookie(HttpServletRequest request) {
+    private String extractAccessTokenFromCookie(HttpServletRequest request) {
         Cookie[] cookies = request.getCookies();
         if (cookies == null) {
             return null;
         }
-        for (Cookie cookie : cookies) {
-            if ("access_token".equals(cookie.getName())) {
-                return cookie.getValue();
+        List<String> candidateNames = jwtProperties != null && jwtProperties.getCookieNames() != null
+                && !jwtProperties.getCookieNames().isEmpty()
+                ? jwtProperties.getCookieNames()
+                : List.of("access_token");
+        for (String name : candidateNames) {
+            for (Cookie cookie : cookies) {
+                if (name.equals(cookie.getName())) {
+                    String value = cookie.getValue();
+                    if (value != null && !value.isBlank()) {
+                        return value;
+                    }
+                }
             }
         }
         return null;

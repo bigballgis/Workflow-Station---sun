@@ -2,6 +2,7 @@ package com.developer.service;
 
 import com.developer.dto.LoginResponse;
 import com.developer.entity.User;
+import com.platform.security.config.JwtProperties;
 import com.platform.security.dto.UserEffectiveRole;
 import com.platform.security.service.UserRoleService;
 import io.jsonwebtoken.Jwts;
@@ -32,6 +33,7 @@ public class DeveloperSsoExchangeService {
 
     private final JdbcTemplate jdbcTemplate;
     private final UserRoleService userRoleService;
+    private final JwtProperties jwtProperties;
 
     @Value("${jwt.secret}")
     private String jwtSecret;
@@ -54,7 +56,8 @@ public class DeveloperSsoExchangeService {
         String refreshToken = generateRefreshToken(user.getId());
         
         // Set httpOnly cookies for access token and refresh token
-        Cookie accessTokenCookie = new Cookie("access_token", accessToken);
+        // 使用服务特有 cookie 名（如 dw_access_token），避免三端在同源下相互覆盖。详见 JwtProperties#cookieNames。
+        Cookie accessTokenCookie = new Cookie(jwtProperties.getPrimaryCookieName(), accessToken);
         accessTokenCookie.setHttpOnly(true);
         accessTokenCookie.setSecure(false);
         accessTokenCookie.setPath("/");
@@ -62,7 +65,7 @@ public class DeveloperSsoExchangeService {
         accessTokenCookie.setAttribute("SameSite", "Lax");
         response.addCookie(accessTokenCookie);
 
-        Cookie refreshTokenCookie = new Cookie("refresh_token", refreshToken);
+        Cookie refreshTokenCookie = new Cookie(jwtProperties.getRefreshCookieName(), refreshToken);
         refreshTokenCookie.setHttpOnly(true);
         refreshTokenCookie.setSecure(false);
         refreshTokenCookie.setPath("/");

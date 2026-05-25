@@ -1701,3 +1701,60 @@
   severity: major
   category: security
   summary: "developer-workstation 容器入口仍以 root 直接启动 Java 进程，未满足非 root 运行约束"
+
+- id: "1385"
+  status: fixed
+  fixed_at: "2026-05-25"
+  severity: major
+  category: bug
+  summary: "User Portal 子表标题始终显示物理 table_name，未按 Developer Workstation 设计的 Table Display Name 渲染（To Do / Completed / My Requests / New Requests 四视图全部受影响）"
+  file: |
+    backend/admin-center/src/main/java/com/admin/dto/response/TableBindingDTO.java
+    backend/admin-center/src/main/java/com/admin/component/FunctionUnitManagerComponent.java
+    backend/user-portal/src/main/java/com/portal/dto/SubTableBindingData.java
+    backend/user-portal/src/main/java/com/portal/component/ProcessFormComponent.java
+  note: |
+    复现：在设计器为 `dw_table_definitions.table_display_name` 配置「subtable A」等显示名后，User Portal 的 To Do 详情、Completed Tasks 详情、My Requests 详情、New Requests（流程发起）四个页面的子表卡片标题仍显示物理表名 `subtable`，违反 `portal-design-parity.mdc`「设计器配置的 Table Display Name 必须在 Portal 运行时呈现」契约。
+    根因：四个 Portal 视图（`tasks/detail.vue` / `applications/detail.vue` / `processes/start.vue`）通过 `processApi.getFunctionUnitContent` 拉取的 `tableBindings` 来自 admin-center `FunctionUnitManagerComponent.attachTableBindings`，其 SQL 仅 `SELECT td.table_name`、`TableBindingDTO` 也没有 `tableDisplayName` 字段；前端虽已写好 `b.tableDisplayName || b.tableName` 兜底，但 `b.tableDisplayName` 永远是 `undefined`，于是 `<SubTableField :title>` 始终落到物理 `table_name`。`FormRenderer.vue` 早已用 `resolveBinding(...).tableName` 作为标题，而设计侧 FormPreview 走 `tableDisplayName || tableName`，两侧因后端契约不完整出现结构性分叉。
+    修复：
+      1) `TableBindingDTO` 新增 `tableDisplayName` 字段，明确语义「优先于 tableName 渲染」。
+      2) `attachTableBindings` 的两条 SQL（sourceId 主路径 + form_name 回退路径）改为同时 `LEFT JOIN dw_table_definitions td` 与 `LEFT JOIN rt_table_definitions rt`，`SELECT COALESCE(td.table_display_name, rt.display_name) AS table_display_name`，并把 INNER JOIN 改为 LEFT JOIN 让 RELATED 绑定（仅有 `relation_table_id`）也能命中。
+      3) 顺带把 user-portal 内部 `SubTableBindingData` DTO 与 `ProcessFormComponent.loadSubTableBindingMapsForForm` SQL 一并补上 `tableDisplayName`，保持后端契约统一（即便当前主路径已走 admin-center）。
+    验证：
+      - `mvn -pl backend/admin-center,backend/user-portal -am package -DskipTests` 成功。
+      - `docker compose -f docker-compose.dev.yml --env-file .env up -d --build admin-center user-portal` 后两容器 healthy，日志无 ERROR。
+      - DB 抽查 `fu-20260422-23tfag` 的 `dw_table_definitions` 显示 `subtable -> subtable A`、`subtable2 -> subtable2 A`、`attachment -> attachment A`，符合修复预期。
+
+- id: "1386"
+  status: fixed
+  fixed_at: "2026-05-25"
+  severity: critical
+  category: security
+  summary: "user-portal / admin-center / developer-workstation 三端在同源（localhost:3000）下都写名为 access_token / refresh_token 的 httpOnly Cookie，导致工作台 claim（activeBusinessUnitId / activeRoleId）被互相覆盖，门户发起流程时报 'Your account is associated with a business unit role...'"
+  file: |
+    backend/platform-security/src/main/java/com/platform/security/config/JwtProperties.java
+    backend/platform-security/src/main/java/com/platform/security/filter/JwtAuthenticationFilter.java
+    backend/user-portal/src/main/java/com/portal/service/PortalSessionIssuerService.java
+    backend/user-portal/src/main/java/com/portal/controller/AuthController.java
+    backend/user-portal/src/main/java/com/portal/client/WorkflowEngineClient.java
+    backend/admin-center/src/main/java/com/admin/service/impl/AuthServiceImpl.java
+    backend/developer-workstation/src/main/java/com/developer/service/DeveloperSsoExchangeService.java
+    backend/developer-workstation/src/main/java/com/developer/controller/AuthController.java
+    backend/developer-workstation/src/main/java/com/developer/component/impl/DeploymentComponentImpl.java
+    backend/user-portal/src/main/resources/application.yml
+    backend/admin-center/src/main/resources/application.yml
+    backend/developer-workstation/src/main/resources/application.yml
+    backend/workflow-engine-core/src/main/resources/application.yml
+  note: |
+    复现：登录 User Portal 选好 BusinessUnit + Role 后发起流程，前端 POST `/api/portal/processes/...`，后端在 `ProcessComponent.startProcess` 抛 `PortalException` 'Your account is associated with a business unit role. Please login first and select a workspace from the top, or re-login and try again'。同时只要在另一个标签页打开 Developer Workstation 或 Admin Center，问题立刻 100% 复现。
+    根因：三端前端经各自 nginx 都挂在 `localhost:3000`，三端后端都用 `new Cookie("access_token", ...).setPath("/")` 写 httpOnly Cookie，浏览器按同源同名同 path 规则会用 **最后一次** Set-Cookie 覆盖前一次。Developer Workstation 的 JWT 没有 `activeBusinessUnitId` / `activeRoleId` claim，一旦覆盖，user-portal 后续请求（特别是 SockJS WebSocket / 退化到 cookie 鉴权的接口）拿到的 Principal 就缺工作台字段，`PortalUserSecurityUtils.getCurrentActiveBusinessUnitId/getCurrentActiveRoleId` 返回空，ProcessComponent 校验失败。
+    修复（根因路径，三端 cookie 命名空间隔离）：
+      1) `JwtProperties` 增加 `cookieNames: List<String>`（首项=本服务写出名，其余=兼容读取名）与 `refreshCookieName`，并提供 `getPrimaryCookieName()`。
+      2) `JwtAuthenticationFilter#extractToken` 与 user-portal `WorkflowEngineClient` / developer-workstation `DeploymentComponentImpl#extractAccessTokenFromCookie` 改为按 `JwtProperties.cookieNames` 顺序匹配，仍保留 `access_token` 兜底以兼容旧客户端。
+      3) 三端所有 cookie 写点（user-portal: `PortalSessionIssuerService` + `AuthController#refresh`；admin-center: `AuthServiceImpl` 登录/SSO/refresh 共 3 处；developer-workstation: `AuthController` 登录/refresh 2 处 + `DeveloperSsoExchangeService` 1 处）一律改用 `jwtProperties.getPrimaryCookieName()` / `getRefreshCookieName()`。
+      4) 四个 `application.yml` 显式设置 cookie 名：user-portal=`up_access_token` / `up_refresh_token`，admin-center=`ac_access_token` / `ac_refresh_token`，developer-workstation=`dw_access_token` / `dw_refresh_token`；workflow-engine-core 因接收三端 WebSocket，配置完整列表 `up_/dw_/ac_/access_token`。
+      5) 受影响测试（`WorkflowEngineClientTest` / `JwtFilterPreservationPropertyTest` / `JwtAuthBugConditionPropertyTest` / `DeploymentComponentMultiInstanceValidationTest`）同步更新构造器调用。
+    验证：
+      - `mvn -pl backend/platform-security,backend/user-portal,backend/admin-center,backend/developer-workstation,backend/workflow-engine-core -am package -DskipTests` 成功。
+      - `docker compose -f docker-compose.dev.yml --env-file .env up -d --build user-portal admin-center developer-workstation workflow-engine` 后四容器全部 healthy，启动日志无 ERROR。
+      - 三端独立 cookie 后，浏览器 DevTools 应能同时看到 `up_access_token` + `dw_access_token` + `ac_access_token` 三份，互不覆盖。
