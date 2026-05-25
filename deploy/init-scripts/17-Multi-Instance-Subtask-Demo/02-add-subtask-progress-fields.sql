@@ -1,12 +1,12 @@
 -- =============================================================================
--- Patch: Add configured multi-instance progress fields to Function Unit "kk"
+-- Patch: Add configured multi-instance progress fields to Function Unit "Multi-Instance Subtask Demo"
 --
 -- Why:
 --   My Request must render subtask progress from developer-workstation metadata,
 --   not from user-portal-only synthetic columns.
 --
 -- Storage note:
---   Subtask rows for kk are persisted as JSON (form / process variables), not as
+--   Subtask rows for this function unit are persisted as JSON (form / process variables), not as
 --   a standalone physical relation table named public.subtable. This script only
 --   updates dw_field_definitions and dw_form_definitions.config_json so the
 --   designer and portal stay aligned; no ALTER TABLE is applied here.
@@ -23,12 +23,13 @@ DECLARE
 BEGIN
   SELECT id INTO v_fu_id
   FROM dw_function_units
-  WHERE code = 'fu-20260422-23tfag' OR code = 'kk' OR name = 'kk'
+  WHERE code = 'fu-20260422-23tfag'
+     OR name IN ('Multi-Instance Subtask Demo', 'kk')
   ORDER BY id DESC
   LIMIT 1;
 
   IF v_fu_id IS NULL THEN
-    RAISE EXCEPTION 'Function unit "kk" not found in dw_function_units.';
+    RAISE EXCEPTION 'Function unit fu-20260422-23tfag (Multi-Instance Subtask Demo) not found in dw_function_units.';
   END IF;
 
   SELECT id INTO v_subtable_id
@@ -39,7 +40,7 @@ BEGIN
   LIMIT 1;
 
   IF v_subtable_id IS NULL THEN
-    RAISE EXCEPTION 'kk subtable definition not found.';
+    RAISE EXCEPTION 'Multi-Instance Subtask Demo subtable definition not found.';
   END IF;
 
   INSERT INTO dw_field_definitions (
@@ -120,5 +121,5 @@ BEGIN
     WHERE id = v_form.id;
   END LOOP;
 
-  RAISE NOTICE 'Patched FU kk (fu_id=%): configured task_status/task_current_node for subtable.', v_fu_id;
+  RAISE NOTICE 'Patched FU Multi-Instance Subtask Demo (fu_id=%): configured task_status/task_current_node for subtable.', v_fu_id;
 END $patch$;

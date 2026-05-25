@@ -1,24 +1,10 @@
 <template>
-  <Teleport to="body">
-    <div
-      v-if="visible"
-      class="sub-table-add-dialog-backdrop"
-      role="presentation"
-      aria-hidden="true"
-      :style="{ zIndex: backdropZIndex }"
-      @click="handleClose"
-    />
-  </Teleport>
-  <el-dialog
-    :model-value="visible"
+  <SubTableNestedModalShell
+    :visible="visibleModel"
     :title="title || (mode === 'edit' ? 'Edit Record' : 'Add Record')"
-    width="600px"
-    :close-on-click-modal="false"
-    :modal="false"
-    append-to-body
-    :z-index="dialogZIndex"
-    @update:model-value="handleClose"
-    @close="handleClose"
+    width="min(600px, calc(100vw - 48px))"
+    @update:visible="visibleModel = $event"
+    @closed="onShellClosed"
   >
     <el-form
       ref="formRef"
@@ -305,7 +291,7 @@
     </el-form>
 
     <template #footer>
-      <el-button @click="handleClose">
+      <el-button @click="requestClose">
         Cancel
       </el-button>
       <el-button
@@ -315,7 +301,7 @@
         Save
       </el-button>
     </template>
-  </el-dialog>
+  </SubTableNestedModalShell>
 </template>
 
 <script setup lang="ts">
@@ -325,21 +311,8 @@ import type { FormInstance } from 'element-plus'
 import { ElMessage } from 'element-plus'
 import { buildInitialRow, buildRules } from './subTableAddDialogHelpers'
 import type { DialogColumn } from './subTableAddDialogHelpers'
-
-const NESTED_DIALOG_Z = 3010
-const dialogZIndex = ref(NESTED_DIALOG_Z)
-const backdropZIndex = computed(() => dialogZIndex.value - 1)
-
-function refreshDialogZIndex() {
-  let maxZ = 2000
-  document.querySelectorAll('.el-overlay').forEach((el) => {
-    const z = Number.parseInt(window.getComputedStyle(el).zIndex || '0', 10)
-    if (z > maxZ) maxZ = z
-  })
-  dialogZIndex.value = Math.max(NESTED_DIALOG_Z, maxZ + 10)
-}
-
-// ─── Component ────────────────────────────────────────────────────────────────
+import SubTableNestedModalShell from './SubTableNestedModalShell.vue'
+import { getFilenameFromUrl } from './uploadFieldUtils'
 
 const props = defineProps<{
   visible: boolean
@@ -354,11 +327,15 @@ const emit = defineEmits<{
   (e: 'save', rowData: Record<string, any>): void
 }>()
 
+const visibleModel = computed({
+  get: () => props.visible,
+  set: (val: boolean) => emit('update:visible', val),
+})
+
 const formRef = ref<FormInstance>()
 const formData = ref<Record<string, any>>({})
 const uploadNames = ref<Record<string, string>>({})
 
-// ─── Signature canvas state ───────────────────────────────────────────────────
 const signatureCanvasRefs = ref<Record<string, HTMLCanvasElement>>({})
 const signingField = ref<string | null>(null)
 
@@ -406,33 +383,35 @@ function clearSignature(field: string) {
 
 const formRules = computed(() => buildRules(props.columns))
 
-// Initialise / reset form whenever dialog opens
 watch(
   () => props.visible,
   (open) => {
     if (!open) return
-    refreshDialogZIndex()
     uploadNames.value = {}
     if (props.mode === 'edit' && props.initialData) {
-      // Deep-clone to avoid mutating the original row
       formData.value = { ...buildInitialRow(props.columns), ...JSON.parse(JSON.stringify(props.initialData)) }
-      // Back-fill upload file names from URL
       for (const col of props.columns) {
         if (col.type === 'upload' && formData.value[col.field]) {
           const url: string = formData.value[col.field]
-          uploadNames.value[col.field] = url.split('/').pop() || url
+          uploadNames.value[col.field] = getFilenameFromUrl(url)
         }
       }
     } else {
       formData.value = buildInitialRow(props.columns)
     }
   },
-  { immediate: false }
+  { immediate: false },
 )
 
-function handleClose() {
+function onShellClosed() {
   formRef.value?.resetFields()
-  emit('update:visible', false)
+  uploadNames.value = {}
+  formData.value = buildInitialRow(props.columns)
+}
+
+function requestClose() {
+  formRef.value?.resetFields()
+  visibleModel.value = false
 }
 
 async function handleSave() {
@@ -440,16 +419,13 @@ async function handleSave() {
   const valid = await formRef.value.validate().catch(() => false)
   if (!valid) return
   emit('save', { ...formData.value })
-  emit('update:visible', false)
+  visibleModel.value = false
 }
-
-// ─── Upload helpers ───────────────────────────────────────────────────────────
 
 function handleUploadSuccess(res: any, file: any, col: DialogColumn) {
   const url: string = res?.data?.url || ''
   formData.value[col.field] = url
   uploadNames.value = { ...uploadNames.value, [col.field]: file.name }
-  // Auto-fill filename to the configured target column (if any)
   const target = col.props?.fileNameTargetField
   if (target && props.columns.some(c => c.field === target)) {
     formData.value[target] = file.name
@@ -477,18 +453,8 @@ function clearUpload(col: DialogColumn) {
 </style>
 
 <style>
-.sub-table-add-dialog-backdrop {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.5);
-}
-
-/* 强制颜色选择器面板显示在 dialog 之上 */
 .sub-table-color-popper {
-  z-index: 99999 !important;
+  z-index: var(--sub-table-nested-popper-z, 10050) !important;
 }
 
 .signature-canvas {

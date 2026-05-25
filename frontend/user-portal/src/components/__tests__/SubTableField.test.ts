@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { mergeListViewFieldColumn, isStoredFileUrl, normalizeSubTableColumns } from '../subTableAddDialogHelpers'
 
 // Unit tests for SubTableField file upload filename auto-fill logic
 // Validates: Requirements 11.2, 11.3, 11.4
@@ -130,5 +131,39 @@ describe('SubTableField fileNameTargetField', () => {
       const result = applyUploadAutoFill(row, columns, 'file', 'doc.pdf')
       expect(result).toEqual({ file: '', description: 'test' })
     })
+  })
+})
+
+describe('subListViews FILE column typing', () => {
+  it('maps dataType FILE to upload when subForm rule is absent', () => {
+    const col = mergeListViewFieldColumn(
+      { fieldName: 'file', comment: 'file', dataType: 'FILE' },
+      undefined,
+      null,
+    )
+    expect(col.type).toBe('upload')
+    expect(col.props?.action).toBe('/api/v1/upload')
+  })
+
+  it('maps field name "file" to upload even without dataType', () => {
+    const col = mergeListViewFieldColumn(
+      { fieldName: 'file', comment: 'file' },
+      { field: 'file', label: 'file', type: 'text' },
+      null,
+    )
+    expect(col.type).toBe('upload')
+  })
+
+  it('normalizes plain-text columns for Add Record dialog', () => {
+    const cols = normalizeSubTableColumns([
+      { field: 'id', label: 'id', type: 'text' },
+      { field: 'file', label: 'file', type: 'text' },
+    ])
+    expect(cols[1].type).toBe('upload')
+  })
+
+  it('detects stored upload URLs', () => {
+    expect(isStoredFileUrl('/api/v1/upload/files/ba771856-9d7b-482b-99c4-47e0f234220d.pdf?originalName=doc.pdf')).toBe(true)
+    expect(isStoredFileUrl('plain text')).toBe(false)
   })
 })

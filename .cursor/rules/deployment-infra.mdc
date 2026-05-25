@@ -56,3 +56,12 @@ envsubst < template > default.conf
 5. 冒烟验证核心功能
 
 任何步骤失败必须立即修复，不允许跳过。
+
+## Docker dev 与 K8s 配置同步
+
+修改 `deploy/environments/dev/.env`、`docker-compose.dev.yml` 或后端 `application*.yml` 中的**环境变量/可配置项**时，必须在同一次变更中同步 K8s。
+
+- **Checklist 与路径表**：[deploy/CONFIG_SYNC.md](../../deploy/CONFIG_SYNC.md)
+- **Agent 强制规则**：[docker-k8s-config-sync.mdc](docker-k8s-config-sync.mdc)
+- K8s 非敏感：`deploy/k8s/config_map/<Environment>/configmap-workflow-platform-config.yml`
+- K8s 敏感：`deploy/k8s/secret/<Environment>/secret-workflow-paltform.yml`

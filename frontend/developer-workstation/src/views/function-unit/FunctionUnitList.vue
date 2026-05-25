@@ -62,14 +62,31 @@
             {{ t('functionUnit.showingResults', { count: filteredList.length, total: store.list.length }) }}
           </span>
         </div>
-        <el-button
-          v-if="permissions.canCreate()"
-          type="primary"
-          @click="showCreateDialog = true"
-        >
-          <el-icon><Plus /></el-icon>
-          {{ t('functionUnit.create') }}
-        </el-button>
+        <div class="filter-actions">
+          <el-button
+            v-if="permissions.canCreate()"
+            @click="showImportDialog = true"
+          >
+            <el-icon><Upload /></el-icon>
+            {{ t('common.import') }}
+          </el-button>
+          <el-button
+            :disabled="store.list.length === 0"
+            :loading="exporting"
+            @click="openExportDialog"
+          >
+            <el-icon><Download /></el-icon>
+            {{ t('common.export') }}
+          </el-button>
+          <el-button
+            v-if="permissions.canCreate()"
+            type="primary"
+            @click="openCreateDialog"
+          >
+            <el-icon><Plus /></el-icon>
+            {{ t('functionUnit.create') }}
+          </el-button>
+        </div>
       </div>
 
       <!-- Loading Skeleton -->
@@ -116,7 +133,7 @@
           <el-button
             v-if="permissions.canCreate()"
             type="primary"
-            @click="showCreateDialog = true"
+            @click="openCreateDialog"
           >
             {{ t('functionUnit.create') }}
           </el-button>
@@ -147,6 +164,7 @@
           :tags="getItemTags(item.id)"
           @click="handleEdit"
           @edit="handleEdit"
+          @settings="handleSettings"
           @clone="handleClone"
           @delete="handleDelete"
         />
@@ -165,44 +183,50 @@
       </div>
     </div>
 
-    <!-- Create Dialog -->
+    <!-- Create / Settings Dialog -->
     <el-dialog
-      v-model="showCreateDialog"
-      :title="t('functionUnit.create')"
+      v-model="showFormDialog"
+      :title="formDialogTitle"
       width="500px"
+      @closed="handleFormDialogClosed"
     >
       <el-form
-        ref="createFormRef"
-        :model="createForm"
+        ref="formRef"
+        :model="basicForm"
         :rules="formRules"
         label-width="100px"
         label-position="left"
       >
         <el-form-item :label="t('functionUnit.icon')">
           <IconUploadField
-            v-model="createForm.iconId"
+            v-model="basicForm.iconId"
             size="medium"
           />
         </el-form-item>
         <el-form-item
           :label="t('functionUnit.name')"
           prop="name"
+          required
         >
-          <el-input v-model="createForm.name" />
+          <el-input
+            v-model="basicForm.name"
+            :placeholder="t('functionUnit.namePlaceholder')"
+          />
         </el-form-item>
         <el-form-item
           :label="t('functionUnit.description')"
           prop="description"
         >
           <el-input
-            v-model="createForm.description"
+            v-model="basicForm.description"
             type="textarea"
             :rows="3"
+            :placeholder="t('functionUnit.descriptionPlaceholder')"
           />
         </el-form-item>
         <el-form-item :label="t('functionUnit.tags')">
           <el-select
-            v-model="createForm.tags"
+            v-model="basicForm.tags"
             multiple
             filterable
             allow-create
@@ -220,14 +244,60 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showCreateDialog = false">
+        <el-button @click="showFormDialog = false">
           {{ t('common.cancel') }}
         </el-button>
         <el-button
           type="primary"
-          @click="handleCreate"
+          :loading="formSubmitting"
+          @click="handleFormSubmit"
         >
-          {{ t('common.confirm') }}
+          {{ formDialogMode === 'create' ? t('common.confirm') : t('common.save') }}
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- Import Dialog -->
+    <FunctionUnitImportDialog
+      v-model="showImportDialog"
+      @imported="loadData"
+    />
+
+    <!-- Export Dialog -->
+    <el-dialog
+      v-model="showExportDialog"
+      :title="t('functionUnit.exportSelectTitle')"
+      width="480px"
+      @open="initExportSelection"
+    >
+      <el-form label-width="100px">
+        <el-form-item :label="t('functionUnit.name')">
+          <el-select
+            v-model="exportTargetId"
+            filterable
+            :placeholder="t('functionUnit.exportSelectPlaceholder')"
+            style="width: 100%;"
+          >
+            <el-option
+              v-for="item in store.list"
+              :key="item.id"
+              :label="item.name"
+              :value="item.id"
+            />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showExportDialog = false">
+          {{ t('common.cancel') }}
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="exporting"
+          :disabled="exportTargetId == null"
+          @click="handleExport"
+        >
+          {{ t('common.export') }}
         </el-button>
       </template>
     </el-dialog>
@@ -240,11 +310,12 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox, type FormInstance } from 'element-plus'
-import { Search, Plus } from '@element-plus/icons-vue'
+import { Search, Plus, Upload, Download } from '@element-plus/icons-vue'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
-import type { FunctionUnitResponse } from '@/api/functionUnit'
+import { functionUnitApi, type FunctionUnitResponse } from '@/api/functionUnit'
 import IconUploadField from '@/components/icon/IconUploadField.vue'
 import FunctionUnitCard from '@/components/function-unit/FunctionUnitCard.vue'
+import FunctionUnitImportDialog from '@/components/function-unit/FunctionUnitImportDialog.vue'
 import { getTags, setTags, getAllAvailableTags, matchesTags } from '@/utils/tagStorage'
 import { isAuthenticated } from '@/api/auth'
 import { permissions } from '@/utils/permission'
@@ -256,17 +327,46 @@ const store = useFunctionUnitStore()
 
 const searchForm = reactive({ name: '', status: '', tags: [] as string[] })
 const pagination = reactive({ page: 1, size: 20 })
-const showCreateDialog = ref(false)
-const createFormRef = ref<FormInstance>()
-const createForm = reactive({ 
+const showFormDialog = ref(false)
+const showImportDialog = ref(false)
+const showExportDialog = ref(false)
+const exporting = ref(false)
+const exportTargetId = ref<number | null>(null)
+const formDialogMode = ref<'create' | 'settings'>('create')
+const settingsItemId = ref<number | null>(null)
+const formSubmitting = ref(false)
+const formRef = ref<FormInstance>()
+const basicForm = reactive({ 
   name: '', 
   description: '', 
   iconId: null as number | null,
   tags: [] as string[]
 })
+const formDialogTitle = computed(() =>
+  formDialogMode.value === 'create' ? t('functionUnit.create') : t('functionUnit.settings')
+)
 const formRules = computed(() => ({
-  name: [{ required: true, message: t('common.inputPlaceholder'), trigger: 'blur' }]
+  name: [{ required: true, message: t('functionUnit.enterName'), trigger: 'blur' }]
 }))
+
+function resetBasicForm() {
+  basicForm.name = ''
+  basicForm.description = ''
+  basicForm.iconId = null
+  basicForm.tags = []
+}
+
+function openCreateDialog() {
+  formDialogMode.value = 'create'
+  settingsItemId.value = null
+  resetBasicForm()
+  showFormDialog.value = true
+}
+
+function handleFormDialogClosed() {
+  formRef.value?.resetFields()
+  settingsItemId.value = null
+}
 
 // Get all available tags for filter dropdown
 const availableTags = computed(() => getAllAvailableTags())
@@ -317,24 +417,45 @@ function handleEdit(item: FunctionUnitResponse) {
   router.push(`/function-units/${item.id}`)
 }
 
-async function handleCreate() {
-  await createFormRef.value?.validate()
-  const result = await store.create({
-    name: createForm.name,
-    description: createForm.description,
-    iconId: createForm.iconId ?? undefined
-  })
-  // Save tags for the new function unit
-  if (result && createForm.tags.length > 0) {
-    setTags(result.id, createForm.tags)
+function handleSettings(item: FunctionUnitResponse) {
+  formDialogMode.value = 'settings'
+  settingsItemId.value = item.id
+  basicForm.name = item.name
+  basicForm.description = item.description ?? ''
+  basicForm.iconId = item.iconId ?? null
+  basicForm.tags = [...getTags(item.id)]
+  showFormDialog.value = true
+}
+
+async function handleFormSubmit() {
+  await formRef.value?.validate()
+  formSubmitting.value = true
+  try {
+    const payload = {
+      name: basicForm.name.trim(),
+      description: basicForm.description?.trim() || undefined,
+      iconId: basicForm.iconId ?? undefined
+    }
+    if (formDialogMode.value === 'create') {
+      const result = await store.create(payload)
+      if (result) {
+        setTags(result.id, basicForm.tags)
+      }
+      ElMessage.success(t('functionUnit.createSuccess'))
+    } else if (settingsItemId.value != null) {
+      await store.update(settingsItemId.value, payload)
+      setTags(settingsItemId.value, basicForm.tags)
+      ElMessage.success(t('functionUnit.saveSuccess'))
+    }
+    showFormDialog.value = false
+    resetBasicForm()
+    loadData()
+  } catch (e: unknown) {
+    const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message
+    ElMessage.error(message || t('functionUnit.saveFailed'))
+  } finally {
+    formSubmitting.value = false
   }
-  ElMessage.success(t('functionUnit.createSuccess'))
-  showCreateDialog.value = false
-  createForm.name = ''
-  createForm.description = ''
-  createForm.iconId = null
-  createForm.tags = []
-  loadData()
 }
 
 async function handleClone(item: FunctionUnitResponse) {
@@ -349,6 +470,46 @@ async function handleDelete(item: FunctionUnitResponse) {
   await store.remove(item.id)
   ElMessage.success(t('functionUnit.deleteSuccess'))
   loadData()
+}
+
+function openExportDialog() {
+  if (store.list.length === 0) return
+  showExportDialog.value = true
+}
+
+function initExportSelection() {
+  if (filteredList.value.length === 1) {
+    exportTargetId.value = filteredList.value[0].id
+  } else if (store.list.length === 1) {
+    exportTargetId.value = store.list[0].id
+  } else {
+    exportTargetId.value = null
+  }
+}
+
+async function handleExport() {
+  if (exportTargetId.value == null) return
+  const target = store.list.find(item => item.id === exportTargetId.value)
+  exporting.value = true
+  try {
+    const response = await functionUnitApi.exportFunctionUnit(exportTargetId.value)
+    const blob = new Blob([response as BlobPart], { type: 'application/zip' })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `function-unit-${target?.name || exportTargetId.value}.zip`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+    ElMessage.success(t('functionUnit.exportSuccess'))
+    showExportDialog.value = false
+  } catch (e: unknown) {
+    const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message
+    ElMessage.error(message || t('functionUnit.exportFailed'))
+  } finally {
+    exporting.value = false
+  }
 }
 
 onMounted(() => {
@@ -374,6 +535,13 @@ onMounted(() => {
 }
 
 .filter-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.filter-actions {
   display: flex;
   align-items: center;
   gap: 12px;

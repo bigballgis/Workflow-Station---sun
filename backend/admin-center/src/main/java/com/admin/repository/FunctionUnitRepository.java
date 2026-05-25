@@ -99,7 +99,12 @@ public interface FunctionUnitRepository extends JpaRepository<FunctionUnit, Stri
     List<FunctionUnit> findByCodeAndEnabled(String code, Boolean enabled);
 
     /**
-     * 指定代码下某状态的全部版本（用于启用校验：必须是已部署中的最高语义版本）
+     * 排除指定状态分页查找功能单元
+     */
+    Page<FunctionUnit> findByStatusNot(FunctionUnitStatus status, Pageable pageable);
+
+    /**
+     * 根据代码和状态查找功能单元
      */
     List<FunctionUnit> findByCodeAndStatus(String code, FunctionUnitStatus status);
     

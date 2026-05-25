@@ -18,7 +18,7 @@
     </div>
 
     <div
-      v-else-if="item.kind === 'subTable' && item.binding.columns?.length && isDualPortalSubTablePreview(item.binding)"
+      v-else-if="item.kind === 'subTable' && hasSubTablePreviewSurface(item.binding) && isDualPortalSubTablePreview(item.binding)"
       class="sub-table-preview-item"
     >
       <div class="sub-preview-header">
@@ -38,6 +38,7 @@
         <el-tab-pane
           :label="t('form.portalViews.toDoDisplay')"
           name="todo"
+          lazy
         >
           <SubTableField
             :config="{ title: item.binding.tableName, columns: item.binding.columns }"
@@ -45,6 +46,8 @@
             :editable="true"
             :form-rule="item.binding.rule"
             :form-option="item.binding.option"
+            :preview-inline-form-rule="inlineFormBelowForBinding(item.binding).rule"
+            :preview-inline-form-option="inlineFormBelowForBinding(item.binding).option"
             :preview-show-form-below="item.binding.portalViews?.assigneeTodo === 'formBelowTable'"
             :preview-lookup-compact="false"
             @update:model-value="(rows: any[]) => updateTableRows(item.binding.bindingId, rows)"
@@ -53,6 +56,7 @@
         <el-tab-pane
           :label="t('form.portalViews.myRequestsDisplay')"
           name="myRequest"
+          lazy
         >
           <SubTableField
             :config="{ title: item.binding.tableName, columns: item.binding.columns }"
@@ -82,8 +86,8 @@
         <span class="sub-preview-title">{{ item.binding.tableName }}</span>
       </div>
       <SubTableField
-        v-if="item.binding.columns && item.binding.columns.length"
-        :config="{ title: item.binding.tableName, columns: item.binding.columns }"
+        v-if="hasSubTablePreviewSurface(item.binding)"
+        :config="{ title: item.binding.tableName, columns: item.binding.columns || [] }"
         :model-value="previewTableRows[item.binding.bindingId]"
         :editable="true"
         :form-rule="item.binding.rule"
@@ -165,10 +169,12 @@ import { computed, reactive } from 'vue'
 import { useI18n } from 'vue-i18n'
 import SubTableField from './SubTableField.vue'
 import LookupPreview from './LookupPreview.vue'
-import type { FormPreviewItem } from './formPreviewTypes'
+import type { FormPreviewItem, PreviewSubTableBinding } from './formPreviewTypes'
 import {
+  hasSubTablePreviewSurface,
   initiatorPreviewIsSummary,
   isDualPortalSubTablePreview,
+  resolvePreviewInlineFormBelowDesign,
 } from './formPreviewTypes'
 
 defineOptions({ name: 'FormPreviewItems' })
@@ -201,6 +207,10 @@ const previewModel = computed({
   get: () => props.previewData,
   set: (value: Record<string, any>) => emit('update:previewData', value),
 })
+
+function inlineFormBelowForBinding(binding: PreviewSubTableBinding) {
+  return resolvePreviewInlineFormBelowDesign(binding)
+}
 
 function updateTableRows(bindingId: number, rows: any[]) {
   emit('update:previewTableRows', {

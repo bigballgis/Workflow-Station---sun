@@ -43,6 +43,9 @@ class FunctionPackageValidationProperties {
         accessRepository = Mockito.mock(FunctionUnitAccessRepository.class);
         component = new FunctionUnitManagerComponent(
                 functionUnitRepository, dependencyRepository, contentRepository, accessRepository,
+                Mockito.mock(com.admin.component.FunctionUnitValidationComponent.class),
+                Mockito.mock(com.admin.component.FunctionUnitPackageParser.class),
+                Mockito.mock(com.admin.repository.ActionDefinitionRepository.class),
                 Mockito.mock(org.springframework.jdbc.core.JdbcTemplate.class),
                 Mockito.mock(com.fasterxml.jackson.databind.ObjectMapper.class),
                 Mockito.mock(org.springframework.web.client.RestTemplate.class));

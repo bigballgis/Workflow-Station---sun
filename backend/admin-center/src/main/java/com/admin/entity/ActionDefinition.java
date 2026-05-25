@@ -2,8 +2,11 @@ package com.admin.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 
 /**
  * Action Definition Entity (Production)
@@ -33,8 +36,9 @@ public class ActionDefinition {
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
     
-    @Column(name = "config_json", columnDefinition = "JSONB")
-    private String configJson;
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "config_json", columnDefinition = "jsonb")
+    private Map<String, Object> configJson;
     
     @Column(name = "icon", length = 50)
     private String icon;

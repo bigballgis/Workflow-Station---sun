@@ -170,12 +170,12 @@ foreach ($f in $meetingParticipantScripts) {
     if (-not (Exec-Sql -File $path -Desc (Split-Path $f -Leaf))) { exit 1 }
 }
 
-Write-Step "Step 5d/6: Loading Function Unit kk..."
-$kkInit = Join-Path $ScriptDir "17-kk/00-init-kk.sql"
-if (Test-Path $kkInit) {
-    if (-not (Exec-Sql -File $kkInit -Desc "00-init-kk.sql")) { exit 1 }
+Write-Step "Step 5d/6: Loading Function Unit Multi-Instance Subtask Demo..."
+$miSubtaskDemoInit = Join-Path $ScriptDir "17-Multi-Instance-Subtask-Demo/00-init-kk.sql"
+if (Test-Path $miSubtaskDemoInit) {
+    if (-not (Exec-Sql -File $miSubtaskDemoInit -Desc "00-init-kk.sql")) { exit 1 }
 } else {
-    Write-Host "  SKIP: kk init script not found at $kkInit" -ForegroundColor Yellow
+    Write-Host "  SKIP: Multi-Instance Subtask Demo init script not found at $miSubtaskDemoInit" -ForegroundColor Yellow
 }
 
 Write-Step "Step 6/6: Finished."
@@ -186,6 +186,6 @@ Write-Host "  Database Initialization Complete!" -ForegroundColor Green
 Write-Host "=========================================" -ForegroundColor Green
 Write-Host "  Login: admin / admin123  (test: 44027893 / admin123)" -ForegroundColor White
 Write-Host "  Change password after first login!" -ForegroundColor Yellow
-Write-Host "  Demo function units: Platform Showcase fu-20260403-a1b2c4; Digital Lending V2 (EN) fu-20260403-a1b2c6; Meeting Participant fu-20260403-a1b2c5; kk fu-20260422-23tfag" -ForegroundColor White
+Write-Host "  Demo function units: Platform Showcase fu-20260403-a1b2c4; Digital Lending V2 (EN) fu-20260403-a1b2c6; Meeting Participant fu-20260403-a1b2c5; Multi-Instance Subtask Demo fu-20260422-23tfag" -ForegroundColor White
 Write-Host "  E2E users (password=password): e2e_zhangwei e2e_lina e2e_wangfang e2e_zhaomin e2e_sunqiang e2e_zhoujie e2e_wugang" -ForegroundColor White
 Write-Host "=========================================" -ForegroundColor Green

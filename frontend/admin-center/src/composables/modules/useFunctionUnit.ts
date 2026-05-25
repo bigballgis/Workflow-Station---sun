@@ -1,23 +1,24 @@
 /**
  * 功能单元业务逻辑 composable
- * 
+ *
  * 封装 function-unit 页面的所有 API 调用和业务逻辑。
  * 组件仅保留 template + 调用此 composable。
  */
 
-import { ref, reactive, computed, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { logger } from '@/utils/logger'
 import { notifyConfirm, notifyError, notifySuccess, notifyWarning } from '@/utils/notify'
 import { storeToRefs } from 'pinia'
-import { functionUnitApi, type FunctionUnit, type Deployment, type DeletePreviewResponse } from '@/api/functionUnit'
+import { functionUnitApi, type FunctionUnit, type Deployment, type DeletePreviewResponse, type FunctionUnitValidationResult } from '@/api/functionUnit'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
+import { ApiError } from '@/types/errors'
 import { pickHttpErrorBodyMessage } from '@/utils/httpErrorMessage'
 
 export function useFunctionUnit() {
   const { t } = useI18n()
   const store = useFunctionUnitStore()
-  const { functionUnits, deployments, loading } = storeToRefs(store)
+  const { functionUnits, archivedFunctionUnits, deployments, loading, archivedLoading } = storeToRefs(store)
 
   // ==================== State ====================
 
@@ -25,31 +26,33 @@ export function useFunctionUnit() {
   const deploymentsLoading = ref(false)
   const versionsLoading = ref(false)
   const importLoading = ref(false)
+  const deployLoadingId = ref<string | null>(null)
+  const validateLoadingId = ref<string | null>(null)
+  const restoreLoadingId = ref<string | null>(null)
 
   const versionList = ref<FunctionUnit[]>([])
   const searchKeyword = ref('')
+  const archiveSearchKeyword = ref('')
   const selectedUnits = ref<FunctionUnit[]>([])
 
   // Dialog visibility
   const showImportDialog = ref(false)
-  const showDeployDialogVisible = ref(false)
   const showAccessDialogVisible = ref(false)
   const showDeleteDialogVisible = ref(false)
   const showVersionsDialogVisible = ref(false)
-  const showLogDialogVisible = ref(false)
   const showCompareDialogVisible = ref(false)
 
   // Current selections
   const currentUnit = ref<FunctionUnit | null>(null)
   const deleteTargetUnit = ref<FunctionUnit | null>(null)
   const deletePreview = ref<DeletePreviewResponse | null>(null)
-  const logDeployment = ref<Deployment | null>(null)
   const compareVersion = ref<FunctionUnit | null>(null)
 
-  // Forms
-  const deployForm = reactive({ environment: 'DEVELOPMENT' as const, strategy: 'FULL' as const })
   const importFile = ref<File | null>(null)
   const importUploadRef = ref<any>(null)
+
+  const showValidateResultDialog = ref(false)
+  const validateResult = ref<FunctionUnitValidationResult | null>(null)
 
   // ==================== Computed ====================
 
@@ -57,6 +60,16 @@ export function useFunctionUnit() {
     const keyword = searchKeyword.value.trim().toLowerCase()
     if (!keyword) return functionUnits.value
     return functionUnits.value.filter(unit =>
+      (unit.name?.toLowerCase().includes(keyword)) ||
+      (unit.code?.toLowerCase().includes(keyword)) ||
+      (unit.description?.toLowerCase().includes(keyword))
+    )
+  })
+
+  const filteredArchivedFunctionUnits = computed(() => {
+    const keyword = archiveSearchKeyword.value.trim().toLowerCase()
+    if (!keyword) return archivedFunctionUnits.value
+    return archivedFunctionUnits.value.filter(unit =>
       (unit.name?.toLowerCase().includes(keyword)) ||
       (unit.code?.toLowerCase().includes(keyword)) ||
       (unit.description?.toLowerCase().includes(keyword))
@@ -79,6 +92,15 @@ export function useFunctionUnit() {
     }
   }
 
+  const fetchArchivedFunctionUnits = async () => {
+    try {
+      await store.fetchArchivedFunctionUnits()
+    } catch (e) {
+      logger.error('functionUnit', 'Failed to load archived function units:', e)
+      notifyError(t('functionUnit.loadFailed'))
+    }
+  }
+
   const fetchDeployments = async () => {
     deploymentsLoading.value = true
     try {
@@ -90,17 +112,12 @@ export function useFunctionUnit() {
     }
   }
 
-  // Watch tab for deployments lazy load
   watch(activeTab, (tab) => {
     if (tab === 'deployments') fetchDeployments()
+    if (tab === 'archive') fetchArchivedFunctionUnits()
   })
 
-  // ==================== Dialog Actions (UI helpers) ====================
-
-  const showDeployDialog = (unit: FunctionUnit) => {
-    currentUnit.value = unit
-    showDeployDialogVisible.value = true
-  }
+  // ==================== Dialog Actions ====================
 
   const showAccessDialog = (unit: FunctionUnit) => {
     currentUnit.value = unit
@@ -121,18 +138,84 @@ export function useFunctionUnit() {
     }
   }
 
+  // ==================== Validate ====================
+
+  const handleValidate = async (unit: FunctionUnit) => {
+    validateLoadingId.value = unit.id
+    try {
+      const result = await functionUnitApi.validateUnit(unit.id)
+      validateResult.value = result
+      showValidateResultDialog.value = true
+      if (result.valid) {
+        notifySuccess(t('functionUnit.validateSuccess'))
+        await fetchFunctionUnits()
+      }
+    } catch (e: unknown) {
+      logger.error('functionUnit', 'Failed to validate:', e)
+      // HTTP 错误已由 request 拦截器 toast；此处仅补充 ApiError 文案（拦截器已展示则不再重复）
+      if (!(e instanceof ApiError)) {
+        const msg = pickHttpErrorBodyMessage((e as { response?: { data?: unknown } })?.response?.data)
+        notifyError(msg || t('functionUnit.validateFailed'))
+      }
+    } finally {
+      validateLoadingId.value = null
+    }
+  }
+
   // ==================== Deploy ====================
 
-  const handleDeploy = async () => {
-    if (!currentUnit.value) return
+  const handleDeploy = async (unit: FunctionUnit) => {
     try {
-      await functionUnitApi.createDeployment(currentUnit.value.id, deployForm.environment, deployForm.strategy)
-      notifySuccess(t('functionUnit.deploySubmitted'))
-      showDeployDialogVisible.value = false
-      fetchFunctionUnits()
-    } catch (e) {
-      logger.error('functionUnit', 'Failed to create deployment:', e)
-      notifyError(t('functionUnit.deployFailed'))
+      await notifyConfirm(
+        t('functionUnit.deployConfirmMessage', { name: unit.name }),
+        t('functionUnit.confirmDeploy'),
+        { type: 'warning' }
+      )
+    } catch {
+      return
+    }
+
+    deployLoadingId.value = unit.id
+    try {
+      await functionUnitApi.deploy(unit.id)
+      notifySuccess(t('functionUnit.deploySuccess'))
+      await fetchFunctionUnits()
+      await fetchDeployments()
+    } catch (e: unknown) {
+      logger.error('functionUnit', 'Failed to deploy:', e)
+      const msg = pickHttpErrorBodyMessage((e as { response?: { data?: unknown } })?.response?.data)
+      notifyError(msg || t('functionUnit.deployFailed'))
+    } finally {
+      deployLoadingId.value = null
+    }
+  }
+
+  // ==================== Restore ====================
+
+  const handleRestore = async (unit: FunctionUnit) => {
+    try {
+      await notifyConfirm(
+        t('functionUnit.restoreConfirmMessage', { name: unit.name }),
+        t('functionUnit.restore'),
+        { type: 'warning' }
+      )
+    } catch {
+      return
+    }
+
+    restoreLoadingId.value = unit.id
+    try {
+      await functionUnitApi.restore(unit.id)
+      notifySuccess(t('functionUnit.restoreSuccess'))
+      archivedFunctionUnits.value = archivedFunctionUnits.value.filter(u => u.code !== unit.code)
+      await fetchArchivedFunctionUnits()
+      await fetchFunctionUnits()
+    } catch (e: unknown) {
+      logger.error('functionUnit', 'Failed to restore:', e)
+      const msg = pickHttpErrorBodyMessage((e as { response?: { data?: unknown } })?.response?.data)
+      notifyError(msg || t('functionUnit.restoreFailed'))
+    } finally {
+      restoreLoadingId.value = null
     }
   }
 
@@ -188,7 +271,7 @@ export function useFunctionUnit() {
     }
   }
 
-  // ==================== Delete ====================
+  // ==================== Delete (Archive) ====================
 
   const handleDeleteClick = async (unit: FunctionUnit) => {
     deleteTargetUnit.value = unit
@@ -204,12 +287,13 @@ export function useFunctionUnit() {
     if (!deleteTargetUnit.value) return
     try {
       await store.deleteFunctionUnit(deleteTargetUnit.value.id)
-      notifySuccess(t('functionUnit.deleteSuccess'))
+      notifySuccess(t('functionUnit.archiveSuccess'))
       showDeleteDialogVisible.value = false
       fetchFunctionUnits()
-    } catch {
-      logger.error('functionUnit', 'Failed to delete:', e)
-      notifyError(e.response?.data?.message || t('functionUnit.deleteFailed'))
+    } catch (e: unknown) {
+      logger.error('functionUnit', 'Failed to archive:', e)
+      const msg = pickHttpErrorBodyMessage((e as { response?: { data?: unknown } })?.response?.data)
+      notifyError(msg || t('functionUnit.deleteFailed'))
     }
   }
 
@@ -244,22 +328,13 @@ export function useFunctionUnit() {
   const handleBatchDelete = async () => {
     const ids = selectedUnits.value.map(u => u.id)
     try {
-      await notifyConfirm(t('functionUnit.batchDeleteConfirm', { count: ids.length }), t('common.confirm'), { type: 'warning' })
+      await notifyConfirm(t('functionUnit.batchArchiveConfirm', { count: ids.length }), t('common.confirm'), { type: 'warning' })
       await store.batchDelete(ids)
-      notifySuccess(t('functionUnit.deleteSuccess'))
+      notifySuccess(t('functionUnit.archiveSuccess'))
       fetchFunctionUnits()
     } catch (e) {
       if ((e as string) !== 'cancel') notifyError(t('common.failed'))
     }
-  }
-
-  // ==================== Deployment Log ====================
-
-  const handleViewLog = async (deployment: Deployment) => {
-    try {
-      logDeployment.value = await functionUnitApi.getDeployment(deployment.id)
-      showLogDialogVisible.value = true
-    } catch { notifyError(t('common.failed')) }
   }
 
   // ==================== Version Compare ====================
@@ -270,6 +345,19 @@ export function useFunctionUnit() {
   }
 
   // ==================== Import ====================
+
+  const resetImportDialog = () => {
+    importFile.value = null
+  }
+
+  const openImportDialog = () => {
+    resetImportDialog()
+    showImportDialog.value = true
+  }
+
+  watch(showImportDialog, (open) => {
+    if (!open) resetImportDialog()
+  })
 
   const handleImportFileChange = (file: any) => {
     importFile.value = file?.raw || null
@@ -282,16 +370,26 @@ export function useFunctionUnit() {
       const reader = new FileReader()
       reader.onload = async () => {
         const base64 = (reader.result as string).split(',')[1]
-        const result = await functionUnitApi.import(importFile.value!.name, base64)
-        if (result.success) {
-          notifySuccess(t('functionUnit.importSuccess'))
-          showImportDialog.value = false
-          importFile.value = null
-          fetchFunctionUnits()
-        } else {
-          notifyError(result.message || t('functionUnit.importFailed'))
+        try {
+          const result = await functionUnitApi.import({
+            fileName: importFile.value!.name,
+            fileContent: base64,
+            overwriteExisting: true,
+          })
+          if (result.success) {
+            notifySuccess(t('functionUnit.importSuccess'))
+            showImportDialog.value = false
+            resetImportDialog()
+            fetchFunctionUnits()
+          } else {
+            notifyError(result.errorMessage || t('functionUnit.importFailed'))
+          }
+        } catch (e: unknown) {
+          const msg = pickHttpErrorBodyMessage((e as { response?: { data?: unknown } })?.response?.data)
+          notifyError(msg || t('functionUnit.importFailed'))
+        } finally {
+          importLoading.value = false
         }
-        importLoading.value = false
       }
       reader.readAsDataURL(importFile.value)
     } catch {
@@ -300,46 +398,46 @@ export function useFunctionUnit() {
     }
   }
 
-  // ==================== Return ====================
-
   return {
-    // State
     activeTab,
     loading,
+    archivedLoading,
     deploymentsLoading,
     versionsLoading,
     importLoading,
+    deployLoadingId,
+    validateLoadingId,
+    restoreLoadingId,
     functionUnits,
+    archivedFunctionUnits,
     deployments,
     versionList,
     searchKeyword,
+    archiveSearchKeyword,
     filteredFunctionUnits,
+    filteredArchivedFunctionUnits,
     selectedUnits,
-    // Dialog visibility
     showImportDialog,
-    showDeployDialogVisible,
     showAccessDialogVisible,
     showDeleteDialogVisible,
     showVersionsDialogVisible,
-    showLogDialogVisible,
     showCompareDialogVisible,
-    // Current selections
     currentUnit,
     deleteTargetUnit,
     deletePreview,
-    logDeployment,
     compareVersion,
-    // Forms
-    deployForm,
     importFile,
     importUploadRef,
-    // Methods
+    showValidateResultDialog,
+    validateResult,
     fetchFunctionUnits,
+    fetchArchivedFunctionUnits,
     fetchDeployments,
-    showDeployDialog,
     showAccessDialog,
     showVersions,
+    handleValidate,
     handleDeploy,
+    handleRestore,
     handleRollback,
     handleEnabledChange,
     handleDeleteClick,
@@ -348,8 +446,8 @@ export function useFunctionUnit() {
     handleBatchEnable,
     handleBatchDisable,
     handleBatchDelete,
-    handleViewLog,
     handleCompareVersion,
+    openImportDialog,
     handleImportFileChange,
     handleStartImport,
   }

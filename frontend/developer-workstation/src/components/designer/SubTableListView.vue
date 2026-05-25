@@ -286,10 +286,10 @@
               </el-divider>
               <div class="inline-form-below-body">
                 <form-create
-                  v-if="formRule && formRule.length"
+                  v-if="inlineFormBelowDesign.rule.length"
                   v-model="inlineFormPreviewData"
                   locale="en"
-                  :rule="formRule"
+                  :rule="inlineFormBelowDesign.rule"
                   :option="inlineFormPreviewOption"
                 />
                 <el-empty
@@ -377,6 +377,7 @@ import { linkFormComponentApi } from '@/api/linkFormComponent'
 import SubTablePreviewDialog from './sub-table-list/SubTablePreviewDialog.vue'
 import SubTableColumnConfigDialog from './sub-table-list/SubTableColumnConfigDialog.vue'
 import LookupPreview from './LookupPreview.vue'
+import { resolveInlineFormBelowDesign } from './formPreviewTypes'
 
 interface LinkFormComponentInfo {
   id: number
@@ -536,8 +537,19 @@ const linkFormOption = computed(() => {
 })
 
 /** Read-only form-create option for the assignee "form below table" strip in dual list preview. */
+const inlineFormBelowDesign = computed(() =>
+  resolveInlineFormBelowDesign({
+    ownBindingId: props.binding.bindingId,
+    ownRule: props.formRule || [],
+    ownOption: props.formOption,
+    columns: viewColumns.value,
+    portalViews: props.portalViews,
+    resolveSubTableFormDesign: props.resolveSubTableFormDesign,
+  }),
+)
+
 const inlineFormPreviewOption = computed(() => {
-  const saved = { ...((props.formOption || {}) as Record<string, unknown>) }
+  const saved = { ...((inlineFormBelowDesign.value.option || props.formOption || {}) as Record<string, unknown>) }
   delete saved.title
   return {
     showMsg: true,

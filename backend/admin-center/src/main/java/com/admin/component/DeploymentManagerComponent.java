@@ -5,12 +5,14 @@ import com.admin.entity.FunctionUnitApproval;
 import com.admin.entity.FunctionUnitDeployment;
 import com.admin.enums.*;
 import com.admin.exception.AdminBusinessException;
+import com.admin.dto.response.DeploymentInfo;
 import com.admin.exception.DeploymentFailedException;
 import com.admin.exception.DeploymentNotFoundException;
 import com.admin.exception.FunctionUnitNotFoundException;
 import com.admin.repository.FunctionUnitApprovalRepository;
 import com.admin.repository.FunctionUnitDeploymentRepository;
 import com.admin.repository.FunctionUnitRepository;
+import com.admin.service.UserReferenceResolver;
 import com.platform.messaging.support.NotificationDispatchHelper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,6 +38,7 @@ public class DeploymentManagerComponent {
     private final FunctionUnitDeploymentRepository deploymentRepository;
     private final FunctionUnitApprovalRepository approvalRepository;
     private final NotificationDispatchHelper notificationDispatchHelper;
+    private final UserReferenceResolver userReferenceResolver;
     
     // 需要审批的环境
     private static final Set<DeploymentEnvironment> APPROVAL_REQUIRED_ENVIRONMENTS = 
@@ -283,6 +286,12 @@ public class DeploymentManagerComponent {
             
             deployment.setStatus(DeploymentStatus.SUCCESS);
             deployment.setCompletedAt(Instant.now());
+            if (deployment.getDeployedAt() == null) {
+                deployment.setDeployedAt(deployment.getCompletedAt());
+            }
+            if (deployment.getDeployedBy() == null || deployment.getDeployedBy().isBlank()) {
+                deployment.setDeployedBy(deployment.getCreatedBy());
+            }
             deployment = deploymentRepository.save(deployment);
             
             // 更新功能单元状态
@@ -442,8 +451,24 @@ public class DeploymentManagerComponent {
      * 获取所有部署记录（全局分页查询，不限定功能单元）
      * Req 15.2
      */
-    public Page<FunctionUnitDeployment> listAllDeployments(Pageable pageable) {
-        return deploymentRepository.findByConditions(null, null, null, pageable);
+    public Page<DeploymentInfo> listAllDeployments(Pageable pageable) {
+        Page<DeploymentInfo> page = deploymentRepository.findByConditions(null, null, null, pageable)
+                .map(DeploymentInfo::fromEntity);
+        enrichDeployedByUsernames(page.getContent());
+        return page;
+    }
+
+    private void enrichDeployedByUsernames(List<DeploymentInfo> items) {
+        if (items == null || items.isEmpty()) {
+            return;
+        }
+        var cache = userReferenceResolver.resolveUsernames(
+                items.stream().map(DeploymentInfo::getDeployedBy).toList());
+        for (DeploymentInfo item : items) {
+            if (item.getDeployedBy() != null) {
+                item.setDeployedBy(userReferenceResolver.resolveWithCache(item.getDeployedBy(), cache));
+            }
+        }
     }
     
     /**

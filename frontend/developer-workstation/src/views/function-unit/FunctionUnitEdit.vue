@@ -170,6 +170,24 @@
             :placeholder="t('functionUnit.descriptionPlaceholder')"
           />
         </el-form-item>
+        <el-form-item :label="t('functionUnit.tags')">
+          <el-select
+            v-model="editForm.tags"
+            multiple
+            filterable
+            allow-create
+            default-first-option
+            :placeholder="t('functionUnit.selectTags')"
+            style="width: 100%;"
+          >
+            <el-option
+              v-for="tag in availableTags"
+              :key="tag"
+              :label="tag"
+              :value="tag"
+            />
+          </el-select>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="showEditDialog = false">
@@ -415,6 +433,7 @@ import VersionManager from '@/components/version/VersionManager.vue'
 import IconPreview from '@/components/icon/IconPreview.vue'
 import IconUploadField from '@/components/icon/IconUploadField.vue'
 import AiPanel from '@/components/ai/AiPanel.vue'
+import { getTags, setTags, getAllAvailableTags } from '@/utils/tagStorage'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -443,8 +462,11 @@ const deployForm = reactive({
 const editForm = reactive({
   name: '',
   description: '',
-  iconId: undefined as number | null | undefined
+  iconId: undefined as number | null | undefined,
+  tags: [] as string[]
 })
+
+const availableTags = computed(() => getAllAvailableTags())
 
 const statusTagType = (status?: string): 'primary' | 'success' | 'warning' | 'info' | 'danger' => {
   const map: Record<string, 'primary' | 'success' | 'warning' | 'info' | 'danger'> = { DRAFT: 'info', PUBLISHED: 'success', ARCHIVED: 'warning' }
@@ -464,6 +486,7 @@ function openEditDialog() {
   editForm.name = store.current?.name || ''
   editForm.description = store.current?.description || ''
   editForm.iconId = store.current?.icon?.id ?? undefined
+  editForm.tags = [...getTags(functionUnitId.value)]
   showEditDialog.value = true
 }
 
@@ -475,10 +498,11 @@ async function handleSaveEdit() {
   saving.value = true
   try {
     await store.update(functionUnitId.value, {
-      name: editForm.name,
-      description: editForm.description,
+      name: editForm.name.trim(),
+      description: editForm.description?.trim() || undefined,
       iconId: editForm.iconId ?? undefined
     })
+    setTags(functionUnitId.value, editForm.tags)
     ElMessage.success(t('functionUnit.saveSuccess'))
     showEditDialog.value = false
     store.fetchById(functionUnitId.value)

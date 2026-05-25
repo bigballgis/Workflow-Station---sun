@@ -222,6 +222,8 @@ services:
       SSO_REDIRECT_DW_HTTP_PREFIX: ${SSO_REDIRECT_DW_HTTP_PREFIX:-http://localhost:3000/dev/sso/callback}
       SUPERSET_HOST: ${SUPERSET_HOST:-http://superset-final:8088}
       SUPERSET_DB_SCHEMA: ${SUPERSET_DB_SCHEMA:-public}
+      # Admin UI「重置密码」后的明文密码（仅 dev 默认 password；生产务必在 .env 中改为强密码）
+      USER_RESET_PASSWORD: ${USER_RESET_PASSWORD:-password}
       # AgentNdjsonLog：与下方 volumes 的 /app/logs 对齐，宿主机见 deploy/environments/dev/logs/debug-864cd4.log
       WORKFLOW_DEBUG_NDJSON_PATH: ${WORKFLOW_DEBUG_NDJSON_PATH:-/app/logs/debug-864cd4.log}
     volumes:

@@ -80,6 +80,15 @@
 
 - `developer-workstation-frontend.yaml`
 
+## Docker 与 K8s 配置同步
+
+本地 Docker Compose（`deploy/environments/dev/`）与本文 ConfigMap/Secret 使用**同一套环境变量名**。修改 dev 的 `.env` 或 `docker-compose.dev.yml` 时，请同步：
+
+- 非敏感：`config_map/<Environment>/configmap-workflow-platform-config.yml`
+- 敏感：`secret/<Environment>/secret-workflow-paltform.yml`
+
+完整 checklist 见 **[deploy/CONFIG_SYNC.md](../CONFIG_SYNC.md)**。
+
 ## 说明
 
 如果需要：

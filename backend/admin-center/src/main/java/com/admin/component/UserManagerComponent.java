@@ -22,6 +22,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -48,6 +49,10 @@ public class UserManagerComponent {
     private final PasswordHistoryRepository passwordHistoryRepository;
     private final PasswordEncoder passwordEncoder;
     private final com.admin.repository.UserBusinessUnitRepository userBusinessUnitRepository;
+
+    /** From env USER_RESET_PASSWORD (see application.yml); not logged or returned in API. */
+    @Value("${admin.user.reset-password}")
+    private String userResetPassword;
     
     private static final Pattern EMAIL_PATTERN = Pattern.compile(
             "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$");
@@ -60,18 +65,24 @@ public class UserManagerComponent {
     public UserCreateResult createUser(UserCreateRequest request) {
         log.info("Creating user: {}", request.getUsername());
         
-        // 验证用户名唯一性
-        validateUsernameUnique(request.getUsername());
-        
-        // 验证邮箱格式
         validateEmailFormat(request.getEmail());
-        
-        // 验证邮箱唯一性
+
+        // 软删除用户复用同一行（username 有 DB 唯一约束，不能 INSERT 新记录）
+        Optional<User> existingByUsername = userRepository.findByUsername(request.getUsername());
+        if (existingByUsername.isPresent()) {
+            User existing = existingByUsername.get();
+            if (Boolean.TRUE.equals(existing.getDeleted())) {
+                return reactivateSoftDeletedUser(existing, request);
+            }
+            throw new UsernameAlreadyExistsException(request.getUsername());
+        }
+
+        validateUsernameUnique(request.getUsername());
+
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new AdminBusinessException("EMAIL_EXISTS", "Email already in use: " + request.getEmail());
         }
         
-        // 创建用户 - 使用 String 类型 ID
         String encodedPassword = passwordEncoder.encode(request.getInitialPassword());
         String userId = UUID.randomUUID().toString();
         
@@ -87,25 +98,60 @@ public class UserManagerComponent {
                 .mustChangePassword(true)
                 .passwordExpiredAt(LocalDateTime.now().plusDays(90))
                 .failedLoginCount(0)
+                .deleted(false)
                 .build();
         
         user = userRepository.save(user);
-        
-        // 如果指定了业务单元，创建用户-业务单元关联
-        if (request.getBusinessUnitId() != null && !request.getBusinessUnitId().isEmpty()) {
-            UserBusinessUnit userBusinessUnit = UserBusinessUnit.builder()
-                    .id(UUID.randomUUID().toString())
-                    .userId(userId)
-                    .businessUnitId(request.getBusinessUnitId())
-                    .build();
-            userBusinessUnitRepository.save(userBusinessUnit);
-        }
-        
-        // 保存密码历史
+        applyBusinessUnitOnCreate(user.getId(), request.getBusinessUnitId());
         savePasswordHistory(userId, encodedPassword);
         
         log.info("User created successfully: {}", userId);
         return UserCreateResult.success(userId, request.getUsername());
+    }
+
+    /**
+     * 复用软删除用户记录并恢复为活跃账号（保留原 userId，满足 username 唯一约束）
+     */
+    private UserCreateResult reactivateSoftDeletedUser(User user, UserCreateRequest request) {
+        log.info("Reactivating soft-deleted user: {} ({})", user.getId(), user.getUsername());
+
+        if (userRepository.existsByEmailExcludingUser(request.getEmail(), user.getId())) {
+            throw new AdminBusinessException("EMAIL_EXISTS", "Email already in use: " + request.getEmail());
+        }
+
+        String encodedPassword = passwordEncoder.encode(request.getInitialPassword());
+        user.setPasswordHash(encodedPassword);
+        user.setEmail(request.getEmail());
+        user.setFullName(request.getFullName());
+        user.setEmployeeId(request.getEmployeeId());
+        user.setPosition(request.getPosition());
+        user.setStatus(UserStatus.ACTIVE);
+        user.setMustChangePassword(true);
+        user.setPasswordExpiredAt(LocalDateTime.now().plusDays(90));
+        user.setFailedLoginCount(0);
+        user.setLockedUntil(null);
+        user.setDeleted(false);
+        user.setDeletedAt(null);
+        user.setDeletedBy(null);
+
+        userRepository.save(user);
+        applyBusinessUnitOnCreate(user.getId(), request.getBusinessUnitId());
+        savePasswordHistory(user.getId(), encodedPassword);
+
+        log.info("User reactivated successfully: {}", user.getId());
+        return UserCreateResult.success(user.getId(), user.getUsername());
+    }
+
+    private void applyBusinessUnitOnCreate(String userId, String businessUnitId) {
+        if (businessUnitId != null && !businessUnitId.isEmpty()) {
+            userBusinessUnitRepository.deleteByUserId(userId);
+            UserBusinessUnit userBusinessUnit = UserBusinessUnit.builder()
+                    .id(UUID.randomUUID().toString())
+                    .userId(userId)
+                    .businessUnitId(businessUnitId)
+                    .build();
+            userBusinessUnitRepository.save(userBusinessUnit);
+        }
     }
     
     /**
@@ -121,7 +167,7 @@ public class UserManagerComponent {
         
         if (request.getEmail() != null && !request.getEmail().equals(user.getEmail())) {
             validateEmailFormat(request.getEmail());
-            if (userRepository.existsByEmail(request.getEmail())) {
+            if (userRepository.existsByEmailExcludingUser(request.getEmail(), userId)) {
                 throw new AdminBusinessException("EMAIL_EXISTS", "Email already in use: " + request.getEmail());
             }
             user.setEmail(request.getEmail());
@@ -220,8 +266,11 @@ public class UserManagerComponent {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException(userId));
         
-        String newPassword = generateRandomPassword();
-        String encodedPassword = passwordEncoder.encode(newPassword);
+        if (userResetPassword == null || userResetPassword.isBlank()) {
+            throw new AdminBusinessException("USER_RESET_PASSWORD_NOT_CONFIGURED",
+                    "User reset password is not configured (set USER_RESET_PASSWORD)");
+        }
+        String encodedPassword = passwordEncoder.encode(userResetPassword);
         
         user.setPasswordHash(encodedPassword);
         user.setMustChangePassword(true);
@@ -536,19 +585,6 @@ public class UserManagerComponent {
                 .createdAt(Instant.now())
                 .build();
         passwordHistoryRepository.save(history);
-    }
-    
-    /**
-     * 生成随机密码
-     */
-    private String generateRandomPassword() {
-        String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
-        StringBuilder password = new StringBuilder();
-        java.security.SecureRandom random = new java.security.SecureRandom();
-        for (int i = 0; i < 12; i++) {
-            password.append(chars.charAt(random.nextInt(chars.length())));
-        }
-        return password.toString();
     }
     
     /**

@@ -41,7 +41,7 @@
                 {{ formatTaskStatus(scope.row.task_status) }}
               </el-tag>
             </template>
-            <template v-else-if="col.type === 'upload'">
+            <template v-else-if="isUploadColumn(col, scope.row[col.field])">
               <span
                 v-if="scope.row[col.field]"
                 class="file-download-link"
@@ -391,64 +391,17 @@
               label-position="left"
             >
               <el-row :gutter="20">
-                <template
-                  v-for="field in linkedFormFields"
-                  :key="field.key"
-                >
-                  <el-col
-                    v-if="field.type === 'card'"
-                    :span="field.span || 24"
-                  >
-                    <el-card
-                      shadow="never"
-                      class="linked-form-card"
-                    >
-                      <template
-                        v-if="field.label"
-                        #header
-                      >
-                        <span>{{ field.label }}</span>
-                      </template>
-                      <el-row :gutter="20">
-                        <el-col
-                          v-for="child in field.children || []"
-                          :key="child.key"
-                          :span="child.span || 24"
-                        >
-                          <el-form-item
-                            :label="child.label"
-                            :prop="child.key"
-                            :required="child.required"
-                          >
-                            <FieldRenderer
-                              :field="child"
-                              :model-value="linkedFormData[child.key]"
-                              :readonly="!canEditSelectedLinkBinding"
-                              @update:model-value="(val: any) => updateLinkedFormField(child.key, val)"
-                            />
-                          </el-form-item>
-                        </el-col>
-                      </el-row>
-                    </el-card>
-                  </el-col>
-                  <el-col
-                    v-else
-                    :span="field.span || 24"
-                  >
-                    <el-form-item
-                      :label="field.label"
-                      :prop="field.key"
-                      :required="field.required"
-                    >
-                      <FieldRenderer
-                        :field="field"
-                        :model-value="linkedFormData[field.key]"
-                        :readonly="!canEditSelectedLinkBinding"
-                        @update:model-value="(val: any) => updateLinkedFormField(field.key, val)"
-                      />
-                    </el-form-item>
-                  </el-col>
-                </template>
+                <PortalFormFields
+                  :fields="linkedFormFields"
+                  :model="linkedFormData"
+                  :readonly="!canEditSelectedLinkBinding"
+                  :editable="canEditSelectedLinkBinding"
+                  :sub-table-bindings="linkedSubTableBindings"
+                  :linked-sub-table-bindings="linkedSubTableBindings"
+                  :parent-row="linkedFormData"
+                  :show-link-form-dialog-footer="showLinkFormDialogFooter"
+                  @update:field="(k, v) => updateLinkedFormField(k, v)"
+                />
               </el-row>
             </el-form>
             <SubTableField
@@ -541,12 +494,13 @@ import { Plus, Document, Loading, Search, Close } from '@element-plus/icons-vue'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import DOMPurify from 'dompurify'
 import SubTableAddDialog from './SubTableAddDialog.vue'
-import { resolveDisplayValue, unwrapUserLikeValueToDisplayString, extractUserIdFromCellValue, isUserSnapshotLikeObject, userObjectTagDisplayString, userSnapshotViewFieldsFromRow, formatUserSnapshotCellValue } from './subTableAddDialogHelpers'
+import { resolveDisplayValue, unwrapUserLikeValueToDisplayString, extractUserIdFromCellValue, isUserSnapshotLikeObject, userObjectTagDisplayString, userSnapshotViewFieldsFromRow, formatUserSnapshotCellValue, isUploadColumn, normalizeSubTableColumns } from './subTableAddDialogHelpers'
 import { fetchLookupRowByPrimaryKey } from './lookup/fetchLookupRowByPrimaryKey'
 import type { DialogColumn } from './subTableAddDialogHelpers'
 import type { FormField, RowFormulaRule, SubTableValidationConfig } from './formRendererHelpers'
 import { calculateSummary } from './businessLogicEngine'
 import FieldRenderer from './FieldRenderer.vue'
+import PortalFormFields from './PortalFormFields.vue'
 import type { AssignSubTableRowResponse } from '@/api/task'
 import { assignSubTableRow, assignSubTableRowByIdentity, getSubTableData, getTaskDetail } from '@/api/task'
 import {
@@ -1554,7 +1508,12 @@ const showAssigneeColumn = computed(() => {
   )
 })
 
-const editableColumns = computed(() => props.columns.filter(col => col.type !== 'linkForm'))
+const editableColumns = computed(() =>
+  normalizeSubTableColumns(
+    props.columns.filter(col => col.type !== 'linkForm'),
+    rows.value,
+  ),
+)
 
 // Summary row support
 const hasSummary = computed(() => (props.summaryColumns?.length ?? 0) > 0)

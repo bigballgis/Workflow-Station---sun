@@ -5,8 +5,10 @@ import { deduplicateByCode } from '@/utils/version'
 
 export const useFunctionUnitStore = defineStore('functionUnit', () => {
   const functionUnits = ref<FunctionUnit[]>([])
+  const archivedFunctionUnits = ref<FunctionUnit[]>([])
   const deployments = ref<Deployment[]>([])
   const loading = ref(false)
+  const archivedLoading = ref(false)
   const deploymentsLoading = ref(false)
 
   const fetchFunctionUnits = async () => {
@@ -29,11 +31,41 @@ export const useFunctionUnitStore = defineStore('functionUnit', () => {
     }
   }
 
+  const fetchArchivedFunctionUnits = async () => {
+    archivedLoading.value = true
+    try {
+      const pageSize = 100
+      const raw: FunctionUnit[] = []
+      let page = 0
+      let totalPages = 1
+      let guard = 0
+      while (page < totalPages && guard++ < 500) {
+        const result = await functionUnitApi.listArchived(page, pageSize)
+        raw.push(...result.content)
+        totalPages = result.totalPages
+        page++
+      }
+      archivedFunctionUnits.value = deduplicateByCode(raw)
+    } finally {
+      archivedLoading.value = false
+    }
+  }
+
   const fetchDeployments = async () => {
     deploymentsLoading.value = true
     try {
-      const result = await functionUnitApi.getAllDeployments()
-      deployments.value = result.content
+      const pageSize = 100
+      const raw: Deployment[] = []
+      let page = 0
+      let totalPages = 1
+      let guard = 0
+      while (page < totalPages && guard++ < 500) {
+        const result = await functionUnitApi.getAllDeployments(page, pageSize)
+        raw.push(...result.content)
+        totalPages = result.totalPages
+        page++
+      }
+      deployments.value = raw
     } finally {
       deploymentsLoading.value = false
     }
@@ -63,8 +95,8 @@ export const useFunctionUnitStore = defineStore('functionUnit', () => {
   }
 
   return {
-    functionUnits, deployments, loading, deploymentsLoading,
-    fetchFunctionUnits, fetchDeployments,
+    functionUnits, archivedFunctionUnits, deployments, loading, archivedLoading, deploymentsLoading,
+    fetchFunctionUnits, fetchArchivedFunctionUnits, fetchDeployments,
     setEnabled, deleteFunctionUnit, batchSetEnabled, batchDelete,
   }
 })

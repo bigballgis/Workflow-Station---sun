@@ -87,6 +87,7 @@ declare module 'vue' {
     NotificationBadge: typeof import('./components/NotificationBadge.vue')['default']
     NotificationsWidget: typeof import('./components/widgets/NotificationsWidget.vue')['default']
     PerformanceWidget: typeof import('./components/widgets/PerformanceWidget.vue')['default']
+    PortalFormFields: typeof import('./components/PortalFormFields.vue')['default']
     ProcessDiagram: typeof import('./components/ProcessDiagram.vue')['default']
     ProcessHistory: typeof import('./components/ProcessHistory.vue')['default']
     ProcessStatsWidget: typeof import('./components/widgets/ProcessStatsWidget.vue')['default']

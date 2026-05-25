@@ -554,7 +554,7 @@ CREATE TABLE IF NOT EXISTS sys_function_units (
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     deployed_at TIMESTAMP,
     previous_version_id VARCHAR(64),
-    CONSTRAINT chk_func_unit_status CHECK (status IN ('DRAFT', 'VALIDATED', 'DEPLOYED', 'DEPRECATED')),
+    CONSTRAINT chk_func_unit_status CHECK (status IN ('DRAFT', 'VALIDATED', 'DEPLOYED', 'DEPRECATED', 'ARCHIVED')),
     CONSTRAINT fk_sys_function_unit_previous_version FOREIGN KEY (previous_version_id) REFERENCES sys_function_units(id) ON DELETE SET NULL
 );
 

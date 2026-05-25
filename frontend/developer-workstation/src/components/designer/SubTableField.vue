@@ -8,8 +8,9 @@
       >
         <el-button
           type="primary"
+          native-type="button"
           size="small"
-          @click="handleAdd"
+          @click.stop="handleAdd"
         >
           <el-icon><Plus /></el-icon> {{ t('common.add') }}
         </el-button>
@@ -32,8 +33,32 @@
         :min-width="col.minWidth || 100"
       >
         <template #default="scope">
+          <!-- upload / file (first: avoid falling through to plain text for stored URLs) -->
+          <template v-if="isUploadColumn(col, scope.row[col.field])">
+            <span
+              v-if="scope.row[col.field]"
+              class="file-download-link"
+              :class="{ downloading: downloadingKeys[scope.$index + '_' + col.field] }"
+              @click.stop="downloadFile(scope.row[col.field], uploadNames[scope.$index + '_' + col.field], scope.$index, col.field)"
+            >
+              <el-icon
+                v-if="downloadingKeys[scope.$index + '_' + col.field]"
+                class="is-loading"
+              >
+                <Loading />
+              </el-icon>
+              <el-icon v-else>
+                <Document />
+              </el-icon>
+              {{ getFilenameFromUrl(scope.row[col.field], uploadNames[scope.$index + '_' + col.field]) }}
+            </span>
+            <span
+              v-else
+              class="no-file"
+            >-</span>
+          </template>
           <!-- colorPicker -->
-          <template v-if="col.type === 'colorPicker'">
+          <template v-else-if="col.type === 'colorPicker'">
             <span
               v-if="scope.row[col.field]"
               class="color-swatch"
@@ -170,10 +195,10 @@
       </el-divider>
       <div class="preview-inline-form-body">
         <form-create
-          v-if="formRule && formRule.length"
+          v-if="effectiveInlineFormRule.length && !hideInlineFormForRowDialog"
           v-model="previewInlineFormData"
           locale="en"
-          :rule="formRule"
+          :rule="effectiveInlineFormRule"
           :option="previewInlineFormOption"
         />
         <el-empty
@@ -199,56 +224,67 @@
       />
     </div>
 
-    <!-- 使用表单设计器的 form-create 规则渲染对话框 (优先使用) -->
-    <SubTableFormDialog
-      v-if="formDialogVisible"
-      :visible="formDialogVisible"
-      :title="config.title || t('subTable.defaultTitle')"
-      :mode="dialogMode"
-      :initial-data="dialogInitialData"
-      :rule="formRule"
-      :option="formOption"
-      @update:visible="formDialogVisible = $event"
-      @save="handleDialogSave"
-    />
+    <Teleport
+      v-if="!previewDialogHost"
+      to="body"
+    >
+      <SubTableFormDialog
+        :visible="formDialogVisible"
+        :title="config.title || t('subTable.defaultTitle')"
+        :mode="dialogMode"
+        :initial-data="dialogInitialData"
+        :rule="formRule"
+        :option="formOption"
+        @update:visible="formDialogVisible = $event"
+        @save="handleDialogSave"
+      />
 
-    <!-- 备用的简单对话框（当没有 form-create 规则时） -->
-    <SubTableAddDialog
-      v-else-if="simpleDialogVisible"
-      :visible="simpleDialogVisible"
-      :columns="dialogColumns"
-      :mode="dialogMode"
-      :initial-data="dialogInitialData"
-      @update:visible="simpleDialogVisible = $event"
-      @save="handleDialogSave"
-    />
+      <SubTableAddDialog
+        :visible="simpleDialogVisible"
+        :columns="dialogColumns"
+        :mode="dialogMode"
+        :initial-data="dialogInitialData"
+        @update:visible="simpleDialogVisible = $event"
+        @save="handleDialogSave"
+      />
 
-    <SubTableFormDialog
-      v-if="linkFormDialogVisible"
-      :visible="linkFormDialogVisible"
-      :title="linkFormDialogTitle"
-      mode="edit"
-      :initial-data="linkFormInitialData"
-      :rule="linkFormRule"
-      :option="linkFormOption"
-      @update:visible="linkFormDialogVisible = $event"
-      @save="handleLinkFormSave"
-    />
+      <SubTableFormDialog
+        :visible="linkFormDialogVisible"
+        :title="linkFormDialogTitle"
+        mode="edit"
+        :initial-data="linkFormInitialData"
+        :rule="linkFormRule"
+        :option="linkFormOption"
+        @update:visible="linkFormDialogVisible = $event"
+        @save="handleLinkFormSave"
+      />
+    </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, inject } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Plus } from '@element-plus/icons-vue'
+import { Plus, Loading, Document } from '@element-plus/icons-vue'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import DOMPurify from 'dompurify'
 import SubTableAddDialog from './SubTableAddDialog.vue'
 import SubTableFormDialog from './SubTableFormDialog.vue'
 import LookupPreview from './LookupPreview.vue'
 import type { DialogColumn } from './subTableAddDialogHelpers'
+import {
+  getFilenameFromUrl,
+  isUploadColumn,
+  normalizeSubTableColumns,
+  resolveFileFetchUrl,
+} from './uploadFieldUtils'
+import { PREVIEW_SUBTABLE_DIALOG_KEY } from './previewSubTableDialog'
 
 const { t } = useI18n()
+const previewDialogHost = inject(PREVIEW_SUBTABLE_DIALOG_KEY, null)
+const hideInlineFormForRowDialog = computed(
+  () => previewDialogHost?.rowDialogOpen.value === true,
+)
 
 function sanitizeHtml(html: string): string {
   if (!html) return ''
@@ -296,6 +332,9 @@ const props = defineProps<{
   previewLookupCompact?: boolean
   /** Form Preview: show read-only form below table (assignee — form below table) */
   previewShowFormBelow?: boolean
+  /** Form Preview: override schema for form-below strip (linkForm → target sub-table) */
+  previewInlineFormRule?: any[]
+  previewInlineFormOption?: any
 }>()
 
 const emit = defineEmits<{
@@ -309,6 +348,8 @@ const loading = ref(false)
 const tableData = ref<any[]>([])
 const currentPage = ref(1)
 const total = ref(0)
+const uploadNames = ref<Record<string, string>>({})
+const downloadingKeys = ref<Record<string, boolean>>({})
 
 // Dialog state - 使用两个独立的 dialog 来避免状态冲突
 const formDialogVisible = ref(false)
@@ -323,8 +364,14 @@ const linkFormRule = ref<any[]>([])
 const linkFormOption = ref<any>({})
 
 const previewInlineFormData = ref<Record<string, unknown>>({})
+const effectiveInlineFormRule = computed(
+  () => (props.previewInlineFormRule?.length ? props.previewInlineFormRule : props.formRule) || [],
+)
+const effectiveInlineFormOptionSource = computed(
+  () => props.previewInlineFormOption ?? props.formOption,
+)
 const previewInlineFormOption = computed(() => {
-  const saved = { ...((props.formOption || {}) as Record<string, unknown>) }
+  const saved = { ...((effectiveInlineFormOptionSource.value || {}) as Record<string, unknown>) }
   delete saved.title
   return {
     showMsg: true,
@@ -347,8 +394,10 @@ const previewInlineFormOption = computed(() => {
 // 计算属性：是否可编辑
 const editable = computed(() => props.editable !== false)
 
-// 计算属性：显示的列
-const displayColumns = computed(() => props.config.columns || [])
+// 计算属性：显示的列（FILE / file 字段归一为 upload，便于文件名展示与下载）
+const displayColumns = computed(() =>
+  normalizeSubTableColumns(props.config.columns || [], tableData.value),
+)
 
 // 是否使用 form-create 对话框（当有 formRule 时优先使用）
 const hasFormRule = computed(() => props.formRule && props.formRule.length > 0)
@@ -376,35 +425,113 @@ watch(() => props.modelValue, (newVal) => {
   if (newVal) {
     tableData.value = [...newVal]
     total.value = newVal.length
+    const nextNames: Record<string, string> = {}
+    newVal.forEach((row: Record<string, unknown>, rowIndex: number) => {
+      for (const col of displayColumns.value) {
+        if (!isUploadColumn(col, row[col.field])) continue
+        const url = row[col.field]
+        if (!url) continue
+        nextNames[`${rowIndex}_${col.field}`] = getFilenameFromUrl(String(url))
+      }
+    })
+    uploadNames.value = nextNames
   }
 }, { immediate: true, deep: true })
 
-// 添加行 — 打开 Dialog
-function handleAdd() {
-  dialogMode.value = 'add'
-  dialogInitialData.value = undefined
-  editingRowIndex.value = null
-  if (hasFormRule.value) {
-    simpleDialogVisible.value = false
-    formDialogVisible.value = true
-  } else {
-    formDialogVisible.value = false
-    simpleDialogVisible.value = true
+function rememberUploadNamesForRow(rowIndex: number, rowData: Record<string, any>) {
+  for (const col of displayColumns.value) {
+    if (!isUploadColumn(col, rowData[col.field])) continue
+    const url = rowData[col.field]
+    if (!url) continue
+    const target = col.props?.fileNameTargetField as string | undefined
+    const saved = (target && rowData[target] != null ? String(rowData[target]) : undefined)
+      || getFilenameFromUrl(String(url))
+    uploadNames.value = { ...uploadNames.value, [`${rowIndex}_${col.field}`]: saved }
   }
+}
+
+async function downloadFile(
+  url: string,
+  savedName: string | undefined,
+  rowIndex: number,
+  field: string,
+) {
+  if (!url) return
+  const key = `${rowIndex}_${field}`
+  if (downloadingKeys.value[key]) return
+
+  const filename = getFilenameFromUrl(url, savedName)
+  const fetchUrl = resolveFileFetchUrl(url)
+  downloadingKeys.value = { ...downloadingKeys.value, [key]: true }
+  const msg = ElMessage({ message: t('common.downloading'), type: 'info', duration: 0 })
+
+  try {
+    const response = await fetch(fetchUrl, { credentials: 'include' })
+    if (!response.ok) {
+      msg.close()
+      ElMessage.error(response.status === 404 ? t('common.fileNotFound') : t('common.downloadFailed'))
+      return
+    }
+    const blob = await response.blob()
+    const blobUrl = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = blobUrl
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(blobUrl)
+    msg.close()
+  } catch {
+    msg.close()
+    ElMessage.error(t('common.downloadFailed'))
+  } finally {
+    const next = { ...downloadingKeys.value }
+    delete next[key]
+    downloadingKeys.value = next
+  }
+}
+
+// 添加/编辑行 — preview 走 FormDesigner 顶层弹层，避免嵌在 Preview Dialog 内被遮罩挡住
+function openRowDialog(mode: 'add' | 'edit', index?: number) {
+  dialogMode.value = mode
+  editingRowIndex.value = mode === 'edit' && index != null ? index : null
+  dialogInitialData.value =
+    mode === 'edit' && index != null ? { ...tableData.value[index] } : undefined
+
+  if (previewDialogHost) {
+    linkFormDialogVisible.value = false
+    previewDialogHost.openRowDialog({
+      mode,
+      title: props.config.title || t('subTable.defaultTitle'),
+      initialData: dialogInitialData.value,
+      formRule: props.formRule,
+      formOption: props.formOption,
+      columns: dialogColumns.value,
+      onSave: (rowData) => handleDialogSave(rowData),
+    })
+    return
+  }
+
+  linkFormDialogVisible.value = false
+  formDialogVisible.value = false
+  simpleDialogVisible.value = false
+  window.setTimeout(() => {
+    if (hasFormRule.value) {
+      formDialogVisible.value = true
+    } else {
+      simpleDialogVisible.value = true
+    }
+  }, 0)
+}
+
+function handleAdd() {
+  openRowDialog('add')
 }
 
 // 编辑行 — 打开 Dialog 并预填数据
 function openEditDialog(index: number) {
-  dialogMode.value = 'edit'
-  editingRowIndex.value = index
-  dialogInitialData.value = { ...tableData.value[index] }
-  if (hasFormRule.value) {
-    simpleDialogVisible.value = false
-    formDialogVisible.value = true
-  } else {
-    formDialogVisible.value = false
-    simpleDialogVisible.value = true
-  }
+  openRowDialog('edit', index)
 }
 
 function linkFormTitleTableName(raw: string): string {
@@ -436,14 +563,19 @@ function handleLinkFormSave(rowData: Record<string, any>) {
 // Dialog 保存回调
 function handleDialogSave(rowData: Record<string, any>) {
   if (dialogMode.value === 'add') {
+    const rowIndex = tableData.value.length
     tableData.value.push(rowData)
+    rememberUploadNamesForRow(rowIndex, rowData)
     emit('add', rowData)
   } else if (dialogMode.value === 'edit' && editingRowIndex.value !== null) {
     tableData.value[editingRowIndex.value] = rowData
+    rememberUploadNamesForRow(editingRowIndex.value, rowData)
     emit('edit', rowData, editingRowIndex.value)
   }
   total.value = tableData.value.length
   emit('update:modelValue', [...tableData.value])
+  formDialogVisible.value = false
+  simpleDialogVisible.value = false
 }
 
 // 删除行
@@ -485,6 +617,8 @@ defineExpose({
     justify-content: space-between;
     align-items: center;
     margin-bottom: 12px;
+    position: relative;
+    z-index: 2;
 
     .title {
       font-weight: 500;
@@ -532,6 +666,30 @@ defineExpose({
     :deep(.lookup-label-text) {
       display: none;
     }
+  }
+
+  .file-download-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--el-color-primary);
+    cursor: pointer;
+    font-size: 12px;
+    max-width: 100%;
+    word-break: break-all;
+
+    &:hover {
+      text-decoration: underline;
+    }
+
+    &.downloading {
+      color: #909399;
+      cursor: wait;
+    }
+  }
+
+  .no-file {
+    color: #909399;
   }
 
   .preview-inline-form-below {

@@ -376,9 +376,19 @@ export const functionUnitApi = {
   copyProcessToTaskForm: (functionUnitId: number, formId: number) =>
     functionUnitAxios.post<any, { data: FormDefinition }>(`/api/v1/function-units/${functionUnitId}/forms/${formId}/copy-to-task`),
 
-  // Export and Deploy
+  // Export, Import and Deploy
   exportFunctionUnit: (functionUnitId: number) =>
     functionUnitAxios.get(`/api/v1/function-units/${functionUnitId}/export`, { responseType: 'blob' }),
+
+  importFunctionUnit: (file: File, conflictStrategy: 'SKIP' | 'OVERWRITE' | 'RENAME' = 'RENAME') => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return functionUnitAxios.post<any, { data: { status: string; message?: string; functionUnitId?: number } }>(
+      '/api/v1/export-import/import',
+      formData,
+      { params: { conflictStrategy } }
+    )
+  },
   
   deploy: (functionUnitId: number, request: DeployRequest) =>
     functionUnitAxios.post<any, { data: DeployResponse }>(`/api/v1/function-units/${functionUnitId}/deploy`, request),

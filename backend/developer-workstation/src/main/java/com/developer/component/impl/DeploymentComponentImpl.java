@@ -258,6 +258,29 @@ public class DeploymentComponentImpl implements DeploymentComponent {
             String importedId = idObj.toString();
 
             updateStep(steps, i18nService.getMessage("deploy.step.upload"), "SUCCESS", i18nService.getMessage("deploy.upload_success"));
+            response.setProgress(55);
+            deploymentJobService.persistUpdate(functionUnitId, targetUrl, response);
+
+            updateStep(steps, i18nService.getMessage("deploy.step.validate"), "RUNNING", null);
+            String validateUrl = targetUrl + "/api/v1/admin/function-units/" + importedId + "/validate";
+            HttpHeaders validateHeaders = new HttpHeaders();
+            applyOutboundAdminHeaders(validateHeaders, authorizationHeader, adminUserId);
+            HttpEntity<Void> validateEntity = new HttpEntity<>(validateHeaders);
+            ResponseEntity<Map> validateResponse = restTemplate.exchange(
+                    validateUrl, HttpMethod.POST, validateEntity, Map.class);
+            if (!validateResponse.getStatusCode().is2xxSuccessful() || validateResponse.getBody() == null) {
+                throw new DeveloperBusinessException("DEPLOY_VALIDATE_FAILED",
+                        i18nService.getMessage("deploy.validate_failed"));
+            }
+            Map<String, Object> validateData = com.platform.common.util.ApiResponseBodyUnwrap
+                    .unwrapDataMap(validateResponse.getBody());
+            Object validFlag = validateData.get("valid");
+            if (!Boolean.TRUE.equals(validFlag)) {
+                throw new DeveloperBusinessException("DEPLOY_VALIDATE_FAILED",
+                        i18nService.getMessage("deploy.validate_failed"));
+            }
+            updateStep(steps, i18nService.getMessage("deploy.step.validate"), "SUCCESS",
+                    i18nService.getMessage("deploy.validate_success"));
             response.setProgress(60);
             deploymentJobService.persistUpdate(functionUnitId, targetUrl, response);
 

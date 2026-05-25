@@ -4,7 +4,7 @@
       <template #actions>
         <el-button
           type="primary"
-          @click="showImportDialog = true"
+          @click="openImportDialog"
         >
           <el-icon><Upload /></el-icon>{{ t('common.import') }}
         </el-button>
@@ -98,7 +98,7 @@
           />
           <el-table-column
             :label="t('common.actions')"
-            width="360"
+            width="420"
             fixed="right"
           >
             <template #default="{ row }">
@@ -111,9 +111,34 @@
                   {{ t('functionUnit.access') }}
                 </el-button>
                 <el-button
+                  v-if="canValidateFunctionUnit(row.status)"
                   link
                   type="primary"
-                  @click="showDeployDialog(row)"
+                  :loading="validateLoadingId === row.id"
+                  @click="handleValidate(row)"
+                >
+                  {{ t('functionUnit.validate') }}
+                </el-button>
+                <el-tooltip
+                  v-if="!canDeployFunctionUnit(row.status)"
+                  :content="t('functionUnit.deployRequiresValidation')"
+                >
+                  <span>
+                    <el-button
+                      link
+                      type="primary"
+                      disabled
+                    >
+                      {{ t('functionUnit.deploy') }}
+                    </el-button>
+                  </span>
+                </el-tooltip>
+                <el-button
+                  v-else
+                  link
+                  type="primary"
+                  :loading="deployLoadingId === row.id"
+                  @click="handleDeploy(row)"
                 >
                   {{ t('functionUnit.deploy') }}
                 </el-button>
@@ -143,12 +168,79 @@
           </el-table-column>
         </el-table>
       </el-tab-pane>
+
+      <el-tab-pane
+        :label="t('functionUnit.archiveList')"
+        name="archive"
+      >
+        <div style="margin-bottom: 16px;">
+          <el-input
+            v-model="archiveSearchKeyword"
+            :placeholder="t('functionUnit.searchPlaceholder')"
+            clearable
+            style="width: 300px;"
+          />
+        </div>
+        <el-table
+          v-loading="archivedLoading"
+          :data="filteredArchivedFunctionUnits"
+          stripe
+        >
+          <el-table-column
+            prop="name"
+            :label="t('common.name')"
+          />
+          <el-table-column
+            prop="code"
+            :label="t('common.code')"
+          />
+          <el-table-column
+            prop="version"
+            :label="t('functionUnit.version')"
+          />
+          <el-table-column
+            prop="status"
+            :label="t('common.status')"
+          >
+            <template #default="{ row }">
+              <el-tag :type="functionUnitStatusType(row.status)">
+                {{ t(functionUnitStatusKey(row.status)) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column
+            prop="updatedAt"
+            :label="t('common.updateTime')"
+          />
+          <el-table-column
+            prop="updatedBy"
+            :label="t('common.updatedBy')"
+          />
+          <el-table-column
+            :label="t('common.actions')"
+            width="120"
+            fixed="right"
+          >
+            <template #default="{ row }">
+              <el-button
+                link
+                type="primary"
+                :loading="restoreLoadingId === row.id"
+                @click="handleRestore(row)"
+              >
+                {{ t('functionUnit.restore') }}
+              </el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-tab-pane>
       
       <el-tab-pane
         :label="t('functionUnit.deploymentRecords')"
         name="deployments"
       >
         <el-table
+          v-loading="deploymentsLoading"
           :data="deployments"
           stripe
         >
@@ -159,14 +251,6 @@
           <el-table-column
             prop="version"
             :label="t('functionUnit.version')"
-          />
-          <el-table-column
-            prop="environment"
-            :label="t('functionUnit.environment')"
-          />
-          <el-table-column
-            prop="strategy"
-            :label="t('functionUnit.strategy')"
           />
           <el-table-column
             prop="status"
@@ -186,21 +270,6 @@
             prop="deployedBy"
             :label="t('functionUnit.deployedBy')"
           />
-          <el-table-column
-            :label="t('common.actions')"
-            width="120"
-            fixed="right"
-          >
-            <template #default="{ row }">
-              <el-button
-                link
-                type="primary"
-                @click="handleViewLog(row)"
-              >
-                {{ t('deployment.viewLog') }}
-              </el-button>
-            </template>
-          </el-table-column>
         </el-table>
       </el-tab-pane>
     </el-tabs>
@@ -212,13 +281,6 @@
       :import-file="importFile"
       @file-change="handleImportFileChange"
       @start-import="handleStartImport"
-    />
-    
-    <!-- Deploy Dialog (extracted) -->
-    <FunctionUnitDeployDialog
-      v-model="showDeployDialogVisible"
-      :deploy-form="deployForm"
-      @deploy="handleDeploy"
     />
     
     <!-- Access Config Dialog -->
@@ -306,43 +368,6 @@
       @confirm="handleDeleteConfirm"
     />
 
-    <!-- Deployment Log Dialog -->
-    <el-dialog
-      v-model="showLogDialogVisible"
-      :title="t('deployment.viewLog')"
-      width="600px"
-    >
-      <div v-if="logDeployment">
-        <el-descriptions
-          :column="1"
-          border
-        >
-          <el-descriptions-item :label="t('menu.functionUnit')">
-            {{ logDeployment.functionUnitName }}
-          </el-descriptions-item>
-          <el-descriptions-item :label="t('functionUnit.environment')">
-            {{ logDeployment.environment }}
-          </el-descriptions-item>
-          <el-descriptions-item :label="t('common.status')">
-            <el-tag :type="deployStatusType(logDeployment.status)">
-              {{ logDeployment.status }}
-            </el-tag>
-          </el-descriptions-item>
-          <el-descriptions-item :label="t('functionUnit.deployedAt')">
-            {{ logDeployment.deployedAt || logDeployment.createdAt }}
-          </el-descriptions-item>
-          <el-descriptions-item :label="t('functionUnit.deployedBy')">
-            {{ logDeployment.deployedBy }}
-          </el-descriptions-item>
-        </el-descriptions>
-      </div>
-      <template #footer>
-        <el-button @click="showLogDialogVisible = false">
-          {{ t('common.close') }}
-        </el-button>
-      </template>
-    </el-dialog>
-
     <!-- Version Compare Dialog -->
     <el-dialog
       v-model="showCompareDialogVisible"
@@ -376,6 +401,11 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <ValidateResultDialog
+      v-model="showValidateResultDialog"
+      :result="validateResult"
+    />
   </div>
 </template>
 
@@ -387,25 +417,28 @@ import PageHeader from '@/components/PageHeader.vue'
 import DeleteConfirmDialog from './components/DeleteConfirmDialog.vue'
 import AccessConfigDialog from './components/AccessConfigDialog.vue'
 import FunctionUnitImportDialog from './components/FunctionUnitImportDialog.vue'
-import FunctionUnitDeployDialog from './components/FunctionUnitDeployDialog.vue'
-import { functionUnitStatusType, functionUnitStatusKey, deployStatusType, formatDate } from '@/utils/format'
+import ValidateResultDialog from './components/ValidateResultDialog.vue'
+import { functionUnitStatusType, functionUnitStatusKey, deployStatusType, formatDate, canValidateFunctionUnit, canDeployFunctionUnit } from '@/utils/format'
 import { useFunctionUnit } from '@/composables/modules/useFunctionUnit'
 
 const { t } = useI18n()
 
 // All business logic is now in the composable — component is pure template binding
 const {
-  activeTab, loading, deploymentsLoading, versionsLoading, importLoading,
-  functionUnits, deployments, versionList, searchKeyword, filteredFunctionUnits, selectedUnits,
-  showImportDialog, showDeployDialogVisible, showAccessDialogVisible,
-  showDeleteDialogVisible, showVersionsDialogVisible, showLogDialogVisible, showCompareDialogVisible,
-  currentUnit, deleteTargetUnit, deletePreview, logDeployment, compareVersion,
-  deployForm, importFile, importUploadRef,
-  fetchFunctionUnits, showDeployDialog, showAccessDialog, showVersions,
-  handleDeploy, handleRollback, handleEnabledChange,
+  activeTab, loading, archivedLoading, deploymentsLoading, versionsLoading, importLoading, deployLoadingId, validateLoadingId, restoreLoadingId,
+  functionUnits, archivedFunctionUnits, deployments, versionList, searchKeyword, archiveSearchKeyword,
+  filteredFunctionUnits, filteredArchivedFunctionUnits, selectedUnits,
+  showImportDialog, showAccessDialogVisible,
+  showDeleteDialogVisible, showVersionsDialogVisible, showCompareDialogVisible,
+  showValidateResultDialog, validateResult,
+  currentUnit, deleteTargetUnit, deletePreview, compareVersion,
+  importFile, importUploadRef,
+  fetchFunctionUnits, showAccessDialog, showVersions,
+  handleValidate, handleDeploy, handleRestore, handleRollback, handleEnabledChange,
   handleDeleteClick, handleDeleteConfirm,
-  handleSelectionChange, handleBatchEnable, handleBatchDisable, handleBatchDelete,
-  handleViewLog, handleCompareVersion,
+  handleSelectionChange, handleBatchEnable, handleBatchDisable,   handleBatchDelete,
+  handleCompareVersion,
+  openImportDialog,
   handleImportFileChange, handleStartImport,
 } = useFunctionUnit()
 

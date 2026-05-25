@@ -304,6 +304,9 @@
       v-model="showPreviewDialog"
       :title="t('form.previewTitle')"
       width="900px"
+      append-to-body
+      :modal="false"
+      :close-on-click-modal="false"
       destroy-on-close
     >
       <div class="preview-container">
@@ -320,6 +323,26 @@
         />
       </div>
     </el-dialog>
+
+    <SubTableFormDialog
+      :visible="previewRowDialog.visible && previewRowDialog.useFormRule"
+      :title="previewRowDialog.title"
+      :mode="previewRowDialog.mode"
+      :initial-data="previewRowDialog.initialData"
+      :rule="previewRowDialog.formRule"
+      :option="previewRowDialog.formOption"
+      @update:visible="onPreviewRowDialogVisibleChange"
+      @save="handlePreviewRowDialogSave"
+    />
+    <SubTableAddDialog
+      :visible="previewRowDialog.visible && !previewRowDialog.useFormRule"
+      :columns="previewRowDialog.columns"
+      :title="previewRowDialog.title"
+      :mode="previewRowDialog.mode"
+      :initial-data="previewRowDialog.initialData"
+      @update:visible="onPreviewRowDialogVisibleChange"
+      @save="handlePreviewRowDialogSave"
+    />
 
     <!-- Bind node dialog -->
     <FormNodeBindDialog
@@ -532,7 +555,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, nextTick, computed, provide, watch } from 'vue'
+import { ref, reactive, onMounted, nextTick, computed, provide, watch, toRef } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useFormAutoSave } from '@/composables/modules/useFormAutoSave'
@@ -557,6 +580,12 @@ import SubTableListView from './SubTableListView.vue'
 import SubTablePortalViewsEditor from './SubTablePortalViewsEditor.vue'
 import FormPreviewItems from './FormPreviewItems.vue'
 import type { FormPreviewItem } from './formPreviewTypes'
+import SubTableFormDialog from './SubTableFormDialog.vue'
+import SubTableAddDialog from './SubTableAddDialog.vue'
+import {
+  PREVIEW_SUBTABLE_DIALOG_KEY,
+  type PreviewSubTableRowDialogOpen,
+} from './previewSubTableDialog'
 import { lookupStore } from './lookupStore'
 import api from '@/api'
 import { BUILT_IN_TEMPLATES, type FormTemplate } from './formTemplates'
@@ -624,6 +653,60 @@ const previewSubBindings = ref<Array<{
 }>>([])
 const previewSubData = ref<Record<number, any>>({})
 const previewTableRows = ref<Record<number, any[]>>({})
+
+const previewRowDialog = reactive({
+  visible: false,
+  mode: 'add' as 'add' | 'edit',
+  title: '',
+  initialData: undefined as Record<string, any> | undefined,
+  formRule: [] as any[],
+  formOption: {} as Record<string, any>,
+  columns: [] as any[],
+  useFormRule: false,
+  onSave: null as PreviewSubTableRowDialogOpen['onSave'] | null,
+})
+
+provide(PREVIEW_SUBTABLE_DIALOG_KEY, {
+  rowDialogOpen: toRef(previewRowDialog, 'visible'),
+  openRowDialog(payload: PreviewSubTableRowDialogOpen) {
+    previewRowDialog.mode = payload.mode
+    previewRowDialog.title = payload.title
+    previewRowDialog.initialData = payload.initialData
+      ? { ...payload.initialData }
+      : undefined
+    previewRowDialog.formRule = cloneFormRules(payload.formRule || [])
+    previewRowDialog.formOption = payload.formOption
+      ? JSON.parse(JSON.stringify(payload.formOption))
+      : {}
+    previewRowDialog.columns = payload.columns.map((col) => ({ ...col }))
+    previewRowDialog.useFormRule = previewRowDialog.formRule.length > 0
+    previewRowDialog.onSave = payload.onSave
+    previewRowDialog.visible = false
+    window.setTimeout(() => {
+      previewRowDialog.visible = true
+    }, 0)
+  },
+})
+
+watch(showPreviewDialog, (open) => {
+  if (open) return
+  previewRowDialog.visible = false
+  previewRowDialog.onSave = null
+})
+
+function onPreviewRowDialogVisibleChange(visible: boolean) {
+  previewRowDialog.visible = visible
+  if (!visible) {
+    previewRowDialog.onSave = null
+  }
+}
+
+function handlePreviewRowDialogSave(row: Record<string, any>) {
+  previewRowDialog.onSave?.(row)
+  previewRowDialog.visible = false
+  previewRowDialog.onSave = null
+}
+
 const autoSaving = ref(false)
 const lastAutoSaveTime = ref<Date | null>(null)
 // Note: autoSaveTimer, lastDesignerState, pollTimerRef moved to useFormAutoSave composable
@@ -1518,6 +1601,35 @@ function resolveLookupPreviewConfig(rawLookupConfig: string, explicitConfig?: an
   }
 }
 
+function mapDataTypeToPreviewColumnType(dataType: string): string | undefined {
+  const dt = (dataType || '').toUpperCase()
+  if (dt === 'FILE') return 'upload'
+  if (dt.includes('INT') || dt === 'BIGINT' || dt.includes('DECIMAL') || dt.includes('NUMERIC') || dt.includes('FLOAT') || dt.includes('DOUBLE')) {
+    return 'number'
+  }
+  if (dt === 'DATE') return 'date'
+  if (dt.includes('TIMESTAMP') || dt === 'DATETIME') return 'datetime'
+  if (dt === 'BOOLEAN' || dt === 'BOOL') return 'switch'
+  return undefined
+}
+
+/** Fallback columns from Data_Table when list view / sub-form are not configured yet (e.g. attachment). */
+function derivePreviewColumnsFromTable(bindingId: number) {
+  const binding = designerSubBindings.value.find(b => b.bindingId === bindingId)
+  if (!binding?.tableId) return []
+  const table = store.tables.find(t => t.id === binding.tableId)
+  const fields = (table as { fieldDefinitions?: Array<Record<string, unknown>> } | undefined)?.fieldDefinitions || []
+  return [...fields]
+    .sort((a, b) => (Number(a.sortOrder) || 0) - (Number(b.sortOrder) || 0))
+    .map((f) => ({
+      field: String(f.fieldName ?? ''),
+      label: String(f.description || f.comment || f.fieldName || ''),
+      type: mapDataTypeToPreviewColumnType(String(f.dataType ?? '')),
+      minWidth: 100,
+    }))
+    .filter((col) => col.field.length > 0)
+}
+
 function toSubTablePreviewColumns(bindingId: number, rule: any[], config: any) {
   const liveColumns = subTableViewState.value[bindingId]?.viewFields
   const savedColumns = (config.subListViews || {})[bindingId]?.columns
@@ -1583,16 +1695,24 @@ function toSubTablePreviewColumns(bindingId: number, rule: any[], config: any) {
           }
         }
       }
+      const colType = fieldRule?.type === 'upload'
+        ? 'upload'
+        : mapDataTypeToPreviewColumnType(String(column.dataType ?? column.fieldType ?? ''))
       return {
         field: column.fieldName,
-        label: column.comment || column.columnLabel || column.fieldName,
-        type: undefined,
-        minWidth: 100
+        label: column.comment || column.columnLabel || fieldRule?.title || column.fieldName,
+        type: colType,
+        minWidth: colType === 'upload' ? 180 : 100,
+        ...(colType === 'upload' && fieldRule?.props
+          ? { props: { action: fieldRule.props.action, accept: fieldRule.props.accept, multiple: fieldRule.props.multiple, fileNameTargetField: fieldRule.props.fileNameTargetField } }
+          : {}),
       }
     })
   }
 
-  return deriveColumnsFromBinding({ bindingId }, { [bindingId]: { rule } })
+  const fromSubFormRule = deriveColumnsFromBinding({ bindingId }, { [bindingId]: { rule } })
+  if (fromSubFormRule.length > 0) return fromSubFormRule
+  return derivePreviewColumnsFromTable(bindingId)
 }
 
 /**

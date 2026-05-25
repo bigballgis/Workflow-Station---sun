@@ -153,20 +153,14 @@ public class FunctionUnitImportController {
                             String actionType = (String) actionData.get("actionType");
                             
                             if (actionName != null && actionType != null) {
-                                String configJsonStr = null;
-                                Object configJsonObj = actionData.get("configJson");
-                                if (configJsonObj instanceof Map) {
-                                    configJsonStr = objectMapper.writeValueAsString(configJsonObj);
-                                } else if (configJsonObj instanceof String) {
-                                    configJsonStr = (String) configJsonObj;
-                                }
+                                Map<String, Object> configJson = parseActionConfigJson(actionData.get("configJson"));
                                 
                                 ActionDefinition actionDef = ActionDefinition.builder()
                                         .functionUnitId(importResult.getFunctionUnit().getId())
                                         .actionName(actionName)
                                         .actionType(actionType)
                                         .description((String) actionData.get("description"))
-                                        .configJson(configJsonStr)
+                                        .configJson(configJson)
                                         .icon((String) actionData.get("icon"))
                                         .buttonColor((String) actionData.get("buttonColor"))
                                         .isDefault(actionData.get("isDefault") instanceof Boolean ? 
@@ -221,12 +215,19 @@ public class FunctionUnitImportController {
         try {
             // 获取功能单元
             FunctionUnit functionUnit = functionUnitManager.getFunctionUnitById(id);
-            
-            // 如果是草稿状态，先验证
-            if (functionUnit.getStatus() == FunctionUnitStatus.DRAFT) {
-                functionUnit = functionUnitManager.validateFunctionUnit(id, userId);
+
+            if (!functionUnit.isDeployable()) {
+                result.put("status", "FAILED");
+                if (functionUnit.getStatus() == FunctionUnitStatus.DRAFT) {
+                    result.put("message", "请先验证功能单元后再部署");
+                    result.put("errorCode", "VALIDATION_REQUIRED");
+                } else {
+                    result.put("message", "功能单元状态不允许部署: " + functionUnit.getStatus());
+                    result.put("errorCode", "INVALID_STATUS");
+                }
+                return ResponseEntity.badRequest().body(result);
             }
-            
+
             // 获取部署参数（键存在且值为 null 时 getOrDefault 不会回落默认值，需单独规范化）
             boolean autoEnable = booleanRequestSetting(request, "autoEnable", true);
             boolean deployToFlowable = booleanRequestSetting(request, "deployToFlowable", true);
@@ -704,5 +705,20 @@ public class FunctionUnitImportController {
         }
         String t = s.trim();
         return t.isEmpty() ? null : t;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> parseActionConfigJson(Object configJsonObj) {
+        if (configJsonObj instanceof Map<?, ?> map) {
+            return (Map<String, Object>) map;
+        }
+        if (configJsonObj instanceof String s && !s.isBlank()) {
+            try {
+                return objectMapper.readValue(s, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+            } catch (Exception e) {
+                log.warn("Failed to parse action config_json: {}", e.getMessage());
+            }
+        }
+        return Map.of();
     }
 }

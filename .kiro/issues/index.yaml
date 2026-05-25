@@ -1184,11 +1184,15 @@
   file: "backend/developer-workstation/src/main/java/com/developer/component/impl/FunctionUnitComponentImpl.java; backend/developer-workstation/src/main/java/com/developer/util/BpmnIdRewriter.java"
 
 - id: "161"
-  status: open
+  status: fixed
+  fixed_at: "2026-05-25"
   severity: major
   category: bug
-  summary: "ExportImportComponentImpl.importPackage 创建 ProcessDefinition 时未设置 functionUnitVersionId，导入带流程的 function unit 时会因 NOT NULL 约束失败"
+  summary: "ExportImportComponentImpl 重新导入功能单元失败（code 冲突 / functionUnitVersionId / sort_order 等）"
   file: "backend/developer-workstation/src/main/java/com/developer/component/impl/ExportImportComponentImpl.java"
+  note: |
+    根因：RENAME 只改 name 不改 code 导致 dw_function_units_code_key 冲突；OVERWRITE delete 未 flush；ProcessDefinition 缺 functionUnitVersionId；FieldDefinition 缺 sort_order。
+    修复：resolveImportIdentity + resolveUniqueImportCode；deleteById + flush/clear；导入流程设 functionUnitVersionId；字段 sort_order 回退为索引；导出/导入补齐 sortOrder。
 
 - id: "162"
   status: open
@@ -1405,3 +1409,108 @@
     导致 designer 表绑定 READONLY 在门户仍显示 Add/Edit/Delete；inlineSubTableFormReadonly 同样被 previewSubTables 绕过。
     另：loadProcessAndTaskFormData 中 parseFormConfig 在节点 formReadOnly 之后可能把 formReadOnly 重置为 false。
     修复：子表可编辑仅看 bindingMode===EDITABLE 且非整表 readonly；节点只读在 parseFormConfig 前后保持 OR 合并。
+
+- id: "1364"
+  status: fixed
+  fixed_at: "2026-05-20"
+  severity: major
+  category: bug
+  summary: "MI 子任务 attachment 子表 file 列显示 API URL 而非文件名且不可下载"
+  file: "frontend/user-portal/src/components/subTableAddDialogHelpers.ts; SubTableField.vue; views/tasks/detail.vue; views/applications/detail.vue"
+  note: |
+    根因：deriveColumnsFromBinding 使用 subListViews 列时未将 dataType=FILE 映射为 type=upload；无 schema 时从行数据推断列全部为 text；SubTableAddDialog 对无 type 字段默认渲染 el-input。
+    修复：mergeListViewFieldColumn/isUploadColumn/normalizeSubTableColumns 推断 upload；Add Record 弹窗与表格统一走上传控件；行推断 fallback 识别 file 字段。
+
+- id: "1365"
+  status: fixed
+  fixed_at: "2026-05-20"
+  severity: major
+  category: bug
+  summary: "developer-workstation Form Preview 子表 +Add 点击无响应（Add 弹层被预览 Dialog 遮罩盖住）"
+  file: "frontend/developer-workstation/src/components/designer/SubTableField.vue; SubTableFormDialog.vue; SubTableAddDialog.vue; SubTableNestedModalShell.vue; nestedDialogZIndex.ts"
+  note: |
+    根因：Form Preview 使用 el-dialog(z-index=2000)，子表 Add/Edit 仍用嵌套 el-dialog，弹层渲染在预览遮罩下方，点击看似无反应。
+    修复：新增 SubTableNestedModalShell + nestedDialogZIndex 将子表弹层 Teleport 到 body 并动态抬高 z-index；SubTableField 统一 Teleport 挂载 Add/Form 对话框；
+    延迟 setTimeout(0) 打开避免同次点击触发遮罩关闭；补全 SubTableAddDialog.onShellClosed。
+    二次修复（2026-05-20）：Form Preview 内 inject 仍不可靠——改为 FormDesigner 在 Preview Dialog 外渲染 SubTableFormDialog/SubTableAddDialog（provide/inject 委托）；
+    Preview Dialog 设 modal=false；SubTableNestedModalShell 改用 Element Plus useZIndex().nextZIndex()；Add 按钮改用 mousedown 触发。
+    三次修复（卡死）：Add 打开对话框时与表格下方内联 form-create 共用同一 formRule 引用，叠加 SubTableFormDialog 对 rule 的 deep watch，form-create 互写 rule 触发无限更新循环；
+    修复：openRowDialog 深拷贝 rule/option；对话框打开时隐藏内联 form-create；移除 rule deep watch，仅在 visible 时 cloneFormRules；Preview 模式不再挂载 SubTableField 本地 Teleport 对话框。
+
+- id: "1366"
+  status: fixed
+  fixed_at: "2026-05-21"
+  severity: major
+  category: bug
+  summary: "developer-workstation Form Preview「Row detail form」在 assigneeTodoFormSource=linkForm(subtable2) 时仍展示父表 subtable 表单"
+  file: "frontend/developer-workstation/src/components/designer/formPreviewTypes.ts; FormPreviewItems.vue; SubTableField.vue; SubTableListView.vue"
+  note: |
+    根因：Form Preview / 列表视图预览在 formBelowTable 模式下始终使用当前 binding 的 formRule，未按 portalViews.assigneeTodoFormSource 解析 Link Form 目标子表（与 user-portal FormRenderer.resolveInlineFormSourceBinding 不一致）。
+    修复：新增 resolveInlineFormBelowDesign；SubTableField 支持 previewInlineFormRule/Option；FormPreviewItems 与 SubTableListView 待办预览区传入解析后的 subtable2 schema。
+
+- id: "1367"
+  status: fixed
+  fixed_at: "2026-05-21"
+  severity: major
+  category: bug
+  summary: "user-portal 待办 sub form2 下 attachment 等非 MI 子表错误展示 assignee/task_status/__subTables__/task_current_node 列"
+  file: "frontend/user-portal/src/composables/tasks/shared.ts; views/tasks/detail.vue"
+  note: |
+    根因：列 schema 为空时从行数据推断列会把 MI 运行时字段一并当成列；enrichChildBindingRowsFromParentsNestedSubTables 向非 MI 子表行合并了父 MI 行的 dashboard 字段。
+    二次根因：BPMN 复制表单（subform_copy binding 104）subListViews 为空，portal 从行数据推断出错误列（id/name/id_idw），而 designer 对同 tableId=74 的 attachment 设计为 id/main_id/file。
+    修复：isSubTableRowMetaField/isMiDashboardSubTableBinding/stripSubTableRowMetaFields；推断列与行数据清洗排除 meta 字段；enrich 仅对 MI dashboard binding 合并 task_status/assignee 等。
+    修复：resolveSubTableSchemaByTableId + deriveColumnsFromRelationFieldDefinitions（对齐 developer-workstation derivePreviewColumnsFromTable），按 tableId 跨表单复用 subListViews/subForm 或 dataTables 字段定义。
+    三次根因：MI 隔离逻辑对全部子表按 assignee 过滤，attachment 等通过 main_id 关联主表的子表行被误过滤，sub form1/前序节点上传的数据在 sub form2 不可见。
+    修复：isMiParticipantScopedSubTableBinding（main_id/process_id 等为流程级共享；id_idw/id 等为参与者级）；rowBelongsToCurrentMiScope 与 isolate/resync/merge 路径仅对参与者级子表过滤。
+    四次根因：resync 时 mergeAllSubTableSlicesFromVariables 把 subtable MI 行（id 343/355 等）误并入 attachment；strip 后只剩 id，file/main_id 显示为 -。
+    修复：mergeSubTableSlicesForRelationTableId 仅合并同 tableId 切片；filterRowsForSharedProcessSubTableBinding/finalizeSharedProcessSubTableBindingRows 剔除 id_idw/assignee 等外来行。
+    五次根因：attachment 行常只存在于 __subTables__ 嵌套链或 sibling binding 103；loadProcessAndTaskFormData 浅合并 task form 空切片覆盖流程 attachment；MI resync 未 deep 收集 nested 切片导致 sub form2 显示 No Data。
+    修复：mergeAllSlicesForSharedProcessSubTableBinding/collectAllNestedSlicesForBindingDeep；rehydrateSharedProcessSubTableBindings（流程变量快照 + 加载后）；mergeIncomingTaskFormFieldValues 深合并保留非空 __subTables__ 切片；MI snapshot 改用任务 API 原始 variables.__subTables__。
+    六次根因：待办 sub form2 与我的申请 attachment 条数不一致（3 vs 1）。DB slice 104 含两条 id=666 行，按 PK 合并后仅 1 条；hydrateBindingsRowsFromVariablesBySharedRelationTableId 对 103+104 同 tableId 做 per-binding 切片分配，104 只拿 slice 104 丢失 103/633/77777。
+    修复：hydrateBindingsRowsFromVariablesBySharedRelationTableId 跳过 isSharedAttachmentFileBinding；applySharedAttachmentFinalizeAndMaterialize 以 mergeAllSlices 全量合并为权威数据源；MI resync/加载后 rehydrateSharedAttachmentBindings；loadFunctionUnitContent 绑定初始化后同步 applySharedAttachment。
+    七次根因：My Request attachment 展示 subtable 参与者 id（666/343/77777/633）——merge 把 subtable/MI 行（含 name、task_status）当作 attachment 行；attachment.id 与 subtable.id 是不同表无关主键。
+    修复：filterRowsForSharedProcessSubTableBinding 先剔除 subtable 泄漏列（name/id_idw/MI）；collectForeignSubTableRowIdsFromVariables 收集 subtable/MI slice 的 id 禁止出现在 attachment；mergeAllSlices omitNestedSlices；My Request resyncMiDashboard 不再 merge attachment 脏数据。
+    八次根因（My Request attachment 仍空/仅 343）：后端 enrichSubTablesWithAssignmentData 为 attachment 行写入 id_idw；isLeakedForeignRowOnSharedAttachment 将带 id_idw 且无 id_idw 列的行一律当 subtable 泄漏删除，633/77777 被误删。
+    修复：有有效 file 的 attachment 行不因 id_idw 被删；仍按 foreign subtable id 与 name 列剔除 MI 泄漏（如 666）；defaultAttachmentListColumns + buildApplicationNodeFormMap 列回退；集成测试 kk-live-db-subTables.json。
+  status: fixed
+  fixed_at: "2026-05-21"
+  severity: major
+  category: bug
+  summary: "user-portal 我的申请 subform_copy 内嵌 attachment 子表未渲染（与 Developer Workstation Preview 不一致）"
+  file: "frontend/user-portal/src/components/PortalFormFields.vue; SubTableInlineForm.vue; SubTableField.vue; FormRenderer.vue; views/applications/detail.vue; .cursor/rules/portal-design-parity.mdc"
+  note: |
+    根因：My Request 三条展示路径（SubTableInlineForm 表格下内联、Link Form 弹窗、MI Detail 弹窗）仅用 FieldRenderer，故意跳过 type=subTable；Detail 弹窗 FormRenderer 未传 sub-table-bindings；applications/detail 缺 resolveSubTableSchemaByTableId 列 schema 回退。
+    修复：新增 PortalFormFields 统一 subTable/card/ primitive 渲染；SubTableInlineForm/Link Form/FormRenderer 传入 bindings；openSubTaskDetailDialog 构建 MI 子表单 bindings；applications/detail 对齐 tasks/detail schema 回退；新增 alwaysApply 规则 portal-design-parity.mdc 约束 Designer→Portal 结构 parity。
+
+- id: "1371"
+  status: fixed
+  fixed_at: "2026-05-22"
+  severity: major
+  category: bug
+  summary: "Admin Center 软删除用户后无法用相同用户名重新创建（existsByUsername 含已删行）"
+  file: "backend/admin-center/src/main/java/com/admin/component/UserManagerComponent.java; repository/UserRepository.java"
+  note: |
+    根因：deleteUser 仅软删除（deleted=true），createUser 用 existsByUsername/existsByEmail 未排除已删用户，且 username 有 DB 唯一约束无法 INSERT 新行。
+    修复：唯一性检查仅针对未删除用户；创建时若命中软删记录则 reactivateSoftDeletedUser 复用原 userId 并恢复字段；更新邮箱改用 existsByEmailExcludingUser。
+
+- id: "1370"
+  status: fixed
+  fixed_at: "2026-05-22"
+  severity: major
+  category: bug
+  summary: "Admin Center 功能单元 Validate 成功却显示失败且无错误明细（ApiResponse 未解包）"
+  file: "frontend/admin-center/src/api/functionUnit.ts; utils/apiResponse.ts; composables/modules/useFunctionUnit.ts"
+  note: |
+    根因：POST /function-units/{id}/validate 经 handleRequest 返回 { success, data: ValidationResult }，前端把整包当 ValidationResult，result.valid 为 undefined → 弹窗显示失败且 errors 为空；列表不刷新仍显示 Draft。重复点击则后端 INVALID_STATUS。
+    修复：unwrapApiData 解包 data；catch 避免与 axios 拦截器重复 toast；后端重复验证错误文案改为中文含当前状态。
+
+- id: "1369"
+  status: fixed
+  fixed_at: "2026-05-21"
+  severity: major
+  category: bug
+  summary: "Admin Center 功能单元导入保存 ActionDefinition 时 config_json JSONB 列绑定为 varchar 导致 PSQLException"
+  file: "backend/admin-center/src/main/java/com/admin/entity/ActionDefinition.java; FunctionUnitManagerComponent.java; FunctionUnitImportController.java"
+  note: |
+    根因：sys_action_definitions.config_json 为 jsonb，但 ActionDefinition.configJson 为 String，Hibernate 以 varchar 绑定 INSERT 失败，导入事务回滚。
+    修复：configJson 改为 Map<String, Object> + @JdbcTypeCode(SqlTypes.JSON)；saveImportedActions 与 ImportController 解析 manifest 中的 configJson（Map 或 JSON 字符串）后再 persist。

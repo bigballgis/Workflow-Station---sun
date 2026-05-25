@@ -1,15 +1,15 @@
 -- =============================================================================
--- Patch: Add SAVE action to Function Unit "kk" (developer catalog)
+-- Patch: Add SAVE action to Function Unit "Multi-Instance Subtask Demo" (developer catalog)
 --
 -- What it does:
---   1) Locate target function unit by code='kk' OR name='kk' in dw_function_units
+--   1) Locate target function unit by code='fu-20260422-23tfag' in dw_function_units
 --   2) Insert a SAVE action definition if missing
 --   3) Append the SAVE action ID to every userTask's actionIds in dw_process_definitions.bpmn_xml
 --
 -- Notes:
 --   - This patch targets dw_* tables (developer-workstation source-of-truth in dev).
 --   - It does not touch sys_action_definitions (deployed catalog).
---   - kk's dw_process_definitions.bpmn_xml may be Base64; this patch detects and
+--   - This function unit's dw_process_definitions.bpmn_xml may be Base64; this patch detects and
 --     edits the decoded XML, then writes back in the original encoding.
 -- =============================================================================
 
@@ -25,12 +25,13 @@ BEGIN
   -- 1) Resolve Function Unit
   SELECT id INTO v_fu_id
   FROM dw_function_units
-  WHERE code = 'kk' OR name = 'kk'
+  WHERE code = 'fu-20260422-23tfag'
+     OR name IN ('Multi-Instance Subtask Demo', 'kk')
   ORDER BY id DESC
   LIMIT 1;
 
   IF v_fu_id IS NULL THEN
-    RAISE EXCEPTION 'Function unit "kk" not found in dw_function_units (by code/name).';
+    RAISE EXCEPTION 'Function unit fu-20260422-23tfag (Multi-Instance Subtask Demo) not found in dw_function_units.';
   END IF;
 
   -- 2) Ensure SAVE action exists
@@ -123,6 +124,6 @@ BEGIN
       updated_at = CURRENT_TIMESTAMP
   WHERE function_unit_id = v_fu_id;
 
-  RAISE NOTICE 'Patched FU kk (fu_id=%): SAVE action id=% inserted/ensured, BPMN actionIds updated.', v_fu_id, v_save_action;
+  RAISE NOTICE 'Patched FU Multi-Instance Subtask Demo (fu_id=%): SAVE action id=% inserted/ensured, BPMN actionIds updated.', v_fu_id, v_save_action;
 END $patch$;
 

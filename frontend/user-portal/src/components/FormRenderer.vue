@@ -91,6 +91,8 @@
                                   :current-row="getCurrentRowForInlineForm(child)"
                                   :readonly="inlineSubTableFormReadonly(child)"
                                   :label-width="labelWidth"
+                                  :sub-table-bindings="subTableBindings"
+                                  :linked-sub-table-bindings="linkableSubTableBindings"
                                   @update:row="(row: Record<string, any>) => handleInlineFormUpdate(child, row)"
                                 />
                               </div>
@@ -212,6 +214,8 @@
                         :current-row="getCurrentRowForInlineForm(field)"
                         :readonly="inlineSubTableFormReadonly(field)"
                         :label-width="labelWidth"
+                        :sub-table-bindings="subTableBindings"
+                        :linked-sub-table-bindings="linkableSubTableBindings"
                         @update:row="(row: Record<string, any>) => handleInlineFormUpdate(field, row)"
                       />
                     </div>
@@ -358,6 +362,8 @@
                               :current-row="getCurrentRowForInlineForm(child)"
                               :readonly="inlineSubTableFormReadonly(child)"
                               :label-width="labelWidth"
+                              :sub-table-bindings="subTableBindings"
+                              :linked-sub-table-bindings="linkableSubTableBindings"
                               @update:row="(row: Record<string, any>) => handleInlineFormUpdate(child, row)"
                             />
                           </div>
@@ -479,6 +485,8 @@
                     :current-row="getCurrentRowForInlineForm(field)"
                     :readonly="inlineSubTableFormReadonly(field)"
                     :label-width="labelWidth"
+                    :sub-table-bindings="subTableBindings"
+                    :linked-sub-table-bindings="linkableSubTableBindings"
                     @update:row="(row: Record<string, any>) => handleInlineFormUpdate(field, row)"
                   />
                 </div>

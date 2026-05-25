@@ -2,8 +2,10 @@ package com.admin.controller;
 
 import com.admin.component.DeploymentManagerComponent;
 import com.admin.component.FunctionUnitManagerComponent;
+import com.admin.component.ProcessDeploymentComponent;
 import com.admin.dto.request.FunctionUnitAccessRequest;
 import com.admin.dto.request.FunctionUnitImportRequest;
+import com.admin.dto.response.DeploymentInfo;
 import com.admin.dto.response.FunctionUnitAccessInfo;
 import com.admin.dto.response.FunctionUnitInfo;
 import com.admin.dto.response.ImportResult;
@@ -16,6 +18,7 @@ import com.admin.enums.DeploymentStrategy;
 import com.admin.enums.FunctionUnitStatus;
 import com.admin.exception.AdminBusinessException;
 import com.admin.service.FunctionUnitAccessService;
+import com.admin.service.UserReferenceResolver;
 import com.platform.common.dto.ApiResponse;
 import com.platform.common.resource.AbstractBaseController;
 import com.platform.security.util.SecurityContextUtils;
@@ -56,7 +59,9 @@ public class FunctionUnitController extends AbstractBaseController {
 
     private final FunctionUnitManagerComponent functionUnitManager;
     private final DeploymentManagerComponent deploymentManager;
+    private final ProcessDeploymentComponent processDeploymentComponent;
     private final FunctionUnitAccessService accessService;
+    private final UserReferenceResolver userReferenceResolver;
 
     /**
      * Extends base error handling to also map {@link AdminBusinessException}
@@ -133,6 +138,29 @@ public class FunctionUnitController extends AbstractBaseController {
         });
     }
     
+    @GetMapping("/archived")
+    @Operation(summary = "获取已归档的功能单元", description = "分页获取已归档（已删除）的功能单元列表")
+    public ResponseEntity<Page<FunctionUnitInfo>> listArchivedFunctionUnits(Pageable pageable) {
+        log.info("Listing archived function units");
+        Page<FunctionUnitInfo> page = functionUnitManager.listArchivedFunctionUnits(pageable)
+                .map(FunctionUnitInfo::fromEntity);
+        enrichUpdatedByUsernames(page.getContent());
+        return ResponseEntity.ok(page);
+    }
+
+    private void enrichUpdatedByUsernames(List<FunctionUnitInfo> items) {
+        if (items == null || items.isEmpty()) {
+            return;
+        }
+        var cache = userReferenceResolver.resolveUsernames(
+                items.stream().map(FunctionUnitInfo::getUpdatedBy).toList());
+        for (FunctionUnitInfo item : items) {
+            if (item.getUpdatedBy() != null) {
+                item.setUpdatedBy(userReferenceResolver.resolveWithCache(item.getUpdatedBy(), cache));
+            }
+        }
+    }
+
     @GetMapping("/{id}")
     @Operation(summary = "获取功能单元详情", description = "根据ID获取功能单元详细信息")
     public ResponseEntity<FunctionUnitInfo> getFunctionUnit(
@@ -155,15 +183,65 @@ public class FunctionUnitController extends AbstractBaseController {
     }
     
     @DeleteMapping("/{id}")
-    @Operation(summary = "删除功能单元", description = "级联删除功能单元及其所有关联内容")
+    @Operation(summary = "归档功能单元", description = "按 code 归档全部版本，并从用户门户移除该应用")
     public ResponseEntity<Void> deleteFunctionUnit(
             @Parameter(description = "功能单元ID") @PathVariable String id) {
-        log.info("Deleting function unit cascade: {}", id);
-        // 先删除访问配置
-        accessService.deleteAllAccessConfigs(id);
-        // 级联删除功能单元
-        functionUnitManager.deleteFunctionUnitCascade(id);
+        log.info("Archiving function unit: {}", id);
+        functionUnitManager.archiveFunctionUnitByCode(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{id}/restore")
+    @Operation(summary = "恢复功能单元", description = "将已归档的功能单元恢复为 DRAFT 状态")
+    public ResponseEntity<ApiResponse<FunctionUnitInfo>> restoreFunctionUnit(
+            @Parameter(description = "功能单元ID") @PathVariable String id) {
+        log.info("Restoring archived function unit: {}", id);
+        return handleRequest(() -> FunctionUnitInfo.fromEntity(functionUnitManager.restoreFunctionUnit(id)));
+    }
+
+    @PostMapping("/{id}/deploy")
+    @Operation(summary = "部署功能单元", description = "一键部署到用户门户（无需选择环境）")
+    public ResponseEntity<ApiResponse<FunctionUnitInfo>> deployFunctionUnit(
+            @Parameter(description = "功能单元ID") @PathVariable String id,
+            @Parameter(description = "部署者ID") @RequestHeader(value = "X-User-Id", defaultValue = "system") String deployerId) {
+        log.info("Deploying function unit to user portal: {}", id);
+        String operator = SecurityContextUtils.getCurrentUsername().orElse(deployerId);
+        return handleRequest(() -> {
+            FunctionUnit functionUnit = functionUnitManager.getFunctionUnitById(id);
+
+            if (functionUnit.getStatus() == FunctionUnitStatus.ARCHIVED) {
+                throw new AdminBusinessException("INVALID_STATUS", "Archived function units cannot be deployed");
+            }
+            if (!functionUnit.isDeployable()) {
+                if (functionUnit.getStatus() == FunctionUnitStatus.DRAFT) {
+                    throw new AdminBusinessException("VALIDATION_REQUIRED", "请先验证功能单元后再部署");
+                }
+                throw new AdminBusinessException("INVALID_STATUS",
+                        "功能单元状态不允许部署: " + functionUnit.getStatus());
+            }
+
+            ProcessDeploymentComponent.ProcessDeploymentResult processResult =
+                    processDeploymentComponent.deployFunctionUnitProcess(id);
+            if (!processResult.isSuccess() && !processResult.isPartialSuccess()) {
+                if (processResult.getMessage() != null && processResult.getMessage().contains("Flowable")) {
+                    throw new AdminBusinessException("FLOWABLE_UNAVAILABLE", processResult.getMessage());
+                }
+                throw new AdminBusinessException("PROCESS_DEPLOY_FAILED", processResult.getMessage());
+            }
+
+            functionUnit.markAsDeployed();
+            functionUnitManager.saveFunctionUnit(functionUnit);
+            functionUnitManager.disableOtherVersions(functionUnit.getCode(), functionUnit.getVersion(), operator);
+
+            FunctionUnitDeployment deployment = deploymentManager.createDeployment(
+                    id, DeploymentEnvironment.DEVELOPMENT, DeploymentStrategy.FULL, operator);
+            if (!deploymentManager.requiresApproval(DeploymentEnvironment.DEVELOPMENT)) {
+                deploymentManager.executeDeployment(deployment.getId());
+            }
+
+            FunctionUnit deployed = functionUnitManager.finalizeOneClickDeployEnable(id, operator);
+            return FunctionUnitInfo.fromEntity(deployed);
+        });
     }
 
     @PostMapping("/{id}/purge-runtime-data")
@@ -215,21 +293,19 @@ public class FunctionUnitController extends AbstractBaseController {
     }
 
     @DeleteMapping("/batch")
-    @Operation(summary = "批量删除", description = "批量删除功能单元及其关联内容")
+    @Operation(summary = "批量归档", description = "批量归档功能单元（按 code 归档全部版本）")
     public ResponseEntity<ApiResponse<Void>> batchDelete(
             @RequestBody @Valid com.admin.dto.request.BatchDeleteRequest request) {
-        log.info("Batch deleting {} function units", request.getIds().size());
+        log.info("Batch archiving {} function units", request.getIds().size());
 
         // 防止 DOS 攻击: 限制批量操作 ID 数量
         if (request.getIds().size() > MAX_BATCH_IDS) {
             throw new AdminBusinessException("ID_COUNT_EXCEEDED",
                     "批量操作 ID 数量超过限制: " + request.getIds().size() + ", 最大 " + MAX_BATCH_IDS);
         }
-
         return handleRequest(() -> {
             for (String id : request.getIds()) {
-                accessService.deleteAllAccessConfigs(id);
-                functionUnitManager.deleteFunctionUnitCascade(id);
+                functionUnitManager.archiveFunctionUnitByCode(id);
             }
             return null;
         });
@@ -246,14 +322,14 @@ public class FunctionUnitController extends AbstractBaseController {
     }
     
     @PostMapping("/{id}/validate")
-    @Operation(summary = "验证功能单元", description = "将功能单元标记为已验证")
-    public ResponseEntity<FunctionUnitInfo> validateFunctionUnit(
+    @Operation(summary = "验证功能单元", description = "校验结构、依赖与 Flowable 可部署性，通过后标记为已验证")
+    public ResponseEntity<ApiResponse<ValidationResult>> validateFunctionUnit(
             @Parameter(description = "功能单元ID") @PathVariable String id) {
-        String validatorId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
+        String validatorId = SecurityContextUtils.getCurrentUserId()
                 .orElseThrow(() -> new RuntimeException("未认证用户"));
         log.info("Validating function unit: {}", id);
-        FunctionUnit unit = functionUnitManager.validateFunctionUnit(id, validatorId);
-        return ResponseEntity.ok(FunctionUnitInfo.fromEntity(unit));
+        String operator = SecurityContextUtils.getCurrentUsername().orElse(validatorId);
+        return handleRequest(() -> functionUnitManager.validateFunctionUnit(id, operator));
     }
     
     @PostMapping("/{id}/deprecate")
@@ -274,9 +350,9 @@ public class FunctionUnitController extends AbstractBaseController {
      */
     @GetMapping("/deployments")
     @Operation(summary = "获取所有部署记录", description = "分页获取所有功能单元的部署记录")
-    public ResponseEntity<ApiResponse<Page<FunctionUnitDeployment>>> getAllDeployments(Pageable pageable) {
+    public ResponseEntity<Page<DeploymentInfo>> getAllDeployments(Pageable pageable) {
         log.info("Getting all deployments, page: {}", pageable);
-        return handleRequest(() -> deploymentManager.listAllDeployments(pageable));
+        return ResponseEntity.ok(deploymentManager.listAllDeployments(pageable));
     }
     
     @PostMapping("/{id}/deployments")

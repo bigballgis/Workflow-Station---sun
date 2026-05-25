@@ -28,18 +28,28 @@ export const statusTagType = (status: string, overrides?: Record<string, TagType
   overrides?.[status] ?? STATUS_TYPE_MAP[status] ?? 'info'
 
 // ---- 功能单元状态 ----
+/** DRAFT 可验证 */
+export const canValidateFunctionUnit = (status: string): boolean => status === 'DRAFT'
+
+/** VALIDATED / DEPLOYED 可部署 */
+export const canDeployFunctionUnit = (status: string): boolean =>
+  status === 'VALIDATED' || status === 'DEPLOYED'
+
 export const functionUnitStatusType = (status: string): TagType =>
   statusTagType(status, {
     DEPLOYED: 'success',
     VALIDATED: 'primary',
     DRAFT: 'warning',
     DEPRECATED: 'info',
+    ARCHIVED: 'info',
   })
 
 // ---- 部署状态 ----
 export const deployStatusType = (status: string): TagType =>
   statusTagType(status, {
+    SUCCESS: 'success',
     COMPLETED: 'success',
+    DEPLOYING: 'warning',
     EXECUTING: 'warning',
     PENDING: 'info',
     APPROVED: 'primary',
@@ -96,6 +106,7 @@ export const functionUnitStatusKey = (status: string) =>
     VALIDATED: 'functionUnit.statusValidated',
     DRAFT: 'functionUnit.statusDraft',
     DEPRECATED: 'functionUnit.statusDeprecated',
+    ARCHIVED: 'functionUnit.statusArchived',
   }[status] || status)
 
 /** 角色类型 i18n key */
