@@ -151,7 +151,15 @@
           :label="t('bi.dashboard.colLastSynced')"
           min-width="170"
           show-overflow-tooltip
-        />
+        >
+          <template #default="{ row }">
+            <span v-if="row.lastSyncedAt">{{ formatDateTime(row.lastSyncedAt) }}</span>
+            <span
+              v-else
+              style="color: #c0c4cc"
+            >-</span>
+          </template>
+        </el-table-column>
         <el-table-column
           :label="t('bi.dashboard.colActions')"
           width="220"
@@ -236,7 +244,7 @@ import { useI18n } from 'vue-i18n'
 import { Refresh, Search, Refresh as RefreshIcon } from '@element-plus/icons-vue'
 import PageHeader from '@/components/PageHeader.vue'
 import { useBiDashboard } from '@/composables/modules/useBiDashboard'
-import { biDashboardStatusKey, biDashboardStatusTagType } from '@/utils/format'
+import { biDashboardStatusKey, biDashboardStatusTagType, formatDateTime } from '@/utils/format'
 import DashboardEditDialog from './components/DashboardEditDialog.vue'
 
 const { t } = useI18n()

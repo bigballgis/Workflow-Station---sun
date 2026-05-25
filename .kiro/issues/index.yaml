@@ -1671,3 +1671,9 @@
     根因：BusinessUnitTree 右侧详情卡片依赖 `<BusinessUnitApproversDialog @success="fetchApprovers">` 与 `<BusinessUnitMembersDialog @success="handleMembersChange">` 回刷列表，但两个 dialog 在 add/remove 成功后都没有 emit `success`；结果弹窗内部列表刷新了，页面右侧列表仍保持旧数据，必须手动刷新页签。
     修复：让 useBusinessUnitApprovers / useBusinessUnitMembers 的 add/remove 方法返回布尔成功标记；两个 dialog 在操作成功后显式 emit `success`，复用父页现有刷新逻辑，避免改 API 或 lookup 配置。
     验证：`npx vitest run "src/composables/__tests__/businessUnitDialogRefresh.test.ts"` 通过；`npm run build` 通过；`docker compose -f docker-compose.dev.yml --env-file .env up -d --build admin-center-frontend` 后容器正常启动。
+
+- id: "1382"
+  status: open
+  severity: major
+  category: bug
+  summary: "admin-center 的 useBiDashboard 在 catch 中引用未定义 error，导致状态切换或删除失败时前端二次报错"

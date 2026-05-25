@@ -163,6 +163,51 @@ export const formatDate = (dateStr: string): string => {
   return new Date(dateStr).toLocaleString('zh-CN')
 }
 
+const parseDateTime = (dateStr: string): Date | null => {
+  const parsed = new Date(dateStr)
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed
+  }
+
+  const match = dateStr.match(
+    /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?$/
+  )
+  if (!match) {
+    return null
+  }
+
+  const [, year, month, day, hour, minute, second = '0', fraction = '0'] = match
+  const millisecond = Number(fraction.padEnd(3, '0').slice(0, 3))
+
+  return new Date(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour),
+    Number(minute),
+    Number(second),
+    millisecond
+  )
+}
+
+export const formatDateTime = (dateStr: string): string => {
+  if (!dateStr) return ''
+
+  const date = parseDateTime(dateStr)
+  if (!date) {
+    return dateStr.replace('T', ' ').replace(/\.\d+$/, '')
+  }
+
+  const yyyy = date.getFullYear()
+  const MM = String(date.getMonth() + 1).padStart(2, '0')
+  const dd = String(date.getDate()).padStart(2, '0')
+  const HH = String(date.getHours()).padStart(2, '0')
+  const mm = String(date.getMinutes()).padStart(2, '0')
+  const ss = String(date.getSeconds()).padStart(2, '0')
+
+  return `${yyyy}-${MM}-${dd} ${HH}:${mm}:${ss}`
+}
+
 
 // ==================== 权限操作文本 i18n key ====================
 
