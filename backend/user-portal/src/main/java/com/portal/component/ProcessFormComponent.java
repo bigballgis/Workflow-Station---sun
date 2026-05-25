@@ -396,7 +396,8 @@ public class ProcessFormComponent {
                             SELECT ftb.id AS binding_id,
                                    ftb.binding_type::text AS binding_type,
                                    ftb.binding_mode::text AS binding_mode,
-                                   COALESCE(td.table_name, rt.table_name) AS table_name
+                                   COALESCE(td.table_name, rt.table_name) AS table_name,
+                                   COALESCE(td.table_display_name, rt.display_name) AS table_display_name
                             FROM dw_form_table_bindings ftb
                             LEFT JOIN dw_table_definitions td ON td.id = ftb.table_id
                             LEFT JOIN rt_table_definitions rt ON rt.id = ftb.relation_table_id
@@ -407,6 +408,7 @@ public class ProcessFormComponent {
                         Map<String, Object> b = new LinkedHashMap<>();
                         b.put("bindingId", rs.getLong("binding_id"));
                         b.put("tableName", rs.getString("table_name"));
+                        b.put("tableDisplayName", rs.getString("table_display_name"));
                         b.put("bindingType", rs.getString("binding_type"));
                         b.put("bindingMode", rs.getString("binding_mode"));
                         b.put("columns", Collections.emptyList());
@@ -549,6 +551,7 @@ public class ProcessFormComponent {
                     .map(b -> SubTableBindingData.builder()
                             .bindingId(b.get("bindingId") != null ? ((Number) b.get("bindingId")).longValue() : null)
                             .tableName((String) b.get("tableName"))
+                            .tableDisplayName((String) b.get("tableDisplayName"))
                             .bindingType((String) b.get("bindingType"))
                             .bindingMode((String) b.get("bindingMode"))
                             .columns((List<Map<String, Object>>) b.get("columns"))

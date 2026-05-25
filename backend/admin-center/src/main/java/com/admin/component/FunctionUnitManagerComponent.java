@@ -931,16 +931,24 @@ public class FunctionUnitManagerComponent {
 
             if (!formSourceIds.isEmpty()) {
                 String placeholders = formSourceIds.stream().map(n -> "?").collect(Collectors.joining(","));
+                // LEFT JOIN both dw_table_definitions (SUB/PRIMARY via table_id) and rt_table_definitions
+                // (RELATED via relation_table_id) so designer-configured display names propagate to portal
+                // for all binding types — mirrors user-portal ProcessFormComponent.loadSubTableBindingMapsForForm.
                 String sql =
                         "SELECT fd.id as form_id, ftb.id as binding_id, ftb.binding_type, ftb.binding_mode, " +
                         "       ftb.sub_mode, ftb.foreign_key_field, ftb.sort_order, " +
-                        "       td.id as table_id, td.table_name, td.table_type, td.description as table_description, " +
+                        "       COALESCE(td.id, rt.id) as table_id, " +
+                        "       COALESCE(td.table_name, rt.table_name) AS table_name, " +
+                        "       COALESCE(td.table_display_name, rt.display_name) AS table_display_name, " +
+                        "       COALESCE(td.table_type, 'RELATION') as table_type, " +
+                        "       COALESCE(td.description, rt.description) as table_description, " +
                         "       (SELECT array_agg(fd_inner.field_name ORDER BY fd_inner.sort_order NULLS LAST, fd_inner.id) " +
                         "        FROM dw_field_definitions fd_inner " +
                         "        WHERE fd_inner.table_id = td.id AND COALESCE(fd_inner.is_primary_key, false) = true) AS primary_key_fields " +
                         "FROM dw_form_definitions fd " +
                         "JOIN dw_form_table_bindings ftb ON ftb.form_id = fd.id " +
-                        "JOIN dw_table_definitions td ON td.id = ftb.table_id " +
+                        "LEFT JOIN dw_table_definitions td ON td.id = ftb.table_id " +
+                        "LEFT JOIN rt_table_definitions rt ON rt.id = ftb.relation_table_id " +
                         "WHERE fd.id::text IN (" + placeholders + ") " +
                         "ORDER BY fd.id, ftb.sort_order";
                 jdbcTemplate.query(sql, rs -> {
@@ -954,6 +962,7 @@ public class FunctionUnitManagerComponent {
                             .foreignKeyField(rs.getString("foreign_key_field"))
                             .sortOrder(rs.getInt("sort_order"))
                             .tableName(rs.getString("table_name"))
+                            .tableDisplayName(rs.getString("table_display_name"))
                             .tableType(rs.getString("table_type"))
                             .tableDescription(rs.getString("table_description"))
                             .primaryKeyFields(readTextArrayColumn(rs, "primary_key_fields"))
@@ -967,14 +976,19 @@ public class FunctionUnitManagerComponent {
                 String sql =
                         "SELECT latest.form_name, ftb.id as binding_id, ftb.binding_type, ftb.binding_mode, " +
                         "       ftb.sub_mode, ftb.foreign_key_field, ftb.sort_order, " +
-                        "       td.id as table_id, td.table_name, td.table_type, td.description as table_description, " +
+                        "       COALESCE(td.id, rt.id) as table_id, " +
+                        "       COALESCE(td.table_name, rt.table_name) AS table_name, " +
+                        "       COALESCE(td.table_display_name, rt.display_name) AS table_display_name, " +
+                        "       COALESCE(td.table_type, 'RELATION') as table_type, " +
+                        "       COALESCE(td.description, rt.description) as table_description, " +
                         "       (SELECT array_agg(fd_inner.field_name ORDER BY fd_inner.sort_order NULLS LAST, fd_inner.id) " +
                         "        FROM dw_field_definitions fd_inner " +
                         "        WHERE fd_inner.table_id = td.id AND COALESCE(fd_inner.is_primary_key, false) = true) AS primary_key_fields " +
                         "FROM (SELECT DISTINCT ON (form_name) id, form_name, config_json FROM dw_form_definitions " +
                         "      WHERE form_name IN (" + placeholders + ") ORDER BY form_name, id DESC) latest " +
                         "JOIN dw_form_table_bindings ftb ON ftb.form_id = latest.id " +
-                        "JOIN dw_table_definitions td ON td.id = ftb.table_id " +
+                        "LEFT JOIN dw_table_definitions td ON td.id = ftb.table_id " +
+                        "LEFT JOIN rt_table_definitions rt ON rt.id = ftb.relation_table_id " +
                         "ORDER BY latest.form_name, ftb.sort_order";
                 jdbcTemplate.query(sql, rs -> {
                     String formName = rs.getString("form_name");
@@ -987,6 +1001,7 @@ public class FunctionUnitManagerComponent {
                             .foreignKeyField(rs.getString("foreign_key_field"))
                             .sortOrder(rs.getInt("sort_order"))
                             .tableName(rs.getString("table_name"))
+                            .tableDisplayName(rs.getString("table_display_name"))
                             .tableType(rs.getString("table_type"))
                             .tableDescription(rs.getString("table_description"))
                             .primaryKeyFields(readTextArrayColumn(rs, "primary_key_fields"))
