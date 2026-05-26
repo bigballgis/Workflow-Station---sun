@@ -68,4 +68,12 @@ public interface ProcessInstanceRepository extends JpaRepository<ProcessInstance
     int updateCurrentNodeIfNotCompleted(@Param("id") String id,
                                         @Param("currentNode") String currentNode,
                                         @Param("currentAssignee") String currentAssignee);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("UPDATE ProcessInstance p SET p.currentNode = :currentNode, p.currentAssignee = :currentAssignee, " +
+           "p.candidateUsers = :candidateUsers WHERE p.id = :id AND p.status <> 'COMPLETED'")
+    int updateCurrentNodeAndAssigneesIfNotCompleted(@Param("id") String id,
+                                                    @Param("currentNode") String currentNode,
+                                                    @Param("currentAssignee") String currentAssignee,
+                                                    @Param("candidateUsers") String candidateUsers);
 }

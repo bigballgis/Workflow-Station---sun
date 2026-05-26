@@ -14,6 +14,7 @@ import com.portal.exception.PortalException;
 import com.portal.repository.DelegationAuditRepository;
 import com.portal.repository.DelegationRuleRepository;
 import com.portal.repository.ProcessInstanceRepository;
+import com.portal.service.ProcessAssigneeSnapshot;
 import com.platform.security.util.SecurityContextUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -107,7 +108,7 @@ public class TaskProcessComponent {
         TaskInfo task = getTaskOrThrow(taskId);
         
         // 更新流程实例的当前处理人（门户侧统一记 JWT userId）
-        updateProcessInstanceAssignee(task.getProcessInstanceId(), userId, task.getTaskName());
+        updateProcessInstanceAssignee(task.getProcessInstanceId(), userId, null, task.getTaskName());
 
         log.info("Task {} claimed via Flowable by user {}", taskId, userId);
         return task;
@@ -149,7 +150,12 @@ public class TaskProcessComponent {
         TaskInfo task = getTaskOrThrow(taskId);
         
         // 取消认领后，清空流程实例的当前处理人
-        updateProcessInstanceAssignee(task.getProcessInstanceId(), null, task.getTaskName());
+        ProcessAssigneeSnapshot snapshot = ProcessAssigneeSnapshot.fromTaskInfo(task);
+        updateProcessInstanceAssignee(
+                task.getProcessInstanceId(),
+                snapshot.getAssigneeUserId(),
+                snapshot.getCandidateUserIds(),
+                task.getTaskName());
 
         log.info("Task {} unclaimed via Flowable by user {}", taskId, userId);
         return task;
@@ -226,7 +232,7 @@ public class TaskProcessComponent {
         
         // 更新流程实例的当前处理人
         TaskInfo task = getTaskOrThrow(taskId);
-        updateProcessInstanceAssignee(task.getProcessInstanceId(), delegateId, task.getTaskName());
+        updateProcessInstanceAssignee(task.getProcessInstanceId(), delegateId, null, task.getTaskName());
         
         // 记录审计日志
         DelegationAudit audit = DelegationAudit.builder()
@@ -267,7 +273,7 @@ public class TaskProcessComponent {
         
         // 更新流程实例的当前处理人
         TaskInfo task = getTaskOrThrow(taskId);
-        updateProcessInstanceAssignee(task.getProcessInstanceId(), toUserId, task.getTaskName());
+        updateProcessInstanceAssignee(task.getProcessInstanceId(), toUserId, null, task.getTaskName());
 
         // 记录审计日志
         DelegationAudit audit = DelegationAudit.builder()
@@ -1348,8 +1354,10 @@ public class TaskProcessComponent {
                     // 流程未完成，可能有下一个任务，尝试获取下一个任务信息
                     String nextTaskName = (String) status.get("nextTaskName");
                     String nextAssignee = (String) status.get("nextAssignee");
+                    String nextCandidateUsers = (String) status.get("nextCandidateUsers");
                     if (nextTaskName != null) {
-                        updateProcessInstanceAssignee(processInstanceId, nextAssignee, nextTaskName);
+                        updateProcessInstanceAssignee(
+                                processInstanceId, nextAssignee, nextCandidateUsers, nextTaskName);
                         log.info("Process {} continues with next task: {}", processInstanceId, nextTaskName);
                     } else {
                         // 没有下一个用户任务，可能流程已经到达非用户任务节点（如结束事件）
@@ -1574,7 +1582,8 @@ public class TaskProcessComponent {
     /**
      * 更新流程实例的当前处理人
      */
-    private void updateProcessInstanceAssignee(String processInstanceId, String assignee, String currentNode) {
+    private void updateProcessInstanceAssignee(String processInstanceId, String assigneeUserId,
+                                               String candidateUserIds, String currentNode) {
         if (processInstanceId == null) {
             return;
         }
@@ -1583,13 +1592,14 @@ public class TaskProcessComponent {
             Optional<ProcessInstance> optInstance = processInstanceRepository.findById(processInstanceId);
             if (optInstance.isPresent()) {
                 ProcessInstance instance = optInstance.get();
-                instance.setCurrentAssignee(assignee);
+                instance.setCurrentAssignee(assigneeUserId);
+                instance.setCandidateUsers(candidateUserIds);
                 if (currentNode != null) {
                     instance.setCurrentNode(currentNode);
                 }
                 processInstanceRepository.save(instance);
-                log.info("Updated process instance {} with currentAssignee={}, currentNode={}",
-                        processInstanceId, assignee, currentNode);
+                log.info("Updated process instance {} with currentAssignee={}, candidateUsers={}, currentNode={}",
+                        processInstanceId, assigneeUserId, candidateUserIds, currentNode);
             }
         } catch (PortalException e) {
             throw e;

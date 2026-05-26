@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -25,6 +26,12 @@ public interface UserRepository extends JpaRepository<User, String> {
      * @return Optional containing the user if found
      */
     Optional<User> findByUsername(String username);
+
+    List<User> findByUsernameIn(Collection<String> usernames);
+
+    Optional<User> findByEmployeeId(String employeeId);
+
+    List<User> findByEmployeeIdIn(Collection<String> employeeIds);
 
     /**
      * Check if a user exists with the given username.

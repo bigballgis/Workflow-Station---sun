@@ -361,18 +361,15 @@ public class DashboardComponent {
 
         List<ProcessInstance> pageContent = resultPage.getContent();
         Set<String> assigneeKeys = pageContent.stream()
-                .map(ProcessInstance::getCurrentAssignee)
-                .filter(a -> a != null && !a.isBlank())
-                .map(String::trim)
+                .flatMap(pi -> userDisplayNameResolver.collectAssigneeUserKeys(
+                        pi.getCurrentAssignee(), pi.getCandidateUsers()).stream())
                 .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
         Map<String, String> assigneeNames = userDisplayNameResolver.resolveBatch(assigneeKeys);
 
         List<TeamRequestsResponse.TeamRequestItem> items = pageContent.stream()
                 .map(pi -> {
-                    String rawAssignee = pi.getCurrentAssignee();
-                    String displayAssignee = rawAssignee != null && !rawAssignee.isBlank()
-                            ? assigneeNames.getOrDefault(rawAssignee.trim(), rawAssignee.trim())
-                            : null;
+                    String displayAssignee = userDisplayNameResolver.resolveCurrentAssigneeDisplay(
+                            pi.getCurrentAssignee(), pi.getCandidateUsers(), assigneeNames);
                     return TeamRequestsResponse.TeamRequestItem.builder()
                         .id(pi.getId())
                         .processDefinitionName(pi.getProcessDefinitionName())

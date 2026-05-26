@@ -437,6 +437,19 @@ public class ProcessEngineComponent {
                     status.put("nextTaskName", currentTask.getName());
                     status.put("nextAssignee", currentTask.getAssignee());
                     status.put("nextTaskId", currentTask.getId());
+
+                    List<String> candidateUserIds = new ArrayList<>();
+                    for (org.flowable.identitylink.api.IdentityLink link
+                            : taskService.getIdentityLinksForTask(currentTask.getId())) {
+                        if ("candidate".equals(link.getType())
+                                && link.getUserId() != null
+                                && !link.getUserId().isBlank()) {
+                            candidateUserIds.add(link.getUserId().trim());
+                        }
+                    }
+                    if (!candidateUserIds.isEmpty()) {
+                        status.put("nextCandidateUsers", String.join(",", candidateUserIds));
+                    }
                 }
                 
                 return status;

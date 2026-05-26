@@ -16,14 +16,20 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static com.portal.service.ProcessAssigneeSnapshot.collectUserKeys;
+import static com.portal.service.ProcessAssigneeSnapshot.parseDelimitedUserKeys;
+
 /**
- * Resolves user identifiers (UUID id or username) to a display name for portal UI.
+ * Resolves user identifiers (UUID id, username, or employee_id) to a display name for portal UI.
  * Priority: fullName &gt; displayName &gt; username &gt; original key.
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class UserDisplayNameResolver {
+
+    /** Separator for multiple assignee display names in list/detail UI. */
+    public static final String MULTI_ASSIGNEE_DISPLAY_SEPARATOR = ", ";
 
     private final UserRepository userRepository;
 
@@ -44,6 +50,13 @@ public class UserDisplayNameResolver {
     }
 
     /**
+     * Collect all user keys referenced by assignee / candidate columns for batch lookup.
+     */
+    public Set<String> collectAssigneeUserKeys(String assigneeUserId, String candidateUserIds) {
+        return collectUserKeys(assigneeUserId, candidateUserIds);
+    }
+
+    /**
      * Batch resolve keys; unresolved keys map to themselves.
      */
     public Map<String, String> resolveBatch(Collection<String> keys) {
@@ -53,40 +66,76 @@ public class UserDisplayNameResolver {
 
         Set<String> unique = keys.stream()
                 .filter(Objects::nonNull)
-                .map(String::trim)
-                .filter(s -> !s.isEmpty())
+                .flatMap(key -> parseDelimitedUserKeys(key).stream())
                 .collect(Collectors.toCollection(LinkedHashSet::new));
         if (unique.isEmpty()) {
             return Map.of();
         }
 
-        Map<String, String> out = new HashMap<>();
-        Map<String, User> byId = new HashMap<>();
-        userRepository.findAllById(unique).forEach(user -> {
-            if (user != null && user.getId() != null) {
-                byId.put(user.getId(), user);
-            }
-        });
+        Map<String, String> aliasToDisplay = new HashMap<>();
+        registerUsers(aliasToDisplay, userRepository.findAllById(unique));
 
-        List<String> unresolved = new ArrayList<>();
-        for (String key : unique) {
-            User user = byId.get(key);
-            if (user != null) {
-                out.put(key, displayNameForUser(user));
-            } else {
-                unresolved.add(key);
-            }
+        List<String> unresolved = unique.stream()
+                .filter(key -> !aliasToDisplay.containsKey(key))
+                .toList();
+        if (!unresolved.isEmpty()) {
+            registerUsers(aliasToDisplay, userRepository.findByUsernameIn(unresolved));
         }
 
-        for (String key : unresolved) {
-            userRepository.findByUsername(key)
-                    .map(UserDisplayNameResolver::displayNameForUser)
-                    .ifPresentOrElse(
-                            name -> out.put(key, name),
-                            () -> out.put(key, key)
-                    );
+        unresolved = unique.stream()
+                .filter(key -> !aliasToDisplay.containsKey(key))
+                .toList();
+        if (!unresolved.isEmpty()) {
+            registerUsers(aliasToDisplay, userRepository.findByEmployeeIdIn(unresolved));
+        }
+
+        Map<String, String> out = new HashMap<>();
+        for (String key : unique) {
+            out.put(key, aliasToDisplay.getOrDefault(key, key));
         }
         return out;
+    }
+
+    /**
+     * Resolve comma-separated user ids to comma-separated display names.
+     */
+    public String resolveDelimitedDisplay(String delimitedUserKeys, Map<String, String> cache) {
+        List<String> keys = parseDelimitedUserKeys(delimitedUserKeys);
+        if (keys.isEmpty()) {
+            return null;
+        }
+        if (keys.size() == 1) {
+            return resolveCached(keys.get(0), cache);
+        }
+        return keys.stream()
+                .map(key -> resolveCached(key, cache))
+                .collect(Collectors.joining(MULTI_ASSIGNEE_DISPLAY_SEPARATOR));
+    }
+
+    /**
+     * Build Current Assignee label: single name, or {@code name1, name2, name3} for BU/Role pools.
+     */
+    public String resolveCurrentAssigneeDisplay(String assigneeUserId, String candidateUserIds,
+                                                Map<String, String> cache) {
+        if (assigneeUserId != null && !assigneeUserId.isBlank()) {
+            List<String> assigneeKeys = parseDelimitedUserKeys(assigneeUserId);
+            if (assigneeKeys.size() == 1) {
+                String resolved = resolveCached(assigneeKeys.get(0), cache);
+                if (!assigneeKeys.get(0).equals(resolved)) {
+                    return resolved;
+                }
+            }
+            if (assigneeKeys.size() > 1) {
+                return resolveDelimitedDisplay(assigneeUserId, cache);
+            }
+        }
+        if (candidateUserIds != null && !candidateUserIds.isBlank()) {
+            return resolveDelimitedDisplay(candidateUserIds, cache);
+        }
+        if (assigneeUserId != null && !assigneeUserId.isBlank()) {
+            return resolveCached(assigneeUserId.trim(), cache);
+        }
+        return null;
     }
 
     static String displayNameForUser(User user) {
@@ -97,5 +146,26 @@ public class UserDisplayNameResolver {
             return user.getDisplayName().trim();
         }
         return user.getUsername();
+    }
+
+    private static void registerUsers(Map<String, String> aliasToDisplay, Iterable<User> users) {
+        if (users == null) {
+            return;
+        }
+        for (User user : users) {
+            if (user == null) {
+                continue;
+            }
+            String display = displayNameForUser(user);
+            if (user.getId() != null && !user.getId().isBlank()) {
+                aliasToDisplay.putIfAbsent(user.getId().trim(), display);
+            }
+            if (user.getUsername() != null && !user.getUsername().isBlank()) {
+                aliasToDisplay.putIfAbsent(user.getUsername().trim(), display);
+            }
+            if (user.getEmployeeId() != null && !user.getEmployeeId().isBlank()) {
+                aliasToDisplay.putIfAbsent(user.getEmployeeId().trim(), display);
+            }
+        }
     }
 }

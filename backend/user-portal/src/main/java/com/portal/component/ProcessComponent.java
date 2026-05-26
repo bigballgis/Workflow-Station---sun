@@ -20,6 +20,7 @@ import com.portal.repository.ProcessHistoryRepository;
 import com.portal.repository.ProcessInstanceRepository;
 import com.portal.repository.ActionDefinitionRepository;
 import com.portal.service.PortalWorkspaceAuthService;
+import com.portal.service.ProcessAssigneeSnapshot;
 import com.portal.service.UserDisplayNameResolver;
 import com.platform.common.jdbc.PostgresPhysicalTablePrimaryKeys;
 import com.platform.common.jdbc.SubTablePhysicalColumnResolver;
@@ -327,8 +328,7 @@ public class ProcessComponent {
         // 自动完成第一个任务（发起人任务）
         // 流程启动后，第一个任务通常是发起人填写表单的任务，需要自动完成以流转到下一个审批节点
         String currentNodeName = null;
-        String currentAssigneeId = null;
-        String currentAssigneeName = null;
+        ProcessAssigneeSnapshot nextAssigneeSnapshot = ProcessAssigneeSnapshot.empty();
         String initiatorTaskIdForHistory = null;
         String initiatorTaskDefKeyForHistory = null;
 
@@ -393,22 +393,11 @@ public class ProcessComponent {
                                     if (nextTasks != null && !nextTasks.isEmpty()) {
                                         Map<String, Object> currentTask = nextTasks.get(0);
                                         currentNodeName = (String) currentTask.get("taskName");
-                                        // 使用 currentAssignee 或 assignmentTarget 字段
-                                        currentAssigneeId = (String) currentTask.get("currentAssignee");
-                                        if (currentAssigneeId == null) {
-                                            currentAssigneeId = (String) currentTask.get("assignmentTarget");
-                                        }
-                                        // 获取当前处理人名称
-                                        currentAssigneeName = (String) currentTask.get("currentAssigneeName");
-                                        if (currentAssigneeName == null || currentAssigneeName.isEmpty()) {
-                                            // 如果没有名称，解析用户ID为名称
-                                            if (currentAssigneeId != null && !currentAssigneeId.isEmpty()) {
-                                                currentAssigneeName = userDisplayNameResolver.resolve(currentAssigneeId);
-                                            }
-                                        }
-                                        
-                                        log.info("Current task after auto-complete: node={}, assignee={}, assigneeName={}", 
-                                                currentNodeName, currentAssigneeId, currentAssigneeName);
+                                        nextAssigneeSnapshot = ProcessAssigneeSnapshot.fromEngineTask(currentTask);
+                                        log.info("Current task after auto-complete: node={}, assignee={}, candidates={}",
+                                                currentNodeName,
+                                                nextAssigneeSnapshot.getAssigneeUserId(),
+                                                nextAssigneeSnapshot.getCandidateUserIds());
                                     }
                                 }
                             }
@@ -443,12 +432,15 @@ public class ProcessComponent {
         // 更新流程实例（补充当前节点和处理人信息）
         // 使用条件 UPDATE 避免覆盖 ProcessCompletionListener 回调已设置的 COMPLETED 状态（竞态条件）
         // JPA 一级缓存会导致 findById 返回旧对象，所以必须用 @Modifying 原生更新绕过缓存
-        String assignee = currentAssigneeName != null ? currentAssigneeName : currentAssigneeId;
-        int updated = processInstanceRepository.updateCurrentNodeIfNotCompleted(
-                flowableProcessInstanceId, currentNodeName, assignee);
+        int updated = processInstanceRepository.updateCurrentNodeAndAssigneesIfNotCompleted(
+                flowableProcessInstanceId,
+                currentNodeName,
+                nextAssigneeSnapshot.getAssigneeUserId(),
+                nextAssigneeSnapshot.getCandidateUserIds());
         if (updated > 0) {
-            log.info("Process instance updated in local database: {} with currentNode={}, currentAssignee={}",
-                    flowableProcessInstanceId, currentNodeName, assignee);
+            log.info("Process instance updated in local database: {} with currentNode={}, assignee={}, candidates={}",
+                    flowableProcessInstanceId, currentNodeName,
+                    nextAssigneeSnapshot.getAssigneeUserId(), nextAssigneeSnapshot.getCandidateUserIds());
         } else {
             log.info("Process instance {} already COMPLETED, skipped currentNode update (race condition avoided)",
                     flowableProcessInstanceId);
@@ -467,6 +459,15 @@ public class ProcessComponent {
                 .build();
         processHistoryRepository.save(startHistory);
         
+        Map<String, String> startAssigneeCache = userDisplayNameResolver.resolveBatch(
+                userDisplayNameResolver.collectAssigneeUserKeys(
+                        nextAssigneeSnapshot.getAssigneeUserId(),
+                        nextAssigneeSnapshot.getCandidateUserIds()));
+        String startAssigneeDisplay = userDisplayNameResolver.resolveCurrentAssigneeDisplay(
+                nextAssigneeSnapshot.getAssigneeUserId(),
+                nextAssigneeSnapshot.getCandidateUserIds(),
+                startAssigneeCache);
+
         return ProcessInstanceInfo.builder()
                 .id(flowableProcessInstanceId)
                 .processDefinitionId((String) data.get("processDefinitionId"))
@@ -478,7 +479,8 @@ public class ProcessComponent {
                 .startUserId(userId)
                 .startUserName(startUserDisplayName)
                 .currentNode(currentNodeName)
-                .currentAssignee(currentAssigneeName != null ? currentAssigneeName : currentAssigneeId)
+                .currentAssignee(startAssigneeDisplay)
+                .candidateUsers(nextAssigneeSnapshot.getCandidateUserIds())
                 .functionUnitCatalogId(pin.catalogId())
                 .functionUnitCode(pin.code())
                 .functionUnitVersionLabel(pin.versionLabel())
@@ -1043,6 +1045,66 @@ public class ProcessComponent {
     // ==================== 流程查询 ====================
 
     /**
+     * 对运行中且本地 assignee 信息不完整/未解析的流程，从引擎补全 user id / 候选人 id 并写回 DB。
+     */
+    private void enrichRunningAssigneesFromEngine(List<ProcessInstance> instances) {
+        if (instances == null || instances.isEmpty() || !workflowEngineClient.isAvailable()) {
+            return;
+        }
+        for (ProcessInstance instance : instances) {
+            if (instance == null || !"RUNNING".equals(instance.getStatus())) {
+                continue;
+            }
+            if (!needsAssigneeEnrichment(instance)) {
+                continue;
+            }
+            try {
+                Optional<Map<String, Object>> tasksResult =
+                        workflowEngineClient.getProcessInstanceTasks(instance.getId());
+                if (tasksResult.isEmpty()) {
+                    continue;
+                }
+                Map<String, Object> tasksData = tasksResult.get();
+                if (tasksData == null) {
+                    continue;
+                }
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> tasks = (List<Map<String, Object>>) tasksData.get("tasks");
+                if (tasks == null || tasks.isEmpty()) {
+                    continue;
+                }
+                ProcessAssigneeSnapshot snapshot = ProcessAssigneeSnapshot.fromEngineTask(tasks.get(0));
+                if (snapshot.getAssigneeUserId() == null && snapshot.getCandidateUserIds() == null) {
+                    continue;
+                }
+                instance.setCurrentAssignee(snapshot.getAssigneeUserId());
+                instance.setCandidateUsers(snapshot.getCandidateUserIds());
+                processInstanceRepository.save(instance);
+                log.debug("Enriched assignee snapshot for process {}: assignee={}, candidates={}",
+                        instance.getId(), snapshot.getAssigneeUserId(), snapshot.getCandidateUserIds());
+            } catch (Exception e) {
+                log.warn("Failed to enrich assignee from engine for process {}: {}",
+                        instance.getId(), e.getMessage());
+            }
+        }
+    }
+
+    private boolean needsAssigneeEnrichment(ProcessInstance instance) {
+        String assignee = instance.getCurrentAssignee();
+        String candidates = instance.getCandidateUsers();
+        if (candidates != null && !candidates.isBlank()) {
+            return true;
+        }
+        if (assignee == null || assignee.isBlank()) {
+            return true;
+        }
+        Map<String, String> probe = userDisplayNameResolver.resolveBatch(
+                userDisplayNameResolver.collectAssigneeUserKeys(assignee, candidates));
+        String display = userDisplayNameResolver.resolveCurrentAssigneeDisplay(assignee, candidates, probe);
+        return display != null && display.equals(assignee.trim());
+    }
+
+    /**
      * 获取我的申请列表
      */
     public Page<ProcessInstanceInfo> getMyApplications(String userId, String status, Pageable pageable) {
@@ -1056,10 +1118,11 @@ public class ProcessComponent {
         }
 
         List<ProcessInstance> pageContent = instancePage.getContent();
+        enrichRunningAssigneesFromEngine(pageContent);
+
         Set<String> assigneeKeys = pageContent.stream()
-                .map(ProcessInstance::getCurrentAssignee)
-                .filter(a -> a != null && !a.isEmpty())
-                .map(String::trim)
+                .flatMap(inst -> userDisplayNameResolver.collectAssigneeUserKeys(
+                        inst.getCurrentAssignee(), inst.getCandidateUsers()).stream())
                 .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
         Map<String, String> userNameCache = userDisplayNameResolver.resolveBatch(assigneeKeys);
         // 列表接口不返回 variables：库内 JSONB 可能含 Jackson 无法序列化的嵌套结构，会在写响应时触发 HttpMessageNotWritableException → SYS_INTERNAL_ERROR
@@ -1080,22 +1143,16 @@ public class ProcessComponent {
     
     /**
      * 我的申请列表：不逐个调用 workflow-engine 拉运行时任务（避免每行一次 HTTP，列表页极慢）。
-     * 当前处理人展示名由门户库 {@link ProcessInstance#getCurrentAssignee()} + admin-center 解析。
+     * 当前处理人展示名由 {@link ProcessInstance#getCurrentAssignee()} / {@link ProcessInstance#getCandidateUsers()}
+     * 经 {@link UserDisplayNameResolver} 解析（单人姓名；BU/Role 或签池 {@code name1, name2, name3}）。
      */
     private ProcessInstanceInfo toProcessInstanceInfoForList(ProcessInstance instance, Map<String, String> userNameCache) {
-        String currentAssignee = instance.getCurrentAssignee();
-        String currentAssigneeName = null;
+        String currentAssigneeName = userDisplayNameResolver.resolveCurrentAssigneeDisplay(
+                instance.getCurrentAssignee(), instance.getCandidateUsers(), userNameCache);
 
-        log.debug("toProcessInstanceInfoForList: processId={}, status={}, currentAssignee from DB={}",
-                instance.getId(), instance.getStatus(), currentAssignee);
-
-        if (currentAssignee != null && !currentAssignee.isEmpty()) {
-            currentAssigneeName = userNameCache.getOrDefault(
-                    currentAssignee.trim(),
-                    userDisplayNameResolver.resolveCached(currentAssignee, userNameCache));
-        }
-
-        log.debug("toProcessInstanceInfoForList: final currentAssigneeName={}", currentAssigneeName);
+        log.debug("toProcessInstanceInfoForList: processId={}, status={}, assignee={}, candidates={}, display={}",
+                instance.getId(), instance.getStatus(),
+                instance.getCurrentAssignee(), instance.getCandidateUsers(), currentAssigneeName);
 
         String currentNode = instance.getCurrentNode();
         if ("COMPLETED".equals(instance.getStatus())) {
@@ -1129,46 +1186,12 @@ public class ProcessComponent {
      * 转换实体到DTO（带方法级用户名缓存，避免列表查询 N+1）
      */
     private ProcessInstanceInfo toProcessInstanceInfo(ProcessInstance instance, Map<String, String> userNameCache) {
-        String currentAssignee = instance.getCurrentAssignee();
-        String currentAssigneeName = null;
-        
-        log.debug("toProcessInstanceInfo: processId={}, status={}, currentAssignee from DB={}", 
-                instance.getId(), instance.getStatus(), currentAssignee);
-        
-        if (currentAssignee != null && !currentAssignee.isEmpty() && "RUNNING".equals(instance.getStatus())) {
-            try {
-                if (workflowEngineClient.isAvailable()) {
-                    Optional<Map<String, Object>> tasksResult = workflowEngineClient.getProcessInstanceTasks(instance.getId());
-                    if (tasksResult.isPresent()) {
-                        Map<String, Object> tasksData = tasksResult.get();
-                        if (tasksData != null) {
-                            @SuppressWarnings("unchecked")
-                            List<Map<String, Object>> tasks = (List<Map<String, Object>>) tasksData.get("tasks");
-                            if (tasks != null && !tasks.isEmpty()) {
-                                Map<String, Object> currentTask = tasks.get(0);
-                                currentAssigneeName = (String) currentTask.get("currentAssigneeName");
-                                if (currentAssigneeName == null || currentAssigneeName.isEmpty()) {
-                                    currentAssigneeName = resolveUserDisplayNameCached(currentAssignee, userNameCache);
-                                }
-                            } else {
-                                log.debug("No active tasks found for process instance {}, clearing current assignee", instance.getId());
-                                currentAssigneeName = null;
-                                currentAssignee = null;
-                            }
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                log.warn("Failed to get current assignee name for process {}: {}", instance.getId(), e.getMessage());
-                currentAssigneeName = resolveUserDisplayNameCached(currentAssignee, userNameCache);
-            }
-        }
-        
-        if (currentAssigneeName == null && currentAssignee != null) {
-            currentAssigneeName = resolveUserDisplayNameCached(currentAssignee, userNameCache);
-        }
-        
-        log.debug("toProcessInstanceInfo: final currentAssigneeName={}", currentAssigneeName);
+        String currentAssigneeName = userDisplayNameResolver.resolveCurrentAssigneeDisplay(
+                instance.getCurrentAssignee(), instance.getCandidateUsers(), userNameCache);
+
+        log.debug("toProcessInstanceInfo: processId={}, status={}, assignee={}, candidates={}, display={}",
+                instance.getId(), instance.getStatus(),
+                instance.getCurrentAssignee(), instance.getCandidateUsers(), currentAssigneeName);
 
         String currentNode = instance.getCurrentNode();
         if ("COMPLETED".equals(instance.getStatus())) {
@@ -1227,25 +1250,24 @@ public class ProcessComponent {
                             if (tasks != null && !tasks.isEmpty()) {
                                 Map<String, Object> currentTask = tasks.get(0);
                                 String currentNodeName = (String) currentTask.get("taskName");
-                                String currentAssigneeId = (String) currentTask.get("currentAssignee");
-                                if (currentAssigneeId == null) {
-                                    currentAssigneeId = (String) currentTask.get("assignmentTarget");
-                                }
-                                String currentAssigneeName = (String) currentTask.get("currentAssigneeName");
-                                if (currentAssigneeName == null || currentAssigneeName.isEmpty()) {
-                                    if (currentAssigneeId != null && !currentAssigneeId.isEmpty()) {
-                                        currentAssigneeName = resolveUserDisplayName(currentAssigneeId);
-                                    }
-                                }
+                                ProcessAssigneeSnapshot snapshot = ProcessAssigneeSnapshot.fromEngineTask(currentTask);
+                                Map<String, String> assigneeCache = userDisplayNameResolver.resolveBatch(
+                                        userDisplayNameResolver.collectAssigneeUserKeys(
+                                                snapshot.getAssigneeUserId(), snapshot.getCandidateUserIds()));
+                                String currentAssigneeDisplay = userDisplayNameResolver.resolveCurrentAssigneeDisplay(
+                                        snapshot.getAssigneeUserId(), snapshot.getCandidateUserIds(), assigneeCache);
 
                                 if (currentNodeName != null && !currentNodeName.isEmpty()) {
                                     info.setCurrentNode(currentNodeName);
-                                    info.setCurrentAssignee(currentAssigneeName != null ? currentAssigneeName : currentAssigneeId);
+                                    info.setCurrentAssignee(currentAssigneeDisplay);
+                                    info.setCandidateUsers(snapshot.getCandidateUserIds());
                                     instance.setCurrentNode(currentNodeName);
-                                    instance.setCurrentAssignee(currentAssigneeName != null ? currentAssigneeName : currentAssigneeId);
+                                    instance.setCurrentAssignee(snapshot.getAssigneeUserId());
+                                    instance.setCandidateUsers(snapshot.getCandidateUserIds());
                                     processInstanceRepository.save(instance);
-                                    log.info("getProcessDetail: refreshed currentNode={}, currentAssignee={} from Flowable for process {}",
-                                            currentNodeName, currentAssigneeName, processId);
+                                    log.info("getProcessDetail: refreshed currentNode={}, assignee={}, candidates={} from Flowable for process {}",
+                                            currentNodeName, snapshot.getAssigneeUserId(),
+                                            snapshot.getCandidateUserIds(), processId);
                                 }
                             } else {
                                 log.debug("getProcessDetail: no active tasks in Flowable for process {}, keeping null currentNode", processId);
