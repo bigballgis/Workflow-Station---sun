@@ -1846,3 +1846,54 @@
       - `npm run -s test -- --run src/components/__tests__/fieldRenderer.property.test.ts src/components/__tests__/fieldRendererUserSearch.property.test.ts` 全部通过（16 tests）。
       - `npm run build` 成功；ReadLints 对 FieldRenderer.vue / tasks/detail.vue / applications/detail.vue 无新增告警。
       - 重建 `user-portal-frontend` 容器并刷新浏览器后，`subtable A` 行内联表单的 assignee 字段显示为按 `selectedDisplayField` 的可读文本（如 username 或 full_name），下方按 sys_users `viewFields`（id / username / display_name / full_name / email / employee_id / status / language）渲染回填视图；Completed Tasks 详情同步修复。
+
+- id: "1391"
+  status: fixed
+  fixed_at: "2026-05-26"
+  severity: major
+  category: deploy
+  summary: "Developer Workstation Table Binding Manager 点击 Add 报 `duplicate key value violates unique constraint \"dw_form_table_bindings_pkey\"`：17-Multi-Instance-Subtask-Demo/00-init-kk.sql 用显式 id 灌入 dw_* 与 rt_* 数据但未推进 BIGSERIAL，JPA `GenerationType.IDENTITY` 取到的下一个序列值远低于已存在的最大 id，凡是该 FU 范围内的新增（dw_form_table_bindings / dw_table_definitions / dw_field_definitions / dw_action_definitions / dw_form_definitions / dw_sub_table_view_configs / dw_sub_table_view_fields / dw_table_relations / dw_process_definitions / rt_field_definitions / rt_table_versions）都会主键冲突"
+  file: |
+    deploy/init-scripts/90-post-seed/00-align-id-sequences.sql;
+    deploy/init-scripts/90-post-seed/README.md;
+    deploy/init-scripts/00-init-all.sh
+  note: |
+    复现：登入 Developer Workstation 打开「Multi-Instance Subtask Demo」→ Form Design → Manage Table Bindings → Add Binding（Binding Type=Sub Table、Select Table=Cat、Foreign Key=id）→ 点 Add。后端报 `org.postgresql.util.PSQLException: ERROR: duplicate key value violates unique constraint "dw_form_table_bindings_pkey"`。
+    范围确认：这不是单一 binding 路径的问题，而是 17-Multi-Instance-Subtask-Demo 这一份 seed 把 12 张表的序列都拉漂了。container 首启后实测漂移：
+      dw_form_table_bindings   30 vs 104   (本次报错入口)
+      dw_table_definitions     14 vs  74
+      dw_field_definitions     186 vs 186  (恰好对齐，但属偶然——02-add-subtask-progress-fields.sql 之后用不带 id 的 INSERT 把序列推到了 186)
+      dw_action_definitions    36 vs  49
+      dw_form_definitions      11 vs  18
+      dw_function_units         3 vs   5
+      dw_process_definitions    4 vs   6
+      dw_sub_table_view_configs 1 vs   7
+      dw_sub_table_view_fields  7 vs  37
+      dw_table_relations       (未抓但 seed id 用到 36/37/38)
+      rt_field_definitions      1 vs   6
+      rt_table_definitions      1 vs   1 (临界)
+      rt_table_versions         1 vs   1 (临界)
+    任何走 JPA `GenerationType.IDENTITY` 的新增（在 Designer 加表/字段/Action/子表视图/Form、在 Admin Center 给 Relation Table 加字段或重新部署新版本、流程版本快照、…）都会撞已 seed 的 id 上，不止 binding。
+    根因：`deploy/init-scripts/17-Multi-Instance-Subtask-Demo/00-init-kk.sql` 是从真实开发环境一次性导出的 seed (85 条 `INSERT INTO ... (id, ...) VALUES (...)`)，pg `BIGSERIAL` 在显式指定 id 的 INSERT 上**不会**自动推进序列；脚本末尾既没 `setval(...)`，运行时也不会触发 `DeveloperWorkstationSequenceSynchronizer.synchronizeAll()`——后者只在 FunctionUnit clone / Export-Import / Version restore 路径调，不覆盖普通 CRUD。其它 init 脚本 10/12/13/14/15/16 使用不带 id 的 INSERT（让 BIGSERIAL 自然推进），不受影响；grep 验证只有 17 一个目录有 `INSERT INTO (dw|rt|...)_x (id, ...)` 模式。
+    修复（两处必须同时改，否则下次 `-Clean` 重建会复现）：
+      a) 新增 `deploy/init-scripts/90-post-seed/` 目录及其 `README.md` 说明这一阶段语义。
+      b) 在该目录下新增 `00-align-id-sequences.sql`（LF）。脚本是一个匿名 `DO` 块，遍历所有 `public.dw_*` 与 `public.rt_*` 表，调 `pg_get_serial_sequence(quote_ident(table_name), 'id')` 取序列名，`setval(seq, GREATEST(MAX(id), 1))`。脚本本身**不做任何 public schema DDL**——只对既有序列调 `setval`。
+      c) 修改 `deploy/init-scripts/00-init-all.sh`，在 `[5d/6] Loading Function Unit Multi-Instance Subtask Demo` 之后新增 `[5e/6] Running post-seed alignment scripts (90-post-seed/)`，按 `00-*.sql` ~ `05-*.sql` 顺序遍历该目录下的脚本。
+    为什么把脚本放进新引入的 `90-post-seed/` 目录而不是 `00-schema/` 或 `99-maintenance/`：项目原本只有三类明确分类——
+      • `00-schema/` = schema DDL（CREATE/ALTER TABLE），在 [1/6]/[2/6] 阶段跑、跑时表空；
+      • `01-admin/`、`08-/15-/16-/17-` = seed 数据（admin 账号/角色/权限、Function Unit 演示数据）；
+      • `99-maintenance/` = 按需手动跑的修复（Flowable repair、wipe FU、widen 列等；其中 `00-wipe-all-function-units.sql` 是历史先例被 [4/6] 显式调用）。
+    align 脚本属于第四类：「每次 init 必跑、必须在 seed **之后**跑、不做 DDL、不挑 FU」。强行放进前三类都会破坏目录纯度——放 00-schema 是 DDL 语义被污染，放 99-maintenance 是"按需"语义被污染，放 17 是误导未来读者以为只为 17 服务。故新建 `90-post-seed/`（前缀 90- 表示位于 17- seed 包之后、99- maintenance 之前），并补 `README.md` 解释这一阶段语义，给未来新增的 finalize 类脚本留扩展位。
+    为什么必须修 `00-init-all.sh`：这个项目的 init 流程是**白名单 loader**——`00-init-all.sh` 显式列出每个要跑的脚本/目录段，没注册的文件不会执行。本次在 sh 中显式加入 `[5e/6]` 步骤遍历 `90-post-seed/0X-*.sql`。17 目录下的 `01-add-save-action.sql` 与 `02-add-subtask-progress-fields.sql` 是历史 patch，内容已并入 00-init-kk.sql 的 export，未被 sh 列入故不执行——与本次修复无关。
+    设计选择：
+      1) 动态遍历后，将来任何「导出真实库作 seed」的脚本都自动受保护，不用逐表硬编码维护；
+      2) 幂等——重复执行没有副作用；
+      3) 不修后端：`DeveloperWorkstationSequenceSynchronizer` 已存在的「clone/import/restore 才同步」语义不动；不在每次 CRUD 请求里跑 setval，避免对正常运行时增加 DB 开销。
+    验证：
+      - 现网执行后再次扫描全部 dw_* / rt_* 序列：无 DRIFT。
+      - `nextval('dw_form_table_bindings_id_seq')` 返回 105（>MAX(id)=104）。
+      - 现网刷新页面后重新点 Add Binding 不再报 duplicate key（无需重建后端 jar / 容器）。
+      - `00-init-all.sh` 新增 [5e/6] 步骤已显式注册 `90-post-seed/0X-*.sql` 遍历；下次 `-Clean` 重新初始化 DB 时会在所有 seed 跑完之后自动对齐所有 dw_*/rt_* 序列，根本解决。
+      - 用新路径的脚本对当前 DB 再次执行：`SELECT last_value FROM dw_form_table_bindings_id_seq` = 104，`MAX(id)` = 104，幂等成立。
+    边界情况：
+      - 17 目录下 `01-add-save-action.sql` 与 `02-add-subtask-progress-fields.sql` 在当前 init 流程中**不会被执行**（白名单未列入），因为其修改内容已被合并进 `00-init-kk.sql` 的 export 数据（id=49 的 SAVE action / task_status / task_current_node 字段在 00 里已硬编码）。本次未删除这两个文件以保留 patch 历史记录，但读者勿误以为它们仍在运行。

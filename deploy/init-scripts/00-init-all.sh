@@ -134,6 +134,22 @@ else
   exit 1
 fi
 
+# --- Step 5e: Post-seed alignment ---
+# Scripts under 90-post-seed/ run on every init, AFTER all seed packages above.
+# They are not DDL and not seed data -- they reconcile state introduced by the
+# seed step (e.g. pushing BIGSERIAL sequences past explicit-id seed rows so the
+# next JPA `GenerationType.IDENTITY` insert does not collide on the primary key).
+echo ""
+echo "[5e/6] Running post-seed alignment scripts (90-post-seed/)..."
+for f in /docker-entrypoint-initdb.d/90-post-seed/00-*.sql \
+         /docker-entrypoint-initdb.d/90-post-seed/01-*.sql \
+         /docker-entrypoint-initdb.d/90-post-seed/02-*.sql \
+         /docker-entrypoint-initdb.d/90-post-seed/03-*.sql \
+         /docker-entrypoint-initdb.d/90-post-seed/04-*.sql \
+         /docker-entrypoint-initdb.d/90-post-seed/05-*.sql; do
+  [ -f "$f" ] && echo "  Running $(basename $f)..." && $PSQL -f "$f"
+done
+
 echo ""
 echo "[6/6] Seed scripts finished."
 
