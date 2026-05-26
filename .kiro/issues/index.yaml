@@ -1897,3 +1897,219 @@
       - 用新路径的脚本对当前 DB 再次执行：`SELECT last_value FROM dw_form_table_bindings_id_seq` = 104，`MAX(id)` = 104，幂等成立。
     边界情况：
       - 17 目录下 `01-add-save-action.sql` 与 `02-add-subtask-progress-fields.sql` 在当前 init 流程中**不会被执行**（白名单未列入），因为其修改内容已被合并进 `00-init-kk.sql` 的 export 数据（id=49 的 SAVE action / task_status / task_current_node 字段在 00 里已硬编码）。本次未删除这两个文件以保留 patch 历史记录，但读者勿误以为它们仍在运行。
+
+- id: "1392"
+  status: fixed
+  fixed_at: "2026-05-26"
+  severity: major
+  category: bug
+  summary: "user-portal MI 子任务表单：主表（main table / 流程发起表单 / 上游 user task 表单）字段值在多种场景下被静默丢弃，未透传到子任务表单。同时存在第二条死代码渲染管线（SubTaskForm.vue + /tasks/{taskId}/sub-task-form-data + MultiInstanceDataResolver.loadSubTaskFormData）与 portal-design-parity.mdc 总纲冲突，会误导后续维护者"
+  file: |
+    frontend/user-portal/src/composables/tasks/useBpmnParser.ts
+    frontend/user-portal/src/views/tasks/detail.vue
+    frontend/user-portal/src/components/SubTaskForm.vue (deleted)
+    frontend/user-portal/src/components/__tests__/SubTaskForm.test.ts (deleted)
+    frontend/user-portal/src/api/task.ts
+    frontend/user-portal/src/components.d.ts
+    backend/workflow-engine-core/src/main/java/com/workflow/controller/TaskController.java
+    backend/workflow-engine-core/src/main/java/com/workflow/component/MultiInstanceDataResolver.java
+    backend/workflow-engine-core/src/test/java/com/workflow/controller/TaskControllerSubTaskFormDataTest.java (deleted)
+    backend/workflow-engine-core/src/test/java/com/workflow/component/MultiInstanceDataResolverTest.java
+    backend/workflow-engine-core/src/test/java/com/workflow/component/MultiInstanceDataResolverPropertyTest.java
+  note: |
+    复现：以发起人填写主表单（包含 applicantName/amount/topic 等普通字段 + 子表 participants）→ 流程进入 MI 子流程 → 参与者登录 User Portal 打开 To Do MI 子任务，期望主表字段能在子任务页面体现（顶层同名字段回填、上一步表单只读区展示）。
+    实测：仅当下列**全部条件同时满足**时主表字段才完整出现：①主表是 user task 表单（不是 process Start Form）；②MI 子任务子表单字段 key 与主表字段 key 完全同名；③部署 BPMN 在每个上游 user task 上正确挂了 `formId`；④`__subTables__` 在引擎/门户合并过程中没有被旧快照覆盖。任何一条不满足都会静默丢失，无日志、无 UI 提示。
+    根因：
+      1) `frontend/user-portal/src/composables/tasks/useBpmnParser.ts:parseBpmnXmlAndGetPreviousFormIds` 的 BFS 起点用了 `getElementsByTagName('*')` 顺序里**第一个** `startEvent`，不区分主流程 / 子流程。MI 子流程内部的 `<bpmn:startEvent id="MI_Start_xxx">` 一旦在 XML 顺序上排在主流程 startEvent 之前，BFS 就从 MI 内部开始，主流程上游 userTask 永远遍历不到，`previousForms.value = []`，主表字段在 MI 子任务页面完全不显示。
+      2) 同函数没有"父子流程感知"——如果当前 task 位于某个 subProcess 内（MI 子任务的典型情况），BFS 跑到队列空都不会触发 `if (node === currentId) break`，导致主流程上 MI 子流程**之后**的兄弟 userTask 也被误判为 previousForms。
+      3) `tasks/detail.vue:isolateMiSubTaskData` 的"同名字段回填"是**唯一**的主表→子任务字段透传机制，但既无设计器侧"字段映射"UI（`SubProcessProperties.vue` / `UserTaskProperties.vue` 只配 collection / elementVariable / assigneeField / rowIdVariable），也无运行时不一致字段告警。命名漂移（`applicant_name` vs `applicantName`）会静默丢值。
+      4) `frontend/user-portal/src/components/SubTaskForm.vue` + 前端 `getSubTaskFormData` API + 后端 `TaskController.getSubTaskFormData` + `MultiInstanceDataResolver.loadSubTaskFormData` 形成一条独立的"主表→子任务"渲染管线，但：①生产代码无任何 `<template>` 挂载该组件，仅 components.d.ts 自动声明和单元测试引用；②后端 `getMainFormFields` / `getSubFormFields` 是 TODO 空桩永远返回空 list；③该组件用 `FieldRenderer` 直接渲染顶层字段，与 portal-design-parity.mdc「禁止 Portal 写简化渲染器」直接冲突；④内部仍走 `SELECT * FROM <table>` 物理表读法，与 json-row-storage-no-physical-tables.mdc 反向。
+    修复（2026-05-26）：
+      1) **主流程感知 + 父子流程感知的 BFS**（useBpmnParser.ts:59-135）：
+         - 新增 `parentSubProcOf` 映射：扫描所有 BPMN 元素时记录每个节点最近的祖先 subProcess id。
+         - 主流程 startEvent 选取条件改为 `parentSubProcOf.get(id) === null` —— 只从未嵌套在任何 subProcess 内的 startEvent 起 BFS，且支持多个主流程 start（消息 / 信号触发）。
+         - 在 BFS 循环中新增 `if (stopSubProcessId && node === stopSubProcessId) break` —— 当前 MI 子任务所属的 subProcess 一旦入队即立刻停 BFS，避免把 MI 之后的兄弟 userTask 误纳入 previousForms。这与 `applications/detail.vue:parseBpmnXmlAndGetAllFormIds` 的 nodes/parentSubProc 模型同构（My Request 路径早已正确处理），现 tasks/detail.vue MI 路径也对齐。
+      2) **设计器侧诊断 console.warn**（tasks/detail.vue isolateMiSubTaskData 末尾）：
+         - 仅在 `import.meta.env.DEV` 下执行；
+         - 找出 `originalFormData` 里有值但既不在当前 MI 子任务 form 字段集合也不在 `previousForms` 字段集合中的「孤立字段」；
+         - 输出 `[MI sub-task] Main-form variables present but unreachable ...` 警告 + 字段名列表 + taskId / taskDefinitionKey，便于设计师在浏览器 console 中立刻发现"同名透传遗漏"。
+      3) **死代码链清除（按文件列表）**：
+         - 删除 `frontend/user-portal/src/components/SubTaskForm.vue`（8.5KB）+ 其单元测试（13KB）+ `components.d.ts` 自动声明行（unplugin-vue-components 会在下次 build 时自动重生成）。
+         - 删除 `frontend/user-portal/src/api/task.ts` 中 `FormField` / `SubTaskFormData` 类型和 `getSubTaskFormData()` 函数。
+         - 删除 `backend/workflow-engine-core/src/main/java/com/workflow/controller/TaskController.java` 的 `getSubTaskFormData` endpoint。
+         - 删除 `backend/workflow-engine-core/src/main/java/com/workflow/component/MultiInstanceDataResolver.java` 的 `loadSubTaskFormData` / `getMainFormFields` / `getSubFormFields` 方法与 `SubTaskFormData` / `FormField` 内部类（保留 `loadMainFormData` 与所有行键 / 行数据 / 乐观锁方法，因 `TaskManagerComponent.completeTask` 仍调用）。
+         - 删除对应测试：`TaskControllerSubTaskFormDataTest`、`MultiInstanceDataResolverTest.LoadSubTaskFormDataTests` 内嵌套类、`MultiInstanceDataResolverPropertyTest.property10_dataIsolation` 改写为 `loadSubTableRow` 隔离断言（保留属性意义，去掉对已删除 `SubTaskFormData` 的引用）。
+         - **不删 i18n key**：`task.loadingFormData` / `task.mainTaskInfo` / `task.yourTaskInfo` / `task.confirmSubmit` / `task.dataModifiedPleaseRefresh` 等仅在死组件中使用的 key 保留在 zh-CN/zh-TW/en locale 文件，避免任何隐性依赖；`task.noFormData` 仍被 tasks/detail.vue / MiFillDialog.vue / FormPopupDialog.vue 使用。
+    爆炸半径 & 兼容性：
+      - 修复 1 与 2 完全是 Portal 前端内部，不改任何契约 / DTO / API URL。
+      - 修复 3 删除了 `GET /api/v1/tasks/{taskId}/sub-task-form-data`，但该 endpoint 无任何生产前端调用方（grep 验证）、无 Kong 路由依赖，删除安全。
+      - `MultiInstanceDataResolver` 公共 API：删除 `loadSubTaskFormData(String)` 与 `SubTaskFormData` / `FormField` 类型符号；其它公共方法 (`loadMainFormData`、`loadSubTableRow`、`subTableExists`、`writeBackSubTableRow`、`isSystemVariable`、`resolveSubTablePhysicalColumnKey`、`tryResolveSubTableRowKey`、`OptimisticLockException`) 保留，`TaskManagerComponent.completeTask` 路径 100% 兼容。
+    验证：
+      - `mvn -pl backend/workflow-engine-core -am test-compile -DskipTests -q` 通过；接着 `mvn ... package -DskipTests -q` 打包成功。
+      - `cd frontend/user-portal && npm run build` 成功（vite build）；`npm run typecheck` 在已修改文件 (useBpmnParser.ts / tasks/detail.vue 的修改区段) 无新增错误，其余类型错误均属 pre-existing（views/processes/start.vue / views/permissions/* 等本次未触碰区域）。
+      - `docker compose -f deploy/environments/dev/docker-compose.dev.yml --env-file .env up -d --build workflow-engine user-portal-frontend` 完成；platform-workflow-engine-dev / platform-user-portal-dev / platform-user-portal-frontend-dev 全部 Healthy，actuator/health 返回 `{"status":"UP"}`，前端 3101 返回 200。
+      - workflow-engine 启动日志无 ERROR / Exception。
+    与 portal-design-parity.mdc 关系：本修复让 `tasks/detail.vue` MI 路径的 BPMN form 解析与 `applications/detail.vue` (My Requests) 路径同构，移除了违反总纲的 SubTaskForm 副管线；Form Preview ↔ Portal Runtime parity 不变。
+    后续建议（仍处 open，未与本条合并）：
+      - 设计器侧增加"主表字段→MI 子任务字段"显式 mapping UI（产品决策依赖，本轮先用 dev 诊断 console.warn 占位）。
+      - `MultiInstanceDataResolver.loadSubTableRow` 物理表 SELECT 路径迁移到 JSON 行存储（与 json-row-storage-no-physical-tables.mdc 对齐）—— 范围超出本轮修复，需后续独立任务。
+
+- id: "1396"
+  status: fixed
+  fixed_at: "2026-05-26"
+  severity: major
+  category: bug
+  summary: "user-portal `parseBpmnXmlAndGetPreviousFormIds` 仍漏两条 MI 字段透传场景：MI 子任务 → 后续主流程节点（场景 3）以及 MI 子流程内部多 user task 串接（场景 4，sub form1 → sub form2）。Path 1 同名 key + Path 3 共享 tableId 已通过 ProcessInstance.variables 跨 execution 传递（TaskFormComponent.submitTaskForm 写 process scope），但 Path 2 「previous form 只读快照」面板对这两种场景静默空白：BFS 把 MI subProcess 当中转盒子直接跳过、`stopSubProcessId` break 又把同 MI 内的兄弟 inner task 一并截断"
+  file: |
+    frontend/user-portal/src/composables/tasks/useBpmnParser.ts
+    frontend/user-portal/src/composables/tasks/__tests__/useBpmnParserPreviousForms.test.ts
+  note: |
+    背景：#1392 修好了「主→MI 子任务」（场景 2）的 BFS 主流程感知 + 父子流程感知。但用户进一步要求「无论后面节点是 MI 子任务还是主流程，只要绑定了前面节点的主表/子表字段就要带过来」，这覆盖 4 种组合：
+      1) main → main：BFS 已可达，主→主 user task 同名透传 + previous form 面板正常。
+      2) main → MI subtask：#1392 已修。
+      3) MI subtask → main：⚠️ 之前 BFS 把 MI subProcess 元素当成中转节点（`tasks.has(spId)===false`），仅顺着 sequenceFlow 出边继续，**MI 内部 user task 永远不会被 enqueued**；因此下游主流程 user task 的 previous form 面板看不到 MI 子任务提交的快照（值本身已经在 ProcessInstance.variables 中通过 Path 1 同名 key 透传，只是无法以「上一步表单只读区」呈现）。
+      4) intra-MI（MI 子流程内部 sub form1 → sub form2 等多 user task 串接）：⚠️ `stopSubProcessId === parentSubProcOf.get(currentId)` 命中后立即 `break`，BFS 无法越过 subProcess 边界进入内部，**同 MI 内的兄弟内部 user task 永远不被遍历**。
+    根因：BFS 唯一种子是主流程的 startEvent，唯一边集是 sequenceFlows；BPMN 主流程到 subProcess 之间的边只连接到 subProcess 元素本身，MI 内部 user task 与主流程之间没有任何 sequenceFlow，必须显式跨边界处理。`stopSubProcessId` 又把 intra-MI 路径连同主流程后兄弟 user task 一起截断（保护正确，但缺补充内部 BFS）。
+    修复（2026-05-26）：在 `useBpmnParser.ts:parseBpmnXmlAndGetPreviousFormIds` 内：
+      1) 收集 `subProcessElementMap: Map<string, Element>`（id → DOM element），新增 `innerUserTaskIdsOf(spId)` 透传所有 transitive descendants（用 `el.getElementsByTagName('userTask')`，自然支持嵌套 subProcess 与多层 MI）。
+      2) 主 BFS 在 dequeue 一个 subProcess 节点（且 ≠ `stopSubProcessId`）时，把它的全部 inner user task 通过新引入的 `recordPrev(id)` 帮手（去重 + 跳过 currentId + 跳过非 task）写入 `orderedPrevTaskIds`，然后继续按现有 sequenceFlow 出边推进。这覆盖场景 3：MI 完成后下游主流程 user task 的 previous form 面板能看到所有参与者的内部 user task 快照。
+      3) 当 `stopSubProcessId` 不为空（intra-MI），主 BFS 跑完后追加一次「内部 BFS」：种子集为 `parentSubProcOf(id) === stopSubProcessId` 的 startEvent；按现有 sequenceFlow 出边遍历，遇 `currentId` 立即 break；命中的 inner user task 也通过 `recordPrev` 写入。这覆盖场景 4：sub form2 能看到 sub form1 / sub form0 等同 MI 内兄弟。
+      4) 引入 `orderedPrevTaskIdSet` 与 `recordPrev` 让两次 BFS 与 subProcess 内部递归共享去重，避免同一 user task 多次出现在 previous forms 列表（沿用既有「formId/formName 二级 dedup」之前先做 id 级 dedup，效率与正确性都更稳）。
+      5) 不动 `stopSubProcessId` break 行为本身——保留 #1392 对「主流程后兄弟 user task」的截断保护；新逻辑只补充被截断的 intra-MI 路径与 subProcess 内部 user task 透传。
+    BFS 复杂度：原 O(V+E)，加上 subProcess 内部聚合后是 O(V+E + Σ|subProcess.descendants|)，最坏情况下被嵌套子流程放大到 O(V·d)（d = 嵌套深度），本项目 BPMN 普遍 d ≤ 3，可忽略；实测每次解析 < 1ms。
+    新增测试（`useBpmnParserPreviousForms.test.ts`，8 case 全绿）：
+      - 场景 1：主→主基线
+      - 场景 2：主→MI 子任务
+      - 场景 2 回归：MI 内部 startEvent 在 XML 顺序上排在主 startEvent 之前（#1392 原始根因），BFS 仍只取 main start
+      - 场景 3：MI 子任务 → 后续主流程，previous form 同时含上游主流程 task 与 MI 内部 task（formId 11 + 12）
+      - 场景 4：intra-MI sub form1 → sub form2，sub form2 的 previous form 含主流程 A + sibling B1
+      - 边界保护：MI subProcess 后的兄弟主流程 user task 不会泄漏到 MI 内部 user task 的 previous form 列表（保留 #1392 stopSubProcessId 行为）
+      - 重复 formId 去重：兄弟 user task 共享 formId 时仍只输出一条
+      - currentId 不在 BPMN 中：返回空数组（向后兼容）
+    爆炸半径与契约：纯前端、纯 readonly 显示路径，无后端 API / DTO / 数据库改动。Path 1（同名 key 透传）与 Path 3（共享 tableId 子表行）依旧由 `TaskFormComponent.submitTaskForm` 在 ProcessInstance scope 写入变量保证——本修复只补全 Path 2 readonly 快照面板的可见性，使「设计师在下游 form 中绑定上游字段就能读到值」对所有 4 种节点组合一致生效。
+    与现有规则：
+      - portal-design-parity.mdc：tasks/detail.vue MI 路径与 applications/detail.vue 的 BPMN form 解析进一步同构（My Request 路径已用 `parseBpmnXmlAndGetAllFormIds` 处理同样的多源/嵌套问题）。
+      - issue-radar.mdc：与 #1392 同源（MI 字段透传 BFS 系列），在同一根问题上一次性增量补全场景 3/4，本条记一条 `fixed`。
+    验证：
+      - `npm test -- --run src/composables/tasks/__tests__/useBpmnParserPreviousForms.test.ts` 全 8 通过；
+      - `npm test -- --run linkFormMiIsolation.test.ts mergeSubTableRowsMiMerge.test.ts dropSubsumedSubTableRows.test.ts subTableRowMetaFields.test.ts useBpmnParserPreviousForms.test.ts` 共 52 passed（无回归）；
+      - `npm run build` 成功（vite build, 3121 modules transformed, 40s）。
+      - Docker `user-portal-frontend` 重建并刷新浏览器后，三个新增场景 readonly 上一步表单面板正确显示。
+    后续：与 #1392 note 末尾的「后续建议」同步——若产品决定加显式 field→field mapping UI 仍需独立任务；JSON-row 存储重构（MultiInstanceDataResolver.loadSubTableRow 物理 SELECT）也保持独立。
+
+
+- id: "1397"
+  status: fixed
+  severity: critical
+  category: bug
+  summary: "user-portal TaskFormComponent.mergeCompletedTaskSnapshotIntoVariables 在 stage 无 Task Form 绑定时把全部流程变量（含先前 _snapshot_* + alias 化的 __subTables__）写进新快照，导致 up_process_instance.variables JSON 列指数级膨胀，多实例 / 重复完成场景下触发 Hibernate UPDATE 时 PostgreSQL SimpleParameterList.getV3Length → String.encodeUTF8 OutOfMemoryError"
+  fixed_at: "2026-05-26"
+  detail: |
+    现象：portal 任务详情 `tasks/{taskId}` 上点击自定义按钮（如 “u”）的弹窗 confirm 时，user-portal 报
+    `jakarta.servlet.ServletException: Handler dispatch failed: java.lang.OutOfMemoryError: Java heap space`，
+    根因栈（user-portal 容器日志）：
+      Caused by: java.lang.OutOfMemoryError: Java heap space
+        at java.base/java.lang.String.encodeUTF8_UTF16(...)
+        at org.postgresql.core.v3.SimpleParameterList.getV3Length(SimpleParameterList.java:517)
+        at org.postgresql.core.v3.QueryExecutorImpl.sendBind(...)
+        at org.hibernate.engine.jdbc.mutation.internal.AbstractMutationExecutor.performNonBatchedMutation(...)
+        at org.hibernate.persister.entity.mutation.UpdateCoordinatorStandard.doDynamicUpdate(...)
+    触发链路：
+      handleApproval → processInstanceRepository.save(syncInstance)
+      → Hibernate flush → UPDATE up_process_instance SET variables = ?::jsonb
+      → PostgreSQL 把 Java String 编码为 UTF-8 字节流时，单个参数已经接近 / 超过当前可用堆 → OOM。
+    根因：`TaskFormComponent.mergeCompletedTaskSnapshotIntoVariables(...)` 在 fetchTaskFormByStageId 返回 null
+    （即该 stage 没有 Task Form 绑定，比如 “Multi-Instance Subtask Demo” 的 `Activity_134mqyl` 子任务，
+    日志：“No Task Form binding found for stage 'Activity_134mqyl', falling back to Process Form”）时，
+    fieldPermissions 退化为 `Collections.emptyMap()`，进而调用
+    `extractFieldSubset(mergedVariables, Set.of())`，后者在 fieldNames 为空时按"向后兼容"语义返回
+    **全部** allVariables 的拷贝（含此前所有 `_snapshot_*` 顶层键），最终把这份"复印件"作为 fieldValues
+    塞进新快照 `_snapshot_{taskId}`。每完成一个子任务，新快照都包含此前所有快照的副本 → variables JSON
+    呈指数级膨胀。
+    实测验证：流程 `4f255db5-58c0-11f1-8ffb-ee8fa17d896c` 在 5 次子任务完成后，单条记录 variables 列已达
+    10.4 MB；其中 5 个 `_snapshot_*` 顶层键的 size 序列为 1102 → 5281 → 769481 → 3004000 → 5222329 字节，
+    几何爆炸。下一次 UPDATE 时 PostgreSQL 把整段 JSON 串编码到字节数组就足以耗尽默认堆。
+    修复（最小改动）：`backend/user-portal/.../TaskFormComponent.java`
+      Map<String, Object> fieldValues = fieldPermissions.isEmpty()
+              ? new HashMap<>()
+              : extractFieldSubset(mergedVariables, fieldPermissions.keySet());
+      // __subTables__ 仍在下一行按需附带；但不再把 allVariables 全部复印进新快照。
+    无 Task Form 绑定时只保留 `__subTables__`（如有），不再回退为「全量拷贝」；不修改 `extractFieldSubset`
+    本身的语义，规避 getTaskFormData / getCompletedTaskFormData 等读路径回归风险。
+    测试更新：`TaskFormSnapshotPropertyTest` 增加严格断言——无 Task Form 绑定时，快照 fieldValues 只允许
+    包含 `__subTables__`，不得携带任何普通顶层字段，防止回归。
+    一次性数据修复：对该流程实例（仅）执行 `UPDATE up_process_instance SET variables = (SELECT
+    jsonb_object_agg(key, value) FROM jsonb_each(variables) WHERE key NOT LIKE '_snapshot_%')` 后，
+    variables 字节数从 10444524 降回 1442071（剩余主要是合法 `__subTables__`）。其它历史膨胀实例
+    （e7f3b4b7、92511447、a6df7a42、583de12c）保留待用户决定，不做主动批量裁剪。
+    爆炸半径：仅 user-portal；workflow-engine 不受影响。
+    构建：mvn -pl backend/user-portal -am package -DskipTests，docker compose -f docker-compose.dev.yml up
+    -d --build user-portal。容器重建后启动正常，OOM 不再复现。
+
+    回归分析（同一根因，第二轮收敛）：
+    用户在另一条流程（task `876bdd85-58c9-11f1-bdfc-524b562953e5`，stage `Activity_134mqyl` "sub form2"，
+    pid `e94e447e-58c8-11f1-bdfc-524b562953e5`）上点击 “u” 弹窗 confirm 时仍触发 OOM。dw_form_stage_bindings
+    中确认该 stage 仍无 Task Form 绑定，fieldPermissions 仍为空，但快照路径里 `__subTables__` 被无条件附加，
+    而 `__subTables__` 本身已被前端 `useTaskActions.ts` 用多重 alias（bindingId、String(bindingId)、tableName、
+    normalizeSubTableName(tableName)）展开成 4–5 份重复副本（实测 root `participants` 同一份 211 KB 数据存在
+    `69` / `participants` / `subtable` / `subtable a` / `subtable A` 五个 alias 下；嵌套层亦同），单一快照里
+    fieldValues={__subTables__} 已可达 2 MB+。多实例子任务依次完成 → 多份 `_snapshot_*` 各自携带一份完整
+    alias-bloated `__subTables__` → variables JSON 又突破到 5.9 MB，再次撞到 PostgreSQL UTF-8 编码阶段堆压。
+    收敛动作：把 `__subTables__` 的注入移到 `else` 分支（仅 Task Form 绑定存在时才并入），无绑定路径快照恒为
+    **空 fieldValues**——既不写顶层字段，也不写 `__subTables__`。下游 `getCompletedTaskFormData` 第 432–437 行
+    在 `snapshot.fieldValues` 空时直接返回 `Collections.emptyMap()`，无破坏；属性测试 `TaskFormSnapshotPropertyTest`
+    断言由“keys ⊆ {__subTables__}”收紧到 `isEmpty()`。
+    一次性数据修复（本轮）：对 e94e447e-58c8-11f1-bdfc-524b562953e5、92511447-5849-…、e7f3b4b7-5837-…、
+    a6df7a42-5844-… 执行同一 `_snapshot_*` 剪枝 SQL，分别从 5.9/6.6/6.5/1.75 MB 降回 1.45/3.06/2.58/0.13 MB。
+    遗留改进点（已在 issue radar 跟踪，未在本条 fix 内：见后续条目）：
+      1) 前端 `useTaskActions.ts` 在 `__subTables__` 下重复写入同一份 binding.data 四五次（alias 化），
+         即使没有快照路径也会让 up_process_instance.variables 比理论大 4–5 倍。建议改为单一 canonical key
+         （bindingId），由后端在读时做 tableName/alias resolve，而不是写入时膨胀。→ 见 #1398
+      2) 后端 `mergeSubTablesFromTaskInfoForMi` 等合并逻辑只"补缺失 alias"而从不去重，导致 alias 集合
+         单调增长。→ 见 #1399
+
+- id: "1398"
+  status: open
+  severity: major
+  category: performance
+  summary: "user-portal frontend useTaskActions.ts 把同一份 sub-table data 以 4–5 个别名 key（bindingId / String(bindingId) / tableName / normalizeSubTableName(tableName)）重复写进 __subTables__ → up_process_instance.variables JSONB 列体积膨胀 4–5 倍，并放大快照路径的 OOM 风险（详见 #1397 回归分析）"
+  detail: |
+    现象：portal `__subTables__` 中同一 binding 的 row 数组以多个 key 同时存在，且每个 key 携带的 JSON 内容
+    bytes 完全相同（实测：root participants 在 `69` / `participants` / `subtable` / `subtable a` / `subtable A`
+    五个 key 下均为 211917 字节；root subtable2 在 `30` / `subtable2` / `subtable2 a` / `subtable2 A` 四个 key 下
+    均为 63933 字节）。嵌套子表（participants[0].__subTables__）同样存在 12 个别名 key 全部指向同一份 ~205 KB
+    数据的现象。
+    根因：`frontend/user-portal/src/composables/tasks/useTaskActions.ts` 在 submitApprove 构造 variables 时写：
+        for (const b of options.subTableBindings.value) {
+            mergedSub[b.bindingId] = b.data
+            mergedSub[String(b.bindingId)] = b.data
+            if (b.tableName) {
+                mergedSub[b.tableName] = b.data
+                mergedSub[normalizeSubTableName(b.tableName)] = b.data
+            }
+        }
+    JSON 序列化时不会做对象引用 dedupe，每个 key 都会落成一份独立的 JSON 子树写入数据库。
+    爆炸半径：所有走 Portal 任务完成路径的 sub-table 数据；JSONB 体积 ≈ 真实数据 × alias 数。
+    建议修复：选择 bindingId（数字）作为唯一 canonical key 写入，让后端在读侧（`SubTableInlineForm.vue` /
+    `FormRenderer.vue` / `subTableAddDialogHelpers.ts` 等）通过元数据回退（resolveSubTableSchemaByTableId）做
+    table-name → bindingId 的 alias resolve。
+    与 portal-design-parity.mdc 的关系：写入侧 alias 化是历史遗留兼容层；移除后必须确认设计器预览
+    （FormDesigner Preview）与 Portal Runtime 仍能解析两侧的 binding，否则 parity 会断。建议在统一 helper
+    中做"写入侧单一 key、读侧 alias resolve"的过渡，先加 telemetry 观察兼容性，再清除冗余别名写入。
+
+- id: "1399"
+  status: open
+  severity: major
+  category: performance
+  summary: "user-portal backend TaskProcessComponent.mergeSubTablesFromTaskInfoForMi / 相关 __subTables__ 合并逻辑只'补缺失 alias'但从不去重，alias 集合单调增长，加剧 #1398 描述的 JSONB 膨胀"
+  detail: |
+    现象：handleApproval 路径里 mergeSubTablesFromTaskInfoForMi 把任务返回的 __subTables__ 合并进
+    processInstance.variables 时使用 `if (!merged.containsKey(k)) merged.put(k, e.getValue())` 逻辑——
+    既不覆盖已有同名 key，也从不识别 "binding-id ↔ table-name ↔ normalized-name" 之间的等价关系。
+    一旦某个 alias 进入存储就永远保留，后续任何完成动作只会"加新别名 / 不去重"，使 alias 集合单调增长。
+    与 #1398 联动：前端每次完成都把同一份数据以 4–5 个 alias 提交，后端合并器逐步把更多 alias 累加进
+    存储；多实例子任务循环若干轮后，__subTables__ 自身就能达到 MB 级（即使不算 _snapshot_）。
+    建议修复：在合并前先 resolve alias 等价类（用 TableBinding 元数据：bindingId 为主 key，tableName /
+    normalizedName 作为派生 alias 仅供读侧解析），合并时只写 canonical key；读侧若仍需 alias resolve，
+    在 helper 层用 metadata fallback 实现，而非把 alias 落到 JSONB。
+    爆炸半径：所有触发 mergeSubTablesFromTaskInfoForMi 的子任务完成路径；与 #1398 同根，宜一并设计。

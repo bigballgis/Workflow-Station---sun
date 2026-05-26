@@ -461,6 +461,16 @@ public class TaskFormComponent {
      * 在完成审批写入前，把 Task Form 字段子集快照以 {@code _snapshot_{taskId}} 并入流程变量。
      * <p>由调用方对 {@link ProcessInstance} 只做<strong>一次</strong> {@code save}，避免与 {@link ProcessInstance#lockVersion}
      * 乐观锁冲突（接连两次 UPDATE 同一行易导致 UnexpectedRollback）。</p>
+     * <p><b>反膨胀边界：</b></p>
+     * <ul>
+     *   <li>当 stage <em>没有</em> Task Form 绑定（{@code fetchTaskFormByStageId} 返回 null 或 fieldPermissions 为空）时，
+     *       快照写入<strong>空 fieldValues</strong>——既不回退到「拷贝全部流程变量」，也不携带
+     *       {@code __subTables__}。根变量里的 {@code __subTables__} 已经是实时数据源；快照层再复制一份只会让
+     *       {@code variables} JSON 列指数级膨胀（前端为每个 binding 注册 binding-id / table-name / normalized-name
+     *       多个别名 key，叠加多实例子任务 N 次完成 → 触发 PostgreSQL 参数编码 OOM）。</li>
+     *   <li>当 stage <em>有</em> Task Form 绑定时，快照沿用 fieldPermissions 子集 + {@code __subTables__}
+     *       供 Portal 完整还原已完成表单内容。</li>
+     * </ul>
      *
      * @param mergedVariables 已合并的流程变量 map（会被原地写入快照键）
      * @return 快照中包含的表单字段名集合（用于日志）
@@ -475,9 +485,15 @@ public class TaskFormComponent {
                 ? extractFieldPermissions(formDefinition)
                 : Collections.emptyMap();
 
-        Map<String, Object> fieldValues = extractFieldSubset(mergedVariables, fieldPermissions.keySet());
-        if (mergedVariables.containsKey("__subTables__")) {
-            fieldValues.put("__subTables__", mergedVariables.get("__subTables__"));
+        // 无 Task Form 绑定时快照恒为空——避免在没有 UI 消费者的情况下把 __subTables__（含别名副本）写进流程变量。
+        Map<String, Object> fieldValues;
+        if (fieldPermissions.isEmpty()) {
+            fieldValues = new HashMap<>();
+        } else {
+            fieldValues = extractFieldSubset(mergedVariables, fieldPermissions.keySet());
+            if (mergedVariables.containsKey("__subTables__")) {
+                fieldValues.put("__subTables__", mergedVariables.get("__subTables__"));
+            }
         }
 
         TaskFormSnapshot snapshot = TaskFormSnapshot.builder()

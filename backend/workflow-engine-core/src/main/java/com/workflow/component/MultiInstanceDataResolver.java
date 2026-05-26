@@ -20,18 +20,17 @@ import java.util.*;
 
 /**
  * 多实例数据解析器
- * 
- * 负责多实例子任务的数据加载和回写，实现数据隔离和乐观锁机制。
- * 
+ *
+ * 负责多实例子任务运行时的行键解析、行数据加载/回写与乐观锁。
+ *
  * 核心职责：
- * 1. 加载子任务表单数据（主任务表单数据 + 子表数据行）
- * 2. 实现数据隔离：每个子任务只能访问自己关联的子表数据行
- * 3. 数据回写时使用乐观锁（row_version）防止并发冲突
- * 4. 区分数据行被删除和版本冲突两种错误场景
- * 
- * 数据流程：
- * - 子任务打开时：loadSubTaskFormData() 加载主表单数据（只读）+ 子表数据行（可编辑）
- * - 子任务提交时：writeBackSubTableRow() 回写数据到子表，row_version 递增
+ * 1. 解析当前 MI 任务关联的子表行键（来自 ExtendedTaskInfo.extendedProperties）
+ * 2. 加载主表单变量（{@link #loadMainFormData}）用于上层组件按需读取
+ * 3. 行数据回写使用 row_version 乐观锁，区分"被删除"与"版本冲突"
+ *
+ * Portal 侧 MI 子任务的表单 hydrate 由 {@code tasks/detail.vue} 主路径完成；本组件
+ * 只负责行键/行数据层面的协议，不再聚合"子任务表单视图"——之前的 SubTaskFormData
+ * 通道与 {@code /tasks/{taskId}/sub-task-form-data} 接口已废弃。
  */
 @Slf4j
 @Component
@@ -50,60 +49,12 @@ public class MultiInstanceDataResolver {
     private BpmnActionParser bpmnActionParser;
     
     private final ObjectMapper objectMapper = new ObjectMapper();
-    
-    /**
-     * 加载子任务表单数据（包含主任务表单数据和子表数据行）
-     * 
-     * @param taskId 任务 ID
-     * @return 子任务表单完整数据
-     * @throws WorkflowValidationException 任务不存在或数据行不存在时
-     */
-    public SubTaskFormData loadSubTaskFormData(String taskId) {
-        log.info("加载子任务表单数据: taskId={}", taskId);
-        
-        // 1. 获取子任务的 ExtendedTaskInfo
-        ExtendedTaskInfo extInfo = extendedTaskInfoRepository.findByTaskIdAndIsDeletedFalse(taskId)
-            .orElseThrow(() -> new WorkflowValidationException("任务不存在"));
-        
-        Map<String, Object> extProps = parseExtendedProperties(extInfo.getExtendedProperties());
 
-        String subTableName = getStringValue(extProps, "subTableName");
-        if (subTableName == null) {
-            throw new WorkflowValidationException("Task is missing multi-instance configuration information");
-        }
-        String safeSubTableName = requireSafeIdentifier(subTableName);
-        Map<String, Object> rowKey = resolveRowKeyFromExt(extProps, safeSubTableName);
-
-        // 2. 获取流程实例 ID，加载主表单数据
-        String processInstanceId = extInfo.getProcessInstanceId();
-        Map<String, Object> mainFormData = loadMainFormData(processInstanceId);
-
-        // 3. 加载主表单字段定义
-        List<FormField> mainFormFields = getMainFormFields(processInstanceId);
-
-        // 4. 加载子表数据行
-        Map<String, Object> subTableRowData = loadSubTableRow(subTableName, rowKey);
-
-        // 5. 加载子表单字段定义
-        List<FormField> subFormFields = getSubFormFields(subTableName);
-
-        log.info("子任务表单数据加载成功: taskId={}, subTableRowKey={}", taskId, rowKey);
-
-        return SubTaskFormData.builder()
-            .taskId(taskId)
-            .mainFormData(mainFormData)
-            .mainFormFields(mainFormFields)
-            .subTableRowData(subTableRowData)
-            .subFormFields(subFormFields)
-            .rowVersion(getLongValue(subTableRowData, "row_version"))
-            .build();
-    }
-    
     /**
      * 加载主表单数据（从流程变量中获取）
-     * 
+     *
      * 过滤系统变量和集合变量，只返回主表单相关的业务数据
-     * 
+     *
      * @param processInstanceId 流程实例 ID
      * @return 主表单数据
      */
@@ -323,37 +274,7 @@ public class MultiInstanceDataResolver {
     public String resolveSubTablePhysicalColumnKey(String subTableName, String variableKey, Set<String> physicalColumns) {
         return SubTablePhysicalColumnResolver.resolvePhysicalColumnKey(jdbcTemplate, subTableName, variableKey, physicalColumns);
     }
-    
-    /**
-     * 获取主表单字段定义
-     * 
-     * 从流程定义或 FormDefinition 中获取主表单字段定义
-     * 
-     * @param processInstanceId 流程实例 ID
-     * @return 主表单字段定义列表
-     */
-    public List<FormField> getMainFormFields(String processInstanceId) {
-        // TODO: 从流程定义或 FormDefinition 中获取主表单字段定义
-        // 实现细节待补充
-        log.debug("获取主表单字段定义: processInstanceId={}", processInstanceId);
-        return new ArrayList<>();
-    }
-    
-    /**
-     * 获取子表单字段定义
-     * 
-     * 从 TableDefinition 和 FieldDefinition 中获取子表字段定义
-     * 
-     * @param subTableName 子表物理表名
-     * @return 子表单字段定义列表
-     */
-    public List<FormField> getSubFormFields(String subTableName) {
-        // TODO: 从 TableDefinition 和 FieldDefinition 中获取子表字段定义
-        // 实现细节待补充
-        log.debug("获取子表单字段定义: subTableName={}", subTableName);
-        return new ArrayList<>();
-    }
-    
+
     // ==================== 辅助方法 ====================
     
     private Map<String, Object> resolveRowKeyFromExt(Map<String, Object> extProps, String safeSubTableName) {
@@ -463,44 +384,7 @@ public class MultiInstanceDataResolver {
     }
     
     // ==================== 内部类 ====================
-    
-    /**
-     * 子任务表单数据
-     */
-    @lombok.Data
-    @lombok.Builder
-    public static class SubTaskFormData {
-        private String taskId;
-        
-        // 主任务表单数据（只读）
-        private Map<String, Object> mainFormData;
-        
-        // 主任务表单字段定义
-        private List<FormField> mainFormFields;
-        
-        // 子任务表单数据（可编辑）
-        private Map<String, Object> subTableRowData;
-        
-        // 子任务表单字段定义
-        private List<FormField> subFormFields;
-        
-        // 乐观锁版本号
-        private Long rowVersion;
-    }
-    
-    /**
-     * 表单字段定义
-     */
-    @lombok.Data
-    @lombok.Builder
-    public static class FormField {
-        private String name;
-        private String label;
-        private String type;
-        private Boolean required;
-        private Boolean readonly;
-    }
-    
+
     /**
      * 乐观锁异常
      */

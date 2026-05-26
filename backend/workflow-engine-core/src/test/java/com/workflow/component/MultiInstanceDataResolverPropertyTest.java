@@ -29,10 +29,10 @@ class MultiInstanceDataResolverPropertyTest {
     
     /**
      * Property 10: 子任务数据隔离
-     * 
-     * For any 多实例子任务，数据加载和编辑操作仅能访问 ExtendedTaskInfo.extended_properties 
+     *
+     * For any 多实例子任务，加载行数据时仅能访问 ExtendedTaskInfo.extended_properties
      * 中 subTableRowId 对应的子表数据行，不能访问其他行。
-     * 
+     *
      * **Validates: Requirements 6.1, 6.2**
      */
     @Property(tries = 100)
@@ -44,22 +44,13 @@ class MultiInstanceDataResolverPropertyTest {
         RuntimeService runtimeService = mock(RuntimeService.class);
         JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
         ExtendedTaskInfoRepository extendedTaskInfoRepository = mock(ExtendedTaskInfoRepository.class);
-        
+
         MultiInstanceDataResolver resolver = new MultiInstanceDataResolver();
         injectMocks(resolver, runtimeService, jdbcTemplate, extendedTaskInfoRepository);
-        
-        // Given: 准备多个子任务，每个关联不同的子表数据行
+
         String subTableName = "fu_participants";
-        when(runtimeService.getVariables(anyString())).thenReturn(new HashMap<>());
-        
+
         for (SubTaskData subTask : subTasks) {
-            // 为每个子任务准备 ExtendedTaskInfo
-            ExtendedTaskInfo extInfo = createExtendedTaskInfo(
-                subTask.taskId, subTask.rowId, subTableName);
-            when(extendedTaskInfoRepository.findByTaskIdAndIsDeletedFalse(subTask.taskId))
-                .thenReturn(Optional.of(extInfo));
-            
-            // 为每个子表行准备数据
             Map<String, Object> subTableRow = new HashMap<>();
             subTableRow.put("id", subTask.rowId);
             subTableRow.put("name", "User-" + subTask.rowId);
@@ -67,41 +58,22 @@ class MultiInstanceDataResolverPropertyTest {
             when(jdbcTemplate.queryForMap(anyString(), eq(subTask.rowId)))
                 .thenReturn(subTableRow);
         }
-        
-        // When & Then: 验证每个子任务只能访问自己的数据行
+
         for (SubTaskData subTask : subTasks) {
-            // 加载子任务表单数据
-            MultiInstanceDataResolver.SubTaskFormData result = 
-                resolver.loadSubTaskFormData(subTask.taskId);
-            
-            // 验证只加载了指定的 subTableRowId
-            assertThat(result.getSubTableRowData().get("id"))
+            Map<String, Object> row = resolver.loadSubTableRow(subTableName, subTask.rowId);
+
+            assertThat(row.get("id"))
                 .as("Task %s should only access row %d", subTask.taskId, subTask.rowId)
                 .isEqualTo(subTask.rowId);
-            
-            // 验证数据内容匹配
-            assertThat(result.getSubTableRowData().get("name"))
-                .isEqualTo("User-" + subTask.rowId);
-            
-            // 验证 JDBC 查询只访问了指定的 rowId
+            assertThat(row.get("name")).isEqualTo("User-" + subTask.rowId);
+
             verify(jdbcTemplate, atLeastOnce()).queryForMap(
                 contains(subTableName),
                 eq(subTask.rowId)
             );
         }
-        
-        // 验证每个子任务没有访问其他子任务的数据行
-        for (SubTaskData subTask : subTasks) {
-            for (SubTaskData otherSubTask : subTasks) {
-                if (subTask.rowId != otherSubTask.rowId) {
-                    // 验证在处理 subTask 时没有访问 otherSubTask 的数据行
-                    // 注意：由于我们使用了 mock，这个验证是隐式的
-                    // 如果访问了错误的行，queryForMap 会返回 null 或抛出异常
-                }
-            }
-        }
     }
-    
+
     /**
      * Property 11: 子表数据回写往返一致性
      * 

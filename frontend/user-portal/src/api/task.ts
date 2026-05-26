@@ -244,31 +244,6 @@ export function assignSubTableRowByIdentity(
   )
 }
 
-// Get sub-task form data (includes main task info and sub-table row data)
-export interface FormField {
-  name: string
-  label: string
-  type: string
-  required?: boolean
-  readonly?: boolean
-  span?: number
-  options?: any[]
-  [key: string]: any
-}
-
-export interface SubTaskFormData {
-  taskId: string
-  mainFormData: Record<string, any>
-  mainFormFields: FormField[]
-  subTableRowData: Record<string, any>
-  subFormFields: FormField[]
-  rowVersion: number
-}
-
-export function getSubTaskFormData(taskId: string) {
-  return request.get<{ data: SubTaskFormData }>(`/tasks/${taskId}/sub-task-form-data`)
-}
-
 // Get main task sub-table data (for real-time sync)
 export interface SubTableRowStatus {
   id?: number

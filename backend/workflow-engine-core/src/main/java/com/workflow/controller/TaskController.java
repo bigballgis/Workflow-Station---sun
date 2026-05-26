@@ -827,32 +827,4 @@ public class TaskController {
         }
     }
     
-    /**
-     * 加载子任务表单数据
-     * 
-     * 用于多实例子任务表单加载，返回主任务表单数据（只读）和子表数据行（可编辑）。
-     * 
-     * **Validates: Requirements 6.1**
-     */
-    @GetMapping("/{taskId}/sub-task-form-data")
-    @Operation(summary = "Load Sub-Task Form Data", description = "Load multi-instance sub-task form data, including main task info and sub-table data rows")
-    public ResponseEntity<ApiResponse<com.workflow.component.MultiInstanceDataResolver.SubTaskFormData>> getSubTaskFormData(
-            @Parameter(description = "Task ID", required = true)
-            @PathVariable String taskId) {
-        
-        log.info("Loading sub-task form data: taskId={}", taskId);
-        
-        try {
-            com.workflow.component.MultiInstanceDataResolver.SubTaskFormData formData = 
-                multiInstanceDataResolver.loadSubTaskFormData(taskId);
-            
-            return ResponseEntity.ok(ApiResponse.success(formData));
-        } catch (Exception e) {
-            log.error("Failed to load sub-task form data: taskId={}", taskId, e);
-            
-            return ResponseEntity.badRequest().body(
-                ApiResponse.error("LOAD_SUBTASK_FORM_DATA_FAILED", e.getMessage())
-            );
-        }
-    }
 }

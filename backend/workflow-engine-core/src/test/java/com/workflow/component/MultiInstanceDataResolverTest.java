@@ -2,7 +2,6 @@ package com.workflow.component;
 
 import com.workflow.component.MultiInstanceDataResolver.OptimisticLockException;
 import com.workflow.entity.ExtendedTaskInfo;
-import com.workflow.exception.WorkflowBusinessException;
 import com.workflow.exception.WorkflowValidationException;
 import com.workflow.repository.ExtendedTaskInfoRepository;
 import org.flowable.engine.RuntimeService;
@@ -10,7 +9,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -73,95 +71,6 @@ class MultiInstanceDataResolverTest {
     private static final String PROCESS_INSTANCE_ID = "proc-001";
     private static final Long SUB_TABLE_ROW_ID = 101L;
     private static final String SUB_TABLE_NAME = "fu_participants";
-    
-    @Nested
-    @DisplayName("loadSubTaskFormData 测试")
-    class LoadSubTaskFormDataTests {
-        
-        @Test
-        @DisplayName("正常加载子任务表单数据")
-        void shouldLoadSubTaskFormDataSuccessfully() {
-            // Given: 准备 ExtendedTaskInfo
-            ExtendedTaskInfo extInfo = createExtendedTaskInfo();
-            when(extendedTaskInfoRepository.findByTaskIdAndIsDeletedFalse(TASK_ID))
-                .thenReturn(Optional.of(extInfo));
-            
-            // 准备流程变量（主表单数据）
-            Map<String, Object> processVariables = new HashMap<>();
-            processVariables.put("meetingTitle", "2026 Q2 产品规划会议");
-            processVariables.put("meetingTime", "2026-04-15T14:00:00");
-            processVariables.put("meetingLocation", "3 楼会议室");
-            processVariables.put("multiInstance_participants_collection", new Object()); // 应被过滤
-            processVariables.put("currentItem", new Object()); // 应被过滤
-            processVariables.put("nrOfInstances", 5); // 系统变量，应被过滤
-            when(runtimeService.getVariables(PROCESS_INSTANCE_ID)).thenReturn(processVariables);
-            
-            // 准备子表数据行
-            Map<String, Object> subTableRow = new HashMap<>();
-            subTableRow.put("id", SUB_TABLE_ROW_ID);
-            subTableRow.put("name", "张三");
-            subTableRow.put("department", "技术部");
-            subTableRow.put("email", "zhang@example.com");
-            subTableRow.put("row_version", 1L);
-            when(jdbcTemplate.queryForMap(anyString(), eq(SUB_TABLE_ROW_ID)))
-                .thenReturn(subTableRow);
-            
-            // When: 加载子任务表单数据
-            MultiInstanceDataResolver.SubTaskFormData result = resolver.loadSubTaskFormData(TASK_ID);
-            
-            // Then: 验证返回数据
-            assertThat(result).isNotNull();
-            assertThat(result.getTaskId()).isEqualTo(TASK_ID);
-            assertThat(result.getRowVersion()).isEqualTo(1L);
-            
-            // 验证主表单数据（应排除系统变量和集合变量）
-            assertThat(result.getMainFormData()).hasSize(3);
-            assertThat(result.getMainFormData()).containsEntry("meetingTitle", "2026 Q2 产品规划会议");
-            assertThat(result.getMainFormData()).containsEntry("meetingTime", "2026-04-15T14:00:00");
-            assertThat(result.getMainFormData()).containsEntry("meetingLocation", "3 楼会议室");
-            assertThat(result.getMainFormData()).doesNotContainKey("multiInstance_participants_collection");
-            assertThat(result.getMainFormData()).doesNotContainKey("currentItem");
-            assertThat(result.getMainFormData()).doesNotContainKey("nrOfInstances");
-            
-            // 验证子表数据行
-            assertThat(result.getSubTableRowData()).hasSize(5);
-            assertThat(result.getSubTableRowData()).containsEntry("name", "张三");
-            assertThat(result.getSubTableRowData()).containsEntry("department", "技术部");
-        }
-        
-        @Test
-        @DisplayName("任务不存在时抛出异常")
-        void shouldThrowExceptionWhenTaskNotFound() {
-            // Given: 任务不存在
-            when(extendedTaskInfoRepository.findByTaskIdAndIsDeletedFalse(TASK_ID))
-                .thenReturn(Optional.empty());
-            
-            // When & Then: 抛出异常
-            assertThatThrownBy(() -> resolver.loadSubTaskFormData(TASK_ID))
-                .isInstanceOf(WorkflowValidationException.class)
-                .hasMessage("任务不存在");
-        }
-        
-        @Test
-        @DisplayName("子表数据行不存在时抛出异常")
-        void shouldThrowExceptionWhenSubTableRowNotFound() {
-            // Given: ExtendedTaskInfo 存在
-            ExtendedTaskInfo extInfo = createExtendedTaskInfo();
-            when(extendedTaskInfoRepository.findByTaskIdAndIsDeletedFalse(TASK_ID))
-                .thenReturn(Optional.of(extInfo));
-            
-            when(runtimeService.getVariables(PROCESS_INSTANCE_ID)).thenReturn(new HashMap<>());
-            
-            // 子表数据行不存在
-            when(jdbcTemplate.queryForMap(anyString(), eq(SUB_TABLE_ROW_ID)))
-                .thenThrow(new EmptyResultDataAccessException(1));
-            
-            // When & Then: 抛出异常
-            assertThatThrownBy(() -> resolver.loadSubTaskFormData(TASK_ID))
-                .isInstanceOf(WorkflowValidationException.class)
-                .hasMessage("The associated data row no longer exists");
-        }
-    }
     
     @Nested
     @DisplayName("loadMainFormData 测试")

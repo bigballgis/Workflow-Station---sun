@@ -104,11 +104,24 @@ public class TaskFormSnapshotPropertyTest {
                 .as("Snapshot completedAt should be non-null")
                 .isNotNull();
 
-        // Core property: fieldValues should match process variables at time of completion
-        // Since no form definition is fetched (REST call fails), all variables are captured
+        // Core property: snapshot must always carry a fieldValues container (never null) so
+        // downstream readers can iterate without null guards. When no Task Form binding is found
+        // (mocked DW REST call returns null), fieldValues MUST be empty — neither top-level form
+        // fields NOR __subTables__ are persisted into the snapshot.
+        //
+        // Rationale (issue 1397, regression-2): __subTables__ is stored under multiple alias keys
+        // (bindingId, String(bindingId), tableName, normalizedTableName) by the frontend. Capturing
+        // it inside _snapshot_* without a Task Form binding means every task completion copies the
+        // ENTIRE alias-bloated subtable tree into the JSON column, with no UI consumer reading it
+        // back. Stacked over multi-instance subtask completions, this triggers PostgreSQL parameter
+        // encoding OOM (String.encodeUTF8) during Hibernate UPDATE.
         assertThat(snapshot.getFieldValues())
                 .as("Snapshot fieldValues should not be null")
                 .isNotNull();
+        assertThat(snapshot.getFieldValues())
+                .as("With no Task Form binding the snapshot MUST be empty — no top-level fields"
+                        + " AND no __subTables__ (which would otherwise inflate via alias copies)")
+                .isEmpty();
 
         // Original process variables should still be present
         for (Map.Entry<String, Object> entry : config.processVariables.entrySet()) {

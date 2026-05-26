@@ -1597,6 +1597,37 @@ function isolateMiSubTaskData(taskData: any) {
     }
   }
 
+  /**
+   * Designer-side diagnostic — surface main-form values that no MI sub-task or previous-form field
+   * can receive. Two failure modes silently drop data without this warning:
+   *   1. designer named the MI sub-task field differently from the main form (no implicit aliasing),
+   *   2. BPMN parsing missed the upstream userTask (e.g. previousForms ended up empty) so the value
+   *      is never displayed even read-only.
+   * Only logged in dev to avoid noise in production; check console when fields appear blank.
+   */
+  if (import.meta.env.DEV) {
+    const currentFormKeySet = new Set<string>(formKeys)
+    const orphanFields: string[] = []
+    for (const key of Object.keys(originalFormData)) {
+      if (!key || key.startsWith('_') || key.startsWith('__')) continue
+      if (key === 'initiator' || key === 'mainRecordId' || key === 'meeting_id'
+          || key === 'approval_result' || key === 'approved') continue
+      const value = originalFormData[key]
+      if (value == null || value === '' || typeof value === 'function') continue
+      if (currentFormKeySet.has(key) || prevFormFieldKeys.has(key)) continue
+      orphanFields.push(key)
+    }
+    if (orphanFields.length > 0) {
+      console.warn(
+        '[MI sub-task] Main-form variables present but unreachable from the current sub-task form ' +
+        'or any previous-form field. Designers: check that sub-task field keys match the main form, ' +
+        'or that upstream userTasks have a formId attached. Orphan keys:',
+        orphanFields,
+        { taskId: (taskData?.id || taskData?.taskId), taskDefinitionKey: taskData?.taskDefinitionKey }
+      )
+    }
+  }
+
   cleanedFormData.__subTables__ = rebuildIsolatedSubTablesPayload()
   if (myRow && typeof myRow === 'object') {
     const rowRec = myRow as Record<string, unknown>
