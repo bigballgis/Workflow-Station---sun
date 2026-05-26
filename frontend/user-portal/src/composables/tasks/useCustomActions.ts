@@ -4,6 +4,23 @@ import { useI18n } from 'vue-i18n'
 import { processApi } from '@/api/process'
 import { applyAutoFill } from '@/utils/n8nAutoFillEngine'
 import type { TaskActionInfo } from '@/api/task'
+import type { FormField, FormTab, PortalViewContext } from '@/components/formRendererHelpers'
+
+/**
+ * Prepared FORM_POPUP rendering context — built by the host view from the
+ * popup's target form content (configJson + tableBindings + cachedContentForms).
+ * Mirrors what FormRenderer needs to render the popup at parity with the
+ * Designer Form Preview (subTable widgets, Link Form targets, portalViews).
+ */
+export interface PreparedFormPopupContext {
+  fields: FormField[]
+  tabs: FormTab[]
+  subTableBindings: any[]
+  linkedSubTableBindings?: any[] | null
+  nativeSubTableBindingIds: number[]
+  formConfig: Record<string, unknown>
+  viewContext?: PortalViewContext
+}
 
 export function useCustomActions(options: {
   taskInfo: Ref<Record<string, any>>
@@ -17,6 +34,20 @@ export function useCustomActions(options: {
   currentApproveAction: Ref<string>
   approveForm: { comment: string }
   loadTaskDetail: () => Promise<void>
+  /**
+   * Resolve the popup's target form content (with tableBindings) from the host's
+   * cached function-unit content. Returning null lets the composable surface a
+   * "form not found" message without re-fetching.
+   */
+  resolveFormPopupContent?: (action: TaskActionInfo, config: any) => any | null
+  /**
+   * Build a FormRenderer-ready context (fields/tabs/subTableBindings/...) from
+   * the popup form content + configJson. Implementations should reuse the host's
+   * deriveColumnsFromBinding / resolveSubFormDesign / mergeLinkFormTargetBindingsInto
+   * helpers so popup rendering matches the host's main-form rendering exactly.
+   * Returning null leaves popup state empty (callers should surface an error).
+   */
+  preparePopupContext?: (formContent: any, formConfig: Record<string, unknown>) => PreparedFormPopupContext | null
 }) {
   const { t } = useI18n()
 
@@ -28,14 +59,24 @@ export function useCustomActions(options: {
   // Form popup state
   const formPopupVisible = ref(false)
   const formPopupTitle = ref('')
-  const formPopupFields = ref<any[]>([])
-  const formPopupTabs = ref<any[]>([])
+  const formPopupFields = ref<FormField[]>([])
+  const formPopupTabs = ref<FormTab[]>([])
   const formPopupData = ref<Record<string, any>>({})
   const formPopupReadOnly = ref(false)
   const formPopupWidth = ref('800px')
   const formPopupLabelWidth = ref('140px')
   const formPopupReadOnlyMode = ref(false)
   const currentFormPopupAction = ref<TaskActionInfo | null>(null)
+  /**
+   * Sub-table bindings prepared for the popup form by the host (via
+   * preparePopupContext); FormRenderer needs these to resolve subTable widgets
+   * declared in the popup's canvas rule.
+   */
+  const formPopupSubTableBindings = ref<any[]>([])
+  const formPopupLinkedSubTableBindings = ref<any[] | null>(null)
+  const formPopupNativeSubTableBindingIds = ref<number[]>([])
+  const formPopupFormConfig = ref<Record<string, unknown>>({})
+  const formPopupViewContext = ref<PortalViewContext>('assigneeTodo')
 
   function handleCustomAction(action: TaskActionInfo) {
     const actionType = (action.actionType || '').trim().toUpperCase()
@@ -144,6 +185,18 @@ export function useCustomActions(options: {
     }
   }
 
+  /**
+   * Open the FORM_POPUP dialog with parity to the Designer Form Preview:
+   *  1) Resolve the target form content (with tableBindings) via the host-provided
+   *     `resolveFormPopupContent` callback (typically reads from cachedContentForms);
+   *     falls back to `processApi.getFunctionUnitContent` so legacy callers still work.
+   *  2) Delegate parsing + sub-table binding assembly to the host via
+   *     `preparePopupContext`, which uses the same helpers as the main form (so
+   *     subTable / lookup / card / Link Form widgets render identically).
+   * Designer must enforce subTable widgets only on PRIMARY-style ACTION forms;
+   * popup rendering does not attempt to write back sub-table data without the
+   * host's submission integration.
+   */
   async function openFormPopup(action: TaskActionInfo, config: any) {
     try {
       currentFormPopupAction.value = action
@@ -151,71 +204,104 @@ export function useCustomActions(options: {
       formPopupWidth.value = config.popupWidth || '800px'
       formPopupReadOnlyMode.value = config.readOnly === true || config.readOnly === 'true'
       formPopupData.value = {}
-      if (config.formId) {
+      formPopupFields.value = []
+      formPopupTabs.value = []
+      formPopupSubTableBindings.value = []
+      formPopupLinkedSubTableBindings.value = null
+      formPopupNativeSubTableBindingIds.value = []
+      formPopupFormConfig.value = {}
+      formPopupViewContext.value = 'assigneeTodo'
+
+      if (!config.formId) {
+        ElMessage.error(t('task.formMissingId'))
+        return
+      }
+
+      // Prefer host-supplied form content (already includes tableBindings + sourceId).
+      let formContent: any = null
+      if (options.resolveFormPopupContent) {
+        formContent = options.resolveFormPopupContent(action, config)
+      }
+
+      // Fallback for hosts that don't supply a resolver — fetch full FU content directly
+      // (legacy parity; still returns tableBindings on each form despite slim TS types).
+      if (!formContent) {
         const functionUnitId = options.taskInfo.value.processDefinitionKey
         if (functionUnitId) {
           try {
-            const res = await processApi.getFunctionUnitContents(functionUnitId, 'FORM')
-            const forms = (res as any).data || []
-            const formContent = forms.find((f: any) => f.sourceId === String(config.formId) || f.contentName === config.formName)
-            if (formContent?.contentData) {
-              const formConfig = typeof formContent.contentData === 'string' ? JSON.parse(formContent.contentData) : formContent.contentData
-              parseFormPopupConfig(formConfig)
-              formPopupVisible.value = true
-            } else {
-              ElMessage.error(t('task.formNotFound', { name: config.formName || config.formId }))
-            }
+            const res = await processApi.getFunctionUnitContent(functionUnitId)
+            const content = ('data' in (res as any) ? (res as any).data : res) as any
+            const forms = content?.forms || []
+            formContent =
+              forms.find((f: any) => String(f.sourceId) === String(config.formId)) ||
+              (config.formName ? forms.find((f: any) => f.name === config.formName) : null) ||
+              null
           } catch {
             ElMessage.error(t('task.formLoadFailed'))
+            return
           }
         }
-      } else {
-        ElMessage.error(t('task.formMissingId'))
       }
-    } catch {
+
+      if (!formContent) {
+        ElMessage.error(t('task.formNotFound', { name: config.formName || config.formId }))
+        return
+      }
+
+      const rawData = formContent.data ?? formContent.contentData
+      let formConfig: Record<string, unknown> = {}
+      try {
+        formConfig = typeof rawData === 'string' ? JSON.parse(rawData) : (rawData || {})
+      } catch {
+        ElMessage.error(t('task.formLoadFailed'))
+        return
+      }
+
+      if (!options.preparePopupContext) {
+        // Without a host-side preparer the composable cannot build sub-table
+        // bindings safely (helpers live in tasks/detail.vue). Refuse to fall back
+        // to the legacy simplified converter — that path silently dropped
+        // subTable / card / lookup widgets and is the root cause of #1394.
+        console.warn('[useCustomActions] preparePopupContext not provided — popup will not render')
+        ElMessage.error(t('task.formOpenFailed'))
+        return
+      }
+
+      const ctx = options.preparePopupContext(formContent, formConfig)
+      if (!ctx) {
+        ElMessage.error(t('task.formOpenFailed'))
+        return
+      }
+
+      formPopupFields.value = ctx.fields
+      formPopupTabs.value = ctx.tabs
+      formPopupSubTableBindings.value = ctx.subTableBindings
+      formPopupLinkedSubTableBindings.value = ctx.linkedSubTableBindings ?? null
+      formPopupNativeSubTableBindingIds.value = ctx.nativeSubTableBindingIds
+      formPopupFormConfig.value = ctx.formConfig
+      formPopupViewContext.value = ctx.viewContext ?? 'assigneeTodo'
+      formPopupVisible.value = true
+    } catch (e) {
+      console.warn('[useCustomActions] openFormPopup failed:', e)
       ElMessage.error(t('task.formOpenFailed'))
     }
   }
 
-  function parseFormPopupConfig(configInput: any) {
-    try {
-      const config = typeof configInput === 'string' ? JSON.parse(configInput) : configInput
-      const rules = config.rule && Array.isArray(config.rule) ? config.rule : (Array.isArray(config) ? config : null)
-      if (rules) {
-        rules.forEach((r: any, i: number) => {
-          if (r.type === 'el-tabs' && Array.isArray(r.children)) {
-            formPopupTabs.value = r.children.map((tab: any) => ({
-              name: tab.props?.label || tab.title || `Tab ${i + 1}`,
-              fields: (tab.children || []).map((item: any) => convertFormCreateRuleSimple(item))
-            }))
-          }
-        })
-        if (formPopupTabs.value.length === 0) {
-          formPopupFields.value = rules.map(convertFormCreateRuleSimple)
-        }
-      }
-    } catch {
-      // ignore parse errors
-    }
-  }
-
-  function convertFormCreateRuleSimple(rule: any): any {
-    return {
-      key: rule.field || rule.id || '',
-      label: rule.title || rule.name || '',
-      type: rule.type || 'input',
-      required: rule.props?.required || false,
-      placeholder: rule.props?.placeholder || '',
-      options: rule.options || [],
-      defaultValue: rule.props?.defaultValue ?? rule.value ?? null,
-      props: rule.props || {}
+  function handleFormPopupSubTableUpdate(bindingId: number, rows: any[]) {
+    const target = formPopupSubTableBindings.value.find(
+      (b: any) => Number(b?.bindingId) === Number(bindingId),
+    )
+    if (target) {
+      target.data = rows
     }
   }
 
   async function submitFormPopup() {
     options.submitting.value = true
     try {
-      // TODO: Implement form popup submission
+      // TODO: Implement form popup submission (needs server-side endpoint for ACTION forms).
+      // Until then the dialog just acknowledges and closes; sub-table edits are preserved
+      // in formPopupSubTableBindings for future submit wiring.
       ElMessage.success(t('task.formSubmitSuccess'))
       formPopupVisible.value = false
       options.loadTaskDetail()
@@ -238,10 +324,16 @@ export function useCustomActions(options: {
     formPopupReadOnly,
     formPopupWidth,
     formPopupLabelWidth,
+    formPopupSubTableBindings,
+    formPopupLinkedSubTableBindings,
+    formPopupNativeSubTableBindingIds,
+    formPopupFormConfig,
+    formPopupViewContext,
     currentFormPopupAction,
     handleCustomAction,
     handleN8nActionExecuted,
     openFormPopup,
-    submitFormPopup
+    submitFormPopup,
+    handleFormPopupSubTableUpdate,
   }
 }

@@ -169,7 +169,9 @@
               :readonly="selectedNodeForm.isCurrentTask ? formReadOnly : true"
               :primary-read-only="selectedNodeForm.isCurrentTask ? primaryReadOnly : false"
               :sub-table-bindings="selectedNodeForm.isCurrentTask ? subTableBindings : selectedNodeForm.subTableBindings"
-              :linked-sub-table-bindings="selectedNodeForm.isCurrentTask ? linkableSubTableBindings : undefined"
+              :linked-sub-table-bindings="selectedNodeForm.isCurrentTask ? linkableSubTableBindings : selectedNodeForm.subTableBindings"
+              :native-sub-table-binding-ids="selectedNodeForm.isCurrentTask ? mainFormNativeSubTableBindingIds : selectedNodeForm.nativeSubTableBindingIds"
+              :form-config="selectedNodeForm.isCurrentTask ? mainFormConfig : selectedNodeForm.formConfig"
               :preview-sub-tables="selectedNodeForm.isCurrentTask ? isMiSubTaskMode : true"
               :task-id="selectedNodeForm.isCurrentTask ? effectiveTaskId : undefined"
               :allow-sub-table-assign="selectedNodeForm.isCurrentTask ? allowSubTableAssignForCurrentTask : false"
@@ -221,14 +223,24 @@
           >
             <div class="section-content">
               <FormRenderer
-                v-if="processFormFields.length > 0 || processFormTabs.length > 0"
+                v-if="processFormFields.length > 0 || processFormTabs.length > 0 || processFormSubTableBindings.length > 0"
                 :fields="processFormFields"
                 :tabs="processFormTabs"
                 :model-value="processFormValues"
                 :label-width="formLabelWidth"
                 :readonly="!processFormEditable"
                 :primary-read-only="primaryReadOnly"
+                :sub-table-bindings="processFormSubTableBindings"
+                :linked-sub-table-bindings="processFormSubTableBindings"
+                :native-sub-table-binding-ids="processFormNativeSubTableBindingIds"
+                :form-config="processFormFormConfig"
+                view-context="initiatorRequest"
+                :show-link-form-dialog-footer="processFormEditable"
                 @update:model-value="val => processFormValues = { ...processFormValues, ...val }"
+                @update:sub-table-data="(bindingId: number, rows: any[]) => {
+                  const target = processFormSubTableBindings.find((b: any) => Number(b?.bindingId) === Number(bindingId))
+                  if (target) target.data = rows
+                }"
               />
               <el-empty
                 v-else
@@ -275,6 +287,8 @@
               :primary-read-only="primaryReadOnly"
               :sub-table-bindings="subTableBindings"
               :linked-sub-table-bindings="linkableSubTableBindings"
+              :native-sub-table-binding-ids="mainFormNativeSubTableBindingIds"
+              :form-config="mainFormConfig"
               :preview-sub-tables="isMiSubTaskMode"
               :task-id="effectiveTaskId"
               :allow-sub-table-assign="allowSubTableAssignForCurrentTask"
@@ -374,8 +388,14 @@
       :label-width="formPopupLabelWidth"
       :readonly="formPopupReadOnly"
       :submitting="submitting"
+      :sub-table-bindings="formPopupSubTableBindings"
+      :linked-sub-table-bindings="formPopupLinkedSubTableBindings ?? formPopupSubTableBindings"
+      :native-sub-table-binding-ids="formPopupNativeSubTableBindingIds"
+      :form-config="formPopupFormConfig"
+      :view-context="formPopupViewContext"
       @update:form-data="val => formPopupData = { ...formPopupData, ...val }"
-@submit="submitFormPopup"
+      @update:sub-table-data="handleFormPopupSubTableUpdate"
+      @submit="submitFormPopup"
     />
 
     <!-- MI subtask fill-form dialog -->
@@ -517,6 +537,21 @@ interface NodeFormInfo {
   tabs: FormTab[]
   values: Record<string, any>
   subTableBindings: PreviousFormEntry['subTableBindings']
+  /**
+   * Designer configJson for this node's form — required so FormRenderer can resolve
+   * Link Form targets (subListViews) and apply the per-binding portalViews merge
+   * (mergeSubTablePortalViewsForRuntime). Without it the snapshot view silently
+   * drops Link Form widgets and falls back to non-portalized columns
+   * (#1395 / portal-design-parity).
+   */
+  formConfig: Record<string, any>
+  /**
+   * Binding ids declared directly on this form's tableBindings (non-PRIMARY,
+   * pre-Link-Form-merge). FormRenderer uses this to distinguish "native"
+   * sub-tables (placed widgets) from Link Form targets pulled in via
+   * mergeLinkFormTargetBindingsInto.
+   */
+  nativeSubTableBindingIds: number[]
 }
 const nodeFormMap = ref<Map<string, NodeFormInfo>>(new Map())
 /** Cached from last successful loadFunctionUnitContent — refreshes nodeFormMap after loadProcessAndTaskFormData merges variables. */
@@ -1990,12 +2025,22 @@ const clearNodeSelection = () => {
 
 // Task 17: Process Form / Task Form separation state
 const processFormData = ref<ProcessFormData | null>(null)
-const showProcessFormPanel = ref(false)
 const processFormCollapse = ref<string[]>([])  // empty = collapsed
 const processFormEditable = ref(false)
 const processFormFields = ref<FormField[]>([])
 const processFormTabs = ref<FormTab[]>([])
 const processFormValues = ref<Record<string, any>>({})
+/**
+ * Sub-table bindings parsed from `pfData.subTableBindings` enriched with
+ * configJson (subForms / subTablePortalViews) — feeds FormRenderer so the
+ * Process Form panel renders sub-table widgets at parity with the Designer
+ * Form Preview (portal-design-parity).
+ */
+const processFormSubTableBindings = ref<typeof subTableBindings.value>([])
+/** Designer configJson for the process form (powers Link Form / portalViews merge). */
+const processFormFormConfig = ref<Record<string, unknown>>({})
+/** Native (non-link-target) binding ids on the process form. */
+const processFormNativeSubTableBindingIds = ref<number[]>([])
 
 // Task 17.2: Task Form data
 const taskFormDTO = ref<TaskFormDataDTO | null>(null)
@@ -2019,9 +2064,34 @@ const { formFields, formTabs, formData, currentFormName, formReadOnly, formLabel
 // Task 17.4: Return_To_Requester state
 const isReturnToRequester = ref(false)
 
+/**
+ * Show the Process Form panel iff we have process form data AND the user can
+ * actually act on it (Return_To_Requester editable mode). Prior code kept this
+ * as a never-flipped `ref(false)`, which silently dead-coded the entire panel.
+ * Read-only completed-task snapshots are surfaced by TaskSnapshotSection,
+ * so this panel is reserved for the editable Return_To_Requester scenario.
+ */
+const showProcessFormPanel = computed(() =>
+  !!processFormData.value && processFormEditable.value,
+)
+
 // Whether the PRIMARY table binding has bindingMode READONLY.
 // When true, main form fields are disabled but sub-tables retain their own editability.
 const primaryReadOnly = ref(false)
+
+/**
+ * Designer configJson for the currently selected task's main form. Required by
+ * FormRenderer to resolve Link Form targets (subListViews / boundSubTableBindingId)
+ * and to drive mergeSubTablePortalViewsForRuntime portalViews merges. Mirrors
+ * applications/detail.vue's mainFormConfig (#1395 / portal-design-parity).
+ */
+const mainFormConfig = ref<Record<string, any>>({})
+/**
+ * Binding ids declared directly on the main form's tableBindings (non-PRIMARY,
+ * pre-Link-Form-merge). Lets FormRenderer distinguish "native" sub-tables placed
+ * on this form's canvas from Link Form targets pulled in from other FU forms.
+ */
+const mainFormNativeSubTableBindingIds = ref<number[]>([])
 
 function isCompletedTaskData(taskData: any): boolean {
   return taskData?.endTime != null ||
@@ -2252,7 +2322,100 @@ const customActions = useCustomActions({
   approveDialogTitle,
   currentApproveAction,
   approveForm,
-  loadTaskDetail
+  loadTaskDetail,
+  /**
+   * FORM_POPUP target form resolution — prefer cachedContentForms (full
+   * tableBindings included) so the popup renders with full sub-table parity
+   * without an extra round-trip. Closure captures cachedContentForms by reference;
+   * it's populated by loadFunctionUnitContent well before any action button can fire.
+   */
+  resolveFormPopupContent: (_action, config) => {
+    if (!config?.formId) return null
+    const forms = cachedContentForms
+    if (!Array.isArray(forms) || forms.length === 0) return null
+    return (
+      forms.find((f: any) => String(f.sourceId) === String(config.formId))
+        || (config.formName ? forms.find((f: any) => f.name === config.formName) : null)
+        || null
+    )
+  },
+  /**
+   * FORM_POPUP rendering context — reuse the main-form helpers so popup canvas
+   * (subTable / lookup / card / Link Form columns) renders at parity with the
+   * Designer Form Preview. Replaces the legacy convertFormCreateRuleSimple path
+   * that silently dropped any non-primitive widget (#1394).
+   */
+  preparePopupContext: (formContent, formConfig) => {
+    const cfg = formConfig as Record<string, any>
+    const rules = cfg.rule && Array.isArray(cfg.rule) ? cfg.rule : (Array.isArray(cfg) ? cfg : null)
+    if (!rules) return null
+
+    const popupTabs: FormTab[] = []
+    const popupFields: FormField[] = []
+    const tabsRule = rules.find((r: any) => r.type === 'el-tabs')
+    if (tabsRule?.children && Array.isArray(tabsRule.children)) {
+      for (const tabPane of tabsRule.children) {
+        if (tabPane.type !== 'el-tab-pane' || !tabPane.props) continue
+        const tabFields: FormField[] =
+          tabPane.children && Array.isArray(tabPane.children)
+            ? extractFieldsRecursive(tabPane.children)
+            : []
+        popupTabs.push({
+          name: tabPane.props.name || `tab_${popupTabs.length}`,
+          label: tabPane.props.label || `Tab ${popupTabs.length + 1}`,
+          fields: tabFields,
+        })
+      }
+    } else {
+      popupFields.push(...extractFieldsRecursive(rules))
+    }
+
+    const subForms = cfg.subForms || {}
+    const subTablePortalViewsCfg = cfg.subTablePortalViews || {}
+    const tableBindings: any[] = (formContent as any).tableBindings || []
+    const popupBindings: typeof subTableBindings.value = []
+    const nativeIds: number[] = []
+    for (const b of tableBindings) {
+      if (b.bindingType === 'PRIMARY') continue
+      const cols = deriveColumnsFromBinding(b, subForms, cfg)
+      const subFormDesign = resolveSubFormDesign(b, subForms)
+      const bindingPortalViews =
+        subTablePortalViewsCfg[b.bindingId] ?? subTablePortalViewsCfg[String(b.bindingId)] ?? null
+      popupBindings.push({
+        bindingId: b.bindingId,
+        tableId: b.tableId ?? null,
+        bindingType: b.bindingType,
+        bindingMode: b.bindingMode,
+        foreignKeyField: b.foreignKeyField,
+        tableName: b.tableDisplayName || b.tableName,
+        physicalTableName: b.tableName,
+        tableType: b.tableType,
+        tableDescription: b.tableDescription,
+        columns: cols,
+        formFields: subFormDesign.formFields,
+        formOptions: subFormDesign.formOptions,
+        portalViews: bindingPortalViews,
+        primaryKeyFields: resolveSubTablePrimaryKeyFields(b.primaryKeyFields, b.bindingId, cfg),
+        data: [],
+      })
+      const bid = Number(b.bindingId)
+      if (Number.isFinite(bid)) nativeIds.push(bid)
+    }
+    // Link Form targets in the popup form may reference bindings declared in
+    // other FU forms (e.g. subtable2). Merge those so SubTableField's Link Form
+    // modal can resolve them at parity with the main form.
+    mergeLinkFormTargetBindingsInto(popupBindings, cachedContentForms, cfg, subForms)
+
+    return {
+      fields: popupFields,
+      tabs: popupTabs,
+      subTableBindings: popupBindings,
+      linkedSubTableBindings: popupBindings,
+      nativeSubTableBindingIds: nativeIds,
+      formConfig: cfg,
+      viewContext: 'assigneeTodo' as const,
+    }
+  },
 })
 const {
   n8nActionDialogVisible,
@@ -2266,11 +2429,17 @@ const {
   formPopupReadOnly,
   formPopupWidth,
   formPopupLabelWidth,
+  formPopupSubTableBindings,
+  formPopupLinkedSubTableBindings,
+  formPopupNativeSubTableBindingIds,
+  formPopupFormConfig,
+  formPopupViewContext,
   currentFormPopupAction: currentFormPopupActionRef,
   handleCustomAction,
   handleN8nActionExecuted,
   openFormPopup,
-  submitFormPopup
+  submitFormPopup,
+  handleFormPopupSubTableUpdate,
 } = customActions
 
 
@@ -2399,6 +2568,15 @@ const loadFunctionUnitContent = async (processKey: string, prefetchedContent?: a
       // Load sub-table bindings for this form (SUB and RELATED, not PRIMARY)
       const bindings: typeof subTableBindings.value = []
       const tableBindings: any[] = selectedForm.tableBindings || []
+
+      // Persist main-form designer context for selected-node FormRenderer parity (#1395):
+      //  - mainFormConfig powers Link Form / portalViews resolution
+      //  - mainFormNativeSubTableBindingIds tags "placed-on-canvas" bindings vs merged Link Form targets
+      mainFormConfig.value = formConfigForSubTables
+      mainFormNativeSubTableBindingIds.value = tableBindings
+        .filter((b: any) => b.bindingType !== 'PRIMARY')
+        .map((b: any) => Number(b.bindingId))
+        .filter((n: number) => Number.isFinite(n))
 
       // When the PRIMARY table binding has bindingMode READONLY, force primary form fields read-only
       // without affecting sub-table editability (sub-tables check their own bindingMode).
@@ -2712,8 +2890,15 @@ const loadFunctionUnitContent = async (processKey: string, prefetchedContent?: a
             const nodeFields: FormField[] = []
             const nodeTabs: FormTab[] = []
             const nodeBindings: PreviousFormEntry['subTableBindings'] = []
+            // Hoisted so the newMap.set below can attach them to NodeFormInfo —
+            // FormRenderer needs configJson (Link Form / portalViews) and the
+            // native binding-id set to render the snapshot at parity with the
+            // current task form (#1395 / portal-design-parity).
+            let nodeFormConfig: Record<string, any> = {}
+            const nodeNativeIds: number[] = []
             try {
               const cfg = typeof matchedForm.data === 'string' ? JSON.parse(matchedForm.data) : (matchedForm.data || {})
+              nodeFormConfig = cfg
               const rules = cfg.rule && Array.isArray(cfg.rule) ? cfg.rule : (Array.isArray(cfg) ? cfg : null)
               if (rules) {
                 const tabsRule = rules.find((r: any) => r.type === 'el-tabs')
@@ -2759,7 +2944,12 @@ const loadFunctionUnitContent = async (processKey: string, prefetchedContent?: a
                   data: [] as any[]
                 }
                 nodeBindings.push(binding)
+                const bid = Number(b.bindingId)
+                if (Number.isFinite(bid)) nodeNativeIds.push(bid)
               }
+              // Capture native bindings BEFORE Link Form merge so FormRenderer
+              // can distinguish "placed on this form's canvas" vs "pulled in
+              // as a Link Form target from another FU form".
               mergeLinkFormTargetBindingsInto(nodeBindings as any, content.forms, configForSubTables, subForms)
               const ambiguousNodeDiagram = bindingIdsPreferStrictSubTableLookup(nodeBindings as any[])
               const _stForNested = formData.value.__subTables__
@@ -2801,7 +2991,9 @@ const loadFunctionUnitContent = async (processKey: string, prefetchedContent?: a
               fields: nodeFields,
               tabs: nodeTabs,
               values: { ...formData.value },
-              subTableBindings: nodeBindings
+              subTableBindings: nodeBindings,
+              formConfig: nodeFormConfig,
+              nativeSubTableBindingIds: nodeNativeIds,
             })
           }
         }
@@ -2886,7 +3078,16 @@ const loadProcessAndTaskFormData = async (taskData: any, prefetched?: Prefetched
 
     if (pfData.configJson) {
       parseProcessFormConfig(pfData.configJson)
+      buildProcessFormSubTableBindings(pfData)
+    } else {
+      processFormSubTableBindings.value = []
+      processFormFormConfig.value = {}
+      processFormNativeSubTableBindingIds.value = []
     }
+  } else {
+    processFormSubTableBindings.value = []
+    processFormFormConfig.value = {}
+    processFormNativeSubTableBindingIds.value = []
   }
 
   if (currentTaskId) {
@@ -2959,6 +3160,57 @@ const parseProcessFormConfig = (configJson: Record<string, unknown>) => {
   } catch (e) {
     console.error('[detail] Failed to parse process form config:', e)
   }
+}
+
+/**
+ * Build FormRenderer-ready sub-table bindings for the Process Form panel.
+ *
+ * The backend ProcessFormData.subTableBindings DTO carries only the minimal
+ * fields (bindingId / tableName / columns / data). Designer-side metadata
+ * needed by FormRenderer (subForms row layout, portalViews, primaryKeyFields)
+ * lives in configJson. Merge them here so the panel renders at parity with
+ * the Designer Form Preview / main task form (portal-design-parity).
+ *
+ * Skips PRIMARY bindings (those drive flat fields, not sub-table widgets) and
+ * coerces bindingId to Number for downstream binding lookup.
+ */
+function buildProcessFormSubTableBindings(pfData: ProcessFormData) {
+  const cfg = (pfData.configJson || {}) as Record<string, any>
+  const subForms = (cfg.subForms || {}) as Record<string, any>
+  const subTablePortalViewsCfg = (cfg.subTablePortalViews || {}) as Record<string, any>
+  const bindings: typeof subTableBindings.value = []
+  const nativeIds: number[] = []
+  for (const b of (pfData.subTableBindings || [])) {
+    if (b.bindingType === 'PRIMARY') continue
+    // resolveSubFormDesign signature: ({ bindingId }, subForms) → uses bindingId to look up cfg.subForms[bindingId].
+    const subFormDesign = resolveSubFormDesign({ bindingId: b.bindingId } as any, subForms)
+    const bindingPortalViews =
+      subTablePortalViewsCfg[b.bindingId as any]
+        ?? subTablePortalViewsCfg[String(b.bindingId)]
+        ?? null
+    bindings.push({
+      bindingId: b.bindingId,
+      tableId: null,
+      bindingType: b.bindingType,
+      bindingMode: b.bindingMode,
+      foreignKeyField: null,
+      tableName: (b as any).tableDisplayName || b.tableName,
+      physicalTableName: b.tableName,
+      tableType: '',
+      tableDescription: '',
+      columns: Array.isArray(b.columns) ? (b.columns as any[]) : [],
+      formFields: subFormDesign.formFields,
+      formOptions: subFormDesign.formOptions,
+      portalViews: bindingPortalViews,
+      primaryKeyFields: resolveSubTablePrimaryKeyFields(null, b.bindingId, cfg),
+      data: Array.isArray(b.data) ? (b.data as any[]) : [],
+    } as any)
+    const bid = Number(b.bindingId)
+    if (Number.isFinite(bid)) nativeIds.push(bid)
+  }
+  processFormSubTableBindings.value = bindings
+  processFormFormConfig.value = cfg
+  processFormNativeSubTableBindingIds.value = nativeIds
 }
 
 // Task 17.4: Submit Process Form update (Return_To_Requester state)

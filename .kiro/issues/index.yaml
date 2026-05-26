@@ -1997,6 +1997,107 @@
       - Docker `user-portal-frontend` 重建并刷新浏览器后，三个新增场景 readonly 上一步表单面板正确显示。
     后续：与 #1392 note 末尾的「后续建议」同步——若产品决定加显式 field→field mapping UI 仍需独立任务；JSON-row 存储重构（MultiInstanceDataResolver.loadSubTableRow 物理 SELECT）也保持独立。
 
+- id: "1393"
+  status: fixed
+  fixed_at: "2026-05-26"
+  severity: major
+  category: bug
+  summary: "user-portal tasks/detail.vue Process Form 面板（Return_To_Requester 场景）整体未绑定 sub-table — FormRenderer 缺 :sub-table-bindings/:linked-sub-table-bindings/:view-context/:form-config，且 showProcessFormPanel 是常 false 死开关；含子表的 Process Form 在 To Do 详情既无法显示也无法渲染"
+  file: |
+    frontend/user-portal/src/views/tasks/detail.vue
+    frontend/user-portal/src/api/processForm.ts
+    backend/user-portal/src/main/java/com/portal/dto/ProcessFormData.java
+  fix_summary: |
+    1) `showProcessFormPanel` 由从未赋值的 `ref(false)` 改为 `computed(() => !!processFormData.value && processFormEditable.value)` — Return_To_Requester editable 场景自动激活，completed snapshot 仍交由 TaskSnapshotSection（避免重复）。
+    2) 新增 `processFormSubTableBindings / processFormFormConfig / processFormNativeSubTableBindingIds` refs；在 `loadProcessAndTaskFormData` 内通过新增的 `buildProcessFormSubTableBindings(pfData)` 把后端 `ProcessFormData.subTableBindings` 与 `configJson.subForms / subTablePortalViews` 合并出 portal binding（含 portalViews / formFields / primaryKeyFields）；pfData 缺失时同步清零。
+    3) Process Form `<FormRenderer>` 补齐 `:sub-table-bindings / :linked-sub-table-bindings / :native-sub-table-binding-ids / :form-config`，`view-context="initiatorRequest"`（发起人重新编辑视角，与 My Request 同语义），并暴露 `update:sub-table-data` 回填到本地 binding。
+    构建 & 验证：`npm run build` 通过、docker compose rebuild `user-portal-frontend` 启动 nginx 16 workers 无错；`user-portal` Spring Boot 9.131s 启动后 Kafka/MVC 正常。
+  note: |
+    场景：发起人在 Process Form 提交流程后，审批人退回（processState='Return_To_Requester'），发起人重新打开 To Do 详情；
+    设计器 Process Form 内含 sub-table（Process Form 是绑定到 startEvent 的 form，contentType=FORM/PROCESS_FORM）。
+    后端 `ProcessFormData` DTO 明确含 `subTableBindings: List<SubTableBindingData>` 字段（getProcessFormData API），但 portal 端：
+      1) **`tasks/detail.vue:1993` `showProcessFormPanel = ref(false)` 全文从未被赋值** —— 即使 `processFormData / processFormEditable / processFormCollapse` 都被 `loadProcessAndTaskFormData` 正确填充，模板 `v-if="showProcessFormPanel && processFormData"` 永远 false。Return_To_Requester 时，发起人只能看到主任务表单（taskForm），而 Process Form 面板压根渲染不出来，无法编辑/查看原始 Process Form。
+      2) 即使把死开关激活，模板 line 223-232 的 `<FormRenderer>` 仅传 `:fields / :tabs / :model-value / :label-width / :readonly / :primary-read-only`，**未传** `:sub-table-bindings / :linked-sub-table-bindings / :view-context / :form-config / :native-sub-table-binding-ids`。
+      3) `parseProcessFormConfig`（line 2931-2962）只用 `extractFieldsRecursive` 把 rule → fields/tabs，**未消费** `pfData.subTableBindings`，相关 binding 数据/字段定义/portalViews 全部被丢弃。子表 widget 的占位 (`type:'subTable', _bindingId:N`) 会进入 `processFormFields`，但 FormRenderer 内 `bindingMap` 为空 → `resolveBinding(child._bindingId)` 返回 undefined → 子表静默不渲染。
+    与 portal-design-parity.mdc 冲突：设计器 Form Preview 渲染 Process Form 子表正常，门户 Return_To_Requester 路径完全断流。
+    复现：在设计器为某个 FU 的 Process Form 拖入一个 sub-table 绑定 → 部署 → 发起一次申请 → 审批人退回 → 发起人 To Do 进入详情。预期：可看到 Process Form 面板 + 子表 + 可编辑；实测：Process Form 面板根本不显示。
+    修复方向（待实施）：
+      - 在 `loadProcessAndTaskFormData` 内基于 pfData 判定后赋值 `showProcessFormPanel.value`（或直接删除开关，用 `processFormData && (isReturnToRequester || isCompletedTask)` 等业务条件控制）。
+      - 在 `parseProcessFormConfig` 之外补充 `parseProcessFormSubTableBindings(pfData)` 把 `pfData.subTableBindings` 映射到 portal 端 binding 结构（columns/data/portalViews/primaryKeyFields 全量），合并 `configJson.subTablePortalViews`，并存入新 ref `processFormSubTableBindings`。
+      - FormRenderer 调用补齐：`:sub-table-bindings="processFormSubTableBindings"`、`:linked-sub-table-bindings="processFormLinkableSubTableBindings"`、`:view-context="isReturnToRequester ? 'assigneeTodo' : 'initiatorRequest'"`（编辑态当作 assigneeTodo 走 form-below-table；只读态以 initiatorRequest 显示）、`:form-config="pfData.configJson"`、并补 `:native-sub-table-binding-ids`。
+      - 同步在 `applications/detail.vue` 校验是否需要同样独立的 Process Form 面板（当前 My Request 只渲染单一 form，行为不同；如未来引入需保持同构）。
+    爆炸半径：仅前端 portal 视图层 + 一个新的 ref/解析函数，无 API/DTO 变更；与 #1392 的死代码清理同性质（先发现、单独立条）。
+
+- id: "1394"
+  status: fixed
+  fixed_at: "2026-05-26"
+  severity: major
+  category: bug
+  summary: "user-portal FORM_POPUP action 弹出的设计表单使用 useCustomActions.parseFormPopupConfig + convertFormCreateRuleSimple 简化转换器（非 extractFieldsRecursive），且 FormPopupDialog 不向 FormRenderer 传任何 sub-table bindings/formConfig；含 subTable/card/lookup/嵌套 tabs/Link Form 的设计稿在 popup 中静默退化为普通输入或丢失"
+  file: |
+    frontend/user-portal/src/composables/tasks/useCustomActions.ts
+    frontend/user-portal/src/components/tasks/FormPopupDialog.vue
+    frontend/user-portal/src/views/tasks/detail.vue
+  fix_summary: |
+    1) 删除 `parseFormPopupConfig` + `convertFormCreateRuleSimple`；`openFormPopup` 改为通过新增的 host callback `resolveFormPopupContent`（优先读 `cachedContentForms`，保留完整 tableBindings + sourceId；缺失时回退 `processApi.getFunctionUnitContent` 全量 FU 内容）+ `preparePopupContext` 装配上下文。
+    2) `tasks/detail.vue` 在 useCustomActions 选项里注入 `preparePopupContext`：复用主任务表同一套 `extractFieldsRecursive / deriveColumnsFromBinding / resolveSubFormDesign / resolveSubTablePrimaryKeyFields / mergeLinkFormTargetBindingsInto`，把 popup 目标 form 解析成与主 form 同构的 `fields / tabs / subTableBindings / nativeSubTableBindingIds / formConfig`（含 subTablePortalViews & Link Form target merge）。无 preparer 时直接返回错误，杜绝旧简化路径回滚。
+    3) `FormPopupDialog.vue` 新增 props `subTableBindings / linkedSubTableBindings / nativeSubTableBindingIds / formConfig / viewContext` 并透传给内部 `<FormRenderer>`；新增 `update:subTableData` emit；`useCustomActions` 暴露 `handleFormPopupSubTableUpdate` 用于本地回填 popup 子表行。
+    4) `useCustomActions` 新增 state refs `formPopupSubTableBindings / formPopupLinkedSubTableBindings / formPopupNativeSubTableBindingIds / formPopupFormConfig / formPopupViewContext`，在 popup 关闭/重新打开时正确重置；目前 `submitFormPopup` 仍是 TODO 桩（未来上线 ACTION form 提交端点时再补 subTableData 上送）。
+    构建 & 验证：`npm run build` 通过；docker compose rebuild `user-portal-frontend` 启动 nginx 无错；container `platform-user-portal-frontend-dev` healthy。
+  note: |
+    场景：设计器 Action Designer 配置 actionType=FORM_POPUP + formId=某 ACTION form；该 form 在设计器画布上包含 subTable / card / tabs / lookup / Link Form 列；处办人在 To Do 详情点击该 action 按钮，期望弹窗与设计器 Form Preview 一致。
+    实测：弹窗仅渲染顶层普通字段；任何 subTable/card/嵌套布局/lookup backfill 元数据全部丢失。
+    根因：
+      1) `useCustomActions.parseFormPopupConfig`（lines 180-200）**未使用** `extractFieldsRecursive` —— 仅顶层 `rules.forEach`，识别 `el-tabs`+其顶层 `children.map(convertFormCreateRuleSimple)`；非 tabs 时直接 `rules.map(convertFormCreateRuleSimple)`。子 card 容器的 `children` 完全不递归。
+      2) `convertFormCreateRuleSimple`（lines 202-213）是一个 1:1 浅拷贝（`type: rule.type || 'input'`，无 subTable/_bindingId/portalViews 处理，无 lookup `_lookupTableId/_lookupConfig/_lookupViewFields` 等 underscore-prefixed 元数据），与 `formRendererHelpers.extractFieldsRecursive` + `extractLookupFieldMetadata` 的契约差异巨大。subTable 节点 → 进入但 `_bindingId` 丢失；card → 进入但 `children` 丢失；lookup → 进入但 lookup 配置全没。
+      3) `FormPopupDialog.vue`（lines 1-39）`<FormRenderer>` 仅接 `:fields / :tabs / :model-value / :label-width / :readonly`，**没有** `subTableBindings / linkedSubTableBindings / viewContext / formConfig / nativeSubTableBindingIds` props 也没有对应 prop 类型 → 即使转换器修好，FormRenderer 内 `resolveBinding` 永远 undefined。
+    与 portal-design-parity.mdc 冲突：Form Preview 弹窗（设计页面 canonical 渲染）与 FORM_POPUP runtime 弹窗结构性分叉；后者是一个独立的"简化渲染器"，直接违反「禁止 Portal 写简化渲染器且与 Designer rule 不一致」红线。
+    修复方向（待实施）：
+      - useCustomActions.parseFormPopupConfig 替换为 `parseFormConfigToTabs(configJson)` + `extractFieldsRecursive(rules)`（与主任务 form 同构）。删除 `convertFormCreateRuleSimple`。
+      - FormPopupDialog 新增 props `subTableBindings`, `linkedSubTableBindings`, `viewContext`, `formConfig`, `nativeSubTableBindingIds`，透传给内部 `<FormRenderer>`；调用方 tasks/detail.vue 在 openFormPopup 时按 FORM_POPUP 目标 form 的 contentForms 解析 tableBindings + configJson 装配 bindings（复用 applications/detail.vue `buildSubTableBindingsForForm` 模式），把弹窗当成"另一份完整的 task form"对待。
+      - 弹窗默认 viewContext='assigneeTodo'（FORM_POPUP 仍是处办人操作场景）；提交逻辑 `submitFormPopup` 当前是 TODO 空桩（line 218），需要补 subTableData 上送逻辑（与主 form 同样的 TaskFormSubmitRequest 结构）。
+    爆炸半径：前端 portal 视图层 + 一个 composable + 一个 dialog 组件；测试覆盖：现存 `__tests__/ActionDesignerN8n.test.ts` 不覆盖 popup 渲染，需要补属性测试断言 popup fields/subTables 与 extractFieldsRecursive 一致。
+
+- id: "1395"
+  status: fixed
+  fixed_at: "2026-05-26"
+  severity: minor
+  category: bug
+  summary: "user-portal tasks/detail.vue 流程图节点 snapshot 视图与 applications/detail.vue 同源视图不同构 — NodeFormInfo 缺 formConfig / nativeSubTableBindingIds，FormRenderer 调用未传 :form-config / :native-sub-table-binding-ids 且非当前节点强制 :linked-sub-table-bindings=undefined；view-context 硬编码 assigneeTodo（vs My Request 同位置用 initiatorRequest）"
+  file: |
+    frontend/user-portal/src/views/tasks/detail.vue
+    frontend/user-portal/src/views/applications/detail.vue
+  fix_summary: |
+    1) `NodeFormInfo` 扩展 `formConfig: Record<string, any>` 与 `nativeSubTableBindingIds: number[]`；在 `loadFunctionUnitContent` 内构建 `newMap` 前把 `cfg`（formConfig）和 `nodeNativeIds`（pre-Link-Form-merge 的非 PRIMARY binding 集合）从 try 局部 hoist 出来一起写入。`refreshNodeFormMapFromFormData` 走 `{...info, ...overrides}` 自动透传新字段，`applyCompletedSnapshotToForm` 原地 mutate 同样保留。
+    2) 新增 `mainFormConfig / mainFormNativeSubTableBindingIds` refs，在 `loadFunctionUnitContent` 解析主任务 form 时同步赋值，与 `applications/detail.vue` 同名概念对齐。
+    3) selected-node `<FormRenderer>` 补 `:native-sub-table-binding-ids / :form-config`，并将 `:linked-sub-table-bindings` 非当前节点 fallback 从 `undefined` 改为 `selectedNodeForm.subTableBindings`（snapshot 自身已含 Link Form merge 后的全量 binding），使 SubTableField 的 Link Form 弹窗可正常解析；当前节点仍使用 `linkableSubTableBindings`。
+    4) 主任务 `<FormRenderer>` 补 `:native-sub-table-binding-ids="mainFormNativeSubTableBindingIds"` 与 `:form-config="mainFormConfig"`，与 selected-node 路径同构。view-context 保留 `assigneeTodo`（tasks/detail.vue 始终是 assignee 视角；与 applications/detail.vue 的 initiatorRequest 是不同语义场景）。
+    构建 & 验证：`npm run build` 通过、`docker compose rebuild user-portal-frontend` healthy；`ReadLints` 全清。
+  note: |
+    场景：To Do / Completed 任务详情，BPMN 流程图右侧点击其它节点 → tasks/detail.vue 显示该节点 form snapshot（line 164-182 `<FormRenderer>`）；
+    My Request 同样路径在 applications/detail.vue line 168-190 渲染。
+    差异：
+      | 维度 | tasks/detail.vue 流程图节点 snapshot | applications/detail.vue 流程图节点 snapshot |
+      |---|---|---|
+      | NodeFormInfo 形状 | `{ formName, isCurrentTask, fields, tabs, values, subTableBindings }`（line 513-520，**无 formConfig/nativeSubTableBindingIds**） | `ApplicationDiagramNodeFormInfo { ..., nativeSubTableBindingIds, formConfig }`（line 700-712） |
+      | :linked-sub-table-bindings | `selectedNodeForm.isCurrentTask ? linkableSubTableBindings : undefined` —— 非当前节点强制 undefined | `diagramSelectedLinkableBindings`（computed，始终聚合所有可达 bindings） |
+      | :form-config | 未传 | 传 `selectedNodeForm.isCurrentStep ? mainFormConfig : selectedNodeForm.formConfig` |
+      | :native-sub-table-binding-ids | 未传 | 传 `selectedNodeForm.isCurrentStep ? mainFormNativeSubTableBindingIds : selectedNodeForm.nativeSubTableBindingIds` |
+      | view-context | 硬编码 `"assigneeTodo"` | `"initiatorRequest"`（与 My Request 主视图一致） |
+    影响：
+      1) Completed Task 详情里点击其它节点查看快照时，若该节点 form 含 link-form-only sub-table（只通过 Link Form 列引用、无 canvas placement），由于缺 `:form-config` → `collectLinkFormTargetBindingIdsFromSubListViews` 无法识别 → `shouldRenderPlacedSubTableField` 无法在 initiatorRequest 模式抑制重复 table；又因 viewContext 是 assigneeTodo 所以早 return true 全部渲染——结果与 Form Preview 的"summary+Link Form modal"模式不符。
+      2) 非当前节点 `linkedSubTableBindings=undefined` → `linkableSubTableBindings` fallback 到 `props.subTableBindings`（即仅该节点自己的 bindings），跨节点 Link Form 列的 target binding（如 subtable2 通常在 main form 注册）将无法被 SubTableField 弹窗解析，Link Form 弹层为空或报缺失。
+      3) viewContext 选择歧义：tasks/detail.vue 流程图节点 snapshot 实际是"非当前 assignee 视角下查看一个非自己负责的节点的历史快照"，与 applications/detail.vue 同视角，应同样用 initiatorRequest 走 portal-display 模式分支（summary+Link Form modal / table-only 等），而不是按"我是该节点 assignee"的 assigneeTodo 全量铺开。
+    与 portal-design-parity.mdc 关系：snapshot 节点视图属于「Portal 运行时」的一种，规则要求"Form Preview ↔ Portal Runtime MUST 一致"且"My Request 同位 merge 同语义"；当前 tasks/detail.vue 路径走的是另一套语义。
+    修复方向（待实施）：
+      1) NodeFormInfo 类型补 `formConfig: Record<string, any>` 和 `nativeSubTableBindingIds: number[]`；在 loadFunctionUnitContent 构建 newMap 时（line 2798-2805）一起填入 `formConfig = matchedForm.contentData JSON / configForSubTables`、`nativeSubTableBindingIds = matchedForm.tableBindings?.filter(b=>b.bindingType!=='PRIMARY').map(b=>b.bindingId)`。
+      2) tasks/detail.vue line 164-182 `<FormRenderer>` 补三个 prop：
+         `:linked-sub-table-bindings="selectedNodeFormLinkableBindings"` （新增 computed，参考 applications/detail.vue `diagramSelectedLinkableBindings`）
+         `:form-config="selectedNodeForm.isCurrentTask ? mainFormConfig : selectedNodeForm.formConfig"`
+         `:native-sub-table-binding-ids="selectedNodeForm.isCurrentTask ? mainFormNativeSubTableBindingIds : selectedNodeForm.nativeSubTableBindingIds"`
+      3) view-context 根据 isCurrentTask 切换：`:view-context="selectedNodeForm.isCurrentTask ? 'assigneeTodo' : 'initiatorRequest'"`（与 applications/detail.vue 节点 snapshot 同语义；当前 task 仍 assigneeTodo）。
+      4) 配套：tasks/detail.vue 同步引入 mainFormConfig + mainFormNativeSubTableBindingIds refs（applications/detail.vue 已有同名概念）；loadFunctionUnitContent 与 parseFormConfig 路径需在解析 task form 时把 `configJson + nativeSubTableBindingIds` 暴露给主表 FormRenderer 也使用（当前主表 FormRenderer line 269-287 也未传这两项，但 viewContext 是 assigneeTodo 早 return true，目前未触发问题；同时建议补齐以保险）。
+    爆炸半径：tasks/detail.vue 局部 + 一个 computed，无契约变更；与 applications/detail.vue 同名概念对齐。建议与 #1392 之后的 portal-design-parity 巩固工作打包一轮再修复。
 
 - id: "1397"
   status: fixed

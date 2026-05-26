@@ -15,7 +15,14 @@
         :model-value="formData"
         :label-width="labelWidth"
         :readonly="readonly"
+        :sub-table-bindings="subTableBindings"
+        :linked-sub-table-bindings="linkedSubTableBindings ?? subTableBindings"
+        :native-sub-table-binding-ids="nativeSubTableBindingIds"
+        :form-config="formConfig"
+        :view-context="viewContext"
+        :show-link-form-dialog-footer="!readonly"
         @update:model-value="emit('update:formData', $event)"
+        @update:sub-table-data="(bindingId: number, rows: any[]) => emit('update:subTableData', bindingId, rows)"
       />
     </div>
     <el-empty
@@ -41,22 +48,43 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import FormRenderer, { type FormField, type FormTab } from '@/components/FormRenderer.vue'
+import type { PortalViewContext } from '@/components/formRendererHelpers'
 
-const props = defineProps<{
-  modelValue: boolean
-  title: string
-  width: string
-  fields: FormField[]
-  tabs: FormTab[]
-  formData: Record<string, any>
-  labelWidth: string
-  readonly: boolean
-  submitting: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    modelValue: boolean
+    title: string
+    width: string
+    fields: FormField[]
+    tabs: FormTab[]
+    formData: Record<string, any>
+    labelWidth: string
+    readonly: boolean
+    submitting: boolean
+    /** Sub-table bindings built by the host (parity with main FormRenderer). */
+    subTableBindings?: any[]
+    /** Link-form target bindings reachable from the popup form. */
+    linkedSubTableBindings?: any[] | null
+    /** Native (non link-form-target) binding ids declared on the popup form. */
+    nativeSubTableBindingIds?: number[]
+    /** Designer configJson — drives Link Form target detection via subListViews. */
+    formConfig?: Record<string, unknown>
+    /** Portal view context — usually 'assigneeTodo' for FORM_POPUP. */
+    viewContext?: PortalViewContext
+  }>(),
+  {
+    subTableBindings: () => [],
+    linkedSubTableBindings: null,
+    nativeSubTableBindingIds: () => [],
+    formConfig: () => ({}),
+    viewContext: 'assigneeTodo',
+  },
+)
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: boolean): void
   (e: 'update:formData', value: Record<string, any>): void
+  (e: 'update:subTableData', bindingId: number, rows: any[]): void
   (e: 'submit'): void
 }>()
 
