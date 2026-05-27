@@ -32,6 +32,11 @@ vi.mock('@/api/user', () => ({
   },
 }))
 
+vi.mock('@/utils/subTableAssignment', () => ({
+  resolveAssigneeFieldForBinding: () => 'assignee_user_id',
+  allSubTableRowsHaveAssignee: () => true,
+}))
+
 import { useTaskActions } from '../useTaskActions'
 
 describe('useTaskActions submitApprove __subTables__ canonicalization', () => {

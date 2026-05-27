@@ -130,10 +130,19 @@ management:
   endpoint:
     health:
       show-details: always
+      group:
+        live:
+          include: ping
+        ready:
+          include: db,redis,kafka
   health:
+    ping:
+      enabled: true
     db:
       enabled: true
     redis:
+      enabled: true
+    kafka:
       enabled: true
 
 # Logging Configuration

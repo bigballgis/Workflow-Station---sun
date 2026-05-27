@@ -173,3 +173,61 @@ cd deploy/k8s
 ## License
 
 Proprietary - HSBC Internal Use Only
+
+
+
+
+
+IKP 探针应用
+4 个后端微服务（包含 developer-workstation）补齐了 prod 健康探针标准接口，并更新了 K8s probe 路径。
+
+1) Actuator 健康分组（live/ready）
+在以下 4 个服务的 application.yml 中新增了：
+
+live：只检查 ping
+ready：检查 db,redis,kafka
+并显式启用 ping/db/redis/kafka 对应 health 指标
+文件：
+
+backend/workflow-engine-core/src/main/resources/application.yml
+backend/admin-center/src/main/resources/application.yml
+backend/user-portal/src/main/resources/application.yml
+backend/developer-workstation/src/main/resources/application.yml
+2) 新增标准探针接口（不改任何现有业务 API）
+为每个服务新增了 HealthAliasController，提供：
+
+GET /health/live（代理到 Actuator /actuator/health/live）
+GET /health/ready（代理到 Actuator /actuator/health/ready）
+GET /.well-known/health（轻量返回 200 OK）
+文件：
+
+backend/workflow-engine-core/src/main/java/com/workflow/controller/HealthAliasController.java
+backend/admin-center/src/main/java/com/admin/controller/HealthAliasController.java
+backend/user-portal/src/main/java/com/portal/controller/HealthAliasController.java
+backend/developer-workstation/src/main/java/com/developer/controller/HealthAliasController.java
+3) 安全配置放行探针路径
+在各服务 Spring Security 配置中显式放行：
+
+/health/**
+/.well-known/health
+文件：
+
+backend/workflow-engine-core/src/main/java/com/workflow/config/SecurityConfig.java
+backend/admin-center/src/main/java/com/admin/config/SecurityConfig.java
+backend/user-portal/src/main/java/com/portal/config/SecurityConfig.java
+backend/developer-workstation/src/main/java/com/developer/config/SecurityConfig.java
+4) 更新 K8s 探针为新标准路径
+仅改了 probe 的 httpGet.path，其它探针参数保持不动。
+
+deploy/k8s/workflow-engine.yaml
+liveness: /health/live
+readiness: /health/ready
+deploy/k8s/admin-center.yaml
+startup/liveness: /api/v1/admin/health/live
+readiness: /api/v1/admin/health/ready
+deploy/k8s/user-portal.yaml
+liveness: /api/portal/health/live
+readiness: /api/portal/health/ready
+deploy/k8s/developer-workstation.yaml
+liveness: /api/v1/health/live
+readiness: /api/v1/health/ready

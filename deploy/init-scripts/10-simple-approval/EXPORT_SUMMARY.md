@@ -4,7 +4,7 @@
 
 **Date**: 2026-02-12  
 **Source**: workflow_platform_dev database  
-**Function Unit**: SIMPLE_APPROVAL  
+**Function Unit**: fu-20260403-a1b2c0  
 **Version**: 1.0.5  
 **Status**: PUBLISHED
 
@@ -13,7 +13,7 @@
 ### Function Unit
 ```
 ID: 2
-Code: SIMPLE_APPROVAL
+Code: fu-20260403-a1b2c0
 Name: Simple Approval Workflow
 Description: Simple approval workflow with manager approval
 Status: PUBLISHED
@@ -121,7 +121,7 @@ The data was exported using the following commands:
 ```bash
 # Function Unit
 docker exec -i platform-postgres-dev psql -U platform_dev -d workflow_platform_dev \
-  -c "SELECT * FROM dw_function_units WHERE code = 'SIMPLE_APPROVAL';"
+  -c "SELECT * FROM dw_function_units WHERE code = 'fu-20260403-a1b2c0';"
 
 # Forms
 docker exec -i platform-postgres-dev psql -U platform_dev -d workflow_platform_dev \
@@ -167,22 +167,22 @@ After import, verify the data:
 -- Check function unit
 SELECT id, code, name, status, current_version 
 FROM dw_function_units 
-WHERE code = 'SIMPLE_APPROVAL';
+WHERE code = 'fu-20260403-a1b2c0';
 
 -- Check forms
 SELECT id, form_name, form_type 
 FROM dw_form_definitions 
-WHERE function_unit_id = (SELECT id FROM dw_function_units WHERE code = 'SIMPLE_APPROVAL');
+WHERE function_unit_id = (SELECT id FROM dw_function_units WHERE code = 'fu-20260403-a1b2c0');
 
 -- Check actions
 SELECT id, action_name, action_type, button_color 
 FROM dw_action_definitions 
-WHERE function_unit_id = (SELECT id FROM dw_function_units WHERE code = 'SIMPLE_APPROVAL');
+WHERE function_unit_id = (SELECT id FROM dw_function_units WHERE code = 'fu-20260403-a1b2c0');
 
 -- Check process definition
 SELECT id, function_unit_id, LEFT(bpmn_xml, 100) as bpmn_preview 
 FROM dw_process_definitions 
-WHERE function_unit_id = (SELECT id FROM dw_function_units WHERE code = 'SIMPLE_APPROVAL');
+WHERE function_unit_id = (SELECT id FROM dw_function_units WHERE code = 'fu-20260403-a1b2c0');
 ```
 
 ## Notes
