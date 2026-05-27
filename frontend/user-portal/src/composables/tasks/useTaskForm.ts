@@ -26,10 +26,12 @@ export function useTaskForm(options: {
   // Form state
   const formFields = ref<FormField[]>([])
   const formTabs = ref<FormTab[]>([])
+  const formFieldsAfterTabs = ref<FormField[]>([])
   const formData = ref<Record<string, any>>({})
   const currentFormName = ref('')
   const formReadOnly = ref(false)
   const formLabelWidth = ref('160px')
+  const formFormOptions = ref<Record<string, unknown>>({})
   const savingTaskForm = ref(false)
   const taskFormDTO = options.taskFormDTO ?? ref<{ fieldValues?: Record<string, any> } | null>(null)
   let subTableAutosaveTimer: ReturnType<typeof setTimeout> | null = null
@@ -122,7 +124,11 @@ export function useTaskForm(options: {
   }
 
   function getCurrentFormFieldKeys(): string[] {
-    return collectLeafFormFieldKeys(formFields.value, formTabs.value)
+    const keys = new Set(collectLeafFormFieldKeys(formFields.value, formTabs.value))
+    for (const key of collectLeafFormFieldKeys(formFieldsAfterTabs.value)) {
+      keys.add(key)
+    }
+    return Array.from(keys)
   }
 
   function clearAutosaveTimer() {
@@ -135,10 +141,12 @@ export function useTaskForm(options: {
   return {
     formFields,
     formTabs,
+    formFieldsAfterTabs,
     formData,
     currentFormName,
     formReadOnly,
     formLabelWidth,
+    formFormOptions,
     savingTaskForm,
     taskFormDTO,
     saveCurrentTaskForm,

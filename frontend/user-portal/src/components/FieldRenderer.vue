@@ -459,6 +459,67 @@
       <el-divider />
     </template>
 
+    <!-- title (fcTitle) -->
+    <template v-else-if="field.type === 'title'">
+      <div
+        class="form-layout-title"
+        :class="`form-layout-title--${field.titleSize || 'default'}`"
+      >
+        {{ field.label }}
+      </div>
+    </template>
+
+    <!-- static text -->
+    <template v-else-if="field.type === 'staticText'">
+      <div class="form-layout-static-text">
+        {{ field.label }}
+      </div>
+    </template>
+
+    <!-- html block -->
+    <template v-else-if="field.type === 'html'">
+      <div
+        class="form-layout-html"
+        v-html="sanitize(String(field.htmlContent || ''))"
+      />
+    </template>
+
+    <!-- tag -->
+    <template v-else-if="field.type === 'tag'">
+      <el-tag type="info">
+        {{ field.label }}
+      </el-tag>
+    </template>
+
+    <!-- button (read-only display) -->
+    <template v-else-if="field.type === 'button'">
+      <el-button disabled>
+        {{ field.label }}
+      </el-button>
+    </template>
+
+    <!-- vertical spacer -->
+    <template v-else-if="field.type === 'space'">
+      <div
+        class="form-layout-space"
+        :style="{ height: `${field.step ?? 16}px` }"
+      />
+    </template>
+
+    <!-- image -->
+    <template v-else-if="field.type === 'image'">
+      <el-image
+        v-if="field.defaultValue"
+        :src="String(field.defaultValue)"
+        fit="contain"
+        style="max-width: 100%; max-height: 240px;"
+      />
+      <span
+        v-else
+        class="readonly-text"
+      >-</span>
+    </template>
+
     <!-- alert -->
     <template v-else-if="field.type === 'alert'">
       <el-alert
@@ -1058,6 +1119,42 @@ onBeforeUnmount(() => {
 .readonly-text {
   color: #606266;
   line-height: 32px;
+}
+
+.form-layout-title {
+  font-weight: 600;
+  color: #303133;
+  margin: 4px 0 12px;
+  line-height: 1.4;
+}
+
+.form-layout-title--h1 {
+  font-size: 20px;
+}
+
+.form-layout-title--h2,
+.form-layout-title--default {
+  font-size: 16px;
+}
+
+.form-layout-title--h3,
+.form-layout-title--h4 {
+  font-size: 14px;
+}
+
+.form-layout-static-text {
+  color: #606266;
+  line-height: 1.5;
+  margin-bottom: 8px;
+}
+
+.form-layout-html {
+  line-height: 1.5;
+  margin-bottom: 8px;
+}
+
+.form-layout-space {
+  width: 100%;
 }
 
 .lookup-field-wrapper {

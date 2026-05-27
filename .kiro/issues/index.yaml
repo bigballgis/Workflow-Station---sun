@@ -128,3 +128,30 @@
   fix_note: |
     复测 `mvn -pl backend/developer-workstation -am package -DskipTests` 已 BUILD SUCCESS，
     当前工作区未复现缺类编译错误，先转 fixed。
+- id: "1416"
+  status: fixed
+  fixed_at: "2026-05-27"
+  severity: major
+  category: bug
+  summary: "User Portal TabPane / fcRow 布局与 Designer Form Preview 不一致"
+  detail: |
+    根因：Portal 仅识别 kebab-case `el-tabs`/`el-tab-pane`，而 form-create 设计器保存为 camelCase `elTabs`/`elTabPane`，
+    导致 tabs 未被识别、Tab 内字段被展平到主表单；另有 fcRow/fcCol 展平、Tab 名重复、辅助控件跳过等问题。
+    修复：isTabsRule/isTabPaneRule/findTabsRule 兼容 camelCase；新增 isCollapseRule/isCollapsePanelRule/extractCollapsePanelsFromRule；
+    elCard 保留 card 容器；div+space 间距组件；FormRendererFields/PortalFormFields 渲染 collapse；三端 extractFieldsRecursive 统一使用 helpers。
+    Card 内 subTable 空白：process start 的 placedBindingIds 未扫描 tabs 之后的 formFieldsAfterTabs（如 Multi-Instance Subtask Demo 中
+    elCard 内 subtable A B binding 64），导致 subTableBindings 被过滤掉；新增 collectPlacedSubTableBindingIds 递归 walk card/row/col/collapse
+    并包含 fieldsAfterTabs；start.vue / applications/detail.vue 同步使用。
+- id: "1417"
+  status: fixed
+  fixed_at: "2026-05-27"
+  severity: major
+  category: bug
+  summary: "User Portal 未执行 Form Design options.onChange 表单事件"
+  detail: |
+    根因：（1）Portal 使用自研 FormRenderer，未解析/执行 configJson.options.onChange；
+    （2）有 tabs 时 allFields 仅含 tab 内字段，initFormData 重建后抹掉 tabs 外 onChange 写入值；
+    （3）设计器 field key（如 tes2）与 title/onChange 目标名（test2）不一致时 setValue 写错 key。
+    修复：formCreateEventRuntime.ts 解析 FORM-CREATE-PREFIX 并提供 setValue/getValue/hidden/display（api/options 双别名）；
+    flattenAllFormFieldSegments 合并 tabs 前/中/后字段；createFieldKeyResolver 按 label 解析 setValue/hidden 目标；
+    FormRenderer.handleFieldChange 触发 onChange；start/tasks/applications 传入 formOptions。

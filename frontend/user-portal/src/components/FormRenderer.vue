@@ -11,11 +11,18 @@
       :size="size"
       :validate-on-rule-change="false"
     >
-      <!-- Tab layout mode -->
+      <!-- Tab layout: render siblings outside tab panes in designer order -->
       <template v-if="hasTabs">
+        <el-row
+          v-if="fields.length > 0"
+          :gutter="20"
+          class="form-fields-before-tabs"
+        >
+          <FormRendererFields :fields="fields" />
+        </el-row>
         <el-tabs
           v-model="activeTab"
-          type="border-card"
+          class="form-renderer-tabs"
         >
           <el-tab-pane
             v-for="(tab, tabIdx) in tabs"
@@ -24,544 +31,23 @@
             :name="tab.name"
           >
             <el-row :gutter="20">
-              <template
-                v-for="field in tab.fields"
-                :key="field.key"
-              >
-                <template v-if="field.type === 'card'">
-                  <el-col :span="field.span || 24">
-                    <el-card
-                      shadow="never"
-                      class="form-layout-card"
-                    >
-                      <template
-                        v-if="field.label"
-                        #header
-                      >
-                        <span class="form-layout-card-title">{{ field.label }}</span>
-                      </template>
-                      <el-row :gutter="20">
-                        <template
-                          v-for="child in field.children || []"
-                          :key="child.key"
-                        >
-                          <template v-if="child.type === 'subTable'">
-                            <el-col
-                              :span="24"
-                              style="padding: 0;"
-                            >
-                              <SubTableField
-                                v-if="resolveBinding(child._bindingId) && shouldRenderPlacedSubTableField(child)"
-                                :title="resolveBinding(child._bindingId)!.tableName"
-                                :columns="resolveBinding(child._bindingId)!.columns"
-                                :model-value="resolveBinding(child._bindingId)!.data"
-                                :editable="isSubTableEditable(child._bindingId)"
-                                :row-formulas="getSubFormRowFormulas(child._bindingId)"
-                                :summary-columns="getSummaryColumns(child._bindingId)"
-                                :summary-aggregations="getSummaryAggregations(child._bindingId)"
-                                :validation-config="getSubTableValidation(child._bindingId)"
-                                :upload-url="uploadUrl"
-                                :task-id="taskId"
-                                :assignee-field="subTableAssigneeField(child._bindingId)"
-                                :show-assign-button="showSubTableAssignColumn(child._bindingId)"
-                                :can-assign="!readonly && showSubTableAssignColumn(child._bindingId)"
-                                :enable-polling="enableSubTablePolling"
-                                :polling-interval="subTablePollingInterval"
-                                :linked-sub-table-bindings="linkableSubTableBindings"
-                                :suppress-link-form-initial-data="suppressLinkFormInitialData"
-                                :show-link-form-dialog-footer="showLinkFormDialogFooter"
-                                :link-form-click-scroll-to-inline="linkFormScrollToInlineEnabled(child)"
-                                :show-task-status="subTableShowTaskStatusInitiator(child)"
-                                :show-view-detail="subTableShowViewDetailInitiator(child)"
-                                :compact-lookup-cells="subTableCompactLookupCells(child)"
-                                :primary-key-fields="resolveBinding(child._bindingId)?.primaryKeyFields"
-                                style="margin-bottom: 16px;"
-                                @update:model-value="(rows: any[]) => handleSubTableUpdate(child._bindingId!, rows)"
-                                @update:linked-sub-table-data="handleSubTableUpdate"
-                                @view-detail="(row: any) => emit('viewSubtaskDetail', row, resolveBinding(child._bindingId)?.data)"
-                                @link-form-scroll-to-inline="scrollSubTableInlineIntoView(child._bindingId)"
-                              />
-                              <div
-                                v-if="resolveBinding(child._bindingId) && subTableMode(child) === 'formBelowTable'"
-                                class="sub-table-inline-anchor"
-                                :ref="(el) => setSubTableInlineAnchor(child._bindingId, el as HTMLElement | null)"
-                              >
-                                <SubTableInlineForm
-                                  :title="resolveInlineFormTableTitle(child)"
-                                  :fields="resolveInlineFormFields(child)"
-                                  :current-row="getCurrentRowForInlineForm(child)"
-                                  :readonly="inlineSubTableFormReadonly(child)"
-                                  :label-width="labelWidth"
-                                  :sub-table-bindings="subTableBindings"
-                                  :linked-sub-table-bindings="linkableSubTableBindings"
-                                  :suppress-link-only-standalone-sub-tables="viewContext === 'initiatorRequest'"
-                                  @update:row="(row: Record<string, any>) => handleInlineFormUpdate(child, row)"
-                                />
-                              </div>
-                            </el-col>
-                          </template>
-                          <template v-else-if="child.type === 'lookup'">
-                            <el-col :span="child.span || 24">
-                              <el-form-item
-                                :prop="child.key"
-                                class="lookup-form-item"
-                              >
-                                <template #label>
-                                  <span class="lookup-label-text">
-                                    <el-icon class="lookup-label-icon"><Search /></el-icon>
-                                    {{ child.label }}
-                                  </span>
-                                </template>
-                                <div class="lookup-field-wrapper">
-                                  <LookupField
-                                    v-model="formData[child.key]"
-                                    :table-id="(child as any)._lookupTableId"
-                                    :search-fields="(child as any)._lookupSearchFields || []"
-                                    :display-field="(child as any)._lookupDisplayField || ''"
-                                    :display-fields="(child as any)._lookupDisplayFields || []"
-                                    :selected-display-field="(child as any)._lookupSelectedDisplayField || ''"
-                                    :filter-conditions="(child as any)._lookupFilterConditions || []"
-                                    :view-fields="(child as any)._lookupViewFields || []"
-                                    :placeholder="child.placeholder"
-                                    :readonly="isFieldReadonly(child)"
-                                    @select="(row: any) => handleLookupSelect(child.key, row)"
-                                    @clear="() => handleLookupClear(child.key)"
-                                    @view-fields-loaded="(fields: any[]) => lookupLoadedViewFields[child.key] = fields"
-                                  />
-                                  <LookupViewDisplay
-                                    v-if="lookupSelectedData[child.key] && lookupShowBackfillView(child)"
-                                    :selected-data="lookupSelectedData[child.key]"
-                                    :view-fields="(child as any)._lookupViewFields?.length ? (child as any)._lookupViewFields : (lookupLoadedViewFields[child.key] || [])"
-                                  />
-                                </div>
-                              </el-form-item>
-                            </el-col>
-                          </template>
-                          <el-col
-                            v-else
-                            v-show="engineVisibility.get(child.key) ?? true"
-                            :span="child.span || 24"
-                          >
-                            <el-form-item
-                              :label="child.label"
-                              :prop="child.key"
-                              :required="child.required"
-                            >
-                              <FieldRenderer
-                                :field="child"
-                                :model-value="formData[child.key]"
-                                :form-data="formData"
-                                :readonly="isFieldReadonly(child)"
-                                :disabled="engineFieldStates.get(child.key)?.disabled || false"
-                                :visible="engineVisibility.get(child.key) ?? true"
-                                :options="engineOptions.get(child.key)"
-                                :upload-url="uploadUrl"
-                                :user-search-results="userSearchResults.get(child.key)"
-                                @update:model-value="(val: any) => handleFieldChange(child.key, val)"
-                                @upload:success="(res: any, file: any, key: string) => handleUploadSuccess(res, file, key)"
-                                @upload:remove="(file: any, key: string) => handleUploadRemove(file, key)"
-                                @search:users="handleUserSearch"
-                              />
-                            </el-form-item>
-                          </el-col>
-                        </template>
-                      </el-row>
-                    </el-card>
-                  </el-col>
-                </template>
-                <template v-else-if="field.type === 'subTable'">
-                  <el-col
-                    :span="24"
-                    style="padding: 0;"
-                  >
-                    <SubTableField
-                      v-if="resolveBinding(field._bindingId) && shouldRenderPlacedSubTableField(field)"
-                      :title="resolveBinding(field._bindingId)!.tableName"
-                      :columns="resolveBinding(field._bindingId)!.columns"
-                      :model-value="resolveBinding(field._bindingId)!.data"
-                      :editable="isSubTableEditable(field._bindingId)"
-                      :row-formulas="getSubFormRowFormulas(field._bindingId)"
-                      :summary-columns="getSummaryColumns(field._bindingId)"
-                      :summary-aggregations="getSummaryAggregations(field._bindingId)"
-                      :validation-config="getSubTableValidation(field._bindingId)"
-                      :upload-url="uploadUrl"
-                      :task-id="taskId"
-                      :assignee-field="subTableAssigneeField(field._bindingId)"
-                      :show-assign-button="showSubTableAssignColumn(field._bindingId)"
-                      :can-assign="!readonly && showSubTableAssignColumn(field._bindingId)"
-                      :enable-polling="enableSubTablePolling"
-                      :polling-interval="subTablePollingInterval"
-                      :linked-sub-table-bindings="linkableSubTableBindings"
-                      :suppress-link-form-initial-data="suppressLinkFormInitialData"
-                      :show-link-form-dialog-footer="showLinkFormDialogFooter"
-                      :link-form-click-scroll-to-inline="linkFormScrollToInlineEnabled(field)"
-                      :show-task-status="subTableShowTaskStatusInitiator(field)"
-                      :show-view-detail="subTableShowViewDetailInitiator(field)"
-                      :compact-lookup-cells="subTableCompactLookupCells(field)"
-                      :primary-key-fields="resolveBinding(field._bindingId)?.primaryKeyFields"
-                      style="margin-bottom: 16px;"
-                      @update:model-value="(rows: any[]) => handleSubTableUpdate(field._bindingId!, rows)"
-                      @update:linked-sub-table-data="handleSubTableUpdate"
-                      @view-detail="(row: any) => emit('viewSubtaskDetail', row, resolveBinding(field._bindingId)?.data)"
-                      @link-form-scroll-to-inline="scrollSubTableInlineIntoView(field._bindingId)"
-                    />
-                    <div
-                      v-if="resolveBinding(field._bindingId) && subTableMode(field) === 'formBelowTable'"
-                      class="sub-table-inline-anchor"
-                      :ref="(el) => setSubTableInlineAnchor(field._bindingId, el as HTMLElement | null)"
-                    >
-                      <SubTableInlineForm
-                        :title="resolveInlineFormTableTitle(field)"
-                        :fields="resolveInlineFormFields(field)"
-                        :current-row="getCurrentRowForInlineForm(field)"
-                        :readonly="inlineSubTableFormReadonly(field)"
-                        :label-width="labelWidth"
-                        :sub-table-bindings="subTableBindings"
-                        :linked-sub-table-bindings="linkableSubTableBindings"
-                        :suppress-link-only-standalone-sub-tables="viewContext === 'initiatorRequest'"
-                        @update:row="(row: Record<string, any>) => handleInlineFormUpdate(field, row)"
-                      />
-                    </div>
-                  </el-col>
-                </template>
-                <template v-else-if="field.type === 'lookup'">
-                  <el-col :span="field.span || 24">
-                    <el-form-item
-                      :prop="field.key"
-                      class="lookup-form-item"
-                    >
-                      <template #label>
-                        <span class="lookup-label-text">
-                          <el-icon class="lookup-label-icon"><Search /></el-icon>
-                          {{ field.label }}
-                        </span>
-                      </template>
-                      <div class="lookup-field-wrapper">
-                        <LookupField
-                          v-model="formData[field.key]"
-                          :table-id="(field as any)._lookupTableId"
-                          :search-fields="(field as any)._lookupSearchFields || []"
-                          :display-field="(field as any)._lookupDisplayField || ''"
-                          :display-fields="(field as any)._lookupDisplayFields || []"
-                          :selected-display-field="(field as any)._lookupSelectedDisplayField || ''"
-                          :filter-conditions="(field as any)._lookupFilterConditions || []"
-                          :view-fields="(field as any)._lookupViewFields || []"
-                          :placeholder="field.placeholder"
-                          :readonly="isFieldReadonly(field)"
-                          @select="(row: any) => handleLookupSelect(field.key, row)"
-                          @clear="() => handleLookupClear(field.key)"
-                          @view-fields-loaded="(fields: any[]) => lookupLoadedViewFields[field.key] = fields"
-                        />
-                        <LookupViewDisplay
-                          v-if="lookupSelectedData[field.key] && lookupShowBackfillView(field)"
-                          :selected-data="lookupSelectedData[field.key]"
-                          :view-fields="(field as any)._lookupViewFields?.length ? (field as any)._lookupViewFields : (lookupLoadedViewFields[field.key] || [])"
-                        />
-                      </div>
-                    </el-form-item>
-                  </el-col>
-                </template>
-                <el-col
-                  v-else
-                  v-show="engineVisibility.get(field.key) ?? true"
-                  :span="field.span || 24"
-                >
-                  <el-form-item
-                    :label="field.label"
-                    :prop="field.key"
-                    :required="field.required"
-                  >
-                    <FieldRenderer
-                      :field="field"
-                      :model-value="formData[field.key]"
-                      :form-data="formData"
-                      :readonly="isFieldReadonly(field)"
-                      :disabled="engineFieldStates.get(field.key)?.disabled || false"
-                      :visible="engineVisibility.get(field.key) ?? true"
-                      :options="engineOptions.get(field.key)"
-                      :upload-url="uploadUrl"
-                      :user-search-results="userSearchResults.get(field.key)"
-                      @update:model-value="(val: any) => handleFieldChange(field.key, val)"
-                      @upload:success="(res: any, file: any, key: string) => handleUploadSuccess(res, file, key)"
-                      @upload:remove="(file: any, key: string) => handleUploadRemove(file, key)"
-                      @search:users="handleUserSearch"
-                    />
-                  </el-form-item>
-                </el-col>
-              </template>
+              <FormRendererFields :fields="tab.fields" />
             </el-row>
           </el-tab-pane>
         </el-tabs>
+        <el-row
+          v-if="fieldsAfterTabs.length > 0"
+          :gutter="20"
+          class="form-fields-after-tabs"
+        >
+          <FormRendererFields :fields="fieldsAfterTabs" />
+        </el-row>
       </template>
 
       <!-- Flat layout mode -->
       <template v-else>
         <el-row :gutter="20">
-          <template
-            v-for="field in fields"
-            :key="field.key"
-          >
-            <template v-if="field.type === 'card'">
-              <el-col :span="field.span || 24">
-                <el-card
-                  shadow="never"
-                  class="form-layout-card"
-                >
-                  <template
-                    v-if="field.label"
-                    #header
-                  >
-                    <span class="form-layout-card-title">{{ field.label }}</span>
-                  </template>
-                  <el-row :gutter="20">
-                    <template
-                      v-for="child in field.children || []"
-                      :key="child.key"
-                    >
-                      <template v-if="child.type === 'subTable'">
-                        <el-col
-                          :span="24"
-                          style="padding: 0;"
-                        >
-                          <SubTableField
-                            v-if="resolveBinding(child._bindingId)"
-                            :title="resolveBinding(child._bindingId)!.tableName"
-                            :columns="resolveBinding(child._bindingId)!.columns"
-                            :model-value="resolveBinding(child._bindingId)!.data"
-                            :editable="isSubTableEditable(child._bindingId)"
-                            :row-formulas="getSubFormRowFormulas(child._bindingId)"
-                            :summary-columns="getSummaryColumns(child._bindingId)"
-                            :summary-aggregations="getSummaryAggregations(child._bindingId)"
-                            :validation-config="getSubTableValidation(child._bindingId)"
-                            :upload-url="uploadUrl"
-                            :task-id="taskId"
-                            :assignee-field="subTableAssigneeField(child._bindingId)"
-                            :show-assign-button="showSubTableAssignColumn(child._bindingId)"
-                            :can-assign="!readonly && showSubTableAssignColumn(child._bindingId)"
-                            :enable-polling="enableSubTablePolling"
-                            :polling-interval="subTablePollingInterval"
-                            :linked-sub-table-bindings="linkableSubTableBindings"
-                            :suppress-link-form-initial-data="suppressLinkFormInitialData"
-                            :show-link-form-dialog-footer="showLinkFormDialogFooter"
-                            :link-form-click-scroll-to-inline="linkFormScrollToInlineEnabled(child)"
-                            :show-task-status="subTableShowTaskStatusInitiator(child)"
-                            :show-view-detail="subTableShowViewDetailInitiator(child)"
-                            :compact-lookup-cells="subTableCompactLookupCells(child)"
-                            :primary-key-fields="resolveBinding(child._bindingId)?.primaryKeyFields"
-                            style="margin-bottom: 16px;"
-                            @update:model-value="(rows: any[]) => handleSubTableUpdate(child._bindingId!, rows)"
-                            @update:linked-sub-table-data="handleSubTableUpdate"
-                            @view-detail="(row: any) => emit('viewSubtaskDetail', row, resolveBinding(child._bindingId)?.data)"
-                            @link-form-scroll-to-inline="scrollSubTableInlineIntoView(child._bindingId)"
-                          />
-                          <div
-                            v-if="resolveBinding(child._bindingId) && subTableMode(child) === 'formBelowTable'"
-                            class="sub-table-inline-anchor"
-                            :ref="(el) => setSubTableInlineAnchor(child._bindingId, el as HTMLElement | null)"
-                          >
-                            <SubTableInlineForm
-                              :title="resolveInlineFormTableTitle(child)"
-                              :fields="resolveInlineFormFields(child)"
-                              :current-row="getCurrentRowForInlineForm(child)"
-                              :readonly="inlineSubTableFormReadonly(child)"
-                              :label-width="labelWidth"
-                              :sub-table-bindings="subTableBindings"
-                              :linked-sub-table-bindings="linkableSubTableBindings"
-                              :suppress-link-only-standalone-sub-tables="viewContext === 'initiatorRequest'"
-                              @update:row="(row: Record<string, any>) => handleInlineFormUpdate(child, row)"
-                            />
-                          </div>
-                        </el-col>
-                      </template>
-                      <template v-else-if="child.type === 'lookup'">
-                        <el-col :span="child.span || 24">
-                          <el-form-item
-                            :prop="child.key"
-                            class="lookup-form-item"
-                          >
-                            <template #label>
-                              <span class="lookup-label-text">
-                                <el-icon class="lookup-label-icon"><Search /></el-icon>
-                                {{ child.label }}
-                              </span>
-                            </template>
-                            <div class="lookup-field-wrapper">
-                              <LookupField
-                                v-model="formData[child.key]"
-                                :table-id="(child as any)._lookupTableId"
-                                :search-fields="(child as any)._lookupSearchFields || []"
-                                :display-field="(child as any)._lookupDisplayField || ''"
-                                :display-fields="(child as any)._lookupDisplayFields || []"
-                                :selected-display-field="(child as any)._lookupSelectedDisplayField || ''"
-                                :filter-conditions="(child as any)._lookupFilterConditions || []"
-                                :view-fields="(child as any)._lookupViewFields || []"
-                                :placeholder="child.placeholder"
-                                :readonly="isFieldReadonly(child)"
-                                @select="(row: any) => handleLookupSelect(child.key, row)"
-                                @clear="() => handleLookupClear(child.key)"
-                                @view-fields-loaded="(fields: any[]) => lookupLoadedViewFields[child.key] = fields"
-                              />
-                              <LookupViewDisplay
-                                v-if="lookupSelectedData[child.key] && lookupShowBackfillView(child)"
-                                :selected-data="lookupSelectedData[child.key]"
-                                :view-fields="(child as any)._lookupViewFields?.length ? (child as any)._lookupViewFields : (lookupLoadedViewFields[child.key] || [])"
-                              />
-                            </div>
-                          </el-form-item>
-                        </el-col>
-                      </template>
-                      <el-col
-                        v-else
-                        v-show="engineVisibility.get(child.key) ?? true"
-                        :span="child.span || 24"
-                      >
-                        <el-form-item
-                          :label="child.label"
-                          :prop="child.key"
-                          :required="child.required"
-                        >
-                          <FieldRenderer
-                            :field="child"
-                            :model-value="formData[child.key]"
-                            :form-data="formData"
-                            :readonly="isFieldReadonly(child)"
-                            :disabled="engineFieldStates.get(child.key)?.disabled || false"
-                            :visible="engineVisibility.get(child.key) ?? true"
-                            :options="engineOptions.get(child.key)"
-                            :upload-url="uploadUrl"
-                            :user-search-results="userSearchResults.get(child.key)"
-                            @update:model-value="(val: any) => handleFieldChange(child.key, val)"
-                            @upload:success="(res: any, file: any, key: string) => handleUploadSuccess(res, file, key)"
-                            @upload:remove="(file: any, key: string) => handleUploadRemove(file, key)"
-                            @search:users="handleUserSearch"
-                          />
-                        </el-form-item>
-                      </el-col>
-                    </template>
-                  </el-row>
-                </el-card>
-              </el-col>
-            </template>
-            <template v-else-if="field.type === 'subTable'">
-              <el-col
-                :span="24"
-                style="padding: 0;"
-              >
-                <SubTableField
-                  v-if="resolveBinding(field._bindingId) && shouldRenderPlacedSubTableField(field)"
-                  :title="resolveBinding(field._bindingId)!.tableName"
-                  :columns="resolveBinding(field._bindingId)!.columns"
-                  :model-value="resolveBinding(field._bindingId)!.data"
-                  :editable="isSubTableEditable(field._bindingId)"
-                  :row-formulas="getSubFormRowFormulas(field._bindingId)"
-                  :summary-columns="getSummaryColumns(field._bindingId)"
-                  :summary-aggregations="getSummaryAggregations(field._bindingId)"
-                  :validation-config="getSubTableValidation(field._bindingId)"
-                  :upload-url="uploadUrl"
-                  :task-id="taskId"
-                  :assignee-field="subTableAssigneeField(field._bindingId)"
-                  :show-assign-button="showSubTableAssignColumn(field._bindingId)"
-                  :can-assign="!readonly && showSubTableAssignColumn(field._bindingId)"
-                  :enable-polling="enableSubTablePolling"
-                  :polling-interval="subTablePollingInterval"
-                  :linked-sub-table-bindings="linkableSubTableBindings"
-                  :suppress-link-form-initial-data="suppressLinkFormInitialData"
-                  :show-link-form-dialog-footer="showLinkFormDialogFooter"
-                  :link-form-click-scroll-to-inline="linkFormScrollToInlineEnabled(field)"
-                  :show-task-status="subTableShowTaskStatusInitiator(field)"
-                  :show-view-detail="subTableShowViewDetailInitiator(field)"
-                  :compact-lookup-cells="subTableCompactLookupCells(field)"
-                  :primary-key-fields="resolveBinding(field._bindingId)?.primaryKeyFields"
-                  style="margin-bottom: 16px;"
-                  @update:model-value="(rows: any[]) => handleSubTableUpdate(field._bindingId!, rows)"
-                  @update:linked-sub-table-data="handleSubTableUpdate"
-                  @view-detail="(row: any) => emit('viewSubtaskDetail', row, resolveBinding(field._bindingId)?.data)"
-                  @link-form-scroll-to-inline="scrollSubTableInlineIntoView(field._bindingId)"
-                />
-                <div
-                  v-if="resolveBinding(field._bindingId) && subTableMode(field) === 'formBelowTable'"
-                  class="sub-table-inline-anchor"
-                  :ref="(el) => setSubTableInlineAnchor(field._bindingId, el as HTMLElement | null)"
-                >
-                  <SubTableInlineForm
-                    :title="resolveInlineFormTableTitle(field)"
-                    :fields="resolveInlineFormFields(field)"
-                    :current-row="getCurrentRowForInlineForm(field)"
-                    :readonly="inlineSubTableFormReadonly(field)"
-                    :label-width="labelWidth"
-                    :sub-table-bindings="subTableBindings"
-                    :linked-sub-table-bindings="linkableSubTableBindings"
-                    :suppress-link-only-standalone-sub-tables="viewContext === 'initiatorRequest'"
-                    @update:row="(row: Record<string, any>) => handleInlineFormUpdate(field, row)"
-                  />
-                </div>
-              </el-col>
-            </template>
-            <template v-else-if="field.type === 'lookup'">
-              <el-col :span="field.span || 24">
-                <el-form-item
-                  :prop="field.key"
-                  class="lookup-form-item"
-                >
-                  <template #label>
-                    <span class="lookup-label-text">
-                      <el-icon class="lookup-label-icon"><Search /></el-icon>
-                      {{ field.label }}
-                    </span>
-                  </template>
-                  <div class="lookup-field-wrapper">
-                    <LookupField
-                      v-model="formData[field.key]"
-                      :table-id="(field as any)._lookupTableId"
-                      :search-fields="(field as any)._lookupSearchFields || []"
-                      :display-field="(field as any)._lookupDisplayField || ''"
-                      :display-fields="(field as any)._lookupDisplayFields || []"
-                      :selected-display-field="(field as any)._lookupSelectedDisplayField || ''"
-                      :filter-conditions="(field as any)._lookupFilterConditions || []"
-                      :view-fields="(field as any)._lookupViewFields || []"
-                      :placeholder="field.placeholder"
-                      :readonly="isFieldReadonly(field)"
-                      @select="(row: any) => handleLookupSelect(field.key, row)"
-                      @clear="() => handleLookupClear(field.key)"
-                      @view-fields-loaded="(fields: any[]) => lookupLoadedViewFields[field.key] = fields"
-                    />
-                    <LookupViewDisplay
-                      v-if="lookupSelectedData[field.key] && lookupShowBackfillView(field)"
-                      :selected-data="lookupSelectedData[field.key]"
-                      :view-fields="(field as any)._lookupViewFields?.length ? (field as any)._lookupViewFields : (lookupLoadedViewFields[field.key] || [])"
-                    />
-                  </div>
-                </el-form-item>
-              </el-col>
-            </template>
-            <el-col
-              v-else
-              v-show="engineVisibility.get(field.key) ?? true"
-              :span="field.span || 24"
-            >
-              <el-form-item
-                :label="field.label"
-                :prop="field.key"
-                :required="field.required"
-              >
-                <FieldRenderer
-                  :field="field"
-                  :model-value="formData[field.key]"
-                  :form-data="formData"
-                  :readonly="isFieldReadonly(field)"
-                  :disabled="engineFieldStates.get(field.key)?.disabled || false"
-                  :visible="engineVisibility.get(field.key) ?? true"
-                  :options="engineOptions.get(field.key)"
-                  :upload-url="uploadUrl"
-                  :user-search-results="userSearchResults.get(field.key)"
-                  @update:model-value="(val: any) => handleFieldChange(field.key, val)"
-                  @upload:success="(res: any, file: any, key: string) => handleUploadSuccess(res, file, key)"
-                  @upload:remove="(file: any, key: string) => handleUploadRemove(file, key)"
-                  @search:users="handleUserSearch"
-                />
-              </el-form-item>
-            </el-col>
-          </template>
+          <FormRendererFields :fields="fields" />
         </el-row>
       </template>
     </el-form>
@@ -569,18 +55,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick, provide } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick, provide, reactive } from 'vue'
 import { watchThrottled } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { isEqual } from 'lodash-es'
 import { ElMessageBox } from 'element-plus'
-import { Upload, Search } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
-import SubTableField from './SubTableField.vue'
-import SubTableInlineForm from './SubTableInlineForm.vue'
-import LookupField from './lookup/LookupField.vue'
-import LookupViewDisplay from './lookup/LookupViewDisplay.vue'
-import FieldRenderer from './FieldRenderer.vue'
+import FormRendererFields from './FormRendererFields.vue'
+import { FORM_RENDERER_FIELDS_CTX } from './formRendererFieldsContext'
 import { BusinessLogicEngine } from './businessLogicEngine'
 import { userApi } from '@/api/user'
 import { resolveAssigneeFieldForBinding } from '@/utils/subTableAssignment'
@@ -593,6 +75,7 @@ import type {
 } from './formRendererHelpers'
 import {
   extractFieldsRecursive,
+  flattenAllFormFieldSegments,
   isFormFieldReadonly,
   mergeSubTablePortalViewsForRuntime,
   resolveSubTableDisplayMode,
@@ -605,6 +88,7 @@ import {
   findMiIsolatedParentRow,
   pickMiLinkChildRowsForParent
 } from '@/composables/tasks/shared'
+import { createPortalFormApi, createFieldKeyResolver, runFormOnChangeHandler, type PortalFormVisibilityState } from '@/utils/formCreateEventRuntime'
 
 export type { FormField, FormTab }
 
@@ -639,6 +123,8 @@ interface SubTableBinding {
 interface Props {
   fields: FormField[]
   tabs?: FormTab[]
+  /** Canvas rules after `el-tabs` (designer siblings below tab widget). */
+  fieldsAfterTabs?: FormField[]
   modelValue?: Record<string, any>
   readonly?: boolean
   /** When true, disables form fields driven by PRIMARY table binding READONLY mode.
@@ -688,11 +174,14 @@ interface Props {
   nativeSubTableBindingIds?: number[]
   /** Designer configJson — used to resolve link-form targets from {@code subListViews}. */
   formConfig?: Record<string, unknown> | null
+  /** form-create designer options (Form event onChange, labelWidth, etc.). */
+  formOptions?: Record<string, unknown> | null
 }
 
 const props = withDefaults(defineProps<Props>(), {
   modelValue: () => ({}),
   tabs: () => [],
+  fieldsAfterTabs: () => [],
   readonly: false,
   primaryReadOnly: false,
   labelWidth: '160px',
@@ -1354,20 +843,61 @@ const handleLookupClear = (fieldKey: string) => {
 const uploadFileLists = ref<Record<string, Array<{ name: string; url: string; uid?: number }>>>({})
 
 // Get all fields (including fields in tabs)
-const allFields = computed(() => {
-  const flatten = (items: FormField[]): FormField[] =>
-    items.flatMap(field => field.children?.length ? flatten(field.children) : [field])
-  if (hasTabs.value && props.tabs) {
-    return props.tabs.flatMap(tab => flatten(tab.fields))
-  }
-  return flatten(props.fields)
-})
+const allFields = computed(() =>
+  flattenAllFormFieldSegments(props.fields, props.tabs, props.fieldsAfterTabs),
+)
 
 // ---------------------------------------------------------------------------
 // Task 7.2: BusinessLogicEngine integration
 // ---------------------------------------------------------------------------
 const engine = new BusinessLogicEngine()
 const engineVisibility = ref(new Map<string, boolean>())
+const eventVisibilityState = reactive<PortalFormVisibilityState>({
+  hidden: new Map<string, boolean>(),
+  display: new Map<string, boolean>(),
+})
+const eventVisibilityTick = ref(0)
+
+function notifyEventVisibilityChange() {
+  eventVisibilityState.hidden = new Map(eventVisibilityState.hidden)
+  eventVisibilityState.display = new Map(eventVisibilityState.display)
+  eventVisibilityTick.value++
+}
+
+function isFieldVisible(fieldKey: string): boolean {
+  void eventVisibilityTick.value
+  if (eventVisibilityState.hidden.get(fieldKey) === true) return false
+  if (eventVisibilityState.display.get(fieldKey) === false) return false
+  return engineVisibility.value.get(fieldKey) ?? true
+}
+
+function createFormEventApi() {
+  const resolveFieldKey = createFieldKeyResolver(() => allFields.value)
+  return createPortalFormApi(
+    () => formData.value,
+    (patch) => {
+      formData.value = { ...formData.value, ...patch }
+    },
+    resolveFieldKey,
+    {
+      state: eventVisibilityState,
+      notify: notifyEventVisibilityChange,
+      getAllFieldKeys: () => allFields.value.map(f => f.key),
+    },
+  )
+}
+
+function runFormOptionsOnChange(field: string, value: unknown) {
+  const onChangeHandler = props.formOptions?.onChange
+  if (!onChangeHandler) return
+  const api = createFormEventApi()
+  runFormOnChangeHandler(onChangeHandler, field, value, api)
+}
+
+function bootstrapFormOptionsOnChange() {
+  if (!props.formOptions?.onChange) return
+  runFormOptionsOnChange('__bootstrap__', null)
+}
 const engineOptions = ref(new Map<string, Array<{ label: string; value: any }>>())
 const engineFieldStates = ref(new Map<string, { disabled?: boolean; required?: boolean }>())
 const engineCalculatedValues = ref(new Map<string, number>())
@@ -1484,6 +1014,14 @@ const formRules = computed<FormRules>(() => {
 function handleFieldChange(key: string, value: any) {
   formData.value[key] = value
   emit('change', key, value)
+
+  const onChangeHandler = props.formOptions?.onChange
+  if (onChangeHandler) {
+    runFormOptionsOnChange(key, value)
+    if (!props.readonly) {
+      emit('update:modelValue', { ...formData.value })
+    }
+  }
 
   // Task 7.2: Trigger engine evaluation on field change
   if (props.config) {
@@ -1776,12 +1314,68 @@ const setFieldValue = (key: string, value: any) => {
   formData.value[key] = value
 }
 
+provide(FORM_RENDERER_FIELDS_CTX, reactive({
+  formData,
+  readonly: effectiveReadonly,
+  labelWidth: computed(() => props.labelWidth),
+  uploadUrl: computed(() => props.uploadUrl),
+  taskId: computed(() => props.taskId),
+  viewContext: computed(() => props.viewContext),
+  subTableBindings: computed(() => props.subTableBindings),
+  linkableSubTableBindings,
+  enableSubTablePolling: computed(() => props.enableSubTablePolling),
+  subTablePollingInterval: computed(() => props.subTablePollingInterval),
+  suppressLinkFormInitialData: computed(() => props.suppressLinkFormInitialData),
+  showLinkFormDialogFooter: computed(() => props.showLinkFormDialogFooter),
+  lookupSelectedData,
+  lookupLoadedViewFields,
+  engineVisibility,
+  isFieldVisible,
+  engineFieldStates,
+  engineOptions,
+  userSearchResults,
+  isFieldReadonly,
+  resolveBinding,
+  shouldRenderPlacedSubTableField,
+  isSubTableEditable,
+  getSubFormRowFormulas,
+  getSummaryColumns,
+  getSummaryAggregations,
+  getSubTableValidation,
+  subTableAssigneeField,
+  showSubTableAssignColumn,
+  linkFormScrollToInlineEnabled,
+  subTableShowTaskStatusInitiator,
+  subTableShowViewDetailInitiator,
+  subTableCompactLookupCells,
+  subTableMode,
+  resolveInlineFormTableTitle,
+  resolveInlineFormFields,
+  getCurrentRowForInlineForm,
+  inlineSubTableFormReadonly,
+  lookupShowBackfillView,
+  handleSubTableUpdate,
+  handleInlineFormUpdate,
+  scrollSubTableInlineIntoView,
+  setSubTableInlineAnchor,
+  handleLookupSelect,
+  handleLookupClear,
+  handleFieldChange,
+  handleUploadSuccess,
+  handleUploadRemove,
+  handleUserSearch,
+  emitViewSubtaskDetail: (row: unknown, siblingRows?: unknown[]) => {
+    emit('viewSubtaskDetail', row, siblingRows)
+  },
+}))
+
 // ---------------------------------------------------------------------------
 // Lifecycle
 // ---------------------------------------------------------------------------
 onMounted(() => {
   initFormData()
   initEngine()
+  bootstrapFormOptionsOnChange()
   // Task 7.5: Check for auto-saved data, then start auto-save timer
   checkAutoSaveRestore().then(() => {
     startAutoSave()
@@ -1855,6 +1449,39 @@ defineExpose({
 
   :deep(.el-form) {
     width: 100%;
+  }
+
+  .form-fields-before-tabs,
+  .form-fields-after-tabs {
+    width: 100%;
+    margin-bottom: 18px;
+  }
+
+  .form-renderer-tabs {
+    width: 100%;
+    margin-bottom: 18px;
+
+    :deep(.el-tabs__header) {
+      margin-bottom: 0;
+    }
+
+    :deep(.el-tabs__content) {
+      padding: 16px 0 0;
+    }
+  }
+
+  .form-renderer-collapse {
+    width: 100%;
+    margin-bottom: 18px;
+
+    :deep(.el-collapse-item__header) {
+      font-weight: 500;
+      color: #303133;
+    }
+
+    :deep(.el-collapse-item__content) {
+      padding: 16px 0 4px;
+    }
   }
 
   .form-layout-card {

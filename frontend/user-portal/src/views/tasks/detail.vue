@@ -172,6 +172,7 @@
               :linked-sub-table-bindings="selectedNodeForm.isCurrentTask ? linkableSubTableBindings : selectedNodeForm.subTableBindings"
               :native-sub-table-binding-ids="selectedNodeForm.isCurrentTask ? mainFormNativeSubTableBindingIds : selectedNodeForm.nativeSubTableBindingIds"
               :form-config="selectedNodeForm.isCurrentTask ? mainFormConfig : selectedNodeForm.formConfig"
+              :form-options="selectedNodeForm.isCurrentTask ? formFormOptions : undefined"
               :preview-sub-tables="selectedNodeForm.isCurrentTask ? isMiSubTaskMode : true"
               :task-id="selectedNodeForm.isCurrentTask ? effectiveTaskId : undefined"
               :allow-sub-table-assign="selectedNodeForm.isCurrentTask ? allowSubTableAssignForCurrentTask : false"
@@ -266,7 +267,7 @@
 
       <!-- Section 3: Form data (hide normal task form card when previewing a selected node) -->
       <div
-        v-if="!selectedNodeId && (!isMiSubTaskMode || formFields.length > 0 || formTabs.length > 0 || subTableBindings.length > 0)"
+        v-if="!selectedNodeId && (!isMiSubTaskMode || formFields.length > 0 || formTabs.length > 0 || formFieldsAfterTabs.length > 0 || subTableBindings.length > 0)"
         class="section form-section"
       >
         <div class="section-header">
@@ -275,12 +276,13 @@
         </div>
         <div class="section-content">
           <div
-            v-if="formFields.length > 0 || formTabs.length > 0 || subTableBindings.length > 0"
+            v-if="formFields.length > 0 || formTabs.length > 0 || formFieldsAfterTabs.length > 0 || subTableBindings.length > 0"
             class="form-container"
           >
             <FormRenderer
               :fields="formFields"
               :tabs="formTabs"
+              :fields-after-tabs="formFieldsAfterTabs"
               :model-value="formData"
               :label-width="formLabelWidth"
               :readonly="formReadOnly"
@@ -289,6 +291,7 @@
               :linked-sub-table-bindings="linkableSubTableBindings"
               :native-sub-table-binding-ids="mainFormNativeSubTableBindingIds"
               :form-config="mainFormConfig"
+              :form-options="formFormOptions"
               :preview-sub-tables="isMiSubTaskMode"
               :task-id="effectiveTaskId"
               :allow-sub-table-assign="allowSubTableAssignForCurrentTask"
@@ -432,7 +435,7 @@ import { processApi } from '@/api/process'
 import ProcessDiagram, { type ProcessNode, type ProcessFlow } from '@/components/ProcessDiagram.vue'
 import ProcessHistory, { type HistoryRecord } from '@/components/ProcessHistory.vue'
 import FormRenderer, { type FormField, type FormTab } from '@/components/FormRenderer.vue'
-import { normalizePortalViews, collectLeafFormFieldKeys, isFormCreateRuleReadonly } from '@/components/formRendererHelpers'
+import { normalizePortalViews, collectLeafFormFieldKeys, isFormCreateRuleReadonly, isRowRule, isColRule, getRuleChildren, getRowGutter, getColSpan, extractRowColumnFields, parseFormRulesLayout, isTabsRule, isCardRule, isCollapseRule, convertAuxiliaryLayoutField, extractTabsFromTabsRule, extractCollapsePanelsFromRule, findTabsRule, isTabPaneRule, getLayoutKey, getLayoutLabel } from '@/components/formRendererHelpers'
 import SubTableField from '@/components/SubTableField.vue'
 import N8nActionDialog from '@/components/N8nActionDialog.vue'
 import {
@@ -1182,7 +1185,11 @@ function collectSubTableBindingMatchKeys(b: {
   const walkFormFields = (fields?: FormField[]) => {
     if (!Array.isArray(fields)) return
     for (const f of fields) {
-      if (f.type === 'card') walkFormFields(f.children)
+      if (f.type === 'tabs' && Array.isArray(f.tabs)) {
+        for (const tab of f.tabs) walkFormFields(tab.fields)
+      } else if (f.type === 'collapse' && Array.isArray(f.collapsePanels)) {
+        for (const panel of f.collapsePanels) walkFormFields(panel.fields)
+      } else if (f.type === 'card' || f.type === 'row' || f.type === 'col') walkFormFields(f.children)
       else if (typeof f.key === 'string' && f.key.length > 0) fieldSet.add(f.key)
     }
   }
@@ -2108,7 +2115,7 @@ function resolveCurrentMiParticipantRowIdFromTaskVars(
 }
 
 const taskForm = useTaskForm({ subTableBindings, isMiSubTaskMode, isCompletedTask, effectiveTaskId, taskFormDTO: taskFormDTO as any })
-const { formFields, formTabs, formData, currentFormName, formReadOnly, formLabelWidth, savingTaskForm, saveCurrentTaskForm, scheduleSubTableAutosave, getCurrentFormFieldKeys, clearAutosaveTimer: clearFormAutosaveTimer } = taskForm
+const { formFields, formTabs, formFieldsAfterTabs, formData, currentFormName, formReadOnly, formLabelWidth, formFormOptions, savingTaskForm, saveCurrentTaskForm, scheduleSubTableAutosave, getCurrentFormFieldKeys, clearAutosaveTimer: clearFormAutosaveTimer } = taskForm
 
 // Task 17.4: Return_To_Requester state
 const isReturnToRequester = ref(false)
@@ -2398,10 +2405,10 @@ const customActions = useCustomActions({
 
     const popupTabs: FormTab[] = []
     const popupFields: FormField[] = []
-    const tabsRule = rules.find((r: any) => r.type === 'el-tabs')
+    const tabsRule = findTabsRule(rules)
     if (tabsRule?.children && Array.isArray(tabsRule.children)) {
-      for (const tabPane of tabsRule.children) {
-        if (tabPane.type !== 'el-tab-pane' || !tabPane.props) continue
+      for (const tabPane of tabsRule.children as Record<string, unknown>[]) {
+        if (!isTabPaneRule(tabPane) || !tabPane.props) continue
         const tabFields: FormField[] =
           tabPane.children && Array.isArray(tabPane.children)
             ? extractFieldsRecursive(tabPane.children)
@@ -2785,10 +2792,10 @@ const loadFunctionUnitContent = async (processKey: string, prefetchedContent?: a
             const cfg = typeof prevForm.data === 'string' ? JSON.parse(prevForm.data) : (prevForm.data || {})
             const rules = cfg.rule && Array.isArray(cfg.rule) ? cfg.rule : (Array.isArray(cfg) ? cfg : null)
             if (rules) {
-              const tabsRule = rules.find((r: any) => r.type === 'el-tabs')
+              const tabsRule = findTabsRule(rules)
               if (tabsRule?.children) {
-                for (const tabPane of tabsRule.children) {
-                  if (tabPane.type === 'el-tab-pane' && tabPane.props) {
+                for (const tabPane of tabsRule.children as Record<string, unknown>[]) {
+                  if (isTabPaneRule(tabPane) && tabPane.props) {
                     const tabFields: FormField[] = []
                     if (tabPane.children) tabFields.push(...extractFieldsRecursive(tabPane.children))
                     parsedTabs.push({ name: tabPane.props.name || `tab_${parsedTabs.length}`, label: tabPane.props.label || `Tab ${parsedTabs.length + 1}`, fields: tabFields })
@@ -2954,10 +2961,10 @@ const loadFunctionUnitContent = async (processKey: string, prefetchedContent?: a
               nodeFormConfig = cfg
               const rules = cfg.rule && Array.isArray(cfg.rule) ? cfg.rule : (Array.isArray(cfg) ? cfg : null)
               if (rules) {
-                const tabsRule = rules.find((r: any) => r.type === 'el-tabs')
-                if (tabsRule?.children) {
-                  for (const tabPane of tabsRule.children) {
-                    if (tabPane.type === 'el-tab-pane' && tabPane.props) {
+    const tabsRule = findTabsRule(rules)
+    if (tabsRule?.children) {
+      for (const tabPane of tabsRule.children as Record<string, unknown>[]) {
+        if (isTabPaneRule(tabPane) && tabPane.props) {
                       const tabFields: FormField[] = []
                       if (tabPane.children) tabFields.push(...extractFieldsRecursive(tabPane.children))
                       nodeTabs.push({ name: tabPane.props.name || `tab_${nodeTabs.length}`, label: tabPane.props.label || `Tab ${nodeTabs.length + 1}`, fields: tabFields })
@@ -3190,16 +3197,17 @@ const parseProcessFormConfig = (configJson: Record<string, unknown>) => {
       : (Array.isArray(config) ? config : null)
     if (!rules) return
 
-    const tabsRule = rules.find((r: any) => r.type === 'el-tabs')
+    const tabsRule = findTabsRule(rules)
     if (tabsRule?.children && Array.isArray(tabsRule.children)) {
       const tabs: FormTab[] = []
-      for (const tabPane of tabsRule.children) {
-        if (tabPane.type === 'el-tab-pane' && tabPane.props) {
+      for (const tabPane of tabsRule.children as Record<string, unknown>[]) {
+        if (isTabPaneRule(tabPane) && tabPane.props) {
+          const props = tabPane.props as Record<string, unknown>
           const tabFields: FormField[] = []
-          if (tabPane.children) tabFields.push(...extractFieldsRecursive(tabPane.children))
+          if (tabPane.children) tabFields.push(...extractFieldsRecursive(tabPane.children as Record<string, unknown>[]))
           tabs.push({
-            name: tabPane.props.name || `tab_${tabs.length}`,
-            label: tabPane.props.label || `Tab ${tabs.length + 1}`,
+            name: String(props.name || `tab_${tabs.length}`),
+            label: String(props.label || `Tab ${tabs.length + 1}`),
             fields: tabFields,
           })
         }
@@ -3298,34 +3306,11 @@ const parseFormConfig = (configStr: string) => {
       //   formLabelWidth.value = config.options.form.labelWidth
       // }
       
-      // Check for el-tabs structure
-      const tabsRule = rules.find((r: any) => r.type === 'el-tabs')
-      
-      if (tabsRule && tabsRule.children && Array.isArray(tabsRule.children)) {
-        // Tab layout
-        const tabs: FormTab[] = []
-        
-        for (const tabPane of tabsRule.children) {
-          if (tabPane.type === 'el-tab-pane' && tabPane.props) {
-            const tabName = tabPane.props.name || `tab_${tabs.length}`
-            const tabLabel = tabPane.props.label || `Tab ${tabs.length + 1}`
-            
-            const tabFields: FormField[] =
-              tabPane.children && Array.isArray(tabPane.children)
-                ? extractFieldsRecursive(tabPane.children)
-                : []
-            
-            tabs.push({ name: tabName, label: tabLabel, fields: tabFields })
-          }
-        }
-        
-        formTabs.value = tabs
-        formFields.value = []
-      } else {
-        // No tab layout, use flat mode
-        formTabs.value = []
-        formFields.value = extractFieldsRecursive(rules)
-      }
+      const layout = parseFormRulesLayout(rules, (items) => extractFieldsRecursive(items))
+      formTabs.value = layout.tabs
+      formFields.value = layout.fields
+      formFieldsAfterTabs.value = layout.fieldsAfterTabs
+      formFormOptions.value = (config.options && typeof config.options === 'object') ? config.options : {}
     }
     // Check if form is read-only (never clear node/BPMN/task-form readonly already applied)
     formReadOnly.value =
@@ -3822,15 +3807,66 @@ const extractFieldsRecursive = (items: any[]): FormField[] => {
         ...(hasWidgetPortalViews ? { portalViews: normalizePortalViews(rawPv) } : {}),
         span: 24
       })
-    } else if (isCardRule(item)) {
+      continue
+    }
+    const auxField = convertAuxiliaryLayoutField(item, fields.length)
+    if (auxField) {
+      fields.push(auxField)
+      continue
+    }
+    if (isRowRule(item)) {
+      fields.push({
+        key: getLayoutKey(item, fields.length, 'row'),
+        label: '',
+        type: 'row',
+        span: 24,
+        gutter: getRowGutter(item),
+        children: extractRowColumnFields(item, (children) => extractFieldsRecursive(children)),
+      } as any)
+      continue
+    } else if (isColRule(item)) {
+      fields.push({
+        key: getLayoutKey(item, fields.length, 'col'),
+        label: '',
+        type: 'col',
+        span: getColSpan(item),
+        children: extractFieldsRecursive(getRuleChildren(item)),
+      } as any)
+      continue
+    }
+    if (isTabsRule(item)) {
+      const nestedTabs = extractTabsFromTabsRule(item, (children) => extractFieldsRecursive(children))
+      if (nestedTabs.length > 0) {
+        fields.push({
+          key: getLayoutKey(item, fields.length, 'tabs'),
+          label: '',
+          type: 'tabs',
+          span: 24,
+          tabs: nestedTabs,
+        } as any)
+      }
+      continue
+    }
+    if (isCollapseRule(item)) {
+      const collapsePanels = extractCollapsePanelsFromRule(item, (children) => extractFieldsRecursive(children))
+      if (collapsePanels.length > 0) {
+        fields.push({
+          key: getLayoutKey(item, fields.length, 'collapse'),
+          label: '',
+          type: 'collapse',
+          span: 24,
+          collapsePanels,
+        } as any)
+      }
+      continue
+    }
+    if (isCardRule(item)) {
       fields.push({
         key: getLayoutKey(item, fields.length, 'card'),
         label: getLayoutLabel(item),
         type: 'card',
         span: item.col?.span || 24,
-        children: item.children && Array.isArray(item.children)
-          ? extractFieldsRecursive(item.children)
-          : []
+        children: extractFieldsRecursive(getRuleChildren(item))
       } as any)
       continue
     } else if (item.type === 'lookup' && item.field) {
@@ -3874,18 +3910,15 @@ const extractFieldsRecursive = (items: any[]): FormField[] => {
       const field = convertFormCreateRule(item)
       if (field) fields.push(field)
     }
-    if (item.children && Array.isArray(item.children)) {
-      fields.push(...extractFieldsRecursive(item.children))
+    const childItems = getRuleChildren(item)
+    if (childItems.length > 0) {
+      if (FC_SKIP_TYPES.has(item.type) || (!isCardRule(item) && !isRowRule(item) && !isColRule(item) && !isTabsRule(item) && !isCollapseRule(item))) {
+        fields.push(...extractFieldsRecursive(childItems))
+      }
     }
   }
   return fields
 }
-
-const isCardRule = (item: any): boolean => ['el-card', 'elCard', 'card'].includes(item.type)
-const getLayoutKey = (item: any, index: number, fallback: string): string =>
-  String(item.field || item.name || item.id || `__layout_${fallback}_${index}`)
-const getLayoutLabel = (item: any): string =>
-  String(item.title || item.props?.header || item.props?.title || '')
 
 // Convert form rules
 const convertFormCreateRule = (rule: any): FormField | null => {

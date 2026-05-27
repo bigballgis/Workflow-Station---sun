@@ -10,6 +10,7 @@ import { computed } from 'vue'
 import type { FormField } from './formRendererHelpers'
 import {
   filterLinkOnlyStandaloneSubTableFields,
+  isDisplayOnlyLayoutField,
 } from './formRendererHelpers'
 import { pullNestedRowsForBindingFromParentRows } from '@/composables/tasks/shared'
 
@@ -37,6 +38,10 @@ const props = withDefaults(
     compactLookupCells?: boolean
     /** My Request: omit link-form target sub-tables from inline / modal field lists. */
     suppressLinkOnlyStandaloneSubTables?: boolean
+    /** Inside fcRow — render fcCol children as grid columns. */
+    rowColumns?: boolean
+    /** Inside fcCol — stack fields vertically. */
+    inColumn?: boolean
   }>(),
   {
     readonly: false,
@@ -44,6 +49,8 @@ const props = withDefaults(
     showLinkFormDialogFooter: false,
     compactLookupCells: false,
     suppressLinkOnlyStandaloneSubTables: false,
+    rowColumns: false,
+    inColumn: false,
   },
 )
 
@@ -115,6 +122,108 @@ function onFieldUpdate(key: string, val: unknown) {
       />
     </el-col>
     <el-col
+      v-else-if="field.type === 'tabs' && field.tabs?.length"
+      :span="24"
+    >
+      <el-tabs class="portal-form-nested-tabs">
+        <el-tab-pane
+          v-for="(tab, tabIdx) in field.tabs"
+          :key="`${field.key}-tab-${tabIdx}-${String(tab.name)}`"
+          :label="tab.label"
+          :name="tab.name"
+        >
+          <PortalFormFields
+            :fields="tab.fields || []"
+            :model="model"
+            :readonly="readonly"
+            :editable="editable"
+            :sub-table-bindings="subTableBindings"
+            :linked-sub-table-bindings="linkedSubTableBindings"
+            :parent-row="parentRow"
+            :show-link-form-dialog-footer="showLinkFormDialogFooter"
+            :compact-lookup-cells="compactLookupCells"
+            @update:field="(k, v) => onFieldUpdate(k, v)"
+          />
+        </el-tab-pane>
+      </el-tabs>
+    </el-col>
+    <el-col
+      v-else-if="isDisplayOnlyLayoutField(field)"
+      :span="field.span || 24"
+      class="portal-form-display-only"
+    >
+      <FieldRenderer
+        :field="field"
+        :model-value="model[field.key]"
+        :form-data="model"
+        :readonly="true"
+      />
+    </el-col>
+    <el-col
+      v-else-if="field.type === 'row'"
+      :span="24"
+    >
+      <el-row :gutter="field.gutter ?? 20">
+        <PortalFormFields
+          :fields="field.children || []"
+          :model="model"
+          :readonly="readonly"
+          :editable="editable"
+          :sub-table-bindings="subTableBindings"
+          :linked-sub-table-bindings="linkedSubTableBindings"
+          :parent-row="parentRow"
+          :show-link-form-dialog-footer="showLinkFormDialogFooter"
+          :compact-lookup-cells="compactLookupCells"
+          row-columns
+          @update:field="(k, v) => onFieldUpdate(k, v)"
+        />
+      </el-row>
+    </el-col>
+    <el-col
+      v-else-if="rowColumns && field.type === 'col'"
+      :span="field.span || 12"
+    >
+      <PortalFormFields
+        :fields="field.children || []"
+        :model="model"
+        :readonly="readonly"
+        :editable="editable"
+        :sub-table-bindings="subTableBindings"
+        :linked-sub-table-bindings="linkedSubTableBindings"
+        :parent-row="parentRow"
+        :show-link-form-dialog-footer="showLinkFormDialogFooter"
+        :compact-lookup-cells="compactLookupCells"
+        in-column
+        @update:field="(k, v) => onFieldUpdate(k, v)"
+      />
+    </el-col>
+    <el-col
+      v-else-if="field.type === 'collapse' && field.collapsePanels?.length"
+      :span="24"
+    >
+      <el-collapse class="portal-form-nested-collapse">
+        <el-collapse-item
+          v-for="(panel, panelIdx) in field.collapsePanels"
+          :key="`${field.key}-collapse-${panelIdx}-${String(panel.name)}`"
+          :title="panel.label"
+          :name="panel.name"
+        >
+          <PortalFormFields
+            :fields="panel.fields || []"
+            :model="model"
+            :readonly="readonly"
+            :editable="editable"
+            :sub-table-bindings="subTableBindings"
+            :linked-sub-table-bindings="linkedSubTableBindings"
+            :parent-row="parentRow"
+            :show-link-form-dialog-footer="showLinkFormDialogFooter"
+            :compact-lookup-cells="compactLookupCells"
+            @update:field="(k, v) => onFieldUpdate(k, v)"
+          />
+        </el-collapse-item>
+      </el-collapse>
+    </el-col>
+    <el-col
       v-else-if="field.type === 'card'"
       :span="field.span || 24"
     >
@@ -145,7 +254,7 @@ function onFieldUpdate(key: string, val: unknown) {
       </el-card>
     </el-col>
     <el-col
-      v-else
+      v-else-if="!inColumn"
       :span="field.span || 24"
     >
       <el-form-item
@@ -162,11 +271,47 @@ function onFieldUpdate(key: string, val: unknown) {
         />
       </el-form-item>
     </el-col>
+    <div
+      v-else
+      class="portal-form-col-field"
+    >
+      <el-form-item
+        :label="field.label"
+        :prop="field.key"
+        :required="field.required"
+      >
+        <FieldRenderer
+          :field="field"
+          :model-value="model[field.key]"
+          :form-data="model"
+          :readonly="readonly || field.readonly === true || !editable"
+          @update:model-value="(val: unknown) => onFieldUpdate(field.key, val)"
+        />
+      </el-form-item>
+    </div>
   </template>
 </template>
 
 <style scoped>
 .portal-form-fields-card {
   margin-bottom: 16px;
+}
+
+.portal-form-col-field {
+  width: 100%;
+}
+
+.portal-form-display-only {
+  margin-bottom: 8px;
+}
+
+.portal-form-nested-tabs {
+  width: 100%;
+  margin-bottom: 12px;
+}
+
+.portal-form-nested-collapse {
+  width: 100%;
+  margin-bottom: 12px;
 }
 </style>

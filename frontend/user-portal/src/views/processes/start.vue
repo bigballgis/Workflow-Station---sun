@@ -183,7 +183,7 @@
         </div>
         <div class="section-content">
           <div
-            v-if="formFields.length > 0 || formTabs.length > 0"
+            v-if="formFields.length > 0 || formTabs.length > 0 || formFieldsAfterTabs.length > 0"
             class="form-container"
           >
             <FormRenderer
@@ -191,8 +191,10 @@
               v-model="formData"
               :fields="formFields"
               :tabs="formTabs"
+              :fields-after-tabs="formFieldsAfterTabs"
               :label-width="formLabelWidth"
               :label-position="formLabelPosition"
+              :form-options="formFormOptions"
               :sub-table-bindings="subTableBindings"
               @update:sub-table-data="(id: number, rows: any[]) => { const b = subTableBindings.find(x => x.bindingId === id); if (b) b.data = rows }"
             />
@@ -280,7 +282,7 @@ import { processApi } from '@/api/process'
 import ProcessDiagram, { type ProcessNode, type ProcessFlow } from '@/components/ProcessDiagram.vue'
 import ProcessHistory, { type HistoryRecord } from '@/components/ProcessHistory.vue'
 import FormRenderer, { type FormField, type FormTab } from '@/components/FormRenderer.vue'
-import { normalizePortalViews, isFormCreateRuleReadonly } from '@/components/formRendererHelpers'
+import { normalizePortalViews, isFormCreateRuleReadonly, isRowRule, isColRule, getRuleChildren, getRowGutter, getColSpan, extractRowColumnFields, parseFormRulesLayout, isTabsRule, isCardRule, isCollapseRule, convertAuxiliaryLayoutField, extractTabsFromTabsRule, extractCollapsePanelsFromRule, getLayoutKey, getLayoutLabel, collectPlacedSubTableBindingIds, computeNeededSubTableBindingIds } from '@/components/formRendererHelpers'
 import N8nActionDialog from '@/components/N8nActionDialog.vue'
 import type { ActionDefinition } from '@/components/N8nActionDialog.vue'
 import { applyAutoFill } from '@/utils/n8nAutoFillEngine'
@@ -343,10 +345,12 @@ const bpmnXml = ref('')
 // 表单数据
 const formFields = ref<FormField[]>([])
 const formTabs = ref<FormTab[]>([])
+const formFieldsAfterTabs = ref<FormField[]>([])
 const formData = ref<Record<string, any>>({})
 const currentFormName = ref('')
 const formLabelWidth = ref('160px')
 const formLabelPosition = ref<'left' | 'right' | 'top'>('left')
+const formFormOptions = ref<Record<string, unknown>>({})
 const formRendererRef = ref<InstanceType<typeof FormRenderer> | null>(null)
 
 // Sub-table bindings for the start form
@@ -383,50 +387,8 @@ function buildStartFormSubTablesPayload(): Record<string, unknown> {
 }
 
 const placedBindingIds = computed((): Set<number> => {
-  const ids = new Set<number>()
-  const collect = (fields: any[]) => fields.forEach((f: any) => {
-    if (f.type === 'subTable' && f._bindingId != null) ids.add(f._bindingId)
-    if (Array.isArray(f.children)) collect(f.children)
-  })
-  collect(formFields.value)
-  formTabs.value.forEach((tab: any) => collect(tab.fields))
-  return ids
+  return collectPlacedSubTableBindingIds(formFields.value, formTabs.value, formFieldsAfterTabs.value)
 })
-
-/**
- * Same closure rule as developer-workstation FormDesigner preview: only SUB/RELATED
- * bindings that are explicitly placed (subTable rule) or required by linkForm columns
- * on an included binding are kept — never show “orphan” bindings at page bottom.
- */
-function computeNeededSubTableBindingIds(
-  placed: Set<number>,
-  allBindings: Array<{
-    bindingId: number
-    columns?: Array<{ type?: string; props?: Record<string, any> }>
-  }>
-): Set<number> {
-  const needed = new Set<number>(placed)
-  let changed = true
-  while (changed) {
-    changed = false
-    for (const b of allBindings) {
-      if (!needed.has(b.bindingId)) continue
-      for (const col of b.columns || []) {
-        if (col.type === 'linkForm') {
-          const boundId = col.props?.boundSubTableBindingId
-          if (boundId != null) {
-            const n = Number(boundId)
-            if (!needed.has(n)) {
-              needed.add(n)
-              changed = true
-            }
-          }
-        }
-      }
-    }
-  }
-  return needed
-}
 
 // Lookup config fallback map (from rt_lookup_configs)
 const lookupDbConfigs = ref<Record<string, { tableId: number; searchFields: string[]; displayField: string; viewFields: any[] }>>({})
@@ -981,42 +943,13 @@ const parseFormConfig = (configStr: string) => {
       if (config.options?.form?.labelPosition) {
         formLabelPosition.value = config.options.form.labelPosition
       }
+      formFormOptions.value = (config.options && typeof config.options === 'object') ? config.options : {}
       
-      // 检查是否有 el-tabs 结构
-      const tabsRule = rules.find((r: any) => r.type === 'el-tabs')
-      
-      if (tabsRule && tabsRule.children && Array.isArray(tabsRule.children)) {
-        // 有 Tab 布局
-        const tabs: FormTab[] = []
-        
-        for (const tabPane of tabsRule.children) {
-          if (tabPane.type === 'el-tab-pane' && tabPane.props) {
-            const tabName = tabPane.props.name || `tab_${tabs.length}`
-            const tabLabel = tabPane.props.label || `Tab ${tabs.length + 1}`
-            
-            // 提取该 Tab 下的字段
-            const tabFields: FormField[] = []
-            if (tabPane.children && Array.isArray(tabPane.children)) {
-              tabFields.push(...extractFieldsRecursive(tabPane.children))
-            }
-            
-            tabs.push({
-              name: tabName,
-              label: tabLabel,
-              fields: tabFields
-            })
-          }
-        }
-        
-        formTabs.value = tabs
-        formFields.value = [] // 清空平铺字段
-        console.log('Parsed form tabs:', tabs)
-      } else {
-        // 无 Tab 布局，使用平铺模式
-        formTabs.value = []
-        formFields.value = extractFieldsRecursive(rules)
-        console.log('Parsed form fields (flat):', formFields.value)
-      }
+      const layout = parseFormRulesLayout(rules, (items) => extractFieldsRecursive(items))
+      formTabs.value = layout.tabs
+      formFields.value = layout.fields
+      formFieldsAfterTabs.value = layout.fieldsAfterTabs
+      console.log('Parsed form layout:', layout)
     }
   } catch (error) {
     console.error('Failed to parse form config:', error)
@@ -1043,15 +976,66 @@ const extractFieldsRecursive = (items: any[]): FormField[] => {
         ...(hasWidgetPortalViews ? { portalViews: normalizePortalViews(rawPv) } : {}),
         span: 24
       })
-    } else if (isCardRule(item)) {
+      continue
+    }
+    const auxField = convertAuxiliaryLayoutField(item, fields.length)
+    if (auxField) {
+      fields.push(auxField)
+      continue
+    }
+    if (isRowRule(item)) {
+      fields.push({
+        key: getLayoutKey(item, fields.length, 'row'),
+        label: '',
+        type: 'row',
+        span: 24,
+        gutter: getRowGutter(item),
+        children: extractRowColumnFields(item, (children) => extractFieldsRecursive(children)),
+      } as any)
+      continue
+    } else if (isColRule(item)) {
+      fields.push({
+        key: getLayoutKey(item, fields.length, 'col'),
+        label: '',
+        type: 'col',
+        span: getColSpan(item),
+        children: extractFieldsRecursive(getRuleChildren(item)),
+      } as any)
+      continue
+    }
+    if (isTabsRule(item)) {
+      const nestedTabs = extractTabsFromTabsRule(item, (children) => extractFieldsRecursive(children))
+      if (nestedTabs.length > 0) {
+        fields.push({
+          key: getLayoutKey(item, fields.length, 'tabs'),
+          label: '',
+          type: 'tabs',
+          span: 24,
+          tabs: nestedTabs,
+        } as any)
+      }
+      continue
+    }
+    if (isCollapseRule(item)) {
+      const collapsePanels = extractCollapsePanelsFromRule(item, (children) => extractFieldsRecursive(children))
+      if (collapsePanels.length > 0) {
+        fields.push({
+          key: getLayoutKey(item, fields.length, 'collapse'),
+          label: '',
+          type: 'collapse',
+          span: 24,
+          collapsePanels,
+        } as any)
+      }
+      continue
+    }
+    if (isCardRule(item)) {
       fields.push({
         key: getLayoutKey(item, fields.length, 'card'),
         label: getLayoutLabel(item),
         type: 'card',
         span: item.col?.span || 24,
-        children: item.children && Array.isArray(item.children)
-          ? extractFieldsRecursive(item.children)
-          : []
+        children: extractFieldsRecursive(getRuleChildren(item))
       } as any)
       continue
     } else if (item.type === 'lookup' && item.field) {
@@ -1097,18 +1081,15 @@ const extractFieldsRecursive = (items: any[]): FormField[] => {
       const field = convertFormCreateRule(item)
       if (field) fields.push(field)
     }
-    if (item.children && Array.isArray(item.children)) {
-      fields.push(...extractFieldsRecursive(item.children))
+    const childItems = getRuleChildren(item)
+    if (childItems.length > 0) {
+      if (FC_SKIP_TYPES.has(item.type) || (!isCardRule(item) && !isRowRule(item) && !isColRule(item) && !isTabsRule(item) && !isCollapseRule(item))) {
+        fields.push(...extractFieldsRecursive(childItems))
+      }
     }
   }
   return fields
 }
-
-const isCardRule = (item: any): boolean => ['el-card', 'elCard', 'card'].includes(item.type)
-const getLayoutKey = (item: any, index: number, fallback: string): string =>
-  String(item.field || item.name || item.id || `__layout_${fallback}_${index}`)
-const getLayoutLabel = (item: any): string =>
-  String(item.title || item.props?.header || item.props?.title || '')
 
 // 将 form-create 规则转换为 FormRenderer 字段
 const convertFormCreateRule = (rule: any): FormField | null => {
