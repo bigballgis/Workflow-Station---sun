@@ -655,6 +655,18 @@ public final class BpmnProcessSimulator {
                 flowList.add(flow);
             }
         }
+        for (BpmnGraphParser.SubProcessScope scope : graph.subProcesses().values()) {
+            for (List<FlowEdge> edges : scope.outgoing().values()) {
+                for (FlowEdge edge : edges) {
+                    Map<String, String> flow = new LinkedHashMap<>();
+                    flow.put("id", edge.flowId());
+                    flow.put("source", edge.sourceId());
+                    flow.put("target", edge.targetId());
+                    flow.put("parentSubProcessId", scope.id());
+                    flowList.add(flow);
+                }
+            }
+        }
 
         Map<String, Object> structure = new LinkedHashMap<>();
         structure.put("nodes", nodeList);

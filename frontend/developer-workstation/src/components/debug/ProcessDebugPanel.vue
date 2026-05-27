@@ -842,11 +842,14 @@ function extractProcessFlows(processStructure: any): Record<string, ProcessFlow>
   const flows = Array.isArray(processStructure?.flows) ? processStructure.flows : []
   const mapped: Record<string, ProcessFlow> = {}
   for (const flow of flows) {
-    if (!flow?.id || !flow?.source || !flow?.target) continue
-    mapped[String(flow.id)] = {
-      id: String(flow.id),
-      source: String(flow.source),
-      target: String(flow.target),
+    const flowId = flow?.id
+    const source = flow?.source ?? flow?.sourceId ?? flow?.sourceRef
+    const target = flow?.target ?? flow?.targetId ?? flow?.targetRef
+    if (!flowId || !source || !target) continue
+    mapped[String(flowId)] = {
+      id: String(flowId),
+      source: String(source),
+      target: String(target),
     }
   }
   return mapped
@@ -857,6 +860,25 @@ function handleSelectGatewayBranch(flowId: string) {
   if (!flow?.target) {
     ElMessage.warning(t('debug.gatewayBranchTargetMissing', { flowId }))
     return
+  }
+  const targetIdx = simulationSteps.value.findIndex((step, idx) => idx > stepIndex.value && step.nodeId === flow.target)
+  if (targetIdx < 0) {
+    const fallbackNode = processNodes.value.find(node => node.id === flow.target)
+    simulationSteps.value.splice(stepIndex.value + 1, 0, {
+      nodeId: flow.target,
+      nodeName: fallbackNode?.name || flow.target,
+      nodeType: fallbackNode?.type || 'userTask',
+      message: t('debug.gatewayBranchForcedStep', { flowId, target: flow.target }),
+      variables: { ...currentVariables.value },
+      miContext: currentMiContext.value || undefined,
+    })
+    addLog(
+      'warning',
+      t('debug.gatewayBranchUnavailableInSimulation', { flowId, target: flow.target }),
+      'GATEWAY_EVAL',
+      currentNode.value?.id,
+      currentNode.value?.name,
+    )
   }
   const gatewayId = currentGatewayEval.value?.gatewayId || currentNode.value?.id || 'gateway'
   const selectionMap = {
@@ -883,6 +905,10 @@ function handleSelectGatewayBranch(flowId: string) {
     currentNode.value?.id,
     currentNode.value?.name,
   )
+  ElMessage.success(t('debug.gatewayBranchSelectionSaved', { flowId, target: flow.target }))
+  if (targetIdx < 0) {
+    ElMessage.info(t('debug.gatewayBranchForced', { flowId, target: flow.target }))
+  }
   addLog(
     'info',
     t('debug.gatewayBranchSelectionPatched', { gatewayId, flowId }),

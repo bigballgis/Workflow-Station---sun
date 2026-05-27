@@ -113,3 +113,18 @@
     resyncMiDashboardFieldsFromVariablesOnBindings 对 file-only 子表（HMDC Attachment）禁止
     mergeAllSubTableSlicesFromVariables，避免 281 的 transaction 行注入为 2 条空 file 行；
     新增 mcyInitiatorMyRequest.test.ts 回归。路径：applications/detail.vue、shared.ts、miSubProcessScope.ts。
+- id: "1415"
+  status: fixed
+  fixed_at: "2026-05-27"
+  severity: major
+  category: quality
+  summary: "developer-workstation 模块本地编译缺失 platform-security 类导致无法通过 javac"
+  file: "backend/developer-workstation/src/main/java/com/developer/config/SecurityConfig.java"
+  note: |
+    执行 `mvn -pl backend/developer-workstation -am -DskipTests compile` 失败，
+    报错含 `com.platform.security.filter.JwtAuthenticationFilter` 与 `com.platform.security.util` 包不存在，
+    同时 PermissionRepository 引用 `com.platform.security.entity.Permission` 无法解析。
+    影响本地编译验证与 CI 稳定性，需检查 platform-security 对外导出与模块依赖声明是否一致。
+  fix_note: |
+    复测 `mvn -pl backend/developer-workstation -am package -DskipTests` 已 BUILD SUCCESS，
+    当前工作区未复现缺类编译错误，先转 fixed。
