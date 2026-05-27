@@ -38,6 +38,9 @@ public interface SystemLogRepository extends JpaRepository<SystemLog, String>, J
     
     @Query("SELECT l.logLevel, COUNT(l) FROM SystemLog l WHERE l.timestamp >= :since GROUP BY l.logLevel")
     List<Object[]> countByLogLevelSince(@Param("since") Instant since);
+
+    @Query("SELECT COALESCE(AVG(l.responseTime), 0) FROM SystemLog l WHERE l.timestamp >= :since AND l.responseTime IS NOT NULL")
+    Double avgResponseTimeSince(@Param("since") Instant since);
     
     @Query("SELECT l.module, COUNT(l) FROM SystemLog l WHERE l.logLevel = 'ERROR' AND l.timestamp >= :since GROUP BY l.module ORDER BY COUNT(l) DESC")
     List<Object[]> getErrorTrendByModule(@Param("since") Instant since);

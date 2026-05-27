@@ -1107,6 +1107,8 @@ public class TaskQueryComponent {
 
         LocalDate today = LocalDate.now();
         LocalDateTime todayStart = today.atStartOfDay();
+        long todayCompletedTasks = countCompletedTasksInRange(
+                userId, todayStart.toString(), LocalDateTime.now().toString());
 
         return TaskStatistics.builder()
                 .totalTasks(totalTodo)
@@ -1120,8 +1122,29 @@ public class TaskQueryComponent {
                 .todayNewTasks(allTasks.stream()
                         .filter(t -> t.getCreateTime() != null && t.getCreateTime().isAfter(todayStart))
                         .count())
-                .todayCompletedTasks(0L)
+                .todayCompletedTasks(todayCompletedTasks)
                 .build();
+    }
+
+    /**
+     * Count tasks the user completed within a time range (via workflow-engine history API).
+     * Aligns with {@link DashboardComponent} completedTodayCount aggregation.
+     */
+    private long countCompletedTasksInRange(String userId, String startIso, String endIso) {
+        try {
+            Optional<Map<String, Object>> result = workflowEngineClient.getCompletedTasks(
+                    userId, 0, 1, null, startIso, endIso);
+            if (result.isPresent()) {
+                Object totalElements = result.get().get("totalElements");
+                if (totalElements instanceof Number) {
+                    return ((Number) totalElements).longValue();
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to count completed tasks for user {} in range {} - {}: {}",
+                    userId, startIso, endIso, e.getMessage());
+        }
+        return 0L;
     }
 
     /**

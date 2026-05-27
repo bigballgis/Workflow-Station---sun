@@ -13,20 +13,6 @@
   note: |
     getTasksAssignedToGroup 恒返回空列表；claimTaskInWorkflowEngine / delegateTaskInWorkflowEngine 仅打日志；
     isTaskAssignedToUser / getTaskAssignedGroup 未查引擎。类注释已标明需集成 workflow-engine。
-- id: "1403"
-  status: open
-  severity: minor
-  category: quality
-  summary: "admin-center SystemMonitorComponent 业务/应用指标仍为随机 mock（mock=true）"
-  file: "backend/admin-center/src/main/java/com/admin/component/SystemMonitorComponent.java"
-  note: "collectBusinessMetrics / collectApplicationMetrics 使用 Random 生成在线用户、待办数等，非真实采集。"
-- id: "1404"
-  status: open
-  severity: minor
-  category: bug
-  summary: "user-portal TaskQueryComponent 任务统计 todayCompletedTasks 固定为 0"
-  file: "backend/user-portal/src/main/java/com/portal/component/TaskQueryComponent.java"
-  note: "buildTaskStatistics 未从历史完成记录聚合当日完成数，仪表盘/统计 API 可能偏低。"
 - id: "1405"
   status: open
   severity: major
@@ -45,9 +31,9 @@
   status: open
   severity: minor
   category: quality
-  summary: "developer-workstation 流程模拟与动作测试为占位实现（SIMULATED / 固定 SUCCESS）"
-  file: "backend/developer-workstation/src/main/java/com/developer/component/impl/ProcessDesignComponentImpl.java; ActionDesignComponentImpl.java"
-  note: "simulateProcess 仅解析 BPMN 结构返回 status=SIMULATED、空 steps；ActionDesignComponentImpl.test 未按 actionType 执行真实探测。"
+  summary: "developer-workstation 动作测试仍为占位实现（固定 SUCCESS）"
+  file: "backend/developer-workstation/src/main/java/com/developer/component/impl/ActionDesignComponentImpl.java"
+  note: "流程 simulate 已改为 BpmnProcessSimulator（步骤遍历、网关条件、completed/error）；ProcessDebugPanel 支持单步/继续/断点。ActionDesignComponentImpl.test 未按 actionType 执行真实探测。"
 - id: "1408"
   status: open
   severity: minor

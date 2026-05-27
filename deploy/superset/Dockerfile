@@ -1,4 +1,4 @@
-FROM apache/superset:latest
+FROM apache/superset:6.0.0
 
 USER root
 
@@ -18,6 +18,7 @@ ENV SUPERSET_SECRET_PATH=/app/pythonpath/superset_config.py
 
 USER superset
 
+# docker pull apache/superset:6.0.0
 # docker build -t my-superset .
 # docker run -d -p 8088:8088 --name superset-final my-superset
 #

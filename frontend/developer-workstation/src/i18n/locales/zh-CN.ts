@@ -1090,7 +1090,14 @@ export default {
     variableUpdatedLog: '变量 {key} 已更新为: {value}',
     breakpointToggled: '断点 {name} {state}',
     enabled: '已启用',
-    disabled: '已禁用'
+    disabled: '已禁用',
+    addBreakpoint: '添加断点',
+    selectNodeForBreakpoint: '选择节点添加断点',
+    breakpointAdded: '已添加断点: {name}',
+    stepProgress: '步骤进度',
+    stepProgressValue: '{current} / {total}',
+    hitBreakpoint: '命中断点，已暂停',
+    noSimulationSteps: '未生成可执行的模拟步骤'
   },
   tags: {
     coreBusiness: '核心业务',

@@ -41,11 +41,7 @@ CORS_OPTIONS = {
     "supports_credentials": True,
     "allow_headers": ["*"],
     "resources": ["/api/*", "/superset/csrf_token/", "/guest_token/"],
-    "origins": [
-        "http://localhost:3000",
-        "http://localhost:3001",
-        "http://localhost:8088",
-    ],
+    "origins": ["*"],
 }
 
 # ==============================================================================

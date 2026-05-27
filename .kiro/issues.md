@@ -1,18 +1,17 @@
 # Issue 跟踪仪表盘
 
-> **详细信息已迁移到 `.kiro/issues/index.yaml`**
+> **活跃条目**：`.kiro/issues/index.yaml`（Open / Wontfix）  
 > 本文件仅保留统计摘要和当前待处理清单。
 
 ## 统计 (截至 2026-05-27)
 
-| 状态 | 数量 |
-|------|------|
-| ✅ Fixed | **18** |
-| 🔓 Open | **7** |
-| ⏸️ Wontfix | **1** |
-| **总计** | **26** |
+| 状态 | 数量 | 位置 |
+|------|------|------|
+| 🔓 Open | **5** | `index.yaml` |
+| ⏸️ Wontfix | **1** | `index.yaml` |
+| ✅ Fixed | **见 index.yaml** | `index.yaml` 内 `status: fixed` 条目（含 #1403–#1404、#1409+ 等） |
 
-按严重度的分布见 `index.yaml` 各条目的 `severity` 字段。
+按严重度的分布见 `index.yaml` 各条目的 `severity` 字段（`status: open` / `fixed` / `wontfix`）。
 
 ---
 
@@ -21,11 +20,9 @@
 | ID | 严重度 | 分类 | 描述 |
 |----|--------|------|------|
 | 1402 | major | architecture | VirtualGroupTaskServiceImpl 与工作流引擎未集成 |
-| 1403 | minor | quality | SystemMonitor 业务/应用指标仍为 mock |
-| 1404 | minor | bug | 任务统计 todayCompletedTasks 恒为 0 |
 | 1405 | major | bug | ACTION 表单弹窗提交无服务端 API |
 | 1406 | minor | quality | 多实例状态接口用户名为 User-{id} 占位 |
-| 1407 | minor | quality | 流程模拟 / 动作测试为占位实现 |
+| 1407 | minor | quality | 动作测试仍为占位实现（流程 simulate 已接入 BpmnProcessSimulator） |
 | 1408 | minor | quality | 表单 boundTable 深绑定校验缺失 |
 
 ### Wontfix
@@ -50,14 +47,22 @@
 
 ## 跟踪系统说明
 
-issue 详情存储在 `.kiro/issues/index.yaml`，格式为机器可读的 YAML。
+issue 详情为机器可读 YAML：
+
+- **待处理 / Wontfix**：`.kiro/issues/index.yaml`
+- **已修复**：`index.yaml` 中 `status: fixed` 条目
 
 查看所有未修复问题：
 ```bash
 grep "status: open" .kiro/issues/index.yaml
 ```
 
-查看特定分类：
+查看特定分类（活跃）：
 ```bash
 grep -A2 "category: security" .kiro/issues/index.yaml | grep "status: open"
+```
+
+按 ID 检索已修复条目：
+```bash
+grep -A20 'id: "1404"' .kiro/issues/index.yaml
 ```

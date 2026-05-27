@@ -106,7 +106,10 @@
       direction="btt"
       size="50%"
     >
-      <ProcessDebugPanel :function-unit-id="functionUnitId" />
+      <ProcessDebugPanel
+        :function-unit-id="functionUnitId"
+        @current-node-change="handleDebugNodeChange"
+      />
     </el-drawer>
 
     <!-- Import XML Dialog -->
@@ -159,6 +162,7 @@ const saving = ref(false)
 const autoSaving = ref(false)
 const lastAutoSaveTime = ref<Date | null>(null)
 const currentZoom = ref(1)
+let highlightedDebugNodeId: string | null = null
 
 let bpmnModeler: any = null
 let autoSaveTimer: ReturnType<typeof setTimeout> | null = null
@@ -329,6 +333,26 @@ function formatLastTaskTopologyViolations(): string {
     .join('; ')
 }
 
+function handleDebugNodeChange(nodeId: string | null) {
+  if (!bpmnModeler) return
+  const canvas = bpmnModeler.get('canvas')
+  if (highlightedDebugNodeId) {
+    canvas.removeMarker(highlightedDebugNodeId, 'debug-current')
+    highlightedDebugNodeId = null
+  }
+  if (!nodeId) return
+  const elementRegistry = bpmnModeler.get('elementRegistry')
+  const element = elementRegistry.get(nodeId)
+  if (!element) return
+  canvas.addMarker(nodeId, 'debug-current')
+  highlightedDebugNodeId = nodeId
+  try {
+    canvas.scrollToElement(element, { top: 80, bottom: 80, left: 80, right: 80 })
+  } catch {
+    // ignore scroll errors for unknown layout nodes
+  }
+}
+
 async function handleValidate() {
   if (!bpmnModeler) return
   const detail = formatLastTaskTopologyViolations()
@@ -473,6 +497,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  handleDebugNodeChange(null)
   // Clear auto-save timer
   if (autoSaveTimer) {
     clearTimeout(autoSaveTimer)
@@ -659,5 +684,10 @@ onUnmounted(() => {
 
 .djs-popup .entry:hover {
   background: rgba(219, 0, 17, 0.1) !important;
+}
+
+.djs-element.debug-current .djs-visual > :nth-child(1) {
+  stroke: #f56c6c !important;
+  stroke-width: 4px !important;
 }
 </style>

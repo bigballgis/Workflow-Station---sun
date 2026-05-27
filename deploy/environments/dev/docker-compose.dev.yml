@@ -137,6 +137,32 @@ services:
       - platform-dev-network
     restart: unless-stopped
 
+  # Superset BI
+  superset-final:
+    build:
+      context: ../../superset
+      dockerfile: Dockerfile
+    image: dev-superset
+    container_name: platform-superset-dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8088:8088"
+    environment:
+      # Keep Superset metadata in dedicated schema.
+      SQLALCHEMY_DATABASE_URI: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?options=-csearch_path%3D${SUPERSET_DB_SCHEMA:-superset}
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY:-replace_this_with_a_real_secert_key}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8088/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+    networks:
+      - platform-dev-network
+    restart: unless-stopped
+
   # ==================== Backend Services ====================
 
   # Workflow Engine Core
@@ -194,6 +220,8 @@ services:
         condition: service_healthy
       workflow-engine:
         condition: service_healthy
+      superset-final:
+        condition: service_started
     ports:
       - "${ADMIN_CENTER_PORT}:8080"
     environment:

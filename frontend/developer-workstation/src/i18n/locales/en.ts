@@ -1095,7 +1095,14 @@ export default {
     variableUpdatedLog: 'Variable {key} updated to: {value}',
     breakpointToggled: 'Breakpoint {name} {state}',
     enabled: 'enabled',
-    disabled: 'disabled'
+    disabled: 'disabled',
+    addBreakpoint: 'Add Breakpoint',
+    selectNodeForBreakpoint: 'Select node for breakpoint',
+    breakpointAdded: 'Breakpoint added: {name}',
+    stepProgress: 'Step Progress',
+    stepProgressValue: '{current} / {total}',
+    hitBreakpoint: 'Breakpoint hit, paused',
+    noSimulationSteps: 'No executable simulation steps were generated'
   },
   tags: {
     coreBusiness: 'Core Business',

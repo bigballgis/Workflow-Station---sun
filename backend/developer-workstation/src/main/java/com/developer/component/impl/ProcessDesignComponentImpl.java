@@ -14,6 +14,7 @@ import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.ProcessDefinitionRepository;
 import com.developer.repository.TableDefinitionRepository;
 import com.developer.util.BpmnLastTaskAssigneeTopologyValidator;
+import com.developer.util.BpmnProcessSimulator;
 import com.developer.util.XmlEncodingUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -137,16 +138,8 @@ public class ProcessDesignComponentImpl implements ProcessDesignComponent {
     
     @Override
     public Map<String, Object> simulate(String bpmnXml, Map<String, Object> variables) {
-        Map<String, Object> result = new HashMap<>();
-        
-        // 解析流程结构
-        Map<String, Object> processStructure = parseBpmnXml(bpmnXml);
-        
-        result.put("processStructure", processStructure);
-        result.put("variables", variables);
+        Map<String, Object> result = new LinkedHashMap<>(BpmnProcessSimulator.simulate(bpmnXml, variables));
         result.put("status", "SIMULATED");
-        result.put("steps", new ArrayList<>());
-
         return result;
     }
     

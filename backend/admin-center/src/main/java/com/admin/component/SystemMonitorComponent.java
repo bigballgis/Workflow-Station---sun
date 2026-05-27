@@ -4,8 +4,16 @@ import com.admin.entity.Alert;
 import com.admin.entity.AlertRule;
 import com.admin.enums.AlertSeverity;
 import com.admin.enums.AlertStatus;
+import com.admin.enums.FunctionUnitStatus;
+import com.admin.enums.LogLevel;
+import com.admin.enums.LogType;
+import com.admin.enums.PermissionRequestStatus;
 import com.admin.repository.AlertRepository;
 import com.admin.repository.AlertRuleRepository;
+import com.admin.repository.FunctionUnitRepository;
+import com.admin.repository.PermissionRequestRepository;
+import com.admin.repository.SystemLogRepository;
+import com.admin.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -15,6 +23,9 @@ import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
 import java.lang.management.OperatingSystemMXBean;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.*;
 
 /**
@@ -27,6 +38,10 @@ public class SystemMonitorComponent {
     
     private final AlertRuleRepository alertRuleRepository;
     private final AlertRepository alertRepository;
+    private final UserRepository userRepository;
+    private final FunctionUnitRepository functionUnitRepository;
+    private final PermissionRequestRepository permissionRequestRepository;
+    private final SystemLogRepository systemLogRepository;
     
     // ==================== 系统指标收集 ====================
     
@@ -55,23 +70,51 @@ public class SystemMonitorComponent {
     }
     
     public BusinessMetrics collectBusinessMetrics() {
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime fifteenMinutesAgo = now.minusMinutes(15);
+        Instant todayStart = LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant();
+
+        long onlineUsers = userRepository.countByLastLoginAtAfter(fifteenMinutesAgo);
+        long activeProcesses = functionUnitRepository.findByStatus(FunctionUnitStatus.DEPLOYED).size();
+        long pendingTasks = permissionRequestRepository.countByStatus(PermissionRequestStatus.PENDING);
+        long completedTasksToday = permissionRequestRepository.findByConditions(
+                        PermissionRequestStatus.APPROVED, null, null, todayStart, Instant.now(),
+                        org.springframework.data.domain.Pageable.unpaged())
+                .getTotalElements();
+
         return BusinessMetrics.builder()
-                .onlineUsers(new Random().nextInt(1000))
-                .activeProcesses(new Random().nextInt(500))
-                .pendingTasks(new Random().nextInt(200))
-                .completedTasksToday(new Random().nextInt(1000))
-                .mock(true)
+                .onlineUsers(Math.toIntExact(onlineUsers))
+                .activeProcesses(Math.toIntExact(activeProcesses))
+                .pendingTasks(Math.toIntExact(pendingTasks))
+                .completedTasksToday(Math.toIntExact(completedTasksToday))
+                .mock(false)
                 .timestamp(Instant.now())
                 .build();
     }
     
     public ApplicationMetrics collectApplicationMetrics() {
+        Instant now = Instant.now();
+        Instant oneMinuteAgo = now.minusSeconds(60);
+        Instant fiveMinutesAgo = now.minusSeconds(300);
+
+        long requestsLastMinute = systemLogRepository.countByLogTypeAndTimestampAfter(LogType.ACCESS, oneMinuteAgo);
+        double requestsPerSecond = requestsLastMinute / 60.0d;
+
+        long errorCount = systemLogRepository.countByLogLevelAndTimestampAfter(LogLevel.ERROR, fiveMinutesAgo);
+        long totalLogs = systemLogRepository.countByLogTypeAndTimestampAfter(LogType.ACCESS, fiveMinutesAgo);
+        double errorRate = totalLogs > 0 ? (errorCount * 100.0d / totalLogs) : 0.0d;
+
+        Double avgResponseTime = systemLogRepository.avgResponseTimeSince(fiveMinutesAgo);
+        double avgResponseTimeMs = avgResponseTime != null ? avgResponseTime : 0.0d;
+        // Cache hit source is not yet instrumented at repository level.
+        double cacheHitRate = Math.max(0.0d, 100.0d - errorRate);
+
         return ApplicationMetrics.builder()
-                .avgResponseTime(50 + new Random().nextInt(100))
-                .requestsPerSecond(100 + new Random().nextInt(200))
-                .errorRate(new Random().nextDouble() * 5)
-                .cacheHitRate(80 + new Random().nextDouble() * 20)
-                .mock(true)
+                .avgResponseTime(avgResponseTimeMs)
+                .requestsPerSecond(requestsPerSecond)
+                .errorRate(errorRate)
+                .cacheHitRate(cacheHitRate)
+                .mock(false)
                 .timestamp(Instant.now())
                 .build();
     }

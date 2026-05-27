@@ -50,36 +50,74 @@
             :label="t('debug.executionLog')"
             name="logs"
           >
-            <ExecutionLogViewer :logs="executionLogs" />
+            <ExecutionLogViewer
+              :logs="executionLogs"
+              @clear="executionLogs = []"
+            />
           </el-tab-pane>
           <el-tab-pane
             :label="t('debug.breakpoints')"
             name="breakpoints"
           >
-            <div class="breakpoint-list">
-              <div
-                v-for="bp in breakpoints"
-                :key="bp.nodeId"
-                class="breakpoint-item"
-              >
-                <el-checkbox
-                  v-model="bp.enabled"
-                  @change="handleBreakpointToggle(bp)"
-                />
-                <span class="node-name">{{ bp.nodeName }}</span>
-                <el-button
-                  link
-                  type="danger"
+            <div class="breakpoint-section">
+              <div class="breakpoint-toolbar">
+                <el-select
+                  v-model="breakpointCandidate"
+                  :placeholder="t('debug.selectNodeForBreakpoint')"
                   size="small"
-                  @click="removeBreakpoint(bp.nodeId)"
+                  filterable
+                  clearable
+                  style="flex: 1;"
                 >
-                  <el-icon><Delete /></el-icon>
+                  <el-option
+                    v-for="node in breakpointCandidates"
+                    :key="node.id"
+                    :label="`${node.name} (${node.type})`"
+                    :value="node.id"
+                    :disabled="hasBreakpoint(node.id)"
+                  />
+                </el-select>
+                <el-button
+                  size="small"
+                  type="primary"
+                  :disabled="!breakpointCandidate"
+                  @click="addBreakpoint(breakpointCandidate!)"
+                >
+                  {{ t('debug.addBreakpoint') }}
                 </el-button>
               </div>
-              <el-empty
-                v-if="!breakpoints.length"
-                :description="t('debug.noBreakpoints')"
-              />
+
+              <div class="breakpoint-list">
+                <div
+                  v-for="bp in breakpoints"
+                  :key="bp.nodeId"
+                  class="breakpoint-item"
+                >
+                  <el-checkbox
+                    v-model="bp.enabled"
+                    @change="handleBreakpointToggle(bp)"
+                  />
+                  <span class="node-name">{{ bp.nodeName }}</span>
+                  <el-tag
+                    size="small"
+                    type="info"
+                  >
+                    {{ bp.nodeType }}
+                  </el-tag>
+                  <el-button
+                    link
+                    type="danger"
+                    size="small"
+                    @click="removeBreakpoint(bp.nodeId)"
+                  >
+                    <el-icon><Delete /></el-icon>
+                  </el-button>
+                </div>
+                <el-empty
+                  v-if="!breakpoints.length"
+                  :description="t('debug.noBreakpoints')"
+                />
+              </div>
             </div>
           </el-tab-pane>
         </el-tabs>
@@ -94,6 +132,13 @@
             </el-tag>
           </div>
           <div
+            v-if="isDebugging && simulationSteps.length"
+            class="status-item"
+          >
+            <span class="label">{{ t('debug.stepProgress') }}:</span>
+            <span class="value">{{ stepProgressText }}</span>
+          </div>
+          <div
             v-if="currentNode"
             class="status-item"
           >
@@ -101,7 +146,7 @@
             <span class="value">{{ currentNode.name }}</span>
           </div>
           <div
-            v-if="executionTime"
+            v-if="executionTime !== null"
             class="status-item"
           >
             <span class="label">{{ t('debug.executionTime') }}:</span>
@@ -121,7 +166,7 @@
             <el-form-item
               v-for="(value, key) in inputVariables"
               :key="key"
-              :label="key"
+              :label="String(key)"
             >
               <el-input v-model="inputVariables[key]" />
             </el-form-item>
@@ -152,7 +197,22 @@ const { t } = useI18n()
 interface Breakpoint {
   nodeId: string
   nodeName: string
+  nodeType: string
   enabled: boolean
+}
+
+interface ProcessNode {
+  id: string
+  name: string
+  type: string
+}
+
+interface SimulationStep {
+  nodeId: string
+  nodeName: string
+  nodeType: string
+  message?: string
+  variables?: Record<string, any>
 }
 
 interface ExecutionLog {
@@ -166,17 +226,39 @@ interface ExecutionLog {
 
 const props = defineProps<{ functionUnitId: number }>()
 
+const emit = defineEmits<{
+  (e: 'current-node-change', nodeId: string | null): void
+}>()
+
+const BREAKPOINT_NODE_TYPES = new Set([
+  'startEvent',
+  'endEvent',
+  'userTask',
+  'serviceTask',
+  'scriptTask',
+  'businessRuleTask',
+  'exclusiveGateway',
+  'parallelGateway',
+  'inclusiveGateway',
+  'subProcess',
+  'callActivity'
+])
+
 const activeTab = ref('variables')
 const isDebugging = ref(false)
 const isPaused = ref(false)
 const starting = ref(false)
-const currentNode = ref<{ id: string; name: string } | null>(null)
+const currentNode = ref<{ id: string; name: string; type?: string } | null>(null)
 const currentVariables = ref<Record<string, any>>({})
 const executionLogs = ref<ExecutionLog[]>([])
 const breakpoints = ref<Breakpoint[]>([])
 const inputVariables = reactive<Record<string, string>>({ initiator: 'admin' })
 const executionTime = ref<number | null>(null)
 const startTime = ref<number>(0)
+const simulationSteps = ref<SimulationStep[]>([])
+const stepIndex = ref(-1)
+const processNodes = ref<ProcessNode[]>([])
+const breakpointCandidate = ref<string | null>(null)
 
 const statusText = computed(() => {
   if (!isDebugging.value) return t('debug.notStarted')
@@ -190,77 +272,226 @@ const statusTagType = computed(() => {
   return 'success'
 })
 
+const stepProgressText = computed(() => {
+  if (!simulationSteps.value.length || stepIndex.value < 0) return '-'
+  return t('debug.stepProgressValue', {
+    current: stepIndex.value + 1,
+    total: simulationSteps.value.length
+  })
+})
+
+const breakpointCandidates = computed(() =>
+  processNodes.value.filter(node => BREAKPOINT_NODE_TYPES.has(node.type))
+)
+
+function hasBreakpoint(nodeId: string): boolean {
+  return breakpoints.value.some(bp => bp.nodeId === nodeId)
+}
+
 async function handleStartDebug() {
   starting.value = true
+  resetDebugSession(false)
   try {
-    const variables = { ...inputVariables }
+    const variables = parseInputVariables()
     const res = await functionUnitApi.simulateProcess(props.functionUnitId, variables)
-    
+    const data = res?.data
+    if (!data) {
+      throw new Error(t('debug.startDebugFailed'))
+    }
+
+    if (data.error) {
+      ElMessage.error(String(data.error))
+      addLog('error', `${t('debug.executionError')}: ${data.error}`)
+      return
+    }
+
+    simulationSteps.value = Array.isArray(data.steps) ? data.steps : []
+    processNodes.value = extractProcessNodes(data.processStructure)
+
+    if (!simulationSteps.value.length) {
+      ElMessage.warning(t('debug.noSimulationSteps'))
+      return
+    }
+
     isDebugging.value = true
-    isPaused.value = false
+    isPaused.value = true
     startTime.value = Date.now()
-    executionLogs.value = []
-    
-    // Add initial log
+    executionTime.value = null
+    stepIndex.value = 0
+
     addLog('info', t('debug.debugStarted'), undefined, variables)
-    
-    // Process simulation result
-    if (res?.data) {
-      processSimulationResult(res.data)
+    applyStep(stepIndex.value, { log: true })
+
+    if (data.completed && stepIndex.value === simulationSteps.value.length - 1) {
+      finishDebug(true)
     }
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.message || t('debug.startDebugFailed'))
+    ElMessage.error(e.response?.data?.message || e.message || t('debug.startDebugFailed'))
   } finally {
     starting.value = false
   }
 }
 
-function processSimulationResult(result: any) {
-  if (result.steps) {
-    result.steps.forEach((step: any) => {
-      addLog('info', `${t('debug.executeNode')}: ${step.nodeName}`, step.nodeId, step.variables)
-    })
+function parseInputVariables(): Record<string, any> {
+  const variables: Record<string, any> = {}
+  for (const [key, rawValue] of Object.entries(inputVariables)) {
+    if (!key.trim()) continue
+    const trimmed = String(rawValue ?? '').trim()
+    if (trimmed === 'true') {
+      variables[key] = true
+    } else if (trimmed === 'false') {
+      variables[key] = false
+    } else if (trimmed !== '' && !Number.isNaN(Number(trimmed))) {
+      variables[key] = Number(trimmed)
+    } else {
+      variables[key] = rawValue
+    }
   }
-  
-  if (result.completed) {
-    executionTime.value = Date.now() - startTime.value
-    addLog('success', t('debug.processCompleted'))
-    isDebugging.value = false
+  return variables
+}
+
+function extractProcessNodes(processStructure: any): ProcessNode[] {
+  const nodes = Array.isArray(processStructure?.nodes) ? processStructure.nodes : []
+  return nodes
+    .filter((node: any) => node?.id && node?.type && node.type !== 'process')
+    .map((node: any) => ({
+      id: String(node.id),
+      type: String(node.type),
+      name: node.name ? String(node.name) : String(node.id)
+    }))
+}
+
+function applyStep(index: number, options: { log?: boolean } = {}) {
+  const step = simulationSteps.value[index]
+  if (!step) return
+
+  currentNode.value = {
+    id: step.nodeId,
+    name: step.nodeName || step.nodeId,
+    type: step.nodeType
   }
-  
-  if (result.error) {
-    addLog('error', `${t('debug.executionError')}: ${result.error}`)
-    isDebugging.value = false
+  currentVariables.value = { ...(step.variables || {}) }
+  emit('current-node-change', step.nodeId)
+
+  if (options.log) {
+    addLog(
+      step.nodeType === 'endEvent' ? 'success' : 'info',
+      step.message || `${t('debug.executeNode')}: ${step.nodeName || step.nodeId}`,
+      step.nodeId,
+      step.nodeName,
+      step.variables
+    )
   }
-  
-  currentVariables.value = result.variables || {}
 }
 
 function handleStepOver() {
-  addLog('info', t('debug.steppingOver'))
-  // Simulate step execution
+  if (!isDebugging.value || !isPaused.value) return
+  if (stepIndex.value >= simulationSteps.value.length - 1) {
+    finishDebug(true)
+    return
+  }
+
+  stepIndex.value += 1
+  applyStep(stepIndex.value, { log: true })
+
+  if (isBreakpointHit(stepIndex.value)) {
+    isPaused.value = true
+    addLog('warning', t('debug.hitBreakpoint'), simulationSteps.value[stepIndex.value].nodeId,
+      simulationSteps.value[stepIndex.value].nodeName)
+    return
+  }
+
+  if (stepIndex.value >= simulationSteps.value.length - 1) {
+    finishDebug(true)
+    return
+  }
+
   isPaused.value = true
 }
 
 function handleContinue() {
+  if (!isDebugging.value || !isPaused.value) return
+
   isPaused.value = false
   addLog('info', t('debug.continuing'))
+
+  while (stepIndex.value < simulationSteps.value.length - 1) {
+    stepIndex.value += 1
+    applyStep(stepIndex.value, { log: true })
+
+    if (isBreakpointHit(stepIndex.value) && stepIndex.value < simulationSteps.value.length - 1) {
+      isPaused.value = true
+      addLog('warning', t('debug.hitBreakpoint'), simulationSteps.value[stepIndex.value].nodeId,
+        simulationSteps.value[stepIndex.value].nodeName)
+      return
+    }
+  }
+
+  finishDebug(true)
+}
+
+function isBreakpointHit(index: number): boolean {
+  const step = simulationSteps.value[index]
+  if (!step) return false
+  return breakpoints.value.some(bp => bp.enabled && bp.nodeId === step.nodeId)
+}
+
+function finishDebug(completed: boolean) {
+  if (completed) {
+    executionTime.value = Date.now() - startTime.value
+    addLog('success', t('debug.processCompleted'))
+  }
+  isDebugging.value = false
+  isPaused.value = false
+  emit('current-node-change', null)
 }
 
 function handleStopDebug() {
-  isDebugging.value = false
-  isPaused.value = false
   executionTime.value = Date.now() - startTime.value
   addLog('warning', t('debug.debugStopped'))
+  resetDebugSession(true)
+}
+
+function resetDebugSession(keepLogs: boolean) {
+  isDebugging.value = false
+  isPaused.value = false
+  currentNode.value = null
+  currentVariables.value = {}
+  simulationSteps.value = []
+  stepIndex.value = -1
+  processNodes.value = []
+  breakpointCandidate.value = null
+  if (!keepLogs) {
+    executionLogs.value = []
+    executionTime.value = null
+  }
+  emit('current-node-change', null)
 }
 
 function handleVariableUpdate(key: string, value: any) {
   currentVariables.value[key] = value
-  addLog('info', `${t('debug.variableUpdatedLog', { key, value: JSON.stringify(value) })}`)
+  addLog('info', t('debug.variableUpdatedLog', { key, value: JSON.stringify(value) }))
 }
 
 function handleBreakpointToggle(bp: Breakpoint) {
-  addLog('info', `${t('debug.breakpointToggled', { name: bp.nodeName, state: bp.enabled ? t('debug.enabled') : t('debug.disabled') })}`)
+  addLog('info', t('debug.breakpointToggled', {
+    name: bp.nodeName,
+    state: bp.enabled ? t('debug.enabled') : t('debug.disabled')
+  }))
+}
+
+function addBreakpoint(nodeId: string) {
+  const node = processNodes.value.find(item => item.id === nodeId)
+  if (!node || hasBreakpoint(nodeId)) return
+
+  breakpoints.value.push({
+    nodeId: node.id,
+    nodeName: node.name,
+    nodeType: node.type,
+    enabled: true
+  })
+  breakpointCandidate.value = null
+  addLog('info', t('debug.breakpointAdded', { name: node.name }))
 }
 
 function removeBreakpoint(nodeId: string) {
@@ -281,12 +512,18 @@ function addInputVariable() {
   }).catch(() => {})
 }
 
-function addLog(level: string, message: string, nodeId?: string, variables?: Record<string, any>) {
+function addLog(
+  level: string,
+  message: string,
+  nodeId?: string,
+  nodeName?: string,
+  variables?: Record<string, any>
+) {
   executionLogs.value.push({
     timestamp: new Date().toISOString(),
     level,
     nodeId,
-    nodeName: nodeId ? `Node-${nodeId}` : undefined,
+    nodeName: nodeName || (nodeId ? nodeId : undefined),
     message,
     variables
   })
@@ -306,9 +543,9 @@ function addLog(level: string, message: string, nodeId?: string, variables?: Rec
   align-items: center;
   padding: 12px 16px;
   border-bottom: 1px solid #e6e6e6;
-  
+
   h3 { margin: 0; }
-  
+
   .debug-actions {
     display: flex;
     gap: 8px;
@@ -336,13 +573,13 @@ function addLog(level: string, message: string, nodeId?: string, variables?: Rec
 
 .execution-status {
   margin-bottom: 20px;
-  
+
   .status-item {
     display: flex;
     align-items: center;
     gap: 8px;
     margin-bottom: 8px;
-    
+
     .label {
       color: #909399;
       min-width: 70px;
@@ -357,6 +594,14 @@ function addLog(level: string, message: string, nodeId?: string, variables?: Rec
   }
 }
 
+.breakpoint-section {
+  .breakpoint-toolbar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+}
+
 .breakpoint-list {
   .breakpoint-item {
     display: flex;
@@ -364,7 +609,7 @@ function addLog(level: string, message: string, nodeId?: string, variables?: Rec
     gap: 8px;
     padding: 8px;
     border-bottom: 1px solid #f0f0f0;
-    
+
     .node-name {
       flex: 1;
     }

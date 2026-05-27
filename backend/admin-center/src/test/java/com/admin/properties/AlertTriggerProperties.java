@@ -5,6 +5,10 @@ import com.admin.entity.AlertRule;
 import com.admin.enums.AlertSeverity;
 import com.admin.repository.AlertRepository;
 import com.admin.repository.AlertRuleRepository;
+import com.admin.repository.FunctionUnitRepository;
+import com.admin.repository.PermissionRequestRepository;
+import com.admin.repository.SystemLogRepository;
+import com.admin.repository.UserRepository;
 import net.jqwik.api.*;
 import net.jqwik.api.constraints.DoubleRange;
 import net.jqwik.api.lifecycle.BeforeTry;
@@ -25,7 +29,12 @@ class AlertTriggerProperties {
     void setUp() {
         var ruleRepo = Mockito.mock(AlertRuleRepository.class);
         var alertRepo = Mockito.mock(AlertRepository.class);
-        component = new SystemMonitorComponent(ruleRepo, alertRepo);
+        var userRepo = Mockito.mock(UserRepository.class);
+        var functionUnitRepo = Mockito.mock(FunctionUnitRepository.class);
+        var permissionRequestRepo = Mockito.mock(PermissionRequestRepository.class);
+        var systemLogRepo = Mockito.mock(SystemLogRepository.class);
+        component = new SystemMonitorComponent(
+                ruleRepo, alertRepo, userRepo, functionUnitRepo, permissionRequestRepo, systemLogRepo);
     }
     
     /**

@@ -1091,7 +1091,14 @@ export default {
     variableUpdatedLog: '變數 {key} 已更新為: {value}',
     breakpointToggled: '中斷點 {name} {state}',
     enabled: '已啟用',
-    disabled: '已停用'
+    disabled: '已停用',
+    addBreakpoint: '新增中斷點',
+    selectNodeForBreakpoint: '選擇節點新增中斷點',
+    breakpointAdded: '已新增中斷點: {name}',
+    stepProgress: '步驟進度',
+    stepProgressValue: '{current} / {total}',
+    hitBreakpoint: '命中中斷點，已暫停',
+    noSimulationSteps: '未產生可執行的模擬步驟'
   },
   tags: {
     coreBusiness: '核心業務',
