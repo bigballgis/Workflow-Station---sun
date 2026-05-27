@@ -1,5 +1,7 @@
 package com.developer.util;
 
+import com.developer.entity.FieldDefinition;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -11,6 +13,7 @@ import java.util.regex.Pattern;
 
 /**
  * Lightweight BPMN path simulator for process design debug (no Flowable runtime).
+ * Supports multi-instance sub-process expansion with mock collection rows.
  */
 public final class BpmnProcessSimulator {
 
@@ -30,8 +33,19 @@ public final class BpmnProcessSimulator {
     }
 
     public static Map<String, Object> simulate(String bpmnXml, Map<String, Object> variables) {
+        return simulate(bpmnXml, variables, Map.of());
+    }
+
+    /**
+     * @param fieldsByTableId sub-table field definitions keyed by table id (for MI mock collection generation)
+     */
+    public static Map<String, Object> simulate(
+            String bpmnXml,
+            Map<String, Object> variables,
+            Map<Long, List<FieldDefinition>> fieldsByTableId) {
         Map<String, Object> result = new LinkedHashMap<>();
         Map<String, Object> workingVars = variables != null ? new LinkedHashMap<>(variables) : new LinkedHashMap<>();
+        Map<Long, List<FieldDefinition>> fieldLookup = fieldsByTableId != null ? fieldsByTableId : Map.of();
 
         if (bpmnXml == null || bpmnXml.trim().isEmpty()) {
             result.put("error", "BPMN XML is empty");
@@ -41,11 +55,10 @@ public final class BpmnProcessSimulator {
             return result;
         }
 
-        Map<String, NodeInfo> nodes = parseNodes(bpmnXml);
-        Map<String, List<FlowEdge>> outgoing = parseOutgoingFlows(bpmnXml);
-        Map<String, Object> processStructure = buildStructure(nodes, outgoing);
+        BpmnGraphParser.ParsedBpmnGraph graph = BpmnGraphParser.parse(bpmnXml);
+        Map<String, Object> processStructure = buildStructure(graph);
 
-        Optional<String> startId = nodes.values().stream()
+        Optional<String> startId = graph.mainNodes().values().stream()
                 .filter(n -> "startEvent".equals(n.type()))
                 .map(NodeInfo::id)
                 .findFirst();
@@ -59,69 +72,332 @@ public final class BpmnProcessSimulator {
             return result;
         }
 
-        List<Map<String, Object>> steps = new ArrayList<>();
-        String currentId = startId.get();
-        Map<String, Integer> visitCount = new HashMap<>();
-        boolean completed = false;
-        String error = null;
+        SimulationState state = new SimulationState();
+        walkMainPath(
+                graph,
+                fieldLookup,
+                startId.get(),
+                workingVars,
+                state,
+                null);
 
-        while (currentId != null && steps.size() < MAX_STEPS) {
-            NodeInfo node = nodes.get(currentId);
-            if (node == null) {
-                error = "Unknown node: " + currentId;
-                break;
-            }
-
-            int visits = visitCount.merge(currentId, 1, Integer::sum);
-            if (visits > 3) {
-                error = "Possible cycle detected at node: " + node.displayName();
-                break;
-            }
-
-            Map<String, Object> step = new LinkedHashMap<>();
-            step.put("nodeId", node.id());
-            step.put("nodeName", node.displayName());
-            step.put("nodeType", node.type());
-            step.put("variables", new LinkedHashMap<>(workingVars));
-            step.put("message", describeNodeEntry(node.type()));
-            steps.add(step);
-
-            if ("endEvent".equals(node.type())) {
-                completed = true;
-                break;
-            }
-
-            List<FlowEdge> edges = outgoing.getOrDefault(currentId, List.of());
-            if (edges.isEmpty()) {
-                error = "No outgoing flow from node: " + node.displayName();
-                break;
-            }
-
-            Optional<FlowEdge> nextEdge = selectNextFlow(node, edges, workingVars);
-            if (nextEdge.isEmpty()) {
-                error = "No matching outgoing flow from gateway: " + node.displayName();
-                break;
-            }
-
-            currentId = nextEdge.get().targetId();
-        }
-
-        if (steps.size() >= MAX_STEPS && !completed) {
-            error = "Simulation exceeded maximum step limit (" + MAX_STEPS + ")";
+        if (state.steps.size() >= MAX_STEPS && !state.completed) {
+            state.error = "Simulation exceeded maximum step limit (" + MAX_STEPS + ")";
         }
 
         result.put("processStructure", processStructure);
         result.put("variables", workingVars);
-        result.put("steps", steps);
-        result.put("totalSteps", steps.size());
-        result.put("completed", completed);
-        if (error != null) {
-            result.put("error", error);
+        result.put("steps", state.steps);
+        result.put("totalSteps", state.steps.size());
+        result.put("completed", state.completed);
+        if (state.error != null) {
+            result.put("error", state.error);
+        }
+        if (!state.generatedCollections.isEmpty()) {
+            result.put("generatedCollections", state.generatedCollections);
         }
         return result;
     }
 
-    private static String describeNodeEntry(String type) {
+    private static void walkMainPath(
+            BpmnGraphParser.ParsedBpmnGraph graph,
+            Map<Long, List<FieldDefinition>> fieldsByTableId,
+            String currentId,
+            Map<String, Object> workingVars,
+            SimulationState state,
+            String miVisitScope) {
+        while (currentId != null && state.steps.size() < MAX_STEPS && state.error == null) {
+            NodeInfo node = graph.mainNodes().get(currentId);
+            if (node == null) {
+                state.error = "Unknown node: " + currentId;
+                return;
+            }
+
+            String visitKey = miVisitScope != null ? miVisitScope + ":" + currentId : currentId;
+            int visits = state.visitCount.merge(visitKey, 1, Integer::sum);
+            if (visits > 3) {
+                state.error = "Possible cycle detected at node: " + node.displayName();
+                return;
+            }
+
+            if ("subProcess".equals(node.type())) {
+                BpmnGraphParser.SubProcessScope scope = graph.subProcesses().get(node.id());
+                if (scope != null && scope.miLoop().isPresent()) {
+                    expandMultiInstanceSubProcess(scope, fieldsByTableId, workingVars, state);
+                    currentId = nextMainNodeAfter(graph, node.id());
+                    continue;
+                }
+            }
+
+            addStep(state, node, workingVars, null);
+
+            if ("endEvent".equals(node.type())) {
+                state.completed = true;
+                return;
+            }
+
+            currentId = selectNextNodeId(node, graph.mainOutgoing().getOrDefault(currentId, List.of()), workingVars, state);
+        }
+    }
+
+    private static String nextMainNodeAfter(BpmnGraphParser.ParsedBpmnGraph graph, String subProcessId) {
+        List<FlowEdge> edges = graph.mainOutgoing().getOrDefault(subProcessId, List.of());
+        if (edges.isEmpty()) {
+            return null;
+        }
+        return edges.get(0).targetId();
+    }
+
+    private static void expandMultiInstanceSubProcess(
+            BpmnGraphParser.SubProcessScope scope,
+            Map<Long, List<FieldDefinition>> fieldsByTableId,
+            Map<String, Object> workingVars,
+            SimulationState state) {
+        BpmnGraphParser.MiLoopConfig mi = scope.miLoop().orElseThrow();
+        List<Map<String, Object>> collection = resolveCollection(
+                mi.collectionVariable(),
+                scope.subTableId(),
+                fieldsByTableId,
+                workingVars,
+                state);
+
+        if (collection.isEmpty()) {
+            state.error = "Multi-instance collection is empty: " + mi.collectionVariable();
+            return;
+        }
+
+        workingVars.put(mi.collectionVariable(), collection);
+
+        boolean parallelMode = !mi.sequential();
+        int totalInstances = collection.size();
+        int nrOfCompletedInstances = 0;
+
+        NodeInfo subProcessNode = new NodeInfo(scope.id(), "subProcess", scope.name());
+        Map<String, Object> subProcessMi = baseMiContext(scope, mi, null, 0, totalInstances);
+        subProcessMi.put("phase", "enter");
+        subProcessMi.put("parallelMode", parallelMode);
+        addStep(state, subProcessNode, workingVars, subProcessMi);
+
+        int instancesToWalk = parallelMode ? 1 : totalInstances;
+        for (int i = 0; i < instancesToWalk && state.steps.size() < MAX_STEPS && state.error == null; i++) {
+            Map<String, Object> item = collection.get(i);
+            Map<String, Object> instanceVars = new LinkedHashMap<>(workingVars);
+            instanceVars.put(mi.elementVariable(), item);
+            instanceVars.put("nrOfInstances", totalInstances);
+            instanceVars.put("nrOfCompletedInstances", nrOfCompletedInstances);
+
+            Map<String, Object> instanceMi = baseMiContext(scope, mi, item, i + 1, totalInstances);
+            instanceMi.put("phase", "instance");
+            instanceMi.put("parallelMode", parallelMode);
+
+            walkInnerScope(scope, instanceVars, state, instanceMi, i + 1);
+
+            nrOfCompletedInstances++;
+            instanceVars.put("nrOfCompletedInstances", nrOfCompletedInstances);
+
+            if (!parallelMode && shouldCompleteMultiInstance(mi.completionCondition(), nrOfCompletedInstances, totalInstances)) {
+                break;
+            }
+        }
+
+        Map<String, Object> exitMi = baseMiContext(scope, mi, null, nrOfCompletedInstances, totalInstances);
+        exitMi.put("phase", "exit");
+        exitMi.put("parallelMode", parallelMode);
+        exitMi.put("completedInstances", nrOfCompletedInstances);
+        addStep(state, subProcessNode, workingVars, exitMi);
+    }
+
+    /**
+     * Evaluates common Flowable multi-instance completion expressions for debug simulation.
+     */
+    static boolean shouldCompleteMultiInstance(String completionCondition, int nrOfCompletedInstances, int nrOfInstances) {
+        if (completionCondition == null || completionCondition.isBlank()) {
+            return false;
+        }
+        if (nrOfInstances <= 0 || nrOfCompletedInstances <= 0) {
+            return false;
+        }
+
+        String expression = completionCondition.trim();
+        if (expression.startsWith("${") && expression.endsWith("}")) {
+            expression = expression.substring(2, expression.length() - 1).trim();
+        }
+
+        Map<String, Object> miVars = Map.of(
+                "nrOfCompletedInstances", nrOfCompletedInstances,
+                "nrOfInstances", nrOfInstances);
+
+        Matcher ratioEq = Pattern.compile(
+                "nrOfCompletedInstances\\s*/\\s*nrOfInstances\\s*==\\s*([0-9.]+)").matcher(expression);
+        if (ratioEq.find()) {
+            double target = Double.parseDouble(ratioEq.group(1));
+            return Math.abs(((double) nrOfCompletedInstances / nrOfInstances) - target) < 0.0001;
+        }
+
+        Matcher ratioGte = Pattern.compile(
+                "nrOfCompletedInstances\\s*/\\s*nrOfInstances\\s*>=\\s*([0-9.]+)").matcher(expression);
+        if (ratioGte.find()) {
+            double target = Double.parseDouble(ratioGte.group(1));
+            return ((double) nrOfCompletedInstances / nrOfInstances) >= target - 0.0001;
+        }
+
+        if (expression.contains("nrOfCompletedInstances") && expression.contains("nrOfInstances")) {
+            String normalized = expression
+                    .replace("nrOfCompletedInstances", String.valueOf(nrOfCompletedInstances))
+                    .replace("nrOfInstances", String.valueOf(nrOfInstances));
+            if (normalized.contains("==")) {
+                String[] parts = normalized.split("==", 2);
+                if (parts.length == 2) {
+                    try {
+                        double left = Double.parseDouble(parts[0].trim());
+                        double right = Double.parseDouble(parts[1].trim());
+                        return Math.abs(left - right) < 0.0001;
+                    } catch (NumberFormatException ignored) {
+                        return evaluateSimpleCondition(expression, miVars);
+                    }
+                }
+            }
+        }
+
+        return evaluateSimpleCondition(expression, miVars);
+    }
+
+    private static Map<String, Object> baseMiContext(
+            BpmnGraphParser.SubProcessScope scope,
+            BpmnGraphParser.MiLoopConfig mi,
+            Map<String, Object> currentItem,
+            int instanceIndex,
+            int totalInstances) {
+        Map<String, Object> ctx = new LinkedHashMap<>();
+        ctx.put("subProcessId", scope.id());
+        ctx.put("subProcessName", scope.name());
+        ctx.put("collectionVariable", mi.collectionVariable());
+        ctx.put("elementVariable", mi.elementVariable());
+        ctx.put("sequential", mi.sequential());
+        ctx.put("parallelMode", !mi.sequential());
+        if (mi.completionCondition() != null && !mi.completionCondition().isBlank()) {
+            ctx.put("completionCondition", mi.completionCondition());
+        }
+        ctx.put("instanceIndex", instanceIndex);
+        ctx.put("totalInstances", totalInstances);
+        if (scope.subTableId() != null) {
+            ctx.put("subTableId", scope.subTableId());
+        }
+        if (currentItem != null) {
+            ctx.put("currentItem", currentItem);
+        }
+        return ctx;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> resolveCollection(
+            String collectionVariable,
+            Long subTableId,
+            Map<Long, List<FieldDefinition>> fieldsByTableId,
+            Map<String, Object> workingVars,
+            SimulationState state) {
+        Object raw = workingVars.get(collectionVariable);
+        if (raw instanceof List<?> list && !list.isEmpty()) {
+            List<Map<String, Object>> normalized = new ArrayList<>();
+            for (Object item : list) {
+                if (item instanceof Map<?, ?> map) {
+                    normalized.add(new LinkedHashMap<>((Map<String, Object>) map));
+                }
+            }
+            if (!normalized.isEmpty()) {
+                return normalized;
+            }
+        }
+
+        List<FieldDefinition> fields = subTableId != null
+                ? fieldsByTableId.getOrDefault(subTableId, List.of())
+                : List.of();
+        int count = DebugMockCollectionGenerator.defaultInstanceCount();
+        List<Map<String, Object>> generated = DebugMockCollectionGenerator.generate(fields, count);
+        workingVars.put(collectionVariable, generated);
+        state.generatedCollections.put(collectionVariable, Map.of(
+                "subTableId", subTableId,
+                "instanceCount", generated.size(),
+                "source", "autoFromSubTableFields"
+        ));
+        return generated;
+    }
+
+    private static void walkInnerScope(
+            BpmnGraphParser.SubProcessScope scope,
+            Map<String, Object> instanceVars,
+            SimulationState state,
+            Map<String, Object> instanceMi,
+            int instanceNumber) {
+        Optional<String> innerStart = scope.nodes().values().stream()
+                .filter(n -> "startEvent".equals(n.type()))
+                .map(NodeInfo::id)
+                .findFirst();
+        if (innerStart.isEmpty()) {
+            state.error = "Multi-instance sub-process is missing a start event: " + scope.name();
+            return;
+        }
+
+        String currentId = innerStart.get();
+        String visitScope = scope.id() + "#" + instanceNumber;
+
+        while (currentId != null && state.steps.size() < MAX_STEPS && state.error == null) {
+            NodeInfo node = scope.nodes().get(currentId);
+            if (node == null) {
+                state.error = "Unknown inner node: " + currentId;
+                return;
+            }
+
+            String visitKey = visitScope + ":" + currentId;
+            int visits = state.visitCount.merge(visitKey, 1, Integer::sum);
+            if (visits > 3) {
+                state.error = "Possible cycle detected at inner node: " + node.displayName();
+                return;
+            }
+
+            addStep(state, node, instanceVars, instanceMi);
+
+            if ("endEvent".equals(node.type())) {
+                return;
+            }
+
+            currentId = selectNextNodeId(node, scope.outgoing().getOrDefault(currentId, List.of()), instanceVars, state);
+        }
+    }
+
+    private static void addStep(
+            SimulationState state,
+            NodeInfo node,
+            Map<String, Object> variables,
+            Map<String, Object> miContext) {
+        Map<String, Object> step = new LinkedHashMap<>();
+        step.put("nodeId", node.id());
+        step.put("nodeName", node.displayName());
+        step.put("nodeType", node.type());
+        step.put("variables", new LinkedHashMap<>(variables));
+        step.put("message", describeNodeEntry(node.type(), miContext));
+        if (miContext != null && !miContext.isEmpty()) {
+            step.put("miContext", new LinkedHashMap<>(miContext));
+        }
+        state.steps.add(step);
+    }
+
+    private static String describeNodeEntry(String type, Map<String, Object> miContext) {
+        if (miContext != null && "subProcess".equals(type)) {
+            String phase = String.valueOf(miContext.getOrDefault("phase", ""));
+            boolean parallel = Boolean.TRUE.equals(miContext.get("parallelMode"));
+            return switch (phase) {
+                case "enter" -> parallel
+                        ? "Entering parallel multi-instance sub-process (preview one instance at a time)"
+                        : "Entering multi-instance sub-process";
+                case "exit" -> "Multi-instance sub-process completed";
+                default -> "Entered sub-process";
+            };
+        }
+        if (miContext != null && miContext.get("instanceIndex") instanceof Number idx) {
+            Object total = miContext.get("totalInstances");
+            return "Multi-instance step (instance " + idx + "/" + total + ")";
+        }
         return switch (type) {
             case "startEvent" -> "Process started";
             case "endEvent" -> "Process ended";
@@ -138,7 +414,24 @@ public final class BpmnProcessSimulator {
         };
     }
 
-    private static Optional<FlowEdge> selectNextFlow(
+    private static String selectNextNodeId(
+            NodeInfo node,
+            List<FlowEdge> edges,
+            Map<String, Object> workingVars,
+            SimulationState state) {
+        if (edges.isEmpty()) {
+            state.error = "No outgoing flow from node: " + node.displayName();
+            return null;
+        }
+        Optional<FlowEdge> nextEdge = selectNextFlow(node, edges, workingVars);
+        if (nextEdge.isEmpty()) {
+            state.error = "No matching outgoing flow from gateway: " + node.displayName();
+            return null;
+        }
+        return nextEdge.get().targetId();
+    }
+
+    static Optional<FlowEdge> selectNextFlow(
             NodeInfo node,
             List<FlowEdge> edges,
             Map<String, Object> variables) {
@@ -249,77 +542,28 @@ public final class BpmnProcessSimulator {
         return Double.parseDouble(String.valueOf(value));
     }
 
-    private static Map<String, NodeInfo> parseNodes(String bpmnXml) {
-        Map<String, NodeInfo> nodes = new LinkedHashMap<>();
-        Matcher matcher = NODE_PATTERN.matcher(bpmnXml);
-        while (matcher.find()) {
-            String type = matcher.group(1) != null ? matcher.group(1) : matcher.group(4);
-            String id = matcher.group(2) != null ? matcher.group(2) : matcher.group(5);
-            String name = matcher.group(3) != null ? matcher.group(3) : matcher.group(6);
-            if (type == null || id == null || "sequenceFlow".equals(type) || "process".equals(type)
-                    || "definitions".equals(type)) {
-                continue;
-            }
-            nodes.putIfAbsent(id, new NodeInfo(id, type, name != null ? name : ""));
-        }
-        return nodes;
-    }
-
-    private static Map<String, List<FlowEdge>> parseOutgoingFlows(String bpmnXml) {
-        Map<String, List<FlowEdge>> outgoing = new LinkedHashMap<>();
-        Matcher flowMatcher = SEQUENCE_FLOW_PATTERN.matcher(bpmnXml);
-        while (flowMatcher.find()) {
-            String attrs = flowMatcher.group(1);
-            String body = flowMatcher.group(2);
-            String flowId = readAttr(attrs, "id");
-            String source = readAttr(attrs, "sourceRef");
-            String target = readAttr(attrs, "targetRef");
-            if (flowId == null || source == null || target == null) {
-                continue;
-            }
-            String condition = body != null ? extractCondition(body) : null;
-            addFlow(outgoing, flowId, source, target, condition);
-        }
-        return outgoing;
-    }
-
-    private static String readAttr(String attrs, String name) {
-        Matcher matcher = Pattern.compile("\\b" + Pattern.quote(name) + "=\"([^\"]*)\"").matcher(attrs);
-        return matcher.find() ? matcher.group(1) : null;
-    }
-
-    private static void addFlow(
-            Map<String, List<FlowEdge>> outgoing,
-            String flowId,
-            String source,
-            String target,
-            String condition) {
-        outgoing.computeIfAbsent(source, k -> new ArrayList<>())
-                .add(new FlowEdge(flowId, source, target, condition));
-    }
-
-    private static String extractCondition(String flowBody) {
-        if (flowBody == null || flowBody.isBlank()) {
-            return null;
-        }
-        Matcher condMatcher = CONDITION_PATTERN.matcher(flowBody);
-        return condMatcher.find() ? condMatcher.group(1).trim() : null;
-    }
-
-    private static Map<String, Object> buildStructure(
-            Map<String, NodeInfo> nodes,
-            Map<String, List<FlowEdge>> outgoing) {
+    private static Map<String, Object> buildStructure(BpmnGraphParser.ParsedBpmnGraph graph) {
         List<Map<String, String>> nodeList = new ArrayList<>();
-        for (NodeInfo node : nodes.values()) {
+        for (NodeInfo node : graph.mainNodes().values()) {
             Map<String, String> item = new LinkedHashMap<>();
             item.put("id", node.id());
             item.put("type", node.type());
             item.put("name", node.displayName());
             nodeList.add(item);
         }
+        for (BpmnGraphParser.SubProcessScope scope : graph.subProcesses().values()) {
+            for (NodeInfo node : scope.nodes().values()) {
+                Map<String, String> item = new LinkedHashMap<>();
+                item.put("id", node.id());
+                item.put("type", node.type());
+                item.put("name", node.displayName());
+                item.put("parentSubProcessId", scope.id());
+                nodeList.add(item);
+            }
+        }
 
         List<Map<String, String>> flowList = new ArrayList<>();
-        for (List<FlowEdge> edges : outgoing.values()) {
+        for (List<FlowEdge> edges : graph.mainOutgoing().values()) {
             for (FlowEdge edge : edges) {
                 Map<String, String> flow = new LinkedHashMap<>();
                 flow.put("id", edge.flowId());
@@ -335,12 +579,69 @@ public final class BpmnProcessSimulator {
         return structure;
     }
 
-    private record NodeInfo(String id, String type, String name) {
+    /** Fallback flat parser for legacy callers / tests without sub-process scoping. */
+    static Map<String, NodeInfo> parseFlatNodes(String bpmnXml) {
+        Map<String, NodeInfo> nodes = new LinkedHashMap<>();
+        Matcher matcher = NODE_PATTERN.matcher(bpmnXml);
+        while (matcher.find()) {
+            String type = matcher.group(1) != null ? matcher.group(1) : matcher.group(4);
+            String id = matcher.group(2) != null ? matcher.group(2) : matcher.group(5);
+            String name = matcher.group(3) != null ? matcher.group(3) : matcher.group(6);
+            if (type == null || id == null || "sequenceFlow".equals(type) || "process".equals(type)
+                    || "definitions".equals(type)) {
+                continue;
+            }
+            nodes.putIfAbsent(id, new NodeInfo(id, type, name != null ? name : ""));
+        }
+        return nodes;
+    }
+
+    static Map<String, List<FlowEdge>> parseFlatOutgoingFlows(String bpmnXml) {
+        Map<String, List<FlowEdge>> outgoing = new LinkedHashMap<>();
+        Matcher flowMatcher = SEQUENCE_FLOW_PATTERN.matcher(bpmnXml);
+        while (flowMatcher.find()) {
+            String attrs = flowMatcher.group(1);
+            String body = flowMatcher.group(2);
+            String flowId = readAttr(attrs, "id");
+            String source = readAttr(attrs, "sourceRef");
+            String target = readAttr(attrs, "targetRef");
+            if (flowId == null || source == null || target == null) {
+                continue;
+            }
+            String condition = body != null ? extractCondition(body) : null;
+            outgoing.computeIfAbsent(source, k -> new ArrayList<>())
+                    .add(new FlowEdge(flowId, source, target, condition));
+        }
+        return outgoing;
+    }
+
+    private static String readAttr(String attrs, String name) {
+        Matcher matcher = Pattern.compile("\\b" + Pattern.quote(name) + "=\"([^\"]*)\"").matcher(attrs);
+        return matcher.find() ? matcher.group(1) : null;
+    }
+
+    private static String extractCondition(String flowBody) {
+        if (flowBody == null || flowBody.isBlank()) {
+            return null;
+        }
+        Matcher condMatcher = CONDITION_PATTERN.matcher(flowBody);
+        return condMatcher.find() ? condMatcher.group(1).trim() : null;
+    }
+
+    private static final class SimulationState {
+        private final List<Map<String, Object>> steps = new ArrayList<>();
+        private final Map<String, Integer> visitCount = new HashMap<>();
+        private final Map<String, Object> generatedCollections = new LinkedHashMap<>();
+        private boolean completed;
+        private String error;
+    }
+
+    record NodeInfo(String id, String type, String name) {
         String displayName() {
             return name != null && !name.isBlank() ? name : id;
         }
     }
 
-    private record FlowEdge(String flowId, String sourceId, String targetId, String conditionExpression) {
+    record FlowEdge(String flowId, String sourceId, String targetId, String conditionExpression) {
     }
 }

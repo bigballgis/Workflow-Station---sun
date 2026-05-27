@@ -78,7 +78,7 @@
           type="primary"
           :loading="saving"
           :disabled="!modelerReady"
-          @click="handleSave"
+          @click="handleSave(false)"
         >
           {{ t('process.save') }}
         </el-button>
@@ -102,12 +102,17 @@
     <!-- Debug Panel Drawer -->
     <el-drawer
       v-model="showDebugPanel"
-      :title="t('process.processDebug')"
       direction="btt"
-      size="50%"
+      :size="debugDrawerExpanded ? '92%' : '50%'"
+      :with-header="false"
+      class="process-debug-drawer"
+      destroy-on-close
     >
       <ProcessDebugPanel
+        v-model:expanded="debugDrawerExpanded"
         :function-unit-id="functionUnitId"
+        :get-bpmn-xml="exportCurrentBpmnXml"
+        @close="showDebugPanel = false"
         @current-node-change="handleDebugNodeChange"
       />
     </el-drawer>
@@ -156,6 +161,7 @@ const canvasRef = ref<HTMLElement>()
 const modelerReady = ref(false)
 const bpmnModelerRef = shallowRef<any>(null)
 const showDebugPanel = ref(false)
+const debugDrawerExpanded = ref(false)
 const showImportDialog = ref(false)
 const importXml = ref('')
 const saving = ref(false)
@@ -331,6 +337,16 @@ function formatLastTaskTopologyViolations(): string {
   return violations
     .map((v) => `${v.taskName || v.taskId} (${v.incomingCount})`)
     .join('; ')
+}
+
+async function exportCurrentBpmnXml(): Promise<string> {
+  if (!bpmnModeler) return store.process?.bpmnXml || ''
+  try {
+    const { xml } = await bpmnModeler.saveXML({ format: true })
+    return xml || store.process?.bpmnXml || ''
+  } catch {
+    return store.process?.bpmnXml || ''
+  }
 }
 
 function handleDebugNodeChange(nodeId: string | null) {
@@ -602,6 +618,15 @@ onUnmounted(() => {
   background: #fff;
   overflow-y: auto;
   flex-shrink: 0;
+}
+
+:deep(.process-debug-drawer.el-drawer) {
+  .el-drawer__body {
+    padding: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
 }
 </style>
 

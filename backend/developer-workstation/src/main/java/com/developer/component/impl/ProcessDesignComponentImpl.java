@@ -2,6 +2,7 @@ package com.developer.component.impl;
 
 import com.developer.component.ProcessDesignComponent;
 import com.developer.dto.ValidationResult;
+import com.developer.entity.FieldDefinition;
 import com.developer.entity.FormDefinition;
 import com.developer.entity.FunctionUnit;
 import com.developer.entity.ProcessDefinition;
@@ -137,10 +138,29 @@ public class ProcessDesignComponentImpl implements ProcessDesignComponent {
     }
     
     @Override
-    public Map<String, Object> simulate(String bpmnXml, Map<String, Object> variables) {
-        Map<String, Object> result = new LinkedHashMap<>(BpmnProcessSimulator.simulate(bpmnXml, variables));
+    public Map<String, Object> simulate(Long functionUnitId, String bpmnXml, Map<String, Object> variables) {
+        Map<Long, List<FieldDefinition>> fieldsByTableId = loadSubTableFieldsById(functionUnitId);
+        Map<String, Object> result = new LinkedHashMap<>(
+                BpmnProcessSimulator.simulate(bpmnXml, variables, fieldsByTableId));
         result.put("status", "SIMULATED");
         return result;
+    }
+
+    private Map<Long, List<FieldDefinition>> loadSubTableFieldsById(Long functionUnitId) {
+        if (functionUnitId == null) {
+            return Map.of();
+        }
+        List<TableDefinition> tables = tableDefinitionRepository.findByFunctionUnitIdWithFields(functionUnitId);
+        Map<Long, List<FieldDefinition>> fieldsByTableId = new LinkedHashMap<>();
+        for (TableDefinition table : tables) {
+            if (table.getId() == null || table.getTableType() != TableType.SUB) {
+                continue;
+            }
+            fieldsByTableId.put(
+                    table.getId(),
+                    table.getFieldDefinitions() != null ? table.getFieldDefinitions() : List.of());
+        }
+        return fieldsByTableId;
     }
     
     @Override

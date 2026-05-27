@@ -26,9 +26,9 @@ public interface ProcessDesignComponent {
     ValidationResult validate(String bpmnXml);
     
     /**
-     * 模拟流程执行
+     * 模拟流程执行（含多实例 mock collection 自动生成）
      */
-    Map<String, Object> simulate(String bpmnXml, Map<String, Object> variables);
+    Map<String, Object> simulate(Long functionUnitId, String bpmnXml, Map<String, Object> variables);
     
     /**
      * 解析BPMN XML获取流程结构

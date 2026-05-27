@@ -65,7 +65,7 @@ public class ProcessDesignController {
             @RequestBody Map<String, Object> variables) {
         ProcessDefinition process = processDesignComponent.getByFunctionUnitId(functionUnitId);
         Map<String, Object> result = process != null ?
-                processDesignComponent.simulate(process.getBpmnXml(), variables) : Map.of();
+                processDesignComponent.simulate(functionUnitId, process.getBpmnXml(), variables) : Map.of();
         return ResponseEntity.ok(ApiResponse.success(result));
     }
 }

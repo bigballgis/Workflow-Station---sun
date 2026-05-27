@@ -1,7 +1,30 @@
 <template>
-  <div class="process-debug-panel">
+  <div
+    class="process-debug-panel"
+    :class="{ 'process-debug-panel--expanded': expanded }"
+  >
     <div class="debug-header">
-      <h3>{{ t('process.processDebug') }}</h3>
+      <div class="debug-header-title">
+        <h3>{{ t('process.processDebug') }}</h3>
+        <div class="debug-header-tools">
+          <el-tooltip :content="expanded ? t('debug.panelHalfScreen') : t('debug.panelFullScreen')">
+            <el-button
+              :icon="expanded ? ScaleToOriginal : FullScreen"
+              circle
+              size="small"
+              @click="toggleExpanded"
+            />
+          </el-tooltip>
+          <el-tooltip :content="t('common.close')">
+            <el-button
+              :icon="Close"
+              circle
+              size="small"
+              @click="emit('close')"
+            />
+          </el-tooltip>
+        </div>
+      </div>
       <div class="debug-actions">
         <el-button
           type="primary"
@@ -53,6 +76,17 @@
             <ExecutionLogViewer
               :logs="executionLogs"
               @clear="executionLogs = []"
+            />
+          </el-tab-pane>
+          <el-tab-pane
+            :label="t('debug.nodeForm')"
+            name="nodeForm"
+          >
+            <ProcessDebugNodeForm
+              :function-unit-id="functionUnitId"
+              :binding="currentNodeFormBinding"
+              :mi-context="effectiveMiContext"
+              :expanded="expanded"
             />
           </el-tab-pane>
           <el-tab-pane
@@ -146,11 +180,107 @@
             <span class="value">{{ currentNode.name }}</span>
           </div>
           <div
+            v-if="miExecutionModeText"
+            class="status-item"
+          >
+            <span class="label">{{ t('debug.miExecutionMode') }}:</span>
+            <el-tag
+              size="small"
+              :type="activeParallelMi ? 'warning' : 'info'"
+            >
+              {{ miExecutionModeText }}
+            </el-tag>
+          </div>
+          <div
+            v-if="miInstanceText"
+            class="status-item"
+          >
+            <span class="label">{{ t('debug.miInstance') }}:</span>
+            <span class="value">{{ miInstanceText }}</span>
+          </div>
+          <div
+            v-if="activeParallelMi && isDebugging"
+            class="status-item mi-instance-switcher"
+          >
+            <span class="label">{{ t('debug.miInstanceSwitcher') }}:</span>
+            <el-radio-group
+              v-model="parallelInstancePicker"
+              size="small"
+              @change="handleParallelInstanceChange"
+            >
+              <el-radio-button
+                v-for="n in activeParallelMi.totalInstances"
+                :key="n"
+                :value="n"
+              >
+                {{ n }}
+              </el-radio-button>
+            </el-radio-group>
+          </div>
+          <div
+            v-if="miAssigneeText"
+            class="status-item"
+          >
+            <span class="label">{{ t('debug.miAssignee') }}:</span>
+            <span class="value">{{ miAssigneeText }}</span>
+          </div>
+          <div
+            v-if="miCompletionConditionText"
+            class="status-item"
+          >
+            <span class="label">{{ t('debug.miCompletionCondition') }}:</span>
+            <span class="value mi-completion-expr">{{ miCompletionConditionText }}</span>
+          </div>
+          <div
+            v-if="currentNodeFormBinding"
+            class="status-item"
+          >
+            <span class="label">{{ t('debug.boundForm') }}:</span>
+            <span class="value form-link" @click="activeTab = 'nodeForm'">
+              {{ currentNodeFormBinding.formName || `#${currentNodeFormBinding.formId}` }}
+            </span>
+          </div>
+          <div
+            v-else-if="currentNode && isFormCapableNode(currentNode.type)"
+            class="status-item"
+          >
+            <span class="label">{{ t('debug.boundForm') }}:</span>
+            <span class="value muted">{{ t('debug.noFormBound') }}</span>
+          </div>
+          <div
             v-if="executionTime !== null"
             class="status-item"
           >
             <span class="label">{{ t('debug.executionTime') }}:</span>
             <span class="value">{{ executionTime }}ms</span>
+          </div>
+        </div>
+
+        <div
+          v-if="generatedCollectionsPreview.length"
+          class="generated-collections"
+        >
+          <h4>{{ t('debug.generatedCollectionsTitle') }}</h4>
+          <div
+            v-for="collection in generatedCollectionsPreview"
+            :key="collection.variableName"
+            class="collection-card"
+          >
+            <div class="collection-meta">
+              <span class="collection-name">{{ collection.variableName }}</span>
+              <el-tag size="small" type="success">
+                {{ t('debug.generatedCollectionCount', { count: collection.instanceCount }) }}
+              </el-tag>
+            </div>
+            <pre class="collection-json">{{ JSON.stringify(collection.rows, null, 2) }}</pre>
+            <el-button
+              size="small"
+              text
+              type="primary"
+              @click="copyCollectionJson(collection)"
+            >
+              {{ t('debug.copyCollectionJson') }}
+            </el-button>
           </div>
         </div>
 
@@ -164,7 +294,7 @@
             size="small"
           >
             <el-form-item
-              v-for="(value, key) in inputVariables"
+              v-for="(_value, key) in inputVariables"
               :key="key"
               :label="String(key)"
             >
@@ -177,6 +307,9 @@
           >
             {{ t('debug.addVariable') }}
           </el-button>
+          <p class="input-hint">
+            {{ t('debug.miCollectionHint') }}
+          </p>
         </div>
       </div>
     </div>
@@ -185,12 +318,18 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed } from 'vue'
-import { VideoPlay, VideoPause, Right, DArrowRight, Delete } from '@element-plus/icons-vue'
+import { VideoPlay, VideoPause, Right, DArrowRight, Delete, FullScreen, ScaleToOriginal, Close } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import { functionUnitApi } from '@/api/functionUnit'
 import VariableMonitor from './VariableMonitor.vue'
 import ExecutionLogViewer from './ExecutionLogViewer.vue'
+import ProcessDebugNodeForm from './ProcessDebugNodeForm.vue'
+import {
+  parseBpmnNodeFormBindings,
+  lookupNodeFormBinding,
+  type BpmnNodeFormBinding,
+} from '@/utils/bpmnFormBindings'
 
 const { t } = useI18n()
 
@@ -213,6 +352,29 @@ interface SimulationStep {
   nodeType: string
   message?: string
   variables?: Record<string, any>
+  miContext?: MiContext
+}
+
+interface MiContext {
+  subProcessId?: string
+  subProcessName?: string
+  collectionVariable?: string
+  elementVariable?: string
+  sequential?: boolean
+  parallelMode?: boolean
+  completionCondition?: string
+  instanceIndex?: number
+  totalInstances?: number
+  currentItem?: Record<string, any>
+  subTableId?: number
+  phase?: string
+}
+
+interface ActiveParallelMi {
+  collectionVariable: string
+  elementVariable: string
+  totalInstances: number
+  subProcessId?: string
 }
 
 interface ExecutionLog {
@@ -224,11 +386,29 @@ interface ExecutionLog {
   variables?: Record<string, any>
 }
 
-const props = defineProps<{ functionUnitId: number }>()
+interface GeneratedCollectionPreview {
+  variableName: string
+  instanceCount: number
+  rows: Array<Record<string, any>>
+}
+
+const props = defineProps<{
+  functionUnitId: number
+  /** Live BPMN XML from the designer canvas (includes unsaved form bindings). */
+  getBpmnXml?: () => Promise<string>
+  /** Drawer uses ~92% viewport height when true, ~50% when false. */
+  expanded?: boolean
+}>()
 
 const emit = defineEmits<{
   (e: 'current-node-change', nodeId: string | null): void
+  (e: 'close'): void
+  (e: 'update:expanded', value: boolean): void
 }>()
+
+function toggleExpanded() {
+  emit('update:expanded', !props.expanded)
+}
 
 const BREAKPOINT_NODE_TYPES = new Set([
   'startEvent',
@@ -250,6 +430,7 @@ const isPaused = ref(false)
 const starting = ref(false)
 const currentNode = ref<{ id: string; name: string; type?: string } | null>(null)
 const currentVariables = ref<Record<string, any>>({})
+const currentMiContext = ref<MiContext | null>(null)
 const executionLogs = ref<ExecutionLog[]>([])
 const breakpoints = ref<Breakpoint[]>([])
 const inputVariables = reactive<Record<string, string>>({ initiator: 'admin' })
@@ -259,6 +440,18 @@ const simulationSteps = ref<SimulationStep[]>([])
 const stepIndex = ref(-1)
 const processNodes = ref<ProcessNode[]>([])
 const breakpointCandidate = ref<string | null>(null)
+const nodeFormBindings = ref<Map<string, BpmnNodeFormBinding>>(new Map())
+const generatedCollectionsPreview = ref<GeneratedCollectionPreview[]>([])
+const activeParallelMi = ref<ActiveParallelMi | null>(null)
+const parallelInstancePicker = ref(1)
+
+const currentNodeFormBinding = computed(() =>
+  lookupNodeFormBinding(nodeFormBindings.value, currentNode.value?.id ?? null),
+)
+
+function isFormCapableNode(nodeType?: string): boolean {
+  return nodeType === 'userTask' || nodeType === 'serviceTask'
+}
 
 const statusText = computed(() => {
   if (!isDebugging.value) return t('debug.notStarted')
@@ -278,6 +471,59 @@ const stepProgressText = computed(() => {
     current: stepIndex.value + 1,
     total: simulationSteps.value.length
   })
+})
+
+const effectiveMiContext = computed(() => {
+  const ctx = currentMiContext.value
+  const scope = activeParallelMi.value
+  if (!ctx || !scope?.collectionVariable) return ctx
+
+  const collection = currentVariables.value[scope.collectionVariable]
+  if (!Array.isArray(collection) || collection.length === 0) return ctx
+
+  const index = Math.min(
+    Math.max(parallelInstancePicker.value, 1),
+    collection.length,
+  ) - 1
+  const currentItem = collection[index]
+  if (!currentItem || typeof currentItem !== 'object') return ctx
+
+  return {
+    ...ctx,
+    instanceIndex: index + 1,
+    totalInstances: scope.totalInstances,
+    currentItem: currentItem as Record<string, any>,
+    parallelMode: true,
+  }
+})
+
+const miExecutionModeText = computed(() => {
+  if (activeParallelMi.value) return t('debug.miParallelMode')
+  const ctx = currentMiContext.value
+  if (ctx?.sequential === true && ctx.phase) return t('debug.miSequentialMode')
+  return ''
+})
+
+const miInstanceText = computed(() => {
+  const ctx = effectiveMiContext.value
+  if (!ctx?.instanceIndex || !ctx.totalInstances || ctx.phase !== 'instance') return ''
+  return t('debug.miInstanceProgress', {
+    current: ctx.instanceIndex,
+    total: ctx.totalInstances
+  })
+})
+
+const miAssigneeText = computed(() => {
+  const item = effectiveMiContext.value?.currentItem
+  if (!item || typeof item !== 'object') return ''
+  const assignee = item.assignee_id ?? item.assignee ?? item.user_id
+  if (assignee == null || assignee === '') return ''
+  return t('debug.miAssigneeValue', { assignee: String(assignee) })
+})
+
+const miCompletionConditionText = computed(() => {
+  const expr = currentMiContext.value?.completionCondition
+  return expr ? String(expr) : ''
 })
 
 const breakpointCandidates = computed(() =>
@@ -308,6 +554,32 @@ async function handleStartDebug() {
     simulationSteps.value = Array.isArray(data.steps) ? data.steps : []
     processNodes.value = extractProcessNodes(data.processStructure)
 
+    let bpmnXml = ''
+    if (props.getBpmnXml) {
+      try {
+        bpmnXml = await props.getBpmnXml()
+      } catch {
+        bpmnXml = ''
+      }
+    }
+    nodeFormBindings.value = parseBpmnNodeFormBindings(bpmnXml)
+
+    generatedCollectionsPreview.value = []
+    activeParallelMi.value = null
+    parallelInstancePicker.value = 1
+    if (data.generatedCollections && typeof data.generatedCollections === 'object') {
+      for (const [varName, meta] of Object.entries(data.generatedCollections as Record<string, any>)) {
+        const count = meta?.instanceCount ?? '?'
+        addLog('info', t('debug.miCollectionGenerated', { name: varName, count }))
+        const rows = Array.isArray(data.variables?.[varName]) ? data.variables[varName] : []
+        generatedCollectionsPreview.value.push({
+          variableName: varName,
+          instanceCount: Number(meta?.instanceCount ?? rows.length ?? 0),
+          rows: rows.slice(0, 5),
+        })
+      }
+    }
+
     if (!simulationSteps.value.length) {
       ElMessage.warning(t('debug.noSimulationSteps'))
       return
@@ -319,7 +591,7 @@ async function handleStartDebug() {
     executionTime.value = null
     stepIndex.value = 0
 
-    addLog('info', t('debug.debugStarted'), undefined, variables)
+    addLog('info', t('debug.debugStarted'), undefined, undefined, variables)
     applyStep(stepIndex.value, { log: true })
 
     if (data.completed && stepIndex.value === simulationSteps.value.length - 1) {
@@ -337,6 +609,14 @@ function parseInputVariables(): Record<string, any> {
   for (const [key, rawValue] of Object.entries(inputVariables)) {
     if (!key.trim()) continue
     const trimmed = String(rawValue ?? '').trim()
+    if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+      try {
+        variables[key] = JSON.parse(trimmed)
+        continue
+      } catch {
+        // fall through to scalar parsing
+      }
+    }
     if (trimmed === 'true') {
       variables[key] = true
     } else if (trimmed === 'false') {
@@ -348,6 +628,51 @@ function parseInputVariables(): Record<string, any> {
     }
   }
   return variables
+}
+
+function syncParallelMiScope(miContext: MiContext | null) {
+  if (!miContext) {
+    activeParallelMi.value = null
+    return
+  }
+  if (!miContext.parallelMode || !miContext.collectionVariable) {
+    return
+  }
+  activeParallelMi.value = {
+    collectionVariable: miContext.collectionVariable,
+    elementVariable: miContext.elementVariable || 'currentItem',
+    totalInstances: miContext.totalInstances ?? 0,
+    subProcessId: miContext.subProcessId,
+  }
+  if (miContext.instanceIndex && miContext.instanceIndex > 0) {
+    parallelInstancePicker.value = miContext.instanceIndex
+  }
+}
+
+function handleParallelInstanceChange() {
+  if (!activeParallelMi.value) return
+  const scope = activeParallelMi.value
+  const collection = currentVariables.value[scope.collectionVariable]
+  if (!Array.isArray(collection)) return
+  const index = parallelInstancePicker.value - 1
+  const item = collection[index]
+  if (!item || typeof item !== 'object') return
+  currentVariables.value = {
+    ...currentVariables.value,
+    [scope.elementVariable]: item,
+  }
+  if (currentNodeFormBinding.value) {
+    activeTab.value = 'nodeForm'
+  }
+}
+
+async function copyCollectionJson(collection: GeneratedCollectionPreview) {
+  try {
+    await navigator.clipboard.writeText(JSON.stringify(collection.rows, null, 2))
+    ElMessage.success(t('debug.copyCollectionSuccess'))
+  } catch {
+    ElMessage.error(t('debug.copyCollectionFailed'))
+  }
 }
 
 function extractProcessNodes(processStructure: any): ProcessNode[] {
@@ -371,7 +696,16 @@ function applyStep(index: number, options: { log?: boolean } = {}) {
     type: step.nodeType
   }
   currentVariables.value = { ...(step.variables || {}) }
+  currentMiContext.value = step.miContext ?? null
+  syncParallelMiScope(step.miContext ?? null)
   emit('current-node-change', step.nodeId)
+
+  if (
+    isFormCapableNode(step.nodeType)
+    && lookupNodeFormBinding(nodeFormBindings.value, step.nodeId)
+  ) {
+    activeTab.value = 'nodeForm'
+  }
 
   if (options.log) {
     addLog(
@@ -457,9 +791,14 @@ function resetDebugSession(keepLogs: boolean) {
   isPaused.value = false
   currentNode.value = null
   currentVariables.value = {}
+  currentMiContext.value = null
   simulationSteps.value = []
   stepIndex.value = -1
   processNodes.value = []
+  nodeFormBindings.value = new Map()
+  generatedCollectionsPreview.value = []
+  activeParallelMi.value = null
+  parallelInstancePicker.value = 1
   breakpointCandidate.value = null
   if (!keepLogs) {
     executionLogs.value = []
@@ -543,12 +882,29 @@ function addLog(
   align-items: center;
   padding: 12px 16px;
   border-bottom: 1px solid #e6e6e6;
+  flex-shrink: 0;
+  gap: 12px;
 
-  h3 { margin: 0; }
+  .debug-header-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+
+    h3 { margin: 0; }
+  }
+
+  .debug-header-tools {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
 
   .debug-actions {
     display: flex;
     gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
 }
 
@@ -556,6 +912,34 @@ function addLog(
   flex: 1;
   display: flex;
   overflow: hidden;
+  min-height: 0;
+}
+
+.process-debug-panel--expanded {
+  .debug-left {
+    display: flex;
+    flex-direction: column;
+
+    :deep(.el-tabs) {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    :deep(.el-tabs__content) {
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    :deep(.el-tab-pane) {
+      height: 100%;
+    }
+  }
+
+  .debug-right {
+    width: 340px;
+  }
 }
 
 .debug-left {
@@ -584,6 +968,26 @@ function addLog(
       color: #909399;
       min-width: 70px;
     }
+
+    .value.muted {
+      color: #c0c4cc;
+      font-size: 12px;
+    }
+
+    .form-link {
+      color: var(--el-color-primary);
+      cursor: pointer;
+
+      &:hover {
+        text-decoration: underline;
+      }
+    }
+
+    .mi-completion-expr {
+      font-size: 11px;
+      word-break: break-all;
+      color: #606266;
+    }
   }
 }
 
@@ -591,6 +995,64 @@ function addLog(
   h4 {
     margin: 0 0 12px;
     font-size: 14px;
+  }
+
+  .input-hint {
+    margin: 10px 0 0;
+    font-size: 12px;
+    color: #909399;
+    line-height: 1.5;
+  }
+}
+
+.generated-collections {
+  margin-bottom: 16px;
+
+  h4 {
+    margin: 0 0 10px;
+    font-size: 14px;
+  }
+
+  .collection-card {
+    border: 1px solid #ebeef5;
+    border-radius: 6px;
+    padding: 8px;
+    margin-bottom: 10px;
+    background: #fafafa;
+  }
+
+  .collection-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+
+  .collection-name {
+    font-size: 12px;
+    color: #606266;
+    word-break: break-all;
+  }
+
+  .mi-instance-switcher {
+    flex-wrap: wrap;
+
+    .label {
+      min-width: 100%;
+      margin-bottom: 4px;
+    }
+  }
+
+  .collection-json {
+    margin: 0;
+    max-height: 180px;
+    overflow: auto;
+    font-size: 12px;
+    line-height: 1.4;
+    background: #fff;
+    padding: 8px;
+    border-radius: 4px;
+    border: 1px solid #f0f0f0;
   }
 }
 

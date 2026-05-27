@@ -107,6 +107,7 @@ declare module 'vue' {
     N8nTaskPropertiesPanel: typeof import('./components/designer/properties/N8nTaskPropertiesPanel.vue')['default']
     NodePropertiesPanel: typeof import('./components/designer/properties/NodePropertiesPanel.vue')['default']
     PhaseIndicator: typeof import('./components/ai/PhaseIndicator.vue')['default']
+    ProcessDebugNodeForm: typeof import('./components/debug/ProcessDebugNodeForm.vue')['default']
     ProcessDebugPanel: typeof import('./components/debug/ProcessDebugPanel.vue')['default']
     ProcessDesigner: typeof import('./components/designer/ProcessDesigner.vue')['default']
     ProcessImportDialog: typeof import('./components/designer/process-designer/ProcessImportDialog.vue')['default']
