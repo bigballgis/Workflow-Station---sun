@@ -24,9 +24,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * 版本管理组件实现
- */
+/** Version management component implementation. */
 @Component
 @Slf4j
 @RequiredArgsConstructor
@@ -38,16 +36,12 @@ public class VersionComponentImpl implements VersionComponent {
     private final DeveloperWorkstationSequenceSynchronizer sequenceSynchronizer;
     
     /**
-     * 获取当前操作者
-     * 优先从 Spring Security Context 获取，如果无法获取则返回 "system"
-     * 
-     * 返回 "system" 的情况：
-     * - 没有认证信息（未登录）
-     * - 匿名用户
-     * - 系统后台任务
-     * - 获取过程中发生异常
-     * 
-     * @return 当前操作者用户名，如果无法获取则返回 "system"
+     * Resolves current operator username.
+     * Prefers Spring Security context; falls back to {@code "system"} when unavailable.
+     * <p>Returns {@code "system"} when there is no auth, anonymous user, background job,
+     * or an exception occurs while resolving the principal.
+     *
+     * @return current username or {@code "system"}
      */
     private String getCurrentOperator() {
         try {
@@ -141,7 +135,7 @@ public class VersionComponentImpl implements VersionComponent {
             throw new DeveloperBusinessException("BIZ_VERSION_MISMATCH", "Version does not belong to this function unit");
         }
 
-        // 方案 B：禁止回滚到当前活跃版本（既无意义，也会触发不必要的 unique 冲突路径）
+        // Plan B: disallow rollback to the already-active version (meaningless and can hit needless unique conflicts).
         String currentVersionNumber = functionUnit.getCurrentVersion();
         if (currentVersionNumber != null
                 && currentVersionNumber.equals(targetVersion.getVersionNumber())) {
@@ -152,10 +146,10 @@ public class VersionComponentImpl implements VersionComponent {
         }
         
         try {
-            // import/init/上次 rollback 可能写入较大 id 而未推进序列，须在任何 INSERT 前对齐
+            // Import/init/previous rollback may insert large IDs without advancing sequences; sync before any INSERT.
             sequenceSynchronizer.synchronizeAll();
 
-            // 先创建当前状态的版本作为备份
+            // Snapshot current state as a backup version first.
             String backupVersion = calculateNextVersion(functionUnit.getCurrentVersion());
             Version backup = Version.builder()
                     .functionUnit(functionUnit)
@@ -166,26 +160,25 @@ public class VersionComponentImpl implements VersionComponent {
                     .build();
             versionRepository.saveAndFlush(backup);
 
-            // 方案 A：两阶段清空。
-            // Hibernate 的 ActionQueue 默认顺序是 INSERT 先于 DELETE，
-            // 若直接在 restoreFromSnapshot 内部 clear()+add()，会用同样的
-            // (function_unit_id, name) 组合先 INSERT 新行，再 DELETE 旧行，
-            // 触发 uk_action_name_fu / uk_table_name_fu / uk_form_name_fu / uk_decision_fu_key
-            // 等唯一约束冲突。这里先把所有受唯一约束的子集合 clear 后强制 flush，
-            // 让孤儿 DELETE 立刻落库，再交给 restoreFromSnapshot 重建。
+            // Plan A: two-phase clear.
+            // Hibernate ActionQueue orders INSERT before DELETE by default.
+            // If restoreFromSnapshot used clear()+add() alone, rows with the same (function_unit_id, name)
+            // could INSERT before DELETE and violate uk_action_name_fu / uk_table_name_fu /
+            // uk_form_name_fu / uk_decision_fu_key. Clear FK-backed child collections here and flush
+            // so DELETEs land before restoreFromSnapshot rebuilds rows.
             clearChildCollectionsAndFlush(functionUnit);
             
-            // 须在「同一事务连接」内 sync，才能看见刚 flush 的 backup 与已删子表
+            // Sequence sync must run on the same transaction connection to see flushed backup deletes.
             sequenceSynchronizer.synchronizeAllInTransaction();
             
-            // 恢复目标版本的内容
+            // Restore target snapshot content.
             Map<String, Object> snapshot = objectMapper.readValue(targetVersion.getSnapshotData(), Map.class);
             restoreFromSnapshot(functionUnit, snapshot);
             functionUnitRepository.saveAndFlush(functionUnit);
             
             sequenceSynchronizer.synchronizeVersions();
             
-            // 创建回滚后的新版本
+            // Create post-rollback version record.
             String newVersion = calculateNextVersion(backupVersion);
             Version rollbackVersion = Version.builder()
                     .functionUnit(functionUnit)
@@ -209,9 +202,8 @@ public class VersionComponentImpl implements VersionComponent {
     }
 
     /**
-     * 清空 FunctionUnit 下所有携带 (function_unit_id, *) 唯一约束的子集合，
-     * 并立即 flush 让 DELETE 在 INSERT 之前落库，避免 Hibernate 默认的
-     * INSERT-before-DELETE 顺序导致的唯一约束冲突。
+     * Clears child collections keyed by unique (function_unit_id, *) constraints and flushes immediately
+     * so DELETE runs before INSERT, avoiding Hibernate's default INSERT-before-DELETE ordering conflicts.
      */
     private void clearChildCollectionsAndFlush(FunctionUnit functionUnit) {
         boolean dirty = false;
@@ -228,7 +220,7 @@ public class VersionComponentImpl implements VersionComponent {
             dirty = true;
         }
         if (!functionUnit.getTableDefinitions().isEmpty()) {
-            // tableDefinitions 同样带 uk_table_name_fu，下游 fieldDefinitions 通过 ON DELETE CASCADE 清理
+            // tableDefinitions participates in uk_table_name_fu; fieldDefinitions cascade on delete.
             functionUnit.getTableDefinitions().clear();
             dirty = true;
         }

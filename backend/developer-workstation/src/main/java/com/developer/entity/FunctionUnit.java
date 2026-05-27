@@ -15,7 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 功能单元实体
+ * Function Unit entity
  */
 @Entity
 @Table(name = "dw_function_units")
@@ -32,8 +32,8 @@ public class FunctionUnit {
     private Long id;
     
     /**
-     * 功能单元唯一编码（英文标识符，用于系统间交互）
-     * 格式：{functionUnitName}-{yyyyMMdd}-{random6chars}，如 test-20260112-a1b2c3
+     * Function Unit unique code (English identifier for cross-system interaction).
+     * Format: {functionUnitName}-{yyyyMMdd}-{random6chars}, e.g. test-20260112-a1b2c3
      */
     @Column(name = "code", nullable = false, unique = true, length = 50)
     private String code;

@@ -13,7 +13,7 @@ import lombok.NoArgsConstructor;
 import java.time.Instant;
 
 /**
- * 功能单元部署记录列表项
+ * API payload: one row in deployment history lists.
  */
 @Data
 @Builder

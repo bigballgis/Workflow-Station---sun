@@ -22,6 +22,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import com.platform.security.util.SecurityContextUtils;
+import com.platform.common.i18n.I18nService;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -40,6 +41,7 @@ import java.util.Map;
 public class MemberController extends BaseController {
     
     private final MemberService memberService;
+    private final I18nService i18nService;
     
     @PostMapping
     @Operation(summary = "Create new member", description = "Create a new member with complete validation and business logic")
@@ -53,7 +55,7 @@ public class MemberController extends BaseController {
             @Valid @RequestBody MemberRequest request) {
         
         String currentUserId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthenticated_user")));
         
         log.info("Creating member with username: {} by user: {}", request.getUsername(), currentUserId);
         
@@ -158,7 +160,7 @@ public class MemberController extends BaseController {
             @Valid @RequestBody MemberUpdateRequest request) {
         
         String currentUserId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthenticated_user")));
         
         log.info("Updating member with ID: {} by user: {}", id, currentUserId);
         
@@ -205,7 +207,7 @@ public class MemberController extends BaseController {
             @Parameter(description = "Member ID", required = true) @PathVariable Long id) {
         
         String currentUserId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthenticated_user")));
         
         log.info("Deleting member with ID: {} by user: {}", id, currentUserId);
         

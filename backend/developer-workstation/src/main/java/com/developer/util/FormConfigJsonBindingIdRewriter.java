@@ -5,8 +5,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 将 form configJson 中以 bindingId 为键的 Map 字段重写为新 bindingId（clone / import 共用）。
- * 同时重写画布 rule 树中 subTable 占位符的 {@code _bindingId}，避免 export/import/clone 后绑定丢失。
+ * Rewrites Map fields in form configJson keyed by bindingId to new bindingIds (shared by clone / import).
+ * Also rewrites {@code _bindingId} on subTable placeholders in the canvas rule tree so bindings are not lost after export/import/clone.
  */
 public final class FormConfigJsonBindingIdRewriter {
 

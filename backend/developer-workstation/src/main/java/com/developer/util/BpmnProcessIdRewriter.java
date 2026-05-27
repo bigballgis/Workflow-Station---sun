@@ -4,11 +4,11 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * 将 BPMN 中 {@code <process id="...">} 重写为功能单元 {@code code}，与新建功能单元时
- * {@link MinimalBpmnTemplate#build(String)} 使用同一 process id 规则。
+ * Rewrites {@code <process id="...">} in BPMN to the function unit {@code code}, using the same process id rule as
+ * {@link MinimalBpmnTemplate#build(String)} when creating a new function unit.
  *
- * <p>clone / import 会生成新的 function unit code，但 BPMN 往往仍保留源流程的
- * {@code Process_1} 等 id；部署与 Process Properties 面板均依赖 process id 与 code 一致。
+ * <p>Clone / import produce a new function unit code, but BPMN often still keeps source process ids such as
+ * {@code Process_1}; deployment and the Process Properties panel both require process id to match code.
  */
 public final class BpmnProcessIdRewriter {
 
@@ -28,7 +28,7 @@ public final class BpmnProcessIdRewriter {
     }
 
     /**
-     * 提取 BPMN 中第一个 {@code process} 元素的 id。
+     * Extracts the id of the first {@code process} element in BPMN.
      */
     public static String extractProcessId(String bpmnXml) {
         if (bpmnXml == null || bpmnXml.isBlank()) {
@@ -40,7 +40,7 @@ public final class BpmnProcessIdRewriter {
     }
 
     /**
-     * 将 process id（及关联 diagram 的 bpmnElement / processRef）重写为功能单元 code。
+     * Rewrites process id (and related diagram bpmnElement / processRef) to the function unit code.
      */
     public static String rewriteToFunctionUnitCode(String bpmnXml, String functionUnitCode) {
         if (bpmnXml == null || bpmnXml.isBlank()

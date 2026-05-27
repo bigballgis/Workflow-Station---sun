@@ -12,25 +12,25 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 业务单元角色绑定控制器
+ * Business unit role binding controller
  */
 @RestController
 @RequestMapping("/business-units/{unitId}/roles")
 @RequiredArgsConstructor
-@Tag(name = "业务单元角色绑定", description = "业务单元与业务角色的绑定管理")
+@Tag(name = "Business Unit Role Binding", description = "Binding management between business units and business roles")
 public class BusinessUnitRoleController {
     
     private final BusinessUnitRoleService businessUnitRoleService;
     
     @GetMapping
-    @Operation(summary = "获取业务单元绑定的角色列表")
+    @Operation(summary = "Get bound roles for business unit")
     public ResponseEntity<List<Role>> getBoundRoles(@PathVariable String unitId) {
         List<Role> roles = businessUnitRoleService.getBoundRoles(unitId);
         return ResponseEntity.ok(roles);
     }
     
     @PostMapping
-    @Operation(summary = "绑定角色到业务单元")
+    @Operation(summary = "Bind role to business unit")
     public ResponseEntity<Void> bindRole(
             @PathVariable String unitId,
             @RequestBody Map<String, String> request) {
@@ -43,7 +43,7 @@ public class BusinessUnitRoleController {
     }
     
     @DeleteMapping("/{roleId}")
-    @Operation(summary = "解绑业务单元的角色")
+    @Operation(summary = "Unbind role from business unit")
     public ResponseEntity<Void> unbindRole(
             @PathVariable String unitId,
             @PathVariable String roleId) {

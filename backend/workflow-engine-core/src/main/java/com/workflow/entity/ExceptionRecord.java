@@ -4,8 +4,8 @@ import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
 /**
- * 异常记录实体类
- * 用于记录流程执行过程中的异常信息
+ * Exception record entity
+ * Used to record exception information during process execution
  */
 @Entity
 @Table(name = "wf_exception_records", indexes = {
@@ -24,191 +24,191 @@ public class ExceptionRecord {
     private String id;
     
     /**
-     * 流程实例ID
+     * Process instance ID
      */
     @Column(length = 64)
     private String processInstanceId;
     
     /**
-     * 流程定义ID
+     * Process definition ID
      */
     @Column(length = 64)
     private String processDefinitionId;
     
     /**
-     * 流程定义Key
+     * Process definition key
      */
     @Column(length = 255)
     private String processDefinitionKey;
     
     /**
-     * 任务ID
+     * Task ID
      */
     @Column(length = 64)
     private String taskId;
     
     /**
-     * 任务名称
+     * Task name
      */
     @Column(length = 255)
     private String taskName;
     
     /**
-     * 活动ID（BPMN节点ID）
+     * Activity ID (BPMN node ID)
      */
     @Column(length = 255)
     private String activityId;
     
     /**
-     * 活动名称
+     * Activity name
      */
     @Column(length = 255)
     private String activityName;
 
     /**
-     * 异常类型
+     * Exception type
      */
     @Column(length = 100, nullable = false)
     private String exceptionType;
     
     /**
-     * 异常类名
+     * Exception class name
      */
     @Column(length = 500)
     private String exceptionClass;
     
     /**
-     * 异常消息
+     * Exception message
      */
     @Column(columnDefinition = "TEXT")
     private String exceptionMessage;
     
     /**
-     * 完整堆栈跟踪
+     * Full stack trace
      */
     @Column(columnDefinition = "TEXT")
     private String stackTrace;
     
     /**
-     * 根本原因
+     * Root cause
      */
     @Column(columnDefinition = "TEXT")
     private String rootCause;
     
     /**
-     * 严重级别: CRITICAL, HIGH, MEDIUM, LOW
+     * Severity level: CRITICAL, HIGH, MEDIUM, LOW
      */
     @Column(length = 20, nullable = false)
     @Enumerated(EnumType.STRING)
     private ExceptionSeverity severity;
     
     /**
-     * 异常状态: PENDING, PROCESSING, RESOLVED, IGNORED
+     * Exception status: PENDING, PROCESSING, RESOLVED, IGNORED
      */
     @Column(length = 20, nullable = false)
     @Enumerated(EnumType.STRING)
     private ExceptionStatus status;
     
     /**
-     * 上下文数据（JSON格式）
+     * Context data (JSON format)
      */
     @Column(columnDefinition = "TEXT")
     private String contextData;
     
     /**
-     * 流程变量快照（JSON格式）
+     * Process variable snapshot (JSON format)
      */
     @Column(columnDefinition = "TEXT")
     private String variablesSnapshot;
     
     /**
-     * 异常发生时间
+     * Exception occurrence time
      */
     @Column(nullable = false)
     private LocalDateTime occurredTime;
     
     /**
-     * 重试次数
+     * Retry count
      */
     @Column(nullable = false)
     private Integer retryCount = 0;
     
     /**
-     * 最大重试次数
+     * Max retry count
      */
     @Column(nullable = false)
     private Integer maxRetryCount = 3;
     
     /**
-     * 下次重试时间
+     * Next retry time
      */
     private LocalDateTime nextRetryTime;
     
     /**
-     * 最后重试时间
+     * Last retry time
      */
     private LocalDateTime lastRetryTime;
 
     /**
-     * 是否已解决
+     * Whether resolved
      */
     @Column(nullable = false)
     private Boolean resolved = false;
     
     /**
-     * 解决时间
+     * Resolution time
      */
     private LocalDateTime resolvedTime;
     
     /**
-     * 解决人
+     * Resolver
      */
     @Column(length = 64)
     private String resolvedBy;
     
     /**
-     * 解决方式: AUTO_RETRY, MANUAL_FIX, IGNORED, COMPENSATED
+     * Resolution method: AUTO_RETRY, MANUAL_FIX, IGNORED, COMPENSATED
      */
     @Column(length = 50)
     private String resolutionMethod;
     
     /**
-     * 解决备注
+     * Resolution notes
      */
     @Column(columnDefinition = "TEXT")
     private String resolutionNote;
     
     /**
-     * 是否已发送告警
+     * Whether alert sent
      */
     @Column(nullable = false)
     private Boolean alertSent = false;
     
     /**
-     * 告警发送时间
+     * Alert sent time
      */
     private LocalDateTime alertSentTime;
     
     /**
-     * 关联的异常记录ID（用于追踪重试链）
+     * Related exception record ID (used to track the retry chain)
      */
     @Column(length = 64)
     private String parentExceptionId;
     
     /**
-     * 租户ID
+     * Tenant ID
      */
     @Column(length = 64)
     private String tenantId;
     
     /**
-     * 创建时间
+     * Created time
      */
     @Column(nullable = false)
     private LocalDateTime createdTime;
     
     /**
-     * 更新时间
+     * Updated time
      */
     private LocalDateTime updatedTime;
     
@@ -231,19 +231,19 @@ public class ExceptionRecord {
         updatedTime = LocalDateTime.now();
     }
     
-    // 枚举定义
+    // Enum definitions
     public enum ExceptionSeverity {
-        CRITICAL,  // 严重：系统级错误，需要立即处理
-        HIGH,      // 高：业务流程中断，需要尽快处理
-        MEDIUM,    // 中：部分功能受影响，可以稍后处理
-        LOW        // 低：轻微问题，可以忽略或延后处理
+        CRITICAL,  // Critical: system-level error, requires immediate attention
+        HIGH,      // High: business process interrupted, requires prompt attention
+        MEDIUM,    // Medium: partial functionality affected, can be handled later
+        LOW        // Low: minor issue, can be ignored or deferred
     }
     
     public enum ExceptionStatus {
-        PENDING,    // 待处理
-        PROCESSING, // 处理中
-        RESOLVED,   // 已解决
-        IGNORED     // 已忽略
+        PENDING,    // Pending
+        PROCESSING, // Processing
+        RESOLVED,   // Resolved
+        IGNORED     // Ignored
     }
 
     // Getters and Setters

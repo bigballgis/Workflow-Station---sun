@@ -9,7 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 功能包验证结果
+ * Result of validating an imported FunctionUnit package.
  */
 @Data
 @Builder
@@ -18,76 +18,76 @@ import java.util.List;
 public class ValidationResult {
     
     /**
-     * 是否验证通过
+     * Overall pass/fail.
      */
     private boolean valid;
     
     /**
-     * 文件格式验证结果
+     * Package file format check.
      */
     private boolean fileFormatValid;
     
     /**
-     * 完整性验证结果
+     * Integrity (checksum/manifest) check.
      */
     private boolean integrityValid;
     
     /**
-     * 数字签名验证结果
+     * Digital signature check.
      */
     private boolean signatureValid;
     
     /**
-     * BPMN语法验证结果
+     * BPMN syntax check.
      */
     private boolean bpmnSyntaxValid;
     
     /**
-     * 数据表结构验证结果
+     * Table design / relation metadata check.
      */
     private boolean dataTableValid;
     
     /**
-     * 表单配置验证结果
+     * Form configuration check.
      */
     private boolean formConfigValid;
 
     /**
-     * 依赖验证结果
+     * Declared dependency resolution check.
      */
     @Builder.Default
     private boolean dependenciesValid = true;
 
     /**
-     * Flowable 引擎试部署结果
+     * Trial deploy against the Flowable engine.
      */
     @Builder.Default
     private boolean engineDeployValid = true;
 
     /**
-     * 被验证的功能单元 ID
+     * FunctionUnit id being validated.
      */
     private String functionUnitId;
 
     /**
-     * 校验完成后的功能单元状态（DRAFT 或 VALIDATED）
+     * Resulting FunctionUnit status after validation ({@code DRAFT} or {@code VALIDATED}).
      */
     private String status;
     
     /**
-     * 验证错误列表
+     * Blocking validation errors.
      */
     @Builder.Default
     private List<ImportResult.ValidationError> errors = new ArrayList<>();
     
     /**
-     * 验证警告列表
+     * Non-blocking warnings.
      */
     @Builder.Default
     private List<String> warnings = new ArrayList<>();
     
     /**
-     * 创建成功结果
+     * Builds an all-pass result.
      */
     public static ValidationResult success() {
         return ValidationResult.builder()
@@ -102,7 +102,7 @@ public class ValidationResult {
     }
     
     /**
-     * 创建失败结果
+     * Builds a failed result with errors.
      */
     public static ValidationResult failure(List<ImportResult.ValidationError> errors) {
         return ValidationResult.builder()
@@ -112,7 +112,7 @@ public class ValidationResult {
     }
     
     /**
-     * 添加错误
+     * Append a structured error and mark {@code valid} false.
      */
     public void addError(String type, String field, String message) {
         if (errors == null) {
@@ -127,7 +127,7 @@ public class ValidationResult {
     }
     
     /**
-     * 添加警告
+     * Append a warning string.
      */
     public void addWarning(String warning) {
         if (warnings == null) {

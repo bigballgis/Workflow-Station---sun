@@ -9,6 +9,7 @@ import com.admin.enums.FunctionUnitStatus;
 import com.admin.exception.AdminBusinessException;
 import com.admin.exception.FunctionUnitNotFoundException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.platform.common.i18n.I18nService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -27,6 +28,7 @@ import java.util.List;
 import static org.hamcrest.Matchers.*;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -56,6 +58,9 @@ class FunctionUnitVersionManagementControllerTest {
     private ProcessDeploymentComponent processDeploymentComponent;
 
     @Mock
+    private I18nService i18nService;
+
+    @Mock
     private ObjectMapper objectMapper;
 
     @InjectMocks
@@ -67,6 +72,8 @@ class FunctionUnitVersionManagementControllerTest {
 
     @BeforeEach
     void setUp() {
+        lenient().when(i18nService.getMessage(anyString())).thenAnswer(inv -> inv.getArgument(0));
+
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
 
         testCode = "TEST_FUNCTION_UNIT";
@@ -101,20 +108,20 @@ class FunctionUnitVersionManagementControllerTest {
                 .andExpect(jsonPath("$.version").value(testVersion))
                 .andExpect(jsonPath("$.name").value("Test Function Unit"))
                 .andExpect(jsonPath("$.enabled").value(true))
-                .andExpect(jsonPath("$.message").value("版本激活成功"));
+                .andExpect(jsonPath("$.message").value("admin.fu.activate_version_success"));
     }
 
     @Test
     @DisplayName("激活不存在的版本应该返回 404")
     void activateVersion_NotFound() throws Exception {
         when(functionUnitManager.activateVersion(eq(testCode), eq(testVersion), anyString()))
-                .thenThrow(new FunctionUnitNotFoundException("功能单元版本不存在: " + testCode + ":" + testVersion));
+                .thenThrow(new FunctionUnitNotFoundException(testCode, testVersion));
 
         mockMvc.perform(post("/function-units-import/{code}/activate/{version}", testCode, testVersion)
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status").value("FAILED"))
-                .andExpect(jsonPath("$.message").value(containsString("功能单元版本不存在")));
+                .andExpect(jsonPath("$.message").value(containsString("Function unit not found")));
     }
 
     @Test
@@ -122,14 +129,14 @@ class FunctionUnitVersionManagementControllerTest {
     void activateVersion_DraftStatus() throws Exception {
         when(functionUnitManager.activateVersion(eq(testCode), eq(testVersion), anyString()))
                 .thenThrow(new AdminBusinessException("INVALID_STATUS",
-                        "仅已部署（DEPLOYED）的版本可激活为门户可发起版本。当前状态: DRAFT"));
+                        "Only DEPLOYED versions can become the portal launch baseline. Current: DRAFT"));
 
         mockMvc.perform(post("/function-units-import/{code}/activate/{version}", testCode, testVersion)
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value("FAILED"))
                 .andExpect(jsonPath("$.message").value(containsString("DRAFT")))
-                .andExpect(jsonPath("$.message").value(containsString("仅已部署")));
+                .andExpect(jsonPath("$.message").value(containsString("DEPLOYED")));
     }
 
     @Test
@@ -137,14 +144,14 @@ class FunctionUnitVersionManagementControllerTest {
     void activateVersion_DeprecatedStatus() throws Exception {
         when(functionUnitManager.activateVersion(eq(testCode), eq(testVersion), anyString()))
                 .thenThrow(new AdminBusinessException("INVALID_STATUS",
-                        "仅已部署（DEPLOYED）的版本可激活为门户可发起版本。当前状态: DEPRECATED"));
+                        "Only DEPLOYED versions can become the portal launch baseline. Current: DEPRECATED"));
 
         mockMvc.perform(post("/function-units-import/{code}/activate/{version}", testCode, testVersion)
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value("FAILED"))
                 .andExpect(jsonPath("$.message").value(containsString("DEPRECATED")))
-                .andExpect(jsonPath("$.message").value(containsString("仅已部署")));
+                .andExpect(jsonPath("$.message").value(containsString("DEPLOYED")));
     }
 
     // ==================== 版本历史端点测试 ====================

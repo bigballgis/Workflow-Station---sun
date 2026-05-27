@@ -25,15 +25,15 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * BPMN actionIds 解析组件
- * 从 BPMN 流程定义中提取 userTask 绑定的 actionIds（动作定义 ID 列表）。
+ * BPMN actionIds parser component.
+ * Extracts actionIds (action definition ID list) bound to userTasks from BPMN process definitions.
  * 
- * 支持三层回退策略：
- * 1. Flowable BpmnModel 内存模型（extension elements）
- * 2. BPMN XML DOM 解析
- * 3. BPMN XML 正则匹配
+ * Supports three-tier fallback strategy:
+ * 1. Flowable BpmnModel in-memory model (extension elements)
+ * 2. BPMN XML DOM parsing
+ * 3. BPMN XML regex matching
  * 
- * 从 TaskManagerComponent 中提取，降低该类的复杂度。
+ * Extracted from TaskManagerComponent to reduce its complexity.
  */
 @Slf4j
 @Component
@@ -53,13 +53,15 @@ public class BpmnActionParser {
     );
 
     /**
-     * 从已部署 BPMN XML 读取指定 UserTask 上 custom:property（name / value）的值。
-     * <p>与 {@link #extractActionIds} 一致：Flowable 内存模型可能未载入完整 custom 扩展，需读原始 XML。</p>
+     * Read the value of a custom:property (name/value) on the specified UserTask
+     * from the deployed BPMN XML.
+     * <p>Consistent with {@link #extractActionIds}: the Flowable in-memory model
+     * may not load full custom extensions, so raw XML must be read.</p>
      *
-     * @param processDefinitionId Flowable 流程定义 id（含 version:uuid）
-     * @param userTaskElementId   BPMN 中 userTask 的 id（如 Task_SubmitApplication）
-     * @param propertyName        property 的 name 属性，如 assigneeType、roleId
-     * @return value 或 null
+     * @param processDefinitionId Flowable process definition ID (with version:uuid)
+     * @param userTaskElementId   BPMN userTask element id (e.g. Task_SubmitApplication)
+     * @param propertyName        property name attribute, e.g. assigneeType, roleId
+     * @return value or null
      */
     public String getUserTaskExtensionPropertyValue(String processDefinitionId, String userTaskElementId,
                                                     String propertyName) {
@@ -197,8 +199,8 @@ public class BpmnActionParser {
     }
 
     /**
-     * 从任务的 BPMN 定义中提取 actionIds。
-     * 三层回退：BpmnModel extension → BPMN XML DOM → BPMN XML 正则。
+     * Extract actionIds from a task's BPMN definition.
+     * Three-tier fallback: BpmnModel extension → BPMN XML DOM → BPMN XML regex.
      */
     public List<String> extractActionIds(Task task) {
         try {
@@ -215,13 +217,13 @@ public class BpmnActionParser {
                 return extractActionIdsFromBpmnXmlResource(task, null);
             }
 
-            // 1) 递归扫描 UserTask 下全部 extension（兼容 custom:properties / 扁平 property）
+            // 1) Recursively scan all extensions under UserTask (supports custom:properties / flat property)
             List<String> fromExt = extractActionIdsRecursive(userTask.getExtensionElements(), "actionIds");
             if (fromExt != null && !fromExt.isEmpty()) {
                 return fromExt;
             }
 
-            // 2) 流程级 globalActionIds（设计器「全局绑定」）
+            // 2) Process-level globalActionIds (designer "global binding")
             org.flowable.bpmn.model.Process mainProcess = bpmnModel.getMainProcess();
             if (mainProcess != null) {
                 List<String> global = extractActionIdsRecursive(mainProcess.getExtensionElements(), "globalActionIds");
@@ -230,7 +232,7 @@ public class BpmnActionParser {
                 }
             }
 
-            // 3) 原始 BPMN 文本回退（Flowable 有时不把 custom 命名空间子节点放进内存模型）
+            // 3) Raw BPMN text fallback (Flowable sometimes does not put custom namespace child nodes in the in-memory model)
             return extractActionIdsFromBpmnXmlResource(task, userTask.getId());
 
         } catch (Exception e) {
@@ -240,7 +242,8 @@ public class BpmnActionParser {
     }
 
     /**
-     * 深度优先查找 name 为给定属性名（actionIds / globalActionIds）的 extension 节点。
+     * Depth-first search for extension nodes whose name attribute matches the given
+     * property name (actionIds / globalActionIds).
      */
     List<String> extractActionIdsRecursive(
             Map<String, List<ExtensionElement>> extensions,
@@ -287,12 +290,12 @@ public class BpmnActionParser {
                 return null;
             }
             String key = userTaskElementId != null ? userTaskElementId : task.getTaskDefinitionKey();
-            // 1) DOM 解析（最稳：任意命名空间与属性顺序）
+            // 1) DOM parsing (most robust: handles any namespace and attribute order)
             List<String> fromDom = parseActionIdsFromBpmnDom(xml, key, "actionIds");
             if (fromDom != null && !fromDom.isEmpty()) {
                 return fromDom;
             }
-            // 2) 正则（双引号 / 单引号）
+            // 2) Regex (double-quoted / single-quoted)
             List<String> fromTask = parseActionIdsFromUserTaskXmlBlock(xml, key, "actionIds");
             if (fromTask != null && !fromTask.isEmpty()) {
                 return fromTask;
@@ -308,7 +311,7 @@ public class BpmnActionParser {
         }
     }
 
-    // ==================== DOM 解析方法 ====================
+    // ==================== Internal Methods ====================
 
     private List<String> parseActionIdsFromBpmnDom(String xml, String taskDefinitionKey, String propertyName) {
         if (xml == null || taskDefinitionKey == null || !"actionIds".equals(propertyName)) {
@@ -319,7 +322,8 @@ public class BpmnActionParser {
     }
 
     /**
-     * 在 userTask 子树中查找第一个带 name/value 的扩展节点，且 name 等于 propertyName。
+     * Find the first extension node in the userTask subtree that has name/value attributes
+     * with name equal to propertyName.
      */
     private String findUserTaskPropertyValueDom(String xml, String taskDefinitionKey, String propertyName) {
         if (xml == null || taskDefinitionKey == null || propertyName == null) {
@@ -471,7 +475,7 @@ public class BpmnActionParser {
         }
     }
 
-    // ==================== 正则解析方法 ====================
+    // ==================== Regex Parsing Methods ====================
 
     private List<String> parseActionIdsFromUserTaskXmlBlock(String xml, String taskDefinitionKey, String propName) {
         if (xml == null || taskDefinitionKey == null) {
@@ -522,10 +526,10 @@ public class BpmnActionParser {
         return null;
     }
 
-    // ==================== 值解析 ====================
+    // ==================== Value Parsing ====================
 
     /**
-     * 解析 actionIds 字符串：将 "[id1,id2]" 或 JSON 数组转换为 List&lt;String&gt;
+     * Parse actionIds string: converts "[id1,id2]" or a JSON array to List&lt;String&gt;.
      */
     List<String> parseActionIds(String value) {
         try {
@@ -535,7 +539,7 @@ public class BpmnActionParser {
 
             String trimmed = value.trim();
 
-            // JSON array: ["a","b"] 或 [1,2,3]（设计器存数字 ID）
+        // JSON array: ["a","b"] or [1,2,3] (designer stores numeric IDs)
             if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
                 try {
                     com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();

@@ -13,49 +13,49 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * 功能单元仓库接口
+ * FunctionUnit repository.
  */
 @Repository
 public interface FunctionUnitRepository extends JpaRepository<FunctionUnit, String> {
     
     /**
-     * 根据代码和版本查找功能单元
+     * Find function unit by code and version.
      */
     Optional<FunctionUnit> findByCodeAndVersion(String code, String version);
     
     /**
-     * 检查代码和版本是否存在
+     * Whether the code+version pair exists.
      */
     boolean existsByCodeAndVersion(String code, String version);
     
     /**
-     * 根据代码查找所有版本
+     * All versions for a code, newest first.
      */
     List<FunctionUnit> findByCodeOrderByVersionDesc(String code);
     
     /**
-     * 根据代码查找所有版本（别名方法）
+     * Alias: all versions for a code, newest first.
      */
     List<FunctionUnit> findAllByCodeOrderByVersionDesc(String code);
     
     /**
-     * 根据状态查找功能单元
+     * Find by status.
      */
     List<FunctionUnit> findByStatus(FunctionUnitStatus status);
     
     /**
-     * 根据状态分页查找功能单元
+     * Find by status (paged).
      */
     Page<FunctionUnit> findByStatus(FunctionUnitStatus status, Pageable pageable);
     
     /**
-     * 根据代码查找最新版本
+     * Latest version row for the given code.
      */
     @Query("SELECT f FROM FunctionUnit f WHERE f.code = :code ORDER BY f.version DESC LIMIT 1")
     Optional<FunctionUnit> findLatestByCode(@Param("code") String code);
     
     /**
-     * 分页查询功能单元
+     * Paged filter by code/name/status (nullable params = ignored).
      */
     @Query("SELECT f FROM FunctionUnit f WHERE " +
            "(:code IS NULL OR f.code LIKE %:code%) AND " +
@@ -68,53 +68,53 @@ public interface FunctionUnitRepository extends JpaRepository<FunctionUnit, Stri
             Pageable pageable);
     
     /**
-     * 查找可部署的功能单元
+     * Units in VALIDATED or DEPLOYED (deployable).
      */
     @Query("SELECT f FROM FunctionUnit f WHERE f.status IN ('VALIDATED', 'DEPLOYED')")
     List<FunctionUnit> findDeployable();
     
     /**
-     * 根据代码模糊查询
+     * Code contains (substring match).
      */
     List<FunctionUnit> findByCodeContaining(String code);
     
     /**
-     * 根据名称模糊查询
+     * Name contains (substring match).
      */
     List<FunctionUnit> findByNameContaining(String name);
     
     /**
-     * 根据状态和启用状态分页查找功能单元
+     * By status and enabled flag (paged).
      */
     Page<FunctionUnit> findByStatusAndEnabled(FunctionUnitStatus status, Boolean enabled, Pageable pageable);
     
     /**
-     * 根据状态和启用状态查找功能单元列表
+     * By status and enabled flag (list).
      */
     List<FunctionUnit> findByStatusAndEnabled(FunctionUnitStatus status, Boolean enabled);
     
     /**
-     * 根据代码和启用状态查找功能单元列表
+     * By code and enabled flag (list).
      */
     List<FunctionUnit> findByCodeAndEnabled(String code, Boolean enabled);
 
     /**
-     * 排除指定状态分页查找功能单元
+     * Paged: status not equal to the given value.
      */
     Page<FunctionUnit> findByStatusNot(FunctionUnitStatus status, Pageable pageable);
 
     /**
-     * 根据代码和状态查找功能单元
+     * By code and status.
      */
     List<FunctionUnit> findByCodeAndStatus(String code, FunctionUnitStatus status);
     
     /**
-     * 根据代码查找已启用的功能单元
+     * Enabled unit by code.
      */
     Optional<FunctionUnit> findByCodeAndEnabledTrue(String code);
     
     /**
-     * 统计指定代码和启用状态的功能单元数量
+     * Count by code and enabled flag.
      */
     long countByCodeAndEnabled(String code, Boolean enabled);
 }

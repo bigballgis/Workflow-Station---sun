@@ -23,14 +23,15 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import com.platform.security.util.SecurityContextUtils;
+import com.platform.common.i18n.I18nService;
 
 /**
- * 用户业务单元角色分配控制器
+ * User Business Unit Role Assignment Controller
  */
 @RestController
 @RequestMapping("/users/{userId}/business-unit-roles")
 @RequiredArgsConstructor
-@Tag(name = "用户业务单元角色", description = "用户在业务单元中的角色分配管理")
+@Tag(name = "User Business Unit Roles", description = "Manage role assignments for users in business units")
 public class UserBusinessUnitRoleController {
     
     private final UserBusinessUnitRoleManagerComponent userBusinessUnitRoleManagerComponent;
@@ -38,9 +39,10 @@ public class UserBusinessUnitRoleController {
     private final UserRepository userRepository;
     private final BusinessUnitRepository businessUnitRepository;
     private final RoleRepository roleRepository;
+    private final I18nService i18nService;
     
     @GetMapping
-    @Operation(summary = "获取用户的业务单元角色列表")
+    @Operation(summary = "Get user business unit role list")
     public ResponseEntity<List<UserBusinessUnitRoleInfo>> getUserBusinessUnitRoles(@PathVariable String userId) {
         List<UserBusinessUnitRole> roles = userBusinessUnitRoleRepository.findByUserId(userId);
         // Fetch related entities
@@ -67,31 +69,31 @@ public class UserBusinessUnitRoleController {
     }
     
     @PostMapping
-    @Operation(summary = "分配业务单元角色给用户")
+    @Operation(summary = "Assign business unit role to user")
     public ResponseEntity<Void> assignRole(
             @PathVariable String userId,
             @RequestBody @Valid UserBusinessUnitRoleAssignRequest request) {
         String operatedBy = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthenticated_user")));
         userBusinessUnitRoleManagerComponent.assign(
                 userId, request.getBusinessUnitId(), request.getRoleId(), operatedBy);
         return ResponseEntity.ok().build();
     }
     
     @DeleteMapping("/{businessUnitId}/{roleId}")
-    @Operation(summary = "移除用户的业务单元角色")
+    @Operation(summary = "Remove user business unit role")
     public ResponseEntity<Void> removeRole(
             @PathVariable String userId,
             @PathVariable String businessUnitId,
             @PathVariable String roleId) {
         String operatedBy = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthenticated_user")));
         userBusinessUnitRoleManagerComponent.remove(userId, businessUnitId, roleId, operatedBy);
         return ResponseEntity.ok().build();
     }
     
     @GetMapping("/by-business-unit/{businessUnitId}")
-    @Operation(summary = "获取用户在指定业务单元的角色列表")
+    @Operation(summary = "Get user roles in specific business unit")
     public ResponseEntity<List<UserBusinessUnitRoleInfo>> getUserRolesInBusinessUnit(
             @PathVariable String userId,
             @PathVariable String businessUnitId) {

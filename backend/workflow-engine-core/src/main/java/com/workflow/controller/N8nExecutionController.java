@@ -27,9 +27,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * N8N 执行记录查询与 Action 同步执行控制器
+ * N8N execution record query and Action sync execution controller.
  *
- * 提供执行记录的查询（支持筛选和分页）以及 N8N Action 同步执行内部 API。
+ * Provides execution record queries (supporting filtering and pagination) and
+ * the N8N Action synchronous execution internal API.
  *
  * Validates: Requirements 7.3, 7.4, 10.20, 10.21, 10.22, 10.23
  */
@@ -42,10 +43,11 @@ public class N8nExecutionController {
     private final N8nExecutionRecordRepository executionRecordRepository;
     private final N8nTaskExecutor n8nTaskExecutor;
 
-    // ==================== 执行记录查询 ====================
+    // ==================== Execution Record Queries ====================
 
     /**
-     * 查询 N8N 执行记录列表，支持按 processInstanceId、status、时间范围筛选和分页。
+     * Query N8N execution record list, supporting filtering by processInstanceId, status,
+     * time range, and pagination.
      *
      * Validates: Requirements 7.3
      */
@@ -77,7 +79,7 @@ public class N8nExecutionController {
     }
 
     /**
-     * 查询单条 N8N 执行记录详情。
+     * Query a single N8N execution record detail.
      *
      * Validates: Requirements 7.4
      */
@@ -95,11 +97,12 @@ public class N8nExecutionController {
                         ApiResponse.error("NOT_FOUND", "Execution record not found: " + id)));
     }
 
-    // ==================== N8N Action 同步执行 ====================
+    // ==================== N8N Action Sync Execution ====================
 
     /**
-     * N8N Action 同步执行内部 API。
-     * 接收 N8N Action 执行请求，调用 N8nTaskExecutor.executeSynchronous() 同步等待结果。
+     * N8N Action synchronous execution internal API.
+     * Receives an N8N Action execution request and calls
+     * N8nTaskExecutor.executeSynchronous() to wait synchronously for the result.
      *
      * Validates: Requirements 10.20, 10.21, 10.22, 10.23
      */
@@ -142,10 +145,11 @@ public class N8nExecutionController {
         }
     }
 
-    // ==================== 内部方法 ====================
+    // ==================== Internal Methods ====================
 
     /**
-     * 构建过滤条件 Specification，支持 processInstanceId、status、时间范围组合过滤。
+     * Build filter specification supporting combined filtering by processInstanceId,
+     * status, and time range.
      */
     Specification<N8nExecutionRecord> buildFilterSpecification(
             String processInstanceId, String status, String startTime, String endTime) {

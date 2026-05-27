@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.platform.common.jdbc.PostgresPhysicalTablePrimaryKeys;
 import com.platform.common.jdbc.SubTablePhysicalColumnResolver;
 import com.platform.common.jdbc.SubTableRowKeySupport;
+import com.platform.common.i18n.I18nService;
 import com.workflow.entity.ExtendedTaskInfo;
 import com.workflow.exception.WorkflowBusinessException;
 import com.workflow.exception.WorkflowValidationException;
@@ -19,18 +20,9 @@ import org.springframework.stereotype.Component;
 import java.util.*;
 
 /**
- * 多实例数据解析器
+ * Resolves multi-instance sub-table row keys, loads/writes row data, and applies optimistic locking.
  *
- * 负责多实例子任务运行时的行键解析、行数据加载/回写与乐观锁。
- *
- * 核心职责：
- * 1. 解析当前 MI 任务关联的子表行键（来自 ExtendedTaskInfo.extendedProperties）
- * 2. 加载主表单变量（{@link #loadMainFormData}）用于上层组件按需读取
- * 3. 行数据回写使用 row_version 乐观锁，区分"被删除"与"版本冲突"
- *
- * Portal 侧 MI 子任务的表单 hydrate 由 {@code tasks/detail.vue} 主路径完成；本组件
- * 只负责行键/行数据层面的协议，不再聚合"子任务表单视图"——之前的 SubTaskFormData
- * 通道与 {@code /tasks/{taskId}/sub-task-form-data} 接口已废弃。
+ * Portal MI sub-task form hydrate is handled in tasks/detail.vue; this component owns row-key/data only.
  */
 @Slf4j
 @Component
@@ -47,24 +39,22 @@ public class MultiInstanceDataResolver {
 
     @Autowired
     private BpmnActionParser bpmnActionParser;
+
+    @Autowired
+    private I18nService i18nService;
     
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
-     * 加载主表单数据（从流程变量中获取）
-     *
-     * 过滤系统变量和集合变量，只返回主表单相关的业务数据
-     *
-     * @param processInstanceId 流程实例 ID
-     * @return 主表单数据
+     * Load main form fields from process variables (excludes system/MI vars).
      */
     public Map<String, Object> loadMainFormData(String processInstanceId) {
-        log.debug("加载主表单数据: processInstanceId={}", processInstanceId);
+        log.debug("Loading main form data: processInstanceId={}", processInstanceId);
         
-        // 从流程变量中获取所有变量
+        // Load all variables from the process instance
         Map<String, Object> variables = runtimeService.getVariables(processInstanceId);
         
-        // 过滤出主表单相关的变量（排除系统变量和集合变量）
+        // Keep business fields only (exclude system/MI collection vars)
         Map<String, Object> mainFormData = new HashMap<>();
         for (Map.Entry<String, Object> entry : variables.entrySet()) {
             String key = entry.getKey();
@@ -75,14 +65,14 @@ public class MultiInstanceDataResolver {
             }
         }
         
-        log.debug("主表单数据加载完成: processInstanceId={}, fieldCount={}", 
+        log.debug("Main form data loaded: processInstanceId={}, fieldCount={}", 
             processInstanceId, mainFormData.size());
         
         return mainFormData;
     }
     
     /**
-     * 加载子表数据行（单列主键兼容：历史调用仍传 Long）。
+     * Load a sub-table row (Long row id for single-column PK legacy callers).
      */
     public Map<String, Object> loadSubTableRow(String subTableName, Long rowId) {
         String safe = requireSafeIdentifier(subTableName);
@@ -101,22 +91,22 @@ public class MultiInstanceDataResolver {
         }
         String where = SubTableRowKeySupport.buildPkWhereClause(pkCols);
         Object[] args = SubTableRowKeySupport.orderedPkParams(pkCols, rowKey);
-        log.debug("加载子表数据行: subTableName={}, rowKey={}", subTableName, rowKey);
+        log.debug("Loading sub-table row: subTableName={}, rowKey={}", subTableName, rowKey);
 
         try {
             String sql = String.format("SELECT * FROM %s WHERE %s", safeTable, where);
             Map<String, Object> row = jdbcTemplate.queryForMap(sql, args);
 
-            log.debug("子表数据行加载成功: subTableName={}", subTableName);
+            log.debug("Sub-table row loaded: subTableName={}", subTableName);
             return row;
         } catch (EmptyResultDataAccessException e) {
-            log.warn("子表数据行不存在: subTableName={}, rowKey={}", subTableName, rowKey);
+            log.warn("Sub-table row not found: subTableName={}, rowKey={}", subTableName, rowKey);
             throw new WorkflowValidationException("The associated data row no longer exists");
         } catch (Exception e) {
-            log.error("加载子表数据行失败: subTableName={}, rowKey={}", subTableName, rowKey, e);
+            log.error("Failed to load sub-table row: subTableName={}, rowKey={}", subTableName, rowKey, e);
             throw new WorkflowBusinessException(
                 "LOAD_SUBTABLE_ROW_FAILED",
-                String.format("加载子表数据行失败: %s", e.getMessage()),
+                i18nService.getMessage("workflow.load_subtable_row_failed"),
                 e
             );
         }
@@ -131,34 +121,21 @@ public class MultiInstanceDataResolver {
                 "SELECT to_regclass(?)::text", String.class, subTableName);
             return resolvedRegclass != null && !resolvedRegclass.isBlank();
         } catch (Exception e) {
-            log.warn("检查子表是否存在失败: subTableName={}", subTableName, e);
+            log.warn("Failed to check sub-table existence: subTableName={}", subTableName, e);
             return false;
         }
     }
     
     /**
-     * 回写子任务表单数据到子表（含乐观锁校验）
-     * 
-     * 使用 row_version 实现乐观锁：
-     * UPDATE ... SET row_version = row_version + 1 WHERE id = ? AND row_version = ?
-     * 
-     * 影响行数为 0 时区分两种情况：
-     * 1. 数据行被删除：抛出 WorkflowValidationException
-     * 2. row_version 不一致：抛出 OptimisticLockException
-     * 
-     * @param taskId 任务 ID
-     * @param formData 表单数据
-     * @param expectedRowVersion 期望的 row_version
-     * @throws OptimisticLockException row_version 不一致时
-     * @throws WorkflowValidationException 数据行已删除时
+     * Write sub-task form data to the sub-table with row_version optimistic locking.
      */
     public void writeBackSubTableRow(String taskId, Map<String, Object> formData, 
                                       Long expectedRowVersion) {
-        log.info("回写子表数据: taskId={}, expectedRowVersion={}", taskId, expectedRowVersion);
+        log.info("Writing back sub-table row: taskId={}, expectedRowVersion={}", taskId, expectedRowVersion);
         
-        // 1. 获取子表信息
+        // 1. Resolve sub-table metadata
         ExtendedTaskInfo extInfo = extendedTaskInfoRepository.findByTaskIdAndIsDeletedFalse(taskId)
-            .orElseThrow(() -> new WorkflowValidationException("任务不存在"));
+            .orElseThrow(() -> new WorkflowValidationException(i18nService.getMessage("workflow.task_not_found")));
         
         Map<String, Object> extProps = parseExtendedProperties(extInfo.getExtendedProperties());
 
@@ -183,7 +160,7 @@ public class MultiInstanceDataResolver {
         try {
             currentRowVersion = jdbcTemplate.queryForObject(checkSql, Long.class, pkArgs);
         } catch (EmptyResultDataAccessException e) {
-            log.warn("数据行已被删除: subTableName={}, rowKey={}", subTableName, rowKey);
+            log.warn("Sub-table row deleted: subTableName={}, rowKey={}", subTableName, rowKey);
             throw new WorkflowValidationException("The associated data row no longer exists");
         }
 
@@ -192,12 +169,12 @@ public class MultiInstanceDataResolver {
         }
 
         if (!currentRowVersion.equals(expectedRowVersion)) {
-            log.warn("乐观锁冲突: subTableName={}, rowKey={}, expected={}, current={}",
+            log.warn("Optimistic lock conflict: subTableName={}, rowKey={}, expected={}, current={}",
                 subTableName, rowKey, expectedRowVersion, currentRowVersion);
             throw new OptimisticLockException("Data has been modified, please refresh and try again");
         }
 
-        // 3. 构建 UPDATE SQL（含乐观锁）
+        // 3. Build UPDATE with optimistic lock
         boolean hasTaskStatus = columnExists(safeSubTableName, statusCol);
         boolean hasTaskCurrentNode = columnExists(safeSubTableName, nodeCol);
         StringBuilder updateSql = new StringBuilder(String.format("UPDATE %s SET ", safeSubTableName));
@@ -226,18 +203,18 @@ public class MultiInstanceDataResolver {
         params.addAll(Arrays.asList(pkArgs));
         params.add(expectedRowVersion);
 
-        // 4. 执行更新
-        log.debug("执行子表数据回写: sql={}", updateSql);
+        // 4. Execute update
+        log.debug("Executing sub-table write-back: sql={}", updateSql);
         int updated = jdbcTemplate.update(updateSql.toString(), params.toArray());
 
         if (updated == 0) {
-            // 再次检查是否是 row_version 不一致还是数据行被删除
+            // Re-check whether row was deleted or version changed
             try {
                 Long latestRowVersion = jdbcTemplate.queryForObject(checkSql, Long.class, pkArgs);
                 if (latestRowVersion == null) {
                     throw new WorkflowValidationException("The associated data row no longer exists");
                 } else {
-                    log.warn("乐观锁冲突（二次检查）: subTableName={}, rowKey={}, expected={}, latest={}",
+                    log.warn("Optimistic lock conflict (recheck): subTableName={}, rowKey={}, expected={}, latest={}",
                         subTableName, rowKey, expectedRowVersion, latestRowVersion);
                     throw new OptimisticLockException("Data has been modified, please refresh and try again");
                 }
@@ -246,19 +223,12 @@ public class MultiInstanceDataResolver {
             }
         }
 
-        log.info("回写子表数据成功: taskId={}, subTableName={}, rowKey={}, newVersion={}",
+        log.info("Sub-table write-back succeeded: taskId={}, subTableName={}, rowKey={}, newVersion={}",
             taskId, subTableName, rowKey, expectedRowVersion + 1);
     }
     
     /**
-     * 判断是否为系统变量
-     * 
-     * Flowable 多实例系统变量：
-     * - nrOfInstances: 总实例数
-     * - nrOfActiveInstances: 活跃实例数
-     * - nrOfCompletedInstances: 已完成实例数
-     * - loopCounter: 循环计数器
-     * - 以下划线开头的变量
+     * Whether the variable key is a Flowable multi-instance system variable.
      */
     public boolean isSystemVariable(String key) {
         return key.equals("nrOfInstances") ||
@@ -275,7 +245,7 @@ public class MultiInstanceDataResolver {
         return SubTablePhysicalColumnResolver.resolvePhysicalColumnKey(jdbcTemplate, subTableName, variableKey, physicalColumns);
     }
 
-    // ==================== 辅助方法 ====================
+    // ==================== Helpers ====================
     
     private Map<String, Object> resolveRowKeyFromExt(Map<String, Object> extProps, String safeSubTableName) {
         List<String> pkCols = PostgresPhysicalTablePrimaryKeys.resolvePrimaryKeyColumns(jdbcTemplate, safeSubTableName);
@@ -303,7 +273,7 @@ public class MultiInstanceDataResolver {
     }
 
     /**
-     * 解析 ExtendedTaskInfo 的 extendedProperties JSON 字符串
+     * Parse extendedProperties JSON on ExtendedTaskInfo.
      */
     private Map<String, Object> parseExtendedProperties(String extendedProperties) {
         if (extendedProperties == null || extendedProperties.trim().isEmpty()) {
@@ -313,13 +283,13 @@ public class MultiInstanceDataResolver {
         try {
             return objectMapper.readValue(extendedProperties, Map.class);
         } catch (JsonProcessingException e) {
-            log.error("解析 extendedProperties 失败: {}", extendedProperties, e);
+            log.error("Failed to parse extendedProperties: {}", extendedProperties, e);
             return new HashMap<>();
         }
     }
     
     /**
-     * 从 Map 中安全获取 Long 值
+     * Safe Long lookup from a map.
      */
     private Long getLongValue(Map<String, Object> map, String key) {
         Object value = map.get(key);
@@ -332,13 +302,13 @@ public class MultiInstanceDataResolver {
         try {
             return Long.parseLong(value.toString());
         } catch (NumberFormatException e) {
-            log.warn("无法将值转换为 Long: key={}, value={}", key, value);
+            log.warn("Cannot convert value to Long: key={}, value={}", key, value);
             return null;
         }
     }
     
     /**
-     * 从 Map 中安全获取 String 值
+     * Safe String lookup from a map.
      */
     private String getStringValue(Map<String, Object> map, String key) {
         Object value = map.get(key);
@@ -346,7 +316,7 @@ public class MultiInstanceDataResolver {
     }
 
     /**
-     * SubProcess 扩展 {@code miTaskStatusField} / {@code miTaskCurrentNodeField}，或 ExtendedTaskInfo JSON 中的同名键。
+     * Resolve MI status/node column from ext props or BPMN subprocess extensions.
      */
     private String resolveMiNamedColumn(Map<String, Object> extProps, String extJsonKey, String bpmnPropertyName,
                                       ExtendedTaskInfo extInfo, String defaultName) {
@@ -383,10 +353,10 @@ public class MultiInstanceDataResolver {
         return count != null && count > 0;
     }
     
-    // ==================== 内部类 ====================
+    // ==================== Inner types ====================
 
     /**
-     * 乐观锁异常
+     * Optimistic lock conflict
      */
     public static class OptimisticLockException extends RuntimeException {
         public OptimisticLockException(String message) {

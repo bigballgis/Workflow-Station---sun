@@ -1,8 +1,8 @@
 package com.workflow.enums;
 
 /**
- * 审计风险等级枚举
- * 用于标识操作的风险等级，便于安全监控和告警
+ * Audit risk level enum
+ * Used to identify the risk level of operations for security monitoring and alerting
  */
 public enum AuditRiskLevel {
     
@@ -28,43 +28,43 @@ public enum AuditRiskLevel {
     }
     
     /**
-     * 根据操作类型和资源类型评估风险等级
+     * Evaluate risk level based on operation type and resource type
      */
     public static AuditRiskLevel evaluateRiskLevel(AuditOperationType operationType, AuditResourceType resourceType) {
-        // 系统级操作通常是高风险
+        // System-level operations are typically high risk
         if (resourceType == AuditResourceType.SYSTEM) {
             return CRITICAL;
         }
         
-        // 删除操作通常是高风险
+        // Delete operations are typically high risk
         if (operationType.name().contains("DELETE")) {
             return HIGH;
         }
         
-        // 权限相关操作是高风险
+        // Permission-related operations are high risk
         if (operationType == AuditOperationType.ASSIGN_ROLE || 
             operationType == AuditOperationType.REVOKE_ROLE ||
             operationType == AuditOperationType.ACCESS_DENIED) {
             return HIGH;
         }
         
-        // 流程定义操作是中等风险
+        // Process definition operations are medium risk
         if (resourceType == AuditResourceType.PROCESS_DEFINITION) {
             return MEDIUM;
         }
         
-        // 数据导出/导入是中等风险
+        // Data export/import is medium risk
         if (operationType == AuditOperationType.EXPORT_DATA || 
             operationType == AuditOperationType.IMPORT_DATA) {
             return MEDIUM;
         }
         
-        // 其他操作默认为低风险
+        // Other operations default to low risk
         return LOW;
     }
     
     /**
-     * 根据字符串获取风险等级
+     * Get risk level from string
      */
     public static AuditRiskLevel fromString(String riskLevel) {
         for (AuditRiskLevel level : AuditRiskLevel.values()) {

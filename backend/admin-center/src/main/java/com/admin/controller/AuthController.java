@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 
 /**
- * 认证控制器
+ * Authentication controller
  */
 @Slf4j
 @RestController
@@ -26,7 +26,7 @@ public class AuthController {
     private final AuthService authService;
 
     /**
-     * 用户登录
+     * User login
      */
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(
@@ -53,7 +53,7 @@ public class AuthController {
     }
 
     /**
-     * 用户登出
+     * User logout
      */
     @PostMapping("/logout")
     public ResponseEntity<Void> logout(
@@ -68,7 +68,7 @@ public class AuthController {
     }
 
     /**
-     * 刷新令牌
+     * Refresh token
      */
     @PostMapping("/refresh")
     public ResponseEntity<LoginResponse> refresh(
@@ -88,7 +88,7 @@ public class AuthController {
     }
 
     /**
-     * 获取当前用户信息
+     * Get current user info
      */
     @GetMapping("/me")
     public ResponseEntity<LoginResponse.UserLoginInfo> getCurrentUser(
@@ -109,7 +109,7 @@ public class AuthController {
     }
 
     /**
-     * 验证令牌
+     * Validate token
      */
     @GetMapping("/validate")
     public ResponseEntity<Boolean> validateToken(
@@ -126,7 +126,7 @@ public class AuthController {
     }
 
     /**
-     * 修改当前用户密码；成功后当前 access token 失效，需重新登录。
+     * Change current user password; on success, current access token is invalidated and re-login is required.
      */
     @PostMapping("/change-password")
     public ResponseEntity<Void> changePassword(

@@ -30,7 +30,7 @@ import java.io.IOException;
 import java.util.Collections;
 
 /**
- * 安全配置
+ * Security configuration
  */
 @Slf4j
 @Configuration

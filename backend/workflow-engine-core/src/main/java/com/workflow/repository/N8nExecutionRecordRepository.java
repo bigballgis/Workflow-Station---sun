@@ -12,29 +12,30 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * N8N 执行记录数据访问层
+ * N8N execution record data access layer.
  */
 @Repository
 public interface N8nExecutionRecordRepository extends JpaRepository<N8nExecutionRecord, Long>,
         JpaSpecificationExecutor<N8nExecutionRecord> {
 
     /**
-     * 根据回调令牌查询执行记录
+     * Find execution record by callback token.
      */
     Optional<N8nExecutionRecord> findByCallbackToken(String callbackToken);
 
     /**
-     * 查询指定状态且开始时间早于截止时间的执行记录（用于超时检测）
+     * Find execution records with the specified status whose start time is before
+     * the cutoff (for timeout detection).
      */
     List<N8nExecutionRecord> findByStatusAndStartedAtBefore(String status, Instant cutoff);
 
     /**
-     * 根据流程实例ID分页查询执行记录
+     * Find execution records by process instance ID with pagination.
      */
     Page<N8nExecutionRecord> findByProcessInstanceId(String processInstanceId, Pageable pageable);
 
     /**
-     * 根据执行状态分页查询执行记录
+     * Find execution records by execution status with pagination.
      */
     Page<N8nExecutionRecord> findByStatus(String status, Pageable pageable);
 }

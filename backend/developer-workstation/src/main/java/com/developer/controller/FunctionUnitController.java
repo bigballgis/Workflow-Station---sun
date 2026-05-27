@@ -23,9 +23,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 
-/**
- * 功能单元控制器
- */
+/** REST controller for Function Unit operations. */
 @RestController
 @RequestMapping("/function-units")
 @Slf4j

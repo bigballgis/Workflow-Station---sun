@@ -12,19 +12,19 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * 虚拟组角色绑定控制器
- * 每个虚拟组只能绑定一个角色（单角色绑定）
+ * Virtual group role binding controller.
+ * Each virtual group can only bind one role (single role binding).
  */
 @RestController
 @RequestMapping("/virtual-groups/{groupId}")
 @RequiredArgsConstructor
-@Tag(name = "虚拟组角色绑定", description = "虚拟组与业务角色的绑定管理（单角色绑定）")
+@Tag(name = "Virtual Group Role Binding", description = "Manage bindings between virtual groups and business roles (single role binding)")
 public class VirtualGroupRoleController {
     
     private final VirtualGroupRoleService virtualGroupRoleService;
     
     @GetMapping("/role")
-    @Operation(summary = "获取虚拟组绑定的角色（单个）")
+    @Operation(summary = "Get bound role for virtual group")
     public ResponseEntity<Role> getBoundRole(@PathVariable String groupId) {
         Optional<Role> role = virtualGroupRoleService.getBoundRole(groupId);
         return role.map(ResponseEntity::ok)
@@ -32,7 +32,7 @@ public class VirtualGroupRoleController {
     }
     
     @PostMapping("/role")
-    @Operation(summary = "绑定角色到虚拟组（会替换现有绑定）")
+    @Operation(summary = "Bind a role to the virtual group (replaces existing binding)")
     public ResponseEntity<Void> bindRole(
             @PathVariable String groupId,
             @RequestBody Map<String, String> request) {
@@ -45,7 +45,7 @@ public class VirtualGroupRoleController {
     }
     
     @DeleteMapping("/role")
-    @Operation(summary = "解绑虚拟组的角色")
+    @Operation(summary = "Unbind role from virtual group")
     public ResponseEntity<Void> unbindRole(@PathVariable String groupId) {
         virtualGroupRoleService.unbindRole(groupId);
         return ResponseEntity.ok().build();

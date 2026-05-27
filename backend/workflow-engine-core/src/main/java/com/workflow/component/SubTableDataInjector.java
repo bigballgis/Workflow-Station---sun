@@ -1,5 +1,6 @@
 package com.workflow.component;
 
+import com.platform.common.i18n.I18nService;
 import com.platform.common.jdbc.PostgresPhysicalTablePrimaryKeys;
 import com.platform.common.jdbc.SubTableRowKeySupport;
 import com.workflow.exception.WorkflowBusinessException;
@@ -17,9 +18,10 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 子表数据注入器
+ * Sub-table data injector.
  *
- * 集合变量元素含 {@code rowKey}（完整主键，支持联合主键）；单列数值主键时额外保留 {@code rowId} 兼容旧逻辑。
+ * Collection variable elements include {@code rowKey} (full primary key, supports composite PK);
+ * additionally keeps {@code rowId} for single numeric PK compatibility with legacy logic.
  */
 @Slf4j
 @Component
@@ -31,8 +33,12 @@ public class SubTableDataInjector {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    @Autowired
+    private I18nService i18nService;
+
     /**
-     * 当前 schema 下是否存在该名字的物理基表（JSON-only 流程通常不存在与子表设计同名的表）。
+     * Whether a physical base table with this name exists in the current schema
+     * (JSON-only workflows typically do not have tables matching sub-table design names).
      */
     public boolean physicalTableExistsInCurrentSchema(String tableName) {
         if (tableName == null || tableName.isBlank()) {
@@ -67,7 +73,7 @@ public class SubTableDataInjector {
             String assigneeField,
             String collectionVariableName) {
 
-        log.info("开始注入子表数据: processInstanceId={}, subTableName={}, mainRecordId={}",
+        log.info("Starting sub-table data injection: processInstanceId={}, subTableName={}, mainRecordId={}",
                 processInstanceId, subTableName, mainRecordId);
 
         List<String> pkCols = PostgresPhysicalTablePrimaryKeys.resolvePrimaryKeyColumns(jdbcTemplate, subTableName);
@@ -77,11 +83,11 @@ public class SubTableDataInjector {
 
         if (subTableRows.isEmpty()) {
             throw new WorkflowValidationException(
-                    "多实例数据源为空，至少需要一条子表数据"
+                    i18nService.getMessage("workflow.subtable.empty_data_source")
             );
         }
 
-        log.debug("查询到 {} 条子表数据行", subTableRows.size());
+        log.debug("Found {} sub-table data rows", subTableRows.size());
 
         List<Map<String, Object>> collectionVariable = buildCollectionVariable(
                 subTableRows, assigneeField, pkCols);
@@ -92,7 +98,7 @@ public class SubTableDataInjector {
 
         runtimeService.setVariable(processInstanceId, variableName, collectionVariable);
 
-        log.info("子表数据注入成功: processInstanceId={}, variableName={}, rowCount={}",
+        log.info("Sub-table data injection successful: processInstanceId={}, variableName={}, rowCount={}",
                 processInstanceId, variableName, collectionVariable.size());
     }
 
@@ -113,11 +119,11 @@ public class SubTableDataInjector {
                     foreignKeyField
             );
 
-            log.debug("执行子表查询: sql={}, mainRecordId={}", sql, mainRecordId);
+            log.debug("Executing sub-table query: sql={}, mainRecordId={}", sql, mainRecordId);
 
             return jdbcTemplate.queryForList(sql, mainRecordId);
         } catch (Exception e) {
-            log.error("查询子表数据失败: subTableName={}, mainRecordId={}",
+            log.error("Sub-table data query failed: subTableName={}, mainRecordId={}",
                     subTableName, mainRecordId, e);
 
             if (e.getMessage() != null
@@ -126,14 +132,14 @@ public class SubTableDataInjector {
                     || e.getMessage().contains("relation") && e.getMessage().contains("does not exist"))) {
                 throw new WorkflowBusinessException(
                         "SUBTABLE_NOT_FOUND",
-                        String.format("关联的子表 %s 不存在", subTableName),
+                        String.format(i18nService.getMessage("workflow.subtable.not_found"), subTableName),
                         e
                 );
             }
 
             throw new WorkflowBusinessException(
                     "SUBTABLE_QUERY_FAILED",
-                    String.format("查询子表数据时发生错误: %s", e.getMessage()),
+                    String.format(i18nService.getMessage("workflow.subtable.query_error"), e.getMessage()),
                     e
             );
         }
@@ -155,7 +161,7 @@ public class SubTableDataInjector {
                 rowKey.put(col, row.get(col));
             }
             if (!SubTableRowKeySupport.isComplete(pkCols, rowKey)) {
-                throw new WorkflowValidationException("子表行主键列存在空值，无法构建多实例集合");
+                throw new WorkflowValidationException(i18nService.getMessage("workflow.subtable.null_pk"));
             }
 
             Object assigneeObj = row.get(assigneeField);
@@ -179,7 +185,7 @@ public class SubTableDataInjector {
 
             collectionVariable.add(element);
 
-            log.debug("构建集合变量元素: rowKey={}, assigneeId={}, rowVersion={}",
+            log.debug("Building collection variable element: rowKey={}, assigneeId={}, rowVersion={}",
                     rowKey, element.get("assigneeId"), element.get("rowVersion"));
         }
 
@@ -187,7 +193,7 @@ public class SubTableDataInjector {
             String rowNumbers = String.join(", ",
                     emptyAssigneeRows.stream().map(String::valueOf).toArray(String[]::new));
             throw new WorkflowValidationException(
-                    String.format("第 %s 行缺少处理人（%s 字段为空）", rowNumbers, assigneeField)
+                    String.format(i18nService.getMessage("workflow.subtable.missing_assignee"), rowNumbers, assigneeField)
             );
         }
 

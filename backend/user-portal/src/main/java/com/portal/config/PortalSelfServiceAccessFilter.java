@@ -2,6 +2,7 @@ package com.portal.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.platform.common.dto.UserPrincipal;
+import com.platform.common.i18n.I18nService;
 import com.portal.controller.AuthController;
 import com.portal.util.PortalUserSecurityUtils;
 import jakarta.servlet.FilterChain;
@@ -24,7 +25,8 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * 无 UBR（JWT {@code portalAccessMode=PERMISSION_SELF_SERVICE_ONLY}）时仅允许权限自助等白名单路径。
+ * When no UBR (JWT {@code portalAccessMode=PERMISSION_SELF_SERVICE_ONLY}), only allow
+ * permission self-service and other whitelisted paths.
  */
 @Slf4j
 @Component
@@ -32,6 +34,7 @@ import java.util.Set;
 public class PortalSelfServiceAccessFilter extends OncePerRequestFilter {
 
     private final ObjectMapper objectMapper;
+    private final I18nService i18nService;
 
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest request,
@@ -67,13 +70,14 @@ public class PortalSelfServiceAccessFilter extends OncePerRequestFilter {
         body.put("success", false);
         Map<String, Object> err = new LinkedHashMap<>();
         err.put("code", "PORTAL_ACCESS_DENIED");
-        err.put("message", "当前为权限自助模式，无法使用此功能");
+        err.put("message", i18nService.getMessage("portal.self_service_access_denied"));
         body.put("error", err);
         response.getWriter().write(objectMapper.writeValueAsString(body));
     }
 
     /**
-     * 顶层路径段与流程实例 ID 区分：UUID/引擎实例 ID 不会与下列保留字冲突。
+     * Top-level path segments vs process instance IDs: UUID / engine instance IDs will not
+     * conflict with the reserved words below.
      */
     private static final Set<String> PROCESS_TOP_LEVEL_RESERVED = Set.of(
             "definitions",
@@ -86,9 +90,10 @@ public class PortalSelfServiceAccessFilter extends OncePerRequestFilter {
             "function-unit-contents");
 
     /**
-     * 将请求 URI 规范成与路由判断一致的形式（含 {@code /api/portal}）。
-     * 部分网关/容器组合下 {@link HttpServletRequest#getRequestURI()} 可能仅为 {@code /processes/...}，
-     * 导致自助模式白名单前缀匹配失败。
+     * Normalize the request URI to match routing logic (including {@code /api/portal}).
+     * Under some gateway/container configurations {@link HttpServletRequest#getRequestURI()}
+     * may return only {@code /processes/...}, causing self-service whitelist prefix matching
+     * to fail.
      */
     private static String normalizeSelfServiceUri(HttpServletRequest request) {
         String uri = request.getRequestURI();
@@ -130,7 +135,9 @@ public class PortalSelfServiceAccessFilter extends OncePerRequestFilter {
     }
 
     /**
-     * 自助模式用户仍需查看「我的申请」、草稿与本人流程详情；禁止发起流程（POST .../start）及无关写接口。
+     * Self-service mode users still need to view "My Applications", drafts, and their own
+     * process details; starting a process (POST .../start) and unrelated write endpoints are
+     * blocked.
      */
     private static boolean isAllowedSelfServiceProcessRequest(String uri, String method) {
         final String prefix = "/api/portal/processes/";

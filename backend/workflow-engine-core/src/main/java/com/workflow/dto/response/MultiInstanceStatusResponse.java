@@ -10,9 +10,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 多实例子流程执行状态响应
+ * Multi-instance subprocess execution status response.
  * 
- * 用于返回多实例子流程的执行进度和子任务详情
+ * Returns multi-instance subprocess execution progress and sub-task details.
  * 
  * **Validates: Requirements 7.1, 7.2**
  * 
@@ -26,62 +26,62 @@ import java.util.Map;
 public class MultiInstanceStatusResponse {
     
     /**
-     * 流程实例ID
+     * Process instance ID
      */
     private String processInstanceId;
     
     /**
-     * 多实例活动ID
+     * Multi-instance activity ID
      */
     private String multiInstanceActivityId;
     
     /**
-     * 多实例活动名称
+     * Multi-instance activity name
      */
     private String multiInstanceActivityName;
     
     /**
-     * 总实例数
+     * Total instances
      */
     private Integer totalInstances;
     
     /**
-     * 已完成实例数
+     * Completed instances
      */
     private Integer completedInstances;
     
     /**
-     * 进行中实例数
+     * Active instances
      */
     private Integer activeInstances;
     
     /**
-     * 已取消实例数
+     * Cancelled instances
      */
     private Integer cancelledInstances;
     
     /**
-     * 多实例状态（ACTIVE, COMPLETED, CANCELLED）
+     * Multi-instance status (ACTIVE, COMPLETED, CANCELLED)
      */
     private String status;
     
     /**
-     * 开始时间
+     * Start time
      */
     private LocalDateTime startedTime;
     
     /**
-     * 完成时间
+     * Completion time
      */
     private LocalDateTime completedTime;
     
     /**
-     * 子任务详情列表
+     * Sub-task detail list
      */
     private List<SubTaskDetail> tasks;
     
     /**
-     * 子任务详情
+     * Sub-task detail
      */
     @Data
     @Builder
@@ -90,77 +90,79 @@ public class MultiInstanceStatusResponse {
     public static class SubTaskDetail {
         
         /**
-         * 任务ID
+         * Task ID
          */
         private String taskId;
         
         /**
-         * 任务名称
+         * Task name
          */
         private String taskName;
 
         /**
-         * BPMN UserTask id（用于在与任务展示名重复时区分步骤，避免孤儿 CREATED 覆盖已完成步骤）
+         * BPMN UserTask id (used to distinguish steps when task display names collide,
+         * preventing orphaned CREATED records from overwriting completed steps).
          */
         private String taskDefinitionKey;
 
         /**
-         * 处理人用户ID
+         * Assignee user ID
          */
         private String assignee;
         
         /**
-         * 处理人姓名
+         * Assignee display name
          */
         private String assigneeName;
         
         /**
-         * 任务状态（CREATED, ASSIGNED, COMPLETED, CANCELLED）
+         * Task status (CREATED, ASSIGNED, COMPLETED, CANCELLED)
          */
         private String status;
         
         /**
-         * 子表行ID
+         * Sub-table row ID
          */
         private Long subTableRowId;
 
         /**
-         * 子表物理行主键（联合主键时为多列；与引擎 extended_properties.subTableRowKey 一致）
+         * Sub-table physical row primary key (multiple columns for composite keys;
+         * consistent with engine extended_properties.subTableRowKey).
          */
         private Map<String, Object> subTableRowKey;
 
         /**
-         * 子表名（来自多实例子任务 extendedProperties.subTableName）
+         * Sub-table name (from multi-instance sub-task extendedProperties.subTableName)
          */
         private String subTableName;
 
         /**
-         * 进度状态列名（来自多实例子流程扩展属性）
+         * Progress status column name (from multi-instance subprocess extension properties)
          */
         private String miTaskStatusField;
 
         /**
-         * 当前节点列名（来自多实例子流程扩展属性）
+         * Current step column name (from multi-instance subprocess extension properties)
          */
         private String miTaskCurrentNodeField;
         
         /**
-         * 任务创建时间
+         * Task creation time
          */
         private LocalDateTime createdTime;
         
         /**
-         * 任务完成时间
+         * Task completion time
          */
         private LocalDateTime completedTime;
         
         /**
-         * 完成人用户ID
+         * Completed by user ID
          */
         private String completedBy;
         
         /**
-         * 完成人姓名
+         * Completed by display name
          */
         private String completedByName;
     }

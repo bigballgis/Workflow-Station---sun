@@ -17,7 +17,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 管理端前端在统一 /login 回调后，将 code 换成本系统 JWT（与 portal / dw 的 exchange 对称）。
+ * Admin frontend exchanges the code for a local JWT after the unified /login callback
+ * (symmetric with portal / dw exchanges).
  */
 @Slf4j
 @RestController

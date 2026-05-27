@@ -10,8 +10,10 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * 按流程实例查询「物理上最近一次已完成的用户任务」的 assignee，供 {@code LAST_TASK_ASSIGNEE} 锚点使用。
- * <p>仅统计 {@link HistoricTaskInstance}（用户任务），不含服务任务等。</p>
+ * Queries the assignee of the "physically most recent completed user task" for a
+ * given process instance, for use by the {@code LAST_TASK_ASSIGNEE} anchor.
+ * <p>Only counts {@link HistoricTaskInstance} (user tasks), excluding service tasks
+ * and others.</p>
  */
 @Slf4j
 @Service
@@ -21,8 +23,8 @@ public class LastUserTaskAssigneeQuery {
     private final HistoryService historyService;
 
     /**
-     * @param processInstanceId 流程实例 ID
-     * @return 最近完成用户任务的 assignee；若无则空
+     * @param processInstanceId process instance ID
+     * @return assignee of the most recent completed user task, or empty if none
      */
     public Optional<String> findLastCompletedUserTaskAssignee(String processInstanceId) {
         if (processInstanceId == null || processInstanceId.isBlank()) {

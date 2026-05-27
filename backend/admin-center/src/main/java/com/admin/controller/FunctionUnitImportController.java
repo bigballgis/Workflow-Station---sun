@@ -36,16 +36,16 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 import com.platform.security.util.SecurityContextUtils;
+import com.platform.common.i18n.I18nService;
 
 /**
- * 功能单元导入控制器
- * 支持从开发者工作站直接上传ZIP文件
+ * Accepts workstation-exported ZIP archives and exposes fast-path deployment hooks for admins.
  */
 @Slf4j
 @RestController
 @RequestMapping("/function-units-import")
 @RequiredArgsConstructor
-@Tag(name = "功能单元导入", description = "支持ZIP文件上传导入和一键部署")
+@Tag(name = "Function unit import", description = "ZIP-based import bundles and streamlined deployment endpoints")
 public class FunctionUnitImportController {
     
     private final FunctionUnitManagerComponent functionUnitManager;
@@ -53,27 +53,27 @@ public class FunctionUnitImportController {
     private final ProcessDeploymentComponent processDeploymentComponent;
     private final ActionDefinitionRepository actionDefinitionRepository;
     private final ObjectMapper objectMapper;
+    private final I18nService i18nService;
     
     /**
-     * 导入功能单元ZIP包
+     * Import a workstation ZIP artifact into repository metadata/content tables.
      */
     @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @Operation(summary = "导入功能单元", description = "上传ZIP文件导入功能单元")
+    @Operation(summary = "Import a function unit", description = "Upload a workstation ZIP archive")
     public ResponseEntity<Map<String, Object>> importFunctionUnit(
-            @Parameter(description = "功能单元ZIP包") @RequestParam("file") MultipartFile file,
-            @Parameter(description = "冲突处理策略") @RequestParam(defaultValue = "OVERWRITE") String conflictStrategy) {
-        String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+            @Parameter(description = "Function unit ZIP") @RequestParam("file") MultipartFile file,
+            @Parameter(description = "Overwrite strategy token (e.g. OVERWRITE)") @RequestParam(defaultValue = "OVERWRITE") String conflictStrategy) {
+        String userId = SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthorized")));
         
         log.info("Importing function unit from file: {}", file.getOriginalFilename());
         
         Map<String, Object> result = new HashMap<>();
         
         try {
-            // 解析ZIP文件
+            // Parse uploaded archive
             Map<String, Object> packageData = parseZipFile(file);
             
-            // 获取manifest信息
             @SuppressWarnings("unchecked")
             Map<String, Object> manifest = (Map<String, Object>) packageData.get("manifest");
             if (manifest == null) {
@@ -82,7 +82,7 @@ public class FunctionUnitImportController {
             
             if (manifest == null) {
                 result.put("status", "FAILED");
-                result.put("message", "无效的功能单元包：缺少manifest.json或metadata.json");
+                result.put("message", i18nService.getMessage("admin.fu.import_invalid_package_manifest"));
                 return ResponseEntity.badRequest().body(result);
             }
             
@@ -91,7 +91,6 @@ public class FunctionUnitImportController {
             String version = trimToNull((String) manifest.get("version"));
             String description = trimToNull((String) manifest.get("description"));
             
-            // 构建导入请求
             FunctionUnitImportRequest importRequest = FunctionUnitImportRequest.builder()
                     .fileName(file.getOriginalFilename())
                     .name(name)
@@ -103,18 +102,15 @@ public class FunctionUnitImportController {
                     .iconSvg(extractIconSvg(manifest))
                     .build();
             
-            // 执行导入
             ImportResult importResult = functionUnitManager.importFunctionPackage(importRequest, userId);
             
             if (importResult.isSuccess()) {
-                // 保存表单内容
                 @SuppressWarnings("unchecked")
                 List<Map<String, Object>> forms = (List<Map<String, Object>>) packageData.get("forms");
                 if (forms != null && !forms.isEmpty()) {
                     for (Map<String, Object> formData : forms) {
                         try {
                             String formName = (String) formData.get("formName");
-                            // 获取原始表单ID（来自 dw_form_definitions.id）
                             Object formIdObj = formData.get("formId");
                             String sourceId = formIdObj != null ? String.valueOf(formIdObj) : null;
                             
@@ -122,7 +118,6 @@ public class FunctionUnitImportController {
                             Map<String, Object> configJson = (Map<String, Object>) formData.get("configJson");
                             
                             if (formName != null && configJson != null) {
-                                // 将表单配置转换为JSON字符串存储
                                 String formConfigStr = objectMapper.writeValueAsString(configJson);
                                 functionUnitManager.addFunctionUnitContent(
                                         importResult.getFunctionUnit().getId(),
@@ -140,11 +135,9 @@ public class FunctionUnitImportController {
                     }
                 }
                 
-                // 保存动作定义到 sys_action_definitions
                 @SuppressWarnings("unchecked")
                 List<Map<String, Object>> actions = (List<Map<String, Object>>) packageData.get("actions");
                 if (actions != null && !actions.isEmpty()) {
-                    // 先清除该功能单元的旧动作定义
                     actionDefinitionRepository.deleteByFunctionUnitId(importResult.getFunctionUnit().getId());
                     
                     for (Map<String, Object> actionData : actions) {
@@ -181,7 +174,7 @@ public class FunctionUnitImportController {
                 result.put("functionUnitId", importResult.getFunctionUnit().getId());
                 result.put("name", importResult.getFunctionUnit().getName());
                 result.put("version", importResult.getFunctionUnit().getVersion());
-                result.put("message", "导入成功");
+                result.put("message", i18nService.getMessage("admin.fu.import_success"));
                 return ResponseEntity.ok(result);
             } else {
                 result.put("status", "FAILED");
@@ -192,54 +185,49 @@ public class FunctionUnitImportController {
         } catch (Exception e) {
             log.error("Failed to import function unit", e);
             result.put("status", "FAILED");
-            result.put("message", "导入失败: " + e.getMessage());
+            result.put("message", i18nService.getMessage("admin.fu.import_unexpected_error"));
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(result);
         }
     }
     
     /**
-     * 部署功能单元
+     * Promote/import flow into an environment optionally wiring Flowable and auto-enable shortcuts.
      */
     @PostMapping("/{id}/deploy")
-    @Operation(summary = "部署功能单元", description = "将功能单元部署到指定环境，并将流程定义部署到 Flowable 引擎")
+    @Operation(summary = "Deploy a function unit", description = "Deploy to a target environment and optionally push BPMN to Flowable")
     public ResponseEntity<Map<String, Object>> deployFunctionUnit(
-            @Parameter(description = "功能单元ID") @PathVariable String id,
+            @Parameter(description = "Function unit id") @PathVariable String id,
             @RequestBody Map<String, Object> request) {
-        String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+        String userId = SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthorized")));
         
         log.info("Deploying function unit: {}", id);
         
         Map<String, Object> result = new HashMap<>();
         
         try {
-            // 获取功能单元
             FunctionUnit functionUnit = functionUnitManager.getFunctionUnitById(id);
 
             if (!functionUnit.isDeployable()) {
                 result.put("status", "FAILED");
                 if (functionUnit.getStatus() == FunctionUnitStatus.DRAFT) {
-                    result.put("message", "请先验证功能单元后再部署");
+                    result.put("message", i18nService.getMessage("admin.fu.deploy_validation_required"));
                     result.put("errorCode", "VALIDATION_REQUIRED");
                 } else {
-                    result.put("message", "功能单元状态不允许部署: " + functionUnit.getStatus());
+                    result.put("message", i18nService.getMessage("admin.fu.deploy_status_invalid", functionUnit.getStatus()));
                     result.put("errorCode", "INVALID_STATUS");
                 }
                 return ResponseEntity.badRequest().body(result);
             }
 
-            // 获取部署参数（键存在且值为 null 时 getOrDefault 不会回落默认值，需单独规范化）
             boolean autoEnable = booleanRequestSetting(request, "autoEnable", true);
             boolean deployToFlowable = booleanRequestSetting(request, "deployToFlowable", true);
-            
-            // 部署流程到 Flowable 引擎
             ProcessDeploymentComponent.ProcessDeploymentResult processResult = null;
             if (deployToFlowable) {
                 processResult = processDeploymentComponent.deployFunctionUnitProcess(id);
                 
                 if (!processResult.isSuccess() && !processResult.isPartialSuccess()) {
-                    // 如果流程部署完全失败，返回错误
-                    if (processResult.getMessage().contains("Flowable 引擎不可用")) {
+                    if (processResult.isEngineUnavailable()) {
                         result.put("status", "FAILED");
                         result.put("message", processResult.getMessage());
                         result.put("errors", processResult.getErrors());
@@ -256,13 +244,10 @@ public class FunctionUnitImportController {
                 ));
             }
             
-            // 一键部署模式：跳过审批流程，直接启用功能单元
             if (autoEnable) {
-                // 直接将功能单元标记为已部署
                 functionUnit.markAsDeployed();
                 functionUnitManager.saveFunctionUnit(functionUnit);
                 
-                // 自动禁用其他版本
                 List<String> disabledVersions = functionUnitManager.disableOtherVersions(
                         functionUnit.getCode(), 
                         functionUnit.getVersion(), 
@@ -274,12 +259,10 @@ public class FunctionUnitImportController {
                             disabledVersions.size(), disabledVersions);
                 }
                 
-                // 创建部署记录用于审计追踪（但不需要审批）
                 try {
                     String envStr = (String) request.getOrDefault("environment", "DEVELOPMENT");
                     DeploymentEnvironment environment = DeploymentEnvironment.valueOf(envStr);
-                    
-                    // 创建部署记录
+
                     FunctionUnitDeployment deployment = deploymentManager.createDeployment(
                             id, environment, DeploymentStrategy.FULL, userId);
                     
@@ -289,29 +272,24 @@ public class FunctionUnitImportController {
                     }
                 } catch (Exception e) {
                     log.warn("Failed to create deployment record for audit: {}", e.getMessage());
-                    // 即使创建部署记录失败，也不影响功能单元的部署
                 }
 
-                // 强制补齐启用：避免 disableOtherVersions 误判 / 会话脏数据导致仍为 disabled
                 functionUnitManager.finalizeOneClickDeployEnable(id, userId);
                 
                 result.put("status", "SUCCESS");
                 result.put("functionUnitId", id);
-                result.put("message", "一键部署成功，功能单元已启用");
+                result.put("message", i18nService.getMessage("admin.deploy.one_click_success"));
                 
                 log.info("One-click deploy completed for function unit: {}", id);
                 return ResponseEntity.ok(result);
             }
             
-            // 非一键部署模式：走正常的部署审批流程
             String envStr = (String) request.getOrDefault("environment", "PRODUCTION");
             DeploymentEnvironment environment = DeploymentEnvironment.valueOf(envStr);
-            
-            // 创建部署
+
             FunctionUnitDeployment deployment = deploymentManager.createDeployment(
                     id, environment, DeploymentStrategy.FULL, userId);
-            
-            // 如果不需要审批，直接执行部署
+
             if (!deploymentManager.requiresApproval(environment)) {
                 deployment = deploymentManager.executeDeployment(deployment.getId());
             }
@@ -319,25 +297,23 @@ public class FunctionUnitImportController {
             result.put("status", "SUCCESS");
             result.put("deploymentId", deployment.getId());
             result.put("deploymentStatus", deployment.getStatus().name());
-            result.put("message", "部署成功");
+            result.put("message", i18nService.getMessage("admin.deploy.record_success"));
             
             return ResponseEntity.ok(result);
             
         } catch (Exception e) {
             log.error("Failed to deploy function unit", e);
             result.put("status", "FAILED");
-            result.put("message", "部署失败: " + e.getMessage());
+            result.put("message", i18nService.getMessage("admin.deploy.deploy_failed_generic"));
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(result);
         }
     }
     
-    /**
-     * 获取功能单元的流程部署信息
-     */
+    /** Backing handler for persisted Flowable linkage metadata returned to clients. */
     @GetMapping("/{id}/process-deployment")
-    @Operation(summary = "获取流程部署信息", description = "获取功能单元的流程部署状态和详情")
+    @Operation(summary = "Get Flowable deployment summary", description = "Returns BPMN deployment linkage for the function unit")
     public ResponseEntity<Map<String, Object>> getProcessDeploymentInfo(
-            @Parameter(description = "功能单元ID") @PathVariable String id) {
+            @Parameter(description = "Function unit id") @PathVariable String id) {
         
         log.info("Getting process deployment info for function unit: {}", id);
         
@@ -347,17 +323,15 @@ public class FunctionUnitImportController {
         } catch (Exception e) {
             log.error("Failed to get process deployment info", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", e.getMessage()));
+                    .body(Map.of("error", i18nService.getMessage("admin.deploy.retrieve_process_info_failed")));
         }
     }
     
-    /**
-     * 单独部署流程到 Flowable
-     */
+    /** BPMN-only deploy path when Flowable rollout is deferred from main bundle import. */
     @PostMapping("/{id}/deploy-process")
-    @Operation(summary = "部署流程到 Flowable", description = "将功能单元的流程定义部署到 Flowable 引擎")
+    @Operation(summary = "Deploy BPMN to Flowable only", description = "Pushes BPMN XML from stored content to Flowable")
     public ResponseEntity<Map<String, Object>> deployProcessToFlowable(
-            @Parameter(description = "功能单元ID") @PathVariable String id) {
+            @Parameter(description = "Function unit id") @PathVariable String id) {
         
         log.info("Deploying process to Flowable for function unit: {}", id);
         
@@ -383,19 +357,17 @@ public class FunctionUnitImportController {
         } catch (Exception e) {
             log.error("Failed to deploy process to Flowable", e);
             result.put("success", false);
-            result.put("message", "部署失败: " + e.getMessage());
+            result.put("message", i18nService.getMessage("admin.deploy.deploy_process_generic_failed"));
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(result);
         }
     }
     
-    /**
-     * 取消部署流程
-     */
+    /** Removes Flowable deployment artefacts for archived versions. */
     @DeleteMapping("/{id}/undeploy-process")
-    @Operation(summary = "取消部署流程", description = "从 Flowable 引擎中删除功能单元的流程定义")
+    @Operation(summary = "Undeploy BPMN from Flowable", description = "Deletes process definitions optionally cascading instances")
     public ResponseEntity<Map<String, Object>> undeployProcess(
-            @Parameter(description = "功能单元ID") @PathVariable String id,
-            @Parameter(description = "是否级联删除运行中的流程实例") 
+            @Parameter(description = "Function unit id") @PathVariable String id,
+            @Parameter(description = "Cascade running instances flag")
             @RequestParam(defaultValue = "false") boolean cascade) {
         
         log.info("Undeploying process for function unit: {}, cascade: {}", id, cascade);
@@ -407,7 +379,10 @@ public class FunctionUnitImportController {
             
             result.put("functionUnitId", id);
             result.put("success", success);
-            result.put("message", success ? "流程取消部署成功" : "流程取消部署失败");
+            result.put("message",
+                    success
+                            ? i18nService.getMessage("admin.deploy.process_undeploy_success")
+                            : i18nService.getMessage("admin.deploy.process_undeploy_failed"));
             
             return success ? ResponseEntity.ok(result) : 
                     ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(result);
@@ -415,24 +390,23 @@ public class FunctionUnitImportController {
         } catch (Exception e) {
             log.error("Failed to undeploy process", e);
             result.put("success", false);
-            result.put("message", "取消部署失败: " + e.getMessage());
+            result.put("message", i18nService.getMessage("admin.deploy.undeploy_process_failed_generic"));
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(result);
         }
     }
     
     /**
-     * 获取已部署的功能单元列表（供用户门户使用）
-     * 只返回已部署且启用的功能单元
+     * Read-only catalogue for portals listing deployable artefacts.
      */
     @GetMapping("/deployed")
-    @Operation(summary = "获取已部署的功能单元", description = "获取所有已部署且启用的功能单元列表（终端用户视图）")
+    @Operation(summary = "List deployed function units",
+            description = "Returns DEPLOYED+ENABLED artefacts consumable by the user portal launcher")
     public ResponseEntity<Map<String, Object>> getDeployedFunctionUnits() {
         log.info("Getting deployed and enabled function units for end users");
         
         Map<String, Object> result = new HashMap<>();
         
         try {
-            // 只返回已部署且启用的功能单元
             var units = functionUnitManager.listDeployedAndEnabledFunctionUnits(
                     org.springframework.data.domain.Pageable.unpaged());
             
@@ -443,20 +417,18 @@ public class FunctionUnitImportController {
             
         } catch (Exception e) {
             log.error("Failed to get deployed function units", e);
-            result.put("error", e.getMessage());
+            result.put("error", i18nService.getMessage("admin.deploy.retrieve_deployed_list_failed"));
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(result);
         }
     }
     
-    /**
-     * 启用功能单元
-     */
+    /** Idempotent publisher enablement flag for operator consoles. */
     @PostMapping("/{id}/enable")
-    @Operation(summary = "启用功能单元")
+    @Operation(summary = "Enable function unit toggle")
     public ResponseEntity<Map<String, Object>> enableFunctionUnit(
             @PathVariable String id) {
-        String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+        String userId = SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthorized")));
         log.info("Enabling function unit: {}", id);
         
         Map<String, Object> result = new HashMap<>();
@@ -470,23 +442,21 @@ public class FunctionUnitImportController {
             }
             
             result.put("status", "SUCCESS");
-            result.put("message", "功能单元已启用");
+            result.put("message", i18nService.getMessage("admin.deploy.fu_enable_success"));
             
             return ResponseEntity.ok(result);
             
         } catch (Exception e) {
             log.error("Failed to enable function unit", e);
             result.put("status", "FAILED");
-            result.put("message", e.getMessage());
+            result.put("message", i18nService.getMessage("admin.deploy.deploy_failed_generic"));
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(result);
         }
     }
     
-    /**
-     * 禁用功能单元
-     */
+    /** Deprecates the consumer-facing launcher entry until re-enabled. */
     @PostMapping("/{id}/disable")
-    @Operation(summary = "禁用功能单元")
+    @Operation(summary = "Disable feature toggle / deprecate view")
     public ResponseEntity<Map<String, Object>> disableFunctionUnit(@PathVariable String id) {
         log.info("Disabling function unit: {}", id);
         
@@ -497,21 +467,19 @@ public class FunctionUnitImportController {
             functionUnit.markAsDeprecated();
             
             result.put("status", "SUCCESS");
-            result.put("message", "功能单元已禁用");
+            result.put("message", i18nService.getMessage("admin.deploy.fu_disable_success"));
             
             return ResponseEntity.ok(result);
             
         } catch (Exception e) {
             log.error("Failed to disable function unit", e);
             result.put("status", "FAILED");
-            result.put("message", e.getMessage());
+            result.put("message", i18nService.getMessage("admin.deploy.deploy_failed_generic"));
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(result);
         }
     }
     
-    /**
-     * 解析ZIP文件
-     */
+    /** Walk workstation bundle layout and hydrate manifest/forms/actions payloads. */
     private Map<String, Object> parseZipFile(MultipartFile file) throws IOException {
         Map<String, Object> result = new HashMap<>();
         Map<String, byte[]> rawFiles = new HashMap<>();
@@ -529,14 +497,12 @@ public class FunctionUnitImportController {
             }
         }
         
-        // 解析 manifest.json 或 metadata.json
         if (rawFiles.containsKey("manifest.json")) {
             result.put("manifest", objectMapper.readValue(rawFiles.get("manifest.json"), Map.class));
         } else if (rawFiles.containsKey("metadata.json")) {
             result.put("metadata", objectMapper.readValue(rawFiles.get("metadata.json"), Map.class));
         }
         
-        // 解析流程文件
         for (String fileName : rawFiles.keySet()) {
             if (fileName.endsWith(".bpmn")) {
                 result.put("process", new String(rawFiles.get(fileName), StandardCharsets.UTF_8));
@@ -544,7 +510,6 @@ public class FunctionUnitImportController {
             }
         }
         
-        // 解析表单文件
         List<Map<String, Object>> forms = new ArrayList<>();
         for (String fileName : rawFiles.keySet()) {
             if (fileName.startsWith("forms/") && fileName.endsWith(".json")) {
@@ -561,7 +526,6 @@ public class FunctionUnitImportController {
             result.put("forms", forms);
         }
         
-        // 解析动作定义文件
         List<Map<String, Object>> actions = new ArrayList<>();
         if (rawFiles.containsKey("actions.json")) {
             try {
@@ -600,15 +564,16 @@ public class FunctionUnitImportController {
     }
     
     /**
-     * 激活指定版本（回滚）
+     * Hot-switches which semantic version stays enabled for launcher consumers (constraints enforced in manager).
      */
     @PostMapping("/{code}/activate/{version}")
-    @Operation(summary = "激活指定版本", description = "仅允许目标为已部署（DEPLOYED）且为该 code 下已部署中的最高语义版本；成功后禁用同 code 其他版本")
+    @Operation(summary = "Activate a catalogued version",
+            description = "Target must remain DEPLOYED and the highest semantic version for the code.")
     public ResponseEntity<Map<String, Object>> activateVersion(
-            @Parameter(description = "功能单元代码") @PathVariable String code,
-            @Parameter(description = "目标版本号") @PathVariable String version) {
-        String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+            @Parameter(description = "Business code") @PathVariable String code,
+            @Parameter(description = "Semantic version") @PathVariable String version) {
+        String userId = SecurityContextUtils.getCurrentUserId()
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthorized")));
         
         log.info("Activating version {} for function unit code: {}", version, code);
         
@@ -623,7 +588,7 @@ public class FunctionUnitImportController {
             result.put("version", activated.getVersion());
             result.put("name", activated.getName());
             result.put("enabled", activated.getEnabled());
-            result.put("message", "版本激活成功");
+            result.put("message", i18nService.getMessage("admin.fu.activate_version_success"));
             
             return ResponseEntity.ok(result);
             
@@ -642,18 +607,16 @@ public class FunctionUnitImportController {
         } catch (Exception e) {
             log.error("Failed to activate version", e);
             result.put("status", "FAILED");
-            result.put("message", "激活版本失败: " + e.getMessage());
+            result.put("message", i18nService.getMessage("admin.fu.activate_version_failed"));
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(result);
         }
     }
     
-    /**
-     * 获取版本历史
-     */
+    /** Admin-only audit timeline for coexistence upgrades. */
     @GetMapping("/{code}/versions")
-    @Operation(summary = "获取版本历史", description = "获取功能单元的所有版本历史")
+    @Operation(summary = "List version lineage", description = "Historical versions with deploy flags for auditing")
     public ResponseEntity<Map<String, Object>> getVersionHistory(
-            @Parameter(description = "功能单元代码") @PathVariable String code) {
+            @Parameter(description = "Business code") @PathVariable String code) {
         
         log.info("Getting version history for function unit code: {}", code);
         
@@ -671,12 +634,12 @@ public class FunctionUnitImportController {
             
         } catch (Exception e) {
             log.error("Failed to get version history", e);
-            result.put("error", e.getMessage());
+            result.put("error", i18nService.getMessage("admin.fu.version_history_load_failed"));
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(result);
         }
     }
 
-    /** JSON Map 中的布尔字段（兼容 Boolean / String；键缺失或显式 null 时使用默认值） */
+    /** Parses boolean-compatible JSON payloads where null means “fall back”. */
     private static boolean booleanRequestSetting(Map<String, Object> body, String key, boolean defaultIfAbsentOrNull) {
         if (!body.containsKey(key)) {
             return defaultIfAbsentOrNull;
@@ -698,7 +661,7 @@ public class FunctionUnitImportController {
         return defaultIfAbsentOrNull;
     }
 
-    /** Manifest 字段入库前去首尾空白，避免 deploy 阶段 disableOtherVersions 版本比对误判 */
+    /** Trims inbound manifest primitives so semantic version predicates stay stable. */
     private static String trimToNull(String s) {
         if (s == null) {
             return null;

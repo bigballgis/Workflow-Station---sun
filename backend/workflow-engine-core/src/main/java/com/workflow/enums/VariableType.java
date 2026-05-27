@@ -1,10 +1,10 @@
 package com.workflow.enums;
 
 /**
- * 流程变量类型枚举
+ * Process variable type enum
  * 
- * 定义工作流引擎支持的所有变量数据类型
- * 支持基本数据类型和复杂对象类型
+ * Defines all variable data types supported by the workflow engine
+ * Supports both primitive and complex object types
  * 
  * @author Workflow Engine
  * @version 1.0
@@ -12,55 +12,55 @@ package com.workflow.enums;
 public enum VariableType {
     
     /**
-     * 字符串类型
+     * String type
      */
     STRING("string", "String"),
     
     /**
-     * 整数类型
+     * Integer type
      */
     INTEGER("integer", "Integer"),
     
     /**
-     * 长整数类型
+     * Long integer type
      */
     LONG("long", "Long"),
     
     /**
-     * 双精度浮点数类型
+     * Double-precision floating-point type
      */
     DOUBLE("double", "Double"),
     
     /**
-     * 布尔类型
+     * Boolean type
      */
     BOOLEAN("boolean", "Boolean"),
     
     /**
-     * 日期时间类型
+     * Date/time type
      */
     DATE("date", "Date"),
     
     /**
-     * JSON对象类型
-     * 用于存储复杂对象，使用PostgreSQL JSONB格式
+     * JSON object type
+     * For storing complex objects, uses PostgreSQL JSONB format
      */
     JSON("json", "JSON"),
     
     /**
-     * 文件类型
-     * 存储文件引用信息
+     * File type
+     * Stores file reference information
      */
     FILE("file", "File"),
     
     /**
-     * 二进制数据类型
+     * Binary data type
      */
     BINARY("binary", "Binary"),
     
     /**
-     * 已删除标记
-     * 用于标记已删除的变量历史记录
+     * Deleted marker
+     * Used to mark deleted variable history records
      */
     DELETED("deleted", "Deleted");
     
@@ -81,10 +81,10 @@ public enum VariableType {
     }
     
     /**
-     * 根据代码获取变量类型
+     * Get variable type by code
      * 
-     * @param code 类型代码
-     * @return 变量类型枚举
+     * @param code type code
+     * @return variable type enum
      */
     public static VariableType fromCode(String code) {
         for (VariableType type : values()) {
@@ -96,18 +96,18 @@ public enum VariableType {
     }
     
     /**
-     * 判断是否为数值类型
+     * Check if this is a numeric type
      * 
-     * @return true如果是数值类型
+     * @return true if numeric type
      */
     public boolean isNumeric() {
         return this == INTEGER || this == LONG || this == DOUBLE;
     }
     
     /**
-     * 判断是否为复杂对象类型
+     * Check if this is a complex object type
      * 
-     * @return true如果是复杂对象类型
+     * @return true if complex object type
      */
     public boolean isComplexType() {
         return this == JSON || this == FILE || this == BINARY;

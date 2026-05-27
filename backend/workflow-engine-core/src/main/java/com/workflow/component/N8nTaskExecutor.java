@@ -27,9 +27,9 @@ import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 /**
- * N8N 任务执行器
- * 实现 Flowable JavaDelegate 接口，处理 Service Task 类型的 N8N 自动化任务。
- * 同时提供 executeSynchronous 方法用于 N8N Action 同步执行模式。
+ * N8N task executor.
+ * Implements Flowable JavaDelegate interface to handle Service Task N8N automation tasks.
+ * Also provides executeSynchronous method for N8N Action synchronous execution mode.
  */
 @Slf4j
 @Component("n8nTaskExecutor")
@@ -45,7 +45,7 @@ public class N8nTaskExecutor implements JavaDelegate {
     private static final String SOURCE_SERVICE_TASK = "SERVICE_TASK";
     private static final String SOURCE_ACTION = "ACTION";
 
-    /** 基础重试延迟（毫秒） */
+    /** Base retry delay (milliseconds) */
     private static final long BASE_RETRY_DELAY_MS = 1000L;
 
     private final AdminCenterClient adminCenterClient;
@@ -60,7 +60,7 @@ public class N8nTaskExecutor implements JavaDelegate {
     @Value("${file-service.base-url:http://localhost:8083}")
     private String fileServiceBaseUrl;
 
-    // ==================== JavaDelegate: Service Task 异步模式 ====================
+    // ==================== JavaDelegate: Service Task Async Mode ====================
 
     @Override
     public void execute(DelegateExecution execution) {
@@ -68,7 +68,7 @@ public class N8nTaskExecutor implements JavaDelegate {
         String processInstanceId = execution.getProcessInstanceId();
         log.info("N8nTaskExecutor triggered: executionId={}, processInstanceId={}", executionId, processInstanceId);
 
-        // 1. 从扩展属性读取 N8N 配置
+        // 1. Read N8N config from extension attributes
         String configId = getExtensionProperty(execution, "n8n:configId");
         String webhookUrl = getExtensionProperty(execution, "n8n:webhookUrl");
         String workflowId = getExtensionProperty(execution, "n8n:workflowId");
@@ -85,17 +85,17 @@ public class N8nTaskExecutor implements JavaDelegate {
         }
         SsrfProtection.validate(webhookUrl);
 
-        // 2. 获取 N8N 连接配置（含解密 apiKey）
+        // 2. Get N8N connection config (with decrypted apiKey)
         Map<String, Object> n8nConfig = adminCenterClient.getN8nConfig(configId);
         if (n8nConfig == null) {
             throw new RuntimeException("Failed to retrieve N8N config for configId: " + configId);
         }
         String apiKey = (String) n8nConfig.get("apiKey");
 
-        // 3. 生成唯一 callbackToken
+        // 3. Generate unique callbackToken
         String callbackToken = generateCallbackToken();
 
-        // 4. 根据 inputMapping 提取流程变量，构建请求体
+        // 4. Build request body using inputMapping to extract process variables
         Map<String, Object> processVariables = execution.getVariables();
         Map<String, Object> inputData = N8nVariableMappingUtil.applyInputMapping(processVariables, inputMappingJson);
         String callbackUrl = buildCallbackUrl();
@@ -107,7 +107,7 @@ public class N8nTaskExecutor implements JavaDelegate {
 
         String inputDataJson = toJson(inputData);
 
-        // 5. 创建 ExecutionRecord (status=PENDING)
+        // 5. Create ExecutionRecord (status=PENDING)
         N8nExecutionRecord record = new N8nExecutionRecord();
         record.setProcessInstanceId(processInstanceId);
         record.setTaskId(executionId);
@@ -123,7 +123,7 @@ public class N8nTaskExecutor implements JavaDelegate {
         record.setTimeoutSeconds(timeoutSeconds);
         record = executionRecordRepository.save(record);
 
-        // 6. 存储 callbackToken 到 Redis
+        // 6. Store callbackToken in Redis
         long redisTtl = timeoutSeconds + 60L;
         stringRedisTemplate.opsForValue().set(
                 REDIS_KEY_PREFIX + callbackToken,
@@ -137,11 +137,11 @@ public class N8nTaskExecutor implements JavaDelegate {
             execution.setVariable("n8n_outputMapping", outputMappingJson);
         }
 
-        // 7. HTTP POST 调用 N8N Webhook URL（含重试）
+        // 7. HTTP POST to N8N Webhook URL (with retries)
         boolean callSuccess = invokeWebhookWithRetry(webhookUrl, apiKey, webhookBody, record, retryCount);
 
         if (callSuccess) {
-            // 成功：更新状态为 RUNNING，Flowable 异步等待
+            // Success: update status to RUNNING, Flowable waits asynchronously
             record.setStatus(STATUS_RUNNING);
             executionRecordRepository.save(record);
             log.info("N8N webhook invoked successfully, task set to async wait: callbackToken={}", callbackToken);
@@ -152,11 +152,11 @@ public class N8nTaskExecutor implements JavaDelegate {
         // If callSuccess is false, the invokeWebhookWithRetry method already handled FAILED status and threw exception
     }
 
-    // ==================== Action 同步执行模式 ====================
+    // ==================== Action Synchronous Execution Mode ====================
 
     /**
-     * 同步执行 N8N 工作流（用于 Action 模式）。
-     * 直接 HTTP POST 调用 N8N Webhook 并等待响应，不使用回调机制。
+     * Synchronously execute an N8N workflow (for Action mode).
+     * Directly HTTP POST to the N8N Webhook and wait for the response. No callback mechanism.
      */
     @SuppressWarnings("unchecked")
     public N8nExecutionResult executeSynchronous(N8nActionRequest request) {
@@ -168,7 +168,7 @@ public class N8nTaskExecutor implements JavaDelegate {
         SsrfProtection.validate(webhookUrl);
         int timeoutSeconds = request.getTimeoutSeconds() != null ? request.getTimeoutSeconds() : 120;
 
-        // 获取 N8N 连接配置
+        // Get N8N connection config
         Map<String, Object> n8nConfig = adminCenterClient.getN8nConfig(configId);
         if (n8nConfig == null) {
             return N8nExecutionResult.failure(null, STATUS_FAILED,
@@ -176,7 +176,7 @@ public class N8nTaskExecutor implements JavaDelegate {
         }
         String apiKey = (String) n8nConfig.get("apiKey");
 
-        // 构建请求体（Action 模式不需要 callbackUrl/callbackToken）
+        // Build request body (Action mode does not need callbackUrl/callbackToken)
         Map<String, Object> inputData = request.getInputData();
         if (inputData == null) {
             inputData = Collections.emptyMap();
@@ -194,7 +194,7 @@ public class N8nTaskExecutor implements JavaDelegate {
 
         String inputDataJson = toJson(inputData);
 
-        // 创建 ExecutionRecord (sourceType=ACTION)
+        // Create ExecutionRecord (sourceType=ACTION)
         N8nExecutionRecord record = new N8nExecutionRecord();
         record.setProcessInstanceId(request.getProcessInstanceId());
         record.setTaskId(request.getTaskId());
@@ -209,7 +209,7 @@ public class N8nTaskExecutor implements JavaDelegate {
         record.setTimeoutSeconds(timeoutSeconds);
         record = executionRecordRepository.save(record);
 
-        // 同步 HTTP POST 调用
+        // Synchronous HTTP POST call
         try {
             HttpHeaders headers = buildHeaders(apiKey);
             HttpEntity<Map<String, Object>> httpEntity = new HttpEntity<>(webhookBody, headers);
@@ -306,24 +306,24 @@ public class N8nTaskExecutor implements JavaDelegate {
         }
     }
 
-    // ==================== 内部方法 ====================
+    // ==================== Internal Methods ====================
 
     /**
-     * 生成唯一的回调令牌
+     * Generate a unique callback token.
      */
     public String generateCallbackToken() {
         return UUID.randomUUID().toString();
     }
 
     /**
-     * 构建回调 URL
+     * Build the callback URL.
      */
     public String buildCallbackUrl() {
         return callbackBaseUrl + "/api/workflow/n8n/callback";
     }
 
     /**
-     * 构建 Webhook 请求体（用于测试可见性）
+     * Build the webhook request body (for test visibility).
      */
     public Map<String, Object> buildWebhookRequestBody(Map<String, Object> inputData,
                                                         String callbackUrl,
@@ -336,7 +336,7 @@ public class N8nTaskExecutor implements JavaDelegate {
     }
 
     /**
-     * 计算第 attempt 次重试的延迟时间（毫秒），使用指数退避策略。
+     * Calculate retry delay for the given attempt (milliseconds), using exponential backoff.
      * delay = BASE_RETRY_DELAY_MS * 2^attempt
      */
     public long calculateRetryDelay(int attempt) {
@@ -344,8 +344,8 @@ public class N8nTaskExecutor implements JavaDelegate {
     }
 
     /**
-     * 调用 N8N Webhook，失败时进行指数退避重试。
-     * 所有重试失败后标记为 FAILED 并抛出异常。
+     * Call the N8N webhook with exponential backoff retry on failure.
+     * After all retries fail, marks the record as FAILED and throws an exception.
      */
     private boolean invokeWebhookWithRetry(String webhookUrl, String apiKey,
                                             Map<String, Object> webhookBody,
@@ -399,7 +399,7 @@ public class N8nTaskExecutor implements JavaDelegate {
     }
 
     /**
-     * 构建 HTTP 请求头（含 N8N API Key 认证）
+     * Build HTTP request headers (with N8N API Key authentication).
      */
     private HttpHeaders buildHeaders(String apiKey) {
         HttpHeaders headers = new HttpHeaders();
@@ -411,8 +411,8 @@ public class N8nTaskExecutor implements JavaDelegate {
     }
 
     /**
-     * 从 BPMN Service Task 的 custom:Properties 扩展属性中读取指定属性值。
-     * 属性名使用 n8n: 前缀（如 n8n:configId）。
+     * Read the specified property value from the custom:Properties extension attributes
+     * of a BPMN Service Task. Property names use the n8n: prefix (e.g. n8n:configId).
      */
     private String getExtensionProperty(DelegateExecution execution, String propertyName) {
         FlowElement flowElement = execution.getCurrentFlowElement();

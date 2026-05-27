@@ -9,7 +9,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * 安全审计结果DTO
+ * Security audit result DTO
  */
 @Data
 @Builder
@@ -18,62 +18,62 @@ import java.util.List;
 public class SecurityAuditResult {
     
     /**
-     * 报告生成时间
+     * Report generation time
      */
     private LocalDateTime reportTime;
     
     /**
-     * 统计开始时间
+     * Statistics start time
      */
     private LocalDateTime startTime;
     
     /**
-     * 统计结束时间
+     * Statistics end time
      */
     private LocalDateTime endTime;
     
     /**
-     * 安全评分（0-100）
+     * Security score (0-100)
      */
     private int securityScore;
     
     /**
-     * 成功登录次数
+     * Successful login count
      */
     private long successfulLogins;
     
     /**
-     * 失败登录次数
+     * Failed login count
      */
     private long failedLogins;
     
     /**
-     * 角色分配次数
+     * Role assignment count
      */
     private long roleAssignments;
     
     /**
-     * 角色撤销次数
+     * Role revocation count
      */
     private long roleRevocations;
     
     /**
-     * 可疑活动列表
+     * Suspicious activity list
      */
     private List<SuspiciousActivity> suspiciousActivities;
     
     /**
-     * 活跃用户数
+     * Active user count
      */
     private long activeUsers;
     
     /**
-     * 锁定账户数
+     * Locked account count
      */
     private long lockedAccounts;
     
     /**
-     * 可疑活动DTO
+     * Suspicious activity DTO
      */
     @Data
     @Builder
@@ -82,37 +82,37 @@ public class SecurityAuditResult {
     public static class SuspiciousActivity {
         
         /**
-         * 活动类型
+         * Activity type
          */
         private String type;
         
         /**
-         * 描述
+         * Description
          */
         private String description;
         
         /**
-         * 严重程度（HIGH, MEDIUM, LOW）
+         * Severity (HIGH, MEDIUM, LOW)
          */
         private String severity;
         
         /**
-         * 相关用户名
+         * Related username
          */
         private String username;
         
         /**
-         * 相关IP地址
+         * Related IP address
          */
         private String ipAddress;
         
         /**
-         * 检测时间
+         * Detection time
          */
         private LocalDateTime detectedTime;
         
         /**
-         * 是否已处理
+         * Whether processed
          */
         private Boolean handled;
     }

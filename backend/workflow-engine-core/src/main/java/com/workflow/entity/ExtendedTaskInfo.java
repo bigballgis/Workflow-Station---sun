@@ -10,14 +10,14 @@ import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
 /**
- * 扩展任务信息实体
- * 支持多维度任务分配的扩展数据模型
+ * Extended task info entity
+ * Extended data model supporting multi-dimensional task assignment
  * 
- * 该实体扩展了Flowable原生任务的功能，支持：
- * 1. 多维度分配类型（用户、虚拟组、部门角色）
- * 2. 任务委托机制
- * 3. 任务认领机制
- * 4. 扩展的任务属性和索引优化
+ * This entity extends Flowable native task functionality, supporting:
+ * 1. Multi-dimensional assignment types (user, virtual group, department role)
+ * 2. Task delegation mechanism
+ * 3. Task claim mechanism
+ * 4. Extended task attributes and index optimization
  */
 @Entity
 @Table(name = "wf_extended_task_info", indexes = {
@@ -43,237 +43,237 @@ public class ExtendedTaskInfo {
     private Long id;
 
     /**
-     * Flowable任务ID（关联到ACT_RU_TASK表）
+     * Flowable task ID (linked to ACT_RU_TASK table)
      */
     @Column(name = "task_id", nullable = false, unique = true, length = 64)
     private String taskId;
 
     /**
-     * 流程实例ID
+     * Process instance ID
      */
     @Column(name = "process_instance_id", nullable = false, length = 64)
     private String processInstanceId;
 
     /**
-     * 流程定义ID
+     * Process definition ID
      */
     @Column(name = "process_definition_id", nullable = false, length = 64)
     private String processDefinitionId;
 
     /**
-     * 任务定义键
+     * Task definition key
      */
     @Column(name = "task_definition_key", length = 255)
     private String taskDefinitionKey;
 
     /**
-     * 任务名称
+     * Task name
      */
     @Column(name = "task_name", length = 255)
     private String taskName;
 
     /**
-     * 任务描述
+     * Task description
      */
     @Column(name = "task_description", length = 4000)
     private String taskDescription;
 
     /**
-     * 任务分配类型
+     * Task assignment type
      */
     @Enumerated(EnumType.STRING)
     @Column(name = "assignment_type", nullable = false, length = 20)
     private AssignmentType assignmentType;
 
     /**
-     * 分配目标
-     * - 当assignmentType为USER时，存储用户ID
-     * - 当assignmentType为VIRTUAL_GROUP时，存储虚拟组ID
-     * - 当assignmentType为DEPT_ROLE时，存储"部门ID:角色ID"格式
+     * Assignment target
+     * - When assignmentType is USER, stores user ID
+     * - When assignmentType is VIRTUAL_GROUP, stores virtual group ID
+     * - When assignmentType is DEPT_ROLE, stores "departmentId:roleId" format
      */
     @Column(name = "assignment_target", nullable = false, length = 255)
     private String assignmentTarget;
 
     /**
-     * 原始分配人（用于委托场景）
-     * 记录任务的原始分配信息，委托后保持不变
+     * Original assignee (for delegation scenarios)
+     * Records the original assignment info of the task, remains unchanged after delegation
      */
     @Column(name = "original_assignee", length = 64)
     private String originalAssignee;
 
     /**
-     * 委托给的用户ID
-     * 当任务被委托时，记录委托目标用户
+     * Delegated user ID
+     * When the task is delegated, records the delegation target user
      */
     @Column(name = "delegated_to", length = 64)
     private String delegatedTo;
 
     /**
-     * 委托人ID
-     * 记录发起委托的用户
+     * Delegator ID
+     * Records the user who initiated the delegation
      */
     @Column(name = "delegated_by", length = 64)
     private String delegatedBy;
 
     /**
-     * 委托时间
+     * Delegation time
      */
     @Column(name = "delegated_time")
     private LocalDateTime delegatedTime;
 
     /**
-     * 委托原因
+     * Delegation reason
      */
     @Column(name = "delegation_reason", length = 500)
     private String delegationReason;
 
     /**
-     * 认领用户ID
-     * 当虚拟组或部门角色任务被认领时，记录认领用户
+     * Claimed user ID
+     * When a virtual group or department role task is claimed, records the claiming user
      */
     @Column(name = "claimed_by", length = 64)
     private String claimedBy;
 
     /**
-     * 认领时间
+     * Claim time
      */
     @Column(name = "claimed_time")
     private LocalDateTime claimedTime;
 
     /**
-     * 任务优先级
-     * 0-100，数值越大优先级越高
+     * Task priority
+     * 0-100, higher value = higher priority
      */
     @Column(name = "priority")
     private Integer priority;
 
     /**
-     * 任务到期时间
+     * Task due date
      */
     @Column(name = "due_date")
     private LocalDateTime dueDate;
 
     /**
-     * 任务状态
-     * CREATED - 已创建
-     * ASSIGNED - 已分配
-     * CLAIMED - 已认领
-     * DELEGATED - 已委托
-     * IN_PROGRESS - 处理中
-     * COMPLETED - 已完成
-     * CANCELLED - 已取消
+     * Task status
+     * CREATED - Created
+     * ASSIGNED - Assigned
+     * CLAIMED - Claimed
+     * DELEGATED - Delegated
+     * IN_PROGRESS - In Progress
+     * COMPLETED - Completed
+     * CANCELLED - Cancelled
      */
     @Column(name = "status", nullable = false, length = 20)
     private String status;
 
     /**
-     * 任务创建时间
+     * Task creation time
      */
     @Column(name = "created_time", nullable = false)
     private LocalDateTime createdTime;
 
     /**
-     * 任务更新时间
+     * Task update time
      */
     @Column(name = "updated_time")
     private LocalDateTime updatedTime;
 
     /**
-     * 任务完成时间
+     * Task completion time
      */
     @Column(name = "completed_time")
     private LocalDateTime completedTime;
 
     /**
-     * 完成用户ID
+     * Completion user ID
      */
     @Column(name = "completed_by", length = 64)
     private String completedBy;
 
     /**
-     * 表单键
+     * Form key
      */
     @Column(name = "form_key", length = 255)
     private String formKey;
 
     /**
-     * 业务键
+     * Business key
      */
     @Column(name = "business_key", length = 255)
     private String businessKey;
 
     /**
-     * 扩展属性（JSON格式）
-     * 存储任务的自定义属性和元数据
+     * Extended attributes (JSON format)
+     * Stores custom attributes and metadata of the task
      */
     @Column(name = "extended_properties", columnDefinition = "TEXT")
     private String extendedProperties;
 
     /**
-     * 租户ID（多租户支持）
+     * Tenant ID (multi-tenant support)
      */
     @Column(name = "tenant_id", length = 64)
     private String tenantId;
 
     /**
-     * 版本号（乐观锁）
+     * Version number (optimistic locking)
      */
     @Version
     @Column(name = "version")
     private Long version;
 
     /**
-     * 是否已删除（软删除）
+     * Whether deleted (soft delete)
      */
     @Column(name = "is_deleted", nullable = false)
     @Builder.Default
     private Boolean isDeleted = false;
 
     /**
-     * 创建人
+     * Creator
      */
     @Column(name = "created_by", length = 64)
     private String createdBy;
 
     /**
-     * 更新人
+     * Updater
      */
     @Column(name = "updated_by", length = 64)
     private String updatedBy;
 
-    // ==================== 业务方法 ====================
+    // ==================== Business methods ====================
 
     /**
-     * 检查任务是否已被委托
+     * Check if task has been delegated
      */
     public boolean isDelegated() {
         return delegatedTo != null && !delegatedTo.trim().isEmpty();
     }
 
     /**
-     * 检查任务是否已被认领
+     * Check if task has been claimed
      */
     public boolean isClaimed() {
         return claimedBy != null && !claimedBy.trim().isEmpty();
     }
 
     /**
-     * 检查任务是否已完成
+     * Check if task has been completed
      */
     public boolean isCompleted() {
         return "COMPLETED".equals(status);
     }
 
     /**
-     * 检查任务是否已过期
+     * Check if task has expired
      */
     public boolean isOverdue() {
         return dueDate != null && LocalDateTime.now().isAfter(dueDate) && !isCompleted();
     }
 
     /**
-     * 获取当前有效的处理人
-     * 优先级：委托人 > 认领人 > 原始分配目标
+     * Get the current effective assignee
+     * Priority: delegator > claimer > original target
      */
     public String getCurrentAssignee() {
         if (isDelegated()) {
@@ -285,18 +285,18 @@ public class ExtendedTaskInfo {
         if (assignmentType == AssignmentType.USER) {
             return assignmentTarget;
         }
-        return null; // 虚拟组和部门角色任务没有具体的处理人
+        return null; // Virtual group and department role tasks have no specific assignee
     }
 
     /**
-     * 获取任务的显示标签
+     * Get the display label of the task
      */
     public String getAssignmentTypeLabel() {
         return assignmentType.getDescription();
     }
 
     /**
-     * 更新任务状态和时间戳
+     * Update task status and timestamp
      */
     public void updateStatus(String newStatus, String updatedBy) {
         this.status = newStatus;
@@ -305,7 +305,7 @@ public class ExtendedTaskInfo {
     }
 
     /**
-     * 委托任务
+     * Delegate task
      */
     public void delegateTask(String delegatedTo, String delegatedBy, String reason) {
         this.delegatedTo = delegatedTo;
@@ -316,7 +316,7 @@ public class ExtendedTaskInfo {
     }
 
     /**
-     * 认领任务
+     * Claim task
      */
     public void claimTask(String claimedBy) {
         this.claimedBy = claimedBy;
@@ -325,7 +325,7 @@ public class ExtendedTaskInfo {
     }
     
     /**
-     * 取消认领任务
+     * Unclaim task
      */
     public void unclaimTask() {
         this.claimedBy = null;
@@ -334,7 +334,7 @@ public class ExtendedTaskInfo {
     }
 
     /**
-     * 完成任务
+     * Complete task
      */
     public void completeTask(String completedBy) {
         this.completedBy = completedBy;

@@ -9,8 +9,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 子表数据查询响应
- * 用于主任务表单实时同步子表数据
+ * Sub-table data query response.
+ * Used for real-time sync of sub-table data in main task forms.
  * 
  * **Validates: Requirements 7.1**
  * 
@@ -24,22 +24,22 @@ import java.util.Map;
 public class SubTableDataResponse {
     
     /**
-     * 任务ID
+     * Task ID
      */
     private String taskId;
     
     /**
-     * 子表名称
+     * Sub-table name
      */
     private String subTableName;
     
     /**
-     * 子表数据行列表
+     * Sub-table data row list
      */
     private List<SubTableRow> rows;
     
     /**
-     * 子表数据行
+     * Sub-table data row
      */
     @Data
     @Builder
@@ -47,32 +47,32 @@ public class SubTableDataResponse {
     @AllArgsConstructor
     public static class SubTableRow {
         /**
-         * 行ID
+         * Row ID
          */
         private Long id;
 
         /**
-         * 物理表主键列→值（联合主键时非空；单列数值主键时通常与 {@link #id} 一致）
+         * Physical table primary key columns -> values (non-null for composite keys; usually same as {@link #id} for single numeric PK)
          */
         private Map<String, Object> rowKey;
         
         /**
-         * 行数据（包含所有字段）
+         * Row data (contains all fields)
          */
         private Map<String, Object> data;
         
         /**
-         * 处理人ID
+         * Assignee ID
          */
         private String assignee;
         
         /**
-         * 处理人姓名
+         * Assignee name
          */
         private String assigneeName;
         
         /**
-         * 任务状态（ASSIGNED, COMPLETED, CANCELLED等）
+         * Task status (ASSIGNED, COMPLETED, CANCELLED, etc.)
          */
         private String status;
     }

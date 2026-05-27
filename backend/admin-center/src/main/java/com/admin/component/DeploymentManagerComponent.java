@@ -13,6 +13,7 @@ import com.admin.repository.FunctionUnitApprovalRepository;
 import com.admin.repository.FunctionUnitDeploymentRepository;
 import com.admin.repository.FunctionUnitRepository;
 import com.admin.service.UserReferenceResolver;
+import com.platform.common.i18n.I18nService;
 import com.platform.messaging.support.NotificationDispatchHelper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,8 +27,7 @@ import java.time.Instant;
 import java.util.*;
 
 /**
- * 部署管理组件
- * 负责多环境部署、部署策略、审批流程和回滚管理
+ * Orchestrates multi-environment deployments, strategies, approvals, and rollbacks for function units.
  */
 @Slf4j
 @Component
@@ -39,13 +39,14 @@ public class DeploymentManagerComponent {
     private final FunctionUnitApprovalRepository approvalRepository;
     private final NotificationDispatchHelper notificationDispatchHelper;
     private final UserReferenceResolver userReferenceResolver;
+    private final I18nService i18nService;
     
-    // 需要审批的环境
+    /** Environments where approval workflow is enforced. */
     private static final Set<DeploymentEnvironment> APPROVAL_REQUIRED_ENVIRONMENTS = 
             EnumSet.of(DeploymentEnvironment.PRODUCTION, DeploymentEnvironment.PRE_PRODUCTION, DeploymentEnvironment.STAGING);
 
     /**
-     * 创建部署请求
+     * Creates a deployment request (optionally routed through approval workflow).
      */
     @Transactional
     public FunctionUnitDeployment createDeployment(String functionUnitId, 
@@ -55,23 +56,22 @@ public class DeploymentManagerComponent {
         log.info("Creating deployment for function unit {} to environment {}", functionUnitId, environment);
         
         FunctionUnit functionUnit = functionUnitRepository.findById(functionUnitId)
-                .orElseThrow(() -> new FunctionUnitNotFoundException("功能单元不存在: " + functionUnitId));
+                .orElseThrow(() -> new FunctionUnitNotFoundException(functionUnitId));
         
-        // 检查功能单元是否可部署
         if (!functionUnit.isDeployable()) {
-            throw new AdminBusinessException("INVALID_STATUS", 
-                    "功能单元状态不允许部署: " + functionUnit.getStatus());
+            throw new AdminBusinessException("INVALID_STATUS",
+                    i18nService.getMessage("admin.fu.deploy_status_invalid", functionUnit.getStatus()));
         }
         
-        // 检查是否已有进行中的部署
         Optional<FunctionUnitDeployment> activeDeployment = 
                 deploymentRepository.findActiveDeployment(functionUnitId, environment);
         if (activeDeployment.isPresent()) {
-            throw new AdminBusinessException("DEPLOYMENT_IN_PROGRESS", 
-                    "该环境已有进行中的部署: " + activeDeployment.get().getId());
+            throw new AdminBusinessException("DEPLOYMENT_IN_PROGRESS",
+                    i18nService.getMessage("admin.deploy.error.deployment_already_in_progress",
+                            activeDeployment.get().getId()));
         }
         
-        // 创建部署记录
+        // Create persistence record for this deployment
         FunctionUnitDeployment deployment = FunctionUnitDeployment.builder()
                 .id(UUID.randomUUID().toString())
                 .functionUnit(functionUnit)
@@ -83,7 +83,6 @@ public class DeploymentManagerComponent {
         
         deployment = deploymentRepository.save(deployment);
         
-        // 如果需要审批，创建审批记录
         if (requiresApproval(environment)) {
             createApprovalRecords(deployment);
             deployment.setStatus(DeploymentStatus.PENDING_APPROVAL);
@@ -96,8 +95,8 @@ public class DeploymentManagerComponent {
             notificationDispatchHelper.publishToUserAfterCommit(
                     deployerId,
                     "APPROVAL",
-                    "部署已提交审批",
-                    String.format("功能单元「%s」至环境 %s 的部署（编号 %s）已进入审批流程，请等待审批结果。",
+                    i18nService.getMessage("admin.deploy.notification.submitted_title"),
+                    i18nService.getMessage("admin.deploy.notification.submitted_body",
                             functionUnit.getName(), environment, deployment.getId()),
                     null,
                     "admin-center");
@@ -106,27 +105,16 @@ public class DeploymentManagerComponent {
         return deployment;
     }
     
-    /**
-     * 检查是否需要审批
-     */
     public boolean requiresApproval(DeploymentEnvironment environment) {
         return APPROVAL_REQUIRED_ENVIRONMENTS.contains(environment);
     }
     
-    /**
-     * 创建审批记录
-     */
     private void createApprovalRecords(FunctionUnitDeployment deployment) {
-        // 生产环境需要多级审批
         if (deployment.getEnvironment() == DeploymentEnvironment.PRODUCTION) {
-            // 技术审批
             createApprovalRecord(deployment, ApprovalType.TECHNICAL, 1);
-            // 业务审批
             createApprovalRecord(deployment, ApprovalType.BUSINESS, 2);
-            // 安全审批
             createApprovalRecord(deployment, ApprovalType.SECURITY, 3);
         } else {
-            // 预生产环境只需要技术审批
             createApprovalRecord(deployment, ApprovalType.TECHNICAL, 1);
         }
     }
@@ -142,45 +130,42 @@ public class DeploymentManagerComponent {
         approvalRepository.save(approval);
     }
 
-    /**
-     * 审批部署
-     */
     @Transactional
     public FunctionUnitApproval approveDeployment(String approvalId, String approverId, String comment) {
         log.info("Approving deployment approval: {}", approvalId);
         
         FunctionUnitApproval approval = approvalRepository.findById(approvalId)
-                .orElseThrow(() -> new AdminBusinessException("APPROVAL_NOT_FOUND", "Approval record not found: " + approvalId));
+                .orElseThrow(() -> new AdminBusinessException("APPROVAL_NOT_FOUND", i18nService.getMessage("admin.deploy.error.approval_not_found", approvalId)));
         
         if (approval.getStatus() != ApprovalStatus.PENDING) {
-            throw new AdminBusinessException("INVALID_STATUS", "Approval status does not allow operation: " + approval.getStatus());
+            throw new AdminBusinessException("INVALID_STATUS", i18nService.getMessage("admin.deploy.error.approval_invalid_status", approval.getStatus()));
         }
         
-        // 检查前置审批是否完成
         FunctionUnitDeployment deployment = approval.getDeployment();
         List<FunctionUnitApproval> pendingApprovals = 
                 approvalRepository.findPendingApprovalsBefore(deployment.getId(), approval.getApprovalOrder());
         if (!pendingApprovals.isEmpty()) {
-            throw new AdminBusinessException("PENDING_APPROVAL", "There are pending prerequisite approvals");
+            throw new AdminBusinessException("PENDING_APPROVAL", i18nService.getMessage("admin.deploy.error.pending_prerequisite_approvals"));
         }
         
         approval.approve(approverId, comment);
         approval = approvalRepository.save(approval);
-        
-        // 检查是否所有审批都已完成
+
         checkAndUpdateDeploymentStatus(deployment);
 
         FunctionUnitDeployment dep = approval.getDeployment();
         if (dep != null && StringUtils.hasText(dep.getDeployedBy())) {
             String fuName = dep.getFunctionUnit() != null ? dep.getFunctionUnit().getName() : "";
+            String commentSuffix = "";
+            if (comment != null && !comment.isBlank()) {
+                commentSuffix = i18nService.getMessage("admin.deploy.notification.comment_line", comment).trim();
+            }
             notificationDispatchHelper.publishToUserAfterCommit(
                     dep.getDeployedBy(),
                     "APPROVAL",
-                    "部署审批进度",
-                    String.format("功能单元「%s」的部署审批（%s）已由审批人处理：通过。%s",
-                            fuName,
-                            approval.getApprovalType(),
-                            comment != null && !comment.isBlank() ? "意见：" + comment : "").trim(),
+                    i18nService.getMessage("admin.deploy.notification.approval_progress_title"),
+                    i18nService.getMessage("admin.deploy.notification.approval_progress_body",
+                            fuName, approval.getApprovalType().name(), commentSuffix).trim(),
                     null,
                     "admin-center");
         }
@@ -188,37 +173,34 @@ public class DeploymentManagerComponent {
         return approval;
     }
     
-    /**
-     * 拒绝部署
-     */
     @Transactional
     public FunctionUnitApproval rejectDeployment(String approvalId, String approverId, String comment) {
         log.info("Rejecting deployment approval: {}", approvalId);
         
         FunctionUnitApproval approval = approvalRepository.findById(approvalId)
-                .orElseThrow(() -> new AdminBusinessException("APPROVAL_NOT_FOUND", "Approval record not found: " + approvalId));
+                .orElseThrow(() -> new AdminBusinessException("APPROVAL_NOT_FOUND", i18nService.getMessage("admin.deploy.error.approval_not_found", approvalId)));
         
         if (approval.getStatus() != ApprovalStatus.PENDING) {
-            throw new AdminBusinessException("INVALID_STATUS", "Approval status does not allow operation: " + approval.getStatus());
+            throw new AdminBusinessException("INVALID_STATUS", i18nService.getMessage("admin.deploy.error.approval_invalid_status", approval.getStatus()));
         }
         
         approval.reject(approverId, comment);
         approval = approvalRepository.save(approval);
-        
-        // 更新部署状态为失败
+
         FunctionUnitDeployment deployment = approval.getDeployment();
         deployment.setStatus(DeploymentStatus.FAILED);
-        deployment.setErrorMessage("Approval rejected: " + comment);
+        deployment.setErrorMessage(i18nService.getMessage("admin.deploy.error.approval_rejected", comment));
         deploymentRepository.save(deployment);
 
         if (StringUtils.hasText(deployment.getDeployedBy())) {
             String fuName = deployment.getFunctionUnit() != null ? deployment.getFunctionUnit().getName() : "";
+            String remark = comment != null ? comment : "";
             notificationDispatchHelper.publishToUserAfterCommit(
                     deployment.getDeployedBy(),
                     "APPROVAL",
-                    "部署审批已拒绝",
-                    String.format("功能单元「%s」的部署（编号 %s）审批未通过。原因：%s",
-                            fuName, deployment.getId(), comment),
+                    i18nService.getMessage("admin.deploy.notification.rejected_title"),
+                    i18nService.getMessage("admin.deploy.notification.rejected_body",
+                            fuName, deployment.getId(), remark),
                     null,
                     "admin-center");
         }
@@ -226,9 +208,6 @@ public class DeploymentManagerComponent {
         return approval;
     }
     
-    /**
-     * 检查并更新部署状态
-     */
     private void checkAndUpdateDeploymentStatus(FunctionUnitDeployment deployment) {
         List<FunctionUnitApproval> allApprovals = approvalRepository.findByDeploymentId(deployment.getId());
         
@@ -244,8 +223,8 @@ public class DeploymentManagerComponent {
                 notificationDispatchHelper.publishToUserAfterCommit(
                         deployment.getDeployedBy(),
                         "APPROVAL",
-                        "部署审批全部通过",
-                        String.format("功能单元「%s」的部署（编号 %s）已完成全部审批，可继续后续发布步骤。",
+                        i18nService.getMessage("admin.deploy.notification.all_approved_title"),
+                        i18nService.getMessage("admin.deploy.notification.all_approved_body",
                                 fuName, deployment.getId()),
                         null,
                         "admin-center");
@@ -254,36 +233,34 @@ public class DeploymentManagerComponent {
     }
     
     /**
-     * 执行部署
+     * Runs deployment logic after prerequisites are satisfied (may be synchronous or delegated to integrations).
      */
     @Transactional
     public FunctionUnitDeployment executeDeployment(String deploymentId) {
         log.info("Executing deployment: {}", deploymentId);
         
         FunctionUnitDeployment deployment = deploymentRepository.findById(deploymentId)
-                .orElseThrow(() -> new DeploymentNotFoundException("Deployment record not found: " + deploymentId));
+                .orElseThrow(() -> new AdminBusinessException("DEPLOYMENT_NOT_FOUND",
+                        i18nService.getMessage("admin.deploy.error.deployment_not_found", deploymentId)));
         
-        // 检查部署状态
         if (deployment.getStatus() != DeploymentStatus.PENDING && 
             deployment.getStatus() != DeploymentStatus.APPROVED) {
             throw new AdminBusinessException("INVALID_STATUS", 
-                    "Deployment status does not allow execution: " + deployment.getStatus());
+                    i18nService.getMessage("admin.deploy.error.deployment_invalid_status_exec", deployment.getStatus()));
         }
         
-        // 如果需要审批但未完成
         if (requiresApproval(deployment.getEnvironment()) && 
             deployment.getStatus() != DeploymentStatus.APPROVED) {
-            throw new AdminBusinessException("APPROVAL_REQUIRED", "Deployment requires approval before execution");
+            throw new AdminBusinessException("APPROVAL_REQUIRED", i18nService.getMessage("admin.deploy.error.approval_required"));
         }
         
         try {
             deployment.setStatus(DeploymentStatus.DEPLOYING);
             deployment.setStartedAt(Instant.now());
             deployment = deploymentRepository.save(deployment);
-            
-            // 执行部署逻辑（根据策略）
+
             executeDeploymentStrategy(deployment);
-            
+
             deployment.setStatus(DeploymentStatus.SUCCESS);
             deployment.setCompletedAt(Instant.now());
             if (deployment.getDeployedAt() == null) {
@@ -293,8 +270,7 @@ public class DeploymentManagerComponent {
                 deployment.setDeployedBy(deployment.getCreatedBy());
             }
             deployment = deploymentRepository.save(deployment);
-            
-            // 更新功能单元状态
+
             FunctionUnit functionUnit = deployment.getFunctionUnit();
             functionUnit.markAsDeployed();
             functionUnitRepository.save(functionUnit);
@@ -307,14 +283,14 @@ public class DeploymentManagerComponent {
             deployment.setErrorMessage(e.getMessage());
             deployment.setCompletedAt(Instant.now());
             deploymentRepository.save(deployment);
-            throw new DeploymentFailedException("Deployment execution failed: " + e.getMessage(), e);
+            throw new DeploymentFailedException(i18nService.getMessage("admin.deploy.error.execution_failed", e.getMessage()), e);
         }
         
         return deployment;
     }
 
     /**
-     * 执行部署策略
+     * Delegates deployment work by strategy variant (currently placeholder hooks for orchestration backends).
      */
     private void executeDeploymentStrategy(FunctionUnitDeployment deployment) {
         log.info("Executing deployment strategy: {} for deployment: {}", 
@@ -335,49 +311,48 @@ public class DeploymentManagerComponent {
                 break;
             default:
                 throw new AdminBusinessException("UNKNOWN_STRATEGY", 
-                        "Unknown deployment strategy: " + deployment.getStrategy());
+                        i18nService.getMessage("admin.deploy.error.unknown_strategy", deployment.getStrategy()));
         }
     }
     
     private void executeFullDeployment(FunctionUnitDeployment deployment) {
         log.info("Executing full deployment for: {}", deployment.getId());
-        // 全量部署：替换所有实例
-        // 实际实现中应该调用部署服务
+        // Placeholder for full rollout (replace instances / rollout controller).
     }
     
     private void executeIncrementalDeployment(FunctionUnitDeployment deployment) {
         log.info("Executing incremental deployment for: {}", deployment.getId());
-        // 增量部署：逐步替换实例
+        // Placeholder for staged rollout updates.
     }
     
     private void executeCanaryDeployment(FunctionUnitDeployment deployment) {
         log.info("Executing canary deployment for: {}", deployment.getId());
-        // 灰度部署：先部署到小部分实例
+        // Placeholder for canary traffic slice.
     }
     
     private void executeBlueGreenDeployment(FunctionUnitDeployment deployment) {
         log.info("Executing blue-green deployment for: {}", deployment.getId());
-        // 蓝绿部署：部署到备用环境，然后切换流量
+        // Placeholder for blue-green switch.
     }
-    
+
     /**
-     * 回滚部署
+     * Rolls deployment back toward the previously successful baseline for the same environment.
      */
     @Transactional
     public FunctionUnitDeployment rollbackDeployment(String deploymentId, String operatorId, String reason) {
         log.info("Rolling back deployment: {}", deploymentId);
         
         FunctionUnitDeployment deployment = deploymentRepository.findById(deploymentId)
-                .orElseThrow(() -> new DeploymentNotFoundException("Deployment record not found: " + deploymentId));
+                .orElseThrow(() -> new AdminBusinessException("DEPLOYMENT_NOT_FOUND",
+                        i18nService.getMessage("admin.deploy.error.deployment_not_found", deploymentId)));
         
         if (deployment.getStatus() != DeploymentStatus.SUCCESS && 
             deployment.getStatus() != DeploymentStatus.DEPLOYING) {
             throw new AdminBusinessException("INVALID_STATUS", 
-                    "Deployment status does not allow rollback: " + deployment.getStatus());
+                    i18nService.getMessage("admin.deploy.error.rollback_invalid_status", deployment.getStatus()));
         }
         
-        // 查找上一个成功的部署
-        Optional<FunctionUnitDeployment> previousDeployment = 
+        Optional<FunctionUnitDeployment> previousDeployment =
                 deploymentRepository.findPreviousSuccessfulDeployment(
                         deployment.getFunctionUnit().getId(), 
                         deployment.getEnvironment(),
@@ -386,12 +361,10 @@ public class DeploymentManagerComponent {
         try {
             deployment.setStatus(DeploymentStatus.ROLLING_BACK);
             deployment = deploymentRepository.save(deployment);
-            
-            // 执行回滚逻辑
+
             if (previousDeployment.isPresent()) {
                 executeRollback(deployment, previousDeployment.get());
             } else {
-                // 没有上一个版本，执行卸载
                 executeUninstall(deployment);
             }
             
@@ -406,9 +379,9 @@ public class DeploymentManagerComponent {
         } catch (Exception e) {
             log.error("Rollback failed: {}", deploymentId, e);
             deployment.setStatus(DeploymentStatus.ROLLBACK_FAILED);
-            deployment.setErrorMessage("Rollback failed: " + e.getMessage());
+            deployment.setErrorMessage(i18nService.getMessage("admin.deploy.error.rollback_failed_message", e.getMessage()));
             deploymentRepository.save(deployment);
-            throw new DeploymentFailedException("Rollback execution failed: " + e.getMessage(), e);
+            throw new DeploymentFailedException(i18nService.getMessage("admin.deploy.error.rollback_failed", e.getMessage()), e);
         }
         
         return deployment;
@@ -416,40 +389,34 @@ public class DeploymentManagerComponent {
     
     private void executeRollback(FunctionUnitDeployment current, FunctionUnitDeployment previous) {
         log.info("Rolling back from {} to {}", current.getId(), previous.getId());
-        // 实际实现中应该调用部署服务恢复到上一个版本
+        // Placeholder: trigger integration to restore artifacts from baseline deployment.
     }
     
     private void executeUninstall(FunctionUnitDeployment deployment) {
         log.info("Uninstalling deployment: {}", deployment.getId());
-        // 实际实现中应该调用部署服务卸载功能单元
+        // Placeholder: uninstall when no predecessor exists.
     }
 
-    /**
-     * 获取部署记录
-     */
+    /** Loads persisted deployment aggregate by identifier. */
     public FunctionUnitDeployment getDeployment(String deploymentId) {
         return deploymentRepository.findById(deploymentId)
-                .orElseThrow(() -> new DeploymentNotFoundException("Deployment record not found: " + deploymentId));
+                .orElseThrow(() -> new AdminBusinessException("DEPLOYMENT_NOT_FOUND",
+                        i18nService.getMessage("admin.deploy.error.deployment_not_found", deploymentId)));
     }
     
-    /**
-     * 获取功能单元的部署历史
-     */
+    /** Lists deployment audits for a particular function unit, newest-first. */
     public List<FunctionUnitDeployment> getDeploymentHistory(String functionUnitId) {
         return deploymentRepository.findByFunctionUnitIdOrderByCreatedAtDesc(functionUnitId);
     }
     
-    /**
-     * 获取环境的部署历史
-     */
+    /** Loads deployments scoped to environment with pagination. */
     public Page<FunctionUnitDeployment> getDeploymentsByEnvironment(
             DeploymentEnvironment environment, Pageable pageable) {
         return deploymentRepository.findByEnvironmentOrderByCreatedAtDesc(environment, pageable);
     }
 
     /**
-     * 获取所有部署记录（全局分页查询，不限定功能单元）
-     * Req 15.2
+     * Global deployment listing (functional requirement Req 15.2).
      */
     public Page<DeploymentInfo> listAllDeployments(Pageable pageable) {
         Page<DeploymentInfo> page = deploymentRepository.findByConditions(null, null, null, pageable)
@@ -471,23 +438,16 @@ public class DeploymentManagerComponent {
         }
     }
     
-    /**
-     * 获取待审批的部署
-     */
+    /** Approvals queued for designated approvers. */
     public List<FunctionUnitApproval> getPendingApprovals(String approverId) {
         return approvalRepository.findPendingApprovalsByApprover(approverId);
     }
     
-    /**
-     * 获取部署的审批记录
-     */
+    /** Loads approval checkpoints for a deployment. */
     public List<FunctionUnitApproval> getDeploymentApprovals(String deploymentId) {
         return approvalRepository.findByDeploymentIdOrderByApprovalOrder(deploymentId);
     }
     
-    /**
-     * 取消部署
-     */
     @Transactional
     public FunctionUnitDeployment cancelDeployment(String deploymentId, String operatorId, String reason) {
         log.info("Cancelling deployment: {}", deploymentId);
@@ -496,15 +456,14 @@ public class DeploymentManagerComponent {
         
         if (deployment.getStatus() != DeploymentStatus.PENDING && 
             deployment.getStatus() != DeploymentStatus.PENDING_APPROVAL) {
-            throw new AdminBusinessException("INVALID_STATUS", 
-                    "部署状态不允许取消: " + deployment.getStatus());
+            throw new AdminBusinessException("INVALID_STATUS",
+                    i18nService.getMessage("admin.deploy.cancel.invalid_status", deployment.getStatus()));
         }
         
         deployment.setStatus(DeploymentStatus.CANCELLED);
-        deployment.setErrorMessage("已取消: " + reason);
+        deployment.setErrorMessage(i18nService.getMessage("admin.deploy.cancel.error_message", reason));
         deployment = deploymentRepository.save(deployment);
         
-        // 取消所有待审批记录
         List<FunctionUnitApproval> approvals = approvalRepository.findByDeploymentId(deploymentId);
         for (FunctionUnitApproval approval : approvals) {
             if (approval.getStatus() == ApprovalStatus.PENDING) {
@@ -517,21 +476,17 @@ public class DeploymentManagerComponent {
         return deployment;
     }
     
-    /**
-     * 获取环境的当前部署
-     */
+    /** Most recent SUCCESS deployment snapshot for optional environment pinning. */
     public Optional<FunctionUnitDeployment> getCurrentDeployment(
             String functionUnitId, DeploymentEnvironment environment) {
         return deploymentRepository.findLatestSuccessfulDeployment(functionUnitId, environment);
     }
     
     /**
-     * 检查是否可以部署到指定环境
+     * Environment gatekeeping (requires successful deployment sequence before production rollout).
      */
     public boolean canDeployToEnvironment(String functionUnitId, DeploymentEnvironment targetEnvironment) {
-        // 检查是否需要先部署到前置环境
         if (targetEnvironment == DeploymentEnvironment.PRODUCTION) {
-            // 生产环境需要先部署到预生产
             Optional<FunctionUnitDeployment> preProductionDeployment = 
                     deploymentRepository.findLatestSuccessfulDeployment(
                             functionUnitId, DeploymentEnvironment.PRE_PRODUCTION);
@@ -539,7 +494,6 @@ public class DeploymentManagerComponent {
         }
         
         if (targetEnvironment == DeploymentEnvironment.PRE_PRODUCTION) {
-            // 预生产需要先部署到测试环境
             Optional<FunctionUnitDeployment> testDeployment = 
                     deploymentRepository.findLatestSuccessfulDeployment(
                             functionUnitId, DeploymentEnvironment.TEST);
@@ -549,37 +503,36 @@ public class DeploymentManagerComponent {
         return true;
     }
     
-    /**
-     * 获取部署进度
-     */
+    /** Coarse UX-friendly progress aggregation for dashboards. */
     public DeploymentProgress getDeploymentProgress(String deploymentId) {
         FunctionUnitDeployment deployment = getDeployment(deploymentId);
-        
-        int totalSteps = 5; // 验证、准备、部署、验证、完成
+
+        int totalSteps = 5; // Discovery, prepare, deploy, verify, complete
         int completedSteps = 0;
-        String currentStep = "初始化";
-        
+        String currentStep = i18nService.getMessage("admin.deploy.progress.initializing");
+
         switch (deployment.getStatus()) {
             case PENDING, PENDING_APPROVAL -> {
                 completedSteps = 0;
-                currentStep = "等待审批";
+                currentStep = i18nService.getMessage("admin.deploy.progress.waiting_approval");
             }
             case APPROVED -> {
                 completedSteps = 1;
-                currentStep = "已审批，等待执行";
+                currentStep = i18nService.getMessage("admin.deploy.progress.approved_pending_execution");
             }
             case IN_PROGRESS, DEPLOYING -> {
                 completedSteps = 2;
-                currentStep = "正在部署";
+                currentStep = i18nService.getMessage("admin.deploy.progress.deploying");
             }
             case SUCCESS -> {
                 completedSteps = 5;
-                currentStep = "部署完成";
+                currentStep = i18nService.getMessage("admin.deploy.progress.completed");
             }
-            case FAILED, ROLLBACK_FAILED -> currentStep = "部署失败";
-            case ROLLING_BACK -> currentStep = "正在回滚";
-            case ROLLED_BACK -> currentStep = "已回滚";
-            case CANCELLED -> currentStep = "已取消";
+            case FAILED, ROLLBACK_FAILED ->
+                    currentStep = i18nService.getMessage("admin.deploy.progress.failed");
+            case ROLLING_BACK -> currentStep = i18nService.getMessage("admin.deploy.progress.rolling_back");
+            case ROLLED_BACK -> currentStep = i18nService.getMessage("admin.deploy.progress.rolled_back");
+            case CANCELLED -> currentStep = i18nService.getMessage("admin.deploy.progress.cancelled");
         }
         
         return DeploymentProgress.builder()
@@ -593,7 +546,7 @@ public class DeploymentManagerComponent {
     }
     
     /**
-     * 部署进度信息
+     * DTO projecting coarse deployment checkpoints for dashboards.
      */
     @lombok.Data
     @lombok.Builder

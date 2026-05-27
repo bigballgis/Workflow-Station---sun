@@ -84,14 +84,14 @@ public class AuthController {
             user.setLastLoginIp(ipAddress);
             userRepository.save(user);
             
-            // 使用 UserRoleService 获取用户有效角色
+            // Resolve effective roles via UserRoleService
             List<UserEffectiveRole> effectiveRoles = userRoleService.getEffectiveRolesForUser(user.getId().toString());
             List<String> roles = effectiveRoles.stream()
                     .map(UserEffectiveRole::getRoleCode)
                     .distinct()
                     .collect(Collectors.toList());
             
-            // 如果没有从新系统获取到角色，回退到旧方式
+            // Fall back to legacy role lookup when the new system returns none
             if (roles.isEmpty()) {
                 roles = getRolesForUserLegacy(user.getId());
             }
@@ -103,7 +103,7 @@ public class AuthController {
             String refreshToken = generateRefreshToken(user.getId());
             
             // Set httpOnly cookies for access token and refresh token
-            // 使用服务特有 cookie 名（如 dw_access_token），避免三端在同源下相互覆盖。详见 JwtProperties#cookieNames。
+            // Service-specific cookie name (e.g. dw_access_token) so three apps on same origin do not overwrite each other. See JwtProperties#cookieNames.
             Cookie accessTokenCookie = new Cookie(jwtProperties.getPrimaryCookieName(), accessToken);
             accessTokenCookie.setHttpOnly(true);
             accessTokenCookie.setSecure(false);
@@ -185,7 +185,7 @@ public class AuthController {
             String newRefreshToken = generateRefreshToken(user.getId());
             
             // Set httpOnly cookies for new tokens
-            // 使用服务特有 cookie 名（如 dw_access_token），避免三端在同源下相互覆盖。详见 JwtProperties#cookieNames。
+            // Service-specific cookie name (e.g. dw_access_token) so three apps on same origin do not overwrite each other. See JwtProperties#cookieNames.
             Cookie accessTokenCookie = new Cookie(jwtProperties.getPrimaryCookieName(), newAccessToken);
             accessTokenCookie.setHttpOnly(true);
             accessTokenCookie.setSecure(false);
@@ -358,14 +358,14 @@ public class AuthController {
 
     private List<String> getRolesForUserLegacy(String userId) {
         try {
-            // 查询用户通过虚拟组获得的角色
+            // Roles granted via virtual group membership
             String sql = "SELECT DISTINCT r.code FROM sys_virtual_group_members vgm " +
                     "JOIN sys_virtual_group_roles vgr ON vgm.group_id = vgr.virtual_group_id " +
                     "JOIN sys_roles r ON vgr.role_id = r.id " +
                     "WHERE vgm.user_id = ?";
             List<String> roles = jdbcTemplate.queryForList(sql, String.class, userId);
             
-            // 如果没有找到角色，返回默认角色
+            // Default role when none are found
             if (roles.isEmpty()) {
                 log.warn("No roles found for user {}, returning default DEVELOPER role", userId);
                 return List.of("DEVELOPER");

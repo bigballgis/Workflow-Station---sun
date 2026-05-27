@@ -7,9 +7,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.*;
 
 /**
- * N8N 变量映射工具类
- * 负责在工作流流程变量与 N8N 工作流输入/输出参数之间进行映射转换。
- * 映射配置以 JSON 字符串格式存储在 BPMN 扩展属性中，格式为 [{source, target}]。
+ * N8N variable mapping utility class.
+ * Handles mapping conversion between workflow process variables and N8N workflow
+ * input/output parameters.
+ * Mapping configuration is stored in BPMN extension attributes as a JSON string
+ * in the format [{source, target}].
  */
 public final class N8nVariableMappingUtil {
 
@@ -20,7 +22,8 @@ public final class N8nVariableMappingUtil {
     }
 
     /**
-     * 变量映射配置，定义 source（源字段名）到 target（目标字段名）的映射关系
+     * Variable mapping configuration, defining the mapping relationship from
+     * source (source field name) to target (target field name).
      */
     public static class VariableMapping {
         private String source;
@@ -41,10 +44,12 @@ public final class N8nVariableMappingUtil {
     }
 
     /**
-     * 解析 JSON 格式的映射配置字符串为 VariableMapping 列表。
+     * Parse the JSON-formatted mapping configuration string into a list of
+     * VariableMapping objects.
      *
-     * @param mappingJson JSON 字符串，格式为 [{"source":"xxx","target":"yyy"}, ...]
-     * @return 解析后的映射配置列表；若输入为 null 或空字符串则返回空列表
+     * @param mappingJson JSON string in the format [{"source":"xxx","target":"yyy"}, ...]
+     * @return parsed mapping configuration list; returns empty list if input is null
+     *         or empty string
      */
     public static List<VariableMapping> parseMappingJson(String mappingJson) {
         if (mappingJson == null || mappingJson.isBlank()) {
@@ -58,11 +63,12 @@ public final class N8nVariableMappingUtil {
     }
 
     /**
-     * 应用输入映射（JSON 字符串版本）：从 Flowable 流程变量提取数据，按映射配置构建 N8N 请求参数。
+     * Apply input mapping (JSON string version): extract data from Flowable process
+     * variables and build N8N request parameters based on the mapping configuration.
      *
-     * @param processVariables 流程变量（源数据）
-     * @param inputMappingJson JSON 格式的输入映射配置字符串
-     * @return 映射后的 N8N 请求参数
+     * @param processVariables process variables (source data)
+     * @param inputMappingJson JSON-formatted input mapping configuration string
+     * @return mapped N8N request parameters
      */
     public static Map<String, Object> applyInputMapping(Map<String, Object> processVariables,
                                                          String inputMappingJson) {
@@ -71,11 +77,12 @@ public final class N8nVariableMappingUtil {
     }
 
     /**
-     * 应用输出映射（JSON 字符串版本）：从 N8N 返回数据按映射配置构建流程变量。
+     * Apply output mapping (JSON string version): build process variables from
+     * N8N return data based on the mapping configuration.
      *
-     * @param n8nOutputData    N8N 工作流返回的输出数据
-     * @param outputMappingJson JSON 格式的输出映射配置字符串
-     * @return 映射后的流程变量数据
+     * @param n8nOutputData    output data returned by the N8N workflow
+     * @param outputMappingJson JSON-formatted output mapping configuration string
+     * @return mapped process variable data
      */
     public static Map<String, Object> applyOutputMapping(Map<String, Object> n8nOutputData,
                                                           String outputMappingJson) {
@@ -84,12 +91,14 @@ public final class N8nVariableMappingUtil {
     }
 
     /**
-     * 应用输入映射：从源数据（流程变量）按映射配置构建目标数据（N8N 请求参数）。
-     * 每个映射项将 sourceVariables 中 source 字段的值写入结果 Map 的 target 字段。
+     * Apply input mapping: build target data (N8N request parameters) from source
+     * data (process variables) based on the mapping configuration.
+     * Each mapping entry writes the value of the source field from sourceVariables
+     * into the target field of the result Map.
      *
-     * @param mappings        映射配置列表
-     * @param sourceVariables 源数据（流程变量）
-     * @return 映射后的目标数据
+     * @param mappings        mapping configuration list
+     * @param sourceVariables source data (process variables)
+     * @return mapped target data
      */
     public static Map<String, Object> applyInputMapping(List<VariableMapping> mappings,
                                                          Map<String, Object> sourceVariables) {
@@ -97,12 +106,14 @@ public final class N8nVariableMappingUtil {
     }
 
     /**
-     * 应用输出映射：从 N8N 返回数据按映射配置构建目标数据（流程变量）。
-     * 每个映射项将 n8nOutput 中 source 字段的值写入结果 Map 的 target 字段。
+     * Apply output mapping: build target data (process variables) from N8N
+     * return data based on the mapping configuration.
+     * Each mapping entry writes the value of the source field from n8nOutput
+     * into the target field of the result Map.
      *
-     * @param mappings  映射配置列表
-     * @param n8nOutput N8N 工作流返回的输出数据
-     * @return 映射后的流程变量数据
+     * @param mappings  mapping configuration list
+     * @param n8nOutput output data returned by the N8N workflow
+     * @return mapped process variable data
      */
     public static Map<String, Object> applyOutputMapping(List<VariableMapping> mappings,
                                                           Map<String, Object> n8nOutput) {
@@ -110,8 +121,9 @@ public final class N8nVariableMappingUtil {
     }
 
     /**
-     * 通用映射逻辑：从源数据按映射配置构建目标数据。
-     * 支持 dot notation 嵌套路径解析（如 "summary.totalAmount"）。
+     * Generic mapping logic: build target data from source data based on the
+     * mapping configuration.
+     * Supports dot notation nested path resolution (e.g., "summary.totalAmount").
      */
     private static Map<String, Object> applyMapping(List<VariableMapping> mappings,
                                                      Map<String, Object> sourceData) {
@@ -133,13 +145,13 @@ public final class N8nVariableMappingUtil {
     }
 
     /**
-     * 支持 dot notation 的嵌套值解析。
-     * 例如: resolveNestedValue({"a": {"b": 1}}, "a.b") → 1
-     * 对于不含 dot 的路径，直接使用 data.get(path)（向后兼容）。
+     * Resolve nested values using dot notation.
+     * Example: resolveNestedValue({"a": {"b": 1}}, "a.b") → 1
+     * For paths without dots, directly uses data.get(path) (backward compatible).
      *
-     * @param data 源数据 Map
-     * @param path dot notation 路径
-     * @return 解析到的值，路径无效时返回 null
+     * @param data source data Map
+     * @param path dot notation path
+     * @return resolved value, returns null if path is invalid
      */
     @SuppressWarnings("unchecked")
     private static Object resolveNestedValue(Map<String, Object> data, String path) {

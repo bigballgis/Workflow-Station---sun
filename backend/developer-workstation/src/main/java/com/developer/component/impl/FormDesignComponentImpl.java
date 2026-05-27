@@ -40,7 +40,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * 表单设计组件实现
+ * Form design component implementation.
  */
 @Component
 @Slf4j
@@ -141,23 +141,22 @@ public class FormDesignComponentImpl implements FormDesignComponent {
     }
     
     /**
-     * 检查表单是否被流程步骤引用
-     * 如果被引用，抛出 DeveloperBusinessException
-     * 
-     * @param formId 表单ID
-     * @throws DeveloperBusinessException 如果表单正在被使用
+     * Checks whether the form is referenced from a process step BPMN XML.
+     * Throws {@link DeveloperBusinessException} if still in use.
+     *
+     * @param formId form primary key
+     * @throws DeveloperBusinessException when BPMN XML still references this form name
      */
     private void checkFormDependencies(Long formId) {
         FormDefinition form = formDefinitionRepository.findById(formId)
                 .orElseThrow(() -> new ResourceNotFoundException("FormDefinition", formId));
         
-        // 获取该功能单元的流程定义
+        // Load BPMN XML for this function unit.
         FunctionUnit functionUnit = form.getFunctionUnit();
         if (functionUnit.getProcessDefinition() != null) {
             String bpmnXml = functionUnit.getProcessDefinition().getBpmnXml();
             
-            // 简化检查：在 BPMN XML 中搜索表单名称
-            // 注意：这是简化实现，完整实现需要解析 BPMN XML
+            // Heuristic: search form name in BPMN XML (full parse not implemented).
             if (bpmnXml != null && bpmnXml.contains(form.getFormName())) {
                 throw new DeveloperBusinessException(
                     "FORM_IN_USE",
@@ -240,22 +239,21 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         FormDefinition formDefinition = getById(id);
         ValidationResult result = new ValidationResult();
         
-        // 验证配置JSON
+        // Validate config JSON presence.
         if (formDefinition.getConfigJson() == null || formDefinition.getConfigJson().isEmpty()) {
             result.addError("EMPTY_CONFIG", i18nService.getMessage("form.empty_config"), null);
         }
         
-        // 验证数据绑定
+        // Validate data binding (bound table).
         if (formDefinition.getBoundTable() != null) {
-            // 检查绑定的字段是否存在于表中
+            // TODO: validate bound fields exist on the table (deep binding check).
             Map<String, Object> config = formDefinition.getConfigJson();
-            // TODO: 深度验证字段绑定
         }
         
         return result;
     }
     
-    // ========== 表绑定管理方法实现 ==========
+    // ========== Form table binding operations ==========
     
     @Override
     @Transactional
@@ -271,14 +269,14 @@ public class FormDesignComponentImpl implements FormDesignComponent {
             table = tableDefinitionRepository.findById(request.getTableId())
                     .orElseThrow(() -> new ResourceNotFoundException("TableDefinition", request.getTableId()));
             
-            // 检查是否已绑定该表
+            // Reject duplicate binding to the same TableDefinition.
             if (formTableBindingRepository.existsByFormIdAndTableId(formId, request.getTableId())) {
                 throw new DeveloperBusinessException("BINDING_EXISTS", 
                         i18nService.getMessage("form.binding_exists"),
                         i18nService.getMessage("form.no_duplicate_binding"));
             }
         } else {
-            // 检查是否已绑定该 Relation Table
+            // Reject duplicate binding to the same deployed Relation Table.
             if (formTableBindingRepository.existsByFormIdAndRelationTableId(formId, request.getRelationTableId())) {
                 throw new DeveloperBusinessException("BINDING_EXISTS", 
                         i18nService.getMessage("form.binding_exists"),
@@ -286,7 +284,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
             }
         }
         
-        // 检查主表绑定唯一性
+        // PRIMARY binding must be unique per form.
         if (request.getBindingType() == BindingType.PRIMARY) {
             if (formTableBindingRepository.existsByFormIdAndBindingType(formId, BindingType.PRIMARY)) {
                 throw new DeveloperBusinessException("PRIMARY_BINDING_EXISTS", 
@@ -297,12 +295,12 @@ public class FormDesignComponentImpl implements FormDesignComponent {
 
         enforcePrimarySubBindingRules(form, request, table, isRelationTable);
         
-        // 验证外键字段（子表需要，关联表的本地表也需要）
+        // Validate foreign-key field (SUB / local RELATED tables).
         if (request.getBindingType() != BindingType.PRIMARY && request.getForeignKeyField() != null && table != null) {
             validateForeignKeyField(table, request.getForeignKeyField());
         }
         
-        // 设置默认绑定模式
+        // Default binding mode when omitted.
         BindingMode bindingMode = request.getBindingMode();
         if (bindingMode == null) {
             bindingMode = request.getBindingType() == BindingType.PRIMARY 
@@ -310,13 +308,13 @@ public class FormDesignComponentImpl implements FormDesignComponent {
                     : BindingMode.READONLY;
         }
 
-        // SUB 未传 subMode 时与前端「Full mode」默认一致，避免 DB 中 sub_mode 为空而列表仍按 FULL 展示
+        // SUB without subMode: match frontend Full mode default so DB row is not NULL while lists assume FULL.
         SubMode effectiveSubMode = request.getSubMode();
         if (request.getBindingType() == BindingType.SUB && effectiveSubMode == null) {
             effectiveSubMode = SubMode.FULL;
         }
 
-        // 计算排序顺序
+        // Compute sort order default.
         int sortOrder = request.getSortOrder() != null 
                 ? request.getSortOrder() 
                 : (int) formTableBindingRepository.countByFormId(formId);
@@ -369,7 +367,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         TableDefinition tableForRules = binding.getTable();
         enforcePrimarySubBindingRules(form, request, tableForRules, isRelationTable);
         
-        // 如果更改了绑定类型为主表，检查唯一性
+        // When upgrading to PRIMARY, enforce uniqueness.
         if (request.getBindingType() == BindingType.PRIMARY && binding.getBindingType() != BindingType.PRIMARY) {
             if (formTableBindingRepository.existsByFormIdAndBindingType(binding.getFormId(), BindingType.PRIMARY)) {
                 throw new DeveloperBusinessException("PRIMARY_BINDING_EXISTS", 
@@ -378,7 +376,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
             }
         }
         
-        // 验证外键字段
+        // Validate FK field exists on bound table when provided.
         if (request.getBindingType() != BindingType.PRIMARY && request.getForeignKeyField() != null && binding.getTable() != null) {
             validateForeignKeyField(binding.getTable(), request.getForeignKeyField());
         }
@@ -425,9 +423,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         return formTableBindingRepository.findByFormIdWithTable(formId);
     }
     
-    /**
-     * 验证外键字段是否存在于表中
-     */
+    /** Ensures FK field exists on the bound table definition. */
     private void validateForeignKeyField(TableDefinition table, String foreignKeyField) {
         boolean fieldExists = table.getFieldDefinitions().stream()
                 .anyMatch(field -> field.getFieldName().equals(foreignKeyField));
@@ -440,12 +436,14 @@ public class FormDesignComponentImpl implements FormDesignComponent {
     }
 
     /**
-     * PROCESS / TASK 表单绑定规则：
-     *   - PRIMARY：必须对应 MAIN 物理表（承载表单主数据）；
-     *   - SUB：必须对应 SUB 物理表，必须先存在 PRIMARY 绑定并填写指向主表的外键；
-     *   - RELATED：用于 Lookup 组件引用参考数据，可绑定本功能单元的 RELATION 表或管理中心部署的关联表，
-     *     不要求 PRIMARY 存在，也不要求外键。
-     * 非 PROCESS / TASK 表单不受这些额外约束。
+     * PROCESS / TASK form binding rules:
+     * <ul>
+     *   <li>PRIMARY must target MAIN table metadata (hosts primary form payload);</li>
+     *   <li>SUB must target SUB tables and requires an existing PRIMARY plus FK pointing to main;</li>
+     *   <li>RELATED backs Lookup widgets and may bind RELATION designer tables or admin-deployed relation tables—
+     *       PRIMARY and FK are optional.</li>
+     * </ul>
+     * Non PROCESS / TASK forms skip these extras.
      */
     private void enforcePrimarySubBindingRules(FormDefinition form, FormTableBindingRequest request,
             TableDefinition table, boolean isDeployedRelationTableBinding) {
@@ -477,8 +475,8 @@ public class FormDesignComponentImpl implements FormDesignComponent {
                         i18nService.getMessage("form.specify_fk_to_main"));
             }
         }
-        // RELATED 绑定在 PROCESS / TASK 下也允许，用于 Lookup 组件引用；无需 PRIMARY、也无需外键。
-        // 但本地表 RELATED 绑定必须对应 RELATION 物理表，避免把 MAIN / SUB 误绑成关联表。
+        // RELATED bindings are allowed under PROCESS/TASK for Lookup lookups without PRIMARY/FK requirements.
+        // Local-table RELATED bindings must reference RELATION-typed catalog tables—never MAIN/SUB by mistake.
         if (request.getBindingType() == BindingType.RELATED && !isDeployedRelationTableBinding
                 && table != null && table.getTableType() != TableType.RELATION) {
             throw new DeveloperBusinessException("RELATED_BINDING_REQUIRES_RELATION_TABLE",
@@ -487,7 +485,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         }
     }
     
-    // ========== Process/Task Form 扩展方法实现 ==========
+    // ========== Process/Task form helpers ==========
     
     @Override
     @Transactional(readOnly = true)

@@ -29,9 +29,9 @@ import java.util.Map;
 import jakarta.servlet.http.HttpServletResponse;
 
 /**
- * 任务管理API
+ * Task Management API
  */
-@Tag(name = "任务管理", description = "任务查询、处理、委托等操作")
+@Tag(name = "Task Management", description = "Task query, process, delegate and other operations")
 @Slf4j
 @RestController
 @RequestMapping("/tasks")
@@ -46,25 +46,25 @@ public class TaskController {
     @Value("${admin-center.url:http://localhost:8090}")
     private String adminCenterUrl;
 
-    @Operation(summary = "查询待办任务列表")
+    @Operation(summary = "Query pending task list")
     @PostMapping("/query")
     public ApiResponse<PageResponse<TaskInfo>> queryTasks(
             @CurrentUserId String userId,
             @RequestBody @Valid TaskQueryRequest request) {
-        // 强制使用当前登录用户，禁止 body 伪造 userId（与 @CurrentUserId 一致）
+        // Enforce current user, forbid body-spoofed userId (consistent with @CurrentUserId)
         request.setUserId(userId);
         PageResponse<TaskInfo> result = taskQueryComponent.queryTasks(request);
         return ApiResponse.success(result);
     }
 
-    @Operation(summary = "获取任务详情")
+    @Operation(summary = "Get task detail")
     @GetMapping("/{taskId}")
     public ApiResponse<TaskInfo> getTaskDetail(
             @CurrentUserId String userId,
             @PathVariable String taskId) {
         TaskInfo task = taskQueryComponent.getTaskById(taskId)
                 .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
-        // 与 TaskFormController 一致：可查看详情 = canViewTaskForm（含发起人、处理人），非仅 canProcessTask
+        // Consistent with TaskFormController: canView = canViewTaskForm (initiator + assignee), not just canProcessTask
         if (userId != null && !taskProcessComponent.canViewTaskForm(task, userId,
                 SecurityContextUtils.getCurrentUsername().orElse(null))) {
             log.warn("User {} denied access to task {} (assignee={}, assignmentType={}, initiatorId={})",
@@ -74,14 +74,14 @@ public class TaskController {
         return ApiResponse.success(task);
     }
 
-    @Operation(summary = "获取任务流转历史")
+    @Operation(summary = "Get task history")
     @GetMapping("/{taskId}/history")
     public ApiResponse<List<TaskHistoryInfo>> getTaskHistory(@PathVariable String taskId) {
         List<TaskHistoryInfo> history = taskQueryComponent.getTaskHistory(taskId);
         return ApiResponse.success(history);
     }
 
-    @Operation(summary = "认领任务")
+    @Operation(summary = "Claim task")
     @PostMapping("/{taskId}/claim")
     public ApiResponse<TaskInfo> claimTask(
             @PathVariable String taskId,
@@ -91,7 +91,7 @@ public class TaskController {
         return ApiResponse.success(i18nService.getMessage("portal.task_claimed"), task);
     }
 
-    @Operation(summary = "取消认领任务")
+    @Operation(summary = "Unclaim task")
     @PostMapping("/{taskId}/unclaim")
     public ApiResponse<TaskInfo> unclaimTask(
             @PathVariable String taskId,
@@ -103,7 +103,7 @@ public class TaskController {
         return ApiResponse.success(i18nService.getMessage("portal.task_unclaimed"), task);
     }
 
-    @Operation(summary = "完成任务")
+    @Operation(summary = "Complete task")
     @PostMapping("/{taskId}/complete")
     public ApiResponse<Void> completeTask(
             @PathVariable String taskId,
@@ -118,7 +118,7 @@ public class TaskController {
         return ApiResponse.success(i18nService.getMessage("portal.task_completed"), null);
     }
 
-    @Operation(summary = "委托任务")
+    @Operation(summary = "Delegate task")
     @PostMapping("/{taskId}/delegate")
     public ApiResponse<Void> delegateTask(
             @PathVariable String taskId,
@@ -129,7 +129,7 @@ public class TaskController {
         return ApiResponse.success(i18nService.getMessage("portal.task_delegated"), null);
     }
 
-    @Operation(summary = "转办任务")
+    @Operation(summary = "Transfer task")
     @PostMapping("/{taskId}/transfer")
     public ApiResponse<Void> transferTask(
             @PathVariable String taskId,
@@ -140,7 +140,7 @@ public class TaskController {
         return ApiResponse.success(i18nService.getMessage("portal.task_transferred"), null);
     }
 
-    @Operation(summary = "催办任务")
+    @Operation(summary = "Urge task")
     @PostMapping("/{taskId}/urge")
     public ApiResponse<Void> urgeTask(
             @PathVariable String taskId,
@@ -150,7 +150,7 @@ public class TaskController {
         return ApiResponse.success(i18nService.getMessage("portal.task_urged"), null);
     }
 
-    @Operation(summary = "批量催办任务")
+    @Operation(summary = "Batch urge tasks")
     @PostMapping("/batch/urge")
     public ApiResponse<Void> batchUrgeTasks(
             @CurrentUserId String userId,
@@ -159,7 +159,7 @@ public class TaskController {
         return ApiResponse.success(i18nService.getMessage("portal.batch_urged"), null);
     }
 
-    @Operation(summary = "获取任务统计")
+    @Operation(summary = "Get task statistics")
     @GetMapping("/statistics")
     public ApiResponse<TaskStatistics> getTaskStatistics(
             @CurrentUserId String userId) {
@@ -167,7 +167,7 @@ public class TaskController {
         return ApiResponse.success(statistics);
     }
     
-    @Operation(summary = "查询已处理任务列表")
+    @Operation(summary = "Query completed task list")
     @PostMapping("/completed/query")
     public ApiResponse<PageResponse<TaskInfo>> queryCompletedTasks(
             @CurrentUserId String userId,
@@ -177,7 +177,7 @@ public class TaskController {
         return ApiResponse.success(result);
     }
 
-    @Operation(summary = "搜索用户（用于转办、委托）")
+    @Operation(summary = "Search users (for transfer/delegate)")
     @GetMapping("/users/search")
     @SuppressWarnings("unchecked")
     public ApiResponse<List<Map<String, Object>>> searchUsers(
@@ -198,7 +198,7 @@ public class TaskController {
         }
     }
 
-    @Operation(summary = "分配子表行处理人", description = "多实例子流程前置任务：为子表某行指定处理人（转发至 workflow-engine）")
+    @Operation(summary = "Assign sub-table row handler", description = "Multi-instance sub-process pre-task: assign a handler to a sub-table row (forwarded to workflow-engine)")
     @PostMapping("/{taskId}/sub-table-rows/{rowId}/assign")
     public ApiResponse<Map<String, Object>> assignSubTableRow(
             @PathVariable String taskId,
@@ -211,7 +211,7 @@ public class TaskController {
         return ApiResponse.success(data);
     }
 
-    @Operation(summary = "按业务字段分配子表行处理人（无 rowId 回退）")
+    @Operation(summary = "Assign sub-table row handler by business field (no rowId fallback)")
     @PostMapping("/{taskId}/sub-table-rows/assign-by-identity")
     public ApiResponse<Map<String, Object>> assignSubTableRowByIdentity(
             @PathVariable String taskId,
@@ -231,7 +231,7 @@ public class TaskController {
         return ApiResponse.success(data);
     }
 
-    @Operation(summary = "查询主任务子表数据（代理 workflow-engine）")
+    @Operation(summary = "Query main task sub-table data (proxy workflow-engine)")
     @GetMapping("/{taskId}/sub-table-data/all")
     public ApiResponse<Map<String, Object>> getSubTableDataAll(@PathVariable String taskId) {
         return workflowEngineClient.getSubTableDataAll(taskId)
@@ -240,7 +240,7 @@ public class TaskController {
     }
 
     /**
-     * 与 TaskFormController 一致：按 code 返回 HTTP 状态码，便于前端展示明确提示。
+     * Consistent with TaskFormController: return HTTP status by code so the frontend can display clear hints.
      */
     @ExceptionHandler(PortalException.class)
     public ApiResponse<Void> handlePortalException(PortalException e, HttpServletResponse response) {

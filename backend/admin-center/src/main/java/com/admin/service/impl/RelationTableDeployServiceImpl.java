@@ -19,6 +19,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.platform.common.dto.RelationFieldDTO;
 import com.platform.common.enums.RelationDataType;
 import com.platform.common.enums.RelationTableStatus;
+import com.platform.common.i18n.I18nService;
 import com.platform.security.util.SecurityContextUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,7 +37,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Relation Table 部署与回滚服务实现
+ * Implements relation table deployment and rollback.
  */
 @Slf4j
 @Service
@@ -49,6 +50,7 @@ public class RelationTableDeployServiceImpl implements RelationTableDeployServic
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
     private final DatabaseSchemaResolver schemaResolver;
+    private final I18nService i18nService;
 
     @Override
     @Transactional
@@ -61,17 +63,17 @@ public class RelationTableDeployServiceImpl implements RelationTableDeployServic
         List<RelationFieldDefinition> fields = tableDefinition.getFieldDefinitions();
         if (fields == null || fields.isEmpty()) {
             throw new RelationTableDeploymentException(
-                    "表 '" + tableDefinition.getTableName() + "' 没有定义任何字段");
+                    i18nService.getMessage("admin.rt.no_fields_defined", tableDefinition.getTableName()));
         }
 
-        // 自动补齐审计字段（如果尚未定义）
+        // Auto-add audit fields when they are missing
         ensureAuditFields(tableDefinition, fields);
 
         boolean isFirstDeploy = tableDefinition.getCurrentVersion() == 0;
-        // 行数据存 rt_table_data_rows (JSONB)，部署仅更新结构元数据与版本快照，不执行 CREATE/ALTER TABLE
+        // Row payload lives in rt_table_data_rows (JSONB): deploy updates metadata/snapshots only, no CREATE/ALTER TABLE.
         log.info("Deploying relation table metadata (JSON row storage): table={}", tableDefinition.getTableName());
 
-        // 创建版本快照
+        // Create version snapshot
         int newVersion = tableDefinition.getCurrentVersion() + 1;
         String snapshotData = createSnapshotData(fields);
         String currentUser = SecurityContextUtils.getCurrentUsername().orElse("system");
@@ -86,7 +88,7 @@ public class RelationTableDeployServiceImpl implements RelationTableDeployServic
                 .build();
         versionRepository.save(version);
 
-        // 更新表状态和版本号
+        // Update table status and version number
         tableDefinition.setStatus(RelationTableStatus.DEPLOYED);
         tableDefinition.setCurrentVersion(newVersion);
         RelationTableDefinition saved = tableDefinitionRepository.save(tableDefinition);
@@ -105,18 +107,19 @@ public class RelationTableDeployServiceImpl implements RelationTableDeployServic
 
         RelationTableVersion targetVersion = versionRepository.findById(request.getTargetVersionId())
                 .orElseThrow(() -> new RelationTableDeploymentException(
-                        "目标版本不存在: " + request.getTargetVersionId()));
+                        i18nService.getMessage("admin.rt.target_version_not_found", request.getTargetVersionId())));
 
-        // 验证版本属于该表
+        // Verify the version belongs to this table
         if (!targetVersion.getTableDefinition().getId().equals(tableId)) {
             throw new RelationTableDeploymentException(
-                    "版本 " + request.getTargetVersionId() + " 不属于表 " + tableId);
+                    i18nService.getMessage("admin.rt.version_not_belongs_to_table",
+                            request.getTargetVersionId(), tableId));
         }
 
-        // 从快照数据恢复字段定义
+        // Restore field definitions from snapshot data
         List<RelationFieldDTO> snapshotFields = parseSnapshotData(targetVersion.getSnapshotData());
 
-        // 清除当前字段定义并用快照数据覆盖
+        // Clear current field definitions and replace with snapshot
         tableDefinition.getFieldDefinitions().clear();
         List<RelationFieldDefinition> restoredFields = new ArrayList<>();
         for (int i = 0; i < snapshotFields.size(); i++) {
@@ -138,7 +141,7 @@ public class RelationTableDeployServiceImpl implements RelationTableDeployServic
         }
         tableDefinition.getFieldDefinitions().addAll(restoredFields);
 
-        // 生成新版本号并创建回滚版本快照
+        // Bump version number and persist rollback snapshot
         int newVersion = tableDefinition.getCurrentVersion() + 1;
         String currentUser = SecurityContextUtils.getCurrentUsername().orElse("system");
 
@@ -152,7 +155,7 @@ public class RelationTableDeployServiceImpl implements RelationTableDeployServic
                 .build();
         versionRepository.save(rollbackVersion);
 
-        // 更新表状态为 ROLLBACK
+        // Set table status to ROLLBACK
         tableDefinition.setStatus(RelationTableStatus.ROLLBACK);
         tableDefinition.setCurrentVersion(newVersion);
         RelationTableDefinition saved = tableDefinitionRepository.save(tableDefinition);
@@ -165,7 +168,7 @@ public class RelationTableDeployServiceImpl implements RelationTableDeployServic
     @Override
     @Transactional(readOnly = true)
     public List<RelationTableVersionResponse> getVersionHistory(Long tableId) {
-        // 验证表存在
+        // Verify table exists
         if (!tableDefinitionRepository.existsById(tableId)) {
             throw new RelationTableNotFoundException(tableId);
         }
@@ -175,10 +178,10 @@ public class RelationTableDeployServiceImpl implements RelationTableDeployServic
                 .collect(Collectors.toList());
     }
 
-    // ==================== DDL 生成 ====================
+    // ==================== DDL generation ====================
 
     /**
-     * 生成 CREATE TABLE DDL
+     * Builds a CREATE TABLE DDL statement.
      */
     String generateCreateTableDdl(String tableName, List<RelationFieldDefinition> fields) {
         StringBuilder sb = new StringBuilder();
@@ -218,22 +221,23 @@ public class RelationTableDeployServiceImpl implements RelationTableDeployServic
     }
 
     /**
-     * 生成 ALTER TABLE DDL 列表
-     * 比较当前字段定义与上一版本快照，生成增删改列的 DDL
+     * Builds a list of ALTER TABLE DDL statements by diffing current field definitions
+     * against the latest version snapshot (add/remove/rename/type changes).
      */
     List<String> generateAlterTableDdl(String tableName, List<RelationFieldDefinition> currentFields) {
         List<String> ddls = new ArrayList<>();
         String quotedTable = quoteIdentifier(tableName);
 
-        // 获取上一版本的快照数据
+        // Load prior version snapshot metadata
         RelationTableDefinition tableDef = tableDefinitionRepository.findByTableName(tableName)
-                .orElseThrow(() -> new RelationTableDeploymentException("表定义不存在: " + tableName));
+                .orElseThrow(() -> new RelationTableDeploymentException(
+                        i18nService.getMessage("admin.rt.table_definition_not_found", tableName)));
 
         RelationTableVersion latestVersion = versionRepository.findLatestVersion(tableDef.getId())
                 .orElse(null);
 
         if (latestVersion == null) {
-            // 没有历史版本，当作首次部署
+            // No prior version — treat as first deployment
             return List.of(generateCreateTableDdl(tableName, currentFields));
         }
 
@@ -264,7 +268,7 @@ public class RelationTableDeployServiceImpl implements RelationTableDeployServic
             }
         }
 
-        // 新增的字段（排除重命名的）
+        // Add new columns (excluding renames)
         for (RelationFieldDefinition field : currentFields) {
             if (!previousFieldMap.containsKey(field.getFieldName()) && !renamedFields.containsValue(field.getFieldName())) {
                 String colDef = "ALTER TABLE " + quotedTable + " ADD COLUMN " +
@@ -282,7 +286,7 @@ public class RelationTableDeployServiceImpl implements RelationTableDeployServic
             }
         }
 
-        // 删除的字段（排除重命名的）
+        // Drop removed columns (excluding renames)
         for (RelationFieldDTO prevField : previousFields) {
             if (!currentFieldMap.containsKey(prevField.getFieldName()) && !renamedFields.containsKey(prevField.getFieldName())) {
                 ddls.add("ALTER TABLE " + quotedTable + " DROP COLUMN " +
@@ -290,7 +294,7 @@ public class RelationTableDeployServiceImpl implements RelationTableDeployServic
             }
         }
 
-        // 修改的字段（类型或长度变化）
+        // Alter columns whose type or size changed
         for (RelationFieldDefinition field : currentFields) {
             RelationFieldDTO prevField = previousFieldMap.get(field.getFieldName());
             if (prevField != null && isFieldChanged(field, prevField)) {
@@ -302,10 +306,10 @@ public class RelationTableDeployServiceImpl implements RelationTableDeployServic
         return ddls;
     }
 
-    // ==================== 辅助方法 ====================
+    // ==================== Helpers ====================
 
     /**
-     * 映射数据类型到 PostgreSQL DDL 类型
+     * Maps a logical field type to a PostgreSQL DDL type string.
      */
     String mapDataType(RelationFieldDefinition field) {
         return switch (field.getDataType()) {
@@ -329,7 +333,7 @@ public class RelationTableDeployServiceImpl implements RelationTableDeployServic
     }
 
     /**
-     * 获取数据类型的默认值（用于 NOT NULL 列添加到已有数据的表时）
+     * Default literal/expression per type when adding a NOT NULL column to a non-empty table.
      */
     private String getTypeDefault(RelationFieldDefinition field) {
         return switch (field.getDataType()) {
@@ -346,7 +350,7 @@ public class RelationTableDeployServiceImpl implements RelationTableDeployServic
     }
 
     /**
-     * 检查字段是否发生变化
+     * Returns whether the column definition differs from the previous snapshot field.
      */
     private boolean isFieldChanged(RelationFieldDefinition current, RelationFieldDTO previous) {
         if (current.getDataType() != previous.getDataType()) {
@@ -371,8 +375,8 @@ public class RelationTableDeployServiceImpl implements RelationTableDeployServic
     }
 
     /**
-     * 确保表定义中包含审计字段: created_at, created_by, updated_at, updated_by
-     * 如果缺少则自动追加并持久化
+     * Ensures audit columns exist (created_at, created_by, updated_at, updated_by);
+     * appends missing ones and persists when any were added.
      */
     private void ensureAuditFields(RelationTableDefinition tableDefinition, List<RelationFieldDefinition> fields) {
         Set<String> existingNames = fields.stream()
@@ -500,7 +504,7 @@ public class RelationTableDeployServiceImpl implements RelationTableDeployServic
     }
 
     /**
-     * 检查物理表是否已存在于数据库中
+     * Whether a physical table with this name exists in the configured schema.
      */
     private boolean physicalTableExists(String tableName) {
         String sql = "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = ? AND table_schema = ?";
@@ -509,20 +513,21 @@ public class RelationTableDeployServiceImpl implements RelationTableDeployServic
     }
 
     /**
-     * 根据物理表的实际列信息生成 ALTER TABLE DDL（用于首次部署但物理表已存在的场景）
+     * Builds ALTER TABLE DDL by comparing logical fields to columns that already exist physically
+     * (when first deploy overlaps an existing legacy table).
      */
     List<String> generateAlterTableDdlFromPhysical(String tableName, List<RelationFieldDefinition> currentFields) {
         List<String> ddls = new ArrayList<>();
         String quotedTable = quoteIdentifier(tableName);
 
-        // 查询物理表已有的列名
+        // Columns already present on the physical table
         String sql = "SELECT column_name FROM information_schema.columns WHERE table_name = ? AND table_schema = ?";
         List<String> existingColumns = jdbcTemplate.queryForList(sql, String.class, tableName, schemaResolver.getSchema());
         Set<String> existingColumnSet = existingColumns.stream()
                 .map(String::toLowerCase)
                 .collect(Collectors.toSet());
 
-        // 添加缺失的列
+        // ADD COLUMN for definitions missing from the physical table
         for (RelationFieldDefinition field : currentFields) {
             if (!existingColumnSet.contains(field.getFieldName().toLowerCase())) {
                 String colDef = "ALTER TABLE " + quotedTable + " ADD COLUMN " +
@@ -543,14 +548,14 @@ public class RelationTableDeployServiceImpl implements RelationTableDeployServic
     }
 
     /**
-     * 引用标识符（防止 SQL 注入和保留字冲突）
+     * Double-quotes an identifier for DDL (reserved words and quoting rules).
      */
     String quoteIdentifier(String identifier) {
         return "\"" + identifier.replace("\"", "\"\"") + "\"";
     }
 
     /**
-     * 创建版本快照 JSON 数据
+     * Serializes field definitions into version snapshot JSON.
      */
     String createSnapshotData(List<RelationFieldDefinition> fields) {
         List<RelationFieldDTO> fieldDtos = fields.stream()
@@ -577,7 +582,7 @@ public class RelationTableDeployServiceImpl implements RelationTableDeployServic
     }
 
     /**
-     * 解析版本快照 JSON 数据
+     * Deserializes version snapshot JSON into field DTOs.
      */
     List<RelationFieldDTO> parseSnapshotData(String snapshotData) {
         try {

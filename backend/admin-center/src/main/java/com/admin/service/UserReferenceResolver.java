@@ -13,7 +13,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * 将用户 ID 或混合引用解析为 username，供列表展示使用。
+ * Resolves user id or mixed references to username for list display.
  */
 @Service
 @RequiredArgsConstructor

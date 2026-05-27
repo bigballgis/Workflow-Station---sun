@@ -6,8 +6,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import java.util.regex.Pattern;
 
 /**
- * BI 模块配置属性
- * 包含 Superset 连接配置和同步配置
+ * BI module configuration properties.
+ * Contains Superset connection config and sync config.
  */
 @ConfigurationProperties(prefix = "bi")
 @Data
@@ -17,30 +17,30 @@ public class BiProperties {
     private Sync sync = new Sync();
 
     /**
-     * Superset 连接配置
+     * Superset connection configuration.
      */
     @Data
     public static class Superset {
         private static final Pattern PG_IDENTIFIER = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
 
-        /** Superset 服务地址 */
+        /** Superset service address */
         private String host = "http://localhost:8088";
-        /** 前端嵌入 Superset 使用的公开地址（可选） */
+        /** Public address for embedding Superset in the frontend (optional) */
         private String publicHost = "http://localhost:8088";
         /**
-         * Superset 元数据表所在 PostgreSQL schema（与 Flask-SQLAlchemy / Superset 安装一致）。
-         * 默认 {@code public}；若 Superset 使用独立 schema（如 {@code superset}），通过环境变量 {@code SUPERSET_DB_SCHEMA} 覆盖。
+         * PostgreSQL schema where Superset metadata tables reside (must match Flask-SQLAlchemy / Superset setup).
+         * Defaults to {@code public}; override via env var {@code SUPERSET_DB_SCHEMA} if Superset uses a dedicated schema (e.g. {@code superset}).
          */
         private String dbSchema = "superset";
-        /** Superset 管理员用户名（环境变量：BI_SUPERSET_ADMIN_USERNAME） */
+        /** Superset admin username (env var: BI_SUPERSET_ADMIN_USERNAME) */
         private String adminUsername;
-        /** Superset 管理员密码（环境变量：BI_SUPERSET_ADMIN_PASSWORD） */
+        /** Superset admin password (env var: BI_SUPERSET_ADMIN_PASSWORD) */
         private String adminPassword;
-        /** Guest Token 超时时间（秒） */
+        /** Guest token timeout in seconds */
         private int guestTokenTimeoutSeconds = 30;
 
         /**
-         * 用于拼接原生 SQL 的 schema 名；非法标识符回退为 {@code public}，避免配置注入。
+         * Schema name used for building native SQL; invalid identifiers fall back to {@code public} to prevent config injection.
          */
         public String resolveDbSchemaForSql() {
             String s = dbSchema == null || dbSchema.isBlank() ? "public" : dbSchema.trim();
@@ -52,13 +52,13 @@ public class BiProperties {
     }
 
     /**
-     * 同步配置
+     * Sync configuration.
      */
     @Data
     public static class Sync {
-        /** 同步 cron 表达式，默认每6小时执行一次 */
+        /** Sync cron expression; defaults to every 6 hours */
         private String cron = "0 0 */6 * * ?";
-        /** 是否启用定时同步 */
+        /** Whether scheduled sync is enabled */
         private boolean enabled = true;
     }
 }

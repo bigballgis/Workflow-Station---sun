@@ -30,7 +30,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Dashboard组件
+ * Dashboard aggregation component.
  */
 @Slf4j
 @Component
@@ -45,8 +45,8 @@ public class DashboardComponent {
     private final UserDisplayNameResolver userDisplayNameResolver;
 
     /**
-     * 为 true 时，首页「团队任务概览」按 BU 成员逐个调用 queryTasks（极慢，成员多时可打爆引擎）。
-     * 默认 false：团队数字与本人待办一致（不聚合）；生产需要团队汇总时通过环境变量开启。
+     * When true, home "team task overview" calls queryTasks per BU member (very slow; can overload engine with many members).
+     * Default false: team counts match personal todo (no aggregation); enable via env when team rollup is needed in production.
      */
     @Value("${portal.dashboard.team-task-aggregation-enabled:false}")
     private boolean teamTaskAggregationEnabled;
@@ -75,7 +75,7 @@ public class DashboardComponent {
     }
 
     /**
-     * 获取Dashboard概览数据
+     * Returns dashboard overview data
      */
     public DashboardOverview getDashboardOverview(String userId) {
         if (overviewCacheTtlSeconds > 0) {
@@ -86,7 +86,7 @@ public class DashboardComponent {
             }
         }
 
-        // 与 queryTasks 并行拉流程统计（均访问 workflow-engine，叠加快照可缩短首屏）
+        // Fetch process stats in parallel with queryTasks (both hit workflow-engine; snapshot speeds first paint)
         CompletableFuture<DashboardOverview.ProcessOverview> processOverviewFuture =
                 CompletableFuture.supplyAsync(() -> getProcessOverview(userId));
 
@@ -99,7 +99,7 @@ public class DashboardComponent {
                 .build();
         PageResponse<TaskInfo> taskPage = taskQueryComponent.queryTasks(dashTaskRequest);
 
-        // 与 buildTaskOverviewFromPage 内 history 调用重叠（均为本地 CPU 或轻量逻辑）
+        // Overlaps with history inside buildTaskOverviewFromPage (local CPU or light logic)
         CompletableFuture<DashboardOverview.PerformanceOverview> performanceFuture =
                 CompletableFuture.supplyAsync(() -> getPerformanceOverview(userId));
         CompletableFuture<List<ProcessInfo>> recentProcessesFuture =
@@ -130,7 +130,7 @@ public class DashboardComponent {
     }
 
     /**
-     * 获取任务概览
+     * Returns task overview
      */
     public DashboardOverview.TaskOverview getTaskOverview(String userId) {
         TaskQueryRequest request = TaskQueryRequest.builder()
@@ -300,7 +300,7 @@ public class DashboardComponent {
         return 0L;
     }
 
-    /** 基于最近已完成任务样本估算平均处理时长（小时）；失败时返回 2.5 */
+    /** Estimates average handling time (hours) from recent completed tasks; returns 2.5 on failure */
     private double estimateAvgProcessingHoursFromRecentCompletions(String userId) {
         try {
             Optional<Map<String, Object>> result = workflowEngineClient.getCompletedTasks(
@@ -324,7 +324,7 @@ public class DashboardComponent {
     }
 
     /**
-     * 递归收集所有子 BU ID
+     * Recursively collects all child BU IDs
      */
     private void collectChildBuIds(String parentBuId, Set<String> allBuIds) {
         List<BusinessUnit> children = businessUnitRepository.findByParentIdAndStatus(parentBuId, "ACTIVE");
@@ -336,7 +336,7 @@ public class DashboardComponent {
     }
 
     /**
-     * 获取团队申请列表（当前用户 BU 及其子 BU 所有成员发起的流程实例）
+     * Returns team applications (process instances started by members of user's BU and child BUs)
      */
     public TeamRequestsResponse getTeamRequests(String userId, String status, int page, int size) {
         Set<String> teamMemberIds = resolveTeamMemberIds(userId);
@@ -398,7 +398,7 @@ public class DashboardComponent {
     }
 
     /**
-     * 解析当前活动 BU 及其子 BU 的全部成员 ID（仅限 JWT 中的 activeBusinessUnitId）
+     * Resolves all member IDs for active BU and child BUs (JWT activeBusinessUnitId only)
      */
     private Set<String> resolveTeamMemberIds(String userId) {
         Optional<String> activeBuOpt = SecurityContextUtils.getCurrentActiveBusinessUnitId();
@@ -419,11 +419,11 @@ public class DashboardComponent {
     }
 
     /**
-     * 获取流程概览
+     * Returns process overview
      */
     @SuppressWarnings("unchecked")
     public DashboardOverview.ProcessOverview getProcessOverview(String userId) {
-        // 从 workflow-engine-core 获取真实数据
+        // Load real data from workflow-engine-core
         try {
             Optional<Map<String, Object>> result = workflowEngineClient.getProcessStatistics(userId);
             if (result.isPresent()) {
@@ -461,7 +461,7 @@ public class DashboardComponent {
             log.warn("Failed to get process statistics from workflow engine: {}", e.getMessage());
         }
         
-        // 如果获取失败，返回空数据
+        // Return empty data on failure
         return DashboardOverview.ProcessOverview.builder()
                 .initiatedCount(0L)
                 .inProgressCount(0L)
@@ -472,10 +472,10 @@ public class DashboardComponent {
     }
 
     /**
-     * 获取个人绩效
+     * Returns personal performance metrics
      */
     public DashboardOverview.PerformanceOverview getPerformanceOverview(String userId) {
-        // 模拟数据，实际应从统计服务获取
+        // Mock data; should come from statistics service in production
         Random random = new Random();
 
         return DashboardOverview.PerformanceOverview.builder()
@@ -488,7 +488,7 @@ public class DashboardComponent {
     }
 
     /**
-     * 获取最近任务
+     * Returns recent tasks
      */
     public List<TaskInfo> getRecentTasks(String userId, int limit) {
         TaskQueryRequest request = TaskQueryRequest.builder()
@@ -502,13 +502,13 @@ public class DashboardComponent {
     }
 
     /**
-     * 获取最近流程
+     * Returns recent processes
      */
     public List<ProcessInfo> getRecentProcesses(String userId, int limit) {
-        // 模拟数据，实际应从workflow-engine-core获取
+        // Mock data; should come from workflow-engine-core in production
         List<ProcessInfo> processes = new ArrayList<>();
         
-        String[] processNames = {"请假申请", "报销申请", "采购申请", "出差申请", "加班申请"};
+        String[] processNames = {"Leave Request", "Expense Report", "Purchase Request", "Travel Request", "Overtime Request"};
         String[] statuses = {"RUNNING", "COMPLETED", "RUNNING", "COMPLETED", "RUNNING"};
         
         for (int i = 0; i < Math.min(limit, processNames.length); i++) {
@@ -518,7 +518,7 @@ public class DashboardComponent {
                     .processDefinitionName(processNames[i])
                     .status(statuses[i])
                     .initiatorId(userId)
-                    .initiatorName("当前用户")
+                    .initiatorName("Current User")
                     .startTime(LocalDateTime.now().minusDays(i))
                     .build());
         }
@@ -527,7 +527,7 @@ public class DashboardComponent {
     }
 
     /**
-     * 获取任务趋势数据
+     * Returns task trend data
      */
     public Map<String, Object> getTaskTrendData(String userId, int days) {
         Map<String, Object> result = new HashMap<>();
@@ -554,22 +554,22 @@ public class DashboardComponent {
     }
 
     /**
-     * 获取流程统计数据
+     * Returns process statistics
      */
     public Map<String, Object> getProcessStatisticsData(String userId) {
         Map<String, Object> result = new HashMap<>();
         
-        // 流程类型分布
+        // Process type distribution
         Map<String, Long> typeDistribution = new LinkedHashMap<>();
-        typeDistribution.put("请假申请", 25L);
-        typeDistribution.put("报销申请", 18L);
-        typeDistribution.put("采购申请", 12L);
-        typeDistribution.put("出差申请", 8L);
-        typeDistribution.put("其他", 5L);
+        typeDistribution.put("Leave Request", 25L);
+        typeDistribution.put("Expense Report", 18L);
+        typeDistribution.put("Purchase Request", 12L);
+        typeDistribution.put("Travel Request", 8L);
+        typeDistribution.put("Other", 5L);
         
-        // 月度统计
+        // Monthly stats
         List<Map<String, Object>> monthlyStats = new ArrayList<>();
-        String[] months = {"1月", "2月", "3月", "4月", "5月", "6月"};
+        String[] months = {"Jan", "Feb", "Mar", "Apr", "May", "Jun"};
         Random random = new Random();
         for (String month : months) {
             Map<String, Object> stat = new HashMap<>();

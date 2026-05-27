@@ -3,7 +3,7 @@ package com.developer.service;
 import com.developer.entity.UploadedFile;
 
 /**
- * 数据库存储文件服务。
+ * Database-backed file storage service.
  */
 public interface FileStorageService {
 

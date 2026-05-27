@@ -6,7 +6,7 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 /**
- * 任务完成结果
+ * Task completion result
  */
 @Data
 @Builder
@@ -25,7 +25,7 @@ public class TaskCompleteResult {
     public static TaskCompleteResult success() {
         return TaskCompleteResult.builder()
                 .success(true)
-                .message("任务完成成功")
+                .message("Task completed successfully")
                 .completionTime(LocalDateTime.now())
                 .build();
     }
@@ -33,7 +33,7 @@ public class TaskCompleteResult {
     public static TaskCompleteResult success(String nextTaskId, boolean processCompleted) {
         return TaskCompleteResult.builder()
                 .success(true)
-                .message("任务完成成功")
+                .message("Task completed successfully")
                 .completionTime(LocalDateTime.now())
                 .nextTaskId(nextTaskId)
                 .processCompleted(processCompleted)

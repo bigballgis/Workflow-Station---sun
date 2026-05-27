@@ -14,91 +14,91 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * 异常记录数据访问层
+ * Exception record data access layer.
  */
 @Repository
 public interface ExceptionRecordRepository extends JpaRepository<ExceptionRecord, String> {
-    
+
     /**
-     * 根据流程实例ID查询异常记录
+     * Find exception records by process instance ID.
      */
     List<ExceptionRecord> findByProcessInstanceIdOrderByOccurredTimeDesc(String processInstanceId);
-    
+
     /**
-     * 根据任务ID查询异常记录
+     * Find exception records by task ID.
      */
     List<ExceptionRecord> findByTaskIdOrderByOccurredTimeDesc(String taskId);
-    
+
     /**
-     * 根据状态查询异常记录
+     * Find exception records by status.
      */
     List<ExceptionRecord> findByStatusOrderByOccurredTimeDesc(ExceptionStatus status);
-    
+
     /**
-     * 根据严重级别查询异常记录
+     * Find exception records by severity level.
      */
     List<ExceptionRecord> findBySeverityOrderByOccurredTimeDesc(ExceptionSeverity severity);
-    
+
     /**
-     * 查询未解决的异常记录
+     * Find unresolved exception records.
      */
     List<ExceptionRecord> findByResolvedFalseOrderBySeverityDescOccurredTimeDesc();
-    
+
     /**
-     * 查询待重试的异常记录
+     * Find exception records pending retry.
      */
     @Query("SELECT e FROM ExceptionRecord e WHERE e.status = 'PENDING' " +
            "AND e.retryCount < e.maxRetryCount " +
            "AND (e.nextRetryTime IS NULL OR e.nextRetryTime <= :now) " +
            "ORDER BY e.severity DESC, e.occurredTime ASC")
     List<ExceptionRecord> findPendingRetryExceptions(@Param("now") LocalDateTime now);
-    
+
     /**
-     * 根据时间范围查询异常记录
+     * Find exception records within a time range.
      */
     List<ExceptionRecord> findByOccurredTimeBetweenOrderByOccurredTimeDesc(
             LocalDateTime startTime, LocalDateTime endTime);
-    
+
     /**
-     * 根据异常类型查询
+     * Find exception records by exception type.
      */
     List<ExceptionRecord> findByExceptionTypeOrderByOccurredTimeDesc(String exceptionType);
-    
+
     /**
-     * 分页查询异常记录
+     * Find exception records with pagination.
      */
     Page<ExceptionRecord> findByStatusAndSeverity(
             ExceptionStatus status, ExceptionSeverity severity, Pageable pageable);
 
     /**
-     * 统计各状态的异常数量
+     * Count exceptions grouped by status.
      */
     @Query("SELECT e.status, COUNT(e) FROM ExceptionRecord e GROUP BY e.status")
     List<Object[]> countByStatus();
-    
+
     /**
-     * 统计各严重级别的异常数量
+     * Count unresolved exceptions grouped by severity.
      */
     @Query("SELECT e.severity, COUNT(e) FROM ExceptionRecord e WHERE e.resolved = false GROUP BY e.severity")
     List<Object[]> countUnresolvedBySeverity();
-    
+
     /**
-     * 统计指定时间范围内的异常数量
+     * Count exceptions within a time range.
      */
     @Query("SELECT COUNT(e) FROM ExceptionRecord e WHERE e.occurredTime BETWEEN :startTime AND :endTime")
     Long countByTimeRange(@Param("startTime") LocalDateTime startTime, @Param("endTime") LocalDateTime endTime);
-    
+
     /**
-     * 查询需要发送告警的异常
+     * Find exceptions that need alerting.
      */
     @Query("SELECT e FROM ExceptionRecord e WHERE e.alertSent = false " +
            "AND e.severity IN ('CRITICAL', 'HIGH') " +
            "AND e.resolved = false " +
            "ORDER BY e.severity DESC, e.occurredTime ASC")
     List<ExceptionRecord> findExceptionsNeedingAlert();
-    
+
     /**
-     * 根据流程定义Key统计异常
+     * Count exceptions by process definition key.
      */
     @Query("SELECT e.processDefinitionKey, COUNT(e) FROM ExceptionRecord e " +
            "WHERE e.occurredTime BETWEEN :startTime AND :endTime " +
@@ -106,7 +106,7 @@ public interface ExceptionRecordRepository extends JpaRepository<ExceptionRecord
     List<Object[]> countByProcessDefinitionKey(
             @Param("startTime") LocalDateTime startTime, 
             @Param("endTime") LocalDateTime endTime);
-    
+
     long countByResolvedFalse();
 
     @Query("SELECT e.exceptionType, COUNT(e) FROM ExceptionRecord e GROUP BY e.exceptionType")
@@ -120,19 +120,19 @@ public interface ExceptionRecordRepository extends JpaRepository<ExceptionRecord
     long countSince(@Param("since") LocalDateTime since);
 
     /**
-     * 查询中断的流程实例（有未解决异常的流程）
+     * Find interrupted process instances (processes with unresolved exceptions).
      */
     @Query("SELECT DISTINCT e.processInstanceId FROM ExceptionRecord e " +
            "WHERE e.resolved = false AND e.processInstanceId IS NOT NULL")
     List<String> findInterruptedProcessInstanceIds();
-    
+
     /**
-     * 根据租户ID查询异常记录
+     * Find exception records by tenant ID.
      */
     Page<ExceptionRecord> findByTenantIdOrderByOccurredTimeDesc(String tenantId, Pageable pageable);
-    
+
     /**
-     * 删除指定时间之前的已解决异常记录
+     * Delete resolved exception records before the specified time.
      */
     void deleteByResolvedTrueAndResolvedTimeBefore(LocalDateTime beforeTime);
 }

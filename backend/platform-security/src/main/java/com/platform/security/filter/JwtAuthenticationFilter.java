@@ -86,8 +86,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (bearerToken != null && bearerToken.startsWith(PlatformConstants.HEADER_BEARER_PREFIX)) {
             return bearerToken.substring(PlatformConstants.HEADER_BEARER_PREFIX.length());
         }
-        // Fallback: 按 platform.security.jwt.cookie-names 配置（首位为本服务自身的 cookie 名）依次读取，
-        // 避免三端共用 access_token 时相互覆盖（详见 JwtProperties#cookieNames 注释）。
+        // Fallback: read cookies per platform.security.jwt.cookie-names (first entry is this service's name)
+        // to avoid cross-app overwrite when all share access_token (see JwtProperties#cookieNames).
         Cookie[] cookies = request.getCookies();
         if (cookies != null) {
             List<String> names = jwtProperties.getCookieNames();

@@ -20,7 +20,8 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.LocalDateTime;
 
 /**
- * 仅用于本地/DEV：统一 /login 回调换设计器 JWT。SIT/UAT/PROD 不部署本服务时可忽略。
+ * Used only for local/DEV: unified /login callback to exchange for designer JWT.
+ * Can be ignored when this service is not deployed in SIT/UAT/PROD.
  */
 @Slf4j
 @RestController

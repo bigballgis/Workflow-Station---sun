@@ -19,9 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-/**
- * 通用上传文件组件实现。
- */
+/** Implementation of the generic file upload component. */
 @Component
 @Slf4j
 @RequiredArgsConstructor

@@ -1,9 +1,9 @@
 package com.workflow.enums;
 
 /**
- * 流程变量作用域枚举
+ * Process variable scope enum
  * 
- * 定义变量在流程执行中的可见范围和生命周期
+ * Defines the visibility scope and lifecycle of variables during process execution
  * 
  * @author Workflow Engine
  * @version 1.0
@@ -11,8 +11,8 @@ package com.workflow.enums;
 public enum VariableScope {
     
     /**
-     * 流程实例级别
-     * 变量在整个流程实例中可见，所有任务和执行都可以访问
+     * Process instance level
+     * Variable is visible throughout the process instance, accessible by all tasks and executions
      */
     PROCESS_INSTANCE("process_instance", "Process Instance"),
     EXECUTION("execution", "Execution"),
@@ -36,10 +36,10 @@ public enum VariableScope {
     }
     
     /**
-     * 根据代码获取变量作用域
+     * Get variable scope by code
      * 
-     * @param code 作用域代码
-     * @return 变量作用域枚举
+     * @param code scope code
+     * @return variable scope enum
      */
     public static VariableScope fromCode(String code) {
         for (VariableScope scope : values()) {

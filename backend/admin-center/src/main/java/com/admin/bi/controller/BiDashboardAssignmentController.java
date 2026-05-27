@@ -19,19 +19,19 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 /**
- * Dashboard 分配管理控制器
+ * Dashboard assignment management controller
  */
 @RestController
 @RequestMapping("/bi/assignments")
 @RequiredArgsConstructor
 @Slf4j
-@Tag(name = "Dashboard 分配管理", description = "Dashboard 分配的创建、查询、更新、删除及用户有效 Dashboard 列表接口")
+@Tag(name = "Dashboard Assignment Management", description = "Dashboard assignment CRUD and user effective dashboard listing")
 public class BiDashboardAssignmentController {
 
     private final BiDashboardAssignmentService assignmentService;
 
     @PostMapping
-    @Operation(summary = "创建分配记录", description = "将 Dashboard 分配给 User、Role 或 Business Unit")
+    @Operation(summary = "Create assignment record", description = "Assign a Dashboard to a User, Role, or Business Unit")
     public ResponseEntity<DashboardAssignmentResponse> createAssignment(
             @RequestBody @Valid DashboardAssignmentCreateRequest request) {
         log.info("User {} creating assignment for dashboard {}", SecurityContextUtils.getCurrentUserId(), request.getDashboardId());
@@ -40,7 +40,7 @@ public class BiDashboardAssignmentController {
     }
 
     @GetMapping
-    @Operation(summary = "分页查询分配列表", description = "支持按 targetType 和 dashboardTitle 筛选")
+    @Operation(summary = "List assignments with pagination", description = "Supports filtering by targetType and dashboardTitle")
     public ResponseEntity<Page<DashboardAssignmentResponse>> listAssignments(
             @RequestParam(required = false) AssignmentTargetType targetType,
             @RequestParam(required = false) String dashboardTitle,
@@ -50,7 +50,7 @@ public class BiDashboardAssignmentController {
     }
 
     @PutMapping("/{id}")
-    @Operation(summary = "更新分配记录", description = "更新指定分配记录的字段")
+    @Operation(summary = "Update assignment record", description = "Update fields of a specified assignment record")
     public ResponseEntity<DashboardAssignmentResponse> updateAssignment(
             @PathVariable String id,
             @RequestBody @Valid DashboardAssignmentCreateRequest request) {
@@ -60,7 +60,7 @@ public class BiDashboardAssignmentController {
     }
 
     @DeleteMapping("/{id}")
-    @Operation(summary = "删除分配记录", description = "删除指定的分配记录")
+    @Operation(summary = "Delete assignment record", description = "Delete a specified assignment record")
     public ResponseEntity<Void> deleteAssignment(
             @PathVariable String id) {
         log.info("User {} deleting assignment {}", SecurityContextUtils.getCurrentUserId(), id);
@@ -70,9 +70,9 @@ public class BiDashboardAssignmentController {
 
     @GetMapping("/user/{userId}")
     @Operation(
-        summary = "获取用户有效 Dashboard 列表",
-        description = "合并 User/Role/BU 维度分配，去重后按 displayOrder 排序。" +
-                      "传入 activeBusinessUnitId 时，BU 维度仅检索该 BU 的分配记录。"
+        summary = "Get user's effective Dashboard list",
+        description = "Merges User/Role/BU dimension assignments, deduplicates, and sorts by displayOrder. " +
+                      "When activeBusinessUnitId is provided, only that BU's assignment records are retrieved for the BU dimension."
     )
     public ResponseEntity<List<UserDashboardResponse>> getUserDashboards(
             @PathVariable String userId,

@@ -14,34 +14,34 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * 功能单元部署记录仓库接口
+ * FunctionUnit deployment record repository.
  */
 @Repository
 public interface FunctionUnitDeploymentRepository extends JpaRepository<FunctionUnitDeployment, String> {
     
     /**
-     * 根据功能单元ID查找部署记录
+     * Deployments for a function unit id.
      */
     List<FunctionUnitDeployment> findByFunctionUnitId(String functionUnitId);
     
     /**
-     * 根据功能单元ID和环境查找部署记录
+     * Deployments for unit and environment.
      */
     List<FunctionUnitDeployment> findByFunctionUnitIdAndEnvironment(
             String functionUnitId, DeploymentEnvironment environment);
     
     /**
-     * 根据环境查找部署记录
+     * Deployments in an environment.
      */
     List<FunctionUnitDeployment> findByEnvironment(DeploymentEnvironment environment);
     
     /**
-     * 根据状态查找部署记录
+     * Deployments with the given status.
      */
     List<FunctionUnitDeployment> findByStatus(DeploymentStatus status);
     
     /**
-     * 查找最新的成功部署记录
+     * Latest SUCCESS deployment for unit+environment (by completedAt).
      */
     @Query("SELECT d FROM FunctionUnitDeployment d WHERE " +
            "d.functionUnit.id = :functionUnitId AND " +
@@ -53,7 +53,7 @@ public interface FunctionUnitDeploymentRepository extends JpaRepository<Function
             @Param("environment") DeploymentEnvironment environment);
     
     /**
-     * 查找环境中最新的成功部署
+     * Successful deployments in an environment (newest first by completedAt).
      */
     @Query("SELECT d FROM FunctionUnitDeployment d WHERE " +
            "d.environment = :environment AND " +
@@ -63,7 +63,7 @@ public interface FunctionUnitDeploymentRepository extends JpaRepository<Function
             @Param("environment") DeploymentEnvironment environment);
     
     /**
-     * 分页查询部署记录（含功能单元信息）
+     * Paged filter with FETCH join on function unit (nullable params ignored).
      */
     @Query(value = "SELECT d FROM FunctionUnitDeployment d JOIN FETCH d.functionUnit fu WHERE " +
            "(:functionUnitId IS NULL OR d.functionUnit.id = :functionUnitId) AND " +
@@ -81,18 +81,18 @@ public interface FunctionUnitDeploymentRepository extends JpaRepository<Function
             Pageable pageable);
     
     /**
-     * 查找待审批的部署
+     * Pending production deployments (PENDING in PRODUCTION).
      */
     @Query("SELECT d FROM FunctionUnitDeployment d WHERE d.status = 'PENDING' AND d.environment = 'PRODUCTION'")
     List<FunctionUnitDeployment> findPendingProductionDeployments();
     
     /**
-     * 查找进行中的部署
+     * Deployments whose status is in the given list.
      */
     List<FunctionUnitDeployment> findByStatusIn(List<DeploymentStatus> statuses);
     
     /**
-     * 查找活跃的部署（进行中或待审批）
+     * Active deployment for unit+environment (PENDING / PENDING_APPROVAL / APPROVED / DEPLOYING).
      */
     @Query("SELECT d FROM FunctionUnitDeployment d WHERE " +
            "d.functionUnit.id = :functionUnitId AND " +
@@ -103,18 +103,18 @@ public interface FunctionUnitDeploymentRepository extends JpaRepository<Function
             @Param("environment") DeploymentEnvironment environment);
     
     /**
-     * 根据功能单元ID查找部署记录（按创建时间倒序）
+     * Deployments for a unit, newest {@code createdAt} first.
      */
     List<FunctionUnitDeployment> findByFunctionUnitIdOrderByCreatedAtDesc(String functionUnitId);
     
     /**
-     * 根据环境查找部署记录（分页，按创建时间倒序）
+     * Paged deployments in an environment ({@code createdAt} descending).
      */
     Page<FunctionUnitDeployment> findByEnvironmentOrderByCreatedAtDesc(
             DeploymentEnvironment environment, Pageable pageable);
     
     /**
-     * 查找上一个成功的部署
+     * Prior SUCCESS deployment before {@code beforeTime} (by startedAt/completedAt order).
      */
     @Query("SELECT d FROM FunctionUnitDeployment d WHERE " +
            "d.functionUnit.id = :functionUnitId AND " +

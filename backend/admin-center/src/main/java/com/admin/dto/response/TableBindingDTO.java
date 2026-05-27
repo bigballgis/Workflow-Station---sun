@@ -8,8 +8,8 @@ import lombok.NoArgsConstructor;
 import java.util.List;
 
 /**
- * 表绑定 DTO
- * 描述表单与数据表之间的绑定关系
+ * Table binding DTO.
+ * Describes the binding relationship between a form and a data table.
  */
 @Data
 @Builder

@@ -20,6 +20,7 @@ import com.workflow.enums.AuditResourceType;
 import com.workflow.exception.WorkflowBusinessException;
 import com.workflow.exception.WorkflowValidationException;
 
+import com.platform.common.i18n.I18nService;
 import com.platform.messaging.support.NotificationDispatchHelper;
 
 import lombok.extern.slf4j.Slf4j;
@@ -102,6 +103,9 @@ public class ProcessEngineComponent {
 
     @Autowired
     private NotificationDispatchHelper notificationDispatchHelper;
+
+    @Autowired
+    private I18nService i18nService;
     
     /**
      * Deploy process definition
@@ -228,8 +232,11 @@ public class ProcessEngineComponent {
                 notificationDispatchHelper.publishToUserAfterCommit(
                         request.getStartUserId(),
                         "PROCESS",
-                        "流程已发起",
-                        String.format("流程「%s」已启动，实例编号 %s。", key, processInstance.getId()),
+                        i18nService.getMessage("workflow.notification.process_started_title"),
+                        i18nService.getMessage(
+                                "workflow.notification.process_started_body",
+                                key,
+                                processInstance.getId()),
                         "/tasks",
                         "workflow-engine");
             }
@@ -746,7 +753,7 @@ public class ProcessEngineComponent {
     }
 
     /**
-     * 删除运行中实例（若存在）并删除历史实例记录（含已结束），用于功能单元版本回滚后的门户数据清理。
+     * Delete runtime instance (if any) and historic records after function-unit version rollback cleanup.
      */
     public void purgeProcessInstanceAndHistory(String processInstanceId) {
         if (!StringUtils.hasText(processInstanceId)) {
@@ -1721,9 +1728,9 @@ public class ProcessEngineComponent {
     }
 
     /**
-     * 获取最新版本的 BPMN XML 内容
-     * @param processDefinitionKey 流程定义 key
-     * @return BPMN XML 字符串，未找到时返回 null
+     * Load latest BPMN XML for a process definition key, or null if missing.
+     * @param processDefinitionKey process definition key
+     * @return BPMN XML string
      */
     public String getBpmnXml(String processDefinitionKey) {
         try {

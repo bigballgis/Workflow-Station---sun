@@ -1,8 +1,8 @@
 package com.workflow.enums;
 
 /**
- * 审计资源类型枚举
- * 定义所有需要审计的资源类型
+ * Audit resource type enum
+ * Defines all resource types that require auditing
  */
 public enum AuditResourceType {
     
@@ -32,7 +32,7 @@ public enum AuditResourceType {
     }
     
     /**
-     * 根据字符串获取资源类型
+     * Get resource type from string
      */
     public static AuditResourceType fromString(String resourceType) {
         for (AuditResourceType type : AuditResourceType.values()) {

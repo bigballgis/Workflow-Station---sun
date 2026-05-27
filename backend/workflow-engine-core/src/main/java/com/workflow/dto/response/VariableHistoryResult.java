@@ -10,10 +10,10 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * 变量历史结果DTO
+ * Variable history result DTO
  * 
- * 返回流程变量的历史变更记录
- * 包含完整的变更轨迹和统计信息
+ * Returns the history change records of process variables
+ * Includes complete change trail and statistics
  * 
  * @author Workflow Engine
  * @version 1.0
@@ -25,57 +25,57 @@ import java.util.List;
 public class VariableHistoryResult {
 
     /**
-     * 流程实例ID
+     * Process instance ID
      */
     private String processInstanceId;
 
     /**
-     * 变量名称
+     * Variable name
      */
     private String variableName;
 
     /**
-     * 历史记录列表（按时间倒序）
+     * History record list (in reverse chronological order)
      */
     private List<ProcessVariable> history;
 
     /**
-     * 总记录数
+     * Total record count
      */
     private Integer totalCount;
 
     /**
-     * 变更次数
+     * Change count
      */
     private Integer changeCount;
 
     /**
-     * 首次创建时间
+     * First creation time
      */
     private LocalDateTime firstCreatedTime;
 
     /**
-     * 最后更新时间
+     * Last update time
      */
     private LocalDateTime lastUpdatedTime;
 
     /**
-     * 当前值
+     * Current value
      */
     private Object currentValue;
 
     /**
-     * 初始值
+     * Initial value
      */
     private Object initialValue;
 
     /**
-     * 创建成功的历史结果
+     * Create a successful history result
      * 
-     * @param processInstanceId 流程实例ID
-     * @param variableName 变量名称
-     * @param history 历史记录
-     * @return 历史结果
+     * @param processInstanceId Process instance ID
+     * @param variableName Variable name
+     * @param history History records
+     * @return History result
      */
     public static VariableHistoryResult success(String processInstanceId, String variableName, 
                                               List<ProcessVariable> history) {
@@ -86,7 +86,7 @@ public class VariableHistoryResult {
                 .totalCount(history.size());
 
         if (!history.isEmpty()) {
-            // 最新记录在前（倒序）
+            // Latest records first (reverse order)
             ProcessVariable latest = history.get(0);
             ProcessVariable earliest = history.get(history.size() - 1);
             
@@ -103,11 +103,11 @@ public class VariableHistoryResult {
     }
 
     /**
-     * 创建空的历史结果
+     * Create an empty history result
      * 
-     * @param processInstanceId 流程实例ID
-     * @param variableName 变量名称
-     * @return 空历史结果
+     * @param processInstanceId Process instance ID
+     * @param variableName Variable name
+     * @return Empty history result
      */
     public static VariableHistoryResult empty(String processInstanceId, String variableName) {
         return VariableHistoryResult.builder()
@@ -120,18 +120,18 @@ public class VariableHistoryResult {
     }
 
     /**
-     * 判断是否有历史记录
+     * Check if history records exist
      * 
-     * @return true如果有历史记录
+     * @return true if history records exist
      */
     public boolean hasHistory() {
         return history != null && !history.isEmpty();
     }
 
     /**
-     * 获取变量变更频率（每小时变更次数）
+     * Get variable change frequency (changes per hour)
      * 
-     * @return 变更频率
+     * @return Change frequency
      */
     public double getChangeFrequency() {
         if (!hasHistory() || firstCreatedTime == null || lastUpdatedTime == null) {
@@ -140,16 +140,16 @@ public class VariableHistoryResult {
         
         long hours = java.time.Duration.between(firstCreatedTime, lastUpdatedTime).toHours();
         if (hours == 0) {
-            return changeCount.doubleValue(); // 1小时内的变更
+            return changeCount.doubleValue(); // changes within 1 hour
         }
         
         return changeCount.doubleValue() / hours;
     }
 
     /**
-     * 判断变量值是否发生过变化
+     * Check if variable value has changed
      * 
-     * @return true如果值发生过变化
+     * @return true if value has changed
      */
     public boolean hasValueChanged() {
         if (!hasHistory() || history.size() < 2) {
@@ -171,10 +171,10 @@ public class VariableHistoryResult {
     }
 
     /**
-     * 获取最近的变更记录
+     * Get recent change records
      * 
-     * @param count 记录数量
-     * @return 最近的变更记录
+     * @param count Number of records
+     * @return Recent change records
      */
     public List<ProcessVariable> getRecentChanges(int count) {
         if (!hasHistory()) {

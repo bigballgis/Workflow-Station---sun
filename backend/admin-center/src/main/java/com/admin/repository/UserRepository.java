@@ -14,42 +14,42 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * 用户仓库接口 - 使用统一的 sys_users 表
+ * User repository — uses the shared {@code sys_users} table.
  */
 @Repository
 public interface UserRepository extends JpaRepository<User, String> {
     
     /**
-     * 根据用户名查找用户（包含软删除，兼容旧数据复活）
+     * Find user by username (includes soft-deleted rows; supports reviving legacy data).
      */
     Optional<User> findByUsername(String username);
     
     /**
-     * 根据邮箱查找用户
+     * Find user by email.
      */
     Optional<User> findByEmail(String email);
     
     /**
-     * 检查用户名是否已被未删除用户使用
+     * Whether the username is already taken by a non-deleted user.
      */
     @Query("SELECT COUNT(u) > 0 FROM User u WHERE u.username = :username " +
            "AND (u.deleted = false OR u.deleted IS NULL)")
     boolean existsByUsername(@Param("username") String username);
     
     /**
-     * 检查邮箱是否已被未删除用户使用
+     * Whether the email is already taken by a non-deleted user.
      */
     @Query("SELECT COUNT(u) > 0 FROM User u WHERE u.email = :email " +
            "AND (u.deleted = false OR u.deleted IS NULL)")
     boolean existsByEmail(@Param("email") String email);
     
     /**
-     * 根据状态查找用户
+     * Find users by account status.
      */
     List<User> findByStatus(UserStatus status);
     
     /**
-     * 搜索用户（用户名、姓名、邮箱）
+     * Search users by username, full name, display name, or email.
      */
     @Query("SELECT u FROM User u WHERE " +
            "u.username LIKE CONCAT('%', :keyword, '%') OR " +
@@ -59,7 +59,7 @@ public interface UserRepository extends JpaRepository<User, String> {
     Page<User> searchUsers(@Param("keyword") String keyword, Pageable pageable);
     
     /**
-     * 根据条件查询用户（不再使用 businessUnitId 字段，改用关联表）
+     * Query users by filters ({@code businessUnitId} via join table, not a column on User).
      */
     @Query("SELECT DISTINCT u FROM User u WHERE " +
            "(u.deleted = false OR u.deleted IS NULL) AND " +
@@ -77,14 +77,14 @@ public interface UserRepository extends JpaRepository<User, String> {
             Pageable pageable);
     
     /**
-     * 查询未删除的用户
+     * Non-deleted users (paged).
      */
     @Query("SELECT u FROM User u WHERE u.deleted = false OR u.deleted IS NULL")
     Page<User> findAllActive(Pageable pageable);
     
     /**
-     * 统计活跃管理员数量
-     * Note: User entity from platform-security doesn't have userRoles relationship, use native query instead
+     * Count active users who have SYS_ADMIN or AUDITOR.
+     * Note: platform-security {@code User} has no {@code userRoles}; use native SQL.
      */
     @Query(value = "SELECT COUNT(DISTINCT u.id) FROM sys_users u " +
            "JOIN sys_user_roles ur ON u.id = ur.user_id " +
@@ -94,7 +94,7 @@ public interface UserRepository extends JpaRepository<User, String> {
     long countActiveAdmins();
     
     /**
-     * 检查用户是否是管理员（SYS_ADMIN 或 AUDITOR）
+     * Whether the user has SYS_ADMIN or AUDITOR.
      */
     @Query(value = "SELECT COUNT(*) > 0 FROM sys_user_roles ur " +
            "JOIN sys_roles r ON ur.role_id = r.id " +
@@ -103,29 +103,29 @@ public interface UserRepository extends JpaRepository<User, String> {
     boolean isUserAdmin(@Param("userId") String userId);
     
     /**
-     * 根据ID查找用户
-     * Note: User entity from platform-security doesn't have userRoles relationship
+     * Find user by id.
+     * Note: platform-security {@code User} has no {@code userRoles} relationship.
      */
     Optional<User> findById(String userId);
     
     /**
-     * 检查邮箱是否被其他用户使用
+     * Whether the email is used by another non-deleted user (excluding {@code excludeUserId}).
      */
     @Query("SELECT COUNT(u) > 0 FROM User u WHERE u.email = :email AND u.id != :excludeUserId AND (u.deleted = false OR u.deleted IS NULL)")
     boolean existsByEmailExcludingUser(@Param("email") String email, @Param("excludeUserId") String excludeUserId);
     
     /**
-     * 统计指定时间之后登录的用户数（在线用户）
+     * Users who logged in after the timestamp (approx. online users).
      */
     long countByLastLoginAtAfter(LocalDateTime timestamp);
     
     /**
-     * 统计指定时间之后创建的用户数（今日新增）
+     * Users created after the timestamp (e.g. today's new users).
      */
     long countByCreatedAtAfter(LocalDateTime timestamp);
     
     /**
-     * 统计指定时间范围内创建的用户数
+     * Count users created in the time range.
      */
     long countByCreatedAtBetween(LocalDateTime start, LocalDateTime end);
 
@@ -136,7 +136,7 @@ public interface UserRepository extends JpaRepository<User, String> {
     List<Object[]> countDailyNewUsers(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
     
     /**
-     * 通过关联表查询业务单元成员（多对多关系）
+     * Business unit members via join table (many-to-many).
      */
     @Query("SELECT u FROM User u WHERE u.id IN " +
            "(SELECT ub.userId FROM UserBusinessUnit ub WHERE ub.businessUnitId = :businessUnitId) " +
@@ -144,7 +144,7 @@ public interface UserRepository extends JpaRepository<User, String> {
     Page<User> findMembersByBusinessUnitId(@Param("businessUnitId") String businessUnitId, Pageable pageable);
     
     /**
-     * 通过关联表统计业务单元成员数量（多对多关系）
+     * Count business unit members via join table (many-to-many).
      */
     @Query("SELECT COUNT(u) FROM User u WHERE u.id IN " +
            "(SELECT ub.userId FROM UserBusinessUnit ub WHERE ub.businessUnitId = :businessUnitId) " +

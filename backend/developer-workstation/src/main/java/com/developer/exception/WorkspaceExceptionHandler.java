@@ -42,9 +42,10 @@ public class WorkspaceExceptionHandler {
     }
 
     /**
-     * {@link DeveloperBusinessException} 继承 {@link RuntimeException}，若不单独处理会被
-     * {@link com.platform.common.exception.GlobalExceptionHandler} 归为未处理运行时异常（500 /
-     * SYS_INTERNAL_ERROR），导致前端只看到「Operation failed」，用户无法获知真实业务规则原因。
+     * {@link DeveloperBusinessException} extends {@link RuntimeException}. If not handled separately,
+     * it will be caught by {@link com.platform.common.exception.GlobalExceptionHandler} as an unhandled
+     * runtime exception (500 / SYS_INTERNAL_ERROR), causing the frontend to only see "Operation failed"
+     * without the real business rule reason.
      */
     @ExceptionHandler(DeveloperBusinessException.class)
     public ResponseEntity<ApiResponse<?>> handleDeveloperBusinessException(
@@ -66,8 +67,9 @@ public class WorkspaceExceptionHandler {
     }
 
     /**
-     * {@link ResourceNotFoundException} 继承 {@link RuntimeException}，若不单独处理会落入全局 {@code RuntimeException} 分支，
-     * 被映射为 {@code SYS_INTERNAL_ERROR}（500），与真实语义不符。
+     * {@link ResourceNotFoundException} extends {@link RuntimeException}. If not handled separately,
+     * it will fall into the global {@code RuntimeException} handler and be mapped to
+     * {@code SYS_INTERNAL_ERROR} (500), which does not match the real semantics.
      */
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ApiResponse<?>> handleResourceNotFound(

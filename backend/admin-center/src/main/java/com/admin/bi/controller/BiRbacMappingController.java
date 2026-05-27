@@ -19,36 +19,36 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 /**
- * RBAC 映射管理控制器
+ * RBAC mapping management controller
  */
 @RestController
 @RequestMapping("/bi/rbac")
 @RequiredArgsConstructor
 @Slf4j
-@Tag(name = "RBAC 映射管理", description = "Superset 角色同步、RBAC 映射查询与更新接口")
+@Tag(name = "RBAC Mapping Management", description = "Superset role sync, RBAC mapping query and update endpoints")
 public class BiRbacMappingController {
 
     private final BiRbacMappingService rbacMappingService;
 
     @PostMapping("/superset-roles/sync")
-    @Operation(summary = "手动同步 Superset 角色", description = "立即执行一次 Superset_Role_Sync_Operation 并返回同步结果摘要")
+    @Operation(summary = "Manually sync Superset roles", description = "Immediately execute a Superset_Role_Sync_Operation and return sync result summary")
     public ResponseEntity<SyncResultResponse> syncSupersetRoles() {
         String userId = SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException("Unauthenticated user"));
         log.info("User {} triggered manual Superset role sync", userId);
         SyncResultResponse result = rbacMappingService.syncSupersetRoles();
         return ResponseEntity.ok(result);
     }
 
     @GetMapping("/superset-roles")
-    @Operation(summary = "获取所有已同步的 Superset 角色列表")
+    @Operation(summary = "Get all synced Superset roles")
     public ResponseEntity<List<SupersetRoleResponse>> listSupersetRoles() {
         List<SupersetRoleResponse> roles = rbacMappingService.listSupersetRoles();
         return ResponseEntity.ok(roles);
     }
 
     @GetMapping("/mappings")
-    @Operation(summary = "获取 RBAC 映射列表", description = "支持按 roleName、roleType 筛选")
+    @Operation(summary = "Get RBAC mapping list", description = "Supports filtering by roleName and roleType")
     public ResponseEntity<List<RbacMappingResponse>> listMappings(
             @RequestParam(required = false) String roleName,
             @RequestParam(required = false) String roleType) {
@@ -57,41 +57,41 @@ public class BiRbacMappingController {
     }
 
     @GetMapping("/unmapped-roles")
-    @Operation(summary = "获取未映射的活跃系统角色列表", description = "返回尚未创建 RBAC 映射的活跃系统角色，用于创建映射时的下拉选择")
+    @Operation(summary = "Get unmapped active system roles", description = "Returns active system roles without RBAC mappings, for dropdown selection when creating mappings")
     public ResponseEntity<List<RoleOptionResponse>> listUnmappedRoles() {
         List<RoleOptionResponse> roles = rbacMappingService.listUnmappedRoles();
         return ResponseEntity.ok(roles);
     }
 
     @PostMapping("/mappings")
-    @Operation(summary = "创建 RBAC 映射", description = "为指定系统角色创建 Superset 角色映射")
+    @Operation(summary = "Create RBAC mapping", description = "Create Superset role mapping for a specified system role")
     public ResponseEntity<Void> createMapping(
             @RequestBody @Valid RbacMappingCreateRequest request) {
         String userId = SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException("Unauthenticated user"));
         log.info("User {} creating RBAC mapping for sysRoleId {}", userId, request.getSysRoleId());
         rbacMappingService.createMapping(request);
         return ResponseEntity.status(201).build();
     }
 
     @PutMapping("/mappings/{sysRoleId}")
-    @Operation(summary = "更新 Sys_Role 的 Superset_Role 映射", description = "全量替换该 Sys_Role 的所有 Superset_Role 映射")
+    @Operation(summary = "Update Sys_Role Superset_Role mapping", description = "Fully replace all Superset_Role mappings for the given Sys_Role")
     public ResponseEntity<Void> updateMapping(
             @PathVariable String sysRoleId,
             @RequestBody @Valid RbacMappingUpdateRequest request) {
         String userId = SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException("Unauthenticated user"));
         log.info("User {} updating RBAC mapping for sysRoleId {}", userId, sysRoleId);
         rbacMappingService.updateMapping(sysRoleId, request);
         return ResponseEntity.noContent().build();
     }
 
     @DeleteMapping("/mappings/{sysRoleId}")
-    @Operation(summary = "删除 Sys_Role 的所有 RBAC 映射", description = "删除该系统角色的所有 Superset 角色映射记录")
+    @Operation(summary = "Delete all RBAC mappings for Sys_Role", description = "Delete all Superset role mapping records for the given system role")
     public ResponseEntity<Void> deleteMapping(
             @PathVariable String sysRoleId) {
         String userId = SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException("Unauthenticated user"));
         log.info("User {} deleting RBAC mapping for sysRoleId {}", userId, sysRoleId);
         rbacMappingService.deleteMapping(sysRoleId);
         return ResponseEntity.noContent().build();

@@ -19,24 +19,26 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import com.platform.common.i18n.I18nService;
 
 /**
- * 虚拟组管理 RESTful API
+ * Virtual Group Management RESTful API
  */
 @Slf4j
 @RestController
 @RequestMapping("/virtual-groups")
 @RequiredArgsConstructor
-@Tag(name = "虚拟组管理", description = "虚拟组的创建、成员管理和任务查询接口")
+@Tag(name = "Virtual Group Management", description = "Virtual group creation, member management and task query APIs")
 public class VirtualGroupController {
     
     private final VirtualGroupManagerComponent virtualGroupManager;
     private final VirtualGroupTaskService virtualGroupTaskService;
+    private final I18nService i18nService;
     
-    // ==================== 虚拟组 CRUD ====================
+    // ==================== Virtual Group CRUD ====================
     
     @PostMapping
-    @Operation(summary = "创建虚拟组", description = "创建新的虚拟组")
+    @Operation(summary = "Create virtual group", description = "Create a new virtual group")
     public ResponseEntity<VirtualGroupResult> createVirtualGroup(
             @Valid @RequestBody VirtualGroupCreateRequest request) {
         log.info("Creating virtual group: {}", request.getName());
@@ -45,28 +47,28 @@ public class VirtualGroupController {
     }
     
     @GetMapping
-    @Operation(summary = "获取虚拟组列表", description = "获取所有虚拟组列表")
+    @Operation(summary = "Get virtual group list", description = "Get all virtual groups")
     public ResponseEntity<List<VirtualGroupInfo>> listVirtualGroups(
-            @Parameter(description = "虚拟组类型") @RequestParam(required = false) String type,
-            @Parameter(description = "状态") @RequestParam(required = false) String status) {
+            @Parameter(description = "Virtual group type") @RequestParam(required = false) String type,
+            @Parameter(description = "Status") @RequestParam(required = false) String status) {
         log.info("Listing virtual groups, type: {}, status: {}", type, status);
         List<VirtualGroupInfo> groups = virtualGroupManager.listVirtualGroups(type, status);
         return ResponseEntity.ok(groups);
     }
     
     @GetMapping("/{groupId}")
-    @Operation(summary = "获取虚拟组详情", description = "根据ID获取虚拟组详细信息")
+    @Operation(summary = "Get virtual group detail", description = "Get virtual group detail by ID")
     public ResponseEntity<VirtualGroupInfo> getVirtualGroup(
-            @Parameter(description = "虚拟组ID") @PathVariable String groupId) {
+            @Parameter(description = "Virtual group ID") @PathVariable String groupId) {
         log.info("Getting virtual group: {}", groupId);
         VirtualGroupInfo group = virtualGroupManager.getVirtualGroup(groupId);
         return ResponseEntity.ok(group);
     }
     
     @PutMapping("/{groupId}")
-    @Operation(summary = "更新虚拟组", description = "更新虚拟组信息")
+    @Operation(summary = "Update virtual group", description = "Update virtual group info")
     public ResponseEntity<VirtualGroupResult> updateVirtualGroup(
-            @Parameter(description = "虚拟组ID") @PathVariable String groupId,
+            @Parameter(description = "Virtual group ID") @PathVariable String groupId,
             @Valid @RequestBody VirtualGroupCreateRequest request) {
         log.info("Updating virtual group: {}", groupId);
         VirtualGroupResult result = virtualGroupManager.updateVirtualGroup(groupId, request);
@@ -74,30 +76,30 @@ public class VirtualGroupController {
     }
     
     @DeleteMapping("/{groupId}")
-    @Operation(summary = "删除虚拟组", description = "删除虚拟组")
+    @Operation(summary = "Delete virtual group", description = "Delete virtual group")
     public ResponseEntity<Void> deleteVirtualGroup(
-            @Parameter(description = "虚拟组ID") @PathVariable String groupId) {
+            @Parameter(description = "Virtual group ID") @PathVariable String groupId) {
         log.info("Deleting virtual group: {}", groupId);
         virtualGroupManager.deleteVirtualGroup(groupId);
         return ResponseEntity.noContent().build();
     }
 
     
-    // ==================== 成员管理 ====================
+    // ==================== Member Management ====================
     
     @GetMapping("/{groupId}/members")
-    @Operation(summary = "获取虚拟组成员", description = "获取虚拟组的所有成员")
+    @Operation(summary = "Get virtual group members", description = "Get all members of a virtual group")
     public ResponseEntity<List<VirtualGroupMemberInfo>> getGroupMembers(
-            @Parameter(description = "虚拟组ID") @PathVariable String groupId) {
+            @Parameter(description = "Virtual group ID") @PathVariable String groupId) {
         log.info("Getting members of virtual group: {}", groupId);
         List<VirtualGroupMemberInfo> members = virtualGroupManager.getGroupMembers(groupId);
         return ResponseEntity.ok(members);
     }
     
     @PostMapping("/{groupId}/members")
-    @Operation(summary = "添加成员", description = "向虚拟组添加成员")
+    @Operation(summary = "Add member", description = "Add member to virtual group")
     public ResponseEntity<VirtualGroupResult> addMember(
-            @Parameter(description = "虚拟组ID") @PathVariable String groupId,
+            @Parameter(description = "Virtual group ID") @PathVariable String groupId,
             @Valid @RequestBody VirtualGroupMemberRequest request) {
         log.info("Adding member {} to virtual group: {}", request.getUserId(), groupId);
         VirtualGroupResult result = virtualGroupManager.addMember(groupId, request);
@@ -105,58 +107,58 @@ public class VirtualGroupController {
     }
     
     @DeleteMapping("/{groupId}/members/{userId}")
-    @Operation(summary = "移除成员", description = "从虚拟组移除成员")
+    @Operation(summary = "Remove member", description = "Remove member from virtual group")
     public ResponseEntity<VirtualGroupResult> removeMember(
-            @Parameter(description = "虚拟组ID") @PathVariable String groupId,
-            @Parameter(description = "用户ID") @PathVariable String userId) {
+            @Parameter(description = "Virtual group ID") @PathVariable String groupId,
+            @Parameter(description = "User ID") @PathVariable String userId) {
         log.info("Removing member {} from virtual group: {}", userId, groupId);
         VirtualGroupResult result = virtualGroupManager.removeMember(groupId, userId);
         return ResponseEntity.ok(result);
     }
     
-    // ==================== 任务查询 ====================
+    // ==================== Task Query ====================
     
     @GetMapping("/{groupId}/tasks")
-    @Operation(summary = "获取虚拟组任务", description = "获取分配给虚拟组的任务列表")
+    @Operation(summary = "Get virtual group tasks", description = "Get tasks assigned to the virtual group")
     public ResponseEntity<List<GroupTaskInfo>> getGroupTasks(
-            @Parameter(description = "虚拟组ID") @PathVariable String groupId) {
+            @Parameter(description = "Virtual group ID") @PathVariable String groupId) {
         String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthenticated_user")));
         log.info("Getting tasks for virtual group: {} by user: {}", groupId, userId);
         List<GroupTaskInfo> tasks = virtualGroupTaskService.getGroupTasks(groupId, userId);
         return ResponseEntity.ok(tasks);
     }
     
     @GetMapping("/my-tasks")
-    @Operation(summary = "获取用户可见的组任务", description = "获取当前用户可见的所有虚拟组任务")
+    @Operation(summary = "Get user-visible group tasks", description = "Get all virtual group tasks visible to current user")
     public ResponseEntity<List<GroupTaskInfo>> getUserVisibleGroupTasks() {
         String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthenticated_user")));
         log.info("Getting visible group tasks for user: {}", userId);
         List<GroupTaskInfo> tasks = virtualGroupTaskService.getUserVisibleGroupTasks(userId);
         return ResponseEntity.ok(tasks);
     }
     
     @GetMapping("/{groupId}/tasks/{taskId}/history")
-    @Operation(summary = "获取任务历史", description = "获取任务的处理历史")
+    @Operation(summary = "Get task history", description = "Get task processing history")
     public ResponseEntity<List<TaskHistoryInfo>> getTaskHistory(
-            @Parameter(description = "虚拟组ID") @PathVariable String groupId,
-            @Parameter(description = "任务ID") @PathVariable String taskId) {
+            @Parameter(description = "Virtual group ID") @PathVariable String groupId,
+            @Parameter(description = "Task ID") @PathVariable String taskId) {
         log.info("Getting history for task: {} in group: {}", taskId, groupId);
         List<TaskHistoryInfo> history = virtualGroupTaskService.getTaskHistory(taskId);
         return ResponseEntity.ok(history);
     }
     
-    // ==================== 任务操作 ====================
+    // ==================== Task Operations ====================
     
     @PostMapping("/{groupId}/tasks/{taskId}/claim")
-    @Operation(summary = "认领任务", description = "认领虚拟组任务")
+    @Operation(summary = "Claim task", description = "Claim a virtual group task")
     public ResponseEntity<Void> claimTask(
-            @Parameter(description = "虚拟组ID") @PathVariable String groupId,
-            @Parameter(description = "任务ID") @PathVariable String taskId,
+            @Parameter(description = "Virtual group ID") @PathVariable String groupId,
+            @Parameter(description = "Task ID") @PathVariable String taskId,
             @RequestBody(required = false) TaskClaimRequest request) {
         String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthenticated_user")));
         log.info("User {} claiming task {} from group {}", userId, taskId, groupId);
         
         TaskClaimRequest claimRequest = request != null ? request : new TaskClaimRequest();
@@ -168,12 +170,12 @@ public class VirtualGroupController {
     }
     
     @PostMapping("/tasks/{taskId}/delegate")
-    @Operation(summary = "委托任务", description = "将任务委托给其他用户")
+    @Operation(summary = "Delegate task", description = "Delegate task to another user")
     public ResponseEntity<Void> delegateTask(
-            @Parameter(description = "任务ID") @PathVariable String taskId,
+            @Parameter(description = "Task ID") @PathVariable String taskId,
             @Valid @RequestBody TaskDelegationRequest request) {
         String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthenticated_user")));
         log.info("User {} delegating task {} to {}", userId, taskId, request.getToUserId());
         
         request.setTaskId(taskId);
@@ -181,23 +183,22 @@ public class VirtualGroupController {
         return ResponseEntity.ok().build();
     }
     
-    // ==================== 生命周期管理 ====================
+    // ==================== Lifecycle Management ====================
     
     @PostMapping("/{groupId}/activate")
-    @Operation(summary = "激活虚拟组", description = "激活虚拟组")
+    @Operation(summary = "Activate virtual group", description = "Activate virtual group")
     public ResponseEntity<VirtualGroupResult> activateGroup(
-            @Parameter(description = "虚拟组ID") @PathVariable String groupId) {
+            @Parameter(description = "Virtual group ID") @PathVariable String groupId) {
         log.info("Activating virtual group: {}", groupId);
         VirtualGroupResult result = virtualGroupManager.activateGroup(groupId);
         return ResponseEntity.ok(result);
     }
     
     @PostMapping("/{groupId}/deactivate")
-    @Operation(summary = "停用虚拟组", description = "停用虚拟组")
+    @Operation(summary = "Deactivate virtual group", description = "Deactivate virtual group")
     public ResponseEntity<VirtualGroupResult> deactivateGroup(
-            @Parameter(description = "虚拟组ID") @PathVariable String groupId) {
+            @Parameter(description = "Virtual group ID") @PathVariable String groupId) {
         log.info("Deactivating virtual group: {}", groupId);
         VirtualGroupResult result = virtualGroupManager.deactivateGroup(groupId);
         return ResponseEntity.ok(result);
     }
-}

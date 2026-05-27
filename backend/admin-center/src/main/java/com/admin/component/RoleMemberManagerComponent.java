@@ -12,6 +12,7 @@ import com.platform.security.entity.User;
 import com.platform.security.entity.Role;
 import com.platform.security.entity.UserRole;
 import com.platform.common.audit.Audited;
+import com.platform.common.i18n.I18nService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -25,41 +26,42 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * 角色成员管理组件
- * 负责角色成员的添加、移除、批量操作和变更历史记录
+ * Role member management component
+ * Manages role member addition, removal, batch operations, and change history
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class RoleMemberManagerComponent {
     
-    // DOS 防护: 批量操作用户数量限制
+    // DOS protection: batch operation user count limit
     private static final int MAX_BATCH_USERS = 500;
 
     private final RoleRepository roleRepository;
     private final UserRepository userRepository;
     private final UserRoleRepository userRoleRepository;
     private final PermissionChangeHistoryRepository changeHistoryRepository;
+    private final I18nService i18nService;
     
     /**
-     * 为用户分配角色
+     * Assign role to user
      */
     @Transactional
     @Audited(action = "ROLE_ASSIGN", resourceType = "USER_ROLE", resourceId = "#userId")
     public void assignRoleToUser(String userId, String roleId, String assignedBy, String reason) {
         log.info("Assigning role {} to user {} by {}", roleId, userId, assignedBy);
         
-        // 验证角色存在
+        // Verify role exists
         Role role = roleRepository.findById(roleId)
                 .orElseThrow(() -> new RoleNotFoundException(roleId));
         assertNotBuUnboundedDirectUserAssignment(role);
 
-        // 检查是否已分配
+        // Check if already assigned
         if (userRoleRepository.existsByUserIdAndRoleId(userId, roleId)) {
             throw new AdminBusinessException("ROLE_ALREADY_ASSIGNED", "User already has this role");
         }
         
-        // 创建用户角色关联
+        // Create user-role association
         UserRole userRole = UserRole.builder()
                 .id(UUID.randomUUID().toString())
                 .userId(userId)
@@ -70,14 +72,14 @@ public class RoleMemberManagerComponent {
         
         userRoleRepository.save(userRole);
         
-        // 记录变更历史
+        // Record change history
         recordChangeHistory("ROLE_ASSIGNED", userId, roleId, null, null, role.getName(), reason, assignedBy);
         
         log.info("Role {} assigned to user {} successfully", roleId, userId);
     }
     
     /**
-     * 移除用户角色
+     * Remove user role
      */
     @Transactional
     @Audited(action = "ROLE_REMOVE", resourceType = "USER_ROLE", resourceId = "#userId")
@@ -94,7 +96,7 @@ public class RoleMemberManagerComponent {
         
         userRoleRepository.delete(userRole);
         
-        // 记录变更历史
+        // Record change history
         recordChangeHistory("ROLE_REMOVED", userId, roleId, null, roleName, null, reason, removedBy);
         
         log.info("Role {} removed from user {} successfully", roleId, userId);
@@ -102,13 +104,13 @@ public class RoleMemberManagerComponent {
 
     
     /**
-     * 批量添加角色成员
+     * Batch add role members
      */
     @Transactional
     public BatchRoleMemberResult batchAddMembers(BatchRoleMemberRequest request, String operatedBy) {
         log.info("Batch adding {} members to role {}", request.getUserIds().size(), request.getRoleId());
         
-        // 验证角色存在
+        // Verify role exists
         Role role = roleRepository.findById(request.getRoleId())
                 .orElseThrow(() -> new RoleNotFoundException(request.getRoleId()));
         assertNotBuUnboundedDirectUserAssignment(role);
@@ -117,28 +119,29 @@ public class RoleMemberManagerComponent {
                 .total(request.getUserIds().size())
                 .build();
 
-        // 防止 DOS 攻击: 限制批量操作用户数量
+        // DOS protection: limit batch operation user count
         if (request.getUserIds().size() > MAX_BATCH_USERS) {
             throw new AdminBusinessException("USER_COUNT_EXCEEDED",
-                    "批量操作用户数量超过限制: " + request.getUserIds().size() + ", 最大 " + MAX_BATCH_USERS);
+                    i18nService.getMessage("admin.role.batch_user_count_exceeded", 
+                            request.getUserIds().size(), MAX_BATCH_USERS));
         }
 
         for (String userId : request.getUserIds()) {
             try {
-                // 验证用户存在
+                // Verify user exists
                 User user = userRepository.findById(userId).orElse(null);
                 if (user == null) {
-                    result.addFailure(userId, "USER_NOT_FOUND", "用户不存在");
+                    result.addFailure(userId, "USER_NOT_FOUND", i18nService.getMessage("admin.role.user_not_found"));
                     continue;
                 }
                 
-                // 检查是否已分配
+                // Check if already assigned
                 if (userRoleRepository.existsByUserIdAndRoleId(userId, request.getRoleId())) {
-                    result.addFailure(userId, "ROLE_ALREADY_ASSIGNED", "用户已拥有该角色");
+                    result.addFailure(userId, "ROLE_ALREADY_ASSIGNED", i18nService.getMessage("admin.role.user_already_has_role"));
                     continue;
                 }
                 
-                // 创建用户角色关联
+                // Create user-role association
                 UserRole userRole = UserRole.builder()
                         .id(UUID.randomUUID().toString())
                         .userId(userId)
@@ -149,7 +152,7 @@ public class RoleMemberManagerComponent {
                 
                 userRoleRepository.save(userRole);
                 
-                // 记录变更历史
+                // Record change history
                 recordChangeHistory("ROLE_ASSIGNED", userId, request.getRoleId(), null, 
                         null, role.getName(), request.getReason(), operatedBy);
                 
@@ -168,13 +171,13 @@ public class RoleMemberManagerComponent {
     }
     
     /**
-     * 批量移除角色成员
+     * Batch remove role members
      */
     @Transactional
     public BatchRoleMemberResult batchRemoveMembers(BatchRoleMemberRequest request, String operatedBy) {
         log.info("Batch removing {} members from role {}", request.getUserIds().size(), request.getRoleId());
         
-        // 验证角色存在
+        // Verify role exists
         Role role = roleRepository.findById(request.getRoleId())
                 .orElseThrow(() -> new RoleNotFoundException(request.getRoleId()));
         
@@ -182,26 +185,27 @@ public class RoleMemberManagerComponent {
                 .total(request.getUserIds().size())
                 .build();
 
-        // 防止 DOS 攻击: 限制批量操作用户数量
+        // DOS protection: limit batch operation user count
         if (request.getUserIds().size() > MAX_BATCH_USERS) {
             throw new AdminBusinessException("USER_COUNT_EXCEEDED",
-                    "批量操作用户数量超过限制: " + request.getUserIds().size() + ", 最大 " + MAX_BATCH_USERS);
+                    i18nService.getMessage("admin.role.batch_user_count_exceeded", 
+                            request.getUserIds().size(), MAX_BATCH_USERS));
         }
 
         for (String userId : request.getUserIds()) {
             try {
-                // 查找用户角色关联
+                // Find user-role association
                 UserRole userRole = userRoleRepository.findByUserIdAndRoleId(userId, request.getRoleId())
                         .orElse(null);
                 
                 if (userRole == null) {
-                    result.addFailure(userId, "ROLE_NOT_ASSIGNED", "用户没有该角色");
+                    result.addFailure(userId, "ROLE_NOT_ASSIGNED", i18nService.getMessage("admin.role.user_not_have_role"));
                     continue;
                 }
                 
                 userRoleRepository.delete(userRole);
                 
-                // 记录变更历史
+                // Record change history
                 recordChangeHistory("ROLE_REMOVED", userId, request.getRoleId(), null, 
                         role.getName(), null, request.getReason(), operatedBy);
                 
@@ -220,28 +224,28 @@ public class RoleMemberManagerComponent {
     }
     
     /**
-     * 获取角色成员列表
+     * Get role member list
      */
     public List<UserRole> getRoleMembers(String roleId) {
         return userRoleRepository.findByRoleId(roleId);
     }
     
     /**
-     * 分页获取角色成员
+     * Get role members with pagination
      */
     public Page<UserRole> getRoleMembersPaged(String roleId, Pageable pageable) {
         return userRoleRepository.findByRoleIdPaged(roleId, pageable);
     }
     
     /**
-     * 获取用户的角色列表
+     * Get user's role list
      */
     public List<Role> getUserRoles(String userId) {
         return roleRepository.findByUserId(userId);
     }
     
     /**
-     * 获取角色成员数量
+     * Get role member count
      */
     public long getRoleMemberCount(String roleId) {
         return userRoleRepository.countByRoleId(roleId);
@@ -249,53 +253,53 @@ public class RoleMemberManagerComponent {
 
     
     /**
-     * 获取用户的权限变更历史
+     * Get user's permission change history
      */
     public List<PermissionChangeHistory> getUserChangeHistory(String userId) {
         return changeHistoryRepository.findByTargetUserIdOrderByChangedAtDesc(userId);
     }
     
     /**
-     * 分页获取用户的权限变更历史
+     * Get user's permission change history with pagination
      */
     public Page<PermissionChangeHistory> getUserChangeHistoryPaged(String userId, Pageable pageable) {
         return changeHistoryRepository.findByTargetUserId(userId, pageable);
     }
     
     /**
-     * 获取角色的变更历史
+     * Get role change history
      */
     public List<PermissionChangeHistory> getRoleChangeHistory(String roleId) {
         return changeHistoryRepository.findByTargetRoleIdOrderByChangedAtDesc(roleId);
     }
     
     /**
-     * 分页获取角色的变更历史
+     * Get role change history with pagination
      */
     public Page<PermissionChangeHistory> getRoleChangeHistoryPaged(String roleId, Pageable pageable) {
         return changeHistoryRepository.findByTargetRoleId(roleId, pageable);
     }
     
     /**
-     * 获取时间范围内的变更历史
+     * Get change history by time range
      */
     public List<PermissionChangeHistory> getChangeHistoryByTimeRange(Instant startTime, Instant endTime) {
         return changeHistoryRepository.findByTimeRange(startTime, endTime);
     }
     
     /**
-     * BU_UNBOUNDED 仅可通过虚拟组获得，禁止写入 sys_user_roles 直配。
+     * BU_UNBOUNDED can only be obtained via virtual groups; direct assignment to sys_user_roles is forbidden.
      */
-    private static void assertNotBuUnboundedDirectUserAssignment(Role role) {
+    private void assertNotBuUnboundedDirectUserAssignment(Role role) {
         if (EntityTypeConverter.toRoleType(role.getType()) == RoleType.BU_UNBOUNDED) {
             throw new AdminBusinessException(
                     "BU_UNBOUNDED_REQUIRES_VIRTUAL_GROUP",
-                    "BU 无关型角色请通过虚拟组分配，不能直接分配给用户");
+                    i18nService.getMessage("admin.role.bu_unbounded_requires_virtual_group"));
         }
     }
 
     /**
-     * 记录权限变更历史
+     * Record permission change history
      */
     private void recordChangeHistory(String changeType, String userId, String roleId, 
                                      String permissionId, String oldValue, String newValue, 
@@ -320,23 +324,23 @@ public class RoleMemberManagerComponent {
     }
     
     /**
-     * 检查用户是否拥有指定角色
+     * Check if user has the specified role
      */
     public boolean hasRole(String userId, String roleId) {
         return userRoleRepository.existsByUserIdAndRoleId(userId, roleId);
     }
     
     /**
-     * 替换用户的所有角色
+     * Replace all roles for a user
      */
     @Transactional
     public void replaceUserRoles(String userId, List<String> newRoleIds, String operatedBy, String reason) {
         log.info("Replacing all roles for user {} with {} new roles", userId, newRoleIds.size());
         
-        // 获取当前角色
+        // Get current roles
         List<UserRole> currentRoles = userRoleRepository.findByUserId(userId);
         
-        // 移除所有当前角色
+        // Remove all current roles
         for (UserRole userRole : currentRoles) {
             // Fetch role to get name
             Role role = roleRepository.findById(userRole.getRoleId())
@@ -347,7 +351,7 @@ public class RoleMemberManagerComponent {
         }
         userRoleRepository.deleteAll(currentRoles);
         
-        // 添加新角色
+        // Add new roles
         for (String roleId : newRoleIds) {
             Role role = roleRepository.findById(roleId)
                     .orElseThrow(() -> new RoleNotFoundException(roleId));

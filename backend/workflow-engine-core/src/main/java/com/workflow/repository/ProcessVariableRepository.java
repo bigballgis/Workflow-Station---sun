@@ -14,11 +14,11 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * 流程变量数据访问层
- * 
- * 提供流程变量的数据库操作接口
- * 支持复杂查询和历史记录管理
- * 
+ * Process variable data access layer.
+ *
+ * Provides database operation interfaces for process variables.
+ * Supports complex queries and history management.
+ *
  * @author Workflow Engine
  * @version 1.0
  */
@@ -26,46 +26,46 @@ import java.util.Optional;
 public interface ProcessVariableRepository extends JpaRepository<ProcessVariable, String> {
 
     /**
-     * 根据流程实例ID和变量名称查询变量历史
-     * 按创建时间倒序排列
-     * 
-     * @param processInstanceId 流程实例ID
-     * @param name 变量名称
-     * @return 变量历史记录列表
+     * Find variable history by process instance ID and variable name,
+     * ordered by creation time descending.
+     *
+     * @param processInstanceId process instance ID
+     * @param name variable name
+     * @return variable history list
      */
     List<ProcessVariable> findByProcessInstanceIdAndNameOrderByCreatedTimeDesc(
             String processInstanceId, String name);
 
     /**
-     * 根据流程实例ID查询所有变量
-     * 
-     * @param processInstanceId 流程实例ID
-     * @return 变量列表
+     * Find all variables by process instance ID.
+     *
+     * @param processInstanceId process instance ID
+     * @return variable list
      */
     List<ProcessVariable> findByProcessInstanceIdOrderByCreatedTimeDesc(String processInstanceId);
 
     /**
-     * 根据任务ID查询变量
-     * 
-     * @param taskId 任务ID
-     * @return 变量列表
+     * Find variables by task ID.
+     *
+     * @param taskId task ID
+     * @return variable list
      */
     List<ProcessVariable> findByTaskIdOrderByCreatedTimeDesc(String taskId);
 
     /**
-     * 根据执行ID查询变量
-     * 
-     * @param executionId 执行ID
-     * @return 变量列表
+     * Find variables by execution ID.
+     *
+     * @param executionId execution ID
+     * @return variable list
      */
     List<ProcessVariable> findByExecutionIdOrderByCreatedTimeDesc(String executionId);
 
     /**
-     * 查询指定流程实例的最新变量值
-     * 
-     * @param processInstanceId 流程实例ID
-     * @param name 变量名称
-     * @return 最新的变量记录
+     * Find the latest variable value for the specified process instance.
+     *
+     * @param processInstanceId process instance ID
+     * @param name variable name
+     * @return latest variable record
      */
     @Query("SELECT v FROM ProcessVariable v WHERE v.processInstanceId = :processInstanceId " +
            "AND v.name = :name AND v.createdTime = " +
@@ -76,38 +76,38 @@ public interface ProcessVariableRepository extends JpaRepository<ProcessVariable
             @Param("name") String name);
 
     /**
-     * 根据变量类型查询变量
-     * 
-     * @param type 变量类型
-     * @param pageable 分页参数
-     * @return 分页的变量列表
+     * Find variables by variable type.
+     *
+     * @param type variable type
+     * @param pageable pagination parameters
+     * @return paginated variable list
      */
     Page<ProcessVariable> findByType(VariableType type, Pageable pageable);
 
     /**
-     * 查询指定时间范围内的变量变更
-     * 
-     * @param startTime 开始时间
-     * @param endTime 结束时间
-     * @return 变量变更列表
+     * Find variable changes within the specified time range.
+     *
+     * @param startTime start time
+     * @param endTime end time
+     * @return variable change list
      */
     List<ProcessVariable> findByCreatedTimeBetweenOrderByCreatedTimeDesc(
             LocalDateTime startTime, LocalDateTime endTime);
 
     /**
-     * 根据租户ID查询变量
-     * 
-     * @param tenantId 租户ID
-     * @param pageable 分页参数
-     * @return 分页的变量列表
+     * Find variables by tenant ID.
+     *
+     * @param tenantId tenant ID
+     * @param pageable pagination parameters
+     * @return paginated variable list
      */
     Page<ProcessVariable> findByTenantId(String tenantId, Pageable pageable);
 
     /**
-     * 查询流程实例的变量统计信息
-     * 
-     * @param processInstanceId 流程实例ID
-     * @return 统计结果：[变量名称, 变更次数]
+     * Query variable statistics for a process instance.
+     *
+     * @param processInstanceId process instance ID
+     * @return statistics results: [variable name, change count]
      */
     @Query("SELECT v.name, COUNT(v) FROM ProcessVariable v " +
            "WHERE v.processInstanceId = :processInstanceId " +
@@ -115,11 +115,11 @@ public interface ProcessVariableRepository extends JpaRepository<ProcessVariable
     List<Object[]> getVariableStatistics(@Param("processInstanceId") String processInstanceId);
 
     /**
-     * 查询包含指定JSON路径的变量
-     * 使用PostgreSQL JSONB查询功能
-     * 
-     * @param jsonPath JSON路径表达式
-     * @return 匹配的变量列表
+     * Find variables containing the specified JSON path.
+     * Uses PostgreSQL JSONB query features.
+     *
+     * @param jsonPath JSON path expression
+     * @return matching variable list
      */
     @Query(value = "SELECT * FROM wf_process_variables " +
                    "WHERE type = 'JSON' AND json_value @> :jsonPath\\:\\:jsonb", 
@@ -127,11 +127,11 @@ public interface ProcessVariableRepository extends JpaRepository<ProcessVariable
     List<ProcessVariable> findByJsonPath(@Param("jsonPath") String jsonPath);
 
     /**
-     * 全文搜索变量内容
-     * 
-     * @param searchText 搜索文本
-     * @param pageable 分页参数
-     * @return 匹配的变量列表
+     * Full-text search for variable content.
+     *
+     * @param searchText search text
+     * @param pageable pagination parameters
+     * @return matching variable list
      */
     @Query("SELECT v FROM ProcessVariable v WHERE " +
            "LOWER(v.name) LIKE LOWER(CONCAT('%', :searchText, '%')) OR " +
@@ -140,26 +140,26 @@ public interface ProcessVariableRepository extends JpaRepository<ProcessVariable
     Page<ProcessVariable> searchVariables(@Param("searchText") String searchText, Pageable pageable);
 
     /**
-     * 删除指定流程实例的所有变量历史记录
-     * 
-     * @param processInstanceId 流程实例ID
-     * @return 删除的记录数
+     * Delete all variable history records for the specified process instance.
+     *
+     * @param processInstanceId process instance ID
+     * @return number of deleted records
      */
     long deleteByProcessInstanceId(String processInstanceId);
 
     /**
-     * 删除指定时间之前的变量历史记录
-     * 
-     * @param beforeTime 截止时间
-     * @return 删除的记录数
+     * Delete variable history records before the specified time.
+     *
+     * @param beforeTime cutoff time
+     * @return number of deleted records
      */
     long deleteByCreatedTimeBefore(LocalDateTime beforeTime);
 
     /**
-     * 查询变量名称列表（去重）
-     * 
-     * @param processInstanceId 流程实例ID
-     * @return 变量名称列表
+     * Query distinct variable names.
+     *
+     * @param processInstanceId process instance ID
+     * @return variable name list
      */
     @Query("SELECT DISTINCT v.name FROM ProcessVariable v " +
            "WHERE v.processInstanceId = :processInstanceId " +
@@ -167,20 +167,20 @@ public interface ProcessVariableRepository extends JpaRepository<ProcessVariable
     List<String> findDistinctVariableNames(@Param("processInstanceId") String processInstanceId);
 
     /**
-     * 统计流程实例的变量数量
-     * 
-     * @param processInstanceId 流程实例ID
-     * @return 变量数量
+     * Count distinct variables for a process instance.
+     *
+     * @param processInstanceId process instance ID
+     * @return distinct variable count
      */
     @Query("SELECT COUNT(DISTINCT v.name) FROM ProcessVariable v " +
            "WHERE v.processInstanceId = :processInstanceId")
     long countDistinctVariablesByProcessInstanceId(@Param("processInstanceId") String processInstanceId);
 
     /**
-     * 查询大型JSON变量（超过指定大小）
-     * 
-     * @param sizeThreshold 大小阈值（字符数）
-     * @return 大型变量列表
+     * Find large JSON variables (exceeding the specified size).
+     *
+     * @param sizeThreshold size threshold (characters)
+     * @return large variable list
      */
     @Query(value = "SELECT * FROM wf_process_variables " +
                    "WHERE type = 'JSON' AND LENGTH(json_value) > :sizeThreshold " +
@@ -189,11 +189,11 @@ public interface ProcessVariableRepository extends JpaRepository<ProcessVariable
     List<ProcessVariable> findLargeJsonVariables(@Param("sizeThreshold") int sizeThreshold);
 
     /**
-     * 查询变量变更频率统计
-     * 
-     * @param processInstanceId 流程实例ID
-     * @param hours 统计时间范围（小时）
-     * @return 变更频率统计
+     * Query variable change frequency statistics.
+     *
+     * @param processInstanceId process instance ID
+     * @param hours statistics time range (hours)
+     * @return change frequency statistics
      */
     @Query("SELECT v.name, COUNT(v) as changeCount FROM ProcessVariable v " +
            "WHERE v.processInstanceId = :processInstanceId " +

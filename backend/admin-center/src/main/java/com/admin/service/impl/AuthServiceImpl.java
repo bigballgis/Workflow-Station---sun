@@ -68,7 +68,7 @@ public class AuthServiceImpl implements AuthService {
             throw new RuntimeException("Invalid username or password");
         }
         
-        // 与 refresh / platform-security 一致：走 UserRoleService（sys_role_assignments + 虚拟组成员）
+        // Align with refresh / platform-security: UserRoleService (sys_role_assignments + virtual group members)
         List<String> userRoleCodes = userRoleService.getEffectiveRoleCodesForUser(user.getId());
         
         boolean hasAdminAccess = userRoleCodes.stream()
@@ -106,7 +106,7 @@ public class AuthServiceImpl implements AuthService {
         String refreshToken = jwtTokenService.generateRefreshToken(user.getId());
         
         // Set httpOnly cookies for access token and refresh token
-        // 使用服务特有 cookie 名（如 ac_access_token），避免三端在同源下相互覆盖。详见 JwtProperties#cookieNames。
+        // Service-specific cookie name (e.g. ac_access_token) so three apps on same origin do not overwrite each other. See JwtProperties#cookieNames.
         setAuthCookie(response, jwtProperties.getPrimaryCookieName(), accessToken, (int)(jwtProperties.getExpirationMs() / 1000));
         setAuthCookie(response, jwtProperties.getRefreshCookieName(), refreshToken, 7 * 24 * 60 * 60);
         
@@ -124,7 +124,7 @@ public class AuthServiceImpl implements AuthService {
                         .roles(roles)
                         .permissions(permissions)
                         .rolesWithSources(rolesWithSources)
-                        // 唯一 UBR 业务单元时有值；多 BU 无 preferred 时为 null（与 TaskAssignmentQueryService 一致）
+                        // Set when user has a single UBR business unit; null with multiple BUs and no preferred (same as TaskAssignmentQueryService)
                         .businessUnitId(taskAssignmentQueryService.getUserBusinessUnitId(user.getId()))
                         .language(user.getLanguage())
                         .build())
@@ -177,7 +177,7 @@ public class AuthServiceImpl implements AuthService {
         String refreshToken = jwtTokenService.generateRefreshToken(user.getId());
 
         // Set httpOnly cookies for access token and refresh token
-        // 使用服务特有 cookie 名（如 ac_access_token），避免三端在同源下相互覆盖。详见 JwtProperties#cookieNames。
+        // Service-specific cookie name (e.g. ac_access_token) so three apps on same origin do not overwrite each other. See JwtProperties#cookieNames.
         setAuthCookie(response, jwtProperties.getPrimaryCookieName(), accessToken, (int)(jwtProperties.getExpirationMs() / 1000));
         setAuthCookie(response, jwtProperties.getRefreshCookieName(), refreshToken, 7 * 24 * 60 * 60);
 
@@ -236,7 +236,7 @@ public class AuthServiceImpl implements AuthService {
             String newRefreshToken = jwtTokenService.generateRefreshToken(user.getId());
 
             // Set httpOnly cookies for new tokens
-            // 使用服务特有 cookie 名（如 ac_access_token），避免三端在同源下相互覆盖。详见 JwtProperties#cookieNames。
+            // Service-specific cookie name (e.g. ac_access_token) so three apps on same origin do not overwrite each other. See JwtProperties#cookieNames.
             setAuthCookie(response, jwtProperties.getPrimaryCookieName(), accessToken, (int)(jwtProperties.getExpirationMs() / 1000));
             setAuthCookie(response, jwtProperties.getRefreshCookieName(), newRefreshToken, 7 * 24 * 60 * 60);
 
@@ -252,7 +252,7 @@ public class AuthServiceImpl implements AuthService {
                             .roles(roles)
                             .permissions(permissions)
                             .rolesWithSources(rolesWithSources)
-                            // 唯一 UBR 业务单元时有值；多 BU 无 preferred 时为 null
+                            // Set when user has a single UBR business unit; null with multiple BUs and no preferred
                             .businessUnitId(taskAssignmentQueryService.getUserBusinessUnitId(user.getId()))
                             .language(user.getLanguage())
                             .build())
@@ -287,7 +287,7 @@ public class AuthServiceImpl implements AuthService {
                     .roles(roles)
                     .permissions(getPermissionsForRoles(roles))
                     .rolesWithSources(rolesWithSources)
-                    // 唯一 UBR 业务单元时有值；多 BU 无 preferred 时为 null
+                    // Set when user has a single UBR business unit; null with multiple BUs and no preferred
                     .businessUnitId(taskAssignmentQueryService.getUserBusinessUnitId(user.getId()))
                     .language(user.getLanguage())
                     .build();

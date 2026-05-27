@@ -24,35 +24,35 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Relation Table 表数据管理 RESTful API
+ * Relation Table data management RESTful API
  */
 @Slf4j
 @RestController
 @RequestMapping("/relation-tables/data")
 @RequiredArgsConstructor
-@Tag(name = "Relation Table 表数据管理", description = "已部署表的数据查询、新增、修改、删除及状态变更")
+@Tag(name = "Relation Table Data Management", description = "Query, create, update, delete and change status of deployed table data")
 public class RelationTableDataController {
 
     private final RelationTableDataService dataService;
     private final RelationTableAuditService auditService;
 
-    // ==================== 已部署表列表 ====================
+    // ==================== Deployed Table List ====================
 
     @GetMapping("/tables")
-    @Operation(summary = "获取已部署的表列表", description = "仅返回 DEPLOYED 状态的 Relation Table")
+    @Operation(summary = "Get deployed table list", description = "Returns only DEPLOYED Relation Tables")
     public ResponseEntity<List<RelationTableResponse>> getDeployedTables() {
         log.info("Getting deployed relation tables");
         List<RelationTableResponse> tables = dataService.getDeployedTables();
         return ResponseEntity.ok(tables);
     }
 
-    // ==================== 表数据 CRUD ====================
+    // ==================== Table Data CRUD ====================
 
     @GetMapping("/{tableId}/export")
-    @Operation(summary = "导出表数据为 CSV", description = "导出指定表的数据为 CSV 文件")
+    @Operation(summary = "Export table data as CSV", description = "Export table data as CSV file")
     public ResponseEntity<byte[]> exportCsv(
-            @Parameter(description = "表定义ID") @PathVariable Long tableId,
-            @Parameter(description = "最大行数") @RequestParam(defaultValue = "10000") int maxRows) {
+            @Parameter(description = "Table definition ID") @PathVariable Long tableId,
+            @Parameter(description = "Max rows") @RequestParam(defaultValue = "10000") int maxRows) {
         log.info("Exporting CSV for table: tableId={}, maxRows={}", tableId, maxRows);
         String csv = dataService.exportCsv(tableId, maxRows);
         return ResponseEntity.ok()
@@ -62,10 +62,10 @@ public class RelationTableDataController {
     }
 
     @GetMapping("/{tableId}")
-    @Operation(summary = "分页查询表数据", description = "根据已部署的最新表结构动态查询物理表数据，支持搜索过滤")
+    @Operation(summary = "Query table data paginated", description = "Dynamically query physical table data using the latest deployed table structure, with search filter support")
     public ResponseEntity<Page<RelationTableDataRowDTO>> queryData(
-            @Parameter(description = "表定义ID") @PathVariable Long tableId,
-            @Parameter(description = "搜索关键字") @RequestParam(required = false) String search,
+            @Parameter(description = "Table definition ID") @PathVariable Long tableId,
+            @Parameter(description = "Search keyword") @RequestParam(required = false) String search,
             Pageable pageable) {
         log.info("Querying data for table: tableId={}, search={}, page={}", tableId, search, pageable);
         Page<RelationTableDataRowDTO> page = dataService.queryData(tableId, search, pageable);
@@ -73,9 +73,9 @@ public class RelationTableDataController {
     }
 
     @PostMapping("/{tableId}")
-    @Operation(summary = "新增数据", description = "向指定表中新增一条数据")
+    @Operation(summary = "Add data", description = "Add a new row to the table")
     public ResponseEntity<RelationTableDataRowDTO> addData(
-            @Parameter(description = "表定义ID") @PathVariable Long tableId,
+            @Parameter(description = "Table definition ID") @PathVariable Long tableId,
             @RequestBody Map<String, Object> data) {
         log.info("Adding data to table: tableId={}", tableId);
         RelationTableDataRowDTO row = dataService.addData(tableId, data);
@@ -83,10 +83,10 @@ public class RelationTableDataController {
     }
 
     @PutMapping("/{tableId}/{rowId}")
-    @Operation(summary = "修改数据", description = "修改指定表中的一条数据")
+    @Operation(summary = "Update data", description = "Update a row in the table")
     public ResponseEntity<RelationTableDataRowDTO> updateData(
-            @Parameter(description = "表定义ID") @PathVariable Long tableId,
-            @Parameter(description = "行ID") @PathVariable String rowId,
+            @Parameter(description = "Table definition ID") @PathVariable Long tableId,
+            @Parameter(description = "Row ID") @PathVariable String rowId,
             @RequestBody Map<String, Object> data) {
         log.info("Updating data in table: tableId={}, rowId={}", tableId, rowId);
         RelationTableDataRowDTO row = dataService.updateData(tableId, rowId, data);
@@ -94,24 +94,24 @@ public class RelationTableDataController {
     }
 
     @DeleteMapping("/{tableId}/{rowId}")
-    @Operation(summary = "删除数据", description = "删除指定表中的一条数据")
+    @Operation(summary = "Delete data", description = "Delete a row from the table")
     public ResponseEntity<Void> deleteData(
-            @Parameter(description = "表定义ID") @PathVariable Long tableId,
-            @Parameter(description = "行ID") @PathVariable String rowId) {
+            @Parameter(description = "Table definition ID") @PathVariable Long tableId,
+            @Parameter(description = "Row ID") @PathVariable String rowId) {
         log.info("Deleting data from table: tableId={}, rowId={}", tableId, rowId);
         dataService.deleteData(tableId, rowId);
         return ResponseEntity.noContent().build();
     }
 
-    // ==================== 状态变更 ====================
+    // ==================== Status Change ====================
 
     private static final Set<String> ALLOWED_STATUSES = Set.of("ACTIVE", "INACTIVE");
 
     @PutMapping("/{tableId}/{rowId}/status")
-    @Operation(summary = "变更数据状态", description = "变更数据的 Active/Inactive 状态")
+    @Operation(summary = "Change data status", description = "Change the Active/Inactive status of data")
     public ResponseEntity<RelationTableDataRowDTO> changeStatus(
-            @Parameter(description = "表定义ID") @PathVariable Long tableId,
-            @Parameter(description = "行ID") @PathVariable String rowId,
+            @Parameter(description = "Table definition ID") @PathVariable Long tableId,
+            @Parameter(description = "Row ID") @PathVariable String rowId,
             @RequestBody Map<String, String> request) {
         String status = request.get("status");
         if (status == null) {
@@ -126,16 +126,16 @@ public class RelationTableDataController {
         return ResponseEntity.ok(row);
     }
 
-    // ==================== 审计日志 ====================
+    // ==================== Audit Log ====================
 
     @GetMapping("/{tableId}/audit-logs")
-    @Operation(summary = "查询审计日志", description = "查询指定表的审计日志，支持按操作时间、操作人、操作类型过滤")
+    @Operation(summary = "Query audit logs", description = "Query audit logs for the table, supporting filter by operation time, operator, and action type")
     public ResponseEntity<Page<RelationTableAuditLog>> queryAuditLogs(
-            @Parameter(description = "表定义ID") @PathVariable Long tableId,
-            @Parameter(description = "操作类型") @RequestParam(required = false) String action,
-            @Parameter(description = "操作人ID") @RequestParam(required = false) String operatorId,
-            @Parameter(description = "开始时间") @RequestParam(required = false) Instant startTime,
-            @Parameter(description = "结束时间") @RequestParam(required = false) Instant endTime,
+            @Parameter(description = "Table definition ID") @PathVariable Long tableId,
+            @Parameter(description = "Action type") @RequestParam(required = false) String action,
+            @Parameter(description = "Operator ID") @RequestParam(required = false) String operatorId,
+            @Parameter(description = "Start time") @RequestParam(required = false) Instant startTime,
+            @Parameter(description = "End time") @RequestParam(required = false) Instant endTime,
             Pageable pageable) {
         log.info("Querying audit logs for table: tableId={}, action={}, operatorId={}", tableId, action, operatorId);
         Page<RelationTableAuditLog> logs = auditService.queryAuditLogs(tableId, action, operatorId, startTime, endTime, pageable);

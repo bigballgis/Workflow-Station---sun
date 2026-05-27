@@ -1,6 +1,7 @@
 package com.portal.client;
 
 import com.platform.common.constant.PlatformConstants;
+import com.platform.common.i18n.I18nService;
 import com.platform.common.util.ApiResponseBodyUnwrap;
 
 import lombok.RequiredArgsConstructor;
@@ -30,11 +31,11 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * Workflow Engine Core 客户端
- * 用于调用 workflow-engine-core 模块的 API
+ * Workflow Engine Core client
+ * Client for workflow-engine-core module APIs
  * 
- * 注意：当前 workflow-engine-core 的 API 尚未完全实现，
- * 此客户端提供了回退机制，在 workflow-engine-core 不可用时使用本地实现
+ * Note: workflow-engine-core APIs are not fully implemented yet;
+ * Provides fallback to local implementation when workflow-engine-core is unavailable
  */
 @Slf4j
 @Component
@@ -43,11 +44,12 @@ public class WorkflowEngineClient {
 
     private final RestTemplate restTemplate;
     private final JwtProperties jwtProperties;
+    private final I18nService i18nService;
 
     @Value("${workflow-engine.url:http://localhost:8081}")
     private String workflowEngineUrl;
 
-    /** 与 application.yml 默认一致，避免未合并完整配置时静默关闭引擎集成 */
+    /** Matches application.yml default so missing merged config does not silently disable engine integration */
     @Value("${workflow-engine.enabled:true}")
     private boolean workflowEngineEnabled;
 
@@ -56,7 +58,7 @@ public class WorkflowEngineClient {
     private volatile long lastHealthCheckTime = 0;
 
     /**
-     * 检查 workflow-engine-core 是否可用（带 30 秒缓存）
+     * Checks whether workflow-engine-core is available (30s cache)
      */
     public boolean isAvailable() {
         if (!workflowEngineEnabled) {
@@ -79,14 +81,14 @@ public class WorkflowEngineClient {
     }
 
     /**
-     * workflow-engine 对 /api/v1/** 要求已认证 JWT（与门户共用 {@code JWT_SECRET}）。
+     * workflow-engine requires authenticated JWT for /api/v1/** (same {@code JWT_SECRET} as portal).
      *
-     * <p>解析顺序与 {@link com.platform.security.filter.JwtAuthenticationFilter#extractToken} 一致：
-     * 优先 {@code Authorization} 头；若缺失则回退到 {@code platform.security.jwt.cookie-names}
-     * 配置的 httpOnly Cookie（user-portal 写出的是 {@code up_access_token}），
-     * 并合成 {@code Authorization: Bearer <token>} 转发给 workflow-engine（跨服务调用不会自动带 cookie）。
+     * <p>Resolution order matches {@link com.platform.security.filter.JwtAuthenticationFilter#extractToken}:
+     * Prefer {@code Authorization} header; else fall back to {@code platform.security.jwt.cookie-names}
+     * configured httpOnly cookies (user-portal writes {@code up_access_token}),
+     * and sends {@code Authorization: Bearer <token>} to workflow-engine (cross-service calls do not forward cookies).
      *
-     * <p>无请求上下文时（如定时任务）不加头 —— 此时调用受保护接口会拿到 403，由调用方处理。
+     * <p>No request context (e.g. scheduled job): no header — protected APIs return 403; caller handles.
      */
     private void forwardInboundAuthorization(HttpHeaders headers) {
         var attrs = RequestContextHolder.getRequestAttributes();
@@ -128,13 +130,13 @@ public class WorkflowEngineClient {
         return null;
     }
 
-    /** 从 Engine 返回的 JSON 响应体里提取业务 message 字段 */
+    /** Extracts business message field from engine JSON response body */
     private String extractMessage(String body) {
         if (body == null || body.isBlank()) return "Unknown error";
         try {
             ObjectMapper mapper = new ObjectMapper();
             JsonNode node = mapper.readTree(body);
-            // 支持 { "message": "..." } 或 { "data": { "message": "..." } } 或 { "error": "..." }
+            // Supports { "message": "..." }, { "data": { "message": "..." } }, or { "error": "..." }
             JsonNode msg = node.path("message");
             if (msg.isMissingNode()) msg = node.path("data").path("message");
             if (msg.isMissingNode()) msg = node.path("error");
@@ -149,10 +151,10 @@ public class WorkflowEngineClient {
         return new HttpEntity<>(headers);
     }
 
-    // ==================== 流程部署与启动 ====================
+    // ==================== Process deploy and start ====================
 
     /**
-     * 部署流程定义
+     * Deploys process definition
      */
     public Optional<Map<String, Object>> deployProcess(String processKey, String bpmnXml, String name) {
         if (!isAvailable()) {
@@ -182,17 +184,19 @@ public class WorkflowEngineClient {
             String body = e.getResponseBodyAsString();
             String msg = extractMessage(body);
             log.warn("Failed to deploy process to workflow engine (HTTP {}): {}", e.getStatusCode(), body);
-            throw new IllegalStateException("部署流程失败[" + e.getStatusCode() + "]: " + msg);
+            throw new IllegalStateException(
+                    i18nService.getMessage("portal.deploy_process_failed", e.getStatusCode(), msg));
         } catch (Exception e) {
             log.warn("Failed to deploy process to workflow engine: {}", e.getMessage(), e);
-            throw new IllegalStateException("部署流程失败: " + e.getMessage(), e);
+            throw new IllegalStateException(
+                    i18nService.getMessage("portal.deploy_process_failed_generic", e.getMessage()), e);
         }
         return Optional.empty();
     }
 
     /**
-     * 启动流程实例。
-     * 失败时抛出 IllegalStateException（含 Engine 返回的具体业务错误信息），调用方无需判断空值。
+     * Starts process instance.
+     * Throws IllegalStateException with engine business message on failure; callers need not check empty.
      */
     public Map<String, Object> startProcess(String processDefinitionKey, String businessKey,
                                                        String startUserId, Map<String, Object> variables) {
@@ -239,7 +243,7 @@ public class WorkflowEngineClient {
     }
 
     /**
-     * 删除引擎侧运行中与历史流程实例（内部清理；purge 路径在引擎侧 permitAll，无需 JWT）
+     * Deletes runtime and historic process instances on engine (internal purge; permitAll, no JWT)
      */
     public boolean purgeProcessInstance(String processInstanceId) {
         if (!isAvailable() || processInstanceId == null || processInstanceId.isEmpty()) {
@@ -261,10 +265,10 @@ public class WorkflowEngineClient {
         }
     }
 
-    // ==================== 任务查询 ====================
+    // ==================== Task queries ====================
 
     /**
-     * 查询用户待办任务
+     * Queries user todo tasks
      */
     public Optional<Map<String, Object>> getUserTasks(String userId, int page, int size) {
         if (!isAvailable()) {
@@ -294,7 +298,7 @@ public class WorkflowEngineClient {
     }
     
     /**
-     * 查询流程实例的任务
+     * Queries tasks for process instance
      */
     public Optional<Map<String, Object>> getProcessInstanceTasks(String processInstanceId) {
         if (!isAvailable()) {
@@ -323,7 +327,7 @@ public class WorkflowEngineClient {
     }
     
     /**
-     * 查询用户所有可见任务（包括虚拟组和部门角色任务）
+     * Queries all tasks visible to user (virtual groups and department roles)
      */
     public Optional<Map<String, Object>> getUserAllVisibleTasks(String userId, List<String> groupIds, 
                                                                  List<String> deptRoles, int page, int size) {
@@ -364,7 +368,7 @@ public class WorkflowEngineClient {
     }
     
     /**
-     * 获取任务详情
+     * Returns task detail
      */
     public Optional<Map<String, Object>> getTaskById(String taskId) {
         if (!isAvailable()) {
@@ -387,7 +391,7 @@ public class WorkflowEngineClient {
     }
 
     /**
-     * 查询主任务子表数据（用于分配前回补 rowId / 实时同步）。
+     * Queries parent task sub-table data (backfill rowId / live sync before assign).
      */
     public Optional<Map<String, Object>> getSubTableDataAll(String taskId) {
         if (!isAvailable()) {
@@ -408,7 +412,7 @@ public class WorkflowEngineClient {
     }
     
     /**
-     * 统计用户任务数量
+     * Counts user tasks
      */
     public Optional<Map<String, Object>> countUserTasks() {
         if (!isAvailable()) {
@@ -430,10 +434,10 @@ public class WorkflowEngineClient {
         return Optional.empty();
     }
 
-    // ==================== 任务操作（完成、认领、委托、转办、回退） ====================
+    // ==================== Task operations (complete, claim, delegate, transfer, return) ====================
 
     /**
-     * 完成任务
+     * Completes task
      */
     public Optional<Map<String, Object>> completeTask(String taskId, String userId, 
                                                        String action, Map<String, Object> variables) {
@@ -474,7 +478,7 @@ public class WorkflowEngineClient {
     }
 
     /**
-     * 认领任务
+     * Claims task
      */
     public Optional<Map<String, Object>> claimTask(String taskId, String userId) {
         if (!isAvailable()) {
@@ -505,7 +509,7 @@ public class WorkflowEngineClient {
     }
 
     /**
-     * 委托任务
+     * Delegates task
      */
     public Optional<Map<String, Object>> delegateTask(String taskId, String delegatorId, 
                                                        String delegateId, String reason) {
@@ -539,7 +543,7 @@ public class WorkflowEngineClient {
     }
     
     /**
-     * 取消认领任务
+     * Unclaims task
      */
     public Optional<Map<String, Object>> unclaimTask(String taskId, String userId) {
         if (!isAvailable()) {
@@ -570,7 +574,7 @@ public class WorkflowEngineClient {
     }
     
     /**
-     * 转办任务
+     * Transfers task
      */
     public Optional<Map<String, Object>> transferTask(String taskId, String fromUserId, 
                                                        String toUserId, String reason) {
@@ -606,8 +610,8 @@ public class WorkflowEngineClient {
     private static final ObjectMapper ENGINE_ERROR_JSON = new ObjectMapper();
 
     /**
-     * 解析 workflow-engine 返回的 ApiResponse 错误体中的可读说明。
-     * 兼容：顶层 {@code message}、{@code error.message} / {@code error.detail}、{@code errorMessage}（子表分配 DTO）。
+     * Parses human-readable message from workflow-engine ApiResponse error body.
+     * Supports top-level {@code message}, {@code error.message} / {@code error.detail}, {@code errorMessage} (sub-table assign DTO).
      */
     private static String parseWorkflowEngineErrorMessage(String json) {
         if (json == null || json.isBlank()) {
@@ -655,14 +659,14 @@ public class WorkflowEngineClient {
     }
 
     /**
-     * 分配子表行处理人（多实例子流程前置任务）
+     * Assigns sub-table row assignee (MI sub-process prerequisite task)
      */
     public Optional<Map<String, Object>> assignSubTableRow(String taskId, long rowId, String assigneeId) {
         return assignSubTableRow(taskId, rowId, assigneeId, null);
     }
 
     /**
-     * @param rowKey 联合主键时必填（路径 rowId 可为占位，引擎以 body 为准）
+     * @param rowKey required for composite PK (path rowId may be placeholder; engine uses body)
      */
     public Optional<Map<String, Object>> assignSubTableRow(String taskId, long rowId, String assigneeId,
                                                            Map<String, Object> rowKey) {
@@ -714,7 +718,7 @@ public class WorkflowEngineClient {
     }
     
     /**
-     * 回退任务到指定的历史节点
+     * Returns task to specified historic activity
      */
     public Optional<Map<String, Object>> returnTask(String taskId, String targetActivityId, 
                                                      String userId, String reason) {
@@ -748,7 +752,7 @@ public class WorkflowEngineClient {
     }
     
     /**
-     * 获取可回退的历史节点列表
+     * Returns list of returnable historic activity nodes
      */
     public Optional<List<Map<String, Object>>> getReturnableActivities(String taskId) {
         if (!isAvailable()) {
@@ -771,11 +775,11 @@ public class WorkflowEngineClient {
         return Optional.empty();
     }
 
-    // ==================== 流程状态与历史查询 ====================
+    // ==================== Process status and history ====================
 
     /**
-     * 获取流程实例状态
-     * 用于检查流程是否已完成以及获取最后一个活动节点
+     * Returns process instance status
+     * Checks whether process completed and returns last activity node
      */
     public Optional<Map<String, Object>> getProcessInstanceStatus(String processInstanceId) {
         if (!isAvailable()) {
@@ -798,7 +802,7 @@ public class WorkflowEngineClient {
     }
 
     /**
-     * 获取流程实例的当前活动节点
+     * Returns current activity node for process instance
      */
     public Optional<Map<String, Object>> getCurrentActivity(String processInstanceId) {
         if (!isAvailable()) {
@@ -822,7 +826,7 @@ public class WorkflowEngineClient {
     }
 
     /**
-     * 获取流程历史
+     * Returns process history
      */
     public Optional<Map<String, Object>> getProcessHistory(String processInstanceId) {
         if (!isAvailable()) {
@@ -845,7 +849,7 @@ public class WorkflowEngineClient {
     }
 
     /**
-     * 获取多实例子流程状态（按子表行聚合）
+     * Returns multi-instance sub-process status (aggregated by sub-table row)
      */
     public Optional<Map<String, Object>> getMultiInstanceStatus(String processInstanceId) {
         if (!isAvailable()) {
@@ -868,7 +872,7 @@ public class WorkflowEngineClient {
 
 
     /**
-     * 获取任务历史（通过流程实例ID）
+     * Returns task history by process instance ID
      */
     public Optional<List<Map<String, Object>>> getTaskHistory(String processInstanceId) {
         if (!isAvailable()) {
@@ -897,7 +901,7 @@ public class WorkflowEngineClient {
     }
     
     /**
-     * 获取流程实例流转历史（通过流程实例ID，包含用户名称解析）
+     * Returns process instance flow history with resolved display names
      */
     public Optional<List<Map<String, Object>>> getProcessInstanceHistory(String processInstanceId) {
         log.debug("WorkflowEngineClient.getProcessInstanceHistory called for: {}", processInstanceId);
@@ -927,7 +931,7 @@ public class WorkflowEngineClient {
     }
     
     /**
-     * 获取任务流转历史（通过任务ID，包含用户名称解析）
+     * Returns task flow history by task ID with resolved display names
      */
     public Optional<List<Map<String, Object>>> getTaskHistoryByTaskId(String taskId) {
         if (!isAvailable()) {
@@ -950,10 +954,10 @@ public class WorkflowEngineClient {
         return Optional.empty();
     }
     
-    // ==================== 用户权限查询 ====================
+    // ==================== User permissions ====================
 
     /**
-     * 获取用户的任务权限信息（虚拟组和部门角色）
+     * Returns user task permissions (virtual groups and department roles)
      */
     public Optional<Map<String, Object>> getUserTaskPermissions(String userId) {
         if (!isAvailable()) {
@@ -976,7 +980,7 @@ public class WorkflowEngineClient {
     }
     
     /**
-     * 检查用户是否有任务操作权限
+     * Checks whether user may perform task operation
      */
     @SuppressWarnings("unchecked")
     public Optional<Boolean> checkTaskPermission(String taskId, String userId) {
@@ -1004,7 +1008,7 @@ public class WorkflowEngineClient {
     }
     
     /**
-     * 获取用户已处理的任务列表
+     * Returns user's completed task list
      */
     @SuppressWarnings("unchecked")
     public Optional<Map<String, Object>> getCompletedTasks(String userId, int page, int size, 
@@ -1042,7 +1046,7 @@ public class WorkflowEngineClient {
     }
     
     /**
-     * 获取用户流程统计数据
+     * Returns user process statistics
      */
     @SuppressWarnings("unchecked")
     public Optional<Map<String, Object>> getProcessStatistics(String userId) {
@@ -1066,7 +1070,7 @@ public class WorkflowEngineClient {
     }
 
     /**
-     * 取消（终止）流程实例
+     * Cancels (terminates) process instance
      */
     public Optional<Map<String, Object>> cancelProcessInstance(String processInstanceId, String reason) {
         if (!isAvailable()) {
@@ -1097,8 +1101,8 @@ public class WorkflowEngineClient {
     }
 
     /**
-     * 执行 N8N Action（同步模式）
-     * 通过 workflow-engine-core 的 POST /api/v1/n8n/execute 内部端点转发执行请求
+     * Executes N8N action (synchronous)
+     * Forwards execution via workflow-engine-core POST /api/v1/n8n/execute internal endpoint
      *
      * Validates: Requirements 10.19
      */
@@ -1129,9 +1133,9 @@ public class WorkflowEngineClient {
     }
 
     /**
-     * 根据流程定义 key 获取 BPMN XML
-     * @param processDefinitionKey 流程定义 key
-     * @return BPMN XML 字符串，失败时返回 Optional.empty()
+     * Fetches BPMN XML by process definition key
+     * @param processDefinitionKey process definition key
+     * @return BPMN XML string, or Optional.empty() on failure
      */
     public Optional<String> getBpmnXml(String processDefinitionKey) {
         if (!isAvailable()) {

@@ -22,7 +22,7 @@ public class VersionResponse {
     private String changeLog;
     private String createdBy;
     private Instant createdAt;
-    /** 是否为 FunctionUnit 当前活跃版本 */
+    /** Whether this version is the FunctionUnit's current active version. */
     private Boolean current;
 
     public static VersionResponse from(Version version, String activeVersionNumber) {

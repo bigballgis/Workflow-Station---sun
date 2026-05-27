@@ -9,8 +9,8 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.time.Instant;
 
 /**
- * 表单阶段绑定实体
- * 管理 Task Form 与 BPMN Stage (userTask) 的绑定关系
+ * Form stage binding entity.
+ * Manages the binding relationship between Task Forms and BPMN Stage (userTask).
  */
 @Entity
 @Table(name = "dw_form_stage_bindings")

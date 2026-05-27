@@ -41,7 +41,7 @@ import java.time.LocalDateTime;
 import java.util.*;
 
 /**
- * 部署组件实现
+ * Deployment component implementation.
  */
 @Component
 @Slf4j
@@ -62,7 +62,7 @@ public class DeploymentComponentImpl implements DeploymentComponent {
     private String defaultAdminCenterUrl;
 
     /**
-     * 生产环境应由已登录用户携带 JWT；本地/自动化测试可设为 false。
+     * In production, a logged-in user should supply JWT; may be false for local/automated tests.
      */
     @Value("${developer.deployment.require-admin-authorization:true}")
     private boolean requireAdminAuthorization;
@@ -123,7 +123,7 @@ public class DeploymentComponentImpl implements DeploymentComponent {
 
         deploymentJobService.persistNew(deploymentId, functionUnitId, targetUrl, response);
 
-        // POST 返回与异步任务分离的快照，避免 MVC 序列化与后台线程并发修改同一 DeployResponse（损坏 JSON / Kong upstream error）。
+        // Snapshot for POST body separate from async work to avoid MVC serializing the same DeployResponse the worker mutates (corrupt JSON / Kong upstream error).
         DeployResponse responseBodyForClient = snapshotDeployResponseForClient(response);
 
         SecurityContext securityContext = SecurityContextHolder.getContext();
@@ -348,11 +348,11 @@ public class DeploymentComponentImpl implements DeploymentComponent {
     }
 
     /**
-     * 从当前 HTTP 请求解析出站 Authorization（异步线程中需在进入异步前由调用方传入，此处仅作兜底尝试）。
-     * 与 {@link com.platform.security.filter.JwtAuthenticationFilter} 一致：优先 Authorization 头，其次 access cookie。
+     * Resolves outbound Authorization from the current HTTP request (caller should pass it before async; this is a fallback).
+     * Matches {@link com.platform.security.filter.JwtAuthenticationFilter}: Authorization header first, then access cookie.
      * <p>
-     * 历史上写死 {@code access_token}；三端为避免 cookie 互相覆盖现已按服务名拆分（如 {@code dw_access_token}），
-     * 故按 {@link JwtProperties#getCookieNames()} 顺序匹配以兼容本服务名 + 备用名（详见 JwtProperties 注释）。
+     * Historically hard-coded {@code access_token}; cookies are now per-service (e.g. {@code dw_access_token}) to avoid cross-app overwrite.
+     * Matches {@link JwtProperties#getCookieNames()} in order for service name + fallbacks (see JwtProperties comments).
      */
     private Optional<String> resolveOutboundAuthorizationHeader() {
         var attrs = RequestContextHolder.getRequestAttributes();

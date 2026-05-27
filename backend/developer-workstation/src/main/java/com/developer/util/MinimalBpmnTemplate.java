@@ -5,8 +5,9 @@ import java.util.Objects;
 import java.util.regex.Pattern;
 
 /**
- * 新建功能单元时的最小可执行 BPMN 模板（单起点 → 单终点）。
- * {@code process} 元素 id 使用功能单元唯一编码等业务标识，避免全局重复的 {@code Process_1}。
+ * Minimal executable BPMN template for new function units (single start event → single end event).
+ * The {@code process} element id uses the function unit unique code as a business identifier
+ * to avoid globally duplicated {@code Process_1}.
  */
 public final class MinimalBpmnTemplate {
 
@@ -57,7 +58,7 @@ public final class MinimalBpmnTemplate {
     }
 
     /**
-     * @param processElementId BPMN process 元素 id，须为合法 XML Name（如功能单元 {@code code}）
+     * @param processElementId BPMN process element id, must be a valid XML Name (e.g. function unit {@code code})
      */
     public static String build(String processElementId) {
         String id = Objects.requireNonNull(processElementId, "processElementId").trim();

@@ -30,8 +30,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * Relation Table 表数据管理服务实现
- * 行数据统一存入 rt_table_data_rows (JSONB)，不创建 per-table 物理表
+ * Relation Table row data management; rows are stored in rt_table_data_rows (JSONB), not per-table physical tables.
  */
 @Slf4j
 @Service
@@ -56,9 +55,9 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
     }
 
     /**
-     * 将表定义转换为响应 DTO。
-     * 对于 UPDATED / ROLLBACK 状态的表，字段列表取最新已部署版本的快照，
-     * 而非 rt_field_definitions 中可能包含尚未部署的新字段。
+     * Maps table definition entity to response DTO.
+     * For UPDATED / ROLLBACK tables, field list comes from the latest deployed version snapshot,
+     * not rt_field_definitions (which may contain undeployed draft fields).
      */
     private RelationTableResponse toDeployedTableResponse(RelationTableDefinition entity) {
         if (entity.getStatus() == RelationTableStatus.UPDATED
@@ -294,10 +293,10 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
                 .build();
     }
 
-    // ==================== 辅助方法 ====================
+    // ==================== Helpers ====================
 
     /**
-     * 导出表数据为 CSV
+     * Exports table rows as CSV.
      */
     @Override
     @Transactional(readOnly = true)
@@ -335,7 +334,7 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
     }
 
     /**
-     * 获取已部署的表定义，验证状态为 DEPLOYED
+     * Loads deployed table definition and validates status allows data access.
      */
     private RelationTableDefinition getDeployedTableDefinition(Long tableId) {
         RelationTableDefinition tableDef = tableDefinitionRepository.findById(tableId)
@@ -349,7 +348,7 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
     }
 
     /**
-     * 获取用于 Data Management 查询的字段列表——与已部署版本快照一致。
+     * Field list for Data Management queries, aligned with deployed version snapshot when applicable.
      */
     private List<RelationFieldDTO> getDeployedFields(RelationTableDefinition tableDef) {
         if (tableDef.getStatus() == RelationTableStatus.UPDATED
@@ -431,7 +430,7 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
     }
 
     /**
-     * 构建 JSON 字段搜索 WHERE 子句（data->>'field' ILIKE）
+     * Builds JSON search WHERE clause ({@code data->>'field' ILIKE}).
      */
     private String buildJsonSearchWhereClause(List<RelationFieldDTO> fields, String search, List<Object> params) {
         if (search == null || search.isBlank()) {
@@ -480,7 +479,7 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
     }
 
     /**
-     * 判断字段是否为文本类型（可搜索）
+     * Whether the field type is textual (searchable).
      */
     private boolean isTextType(RelationFieldDTO field) {
         return switch (field.getDataType()) {
@@ -490,7 +489,7 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
     }
 
     /**
-     * 解析版本快照 JSON 数据
+     * Parses version snapshot JSON into field DTOs.
      */
     private List<RelationFieldDTO> parseSnapshotData(String snapshotData) {
         try {

@@ -10,7 +10,7 @@ import lombok.NoArgsConstructor;
 import java.time.Instant;
 
 /**
- * 功能单元信息响应
+ * API payload: FunctionUnit summary for Admin Center lists/detail.
  */
 @Data
 @Builder
@@ -37,7 +37,7 @@ public class FunctionUnitInfo {
     private String iconSvg;
     
     /**
-     * 从实体转换
+     * Map from persisted {@link FunctionUnit} entity.
      */
     public static FunctionUnitInfo fromEntity(FunctionUnit entity) {
         if (entity == null) {

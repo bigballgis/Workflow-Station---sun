@@ -43,7 +43,7 @@ import java.util.stream.Collectors;
  * Supports multi-dimensional task queries: direct assignment, virtual groups, department roles, delegated tasks.
  * 
  * Primary path queries the Flowable engine, then drops only {@link TaskProcessComponent#shouldHideTaskInTodoList}
- * (发起人误占下游空池), then {@link #filterFixedBuRoleTasksForActiveWorkspace} for FIXED_BU_ROLE vs JWT active BU.
+ * (initiator incorrectly occupying a downstream empty pool), then {@link #filterFixedBuRoleTasksForActiveWorkspace} for FIXED_BU_ROLE vs JWT active BU.
  * Full {@link TaskProcessComponent#canProcessTask} is not applied to the list — engine
  * membership is authoritative; complete/claim still enforce canProcessTask.
  * When the engine returns an empty list, {@link #mergeTasksFromRunningProcessInstancesForUser} merges from
@@ -54,7 +54,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class TaskQueryComponent {
 
-    /** 委托方待办分页单次拉取条数（避免单次过大响应） */
+    /** Page size for a single delegator task fetch (avoid oversized responses) */
     private static final int DELEGATOR_ENGINE_PAGE_SIZE = 200;
 
     private final DelegationRuleRepository delegationRuleRepository;
@@ -111,9 +111,11 @@ public class TaskQueryComponent {
 
     /**
      * Query pending tasks for a user.
-     * <p>默认：按请求的 {@code page}/{@code size} 调工作流引擎拉取待办，与 {@link #queryDelegatedTasks}（若适用）并行执行，
-     * 合并后按门户规则过滤、排序，再对合并列表做分页切片。无固定 1000 条上限。
-     * 关键词/优先级等筛选则按 {@code size} 分页循环拉取引擎直至取尽，再查委托后统一过滤。</p>
+     * <p>Default: fetch pending tasks from the engine using the requested {@code page}/{@code size},
+     * in parallel with {@link #queryDelegatedTasks} (when applicable), then merge, filter by portal rules,
+     * sort, and paginate the merged list. No hard 1000-row limit.
+     * Keyword/priority filters need the full engine task list; fetch all engine pages by {@code size},
+     * then merge with delegated tasks before filtering.</p>
      */
     public PageResponse<TaskInfo> queryTasks(TaskQueryRequest request) {
         if (!workflowEngineClient.isAvailable()) {
@@ -146,7 +148,8 @@ public class TaskQueryComponent {
     }
 
     /**
-     * 关键词、优先级等必须在全量引擎待办上过滤；按请求的 {@code size} 分页向引擎取直至取尽（无单次条数上限）。
+     * Keyword, priority, etc. must be filtered over the full engine task list;
+     * fetch all pages from the engine with the requested page size (no row limit).
      */
     private boolean needsFullEngineScanBeforeFilters(TaskQueryRequest request) {
         if (request.getPriorities() != null && !request.getPriorities().isEmpty()) {
@@ -229,13 +232,14 @@ public class TaskQueryComponent {
     }
 
     /**
-     * 引擎单页拉取结果（含 totalCount，供分页近似用）。
+     * Engine single-page fetch result (with totalCount, for pagination approximation).
      */
     private record EngineWindowResult(List<TaskInfo> tasks, long engineTotal) {
     }
 
     /**
-     * 按 {@code page}/{@code size} 向引擎拉一页待办；若为空则尝试发起人 RUNNING 合并路径。
+     * Fetch one page of tasks from the engine using page/size; merge from the initiator's
+     * RUNNING instances as a fallback path if the result is empty.
      */
     private EngineWindowResult fetchEngineTaskPageWindow(
             String userId, List<String> assignmentTypes, int page, int size) {
@@ -271,8 +275,9 @@ public class TaskQueryComponent {
     }
 
     /**
-     * 先按请求的 {@code page}/{@code size} 向引擎拉取待办，再同步拉取委托待办，合并排序后切片（当前页 = 合并列表的第 {@code page} 页）。
-     * 引擎与委托待办在无依赖情况下并行拉取以缩短首屏等待。
+     * Fetch engine tasks using the requested {@code page}/{@code size}, then synchronously fetch
+     * delegated tasks; merge, sort, then slice (current page = page {@code page} of merged list).
+     * Engine and delegated task fetches run in parallel when possible to reduce first-screen latency.
      */
     private PageResponse<TaskInfo> queryTasksEngineWindowThenDelegate(
             String userId,
@@ -399,9 +404,11 @@ public class TaskQueryComponent {
     }
 
     /**
-     * 当 /api/v1/tasks?userId= 聚合结果为空时，根据门户库中「当前用户为发起人的 RUNNING 实例」按 processInstanceId 再拉引擎任务。
-     * 覆盖：assignee 未写入、userId 与引擎不一致、RestTemplate 静默失败等导致待办为空的场景。
-     * <p>仅合并当前用户<strong>有权处理</strong>的任务（与引擎 assignee/候选人语义一致），避免把下一节点（如 BU_ROLE）误塞给发起人待办。</p>
+     * When /api/v1/tasks?userId= aggregation is empty, re-query engine tasks by processInstanceId
+     * for RUNNING instances where the current user is the initiator in the portal DB.
+     * Covers cases where assignee is not written, userId differs from engine, or RestTemplate silently fails.
+     * <p>Only merges tasks the current user <strong>can process</strong> (consistent with engine assignee/candidate
+     * semantics), preventing next-step tasks (e.g. BU_ROLE) from being incorrectly pushed to initiator.</p>
      */
     private void mergeTasksFromRunningProcessInstancesForUser(String userId, List<TaskInfo> allTasks) {
         String portalUsername = SecurityContextUtils.getCurrentUsername().orElse(null);
@@ -464,8 +471,9 @@ public class TaskQueryComponent {
     }
 
     /**
-     * 引擎 REST 经 Map 反序列化时，用户 ID 可能为 JSON 数字（Long），不能直接 (String) 强转，
-     * 否则运行时异常或字段丢失，门户会误认为 assignee 为空，权限校验失败。
+     * When the engine REST response uses Map deserialization, user IDs may come as JSON numbers
+     * (Long) and cannot be cast directly to (String); doing so causes a runtime exception or
+     * field loss, making the portal see an empty assignee and fail permission checks.
      */
     private static String engineStringField(Object value) {
         if (value == null) {
@@ -573,7 +581,7 @@ public class TaskQueryComponent {
     }
 
     /**
-     * 解析引擎返回的候选人/候选组列表（JSON 数组或逗号分隔字符串）
+     * Parse the candidate user/group ID lists returned by the engine (JSON array or comma-separated string).
      */
     private List<String> parseStringIdList(Object raw) {
         if (raw == null) {
@@ -637,7 +645,8 @@ public class TaskQueryComponent {
     }
 
     /**
-     * 在异步线程中继承当前请求的 Authorization 与安全上下文，供转发 workflow-engine 使用。
+     * Inherit the current request's Authorization and security context in an async thread
+     * for forwarding to workflow-engine.
      */
     private static <T> T runWithInheritedRequestAndSecurity(
             SecurityContext securityContext,
@@ -660,7 +669,8 @@ public class TaskQueryComponent {
     }
 
     /**
-     * 将某委托人的待办转为「受委托人为 assignee」的列表（单委托人；可与其它委托人并行查询）。
+     * Convert one delegator's pending tasks into a list with the delegate as assignee
+     * (single delegator; can query multiple delegators in parallel).
      */
     private List<TaskInfo> loadDelegatedTasksForDelegator(String delegateUserId, String delegatorId) {
         List<TaskInfo> delegatedTasks = new ArrayList<>();
@@ -917,10 +927,12 @@ public class TaskQueryComponent {
     }
 
     /**
-     * 固定/指定 BU 角色池（BPMN FIXED_BU_ROLE，或 BU_ROLE 且扩展含 businessUnitId）：引擎会合并 taskCandidateUser，
-     * 与候选组过滤无关。只要 JWT 含 {@code activeBusinessUnitId}，池所属 BU 必须与当前工作台一致。
-     * <p>不再依赖 {@link PortalWorkspaceAuthService#listWorkspaceContexts} 非空：部分环境 UBR 数据与「切换 BU」不同步时，
-     * 仅靠 VG 过滤会误判为「非工作台模式」而跳过本过滤。</p>
+     * FIXED_BU_ROLE or BU_ROLE with an explicit businessUnitId in BPMN extensions:
+     * the engine merges into taskCandidateUser, unrelated to candidate group filtering.
+     * When the JWT contains {@code activeBusinessUnitId}, the pool's BU must match the current workspace.
+     * <p>No longer relies on {@link PortalWorkspaceAuthService#listWorkspaceContexts} being non-empty:
+     * in some environments, UBR data may be out of sync with the workspace switcher,
+     * causing VG-only filtering to misclassify the situation as "non-workspace mode" and skip this filter.</p>
      */
     private List<TaskInfo> filterFixedBuRoleTasksForActiveWorkspace(List<TaskInfo> tasks) {
         Optional<String> activeBuOpt = SecurityContextUtils.getCurrentActiveBusinessUnitId();
@@ -957,8 +969,9 @@ public class TaskQueryComponent {
     }
 
     /**
-     * FIXED_BU_ROLE，或 BPMN 为 BU_ROLE 且扩展中显式指定 businessUnitId（与引擎 {@code isWorkspaceScopedBuPoolSemantics} 对齐）。
-     * <p>仅 BPMN 扩展；不读流程变量（避免跨节点残留变量误判）。</p>
+     * FIXED_BU_ROLE, or BU_ROLE with an explicit businessUnitId in BPMN extensions
+     * (aligned with engine {@code isWorkspaceScopedBuPoolSemantics}).
+     * <p>BPMN extensions only; does not read process variables (to avoid stale cross-node variable spillover).</p>
      */
     private boolean isWorkspaceScopedBuPoolSemantics(TaskInfo t) {
         String bpmn = t.getBpmnAssigneeType();
@@ -994,7 +1007,8 @@ public class TaskQueryComponent {
     }
 
     /**
-     * 固定业务单元：仅 BPMN 扩展 {@code bpmnBusinessUnitId}（与 workflow-engine 任务列表过滤语义一致，不用流程变量）。
+     * Fixed business unit: BPMN extension {@code bpmnBusinessUnitId} only
+     * (consistent with workflow-engine task list filtering semantics; does not use process variables).
      */
     private String resolveFixedBusinessUnitForBpmnTask(TaskInfo t) {
         String bu = t.getBpmnBusinessUnitId();
@@ -1005,8 +1019,10 @@ public class TaskQueryComponent {
     }
 
     /**
-     * 工作台上下文下：仅保留「当前业务单元下对该虚拟组绑定角色拥有 UBR」的虚拟组，
-     * 避免多 BU 用户在其他 BU 工作台仍看到候选组任务（引擎 user-permissions 返回全量 virtualGroupIds）。
+     * In workspace context: keep only virtual groups where the current user has a UBR
+     * for the bound role within the active business unit, preventing users with multiple BUs
+     * from seeing candidate group tasks in other BU workspaces (engine user-permissions
+     * returns all virtualGroupIds).
      */
     private List<String> filterVirtualGroupsForActiveWorkspace(String userId, List<String> groupIds) {
         if (groupIds == null || groupIds.isEmpty()) {
@@ -1323,8 +1339,9 @@ public class TaskQueryComponent {
     }
 
     /**
-     * 流程变量中的 {@code __subTables__} 行可能仅含表单字段（无 {@code id}），门户 Assign 需要 rowId。
-     * 关系表已落库时，按 email（必要时结合 name 消歧）从 {@code participants} 表回补主键。
+     * Rows in process variable {@code __subTables__} may only contain form fields (no {@code id});
+     * portal Assign needs rowId. When the relation table has been persisted, backfill the primary key
+     * from the {@code participants} table by email (with name disambiguation when needed).
      */
     @SuppressWarnings("unchecked")
     private void enrichMissingParticipantRowIdsInSubTables(Map<String, Object> variables) {
@@ -1451,8 +1468,8 @@ public class TaskQueryComponent {
     }
 
     /**
-     * 从 participants 物理表回填 assignee_display_name 和 attend_status 到 __subTables__ 行，
-     * 使 completed tasks 视图能显示分配结果。
+     * Backfill assignee_display_name and attend_status from the participants physical table
+     * into __subTables__ rows, so the completed tasks view can display assignment results.
      */
     @SuppressWarnings("unchecked")
     private void enrichParticipantAssignmentData(Map<String, Object> variables) {

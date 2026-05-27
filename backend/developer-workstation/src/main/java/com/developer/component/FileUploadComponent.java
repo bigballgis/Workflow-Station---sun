@@ -6,9 +6,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.util.Map;
 
-/**
- * 通用上传文件组件。
- */
+/** Generic file upload component. */
 public interface FileUploadComponent {
 
     Map<String, Object> upload(MultipartFile file) throws IOException;

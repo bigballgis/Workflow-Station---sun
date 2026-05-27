@@ -15,9 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.*;
 import java.util.stream.Collectors;
 
-/**
- * Portal Relation Table 服务实现
- */
+/** Portal implementation for Relation Table access. */
 @Slf4j
 @Service
 @RequiredArgsConstructor

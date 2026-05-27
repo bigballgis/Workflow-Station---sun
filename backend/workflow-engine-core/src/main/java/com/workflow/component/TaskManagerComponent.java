@@ -21,6 +21,7 @@ import com.workflow.service.UserPermissionService;
 import com.workflow.util.InitiatorOrphanRepairEligibility;
 
 import com.platform.messaging.support.NotificationDispatchHelper;
+import com.platform.common.i18n.I18nService;
 
 import org.flowable.bpmn.model.BpmnModel;
 import org.flowable.bpmn.model.FlowElement;
@@ -56,9 +57,9 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * 任务管理组件
- * 负责多维度任务分配、查询、委托和完成功能
- * 支持用户、虚拟组、部门角色三种分配类型
+ * Task Manager Component
+ * Responsible for multi-dimension task assignment, query, delegation and completion
+ * Supports three assignment types: user, virtual group, department role
  */
 @Slf4j
 @Component
@@ -108,18 +109,21 @@ public class TaskManagerComponent {
     @Autowired
     private NotificationDispatchHelper notificationDispatchHelper;
 
-    // ==================== 任务查询 ====================
+    @Autowired
+    private I18nService i18nService;
+
+    // ==================== Task Query ====================
 
     /**
-     * 查询用户的待办任务（包括直接分配、候选人任务）
-     * 支持多维度任务分配类型
+     * Query user pending tasks (including directly assigned and candidate tasks)
+     * Supports multi-dimension task assignment types
      */
     public TaskListResult getUserTasks(String userId, int page, int size) {
         return getUserTasks(userId, page, size, null);
     }
 
     /**
-     * @param activeBusinessUnitId 门户当前工作台 BU（可选）；非空时过滤 BPMN FIXED_BU_ROLE 与当前工作台不一致的待办
+     * @param activeBusinessUnitId portal current workspace BU (optional); filters out FIXED_BU_ROLE tasks mismatching current workspace when non-null
      */
     public TaskListResult getUserTasks(String userId, int page, int size, String activeBusinessUnitId) {
         try {
@@ -185,15 +189,15 @@ public class TaskManagerComponent {
     }
     
     /**
-     * 将 Flowable Task 转换为 TaskInfo（与详情查询共用逻辑，含候选人/候选组）
+     * Convert Flowable Task to TaskInfo (shared logic with detail query, includes candidate users/groups)
      */
     private TaskListResult.TaskInfo convertFlowableTaskToTaskInfo(Task task) {
         return buildTaskInfoFromFlowableTask(task);
     }
     
     /**
-     * 解析用户显示名称
-     * 优先返回 fullName，其次 displayName，再次 username，最后返回 userId
+     * Resolve user display name
+     * Returns fullName first, then displayName, then username, finally userId
      */
     private String resolveUserDisplayName(String userId) {
         if (userId == null || userId.isEmpty()) {
@@ -202,17 +206,17 @@ public class TaskManagerComponent {
         try {
             Map<String, Object> userInfo = adminCenterClient.getUserInfo(userId);
             if (userInfo != null) {
-                // 优先使用 fullName
+                // Prefer fullName
                 String fullName = (String) userInfo.get("fullName");
                 if (fullName != null && !fullName.isEmpty()) {
                     return fullName;
                 }
-                // 其次使用 displayName
+                // Then displayName
                 String displayName = (String) userInfo.get("displayName");
                 if (displayName != null && !displayName.isEmpty()) {
                     return displayName;
                 }
-                // 再次使用 username
+                // Then username
                 String username = (String) userInfo.get("username");
                 if (username != null && !username.isEmpty()) {
                     return username;
@@ -225,7 +229,7 @@ public class TaskManagerComponent {
     }
     
     /**
-     * 获取流程定义名称
+     * Get process definition name
      */
     private String getProcessDefinitionName(String processDefinitionId) {
         if (processDefinitionId == null || processDefinitionId.isEmpty()) {
@@ -245,20 +249,20 @@ public class TaskManagerComponent {
     }
     
     /**
-     * 从 processDefinitionId 中提取 processDefinitionKey
-     * 格式: key:version:uuid (例如: Process_PurchaseRequest:2:b550b1fe-f0b0-11f0-b82f-00ff197375e0)
-     * Flowable 7.0 可能只返回 UUID，此时查询 repositoryService 获取真实 key
+     * Extract processDefinitionKey from processDefinitionId
+     * Format: key:version:uuid (e.g. Process_PurchaseRequest:2:b550b1fe-f0b0-11f0-b82f-00ff197375e0)
+     * Flowable 7.0 may return UUID only; falls back to repositoryService for actual key
      */
     private String extractProcessDefinitionKey(String processDefinitionId) {
         if (processDefinitionId == null || processDefinitionId.isEmpty()) {
             return null;
         }
-        // 标准格式: key:version:uuid
+        // Standard format: key:version:uuid
         int colonIndex = processDefinitionId.indexOf(':');
         if (colonIndex > 0) {
             return processDefinitionId.substring(0, colonIndex);
         }
-        // Flowable 7.0 可能仅返回 UUID，查询 repositoryService 获取真实 key
+        // Flowable 7.0 may return UUID only; query repositoryService for actual key
         try {
             org.flowable.engine.repository.ProcessDefinition pd = repositoryService
                 .createProcessDefinitionQuery()
@@ -275,11 +279,11 @@ public class TaskManagerComponent {
     }
     
     /**
-     * 按流程实例ID查询任务
+     * Query tasks by process instance ID
      */
     public TaskListResult getTasksByProcessInstance(String processInstanceId, int page, int size) {
         try {
-            // 查询流程实例的所有任务
+            // Query all tasks for the process instance
             List<Task> tasks = taskService.createTaskQuery()
                 .processInstanceId(processInstanceId)
                 .orderByTaskCreateTime()
@@ -290,7 +294,7 @@ public class TaskManagerComponent {
                 .processInstanceId(processInstanceId)
                 .count();
             
-            // 转换为结果对象
+            // Convert to result object
             List<TaskListResult.TaskInfo> taskInfos = tasks.stream()
                 .map(this::convertFlowableTaskToTaskInfo)
                 .toList();
@@ -311,9 +315,9 @@ public class TaskManagerComponent {
         }
     }
     /**
-     * 查询用户的所有可见任务（包括虚拟组和部门角色任务）
+     * Query all visible tasks for user (including virtual group and department role tasks)
      * 
-     * 直接从 Flowable TaskService 查询任务
+     * Query tasks directly from Flowable TaskService
      */
     public TaskListResult getUserAllVisibleTasks(String userId, List<String> groupIds, 
                                                List<String> deptRoles, int page, int size) {
@@ -321,7 +325,7 @@ public class TaskManagerComponent {
     }
 
     /**
-     * @param activeBusinessUnitId 门户当前工作台 BU（可选）；非空时过滤 BPMN FIXED_BU_ROLE 与当前工作台不一致的待办
+     * @param activeBusinessUnitId portal current workspace BU (optional); filters out FIXED_BU_ROLE tasks mismatching current workspace when non-null
      */
     public TaskListResult getUserAllVisibleTasks(String userId, List<String> groupIds, 
                                                List<String> deptRoles, int page, int size,
@@ -635,12 +639,12 @@ public class TaskManagerComponent {
     }
 
     /**
-     * 合并「未指派但流程变量 initiator 为当前用户」的任务，并幂等写回 assignee。
-     * 覆盖监听器未执行、变量类型为 Long、或 assignee 未写入等导致 taskAssignee 查询不到的情况。
-     * <p><b>仅限 BPMN 上本节点为发起人办理（INITIATOR / PROCESS_INITIATOR 或等价的 flowable:assignee）</b>；
-     * BU_ROLE 等非发起人节点不会在此写回发起人，避免误派。</p>
-     * <p>历史上若已通过旧逻辑把 assignee 误写给发起人，需转办、开发库 UPDATE 或 purge 后重跑实例；本方法不会自动纠正。</p>
-     * <p>BU_ROLE 解析仅 1 人时引擎侧为直派，无 Claim，与门户展示一致。</p>
+     * Merge tasks unassigned but with initiator variable matching current user, and idempotently write back assignee.
+     * Covers cases where listener did not execute, variable type is Long, or assignee was not written causing taskAssignee query misses.
+     * <p><b>Only applies when BPMN node is initiator handling (INITIATOR / PROCESS_INITIATOR or equivalent flowable:assignee)</b>;
+     * non-initiator nodes like BU_ROLE will not have initiator written back here, avoiding misassignment.</p>
+     * <p>If assignee was previously misassigned to initiator by old logic, use transfer, dev DB UPDATE, or purge+rerun the instance; this method does not auto-correct.</p>
+     * <p>When BU_ROLE resolves to single user, engine assigns directly with no Claim, consistent with portal display.</p>
      */
     private void mergeOrphanInitiatorTasksRepair(String userId, int fetchLimit,
             java.util.LinkedHashMap<String, Task> taskMap) {
@@ -697,7 +701,7 @@ public class TaskManagerComponent {
     }
 
     /**
-     * Flowable BpmnModel 中 UserTask 的标准 assignee 表达式（无扩展 assigneeType 时的兜底）。
+     * Standard assignee expression on UserTask in Flowable BpmnModel (fallback when no extension assigneeType).
      */
     private String readUserTaskAssigneeExpression(String processDefinitionId, String taskDefinitionKey) {
         if (!StringUtils.hasText(processDefinitionId) || !StringUtils.hasText(taskDefinitionKey)) {
@@ -720,10 +724,10 @@ public class TaskManagerComponent {
         }
     }
     
-    // ==================== 任务分配、委托、认领 ====================
+    // ==================== Task Assignment, Delegation, Claim ====================
 
     /**
-     * 分配任务（支持多种分配类型）
+     * Assign task (supports multiple assignment types)
      */
     @Auditable(
         operationType = AuditOperationType.ASSIGN_TASK,
@@ -734,10 +738,10 @@ public class TaskManagerComponent {
     )
     public TaskAssignmentResult assignTask(String taskId, TaskAssignmentRequest request) {
         try {
-            // 验证请求参数
+            // Validate request parameters
             validateTaskAssignmentRequest(request);
             
-            // 验证任务是否存在
+            // Verify task exists
             Task flowableTask = taskService.createTaskQuery()
                 .taskId(taskId)
                 .singleResult();
@@ -748,21 +752,21 @@ public class TaskManagerComponent {
                         "taskId", "Task not found", taskId)));
             }
             
-            // 查找或创建扩展任务信息
+            // Find or create extended task info
             ExtendedTaskInfo extendedTaskInfo = extendedTaskInfoRepository
                 .findByTaskIdAndIsDeletedFalse(taskId)
                 .orElse(createExtendedTaskInfo(flowableTask, request));
             
-            // 更新分配信息
+            // Update assignment info
             updateTaskAssignment(extendedTaskInfo, request);
             
-            // 根据分配类型更新Flowable任务
+            // Update Flowable task by assignment type
             updateFlowableTaskAssignment(flowableTask, request);
             
-            // 保存扩展任务信息
+            // Save extended task info
             extendedTaskInfo = extendedTaskInfoRepository.save(extendedTaskInfo);
             
-            // 发布任务分配事件
+            // Publish task assignment event
             publishTaskAssignmentEvent(extendedTaskInfo, request);
             
             return TaskAssignmentResult.success(
@@ -781,37 +785,37 @@ public class TaskManagerComponent {
     }
     
     /**
-     * 委托任务（任何分配类型的任务都可以被委托）
+     * Delegate task (tasks of any assignment type can be delegated)
      */
     public TaskAssignmentResult delegateTask(String taskId, TaskDelegationRequest request) {
         try {
-            // 验证请求参数
+            // Validate request parameters
             validateTaskDelegationRequest(request);
             
-            // 查找扩展任务信息
+            // Find extended task info
             ExtendedTaskInfo extendedTaskInfo = extendedTaskInfoRepository
                 .findByTaskIdAndIsDeletedFalse(taskId)
                 .orElseThrow(() -> new WorkflowValidationException(Collections.singletonList(
                     new WorkflowValidationException.ValidationError(
                         "taskId", "Task not found", taskId))));
             
-            // 验证委托权限
+            // Verify delegation permission
             validateDelegationPermission(extendedTaskInfo, request.getDelegatedBy());
             
-            // 检查任务是否已完成
+            // Check if task is already completed
             if (extendedTaskInfo.isCompleted()) {
                 throw new WorkflowValidationException(Collections.singletonList(
                     new WorkflowValidationException.ValidationError(
                         "taskId", "Task already completed, cannot delegate", taskId)));
             }
             
-            // 执行委托操作
+            // Execute delegation operation
             extendedTaskInfo.delegateTask(
                 request.getDelegatedTo(), 
                 request.getDelegatedBy(), 
                 request.getEffectiveDelegationReason());
             
-            // 更新Flowable任务的分配人
+            // Update Flowable task assignee
             String previousActor = Authentication.getAuthenticatedUserId();
             try {
                 Authentication.setAuthenticatedUserId(request.getDelegatedBy());
@@ -820,15 +824,15 @@ public class TaskManagerComponent {
                 Authentication.setAuthenticatedUserId(previousActor);
             }
             
-            // 保存扩展任务信息
+            // Save extended task info
             extendedTaskInfo = extendedTaskInfoRepository.save(extendedTaskInfo);
             
-            // 发布任务委托事件
+            // Publish task delegation event
             publishTaskDelegationEvent(extendedTaskInfo, request);
             
             return TaskAssignmentResult.success(
                 taskId, 
-                AssignmentType.USER, // 委托后变为用户分配
+                AssignmentType.USER, // becomes USER after delegation
                 request.getDelegatedTo(),
                 request.getDelegatedBy(),
                 "Task delegated successfully");
@@ -841,17 +845,16 @@ public class TaskManagerComponent {
         }
     }
     /**
-     * 认领任务（虚拟组和部门角色任务）
-     * 
-     * 优先从 Flowable TaskService 查询任务，确保能认领所有任务
-     * 即使任务没有在 ExtendedTaskInfo 表中也能认领
+     * Claim task (virtual group and department role tasks)
+     * Queries Flowable TaskService first to ensure all tasks can be claimed
+     * Can claim tasks even if not present in ExtendedTaskInfo table
      */
     public TaskAssignmentResult claimTask(String taskId, TaskClaimRequest request) {
         try {
-            // 验证请求参数
+            // Validate request parameters
             validateTaskClaimRequest(request);
             
-            // 首先从 Flowable 查询任务是否存在
+            // First check if task exists in Flowable
             Task flowableTask = taskService.createTaskQuery()
                 .taskId(taskId)
                 .singleResult();
@@ -862,45 +865,45 @@ public class TaskManagerComponent {
                         "taskId", "Task not found", taskId)));
             }
             
-            // 检查任务是否已被认领（有 assignee）
+            // Check if task is already claimed (has assignee)
             if (flowableTask.getAssignee() != null && !flowableTask.getAssignee().isEmpty()) {
                 throw new WorkflowValidationException(Collections.singletonList(
                     new WorkflowValidationException.ValidationError(
                         "taskId", "Task already claimed", taskId)));
             }
             
-            // 查找扩展任务信息（可选）
+            // Find extended task info (optional)
             Optional<ExtendedTaskInfo> extendedTaskInfoOpt = extendedTaskInfoRepository
                 .findByTaskIdAndIsDeletedFalse(taskId);
             
-            // 如果有扩展任务信息，进行额外验证
+            // If extended task info exists, perform additional validation
             if (extendedTaskInfoOpt.isPresent()) {
                 ExtendedTaskInfo extendedTaskInfo = extendedTaskInfoOpt.get();
                 
-                // 验证认领权限
+                // Verify claim permission
                 validateClaimPermission(extendedTaskInfo, request.getClaimedBy());
                 
-                // 检查任务是否已完成
+                // Check if task is already completed
                 if (extendedTaskInfo.isCompleted()) {
                     throw new WorkflowValidationException(Collections.singletonList(
                         new WorkflowValidationException.ValidationError(
                             "taskId", "Task already completed, cannot claim", taskId)));
                 }
                 
-                // 执行认领操作
+                // Execute claim operation
                 extendedTaskInfo.claimTask(request.getClaimedBy());
                 extendedTaskInfoRepository.save(extendedTaskInfo);
                 
-                // 发布任务认领事件
+                // Publish task claim event
                 publishTaskClaimEvent(extendedTaskInfo, request);
             }
             
-            // 更新Flowable任务的分配人
+            // Update Flowable task assignee
             taskService.claim(taskId, request.getClaimedBy());
             
             return TaskAssignmentResult.success(
                 taskId, 
-                AssignmentType.USER, // 认领后变为用户分配
+                AssignmentType.USER, // becomes USER after claim
                 request.getClaimedBy(),
                 request.getClaimedBy(),
                 "Task claimed successfully");
@@ -914,8 +917,8 @@ public class TaskManagerComponent {
     }
     
     /**
-     * 取消认领任务
-     * 与 {@link #claimTask} 对称：以 Flowable 运行时任务为准，扩展表为可选同步
+     * Unclaim task
+     * Symmetric to {@link #claimTask}: uses Flowable runtime task as source of truth, extended table is optional sync
      */
     public TaskAssignmentResult unclaimTask(String taskId, String userId) {
         try {
@@ -988,15 +991,15 @@ public class TaskManagerComponent {
     }
     
     /**
-     * 转办任务
+     * Transfer task
      */
     public TaskAssignmentResult transferTask(String taskId, String fromUserId, String toUserId, String reason) {
         try {
-            // 验证参数
+            // Validate parameters
             validateUserId(fromUserId);
             validateUserId(toUserId);
             
-            // 首先从 Flowable 查询任务是否存在
+            // First check if task exists in Flowable
             Task flowableTask = taskService.createTaskQuery()
                 .taskId(taskId)
                 .singleResult();
@@ -1007,24 +1010,24 @@ public class TaskManagerComponent {
                         "taskId", "Task not found", taskId)));
             }
             
-            // 查找扩展任务信息（可选）
+            // Find extended task info (optional)
             Optional<ExtendedTaskInfo> extendedTaskInfoOpt = extendedTaskInfoRepository
                 .findByTaskIdAndIsDeletedFalse(taskId);
             
             if (extendedTaskInfoOpt.isPresent()) {
                 ExtendedTaskInfo extendedTaskInfo = extendedTaskInfoOpt.get();
                 
-                // 检查任务是否已完成
+                // Check if task is already completed
                 if (extendedTaskInfo.isCompleted()) {
                     throw new WorkflowValidationException(Collections.singletonList(
                         new WorkflowValidationException.ValidationError(
                             "taskId", "Task already completed, cannot transfer", taskId)));
                 }
                 
-                // 验证转办权限
+                // Verify transfer permission
                 validateCompletePermission(extendedTaskInfo, fromUserId);
                 
-                // 执行转办操作 - 直接更改分配人
+                // Execute transfer - directly change assignee
                 extendedTaskInfo.setAssignmentType(AssignmentType.USER);
                 extendedTaskInfo.setAssignmentTarget(toUserId);
                 extendedTaskInfo.setClaimedBy(null);
@@ -1037,7 +1040,7 @@ public class TaskManagerComponent {
                 extendedTaskInfoRepository.save(extendedTaskInfo);
             }
             
-            // 更新Flowable任务的分配人并记录转办原因到 ACT_HI_COMMENT
+            // Update Flowable task assignee and record transfer reason in ACT_HI_COMMENT
             String processInstanceId = flowableTask.getProcessInstanceId();
             String previousActor = Authentication.getAuthenticatedUserId();
             try {
@@ -1052,14 +1055,15 @@ public class TaskManagerComponent {
             }
 
             String taskLabel = flowableTask.getName() != null ? flowableTask.getName() : taskId;
+            String reasonText = reason != null && !reason.isBlank()
+                    ? i18nService.getMessage("workflow.notification.transfer_reason", reason)
+                    : "";
             notificationDispatchHelper.publishToUserAfterCommit(
                     toUserId,
                     "TASK",
-                    "任务已转办给您",
-                    String.format("用户 %s 将任务「%s」转办给您。%s",
-                            fromUserId,
-                            taskLabel,
-                            reason != null && !reason.isBlank() ? "原因：" + reason : "").trim(),
+                    i18nService.getMessage("workflow.notification.transferred_title"),
+                    i18nService.getMessage("workflow.notification.transferred_body",
+                            fromUserId, taskLabel, reasonText).trim(),
                     taskLink(taskId),
                     "workflow-engine");
             
@@ -1078,13 +1082,13 @@ public class TaskManagerComponent {
         }
     }
     
-    // ==================== 任务完成与回退 ====================
+    // ==================== Task Completion and Rollback ====================
 
     /**
-     * 完成任务（支持委托人代表原分配人完成）
+     * Complete task (supports delegate completing on behalf of original assignee)
      * 
-     * 优先从 Flowable TaskService 查询任务，确保能完成所有任务
-     * 即使任务没有在 ExtendedTaskInfo 表中也能完成
+     * Queries Flowable TaskService first to ensure all tasks can be completed
+     * Can complete tasks even if not present in ExtendedTaskInfo table
      */
     public TaskAssignmentResult completeTask(String taskId, String userId,
                                            java.util.Map<String, Object> variables) {
@@ -1092,16 +1096,16 @@ public class TaskManagerComponent {
     }
 
     /**
-     * 完成任务，并可选择是否向流程发起人推送站内信。
+     * Complete task, optionally sending notification to process initiator.
      */
     public TaskAssignmentResult completeTask(String taskId, String userId,
                                            java.util.Map<String, Object> variables,
                                            boolean sendNotification) {
         try {
-            // 验证参数
+            // Validate parameters
             validateUserId(userId);
             
-            // 首先从 Flowable 查询任务是否存在
+            // First check if task exists in Flowable
             Task flowableTask = taskService.createTaskQuery()
                 .taskId(taskId)
                 .singleResult();
@@ -1122,7 +1126,8 @@ public class TaskManagerComponent {
                             "taskId", "Task not found after assignee repair", taskId)));
             }
 
-            // BPMN 为发起人节点但运行时仅有候选人链时，complete 前 claim/setAssignee，避免 API 展示已归一化为 USER 而库表仍无 assignee
+            // BPMN initiator node with only candidate chain: claim/setAssignee before complete
+            // to avoid API displaying USER-normalized while the DB still has no assignee
             ensureProcessInitiatorAssigneeFromBpmnIfNeeded(flowableTask, userId);
             flowableTask = taskService.createTaskQuery()
                     .taskId(taskId)
@@ -1135,29 +1140,29 @@ public class TaskManagerComponent {
 
             String taskDisplayName = flowableTask.getName() != null ? flowableTask.getName() : taskId;
             
-            // 查找扩展任务信息（可选，用于记录额外信息）
+            // Find extended task info (optional, for recording additional info)
             Optional<ExtendedTaskInfo> extendedTaskInfoOpt = extendedTaskInfoRepository
                 .findByTaskIdAndIsDeletedFalse(taskId);
             
-            // 如果有扩展任务信息，验证权限和状态
+            // If extended task info exists, verify permission and status
             if (extendedTaskInfoOpt.isPresent()) {
                 ExtendedTaskInfo extendedTaskInfo = extendedTaskInfoOpt.get();
 
-                // Flowable 运行时 assignee/候选人优先；扩展表可能滞后（如发起人节点仍记为 VIRTUAL_GROUP），避免误拒 complete
+                // Flowable runtime assignee/candidates take priority; extended table may lag (e.g. initiator node still marked VIRTUAL_GROUP), avoid incorrectly rejecting complete
                 if (!flowableRuntimeAuthorizesComplete(flowableTask, userId)) {
                     validateCompletePermission(extendedTaskInfo, userId);
                 }
 
-                // 检查任务是否已完成
+                // Check if task is already completed
                 if (extendedTaskInfo.isCompleted()) {
                     throw new WorkflowValidationException(Collections.singletonList(
                         new WorkflowValidationException.ValidationError(
                             "taskId", "Task already completed", taskId)));
                 }
                 
-                // 【多实例扩展】检测当前任务是否为多实例子任务，如果是则回写数据到子表
+                // [Multi-Instance Extension] Detect if current task is multi-instance sub-task, if so write back data to sub-table
                 if (isMultiInstanceSubTask(extendedTaskInfo)) {
-                    log.info("检测到多实例子任务，准备回写数据到子表: taskId={}", taskId);
+                    log.info("Detected multi-instance sub-task, preparing to write back to sub-table: taskId={}", taskId);
                     handleMultiInstanceSubTaskCompletion(taskId, variables, extendedTaskInfo);
                 }
             } else if (!flowableRuntimeAuthorizesComplete(flowableTask, userId)) {
@@ -1169,12 +1174,12 @@ public class TaskManagerComponent {
             String processInstanceId = flowableTask.getProcessInstanceId();
             String initiatorUserId = resolveInitiatorUserId(processInstanceId);
             if (processInstanceId != null) {
-                // 下一任务创建时 TaskAssignmentListener 读取，用于 CURRENT_BU_ROLE 等「当前处理人」语义
-                // 统一写入门户用户主键（UUID），避免 Flowable assignee 使用 username 时污染流程变量
+                // Read by TaskAssignmentListener when next task is created, for "current handler" semantics like CURRENT_BU_ROLE
+                // Uniformly write portal user primary key (UUID), avoiding process variable pollution when Flowable assignee uses username
                 runtimeService.setVariable(processInstanceId, "currentUserId", normalizePortalUserIdForVariable(userId));
             }
 
-            // 合并保留 initiator：门户完成首任务时传入的表单变量可能不含 initiator，避免后续 INITIATOR 节点无法解析受理人
+            // Merge and preserve initiator: form variables from portal completing first task may lack initiator, preventing subsequent INITIATOR node from resolving assignee
             if (variables != null && !variables.isEmpty() && processInstanceId != null) {
                 Object existingInitiator = runtimeService.getVariable(processInstanceId, "initiator");
                 if (existingInitiator != null
@@ -1184,7 +1189,7 @@ public class TaskManagerComponent {
                 }
             }
             
-            // 设置流程变量到流程实例（在完成任务之前）
+            // Set process variables on process instance (before task completion)
             if (variables != null && !variables.isEmpty()) {
                 if (processInstanceId != null) {
                     log.debug("Setting {} variable keys on process instance {} before completing task {}",
@@ -1195,7 +1200,7 @@ public class TaskManagerComponent {
                 log.debug("No variables provided for task completion. TaskId: {}, UserId: {}", taskId, userId);
             }
             
-            // 【多实例扩展】检测下一节点是否为多实例子流程，如果是则注入子表数据
+            // [Multi-Instance Extension] Detect if next node is multi-instance sub-process, if so inject sub-table data
             String processDefinitionId = flowableTask.getProcessDefinitionId();
             String taskDefinitionKey = flowableTask.getTaskDefinitionKey();
             
@@ -1210,7 +1215,7 @@ public class TaskManagerComponent {
                 }
             }
 
-            // Flowable 完成权限默认依赖 authenticatedUserId（候选人任务尤甚）
+            // Flowable complete permission defaults to authenticatedUserId (especially for candidate tasks)
             String previousActor = Authentication.getAuthenticatedUserId();
             try {
                 Authentication.setAuthenticatedUserId(userId);
@@ -1225,7 +1230,7 @@ public class TaskManagerComponent {
                 Authentication.setAuthenticatedUserId(previousActor);
             }
             
-            // 更新扩展任务信息（如果存在）
+            // Update extended task info (if exists)
             AssignmentType assignmentType = AssignmentType.USER;
             String currentAssignee = userId;
             
@@ -1236,7 +1241,7 @@ public class TaskManagerComponent {
                 assignmentType = extendedTaskInfo.getAssignmentType();
                 currentAssignee = extendedTaskInfo.getCurrentAssignee();
                 
-                // 发布任务完成事件
+                // Publish task completion event
                 publishTaskCompleteEvent(extendedTaskInfo, userId, variables, sendNotification,
                         taskDisplayName, initiatorUserId, processInstanceId, taskId);
             } else if (sendNotification) {
@@ -1254,7 +1259,7 @@ public class TaskManagerComponent {
         } catch (WorkflowValidationException e) {
             throw e;
         } catch (MultiInstanceDataResolver.OptimisticLockException e) {
-            // 直接抛出乐观锁异常，不包装
+            // Throw optimistic lock exception directly, no wrapping
             throw e;
         } catch (Exception e) {
             throw new WorkflowBusinessException("TASK_COMPLETE_ERROR", 
@@ -1263,8 +1268,8 @@ public class TaskManagerComponent {
     }
     
     /**
-     * 回退任务到指定的历史节点
-     * 使用 Flowable 的 createChangeActivityStateBuilder 实现任务回退
+     * Rollback task to specified historic node
+     * Uses Flowable createChangeActivityStateBuilder for task rollback
      */
     @Auditable(
         operationType = AuditOperationType.RETURN_TASK,
@@ -1275,10 +1280,10 @@ public class TaskManagerComponent {
     )
     public TaskAssignmentResult returnTask(String taskId, TaskReturnRequest request) {
         try {
-            // 验证请求参数
+            // Validate request parameters
             validateTaskReturnRequest(request);
             
-            // 查找当前任务
+            // Find current task
             Task currentTask = taskService.createTaskQuery()
                 .taskId(taskId)
                 .singleResult();
@@ -1293,7 +1298,7 @@ public class TaskManagerComponent {
             String currentActivityId = currentTask.getTaskDefinitionKey();
             String targetActivityId = request.getTargetActivityId();
             
-            // 验证目标节点是否为历史节点
+            // Verify target node is a historic node
             List<HistoricActivityInstance> historicActivities = historyService
                 .createHistoricActivityInstanceQuery()
                 .processInstanceId(processInstanceId)
@@ -1309,20 +1314,20 @@ public class TaskManagerComponent {
                         "targetActivityId", "Target activity is not a valid historic activity", targetActivityId)));
             }
             
-            // 检查回退目标是否在多实例子流程之前，如果是则级联取消多实例子任务
+            // Check if rollback target is before multi-instance sub-process; if so, cascade cancel multi-instance sub-tasks
             if (isReturnTargetBeforeMultiInstance(processInstanceId, currentActivityId, targetActivityId)) {
-                log.info("回退目标在多实例子流程之前，开始级联取消多实例子任务: processInstanceId={}, targetActivityId={}", 
+                log.info("Rollback target is before multi-instance sub-process, starting cascade cancel: processInstanceId={}, targetActivityId={}", 
                     processInstanceId, targetActivityId);
                 multiInstanceCanceller.cancelMultiInstanceTasks(processInstanceId);
             }
             
-            // 使用 Flowable 的 createChangeActivityStateBuilder 进行回退
+            // Use Flowable createChangeActivityStateBuilder to perform rollback
             runtimeService.createChangeActivityStateBuilder()
                 .processInstanceId(processInstanceId)
                 .moveActivityIdTo(currentActivityId, targetActivityId)
                 .changeState();
             
-            // 查找扩展任务信息并更新状态
+            // Find extended task info and update status
             ExtendedTaskInfo extendedTaskInfo = extendedTaskInfoRepository
                 .findByTaskIdAndIsDeletedFalse(taskId)
                 .orElse(null);
@@ -1333,7 +1338,7 @@ public class TaskManagerComponent {
                 extendedTaskInfoRepository.save(extendedTaskInfo);
             }
             
-            // 发布任务回退事件
+            // Publish task rollback event
             publishTaskReturnEvent(taskId, processInstanceId, currentActivityId, targetActivityId, request);
             
             return TaskAssignmentResult.success(
@@ -1352,23 +1357,23 @@ public class TaskManagerComponent {
     }
     
     /**
-     * 检查回退目标是否在多实例子流程之前
+     * Check if rollback target is before multi-instance sub-process
+     *
+     * Simplified implementation: judge by historic execution time
+     * - If active multi-instance sub-tasks exist
+     * - And target activity's last completion time is earlier than multi-instance sub-task creation time
+     * - Then rollback target is considered before multi-instance sub-process
      * 
-     * 简化实现：通过历史执行时间判断
-     * - 如果存在活跃的多实例子任务
-     * - 且目标活动的最后完成时间早于多实例子任务的创建时间
-     * - 则认为回退目标在多实例子流程之前
-     * 
-     * @param processInstanceId 流程实例 ID
-     * @param currentActivityId 当前活动 ID
-     * @param targetActivityId 目标活动 ID
-     * @return 如果回退目标在多实例子流程之前返回 true
+     * @param processInstanceId Process instance ID
+     * @param currentActivityId Current activity ID
+     * @param targetActivityId Target activity ID
+     * @return true if rollback target is before multi-instance sub-process
      */
     private boolean isReturnTargetBeforeMultiInstance(String processInstanceId, 
                                                       String currentActivityId, 
                                                       String targetActivityId) {
         try {
-            // 查询流程实例中所有活跃的多实例子任务
+            // Query all active multi-instance sub-tasks in process instance
             List<ExtendedTaskInfo> activeMultiInstanceTasks = extendedTaskInfoRepository
                 .findByProcessInstanceIdAndIsDeletedFalse(processInstanceId)
                 .stream()
@@ -1377,22 +1382,22 @@ public class TaskManagerComponent {
                 .toList();
             
             if (activeMultiInstanceTasks.isEmpty()) {
-                log.debug("流程实例 {} 中没有活跃的多实例子任务", processInstanceId);
+                log.debug("No active multi-instance sub-tasks in process instance {}", processInstanceId);
                 return false;
             }
             
-            // 获取最早的多实例子任务创建时间
+            // Get earliest multi-instance sub-task creation time
             LocalDateTime earliestMultiInstanceTaskTime = activeMultiInstanceTasks.stream()
                 .map(ExtendedTaskInfo::getCreatedTime)
                 .min(LocalDateTime::compareTo)
                 .orElse(null);
             
             if (earliestMultiInstanceTaskTime == null) {
-                log.warn("无法获取多实例子任务的创建时间");
+                log.warn("Cannot get creation time of multi-instance sub-task");
                 return false;
             }
             
-            // 查询目标活动的最后完成时间
+            // Query target activity's last completion time
             List<HistoricActivityInstance> targetActivities = historyService
                 .createHistoricActivityInstanceQuery()
                 .processInstanceId(processInstanceId)
@@ -1403,14 +1408,14 @@ public class TaskManagerComponent {
                 .list();
             
             if (targetActivities.isEmpty()) {
-                log.warn("未找到目标活动的历史记录: {}", targetActivityId);
+                log.warn("No history record found for target activity: {}", targetActivityId);
                 return false;
             }
             
-            // 获取目标活动的最后完成时间
+            // Get target activity's last completion time
             java.util.Date targetEndDate = targetActivities.get(0).getEndTime();
             if (targetEndDate == null) {
-                log.warn("目标活动 {} 的完成时间为空", targetActivityId);
+                log.warn("Target activity {} has no completion time", targetActivityId);
                 return false;
             }
             
@@ -1419,25 +1424,25 @@ public class TaskManagerComponent {
                 java.time.ZoneId.systemDefault()
             );
             
-            // 如果目标活动的完成时间早于多实例子任务的创建时间，则认为回退目标在多实例之前
+            // If target activity completion time is earlier than multi-instance sub-task creation time, rollback target is before multi-instance
             boolean isBeforeMultiInstance = targetEndTime.isBefore(earliestMultiInstanceTaskTime);
             
             if (isBeforeMultiInstance) {
-                log.info("检测到回退目标 {} (完成时间: {}) 在多实例子流程 (创建时间: {}) 之前", 
+                log.info("Detected rollback target {} (completed: {}) before multi-instance sub-process (created: {})", 
                     targetActivityId, targetEndTime, earliestMultiInstanceTaskTime);
             }
             
             return isBeforeMultiInstance;
             
         } catch (Exception e) {
-            log.error("检查回退目标是否在多实例子流程之前时发生异常: processInstanceId={}", processInstanceId, e);
-            // 发生异常时保守处理，不执行级联取消
+            log.error("Exception checking whether rollback target is before multi-instance sub-process: processInstanceId={}", processInstanceId, e);
+            // Conservative handling on exception: do not execute cascade cancel
             return false;
         }
     }
     
     /**
-     * 检查任务是否为多实例子任务
+     * Check if task is a multi-instance sub-task
      */
     private boolean isMultiInstanceTask(ExtendedTaskInfo task) {
         String extendedProperties = task.getExtendedProperties();
@@ -1455,17 +1460,17 @@ public class TaskManagerComponent {
             Object multiInstance = properties.get("multiInstance");
             return multiInstance != null && Boolean.TRUE.equals(multiInstance);
         } catch (Exception e) {
-            log.warn("解析 extendedProperties 失败: taskId={}", task.getTaskId(), e);
+            log.warn("Failed to parse extendedProperties: taskId={}", task.getTaskId(), e);
             return false;
         }
     }
     
     /**
-     * 获取可回退的历史节点列表
+     * Get list of rollback-able historic nodes
      */
     public List<TaskListResult.TaskInfo> getReturnableActivities(String taskId) {
         try {
-            // 查找当前任务
+            // Find current task
             Task currentTask = taskService.createTaskQuery()
                 .taskId(taskId)
                 .singleResult();
@@ -1478,7 +1483,7 @@ public class TaskManagerComponent {
             
             String processInstanceId = currentTask.getProcessInstanceId();
             
-            // 查询历史用户任务节点
+            // Query historic user task nodes
             List<HistoricActivityInstance> historicActivities = historyService
                 .createHistoricActivityInstanceQuery()
                 .processInstanceId(processInstanceId)
@@ -1488,7 +1493,7 @@ public class TaskManagerComponent {
                 .desc()
                 .list();
             
-            // 转换为任务信息列表（去重）
+            // Convert to task info list (deduplicated)
             List<TaskListResult.TaskInfo> returnableActivities = new ArrayList<>();
             java.util.Set<String> seenActivityIds = new java.util.HashSet<>();
             
@@ -1516,22 +1521,22 @@ public class TaskManagerComponent {
     }
     
     /**
-     * 获取任务详情
-     * 优先从 Flowable TaskService 查询，如果找不到再从扩展表查询
+     * Get task detail
+     * Query Flowable TaskService first, fall back to extended table if not found
      */
     public TaskListResult.TaskInfo getTaskInfo(String taskId) {
         try {
-            // 1. 首先尝试从 Flowable 直接查询任务
+            // 1. First try querying task directly from Flowable
             Task task = taskService.createTaskQuery()
                 .taskId(taskId)
                 .singleResult();
             
             if (task != null) {
-                // 从 Flowable 任务构建 TaskInfo
+                // Build TaskInfo from Flowable task
                 return buildTaskInfoFromFlowableTask(task);
             }
             
-            // 2. 如果 Flowable 中没有，尝试从扩展表查询（可能是已完成的任务）
+            // 2. If not found in Flowable, try querying extended table (may be completed task)
             Optional<ExtendedTaskInfo> extendedTaskInfoOpt = extendedTaskInfoRepository
                 .findByTaskIdAndIsDeletedFalse(taskId);
             
@@ -1549,7 +1554,7 @@ public class TaskManagerComponent {
                 return buildTaskInfoFromHistoricTask(historicTask);
             }
             
-            // 4. 都找不到，抛出异常
+            // 4. Not found anywhere, throw exception
             throw new WorkflowValidationException(Collections.singletonList(
                 new WorkflowValidationException.ValidationError(
                     "taskId", "Task not found", taskId)));
@@ -1563,15 +1568,15 @@ public class TaskManagerComponent {
     }
     
     /**
-     * 从 Flowable Task 构建 TaskInfo
+     * Build TaskInfo from Flowable Task
      */
     private TaskListResult.TaskInfo buildTaskInfoFromFlowableTask(Task task) {
-        // 从 processDefinitionId 提取 processDefinitionKey
-        // Flowable 7.0 可能只返回 UUID，使用 extractProcessDefinitionKey 会自动查询 repositoryService
+        // Extract processDefinitionKey from processDefinitionId
+        // Flowable 7.0 may return UUID only; extractProcessDefinitionKey auto-queries repositoryService
         String processDefinitionId = task.getProcessDefinitionId();
         String processDefinitionKey = extractProcessDefinitionKey(processDefinitionId);
         
-        // 获取流程定义名称
+        // Get process definition name
         String processDefinitionName = getProcessDefinitionName(processDefinitionId);
         
         List<String> candidateUserIds = new ArrayList<>();
@@ -1604,7 +1609,7 @@ public class TaskManagerComponent {
             assignmentTarget = null;
         }
 
-        // 获取流程变量（先于发起人解析，便于 startUserId 为空时用 variables.initiator 兜底）
+        // Get process variables (before initiator resolution, so variables.initiator can fallback if startUserId is empty)
         Map<String, Object> variables = null;
         if (task.getProcessInstanceId() != null) {
             try {
@@ -1632,7 +1637,7 @@ public class TaskManagerComponent {
             }
         }
 
-        // 获取流程发起人信息
+        // Get process initiator info
         String initiatorId = null;
         String initiatorName = null;
         if (task.getProcessInstanceId() != null) {
@@ -1673,14 +1678,14 @@ public class TaskManagerComponent {
             bpmnAssigneeType = bpmnAssigneeType.trim();
         }
 
-        // 获取当前处理人名称
+        // Get current assignee name
         String currentAssignee = task.getAssignee();
         String currentAssigneeName = null;
         if (currentAssignee != null && !currentAssignee.isEmpty()) {
             currentAssigneeName = resolveUserDisplayName(currentAssignee);
         }
 
-        // BPMN 为流程发起人直办而运行时未写 assignee 时，纠正 API：避免误报 VIRTUAL_GROUP 空池
+        // When BPMN is initiator direct handling but runtime has no assignee, correct API: avoid falsely reporting VIRTUAL_GROUP empty pool
         if (isBpmnProcessInitiatorType(bpmnAssigneeType)
                 && StringUtils.hasText(initiatorId)
                 && !StringUtils.hasText(currentAssignee)) {
@@ -1757,8 +1762,8 @@ public class TaskManagerComponent {
     }
 
     /**
-     * 门户传入当前工作台 BU 时，在分页前剔除 BPMN FIXED_BU_ROLE 固定 BU 与 JWT 工作台不一致的任务。
-     * 依赖 {@link #buildTaskInfoFromFlowableTask} 中的 bpmnAssigneeType / bpmnBusinessUnitId / variables。
+     * When portal passes current workspace BU, filter out tasks before pagination where BPMN FIXED_BU_ROLE fixed BU mismatches JWT workspace.
+     * Depends on bpmnAssigneeType / bpmnBusinessUnitId / variables in {@link #buildTaskInfoFromFlowableTask}.
      */
     private List<Task> applyActiveWorkspaceBuTaskFilter(List<Task> tasks, String activeBusinessUnitId) {
         if (!StringUtils.hasText(activeBusinessUnitId) || tasks == null || tasks.isEmpty()) {
@@ -1790,9 +1795,9 @@ public class TaskManagerComponent {
     }
 
     /**
-     * FIXED_BU_ROLE，或 BPMN 为 BU_ROLE 且扩展中显式指定 businessUnitId（设计器「指定业务单元角色」固定池）。
-     * <p>仅依据当前用户任务 BPMN 扩展判断，不使用流程实例级 {@code assigneeType}/{@code businessUnitId} 变量：
-     * 后者会跨节点残留，误把下游节点当「固定 BU 池」并在 {@link #applyActiveWorkspaceBuTaskFilter} 中全部剔除。</p>
+     * FIXED_BU_ROLE, or BPMN BU_ROLE with explicit businessUnitId in extensions (designer fixed BU role pool).
+     * <p>Judged solely by current user task BPMN extensions, not process-instance-level {@code assigneeType}/{@code businessUnitId} variables:
+     * those leak across nodes, misidentifying downstream nodes as fixed BU pool and filtering them all out in {@link #applyActiveWorkspaceBuTaskFilter}.</p>
      */
     private static boolean isWorkspaceScopedBuPoolSemantics(TaskListResult.TaskInfo info) {
         String bpmn = info.getBpmnAssigneeType();
@@ -1808,7 +1813,7 @@ public class TaskManagerComponent {
         return false;
     }
 
-    /** 对齐 JWT 字符串与引擎变量中 Long/数字字符串形式的 BU id */
+    /** Align JWT string with Long/numeric-string BU id in engine variables */
     private static boolean equalsNormalizedBuId(String a, String b) {
         if (a == null || b == null) {
             return false;
@@ -1836,7 +1841,7 @@ public class TaskManagerComponent {
     }
     
     
-    // ==================== 私有辅助方法 ====================
+    // ==================== Private Helper Methods ====================
 
     private static boolean isBpmnProcessInitiatorType(String bpmnAssigneeType) {
         if (!StringUtils.hasText(bpmnAssigneeType)) {
@@ -1847,7 +1852,7 @@ public class TaskManagerComponent {
     }
     
     /**
-     * 验证用户ID
+     * Validate user ID
      */
     private void validateUserId(String userId) {
         if (!StringUtils.hasText(userId)) {
@@ -1858,7 +1863,7 @@ public class TaskManagerComponent {
     }
     
     /**
-     * 验证任务分配请求
+     * Validate task assignment request
      */
     private void validateTaskAssignmentRequest(TaskAssignmentRequest request) {
         if (request == null) {
@@ -1875,7 +1880,7 @@ public class TaskManagerComponent {
     }
     
     /**
-     * 验证任务委托请求
+     * Validate task delegation request
      */
     private void validateTaskDelegationRequest(TaskDelegationRequest request) {
         if (request == null) {
@@ -1892,7 +1897,7 @@ public class TaskManagerComponent {
     }
     
     /**
-     * 验证任务认领请求
+     * Validate task claim request
      */
     private void validateTaskClaimRequest(TaskClaimRequest request) {
         if (request == null) {
@@ -1909,7 +1914,7 @@ public class TaskManagerComponent {
     }
     
     /**
-     * 验证任务回退请求
+     * Validate task rollback request
      */
     private void validateTaskReturnRequest(TaskReturnRequest request) {
         if (request == null) {
@@ -1932,7 +1937,7 @@ public class TaskManagerComponent {
     }
     
     /**
-     * 创建扩展任务信息
+     * Create extended task info
      */
     private ExtendedTaskInfo createExtendedTaskInfo(Task flowableTask, TaskAssignmentRequest request) {
         return ExtendedTaskInfo.builder()
@@ -1957,7 +1962,7 @@ public class TaskManagerComponent {
     }
     
     /**
-     * 更新任务分配信息
+     * Update task assignment info
      */
     private void updateTaskAssignment(ExtendedTaskInfo extendedTaskInfo, TaskAssignmentRequest request) {
         extendedTaskInfo.setAssignmentType(request.getAssignmentType());
@@ -1966,7 +1971,7 @@ public class TaskManagerComponent {
         extendedTaskInfo.setDueDate(request.getDueDate());
         extendedTaskInfo.updateStatus("ASSIGNED", request.getOperatorUserId());
         
-        // 清除之前的委托和认领信息
+        // Clear previous delegation and claim info
         extendedTaskInfo.setDelegatedTo(null);
         extendedTaskInfo.setDelegatedBy(null);
         extendedTaskInfo.setDelegatedTime(null);
@@ -1976,22 +1981,22 @@ public class TaskManagerComponent {
     }
     
     /**
-     * 更新Flowable任务分配
+     * Update Flowable task assignment
      */
     private void updateFlowableTaskAssignment(Task flowableTask, TaskAssignmentRequest request) {
         switch (request.getAssignmentType()) {
             case USER:
-                // 直接分配给用户
+                // Directly assign to user
                 taskService.setAssignee(flowableTask.getId(), request.getAssignmentTarget());
                 break;
             case VIRTUAL_GROUP:
             case CANDIDATE_USERS:
-                // 分配给虚拟组或候选人池，清除个人分配
+                // Assign to virtual group or candidate pool, clear personal assignment
                 taskService.setAssignee(flowableTask.getId(), null);
                 break;
         }
         
-        // 设置优先级和到期时间
+        // Set priority and due date
         if (request.getPriority() != null) {
             taskService.setPriority(flowableTask.getId(), request.getPriority());
         }
@@ -2001,10 +2006,10 @@ public class TaskManagerComponent {
         }
     }
     /**
-     * 验证委托权限
+     * Verify delegation permission
      */
     private void validateDelegationPermission(ExtendedTaskInfo task, String delegatedBy) {
-        // 验证委托人是否有权限委托此任务
+        // Verify delegator has permission to delegate this task
         boolean hasPermission = userPermissionService.hasTaskPermission(
                 delegatedBy, 
                 task.getAssignmentType(), 
@@ -2018,17 +2023,17 @@ public class TaskManagerComponent {
     }
     
     /**
-     * 验证认领权限
+     * Verify claim permission
      */
     private void validateClaimPermission(ExtendedTaskInfo task, String claimedBy) {
-        // 只有虚拟组和部门角色任务可以被认领
+        // Only virtual group and department role tasks can be claimed
         if (task.getAssignmentType() == AssignmentType.USER) {
             throw new WorkflowValidationException(Collections.singletonList(
                 new WorkflowValidationException.ValidationError(
                     "taskId", "Directly assigned tasks cannot be claimed", task.getTaskId())));
         }
         
-        // 验证用户是否有权限认领此任务
+        // Verify user has permission to claim this task
         boolean hasPermission = userPermissionService.hasTaskPermission(
                 claimedBy, 
                 task.getAssignmentType(), 
@@ -2042,7 +2047,7 @@ public class TaskManagerComponent {
     }
     
     /**
-     * 引擎侧 assignee / claimedBy 可能为历史数据中的 username，而门户 JWT subject 为用户主键 UUID。
+     * Engine-side assignee / claimedBy may be username from historic data, while portal JWT subject is user primary key UUID.
      */
     private boolean engineActorMatchesPortalUser(String engineSideActor, String portalUserId) {
         if (!StringUtils.hasText(engineSideActor) || !StringUtils.hasText(portalUserId)) {
@@ -2072,7 +2077,7 @@ public class TaskManagerComponent {
     }
 
     /**
-     * 将 username 或已是 UUID 的 actor 解析为 admin-center 用户主键，供流程变量使用。
+     * Resolve actor (username or already UUID) to admin-center user primary key, for use in process variables.
      */
     private String normalizePortalUserIdForVariable(String actor) {
         if (!StringUtils.hasText(actor)) {
@@ -2090,7 +2095,7 @@ public class TaskManagerComponent {
     }
 
     /**
-     * 以 Flowable 运行时 assignee / 候选人（用户与候选组）判断当前用户是否可完成，避免仅依赖可能过期的 ExtendedTaskInfo。
+     * Judge whether current user can complete by Flowable runtime assignee / candidates (users and candidate groups), avoiding sole reliance on potentially stale ExtendedTaskInfo.
      */
     private boolean flowableRuntimeAuthorizesComplete(Task task, String portalUserId) {
         if (task == null || !StringUtils.hasText(portalUserId)) {
@@ -2118,7 +2123,7 @@ public class TaskManagerComponent {
     }
 
     /**
-     * BPMN assigneeType 为发起人节点且当前用户为发起人时，在仅有候选人、无 assignee 的情况下 claim/setAssignee，与 {@link #buildTaskInfoFromFlowableTask} 归一化语义一致。
+     * When BPMN assigneeType is initiator node and current user is initiator, claim/setAssignee when only candidates exist without assignee, consistent with normalized semantics in {@link #buildTaskInfoFromFlowableTask}.
      */
     private void ensureProcessInitiatorAssigneeFromBpmnIfNeeded(Task task, String portalUserId) {
         if (task == null || !StringUtils.hasText(portalUserId)) {
@@ -2165,7 +2170,7 @@ public class TaskManagerComponent {
     }
 
     /**
-     * 无 assignee、无候选人链路的「孤儿」用户任务：发起人完成前写入 assignee，否则 Flowable 往往无法 complete。
+     * Orphan user tasks without assignee or candidate chain: write assignee before initiator completes, otherwise Flowable typically cannot complete.
      */
     private void ensureAssigneeForOrphanInitiatorTaskIfNeeded(Task task, String portalUserId) {
         if (task == null || !StringUtils.hasText(portalUserId)) {
@@ -2200,12 +2205,12 @@ public class TaskManagerComponent {
     }
 
     /**
-     * 验证完成权限
+     * Verify completion permission
      */
     private void validateCompletePermission(ExtendedTaskInfo task, String userId) {
         String currentAssignee = task.getCurrentAssignee();
         
-        // 如果任务有明确的当前处理人（委托人或认领人），只有该用户可以完成
+        // If task has explicit current handler (delegate or claimer), only that user can complete
         if (currentAssignee != null && !currentAssignee.isBlank()) {
             if (!engineActorMatchesPortalUser(currentAssignee, userId)) {
                 throw new WorkflowValidationException(Collections.singletonList(
@@ -2215,7 +2220,7 @@ public class TaskManagerComponent {
             return;
         }
         
-        // 如果没有明确的当前处理人，根据分配类型验证权限
+        // If no explicit current handler, verify permission by assignment type
         boolean hasPermission = userPermissionService.hasTaskPermission(
                 userId, 
                 task.getAssignmentType(), 
@@ -2229,10 +2234,10 @@ public class TaskManagerComponent {
     }
     
     /**
-     * 转换为任务信息DTO
+     * Convert to task info DTO
      */
     private TaskListResult.TaskInfo convertToTaskInfo(ExtendedTaskInfo extendedTaskInfo) {
-        // 获取流程定义名称
+        // Get process definition name
         String processDefinitionName = getProcessDefinitionName(extendedTaskInfo.getProcessDefinitionId());
         String processDefinitionKey = extractProcessDefinitionKey(extendedTaskInfo.getProcessDefinitionId());
         
@@ -2259,7 +2264,7 @@ public class TaskManagerComponent {
             .businessKey(extendedTaskInfo.getBusinessKey())
             .build();
     }
-    // ==================== 事件发布方法（Kafka 站内信 → user-portal）====================
+    // ==================== Event Publishing Methods (Kafka notifications → user-portal) ====================
     
     private static String taskLink(String taskId) {
         return "/tasks/" + taskId;
@@ -2307,8 +2312,8 @@ public class TaskManagerComponent {
         notificationDispatchHelper.publishToUserAfterCommit(
                 targetUser.trim(),
                 "TASK",
-                "新任务分配",
-                String.format("您有新的待办任务「%s」。操作人：%s", label, request.getOperatorUserId()),
+                i18nService.getMessage("workflow.notification.assigned_title"),
+                i18nService.getMessage("workflow.notification.assigned_body", label, request.getOperatorUserId()),
                 taskLink(task.getTaskId()),
                 "workflow-engine");
     }
@@ -2323,12 +2328,12 @@ public class TaskManagerComponent {
         notificationDispatchHelper.publishToUserAfterCommit(
                 request.getDelegatedTo(),
                 "TASK",
-                "任务已委托给您",
-                String.format("用户 %s 将任务「%s」委托给您。%s",
+                i18nService.getMessage("workflow.notification.delegated_title"),
+                i18nService.getMessage("workflow.notification.delegated_body",
                         request.getDelegatedBy(),
                         label,
                         request.getEffectiveDelegationReason() != null
-                                ? "说明：" + request.getEffectiveDelegationReason()
+                                ? " " + i18nService.getMessage("workflow.notification.delegation_reason", request.getEffectiveDelegationReason())
                                 : "").trim(),
                 taskLink(task.getTaskId()),
                 "workflow-engine");
@@ -2337,7 +2342,7 @@ public class TaskManagerComponent {
     private void publishTaskClaimEvent(ExtendedTaskInfo task, TaskClaimRequest request) {
         log.info("Task claim event: taskId={}, claimedBy={}",
                 task.getTaskId(), request.getClaimedBy());
-        // 认领人即操作者本人，不向本人发站内信以免噪音
+        // Claimer is the operator; skip self-notification to avoid noise
     }
     
     private void publishTaskCompleteEvent(ExtendedTaskInfo task, String userId,
@@ -2357,8 +2362,8 @@ public class TaskManagerComponent {
         notificationDispatchHelper.publishToUserAfterCommit(
                 initiatorUserId,
                 "TASK",
-                "任务已处理",
-                String.format("用户 %s 已完成任务「%s」。", userId, label),
+                i18nService.getMessage("workflow.notification.completed_title"),
+                i18nService.getMessage("workflow.notification.completed_body", userId, label),
                 link,
                 "workflow-engine");
     }
@@ -2378,21 +2383,21 @@ public class TaskManagerComponent {
         notificationDispatchHelper.publishToUserAfterCommit(
                 initiator,
                 "PROCESS",
-                "流程已回退",
-                String.format("流程实例 %s 已由 %s 从节点 %s 回退至 %s。%s",
+                i18nService.getMessage("workflow.notification.rollback_title"),
+                i18nService.getMessage("workflow.notification.rollback_body",
                         processInstanceId,
                         request.getUserId(),
                         fromActivityId,
                         toActivityId,
-                        request.getReason() != null ? "原因：" + request.getReason() : "").trim(),
+                        request.getReason() != null ? " " + i18nService.getMessage("workflow.notification.rollback_reason", request.getReason()) : "").trim(),
                 "/tasks",
                 "workflow-engine");
     }
     
-    // ==================== 统计查询方法 ====================
+    // ==================== Statistical Query Methods ====================
     
     /**
-     * 统计用户的任务数量
+     * Count user tasks
      */
     public long countUserTasks(String userId) {
         try {
@@ -2405,7 +2410,7 @@ public class TaskManagerComponent {
     }
     
     /**
-     * 统计用户的过期任务数量
+     * Count user overdue tasks
      */
     public long countUserOverdueTasks(String userId) {
         try {
@@ -2418,7 +2423,7 @@ public class TaskManagerComponent {
     }
     
     /**
-     * 查询过期任务
+     * Query overdue tasks
      */
     public List<TaskListResult.TaskInfo> getOverdueTasks() {
         try {
@@ -2436,7 +2441,7 @@ public class TaskManagerComponent {
     }
     
     /**
-     * 查询高优先级任务
+     * Query high priority tasks
      */
     public List<TaskListResult.TaskInfo> getHighPriorityTasks(int minPriority) {
         try {
@@ -2453,11 +2458,11 @@ public class TaskManagerComponent {
         }
     }
     
-    // ==================== 多实例子流程支持方法 ====================
+    // ==================== Multi-Instance Sub-Process Support Methods ====================
     
     /**
-     * 检测当前任务是否为多实例子任务
-     * 通过 extendedProperties 中的 multiInstance 标记判断
+     * Detect if current task is a multi-instance sub-task
+     * Judge by multiInstance flag in extendedProperties
      */
     private boolean isMultiInstanceSubTask(ExtendedTaskInfo extendedTaskInfo) {
         String extendedProperties = extendedTaskInfo.getExtendedProperties();
@@ -2471,25 +2476,25 @@ public class TaskManagerComponent {
             Object multiInstance = props.get("multiInstance");
             return multiInstance != null && Boolean.TRUE.equals(multiInstance);
         } catch (Exception e) {
-            log.warn("解析 extendedProperties 失败: taskId={}", extendedTaskInfo.getTaskId(), e);
+            log.warn("Failed to parse extendedProperties: taskId={}", extendedTaskInfo.getTaskId(), e);
             return false;
         }
     }
     
     /**
-     * 处理多实例子任务完成时的数据回写
-     * 调用 MultiInstanceDataResolver 将表单数据回写到子表
+     * Handle data write-back when multi-instance sub-task completes
+     * Call MultiInstanceDataResolver to write back form data to sub-table
      *
-     * 支持两种 variables 结构：
-     * 1. 嵌套模式 — variables 包含 "formData" / "rowVersion" 键
-     * 2. 扁平模式 — 门户将表单字段展开为 variables 顶层键（实际运行时路径）
+     * Supports two variables structures:
+     * 1. Nested mode — variables contain "formData" / "rowVersion" keys
+     * 2. Flat mode — portal expands form fields as variables top-level keys (actual runtime path)
      */
     @SuppressWarnings("unchecked")
     private void handleMultiInstanceSubTaskCompletion(String taskId, Map<String, Object> variables, 
                                                       ExtendedTaskInfo extendedTaskInfo) {
         try {
             if (variables == null || variables.isEmpty()) {
-                log.warn("多实例子任务完成但未提供表单数据: taskId={}", taskId);
+                log.warn("Multi-instance sub-task completed but no form data provided: taskId={}", taskId);
                 return;
             }
             
@@ -2511,13 +2516,13 @@ public class TaskManagerComponent {
                 Map<String, Object> rowKey = multiInstanceDataResolver.tryResolveSubTableRowKey(subTableName, extProps);
 
                 if (rowKey == null || subTableName == null) {
-                    log.warn("多实例子任务缺少 subTableRowKey/subTableName, 跳过回写: taskId={}", taskId);
+                    log.warn("Multi-instance sub-task missing subTableRowKey/subTableName, skipping write-back: taskId={}", taskId);
                     return;
                 }
 
                 if (!multiInstanceDataResolver.subTableExists(subTableName)
                         && variables.containsKey("__subTables__")) {
-                    log.info("多实例子任务使用变量型子表，跳过物理表回写: taskId={}, subTableName={}, rowKey={}",
+                    log.info("Multi-instance sub-task uses variable-type sub-table, skipping physical table write-back: taskId={}, subTableName={}, rowKey={}",
                             taskId, subTableName, rowKey);
                     return;
                 }
@@ -2549,29 +2554,29 @@ public class TaskManagerComponent {
                         formData.put(col, e.getValue());
                     }
                 }
-                log.info("从 variables 顶层键提取子表列数据: taskId={}, columns={}, rowVersion={}",
+                log.info("Extracting sub-table column data from variables top-level keys: taskId={}, columns={}, rowVersion={}",
                         taskId, formData.keySet(), rowVersion);
             }
             
-            log.info("调用 MultiInstanceDataResolver 回写数据: taskId={}, rowVersion={}", 
+            log.info("Calling MultiInstanceDataResolver to write back data: taskId={}, rowVersion={}", 
                 taskId, rowVersion);
             
             multiInstanceDataResolver.writeBackSubTableRow(taskId, formData, rowVersion);
             
-            log.info("多实例子任务数据回写成功: taskId={}", taskId);
+            log.info("Multi-instance sub-task data write-back succeeded: taskId={}", taskId);
             
-            // 发布 WebSocket 更新通知
+            // Publish WebSocket update notification
             publishMultiInstanceWebSocketUpdate(taskId, extendedTaskInfo);
             
         } catch (MultiInstanceDataResolver.OptimisticLockException e) {
-            log.error("多实例子任务数据回写失败（乐观锁冲突）: taskId={}", taskId, e);
+            log.error("Multi-instance sub-task data write-back failed (optimistic lock conflict): taskId={}", taskId, e);
             throw e;
         } catch (WorkflowValidationException e) {
             throw e;
         } catch (Exception e) {
-            log.error("多实例子任务数据回写失败: taskId={}", taskId, e);
+            log.error("Multi-instance sub-task data write-back failed: taskId={}", taskId, e);
             throw new WorkflowBusinessException("MULTI_INSTANCE_DATA_WRITEBACK_ERROR", 
-                "多实例子任务数据回写失败: " + e.getMessage(), e);
+                "Multi-instance sub-task data write-back failed: " + e.getMessage(), e);
         }
     }
     
@@ -2581,7 +2586,7 @@ public class TaskManagerComponent {
         try {
             return new ObjectMapper().readValue(json, new TypeReference<Map<String, Object>>() {});
         } catch (Exception e) {
-            log.warn("解析 extendedProperties 失败: taskId={}", extendedTaskInfo.getTaskId(), e);
+            log.warn("Failed to parse extendedProperties: taskId={}", extendedTaskInfo.getTaskId(), e);
             return Collections.emptyMap();
         }
     }
@@ -2594,7 +2599,7 @@ public class TaskManagerComponent {
     }
     
     /**
-     * 发布多实例子任务 WebSocket 更新通知
+     * Publish multi-instance sub-task WebSocket update notification
      */
     private void publishMultiInstanceWebSocketUpdate(String taskId, ExtendedTaskInfo extendedTaskInfo) {
         if (updatePublisher == null) {
@@ -2602,7 +2607,7 @@ public class TaskManagerComponent {
         }
         
         try {
-            // 从 extendedProperties 中提取 rowId 和主任务 ID
+            // Extract rowId and main task ID from extendedProperties
             String extendedProperties = extendedTaskInfo.getExtendedProperties();
             if (extendedProperties == null || extendedProperties.trim().isEmpty()) {
                 return;
@@ -2616,32 +2621,32 @@ public class TaskManagerComponent {
                     props);
             Long rowId = toLong(props.get("subTableRowId"));
             if (rowKey == null && rowId == null) {
-                log.warn("无法从 extendedProperties 中解析子表行键: taskId={}", taskId);
+                log.warn("Cannot parse sub-table row key from extendedProperties: taskId={}", taskId);
                 return;
             }
 
-            // 获取主任务 ID（从流程实例中查找前置任务）
+            // Get main task ID (find predecessor task from process instance)
             String processInstanceId = extendedTaskInfo.getProcessInstanceId();
             String mainTaskId = findMainTaskIdForMultiInstance(processInstanceId);
 
             if (mainTaskId != null) {
                 updatePublisher.publishUpdate(mainTaskId, rowId, rowKey, null, "COMPLETED");
-                log.debug("WebSocket 更新通知已发布: mainTaskId={}, rowId={}, rowKey={}", mainTaskId, rowId, rowKey);
+                log.debug("WebSocket update notification published: mainTaskId={}, rowId={}, rowKey={}", mainTaskId, rowId, rowKey);
             }
 
         } catch (Exception e) {
-            // WebSocket 发布失败不应影响主流程
-            log.warn("发布 WebSocket 更新通知失败: taskId={}", taskId, e);
+            // WebSocket publish failure should not affect main flow
+            log.warn("Failed to publish WebSocket update notification: taskId={}", taskId, e);
         }
     }
 
     /**
-     * 查找多实例子流程的主任务 ID
-     * 通过查询流程实例的历史任务，找到多实例子流程之前的任务
+     * Find main task ID for multi-instance sub-process
+     * Find task before multi-instance sub-process by querying process instance historic tasks
      */
     private String findMainTaskIdForMultiInstance(String processInstanceId) {
         try {
-            // 查询流程实例的所有历史任务，按创建时间倒序
+            // Query all historic tasks of process instance, ordered by creation time descending
             List<HistoricActivityInstance> activities = historyService
                 .createHistoricActivityInstanceQuery()
                 .processInstanceId(processInstanceId)
@@ -2650,7 +2655,7 @@ public class TaskManagerComponent {
                 .desc()
                 .list();
 
-            // 找到第一个非多实例子任务（即主任务）
+            // Find first non-multi-instance sub-task (i.e. main task)
             for (HistoricActivityInstance activity : activities) {
                 String taskId = activity.getTaskId();
                 if (taskId != null) {
@@ -2668,57 +2673,57 @@ public class TaskManagerComponent {
 
             return null;
         } catch (Exception e) {
-            log.warn("查找主任务 ID 失败: processInstanceId={}", processInstanceId, e);
+            log.warn("Failed to find main task ID: processInstanceId={}", processInstanceId, e);
             return null;
         }
     }
 
     /**
-     * 检测下一节点是否为多实例子流程，如果是则注入子表数据
-     * 
-     * 实现逻辑：
-     * 1. 获取当前任务的 BPMN 模型
-     * 2. 查找当前任务的出口连线（outgoing flows）
-     * 3. 遍历出口连线的目标节点，检测是否为多实例子流程
-     * 4. 如果是多实例子流程，从扩展属性中提取子表配置
-     * 5. 调用 SubTableDataInjector 注入子表数据
+     * Detect if next node is multi-instance sub-process, if so inject sub-table data
+     *
+     * Implementation logic:
+     * 1. Get BPMN model of current task
+     * 2. Find outgoing flows of current task
+     * 3. Iterate target nodes of outgoing flows, detect if multi-instance sub-process
+     * 4. If multi-instance sub-process, extract sub-table config from extension attributes
+     * 5. Call SubTableDataInjector to inject sub-table data
      */
     private void detectAndInjectMultiInstanceData(String processInstanceId, 
                                                   String processDefinitionId, 
                                                   String taskDefinitionKey) {
         try {
-            log.debug("检测下一节点是否为多实例子流程: processInstanceId={}, taskDefinitionKey={}", 
+            log.debug("Detecting if next node is multi-instance sub-process: processInstanceId={}, taskDefinitionKey={}", 
                 processInstanceId, taskDefinitionKey);
             
-            // 1. 获取 BPMN 模型
+            // 1. Get BPMN model
             org.flowable.bpmn.model.BpmnModel bpmnModel = repositoryService.getBpmnModel(processDefinitionId);
             if (bpmnModel == null) {
-                log.warn("无法获取 BPMN 模型: processDefinitionId={}", processDefinitionId);
+                log.warn("Cannot get BPMN model: processDefinitionId={}", processDefinitionId);
                 return;
             }
             
-            // 2. 获取当前任务节点
+            // 2. Get current task node
             org.flowable.bpmn.model.FlowElement currentElement = bpmnModel.getFlowElement(taskDefinitionKey);
             if (currentElement == null) {
-                log.warn("无法找到当前任务节点: taskDefinitionKey={}", taskDefinitionKey);
+                log.warn("Cannot find current task node: taskDefinitionKey={}", taskDefinitionKey);
                 return;
             }
             
             if (!(currentElement instanceof org.flowable.bpmn.model.UserTask)) {
-                log.debug("当前节点不是 UserTask: taskDefinitionKey={}", taskDefinitionKey);
+                log.debug("Current node is not a UserTask: taskDefinitionKey={}", taskDefinitionKey);
                 return;
             }
             
             org.flowable.bpmn.model.UserTask userTask = (org.flowable.bpmn.model.UserTask) currentElement;
             
-            // 3. 获取出口连线
+            // 3. Get outgoing flows
             List<org.flowable.bpmn.model.SequenceFlow> outgoingFlows = userTask.getOutgoingFlows();
             if (outgoingFlows == null || outgoingFlows.isEmpty()) {
-                log.debug("当前任务没有出口连线: taskDefinitionKey={}", taskDefinitionKey);
+                log.debug("Current task has no outgoing flows: taskDefinitionKey={}", taskDefinitionKey);
                 return;
             }
             
-            // 4. 遍历出口连线，检测目标节点是否为多实例子流程
+            // 4. Iterate outgoing flows, detect if target node is multi-instance sub-process
             for (org.flowable.bpmn.model.SequenceFlow flow : outgoingFlows) {
                 String targetRef = flow.getTargetRef();
                 org.flowable.bpmn.model.FlowElement targetElement = bpmnModel.getFlowElement(targetRef);
@@ -2727,39 +2732,39 @@ public class TaskManagerComponent {
                     org.flowable.bpmn.model.SubProcess subProcess = 
                         (org.flowable.bpmn.model.SubProcess) targetElement;
                     
-                    // 检测是否为多实例子流程
+                    // Detect if multi-instance sub-process
                     org.flowable.bpmn.model.MultiInstanceLoopCharacteristics loopCharacteristics = 
                         subProcess.getLoopCharacteristics();
                     
                     if (loopCharacteristics != null) {
-                        log.info("检测到多实例子流程: subProcessId={}, processInstanceId={}", 
+                        log.info("Detected multi-instance sub-process: subProcessId={}, processInstanceId={}", 
                             subProcess.getId(), processInstanceId);
                         
-                        // 5. 提取多实例配置并注入数据
+                        // 5. Extract multi-instance config and inject data
                         injectMultiInstanceSubTableData(processDefinitionId, processInstanceId, subProcess,
                                 loopCharacteristics);
                         
-                        // 只处理第一个多实例子流程
+                        // Only process first multi-instance sub-process
                         return;
                     }
                 }
             }
             
-            log.debug("下一节点不是多实例子流程: taskDefinitionKey={}", taskDefinitionKey);
+            log.debug("Next node is not multi-instance sub-process: taskDefinitionKey={}", taskDefinitionKey);
             
         } catch (Exception e) {
-            log.error("检测多实例子流程失败: processInstanceId={}, taskDefinitionKey={}", 
+            log.error("Failed to detect multi-instance sub-process: processInstanceId={}, taskDefinitionKey={}", 
                 processInstanceId, taskDefinitionKey, e);
-            // 不抛出异常，避免影响任务完成流程
+            // Do not throw exception, avoid affecting task completion flow
         }
     }
 
     /**
-     * 解析多实例输入集合的流程变量名。
-     * <p>设计器 / Flowable 导出常用 {@code <multiInstanceLoopCharacteristics flowable:collection="..." />}，
-     * Flowable 内存模型将其存为 {@link org.flowable.bpmn.model.MultiInstanceLoopCharacteristics#getInputDataItem()}；
-     * {@link com.developer.util.BpmnXmlGenerator} 另一种写法是在 extensionElements 下放 {@code flowable:collection} 子元素，
-     * 二者需同时支持（kk 等流程为前者）。</p>
+     * Resolve the process variable name for multi-instance input collection.
+     * <p>Designer / Flowable export commonly uses {@code <multiInstanceLoopCharacteristics flowable:collection="..." />},
+     * Flowable in-memory model stores it as {@link org.flowable.bpmn.model.MultiInstanceLoopCharacteristics#getInputDataItem()};
+     * {@link com.developer.util.BpmnXmlGenerator} alternatively places {@code flowable:collection} child element under extensionElements,
+     * both must be supported (kk and similar processes use the former).</p>
      */
     private String resolveMultiInstanceCollectionVariableName(
             org.flowable.bpmn.model.MultiInstanceLoopCharacteristics loopCharacteristics) {
@@ -2786,10 +2791,10 @@ public class TaskManagerComponent {
     }
 
     /**
-     * 注入多实例子表数据
-     * 从子流程内部 UserTask 的扩展属性中提取子表配置，调用 SubTableDataInjector 注入数据。
-     * <p>Flowable 内存 {@link org.flowable.bpmn.model.BpmnModel} 常未载入设计器 {@code custom:*} 扩展，
-     * 与 {@link SubTableAssignmentHandler}、{@link TaskAssignmentListener} 一致，在缺失时从已部署 BPMN XML 补读。</p>
+     * Inject multi-instance sub-table data
+     * Extract sub-table config from extension attributes of UserTask inside sub-process, call SubTableDataInjector to inject data.
+     * <p>Flowable in-memory {@link org.flowable.bpmn.model.BpmnModel} often lacks designer {@code custom:*} extensions,
+     * consistent with {@link SubTableAssignmentHandler}, {@link TaskAssignmentListener}: when missing, re-read from deployed BPMN XML.</p>
      */
     private void injectMultiInstanceSubTableData(String processDefinitionId,
                                                  String processInstanceId,
@@ -2799,14 +2804,14 @@ public class TaskManagerComponent {
             String collectionVariableName = resolveMultiInstanceCollectionVariableName(loopCharacteristics);
 
             if (!StringUtils.hasText(collectionVariableName)) {
-                log.warn("多实例子流程缺少 collection 配置（无 flowable:collection / inputDataItem，且无 extensionElements.collection）: subProcessId={}",
+                log.warn("Multi-instance sub-process missing collection config (no flowable:collection / inputDataItem, and no extensionElements.collection): subProcessId={}",
                         subProcess.getId());
                 return;
             }
 
-            log.info("多实例子流程 collection 变量名: {}", collectionVariableName.trim());
+            log.info("Multi-instance sub-process collection variable name: {}", collectionVariableName.trim());
 
-            // 从子流程内部的 UserTask 中提取子表配置
+            // Extract sub-table config from UserTask inside sub-process
             List<org.flowable.bpmn.model.FlowElement> flowElements =
                     (List<org.flowable.bpmn.model.FlowElement>) subProcess.getFlowElements();
 
@@ -2830,28 +2835,28 @@ public class TaskManagerComponent {
 
                         String collectionVarTrimmed = collectionVariableName.trim();
 
-                        // ① 门户已从 __subTables__ 写入多实例集合（JSON 存储，无物理子表）
+                        // ① Portal already wrote multi-instance collection from __subTables__ (JSON storage, no physical sub-table)
                         try {
                             Object existingCollection = runtimeService.getVariable(processInstanceId, collectionVarTrimmed);
                             if (existingCollection instanceof java.util.Collection<?> ec && !ec.isEmpty()) {
-                                log.info("多实例集合 '{}' 已存在 {} 条元素，跳过 SubTableDataInjector（JSON / user-portal 路径）",
+                                log.info("Multi-instance collection '{}' already has {} elements, skipping SubTableDataInjector (JSON / user-portal path)",
                                         collectionVarTrimmed, ec.size());
                                 return;
                             }
                         } catch (Exception e) {
-                            log.debug("读取多实例集合变量 {} 失败: {}", collectionVarTrimmed, e.getMessage());
+                            log.debug("Failed to read multi-instance collection variable {}: {}", collectionVarTrimmed, e.getMessage());
                         }
 
-                        // ② 无物理子表时不应执行 JDBC SELECT，避免 relation does not exist
+                        // ② When no physical sub-table, skip JDBC SELECT to avoid relation does not exist
                         if (!subTableDataInjector.physicalTableExistsInCurrentSchema(subTableName)) {
-                            log.warn(
-                                    "当前 schema 无物理表 '{}'，且多实例集合 '{}' 为空或未设置；跳过 JDBC 注入。"
-                                            + " 纯 JSON 子表请在门户完成前置任务前写入该集合变量（见 TaskProcessComponent.injectMiCollectionFromBpmn）。",
+                                log.warn(
+                                    "Schema has no physical table '{}' and multi-instance collection '{}' is empty or not set; skip JDBC injection."
+                                            + " For pure JSON sub-tables, write the collection variable before completing the predecessor task in portal (see TaskProcessComponent.injectMiCollectionFromBpmn).",
                                     subTableName, collectionVarTrimmed);
                             return;
                         }
 
-                        log.info("准备注入子表数据: subTableName={}, assigneeField={}, collectionVar={}",
+                        log.info("Preparing to inject sub-table data: subTableName={}, assigneeField={}, collectionVar={}",
                                 subTableName, assigneeField, collectionVarTrimmed);
 
                         subTableDataInjector.injectSubTableData(
@@ -2863,33 +2868,33 @@ public class TaskManagerComponent {
                                 collectionVarTrimmed
                         );
 
-                        log.info("子表数据注入成功: processInstanceId={}, subTableName={}",
+                        log.info("Sub-table data injection succeeded: processInstanceId={}, subTableName={}",
                                 processInstanceId, subTableName);
 
-                        // 只处理第一个带完整配置的 UserTask
+                        // Only process first UserTask with complete config
                         return;
                     }
                 }
             }
 
-            log.warn("多实例子流程中未找到子表配置: subProcessId={}", subProcess.getId());
+            log.warn("No sub-table config found in multi-instance sub-process: subProcessId={}", subProcess.getId());
 
         } catch (Exception e) {
-            log.error("注入多实例子表数据失败: processInstanceId={}, subProcessId={}",
+            log.error("Failed to inject multi-instance sub-table data: processInstanceId={}, subProcessId={}",
                     processInstanceId, subProcess.getId(), e);
             throw new WorkflowBusinessException("MULTI_INSTANCE_DATA_INJECTION_ERROR",
-                    "注入多实例子表数据失败: " + e.getMessage(), e);
+                    "Failed to inject multi-instance sub-table data: " + e.getMessage(), e);
         }
     }
 
     /**
-     * 多实例内 UserTask 上声明的子表字段（内存模型 + 已部署 XML 回退）。
+     * Sub-table fields declared on UserTask inside multi-instance (in-memory model + deployed XML fallback).
      */
     private record MiSubTableExtensionConfig(String subTableName, String assigneeField, String foreignKey) {
     }
 
     /**
-     * 合并 Flowable 内存中的扩展属性与 {@link BpmnActionParser} 从 BPMN XML 解析的结果。
+     * Merge extension attributes from Flowable in-memory model with results parsed from BPMN XML by {@link BpmnActionParser}.
      */
     private MiSubTableExtensionConfig resolveMiSubTableExtensionConfig(
             org.flowable.bpmn.model.UserTask userTask,
@@ -2967,8 +2972,8 @@ public class TaskManagerComponent {
     }
     
     /**
-     * 从 UserTask 的扩展属性中提取子表配置
-     * 查找 custom:properties 中的 subTableName、assigneeField 等属性
+     * Extract sub-table config from UserTask extension attributes
+     * Look for subTableName, assigneeField, etc. in custom:properties
      */
     private Map<String, Object> extractSubTableConfig(org.flowable.bpmn.model.UserTask userTask) {
         Map<String, Object> config = new HashMap<>();
@@ -2980,7 +2985,7 @@ public class TaskManagerComponent {
             return config;
         }
         
-        // 查找 custom:properties 元素
+        // Find custom:properties element
         List<org.flowable.bpmn.model.ExtensionElement> propertiesElements = 
             extensionElements.get("properties");
         
@@ -3008,20 +3013,20 @@ public class TaskManagerComponent {
     }
     
     /**
-     * 从流程变量中获取主表记录 ID
-     * 通常主表记录 ID 存储在流程变量 "mainRecordId" 或 "businessKey" 中
+     * Get main table record ID from process variables
+     * Main table record ID is typically stored in process variable "mainRecordId" or "businessKey"
      */
     private Long getMainRecordIdFromProcessVariables(String processInstanceId) {
         try {
             Map<String, Object> variables = runtimeService.getVariables(processInstanceId);
             
-            // 尝试从 mainRecordId 变量获取
+            // Try to get from mainRecordId variable
             Object mainRecordIdObj = variables.get("mainRecordId");
             if (mainRecordIdObj != null) {
                 return ((Number) mainRecordIdObj).longValue();
             }
             
-            // 尝试从 businessKey 获取
+            // Try to get from businessKey
             ProcessInstance processInstance = runtimeService.createProcessInstanceQuery()
                 .processInstanceId(processInstanceId)
                 .singleResult();
@@ -3030,15 +3035,15 @@ public class TaskManagerComponent {
                 try {
                     return Long.parseLong(processInstance.getBusinessKey());
                 } catch (NumberFormatException e) {
-                    log.warn("无法将 businessKey 转换为 Long: {}", processInstance.getBusinessKey());
+                    log.warn("Cannot convert businessKey to Long: {}", processInstance.getBusinessKey());
                 }
             }
             
-            log.warn("无法从流程变量中获取主表记录 ID: processInstanceId={}", processInstanceId);
+            log.warn("Cannot get main table record ID from process variables: processInstanceId={}", processInstanceId);
             return null;
             
         } catch (Exception e) {
-            log.error("获取主表记录 ID 失败: processInstanceId={}", processInstanceId, e);
+            log.error("Failed to get main table record ID: processInstanceId={}", processInstanceId, e);
             return null;
         }
     }

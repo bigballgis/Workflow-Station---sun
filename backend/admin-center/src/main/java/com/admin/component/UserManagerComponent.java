@@ -16,6 +16,7 @@ import com.admin.repository.BusinessUnitRepository;
 import com.admin.repository.PasswordHistoryRepository;
 import com.admin.repository.UserRepository;
 import com.platform.common.audit.Audited;
+import com.platform.common.i18n.I18nService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -36,8 +37,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
- * 用户管理组件
- * 负责用户的创建、更新、状态管理、批量导入等核心功能
+ * User provisioning: CRUD lifecycle, auditing hooks, batch import scaffolding.
  */
 @Slf4j
 @Component
@@ -49,6 +49,7 @@ public class UserManagerComponent {
     private final PasswordHistoryRepository passwordHistoryRepository;
     private final PasswordEncoder passwordEncoder;
     private final com.admin.repository.UserBusinessUnitRepository userBusinessUnitRepository;
+    private final I18nService i18nService;
 
     /** From env USER_RESET_PASSWORD (see application.yml); not logged or returned in API. */
     @Value("${admin.user.reset-password}")
@@ -58,7 +59,7 @@ public class UserManagerComponent {
             "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$");
     
     /**
-     * 创建用户 - 立即激活，无需邮件验证
+     * Create user (active immediately; no outbound email handshake in this pathway).
      */
     @Transactional
     @Audited(action = "USER_CREATE", resourceType = "USER", resourceId = "#result.userId")
@@ -67,7 +68,7 @@ public class UserManagerComponent {
         
         validateEmailFormat(request.getEmail());
 
-        // 软删除用户复用同一行（username 有 DB 唯一约束，不能 INSERT 新记录）
+        // Re-enable soft-deleted row in place (unique username constraint forbids inserting a second profile)
         Optional<User> existingByUsername = userRepository.findByUsername(request.getUsername());
         if (existingByUsername.isPresent()) {
             User existing = existingByUsername.get();
@@ -80,7 +81,8 @@ public class UserManagerComponent {
         validateUsernameUnique(request.getUsername());
 
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new AdminBusinessException("EMAIL_EXISTS", "Email already in use: " + request.getEmail());
+            throw new AdminBusinessException("EMAIL_EXISTS",
+                    i18nService.getMessage("admin.user.email_already_in_use", request.getEmail()));
         }
         
         String encodedPassword = passwordEncoder.encode(request.getInitialPassword());
@@ -110,13 +112,13 @@ public class UserManagerComponent {
     }
 
     /**
-     * 复用软删除用户记录并恢复为活跃账号（保留原 userId，满足 username 唯一约束）
+     * Hydrate a tombstoned username row instead of allocating a conflicting insert.
      */
     private UserCreateResult reactivateSoftDeletedUser(User user, UserCreateRequest request) {
         log.info("Reactivating soft-deleted user: {} ({})", user.getId(), user.getUsername());
 
         if (userRepository.existsByEmailExcludingUser(request.getEmail(), user.getId())) {
-            throw new AdminBusinessException("EMAIL_EXISTS", "Email already in use: " + request.getEmail());
+            throw new AdminBusinessException("EMAIL_EXISTS", i18nService.getMessage("admin.user.email_already_in_use", request.getEmail()));
         }
 
         String encodedPassword = passwordEncoder.encode(request.getInitialPassword());
@@ -155,7 +157,7 @@ public class UserManagerComponent {
     }
     
     /**
-     * 更新用户信息
+     * Persist profile updates originating from administrators.
      */
     @Transactional
     @Audited(action = "USER_UPDATE", resourceType = "USER", resourceId = "#userId")
@@ -168,7 +170,7 @@ public class UserManagerComponent {
         if (request.getEmail() != null && !request.getEmail().equals(user.getEmail())) {
             validateEmailFormat(request.getEmail());
             if (userRepository.existsByEmailExcludingUser(request.getEmail(), userId)) {
-                throw new AdminBusinessException("EMAIL_EXISTS", "Email already in use: " + request.getEmail());
+                throw new AdminBusinessException("EMAIL_EXISTS", i18nService.getMessage("admin.user.email_already_in_use", request.getEmail()));
             }
             user.setEmail(request.getEmail());
         }
@@ -180,7 +182,6 @@ public class UserManagerComponent {
             user.setEmployeeId(request.getEmployeeId());
         }
         if (request.getBusinessUnitId() != null) {
-            // 更新用户-业务单元关联（先删除旧的，再创建新的）
             userBusinessUnitRepository.deleteByUserId(userId);
             if (!request.getBusinessUnitId().isEmpty()) {
                 UserBusinessUnit userBusinessUnit = UserBusinessUnit.builder()
@@ -195,12 +196,10 @@ public class UserManagerComponent {
             user.setPosition(request.getPosition());
         }
         
-        // 更新实体管理者
         if (request.getEntityManagerId() != null) {
             if (!request.getEntityManagerId().isEmpty()) {
-                // 验证实体管理者存在
                 if (!userRepository.existsById(request.getEntityManagerId())) {
-                    throw new AdminBusinessException("ENTITY_MANAGER_NOT_FOUND", "Entity manager not found");
+                    throw new AdminBusinessException("ENTITY_MANAGER_NOT_FOUND", i18nService.getMessage("admin.user.entity_manager_not_found"));
                 }
                 user.setEntityManagerId(request.getEntityManagerId());
             } else {
@@ -208,12 +207,10 @@ public class UserManagerComponent {
             }
         }
         
-        // 更新职能管理者
         if (request.getFunctionManagerId() != null) {
             if (!request.getFunctionManagerId().isEmpty()) {
-                // 验证职能管理者存在
                 if (!userRepository.existsById(request.getFunctionManagerId())) {
-                    throw new AdminBusinessException("FUNCTION_MANAGER_NOT_FOUND", "Function manager not found");
+                    throw new AdminBusinessException("FUNCTION_MANAGER_NOT_FOUND", i18nService.getMessage("admin.user.function_manager_not_found"));
                 }
                 user.setFunctionManagerId(request.getFunctionManagerId());
             } else {
@@ -227,7 +224,7 @@ public class UserManagerComponent {
     }
     
     /**
-     * 更新用户状态
+     * Transition platform user status respecting allowed lifecycles (active/locked/inactive).
      */
     @Transactional
     @Audited(action = "USER_STATUS_CHANGE", resourceType = "USER", resourceId = "#userId")
@@ -239,12 +236,10 @@ public class UserManagerComponent {
         
         UserStatus oldStatus = user.getStatus();
         
-        // 验证状态转换
         validateStatusTransition(oldStatus, newStatus);
-        
+
         user.setStatus(newStatus);
-        
-        // 如果是解锁操作，重置锁定相关字段
+
         if (newStatus == UserStatus.ACTIVE && oldStatus == UserStatus.LOCKED) {
             user.setLockedUntil(null);
             user.setFailedLoginCount(0);
@@ -256,7 +251,7 @@ public class UserManagerComponent {
     }
     
     /**
-     * 重置用户密码
+     * Reset credential to administrator-configured rotating secret.
      */
     @Transactional
     @Audited(action = "PASSWORD_RESET", resourceType = "USER", resourceId = "#userId")
@@ -268,7 +263,7 @@ public class UserManagerComponent {
         
         if (userResetPassword == null || userResetPassword.isBlank()) {
             throw new AdminBusinessException("USER_RESET_PASSWORD_NOT_CONFIGURED",
-                    "User reset password is not configured (set USER_RESET_PASSWORD)");
+                    i18nService.getMessage("admin.user.reset_password_not_configured"));
         }
         String encodedPassword = passwordEncoder.encode(userResetPassword);
         
@@ -284,7 +279,7 @@ public class UserManagerComponent {
     }
     
     /**
-     * 删除用户（软删除）
+     * Soft-delete semantics to retain audit trail yet free uniqueness slots.
      */
     @Transactional
     @Audited(action = "USER_DELETE", resourceType = "USER", resourceId = "#userId")
@@ -292,16 +287,13 @@ public class UserManagerComponent {
         log.info("Deleting user: {}", userId);
         
         try {
-            // 直接查找用户
             User user = userRepository.findById(userId)
                     .orElseThrow(() -> new UserNotFoundException(userId));
-            
-            // 检查是否是最后一个管理员
+
             if (isLastActiveAdmin(user)) {
-                throw new AdminBusinessException("USER_005", "Cannot delete the last administrator");
+                throw new AdminBusinessException("USER_005", i18nService.getMessage("admin.user.cannot_delete_last_admin"));
             }
             
-            // 软删除时同时释放唯一字段占用，允许后续重新创建同名账号
             user.setDeleted(true);
             user.setDeletedAt(LocalDateTime.now());
             user.setDeletedBy(getCurrentUserId());
@@ -315,16 +307,15 @@ public class UserManagerComponent {
             
             log.info("User soft deleted successfully: {}", userId);
         } catch (AdminBusinessException e) {
-            // 业务异常（包括 UserNotFoundException）直接抛出
             throw e;
         } catch (Exception e) {
             log.error("Failed to delete user: {}", userId, e);
-            throw new AdminBusinessException("USER_DELETE_FAILED", "Failed to delete user: " + e.getMessage());
+            throw new AdminBusinessException("USER_DELETE_FAILED", i18nService.getMessage("admin.user.delete_failed", e.getMessage()));
         }
     }
     
     /**
-     * 检查是否是最后一个活跃管理员
+     * Guardrail deleting the solitary active SUPER_ADMIN-equivalent boundary.
      */
     private boolean isLastActiveAdmin(User user) {
         if (user == null) {
@@ -332,19 +323,15 @@ public class UserManagerComponent {
         }
         
         try {
-            // 首先检查该用户是否是管理员
             boolean isAdmin = userRepository.isUserAdmin(user.getId());
             if (!isAdmin) {
-                // 如果不是管理员，可以删除
                 return false;
             }
-            
-            // 如果是管理员，检查是否是最后一个活跃管理员
+
             long activeAdminCount = userRepository.countActiveAdmins();
             return activeAdminCount <= 1;
         } catch (Exception e) {
             log.error("Error checking if last active admin for user: {}", user.getId(), e);
-            // 如果检查失败，为了安全起见，不允许删除
             return true;
         }
     }
@@ -358,22 +345,20 @@ public class UserManagerComponent {
     }
     
     /**
-     * 获取当前用户ID
+     * Request-scoped operator placeholder (future: propagate security principal).
      */
     private String getCurrentUserId() {
         return "system";
     }
     
-    /**
-     * 获取用户详情
-     */
+    /** Fetch persisted {@link User} aggregate. */
     public User getUser(String userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException(userId));
     }
     
     /**
-     * 获取用户详情（包含角色和登录历史）
+     * Enriched projection for admin UI (delegations + managers + roles placeholder hook).
      */
     @Transactional(readOnly = true)
     public UserDetailInfo getUserDetail(String userId) {
@@ -381,40 +366,33 @@ public class UserManagerComponent {
                 .orElseThrow(() -> new UserNotFoundException(userId));
         
         UserDetailInfo detail = UserDetailInfo.fromEntity(user);
-        
-        // 获取用户角色 - 通过repository查询
-        // 注意：User实体不再有getUserRoles()方法，需要通过其他方式获取
+
+        // Role assignments are queried separately in future iterations (User entity exposes no eager role bag).
         detail.setRoles(java.util.Set.of());
-        
-        // 获取实体管理者名称
+
         if (user.getEntityManagerId() != null) {
             userRepository.findById(user.getEntityManagerId())
                     .ifPresent(manager -> detail.setEntityManagerName(manager.getFullName()));
         }
-        
-        // 获取职能管理者名称
+
         if (user.getFunctionManagerId() != null) {
             userRepository.findById(user.getFunctionManagerId())
                     .ifPresent(manager -> detail.setFunctionManagerName(manager.getFullName()));
         }
-        
-        // 获取登录历史（最近10条）
+
+        // Recent login auditing will plug in via dedicated projections.
         detail.setLoginHistory(List.of());
         
         return detail;
     }
     
-    /**
-     * 根据用户名获取用户
-     */
+    /** Resolve user by immutable login handle. */
     public User getUserByUsername(String username) {
         return userRepository.findByUsername(username)
                 .orElseThrow(() -> new UserNotFoundException(username));
     }
     
-    /**
-     * 分页查询用户
-     */
+    /** Filtered, paginated directory view for admin grid. */
     public Page<UserInfo> listUsers(UserQueryRequest request) {
         Pageable pageable = PageRequest.of(
                 request.getPage(), 
@@ -489,7 +467,7 @@ public class UserManagerComponent {
     }
     
     /**
-     * 批量导入用户
+     * Batch import driver (file parsing currently stubbed; errors aggregate per logical row).
      */
     @Transactional
     @Audited(action = "BATCH_IMPORT", resourceType = "USER", logResponse = true)
@@ -514,7 +492,8 @@ public class UserManagerComponent {
                     successCount++;
                 } catch (Exception e) {
                     failureCount++;
-                    errors.append(String.format("行 %d: %s\n", i + 2, e.getMessage()));
+                    errors.append(i18nService.getMessage("admin.user.import_line_failed", i + 2));
+                    errors.append('\n');
                 }
             }
             
@@ -534,49 +513,40 @@ public class UserManagerComponent {
             log.error("Batch import failed", e);
             return resultBuilder
                     .success(false)
-                    .errors("文件解析失败: " + e.getMessage())
+                    .errors(i18nService.getMessage("admin.user.import_file_parse_failed"))
                     .endTime(Instant.now())
                     .build();
         }
     }
     
-    /**
-     * 验证用户名唯一性
-     */
+    /** Username uniqueness guard before insert. */
     public void validateUsernameUnique(String username) {
         if (userRepository.existsByUsername(username)) {
             throw new UsernameAlreadyExistsException(username);
         }
     }
     
-    /**
-     * 验证邮箱格式
-     */
+    /** RFC5322-lightweight email guard. */
     public void validateEmailFormat(String email) {
         if (email == null || !EMAIL_PATTERN.matcher(email).matches()) {
             throw new InvalidEmailException(email);
         }
     }
     
-    /**
-     * 验证状态转换
-     */
     private void validateStatusTransition(UserStatus from, UserStatus to) {
         boolean valid = switch (from) {
             case ACTIVE -> to == UserStatus.INACTIVE || to == UserStatus.LOCKED;
             case INACTIVE -> to == UserStatus.ACTIVE;
             case LOCKED -> to == UserStatus.ACTIVE;
         };
-        
+
         if (!valid) {
             throw new AdminBusinessException("INVALID_STATUS_TRANSITION",
-                    String.format("无效的状态转换: %s -> %s", from, to));
+                    i18nService.getMessage("admin.user.invalid_status_transition", from, to));
         }
     }
-    
-    /**
-     * 保存密码历史
-     */
+
+    /** Append-only password lineage for auditing / replay resistance policies. */
     private void savePasswordHistory(String userId, String passwordHash) {
         PasswordHistory history = PasswordHistory.builder()
                 .id(UUID.randomUUID().toString())
@@ -587,9 +557,7 @@ public class UserManagerComponent {
         passwordHistoryRepository.save(history);
     }
     
-    /**
-     * 解析导入文件
-     */
+    /** Materialize parsed CSV/XLS payload (currently returns empty sentinel). */
     private List<UserCreateRequest> parseImportFile(MultipartFile file) {
         return List.of();
     }

@@ -1,8 +1,9 @@
 package com.workflow.enums;
 
 /**
- * 组织类分配中，「相对谁」取 BU 链 / 经理：发起人，或物理上最近完成的用户任务办理人。
- * <p>详见 {@code .kiro/docs/assignee-type-convergence.md}。</p>
+ * In organizational assignments, the reference point for resolving BU chain / manager:
+ * initiator, or the physically most recent completed user task assignee.
+ * <p>For details, see {@code .kiro/docs/assignee-type-convergence.md}.</p>
  */
 public enum AssigneeAnchor {
 

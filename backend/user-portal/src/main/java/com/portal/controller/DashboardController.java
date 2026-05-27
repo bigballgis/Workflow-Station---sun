@@ -15,7 +15,7 @@ import java.util.Map;
 /**
  * Dashboard API
  */
-@Tag(name = "工作台", description = "Dashboard概览和统计数据")
+@Tag(name = "Dashboard", description = "Dashboard overview and statistics")
 @RestController
 @RequestMapping("/dashboard")
 @RequiredArgsConstructor
@@ -23,7 +23,7 @@ public class DashboardController {
 
     private final DashboardComponent dashboardComponent;
 
-    @Operation(summary = "获取Dashboard概览数据")
+    @Operation(summary = "Get Dashboard overview data")
     @GetMapping("/overview")
     public ApiResponse<DashboardOverview> getDashboardOverview(
             @CurrentUserId String userId) {
@@ -31,7 +31,7 @@ public class DashboardController {
         return ApiResponse.success(overview);
     }
 
-    @Operation(summary = "获取任务概览")
+    @Operation(summary = "Get task overview")
     @GetMapping("/task-overview")
     public ApiResponse<DashboardOverview.TaskOverview> getTaskOverview(
             @CurrentUserId String userId) {
@@ -39,7 +39,7 @@ public class DashboardController {
         return ApiResponse.success(overview);
     }
 
-    @Operation(summary = "获取流程概览")
+    @Operation(summary = "Get process overview")
     @GetMapping("/process-overview")
     public ApiResponse<DashboardOverview.ProcessOverview> getProcessOverview(
             @CurrentUserId String userId) {
@@ -47,7 +47,7 @@ public class DashboardController {
         return ApiResponse.success(overview);
     }
 
-    @Operation(summary = "获取个人绩效")
+    @Operation(summary = "Get personal performance")
     @GetMapping("/performance")
     public ApiResponse<DashboardOverview.PerformanceOverview> getPerformanceOverview(
             @CurrentUserId String userId) {
@@ -55,7 +55,7 @@ public class DashboardController {
         return ApiResponse.success(overview);
     }
 
-    @Operation(summary = "获取任务趋势数据")
+    @Operation(summary = "Get task trend data")
     @GetMapping("/task-trend")
     public ApiResponse<Map<String, Object>> getTaskTrendData(
             @CurrentUserId String userId,
@@ -64,7 +64,7 @@ public class DashboardController {
         return ApiResponse.success(data);
     }
 
-    @Operation(summary = "获取流程统计数据")
+    @Operation(summary = "Get process statistics data")
     @GetMapping("/process-statistics")
     public ApiResponse<Map<String, Object>> getProcessStatisticsData(
             @CurrentUserId String userId) {
@@ -72,7 +72,7 @@ public class DashboardController {
         return ApiResponse.success(data);
     }
 
-    @Operation(summary = "获取团队申请列表")
+    @Operation(summary = "Get team request list")
     @GetMapping("/team-requests")
     public ApiResponse<TeamRequestsResponse> getTeamRequests(
             @CurrentUserId String userId,

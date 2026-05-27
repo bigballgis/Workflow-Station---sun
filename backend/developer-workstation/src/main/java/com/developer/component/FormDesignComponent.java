@@ -12,109 +12,109 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * 表单设计组件接口
+ * Form design component interface
  */
 public interface FormDesignComponent {
     
     /**
-     * 创建表单定义
+     * Create form definition
      */
     FormDefinition create(Long functionUnitId, FormDefinitionRequest request);
     
     /**
-     * 更新表单定义
+     * Update form definition
      */
     FormDefinition update(Long id, FormDefinitionRequest request);
     
     /**
-     * 删除表单定义
+     * Delete form definition
      */
     void delete(Long id);
     
     /**
-     * 根据ID获取表单定义
+     * Get form definition by ID
      */
     FormDefinition getById(Long id);
     
     /**
-     * 获取功能单元的所有表单定义
+     * Get all form definitions of a function unit
      */
     List<FormDefinition> getByFunctionUnitId(Long functionUnitId);
     
     /**
-     * 生成Form-Create兼容的JSON配置
+     * Generate Form-Create compatible JSON config
      */
     String generateFormConfig(Long id);
     
     /**
-     * 解析Form-Create JSON配置
+     * Parse Form-Create JSON config
      */
     Map<String, Object> parseFormConfig(String configJson);
     
     /**
-     * 验证表单定义
+     * Validate form definition
      */
     ValidationResult validate(Long id);
     
-    // ========== 表绑定管理方法 ==========
+    // ========== Table binding management methods ==========
     
     /**
-     * 创建表单表绑定并返回可直接序列化的 DTO（避免事务外访问 LAZY 的 form/table 关联）。
+     * Create form table binding and return a directly serializable DTO (avoids accessing LAZY form/table associations outside transaction).
      */
     FormTableBindingResponse createBinding(Long formId, FormTableBindingRequest request);
     
     /**
-     * 更新表单表绑定
+     * Update form table binding
      */
     FormTableBinding updateBinding(Long bindingId, FormTableBindingRequest request);
     
     /**
-     * 删除表单表绑定
+     * Delete form table binding
      */
     void deleteBinding(Long bindingId);
     
     /**
-     * 获取表单的所有表绑定
+     * Get all table bindings of a form
      */
     List<FormTableBinding> getBindings(Long formId);
     
-    // ========== Process/Task Form 扩展方法 ==========
+    // ========== Process/Task Form extension methods ==========
     
     /**
-     * 校验 PROCESS form 唯一性
-     * 查询 FunctionUnit 下 PROCESS form 数量，>0 时抛出 409 DeveloperBusinessException
+     * Validate PROCESS form uniqueness.
+     * Query the count of PROCESS forms under the FunctionUnit; throws 409 DeveloperBusinessException if > 0.
      */
     void validateProcessFormUniqueness(Long functionUnitId);
     
     /**
-     * 校验字段名是否存在于 Data_Table 列中
-     * 对比字段名与 Data_Table 列名，不匹配时抛出 400 DeveloperBusinessException
+     * Validate that field names exist in Data_Table columns.
+     * Compare field names against Data_Table column names; throws 400 DeveloperBusinessException on mismatch.
      */
     void validateFieldNames(Long functionUnitId, List<String> fieldNames);
     
     /**
-     * 复制 Task Form
-     * 深拷贝 configJson，清空 stageBindings，生成新 ID
+     * Copy Task Form.
+     * Deep copy configJson, clear stageBindings, generate new ID.
      */
     FormDefinition copyTaskForm(Long sourceFormId);
     
     /**
-     * Copy Process Form to Task Form
+     * Copy Process Form to Task Form.
      * Deep copy configJson and fieldPermissions, clear stageBindings,
-     * change formType to TASK, generate new ID
+     * change formType to TASK, generate new ID.
      */
     FormDefinition copyProcessToTaskForm(Long sourceFormId);
     
     /**
-     * 获取 FunctionUnit 所有 Data_Table 列名
-     * 查询所有 TableDefinition → FieldDefinition 列名
+     * Get all Data_Table column names of a FunctionUnit.
+     * Query all TableDefinition -> FieldDefinition column names.
      */
     List<String> getDataTableColumns(Long functionUnitId);
 
     /**
-     * 解析 RELATED 类型绑定对应的 Relation Table 名称
-     * @param binding 表单表绑定
-     * @return 关联表名称，非 RELATED 类型或不存在时返回 null
+     * Resolve the Relation Table name for a RELATED type binding.
+     * @param binding form table binding
+     * @return relation table name, or null if not RELATED type or not found
      */
     String resolveRelationTableName(FormTableBinding binding);
 }

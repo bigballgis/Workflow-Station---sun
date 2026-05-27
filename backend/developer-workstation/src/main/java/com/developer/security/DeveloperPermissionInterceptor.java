@@ -16,7 +16,7 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * 开发者权限检查拦截器
+ * Developer permission check interceptor
  */
 @Slf4j
 @Component
@@ -42,13 +42,13 @@ public class DeveloperPermissionInterceptor implements HandlerInterceptor {
         HandlerMethod handlerMethod = (HandlerMethod) handler;
         log.debug("Handler method: {}.{}", handlerMethod.getBeanType().getSimpleName(), handlerMethod.getMethod().getName());
         
-        // 检查方法级别的注解
+        // Check method-level annotation
         RequireDeveloperPermission methodAnnotation = handlerMethod.getMethodAnnotation(RequireDeveloperPermission.class);
         
-        // 检查类级别的注解
+        // Check class-level annotation
         RequireDeveloperPermission classAnnotation = handlerMethod.getBeanType().getAnnotation(RequireDeveloperPermission.class);
         
-        // 方法级别优先
+        // Method-level takes precedence
         RequireDeveloperPermission annotation = methodAnnotation != null ? methodAnnotation : classAnnotation;
         
         if (annotation == null) {
@@ -98,7 +98,7 @@ public class DeveloperPermissionInterceptor implements HandlerInterceptor {
     private boolean checkPermissions(String userId, String[] requiredPermissions, RequireDeveloperPermission.Mode mode) {
         Set<String> userPermissions = permissionChecker.getUserPermissions(userId);
         
-        // 将注解中的权限代码转换为小写格式（FUNCTION_UNIT_VIEW -> function_unit:view）
+        // Convert permission code from annotation format to lowercase colon format (e.g. FUNCTION_UNIT_VIEW -> function_unit:view)
         if (mode == RequireDeveloperPermission.Mode.ALL) {
             return Arrays.stream(requiredPermissions)
                 .map(this::convertPermissionCode)
@@ -111,11 +111,11 @@ public class DeveloperPermissionInterceptor implements HandlerInterceptor {
     }
     
     /**
-     * 将权限代码从大写下划线格式转换为小写冒号格式
-     * 例如: FUNCTION_UNIT_VIEW -> function_unit:view
+     * Convert permission code from UPPER_SNAKE_CASE to lowercase colon format.
+     * Example: FUNCTION_UNIT_VIEW -> function_unit:view
      */
     private String convertPermissionCode(String code) {
-        // 找到最后一个下划线的位置（分隔资源和操作）
+        // Find the position of the last underscore (separates resource from action)
         int lastUnderscore = code.lastIndexOf('_');
         if (lastUnderscore > 0) {
             String resource = code.substring(0, lastUnderscore).toLowerCase();

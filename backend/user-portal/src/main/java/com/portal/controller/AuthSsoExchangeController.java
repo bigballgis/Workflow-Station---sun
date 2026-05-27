@@ -23,7 +23,8 @@ import java.time.LocalDateTime;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 统一 /login 回调：用 admin-center 签发的 code 换门户 JWT；工作台多选逻辑在本接口完成（与密码登录一致）。
+ * Unified /login callback: exchanges admin-center-issued code for portal JWT;
+ * workspace selection logic runs here (same as password login).
  */
 @Slf4j
 @RestController
@@ -89,8 +90,8 @@ public class AuthSsoExchangeController {
     }
 
     /**
-     * 先从待定缓存（第一次 exchange 已 redeem 但需要选工作台）取 userId，
-     * 未命中时走 admin-center redeem。
+     * Resolves userId from pending cache first (already redeemed on first exchange
+     * but workspace selection needed), falls back to admin-center redeem on cache miss.
      */
     private String resolveUserId(String code) {
         evictExpired();

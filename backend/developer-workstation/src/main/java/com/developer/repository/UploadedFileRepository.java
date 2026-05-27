@@ -7,7 +7,7 @@ import org.springframework.stereotype.Repository;
 import java.util.Optional;
 
 /**
- * 上传文件仓库。
+ * Repository for uploaded files.
  */
 @Repository
 public interface UploadedFileRepository extends JpaRepository<UploadedFile, Long> {

@@ -1,31 +1,31 @@
 package com.admin.enums;
 
 /**
- * 功能单元状态枚举
+ * Lifecycle status of an imported FunctionUnit in Admin Center.
  */
 public enum FunctionUnitStatus {
     /**
-     * 草稿 - 刚导入或从归档恢复，待部署
+     * Draft — newly imported or restored from archive; not yet deployed.
      */
     DRAFT,
     
     /**
-     * 已验证 - 通过验证，可以部署
+     * Validated — passed validation and may be deployed.
      */
     VALIDATED,
     
     /**
-     * 已部署 - 已部署到某个环境
+     * Deployed — deployed to at least one environment.
      */
     DEPLOYED,
     
     /**
-     * 已废弃 - 不再使用
+     * Deprecated — should not be used for new work.
      */
     DEPRECATED,
 
     /**
-     * 已归档 - 从功能单元列表删除后保留，可恢复
+     * Archived — removed from the main list but retained for restore.
      */
     ARCHIVED
 }

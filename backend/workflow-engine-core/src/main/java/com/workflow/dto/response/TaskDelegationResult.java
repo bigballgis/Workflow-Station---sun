@@ -6,7 +6,7 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 /**
- * 任务委托结果
+ * Task delegation result
  */
 @Data
 @Builder
@@ -21,7 +21,7 @@ public class TaskDelegationResult {
     public static TaskDelegationResult success() {
         return TaskDelegationResult.builder()
                 .success(true)
-                .message("任务委托成功")
+                .message("Task delegated successfully")
                 .delegationTime(LocalDateTime.now())
                 .build();
     }

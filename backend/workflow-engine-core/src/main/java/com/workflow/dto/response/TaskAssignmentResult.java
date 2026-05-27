@@ -7,64 +7,64 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 /**
- * 任务分配结果
+ * Task assignment result
  */
 @Data
 @Builder
 public class TaskAssignmentResult {
     
     /**
-     * 任务ID
+     * Task ID
      */
     private String taskId;
     
     /**
-     * 分配类型
+     * Assignment type
      */
     private AssignmentType assignmentType;
     
     /**
-     * 分配目标
+     * Assignment target
      */
     private String assignmentTarget;
     
     /**
-     * 操作用户ID
+     * Operator user ID
      */
     private String operatorUserId;
     
     /**
-     * 分配时间
+     * Assignment time
      */
     @Builder.Default
     private LocalDateTime assignmentTime = LocalDateTime.now();
     
     /**
-     * 是否成功
+     * Whether successful
      */
     private Boolean success;
     
     /**
-     * 检查是否成功
+     * Check whether successful
      */
     public boolean isSuccess() {
         return Boolean.TRUE.equals(success);
     }
     
     /**
-     * 消息
+     * Message
      */
     private String message;
     
     /**
-     * 错误代码
+     * Error code
      */
     private String errorCode;
     
-    // ==================== 静态工厂方法 ====================
+    // ==================== Static factory methods ====================
     
     /**
-     * 创建成功结果
+     * Create success result
      */
     public static TaskAssignmentResult success(String taskId, AssignmentType assignmentType, 
                                              String assignmentTarget, String operatorUserId, 
@@ -80,7 +80,7 @@ public class TaskAssignmentResult {
     }
     
     /**
-     * 创建失败结果
+     * Create failure result
      */
     public static TaskAssignmentResult failure(String taskId, AssignmentType assignmentType, 
                                              String assignmentTarget, String operatorUserId, 
@@ -96,7 +96,7 @@ public class TaskAssignmentResult {
     }
     
     /**
-     * 创建失败结果（带错误代码）
+     * Create failure result (with error code)
      */
     public static TaskAssignmentResult failure(String taskId, AssignmentType assignmentType, 
                                              String assignmentTarget, String operatorUserId, 
@@ -113,9 +113,9 @@ public class TaskAssignmentResult {
     }
     
     /**
-     * 获取分配类型描述
+     * Get assignment type description
      */
     public String getAssignmentTypeDescription() {
-        return assignmentType != null ? assignmentType.getDescription() : "未知";
+        return assignmentType != null ? assignmentType.getDescription() : "Unknown";
     }
 }

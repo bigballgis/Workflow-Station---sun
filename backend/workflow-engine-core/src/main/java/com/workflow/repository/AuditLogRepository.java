@@ -12,61 +12,61 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * 审计日志数据访问层
- * 提供审计日志的查询、统计和分析功能
+ * Audit log data access layer.
+ * Provides query, statistics, and analysis functions for audit logs.
  */
 @Repository
 public interface AuditLogRepository extends JpaRepository<AuditLog, String> {
-    
+
     /**
-     * 根据用户ID查询审计日志
+     * Find audit logs by user ID.
      */
     Page<AuditLog> findByUserIdOrderByTimestampDesc(String userId, Pageable pageable);
-    
+
     /**
-     * 根据操作类型查询审计日志
+     * Find audit logs by operation type.
      */
     Page<AuditLog> findByOperationTypeOrderByTimestampDesc(String operationType, Pageable pageable);
-    
+
     /**
-     * 根据资源类型和资源ID查询审计日志
+     * Find audit logs by resource type and resource ID.
      */
     Page<AuditLog> findByResourceTypeAndResourceIdOrderByTimestampDesc(
         String resourceType, String resourceId, Pageable pageable);
-    
+
     /**
-     * 根据时间范围查询审计日志
+     * Find audit logs within a time range.
      */
     Page<AuditLog> findByTimestampBetweenOrderByTimestampDesc(
         LocalDateTime startTime, LocalDateTime endTime, Pageable pageable);
-    
+
     /**
-     * 根据风险等级查询审计日志
+     * Find audit logs by risk level.
      */
     Page<AuditLog> findByRiskLevelOrderByTimestampDesc(String riskLevel, Pageable pageable);
-    
+
     /**
-     * 查询敏感操作的审计日志
+     * Find sensitive operation audit logs.
      */
     Page<AuditLog> findByIsSensitiveTrueOrderByTimestampDesc(Pageable pageable);
-    
+
     /**
-     * 根据IP地址查询审计日志
+     * Find audit logs by IP address.
      */
     Page<AuditLog> findByIpAddressOrderByTimestampDesc(String ipAddress, Pageable pageable);
-    
+
     /**
-     * 根据会话ID查询审计日志
+     * Find audit logs by session ID.
      */
     List<AuditLog> findBySessionIdOrderByTimestampDesc(String sessionId);
-    
+
     /**
-     * 根据请求ID查询审计日志（同一请求的所有操作）
+     * Find audit logs by request ID (all operations for the same request).
      */
     List<AuditLog> findByRequestIdOrderByTimestampDesc(String requestId);
-    
+
     /**
-     * 复合条件查询审计日志
+     * Complex condition query for audit logs.
      */
     @Query("SELECT a FROM AuditLog a WHERE " +
            "(:userId IS NULL OR a.userId = :userId) AND " +
@@ -90,16 +90,16 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, String> {
         @Param("isSensitive") Boolean isSensitive,
         @Param("tenantId") String tenantId,
         Pageable pageable);
-    
+
     /**
-     * 统计指定时间范围内的操作次数
+     * Count operations within a time range.
      */
     @Query("SELECT COUNT(a) FROM AuditLog a WHERE a.timestamp BETWEEN :startTime AND :endTime")
     long countByTimestampBetween(@Param("startTime") LocalDateTime startTime, 
                                 @Param("endTime") LocalDateTime endTime);
-    
+
     /**
-     * 统计各操作类型的数量
+     * Count by operation type.
      */
     @Query("SELECT a.operationType, COUNT(a) FROM AuditLog a " +
            "WHERE a.timestamp BETWEEN :startTime AND :endTime " +
@@ -107,9 +107,9 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, String> {
     List<Object[]> countByOperationTypeAndTimestampBetween(
         @Param("startTime") LocalDateTime startTime, 
         @Param("endTime") LocalDateTime endTime);
-    
+
     /**
-     * 统计各用户的操作次数
+     * Count operations by user.
      */
     @Query("SELECT a.userId, COUNT(a) FROM AuditLog a " +
            "WHERE a.timestamp BETWEEN :startTime AND :endTime " +
@@ -117,9 +117,9 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, String> {
     List<Object[]> countByUserIdAndTimestampBetween(
         @Param("startTime") LocalDateTime startTime, 
         @Param("endTime") LocalDateTime endTime);
-    
+
     /**
-     * 统计各风险等级的操作次数
+     * Count operations by risk level.
      */
     @Query("SELECT a.riskLevel, COUNT(a) FROM AuditLog a " +
            "WHERE a.timestamp BETWEEN :startTime AND :endTime " +
@@ -127,9 +127,9 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, String> {
     List<Object[]> countByRiskLevelAndTimestampBetween(
         @Param("startTime") LocalDateTime startTime, 
         @Param("endTime") LocalDateTime endTime);
-    
+
     /**
-     * 查询失败的操作
+     * Find failed operations.
      */
     @Query("SELECT a FROM AuditLog a WHERE a.operationResult = 'FAILURE' " +
            "AND a.timestamp BETWEEN :startTime AND :endTime " +
@@ -138,9 +138,9 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, String> {
         @Param("startTime") LocalDateTime startTime, 
         @Param("endTime") LocalDateTime endTime, 
         Pageable pageable);
-    
+
     /**
-     * 查询异常活跃的IP地址
+     * Find abnormally active IP addresses.
      */
     @Query("SELECT a.ipAddress, COUNT(a) FROM AuditLog a " +
            "WHERE a.timestamp BETWEEN :startTime AND :endTime " +
@@ -150,9 +150,9 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, String> {
         @Param("startTime") LocalDateTime startTime, 
         @Param("endTime") LocalDateTime endTime,
         @Param("threshold") long threshold);
-    
+
     /**
-     * 全文搜索审计日志
+     * Full-text search for audit logs.
      */
     @Query("SELECT a FROM AuditLog a WHERE " +
            "LOWER(a.operationDescription) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
@@ -160,9 +160,9 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, String> {
            "LOWER(a.errorMessage) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
            "ORDER BY a.timestamp DESC")
     Page<AuditLog> searchByKeyword(@Param("keyword") String keyword, Pageable pageable);
-    
+
     /**
-     * 删除指定时间之前的审计日志（用于数据清理）
+     * Delete audit logs before the specified time (for data cleanup).
      */
     void deleteByTimestampBefore(LocalDateTime cutoffTime);
 }

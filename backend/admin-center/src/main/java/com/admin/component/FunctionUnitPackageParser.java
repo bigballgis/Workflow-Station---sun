@@ -21,7 +21,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 /**
- * 解析 Developer Workstation 导出的功能单元 ZIP 包（manifest.json + process/forms/tables/actions）。
+ * Parses Developer Workstation-exported ZIP archives (manifest or metadata descriptor plus BPMN/forms/tables/actions).
  */
 @Slf4j
 @Component

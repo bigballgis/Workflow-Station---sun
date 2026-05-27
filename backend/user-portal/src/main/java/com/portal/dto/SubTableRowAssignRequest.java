@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
 import java.util.Map;
 
 /**
- * 子表行分配处理人请求（门户转发至 workflow-engine）
+ * Sub-table row assignment request (portal forwarded to workflow-engine)
  */
 @Data
 @Builder

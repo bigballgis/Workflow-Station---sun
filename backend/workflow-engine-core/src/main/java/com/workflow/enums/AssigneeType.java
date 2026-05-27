@@ -1,35 +1,37 @@
 package com.workflow.enums;
 
 /**
- * 任务处理人分配类型（收敛模型）。
- * <p>产品语义见 {@code .kiro/docs/assignee-type-convergence.md}。</p>
+ * Task assignee type (convergence model).
+ * <p>For product semantics, see {@code .kiro/docs/assignee-type-convergence.md}.</p>
  */
 public enum AssigneeType {
 
-    PROCESS_INITIATOR("PROCESS_INITIATOR", "任务发起人"),
+    PROCESS_INITIATOR("PROCESS_INITIATOR", "Process Initiator"),
 
-    ENTITY_MANAGER("ENTITY_MANAGER", "实体经理"),
+    ENTITY_MANAGER("ENTITY_MANAGER", "Entity Manager"),
 
-    FUNCTIONAL_MANAGER("FUNCTIONAL_MANAGER", "职能经理"),
-
-    /**
-     * 锚点用户所在 BU 及全部父级 BU 上某角色的成员并集；0/1/多人规则由解析器写入 {@link com.workflow.service.TaskAssigneeResolver.ResolveResult}。
-     */
-    HIERARCHY_ROLE("HIERARCHY_ROLE", "层级角色"),
-
-    BU_ROLE("BU_ROLE", "指定BU角色"),
+    FUNCTIONAL_MANAGER("FUNCTIONAL_MANAGER", "Functional Manager"),
 
     /**
-     * 由流程变量在任务创建前写入；监听器内解析，不进入 {@link com.workflow.service.TaskAssigneeResolver} 主 switch。
+     * Union of members of a role on the anchor user's BU and all parent BUs;
+     * 0/1/multi-person rule is written to {@link com.workflow.service.TaskAssigneeResolver.ResolveResult} by the resolver.
      */
-    MANUAL_ASSIGN("MANUAL_ASSIGN", "手动分配"),
+    HIERARCHY_ROLE("HIERARCHY_ROLE", "Hierarchy Role"),
 
-    ASSIGNEE_FROM_VARIABLE("ASSIGNEE_FROM_VARIABLE", "变量解析"),
+    BU_ROLE("BU_ROLE", "Specified BU Role"),
 
     /**
-     * 多实例元素变量；仅 {@link com.workflow.listener.TaskAssignmentListener} 处理。
+     * Written by process variables before task creation; resolved in listener,
+     * not entering the main switch of {@link com.workflow.service.TaskAssigneeResolver}.
      */
-    ELEMENT_VARIABLE("ELEMENT_VARIABLE", "多实例元素变量");
+    MANUAL_ASSIGN("MANUAL_ASSIGN", "Manual Assignment"),
+
+    ASSIGNEE_FROM_VARIABLE("ASSIGNEE_FROM_VARIABLE", "Variable Resolution"),
+
+    /**
+     * Multi-instance element variable; handled only by {@link com.workflow.listener.TaskAssignmentListener}.
+     */
+    ELEMENT_VARIABLE("ELEMENT_VARIABLE", "Multi-instance Element Variable");
 
     private final String code;
     private final String name;
@@ -48,7 +50,8 @@ public enum AssigneeType {
     }
 
     /**
-     * 是否需在监听器内单独处理（不走路径统一的 resolve 方法体）。
+     * Whether it needs separate handling in the listener
+     * (bypassing the unified resolve method body).
      */
     public boolean isListenerOnly() {
         return this == MANUAL_ASSIGN || this == ASSIGNEE_FROM_VARIABLE || this == ELEMENT_VARIABLE;
@@ -63,7 +66,8 @@ public enum AssigneeType {
     }
 
     /**
-     * 解析经理或 HIERARCHY 时，需要「锚点用户 ID」（发起人或最近完成任务者）。
+     * When resolving manager or HIERARCHY, requires an anchor user ID
+     * (initiator or last task completer).
      */
     public boolean requiresAnchorUserId() {
         return this == ENTITY_MANAGER || this == FUNCTIONAL_MANAGER || this == HIERARCHY_ROLE;

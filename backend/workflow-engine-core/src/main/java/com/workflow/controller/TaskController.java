@@ -48,11 +48,10 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
- * 任务管理控制器
- * 
- * 提供任务查询、完成、委托、转办等RESTful API接口
- * 通过 TaskManagerComponent 调用 Flowable 引擎
- * 集成了安全验证、输入验证和错误处理框架
+ * Task management REST controller.
+ *
+ * Exposes task query, complete, delegate, transfer, and related APIs via TaskManagerComponent.
+ * Integrates security validation, input validation, and centralized error handling.
  * 
  * **Validates: Requirements 4.2**
  * 
@@ -77,7 +76,7 @@ public class TaskController {
     private final com.workflow.component.MultiInstanceDataResolver multiInstanceDataResolver;
 
     /**
-     * 查询任务列表
+     * Query task list.
      */
     @GetMapping
     @Operation(summary = "Query Task List", description = "Query tasks by criteria")
@@ -131,12 +130,12 @@ public class TaskController {
         
         TaskListResult result;
         if (processInstanceId != null && !processInstanceId.isEmpty()) {
-            // 按流程实例ID查询任务
+            // Query tasks by process instance ID
             result = taskManagerComponent.getTasksByProcessInstance(processInstanceId, page, pageSize);
         } else {
-            // 统一走 getUserAllVisibleTasks（含 repairOrphanBuRolePoolTasks）。
-            // 当请求未带 groupIds（门户 filterVirtualGroupsForActiveWorkspace 过滤掉全部 VG 后）时，
-            // 若误走 getUserTasks 会跳过 BU_ROLE 孤儿池修复，待办可能为空。
+            // Always use getUserAllVisibleTasks (includes repairOrphanBuRolePoolTasks).
+            // When groupIds is absent (portal filterVirtualGroupsForActiveWorkspace removed all VGs),
+            // getUserTasks would skip BU_ROLE orphan-pool repair and todos may be empty.
             List<String> gids = groupIds != null ? groupIds : Collections.emptyList();
             List<String> droles = deptRoles != null ? deptRoles : Collections.emptyList();
             result = taskManagerComponent.getUserAllVisibleTasks(userId, gids, droles, page, pageSize,
@@ -147,7 +146,7 @@ public class TaskController {
     }
 
     /**
-     * 获取任务详情
+     * Get task details.
      */
     @GetMapping("/{taskId}")
     @Operation(summary = "Get Task Details", description = "Get task details by ID")
@@ -161,7 +160,7 @@ public class TaskController {
     }
     
     /**
-     * 获取任务流转历史
+     * Get task transition history.
      */
     @GetMapping("/{taskId}/history")
     @Operation(summary = "Get Task Flow History", description = "Get the flow history of a task's process instance")
@@ -171,7 +170,7 @@ public class TaskController {
         
         log.info("Getting task history for task: {}", taskId);
         
-        // 先获取任务信息以获取流程实例ID
+        // Resolve process instance ID from the task first
         TaskListResult.TaskInfo taskInfo = taskManagerComponent.getTaskInfo(taskId);
         String processInstanceId = taskInfo.getProcessInstanceId();
         
@@ -179,7 +178,7 @@ public class TaskController {
     }
     
     /**
-     * 获取流程实例流转历史（通过流程实例ID）
+     * Get process instance activity history by process instance ID.
      */
     @GetMapping("/process/{processInstanceId}/history")
     @Operation(summary = "Get Process Instance Flow History", description = "Get the complete flow history of a process instance with user name resolution")
@@ -189,20 +188,20 @@ public class TaskController {
         
         log.info("Getting process instance history for: {}", processInstanceId);
         
-        // 查询流程实例的活动历史
+        // Load historic activity instances for the process
         List<HistoricActivityInstance> activities = historyService
             .createHistoricActivityInstanceQuery()
             .processInstanceId(processInstanceId)
             .orderByHistoricActivityInstanceStartTime().asc()
             .list();
         
-        // 查询任务历史以获取 deleteReason
+        // Load task history for deleteReason
         List<HistoricTaskInstance> tasks = historyService
             .createHistoricTaskInstanceQuery()
             .processInstanceId(processInstanceId)
             .list();
         
-        // 创建 taskId 到 deleteReason 的映射
+        // Map taskId -> deleteReason
         Map<String, String> taskDeleteReasons = tasks.stream()
             .filter(task -> task.getDeleteReason() != null)
             .collect(Collectors.toMap(
@@ -236,14 +235,14 @@ public class TaskController {
             log.warn("Failed to load Flowable comments for process {}: {}", processInstanceId, e.getMessage());
         }
         
-        // 获取流程实例信息（用于 startEvent 的发起人解析）
+        // Process instance info for startEvent initiator resolution
         HistoricProcessInstance processInstance = historyService
             .createHistoricProcessInstanceQuery()
             .processInstanceId(processInstanceId)
             .singleResult();
         String processStartUserId = processInstance != null ? processInstance.getStartUserId() : null;
 
-        // 转换为前端期望的格式
+        // Shape response for the portal UI
         List<Map<String, Object>> historyList = activities.stream()
             .filter(activity -> "userTask".equals(activity.getActivityType()) || 
                                "startEvent".equals(activity.getActivityType()) ||
@@ -260,7 +259,7 @@ public class TaskController {
                 item.put("activityName", activity.getActivityName());
                 item.put("activityType", activity.getActivityType());
                 
-                // 根据活动类型和 deleteReason 设置操作类型
+                // Derive operation type from activity type and deleteReason
                 String activityType = activity.getActivityType();
                 String operationType = "PENDING";
                 if (activity.getEndTime() != null) {
@@ -271,7 +270,7 @@ public class TaskController {
                                "inclusiveGateway".equals(activityType)) {
                         operationType = "GATEWAY";
                     } else if ("userTask".equals(activityType)) {
-                        // 检查 deleteReason 来判断是 APPROVE 还是 REJECT
+                        // Use deleteReason to distinguish APPROVE vs REJECT
                         String deleteReason = taskDeleteReasons.get(activity.getTaskId());
                         if (deleteReason != null) {
                             if (deleteReason.contains("rejected") || deleteReason.contains("REJECTED") ||
@@ -296,30 +295,30 @@ public class TaskController {
                 }
                 item.put("operationType", operationType);
                 
-                // startEvent 在 Flowable 中没有 assignee，使用流程实例的发起人
+                // startEvent has no assignee in Flowable; use process initiator
                 String assignee = activity.getAssignee();
                 if ((assignee == null || assignee.isEmpty()) && "startEvent".equals(activityType)) {
                     assignee = processStartUserId;
                 }
                 item.put("operatorId", assignee);
                 
-                // 解析用户显示名称
+                // Resolve user display name
                 String operatorName = assignee;
                 if (assignee != null && !assignee.isEmpty()) {
                     try {
                         Map<String, Object> userInfo = adminCenterClient.getUserInfo(assignee);
                         if (userInfo != null) {
-                            // 优先使用 fullName
+                            // Prefer fullName
                             String fullName = (String) userInfo.get("fullName");
                             if (fullName != null && !fullName.isEmpty()) {
                                 operatorName = fullName;
                             } else {
-                                // 其次使用 displayName
+                                // Then displayName
                                 String displayName = (String) userInfo.get("displayName");
                                 if (displayName != null && !displayName.isEmpty()) {
                                     operatorName = displayName;
                                 } else {
-                                    // 再次使用 username
+                                    // Finally username
                                     String username = (String) userInfo.get("username");
                                     if (username != null && !username.isEmpty()) {
                                         operatorName = username;
@@ -414,7 +413,7 @@ public class TaskController {
     }
 
     /**
-     * 分配任务
+     * Assign task.
      */
     @PostMapping("/{taskId}/assign")
     @Operation(summary = "Assign Task", description = "Assign task to a user or group")
@@ -440,7 +439,7 @@ public class TaskController {
     }
 
     /**
-     * 认领任务
+     * Claim task.
      */
     @PostMapping("/{taskId}/claim")
     @Operation(summary = "Claim Task", description = "Claim a virtual group or department role task")
@@ -452,7 +451,7 @@ public class TaskController {
         if (request == null) {
             request = new TaskClaimRequest();
         }
-        // 设置 taskId（从路径参数获取；勿对 body 使用 @Valid，否则在 setTaskId 之前校验会失败）
+        // Set taskId from path; avoid @Valid on body or validation runs before setTaskId
         request.setTaskId(taskId);
 
         Optional<String> actor = WorkflowActorResolver.currentUserId();
@@ -473,7 +472,7 @@ public class TaskController {
     }
 
     /**
-     * 委托任务
+     * Delegate task.
      */
     @PostMapping("/{taskId}/delegate")
     @Operation(summary = "Delegate Task", description = "Delegate task to another user")
@@ -500,7 +499,7 @@ public class TaskController {
     }
     
     /**
-     * 取消认领任务
+     * Unclaim task.
      */
     @PostMapping("/{taskId}/unclaim")
     @Operation(summary = "Unclaim Task", description = "Unclaim a previously claimed task")
@@ -525,7 +524,7 @@ public class TaskController {
     }
     
     /**
-     * 转办任务
+     * Transfer task.
      */
     @PostMapping("/{taskId}/transfer")
     @Operation(summary = "Transfer Task", description = "Transfer task to another user")
@@ -554,7 +553,7 @@ public class TaskController {
     }
 
     /**
-     * 完成任务
+     * Complete task.
      */
     @PostMapping("/{taskId}/complete")
     @Operation(summary = "Complete Task", description = "Complete the specified task")
@@ -590,7 +589,7 @@ public class TaskController {
     }
     
     /**
-     * 回退任务
+     * Return task to a previous activity.
      */
     @PostMapping("/{taskId}/return")
     @Operation(summary = "Return Task", description = "Return the task to a specified historical node")
@@ -621,7 +620,7 @@ public class TaskController {
     }
     
     /**
-     * 获取可回退的历史节点
+     * List historic activities available for return.
      */
     @GetMapping("/{taskId}/returnable-activities")
     @Operation(summary = "Get Returnable Activities", description = "Get the list of historical nodes the task can be returned to")
@@ -635,7 +634,7 @@ public class TaskController {
     }
 
     /**
-     * 批量完成任务
+     * Batch complete tasks.
      */
     @PostMapping("/batch/complete")
     @Operation(summary = "Batch Complete Tasks", description = "Complete multiple tasks in batch")
@@ -690,7 +689,7 @@ public class TaskController {
     }
     
     /**
-     * 统计用户任务数量
+     * Count tasks for a user.
      */
     @GetMapping("/count")
     @Operation(summary = "Count User Tasks", description = "Count pending task count for the current authenticated user (userId query param is not trusted)")
@@ -716,8 +715,7 @@ public class TaskController {
     }
     
     /**
-     * 获取用户的任务权限信息
-     * 返回用户所属的虚拟组ID列表和部门角色列表，用于任务查询
+     * Get task permission context for a user (virtual group IDs and department roles for queries).
      */
     @GetMapping("/user-permissions")
     @Operation(summary = "Get User Task Permissions", description = "Get user's virtual group and role information for task queries")
@@ -749,7 +747,7 @@ public class TaskController {
     }
     
     /**
-     * 检查用户是否有任务操作权限
+     * Check whether the user may perform an operation on the task.
      */
     @GetMapping("/{taskId}/check-permission")
     @Operation(summary = "Check Task Permission", description = "Check if user has permission to operate on the specified task")
@@ -789,10 +787,7 @@ public class TaskController {
     }
     
     /**
-     * 分配子表行处理人
-     * 
-     * 用于多实例子流程前置任务中，手动为子表行分配处理人。
-     * 这是多实例任务分发流程的第一步：前置任务处理人通过 Assign 按钮为每个子表行指定处理人。
+     * Assign sub-table row assignee (MI pre-task Assign action).
      */
     @PostMapping("/{taskId}/sub-table-rows/{rowId}/assign")
     @Operation(summary = "Assign Sub-Table Row Handler", description = "Assign handler for a sub-table row in a multi-instance sub-process")

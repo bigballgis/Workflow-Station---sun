@@ -51,10 +51,10 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * 任务处理组件
- * 支持任务认领、完成、转办、委托等操作
+ * Task processing component
+ * Supports claim, complete, transfer, delegate, and related operations
  * 
- * 通过 WorkflowEngineClient 调用 Flowable 引擎
+ * Uses WorkflowEngineClient to call Flowable engine
  */
 @Slf4j
 @Component
@@ -71,8 +71,8 @@ public class TaskProcessComponent {
     private final JdbcTemplate jdbcTemplate;
 
     /**
-     * 认领任务
-     * 通过 WorkflowEngineClient 调用 Flowable 引擎
+     * Claims task
+     * Via WorkflowEngineClient calling Flowable engine
      */
     @Transactional
     public TaskInfo claimTask(String taskId, String userId) {
@@ -80,7 +80,7 @@ public class TaskProcessComponent {
     }
 
     /**
-     * 认领任务（支持 JWT userId 与 Flowable 侧 assignee/候选人使用 username 时不一致的场景）
+     * Claims task when JWT userId differs from Flowable assignee/candidate username.
      */
     @Transactional
     public TaskInfo claimTask(String taskId, String userId, String portalUsername) {
@@ -104,10 +104,10 @@ public class TaskProcessComponent {
             throw new PortalException("500", message);
         }
         
-        // 任务状态已在 Flowable 中更新，重新获取最新状态
+        // Task updated in Flowable; reload latest state
         TaskInfo task = getTaskOrThrow(taskId);
         
-        // 更新流程实例的当前处理人（门户侧统一记 JWT userId）
+        // Update process instance current assignee (portal stores JWT userId)
         updateProcessInstanceAssignee(task.getProcessInstanceId(), userId, null, task.getTaskName());
 
         log.info("Task {} claimed via Flowable by user {}", taskId, userId);
@@ -115,8 +115,8 @@ public class TaskProcessComponent {
     }
 
     /**
-     * 取消认领任务
-     * 通过 WorkflowEngineClient 调用 Flowable 引擎
+     * Unclaims task
+     * Via WorkflowEngineClient calling Flowable engine
      */
     @Transactional
     public TaskInfo unclaimTask(String taskId, String userId, String originalAssignmentType, String originalAssignee) {
@@ -146,10 +146,10 @@ public class TaskProcessComponent {
             throw new PortalException("500", message);
         }
         
-        // 任务状态已在 Flowable 中更新，重新获取最新状态
+        // Task updated in Flowable; reload latest state
         TaskInfo task = getTaskOrThrow(taskId);
         
-        // 取消认领后，清空流程实例的当前处理人
+        // After unclaim, restore process instance assignee from task snapshot
         ProcessAssigneeSnapshot snapshot = ProcessAssigneeSnapshot.fromTaskInfo(task);
         updateProcessInstanceAssignee(
                 task.getProcessInstanceId(),
@@ -162,7 +162,7 @@ public class TaskProcessComponent {
     }
 
     /**
-     * 完成任务
+     * Completes task
      */
     @Transactional
     public void completeTask(TaskCompleteRequest request, String userId) {
@@ -178,12 +178,12 @@ public class TaskProcessComponent {
                     "This task is no longer active (it may already be completed). Please refresh your todo list.");
         }
 
-        // 验证用户是否有权限处理任务
+        // Verify user may process task
         if (!canProcessTask(task, userId, portalUsername)) {
             throw new PortalException("403", "You do not have permission to process this task");
         }
 
-        // 自动认领：虚拟组或 Flowable 候选人池任务且尚未有 assignee（排除「空池」孤儿任务，无 identity link 时 claim 必失败）
+        // Auto-claim: virtual group or candidate pool without assignee (skip empty pool; claim fails without identity links)
         boolean poolStyle = "VIRTUAL_GROUP".equals(task.getAssignmentType()) || "CANDIDATE_USERS".equals(task.getAssignmentType())
                 || "DEPT_ROLE".equals(task.getAssignmentType());
         boolean noAssignee = task.getAssignee() == null || task.getAssignee().isEmpty();
@@ -192,7 +192,7 @@ public class TaskProcessComponent {
             log.info("Auto-claiming pool task {} (type {}) for user {}", taskId, task.getAssignmentType(), userId);
             poolAutoClaimed = true;
             claimTask(taskId, userId, portalUsername);
-            task = getTaskOrThrow(taskId); // 认领后刷新任务状态
+            task = getTaskOrThrow(taskId); // Refresh task after claim
         } else if (poolStyle && noAssignee && isEmptyAssignmentPool(task)) {
             log.info("Skipping auto-claim for empty-pool task {} (no assignee/target/candidates); completing without claim", taskId);
         }
@@ -208,8 +208,8 @@ public class TaskProcessComponent {
     }
 
     /**
-     * 委托任务
-     * 通过 WorkflowEngineClient 调用 Flowable 引擎
+     * Delegates task
+     * Via WorkflowEngineClient calling Flowable engine
      */
     @Transactional
     public void delegateTask(String taskId, String delegatorId, String delegateId, String reason) {
@@ -230,11 +230,11 @@ public class TaskProcessComponent {
             throw new PortalException("500", message);
         }
         
-        // 更新流程实例的当前处理人
+        // Update process instance current assignee
         TaskInfo task = getTaskOrThrow(taskId);
         updateProcessInstanceAssignee(task.getProcessInstanceId(), delegateId, null, task.getTaskName());
         
-        // 记录审计日志
+        // Record audit log
         DelegationAudit audit = DelegationAudit.builder()
                 .delegatorId(delegatorId)
                 .delegateId(delegateId)
@@ -249,8 +249,8 @@ public class TaskProcessComponent {
     }
 
     /**
-     * 转办任务
-     * 通过 WorkflowEngineClient 调用 Flowable 引擎
+     * Transfers task
+     * Via WorkflowEngineClient calling Flowable engine
      */
     @Transactional
     public void transferTask(String taskId, String fromUserId, String toUserId, String reason) {
@@ -271,11 +271,11 @@ public class TaskProcessComponent {
             throw new PortalException("500", message);
         }
         
-        // 更新流程实例的当前处理人
+        // Update process instance current assignee
         TaskInfo task = getTaskOrThrow(taskId);
         updateProcessInstanceAssignee(task.getProcessInstanceId(), toUserId, null, task.getTaskName());
 
-        // 记录审计日志
+        // Record audit log
         DelegationAudit audit = DelegationAudit.builder()
                 .delegatorId(fromUserId)
                 .delegateId(toUserId)
@@ -290,7 +290,7 @@ public class TaskProcessComponent {
     }
 
     /**
-     * 为子表行分配处理人（多实例子流程前置任务），经 {@link WorkflowEngineClient} 调用引擎。
+     * Assigns sub-table row processor (MI sub-process prerequisite) via {@link WorkflowEngineClient}.
      */
     @Transactional
     public Map<String, Object> assignSubTableRow(String taskId, Long rowId, String assigneeId, String userId) {
@@ -336,7 +336,7 @@ public class TaskProcessComponent {
 
         Map<String, Object> data = result.get();
         if (!Boolean.TRUE.equals(data.get("success"))) {
-            // 引擎 AssignSubTableRowResponse 失败说明在 errorMessage；ApiResponse 错误在 message / error.message
+            // Engine AssignSubTableRowResponse failure in errorMessage; ApiResponse errors in message / error.message
             Object msgObj = data.get("message");
             if (msgObj == null || String.valueOf(msgObj).isBlank()) {
                 msgObj = data.get("errorMessage");
@@ -827,7 +827,7 @@ public class TaskProcessComponent {
     }
 
     /**
-     * 运行时无处理人、无候选人用户/组、无 assignmentTarget（与 Flowable identity link 一致的空池），不因 assignmentType 字符串再收紧。
+     * Runtime empty pool: no assignee, candidates, groups, or assignmentTarget (matches Flowable identity links); do not tighten by assignmentType.
      */
     private static boolean isEmptyAssignmentPool(TaskInfo task) {
         if (task == null) {
@@ -860,7 +860,7 @@ public class TaskProcessComponent {
     }
 
     /**
-     * JWT 与引擎侧用户 ID 比较：trim，避免首尾空格导致误判。
+     * Compare JWT and engine user IDs with trim to avoid whitespace false negatives.
      */
     private static boolean samePortalUserId(String a, String b) {
         if (a == null || b == null) {
@@ -870,7 +870,7 @@ public class TaskProcessComponent {
     }
 
     /**
-     * 引擎返回的 assignee / 候选人可能是 username，JWT {@code userId} 为用户主键 UUID。
+     * Engine assignee/candidates may be username; JWT {@code userId} is primary-key UUID.
      */
     private static boolean matchesPortalIdentity(String engineSideRef, String portalUserId, String portalUsername) {
         if (engineSideRef == null || engineSideRef.isBlank() || portalUserId == null) {
@@ -887,7 +887,7 @@ public class TaskProcessComponent {
     }
 
     /**
-     * 认领 / 取消认领时须传入与 Flowable IdentityLink 一致的字符串（候选人常为 username）。
+     * Claim/unclaim must pass the same string as Flowable IdentityLink (candidates often username).
      */
     private static String resolveEnginePrincipalForWorkflow(TaskInfo task, String portalUserId, String portalUsername) {
         if (portalUserId == null || portalUserId.isBlank()) {
@@ -937,7 +937,7 @@ public class TaskProcessComponent {
     }
 
     /**
-     * 验证用户是否可以认领任务
+     * Whether the user may claim the task
      */
     public boolean canClaimTask(TaskInfo task, String userId) {
         return canClaimTask(task, userId, null);
@@ -968,7 +968,7 @@ public class TaskProcessComponent {
     }
 
     /**
-     * 验证用户是否可以处理任务
+     * Whether the user may process the task
      */
     public boolean canProcessTask(TaskInfo task, String userId) {
         return canProcessTask(task, userId, null);
@@ -978,33 +978,33 @@ public class TaskProcessComponent {
         String assignmentType = task.getAssignmentType();
         String assignee = task.getAssignee();
 
-        // 如果任务已分配给当前用户（包括认领后的任务），允许处理
+        // Allow when assignee matches current user (including after claim)
         if (assignee != null && matchesPortalIdentity(assignee, userId, portalUsername)) {
             return true;
         }
 
-        // 直接分配给用户
+        // Direct user assignment
         if ("USER".equals(assignmentType) && assignee != null && matchesPortalIdentity(assignee, userId, portalUsername)) {
             return true;
         }
 
-        // 委托任务
+        // Delegated task
         if ("DELEGATED".equals(assignmentType) && assignee != null && matchesPortalIdentity(assignee, userId, portalUsername)) {
             return true;
         }
 
-        // Flowable 候选人池：必须在候选人列表中
+        // Flowable candidate pool: user must be in candidate list
         if ("CANDIDATE_USERS".equals(assignmentType)) {
             return candidateUserIdsContain(task.getCandidateUserIds(), userId, portalUsername);
         }
 
-        // 实体管理者任务（ENTITY_MANAGER）
+        // Entity manager task (ENTITY_MANAGER)
         if ("ENTITY_MANAGER".equals(assignmentType)) {
             log.info("Entity manager task {} for user {}, allowing process (permission verified by query)", task.getTaskId(), userId);
             return true;
         }
 
-        // 虚拟组：必须能证明组成员身份（assignee 存组 ID，或引擎返回 candidateGroupIds）
+        // Virtual group: prove membership (assignee is group ID or engine candidateGroupIds)
         if ("VIRTUAL_GROUP".equals(assignmentType)) {
             if (assignee != null && !assignee.isEmpty() && isUserInVirtualGroup(userId, assignee)) {
                 return true;
@@ -1018,7 +1018,7 @@ public class TaskProcessComponent {
             }
         }
 
-        // 检查是否有委托权限
+        // Check delegation rules
         if (assignee != null) {
             List<DelegationRule> delegations = delegationRuleRepository
                     .findActiveDelegationsForDelegate(userId, LocalDateTime.now());
@@ -1029,8 +1029,8 @@ public class TaskProcessComponent {
             }
         }
 
-        // 无 assignee、无候选人/组、无 assignmentTarget 的「空池」任务：仅当 BPMN 为发起人办理时放行发起人；
-        // BU_ROLE / HIERARCHY 等节点若误表现为空池，不得出现在发起人待办。
+        // Empty pool (no assignee/candidates/groups/target): allow initiator only when BPMN is initiator task;
+        // BU_ROLE / HIERARCHY nodes that look empty must not appear on initiator todo.
         if (isEmptyAssignmentPool(task) && isInitiatorOfTask(task, userId, portalUsername)) {
             if (!allowsInitiatorEmptyPoolFallback(task.getBpmnAssigneeType())) {
                 log.debug("canProcessTask: deny initiator empty-pool for BPMN assigneeType={} task={}",
@@ -1045,8 +1045,8 @@ public class TaskProcessComponent {
     }
 
     /**
-     * 空池发起人兜底：仅当 BPMN 明确为发起人节点时允许。
-     * 未配置 assigneeType 或后续节点（BU_ROLE 等）不得因「发起人是自己」出现在待办——发起人只应处理明确标成 INITIATOR 的空池任务。
+     * Empty-pool initiator fallback: only when BPMN explicitly marks initiator.
+     * Without assigneeType or on later nodes (BU_ROLE), initiator must not see empty-pool tasks unless BPMN marks INITIATOR.
      */
     private static boolean allowsInitiatorEmptyPoolFallback(String bpmnAssigneeType) {
         if (bpmnAssigneeType == null || bpmnAssigneeType.isBlank()) {
@@ -1057,9 +1057,9 @@ public class TaskProcessComponent {
     }
 
     /**
-     * 待办列表专用过滤：仅隐藏「发起人对空池且 BPMN 非 INITIATOR/PROCESS_INITIATOR」的条目（如误展示的 BU_ROLE 节点）。
-     * <p>不要用完整 {@link #canProcessTask} 过滤整表：引擎已按 assignee/候选人/候选组聚合，二次过滤易因候选人 ID（UUID vs username）
-     * 与 JWT 字段不一致导致合法处理人（如 BU_ROLE 池成员）待办为空。</p>
+     * Todo-list filter: hide initiator on empty pool when BPMN is not INITIATOR/PROCESS_INITIATOR (e.g. mis-shown BU_ROLE).
+     * <p>Do not filter the whole list with {@link #canProcessTask}: engine already aggregates assignee/candidates/groups; re-filter risks candidate ID (UUID vs username)
+     * JWT mismatch can hide valid processors (e.g. BU_ROLE pool members) from the todo list.</p>
      */
     public boolean shouldHideTaskInTodoList(TaskInfo task, String userId, String portalUsername) {
         if (!isEmptyAssignmentPool(task) || !isInitiatorOfTask(task, userId, portalUsername)) {
@@ -1069,7 +1069,7 @@ public class TaskProcessComponent {
     }
 
     /**
-     * 是否可查看任务表单（待办/已办快照）：处理人规则 + 发起人 + 当前 assignee（含已办仍带回 assignee 的场景）。
+     * Whether task form is viewable (todo/done snapshot): processor rules + initiator + current assignee (including done tasks).
      */
     public boolean canViewTaskForm(TaskInfo task, String userId) {
         return canViewTaskForm(task, userId, null);
@@ -1124,7 +1124,7 @@ public class TaskProcessComponent {
     }
 
     /**
-     * 获取任务或抛出异常。
+     * Loads task or throws.
      */
     private TaskInfo getTaskOrThrow(String taskId) {
         Optional<TaskInfo> first = taskQueryComponent.getTaskById(taskId);
@@ -1159,8 +1159,8 @@ public class TaskProcessComponent {
     }
 
     /**
-     * 处理审批操作
-     * 通过 WorkflowEngineClient 调用 Flowable 引擎
+     * Handles approval completion
+     * Via WorkflowEngineClient calling Flowable engine
      */
     private void handleApproval(TaskInfo task, TaskCompleteRequest request, String userId) {
         String taskId = task.getTaskId();
@@ -1199,8 +1199,8 @@ public class TaskProcessComponent {
             variables.put("approverComments", request.getComment());
         }
 
-        // 完成审批时前端常只提交增量字段；__subTables__ 往往在 TaskInfo（本地 ProcessInstance 合并）里才有。
-        // 不在此处合并则 injectMiCollectionFromBpmn 读不到子表行，多实例集合为空 → 子任务数为 0。
+        // Approval submit is often incremental; __subTables__ may only exist on TaskInfo (merged ProcessInstance).
+        // Without merge here, injectMiCollectionFromBpmn sees no sub-table rows → empty MI collection → zero child tasks.
         mergeSubTablesFromTaskInfoForMi(task, variables);
         Object subTablesAfterMerge = variables.get("__subTables__");
         if (!(subTablesAfterMerge instanceof Map<?, ?> subMap) || subMap.isEmpty()) {
@@ -1209,7 +1209,7 @@ public class TaskProcessComponent {
                     task.getTaskId(), task.getProcessInstanceId());
         }
 
-        // 检测当前任务是否是多实例子流程的前置任务；若是，从 BPMN 读取 collection 变量名和 assignee 字段并构建集合变量
+        // If MI sub-process prerequisite, read collection variable and assignee field from BPMN and build collection
         injectMiCollectionFromBpmn(task.getProcessDefinitionKey(), task.getTaskDefinitionKey(), task.getProcessInstanceId(), variables);
 
         log.info("Variables before calling workflowEngineClient: {}", variables);
@@ -1234,9 +1234,9 @@ public class TaskProcessComponent {
         log.info("Task {} completed via Flowable by user {} with action {} (approvalStatus: {})", 
                 taskId, userId, action, variables.get("approvalStatus"));
 
-        // 将审批变量同步回本地 ProcessInstance，确保 Completed Tasks / My Requests 能看到
-        // 注意：必须创建新的 HashMap 而非原地修改旧 Map，否则 Hibernate 对 JSON 列的脏检测
-        // 会因新旧引用相同而误判为"未变更"，导致 UPDATE 语句不被执行
+        // Sync approval variables to local ProcessInstance for Completed Tasks / My Requests
+        // Must copy into a new HashMap; in-place edit breaks Hibernate JSON dirty detection
+        // Same reference makes Hibernate dirty-check think unchanged and skip UPDATE
         try {
             String syncProcessId = task.getProcessInstanceId();
             Optional<ProcessInstance> syncOpt = processInstanceRepository.findById(syncProcessId);
@@ -1320,12 +1320,12 @@ public class TaskProcessComponent {
             rethrowIfRollbackOnlyAfterCatch(e, taskId);
         }
 
-        // 任务完成后，检查流程是否还有活动任务，如果没有则流程可能已完成
-        // 这是一个补偿机制，防止 ProcessCompletionListener 通知失败导致状态不同步
+        // After task completion, check for active tasks; none may mean process completed
+        // Compensation when ProcessCompletionListener notification fails and portal state drifts
         try {
             String processInstanceId = task.getProcessInstanceId();
             
-            // 通过 workflowEngineClient 检查流程状态
+            // Check process status via workflowEngineClient
             Optional<Map<String, Object>> processStatus = workflowEngineClient.getProcessInstanceStatus(processInstanceId);
             if (processStatus.isPresent()) {
                 Map<String, Object> status = processStatus.get();
@@ -1334,7 +1334,7 @@ public class TaskProcessComponent {
                 if (Boolean.TRUE.equals(isCompleted)) {
                     log.info("Process {} is completed after task completion, syncing portal process instance", processInstanceId);
 
-                    // 更新流程实例状态
+                    // Update process instance status
                     Optional<ProcessInstance> optInstance = processInstanceRepository.findById(processInstanceId);
                     if (optInstance.isPresent()) {
                         ProcessInstance instance = optInstance.get();
@@ -1351,7 +1351,7 @@ public class TaskProcessComponent {
                         }
                     }
                 } else {
-                    // 流程未完成，可能有下一个任务，尝试获取下一个任务信息
+                    // Process still running; try next task info
                     String nextTaskName = (String) status.get("nextTaskName");
                     String nextAssignee = (String) status.get("nextAssignee");
                     String nextCandidateUsers = (String) status.get("nextCandidateUsers");
@@ -1360,8 +1360,8 @@ public class TaskProcessComponent {
                                 processInstanceId, nextAssignee, nextCandidateUsers, nextTaskName);
                         log.info("Process {} continues with next task: {}", processInstanceId, nextTaskName);
                     } else {
-                        // 没有下一个用户任务，可能流程已经到达非用户任务节点（如结束事件）
-                        // 尝试获取当前活动节点
+                        // No next user task; may be at non-user task (e.g. end event)
+                        // Try to load current activity
                         log.info("No next user task found for process {}, checking for current activity", processInstanceId);
                         Optional<Map<String, Object>> currentActivity = getCurrentActivity(processInstanceId);
                         if (currentActivity.isPresent()) {
@@ -1370,19 +1370,19 @@ public class TaskProcessComponent {
                             log.info("Current activity for process {}: {} (type: {})", 
                                     processInstanceId, currentActivityName, currentActivityType);
                             
-                            // 跳过 SequenceFlow 类型，其 name 是条件标签（如 "Yes"/"No"），不应作为 currentNode
+                            // Skip SequenceFlow: name is a condition label (e.g. Yes/No), not currentNode
                             if ("SequenceFlow".equals(currentActivityType)) {
                                 log.warn("Current activity is SequenceFlow (name: {}), skipping currentNode update for process {}", 
                                         currentActivityName, processInstanceId);
                             } else {
-                                // 更新流程实例的当前节点
+                                // Update process instance current node
                                 Optional<ProcessInstance> optInstance = processInstanceRepository.findById(processInstanceId);
                                 if (optInstance.isPresent()) {
                                     ProcessInstance instance = optInstance.get();
                                     instance.setCurrentNode(currentActivityName);
                                     instance.setCurrentAssignee(null);
                                     
-                                    // 如果当前活动是结束事件，则流程已完成
+                                    // End event means process completed
                                     if ("endEvent".equals(currentActivityType) || "EndEvent".equals(currentActivityType)) {
                                         log.info("Current activity is end event, marking process {} as COMPLETED", processInstanceId);
                                         instance.setStatus("COMPLETED");
@@ -1419,7 +1419,7 @@ public class TaskProcessComponent {
     }
 
     /**
-     * 处理转办操作
+     * Handles transfer action
      */
     private void handleTransfer(TaskInfo task, TaskCompleteRequest request, String userId) {
         String targetUserId = request.getTargetUserId();
@@ -1430,7 +1430,7 @@ public class TaskProcessComponent {
     }
 
     /**
-     * 处理委托操作
+     * Handles delegate action
      */
     private void handleDelegate(TaskInfo task, TaskCompleteRequest request, String userId) {
         String targetUserId = request.getTargetUserId();
@@ -1441,8 +1441,8 @@ public class TaskProcessComponent {
     }
 
     /**
-     * 处理回退操作
-     * 通过 WorkflowEngineClient 调用 Flowable 引擎
+     * Handles return (rollback) action
+     * Via WorkflowEngineClient calling Flowable engine
      */
     private void handleReturn(TaskInfo task, TaskCompleteRequest request, String userId) {
         String taskId = task.getTaskId();
@@ -1470,7 +1470,7 @@ public class TaskProcessComponent {
             throw new PortalException("500", message);
         }
         
-        // 记录审计日志
+        // Record audit log
         DelegationAudit audit = DelegationAudit.builder()
                 .delegatorId(userId)
                 .delegateId(targetActivityId)
@@ -1485,8 +1485,8 @@ public class TaskProcessComponent {
     }
 
     /**
-     * 检查用户是否在虚拟组中
-     * 通过 WorkflowEngineClient 调用 workflow-engine-core 验证
+     * Whether the user belongs to the virtual group
+     * Verified via WorkflowEngineClient against workflow-engine-core
      */
     private boolean isUserInVirtualGroup(String userId, String groupId) {
         if (!workflowEngineClient.isAvailable()) {
@@ -1494,7 +1494,7 @@ public class TaskProcessComponent {
             return false;
         }
         try {
-            // checkTaskPermission 的第一参数为 taskId，不可传入虚拟组 ID
+            // checkTaskPermission first argument is taskId, not virtual group ID
             Optional<Map<String, Object>> permissions = workflowEngineClient.getUserTaskPermissions(userId);
             if (permissions.isPresent()) {
                 @SuppressWarnings("unchecked")
@@ -1510,26 +1510,26 @@ public class TaskProcessComponent {
     }
 
     /**
-     * 催办任务
+     * Urges a task
      */
     @Transactional
     public void urgeTask(String taskId, String urgerId, String message) {
         TaskInfo task = getTaskOrThrow(taskId);
 
-        // 验证催办人是否有权限（通常是流程发起人或管理员）
+        // Verify urger permission (usually initiator or admin)
         if (!canUrgeTask(task, urgerId)) {
             throw new PortalException("403", "You do not have permission to urge this task");
         }
 
-        // 获取任务处理人
+        // Resolve task assignee
         String assignee = task.getAssignee();
         String assigneeName = task.getAssigneeName();
 
-        // 发送催办通知（实际应调用消息服务）
+        // Send urge notification (should call messaging service)
         String urgeMessage = message != null ? message : "Please process the task as soon as possible: " + task.getTaskName();
         sendUrgeNotification(taskId, assignee, urgerId, urgeMessage);
 
-        // 记录催办日志
+        // Record urge audit log
         DelegationAudit audit = DelegationAudit.builder()
                 .delegatorId(urgerId)
                 .delegateId(assignee)
@@ -1544,7 +1544,7 @@ public class TaskProcessComponent {
     }
 
     /**
-     * 批量催办任务
+     * Batch urge tasks
      */
     @Transactional
     public void batchUrgeTasks(List<String> taskIds, String urgerId, String message) {
@@ -1558,7 +1558,7 @@ public class TaskProcessComponent {
     }
 
     /**
-     * 验证用户是否可以催办任务
+     * Whether the user may urge the task
      */
     private boolean canUrgeTask(TaskInfo task, String userId) {
         if (userId == null || userId.isBlank()) {
@@ -1571,16 +1571,16 @@ public class TaskProcessComponent {
     }
 
     /**
-     * 发送催办通知
+     * Sends urge notification
      */
     private void sendUrgeNotification(String taskId, String assignee, String urgerId, String message) {
-        // 实际应调用消息服务发送通知
-        // 这里只记录日志
+        // Should invoke messaging service in production
+        // Log only for now
         log.info("Sending urge notification: task={}, assignee={}, urger={}, message={}", taskId, assignee, urgerId, message);
     }
 
     /**
-     * 更新流程实例的当前处理人
+     * Updates the process instance current assignee
      */
     private void updateProcessInstanceAssignee(String processInstanceId, String assigneeUserId,
                                                String candidateUserIds, String currentNode) {
@@ -1619,7 +1619,7 @@ public class TaskProcessComponent {
     }
 
     /**
-     * 获取流程实例的当前活动节点
+     * Returns the current activity node for a process instance
      */
     private Optional<Map<String, Object>> getCurrentActivity(String processInstanceId) {
         try {
@@ -1627,7 +1627,7 @@ public class TaskProcessComponent {
                 return Optional.empty();
             }
             
-            // 调用 workflow-engine 获取当前活动节点
+            // Call workflow-engine for current activity
             return workflowEngineClient.getCurrentActivity(processInstanceId);
         } catch (Exception e) {
             log.warn("Failed to get current activity for process {}: {}", processInstanceId, e.getMessage());
@@ -1636,8 +1636,8 @@ public class TaskProcessComponent {
     }
 
     /**
-     * 审批完成请求体往往不含完整 {@code __subTables__}；待办详情 {@link TaskInfo#getVariables()} 已与本地 ProcessInstance 合并，
-     * 补齐后再构建多实例集合，否则会生成 0 个子任务。
+     * Approval completion body often lacks full {@code __subTables__}; todo detail {@link TaskInfo#getVariables()} is merged with local ProcessInstance,
+     * Merge before building MI collection or zero child tasks are created.
      */
     @SuppressWarnings("unchecked")
     private void mergeSubTablesFromTaskInfoForMi(TaskInfo task, Map<String, Object> variables) {
@@ -1673,7 +1673,7 @@ public class TaskProcessComponent {
     }
 
     /**
-     * 设计器里 assignee 列字段名可能是 {@code assignee}，落库/变量行里常为 {@code assignee_user_id} 等；BPMN 仍用配置的 assigneeField。
+     * Designer assignee column may be {@code assignee}; stored rows often use {@code assignee_user_id}; BPMN still uses configured assigneeField.
      */
     private static final List<String> MI_ASSIGNEE_ALTERNATE_KEYS = List.of(
             "assignee_user_id", "assigneeUserId", "assignee_id", "assigneeId", "assignee", "user_id", "userId");
@@ -1700,10 +1700,10 @@ public class TaskProcessComponent {
     }
 
     /**
-     * 检测当前完成的任务是否是多实例子流程的前置任务；若是，从 BPMN 动态读取 collection 变量名和 assignee 字段，
-     * 从 __subTables__ 构建集合变量并注入到 variables 中。
+     * When the completed task is a prerequisite for a multi-instance sub-process, reads collection variable name and assignee field from BPMN,
+     * Builds collection variable from __subTables__ and injects into variables.
      * <p>
-     * 替代原有的硬编码 {@code Task_AssignParticipants} 判断，自动适配所有 BPMN 多实例配置。
+     * Replaces hard-coded {@code Task_AssignParticipants} checks; adapts to any BPMN multi-instance configuration.
      */
     @SuppressWarnings("unchecked")
     private void injectMiCollectionFromBpmn(String processDefinitionKey, String taskDefinitionKey,
@@ -1724,7 +1724,7 @@ public class TaskProcessComponent {
             }
             Document document = parseBpmnSecurely(bpmnOpt.get());
 
-            // 1. 找到当前任务节点（兼容 bpmn:userTask / userTask）
+            // 1. Locate current task node (bpmn:userTask / userTask)
             Element taskElement = findElementByLocalNameAndId(document, "userTask", taskDefinitionKey);
             if (taskElement == null) {
                 log.warn("[MI] UserTask id={} not found in BPMN (check taskDefinitionKey vs XML). Skip MI injection.",
@@ -1732,7 +1732,7 @@ public class TaskProcessComponent {
                 return;
             }
 
-            // 2. 出线：许多导出的 BPMN 只有 sequenceFlow@sourceRef，没有 userTask 下 <outgoing> 子元素
+            // 2. Outgoing: many exported BPMN files only have sequenceFlow@sourceRef, no <outgoing> under userTask
             List<String> outgoingFlowIds = getDirectChildTextValues(taskElement, "outgoing");
             if (outgoingFlowIds.isEmpty()) {
                 outgoingFlowIds = listSequenceFlowIdsWithSourceRef(document, taskDefinitionKey);
@@ -1813,13 +1813,13 @@ public class TaskProcessComponent {
     }
 
     /**
-     * 从 __subTables__ 构建多实例集合变量。
-     * collectionVariableName 常为 {@code multiInstance_{subTableName}_collection}；主键优先从 PG / 设计器元数据解析。
-     * 纯 JSON 子表（无物理表）时用 {@code dw_table_definitions} 模糊匹配表名；仍失败时对 {@code __subTables__} 推断单列 {@code id}。
+     * Builds multi-instance collection variable from __subTables__.
+     * collectionVariableName is often {@code multiInstance_{subTableName}_collection}; PK resolved from PG / designer metadata first.
+     * For JSON-only sub-tables (no physical table), fuzzy-match table name via {@code dw_table_definitions}; else infer single {@code id} from {@code __subTables__}.
      * <p>
-     * __subTables__ 中常有多个 binding 列表；若简单扁平合并，则凡是能凑齐目标表主键列且带有 assignee 的行都会被当成多实例元素
-     * （例如多个子表都有列 {@code id}），会在完成前置任务后创建远多于预期的子任务。此处对每个 map 值的列表单独打分，
-     * 只采用与目标表主键 + assignee 最匹配的来源列表（并列则合并并去重）。
+     * __subTables__ often has multiple binding lists; naive flattening treats any row with target PK columns and assignee as an MI element
+     * (e.g. multiple sub-tables with column {@code id}) creates far more child tasks than expected after the prerequisite task. Each map value list is scored separately,
+     * Uses only the source list that best matches target PK + assignee (merge and dedupe on ties).
      */
     @SuppressWarnings("unchecked")
     private void buildMiCollectionVariable(Map<String, Object> variables, String collectionVariableName,
@@ -1942,8 +1942,8 @@ public class TaskProcessComponent {
     }
 
     /**
-     * 将 BPMN 集合变量里的逻辑段（如 {@code participants}）解析为主键列名。
-     * 顺序：物理表精确/模糊 →{@code dw_table_definitions} 模糊（纯 JSON 子表常见于仅有设计器元数据而无 PG 表）。
+     * Resolves the logical segment in a BPMN collection variable (e.g. {@code participants}) to primary-key column names.
+     * Order: physical table exact/fuzzy → {@code dw_table_definitions} fuzzy (JSON-only sub-tables often have designer metadata only).
      */
     private MiSubTablePkResult resolveMiSubTablePk(String middleSegment) {
         if (middleSegment == null || middleSegment.isBlank()) {
@@ -2057,7 +2057,7 @@ public class TaskProcessComponent {
     }
 
     /**
-     * 当物理表与设计器表名均无法匹配时：若 {@code __subTables__} 行带非空 {@code id} 与 assignee，则按单列 id 作为行主键（JSON 存储子表）。
+     * When physical/designer table names do not match: if {@code __subTables__} rows have non-empty {@code id} and assignee, use single-column id as row key (JSON sub-table).
      */
     private MiSubTablePkResult inferMiPkFromJsonSubTables(Map<String, Object> subTables, String assigneeField,
                                                           String collectionVariableName) {
@@ -2075,7 +2075,7 @@ public class TaskProcessComponent {
     }
 
     /**
-     * 从 __subTables__ 的多个列表中选出最可能属于当前多实例物理表的数据源，避免跨子表扁平化导致实例数爆炸。
+     * Picks the sub-table list most likely for the current MI physical table, avoiding cross-table flattening that explodes instance count.
      */
     private List<Map<String, Object>> selectRowsForMiCollection(Map<String, Object> subTables,
                                                                 List<String> pkCols,
@@ -2202,7 +2202,7 @@ public class TaskProcessComponent {
         return null;
     }
 
-    // ==================== BPMN XML 解析辅助方法 ====================
+    // ==================== BPMN XML parsing helpers ====================
 
     private Document parseBpmnSecurely(String xml) throws Exception {
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
@@ -2266,7 +2266,7 @@ public class TaskProcessComponent {
     }
 
     /**
-     * BPMN 中出线常用 sequenceFlow 的 sourceRef 指向活动 id，而无须 userTask 下显式 &lt;outgoing&gt;。
+     * Outgoing flows often use sequenceFlow sourceRef to the activity id without an explicit &lt;outgoing&gt; under userTask.
      */
     private List<String> listSequenceFlowIdsWithSourceRef(Document document, String sourceActivityId) {
         List<String> ids = new ArrayList<>();
@@ -2286,7 +2286,7 @@ public class TaskProcessComponent {
         return ids;
     }
 
-    /** multiInstanceLoopCharacteristics 在部分导出中不是 subProcess 的第一个直接子节点。 */
+    /** multiInstanceLoopCharacteristics is not always the first direct child of subProcess in some exports. */
     private Element findMultiInstanceLoopInSubProcess(Element subProcess) {
         if (subProcess == null) {
             return null;

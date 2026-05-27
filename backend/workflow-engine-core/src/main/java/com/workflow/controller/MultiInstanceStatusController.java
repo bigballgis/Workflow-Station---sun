@@ -32,10 +32,10 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * 多实例子流程状态监控控制器
+ * Multi-instance subprocess status monitoring controller.
  * 
- * 提供多实例子流程执行状态查询接口
- * 从 Flowable 运行时数据和 ExtendedTaskInfo 中聚合子任务信息
+ * Provides query APIs for multi-instance subprocess execution status.
+ * Aggregates sub-task information from Flowable runtime data and ExtendedTaskInfo.
  * 
  * **Validates: Requirements 7.1, 7.2**
  * 
@@ -46,7 +46,7 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/v1/workflow/multi-instance")
 @RequiredArgsConstructor
-@Tag(name = "多实例状态监控", description = "多实例子流程执行状态查询API")
+@Tag(name = "Multi-Instance Status Monitor", description = "Multi-instance subprocess execution status query API")
 public class MultiInstanceStatusController {
 
     private final RuntimeService runtimeService;
@@ -58,28 +58,28 @@ public class MultiInstanceStatusController {
     private final BpmnActionParser bpmnActionParser;
 
     /**
-     * 查询多实例子流程执行状态
+     * Query multi-instance subprocess execution status.
      * 
      * GET /api/v1/workflow/multi-instance/{processInstanceId}/status
      * 
-     * @param processInstanceId 流程实例ID
-     * @return 多实例执行状态响应
+     * @param processInstanceId process instance ID
+     * @return multi-instance execution status response
      */
     @GetMapping("/{processInstanceId}/status")
-    @Operation(summary = "查询多实例执行状态", description = "返回指定流程实例中多实例子流程的执行状态，包括总实例数、已完成数、进行中数、各子任务详情")
+    @Operation(summary = "Query multi-instance execution status", description = "Returns the execution status of multi-instance subprocesses in the specified process instance, including total, completed, active, and sub-task details")
     public ResponseEntity<ApiResponse<MultiInstanceStatusResponse>> getStatus(
-            @Parameter(description = "流程实例ID")
+            @Parameter(description = "Process instance ID")
             @PathVariable String processInstanceId) {
         
         try {
-            log.info("查询多实例执行状态，流程实例ID: {}", processInstanceId);
+            log.info("Querying multi-instance execution status, processInstanceId: {}", processInstanceId);
             
-            // 1. 查询流程实例中的多实例执行（查找包含 multiInstanceLoopCharacteristics 的活动）
+            // 1. Query multi-instance executions in the process instance (find activities containing multiInstanceLoopCharacteristics)
             List<Execution> executions = runtimeService.createExecutionQuery()
                     .processInstanceId(processInstanceId)
                     .list();
             
-            // 2. 查找多实例父执行（通过变量判断；流程已结束时不存在 runtime execution，将退化为基于 ExtendedTaskInfo 构造响应）
+            // 2. Find multi-instance parent execution (by variable; when process has ended there is no runtime execution, fall back to constructing response from ExtendedTaskInfo)
             Execution multiInstanceExecution = null;
             for (Execution execution : executions) {
                 Map<String, Object> variables = runtimeService.getVariables(execution.getId());
@@ -89,7 +89,7 @@ public class MultiInstanceStatusController {
                 }
             }
 
-            // 3. 从 Flowable 变量中获取多实例统计信息（如果存在 runtime execution）
+            // 3. Get multi-instance statistics from Flowable variables (if runtime execution exists)
             Integer nrOfInstances = null;
             Integer nrOfCompletedInstances = null;
             Integer nrOfActiveInstances = null;
@@ -100,17 +100,18 @@ public class MultiInstanceStatusController {
                 nrOfActiveInstances = (Integer) miVariables.get("nrOfActiveInstances");
             }
 
-            // 4. 查询流程实例的所有扩展任务信息
+            // 4. Query all extended task info for the process instance
             List<ExtendedTaskInfo> allTaskInfos = extendedTaskInfoRepository
                     .findByProcessInstanceIdAndIsDeletedFalse(processInstanceId);
 
-            // 5. 多实例进度：multiInstance 标记，或扩展里已有 subTableRowId（预分配处理人路径曾漏写 multiInstance）
+            // 5. Multi-instance progress: multiInstance flag, or already has subTableRowId in extensions (pre-assigned handler path missed multiInstance)
             List<ExtendedTaskInfo> multiInstanceTasks = allTaskInfos.stream()
                     .filter(this::isIncludedInMultiInstanceStatus)
                     .collect(Collectors.toList());
 
-            // 5b. 流程已结束且无运行时 execution 时，扩展表常被软删除；门户聚合若无记录会误判子表 MI 状态。
-            //     对已结束的流程实例补查「含已删除」的扩展行以重建 MI 任务列表。
+            // 5b. When process has ended and no runtime execution, wf_extended rows are often soft-deleted;
+            //     portal aggregation would misjudge sub-table MI status if there are no records.
+            //     For ended process instances, re-query including soft-deleted rows to rebuild MI task list.
             if (multiInstanceTasks.isEmpty() && multiInstanceExecution == null) {
                 HistoricProcessInstance hip = historyService.createHistoricProcessInstanceQuery()
                         .processInstanceId(processInstanceId)
@@ -124,14 +125,14 @@ public class MultiInstanceStatusController {
             }
 
             if (multiInstanceTasks.isEmpty() && multiInstanceExecution == null) {
-                log.warn("流程实例 {} 中未找到多实例执行或历史多实例任务", processInstanceId);
+                log.warn("No multi-instance execution or historical multi-instance tasks found for process instance: {}", processInstanceId);
                 return ResponseEntity.ok(ApiResponse.error(
                         "MULTI_INSTANCE_NOT_FOUND",
-                        "流程实例中未找到多实例子流程"
+                        "No multi-instance subprocess found in process instance"
                 ));
             }
             
-            // 6. 构建子任务详情列表
+            // 6. Build sub-task detail list
             List<MultiInstanceStatusResponse.SubTaskDetail> taskDetails = new ArrayList<>();
             for (ExtendedTaskInfo taskInfo : multiInstanceTasks) {
                 Map<String, Object> extProps = parseExtendedProperties(taskInfo.getExtendedProperties());
@@ -183,16 +184,16 @@ public class MultiInstanceStatusController {
                 taskDetails.add(detail);
             }
 
-            // 6b. 运行时仍在途的 MI 内 UserTask，若扩展表未建记录（认领前候选人、路径遗漏等），
-            // wf_extended-only 聚合会把该行误判为已全部完成 → 门户 Current Step 显示 end。
+            // 6b. MI UserTasks still in-flight at runtime that lack wf_extended records (pre-claim candidates, path gaps, etc.)
+            // wf_extended-only aggregation would misjudge the row as fully completed → portal Current Step shows "end".
             appendMissingRuntimeMultiInstanceTasks(processInstanceId, taskDetails);
             
-            // 7. 统计已取消的实例数
+            // 7. Count cancelled instances
             long cancelledCount = multiInstanceTasks.stream()
                     .filter(t -> "CANCELLED".equals(t.getStatus()))
                     .count();
             
-            // 8. 确定多实例状态
+            // 8. Determine multi-instance status
             // Runtime variables missing (process completed) → derive from ExtendedTaskInfo aggregate
             if (nrOfInstances == null && !multiInstanceTasks.isEmpty()) {
                 nrOfInstances = multiInstanceTasks.size();
@@ -206,15 +207,15 @@ public class MultiInstanceStatusController {
             }
             String status = determineMultiInstanceStatus(nrOfInstances, nrOfCompletedInstances, cancelledCount);
 
-            // 9. 获取多实例活动信息
+            // 9. Get multi-instance activity info
             String activityId = multiInstanceExecution != null ? multiInstanceExecution.getActivityId() : null;
             String activityName = activityId != null ? getActivityName(processInstanceId, activityId) : null;
             
-            // 10. 获取开始和完成时间
+            // 10. Get start and completion times
             LocalDateTime startedTime = getMultiInstanceStartTime(multiInstanceTasks);
             LocalDateTime completedTime = "COMPLETED".equals(status) ? getMultiInstanceCompletedTime(multiInstanceTasks) : null;
             
-            // 11. 构建响应
+            // 11. Build response
             MultiInstanceStatusResponse response = MultiInstanceStatusResponse.builder()
                     .processInstanceId(processInstanceId)
                     .multiInstanceActivityId(activityId)
@@ -229,16 +230,16 @@ public class MultiInstanceStatusController {
                     .tasks(taskDetails)
                     .build();
             
-            log.info("多实例执行状态查询成功，流程实例ID: {}, 总实例数: {}, 已完成: {}, 进行中: {}",
+            log.info("Multi-instance execution status query succeeded, processInstanceId: {}, total: {}, completed: {}, active: {}",
                     processInstanceId, response.getTotalInstances(), response.getCompletedInstances(), response.getActiveInstances());
             
             return ResponseEntity.ok(ApiResponse.success(response));
             
         } catch (Exception e) {
-            log.error("查询多实例执行状态失败，流程实例ID: {}", processInstanceId, e);
+            log.error("Failed to query multi-instance execution status, processInstanceId: {}", processInstanceId, e);
             return ResponseEntity.ok(ApiResponse.error(
                     "QUERY_FAILED",
-                    "查询多实例执行状态失败: " + e.getMessage()
+                    "Failed to query multi-instance execution status: " + e.getMessage()
             ));
         }
     }
@@ -258,8 +259,9 @@ public class MultiInstanceStatusController {
     }
 
     /**
-     * 将 Flowable 运行时仍存在、但 {@link ExtendedTaskInfo} 未覆盖的 MI UserTask 并入 tasks，
-     * 供门户按子表行解析 Current Step / 状态（与队列里用户实际看到的节点一致）。
+     * Merge MI UserTasks that exist at Flowable runtime but are not covered by
+     * {@link ExtendedTaskInfo} into the tasks list, so the portal can resolve
+     * Current Step / status per sub-table row (matching what users actually see in the queue).
      */
     private void appendMissingRuntimeMultiInstanceTasks(String processInstanceId,
             List<MultiInstanceStatusResponse.SubTaskDetail> taskDetails) {
@@ -382,7 +384,7 @@ public class MultiInstanceStatusController {
     }
 
     /**
-     * 是否纳入多实例状态聚合（MI 标记或参与者子表行 id）
+     * Whether to include in multi-instance status aggregation (MI flag or participant sub-table row id).
      */
     private boolean isIncludedInMultiInstanceStatus(ExtendedTaskInfo taskInfo) {
         return isMultiInstanceTask(taskInfo) || hasParticipantSubTableRow(taskInfo);
@@ -404,7 +406,7 @@ public class MultiInstanceStatusController {
     }
 
     /**
-     * 判断任务是否为多实例子任务
+     * Determine if a task is a multi-instance sub-task.
      */
     private boolean isMultiInstanceTask(ExtendedTaskInfo taskInfo) {
         if (taskInfo.getExtendedProperties() == null) {
@@ -415,13 +417,13 @@ public class MultiInstanceStatusController {
             Map<String, Object> extProps = parseExtendedProperties(taskInfo.getExtendedProperties());
             return Boolean.TRUE.equals(extProps.get("multiInstance"));
         } catch (Exception e) {
-            log.warn("解析扩展属性失败，任务ID: {}", taskInfo.getTaskId(), e);
+            log.warn("Failed to parse extended properties, taskId: {}", taskInfo.getTaskId(), e);
             return false;
         }
     }
     
     /**
-     * 解析扩展属性 JSON
+     * Parse extended properties JSON.
      */
     private Map<String, Object> parseExtendedProperties(String extendedProperties) {
         if (extendedProperties == null || extendedProperties.trim().isEmpty()) {
@@ -431,24 +433,24 @@ public class MultiInstanceStatusController {
         try {
             return objectMapper.readValue(extendedProperties, new TypeReference<Map<String, Object>>() {});
         } catch (Exception e) {
-            log.warn("解析扩展属性 JSON 失败: {}", extendedProperties, e);
+            log.warn("Failed to parse extended properties JSON: {}", extendedProperties, e);
             return new HashMap<>();
         }
     }
     
     /**
-     * 获取用户姓名（简化实现，实际应调用用户服务）
+     * Get user display name (simplified implementation; should call user service in production).
      */
     private String getUserName(String userId) {
         if (userId == null) {
             return null;
         }
-        // TODO: 调用用户服务获取真实姓名
-        return "用户-" + userId;
+        // TODO: Call user service to get real name
+        return "User-" + userId;
     }
     
     /**
-     * 确定多实例状态
+     * Determine multi-instance status.
      */
     private String determineMultiInstanceStatus(Integer nrOfInstances, Integer nrOfCompletedInstances, long cancelledCount) {
         if (nrOfInstances == null || nrOfCompletedInstances == null) {
@@ -467,21 +469,21 @@ public class MultiInstanceStatusController {
     }
     
     /**
-     * 获取活动名称
+     * Get activity display name.
      */
     private String getActivityName(String processInstanceId, String activityId) {
         try {
-            // 从流程定义中获取活动名称
-            // 简化实现：返回活动ID
+            // Get activity name from process definition
+            // Simplified implementation: return activity ID
             return activityId;
         } catch (Exception e) {
-            log.warn("获取活动名称失败，流程实例ID: {}, 活动ID: {}", processInstanceId, activityId, e);
+            log.warn("Failed to get activity name, processInstanceId: {}, activityId: {}", processInstanceId, activityId, e);
             return activityId;
         }
     }
     
     /**
-     * 获取多实例开始时间（取最早的子任务创建时间）
+     * Get multi-instance start time (earliest sub-task creation time).
      */
     private LocalDateTime getMultiInstanceStartTime(List<ExtendedTaskInfo> tasks) {
         return tasks.stream()
@@ -492,7 +494,7 @@ public class MultiInstanceStatusController {
     }
     
     /**
-     * 获取多实例完成时间（取最晚的子任务完成时间）
+     * Get multi-instance completion time (latest sub-task completion time).
      */
     private LocalDateTime getMultiInstanceCompletedTime(List<ExtendedTaskInfo> tasks) {
         return tasks.stream()
@@ -503,45 +505,45 @@ public class MultiInstanceStatusController {
     }
     
     /**
-     * 查询主任务子表数据（用于实时同步）
+     * Query main task sub-table data (for real-time sync).
      * 
      * GET /api/v1/workflow/tasks/{taskId}/sub-table-data/all
      * 
-     * @param taskId 主任务ID
-     * @return 子表数据列表（含 assignee、status）
+     * @param taskId main task ID
+     * @return sub-table data list (with assignee, status)
      */
     @GetMapping("/tasks/{taskId}/sub-table-data/all")
-    @Operation(summary = "查询主任务子表数据", description = "查询子表所有数据行（含 assignee、status），用于主任务表单实时同步")
+    @Operation(summary = "Query main task sub-table data", description = "Query all sub-table data rows (with assignee, status) for main task form real-time sync")
     public ResponseEntity<ApiResponse<SubTableDataResponse>> getSubTableData(
-            @Parameter(description = "主任务ID")
+            @Parameter(description = "Main task ID")
             @PathVariable String taskId) {
         
         try {
-            log.info("查询主任务子表数据，任务ID: {}", taskId);
+            log.info("Querying main task sub-table data, taskId: {}", taskId);
             
-            // 1. 查询任务信息
+            // 1. Query task info
             Task task = taskService.createTaskQuery().taskId(taskId).singleResult();
             if (task == null) {
-                log.warn("任务不存在: {}", taskId);
+                log.warn("Task not found: {}", taskId);
                 return ResponseEntity.ok(ApiResponse.error(
                         "TASK_NOT_FOUND",
-                        "任务不存在"
+                        "Task not found"
                 ));
             }
             
-            // 2. 获取流程实例ID
+            // 2. Get process instance ID
             String processInstanceId = task.getProcessInstanceId();
             
-            // 3. 从流程变量中获取子表配置信息
+            // 3. Get sub-table config from process variables
             Map<String, Object> processVariables = runtimeService.getVariables(processInstanceId);
             
-            // 查找多实例集合变量（格式：multiInstance_{subTableName}_collection）
+            // Find multi-instance collection variable (format: multiInstance_{subTableName}_collection)
             String collectionVariableName = null;
             String subTableName = null;
             for (String varName : processVariables.keySet()) {
                 if (varName.startsWith("multiInstance_") && varName.endsWith("_collection")) {
                     collectionVariableName = varName;
-                    // 提取子表名称：multiInstance_{subTableName}_collection
+                    // Extract sub-table name: multiInstance_{subTableName}_collection
                     subTableName = varName.substring("multiInstance_".length(), 
                             varName.length() - "_collection".length());
                     break;
@@ -549,29 +551,29 @@ public class MultiInstanceStatusController {
             }
             
             if (subTableName == null) {
-                log.warn("未找到多实例集合变量，流程实例ID: {}", processInstanceId);
+                log.warn("Multi-instance collection variable not found, processInstanceId: {}", processInstanceId);
                 return ResponseEntity.ok(ApiResponse.error(
                         "MULTI_INSTANCE_CONFIG_NOT_FOUND",
-                        "未找到多实例配置信息"
+                        "Multi-instance configuration not found"
                 ));
             }
             if (!subTableName.matches("[A-Za-z_][A-Za-z0-9_]*")) {
-                log.warn("非法子表名（跳过查询）: {}", subTableName);
+                log.warn("Invalid sub-table name (skipping query): {}", subTableName);
                 return ResponseEntity.ok(ApiResponse.error(
                         "INVALID_SUBTABLE_NAME",
-                        "子表配置无效"
+                        "Invalid sub-table configuration"
                 ));
             }
             List<String> pkCols = PostgresPhysicalTablePrimaryKeys.resolvePrimaryKeyColumns(jdbcTemplate, subTableName);
             String pkWhere = SubTableRowKeySupport.buildPkWhereClause(pkCols);
 
-            // 4. 获取集合变量（元素含 rowKey 和/或 rowId）
+            // 4. Get collection variable (elements contain rowKey and/or rowId)
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> collectionData =
                     (List<Map<String, Object>>) processVariables.get(collectionVariableName);
             
             if (collectionData == null || collectionData.isEmpty()) {
-                log.warn("多实例集合变量为空，流程实例ID: {}", processInstanceId);
+                log.warn("Multi-instance collection variable is empty, processInstanceId: {}", processInstanceId);
                 return ResponseEntity.ok(ApiResponse.success(
                         SubTableDataResponse.builder()
                                 .taskId(taskId)
@@ -611,7 +613,7 @@ public class MultiInstanceStatusController {
                 try {
                     rowData = jdbcTemplate.queryForMap(selectSql, SubTableRowKeySupport.orderedPkParams(pkCols, rk));
                 } catch (org.springframework.dao.EmptyResultDataAccessException e) {
-                    log.warn("子表行不存在: table={}, rowKey={}", subTableName, rk);
+                    log.warn("Sub-table row not found: table={}, rowKey={}", subTableName, rk);
                     continue;
                 }
                 String canon = SubTableRowKeySupport.canonicalRowKeyString(pkCols, rk);
@@ -662,16 +664,16 @@ public class MultiInstanceStatusController {
                     .rows(rows)
                     .build();
             
-            log.info("查询主任务子表数据成功，任务ID: {}, 子表: {}, 数据行数: {}",
+            log.info("Main task sub-table data query succeeded, taskId: {}, subTable: {}, row count: {}",
                     taskId, subTableName, rows.size());
             
             return ResponseEntity.ok(ApiResponse.success(response));
             
         } catch (Exception e) {
-            log.error("查询主任务子表数据失败，任务ID: {}", taskId, e);
+            log.error("Failed to query main task sub-table data, taskId: {}", taskId, e);
             return ResponseEntity.ok(ApiResponse.error(
                     "QUERY_FAILED",
-                    "查询子表数据失败: " + e.getMessage()
+                    "Failed to query sub-table data: " + e.getMessage()
             ));
         }
     }

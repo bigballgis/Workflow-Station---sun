@@ -9,7 +9,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * 团队申请概览响应 DTO
+ * Team requests overview response DTO
  */
 @Data
 @Builder

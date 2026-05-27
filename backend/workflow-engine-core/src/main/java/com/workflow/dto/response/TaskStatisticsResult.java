@@ -8,7 +8,7 @@ import lombok.NoArgsConstructor;
 import java.util.Map;
 
 /**
- * 任务统计结果
+ * Task statistics result
  * 
  * @author Workflow Engine
  * @version 1.0
@@ -20,41 +20,41 @@ import java.util.Map;
 public class TaskStatisticsResult {
     
     /**
-     * 总任务数
+     * Total task count
      */
     private Long totalCount;
     
     /**
-     * 待办任务数
+     * Pending task count
      */
     private Long pendingCount;
     
     /**
-     * 已完成任务数
+     * Completed task count
      */
     private Long completedCount;
     
     /**
-     * 超时任务数
+     * Overdue task count
      */
     private Long overdueCount;
     
     /**
-     * 按任务名称分组统计
-     * key: 任务名称
-     * value: 数量
+     * Statistics grouped by task name
+     * key: Task name
+     * value: Count
      */
     private Map<String, Long> taskNameStatistics;
     
     /**
-     * 按分配人分组统计
-     * key: 分配人
-     * value: 数量
+     * Statistics grouped by assignee
+     * key: Assignee
+     * value: Count
      */
     private Map<String, Long> assigneeStatistics;
     
     /**
-     * 平均处理时间（秒）
+     * Average processing time (seconds)
      */
     private Double averageProcessingTime;
 }

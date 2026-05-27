@@ -7,6 +7,7 @@ import com.admin.enums.ContentType;
 import com.admin.exception.AdminBusinessException;
 import com.admin.repository.FunctionUnitContentRepository;
 import com.admin.repository.FunctionUnitRepository;
+import com.platform.common.i18n.I18nService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -18,8 +19,7 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * 流程部署组件
- * 负责将功能单元中的流程定义部署到 Flowable 引擎
+ * Deploys BPMN process definitions from a function unit onto the Flowable-powered workflow engine.
  */
 @Slf4j
 @Component
@@ -29,114 +29,110 @@ public class ProcessDeploymentComponent {
     private final WorkflowEngineClient workflowEngineClient;
     private final FunctionUnitRepository functionUnitRepository;
     private final FunctionUnitContentRepository contentRepository;
+    private final I18nService i18nService;
 
     /**
-     * 部署功能单元的流程定义到 Flowable 引擎
-     * 
-     * @param functionUnitId 功能单元ID
-     * @return 部署结果
+     * Deploys process definitions stored on the function unit to the Flowable engine.
+     *
+     * @param functionUnitId function unit identifier
+     * @return deployment outcome
      */
     @Transactional
     public ProcessDeploymentResult deployFunctionUnitProcess(String functionUnitId) {
         log.info("Deploying process for function unit: {}", functionUnitId);
-        
-        // 获取功能单元
+
         FunctionUnit functionUnit = functionUnitRepository.findById(functionUnitId)
-                .orElseThrow(() -> new AdminBusinessException("FUNCTION_UNIT_NOT_FOUND", 
-                        "功能单元不存在: " + functionUnitId));
-        
-        // 获取流程定义内容
+                .orElseThrow(() -> new AdminBusinessException("FUNCTION_UNIT_NOT_FOUND",
+                        i18nService.getMessage("admin.fu.not_found_by_id", functionUnitId)));
+
         List<FunctionUnitContent> processContents = contentRepository
                 .findByFunctionUnitIdAndContentType(functionUnitId, ContentType.PROCESS);
-        
+
         if (processContents.isEmpty()) {
             log.warn("No process definition found for function unit: {}", functionUnitId);
-            return ProcessDeploymentResult.noProcess(functionUnitId);
+            return noProcessResult(functionUnitId);
         }
-        
-        // 检查 workflow-engine 是否可用
+
         if (!workflowEngineClient.isAvailable()) {
             log.error("Workflow engine is not available");
-            return ProcessDeploymentResult.engineUnavailable(functionUnitId);
+            return engineUnavailableResult(functionUnitId);
         }
-        
-        // 部署每个流程定义
+
         Map<String, String> deployedProcesses = new HashMap<>();
         List<String> errors = new java.util.ArrayList<>();
-        
+        String itemFailedFallback = i18nService.getMessage("admin.deploy.process.item_deploy_failed_fallback");
+
         for (FunctionUnitContent processContent : processContents) {
             try {
                 String bpmnXml = processContent.getContentData();
                 String processKey = extractProcessKey(bpmnXml, functionUnit.getCode());
                 String processName = functionUnit.getName() + " - " + processContent.getContentName();
-                
-                // 调用 workflow-engine-core 部署流程
-                Optional<WorkflowEngineClient.ProcessDeploymentResult> result = 
+
+                Optional<WorkflowEngineClient.ProcessDeploymentResult> result =
                         workflowEngineClient.deployProcess(processKey, bpmnXml, processName);
-                
+
                 if (result.isPresent() && result.get().isSuccess()) {
-                    deployedProcesses.put(processContent.getContentName(), 
+                    deployedProcesses.put(processContent.getContentName(),
                             result.get().getProcessDefinitionId());
-                    
-                    // 更新功能单元内容，记录 Flowable 中的流程定义ID
+
                     processContent.setFlowableProcessDefinitionId(result.get().getProcessDefinitionId());
                     processContent.setFlowableDeploymentId(result.get().getDeploymentId());
                     contentRepository.save(processContent);
-                    
-                    log.info("Process deployed: {} -> {}", 
+
+                    log.info("Process deployed: {} -> {}",
                             processContent.getContentName(), result.get().getProcessDefinitionId());
                 } else {
                     String errorMsg = result.map(WorkflowEngineClient.ProcessDeploymentResult::getMessage)
-                            .orElse("部署失败");
+                            .orElse(itemFailedFallback);
                     errors.add(processContent.getContentName() + ": " + errorMsg);
                     log.error("Failed to deploy process: {}", processContent.getContentName());
                 }
-                
+
             } catch (Exception e) {
-                errors.add(processContent.getContentName() + ": " + e.getMessage());
+                errors.add(processContent.getContentName() + ": " + safeDetail(e));
                 log.error("Error deploying process: {}", processContent.getContentName(), e);
             }
         }
-        
-        // 更新功能单元的流程部署状态
+
         if (!deployedProcesses.isEmpty()) {
             functionUnit.setProcessDeployed(true);
             functionUnit.setProcessDeploymentCount(deployedProcesses.size());
             functionUnitRepository.save(functionUnit);
         }
-        
+
         if (errors.isEmpty()) {
-            return ProcessDeploymentResult.success(functionUnitId, deployedProcesses);
+            return successResult(functionUnitId, deployedProcesses);
         } else if (!deployedProcesses.isEmpty()) {
-            return ProcessDeploymentResult.partialSuccess(functionUnitId, deployedProcesses, errors);
+            return partialSuccessResult(functionUnitId, deployedProcesses, errors);
         } else {
-            return ProcessDeploymentResult.failure(functionUnitId, errors);
+            return failureResult(functionUnitId, errors);
         }
     }
 
     /**
-     * 试部署流程到 Flowable 以验证 BPMN 可部署性，成功后立即清理部署记录，不写入功能单元状态。
+     * Dry-run deployment to Flowable to validate BPMN; cleans deployment records afterward and does not persist FU flags.
      */
     public ProcessDeploymentResult dryRunDeployFunctionUnitProcess(String functionUnitId) {
         log.info("Dry-run deploying process for function unit: {}", functionUnitId);
 
         FunctionUnit functionUnit = functionUnitRepository.findById(functionUnitId)
                 .orElseThrow(() -> new AdminBusinessException("FUNCTION_UNIT_NOT_FOUND",
-                        "功能单元不存在: " + functionUnitId));
+                        i18nService.getMessage("admin.fu.not_found_by_id", functionUnitId)));
 
         List<FunctionUnitContent> processContents = contentRepository
                 .findByFunctionUnitIdAndContentType(functionUnitId, ContentType.PROCESS);
 
         if (processContents.isEmpty()) {
-            return ProcessDeploymentResult.noProcess(functionUnitId);
+            return noProcessResult(functionUnitId);
         }
 
         if (!workflowEngineClient.isAvailable()) {
-            return ProcessDeploymentResult.engineUnavailable(functionUnitId);
+            return engineUnavailableResult(functionUnitId);
         }
 
         List<String> errors = new java.util.ArrayList<>();
         List<String> deploymentIdsToCleanup = new java.util.ArrayList<>();
+        String itemFailedFallback = i18nService.getMessage("admin.deploy.process.item_deploy_failed_fallback");
 
         for (FunctionUnitContent processContent : processContents) {
             try {
@@ -154,12 +150,12 @@ public class ProcessDeploymentComponent {
                     log.info("Dry-run process deploy OK: {}", processContent.getContentName());
                 } else {
                     String errorMsg = result.map(WorkflowEngineClient.ProcessDeploymentResult::getMessage)
-                            .orElse("部署失败");
+                            .orElse(itemFailedFallback);
                     errors.add(processContent.getContentName() + ": " + errorMsg);
                     log.error("Dry-run failed for process: {}", processContent.getContentName());
                 }
             } catch (Exception e) {
-                errors.add(processContent.getContentName() + ": " + e.getMessage());
+                errors.add(processContent.getContentName() + ": " + safeDetail(e));
                 log.error("Dry-run error for process: {}", processContent.getContentName(), e);
             }
         }
@@ -173,23 +169,86 @@ public class ProcessDeploymentComponent {
         }
 
         if (errors.isEmpty()) {
-            return ProcessDeploymentResult.success(functionUnitId, Map.of());
+            return successResult(functionUnitId, Map.of());
         }
-        return ProcessDeploymentResult.failure(functionUnitId, errors);
+        return failureResult(functionUnitId, errors);
     }
 
-    /**
-     * 从 BPMN XML 中提取流程 Key
-     */
+    private static String safeDetail(Exception e) {
+        return e.getClass().getSimpleName();
+    }
+
+    private ProcessDeploymentResult successResult(String functionUnitId, Map<String, String> deployedProcesses) {
+        return ProcessDeploymentResult.builder()
+                .functionUnitId(functionUnitId)
+                .success(true)
+                .partialSuccess(false)
+                .engineUnavailable(false)
+                .message(i18nService.getMessage("admin.deploy.process.all_deployed_success"))
+                .deployedProcesses(deployedProcesses)
+                .errors(List.of())
+                .build();
+    }
+
+    private ProcessDeploymentResult partialSuccessResult(String functionUnitId,
+                                                         Map<String, String> deployedProcesses,
+                                                         List<String> errors) {
+        return ProcessDeploymentResult.builder()
+                .functionUnitId(functionUnitId)
+                .success(false)
+                .partialSuccess(true)
+                .engineUnavailable(false)
+                .message(i18nService.getMessage("admin.deploy.process.partial_deployed_success"))
+                .deployedProcesses(deployedProcesses)
+                .errors(errors)
+                .build();
+    }
+
+    private ProcessDeploymentResult failureResult(String functionUnitId, List<String> errors) {
+        return ProcessDeploymentResult.builder()
+                .functionUnitId(functionUnitId)
+                .success(false)
+                .partialSuccess(false)
+                .engineUnavailable(false)
+                .message(i18nService.getMessage("admin.deploy.process.deploy_failed_summary"))
+                .deployedProcesses(Map.of())
+                .errors(errors)
+                .build();
+    }
+
+    private ProcessDeploymentResult noProcessResult(String functionUnitId) {
+        return ProcessDeploymentResult.builder()
+                .functionUnitId(functionUnitId)
+                .success(true)
+                .partialSuccess(false)
+                .engineUnavailable(false)
+                .message(i18nService.getMessage("admin.deploy.process.no_definition_in_unit"))
+                .deployedProcesses(Map.of())
+                .errors(List.of())
+                .build();
+    }
+
+    private ProcessDeploymentResult engineUnavailableResult(String functionUnitId) {
+        return ProcessDeploymentResult.builder()
+                .functionUnitId(functionUnitId)
+                .success(false)
+                .partialSuccess(false)
+                .engineUnavailable(true)
+                .message(i18nService.getMessage("admin.deploy.workflow_engine_unavailable_hint"))
+                .deployedProcesses(Map.of())
+                .errors(List.of(i18nService.getMessage("admin.deploy.workflow_engine_client_unavailable")))
+                .build();
+    }
+
     private String extractProcessKey(String bpmnXml, String defaultKey) {
-        String extracted = extractProcessKey(bpmnXml);
+        String extracted = extractProcessKeyFromXml(bpmnXml);
         return extracted != null ? extracted : defaultKey;
     }
 
     /**
-     * 从 BPMN XML 中提取 <process id="..."> 属性值
+     * Parses {@code id} from {@code &lt;bpmn:process&gt;} or {@code &lt;process&gt;}.
      */
-    private String extractProcessKey(String bpmnXml) {
+    private String extractProcessKeyFromXml(String bpmnXml) {
         try {
             int processStart = bpmnXml.indexOf("<bpmn:process");
             if (processStart == -1) {
@@ -211,23 +270,20 @@ public class ProcessDeploymentComponent {
         return null;
     }
 
-    /**
-     * 取消部署功能单元的流程
-     */
     @Transactional
     public boolean undeployFunctionUnitProcess(String functionUnitId, boolean cascade) {
         log.info("Undeploying process for function unit: {}", functionUnitId);
-        
+
         List<FunctionUnitContent> processContents = contentRepository
                 .findByFunctionUnitIdAndContentType(functionUnitId, ContentType.PROCESS);
-        
+
         boolean allSuccess = true;
-        
+
         for (FunctionUnitContent processContent : processContents) {
             if (processContent.getFlowableDeploymentId() != null) {
                 boolean deleted = workflowEngineClient.deleteProcessDefinition(
                         processContent.getFlowableDeploymentId(), cascade);
-                
+
                 if (deleted) {
                     processContent.setFlowableProcessDefinitionId(null);
                     processContent.setFlowableDeploymentId(null);
@@ -237,7 +293,7 @@ public class ProcessDeploymentComponent {
                 }
             }
         }
-        
+
         if (allSuccess) {
             FunctionUnit functionUnit = functionUnitRepository.findById(functionUnitId).orElse(null);
             if (functionUnit != null) {
@@ -246,30 +302,24 @@ public class ProcessDeploymentComponent {
                 functionUnitRepository.save(functionUnit);
             }
         }
-        
+
         return allSuccess;
     }
 
-    /**
-     * 检查功能单元的流程是否已部署
-     */
     public boolean isProcessDeployed(String functionUnitId) {
         List<FunctionUnitContent> processContents = contentRepository
                 .findByFunctionUnitIdAndContentType(functionUnitId, ContentType.PROCESS);
-        
+
         return processContents.stream()
                 .anyMatch(c -> c.getFlowableProcessDefinitionId() != null);
     }
 
-    /**
-     * 获取功能单元的流程部署信息
-     */
     public Map<String, Object> getProcessDeploymentInfo(String functionUnitId) {
         Map<String, Object> info = new HashMap<>();
-        
+
         List<FunctionUnitContent> processContents = contentRepository
                 .findByFunctionUnitIdAndContentType(functionUnitId, ContentType.PROCESS);
-        
+
         List<Map<String, String>> processes = processContents.stream()
                 .filter(c -> c.getFlowableProcessDefinitionId() != null)
                 .map(c -> {
@@ -280,19 +330,16 @@ public class ProcessDeploymentComponent {
                     return processInfo;
                 })
                 .toList();
-        
+
         info.put("functionUnitId", functionUnitId);
         info.put("deployed", !processes.isEmpty());
         info.put("processCount", processes.size());
         info.put("processes", processes);
         info.put("workflowEngineAvailable", workflowEngineClient.isAvailable());
-        
+
         return info;
     }
 
-    /**
-     * 流程部署结果
-     */
     @lombok.Data
     @lombok.Builder
     @lombok.NoArgsConstructor
@@ -301,64 +348,9 @@ public class ProcessDeploymentComponent {
         private String functionUnitId;
         private boolean success;
         private boolean partialSuccess;
+        private boolean engineUnavailable;
         private String message;
         private Map<String, String> deployedProcesses;
         private List<String> errors;
-
-        public static ProcessDeploymentResult success(String functionUnitId, Map<String, String> deployedProcesses) {
-            return ProcessDeploymentResult.builder()
-                    .functionUnitId(functionUnitId)
-                    .success(true)
-                    .partialSuccess(false)
-                    .message("所有流程部署成功")
-                    .deployedProcesses(deployedProcesses)
-                    .errors(List.of())
-                    .build();
-        }
-
-        public static ProcessDeploymentResult partialSuccess(String functionUnitId, 
-                Map<String, String> deployedProcesses, List<String> errors) {
-            return ProcessDeploymentResult.builder()
-                    .functionUnitId(functionUnitId)
-                    .success(false)
-                    .partialSuccess(true)
-                    .message("部分流程部署成功")
-                    .deployedProcesses(deployedProcesses)
-                    .errors(errors)
-                    .build();
-        }
-
-        public static ProcessDeploymentResult failure(String functionUnitId, List<String> errors) {
-            return ProcessDeploymentResult.builder()
-                    .functionUnitId(functionUnitId)
-                    .success(false)
-                    .partialSuccess(false)
-                    .message("流程部署失败")
-                    .deployedProcesses(Map.of())
-                    .errors(errors)
-                    .build();
-        }
-
-        public static ProcessDeploymentResult noProcess(String functionUnitId) {
-            return ProcessDeploymentResult.builder()
-                    .functionUnitId(functionUnitId)
-                    .success(true)
-                    .partialSuccess(false)
-                    .message("功能单元没有流程定义")
-                    .deployedProcesses(Map.of())
-                    .errors(List.of())
-                    .build();
-        }
-
-        public static ProcessDeploymentResult engineUnavailable(String functionUnitId) {
-            return ProcessDeploymentResult.builder()
-                    .functionUnitId(functionUnitId)
-                    .success(false)
-                    .partialSuccess(false)
-                    .message("Flowable 引擎不可用，请检查 workflow-engine-core 服务是否启动")
-                    .deployedProcesses(Map.of())
-                    .errors(List.of("Workflow engine is not available"))
-                    .build();
-        }
     }
 }

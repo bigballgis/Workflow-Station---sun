@@ -5,6 +5,7 @@ import com.workflow.dto.response.DataTableOperationResult;
 import com.workflow.dto.response.DataTableQueryResult;
 import com.workflow.exception.WorkflowBusinessException;
 import com.workflow.exception.WorkflowValidationException;
+import com.platform.common.i18n.I18nService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
@@ -21,11 +22,11 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * 数据表管理组件
+ * Data table management component
  * 
- * 负责与PostgreSQL数据表的CRUD操作
- * 支持动态SQL生成和执行
- * 提供数据验证和类型转换功能
+ * Handles CRUD operations with PostgreSQL data tables
+ * Supports dynamic SQL generation and execution
+ * Provides data validation and type conversion
  * 
  * @author Workflow Engine
  * @version 1.0
@@ -36,17 +37,18 @@ import java.util.stream.Collectors;
 public class DataTableManagerComponent {
 
     private final JdbcTemplate jdbcTemplate;
+    private final I18nService i18nService;
     
-    // 安全的表名和字段名模式（防止SQL注入）
+    // Safe table name and field name pattern (prevent SQL injection)
     private static final String SAFE_NAME_PATTERN = "^[a-zA-Z_][a-zA-Z0-9_]*$";
     
-    // 允许的排序方向
+    // Allowed sort directions
     private static final Set<String> ALLOWED_ORDER_DIRECTIONS = Set.of("ASC", "DESC");
     
-    // 允许的连接类型
+    // Allowed join types
     private static final Set<String> ALLOWED_JOIN_TYPES = Set.of("INNER", "LEFT", "RIGHT", "FULL");
 
-    // DOS 防护: 集合大小限制
+    // DOS protection: collection size limits
     private static final int MAX_SELECT_FIELDS = 100;
     private static final int MAX_INSERT_COLUMNS = 200;
     private static final int MAX_UPDATE_COLUMNS = 200;
@@ -54,30 +56,30 @@ public class DataTableManagerComponent {
     private static final int MAX_JOIN_CONDITIONS = 10;
 
     /**
-     * 查询数据表记录
+     * Query data table records
      * 
-     * @param request 查询请求
-     * @return 查询结果
+     * @param request the query request
+     * @return query result
      */
     @Transactional(readOnly = true)
     public DataTableQueryResult queryTable(DataTableQueryRequest request) {
-        log.info("查询数据表: tableName={}, conditions={}", request.getTableName(), request.getWhereConditions());
+        log.info("Querying data table: tableName={}, conditions={}", request.getTableName(), request.getWhereConditions());
         
         try {
-            // 验证请求参数
+            // Validate request parameters
             validateQueryRequest(request);
             
-            // 构建查询SQL
+            // Build query SQL
             SqlBuilder sqlBuilder = buildSelectSql(request);
             String sql = sqlBuilder.getSql();
             Object[] params = sqlBuilder.getParams().toArray();
             
-            log.debug("执行查询SQL: {}, 参数: {}", sql, Arrays.toString(params));
+            log.debug("Execute query SQL: {}, params: {}", sql, Arrays.toString(params));
             
-            // 执行查询
+            // Execute query
             List<Map<String, Object>> data = jdbcTemplate.queryForList(sql, params);
             
-            // 查询总数（如果需要分页）
+            // Query total count (if pagination needed)
             Long totalCount = null;
             if (request.getLimit() != null) {
                 totalCount = queryTotalCount(request);
@@ -94,43 +96,43 @@ public class DataTableManagerComponent {
                     .build();
                     
         } catch (WorkflowValidationException e) {
-            // 重新抛出验证异常，让调用者处理
+            // Re-throw validation exception for caller to handle
             throw e;
         } catch (Exception e) {
-            log.error("查询数据表失败: tableName={}, error={}", request.getTableName(), e.getMessage(), e);
+            log.error("Query data table failed: tableName={}, error={}", request.getTableName(), e.getMessage(), e);
             return DataTableQueryResult.builder()
                     .success(false)
-                    .errorMessage("查询失败: " + e.getMessage())
+                    .errorMessage(i18nService.getMessage("workflow.dt.query_failed", e.getMessage()))
                     .build();
         }
     }
 
     /**
-     * 插入数据表记录
+     * Insert data table record
      * 
-     * @param request 插入请求
-     * @return 操作结果
+     * @param request the insert request
+     * @return operation result
      */
     @Transactional
     public DataTableOperationResult insertRecord(DataTableInsertRequest request) {
-        log.info("插入数据表记录: tableName={}, data={}", request.getTableName(), request.getData());
+        log.info("Inserting data table record: tableName={}, data={}", request.getTableName(), request.getData());
         
         try {
-            // 验证请求参数
+            // Validate request parameters
             validateInsertRequest(request);
             
-            // 构建插入SQL
+            // Build insert SQL
             SqlBuilder sqlBuilder = buildInsertSql(request);
             String sql = sqlBuilder.getSql();
             Object[] params = sqlBuilder.getParams().toArray();
             
-            log.debug("执行插入SQL: {}, 参数: {}", sql, Arrays.toString(params));
+            log.debug("Execute insert SQL: {}, params: {}", sql, Arrays.toString(params));
             
             int affectedRows;
             Map<String, Object> generatedKeys = new HashMap<>();
             
             if (request.isReturnGeneratedKeys()) {
-                // 需要返回生成的主键
+                // Need to return generated keys
                 KeyHolder keyHolder = new GeneratedKeyHolder();
                 affectedRows = jdbcTemplate.update(connection -> {
                     PreparedStatement ps = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
@@ -144,7 +146,7 @@ public class DataTableManagerComponent {
                     generatedKeys.putAll(keyHolder.getKeys());
                 }
             } else {
-                // 不需要返回生成的主键
+                // No generated keys needed
                 affectedRows = jdbcTemplate.update(sql, params);
             }
             
@@ -156,40 +158,40 @@ public class DataTableManagerComponent {
                     .build();
                     
         } catch (WorkflowValidationException e) {
-            // 重新抛出验证异常，让调用者处理
+            // Re-throw validation exception for caller to handle
             throw e;
         } catch (Exception e) {
-            log.error("插入数据表记录失败: tableName={}, error={}", request.getTableName(), e.getMessage(), e);
+            log.error("Insert data table record failed: tableName={}, error={}", request.getTableName(), e.getMessage(), e);
             return DataTableOperationResult.builder()
                     .success(false)
-                    .errorMessage("插入失败: " + e.getMessage())
+                    .errorMessage(i18nService.getMessage("workflow.dt.insert_failed", e.getMessage()))
                     .build();
         }
     }
 
     /**
-     * 更新数据表记录
+     * Update data table record
      * 
-     * @param request 更新请求
-     * @return 操作结果
+     * @param request the update request
+     * @return operation result
      */
     @Transactional
     public DataTableOperationResult updateRecord(DataTableUpdateRequest request) {
-        log.info("更新数据表记录: tableName={}, updateData={}, conditions={}", 
+        log.info("Updating data table record: tableName={}, updateData={}, conditions={}", 
                 request.getTableName(), request.getUpdateData(), request.getWhereConditions());
         
         try {
-            // 验证请求参数
+            // Validate request parameters
             validateUpdateRequest(request);
             
-            // 构建更新SQL
+            // Build update SQL
             SqlBuilder sqlBuilder = buildUpdateSql(request);
             String sql = sqlBuilder.getSql();
             Object[] params = sqlBuilder.getParams().toArray();
             
-            log.debug("执行更新SQL: {}, 参数: {}", sql, Arrays.toString(params));
+            log.debug("Execute update SQL: {}, params: {}", sql, Arrays.toString(params));
             
-            // 执行更新
+            // Execute update
             int affectedRows = jdbcTemplate.update(sql, params);
             
             return DataTableOperationResult.builder()
@@ -199,39 +201,39 @@ public class DataTableManagerComponent {
                     .build();
                     
         } catch (WorkflowValidationException e) {
-            // 重新抛出验证异常，让调用者处理
+            // Re-throw validation exception for caller to handle
             throw e;
         } catch (Exception e) {
-            log.error("更新数据表记录失败: tableName={}, error={}", request.getTableName(), e.getMessage(), e);
+            log.error("Update data table record failed: tableName={}, error={}", request.getTableName(), e.getMessage(), e);
             return DataTableOperationResult.builder()
                     .success(false)
-                    .errorMessage("更新失败: " + e.getMessage())
+                    .errorMessage(i18nService.getMessage("workflow.dt.update_failed", e.getMessage()))
                     .build();
         }
     }
 
     /**
-     * 删除数据表记录
+     * Delete data table record
      * 
-     * @param request 删除请求
-     * @return 操作结果
+     * @param request the delete request
+     * @return operation result
      */
     @Transactional
     public DataTableOperationResult deleteRecord(DataTableDeleteRequest request) {
-        log.info("删除数据表记录: tableName={}, conditions={}", request.getTableName(), request.getWhereConditions());
+        log.info("Deleting data table record: tableName={}, conditions={}", request.getTableName(), request.getWhereConditions());
         
         try {
-            // 验证请求参数
+            // Validate request parameters
             validateDeleteRequest(request);
             
-            // 构建删除SQL
+            // Build delete SQL
             SqlBuilder sqlBuilder = buildDeleteSql(request);
             String sql = sqlBuilder.getSql();
             Object[] params = sqlBuilder.getParams().toArray();
             
-            log.debug("执行删除SQL: {}, 参数: {}", sql, Arrays.toString(params));
+            log.debug("Execute delete SQL: {}, params: {}", sql, Arrays.toString(params));
             
-            // 执行删除
+            // Execute delete
             int affectedRows = jdbcTemplate.update(sql, params);
             
             return DataTableOperationResult.builder()
@@ -241,76 +243,76 @@ public class DataTableManagerComponent {
                     .build();
                     
         } catch (WorkflowValidationException e) {
-            // 重新抛出验证异常，让调用者处理
+            // Re-throw validation exception for caller to handle
             throw e;
         } catch (Exception e) {
-            log.error("删除数据表记录失败: tableName={}, error={}", request.getTableName(), e.getMessage(), e);
+            log.error("Delete data table record failed: tableName={}, error={}", request.getTableName(), e.getMessage(), e);
             return DataTableOperationResult.builder()
                     .success(false)
-                    .errorMessage("删除失败: " + e.getMessage())
+                    .errorMessage(i18nService.getMessage("workflow.dt.delete_failed", e.getMessage()))
                     .build();
         }
     }
 
     /**
-     * 验证查询请求参数
+     * Validate query request parameters
      */
     private void validateQueryRequest(DataTableQueryRequest request) {
         List<WorkflowValidationException.ValidationError> errors = new ArrayList<>();
         
         if (!StringUtils.hasText(request.getTableName())) {
-            errors.add(new WorkflowValidationException.ValidationError("tableName", "表名不能为空", request.getTableName()));
+            errors.add(new WorkflowValidationException.ValidationError("tableName", i18nService.getMessage("workflow.dt.table_name_empty"), request.getTableName()));
         }
         
         if (StringUtils.hasText(request.getTableName()) && !isValidName(request.getTableName())) {
-            errors.add(new WorkflowValidationException.ValidationError("tableName", "表名格式不正确: " + request.getTableName(), request.getTableName()));
+            errors.add(new WorkflowValidationException.ValidationError("tableName", i18nService.getMessage("workflow.dt.table_name_invalid", request.getTableName()), request.getTableName()));
         }
         
-        // 防止 DOS 攻击: 限制查询字段数量
+        // DOS protection: limit select field count
         if (request.getSelectFields() != null && request.getSelectFields().size() > MAX_SELECT_FIELDS) {
             errors.add(new WorkflowValidationException.ValidationError("selectFields",
-                    "查询字段数量超过限制: " + request.getSelectFields().size() + ", 最大 " + MAX_SELECT_FIELDS, request.getSelectFields().size()));
+                    i18nService.getMessage("workflow.dt.select_fields_exceeded", request.getSelectFields().size(), MAX_SELECT_FIELDS), request.getSelectFields().size()));
         }
 
-        // 验证字段名
+        // Validate field names
         if (request.getSelectFields() != null) {
             for (String field : request.getSelectFields()) {
                 if (!isValidName(field)) {
-                    errors.add(new WorkflowValidationException.ValidationError("selectFields", "字段名格式不正确: " + field, field));
+                    errors.add(new WorkflowValidationException.ValidationError("selectFields", i18nService.getMessage("workflow.dt.field_name_invalid", field), field));
                 }
             }
         }
 
-        // 防止 DOS 攻击: 限制 WHERE 条件数量
+        // DOS protection: limit WHERE condition count
         if (request.getWhereConditions() != null && request.getWhereConditions().size() > MAX_WHERE_CONDITIONS) {
             errors.add(new WorkflowValidationException.ValidationError("whereConditions",
-                    "WHERE 条件数量超过限制: " + request.getWhereConditions().size() + ", 最大 " + MAX_WHERE_CONDITIONS, request.getWhereConditions().size()));
+                    i18nService.getMessage("workflow.dt.where_conditions_exceeded", request.getWhereConditions().size(), MAX_WHERE_CONDITIONS), request.getWhereConditions().size()));
         }
 
-        // 防止 DOS 攻击: 限制 JOIN 数量
+        // DOS protection: limit JOIN count
         if (request.getJoinConditions() != null && request.getJoinConditions().size() > MAX_JOIN_CONDITIONS) {
             errors.add(new WorkflowValidationException.ValidationError("joinConditions",
-                    "JOIN 条件数量超过限制: " + request.getJoinConditions().size() + ", 最大 " + MAX_JOIN_CONDITIONS, request.getJoinConditions().size()));
+                    i18nService.getMessage("workflow.dt.join_conditions_exceeded", request.getJoinConditions().size(), MAX_JOIN_CONDITIONS), request.getJoinConditions().size()));
         }
 
-        // 验证排序参数
+        // Validate sort parameters
         if (StringUtils.hasText(request.getOrderBy()) && !isValidName(request.getOrderBy())) {
-            errors.add(new WorkflowValidationException.ValidationError("orderBy", "排序字段名格式不正确: " + request.getOrderBy(), request.getOrderBy()));
+            errors.add(new WorkflowValidationException.ValidationError("orderBy", i18nService.getMessage("workflow.dt.order_by_invalid", request.getOrderBy()), request.getOrderBy()));
         }
         
-        // 验证排序方向
+        // Validate sort direction
         if (StringUtils.hasText(request.getOrderDirection()) && 
             !ALLOWED_ORDER_DIRECTIONS.contains(request.getOrderDirection().toUpperCase())) {
-            errors.add(new WorkflowValidationException.ValidationError("orderDirection", "排序方向不正确: " + request.getOrderDirection(), request.getOrderDirection()));
+            errors.add(new WorkflowValidationException.ValidationError("orderDirection", i18nService.getMessage("workflow.dt.order_direction_invalid", request.getOrderDirection()), request.getOrderDirection()));
         }
         
-        // 验证分页参数
+        // Validate pagination parameters
         if (request.getOffset() != null && request.getOffset() < 0) {
-            errors.add(new WorkflowValidationException.ValidationError("offset", "偏移量不能为负数", request.getOffset()));
+            errors.add(new WorkflowValidationException.ValidationError("offset", i18nService.getMessage("workflow.dt.offset_negative"), request.getOffset()));
         }
         
         if (request.getLimit() != null && request.getLimit() <= 0) {
-            errors.add(new WorkflowValidationException.ValidationError("limit", "分页大小必须大于0", request.getLimit()));
+            errors.add(new WorkflowValidationException.ValidationError("limit", i18nService.getMessage("workflow.dt.limit_must_be_positive"), request.getLimit()));
         }
         
         if (!errors.isEmpty()) {
@@ -319,34 +321,34 @@ public class DataTableManagerComponent {
     }
 
     /**
-     * 验证插入请求参数
+     * Validate insert request parameters
      */
     private void validateInsertRequest(DataTableInsertRequest request) {
         List<WorkflowValidationException.ValidationError> errors = new ArrayList<>();
         
         if (!StringUtils.hasText(request.getTableName())) {
-            errors.add(new WorkflowValidationException.ValidationError("tableName", "表名不能为空", request.getTableName()));
+            errors.add(new WorkflowValidationException.ValidationError("tableName", i18nService.getMessage("workflow.dt.table_name_empty"), request.getTableName()));
         }
         
         if (StringUtils.hasText(request.getTableName()) && !isValidName(request.getTableName())) {
-            errors.add(new WorkflowValidationException.ValidationError("tableName", "表名格式不正确: " + request.getTableName(), request.getTableName()));
+            errors.add(new WorkflowValidationException.ValidationError("tableName", i18nService.getMessage("workflow.dt.table_name_invalid", request.getTableName()), request.getTableName()));
         }
         
         if (request.getData() == null || request.getData().isEmpty()) {
-            errors.add(new WorkflowValidationException.ValidationError("data", "插入数据不能为空", request.getData()));
+            errors.add(new WorkflowValidationException.ValidationError("data", i18nService.getMessage("workflow.dt.insert_data_empty"), request.getData()));
         }
         
-        // 防止 DOS 攻击: 限制插入列数量
+        // DOS protection: limit insert column count
         if (request.getData() != null && request.getData().size() > MAX_INSERT_COLUMNS) {
             errors.add(new WorkflowValidationException.ValidationError("data",
-                    "插入列数量超过限制: " + request.getData().size() + ", 最大 " + MAX_INSERT_COLUMNS, request.getData().size()));
+                    i18nService.getMessage("workflow.dt.insert_columns_exceeded", request.getData().size(), MAX_INSERT_COLUMNS), request.getData().size()));
         }
 
-        // 验证字段名
+        // Validate field names
         if (request.getData() != null) {
             for (String field : request.getData().keySet()) {
                 if (!isValidName(field)) {
-                    errors.add(new WorkflowValidationException.ValidationError("data", "字段名格式不正确: " + field, field));
+                    errors.add(new WorkflowValidationException.ValidationError("data", i18nService.getMessage("workflow.dt.field_name_invalid", field), field));
                 }
             }
         }
@@ -357,44 +359,44 @@ public class DataTableManagerComponent {
     }
 
     /**
-     * 验证更新请求参数
+     * Validate update request parameters
      */
     private void validateUpdateRequest(DataTableUpdateRequest request) {
         List<WorkflowValidationException.ValidationError> errors = new ArrayList<>();
         
         if (!StringUtils.hasText(request.getTableName())) {
-            errors.add(new WorkflowValidationException.ValidationError("tableName", "表名不能为空", request.getTableName()));
+            errors.add(new WorkflowValidationException.ValidationError("tableName", i18nService.getMessage("workflow.dt.table_name_empty"), request.getTableName()));
         }
         
         if (StringUtils.hasText(request.getTableName()) && !isValidName(request.getTableName())) {
-            errors.add(new WorkflowValidationException.ValidationError("tableName", "表名格式不正确: " + request.getTableName(), request.getTableName()));
+            errors.add(new WorkflowValidationException.ValidationError("tableName", i18nService.getMessage("workflow.dt.table_name_invalid", request.getTableName()), request.getTableName()));
         }
         
         if (request.getUpdateData() == null || request.getUpdateData().isEmpty()) {
-            errors.add(new WorkflowValidationException.ValidationError("updateData", "更新数据不能为空", request.getUpdateData()));
+            errors.add(new WorkflowValidationException.ValidationError("updateData", i18nService.getMessage("workflow.dt.update_data_empty"), request.getUpdateData()));
         }
         
         if (request.getWhereConditions() == null || request.getWhereConditions().isEmpty()) {
-            errors.add(new WorkflowValidationException.ValidationError("whereConditions", "更新条件不能为空", request.getWhereConditions()));
+            errors.add(new WorkflowValidationException.ValidationError("whereConditions", i18nService.getMessage("workflow.dt.update_conditions_empty"), request.getWhereConditions()));
         }
         
-        // 防止 DOS 攻击: 限制更新列数量
+        // DOS protection: limit update column count
         if (request.getUpdateData() != null && request.getUpdateData().size() > MAX_UPDATE_COLUMNS) {
             errors.add(new WorkflowValidationException.ValidationError("updateData",
-                    "SET 子句数量超过限制: " + request.getUpdateData().size() + ", 最大 " + MAX_UPDATE_COLUMNS, request.getUpdateData().size()));
+                    i18nService.getMessage("workflow.dt.set_clauses_exceeded", request.getUpdateData().size(), MAX_UPDATE_COLUMNS), request.getUpdateData().size()));
         }
 
-        // 防止 DOS 攻击: 限制 WHERE 条件数量
+        // DOS protection: limit WHERE condition count
         if (request.getWhereConditions() != null && request.getWhereConditions().size() > MAX_WHERE_CONDITIONS) {
             errors.add(new WorkflowValidationException.ValidationError("whereConditions",
-                    "WHERE 条件数量超过限制: " + request.getWhereConditions().size() + ", 最大 " + MAX_WHERE_CONDITIONS, request.getWhereConditions().size()));
+                    i18nService.getMessage("workflow.dt.where_conditions_exceeded", request.getWhereConditions().size(), MAX_WHERE_CONDITIONS), request.getWhereConditions().size()));
         }
 
-        // 验证字段名
+        // Validate field names
         if (request.getUpdateData() != null) {
             for (String field : request.getUpdateData().keySet()) {
                 if (!isValidName(field)) {
-                    errors.add(new WorkflowValidationException.ValidationError("updateData", "字段名格式不正确: " + field, field));
+                    errors.add(new WorkflowValidationException.ValidationError("updateData", i18nService.getMessage("workflow.dt.field_name_invalid", field), field));
                 }
             }
         }
@@ -402,7 +404,7 @@ public class DataTableManagerComponent {
         if (request.getWhereConditions() != null) {
             for (String field : request.getWhereConditions().keySet()) {
                 if (!isValidName(field)) {
-                    errors.add(new WorkflowValidationException.ValidationError("whereConditions", "条件字段名格式不正确: " + field, field));
+                    errors.add(new WorkflowValidationException.ValidationError("whereConditions", i18nService.getMessage("workflow.dt.condition_field_invalid", field), field));
                 }
             }
         }
@@ -413,34 +415,34 @@ public class DataTableManagerComponent {
     }
 
     /**
-     * 验证删除请求参数
+     * Validate delete request parameters
      */
     private void validateDeleteRequest(DataTableDeleteRequest request) {
         List<WorkflowValidationException.ValidationError> errors = new ArrayList<>();
         
         if (!StringUtils.hasText(request.getTableName())) {
-            errors.add(new WorkflowValidationException.ValidationError("tableName", "表名不能为空", request.getTableName()));
+            errors.add(new WorkflowValidationException.ValidationError("tableName", i18nService.getMessage("workflow.dt.table_name_empty"), request.getTableName()));
         }
         
         if (StringUtils.hasText(request.getTableName()) && !isValidName(request.getTableName())) {
-            errors.add(new WorkflowValidationException.ValidationError("tableName", "表名格式不正确: " + request.getTableName(), request.getTableName()));
+            errors.add(new WorkflowValidationException.ValidationError("tableName", i18nService.getMessage("workflow.dt.table_name_invalid", request.getTableName()), request.getTableName()));
         }
         
         if (request.getWhereConditions() == null || request.getWhereConditions().isEmpty()) {
-            errors.add(new WorkflowValidationException.ValidationError("whereConditions", "删除条件不能为空", request.getWhereConditions()));
+            errors.add(new WorkflowValidationException.ValidationError("whereConditions", i18nService.getMessage("workflow.dt.delete_conditions_empty"), request.getWhereConditions()));
         }
         
-        // 防止 DOS 攻击: 限制 WHERE 条件数量
+        // DOS protection: limit WHERE condition count
         if (request.getWhereConditions() != null && request.getWhereConditions().size() > MAX_WHERE_CONDITIONS) {
             errors.add(new WorkflowValidationException.ValidationError("whereConditions",
-                    "WHERE 条件数量超过限制: " + request.getWhereConditions().size() + ", 最大 " + MAX_WHERE_CONDITIONS, request.getWhereConditions().size()));
+                    i18nService.getMessage("workflow.dt.where_conditions_exceeded", request.getWhereConditions().size(), MAX_WHERE_CONDITIONS), request.getWhereConditions().size()));
         }
 
-        // 验证字段名
+        // Validate field names
         if (request.getWhereConditions() != null) {
             for (String field : request.getWhereConditions().keySet()) {
                 if (!isValidName(field)) {
-                    errors.add(new WorkflowValidationException.ValidationError("whereConditions", "条件字段名格式不正确: " + field, field));
+                    errors.add(new WorkflowValidationException.ValidationError("whereConditions", i18nService.getMessage("workflow.dt.condition_field_invalid", field), field));
                 }
             }
         }
@@ -451,19 +453,19 @@ public class DataTableManagerComponent {
     }
 
     /**
-     * 验证名称是否安全（防止SQL注入）
+     * Validate name safety (prevent SQL injection)
      */
     private boolean isValidName(String name) {
         return name != null && name.matches(SAFE_NAME_PATTERN);
     }
 
     /**
-     * 构建查询SQL
+     * Build query SQL
      */
     private SqlBuilder buildSelectSql(DataTableQueryRequest request) {
         SqlBuilder builder = new SqlBuilder();
         
-        // SELECT 子句
+        // SELECT clause
         if (request.getSelectFields() != null && !request.getSelectFields().isEmpty()) {
             String fields = request.getSelectFields().stream()
                     .collect(Collectors.joining(", "));
@@ -472,10 +474,10 @@ public class DataTableManagerComponent {
             builder.append("SELECT *");
         }
         
-        // FROM 子句
+        // FROM clause
         builder.append(" FROM ").append(request.getTableName());
         
-        // JOIN 子句
+        // JOIN clause
         if (request.getJoinConditions() != null && !request.getJoinConditions().isEmpty()) {
             for (DataTableQueryRequest.JoinCondition join : request.getJoinConditions()) {
                 if (ALLOWED_JOIN_TYPES.contains(join.getJoinType().toUpperCase()) &&
@@ -489,7 +491,7 @@ public class DataTableManagerComponent {
             }
         }
         
-        // WHERE 子句
+        // WHERE clause
         if (request.getWhereConditions() != null && !request.getWhereConditions().isEmpty()) {
             builder.append(" WHERE ");
             boolean first = true;
@@ -503,7 +505,7 @@ public class DataTableManagerComponent {
             }
         }
         
-        // ORDER BY 子句
+        // ORDER BY clause
         if (StringUtils.hasText(request.getOrderBy())) {
             builder.append(" ORDER BY ").append(request.getOrderBy());
             if (StringUtils.hasText(request.getOrderDirection())) {
@@ -511,7 +513,7 @@ public class DataTableManagerComponent {
             }
         }
         
-        // LIMIT 和 OFFSET 子句
+        // LIMIT and OFFSET clause
         if (request.getLimit() != null) {
             builder.append(" LIMIT ?");
             builder.addParam(request.getLimit());
@@ -526,7 +528,7 @@ public class DataTableManagerComponent {
     }
 
     /**
-     * 构建插入SQL
+     * Build insert SQL
      */
     private SqlBuilder buildInsertSql(DataTableInsertRequest request) {
         SqlBuilder builder = new SqlBuilder();
@@ -539,7 +541,7 @@ public class DataTableManagerComponent {
                .append(" (").append(fieldList).append(")")
                .append(" VALUES (").append(placeholders).append(")");
         
-        // 添加参数
+        // Add parameters
         for (String field : fields) {
             builder.addParam(request.getData().get(field));
         }
@@ -548,14 +550,14 @@ public class DataTableManagerComponent {
     }
 
     /**
-     * 构建更新SQL
+     * Build update SQL
      */
     private SqlBuilder buildUpdateSql(DataTableUpdateRequest request) {
         SqlBuilder builder = new SqlBuilder();
         
         builder.append("UPDATE ").append(request.getTableName()).append(" SET ");
         
-        // SET 子句
+        // SET clause
         boolean first = true;
         for (Map.Entry<String, Object> entry : request.getUpdateData().entrySet()) {
             if (!first) {
@@ -566,7 +568,7 @@ public class DataTableManagerComponent {
             first = false;
         }
         
-        // WHERE 子句
+        // WHERE clause
         builder.append(" WHERE ");
         first = true;
         for (Map.Entry<String, Object> entry : request.getWhereConditions().entrySet()) {
@@ -582,7 +584,7 @@ public class DataTableManagerComponent {
     }
 
     /**
-     * 构建删除SQL
+     * Build delete SQL
      */
     private SqlBuilder buildDeleteSql(DataTableDeleteRequest request) {
         SqlBuilder builder = new SqlBuilder();
@@ -603,14 +605,14 @@ public class DataTableManagerComponent {
     }
 
     /**
-     * 查询总记录数
+     * Query total record count
      */
     private Long queryTotalCount(DataTableQueryRequest request) {
         SqlBuilder builder = new SqlBuilder();
         
         builder.append("SELECT COUNT(*) FROM ").append(request.getTableName());
         
-        // JOIN 子句
+        // JOIN clause
         if (request.getJoinConditions() != null && !request.getJoinConditions().isEmpty()) {
             for (DataTableQueryRequest.JoinCondition join : request.getJoinConditions()) {
                 if (ALLOWED_JOIN_TYPES.contains(join.getJoinType().toUpperCase()) &&
@@ -624,7 +626,7 @@ public class DataTableManagerComponent {
             }
         }
         
-        // WHERE 子句
+        // WHERE clause
         if (request.getWhereConditions() != null && !request.getWhereConditions().isEmpty()) {
             builder.append(" WHERE ");
             boolean first = true;
@@ -643,7 +645,7 @@ public class DataTableManagerComponent {
     }
 
     /**
-     * SQL构建器内部类
+     * SQL builder inner class
      */
     private static class SqlBuilder {
         private final StringBuilder sql = new StringBuilder();

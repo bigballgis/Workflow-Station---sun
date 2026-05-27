@@ -8,228 +8,228 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * 任务列表查询结果
+ * Task list query result
  */
 @Data
 @Builder
 public class TaskListResult {
     
     /**
-     * 任务列表
+     * Task list
      */
     private List<TaskInfo> tasks;
     
     /**
-     * 总数量
+     * Total count
      */
     private Long totalCount;
     
     /**
-     * 当前页码
+     * Current page number
      */
     private Integer currentPage;
     
     /**
-     * 页面大小
+     * Page size
      */
     private Integer pageSize;
     
     /**
-     * 总页数
+     * Total pages
      */
     private Integer totalPages;
     
     /**
-     * 是否成功
+     * Whether successful
      */
     @Builder.Default
     private Boolean success = true;
     
     /**
-     * 消息
+     * Message
      */
     private String message;
     
     /**
-     * 任务信息
+     * Task information
      */
     @Data
     @Builder
     public static class TaskInfo {
         
         /**
-         * 任务ID
+         * Task ID
          */
         private String taskId;
         
         /**
-         * 任务名称
+         * Task name
          */
         private String taskName;
         
         /**
-         * 任务描述
+         * Task description
          */
         private String taskDescription;
         
         /**
-         * 流程实例ID
+         * Process instance ID
          */
         private String processInstanceId;
         
         /**
-         * 流程定义ID
+         * Process definition ID
          */
         private String processDefinitionId;
         
         /**
-         * 流程定义Key（从processDefinitionId中提取）
+         * Process definition key (extracted from processDefinitionId)
          */
         private String processDefinitionKey;
         
         /**
-         * 流程定义名称
+         * Process definition name
          */
         private String processDefinitionName;
         
         /**
-         * 分配类型
+         * Assignment type
          */
         private AssignmentType assignmentType;
 
         /**
-         * BPMN 用户任务扩展属性 assigneeType 的原始值（从已部署 BPMN XML 读取，如 INITIATOR、ROLE）。
-         * 与运行时 {@link #assignmentType} 分离，用于展示设计器语义；若已规范化为发起人直办，{@link #assignmentType} 可能为 USER。
+         * Original value of the BPMN user task extension attribute assigneeType (read from deployed BPMN XML, e.g. INITIATOR, ROLE).
+         * Separate from runtime {@link #assignmentType}, used to display designer semantics; if normalized to initiator assignment, {@link #assignmentType} may be USER.
          */
         private String bpmnAssigneeType;
 
         /**
-         * BPMN 扩展 {@code businessUnitId}（如 FIXED_BU_ROLE 指定的固定 BU），供门户按当前工作台过滤待办。
+         * BPMN extension {@code businessUnitId} (e.g. fixed BU specified by FIXED_BU_ROLE), used by portal to filter tasks by current workspace.
          */
         private String bpmnBusinessUnitId;
         
         /**
-         * 分配目标
+         * Assignment target
          */
         private String assignmentTarget;
         
         /**
-         * 当前处理人
+         * Current assignee
          */
         private String currentAssignee;
         
         /**
-         * 当前处理人名称
+         * Current assignee name
          */
         private String currentAssigneeName;
         
         /**
-         * 优先级
+         * Priority
          */
         private Integer priority;
         
         /**
-         * 到期时间
+         * Due date
          */
         private LocalDateTime dueDate;
         
         /**
-         * 任务状态
+         * Task status
          */
         private String status;
         
         /**
-         * 创建时间
+         * Created time
          */
         private LocalDateTime createdTime;
         
         /**
-         * 是否已委托
+         * Whether delegated
          */
         private Boolean isDelegated;
         
         /**
-         * 是否已认领
+         * Whether claimed
          */
         private Boolean isClaimed;
         
         /**
-         * 是否过期
+         * Whether overdue
          */
         private Boolean isOverdue;
         
         /**
-         * 表单键
+         * Form key
          */
         private String formKey;
         
         /**
-         * 业务键
+         * Business key
          */
         private String businessKey;
         
         /**
-         * 流程发起人ID
+         * Process initiator ID
          */
         private String initiatorId;
         
         /**
-         * 流程发起人名称
+         * Process initiator name
          */
         private String initiatorName;
         
         /**
-         * 流程变量（用于表单数据绑定）
+         * Process variables (for form data binding)
          */
         private java.util.Map<String, Object> variables;
 
         /**
-         * Flowable 候选人用户 ID（运行时任务，无 assignee 时由 identity links 解析）
+         * Flowable candidate user IDs (resolved from identity links at runtime when no assignee)
          */
         private java.util.List<String> candidateUserIds;
 
         /**
-         * Flowable 候选组 ID
+         * Flowable candidate group IDs
          */
         private java.util.List<String> candidateGroupIds;
         
         /**
-         * 任务定义Key（BPMN元素ID，如 Activity_1abc）
+         * Task definition key (BPMN element ID, e.g. Activity_1abc)
          */
         private String taskDefinitionKey;
         
         /**
-         * 任务可用操作ID列表（从BPMN extensionElements中提取）
+         * Available action IDs for the task (extracted from BPMN extensionElements)
          */
         private java.util.List<String> actionIds;
         
         /**
-         * 分配类型描述
+         * Assignment type description
          */
         public String getAssignmentTypeDescription() {
-            return assignmentType != null ? assignmentType.getDescription() : "未知";
+            return assignmentType != null ? assignmentType.getDescription() : "Unknown";
         }
         
         /**
-         * 获取任务状态标签
+         * Get task status label
          */
         public String getStatusLabel() {
             if (isDelegated != null && isDelegated) {
-                return "已委托";
+                return "Delegated";
             }
             if (isClaimed != null && isClaimed) {
-                return "已认领";
+                return "Claimed";
             }
             if (isOverdue != null && isOverdue) {
-                return "已过期";
+                return "Overdue";
             }
             return switch (status != null ? status : "UNKNOWN") {
-                case "CREATED" -> "已创建";
-                case "ASSIGNED" -> "已分配";
-                case "IN_PROGRESS" -> "处理中";
-                case "COMPLETED" -> "已完成";
-                case "CANCELLED" -> "已取消";
-                default -> "未知状态";
+                case "CREATED" -> "Created";
+                case "ASSIGNED" -> "Assigned";
+                case "IN_PROGRESS" -> "In Progress";
+                case "COMPLETED" -> "Completed";
+                case "CANCELLED" -> "Cancelled";
+                default -> "Unknown status";
             };
         }
     }

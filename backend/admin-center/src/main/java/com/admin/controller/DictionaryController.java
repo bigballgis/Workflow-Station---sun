@@ -21,30 +21,32 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 import com.platform.security.util.SecurityContextUtils;
+import com.platform.common.i18n.I18nService;
 
 @Slf4j
 @RestController
 @RequestMapping("/dictionaries")
 @RequiredArgsConstructor
-@Tag(name = "数据字典管理", description = "字典CRUD、字典项查询和关联数据查询接口")
+@Tag(name = "Data Dictionary Management", description = "Dictionary CRUD, item query and related data query APIs")
 public class DictionaryController {
     
     private final DataDictionaryManagerComponent dictionaryManager;
+    private final I18nService i18nService;
     
-    // ==================== 字典 CRUD ====================
+    // ==================== Dictionary CRUD ====================
     
     @PostMapping
-    @Operation(summary = "创建字典")
+    @Operation(summary = "Create dictionary")
     public ResponseEntity<Dictionary> createDictionary(
             @Valid @RequestBody DictionaryCreateRequest request) {
         String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthenticated_user")));
         Dictionary dictionary = dictionaryManager.createDictionary(request, userId);
         return ResponseEntity.status(HttpStatus.CREATED).body(dictionary);
     }
     
     @GetMapping
-    @Operation(summary = "获取字典列表")
+    @Operation(summary = "Get dictionary list")
     public ResponseEntity<List<Dictionary>> listDictionaries(
             @RequestParam(required = false) DictionaryType type,
             @RequestParam(required = false) DictionaryStatus status) {
@@ -52,92 +54,92 @@ public class DictionaryController {
     }
     
     @GetMapping("/page")
-    @Operation(summary = "分页获取字典列表")
+    @Operation(summary = "Get dictionary list (paged)")
     public ResponseEntity<Page<Dictionary>> listDictionariesPaged(Pageable pageable) {
         return ResponseEntity.ok(dictionaryManager.listDictionaries(pageable));
     }
 
     
     @GetMapping("/{id}")
-    @Operation(summary = "获取字典详情")
+    @Operation(summary = "Get dictionary detail")
     public ResponseEntity<Dictionary> getDictionary(@PathVariable String id) {
         return ResponseEntity.ok(dictionaryManager.getDictionaryById(id));
     }
     
     @GetMapping("/code/{code}")
-    @Operation(summary = "根据代码获取字典")
+    @Operation(summary = "Get dictionary by code")
     public ResponseEntity<Dictionary> getDictionaryByCode(@PathVariable String code) {
         return ResponseEntity.ok(dictionaryManager.getDictionaryByCode(code));
     }
     
     @PutMapping("/{id}")
-    @Operation(summary = "更新字典")
+    @Operation(summary = "Update dictionary")
     public ResponseEntity<Dictionary> updateDictionary(
             @PathVariable String id,
             @Valid @RequestBody DictionaryUpdateRequest request) {
         String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthenticated_user")));
         return ResponseEntity.ok(dictionaryManager.updateDictionary(id, request, userId));
     }
     
     @DeleteMapping("/{id}")
-    @Operation(summary = "删除字典")
+    @Operation(summary = "Delete dictionary")
     public ResponseEntity<Void> deleteDictionary(@PathVariable String id) {
         dictionaryManager.deleteDictionary(id);
         return ResponseEntity.noContent().build();
     }
     
     @PostMapping("/{id}/activate")
-    @Operation(summary = "启用字典")
+    @Operation(summary = "Activate dictionary")
     public ResponseEntity<Dictionary> activateDictionary(
             @PathVariable String id) {
         String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthenticated_user")));
         return ResponseEntity.ok(dictionaryManager.activateDictionary(id, userId));
     }
     
     @PostMapping("/{id}/deactivate")
-    @Operation(summary = "禁用字典")
+    @Operation(summary = "Deactivate dictionary")
     public ResponseEntity<Dictionary> deactivateDictionary(
             @PathVariable String id) {
         String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthenticated_user")));
         return ResponseEntity.ok(dictionaryManager.deactivateDictionary(id, userId));
     }
     
     @GetMapping("/search")
-    @Operation(summary = "搜索字典")
+    @Operation(summary = "Search dictionaries")
     public ResponseEntity<List<Dictionary>> searchDictionaries(@RequestParam String keyword) {
         return ResponseEntity.ok(dictionaryManager.searchDictionaries(keyword));
     }
     
-    // ==================== 字典项管理 ====================
+    // ==================== Dictionary Item Management ====================
     
     @PostMapping("/{dictionaryId}/items")
-    @Operation(summary = "创建字典项")
+    @Operation(summary = "Create dictionary item")
     public ResponseEntity<DictionaryItem> createDictionaryItem(
             @PathVariable String dictionaryId,
             @Valid @RequestBody DictionaryItemRequest request) {
         String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthenticated_user")));
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(dictionaryManager.createDictionaryItem(dictionaryId, request, userId));
     }
     
     @GetMapping("/{dictionaryId}/items")
-    @Operation(summary = "获取字典项列表")
+    @Operation(summary = "Get dictionary items")
     public ResponseEntity<List<DictionaryItem>> getDictionaryItems(@PathVariable String dictionaryId) {
         return ResponseEntity.ok(dictionaryManager.getDictionaryItems(dictionaryId));
     }
     
     @GetMapping("/{dictionaryId}/items/valid")
-    @Operation(summary = "获取有效字典项")
+    @Operation(summary = "Get valid dictionary items")
     public ResponseEntity<List<DictionaryItem>> getValidDictionaryItems(@PathVariable String dictionaryId) {
         return ResponseEntity.ok(dictionaryManager.getValidDictionaryItems(dictionaryId));
     }
     
     @GetMapping("/{dictionaryId}/items/localized")
-    @Operation(summary = "获取本地化字典项")
+    @Operation(summary = "Get localized dictionary items")
     public ResponseEntity<List<DictionaryItemLocalized>> getLocalizedItems(
             @PathVariable String dictionaryId,
             @RequestParam(defaultValue = "zh-CN") String language) {
@@ -145,51 +147,51 @@ public class DictionaryController {
     }
     
     @PutMapping("/items/{itemId}")
-    @Operation(summary = "更新字典项")
+    @Operation(summary = "Update dictionary item")
     public ResponseEntity<DictionaryItem> updateDictionaryItem(
             @PathVariable String itemId,
             @Valid @RequestBody DictionaryItemRequest request) {
         String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthenticated_user")));
         return ResponseEntity.ok(dictionaryManager.updateDictionaryItem(itemId, request, userId));
     }
     
     @DeleteMapping("/items/{itemId}")
-    @Operation(summary = "删除字典项")
+    @Operation(summary = "Delete dictionary item")
     public ResponseEntity<Void> deleteDictionaryItem(
             @PathVariable String itemId) {
         String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthenticated_user")));
         dictionaryManager.deleteDictionaryItem(itemId, userId);
         return ResponseEntity.noContent().build();
     }
     
     @PutMapping("/items/{itemId}/translations")
-    @Operation(summary = "更新字典项翻译")
+    @Operation(summary = "Update item translations")
     public ResponseEntity<Void> updateItemTranslations(
             @PathVariable String itemId,
             @RequestBody Map<String, String> translations) {
         String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthenticated_user")));
         dictionaryManager.updateItemTranslations(itemId, translations, userId);
         return ResponseEntity.ok().build();
     }
     
-    // ==================== 版本管理 ====================
+    // ==================== Version Management ====================
     
     @GetMapping("/{dictionaryId}/versions")
-    @Operation(summary = "获取版本历史")
+    @Operation(summary = "Get version history")
     public ResponseEntity<List<DictionaryVersion>> getVersionHistory(@PathVariable String dictionaryId) {
         return ResponseEntity.ok(dictionaryManager.getVersionHistory(dictionaryId));
     }
     
     @PostMapping("/{dictionaryId}/rollback/{version}")
-    @Operation(summary = "回滚到指定版本")
+    @Operation(summary = "Rollback to specified version")
     public ResponseEntity<Dictionary> rollbackToVersion(
             @PathVariable String dictionaryId,
             @PathVariable Integer version) {
         String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthenticated_user")));
         return ResponseEntity.ok(dictionaryManager.rollbackToVersion(dictionaryId, version, userId));
     }
 }

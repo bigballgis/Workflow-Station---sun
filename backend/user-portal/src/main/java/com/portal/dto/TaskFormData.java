@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Task Form 数据响应 DTO
+ * Task Form data response DTO
  * GET /api/portal/tasks/{taskId}/form-data
  */
 @Data

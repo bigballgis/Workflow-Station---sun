@@ -20,7 +20,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.time.Instant;
 
 /**
- * 通用上传文件实体。
+ * Generic uploaded file entity.
  */
 @Entity
 @Table(name = "dw_uploaded_files")

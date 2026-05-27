@@ -13,7 +13,7 @@ import lombok.NoArgsConstructor;
 import java.time.Instant;
 
 /**
- * 表单表绑定响应DTO
+ * Form-Table Binding Response DTO
  */
 @Data
 @Builder
@@ -36,7 +36,7 @@ public class FormTableBindingResponse {
     private SubMode subMode;
 
     /**
-     * 从实体转换为响应DTO
+     * Convert from entity to response DTO.
      */
     public static FormTableBindingResponse fromEntity(FormTableBinding binding) {
         return fromEntity(binding, null);
@@ -47,7 +47,8 @@ public class FormTableBindingResponse {
     }
 
     /**
-     * @param formIdOverride 若为非 null，则用其作为响应中的 formId，避免在未初始化 LAZY {@code form} 时调用 {@link FormTableBinding#getFormId()}。
+     * @param formIdOverride if non-null, use it as the formId in the response to avoid calling
+     *                       {@link FormTableBinding#getFormId()} when the LAZY {@code form} is not initialized.
      */
     public static FormTableBindingResponse fromEntity(
             FormTableBinding binding, String relationTableName, Long formIdOverride) {
@@ -77,8 +78,10 @@ public class FormTableBindingResponse {
     }
 
     /**
-     * 在服务层已知物理表或为 RELATED 时使用：不调用 {@link FormTableBinding#getTableId()} /
-     * {@link FormTableBinding#getTableName()} / {@link FormTableBinding#getFormId()}（会触碰 LAZY 关联）。
+     * Use when the service layer already knows the physical table or is a RELATED binding:
+     * avoids calling {@link FormTableBinding#getTableId()} /
+     * {@link FormTableBinding#getTableName()} / {@link FormTableBinding#getFormId()}
+     * (which would touch LAZY associations).
      */
     public static FormTableBindingResponse fromPersisted(
             FormTableBinding binding,

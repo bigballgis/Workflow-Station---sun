@@ -25,11 +25,12 @@ import com.platform.security.util.SecurityContextUtils;
 import com.developer.entity.AiDocument;
 import com.developer.enums.AiDocumentType;
 import com.developer.enums.AiPhase;
+import com.platform.common.i18n.I18nService;
 
 import java.util.List;
 
 /**
- * AI 功能单元生成控制器
+ * AI Function Unit Generation Controller
  */
 @RestController
 @RequestMapping("/ai-generation")
@@ -38,9 +39,11 @@ import java.util.List;
 public class AiGenerationController extends BaseController {
 
     private final AiGenerationComponent aiGenerationComponent;
+    private final I18nService i18nService;
 
-    public AiGenerationController(AiGenerationComponent aiGenerationComponent) {
+    public AiGenerationController(AiGenerationComponent aiGenerationComponent, I18nService i18nService) {
         this.aiGenerationComponent = aiGenerationComponent;
+        this.i18nService = i18nService;
     }
 
     @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
@@ -48,7 +51,7 @@ public class AiGenerationController extends BaseController {
     @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
     public SseEmitter chatStream(@Valid @RequestBody AiChatRequest request) {
         String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthenticated_user")));
         log.info("Chat stream request for functionUnitId={}, userId={}", request.getFunctionUnitId(), userId);
         return aiGenerationComponent.chatStream(request, userId);
     }
@@ -58,7 +61,7 @@ public class AiGenerationController extends BaseController {
     @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public SseEmitter eventStream(@PathVariable Long functionUnitId) {
         String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthenticated_user")));
         log.info("Event stream registered for functionUnitId={}, userId={}", functionUnitId, userId);
         return aiGenerationComponent.registerEventEmitter(functionUnitId, userId);
     }
@@ -69,8 +72,8 @@ public class AiGenerationController extends BaseController {
     public ResponseEntity<ApiResponse<LockInfoResponse>> acquireLock(
             @PathVariable Long functionUnitId) {
         String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
-        // 不使用 handleRequest：AiLockConflictException 等需交由 AiExceptionHandler 映射 HTTP 状态码
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthenticated_user")));
+        // Do not use handleRequest: AiLockConflictException etc. must be handled by AiExceptionHandler to map HTTP status codes
         return ResponseEntity.ok(ApiResponse.success(aiGenerationComponent.acquireLock(functionUnitId, userId)));
     }
 
@@ -80,7 +83,7 @@ public class AiGenerationController extends BaseController {
     public ResponseEntity<ApiResponse<Void>> releaseLock(
             @PathVariable Long functionUnitId) {
         String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthenticated_user")));
         return handleRequest(() -> {
             aiGenerationComponent.releaseLock(functionUnitId, userId);
             return null;
@@ -93,7 +96,7 @@ public class AiGenerationController extends BaseController {
     public ResponseEntity<ApiResponse<Void>> requestForceUnlock(
             @PathVariable Long functionUnitId) {
         String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthenticated_user")));
         return handleRequest(() -> {
             aiGenerationComponent.requestForceUnlock(functionUnitId, userId);
             return null;
@@ -107,7 +110,7 @@ public class AiGenerationController extends BaseController {
             @PathVariable Long functionUnitId,
             @RequestBody ForceUnlockResponseRequest request) {
         String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthenticated_user")));
         return handleRequest(() -> {
             aiGenerationComponent.respondForceUnlock(functionUnitId, userId, request.isAccept());
             return null;
@@ -172,7 +175,7 @@ public class AiGenerationController extends BaseController {
     public ResponseEntity<ApiResponse<AiDocument>> saveDocument(
             @Valid @RequestBody SaveDocumentRequest request) {
         String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthenticated_user")));
         return handleRequest(() -> aiGenerationComponent.saveDocument(
                 request.getFunctionUnitId(), request.getDocumentType(), request.getContent(), userId));
     }
@@ -184,7 +187,7 @@ public class AiGenerationController extends BaseController {
             @PathVariable Long functionUnitId,
             @Valid @RequestBody ApplyGeneratedDataRequest request) {
         String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthenticated_user")));
         aiGenerationComponent.applyGeneratedData(functionUnitId, request, userId);
         return ResponseEntity.ok(ApiResponse.success());
     }

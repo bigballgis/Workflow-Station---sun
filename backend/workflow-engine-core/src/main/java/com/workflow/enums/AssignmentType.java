@@ -1,31 +1,33 @@
 package com.workflow.enums;
 
 /**
- * 任务分配类型枚举
- * 支持多维度任务分配：用户、虚拟组
+ * Task assignment type enum
+ * Supports multi-dimensional task assignment: user, virtual group
  * 
- * 注意：此枚举是旧的分配类型，新的任务分配机制使用 AssigneeType 枚举
- * AssigneeType 定义了9种标准的任务分配方式，包括基于业务单元角色的分配
+ * Note: This enum is the legacy assignment type. The new task assignment mechanism
+ * uses the AssigneeType enum, which defines 9 standard task assignment methods
+ * including business-unit-role-based assignment.
  * 
  * @see AssigneeType
  */
 public enum AssignmentType {
     
     /**
-     * 直接分配给用户
-     * 任务直接分配给特定用户，该用户在待办任务中可以看到
+     * Directly assign to user
+     * Task is assigned directly to a specific user who can see it in their to-do list
      */
     USER("USER", "User Assignment"),
     
     /**
-     * 分配给虚拟组
-     * 任务分配给虚拟组，虚拟组的所有成员都可以看到并认领处理
+     * Assign to virtual group
+     * Task is assigned to a virtual group; all group members can see and claim it
      */
     VIRTUAL_GROUP("VIRTUAL_GROUP", "Virtual Group Assignment"),
 
     /**
-     * 候选人列表（Flowable candidate users）
-     * 仅列表内用户可认领；assignmentTarget 可为逗号分隔的用户 ID（用于权限校验）
+     * Candidate user list (Flowable candidate users)
+     * Only users in the list can claim; assignmentTarget can be comma-separated user IDs
+     * (for permission validation)
      */
     CANDIDATE_USERS("CANDIDATE_USERS", "Candidate Users (claim pool)");
     
@@ -46,7 +48,7 @@ public enum AssignmentType {
     }
     
     /**
-     * 根据代码获取分配类型
+     * Get assignment type by code
      */
     public static AssignmentType fromCode(String code) {
         for (AssignmentType type : values()) {

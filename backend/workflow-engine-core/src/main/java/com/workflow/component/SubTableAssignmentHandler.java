@@ -2,6 +2,7 @@ package com.workflow.component;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.platform.common.i18n.I18nService;
 import com.platform.common.jdbc.PostgresPhysicalTablePrimaryKeys;
 import com.platform.common.jdbc.SubTableRowKeySupport;
 import com.workflow.client.AdminCenterClient;
@@ -27,18 +28,19 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * 子表行处理人分配处理器
+ * Sub-table row assignee handler.
  * 
- * 负责在多实例子流程前置任务中，手动分配子表行的处理人。
- * 这是多实例任务分发流程的第一步：前置任务处理人通过 Assign 按钮为每个子表行指定处理人。
+ * Handles manual assignment of sub-table row assignees in multi-instance sub-process pre-tasks.
+ * This is the first step of the multi-instance task distribution workflow: the pre-task handler
+ * uses the Assign button to specify an assignee for each sub-table row.
  * 
- * 核心职责：
- * 1. 验证任务存在且当前用户有权限
- * 2. 从任务扩展属性或流程定义中获取子表配置（subTableName、assigneeField）
- * 3. 验证 rowId 属于当前任务关联的主表记录
- * 4. 验证 assigneeId 对应的用户存在且未禁用
- * 5. 更新子表的 assigneeField 字段
- * 6. 返回分配结果
+ * Core responsibilities:
+ * 1. Verify the task exists and the current user has permission
+ * 2. Retrieve sub-table configuration (subTableName, assigneeField) from task extended properties or process definition
+ * 3. Verify rowId belongs to the main table record associated with the current task
+ * 4. Verify the assigneeId user exists and is not disabled
+ * 5. Update the sub-table's assigneeField column
+ * 6. Return the assignment result
  */
 @Slf4j
 @Component
@@ -64,31 +66,34 @@ public class SubTableAssignmentHandler {
 
     @Autowired
     private BpmnActionParser bpmnActionParser;
+
+    @Autowired
+    private I18nService i18nService;
     
     /**
-     * 分配子表行处理人
+     * Assign sub-table row assignee.
      * 
-     * @param taskId 主任务 ID
-     * @param rowId 子表行 ID
-     * @param assigneeId 处理人用户 ID
-     * @return 分配结果
-     * @throws WorkflowValidationException 验证失败时
-     * @throws WorkflowBusinessException 业务异常时
+     * @param taskId main task ID
+     * @param rowId sub-table row ID
+     * @param assigneeId assignee user ID
+     * @return assignment result
+     * @throws WorkflowValidationException on validation failure
+     * @throws WorkflowBusinessException on business exception
      */
     public AssignmentResponse assign(String taskId, Long rowId, String assigneeId) {
         return assign(taskId, rowId, null, assigneeId);
     }
 
     public AssignmentResponse assign(String taskId, Long rowId, Map<String, Object> rowKey, String assigneeId) {
-        log.info("开始分配子表行处理人: taskId={}, rowId={}, assigneeId={}", taskId, rowId, assigneeId);
+        log.info("Starting sub-table row assignee assignment: taskId={}, rowId={}, assigneeId={}", taskId, rowId, assigneeId);
 
-        // 1. 验证任务存在
+        // 1. Verify task exists
         Task task = taskService.createTaskQuery().taskId(taskId).singleResult();
         if (task == null) {
             throw new WorkflowValidationException("Task not found: " + taskId);
         }
 
-        // 2. 从任务扩展属性或流程定义中获取子表配置
+        // 2. Retrieve sub-table configuration from task extended properties or process definition
         SubTableConfig config = getSubTableConfig(task);
         if (config == null) {
             throw new WorkflowBusinessException(
@@ -109,10 +114,10 @@ public class SubTableAssignmentHandler {
             throw new WorkflowValidationException("Could not resolve sub-table row primary key");
         }
 
-        log.debug("获取到子表配置: subTableName={}, assigneeField={}, foreignKey={}",
+        log.debug("Retrieved sub-table config: subTableName={}, assigneeField={}, foreignKey={}",
             config.getSubTableName(), config.getAssigneeField(), config.getForeignKey());
 
-        // 3. 验证 row 属于当前任务关联的主表记录
+        // 3. Verify the row belongs to the main table record associated with the current task
         if (!verifyRowBelongsToTask(config, resolvedRowKey, task)) {
             throw new WorkflowValidationException(
                 String.format("Sub-table row %s does not belong to the main table record associated with current task",
@@ -120,13 +125,13 @@ public class SubTableAssignmentHandler {
             );
         }
 
-        // 4. 验证 assigneeId 对应的用户存在且未禁用
+        // 4. Verify assigneeId user exists and is not disabled
         validateUser(assigneeId);
 
-        // 5. 更新子表 assigneeField
+        // 5. Update sub-table assigneeField
         updateSubTableAssignee(config.getSubTableName(), config.getAssigneeField(), resolvedRowKey, assigneeId);
 
-        // 6. 获取用户名称并返回分配结果
+        // 6. Get user display name and return assignment result
         String assigneeName = getUserName(assigneeId);
 
         Long legacyRowId = pkCols.size() == 1 && resolvedRowKey.get(pkCols.get(0)) instanceof Number
@@ -140,20 +145,20 @@ public class SubTableAssignmentHandler {
             .assigneeName(assigneeName)
             .build();
 
-        log.info("子表行处理人分配成功: taskId={}, rowKey={}, assigneeId={}, assigneeName={}",
+        log.info("Sub-table row assignee assignment successful: taskId={}, rowKey={}, assigneeId={}, assigneeName={}",
             taskId, resolvedRowKey, assigneeId, assigneeName);
 
-        // 7. 发布 WebSocket 更新通知
+        // 7. Publish WebSocket update notification
         publishWebSocketUpdate(taskId, resolvedRowKey, assigneeId);
 
         return response;
     }
     
     /**
-     * 从任务扩展属性或流程定义中获取子表配置
+     * Retrieve sub-table configuration from task extended properties or process definition
      */
     private SubTableConfig getSubTableConfig(Task task) {
-        // 尝试从 ExtendedTaskInfo 的 extendedProperties 中获取
+        // Try to retrieve from ExtendedTaskInfo.extendedProperties
         Optional<ExtendedTaskInfo> extInfoOpt = extendedTaskInfoRepository.findByTaskIdAndIsDeletedFalse(task.getId());
         if (extInfoOpt.isPresent() && extInfoOpt.get().getExtendedProperties() != null) {
             try {
@@ -162,7 +167,7 @@ public class SubTableAssignmentHandler {
                     new TypeReference<Map<String, Object>>() {}
                 );
                 
-                // 检查是否包含子表配置
+                // Check if sub-table config is present
                 if (extProps.containsKey("subTableName") && extProps.containsKey("assigneeField")) {
                     Map<String, Object> variables = safeTaskVariables(task.getId());
                     Long mainFromExt = toLong(extProps.get("mainRecordId"));
@@ -177,11 +182,11 @@ public class SubTableAssignmentHandler {
                         .build();
                 }
             } catch (Exception e) {
-                log.warn("解析 ExtendedTaskInfo.extendedProperties 失败: taskId={}", task.getId(), e);
+                log.warn("Failed to parse ExtendedTaskInfo.extendedProperties: taskId={}", task.getId(), e);
             }
         }
         
-        // 尝试从流程变量中获取（作为备选方案）
+        // Try to retrieve from process variables (as fallback)
         try {
             Map<String, Object> variables = taskService.getVariables(task.getId());
             if (variables.containsKey("subTableName") && variables.containsKey("assigneeField")) {
@@ -193,10 +198,10 @@ public class SubTableAssignmentHandler {
                     .build();
             }
         } catch (Exception e) {
-            log.warn("从流程变量获取子表配置失败: taskId={}", task.getId(), e);
+            log.warn("Failed to retrieve sub-table config from process variables: taskId={}", task.getId(), e);
         }
 
-        // 3) 多实例前置任务（如「分配参与人」）常在 BPMN 上声明 subTableName/assigneeField，但流程变量未注入 — 从已部署 BPMN XML 读取
+        // 3) Multi-instance pre-tasks (e.g., "Assign Participants") often declare subTableName/assigneeField on BPMN, but process variables are not injected — read from deployed BPMN XML
         try {
             String pdId = task.getProcessDefinitionId();
             String defKey = task.getTaskDefinitionKey();
@@ -215,7 +220,7 @@ public class SubTableAssignmentHandler {
                 }
             }
         } catch (Exception e) {
-            log.warn("从 BPMN 扩展读取子表配置失败: taskId={}", task.getId(), e);
+            log.warn("Failed to read sub-table config from BPMN extensions: taskId={}", task.getId(), e);
         }
 
         return null;
@@ -232,7 +237,7 @@ public class SubTableAssignmentHandler {
     }
 
     /**
-     * 主表主键：优先 {@code mainRecordId}，其次会议演示流程的 {@code meeting_id}。
+     * Main table primary key: prefer {@code mainRecordId}, then fallback to {@code meeting_id} for meeting demo workflows.
      */
     private static Long resolveMainRecordId(Map<String, Object> variables) {
         if (variables == null || variables.isEmpty()) {
@@ -267,12 +272,12 @@ public class SubTableAssignmentHandler {
     }
 
     /**
-     * 验证子表行是否属于当前任务关联的主表记录
+     * Verify that the sub-table row belongs to the main table record associated with the current task
      */
     private boolean verifyRowBelongsToTask(SubTableConfig config, Map<String, Object> rowKey, Task task) {
         if (config.getForeignKey() == null || config.getMainRecordId() == null) {
-            // 如果没有配置外键信息，跳过验证（假设配置正确）
-            log.warn("子表配置缺少外键信息，跳过归属验证: taskId={}, rowKey={}", task.getId(), rowKey);
+            // If no foreign key info configured, skip verification (assume configuration is correct)
+            log.warn("Sub-table config missing foreign key info, skipping ownership verification: taskId={}, rowKey={}", task.getId(), rowKey);
             return true;
         }
 
@@ -298,17 +303,17 @@ public class SubTableAssignmentHandler {
 
             return count != null && count > 0;
         } catch (Exception e) {
-            log.error("验证子表行归属失败: taskId={}, rowKey={}", task.getId(), rowKey, e);
+            log.error("Failed to verify sub-table row ownership: taskId={}, rowKey={}", task.getId(), rowKey, e);
             throw new WorkflowBusinessException(
                 "SUBTABLE_VERIFICATION_FAILED",
-                "验证子表行归属时发生错误: " + e.getMessage(),
+                i18nService.getMessage("workflow.subtable.verification_error") + ": " + e.getMessage(),
                 e
             );
         }
     }
     
     /**
-     * 验证用户存在且未禁用
+     * Verify user exists and is not disabled
      */
     private void validateUser(String assigneeId) {
         try {
@@ -316,33 +321,33 @@ public class SubTableAssignmentHandler {
             
             if (userInfo == null) {
                 throw new WorkflowValidationException(
-                    String.format("用户不存在: %s", assigneeId)
+                    String.format(i18nService.getMessage("workflow.subtable.user_not_found"), assigneeId)
                 );
             }
             
-            // 检查用户是否被禁用
+            // Check if user is disabled
             Boolean enabled = (Boolean) userInfo.get("enabled");
             if (enabled != null && !enabled) {
                 throw new WorkflowValidationException(
-                    String.format("用户已被禁用: %s", assigneeId)
+                    String.format(i18nService.getMessage("workflow.subtable.user_disabled"), assigneeId)
                 );
             }
             
-            log.debug("用户验证通过: assigneeId={}", assigneeId);
+            log.debug("User verification passed: assigneeId={}", assigneeId);
         } catch (WorkflowValidationException e) {
             throw e;
         } catch (Exception e) {
-            log.error("验证用户失败: assigneeId={}", assigneeId, e);
+            log.error("Failed to verify user: assigneeId={}", assigneeId, e);
             throw new WorkflowBusinessException(
                 "USER_VALIDATION_FAILED",
-                "验证用户时发生错误: " + e.getMessage(),
+                i18nService.getMessage("workflow.subtable.user_validation_error") + ": " + e.getMessage(),
                 e
             );
         }
     }
     
     /**
-     * 更新子表的 assigneeField 字段
+     * Update the sub-tables assigneeField column
      */
     private void updateSubTableAssignee(String subTableName, String assigneeField,
                                         Map<String, Object> rowKey, String assigneeId) {
@@ -365,26 +370,26 @@ public class SubTableAssignmentHandler {
 
             if (updated == 0) {
                 throw new WorkflowValidationException(
-                    String.format("子表行不存在或已被删除: rowKey=%s", rowKey)
+                    String.format("Sub-table row does not exist or has been deleted: rowKey=%s", rowKey)
                 );
             }
 
-            log.debug("子表 assigneeField 更新成功: subTableName={}, rowKey={}, assigneeId={}",
+            log.debug("Sub-table assigneeField updated successfully: subTableName={}, rowKey={}, assigneeId={}",
                 subTableName, rowKey, assigneeId);
         } catch (WorkflowValidationException e) {
             throw e;
         } catch (Exception e) {
-            log.error("更新子表 assigneeField 失败: subTableName={}, rowKey={}", subTableName, rowKey, e);
+            log.error("Failed to update sub-table assigneeField: subTableName={}, rowKey={}", subTableName, rowKey, e);
             throw new WorkflowBusinessException(
                 "SUBTABLE_UPDATE_FAILED",
-                "更新子表处理人字段时发生错误: " + e.getMessage(),
+                i18nService.getMessage("workflow.subtable.update_error") + ": " + e.getMessage(),
                 e
             );
         }
     }
     
     /**
-     * 获取用户名称
+     * Get user display name
      */
     private String getUserName(String assigneeId) {
         try {
@@ -394,21 +399,21 @@ public class SubTableAssignmentHandler {
                 if (name != null) {
                     return name.toString();
                 }
-                // 如果没有 name 字段，尝试 username
+                // If no name field, try username
                 Object username = userInfo.get("username");
                 if (username != null) {
                     return username.toString();
                 }
             }
         } catch (Exception e) {
-            log.warn("获取用户名称失败，使用用户ID: assigneeId={}", assigneeId, e);
+            log.warn("Failed to get user display name, using user ID: assigneeId={}", assigneeId, e);
         }
         
-        return assigneeId; // 降级：返回用户ID
+        return assigneeId; // Fallback: return user ID
     }
     
     /**
-     * 发布 WebSocket 更新通知
+     * Publish WebSocket update notification
      */
     private void publishWebSocketUpdate(String taskId, Map<String, Object> rowKey, String assigneeId) {
         if (updatePublisher != null) {
@@ -421,16 +426,16 @@ public class SubTableAssignmentHandler {
                     }
                 }
                 updatePublisher.publishUpdate(taskId, rowId, rowKey, assigneeId, null);
-                log.debug("WebSocket 更新通知已发布: taskId={}, rowKey={}", taskId, rowKey);
+                log.debug("WebSocket update notification published: taskId={}, rowKey={}", taskId, rowKey);
             } catch (Exception e) {
-                // WebSocket 发布失败不应影响主流程
-                log.warn("发布 WebSocket 更新通知失败: taskId={}, rowKey={}", taskId, rowKey, e);
+                // WebSocket publish failure should not affect the main flow
+                log.warn("Failed to publish WebSocket update notification: taskId={}, rowKey={}", taskId, rowKey, e);
             }
         }
     }
     
     /**
-     * 子表配置
+     * Sub-table configuration
      */
     @Data
     @Builder
@@ -442,7 +447,7 @@ public class SubTableAssignmentHandler {
     }
     
     /**
-     * 分配响应
+     * Assignment response
      */
     @Data
     @Builder

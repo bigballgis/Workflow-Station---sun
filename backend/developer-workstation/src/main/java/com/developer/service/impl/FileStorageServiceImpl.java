@@ -9,7 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 数据库存储文件服务实现。
+ * Database-backed file storage service implementation.
  */
 @Service
 @RequiredArgsConstructor

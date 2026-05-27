@@ -1,30 +1,30 @@
 package com.portal.enums;
 
 /**
- * 权限申请类型枚举
+ * Permission request type enum
  */
 public enum PermissionRequestType {
-    /** 角色分配申请 - 申请某个组织单元的业务角色 */
+    /** Role assignment request - apply for a business role in an organization unit */
     ROLE_ASSIGNMENT,
-    /** 虚拟组加入申请 - 申请加入虚拟组 */
+    /** Virtual group join request - apply to join a virtual group */
     VIRTUAL_GROUP_JOIN,
-    /** 业务单元加入申请 - 申请加入业务单元 */
+    /** Business unit join request - apply to join a business unit */
     BUSINESS_UNIT_JOIN,
 
-    /** 申请移除在指定业务单元下的某业务角色（需审批人批准后生效） */
+    /** Apply to remove a business role under a specified business unit (takes effect after approver's approval) */
     BUSINESS_UNIT_ROLE_REMOVAL,
 
-    /** 申请退出业务单元成员（审批通过后移除成员及该 BU 下全部 UBR） */
+    /** Apply to exit a business unit membership (removes member and all UBR under this BU after approval) */
     BUSINESS_UNIT_EXIT,
     
-    // ========== 以下为旧类型，已废弃 ==========
-    /** @deprecated 使用 ROLE_ASSIGNMENT 替代 */
+    // ========== Deprecated types below ==========
+    /** @deprecated Use ROLE_ASSIGNMENT instead */
     @Deprecated
     FUNCTION,
-    /** @deprecated 使用 ROLE_ASSIGNMENT 替代 */
+    /** @deprecated Use ROLE_ASSIGNMENT instead */
     @Deprecated
     DATA,
-    /** @deprecated 使用 ROLE_ASSIGNMENT 替代 */
+    /** @deprecated Use ROLE_ASSIGNMENT instead */
     @Deprecated
     TEMPORARY
 }

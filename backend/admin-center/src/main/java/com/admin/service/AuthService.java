@@ -5,47 +5,47 @@ import com.admin.dto.response.LoginResponse;
 import jakarta.servlet.http.HttpServletResponse;
 
 /**
- * 认证服务接口
+ * Authentication service interface
  */
 public interface AuthService {
     
     /**
-     * 用户登录
+     * User login
      */
     LoginResponse login(LoginRequest request, String ipAddress, String userAgent, HttpServletResponse response);
     
     /**
-     * 用户登出
+     * User logout
      */
     void logout(String token);
     
     /**
-     * 刷新会话：吊销旧 refresh token 并签发新的 access + refresh（轮换）。
+     * Refresh session: revoke old refresh token and issue new access + refresh tokens (rotation).
      */
     LoginResponse refreshLogin(String refreshToken, HttpServletResponse response);
     
     /**
-     * 获取当前用户信息
+     * Get current user info
      */
     LoginResponse.UserLoginInfo getCurrentUser(String token);
     
     /**
-     * 验证令牌
+     * Validate token
      */
     boolean validateToken(String token);
 
     /**
-     * 修改当前用户密码；成功后会使当前 access token 失效，需重新登录。
+     * Change current user password; on success, current access token is invalidated and re-login is required.
      */
     void changePassword(String accessToken, String oldPassword, String newPassword);
     
     /**
-     * 为用户信息生成新的 access token
+     * Generate a new access token for user info
      */
     String generateAccessTokenForUser(LoginResponse.UserLoginInfo userInfo);
 
     /**
-     * 统一登录（SSO）已校验身份后，为本系统签发会话（须具备管理端访问角色）。
+     * Issue a local session after unified login (SSO) has verified identity (must have admin access role).
      */
     LoginResponse issueSsoSession(String userId, String ipAddress, String userAgent, HttpServletResponse response);
 }

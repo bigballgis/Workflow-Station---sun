@@ -30,7 +30,7 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
- * 门户登录成功后签发 JWT（密码登录与 SSO exchange 共用），含工作台 / UBR 逻辑。
+ * Issues JWT after successful portal login (password and SSO exchange), including workspace / UBR logic.
  */
 @Slf4j
 @Service
@@ -57,7 +57,7 @@ public class PortalSessionIssuerService {
     private long jwtExpiration;
 
     /**
-     * 密码已校验且用户已持久化（含 lastLogin）后调用；{@link LoginRequest} 中 workspace 字段用于多条 UBR 场景。
+     * Called after password validation and user persistence (including lastLogin); {@link LoginRequest} workspace fields apply when multiple UBR rows exist.
      */
     public ResponseEntity<LoginResponse> issuePortalSession(User user, LoginRequest request, HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
         return issuePortalSession(user, request.getWorkspaceBusinessUnitId(), request.getWorkspaceRoleId(), httpRequest,
@@ -65,7 +65,7 @@ public class PortalSessionIssuerService {
     }
 
     /**
-     * SSO exchange：身份已由 admin-center 校验，仅处理工作台与签发令牌。
+     * SSO exchange: identity already verified by admin-center; only workspace selection and token issuance.
      */
     public ResponseEntity<LoginResponse> issuePortalSession(User user, String workspaceBusinessUnitId,
                                                              String workspaceRoleId, HttpServletRequest httpRequest,
@@ -115,7 +115,7 @@ public class PortalSessionIssuerService {
             String refreshToken = generateRefreshToken(userId, activeBu, activeRoleId, portalAccessMode);
 
             // Set httpOnly cookies for access token and refresh token
-            // 使用服务特有 cookie 名（如 up_access_token），避免三端在同源下相互覆盖。详见 JwtProperties#cookieNames。
+            // Service-specific cookie names (e.g. up_access_token) avoid cross-app overwrite on same origin. See JwtProperties#cookieNames.
             setAuthCookie(httpResponse, jwtProperties.getPrimaryCookieName(), accessToken, (int)(jwtExpiration / 1000));
             setAuthCookie(httpResponse, jwtProperties.getRefreshCookieName(), refreshToken, 7 * 24 * 60 * 60);
 

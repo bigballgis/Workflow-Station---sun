@@ -7,8 +7,8 @@ import org.hibernate.annotations.Type;
 import java.time.Instant;
 
 /**
- * N8N 工作流执行记录实体类
- * 记录每次 N8N 任务执行的详细信息，包含执行状态、输入输出数据、耗时等
+ * N8N workflow execution record entity
+ * Records detailed information of each N8N task execution, including execution status, input/output data, duration, etc.
  */
 @Entity
 @Table(name = "wf_n8n_execution_record", indexes = {
@@ -23,69 +23,69 @@ public class N8nExecutionRecord {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /** 流程实例ID */
+    /** Process instance ID */
     @Column(name = "process_instance_id", length = 64)
     private String processInstanceId;
 
-    /** Flowable 任务ID */
+    /** Flowable task ID */
     @Column(name = "task_id", length = 64)
     private String taskId;
 
-    /** N8N 配置ID */
+    /** N8N config ID */
     @Column(name = "n8n_config_id", length = 36)
     private String n8nConfigId;
 
-    /** N8N 工作流ID */
+    /** N8N workflow ID */
     @Column(name = "n8n_workflow_id", length = 100)
     private String n8nWorkflowId;
 
-    /** Webhook 地址 */
+    /** Webhook URL */
     @Column(name = "webhook_url", length = 500)
     private String webhookUrl;
 
-    /** 回调令牌 */
+    /** Callback token */
     @Column(name = "callback_token", length = 64)
     private String callbackToken;
 
-    /** 执行状态: PENDING, RUNNING, SUCCESS, FAILED, TIMEOUT */
+    /** Execution status: PENDING, RUNNING, SUCCESS, FAILED, TIMEOUT */
     @Column(name = "status", nullable = false, length = 20)
     private String status;
 
-    /** 执行来源: SERVICE_TASK, ACTION */
+    /** Execution source: SERVICE_TASK, ACTION */
     @Column(name = "source_type", nullable = false, length = 20)
     private String sourceType;
 
-    /** 输入数据 JSON */
+    /** Input data JSON */
     @Type(JsonbType.class)
     @Column(name = "input_data", columnDefinition = "JSONB")
     private String inputData;
 
-    /** 输出数据 JSON */
+    /** Output data JSON */
     @Type(JsonbType.class)
     @Column(name = "output_data", columnDefinition = "JSONB")
     private String outputData;
 
-    /** 错误信息 */
+    /** Error message */
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
 
-    /** 已重试次数 */
+    /** Retry count */
     @Column(name = "retry_count")
     private Integer retryCount;
 
-    /** 开始时间 */
+    /** Start time */
     @Column(name = "started_at")
     private Instant startedAt;
 
-    /** 完成时间 */
+    /** Completion time */
     @Column(name = "completed_at")
     private Instant completedAt;
 
-    /** 超时秒数 */
+    /** Timeout seconds */
     @Column(name = "timeout_seconds")
     private Integer timeoutSeconds;
 
-    /** 创建时间 */
+    /** Created time */
     @Column(name = "created_at")
     private Instant createdAt;
 

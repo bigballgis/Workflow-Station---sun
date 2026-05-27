@@ -13,10 +13,10 @@ import java.time.LocalDateTime;
 import java.util.Date;
 
 /**
- * 流程变量实体类
+ * Process variable entity
  * 
- * 用于存储流程变量的历史记录和扩展信息
- * 支持多种数据类型和PostgreSQL JSONB存储
+ * Used to store the history and extended information of process variables
+ * Supports multiple data types and PostgreSQL JSONB storage
  * 
  * @author Workflow Engine
  * @version 1.0
@@ -35,7 +35,7 @@ import java.util.Date;
 public class ProcessVariable {
 
     /**
-     * 主键ID
+     * Primary key ID
      */
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -43,160 +43,160 @@ public class ProcessVariable {
     private String id;
 
     /**
-     * 变量名称
+     * Variable name
      */
     @Column(name = "name", nullable = false, length = 255)
     private String name;
 
     /**
-     * 变量类型
+     * Variable type
      */
     @Enumerated(EnumType.STRING)
     @Column(name = "type", nullable = false, length = 20)
     private VariableType type;
 
     /**
-     * 流程实例ID
+     * Process instance ID
      */
     @Column(name = "process_instance_id", length = 64)
     private String processInstanceId;
 
     /**
-     * 执行ID
+     * Execution ID
      */
     @Column(name = "execution_id", length = 64)
     private String executionId;
 
     /**
-     * 任务ID
+     * Task ID
      */
     @Column(name = "task_id", length = 64)
     private String taskId;
 
     /**
-     * 案例实例ID（CMMN支持）
+     * Case instance ID (CMMN support)
      */
     @Column(name = "case_instance_id", length = 64)
     private String caseInstanceId;
 
     /**
-     * 案例执行ID（CMMN支持）
+     * Case execution ID (CMMN support)
      */
     @Column(name = "case_execution_id", length = 64)
     private String caseExecutionId;
 
     /**
-     * 活动实例ID
+     * Activity instance ID
      */
     @Column(name = "activity_instance_id", length = 64)
     private String activityInstanceId;
 
     /**
-     * 租户ID（多租户支持）
+     * Tenant ID (multi-tenant support)
      */
     @Column(name = "tenant_id", length = 255)
     private String tenantId;
 
     /**
-     * 序列计数器（版本控制）
+     * Sequence counter (version control)
      */
     @Column(name = "sequence_counter")
     private Long sequenceCounter;
 
     /**
-     * 是否为并发本地变量
+     * Whether concurrent local variable
      */
     @Column(name = "is_concurrent_local")
     @Builder.Default
     private Boolean isConcurrentLocal = false;
 
-    // 不同类型的值字段
+    // Different type value fields
 
     /**
-     * 文本值（字符串、布尔值等）
+     * Text value (String, Boolean, etc.)
      */
     @Column(name = "text_value", columnDefinition = "TEXT")
     private String textValue;
 
     /**
-     * 扩展文本值
+     * Extended text value
      */
     @Column(name = "text_value2", columnDefinition = "TEXT")
     private String textValue2;
 
     /**
-     * 双精度浮点数值
+     * Double value
      */
     @Column(name = "double_value")
     private Double doubleValue;
 
     /**
-     * 长整数值
+     * Long value
      */
     @Column(name = "long_value")
     private Long longValue;
 
     /**
-     * 日期值
+     * Date value
      */
     @Column(name = "date_value")
     @Temporal(TemporalType.TIMESTAMP)
     private Date dateValue;
 
     /**
-     * JSON值（PostgreSQL JSONB支持）
+     * JSON value (PostgreSQL JSONB support)
      */
     @Column(name = "json_value", columnDefinition = "jsonb")
     @JdbcTypeCode(SqlTypes.JSON)
     private String jsonValue;
 
     /**
-     * 二进制数据（文件等）
+     * Binary data (files, etc.)
      */
     @Column(name = "binary_value", columnDefinition = "bytea")
     private byte[] binaryValue;
 
     /**
-     * 创建时间
+     * Created time
      */
     @Column(name = "created_time", nullable = false)
     private LocalDateTime createdTime;
 
     /**
-     * 更新时间
+     * Updated time
      */
     @Column(name = "updated_time", nullable = false)
     private LocalDateTime updatedTime;
 
     /**
-     * 创建人
+     * Creator
      */
     @Column(name = "created_by", length = 64)
     private String createdBy;
 
     /**
-     * 更新人
+     * Updater
      */
     @Column(name = "updated_by", length = 64)
     private String updatedBy;
 
     /**
-     * 变更原因
+     * Change reason
      */
     @Column(name = "change_reason", length = 500)
     private String changeReason;
 
     /**
-     * 操作类型（CREATE, UPDATE, DELETE）
+     * Operation type (CREATE, UPDATE, DELETE)
      */
     @Column(name = "operation_type", length = 20)
     private String operationType;
 
     /**
-     * 获取实际的变量值
-     * 根据类型返回相应字段的值
+     * Get the actual variable value
+     * Return the corresponding field value based on type
      * 
-     * @return 变量值
+     * @return Variable value
      */
     public Object getValue() {
         if (type == null) {
@@ -226,10 +226,10 @@ public class ProcessVariable {
     }
 
     /**
-     * 设置变量值
-     * 根据类型设置到相应的字段
+     * Set variable value
+     * Set to the corresponding field based on type
      * 
-     * @param value 变量值
+     * @param value Variable value
      */
     public void setValue(Object value) {
         if (value == null) {
@@ -237,7 +237,7 @@ public class ProcessVariable {
         }
         
         if (type == null) {
-            // 自动推断类型
+            // Auto-infer type
             type = inferType(value);
         }
         
@@ -283,7 +283,7 @@ public class ProcessVariable {
     }
 
     /**
-     * 推断变量类型
+     * Infer variable type
      */
     private VariableType inferType(Object value) {
         if (value instanceof String) {

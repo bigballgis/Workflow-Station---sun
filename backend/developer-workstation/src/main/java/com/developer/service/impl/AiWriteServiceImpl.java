@@ -18,8 +18,9 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * AI 数据写入服务实现
- * 全量替换写入策略：MODIFY 模式下先删除旧数据再写入新数据，NEW 模式下直接写入
+ * AI data write service implementation.
+ * Full-replacement write strategy: in MODIFY mode, delete old data first then write new data;
+ * in NEW mode, write directly.
  */
 @Slf4j
 @Service

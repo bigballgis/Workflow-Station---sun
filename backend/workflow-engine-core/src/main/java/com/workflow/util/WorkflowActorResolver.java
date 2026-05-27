@@ -8,7 +8,8 @@ import org.springframework.util.StringUtils;
 import java.util.Optional;
 
 /**
- * 从 Spring Security 上下文解析当前登录用户 ID，用于任务类 API 与 JWT 主体绑定。
+ * Resolves current logged-in user ID from Spring Security context,
+ * used for task-related APIs and JWT principal binding.
  */
 public final class WorkflowActorResolver {
 
@@ -16,7 +17,7 @@ public final class WorkflowActorResolver {
     }
 
     /**
-     * @return 已认证用户的业务用户 ID；未认证或无法解析时为空
+     * @return Business user ID of the authenticated user; empty if unauthenticated or unresolvable
      */
     public static Optional<String> currentUserId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();

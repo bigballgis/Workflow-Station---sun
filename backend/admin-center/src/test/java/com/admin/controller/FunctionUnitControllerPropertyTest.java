@@ -10,6 +10,7 @@ import com.admin.exception.AdminBusinessException;
 import com.admin.exception.FunctionUnitNotFoundException;
 import com.platform.common.dto.ApiResponse;
 import com.platform.common.dto.UserPrincipal;
+import com.platform.common.i18n.I18nService;
 import net.jqwik.api.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -38,12 +39,23 @@ import static org.mockito.Mockito.when;
 class FunctionUnitControllerPropertyTest {
 
     private FunctionUnitController createController(FunctionUnitManagerComponent mgr) {
+        @SuppressWarnings("unchecked")
+        I18nService i18n = mock(I18nService.class,
+                (org.mockito.stubbing.Answer<String>) invocation -> {
+                    if (!"getMessage".equals(invocation.getMethod().getName())) {
+                        return null;
+                    }
+                    Object[] args = invocation.getArguments();
+                    return String.valueOf(args[0]);
+                });
+
         return new FunctionUnitController(
                 mgr,
                 mock(com.admin.component.DeploymentManagerComponent.class),
                 mock(com.admin.component.ProcessDeploymentComponent.class),
                 mock(com.admin.service.FunctionUnitAccessService.class),
-                mock(com.admin.service.UserReferenceResolver.class));
+                mock(com.admin.service.UserReferenceResolver.class),
+                i18n);
     }
 
     // ── Property 4: Admin Center API unified response format ──────────

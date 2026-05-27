@@ -21,8 +21,8 @@ import java.time.Instant;
 import java.util.Map;
 
 /**
- * 文件上传控制器
- * 支持常见文件格式：jpg/png/pdf/docx/xlsx
+ * File upload controller.
+ * Supports common formats: jpg/png/pdf/docx/xlsx.
  */
 @RestController
 @RequestMapping("/upload")
@@ -34,7 +34,7 @@ public class FileUploadController {
     private final FileUploadComponent fileUploadComponent;
 
     /**
-     * 上传单个文件
+     * Upload a single file.
      */
     @PostMapping
     @Operation(summary = "Upload file", description = "Supports jpg/png/pdf/docx/xlsx, max 10MB")
@@ -52,7 +52,7 @@ public class FileUploadController {
     }
 
     /**
-     * 访问已上传的文件（支持内联预览）
+     * Access an uploaded file (supports inline preview).
      */
     @GetMapping("/files/{filename}")
     @Operation(summary = "Get file", description = "Access uploaded file by filename, supports inline preview")
@@ -77,7 +77,7 @@ public class FileUploadController {
     }
 
     /**
-     * 删除已上传的文件
+     * Delete an uploaded file.
      */
     @DeleteMapping("/files/{filename}")
     @Operation(summary = "Delete file", description = "Delete an uploaded file")

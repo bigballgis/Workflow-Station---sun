@@ -19,10 +19,10 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * N8N Action 执行控制器
+ * N8N Action execution controller.
  * 
- * 接收前端 N8N Action 执行请求，从 sys_action_definitions 加载配置，
- * 通过 WorkflowEngineClient 转发到 workflow-engine-core。
+ * Receives N8N Action execution requests from the frontend, loads configuration
+ * from sys_action_definitions, and forwards to workflow-engine-core via WorkflowEngineClient.
  *
  * Validates: Requirements 10.18, 10.19
  */
@@ -30,7 +30,7 @@ import java.util.Optional;
 @RestController
 @RequestMapping("/n8n/action")
 @RequiredArgsConstructor
-@Tag(name = "N8N Action", description = "N8N Action 执行 API")
+@Tag(name = "N8N Action", description = "N8N Action execution API")
 public class N8nActionController {
 
     private final ActionDefinitionRepository actionDefinitionRepository;
@@ -38,15 +38,15 @@ public class N8nActionController {
     private final ObjectMapper objectMapper;
 
     /**
-     * 执行 N8N Action
+     * Execute N8N Action.
      *
-     * 接收 actionDefinitionId、taskId、processInstanceId、inputData，
-     * 从 sys_action_definitions 表加载 configJson，提取 N8N 配置参数，
-     * 通过 WorkflowEngineClient 转发到 workflow-engine-core 的 POST /api/v1/n8n/execute。
+     * Receives actionDefinitionId, taskId, processInstanceId, and inputData,
+     * loads configJson from sys_action_definitions, extracts N8N config parameters,
+     * and forwards to workflow-engine-core via POST /api/v1/n8n/execute.
      *
      * Validates: Requirements 10.18, 10.19
      */
-    @Operation(summary = "执行 N8N Action", description = "触发 N8N 工作流执行并同步等待结果")
+    @Operation(summary = "Execute N8N Action", description = "Trigger N8N workflow execution and synchronously wait for result")
     @PostMapping("/execute")
     public ApiResponse<Map<String, Object>> executeAction(
             @CurrentUserId String userId,

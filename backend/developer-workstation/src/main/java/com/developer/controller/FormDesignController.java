@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 /**
- * 表单设计控制器
+ * Form design controller
  */
 @RestController
 @RequestMapping("/function-units/{functionUnitId}/forms")
@@ -98,7 +98,7 @@ public class FormDesignController {
         return ResponseEntity.ok(ApiResponse.success(result));
     }
     
-    // ========== 表绑定管理端点 ==========
+    // ========== Table binding management endpoints ==========
     
     @GetMapping("/{formId}/bindings")
     @Operation(summary = "List form table bindings")
@@ -150,7 +150,7 @@ public class FormDesignController {
         return ResponseEntity.ok(ApiResponse.success(null));
     }
     
-    // ========== Process/Task Form 扩展端点 ==========
+    // ========== Process/Task Form extension endpoints ==========
     
     @GetMapping("/data-table-columns")
     @Operation(summary = "Get Data_Table column names for autocomplete")

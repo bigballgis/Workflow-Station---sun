@@ -40,24 +40,25 @@ public class JwtProperties {
     private boolean validateIssuer = true;
 
     /**
-     * Access-token httpOnly cookie 名（按优先级排序）。
+     * Access-token httpOnly cookie names (priority order).
      * <p>
-     * 三端共用 {@code localhost:3000} 单一来源时若都写名为 {@code access_token} 的 Cookie 会互相覆盖，
-     * 进而把 user-portal 的工作台 claim（{@code activeBusinessUnitId} / {@code activeRoleId}）冲掉，
-     * 导致 {@code ProcessComponent} 在发起流程时报 "associated with a business unit role"。
+     * When all three frontends share a single origin such as {@code localhost:3000}, writing a cookie named
+     * {@code access_token} overwrites the others and can clear user-portal workspace claims
+     * ({@code activeBusinessUnitId} / {@code activeRoleId}), causing ProcessComponent to reject process start with
+     * "associated with a business unit role".
      * <p>
-     * 每个服务在 application.yml 中以服务前缀单独配置，列表中的第一项是本服务写出 Cookie 时使用的名称；
-     * {@code workflow-engine-core} 同时接收三端的 WebSocket，可配置完整列表以兼容。
+     * Each service configures a prefixed list in application.yml; the first entry is the name used when writing cookies.
+     * {@code workflow-engine-core} may list all names because it accepts WebSockets from every frontend.
      */
     private List<String> cookieNames = List.of("access_token");
 
     /**
-     * Refresh-token httpOnly cookie 名（每个服务写自己的名字，刷新接口也按此名读取）。
+     * Refresh-token httpOnly cookie name (each service writes and reads its own on refresh).
      */
     private String refreshCookieName = "refresh_token";
 
     /**
-     * 便捷获取本服务写出 access cookie 的名称（{@link #cookieNames} 中的第一项）。
+     * Primary access cookie name for this service ({@link #cookieNames} first entry).
      */
     public String getPrimaryCookieName() {
         if (cookieNames == null || cookieNames.isEmpty()) {

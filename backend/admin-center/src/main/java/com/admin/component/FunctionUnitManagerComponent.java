@@ -24,6 +24,7 @@ import com.admin.repository.FunctionUnitAccessRepository;
 import com.admin.repository.FunctionUnitContentRepository;
 import com.admin.repository.FunctionUnitDependencyRepository;
 import com.admin.repository.FunctionUnitRepository;
+import com.platform.common.i18n.I18nService;
 import com.platform.common.util.ApiResponseBodyUnwrap;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -52,8 +53,8 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
- * 功能单元管理组件
- * 负责功能包的导入、验证、依赖检测和管理
+ * Function unit management component.
+ * Handles function package import, validation, dependency checks, and management.
  */
 @Slf4j
 @Component
@@ -70,6 +71,7 @@ public class FunctionUnitManagerComponent {
     private final org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
     private final RestTemplate restTemplate;
+    private final I18nService i18nService;
 
     @Value("${user-portal.base-url:http://localhost:8082/api/portal}")
     private String userPortalBaseUrl;
@@ -77,28 +79,28 @@ public class FunctionUnitManagerComponent {
     @Value("${user-portal.internal-api-token:}")
     private String userPortalInternalApiToken;
     
-    // 版本号正则表达式（语义化版本）
+    // Semantic version regex
     private static final Pattern VERSION_PATTERN = Pattern.compile("^\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9]+)?$");
         
     /**
-     * 导入功能包
+     * Import function package
      */
     @Transactional
     public ImportResult importFunctionPackage(FunctionUnitImportRequest request, String importerId) {
         log.info("Importing function package: {}", request.getFileName());
         
         try {
-            // 1. 验证文件格式和完整性
+            // 1. Validate file format and integrity
             ValidationResult validationResult = validatePackage(request);
             if (!validationResult.isValid()) {
                 return ImportResult.validationFailed(validationResult.getErrors());
             }
             
-            // 2. 解析功能包内容（支持 Developer Workstation 导出的 ZIP）
+            // 2. Parse package (Developer Workstation ZIP export)
             FunctionUnitPackageParser.ParsedImportPackage parsed = parseImportRequest(request);
             FunctionPackageContent packageContent = parsed.getPackageContent();
 
-            // 3. 检查版本是否已存在
+            // 3. Check whether version already exists
             if (functionUnitRepository.existsByCodeAndVersion(packageContent.getCode(), packageContent.getVersion())) {
                 boolean shouldOverwrite = request.isOverwrite()
                         || functionUnitRepository.findByCodeAndVersion(packageContent.getCode(), packageContent.getVersion())
@@ -107,7 +109,7 @@ public class FunctionUnitManagerComponent {
                 if (!shouldOverwrite) {
                     return ImportResult.failure("Function unit version already exists: "
                             + packageContent.getCode() + ":" + packageContent.getVersion()
-                            + "（请勾选覆盖或先删除归档版本）");
+                            + i18nService.getMessage("admin.fu.version_exists_suffix"));
                 }
                 deleteExistingVersion(packageContent.getCode(), packageContent.getVersion());
             }
@@ -116,16 +118,16 @@ public class FunctionUnitManagerComponent {
                 request.setIconSvg(parsed.getIconSvg());
             }
             
-            // 4. 检测依赖冲突
+            // 4. Detect dependency conflicts
             List<ImportResult.DependencyConflict> conflicts = detectConflicts(packageContent);
             
-            // 5. 创建功能单元（导入后为 DRAFT 状态，未启用，需验证后部署）
+            // 5. Create function unit(DRAFT after import; enable after validation/deploy)
             FunctionUnit functionUnit = createFunctionUnit(packageContent, request, importerId);
             
-            // 7. 保存依赖关系
+            // 7. Save dependencies
             saveDependencies(functionUnit, packageContent.getDependencies());
             
-            // 8. 保存内容（流程、表）及表单
+            // 8. Save contents (process, tables) and forms
             saveContents(functionUnit, packageContent.getContents());
             if (parsed.getForms() != null) {
                 saveContents(functionUnit, parsed.getForms());
@@ -142,13 +144,13 @@ public class FunctionUnitManagerComponent {
             
         } catch (Exception e) {
             log.error("Failed to import function package", e);
-            return ImportResult.failure("导入失败: " + e.getMessage());
+            return ImportResult.failure(i18nService.getMessage("admin.fu.import_failed", e.getMessage()));
         }
     }
 
     
     /**
-     * 验证功能包
+     * Validate function package
      */
     public ValidationResult validatePackage(FunctionUnitImportRequest request) {
         log.info("Validating function package: {}", request.getFileName());
@@ -165,44 +167,44 @@ public class FunctionUnitManagerComponent {
                 .warnings(new ArrayList<>())
                 .build();
         
-        // 1. 验证文件格式
+        // 1. Validate file format
         if (!validateFileFormat(request, result)) {
             result.setFileFormatValid(false);
         }
         
-        // 2. 验证完整性
+        // 2. Validate integrity
         if (!validateIntegrity(request, result)) {
             result.setIntegrityValid(false);
         }
         
-        // 3. 验证数字签名（如果有）
+        // 3. Validate digital signature (if present)
         if (request.getFileContent() != null && !validateDigitalSignature(request, result)) {
             result.setSignatureValid(false);
-            result.addWarning("数字签名验证失败，但不影响导入");
+            result.addWarning(i18nService.getMessage("admin.fu.signature_warning"));
         }
         
         return result;
     }
     
     /**
-     * 验证文件格式
+     * Validate file format
      */
     private boolean validateFileFormat(FunctionUnitImportRequest request, ValidationResult result) {
         if (request.getFileName() == null || request.getFileName().isEmpty()) {
-            result.addError("FILE_FORMAT", "fileName", "文件名不能为空");
+            result.addError("FILE_FORMAT", "fileName", i18nService.getMessage("admin.fu.file_name_required"));
             return false;
         }
         
-        // 检查文件扩展名
+        // Check file extension
         String fileName = request.getFileName().toLowerCase();
         if (!fileName.endsWith(".zip") && !fileName.endsWith(".fpkg")) {
-            result.addError("FILE_FORMAT", "fileName", "不支持的文件格式，仅支持 .zip 或 .fpkg");
+            result.addError("FILE_FORMAT", "fileName", i18nService.getMessage("admin.fu.file_format_unsupported"));
             return false;
         }
         
-        // 检查文件内容
+        // Check file content
         if (request.getFileContent() == null && request.getFilePath() == null) {
-            result.addError("FILE_FORMAT", "fileContent", "文件内容或文件路径不能为空");
+            result.addError("FILE_FORMAT", "fileContent", i18nService.getMessage("admin.fu.file_content_required"));
             return false;
         }
         
@@ -210,38 +212,38 @@ public class FunctionUnitManagerComponent {
     }
     
     /**
-     * 验证完整性
+     * Validate integrity
      */
     private boolean validateIntegrity(FunctionUnitImportRequest request, ValidationResult result) {
-        // 简化实现：检查文件内容是否为空
+        // Simplified: reject empty file content
         if (request.getFileContent() != null && request.getFileContent().isEmpty()) {
-            result.addError("INTEGRITY", "fileContent", "文件内容为空");
+            result.addError("INTEGRITY", "fileContent", i18nService.getMessage("admin.fu.file_content_empty"));
             return false;
         }
         return true;
     }
     
     /**
-     * 验证数字签名
+     * Validate digital signature
      */
     private boolean validateDigitalSignature(FunctionUnitImportRequest request, ValidationResult result) {
-        // 简化实现：总是返回true
-        // 实际实现中应该验证数字签名
+        // Simplified: always returns true
+        // Production should verify digital signature
         return true;
     }
     
     /**
-     * 验证BPMN语法
+     * Validate BPMN syntax
      */
     public boolean validateBpmnSyntax(String bpmnContent, ValidationResult result) {
         if (bpmnContent == null || bpmnContent.isEmpty()) {
-            result.addError("BPMN_SYNTAX", "content", "BPMN内容为空");
+            result.addError("BPMN_SYNTAX", "content", i18nService.getMessage("admin.fu.bpmn_empty"));
             return false;
         }
         
-        // 简化实现：检查基本的BPMN结构
+        // Simplified: check basic BPMN structure
         if (!bpmnContent.contains("definitions") || !bpmnContent.contains("process")) {
-            result.addError("BPMN_SYNTAX", "content", "无效的BPMN格式");
+            result.addError("BPMN_SYNTAX", "content", i18nService.getMessage("admin.fu.bpmn_invalid"));
             return false;
         }
         
@@ -249,17 +251,17 @@ public class FunctionUnitManagerComponent {
     }
     
     /**
-     * 验证数据表结构
+     * Validate data table structure
      */
     public boolean validateDataTableStructure(String tableDefinition, ValidationResult result) {
         if (tableDefinition == null || tableDefinition.isEmpty()) {
-            return true; // 数据表定义可选
+            return true; // data table definition optional
         }
         
-        // 简化实现：检查基本的SQL结构
+        // Simplified: check basic SQL structure
         String upperDef = tableDefinition.toUpperCase();
         if (!upperDef.contains("CREATE TABLE") && !upperDef.contains("ALTER TABLE")) {
-            result.addError("DATA_TABLE", "definition", "无效的数据表定义");
+            result.addError("DATA_TABLE", "definition", i18nService.getMessage("admin.fu.data_table_invalid"));
             return false;
         }
         
@@ -267,16 +269,16 @@ public class FunctionUnitManagerComponent {
     }
     
     /**
-     * 验证表单配置
+     * Validate form configuration
      */
     public boolean validateFormConfig(String formConfig, ValidationResult result) {
         if (formConfig == null || formConfig.isEmpty()) {
-            return true; // 表单配置可选
+            return true; // form configuration optional
         }
         
-        // 简化实现：检查JSON格式
+        // Simplified: check JSON format
         if (!formConfig.trim().startsWith("{") && !formConfig.trim().startsWith("[")) {
-            result.addError("FORM_CONFIG", "config", "无效的表单配置格式");
+            result.addError("FORM_CONFIG", "config", i18nService.getMessage("admin.fu.form_config_invalid"));
             return false;
         }
         
@@ -284,13 +286,13 @@ public class FunctionUnitManagerComponent {
     }
     
     /**
-     * 检测依赖冲突
+     * Detect dependency conflicts
      */
     public List<ImportResult.DependencyConflict> detectConflicts(FunctionPackageContent packageContent) {
         List<ImportResult.DependencyConflict> conflicts = new ArrayList<>();
         
         for (DependencyInfo dep : packageContent.getDependencies()) {
-            // 检查依赖是否存在
+            // Check dependencies exist
             Optional<FunctionUnit> existing = functionUnitRepository.findLatestByCode(dep.getCode());
             if (existing.isPresent()) {
                 String existingVersion = existing.get().getVersion();
@@ -316,7 +318,7 @@ public class FunctionUnitManagerComponent {
     }
     
     /**
-     * 解析导入请求：优先按 ZIP（Base64）解析 Developer Workstation 导出包。
+     * Parse import request: prefer ZIP (Base64) from Developer Workstation export.
      */
     private FunctionUnitPackageParser.ParsedImportPackage parseImportRequest(FunctionUnitImportRequest request)
             throws IOException {
@@ -357,10 +359,10 @@ public class FunctionUnitManagerComponent {
     }
 
     /**
-     * 旧版解析（非 ZIP 或纯 BPMN 文本）
+     * Legacy parse (non-ZIP or raw BPMN text)
      */
     private FunctionPackageContent parsePackageContentLegacy(FunctionUnitImportRequest request) {
-        // 优先使用请求中的code，如果没有则从文件名提取
+        // Prefer request code; else derive from file name
         String code = request.getCode() != null && !request.getCode().isEmpty() 
                 ? request.getCode() 
                 : extractCodeFromFileName(request.getFileName());
@@ -371,9 +373,9 @@ public class FunctionUnitManagerComponent {
         List<DependencyInfo> dependencies = new ArrayList<>();
         List<ContentInfo> contents = new ArrayList<>();
         
-        // 如果有文件内容，尝试解析
+        // If file content present, attempt parse
         if (request.getFileContent() != null && !request.getFileContent().isEmpty()) {
-            // 简化实现：假设内容是BPMN流程定义
+            // Simplified: assume content is BPMN process definition
             contents.add(ContentInfo.builder()
                     .contentType(ContentType.PROCESS)
                     .contentName("main-process.bpmn")
@@ -393,19 +395,19 @@ public class FunctionUnitManagerComponent {
     }
     
     /**
-     * 从文件名提取代码
+     * Extract code from file name
      */
     private String extractCodeFromFileName(String fileName) {
         if (fileName == null || fileName.isEmpty()) {
             return "unknown";
         }
-        // 移除扩展名
+        // Strip extension
         String name = fileName;
         int dotIndex = fileName.lastIndexOf('.');
         if (dotIndex > 0) {
             name = fileName.substring(0, dotIndex);
         }
-        // 移除版本号（如果有）
+        // Strip version suffix if present
         int dashIndex = name.lastIndexOf('-');
         if (dashIndex > 0 && name.substring(dashIndex + 1).matches("\\d+\\.\\d+\\.\\d+.*")) {
             name = name.substring(0, dashIndex);
@@ -414,7 +416,7 @@ public class FunctionUnitManagerComponent {
     }
     
     /**
-     * 创建功能单元
+     * Create function unit
      */
     private FunctionUnit createFunctionUnit(FunctionPackageContent packageContent, 
                                             FunctionUnitImportRequest request, 
@@ -442,7 +444,7 @@ public class FunctionUnitManagerComponent {
     }
     
     /**
-     * 保存依赖关系
+     * Save dependencies
      */
     private void saveDependencies(FunctionUnit functionUnit, List<DependencyInfo> dependencies) {
         for (DependencyInfo dep : dependencies) {
@@ -458,7 +460,7 @@ public class FunctionUnitManagerComponent {
     }
     
     /**
-     * 保存内容
+     * Save contents
      */
     private void saveContents(FunctionUnit functionUnit, List<ContentInfo> contents) {
         for (ContentInfo content : contents) {
@@ -528,7 +530,7 @@ public class FunctionUnitManagerComponent {
     }
     
     /**
-     * 添加功能单元内容
+     * Add function unit content
      */
     @Transactional
     public void addFunctionUnitContent(String functionUnitId, ContentType contentType, 
@@ -537,8 +539,8 @@ public class FunctionUnitManagerComponent {
     }
     
     /**
-     * 添加功能单元内容（带原始ID）
-     * @param sourceId 原始内容ID（来自 developer-workstation 的 dw_form_definitions.id 等）
+     * Add function unit content(with source id)
+     * @param sourceId Source content id (e.g. developer-workstation dw_form_definitions.id)
      */
     @Transactional
     public void addFunctionUnitContent(String functionUnitId, ContentType contentType, 
@@ -564,37 +566,37 @@ public class FunctionUnitManagerComponent {
     }
     
     /**
-     * 删除已存在的版本
+     * Delete existing version
      */
     @Transactional
     public void deleteExistingVersion(String code, String version) {
         Optional<FunctionUnit> existing = functionUnitRepository.findByCodeAndVersion(code, version);
         if (existing.isPresent()) {
             FunctionUnit unit = existing.get();
-            // 删除相关访问权限配置
+            // Delete related access permissions
             accessRepository.deleteByFunctionUnitId(unit.getId());
-            // 删除相关内容
+            // Delete related contents
             contentRepository.deleteByFunctionUnitId(unit.getId());
-            // 删除相关依赖
+            // Delete related dependencies
             dependencyRepository.deleteByFunctionUnitId(unit.getId());
             actionDefinitionRepository.deleteByFunctionUnitId(unit.getId());
-            // 删除功能单元
+            // Delete function unit
             functionUnitRepository.delete(unit);
-            // 强制刷新，确保删除操作在后续插入之前完成
+            // Flush so deletes complete before subsequent inserts
             functionUnitRepository.flush();
             log.info("Deleted existing function unit version: {}:{}", code, version);
         }
     }
     
     /**
-     * 检查版本兼容性
+     * Check version compatibility
      */
     public boolean isVersionCompatible(String requiredVersion, String existingVersion) {
         if (requiredVersion == null || existingVersion == null) {
             return false;
         }
         
-        // 解析版本号
+        // Parse version number
         int[] required = parseVersion(requiredVersion);
         int[] existing = parseVersion(existingVersion);
         
@@ -602,17 +604,17 @@ public class FunctionUnitManagerComponent {
             return requiredVersion.equals(existingVersion);
         }
         
-        // 主版本号必须相同
+        // Major version must match
         if (required[0] != existing[0]) {
             return false;
         }
         
-        // 现有版本的次版本号必须大于等于要求的版本
+        // Existing minor must be >= required minor
         if (existing[1] < required[1]) {
             return false;
         }
         
-        // 如果次版本号相同，补丁版本号必须大于等于要求的版本
+        // If minor equal, patch must be >= required patch
         if (existing[1] == required[1] && existing[2] < required[2]) {
             return false;
         }
@@ -621,14 +623,14 @@ public class FunctionUnitManagerComponent {
     }
     
     /**
-     * 解析版本号
+     * Parse version number
      */
     private int[] parseVersion(String version) {
         if (version == null) {
             return null;
         }
         
-        // 移除预发布标签
+        // Strip pre-release tag
         String cleanVersion = version.split("-")[0];
         String[] parts = cleanVersion.split("\\.");
         
@@ -648,7 +650,7 @@ public class FunctionUnitManagerComponent {
     }
     
     /**
-     * 计算校验和
+     * Compute checksum
      */
     public String calculateChecksum(String content) {
         if (content == null || content.isEmpty()) {
@@ -674,16 +676,17 @@ public class FunctionUnitManagerComponent {
     }
     
     /**
-     * 根据ID获取功能单元
+     * Get function unit by id
      */
     public FunctionUnit getFunctionUnitById(String id) {
         return functionUnitRepository.findById(id)
-                .orElseThrow(() -> new FunctionUnitNotFoundException("功能单元不存在: " + id));
+                .orElseThrow(() -> new FunctionUnitNotFoundException(
+                        i18nService.getMessage("admin.fu.not_found_by_id", id)));
     }
     
     /**
-     * 根据流程定义Key获取功能单元
-     * 通过查找 flowable_process_definition_id 以 processKey: 开头的内容来定位功能单元
+     * Get function unit by process definition key
+     * Locate via content whose flowable_process_definition_id starts with processKey:
      */
     @Transactional(readOnly = true)
     public FunctionUnit getFunctionUnitByProcessKey(String processKey) {
@@ -691,8 +694,8 @@ public class FunctionUnitManagerComponent {
         if (results.isEmpty()) {
             throw new FunctionUnitNotFoundException("Function unit not found for process definition key: " + processKey);
         }
-        // 列表按 content.createdAt DESC：最新一条可能挂在「已禁用」的旧目录版本上。
-        // 门户待办/分配仍用 processDefinitionKey 解析目录时，应优先解析到仍启用的目录行，避免误报 disabled。
+        // List ordered by content.createdAt DESC; newest row may be on a disabled catalog version.
+        // For portal tasks/assignment by processDefinitionKey, prefer enabled catalog row to avoid false disabled.
         for (FunctionUnitContent c : results) {
             FunctionUnit fu = c.getFunctionUnit();
             if (fu != null && Boolean.TRUE.equals(fu.getEnabled())) {
@@ -703,7 +706,7 @@ public class FunctionUnitManagerComponent {
     }
     
     /**
-     * 保存功能单元
+     * Save function unit
      */
     @Transactional
     public FunctionUnit saveFunctionUnit(FunctionUnit functionUnit) {
@@ -711,29 +714,30 @@ public class FunctionUnitManagerComponent {
     }
     
     /**
-     * 根据代码和版本获取功能单元
+     * Get function unit by code and version
      */
     public FunctionUnit getFunctionUnitByCodeAndVersion(String code, String version) {
         return functionUnitRepository.findByCodeAndVersion(code, version)
-                .orElseThrow(() -> new FunctionUnitNotFoundException("功能单元不存在: " + code + ":" + version));
+                .orElseThrow(() -> new FunctionUnitNotFoundException(
+                        i18nService.getMessage("admin.fu.not_found_by_code", code, version)));
     }
     
     /**
-     * 获取功能单元的所有内容
+     * Get all contents for function unit
      */
     public List<FunctionUnitContent> getFunctionUnitContents(String functionUnitId) {
         return contentRepository.findByFunctionUnitId(functionUnitId);
     }
 
     /**
-     * 获取功能单元内容，按类型过滤。
-     * <p>type 为 null 时返回所有类型；type 有效时返回该类型；type 无效时抛出 AdminBusinessException。
+     * Get function unit contents filtered by type.
+     * <p>null type returns all; valid type filters; invalid type throws AdminBusinessException.
      *
      * <p><b>Validates: Requirements 35.1, 35.2, 35.3</b>
      *
-     * @param functionUnitId 功能单元 ID
-     * @param type           内容类型字符串（可选），如 "FORM", "PROCESS", "DATA_TABLE"
-     * @return 内容项 DTO 列表
+     * @param functionUnitId Function unit id
+     * @param type           Content type string (optional), e.g. "FORM", "PROCESS", "DATA_TABLE"
+     * @return List of content item DTOs
      */
     @Transactional(readOnly = true)
     public List<FunctionUnitContentItemDTO> getContentsByType(String functionUnitId, String type) {
@@ -761,14 +765,14 @@ public class FunctionUnitManagerComponent {
     }
 
     /**
-     * 组装功能单元完整内容（BPMN 流程、表单定义、数据表等）。
-     * <p>业务逻辑包括：Base64 解码 BPMN XML、从 dw_form_definitions 读取最新 config_json、
-     * 查询 tableBindings 并附加到表单内容。
+     * Assemble full function unit content (BPMN, forms, data tables, etc.).
+     * <p>Includes Base64 BPMN decode, latest config_json from dw_form_definitions,
+     * load tableBindings and attach to form content.
      *
      * <p><b>Validates: Requirements 6.1, 6.2, 6.3</b>
      *
-     * @param id 功能单元 ID
-     * @return 完整内容响应 DTO
+     * @param id Function unit id
+     * @return Full content response DTO
      */
     @Transactional(readOnly = true)
     public FunctionUnitContentResponse assembleFunctionUnitContent(String id) {
@@ -1030,35 +1034,35 @@ public class FunctionUnitManagerComponent {
     }
     
     /**
-     * 获取功能单元列表（分页）
+     * List function units (paged)
      */
     public Page<FunctionUnit> listFunctionUnits(Pageable pageable) {
         return functionUnitRepository.findByStatusNot(FunctionUnitStatus.ARCHIVED, pageable);
     }
     
     /**
-     * 获取已归档的功能单元列表（分页）
+     * List archived function units (paged)
      */
     public Page<FunctionUnit> listArchivedFunctionUnits(Pageable pageable) {
         return functionUnitRepository.findByStatus(FunctionUnitStatus.ARCHIVED, pageable);
     }
     
     /**
-     * 根据状态获取功能单元列表
+     * List function units by status
      */
     public Page<FunctionUnit> listFunctionUnitsByStatus(FunctionUnitStatus status, Pageable pageable) {
         return functionUnitRepository.findByStatus(status, pageable);
     }
     
     /**
-     * 获取功能单元的所有版本
+     * List all versions of function unit
      */
     public List<FunctionUnit> getAllVersions(String code) {
         return functionUnitRepository.findAllByCodeOrderByVersionDesc(code);
     }
     
     /**
-     * 验证功能单元：执行结构/依赖/引擎试部署检查，通过后标记为 VALIDATED
+     * Validate function unit: structure/dependency/trial deploy; mark VALIDATED on success
      */
     @Transactional
     public ValidationResult validateFunctionUnit(String id, String validatorId) {
@@ -1066,7 +1070,7 @@ public class FunctionUnitManagerComponent {
 
         if (!functionUnit.isValidatable()) {
             throw new AdminBusinessException("INVALID_STATUS",
-                    "仅草稿状态的功能单元可以验证（当前状态: " + functionUnit.getStatus() + "）");
+                    i18nService.getMessage("admin.fu.validate_draft_only", functionUnit.getStatus()));
         }
 
         ValidationResult result = validationComponent.validate(id);
@@ -1084,7 +1088,7 @@ public class FunctionUnitManagerComponent {
     }
     
     /**
-     * 废弃功能单元
+     * Deprecate function unit
      */
     @Transactional
     public FunctionUnit deprecateFunctionUnit(String id) {
@@ -1093,18 +1097,18 @@ public class FunctionUnitManagerComponent {
         return functionUnitRepository.save(functionUnit);
     }
     
-    // ==================== 版本管理功能 ====================
+    // ==================== Version management ====================
     
     /**
-     * 验证语义化版本格式
+     * Validate semantic version format
      */
     public boolean isValidSemanticVersion(String version) {
         return version != null && VERSION_PATTERN.matcher(version).matches();
     }
     
     /**
-     * 比较两个版本号
-     * @return 负数表示v1 < v2，0表示相等，正数表示v1 > v2
+     * Compare two version strings
+     * @return negative if v1 < v2, zero if equal, positive if v1 > v2
      */
     public int compareVersions(String v1, String v2) {
         int[] version1 = parseVersion(v1);
@@ -1120,20 +1124,20 @@ public class FunctionUnitManagerComponent {
             return 1;
         }
         
-        // 比较主版本号
+        // Compare major version
         if (version1[0] != version2[0]) {
             return version1[0] - version2[0];
         }
-        // 比较次版本号
+        // Compare minor version
         if (version1[1] != version2[1]) {
             return version1[1] - version2[1];
         }
-        // 比较补丁版本号
+        // Compare patch version
         return version1[2] - version2[2];
     }
     
     /**
-     * 获取下一个主版本号
+     * Next major version string
      */
     public String getNextMajorVersion(String currentVersion) {
         int[] version = parseVersion(currentVersion);
@@ -1144,7 +1148,7 @@ public class FunctionUnitManagerComponent {
     }
     
     /**
-     * 获取下一个次版本号
+     * Next minor version string
      */
     public String getNextMinorVersion(String currentVersion) {
         int[] version = parseVersion(currentVersion);
@@ -1155,7 +1159,7 @@ public class FunctionUnitManagerComponent {
     }
     
     /**
-     * 获取下一个补丁版本号
+     * Next patch version string
      */
     public String getNextPatchVersion(String currentVersion) {
         int[] version = parseVersion(currentVersion);
@@ -1166,7 +1170,7 @@ public class FunctionUnitManagerComponent {
     }
     
     /**
-     * 获取功能单元的最新版本（使用语义化版本比较，避免字典序错误如 1.0.9 > 1.0.11）
+     * Latest function unit version (semantic compare; avoids lexicographic errors like 1.0.9 > 1.0.11)
      */
     public Optional<FunctionUnit> getLatestVersion(String code) {
         List<FunctionUnit> versions = functionUnitRepository.findByCodeOrderByVersionDesc(code);
@@ -1181,7 +1185,7 @@ public class FunctionUnitManagerComponent {
     }
     
     /**
-     * 获取功能单元的最新稳定版本（已验证或已部署），使用语义化版本比较
+     * Latest stable version (VALIDATED or DEPLOYED) via semantic compare
      */
     public Optional<FunctionUnit> getLatestStableVersion(String code) {
         List<FunctionUnit> versions = functionUnitRepository.findAllByCodeOrderByVersionDesc(code);
@@ -1198,7 +1202,7 @@ public class FunctionUnitManagerComponent {
     }
     
     /**
-     * 检查是否可以升级到指定版本
+     * Check whether upgrade to target version is allowed
      */
     public VersionUpgradeCheck checkVersionUpgrade(String code, String fromVersion, String toVersion) {
         VersionUpgradeCheck check = new VersionUpgradeCheck();
@@ -1208,13 +1212,13 @@ public class FunctionUnitManagerComponent {
         check.setWarnings(new ArrayList<>());
         check.setErrors(new ArrayList<>());
         
-        // 验证版本格式
+        // Validate version format
         if (!isValidSemanticVersion(fromVersion)) {
-            check.addError("源版本格式无效: " + fromVersion);
+            check.addError(i18nService.getMessage("admin.fu.source_version_invalid", fromVersion));
             check.setUpgradable(false);
         }
         if (!isValidSemanticVersion(toVersion)) {
-            check.addError("目标版本格式无效: " + toVersion);
+            check.addError(i18nService.getMessage("admin.fu.target_version_invalid", toVersion));
             check.setUpgradable(false);
         }
         
@@ -1222,35 +1226,35 @@ public class FunctionUnitManagerComponent {
             return check;
         }
         
-        // 检查版本顺序
+        // Check version ordering
         int comparison = compareVersions(fromVersion, toVersion);
         if (comparison >= 0) {
-            check.addError("目标版本必须大于源版本");
+            check.addError(i18nService.getMessage("admin.fu.target_must_gt_source"));
             check.setUpgradable(false);
             return check;
         }
         
-        // 检查目标版本是否存在
+        // Check target version exists
         Optional<FunctionUnit> targetUnit = functionUnitRepository.findByCodeAndVersion(code, toVersion);
         if (targetUnit.isEmpty()) {
-            check.addError("目标版本不存在: " + code + ":" + toVersion);
+            check.addError(i18nService.getMessage("admin.fu.target_not_found", code, toVersion));
             check.setUpgradable(false);
             return check;
         }
         
-        // 检查目标版本状态
+        // Check target version status
         FunctionUnit target = targetUnit.get();
         if (!target.isDeployable()) {
-            check.addError("目标版本状态不允许升级: " + target.getStatus());
+            check.addError(i18nService.getMessage("admin.fu.target_status_invalid", target.getStatus()));
             check.setUpgradable(false);
             return check;
         }
         
-        // 检查主版本号变化（可能有破坏性变更）
+        // Check major version change (possible breaking change)
         int[] from = parseVersion(fromVersion);
         int[] to = parseVersion(toVersion);
         if (from != null && to != null && from[0] != to[0]) {
-            check.addWarning("主版本号变化，可能存在破坏性变更");
+            check.addWarning(i18nService.getMessage("admin.fu.major_version_warning"));
             check.setMajorUpgrade(true);
         }
         
@@ -1258,7 +1262,7 @@ public class FunctionUnitManagerComponent {
     }
     
     /**
-     * 获取版本历史
+     * Version history
      */
     public List<VersionHistory> getVersionHistory(String code) {
         List<FunctionUnit> versions = functionUnitRepository.findAllByCodeOrderByVersionDesc(code);
@@ -1278,7 +1282,7 @@ public class FunctionUnitManagerComponent {
                              current.getStatus() == FunctionUnitStatus.DEPLOYED)
                     .build();
             
-            // 计算与前一版本的差异类型
+            // Compute change type vs previous version
             if (i < versions.size() - 1) {
                 FunctionUnit previous = versions.get(i + 1);
                 entry.setChangeType(determineChangeType(previous.getVersion(), current.getVersion()));
@@ -1293,7 +1297,7 @@ public class FunctionUnitManagerComponent {
     }
     
     /**
-     * 确定版本变更类型
+     * Determine version change type
      */
     private String determineChangeType(String fromVersion, String toVersion) {
         int[] from = parseVersion(fromVersion);
@@ -1316,28 +1320,28 @@ public class FunctionUnitManagerComponent {
     }
     
     /**
-     * 创建新版本（基于现有版本）
+     * Create new version from existing
      */
     @Transactional
     public FunctionUnit createNewVersion(String sourceId, String newVersion, String creatorId) {
         FunctionUnit source = getFunctionUnitById(sourceId);
         
-        // 验证新版本格式
+        // Validate new version format
         if (!isValidSemanticVersion(newVersion)) {
             throw new AdminBusinessException("INVALID_VERSION", "Invalid version format: " + newVersion);
         }
         
-        // 检查新版本是否已存在
+        // Check new version does not already exist
         if (functionUnitRepository.existsByCodeAndVersion(source.getCode(), newVersion)) {
             throw new AdminBusinessException("VERSION_EXISTS", "Version already exists: " + source.getCode() + ":" + newVersion);
         }
         
-        // 检查版本顺序
+        // Check version ordering
         if (compareVersions(source.getVersion(), newVersion) >= 0) {
             throw new AdminBusinessException("INVALID_VERSION", "New version must be greater than source version");
         }
         
-        // 创建新版本
+        // Create new version record
         FunctionUnit newUnit = FunctionUnit.builder()
                 .id(UUID.randomUUID().toString())
                 .code(source.getCode())
@@ -1354,7 +1358,7 @@ public class FunctionUnitManagerComponent {
         
         newUnit = functionUnitRepository.save(newUnit);
         
-        // 复制依赖关系
+        // Copy dependencies
         List<FunctionUnitDependency> sourceDeps = dependencyRepository.findByFunctionUnitId(source.getId());
         for (FunctionUnitDependency dep : sourceDeps) {
             FunctionUnitDependency newDep = FunctionUnitDependency.builder()
@@ -1367,7 +1371,7 @@ public class FunctionUnitManagerComponent {
             dependencyRepository.save(newDep);
         }
         
-        // 复制内容
+        // Copy contents
         List<FunctionUnitContent> sourceContents = contentRepository.findByFunctionUnitId(source.getId());
         for (FunctionUnitContent content : sourceContents) {
             FunctionUnitContent newContent = FunctionUnitContent.builder()
@@ -1387,19 +1391,19 @@ public class FunctionUnitManagerComponent {
     }
     
     /**
-     * 回滚到指定版本
+     * Rollback to target version
      */
     @Transactional
     public FunctionUnit rollbackToVersion(String code, String targetVersion, String operatorId) {
-        // 获取目标版本
+        // Load target version
         FunctionUnit targetUnit = getFunctionUnitByCodeAndVersion(code, targetVersion);
         
-        // 检查目标版本状态
+        // Check target version status
         if (!targetUnit.isDeployable()) {
             throw new AdminBusinessException("INVALID_STATUS", "Target version status does not allow rollback: " + targetUnit.getStatus());
         }
         
-        // 废弃所有比目标版本新的版本
+        // Deprecate versions newer than target
         List<FunctionUnit> allVersions = functionUnitRepository.findAllByCodeOrderByVersionDesc(code);
         for (FunctionUnit unit : allVersions) {
             if (compareVersions(unit.getVersion(), targetVersion) > 0) {
@@ -1414,10 +1418,10 @@ public class FunctionUnitManagerComponent {
         return targetUnit;
     }
     
-    // ==================== 版本管理内部类 ====================
+    // ==================== Version management inner types ====================
     
     /**
-     * 版本升级检查结果
+     * Version upgrade check result
      */
     @lombok.Data
     @lombok.NoArgsConstructor
@@ -1446,7 +1450,7 @@ public class FunctionUnitManagerComponent {
     }
     
     /**
-     * 版本历史记录
+     * Version history entry
      */
     @lombok.Data
     @lombok.Builder
@@ -1464,10 +1468,10 @@ public class FunctionUnitManagerComponent {
         private boolean isStable;
     }
     
-    // ==================== 内部类 ====================
+    // ==================== Inner types ====================
     
     /**
-     * 功能包内容
+     * Function package content
      */
     @lombok.Data
     @lombok.Builder
@@ -1483,7 +1487,7 @@ public class FunctionUnitManagerComponent {
     }
     
     /**
-     * 依赖信息
+     * Dependency info
      */
     @lombok.Data
     @lombok.Builder
@@ -1496,7 +1500,7 @@ public class FunctionUnitManagerComponent {
     }
     
     /**
-     * 内容信息
+     * Content info
      */
     @lombok.Data
     @lombok.Builder
@@ -1510,17 +1514,17 @@ public class FunctionUnitManagerComponent {
         private String sourceId;
     }
     
-    // ==================== 删除和启用/禁用功能 ====================
+    // ==================== Delete and enable/disable ====================
     
     /**
-     * 获取删除预览信息
-     * 统计将被删除的关联数据数量
+     * Delete preview
+     * Count associated data that would be removed
      */
     @Transactional(readOnly = true)
     public com.admin.dto.response.DeletePreviewResponse getDeletePreview(String functionUnitId) {
         FunctionUnit unit = getFunctionUnitById(functionUnitId);
         
-        // 统计各类关联数据
+        // Count associated entities by type
         List<FunctionUnitContent> contents = contentRepository.findByFunctionUnitId(functionUnitId);
         
         int formCount = 0;
@@ -1546,7 +1550,7 @@ public class FunctionUnitManagerComponent {
         int dependencyCount = dependencyRepository.findByFunctionUnitId(functionUnitId).size();
         int deploymentCount = unit.getDeployments() != null ? unit.getDeployments().size() : 0;
         
-        // 检查运行中的流程实例（简化实现，实际需要调用流程引擎）
+        // Check running instances (simplified; production should call engine)
         boolean hasRunningInstances = false;
         int runningInstanceCount = 0;
         
@@ -1557,7 +1561,7 @@ public class FunctionUnitManagerComponent {
                 .formCount(formCount)
                 .processCount(processCount)
                 .dataTableCount(dataTableCount)
-                .accessConfigCount(0) // 将在后续查询
+                .accessConfigCount(0) // filled in by a later query
                 .deploymentCount(deploymentCount)
                 .dependencyCount(dependencyCount)
                 .hasRunningInstances(hasRunningInstances)
@@ -1566,16 +1570,16 @@ public class FunctionUnitManagerComponent {
     }
     
     /**
-     * 检查是否有运行中的流程实例
+     * Whether running process instances exist
      */
     public boolean hasRunningInstances(String functionUnitId) {
-        // 简化实现：实际需要调用流程引擎检查
-        // 这里返回false，表示没有运行中的实例
+        // Simplified: should call process engine
+        // Returns false here (no running instances)
         return false;
     }
     
     /**
-     * 归档功能单元（按 code 归档全部版本，并从用户门户移除可见性）
+     * Archive function unit by code (all versions; remove portal visibility)
      */
     @Transactional
     public void archiveFunctionUnitByCode(String functionUnitId) {
@@ -1607,7 +1611,7 @@ public class FunctionUnitManagerComponent {
     }
 
     /**
-     * 恢复已归档的功能单元（恢复该 code 下全部 ARCHIVED 版本为 DRAFT）
+     * Restore archived function unit (all ARCHIVED versions under code → DRAFT)
      */
     @Transactional
     public FunctionUnit restoreFunctionUnit(String functionUnitId) {
@@ -1634,13 +1638,13 @@ public class FunctionUnitManagerComponent {
     }
 
     /**
-     * 级联删除功能单元及其所有关联内容（保留供内部/测试使用；对外 DELETE 走归档）
+     * Cascade-delete function unit and related data (internal/test; public DELETE uses archive)
      */
     @Transactional
     public void deleteFunctionUnitCascade(String functionUnitId) {
         FunctionUnit unit = getFunctionUnitById(functionUnitId);
         
-        // 检查是否有运行中的流程实例
+        // Whether running process instances exist
         if (hasRunningInstances(functionUnitId)) {
             throw new AdminBusinessException("HAS_RUNNING_INSTANCES", 
                     "Cannot delete: there are running process instances");
@@ -1648,23 +1652,23 @@ public class FunctionUnitManagerComponent {
         
         log.info("Deleting function unit cascade: {} ({})", unit.getName(), functionUnitId);
         
-        // 删除访问权限配置
+        // Delete access permissions
         accessRepository.deleteByFunctionUnitId(functionUnitId);
         
-        // 删除内容
+        // Delete contents
         contentRepository.deleteByFunctionUnitId(functionUnitId);
         
-        // 删除依赖
+        // Delete dependencies
         dependencyRepository.deleteByFunctionUnitId(functionUnitId);
         
-        // 删除功能单元（会级联删除deployments）
+        // Delete function unit (cascades deployments)
         functionUnitRepository.delete(unit);
         
         log.info("Function unit deleted successfully: {}", functionUnitId);
     }
     
     /**
-     * 设置功能单元启用状态
+     * Set function unit enabled flag
      */
     @Transactional
     public FunctionUnit setEnabled(String functionUnitId, boolean enabled) {
@@ -1672,12 +1676,12 @@ public class FunctionUnitManagerComponent {
     }
     
     /**
-     * 设置功能单元启用状态（带操作人和原因）
-     * @param functionUnitId 功能单元ID
-     * @param enabled 启用状态
-     * @param operatorId 操作人ID
-     * @param reason 原因
-     * @return 更新后的功能单元
+     * Set function unit enabled flag (with operator and reason).
+     * @param functionUnitId function unit id
+     * @param enabled enabled flag
+     * @param operatorId operator id
+     * @param reason reason
+     * @return updated function unit
      */
     @Transactional
     public FunctionUnit setEnabled(String functionUnitId, boolean enabled, String operatorId, String reason) {
@@ -1709,15 +1713,15 @@ public class FunctionUnitManagerComponent {
     }
     
     /**
-     * 获取已部署且启用的功能单元列表
+     * List deployed and enabled function units
      */
     public Page<FunctionUnit> listDeployedAndEnabledFunctionUnits(Pageable pageable) {
         return functionUnitRepository.findByStatusAndEnabled(FunctionUnitStatus.DEPLOYED, true, pageable);
     }
     
     /**
-     * 获取每个功能单元 code 的最新已部署版本
-     * 按 code 分组，使用 SemanticVersion 比较保留每组版本号最高的记录
+     * Latest deployed version per function unit code
+     * Group by code; keep highest SemanticVersion per group
      */
     public List<FunctionUnit> listLatestDeployedFunctionUnits() {
         List<FunctionUnit> allDeployed = functionUnitRepository.findByStatusAndEnabled(
@@ -1727,7 +1731,7 @@ public class FunctionUnitManagerComponent {
             return Collections.emptyList();
         }
         
-        // 按 code 分组，每组保留语义化版本号最高的记录
+        // Group by code; keep highest semantic version per group
         Map<String, FunctionUnit> latestByCode = new HashMap<>();
         for (FunctionUnit unit : allDeployed) {
             String code = unit.getCode();
@@ -1742,7 +1746,7 @@ public class FunctionUnitManagerComponent {
                         latestByCode.put(code, unit);
                     }
                 } catch (IllegalArgumentException e) {
-                    // 版本号格式不合法，降级为字典序比较
+                    // Invalid semver; fall back to lexicographic compare
                     log.warn("Invalid semantic version format, falling back to lexicographic comparison: {} vs {}", 
                             unit.getVersion(), existing.getVersion());
                     if (unit.getVersion().compareTo(existing.getVersion()) > 0) {
@@ -1756,7 +1760,7 @@ public class FunctionUnitManagerComponent {
     }
 
     /**
-     * 门户发起流程：当前 code 下「已部署 + 已启用」中语义版本最高的一条目录记录（若无则 empty）
+     * Portal start: highest semantic version among deployed+enabled for code (empty if none)
      */
     public Optional<FunctionUnit> getActiveCatalogForPortalStart(String code) {
         List<FunctionUnit> deployed = functionUnitRepository.findByCodeAndStatus(code, FunctionUnitStatus.DEPLOYED);
@@ -1785,7 +1789,7 @@ public class FunctionUnitManagerComponent {
     }
 
     /**
-     * 按功能单元目录 ID 清理门户运行数据（并驱动引擎 purge），供回滚/废弃编排
+     * Purge portal runtime data by catalog id (engine purge) for rollback/deprecate flows
      */
     public Map<String, Object> purgeRuntimeDataForCatalog(String catalogId) {
         if (userPortalInternalApiToken == null || userPortalInternalApiToken.isBlank()) {
@@ -1814,14 +1818,14 @@ public class FunctionUnitManagerComponent {
         }
     }
     
-    // ==================== 新增版本管理方法 ====================
+    // ==================== Additional version management APIs ====================
     
     /**
-     * 禁用指定功能单元代码的其他版本
-     * @param code 功能单元代码
-     * @param enabledVersion 保持启用的版本号（如果为null则禁用所有版本）
-     * @param operatorId 操作人ID
-     * @return 被禁用的版本号列表
+     * Disable other versions for function unit code
+     * @param code function unit code
+     * @param enabledVersion version to keep enabled (null disables all)
+     * @param operatorId operator id
+     * @return list of disabled version strings
      */
     @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
     public List<String> disableOtherVersions(String code, String enabledVersion, String operatorId) {
@@ -1830,12 +1834,12 @@ public class FunctionUnitManagerComponent {
         
         List<String> disabledVersions = new ArrayList<>();
         
-        // 查询该代码的所有版本
+        // Load all versions for code
         List<FunctionUnit> allVersions = functionUnitRepository.findAllByCodeOrderByVersionDesc(code);
         
         for (FunctionUnit unit : allVersions) {
-            // 如果不是要保持启用的版本，且当前是启用状态，则禁用
-            // 使用 trim 比对：manifest / 路径变量与入库 version 若存在首尾空白，勿误判为「其他版本」而把当前部署行关掉
+            // Disable when not the version to keep and currently enabled
+            // Trim compare: leading/trailing whitespace on manifest/path vs stored version must not disable the wrong deployed row
             if (!shouldKeepVersionEnabled(unit, enabledVersion) && unit.isEnabled()) {
                 unit.setEnabled(false);
                 functionUnitRepository.save(unit);
@@ -1844,7 +1848,7 @@ public class FunctionUnitManagerComponent {
             }
         }
         
-        // 强制刷新到数据库，确保约束检查时旧版本已禁用
+        // Flush so DB sees disabled rows before constraint checks
         functionUnitRepository.flush();
         
         log.info("Disabled {} versions for function unit {}: {}", 
@@ -1854,8 +1858,8 @@ public class FunctionUnitManagerComponent {
     }
 
     /**
-     * 在 {@link #disableOtherVersions(String, String, String)} 中判断某条记录是否为「应保持启用」的版本。
-     * <p>{@code keepEnabledVersion == null} 表示导入前「关掉同一 code 下所有已启用行」（随后插入新版本）；此时应对每一行返回 false。
+     * In {@link #disableOtherVersions(String, String, String)}, whether a row is the version that should stay enabled.
+     * <p>{@code keepEnabledVersion == null} means pre-import: disable all enabled rows for the code (before inserting the new version); always false per row.
      */
     private static boolean shouldKeepVersionEnabled(FunctionUnit unit, String keepEnabledVersion) {
         if (keepEnabledVersion == null) {
@@ -1869,8 +1873,8 @@ public class FunctionUnitManagerComponent {
     }
 
     /**
-     * 工作站「一键部署」链路末尾补齐启用状态：禁用同 code 其他版本后，将<strong>本次部署</strong>的行设为启用。
-     * <p>若存在更高「已部署」语义版本，仍启用当前行并记告警（与设计器发布预期一致；门户发起请以业务规则为准）。
+     * End of workstation one-click deploy: after disabling other versions for the code, enable the <strong>row deployed in this run</strong>.
+     * <p>If a higher deployed semantic version exists, still enable this row and log a warning (matches designer publish expectation; portal start follows business rules).
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public FunctionUnit finalizeOneClickDeployEnable(String functionUnitId, String operatorId) {
@@ -1900,19 +1904,19 @@ public class FunctionUnitManagerComponent {
     }
     
     /**
-     * 获取当前启用的版本
-     * @param code 功能单元代码
-     * @return 当前启用的功能单元，如果没有则返回空
+     * Currently enabled version for a code.
+     * @param code function unit code
+     * @return enabled function unit, or empty if none
      */
     public Optional<FunctionUnit> getEnabledVersion(String code) {
         return functionUnitRepository.findByCodeAndEnabledTrue(code);
     }
     
     /**
-     * 激活指定版本（与 {@link #setEnabled(String, boolean, String, String)} 同一套规则）
+     * Activate a specific version (same rules as {@link #setEnabled(String, boolean, String, String)}).
      * <ul>
-     *   <li>目标必须为 {@link FunctionUnitStatus#DEPLOYED}</li>
-     *   <li>目标必须为该 code 下全部已部署记录中语义版本最高者</li>
+     *   <li>Target must be {@link FunctionUnitStatus#DEPLOYED}</li>
+     *   <li>Target must be the highest semantic version among all deployed rows for the code</li>
      * </ul>
      */
     @Transactional
@@ -1949,9 +1953,9 @@ public class FunctionUnitManagerComponent {
     }
     
     /**
-     * 获取版本历史（包含启用状态）
-     * @param code 功能单元代码
-     * @return 版本历史列表
+     * Version history including enabled flag.
+     * @param code function unit code
+     * @return version history entries
      */
     public List<com.admin.dto.response.VersionHistoryEntry> getVersionHistoryWithStatus(String code) {
         List<FunctionUnit> versions = functionUnitRepository.findAllByCodeOrderByVersionDesc(code);
@@ -1974,7 +1978,7 @@ public class FunctionUnitManagerComponent {
                     .isCurrentlyEnabled(current.isEnabled())
                     .build();
             
-            // 计算与前一版本的差异类型
+            // Compute change type vs previous version
             if (i < versions.size() - 1) {
                 FunctionUnit previous = versions.get(i + 1);
                 entry.setChangeType(determineChangeType(previous.getVersion(), current.getVersion()));
@@ -1989,7 +1993,7 @@ public class FunctionUnitManagerComponent {
     }
 
     /**
-     * 从 BPMN XML 中提取 <process id="..."> 属性值
+     * Extract {@code <process id="...">} attribute value from BPMN XML.
      */
     private String extractProcessKey(String bpmnXml) {
         try {

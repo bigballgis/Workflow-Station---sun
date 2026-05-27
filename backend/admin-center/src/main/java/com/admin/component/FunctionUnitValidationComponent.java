@@ -11,6 +11,7 @@ import com.admin.exception.AdminBusinessException;
 import com.admin.repository.FunctionUnitContentRepository;
 import com.admin.repository.FunctionUnitDependencyRepository;
 import com.admin.repository.FunctionUnitRepository;
+import com.platform.common.i18n.I18nService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -19,7 +20,7 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * 功能单元发布前校验（静态结构 + 依赖 + Flowable 试部署）
+ * Pre-publish validation (structure, dependencies, and Flowable dry-run deploy).
  */
 @Slf4j
 @Component
@@ -30,11 +31,12 @@ public class FunctionUnitValidationComponent {
     private final FunctionUnitContentRepository contentRepository;
     private final FunctionUnitDependencyRepository dependencyRepository;
     private final ProcessDeploymentComponent processDeploymentComponent;
+    private final I18nService i18nService;
 
     public ValidationResult validate(String functionUnitId) {
         FunctionUnit functionUnit = functionUnitRepository.findById(functionUnitId)
                 .orElseThrow(() -> new AdminBusinessException("FUNCTION_UNIT_NOT_FOUND",
-                        "功能单元不存在: " + functionUnitId));
+                        i18nService.getMessage("admin.fu.not_found_by_id", functionUnitId)));
 
         ValidationResult result = ValidationResult.builder()
                 .valid(true)
@@ -80,25 +82,25 @@ public class FunctionUnitValidationComponent {
         }
 
         if (!hasProcess) {
-            result.addWarning("功能单元未包含流程定义，部署后无法发起流程");
+            result.addWarning(i18nService.getMessage("admin.fu.validate_warning_no_process"));
         }
     }
 
     private boolean validateBpmnContent(String bpmnXml, String contentName, ValidationResult result) {
         if (bpmnXml == null || bpmnXml.isBlank()) {
-            result.addError("BPMN_SYNTAX", contentName, "BPMN 内容为空");
+            result.addError("BPMN_SYNTAX", contentName, i18nService.getMessage("admin.fu.bpmn_empty"));
             return false;
         }
         if (!bpmnXml.contains("definitions") || !bpmnXml.contains("process")) {
-            result.addError("BPMN_SYNTAX", contentName, "无效的 BPMN 格式");
+            result.addError("BPMN_SYNTAX", contentName, i18nService.getMessage("admin.fu.bpmn_invalid"));
             return false;
         }
         if (!bpmnXml.contains("startEvent")) {
-            result.addError("BPMN_SYNTAX", contentName, "流程缺少开始事件 (startEvent)");
+            result.addError("BPMN_SYNTAX", contentName, i18nService.getMessage("admin.fu.bpmn_missing_start_event"));
             return false;
         }
         if (!bpmnXml.contains("endEvent")) {
-            result.addError("BPMN_SYNTAX", contentName, "流程缺少结束事件 (endEvent)");
+            result.addError("BPMN_SYNTAX", contentName, i18nService.getMessage("admin.fu.bpmn_missing_end_event"));
             return false;
         }
         return true;
@@ -110,7 +112,7 @@ public class FunctionUnitValidationComponent {
         }
         String trimmed = formConfig.trim();
         if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
-            result.addError("FORM_CONFIG", contentName, "无效的表单配置 JSON");
+            result.addError("FORM_CONFIG", contentName, i18nService.getMessage("admin.fu.form_config_invalid"));
             return false;
         }
         return true;
@@ -123,7 +125,7 @@ public class FunctionUnitValidationComponent {
         String upperDef = tableDefinition.toUpperCase();
         if (!upperDef.contains("CREATE TABLE") && !upperDef.contains("ALTER TABLE")
                 && !tableDefinition.trim().startsWith("{")) {
-            result.addError("DATA_TABLE", contentName, "无效的数据表定义");
+            result.addError("DATA_TABLE", contentName, i18nService.getMessage("admin.fu.data_table_invalid"));
             return false;
         }
         return true;
@@ -138,18 +140,20 @@ public class FunctionUnitValidationComponent {
             Optional<FunctionUnit> existing = functionUnitRepository.findLatestByCode(dep.getDependencyCode());
             if (existing.isEmpty()) {
                 result.addError("MISSING_DEPENDENCY", dep.getDependencyCode(),
-                        "缺少必需依赖: " + dep.getDependencyCode() + ":" + dep.getDependencyVersion());
+                        i18nService.getMessage("admin.fu.dependency_required_missing",
+                                dep.getDependencyCode(), dep.getDependencyVersion()));
                 result.setDependenciesValid(false);
                 continue;
             }
             FunctionUnit resolved = existing.get();
             if (resolved.getStatus() != FunctionUnitStatus.DEPLOYED) {
                 result.addError("DEPENDENCY_NOT_DEPLOYED", dep.getDependencyCode(),
-                        "依赖 " + dep.getDependencyCode() + " 尚未部署 (当前状态: " + resolved.getStatus() + ")");
+                        i18nService.getMessage("admin.fu.dependency_not_deployed_status",
+                                dep.getDependencyCode(), resolved.getStatus()));
                 result.setDependenciesValid(false);
             } else if (!resolved.isEnabled()) {
                 result.addError("DEPENDENCY_DISABLED", dep.getDependencyCode(),
-                        "依赖 " + dep.getDependencyCode() + " 已部署但未启用");
+                        i18nService.getMessage("admin.fu.dependency_deployed_but_disabled", dep.getDependencyCode()));
                 result.setDependenciesValid(false);
             }
         }
@@ -159,13 +163,12 @@ public class FunctionUnitValidationComponent {
         ProcessDeploymentComponent.ProcessDeploymentResult dryRun =
                 processDeploymentComponent.dryRunDeployFunctionUnitProcess(functionUnitId);
 
-        if (dryRun.isSuccess()
-                || (dryRun.getMessage() != null && dryRun.getMessage().contains("没有流程定义"))) {
+        if (dryRun.isSuccess()) {
             return;
         }
 
         result.setEngineDeployValid(false);
-        if (dryRun.getMessage() != null && dryRun.getMessage().contains("Flowable")) {
+        if (dryRun.isEngineUnavailable()) {
             result.addError("ENGINE_UNAVAILABLE", "workflow-engine",
                     dryRun.getMessage());
         } else if (dryRun.getErrors() != null) {
@@ -173,7 +176,9 @@ public class FunctionUnitValidationComponent {
                 result.addError("ENGINE_DEPLOY", "process", error);
             }
         } else {
-            result.addError("ENGINE_DEPLOY", "process", dryRun.getMessage());
+            String msg = dryRun.getMessage() != null ? dryRun.getMessage()
+                    : i18nService.getMessage("admin.deploy.process.deploy_failed_summary");
+            result.addError("ENGINE_DEPLOY", "process", msg);
         }
     }
 }

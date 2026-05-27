@@ -12,7 +12,7 @@ import java.util.Collection;
 import java.util.List;
 
 /**
- * 流程实例Repository
+ * Process instance repository.
  */
 @Repository
 public interface ProcessInstanceRepository extends JpaRepository<ProcessInstance, String> {
@@ -40,27 +40,27 @@ public interface ProcessInstanceRepository extends JpaRepository<ProcessInstance
     long countByStartUserIdInAndStatus(Collection<String> startUserIds, String status);
 
     /**
-     * 查询分配给指定用户的待办流程实例
+     * Find active process instances assigned to the specified user.
      */
     Page<ProcessInstance> findByCurrentAssigneeAndStatusOrderByStartTimeDesc(String assignee, String status, Pageable pageable);
 
     /**
-     * 查询候选用户包含指定用户的待办流程实例（用于或签场景）
+     * Find active process instances whose candidate users include the specified user (OR-sign scenarios).
      */
     @Query("SELECT p FROM ProcessInstance p WHERE p.status = :status AND p.candidateUsers LIKE %:userId%")
     Page<ProcessInstance> findByCandidateUsersContainingAndStatus(@Param("userId") String userId, @Param("status") String status, Pageable pageable);
 
     /**
-     * 查询分配给指定用户或候选用户包含指定用户的待办流程实例
+     * Find active process instances assigned to the user or whose candidate users include the user.
      */
     @Query("SELECT p FROM ProcessInstance p WHERE p.status = :status AND (p.currentAssignee = :userId OR p.candidateUsers LIKE %:userId%)")
     Page<ProcessInstance> findByAssigneeOrCandidateAndStatus(@Param("userId") String userId, @Param("status") String status, Pageable pageable);
 
 
     /**
-     * 条件更新：仅当流程状态不是 COMPLETED 时才更新 currentNode 和 currentAssignee。
-     * 用于避免 startProcess 自动完成首任务后覆盖 ProcessCompletionListener 已设置的 COMPLETED 状态（竞态条件）。
-     * 返回受影响行数：0 表示流程已完成，无需更新。
+     * Conditional update: updates {@code currentNode} and {@code currentAssignee} only when status is not COMPLETED.
+     * Avoids overwriting COMPLETED set by ProcessCompletionListener after startProcess auto-completes the first task (race).
+     * Returns affected row count: 0 means the process is already completed and no update is needed.
      */
     @org.springframework.data.jpa.repository.Modifying
     @Query("UPDATE ProcessInstance p SET p.currentNode = :currentNode, p.currentAssignee = :currentAssignee " +

@@ -47,8 +47,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * 任务创建时按 BPMN 扩展属性 {@code assigneeType} 等解析处理人。
- * <p>语义见 {@code .kiro/docs/assignee-type-convergence.md}。</p>
+ * Resolves assignee when a task is created, based on BPMN extension attributes such as {@code assigneeType}.
+ * <p>See {@code .kiro/docs/assignee-type-convergence.md} for semantics.</p>
  */
 @Slf4j
 @Component
@@ -182,7 +182,8 @@ public class TaskAssignmentListener implements FlowableEventListener {
                 }
             }
 
-            // Flowable BpmnModel 常未载入 designer custom 命名空间扩展，与 actionIds 一致从已部署 XML 补读
+            // Flowable's in-memory BpmnModel often misses designer custom namespace extensions; read from deployed XML
+            // (consistent with actionIds fallback pattern)
             if (processDefinitionId != null && taskDefinitionKey != null) {
                 assigneeTypeRaw = firstNonBlank(assigneeTypeRaw,
                         bpmnActionParser.getUserTaskExtensionPropertyValue(processDefinitionId, taskDefinitionKey,
@@ -349,8 +350,9 @@ public class TaskAssignmentListener implements FlowableEventListener {
             taskService.setAssignee(taskId, resolvedAssignee);
             log.info("Task {} assigned to user: {}", taskId, resolvedAssignee);
             notifyNewTask(resolvedAssignee, taskId, task.getName(), processInstanceId);
-            // BU_ROLE / INITIATOR / … 在创建时 assignee 常为空，此处才 setAssignee；须补写 MI 扩展任务，
-            // 否则 multi-instance status 只有 ELEMENT_VARIABLE 等前一节点记录，门户子表仍显示 COMPLETED/end。
+            // BU_ROLE / INITIATOR / ... often have empty assignee at task creation; setAssignee happens here.
+            // Must also write the MI extended task, otherwise multi-instance status only sees
+            // ELEMENT_VARIABLE predecessor records and portal sub-table still shows COMPLETED/end.
             try {
                 ensureMultiInstanceExtendedTaskForPreassignedTask(task, taskId, processInstanceId,
                         processDefinitionId, taskDefinitionKey, resolvedAssignee);
@@ -880,7 +882,8 @@ public class TaskAssignmentListener implements FlowableEventListener {
             final List<String> pkCols = pkColsEv;
             final Map<String, Object> rowKey = rowKeyEv;
 
-            // 与门户 buildParticipantsCollection、子表列名对齐：优先 BPMN assigneeField，其次 assigneeId，再次 assignee_user_id
+            // Align with portal buildParticipantsCollection and sub-table column names:
+            // prefer BPMN assigneeField, then assigneeId, then assignee_user_id
             Object assigneeIdObj = null;
             if (assigneeFieldFromBpmn != null && !assigneeFieldFromBpmn.isBlank()) {
                 assigneeIdObj = currentItem.get(assigneeFieldFromBpmn.trim());
@@ -1009,8 +1012,8 @@ public class TaskAssignmentListener implements FlowableEventListener {
                 if (container == null || container.getName() == null) {
                     continue;
                 }
-                // Flowable 解析 designer 导出的 custom:properties 时，getName() 可能是 "properties"
-                // 或带前缀如 "custom:properties"，仅 equals "properties" 会漏读 assigneeType
+                // Flowable parses designer-exported custom:properties with getName() returning "properties"
+                // or namespaced like "custom:properties"; equals "properties" alone would miss assigneeType
                 if (!isExtensionPropertiesContainer(container.getName())) {
                     continue;
                 }
@@ -1020,7 +1023,7 @@ public class TaskAssignmentListener implements FlowableEventListener {
                 }
             }
         }
-        // 兜底：任意层级下的 property（兼容非标准嵌套）
+        // Fallback: match property element at any nesting level (compatible with non-standard nesting)
         for (List<ExtensionElement> group : userTask.getExtensionElements().values()) {
             if (group == null) {
                 continue;

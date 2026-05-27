@@ -29,66 +29,68 @@ import java.time.Instant;
 import java.util.List;
 
 import com.platform.security.util.SecurityContextUtils;
+import com.platform.common.i18n.I18nService;
 
 @Slf4j
 @RestController
 @RequestMapping("/security")
 @RequiredArgsConstructor
-@Tag(name = "安全审计", description = "安全策略配置和审计日志管理接口")
+@Tag(name = "Security Audit", description = "Security policy configuration and audit log management APIs")
 public class SecurityAuditController {
     
     private final SecurityAuditComponent securityAuditComponent;
+    private final I18nService i18nService;
     
-    // ==================== 安全策略管理 ====================
+    // ==================== Security Policy Management ====================
     
     @GetMapping("/policies")
-    @Operation(summary = "获取所有安全策略")
+    @Operation(summary = "Get all security policies")
     public ResponseEntity<List<SecurityPolicy>> getAllPolicies() {
         return ResponseEntity.ok(securityAuditComponent.getAllPolicies());
     }
     
     @GetMapping("/policies/{policyType}")
-    @Operation(summary = "获取指定类型的安全策略")
+    @Operation(summary = "Get security policy by type")
     public ResponseEntity<SecurityPolicy> getPolicy(@PathVariable String policyType) {
         return ResponseEntity.ok(securityAuditComponent.getPolicy(policyType));
     }
     
     @PutMapping("/policies/password")
-    @Operation(summary = "更新密码策略")
+    @Operation(summary = "Update password policy")
     public ResponseEntity<SecurityPolicy> updatePasswordPolicy(
             @Valid @RequestBody PasswordPolicyConfig config) {
         String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthenticated_user")));
         return ResponseEntity.ok(securityAuditComponent.createOrUpdatePolicy("PASSWORD", config, userId));
     }
     
     @PutMapping("/policies/login")
-    @Operation(summary = "更新登录策略")
+    @Operation(summary = "Update login policy")
     public ResponseEntity<SecurityPolicy> updateLoginPolicy(
             @Valid @RequestBody LoginPolicyConfig config) {
         String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthenticated_user")));
         return ResponseEntity.ok(securityAuditComponent.createOrUpdatePolicy("LOGIN", config, userId));
     }
     
     @PutMapping("/policies/session")
-    @Operation(summary = "更新会话策略")
+    @Operation(summary = "Update session policy")
     public ResponseEntity<SecurityPolicy> updateSessionPolicy(
             @Valid @RequestBody SessionPolicyConfig config) {
         String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthenticated_user")));
         return ResponseEntity.ok(securityAuditComponent.createOrUpdatePolicy("SESSION", config, userId));
     }
     
-    // ==================== 密码验证 ====================
+    // ==================== Password Validation ====================
     
     @PostMapping("/validate-password")
-    @Operation(summary = "验证密码是否符合策略")
+    @Operation(summary = "Validate password against policy")
     public ResponseEntity<PasswordValidationResult> validatePassword(@RequestBody String password) {
         return ResponseEntity.ok(securityAuditComponent.validatePassword(password));
     }
     
-    // ==================== 审计日志查询 ====================
+    // ==================== Audit Log Query ====================
     
     /** All known resource types produced by AdminAuditAspect, returned to the UI for the filter dropdown */
     static final List<String> ALL_RESOURCE_TYPES = List.of(
@@ -102,7 +104,7 @@ public class SecurityAuditController {
     );
     
     @PostMapping("/audit-logs/query")
-    @Operation(summary = "查询审计日志")
+    @Operation(summary = "Query audit logs")
     public ResponseEntity<Page<AuditLog>> queryAuditLogs(
             @RequestBody AuditQueryRequestDto requestDto, Pageable pageable) {
         AuditQueryRequest request = toInternalRequest(requestDto);
@@ -114,7 +116,7 @@ public class SecurityAuditController {
     }
     
     @GetMapping("/audit-logs/resource-types")
-    @Operation(summary = "获取所有 Resource Type 枚举值（用于前端下拉过滤）")
+    @Operation(summary = "Get all resource type enum values (for frontend dropdown filter)")
     public ResponseEntity<List<String>> getResourceTypes() {
         return ResponseEntity.ok(ALL_RESOURCE_TYPES);
     }
@@ -148,14 +150,14 @@ public class SecurityAuditController {
     }
     
     @GetMapping("/audit-logs/user/{userId}")
-    @Operation(summary = "获取用户审计日志")
+    @Operation(summary = "Get user audit logs")
     public ResponseEntity<Page<AuditLog>> getAuditLogsByUser(
             @PathVariable String userId, Pageable pageable) {
         return ResponseEntity.ok(securityAuditComponent.getAuditLogsByUser(userId, pageable));
     }
     
     @GetMapping("/audit-logs/resource/{resourceType}/{resourceId}")
-    @Operation(summary = "获取资源审计日志")
+    @Operation(summary = "Get resource audit logs")
     public ResponseEntity<Page<AuditLog>> getAuditLogsByResource(
             @PathVariable String resourceType,
             @PathVariable String resourceId,
@@ -164,7 +166,7 @@ public class SecurityAuditController {
     }
     
     @PostMapping("/audit-logs/export")
-    @Operation(summary = "导出审计日志")
+    @Operation(summary = "Export audit logs")
     public ResponseEntity<byte[]> exportAuditLogs(@RequestBody AuditQueryRequestDto requestDto) {
         AuditQueryRequest request = toInternalRequest(requestDto);
         Page<AuditLog> page = securityAuditComponent.queryAuditLogs(request, Pageable.unpaged());
@@ -177,9 +179,9 @@ public class SecurityAuditController {
     
     private byte[] buildAuditLogExcel(List<AuditLog> logs) {
         try (Workbook wb = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-            Sheet sheet = wb.createSheet("审计日志");
+            Sheet sheet = wb.createSheet("Audit Log");
             Row header = sheet.createRow(0);
-            String[] headers = {"操作类型", "操作人", "资源类型", "资源ID", "IP地址", "结果", "时间"};
+            String[] headers = {"Action", "Operator", "Resource Type", "Resource ID", "IP Address", "Result", "Time"};
             for (int i = 0; i < headers.length; i++) {
                 header.createCell(i).setCellValue(headers[i]);
             }
@@ -191,7 +193,7 @@ public class SecurityAuditController {
                 row.createCell(2).setCellValue(log.getResourceType() != null ? log.getResourceType() : "");
                 row.createCell(3).setCellValue(log.getResourceId() != null ? log.getResourceId() : "");
                 row.createCell(4).setCellValue(log.getIpAddress() != null ? log.getIpAddress() : "");
-                row.createCell(5).setCellValue(Boolean.TRUE.equals(log.getSuccess()) ? "成功" : "失败");
+                row.createCell(5).setCellValue(Boolean.TRUE.equals(log.getSuccess()) ? "Success" : "Failure");
                 row.createCell(6).setCellValue(log.getTimestamp() != null ? log.getTimestamp().toString() : "");
             }
             wb.write(out);
@@ -214,19 +216,19 @@ public class SecurityAuditController {
         private Boolean success;
     }
     
-    // ==================== 异常检测 ====================
+    // ==================== Anomaly Detection ====================
     
     @GetMapping("/anomalies")
-    @Operation(summary = "检测异常行为")
+    @Operation(summary = "Detect anomalous behavior")
     public ResponseEntity<List<AnomalyDetectionResult>> detectAnomalies(
             @RequestParam(defaultValue = "7") int days) {
         return ResponseEntity.ok(securityAuditComponent.detectAnomalies(days));
     }
     
-    // ==================== 合规报告 ====================
+    // ==================== Compliance Report ====================
     
     @GetMapping("/compliance-report")
-    @Operation(summary = "生成合规报告")
+    @Operation(summary = "Generate compliance report")
     public ResponseEntity<ComplianceReport> generateComplianceReport(
             @RequestParam(defaultValue = "30") int days) {
         return ResponseEntity.ok(securityAuditComponent.generateComplianceReport(days));

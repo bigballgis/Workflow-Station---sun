@@ -27,14 +27,14 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * 表设计组件实现
+ * Table Design component implementation.
  */
 @Component
 @Slf4j
 @RequiredArgsConstructor
 public class TableDesignComponentImpl implements TableDesignComponent {
     
-    // DOS 防护: 字段定义数量限制
+    // DoS mitigation: cap field-definition count.
     private static final int MAX_FIELD_DEFINITIONS = 200;
 
     private final TableDefinitionRepository tableDefinitionRepository;
@@ -68,12 +68,13 @@ public class TableDesignComponentImpl implements TableDesignComponent {
         
         tableDefinition = tableDefinitionRepository.save(tableDefinition);
         
-        // 添加字段
+        // Persist field rows.
         if (request.getFields() != null) {
-            // 防止 DOS 攻击: 限制字段定义数量
+            // DoS mitigation: enforce field-definition upper bound.
             if (request.getFields().size() > MAX_FIELD_DEFINITIONS) {
                 throw new DeveloperBusinessException("FIELD_COUNT_EXCEEDED",
-                        "字段定义数量超过限制: " + request.getFields().size() + ", 最大 " + MAX_FIELD_DEFINITIONS);
+                        i18nService.getMessage("table.field_count_exceeded",
+                                request.getFields().size(), MAX_FIELD_DEFINITIONS));
             }
             sequenceSynchronizer.synchronizeFieldDefinitions();
             int sortOrder = 0;
@@ -98,8 +99,8 @@ public class TableDesignComponentImpl implements TableDesignComponent {
                     i18nService.getMessage("table.use_other_name"));
         }
 
-        // 在删除旧字段前，按 id 快照 (fieldName, description)，供保存后与请求做 diff
-        // 以便把字段重命名 / Display Name 变更同步到所有引用此表的 Form rule + fieldPermissions。
+        // Before deleting legacy fields snapshot (fieldName, description, ...) keyed by id for diffing after save
+        // so renames/display-name tweaks propagate into every referencing Form rule + fieldPermissions.
         Map<Long, OldFieldSnapshot> originals = new HashMap<>();
         for (FieldDefinition existing : tableDefinition.getFieldDefinitions()) {
             if (existing.getId() == null) continue;
@@ -114,26 +115,26 @@ public class TableDesignComponentImpl implements TableDesignComponent {
         }
         Long functionUnitId = tableDefinition.getFunctionUnit().getId();
 
-        // 更新表基本信息
+        // Update table metadata.
         tableDefinition.setTableName(request.getTableName());
         tableDefinition.setTableDisplayName(request.getTableDisplayName());
         tableDefinition.setTableType(request.getTableType());
         tableDefinition.setDescription(request.getDescription());
         
-        // 更新字段定义
-        // 由于使用了 cascade = CascadeType.ALL, orphanRemoval = true
-        // 先清空内存中的集合，然后显式删除旧的字段记录，避免唯一约束冲突
+        // Refresh field definitions: cascade=CascadeType.ALL + orphanRemoval=true → clear memory, delete rows explicitly
+        // to avoid unique constraint races.
         tableDefinition.getFieldDefinitions().clear();
         fieldDefinitionRepository.deleteByTableDefinitionId(id);
         fieldDefinitionRepository.flush();
         
         if (request.getFields() != null && !request.getFields().isEmpty()) {
-            // 防止 DOS 攻击: 限制字段定义数量
+            // DoS mitigation: enforce field-definition upper bound.
             if (request.getFields().size() > MAX_FIELD_DEFINITIONS) {
                 throw new DeveloperBusinessException("FIELD_COUNT_EXCEEDED",
-                        "字段定义数量超过限制: " + request.getFields().size() + ", 最大 " + MAX_FIELD_DEFINITIONS);
+                        i18nService.getMessage("table.field_count_exceeded",
+                                request.getFields().size(), MAX_FIELD_DEFINITIONS));
             }
-            // 导入/init 脚本若写入较大 id 而未推进序列，delete+reinsert 会触发主键冲突
+            // Import/init inserts with large IDs but stale sequences ⇒ PK clash on delete+reinsert unless we realign first.
             sequenceSynchronizer.synchronizeFieldDefinitions();
             int sortOrder = 0;
             for (FieldDefinitionRequest fieldRequest : request.getFields()) {
@@ -154,8 +155,7 @@ public class TableDesignComponentImpl implements TableDesignComponent {
         TableDefinition saved = tableDefinitionRepository.save(tableDefinition);
         tableDefinitionRepository.flush();
 
-        // 计算字段变更（fieldName/description/dataType/length/scale/nullable），
-        // 同步到该 FunctionUnit 的所有相关 Form 画布与字段权限。
+        // Diff field deltas (fieldName/description/dataType/length/scale/nullable) and push into every related Form canvas + permissions.
         List<FormConfigFieldRenamer.FieldChange> changes = computeFieldChanges(originals, request.getFields());
         if (!changes.isEmpty()) {
             propagateFieldChangesToForms(functionUnitId, saved, changes);
@@ -166,7 +166,7 @@ public class TableDesignComponentImpl implements TableDesignComponent {
                 .orElse(saved);
     }
 
-    /** 在事务内：扫描该 FunctionUnit 下所有表单，按字段变更同步 rule.field/title/props/validate 与 fieldPermissions。 */
+    /** Within the transaction: scan every form in the FunctionUnit and propagate field deltas into rule.field/title/props/validate + fieldPermissions. */
     private void propagateFieldChangesToForms(Long functionUnitId,
                                               TableDefinition table,
                                               List<FormConfigFieldRenamer.FieldChange> changes) {
@@ -205,7 +205,7 @@ public class TableDesignComponentImpl implements TableDesignComponent {
                     orig.nullable(),
                     f.getNullable()
             );
-            // 若所有维度都未变，则不产出 FieldChange
+            // Skip emitting FieldChange when every tracked axis is unchanged.
             if (!ch.fieldNameChanged()
                     && !ch.descriptionChanged()
                     && !ch.lengthChanged()
@@ -230,14 +230,14 @@ public class TableDesignComponentImpl implements TableDesignComponent {
     public void delete(Long id) {
         TableDefinition tableDefinition = getById(id);
         
-        // 检查是否被表单引用（旧的单表绑定方式）
+        // Guard: legacy single boundTable associations.
         if (formDefinitionRepository.existsByBoundTable_Id(id)) {
             throw new DeveloperBusinessException("BIZ_TABLE_IN_USE", 
                     i18nService.getMessage("table.in_use_by_form"),
                     i18nService.getMessage("table.unbind_form_first"));
         }
         
-        // 检查是否被表单多表绑定引用
+        // Guard: multi-table bindings referencing this catalog table.
         if (formTableBindingRepository.existsByTableId(id)) {
             throw new DeveloperBusinessException("BIZ_TABLE_IN_USE", 
                     i18nService.getMessage("table.in_use_by_binding"),
@@ -284,7 +284,7 @@ public class TableDesignComponentImpl implements TableDesignComponent {
     public boolean hasCircularDependency(Long functionUnitId) {
         List<ForeignKey> foreignKeys = foreignKeyRepository.findByFunctionUnitId(functionUnitId);
         
-        // 构建依赖图
+        // Build FK dependency adjacency graph.
         Map<Long, Set<Long>> graph = new HashMap<>();
         for (ForeignKey fk : foreignKeys) {
             Long fromTableId = fk.getTableDefinition().getId();
@@ -292,7 +292,7 @@ public class TableDesignComponentImpl implements TableDesignComponent {
             graph.computeIfAbsent(fromTableId, k -> new HashSet<>()).add(toTableId);
         }
         
-        // DFS检测环
+        // DFS cycle detection.
         Set<Long> visited = new HashSet<>();
         Set<Long> recursionStack = new HashSet<>();
         
@@ -395,7 +395,7 @@ public class TableDesignComponentImpl implements TableDesignComponent {
             }
         }
         
-        // 为 SUB 类型的表自动添加 row_version 列（用于乐观锁）
+        // Append row_version for SUB tables (optimistic locking sentinel in generated DDL previews).
         if (table.getTableType() == com.developer.enums.TableType.SUB) {
             String rowVersionType = switch (dialect) {
                 case POSTGRESQL -> "BIGINT";
@@ -414,7 +414,7 @@ public class TableDesignComponentImpl implements TableDesignComponent {
         
         ddl.append("\n)");
         
-        // 添加方言特定的后缀
+        // Dialect-specific table suffix (MySQL ENGINE/charset).
         if (dialect == DatabaseDialect.MYSQL) {
             ddl.append(" ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
         }

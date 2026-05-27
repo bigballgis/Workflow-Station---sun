@@ -9,6 +9,7 @@ import com.admin.exception.AdminBusinessException;
 import com.admin.repository.FunctionUnitApprovalRepository;
 import com.admin.repository.FunctionUnitDeploymentRepository;
 import com.admin.repository.FunctionUnitRepository;
+import com.platform.common.i18n.I18nService;
 import net.jqwik.api.*;
 import net.jqwik.api.lifecycle.BeforeTry;
 import org.mockito.Mockito;
@@ -31,6 +32,7 @@ class DeploymentRollbackProperties {
     private FunctionUnitRepository functionUnitRepository;
     private FunctionUnitDeploymentRepository deploymentRepository;
     private FunctionUnitApprovalRepository approvalRepository;
+    private I18nService i18nService;
     private DeploymentManagerComponent component;
 
     @BeforeTry
@@ -38,12 +40,15 @@ class DeploymentRollbackProperties {
         functionUnitRepository = Mockito.mock(FunctionUnitRepository.class);
         deploymentRepository = Mockito.mock(FunctionUnitDeploymentRepository.class);
         approvalRepository = Mockito.mock(FunctionUnitApprovalRepository.class);
+        i18nService = Mockito.mock(I18nService.class);
+        Mockito.lenient().when(i18nService.getMessage(Mockito.anyString())).thenAnswer(inv -> inv.getArgument(0));
         component = new DeploymentManagerComponent(
                 functionUnitRepository,
                 deploymentRepository,
                 approvalRepository,
                 Mockito.mock(com.platform.messaging.support.NotificationDispatchHelper.class),
-                Mockito.mock(com.admin.service.UserReferenceResolver.class));
+                Mockito.mock(com.admin.service.UserReferenceResolver.class),
+                i18nService);
     }
 
     // ==================== 属性 1: 只有成功或部署中的部署可以回滚 ====================

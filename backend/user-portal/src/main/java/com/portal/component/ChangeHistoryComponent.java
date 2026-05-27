@@ -31,8 +31,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * 变更历史组件
- * 记录字段级变更历史，采用"尽力而为"策略，失败不阻断主流程
+ * Change History component
+ * Records field-level change history with a "best-effort" strategy; failures do not block the main flow.
  */
 @Slf4j
 @Component
@@ -78,8 +78,8 @@ public class ChangeHistoryComponent {
     );
 
     /**
-     * 记录字段变更
-     * 比较 oldValues 和 newValues，为每个变更的字段创建一条 ChangeHistory 记录
+     * Record field changes.
+     * Compare oldValues and newValues, and create a ChangeHistory record for each changed field.
      */
     public void recordFieldChanges(ChangeHistoryContext context,
                                    Map<String, Object> oldValues,
@@ -134,7 +134,7 @@ public class ChangeHistoryComponent {
     }
 
     /**
-     * 记录子表变更
+     * Record sub-table changes.
      */
     public void recordSubTableChanges(ChangeHistoryContext context,
                                       String subTableName,
@@ -179,7 +179,7 @@ public class ChangeHistoryComponent {
     }
 
     /**
-     * 查询变更历史
+     * Query change history.
      */
     public List<ChangeHistoryRecord> getChangeHistory(String processInstanceId) {
         List<ChangeHistory> entities = changeHistoryRepository
@@ -200,7 +200,7 @@ public class ChangeHistoryComponent {
     }
 
     /**
-     * 记录并发修改警告
+     * Record concurrent modification warning.
      */
     public void recordConcurrentModificationWarning(String processInstanceId,
                                                      String fieldName,

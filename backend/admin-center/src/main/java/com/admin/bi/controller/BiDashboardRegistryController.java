@@ -18,29 +18,29 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 /**
- * Dashboard 注册表管理控制器
+ * Dashboard registry management controller
  */
 @RestController
 @RequestMapping("/bi/dashboards")
 @RequiredArgsConstructor
 @Slf4j
-@Tag(name = "Dashboard 注册表管理", description = "Dashboard 同步、查询、更新、状态切换、删除等接口")
+@Tag(name = "Dashboard Registry Management", description = "Dashboard sync, query, update, status toggle, delete and other endpoints")
 public class BiDashboardRegistryController {
 
     private final BiDashboardRegistryService dashboardRegistryService;
 
     @PostMapping("/sync")
-    @Operation(summary = "手动同步 Dashboard", description = "立即执行一次 Sync_Operation 并返回同步结果摘要")
+    @Operation(summary = "Manually sync Dashboards", description = "Immediately execute a Sync_Operation and return sync result summary")
     public ResponseEntity<SyncResultResponse> syncDashboards() {
         String userId = SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException("Unauthenticated user"));
         log.info("User {} triggered manual dashboard sync", userId);
         SyncResultResponse result = dashboardRegistryService.syncDashboards();
         return ResponseEntity.ok(result);
     }
 
     @GetMapping
-    @Operation(summary = "分页查询 Dashboard 列表", description = "支持按 title、tags、status 筛选")
+    @Operation(summary = "List Dashboards with pagination", description = "Supports filtering by title, tags, and status")
     public ResponseEntity<Page<DashboardRegistryResponse>> listDashboards(
             @RequestParam(required = false) String title,
             @RequestParam(required = false) String tags,
@@ -51,31 +51,31 @@ public class BiDashboardRegistryController {
     }
 
     @GetMapping("/{id}")
-    @Operation(summary = "获取 Dashboard 详情")
+    @Operation(summary = "Get Dashboard details")
     public ResponseEntity<DashboardRegistryResponse> getDashboard(@PathVariable String id) {
         DashboardRegistryResponse response = dashboardRegistryService.getDashboard(id);
         return ResponseEntity.ok(response);
     }
 
     @PutMapping("/{id}")
-    @Operation(summary = "更新本地扩展字段", description = "仅允许更新 Tags 和 Is_Default_Landing")
+    @Operation(summary = "Update local extension fields", description = "Only allows updating Tags and Is_Default_Landing")
     public ResponseEntity<DashboardRegistryResponse> updateDashboard(
             @PathVariable String id,
             @RequestBody @Valid DashboardRegistryUpdateRequest request) {
         String userId = SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException("Unauthenticated user"));
         log.info("User {} updating dashboard {}", userId, id);
         DashboardRegistryResponse response = dashboardRegistryService.updateDashboard(id, request);
         return ResponseEntity.ok(response);
     }
 
     @PutMapping("/{id}/status")
-    @Operation(summary = "切换 Dashboard 状态", description = "启用（MANUAL_INACTIVE → ACTIVE）或禁用（ACTIVE → MANUAL_INACTIVE）")
+    @Operation(summary = "Toggle Dashboard status", description = "Enable (MANUAL_INACTIVE → ACTIVE) or disable (ACTIVE → MANUAL_INACTIVE)")
     public ResponseEntity<DashboardRegistryResponse> updateDashboardStatus(
             @PathVariable String id,
             @RequestBody @Valid DashboardStatusUpdateRequest request) {
         String userId = SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException("Unauthenticated user"));
         log.info("User {} changing dashboard {} status to {}", userId, id, request.getStatus());
         DashboardRegistryResponse response;
         if (request.getStatus() == DashboardStatus.ACTIVE) {
@@ -87,11 +87,11 @@ public class BiDashboardRegistryController {
     }
 
     @DeleteMapping("/{id}")
-    @Operation(summary = "删除 Dashboard", description = "有关联分配时拒绝删除")
+    @Operation(summary = "Delete Dashboard", description = "Rejects deletion when there are associated assignments")
     public ResponseEntity<Void> deleteDashboard(
             @PathVariable String id) {
         String userId = SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException("Unauthenticated user"));
         log.info("User {} deleting dashboard {}", userId, id);
         dashboardRegistryService.deleteDashboard(id);
         return ResponseEntity.noContent().build();

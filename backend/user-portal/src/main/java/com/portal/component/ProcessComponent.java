@@ -22,6 +22,7 @@ import com.portal.repository.ActionDefinitionRepository;
 import com.portal.service.PortalWorkspaceAuthService;
 import com.portal.service.ProcessAssigneeSnapshot;
 import com.portal.service.UserDisplayNameResolver;
+import com.platform.common.i18n.I18nService;
 import com.platform.common.jdbc.PostgresPhysicalTablePrimaryKeys;
 import com.platform.common.jdbc.SubTablePhysicalColumnResolver;
 import com.platform.common.jdbc.SubTableRowKeySupport;
@@ -70,6 +71,7 @@ public class ProcessComponent {
     private final MeetingParticipantVariablesPersistence meetingParticipantVariablesPersistence;
     private final TaskFormComponent taskFormComponent;
     private final UserDisplayNameResolver userDisplayNameResolver;
+    private final I18nService i18nService;
 
     @jakarta.persistence.PersistenceContext
     private jakarta.persistence.EntityManager entityManager;
@@ -77,18 +79,18 @@ public class ProcessComponent {
     @Value("${admin-center.url:http://localhost:8090}")
     private String adminCenterUrl;
 
-    // ==================== 流程定义与发起 ====================
+    // ==================== Process definitions and start ====================
 
     /**
-     * 获取可发起的流程定义列表
-     * 从管理员中心获取已部署的功能单元，并根据用户的业务角色过滤
+     * Returns startable process definitions
+     * Loads deployed function units from admin center and filters by business role
      */
     public List<ProcessDefinitionInfo> getAvailableProcessDefinitions(String userId, String category, String keyword) {
         log.info("Getting available process definitions for user: {}", userId);
         List<ProcessDefinitionInfo> definitions = new ArrayList<>();
         
         try {
-            // 尝试从管理员中心获取已部署的功能单元
+            // Fetch deployed function units from admin center
             String url = adminCenterUrl + "/api/v1/admin/function-units/deployed/latest";
             log.info("Fetching latest deployed function units from: {}", url);
             
@@ -101,7 +103,7 @@ public class ProcessComponent {
                 if (!units.isEmpty()) {
                     log.info("Got {} deployed function units", units.size());
                 
-                    // 根据用户的业务角色过滤可访问的功能单元
+                    // Filter function units by user business roles
                     List<Map<String, Object>> accessibleUnits = functionUnitAccessComponent.filterAccessibleFunctionUnits(userId, units);
                     log.info("After filtering, {} function units are accessible to user {}", accessibleUnits.size(), userId);
                 
@@ -111,7 +113,7 @@ public class ProcessComponent {
                                 .key((String) unit.get("code"))
                                 .name((String) unit.get("name"))
                                 .description((String) unit.get("description"))
-                                .category("业务流程")
+                                .category(i18nService.getMessage("portal.process.category.business"))
                                 .version(unit.get("version") != null ? String.valueOf(unit.get("version")) : "1.0.0")
                                 .icon((String) unit.get("iconSvg"))
                                 .build();
@@ -123,13 +125,13 @@ public class ProcessComponent {
             log.warn("Failed to fetch deployed function units from admin center: {}", e.getMessage(), e);
         }
         
-        // 如果没有可访问的流程，返回空列表（不再使用模拟数据）
-        // 前端会显示"暂无可发起的流程"提示
+        // Return empty list when none accessible (no mock data)
+        // Frontend shows no-available-processes message
         if (definitions.isEmpty()) {
             log.info("No accessible process definitions found for user: {}", userId);
         }
 
-        // 过滤
+        // Filter
         if (category != null && !category.isEmpty()) {
             definitions.removeIf(d -> !d.getCategory().equals(category));
         }
@@ -144,7 +146,7 @@ public class ProcessComponent {
             });
         }
 
-        // 标记收藏
+        // Mark favorites
         List<FavoriteProcess> favorites = favoriteProcessRepository.findByUserIdOrderByDisplayOrderAsc(userId);
         Set<String> favoriteKeys = new HashSet<>();
         favorites.forEach(f -> favoriteKeys.add(f.getProcessDefinitionKey()));
@@ -154,8 +156,8 @@ public class ProcessComponent {
     }
 
     /**
-     * 发起流程
-     * 通过 WorkflowEngineClient 调用 Flowable 引擎
+     * Starts process
+     * Via WorkflowEngineClient calling Flowable engine
      */
     @Transactional
     public ProcessInstanceInfo startProcess(String userId, String processKey, ProcessStartRequest request) {
@@ -181,12 +183,12 @@ public class ProcessComponent {
 
         functionUnitAccessComponent.checkFunctionUnitAccess(userId, pin.catalogId());
 
-        // 获取流程定义名称和 BPMN XML
+        // Load process definition name and BPMN XML
         String processName = processKey;
         String bpmnXml = null;
         
-        // 优先从 API 响应中直接获取已部署的 process definition key（最可靠）。
-        // admin-center API 已在 ProcessContentDTO.flowableProcessDefinitionKey 字段返回此值。
+        // Prefer deployed process definition key from API response (most reliable).
+        // admin-center API returns this in ProcessContentDTO.flowableProcessDefinitionKey.
         String flowableProcessKey = null;
 
         try {
@@ -198,7 +200,7 @@ public class ProcessComponent {
                 @SuppressWarnings("unchecked")
                 List<Map<String, Object>> processes = (List<Map<String, Object>>) content.get("processes");
                 if (processes != null && !processes.isEmpty()) {
-                    // 直接从 API 响应获取已部署的 process key（最可靠）
+                    // Read deployed process key from API response (most reliable)
                     Object flowableKeyObj = processes.get(0).get("flowableProcessDefinitionKey");
                     if (flowableKeyObj != null) {
                         flowableProcessKey = flowableKeyObj.toString();
@@ -218,27 +220,28 @@ public class ProcessComponent {
             throw new IllegalStateException("Cannot obtain process definition BPMN: " + processKey);
         }
 
-        // 检查 Flowable 引擎是否可用
+        // Check Flowable engine availability
         if (!workflowEngineClient.isAvailable()) {
             throw new IllegalStateException("Workflow engine unavailable, please check if workflow-engine-core service is running");
         }
 
         log.info("Using Flowable engine to start process: {}", processKey);
         
-        // 如果 API 响应中没有 flowableProcessDefinitionKey，则从 BPMN XML 提取
+        // If API lacks flowableProcessDefinitionKey, extract from BPMN XML
         if (flowableProcessKey == null || flowableProcessKey.isEmpty()) {
             flowableProcessKey = extractProcessIdFromBpmn(bpmnXml);
             if (flowableProcessKey == null || flowableProcessKey.isEmpty()) {
-                throw new IllegalStateException("无法从 BPMN XML 中提取 process id，请检查 BPMN 格式是否正确: " + processKey);
+                throw new IllegalStateException(
+                        i18nService.getMessage("portal.process.bpmn_process_id_missing", processKey));
             }
         }
 
-        // 先部署流程定义（如果尚未部署）
+        // Deploy process definition if not already deployed
         Optional<Map<String, Object>> deployResult = workflowEngineClient.deployProcess(processKey, bpmnXml, processName);
         if (deployResult.isPresent()) {
             Map<String, Object> deployed = deployResult.get();
             log.info("Process definition deployed: {}", deployed);
-            // deployResult 中的 processDefinitionKey 来自 Flowable 的返回值，已验证有效
+            // deployResult processDefinitionKey from Flowable response, validated
             Object deployedKey = deployed.get("processDefinitionKey");
             if (deployedKey != null && !deployedKey.toString().isEmpty()) {
                 flowableProcessKey = deployedKey.toString();
@@ -248,15 +251,15 @@ public class ProcessComponent {
             throw new IllegalStateException("Process deployment returned empty data: " + processKey);
         }
 
-        // actualProcessKey 是最终用于启动流程的 key（Flowable 使用 BPMN XML 中的 <process id> 作为 key）
+        // actualProcessKey is the key used to start (Flowable uses BPMN <process id>)
         final String actualProcessKey = flowableProcessKey;
 
-        // 启动流程实例：剥离客户端伪造的工作台键；有 UBR 的用户必须携带有效 JWT 工作台上下文（与 hasContext 一致）
+        // Start instance: strip forged workspace keys; UBR users need valid JWT workspace context (matches hasContext)
         Map<String, Object> variables = request.getFormData() != null ? new HashMap<>(request.getFormData()) : new HashMap<>();
         variables.remove("activeBusinessUnitId");
         variables.remove("activeRoleId");
         variables.put("initiator", userId);
-        // 会议参与人演示功能单元 fu-20260403-a1b2c5：「分配参与人」节点使用 INITIATOR；脚本/后续逻辑仍读取 participant_assigner_user_id
+        // Demo FU fu-20260403-a1b2c5: assign-participants node uses INITIATOR; scripts still read participant_assigner_user_id
         if ("fu-20260403-a1b2c5".equals(pin.code())) {
             variables.put("participant_assigner_user_id", userId);
         }
@@ -302,7 +305,7 @@ public class ProcessComponent {
         String flowableProcessInstanceId = (String) data.get("processInstanceId");
         log.info("Process started via Flowable: {}", flowableProcessInstanceId);
         
-        // 立即保存流程实例到本地数据库（状态为 RUNNING），防止 ProcessCompletionListener 回调时找不到记录
+        // Persist process instance as RUNNING so ProcessCompletionListener callback finds a row
         String startUserDisplayName = userDisplayNameResolver.resolve(userId);
         ProcessInstance processInstance = ProcessInstance.builder()
                 .id(flowableProcessInstanceId)
@@ -325,15 +328,15 @@ public class ProcessComponent {
         processInstanceRepository.save(processInstance);
         log.info("Process instance pre-saved to local database: {}", flowableProcessInstanceId);
         
-        // 自动完成第一个任务（发起人任务）
-        // 流程启动后，第一个任务通常是发起人填写表单的任务，需要自动完成以流转到下一个审批节点
+        // Auto-complete first task (initiator task)
+        // After start, first task is usually initiator form — auto-complete to reach next approval
         String currentNodeName = null;
         ProcessAssigneeSnapshot nextAssigneeSnapshot = ProcessAssigneeSnapshot.empty();
         String initiatorTaskIdForHistory = null;
         String initiatorTaskDefKeyForHistory = null;
 
         try {
-            // 查询流程实例的任务
+            // Query tasks for process instance
             Optional<Map<String, Object>> tasksResult = workflowEngineClient.getProcessInstanceTasks(flowableProcessInstanceId);
             if (tasksResult.isPresent()) {
                 Map<String, Object> tasksData = tasksResult.get();
@@ -341,7 +344,7 @@ public class ProcessComponent {
                     @SuppressWarnings("unchecked")
                     List<Map<String, Object>> tasks = (List<Map<String, Object>>) tasksData.get("tasks");
                     if (tasks != null && !tasks.isEmpty()) {
-                        // 获取第一个任务
+                        // Take first task
                         Map<String, Object> firstTask = tasks.get(0);
                         String taskId = (String) firstTask.get("taskId");
                         initiatorTaskIdForHistory = taskId;
@@ -349,7 +352,7 @@ public class ProcessComponent {
                         initiatorTaskDefKeyForHistory = taskDefKey != null ? taskDefKey.toString() : null;
                         log.info("Auto-completing first task: {} for process: {}", taskId, flowableProcessInstanceId);
 
-                        // 先认领任务（设置 assignee）
+                        // Claim task first (set assignee)
                         Optional<Map<String, Object>> claimResult = workflowEngineClient.claimTask(taskId, userId);
                         if (claimResult.isPresent()) {
                             log.info("First task claimed successfully: {} by user: {}", taskId, userId);
@@ -368,13 +371,13 @@ public class ProcessComponent {
                             });
                         }
 
-                        // 用户字段可能反序列化为 { userId } 而无 id，引擎侧若误用 Map#toString 会撑爆 Flowable varchar(255)
+                        // User field may deserialize as { userId } without id; Map#toString can exceed Flowable varchar(255)
                         coerceUserRefVariablesForEngine(variables);
                         
-                        // 计算子表条件变量（如 requestItemsHasHighValue）并注入
+                        // Compute sub-table condition variables (e.g. requestItemsHasHighValue) and inject
                         computeSubTableConditionVariables(variables);
 
-                        // 完成第一个任务
+                        // Complete first task
                         Optional<Map<String, Object>> completeResult = workflowEngineClient.completeTask(
                                 taskId, userId, "SUBMIT", variables);
                         if (completeResult.isPresent()
@@ -383,7 +386,7 @@ public class ProcessComponent {
                             taskFormComponent.captureTaskFormSnapshot(
                                     taskId, userId, firstTaskDefKey, flowableProcessInstanceId, variables);
                             
-                            // 完成第一个任务后，查询当前任务（下一个审批节点）
+                            // After first task, query current task (next approval node)
                             Optional<Map<String, Object>> nextTasksResult = workflowEngineClient.getProcessInstanceTasks(flowableProcessInstanceId);
                             if (nextTasksResult.isPresent()) {
                                 Map<String, Object> nextTasksData = nextTasksResult.get();
@@ -418,10 +421,10 @@ public class ProcessComponent {
             }
         } catch (Exception e) {
             log.warn("Failed to auto-complete first task: {}", e.getMessage());
-            // 不抛出异常，流程已经启动成功
+            // Do not throw; process already started successfully
         }
 
-        // 首任务由引擎 API 直接完成，不经过 TaskFormComponent，在此补写字段级变更历史（与待办提交路径一致）
+        // First task completed via engine API (not TaskFormComponent); record field change history like todo submit
         recordInitialSubmitChangeHistory(
                 flowableProcessInstanceId,
                 initiatorTaskIdForHistory,
@@ -429,9 +432,9 @@ public class ProcessComponent {
                 userId,
                 variables);
 
-        // 更新流程实例（补充当前节点和处理人信息）
-        // 使用条件 UPDATE 避免覆盖 ProcessCompletionListener 回调已设置的 COMPLETED 状态（竞态条件）
-        // JPA 一级缓存会导致 findById 返回旧对象，所以必须用 @Modifying 原生更新绕过缓存
+        // Update process instance (current node and assignee)
+        // Conditional UPDATE avoids overwriting COMPLETED set by ProcessCompletionListener (race)
+        // JPA L1 cache stale findById — use @Modifying native update to bypass cache
         int updated = processInstanceRepository.updateCurrentNodeAndAssigneesIfNotCompleted(
                 flowableProcessInstanceId,
                 currentNodeName,
@@ -446,16 +449,16 @@ public class ProcessComponent {
                     flowableProcessInstanceId);
         }
         
-        // 记录流程启动历史
+        // Record process start history
         ProcessHistory startHistory = ProcessHistory.builder()
                 .processInstanceId(flowableProcessInstanceId)
                 .activityId("startEvent")
-                .activityName("提交申请")
+                .activityName(i18nService.getMessage("portal.process.history.submit_application"))
                 .activityType("startEvent")
                 .operationType("SUBMIT")
                 .operatorId(userId)
                 .operatorName(startUserDisplayName)
-                .comment("发起流程")
+                .comment(i18nService.getMessage("portal.process.history.start_comment"))
                 .build();
         processHistoryRepository.save(startHistory);
         
@@ -490,7 +493,7 @@ public class ProcessComponent {
     private record ActiveCatalogPin(String catalogId, String code, String versionLabel) {}
 
     /**
-     * 从 admin 获取当前 code 下「已部署+已启用」中语义版本最高的目录行（与 /deployed/latest 规则一致）
+     * Fetches highest semantic-version deployed+enabled catalog row for code (same as /deployed/latest)
      */
     private Optional<ActiveCatalogPin> fetchActiveCatalogForStart(String code) {
         try {
@@ -526,7 +529,7 @@ public class ProcessComponent {
     }
     
     /**
-     * 从 BPMN XML 中提取 <process id="..."> 属性值
+     * Extracts <process id="..."> from BPMN XML
      */
     private String extractProcessIdFromBpmn(String bpmnXml) {
         if (bpmnXml == null) return null;
@@ -547,7 +550,7 @@ public class ProcessComponent {
     }
 
     /**
-     * 解析 BPMN XML 获取第一个需要审批的用户任务信息（跳过发起人任务）
+     * Parses BPMN XML for first approval user task (skips initiator task)
      */
     private Map<String, String> parseFirstUserTask(String bpmnXml, Map<String, Object> formData, String initiatorId) {
         Map<String, String> result = new HashMap<>();
@@ -555,7 +558,7 @@ public class ProcessComponent {
         log.info("BPMN XML length: {}", bpmnXml != null ? bpmnXml.length() : 0);
         
         try {
-            // 查找所有 userTask 标签
+            // Find all userTask tags
             int searchStart = 0;
             int taskCount = 0;
             
@@ -569,13 +572,13 @@ public class ProcessComponent {
                     break;
                 }
                 
-                // 找到完整的 userTask 元素（包括子元素）
+                // Locate full userTask element including children
                 int userTaskEnd = findClosingTag(bpmnXml, userTaskStart, "userTask");
                 if (userTaskEnd == -1) {
                     userTaskEnd = findClosingTag(bpmnXml, userTaskStart, "bpmn:userTask");
                 }
                 if (userTaskEnd == -1) {
-                    // 自闭合标签
+                    // Self-closing tag
                     userTaskEnd = bpmnXml.indexOf("/>", userTaskStart);
                     if (userTaskEnd == -1) {
                         break;
@@ -586,10 +589,10 @@ public class ProcessComponent {
                 String userTaskElement = bpmnXml.substring(userTaskStart, userTaskEnd);
                 taskCount++;
                 
-                // 提取任务名称
+                // Extract task name
                 String name = extractAttribute(userTaskElement, "name");
                 
-                // 从 custom:properties 解析（与 developer-workstation 设计器、workflow-engine 监听器对齐）
+                // Parse custom:properties (aligned with DW designer and workflow-engine listeners)
                 String taskDefKey = extractAttribute(userTaskElement, "id");
                 String assigneeType = extractCustomProperty(userTaskElement, "assigneeType");
                 String assigneeValue = extractCustomProperty(userTaskElement, "assigneeValue");
@@ -695,7 +698,7 @@ public class ProcessComponent {
                             assignee = resolveLegacyAssigneeType(assigneeType, assigneeValue, initiatorId);
                     }
                 } else {
-                    // 回退到标准属性解析
+                    // Fall back to standard attribute parsing
                     assignee = extractAttribute(userTaskElement, "camunda:assignee");
                     if (assignee == null) {
                         assignee = extractAttribute(userTaskElement, "flowable:assignee");
@@ -705,19 +708,19 @@ public class ProcessComponent {
                     }
                 }
                 
-                // 跳过发起人任务（第一个任务通常是发起人填写表单）
+                // Skip initiator task (first task is usually initiator form)
                 boolean isInitiatorTask = "initiator".equalsIgnoreCase(assigneeType)
                     || "INITIATOR".equalsIgnoreCase(assigneeType)
                     || "PROCESS_INITIATOR".equalsIgnoreCase(assigneeType)
                     || (assignee != null && (assignee.equals("${initiator}") || assignee.equals(initiatorId)));
                 
                 if (!isInitiatorTask || taskCount > 1) {
-                    // 这是需要审批的任务
+                    // First task requiring approval
                     if (name != null) {
                         result.put("name", name);
                     }
                     
-                    // 解析 assignee 变量（如果还没解析）
+                    // Resolve assignee variable if not yet parsed
                     if (assignee != null) {
                         if (assignee.startsWith("${") && assignee.endsWith("}")) {
                             String varName = assignee.substring(2, assignee.length() - 1);
@@ -726,7 +729,7 @@ public class ProcessComponent {
                         result.put("assignee", assignee);
                     }
                     
-                    // 设置候选用户
+                    // Set candidate users
                     if (candidateUsers != null) {
                         result.put("candidateUsers", candidateUsers);
                         if (result.get("assignee") == null) {
@@ -734,7 +737,7 @@ public class ProcessComponent {
                         }
                     }
                     
-                    // 检查是否有标准的 candidateUsers（会签任务）
+                    // Check standard candidateUsers (multi-instance sign-off)
                     if (candidateUsers == null) {
                         candidateUsers = extractAttribute(userTaskElement, "flowable:candidateUsers");
                         if (candidateUsers == null) {
@@ -751,7 +754,7 @@ public class ProcessComponent {
                         }
                     }
                     
-                    // 检查是否有 candidateGroups（组任务）
+                    // Check candidateGroups (group task)
                     String candidateGroups = extractAttribute(userTaskElement, "flowable:candidateGroups");
                     if (candidateGroups == null) {
                         candidateGroups = extractAttribute(userTaskElement, "camunda:candidateGroups");
@@ -772,18 +775,18 @@ public class ProcessComponent {
     }
     
     /**
-     * 从 custom:properties 中提取属性值
+     * Extracts property value from custom:properties
      */
     private String extractCustomProperty(String element, String propertyName) {
         try {
-            // 查找 custom:property 标签
+            // Find custom:property tags
             String searchPattern = "name=\"" + propertyName + "\"";
             int propIndex = element.indexOf(searchPattern);
             if (propIndex == -1) {
                 return null;
             }
             
-            // 找到这个 property 标签的 value 属性
+            // Read value attribute on property tag
             int lineStart = element.lastIndexOf("<", propIndex);
             int lineEnd = element.indexOf("/>", propIndex);
             if (lineEnd == -1) {
@@ -803,7 +806,7 @@ public class ProcessComponent {
     }
     
     /**
-     * 找到闭合标签的位置
+     * Finds closing tag position
      */
     private int findClosingTag(String xml, int startIndex, String tagName) {
         String closingTag = "</" + tagName + ">";
@@ -831,7 +834,7 @@ public class ProcessComponent {
     }
 
     /**
-     * 解析旧版分配类型（向后兼容）
+     * Parses legacy assignment type (backward compatible)
      */
     private String resolveLegacyAssigneeType(String assigneeType, String assigneeValue, String initiatorId) {
         return switch (assigneeType.toLowerCase()) {
@@ -844,15 +847,15 @@ public class ProcessComponent {
     }
     
     /**
-     * 解析流程变量
+     * Resolves process variables
      */
     private String resolveProcessVariable(String varName, Map<String, Object> formData, String initiatorId) {
-        // 首先检查表单数据
+        // Check form data first
         if (formData != null && formData.containsKey(varName)) {
             return String.valueOf(formData.get(varName));
         }
         
-        // 处理特殊变量（使用新的7种标准类型）
+        // Handle special variables (seven standard assignment types)
         return switch (varName) {
             case "initiator" -> initiatorId;
             case "entityManager" -> getEntityManager(initiatorId);
@@ -862,7 +865,7 @@ public class ProcessComponent {
     }
     
     /**
-     * 解析候选用户表达式（支持多个变量，如 ${entityManager},${functionManager}）
+     * Resolves candidate user expressions (multiple vars, e.g. ${entityManager},${functionManager})
      */
     private List<String> resolveCandidateUsers(String candidateUsersExpr, Map<String, Object> formData, String initiatorId) {
         List<String> result = new ArrayList<>();
@@ -871,7 +874,7 @@ public class ProcessComponent {
             return result;
         }
         
-        // 分割多个候选用户表达式
+        // Split multiple candidate user expressions
         String[] expressions = candidateUsersExpr.split(",");
         for (String expr : expressions) {
             expr = expr.trim();
@@ -884,7 +887,7 @@ public class ProcessComponent {
                     log.warn("Failed to resolve candidate user variable: {}", varName);
                 }
             } else if (!expr.isEmpty()) {
-                // 直接是用户ID
+                // Literal user ID
                 result.add(expr);
             }
         }
@@ -893,11 +896,11 @@ public class ProcessComponent {
     }
     
     /**
-     * 获取发起人的实体管理者
+     * Resolves initiator entity manager
      */
     private String getEntityManager(String initiatorId) {
         try {
-            // 首先尝试通过用户ID查询
+            // Try user ID first
             String userUrl = adminCenterUrl + "/api/v1/admin/users/" + initiatorId;
             log.info("Fetching user info for entity manager from: {}", userUrl);
             
@@ -910,7 +913,7 @@ public class ProcessComponent {
                 log.warn("Failed to get user by ID {}, trying by username: {}", initiatorId, e.getMessage());
             }
             
-            // 如果通过ID查询失败，尝试通过用户名查询
+            // If lookup by ID fails, try username
             if (userInfo == null || userInfo.get("entityManagerId") == null) {
                 String searchUrl = adminCenterUrl + "/api/v1/admin/users?keyword=" + initiatorId + "&size=1";
                 log.info("Searching user by username from: {}", searchUrl);
@@ -948,11 +951,11 @@ public class ProcessComponent {
     }
     
     /**
-     * 获取发起人的职能管理者
+     * Resolves initiator function manager
      */
     private String getFunctionManager(String initiatorId) {
         try {
-            // 首先尝试通过用户ID查询
+            // Try user ID first
             String userUrl = adminCenterUrl + "/api/v1/admin/users/" + initiatorId;
             log.info("Fetching user info for function manager from: {}", userUrl);
             
@@ -965,7 +968,7 @@ public class ProcessComponent {
                 log.warn("Failed to get user by ID {}, trying by username: {}", initiatorId, e.getMessage());
             }
             
-            // 如果通过ID查询失败，尝试通过用户名查询
+            // If lookup by ID fails, try username
             if (userInfo == null || userInfo.get("functionManagerId") == null) {
                 String searchUrl = adminCenterUrl + "/api/v1/admin/users?keyword=" + initiatorId + "&size=1";
                 log.info("Searching user by username from: {}", searchUrl);
@@ -1003,21 +1006,21 @@ public class ProcessComponent {
     }
     
     /**
-     * 带缓存的用户显示名称解析，避免同一批次内重复 DB 查询
+     * Cached display-name resolution to avoid duplicate DB hits in one batch
      */
     private String resolveUserDisplayNameCached(String userId, Map<String, String> cache) {
         return userDisplayNameResolver.resolveCached(userId, cache);
     }
     
     /**
-     * 解析用户显示名称
+     * Resolves user display name
      */
     private String resolveUserDisplayName(String userId) {
         return userDisplayNameResolver.resolve(userId);
     }
     
     /**
-     * 从 XML 标签中提取属性值
+     * Extracts attribute value from XML tag
      */
     private String extractAttribute(String tag, String attrName) {
         String pattern1 = attrName + "=\"";
@@ -1029,7 +1032,7 @@ public class ProcessComponent {
                 return tag.substring(start, end);
             }
         }
-        // 尝试单引号
+        // Try single quotes
         String pattern2 = attrName + "='";
         start = tag.indexOf(pattern2);
         if (start != -1) {
@@ -1042,10 +1045,10 @@ public class ProcessComponent {
         return null;
     }
 
-    // ==================== 流程查询 ====================
+    // ==================== Process queries ====================
 
     /**
-     * 对运行中且本地 assignee 信息不完整/未解析的流程，从引擎补全 user id / 候选人 id 并写回 DB。
+     * For running processes with incomplete local assignee data, backfill user/candidate ids from engine and persist.
      */
     private void enrichRunningAssigneesFromEngine(List<ProcessInstance> instances) {
         if (instances == null || instances.isEmpty() || !workflowEngineClient.isAvailable()) {
@@ -1105,7 +1108,7 @@ public class ProcessComponent {
     }
 
     /**
-     * 获取我的申请列表
+     * Returns my applications list
      */
     public Page<ProcessInstanceInfo> getMyApplications(String userId, String status, Pageable pageable) {
         log.info("Getting applications for user: {}, status: {}", userId, status);
@@ -1125,7 +1128,7 @@ public class ProcessComponent {
                         inst.getCurrentAssignee(), inst.getCandidateUsers()).stream())
                 .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
         Map<String, String> userNameCache = userDisplayNameResolver.resolveBatch(assigneeKeys);
-        // 列表接口不返回 variables：库内 JSONB 可能含 Jackson 无法序列化的嵌套结构，会在写响应时触发 HttpMessageNotWritableException → SYS_INTERNAL_ERROR
+        // List API omits variables: JSONB may contain Jackson-unfriendly nesting → HttpMessageNotWritableException → SYS_INTERNAL_ERROR
         List<ProcessInstanceInfo> instances = pageContent.stream()
                 .map(inst -> toProcessInstanceInfoForList(inst, userNameCache))
                 .peek(info -> info.setVariables(null))
@@ -1135,16 +1138,16 @@ public class ProcessComponent {
     }
     
     /**
-     * 转换实体到DTO（无缓存版本，用于单个流程查询）
+     * Entity to DTO without cache (single process query)
      */
     private ProcessInstanceInfo toProcessInstanceInfo(ProcessInstance instance) {
         return toProcessInstanceInfo(instance, new HashMap<>());
     }
     
     /**
-     * 我的申请列表：不逐个调用 workflow-engine 拉运行时任务（避免每行一次 HTTP，列表页极慢）。
-     * 当前处理人展示名由 {@link ProcessInstance#getCurrentAssignee()} / {@link ProcessInstance#getCandidateUsers()}
-     * 经 {@link UserDisplayNameResolver} 解析（单人姓名；BU/Role 或签池 {@code name1, name2, name3}）。
+     * My requests list: do not call workflow-engine per row for runtime tasks (one HTTP per row is too slow).
+     * Assignee display name from {@link ProcessInstance#getCurrentAssignee()} / {@link ProcessInstance#getCandidateUsers()}
+     * via {@link UserDisplayNameResolver} (single name; BU/Role OR pool {@code name1, name2, name3}).
      */
     private ProcessInstanceInfo toProcessInstanceInfoForList(ProcessInstance instance, Map<String, String> userNameCache) {
         String currentAssigneeName = userDisplayNameResolver.resolveCurrentAssigneeDisplay(
@@ -1183,7 +1186,7 @@ public class ProcessComponent {
     }
 
     /**
-     * 转换实体到DTO（带方法级用户名缓存，避免列表查询 N+1）
+     * Entity to DTO with method-level display-name cache (avoids list N+1)
      */
     private ProcessInstanceInfo toProcessInstanceInfo(ProcessInstance instance, Map<String, String> userNameCache) {
         String currentAssigneeName = userDisplayNameResolver.resolveCurrentAssigneeDisplay(
@@ -1222,8 +1225,8 @@ public class ProcessComponent {
     }
 
     /**
-     * 获取流程详情
-     * 如果本地数据库中没有当前节点信息，从 Flowable 实时获取
+     * Returns process detail
+     * When local DB lacks current node, fetch live from Flowable
      */
     public ProcessInstanceInfo getProcessDetail(String processId) {
         Optional<ProcessInstance> optInstance = processInstanceRepository.findById(processId);
@@ -1777,8 +1780,8 @@ public class ProcessComponent {
     }
 
     /**
-     * 写入 MI 扩展列的同时镜像门户约定的 {@code task_status}/{@code task_current_node}，
-     * SubTableField / My Request 流程图依赖这两列。
+     * Mirrors portal {@code task_status}/{@code task_current_node} when writing MI extension columns,
+     * SubTableField / My Request flow chart depends on these columns.
      */
     private void applyMiOverlayToVariableRow(Map<String, Object> row, MiRowProgress p) {
         if (row == null || p == null) {
@@ -1813,7 +1816,7 @@ public class ProcessComponent {
     }
 
     /**
-     * 流程已归档完成但变量快照/MI API 仍可能遗留进行中占位符时的兜底（常见于扩展任务软删除后）。
+     * Fallback when process is archived but variable snapshot/MI API still shows in-progress placeholders (often after soft-deleted extended tasks).
      */
     private static void normalizeStuckMiParticipantRowForCompletedProcess(Map<String, Object> row) {
         if (row == null || row.isEmpty()) {
@@ -2144,8 +2147,8 @@ public class ProcessComponent {
     }
 
     /**
-     * 同一子表行可能对同一 BPMN 步骤残留多条扩展任务（已完成 + 孤儿 CREATED/ASSIGNED）。
-     * 若不收敛，门户会把当前节点误判为较早步骤（例如仍显示 sub form1）。
+     * Same sub-table row may retain multiple extended tasks per BPMN step (completed + orphan CREATED/ASSIGNED).
+     * Without dedupe, portal may show an earlier step as current (e.g. still sub form1).
      */
     private static List<Map<String, Object>> dedupeMiTasksPreferCompletedPerStepKey(List<Map<String, Object>> tasks) {
         if (tasks == null || tasks.size() <= 1) {
@@ -2268,7 +2271,7 @@ public class ProcessComponent {
         return ida.compareTo(idb);
     }
 
-    /** API Map 中 LocalDateTime 可能为 ISO 字符串 */
+    /** LocalDateTime in API Map may be an ISO string */
     private static LocalDateTime parseMiStatusLocalDateTime(Object raw) {
         if (raw == null) {
             return null;
@@ -2540,10 +2543,10 @@ public class ProcessComponent {
         }
     }
 
-    // ==================== 流程操作（撤回、催办、收藏） ====================
+    // ==================== Process actions (withdraw, urge, favorite) ====================
 
     /**
-     * 撤回流程
+     * Withdraws process
      */
     public boolean withdrawProcess(String userId, String processId, String reason) {
         Optional<ProcessInstance> optInstance = processInstanceRepository.findById(processId);
@@ -2559,16 +2562,17 @@ public class ProcessComponent {
             return false;
         }
         
-        // 更新状态为已撤回
+        // Set status to withdrawn
         instance.setStatus("WITHDRAWN");
         instance.setEndTime(LocalDateTime.now());
         processInstanceRepository.save(instance);
         
-        // 调用 Flowable 引擎取消流程实例
+        // Cancel process instance via Flowable engine
         try {
             if (workflowEngineClient.isAvailable()) {
                 Optional<Map<String, Object>> cancelResult = workflowEngineClient
-                        .cancelProcessInstance(processId, reason != null ? reason : "用户撤回");
+                        .cancelProcessInstance(processId,
+                                reason != null ? reason : i18nService.getMessage("portal.process.withdraw.default_reason"));
                 if (cancelResult.isPresent()) {
                     log.info("Flowable process instance cancelled: {}", processId);
                 } else {
@@ -2585,7 +2589,7 @@ public class ProcessComponent {
     }
 
     /**
-     * 催办流程
+     * Urges process
      */
     public boolean urgeProcess(String userId, String processId) {
         Optional<ProcessInstance> optInstance = processInstanceRepository.findById(processId);
@@ -2600,13 +2604,13 @@ public class ProcessComponent {
         if (!"RUNNING".equals(instance.getStatus())) {
             return false;
         }
-        // 发送催办通知 - 通知逻辑可以在此处集成
+        // Send urge notification — messaging can be integrated here
         log.info("Urging process: {} by user: {}", processId, userId);
         return true;
     }
 
     /**
-     * 切换收藏状态
+     * Toggles favorite status
      */
     public boolean toggleFavorite(String userId, String processKey) {
         Optional<FavoriteProcess> existing = favoriteProcessRepository.findByUserIdAndProcessDefinitionKey(userId, processKey);
@@ -2623,10 +2627,10 @@ public class ProcessComponent {
         }
     }
 
-    // ==================== 草稿管理（委托给 ProcessDraftComponent） ====================
+    // ==================== Draft management (delegated to ProcessDraftComponent) ====================
 
     /**
-     * 保存草稿
+     * Saves draft
      * @see ProcessDraftComponent#saveDraft(String, String, Map)
      */
     public ProcessDraft saveDraft(String userId, String processKey, Map<String, Object> formData) {
@@ -2634,7 +2638,7 @@ public class ProcessComponent {
     }
 
     /**
-     * 获取草稿
+     * Loads draft
      * @see ProcessDraftComponent#getDraft(String, String)
      */
     public Optional<ProcessDraft> getDraft(String userId, String processKey) {
@@ -2642,7 +2646,7 @@ public class ProcessComponent {
     }
 
     /**
-     * 删除草稿
+     * Deletes draft
      * @see ProcessDraftComponent#deleteDraft(String, String)
      */
     public void deleteDraft(String userId, String processKey) {
@@ -2650,7 +2654,7 @@ public class ProcessComponent {
     }
     
     /**
-     * 获取用户的草稿列表
+     * Lists drafts for user
      * @see ProcessDraftComponent#getDraftList(String)
      */
     public List<Map<String, Object>> getDraftList(String userId) {
@@ -2658,7 +2662,7 @@ public class ProcessComponent {
     }
     
     /**
-     * 根据ID删除草稿
+     * Deletes draft by ID
      * @see ProcessDraftComponent#deleteDraftById(String, Long)
      */
     public void deleteDraftById(String userId, Long draftId) {
@@ -2666,13 +2670,13 @@ public class ProcessComponent {
     }
     
     /**
-     * 获取功能单元完整内容（BPMN、表单、动作绑定等）
-     * 会检查功能单元是否启用，禁用时抛出异常
+     * Returns full function unit content (BPMN, forms, action bindings, etc.)
+     * Checks function unit is enabled; throws when disabled
      */
     public Map<String, Object> getFunctionUnitContent(String userId, String functionUnitIdOrCode) {
         log.info("Getting function unit content for: {}, user: {}", functionUnitIdOrCode, userId);
 
-        // 必须使用原始 processKey/code/id：先解析再校验会传入已解析 UUID，导致无法按 processKey 清理过期缓存（见 FunctionUnitAccessComponent）
+        // Must use raw processKey/code/id: resolve-then-check passes UUID and breaks processKey cache eviction (FunctionUnitAccessComponent)
         functionUnitAccessComponent.checkFunctionUnitAccess(userId, functionUnitIdOrCode);
         String functionUnitId = functionUnitAccessComponent.resolveFunctionUnitId(functionUnitIdOrCode);
         log.info("Resolved function unit ID: {}", functionUnitId);
@@ -2704,7 +2708,7 @@ public class ProcessComponent {
     }
     
     /**
-     * 获取功能单元完整内容（不检查权限，用于内部调用）。
+     * Returns full function unit content without permission check (internal).
      * Primary source: admin-center (function unit catalog with BPMN, forms, etc.).
      * If admin-center returns no BPMN, falls back to workflow-engine (deployed BPMN by functionUnitCode).
      */
@@ -2712,7 +2716,7 @@ public class ProcessComponent {
         log.info("Getting function unit content for: {}", functionUnitIdOrCode);
 
         try {
-            // 先解析功能单元 ID（支持 code 或 ID）
+            // Resolve function unit ID (code or ID)
             String functionUnitId = functionUnitIdOrCode;
             try {
                 functionUnitId = functionUnitAccessComponent.resolveFunctionUnitId(functionUnitIdOrCode);
@@ -2786,20 +2790,20 @@ public class ProcessComponent {
     }
     
     /**
-     * 获取功能单元特定类型的内容（用于表单弹窗等场景）
+     * Returns function unit content of a given type (form dialogs, etc.)
      * 
-     * 使用 /function-units/{id}/content 端点获取所有内容，然后在客户端过滤
-     * 这是因为 Spring 的 ResourceHttpRequestHandler 会拦截某些特定路径模式
+     * Uses /function-units/{id}/content then filters client-side
+     * Spring ResourceHttpRequestHandler intercepts some specific path patterns
      */
     public List<Map<String, Object>> getFunctionUnitContents(String functionUnitIdOrCode, String contentType) {
         log.info("Getting function unit contents for: {}, contentType: {}", functionUnitIdOrCode, contentType);
         
         try {
-            // 先解析功能单元 ID（支持 code 或名称）
+            // Resolve function unit ID (code or name)
             String functionUnitId = functionUnitAccessComponent.resolveFunctionUnitId(functionUnitIdOrCode);
             log.info("Resolved function unit ID: {}", functionUnitId);
             
-            // 使用通用的 /content 端点获取所有内容
+            // Use generic /content endpoint for all content
             String url = adminCenterUrl + "/api/v1/admin/function-units/" + functionUnitId + "/content";
             log.info("Fetching function unit content from: {}", url);
             
@@ -2808,7 +2812,7 @@ public class ProcessComponent {
             Map<String, Object> payload = ApiResponseBodyUnwrap.unwrapDataMap(response);
             
             if (!payload.isEmpty()) {
-                // 根据内容类型提取对应的数组
+                // Extract array for requested content type
                 String key = contentType.equalsIgnoreCase("FORM") ? "forms" :
                             contentType.equalsIgnoreCase("PROCESS") ? "processes" :
                             contentType.equalsIgnoreCase("DATA_TABLE") ? "dataTables" : null;
@@ -2834,8 +2838,8 @@ public class ProcessComponent {
     }
     
     /**
-     * 获取流程历史记录
-     * 调用 workflow-engine 的流程历史接口，返回已解析用户名称的历史记录
+     * Returns process history
+     * Calls workflow-engine process history with resolved user display names
      */
     public List<Map<String, Object>> getProcessHistory(String processId) {
         log.debug("ProcessComponent.getProcessHistory called for: {}", processId);
@@ -2848,8 +2852,8 @@ public class ProcessComponent {
         log.debug("Workflow engine is available, calling getProcessInstanceHistory");
         
         try {
-            // 直接调用 workflow-engine 的流程实例历史接口（通过 processInstanceId）
-            // 该接口会查询 Flowable 的历史活动记录并解析用户名称
+            // Calls workflow-engine process instance history API by processInstanceId
+            // Queries Flowable historic activities and resolves display names
             Optional<List<Map<String, Object>>> historyResult = workflowEngineClient.getProcessInstanceHistory(processId);
             
             if (historyResult.isPresent()) {
@@ -2868,8 +2872,8 @@ public class ProcessComponent {
     }
     
     /**
-     * 标记流程为已完成
-     * 由 workflow-engine 的流程完成监听器调用
+     * Marks process as completed
+     * Invoked by workflow-engine process completion listener
      */
     public void markProcessAsCompleted(String processId, String lastActivityName) {
         log.debug("ProcessComponent.markProcessAsCompleted called for: {} with lastActivity: {}", 
@@ -2884,15 +2888,15 @@ public class ProcessComponent {
             
             ProcessInstance instance = optInstance.get();
             
-            // 只更新状态为 RUNNING 的流程
+            // Update only processes still RUNNING
             if ("RUNNING".equals(instance.getStatus())) {
                 instance.setStatus("COMPLETED");
                 LocalDateTime finishedAt = LocalDateTime.now();
                 instance.setEndTime(finishedAt);
                 instance.setCompletedAt(finishedAt);
-                // 已完成流程无「当前步骤」；最后节点见流程历史
+                // Completed processes have no current step; see process history for last node
                 instance.setCurrentNode(null);
-                // 清空当前处理人
+                // Clear current assignee
                 instance.setCurrentAssignee(null);
                 processInstanceRepository.save(instance);
                 log.info("Process instance {} marked as COMPLETED (current step cleared)", processId);
@@ -2907,16 +2911,16 @@ public class ProcessComponent {
     }
 
     /**
-     * 从表单变量中计算子表条件变量，注入到 variables 中供网关条件判断使用。
-     * 支持以下变量：
-     *   requestItemsHasHighValue — 任意一条记录的 total_price > 10000（Boolean）
-     *   totalPrice               — 所有记录 total_price 之和（Double，供 BPMN 直接比较）
-     *   maxItemPrice             — 所有记录中最大的 total_price（Double）
-     *   itemCount                — 子表记录总数（Integer）
+     * Computes sub-table condition variables from form data and injects them for gateway conditions.
+     * Supported variables:
+     *   requestItemsHasHighValue — any row with total_price > 10000 (Boolean)
+     *   totalPrice               — sum of total_price (Double, for BPMN comparisons)
+     *   maxItemPrice             — max total_price across rows (Double)
+     *   itemCount                — sub-table row count (Integer)
      */
     /**
-     * 发起流程时提交的表单变量写入 up_change_history，便于申请单详情「变更历史」展示。
-     * 仅记录表单定义中的用户可见字段，排除引擎/快照内部键，避免噪声。
+     * Writes start-form variables to up_change_history for application detail change-history display.
+     * Records only user-visible form fields; excludes engine/snapshot internal keys to reduce noise.
      */
     private void recordInitialSubmitChangeHistory(String processInstanceId,
                                                 String taskInstanceId,
@@ -3046,8 +3050,8 @@ public class ProcessComponent {
     }
 
     /**
-     * 将门户表单中的「用户」对象（id / userId / user_id / value）压成纯字符串，避免 workflow-engine
-     * ASSIGNEE_FROM_VARIABLE 解析失败或误写入超长标识。
+     * Coerces portal form "user" objects (id / userId / user_id / value) to plain strings so workflow-engine
+     * ASSIGNEE_FROM_VARIABLE parse failures or oversized identifiers.
      */
     private void coerceUserRefVariablesForEngine(Map<String, Object> variables) {
         if (variables == null || variables.isEmpty()) {

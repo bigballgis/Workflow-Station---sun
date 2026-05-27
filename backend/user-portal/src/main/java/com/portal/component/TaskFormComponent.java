@@ -31,8 +31,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 /**
- * Task Form 组件
- * 负责 Task Form 数据的获取、提交、快照捕获和已完成任务数据查询
+ * Task Form component.
+ * Loads Task Form data, submit handling, snapshot capture, and completed-task form queries.
  */
 @Slf4j
 @Component
@@ -74,11 +74,10 @@ public class TaskFormComponent {
     private String developerWorkstationUrl;
 
     /**
-     * 获取 Task Form 布局 + 当前流程变量值（字段子集）
-     * 根据 taskDefinitionKey 查找 FormStageBinding → 获取 Task Form 布局
-     * 无绑定时返回 Process Form 只读数据（fallback）
+     * Returns Task Form layout and current process variable values (field subset).
+     * Resolves FormStageBinding by taskDefinitionKey; falls back to read-only Process Form when unbound.
      *
-     * @param taskId 任务实例 ID
+     * @param taskId task instance ID
      * @return TaskFormData DTO
      */
     public TaskFormData getTaskFormData(String taskId) {
@@ -155,24 +154,24 @@ public class TaskFormComponent {
     }
 
     /**
-     * 提交 Task Form 更新（仅可编辑字段）
-     * 过滤只读字段，仅更新 EDITABLE 字段的流程变量
+     * Submits Task Form updates (editable fields only).
+     * Filters read-only fields and updates only EDITABLE process variables.
      *
-     * @param taskId   任务实例 ID
-     * @param userId   操作用户 ID
-     * @param formData 表单数据（可能包含只读字段，会被过滤）
+     * @param taskId   task instance ID
+     * @param userId   acting user ID
+     * @param formData form payload (may include read-only fields; they are filtered out)
      */
     public void submitTaskForm(String taskId, String userId, Map<String, Object> formData) {
         submitTaskForm(taskId, userId, formData, null);
     }
 
     /**
-     * 提交 Task Form 更新（仅可编辑字段），支持并发修改检测
+     * Submits Task Form updates (editable fields only) with optional concurrent-modification detection.
      *
-     * @param taskId         任务实例 ID
-     * @param userId         操作用户 ID
-     * @param formData       表单数据（可能包含只读字段，会被过滤）
-     * @param baselineValues 基准值（前端加载时的字段快照），用于并发检测；null 表示不检测
+     * @param taskId         task instance ID
+     * @param userId         acting user ID
+     * @param formData       form payload (read-only fields filtered)
+     * @param baselineValues field snapshot from client load for concurrency check; null skips detection
      */
     public void submitTaskForm(String taskId, String userId, Map<String, Object> formData,
                                Map<String, Object> baselineValues) {
@@ -374,13 +373,13 @@ public class TaskFormComponent {
     }
 
     /**
-     * 检测并发修改：对比基准值与当前流程变量值。
-     * 如果某个字段的当前值 != 基准值，说明在用户编辑期间被其他用户修改了。
+     * Detects concurrent edits by comparing baseline values to current process variables.
+     * When current value != baseline, another user changed the field during editing.
      *
-     * @param baselineValues 前端加载时的字段快照（可为 null）
-     * @param currentVariables 当前流程变量值
-     * @param submittedFieldNames 本次提交的字段名集合
-     * @return 被并发修改的字段名集合
+     * @param baselineValues field snapshot from client load (may be null)
+     * @param currentVariables current process variables
+     * @param submittedFieldNames field names in this submit
+     * @return field names modified concurrently
      */
     public Set<String> detectConcurrentModifications(Map<String, Object> baselineValues,
                                                       Map<String, Object> currentVariables,
@@ -405,9 +404,9 @@ public class TaskFormComponent {
     }
 
     /**
-     * 获取已完成 Task 的快照 + 实时值
+     * Returns snapshot and live values for a completed task.
      *
-     * @param taskId 任务实例 ID
+     * @param taskId task instance ID
      * @return CompletedTaskFormData DTO
      */
     public CompletedTaskFormData getCompletedTaskFormData(String taskId) {
@@ -458,22 +457,22 @@ public class TaskFormComponent {
     }
 
     /**
-     * 在完成审批写入前，把 Task Form 字段子集快照以 {@code _snapshot_{taskId}} 并入流程变量。
-     * <p>由调用方对 {@link ProcessInstance} 只做<strong>一次</strong> {@code save}，避免与 {@link ProcessInstance#lockVersion}
-     * 乐观锁冲突（接连两次 UPDATE 同一行易导致 UnexpectedRollback）。</p>
-     * <p><b>反膨胀边界：</b></p>
+     * Merges a Task Form field-subset snapshot as {@code _snapshot_{taskId}} into process variables before approval completion.
+     * <p>Callers should {@code save} {@link ProcessInstance} <strong>once</strong> to avoid {@link ProcessInstance#lockVersion}
+     * optimistic-lock conflicts (back-to-back UPDATEs on the same row can cause UnexpectedRollback).</p>
+     * <p><b>Anti-bloat guardrails:</b></p>
      * <ul>
-     *   <li>当 stage <em>没有</em> Task Form 绑定（{@code fetchTaskFormByStageId} 返回 null 或 fieldPermissions 为空）时，
-     *       快照写入<strong>空 fieldValues</strong>——既不回退到「拷贝全部流程变量」，也不携带
-     *       {@code __subTables__}。根变量里的 {@code __subTables__} 已经是实时数据源；快照层再复制一份只会让
-     *       {@code variables} JSON 列指数级膨胀（前端为每个 binding 注册 binding-id / table-name / normalized-name
-     *       多个别名 key，叠加多实例子任务 N 次完成 → 触发 PostgreSQL 参数编码 OOM）。</li>
-     *   <li>当 stage <em>有</em> Task Form 绑定时，快照沿用 fieldPermissions 子集 + {@code __subTables__}
-     *       供 Portal 完整还原已完成表单内容。</li>
+     *   <li>When the stage has <em>no</em> Task Form binding ({@code fetchTaskFormByStageId} null or empty fieldPermissions),
+     *       the snapshot stores <strong>empty fieldValues</strong>—no fallback to copying all process variables and no
+     *       {@code __subTables__}. Live {@code __subTables__} already lives on root variables; duplicating it in snapshots
+     *       inflates the {@code variables} JSON column (frontend alias keys per binding, multiplied by MI child completions →
+     *       PostgreSQL parameter encoding OOM).</li>
+     *   <li>When the stage <em>has</em> a Task Form binding, the snapshot keeps the fieldPermissions subset plus
+     *       {@code __subTables__} so Portal can fully render the completed form.</li>
      * </ul>
      *
-     * @param mergedVariables 已合并的流程变量 map（会被原地写入快照键）
-     * @return 快照中包含的表单字段名集合（用于日志）
+     * @param mergedVariables merged process variables map (snapshot key written in place)
+     * @return form field names included in the snapshot (for logging)
      */
     public Set<String> mergeCompletedTaskSnapshotIntoVariables(String taskId, String userId, String taskDefinitionKey,
                                                                Map<String, Object> mergedVariables) {
@@ -485,7 +484,7 @@ public class TaskFormComponent {
                 ? extractFieldPermissions(formDefinition)
                 : Collections.emptyMap();
 
-        // 无 Task Form 绑定时快照恒为空——避免在没有 UI 消费者的情况下把 __subTables__（含别名副本）写进流程变量。
+        // Empty snapshot when no Task Form binding—avoid writing __subTables__ (with alias copies) with no UI consumer.
         Map<String, Object> fieldValues;
         if (fieldPermissions.isEmpty()) {
             fieldValues = new HashMap<>();
@@ -510,11 +509,11 @@ public class TaskFormComponent {
     }
 
     /**
-     * Task 完成时捕获快照
-     * 获取当前流程变量值（Task Form 字段子集），存储为 _snapshot_{taskId}
+     * Captures snapshot on task completion.
+     * Persists current process variables (Task Form field subset) as _snapshot_{taskId}.
      *
-     * @param taskId 任务实例 ID
-     * @param userId 操作用户 ID（assignee）
+     * @param taskId task instance ID
+     * @param userId acting user ID (assignee)
      */
     @Transactional
     public void captureTaskFormSnapshot(String taskId, String userId) {
@@ -525,8 +524,8 @@ public class TaskFormComponent {
     }
 
     /**
-     * Task 完成后捕获快照。
-     * <p>任务完成后 Flowable 运行时任务已不存在，调用方需要传入完成前拿到的 stage/process 信息。</p>
+     * Captures snapshot after task completion.
+     * <p>Flowable runtime task is gone after completion; caller must pass stage/process info captured beforehand.</p>
      */
     @Transactional
     public void captureTaskFormSnapshot(String taskId, String userId, String taskDefinitionKey,
@@ -559,8 +558,8 @@ public class TaskFormComponent {
     // ==================== Public utility methods for testing ====================
 
     /**
-     * 过滤只读字段，仅保留 EDITABLE 字段
-     * 如果 fieldPermissions 为空，则接受所有字段（向后兼容）
+     * Filters read-only fields, keeping EDITABLE fields only.
+     * When fieldPermissions is empty, accepts all fields (backward compatible).
      */
     public Map<String, Object> filterEditableFields(Map<String, Object> formData,
                                                      Map<String, String> fieldPermissions) {
@@ -575,7 +574,7 @@ public class TaskFormComponent {
     }
 
     /**
-     * 从全量流程变量中提取字段子集
+     * Extracts a field subset from full process variables.
      */
     public Map<String, Object> extractFieldSubset(Map<String, Object> allVariables,
                                                    Set<String> fieldNames) {
@@ -593,7 +592,7 @@ public class TaskFormComponent {
     }
 
     /**
-     * 计算快照与实时值之间的差异字段数
+     * Counts fields that differ between snapshot and live values.
      */
     public int countSnapshotDiffs(Map<String, Object> snapshotValues, Map<String, Object> liveValues) {
         if (snapshotValues == null || liveValues == null) {
@@ -612,7 +611,7 @@ public class TaskFormComponent {
     }
 
     /**
-     * 将快照 DTO 转换为 Map（用于存储到流程变量）
+     * Converts snapshot DTO to Map for storage in process variables.
      */
     public Map<String, Object> snapshotToMap(TaskFormSnapshot snapshot) {
         Map<String, Object> map = new HashMap<>();
@@ -626,7 +625,7 @@ public class TaskFormComponent {
     }
 
     /**
-     * 从 Map 还原快照 DTO（从流程变量读取）
+     * Restores snapshot DTO from Map (read from process variables).
      */
     @SuppressWarnings("unchecked")
     public TaskFormSnapshot mapToSnapshot(Map<String, Object> map) {
@@ -647,8 +646,7 @@ public class TaskFormComponent {
     // ==================== Private Helper Methods ====================
 
     /**
-     * 获取任务信息（taskDefinitionKey, processInstanceId）
-     * 通过 WorkflowEngineClient 从 Flowable 获取任务详情
+     * Loads task info (taskDefinitionKey, processInstanceId) via WorkflowEngineClient from Flowable.
      */
     @SuppressWarnings("unchecked")
     protected TaskInfo getTaskInfo(String taskId) {
@@ -672,8 +670,8 @@ public class TaskFormComponent {
     }
 
     /**
-     * 根据 stageId (taskDefinitionKey) 获取 Task Form 定义。
-     * 优先请求 developer-workstation；Docker/网络不可达时从本库 {@code dw_form_stage_bindings} 回退（与 DW 共用同一 PostgreSQL）。
+     * Loads Task Form definition by stageId (taskDefinitionKey).
+     * Prefers developer-workstation; falls back to local {@code dw_form_stage_bindings} when unreachable (shared PostgreSQL with DW).
      */
     @SuppressWarnings("unchecked")
     private Map<String, Object> fetchTaskFormByStageId(String stageId) {
@@ -717,7 +715,7 @@ public class TaskFormComponent {
     }
 
     /**
-     * 与 developer-workstation 共用库表时的本地解析（避免容器内 developer-workstation.url 误配为 localhost 导致始终失败）。
+     * Local lookup when sharing DB with developer-workstation (avoids localhost misconfiguration inside containers).
      */
     private Map<String, Object> fetchTaskFormFromLocalDw(String stageId) {
         if (stageId == null || stageId.isBlank()) {
@@ -783,7 +781,7 @@ public class TaskFormComponent {
         return base.endsWith("/") ? base.substring(0, base.length() - 1) : base;
     }
 
-    /** 支持 {@code DEVELOPER_WORKSTATION_URL} 仅含 host:port，或误带 {@code /api/v1} 后缀。 */
+    /** Supports {@code DEVELOPER_WORKSTATION_URL} as host:port only or with a mistaken {@code /api/v1} suffix. */
     private static String normalizeDeveloperWorkstationBase(String url) {
         String b = trimTrailingSlash(url != null ? url : "");
         if (b.endsWith("/api/v1")) {
@@ -827,7 +825,7 @@ public class TaskFormComponent {
     // ========== Inner data class ==========
 
     /**
-     * Task 信息（从 Flowable 获取）
+     * Task info (from Flowable).
      */
     public static class TaskInfo {
         public final String taskDefinitionKey;

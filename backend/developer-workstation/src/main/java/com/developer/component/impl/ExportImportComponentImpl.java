@@ -49,7 +49,7 @@ import java.util.stream.Collectors;
 import java.util.zip.*;
 
 /**
- * 导入导出组件实现
+ * Export/import component implementation.
  */
 @Component
 @Slf4j
@@ -78,16 +78,16 @@ public class ExportImportComponentImpl implements ExportImportComponent {
     private record ResolvedImportIdentity(String name, String code, boolean skipped, String skipMessage) {}
 
     /**
-     * 获取当前操作者
-     * 优先从 Spring Security Context 获取，如果无法获取则返回 "system"
+     * Returns the current operator.
+     * Prefer Spring Security Context; return "system" when unavailable.
      * 
-     * 返回 "system" 的情况：
-     * - 没有认证信息（未登录）
-     * - 匿名用户
-     * - 系统后台任务
-     * - 获取过程中发生异常
+     * Cases that yield "system":
+     * - No authentication (not logged in)
+     * - Anonymous user
+     * - System background job
+     * - Exception while resolving operator
      * 
-     * @return 当前操作者用户名，如果无法获取则返回 "system"
+     * @return current operator username, or "system" when unavailable
      */
     private String getCurrentOperator() {
         try {
@@ -121,15 +121,15 @@ public class ExportImportComponentImpl implements ExportImportComponent {
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
              ZipOutputStream zos = new ZipOutputStream(baos)) {
             
-            // 用于计算校验和的内容
+            // Content used for checksum
             Map<String, byte[]> fileContents = new LinkedHashMap<>();
             
-            // 构建组件清单
+            // Build component manifest
             List<String> tableFiles = new ArrayList<>();
             List<String> formFiles = new ArrayList<>();
             List<String> actionFiles = new ArrayList<>();
             
-            // 导出流程定义 - 解码Base64后导出原始XML
+            // Export process definition — decode Base64 to raw XML
             String processFile = null;
             if (processDefinition != null) {
                 String bpmnXml = XmlEncodingUtil.smartDecode(processDefinition.getBpmnXml());
@@ -139,7 +139,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
                 addZipEntry(zos, processFile, processData);
             }
             
-            // 导出表定义
+            // Export table definitions
             int tableIndex = 0;
             for (TableDefinition table : tables) {
                 String fileName = "tables/table_" + tableIndex + ".json";
@@ -150,7 +150,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
                 tableIndex++;
             }
 
-            // 导出表关系
+            // Export table relations
             if (!tableRelations.isEmpty()) {
                 String relationsFile = "relations/table_relations.json";
                 List<Map<String, Object>> relationPayload = tableRelations.stream()
@@ -161,7 +161,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
                 addZipEntry(zos, relationsFile, relationsData);
             }
             
-            // 导出表单定义
+            // Export form definitions
             int formIndex = 0;
             for (FormDefinition form : forms) {
                 String fileName = "forms/form_" + formIndex + ".json";
@@ -173,7 +173,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
                 formIndex++;
             }
             
-            // 导出动作定义
+            // Export action definitions
             int actionIndex = 0;
             for (ActionDefinition action : actions) {
                 String fileName = "actions/action_" + actionIndex + ".json";
@@ -184,7 +184,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
                 actionIndex++;
             }
             
-            // 导出决策定义（DMN XML 格式）
+            // Export decision definitions (DMN XML)
             List<String> decisionFiles = new ArrayList<>();
             int decisionIndex = 0;
             for (DecisionDefinition decision : decisions) {
@@ -197,7 +197,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
                 decisionIndex++;
             }
             
-            // 构建 manifest
+            // Build manifest
             ExportManifest.IconInfo iconInfo = null;
             if (functionUnit.getIcon() != null) {
                 iconInfo = ExportManifest.IconInfo.builder()
@@ -238,7 +238,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
             fileContents.put("manifest.json", manifestData);
             addZipEntry(zos, "manifest.json", manifestData);
             
-            // 生成校验和
+            // Generate checksum
             String checksum = generateChecksum(fileContents);
             byte[] checksumData = checksum.getBytes(StandardCharsets.UTF_8);
             addZipEntry(zos, "checksum.sha256", checksumData);
@@ -251,7 +251,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
     }
     
     /**
-     * 生成文件内容的SHA-256校验和
+     * SHA-256 checksum of file content
      */
     private String generateChecksum(Map<String, byte[]> fileContents) {
         try {
@@ -289,7 +289,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
         Map<String, Object> result = new HashMap<>();
         Map<String, Object> packageData = parseImportPackage(file);
         
-        // 优先使用 manifest.json，兼容旧的 metadata.json
+        // Prefer manifest.json; fall back to legacy metadata.json
         @SuppressWarnings("unchecked")
         Map<String, Object> manifest = packageData.containsKey("manifest") ? 
                 (Map<String, Object>) packageData.get("manifest") :
@@ -309,7 +309,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
         name = resolved.name();
         code = resolved.code();
 
-        // 创建功能单元
+        // Create function unit
         FunctionUnit functionUnit = FunctionUnit.builder()
                 .name(name)
                 .code(code)
@@ -389,7 +389,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
             }
         }
 
-        // 流程在表/表单/动作导入后再写入，并重写 BPMN 中的旧 ID 引用（与 clone 一致）
+        // Write process after tables/forms/actions import; rewrite old BPMN IDs (same as clone)
         if (packageData.containsKey("process")) {
             String bpmnXml = (String) packageData.get("process");
             String rewrittenBpmn = BpmnIdRewriter.rewrite(
@@ -435,7 +435,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
                 .build();
         table = tableDefinitionRepository.save(table);
         
-        // 导入字段定义
+        // Import field definitions
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> fields = (List<Map<String, Object>>) tableData.get("fields");
         if (fields != null) {
@@ -698,9 +698,9 @@ public class ExportImportComponentImpl implements ExportImportComponent {
     }
 
     /**
-     * 导入决策定义（从 DMN XML）
-     * 使用 DmnXmlParser 提取 decisionKey、hitPolicy，从 XML decision 元素提取 name
-     * 冲突策略: 同一 functionUnit 下相同 decisionKey 则覆盖
+     * Import decision definitions (from DMN XML)
+     * Use DmnXmlParser for decisionKey/hitPolicy; name from XML decision element
+     * Conflict: overwrite same decisionKey within functionUnit
      */
     private void importDecision(FunctionUnit functionUnit, String dmnXml) {
         if (dmnXml == null || dmnXml.isBlank()) {
@@ -753,7 +753,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
         try {
             Map<String, Object> packageData = parseImportPackage(file);
             
-            // 与导入一致：manifest.json（新）或 metadata.json（旧）
+            // Same as import: manifest.json (new) or metadata.json (legacy)
             Map<String, Object> descriptor = resolvePackageDescriptor(packageData);
             if (descriptor == null) {
                 errors.add("Missing manifest.json or metadata.json");
@@ -840,7 +840,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
     }
 
     /**
-     * 导入/预览与保存、部署一致：LAST_TASK_ASSIGNEE 锚点要求单入线。
+     * Import/preview matches save/deploy: LAST_TASK_ASSIGNEE anchor requires single incoming flow.
      */
     private void assertLastTaskAssigneeTopologyOrThrow(String bpmnXml) {
         if (bpmnXml == null || bpmnXml.isBlank()) {
@@ -863,7 +863,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
     }
 
     /**
-     * 与 {@link #importFunctionUnit} 一致：优先 manifest.json，兼容 metadata.json。
+     * Same as {@link #importFunctionUnit}: prefer manifest.json; legacy metadata.json.
      */
     @SuppressWarnings("unchecked")
     private Map<String, Object> resolvePackageDescriptor(Map<String, Object> packageData) {
@@ -896,14 +896,14 @@ public class ExportImportComponentImpl implements ExportImportComponent {
         }
         
         try {
-            // 解析 manifest.json（新格式）或 metadata.json（旧格式）
+            // Parse manifest.json (new) or metadata.json (legacy)
             if (rawFiles.containsKey("manifest.json")) {
                 result.put("manifest", objectMapper.readValue(rawFiles.get("manifest.json"), Map.class));
             } else if (rawFiles.containsKey("metadata.json")) {
                 result.put("metadata", objectMapper.readValue(rawFiles.get("metadata.json"), Map.class));
             }
             
-            // 解析流程文件
+            // Parse process file
             for (String fileName : rawFiles.keySet()) {
                 if (fileName.endsWith(".bpmn")) {
                     result.put("process", new String(rawFiles.get(fileName), StandardCharsets.UTF_8));
@@ -911,7 +911,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
                 }
             }
             
-            // 解析表定义（支持新旧两种格式）
+            // Parse table definitions (old and new formats)
             List<Map<String, Object>> tables = new ArrayList<>();
             if (rawFiles.containsKey("tables.json")) {
                 tables = objectMapper.readValue(rawFiles.get("tables.json"), List.class);
@@ -924,13 +924,13 @@ public class ExportImportComponentImpl implements ExportImportComponent {
             }
             result.put("tables", tables);
 
-            // 解析表关系
+            // Parse table relations
             if (rawFiles.containsKey("relations/table_relations.json")) {
                 result.put("tableRelations", objectMapper.readValue(
                         rawFiles.get("relations/table_relations.json"), List.class));
             }
             
-            // 解析表单定义
+            // Parse form definitions
             List<Map<String, Object>> forms = new ArrayList<>();
             if (rawFiles.containsKey("forms.json")) {
                 forms = objectMapper.readValue(rawFiles.get("forms.json"), List.class);
@@ -943,7 +943,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
             }
             result.put("forms", forms);
             
-            // 解析动作定义
+            // Parse action definitions
             List<Map<String, Object>> actions = new ArrayList<>();
             if (rawFiles.containsKey("actions.json")) {
                 actions = objectMapper.readValue(rawFiles.get("actions.json"), List.class);
@@ -956,7 +956,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
             }
             result.put("actions", actions);
             
-            // 解析决策定义（DMN XML 文件）
+            // Parse decision definitions (DMN XML files)
             List<String> decisions = new ArrayList<>();
             for (String fileName : rawFiles.keySet()) {
                 if (fileName.startsWith("decisions/") && fileName.endsWith(".dmn")) {
@@ -965,7 +965,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
             }
             result.put("decisions", decisions);
             
-            // 保存校验和用于验证
+            // Store checksum for verification
             if (rawFiles.containsKey("checksum.sha256")) {
                 result.put("checksum", new String(rawFiles.get("checksum.sha256"), StandardCharsets.UTF_8));
             }
@@ -1081,7 +1081,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
     }
 
     /**
-     * 生成导入时的唯一编码
+     * Generate unique code on import
      */
     private String generateImportCode(String functionUnitName) {
         String prefix = normalizeCodePrefix(functionUnitName);
@@ -1103,7 +1103,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
     }
 
     /**
-     * 与 FunctionUnit 创建逻辑保持一致的前缀清洗规则（Flowable/BPMN XML Name 约束 + 总长度约束）。
+     * Same prefix sanitization as FunctionUnit create (Flowable/BPMN XML Name + total length limits).
      */
     private String normalizeCodePrefix(String name) {
         final int maxPrefixLen = 34;

@@ -1,7 +1,7 @@
 package com.workflow.exception;
 
 /**
- * 工作流业务异常
+ * Workflow business exception
  */
 public class WorkflowBusinessException extends RuntimeException {
     

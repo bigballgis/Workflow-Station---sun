@@ -13,7 +13,7 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 
 /**
- * 权限申请Repository
+ * Permission request Repository
  */
 @Repository
 public interface PermissionRequestRepository extends JpaRepository<PermissionRequest, Long> {
@@ -55,7 +55,7 @@ public interface PermissionRequestRepository extends JpaRepository<PermissionReq
             Pageable pageable);
 
     /**
-     * 待审批：业务单元类申请，且 businessUnitId 在当前用户可审批的 BU 列表内（分页在数据库层完成）。
+     * Pending approval: business unit requests where businessUnitId is in the current user's approvable BU list (paginated at database level).
      */
     @Query("""
             SELECT p FROM PermissionRequest p
@@ -71,7 +71,7 @@ public interface PermissionRequestRepository extends JpaRepository<PermissionReq
             Pageable pageable);
 
     /**
-     * 待审批：虚拟组加入申请，且 virtualGroupId 在当前用户可审批的虚拟组列表内。
+     * Pending approval: virtual group join requests where virtualGroupId is in the current user's approvable VG list.
      */
     @Query("""
             SELECT p FROM PermissionRequest p
@@ -87,7 +87,7 @@ public interface PermissionRequestRepository extends JpaRepository<PermissionReq
             Pageable pageable);
 
     /**
-     * 待审批：业务单元类（加入 / 移除角色 / 退出成员）或虚拟组加入，OR 合并查询（审批人同时管 BU 与 VG 时使用）。
+     * Pending approval: business unit (join / role removal / exit) or virtual group join, OR combined query (for approvers managing both BU and VG).
      */
     @Query("""
             SELECT p FROM PermissionRequest p
@@ -107,7 +107,7 @@ public interface PermissionRequestRepository extends JpaRepository<PermissionReq
             Pageable pageable);
 
     /**
-     * 审批历史：仅本人作为 approver 处理过的记录（含业务单元类与虚拟组类等所有类型）。
+     * Approval history: only records processed by this user as approver (including all types such as BU and VG).
      */
     @Query("""
             SELECT p FROM PermissionRequest p

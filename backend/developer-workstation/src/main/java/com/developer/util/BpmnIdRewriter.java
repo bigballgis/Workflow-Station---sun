@@ -9,10 +9,11 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * BPMN XML 中数据库 ID 引用的重写器。
+ * Rewriter for database ID references in BPMN XML.
  *
- * <p>用于克隆 / 导入功能单元时，把 BPMN 扩展属性中残留的源功能单元 ID
- * 替换为目标功能单元的对应 ID。涉及的扩展元素形如：
+ * <p>Used during clone/import of function units to replace residual source function unit IDs
+ * in BPMN extension properties with the target function unit's corresponding IDs.
+ * Relevant extension elements look like:
  * <pre>{@code
  *   <custom:property name="subTableId" value="13" />
  *   <custom:property name="formId" value="11" />
@@ -20,33 +21,33 @@ import java.util.regex.Pattern;
  *   <custom_1:values name="actionIds" value="[12,34]" />
  * }</pre>
  *
- * <p>解析顺序（块内）：
+ * <p>Resolution order (inside blocks):
  * <ol>
- *   <li><b>名字优先</b>：当同一 {@code <X:properties>} 块内同时存在 {@code subTableName} +
- *       {@code subTableId}（或 {@code tableName} + {@code tableId} / {@code formName} +
- *       {@code formId}）时，按名字在克隆侧查找对应实体的 ID 并写回；
- *       这样即使源数据中 ID 与名字不一致（用户在设计器换过表/表单导致 ID 没刷新），
- *       克隆出的 BPMN 仍能指向正确的克隆实体。</li>
- *   <li><b>ID 兜底</b>：没有名字属性，或名字在克隆侧找不到时，使用旧 ID → 新 ID 映射。</li>
- *   <li><b>actionIds 数组</b>：按 ID 逐个映射，找不到的保持原值（actionNames 长度与 actionIds 经常
- *       不一致，无法可靠按名字匹配）。</li>
+ *   <li><b>Name first</b>: when the same {@code <X:properties>} block contains both {@code subTableName} +
+ *       {@code subTableId} (or {@code tableName} + {@code tableId} / {@code formName} +
+ *       {@code formId}), look up the corresponding entity ID on the clone side by name and write it back;
+ *       this way even if the source data has inconsistent IDs and names (user swapped tables/forms in the designer
+ *       causing stale IDs), the cloned BPMN will still point to the correct cloned entities.</li>
+ *   <li><b>ID fallback</b>: no name attribute, or name not found on the clone side → use old ID → new ID mapping.</li>
+ *   <li><b>actionIds array</b>: map each ID individually; keep original for unmatched (actionNames length often
+ *       differs from actionIds, making reliable name matching impossible).</li>
  * </ol>
  *
- * <p>支持 Base64 编码与原文 XML：会在解码后重写并按原编码方式回写。
+ * <p>Supports both Base64-encoded and plain-text XML: decodes, rewrites, and re-encodes in the original format.
  */
 public final class BpmnIdRewriter {
 
-    /** 匹配 {@code <prefix:properties ...> ... </prefix:properties>} 块（含开闭标签）。 */
+    /** Matches {@code <prefix:properties ...> ... </prefix:properties>} blocks (including open/close tags). */
     private static final Pattern PROPERTIES_BLOCK = Pattern.compile(
             "<(\\w+):properties\\b[^>]*>.*?</\\1:properties>",
             Pattern.DOTALL);
 
-    /** 匹配 {@code <prefix:properties ...>} 开标签。 */
+    /** Matches {@code <prefix:properties ...>} opening tag. */
     private static final Pattern OPENING_PROPERTIES_TAG = Pattern.compile(
             "<(\\w+):properties\\b[^>]*>",
             Pattern.DOTALL);
 
-    /** 匹配 {@code <prefix:property ... />} 或 {@code <prefix:values ... />} 自闭合扩展元素。 */
+    /** Matches {@code <prefix:property ... />} or {@code <prefix:values ... />} self-closing extension elements. */
     private static final Pattern EXTENSION_ELEMENT = Pattern.compile(
             "<(\\w+):(property|values)\\s+([^/>]*?)/>",
             Pattern.DOTALL);
@@ -61,7 +62,7 @@ public final class BpmnIdRewriter {
     }
 
     /**
-     * 旧 API：仅按 ID 映射重写。
+     * Legacy API: rewrite using ID mapping only.
      */
     public static String rewrite(String bpmnXml,
                                  Map<Long, Long> tableIdMapping,
@@ -72,15 +73,15 @@ public final class BpmnIdRewriter {
     }
 
     /**
-     * 重写 BPMN XML 中的 ID 引用，名字优先、ID 兜底。
+     * Rewrite ID references in BPMN XML, name-first with ID fallback.
      *
-     * @param bpmnXml             原始 BPMN XML（可能为 Base64 编码）
-     * @param tableIdMapping      旧 TableDefinition.id → 新 id（用于 subTableId / tableId 兜底）
-     * @param formIdMapping       旧 FormDefinition.id → 新 id（用于 formId 兜底）
-     * @param actionIdMapping     旧 ActionDefinition.id → 新 id（按数组逐个映射 actionIds）
-     * @param clonedTableNameToId 克隆侧 表名 → 克隆 TableDefinition.id（块内有 subTableName/tableName 时优先用）
-     * @param clonedFormNameToId  克隆侧 表单名 → 克隆 FormDefinition.id（块内有 formName 时优先用）
-     * @return 重写后的 BPMN XML，编码方式与输入保持一致；输入为 null/空白时原样返回
+     * @param bpmnXml             original BPMN XML (may be Base64 encoded)
+     * @param tableIdMapping      old TableDefinition.id → new id (fallback for subTableId / tableId)
+     * @param formIdMapping       old FormDefinition.id → new id (fallback for formId)
+     * @param actionIdMapping     old ActionDefinition.id → new id (array elements mapped individually for actionIds)
+     * @param clonedTableNameToId clone-side table name → clone TableDefinition.id (preferred when subTableName/tableName present in block)
+     * @param clonedFormNameToId  clone-side form name → clone FormDefinition.id (preferred when formName present in block)
+     * @return rewritten BPMN XML, encoding matches input; returns unchanged for null/blank input
      */
     public static String rewrite(String bpmnXml,
                                  Map<Long, Long> tableIdMapping,
@@ -114,10 +115,11 @@ public final class BpmnIdRewriter {
     }
 
     /**
-     * 主重写流程：
+     * Main rewrite flow:
      * <ul>
-     *   <li>对 {@code <X:properties>} 块内容按"名字优先 + ID 兜底"重写；</li>
-     *   <li>对块外的零散 {@code <X:property>} / {@code <X:values>} 自闭合元素按 ID 兜底重写。</li>
+     *   <li>Inside {@code <X:properties>} blocks: apply "name-first + ID fallback" rewriting;</li>
+     *   <li>Outside blocks: for scattered {@code <X:property>} / {@code <X:values>} self-closing elements,
+     *       apply ID fallback only.</li>
      * </ul>
      */
     private static String rewriteAll(String xml,
@@ -130,11 +132,11 @@ public final class BpmnIdRewriter {
         StringBuilder sb = new StringBuilder();
         int pos = 0;
         while (m.find()) {
-            // 块外区域：仅按 ID 兜底
+            // Outside block region: ID fallback only
             sb.append(rewriteUnwrapped(
                     xml.substring(pos, m.start()),
                     tableIdMapping, formIdMapping, actionIdMapping));
-            // 块内：使用名字+ID 综合判断
+            // Inside block: name + ID combined judgment
             sb.append(rewriteBlock(
                     m.group(),
                     tableIdMapping, formIdMapping, actionIdMapping,
@@ -148,7 +150,8 @@ public final class BpmnIdRewriter {
     }
 
     /**
-     * 重写 {@code <X:properties>...</X:properties>} 块的内容，应用名字优先 + ID 兜底策略。
+     * Rewrite the content of a {@code <X:properties>...</X:properties>} block,
+     * applying name-first + ID fallback strategy.
      */
     private static String rewriteBlock(String block,
                                        Map<Long, Long> tableIdMapping,
@@ -217,7 +220,7 @@ public final class BpmnIdRewriter {
     }
 
     /**
-     * 重写块外（unwrapped）的零散扩展元素，仅做 ID 映射兜底。
+     * Rewrite scattered extension elements outside blocks, ID mapping fallback only.
      */
     private static String rewriteUnwrapped(String segment,
                                            Map<Long, Long> tableIdMapping,
@@ -276,7 +279,8 @@ public final class BpmnIdRewriter {
     }
 
     /**
-     * 解析 properties 块内容，提取所有 {@code <X:property>} / {@code <X:values>} 的 name → value。
+     * Parse properties block content, extracting name → value for all
+     * {@code <X:property>} / {@code <X:values>} elements.
      */
     private static Map<String, String> parsePropertyMap(String content) {
         Map<String, String> result = new HashMap<>();
@@ -293,11 +297,11 @@ public final class BpmnIdRewriter {
     }
 
     /**
-     * 名字优先解析单一 ID。
+     * Name-first resolution of a single ID.
      * <ol>
-     *   <li>oldName 非空且在 nameToId 中命中 → 返回名字对应的新 ID（推荐路径）。</li>
-     *   <li>否则若 oldIdStr 在 idMapping 中命中 → 返回映射后的新 ID。</li>
-     *   <li>都失败 → 返回 null（调用方保留原值）。</li>
+     *   <li>oldName non-null and found in nameToId → returns name-mapped new ID (recommended path).</li>
+     *   <li>Otherwise if oldIdStr found in idMapping → returns mapped new ID.</li>
+     *   <li>Both fail → returns null (caller preserves original).</li>
      * </ol>
      */
     private static String resolveSingularId(String oldIdStr,
@@ -328,8 +332,8 @@ public final class BpmnIdRewriter {
     }
 
     /**
-     * 在 properties 块内容里替换指定 name 对应的 {@code <X:property|values>} 元素的 value。
-     * 兼容两种属性顺序与单/双引号。
+     * Replace the value of a {@code <X:property|values>} element with the given property name
+     * inside a properties block. Compatible with both attribute orderings and single/double quotes.
      */
     private static String replacePropertyValueByName(String content, String propertyName, String newValue) {
         Pattern p = Pattern.compile(

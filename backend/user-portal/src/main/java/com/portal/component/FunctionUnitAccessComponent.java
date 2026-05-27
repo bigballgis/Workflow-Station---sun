@@ -15,8 +15,8 @@ import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 /**
- * 功能单元访问权限组件
- * 根据用户的业务角色过滤可访问的功能单元
+ * Function unit access permission component
+ * Filters accessible function units based on the user's business roles
  */
 @Slf4j
 @Component
@@ -61,21 +61,21 @@ public class FunctionUnitAccessComponent {
     private static final long CACHE_TTL = TimeUnit.MINUTES.toMillis(5);
     
     /**
-     * 检查用户是否可以访问指定的功能单元
+     * Check if a user can access a specified function unit
      */
     public boolean canAccessFunctionUnit(String userId, String functionUnitId) {
-        // 获取功能单元的访问配置（允许访问的角色ID列表）
+        // Get the function unit's access configuration (list of allowed role IDs)
         Set<String> allowedRoleIds = getFunctionUnitAllowedRoles(functionUnitId);
         
-        // 如果没有配置访问权限，则所有用户都可以访问
+        // If no access permissions are configured, all users can access
         if (allowedRoleIds.isEmpty()) {
             return true;
         }
         
-        // 获取用户的业务角色ID列表
+        // Get the user's business role ID list
         Set<String> userRoleIds = getUserBusinessRoleIds(userId);
         
-        // 检查是否有交集
+        // Check if there is any intersection
         for (String roleId : userRoleIds) {
             if (allowedRoleIds.contains(roleId)) {
                 return true;
@@ -86,14 +86,14 @@ public class FunctionUnitAccessComponent {
     }
     
     /**
-     * 检查功能单元是否启用
-     * @return true 如果启用，false 如果禁用或无法获取状态
+     * Check if a function unit is enabled
+     * @return true if enabled, false if disabled or unable to determine status
      */
     public boolean isFunctionUnitEnabled(String functionUnitIdOrCode) {
         log.info("Checking if function unit {} is enabled", functionUnitIdOrCode);
         
         try {
-            // 先尝试通过 ID 获取
+            // Try fetching by ID first
             String url = adminCenterUrl + "/api/v1/admin/function-units/" + functionUnitIdOrCode;
             log.info("Fetching function unit info from: {}", url);
             
@@ -108,7 +108,7 @@ public class FunctionUnitAccessComponent {
                 Map<String, Object> payload = ApiResponseBodyUnwrap.unwrapDataMap(response.getBody());
                 Boolean enabled = parseEnabledFlag(payload.get("enabled"));
                 log.info("Function unit {} enabled status: {}", functionUnitIdOrCode, enabled);
-                // 默认为 true（如果字段不存在）
+                // Default to true (if field does not exist)
                 return enabled == null || enabled;
             }
             
@@ -116,19 +116,19 @@ public class FunctionUnitAccessComponent {
             
         } catch (Exception e) {
             log.error("Failed to check function unit enabled status for {}: {}", functionUnitIdOrCode, e.getMessage(), e);
-            // 出错时默认允许访问，避免阻断用户
+            // Default to allowing access on error to avoid blocking the user
             return true;
         }
     }
     
     /**
-     * 根据 ID、code、名称或流程定义Key获取功能单元的实际 ID
+     * Resolve the actual function unit ID by ID, code, name, or process definition key
      */
     public String resolveFunctionUnitId(String functionUnitIdOrCode) {
         log.info("Resolving function unit ID for: {}", functionUnitIdOrCode);
         
-        // 如果看起来像 UUID，先验证是否为有效的功能单元 ID
-        // 注意：Flowable 7.0 的 processDefinitionId 也是 UUID 格式，不能直接当功能单元 ID 使用
+        // If it looks like a UUID, first verify whether it's a valid function unit ID
+        // Note: Flowable 7.0 processDefinitionId is also in UUID format and cannot be directly used as a function unit ID
         if (functionUnitIdOrCode != null && functionUnitIdOrCode.matches(LOWERCASE_UUID_REGEX)) {
             try {
                 String verifyUrl = adminCenterUrl + "/api/v1/admin/function-units/" + functionUnitIdOrCode;
@@ -143,15 +143,15 @@ public class FunctionUnitAccessComponent {
                     return functionUnitIdOrCode;
                 }
             } catch (Exception e) {
-                // UUID 不是有效的功能单元 ID（可能是 Flowable processDefinitionId），继续尝试其他查找方式
+                // UUID is not a valid function unit ID (may be a Flowable processDefinitionId), continue trying other lookup methods
                 log.warn("UUID {} is not a valid function unit ID (possibly a Flowable processDefinitionId), trying other lookup methods: {}", functionUnitIdOrCode, e.getMessage());
             }
-            // 不能通过 code/processKey 查找 UUID，直接返回（作为最终兜底）
+            // Cannot look up a UUID via code/processKey, return as-is (final fallback)
             log.warn("Could not resolve UUID {} to a function unit, returning as-is", functionUnitIdOrCode);
             return functionUnitIdOrCode;
         }
         
-        // 检查 process key 缓存
+        // Check process key cache
         CachedData<String> cachedResult = processKeyCache.get(functionUnitIdOrCode);
         if (cachedResult != null && !cachedResult.isExpired()) {
             log.info("Returning cached function unit ID for process key {}: {}", functionUnitIdOrCode, cachedResult.data);
@@ -159,12 +159,12 @@ public class FunctionUnitAccessComponent {
         }
         
         try {
-            // 对参数进行 URL 编码（支持中文）
+            // URL-encode the parameter (supports Chinese characters)
             String encodedParam = java.net.URLEncoder.encode(functionUnitIdOrCode, java.nio.charset.StandardCharsets.UTF_8);
 
-            // 待办/流程实例传入的多为 Flowable processDefinitionKey，须优先按流程 Key 解析：
-            // admin-center getFunctionUnitByProcessKey 会优先返回仍启用的目录行。
-            // 若先用 code/latest，可能与流程 Key 同名的「另一包最新版本」且已禁用，误报 Function unit is disabled。
+            // Tasks/process instances typically pass a Flowable processDefinitionKey, so resolve by process key first:
+            // admin-center's getFunctionUnitByProcessKey will preferentially return the still-enabled catalog entry.
+            // If resolved by code/latest first, it could match a different package's latest version with the same name that is disabled, falsely reporting "Function unit is disabled".
             String processKeyUrl = adminCenterUrl + "/api/v1/admin/function-units/by-process-key/" + encodedParam;
             log.info("Fetching function unit by process key from: {}", processKeyUrl);
 
@@ -187,7 +187,7 @@ public class FunctionUnitAccessComponent {
                 log.warn("Failed to find function unit by process key {}, trying by code: {}", functionUnitIdOrCode, e.getMessage());
             }
 
-            // 门户发起列表等处传入的是目录 code，process key 未命中时再按 code 查最新版本
+            // Portal-initiated lists and similar pass a catalog code; when process key misses, look up the latest version by code
             String url = adminCenterUrl + "/api/v1/admin/function-units/code/" + encodedParam + "/latest";
             log.info("Fetching function unit by code from: {}", url);
 
@@ -209,7 +209,7 @@ public class FunctionUnitAccessComponent {
                 log.warn("Failed to find function unit by code {}, trying by name: {}", functionUnitIdOrCode, e.getMessage());
             }
             
-            // process key / code 均未命中时，再按名称精确匹配搜索
+            // When neither process key nor code hits, search by exact name match
             String searchUrl = adminCenterUrl + "/api/v1/admin/function-units?keyword=" + encodedParam + "&size=1";
             log.info("Searching function unit by name from: {}", searchUrl);
             
@@ -223,7 +223,7 @@ public class FunctionUnitAccessComponent {
             if (searchResponse.getBody() != null) {
                 java.util.List<Map<String, Object>> content = ApiResponseBodyUnwrap.normalizeToListOfMaps(searchResponse.getBody());
                 if (!content.isEmpty()) {
-                    // 只返回精确匹配名称的功能单元，避免模糊匹配返回错误结果
+                    // Only return function units with exact name match, avoid fuzzy matching wrong results
                     for (Map<String, Object> unit : content) {
                         String name = (String) unit.get("name");
                         if (functionUnitIdOrCode.equals(name)) {
@@ -232,7 +232,7 @@ public class FunctionUnitAccessComponent {
                             return id;
                         }
                     }
-                    // 没有精确匹配，不使用模糊结果（避免加载错误的功能单元）
+                    // No exact match, skip fuzzy results (to avoid loading the wrong function unit)
                     log.warn("No exact name match found for: {}, skipping fuzzy result to avoid wrong function unit", functionUnitIdOrCode);
                 }
             }
@@ -247,17 +247,17 @@ public class FunctionUnitAccessComponent {
     }
     
     /**
-     * 检查用户是否可以访问指定的功能单元（包含启用状态检查）
-     * @throws FunctionUnitDisabledException 如果功能单元已禁用
+     * Check if a user can access the specified function unit (includes enabled status check)
+     * @throws FunctionUnitDisabledException if the function unit is disabled
      */
     public void checkFunctionUnitAccess(String userId, String functionUnitIdOrCode) {
-        // 先解析功能单元 ID
+        // First resolve the function unit ID
         String functionUnitId = resolveFunctionUnitId(functionUnitIdOrCode);
 
-        // 首先检查功能单元是否启用
+        // First check if the function unit is enabled
         if (!isFunctionUnitEnabled(functionUnitId)) {
-            // processDefinitionKey / 目录 code 的解析结果会缓存在 processKeyCache（TTL 5min）。
-            // 管理员禁用旧目录行并启用新版本后，缓存仍可能指向已禁用的 ID，导致待办打开误报 disabled。
+            // Resolved results for processDefinitionKey / catalog code are cached in processKeyCache (TTL 5min).
+            // After an admin disables an old catalog entry and enables a new version, the cache may still point to the disabled ID, causing false "disabled" errors in task views.
             if (mayResolveViaProcessKeyCache(functionUnitIdOrCode)) {
                 log.info(
                         "Resolved function unit {} appears disabled; invalidating process-key cache for lookup key [{}] and re-resolving once",
@@ -272,7 +272,7 @@ public class FunctionUnitAccessComponent {
             throw new FunctionUnitDisabledException("Function unit is disabled");
         }
         
-        // 然后检查用户权限
+        // Then check user permissions
         if (!canAccessFunctionUnit(userId, functionUnitId)) {
             log.warn("User {} does not have access to function unit {}", userId, functionUnitId);
             throw new FunctionUnitAccessDeniedException("You do not have permission to access this function unit");
@@ -280,7 +280,7 @@ public class FunctionUnitAccessComponent {
     }
     
     /**
-     * 功能单元已禁用异常
+     * Function unit disabled exception
      */
     public static class FunctionUnitDisabledException extends RuntimeException {
         public FunctionUnitDisabledException(String message) {
@@ -289,7 +289,7 @@ public class FunctionUnitAccessComponent {
     }
     
     /**
-     * 功能单元访问被拒绝异常
+     * Function unit access denied exception
      */
     public static class FunctionUnitAccessDeniedException extends RuntimeException {
         public FunctionUnitAccessDeniedException(String message) {
@@ -298,8 +298,8 @@ public class FunctionUnitAccessComponent {
     }
     
     /**
-     * 过滤用户可访问的功能单元列表
-     * 过滤条件：1. 功能单元已启用 2. 用户有访问权限
+     * Filter the list of function units accessible to a user
+     * Filter conditions: 1. Function unit is enabled 2. User has access permission
      */
     public List<Map<String, Object>> filterAccessibleFunctionUnits(String userId, List<Map<String, Object>> functionUnits) {
         if (functionUnits == null || functionUnits.isEmpty()) {
@@ -312,7 +312,7 @@ public class FunctionUnitAccessComponent {
         for (Map<String, Object> unit : functionUnits) {
             String unitId = (String) unit.get("id");
             
-            // 检查功能单元是否启用
+            // Check if the function unit is enabled
             Boolean enabled = parseEnabledFlag(unit.get("enabled"));
             if (enabled != null && !enabled) {
                 log.debug("Function unit {} is disabled, skipping", unitId);
@@ -321,7 +321,7 @@ public class FunctionUnitAccessComponent {
             
             Set<String> allowedRoleIds = getFunctionUnitAllowedRoles(unitId);
             
-            // 如果没有配置访问权限，或者用户有允许的角色
+            // If no access permissions are configured, or the user has an allowed role
             if (allowedRoleIds.isEmpty() || hasAnyRole(userRoleIds, allowedRoleIds)) {
                 accessible.add(unit);
             }
@@ -331,7 +331,8 @@ public class FunctionUnitAccessComponent {
     }
 
     /**
-     * 拉取管理中心已部署功能单元最新版本列表（与流程发起列表同源），供权限移除等场景按功能单元聚合展示。
+     * Fetch the latest version list of deployed function units from the admin center (same source as the process initiation list),
+     * for use in scenarios like permission removal where function-unit-level aggregation display is needed.
      */
     public List<Map<String, Object>> fetchLatestDeployedFunctionUnits() {
         try {
@@ -350,7 +351,7 @@ public class FunctionUnitAccessComponent {
     }
     
     /**
-     * 获取用户的业务角色ID列表
+     * Get the user's business role ID list
      */
     public Set<String> getUserBusinessRoleIds(String userId) {
         log.info("Getting business roles for user: {}", userId);
@@ -395,7 +396,7 @@ public class FunctionUnitAccessComponent {
     }
     
     /**
-     * 获取功能单元允许访问的角色ID列表
+     * Get the list of role IDs allowed to access a function unit
      */
     public Set<String> getFunctionUnitAllowedRoles(String functionUnitId) {
         log.info("Getting allowed roles for function unit: {}", functionUnitId);
@@ -421,7 +422,7 @@ public class FunctionUnitAccessComponent {
             if (response.getBody() != null) {
                 log.info("Got {} access records for function unit {}", response.getBody().size(), functionUnitId);
                 for (Map<String, Object> access : response.getBody()) {
-                    // 检查targetType是否为ROLE
+                    // Check if targetType is ROLE
                     String targetType = (String) access.get("targetType");
                     if ("ROLE".equals(targetType)) {
                         String roleId = (String) access.get("targetId");
@@ -446,28 +447,28 @@ public class FunctionUnitAccessComponent {
     }
     
     /**
-     * 清除用户角色缓存
+     * Clear user role cache
      */
     public void clearUserRolesCache(String userId) {
         userRolesCache.remove(userId);
     }
     
     /**
-     * 清除功能单元访问缓存
+     * Clear function unit access cache
      */
     public void clearFunctionUnitAccessCache(String functionUnitId) {
         functionUnitAccessCache.remove(functionUnitId);
     }
     
     /**
-     * 清除 process key 缓存
+     * Clear process key cache
      */
     public void clearProcessKeyCache(String processKey) {
         processKeyCache.remove(processKey);
     }
     
     /**
-     * 清除所有缓存
+     * Clear all caches
      */
     public void clearAllCache() {
         userRolesCache.clear();
@@ -476,14 +477,14 @@ public class FunctionUnitAccessComponent {
     }
     
     /**
-     * 获取 process key 缓存大小（用于测试）
+     * Get process key cache size (for testing)
      */
     public int getProcessKeyCacheSize() {
         return processKeyCache.size();
     }
     
     /**
-     * 检查 process key 是否在缓存中（用于测试）
+     * Check if a process key is in the cache (for testing)
      */
     public boolean isProcessKeyCached(String processKey) {
         CachedData<String> cached = processKeyCache.get(processKey);
@@ -491,7 +492,8 @@ public class FunctionUnitAccessComponent {
     }
     
     /**
-     * 与 {@link #resolveFunctionUnitId} 一致：UUID 形参走「按 id 校验」路径，不使用 processKey 缓存键。
+     * Consistent with {@link #resolveFunctionUnitId}: UUID-shaped parameters go through the "verify by ID" path
+     * and do not use the processKey cache key.
      */
     private boolean mayResolveViaProcessKeyCache(String functionUnitIdOrCode) {
         if (functionUnitIdOrCode == null || functionUnitIdOrCode.isBlank()) {
@@ -510,7 +512,8 @@ public class FunctionUnitAccessComponent {
     }
     
     /**
-     * 解析 admin-center 返回的 enabled 字段（兼容 Boolean / Number / String），异常类型视为 null（即未禁用）。
+     * Parse the enabled field returned by admin-center (compatible with Boolean / Number / String),
+     * unrecognized types are treated as null (i.e., not disabled).
      */
     private static Boolean parseEnabledFlag(Object raw) {
         if (raw == null) {

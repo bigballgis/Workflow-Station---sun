@@ -48,7 +48,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 /**
- * 功能单元组件实现
+ * Function unit component implementation.
  */
 @Component
 @Slf4j
@@ -113,16 +113,16 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     }
     
     /**
-     * 获取当前操作者
-     * 优先从 Spring Security Context 获取，如果无法获取则返回 "system"
+     * Returns the current operator.
+     * Prefer Spring Security Context; return "system" when unavailable.
      * 
-     * 返回 "system" 的情况：
-     * - 没有认证信息（未登录）
-     * - 匿名用户
-     * - 系统后台任务
-     * - 获取过程中发生异常
+     * Cases that yield "system":
+     * - No authentication (not logged in)
+     * - Anonymous user
+     * - System background job
+     * - Exception while resolving operator
      * 
-     * @return 当前操作者用户名，如果无法获取则返回 "system"
+     * @return current operator username, or "system" when unavailable
      */
     private String getCurrentOperator() {
         try {
@@ -143,7 +143,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
                     "Please use a different name");
         }
         
-        // 生成唯一编码
+        // Generate unique code
         String code = generateUniqueCode(request.getName());
         
         FunctionUnit functionUnit = FunctionUnit.builder()
@@ -173,10 +173,10 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     }
     
     /**
-     * 生成唯一的功能单元编码
-     * 格式：{functionUnitName}-{yyyyMMdd}-{random6chars}
+     * Generate a unique function unit code
+     * Format: {functionUnitName}-{yyyyMMdd}-{random6chars}
      *
-     * 注意：prefix 会做安全清洗，仅保留 [a-z0-9-]，且避免为空或以数字开头导致的 BPMN 兼容性问题。
+     * Note: prefix is sanitized to [a-z0-9-] only; empty or digit-leading prefixes are avoided for BPMN compatibility.
      */
     private String generateUniqueCode(String functionUnitName) {
         String prefix = normalizeCodePrefix(functionUnitName);
@@ -194,17 +194,17 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
                 return code;
             }
         }
-        // 极端情况下使用时间戳
+        // Use timestamp as last resort
         return prefix + "-" + datePart + "-" + (System.currentTimeMillis() % 1000000);
     }
 
     /**
-     * 将 FunctionUnit name 归一化为可用作 code/processId 的前缀。
+     * Normalize FunctionUnit name into a prefix usable as code/processId.
      *
-     * Flowable/BPMN 实际约束（按 XML Name / xsd:ID 的安全子集）：
-     * - 首字符必须是 [a-z_]（避免数字开头）
-     * - 后续字符仅允许 [a-z0-9_.-]
-     * - 结果用于 `<bpmn:process id="...">`，同时写入 dw_function_units.code（length=50），因此会截断以保证总长度不超 50。
+     * Flowable/BPMN constraints (XML Name / xsd:ID safe subset):
+     * - First character must be [a-z_] (no leading digit)
+     * - Subsequent characters only [a-z0-9_.-]
+     * - Used for `<bpmn:process id="...">` and dw_function_units.code (length=50); truncated so total length stays within 50.
      */
     private String normalizeCodePrefix(String name) {
         // Reserve space for "-yyyyMMdd-random6" => 1 + 8 + 1 + 6 = 16 chars
@@ -378,14 +378,14 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
             return cb.and(predicates.toArray(new Predicate[0]));
         };
         
-        // 使用 Specification 查询，但需要手动处理关联加载
-        // 由于 Specification 不支持 EntityGraph，我们在 toResponse 中安全处理懒加载
+        // Query via Specification; load associations manually
+        // Specification has no EntityGraph; toResponse handles lazy loading safely
         Page<FunctionUnit> page = functionUnitRepository.findAll(spec, pageable);
         
-        // 在事务内触发懒加载，确保所有关联数据都被加载
+        // Trigger lazy loading in transaction so associations are initialized
         page.getContent().forEach(entity -> {
             try {
-                // 触发懒加载
+                // Trigger lazy loading
                 if (entity.getTableDefinitions() != null) {
                     entity.getTableDefinitions().size();
                 }
@@ -416,7 +416,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         functionUnitWorkspaceAccessService.assertCanAccess(id, WorkspaceAccessAction.MODIFY);
         FunctionUnit functionUnit = getById(id);
         
-        // 验证功能单元完整性
+        // Validate function unit completeness
         ValidationResult validationResult = validate(id);
         if (!validationResult.isValid()) {
             throw new DeveloperBusinessException("BIZ_INVALID_FUNCTION_UNIT", 
@@ -424,16 +424,16 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
                     "Please fix validation errors before retrying");
         }
         
-        // 计算新版本号
+        // Compute new version number
         String newVersion = calculateNextVersion(functionUnit.getCurrentVersion());
         
-        // 检查版本号是否已存在，避免唯一约束冲突
+        // Check version exists to avoid unique constraint conflict
         boolean versionAlreadyExists = versionRepository.findByFunctionUnitIdAndVersionNumber(id, newVersion).isPresent();
         if (versionAlreadyExists) {
-            // 版本快照已存在但 currentVersion 尚未更新，说明上次 deploy 中途失败，允许继续完成状态更新
+            // Version snapshot exists but currentVersion not updated (failed deploy); allow completing status update
             log.warn("Version snapshot {} already exists but function unit status not updated, continuing publish flow, functionUnitId={}", newVersion, id);
         } else {
-            // 创建版本快照
+            // Create version snapshot
             try {
                 byte[] snapshotData = createSnapshot(functionUnit);
                 Version version = Version.builder()
@@ -452,7 +452,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
             }
         }
         
-        // 更新功能单元状态
+        // Update function unit status
         functionUnit.setStatus(FunctionUnitStatus.PUBLISHED);
         functionUnit.setCurrentVersion(newVersion);
         
@@ -476,7 +476,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         List<FormDefinition> sourceForms = formDefinitionRepository.findByFunctionUnitIdWithBindings(id);
         List<TableRelation> sourceRelations = tableRelationRepository.findByFunctionUnitId(id);
         
-        // 创建新的功能单元（生成新的唯一编码）
+        // Create new function unit with new unique code
         FunctionUnit cloned = FunctionUnit.builder()
                 .name(newName)
                 .code(generateUniqueCode(newName))
@@ -486,18 +486,18 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
                 .build();
         cloned = functionUnitRepository.save(cloned);
         
-        // 克隆顺序：先克隆 ProcessDefinition 引用的所有依赖（表/表单/动作），
-        // 收集旧 ID → 新 ID 映射，最后再写入流程定义并重写 BPMN 中的 ID 引用。
-        // 否则 BPMN 仍会引用源功能单元的 subTableId / formId / actionIds，导致部署校验失败。
+        // Clone order: clone all ProcessDefinition dependencies (tables/forms/actions) first,
+        // collect old→new ID map, then write process definition and rewrite BPMN ID references.
+        // Otherwise BPMN still references source subTableId/formId/actionIds and deploy validation fails.
         
-        // 克隆表定义
+        // Clone table definitions
         Map<Long, TableDefinition> tableMapping = new HashMap<>();
         for (TableDefinition sourceTable : sourceTables) {
             TableDefinition clonedTable = cloneTable(sourceTable, cloned);
             tableMapping.put(sourceTable.getId(), clonedTable);
         }
         
-        // 克隆外键关系（需要在所有表克隆完成后处理，因为外键可能跨表引用）
+        // Clone FK relations after all tables (FKs may cross tables)
         Map<Long, Map<String, FieldDefinition>> clonedFieldLookup = new HashMap<>();
         for (Map.Entry<Long, TableDefinition> entry : tableMapping.entrySet()) {
             Map<String, FieldDefinition> fieldMap = new HashMap<>();
@@ -537,34 +537,34 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
 
         cloneTableRelations(sourceRelations, cloned, tableMapping);
         
-        // 克隆表单定义（包含 TableBindings），收集 form id 映射
+        // Clone form definitions (with TableBindings); collect form id map
         Map<Long, Long> formIdMapping = new HashMap<>();
         for (FormDefinition sourceForm : sourceForms) {
             FormDefinition clonedForm = cloneForm(sourceForm, cloned, tableMapping);
             formIdMapping.put(sourceForm.getId(), clonedForm.getId());
         }
         
-        // 克隆动作定义，收集 action id 映射
+        // Clone action definitions; collect action id map
         Map<Long, Long> actionIdMapping = new HashMap<>();
         for (ActionDefinition sourceAction : source.getActionDefinitions()) {
             ActionDefinition clonedAction = cloneAction(sourceAction, cloned);
             actionIdMapping.put(sourceAction.getId(), clonedAction.getId());
         }
         
-        // 克隆决策定义
+        // Clone decision definitions
         for (DecisionDefinition sourceDecision : source.getDecisionDefinitions()) {
             cloneDecision(sourceDecision, cloned);
         }
         
-        // 克隆流程定义（最后执行，并重写 BPMN 中的 ID 引用）
+        // Clone process definition last; rewrite BPMN ID references
         if (source.getProcessDefinition() != null) {
-            // 旧 ID → 新 ID 映射（兜底用）
+            // Old→new ID map (fallback)
             Map<Long, Long> tableIdMapping = new HashMap<>();
             for (Map.Entry<Long, TableDefinition> entry : tableMapping.entrySet()) {
                 tableIdMapping.put(entry.getKey(), entry.getValue().getId());
             }
-            // 克隆侧 名字 → 新 ID 映射（优先用，可纠正源 BPMN 中 ID 与名字不一致的脏数据）。
-            // 名字直接复用，因为 cloneTable / cloneForm 会保留源侧名字。
+            // Clone-side name→new ID map (preferred; fixes dirty BPMN where id/name diverge).
+            // Names reused as-is; cloneTable/cloneForm keep source names.
             Map<String, Long> clonedTableNameToId = new HashMap<>();
             for (TableDefinition clonedTable : tableMapping.values()) {
                 clonedTableNameToId.put(clonedTable.getTableName(), clonedTable.getId());
@@ -602,47 +602,47 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         FunctionUnit functionUnit = getById(id);
         ValidationResult result = new ValidationResult();
         
-        // 检查是否有流程定义
+        // Check process definition exists
         if (functionUnit.getProcessDefinition() == null) {
             result.addWarning("MISSING_PROCESS", "Function unit has no process definition", null);
         }
         
-        // 检查是否有主表
+        // Check primary table exists
         boolean hasMainTable = functionUnit.getTableDefinitions().stream()
                 .anyMatch(t -> t.getTableType() == com.developer.enums.TableType.MAIN);
         if (!hasMainTable) {
             result.addWarning("MISSING_MAIN_TABLE", "Function unit has no main table", null);
         }
         
-        // 检查是否有流程表单
+        // Check process form exists
         boolean hasProcessForm = functionUnit.getFormDefinitions().stream()
                 .anyMatch(f -> f.getFormType() == com.developer.enums.FormType.PROCESS);
         if (!hasProcessForm) {
             result.addWarning("MISSING_PROCESS_FORM", "Function unit has no process form", null);
         }
         
-        // BPMN-DMN 交叉引用验证
+        // BPMN-DMN cross-reference validation
         validateBpmnDmnCrossReferences(functionUnit, result);
         
-        // DECISION_TABLE 动作配置验证
+        // DECISION_TABLE action config validation
         validateDecisionTableActions(functionUnit, result);
         
         return result;
     }
     
     /**
-     * BPMN-DMN 交叉引用验证
-     * 检查 BPMN 流程中引用的决策键是否存在于同一功能单元的决策定义中
+     * BPMN-DMN cross-reference validation
+     * Ensure BPMN decision keys exist in same function unit decision definitions
      */
     private void validateBpmnDmnCrossReferences(FunctionUnit functionUnit, ValidationResult result) {
         List<DecisionDefinition> decisions = functionUnit.getDecisionDefinitions();
         
-        // 无 DecisionDefinition 时不产生决策相关错误
+        // No decision errors when there are no DecisionDefinitions
         if (decisions == null || decisions.isEmpty()) {
             return;
         }
         
-        // 如果没有流程定义，无法进行交叉引用验证
+        // Cannot cross-validate without process definition
         if (functionUnit.getProcessDefinition() == null) {
             return;
         }
@@ -652,19 +652,19 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
             return;
         }
         
-        // 解码 BPMN XML（可能是 Base64 编码）
+        // Decode BPMN XML (may be Base64)
         String decodedBpmnXml = XmlEncodingUtil.smartDecode(bpmnXml);
         
-        // 从 BPMN XML 中提取所有 DMN 服务任务引用的决策键
+        // Extract decision keys from DMN service tasks in BPMN XML
         Set<String> referencedKeys = extractDmnReferenceKeys(decodedBpmnXml, functionUnit.getId());
         
-        // 构建已有决策定义的 key 集合
+        // Build set of existing decision definition keys
         Set<String> definedKeys = new HashSet<>();
         for (DecisionDefinition decision : decisions) {
             definedKeys.add(decision.getDecisionKey());
         }
         
-        // 检查 BPMN 引用的决策键是否存在于 DecisionDefinition 列表中
+        // Check BPMN decision keys exist in DecisionDefinition list
         for (String referencedKey : referencedKeys) {
             if (!definedKeys.contains(referencedKey)) {
                 result.addError("INVALID_DECISION_REFERENCE",
@@ -684,7 +684,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
             }
         }
         
-        // 检查是否有未被 BPMN 引用的 DecisionDefinition
+        // Check for DecisionDefinitions not referenced by BPMN
         for (String definedKey : definedKeys) {
             if (!referencedKeys.contains(definedKey)) {
                 result.addWarning("UNREFERENCED_DECISION",
@@ -695,9 +695,9 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     }
     
     /**
-     * DECISION_TABLE 动作配置验证
-     * 当 ActionType 为 DECISION_TABLE 时，校验 config_json 包含 decisionKey、inputMappings、outputMappings，
-     * 并校验 decisionKey 引用同一功能单元内存在的 DecisionDefinition。
+     * DECISION_TABLE action config validation
+     * When ActionType is DECISION_TABLE, validate config_json has decisionKey, inputMappings, outputMappings,
+     * and decisionKey references a DecisionDefinition in the same function unit.
      */
     private void validateDecisionTableActions(FunctionUnit functionUnit, ValidationResult result) {
         List<ActionDefinition> actions = functionUnit.getActionDefinitions();
@@ -705,7 +705,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
             return;
         }
         
-        // 构建已有决策定义的 key 集合
+        // Build set of existing decision definition keys
         Set<String> definedDecisionKeys = new HashSet<>();
         List<DecisionDefinition> decisions = functionUnit.getDecisionDefinitions();
         if (decisions != null) {
@@ -729,7 +729,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
                 continue;
             }
             
-            // 校验必填字段: decisionKey
+            // Validate required field: decisionKey
             Object decisionKeyObj = config.get("decisionKey");
             boolean hasDecisionKey = decisionKeyObj instanceof String dk && !dk.isBlank();
             if (!hasDecisionKey) {
@@ -738,21 +738,21 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
                         actionName);
             }
             
-            // 校验必填字段: inputMappings
+            // Validate required field: inputMappings
             if (!config.containsKey("inputMappings")) {
                 result.addError("MISSING_INPUT_MAPPINGS",
                         "DECISION_TABLE action '" + actionName + "' config_json is missing required field 'inputMappings'",
                         actionName);
             }
             
-            // 校验必填字段: outputMappings
+            // Validate required field: outputMappings
             if (!config.containsKey("outputMappings")) {
                 result.addError("MISSING_OUTPUT_MAPPINGS",
                         "DECISION_TABLE action '" + actionName + "' config_json is missing required field 'outputMappings'",
                         actionName);
             }
             
-            // 校验 decisionKey 引用同一功能单元内存在的 DecisionDefinition
+            // Validate decisionKey references DecisionDefinition in same function unit
             if (hasDecisionKey) {
                 String decisionKey = (String) decisionKeyObj;
                 if (!definedDecisionKeys.contains(decisionKey)) {
@@ -776,30 +776,30 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     }
     
     /**
-     * 从 BPMN XML 中提取所有 DMN 服务任务引用的 decisionTableReferenceKey
-     * 支持两种格式:
-     * 1. 属性格式: flowable:decisionTableReferenceKey="key"
-     * 2. 扩展元素格式: flowable:field name="decisionTableReferenceKey" > flowable:string
+     * Extract decisionTableReferenceKey from DMN service tasks in BPMN XML
+     * Supports two formats:
+     * 1. Attribute: flowable:decisionTableReferenceKey="key"
+     * 2. Extension element: flowable:field name="decisionTableReferenceKey" > flowable:string
      */
     private Set<String> extractDmnReferenceKeys(String bpmnXml, Long functionUnitId) {
         Set<String> keys = new HashSet<>();
         try {
             Document document = parseXmlSecurely(bpmnXml);
             
-            // 查找所有 serviceTask 元素
+            // Find all serviceTask elements
             NodeList serviceTasks = document.getElementsByTagNameNS("*", "serviceTask");
             for (int i = 0; i < serviceTasks.getLength(); i++) {
                 Element serviceTask = (Element) serviceTasks.item(i);
                 
-                // 检查是否为 DMN 类型的服务任务 (flowable:type="dmn")
+                // Check DMN service task (flowable:type="dmn")
                 if (!isDmnServiceTask(serviceTask)) {
                     continue;
                 }
                 
-                // 尝试从属性提取 decisionTableReferenceKey
+                // Try attribute for decisionTableReferenceKey
                 String key = extractKeyFromAttribute(serviceTask);
                 if (key == null || key.isBlank()) {
-                    // 尝试从扩展元素提取
+                    // Try extension element extraction
                     key = extractKeyFromExtensionElements(serviceTask);
                 }
                 
@@ -815,10 +815,10 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     }
     
     /**
-     * 检查 serviceTask 元素是否为 DMN 类型
+     * Check whether serviceTask is DMN type
      */
     private boolean isDmnServiceTask(Element serviceTask) {
-        // 检查所有可能的命名空间前缀下的 type 属性
+        // Check type attribute under all namespace prefixes
         var attributes = serviceTask.getAttributes();
         for (int i = 0; i < attributes.getLength(); i++) {
             var attr = attributes.item(i);
@@ -830,7 +830,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     }
     
     /**
-     * 从 serviceTask 属性中提取 decisionTableReferenceKey
+     * Extract decisionTableReferenceKey from serviceTask attributes
      */
     private String extractKeyFromAttribute(Element serviceTask) {
         var attributes = serviceTask.getAttributes();
@@ -844,8 +844,8 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     }
     
     /**
-     * 从扩展元素中提取 decisionTableReferenceKey
-     * 格式: <flowable:field name="decisionTableReferenceKey"><flowable:string>key</flowable:string></flowable:field>
+     * Extract decisionTableReferenceKey from extension elements
+     * Format: {@code <flowable:field name="decisionTableReferenceKey"><flowable:string>key</flowable:string></flowable:field>}
      */
     private String extractKeyFromExtensionElements(Element serviceTask) {
         NodeList extensionElements = serviceTask.getElementsByTagNameNS("*", "extensionElements");
@@ -855,12 +855,12 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
             for (int j = 0; j < fields.getLength(); j++) {
                 Element field = (Element) fields.item(j);
                 if ("decisionTableReferenceKey".equals(field.getAttribute("name"))) {
-                    // 尝试从 flowable:string 子元素获取值
+                    // Read value from flowable:string child
                     NodeList stringElements = field.getElementsByTagNameNS("*", "string");
                     if (stringElements.getLength() > 0) {
                         return stringElements.item(0).getTextContent().trim();
                     }
-                    // 尝试从 flowable:expression 子元素获取值
+                    // Read value from flowable:expression child
                     NodeList exprElements = field.getElementsByTagNameNS("*", "expression");
                     if (exprElements.getLength() > 0) {
                         return exprElements.item(0).getTextContent().trim();
@@ -872,7 +872,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     }
     
     /**
-     * XXE 安全的 XML 解析
+     * XXE-safe XML parsing
      */
     private Document parseXmlSecurely(String xml) throws Exception {
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
@@ -942,7 +942,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     }
 
     /**
-     * 防越权：确认版本归属于当前 functionUnit，避免 A 用户通过其他 functionUnitId 反查 B 的版本。
+     * Authorization: ensure version belongs to functionUnit so users cannot read another unit's versions.
      */
     private void assertVersionBelongsToFunctionUnit(Long functionUnitId, Long versionId) {
         Version version = versionComponent.getById(versionId);
@@ -973,7 +973,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
             log.warn("Failed to load icon for function unit {}: {}", entity.getId(), e.getMessage());
         }
         
-        // 安全地获取集合大小，避免 LazyInitializationException
+        // Safely get collection size to avoid LazyInitializationException
         int tableCount = 0;
         int formCount = 0;
         int actionCount = 0;
@@ -1189,7 +1189,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
                 .build();
         cloned = tableDefinitionRepository.save(cloned);
         
-        // 克隆字段
+        // Clone fields
         for (FieldDefinition sourceField : source.getFieldDefinitions()) {
             FieldDefinition clonedField = FieldDefinition.builder()
                     .tableDefinition(cloned)

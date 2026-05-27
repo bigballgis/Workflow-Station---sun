@@ -12,82 +12,83 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * 表单表绑定仓库
+ * Form-Table Binding Repository
  */
 @Repository
 public interface FormTableBindingRepository extends JpaRepository<FormTableBinding, Long> {
     
     /**
-     * 按绑定 ID 查询并 JOIN FETCH table + form。
-     * 组装 {@link com.developer.dto.FormTableBindingResponse} 时会调用 {@code getTable*()} 与 {@code getFormId()}，
-     * 二者均可能触及 LAZY 关联；事务外或 OSIV 关闭时必须事先初始化，否则 LazyInitializationException → 500。
+     * Query by binding ID with JOIN FETCH table + form.
+     * Assembling {@link com.developer.dto.FormTableBindingResponse} calls {@code getTable*()} and {@code getFormId()},
+     * both of which may touch LAZY associations; outside a transaction or with OSIV off, they must be initialized
+     * beforehand, otherwise LazyInitializationException → 500.
      */
     @Query("SELECT b FROM FormTableBinding b LEFT JOIN FETCH b.table LEFT JOIN FETCH b.form WHERE b.id = :id")
     Optional<FormTableBinding> findByIdWithTable(@Param("id") Long id);
     
     /**
-     * 按表单ID查询所有绑定，按排序顺序排列
+     * Query all bindings by form ID, ordered by sort order.
      */
     @Query("SELECT b FROM FormTableBinding b WHERE b.form.id = :formId ORDER BY b.sortOrder")
     List<FormTableBinding> findByFormIdOrderBySortOrder(@Param("formId") Long formId);
     
     /**
-     * 按表单 ID 查询所有绑定，同时加载 table 与 form（与 DTO 组装所需字段一致）。
+     * Query all bindings by form ID, loading table and form (consistent with DTO assembly fields).
      */
     @Query("SELECT b FROM FormTableBinding b LEFT JOIN FETCH b.table LEFT JOIN FETCH b.form WHERE b.form.id = :formId ORDER BY b.sortOrder")
     List<FormTableBinding> findByFormIdWithTable(@Param("formId") Long formId);
     
     /**
-     * 按表单ID和绑定类型查询
+     * Query by form ID and binding type.
      */
     @Query("SELECT b FROM FormTableBinding b WHERE b.form.id = :formId AND b.bindingType = :bindingType")
     Optional<FormTableBinding> findByFormIdAndBindingType(@Param("formId") Long formId, @Param("bindingType") BindingType bindingType);
     
     /**
-     * 检查表单是否已绑定指定表
+     * Check if a form has already bound the specified table.
      */
     @Query("SELECT COUNT(b) > 0 FROM FormTableBinding b WHERE b.form.id = :formId AND b.table.id = :tableId")
     boolean existsByFormIdAndTableId(@Param("formId") Long formId, @Param("tableId") Long tableId);
     
     /**
-     * 检查表是否被任何表单绑定
+     * Check if a table is bound by any form.
      */
     @Query("SELECT COUNT(b) > 0 FROM FormTableBinding b WHERE b.table.id = :tableId")
     boolean existsByTableId(@Param("tableId") Long tableId);
     
     /**
-     * 检查表单是否已有主表绑定
+     * Check if a form already has a primary binding.
      */
     @Query("SELECT COUNT(b) > 0 FROM FormTableBinding b WHERE b.form.id = :formId AND b.bindingType = :bindingType")
     boolean existsByFormIdAndBindingType(@Param("formId") Long formId, @Param("bindingType") BindingType bindingType);
     
     /**
-     * 删除表单的所有绑定
+     * Delete all bindings of a form.
      */
     @Modifying
     @Query("DELETE FROM FormTableBinding b WHERE b.form.id = :formId")
     void deleteByFormId(@Param("formId") Long formId);
     
     /**
-     * 统计表单的绑定数量
+     * Count bindings for a form.
      */
     @Query("SELECT COUNT(b) FROM FormTableBinding b WHERE b.form.id = :formId")
     long countByFormId(@Param("formId") Long formId);
     
     /**
-     * 按表ID查询所有绑定（用于检查表是否被引用）
+     * Query all bindings by table ID (for checking if a table is referenced).
      */
     @Query("SELECT b FROM FormTableBinding b WHERE b.table.id = :tableId")
     List<FormTableBinding> findByTableId(@Param("tableId") Long tableId);
 
     /**
-     * 检查表单是否已绑定指定 Relation Table
+     * Check if a form has already bound the specified Relation Table.
      */
     @Query("SELECT COUNT(b) > 0 FROM FormTableBinding b WHERE b.form.id = :formId AND b.relationTableId = :relationTableId")
     boolean existsByFormIdAndRelationTableId(@Param("formId") Long formId, @Param("relationTableId") Long relationTableId);
 
     /**
-     * 按表单ID和绑定类型查询所有绑定
+     * Query all bindings by form ID and binding type.
      */
     @Query("SELECT b FROM FormTableBinding b WHERE b.form.id = :formId AND b.bindingType = :type ORDER BY b.sortOrder")
     List<FormTableBinding> findByFormIdAndBindingTypeList(@Param("formId") Long formId, @Param("type") BindingType type);

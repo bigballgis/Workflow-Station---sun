@@ -6,8 +6,8 @@ import org.hibernate.annotations.Type;
 import java.time.LocalDateTime;
 
 /**
- * 审计日志实体类
- * 记录所有流程操作的审计轨迹，支持合规检查和业务分析
+ * Audit log entity
+ * Records audit trail of all process operations, supports compliance checking and business analysis
  */
 @Entity
 @Table(name = "wf_audit_logs", indexes = {
@@ -28,129 +28,129 @@ public class AuditLog {
     private String id;
     
     /**
-     * 操作用户ID
+     * Operation user ID
      */
     @Column(name = "user_id", length = 64, nullable = false)
     private String userId;
     
     /**
-     * 操作类型：CREATE, UPDATE, DELETE, EXECUTE, COMPLETE, DELEGATE, CLAIM, SUSPEND, RESUME, TERMINATE
+     * Operation type: CREATE, UPDATE, DELETE, EXECUTE, COMPLETE, DELEGATE, CLAIM, SUSPEND, RESUME, TERMINATE
      */
     @Column(name = "operation_type", length = 50, nullable = false)
     private String operationType;
     
     /**
-     * 资源类型：PROCESS_DEFINITION, PROCESS_INSTANCE, TASK, VARIABLE, FORM, USER, ROLE
+     * Resource type: PROCESS_DEFINITION, PROCESS_INSTANCE, TASK, VARIABLE, FORM, USER, ROLE
      */
     @Column(name = "resource_type", length = 50, nullable = false)
     private String resourceType;
     
     /**
-     * 资源ID
+     * Resource ID
      */
     @Column(name = "resource_id", length = 64, nullable = false)
     private String resourceId;
     
     /**
-     * 资源名称
+     * Resource name
      */
     @Column(name = "resource_name", length = 255)
     private String resourceName;
     
     /**
-     * 操作描述
+     * Operation description
      */
     @Column(name = "operation_description", columnDefinition = "TEXT")
     private String operationDescription;
     
     /**
-     * 操作前数据（JSON格式，敏感数据已脱敏）
+     * Pre-operation data (JSON format, sensitive data masked)
      */
     @Type(JsonbType.class)
     @Column(name = "before_data", columnDefinition = "JSONB")
     private String beforeData;
     
     /**
-     * 操作后数据（JSON格式，敏感数据已脱敏）
+     * Post-operation data (JSON format, sensitive data masked)
      */
     @Type(JsonbType.class)
     @Column(name = "after_data", columnDefinition = "JSONB")
     private String afterData;
     
     /**
-     * 操作结果：SUCCESS, FAILURE, PARTIAL
+     * Operation result: SUCCESS, FAILURE, PARTIAL
      */
     @Column(name = "operation_result", length = 20, nullable = false)
     private String operationResult;
     
     /**
-     * 错误信息（操作失败时记录）
+     * Error message (recorded when operation fails)
      */
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
     
     /**
-     * 操作时间戳
+     * Operation timestamp
      */
     @Column(name = "timestamp", nullable = false)
     private LocalDateTime timestamp;
     
     /**
-     * 客户端IP地址
+     * Client IP address
      */
     @Column(name = "ip_address", length = 45)
     private String ipAddress;
     
     /**
-     * 用户代理信息
+     * User agent info
      */
     @Column(name = "user_agent", length = 500)
     private String userAgent;
     
     /**
-     * 会话ID
+     * Session ID
      */
     @Column(name = "session_id", length = 128)
     private String sessionId;
     
     /**
-     * 请求ID（用于关联同一请求的多个操作）
+     * Request ID (used to correlate multiple operations of the same request)
      */
     @Column(name = "request_id", length = 64)
     private String requestId;
     
     /**
-     * 操作持续时间（毫秒）
+     * Operation duration (milliseconds)
      */
     @Column(name = "duration_ms")
     private Long durationMs;
     
     /**
-     * 租户ID（多租户支持）
+     * Tenant ID (multi-tenant support)
      */
     @Column(name = "tenant_id", length = 64)
     private String tenantId;
     
     /**
-     * 额外的上下文信息（JSON格式）
+     * Additional context information (JSON format)
      */
     @Type(JsonbType.class)
     @Column(name = "context_data", columnDefinition = "JSONB")
     private String contextData;
     
     /**
-     * 风险等级：LOW, MEDIUM, HIGH, CRITICAL
+     * Risk level: LOW, MEDIUM, HIGH, CRITICAL
      */
     @Column(name = "risk_level", length = 20)
     private String riskLevel;
     
     /**
-     * 是否为敏感操作
+     * Whether sensitive operation
      */
     @Column(name = "is_sensitive", nullable = false)
     private Boolean isSensitive = false;
     
-    // 构造函数
+    // Constructor
     public AuditLog() {}
     
     public AuditLog(String id, String userId, String operationType, String resourceType, 

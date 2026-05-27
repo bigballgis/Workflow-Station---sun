@@ -20,6 +20,7 @@ import com.admin.exception.AdminBusinessException;
 import com.admin.service.FunctionUnitAccessService;
 import com.admin.service.UserReferenceResolver;
 import com.platform.common.dto.ApiResponse;
+import com.platform.common.i18n.I18nService;
 import com.platform.common.resource.AbstractBaseController;
 import com.platform.security.util.SecurityContextUtils;
 import io.swagger.v3.oas.annotations.Operation;
@@ -39,7 +40,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * 功能单元管理 RESTful API
+ * REST API for Function Unit management.
  *
  * <p>Extends {@link AbstractBaseController} for unified {@link ApiResponse} wrapping
  * and HTTP status code mapping. Overrides {@link #handleError(Exception)} to also
@@ -51,10 +52,10 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/function-units")
 @RequiredArgsConstructor
-@Tag(name = "功能单元管理", description = "功能包导入、部署管理和版本查询接口")
+@Tag(name = "Function unit management", description = "Function package import, deployment, and version APIs")
 public class FunctionUnitController extends AbstractBaseController {
     
-    // DOS 防护: 批量操作 ID 数量限制
+    /** DOS mitigation: maximum number of IDs per batch operation. */
     private static final int MAX_BATCH_IDS = 100;
 
     private final FunctionUnitManagerComponent functionUnitManager;
@@ -62,6 +63,7 @@ public class FunctionUnitController extends AbstractBaseController {
     private final ProcessDeploymentComponent processDeploymentComponent;
     private final FunctionUnitAccessService accessService;
     private final UserReferenceResolver userReferenceResolver;
+    private final I18nService i18nService;
 
     /**
      * Extends base error handling to also map {@link AdminBusinessException}
@@ -77,21 +79,21 @@ public class FunctionUnitController extends AbstractBaseController {
         return super.handleError(e);
     }
     
-    // ==================== 功能包导入 ====================
+    // ==================== Function package import ====================
     
     @PostMapping("/import")
-    @Operation(summary = "导入功能包", description = "导入功能包文件")
+    @Operation(summary = "Import function package", description = "Import a function package file")
     public ResponseEntity<ImportResult> importFunctionPackage(
             @Valid @RequestBody FunctionUnitImportRequest request) {
         String importerId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthorized")));
         log.info("Importing function package: {}", request.getFileName());
         ImportResult result = functionUnitManager.importFunctionPackage(request, importerId);
         return ResponseEntity.status(result.isSuccess() ? HttpStatus.CREATED : HttpStatus.BAD_REQUEST).body(result);
     }
     
     @PostMapping("/validate")
-    @Operation(summary = "验证功能包", description = "验证功能包格式和内容")
+    @Operation(summary = "Validate function package", description = "Validate package format and contents")
     public ResponseEntity<ValidationResult> validatePackage(
             @Valid @RequestBody FunctionUnitImportRequest request) {
         log.info("Validating function package: {}", request.getFileName());
@@ -100,12 +102,12 @@ public class FunctionUnitController extends AbstractBaseController {
     }
 
     
-    // ==================== 功能单元 CRUD ====================
+    // ==================== Function unit CRUD ====================
     
     @GetMapping
-    @Operation(summary = "获取功能单元列表", description = "分页获取功能单元列表")
+    @Operation(summary = "List function units", description = "Paginated list of function units")
     public ResponseEntity<Page<FunctionUnitInfo>> listFunctionUnits(
-            @Parameter(description = "状态筛选") @RequestParam(required = false) FunctionUnitStatus status,
+            @Parameter(description = "Optional status filter") @RequestParam(required = false) FunctionUnitStatus status,
             Pageable pageable) {
         log.info("Listing function units, status: {}", status);
         Page<FunctionUnit> units = status != null 
@@ -116,7 +118,7 @@ public class FunctionUnitController extends AbstractBaseController {
     
     // TODO: [Req 28.2] Refactor to return ApiResponse<Page<FunctionUnitInfo>> instead of Map<String, Object>
     @GetMapping("/deployed")
-    @Operation(summary = "获取已部署的功能单元", description = "获取所有已部署的功能单元列表（供用户门户使用）")
+    @Operation(summary = "List deployed function units", description = "All deployed function units (for user portal)")
     public ResponseEntity<ApiResponse<List<FunctionUnitInfo>>> getDeployedFunctionUnits() {
         log.info("Getting deployed function units");
         return handleRequest(() -> {
@@ -129,7 +131,7 @@ public class FunctionUnitController extends AbstractBaseController {
     
     // TODO: [Req 28.3] Refactor to return ApiResponse<List<FunctionUnitInfo>> instead of Map<String, Object>
     @GetMapping("/deployed/latest")
-    @Operation(summary = "获取每个功能单元的最新已部署版本", description = "每个 code 仅返回版本号最高的一条记录（供用户门户使用）")
+    @Operation(summary = "Latest deployed per code", description = "Highest version per code (for user portal)")
     public ResponseEntity<ApiResponse<List<FunctionUnitInfo>>> getLatestDeployedFunctionUnits() {
         log.info("Getting latest deployed function units (deduplicated by code)");
         return handleRequest(() -> {
@@ -139,7 +141,7 @@ public class FunctionUnitController extends AbstractBaseController {
     }
     
     @GetMapping("/archived")
-    @Operation(summary = "获取已归档的功能单元", description = "分页获取已归档（已删除）的功能单元列表")
+    @Operation(summary = "List archived function units", description = "Paginated archived (soft-deleted) function units")
     public ResponseEntity<Page<FunctionUnitInfo>> listArchivedFunctionUnits(Pageable pageable) {
         log.info("Listing archived function units");
         Page<FunctionUnitInfo> page = functionUnitManager.listArchivedFunctionUnits(pageable)
@@ -162,48 +164,48 @@ public class FunctionUnitController extends AbstractBaseController {
     }
 
     @GetMapping("/{id}")
-    @Operation(summary = "获取功能单元详情", description = "根据ID获取功能单元详细信息")
+    @Operation(summary = "Get function unit by id", description = "Function unit detail by id")
     public ResponseEntity<FunctionUnitInfo> getFunctionUnit(
-            @Parameter(description = "功能单元ID") @PathVariable String id) {
+            @Parameter(description = "Function unit id") @PathVariable String id) {
         log.info("Getting function unit: {}", id);
         FunctionUnit unit = functionUnitManager.getFunctionUnitById(id);
         return ResponseEntity.ok(FunctionUnitInfo.fromEntity(unit));
     }
     
     @GetMapping("/{id}/delete-preview")
-    @Operation(summary = "获取删除预览", description = "获取功能单元删除预览，显示将被删除的关联数据统计")
+    @Operation(summary = "Delete preview", description = "Preview related data counts before delete")
     public ResponseEntity<com.admin.dto.response.DeletePreviewResponse> getDeletePreview(
-            @Parameter(description = "功能单元ID") @PathVariable String id) {
+            @Parameter(description = "Function unit id") @PathVariable String id) {
         log.info("Getting delete preview for function unit: {}", id);
         com.admin.dto.response.DeletePreviewResponse preview = functionUnitManager.getDeletePreview(id);
-        // 补充访问配置数量
+        // Augment with access-config count
         int accessConfigCount = accessService.getAccessConfigs(id).size();
         preview.setAccessConfigCount(accessConfigCount);
         return ResponseEntity.ok(preview);
     }
     
     @DeleteMapping("/{id}")
-    @Operation(summary = "归档功能单元", description = "按 code 归档全部版本，并从用户门户移除该应用")
+    @Operation(summary = "Archive function unit", description = "Archive all versions by code and remove from portal")
     public ResponseEntity<Void> deleteFunctionUnit(
-            @Parameter(description = "功能单元ID") @PathVariable String id) {
+            @Parameter(description = "Function unit id") @PathVariable String id) {
         log.info("Archiving function unit: {}", id);
         functionUnitManager.archiveFunctionUnitByCode(id);
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/{id}/restore")
-    @Operation(summary = "恢复功能单元", description = "将已归档的功能单元恢复为 DRAFT 状态")
+    @Operation(summary = "Restore archived function unit", description = "Restore archived unit to DRAFT")
     public ResponseEntity<ApiResponse<FunctionUnitInfo>> restoreFunctionUnit(
-            @Parameter(description = "功能单元ID") @PathVariable String id) {
+            @Parameter(description = "Function unit id") @PathVariable String id) {
         log.info("Restoring archived function unit: {}", id);
         return handleRequest(() -> FunctionUnitInfo.fromEntity(functionUnitManager.restoreFunctionUnit(id)));
     }
 
     @PostMapping("/{id}/deploy")
-    @Operation(summary = "部署功能单元", description = "一键部署到用户门户（无需选择环境）")
+    @Operation(summary = "Deploy function unit", description = "One-click deploy to user portal")
     public ResponseEntity<ApiResponse<FunctionUnitInfo>> deployFunctionUnit(
-            @Parameter(description = "功能单元ID") @PathVariable String id,
-            @Parameter(description = "部署者ID") @RequestHeader(value = "X-User-Id", defaultValue = "system") String deployerId) {
+            @Parameter(description = "Function unit id") @PathVariable String id,
+            @Parameter(description = "Deployer id header") @RequestHeader(value = "X-User-Id", defaultValue = "system") String deployerId) {
         log.info("Deploying function unit to user portal: {}", id);
         String operator = SecurityContextUtils.getCurrentUsername().orElse(deployerId);
         return handleRequest(() -> {
@@ -214,10 +216,11 @@ public class FunctionUnitController extends AbstractBaseController {
             }
             if (!functionUnit.isDeployable()) {
                 if (functionUnit.getStatus() == FunctionUnitStatus.DRAFT) {
-                    throw new AdminBusinessException("VALIDATION_REQUIRED", "请先验证功能单元后再部署");
+                    throw new AdminBusinessException("VALIDATION_REQUIRED",
+                            i18nService.getMessage("admin.fu.deploy_validation_required"));
                 }
                 throw new AdminBusinessException("INVALID_STATUS",
-                        "功能单元状态不允许部署: " + functionUnit.getStatus());
+                        i18nService.getMessage("admin.fu.deploy_status_invalid", functionUnit.getStatus()));
             }
 
             ProcessDeploymentComponent.ProcessDeploymentResult processResult =
@@ -245,20 +248,20 @@ public class FunctionUnitController extends AbstractBaseController {
     }
 
     @PostMapping("/{id}/purge-runtime-data")
-    @Operation(summary = "清理门户运行数据", description = "按该目录行 ID 删除门户流程实例及变更/流程历史，并驱动引擎 purge（版本回滚等）")
+    @Operation(summary = "Purge portal runtime data", description = "Remove portal instances and histories by catalog row id")
     public ResponseEntity<ApiResponse<Map<String, Object>>> purgeRuntimeData(
-            @Parameter(description = "功能单元目录 ID") @PathVariable String id) {
+            @Parameter(description = "Function unit catalog row id") @PathVariable String id) {
         log.info("Purging portal runtime data for catalog id: {}", id);
         return handleRequest(() -> functionUnitManager.purgeRuntimeDataForCatalog(id));
     }
     
     @PutMapping("/{id}/enabled")
-    @Operation(summary = "切换启用状态", description = "切换功能单元的启用/禁用状态")
+    @Operation(summary = "Set enabled flag", description = "Enable or disable a function unit")
     public ResponseEntity<ApiResponse<FunctionUnitInfo>> setEnabled(
-            @Parameter(description = "功能单元ID") @PathVariable String id,
+            @Parameter(description = "Function unit id") @PathVariable String id,
             @RequestBody @Valid com.admin.dto.request.SetEnabledRequest request) {
         String operatorId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthorized")));
         log.info("Setting enabled status for function unit {}: {}", id, request.getEnabled());
         return handleRequest(() -> {
             String op = operatorId != null && !operatorId.isBlank() ? operatorId : "system";
@@ -267,20 +270,20 @@ public class FunctionUnitController extends AbstractBaseController {
         });
     }
 
-    // ==================== 批量操作 (Req 20) ====================
+    // ==================== Batch operations (Req 20) ====================
 
     @PutMapping("/batch/enabled")
-    @Operation(summary = "批量启用/禁用", description = "批量切换功能单元的启用/禁用状态")
+    @Operation(summary = "Batch enable/disable", description = "Bulk toggle enabled flag")
     public ResponseEntity<ApiResponse<List<FunctionUnitInfo>>> batchSetEnabled(
             @RequestBody @Valid com.admin.dto.request.BatchEnabledRequest request) {
         String operatorId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthorized")));
         log.info("Batch setting enabled={} for {} function units", request.getEnabled(), request.getIds().size());
 
-        // 防止 DOS 攻击: 限制批量操作 ID 数量
+        // DOS mitigation: enforce batch ID cap
         if (request.getIds().size() > MAX_BATCH_IDS) {
             throw new AdminBusinessException("ID_COUNT_EXCEEDED",
-                    "批量操作 ID 数量超过限制: " + request.getIds().size() + ", 最大 " + MAX_BATCH_IDS);
+                    i18nService.getMessage("admin.batch.id_count_exceeded", request.getIds().size(), MAX_BATCH_IDS));
         }
 
         String op = operatorId != null && !operatorId.isBlank() ? operatorId : "system";
@@ -293,15 +296,15 @@ public class FunctionUnitController extends AbstractBaseController {
     }
 
     @DeleteMapping("/batch")
-    @Operation(summary = "批量归档", description = "批量归档功能单元（按 code 归档全部版本）")
+    @Operation(summary = "Batch archive", description = "Archive function units by code")
     public ResponseEntity<ApiResponse<Void>> batchDelete(
             @RequestBody @Valid com.admin.dto.request.BatchDeleteRequest request) {
         log.info("Batch archiving {} function units", request.getIds().size());
 
-        // 防止 DOS 攻击: 限制批量操作 ID 数量
+        // DOS mitigation: enforce batch ID cap
         if (request.getIds().size() > MAX_BATCH_IDS) {
             throw new AdminBusinessException("ID_COUNT_EXCEEDED",
-                    "批量操作 ID 数量超过限制: " + request.getIds().size() + ", 最大 " + MAX_BATCH_IDS);
+                    i18nService.getMessage("admin.batch.id_count_exceeded", request.getIds().size(), MAX_BATCH_IDS));
         }
         return handleRequest(() -> {
             for (String id : request.getIds()) {
@@ -312,9 +315,9 @@ public class FunctionUnitController extends AbstractBaseController {
     }
     
     @DeleteMapping("/{id}/legacy")
-    @Operation(summary = "删除功能单元（旧版）", description = "删除指定的功能单元（旧版API，保留兼容）")
+    @Operation(summary = "Delete function unit (legacy)", description = "Legacy API retained for compatibility")
     public ResponseEntity<Void> deleteFunctionUnitLegacy(
-            @Parameter(description = "功能单元ID") @PathVariable String id) {
+            @Parameter(description = "Function unit id") @PathVariable String id) {
         log.info("Deleting function unit: {}", id);
         FunctionUnit unit = functionUnitManager.getFunctionUnitById(id);
         functionUnitManager.deleteExistingVersion(unit.getCode(), unit.getVersion());
@@ -322,174 +325,174 @@ public class FunctionUnitController extends AbstractBaseController {
     }
     
     @PostMapping("/{id}/validate")
-    @Operation(summary = "验证功能单元", description = "校验结构、依赖与 Flowable 可部署性，通过后标记为已验证")
+    @Operation(summary = "Validate function unit", description = "Structural checks and Flowable deployability")
     public ResponseEntity<ApiResponse<ValidationResult>> validateFunctionUnit(
-            @Parameter(description = "功能单元ID") @PathVariable String id) {
+            @Parameter(description = "Function unit id") @PathVariable String id) {
         String validatorId = SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthorized")));
         log.info("Validating function unit: {}", id);
         String operator = SecurityContextUtils.getCurrentUsername().orElse(validatorId);
         return handleRequest(() -> functionUnitManager.validateFunctionUnit(id, operator));
     }
     
     @PostMapping("/{id}/deprecate")
-    @Operation(summary = "废弃功能单元", description = "将功能单元标记为已废弃")
+    @Operation(summary = "Deprecate function unit", description = "Mark function unit as deprecated")
     public ResponseEntity<FunctionUnitInfo> deprecateFunctionUnit(
-            @Parameter(description = "功能单元ID") @PathVariable String id) {
+            @Parameter(description = "Function unit id") @PathVariable String id) {
         log.info("Deprecating function unit: {}", id);
         FunctionUnit unit = functionUnitManager.deprecateFunctionUnit(id);
         return ResponseEntity.ok(FunctionUnitInfo.fromEntity(unit));
     }
 
     
-    // ==================== 部署管理 ====================
+    // ==================== Deployment management ====================
 
     /**
-     * 获取所有部署记录（全局分页查询，不限定功能单元）
+     * List all deployments (global paging, any function unit).
      * Req 15.2
      */
     @GetMapping("/deployments")
-    @Operation(summary = "获取所有部署记录", description = "分页获取所有功能单元的部署记录")
+    @Operation(summary = "List all deployments", description = "Paginated deployments across units")
     public ResponseEntity<Page<DeploymentInfo>> getAllDeployments(Pageable pageable) {
         log.info("Getting all deployments, page: {}", pageable);
         return ResponseEntity.ok(deploymentManager.listAllDeployments(pageable));
     }
     
     @PostMapping("/{id}/deployments")
-    @Operation(summary = "创建部署", description = "创建功能单元部署请求")
+    @Operation(summary = "Create deployment", description = "Submit a deployment request")
     public ResponseEntity<FunctionUnitDeployment> createDeployment(
-            @Parameter(description = "功能单元ID") @PathVariable String id,
-            @Parameter(description = "目标环境") @RequestParam DeploymentEnvironment environment,
-            @Parameter(description = "部署策略") @RequestParam(defaultValue = "FULL") DeploymentStrategy strategy) {
+            @Parameter(description = "Function unit id") @PathVariable String id,
+            @Parameter(description = "Target environment") @RequestParam DeploymentEnvironment environment,
+            @Parameter(description = "Deployment strategy") @RequestParam(defaultValue = "FULL") DeploymentStrategy strategy) {
         String deployerId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthorized")));
         log.info("Creating deployment for function unit {} to {}", id, environment);
         FunctionUnitDeployment deployment = deploymentManager.createDeployment(id, environment, strategy, deployerId);
         return ResponseEntity.status(HttpStatus.CREATED).body(deployment);
     }
     
     @GetMapping("/{id}/deployments")
-    @Operation(summary = "获取部署历史", description = "获取功能单元的部署历史")
+    @Operation(summary = "Deployment history", description = "History for one function unit")
     public ResponseEntity<List<FunctionUnitDeployment>> getDeploymentHistory(
-            @Parameter(description = "功能单元ID") @PathVariable String id) {
+            @Parameter(description = "Function unit id") @PathVariable String id) {
         log.info("Getting deployment history for function unit: {}", id);
         List<FunctionUnitDeployment> history = deploymentManager.getDeploymentHistory(id);
         return ResponseEntity.ok(history);
     }
     
     @PostMapping("/deployments/{deploymentId}/execute")
-    @Operation(summary = "执行部署", description = "执行已审批的部署")
+    @Operation(summary = "Execute deployment", description = "Execute an approved deployment")
     public ResponseEntity<FunctionUnitDeployment> executeDeployment(
-            @Parameter(description = "部署ID") @PathVariable String deploymentId) {
+            @Parameter(description = "Deployment id") @PathVariable String deploymentId) {
         log.info("Executing deployment: {}", deploymentId);
         FunctionUnitDeployment deployment = deploymentManager.executeDeployment(deploymentId);
         return ResponseEntity.ok(deployment);
     }
     
     @PostMapping("/deployments/{deploymentId}/rollback")
-    @Operation(summary = "回滚部署", description = "回滚已部署的功能单元")
+    @Operation(summary = "Rollback deployment", description = "Rollback a completed deployment")
     public ResponseEntity<FunctionUnitDeployment> rollbackDeployment(
-            @Parameter(description = "部署ID") @PathVariable String deploymentId,
-            @Parameter(description = "回滚原因") @RequestParam String reason) {
+            @Parameter(description = "Deployment id") @PathVariable String deploymentId,
+            @Parameter(description = "Rollback reason") @RequestParam String reason) {
         String operatorId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthorized")));
         log.info("Rolling back deployment: {}", deploymentId);
         FunctionUnitDeployment deployment = deploymentManager.rollbackDeployment(deploymentId, operatorId, reason);
         return ResponseEntity.ok(deployment);
     }
     
     @PostMapping("/deployments/{deploymentId}/cancel")
-    @Operation(summary = "取消部署", description = "取消待执行的部署")
+    @Operation(summary = "Cancel deployment", description = "Cancel pending deployment")
     public ResponseEntity<FunctionUnitDeployment> cancelDeployment(
-            @Parameter(description = "部署ID") @PathVariable String deploymentId,
-            @Parameter(description = "取消原因") @RequestParam String reason) {
+            @Parameter(description = "Deployment id") @PathVariable String deploymentId,
+            @Parameter(description = "Cancel reason") @RequestParam String reason) {
         String operatorId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthorized")));
         log.info("Cancelling deployment: {}", deploymentId);
         FunctionUnitDeployment deployment = deploymentManager.cancelDeployment(deploymentId, operatorId, reason);
         return ResponseEntity.ok(deployment);
     }
     
     @GetMapping("/deployments/{deploymentId}")
-    @Operation(summary = "获取部署详情", description = "获取部署记录详情")
+    @Operation(summary = "Get deployment", description = "Single deployment detail")
     public ResponseEntity<FunctionUnitDeployment> getDeployment(
-            @Parameter(description = "部署ID") @PathVariable String deploymentId) {
+            @Parameter(description = "Deployment id") @PathVariable String deploymentId) {
         log.info("Getting deployment: {}", deploymentId);
         FunctionUnitDeployment deployment = deploymentManager.getDeployment(deploymentId);
         return ResponseEntity.ok(deployment);
     }
     
     @GetMapping("/deployments/{deploymentId}/progress")
-    @Operation(summary = "获取部署进度", description = "获取部署执行进度")
+    @Operation(summary = "Deployment progress", description = "Poll deployment execution progress")
     public ResponseEntity<DeploymentManagerComponent.DeploymentProgress> getDeploymentProgress(
-            @Parameter(description = "部署ID") @PathVariable String deploymentId) {
+            @Parameter(description = "Deployment id") @PathVariable String deploymentId) {
         log.info("Getting deployment progress: {}", deploymentId);
         DeploymentManagerComponent.DeploymentProgress progress = deploymentManager.getDeploymentProgress(deploymentId);
         return ResponseEntity.ok(progress);
     }
 
     
-    // ==================== 审批管理 ====================
+    // ==================== Approval workflows ====================
     
     @GetMapping("/deployments/{deploymentId}/approvals")
-    @Operation(summary = "获取部署审批记录", description = "获取部署的审批记录列表")
+    @Operation(summary = "List deployment approvals", description = "Approvals tied to deployment")
     public ResponseEntity<List<FunctionUnitApproval>> getDeploymentApprovals(
-            @Parameter(description = "部署ID") @PathVariable String deploymentId) {
+            @Parameter(description = "Deployment id") @PathVariable String deploymentId) {
         log.info("Getting approvals for deployment: {}", deploymentId);
         List<FunctionUnitApproval> approvals = deploymentManager.getDeploymentApprovals(deploymentId);
         return ResponseEntity.ok(approvals);
     }
     
     @PostMapping("/approvals/{approvalId}/approve")
-    @Operation(summary = "审批通过", description = "审批通过部署请求")
+    @Operation(summary = "Approve deployment", description = "Approve a deployment request")
     public ResponseEntity<FunctionUnitApproval> approveDeployment(
-            @Parameter(description = "审批ID") @PathVariable String approvalId,
-            @Parameter(description = "审批意见") @RequestParam(required = false) String comment) {
+            @Parameter(description = "Approval id") @PathVariable String approvalId,
+            @Parameter(description = "Optional comment") @RequestParam(required = false) String comment) {
         String approverId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthorized")));
         log.info("Approving deployment: {}", approvalId);
         FunctionUnitApproval approval = deploymentManager.approveDeployment(approvalId, approverId, comment);
         return ResponseEntity.ok(approval);
     }
     
     @PostMapping("/approvals/{approvalId}/reject")
-    @Operation(summary = "审批拒绝", description = "拒绝部署请求")
+    @Operation(summary = "Reject deployment", description = "Reject a deployment request")
     public ResponseEntity<FunctionUnitApproval> rejectDeployment(
-            @Parameter(description = "审批ID") @PathVariable String approvalId,
-            @Parameter(description = "拒绝原因") @RequestParam String comment) {
+            @Parameter(description = "Approval id") @PathVariable String approvalId,
+            @Parameter(description = "Rejection comment") @RequestParam String comment) {
         String approverId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthorized")));
         log.info("Rejecting deployment: {}", approvalId);
         FunctionUnitApproval approval = deploymentManager.rejectDeployment(approvalId, approverId, comment);
         return ResponseEntity.ok(approval);
     }
     
     @GetMapping("/approvals/pending")
-    @Operation(summary = "获取待审批列表", description = "获取当前用户待审批的部署列表")
+    @Operation(summary = "Pending approvals", description = "Deployments awaiting current user's approval")
     public ResponseEntity<List<FunctionUnitApproval>> getPendingApprovals() {
         String approverId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthorized")));
         log.info("Getting pending approvals for: {}", approverId);
         List<FunctionUnitApproval> approvals = deploymentManager.getPendingApprovals(approverId);
         return ResponseEntity.ok(approvals);
     }
 
     
-    // ==================== 版本管理 ====================
+    // ==================== Version management ====================
     
     @GetMapping("/code/{code}/versions")
-    @Operation(summary = "获取版本列表", description = "获取功能单元的所有版本")
+    @Operation(summary = "List versions", description = "All versions for code")
     public ResponseEntity<List<FunctionUnitInfo>> getAllVersions(
-            @Parameter(description = "功能单元代码") @PathVariable String code) {
+            @Parameter(description = "Function unit code") @PathVariable String code) {
         log.info("Getting all versions for: {}", code);
         List<FunctionUnit> versions = functionUnitManager.getAllVersions(code);
         return ResponseEntity.ok(versions.stream().map(FunctionUnitInfo::fromEntity).toList());
     }
     
     @GetMapping("/code/{code}/latest")
-    @Operation(summary = "获取最新版本", description = "获取功能单元的最新版本")
+    @Operation(summary = "Latest version", description = "Latest semantic version")
     public ResponseEntity<FunctionUnitInfo> getLatestVersion(
-            @Parameter(description = "功能单元代码") @PathVariable String code) {
+            @Parameter(description = "Function unit code") @PathVariable String code) {
         log.info("Getting latest version for: {}", code);
         return functionUnitManager.getLatestVersion(code)
                 .map(unit -> ResponseEntity.ok(FunctionUnitInfo.fromEntity(unit)))
@@ -497,20 +500,21 @@ public class FunctionUnitController extends AbstractBaseController {
     }
 
     @GetMapping("/code/{code}/active-for-start")
-    @Operation(summary = "门户可发起版本", description = "已部署且已启用中语义版本最高的一条，供门户发起流程钉死目录行")
+    @Operation(summary = "Active catalog for portal start", description = "Highest deployed+enabled semver for pinning catalog row")
     public ResponseEntity<ApiResponse<FunctionUnitInfo>> getActiveCatalogForPortalStart(
-            @Parameter(description = "功能单元代码") @PathVariable String code) {
+            @Parameter(description = "Function unit code") @PathVariable String code) {
         log.info("Getting active catalog for portal start, code: {}", code);
         return functionUnitManager.getActiveCatalogForPortalStart(code)
                 .map(u -> ResponseEntity.ok(ApiResponse.success(FunctionUnitInfo.fromEntity(u))))
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
-                        .body(ApiResponse.error("NO_ACTIVE_FOR_START", "无可用于发起的已部署且已启用版本")));
+                        .body(ApiResponse.error("NO_ACTIVE_FOR_START",
+                                i18nService.getMessage("admin.fu.no_active_for_start"))));
     }
     
     @GetMapping("/code/{code}/latest-stable")
-    @Operation(summary = "获取最新稳定版本", description = "获取功能单元的最新稳定版本")
+    @Operation(summary = "Latest stable version", description = "Highest stable release")
     public ResponseEntity<FunctionUnitInfo> getLatestStableVersion(
-            @Parameter(description = "功能单元代码") @PathVariable String code) {
+            @Parameter(description = "Function unit code") @PathVariable String code) {
         log.info("Getting latest stable version for: {}", code);
         return functionUnitManager.getLatestStableVersion(code)
                 .map(unit -> ResponseEntity.ok(FunctionUnitInfo.fromEntity(unit)))
@@ -518,53 +522,53 @@ public class FunctionUnitController extends AbstractBaseController {
     }
     
     @PostMapping("/{id}/new-version")
-    @Operation(summary = "创建新版本", description = "基于现有版本创建新版本")
+    @Operation(summary = "Fork new version", description = "Clone from existing unit with semver")
     public ResponseEntity<FunctionUnitInfo> createNewVersion(
-            @Parameter(description = "源功能单元ID") @PathVariable String id,
-            @Parameter(description = "新版本号") @RequestParam String newVersion) {
+            @Parameter(description = "Source function unit id") @PathVariable String id,
+            @Parameter(description = "New version label") @RequestParam String newVersion) {
         String creatorId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthorized")));
         log.info("Creating new version {} from {}", newVersion, id);
         FunctionUnit unit = functionUnitManager.createNewVersion(id, newVersion, creatorId);
         return ResponseEntity.status(HttpStatus.CREATED).body(FunctionUnitInfo.fromEntity(unit));
     }
     
     @GetMapping("/code/{code}/history")
-    @Operation(summary = "获取版本历史", description = "获取功能单元的版本变更历史")
+    @Operation(summary = "Version history", description = "Historical changes for code")
     public ResponseEntity<List<FunctionUnitManagerComponent.VersionHistory>> getVersionHistory(
-            @Parameter(description = "功能单元代码") @PathVariable String code) {
+            @Parameter(description = "Function unit code") @PathVariable String code) {
         log.info("Getting version history for: {}", code);
         List<FunctionUnitManagerComponent.VersionHistory> history = functionUnitManager.getVersionHistory(code);
         return ResponseEntity.ok(history);
     }
     
     @GetMapping("/code/{code}/upgrade-check")
-    @Operation(summary = "检查版本升级", description = "检查是否可以从一个版本升级到另一个版本")
+    @Operation(summary = "Upgrade check", description = "Evaluate upgrade path between versions")
     public ResponseEntity<FunctionUnitManagerComponent.VersionUpgradeCheck> checkVersionUpgrade(
-            @Parameter(description = "功能单元代码") @PathVariable String code,
-            @Parameter(description = "源版本") @RequestParam String fromVersion,
-            @Parameter(description = "目标版本") @RequestParam String toVersion) {
+            @Parameter(description = "Function unit code") @PathVariable String code,
+            @Parameter(description = "From version") @RequestParam String fromVersion,
+            @Parameter(description = "To version") @RequestParam String toVersion) {
         log.info("Checking upgrade from {} to {} for {}", fromVersion, toVersion, code);
         FunctionUnitManagerComponent.VersionUpgradeCheck check = 
                 functionUnitManager.checkVersionUpgrade(code, fromVersion, toVersion);
         return ResponseEntity.ok(check);
     }
     
-    // ==================== 访问权限管理 ====================
+    // ==================== Access control ====================
     
     @GetMapping("/{id}/access")
-    @Operation(summary = "获取访问权限配置", description = "获取功能单元的访问权限配置列表")
+    @Operation(summary = "List access rules", description = "Access configs for unit")
     public ResponseEntity<List<FunctionUnitAccessInfo>> getAccessConfigs(
-            @Parameter(description = "功能单元ID") @PathVariable String id) {
+            @Parameter(description = "Function unit id") @PathVariable String id) {
         log.info("Getting access configs for function unit: {}", id);
         List<FunctionUnitAccessInfo> configs = accessService.getAccessConfigs(id);
         return ResponseEntity.ok(configs);
     }
     
     @PostMapping("/{id}/access")
-    @Operation(summary = "添加访问权限配置", description = "为功能单元添加业务角色访问权限配置")
+    @Operation(summary = "Add access rule", description = "Grant business role access")
     public ResponseEntity<FunctionUnitAccessInfo> addAccessConfig(
-            @Parameter(description = "功能单元ID") @PathVariable String id,
+            @Parameter(description = "Function unit id") @PathVariable String id,
             @Valid @RequestBody FunctionUnitAccessRequest request) {
         log.info("Adding access config for function unit {}: roleId={}", 
                 id, request.getRoleId());
@@ -573,19 +577,19 @@ public class FunctionUnitController extends AbstractBaseController {
     }
     
     @DeleteMapping("/{id}/access/{accessId}")
-    @Operation(summary = "删除访问权限配置", description = "删除功能单元的指定访问权限配置")
+    @Operation(summary = "Remove access rule", description = "Delete concrete access-config row")
     public ResponseEntity<Void> removeAccessConfig(
-            @Parameter(description = "功能单元ID") @PathVariable String id,
-            @Parameter(description = "访问配置ID") @PathVariable String accessId) {
+            @Parameter(description = "Function unit id") @PathVariable String id,
+            @Parameter(description = "Access config id") @PathVariable String accessId) {
         log.info("Removing access config {} from function unit {}", accessId, id);
         accessService.removeAccessConfig(id, accessId);
         return ResponseEntity.noContent().build();
     }
     
     @PutMapping("/{id}/access")
-    @Operation(summary = "批量设置访问权限配置", description = "批量设置功能单元的访问权限配置（替换现有配置）")
+    @Operation(summary = "Replace access rules", description = "Bulk replace configs")
     public ResponseEntity<List<FunctionUnitAccessInfo>> setAccessConfigs(
-            @Parameter(description = "功能单元ID") @PathVariable String id,
+            @Parameter(description = "Function unit id") @PathVariable String id,
             @Valid @RequestBody List<FunctionUnitAccessRequest> requests) {
         log.info("Setting {} access configs for function unit {}", requests.size(), id);
         List<FunctionUnitAccessInfo> configs = accessService.setAccessConfigs(id, requests);
@@ -593,21 +597,21 @@ public class FunctionUnitController extends AbstractBaseController {
     }
     
     @GetMapping("/{id}/access/check")
-    @Operation(summary = "检查用户访问权限", description = "检查指定用户是否有权限访问功能单元")
+    @Operation(summary = "Check access", description = "Whether user can access unit")
     public ResponseEntity<Boolean> checkUserAccess(
-            @Parameter(description = "功能单元ID") @PathVariable String id,
-            @Parameter(description = "用户ID") @RequestParam String userId) {
+            @Parameter(description = "Function unit id") @PathVariable String id,
+            @Parameter(description = "User id") @RequestParam String userId) {
         log.info("Checking access for user {} to function unit {}", userId, id);
         boolean hasAccess = accessService.hasAccess(id, userId);
         return ResponseEntity.ok(hasAccess);
     }
     
-    // ==================== 功能单元内容获取（供用户门户使用） ====================
+    // ==================== Content payloads (portal consumers) ====================
     
     @GetMapping("/by-process-key/{processKey}")
-    @Operation(summary = "根据流程定义Key获取功能单元", description = "根据BPMN流程定义Key查找对应的功能单元")
+    @Operation(summary = "Find by process key", description = "Locate unit via BPMN processDefinitionKey")
     public ResponseEntity<FunctionUnitInfo> getFunctionUnitByProcessKey(
-            @Parameter(description = "流程定义Key") @PathVariable String processKey) {
+            @Parameter(description = "Process definition key") @PathVariable String processKey) {
         log.info("Getting function unit by process key: {}", processKey);
         
         try {
@@ -620,29 +624,29 @@ public class FunctionUnitController extends AbstractBaseController {
     }
     
     @GetMapping("/{id}/content")
-    @Operation(summary = "获取功能单元完整内容", description = "获取功能单元的BPMN流程、表单定义、动作绑定等完整内容（供用户门户使用）")
+    @Operation(summary = "Full bundled content", description = "Forms, BPMN, actions for portal")
     public ResponseEntity<ApiResponse<com.admin.dto.response.FunctionUnitContentResponse>> getFunctionUnitContent(
-            @Parameter(description = "功能单元ID") @PathVariable String id) {
+            @Parameter(description = "Function unit id") @PathVariable String id) {
         log.info("Getting function unit content for: {}", id);
         return handleRequest(() -> functionUnitManager.assembleFunctionUnitContent(id));
     }
     
-    // ==================== 合并内容端点 (Req 35) ====================
+    // ==================== Merge content endpoint (Req 35) ====================
 
     @GetMapping("/{id}/contents")
-    @Operation(summary = "获取功能单元内容", description = "获取功能单元的内容列表，可按类型过滤。type 为空时返回所有类型。")
+    @Operation(summary = "List typed contents", description = "Filter by FORM, PROCESS, etc.; empty type returns all")
     public ResponseEntity<ApiResponse<java.util.List<com.admin.dto.response.FunctionUnitContentItemDTO>>> getContents(
-            @Parameter(description = "功能单元ID") @PathVariable String id,
-            @Parameter(description = "内容类型（可选）：FORM, PROCESS, DATA_TABLE, SCRIPT, ACTION") @RequestParam(required = false) String type) {
+            @Parameter(description = "Function unit id") @PathVariable String id,
+            @Parameter(description = "Optional filter: FORM, PROCESS, DATA_TABLE, SCRIPT, ACTION") @RequestParam(required = false) String type) {
         log.info("Getting function unit contents for: {}, type: {}", id, type);
         return handleRequest(() -> functionUnitManager.getContentsByType(id, type));
     }
 
-    // ==================== 旧端点（已废弃，下一版本移除） ====================
+    // ==================== Legacy removals next release ====================
 
     @Deprecated
     @PostMapping(value = "/formcontent", produces = "application/json")
-    @Operation(summary = "获取功能单元表单内容（已废弃）", description = "已废弃，请使用 GET /{id}/contents?type=FORM")
+    @Operation(summary = "Form-only content (deprecated)", description = "Use GET /{id}/contents?type=FORM instead")
     public ResponseEntity<ApiResponse<java.util.List<com.admin.dto.response.FunctionUnitContentItemDTO>>> getFunctionUnitFormContent(
             @RequestBody java.util.Map<String, String> request) {
         String id = request.get("id");
@@ -652,20 +656,20 @@ public class FunctionUnitController extends AbstractBaseController {
     
     @Deprecated
     @GetMapping(value = "/fu-content/{id}/type/{contentType}", produces = "application/json")
-    @Operation(summary = "获取功能单元特定类型的内容（已废弃）", description = "已废弃，请使用 GET /{id}/contents?type={contentType}")
+    @Operation(summary = "Typed content (deprecated)", description = "Use GET /{id}/contents?type={contentType}")
     public ResponseEntity<ApiResponse<java.util.List<com.admin.dto.response.FunctionUnitContentItemDTO>>> getFunctionUnitContentByType(
-            @Parameter(description = "功能单元ID") @PathVariable String id,
-            @Parameter(description = "内容类型：FORM, PROCESS, DATA_TABLE") @PathVariable String contentType) {
+            @Parameter(description = "Function unit id") @PathVariable String id,
+            @Parameter(description = "Content type enum string") @PathVariable String contentType) {
         log.info("[DEPRECATED] Getting function unit content by type for: {}, contentType: {}", id, contentType);
         return handleRequest(() -> functionUnitManager.getContentsByType(id, contentType));
     }
     
     @Deprecated
     @GetMapping(value = "/{id}/content-items", produces = "application/json")
-    @Operation(summary = "获取功能单元特定类型的内容（已废弃）", description = "已废弃，请使用 GET /{id}/contents?type={contentType}")
+    @Operation(summary = "Legacy content-items (deprecated)", description = "Use GET /{id}/contents?type={contentType}")
     public ResponseEntity<ApiResponse<java.util.List<com.admin.dto.response.FunctionUnitContentItemDTO>>> getFunctionUnitContents(
-            @Parameter(description = "功能单元ID") @PathVariable String id,
-            @Parameter(description = "内容类型") @RequestParam String contentType) {
+            @Parameter(description = "Function unit id") @PathVariable String id,
+            @Parameter(description = "Content type") @RequestParam String contentType) {
         log.info("[DEPRECATED] Getting function unit content items for: {}, contentType: {}", id, contentType);
         return handleRequest(() -> functionUnitManager.getContentsByType(id, contentType));
     }

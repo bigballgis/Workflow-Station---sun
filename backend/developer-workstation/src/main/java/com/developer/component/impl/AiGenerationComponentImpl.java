@@ -36,8 +36,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
- * AI 生成功能组件实现
- * 编排锁管理、会话管理、N8N 调用、SSE 事件流、数据校验与写入等服务
+ * AI Generation Component Implementation
+ * Orchestrates lock management, session management, N8N calls, SSE event streaming, data validation, and write services
  */
 @Component
 @Slf4j
@@ -51,10 +51,10 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
     private final Executor taskExecutor;
     private final ObjectMapper objectMapper;
 
-    /** 撤销快照缓存：key = functionUnitId → 序列化的 AiGeneratedData JSON */
+    /** Undo snapshot cache: key = functionUnitId → serialized AiGeneratedData JSON */
     private final ConcurrentHashMap<Long, String> undoSnapshots = new ConcurrentHashMap<>();
 
-    /** 撤销快照 TTL 清理调度器 */
+    /** Undo snapshot TTL cleanup scheduler */
     private final ScheduledExecutorService undoCleanupExecutor = Executors.newSingleThreadScheduledExecutor();
 
     @PreDestroy
@@ -83,10 +83,10 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
     @Override
     public SseEmitter chatStream(AiChatRequest request, String userId) {
         functionUnitWorkspaceAccessService.assertCanAccess(request.getFunctionUnitId(), WorkspaceAccessAction.MODIFY);
-        // 1. 续期锁
+        // 1. Renew the lock
         aiLockService.extendLock(request.getFunctionUnitId(), userId);
 
-        // 2. 创建或恢复会话
+        // 2. Create or restore a session
         AiSession session;
         boolean isFirstMessage = request.getSessionId() == null || request.getSessionId().isBlank();
         log.info("chatStream: functionUnitId={}, isFirstMessage={}, sessionId={}, phase={}, mode={}",
@@ -97,12 +97,12 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
             session = aiGenerationService.restoreSession(request.getSessionId());
         }
 
-        // 3. 保存用户消息
+        // 3. Save the user message
         aiGenerationService.saveMessage(session.getSessionId(), AiMessageRole.USER, request.getMessage(), request.getPhase());
 
-        // 4. 在主线程（有 Spring 事务上下文）中加载功能单元上下文和前序文档
-        // 不能在 CompletableFuture.runAsync() 中调用，因为 @Transactional 是线程绑定的，
-        // ForkJoinPool 线程没有事务上下文，会导致 Hibernate lazy loading 静默失败
+        // 4. Load function unit context and prior documents in the main thread (which has Spring transaction context)
+        // Cannot be called inside CompletableFuture.runAsync() because @Transactional is thread-bound;
+        // ForkJoinPool threads have no transaction context, causing Hibernate lazy loading to fail silently
         FunctionUnitContextDTO context;
         List<Map<String, String>> existingDocuments;
         try {
@@ -121,7 +121,7 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
             existingDocuments = List.of();
         }
 
-        // 5. 创建对话 SSE emitter
+        // 5. Create the chat SSE emitter
         SseEmitter emitter = aiGenerationService.createChatEmitter(request.getFunctionUnitId(), userId);
 
         // 6. Async N8N call (context and existingDocuments already loaded in main thread)
@@ -138,13 +138,13 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
                         AiChatSseEvent.builder().eventType("session")
                                 .data(Map.of("sessionId", session.getSessionId().toString())).build());
 
-                // 6b. 调用 N8N Webhook
+                // 6b. Call N8N Webhook
                 Map<String, Object> n8nResponse = aiGenerationService.callN8NWebhook(
                         session.getSessionId(), request.getMessage(), request.getPhase(), request.getMode(),
                         finalContext, request.getFunctionUnitId(), finalExistingDocuments,
                         request.getRegenerateScope());
 
-                // 6b. 解析 N8N 响应并发送 SSE 事件
+                // 6b. Parse N8N response and send SSE events
                 String reply = null;
                 if (n8nResponse.containsKey("reply")) {
                     reply = (String) n8nResponse.get("reply");
@@ -201,16 +201,16 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
                             AiChatSseEvent.builder().eventType("generated_data").data(n8nResponse.get("generatedData")).build());
                 }
 
-                // 6c. 保存 AI 响应消息
+                // 6c. Save AI response message
                 if (reply != null) {
                     aiGenerationService.saveMessage(session.getSessionId(), AiMessageRole.ASSISTANT, reply, request.getPhase());
                 }
 
-                // 6d. 发送 done 事件
+                // 6d. Send done event
                 aiGenerationService.sendChatEvent(request.getFunctionUnitId(), userId,
                         AiChatSseEvent.builder().eventType("done").data(null).build());
 
-                // 6e. 完成 emitter
+                // 6e. Complete the emitter
                 aiGenerationService.completeChatEmitter(request.getFunctionUnitId(), userId);
 
             } catch (Exception e) {
@@ -224,7 +224,7 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
                     errorData.put("errorCode", errorCode);
                     errorData.put("message", e.getMessage());
 
-                    // 检查异常是否携带降级信息（N8N 重试失败后的优雅降级）
+                    // Check if the exception carries degradation info (graceful degradation after N8N retry failure)
                     if (e instanceof com.developer.exception.AiGenerationException aiEx2
                             && aiEx2.getExtraData() != null) {
                         Object degradationOptions = aiEx2.getExtraData().get("degradationOptions");
@@ -309,19 +309,19 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
     @Override
     public void applyGeneratedData(Long functionUnitId, ApplyGeneratedDataRequest request, String userId) {
         functionUnitWorkspaceAccessService.assertCanAccess(functionUnitId, WorkspaceAccessAction.MODIFY);
-        // 1. 续期锁
+        // 1. Renew the lock
         aiLockService.extendLock(functionUnitId, userId);
 
         try {
-            // 2. 校验生成数据
+            // 2. Validate generated data
             AiValidationResult validationResult = aiValidationService.validate(request.getGeneratedData());
 
-            // 3. 校验失败则抛出异常
+            // 3. Throw exception if validation fails
             if (!validationResult.isValid()) {
                 throw new AiValidationFailedException(validationResult.getErrors());
             }
 
-            // 4. 保存撤销快照（在清除旧数据前）
+            // 4. Save undo snapshot (before clearing old data)
             try {
                 String snapshot = buildSnapshotData(functionUnitId);
                 undoSnapshots.put(functionUnitId, snapshot);
@@ -332,14 +332,14 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
                         functionUnitId, snapshotEx.getMessage());
             }
 
-            // 5. 写入数据
+            // 5. Write data
             aiWriteService.applyGeneratedData(functionUnitId, request.getGeneratedData(),
                     request.getRegenerateScope());
 
-            // 6. 更新会话状态
+            // 6. Update session status
             aiGenerationService.updateSessionStatus(request.getSessionId(), AiSessionStatus.COMPLETED);
 
-            // 7. 发送写入成功事件（携带 warnings）
+            // 7. Send write success event (with warnings)
             Map<String, Object> successData = new LinkedHashMap<>();
             successData.put("functionUnitId", functionUnitId);
             if (validationResult.getWarnings() != null && !validationResult.getWarnings().isEmpty()) {
@@ -366,10 +366,10 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
     }
 
     /**
-     * 撤销上次应用操作，从快照缓存恢复数据
+     * Undo the last apply operation, restoring data from snapshot cache
      *
-     * @param functionUnitId 功能单元 ID
-     * @throws AiGenerationException 如果撤销窗口已过期（30 秒 TTL）
+     * @param functionUnitId function unit ID
+     * @throws AiGenerationException if the undo window has expired (30-second TTL)
      */
     @Override
     public void undoLastApply(Long functionUnitId) {
@@ -391,10 +391,10 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
     }
 
     /**
-     * 将当前功能单元的所有实体数据序列化为 AiGeneratedData 格式的 JSON 字符串
+     * Serialize all entity data of the current function unit into a JSON string in AiGeneratedData format
      */
     private String buildSnapshotData(Long functionUnitId) throws Exception {
-        // 使用 serializeFunctionUnitContext 获取当前数据，然后转换为 AiGeneratedData 格式
+        // Use serializeFunctionUnitContext to get current data, then convert to AiGeneratedData format
         FunctionUnitContextDTO context = aiGenerationService.serializeFunctionUnitContext(functionUnitId);
         if (context == null) {
             return objectMapper.writeValueAsString(AiGeneratedData.builder().build());
@@ -417,7 +417,7 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
     }
 
     /**
-     * 获取下一个阶段，如果已是最后阶段则返回 null
+     * Get the next phase, return null if already at the last phase
      */
     private AiPhase getNextPhase(AiPhase current) {
         return switch (current) {

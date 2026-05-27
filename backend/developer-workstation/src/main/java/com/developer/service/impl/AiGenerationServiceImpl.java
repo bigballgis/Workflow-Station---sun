@@ -63,7 +63,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Collectors;
 
 /**
- * AI 生成服务实现
+ * AI generation service implementation.
  */
 @Service
 @Slf4j
@@ -94,7 +94,7 @@ public class AiGenerationServiceImpl implements AiGenerationService {
     /** Event SSE emitters: key = functionUnitId → list of (userId, SseEmitter) pairs */
     private final ConcurrentHashMap<Long, CopyOnWriteArrayList<EventEmitterEntry>> eventEmitters = new ConcurrentHashMap<>();
 
-    /** 最近一次 N8N 调用成功的时间戳，用于降级信息（需求 45 联动） */
+    /** Timestamp of the last successful N8N call, used for degradation info (requirements 45 linkage) */
     private volatile Instant lastN8NSuccessTime;
 
     public AiGenerationServiceImpl(
@@ -292,9 +292,9 @@ public class AiGenerationServiceImpl implements AiGenerationService {
     @Override
     @Transactional(readOnly = true)
     public FunctionUnitContextDTO serializeFunctionUnitContext(Long functionUnitId) {
-        // 使用 findById 而非 findByIdWithRelations，避免 MultipleBagFetchException
-        // （Hibernate 不允许同时 fetch 多个 List 类型的关联）
-        // 在 @Transactional 事务内，lazy loading 会逐个加载关联集合
+        // Use findById instead of findByIdWithRelations to avoid MultipleBagFetchException
+        // (Hibernate does not allow fetching multiple List-type associations simultaneously)
+        // Within @Transactional, lazy loading will load associated collections one by one
         FunctionUnit fu = functionUnitRepository.findById(functionUnitId)
                 .orElseThrow(() -> new AiGenerationException("AI_FUNCTION_UNIT_NOT_FOUND", "Function unit not found"));
 
@@ -328,7 +328,7 @@ public class AiGenerationServiceImpl implements AiGenerationService {
     }
 
     private FunctionUnitContextDTO buildContextDTO(FunctionUnit fu) {
-        // 显式触发 lazy loading（确保在 @Transactional 事务内加载所有关联）
+        // Explicitly trigger lazy loading (ensure all associations are loaded within @Transactional)
         List<TableDefinition> tables = fu.getTableDefinitions();
         if (tables != null) tables.size();
         List<FormDefinition> forms = fu.getFormDefinitions();
@@ -486,7 +486,8 @@ public class AiGenerationServiceImpl implements AiGenerationService {
     }
 
     /**
-     * 序列化表关系，将 sourceTableId/targetTableId 解析为对应的 tableName（AI 不知道内部 ID）
+     * Serialize table relations, resolving sourceTableId/targetTableId to corresponding tableName
+     * (AI does not know internal IDs).
      */
     private List<Map<String, Object>> serializeTableRelations(
             List<TableRelation> relations, List<TableDefinition> tables) {
@@ -494,7 +495,7 @@ public class AiGenerationServiceImpl implements AiGenerationService {
             return List.of();
         }
 
-        // 构建 ID → tableName 查找表
+        // Build ID → tableName lookup table
         Map<Long, String> idToName = new HashMap<>();
         if (tables != null) {
             for (TableDefinition t : tables) {
@@ -556,10 +557,10 @@ public class AiGenerationServiceImpl implements AiGenerationService {
 
     @SuppressWarnings("unchecked")
     private void truncateConfigJson(FunctionUnitContextDTO dto) {
-        // 仅截断 formDefinitions 的 configJson，不截断 actionDefinitions
+        // Only truncate configJson on formDefinitions, not actionDefinitions
         if (dto.getFormDefinitions() == null) return;
 
-        // 第一级截断：仅截断 configJson 中的 rule 数组，保留业务逻辑扩展字段
+        // Level 1 truncation: only truncate the rule array in configJson, keep business logic extension fields
         for (Map<String, Object> form : dto.getFormDefinitions()) {
             Object configObj = form.get("configJson");
             if (configObj instanceof Map) {
@@ -578,11 +579,11 @@ public class AiGenerationServiceImpl implements AiGenerationService {
             }
         }
 
-        // 检查是否仍超限
+        // Check if still over limit
         byte[] jsonBytes = toJsonBytes(dto);
         if (jsonBytes.length <= maxContextSizeBytes) return;
 
-        // 第二级截断：替换整个 formDefinitions 的 configJson
+        // Level 2 truncation: replace entire configJson on formDefinitions
         for (Map<String, Object> form : dto.getFormDefinitions()) {
             form.put("configJson", new LinkedHashMap<>(Map.of("truncated", true)));
             log.info("Tier-2 truncation: form '{}' entire configJson truncated", form.get("formName"));
@@ -609,8 +610,8 @@ public class AiGenerationServiceImpl implements AiGenerationService {
 
         switch (phase) {
             case REQUIREMENTS:
-                // 无论 NEW 还是 MODIFY，都加载已有需求文档（如果存在）
-                // 用户可能在当前会话中已生成文档，后续消息需要让 AI 看到
+        // Whether NEW or MODIFY, always load existing requirements documents if present.
+        // The user may have generated docs in the current session; subsequent messages need the AI to see them.
                 aiDocumentRepository.findTopByFunctionUnitIdAndDocumentTypeOrderByVersionDesc(
                         functionUnitId, AiDocumentType.REQUIREMENTS)
                     .ifPresent(doc -> documents.add(Map.of(
@@ -661,7 +662,7 @@ public class AiGenerationServiceImpl implements AiGenerationService {
             log.warn("N8N session not found for sessionId={}, rebuilding", sessionId);
             List<Map<String, String>> conversationHistory = buildConversationHistory(sessionId);
 
-            // 使用 functionUnitId 重新加载上下文和文档
+            // Reload context and documents using functionUnitId
             FunctionUnitContextDTO rebuiltContext = serializeFunctionUnitContext(functionUnitId);
             List<Map<String, String>> rebuiltDocs = getLatestDocuments(functionUnitId, phase, mode);
 
@@ -684,8 +685,8 @@ public class AiGenerationServiceImpl implements AiGenerationService {
         body.put("phase", phase.name());
         body.put("mode", mode.name());
 
-        // 始终传递 functionUnitId 给 N8N，供 Agent 工具节点查询数据库
-        // 即使 context 为 null（新功能单元尚未生成），也要传递 functionUnitId
+        // Always pass functionUnitId to N8N for the Agent tool node to query the database.
+        // Even if context is null (new function unit not yet generated), pass functionUnitId.
         if (functionUnitId != null) {
             body.put("functionUnitId", functionUnitId);
         } else if (context != null && context.getFunctionUnitId() != null) {
@@ -693,7 +694,7 @@ public class AiGenerationServiceImpl implements AiGenerationService {
         }
 
         if (context != null) {
-            // 预序列化为 JSON 字符串，避免 N8N 表达式渲染为 [object Object]
+            // Pre-serialize to JSON string to avoid N8N expression rendering as [object Object]
             body.put("context", toJsonString(context));
         }
 
@@ -706,27 +707,28 @@ public class AiGenerationServiceImpl implements AiGenerationService {
             body.put("conversationHistory", conversationHistory);
         }
 
-        // 注入新架构元数据，帮助 AI 生成符合新架构的数据结构（需求 15）
+        // Inject new architecture metadata to help AI generate data structures that conform to the new architecture (requirement 15)
         body.put("schemaMetadata", buildSchemaMetadata());
 
-        // 指示 AI 在生成数据时附带解释（需求 50）
+        // Instruct AI to include explanations when generating data (requirement 50)
         body.put("includeExplanations", true);
 
-        // 增量重新生成范围（需求 42）
+        // Incremental regeneration scope (requirement 42)
         body.put("regenerateScope", regenerateScope != null ? regenerateScope : "ALL");
 
         return body;
     }
 
     /**
-     * 构建新架构元数据，包含枚举值列表、configJson 扩展结构描述、
-     * ConditionExpression 格式和新增实体结构。
-     * 供 N8N/AI 理解当前系统架构并生成符合规范的数据。
+     * Build new architecture metadata, including enum value lists, configJson extension
+     * structure descriptions, ConditionExpression format, and new entity structures.
+     * Provides N8N/AI with understanding of the current system architecture to generate
+     * standard-compliant data.
      */
     private Map<String, Object> buildSchemaMetadata() {
         Map<String, Object> metadata = new LinkedHashMap<>();
 
-        // 枚举值列表
+        // Enum value list
         metadata.put("formTypes", java.util.Arrays.stream(com.developer.enums.FormType.values())
                 .map(Enum::name).collect(Collectors.toList()));
         metadata.put("tableTypes", java.util.Arrays.stream(com.developer.enums.TableType.values())
@@ -734,7 +736,7 @@ public class AiGenerationServiceImpl implements AiGenerationService {
         metadata.put("actionTypes", java.util.Arrays.stream(com.developer.enums.ActionType.values())
                 .map(Enum::name).collect(Collectors.toList()));
 
-        // configJson 扩展字段结构描述
+        // configJson extension field structure description
         Map<String, Object> configJsonExtensions = new LinkedHashMap<>();
         configJsonExtensions.put("formulas", "Array of { targetField, expression, dependsOn[] }");
         configJsonExtensions.put("linkages", "Array of { sourceField, targetField, linkageType: option-filtering|value-auto-fill|field-state-change }");
@@ -743,7 +745,7 @@ public class AiGenerationServiceImpl implements AiGenerationService {
         configJsonExtensions.put("subTableValidation", "Object with sub-table validation rules");
         metadata.put("configJsonExtensions", configJsonExtensions);
 
-        // visibilityCondition 格式描述
+        // visibilityCondition format description
         Map<String, Object> visibilityConditionFormat = new LinkedHashMap<>();
         visibilityConditionFormat.put("type", "ConditionExpression object (not a string)");
         visibilityConditionFormat.put("structure", "{ field, operator, value }");
@@ -751,7 +753,7 @@ public class AiGenerationServiceImpl implements AiGenerationService {
                 "equals", "not-equals", "contains", "greater-than", "less-than", "is-empty", "is-not-empty"));
         metadata.put("visibilityConditionFormat", visibilityConditionFormat);
 
-        // 新增实体结构
+        // New entity structures
         Map<String, Object> newEntities = new LinkedHashMap<>();
         newEntities.put("decisionDefinitions", "Array of { decisionKey, decisionName, dmnXml, hitPolicy: FIRST|UNIQUE|PRIORITY|ANY|COLLECT|RULE_ORDER|OUTPUT_ORDER, description }");
         newEntities.put("tableRelations", "Array of { sourceTableName, sourceFieldName, relationType: ONE_TO_ONE|ONE_TO_MANY|MANY_TO_MANY, targetTableName, targetFieldName }");
@@ -762,8 +764,10 @@ public class AiGenerationServiceImpl implements AiGenerationService {
     }
 
     /**
-     * 包装 doCallN8NWebhook，对 AI_N8N_TIMEOUT 和 AI_N8N_CALL_FAILED 异常自动重试一次（2 秒延迟）。
-     * 重试失败时构建降级信息并通过 AiGenerationException extraData 传递给上层（需求 23 + 45 联动）。
+     * Wraps doCallN8NWebhook with an automatic retry (2-second delay) for AI_N8N_TIMEOUT
+     * and AI_N8N_CALL_FAILED exceptions.
+     * On retry failure, builds degradation info and passes it to the caller via
+     * AiGenerationException extraData (requirements 23 + 45 linkage).
      */
     private Map<String, Object> doCallN8NWebhookWithRetry(Map<String, Object> requestBody) {
         try {
@@ -785,7 +789,7 @@ public class AiGenerationServiceImpl implements AiGenerationService {
                     return response;
                 } catch (AiGenerationException retryEx) {
                     log.warn("N8N retry also failed with {}: {}", retryEx.getErrorCode(), retryEx.getMessage());
-                    // 构建降级信息（需求 45 联动）
+                    // Build degradation info (requirements 45 linkage)
                     Map<String, Object> degradationInfo = new LinkedHashMap<>();
                     degradationInfo.put("lastSuccessTime",
                             lastN8NSuccessTime != null ? lastN8NSuccessTime.toString() : null);
@@ -854,7 +858,7 @@ public class AiGenerationServiceImpl implements AiGenerationService {
         long chatEmitterTimeout = (long) n8nTimeoutSeconds * 2 * 1000 + 60_000L;
         SseEmitter emitter = new SseEmitter(chatEmitterTimeout);
 
-        // 如果已有活跃的 emitter，先完成它，防止覆盖导致响应丢失
+        // If there's already an active emitter, complete it first to prevent overwriting
         SseEmitter existingEmitter = chatEmitters.get(key);
         if (existingEmitter != null) {
             log.warn("Existing chat SSE emitter found for key={}, completing it before creating new one", key);
@@ -1082,8 +1086,8 @@ public class AiGenerationServiceImpl implements AiGenerationService {
     }
 
     /**
-     * 将文档列表格式化为人类可读的纯文本，便于 AI 在 systemMessage 中理解。
-     * 避免使用 JSON 字符串（双重转义后 AI 难以解析）。
+     * Format document list as human-readable plain text for AI to understand in systemMessage.
+     * Avoids JSON strings (double-escaping makes it hard for AI to parse).
      */
     private String formatDocumentsForPrompt(List<Map<String, String>> documents) {
         StringBuilder sb = new StringBuilder();

@@ -9,7 +9,7 @@ import java.time.LocalDateTime;
 import java.util.Set;
 
 /**
- * 用户安全信息DTO
+ * User security info DTO
  */
 @Data
 @Builder
@@ -18,52 +18,52 @@ import java.util.Set;
 public class UserSecurityInfo {
     
     /**
-     * 用户名
+     * Username
      */
     private String username;
     
     /**
-     * 显示名称
+     * Display name
      */
     private String displayName;
     
     /**
-     * 邮箱
+     * Email
      */
     private String email;
     
     /**
-     * 用户角色
+     * User role
      */
     private Set<String> roles;
     
     /**
-     * 用户权限
+     * User permissions
      */
     private Set<String> permissions;
     
     /**
-     * 最后登录时间
+     * Last login time
      */
     private LocalDateTime lastLoginTime;
     
     /**
-     * 最后登录IP
+     * Last login IP
      */
     private String lastLoginIp;
     
     /**
-     * 账户是否启用
+     * Whether account is enabled
      */
     private Boolean enabled;
     
     /**
-     * 账户是否锁定
+     * Whether account is locked
      */
     private Boolean locked;
     
     /**
-     * 密码过期时间
+     * Password expiration time
      */
     private LocalDateTime passwordExpiresAt;
 }

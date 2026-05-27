@@ -14,8 +14,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 /**
- * 功能单元实体
- * 表示从开发工作站导入的功能包
+ * Admin Center FunctionUnit entity — a package imported from Developer Workstation.
  */
 @Entity
 @Table(name = "sys_function_units")
@@ -71,8 +70,7 @@ public class FunctionUnit {
     private String importedBy;
     
     /**
-     * 功能单元部署时间戳
-     * 记录功能单元首次部署到系统的时间
+     * When this function unit was first deployed into the platform (persisted milestone).
      */
     @Column(name = "deployed_at", nullable = false)
     @Builder.Default
@@ -101,14 +99,14 @@ public class FunctionUnit {
     private String updatedBy;
     
     /**
-     * 流程是否已部署到 Flowable 引擎
+     * Whether BPMN/process definitions were deployed to the Flowable engine.
      */
     @Column(name = "process_deployed")
     @Builder.Default
     private Boolean processDeployed = false;
     
     /**
-     * 已部署的流程数量
+     * Number of process definitions deployed from this package.
      */
     @Column(name = "process_deployment_count")
     @Builder.Default
@@ -131,7 +129,7 @@ public class FunctionUnit {
     private Set<FunctionUnitContent> contents = new HashSet<>();
     
     /**
-     * 检查功能单元是否可以部署（须先通过验证）
+     * {@code true} if the unit may be deployed (validated or already deployed).
      */
     public boolean isDeployable() {
         return status == FunctionUnitStatus.VALIDATED
@@ -139,42 +137,42 @@ public class FunctionUnit {
     }
 
     /**
-     * 检查功能单元是否可以执行验证
+     * {@code true} if validation may be run (draft only).
      */
     public boolean isValidatable() {
         return status == FunctionUnitStatus.DRAFT;
     }
     
     /**
-     * 检查功能单元是否已废弃
+     * {@code true} if status is DEPRECATED.
      */
     public boolean isDeprecated() {
         return status == FunctionUnitStatus.DEPRECATED;
     }
     
     /**
-     * 检查功能单元是否启用
+     * {@code true} if the {@code enabled} flag is set.
      */
     public boolean isEnabled() {
         return enabled != null && enabled;
     }
     
     /**
-     * 检查功能单元是否对用户可用（已部署且启用）
+     * {@code true} if deployed and enabled (available to end users).
      */
     public boolean isAvailableToUsers() {
         return status == FunctionUnitStatus.DEPLOYED && isEnabled();
     }
     
     /**
-     * 获取完整版本标识
+     * Full version key: {@code code:version}.
      */
     public String getFullVersionId() {
         return code + ":" + version;
     }
     
     /**
-     * 标记为草稿状态（导入或恢复后）
+     * Reset to draft and disable (after import or restore).
      */
     public void markAsDraft() {
         this.status = FunctionUnitStatus.DRAFT;
@@ -182,7 +180,7 @@ public class FunctionUnit {
     }
 
     /**
-     * 标记为已归档
+     * Mark as archived and disable.
      */
     public void markAsArchived() {
         this.status = FunctionUnitStatus.ARCHIVED;
@@ -190,7 +188,7 @@ public class FunctionUnit {
     }
 
     /**
-     * 标记为已验证
+     * Mark as validated; records validator and timestamp.
      */
     public void markAsValidated(String validatorId) {
         this.status = FunctionUnitStatus.VALIDATED;
@@ -199,21 +197,21 @@ public class FunctionUnit {
     }
     
     /**
-     * 标记为已部署
+     * Mark status as deployed.
      */
     public void markAsDeployed() {
         this.status = FunctionUnitStatus.DEPLOYED;
     }
     
     /**
-     * 标记为已废弃
+     * Mark as deprecated.
      */
     public void markAsDeprecated() {
         this.status = FunctionUnitStatus.DEPRECATED;
     }
     
     /**
-     * 添加部署记录
+     * Attach a deployment record (owns both sides).
      */
     public void addDeployment(FunctionUnitDeployment deployment) {
         if (deployments == null) {
@@ -224,7 +222,7 @@ public class FunctionUnit {
     }
     
     /**
-     * 添加依赖
+     * Attach a dependency row.
      */
     public void addDependency(FunctionUnitDependency dependency) {
         if (dependencies == null) {
@@ -235,7 +233,7 @@ public class FunctionUnit {
     }
     
     /**
-     * 添加内容
+     * Attach a package content artifact row.
      */
     public void addContent(FunctionUnitContent content) {
         if (contents == null) {

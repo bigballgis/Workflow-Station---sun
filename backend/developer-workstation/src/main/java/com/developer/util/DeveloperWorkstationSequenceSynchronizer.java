@@ -10,10 +10,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 /**
- * 将 dw_* BIGSERIAL 序列与表中 MAX(id) 对齐。
- * init 脚本或导入若写入较大 id 而未推进序列，会导致 clone/import 主键冲突。
+ * Aligns dw_* BIGSERIAL sequences with MAX(id) in each table.
+ * If init scripts or imports insert large IDs without advancing the sequence, clone/import may hit PK conflicts.
  *
- * <p>必须在独立连接/事务外执行（NOT_SUPPORTED），避免某表不存在时污染调用方的 PostgreSQL 事务。
+ * <p>Runs outside the caller transaction (NOT_SUPPORTED) so missing tables do not poison the caller's PostgreSQL transaction.
  */
 @Slf4j
 @Component
@@ -42,8 +42,8 @@ public class DeveloperWorkstationSequenceSynchronizer {
     private final JdbcTemplate jdbcTemplate;
 
     /**
-     * 同步所有已知 dw_* 表的 id 序列（表不存在或无序列时跳过）。
-     * 在独立连接执行，适合 import/clone 等「尚无本事务内未提交写入」的场景。
+     * Syncs id sequences for all known dw_* tables (skips if table missing or no serial sequence).
+     * Runs on a separate connection; suitable for import/clone before uncommitted writes in the current transaction.
      */
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void synchronizeAll() {
@@ -53,8 +53,8 @@ public class DeveloperWorkstationSequenceSynchronizer {
     }
 
     /**
-     * 与调用方同一 JDBC 事务内对齐序列，能看见本事务已 flush、尚未 commit 的行。
-     * rollback 等「先删/插再 restore」流程必须用此方法，否则 NOT_SUPPORTED 会把序列设回旧 MAX。
+     * Aligns sequences within the same JDBC transaction as the caller, so flushed-but-uncommitted rows are visible.
+     * Rollback flows that delete/reinsert before restore must use this; otherwise NOT_SUPPORTED would reset the sequence to stale MAX.
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public void synchronizeAllInTransaction() {
@@ -63,12 +63,12 @@ public class DeveloperWorkstationSequenceSynchronizer {
         }
     }
 
-    /** 将 dw_field_definitions 序列与 MAX(id) 对齐（表保存 delete+reinsert 前调用）。 */
+    /** Aligns dw_field_definitions sequence with MAX(id) (call before table save delete+reinsert). */
     public void synchronizeFieldDefinitions() {
         synchronizeTable("dw_field_definitions");
     }
 
-    /** 将 dw_versions 序列与 MAX(id) 对齐。 */
+    /** Aligns dw_versions sequence with MAX(id). */
     public void synchronizeVersions() {
         synchronizeTable("dw_versions");
     }

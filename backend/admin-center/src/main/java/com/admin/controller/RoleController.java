@@ -23,23 +23,25 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Set;
+import com.platform.common.i18n.I18nService;
 
 /**
- * 角色管理控制器
+ * Role Management Controller
  */
 @RestController
 @RequestMapping("/roles")
 @RequiredArgsConstructor
-@Tag(name = "角色管理", description = "角色的创建、配置、成员管理等接口")
+@Tag(name = "Role Management", description = "Role creation, configuration, member management APIs")
 public class RoleController {
     
     private final RolePermissionManagerComponent rolePermissionManager;
     private final RoleMemberManagerComponent roleMemberManager;
+    private final I18nService i18nService;
     
-    // ==================== 角色 CRUD ====================
+    // ==================== Role CRUD ====================
     
     @PostMapping
-    @Operation(summary = "创建角色")
+    @Operation(summary = "Create role")
     public ResponseEntity<Role> createRole(@RequestBody @Valid CreateRoleRequest request) {
         Role role = rolePermissionManager.createRole(
                 request.getName(),
@@ -51,14 +53,14 @@ public class RoleController {
     }
     
     @GetMapping("/{roleId}")
-    @Operation(summary = "获取角色详情")
+    @Operation(summary = "Get role detail")
     public ResponseEntity<Role> getRole(@PathVariable String roleId) {
         Role role = rolePermissionManager.getRole(roleId);
         return ResponseEntity.ok(role);
     }
     
     @GetMapping
-    @Operation(summary = "获取角色列表", description = "支持按类型筛选角色")
+    @Operation(summary = "Get role list", description = "Supports filtering roles by type")
     public ResponseEntity<List<Role>> getRoles(
             @RequestParam(required = false) RoleType type) {
         List<Role> roles;
@@ -73,28 +75,28 @@ public class RoleController {
     }
     
     @GetMapping("/business")
-    @Operation(summary = "获取业务角色列表", description = "获取所有业务角色，用于功能单元访问配置")
+    @Operation(summary = "Get business role list", description = "Get all business roles for function unit access configuration")
     public ResponseEntity<List<Role>> getBusinessRoles() {
         List<Role> roles = rolePermissionManager.getBusinessRoles();
         return ResponseEntity.ok(roles);
     }
     
     @GetMapping("/developer")
-    @Operation(summary = "获取开发角色列表", description = "获取所有开发角色")
+    @Operation(summary = "Get developer role list", description = "Get all developer roles")
     public ResponseEntity<List<Role>> getDeveloperRoles() {
         List<Role> roles = rolePermissionManager.getDeveloperRoles();
         return ResponseEntity.ok(roles);
     }
     
     @DeleteMapping("/{roleId}")
-    @Operation(summary = "删除角色")
+    @Operation(summary = "Delete role")
     public ResponseEntity<Void> deleteRole(@PathVariable String roleId) {
         rolePermissionManager.deleteRole(roleId);
         return ResponseEntity.noContent().build();
     }
     
     @PutMapping("/{roleId}")
-    @Operation(summary = "更新角色")
+    @Operation(summary = "Update role")
     public ResponseEntity<Role> updateRole(
             @PathVariable String roleId,
             @RequestBody @Valid UpdateRoleRequest request) {
@@ -108,10 +110,10 @@ public class RoleController {
     }
 
     
-    // ==================== 权限配置 ====================
+    // ==================== Permission Configuration ====================
     
     @PutMapping("/{roleId}/permissions")
-    @Operation(summary = "配置角色权限")
+    @Operation(summary = "Configure role permissions")
     public ResponseEntity<Void> configurePermissions(
             @PathVariable String roleId,
             @RequestBody @Valid List<PermissionConfig> permissions) {
@@ -120,23 +122,23 @@ public class RoleController {
     }
     
     @GetMapping("/{roleId}/permissions")
-    @Operation(summary = "获取角色权限")
+    @Operation(summary = "Get role permissions")
     public ResponseEntity<Set<Permission>> getRolePermissions(@PathVariable String roleId) {
         Set<Permission> permissions = rolePermissionManager.getEffectivePermissions(roleId);
         return ResponseEntity.ok(permissions);
     }
     
-    // ==================== 成员管理 ====================
+    // ==================== Member Management ====================
     
     @GetMapping("/{roleId}/members")
-    @Operation(summary = "获取角色成员列表")
+    @Operation(summary = "Get role member list")
     public ResponseEntity<List<UserRole>> getRoleMembers(@PathVariable String roleId) {
         List<UserRole> members = roleMemberManager.getRoleMembers(roleId);
         return ResponseEntity.ok(members);
     }
     
     @GetMapping("/{roleId}/members/paged")
-    @Operation(summary = "分页获取角色成员")
+    @Operation(summary = "Get role members (paged)")
     public ResponseEntity<Page<UserRole>> getRoleMembersPaged(
             @PathVariable String roleId,
             Pageable pageable) {
@@ -145,72 +147,72 @@ public class RoleController {
     }
     
     @PostMapping("/{roleId}/members/{userId}")
-    @Operation(summary = "添加角色成员")
+    @Operation(summary = "Add role member")
     public ResponseEntity<Void> addMember(
             @PathVariable String roleId,
             @PathVariable String userId,
             @RequestParam(required = false) String reason) {
         String operatedBy = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthenticated_user")));
         roleMemberManager.assignRoleToUser(userId, roleId, operatedBy, reason);
         return ResponseEntity.ok().build();
     }
     
     @DeleteMapping("/{roleId}/members/{userId}")
-    @Operation(summary = "移除角色成员")
+    @Operation(summary = "Remove role member")
     public ResponseEntity<Void> removeMember(
             @PathVariable String roleId,
             @PathVariable String userId,
             @RequestParam(required = false) String reason) {
         String operatedBy = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthenticated_user")));
         roleMemberManager.removeRoleFromUser(userId, roleId, operatedBy, reason);
         return ResponseEntity.noContent().build();
     }
     
     @PostMapping("/{roleId}/members/batch")
-    @Operation(summary = "批量添加角色成员")
+    @Operation(summary = "Batch add role members")
     public ResponseEntity<BatchRoleMemberResult> batchAddMembers(
             @PathVariable String roleId,
             @RequestBody @Valid BatchRoleMemberRequest request) {
         String operatedBy = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthenticated_user")));
         request.setRoleId(roleId);
         BatchRoleMemberResult result = roleMemberManager.batchAddMembers(request, operatedBy);
         return ResponseEntity.ok(result);
     }
     
     @DeleteMapping("/{roleId}/members/batch")
-    @Operation(summary = "批量移除角色成员")
+    @Operation(summary = "Batch remove role members")
     public ResponseEntity<BatchRoleMemberResult> batchRemoveMembers(
             @PathVariable String roleId,
             @RequestBody @Valid BatchRoleMemberRequest request) {
         String operatedBy = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthenticated_user")));
         request.setRoleId(roleId);
         BatchRoleMemberResult result = roleMemberManager.batchRemoveMembers(request, operatedBy);
         return ResponseEntity.ok(result);
     }
     
     @GetMapping("/{roleId}/members/count")
-    @Operation(summary = "获取角色成员数量")
+    @Operation(summary = "Get role member count")
     public ResponseEntity<Long> getMemberCount(@PathVariable String roleId) {
         long count = roleMemberManager.getRoleMemberCount(roleId);
         return ResponseEntity.ok(count);
     }
 
     
-    // ==================== 变更历史 ====================
+    // ==================== Change History ====================
     
     @GetMapping("/{roleId}/history")
-    @Operation(summary = "获取角色变更历史")
+    @Operation(summary = "Get role change history")
     public ResponseEntity<List<PermissionChangeHistory>> getRoleHistory(@PathVariable String roleId) {
         List<PermissionChangeHistory> history = roleMemberManager.getRoleChangeHistory(roleId);
         return ResponseEntity.ok(history);
     }
     
     @GetMapping("/{roleId}/history/paged")
-    @Operation(summary = "分页获取角色变更历史")
+    @Operation(summary = "Get role change history (paged)")
     public ResponseEntity<Page<PermissionChangeHistory>> getRoleHistoryPaged(
             @PathVariable String roleId,
             Pageable pageable) {
@@ -218,17 +220,17 @@ public class RoleController {
         return ResponseEntity.ok(history);
     }
     
-    // ==================== 请求对象 ====================
+    // ==================== Request Objects ====================
     
     @lombok.Data
     public static class CreateRoleRequest {
-        @jakarta.validation.constraints.NotBlank(message = "角色名称不能为空")
+        @jakarta.validation.constraints.NotBlank(message = "{validation.role_name_required}")
         private String name;
         
-        @jakarta.validation.constraints.NotBlank(message = "角色编码不能为空")
+        @jakarta.validation.constraints.NotBlank(message = "{validation.role_code_required}")
         private String code;
         
-        @jakarta.validation.constraints.NotNull(message = "角色类型不能为空")
+        @jakarta.validation.constraints.NotNull(message = "{validation.role_type_required}")
         private RoleType type;
         
         private String description;

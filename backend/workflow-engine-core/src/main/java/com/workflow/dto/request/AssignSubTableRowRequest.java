@@ -8,9 +8,9 @@ import lombok.NoArgsConstructor;
 import jakarta.validation.constraints.NotBlank;
 
 /**
- * 分配子表行处理人请求
+ * Assign sub-table row handler request.
  * 
- * 用于多实例子流程前置任务中，手动为子表行分配处理人。
+ * Used in multi-instance sub-process pre-tasks to manually assign handlers for sub-table rows.
  */
 @Data
 @Builder
@@ -19,13 +19,13 @@ import jakarta.validation.constraints.NotBlank;
 public class AssignSubTableRowRequest {
     
     /**
-     * 处理人用户 ID
+     * Assignee user ID
      */
-    @NotBlank(message = "处理人用户ID不能为空")
+    @NotBlank(message = "Assignee user ID must not be empty")
     private String assigneeId;
 
     /**
-     * 联合主键时必须提供；单列主键可与路径 rowId 二选一。
+     * Required for composite primary keys; optional for single-column PK (can use path rowId instead).
      */
     private java.util.Map<String, Object> rowKey;
 }

@@ -13,8 +13,8 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * 任务操作服务
- * 负责从BPMN中解析任务的可用操作
+ * Resolves task-level actions from BPMN metadata.
+ * Loads available actions for a task from the workflow engine and local definitions.
  */
 @Slf4j
 @Service
@@ -25,13 +25,13 @@ public class TaskActionService {
     private final ActionDefinitionRepository actionDefinitionRepository;
     
     /**
-     * 获取任务的可用操作列表
-     * 通过 Workflow Engine API 获取任务的 actionIds，然后从数据库查询 action 定义
+     * Returns the list of actions enabled for a task.
+     * Fetches {@code actionIds} from the workflow engine, then loads definitions from the database.
      */
     public List<TaskActionInfo> getTaskActions(String taskId) {
         log.debug("TaskActionService.getTaskActions called for taskId: {}", taskId);
         try {
-            // 1. 从 Workflow Engine 获取任务的 actionIds
+            // 1. Load actionIds for the task from the workflow engine.
             Optional<Map<String, Object>> result = workflowEngineClient.getTaskById(taskId);
             
             if (result.isEmpty()) {
@@ -47,7 +47,7 @@ public class TaskActionService {
                 return Collections.emptyList();
             }
             
-            // 2. 提取 actionIds（引擎 JSON 常为数字数组 [1,2,3]，反序列化为 List<Integer>，不能直接强转为 List<String>）
+            // 2. Normalize actionIds (engine JSON often uses numeric arrays deserialized as List<Integer>, not List<String>).
             List<String> actionIds = normalizeActionIdList(data.get("actionIds"));
             
             if (actionIds == null || actionIds.isEmpty()) {
@@ -57,8 +57,8 @@ public class TaskActionService {
             
             log.info("Found {} action IDs for task {}: {}", actionIds.size(), taskId, actionIds);
             
-            // 3. 仅解析当前节点 actionIds 对应的动作定义；不能回退为整条流程的全部动作，
-            // 否则待办详情会把其它节点动作也渲染成底部按钮。
+            // 3. Resolve definitions only for this node's actionIds; do not fall back to all process actions
+            // or todo detail would show buttons for unrelated nodes.
             return fetchActionDefinitions(actionIds);
             
         } catch (Exception e) {
@@ -68,10 +68,7 @@ public class TaskActionService {
     }
     
     /**
-     * 从数据库批量获取action定义
-     */
-    /**
-     * 将引擎返回的 actionIds（Integer/Long/String 混合列表）规范为 String ID，供 JPA 查询。
+     * Normalizes engine-returned actionIds (Integer/Long/String list) to String IDs for JPA lookup.
      */
     private static List<String> normalizeActionIdList(Object raw) {
         if (raw == null) {
@@ -159,9 +156,7 @@ public class TaskActionService {
         }
     }
     
-    /**
-     * 将ActionDefinition实体转换为TaskActionInfo DTO
-     */
+    /** Maps an ActionDefinition entity to TaskActionInfo. */
     private TaskActionInfo toTaskActionInfo(ActionDefinition action) {
         return TaskActionInfo.builder()
             .actionId(action.getId())

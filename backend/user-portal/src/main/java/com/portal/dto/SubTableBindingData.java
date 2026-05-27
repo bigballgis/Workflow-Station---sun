@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 子表绑定数据 DTO
+ * Sub-table binding payload DTO.
  */
 @Data
 @Builder

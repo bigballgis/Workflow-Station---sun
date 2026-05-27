@@ -29,17 +29,17 @@ import java.util.Objects;
 @RequestMapping("/permissions")
 @RequiredArgsConstructor
 @Slf4j
-@Tag(name = "权限管理", description = "权限申请和管理相关接口")
+@Tag(name = "Permission Management", description = "Permission request and management APIs")
 public class PermissionController {
 
     private final PermissionComponent permissionComponent;
     private final RoleAccessComponent roleAccessComponent;
     private final I18nService i18nService;
 
-    // ==================== 新的 API 端点 ====================
+    // ==================== New API endpoints ====================
 
     @GetMapping("/available-roles")
-    @Operation(summary = "获取可申请的业务角色", description = "获取用户可以申请的业务角色列表（排除已拥有的）")
+    @Operation(summary = "Get available business roles", description = "Get the list of business roles the user can apply for (excluding already owned)")
     public ApiResponse<List<Map<String, Object>>> getAvailableRoles(
             @CurrentUserId String userId) {
         List<Map<String, Object>> roles = permissionComponent.getAvailableRoles(userId);
@@ -47,14 +47,14 @@ public class PermissionController {
     }
 
     @GetMapping("/available-virtual-groups")
-    @Operation(summary = "获取可加入的虚拟组", description = "已禁用：虚拟组不在 User Portal 提供")
+    @Operation(summary = "Get available virtual groups", description = "Disabled: virtual groups are not available in User Portal")
     public ApiResponse<List<Map<String, Object>>> getAvailableVirtualGroups(
             @CurrentUserId String userId) {
         return ApiResponse.error(i18nService.getMessage("portal.virtual_group_not_in_portal"));
     }
 
     @GetMapping("/users/search")
-    @Operation(summary = "搜索启用用户", description = "代办选人：仅返回 ACTIVE 用户（分页）")
+    @Operation(summary = "Search active users", description = "Delegate user selection: returns only ACTIVE users (paginated)")
     public ApiResponse<PageResponse<Map<String, Object>>> searchUsersForDelegation(
             @CurrentUserId String userId,
             @RequestParam(required = false) String keyword,
@@ -64,7 +64,7 @@ public class PermissionController {
     }
 
     @GetMapping("/available-business-units")
-    @Operation(summary = "获取可加入的业务单元", description = "获取用户可以加入的业务单元列表（排除已加入的）")
+    @Operation(summary = "Get available business units", description = "Get the list of business units the user can join (excluding already joined)")
     public ApiResponse<List<Map<String, Object>>> getAvailableBusinessUnits(
             @CurrentUserId String userId) {
         List<Map<String, Object>> businessUnits = permissionComponent.getAvailableBusinessUnits(userId);
@@ -72,14 +72,14 @@ public class PermissionController {
     }
 
     @GetMapping("/business-units")
-    @Operation(summary = "获取业务单元目录", description = "获取平台业务单元扁平列表（成员管理等下拉）")
+    @Operation(summary = "Get business unit catalog", description = "Get platform business unit flat list (for member management dropdowns, etc.)")
     public ApiResponse<List<Map<String, Object>>> getBusinessUnitsCatalog(@CurrentUserId String userId) {
         log.debug("Business units catalog requested by user {}", userId);
         return ApiResponse.success(permissionComponent.getBusinessUnitsCatalog());
     }
 
     @GetMapping("/business-units/{businessUnitId}/roles")
-    @Operation(summary = "获取业务单元绑定角色", description = "获取业务单元已绑定的业务角色列表")
+    @Operation(summary = "Get business unit bound roles", description = "Get the list of business roles bound to a business unit")
     public ApiResponse<List<Map<String, Object>>> getBusinessUnitRoles(
             @CurrentUserId String userId,
             @PathVariable String businessUnitId) {
@@ -88,7 +88,7 @@ public class PermissionController {
     }
 
     @PostMapping("/request-role")
-    @Operation(summary = "申请角色", description = "申请某个组织单元的业务角色（自动批准）")
+    @Operation(summary = "Request role", description = "Apply for a business role in an organization unit (auto-approved)")
     public ApiResponse<PermissionRequest> requestRole(
             @CurrentUserId String userId,
             @RequestBody Map<String, String> body) {
@@ -115,7 +115,7 @@ public class PermissionController {
     }
 
     @PostMapping("/request-virtual-group")
-    @Operation(summary = "申请加入虚拟组", description = "已禁用：虚拟组不在 User Portal 提供")
+    @Operation(summary = "Request virtual group join", description = "Disabled: virtual groups are not available in User Portal")
     public ApiResponse<PermissionRequest> requestVirtualGroup(
             @CurrentUserId String userId,
             @RequestBody Map<String, String> body) {
@@ -123,7 +123,7 @@ public class PermissionController {
     }
 
     @PostMapping("/request-business-unit")
-    @Operation(summary = "申请加入业务单元", description = "可申请为他人代办（beneficiaryUserId，可选）")
+    @Operation(summary = "Request business unit join", description = "Can apply on behalf of others (beneficiaryUserId, optional)")
     public ApiResponse<PermissionRequest> requestBusinessUnit(
             @CurrentUserId String userId,
             @RequestBody Map<String, Object> body) {
@@ -147,7 +147,7 @@ public class PermissionController {
     }
 
     @PostMapping("/request-business-unit-role")
-    @Operation(summary = "申请加入业务单元并指定角色", description = "申请加入业务单元，并选择该业务单元下的一条 Eligible Role")
+    @Operation(summary = "Request business unit join with role", description = "Apply to join a business unit and select an Eligible Role under it")
     public ApiResponse<PermissionRequest> requestBusinessUnitWithRole(
             @CurrentUserId String userId,
             @RequestBody Map<String, Object> body) {
@@ -187,7 +187,7 @@ public class PermissionController {
     }
 
     @PostMapping("/request-business-unit-exit")
-    @Operation(summary = "申请退出业务单元", description = "退出成员身份（审批通过后执行）；可代办 beneficiaryUserId")
+    @Operation(summary = "Request business unit exit", description = "Exit membership (executes after approval); can proxy via beneficiaryUserId")
     public ApiResponse<PermissionRequest> requestBusinessUnitExit(
             @CurrentUserId String userId,
             @RequestBody Map<String, Object> body) {
@@ -209,7 +209,7 @@ public class PermissionController {
     }
 
     @GetMapping("/removal-options-by-function-unit")
-    @Operation(summary = "按功能单元查看可移除的业务单元角色", description = "根据受益人当前 BU 角色与已部署功能单元的访问配置（角色门槛）聚合，供门户移除权限多选。")
+    @Operation(summary = "View removable business unit roles by function unit", description = "Aggregated by beneficiary current BU roles and deployed function unit access config (role thresholds), for multi-select removal in portal.")
     public ApiResponse<Map<String, Object>> getRemovalOptionsByFunctionUnit(
             @CurrentUserId String userId,
             @RequestParam(required = false) String beneficiaryUserId) {
@@ -224,7 +224,7 @@ public class PermissionController {
     }
 
     @PostMapping("/request-business-unit-role-removal")
-    @Operation(summary = "申请移除业务单元下的业务角色", description = "提交申请，经业务单元审批人批准后移除该角色绑定")
+    @Operation(summary = "Request removal of business role under business unit", description = "Submit a request to remove the role binding after BU approver approval")
     public ApiResponse<PermissionRequest> requestBusinessUnitRoleRemoval(
             @CurrentUserId String userId,
             @RequestBody Map<String, Object> body) {
@@ -254,7 +254,7 @@ public class PermissionController {
     }
 
     @GetMapping("/my-roles")
-    @Operation(summary = "获取我的角色", description = "获取用户当前拥有的业务角色列表")
+    @Operation(summary = "Get my roles", description = "Get the list of business roles currently owned by the user")
     public ApiResponse<List<Map<String, Object>>> getMyRoles(
             @CurrentUserId String userId) {
         List<Map<String, Object>> roles = permissionComponent.getUserCurrentRoles(userId);
@@ -262,21 +262,21 @@ public class PermissionController {
     }
 
     @GetMapping("/my-virtual-groups")
-    @Operation(summary = "获取我的虚拟组", description = "已禁用：虚拟组不在 User Portal 提供")
+    @Operation(summary = "Get my virtual groups", description = "Disabled: virtual groups are not available in User Portal")
     public ApiResponse<List<Map<String, Object>>> getMyVirtualGroups(
             @CurrentUserId String userId) {
         return ApiResponse.error(i18nService.getMessage("portal.virtual_group_not_in_portal"));
     }
 
-    // ==================== 审批 API 端点 ====================
+    // ==================== Approval API endpoints ====================
 
     @GetMapping("/approvals/pending")
-    @Operation(summary = "获取待审批列表", description = "获取当前用户可以审批的权限申请")
+    @Operation(summary = "Get pending approvals", description = "Get permission requests the current user can approve")
     public ApiResponse<PageResponse<PermissionRequest>> getPendingApprovals(
             @CurrentUserId String userId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        // 检查审批权限
+        // Check approval permission
         if (!permissionComponent.isApprover(userId)) {
             return ApiResponse.error(i18nService.getMessage("portal.no_approval_permission"));
         }
@@ -289,12 +289,12 @@ public class PermissionController {
     }
 
     @PostMapping("/approvals/{requestId}/approve")
-    @Operation(summary = "批准申请", description = "批准权限申请")
+    @Operation(summary = "Approve request", description = "Approve a permission request")
     public ApiResponse<PermissionRequest> approveRequest(
             @CurrentUserId String userId,
             @PathVariable Long requestId,
             @RequestBody(required = false) Map<String, String> body) {
-        // 检查审批权限
+        // Check approval permission
         if (!permissionComponent.isApprover(userId)) {
             return ApiResponse.error(i18nService.getMessage("portal.no_approval_permission"));
         }
@@ -310,12 +310,12 @@ public class PermissionController {
     }
 
     @PostMapping("/approvals/{requestId}/reject")
-    @Operation(summary = "拒绝申请", description = "拒绝权限申请（必须填写原因）")
+    @Operation(summary = "Reject request", description = "Reject a permission request (reason required)")
     public ApiResponse<PermissionRequest> rejectRequest(
             @CurrentUserId String userId,
             @PathVariable Long requestId,
             @RequestBody Map<String, String> body) {
-        // 检查审批权限
+        // Check approval permission
         if (!permissionComponent.isApprover(userId)) {
             return ApiResponse.error(i18nService.getMessage("portal.no_approval_permission"));
         }
@@ -334,7 +334,7 @@ public class PermissionController {
     }
 
     @GetMapping("/approvals/is-approver")
-    @Operation(summary = "检查审批权限", description = "检查当前用户是否有审批权限")
+    @Operation(summary = "Check approval permission", description = "Check if the current user has approval permission")
     public ApiResponse<Map<String, Object>> isApprover(
             @CurrentUserId String userId) {
         boolean isApprover = permissionComponent.isApprover(userId);
@@ -344,12 +344,12 @@ public class PermissionController {
     }
 
     @GetMapping("/approvals/history")
-    @Operation(summary = "获取审批历史", description = "获取当前用户的审批历史记录")
+    @Operation(summary = "Get approval history", description = "Get the current user's approval history records")
     public ApiResponse<PageResponse<PermissionRequest>> getApprovalHistory(
             @CurrentUserId String userId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        // 检查审批权限
+        // Check approval permission
         if (!permissionComponent.isApprover(userId)) {
             return ApiResponse.error(i18nService.getMessage("portal.no_approval_permission"));
         }
@@ -361,10 +361,10 @@ public class PermissionController {
         return ApiResponse.success(PageResponse.of(result));
     }
 
-    // ==================== 旧的 API 端点（保留兼容） ====================
+    // ==================== Legacy API endpoints (kept for compatibility) ====================
 
     @GetMapping("/my")
-    @Operation(summary = "获取我的权限列表")
+    @Operation(summary = "Get my permission list")
     @Deprecated
     public ApiResponse<List<Map<String, Object>>> getMyPermissions(
             @CurrentUserId String userId) {
@@ -373,7 +373,7 @@ public class PermissionController {
     }
 
     @PostMapping("/request")
-    @Operation(summary = "提交权限申请")
+    @Operation(summary = "Submit permission request")
     @Deprecated
     public ApiResponse<PermissionRequest> submitRequest(
             @CurrentUserId String userId,
@@ -383,7 +383,7 @@ public class PermissionController {
     }
 
     @GetMapping("/requests")
-    @Operation(summary = "获取我的申请记录")
+    @Operation(summary = "Get my request records")
     public ApiResponse<PageResponse<PermissionRequestListItem>> getMyRequests(
             @CurrentUserId String userId,
             @RequestParam(required = false) PermissionRequestStatus status,
@@ -397,7 +397,7 @@ public class PermissionController {
     }
 
     @GetMapping("/requests/{requestId}")
-    @Operation(summary = "获取申请详情")
+    @Operation(summary = "Get request details")
     public ApiResponse<PermissionRequest> getRequestDetail(
             @CurrentUserId String userId,
             @PathVariable Long requestId) {
@@ -407,7 +407,7 @@ public class PermissionController {
     }
 
     @DeleteMapping("/requests/{requestId}")
-    @Operation(summary = "取消申请")
+    @Operation(summary = "Cancel request")
     public ApiResponse<Void> cancelRequest(
             @CurrentUserId String userId,
             @PathVariable Long requestId) {
@@ -419,7 +419,7 @@ public class PermissionController {
     }
 
     @PostMapping("/renew")
-    @Operation(summary = "续期申请")
+    @Operation(summary = "Renew request")
     @Deprecated
     public ApiResponse<PermissionRequest> renewPermission(
             @CurrentUserId String userId,
@@ -434,7 +434,7 @@ public class PermissionController {
     }
 
     @GetMapping("/expiring")
-    @Operation(summary = "获取即将过期的权限")
+    @Operation(summary = "Get expiring permissions")
     @Deprecated
     public ApiResponse<List<Map<String, Object>>> getExpiringPermissions(
             @CurrentUserId String userId,

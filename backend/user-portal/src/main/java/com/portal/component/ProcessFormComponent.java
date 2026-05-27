@@ -27,8 +27,8 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Process Form 组件
- * 负责 Process Form 数据的获取、提交更新和存在性校验
+ * Process Form component.
+ * Loads Process Form data, handles submit updates, and validates existence.
  */
 @Slf4j
 @Component
@@ -64,9 +64,9 @@ public class ProcessFormComponent {
     private static final String RETURN_TO_REQUESTER = "RETURN_TO_REQUESTER";
 
     /**
-     * 获取 Process Form 布局 + 当前流程变量值
+     * Returns Process Form layout and current process variable values.
      *
-     * @param processInstanceId 流程实例 ID
+     * @param processInstanceId process instance ID
      * @return ProcessFormData DTO
      */
     public ProcessFormData getProcessFormData(String processInstanceId) {
@@ -111,11 +111,11 @@ public class ProcessFormComponent {
     }
 
     /**
-     * 提交 Process Form 更新（仅 Return_To_Requester 状态）
+     * Submits Process Form updates (only in Return_To_Requester state).
      *
-     * @param processInstanceId 流程实例 ID
-     * @param userId            操作用户 ID
-     * @param formData          表单数据
+     * @param processInstanceId process instance ID
+     * @param userId            acting user ID
+     * @param formData          form payload
      */
     public void submitProcessFormUpdate(String processInstanceId, String userId, Map<String, Object> formData) {
         log.info("Submitting process form update for process: {}, user: {}", processInstanceId, userId);
@@ -290,10 +290,10 @@ public class ProcessFormComponent {
     }
 
     /**
-     * 校验 FunctionUnit 是否有 PROCESS 类型表单
+     * Validates that the FunctionUnit has a PROCESS form.
      *
-     * @param functionUnitId 功能单元 ID
-     * @throws PortalException 如果没有 PROCESS form 则抛出 400 异常
+     * @param functionUnitId function unit ID
+     * @throws PortalException HTTP 400 when no PROCESS form exists
      */
     public void validateProcessFormExists(String functionUnitId) {
         log.debug("Validating PROCESS form exists for function unit: {}", functionUnitId);
@@ -306,7 +306,7 @@ public class ProcessFormComponent {
     }
 
     /**
-     * 判断流程是否处于 Return_To_Requester 状态
+     * Whether the process is in Return_To_Requester state.
      */
     public boolean isInReturnToRequesterState(String processInstanceId) {
         return processInstanceRepository.findById(processInstanceId)
@@ -317,10 +317,10 @@ public class ProcessFormComponent {
     // ==================== Private Helper Methods ====================
 
     /**
-     * 解析 PROCESS 表单定义：优先从与 developer-workstation 共用的 {@code dw_*} 表读取；
-     * 否则从 admin-center {@code GET /function-units/{id}/contents?type=FORM} 解析包内快照（含 formType）。
+     * Resolves PROCESS form definition: prefer shared {@code dw_*} tables with developer-workstation;
+     * otherwise parse admin-center {@code GET /function-units/{id}/contents?type=FORM} package snapshot (includes formType).
      * <p>
-     * 历史实现误调用了不存在的 {@code /function-units/.../forms?formType=PROCESS}，导致 4xx/5xx。
+     * Legacy code incorrectly called non-existent {@code /function-units/.../forms?formType=PROCESS}, causing 4xx/5xx.
      */
     @SuppressWarnings("unchecked")
     private Map<String, Object> fetchProcessFormDefinition(String processDefinitionKey) {
@@ -387,7 +387,7 @@ public class ProcessFormComponent {
     }
 
     /**
-     * 与 admin-center attachTableBindings 对齐：优先 dw_table_definitions，RELATED 时回退 rt_table_definitions。
+     * Aligns with admin-center attachTableBindings: prefer dw_table_definitions; RELATED falls back to rt_table_definitions.
      */
     private List<Map<String, Object>> loadSubTableBindingMapsForForm(long formId) {
         try {

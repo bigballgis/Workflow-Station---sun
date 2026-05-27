@@ -9,10 +9,10 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
 /**
- * 变量获取结果DTO
+ * Variable get result DTO
  * 
- * 返回流程变量的查询结果
- * 包含变量值、类型和元数据信息
+ * Returns the query result of process variables
+ * Includes variable value, type, and metadata
  * 
  * @author Workflow Engine
  * @version 1.0
@@ -24,87 +24,87 @@ import java.time.LocalDateTime;
 public class VariableGetResult {
 
     /**
-     * 变量名称
+     * Variable name
      */
     private String name;
 
     /**
-     * 变量值
+     * Variable value
      */
     private Object value;
 
     /**
-     * 变量类型
+     * Variable type
      */
     private VariableType type;
 
     /**
-     * 变量作用域
+     * Variable scope
      */
     private String scope;
 
     /**
-     * 流程实例ID
+     * Process instance ID
      */
     private String processInstanceId;
 
     /**
-     * 执行ID
+     * Execution ID
      */
     private String executionId;
 
     /**
-     * 任务ID
+     * Task ID
      */
     private String taskId;
 
     /**
-     * 是否找到变量
+     * Whether variable found
      */
     private Boolean found;
 
     /**
-     * 变量创建时间
+     * Variable creation time
      */
     private LocalDateTime createdTime;
 
     /**
-     * 变量更新时间
+     * Variable update time
      */
     private LocalDateTime updatedTime;
 
     /**
-     * 创建人
+     * Created by
      */
     private String createdBy;
 
     /**
-     * 更新人
+     * Updated by
      */
     private String updatedBy;
 
     /**
-     * 租户ID
+     * Tenant ID
      */
     private String tenantId;
 
     /**
-     * 序列计数器（版本号）
+     * Sequence counter (version number)
      */
     private Long sequenceCounter;
 
     /**
-     * 是否为并发本地变量
+     * Whether concurrent local variable
      */
     private Boolean isConcurrentLocal;
 
     /**
-     * 创建成功的结果
+     * Create a successful result
      * 
-     * @param name 变量名称
-     * @param value 变量值
-     * @param type 变量类型
-     * @return 成功结果
+     * @param name Variable name
+     * @param value Variable value
+     * @param type Variable type
+     * @return Successful result
      */
     public static VariableGetResult success(String name, Object value, VariableType type) {
         return VariableGetResult.builder()
@@ -116,10 +116,10 @@ public class VariableGetResult {
     }
 
     /**
-     * 创建未找到的结果
+     * Create a not-found result
      * 
-     * @param name 变量名称
-     * @return 未找到结果
+     * @param name Variable name
+     * @return Not-found result
      */
     public static VariableGetResult notFound(String name) {
         return VariableGetResult.builder()
@@ -129,9 +129,9 @@ public class VariableGetResult {
     }
 
     /**
-     * 获取格式化的变量值字符串
+     * Get formatted variable value string
      * 
-     * @return 格式化的值
+     * @return Formatted value
      */
     public String getFormattedValue() {
         if (value == null) {
@@ -161,18 +161,18 @@ public class VariableGetResult {
     }
 
     /**
-     * 判断变量是否为空值
+     * Check if variable is null/empty
      * 
-     * @return true如果为空值
+     * @return true if null/empty
      */
     public boolean isEmpty() {
         return !found || value == null;
     }
 
     /**
-     * 获取变量大小（字节数估算）
+     * Get variable size (estimated byte count)
      * 
-     * @return 变量大小
+     * @return Variable size
      */
     public long getEstimatedSize() {
         if (value == null) {
@@ -180,7 +180,7 @@ public class VariableGetResult {
         }
         
         if (type == null) {
-            return value.toString().length() * 2; // 估算Unicode字符大小
+            return value.toString().length() * 2; // Estimated Unicode character size
         }
         
         switch (type) {

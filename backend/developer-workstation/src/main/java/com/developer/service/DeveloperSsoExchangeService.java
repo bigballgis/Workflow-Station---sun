@@ -24,7 +24,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * DEV 专用：SSO exchange 后为设计器签发与密码登录一致的 JWT。
+ * DEV-only: issues a JWT for the designer after SSO exchange, matching password login.
  */
 @Slf4j
 @Service
@@ -56,7 +56,7 @@ public class DeveloperSsoExchangeService {
         String refreshToken = generateRefreshToken(user.getId());
         
         // Set httpOnly cookies for access token and refresh token
-        // 使用服务特有 cookie 名（如 dw_access_token），避免三端在同源下相互覆盖。详见 JwtProperties#cookieNames。
+        // Service-specific cookie name (e.g. dw_access_token) so three apps on same origin do not overwrite each other. See JwtProperties#cookieNames.
         Cookie accessTokenCookie = new Cookie(jwtProperties.getPrimaryCookieName(), accessToken);
         accessTokenCookie.setHttpOnly(true);
         accessTokenCookie.setSecure(false);

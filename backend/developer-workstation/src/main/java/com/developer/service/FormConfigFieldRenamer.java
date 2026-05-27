@@ -13,30 +13,30 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * 表设计字段变更 → 表单设计器同步器。
+ * Table Design field changes propagated into form designer configs.
  *
- * <p>当 Table Design 中字段属性变更时，把可安全传播的部分同步到所有引用该表的
- * 表单画布（form-create rule）。同步范围（折中硬同步策略，避免抹掉设计师在画布上的手工调整）：
+ * <p>When Table Design field attributes change, safely sync what we can into every canvas ({@code form-create rule})
+ * referencing that table. Scope (hard sync balance to avoid wiping designer tweaks):
  * <ul>
- *   <li>{@code fieldName} → {@code rule.field} + {@code fieldPermissions} key（无条件）；</li>
- *   <li>{@code description}（Display Name）→ {@code rule.title}（无条件）；</li>
- *   <li>{@code length} → {@code props.maxlength}（仅当节点 {@code type=="input"} 且 dataType 仍是 VARCHAR）；</li>
- *   <li>{@code scale} → {@code props.precision}（仅当节点 {@code type=="inputNumber"} 且 dataType 是 DECIMAL）；</li>
- *   <li>{@code nullable} → {@code validate[].required} 的 add/remove（任意控件类型，但仅对应字段节点）。</li>
+ *   <li>{@code fieldName} → {@code rule.field} + {@code fieldPermissions} keys (always);</li>
+ *   <li>{@code description} (display name) → {@code rule.title} (always);</li>
+ *   <li>{@code length} → {@code props.maxlength} ({@code type=="input"} and dataType still VARCHAR);</li>
+ *   <li>{@code scale} → {@code props.precision} ({@code type=="inputNumber"} and dataType DECIMAL);</li>
+ *   <li>{@code nullable} → add/remove {@code validate[].required} for the matching control node.</li>
  * </ul>
  *
- * <p><b>显式不同步</b>：{@code dataType} 变更 <b>不</b> 改写画布节点的 {@code type}（避免抹掉设计师可能换成的
- * select/autoComplete/自定义控件）；{@code defaultValue} 不同步（已有数据风险）；{@code precision}（DECIMAL 总位数）
- * 不映射到画布（form-create 的 {@code props.precision} 对应小数位 scale，不是总位数）。
+ * <p><b>Explicitly not synced:</b> {@code dataType} never rewrites canvas {@code type} (avoid clobbering
+ * select/autoComplete/etc.); {@code defaultValue} stays untouched (risk to existing payloads);
+ * DECIMAL {@code precision} total digits never map into canvas ({@code props.precision} mirrors scale only).
  *
- * <p>仅在 {@link com.developer.component.impl.TableDesignComponentImpl#update} 的事务内调用，
- * 保证表结构与所有表单的可见命名/约束在同一事务中完成。
+ * <p>Invoked inside {@link com.developer.component.impl.TableDesignComponentImpl#update}'s transaction so
+ * schemas and canvases remain consistent atomically.
  *
- * <p>遍历范围：
+ * <p>Traversal scope:
  * <ul>
- *   <li>表单顶层 {@code configJson.rule}（递归 {@code children}）；</li>
- *   <li>对当前表的 SUB / RELATED 绑定，仅遍历 {@code configJson.subForms[bindingId].rule}，
- *       避免把同名字段在其他子表的子表单里误改。</li>
+ *   <li>Top-level {@code configJson.rule} (recursive {@code children});</li>
+ *   <li>For SUB/RELATED bindings to the edited table only, recurse {@code configJson.subForms[bindingId].rule}
+ *       so unrelated sub-forms with same field labels stay untouched.</li>
  * </ul>
  */
 @Slf4j
@@ -45,10 +45,10 @@ public final class FormConfigFieldRenamer {
     private FormConfigFieldRenamer() {}
 
     /**
-     * 单个字段在一次保存中的属性变更快照（仅保存 form 端会消费的属性）。
+     * Captures per-field attribute deltas used by form sync for one save.
      *
-     * <p>{@code old*} 与 {@code new*} 各成对出现；任一对相等表示该维度未变更。
-     * 历史命名沿用 {@code FieldChange}（早期版本叫 {@code Rename}，仅含 field/description）。
+     * <p>Each {@code old*}/{@code new*} pair lines up; equal pairs mean no change on that axis.
+     * Kept name {@code FieldChange} for history (older builds only renamed field/description).
      */
     public record FieldChange(String oldFieldName,
                               String newFieldName,
@@ -63,7 +63,7 @@ public final class FormConfigFieldRenamer {
                               Boolean oldNullable,
                               Boolean newNullable) {
 
-        /** 仅同步 field/title 的旧版便利构造。 */
+        /** Legacy convenience ctor syncing only field/title dimensions. */
         public FieldChange(String oldFieldName, String newFieldName,
                            String oldDescription, String newDescription) {
             this(oldFieldName, newFieldName, oldDescription, newDescription,
@@ -78,7 +78,7 @@ public final class FormConfigFieldRenamer {
     }
 
     /**
-     * @return 实际发生变更的 {@link FormDefinition}（其 {@code configJson} / {@code fieldPermissions} 已就地修改）。
+     * @return {@link FormDefinition} instances whose {@code configJson} / {@code fieldPermissions} were mutated in place.
      */
     public static List<FormDefinition> apply(TableDefinition table,
                                              List<FormDefinition> forms,
@@ -109,13 +109,13 @@ public final class FormConfigFieldRenamer {
         if (form == null) return false;
         Map<String, Object> config = form.getConfigJson();
         if (config == null) return false;
-        // 复制一层根 Map，确保 Hibernate {@code @JdbcTypeCode(SqlTypes.JSON)} 字段
-        // 在引用层级即可被识别为 dirty；子层 Map / List 仍可就地修改，最终在 setConfigJson 时回写。
+        // Shallow-clone root map so Hibernate {@code @JdbcTypeCode(SqlTypes.JSON)} sees the column as dirty;
+        // nested maps/lists may still be mutated in place before setConfigJson.
         Map<String, Object> next = new LinkedHashMap<>(config);
 
         boolean changed = false;
 
-        // 1) 主画布 rule —— 当表单的 PRIMARY 绑定或遗留 boundTable 指向当前表时遍历
+        // 1) Main canvas rule — traverse when PRIMARY binding (or legacy boundTable) targets this table.
         boolean appliesToMain = false;
         TableDefinition legacyBound = form.getBoundTable();
         if (legacyBound != null && Objects.equals(legacyBound.getId(), tableId)) {
@@ -134,7 +134,7 @@ public final class FormConfigFieldRenamer {
             if (walkRuleNodes(rule, byOldFieldName)) changed = true;
         }
 
-        // 2) 子表单 rule —— 仅遍历指向当前表的 SUB/RELATED 绑定对应的 subForms[bindingId]
+        // 2) Sub-form rules — only SUB/RELATED bindings that point at this table via subForms[bindingId].
         Object subFormsRaw = next.get("subForms");
         if (subFormsRaw instanceof Map<?, ?> subForms) {
             for (FormTableBinding b : safeBindings(form)) {
@@ -149,7 +149,7 @@ public final class FormConfigFieldRenamer {
             }
         }
 
-        // 3) 仅对主表绑定生效的 fieldPermissions（Task Form 字段权限）—— 以 fieldName 为 key 重映射
+        // 3) fieldPermissions (task form) remapped by fieldName for main-table bindings only.
         if (appliesToMain) {
             Map<String, String> perms = form.getFieldPermissions();
             if (perms != null && !perms.isEmpty()) {
@@ -182,8 +182,7 @@ public final class FormConfigFieldRenamer {
     }
 
     /**
-     * 表单 jsonb 反序列化后 Map 的 key 可能是 {@link String}（多数情况）或数值类型。
-     * 这里兼容两种写法，按字符串等价匹配。
+     * Form JSON map keys may deserialize as {@link String} (typical) or numeric types; match by string equality.
      */
     private static Object lookup(Map<?, ?> map, Long bindingId) {
         if (bindingId == null) return null;
@@ -197,12 +196,12 @@ public final class FormConfigFieldRenamer {
     }
 
     /**
-     * 递归遍历 form-create 节点（数组或单节点）。对 {@code field} 命中 {@code byOldFieldName}
-     * 的节点：
+     * Recursively walks form-create nodes (array or singleton). For nodes whose {@code field} matches
+     * {@code byOldFieldName}:
      * <ul>
-     *   <li>重写 {@code field}，同步 {@code title}（无条件）；</li>
-     *   <li>根据节点当前 {@code type} 与新 dataType 守门后同步 {@code props.maxlength} / {@code props.precision}；</li>
-     *   <li>根据 {@code nullable} 增删 {@code validate} 中的 {@code required} 项。</li>
+     *   <li>Rewrite {@code field}, sync {@code title} (always);</li>
+     *   <li>After guard checks on control {@code type} + new dataType, sync {@code props.maxlength}/{@code props.precision};</li>
+     *   <li>Add/remove {@code required} entries inside {@code validate} from {@code nullable}.</li>
      * </ul>
      */
     @SuppressWarnings("unchecked")
@@ -228,8 +227,8 @@ public final class FormConfigFieldRenamer {
                     n.put("field", c.newFieldName());
                     changed = true;
                 }
-                // Title：与 FormDesigner.fieldToFormRule (`title: field.description || field.fieldName`) 一致：
-                // 仅当 Display Name 或 Field Name 任一变更时回写；优先 Display Name，空则回退 Field Name。
+                // Title mirrors FormDesigner.fieldToFormRule (`title: field.description || field.fieldName`):
+                // rewrite when display name or field name changes; prefer display name, fall back to field name.
                 if (c.descriptionChanged() || c.fieldNameChanged()) {
                     String nextTitle = !isBlank(c.newDescription())
                             ? c.newDescription()
@@ -243,8 +242,8 @@ public final class FormConfigFieldRenamer {
                     }
                 }
 
-                // dataType 守门：取节点当前控件类型 + 新 dataType；
-                // 设计师若已把 VARCHAR 的 input 换成 select，length 不会被回写。
+                // dataType guard: use current control type + new dataType;
+                // if designer swapped VARCHAR input→select we do not overwrite length.
                 String currentControlType = stringValue(n.get("type"));
                 String newDataType = upper(c.newDataType());
 
@@ -282,10 +281,10 @@ public final class FormConfigFieldRenamer {
     }
 
     /**
-     * 写入或更新节点 {@code props.<key>}。若 {@code props} 不存在则创建。
-     * 当 props 不是 Map（结构异常）则放弃，避免破坏既有数据。
+     * Writes {@code props.<key>}, creating {@code props} map if missing.
+     * Aborts if {@code props} is not a map to avoid corrupting malformed nodes.
      *
-     * @return 是否真的产生了变更
+     * @return true when a value changed
      */
     @SuppressWarnings("unchecked")
     private static boolean writeProp(Map<String, Object> node, String key, Object value) {
@@ -307,15 +306,15 @@ public final class FormConfigFieldRenamer {
     }
 
     /**
-     * 根据 nullable 在 {@code node.validate} 中增删 {@code required:true} 校验项。
+     * Adds/removes {@code required:true} entries inside {@code node.validate}.
      *
      * <ul>
-     *   <li>{@code nullable == false} 且无 required 项 → 追加 {@code {required:true, message, trigger:'blur'}}；</li>
-     *   <li>{@code nullable == true} 且存在 required 项 → 移除；</li>
-     *   <li>仅触动 {@code required:true} 的校验项，其它（如 type/min/max 校验）保持不变。</li>
+     *   <li>{@code nullable == false} and no existing required rule → append {@code {required:true, message, trigger:'blur'}};</li>
+     *   <li>{@code nullable == true} with existing required rule → remove it;</li>
+     *   <li>Other validators (type/min/max) stay untouched.</li>
      * </ul>
      *
-     * @return 是否真的产生了变更
+     * @return true when validators changed
      */
     @SuppressWarnings("unchecked")
     private static boolean syncRequiredValidate(Map<String, Object> node,
@@ -343,17 +342,17 @@ public final class FormConfigFieldRenamer {
 
         boolean wantRequired = Boolean.FALSE.equals(newNullable); // nullable=false → required
         if (wantRequired) {
-            if (requiredIdx >= 0) return false; // 已经必填
+            if (requiredIdx >= 0) return false; // already required
             Map<String, Object> req = new LinkedHashMap<>();
             req.put("required", true);
-            // message 后端无 i18n 上下文：使用字段显示名作为简单占位，前端可在 Form Designer 里改。
+            // Backend has no i18n here: use display label as placeholder; designers can refine in Form Designer.
             req.put("message", label != null ? label + " is required" : "Required");
             req.put("trigger", "blur");
             validate.add(req);
             node.put("validate", validate);
             return true;
         } else {
-            // nullable=true → 不必填，移除 required 项
+            // nullable=true → optional, strip required validator
             if (requiredIdx < 0) return false;
             validate.remove(requiredIdx);
             node.put("validate", validate);

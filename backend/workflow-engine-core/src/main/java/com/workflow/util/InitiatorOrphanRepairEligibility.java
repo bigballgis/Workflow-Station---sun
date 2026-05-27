@@ -3,10 +3,13 @@ package com.workflow.util;
 import java.util.Locale;
 
 /**
- * 判断「发起人孤儿任务修复」是否允许把未指派的任务幂等写回给流程发起人。
+ * Determines whether the "initiator orphan task repair" is allowed to idempotently
+ * write unassigned tasks back to the process initiator.
  * <p>
- * 仅当 BPMN 上本节点为发起人办理语义时才允许；BU_ROLE、HIERARCHY 等非发起人节点禁止修复，
- * 否则查询待办时会把任务误派给发起人（见 {@code TaskManagerComponent.appendUnassignedInitiatorTasks}）。
+ * Only allowed when the BPMN node has initiator-handling semantics; non-initiator
+ * nodes such as BU_ROLE and HIERARCHY must not be repaired, otherwise the task
+ * would be incorrectly assigned to the initiator when querying the to-do list
+ * (see {@code TaskManagerComponent.appendUnassignedInitiatorTasks}).
  * </p>
  */
 public final class InitiatorOrphanRepairEligibility {
@@ -15,9 +18,10 @@ public final class InitiatorOrphanRepairEligibility {
     }
 
     /**
-     * @param assigneeTypeExtension custom:property assigneeType，可为 null/空白
-     * @param flowableUserTaskAssignee Flowable UserTask 标准 assignee 表达式（仅当扩展未写 assigneeType 时使用）
-     * @return 是否允许将未指派任务修复为当前发起人用户
+     * @param assigneeTypeExtension custom:property assigneeType, may be null/blank
+     * @param flowableUserTaskAssignee Flowable UserTask standard assignee expression
+     *        (used only when the extension does not specify assigneeType)
+     * @return whether the unassigned task should be repaired to the current initiator user
      */
     public static boolean shouldRepair(String assigneeTypeExtension, String flowableUserTaskAssignee) {
         if (assigneeTypeExtension != null && !assigneeTypeExtension.isBlank()) {
@@ -38,7 +42,7 @@ public final class InitiatorOrphanRepairEligibility {
     }
 
     /**
-     * 与 {@link com.workflow.listener.TaskAssignmentListener#isInitiatorExpression(String)} 对齐。
+     * Aligned with {@link com.workflow.listener.TaskAssignmentListener#isInitiatorExpression(String)}.
      */
     private static boolean isInitiatorExpression(String expr) {
         if (expr == null || expr.isEmpty()) {

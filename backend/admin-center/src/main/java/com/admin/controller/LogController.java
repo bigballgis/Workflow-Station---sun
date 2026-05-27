@@ -21,84 +21,86 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 import com.platform.security.util.SecurityContextUtils;
+import com.platform.common.i18n.I18nService;
 
 @Slf4j
 @RestController
 @RequestMapping("/logs")
 @RequiredArgsConstructor
-@Tag(name = "日志管理", description = "日志查询、分析和导出接口")
+@Tag(name = "Log Management", description = "Log query, analysis and export APIs")
 public class LogController {
     
     private final LogManagerComponent logManager;
+    private final I18nService i18nService;
     
-    // ==================== 日志查询 ====================
+    // ==================== Log Query ====================
     
     @PostMapping("/query")
-    @Operation(summary = "查询日志")
+    @Operation(summary = "Query logs")
     public ResponseEntity<Page<SystemLog>> queryLogs(
             @RequestBody LogQueryRequest request, Pageable pageable) {
         return ResponseEntity.ok(logManager.queryLogs(request, pageable));
     }
     
     @GetMapping("/search")
-    @Operation(summary = "搜索日志")
+    @Operation(summary = "Search logs")
     public ResponseEntity<Page<SystemLog>> searchLogs(
             @RequestParam String keyword, Pageable pageable) {
         return ResponseEntity.ok(logManager.searchLogs(keyword, pageable));
     }
     
     @GetMapping("/type/{logType}")
-    @Operation(summary = "按类型获取日志")
+    @Operation(summary = "Get logs by type")
     public ResponseEntity<Page<SystemLog>> getLogsByType(
             @PathVariable LogType logType, Pageable pageable) {
         return ResponseEntity.ok(logManager.getLogsByType(logType, pageable));
     }
     
     @GetMapping("/user/{userId}")
-    @Operation(summary = "获取用户日志")
+    @Operation(summary = "Get user logs")
     public ResponseEntity<Page<SystemLog>> getLogsByUser(
             @PathVariable String userId, Pageable pageable) {
         return ResponseEntity.ok(logManager.getLogsByUser(userId, pageable));
     }
     
-    // ==================== 用户行为分析 ====================
+    // ==================== User Behavior Analysis ====================
     
     @GetMapping("/user/{userId}/behavior")
-    @Operation(summary = "分析用户行为")
+    @Operation(summary = "Analyze user behavior")
     public ResponseEntity<UserBehaviorAnalysis> analyzeUserBehavior(
             @PathVariable String userId,
             @RequestParam(defaultValue = "30") int days) {
         return ResponseEntity.ok(logManager.analyzeUserBehavior(userId, days));
     }
     
-    // ==================== 日志分析 ====================
+    // ==================== Log Analysis ====================
     
     @GetMapping("/statistics")
-    @Operation(summary = "获取日志统计")
+    @Operation(summary = "Get log statistics")
     public ResponseEntity<LogStatistics> getLogStatistics(
             @RequestParam(defaultValue = "7") int days) {
         return ResponseEntity.ok(logManager.getLogStatistics(days));
     }
     
     @GetMapping("/error-trend")
-    @Operation(summary = "获取错误趋势")
+    @Operation(summary = "Get error trend")
     public ResponseEntity<List<ErrorTrendPoint>> getErrorTrend(
             @RequestParam(defaultValue = "30") int days) {
         return ResponseEntity.ok(logManager.getErrorTrend(days));
     }
     
     @GetMapping("/performance-bottlenecks")
-    @Operation(summary = "检测性能瓶颈")
+    @Operation(summary = "Detect performance bottlenecks")
     public ResponseEntity<List<PerformanceBottleneck>> detectPerformanceBottlenecks(
             @RequestParam(defaultValue = "1000") long thresholdMs,
             @RequestParam(defaultValue = "7") int days) {
         return ResponseEntity.ok(logManager.detectPerformanceBottlenecks(thresholdMs, days));
     }
     
-    // ==================== 日志导出 ====================
+    // ==================== Log Export ====================
     
     @PostMapping("/export")
-    @Operation(summary = "导出日志")
+    @Operation(summary = "Export logs")
     public ResponseEntity<byte[]> exportLogs(
             @RequestBody LogQueryRequest request,
             @RequestParam(defaultValue = "csv") String format) {
@@ -111,10 +113,10 @@ public class LogController {
         return new ResponseEntity<>(result.getContent().getBytes(), headers, HttpStatus.OK);
     }
     
-    // ==================== 保留策略管理 ====================
+    // ==================== Retention Policy Management ====================
     
     @PostMapping("/retention-policies")
-    @Operation(summary = "创建保留策略")
+    @Operation(summary = "Create retention policy")
     public ResponseEntity<LogRetentionPolicy> createRetentionPolicy(
             @Valid @RequestBody RetentionPolicyRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
@@ -122,23 +124,23 @@ public class LogController {
     }
     
     @GetMapping("/retention-policies")
-    @Operation(summary = "获取保留策略列表")
+    @Operation(summary = "Get retention policy list")
     public ResponseEntity<List<LogRetentionPolicy>> getRetentionPolicies() {
         return ResponseEntity.ok(logManager.getRetentionPolicies());
     }
     
     @PutMapping("/retention-policies/{id}")
-    @Operation(summary = "更新保留策略")
+    @Operation(summary = "Update retention policy")
     public ResponseEntity<LogRetentionPolicy> updateRetentionPolicy(
             @PathVariable String id,
             @Valid @RequestBody RetentionPolicyRequest request) {
         String userId = com.platform.security.util.SecurityContextUtils.getCurrentUserId()
-                .orElseThrow(() -> new RuntimeException("未认证用户"));
+                .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthenticated_user")));
         return ResponseEntity.ok(logManager.updateRetentionPolicy(id, request, userId));
     }
     
     @PostMapping("/retention-policies/apply")
-    @Operation(summary = "应用保留策略")
+    @Operation(summary = "Apply retention policies")
     public ResponseEntity<Void> applyRetentionPolicies() {
         logManager.applyRetentionPolicies();
         return ResponseEntity.ok().build();

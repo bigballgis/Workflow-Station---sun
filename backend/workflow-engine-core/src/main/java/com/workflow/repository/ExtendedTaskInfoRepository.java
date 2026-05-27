@@ -14,29 +14,30 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * 扩展任务信息数据访问层
- * 提供多维度任务查询和管理功能
+ * Extended task info data access layer.
+ * Provides multi-dimensional task query and management capabilities.
  */
 @Repository
 public interface ExtendedTaskInfoRepository extends JpaRepository<ExtendedTaskInfo, Long> {
 
     /**
-     * 根据任务ID查找扩展任务信息
+     * Find extended task info by task ID.
      */
     Optional<ExtendedTaskInfo> findByTaskIdAndIsDeletedFalse(String taskId);
 
     /**
-     * 根据流程实例ID查找所有任务
+     * Find all tasks by process instance ID.
      */
     List<ExtendedTaskInfo> findByProcessInstanceIdAndIsDeletedFalse(String processInstanceId);
 
     /**
-     * 流程实例全部扩展任务（含软删除）。流程结束后门户仍可能依赖其中的 MI 元数据重建子表行状态。
+     * All extended tasks for a process instance (including soft-deleted). The portal may still
+     * depend on MI metadata within to reconstruct sub-table row status after process end.
      */
     List<ExtendedTaskInfo> findAllByProcessInstanceId(String processInstanceId);
 
     /**
-     * 查询用户的直接分配任务
+     * Query directly assigned tasks for a user.
      */
     @Query("SELECT t FROM ExtendedTaskInfo t WHERE t.assignmentType = 'USER' " +
            "AND t.assignmentTarget = :userId AND t.status != 'COMPLETED' " +
@@ -44,21 +45,21 @@ public interface ExtendedTaskInfoRepository extends JpaRepository<ExtendedTaskIn
     List<ExtendedTaskInfo> findDirectAssignedTasks(@Param("userId") String userId);
 
     /**
-     * 查询委托给用户的任务
+     * Query tasks delegated to a user.
      */
     @Query("SELECT t FROM ExtendedTaskInfo t WHERE t.delegatedTo = :userId " +
            "AND t.status != 'COMPLETED' AND t.isDeleted = false")
     List<ExtendedTaskInfo> findDelegatedTasks(@Param("userId") String userId);
 
     /**
-     * 查询用户认领的任务
+     * Query tasks claimed by a user.
      */
     @Query("SELECT t FROM ExtendedTaskInfo t WHERE t.claimedBy = :userId " +
            "AND t.status != 'COMPLETED' AND t.isDeleted = false")
     List<ExtendedTaskInfo> findClaimedTasks(@Param("userId") String userId);
 
     /**
-     * 查询虚拟组的未认领任务
+     * Query unclaimed virtual group tasks.
      */
     @Query("SELECT t FROM ExtendedTaskInfo t WHERE t.assignmentType = 'VIRTUAL_GROUP' " +
            "AND t.assignmentTarget = :groupId AND t.claimedBy IS NULL " +
@@ -66,7 +67,7 @@ public interface ExtendedTaskInfoRepository extends JpaRepository<ExtendedTaskIn
     List<ExtendedTaskInfo> findVirtualGroupTasks(@Param("groupId") String groupId);
 
     /**
-     * 查询部门角色的未认领任务
+     * Query unclaimed department role tasks.
      */
     @Query("SELECT t FROM ExtendedTaskInfo t WHERE t.assignmentType = 'DEPT_ROLE' " +
            "AND t.assignmentTarget = :deptRole AND t.claimedBy IS NULL " +
@@ -74,7 +75,7 @@ public interface ExtendedTaskInfoRepository extends JpaRepository<ExtendedTaskIn
     List<ExtendedTaskInfo> findDeptRoleTasks(@Param("deptRole") String deptRole);
 
     /**
-     * 查询用户的所有待办任务（包括直接分配、委托、认领的任务）
+     * Query all pending tasks for a user (including direct, delegated, and claimed tasks).
      */
     @Query("SELECT t FROM ExtendedTaskInfo t WHERE " +
            "((t.assignmentType = 'USER' AND t.assignmentTarget = :userId) " +
@@ -85,7 +86,7 @@ public interface ExtendedTaskInfoRepository extends JpaRepository<ExtendedTaskIn
     List<ExtendedTaskInfo> findUserTodoTasks(@Param("userId") String userId);
 
     /**
-     * 分页查询用户的所有待办任务
+     * Paginated query of all pending tasks for a user.
      */
     @Query("SELECT t FROM ExtendedTaskInfo t WHERE " +
            "((t.assignmentType = 'USER' AND t.assignmentTarget = :userId) " +
@@ -95,7 +96,7 @@ public interface ExtendedTaskInfoRepository extends JpaRepository<ExtendedTaskIn
     Page<ExtendedTaskInfo> findUserTodoTasks(@Param("userId") String userId, Pageable pageable);
 
     /**
-     * 查询用户可见的虚拟组任务（用户是虚拟组成员）
+     * Query virtual group tasks visible to a user (user is a member of the virtual groups).
      */
     @Query("SELECT t FROM ExtendedTaskInfo t WHERE t.assignmentType = 'VIRTUAL_GROUP' " +
            "AND t.assignmentTarget IN :groupIds AND t.claimedBy IS NULL " +
@@ -103,7 +104,7 @@ public interface ExtendedTaskInfoRepository extends JpaRepository<ExtendedTaskIn
     List<ExtendedTaskInfo> findUserVisibleGroupTasks(@Param("groupIds") List<String> groupIds);
 
     /**
-     * 查询用户可见的部门角色任务（用户拥有该部门角色）
+     * Query department role tasks visible to a user (user has the department role).
      */
     @Query("SELECT t FROM ExtendedTaskInfo t WHERE t.assignmentType = 'DEPT_ROLE' " +
            "AND t.assignmentTarget IN :deptRoles AND t.claimedBy IS NULL " +
@@ -111,7 +112,8 @@ public interface ExtendedTaskInfoRepository extends JpaRepository<ExtendedTaskIn
     List<ExtendedTaskInfo> findUserVisibleDeptRoleTasks(@Param("deptRoles") List<String> deptRoles);
 
     /**
-     * 查询用户的所有可见任务（包括直接分配、委托、认领、虚拟组、部门角色）
+     * Query all visible tasks for a user (including direct, delegated, claimed, virtual group,
+     * and department role tasks).
      */
     @Query("SELECT t FROM ExtendedTaskInfo t WHERE " +
            "((t.assignmentType = 'USER' AND t.assignmentTarget = :userId) " +
@@ -128,7 +130,7 @@ public interface ExtendedTaskInfoRepository extends JpaRepository<ExtendedTaskIn
     );
 
     /**
-     * 分页查询用户的所有可见任务
+     * Paginated query of all visible tasks for a user.
      */
     @Query("SELECT t FROM ExtendedTaskInfo t WHERE " +
            "((t.assignmentType = 'USER' AND t.assignmentTarget = :userId) " +
@@ -145,14 +147,14 @@ public interface ExtendedTaskInfoRepository extends JpaRepository<ExtendedTaskIn
     );
 
     /**
-     * 查询过期任务
+     * Query overdue tasks.
      */
     @Query("SELECT t FROM ExtendedTaskInfo t WHERE t.dueDate < :currentTime " +
            "AND t.status != 'COMPLETED' AND t.isDeleted = false")
     List<ExtendedTaskInfo> findOverdueTasks(@Param("currentTime") LocalDateTime currentTime);
 
     /**
-     * 查询即将过期的任务（指定时间范围内）
+     * Query tasks due soon (within the specified time range).
      */
     @Query("SELECT t FROM ExtendedTaskInfo t WHERE t.dueDate BETWEEN :currentTime AND :alertTime " +
            "AND t.status != 'COMPLETED' AND t.isDeleted = false")
@@ -162,17 +164,17 @@ public interface ExtendedTaskInfoRepository extends JpaRepository<ExtendedTaskIn
     );
 
     /**
-     * 根据分配类型查询任务
+     * Query tasks by assignment type.
      */
     List<ExtendedTaskInfo> findByAssignmentTypeAndIsDeletedFalse(AssignmentType assignmentType);
 
     /**
-     * 根据状态查询任务
+     * Query tasks by status.
      */
     List<ExtendedTaskInfo> findByStatusAndIsDeletedFalse(String status);
 
     /**
-     * 查询指定时间范围内创建的任务
+     * Query tasks created within the specified time range.
      */
     @Query("SELECT t FROM ExtendedTaskInfo t WHERE t.createdTime BETWEEN :startTime AND :endTime " +
            "AND t.isDeleted = false")
@@ -182,7 +184,7 @@ public interface ExtendedTaskInfoRepository extends JpaRepository<ExtendedTaskIn
     );
 
     /**
-     * 查询指定时间范围内完成的任务
+     * Query tasks completed within the specified time range.
      */
     @Query("SELECT t FROM ExtendedTaskInfo t WHERE t.completedTime BETWEEN :startTime AND :endTime " +
            "AND t.status = 'COMPLETED' AND t.isDeleted = false")
@@ -192,7 +194,7 @@ public interface ExtendedTaskInfoRepository extends JpaRepository<ExtendedTaskIn
     );
 
     /**
-     * 统计用户的任务数量
+     * Count a user's tasks.
      */
     @Query("SELECT COUNT(t) FROM ExtendedTaskInfo t WHERE " +
            "((t.assignmentType = 'USER' AND t.assignmentTarget = :userId) " +
@@ -202,7 +204,7 @@ public interface ExtendedTaskInfoRepository extends JpaRepository<ExtendedTaskIn
     long countUserTodoTasks(@Param("userId") String userId);
 
     /**
-     * 统计用户的过期任务数量
+     * Count a user's overdue tasks.
      */
     @Query("SELECT COUNT(t) FROM ExtendedTaskInfo t WHERE " +
            "((t.assignmentType = 'USER' AND t.assignmentTarget = :userId) " +
@@ -212,7 +214,7 @@ public interface ExtendedTaskInfoRepository extends JpaRepository<ExtendedTaskIn
     long countUserOverdueTasks(@Param("userId") String userId, @Param("currentTime") LocalDateTime currentTime);
 
     /**
-     * 根据优先级查询任务
+     * Query high-priority tasks.
      */
     @Query("SELECT t FROM ExtendedTaskInfo t WHERE t.priority >= :minPriority " +
            "AND t.status != 'COMPLETED' AND t.isDeleted = false " +
@@ -220,7 +222,7 @@ public interface ExtendedTaskInfoRepository extends JpaRepository<ExtendedTaskIn
     List<ExtendedTaskInfo> findHighPriorityTasks(@Param("minPriority") Integer minPriority);
 
     /**
-     * 软删除任务
+     * Soft-delete a task.
      */
     @Query("UPDATE ExtendedTaskInfo t SET t.isDeleted = true, t.updatedTime = :currentTime, " +
            "t.updatedBy = :updatedBy WHERE t.taskId = :taskId")
@@ -231,7 +233,7 @@ public interface ExtendedTaskInfoRepository extends JpaRepository<ExtendedTaskIn
     );
 
     /**
-     * 批量软删除流程实例的所有任务
+     * Batch soft-delete all tasks of a process instance.
      */
     @Query("UPDATE ExtendedTaskInfo t SET t.isDeleted = true, t.updatedTime = :currentTime, " +
            "t.updatedBy = :updatedBy WHERE t.processInstanceId = :processInstanceId")

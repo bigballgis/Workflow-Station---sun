@@ -19,7 +19,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * 按 BPMN userTask id（stageId）解析任务表单定义，供 user-portal {@code TaskFormComponent} 使用。
+ * Resolve task form definition by BPMN userTask id (stageId), for use by user-portal {@code TaskFormComponent}.
  */
 @RestController
 @RequestMapping("/form-stage-bindings")

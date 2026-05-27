@@ -13,7 +13,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 任务处理人解析。收敛模型见 {@code .kiro/docs/assignee-type-convergence.md}。
+ * Task assignee resolver. For the convergence model, see
+ * {@code .kiro/docs/assignee-type-convergence.md}.
  */
 @Slf4j
 @Service
@@ -33,8 +34,10 @@ public class TaskAssigneeResolver {
     }
 
     /**
-     * @param anchorUserId 锚点用户（发起人或 LAST 解析结果）；PROCESS_INITIATOR / BU_ROLE 可传 null
-     * @param anchorActiveBusinessUnitId 流程变量 activeBusinessUnitId，多 BU 下解析 HIERARCHY 等时需要
+     * @param anchorUserId anchor user (initiator or LAST resolution result);
+     *        may be null for PROCESS_INITIATOR / BU_ROLE
+     * @param anchorActiveBusinessUnitId process variable activeBusinessUnitId,
+     *        needed for HIERARCHY resolution in multi-BU scenarios
      */
     public ResolveResult resolve(String assigneeTypeCode, String roleId, String businessUnitId,
                                  String initiatorId, String anchorUserId, String anchorActiveBusinessUnitId) {
@@ -99,7 +102,8 @@ public class TaskAssigneeResolver {
     }
 
     /**
-     * 按流程变量解析出的用户 ID 列表套用 0/1/多人规则（与 BU_ROLE / HIERARCHY 一致）。
+     * Apply 0/1/multi-user rules to user ID list resolved from process variables
+     * (consistent with BU_ROLE / HIERARCHY).
      */
     public ResolveResult resolveFromUserIdList(AssigneeType assigneeType, List<String> userIds) {
         if (assigneeType != AssigneeType.ASSIGNEE_FROM_VARIABLE) {
@@ -248,7 +252,8 @@ public class TaskAssigneeResolver {
     }
 
     /**
-     * @deprecated 仅兼容旧三参调用；锚点用户固定为发起人。
+     * @deprecated Only retained for backward compatibility with the old three-argument
+     * signature; the anchor user is fixed to the initiator.
      */
     @Deprecated
     public ResolveResult resolve(String assigneeTypeCode, String assigneeValue, String initiatorId) {

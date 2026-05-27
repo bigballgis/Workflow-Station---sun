@@ -23,14 +23,14 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * 统一全局异常处理器
- * 处理所有模块的异常，避免 Bean 冲突
+ * Unified global exception handler.
+ * Handles exceptions across all modules, avoiding Bean conflicts.
  */
 @RestControllerAdvice
 @Slf4j
 public class GlobalExceptionHandler {
 
-    // ==================== 认证和授权异常 ====================
+    // ==================== Auth & Authorization Exceptions ====================
     
     @ExceptionHandler(AuthenticationException.class)
     public ResponseEntity<ApiResponse<?>> handleAuthenticationException(
@@ -83,7 +83,7 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error(errorResponse));
     }
 
-    // ==================== 权限异常 ====================
+    // ==================== Permission Exceptions ====================
 
     @ExceptionHandler(PermissionDeniedException.class)
     public ResponseEntity<ApiResponse<?>> handlePermissionDeniedException(
@@ -104,7 +104,7 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error(errorResponse));
     }
 
-    // ==================== 验证异常 ====================
+    // ==================== Validation Exceptions ====================
     
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<?>> handleValidationException(
@@ -160,7 +160,7 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.error(errorResponse));
     }
 
-    // ==================== 平台/业务异常 ====================
+    // ==================== Platform / Business Exceptions ====================
 
     @ExceptionHandler(PlatformException.class)
     public ResponseEntity<ApiResponse<?>> handlePlatformException(
@@ -199,7 +199,7 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(errorCode.getHttpStatus()).body(ApiResponse.error(errorResponse));
     }
 
-    // ==================== 参数与非法状态（避免误报为 SYS_INTERNAL_ERROR）====================
+    // ==================== Parameter & Illegal State (avoid false-positive SYS_INTERNAL_ERROR) ====================
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ApiResponse<?>> handleMethodArgumentTypeMismatch(
@@ -241,7 +241,7 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.error(errorResponse));
     }
 
-    // ==================== 兜底异常 ====================
+    // ==================== Fallback Exceptions ====================
 
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ApiResponse<?>> handleIllegalState(
@@ -313,7 +313,7 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(errorResponse));
     }
 
-    // ==================== 工具方法 ====================
+    // ==================== Utility Methods ====================
     
     private String generateTraceId() {
         return UUID.randomUUID().toString().substring(0, 8);

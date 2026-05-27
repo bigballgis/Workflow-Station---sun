@@ -52,7 +52,7 @@ public class AuthController {
     private static final String CLAIM_ACTIVE_BUSINESS_UNIT_ID = "activeBusinessUnitId";
     private static final String CLAIM_ACTIVE_ROLE_ID = "activeRoleId";
     private static final String CLAIM_PORTAL_ACCESS_MODE = "portalAccessMode";
-    /** 无 UBR（|C|=0）时门户仅开放权限自助等白名单接口 */
+    /** When no UBR (|C|=0), portal allows only permission self-service and other whitelist APIs */
     public static final String PORTAL_ACCESS_MODE_SELF_SERVICE = "PERMISSION_SELF_SERVICE_ONLY";
     public static final String PORTAL_ACCESS_MODE_FULL = "FULL";
     private static final String REFRESH_TYPE = "refresh";
@@ -117,7 +117,7 @@ public class AuthController {
         } catch (RuntimeException e) {
             log.warn("Login failed: {}", e.getMessage());
             return ResponseEntity.badRequest().body(LoginResponse.builder()
-                    .message(e.getMessage() != null ? e.getMessage() : "登录失败")
+                    .message(e.getMessage() != null ? e.getMessage() : i18nService.getMessage("auth.login_failed"))
                     .build());
         }
     }
@@ -173,7 +173,7 @@ public class AuthController {
             String newRefreshToken = generateRefreshToken(userId, activeBu, activeRoleId, portalAccessMode);
 
             // Set httpOnly cookies for new tokens
-            // 使用服务特有 cookie 名（如 up_access_token），避免三端在同源下相互覆盖。详见 JwtProperties#cookieNames。
+            // Service-specific cookie names (e.g. up_access_token) avoid cross-app overwrite on same origin. See JwtProperties#cookieNames.
             Cookie accessTokenCookie = new Cookie(jwtProperties.getPrimaryCookieName(), newAccessToken);
             accessTokenCookie.setHttpOnly(true);
             accessTokenCookie.setSecure(false);
@@ -393,9 +393,9 @@ public class AuthController {
     }
 
     /**
-     * JWT 可能在「尚无 UBR」时签发（claims 中无 active BU/Role）。管理员随后写入 UBR 后，
-     * 自动采用 {@link PortalWorkspaceAuthService#listWorkspaceContexts} 排序后的第一条，
-     * 与「仅一条 UBR 时登录」行为一致；多条 UBR 时用户仍可在顶栏切换工作台。
+     * JWT may be issued before UBR exists (no active BU/Role in claims). After admin adds UBR,
+     * Auto-selects first entry from {@link PortalWorkspaceAuthService#listWorkspaceContexts} sort order,
+     * Matches single-UBR login behavior; user can still switch workspace in header when multiple UBRs.
      */
     private static String[] resolveActiveWorkspaceClaims(
             List<PortalWorkspaceAuthService.WorkspaceContextRow> wctx,
