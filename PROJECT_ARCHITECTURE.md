@@ -9,6 +9,22 @@
 - 前端技术栈：Vue 3 + TypeScript + Vite + Element Plus
 - 网关与入口：Kong Gateway（API 边缘）+ 各前端应用自带 Nginx（按环境可直连后端或转发 Kong）
 
+## 1.0 当前建设重点（2026-05）
+
+### A) Gateway Governance（分阶段演进）
+
+- 当前运行面维持 Kong 统一网关，不改变线上流量主路径。
+- 治理面按 Phase 1–5 渐进：Admin 内嵌治理域 -> GMS 抽离 -> `gateway-mfe` -> API Marketplace -> 多网关平台。
+- 治理业务模型统一为 `API / Application / Policy / Release`，避免前端直接面向 Kong 原生对象。
+- 详见：`docs/gateway-governance-README.md` 及各 phase 配套 blueprint/task/api/ddl/permission/checklist 文档。
+
+### B) Process Debug Console MVP（Developer Workstation）
+
+- 在 `Process Design` 现有模拟器上增强调试闭环，而非引入完整 runtime 引擎。
+- 核心能力：`Gateway Explain`、`Lookup Live Probe`、`Action Button Runner`。
+- 目标是提升流程调试可解释性与可执行性，同时控制跨模块爆炸半径。
+- 详见：`docs/process-debug-console-mvp-spec.md`。
+
 ## 1.1 架构图（ASCII，兼容所有 Markdown 预览）
 
 ```text
@@ -44,6 +60,23 @@
 └─────────┘  └─────────┘  └──────────┘
 
 PostgreSQL ── N8N (独立数据库 n8n_{env})
+```
+
+## 1.3 Gateway Governance 演进时序（Phase 1 -> Phase 5）
+
+```mermaid
+flowchart LR
+  P1["Phase 1<br/>Admin Center 内嵌 Gateway Domain<br/>发布/回滚 MVP"] --> P2["Phase 2<br/>GMS 服务化抽离<br/>漂移检测 / 监控 / 环境晋级"]
+  P2 --> P3["Phase 3<br/>gateway-mfe 微前端化<br/>治理 UI 从 Admin 解耦"]
+  P3 --> P4["Phase 4<br/>Developer API Marketplace<br/>面向应用与开发者开放能力"]
+  P4 --> P5["Phase 5<br/>Multi-Gateway Governance Platform<br/>Adapter SPI 支持多网关厂商"]
+```
+
+ASCII 兜底（Mermaid 不可用时）：
+
+```text
+Phase 1 -> Phase 2 -> Phase 3 -> Phase 4 -> Phase 5
+Admin嵌入  -> GMS抽离  -> gateway-mfe -> Marketplace -> Multi-Gateway
 ```
 
 ## 1.2 后端模块依赖关系（文字版）
@@ -162,4 +195,5 @@ Workflow-Station---sun/
 - 新增后端模块时：同时更新根 `pom.xml` 与本文档“聚合模块”章节
 - 新增前端应用时：补充“前后端映射关系”
 - 变更部署链路时：同步更新 `BUILD_GUIDE.md` 与 `deploy/` 文档
+- Gateway 治理阶段变更时：同步更新 `docs/gateway-governance-README.md` 与本文档“1.3 演进时序”
 

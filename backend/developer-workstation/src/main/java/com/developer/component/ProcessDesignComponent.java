@@ -29,6 +29,16 @@ public interface ProcessDesignComponent {
      * 模拟流程执行（含多实例 mock collection 自动生成）
      */
     Map<String, Object> simulate(Long functionUnitId, String bpmnXml, Map<String, Object> variables);
+
+    /**
+     * Debug lookup live probe.
+     */
+    Map<String, Object> debugLookupProbe(Long functionUnitId, Map<String, Object> request);
+
+    /**
+     * Debug action runner (dry run).
+     */
+    Map<String, Object> debugRunAction(Long functionUnitId, Map<String, Object> request);
     
     /**
      * 解析BPMN XML获取流程结构

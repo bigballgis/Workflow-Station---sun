@@ -228,6 +228,58 @@ export interface ValidationResult {
   warnings: string[]
 }
 
+export interface GatewayEvaluationItem {
+  flowId: string
+  condition?: string
+  result: boolean
+  reason?: string
+}
+
+export interface GatewayEvaluation {
+  gatewayId: string
+  gatewayType?: string
+  defaultFlowId?: string
+  selectedFlowId?: string
+  evaluations: GatewayEvaluationItem[]
+}
+
+export interface DebugLookupProbeRequest {
+  formId: number
+  bindingId: number
+  lookupConfig: Record<string, any>
+  keyword?: string
+  runtimeVariables?: Record<string, any>
+  page?: number
+  size?: number
+  sort?: string[]
+  searchMode?: 'contains' | 'startsWith' | 'exact'
+}
+
+export interface DebugLookupProbeResult {
+  columns: Array<{ fieldName: string; label?: string }>
+  rows: Array<Record<string, any>>
+  appliedFilters?: Array<{ fieldName: string; value: any }>
+  page: number
+  size: number
+  total: number
+}
+
+export interface DebugActionRunRequest {
+  nodeId: string
+  actionId: string | number
+  runtimeVariables?: Record<string, any>
+  formData?: Record<string, any>
+  dryRun?: boolean
+}
+
+export interface DebugActionRunResult {
+  success: boolean
+  actionResult?: Record<string, any>
+  variablePatches?: Record<string, any>
+  logs?: string[]
+  durationMs?: number
+}
+
 export interface Version {
   id: number
   versionNumber: string
@@ -353,6 +405,20 @@ export const functionUnitApi = {
   // Process simulation
   simulateProcess: (functionUnitId: number, variables: any) =>
     functionUnitAxios.post<any, { data: any }>(`/api/v1/function-units/${functionUnitId}/process/simulate`, variables),
+
+  // Process debug lookup probe
+  debugLookupProbe: (functionUnitId: number, payload: DebugLookupProbeRequest) =>
+    functionUnitAxios.post<any, { data: DebugLookupProbeResult }>(
+      `/api/v1/function-units/${functionUnitId}/process/debug/lookup/probe`,
+      payload
+    ),
+
+  // Process debug action runner
+  debugRunAction: (functionUnitId: number, payload: DebugActionRunRequest) =>
+    functionUnitAxios.post<any, { data: DebugActionRunResult }>(
+      `/api/v1/function-units/${functionUnitId}/process/debug/actions/run`,
+      payload
+    ),
 
   // Form Table Bindings
   getFormBindings: (functionUnitId: number, formId: number) =>

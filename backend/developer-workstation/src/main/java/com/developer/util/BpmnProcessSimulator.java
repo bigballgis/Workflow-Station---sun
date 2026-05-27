@@ -56,6 +56,7 @@ public final class BpmnProcessSimulator {
         }
 
         BpmnGraphParser.ParsedBpmnGraph graph = BpmnGraphParser.parse(bpmnXml);
+        Map<String, String> gatewayDefaultFlowIds = parseGatewayDefaultFlowIds(bpmnXml);
         Map<String, Object> processStructure = buildStructure(graph);
 
         Optional<String> startId = graph.mainNodes().values().stream()
@@ -79,7 +80,8 @@ public final class BpmnProcessSimulator {
                 startId.get(),
                 workingVars,
                 state,
-                null);
+                null,
+                gatewayDefaultFlowIds);
 
         if (state.steps.size() >= MAX_STEPS && !state.completed) {
             state.error = "Simulation exceeded maximum step limit (" + MAX_STEPS + ")";
@@ -96,6 +98,9 @@ public final class BpmnProcessSimulator {
         if (!state.generatedCollections.isEmpty()) {
             result.put("generatedCollections", state.generatedCollections);
         }
+        if (!state.warnings.isEmpty()) {
+            result.put("warnings", state.warnings);
+        }
         return result;
     }
 
@@ -105,7 +110,8 @@ public final class BpmnProcessSimulator {
             String currentId,
             Map<String, Object> workingVars,
             SimulationState state,
-            String miVisitScope) {
+            String miVisitScope,
+            Map<String, String> gatewayDefaultFlowIds) {
         while (currentId != null && state.steps.size() < MAX_STEPS && state.error == null) {
             NodeInfo node = graph.mainNodes().get(currentId);
             if (node == null) {
@@ -123,7 +129,7 @@ public final class BpmnProcessSimulator {
             if ("subProcess".equals(node.type())) {
                 BpmnGraphParser.SubProcessScope scope = graph.subProcesses().get(node.id());
                 if (scope != null && scope.miLoop().isPresent()) {
-                    expandMultiInstanceSubProcess(scope, fieldsByTableId, workingVars, state);
+                    expandMultiInstanceSubProcess(scope, fieldsByTableId, workingVars, state, gatewayDefaultFlowIds);
                     currentId = nextMainNodeAfter(graph, node.id());
                     continue;
                 }
@@ -136,7 +142,14 @@ public final class BpmnProcessSimulator {
                 return;
             }
 
-            currentId = selectNextNodeId(node, graph.mainOutgoing().getOrDefault(currentId, List.of()), workingVars, state);
+            StepTransition transition = selectNextNodeId(
+                    node,
+                    graph.mainOutgoing().getOrDefault(currentId, List.of()),
+                    workingVars,
+                    state,
+                    gatewayDefaultFlowIds.get(node.id()));
+            attachGatewayEvalToLatestStep(state, transition.gatewayEval());
+            currentId = transition.nextNodeId();
         }
     }
 
@@ -152,7 +165,8 @@ public final class BpmnProcessSimulator {
             BpmnGraphParser.SubProcessScope scope,
             Map<Long, List<FieldDefinition>> fieldsByTableId,
             Map<String, Object> workingVars,
-            SimulationState state) {
+            SimulationState state,
+            Map<String, String> gatewayDefaultFlowIds) {
         BpmnGraphParser.MiLoopConfig mi = scope.miLoop().orElseThrow();
         List<Map<String, Object>> collection = resolveCollection(
                 mi.collectionVariable(),
@@ -190,7 +204,7 @@ public final class BpmnProcessSimulator {
             instanceMi.put("phase", "instance");
             instanceMi.put("parallelMode", parallelMode);
 
-            walkInnerScope(scope, instanceVars, state, instanceMi, i + 1);
+            walkInnerScope(scope, instanceVars, state, instanceMi, i + 1, gatewayDefaultFlowIds);
 
             nrOfCompletedInstances++;
             instanceVars.put("nrOfCompletedInstances", nrOfCompletedInstances);
@@ -328,7 +342,8 @@ public final class BpmnProcessSimulator {
             Map<String, Object> instanceVars,
             SimulationState state,
             Map<String, Object> instanceMi,
-            int instanceNumber) {
+            int instanceNumber,
+            Map<String, String> gatewayDefaultFlowIds) {
         Optional<String> innerStart = scope.nodes().values().stream()
                 .filter(n -> "startEvent".equals(n.type()))
                 .map(NodeInfo::id)
@@ -361,7 +376,14 @@ public final class BpmnProcessSimulator {
                 return;
             }
 
-            currentId = selectNextNodeId(node, scope.outgoing().getOrDefault(currentId, List.of()), instanceVars, state);
+            StepTransition transition = selectNextNodeId(
+                    node,
+                    scope.outgoing().getOrDefault(currentId, List.of()),
+                    instanceVars,
+                    state,
+                    gatewayDefaultFlowIds.get(node.id()));
+            attachGatewayEvalToLatestStep(state, transition.gatewayEval());
+            currentId = transition.nextNodeId();
         }
     }
 
@@ -414,37 +436,51 @@ public final class BpmnProcessSimulator {
         };
     }
 
-    private static String selectNextNodeId(
+    private static StepTransition selectNextNodeId(
             NodeInfo node,
             List<FlowEdge> edges,
             Map<String, Object> workingVars,
-            SimulationState state) {
+            SimulationState state,
+            String defaultFlowId) {
         if (edges.isEmpty()) {
             state.error = "No outgoing flow from node: " + node.displayName();
-            return null;
+            return StepTransition.of(null, null);
         }
-        Optional<FlowEdge> nextEdge = selectNextFlow(node, edges, workingVars);
-        if (nextEdge.isEmpty()) {
+        FlowSelection selection = selectNextFlow(node, edges, workingVars, defaultFlowId);
+        if (selection.selectedEdge() == null) {
             state.error = "No matching outgoing flow from gateway: " + node.displayName();
-            return null;
+            return StepTransition.of(null, selection.gatewayEval());
         }
-        return nextEdge.get().targetId();
+        if (selection.warning() != null) {
+            state.warnings.add(selection.warning());
+        }
+        return StepTransition.of(selection.selectedEdge().targetId(), selection.gatewayEval());
     }
 
-    static Optional<FlowEdge> selectNextFlow(
+    static FlowSelection selectNextFlow(
             NodeInfo node,
             List<FlowEdge> edges,
-            Map<String, Object> variables) {
+            Map<String, Object> variables,
+            String explicitDefaultFlowId) {
         if (edges.size() == 1) {
-            return Optional.of(edges.get(0));
+            return FlowSelection.of(edges.get(0), null, null);
         }
 
         boolean isGateway = node.type().endsWith("Gateway");
         if (!isGateway) {
-            return Optional.of(edges.get(0));
+            return FlowSelection.of(edges.get(0), null, null);
         }
 
         FlowEdge defaultFlow = null;
+        if (explicitDefaultFlowId != null && !explicitDefaultFlowId.isBlank()) {
+            for (FlowEdge edge : edges) {
+                if (explicitDefaultFlowId.equals(edge.flowId())) {
+                    defaultFlow = edge;
+                    break;
+                }
+            }
+        }
+        List<Map<String, Object>> evaluations = new ArrayList<>();
         for (FlowEdge edge : edges) {
             if (edge.conditionExpression() == null || edge.conditionExpression().isBlank()) {
                 if (defaultFlow == null) {
@@ -452,16 +488,60 @@ public final class BpmnProcessSimulator {
                 }
                 continue;
             }
-            if (evaluateSimpleCondition(edge.conditionExpression(), variables)) {
-                return Optional.of(edge);
+            ConditionEvaluation condition = evaluateSimpleConditionWithReason(edge.conditionExpression(), variables);
+            Map<String, Object> eval = new LinkedHashMap<>();
+            eval.put("flowId", edge.flowId());
+            eval.put("condition", edge.conditionExpression());
+            eval.put("result", condition.result());
+            eval.put("reason", condition.reason());
+            evaluations.add(eval);
+            if (condition.result()) {
+                return FlowSelection.of(edge, buildGatewayEval(node, defaultFlow, evaluations, edge.flowId()), null);
             }
         }
-        return Optional.ofNullable(defaultFlow != null ? defaultFlow : edges.get(0));
+        FlowEdge fallback = defaultFlow != null ? defaultFlow : edges.get(0);
+        Map<String, Object> warning = null;
+        if (defaultFlow == null) {
+            warning = Map.of(
+                    "code", "BIZ_DEBUG_GATEWAY_EXPRESSION_UNSUPPORTED",
+                    "message", "Gateway " + node.id() + " fallback to first outgoing flow");
+        }
+        return FlowSelection.of(
+                fallback,
+                buildGatewayEval(node, defaultFlow, evaluations, fallback.flowId()),
+                warning);
+    }
+
+    private static Map<String, Object> buildGatewayEval(
+            NodeInfo node,
+            FlowEdge defaultFlow,
+            List<Map<String, Object>> evaluations,
+            String selectedFlowId) {
+        Map<String, Object> gatewayEval = new LinkedHashMap<>();
+        gatewayEval.put("gatewayId", node.id());
+        gatewayEval.put("gatewayType", node.type());
+        if (defaultFlow != null) {
+            gatewayEval.put("defaultFlowId", defaultFlow.flowId());
+        }
+        gatewayEval.put("evaluations", evaluations);
+        gatewayEval.put("selectedFlowId", selectedFlowId);
+        return gatewayEval;
+    }
+
+    private static void attachGatewayEvalToLatestStep(SimulationState state, Map<String, Object> gatewayEval) {
+        if (gatewayEval == null || state.steps.isEmpty()) {
+            return;
+        }
+        state.steps.get(state.steps.size() - 1).put("gatewayEval", gatewayEval);
     }
 
     static boolean evaluateSimpleCondition(String conditionExpression, Map<String, Object> variables) {
+        return evaluateSimpleConditionWithReason(conditionExpression, variables).result();
+    }
+
+    static ConditionEvaluation evaluateSimpleConditionWithReason(String conditionExpression, Map<String, Object> variables) {
         if (conditionExpression == null || conditionExpression.isBlank()) {
-            return true;
+            return new ConditionEvaluation(true, "EMPTY_CONDITION");
         }
 
         String expression = conditionExpression.trim();
@@ -475,7 +555,8 @@ public final class BpmnProcessSimulator {
                 String leftVar = parts[0].trim();
                 String rightValue = parts[1].trim().replace("'", "").replace("\"", "");
                 Object varValue = variables.get(leftVar);
-                return equalsVariable(varValue, rightValue);
+                boolean result = equalsVariable(varValue, rightValue);
+                return new ConditionEvaluation(result, leftVar + "=" + String.valueOf(varValue) + " == " + rightValue);
             }
         }
 
@@ -485,7 +566,8 @@ public final class BpmnProcessSimulator {
                 String leftVar = parts[0].trim();
                 String rightValue = parts[1].trim().replace("'", "").replace("\"", "");
                 Object varValue = variables.get(leftVar);
-                return !equalsVariable(varValue, rightValue);
+                boolean result = !equalsVariable(varValue, rightValue);
+                return new ConditionEvaluation(result, leftVar + "=" + String.valueOf(varValue) + " != " + rightValue);
             }
         }
 
@@ -498,20 +580,21 @@ public final class BpmnProcessSimulator {
                     String rightLiteral = parts[1].trim();
                     Object varValue = variables.get(leftVar);
                     if (varValue == null) {
-                        return false;
+                        return new ConditionEvaluation(false, leftVar + " is null");
                     }
                     try {
                         double leftNum = toDouble(varValue);
                         double rightNum = Double.parseDouble(rightLiteral);
-                        return switch (op) {
+                        boolean result = switch (op) {
                             case "<=" -> leftNum <= rightNum;
                             case ">=" -> leftNum >= rightNum;
                             case "<" -> leftNum < rightNum;
                             case ">" -> leftNum > rightNum;
                             default -> false;
                         };
+                        return new ConditionEvaluation(result, leftVar + "=" + leftNum + " " + op + " " + rightNum);
                     } catch (NumberFormatException e) {
-                        return false;
+                        return new ConditionEvaluation(false, "UNSUPPORTED_EXPRESSION");
                     }
                 }
             }
@@ -519,9 +602,9 @@ public final class BpmnProcessSimulator {
 
         Object varValue = variables.get(expression);
         if (varValue instanceof Boolean bool) {
-            return bool;
+            return new ConditionEvaluation(bool, expression + "=" + bool);
         }
-        return true;
+        return new ConditionEvaluation(true, "UNSUPPORTED_EXPRESSION");
     }
 
     private static boolean equalsVariable(Object varValue, String rightLiteral) {
@@ -628,10 +711,32 @@ public final class BpmnProcessSimulator {
         return condMatcher.find() ? condMatcher.group(1).trim() : null;
     }
 
+    private static Map<String, String> parseGatewayDefaultFlowIds(String bpmnXml) {
+        Map<String, String> defaults = new LinkedHashMap<>();
+        if (bpmnXml == null || bpmnXml.isBlank()) {
+            return defaults;
+        }
+        Pattern gatewayPattern = Pattern.compile("<bpmn:(?:exclusiveGateway|inclusiveGateway|parallelGateway|eventBasedGateway|complexGateway)\\b([^>]*)>");
+        Matcher matcher = gatewayPattern.matcher(bpmnXml);
+        while (matcher.find()) {
+            String attrs = matcher.group(1);
+            if (attrs == null) {
+                continue;
+            }
+            String id = readAttr(attrs, "id");
+            String defaultFlowId = readAttr(attrs, "default");
+            if (id != null && defaultFlowId != null && !defaultFlowId.isBlank()) {
+                defaults.put(id, defaultFlowId);
+            }
+        }
+        return defaults;
+    }
+
     private static final class SimulationState {
         private final List<Map<String, Object>> steps = new ArrayList<>();
         private final Map<String, Integer> visitCount = new HashMap<>();
         private final Map<String, Object> generatedCollections = new LinkedHashMap<>();
+        private final List<Map<String, Object>> warnings = new ArrayList<>();
         private boolean completed;
         private String error;
     }
@@ -643,5 +748,20 @@ public final class BpmnProcessSimulator {
     }
 
     record FlowEdge(String flowId, String sourceId, String targetId, String conditionExpression) {
+    }
+
+    record ConditionEvaluation(boolean result, String reason) {
+    }
+
+    record FlowSelection(FlowEdge selectedEdge, Map<String, Object> gatewayEval, Map<String, Object> warning) {
+        static FlowSelection of(FlowEdge selectedEdge, Map<String, Object> gatewayEval, Map<String, Object> warning) {
+            return new FlowSelection(selectedEdge, gatewayEval, warning);
+        }
+    }
+
+    record StepTransition(String nextNodeId, Map<String, Object> gatewayEval) {
+        static StepTransition of(String nextNodeId, Map<String, Object> gatewayEval) {
+            return new StepTransition(nextNodeId, gatewayEval);
+        }
     }
 }

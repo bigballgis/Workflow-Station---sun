@@ -79,6 +79,111 @@
             />
           </el-tab-pane>
           <el-tab-pane
+            :label="t('debug.decision')"
+            name="decision"
+          >
+            <div
+              v-if="currentGatewayEval"
+              class="decision-pane"
+            >
+              <div class="decision-meta">
+                <el-tag size="small" type="info">
+                  {{ currentGatewayEval.gatewayType || currentNode?.type || 'gateway' }}
+                </el-tag>
+                <span class="decision-selected">
+                  {{ t('debug.gatewaySelectedFlow', { flowId: currentGatewayEval.selectedFlowId || '-' }) }}
+                </span>
+              </div>
+              <el-table
+                :data="currentGatewayEval.evaluations || []"
+                size="small"
+                border
+              >
+                <el-table-column prop="flowId" :label="t('debug.gatewayFlowId')" min-width="120" />
+                <el-table-column prop="condition" :label="t('debug.gatewayCondition')" min-width="180" />
+                <el-table-column :label="t('debug.gatewayResult')" width="100">
+                  <template #default="{ row }">
+                    <el-tag :type="row.result ? 'success' : 'info'" size="small">
+                      {{ row.result ? t('common.yes') : t('common.no') }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="reason" :label="t('debug.gatewayReason')" min-width="220" />
+              </el-table>
+              <p
+                v-if="currentGatewayEval.defaultFlowId"
+                class="decision-default"
+              >
+                {{ t('debug.gatewayDefaultFlow', { flowId: currentGatewayEval.defaultFlowId }) }}
+              </p>
+              <div
+                v-if="canSelectGatewayBranch && gatewaySelectableFlowIds.length"
+                class="decision-selector"
+              >
+                <div class="decision-selector-title">{{ t('debug.gatewayBranchSelectionTitle') }}</div>
+                <el-button
+                  v-for="flowId in gatewaySelectableFlowIds"
+                  :key="flowId"
+                  size="small"
+                  :type="currentGatewayEval.selectedFlowId === flowId ? 'primary' : 'default'"
+                  @click="handleSelectGatewayBranch(flowId)"
+                >
+                  {{ t('debug.gatewayBranchApply', { flowId }) }}
+                </el-button>
+              </div>
+            </div>
+            <el-empty
+              v-else
+              :description="t('debug.noGatewayExplain')"
+            />
+          </el-tab-pane>
+          <el-tab-pane
+            :label="t('debug.actionsTab')"
+            name="actions"
+          >
+            <div class="actions-pane">
+              <el-empty
+                v-if="!currentNodeActions.length"
+                :description="t('debug.noNodeActions')"
+              />
+              <el-card
+                v-for="action in currentNodeActions"
+                :key="action.id"
+                class="action-card"
+                shadow="never"
+              >
+                <div class="action-header">
+                  <div class="action-title">
+                    <span>{{ action.actionName || action.id }}</span>
+                    <el-tag size="small" type="info">{{ action.id }}</el-tag>
+                  </div>
+                  <el-button
+                    size="small"
+                    type="primary"
+                    :loading="runningActionId === String(action.id)"
+                    :disabled="!isDebugging || !isPaused"
+                    @click="handleRunAction(action.id)"
+                  >
+                    {{ t('debug.runAction') }}
+                  </el-button>
+                </div>
+                <p v-if="action.description" class="action-description">{{ action.description }}</p>
+              </el-card>
+              <el-alert
+                v-if="actionRunResult"
+                class="action-result"
+                :type="actionRunResult.success ? 'success' : 'warning'"
+                :title="t('debug.actionRunResult')"
+                :closable="false"
+                show-icon
+              >
+                <template #default>
+                  <pre class="action-result-json">{{ JSON.stringify(actionRunResult, null, 2) }}</pre>
+                </template>
+              </el-alert>
+            </div>
+          </el-tab-pane>
+          <el-tab-pane
             :label="t('debug.nodeForm')"
             name="nodeForm"
           >
@@ -87,6 +192,7 @@
               :binding="currentNodeFormBinding"
               :mi-context="effectiveMiContext"
               :expanded="expanded"
+              @lookup-probe-log="handleLookupProbeLog"
             />
           </el-tab-pane>
           <el-tab-pane
@@ -321,7 +427,12 @@ import { ref, reactive, computed } from 'vue'
 import { VideoPlay, VideoPause, Right, DArrowRight, Delete, FullScreen, ScaleToOriginal, Close } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useI18n } from 'vue-i18n'
-import { functionUnitApi } from '@/api/functionUnit'
+import {
+  functionUnitApi,
+  type ActionDefinition,
+  type DebugActionRunResult,
+  type GatewayEvaluation,
+} from '@/api/functionUnit'
 import VariableMonitor from './VariableMonitor.vue'
 import ExecutionLogViewer from './ExecutionLogViewer.vue'
 import ProcessDebugNodeForm from './ProcessDebugNodeForm.vue'
@@ -346,6 +457,12 @@ interface ProcessNode {
   type: string
 }
 
+interface ProcessFlow {
+  id: string
+  source: string
+  target: string
+}
+
 interface SimulationStep {
   nodeId: string
   nodeName: string
@@ -353,6 +470,7 @@ interface SimulationStep {
   message?: string
   variables?: Record<string, any>
   miContext?: MiContext
+  gatewayEval?: GatewayEvaluation
 }
 
 interface MiContext {
@@ -380,6 +498,7 @@ interface ActiveParallelMi {
 interface ExecutionLog {
   timestamp: string
   level: string
+  eventType?: 'NODE_ENTER' | 'GATEWAY_EVAL' | 'LOOKUP_PROBE' | 'ACTION_RUN' | 'VARIABLE_PATCH'
   nodeId?: string
   nodeName?: string
   message: string
@@ -439,11 +558,18 @@ const startTime = ref<number>(0)
 const simulationSteps = ref<SimulationStep[]>([])
 const stepIndex = ref(-1)
 const processNodes = ref<ProcessNode[]>([])
+const processFlows = ref<Record<string, ProcessFlow>>({})
 const breakpointCandidate = ref<string | null>(null)
 const nodeFormBindings = ref<Map<string, BpmnNodeFormBinding>>(new Map())
+const availableActions = ref<ActionDefinition[]>([])
 const generatedCollectionsPreview = ref<GeneratedCollectionPreview[]>([])
 const activeParallelMi = ref<ActiveParallelMi | null>(null)
 const parallelInstancePicker = ref(1)
+const currentGatewayEval = ref<GatewayEvaluation | null>(null)
+const currentNodeActions = ref<ActionDefinition[]>([])
+const runningActionId = ref('')
+const actionRunResult = ref<DebugActionRunResult | null>(null)
+const pendingGatewayTargetNodeId = ref<string | null>(null)
 
 const currentNodeFormBinding = computed(() =>
   lookupNodeFormBinding(nodeFormBindings.value, currentNode.value?.id ?? null),
@@ -530,6 +656,21 @@ const breakpointCandidates = computed(() =>
   processNodes.value.filter(node => BREAKPOINT_NODE_TYPES.has(node.type))
 )
 
+const canSelectGatewayBranch = computed(() =>
+  isPaused.value
+  && currentNode.value?.type === 'exclusiveGateway'
+  && !!currentGatewayEval.value,
+)
+
+const gatewaySelectableFlowIds = computed(() => {
+  const evals = currentGatewayEval.value?.evaluations || []
+  const ids = evals.map(item => item.flowId).filter(Boolean)
+  if (currentGatewayEval.value?.defaultFlowId) {
+    ids.push(currentGatewayEval.value.defaultFlowId)
+  }
+  return Array.from(new Set(ids))
+})
+
 function hasBreakpoint(nodeId: string): boolean {
   return breakpoints.value.some(bp => bp.nodeId === nodeId)
 }
@@ -547,12 +688,13 @@ async function handleStartDebug() {
 
     if (data.error) {
       ElMessage.error(String(data.error))
-      addLog('error', `${t('debug.executionError')}: ${data.error}`)
+      addLog('error', `${t('debug.executionError')}: ${data.error}`, 'NODE_ENTER')
       return
     }
 
     simulationSteps.value = Array.isArray(data.steps) ? data.steps : []
     processNodes.value = extractProcessNodes(data.processStructure)
+    processFlows.value = extractProcessFlows(data.processStructure)
 
     let bpmnXml = ''
     if (props.getBpmnXml) {
@@ -563,14 +705,24 @@ async function handleStartDebug() {
       }
     }
     nodeFormBindings.value = parseBpmnNodeFormBindings(bpmnXml)
+    try {
+      const actionRes = await functionUnitApi.getActions(props.functionUnitId)
+      availableActions.value = Array.isArray(actionRes.data) ? actionRes.data : []
+    } catch {
+      availableActions.value = []
+    }
 
     generatedCollectionsPreview.value = []
     activeParallelMi.value = null
     parallelInstancePicker.value = 1
+    currentGatewayEval.value = null
+    currentNodeActions.value = []
+    actionRunResult.value = null
+    pendingGatewayTargetNodeId.value = null
     if (data.generatedCollections && typeof data.generatedCollections === 'object') {
       for (const [varName, meta] of Object.entries(data.generatedCollections as Record<string, any>)) {
         const count = meta?.instanceCount ?? '?'
-        addLog('info', t('debug.miCollectionGenerated', { name: varName, count }))
+        addLog('info', t('debug.miCollectionGenerated', { name: varName, count }), 'NODE_ENTER')
         const rows = Array.isArray(data.variables?.[varName]) ? data.variables[varName] : []
         generatedCollectionsPreview.value.push({
           variableName: varName,
@@ -591,7 +743,7 @@ async function handleStartDebug() {
     executionTime.value = null
     stepIndex.value = 0
 
-    addLog('info', t('debug.debugStarted'), undefined, undefined, variables)
+    addLog('info', t('debug.debugStarted'), 'NODE_ENTER', undefined, undefined, variables)
     applyStep(stepIndex.value, { log: true })
 
     if (data.completed && stepIndex.value === simulationSteps.value.length - 1) {
@@ -686,6 +838,74 @@ function extractProcessNodes(processStructure: any): ProcessNode[] {
     }))
 }
 
+function extractProcessFlows(processStructure: any): Record<string, ProcessFlow> {
+  const flows = Array.isArray(processStructure?.flows) ? processStructure.flows : []
+  const mapped: Record<string, ProcessFlow> = {}
+  for (const flow of flows) {
+    if (!flow?.id || !flow?.source || !flow?.target) continue
+    mapped[String(flow.id)] = {
+      id: String(flow.id),
+      source: String(flow.source),
+      target: String(flow.target),
+    }
+  }
+  return mapped
+}
+
+function handleSelectGatewayBranch(flowId: string) {
+  const flow = processFlows.value[flowId]
+  if (!flow?.target) {
+    ElMessage.warning(t('debug.gatewayBranchTargetMissing', { flowId }))
+    return
+  }
+  const gatewayId = currentGatewayEval.value?.gatewayId || currentNode.value?.id || 'gateway'
+  const selectionMap = {
+    ...(currentVariables.value.__debugGatewaySelectionMap || {}),
+    [gatewayId]: flowId,
+  }
+  currentVariables.value = {
+    ...currentVariables.value,
+    __debugGatewaySelectionMap: selectionMap,
+    __debugLastGatewayId: gatewayId,
+    __debugLastGatewayFlowId: flowId,
+  }
+  pendingGatewayTargetNodeId.value = flow.target
+  if (currentGatewayEval.value) {
+    currentGatewayEval.value = {
+      ...currentGatewayEval.value,
+      selectedFlowId: flowId,
+    }
+  }
+  addLog(
+    'info',
+    t('debug.gatewayBranchSelected', { flowId, target: flow.target }),
+    'GATEWAY_EVAL',
+    currentNode.value?.id,
+    currentNode.value?.name,
+  )
+  addLog(
+    'info',
+    t('debug.gatewayBranchSelectionPatched', { gatewayId, flowId }),
+    'VARIABLE_PATCH',
+    currentNode.value?.id,
+    currentNode.value?.name,
+    {
+      __debugGatewaySelectionMap: selectionMap,
+      __debugLastGatewayId: gatewayId,
+      __debugLastGatewayFlowId: flowId,
+    },
+  )
+}
+
+function consumeNextStepIndex(): number {
+  const fallback = stepIndex.value + 1
+  const targetNodeId = pendingGatewayTargetNodeId.value
+  pendingGatewayTargetNodeId.value = null
+  if (!targetNodeId) return fallback
+  const targetIdx = simulationSteps.value.findIndex((step, idx) => idx > stepIndex.value && step.nodeId === targetNodeId)
+  return targetIdx > -1 ? targetIdx : fallback
+}
+
 function applyStep(index: number, options: { log?: boolean } = {}) {
   const step = simulationSteps.value[index]
   if (!step) return
@@ -697,7 +917,9 @@ function applyStep(index: number, options: { log?: boolean } = {}) {
   }
   currentVariables.value = { ...(step.variables || {}) }
   currentMiContext.value = step.miContext ?? null
+  currentGatewayEval.value = step.gatewayEval ?? null
   syncParallelMiScope(step.miContext ?? null)
+  syncCurrentNodeActions(step.nodeId)
   emit('current-node-change', step.nodeId)
 
   if (
@@ -711,11 +933,94 @@ function applyStep(index: number, options: { log?: boolean } = {}) {
     addLog(
       step.nodeType === 'endEvent' ? 'success' : 'info',
       step.message || `${t('debug.executeNode')}: ${step.nodeName || step.nodeId}`,
+      'NODE_ENTER',
       step.nodeId,
       step.nodeName,
       step.variables
     )
+    if (step.gatewayEval) {
+      addLog(
+        'info',
+        t('debug.gatewayEvaluated', { node: step.nodeName || step.nodeId }),
+        'GATEWAY_EVAL',
+        step.nodeId,
+        step.nodeName,
+        { gatewayEval: step.gatewayEval },
+      )
+    }
   }
+}
+
+function syncCurrentNodeActions(nodeId: string) {
+  const binding = lookupNodeFormBinding(nodeFormBindings.value, nodeId)
+  const ids = binding?.actionIds || []
+  if (!ids.length) {
+    currentNodeActions.value = []
+    return
+  }
+  currentNodeActions.value = ids.map((id) => {
+    const found = availableActions.value.find(action => String(action.id) === String(id))
+    return found || {
+      id,
+      actionName: String(id),
+      actionType: 'UNKNOWN',
+      description: '',
+      configJson: {},
+    }
+  })
+}
+
+async function handleRunAction(actionId: string | number) {
+  if (!currentNode.value) return
+  runningActionId.value = String(actionId)
+  try {
+    const res = await functionUnitApi.debugRunAction(props.functionUnitId, {
+      nodeId: currentNode.value.id,
+      actionId,
+      runtimeVariables: currentVariables.value,
+      formData: currentVariables.value,
+      dryRun: true,
+    })
+    actionRunResult.value = res.data
+    addLog(
+      res.data?.success ? 'success' : 'warning',
+      t('debug.actionRunFinished', { actionId: String(actionId) }),
+      'ACTION_RUN',
+      currentNode.value.id,
+      currentNode.value.name,
+      res.data || {},
+    )
+    if (res.data?.variablePatches) {
+      currentVariables.value = {
+        ...currentVariables.value,
+        ...res.data.variablePatches,
+      }
+      addLog(
+        'info',
+        t('debug.variablePatchApplied'),
+        'VARIABLE_PATCH',
+        currentNode.value.id,
+        currentNode.value.name,
+        res.data.variablePatches,
+      )
+    }
+  } catch (e: any) {
+    actionRunResult.value = null
+    addLog(
+      'error',
+      t('debug.actionRunFailed', { actionId: String(actionId) }),
+      'ACTION_RUN',
+      currentNode.value.id,
+      currentNode.value.name,
+      { error: e?.response?.data?.error?.message || e?.message || 'unknown_error' },
+    )
+  } finally {
+    runningActionId.value = ''
+  }
+}
+
+function handleLookupProbeLog(payload: { message: string; detail?: Record<string, any> }) {
+  addLog('info', payload.message, 'LOOKUP_PROBE', currentNode.value?.id, currentNode.value?.name, payload.detail)
 }
 
 function handleStepOver() {
@@ -725,12 +1030,12 @@ function handleStepOver() {
     return
   }
 
-  stepIndex.value += 1
+  stepIndex.value = consumeNextStepIndex()
   applyStep(stepIndex.value, { log: true })
 
   if (isBreakpointHit(stepIndex.value)) {
     isPaused.value = true
-    addLog('warning', t('debug.hitBreakpoint'), simulationSteps.value[stepIndex.value].nodeId,
+    addLog('warning', t('debug.hitBreakpoint'), 'NODE_ENTER', simulationSteps.value[stepIndex.value].nodeId,
       simulationSteps.value[stepIndex.value].nodeName)
     return
   }
@@ -747,15 +1052,15 @@ function handleContinue() {
   if (!isDebugging.value || !isPaused.value) return
 
   isPaused.value = false
-  addLog('info', t('debug.continuing'))
+  addLog('info', t('debug.continuing'), 'NODE_ENTER')
 
   while (stepIndex.value < simulationSteps.value.length - 1) {
-    stepIndex.value += 1
+    stepIndex.value = consumeNextStepIndex()
     applyStep(stepIndex.value, { log: true })
 
     if (isBreakpointHit(stepIndex.value) && stepIndex.value < simulationSteps.value.length - 1) {
       isPaused.value = true
-      addLog('warning', t('debug.hitBreakpoint'), simulationSteps.value[stepIndex.value].nodeId,
+      addLog('warning', t('debug.hitBreakpoint'), 'NODE_ENTER', simulationSteps.value[stepIndex.value].nodeId,
         simulationSteps.value[stepIndex.value].nodeName)
       return
     }
@@ -773,7 +1078,7 @@ function isBreakpointHit(index: number): boolean {
 function finishDebug(completed: boolean) {
   if (completed) {
     executionTime.value = Date.now() - startTime.value
-    addLog('success', t('debug.processCompleted'))
+    addLog('success', t('debug.processCompleted'), 'NODE_ENTER')
   }
   isDebugging.value = false
   isPaused.value = false
@@ -782,7 +1087,7 @@ function finishDebug(completed: boolean) {
 
 function handleStopDebug() {
   executionTime.value = Date.now() - startTime.value
-  addLog('warning', t('debug.debugStopped'))
+  addLog('warning', t('debug.debugStopped'), 'NODE_ENTER')
   resetDebugSession(true)
 }
 
@@ -795,7 +1100,14 @@ function resetDebugSession(keepLogs: boolean) {
   simulationSteps.value = []
   stepIndex.value = -1
   processNodes.value = []
+  processFlows.value = {}
   nodeFormBindings.value = new Map()
+  availableActions.value = []
+  currentGatewayEval.value = null
+  currentNodeActions.value = []
+  actionRunResult.value = null
+  runningActionId.value = ''
+  pendingGatewayTargetNodeId.value = null
   generatedCollectionsPreview.value = []
   activeParallelMi.value = null
   parallelInstancePicker.value = 1
@@ -809,14 +1121,14 @@ function resetDebugSession(keepLogs: boolean) {
 
 function handleVariableUpdate(key: string, value: any) {
   currentVariables.value[key] = value
-  addLog('info', t('debug.variableUpdatedLog', { key, value: JSON.stringify(value) }))
+  addLog('info', t('debug.variableUpdatedLog', { key, value: JSON.stringify(value) }), 'VARIABLE_PATCH')
 }
 
 function handleBreakpointToggle(bp: Breakpoint) {
   addLog('info', t('debug.breakpointToggled', {
     name: bp.nodeName,
     state: bp.enabled ? t('debug.enabled') : t('debug.disabled')
-  }))
+  }), 'NODE_ENTER')
 }
 
 function addBreakpoint(nodeId: string) {
@@ -830,7 +1142,7 @@ function addBreakpoint(nodeId: string) {
     enabled: true
   })
   breakpointCandidate.value = null
-  addLog('info', t('debug.breakpointAdded', { name: node.name }))
+  addLog('info', t('debug.breakpointAdded', { name: node.name }), 'NODE_ENTER')
 }
 
 function removeBreakpoint(nodeId: string) {
@@ -854,6 +1166,7 @@ function addInputVariable() {
 function addLog(
   level: string,
   message: string,
+  eventType?: ExecutionLog['eventType'],
   nodeId?: string,
   nodeName?: string,
   variables?: Record<string, any>
@@ -861,6 +1174,7 @@ function addLog(
   executionLogs.value.push({
     timestamp: new Date().toISOString(),
     level,
+    eventType,
     nodeId,
     nodeName: nodeName || (nodeId ? nodeId : undefined),
     message,
@@ -1075,6 +1389,78 @@ function addLog(
     .node-name {
       flex: 1;
     }
+  }
+}
+
+.decision-pane {
+  .decision-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .decision-selected,
+  .decision-default {
+    font-size: 12px;
+    color: #606266;
+  }
+
+  .decision-default {
+    margin-top: 8px;
+  }
+
+  .decision-selector {
+    margin-top: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .decision-selector-title {
+    width: 100%;
+    font-size: 12px;
+    color: #606266;
+  }
+}
+
+.actions-pane {
+  .action-card {
+    margin-bottom: 10px;
+  }
+
+  .action-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .action-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: #303133;
+  }
+
+  .action-description {
+    margin: 8px 0 0;
+    color: #606266;
+    font-size: 12px;
+  }
+
+  .action-result {
+    margin-top: 10px;
+  }
+
+  .action-result-json {
+    margin: 0;
+    max-height: 220px;
+    overflow: auto;
+    font-size: 12px;
+    line-height: 1.4;
   }
 }
 </style>

@@ -40,6 +40,16 @@
           value="error"
         />
       </el-select>
+      <el-select
+        v-model="eventTypeFilter"
+        :placeholder="t('debug.eventType')"
+        size="small"
+        clearable
+        style="width: 180px;"
+      >
+        <el-option :label="t('debug.all')" value="" />
+        <el-option v-for="event in eventTypeOptions" :key="event" :label="event" :value="event" />
+      </el-select>
       <el-checkbox
         v-model="autoScroll"
         size="small"
@@ -82,6 +92,14 @@
           v-if="log.nodeName"
           class="log-node"
         >[{{ log.nodeName }}]</span>
+        <el-tag
+          v-if="log.eventType"
+          size="small"
+          type="warning"
+          effect="plain"
+        >
+          {{ log.eventType }}
+        </el-tag>
         <span class="log-message">{{ log.message }}</span>
         <el-button
           v-if="log.variables"
@@ -121,6 +139,7 @@ const { t } = useI18n()
 interface ExecutionLog {
   timestamp: string
   level: string
+  eventType?: 'NODE_ENTER' | 'GATEWAY_EVAL' | 'LOOKUP_PROBE' | 'ACTION_RUN' | 'VARIABLE_PATCH'
   nodeId?: string
   nodeName?: string
   message: string
@@ -137,16 +156,29 @@ const emit = defineEmits<{
 
 const searchText = ref('')
 const levelFilter = ref('')
+const eventTypeFilter = ref('')
 const autoScroll = ref(true)
 const logContainerRef = ref<HTMLElement>()
 const showVariablesDialog = ref(false)
 const selectedLogVariables = ref<Record<string, any>>({})
+
+const eventTypeOptions: Array<NonNullable<ExecutionLog['eventType']>> = [
+  'NODE_ENTER',
+  'GATEWAY_EVAL',
+  'LOOKUP_PROBE',
+  'ACTION_RUN',
+  'VARIABLE_PATCH',
+]
 
 const filteredLogs = computed(() => {
   let result = props.logs
   
   if (levelFilter.value) {
     result = result.filter(log => log.level === levelFilter.value)
+  }
+
+  if (eventTypeFilter.value) {
+    result = result.filter(log => log.eventType === eventTypeFilter.value)
   }
   
   if (searchText.value) {
@@ -205,7 +237,7 @@ function handleClear() {
 
 function handleExport() {
   const data = props.logs.map(log => 
-    `[${formatTime(log.timestamp)}] [${log.level.toUpperCase()}] ${log.nodeName ? `[${log.nodeName}] ` : ''}${log.message}`
+    `[${formatTime(log.timestamp)}] [${log.level.toUpperCase()}]${log.eventType ? ` [${log.eventType}]` : ''} ${log.nodeName ? `[${log.nodeName}] ` : ''}${log.message}`
   ).join('\n')
   
   const blob = new Blob([data], { type: 'text/plain' })

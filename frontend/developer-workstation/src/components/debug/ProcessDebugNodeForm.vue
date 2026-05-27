@@ -44,6 +44,38 @@
         </el-tag>
       </div>
       <div class="form-preview-wrap">
+        <div
+          v-if="lookupItems.length"
+          class="lookup-probe-toolbar"
+        >
+          <span class="lookup-probe-title">{{ t('debug.lookupProbe') }}</span>
+          <div
+            v-for="lookup in lookupItems"
+            :key="lookup.key"
+            class="lookup-probe-item"
+          >
+            <span class="lookup-probe-label">{{ lookup.label }}</span>
+            <el-input
+              v-model="lookupKeywords[lookup.key]"
+              size="small"
+              :placeholder="t('debug.lookupProbeKeywordPlaceholder')"
+            />
+            <el-button
+              size="small"
+              :disabled="!canProbeLookup(lookup) || lookupProbeUnavailable"
+              :loading="probingLookupKey === lookup.key"
+              @click="handleLookupProbe(lookup)"
+            >
+              {{ t('debug.lookupProbeRun') }}
+            </el-button>
+          </div>
+          <p
+            v-if="lookupProbeUnavailable"
+            class="lookup-probe-hint"
+          >
+            {{ t('debug.lookupProbeUnavailable') }}
+          </p>
+        </div>
         <FormPreviewItems
           v-if="previewItems.length > 0"
           v-model:preview-data="previewData"
@@ -56,6 +88,32 @@
           :description="t('form.noFormContent')"
         />
       </div>
+      <el-dialog
+        v-model="showLookupProbeDialog"
+        :title="t('debug.lookupProbeResultTitle')"
+        width="760px"
+      >
+        <el-table
+          v-if="lookupProbeRows.length"
+          :data="lookupProbeRows"
+          border
+          size="small"
+          height="360"
+          @row-click="handleLookupRowPick"
+        >
+          <el-table-column
+            v-for="col in lookupProbeColumns"
+            :key="col.fieldName"
+            :prop="col.fieldName"
+            :label="col.label || col.fieldName"
+            min-width="160"
+          />
+        </el-table>
+        <el-empty
+          v-else
+          :description="t('debug.lookupProbeNoRows')"
+        />
+      </el-dialog>
     </template>
   </div>
 </template>
@@ -63,7 +121,12 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { functionUnitApi, type FormDefinition, type TableBinding } from '@/api/functionUnit'
+import {
+  functionUnitApi,
+  type DebugLookupProbeResult,
+  type FormDefinition,
+  type TableBinding,
+} from '@/api/functionUnit'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
 import FormPreviewItems from '@/components/designer/FormPreviewItems.vue'
 import type { FormPreviewItem } from '@/components/designer/formPreviewTypes'
@@ -83,6 +146,9 @@ const props = defineProps<{
   miContext?: MiContext | null
   expanded?: boolean
 }>()
+const emit = defineEmits<{
+  (e: 'lookup-probe-log', payload: { message: string; detail?: Record<string, any> }): void
+}>()
 
 const { t } = useI18n()
 const store = useFunctionUnitStore()
@@ -94,6 +160,24 @@ const previewData = ref<Record<string, unknown>>({})
 const previewTableRows = ref<Record<number, any[]>>({})
 const previewOption = { submitBtn: false, resetBtn: false }
 const resolvedFormName = ref('')
+const lookupKeywords = ref<Record<string, string>>({})
+const probingLookupKey = ref('')
+const lookupProbeUnavailable = ref(false)
+const showLookupProbeDialog = ref(false)
+const lookupProbeColumns = ref<Array<{ fieldName: string; label?: string }>>([])
+const lookupProbeRows = ref<Array<Record<string, any>>>([])
+
+type LookupPreviewItem = Extract<FormPreviewItem, { kind: 'lookup' }>
+type ProbeLookupItem = LookupPreviewItem & { key: string }
+
+const lookupItems = computed<ProbeLookupItem[]>(() =>
+  previewItems.value
+    .filter((item): item is LookupPreviewItem => item.kind === 'lookup')
+    .map((item, index) => ({
+      ...item,
+      key: `${item.bindingId ?? 'unknown'}-${index}`,
+    })),
+)
 
 const emptyDescription = computed(() => {
   if (!props.binding) return t('debug.noNodeForm')
@@ -127,6 +211,7 @@ async function loadFormPreview() {
   previewItems.value = []
   previewData.value = {}
   previewTableRows.value = {}
+  lookupKeywords.value = {}
   loadError.value = ''
   resolvedFormName.value = ''
 
@@ -176,6 +261,70 @@ async function loadFormPreview() {
   } finally {
     loading.value = false
   }
+}
+
+function canProbeLookup(item: ProbeLookupItem): boolean {
+  return Number.isFinite(Number(item.bindingId))
+}
+
+async function handleLookupProbe(item: ProbeLookupItem) {
+  const bindingId = Number(item.bindingId)
+  if (!Number.isFinite(bindingId) || !props.binding?.formId) return
+  probingLookupKey.value = item.key
+  try {
+    const result = await functionUnitApi.debugLookupProbe(props.functionUnitId, {
+      formId: props.binding.formId,
+      bindingId,
+      lookupConfig: {
+        searchFields: item.searchFields,
+        displayFields: item.displayFields,
+        selectedDisplayField: item.selectedDisplayField,
+        filterConditions: item.filterConditions || [],
+      },
+      keyword: lookupKeywords.value[item.key] || '',
+      runtimeVariables: previewData.value,
+      page: 0,
+      size: 20,
+      searchMode: 'contains',
+    })
+    applyLookupProbeResult(result.data)
+    emit('lookup-probe-log', {
+      message: t('debug.lookupProbeSucceeded', {
+        label: item.label,
+        count: result.data.total ?? result.data.rows?.length ?? 0,
+      }),
+      detail: { bindingId, keyword: lookupKeywords.value[item.key] || '' },
+    })
+  } catch (e: any) {
+    const status = Number(e?.response?.status)
+    if (status === 404 || status === 501) {
+      lookupProbeUnavailable.value = true
+    }
+    emit('lookup-probe-log', {
+      message: t('debug.lookupProbeFailed', { label: item.label }),
+      detail: { error: e?.response?.data?.error?.message || e?.message || 'unknown_error' },
+    })
+  } finally {
+    probingLookupKey.value = ''
+  }
+}
+
+function applyLookupProbeResult(result: DebugLookupProbeResult) {
+  lookupProbeColumns.value = result.columns || []
+  lookupProbeRows.value = result.rows || []
+  showLookupProbeDialog.value = true
+}
+
+function handleLookupRowPick(row: Record<string, any>) {
+  previewData.value = {
+    ...previewData.value,
+    ...row,
+  }
+  emit('lookup-probe-log', {
+    message: t('debug.lookupProbeRowApplied'),
+    detail: { fields: Object.keys(row).length },
+  })
+  showLookupProbeDialog.value = false
 }
 
 watch(
@@ -233,5 +382,42 @@ watch(
   max-height: 360px;
   overflow-y: auto;
   padding-right: 4px;
+}
+
+.lookup-probe-toolbar {
+  margin-bottom: 10px;
+  border: 1px solid #ebeef5;
+  border-radius: 6px;
+  padding: 10px;
+  background: #fafafa;
+}
+
+.lookup-probe-title {
+  display: inline-block;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: #606266;
+}
+
+.lookup-probe-item {
+  display: grid;
+  grid-template-columns: 140px 1fr auto;
+  gap: 8px;
+  margin-bottom: 8px;
+  align-items: center;
+}
+
+.lookup-probe-label {
+  font-size: 12px;
+  color: #606266;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lookup-probe-hint {
+  margin: 0;
+  font-size: 12px;
+  color: #909399;
 }
 </style>

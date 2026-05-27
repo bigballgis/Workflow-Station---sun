@@ -10,16 +10,36 @@ export interface BpmnNodeFormBinding {
   formId: number
   formName?: string
   readOnly: boolean
+  actionIds?: Array<string | number>
 }
 
 function localName(el: Element): string {
   return el.localName || el.nodeName.split(':').pop() || ''
 }
 
-function readTaskFormProps(task: Element): { formId: number | null; formName?: string; readOnly: boolean } {
+function parseActionIds(value: string): Array<string | number> {
+  if (!value) return []
+  try {
+    const parsed = JSON.parse(value)
+    if (Array.isArray(parsed)) return parsed
+  } catch {
+    // fallback to comma-separated format
+  }
+  const cleaned = value.replace(/[\[\]\s]/g, '')
+  if (!cleaned) return []
+  return cleaned.split(',').map(v => v.trim()).filter(Boolean)
+}
+
+function readTaskFormProps(task: Element): {
+  formId: number | null
+  formName?: string
+  readOnly: boolean
+  actionIds: Array<string | number>
+} {
   let formId: number | null = null
   let formName: string | undefined
   let readOnly = false
+  let actionIds: Array<string | number> = []
 
   const descendants = task.getElementsByTagName('*')
   for (let i = 0; i < descendants.length; i++) {
@@ -34,9 +54,10 @@ function readTaskFormProps(task: Element): { formId: number | null; formName?: s
     }
     if (name === 'formName' && value) formName = value
     if (name === 'formReadOnly' && value === 'true') readOnly = true
+    if (name === 'actionIds' && value) actionIds = parseActionIds(value)
   }
 
-  return { formId, formName, readOnly }
+  return { formId, formName, readOnly, actionIds }
 }
 
 /**
@@ -57,7 +78,7 @@ export function parseBpmnNodeFormBindings(bpmnXml: string | null | undefined): M
       const nodeId = el.getAttribute('id') || ''
       if (!nodeId) continue
 
-      const { formId, formName, readOnly } = readTaskFormProps(el)
+      const { formId, formName, readOnly, actionIds } = readTaskFormProps(el)
       if (formId == null) continue
 
       result.set(nodeId, {
@@ -67,6 +88,7 @@ export function parseBpmnNodeFormBindings(bpmnXml: string | null | undefined): M
         formId,
         formName,
         readOnly,
+        actionIds,
       })
     }
   } catch {

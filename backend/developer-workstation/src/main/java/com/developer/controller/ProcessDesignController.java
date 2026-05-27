@@ -5,6 +5,7 @@ import com.developer.dto.ApiResponse;
 import com.developer.dto.ErrorResponse;
 import com.developer.dto.ValidationResult;
 import com.developer.entity.ProcessDefinition;
+import com.developer.security.RequireDeveloperPermission;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -60,12 +61,33 @@ public class ProcessDesignController {
     
     @PostMapping("/simulate")
     @Operation(summary = "Simulate process execution")
+    @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<Map<String, Object>>> simulate(
             @PathVariable Long functionUnitId,
             @RequestBody Map<String, Object> variables) {
         ProcessDefinition process = processDesignComponent.getByFunctionUnitId(functionUnitId);
         Map<String, Object> result = process != null ?
                 processDesignComponent.simulate(functionUnitId, process.getBpmnXml(), variables) : Map.of();
+        return ResponseEntity.ok(ApiResponse.success(result));
+    }
+
+    @PostMapping("/debug/lookup/probe")
+    @Operation(summary = "Debug lookup live probe")
+    @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> debugLookupProbe(
+            @PathVariable Long functionUnitId,
+            @RequestBody Map<String, Object> request) {
+        Map<String, Object> result = processDesignComponent.debugLookupProbe(functionUnitId, request);
+        return ResponseEntity.ok(ApiResponse.success(result));
+    }
+
+    @PostMapping("/debug/actions/run")
+    @Operation(summary = "Debug action runner")
+    @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> debugRunAction(
+            @PathVariable Long functionUnitId,
+            @RequestBody Map<String, Object> request) {
+        Map<String, Object> result = processDesignComponent.debugRunAction(functionUnitId, request);
         return ResponseEntity.ok(ApiResponse.success(result));
     }
 }
