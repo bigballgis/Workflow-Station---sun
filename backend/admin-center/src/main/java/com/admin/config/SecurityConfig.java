@@ -57,6 +57,8 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                 .requestMatchers("/actuator/**").permitAll()
+                .requestMatchers("/health/**").permitAll()
+                .requestMatchers("/.well-known/health").permitAll()
                 .requestMatchers("/data-api/**").permitAll()
                 // DESIGN NOTE: Authentication is handled by Kong Gateway (JWT plugin) as the first line of defense,
                 // and JwtAuthenticationFilter as the second line. Spring Security's authorizeHttpRequests is intentionally

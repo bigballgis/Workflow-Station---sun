@@ -139,3 +139,17 @@ management:
   endpoint:
     health:
       show-details: when_authorized
+      group:
+        live:
+          include: ping
+        ready:
+          include: db,redis,kafka
+  health:
+    ping:
+      enabled: true
+    db:
+      enabled: true
+    redis:
+      enabled: true
+    kafka:
+      enabled: true

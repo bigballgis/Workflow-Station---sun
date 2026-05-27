@@ -8,11 +8,30 @@ import {
   resolveAssigneeFieldForBinding,
   allSubTableRowsHaveAssignee
 } from '@/utils/subTableAssignment'
-import { normalizeSubTableName } from './shared'
 
 function resolveProcessTaskId(source: MaybeRef<string>): string {
   const v = unref(source)
   return typeof v === 'string' ? v.trim() : ''
+}
+
+function isDigitsKey(key: string): boolean {
+  return /^\d+$/.test(key)
+}
+
+/**
+ * Canonicalize __subTables__ slices for persistence:
+ * if numeric bindingId keys exist, keep only numeric keys to avoid alias fan-out.
+ */
+function canonicalizeSubTablesForSubmit(input: Record<string, any>): Record<string, any> {
+  const keys = Object.keys(input)
+  if (keys.length === 0) return {}
+  const hasNumeric = keys.some(isDigitsKey)
+  if (!hasNumeric) return { ...input }
+  const out: Record<string, any> = {}
+  for (const k of keys) {
+    if (isDigitsKey(k)) out[k] = input[k]
+  }
+  return out
 }
 
 export function useTaskActions(options: {
@@ -126,20 +145,21 @@ export function useTaskActions(options: {
           currentFormData[key] = options.formData.value[key]
         }
       }
-      const mergedSub: Record<string, any> = { ...(options.formData.value.__subTables__ || {}) }
+      const mergedSub: Record<string, any> = canonicalizeSubTablesForSubmit({
+        ...(options.formData.value.__subTables__ || {})
+      })
       for (const b of options.subTableBindings.value) {
-        mergedSub[b.bindingId] = b.data
-        mergedSub[String(b.bindingId)] = b.data
-        if (b.tableName) {
-          mergedSub[b.tableName] = b.data
-          mergedSub[normalizeSubTableName(b.tableName)] = b.data
-        }
+        const bindingId = b?.bindingId
+        if (bindingId === null || bindingId === undefined || bindingId === '') continue
+        mergedSub[String(bindingId)] = b.data
       }
       const participantsBinding = options.subTableBindings.value.find(
         b => b.tableName === 'participants' || resolveAssigneeFieldForBinding(b.columns, b.tableName)
       )
-      if (participantsBinding) {
-        mergedSub.participants = participantsBinding.data
+      if (participantsBinding?.bindingId !== null
+        && participantsBinding?.bindingId !== undefined
+        && participantsBinding?.bindingId !== '') {
+        mergedSub[String(participantsBinding.bindingId)] = participantsBinding.data
       }
       currentFormData.__subTables__ = mergedSub
       Object.assign(variables, currentFormData)
