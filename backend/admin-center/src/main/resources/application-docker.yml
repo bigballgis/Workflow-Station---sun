@@ -82,11 +82,16 @@ spring:
   kafka:
     bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:kafka:29092}
 
-# Actuator Configuration - disable Redis health check to avoid localhost connection issue
+# Actuator: ready group includes redis — host is compose service "redis"
 management:
+  endpoint:
+    health:
+      group:
+        ready:
+          include: db,redis
   health:
     redis:
-      enabled: false
+      enabled: true
 
 # Workflow Engine Configuration for Docker network
 # In Docker, use service name and internal port

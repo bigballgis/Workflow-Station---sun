@@ -49,9 +49,6 @@ class AiTransactionAtomicityProperties {
         @Override public org.springframework.data.domain.Page<FunctionUnit> findByStatus(com.developer.enums.FunctionUnitStatus status, org.springframework.data.domain.Pageable pageable) { return org.springframework.data.domain.Page.empty(); }
         @Override public org.springframework.data.domain.Page<FunctionUnit> findAllWithRelations(org.springframework.data.domain.Pageable pageable) { return org.springframework.data.domain.Page.empty(); }
         @Override public Optional<FunctionUnit> findByIdWithRelations(Long id) { return Optional.empty(); }
-        @Override public Optional<FunctionUnit> findByNameAndIsActive(String name, Boolean isActive) { return Optional.empty(); }
-        @Override public List<FunctionUnit> findByNameOrderByVersionDesc(String name) { return List.of(); }
-        @Override public boolean existsByNameAndVersion(String name, String version) { return false; }
         @Override public void flush() {}
         @Override public <S extends FunctionUnit> S saveAndFlush(S entity) { return entity; }
         @Override public <S extends FunctionUnit> List<S> saveAllAndFlush(Iterable<S> entities) { return List.of(); }

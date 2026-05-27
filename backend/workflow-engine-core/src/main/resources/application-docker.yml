@@ -85,11 +85,16 @@ flowable:
   async-executor-activate: true
   history-level: full
 
-# Actuator Configuration - disable Redis health check to avoid localhost connection issue
+# Actuator: ready group (application.yml) includes redis — keep contributor enabled; host is compose service "redis", not localhost
 management:
+  endpoint:
+    health:
+      group:
+        ready:
+          include: db,redis
   health:
     redis:
-      enabled: false
+      enabled: true
 
 # Logging - reduce verbosity in Docker
 logging:

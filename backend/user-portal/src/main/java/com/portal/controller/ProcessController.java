@@ -198,8 +198,12 @@ public class ProcessController {
     public ApiResponse<ProcessInstanceInfo> getProcessDetail(
             @CurrentUserId String userId,
             @PathVariable String processId) {
+        if (userId == null || userId.isBlank()) {
+            throw new FunctionUnitAccessComponent.FunctionUnitAccessDeniedException(
+                    "Please login first before viewing process details");
+        }
         ProcessInstanceInfo detail = processComponent.getProcessDetail(processId);
-        if (detail != null && userId != null) {
+        if (detail != null) {
             boolean isParticipant = processComponent.isProcessParticipant(userId, detail);
             if (!isParticipant) {
                 log.warn("User {} attempted to access process {} without being a participant", userId, processId);
@@ -295,14 +299,16 @@ public class ProcessController {
     public ApiResponse<List<Map<String, Object>>> getProcessHistory(
             @CurrentUserId String userId,
             @PathVariable String processId) {
-        if (userId != null) {
-            ProcessInstanceInfo detail = processComponent.getProcessDetail(processId);
-            if (detail != null) {
-                boolean isParticipant = processComponent.isProcessParticipant(userId, detail);
-                if (!isParticipant) {
-                    log.warn("User {} attempted to access process history {} without being a participant", userId, processId);
-                    return ApiResponse.error("403", "You are not a participant of this process");
-                }
+        if (userId == null || userId.isBlank()) {
+            throw new FunctionUnitAccessComponent.FunctionUnitAccessDeniedException(
+                    "Please login first before viewing process history");
+        }
+        ProcessInstanceInfo detail = processComponent.getProcessDetail(processId);
+        if (detail != null) {
+            boolean isParticipant = processComponent.isProcessParticipant(userId, detail);
+            if (!isParticipant) {
+                log.warn("User {} attempted to access process history {} without being a participant", userId, processId);
+                return ApiResponse.error("403", "You are not a participant of this process");
             }
         }
         log.debug("ProcessController.getProcessHistory called with processId: {}", processId);

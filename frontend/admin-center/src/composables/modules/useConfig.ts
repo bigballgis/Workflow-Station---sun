@@ -1,7 +1,7 @@
 /**
  * 系统配置业务逻辑 composable
  */
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { AppErrorCode } from '@/types/errors'
 import { errorTranslator } from '@/utils/errorTranslator'

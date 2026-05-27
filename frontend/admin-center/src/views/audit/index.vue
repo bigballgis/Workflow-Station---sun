@@ -362,11 +362,10 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onActivated } from 'vue'
+import { onActivated } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Download, Search, InfoFilled, RefreshRight, VideoPause } from '@element-plus/icons-vue'
 import PageHeader from '@/components/PageHeader.vue'
-import type { AuditLog } from '@/api/audit'
 import AuditExportDialog from './components/AuditExportDialog.vue'
 import AuditDetailDialog from './components/AuditDetailDialog.vue'
 import { useAudit } from '@/composables/modules/useAudit'
@@ -376,7 +375,7 @@ const { t } = useI18n()
 const {
   loading, exporting, logs, total, page, size,
   detailDialogVisible, currentLog, dateRange,
-  tableRef, selectedRows, sortField, sortOrder,
+  tableRef, selectedRows,
   query, resourceTypes,
   refreshCountdown, autoRefreshPaused, toggleAutoRefresh,
   exportDialogVisible, exportSelectAll, exportIndeterminate,

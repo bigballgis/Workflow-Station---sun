@@ -5,7 +5,7 @@
  * 组件仅保留 template + 调用此 composable。
  */
 
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { AppErrorCode } from '@/types/errors'
 import { errorTranslator } from '@/utils/errorTranslator'
@@ -172,7 +172,7 @@ export function useAudit() {
 
   // ==================== Action/Type Mapping ====================
 
-  const actionType = (action: string): '' | 'success' | 'warning' | 'info' | 'primary' | 'danger' => {
+  const actionType = (action: string): 'success' | 'warning' | 'info' | 'primary' | 'danger' => {
     switch ((action || '').toUpperCase()) {
       case 'CREATE': return 'primary'
       case 'UPDATE': return 'warning'
@@ -183,7 +183,6 @@ export function useAudit() {
   }
 
   const actionText = (action: string) => {
-    const key = `audit.action${(action || '').toUpperCase()}` as string
     switch ((action || '').toUpperCase()) {
       case 'CREATE': return t('audit.actionCREATE')
       case 'UPDATE': return t('audit.actionUPDATE')

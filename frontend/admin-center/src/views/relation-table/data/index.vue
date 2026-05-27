@@ -304,11 +304,11 @@ import { useRelationTableData } from '@/composables/modules/useRelationTableData
 
 const {
   tableListLoading, dataLoading, exporting, saving,
-  tables, selectedTableId, searchKeyword, tableSearchKeyword, currentPage, pageSize, totalElements, dataRows,
-  fetchDataError, dialogVisible, dialogMode, editingRowId, formData,
+  selectedTableId, searchKeyword, tableSearchKeyword, currentPage, pageSize, totalElements, dataRows,
+  fetchDataError, dialogVisible, dialogMode, formData,
   selectedTable, fieldColumns, filteredTables,
   isNumericType, isRowDisabled,
-  fetchTables, fetchData, handleSelectTable, handlePageChange, handleSizeChange,
+  fetchData, handleSelectTable, handlePageChange, handleSizeChange,
   openAddDialog, openEditDialog, handleSaveRecord, handleDisable, handleEnable, handleDelete,
   formatHKT, handleExport, init, refresh,
 } = useRelationTableData()

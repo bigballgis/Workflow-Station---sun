@@ -5,6 +5,6 @@ export { useConfirmDelete } from './useConfirmDelete'
 export type { UseConfirmDeleteOptions } from './useConfirmDelete'
 
 export { useToggleSwitch } from './useToggleSwitch'
-export type { ToggleState, UseToggleSwitchOptions } from './useToggleSwitch'
+export type { ToggleState, ToggleResult } from './useToggleSwitch'
 
 export { useTabRefresh } from './useTabRefresh'

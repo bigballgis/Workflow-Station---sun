@@ -18,6 +18,6 @@ for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
 app.use(createPinia())
 app.use(router)
 app.use(i18n)
-app.use(ElementPlus, { message: { appendTo: '#app' } })
+app.use(ElementPlus)
 
 app.mount('#app')

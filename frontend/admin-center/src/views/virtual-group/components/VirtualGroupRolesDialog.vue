@@ -96,7 +96,7 @@ const props = defineProps<{ group: VirtualGroup | null }>()
 const visible = defineModel<boolean>({ default: false })
 const { t } = useI18n()
 
-const { loading, boundRole, selectedRoleId, isSystemGroup, availableRoles,
+const { boundRole, selectedRoleId, isSystemGroup, availableRoles,
   getRoleTypeLabel, fetchRoles, bindRole, unbindRole }
   = useVirtualGroupRoles(toRef(props, 'group'))
 

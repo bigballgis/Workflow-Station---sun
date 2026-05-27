@@ -13,7 +13,7 @@ import { notifyConfirm, notifyError, notifySuccess } from '@/utils/notify'
 import type { User } from '@/api/user'
 import { userApi } from '@/api/user'
 import { useUserStore } from '@/stores/user'
-import { pickHttpErrorBodyMessage } from '@/utils/httpErrorMessage'
+import { extractErrorDetail } from '@/utils/errorTranslator'
 import { usePagination } from '@/composables/usePagination'
 import { hasPermission, PERMISSIONS } from '@/utils/permission'
 
@@ -106,7 +106,7 @@ export function useUser() {
       handleSearch()
     } catch (error: unknown) {
       if (error !== 'cancel') {
-        notifyError(error.message || t('user.actionFailed', { action }))
+        notifyError(extractErrorDetail(error) || t('user.actionFailed', { action }))
       }
     }
   }
@@ -124,7 +124,7 @@ export function useUser() {
       notifySuccess(t('user.passwordResetNoPlaintext'))
     } catch (error: unknown) {
       if (error !== 'cancel') {
-        notifyError(error.message || t('user.resetPasswordFailed'))
+        notifyError(extractErrorDetail(error) || t('user.resetPasswordFailed'))
       }
     }
   }
@@ -147,7 +147,7 @@ export function useUser() {
       handleSearch()
     } catch (error: unknown) {
       if (error !== 'cancel') {
-        notifyError(error.message || t('user.deleteFailed'))
+        notifyError(extractErrorDetail(error) || t('user.deleteFailed'))
       }
     }
   }

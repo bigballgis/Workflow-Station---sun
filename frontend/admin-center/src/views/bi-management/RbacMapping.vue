@@ -203,10 +203,10 @@ import RbacEditDialog from './components/RbacEditDialog.vue'
 const { t } = useI18n()
 
 const {
-  loading, syncing, editLoading, supersetRolesLoading, mappings, allSupersetRoles,
+  loading, syncing, editLoading, supersetRolesLoading, mappings,
   query, editDialogVisible, editForm, activeSupersetRoles,
   createDialogVisible, createLoading, unmappedRolesLoading, createSupersetRolesLoading,
-  unmappedRoles, createAllSupersetRoles, createDialogRef, createForm, createFormRules, createActiveSupersetRoles,
+  unmappedRoles, createDialogRef, createForm, createFormRules, createActiveSupersetRoles,
   handleSearch, handleReset, handleSync,
   showEditDialog, handleEditSubmit,
   showCreateDialog, handleCreateSubmit, handleDelete,

@@ -25,7 +25,7 @@ describe('usePagination', () => {
 
   it('handleReset restores default query and refetches', async () => {
     const fetchFn = makeFetch([{ id: 1 }])
-    const { query, handleSearch, handleReset } = usePagination(fetchFn, { keyword: 'test' })
+    const { query, handleReset } = usePagination(fetchFn, { keyword: 'test' })
 
     query.keyword = 'changed'
     await handleReset()
@@ -43,7 +43,7 @@ describe('usePagination', () => {
 
   it('filters empty string params', async () => {
     const fetchFn = vi.fn().mockResolvedValue({ content: [], totalElements: 0 })
-    const { query, handleSearch } = usePagination(fetchFn, { status: '' })
+    const { handleSearch } = usePagination(fetchFn, { status: '' })
 
     await handleSearch()
     const params = fetchFn.mock.calls[0][0]

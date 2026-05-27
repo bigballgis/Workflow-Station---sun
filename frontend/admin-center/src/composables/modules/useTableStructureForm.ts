@@ -1,7 +1,7 @@
 /**
  * Table Structure Form 业务逻辑 composable
  */
-import { ref, reactive, computed, type Ref } from 'vue'
+import { ref, reactive, type Ref } from 'vue'
 import { notifySuccess, notifyError, notifyWarning } from '@/utils/notify'
 import { relationTableStructureApi, type RelationDataType, type CreateFieldDefinitionRequest, type UpdateFieldDefinitionRequest } from '@/api/relationTable'
 

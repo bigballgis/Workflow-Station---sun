@@ -1,18 +1,15 @@
 /**
  * Function Unit Access Config 业务逻辑 composable
  */
-import { ref, computed, watch, type Ref } from 'vue'
+import { ref, computed, type Ref } from 'vue'
+import type { CascaderValue } from 'element-plus'
 import { notifySuccess, notifyError } from '@/utils/notify'
-import { AppErrorCode } from '@/types/errors'
-import { errorTranslator } from '@/utils/errorTranslator'
 import { functionUnitApi, type FunctionUnitAccess } from '@/api/functionUnit'
 import { roleApi, type Role } from '@/api/role'
 import { businessUnitApi, type BusinessUnit } from '@/api/businessUnit'
 import { formatDate as fmtDate, roleTypeDisplayLabel, roleTagType } from '@/utils/format'
 
 export function useFunctionUnitAccessConfig(functionUnitId: Ref<string | undefined>) {
-  const terr = (code: string) => '' // t(errorTranslator(code)) — caller provides t()
-
   const loading = ref(false)
   const accessList = ref<FunctionUnitAccess[]>([])
   const allRoles = ref<Role[]>([])
@@ -37,7 +34,7 @@ export function useFunctionUnitAccessConfig(functionUnitId: Ref<string | undefin
 
   const resolveRoleName = (roleId: string) => allRolesMap.value.get(roleId)?.name ?? roleId
   const resolveRoleTypeLabel = (roleId: string) => { const t = allRolesMap.value.get(roleId)?.type; return t ? (roleTypeDisplayLabel(t)) : '—' }
-  const resolveRoleTagType = (roleId: string) => { const t = allRolesMap.value.get(roleId)?.type; return t ? roleTagType(t) : '' }
+  const resolveRoleTagType = (roleId: string) => { const rt = allRolesMap.value.get(roleId)?.type; return rt ? roleTagType(rt) : 'info' }
   const formatDate = (d: string | undefined) => d ? fmtDate(d) : ''
 
   const fetchAccessConfig = async () => {
@@ -67,7 +64,18 @@ export function useFunctionUnitAccessConfig(functionUnitId: Ref<string | undefin
     fetchBuTree()
   }
 
-  const handleBuChange = async (buId: string | null) => {
+  const resolveCascaderBuId = (value: CascaderValue | null | undefined): string | null => {
+    if (value == null || value === '') return null
+    if (Array.isArray(value)) {
+      const last = value[value.length - 1]
+      return last == null || last === '' ? null : String(last)
+    }
+    return String(value)
+  }
+
+  const handleBuChange = async (value: CascaderValue | null | undefined) => {
+    const buId = resolveCascaderBuId(value)
+    selectedBuId.value = buId
     selectedBuRoleId.value = ''; buRoles.value = []
     if (!buId) return
     buRolesLoading.value = true
@@ -105,6 +113,6 @@ export function useFunctionUnitAccessConfig(functionUnitId: Ref<string | undefin
     buCascaderOptions, buRoles, buRolesLoading, buCascaderProps,
     assignedIds, availableSystemRoles, availableBuRoles,
     resolveRoleName, resolveRoleTypeLabel, resolveRoleTagType, formatDate,
-    fetchAccessConfig, fetchAllRoles, openAddDialog, handleBuChange, handleAddRole, handleRemove,
+    fetchAccessConfig, fetchAllRoles, resetAddForm, openAddDialog, handleBuChange, handleAddRole, handleRemove,
   }
 }

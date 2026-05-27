@@ -1,12 +1,12 @@
 /**
  * User Form 业务逻辑 composable
  */
-import { ref, reactive, computed, watch, type Ref } from 'vue'
+import { ref, reactive, computed, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { notifySuccess, notifyError } from '@/utils/notify'
 import { AppErrorCode } from '@/types/errors'
 import { errorTranslator } from '@/utils/errorTranslator'
-import { userApi } from '@/api/user'
+import { userApi, type User } from '@/api/user'
 import type { FormRules } from 'element-plus'
 
 interface UserData { id: string; username: string; fullName: string; email: string; employeeId?: string; position?: string; entityManagerId?: string; functionManagerId?: string }
@@ -35,7 +35,7 @@ export function useUserForm(options: { user: Ref<UserData | null>; onSuccess: ()
 
   const initForm = async () => {
     if (user.value) {
-      const u = user.value as Record<string, unknown>
+      const u = user.value
       Object.assign(form, { username: u.username, fullName: u.fullName, email: u.email, employeeId: u.employeeId || '', position: u.position || '', entityManagerId: u.entityManagerId || '', functionManagerId: u.functionManagerId || '', initialPassword: '' })
       await loadSelectedManagers()
     } else {
@@ -59,7 +59,7 @@ export function useUserForm(options: { user: Ref<UserData | null>; onSuccess: ()
     userSearchLoading.value = true
     try {
       const res = await userApi.list({ page: 0, size: 3 })
-      userOptions.value = (res.content || []).map((u: Record<string, unknown>) => ({ id: u.id as string, fullName: u.fullName as string, username: u.username as string }))
+      userOptions.value = (res.content || []).map((u: User) => ({ id: u.id, fullName: u.fullName, username: u.username }))
     } catch { userOptions.value = [] } finally { userSearchLoading.value = false }
   }
 
@@ -68,7 +68,7 @@ export function useUserForm(options: { user: Ref<UserData | null>; onSuccess: ()
     userSearchLoading.value = true
     try {
       const res = await userApi.list({ keyword: query, page: 0, size: 20 })
-      userOptions.value = (res.content || []).map((u: Record<string, unknown>) => ({ id: u.id as string, fullName: u.fullName as string, username: u.username as string }))
+      userOptions.value = (res.content || []).map((u: User) => ({ id: u.id, fullName: u.fullName, username: u.username }))
     } catch { userOptions.value = [] } finally { userSearchLoading.value = false }
   }
 

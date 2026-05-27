@@ -189,7 +189,6 @@ const {
   filterText,
   loading,
   itemsLoading,
-  dictionaries,
   selectedDict,
   dictItems,
   formDialogVisible,

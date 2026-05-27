@@ -124,6 +124,6 @@ export function useUserDetail(userId: Ref<string>) {
     platformRoles, buRoles, buRoleGroups, assignDialogVisible, assignRoleLoading, assignSubmitting,
     assignRoleOptions, assignRoleLoaded, assignForm,
     getPlatformRoleTagType, statusType, statusText, formatDate,
-    loadDetail, reloadBuRoles, onAssignBuChange, openAssignBuRole, submitAssignBuRole, removeBuRole, resetPassword,
+    loadDetail, reloadBuRoles, resetAssignDialog, onAssignBuChange, openAssignBuRole, submitAssignBuRole, removeBuRole, resetPassword,
   }
 }

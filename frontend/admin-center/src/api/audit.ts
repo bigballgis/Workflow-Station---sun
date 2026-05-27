@@ -69,7 +69,7 @@ export interface AuditLog {
   requestPath: string
   requestParams: Record<string, any>
   responseStatus: number
-  result: 'SUCCESS' | 'FAILED'
+  result: 'SUCCESS' | 'FAILED' | 'PENDING'
   errorMessage?: string
   duration: number
   createdAt: string

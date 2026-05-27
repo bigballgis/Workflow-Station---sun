@@ -1,7 +1,7 @@
 /**
  * BI Dashboard Registry 业务逻辑 composable
  */
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { AppErrorCode } from '@/types/errors'
 import { errorTranslator } from '@/utils/errorTranslator'
@@ -90,7 +90,7 @@ export function useBiDashboard() {
       await biManagementApi.dashboard.updateStatus(row.id, { status: newStatus })
       notifySuccess(t('bi.dashboard.statusChangeSuccess', { action: action.charAt(0).toUpperCase() + action.slice(1) }))
       handleSearch()
-    } catch {
+    } catch (error) {
       if (error !== 'cancel') notifyError(t(errorTranslator(AppErrorCode.BI_DASHBOARD_STATUS_CHANGE_FAILED)))
     }
   }
@@ -104,7 +104,7 @@ export function useBiDashboard() {
       await biManagementApi.dashboard.delete(row.id)
       notifySuccess(t('bi.dashboard.deleteSuccess'))
       handleSearch()
-    } catch {
+    } catch (error) {
       if (error !== 'cancel') notifyError(t(errorTranslator(AppErrorCode.BI_DASHBOARD_DELETE_FAILED)))
     }
   }

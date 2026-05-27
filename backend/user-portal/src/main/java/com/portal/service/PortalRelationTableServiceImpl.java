@@ -92,22 +92,34 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
             }
 
             if (SYSTEM_USER_TABLE_ID.equals(tableId)) {
-                return querySystemUserTableData(page, size);
+                return querySystemUserTableData(page, size, search);
             }
 
             if (!isDeployedRelationTable(tableId)) {
                 return PageResponse.of(Collections.emptyList(), page, size, 0);
             }
 
+            List<Object> searchParams = new ArrayList<>();
+            String searchClause = buildJsonDataSearchClause(getFieldNames(tableId), search, searchParams);
+
+            List<Object> countParams = new ArrayList<>();
+            countParams.add(tableId);
+            countParams.addAll(searchParams);
             Long total = jdbcTemplate.queryForObject(
-                    "SELECT COUNT(*) FROM " + DATA_ROWS_TABLE + " WHERE table_id = ?",
-                    Long.class, tableId);
+                    "SELECT COUNT(*) FROM " + DATA_ROWS_TABLE + " WHERE table_id = ?" + searchClause,
+                    Long.class, countParams.toArray());
             if (total == null) total = 0L;
 
+            List<Object> dataParams = new ArrayList<>();
+            dataParams.add(tableId);
+            dataParams.addAll(searchParams);
+            dataParams.add(size);
+            dataParams.add(page * size);
             List<Map<String, Object>> rows = jdbcTemplate.query(
-                    "SELECT data FROM " + DATA_ROWS_TABLE + " WHERE table_id = ? ORDER BY id LIMIT ? OFFSET ?",
+                    "SELECT data FROM " + DATA_ROWS_TABLE + " WHERE table_id = ?" + searchClause
+                            + " ORDER BY id LIMIT ? OFFSET ?",
                     (rs, rowNum) -> parseJsonRow(rs.getString("data")),
-                    tableId, size, page * size);
+                    dataParams.toArray());
 
             return PageResponse.of(rows, page, size, total);
         } catch (Exception e) {
@@ -187,15 +199,25 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
         }
     }
 
-    private PageResponse<Map<String, Object>> querySystemUserTableData(int page, int size) {
+    private PageResponse<Map<String, Object>> querySystemUserTableData(int page, int size, String search) {
         String tableName = sanitizeIdentifier(SYSTEM_USER_TABLE_NAME);
         List<String> fieldNames = SYSTEM_USER_FIELD_NAMES.stream().map(this::sanitizeIdentifier).toList();
         String columns = String.join(", ", fieldNames);
-        Long total = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM " + tableName, Long.class);
+
+        List<Object> searchParams = new ArrayList<>();
+        String searchClause = buildSystemUserSearchClause(search, searchParams);
+
+        Long total = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM " + tableName + searchClause,
+                Long.class, searchParams.toArray());
         if (total == null) total = 0L;
+
+        List<Object> dataParams = new ArrayList<>(searchParams);
+        dataParams.add(size);
+        dataParams.add(page * size);
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                "SELECT " + columns + " FROM " + tableName + " LIMIT ? OFFSET ?",
-                size, page * size);
+                "SELECT " + columns + " FROM " + tableName + searchClause + " LIMIT ? OFFSET ?",
+                dataParams.toArray());
         return PageResponse.of(rows, page, size, total);
     }
 
@@ -530,6 +552,42 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
         }
         String sql = "SELECT field_name FROM rt_field_definitions WHERE table_id = ? ORDER BY sort_order ASC";
         return jdbcTemplate.query(sql, (rs, rowNum) -> rs.getString("field_name"), tableId);
+    }
+
+    /**
+     * @return SQL fragment like {@code  AND (data->>'f1' ILIKE ? OR ...)} or empty when search is blank
+     */
+    private String buildJsonDataSearchClause(List<String> fieldNames, String search, List<Object> outParams) {
+        if (search == null || search.isBlank() || fieldNames == null || fieldNames.isEmpty()) {
+            return "";
+        }
+        List<String> sanitizedFields = fieldNames.stream()
+                .map(this::sanitizeIdentifier)
+                .toList();
+        if (sanitizedFields.isEmpty()) {
+            return "";
+        }
+        String keywordClause = sanitizedFields.stream()
+                .map(f -> "data->>'" + f + "' ILIKE ?")
+                .collect(Collectors.joining(" OR "));
+        String likePattern = "%" + search + "%";
+        sanitizedFields.forEach(ignored -> outParams.add(likePattern));
+        return " AND (" + keywordClause + ")";
+    }
+
+    private String buildSystemUserSearchClause(String search, List<Object> outParams) {
+        if (search == null || search.isBlank()) {
+            return "";
+        }
+        List<String> sanitizedFields = DEFAULT_SYSTEM_USER_SEARCH_FIELDS.stream()
+                .map(this::sanitizeIdentifier)
+                .toList();
+        String keywordClause = sanitizedFields.stream()
+                .map(f -> f + " ILIKE ?")
+                .collect(Collectors.joining(" OR "));
+        String likePattern = "%" + search + "%";
+        sanitizedFields.forEach(ignored -> outParams.add(likePattern));
+        return " WHERE (" + keywordClause + ")";
     }
 
     private String sanitizeIdentifier(String identifier) {

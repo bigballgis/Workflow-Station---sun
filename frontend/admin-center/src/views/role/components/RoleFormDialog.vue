@@ -94,6 +94,7 @@ import { ref, reactive, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, FormInstance } from 'element-plus'
 import { useRoleStore } from '@/stores/role'
+import type { RoleType } from '@/api/role'
 import { Role } from '@/api/role'
 
 const props = defineProps<{ modelValue: boolean; role: Role | null }>()
@@ -106,7 +107,9 @@ const formRef = ref<FormInstance>()
 const loading = ref(false)
 const isEdit = computed(() => !!props.role)
 
-const form = reactive({ name: '', code: '', type: 'BU_BOUNDED', description: '', status: 'ACTIVE' })
+const form = reactive<{ name: string; code: string; type: RoleType; description: string; status: 'ACTIVE' | 'INACTIVE' }>({
+  name: '', code: '', type: 'BU_BOUNDED', description: '', status: 'ACTIVE',
+})
 
 const rules = computed(() => ({
   name: [{ required: true, message: t('common.inputPlaceholder'), trigger: 'blur' }],
@@ -135,11 +138,10 @@ const handleSubmit = async () => {
   loading.value = true
   try {
     if (isEdit.value) {
-      await roleStore.updateRole(props.role!.id, { 
-        name: form.name, 
-        type: form.type, 
+      await roleStore.updateRole(props.role!.id, {
+        name: form.name,
         description: form.description,
-        status: form.status
+        status: form.status,
       })
     } else {
       await roleStore.createRole({ ...form })

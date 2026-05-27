@@ -5,7 +5,7 @@
  * 组件仅保留 template + 调用此 composable。
  */
 
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 import { notifySuccess, notifyError, notifyConfirm } from '@/utils/notify'
 import { relationTableDataApi, type RelationTableResponse, type RelationTableDataRow, type FieldDefinitionResponse } from '@/api/relationTable'
 
@@ -28,7 +28,8 @@ export function useRelationTableData() {
   const dialogVisible = ref(false)
   const dialogMode = ref<'add' | 'edit'>('add')
   const editingRowId = ref<string | null>(null)
-  const formData = ref<Record<string, unknown>>({})
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic column keys from relation table schema
+  const formData = ref<Record<string, any>>({})
 
   const localStatusMap = ref<Record<string, string>>({})
 
@@ -59,7 +60,7 @@ export function useRelationTableData() {
   const isRowDisabled = (row: RelationTableDataRow): boolean => {
     const local = localStatusMap.value[row.rowId]
     if (local) return local === 'INACTIVE'
-    const status = (row.data as Record<string, unknown>)?.status ?? (row as Record<string, unknown>).status ?? ''
+    const status = (row.data as unknown as Record<string, unknown>)?.status ?? (row as unknown as Record<string, unknown>).status ?? ''
     return String(status).toUpperCase() === 'DISABLED' || String(status).toUpperCase() === 'INACTIVE'
   }
 

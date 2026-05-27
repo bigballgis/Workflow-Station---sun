@@ -1,7 +1,7 @@
 /**
  * 用户 Profile 业务逻辑 composable
  */
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { AppErrorCode } from '@/types/errors'
 import { errorTranslator } from '@/utils/errorTranslator'
@@ -9,7 +9,7 @@ import { logger } from '@/utils/logger'
 import { notifyError, notifySuccess } from '@/utils/notify'
 import type { FormInstance, FormRules } from 'element-plus'
 import { changePassword, clearAuth, getCurrentUser, getUser, saveUser, USER_KEY, USERNAME_KEY } from '@/api/auth'
-import { getChangePasswordFailureMessage } from '@/utils/changePasswordError'
+import { languageLabelFor } from '@/utils/languageLabel'
 import { redirectToUnifiedLogin } from '@/utils/sso'
 
 interface UserInfo {
@@ -32,22 +32,6 @@ export function useProfile() {
   const userInfo = ref<UserInfo | null>(null)
   const passwordFormRef = ref<FormInstance>()
   const changingPassword = ref(false)
-
-  function languageLabelFor(code: string | undefined, loc: string): string {
-    const c = (code || 'zh-CN').replace('_', '-')
-    const en = loc.startsWith('en')
-    const tw = loc === 'zh-TW'
-    if (en) {
-      const m: Record<string, string> = { 'zh-CN': 'Simplified Chinese', 'zh-TW': 'Traditional Chinese', en: 'English' }
-      return m[c] || c
-    }
-    if (tw) {
-      const m: Record<string, string> = { 'zh-CN': '簡體中文', 'zh-TW': '繁體中文', en: 'English' }
-      return m[c] || c
-    }
-    const m: Record<string, string> = { 'zh-CN': '简体中文', 'zh-TW': '繁體中文', en: 'English' }
-    return m[c] || c
-  }
 
   const languageLabel = computed(() => languageLabelFor(userInfo.value?.language, String(locale.value)))
 

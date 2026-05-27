@@ -84,11 +84,16 @@ spring:
       password: ${SPRING_REDIS_PASSWORD:redis123}
       database: 4
 
-# Actuator Configuration - disable Redis health check to avoid localhost connection issue
+# Actuator: ready group includes redis — host is compose service "redis"
 management:
+  endpoint:
+    health:
+      group:
+        ready:
+          include: db,redis
   health:
     redis:
-      enabled: false
+      enabled: true
 
 # SSO redeem 调用 admin-center（容器内通常为 http://admin-center:8080）
 platform:

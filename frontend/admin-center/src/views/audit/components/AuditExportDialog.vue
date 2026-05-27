@@ -44,7 +44,7 @@
         plain
         :loading="exporting"
         :disabled="selectedFields.length === 0"
-        @click="emit('export', 'csv')"
+        @click="emit('export', 'csv', [...selectedFields])"
       >
         <el-icon><Download /></el-icon>CSV
       </el-button>
@@ -52,7 +52,7 @@
         type="primary"
         :loading="exporting"
         :disabled="selectedFields.length === 0"
-        @click="emit('export', 'excel')"
+        @click="emit('export', 'excel', [...selectedFields])"
       >
         <el-icon><Download /></el-icon>Excel
       </el-button>
@@ -61,8 +61,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue'
+import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import type { CheckboxValueType } from 'element-plus'
 import { Download, InfoFilled } from '@element-plus/icons-vue'
 
 const { t } = useI18n()
@@ -107,19 +108,22 @@ watch(() => props.modelValue, (v) => {
   }
 }, { immediate: true })
 
-const handleSelectAll = (val: boolean) => {
-  selectedFields.value = val ? props.exportFields.map(f => f.key) : []
+const handleSelectAll = (val: CheckboxValueType) => {
+  const checked = val === true
+  selectedFields.value = checked ? props.exportFields.map(f => f.key) : []
   indeterminate.value = false
   emit('update:selectedFields', [...selectedFields.value])
-  emit('update:selectAll', val)
+  emit('update:selectAll', checked)
   emit('update:indeterminate', false)
 }
 
-const handleFieldChange = (val: string[]) => {
+const handleFieldChange = (val: CheckboxValueType[]) => {
   const total = props.exportFields.length
-  selectAll.value = val.length === total
-  indeterminate.value = val.length > 0 && val.length < total
-  emit('update:selectedFields', [...val])
+  const keys = val.map(v => String(v))
+  selectedFields.value = keys
+  selectAll.value = keys.length === total
+  indeterminate.value = keys.length > 0 && keys.length < total
+  emit('update:selectedFields', [...keys])
   emit('update:selectAll', selectAll.value)
   emit('update:indeterminate', indeterminate.value)
 }

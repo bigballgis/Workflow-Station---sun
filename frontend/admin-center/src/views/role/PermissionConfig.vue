@@ -97,7 +97,7 @@ import { usePermissionConfig } from '@/composables/modules/usePermissionConfig'
 const { t } = useI18n()
 
 const {
-  roleFilter, selectedRole, actions, loading,
+  roleFilter, selectedRoleId, selectedRole, actions, loading,
   permissionMatrix, filteredRoles, handleRoleSelect, handleSave,
 } = usePermissionConfig()
 </script>

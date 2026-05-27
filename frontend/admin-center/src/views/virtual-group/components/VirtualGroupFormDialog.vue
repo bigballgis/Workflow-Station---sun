@@ -119,9 +119,9 @@ const handleSubmit = async () => {
   try {
     const data = {
       name: form.name,
-      type: form.type as string,
+      type: form.type as 'SYSTEM' | 'CUSTOM',
       description: form.description,
-      adGroup: form.adGroup || undefined
+      adGroup: form.adGroup || undefined,
     }
     if (isEdit.value) {
       await virtualGroupApi.update(props.group.id, data)

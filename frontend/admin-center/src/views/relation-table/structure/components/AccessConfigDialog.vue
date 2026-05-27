@@ -217,10 +217,10 @@ const props = defineProps<{ modelValue: boolean; tableId?: number; tableName?: s
 const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()
 
 const {
-  loading, accessList, allRoles, rolesLoading,
+  loading, accessList, rolesLoading,
   showAddRole, adding, addRoleTab, selectedSystemRoleIds, selectedBuId, selectedBuRoleId,
-  buCascaderOptions, buRoles, buRolesLoading, buCascaderProps,
-  assignedIds, availableSystemRoles, availableBuRoles, roleTypeDisplayLabel,
+  buCascaderOptions, buRolesLoading, buCascaderProps,
+  availableSystemRoles, availableBuRoles, roleTypeDisplayLabel,
   resolveRoleName, resolveRoleTagType, resolveRoleTypeLabel, formatDate,
   loadAccessList, loadAllRoles, resetAddForm, openAddDialog, handleBuChange, handleAddRole, handleRemove,
 } = useRelationTableAccessConfig(toRef(props, 'tableId'))

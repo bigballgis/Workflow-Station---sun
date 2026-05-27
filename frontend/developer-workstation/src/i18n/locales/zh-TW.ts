@@ -413,6 +413,10 @@ export default {
       linkFormColumnEmpty: '目前表單的子表中未設定連結表單欄',
       linkFormScopeFallback: '此子表清單視圖中無連結表單欄 — 正在顯示其他子表中的欄。'
     },
+    linkFormSelectPlaceholder: '請選擇連結表單',
+    linkFormSelectEmpty: '暫無可用連結表單元件',
+    linkFormPlaceholderUnconfigured: '未選擇連結表單',
+    linkFormPlaceholderStale: '元件已失效',
     // Stage binding (Task Form)
     stageBinding: '階段綁定',
     stageBindingPlaceholder: '選擇要綁定的階段',
@@ -1128,6 +1132,10 @@ export default {
     primaryTable: '主表',
     subTable: '子表',
     relatedTable: '關聯表',
+    subMode: '子表模式',
+    subModeFull: '完整模式（表單+清單）',
+    subModeFormOnly: '僅表單模式',
+    subModeTip: '完整模式會產生表單設計和清單視圖；僅表單模式只產生表單設計',
     bindingMode: '綁定模式',
     selectForeignKey: '選擇關聯主表的外鍵欄位',
     foreignKeyTip: '子表和關聯表需要指定關聯主表的外鍵欄位',

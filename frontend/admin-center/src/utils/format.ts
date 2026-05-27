@@ -8,7 +8,11 @@
 // ==================== Tag 颜色映射（纯函数） ====================
 
 /** Element Plus Tag type 联合类型 */
-export type TagType = 'success' | 'warning' | 'danger' | 'info' | 'primary' | ''
+export type TagType = 'success' | 'warning' | 'danger' | 'info' | 'primary'
+
+/** 供 el-tag :type 使用（排除空字符串） */
+export const toElTagType = (tag: TagType | ''): TagType | undefined =>
+  tag === '' ? undefined : tag
 
 // ---- 通用状态映射 ----
 const STATUS_TYPE_MAP: Record<string, TagType> = {

@@ -5,49 +5,65 @@
   summary: "auth.ts 在三个前端应用中大量重复(已标注)"
   note: "三端独立构建、无共享 npm 包；抽公共包成本高，维持各应用内 auth 模块并保留 NOTE 说明"
 - id: "137"
-  status: open
+  status: fixed
+  fixed_at: "2026-05-27"
   severity: major
   category: architecture
-  summary: "developer-workstation 功能单元版本/部署双轨：VersionController+DeploymentService（按 name 多行实体）与 publish+DeploymentComponentImpl→admin（单行+dw_versions 快照）并存，易混淆且与 admin 按 code+version 导入模型对齐成本高"
-  file: "backend/developer-workstation/src/main/java/com/developer/service/DeploymentService.java"
+  summary: "developer-workstation 功能单元版本/部署双轨 — 已移除 VersionController 及按 name 多行 dw_function_units 的 DeploymentService/VersionService 等遗留栈；canonical 路径为 publish(dw_versions 快照)+DeploymentComponentImpl→admin(code+version)"
+  file: "backend/developer-workstation/src/main/java/com/developer/component/impl/DeploymentComponentImpl.java"
 - id: "148"
-  status: open
+  status: fixed
+  fixed_at: "2026-05-27"
   severity: minor
   category: quality
-  summary: "三端 profile 页重复实现 languageLabelFor（界面语言展示）；可抽到共享 util 或 i18n 嵌套表减少漂移"
-  file: "frontend/user-portal|admin-center|developer-workstation/src/views/profile/index.vue"
+  summary: "三端 profile 页重复实现 languageLabelFor — 已抽到各应用 utils/languageLabel.ts，profile 与 useProfile 改为 import"
+  file: "frontend/*/src/utils/languageLabel.ts"
 - id: "155"
-  status: open
+  status: fixed
+  fixed_at: "2026-05-27"
   severity: minor
   category: quality
-  summary: "user-portal subTablePositionControl.property.test.ts 挂载 FormRenderer 未注册 Element Plus，断言通过但 Vitest 因大量 el-* 组件解析警告以 unhandled errors 退出"
+  summary: "subTablePositionControl.property.test.ts 挂载 FormRenderer 未注册 Element Plus — 已加入 ElementPlus plugin 与 unmount 清理，消除 el-* 未解析警告"
   file: "frontend/user-portal/src/views/__tests__/subTablePositionControl.property.test.ts"
 - id: "158"
-  status: open
+  status: fixed
+  fixed_at: "2026-05-27"
   severity: minor
   category: bug
   summary: "PortalRelationTableServiceImpl.queryTableData 接收 search 参数但未用于过滤，relation table 页面搜索无效"
   file: "backend/user-portal/src/main/java/com/portal/service/PortalRelationTableServiceImpl.java"
+  fix: "queryTableData 对 JSON 行表与 sys_users 虚拟表应用 ILIKE 搜索（字段来自 rt_field_definitions / DEFAULT_SYSTEM_USER_SEARCH_FIELDS），COUNT 与分页查询共用同一 WHERE 子句"
 - id: "162"
-  status: open
+  status: fixed
+  fixed_at: "2026-05-27"
   severity: major
   category: bug
-  summary: "DeploymentService.deployFunctionUnit 创建 ProcessDefinition 时未显式设置 functionUnitVersionId，依赖 cascade save 行为；BPMN 部署到 Flowable 后入库会因 NOT NULL 约束失败"
+  summary: "DeploymentService.deployFunctionUnit 创建 ProcessDefinition 时未设置 functionUnitVersionId — 已在 builder 显式写入 newVersion.getId()，并补充 DeploymentServiceTest 回归断言"
   file: "backend/developer-workstation/src/main/java/com/developer/service/DeploymentService.java"
 - id: "166"
-  status: open
+  status: fixed
+  fixed_at: "2026-05-27"
   severity: major
   category: quality
-  summary: "frontend/admin-center：package.json 的 lint 调用 eslint 但未声明依赖（本地 eslint: command not found）；vue-tsc --noEmit 约 140 条诊断且 vite build 未跑类型检查；若干 composables 在 catch 块引用未绑定标识符（如 useBiDashboard/useBiRbac 的 error、useBusinessUnit/useFunctionUnit 的 e），存在运行时 ReferenceError 风险"
-  file: "frontend/admin-center/package.json; frontend/admin-center/src/composables/modules/useBiDashboard.ts; frontend/admin-center/vite.config.ts"
-- id: "167"
-  status: open
+  summary: "frontend/admin-center：devDependencies 已含 eslint 套件且 npm run lint 可执行；useBiRbac.handleDelete / useBusinessUnit.handleDelete 的 catch 补全 error/e 绑定消除 ReferenceError；新增 build:check（vue-tsc && vite build），默认 build 仍仅 vite 以免阻塞现有 ~122 条 TS 债务"
+  file: "frontend/admin-center/package.json; frontend/admin-center/src/composables/modules/useBiRbac.ts; frontend/admin-center/src/composables/modules/useBusinessUnit.ts; frontend/admin-center/eslint.config.js"
+- id: "168"
+  status: fixed
+  fixed_at: "2026-05-27"
   severity: minor
   category: quality
-  summary: "frontend/developer-workstation 三语 locale 不一致：zh-TW 缺失 form.linkFormPlaceholderStale / form.linkFormPlaceholderUnconfigured / form.linkFormSelectEmpty / form.linkFormSelectPlaceholder / tableBinding.subMode / tableBinding.subModeFormOnly / tableBinding.subModeFull / tableBinding.subModeTip 共 8 个 key，被 i18n-locale-key-consistency 测试持续标红"
+  summary: "frontend/admin-center：清理 vue-tsc 全部 TS 诊断（TagType/errorTranslator/AppErrorCode、useUser extractErrorDetail、ImportResult 字段、Cascader/审计/角色类型、未使用导入等）；npm run build:check（vue-tsc --noEmit && vite build）已通过"
+  file: "frontend/admin-center/src/"
+- id: "167"
+  status: fixed
+  fixed_at: "2026-05-27"
+  severity: minor
+  category: quality
+  summary: "frontend/developer-workstation 三语 locale 不一致：zh-TW 缺失 form.linkForm* / tableBinding.subMode* 共 8 个 key — 已补全 Traditional Chinese 译文并通过 i18n-locale-key-consistency"
   file: "frontend/developer-workstation/src/i18n/locales/zh-TW.ts"
 - id: "1373"
-  status: open
+  status: fixed
+  fixed_at: "2026-05-27"
   severity: critical
   category: security
   summary: "user-portal 流程详情接口在未登录时仍可直接读取流程实例详情"
@@ -55,11 +71,17 @@
   note: |
     现状：GET /api/portal/processes/{processId} 在 @CurrentUserId 解析为 null 时仍返回 ApiResponse.success(detail)；只有 userId != null 时才校验参与者身份。
     风险：匿名请求可枚举并读取流程详情（发起人、流程定义、变量等），属于越权信息泄露。
+    修复：`getProcessDetail` / `getProcessHistory` 在 userId 为空时立即抛出 FunctionUnitAccessDeniedException（403），
+    与 `getMyApplications` 一致；仅在已登录且为流程参与者时才返回详情/历史。
 - id: "1382"
-  status: open
+  status: fixed
+  fixed_at: "2026-05-27"
   severity: major
   category: bug
   summary: "admin-center 的 useBiDashboard 在 catch 中引用未定义 error，导致状态切换或删除失败时前端二次报错"
+  note: |
+    根因：`handleToggleStatus` / `handleDelete` 使用 `catch {` 却在块内读取 `error`，取消确认或 API 失败时触发 ReferenceError。
+    修复：改为 `catch (error)`，与 `useBiAssignment` 一致；用户取消（`error === 'cancel'`）时不弹错误 toast。
 - id: "1398"
   status: fixed
   fixed_at: "2026-05-27"

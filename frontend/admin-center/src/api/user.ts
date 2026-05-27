@@ -1,4 +1,6 @@
 import { PageResult } from '@/types/common'
+
+export type { PageResult } from '@/types/common'
 import { get, post, put, del } from './request'
 
 export interface User {

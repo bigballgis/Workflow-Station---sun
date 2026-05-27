@@ -46,36 +46,6 @@ public interface FunctionUnitRepository extends JpaRepository<FunctionUnit, Long
     @Query("SELECT fu FROM FunctionUnit fu WHERE fu.id = :id")
     Optional<FunctionUnit> findByIdWithRelations(@Param("id") Long id);
     
-    /**
-     * Find active version by function unit name
-     * Requirements: 2.5 - Query for active version
-     */
-    Optional<FunctionUnit> findByNameAndIsActive(String name, Boolean isActive);
-    
-    /**
-     * Find function unit by name (returns active version for backward compatibility)
-     * This method is provided for backward compatibility with legacy code that doesn't specify version.
-     * 
-     * Requirements: 9.4 - THE System SHALL support queries for Function_Units without specifying version
-     *               9.5 - WHEN legacy code queries Function_Units, THE System SHALL return Active_Version data transparently
-     */
-    default Optional<FunctionUnit> findActiveByName(String name) {
-        return findByNameAndIsActive(name, true);
-    }
-    
-    /**
-     * Find all versions of a function unit ordered by version descending
-     * Requirements: 3.3 - Display all versions ordered by version number
-     */
-    @Query("SELECT fu FROM FunctionUnit fu WHERE fu.name = :name ORDER BY fu.version DESC")
-    List<FunctionUnit> findByNameOrderByVersionDesc(@Param("name") String name);
-    
-    /**
-     * Check if a specific version exists for a function unit
-     * Requirements: 1.4 - Prevent deployment of duplicate versions
-     */
-    boolean existsByNameAndVersion(String name, String version);
-
     @Query("SELECT fu.id FROM FunctionUnit fu WHERE fu.createdBy = :username")
     List<Long> findIdsByCreatedBy(@Param("username") String username);
 }

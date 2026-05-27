@@ -49,7 +49,7 @@
             <span
               class="text-muted"
               style="margin-left: 8px"
-            >({{ boundVirtualGroup.code }})</span>
+            >({{ boundVirtualGroup.boundRoleCode || boundVirtualGroup.id }})</span>
           </template>
           <span
             v-else

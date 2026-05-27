@@ -7,10 +7,10 @@
 
 | 状态 | 数量 |
 |------|------|
-| ✅ Fixed | **4** |
-| 🔓 Open | **8** |
+| ✅ Fixed | **14** |
+| 🔓 Open | **0** |
 | ⏸️ Wontfix | **1** |
-| **总计** | **13** |
+| **总计** | **15** |
 
 按严重度的分布见 `index.yaml` 各条目的 `severity` 字段。
 
@@ -18,16 +18,7 @@
 
 ## 当前待处理 (Open)
 
-| ID | 分类 | 描述 |
-|----|------|------|
-| 137 | architecture | developer-workstation 功能单元版本/部署双轨并存 |
-| 148 | quality | 三端 profile 页重复实现 languageLabelFor |
-| 155 | quality | user-portal subTablePositionControl.property.test.ts 未注册 Element Plus 导致 Vitest unhandled errors |
-| 158 | bug | user-portal PortalRelationTableServiceImpl.queryTableData 接收 search 参数但未用于过滤 |
-| 162 | bug | DeploymentService.deployFunctionUnit 未显式设置 ProcessDefinition.functionUnitVersionId |
-| 166 | quality | frontend/admin-center lint/typecheck 配置与 catch 变量引用存在问题 |
-| 167 | quality | frontend/developer-workstation 三语 locale key 不一致 |
-| 1373 | security | user-portal 流程详情接口在未登录时仍可直接读取流程实例详情 |
+（无）
 
 ### Wontfix
 

@@ -412,13 +412,12 @@
 <script setup lang="ts">
 import { onMounted, onActivated } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Plus } from '@element-plus/icons-vue'
 import PageHeader from '@/components/PageHeader.vue'
 import DeleteConfirmDialog from './components/DeleteConfirmDialog.vue'
 import AccessConfigDialog from './components/AccessConfigDialog.vue'
 import FunctionUnitImportDialog from './components/FunctionUnitImportDialog.vue'
 import ValidateResultDialog from './components/ValidateResultDialog.vue'
-import { functionUnitStatusType, functionUnitStatusKey, deployStatusType, formatDate, canValidateFunctionUnit, canDeployFunctionUnit } from '@/utils/format'
+import { functionUnitStatusType, functionUnitStatusKey, deployStatusType, canValidateFunctionUnit, canDeployFunctionUnit } from '@/utils/format'
 import { useFunctionUnit } from '@/composables/modules/useFunctionUnit'
 
 const { t } = useI18n()
@@ -426,13 +425,13 @@ const { t } = useI18n()
 // All business logic is now in the composable — component is pure template binding
 const {
   activeTab, loading, archivedLoading, deploymentsLoading, versionsLoading, importLoading, deployLoadingId, validateLoadingId, restoreLoadingId,
-  functionUnits, archivedFunctionUnits, deployments, versionList, searchKeyword, archiveSearchKeyword,
+  deployments, versionList, searchKeyword, archiveSearchKeyword,
   filteredFunctionUnits, filteredArchivedFunctionUnits, selectedUnits,
   showImportDialog, showAccessDialogVisible,
   showDeleteDialogVisible, showVersionsDialogVisible, showCompareDialogVisible,
   showValidateResultDialog, validateResult,
   currentUnit, deleteTargetUnit, deletePreview, compareVersion,
-  importFile, importUploadRef,
+  importFile,
   fetchFunctionUnits, showAccessDialog, showVersions,
   handleValidate, handleDeploy, handleRestore, handleRollback, handleEnabledChange,
   handleDeleteClick, handleDeleteConfirm,

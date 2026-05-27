@@ -40,7 +40,7 @@ export function useRelationTableAccessConfig(entityId: Ref<number | undefined>) 
   const resolveRoleName = (roleId: string) => allRolesMap.value.get(roleId)?.name ?? roleId
   const resolveRoleTagType = (roleId: string) => {
     const t = allRolesMap.value.get(roleId)?.type
-    return t ? roleTagType(t) : ''
+    return t ? roleTagType(t) : 'info'
   }
   const resolveRoleTypeLabel = (roleId: string) => {
     const t = allRolesMap.value.get(roleId)?.type
@@ -98,7 +98,18 @@ export function useRelationTableAccessConfig(entityId: Ref<number | undefined>) 
     fetchBuTree()
   }
 
-  const handleBuChange = async (buId: string | null) => {
+  const resolveCascaderBuId = (value: import('element-plus').CascaderValue | null | undefined): string | null => {
+    if (value == null || value === '') return null
+    if (Array.isArray(value)) {
+      const last = value[value.length - 1]
+      return last == null || last === '' ? null : String(last)
+    }
+    return String(value)
+  }
+
+  const handleBuChange = async (value: import('element-plus').CascaderValue | null | undefined) => {
+    const buId = resolveCascaderBuId(value)
+    selectedBuId.value = buId
     selectedBuRoleId.value = ''
     buRoles.value = []
     if (!buId) return

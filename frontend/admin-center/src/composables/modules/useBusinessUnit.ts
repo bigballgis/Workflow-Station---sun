@@ -130,8 +130,9 @@ export function useBusinessUnit() {
       await orgStore.deleteBusinessUnit(bu.id)
       notifySuccess(t('common.success'))
       if (selectedBusinessUnit.value?.id === bu.id) selectedBusinessUnit.value = null
-    } catch {
-      notifyError(e.response?.data?.message || t('common.failed'))
+    } catch (e: unknown) {
+      const ax = e as { response?: { data?: { message?: string } } }
+      notifyError(ax.response?.data?.message || t('common.failed'))
     }
   }
 

@@ -80,11 +80,16 @@ spring:
       password: ${SPRING_REDIS_PASSWORD:redis123}
       database: 2
 
-# Actuator Configuration - disable Redis health check to avoid localhost connection issue
+# Actuator: ready group includes redis — host is compose service "redis"
 management:
+  endpoint:
+    health:
+      group:
+        ready:
+          include: db,redis
   health:
     redis:
-      enabled: false
+      enabled: true
 
 # File Upload Configuration (Docker)
 file:

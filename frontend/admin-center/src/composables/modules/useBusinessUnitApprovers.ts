@@ -5,7 +5,7 @@
  * Dialog 组件仅保留 template + 调用此 composable。
  */
 
-import { ref, type Ref, computed } from 'vue'
+import { ref, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { notifySuccess, notifyError, notifyConfirm } from '@/utils/notify'
 import { AppErrorCode } from '@/types/errors'

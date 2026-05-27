@@ -46,7 +46,7 @@
         :label="t('user.role')"
         min-width="110"
       >
-        <template #default="{ row }">
+        <template #default>
           <el-tag
             type="info"
             size="small"

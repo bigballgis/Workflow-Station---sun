@@ -42,6 +42,18 @@ import java.util.*;
 
 /**
  * Deployment component implementation.
+ * <p>
+ * Canonical function-unit versioning and deployment (replaces removed {@code VersionController}
+ * / multi-row {@code DeploymentService} path, which conflicted with {@code dw_function_units.name}
+ * UNIQUE and admin-center's code+version import model):
+ * <ul>
+ *   <li>{@code POST /function-units/{id}/publish} — snapshot in {@code dw_versions}, update
+ *       {@code current_version} on the single {@code dw_function_units} row</li>
+ *   <li>{@code POST /function-units/{id}/deploy} — export ZIP → admin import/deploy by
+ *       {@code code} + semantic version</li>
+ *   <li>Version history / rollback — {@code FunctionUnitController} + {@code VersionComponent}
+ *       ({@code dw_versions.snapshot_data})</li>
+ * </ul>
  */
 @Component
 @Slf4j

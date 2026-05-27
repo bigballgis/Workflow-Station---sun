@@ -172,7 +172,7 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { 
   Fold, Expand,
-  Odometer, OfficeBuilding, Key, Connection, Box, User, Lock, Document, DataAnalysis, Grid
+  Odometer, Box, User, Lock, Document, DataAnalysis, Grid
 } from '@element-plus/icons-vue'
 import UserProfileDropdown from '@/components/UserProfileDropdown.vue'
 import { hasPermission, PERMISSIONS } from '@/utils/permission'
@@ -186,7 +186,6 @@ const activeMenu = computed(() => route.path)
 // Permission checks
 const isSystemAdmin = computed(() => hasPermission(PERMISSIONS.SYSTEM_ADMIN))
 const canReadUser = computed(() => hasPermission(PERMISSIONS.USER_READ))
-const canWriteUser = computed(() => hasPermission(PERMISSIONS.USER_WRITE))
 const canReadRole = computed(() => hasPermission(PERMISSIONS.ROLE_READ))
 const canReadAudit = computed(() => hasPermission(PERMISSIONS.AUDIT_READ) || hasPermission(PERMISSIONS.LOG_READ))
 

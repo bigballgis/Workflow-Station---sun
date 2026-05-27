@@ -151,7 +151,7 @@ export function useBiRbac() {
       await biManagementApi.rbac.deleteMapping(row.sysRoleId)
       notifySuccess(t('bi.rbac.deleteSuccess'))
       handleSearch()
-    } catch {
+    } catch (error: unknown) {
       if (error === 'cancel' || error?.toString?.() === 'cancel') return
       notifyError(t(errorTranslator(AppErrorCode.BI_RBAC_DELETE_FAILED)))
     }

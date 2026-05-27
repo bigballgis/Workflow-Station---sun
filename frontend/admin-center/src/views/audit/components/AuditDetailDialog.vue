@@ -151,7 +151,7 @@ const props = defineProps<{
   modelValue: boolean
   log: AuditLog | null
   /** Pre-computed display helpers (passed from parent to keep logic centralized) */
-  actionType: (action: string) => '' | 'success' | 'warning' | 'info' | 'primary' | 'danger'
+  actionType: (action: string) => 'success' | 'warning' | 'info' | 'primary' | 'danger'
   actionText: (action: string) => string
   resourceTypeText: (rt: string | null | undefined) => string
   formatTime: (isoStr: string | null | undefined) => string

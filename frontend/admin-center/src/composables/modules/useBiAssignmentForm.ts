@@ -8,8 +8,6 @@
 import { ref, reactive, computed, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { notifySuccess, notifyError, notifyWarning } from '@/utils/notify'
-import { AppErrorCode } from '@/types/errors'
-import { errorTranslator } from '@/utils/errorTranslator'
 import {
   biManagementApi,
   type DashboardAssignmentResponse,
@@ -35,7 +33,6 @@ export interface BiAssignmentFormOptions {
 export function useBiAssignmentForm(options: BiAssignmentFormOptions) {
   const { mode, initialRow, onSuccess } = options
   const { t } = useI18n()
-  const terr = (code: string) => t(errorTranslator(code))
 
   // ==================== State ====================
 

@@ -425,10 +425,10 @@ defineEmits(['update:modelValue'])
 const { t } = useI18n()
 
 const { loading, detailActiveTab, user, businessUnits, portalVirtualGroups, platformVirtualGroups,
-  platformRoles, buRoles, buRoleGroups, assignDialogVisible, assignRoleLoading, assignSubmitting,
+  platformRoles, buRoleGroups, assignDialogVisible, assignRoleLoading, assignSubmitting,
   assignRoleOptions, assignRoleLoaded, assignForm,
   getPlatformRoleTagType, statusType, statusText, formatDate,
-  loadDetail, onAssignBuChange, openAssignBuRole, submitAssignBuRole, removeBuRole, resetPassword,
+  loadDetail, resetAssignDialog, onAssignBuChange, openAssignBuRole, submitAssignBuRole, removeBuRole, resetPassword,
 } = useUserDetail(toRef(props, 'userId'))
 
 watch(() => props.modelValue, async (val) => {

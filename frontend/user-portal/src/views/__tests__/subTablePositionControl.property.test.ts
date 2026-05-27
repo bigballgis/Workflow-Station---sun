@@ -6,6 +6,7 @@
 import { describe, it, expect } from 'vitest'
 import * as fc from 'fast-check'
 import { mount } from '@vue/test-utils'
+import ElementPlus from 'element-plus'
 import { createI18n } from 'vue-i18n'
 import FormRenderer from '../../components/FormRenderer.vue'
 import SubTableField from '../../components/SubTableField.vue'
@@ -18,6 +19,11 @@ const i18n = createI18n({
   missingWarn: false,
   fallbackWarn: false,
 })
+
+/** Align with main.ts: FormRenderer renders many el-* components; omitting Element Plus floods Vitest with unresolved-component warnings. */
+const formRendererMountGlobal = {
+  plugins: [i18n, ElementPlus],
+}
 
 describe('Property 2: Inline sub-table editable prop reflects mode', () => {
   /**
@@ -50,13 +56,15 @@ describe('Property 2: Inline sub-table editable prop reflects mode', () => {
               subTableBindings: [binding],
               readonly: isReadonly,
             },
-            global: {
-              plugins: [i18n],
-            },
+            global: formRendererMountGlobal,
           })
-          const subTable = wrapper.findComponent(SubTableField)
-          const expectedEditable = !isReadonly && bindingMode === 'EDITABLE'
-          expect(subTable.props('editable')).toBe(expectedEditable)
+          try {
+            const subTable = wrapper.findComponent(SubTableField)
+            const expectedEditable = !isReadonly && bindingMode === 'EDITABLE'
+            expect(subTable.props('editable')).toBe(expectedEditable)
+          } finally {
+            wrapper.unmount()
+          }
         },
       ),
       { numRuns: 100 },
@@ -94,15 +102,17 @@ describe('Property 3: update:subTableData emitted on inline row change', () => {
               subTableBindings: [binding],
               readonly: false,
             },
-            global: {
-              plugins: [i18n],
-            },
+            global: formRendererMountGlobal,
           })
-          wrapper.findComponent(SubTableField).vm.$emit('update:modelValue', newRows)
-          const emitted = wrapper.emitted('update:subTableData')
-          expect(emitted).toBeTruthy()
-          expect(emitted![0][0]).toBe(bindingId)
-          expect(emitted![0][1]).toEqual(newRows)
+          try {
+            wrapper.findComponent(SubTableField).vm.$emit('update:modelValue', newRows)
+            const emitted = wrapper.emitted('update:subTableData')
+            expect(emitted).toBeTruthy()
+            expect(emitted![0][0]).toBe(bindingId)
+            expect(emitted![0][1]).toEqual(newRows)
+          } finally {
+            wrapper.unmount()
+          }
         },
       ),
       { numRuns: 100 },

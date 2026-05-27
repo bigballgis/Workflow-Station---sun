@@ -75,14 +75,14 @@
         
         <template v-if="step === 2">
           <el-result
-            :icon="importResult.failedCount === 0 ? 'success' : 'warning'"
+            :icon="importResult.failed === 0 ? 'success' : 'warning'"
             :title="resultTitle"
           >
             <template #sub-title>
               <div class="result-stats">
-                <span>{{ t('user.totalCount') }}: {{ importResult.totalCount }}</span>
-                <span class="success">{{ t('user.successCount') }}: {{ importResult.successCount }}</span>
-                <span class="failed">{{ t('user.failedCount') }}: {{ importResult.failedCount }}</span>
+                <span>{{ t('user.totalCount') }}: {{ importResult.total }}</span>
+                <span class="success">{{ t('user.successCount') }}: {{ importResult.success }}</span>
+                <span class="failed">{{ t('user.failedCount') }}: {{ importResult.failed }}</span>
               </div>
             </template>
             <template #extra>
@@ -157,9 +157,9 @@ const step = ref(0)
 const selectedFile = ref<File | null>(null)
 const previewData = ref<any[]>([])
 const importing = ref(false)
-const importResult = ref<ImportResult>({ totalCount: 0, successCount: 0, failedCount: 0, errors: [] })
+const importResult = ref<ImportResult>({ total: 0, success: 0, failed: 0, errors: [] })
 
-const resultTitle = computed(() => importResult.value.failedCount === 0 ? t('user.importSuccess') : t('user.importPartialSuccess'))
+const resultTitle = computed(() => importResult.value.failed === 0 ? t('user.importSuccess') : t('user.importPartialSuccess'))
 
 const handleFileChange = (file: any) => { selectedFile.value = file.raw }
 
@@ -213,7 +213,7 @@ const resetImport = () => {
   step.value = 0
   selectedFile.value = null
   previewData.value = []
-  importResult.value = { totalCount: 0, successCount: 0, failedCount: 0, errors: [] }
+  importResult.value = { total: 0, success: 0, failed: 0, errors: [] }
 }
 </script>
 

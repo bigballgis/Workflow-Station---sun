@@ -185,36 +185,9 @@ import { userApi } from '@/api/user'
 import { permissionApi } from '@/api/permission'
 import { parseMyPermissionViewPayload, type PortalBuBoundedRow } from '@/utils/myPermissionView'
 import { getChangePasswordFailureMessage } from '@/utils/changePasswordError'
+import { languageLabelFor } from '@/utils/languageLabel'
 
 const { t, locale } = useI18n()
-
-function languageLabelFor(code: string | undefined, loc: string): string {
-  const c = (code || 'zh-CN').replace('_', '-')
-  const en = loc.startsWith('en')
-  const tw = loc === 'zh-TW'
-  if (en) {
-    const m: Record<string, string> = {
-      'zh-CN': 'Simplified Chinese',
-      'zh-TW': 'Traditional Chinese',
-      en: 'English'
-    }
-    return m[c] || c
-  }
-  if (tw) {
-    const m: Record<string, string> = {
-      'zh-CN': '簡體中文',
-      'zh-TW': '繁體中文',
-      en: 'English'
-    }
-    return m[c] || c
-  }
-  const m: Record<string, string> = {
-    'zh-CN': '简体中文',
-    'zh-TW': '繁體中文',
-    en: 'English'
-  }
-  return m[c] || c
-}
 
 const loading = ref(false)
 const userInfo = ref<UserInfo | null>(null)

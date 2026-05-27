@@ -84,8 +84,8 @@ const ERROR_I18N_MAP: Record<AppErrorCodeType, string> = {
  * 将 AppErrorCode 转为 vue-i18n 的翻译 key。
  * UI 层: t(errorTranslator(err.code)) → 用户可见文案
  */
-export function errorTranslator(code: AppErrorCodeType): string {
-  return ERROR_I18N_MAP[code] || 'errors.unknown'
+export function errorTranslator(code: AppErrorCodeType | string): string {
+  return ERROR_I18N_MAP[code as AppErrorCodeType] || 'errors.unknown'
 }
 
 /**

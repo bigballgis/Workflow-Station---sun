@@ -116,7 +116,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { UploadInstance, UploadFile, UploadRawFile } from 'element-plus'
+import type { UploadInstance, UploadFile } from 'element-plus'
 import { Upload, Download } from '@element-plus/icons-vue'
 import DOMPurify from 'dompurify'
 import { useUserImport } from '@/composables/modules/useUserImport'
@@ -126,8 +126,10 @@ defineProps<{ modelValue: boolean }>()
 const emit = defineEmits(['update:modelValue', 'success'])
 const uploadRef = ref<UploadInstance>()
 
-const { loading, selectedFile, importResult, validateFile, downloadTemplate, doImport }
+const { loading, selectedFile, importResult, validateFile, onExceed, downloadTemplate, doImport }
   = useUserImport(() => emit('success'))
+
+const handleExceed = () => onExceed()
 
 const handleFileChange = (file: UploadFile) => { if (file.raw) validateFile(file.raw) || uploadRef.value?.clearFiles() }
 const handleDownloadTemplate = () => downloadTemplate()

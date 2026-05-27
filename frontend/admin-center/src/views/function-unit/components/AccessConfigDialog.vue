@@ -211,18 +211,19 @@
 <script setup lang="ts">
 import { watch, toRef } from 'vue'
 import { Plus } from '@element-plus/icons-vue'
+import { roleTypeDisplayLabel } from '@/utils/format'
 import { useFunctionUnitAccessConfig } from '@/composables/modules/useFunctionUnitAccessConfig'
 
 const props = defineProps<{ modelValue: boolean; functionUnitId?: string; functionUnitName?: string }>()
 const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()
 
 const {
-  loading, accessList, allRoles, rolesLoading,
+  loading, accessList, rolesLoading,
   showAddRole, addLoading, addRoleTab, selectedSystemRoleIds, selectedBuId, selectedBuRoleId,
-  buCascaderOptions, buRoles, buRolesLoading, buCascaderProps,
-  assignedIds, availableSystemRoles, availableBuRoles,
+  buCascaderOptions, buRolesLoading, buCascaderProps,
+  availableSystemRoles, availableBuRoles,
   resolveRoleName, resolveRoleTypeLabel, resolveRoleTagType, formatDate,
-  fetchAccessConfig, fetchAllRoles, openAddDialog, handleBuChange, handleAddRole, handleRemove,
+  resetAddForm, fetchAccessConfig, fetchAllRoles, openAddDialog, handleBuChange, handleAddRole, handleRemove,
 } = useFunctionUnitAccessConfig(toRef(props, 'functionUnitId'))
 
 watch(() => props.modelValue, val => { if (val) { fetchAccessConfig(); fetchAllRoles() } })

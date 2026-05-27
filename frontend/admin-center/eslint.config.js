@@ -36,7 +36,9 @@ export default [
   {
     rules: {
       // 允许单名单词组件名（App.vue / Login.vue 等）
-      'vue/multi-word-component-names': 'off'
+      'vue/multi-word-component-names': 'off',
+      // catch 省略绑定后引用 error/e 会在运行时 ReferenceError
+      'no-undef': 'error'
     },
     languageOptions: {
       globals: {

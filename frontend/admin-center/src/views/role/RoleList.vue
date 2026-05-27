@@ -187,7 +187,7 @@ import PageHeader from '@/components/PageHeader.vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Lock } from '@element-plus/icons-vue'
 import { useRoleStore } from '@/stores/role'
-import { Role } from '@/api/role'
+import { Role, type RoleType } from '@/api/role'
 import { hasPermission, PERMISSIONS } from '@/utils/permission'
 import { roleTypeTagType, roleTypeKey } from '@/utils/format'
 import RoleFormDialog from './components/RoleFormDialog.vue'
@@ -201,7 +201,7 @@ const roleStore = useRoleStore()
 const canWriteRole = hasPermission(PERMISSIONS.ROLE_WRITE)
 const canDeleteRole = hasPermission(PERMISSIONS.ROLE_DELETE)
 
-const query = reactive({ type: '' })
+const query = reactive<{ type: RoleType | '' }>({ type: '' })
 const formDialogVisible = ref(false)
 const membersDialogVisible = ref(false)
 const currentRole = ref<Role | null>(null)
@@ -214,7 +214,7 @@ const sortedRoles = computed(() => {
   })
 })
 
-const handleSearch = () => roleStore.fetchRoles(query.type ? { type: query.type } : undefined)
+const handleSearch = () => roleStore.fetchRoles(query.type ? { type: query.type as RoleType } : undefined)
 const handleReset = () => { query.type = ''; handleSearch() }
 
 const showCreateDialog = () => { currentRole.value = null; formDialogVisible.value = true }
