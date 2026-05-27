@@ -18,7 +18,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class WorkflowEngineClientTest {
 
-    private final WorkflowEngineClient client = new WorkflowEngineClient(new RestTemplate(), buildJwtProperties());
+    private final WorkflowEngineClient client = new WorkflowEngineClient(
+            new RestTemplate(), buildJwtProperties(), org.mockito.Mockito.mock(com.platform.common.i18n.I18nService.class));
 
     private static JwtProperties buildJwtProperties() {
         JwtProperties props = new JwtProperties();
