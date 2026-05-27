@@ -269,3 +269,63 @@ VALUES (
     'system'
 )
 ON CONFLICT (group_id, user_id) DO NOTHING;
+
+-- =====================================================
+-- 通用开发测试账号：developer / password
+-- 兼具 Technical Leads + System Administrators 虚拟组角色，
+-- 并在「共享财务中心」拥有 Department Manager 业务单元角色
+-- =====================================================
+INSERT INTO sys_users (
+    id, username, password_hash, email, display_name, full_name,
+    employee_id, position, status, language, must_change_password,
+    created_at, updated_at, deleted
+)
+VALUES (
+    'user-dev',
+    'developer',
+    '$2a$10$P/xQaseE4Hr8/9fhSws86ez3nTUDLUGC8XeQueVX4QKZmdM/LeiYa',
+    'developer@e2e.workflow.local',
+    'Developer Tester',
+    'Developer Tester',
+    'E26-DEV-001',
+    '平台开发测试账号',
+    'ACTIVE',
+    'zh_CN',
+    false,
+    CURRENT_TIMESTAMP,
+    CURRENT_TIMESTAMP,
+    false
+)
+ON CONFLICT (username) DO UPDATE SET
+    email           = EXCLUDED.email,
+    display_name    = EXCLUDED.display_name,
+    full_name       = EXCLUDED.full_name,
+    employee_id     = EXCLUDED.employee_id,
+    position        = EXCLUDED.position,
+    password_hash   = EXCLUDED.password_hash,
+    status          = EXCLUDED.status,
+    updated_at      = CURRENT_TIMESTAMP;
+
+-- dev 隶属于「共享财务中心」业务单元
+INSERT INTO sys_user_business_units (id, user_id, business_unit_id, created_at, created_by)
+VALUES ('ubu-dev-fin', 'user-dev', 'bu-e2e-finance', CURRENT_TIMESTAMP, 'system')
+ON CONFLICT (user_id, business_unit_id) DO NOTHING;
+
+-- dev 在「共享财务中心」的 Department Manager 角色
+INSERT INTO sys_user_business_unit_roles (id, user_id, business_unit_id, role_id, created_at, created_by)
+VALUES (
+    'ubur-dev-fin-mgr',
+    'user-dev',
+    'bu-e2e-finance',
+    'role-manager',
+    CURRENT_TIMESTAMP,
+    'system'
+)
+ON CONFLICT (user_id, business_unit_id, role_id) DO NOTHING;
+
+-- dev 加入 Technical Leads + System Administrators 虚拟组（继承对应系统角色）
+INSERT INTO sys_virtual_group_members (id, group_id, user_id, joined_at, added_by)
+VALUES
+    ('vgm-dev-tech-leads', 'vg-tech-leads', 'user-dev', CURRENT_TIMESTAMP, 'system'),
+    ('vgm-dev-sys-admins', 'vg-sys-admins', 'user-dev', CURRENT_TIMESTAMP, 'system')
+ON CONFLICT (group_id, user_id) DO NOTHING;
