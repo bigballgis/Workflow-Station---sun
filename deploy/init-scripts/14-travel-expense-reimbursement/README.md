@@ -16,7 +16,7 @@ EOF
 ## 数据结构
 
 ### Function Unit
-- Code: `TRAVEL_EXPENSE_REIMBURSEMENT`
+- Code: `fu-20260403-a1b2c3`
 - Name: `Travel Expense Reimbursement`
 - Status: `PUBLISHED`
 - Version: `1.0.0`

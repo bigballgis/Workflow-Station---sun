@@ -16,7 +16,7 @@ EOF
 ## 数据结构
 
 ### Function Unit
-- Code: `SIMPLE_APPROVAL_12`
+- Code: `fu-20260403-a1b2c1`
 - Name: `Simple Approval Workflow 12`
 - Status: `DRAFT`
 - Version: `1.0.0`

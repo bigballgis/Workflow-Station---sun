@@ -28,7 +28,7 @@ EOF
 ## 数据结构
 
 ### Function Unit
-- Code: `PROCUREMENT_WORKFLOW`
+- Code: `fu-20260403-a1b2c2`
 - Name: `Procurement Workflow`
 - Status: `PUBLISHED`, current_version: `1.0.6`, version: `1.0.0`
 

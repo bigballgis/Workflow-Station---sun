@@ -6,7 +6,7 @@ This directory contains the SQL scripts to recreate the Simple Approval Workflow
 
 - **Export Date**: 2026-02-12
 - **Source Database**: workflow_platform_dev
-- **Function Unit Code**: SIMPLE_APPROVAL
+- **Function Unit Code**: fu-20260403-a1b2c0
 - **Current Version**: 1.0.5
 - **Status**: PUBLISHED
 
