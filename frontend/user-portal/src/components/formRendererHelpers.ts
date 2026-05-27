@@ -112,6 +112,42 @@ export interface FormTab {
   fields: FormField[]
 }
 
+const LAYOUT_ONLY_FIELD_KEY_PREFIXES = ['__subTable_', '__layout_']
+
+function isDataBoundFormFieldKey(key: string): boolean {
+  if (!key || key.startsWith('__')) return false
+  return !LAYOUT_ONLY_FIELD_KEY_PREFIXES.some(p => key.startsWith(p))
+}
+
+/**
+ * Collect data-bound field keys from parsed {@link FormField} trees, recursing into
+ * {@code elCard} children (and tab panes). Used by MI isolation and My Request hydration
+ * so scalars inside Case Info cards (e.g. {@code case_number}, {@code legal_hold}) are not dropped.
+ */
+export function collectLeafFormFieldKeys(
+  fields: FormField[],
+  tabs?: FormTab[],
+): string[] {
+  const keys = new Set<string>()
+  const walk = (arr?: FormField[]) => {
+    if (!Array.isArray(arr)) return
+    for (const f of arr) {
+      if (f.type === 'card' && Array.isArray(f.children)) {
+        walk(f.children)
+        continue
+      }
+      if (f.type === 'subTable') continue
+      const key = f.key != null ? String(f.key) : ''
+      if (isDataBoundFormFieldKey(key)) keys.add(key)
+    }
+  }
+  walk(fields)
+  for (const tab of tabs || []) {
+    walk(tab.fields)
+  }
+  return Array.from(keys)
+}
+
 /**
  * Recursively extract FormField entries from a form-create rule array.
  * Handles subTable placeholder entries (type === 'subTable') before delegating
@@ -500,6 +536,9 @@ export function shouldSuppressStandaloneSubTableInInitiatorRequest(
   const binding = bindings.find(b => Number(b.bindingId) === id)
   if (String(binding?.subMode || '').toUpperCase() === 'FORM_ONLY') return true
   if (nativeBindingIds && nativeBindingIds.size > 0 && !nativeBindingIds.has(id)) return true
+  // Canvas-placed sub-tables (native tableBindings) must render even when the binding is also
+  // referenced as a Link Form target (e.g. self-ref linkForm column in subListViews).
+  if (nativeBindingIds && nativeBindingIds.size > 0 && nativeBindingIds.has(id)) return false
   if (!collectAllLinkFormTargetBindingIds(bindings, formConfig).has(id)) return false
   const pv = normalizePortalViews(
     portalViews ?? (binding?.portalViews as Partial<SubTablePortalViews> | undefined)

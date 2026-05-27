@@ -3,6 +3,7 @@ import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import { submitTaskForm } from '@/api/processForm'
 import type { FormField, FormTab } from '@/components/FormRenderer.vue'
+import { collectLeafFormFieldKeys } from '@/components/formRendererHelpers'
 import {
   cloneSubTableRows,
   mergeSubTableRowsByRowId,
@@ -121,16 +122,7 @@ export function useTaskForm(options: {
   }
 
   function getCurrentFormFieldKeys(): string[] {
-    const keys = new Set<string>()
-    formFields.value.forEach((f: any) => {
-      if (f?.key) keys.add(String(f.key))
-    })
-    formTabs.value.forEach((tab: any) => {
-      ;(tab?.fields || []).forEach((f: any) => {
-        if (f?.key) keys.add(String(f.key))
-      })
-    })
-    return Array.from(keys)
+    return collectLeafFormFieldKeys(formFields.value, formTabs.value)
   }
 
   function clearAutosaveTimer() {

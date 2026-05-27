@@ -139,3 +139,27 @@
     normalizedName 作为派生 alias 仅供读侧解析），合并时只写 canonical key；读侧若仍需 alias resolve，
     在 helper 层用 metadata fallback 实现，而非把 alias 落到 JSONB。
     爆炸半径：所有触发 mergeSubTablesFromTaskInfoForMi 的子任务完成路径；与 #1398 同根，宜一并设计。
+- id: "1400"
+  status: fixed
+  fixed_at: "2026-05-27"
+  severity: major
+  category: bug
+  summary: "user-portal My Request 画布已放置的 sub-table 因同时是 Link Form 目标被 filterLinkOnlyStandaloneSubTableFields 误删（mirrorTodo + tableOnly）"
+  detail: |
+    根因：shouldSuppressStandaloneSubTableInInitiatorRequest 对 native tableBindings 中的 binding 若出现在
+    collectAllLinkFormTargetBindingIds（含 subListViews 自引用 linkForm 列）且 initiatorRequest 为 mirrorTodo，
+    仍按 mirrorTodo !== tableOnly 判定 suppress，导致 applyLinkOnlySubTableFieldFilterToMainForm 从 formFields
+    移除画布 subTable 节点（Transaction Assignment binding 281 等）。
+    修复：nativeBindingIds 命中时直接 return false，画布放置优先于 link-only 去重逻辑。
+    路径：formRendererHelpers.ts + linkOnlySubTableFields.test.ts。
+- id: "1401"
+  status: fixed
+  fixed_at: "2026-05-27"
+  severity: major
+  category: bug
+  summary: "MI Transaction Investigation 未带出 Case Number / Legal Hold（elCard 内字段被 isolateMiSubTaskData 剥离）"
+  detail: |
+    根因：流程变量已有 case_number/legal_hold（如 344 / true），但 HMDC 表单将字段放在 elCard 子节点；
+    getCurrentFormFieldKeys 只收集顶层 key，MI isolateMiSubTaskData 重建 formData 时丢弃 card 内标量。
+    修复：formRendererHelpers.collectLeafFormFieldKeys 递归 card；useTaskForm、tasks/detail、applications/detail 统一使用。
+    路径：formRendererHelpers.ts、useTaskForm.ts、tasks/detail.vue、applications/detail.vue、collectLeafFormFieldKeys.test.ts。

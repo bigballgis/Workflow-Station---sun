@@ -425,6 +425,7 @@ import {
   resolveSubTableDisplayMode,
   collectLinkFormTargetBindingIdsFromSubListViews,
   filterLinkOnlyStandaloneSubTableFields,
+  collectLeafFormFieldKeys,
 } from '@/components/formRendererHelpers'
 import SubTableField from '@/components/SubTableField.vue'
 import SubTableInlineForm from '@/components/SubTableInlineForm.vue'
@@ -1470,16 +1471,7 @@ function openSubTaskDetailDialog(row: any, siblingRowsOverride?: any[] | null) {
 }
 
 function getCurrentFormFieldKeys(): string[] {
-  const keys = new Set<string>()
-  formFields.value.forEach((field: any) => {
-    if (field?.key) keys.add(String(field.key))
-  })
-  formTabs.value.forEach((tab: any) => {
-    ;(tab?.fields || []).forEach((field: any) => {
-      if (field?.key) keys.add(String(field.key))
-    })
-  })
-  return Array.from(keys)
+  return collectLeafFormFieldKeys(formFields.value, formTabs.value)
 }
 
 function hydrateCurrentFormDataFromCompletedSubTaskRows() {

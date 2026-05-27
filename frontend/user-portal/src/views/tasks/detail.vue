@@ -432,7 +432,7 @@ import { processApi } from '@/api/process'
 import ProcessDiagram, { type ProcessNode, type ProcessFlow } from '@/components/ProcessDiagram.vue'
 import ProcessHistory, { type HistoryRecord } from '@/components/ProcessHistory.vue'
 import FormRenderer, { type FormField, type FormTab } from '@/components/FormRenderer.vue'
-import { normalizePortalViews } from '@/components/formRendererHelpers'
+import { normalizePortalViews, collectLeafFormFieldKeys } from '@/components/formRendererHelpers'
 import SubTableField from '@/components/SubTableField.vue'
 import N8nActionDialog from '@/components/N8nActionDialog.vue'
 import {
@@ -1621,10 +1621,9 @@ function isolateMiSubTaskData(taskData: any) {
   // Preserve previous form field values (readonly display of parent task data)
   const prevFormFieldKeys = new Set<string>()
   previousForms.value.forEach((pf: any) => {
-    ;(pf.fields || []).forEach((f: any) => { if (f?.key) prevFormFieldKeys.add(String(f.key)) })
-    ;(pf.tabs || []).forEach((tab: any) => {
-      ;(tab?.fields || []).forEach((f: any) => { if (f?.key) prevFormFieldKeys.add(String(f.key)) })
-    })
+    for (const key of collectLeafFormFieldKeys(pf.fields || [], pf.tabs || [])) {
+      prevFormFieldKeys.add(key)
+    }
   })
   for (const key of prevFormFieldKeys) {
     if (!(key in cleanedFormData) && Object.prototype.hasOwnProperty.call(originalFormData, key)) {
