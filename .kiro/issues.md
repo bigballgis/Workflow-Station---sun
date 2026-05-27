@@ -7,10 +7,10 @@
 
 | 状态 | 数量 |
 |------|------|
-| ✅ Fixed | **0** |
-| 🔓 Open | **15** |
+| ✅ Fixed | **2** |
+| 🔓 Open | **9** |
 | ⏸️ Wontfix | **1** |
-| **总计** | **16** |
+| **总计** | **12** |
 
 按严重度的分布见 `index.yaml` 各条目的 `severity` 字段。
 
@@ -23,17 +23,11 @@
 | 137 | architecture | developer-workstation 功能单元版本/部署双轨并存 |
 | 148 | quality | 三端 profile 页重复实现 languageLabelFor |
 | 155 | quality | user-portal subTablePositionControl.property.test.ts 未注册 Element Plus 导致 Vitest unhandled errors |
-| 156 | quality | user-portal vue-tsc 在当前工具链下启动失败，无法执行类型检查 |
-| 157 | security | BpmnActionParser DOM 解析 BPMN 时未禁用 DTD/外部实体，存在 XXE 风险 |
 | 158 | bug | user-portal PortalRelationTableServiceImpl.queryTableData 接收 search 参数但未用于过滤 |
 | 162 | bug | DeploymentService.deployFunctionUnit 未显式设置 ProcessDefinition.functionUnitVersionId |
 | 166 | quality | frontend/admin-center lint/typecheck 配置与 catch 变量引用存在问题 |
 | 167 | quality | frontend/developer-workstation 三语 locale key 不一致 |
-| 168 | deploy | dev docker-compose n8n healthcheck 用 curl 但镜像无 curl，容器长期 unhealthy |
 | 1373 | security | user-portal 流程详情接口在未登录时仍可直接读取流程实例详情 |
-| 1383 | bug | user-portal MI 子任务 To Do 的 subtable2 inline 表单串用上一参与者数据 |
-| 1398 | performance | user-portal 前端 useTaskActions 把同一份 sub-table data 写 4–5 个别名 key 进 __subTables__，JSONB 体积 ×N |
-| 1399 | performance | user-portal 后端 __subTables__ 合并器只"补缺失 alias"不去重，alias 集合单调增长（与 #1398 同根） |
 
 ### Wontfix
 

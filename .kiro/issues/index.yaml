@@ -22,18 +22,6 @@
   category: quality
   summary: "user-portal subTablePositionControl.property.test.ts 挂载 FormRenderer 未注册 Element Plus，断言通过但 Vitest 因大量 el-* 组件解析警告以 unhandled errors 退出"
   file: "frontend/user-portal/src/views/__tests__/subTablePositionControl.property.test.ts"
-- id: "156"
-  status: open
-  severity: minor
-  category: quality
-  summary: "user-portal vue-tsc 在 Node 22 / 当前 TypeScript 组合下启动即报 Search string not found: supportedTSExtensions，无法执行类型检查"
-  file: "frontend/user-portal/package.json"
-- id: "157"
-  status: open
-  severity: major
-  category: security
-  summary: "BpmnActionParser DOM 解析 BPMN 时未禁用 DTD/外部实体，存在 XXE 风险"
-  file: "backend/workflow-engine-core/src/main/java/com/workflow/component/BpmnActionParser.java"
 - id: "158"
   status: open
   severity: minor
@@ -58,12 +46,6 @@
   category: quality
   summary: "frontend/developer-workstation 三语 locale 不一致：zh-TW 缺失 form.linkFormPlaceholderStale / form.linkFormPlaceholderUnconfigured / form.linkFormSelectEmpty / form.linkFormSelectPlaceholder / tableBinding.subMode / tableBinding.subModeFormOnly / tableBinding.subModeFull / tableBinding.subModeTip 共 8 个 key，被 i18n-locale-key-consistency 测试持续标红"
   file: "frontend/developer-workstation/src/i18n/locales/zh-TW.ts"
-- id: "168"
-  status: open
-  severity: minor
-  category: deploy
-  summary: "deploy/environments/dev/docker-compose.dev.yml 中 n8n healthcheck 使用 curl，但镜像内无 curl，容器长期显示 unhealthy 造成误导"
-  file: "deploy/environments/dev/docker-compose.dev.yml"
 - id: "1373"
   status: open
   severity: critical
@@ -78,25 +60,9 @@
   severity: major
   category: bug
   summary: "admin-center 的 useBiDashboard 在 catch 中引用未定义 error，导致状态切换或删除失败时前端二次报错"
-- id: "1383"
-  status: open
-  severity: major
-  category: bug
-  summary: "user-portal MI 子任务 To Do：完成第一个子任务后打开第二个子任务 sub form1，subtable2 inline 表单被预填了上一子任务输入的 age/sex"
-  file: |
-    frontend/user-portal/src/views/tasks/detail.vue
-  note: |
-    复现：Multi-Instance Subtask Demo（17-Multi-Instance-Subtask-Demo），e2e_lina 登录 user-portal → To Do → 完成参与者 1 的 sub form1（subtable2 中填 age/sex）→ 打开参与者 2 的 sub form1，发现 subtable2 inline 表单被默认填上了参与者 1 的 age/sex，应当显示空表单等待参与者 2 自行填写。
-    根因：tasks/detail.vue `isolateMiSubTaskData` 在重建当前参与者 myRow.__subTables__ 时（line ~1618 起的内层循环），把 `rebuildIsolatedSubTablesPayload`（混入 `previousForms.value` 中其它参与者已完成节点的 subTableBindings）和 myRow 原有 nested `__subTables__` 直接 merge 进 `nextRowSub[binding.bindingId]`，但 **没有按 `rowBelongsToCurrentMiScope` 过滤**。结果 participant 2 的 myRow.__subTables__["30"]（subtable2，binding 30，foreignKeyField=id）里残留了 participant 1 的 {id:232, age, sex} 行。随后 FormRenderer `mergeRowsForInlineFormTarget` 在 miIsolate 分支调用 `pullNestedRowsForBindingFromParentRows(target=binding30, [parentRow])` 读取 parentRow.__subTables__["30"]，拿到 participant 1 的行；`getCurrentRowForInlineForm` 在 `rows.length === 1` 时直接将其作为 inline form 的 currentRow（pickReason='mi-nested-only'）。同一份 `nextRowSub` 还会通过紧随其后的二次循环（line ~1657）回流到 binding 30.data，虽然 `resyncMiParticipantSubTablesFromVariables` 末尾的 `applyMiParticipantFilterToCurrentSubTableBindings` 会再次过滤 binding.data，但 `syncMiLinkChildRowsIntoParentNested` 仅在 `rows.length > 0` 时回写 parentRow.__subTables__，因此一旦 binding.data 被过滤为空，parentRow.__subTables__["30"] 中残留的 participant 1 行就再也得不到清理，FormRenderer 仍读到泄漏数据。
-    修复：
-      1) `isolateMiSubTaskData` 内层 binding 循环里，在 `merged = mergeSubTableRowsByRowId(...)` 之后、写回 `nextRowSub[bindingId]` 之前，对 MI participant-scoped binding 增加 `rowBelongsToCurrentMiScope` 过滤；这样 myRow.__subTables__ 中只保留属于当前参与者的行，inline form 的初始 rows 不会再借参与者 1 的行。`cleanedFormData.__subTables__`（持久化用，第 1600 行已是 `rebuildIsolatedSubTablesPayload` 全量 snapshot）保持不变，确保提交时不会丢失其他参与者已经保存的子表数据。
-      2) `resyncMiParticipantSubTablesFromVariables` 末尾的 `syncMiLinkChildRowsIntoParentNested` 调用条件放宽为「MI participant-scoped binding 即便 binding.data 为空也参与一次回写」，使得 parentRow.__subTables__ 中针对当前参与者的旧脏数据被强制刷成空切片，作为深度防御层。
-    验证：
-      - `npx vitest run src/composables/tasks/__tests__/linkFormMiIsolation.test.ts src/composables/tasks/__tests__/mergeSubTableRowsMiMerge.test.ts src/composables/tasks/__tests__/subTableRowMetaFields.test.ts` 全部通过（39/39）。
-      - `cd frontend/user-portal && npm run build` 成功。
-      - `docker compose -f docker-compose.dev.yml --env-file .env up -d --build user-portal-frontend` 后 platform-user-portal-frontend-dev / platform-user-portal-dev 正常启动。
 - id: "1398"
-  status: open
+  status: fixed
+  fixed_at: "2026-05-27"
   severity: major
   category: performance
   summary: "user-portal frontend useTaskActions.ts 把同一份 sub-table data 以 4–5 个别名 key（bindingId / String(bindingId) / tableName / normalizeSubTableName(tableName)）重复写进 __subTables__ → up_process_instance.variables JSONB 列体积膨胀 4–5 倍，并放大快照路径的 OOM 风险（详见 #1397 回归分析）"
@@ -123,8 +89,13 @@
     与 portal-design-parity.mdc 的关系：写入侧 alias 化是历史遗留兼容层；移除后必须确认设计器预览
     （FormDesigner Preview）与 Portal Runtime 仍能解析两侧的 binding，否则 parity 会断。建议在统一 helper
     中做"写入侧单一 key、读侧 alias resolve"的过渡，先加 telemetry 观察兼容性，再清除冗余别名写入。
+    
+    已落地实现：`frontend/user-portal/src/composables/tasks/useTaskActions.ts` 的 submitApprove 构造 variables 时，
+    `__subTables__` 改为 canonical 仅写 bindingId key；当存在数字 key 时会先清理历史别名 key，再按 bindingId 覆写当前
+    `subTableBindings` 数据，不再写 `tableName` / `normalizeSubTableName(tableName)` / `participants` 别名键。
 - id: "1399"
-  status: open
+  status: fixed
+  fixed_at: "2026-05-27"
   severity: major
   category: performance
   summary: "user-portal backend TaskProcessComponent.mergeSubTablesFromTaskInfoForMi / 相关 __subTables__ 合并逻辑只'补缺失 alias'但从不去重，alias 集合单调增长，加剧 #1398 描述的 JSONB 膨胀"
@@ -138,4 +109,8 @@
     建议修复：在合并前先 resolve alias 等价类（用 TableBinding 元数据：bindingId 为主 key，tableName /
     normalizedName 作为派生 alias 仅供读侧解析），合并时只写 canonical key；读侧若仍需 alias resolve，
     在 helper 层用 metadata fallback 实现，而非把 alias 落到 JSONB。
+
+    已落地实现：在 `backend/user-portal/.../TaskProcessComponent.mergeSubTablesFromTaskInfoForMi` 合并完成后，
+    若同一层级存在数字 key（bindingId），则仅保留数字 key，并递归清理行内 nested `__subTables__` 的非数字别名 key，
+    从根源阻断 alias 集合单调增长。
     爆炸半径：所有触发 mergeSubTablesFromTaskInfoForMi 的子任务完成路径；与 #1398 同根，宜一并设计。
