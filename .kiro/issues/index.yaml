@@ -55,3 +55,50 @@
   summary: "developer-workstation 表单校验未做 boundTable 字段深绑定存在性检查"
   file: "backend/developer-workstation/src/main/java/com/developer/component/impl/FormDesignComponentImpl.java"
   note: "validate 仅检查 configJson 非空；画布字段与表元数据一致性未校验（清理 TODO 时移除空分支）。"
+- id: "1409"
+  status: fixed
+  fixed_at: "2026-05-27"
+  severity: major
+  category: bug
+  summary: "MCY MI Transaction Investigation 的 HMDC Transaction 子表显示全部 MI 行而非当前子任务一行"
+  detail: |
+    根因：子任务隔离未按 Process Design BPMN 的 subTableName + 设计器主键划分，此前依赖硬编码列名/assignee 推断。
+    修复：新增 miSubProcessScope.ts — 从 BPMN 读取 subTableName/assigneeField/rowIdVariable/miTaskStatusField，
+    用 binding.primaryKeyFields（设计器 PK，如 row_id）匹配 participantRowId；applications/tasks detail 接入。
+    路径：miSubProcessScope.ts、applications/detail.vue、tasks/detail.vue、miSubProcessScope.test.ts。
+- id: "1410"
+  status: fixed
+  fixed_at: "2026-05-27"
+  severity: major
+  category: deploy
+  summary: "Docker 启动失败：Actuator ready 组引用不存在的 redis/kafka health contributor"
+  detail: |
+    根因：commit 16fd35b8 为四后端新增 ready 组 include db,redis,kafka；application-docker.yml 曾禁用 redis health，
+    且 Spring Boot 3.2 无内置 kafka health contributor，启动校验报 NoSuchHealthContributorException。
+    修复：移除 docker profile 对 redis health 的禁用；ready 组改为 db,redis（user-portal 仅 db，无 Redis starter）；
+    删除无效的 management.health.kafka.enabled。
+    路径：backend/*/application.yml、backend/*/application-docker.yml。
+- id: "1411"
+  status: fixed
+  fixed_at: "2026-05-27"
+  severity: major
+  category: deploy
+  summary: "Docker 首次 init 时 MCY Debit Card seed 因 dw_sub_table_view_fields 主键冲突整包回滚"
+  detail: |
+    根因：18-MCY/init.sql 插入 dw_sub_table_view_fields 未带显式 id，依赖序列；17-Multi-Instance-Subtask-Demo
+    已占用 id 4–37 且未在 MCY 之前执行 90-post-seed 对齐，序列从 34 起与既有行冲突（init.sql:128）。
+    整事务 ROLLBACK，fu-20260505-thwmut 未入库；仅 docker restart 不会重跑 init（卷已存在）。
+    修复：MCY init.sql 为 view fields 指定 id 38–68；现有库可手动 psql -f 18-MCY/init.sql 补种。
+    路径：deploy/init-scripts/18-MCY/init.sql。
+- id: "1412"
+  status: fixed
+  fixed_at: "2026-05-27"
+  severity: major
+  category: bug
+  summary: "My Request 流程图点击 Case Submission 时 HMDC Transaction 子表多出一行空行"
+  detail: |
+    根因：buildApplicationNodeFormMap 调用 hydrateBindingsRowsFromVariablesBySharedRelationTableId 时，
+    mergeRowsFromSoleUnclaimedNumericSlice 在 transaction binding 271 已有 row_id 行的情况下，仍把
+    唯一未认领的 numeric slice 273（HMDC Attachment）合并进 271，产生无 row_id 的 ghost 行。
+    修复：sole-unclaimed 回退仅在 slice 的 relationTableId 与目标 binding 的 tableId 一致时合并；
+    新增 HMDC 271+273 回归单测。路径：shared.ts mergeRowsFromSoleUnclaimedNumericSlice。

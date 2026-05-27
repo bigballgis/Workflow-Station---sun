@@ -257,6 +257,8 @@ export default {
     allParticipantsMustHaveAssignee: '請為子表中每一列點擊「分配」指定處理人後再完成。',
     addParticipantInfoForm: '新增參與者資訊表',
     noFormBound: '無綁定表單',
+    miPrimaryKeyNotConfigured:
+      '多實例子表「{table}」未在 Table Design 中配置主鍵欄位，無法按參與者隔離資料。請在設計站為該表標記主鍵列。',
     userOptionFormat: '{name}（{username}）',
   },
   process: {

@@ -543,13 +543,20 @@ export function isSubTableRowMetaField(key: string): boolean {
   return SUB_TABLE_ROW_META_KEYS.has(key)
 }
 
+const MI_DASHBOARD_STATUS_FIELDS = new Set([
+  'task_status',
+  'task_current_node',
+  'sub_task_status',
+  'sub_task_current_node',
+])
+
 /** True when designer schema declares this binding as a multi-instance participant dashboard (not a plain related table). */
 export function isMiDashboardSubTableBinding(binding: {
   columns?: Array<{ field?: string }> | null
   tableName?: string
 }): boolean {
   const cols = binding.columns ?? []
-  if (cols.some(c => c?.field === 'task_status' || c?.field === 'task_current_node')) return true
+  if (cols.some(c => c?.field != null && MI_DASHBOARD_STATUS_FIELDS.has(String(c.field)))) return true
   const assigneeField = resolveAssigneeFieldForBinding(cols, binding.tableName)
   if (assigneeField && cols.some(c => c?.field === assigneeField)) return true
   const tn = (binding.tableName || '').toLowerCase()
@@ -1136,9 +1143,11 @@ export function stripSubTableRowMetaFields(row: Record<string, unknown>): Record
 export function isSubTableMiDashboardRow(row: Record<string, unknown> | null | undefined): boolean {
   if (!row) return false
   if (row.task_status !== undefined && row.task_status !== null) return true
+  if (row.sub_task_status !== undefined && row.sub_task_status !== null) return true
   if (row.task_id != null && String(row.task_id).trim() !== '') return true
   if (row.task_definition_key != null && String(row.task_definition_key).trim() !== '') return true
   if (row.assignee_user_id != null && String(row.assignee_user_id).trim() !== '') return true
+  if (row.assignee_id != null && String(row.assignee_id).trim() !== '') return true
   return false
 }
 
@@ -1552,18 +1561,30 @@ function claimedNumericSubTableSliceKeys(
 /**
  * When {@code bindingTableById.get(kid)} is missing for some keys, merge the single numeric slice
  * not claimed by any sibling binding that already has rows (initiator 64 vs subtable2 66 scenario).
+ * When {@code selfTidRaw} is known, only slices whose relation-table id matches — never pull attachment
+ * (273) into transaction (271) just because it is the sole unclaimed numeric key (HMDC Case Submission diagram).
  */
 function mergeRowsFromSoleUnclaimedNumericSlice(
   b: { bindingId: number; data: any[] },
   savedSubTables: Record<string, unknown>,
-  claimedNumericKeys: Set<number>
+  claimedNumericKeys: Set<number>,
+  bindingTableById?: Map<number, number | null>,
+  selfTidRaw?: number | null,
 ): any[] {
+  const wantTid =
+    selfTidRaw != null && Number.isFinite(Number(selfTidRaw)) && !Number.isNaN(Number(selfTidRaw))
+      ? Number(selfTidRaw)
+      : null
   const candidates: number[] = []
   for (const [key, val] of Object.entries(savedSubTables)) {
     const kid = Number(key)
     if (!Number.isFinite(kid) || kid === b.bindingId) continue
     if (!Array.isArray(val) || val.length === 0) continue
     if (claimedNumericKeys.has(kid)) continue
+    if (wantTid != null && bindingTableById != null) {
+      const otid = bindingTableById.get(kid)
+      if (otid == null || Number.isNaN(Number(otid)) || Number(otid) !== wantTid) continue
+    }
     candidates.push(kid)
   }
   if (candidates.length !== 1) {
@@ -1847,7 +1868,15 @@ export function hydrateBindingsRowsFromVariablesBySharedRelationTableId<
 
     if (chunks.length === 0) {
       if (!multiPlacementSameTid) {
-        chunks.push(...mergeRowsFromSoleUnclaimedNumericSlice(b, savedSubTables, claimedKeys))
+        chunks.push(
+          ...mergeRowsFromSoleUnclaimedNumericSlice(
+            b,
+            savedSubTables,
+            claimedKeys,
+            bindingTableById,
+            selfTidRaw != null && !Number.isNaN(Number(selfTidRaw)) ? Number(selfTidRaw) : null,
+          ),
+        )
       }
     }
 
@@ -2323,3 +2352,16 @@ export function hydrateChildSubTablesFromParentsNestedRows<
     child.data = cloneSubTableRows(mergeSubTableRowsByRowId(existing, mergedIncoming, pk))
   }
 }
+
+export {
+  expansionKeyMatchesParticipantRow,
+  rowMatchesSubTablePrimaryKey,
+  bindingMatchesMiSubTableName,
+  findBindingForMiSubTableName,
+  resolveMiSubProcessScopeFromBpmn,
+  filterBindingsToMiParticipantRow,
+  resolveViewerParticipantRowIdFromCollectionBinding,
+  extractParticipantRowIdFromVariables,
+  type MiSubProcessScopeConfig,
+  type SubTableBindingLike,
+} from './miSubProcessScope'

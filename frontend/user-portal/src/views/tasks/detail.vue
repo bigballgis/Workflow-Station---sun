@@ -463,6 +463,18 @@ import {
   applySharedAttachmentFinalizeAndMaterialize,
   isSharedAttachmentFileBinding,
 } from '@/composables/tasks/shared'
+import {
+  rowMatchesSubTablePrimaryKey,
+  bindingMatchesMiSubTableName,
+  resolveMiSubProcessScopeFromBpmn,
+  findBindingForMiSubTableName,
+  extractMiParticipantRowIdFromCurrentItem,
+  hasConfiguredPrimaryKeyFields,
+  describeSubTableBindingLabel,
+  miParticipantRowIdsEqual,
+  type MiSubProcessScopeConfig,
+  type MiParticipantRowId,
+} from '@/composables/tasks/miSubProcessScope'
 import dayjs from 'dayjs'
 import ChangeHistoryPanel from '@/components/ChangeHistoryPanel.vue'
 import TaskBasicInfo from '@/components/tasks/TaskBasicInfo.vue'
@@ -751,19 +763,20 @@ function rebuildIsolatedSubTablesPayload(): Record<string, any> {
 
 function patchMiParentRowsWithNestedChildSlice(
   parentRows: any[],
-  myRowId: number,
+  myRowId: MiParticipantRowId,
   childBinding: { bindingId: number; tableName: string },
   childSlice: any[],
 ): any[] {
   if (!Array.isArray(parentRows)) return parentRows
+  const collectionPk = miCollectionPrimaryKeyFields()
   return parentRows.map(row => {
     if (!row || typeof row !== 'object') return row
     const rec = row as Record<string, unknown>
     if (
-      !expansionKeyMatchesParticipantRow(row, myRowId) &&
+      !rowMatchesSubTablePrimaryKey(row, myRowId, collectionPk) &&
       !miRowBelongsToCurrentParticipant(row, myRowId, {
         tableName: childBinding.tableName,
-        primaryKeyFields: ['id_idw']
+        primaryKeyFields: collectionPk,
       })
     ) {
       return row
@@ -790,9 +803,8 @@ function syncMiLinkChildRowsIntoParentNested(
   childRows: any[]
 ) {
   const rid = currentMiRowId.value
-  if (rid == null || String(rid).trim() === '') return
-  const myRowId = Number(rid)
-  if (Number.isNaN(myRowId)) return
+  if (rid == null) return
+  const myRowId = rid
 
   for (const parentBinding of subTableBindings.value) {
     if (parentBinding.bindingId === childBinding.bindingId) continue
@@ -1273,38 +1285,18 @@ function isParticipantsBinding(binding: { tableName: string }): boolean {
   return tn === 'participants' || tn.endsWith('participants')
 }
 
-/** Flowable `_currentItem.rowId` may match designer PK ({@code id_idw}) or SQL {@code id}, not only FK columns on related tables */
-function expansionKeyMatchesParticipantRow(row: unknown, myRowId: number): boolean {
+/** When slice binding metadata is missing, match MI rows via FK columns to the participant row id. */
+function miIncomingRowLikelyForParticipant(row: unknown, myRowId: MiParticipantRowId): boolean {
   if (!row || typeof row !== 'object') return false
-  const r = row as Record<string, unknown>
-  const mid = Number(myRowId)
-  if (!Number.isNaN(mid)) {
-    const id = Number(r.id)
-    const rv = Number(r.rowId)
-    if (id === mid || rv === mid) return true
+  const collectionPk = miCollectionPrimaryKeyFields()
+  if (hasConfiguredPrimaryKeyFields(collectionPk) && rowMatchesSubTablePrimaryKey(row, myRowId, collectionPk)) {
+    return true
   }
-  const ms = String(myRowId).trim()
-  if (ms !== '') {
-    const idw = r.id_idw
-    if (idw != null && String(idw).trim() === ms) return true
-  }
-  return false
-}
-
-/** When slice binding metadata is missing, match MI rows via common FK columns only (narrow fallback). */
-function miIncomingRowLikelyForParticipant(row: unknown, myRowId: number): boolean {
-  if (!row || typeof row !== 'object') return false
-  if (expansionKeyMatchesParticipantRow(row, myRowId)) return true
   const rec = row as Record<string, unknown>
   const fkKeys = ['participant_id', 'participantId', 'parent_id', 'parentId', 'meeting_participant_id']
-  const ms = String(myRowId).trim()
-  const mn = Number(myRowId)
   for (const k of fkKeys) {
     const v = rec[k]
-    if (v == null || v === '') continue
-    if (ms !== '' && String(v).trim() === ms) return true
-    const vn = Number(v)
-    if (!Number.isNaN(mn) && !Number.isNaN(vn) && vn === mn) return true
+    if (v != null && v !== '' && miParticipantRowIdsEqual(v, myRowId)) return true
   }
   return false
 }
@@ -1368,10 +1360,7 @@ function mergeIncomingTaskFormFieldValues(fieldValues: Record<string, any>, task
   }
 
   const vars = taskData?.variables || {}
-  const ci = vars._currentItem || vars.currentItem
-  const rawRowId = ci?.rowId
-  const myRowId =
-    rawRowId != null && String(rawRowId).trim() !== '' ? Number(rawRowId) : Number.NaN
+  const myRowId = resolveCurrentMiParticipantRowIdFromTaskVars(vars)
 
   const incomingFull = { ...fieldValues }
   const incomingSub = incomingFull.__subTables__
@@ -1390,7 +1379,7 @@ function mergeIncomingTaskFormFieldValues(fieldValues: Record<string, any>, task
           b => normalizeSubTableName(b.tableName) === normalizeSubTableName(String(sliceKey)),
         )
 
-      if (!Number.isNaN(myRowId)) {
+      if (myRowId != null) {
         const scopeToParticipant =
           bindingHint && isMiParticipantScopedSubTableBinding(bindingHint)
         if (scopeToParticipant) {
@@ -1426,30 +1415,49 @@ function mergeIncomingTaskFormFieldValues(fieldValues: Record<string, any>, task
 /** MI isolation: participant-scoped sub-tables only; main-table-linked tables (e.g. attachment) stay shared. */
 function rowBelongsToCurrentMiScope(
   row: unknown,
-  myRowId: number,
-  binding: { tableName: string; foreignKeyField?: string | null; primaryKeyFields?: string[]; columns?: Array<{ field?: string }> },
+  myRowId: MiParticipantRowId,
+  binding: {
+    tableName: string
+    physicalTableName?: string
+    foreignKeyField?: string | null
+    primaryKeyFields?: string[]
+    columns?: Array<{ field?: string }>
+    bindingId?: number | string
+  },
 ): boolean {
+  const scope = miSubProcessScope.value
+  if (scope && bindingMatchesMiSubTableName(binding, scope.subTableName)) {
+    const pk = binding.primaryKeyFields ?? miCollectionPrimaryKeyFields()
+    if (!hasConfiguredPrimaryKeyFields(pk)) {
+      warnMiMissingPrimaryKey(binding)
+      return false
+    }
+    return rowMatchesSubTablePrimaryKey(row, myRowId, pk)
+  }
   if (!isMiParticipantScopedSubTableBinding(binding)) return true
-  return (
-    expansionKeyMatchesParticipantRow(row, myRowId) ||
-    miRowBelongsToCurrentParticipant(row, myRowId, binding)
-  )
+  return miRowBelongsToCurrentParticipant(row, myRowId, binding)
 }
 
 /** MI isolation: participant rows match by PK; related sub-table rows match by FK to participant (not by sub-row id). */
 function miRowBelongsToCurrentParticipant(
   row: any,
-  myRowId: number,
-  binding: { tableName: string; foreignKeyField?: string; primaryKeyFields?: string[] }
+  myRowId: MiParticipantRowId,
+  binding: {
+    tableName: string
+    foreignKeyField?: string
+    primaryKeyFields?: string[]
+    physicalTableName?: string
+    bindingId?: number | string
+  },
 ): boolean {
   if (!row || typeof row !== 'object') return false
   if (isParticipantsBinding(binding)) {
-    const pks = binding.primaryKeyFields
-    if (pks?.length === 1) {
-      const v = row[pks[0]!]
-      return Number(v) === myRowId
+    const pks = binding.primaryKeyFields ?? miCollectionPrimaryKeyFields()
+    if (!hasConfiguredPrimaryKeyFields(pks)) {
+      warnMiMissingPrimaryKey(binding)
+      return false
     }
-    return expansionKeyMatchesParticipantRow(row, myRowId)
+    return rowMatchesSubTablePrimaryKey(row, myRowId, pks)
   }
   const fk = binding.foreignKeyField
   const fkStr = fk ? String(fk).trim() : ''
@@ -1463,34 +1471,22 @@ function miRowBelongsToCurrentParticipant(
       binding.primaryKeyFields.length > 0 &&
       binding.primaryKeyFields.some(p => String(p).trim() === fkStr)) ||
     (fkStr.toLowerCase() === 'id' && !isParticipantsBinding(binding))
-  if (
-    fk &&
-    !fkLooksLikeRowPrimaryKey &&
-    row[fk] != null &&
-    row[fk] !== '' &&
-    !Number.isNaN(Number(row[fk]))
-  ) {
-    return Number(row[fk]) === myRowId
+  if (fk && !fkLooksLikeRowPrimaryKey && row[fk] != null && row[fk] !== '') {
+    if (miParticipantRowIdsEqual(row[fk], myRowId)) return true
   }
   const fallbackFkKeys = ['participant_id', 'participantId', 'parent_id', 'parentId', 'meeting_participant_id']
   for (const k of fallbackFkKeys) {
-    if (row[k] != null && row[k] !== '' && !Number.isNaN(Number(row[k])) && Number(row[k]) === myRowId) {
+    if (row[k] != null && row[k] !== '' && miParticipantRowIdsEqual(row[k], myRowId)) {
       return true
     }
   }
   const pksRel = binding.primaryKeyFields
-  if (Array.isArray(pksRel) && pksRel.length > 0) {
-    for (const pf of pksRel) {
-      const k = String(pf).trim()
-      if (!k) continue
-      const v = row[k]
-      if (v == null || v === '') continue
-      if (String(v).trim() === String(myRowId).trim()) return true
-      if (!Number.isNaN(Number(myRowId)) && !Number.isNaN(Number(v)) && Number(v) === Number(myRowId))
-        return true
-    }
+  const collPk = miCollectionPrimaryKeyFields()
+  const pkForMatch = pksRel?.length ? pksRel : collPk
+  if (hasConfiguredPrimaryKeyFields(pkForMatch)) {
+    return rowMatchesSubTablePrimaryKey(row, myRowId, pkForMatch)
   }
-  return expansionKeyMatchesParticipantRow(row, myRowId)
+  return false
 }
 
 const isMiSubTask = (taskData: any): boolean => {
@@ -1505,16 +1501,12 @@ const isMiSubTask = (taskData: any): boolean => {
 const isMiSubTaskMode = ref(false)
 
 /**
- * Row id of the MI participant for the current task. Read from `_currentItem.rowId`
- * (Flowable injects this when expanding the multi-instance collection). Used by
- * FormRenderer's "form below table" mode to bind to the participant's row.
- * `null` when not in MI mode.
+ * Current MI participant row id from {@code _currentItem} + designer {@code primaryKeyFields}
+ * (single PK scalar or composite {@code v1|v2|...} from {@code rowKey}).
  */
-const currentMiRowId = computed<number | string | null>(() => {
-  const vars = (taskInfo.value as any)?.variables
-  const ci = vars?._currentItem || vars?.currentItem
-  const rowId = ci?.rowId
-  return rowId != null && String(rowId).trim() !== '' ? rowId : null
+const currentMiRowId = computed<MiParticipantRowId | null>(() => {
+  const vars = (taskInfo.value as { variables?: Record<string, unknown> })?.variables
+  return resolveCurrentMiParticipantRowIdFromTaskVars(vars)
 })
 
 // MI subtask fill-form dialog state
@@ -1525,16 +1517,14 @@ const miFilled = ref(false)
 const miFillDialogReadOnly = ref(false)
 
 function isolateMiSubTaskData(taskData: any) {
-  const currentItem = taskData?.variables?._currentItem as { rowId?: number; assigneeId?: string } | undefined
-  if (currentItem?.rowId == null) {
+  const myRowId = resolveCurrentMiParticipantRowIdFromTaskVars(taskData?.variables)
+  if (myRowId == null) {
     return
   }
 
-  const myRowId = Number(currentItem.rowId)
-  if (Number.isNaN(myRowId)) {
-    return
-  }
+  warnMiCollectionPrimaryKeyIfNeeded()
 
+  const collectionPk = miCollectionPrimaryKeyFields()
   const ambiguousCurrentBindings = bindingIdsPreferStrictSubTableLookup(subTableBindings.value)
 
   // Multi-instance data isolation: only the **current** task form is scoped to this participant.
@@ -1549,7 +1539,10 @@ function isolateMiSubTaskData(taskData: any) {
   outer_myrow: for (const b of subTableBindings.value) {
     const rows = Array.isArray(b.data) ? b.data : []
     for (const row of rows) {
-      if (expansionKeyMatchesParticipantRow(row, myRowId) || miRowBelongsToCurrentParticipant(row, myRowId, b)) {
+      if (
+        rowMatchesSubTablePrimaryKey(row, myRowId, collectionPk) ||
+        miRowBelongsToCurrentParticipant(row, myRowId, b)
+      ) {
         myRow = row
         break outer_myrow
       }
@@ -1747,7 +1740,7 @@ function isolateMiSubTaskData(taskData: any) {
  * {@link enrichChildBindingRowsFromParentsNestedSubTables} unions nested child slices from **every** peer parent
  * binding; in MI sub-tasks that can resurrect other instances' rows. Re-filter by {@link miRowBelongsToCurrentParticipant}.
  */
-function applyMiParticipantFilterToCurrentSubTableBindings(myRowId: number) {
+function applyMiParticipantFilterToCurrentSubTableBindings(myRowId: MiParticipantRowId) {
   for (const binding of subTableBindings.value) {
     if (!isMiParticipantScopedSubTableBinding(binding)) continue
     const rows = Array.isArray(binding.data) ? binding.data : []
@@ -1761,7 +1754,7 @@ function applyMiParticipantFilterToCurrentSubTableBindings(myRowId: number) {
  * nest link-child rows under the participant parent row for inline form-below-table.
  */
 function resyncMiParticipantSubTablesFromVariables(
-  myRowId: number,
+  myRowId: MiParticipantRowId,
   subTablesSource?: Record<string, unknown> | null,
 ) {
   const savedMap = coerceSubTablesVariableToMap(subTablesSource ?? formData.value.__subTables__)
@@ -2057,6 +2050,63 @@ const isCompletedTask = ref(false)
 const bpmnParser = useBpmnParser({ taskInfo: taskInfo as any, historyRecords, isCompletedTask })
 const { processNodes, processFlows, completedNodeIds, currentNodeId, bpmnXml, parseBpmnXml, parseBpmnXmlAndGetFormId, parseBpmnXmlAndGetPreviousFormIds } = bpmnParser
 
+const miSubProcessScope = ref<MiSubProcessScopeConfig | null>(null)
+
+function refreshMiSubProcessScopeFromBpmn() {
+  const xml = bpmnXml.value
+  if (!xml) {
+    miSubProcessScope.value = null
+    return
+  }
+  const ti = taskInfo.value as { taskDefinitionKey?: string; taskName?: string }
+  miSubProcessScope.value = resolveMiSubProcessScopeFromBpmn(xml, {
+    userTaskId: ti?.taskDefinitionKey ?? null,
+    userTaskName: ti?.taskName ?? null,
+  })
+}
+
+function miCollectionPrimaryKeyFields(): string[] | undefined {
+  const scope = miSubProcessScope.value
+  if (!scope?.subTableName) return undefined
+  const b = findBindingForMiSubTableName(subTableBindings.value, scope.subTableName)
+  return b?.primaryKeyFields ?? undefined
+}
+
+const miMissingPrimaryKeyWarned = new Set<string>()
+
+function warnMiMissingPrimaryKey(binding: {
+  tableName?: string
+  physicalTableName?: string
+  bindingId?: number | string
+}) {
+  const label = describeSubTableBindingLabel(binding)
+  const key = label || 'unknown'
+  if (miMissingPrimaryKeyWarned.has(key)) return
+  miMissingPrimaryKeyWarned.add(key)
+  ElMessage.error(t('task.miPrimaryKeyNotConfigured', { table: label || key }))
+}
+
+function warnMiCollectionPrimaryKeyIfNeeded(): void {
+  const scope = miSubProcessScope.value
+  if (!scope?.subTableName) return
+  const b = findBindingForMiSubTableName(subTableBindings.value, scope.subTableName)
+  if (!b) return
+  if (hasConfiguredPrimaryKeyFields(b.primaryKeyFields)) return
+  warnMiMissingPrimaryKey(b)
+}
+
+/** Resolve MI participant id for task variables using designer PK + {@code _currentItem.rowKey}. */
+function resolveCurrentMiParticipantRowIdFromTaskVars(
+  vars?: Record<string, unknown> | null,
+): MiParticipantRowId | null {
+  const ci = (vars?._currentItem ?? vars?.currentItem) as Record<string, unknown> | undefined
+  const scope = miSubProcessScope.value
+  const pk = miCollectionPrimaryKeyFields()
+  return extractMiParticipantRowIdFromCurrentItem(ci, pk, {
+    rowIdVariable: scope?.rowIdVariable ?? 'currentItem.rowId',
+  })
+}
+
 const taskForm = useTaskForm({ subTableBindings, isMiSubTaskMode, isCompletedTask, effectiveTaskId, taskFormDTO: taskFormDTO as any })
 const { formFields, formTabs, formData, currentFormName, formReadOnly, formLabelWidth, savingTaskForm, saveCurrentTaskForm, scheduleSubTableAutosave, getCurrentFormFieldKeys, clearAutosaveTimer: clearFormAutosaveTimer } = taskForm
 
@@ -2189,11 +2239,8 @@ const loadTaskDetail = async () => {
         enrichChildBindingRowsFromParentsNestedSubTables(subTableBindings.value)
         // Enrich re-aggregates nested rows across peer parents — scope again to this MI element (one task ↔ one participant row).
         const miVarsRef = data?.variables ?? {}
-        const miCiRef = miVarsRef._currentItem || miVarsRef.currentItem
-        const miRawRidRef = miCiRef?.rowId
-        const miRowIdPostEnrich =
-          miRawRidRef != null && String(miRawRidRef).trim() !== '' ? Number(miRawRidRef) : Number.NaN
-        if (!Number.isNaN(miRowIdPostEnrich)) {
+        const miRowIdPostEnrich = resolveCurrentMiParticipantRowIdFromTaskVars(miVarsRef)
+        if (miRowIdPostEnrich != null) {
           resyncMiParticipantSubTablesFromVariables(miRowIdPostEnrich, miFullSubTablesSnapshot)
         }
         rehydrateSharedAttachmentBindings(
@@ -2494,6 +2541,7 @@ const loadFunctionUnitContent = async (processKey: string, prefetchedContent?: a
       currentFormInfo = parseBpmnXmlAndGetFormId(content.processes[0].data)
       bpmnXml.value = content.processes[0].data
       parseBpmnXml(content.processes[0].data)
+      refreshMiSubProcessScopeFromBpmn()
     }
     
     // Parse forms - select the correct form based on the current node formId
@@ -2624,10 +2672,16 @@ const loadFunctionUnitContent = async (processKey: string, prefetchedContent?: a
         const flattened = JSON.parse(JSON.stringify(rawSubTables)) as Record<string, unknown>
         flattenNestedSubTableRowsIntoPayload(flattened)
         const ciLoad = (formData.value._currentItem ?? formData.value.currentItem) as
-          | { rowId?: string | number }
+          | Record<string, unknown>
           | undefined
-        const ridLoad = ciLoad?.rowId
-        if (ridLoad != null && String(ridLoad).trim() !== '') {
+        const scopeLoad = miSubProcessScope.value
+        const collBindingLoad = scopeLoad?.subTableName
+          ? bindings.find(b => bindingMatchesMiSubTableName(b, scopeLoad.subTableName))
+          : undefined
+        const ridLoad = extractMiParticipantRowIdFromCurrentItem(ciLoad, collBindingLoad?.primaryKeyFields, {
+          rowIdVariable: scopeLoad?.rowIdVariable ?? 'currentItem.rowId',
+        })
+        if (ridLoad != null) {
           scrubMiCorruptLinkChildRowsForParent(flattened, ridLoad)
         }
         formData.value = { ...formData.value, __subTables__: flattened }

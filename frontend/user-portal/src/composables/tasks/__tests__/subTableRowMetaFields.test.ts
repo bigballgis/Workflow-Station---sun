@@ -6,6 +6,8 @@ import {
   filterRowsForMiParticipantSubTableBinding,
   isMiDashboardSubTableBinding,
   isMiParticipantScopedSubTableBinding,
+  expansionKeyMatchesParticipantRow,
+  isSubTableMiDashboardRow,
   isSubTableRowMetaField,
   mergeSubTableSlicesForRelationTableId,
   mergeAllSlicesForSharedProcessSubTableBinding,
@@ -103,6 +105,32 @@ describe('subTableRowMetaFields', () => {
         columns: [{ field: 'assignee_user_id' }, { field: 'task_status' }],
       }),
     ).toBe(true)
+    expect(
+      isMiDashboardSubTableBinding({
+        tableName: 'HMDC Transaction',
+        columns: [{ field: 'row_id' }, { field: 'assignee_id' }],
+      }),
+    ).toBe(true)
+    expect(
+      isMiDashboardSubTableBinding({
+        tableName: 'HMDC Transaction',
+        columns: [{ field: 'row_id' }, { field: 'sub_task_status' }],
+      }),
+    ).toBe(true)
+  })
+
+  it('expansionKeyMatchesParticipantRow requires designer primary key fields', () => {
+    expect(expansionKeyMatchesParticipantRow({ row_id: 232424 }, 232424, ['row_id'])).toBe(true)
+    expect(expansionKeyMatchesParticipantRow({ row_id: '57666' }, 57666, ['row_id'])).toBe(true)
+    expect(expansionKeyMatchesParticipantRow({ row_id: 57666 }, 232424, ['row_id'])).toBe(false)
+    expect(expansionKeyMatchesParticipantRow({ row_id: 232424 }, 232424)).toBe(false)
+    expect(expansionKeyMatchesParticipantRow({ row_id: 232424 }, 232424, [])).toBe(false)
+  })
+
+  it('isSubTableMiDashboardRow recognizes MCY assignee_id and sub_task_status', () => {
+    expect(isSubTableMiDashboardRow({ assignee_id: 'u-1' })).toBe(true)
+    expect(isSubTableMiDashboardRow({ sub_task_status: 'IN_PROGRESS' })).toBe(true)
+    expect(isSubTableMiDashboardRow({ card_number: '4111' })).toBe(false)
   })
 
   it('isSharedAttachmentFileBinding recognizes tableId 74 even when list columns omit file', () => {
@@ -524,6 +552,46 @@ describe('subTableRowMetaFields', () => {
     ]
     enrichChildBindingRowsFromParentsNestedSubTables(bindings)
     expect(bindings[0]!.data.map((r: { id: unknown }) => String(r.id)).sort()).toEqual(['343', '633'])
+  })
+
+  it('hydrateBindingsRowsFromVariablesBySharedRelationTableId does not merge sole unclaimed slice from another relation table (HMDC)', () => {
+    const rtMap = new Map<number, number | null>([
+      [271, 112],
+      [273, 114],
+    ])
+    const saved = {
+      271: [
+        {
+          row_id: '455656',
+          card_number: '',
+          arn: '',
+        },
+      ],
+      273: [{ file: '/api/v1/upload/files/test.jpg' }],
+    }
+    const bindings = [
+      {
+        bindingId: 271,
+        tableId: 112,
+        tableName: 'HMDC Transaction',
+        physicalTableName: 'HMDC_Transaction',
+        columns: [{ field: 'row_id' }, { field: 'card_number' }],
+        primaryKeyFields: ['row_id'],
+        data: [...saved[271]!],
+      },
+      {
+        bindingId: 273,
+        tableId: 114,
+        tableName: 'HMDC Attachment',
+        physicalTableName: 'HMDC_Attachment',
+        columns: [{ field: 'file' }],
+        data: [...saved[273]!],
+      },
+    ]
+    hydrateBindingsRowsFromVariablesBySharedRelationTableId(bindings, saved, rtMap)
+    expect(bindings[0]!.data).toHaveLength(1)
+    expect(bindings[0]!.data[0]!.row_id).toBe('455656')
+    expect(bindings[0]!.data[0]!.file).toBeUndefined()
   })
 
   it('hydrateBindingsRowsFromVariablesBySharedRelationTableId skips shared attachment (no per-binding split)', () => {

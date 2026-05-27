@@ -186,6 +186,9 @@ deploy/
 │   ├── 14-travel-expense-reimbursement/
 │   ├── 15-platform-showcase/ …
 │   ├── 16-meeting-participant-collection/ …
+│   ├── 17-Multi-Instance-Subtask-Demo/ …
+│   ├── 18-MCY/                    # MCY Debit Card demo function unit
+│   ├── 90-post-seed/              # Post-seed sequence alignment
 │   └── 99-maintenance/ …          # 完整子目录以仓库 init-scripts/ 为准
 └── README.md                      # This file
 ```

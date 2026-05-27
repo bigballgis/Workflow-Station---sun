@@ -172,18 +172,23 @@ foreach ($f in $meetingParticipantScripts) {
 
 Write-Step "Step 5d/6: Loading Function Unit Multi-Instance Subtask Demo..."
 $miSubtaskDemoInit = Join-Path $ScriptDir "17-Multi-Instance-Subtask-Demo/00-init-kk.sql"
-if (Test-Path $miSubtaskDemoInit) {
-    if (-not (Exec-Sql -File $miSubtaskDemoInit -Desc "00-init-kk.sql")) { exit 1 }
-} else {
-    Write-Host "  SKIP: Multi-Instance Subtask Demo init script not found at $miSubtaskDemoInit" -ForegroundColor Yellow
-}
+if (-not (Test-Path $miSubtaskDemoInit)) { Write-Fail "Missing: 17-Multi-Instance-Subtask-Demo/00-init-kk.sql"; exit 1 }
+if (-not (Exec-Sql -File $miSubtaskDemoInit -Desc "00-init-kk.sql")) { exit 1 }
 
 Write-Step "Step 5e/6: Loading MCY Debit Card..."
 $mcyInit = Join-Path $ScriptDir "18-MCY/init.sql"
-if (Test-Path $mcyInit) {
-    if (-not (Exec-Sql -File $mcyInit -Desc "init.sql")) { exit 1 }
-} else {
-    Write-Host "  SKIP: MCY Debit Card init script not found at $mcyInit" -ForegroundColor Yellow
+if (-not (Test-Path $mcyInit)) { Write-Fail "Missing: 18-MCY/init.sql"; exit 1 }
+if (-not (Exec-Sql -File $mcyInit -Desc "init.sql")) { exit 1 }
+
+Write-Step "Step 5f/6: Running post-seed alignment scripts (90-post-seed/)..."
+$postSeedScripts = @(
+    "90-post-seed/00-align-id-sequences.sql"
+)
+foreach ($f in $postSeedScripts) {
+    $path = Join-Path $ScriptDir $f
+    if (Test-Path $path) {
+        if (-not (Exec-Sql -File $path -Desc (Split-Path $f -Leaf))) { exit 1 }
+    }
 }
 
 Write-Step "Step 6/6: Finished."

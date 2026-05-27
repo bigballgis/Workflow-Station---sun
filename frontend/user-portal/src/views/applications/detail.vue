@@ -205,7 +205,7 @@
                 :title="binding.tableName"
                 :columns="binding.columns"
                 :editable="false"
-                :assignee-field="hasAssignmentData(binding.data) ? 'assignee_user_id' : undefined"
+                :assignee-field="resolveBindingAssigneeField(binding)"
                 :show-task-status="shouldShowBindingTaskStatus(binding)"
                 :show-view-detail="shouldShowBindingDetailsModal(binding)"
                 :compact-lookup-cells="bindingCompactLookupCells(binding)"
@@ -297,7 +297,7 @@
                 :title="binding.tableName"
                 :columns="binding.columns"
                 :editable="false"
-                :assignee-field="hasAssignmentData(binding.data) ? 'assignee_user_id' : undefined"
+                :assignee-field="resolveBindingAssigneeField(binding)"
                 :show-task-status="shouldShowBindingTaskStatus(binding)"
                 :show-view-detail="shouldShowBindingDetailsModal(binding)"
                 :compact-lookup-cells="bindingCompactLookupCells(binding)"
@@ -464,6 +464,15 @@ import {
   isMiParticipantScopedSubTableBinding,
   filterRowsForMiParticipantSubTableBinding,
 } from '@/composables/tasks/shared'
+import {
+  resolveMiSubProcessScopeFromBpmn,
+  findBindingForMiSubTableName,
+  filterBindingsToMiParticipantRow,
+  resolveViewerParticipantRowIdFromCollectionBinding,
+  hasConfiguredPrimaryKeyFields,
+  describeSubTableBindingLabel,
+  type MiSubProcessScopeConfig,
+} from '@/composables/tasks/miSubProcessScope'
 import { USER_ID_KEY, USER_KEY } from '@/api/auth'
 import { clearBpmnParseCache, getCachedBpmnDocument } from '@/utils/bpmnParseCache'
 
@@ -522,6 +531,20 @@ const processFlows = ref<ProcessFlow[]>([])
 const currentNodeId = ref('')
 const completedNodeIds = ref<string[]>([])
 const bpmnXml = ref('')
+const activeMiSubProcessScope = ref<MiSubProcessScopeConfig | null>(null)
+const miMissingPrimaryKeyWarned = new Set<string>()
+
+function warnMiMissingPrimaryKey(binding: {
+  tableName?: string
+  physicalTableName?: string
+  bindingId?: number | string
+}) {
+  const label = describeSubTableBindingLabel(binding)
+  const key = label || 'unknown'
+  if (miMissingPrimaryKeyWarned.has(key)) return
+  miMissingPrimaryKeyWarned.add(key)
+  ElMessage.error(t('task.miPrimaryKeyNotConfigured', { table: label || key }))
+}
 /** Heavy BPMN node/flow parse is deferred so form + sub-tables can paint first. */
 const diagramReady = ref(false)
 let diagramParseScheduled = false
@@ -962,6 +985,7 @@ function alignMainSubTableBindingsOnly() {
 }
 
 function alignProcessSubTableBindingsBySharedTable() {
+  refreshActiveMiSubProcessScopeFromBpmn()
   const nodeBindings: SubTableBindingAlignable[] = Array.from(nodeFormMap.value.values()).flatMap(
     info => info.subTableBindings as SubTableBindingAlignable[]
   )
@@ -982,6 +1006,13 @@ function alignProcessSubTableBindingsBySharedTable() {
     ...Array.from(nodeFormMap.value.values()).flatMap(n => n.subTableBindings)
   ])
   resyncMiDashboardFieldsFromVariablesOnBindings(all)
+  filterRunningMiBindingsByProcessDesignScope(subTableBindings.value)
+  for (const prevForm of previousForms.value) {
+    filterRunningMiBindingsByProcessDesignScope(prevForm.subTableBindings as typeof subTableBindings.value)
+  }
+  for (const nodeForm of nodeFormMap.value.values()) {
+    filterRunningMiBindingsByProcessDesignScope(nodeForm.subTableBindings as typeof subTableBindings.value)
+  }
   applySharedAttachmentHydrationToAllBindings()
 }
 
@@ -1064,8 +1095,12 @@ function collectSubTableBindingMatchKeys(b: {
 
 const SUB_TABLE_MI_PLACEHOLDER_KEYS = new Set([
   'assignee_user_id',
+  'assignee_id',
   'assignee_display_name',
   'task_status',
+  'task_current_node',
+  'sub_task_status',
+  'sub_task_current_node',
   'task_id',
   'task_definition_key'
 ])
@@ -1297,10 +1332,69 @@ function hasTaskStatusData(rows: any[]): boolean {
 function isMultiInstanceStyleSubTableRow(row: any): boolean {
   if (!row || typeof row !== 'object') return false
   if (row.task_status !== undefined && row.task_status !== null) return true
+  if (row.sub_task_status !== undefined && row.sub_task_status !== null) return true
   if (row.task_id != null && String(row.task_id).trim() !== '') return true
   if (row.task_definition_key != null && String(row.task_definition_key).trim() !== '') return true
   if (row.assignee_user_id != null && String(row.assignee_user_id).trim() !== '') return true
+  if (row.assignee_id != null && String(row.assignee_id).trim() !== '') return true
   return false
+}
+
+function rowAssigneeUserId(row: any, assigneeField: string): string | null {
+  if (!row || typeof row !== 'object') return null
+  const raw = row[assigneeField]
+  if (raw == null || raw === '') return null
+  if (typeof raw === 'string' || typeof raw === 'number') {
+    const s = String(raw).trim()
+    return s.length > 0 ? s : null
+  }
+  if (typeof raw === 'object') {
+    const uid = (raw as { userId?: unknown; id?: unknown }).userId ?? (raw as { id?: unknown }).id
+    if (uid == null || uid === '') return null
+    const s = String(uid).trim()
+    return s.length > 0 ? s : null
+  }
+  return null
+}
+
+function refreshActiveMiSubProcessScopeFromBpmn() {
+  const xml = bpmnXml.value
+  if (!xml) {
+    activeMiSubProcessScope.value = null
+    return
+  }
+  activeMiSubProcessScope.value = resolveMiSubProcessScopeFromBpmn(xml, {
+    userTaskName: snapshotTaskName || processInfo.value.currentNode || null,
+  })
+}
+
+/**
+ * Running MI subprocess on My Request: scope to the viewer's participant row using
+ * Process Design subTableName + designer primary key (not hard-coded columns).
+ */
+function filterRunningMiBindingsByProcessDesignScope(bindings: typeof subTableBindings.value) {
+  if (snapshotTaskName || processInfo.value.status !== 'RUNNING') return
+  const scope = activeMiSubProcessScope.value
+  if (!scope?.subTableName) return
+  const viewerId = getPortalUserId()?.trim()
+  if (!viewerId) return
+
+  const collectionBinding = findBindingForMiSubTableName(bindings, scope.subTableName)
+  if (!collectionBinding) return
+
+  if (!hasConfiguredPrimaryKeyFields(collectionBinding.primaryKeyFields)) {
+    warnMiMissingPrimaryKey(collectionBinding)
+    return
+  }
+
+  const participantRowId = resolveViewerParticipantRowIdFromCollectionBinding(
+    scope,
+    collectionBinding,
+    viewerId,
+  )
+  if (participantRowId == null) return
+
+  filterBindingsToMiParticipantRow(bindings, scope, participantRowId)
 }
 
 /**
@@ -1884,17 +1978,22 @@ async function runApplicationDetailSecondary(ctx: ApplicationDetailSecondaryCtx)
     if (viewerId) {
       const filterByAssignee = (bindings: typeof subTableBindings.value) => {
         for (const binding of bindings) {
-          if (binding.data && binding.data.length > 0 && hasAssignmentData(binding.data)) {
-            const filtered = binding.data.filter(
-              (row: any) => row.assignee_user_id === viewerId && row.task_status === 'COMPLETED'
+          if (!binding.data || binding.data.length === 0) continue
+          const assigneeField = resolveAssigneeFieldForBinding(binding.columns, binding.tableName)
+          if (!assigneeField || !hasAssignmentData(binding.data, assigneeField)) continue
+          const filtered = binding.data.filter(
+            (row: any) =>
+              rowAssigneeUserId(row, assigneeField) === viewerId &&
+              String(row.task_status ?? row.sub_task_status ?? '').toUpperCase() === 'COMPLETED',
+          )
+          if (filtered.length > 0) {
+            binding.data = filtered
+          } else {
+            const byAssignee = binding.data.filter(
+              (row: any) => rowAssigneeUserId(row, assigneeField) === viewerId,
             )
-            if (filtered.length > 0) {
-              binding.data = filtered
-            } else {
-              const byAssignee = binding.data.filter((row: any) => row.assignee_user_id === viewerId)
-              if (byAssignee.length > 0) {
-                binding.data = byAssignee
-              }
+            if (byAssignee.length > 0) {
+              binding.data = byAssignee
             }
           }
         }
@@ -2262,6 +2361,7 @@ const loadFunctionUnitContent = async (processKey: string, prefetchedContent?: a
 
       currentFormInfo = parseBpmnXmlAndGetFormId(xml)
       bpmnXml.value = xml
+      refreshActiveMiSubProcessScopeFromBpmn()
     }
     
     if (content.forms?.length > 0) {      // Select the correct form based on the current node formId
@@ -4455,9 +4555,27 @@ const handleWithdraw = async () => {
   finally { withdrawing.value = false }
 }
 
-const hasAssignmentData = (rows: any[]): boolean => {
+const hasAssignmentData = (rows: any[], assigneeField?: string): boolean => {
   if (!Array.isArray(rows) || rows.length === 0) return false
-  return rows.some(r => r && (r.assignee_display_name || r.assignee_user_id))
+  if (assigneeField) {
+    return rows.some(r => r && rowAssigneeUserId(r, assigneeField) != null)
+  }
+  for (const field of ['assignee_user_id', 'assignee_id']) {
+    if (rows.some(r => r && rowAssigneeUserId(r, field) != null)) return true
+  }
+  return rows.some(r => r && r.assignee_display_name)
+}
+
+function resolveBindingAssigneeField(binding: {
+  columns?: Array<{ field?: string }>
+  tableName?: string
+  data?: any[]
+}): string | undefined {
+  const assigneeField = resolveAssigneeFieldForBinding(binding.columns, binding.tableName)
+  if (assigneeField && hasAssignmentData(binding.data || [], assigneeField)) {
+    return assigneeField
+  }
+  return undefined
 }
 
 onMounted(() => { loadProcessDetail() })

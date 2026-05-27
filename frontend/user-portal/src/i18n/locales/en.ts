@@ -257,6 +257,8 @@ export default {
     allParticipantsMustHaveAssignee: 'Assign a user to every sub-table row (use Assign) before completing.',
     addParticipantInfoForm: 'Add Participant Info Form',
     noFormBound: 'No Form Bound',
+    miPrimaryKeyNotConfigured:
+      'Multi-instance sub-table "{table}" has no primary key configured in Table Design. Mark a primary key column in the designer to isolate participant data.',
     userOptionFormat: '{name} ({username})',
   },
   process: {

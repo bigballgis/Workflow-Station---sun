@@ -205,15 +205,13 @@ management:
         live:
           include: ping
         ready:
-          include: db,redis,kafka
+          include: db,redis
   health:
     ping:
       enabled: true
     db:
       enabled: true
     redis:
-      enabled: true
-    kafka:
       enabled: true
 
 # OpenAPI Configuration
