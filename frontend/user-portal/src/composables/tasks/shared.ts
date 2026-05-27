@@ -780,6 +780,16 @@ function pickNonEmptyAttachmentFile(row: unknown): boolean {
   return true
 }
 
+/** Designer list columns are file-only (e.g. HMDC Attachment) — not {@link isSharedAttachmentFileBinding} (main_id). */
+export function isFileOnlySubTableBinding(binding: {
+  columns?: Array<{ field?: string }> | null
+}): boolean {
+  const fields = (binding.columns ?? [])
+    .map(c => String(c?.field ?? '').trim())
+    .filter(Boolean)
+  return fields.length > 0 && fields.every(f => f === 'file')
+}
+
 export function isSharedAttachmentFileBinding(binding: {
   bindingId?: number
   tableId?: number | null

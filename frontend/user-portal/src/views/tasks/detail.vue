@@ -3861,7 +3861,7 @@ const extractFieldsRecursive = (items: any[]): FormField[] => {
         _lookupDisplayFields: lookupCfg.displayFields || [],
         _lookupSelectedDisplayField: lookupCfg.selectedDisplayField || lookupCfg.displayField || '',
         _lookupFilterConditions: Array.isArray(lookupCfg.filterConditions) ? lookupCfg.filterConditions : [],
-        _lookupViewFields: resolvedViewFields,
+        _lookupViewFields: lookupCfg.showBackfillView === false ? [] : resolvedViewFields,
         _lookupShowBackfillView: lookupCfg.showBackfillView !== false
       }
       fields.push(field)

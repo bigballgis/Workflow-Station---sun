@@ -18,6 +18,7 @@ alwaysApply: true
 | Portal Display 模式 | `formRendererHelpers.ts` — `assigneeTodo` / `initiatorRequest` / `mergeSubTablePortalViewsForRuntime` |
 | 主表单渲染（Portal 侧） | `FormRenderer.vue` — 画布 `rule` + `subTableBindings` + `viewContext` |
 | Preview ↔ Portal merge 对齐 | `mergePortalViewsForPreview`（DW）与 `mergeSubTablePortalViewsForRuntime`（Portal）MUST 同一语义 |
+| **My Request × MI 子表数据** | `portal-mi-subtable-my-request.mdc` — 发起人全案 vs 办理人切片；file-only 附件禁止 global MI merge |
 
 ## 必须遵守
 

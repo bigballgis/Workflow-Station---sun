@@ -1,0 +1,69 @@
+---
+description: My Request / MI 子表数据规则 — 发起人全量 vs 办理人切片、file-only 附件禁止 global MI merge
+globs: frontend/user-portal/src/{views/applications,views/tasks,composables/tasks}/**/*
+alwaysApply: true
+---
+
+# Portal — My Request × MI 子表数据规则
+
+与 `portal-design-parity.mdc` **数据 parity** 配套：同一 `__subTables__` 在不同 **viewContext** 下 MUST 按下列语义 hydrate，不得混用 To Do 的 MI 切片逻辑。
+
+## 视图与受众（谁先决定能不能 filter）
+
+| 场景 | 识别 | 子表数据范围 |
+|---|---|---|
+| **发起人 My Request** | `viewerId === startUserId` 且非 Completed Tasks snapshot（`!snapshotTaskName`）→ `isInitiatorMyRequestView` | **全案快照**：MI collection（如 HMDC_Transaction）MUST 显示 **全部** 行，**禁止** `filterRunningMiBindingsByProcessDesignScope` |
+| **办理人待办（MI 内）** | `tasks/detail.vue`，当前用户为 assignee | **参与者切片**：BPMN `subTableName` + `assigneeField` + 设计师 PK → `filterBindingsToMiParticipantRow` |
+| **Completed Tasks snapshot** | `snapshotTaskName` 等 query | 按 assignee + 已完成状态过滤（独立路径，≠ 上两项） |
+
+```typescript
+// ✅ 发起人 My Request — 入口 guard
+function filterRunningMiBindingsByProcessDesignScope(bindings) {
+  if (isInitiatorMyRequestView.value) return  // 全案，不按 assignee 裁 transaction
+  // ...
+}
+```
+
+## 子表 binding 类型（决定 hydrate / resync 走哪条管道）
+
+改 `shared.ts`、`applications/detail.vue`、`tasks/detail.vue` 的 hydrate / resync / align 前，先归类 binding：
+
+| 类型 | 识别 | resync / merge 规则 |
+|---|---|---|
+| **MI collection** | BPMN `subTableName` 对应表；列含 assignee / task_status（`isMiDashboardSubTableBinding`） | 可 `mergeAllSubTableSlicesFromVariables`（MI overlay）；跨 form 同 `tableId` union merge（281→285） |
+| **Shared attachment** | `isSharedAttachmentFileBinding`（`main_id` FK 等） | 仅 `applySharedAttachmentFinalizeAndMaterialize`；勿走 per-binding numeric slice 拆分 |
+| **File-only 子表** | `isFileOnlySubTableBinding`（列 **仅** `file`，如 HMDC_Attachment；FK 可为 `row_id`） | **禁止** `mergeAllSubTableSlicesFromVariables` — 会把 transaction 行注入附件表 → **空 file 行**；只用 **本 binding slice** + `filterRowsForSharedProcessSubTableBinding` |
+| **MI participant-scoped 子表** | `isMiParticipantScopedSubTableBinding`（`id_idw` / `participant_id` FK 等） | 仅 own slice + `filterRowsForMiParticipantSubTableBinding` |
+
+```typescript
+// ✅ resyncMiDashboardFieldsFromVariablesOnBindings — file-only 分支（applications/detail.vue）
+if (isFileOnlySubTableBinding(b)) {
+  // 只用 bindingSaved，禁止 allSlicesMerged
+  b.data = dropSubsumedSubTableRows(
+    filterRowsForSharedProcessSubTableBinding(merged, b),
+  )
+  continue
+}
+```
+
+## MI 参与者过滤 — 子表附件
+
+`filterBindingsToMiParticipantRow` 裁剪 **办理人** 视图时：
+
+- Collection 行：按设计师 PK 留一条。
+- 子表 FK **等于** collection PK（如 `row_id`）且行 **仅有 file**：MUST 保留（case 级附件，无 `row_id` 字段）— 见 `rowHasAttachmentFile` / `miSubProcessScope.ts`。
+
+## 变更检查清单
+
+- [ ] 发起人 My Request 是否仍 **跳过** MI 参与者 filter？
+- [ ] File-only 子表 resync 是否 **未** 使用 `mergeAllSubTableSlicesFromVariables`？
+- [ ] 同 `tableId` 的 **transaction** binding union merge 是否未误伤 **attachment** binding？
+- [ ] `tasks/detail.vue` 与 `applications/detail.vue` 是否仍行为对齐（除「发起人全案 vs 办理人切片」差异）？
+- [ ] 回归：`mcyInitiatorMyRequest.test.ts`；MCY 手测：2 条 HMDC Transaction + 1 条 HMDC Attachment（有 PDF）。
+
+## 参考
+
+- 实现：`applications/detail.vue`（`isInitiatorMyRequestView`、`resyncMiDashboardFieldsFromVariablesOnBindings`）
+- 类型/helpers：`shared.ts`（`isFileOnlySubTableBinding`、`isSharedAttachmentFileBinding`）
+- MI 范围：`miSubProcessScope.ts`（`filterBindingsToMiParticipantRow`）
+- Issue：**#1414**（MCY Debit Card Transaction Investigation）

@@ -461,8 +461,10 @@ import {
   pullNestedRowsForBindingFromParentRows,
   applySharedAttachmentFinalizeAndMaterialize,
   isSharedAttachmentFileBinding,
+  isFileOnlySubTableBinding,
   isMiParticipantScopedSubTableBinding,
   filterRowsForMiParticipantSubTableBinding,
+  filterRowsForSharedProcessSubTableBinding,
 } from '@/composables/tasks/shared'
 import {
   resolveMiSubProcessScopeFromBpmn,
@@ -484,6 +486,8 @@ const processId = route.params.id as string
 const snapshotTime = route.query.snapshotTime as string | undefined
 // Snapshot task name from completed tasks entry, used to highlight that node as current
 const snapshotTaskName = route.query.snapshotTaskName as string | undefined
+/** True when the viewer is the process initiator on My Request (not Completed Tasks snapshot). */
+const isInitiatorMyRequestView = ref(false)
 const snapshotTaskId = route.query.snapshotTaskId as string | undefined
 const snapshotTaskDefinitionKey = route.query.snapshotTaskDefinitionKey as string | undefined
 
@@ -1057,6 +1061,29 @@ function resyncMiDashboardFieldsFromVariablesOnBindings(all: SubTableBindingAlig
       )
       continue
     }
+    // HMDC Attachment: file-only columns — global MI slice merge injects transaction rows as empty file rows.
+    if (isFileOnlySubTableBinding(b as { columns?: Array<{ field?: string }> | null })) {
+      const fromOwnSlice = bindingSaved ?? []
+      if (fromOwnSlice.length === 0 && !(Array.isArray(b.data) && b.data.length > 0)) continue
+      const merged = mergeSubTableRowsByRowId(
+        Array.isArray(b.data) ? b.data : [],
+        fromOwnSlice,
+        pk,
+      )
+      b.data = dropSubsumedSubTableRows(
+        filterRowsForSharedProcessSubTableBinding(
+          merged,
+          b as {
+            columns?: Array<{ field?: string }> | null
+            foreignKeyField?: string | null
+            tableName?: string
+            physicalTableName?: string
+            tableId?: number | null
+          },
+        ),
+      )
+      continue
+    }
     const fromVariables = useAllSlices
       ? mergeSubTableRowsByRowId(allSlicesMerged, bindingSaved ?? [], pk)
       : (bindingSaved ?? [])
@@ -1371,8 +1398,10 @@ function refreshActiveMiSubProcessScopeFromBpmn() {
 /**
  * Running MI subprocess on My Request: scope to the viewer's participant row using
  * Process Design subTableName + designer primary key (not hard-coded columns).
+ * Initiators see the full case (all MI transaction rows + case attachments), not one participant slice.
  */
 function filterRunningMiBindingsByProcessDesignScope(bindings: typeof subTableBindings.value) {
+  if (isInitiatorMyRequestView.value) return
   if (snapshotTaskName || processInfo.value.status !== 'RUNNING') return
   const scope = activeMiSubProcessScope.value
   if (!scope?.subTableName) return
@@ -2358,6 +2387,7 @@ const loadFunctionUnitContent = async (processKey: string, prefetchedContent?: a
         viewerId.trim() === initiatorId &&
         !snapshotTaskName &&
         !snapshotTime
+      isInitiatorMyRequestView.value = useInitiatorFormOnly
 
       currentFormInfo = parseBpmnXmlAndGetFormId(xml)
       bpmnXml.value = xml
@@ -2514,6 +2544,7 @@ const loadFunctionUnitContent = async (processKey: string, prefetchedContent?: a
       previousForms.value = []
       subTableBindings.value = []
       nodeFormMap.value = new Map()
+      isInitiatorMyRequestView.value = false
       selectedNodeId.value = null
     }
   } catch (error) {
@@ -3763,7 +3794,7 @@ const extractFieldsRecursive = (
         _lookupDisplayFields: lookupCfg.displayFields || [],
         _lookupSelectedDisplayField: lookupCfg.selectedDisplayField || lookupCfg.displayField || '',
         _lookupFilterConditions: Array.isArray(lookupCfg.filterConditions) ? lookupCfg.filterConditions : [],
-        _lookupViewFields: resolvedViewFields,
+        _lookupViewFields: lookupCfg.showBackfillView === false ? [] : resolvedViewFields,
         _lookupShowBackfillView: lookupCfg.showBackfillView !== false
       }
       fields.push(field)

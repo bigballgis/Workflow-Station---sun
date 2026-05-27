@@ -88,3 +88,28 @@
     唯一未认领的 numeric slice 273（HMDC Attachment）合并进 271，产生无 row_id 的 ghost 行。
     修复：sole-unclaimed 回退仅在 slice 的 relationTableId 与目标 binding 的 tableId 一致时合并；
     新增 HMDC 271+273 回归单测。路径：shared.ts mergeRowsFromSoleUnclaimedNumericSlice。
+- id: "1413"
+  status: fixed
+  fixed_at: "2026-05-27"
+  severity: major
+  category: bug
+  summary: "User Portal Lookup Backfill View=no 仍显示回填视图（Form Preview 已隐藏）"
+  detail: |
+    根因：FormRenderer.vue 对 lookup 走独立渲染路径，LookupViewDisplay 仅判断 lookupSelectedData，
+    未检查 _lookupShowBackfillView；FieldRenderer 已正确 honor showBackfillView。
+    修复：FormRenderer 四处 LookupViewDisplay 增加 lookupShowBackfillView 守卫；
+    tasks/detail、applications/detail、processes/start 在 showBackfillView=false 时清空 _lookupViewFields（与 DW resolveLookupPreviewConfig 对齐）。
+- id: "1414"
+  status: fixed
+  fixed_at: "2026-05-27"
+  severity: major
+  category: bug
+  summary: "MCY My Request Transaction Investigation 仅 1 条 HMDC Transaction、HMDC Attachment 空"
+  detail: |
+    根因：运行中 MI 子流程在 My Request 对发起人误用 filterRunningMiBindingsByProcessDesignScope
+    （按 assignee 只保留一条 transaction）；子表 FK=row_id 的 HMDC Attachment 行仅有 file 字段，
+    filterBindingsToMiParticipantRow 过滤后未保留 case 级附件行。
+    修复：发起人 My Request 跳过 MI 参与者过滤；MI 子表过滤保留 file-only 附件行；
+    resyncMiDashboardFieldsFromVariablesOnBindings 对 file-only 子表（HMDC Attachment）禁止
+    mergeAllSubTableSlicesFromVariables，避免 281 的 transaction 行注入为 2 条空 file 行；
+    新增 mcyInitiatorMyRequest.test.ts 回归。路径：applications/detail.vue、shared.ts、miSubProcessScope.ts。

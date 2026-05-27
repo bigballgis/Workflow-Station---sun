@@ -128,7 +128,7 @@
                                     @view-fields-loaded="(fields: any[]) => lookupLoadedViewFields[child.key] = fields"
                                   />
                                   <LookupViewDisplay
-                                    v-if="lookupSelectedData[child.key]"
+                                    v-if="lookupSelectedData[child.key] && lookupShowBackfillView(child)"
                                     :selected-data="lookupSelectedData[child.key]"
                                     :view-fields="(child as any)._lookupViewFields?.length ? (child as any)._lookupViewFields : (lookupLoadedViewFields[child.key] || [])"
                                   />
@@ -252,7 +252,7 @@
                           @view-fields-loaded="(fields: any[]) => lookupLoadedViewFields[field.key] = fields"
                         />
                         <LookupViewDisplay
-                          v-if="lookupSelectedData[field.key]"
+                          v-if="lookupSelectedData[field.key] && lookupShowBackfillView(field)"
                           :selected-data="lookupSelectedData[field.key]"
                           :view-fields="(field as any)._lookupViewFields?.length ? (field as any)._lookupViewFields : (lookupLoadedViewFields[field.key] || [])"
                         />
@@ -401,7 +401,7 @@
                                 @view-fields-loaded="(fields: any[]) => lookupLoadedViewFields[child.key] = fields"
                               />
                               <LookupViewDisplay
-                                v-if="lookupSelectedData[child.key]"
+                                v-if="lookupSelectedData[child.key] && lookupShowBackfillView(child)"
                                 :selected-data="lookupSelectedData[child.key]"
                                 :view-fields="(child as any)._lookupViewFields?.length ? (child as any)._lookupViewFields : (lookupLoadedViewFields[child.key] || [])"
                               />
@@ -525,7 +525,7 @@
                       @view-fields-loaded="(fields: any[]) => lookupLoadedViewFields[field.key] = fields"
                     />
                     <LookupViewDisplay
-                      v-if="lookupSelectedData[field.key]"
+                      v-if="lookupSelectedData[field.key] && lookupShowBackfillView(field)"
                       :selected-data="lookupSelectedData[field.key]"
                       :view-fields="(field as any)._lookupViewFields?.length ? (field as any)._lookupViewFields : (lookupLoadedViewFields[field.key] || [])"
                     />
@@ -1333,6 +1333,10 @@ function handleInlineFormUpdate(field: FormField, mergedRow: Record<string, any>
 // Lookup selected data state
 const lookupSelectedData = ref<Record<string, Record<string, any>>>({})
 const lookupLoadedViewFields = ref<Record<string, any[]>>({})
+/** Parity with Form Preview / FieldRenderer — honor lookupConfig.showBackfillView === false. */
+function lookupShowBackfillView(field: FormField): boolean {
+  return (field as any)._lookupShowBackfillView !== false
+}
 const handleLookupSelect = (fieldKey: string, row: Record<string, any>) => {
   lookupSelectedData.value[fieldKey] = row
 }

@@ -5,6 +5,17 @@
 
 import { getCachedBpmnDocument } from '@/utils/bpmnParseCache'
 
+function rowHasAttachmentFile(row: unknown): boolean {
+  if (!row || typeof row !== 'object') return false
+  const rec = row as Record<string, unknown>
+  const file = rec.file
+  if (file == null || file === '') return false
+  if (typeof file === 'string') return file.trim().length > 0
+  if (Array.isArray(file)) return file.length > 0
+  if (typeof file === 'object') return Object.keys(file as object).length > 0
+  return true
+}
+
 function normalizeSubTableNameLocal(name?: string): string {
   return String(name || '').trim().toLowerCase()
 }
@@ -492,7 +503,15 @@ export function filterBindingsToMiParticipantRow<T extends SubTableBindingLike &
       ) {
         return true
       }
-      return rowMatchesSubTablePrimaryKey(row, participantRowId, participantPk)
+      if (rowMatchesSubTablePrimaryKey(row, participantRowId, participantPk)) {
+        return true
+      }
+      // HMDC-style child tables (FK = parent PK e.g. row_id): case-level attachment rows often
+      // have file only — keep them visible for the active MI participant / initiator snapshot.
+      if (fkIsOwnPk && rowHasAttachmentFile(row)) {
+        return true
+      }
+      return false
     })
     if (filtered.length > 0) {
       binding.data = filtered as T['data']
