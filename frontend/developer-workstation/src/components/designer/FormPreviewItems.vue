@@ -5,7 +5,7 @@
   >
     <div
       v-if="item.kind === 'fields'"
-      class="form-preview-wrapper"
+      class="form-preview-wrapper form-readonly-surface"
     >
       <form-create
         v-if="item.rule.length"
@@ -141,7 +141,7 @@
         :view-fields="item.viewFields"
         :field-defs="item.fieldDefs"
         :show-backfill-view="item.showBackfillView !== false"
-        :readonly="isMyRequestsPreview"
+        :readonly="isMyRequestsPreview || item.readonly === true"
       />
     </div>
 
@@ -263,6 +263,8 @@ function updateTableRows(bindingId: number, rows: any[]) {
 </script>
 
 <style scoped lang="scss">
+@import '@/styles/form-readonly.scss';
+
 .form-preview-wrapper {
   :deep(.form-create) {
     width: 100%;

@@ -69,6 +69,25 @@ export interface FormField {
   /** Designer-driven portal display strategy; only present when type === 'subTable'. */
   portalViews?: SubTablePortalViews
   children?: FormField[] // set for layout containers such as card
+  /** Per-field read-only from designer rule props.readonly / disabled. */
+  readonly?: boolean
+}
+
+/** True when a form-create rule marks the field read-only (designer Props → readonly or disabled). */
+export function isFormCreateRuleReadonly(rule: unknown): boolean {
+  if (!rule || typeof rule !== 'object') return false
+  const r = rule as Record<string, unknown>
+  const props = (r.props as Record<string, unknown> | undefined) || {}
+  return (
+    r.disabled === true ||
+    r.readonly === true ||
+    props.disabled === true ||
+    props.readonly === true
+  )
+}
+
+export function isFormFieldReadonly(field: FormField, formReadonly = false): boolean {
+  return formReadonly || field.readonly === true
 }
 
 /**

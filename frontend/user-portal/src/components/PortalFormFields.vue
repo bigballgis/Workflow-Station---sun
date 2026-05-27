@@ -157,7 +157,7 @@ function onFieldUpdate(key: string, val: unknown) {
           :field="field"
           :model-value="model[field.key]"
           :form-data="model"
-          :readonly="readonly || !editable"
+          :readonly="readonly || field.readonly === true || !editable"
           @update:model-value="(val: unknown) => onFieldUpdate(field.key, val)"
         />
       </el-form-item>

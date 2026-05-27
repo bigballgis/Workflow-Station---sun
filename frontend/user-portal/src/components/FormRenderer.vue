@@ -2,6 +2,7 @@
   <div class="form-renderer">
     <el-form
       ref="formRef"
+      class="form-readonly-surface"
       :model="formData"
       :rules="formRules"
       :label-width="labelWidth"
@@ -122,7 +123,7 @@
                                     :filter-conditions="(child as any)._lookupFilterConditions || []"
                                     :view-fields="(child as any)._lookupViewFields || []"
                                     :placeholder="child.placeholder"
-                                    :readonly="effectiveReadonly"
+                                    :readonly="isFieldReadonly(child)"
                                     @select="(row: any) => handleLookupSelect(child.key, row)"
                                     @clear="() => handleLookupClear(child.key)"
                                     @view-fields-loaded="(fields: any[]) => lookupLoadedViewFields[child.key] = fields"
@@ -150,7 +151,7 @@
                                 :field="child"
                                 :model-value="formData[child.key]"
                                 :form-data="formData"
-                                :readonly="effectiveReadonly"
+                                :readonly="isFieldReadonly(child)"
                                 :disabled="engineFieldStates.get(child.key)?.disabled || false"
                                 :visible="engineVisibility.get(child.key) ?? true"
                                 :options="engineOptions.get(child.key)"
@@ -246,7 +247,7 @@
                           :filter-conditions="(field as any)._lookupFilterConditions || []"
                           :view-fields="(field as any)._lookupViewFields || []"
                           :placeholder="field.placeholder"
-                          :readonly="effectiveReadonly"
+                          :readonly="isFieldReadonly(field)"
                           @select="(row: any) => handleLookupSelect(field.key, row)"
                           @clear="() => handleLookupClear(field.key)"
                           @view-fields-loaded="(fields: any[]) => lookupLoadedViewFields[field.key] = fields"
@@ -274,7 +275,7 @@
                       :field="field"
                       :model-value="formData[field.key]"
                       :form-data="formData"
-                      :readonly="effectiveReadonly"
+                      :readonly="isFieldReadonly(field)"
                       :disabled="engineFieldStates.get(field.key)?.disabled || false"
                       :visible="engineVisibility.get(field.key) ?? true"
                       :options="engineOptions.get(field.key)"
@@ -395,7 +396,7 @@
                                 :filter-conditions="(child as any)._lookupFilterConditions || []"
                                 :view-fields="(child as any)._lookupViewFields || []"
                                 :placeholder="child.placeholder"
-                                :readonly="effectiveReadonly"
+                                :readonly="isFieldReadonly(child)"
                                 @select="(row: any) => handleLookupSelect(child.key, row)"
                                 @clear="() => handleLookupClear(child.key)"
                                 @view-fields-loaded="(fields: any[]) => lookupLoadedViewFields[child.key] = fields"
@@ -423,7 +424,7 @@
                             :field="child"
                             :model-value="formData[child.key]"
                             :form-data="formData"
-                            :readonly="effectiveReadonly"
+                            :readonly="isFieldReadonly(child)"
                             :disabled="engineFieldStates.get(child.key)?.disabled || false"
                             :visible="engineVisibility.get(child.key) ?? true"
                             :options="engineOptions.get(child.key)"
@@ -519,7 +520,7 @@
                       :filter-conditions="(field as any)._lookupFilterConditions || []"
                       :view-fields="(field as any)._lookupViewFields || []"
                       :placeholder="field.placeholder"
-                      :readonly="effectiveReadonly"
+                      :readonly="isFieldReadonly(field)"
                       @select="(row: any) => handleLookupSelect(field.key, row)"
                       @clear="() => handleLookupClear(field.key)"
                       @view-fields-loaded="(fields: any[]) => lookupLoadedViewFields[field.key] = fields"
@@ -547,7 +548,7 @@
                   :field="field"
                   :model-value="formData[field.key]"
                   :form-data="formData"
-                  :readonly="effectiveReadonly"
+                  :readonly="isFieldReadonly(field)"
                   :disabled="engineFieldStates.get(field.key)?.disabled || false"
                   :visible="engineVisibility.get(field.key) ?? true"
                   :options="engineOptions.get(field.key)"
@@ -592,6 +593,7 @@ import type {
 } from './formRendererHelpers'
 import {
   extractFieldsRecursive,
+  isFormFieldReadonly,
   mergeSubTablePortalViewsForRuntime,
   resolveSubTableDisplayMode,
   shouldSuppressStandaloneSubTableInInitiatorRequest,
@@ -730,6 +732,10 @@ provide('departmentTreeLoading', departmentTreeLoading)
 
 const hasTabs = computed(() => props.tabs && props.tabs.length > 0)
 const effectiveReadonly = computed(() => props.readonly || props.primaryReadOnly)
+
+function isFieldReadonly(field: FormField): boolean {
+  return isFormFieldReadonly(field, effectiveReadonly.value)
+}
 const activeTab = ref('')
 
 watch(
@@ -1804,6 +1810,8 @@ defineExpose({
 </script>
 
 <style scoped lang="scss">
+@import '@/styles/form-readonly.scss';
+
 .form-renderer {
   width: 100%;
 

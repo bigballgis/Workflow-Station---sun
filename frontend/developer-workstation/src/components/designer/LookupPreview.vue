@@ -28,10 +28,13 @@
             ><Close /></el-icon>
           </span>
         </div>
-        <span
+        <el-input
           v-else-if="readonly"
-          class="lookup-readonly-empty"
-        >-</span>
+          model-value=""
+          placeholder="-"
+          class="lookup-input"
+          disabled
+        />
         <!-- Search input (hidden when a value is selected) -->
         <el-input
           v-else
@@ -380,7 +383,21 @@ onBeforeUnmount(() => {
   position: relative;
 
   &.readonly {
-    cursor: default;
+    cursor: not-allowed;
+    pointer-events: none;
+
+    .lookup-selected-wrapper {
+      background: var(--el-disabled-bg-color, #f5f7fa);
+      border-color: var(--el-disabled-border-color, #e4e7ed);
+      cursor: not-allowed;
+    }
+
+    .lookup-input :deep(.el-input__wrapper) {
+      background-color: var(--el-disabled-bg-color, #f5f7fa);
+      box-shadow: 0 0 0 1px var(--el-disabled-border-color, #e4e7ed) inset;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
   }
 
   .lookup-input {

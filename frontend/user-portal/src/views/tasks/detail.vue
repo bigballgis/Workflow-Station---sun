@@ -432,7 +432,7 @@ import { processApi } from '@/api/process'
 import ProcessDiagram, { type ProcessNode, type ProcessFlow } from '@/components/ProcessDiagram.vue'
 import ProcessHistory, { type HistoryRecord } from '@/components/ProcessHistory.vue'
 import FormRenderer, { type FormField, type FormTab } from '@/components/FormRenderer.vue'
-import { normalizePortalViews, collectLeafFormFieldKeys } from '@/components/formRendererHelpers'
+import { normalizePortalViews, collectLeafFormFieldKeys, isFormCreateRuleReadonly } from '@/components/formRendererHelpers'
 import SubTableField from '@/components/SubTableField.vue'
 import N8nActionDialog from '@/components/N8nActionDialog.vue'
 import {
@@ -3462,7 +3462,7 @@ const deriveColumnsFromBinding = (binding: any, subForms?: Record<string, any>, 
 
       const required = r.validate?.some((v: any) => v.required) || false
       // form-create uses `disabled` to mark a field as read-only
-      const readonly = r.disabled === true || rProps.disabled === true
+      const readonly = isFormCreateRuleReadonly(r)
 
       return {
         field: r.field,
@@ -3864,6 +3864,9 @@ const extractFieldsRecursive = (items: any[]): FormField[] => {
         _lookupViewFields: lookupCfg.showBackfillView === false ? [] : resolvedViewFields,
         _lookupShowBackfillView: lookupCfg.showBackfillView !== false
       }
+      if (isFormCreateRuleReadonly(item)) {
+        field.readonly = true
+      }
       fields.push(field)
     } else if (FC_SKIP_TYPES.has(item.type)) {
       // Traverse children only (see block below); `continue` would drop all nested row fields.
@@ -3914,6 +3917,9 @@ const convertFormCreateRule = (rule: any): FormField | null => {
   }
   if (rule.type === 'userSelect' || rule.type === 'user') {
     field.type = 'user'
+  }
+  if (isFormCreateRuleReadonly(rule)) {
+    field.readonly = true
   }
   return field
 }

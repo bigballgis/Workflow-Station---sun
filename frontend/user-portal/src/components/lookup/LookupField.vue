@@ -2,6 +2,7 @@
   <div
     ref="wrapperRef"
     class="lookup-field"
+    :class="{ readonly }"
   >
     <!-- Selected value: input container with inner tag -->
     <div
@@ -25,11 +26,14 @@
       :placeholder="placeholder || 'Click to search'"
       @focus="handleFocus"
     />
-    <!-- Readonly empty state -->
-    <span
+    <!-- Readonly empty: keep disabled input chrome (border) like other fields -->
+    <el-input
       v-else
-      class="lookup-readonly-empty"
-    >-</span>
+      model-value=""
+      placeholder="-"
+      class="lookup-input"
+      disabled
+    />
 
     <div
       v-if="dropdownVisible"
@@ -339,6 +343,17 @@ defineExpose({ effectiveViewFields })
   width: 100%;
   position: relative;
 
+  &.readonly {
+    cursor: not-allowed;
+
+    .lookup-input :deep(.el-input__wrapper) {
+      background-color: var(--el-disabled-bg-color, #f5f7fa);
+      box-shadow: 0 0 0 1px var(--el-disabled-border-color, #e4e7ed) inset;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+  }
+
   .lookup-selected-wrapper {
     display: flex;
     align-items: center;
@@ -349,7 +364,10 @@ defineExpose({ effectiveViewFields })
     background: #fff;
 
     &.is-readonly {
-      background: #f5f7fa;
+      background: var(--el-disabled-bg-color, #f5f7fa);
+      border-color: var(--el-disabled-border-color, #e4e7ed);
+      cursor: not-allowed;
+      pointer-events: none;
     }
   }
 
@@ -387,6 +405,10 @@ defineExpose({ effectiveViewFields })
   .lookup-readonly-empty {
     color: #606266;
     line-height: 32px;
+  }
+
+  .lookup-input {
+    width: 100%;
   }
 
   .lookup-dropdown {

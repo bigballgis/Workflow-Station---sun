@@ -435,6 +435,7 @@ const dialogColumns = computed<DialogColumn[]>(() => {
       minWidth: col.minWidth,
       options: col.options,
       props: col.props,
+      readonly: (col as { readonly?: boolean }).readonly,
     }
   })
 })

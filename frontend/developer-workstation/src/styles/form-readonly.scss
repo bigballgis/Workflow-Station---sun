@@ -1,0 +1,279 @@
+/**
+
+ * Disabled / read-only form controls — Preview parity with User Portal FieldRenderer.
+
+ * form-create uses rule.disabled; native Element Plus disabled surfaces get gray fill + no focus.
+
+ */
+
+@mixin form-readonly-control-rules($selector-prefix: '') {
+
+  #{$selector-prefix}.el-input.is-disabled,
+
+  #{$selector-prefix}.el-textarea.is-disabled,
+
+  #{$selector-prefix}.el-input-number.is-disabled,
+
+  #{$selector-prefix}.el-select .is-disabled,
+
+  #{$selector-prefix}.el-date-editor.is-disabled,
+
+  #{$selector-prefix}.el-time-editor.is-disabled,
+
+  #{$selector-prefix}.el-cascader.is-disabled {
+
+    cursor: not-allowed;
+
+  }
+
+
+
+  #{$selector-prefix}.el-input.is-disabled .el-input__wrapper,
+
+  #{$selector-prefix}.el-textarea.is-disabled .el-textarea__inner,
+
+  #{$selector-prefix}.el-input-number.is-disabled .el-input-number__decrease,
+
+  #{$selector-prefix}.el-input-number.is-disabled .el-input-number__increase,
+
+  #{$selector-prefix}.el-input-number.is-disabled .el-input__wrapper,
+
+  #{$selector-prefix}.el-select .el-select__wrapper.is-disabled,
+
+  #{$selector-prefix}.el-date-editor.is-disabled .el-input__wrapper,
+
+  #{$selector-prefix}.el-cascader.is-disabled .el-input__wrapper {
+
+    background-color: var(--el-disabled-bg-color, #f5f7fa);
+
+    box-shadow: 0 0 0 1px var(--el-disabled-border-color, #e4e7ed) inset;
+
+    cursor: not-allowed;
+
+  }
+
+
+
+  #{$selector-prefix}.el-input.is-disabled .el-input__inner,
+
+  #{$selector-prefix}.el-input.is-disabled .el-input__wrapper,
+
+  #{$selector-prefix}.el-textarea.is-disabled .el-textarea__inner,
+
+  #{$selector-prefix}.el-input-number.is-disabled,
+
+  #{$selector-prefix}.el-select .is-disabled,
+
+  #{$selector-prefix}.el-radio.is-disabled,
+
+  #{$selector-prefix}.el-checkbox.is-disabled,
+
+  #{$selector-prefix}.el-switch.is-disabled,
+
+  #{$selector-prefix}.el-rate.is-disabled,
+
+  #{$selector-prefix}.el-slider.is-disabled {
+
+    pointer-events: none;
+
+  }
+
+
+
+  #{$selector-prefix}.el-radio-group.is-disabled,
+
+  #{$selector-prefix}.el-checkbox-group.is-disabled {
+
+    pointer-events: none;
+
+    cursor: not-allowed;
+
+  }
+
+
+
+  /* Fallback when form-create still passes native readonly (e.g. legacy rules). */
+
+  #{$selector-prefix}.el-input__wrapper:has(.el-input__inner[readonly]),
+
+  #{$selector-prefix}.el-textarea__inner[readonly] {
+
+    background-color: var(--el-disabled-bg-color, #f5f7fa);
+
+    box-shadow: 0 0 0 1px var(--el-disabled-border-color, #e4e7ed) inset;
+
+    cursor: not-allowed;
+
+  }
+
+
+
+  #{$selector-prefix}.el-input__inner[readonly],
+
+  #{$selector-prefix}.el-textarea__inner[readonly] {
+
+    pointer-events: none;
+
+    cursor: not-allowed;
+
+  }
+
+}
+
+
+
+@mixin form-readonly-surface-scoped {
+
+  :deep(.el-input.is-disabled),
+
+  :deep(.el-textarea.is-disabled),
+
+  :deep(.el-input-number.is-disabled),
+
+  :deep(.el-select .is-disabled),
+
+  :deep(.el-date-editor.is-disabled),
+
+  :deep(.el-time-editor.is-disabled),
+
+  :deep(.el-cascader.is-disabled) {
+
+    cursor: not-allowed;
+
+  }
+
+
+
+  :deep(.el-input.is-disabled .el-input__wrapper),
+
+  :deep(.el-textarea.is-disabled .el-textarea__inner),
+
+  :deep(.el-input-number.is-disabled .el-input-number__decrease),
+
+  :deep(.el-input-number.is-disabled .el-input-number__increase),
+
+  :deep(.el-input-number.is-disabled .el-input__wrapper),
+
+  :deep(.el-select .el-select__wrapper.is-disabled),
+
+  :deep(.el-date-editor.is-disabled .el-input__wrapper),
+
+  :deep(.el-cascader.is-disabled .el-input__wrapper) {
+
+    background-color: var(--el-disabled-bg-color, #f5f7fa);
+
+    box-shadow: 0 0 0 1px var(--el-disabled-border-color, #e4e7ed) inset;
+
+    cursor: not-allowed;
+
+  }
+
+
+
+  :deep(.el-input.is-disabled .el-input__inner),
+
+  :deep(.el-input.is-disabled .el-input__wrapper),
+
+  :deep(.el-textarea.is-disabled .el-textarea__inner),
+
+  :deep(.el-input-number.is-disabled),
+
+  :deep(.el-select .is-disabled),
+
+  :deep(.el-radio.is-disabled),
+
+  :deep(.el-checkbox.is-disabled),
+
+  :deep(.el-switch.is-disabled),
+
+  :deep(.el-rate.is-disabled),
+
+  :deep(.el-slider.is-disabled) {
+
+    pointer-events: none;
+
+  }
+
+
+
+  :deep(.el-radio-group.is-disabled),
+
+  :deep(.el-checkbox-group.is-disabled) {
+
+    pointer-events: none;
+
+    cursor: not-allowed;
+
+  }
+
+
+
+  :deep(.el-input__wrapper:has(.el-input__inner[readonly])),
+
+  :deep(.el-textarea__inner[readonly]) {
+
+    background-color: var(--el-disabled-bg-color, #f5f7fa);
+
+    box-shadow: 0 0 0 1px var(--el-disabled-border-color, #e4e7ed) inset;
+
+    cursor: not-allowed;
+
+  }
+
+
+
+  :deep(.el-input__inner[readonly]),
+
+  :deep(.el-textarea__inner[readonly]) {
+
+    pointer-events: none;
+
+    cursor: not-allowed;
+
+  }
+
+
+
+  :deep(.lookup-field.readonly .el-input.is-disabled .el-input__wrapper),
+
+  :deep(.lookup-field.readonly .lookup-selected-wrapper) {
+
+    background-color: var(--el-disabled-bg-color, #f5f7fa);
+
+    border-color: var(--el-disabled-border-color, #e4e7ed);
+
+    cursor: not-allowed;
+
+    pointer-events: none;
+
+  }
+
+
+
+  :deep(.lookup-field.readonly .el-input.is-disabled .el-input__wrapper) {
+
+    box-shadow: 0 0 0 1px var(--el-disabled-border-color, #e4e7ed) inset;
+
+  }
+
+}
+
+
+
+.form-readonly-surface {
+
+  @include form-readonly-surface-scoped;
+
+}
+
+
+
+/* fc-designer built-in preview (Form mode / Component / HTML tabs). */
+
+._fd-preview-dialog {
+
+  @include form-readonly-control-rules(' ');
+
+}
+
+

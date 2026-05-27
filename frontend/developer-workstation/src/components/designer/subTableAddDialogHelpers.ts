@@ -37,6 +37,7 @@ export interface DialogColumn {
   label: string
   type?: ColumnType
   required?: boolean
+  readonly?: boolean
   placeholder?: string
   minWidth?: number
   options?: Array<{ label: string; value: string | number }>
@@ -60,6 +61,10 @@ export interface DialogColumn {
     checkStrictly?: boolean
     [key: string]: unknown
   }
+}
+
+export function isColReadonly(col: Pick<DialogColumn, 'readonly'>): boolean {
+  return col.readonly === true
 }
 
 export function buildInitialRow(columns: DialogColumn[]): Record<string, unknown> {

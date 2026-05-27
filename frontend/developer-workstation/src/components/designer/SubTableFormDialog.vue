@@ -8,7 +8,7 @@
   >
     <div
       v-if="formRule && formRule.length"
-      class="sub-table-form-preview"
+      class="sub-table-form-preview form-readonly-surface"
     >
       <form-create
         v-if="formCreateMounted"
@@ -57,6 +57,7 @@ import { useI18n } from 'vue-i18n'
 import { Loading } from '@element-plus/icons-vue'
 import SubTableNestedModalShell from './SubTableNestedModalShell.vue'
 import { cloneFormRules, collectUploadRulesFromTree, injectPreviewUploadHandlers } from '@/utils/formDesigner'
+import { mapFormCreateRulesReadonlyDeep } from '@/utils/formCreateRuleUtils'
 import {
   alignUploadFieldsToColumns,
   hydrateUploadFieldsForFormCreate,
@@ -145,7 +146,7 @@ watch(
     }
     formCreateMounted.value = false
     uploadSession.value = {}
-    formRule.value = cloneFormRules(rule || [])
+    formRule.value = mapFormCreateRulesReadonlyDeep(cloneFormRules(rule || [])) as any[]
     injectPreviewUploadHandlers(formRule.value, formData, uploadSession)
     if (mode === 'edit' && data) {
       formData.value = { ...(data as Record<string, any>) }
@@ -191,6 +192,8 @@ function handleSave() {
 </script>
 
 <style scoped>
+@import '@/styles/form-readonly.scss';
+
 .sub-table-form-preview {
   min-height: 200px;
   max-height: 60vh;

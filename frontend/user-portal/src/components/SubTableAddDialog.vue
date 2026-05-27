@@ -23,6 +23,7 @@
     <el-form
       :key="dialogKey"
       ref="formRef"
+      class="form-readonly-surface"
       :model="formData"
       :rules="formRules"
       label-width="120px"
@@ -35,20 +36,16 @@
         :prop="col.field"
         :error="columnErrors[col.field]?.join('; ')"
       >
-        <!-- text (readonly) -->
-        <span v-if="col.readonly && (!col.type || col.type === 'text') && !isUploadColumn(col, formData[col.field])" class="ro-value">{{ resolveDisplayValue(col, formData[col.field]) }}</span>
         <!-- text -->
         <el-input
-          v-if="!col.readonly && (!col.type || col.type === 'text') && !isUploadColumn(col, formData[col.field])"
+          v-if="(!col.type || col.type === 'text') && !isUploadColumn(col, formData[col.field])"
           v-model="formData[col.field]"
           :placeholder="col.placeholder || col.label"
           :maxlength="col.props?.maxlength"
-          :disabled="calculatedColumns.has(col.field)"
-          clearable
+          :disabled="isColDisabled(col)"
+          :clearable="!isColDisabled(col)"
         />
 
-        <!-- textarea (readonly) -->
-        <span v-if="col.readonly && col.type === 'textarea'" class="ro-value" style="white-space: pre-wrap">{{ resolveDisplayValue(col, formData[col.field]) }}</span>
         <!-- textarea -->
         <el-input
           v-else-if="col.type === 'textarea'"
@@ -57,31 +54,29 @@
           :rows="col.props?.rows || 3"
           :placeholder="col.placeholder || col.label"
           :maxlength="col.props?.maxlength"
+          :disabled="isColDisabled(col)"
         />
 
-        <!-- number (readonly) -->
-        <span v-if="col.readonly && col.type === 'number'" class="ro-value">{{ formData[col.field] != null ? formData[col.field] : '-' }}</span>
         <!-- number -->
         <el-input-number
-          v-if="!col.readonly && col.type === 'number'"
+          v-else-if="col.type === 'number'"
           v-model="formData[col.field]"
           :precision="col.props?.precision"
           :min="col.props?.min"
           :max="col.props?.max"
           :placeholder="col.placeholder || col.label"
-          :disabled="calculatedColumns.has(col.field)"
+          :disabled="isColDisabled(col)"
           style="width: 100%"
         />
 
-        <!-- select (readonly) -->
-        <span v-if="col.readonly && col.type === 'select'" class="ro-value">{{ resolveDisplayValue(col, formData[col.field]) }}</span>
         <!-- select -->
         <el-select
-          v-if="!col.readonly && col.type === 'select'"
+          v-else-if="col.type === 'select'"
           v-model="formData[col.field]"
           :placeholder="col.placeholder || col.label"
           :multiple="col.props?.multiple"
-          clearable
+          :clearable="!isColDisabled(col)"
+          :disabled="isColDisabled(col)"
           :teleported="true"
           style="width: 100%"
         >
@@ -93,12 +88,11 @@
           />
         </el-select>
 
-        <!-- radio (readonly) -->
-        <span v-if="col.readonly && col.type === 'radio'" class="ro-value">{{ resolveDisplayValue(col, formData[col.field]) }}</span>
         <!-- radio -->
         <el-radio-group
-          v-if="!col.readonly && col.type === 'radio'"
+          v-else-if="col.type === 'radio'"
           v-model="formData[col.field]"
+          :disabled="isColDisabled(col)"
         >
           <el-radio
             v-for="opt in (col.props?.options ?? col.options ?? [])"
@@ -109,12 +103,11 @@
           </el-radio>
         </el-radio-group>
 
-        <!-- checkbox (readonly) -->
-        <span v-if="col.readonly && col.type === 'checkbox'" class="ro-value">{{ resolveDisplayValue(col, formData[col.field]) }}</span>
         <!-- checkbox -->
         <el-checkbox-group
-          v-if="!col.readonly && col.type === 'checkbox'"
+          v-else-if="col.type === 'checkbox'"
           v-model="formData[col.field]"
+          :disabled="isColDisabled(col)"
         >
           <el-checkbox
             v-for="opt in (col.props?.options ?? col.options ?? [])"
@@ -125,104 +118,100 @@
           </el-checkbox>
         </el-checkbox-group>
 
-        <!-- password (readonly) -->
-        <span v-if="col.readonly && col.type === 'password'" class="ro-value">{{ resolveDisplayValue(col, formData[col.field]) }}</span>
         <!-- password -->
         <el-input
-          v-if="!col.readonly && col.type === 'password'"
+          v-else-if="col.type === 'password'"
           v-model="formData[col.field]"
           type="password"
           show-password
           :placeholder="col.placeholder || col.label"
-          clearable
+          :disabled="isColDisabled(col)"
+          :clearable="!isColDisabled(col)"
         />
 
-        <!-- timerange (readonly) -->
-        <span v-if="col.readonly && col.type === 'timerange'" class="ro-value">{{ resolveDisplayValue(col, formData[col.field]) }}</span>
         <!-- timerange -->
         <el-time-picker
-          v-if="!col.readonly && col.type === 'timerange'"
+          v-else-if="col.type === 'timerange'"
           v-model="formData[col.field]"
           is-range
           value-format="HH:mm:ss"
           :start-placeholder="col.props?.startPlaceholder || t('subTable.startTime')"
           :end-placeholder="col.props?.endPlaceholder || t('subTable.endTime')"
+          :disabled="isColDisabled(col)"
           :teleported="true"
           popper-class="sub-table-date-popper"
           style="width: 100%"
         />
 
-        <!-- treeselect (readonly) -->
-        <span v-if="col.readonly && col.type === 'treeselect'" class="ro-value">{{ resolveDisplayValue(col, formData[col.field]) }}</span>
         <!-- treeselect -->
         <el-tree-select
-          v-if="!col.readonly && col.type === 'treeselect'"
+          v-else-if="col.type === 'treeselect'"
           v-model="formData[col.field]"
           :data="col.props?.treeData || []"
           :multiple="col.props?.multiple"
           :check-strictly="col.props?.checkStrictly !== false"
           :placeholder="col.placeholder || col.label"
-          clearable
+          :clearable="!isColDisabled(col)"
+          :disabled="isColDisabled(col)"
           :teleported="true"
           style="width: 100%"
         />
 
-        <!-- tree (readonly) -->
-        <span v-if="col.readonly && col.type === 'tree'" class="ro-value">{{ resolveDisplayValue(col, formData[col.field]) }}</span>
-        <!-- tree (el-tree with checkbox, uses id/label node format) -->
+        <!-- tree -->
         <el-tree
-          v-if="!col.readonly && col.type === 'tree'"
+          v-else-if="col.type === 'tree'"
           :data="col.props?.treeData || []"
           :props="col.props?.labelProps || { label: 'label', children: 'children' }"
           :node-key="col.props?.nodeKey || 'id'"
-          :show-checkbox="col.props?.showCheckbox !== false"
-          @check="(node: any, state: any) => { formData[col.field] = state.checkedKeys }"
+          :show-checkbox="col.props?.showCheckbox !== false && !isColDisabled(col)"
+          :class="{ 'tree-readonly': isColDisabled(col) }"
+          @check="(node: any, state: any) => { if (!isColDisabled(col)) formData[col.field] = state.checkedKeys }"
         />
 
-        <!-- switch (readonly) -->
-        <span v-if="col.readonly && col.type === 'switch'" class="ro-value">{{ formData[col.field] ? '✓' : '✗' }}</span>
         <!-- switch -->
         <el-switch
-          v-if="!col.readonly && col.type === 'switch'"
+          v-else-if="col.type === 'switch'"
           v-model="formData[col.field]"
+          :disabled="isColDisabled(col)"
         />
 
-        <!-- date (readonly) -->
-        <span v-if="col.readonly && col.type === 'date'" class="ro-value">{{ formData[col.field] || '-' }}</span>
         <!-- date -->
         <el-date-picker
-          v-if="!col.readonly && col.type === 'date'"
+          v-else-if="col.type === 'date'"
           v-model="formData[col.field]"
           type="date"
           value-format="YYYY-MM-DD"
           :placeholder="col.placeholder || col.label"
+          :disabled="isColDisabled(col)"
           :teleported="true"
           popper-class="sub-table-date-popper"
           style="width: 100%"
         />
 
-        <!-- datetime (readonly) -->
-        <span v-if="col.readonly && col.type === 'datetime'" class="ro-value">{{ formData[col.field] || '-' }}</span>
         <!-- datetime -->
         <el-date-picker
-          v-if="!col.readonly && col.type === 'datetime'"
+          v-else-if="col.type === 'datetime'"
           v-model="formData[col.field]"
           type="datetime"
           value-format="YYYY-MM-DD HH:mm:ss"
           :placeholder="col.placeholder || col.label"
+          :disabled="isColDisabled(col)"
           :teleported="true"
           popper-class="sub-table-date-popper"
           style="width: 100%"
         />
 
         <!-- upload (readonly) -->
-        <span v-if="col.readonly && isUploadColumn(col, formData[col.field])" class="ro-value">
+        <div
+          v-else-if="isUploadColumn(col, formData[col.field]) && isColDisabled(col)"
+          class="ro-value"
+        >
           <a v-if="formData[col.field]" :href="formData[col.field]" target="_blank" class="upload-download-link">{{ getFilenameFromUrl(formData[col.field], uploadNames[col.field]) }}</a>
           <span v-else>-</span>
-        </span>
+        </div>
         <!-- upload -->
         <div
-          v-if="!col.readonly && isUploadColumn(col, formData[col.field])"
+          v-else-if="isUploadColumn(col, formData[col.field])"
           style="display: flex; flex-direction: column; gap: 4px;"
         >
           <el-upload
@@ -250,44 +239,44 @@
           </el-tag>
         </div>
 
-        <!-- colorPicker (readonly) -->
-        <span v-if="col.readonly && col.type === 'colorPicker'" class="ro-value"><span v-if="formData[col.field]" class="color-swatch-ro" :style="{ backgroundColor: formData[col.field] }" /> <span v-else>-</span></span>
         <!-- colorPicker -->
         <el-color-picker
-          v-if="!col.readonly && col.type === 'colorPicker'"
+          v-else-if="col.type === 'colorPicker'"
           v-model="formData[col.field]"
           :show-alpha="col.props?.showAlpha || false"
+          :disabled="isColDisabled(col)"
           popper-class="sub-table-color-popper"
         />
 
-        <!-- rate (readonly) -->
-        <span v-if="col.readonly && col.type === 'rate'" class="ro-value">{{ resolveDisplayValue(col, formData[col.field]) }}</span>
         <!-- rate -->
         <el-rate
-          v-if="!col.readonly && col.type === 'rate'"
+          v-else-if="col.type === 'rate'"
           v-model="formData[col.field]"
           :max="col.props?.max || 5"
           :allow-half="col.props?.allowHalf || false"
+          :disabled="isColDisabled(col)"
         />
 
-        <!-- slider (readonly) -->
-        <span v-if="col.readonly && col.type === 'slider'" class="ro-value">{{ resolveDisplayValue(col, formData[col.field]) }}</span>
         <!-- slider -->
         <el-slider
-          v-if="!col.readonly && col.type === 'slider'"
+          v-else-if="col.type === 'slider'"
           v-model="formData[col.field]"
           :min="col.props?.min ?? 0"
           :max="col.props?.max ?? 100"
           :step="col.props?.step || 1"
+          :disabled="isColDisabled(col)"
           style="width: 100%"
         />
 
         <!-- editor (readonly) -->
-        <div v-if="col.readonly && col.type === 'editor'" class="editor-readonly-ro" v-html="sanitizeHtml(formData[col.field] || '')" />
-        <span v-else-if="col.readonly && col.type === 'editor'" class="ro-value">-</span>
-        <!-- editor (rich text — wangeditor, consistent with FieldRenderer) -->
         <div
-          v-if="!col.readonly && col.type === 'editor'"
+          v-else-if="col.type === 'editor' && isColDisabled(col)"
+          class="editor-readonly-ro"
+          v-html="sanitizeHtml(formData[col.field] || '')"
+        />
+        <!-- editor -->
+        <div
+          v-else-if="col.type === 'editor'"
           class="sub-table-editor-wrapper"
         >
           <Toolbar
@@ -307,11 +296,19 @@
         </div>
 
         <!-- signature (readonly) -->
-        <img v-if="col.readonly && col.type === 'signature' && formData[col.field]" :src="formData[col.field]" class="signature-preview-ro" alt="Signature" />
-        <span v-else-if="col.readonly && col.type === 'signature'" class="ro-value">-</span>
-        <!-- signature (base64 image URL input) -->
+        <img
+          v-else-if="col.type === 'signature' && isColDisabled(col) && formData[col.field]"
+          :src="formData[col.field]"
+          class="signature-preview-ro"
+          alt="Signature"
+        >
+        <span
+          v-else-if="col.type === 'signature' && isColDisabled(col)"
+          class="ro-value"
+        >-</span>
+        <!-- signature -->
         <div
-          v-if="!col.readonly && col.type === 'signature'"
+          v-else-if="col.type === 'signature'"
           style="width: 100%;"
         >
           <canvas
@@ -335,37 +332,33 @@
           </div>
         </div>
 
-        <!-- transfer (readonly) -->
-        <span v-if="col.readonly && col.type === 'transfer'" class="ro-value">{{ resolveDisplayValue(col, formData[col.field]) }}</span>
         <!-- transfer -->
         <el-transfer
-          v-if="!col.readonly && col.type === 'transfer'"
+          v-else-if="col.type === 'transfer'"
           v-model="formData[col.field]"
           :data="(col.props?.options ?? col.options ?? []).map((o: any) => ({ key: o.value, label: o.label }))"
           :titles="[col.props?.leftTitle || t('subTable.transferSource'), col.props?.rightTitle || t('subTable.transferTarget')]"
-          filterable
+          :filterable="!isColDisabled(col)"
+          :disabled="isColDisabled(col)"
         />
 
-        <!-- cascader (readonly) -->
-        <span v-if="col.readonly && col.type === 'cascader'" class="ro-value">{{ resolveDisplayValue(col, formData[col.field]) }}</span>
         <!-- cascader -->
         <el-cascader
-          v-if="!col.readonly && col.type === 'cascader'"
+          v-else-if="col.type === 'cascader'"
           v-model="formData[col.field]"
           :options="col.props?.options ?? col.options ?? []"
           :props="col.props?.cascaderProps"
           :placeholder="col.placeholder || col.label"
-          clearable
+          :clearable="!isColDisabled(col)"
+          :disabled="isColDisabled(col)"
           :teleported="true"
           popper-class="sub-table-date-popper"
           style="width: 100%"
         />
 
-        <!-- lookup (readonly) -->
-        <span v-if="col.readonly && col.type === 'lookup'" class="ro-value">{{ resolveDisplayValue(col, formData[col.field]) }}</span>
-        <!-- lookup (+ backfill view, same pattern as FormRenderer) -->
+        <!-- lookup -->
         <div
-          v-if="!col.readonly && col.type === 'lookup'"
+          v-else-if="col.type === 'lookup'"
           class="lookup-field-wrapper"
         >
           <LookupField
@@ -379,6 +372,7 @@
             :lookup-config="col.props?.lookupConfig"
             :view-fields="col.props?.viewFields || []"
             :placeholder="col.placeholder || col.label"
+            :readonly="isColDisabled(col)"
             @select="(row: Record<string, any>) => onLookupSelect(col.field, row)"
             @view-fields-loaded="(fields: any[]) => onLookupViewFieldsLoaded(col.field, fields)"
           />
@@ -389,18 +383,17 @@
           />
         </div>
 
-        <!-- user (readonly) -->
-        <span v-if="col.readonly && col.type === 'user'" class="ro-value">{{ resolveDisplayValue(col, formData[col.field]) }}</span>
-        <!-- user — remote search select (consistent with FieldRenderer) -->
+        <!-- user -->
         <el-select
-          v-if="!col.readonly && col.type === 'user'"
+          v-else-if="col.type === 'user'"
           v-model="formData[col.field]"
           :placeholder="col.placeholder || t('subTable.selectUser')"
           filterable
           remote
           :remote-method="(query: string) => handleUserSearch(query, col.field)"
           :loading="userSearchLoading[col.field]"
-          clearable
+          :clearable="!isColDisabled(col)"
+          :disabled="isColDisabled(col)"
           :teleported="true"
           style="width: 100%"
         >
@@ -412,31 +405,29 @@
           />
         </el-select>
 
-        <!-- department (readonly) -->
-        <span v-if="col.readonly && col.type === 'department'" class="ro-value">{{ resolveDisplayValue(col, formData[col.field]) }}</span>
-        <!-- department — tree select (consistent with FieldRenderer) -->
+        <!-- department -->
         <el-tree-select
-          v-if="!col.readonly && col.type === 'department'"
+          v-else-if="col.type === 'department'"
           v-model="formData[col.field]"
           :data="departmentTreeData"
           :props="({ label: 'name', value: 'id', children: 'children' } as any)"
           :placeholder="col.placeholder || t('subTable.selectDepartment')"
           :loading="departmentLoading"
           check-strictly
-          clearable
+          :clearable="!isColDisabled(col)"
+          :disabled="isColDisabled(col)"
           filterable
           :teleported="true"
           style="width: 100%"
         />
 
-        <!-- fallback (readonly) — only for types NOT handled above -->
-        <span v-if="col.readonly && col.type && !HANDLED_TYPES.has(col.type)" class="ro-value">{{ formData[col.field] || '-' }}</span>
-        <!-- fallback — only for types NOT handled above -->
+        <!-- fallback -->
         <el-input
-          v-if="!col.readonly && col.type && !HANDLED_TYPES.has(col.type)"
+          v-else-if="col.type && !HANDLED_TYPES.has(col.type)"
           v-model="formData[col.field]"
           :placeholder="col.placeholder || col.label"
-          clearable
+          :disabled="isColDisabled(col)"
+          :clearable="!isColDisabled(col)"
         />
       </el-form-item>
     </el-form>
@@ -705,6 +696,10 @@ const calculatedColumns = computed(() => {
   return new Set(props.rowFormulas.map(f => f.targetColumn))
 })
 
+function isColDisabled(col: DialogColumn): boolean {
+  return col.readonly === true || calculatedColumns.value.has(col.field)
+}
+
 // Watch dependent column values and compute target columns
 watch(
   () => {
@@ -866,6 +861,8 @@ function clearUpload(col: DialogColumn) {
 </script>
 
 <style>
+@import '@/styles/form-readonly.scss';
+
 /* 遮罩经 Teleport 挂 body；z-index 2009 低于 dialog(2010)，picker 用 popper-class 抬到 2050 */
 .sub-table-backdrop {
   position: fixed;
@@ -910,15 +907,25 @@ function clearUpload(col: DialogColumn) {
 .ro-value {
   display: flex;
   align-items: center;
+  width: 100%;
+  box-sizing: border-box;
   min-height: 32px;
   padding: 0 11px;
-  color: #606266;
+  color: var(--el-disabled-text-color, #a8abb2);
   font-size: 14px;
   line-height: 1.5;
   word-break: break-word;
-  background: #f5f7fa;
+  background: var(--el-disabled-bg-color, #f5f7fa);
   border-radius: 4px;
-  border: 1px solid #e4e7ed;
+  border: 1px solid var(--el-disabled-border-color, #e4e7ed);
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.tree-readonly {
+  opacity: 0.7;
+  pointer-events: none;
+  cursor: not-allowed;
 }
 
 .color-swatch-ro {

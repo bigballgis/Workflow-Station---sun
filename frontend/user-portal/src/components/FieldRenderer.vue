@@ -2,7 +2,7 @@
   <!-- 占满表单项内容区，否则 el-select 等 width:100% 会相对收缩父级计算，出现仅显示箭头 -->
   <div
     v-show="visible"
-    class="field-renderer-root"
+    class="field-renderer-root form-readonly-surface"
   >
     <!-- text / input -->
     <template v-if="field.type === 'text' || field.type === 'input'">
@@ -993,6 +993,8 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped lang="scss">
+@import '@/styles/form-readonly.scss';
+
 .field-renderer-root {
   width: 100%;
   min-width: 0;

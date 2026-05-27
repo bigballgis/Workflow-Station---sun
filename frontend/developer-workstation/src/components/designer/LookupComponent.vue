@@ -11,6 +11,7 @@
       :view-fields="previewConfig.viewFields"
       :field-defs="previewConfig.fieldDefs"
       :show-backfill-view="previewConfig.showBackfillView"
+      :readonly="isReadonly"
     />
   </div>
 </template>
@@ -19,11 +20,14 @@
 import { computed } from 'vue'
 import LookupPreview from './LookupPreview.vue'
 import { lookupStore } from './lookupStore'
+import { isFormCreateRuleReadonly } from '@/utils/formCreateRuleUtils'
 
 const props = defineProps<{
   modelValue?: any
   placeholder?: string
   lookupConfig?: string
+  disabled?: boolean
+  formCreateInject?: { rule?: Record<string, unknown> }
 }>()
 
 const emit = defineEmits<{
@@ -34,6 +38,10 @@ const lookupValue = computed({
   get: () => props.modelValue,
   set: (value) => emit('update:modelValue', value)
 })
+
+const isReadonly = computed(
+  () => props.disabled === true || isFormCreateRuleReadonly(props.formCreateInject?.rule),
+)
 
 function parseLookupConfig(raw?: string): Record<string, any> {
   if (!raw) return {}

@@ -131,10 +131,13 @@
                         <span class="lookup-selected-text">{{ lookupTagDisplayText(col, scope.row[col.field]) }}</span>
                       </span>
                     </div>
-                    <span
+                    <el-input
                       v-else
-                      class="lookup-readonly-empty"
-                    >-</span>
+                      model-value=""
+                      placeholder="-"
+                      class="lookup-input"
+                      disabled
+                    />
                   </div>
                 </div>
                 <div
@@ -3110,7 +3113,21 @@ watch(() => props.taskId, () => {
     position: relative;
 
     &.readonly {
-      cursor: default;
+      cursor: not-allowed;
+
+      .lookup-selected-wrapper {
+        background: var(--el-disabled-bg-color, #f5f7fa);
+        border-color: var(--el-disabled-border-color, #e4e7ed);
+        cursor: not-allowed;
+        pointer-events: none;
+      }
+
+      .lookup-input :deep(.el-input__wrapper) {
+        background-color: var(--el-disabled-bg-color, #f5f7fa);
+        box-shadow: 0 0 0 1px var(--el-disabled-border-color, #e4e7ed) inset;
+        cursor: not-allowed;
+        pointer-events: none;
+      }
     }
 
     .lookup-selected-wrapper {
@@ -3146,6 +3163,10 @@ watch(() => props.taskId, () => {
   .lookup-readonly-empty {
     color: #909399;
     line-height: 32px;
+  }
+
+  .lookup-input {
+    width: 100%;
   }
 
   .lookup-view-display {

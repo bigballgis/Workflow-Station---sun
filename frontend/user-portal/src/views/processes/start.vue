@@ -280,7 +280,7 @@ import { processApi } from '@/api/process'
 import ProcessDiagram, { type ProcessNode, type ProcessFlow } from '@/components/ProcessDiagram.vue'
 import ProcessHistory, { type HistoryRecord } from '@/components/ProcessHistory.vue'
 import FormRenderer, { type FormField, type FormTab } from '@/components/FormRenderer.vue'
-import { normalizePortalViews } from '@/components/formRendererHelpers'
+import { normalizePortalViews, isFormCreateRuleReadonly } from '@/components/formRendererHelpers'
 import N8nActionDialog from '@/components/N8nActionDialog.vue'
 import type { ActionDefinition } from '@/components/N8nActionDialog.vue'
 import { applyAutoFill } from '@/utils/n8nAutoFillEngine'
@@ -1087,6 +1087,9 @@ const extractFieldsRecursive = (items: any[]): FormField[] => {
         _lookupViewFields: lookupCfg.showBackfillView === false ? [] : resolvedViewFields,
         _lookupShowBackfillView: lookupCfg.showBackfillView !== false
       }
+      if (isFormCreateRuleReadonly(item)) {
+        field.readonly = true
+      }
       fields.push(field)
     } else if (FC_SKIP_TYPES.has(item.type)) {
       // Traverse children only; `continue` would drop nested sub-table row fields.
@@ -1219,6 +1222,10 @@ const convertFormCreateRule = (rule: any): FormField | null => {
   if (rule.type === 'userSelect' || rule.type === 'user') {
     field.type = 'user'
   }
+
+  if (isFormCreateRuleReadonly(rule)) {
+    field.readonly = true
+  }
   
   // 调试输出
   console.log('Converting rule:', rule.type, '->', field.type, rule)
@@ -1339,7 +1346,7 @@ const deriveColumnsFromBinding = (
         if (options) passProps.options = options
 
         const required = r.validate?.some((v: any) => v.required) || false
-        const readonly = r.disabled === true || rProps.disabled === true
+        const readonly = isFormCreateRuleReadonly(r)
 
         return {
           field: r.field,

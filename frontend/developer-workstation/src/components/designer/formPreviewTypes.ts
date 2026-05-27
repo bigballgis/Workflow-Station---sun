@@ -171,5 +171,5 @@ export type FormPreviewItem =
   | { kind: 'fields'; rule: any[]; modelKey: string }
   | { kind: 'subTable'; binding: PreviewSubTableBinding }
   | { kind: 'relationTable'; tableName: string; fields: Array<{ label: string; value: string }> }
-  | { kind: 'lookup'; label: string; placeholder: string; searchFields: string[]; displayFields: string[]; selectedDisplayField?: string; filterConditions?: any[]; viewFields: any[]; fieldDefs: any[]; showBackfillView?: boolean; bindingId?: number }
+  | { kind: 'lookup'; label: string; placeholder: string; searchFields: string[]; displayFields: string[]; selectedDisplayField?: string; filterConditions?: any[]; viewFields: any[]; fieldDefs: any[]; showBackfillView?: boolean; bindingId?: number; readonly?: boolean }
   | { kind: 'card'; title: string; items: FormPreviewItem[]; modelKey: string }

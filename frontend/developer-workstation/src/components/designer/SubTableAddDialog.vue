@@ -8,8 +8,8 @@
   >
     <el-form
       ref="formRef"
+      class="form-readonly-surface"
       :model="formData"
-      :rules="formRules"
       label-width="auto"
       label-position="left"
     >
@@ -25,7 +25,8 @@
           v-model="formData[col.field]"
           :placeholder="col.placeholder || col.label"
           :maxlength="col.props?.maxlength"
-          clearable
+          :disabled="isColReadonly(col)"
+          :clearable="!isColReadonly(col)"
         />
 
         <!-- textarea -->
@@ -36,6 +37,7 @@
           :rows="col.props?.rows || 3"
           :placeholder="col.placeholder || col.label"
           :maxlength="col.props?.maxlength"
+          :disabled="isColReadonly(col)"
         />
 
         <!-- number -->
@@ -46,6 +48,7 @@
           :min="col.props?.min"
           :max="col.props?.max"
           :placeholder="col.placeholder || col.label"
+          :disabled="isColReadonly(col)"
           style="width: 100%"
         />
 
@@ -55,7 +58,8 @@
           v-model="formData[col.field]"
           :placeholder="col.placeholder || col.label"
           :multiple="col.props?.multiple"
-          clearable
+          :clearable="!isColReadonly(col)"
+          :disabled="isColReadonly(col)"
           style="width: 100%"
         >
           <el-option
@@ -70,6 +74,7 @@
         <el-radio-group
           v-else-if="col.type === 'radio'"
           v-model="formData[col.field]"
+          :disabled="isColReadonly(col)"
         >
           <el-radio
             v-for="opt in (col.props?.options ?? col.options ?? [])"
@@ -84,6 +89,7 @@
         <el-checkbox-group
           v-else-if="col.type === 'checkbox'"
           v-model="formData[col.field]"
+          :disabled="isColReadonly(col)"
         >
           <el-checkbox
             v-for="opt in (col.props?.options ?? col.options ?? [])"
@@ -101,7 +107,8 @@
           type="password"
           show-password
           :placeholder="col.placeholder || col.label"
-          clearable
+          :disabled="isColReadonly(col)"
+          :clearable="!isColReadonly(col)"
         />
 
         <!-- timerange -->
@@ -112,6 +119,7 @@
           value-format="HH:mm:ss"
           :start-placeholder="col.props?.startPlaceholder || 'Start time'"
           :end-placeholder="col.props?.endPlaceholder || 'End time'"
+          :disabled="isColReadonly(col)"
           style="width: 100%"
         />
 
@@ -123,7 +131,8 @@
           :multiple="col.props?.multiple"
           :check-strictly="col.props?.checkStrictly !== false"
           :placeholder="col.placeholder || col.label"
-          clearable
+          :clearable="!isColReadonly(col)"
+          :disabled="isColReadonly(col)"
           style="width: 100%"
         />
 
@@ -131,6 +140,7 @@
         <el-switch
           v-else-if="col.type === 'switch'"
           v-model="formData[col.field]"
+          :disabled="isColReadonly(col)"
         />
 
         <!-- date -->
@@ -140,6 +150,7 @@
           type="date"
           value-format="YYYY-MM-DD"
           :placeholder="col.placeholder || col.label"
+          :disabled="isColReadonly(col)"
           style="width: 100%"
         />
 
@@ -150,6 +161,7 @@
           type="datetime"
           value-format="YYYY-MM-DD HH:mm:ss"
           :placeholder="col.placeholder || col.label"
+          :disabled="isColReadonly(col)"
           style="width: 100%"
         />
 
@@ -198,6 +210,7 @@
           v-else-if="col.type === 'colorPicker'"
           v-model="formData[col.field]"
           :show-alpha="col.props?.showAlpha || false"
+          :disabled="isColReadonly(col)"
           popper-class="sub-table-color-popper"
         />
 
@@ -207,6 +220,7 @@
           v-model="formData[col.field]"
           :max="col.props?.max || 5"
           :allow-half="col.props?.allowHalf || false"
+          :disabled="isColReadonly(col)"
         />
 
         <!-- slider -->
@@ -216,6 +230,7 @@
           :min="col.props?.min ?? 0"
           :max="col.props?.max ?? 100"
           :step="col.props?.step || 1"
+          :disabled="isColReadonly(col)"
           style="width: 100%"
         />
 
@@ -258,7 +273,8 @@
           v-model="formData[col.field]"
           :data="(col.props?.options ?? col.options ?? []).map((o: any) => ({ key: o.value, label: o.label }))"
           :titles="[col.props?.leftTitle || 'Source', col.props?.rightTitle || 'Target']"
-          filterable
+          :filterable="!isColReadonly(col)"
+          :disabled="isColReadonly(col)"
         />
 
         <!-- cascader -->
@@ -268,16 +284,18 @@
           :options="col.props?.options ?? col.options ?? []"
           :props="col.props?.cascaderProps"
           :placeholder="col.placeholder || col.label"
-          clearable
+          :clearable="!isColReadonly(col)"
+          :disabled="isColReadonly(col)"
           style="width: 100%"
         />
 
-        <!-- user / department — rendered as plain input (placeholder) -->
+        <!-- user / department -->
         <el-input
           v-else-if="col.type === 'user' || col.type === 'department'"
           v-model="formData[col.field]"
           :placeholder="col.placeholder || (col.type === 'user' ? 'Select user' : 'Select department')"
-          clearable
+          :disabled="isColReadonly(col)"
+          :clearable="!isColReadonly(col)"
         />
 
         <!-- fallback -->
@@ -285,7 +303,8 @@
           v-else
           v-model="formData[col.field]"
           :placeholder="col.placeholder || col.label"
-          clearable
+          :disabled="isColReadonly(col)"
+          :clearable="!isColReadonly(col)"
         />
       </el-form-item>
     </el-form>
@@ -309,7 +328,7 @@ import { ref, watch, computed } from 'vue'
 import { Upload } from '@element-plus/icons-vue'
 import type { FormInstance } from 'element-plus'
 import { ElMessage } from 'element-plus'
-import { buildInitialRow, buildRules } from './subTableAddDialogHelpers'
+import { buildInitialRow, buildRules, isColReadonly } from './subTableAddDialogHelpers'
 import type { DialogColumn } from './subTableAddDialogHelpers'
 import SubTableNestedModalShell from './SubTableNestedModalShell.vue'
 import { getFilenameFromUrl, extractUploadUrlFromResponse, normalizeUploadFieldsInRow } from './uploadFieldUtils'
@@ -447,6 +466,8 @@ function clearUpload(col: DialogColumn) {
 </script>
 
 <style scoped>
+@import '@/styles/form-readonly.scss';
+
 :deep(.el-form-item__label) {
   white-space: nowrap;
   overflow: hidden;

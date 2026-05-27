@@ -595,6 +595,11 @@ import api from '@/api'
 import { BUILT_IN_TEMPLATES, type FormTemplate } from './formTemplates'
 import { subTableViewApi, type SubTableFieldDTO, type SubTableViewConfig } from '@/api/subTableView'
 import fcDesignerEnLocale from '@form-create/designer/locale/en.js'
+import {
+  isFormCreateRuleReadonly,
+  mapFormCreateRulesReadonlyDeep,
+  stripFormCreateRulesDisabledDeep,
+} from '@/utils/formCreateRuleUtils'
 
 const { t } = useI18n()
 
@@ -681,7 +686,7 @@ provide(PREVIEW_SUBTABLE_DIALOG_KEY, {
     previewRowDialog.initialData = payload.initialData
       ? { ...payload.initialData }
       : undefined
-    previewRowDialog.formRule = cloneFormRules(payload.formRule || [])
+    previewRowDialog.formRule = mapFormCreateRulesReadonlyDeep(cloneFormRules(payload.formRule || [])) as any[]
     previewRowDialog.formOption = payload.formOption
       ? JSON.parse(JSON.stringify(payload.formOption))
       : {}
@@ -1440,6 +1445,19 @@ const designerConfig = computed(() => ({
   showDevice: true,
   showSave: false, // Use custom save button
   fieldReadonly: false,
+  hiddenItemConfig: {
+    default: ['disabled'],
+  },
+  componentRule: {
+    default: {
+      append: true,
+      rule(rule: { type?: string }) {
+        const builtInReadonly = new Set(['input', 'textarea', 'password', 'timePicker', 'datePicker', 'lookup'])
+        if (builtInReadonly.has(String(rule.type ?? ''))) return []
+        return [{ type: 'switch', field: 'readonly', title: 'Readonly' }]
+      },
+    },
+  },
 }))
 
 // Default form options — label left-aligned; locale + language so fcUpload `t('clickToUpload')` is English
@@ -1556,11 +1574,13 @@ function deriveColumnsFromBinding(binding: any, subForms?: Record<string, any>) 
         passProps.showBackfillView = lookupPreviewConfig.showBackfillView
       }
       if (options) passProps.options = options
+      const readonly = isFormCreateRuleReadonly(r)
       return {
         field: r.field,
         label: r.title || r.field,
         type,
         required: r.validate?.some((v: any) => v.required) || false,
+        ...(readonly ? { readonly: true } : {}),
         ...(options ? { options } : {}),
         ...(Object.keys(passProps).length > 0 ? { props: passProps } : {}),
       }
@@ -1606,7 +1626,8 @@ function makeLookupPreviewItem(ruleItem: any, config: any) {
     viewFields: previewConfig.viewFields,
     fieldDefs: previewConfig.fieldDefs,
     showBackfillView: previewConfig.showBackfillView,
-    bindingId: previewConfig.bindingId
+    bindingId: previewConfig.bindingId,
+    readonly: isFormCreateRuleReadonly(ruleItem),
   }
 }
 
@@ -1747,6 +1768,7 @@ function toSubTablePreviewColumns(bindingId: number, rule: any[], config: any) {
         label: column.comment || column.columnLabel || fieldRule?.title || column.fieldName,
         type: colType,
         minWidth: colType === 'upload' ? 180 : 100,
+        ...(fieldRule && isFormCreateRuleReadonly(fieldRule) ? { readonly: true } : {}),
         ...(uploadProps ? { props: uploadProps } : {}),
       }
     })
@@ -2512,9 +2534,11 @@ async function handleSelectForm(row: FormDefinition) {
     setTimeout(() => {
       if (!designerRef.value) return
       try {
-        const rules = cloneFormRules(
-          effectiveMain.rule && effectiveMain.rule.length ? effectiveMain.rule : []
-        )
+        const rules = stripFormCreateRulesDisabledDeep(
+          cloneFormRules(
+            effectiveMain.rule && effectiveMain.rule.length ? effectiveMain.rule : []
+          ) as unknown[]
+        ) as ReturnType<typeof cloneFormRules>
         injectUploadButtonLabels(rules, t('form.clickToUpload'))
         designerRef.value.setRule(rules)
         designerRef.value.setOption(
@@ -2550,8 +2574,10 @@ function loadSubDesigners(row: FormDefinition) {
         if (subRef) {
           const subConfig = subForms[binding.bindingId] || {}
           try {
-            const rules = cloneFormRules(subConfig.rule && subConfig.rule.length ? subConfig.rule : [])
-          injectUploadButtonLabels(rules, t('form.clickToUpload'))
+            const rules = stripFormCreateRulesDisabledDeep(
+              cloneFormRules(subConfig.rule && subConfig.rule.length ? subConfig.rule : []) as unknown[]
+            ) as ReturnType<typeof cloneFormRules>
+            injectUploadButtonLabels(rules, t('form.clickToUpload'))
             subRef.setRule(rules)
             subRef.setOption(
               mergeLoadedFormOptions(
@@ -2606,7 +2632,9 @@ function handleTabChange(tabName: TabPaneName) {
         const cached = subFormCache.value[bindingId]
         const subConfig = cached || subForms[bindingId] || {}
         try {
-          const rules = cloneFormRules(subConfig.rule && subConfig.rule.length ? subConfig.rule : [])
+          const rules = stripFormCreateRulesDisabledDeep(
+            cloneFormRules(subConfig.rule && subConfig.rule.length ? subConfig.rule : []) as unknown[]
+          ) as ReturnType<typeof cloneFormRules>
           injectUploadButtonLabels(rules, t('form.clickToUpload'))
           subRef.setRule(rules)
           subRef.setOption(
@@ -2835,7 +2863,7 @@ async function handleSaveForm(isManual = false) {
   }
 
   try {
-    const rule = designerRef.value.getRule()
+    const rule = stripFormCreateRulesDisabledDeep(designerRef.value.getRule() || []) as any[]
     const options = designerRef.value.getOption()
 
     const subTableRules = collectSubTableRules(rule)
@@ -2893,7 +2921,7 @@ async function handleSaveForm(isManual = false) {
       if (subRef) {
         // Tab is currently active and mounted
         try {
-          const liveRule = subRef.getRule() || []
+          const liveRule = stripFormCreateRulesDisabledDeep(subRef.getRule() || []) as any[]
           const liveOptions = subRef.getOption() || {}
           subForms[binding.bindingId] = { rule: liveRule, options: liveOptions }
           // Also update cache
@@ -2901,11 +2929,20 @@ async function handleSaveForm(isManual = false) {
         } catch {}
       } else if (subFormCache.value[binding.bindingId]) {
         // Tab was visited but is now unmounted — use cache
-        subForms[binding.bindingId] = subFormCache.value[binding.bindingId]
+        const cached = subFormCache.value[binding.bindingId]
+        subForms[binding.bindingId] = {
+          rule: stripFormCreateRulesDisabledDeep(cached.rule || []) as any[],
+          options: cached.options,
+        }
       } else {
         // Tab never visited — preserve previously saved data
         const existing = (selectedForm.value!.configJson?.subForms || {})[binding.bindingId]
-        if (existing) subForms[binding.bindingId] = existing
+        if (existing) {
+          subForms[binding.bindingId] = {
+            rule: stripFormCreateRulesDisabledDeep(existing.rule || []) as any[],
+            options: existing.options,
+          }
+        }
       }
     })
 
@@ -3090,6 +3127,7 @@ function handlePreview() {
       rule = subFormCache.value[bindingId]?.rule || subForms[bindingId]?.rule || []
       option = subFormCache.value[bindingId]?.options || subForms[bindingId]?.options || {}
     }
+    rule = mapFormCreateRulesReadonlyDeep(rule) as any[]
     const columns = toSubTablePreviewColumns(bindingId, rule, config)
     previewTableRows.value[bindingId] = []
     bindingMap.set(bindingId, {
@@ -3148,6 +3186,8 @@ function handlePreview() {
     }
     return r
   })
+
+  rawRule = mapFormCreateRulesReadonlyDeep(rawRule) as any[]
 
   // form-create proprietary types that should not be rendered in preview
   const FC_SKIP_PREVIEW = new Set(['subForm', 'tableForm', 'tableFormColumn', 'group', 'el-row', 'el-col'])

@@ -14,6 +14,7 @@ import App from './App.vue'
 import router from './router'
 import i18n from './i18n'
 import './styles/index.scss'
+import './styles/form-readonly.scss'
 import SubTablePlaceholderWidget from './components/designer/SubTablePlaceholderWidget.vue'
 import SubTableBindingSelect from './components/designer/SubTableBindingSelect.vue'
 import SubTablePortalViewsEditor from './components/designer/SubTablePortalViewsEditor.vue'
@@ -22,6 +23,8 @@ import LinkFormBindingSelect from './components/designer/LinkFormBindingSelect.v
 import { FcEditor, FcTransfer, FcCascader, FcSlider } from './components/designer/fc-custom-fields'
 import LookupComponent from './components/designer/LookupComponent.vue'
 import LookupBindingSelect from './components/designer/LookupBindingSelect.vue'
+import { registerFormCreateReadonlyParser } from './utils/registerFormCreateReadonlyParser'
+import formCreateFactory from '@form-create/element-ui'
 
 // Force set HTML lang attribute to English
 document.documentElement.lang = 'en'
@@ -41,6 +44,10 @@ app.use(i18n)
 FcDesigner.useLocale(enLocale)
 app.use(FcDesigner)
 app.use(FcDesigner.formCreate)
+const formCreateWithParser =
+  (formCreateFactory as { default?: { parser?: (name: string, config: unknown) => void } }).default ??
+  formCreateFactory
+registerFormCreateReadonlyParser(formCreateWithParser as { parser: (name: string, config: unknown) => void })
 
 // Register SubTableBindingSelect into both designerForm (props panel) and formCreate (canvas)
 // FcDesigner.component() calls addComponent() which registers to both instances
@@ -352,6 +359,7 @@ FcDesigner.addDragRule({
   props() {
     return [
       { type: 'input', field: 'placeholder', title: 'Placeholder' },
+      { type: 'switch', field: 'readonly', title: 'Readonly' },
       { type: 'LookupBindingSelect', field: 'lookupConfig', title: 'Lookup Config', props: {} }
     ]
   }
