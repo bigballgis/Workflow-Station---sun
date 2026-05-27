@@ -24,8 +24,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 @Tag(name = "Approvals", description = "Permission request approval operations")
 public class ApprovalController {
-    
-    // TODO: Inject ApproverService from admin-center via REST client
+
     private final AdminCenterClient adminCenterClient;
     
     @GetMapping("/pending")
@@ -33,10 +32,7 @@ public class ApprovalController {
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getPendingApprovals(
             @CurrentUserId String userId) {
         log.info("Getting pending approvals for approver: {}", userId);
-        
-        // TODO: Call admin-center API to get pending requests for this approver
-        // GET /api/v1/admin/permission-requests?approverId={userId}&status=PENDING
-        
+
         return adminCenterClient.getPendingApprovals(userId)
                 .<ResponseEntity<ApiResponse<List<Map<String, Object>>>>>map(data -> ResponseEntity.ok(ApiResponse.success(data)))
                 .orElse(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
@@ -52,10 +48,7 @@ public class ApprovalController {
         log.info("Approver {} approving request: {}", userId, requestId);
         
         String comment = (String) request.get("comment");
-        
-        // TODO: Call admin-center API to approve request
-        // POST /api/v1/admin/permission-requests/{requestId}/approve
-        
+
         return adminCenterClient.approveRequest(requestId, userId, comment)
                 .<ResponseEntity<ApiResponse<Map<String, Object>>>>map(data -> ResponseEntity.ok(ApiResponse.success(data)))
                 .orElse(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
@@ -74,10 +67,7 @@ public class ApprovalController {
         if (comment == null || comment.trim().isEmpty()) {
             return ResponseEntity.badRequest().body(ApiResponse.error("400", "Comment is required when rejecting a request"));
         }
-        
-        // TODO: Call admin-center API to reject request
-        // POST /api/v1/admin/permission-requests/{requestId}/reject
-        
+
         return adminCenterClient.rejectRequest(requestId, userId, comment)
                 .<ResponseEntity<ApiResponse<Map<String, Object>>>>map(data -> ResponseEntity.ok(ApiResponse.success(data)))
                 .orElse(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
@@ -89,10 +79,7 @@ public class ApprovalController {
     public ResponseEntity<ApiResponse<Map<String, Object>>> isApprover(
             @CurrentUserId String userId) {
         log.info("Checking if user {} is an approver", userId);
-        
-        // TODO: Call admin-center API to check if user is any approver
-        // GET /api/v1/admin/approvers/check?userId={userId}
-        
+
         return adminCenterClient.checkIsApprover(userId)
                 .<ResponseEntity<ApiResponse<Map<String, Object>>>>map(data -> ResponseEntity.ok(ApiResponse.success(data)))
                 .orElse(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
@@ -105,10 +92,7 @@ public class ApprovalController {
             @CurrentUserId String userId,
             @RequestParam(required = false) String status) {
         log.info("Getting approval history for approver: {}, status: {}", userId, status);
-        
-        // TODO: Call admin-center API to get approval history
-        // GET /api/v1/admin/permission-requests?approverId={userId}&status={status}
-        
+
         return adminCenterClient.getApprovalHistory(userId, status)
                 .<ResponseEntity<ApiResponse<List<Map<String, Object>>>>>map(data -> ResponseEntity.ok(ApiResponse.success(data)))
                 .orElse(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)

@@ -203,8 +203,7 @@ public class VirtualGroupTaskServiceImpl implements VirtualGroupTaskService {
      * 实际实现时需要与工作流引擎集成
      */
     private List<GroupTaskInfo> getTasksAssignedToGroup(String groupId) {
-        // TODO: 与工作流引擎集成，获取分配给该组的任务
-        // 这里返回空列表，实际实现时需要调用工作流引擎API
+        // 未集成工作流引擎时返回空列表
         return new ArrayList<>();
     }
     
@@ -213,7 +212,6 @@ public class VirtualGroupTaskServiceImpl implements VirtualGroupTaskService {
      * 实际实现时需要与工作流引擎集成
      */
     private void claimTaskInWorkflowEngine(String taskId, String userId) {
-        // TODO: 与工作流引擎集成，将任务分配给用户
         log.info("Claiming task {} for user {} in workflow engine", taskId, userId);
     }
     
@@ -222,7 +220,6 @@ public class VirtualGroupTaskServiceImpl implements VirtualGroupTaskService {
      * 实际实现时需要与工作流引擎集成
      */
     private void delegateTaskInWorkflowEngine(String taskId, String fromUserId, String toUserId) {
-        // TODO: 与工作流引擎集成，将任务委托给目标用户
         log.info("Delegating task {} from {} to {} in workflow engine", taskId, fromUserId, toUserId);
     }
     
@@ -231,7 +228,6 @@ public class VirtualGroupTaskServiceImpl implements VirtualGroupTaskService {
      * 实际实现时需要与工作流引擎集成
      */
     private boolean isTaskAssignedToUser(String taskId, String userId) {
-        // TODO: 与工作流引擎集成
         return false;
     }
     
@@ -240,7 +236,6 @@ public class VirtualGroupTaskServiceImpl implements VirtualGroupTaskService {
      * 实际实现时需要与工作流引擎集成
      */
     private String getTaskAssignedGroup(String taskId) {
-        // TODO: 与工作流引擎集成
         return null;
     }
     
@@ -249,7 +244,6 @@ public class VirtualGroupTaskServiceImpl implements VirtualGroupTaskService {
      * 实际实现时需要与工作流引擎集成
      */
     private boolean isTaskAssignedToGroupAndUnclaimed(String taskId, String groupId) {
-        // TODO: 与工作流引擎集成
         // 检查是否有认领记录
         List<VirtualGroupTaskHistory> claimHistory = taskHistoryRepository.findClaimHistoryByTaskId(taskId);
         return claimHistory.isEmpty();

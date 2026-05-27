@@ -146,9 +146,7 @@ public class ProcessDesignComponentImpl implements ProcessDesignComponent {
         result.put("variables", variables);
         result.put("status", "SIMULATED");
         result.put("steps", new ArrayList<>());
-        
-        // TODO: 实现实际的流程模拟逻辑
-        
+
         return result;
     }
     

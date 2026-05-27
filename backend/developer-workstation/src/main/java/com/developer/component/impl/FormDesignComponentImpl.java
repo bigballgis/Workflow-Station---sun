@@ -244,12 +244,6 @@ public class FormDesignComponentImpl implements FormDesignComponent {
             result.addError("EMPTY_CONFIG", i18nService.getMessage("form.empty_config"), null);
         }
         
-        // Validate data binding (bound table).
-        if (formDefinition.getBoundTable() != null) {
-            // TODO: validate bound fields exist on the table (deep binding check).
-            Map<String, Object> config = formDefinition.getConfigJson();
-        }
-        
         return result;
     }
     

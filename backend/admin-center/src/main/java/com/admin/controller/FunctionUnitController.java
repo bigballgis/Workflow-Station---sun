@@ -116,7 +116,6 @@ public class FunctionUnitController extends AbstractBaseController {
         return ResponseEntity.ok(units.map(FunctionUnitInfo::fromEntity));
     }
     
-    // TODO: [Req 28.2] Refactor to return ApiResponse<Page<FunctionUnitInfo>> instead of Map<String, Object>
     @GetMapping("/deployed")
     @Operation(summary = "List deployed function units", description = "All deployed function units (for user portal)")
     public ResponseEntity<ApiResponse<List<FunctionUnitInfo>>> getDeployedFunctionUnits() {
@@ -129,7 +128,6 @@ public class FunctionUnitController extends AbstractBaseController {
         });
     }
     
-    // TODO: [Req 28.3] Refactor to return ApiResponse<List<FunctionUnitInfo>> instead of Map<String, Object>
     @GetMapping("/deployed/latest")
     @Operation(summary = "Latest deployed per code", description = "Highest version per code (for user portal)")
     public ResponseEntity<ApiResponse<List<FunctionUnitInfo>>> getLatestDeployedFunctionUnits() {

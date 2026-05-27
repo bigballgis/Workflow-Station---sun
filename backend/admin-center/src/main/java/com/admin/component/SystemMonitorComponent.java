@@ -54,7 +54,6 @@ public class SystemMonitorComponent {
                 .build();
     }
     
-    // TODO: Replace mock data with real metrics collection
     public BusinessMetrics collectBusinessMetrics() {
         return BusinessMetrics.builder()
                 .onlineUsers(new Random().nextInt(1000))
@@ -66,7 +65,6 @@ public class SystemMonitorComponent {
                 .build();
     }
     
-    // TODO: Replace mock data with real metrics collection
     public ApplicationMetrics collectApplicationMetrics() {
         return ApplicationMetrics.builder()
                 .avgResponseTime(50 + new Random().nextInt(100))

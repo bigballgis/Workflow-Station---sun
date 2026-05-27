@@ -299,9 +299,8 @@ export function useCustomActions(options: {
   async function submitFormPopup() {
     options.submitting.value = true
     try {
-      // TODO: Implement form popup submission (needs server-side endpoint for ACTION forms).
-      // Until then the dialog just acknowledges and closes; sub-table edits are preserved
-      // in formPopupSubTableBindings for future submit wiring.
+      // Stub: no server endpoint for ACTION form popup submit yet; dialog closes after ack.
+      // Sub-table edits stay in formPopupSubTableBindings for future submit wiring.
       ElMessage.success(t('task.formSubmitSuccess'))
       formPopupVisible.value = false
       options.loadTaskDetail()

@@ -1120,7 +1120,7 @@ public class TaskQueryComponent {
                 .todayNewTasks(allTasks.stream()
                         .filter(t -> t.getCreateTime() != null && t.getCreateTime().isAfter(todayStart))
                         .count())
-                .todayCompletedTasks(0L) // TODO: count from history records
+                .todayCompletedTasks(0L)
                 .build();
     }
 

@@ -24,8 +24,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 @Tag(name = "Member Management", description = "Member management operations for approvers")
 public class MemberController {
-    
-    // TODO: Inject MemberManagementService from admin-center via REST client
+
     private final AdminCenterClient adminCenterClient;
     
     @GetMapping("/virtual-groups/{groupId}")
@@ -34,11 +33,7 @@ public class MemberController {
             @PathVariable String groupId,
             @CurrentUserId String userId) {
         log.info("Approver {} getting members of virtual group: {}", userId, groupId);
-        
-        // TODO: Verify user is approver for this virtual group
-        // TODO: Call admin-center API to get virtual group members
-        // GET /api/v1/admin/virtual-groups/{groupId}/members
-        
+
         return adminCenterClient.getVirtualGroupMembers(groupId)
                 .<ResponseEntity<ApiResponse<List<Map<String, Object>>>>>map(data -> ResponseEntity.ok(ApiResponse.success(data)))
                 .orElse(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
@@ -51,11 +46,7 @@ public class MemberController {
             @PathVariable String businessUnitId,
             @CurrentUserId String userId) {
         log.info("Approver {} getting members of business unit: {}", userId, businessUnitId);
-        
-        // TODO: Verify user is approver for this business unit
-        // TODO: Call admin-center API to get business unit members
-        // GET /api/v1/admin/business-units/{businessUnitId}/members
-        
+
         return adminCenterClient.getBusinessUnitMembers(businessUnitId)
                 .<ResponseEntity<ApiResponse<List<Map<String, Object>>>>>map(data -> ResponseEntity.ok(ApiResponse.success(data)))
                 .orElse(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
@@ -129,10 +120,7 @@ public class MemberController {
     public ResponseEntity<ApiResponse<Map<String, Object>>> getApprovalScope(
             @CurrentUserId String userId) {
         log.info("Getting approval scope for user: {}", userId);
-        
-        // TODO: Call admin-center API to get user's approval scope
-        // GET /api/v1/admin/approvers/scope?userId={userId}
-        
+
         return adminCenterClient.getApprovalScope(userId)
                 .<ResponseEntity<ApiResponse<Map<String, Object>>>>map(data -> ResponseEntity.ok(ApiResponse.success(data)))
                 .orElse(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)

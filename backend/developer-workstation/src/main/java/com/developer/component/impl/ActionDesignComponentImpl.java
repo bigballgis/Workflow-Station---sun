@@ -161,9 +161,7 @@ public class ActionDesignComponentImpl implements ActionDesignComponent {
         result.put("actionType", actionDefinition.getActionType());
         result.put("status", "SUCCESS");
         result.put("message", i18nService.getMessage("action.test_success"));
-        
-        // TODO: 根据动作类型执行实际测试
-        
+
         return result;
     }
     

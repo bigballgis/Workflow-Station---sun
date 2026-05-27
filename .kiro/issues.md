@@ -8,9 +8,9 @@
 | 状态 | 数量 |
 |------|------|
 | ✅ Fixed | **14** |
-| 🔓 Open | **0** |
+| 🔓 Open | **7** |
 | ⏸️ Wontfix | **1** |
-| **总计** | **15** |
+| **总计** | **22** |
 
 按严重度的分布见 `index.yaml` 各条目的 `severity` 字段。
 
@@ -18,7 +18,15 @@
 
 ## 当前待处理 (Open)
 
-（无）
+| ID | 严重度 | 分类 | 描述 |
+|----|--------|------|------|
+| 1402 | major | architecture | VirtualGroupTaskServiceImpl 与工作流引擎未集成 |
+| 1403 | minor | quality | SystemMonitor 业务/应用指标仍为 mock |
+| 1404 | minor | bug | 任务统计 todayCompletedTasks 恒为 0 |
+| 1405 | major | bug | ACTION 表单弹窗提交无服务端 API |
+| 1406 | minor | quality | 多实例状态接口用户名为 User-{id} 占位 |
+| 1407 | minor | quality | 流程模拟 / 动作测试为占位实现 |
+| 1408 | minor | quality | 表单 boundTable 深绑定校验缺失 |
 
 ### Wontfix
 

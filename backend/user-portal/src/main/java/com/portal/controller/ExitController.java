@@ -62,10 +62,7 @@ public class ExitController {
     public ResponseEntity<ApiResponse<Map<String, Object>>> getMyMemberships(
             @CurrentUserId String userId) {
         log.info("Getting memberships for user: {}", userId);
-        
-        // TODO: Call admin-center API to get user's memberships
-        // GET /api/v1/admin/users/{userId}/memberships
-        
+
         return adminCenterClient.getUserMemberships(userId)
                 .<ResponseEntity<ApiResponse<Map<String, Object>>>>map(data -> ResponseEntity.ok(ApiResponse.success(data)))
                 .orElse(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
@@ -77,10 +74,7 @@ public class ExitController {
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getExitHistory(
             @CurrentUserId String userId) {
         log.info("Getting exit history for user: {}", userId);
-        
-        // TODO: Call admin-center API to get user's exit history
-        // GET /api/v1/admin/member-change-logs?userId={userId}&changeType=EXIT
-        
+
         return adminCenterClient.getExitHistory(userId)
                 .<ResponseEntity<ApiResponse<List<Map<String, Object>>>>>map(data -> ResponseEntity.ok(ApiResponse.success(data)))
                 .orElse(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)

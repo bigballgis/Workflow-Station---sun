@@ -4,159 +4,54 @@
   category: quality
   summary: "auth.ts 在三个前端应用中大量重复(已标注)"
   note: "三端独立构建、无共享 npm 包；抽公共包成本高，维持各应用内 auth 模块并保留 NOTE 说明"
-- id: "137"
-  status: fixed
-  fixed_at: "2026-05-27"
+- id: "1402"
+  status: open
   severity: major
   category: architecture
-  summary: "developer-workstation 功能单元版本/部署双轨 — 已移除 VersionController 及按 name 多行 dw_function_units 的 DeploymentService/VersionService 等遗留栈；canonical 路径为 publish(dw_versions 快照)+DeploymentComponentImpl→admin(code+version)"
-  file: "backend/developer-workstation/src/main/java/com/developer/component/impl/DeploymentComponentImpl.java"
-- id: "148"
-  status: fixed
-  fixed_at: "2026-05-27"
-  severity: minor
-  category: quality
-  summary: "三端 profile 页重复实现 languageLabelFor — 已抽到各应用 utils/languageLabel.ts，profile 与 useProfile 改为 import"
-  file: "frontend/*/src/utils/languageLabel.ts"
-- id: "155"
-  status: fixed
-  fixed_at: "2026-05-27"
-  severity: minor
-  category: quality
-  summary: "subTablePositionControl.property.test.ts 挂载 FormRenderer 未注册 Element Plus — 已加入 ElementPlus plugin 与 unmount 清理，消除 el-* 未解析警告"
-  file: "frontend/user-portal/src/views/__tests__/subTablePositionControl.property.test.ts"
-- id: "158"
-  status: fixed
-  fixed_at: "2026-05-27"
-  severity: minor
-  category: bug
-  summary: "PortalRelationTableServiceImpl.queryTableData 接收 search 参数但未用于过滤，relation table 页面搜索无效"
-  file: "backend/user-portal/src/main/java/com/portal/service/PortalRelationTableServiceImpl.java"
-  fix: "queryTableData 对 JSON 行表与 sys_users 虚拟表应用 ILIKE 搜索（字段来自 rt_field_definitions / DEFAULT_SYSTEM_USER_SEARCH_FIELDS），COUNT 与分页查询共用同一 WHERE 子句"
-- id: "162"
-  status: fixed
-  fixed_at: "2026-05-27"
-  severity: major
-  category: bug
-  summary: "DeploymentService.deployFunctionUnit 创建 ProcessDefinition 时未设置 functionUnitVersionId — 已在 builder 显式写入 newVersion.getId()，并补充 DeploymentServiceTest 回归断言"
-  file: "backend/developer-workstation/src/main/java/com/developer/service/DeploymentService.java"
-- id: "166"
-  status: fixed
-  fixed_at: "2026-05-27"
-  severity: major
-  category: quality
-  summary: "frontend/admin-center：devDependencies 已含 eslint 套件且 npm run lint 可执行；useBiRbac.handleDelete / useBusinessUnit.handleDelete 的 catch 补全 error/e 绑定消除 ReferenceError；新增 build:check（vue-tsc && vite build），默认 build 仍仅 vite 以免阻塞现有 ~122 条 TS 债务"
-  file: "frontend/admin-center/package.json; frontend/admin-center/src/composables/modules/useBiRbac.ts; frontend/admin-center/src/composables/modules/useBusinessUnit.ts; frontend/admin-center/eslint.config.js"
-- id: "168"
-  status: fixed
-  fixed_at: "2026-05-27"
-  severity: minor
-  category: quality
-  summary: "frontend/admin-center：清理 vue-tsc 全部 TS 诊断（TagType/errorTranslator/AppErrorCode、useUser extractErrorDetail、ImportResult 字段、Cascader/审计/角色类型、未使用导入等）；npm run build:check（vue-tsc --noEmit && vite build）已通过"
-  file: "frontend/admin-center/src/"
-- id: "167"
-  status: fixed
-  fixed_at: "2026-05-27"
-  severity: minor
-  category: quality
-  summary: "frontend/developer-workstation 三语 locale 不一致：zh-TW 缺失 form.linkForm* / tableBinding.subMode* 共 8 个 key — 已补全 Traditional Chinese 译文并通过 i18n-locale-key-consistency"
-  file: "frontend/developer-workstation/src/i18n/locales/zh-TW.ts"
-- id: "1373"
-  status: fixed
-  fixed_at: "2026-05-27"
-  severity: critical
-  category: security
-  summary: "user-portal 流程详情接口在未登录时仍可直接读取流程实例详情"
-  file: "backend/user-portal/src/main/java/com/portal/controller/ProcessController.java"
+  summary: "admin-center VirtualGroupTaskServiceImpl 虚拟组任务与工作流引擎未集成（认领/委托/分配查询均为 stub）"
+  file: "backend/admin-center/src/main/java/com/admin/service/impl/VirtualGroupTaskServiceImpl.java"
   note: |
-    现状：GET /api/portal/processes/{processId} 在 @CurrentUserId 解析为 null 时仍返回 ApiResponse.success(detail)；只有 userId != null 时才校验参与者身份。
-    风险：匿名请求可枚举并读取流程详情（发起人、流程定义、变量等），属于越权信息泄露。
-    修复：`getProcessDetail` / `getProcessHistory` 在 userId 为空时立即抛出 FunctionUnitAccessDeniedException（403），
-    与 `getMyApplications` 一致；仅在已登录且为流程参与者时才返回详情/历史。
-- id: "1382"
-  status: fixed
-  fixed_at: "2026-05-27"
+    getTasksAssignedToGroup 恒返回空列表；claimTaskInWorkflowEngine / delegateTaskInWorkflowEngine 仅打日志；
+    isTaskAssignedToUser / getTaskAssignedGroup 未查引擎。类注释已标明需集成 workflow-engine。
+- id: "1403"
+  status: open
+  severity: minor
+  category: quality
+  summary: "admin-center SystemMonitorComponent 业务/应用指标仍为随机 mock（mock=true）"
+  file: "backend/admin-center/src/main/java/com/admin/component/SystemMonitorComponent.java"
+  note: "collectBusinessMetrics / collectApplicationMetrics 使用 Random 生成在线用户、待办数等，非真实采集。"
+- id: "1404"
+  status: open
+  severity: minor
+  category: bug
+  summary: "user-portal TaskQueryComponent 任务统计 todayCompletedTasks 固定为 0"
+  file: "backend/user-portal/src/main/java/com/portal/component/TaskQueryComponent.java"
+  note: "buildTaskStatistics 未从历史完成记录聚合当日完成数，仪表盘/统计 API 可能偏低。"
+- id: "1405"
+  status: open
   severity: major
   category: bug
-  summary: "admin-center 的 useBiDashboard 在 catch 中引用未定义 error，导致状态切换或删除失败时前端二次报错"
-  note: |
-    根因：`handleToggleStatus` / `handleDelete` 使用 `catch {` 却在块内读取 `error`，取消确认或 API 失败时触发 ReferenceError。
-    修复：改为 `catch (error)`，与 `useBiAssignment` 一致；用户取消（`error === 'cancel'`）时不弹错误 toast。
-- id: "1398"
-  status: fixed
-  fixed_at: "2026-05-27"
-  severity: major
-  category: performance
-  summary: "user-portal frontend useTaskActions.ts 把同一份 sub-table data 以 4–5 个别名 key（bindingId / String(bindingId) / tableName / normalizeSubTableName(tableName)）重复写进 __subTables__ → up_process_instance.variables JSONB 列体积膨胀 4–5 倍，并放大快照路径的 OOM 风险（详见 #1397 回归分析）"
-  detail: |
-    现象：portal `__subTables__` 中同一 binding 的 row 数组以多个 key 同时存在，且每个 key 携带的 JSON 内容
-    bytes 完全相同（实测：root participants 在 `69` / `participants` / `subtable` / `subtable a` / `subtable A`
-    五个 key 下均为 211917 字节；root subtable2 在 `30` / `subtable2` / `subtable2 a` / `subtable2 A` 四个 key 下
-    均为 63933 字节）。嵌套子表（participants[0].__subTables__）同样存在 12 个别名 key 全部指向同一份 ~205 KB
-    数据的现象。
-    根因：`frontend/user-portal/src/composables/tasks/useTaskActions.ts` 在 submitApprove 构造 variables 时写：
-        for (const b of options.subTableBindings.value) {
-            mergedSub[b.bindingId] = b.data
-            mergedSub[String(b.bindingId)] = b.data
-            if (b.tableName) {
-                mergedSub[b.tableName] = b.data
-                mergedSub[normalizeSubTableName(b.tableName)] = b.data
-            }
-        }
-    JSON 序列化时不会做对象引用 dedupe，每个 key 都会落成一份独立的 JSON 子树写入数据库。
-    爆炸半径：所有走 Portal 任务完成路径的 sub-table 数据；JSONB 体积 ≈ 真实数据 × alias 数。
-    建议修复：选择 bindingId（数字）作为唯一 canonical key 写入，让后端在读侧（`SubTableInlineForm.vue` /
-    `FormRenderer.vue` / `subTableAddDialogHelpers.ts` 等）通过元数据回退（resolveSubTableSchemaByTableId）做
-    table-name → bindingId 的 alias resolve。
-    与 portal-design-parity.mdc 的关系：写入侧 alias 化是历史遗留兼容层；移除后必须确认设计器预览
-    （FormDesigner Preview）与 Portal Runtime 仍能解析两侧的 binding，否则 parity 会断。建议在统一 helper
-    中做"写入侧单一 key、读侧 alias resolve"的过渡，先加 telemetry 观察兼容性，再清除冗余别名写入。
-    
-    已落地实现：`frontend/user-portal/src/composables/tasks/useTaskActions.ts` 的 submitApprove 构造 variables 时，
-    `__subTables__` 改为 canonical 仅写 bindingId key；当存在数字 key 时会先清理历史别名 key，再按 bindingId 覆写当前
-    `subTableBindings` 数据，不再写 `tableName` / `normalizeSubTableName(tableName)` / `participants` 别名键。
-- id: "1399"
-  status: fixed
-  fixed_at: "2026-05-27"
-  severity: major
-  category: performance
-  summary: "user-portal backend TaskProcessComponent.mergeSubTablesFromTaskInfoForMi / 相关 __subTables__ 合并逻辑只'补缺失 alias'但从不去重，alias 集合单调增长，加剧 #1398 描述的 JSONB 膨胀"
-  detail: |
-    现象：handleApproval 路径里 mergeSubTablesFromTaskInfoForMi 把任务返回的 __subTables__ 合并进
-    processInstance.variables 时使用 `if (!merged.containsKey(k)) merged.put(k, e.getValue())` 逻辑——
-    既不覆盖已有同名 key，也从不识别 "binding-id ↔ table-name ↔ normalized-name" 之间的等价关系。
-    一旦某个 alias 进入存储就永远保留，后续任何完成动作只会"加新别名 / 不去重"，使 alias 集合单调增长。
-    与 #1398 联动：前端每次完成都把同一份数据以 4–5 个 alias 提交，后端合并器逐步把更多 alias 累加进
-    存储；多实例子任务循环若干轮后，__subTables__ 自身就能达到 MB 级（即使不算 _snapshot_）。
-    建议修复：在合并前先 resolve alias 等价类（用 TableBinding 元数据：bindingId 为主 key，tableName /
-    normalizedName 作为派生 alias 仅供读侧解析），合并时只写 canonical key；读侧若仍需 alias resolve，
-    在 helper 层用 metadata fallback 实现，而非把 alias 落到 JSONB。
-
-    已落地实现：在 `backend/user-portal/.../TaskProcessComponent.mergeSubTablesFromTaskInfoForMi` 合并完成后，
-    若同一层级存在数字 key（bindingId），则仅保留数字 key，并递归清理行内 nested `__subTables__` 的非数字别名 key，
-    从根源阻断 alias 集合单调增长。
-    爆炸半径：所有触发 mergeSubTablesFromTaskInfoForMi 的子任务完成路径；与 #1398 同根，宜一并设计。
-- id: "1400"
-  status: fixed
-  fixed_at: "2026-05-27"
-  severity: major
-  category: bug
-  summary: "user-portal My Request 画布已放置的 sub-table 因同时是 Link Form 目标被 filterLinkOnlyStandaloneSubTableFields 误删（mirrorTodo + tableOnly）"
-  detail: |
-    根因：shouldSuppressStandaloneSubTableInInitiatorRequest 对 native tableBindings 中的 binding 若出现在
-    collectAllLinkFormTargetBindingIds（含 subListViews 自引用 linkForm 列）且 initiatorRequest 为 mirrorTodo，
-    仍按 mirrorTodo !== tableOnly 判定 suppress，导致 applyLinkOnlySubTableFieldFilterToMainForm 从 formFields
-    移除画布 subTable 节点（Transaction Assignment binding 281 等）。
-    修复：nativeBindingIds 命中时直接 return false，画布放置优先于 link-only 去重逻辑。
-    路径：formRendererHelpers.ts + linkOnlySubTableFields.test.ts。
-- id: "1401"
-  status: fixed
-  fixed_at: "2026-05-27"
-  severity: major
-  category: bug
-  summary: "MI Transaction Investigation 未带出 Case Number / Legal Hold（elCard 内字段被 isolateMiSubTaskData 剥离）"
-  detail: |
-    根因：流程变量已有 case_number/legal_hold（如 344 / true），但 HMDC 表单将字段放在 elCard 子节点；
-    getCurrentFormFieldKeys 只收集顶层 key，MI isolateMiSubTaskData 重建 formData 时丢弃 card 内标量。
-    修复：formRendererHelpers.collectLeafFormFieldKeys 递归 card；useTaskForm、tasks/detail、applications/detail 统一使用。
-    路径：formRendererHelpers.ts、useTaskForm.ts、tasks/detail.vue、applications/detail.vue、collectLeafFormFieldKeys.test.ts。
+  summary: "user-portal ACTION 表单弹窗提交为 stub，无服务端落库/流程变量写入"
+  file: "frontend/user-portal/src/composables/tasks/useCustomActions.ts"
+  note: "submitFormPopup 仅 ElMessage 成功并关闭弹窗；子表编辑保留在 formPopupSubTableBindings，缺 ACTION 专用 API。"
+- id: "1406"
+  status: open
+  severity: minor
+  category: quality
+  summary: "workflow-engine MultiInstanceStatusController 用户展示名硬编码为 User-{userId}"
+  file: "backend/workflow-engine-core/src/main/java/com/workflow/controller/MultiInstanceStatusController.java"
+  note: "getUserName 未调用 admin-center/用户服务解析 displayName。"
+- id: "1407"
+  status: open
+  severity: minor
+  category: quality
+  summary: "developer-workstation 流程模拟与动作测试为占位实现（SIMULATED / 固定 SUCCESS）"
+  file: "backend/developer-workstation/src/main/java/com/developer/component/impl/ProcessDesignComponentImpl.java; ActionDesignComponentImpl.java"
+  note: "simulateProcess 仅解析 BPMN 结构返回 status=SIMULATED、空 steps；ActionDesignComponentImpl.test 未按 actionType 执行真实探测。"
+- id: "1408"
+  status: open
+  severity: minor
+  category: quality
+  summary: "developer-workstation 表单校验未做 boundTable 字段深绑定存在性检查"
+  file: "backend/developer-workstation/src/main/java/com/developer/component/impl/FormDesignComponentImpl.java"
+  note: "validate 仅检查 configJson 非空；画布字段与表元数据一致性未校验（清理 TODO 时移除空分支）。"

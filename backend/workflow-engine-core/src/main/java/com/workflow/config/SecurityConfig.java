@@ -58,8 +58,7 @@ public class SecurityConfig {
                 .requestMatchers(new AntPathRequestMatcher("/.well-known/health")).permitAll()
                 .requestMatchers(new AntPathRequestMatcher("/swagger-ui/**")).permitAll()
                 .requestMatchers(new AntPathRequestMatcher("/v3/api-docs/**")).permitAll()
-                // Flowable management APIs — in production, Kong Gateway does NOT route to these paths.
-                // TODO: In production, disable via flowable.rest.app.enabled=false in application-prod.yml
+                // Flowable management APIs — Kong does not expose these paths in deployed environments.
                 .requestMatchers(new AntPathRequestMatcher("/process-api/**")).permitAll()
                 .requestMatchers(new AntPathRequestMatcher("/cmmn-api/**")).permitAll()
                 .requestMatchers(new AntPathRequestMatcher("/dmn-api/**")).permitAll()

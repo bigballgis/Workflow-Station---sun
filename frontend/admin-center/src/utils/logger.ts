@@ -18,7 +18,7 @@ interface LogEntry {
 
 // 预留：远程日志发送
 const sendRemote = (_entry: LogEntry) => {
-  // TODO: 接入 analytics 服务
+  // no-op until analytics endpoint is configured
 }
 
 const log = (level: LogLevel, module: string, message: string, data?: unknown) => {

@@ -1,5 +1,3 @@
-<!-- TODO: Verify ProcessDesigner completeness (Req 33) — ensure support for all BPMN elements,
-     user task form/action binding, service task decision binding, and BPMN XML structure validation on save -->
 <template>
   <div class="process-designer">
     <div class="designer-toolbar">

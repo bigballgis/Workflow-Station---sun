@@ -445,7 +445,6 @@ public class MultiInstanceStatusController {
         if (userId == null) {
             return null;
         }
-        // TODO: Call user service to get real name
         return "User-" + userId;
     }
     

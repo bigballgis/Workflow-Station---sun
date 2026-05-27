@@ -83,8 +83,6 @@ public class TaskFormComponent {
     public TaskFormData getTaskFormData(String taskId) {
         log.debug("Getting task form data for task: {}", taskId);
 
-        // Get task info (taskDefinitionKey, processInstanceId) from ProcessInstance
-        // TODO: In production, get task info from Flowable TaskService
         TaskInfo taskInfo = getTaskInfo(taskId);
 
         // Find FormStageBinding by taskDefinitionKey

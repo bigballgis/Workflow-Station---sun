@@ -72,10 +72,7 @@ public class PermissionRequestController {
             @CurrentUserId String userId,
             @RequestParam(required = false) String status) {
         log.info("Getting requests for user: {}, status: {}", userId, status);
-        
-        // TODO: Call admin-center API to get user's requests
-        // GET /api/v1/admin/permission-requests?applicantId={userId}&status={status}
-        
+
         return adminCenterClient.getUserPermissionRequests(userId, status)
                 .<ResponseEntity<ApiResponse<List<Map<String, Object>>>>>map(data -> ResponseEntity.ok(ApiResponse.success(data)))
                 .orElse(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
@@ -98,14 +95,7 @@ public class PermissionRequestController {
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getApplicableBusinessUnits(
             @CurrentUserId String userId) {
         log.info("Getting applicable business units for user: {}", userId);
-        
-        // TODO: Call admin-center API to get applicable business units
-        // GET /api/v1/admin/permission-requests/applicable-business-units?userId={userId}
-        // Returns business units that:
-        // 1. Have approvers configured
-        // 2. Are associated with roles that user has (BU-Bounded roles from virtual groups)
-        // 3. User is not already a member of
-        
+
         return adminCenterClient.getApplicableBusinessUnits(userId)
                 .<ResponseEntity<ApiResponse<List<Map<String, Object>>>>>map(data -> ResponseEntity.ok(ApiResponse.success(data)))
                 .orElse(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
@@ -119,11 +109,7 @@ public class PermissionRequestController {
             @PathVariable String businessUnitId,
             @CurrentUserId String userId) {
         log.info("Getting activatable roles for user {} in business unit: {}", userId, businessUnitId);
-        
-        // TODO: Call admin-center API to get activatable roles
-        // GET /api/v1/admin/permission-requests/business-units/{businessUnitId}/activatable-roles?userId={userId}
-        // Returns user's BU-Bounded roles that are associated with this business unit
-        
+
         return adminCenterClient.getActivatableRoles(businessUnitId, userId)
                 .<ResponseEntity<ApiResponse<List<Map<String, Object>>>>>map(data -> ResponseEntity.ok(ApiResponse.success(data)))
                 .orElse(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
