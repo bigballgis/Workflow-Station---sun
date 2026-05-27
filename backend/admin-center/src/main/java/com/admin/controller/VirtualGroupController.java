@@ -202,3 +202,4 @@ public class VirtualGroupController {
         VirtualGroupResult result = virtualGroupManager.deactivateGroup(groupId);
         return ResponseEntity.ok(result);
     }
+}
