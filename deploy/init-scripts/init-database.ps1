@@ -178,6 +178,14 @@ if (Test-Path $miSubtaskDemoInit) {
     Write-Host "  SKIP: Multi-Instance Subtask Demo init script not found at $miSubtaskDemoInit" -ForegroundColor Yellow
 }
 
+Write-Step "Step 5e/6: Loading MCY Debit Card..."
+$mcyInit = Join-Path $ScriptDir "18-MCY/init.sql"
+if (Test-Path $mcyInit) {
+    if (-not (Exec-Sql -File $mcyInit -Desc "init.sql")) { exit 1 }
+} else {
+    Write-Host "  SKIP: MCY Debit Card init script not found at $mcyInit" -ForegroundColor Yellow
+}
+
 Write-Step "Step 6/6: Finished."
 
 Write-Host ""
@@ -186,6 +194,6 @@ Write-Host "  Database Initialization Complete!" -ForegroundColor Green
 Write-Host "=========================================" -ForegroundColor Green
 Write-Host "  Login: admin / admin123  (test: 44027893 / admin123)" -ForegroundColor White
 Write-Host "  Change password after first login!" -ForegroundColor Yellow
-Write-Host "  Demo function units: Platform Showcase fu-20260403-a1b2c4; Digital Lending V2 (EN) fu-20260403-a1b2c6; Meeting Participant fu-20260403-a1b2c5; Multi-Instance Subtask Demo fu-20260422-23tfag" -ForegroundColor White
+Write-Host "  Demo function units: Platform Showcase fu-20260403-a1b2c4; Digital Lending V2 (EN) fu-20260403-a1b2c6; Meeting Participant fu-20260403-a1b2c5; Multi-Instance Subtask Demo fu-20260422-23tfag; MCY Debit Card fu-20260505-thwmut" -ForegroundColor White
 Write-Host "  E2E users (password=password): e2e_zhangwei e2e_lina e2e_wangfang e2e_zhaomin e2e_sunqiang e2e_zhoujie e2e_wugang" -ForegroundColor White
 Write-Host "=========================================" -ForegroundColor Green

@@ -27,7 +27,7 @@
 --
 -- Execution timing:
 --   `00-init-all.sh` invokes this script explicitly in its post-seed stage,
---   right after the last seed package (17-Multi-Instance-Subtask-Demo).
+--   right after the last seed package (18-MCY).
 --   Putting it any earlier would see empty tables and become a no-op.
 --
 -- Defensive coverage:
