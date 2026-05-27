@@ -61,7 +61,8 @@ class RelationTableDeployPropertyTest {
         schemaResolver = mock(com.admin.config.DatabaseSchemaResolver.class);
         when(schemaResolver.getSchema()).thenReturn("public");
         service = new RelationTableDeployServiceImpl(
-                tableDefinitionRepository, versionRepository, fieldDefinitionRepository, jdbcTemplate, objectMapper, schemaResolver);
+                tableDefinitionRepository, versionRepository, fieldDefinitionRepository, jdbcTemplate, objectMapper, schemaResolver,
+                mock(com.platform.common.i18n.I18nService.class));
     }
 
     // ==================== Arbitraries ====================

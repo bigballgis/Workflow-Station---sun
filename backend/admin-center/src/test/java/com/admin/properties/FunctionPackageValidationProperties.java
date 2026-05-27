@@ -48,7 +48,8 @@ class FunctionPackageValidationProperties {
                 Mockito.mock(com.admin.repository.ActionDefinitionRepository.class),
                 Mockito.mock(org.springframework.jdbc.core.JdbcTemplate.class),
                 Mockito.mock(com.fasterxml.jackson.databind.ObjectMapper.class),
-                Mockito.mock(org.springframework.web.client.RestTemplate.class));
+                Mockito.mock(org.springframework.web.client.RestTemplate.class),
+                Mockito.mock(com.platform.common.i18n.I18nService.class));
     }
 
     // ==================== 属性 1: 空文件名验证失败 ====================

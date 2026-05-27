@@ -46,7 +46,8 @@ class FunctionUnitDeduplicationPropertyTest {
                 mock(com.admin.repository.ActionDefinitionRepository.class),
                 mock(org.springframework.jdbc.core.JdbcTemplate.class),
                 mock(com.fasterxml.jackson.databind.ObjectMapper.class),
-                mock(org.springframework.web.client.RestTemplate.class)
+                mock(org.springframework.web.client.RestTemplate.class),
+                mock(com.platform.common.i18n.I18nService.class)
         );
     }
 

@@ -53,7 +53,8 @@ class FunctionUnitDeleteProperties {
                 Mockito.mock(com.admin.repository.ActionDefinitionRepository.class),
                 Mockito.mock(org.springframework.jdbc.core.JdbcTemplate.class),
                 Mockito.mock(com.fasterxml.jackson.databind.ObjectMapper.class),
-                Mockito.mock(org.springframework.web.client.RestTemplate.class));
+                Mockito.mock(org.springframework.web.client.RestTemplate.class),
+                Mockito.mock(com.platform.common.i18n.I18nService.class));
     }
 
     // ==================== Property 1: 删除预览数量正确性 ====================
