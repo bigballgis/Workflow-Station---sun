@@ -5,7 +5,9 @@ export default {
     subtitle: 'Unified Sign-In',
     username: 'Username',
     password: 'Password',
-    submit: 'Sign In',
+    usernamePlaceholder: 'Enter Your Username',
+    passwordPlaceholder: 'Enter Your Password',
+    submit: 'Log in',
     submitting: 'Signing in...',
     error: {
       missingParams: 'Missing client_id or redirect_uri parameter.',

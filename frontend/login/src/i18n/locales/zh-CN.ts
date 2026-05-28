@@ -5,6 +5,8 @@ export default {
     subtitle: '统一登录',
     username: '用户名',
     password: '密码',
+    usernamePlaceholder: '请输入用户名',
+    passwordPlaceholder: '请输入密码',
     submit: '登录',
     submitting: '登录中...',
     error: {
