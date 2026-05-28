@@ -11,161 +11,179 @@
       </template>
     </PageHeader>
 
-    <el-table
-      v-loading="loading"
-      :data="tableList"
-      stripe
-    >
-      <el-table-column
-        prop="tableName"
-        label="Name"
-        min-width="140"
-      />
-      <el-table-column
-        prop="displayName"
-        label="Display Name"
-        min-width="140"
-      />
-      <el-table-column
-        prop="currentVersion"
-        label="Version"
-        width="90"
-        align="center"
+    <el-card class="table-card">
+      <el-table
+        v-loading="loading"
+        :data="tableList"
+        stripe
+        class="table-fixed-actions"
+        style="width: 100%"
       >
-        <template #default="{ row }">
-          v{{ row.currentVersion }}
-        </template>
-      </el-table-column>
-      <el-table-column
-        prop="status"
-        label="Status"
-        width="110"
-        align="center"
-      >
-        <template #default="{ row }">
-          <el-tag
-            :type="statusTagType(row.status)"
-            size="small"
-          >
-            {{ row.status }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column
-        label="Enable"
-        width="80"
-        align="center"
-      >
-        <template #default="{ row }">
-          <el-switch
-            v-model="row.enabled"
-            :loading="enableLoadingMap[row.id]"
-            @change="(val: string | number | boolean) => handleToggleEnabled(row, val as boolean)"
-          />
-        </template>
-      </el-table-column>
-      <el-table-column
-        label="Portal Visibility"
-        width="130"
-        align="center"
-      >
-        <template #default="{ row }">
-          <el-switch
-            v-model="row.portalVisible"
-            :loading="portalLoadingMap[row.id]"
-            :disabled="!row.enabled"
-            @change="(val: string | number | boolean) => handleTogglePortalVisibility(row, val as boolean)"
-          />
-        </template>
-      </el-table-column>
-      <el-table-column
-        prop="createdAt"
-        label="Created At"
-        width="170"
-      >
-        <template #default="{ row }">
-          {{ formatDate(row.createdAt) }}
-        </template>
-      </el-table-column>
-      <el-table-column
-        prop="createdBy"
-        label="Created By"
-        width="120"
-      />
-      <el-table-column
-        prop="updatedAt"
-        label="Updated At"
-        width="170"
-      >
-        <template #default="{ row }">
-          {{ formatDate(row.updatedAt) }}
-        </template>
-      </el-table-column>
-      <el-table-column
-        prop="updatedBy"
-        label="Updated By"
-        width="120"
-      />
-      <el-table-column
-        label="Actions"
-        width="450"
-        fixed="right"
-      >
-        <template #default="{ row }">
-          <div style="display: flex; align-items: center; flex-wrap: nowrap; white-space: nowrap;">
-            <el-button
-              link
-              type="warning"
-              @click="handleEdit(row)"
+        <el-table-column
+          prop="tableName"
+          label="Name"
+          min-width="120"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="displayName"
+          label="Display Name"
+          min-width="120"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="currentVersion"
+          label="Version"
+          width="90"
+          align="center"
+        >
+          <template #default="{ row }">
+            v{{ row.currentVersion }}
+          </template>
+        </el-table-column>
+        <el-table-column
+          prop="status"
+          label="Status"
+          width="110"
+          align="center"
+        >
+          <template #default="{ row }">
+            <el-tag
+              :type="statusTagType(row.status)"
+              size="small"
             >
-              Edit
-            </el-button>
-            <el-button
-              link
-              type="danger"
-              @click="handleDelete(row)"
-            >
-              Delete
-            </el-button>
-            <el-button
-              link
-              type="primary"
-              @click="handleDeploy(row)"
-            >
-              Deploy
-            </el-button>
-            <el-button
-              link
-              type="danger"
-              @click="handleRollback(row)"
-            >
-              Rollback
-            </el-button>
-            <el-button
-              link
-              type="primary"
-              @click="handleVersions(row)"
-            >
-              Version
-            </el-button>
-            <el-button
-              link
-              type="info"
-              @click="handleCompare(row)"
-            >
-              Compare
-            </el-button>
-            <el-button
-              link
-              type="primary"
-              @click="handleAccess(row)"
-            >
-              Access
-            </el-button>
-          </div>
-        </template>
-      </el-table-column>
-    </el-table>
+              {{ row.status }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column
+          label="Enable"
+          width="80"
+          align="center"
+        >
+          <template #default="{ row }">
+            <el-switch
+              v-model="row.enabled"
+              :loading="enableLoadingMap[row.id]"
+              @change="(val: string | number | boolean) => handleToggleEnabled(row, val as boolean)"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column
+          label="Portal"
+          width="90"
+          align="center"
+        >
+          <template #default="{ row }">
+            <el-switch
+              v-model="row.portalVisible"
+              :loading="portalLoadingMap[row.id]"
+              :disabled="!row.enabled"
+              @change="(val: string | number | boolean) => handleTogglePortalVisibility(row, val as boolean)"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column
+          prop="createdAt"
+          label="Created At"
+          width="160"
+          show-overflow-tooltip
+        >
+          <template #default="{ row }">
+            {{ formatDate(row.createdAt) }}
+          </template>
+        </el-table-column>
+        <el-table-column
+          prop="createdBy"
+          label="Created By"
+          width="110"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="updatedAt"
+          label="Updated At"
+          width="160"
+          show-overflow-tooltip
+        >
+          <template #default="{ row }">
+            {{ formatDate(row.updatedAt) }}
+          </template>
+        </el-table-column>
+        <el-table-column
+          prop="updatedBy"
+          label="Updated By"
+          width="110"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          label="Actions"
+          width="420"
+          fixed="right"
+          align="center"
+        >
+          <template #default="{ row }">
+            <div class="action-cell">
+              <el-button
+                link
+                type="warning"
+                size="small"
+                @click="handleEdit(row)"
+              >
+                Edit
+              </el-button>
+              <el-button
+                link
+                type="danger"
+                size="small"
+                @click="handleDelete(row)"
+              >
+                Delete
+              </el-button>
+              <el-button
+                link
+                type="primary"
+                size="small"
+                @click="handleDeploy(row)"
+              >
+                Deploy
+              </el-button>
+              <el-button
+                link
+                type="danger"
+                size="small"
+                @click="handleRollback(row)"
+              >
+                Rollback
+              </el-button>
+              <el-button
+                link
+                type="primary"
+                size="small"
+                @click="handleVersions(row)"
+              >
+                Version
+              </el-button>
+              <el-button
+                link
+                type="info"
+                size="small"
+                @click="handleCompare(row)"
+              >
+                Compare
+              </el-button>
+              <el-button
+                link
+                type="primary"
+                size="small"
+                @click="handleAccess(row)"
+              >
+                Access
+              </el-button>
+            </div>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-card>
 
     <!-- Version History Dialog -->
     <VersionDialog
@@ -233,5 +251,3 @@ onActivated(() => {
   fetchTableList()
 })
 </script>
-
-

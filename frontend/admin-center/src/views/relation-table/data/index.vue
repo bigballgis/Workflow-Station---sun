@@ -83,6 +83,7 @@
             v-loading="dataLoading"
             :data="dataRows"
             stripe
+            class="table-fixed-actions"
             style="width: 100%;"
             border
           >
@@ -159,8 +160,10 @@
               label="Actions"
               width="240"
               fixed="right"
+              align="center"
             >
               <template #default="{ row }">
+                <div class="action-cell">
                 <el-button
                   link
                   type="primary"
@@ -195,6 +198,7 @@
                 >
                   Delete
                 </el-button>
+                </div>
               </template>
             </el-table-column>
           </el-table>

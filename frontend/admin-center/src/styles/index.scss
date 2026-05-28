@@ -114,4 +114,25 @@ html, body, #app {
   align-items: center;
   justify-content: center;
   gap: 4px;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+
+// 固定 Actions 列：保留 sticky，去掉 Element Plus 默认阴影分隔线
+.el-table.table-fixed-actions {
+  --el-table-fixed-right-column: none;
+  --el-table-fixed-left-column: none;
+
+  .el-table__header-wrapper tr th.el-table-fixed-column--right.is-first-column::before,
+  .el-table__body-wrapper tr td.el-table-fixed-column--right.is-first-column::before {
+    display: none !important;
+    box-shadow: none !important;
+  }
+
+  &.is-scrolling-left,
+  &.is-scrolling-middle {
+    .el-table-fixed-column--right.is-first-column::before {
+      box-shadow: none !important;
+    }
+  }
 }
