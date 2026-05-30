@@ -2,6 +2,7 @@
   <div
     class="sub-table-placeholder-widget"
     :class="`is-${state}`"
+    :data-fc-designer-binding-id="effectiveBindingId ?? undefined"
     @click.stop="onWidgetClick"
   >
     <!-- 图标 + 状态文字 -->
@@ -100,6 +101,7 @@ const injectedSubBindings = inject<() => DesignerSubBinding[]>('designerSubBindi
 
 const subBindings = computed(() => props.subBindings ?? injectedSubBindings())
 const bindingId = computed(() => normalizeBindingId(props._bindingId ?? props.bindingId ?? null))
+const effectiveBindingId = bindingId
 
 type PlaceholderState = 'unconfigured' | 'valid' | 'stale'
 

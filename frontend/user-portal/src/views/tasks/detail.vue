@@ -435,7 +435,7 @@ import { processApi } from '@/api/process'
 import ProcessDiagram, { type ProcessNode, type ProcessFlow } from '@/components/ProcessDiagram.vue'
 import ProcessHistory, { type HistoryRecord } from '@/components/ProcessHistory.vue'
 import FormRenderer, { type FormField, type FormTab } from '@/components/FormRenderer.vue'
-import { normalizePortalViews, collectLeafFormFieldKeys, isFormCreateRuleReadonly, isRowRule, isColRule, getRuleChildren, getRowGutter, getColSpan, extractRowColumnFields, parseFormRulesLayout, isTabsRule, isCardRule, isCollapseRule, convertAuxiliaryLayoutField, extractTabsFromTabsRule, extractCollapsePanelsFromRule, findTabsRule, isTabPaneRule, getLayoutKey, getLayoutLabel } from '@/components/formRendererHelpers'
+import { normalizePortalViews, collectLeafFormFieldKeys, isFormCreateRuleReadonly, isFormCreateRuleHidden, isRowRule, isColRule, getRuleChildren, getRowGutter, getColSpan, extractRowColumnFields, parseFormRulesLayout, isTabsRule, isCardRule, isCollapseRule, convertAuxiliaryLayoutField, extractTabsFromTabsRule, extractCollapsePanelsFromRule, findTabsRule, isTabPaneRule, getLayoutKey, getLayoutLabel } from '@/components/formRendererHelpers'
 import SubTableField from '@/components/SubTableField.vue'
 import N8nActionDialog from '@/components/N8nActionDialog.vue'
 import {
@@ -3794,8 +3794,14 @@ const FC_SKIP_TYPES = new Set(['subForm', 'tableForm', 'tableFormColumn'])
 const extractFieldsRecursive = (items: any[]): FormField[] => {
   const fields: FormField[] = []
   for (const item of items) {
+    if (item.field && isFormCreateRuleHidden(item)) {
+      continue
+    }
     const bindingId = item._bindingId ?? item.props?._bindingId
     if (item.type === 'subTable' && bindingId != null) {
+      if (isFormCreateRuleHidden(item)) {
+        continue
+      }
       const rawPv = item.props?.portalViews
       const hasWidgetPortalViews =
         rawPv != null && typeof rawPv === 'object' && Object.keys(rawPv).length > 0

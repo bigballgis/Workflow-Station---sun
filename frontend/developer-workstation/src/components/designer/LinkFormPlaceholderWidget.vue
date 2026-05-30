@@ -2,6 +2,7 @@
   <div
     class="link-form-placeholder-widget"
     :class="`is-${state}`"
+    :data-fc-designer-link-form-id="effectiveComponentId ?? undefined"
     @click.stop="onWidgetClick"
   >
     <el-icon><Link /></el-icon>
@@ -54,6 +55,7 @@ function onWidgetClick(e: MouseEvent) {
 }
 
 const componentId = computed(() => props._componentId ?? props.componentId ?? null)
+const effectiveComponentId = componentId
 
 type PlaceholderState = 'unconfigured' | 'valid' | 'stale'
 

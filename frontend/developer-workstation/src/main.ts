@@ -136,6 +136,7 @@ FcDesigner.addDragRule({
   },
   props() {
     return [
+      { type: 'switch', field: 'hidden', title: 'Hide' },
       {
         type: 'SubTableBindingSelect',
         field: '_bindingId',
@@ -197,6 +198,7 @@ FcDesigner.addDragRule({
   },
   props() {
     return [
+      { type: 'switch', field: 'hidden', title: 'Hide' },
       {
         type: 'LinkFormBindingSelect',
         field: '_componentId',
@@ -359,6 +361,7 @@ FcDesigner.addDragRule({
   props() {
     return [
       { type: 'input', field: 'placeholder', title: 'Placeholder' },
+      { type: 'switch', field: 'hidden', title: 'Hide' },
       { type: 'switch', field: 'readonly', title: 'Readonly' },
       { type: 'LookupBindingSelect', field: 'lookupConfig', title: 'Lookup Config', props: {} }
     ]

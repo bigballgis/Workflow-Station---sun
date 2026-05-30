@@ -15,6 +15,21 @@ export function isFormCreateRuleReadonly(rule: unknown): boolean {
   )
 }
 
+/** Designer "Hide" toggle — form-create `rule.hidden` / live canvas `_hidden` (also props.hide for legacy). */
+export function isFormCreateRuleHidden(rule: unknown): boolean {
+  if (!rule || typeof rule !== 'object') return false
+  const r = rule as Record<string, unknown>
+  const props = (r.props as Record<string, unknown> | undefined) || {}
+  return (
+    r.hidden === true ||
+    r._hidden === true ||
+    r.display === false ||
+    r._display === false ||
+    props.hidden === true ||
+    props.hide === true
+  )
+}
+
 /** Map designer readonly → form-create disabled for Preview / sub-form dialogs. */
 export function applyFormCreateRuleReadonly(rule: unknown): unknown {
   if (!rule || typeof rule !== 'object') return rule

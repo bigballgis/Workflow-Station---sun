@@ -79,6 +79,8 @@ export interface FormField {
   htmlContent?: string
   /** Per-field read-only from designer rule props.readonly / disabled. */
   readonly?: boolean
+  /** Designer "Hide" — form-create rule.hidden; field omitted from layout when true. */
+  hidden?: boolean
   /** Row layout gutter (type === 'row'). */
   gutter?: number
 }
@@ -93,6 +95,21 @@ export function isFormCreateRuleReadonly(rule: unknown): boolean {
     r.readonly === true ||
     props.disabled === true ||
     props.readonly === true
+  )
+}
+
+/** Designer "Hide" toggle — form-create `rule.hidden` / `_hidden` / `display: false`. */
+export function isFormCreateRuleHidden(rule: unknown): boolean {
+  if (!rule || typeof rule !== 'object') return false
+  const r = rule as Record<string, unknown>
+  const props = (r.props as Record<string, unknown> | undefined) || {}
+  return (
+    r.hidden === true ||
+    r._hidden === true ||
+    r.display === false ||
+    r._display === false ||
+    props.hidden === true ||
+    props.hide === true
   )
 }
 
@@ -447,9 +464,15 @@ export function extractFieldsRecursive(
   const fields: FormField[] = []
   for (let index = 0; index < items.length; index++) {
     const item = items[index]
+    if (item.field && isFormCreateRuleHidden(item)) {
+      continue
+    }
     const props = item.props as Record<string, unknown> | undefined
     const bindingId = item._bindingId ?? props?._bindingId
     if (item.type === 'subTable' && bindingId != null) {
+      if (isFormCreateRuleHidden(item)) {
+        continue
+      }
       const rawPv = props?.portalViews as Partial<SubTablePortalViews> | undefined
       const hasWidgetPortalViews =
         rawPv != null && typeof rawPv === 'object' && Object.keys(rawPv).length > 0

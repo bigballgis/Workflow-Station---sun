@@ -428,6 +428,7 @@ import {
   filterLinkOnlyStandaloneSubTableFields,
   collectLeafFormFieldKeys,
   isFormCreateRuleReadonly,
+  isFormCreateRuleHidden,
   isRowRule,
   isColRule,
   getRuleChildren,
@@ -3720,8 +3721,14 @@ const extractFieldsRecursive = (
 ): FormField[] => {
   const fields: FormField[] = []
   for (const item of items) {
+    if (item.field && isFormCreateRuleHidden(item)) {
+      continue
+    }
     const bindingId = item._bindingId ?? item.props?._bindingId
     if (item.type === 'subTable' && bindingId != null) {
+      if (isFormCreateRuleHidden(item)) {
+        continue
+      }
       if (!ctx.skipSubTable) {
         const rawPv = item.props?.portalViews
         const hasWidgetPortalViews =

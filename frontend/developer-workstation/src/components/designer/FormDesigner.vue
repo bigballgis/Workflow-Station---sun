@@ -110,13 +110,27 @@
               {{ selectedForm.formName }}
             </span>
           </template>
-          <div class="fc-designer-wrapper">
-            <fc-designer
-              ref="designerRef"
-              :locale="fcDesignerEnLocale"
-              :config="designerConfig"
-              height="calc(100vh - 260px)"
-            />
+          <div
+            class="fc-designer-wrapper"
+            :style="designerZoomStyle"
+          >
+            <div class="form-designer-canvas-toolbar-host">
+              <FormDesignerCanvasToolbar
+                v-model:show-hidden="designerShowHidden"
+                v-model:zoom-percent="designerZoomPercent"
+                in-designer-bar
+              />
+            </div>
+            <div class="fc-designer-zoom-stage">
+              <fc-designer
+                ref="designerRef"
+                :locale="fcDesignerEnLocale"
+                :config="designerConfig"
+                height="calc(100vh - 260px)"
+                @active="scheduleSyncHiddenMarkers"
+                @change-field="scheduleSyncHiddenMarkers"
+              />
+            </div>
           </div>
         </el-tab-pane>
         <el-tab-pane
@@ -176,13 +190,27 @@
                 :label="t('subTableView.formDesign')"
                 name="form"
               >
-                <div class="fc-designer-wrapper">
-                  <fc-designer
-                    :ref="(el: any) => setSubDesignerRef(el, index)"
-                    :locale="fcDesignerEnLocale"
-                    :config="designerConfig"
-                    height="calc(100vh - 320px)"
-                  />
+                <div
+                  class="fc-designer-wrapper"
+                  :style="designerZoomStyle"
+                >
+                  <div class="form-designer-canvas-toolbar-host">
+                    <FormDesignerCanvasToolbar
+                      v-model:show-hidden="designerShowHidden"
+                      v-model:zoom-percent="designerZoomPercent"
+                      in-designer-bar
+                    />
+                  </div>
+                  <div class="fc-designer-zoom-stage">
+                    <fc-designer
+                      :ref="(el: any) => setSubDesignerRef(el, index)"
+                      :locale="fcDesignerEnLocale"
+                      :config="designerConfig"
+                      height="calc(100vh - 320px)"
+                      @active="scheduleSyncHiddenMarkers"
+                      @change-field="scheduleSyncHiddenMarkers"
+                    />
+                  </div>
                 </div>
               </el-tab-pane>
               <el-tab-pane
@@ -215,13 +243,25 @@
           <div
             v-else
             class="fc-designer-wrapper"
+            :style="designerZoomStyle"
           >
-            <fc-designer
-              :ref="(el: any) => setSubDesignerRef(el, index)"
-              :locale="fcDesignerEnLocale"
-              :config="designerConfig"
-              height="calc(100vh - 260px)"
-            />
+            <div class="form-designer-canvas-toolbar-host">
+              <FormDesignerCanvasToolbar
+                v-model:show-hidden="designerShowHidden"
+                v-model:zoom-percent="designerZoomPercent"
+                in-designer-bar
+              />
+            </div>
+            <div class="fc-designer-zoom-stage">
+              <fc-designer
+                :ref="(el: any) => setSubDesignerRef(el, index)"
+                :locale="fcDesignerEnLocale"
+                :config="designerConfig"
+                height="calc(100vh - 260px)"
+                @active="scheduleSyncHiddenMarkers"
+                @change-field="scheduleSyncHiddenMarkers"
+              />
+            </div>
           </div>
         </el-tab-pane>
       </el-tabs>
@@ -581,6 +621,8 @@ import RelationTableView from './RelationTableView.vue'
 import SubTableListView from './SubTableListView.vue'
 import SubTablePortalViewsEditor from './SubTablePortalViewsEditor.vue'
 import FormPreviewItems from './FormPreviewItems.vue'
+import FormDesignerCanvasToolbar from './FormDesignerCanvasToolbar.vue'
+import { useFormDesignerCanvasChrome } from '@/composables/modules/useFormDesignerCanvasChrome'
 import type { FormPreviewItem } from './formPreviewTypes'
 import SubTableFormDialog from './SubTableFormDialog.vue'
 import SubTableAddDialog from './SubTableAddDialog.vue'
@@ -597,6 +639,7 @@ import { subTableViewApi, type SubTableFieldDTO, type SubTableViewConfig } from 
 import fcDesignerEnLocale from '@form-create/designer/locale/en.js'
 import {
   isFormCreateRuleReadonly,
+  isFormCreateRuleHidden,
   mapFormCreateRulesReadonlyDeep,
   stripFormCreateRulesDisabledDeep,
 } from '@/utils/formCreateRuleUtils'
@@ -1189,6 +1232,21 @@ const designerSubBindings = computed(() => {
   })
 })
 
+const {
+  designerShowHidden,
+  designerZoomPercent,
+  designerZoomStyle,
+  scheduleSyncHiddenMarkers,
+  setupMarkerObserver,
+  teardownMarkerObserver,
+} = useFormDesignerCanvasChrome({
+  activeDesignerTab,
+  designerRef,
+  subDesignerRefs,
+  designerSubBindings,
+  hiddenBadgeLabel: () => t('form.canvasHiddenBadge'),
+})
+
 // Provide subBindings to SubTablePlaceholderWidget via inject
 // The widget uses inject('designerSubBindings') to get the current list
 provide('designerSubBindings', () => designerSubBindings.value.map(b => ({
@@ -1446,15 +1504,40 @@ const designerConfig = computed(() => ({
   showSave: false, // Use custom save button
   fieldReadonly: false,
   hiddenItemConfig: {
-    default: ['disabled'],
+    // Hide built-in Basic "Hidden" — use Props tab "Hide" instead (same rule.hidden).
+    default: ['disabled', 'hidden'],
+    lookup: ['disabled', 'hidden'],
+    subTable: ['disabled', 'hidden'],
+    linkForm: ['disabled', 'hidden'],
+    editor: ['disabled', 'hidden'],
+    transfer: ['disabled', 'hidden'],
+    cascader: ['disabled', 'hidden'],
+    slider: ['disabled', 'hidden'],
   },
   componentRule: {
     default: {
       append: true,
       rule(rule: { type?: string }) {
         const builtInReadonly = new Set(['input', 'textarea', 'password', 'timePicker', 'datePicker', 'lookup'])
-        if (builtInReadonly.has(String(rule.type ?? ''))) return []
-        return [{ type: 'switch', field: 'readonly', title: 'Readonly' }]
+        const extra: Array<Record<string, unknown>> = [
+          { type: 'switch', field: 'hidden', title: 'Hide' },
+        ]
+        if (!builtInReadonly.has(String(rule.type ?? ''))) {
+          extra.push({ type: 'switch', field: 'readonly', title: 'Readonly' })
+        }
+        return extra
+      },
+    },
+    subTable: {
+      append: true,
+      rule() {
+        return [{ type: 'switch', field: 'hidden', title: 'Hide' }]
+      },
+    },
+    linkForm: {
+      append: true,
+      rule() {
+        return [{ type: 'switch', field: 'hidden', title: 'Hide' }]
       },
     },
   },
@@ -2558,6 +2641,8 @@ async function handleSelectForm(row: FormDefinition) {
         } catch {}
       }
       setupAutoSavePolling()
+      setupMarkerObserver()
+      scheduleSyncHiddenMarkers()
     }, 100)
   })
 
@@ -2594,7 +2679,13 @@ function loadSubDesigners(row: FormDefinition) {
 }
 
 function handleTabChange(tabName: TabPaneName) {
-  if (tabName === 'main') return
+  if (tabName === 'main') {
+    nextTick(() => {
+      setupMarkerObserver()
+      scheduleSyncHiddenMarkers()
+    })
+    return
+  }
   const bindingId = Number(tabName)
   const index = designerSubBindings.value.findIndex(b => b.bindingId === bindingId)
   if (index < 0) return
@@ -2646,6 +2737,8 @@ function handleTabChange(tabName: TabPaneName) {
           )
         } catch {}
       }
+      setupMarkerObserver()
+      scheduleSyncHiddenMarkers()
     }, 100)
   })
 }
@@ -2658,6 +2751,7 @@ function handleSubTableInnerTabChange(tabName: string, binding: any) {
 }
 
 function handleBackToList() {
+  teardownMarkerObserver()
   selectedForm.value = null
   cleanupAutoSavePolling()
 }
@@ -3215,6 +3309,9 @@ function handlePreview() {
       console.log('[Preview] Checking ruleItem:', { type: ruleItem.type, _bindingId: itemBindingId, field: ruleItem.field })
 
       if (ruleItem.type === 'subTable' && itemBindingId != null) {
+        if (isFormCreateRuleHidden(ruleItem)) {
+          continue
+        }
         flushSegment()
         const binding = localBindingMap.get(Number(itemBindingId))
         console.log('[Preview] Found subTable with bindingId:', itemBindingId, 'binding found:', !!binding)
@@ -3235,14 +3332,16 @@ function handlePreview() {
           modelKey: `${keyPrefix}_card_${segmentIndex}`,
         })
       } else if (ruleItem.type === 'lookup') {
-        flushSegment()
-        items.push(makeLookupPreviewItem(ruleItem, config))
+        if (!isFormCreateRuleHidden(ruleItem)) {
+          flushSegment()
+          items.push(makeLookupPreviewItem(ruleItem, config))
+        }
       } else if (FC_SKIP_PREVIEW.has(ruleItem.type)) {
         if (containsSubTableRule(ruleItem)) {
           flushSegment()
           items.push(...buildPreviewItems(getRuleChildren(ruleItem), localBindingMap, `${keyPrefix}_layout_${segmentIndex++}`))
         }
-      } else {
+      } else if (!isFormCreateRuleHidden(ruleItem)) {
         currentSegment.push(ruleItem)
       }
     }
@@ -3697,10 +3796,85 @@ onMounted(() => {
 }
 
 .fc-designer-wrapper {
+  /* form-create 左侧组件栏 / 右侧属性栏 / 顶栏 Preview·Clear 区宽度 */
+  --fc-designer-menu-width: 251px;
+  --fc-designer-side-r-width: 320px;
+  --fc-designer-top-actions-width: 200px;
   flex: 1;
-  overflow: hidden;
+  overflow: auto;
+  position: relative;
   border: 1px solid #e6e6e6;
   border-radius: 4px;
+
+  /* Show hidden + 缩放：顶栏右侧，紧贴 Preview 左侧（Y 与 fc-designer 顶栏对齐） */
+  .form-designer-canvas-toolbar-host {
+    position: absolute;
+    top: 0;
+    left: var(--fc-designer-menu-width);
+    right: var(--fc-designer-side-r-width);
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: var(--fc-designer-top-actions-width);
+    z-index: 30;
+    pointer-events: none;
+
+    :deep(.form-designer-canvas-toolbar) {
+      pointer-events: auto;
+    }
+  }
+
+  .fc-designer-zoom-stage {
+    transform: scale(var(--fc-designer-zoom, 1));
+    transform-origin: top left;
+    width: calc(100% / var(--fc-designer-zoom, 1));
+    min-height: calc(100% / var(--fc-designer-zoom, 1));
+  }
+
+  /* form-create: `._fd-drag-hidden` is a direct-child overlay (not a class on the drag-tool) */
+  &:not(.fc-designer-show-hidden) {
+    :deep(._fd-drag-tool:has(> ._fd-drag-hidden)) {
+      display: none !important;
+    }
+  }
+
+  :deep(.fc-designer-hidden-field) {
+    position: relative;
+
+    &.fc-designer-hidden-field--concealed {
+      display: none !important;
+    }
+
+    &:not(.fc-designer-hidden-field--concealed)::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border: 2px dashed #e6a23c;
+      background: rgba(230, 162, 60, 0.1);
+      border-radius: 4px;
+      pointer-events: none;
+      z-index: 4;
+    }
+
+    &:not(.fc-designer-hidden-field--concealed)::after {
+      content: var(--fc-designer-hidden-badge, 'Hidden');
+      position: absolute;
+      top: 4px;
+      right: 6px;
+      font-size: 11px;
+      line-height: 1.2;
+      padding: 2px 8px;
+      background: #e6a23c;
+      color: #fff;
+      border-radius: 3px;
+      z-index: 5;
+      pointer-events: none;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+    }
+  }
   
   :deep(.fc-designer) {
     height: 100% !important;

@@ -84,6 +84,7 @@ declare module 'vue' {
     ExecutionLogViewer: typeof import('./components/debug/ExecutionLogViewer.vue')['default']
     FormCreateDialog: typeof import('./components/designer/form-designer/FormCreateDialog.vue')['default']
     FormDesigner: typeof import('./components/designer/FormDesigner.vue')['default']
+    FormDesignerCanvasToolbar: typeof import('./components/designer/FormDesignerCanvasToolbar.vue')['default']
     FormListSidebar: typeof import('./components/designer/form-designer/FormListSidebar.vue')['default']
     FormNodeBindDialog: typeof import('./components/designer/form-designer/FormNodeBindDialog.vue')['default']
     FormPreviewItems: typeof import('./components/designer/FormPreviewItems.vue')['default']
