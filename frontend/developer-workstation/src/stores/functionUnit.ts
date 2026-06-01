@@ -83,7 +83,16 @@ export const useFunctionUnitStore = defineStore('functionUnit', () => {
 
   async function updateTable(functionUnitId: number, tableId: number, data: Partial<TableDefinition>) {
     const res = await functionUnitApi.updateTable(functionUnitId, tableId, data)
-    return res.data
+    const updated = res.data
+    if (updated) {
+      const index = tables.value.findIndex(t => t.id === tableId)
+      if (index >= 0) {
+        tables.value[index] = updated
+      } else {
+        tables.value.push(updated)
+      }
+    }
+    return updated
   }
 
   async function deleteTable(functionUnitId: number, tableId: number) {

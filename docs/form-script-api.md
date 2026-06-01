@@ -87,6 +87,21 @@ fc-designer 在内存与导出之间做别名转换（见 `FcDesigner.vue` `load
 - 有 `_fc_id` / `_menu` 的画布节点 → **`_on` + `_hook`**
 - `getRule()` 返回、保存前 walk 的树 → **`on` + `hook`**
 
+### 1.3 字段默认值（Table Design / Form Basis）
+
+| 来源 | 存储位置 | 预览 / 门户 |
+|------|----------|-------------|
+| **Table Design** → Default Value | `dw_field_definitions.defaultValue` | **Form Design 画布**：打开表单 / `setRule` 前 `hydrateDesignerRulesFromLatestTableDefaults`（`tableOverridesRule`，覆盖陈旧 `rule.value`）；**预览**：`handlePreview` 同上；**保存**：`walkRulesApplyTableFieldDefaultsToPersistedRules` 写入 `rule.value` 供门户读取 |
+| **Form Design** → Basis → Default value | 部分控件无此项；有则 `rule.value` / `rule.props.value` | `resolveRuleDefaultValue` → `seedFormDataFromRules` |
+
+实现：`frontend/*/src/utils/formCreateRuleDefaults.ts`（设计器与门户各一份，需保持同步）。
+
+**Select / Radio：** 默认值应使用选项的 **value**（如 `1`），或填写与 **label** 完全一致的文案；任意字符串（如 `test select`）若既不匹配 value 也不匹配 label，下拉框会保持空白。
+
+**门户：** `convertFormCreateRule` 调用 `applyRuleDefaultToFormField`；`FormRenderer.initFormData` 在 `modelValue` 为空时应用 `field.defaultValue`。
+
+**导出/导入后 Event 脚本：** 加载表单时 `inflateComponentEventsForDesigner` 将持久化的 `on`/`hook` 复制到 `_on`/`_hook`，供设计器 Event 面板显示。
+
 ---
 
 ## 2. 运行时 API（`PortalFormApi`）

@@ -436,6 +436,7 @@ import ProcessDiagram, { type ProcessNode, type ProcessFlow } from '@/components
 import ProcessHistory, { type HistoryRecord } from '@/components/ProcessHistory.vue'
 import FormRenderer, { type FormField, type FormTab } from '@/components/FormRenderer.vue'
 import { normalizePortalViews, collectLeafFormFieldKeys, isFormCreateRuleReadonly, isFormCreateRuleHidden, isRowRule, isColRule, getRuleChildren, getRowGutter, getColSpan, extractRowColumnFields, parseFormRulesLayout, isTabsRule, isCardRule, isCollapseRule, convertAuxiliaryLayoutField, extractTabsFromTabsRule, extractCollapsePanelsFromRule, findTabsRule, isTabPaneRule, getLayoutKey, getLayoutLabel } from '@/components/formRendererHelpers'
+import { applyRuleDefaultToFormField } from '@/utils/formCreateRuleDefaults'
 import SubTableField from '@/components/SubTableField.vue'
 import N8nActionDialog from '@/components/N8nActionDialog.vue'
 import {
@@ -3960,6 +3961,7 @@ const convertFormCreateRule = (rule: any): FormField | null => {
   if (isFormCreateRuleReadonly(rule)) {
     field.readonly = true
   }
+  applyRuleDefaultToFormField(field, rule as Record<string, unknown>)
   return field
 }
 

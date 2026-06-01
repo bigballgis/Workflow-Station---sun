@@ -448,6 +448,7 @@ import {
   convertAuxiliaryLayoutField,
   collectPlacedSubTableBindingIds,
 } from '@/components/formRendererHelpers'
+import { applyRuleDefaultToFormField } from '@/utils/formCreateRuleDefaults'
 import SubTableField from '@/components/SubTableField.vue'
 import SubTableInlineForm from '@/components/SubTableInlineForm.vue'
 import ChangeHistoryPanel from '@/components/ChangeHistoryPanel.vue'
@@ -3912,6 +3913,7 @@ const convertFormCreateRule = (rule: any): FormField | null => {
   if (isFormCreateRuleReadonly(rule)) {
     field.readonly = true
   }
+  applyRuleDefaultToFormField(field, rule as Record<string, unknown>)
   return field
 }
 

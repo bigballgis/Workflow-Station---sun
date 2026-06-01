@@ -17,6 +17,7 @@ import {
   normalizeFormLevelEventHandler,
 
   flattenComponentEventsForPersist,
+  inflateComponentEventsForDesigner,
   normalizeEventEditorBody,
 
   walkRulesEnsureComponentEvents,
@@ -199,6 +200,22 @@ describe('formCreateDefaultEvents', () => {
     flattenComponentEventsForPersist(rules)
     const rule = rules[0] as Record<string, unknown>
     expect(rule._on).toBeUndefined()
+    expect(String((rule.on as Record<string, unknown>).blur)).toContain('legal_hold')
+  })
+
+  it('inflateComponentEventsForDesigner copies on.blur to _on for Event panel', () => {
+    const rules = [
+      {
+        type: 'input',
+        field: 'case_number',
+        on: {
+          blur: '$FNX:\nif ($inject.value === "abc") { $inject.api.setValue("legal_hold", true) }',
+        },
+      },
+    ] as Record<string, unknown>[]
+    inflateComponentEventsForDesigner(rules)
+    const rule = rules[0] as Record<string, unknown>
+    expect(String((rule._on as Record<string, unknown>).blur)).toContain('legal_hold')
     expect(String((rule.on as Record<string, unknown>).blur)).toContain('legal_hold')
   })
 

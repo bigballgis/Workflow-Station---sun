@@ -1064,9 +1064,10 @@ function applyEngineResult(result: {
 const initFormData = () => {
   const data: Record<string, any> = {}
   allFields.value.forEach(field => {
-    if (props.modelValue[field.key] !== undefined) {
-      data[field.key] = props.modelValue[field.key]
-    } else if (field.defaultValue !== undefined) {
+    const bound = props.modelValue[field.key]
+    if (bound !== undefined && bound !== null && bound !== '') {
+      data[field.key] = bound
+    } else if (field.defaultValue !== undefined && field.defaultValue !== null && field.defaultValue !== '') {
       data[field.key] = field.defaultValue
     } else if (field.type === 'checkbox') {
       data[field.key] = []

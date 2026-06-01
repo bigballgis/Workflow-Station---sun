@@ -284,6 +284,7 @@ import ProcessDiagram, { type ProcessNode, type ProcessFlow } from '@/components
 import ProcessHistory, { type HistoryRecord } from '@/components/ProcessHistory.vue'
 import FormRenderer, { type FormField, type FormTab } from '@/components/FormRenderer.vue'
 import { normalizePortalViews, isFormCreateRuleReadonly, isFormCreateRuleHidden, isRowRule, isColRule, getRuleChildren, getRowGutter, getColSpan, extractRowColumnFields, parseFormRulesLayout, isTabsRule, isCardRule, isCollapseRule, convertAuxiliaryLayoutField, extractTabsFromTabsRule, extractCollapsePanelsFromRule, getLayoutKey, getLayoutLabel, collectPlacedSubTableBindingIds, computeNeededSubTableBindingIds } from '@/components/formRendererHelpers'
+import { applyRuleDefaultToFormField } from '@/utils/formCreateRuleDefaults'
 import N8nActionDialog from '@/components/N8nActionDialog.vue'
 import type { ActionDefinition } from '@/components/N8nActionDialog.vue'
 import { applyAutoFill } from '@/utils/n8nAutoFillEngine'
@@ -1196,10 +1197,7 @@ const convertFormCreateRule = (rule: any): FormField | null => {
   // 处理滑块
   if (rule.type === 'slider') { field.min = rule.props?.min ?? 0; field.max = rule.props?.max ?? 100; field.step = rule.props?.step || 1 }
   
-  // 处理默认值
-  if (rule.value !== undefined) {
-    field.defaultValue = rule.value
-  }
+  applyRuleDefaultToFormField(field, rule as Record<string, unknown>)
 
   // 处理文件上传
   if (rule.type === 'upload') {

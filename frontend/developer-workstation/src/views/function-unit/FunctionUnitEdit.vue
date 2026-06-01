@@ -416,7 +416,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, reactive, onMounted, onUnmounted } from 'vue'
+import { ref, computed, reactive, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -442,6 +442,12 @@ const store = useFunctionUnitStore()
 
 const functionUnitId = computed(() => Number(route.params.id))
 const activeTab = ref('process')
+
+watch(activeTab, (tab) => {
+  if (tab === 'forms' && functionUnitId.value) {
+    void store.fetchTables(functionUnitId.value)
+  }
+})
 const validating = ref(false)
 const saving = ref(false)
 const exporting = ref(false)

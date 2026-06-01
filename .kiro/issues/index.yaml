@@ -155,3 +155,17 @@
     修复：formCreateEventRuntime.ts 解析 FORM-CREATE-PREFIX 并提供 setValue/getValue/hidden/display（api/options 双别名）；
     flattenAllFormFieldSegments 合并 tabs 前/中/后字段；createFieldKeyResolver 按 label 解析 setValue/hidden 目标；
     FormRenderer.handleFieldChange 触发 onChange；start/tasks/applications 传入 formOptions。
+- id: "1418"
+  status: fixed
+  fixed_at: "2026-05-30"
+  severity: major
+  category: bug
+  summary: "Table Design select 默认值未在 Form Preview 生效，且修改表默认后仍显示旧选项"
+  detail: |
+    根因：（1）form-create 预览忽略预挂载 v-model，select 仍显示 placeholder；
+    （2）预览/保存优先使用 config_json.rule 内陈旧的 rule.value，Table Design 更新 defaultValue 后被跳过。
+    修复：formCreatePreviewEvents hook.load + onMounted setValue；handlePreview 使用 tableOverridesRule 以表元数据覆盖陈旧 rule；
+    walkRulesApplyTableFieldDefaultsToPersistedRules 保存时始终写入当前表默认；门户 applyRuleDefaultToFormField 表优先；
+    Form Design 画布：handleSelectForm / 子表 setRule 前 hydrateDesignerRulesFromLatestTableDefaults；切换至 Form Design 页 prefetch tables；
+    watch store.tables 在表保存后刷新当前画布。
+    路径：formCreateRuleDefaults.ts（DW/Portal）、formCreatePreviewEvents.ts、FormDesigner；docs/form-script-api.md §1.3。

@@ -351,11 +351,11 @@
     >
       <div class="preview-container">
         <FormPreviewItems
-          v-if="previewItems.length > 0"
+          v-if="previewItems.length > 0 && previewFormReady"
           v-model:preview-data="previewData"
           v-model:preview-table-rows="previewTableRows"
           :items="previewItems"
-          :preview-option="previewOption"
+          :preview-option="previewDialogOption"
         />
         <el-empty
           v-else
@@ -605,14 +605,28 @@ import { useFormActions } from '@/composables/modules/useFormActions'
 import { parseLookupConfig, getMockValueForType, derivePreviewColumns } from '@/utils/formPreview'
 import { resolveBindingDisplayName } from '@/utils/bindingDisplayHelpers'
 import { cloneFormRules, injectUploadButtonLabels, mergeLoadedFormOptions, getRuleChildren, collectSubTableRules, isCardRule, getLayoutLabel } from '@/utils/formDesigner'
-import { materializePreviewItemsEvents } from '@/utils/formCreatePreviewEvents'
-import { flattenComponentEventsForPersist } from '@/utils/formCreateDefaultEvents'
 import {
+  applyPreviewDefaultsToItemRules,
+  attachPreviewMountedDefaultSync,
+  materializePreviewItemsEvents,
+} from '@/utils/formCreatePreviewEvents'
+import {
+  flattenComponentEventsForPersist,
+  inflateComponentEventsForDesigner,
   buildDefaultFormCreateOptions,
   buildDesignerUpdateDefaultRule,
   ensureEmptyRuleComponentEvents,
   walkRulesEnsureComponentEvents,
 } from '@/utils/formCreateDefaultEvents'
+import {
+  applyTableFieldDefaultToRule,
+  applyTableFieldDefaultsToRulesAndModel,
+  resolveRuleDefaultValue,
+  seedFormDataFromRules,
+  syncModelValuesOntoRules,
+  walkRulesApplyTableFieldDefaultsToPersistedRules,
+  type TableFieldDefLike,
+} from '@/utils/formCreateRuleDefaults'
 import { ArrowLeft, Connection, Loading, CircleCheck } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { TabPaneName } from 'element-plus'
@@ -682,6 +696,8 @@ const designerRef = ref<any>(null)
 const showCreateDialog = ref(false)
 const showRenameDialog = ref(false)
 const showPreviewDialog = ref(false)
+const previewFormReady = ref(false)
+const previewDialogOption = ref<Record<string, unknown>>({})
 const showBindDialog = ref(false)
 const renameFormName = ref('')
 const renameTargetForm = ref<FormDefinition | null>(null)
@@ -753,6 +769,7 @@ provide(PREVIEW_SUBTABLE_DIALOG_KEY, {
 
 watch(showPreviewDialog, (open) => {
   if (open) return
+  previewFormReady.value = false
   previewRowDialog.visible = false
   previewRowDialog.onSave = null
   previewMyRequestsActive.value = false
@@ -1426,6 +1443,16 @@ watch(() => selectedForm.value?.tableBindings, (newVal) => {
   console.log('[FormDesigner] tableBindings changed:', newVal)
 }, { deep: true })
 
+// Table Design saved while another tab was open — refresh canvas defaults when tables update.
+watch(
+  () => store.tables,
+  () => {
+    if (!selectedForm.value) return
+    nextTick(() => refreshActiveDesignerRulesFromTableDefaults())
+  },
+  { deep: true },
+)
+
 // Watch for selectedForm changes and load linkFormComponents
 watch([() => selectedForm.value, () => props.functionUnitId], async ([form, fuId]) => {
   if (form && fuId) {
@@ -1708,6 +1735,7 @@ function deriveColumnsFromBinding(binding: any, subForms?: Record<string, any>) 
       }
       if (options) passProps.options = options
       const readonly = isFormCreateRuleReadonly(r)
+      const defaultValue = resolveRuleDefaultValue(r as Record<string, unknown>)
       return {
         field: r.field,
         label: r.title || r.field,
@@ -1716,6 +1744,7 @@ function deriveColumnsFromBinding(binding: any, subForms?: Record<string, any>) 
         ...(readonly ? { readonly: true } : {}),
         ...(options ? { options } : {}),
         ...(Object.keys(passProps).length > 0 ? { props: passProps } : {}),
+        ...(defaultValue !== undefined ? { defaultValue } : {}),
       }
     })
   }
@@ -2114,6 +2143,61 @@ async function handleImportFieldsToDesigner() {
   showImportFieldsDialog.value = true
 }
 
+/** PRIMARY-bound table field defs (Table Design defaults). */
+function getPrimaryBindingFieldDefinitions(): FieldDefinition[] {
+  if (!selectedForm.value) return []
+  const bindings = selectedForm.value.tableBindings ?? []
+  const primary = bindings.find(
+    (b: TableBinding) => String(b.bindingType ?? '').toUpperCase() === 'PRIMARY',
+  )
+  let tableId = primary?.tableId ?? selectedForm.value.boundTableId
+  if (!tableId && bindings.length === 1) {
+    tableId = bindings[0].tableId
+  }
+  return getTableFieldDefinitionsByTableId(tableId)
+}
+
+function getTableFieldDefinitionsByTableId(tableId?: number | null): FieldDefinition[] {
+  if (!tableId) return []
+  const table = store.tables.find(t => t.id === tableId)
+  return table?.fieldDefinitions ?? []
+}
+
+/** Canvas load: Table Design default overrides stale rule.value from last form save. */
+function hydrateDesignerRulesFromLatestTableDefaults(
+  rules: unknown[],
+  fieldDefs: TableFieldDefLike[],
+): void {
+  if (!Array.isArray(rules) || rules.length === 0 || fieldDefs.length === 0) return
+  applyTableFieldDefaultsToRulesAndModel(rules, fieldDefs, {}, false, { tableOverridesRule: true })
+}
+
+function refreshActiveDesignerRulesFromTableDefaults(): void {
+  const designer = getActiveDesignerRef()
+  if (!designer?.getRule || !designer.setRule) return
+  let rules: unknown[] = []
+  try {
+    rules = designer.getRule() || []
+  } catch {
+    return
+  }
+  if (!rules.length) return
+  rules = cloneFormRules(rules) as unknown[]
+  let fieldDefs: TableFieldDefLike[] = getPrimaryBindingFieldDefinitions()
+  if (activeDesignerTab.value !== 'main') {
+    const bindingId = Number(activeDesignerTab.value)
+    const binding = designerSubBindings.value.find(b => b.bindingId === bindingId)
+    fieldDefs = getTableFieldDefinitionsByTableId(binding?.tableId)
+  }
+  hydrateDesignerRulesFromLatestTableDefaults(rules, fieldDefs)
+  try {
+    injectUploadButtonLabels(rules as ReturnType<typeof cloneFormRules>, t('form.clickToUpload'))
+    designer.setRule(rules as ReturnType<typeof cloneFormRules>)
+  } catch {
+    // ignore designer sync errors
+  }
+}
+
 /**
  * Convert database field type to form-create rule
  */
@@ -2134,10 +2218,11 @@ function fieldToFormRule(field: FieldDefinition): any {
     })
   }
   
+  let rule: any
   // Map data type to form component
   switch (field.dataType) {
     case 'VARCHAR':
-      return {
+      rule = {
         ...baseRule,
         type: 'input',
         props: {
@@ -2146,8 +2231,9 @@ function fieldToFormRule(field: FieldDefinition): any {
           showWordLimit: true
         }
       }
+      break
     case 'TEXT':
-      return {
+      rule = {
         ...baseRule,
         type: 'input',
         props: {
@@ -2156,9 +2242,10 @@ function fieldToFormRule(field: FieldDefinition): any {
           rows: 3
         }
       }
+      break
     case 'INTEGER':
     case 'BIGINT':
-      return {
+      rule = {
         ...baseRule,
         type: 'inputNumber',
         props: {
@@ -2166,8 +2253,9 @@ function fieldToFormRule(field: FieldDefinition): any {
           precision: 0
         }
       }
+      break
     case 'DECIMAL':
-      return {
+      rule = {
         ...baseRule,
         type: 'inputNumber',
         props: {
@@ -2175,14 +2263,16 @@ function fieldToFormRule(field: FieldDefinition): any {
           precision: field.scale || 2
         }
       }
+      break
     case 'BOOLEAN':
-      return {
+      rule = {
         ...baseRule,
         type: 'switch',
         props: {}
       }
+      break
     case 'DATE':
-      return {
+      rule = {
         ...baseRule,
         type: 'datePicker',
         props: {
@@ -2191,8 +2281,9 @@ function fieldToFormRule(field: FieldDefinition): any {
           valueFormat: 'YYYY-MM-DD'
         }
       }
+      break
     case 'TIMESTAMP':
-      return {
+      rule = {
         ...baseRule,
         type: 'datePicker',
         props: {
@@ -2201,8 +2292,9 @@ function fieldToFormRule(field: FieldDefinition): any {
           valueFormat: 'YYYY-MM-DD HH:mm:ss'
         }
       }
+      break
     case 'FILE':
-      return {
+      rule = {
         ...baseRule,
         type: 'upload',
         props: {
@@ -2215,8 +2307,9 @@ function fieldToFormRule(field: FieldDefinition): any {
           tip: t('form.fileUploadTip')
         }
       }
+      break
     default:
-      return {
+      rule = {
         ...baseRule,
         type: 'input',
         props: {
@@ -2224,6 +2317,8 @@ function fieldToFormRule(field: FieldDefinition): any {
         }
       }
   }
+  applyTableFieldDefaultToRule(rule, field)
+  return rule
 }
 
 /**
@@ -2673,7 +2768,9 @@ async function handleSelectForm(row: FormDefinition) {
           ) as unknown[]
         ) as ReturnType<typeof cloneFormRules>
         injectUploadButtonLabels(rules, t('form.clickToUpload'))
+        inflateComponentEventsForDesigner(rules)
         walkRulesEnsureComponentEvents(rules)
+        hydrateDesignerRulesFromLatestTableDefaults(rules, getPrimaryBindingFieldDefinitions())
         designerRef.value.setRule(rules)
         nextTick(() => patchDesignerRulesDefaultEvents())
         designerRef.value.setOption(
@@ -2715,7 +2812,9 @@ function loadSubDesigners(row: FormDefinition) {
               cloneFormRules(subConfig.rule && subConfig.rule.length ? subConfig.rule : []) as unknown[]
             ) as ReturnType<typeof cloneFormRules>
             injectUploadButtonLabels(rules, t('form.clickToUpload'))
+            inflateComponentEventsForDesigner(rules)
             walkRulesEnsureComponentEvents(rules)
+            hydrateDesignerRulesFromLatestTableDefaults(rules, getTableFieldDefinitionsByTableId(binding.tableId))
             subRef.setRule(rules)
             subRef.setOption(
               mergeLoadedFormOptions(
@@ -2780,7 +2879,9 @@ function handleTabChange(tabName: TabPaneName) {
             cloneFormRules(subConfig.rule && subConfig.rule.length ? subConfig.rule : []) as unknown[]
           ) as ReturnType<typeof cloneFormRules>
           injectUploadButtonLabels(rules, t('form.clickToUpload'))
+          inflateComponentEventsForDesigner(rules)
           walkRulesEnsureComponentEvents(rules)
+          hydrateDesignerRulesFromLatestTableDefaults(rules, getTableFieldDefinitionsByTableId(binding.tableId))
           subRef.setRule(rules)
           subRef.setOption(
             mergeLoadedFormOptions(
@@ -3012,6 +3113,7 @@ async function handleSaveForm(isManual = false) {
 
   try {
     const rule = stripFormCreateRulesDisabledDeep(designerRef.value.getRule() || []) as any[]
+    walkRulesApplyTableFieldDefaultsToPersistedRules(rule, getPrimaryBindingFieldDefinitions())
     flattenComponentEventsForPersist(rule)
     walkRulesEnsureComponentEvents(rule)
     const options = designerRef.value.getOption()
@@ -3197,12 +3299,17 @@ async function handleSaveForm(isManual = false) {
   }
 }
 
-function handlePreview() {
+async function handlePreview() {
   console.log('[DEBUG] ==================== handlePreview START ====================')
-  console.log('[DEBUG] after fetch')
+
+  try {
+    await store.fetchTables(props.functionUnitId)
+  } catch (e) {
+    console.warn('[FormDesigner] fetchTables before preview failed:', e)
+  }
 
   // Wrapper to catch errors during preview generation
-  function buildPreview() {
+  async function buildPreview() {
   if (!selectedForm.value) {
     console.log('[DEBUG] no selectedForm, returning early')
     return
@@ -3339,6 +3446,13 @@ function handlePreview() {
 
   rawRule = mapFormCreateRulesReadonlyDeep(rawRule) as any[]
 
+  const tableFieldDefs = getPrimaryBindingFieldDefinitions()
+  applyTableFieldDefaultsToRulesAndModel(rawRule, tableFieldDefs, previewData.value, true, {
+    tableOverridesRule: true,
+  })
+  seedFormDataFromRules(rawRule, previewData.value, true)
+  syncModelValuesOntoRules(rawRule, previewData.value)
+
   // form-create proprietary types that should not be rendered in preview
   const FC_SKIP_PREVIEW = new Set(['subForm', 'tableForm', 'tableFormColumn', 'group', 'el-row', 'el-col'])
 
@@ -3393,9 +3507,10 @@ function handlePreview() {
           items.push(makeLookupPreviewItem(ruleItem, config))
         }
       } else if (FC_SKIP_PREVIEW.has(ruleItem.type)) {
-        if (containsSubTableRule(ruleItem)) {
+        const layoutChildren = getRuleChildren(ruleItem)
+        if (containsSubTableRule(ruleItem) || layoutChildren.length > 0) {
           flushSegment()
-          items.push(...buildPreviewItems(getRuleChildren(ruleItem), localBindingMap, `${keyPrefix}_layout_${segmentIndex++}`))
+          items.push(...buildPreviewItems(layoutChildren, localBindingMap, `${keyPrefix}_layout_${segmentIndex++}`))
         }
       } else if (!isFormCreateRuleHidden(ruleItem)) {
         currentSegment.push(ruleItem)
@@ -3413,7 +3528,24 @@ function handlePreview() {
   // (placed bindings were already deleted from bindingMap above)
 
   previewItems.value = items
+  for (const pi of previewItems.value) {
+    if (pi.kind === 'fields') {
+      syncModelValuesOntoRules(pi.rule, previewData.value)
+    } else if (pi.kind === 'card') {
+      for (const cardItem of pi.items) {
+        if (cardItem.kind === 'fields') {
+          syncModelValuesOntoRules(cardItem.rule, previewData.value)
+        }
+      }
+    }
+  }
+  previewData.value = { ...previewData.value }
+  applyPreviewDefaultsToItemRules(previewItems.value, previewData)
   materializePreviewItemsEvents(previewItems.value, previewData)
+  previewDialogOption.value = attachPreviewMountedDefaultSync(
+    getPreviewOption() as Record<string, unknown>,
+    previewData,
+  )
   // Keep previewRule for backward compat (used by previewSubBindings logic elsewhere if any)
   previewRule.value = rawRule.filter(r => r.type !== 'subTable')
   console.log('[Preview] previewItems:', items.map(i => i.kind === 'fields' ? `fields(${i.rule.length})` : i.kind))
@@ -3429,13 +3561,16 @@ function handlePreview() {
   })
   previewSubBindings.value = [] // no longer used for bottom rendering
 
+  previewFormReady.value = false
   showPreviewDialog.value = true
+  await nextTick()
+  previewFormReady.value = true
   console.log('[DEBUG] ==================== handlePreview END ====================')
   } // end of buildPreview function
 
   // Wrap the entire preview building in try-catch to handle circular dependency errors
   try {
-    buildPreview()
+    await buildPreview()
   } catch (e: any) {
     console.error('[FormDesigner] Preview build error:', e)
     // Try a simpler preview with just the basic rule

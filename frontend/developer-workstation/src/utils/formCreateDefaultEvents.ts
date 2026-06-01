@@ -240,6 +240,28 @@ export function flattenComponentEventsForPersist(rules: unknown[]): void {
   }
 }
 
+/**
+ * After loading config_json into fc-designer: copy persisted `on` / `hook` into `_on` / `_hook`
+ * so Hermes EventConfig reads scripts (inverse of {@link flattenComponentEventsForPersist}).
+ */
+export function inflateComponentEventsForDesigner(rules: unknown[]): void {
+  if (!Array.isArray(rules)) return
+  for (const raw of rules) {
+    if (!raw || typeof raw !== 'object') continue
+    const rule = raw as Record<string, unknown>
+    const on = mergeRuleOnHandlers(rule)
+    if (Object.keys(on).length > 0) {
+      rule._on = on
+    }
+    const hook = mergeRuleHookHandlers(rule)
+    if (Object.keys(hook).length > 0) {
+      rule._hook = hook
+    }
+    const children = getRuleChildren(rule)
+    if (children.length) inflateComponentEventsForDesigner(children)
+  }
+}
+
 /** True when rule is a live fc-designer canvas node (uses `_on` / `_hook`). */
 export function isDesignerCanvasRule(rule: Record<string, unknown>): boolean {
   return rule._fc_id != null || rule._menu != null
