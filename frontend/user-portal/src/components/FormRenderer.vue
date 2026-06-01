@@ -891,6 +891,20 @@ function isFieldVisible(fieldKey: string): boolean {
   return engineVisibility.value.get(fieldKey) ?? true
 }
 
+/** Errors from Form/Component event scripts (`api.setFieldError`). */
+const scriptFieldErrors = ref<Record<string, string>>({})
+
+function setScriptFieldError(fieldKey: string, message: string) {
+  scriptFieldErrors.value = { ...scriptFieldErrors.value, [fieldKey]: message }
+}
+
+function clearScriptFieldError(fieldKey: string) {
+  if (!(fieldKey in scriptFieldErrors.value)) return
+  const next = { ...scriptFieldErrors.value }
+  delete next[fieldKey]
+  scriptFieldErrors.value = next
+}
+
 function createFormEventApi() {
   const resolveFieldKey = createFieldKeyResolver(() => allFields.value)
   return createPortalFormApi(
@@ -903,6 +917,14 @@ function createFormEventApi() {
       state: eventVisibilityState,
       notify: notifyEventVisibilityChange,
       getAllFieldKeys: () => allFields.value.map(f => f.key),
+    },
+    {
+      setFieldError: (fieldKey, message) => {
+        setScriptFieldError(fieldKey, message)
+      },
+      clearFieldError: (fieldKey) => {
+        clearScriptFieldError(fieldKey)
+      },
     },
   )
 }
@@ -1215,24 +1237,39 @@ watch(
 // Task 7.3: Form validation with engine integration
 // ---------------------------------------------------------------------------
 
+function findFormItemEl(fieldKey: string): HTMLElement | null {
+  const root = formRef.value?.$el as HTMLElement | undefined
+  if (!root) return null
+  return root.querySelector(
+    `.el-form-item[data-field-key="${CSS.escape(fieldKey)}"]`,
+  ) as HTMLElement | null
+}
+
 /**
  * Inject an engine validation error into an Element Plus form-item via DOM.
  * Adds the `is-error` class and appends an `.el-form-item__error` element.
  */
 function injectFieldError(fieldKey: string, message: string) {
-  const itemEl = document.querySelector(
-    `.el-form-item[prop="${fieldKey}"]`
-  ) as HTMLElement | null
+  const itemEl = findFormItemEl(fieldKey)
   if (!itemEl) return
   itemEl.classList.add('is-error')
   const contentEl = itemEl.querySelector('.el-form-item__content')
   if (!contentEl) return
-  // Remove any previously injected engine errors
   contentEl.querySelectorAll('.engine-error').forEach(el => el.remove())
   const errorDiv = document.createElement('div')
   errorDiv.className = 'el-form-item__error engine-error'
   errorDiv.textContent = message
   contentEl.appendChild(errorDiv)
+}
+
+function clearInjectedFieldError(fieldKey: string) {
+  const itemEl = findFormItemEl(fieldKey)
+  if (!itemEl) return
+  const contentEl = itemEl.querySelector('.el-form-item__content')
+  contentEl?.querySelectorAll('.engine-error').forEach(el => el.remove())
+  if (!contentEl?.querySelector('.el-form-item__error:not(.engine-error)')) {
+    itemEl.classList.remove('is-error')
+  }
 }
 
 /**
@@ -1279,6 +1316,19 @@ const validate = async (): Promise<boolean> => {
       })
       return false
     }
+  }
+
+  const scriptErrorKeys = Object.keys(scriptFieldErrors.value)
+  if (scriptErrorKeys.length > 0) {
+    nextTick(() => {
+      const root = formRef.value?.$el as HTMLElement | undefined
+      const firstKey = scriptErrorKeys[0]
+      const firstError = firstKey && root
+        ? root.querySelector(`.el-form-item[data-field-key="${CSS.escape(firstKey)}"]`)
+        : document.querySelector('.el-form-item.is-error')
+      firstError?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    })
+    return false
   }
 
   if (!elPlusValid) {
@@ -1448,6 +1498,7 @@ provide(FORM_RENDERER_FIELDS_CTX, reactive({
   handleLookupClear,
   handleFieldChange,
   handleFieldBlur,
+  scriptFieldErrors,
   handleUploadSuccess,
   handleUploadRemove,
   handleUserSearch,

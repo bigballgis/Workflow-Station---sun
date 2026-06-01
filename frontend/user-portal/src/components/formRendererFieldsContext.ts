@@ -49,6 +49,8 @@ export interface FormRendererFieldsContext {
   handleLookupClear: (key: string) => void
   handleFieldChange: (key: string, val: unknown) => void
   handleFieldBlur: (key: string) => void
+  /** Form-event script errors (setFieldError), keyed by field binding key. */
+  scriptFieldErrors: Ref<Record<string, string>>
   handleUploadSuccess: (res: unknown, file: unknown, key: string) => void
   handleUploadRemove: (file: unknown, key: string) => void
   handleUserSearch: (query: string, key: string) => void

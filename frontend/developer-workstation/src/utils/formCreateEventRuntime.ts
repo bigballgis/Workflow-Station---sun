@@ -16,6 +16,8 @@ export interface PortalFormApi {
   display: (status: boolean, field?: string | string[]) => void
   hiddenStatus: (field: string) => boolean
   displayStatus: (field: string) => boolean
+  setFieldError: (field: string, message: string) => void
+  clearFieldError: (field: string) => void
   readonly form: Record<string, unknown>
 }
 
@@ -204,6 +206,10 @@ export function createPortalFormApi(
     notify: () => void
     getAllFieldKeys: () => string[]
   },
+  fieldErrors?: {
+    setFieldError: (fieldKey: string, message: string) => void
+    clearFieldError: (fieldKey: string) => void
+  },
 ): PortalFormApi {
   const resolve = (key: string) => resolveFieldKey?.(key) ?? key
   const vis = visibility?.state
@@ -260,6 +266,12 @@ export function createPortalFormApi(
       const key = resolve(field)
       if (vis?.display.has(key)) return vis.display.get(key) !== false
       return true
+    },
+    setFieldError(field: string, message: string) {
+      fieldErrors?.setFieldError(resolve(field), message)
+    },
+    clearFieldError(field: string) {
+      fieldErrors?.clearFieldError(resolve(field))
     },
   }
 }

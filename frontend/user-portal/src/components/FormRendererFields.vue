@@ -412,9 +412,11 @@ function onCollapseActiveChange(fieldKey: string, names: string | string[]) {
         :span="field.span || 24"
       >
         <el-form-item
+          :data-field-key="field.key"
           :label="field.label"
           :prop="field.key"
           :required="field.required"
+          :class="{ 'is-error': !!ctx.scriptFieldErrors[field.key] }"
         >
           <FieldRenderer
             :field="field"
@@ -432,6 +434,12 @@ function onCollapseActiveChange(fieldKey: string, names: string | string[]) {
             @upload:remove="(file: any, key: string) => ctx.handleUploadRemove(file, key)"
             @search:users="ctx.handleUserSearch"
           />
+          <div
+            v-if="ctx.scriptFieldErrors[field.key]"
+            class="el-form-item__error script-field-error"
+          >
+            {{ ctx.scriptFieldErrors[field.key] }}
+          </div>
         </el-form-item>
       </el-col>
       <div
@@ -439,9 +447,11 @@ function onCollapseActiveChange(fieldKey: string, names: string | string[]) {
         class="form-col-field"
       >
         <el-form-item
+          :data-field-key="field.key"
           :label="field.label"
           :prop="field.key"
           :required="field.required"
+          :class="{ 'is-error': !!ctx.scriptFieldErrors[field.key] }"
         >
           <FieldRenderer
             :field="field"
@@ -459,6 +469,12 @@ function onCollapseActiveChange(fieldKey: string, names: string | string[]) {
             @upload:remove="(file: any, key: string) => ctx.handleUploadRemove(file, key)"
             @search:users="ctx.handleUserSearch"
           />
+          <div
+            v-if="ctx.scriptFieldErrors[field.key]"
+            class="el-form-item__error script-field-error"
+          >
+            {{ ctx.scriptFieldErrors[field.key] }}
+          </div>
         </el-form-item>
       </div>
     </template>

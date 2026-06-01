@@ -118,4 +118,24 @@ describe('formCreateEventRuntime', () => {
     runFormOnChangeHandler(raw, 'test3', '2', api)
     expect(vis.hidden.get('tes2')).toBe(true)
   })
+
+  it('setFieldError and clearFieldError invoke field error callbacks', () => {
+    const errors: string[] = []
+    const api = createPortalFormApi(
+      () => ({}),
+      () => {},
+      undefined,
+      undefined,
+      {
+        setFieldError: (key, msg) => errors.push(`${key}:${msg}`),
+        clearFieldError: (key) => errors.push(`clear:${key}`),
+      },
+    )
+    api.setFieldError('enddate', 'Start date must be before end date.')
+    api.clearFieldError('enddate')
+    expect(errors).toEqual([
+      'enddate:Start date must be before end date.',
+      'clear:enddate',
+    ])
+  })
 })

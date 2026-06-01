@@ -102,6 +102,8 @@ fc-designer 在内存与导出之间做别名转换（见 `FcDesigner.vue` `load
 | `display(status, field?)` | `display(true, 'x')` 不占位隐藏（CSS）；`display(false, 'x')` 显示 |
 | `hiddenStatus(field)` | 是否被 `hidden()` 隐藏 |
 | `displayStatus(field)` | 是否处于 `display()` 隐藏态 |
+| `setFieldError(field, message)` | 在字段下方显示红色校验文案（门户 `FormRenderer`） |
+| `clearFieldError(field)` | 清除该字段由脚本注入的错误 |
 | `form` | 只读对象，等同于当前整表 `formData` |
 
 **字段名解析**：`getValue` / `setValue` / `hidden` / `display` 可使用绑定键 **`field`** 或设计器标题 **`title`/label**；不一致时解析到实际 key（`createFieldKeyResolver`）。
@@ -157,6 +159,36 @@ function (field, value, options) {
 ```
 
 赋值合并进 `formData` 并触发 `update:modelValue`（可写场景）。支持按 label 解析键名。
+
+### 2.4 跨字段校验：开始日期早于结束日期
+
+在 **Form → Form event → `onChange`** 中写（任一侧日期变更都会触发）。字段名改成你表单里的 **Field**（示例 `startdate` / `enddate`）：
+
+```javascript
+var start = api.getValue('startdate')
+var end = api.getValue('enddate')
+if (!start || !end) {
+  api.clearFieldError('enddate')
+  return
+}
+var s = new Date(String(start)).getTime()
+var e = new Date(String(end)).getTime()
+if (isNaN(s) || isNaN(e)) {
+  api.clearFieldError('enddate')
+  return
+}
+if (s >= e) {
+  api.setFieldError('enddate', 'Start date must be before end date.')
+} else {
+  api.clearFieldError('enddate')
+}
+```
+
+也可挂在 **startdate** / **enddate** 的 **`change`** 上，函数体相同，把 `api` 写成 `$inject.api`。
+
+日期控件请用 **`change`**，不要用 **`blur`**。提交时 `FormRenderer.validate()` 会检查脚本错误并**阻止提交**（与 Element Plus / Action Design 校验并列）。
+
+**门户显示**：`setFieldError` 写入 `scriptFieldErrors` 并在对应 `el-form-item` 下渲染红字（`data-field-key` 与字段 **Field** 一致）。
 
 ---
 
