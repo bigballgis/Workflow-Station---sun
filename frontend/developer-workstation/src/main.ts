@@ -25,7 +25,10 @@ import { FcEditor, FcTransfer, FcCascader, FcSlider } from './components/designe
 import LookupComponent from './components/designer/LookupComponent.vue'
 import LookupBindingSelect from './components/designer/LookupBindingSelect.vue'
 import { registerFormCreateReadonlyParser } from './utils/registerFormCreateReadonlyParser'
+import { installDesignerFieldPanelRules } from './utils/designerPropsPanelRules'
 import formCreateFactory from '@form-create/element-ui'
+
+installDesignerFieldPanelRules(FcDesigner as { addDragRule: (config: Record<string, unknown>) => void })
 
 // Force set HTML lang attribute to English
 document.documentElement.lang = 'en'
@@ -140,7 +143,6 @@ FcDesigner.addDragRule({
   },
   props() {
     return [
-      { type: 'switch', field: 'hidden', title: 'Hide' },
       {
         type: 'SubTableBindingSelect',
         field: '_bindingId',
@@ -205,7 +207,6 @@ FcDesigner.addDragRule({
   },
   props() {
     return [
-      { type: 'switch', field: 'hidden', title: 'Hide' },
       {
         type: 'LinkFormBindingSelect',
         field: '_componentId',
@@ -368,9 +369,7 @@ FcDesigner.addDragRule({
   props() {
     return [
       { type: 'input', field: 'placeholder', title: 'Placeholder' },
-      { type: 'switch', field: 'hidden', title: 'Hide' },
-      { type: 'switch', field: 'readonly', title: 'Readonly' },
-      { type: 'LookupBindingSelect', field: 'lookupConfig', title: 'Lookup Config', props: {} }
+      { type: 'LookupBindingSelect', field: 'lookupConfig', title: 'Lookup Config', props: {} },
     ]
   }
 })

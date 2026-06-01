@@ -619,6 +619,10 @@ import {
   walkRulesEnsureComponentEvents,
 } from '@/utils/formCreateDefaultEvents'
 import {
+  buildDesignerBaseRulePrependHiddenReadonly,
+  buildDesignerComponentRuleDefaultStripHiddenReadonly,
+} from '@/utils/designerPropsPanelRules'
+import {
   applyTableFieldDefaultToRule,
   applyTableFieldDefaultsToRulesAndModel,
   resolveRuleDefaultValue,
@@ -1580,43 +1584,20 @@ const designerConfig = computed(() => ({
     ensureEmptyRuleComponentEvents(rule)
   },
   updateDefaultRule: buildDesignerUpdateDefaultRule(),
-  hiddenItemConfig: {
-    // Hide built-in Basic "Hidden" — use Props tab "Hide" instead (same rule.hidden).
-    default: ['disabled', 'hidden'],
-    lookup: ['disabled', 'hidden'],
-    subTable: ['disabled', 'hidden'],
-    linkForm: ['disabled', 'hidden'],
-    editor: ['disabled', 'hidden'],
-    transfer: ['disabled', 'hidden'],
-    cascader: ['disabled', 'hidden'],
-    slider: ['disabled', 'hidden'],
-  },
+  baseRule: buildDesignerBaseRulePrependHiddenReadonly(),
   componentRule: {
-    default: {
-      append: true,
-      rule(rule: { type?: string }) {
-        const builtInReadonly = new Set(['input', 'textarea', 'password', 'timePicker', 'datePicker', 'lookup'])
-        const extra: Array<Record<string, unknown>> = [
-          { type: 'switch', field: 'hidden', title: 'Hide' },
-        ]
-        if (!builtInReadonly.has(String(rule.type ?? ''))) {
-          extra.push({ type: 'switch', field: 'readonly', title: 'Readonly' })
-        }
-        return extra
-      },
-    },
-    subTable: {
-      append: true,
-      rule() {
-        return [{ type: 'switch', field: 'hidden', title: 'Hide' }]
-      },
-    },
-    linkForm: {
-      append: true,
-      rule() {
-        return [{ type: 'switch', field: 'hidden', title: 'Hide' }]
-      },
-    },
+    default: buildDesignerComponentRuleDefaultStripHiddenReadonly(),
+  },
+  hiddenItemConfig: {
+    // Keep disabled in library position; Hidden/Readonly are prepended via baseRule.
+    default: ['disabled'],
+    lookup: ['disabled'],
+    subTable: ['disabled'],
+    linkForm: ['disabled'],
+    editor: ['disabled'],
+    transfer: ['disabled'],
+    cascader: ['disabled'],
+    slider: ['disabled'],
   },
 }))
 
