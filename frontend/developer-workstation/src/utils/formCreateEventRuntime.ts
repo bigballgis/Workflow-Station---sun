@@ -1,6 +1,6 @@
 /**
- * Execute form-create designer "Form event" handlers (e.g. options.onChange) in User Portal.
- * Designer stores functions as [[FORM-CREATE-PREFIX-function ...}-FORM-CREATE-SUFFIX]] strings.
+ * Execute form-create designer event handlers (Form Preview + keep in sync with user-portal).
+ * Designer stores functions as [[FORM-CREATE-PREFIX-…]] or $FNX: + body.
  */
 
 const FC_FN_WRAPPER_RE =
@@ -12,9 +12,7 @@ const DANGEROUS_KEYWORDS = /\b(eval|Function|import|require|window|document|glob
 export interface PortalFormApi {
   setValue: (fieldOrData: string | Record<string, unknown>, value?: unknown) => void
   getValue: (field: string) => unknown
-  /** form-create: `hidden(true, field)` hides (no DOM); `hidden(false, field)` shows. */
   hidden: (status: boolean, field?: string | string[]) => void
-  /** form-create: `display(true, field)` hides (CSS); `display(false, field)` shows. */
   display: (status: boolean, field?: string | string[]) => void
   hiddenStatus: (field: string) => boolean
   displayStatus: (field: string) => boolean
@@ -22,13 +20,10 @@ export interface PortalFormApi {
 }
 
 export interface PortalFormVisibilityState {
-  /** true = field removed from DOM (form-create `hidden`). */
   hidden: Map<string, boolean>
-  /** false = field rendered but not visible (form-create `display`). */
   display: Map<string, boolean>
 }
 
-/** Map designer script field names to bound keys (e.g. label "test2" → key "tes2"). */
 export type FieldKeyResolver = (name: string) => string
 
 export function createFieldKeyResolver(
@@ -121,10 +116,6 @@ export function isEmptyFormCreateHandler(raw: unknown): boolean {
   return true
 }
 
-/**
- * Parse a form-create stored handler (form-level or component-level).
- * Injects options/api/rule/self for designer EVENT panel scripts.
- */
 export function parseFormCreateEventHandler(raw: unknown): ((ctx: FormCreateEventContext) => void) | null {
   if (typeof raw === 'function') {
     return (ctx) => {
@@ -204,34 +195,6 @@ export function parseFormCreateEventHandler(raw: unknown): ((ctx: FormCreateEven
   }
 }
 
-/**
- * Parse a form-create stored handler into a callable function.
- * Injects both `options` and `api` (same object) so designer scripts using either name work.
- */
-export function parseFormCreateFunction(raw: unknown): FormCreateChangeHandler | null {
-  const handler = parseFormCreateEventHandler(raw)
-  if (!handler) return null
-  return (field, value, portalApi) => {
-    handler({ field, value, api: portalApi, rule: {} })
-  }
-}
-
-function wrapFormCreateHandler(fn: FormCreateChangeHandler): FormCreateChangeHandler {
-  return (field, value, portalApi) => {
-    fn(field, value, portalApi)
-  }
-}
-
-function resolveFieldTargets(
-  field: string | string[] | undefined,
-  resolve: (key: string) => string,
-  getAllFieldKeys: () => string[],
-): string[] {
-  if (field === undefined) return getAllFieldKeys()
-  const list = Array.isArray(field) ? field : [field]
-  return list.map(resolve)
-}
-
 export function createPortalFormApi(
   getFormData: () => Record<string, unknown>,
   applyPatch: (patch: Record<string, unknown>) => void,
@@ -244,6 +207,15 @@ export function createPortalFormApi(
 ): PortalFormApi {
   const resolve = (key: string) => resolveFieldKey?.(key) ?? key
   const vis = visibility?.state
+
+  function resolveFieldTargets(
+    field: string | string[] | undefined,
+    getAllFieldKeys: () => string[],
+  ): string[] {
+    if (field === undefined) return getAllFieldKeys()
+    const list = Array.isArray(field) ? field : [field]
+    return list.map(resolve)
+  }
 
   return {
     get form() {
@@ -267,7 +239,7 @@ export function createPortalFormApi(
     },
     hidden(status: boolean, field?: string | string[]) {
       if (!vis) return
-      for (const key of resolveFieldTargets(field, resolve, visibility!.getAllFieldKeys)) {
+      for (const key of resolveFieldTargets(field, visibility!.getAllFieldKeys)) {
         if (status) vis.hidden.set(key, true)
         else vis.hidden.delete(key)
       }
@@ -275,7 +247,7 @@ export function createPortalFormApi(
     },
     display(status: boolean, field?: string | string[]) {
       if (!vis) return
-      for (const key of resolveFieldTargets(field, resolve, visibility!.getAllFieldKeys)) {
+      for (const key of resolveFieldTargets(field, visibility!.getAllFieldKeys)) {
         if (status) vis.display.set(key, false)
         else vis.display.delete(key)
       }

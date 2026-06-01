@@ -14,7 +14,7 @@
 | [portal-bu-rbac.md](./portal-bu-rbac.md) | 门户：业务单元角色（UBR）、工作台上下文与权限摘要 |
 | [portal-permission-self-service.md](./portal-permission-self-service.md) | 门户：权限自助（申请/代办/退出、`|C|=0` 模式） |
 | [user-profile-information-architecture.md](./user-profile-information-architecture.md) | 三端个人中心 / 顶栏用户信息展示边界 |
-| [form-script-api.md](./form-script-api.md) | 表单 Form event API：隐藏控件、getValue、setValue（设计器 + User Portal） |
+| [form-script-api.md](./form-script-api.md) | 表单脚本 API：Form/Component event、`$FNX:` 与 `[[FORM-CREATE-PREFIX…]]`、`_on`/`on` 双轨存储、PortalFormApi、默认事件种子与门户执行范围 |
 
 ### 审计与复盘稿（可选）
 

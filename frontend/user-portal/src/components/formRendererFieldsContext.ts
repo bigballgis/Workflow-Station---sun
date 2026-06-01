@@ -48,6 +48,7 @@ export interface FormRendererFieldsContext {
   handleLookupSelect: (key: string, row: unknown) => void
   handleLookupClear: (key: string) => void
   handleFieldChange: (key: string, val: unknown) => void
+  handleFieldBlur: (key: string) => void
   handleUploadSuccess: (res: unknown, file: unknown, key: string) => void
   handleUploadRemove: (file: unknown, key: string) => void
   handleUserSearch: (query: string, key: string) => void

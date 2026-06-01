@@ -195,6 +195,7 @@
               :label-width="formLabelWidth"
               :label-position="formLabelPosition"
               :form-options="formFormOptions"
+              :form-config="formConfigJson"
               :sub-table-bindings="subTableBindings"
               @update:sub-table-data="(id: number, rows: any[]) => { const b = subTableBindings.find(x => x.bindingId === id); if (b) b.data = rows }"
             />
@@ -351,6 +352,7 @@ const currentFormName = ref('')
 const formLabelWidth = ref('160px')
 const formLabelPosition = ref<'left' | 'right' | 'top'>('left')
 const formFormOptions = ref<Record<string, unknown>>({})
+const formConfigJson = ref<Record<string, unknown> | null>(null)
 const formRendererRef = ref<InstanceType<typeof FormRenderer> | null>(null)
 
 // Sub-table bindings for the start form
@@ -922,6 +924,7 @@ const parseFormConfig = (configStr: string) => {
   
   try {
     const config = typeof configStr === 'string' ? JSON.parse(configStr) : configStr
+    formConfigJson.value = config && typeof config === 'object' ? config as Record<string, unknown> : null
     console.log('Parsing form config:', config)
     
     // 支持两种格式：

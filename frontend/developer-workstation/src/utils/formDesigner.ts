@@ -42,6 +42,7 @@ import {
   getFilenameFromUrl,
   syncFormCreateUploadFieldValue,
 } from '@/components/designer/uploadFieldUtils'
+import { ensureEmptyFormOptionsEvents } from '@/utils/formCreateDefaultEvents'
 
 /**
  * Collect upload rules from a form-create rule tree (including nested layout children).
@@ -192,21 +193,22 @@ export function mergeLoadedFormOptions(
   defaults: Record<string, any>,
   clickToUploadText: string,
 ): Record<string, any> {
+  const baseDefaults = ensureEmptyFormOptionsEvents(defaults)
   if (!stored || Object.keys(stored).length === 0) {
-    return { ...defaults }
+    return { ...baseDefaults }
   }
-  return {
-    ...defaults,
+  return ensureEmptyFormOptionsEvents({
+    ...baseDefaults,
     ...stored,
-    form: { ...defaults.form, ...(stored.form || {}) },
+    form: { ...baseDefaults.form, ...(stored.form || {}) },
     language: {
-      ...(defaults.language as Record<string, unknown>),
+      ...(baseDefaults.language as Record<string, unknown>),
       ...(stored.language || {}),
       en: {
-        ...((defaults.language as { en?: Record<string, string> })?.en || {}),
+        ...((baseDefaults.language as { en?: Record<string, string> })?.en || {}),
         ...((stored.language as { en?: Record<string, string> } | undefined)?.en || {}),
         clickToUpload: clickToUploadText,
       },
     },
-  }
+  })
 }

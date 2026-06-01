@@ -14,6 +14,7 @@
         :disabled="isDisabled"
         clearable
         @update:model-value="onUpdate"
+        @blur="onBlur"
       />
     </template>
 
@@ -27,6 +28,7 @@
         :disabled="isDisabled"
         clearable
         @update:model-value="onUpdate"
+        @blur="onBlur"
       />
     </template>
 
@@ -41,6 +43,7 @@
         :show-word-limit="!!field.maxLength"
         :disabled="isDisabled"
         @update:model-value="onUpdate"
+        @blur="onBlur"
       />
     </template>
 
@@ -653,6 +656,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: any): void
+  (e: 'field-blur', fieldKey: string): void
   (e: 'upload:success', response: any, file: any, fieldKey: string): void
   (e: 'upload:remove', file: any, fieldKey: string): void
   (e: 'search:users', query: string, fieldKey: string): void
@@ -663,6 +667,11 @@ const isDisabled = computed(() => props.readonly || props.disabled)
 function onUpdate(value: any) {
   if (props.readonly) return
   emit('update:modelValue', value)
+}
+
+function onBlur() {
+  if (props.readonly) return
+  emit('field-blur', props.field.key)
 }
 
 // ---------------------------------------------------------------------------

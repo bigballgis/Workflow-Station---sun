@@ -127,8 +127,8 @@
                 :locale="fcDesignerEnLocale"
                 :config="designerConfig"
                 height="calc(100vh - 260px)"
-                @active="scheduleSyncHiddenMarkers"
-                @change-field="scheduleSyncHiddenMarkers"
+                @active="onDesignerStructureChange"
+                @change-field="onDesignerStructureChange"
               />
             </div>
           </div>
@@ -258,8 +258,8 @@
                 :locale="fcDesignerEnLocale"
                 :config="designerConfig"
                 height="calc(100vh - 260px)"
-                @active="scheduleSyncHiddenMarkers"
-                @change-field="scheduleSyncHiddenMarkers"
+                @active="onDesignerStructureChange"
+                @change-field="onDesignerStructureChange"
               />
             </div>
           </div>
@@ -605,6 +605,14 @@ import { useFormActions } from '@/composables/modules/useFormActions'
 import { parseLookupConfig, getMockValueForType, derivePreviewColumns } from '@/utils/formPreview'
 import { resolveBindingDisplayName } from '@/utils/bindingDisplayHelpers'
 import { cloneFormRules, injectUploadButtonLabels, mergeLoadedFormOptions, getRuleChildren, collectSubTableRules, isCardRule, getLayoutLabel } from '@/utils/formDesigner'
+import { materializePreviewItemsEvents } from '@/utils/formCreatePreviewEvents'
+import { flattenComponentEventsForPersist } from '@/utils/formCreateDefaultEvents'
+import {
+  buildDefaultFormCreateOptions,
+  buildDesignerUpdateDefaultRule,
+  ensureEmptyRuleComponentEvents,
+  walkRulesEnsureComponentEvents,
+} from '@/utils/formCreateDefaultEvents'
 import { ArrowLeft, Connection, Loading, CircleCheck } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { TabPaneName } from 'element-plus'
@@ -1247,6 +1255,41 @@ const {
   hiddenBadgeLabel: () => t('form.canvasHiddenBadge'),
 })
 
+function getActiveDesignerRef(): { getRule?: () => unknown[]; setRule?: (r: unknown[]) => void } | null | undefined {
+  if (activeDesignerTab.value === 'main') {
+    return designerRef.value
+  }
+  const bindingId = Number(activeDesignerTab.value)
+  if (!Number.isFinite(bindingId)) return null
+  const index = designerSubBindings.value.findIndex((b) => b.bindingId === bindingId)
+  if (index < 0) return null
+  return subDesignerRefs.value[index]
+}
+
+function patchDesignerRulesDefaultEvents() {
+  const designer = getActiveDesignerRef()
+  if (!designer?.getRule || !designer.setRule) return
+  let rules: unknown[] = []
+  try {
+    rules = designer.getRule() || []
+  } catch {
+    return
+  }
+  // Only setRule when defaults were actually added — full reload clears activeRule and can
+  // drop in-memory _on/_hook edits before the user saves the form.
+  if (!walkRulesEnsureComponentEvents(rules)) return
+  try {
+    designer.setRule(rules)
+  } catch {
+    // ignore designer sync errors
+  }
+}
+
+function onDesignerStructureChange() {
+  scheduleSyncHiddenMarkers()
+  nextTick(() => patchDesignerRulesDefaultEvents())
+}
+
 // Provide subBindings to SubTablePlaceholderWidget via inject
 // The widget uses inject('designerSubBindings') to get the current list
 provide('designerSubBindings', () => designerSubBindings.value.map(b => ({
@@ -1503,6 +1546,13 @@ const designerConfig = computed(() => ({
   showDevice: true,
   showSave: false, // Use custom save button
   fieldReadonly: false,
+  formOptions: buildDefaultFormCreateOptions({
+    form: { labelPosition: 'left' },
+  }),
+  beforeActiveRule: ({ rule }: { rule: Record<string, unknown> }) => {
+    ensureEmptyRuleComponentEvents(rule)
+  },
+  updateDefaultRule: buildDesignerUpdateDefaultRule(),
   hiddenItemConfig: {
     // Hide built-in Basic "Hidden" — use Props tab "Hide" instead (same rule.hidden).
     default: ['disabled', 'hidden'],
@@ -1543,8 +1593,8 @@ const designerConfig = computed(() => ({
   },
 }))
 
-// Default form options — label left-aligned; locale + language so fcUpload `t('clickToUpload')` is English
-const defaultFormOption = computed(() => ({
+// Default form options — label left-aligned + empty Form event handlers (onChange, onSubmit, …)
+const defaultFormOption = computed(() => buildDefaultFormCreateOptions({
   form: { labelPosition: 'left' },
   language: {
     en: {
@@ -2623,7 +2673,9 @@ async function handleSelectForm(row: FormDefinition) {
           ) as unknown[]
         ) as ReturnType<typeof cloneFormRules>
         injectUploadButtonLabels(rules, t('form.clickToUpload'))
+        walkRulesEnsureComponentEvents(rules)
         designerRef.value.setRule(rules)
+        nextTick(() => patchDesignerRulesDefaultEvents())
         designerRef.value.setOption(
           mergeLoadedFormOptions(
             effectiveMain.options && Object.keys(effectiveMain.options).length
@@ -2663,6 +2715,7 @@ function loadSubDesigners(row: FormDefinition) {
               cloneFormRules(subConfig.rule && subConfig.rule.length ? subConfig.rule : []) as unknown[]
             ) as ReturnType<typeof cloneFormRules>
             injectUploadButtonLabels(rules, t('form.clickToUpload'))
+            walkRulesEnsureComponentEvents(rules)
             subRef.setRule(rules)
             subRef.setOption(
               mergeLoadedFormOptions(
@@ -2727,6 +2780,7 @@ function handleTabChange(tabName: TabPaneName) {
             cloneFormRules(subConfig.rule && subConfig.rule.length ? subConfig.rule : []) as unknown[]
           ) as ReturnType<typeof cloneFormRules>
           injectUploadButtonLabels(rules, t('form.clickToUpload'))
+          walkRulesEnsureComponentEvents(rules)
           subRef.setRule(rules)
           subRef.setOption(
             mergeLoadedFormOptions(
@@ -2738,7 +2792,7 @@ function handleTabChange(tabName: TabPaneName) {
         } catch {}
       }
       setupMarkerObserver()
-      scheduleSyncHiddenMarkers()
+      onDesignerStructureChange()
     }, 100)
   })
 }
@@ -2958,6 +3012,8 @@ async function handleSaveForm(isManual = false) {
 
   try {
     const rule = stripFormCreateRulesDisabledDeep(designerRef.value.getRule() || []) as any[]
+    flattenComponentEventsForPersist(rule)
+    walkRulesEnsureComponentEvents(rule)
     const options = designerRef.value.getOption()
 
     const subTableRules = collectSubTableRules(rule)
@@ -3357,6 +3413,7 @@ function handlePreview() {
   // (placed bindings were already deleted from bindingMap above)
 
   previewItems.value = items
+  materializePreviewItemsEvents(previewItems.value, previewData)
   // Keep previewRule for backward compat (used by previewSubBindings logic elsewhere if any)
   previewRule.value = rawRule.filter(r => r.type !== 'subTable')
   console.log('[Preview] previewItems:', items.map(i => i.kind === 'fields' ? `fields(${i.rule.length})` : i.kind))

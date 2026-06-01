@@ -4,6 +4,7 @@ import ElementPlus from 'element-plus'
 import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 import 'element-plus/dist/index.css'
 import FcDesigner from '@form-create/designer'
+import { ensureEmptyRuleComponentEvents } from '@/utils/formCreateDefaultEvents'
 // Import form-create styles
 import '@form-create/designer/src/style/index.css'
 import '@form-create/designer/src/style/icon.css'
@@ -87,6 +88,7 @@ FcDesigner.addDragRule({
   // When loading a saved rule, copy top-level _bindingId into props so the config panel can read it,
   // and seed default portalViews when missing (legacy rules treated as "tableOnly" so behavior is preserved).
   loadRule(rule: any) {
+    ensureEmptyRuleComponentEvents(rule)
     rule.props = rule.props || {}
     if (rule._bindingId !== undefined) {
       rule.props._bindingId = rule._bindingId
@@ -119,7 +121,7 @@ FcDesigner.addDragRule({
     }
   },
   rule() {
-    return {
+    const r = {
       type: 'subTable',
       _bindingId: null,
       title: 'Sub-Table',
@@ -133,6 +135,8 @@ FcDesigner.addDragRule({
         }
       }
     }
+    ensureEmptyRuleComponentEvents(r)
+    return r
   },
   props() {
     return [
@@ -170,6 +174,7 @@ FcDesigner.addDragRule({
   handleBtn: true,
   languageKey: [],
   loadRule(rule: any) {
+    ensureEmptyRuleComponentEvents(rule)
     rule.props = rule.props || {}
     if (rule._componentId !== undefined) {
       rule.props._componentId = rule._componentId
@@ -189,12 +194,14 @@ FcDesigner.addDragRule({
     }
   },
   rule() {
-    return {
+    const r = {
       type: 'linkForm',
       _componentId: null,
       title: 'Link Form',
       props: { _componentId: null }
     }
+    ensureEmptyRuleComponentEvents(r)
+    return r
   },
   props() {
     return [

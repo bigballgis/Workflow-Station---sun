@@ -14,6 +14,7 @@
         locale="en"
         :rule="item.rule"
         :option="effectivePreviewOption"
+        @change="(field: string, value: unknown) => onPreviewFieldChange(item.rule, field, value)"
       />
     </div>
 
@@ -183,6 +184,8 @@ import {
   isDualPortalSubTablePreview,
   resolvePreviewInlineFormBelowDesign,
 } from './formPreviewTypes'
+import { collectFieldComponentEventsFromRules, runComponentFieldEvents } from '@/utils/formCreateComponentEvents'
+import { createPortalFormApi } from '@/utils/formCreateEventRuntime'
 
 defineOptions({ name: 'FormPreviewItems' })
 
@@ -258,6 +261,26 @@ function updateTableRows(bindingId: number, rows: any[]) {
   emit('update:previewTableRows', {
     ...props.previewTableRows,
     [bindingId]: rows,
+  })
+}
+
+function onPreviewFieldChange(segmentRules: unknown[], field: string, value: unknown) {
+  if (!field || isMyRequestsPreview.value) return
+  const patch = { [field]: value }
+  previewModel.value = { ...previewModel.value, ...patch }
+  const api = createPortalFormApi(
+    () => previewModel.value,
+    (p) => {
+      previewModel.value = { ...previewModel.value, ...p }
+    },
+  )
+  const ev = collectFieldComponentEventsFromRules(segmentRules).get(field)
+  runComponentFieldEvents(ev, {
+    field,
+    value,
+    api,
+    onEvent: 'change',
+    hookEvent: 'value',
   })
 }
 </script>

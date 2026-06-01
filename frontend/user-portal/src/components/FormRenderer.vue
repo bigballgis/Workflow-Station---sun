@@ -89,6 +89,11 @@ import {
   pickMiLinkChildRowsForParent
 } from '@/composables/tasks/shared'
 import { createPortalFormApi, createFieldKeyResolver, runFormOnChangeHandler, type PortalFormVisibilityState } from '@/utils/formCreateEventRuntime'
+import {
+  collectFieldComponentEventsFromRules,
+  runAllComponentHookEvents,
+  runComponentFieldEvents,
+} from '@/utils/formCreateComponentEvents'
 
 export type { FormField, FormTab }
 
@@ -176,6 +181,8 @@ interface Props {
   formConfig?: Record<string, unknown> | null
   /** form-create designer options (Form event onChange, labelWidth, etc.). */
   formOptions?: Record<string, unknown> | null
+  /** Raw form-create rule tree (for per-component on/_hook events). Falls back to formConfig.rule. */
+  formCreateRules?: unknown[] | null
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -847,6 +854,18 @@ const allFields = computed(() =>
   flattenAllFormFieldSegments(props.fields, props.tabs, props.fieldsAfterTabs),
 )
 
+const formCreateRulesResolved = computed(() => {
+  if (Array.isArray(props.formCreateRules) && props.formCreateRules.length) {
+    return props.formCreateRules
+  }
+  const fromConfig = props.formConfig?.rule
+  return Array.isArray(fromConfig) ? fromConfig : []
+})
+
+const fieldComponentEvents = computed(() =>
+  collectFieldComponentEventsFromRules(formCreateRulesResolved.value),
+)
+
 // ---------------------------------------------------------------------------
 // Task 7.2: BusinessLogicEngine integration
 // ---------------------------------------------------------------------------
@@ -891,12 +910,72 @@ function runFormOptionsOnChange(field: string, value: unknown) {
   const onChangeHandler = props.formOptions?.onChange
   if (!onChangeHandler) return
   const api = createFormEventApi()
-  runFormOnChangeHandler(onChangeHandler, field, value, api)
+  const rule = fieldComponentEvents.value.get(field)?.rule ?? {}
+  runFormOnChangeHandler(onChangeHandler, field, value, api, rule)
+}
+
+function runComponentEventsOnFieldChange(key: string, value: unknown) {
+  const api = createFormEventApi()
+  const ev = fieldComponentEvents.value.get(key)
+  runComponentFieldEvents(ev, {
+    field: key,
+    value,
+    api,
+    onEvent: 'change',
+    hookEvent: 'value',
+  })
+}
+
+/** Component `on.blur` — runs when focus leaves input/textarea (not on each keystroke). */
+function handleFieldBlur(key: string) {
+  const value = formData.value[key]
+  const api = createFormEventApi()
+  const ev = fieldComponentEvents.value.get(key)
+  runComponentFieldEvents(ev, {
+    field: key,
+    value,
+    api,
+    onEvent: 'blur',
+  })
+  const onChangeHandler = props.formOptions?.onChange
+  if (onChangeHandler || fieldComponentEvents.value.has(key)) {
+    if (!props.readonly) {
+      emit('update:modelValue', { ...formData.value })
+    }
+  }
 }
 
 function bootstrapFormOptionsOnChange() {
   if (!props.formOptions?.onChange) return
   runFormOptionsOnChange('__bootstrap__', null)
+}
+
+function bootstrapComponentHookEvents() {
+  if (!formCreateRulesResolved.value.length) return
+  runAllComponentHookEvents(
+    formCreateRulesResolved.value,
+    'load',
+    () => formData.value,
+    (patch) => { formData.value = { ...formData.value, ...patch } },
+    createFieldKeyResolver(() => allFields.value),
+    {
+      state: eventVisibilityState,
+      notify: notifyEventVisibilityChange,
+      getAllFieldKeys: () => allFields.value.map(f => f.key),
+    },
+  )
+  runAllComponentHookEvents(
+    formCreateRulesResolved.value,
+    'mounted',
+    () => formData.value,
+    (patch) => { formData.value = { ...formData.value, ...patch } },
+    createFieldKeyResolver(() => allFields.value),
+    {
+      state: eventVisibilityState,
+      notify: notifyEventVisibilityChange,
+      getAllFieldKeys: () => allFields.value.map(f => f.key),
+    },
+  )
 }
 const engineOptions = ref(new Map<string, Array<{ label: string; value: any }>>())
 const engineFieldStates = ref(new Map<string, { disabled?: boolean; required?: boolean }>())
@@ -1015,9 +1094,13 @@ function handleFieldChange(key: string, value: any) {
   formData.value[key] = value
   emit('change', key, value)
 
+  runComponentEventsOnFieldChange(key, value)
+
   const onChangeHandler = props.formOptions?.onChange
   if (onChangeHandler) {
     runFormOptionsOnChange(key, value)
+  }
+  if (onChangeHandler || fieldComponentEvents.value.has(key)) {
     if (!props.readonly) {
       emit('update:modelValue', { ...formData.value })
     }
@@ -1361,6 +1444,7 @@ provide(FORM_RENDERER_FIELDS_CTX, reactive({
   handleLookupSelect,
   handleLookupClear,
   handleFieldChange,
+  handleFieldBlur,
   handleUploadSuccess,
   handleUploadRemove,
   handleUserSearch,
@@ -1375,6 +1459,7 @@ provide(FORM_RENDERER_FIELDS_CTX, reactive({
 onMounted(() => {
   initFormData()
   initEngine()
+  bootstrapComponentHookEvents()
   bootstrapFormOptionsOnChange()
   // Task 7.5: Check for auto-saved data, then start auto-save timer
   checkAutoSaveRestore().then(() => {

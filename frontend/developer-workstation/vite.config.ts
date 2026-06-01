@@ -1,13 +1,39 @@
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { resolve } from 'path'
 import AutoImport from 'unplugin-auto-import/vite'
 import Components from 'unplugin-vue-components/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 
+const HERMES_EVENT_CONFIG = resolve(__dirname, 'src/components/designer/HermesEventConfig.vue')
+
+/** Redirect fc-designer `./EventConfig.vue` import to HermesEventConfig (Vite string alias misses relative imports). */
+function hermesEventConfigPlugin(): Plugin {
+  return {
+    name: 'hermes-event-config',
+    enforce: 'pre',
+    resolveId(source, importer) {
+      if (!importer) return null
+      const fromDesigner = importer.replace(/\\/g, '/').includes('@form-create/designer')
+      if (!fromDesigner) return null
+      const isEventConfig =
+        source === './EventConfig.vue'
+        || source.endsWith('/components/EventConfig.vue')
+        || source === '@form-create/designer/src/components/EventConfig.vue'
+      if (!isEventConfig) return null
+      return HERMES_EVENT_CONFIG
+    },
+  }
+}
+
 export default defineConfig({
   base: '/dev/',
+  /** Prebundle would bake stock EventConfig.vue and ignore hermesEventConfigPlugin. */
+  optimizeDeps: {
+    exclude: ['@form-create/designer'],
+  },
   plugins: [
+    hermesEventConfigPlugin(),
     vue(),
     AutoImport({
       resolvers: [ElementPlusResolver()],
@@ -20,9 +46,17 @@ export default defineConfig({
     })
   ],
   resolve: {
-    alias: {
-      '@': resolve(__dirname, 'src')
-    }
+    alias: [
+      { find: '@', replacement: resolve(__dirname, 'src') },
+      /**
+       * Package `main` points at dist/index.es.js (stock EventConfig baked in).
+       * Use source entry so hermesEventConfigPlugin can replace EventConfig.vue.
+       */
+      {
+        find: /^@form-create\/designer$/,
+        replacement: resolve(__dirname, 'node_modules/@form-create/designer/src/index.js'),
+      },
+    ],
   },
   server: {
     port: 3002,
