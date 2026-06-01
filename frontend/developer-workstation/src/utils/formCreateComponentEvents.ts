@@ -16,6 +16,44 @@ export interface FieldComponentEvents {
   hook: Record<string, unknown>
 }
 
+function normalizeHandler(raw: unknown): unknown {
+  if (Array.isArray(raw)) return raw[0]
+  return raw
+}
+
+function pickMergedHandler(primary: unknown, secondary: unknown): unknown {
+  const p = normalizeHandler(primary)
+  const s = normalizeHandler(secondary)
+  if (p == null && s == null) return undefined
+  if (p != null && !isEmptyFormCreateHandler(p)) return p
+  if (s != null && !isEmptyFormCreateHandler(s)) return s
+  return p ?? s
+}
+
+function mergeRuleOnHandlers(rule: Record<string, unknown>): Record<string, unknown> {
+  const a = rule.on && typeof rule.on === 'object' ? (rule.on as Record<string, unknown>) : {}
+  const b = rule._on && typeof rule._on === 'object' ? (rule._on as Record<string, unknown>) : {}
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)])
+  const out: Record<string, unknown> = {}
+  for (const k of keys) {
+    const picked = pickMergedHandler(a[k], b[k])
+    if (picked != null) out[k] = picked
+  }
+  return out
+}
+
+function mergeRuleHookHandlers(rule: Record<string, unknown>): Record<string, unknown> {
+  const a = rule.hook && typeof rule.hook === 'object' ? (rule.hook as Record<string, unknown>) : {}
+  const b = rule._hook && typeof rule._hook === 'object' ? (rule._hook as Record<string, unknown>) : {}
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)])
+  const out: Record<string, unknown> = {}
+  for (const k of keys) {
+    const picked = pickMergedHandler(a[k], b[k])
+    if (picked != null) out[k] = picked
+  }
+  return out
+}
+
 function walkRulesCollect(
   items: unknown[],
   map: Map<string, FieldComponentEvents>,
@@ -26,13 +64,8 @@ function walkRulesCollect(
     const rule = raw as Record<string, unknown>
     const field = rule.field != null ? String(rule.field) : ''
     if (field) {
-      const on = (rule.on && typeof rule.on === 'object'
-        ? (rule.on as Record<string, unknown>)
-        : {}) as Record<string, unknown>
-      const hookRaw = rule.hook ?? rule._hook
-      const hook = (hookRaw && typeof hookRaw === 'object'
-        ? (hookRaw as Record<string, unknown>)
-        : {}) as Record<string, unknown>
+      const on = mergeRuleOnHandlers(rule)
+      const hook = mergeRuleHookHandlers(rule)
       map.set(field, { rule, on, hook })
     }
     walkRulesCollect(getRuleChildren(rule), map)
@@ -54,11 +87,43 @@ export interface RunComponentEventsOptions {
   api: PortalFormApi
   onEvent?: string
   hookEvent?: string
+  fieldType?: string
 }
 
-function normalizeHandler(raw: unknown): unknown {
-  if (Array.isArray(raw)) return raw[0]
-  return raw
+const RULE_TYPES_MIRROR_BLUR_ON_CHANGE = new Set([
+  'select',
+  'radio',
+  'checkbox',
+  'cascader',
+  'switch',
+  'rate',
+  'slider',
+  'datePicker',
+  'timePicker',
+  'dateRange',
+  'timeRange',
+  'elTreeSelect',
+  'treeSelect',
+  'treeselect',
+  'date',
+  'datetime',
+  'time',
+  'inputNumber',
+  'number',
+  'user',
+  'transfer',
+  'colorPicker',
+  'lookup',
+])
+
+export function shouldMirrorBlurOnChange(
+  rule: Record<string, unknown> | undefined,
+  fieldType?: string,
+): boolean {
+  const fromRule = String(rule?.type ?? '')
+  const fromField = String(fieldType ?? '')
+  return RULE_TYPES_MIRROR_BLUR_ON_CHANGE.has(fromRule)
+    || RULE_TYPES_MIRROR_BLUR_ON_CHANGE.has(fromField)
 }
 
 function runHandler(
@@ -99,3 +164,20 @@ export function runComponentFieldEvents(
     runHandler(events.hook[options.hookEvent], ctx)
   }
 }
+
+export function runComponentFieldEventsOnValueChange(
+  events: FieldComponentEvents | undefined,
+  options: RunComponentEventsOptions,
+): void {
+  runComponentFieldEvents(events, options)
+  if (!options.onEvent && !options.hookEvent) return
+  if (!shouldMirrorBlurOnChange(events?.rule, options.fieldType)) return
+  runComponentFieldEvents(events, {
+    field: options.field,
+    value: options.value,
+    api: options.api,
+    onEvent: 'blur',
+  })
+}
+
+export { createPortalFormApi }

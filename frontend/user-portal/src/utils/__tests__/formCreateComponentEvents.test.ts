@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { collectFieldComponentEventsFromRules, runComponentFieldEvents } from '../formCreateComponentEvents'
+import {
+  collectFieldComponentEventsFromRules,
+  runComponentFieldEvents,
+  runComponentFieldEventsOnValueChange,
+} from '../formCreateComponentEvents'
 import { createPortalFormApi } from '../formCreateEventRuntime'
 
 const emptyFn = (params: string, body = '') =>
@@ -61,6 +65,39 @@ describe('formCreateComponentEvents', () => {
       onEvent: 'change',
     })
     expect(formData.legal_hold).toBe(true)
+  })
+
+  it('mirrors on.blur when select value changes (designer blur on select)', () => {
+    const rules = [
+      {
+        type: 'select',
+        field: 'select',
+        on: {
+          blur: '$FNX:\nvar hide = $inject.value === 1 || $inject.value === \'1\'\n$inject.api.hidden(hide, \'fileupload\')',
+        },
+      },
+      { type: 'upload', field: 'fileupload' },
+    ]
+    const formData: Record<string, unknown> = { select: '', fileupload: '' }
+    const map = collectFieldComponentEventsFromRules(rules)
+    const api = createPortalFormApi(
+      () => formData,
+      (patch) => Object.assign(formData, patch),
+      undefined,
+      {
+        state: { hidden: new Map(), display: new Map() },
+        notify: () => {},
+        getAllFieldKeys: () => ['select', 'fileupload'],
+      },
+    )
+    runComponentFieldEventsOnValueChange(map.get('select'), {
+      field: 'select',
+      value: '1',
+      api,
+      onEvent: 'change',
+      fieldType: 'select',
+    })
+    expect(api.hiddenStatus('fileupload')).toBe(true)
   })
 
   it('runs blur handler on field blur with final value', () => {

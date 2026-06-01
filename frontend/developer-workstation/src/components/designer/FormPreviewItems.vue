@@ -184,7 +184,10 @@ import {
   isDualPortalSubTablePreview,
   resolvePreviewInlineFormBelowDesign,
 } from './formPreviewTypes'
-import { collectFieldComponentEventsFromRules, runComponentFieldEvents } from '@/utils/formCreateComponentEvents'
+import {
+  collectFieldComponentEventsFromRules,
+  runComponentFieldEventsOnValueChange,
+} from '@/utils/formCreateComponentEvents'
 import { createPortalFormApi } from '@/utils/formCreateEventRuntime'
 
 defineOptions({ name: 'FormPreviewItems' })
@@ -275,12 +278,13 @@ function onPreviewFieldChange(segmentRules: unknown[], field: string, value: unk
     },
   )
   const ev = collectFieldComponentEventsFromRules(segmentRules).get(field)
-  runComponentFieldEvents(ev, {
+  runComponentFieldEventsOnValueChange(ev, {
     field,
     value,
     api,
     onEvent: 'change',
     hookEvent: 'value',
+    fieldType: ev?.rule?.type != null ? String(ev.rule.type) : undefined,
   })
 }
 </script>

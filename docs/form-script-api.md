@@ -248,7 +248,15 @@ function (field, value, options) {
 | `lookup` / `subTable` / `linkForm` | `change` |
 | 布局（`elCard`、`fcRow`、`col` 等，无 `field`） | `click` |
 
-**门户当前执行**：`on.change`、`hook.value`（每次输入都会触发）、`on.blur`（**input / textarea / password** 失焦时触发）。`focus`、`click` 等仍未绑定 DOM。
+**门户当前执行**：
+
+| 事件 | 门户行为 |
+|------|----------|
+| `on.change` / `hook.value` | 控件 `v-model` 变更时执行 |
+| `on.blur` | **input / textarea / password / money** 等已绑 DOM 失焦；**select / radio / 日期 / 数字 / user / 树选等** 在**改值时同步执行** `on.blur`（避免只写 blur 不生效） |
+| `on.focus`、`click`、`removeTag`、`visibleChange`、upload 的 `remove`/`preview`/… | **未执行**（设计器可配，门户未接 DOM） |
+| `hook.load` / `hook.mounted` | 表单挂载时执行 |
+| `hook.hidden` / `hook.watch` / … | **未执行** |
 
 **Form Preview（设计器 Preview 弹窗）**：通过 `formCreatePreviewEvents.ts` 将 `$FNX:` 绑定到 form-create 的 `on.blur` / `on.change`；`change` 回调同时执行 `hook.value`（与门户 `handleFieldChange` 链一致）。保存表单后 Preview 与门户行为应对齐。
 
@@ -284,6 +292,15 @@ if (value === 'abc') {
   api.setValue('legal_hold', false)
 }
 ```
+
+**Select 显隐 `fileupload`（`select === 1` 时隐藏）** — 可写在 **`change`** 或 **`blur`**（门户在 select 改值时会同步跑 `blur` 脚本）：
+
+```javascript
+var hide = $inject.value === 1 || $inject.value === '1'
+$inject.api.hidden(hide, 'fileupload')
+```
+
+选项的 **value** 须与设计器 Options 里配置的一致（显示 `Option02` 时 value 可能是 `'2'` 而非 `1`）。打开表单时若已有值，在同字段加 **`hook_load`**，函数体相同。
 
 **`hook.value` 示例**（每次改值都会触发，不适合「仅失焦后」逻辑）
 

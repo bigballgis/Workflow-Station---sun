@@ -93,6 +93,7 @@ import {
   collectFieldComponentEventsFromRules,
   runAllComponentHookEvents,
   runComponentFieldEvents,
+  runComponentFieldEventsOnValueChange,
 } from '@/utils/formCreateComponentEvents'
 
 export type { FormField, FormTab }
@@ -917,12 +918,14 @@ function runFormOptionsOnChange(field: string, value: unknown) {
 function runComponentEventsOnFieldChange(key: string, value: unknown) {
   const api = createFormEventApi()
   const ev = fieldComponentEvents.value.get(key)
-  runComponentFieldEvents(ev, {
+  const fieldType = allFields.value.find(f => f.key === key)?.type
+  runComponentFieldEventsOnValueChange(ev, {
     field: key,
     value,
     api,
     onEvent: 'change',
     hookEvent: 'value',
+    fieldType,
   })
 }
 

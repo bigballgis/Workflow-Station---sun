@@ -91,6 +91,49 @@ export interface RunComponentEventsOptions {
   onEvent?: string
   /** hook_* name without prefix, e.g. value / load */
   hookEvent?: string
+  /** Portal `FormField.type` when rule.type alone is insufficient */
+  fieldType?: string
+}
+
+/** Select-like controls: portal does not fire DOM blur reliably; mirror `on.blur` on change. */
+/**
+ * Discrete-value controls: designer often uses on.blur; DOM blur is missing or unreliable.
+ * Do NOT add text/input/textarea/password — they have real blur; mirroring would run blur every keystroke.
+ */
+const RULE_TYPES_MIRROR_BLUR_ON_CHANGE = new Set([
+  'select',
+  'radio',
+  'checkbox',
+  'cascader',
+  'switch',
+  'rate',
+  'slider',
+  'datePicker',
+  'timePicker',
+  'dateRange',
+  'timeRange',
+  'elTreeSelect',
+  'treeSelect',
+  'treeselect',
+  'date',
+  'datetime',
+  'time',
+  'inputNumber',
+  'number',
+  'user',
+  'transfer',
+  'colorPicker',
+  'lookup',
+])
+
+export function shouldMirrorBlurOnChange(
+  rule: Record<string, unknown> | undefined,
+  fieldType?: string,
+): boolean {
+  const fromRule = String(rule?.type ?? '')
+  const fromField = String(fieldType ?? '')
+  return RULE_TYPES_MIRROR_BLUR_ON_CHANGE.has(fromRule)
+    || RULE_TYPES_MIRROR_BLUR_ON_CHANGE.has(fromField)
 }
 
 function runHandler(
@@ -130,6 +173,22 @@ export function runComponentFieldEvents(
   if (options.hookEvent) {
     runHandler(events.hook[options.hookEvent], ctx)
   }
+}
+
+/** Run change/hook_value and, for select-like fields, also `on.blur` (designer often uses blur). */
+export function runComponentFieldEventsOnValueChange(
+  events: FieldComponentEvents | undefined,
+  options: RunComponentEventsOptions,
+): void {
+  runComponentFieldEvents(events, options)
+  if (!options.onEvent && !options.hookEvent) return
+  if (!shouldMirrorBlurOnChange(events?.rule, options.fieldType)) return
+  runComponentFieldEvents(events, {
+    field: options.field,
+    value: options.value,
+    api: options.api,
+    onEvent: 'blur',
+  })
 }
 
 export function runAllComponentHookEvents(

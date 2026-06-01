@@ -58,6 +58,7 @@
         :disabled="isDisabled"
         style="width: 100%"
         @update:model-value="onUpdate"
+        @blur="onBlur"
       />
     </template>
 
@@ -73,6 +74,7 @@
         style="width: 100%"
         popper-class="form-renderer-popper"
         @update:model-value="onUpdate"
+        @blur="onBlur"
       >
         <el-option
           v-for="opt in resolvedOptions"
@@ -212,6 +214,7 @@
         style="width: 100%"
         popper-class="form-renderer-popper"
         @update:model-value="onUpdate"
+        @blur="onBlur"
       />
     </template>
 
@@ -229,6 +232,7 @@
         style="width: 100%"
         popper-class="form-renderer-popper"
         @update:model-value="onUpdate"
+        @blur="onBlur"
       >
         <el-option
           v-for="user in (userSearchResults || field.userOptions || [])"
@@ -252,6 +256,7 @@
         style="width: 100%"
         popper-class="form-renderer-popper"
         @update:model-value="onUpdate"
+        @blur="onBlur"
       />
     </template>
 
@@ -268,6 +273,7 @@
         style="width: 100%"
         popper-class="form-renderer-popper"
         @update:model-value="onUpdate"
+        @blur="onBlur"
       />
     </template>
 
@@ -279,6 +285,7 @@
         :disabled="isDisabled"
         clearable
         @update:model-value="onUpdate"
+        @blur="onBlur"
       >
         <template #prepend>
           {{ field.currency || '¥' }}
