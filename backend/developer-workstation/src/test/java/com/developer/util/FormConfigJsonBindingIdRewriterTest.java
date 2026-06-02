@@ -81,6 +81,77 @@ class FormConfigJsonBindingIdRewriterTest {
     }
 
     @Test
+    void remapBindingIds_remapsLookupConfigBindingIdOnLookupNode() {
+        Map<String, Object> props = new LinkedHashMap<>();
+        props.put("lookupConfig",
+                "{\"bindingId\":35,\"tableId\":1,\"tableName\":\"test\",\"searchFields\":[\"id\"]}");
+        Map<String, Object> lookupNode = new LinkedHashMap<>();
+        lookupNode.put("type", "lookup");
+        lookupNode.put("field", "lookup");
+        lookupNode.put("props", props);
+
+        Map<String, Object> configJson = new HashMap<>();
+        configJson.put("rule", new ArrayList<>(List.of(lookupNode)));
+
+        FormConfigJsonBindingIdRewriter.remapBindingIds(configJson, Map.of(35L, 333L));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> node = (Map<String, Object>) ((List<?>) configJson.get("rule")).get(0);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> remappedProps = (Map<String, Object>) node.get("props");
+        String cfg = (String) remappedProps.get("lookupConfig");
+        assertTrue(cfg.contains("\"bindingId\":333"), cfg);
+        assertFalse(cfg.contains("\"bindingId\":35"), cfg);
+        // unrelated fields untouched
+        assertTrue(cfg.contains("\"tableId\":1"));
+        assertTrue(cfg.contains("\"tableName\":\"test\""));
+    }
+
+    @Test
+    void remapBindingIds_remapsLookupConfigBindingIdInSubListViewColumn() {
+        Map<String, Object> column = new LinkedHashMap<>();
+        column.put("columnType", "lookup");
+        column.put("lookupConfig",
+                "{\"bindingId\":60,\"tableId\":-1000000001,\"tableName\":\"sys_users\"}");
+
+        Map<String, Object> subListViews = new LinkedHashMap<>();
+        subListViews.put("101", Map.of("columns", List.of(column)));
+
+        Map<String, Object> configJson = new HashMap<>();
+        configJson.put("subListViews", subListViews);
+
+        FormConfigJsonBindingIdRewriter.remapBindingIds(configJson, Map.of(60L, 334L));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> entry = (Map<String, Object>) ((Map<?, ?>) configJson.get("subListViews")).get("101");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> col = (Map<String, Object>) ((List<?>) entry.get("columns")).get(0);
+        String cfg = (String) col.get("lookupConfig");
+        assertTrue(cfg.contains("\"bindingId\":334"), cfg);
+        assertFalse(cfg.contains("\"bindingId\":60"), cfg);
+    }
+
+    @Test
+    void remapBindingIds_leavesUnmappedLookupConfigUntouched() {
+        Map<String, Object> props = new LinkedHashMap<>();
+        props.put("lookupConfig", "{\"bindingId\":999,\"tableId\":1}");
+        Map<String, Object> lookupNode = new LinkedHashMap<>();
+        lookupNode.put("type", "lookup");
+        lookupNode.put("props", props);
+
+        Map<String, Object> configJson = new HashMap<>();
+        configJson.put("rule", new ArrayList<>(List.of(lookupNode)));
+
+        FormConfigJsonBindingIdRewriter.remapBindingIds(configJson, Map.of(35L, 333L));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> node = (Map<String, Object>) ((List<?>) configJson.get("rule")).get(0);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> remappedProps = (Map<String, Object>) node.get("props");
+        assertEquals("{\"bindingId\":999,\"tableId\":1}", remappedProps.get("lookupConfig"));
+    }
+
+    @Test
     void remapBindingIds_remapsSubListViewLinkColumnRefs() {
         Map<String, Object> column = new LinkedHashMap<>();
         column.put("columnType", "linkForm");

@@ -3,12 +3,19 @@ package com.developer.util;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Rewrites Map fields in form configJson keyed by bindingId to new bindingIds (shared by clone / import).
  * Also rewrites {@code _bindingId} on subTable placeholders in the canvas rule tree so bindings are not lost after export/import/clone.
+ * Lookup fields persist their binding inside a {@code lookupConfig} JSON string ({@code {"bindingId":N,...}});
+ * its {@code bindingId} is remapped too, otherwise imported Lookup configs point at stale bindings (show raw id).
  */
 public final class FormConfigJsonBindingIdRewriter {
+
+    /** Matches the numeric {@code "bindingId": N} entry inside a lookupConfig JSON string. */
+    private static final Pattern LOOKUP_CONFIG_BINDING_ID = Pattern.compile("(\"bindingId\"\\s*:\\s*)(-?\\d+)");
 
     private static final String[] BINDING_KEYED_FIELDS = {
             "subForms",
@@ -64,6 +71,7 @@ public final class FormConfigJsonBindingIdRewriter {
                 Map<String, Object> colMap = (Map<String, Object>) colMapRaw;
                 remapBindingIdField(colMap, "boundSubTableBindingId", bindingIdMapping);
                 remapNegativeComponentId(colMap, "componentId", bindingIdMapping);
+                remapLookupConfigBindingId(colMap, bindingIdMapping);
             }
         }
     }
@@ -87,6 +95,11 @@ public final class FormConfigJsonBindingIdRewriter {
                     remapBindingIdField(propsMap, "bindingId", bindingIdMapping);
                 }
             }
+            // Lookup fields keep their binding in props.lookupConfig (JSON string), any node type.
+            Object lookupProps = node.get("props");
+            if (lookupProps instanceof Map<?, ?> lookupPropsRaw) {
+                remapLookupConfigBindingId((Map<String, Object>) lookupPropsRaw, bindingIdMapping);
+            }
             Object children = node.get("children");
             if (children instanceof List<?>) {
                 remapRuleBindingIds(children, bindingIdMapping);
@@ -100,6 +113,36 @@ public final class FormConfigJsonBindingIdRewriter {
         Long remapped = remapBindingIdValue(raw, bindingIdMapping);
         if (remapped != null && !remapped.equals(asLong(raw))) {
             container.put(fieldName, remapped);
+        }
+    }
+
+    /**
+     * Remaps {@code bindingId} inside a {@code lookupConfig} JSON string (e.g. on a {@code lookup} rule node
+     * or a sub-list-view column). Leaves the rest of the JSON untouched; no-op when absent or unmapped.
+     */
+    private static void remapLookupConfigBindingId(Map<String, Object> container,
+                                                   Map<Long, Long> bindingIdMapping) {
+        Object raw = container.get("lookupConfig");
+        if (!(raw instanceof String json) || json.isBlank()) {
+            return;
+        }
+        Matcher matcher = LOOKUP_CONFIG_BINDING_ID.matcher(json);
+        StringBuilder rewritten = new StringBuilder();
+        boolean changed = false;
+        while (matcher.find()) {
+            long oldId = Long.parseLong(matcher.group(2));
+            Long newId = bindingIdMapping.get(oldId);
+            String replacement = (newId != null && !newId.equals(oldId))
+                    ? matcher.group(1) + newId
+                    : matcher.group(0);
+            if (newId != null && !newId.equals(oldId)) {
+                changed = true;
+            }
+            matcher.appendReplacement(rewritten, Matcher.quoteReplacement(replacement));
+        }
+        matcher.appendTail(rewritten);
+        if (changed) {
+            container.put("lookupConfig", rewritten.toString());
         }
     }
 
