@@ -154,6 +154,21 @@ export function useAudit() {
 
   // ==================== Computed ====================
 
+  const exportRecordCount = computed(() =>
+    selectedRows.value.length > 0 ? selectedRows.value.length : total.value
+  )
+
+  const filterResourceTypes = computed(() => {
+    const seen = new Set<string>()
+    return resourceTypes.value.filter(rt => {
+      if (rt === 'TASK') return false
+      const label = resourceTypeText(rt)
+      if (seen.has(label)) return false
+      seen.add(label)
+      return true
+    })
+  })
+
   const sortedLogs = computed(() => {
     if (!sortField.value) return logs.value
     return [...logs.value].sort((a, b) => {
@@ -210,7 +225,7 @@ export function useAudit() {
       case 'USER':               return [t('menu.userManagement'), t('menu.userList')].join(sep)
       case 'ROLE':               return [EM, t('menu.roleManagement')].join(sep)
       case 'VIRTUAL_GROUP':      return [EM, t('menu.virtualGroup')].join(sep)
-      case 'TASK':               return [EM, t('menu.virtualGroup')].join(sep)
+      case 'TASK':               return [EM, t('menu.virtualGroup')].join(sep) // table rows only; not in filter dropdown
       case 'BUSINESS_UNIT':      return [EM, t('menu.organization')].join(sep)
       case 'RELATION_TABLE':     return [RT, t('menu.tableStructure')].join(sep)
       case 'RELATION_TABLE_ROW': return [RT, t('menu.tableData')].join(sep)
@@ -318,34 +333,46 @@ export function useAudit() {
     const fields = selectedExportFields.value
     if (fields.length === 0) return
     const fieldLabels = ALL_EXPORT_FIELDS.value.filter(f => fields.includes(f.key))
-    const dataToExport = selectedRows.value.length > 0 ? selectedRows.value : sortedLogs.value
-    if (format === 'csv') {
-      const headers = fieldLabels.map(f => f.label)
-      const rows = dataToExport.map(row => fieldLabels.map(f => getRowValue(row, f.key)))
-      const csv = [headers, ...rows]
-        .map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
-        .join('\n')
-      const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `audit-logs-${new Date().toISOString().slice(0, 10)}.csv`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
-      exportDialogVisible.value = false
-    } else {
-      exporting.value = true
-      try {
-        await exportAuditLogs(store.buildQueryRequest())
+
+    exporting.value = true
+    try {
+      let dataToExport: AuditLog[]
+      if (selectedRows.value.length > 0) {
+        dataToExport = selectedRows.value
+      } else if (format === 'csv') {
+        dataToExport = await store.fetchAllLogsForExport()
+      } else {
+        dataToExport = []
+      }
+
+      if (format === 'csv') {
+        const headers = fieldLabels.map(f => f.label)
+        const rows = dataToExport.map(row => fieldLabels.map(f => getRowValue(row, f.key)))
+        const csv = [headers, ...rows]
+          .map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
+          .join('\n')
+        const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `audit-logs-${new Date().toISOString().slice(0, 10)}.csv`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+        exportDialogVisible.value = false
+      } else {
+        const query = selectedRows.value.length > 0
+          ? { ids: selectedRows.value.map(r => r.id) }
+          : store.buildQueryRequest()
+        await exportAuditLogs(query)
         notifySuccess(t('common.success'))
         exportDialogVisible.value = false
-      } catch (e) {
-        notifyError(t(errorTranslator(AppErrorCode.AUDIT_EXPORT_FAILED)))
-      } finally {
-        exporting.value = false
       }
+    } catch (e) {
+      notifyError(t(errorTranslator(AppErrorCode.AUDIT_EXPORT_FAILED)))
+    } finally {
+      exporting.value = false
     }
   }
 
@@ -593,11 +620,12 @@ export function useAudit() {
     loading, exporting, logs, total, page, size,
     detailDialogVisible, currentLog, dateRange,
     tableRef, selectedRows, sortField, sortOrder,
-    query, resourceTypes,
+    query, resourceTypes, filterResourceTypes,
     // Auto-refresh
     refreshCountdown, autoRefreshPaused, toggleAutoRefresh,
     // Export
     exportDialogVisible, exportSelectAll, exportIndeterminate,
+    exportRecordCount,
     ALL_EXPORT_FIELDS, selectedExportFields,
     openExportDialog, doExport, handleBatchExportCsv, exportAsCsv, getRowValue,
     // Date shortcuts

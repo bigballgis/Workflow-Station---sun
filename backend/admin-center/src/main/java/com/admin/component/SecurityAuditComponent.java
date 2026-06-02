@@ -180,6 +180,11 @@ public class SecurityAuditComponent {
     private Specification<AuditLog> buildSpecification(AuditQueryRequest request) {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
+
+            if (request.getIds() != null && !request.getIds().isEmpty()) {
+                predicates.add(root.get("id").in(request.getIds()));
+                return cb.and(predicates.toArray(new Predicate[0]));
+            }
             
             if (request.getAction() != null) {
                 predicates.add(cb.equal(root.get("action"), request.getAction()));
@@ -195,6 +200,9 @@ public class SecurityAuditComponent {
             }
             if (request.getResourceId() != null) {
                 predicates.add(cb.equal(root.get("resourceId"), request.getResourceId()));
+            }
+            if (request.getIpAddress() != null && !request.getIpAddress().isBlank()) {
+                predicates.add(cb.equal(root.get("ipAddress"), request.getIpAddress().trim()));
             }
             if (request.getStartTime() != null) {
                 predicates.add(cb.greaterThanOrEqualTo(root.get("timestamp"), request.getStartTime()));
@@ -416,11 +424,13 @@ public class SecurityAuditComponent {
     @lombok.NoArgsConstructor
     @lombok.AllArgsConstructor
     public static class AuditQueryRequest {
+        private List<String> ids;
         private AuditAction action;
         private String userId;
         private String userName;  // 支持按用户名筛选
         private String resourceType;
         private String resourceId;
+        private String ipAddress;
         private Instant startTime;
         private Instant endTime;
         private Boolean success;  // result: SUCCESS->true, FAILED->false

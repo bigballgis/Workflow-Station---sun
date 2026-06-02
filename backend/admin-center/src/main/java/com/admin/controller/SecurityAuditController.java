@@ -99,7 +99,6 @@ public class SecurityAuditController {
             "BUSINESS_UNIT",
             "RELATION_TABLE", "RELATION_TABLE_ROW",
             "ROLE",
-            "TASK",
             "USER", "VIRTUAL_GROUP"
     );
     
@@ -130,10 +129,14 @@ public class SecurityAuditController {
                 log.debug("Unknown audit action: {}", dto.getAction());
             }
         }
+        req.setIds(dto.getIds());
         req.setUserId(dto.getUserId());
         req.setUserName(dto.getUsername());
         req.setResourceType(dto.getResourceType());
         req.setResourceId(dto.getResourceId());
+        if (dto.getIpAddress() != null && !dto.getIpAddress().isBlank()) {
+            req.setIpAddress(dto.getIpAddress().trim());
+        }
         if (dto.getResult() != null) {
             req.setSuccess("SUCCESS".equalsIgnoreCase(dto.getResult()));
         }
@@ -205,11 +208,13 @@ public class SecurityAuditController {
     
     @Data
     public static class AuditQueryRequestDto {
+        private List<String> ids;
         private String action;
         private String userId;
         private String username;
         private String resourceType;
         private String resourceId;
+        private String ipAddress;
         private String result;
         private String startTime;
         private String endTime;

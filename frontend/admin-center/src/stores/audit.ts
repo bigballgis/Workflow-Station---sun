@@ -49,6 +49,25 @@ export const useAuditStore = defineStore('audit', () => {
     return req
   }
 
+  const fetchAllLogsForExport = async (): Promise<AuditLog[]> => {
+    const sortDir = sort.order === 'ascending' ? 'asc' : 'desc'
+    const entityField = toEntityField(sort.field)
+    const pageSize = 500
+    const all: AuditLog[] = []
+    let page = 0
+    let totalElements = Infinity
+
+    while (all.length < totalElements) {
+      const result = await queryAuditLogs(buildQueryRequest(), page, pageSize, entityField, sortDir)
+      all.push(...result.content)
+      totalElements = result.totalElements
+      if (result.content.length === 0) break
+      page += 1
+    }
+
+    return all
+  }
+
   const fetchLogs = async () => {
     loading.value = true
     try {
@@ -67,7 +86,9 @@ export const useAuditStore = defineStore('audit', () => {
   const fetchResourceTypes = async () => {
     try {
       const types = await getAuditResourceTypes()
-      resourceTypes.value = [...types].sort((a, b) => a.localeCompare(b))
+      resourceTypes.value = [...types]
+        .filter(rt => rt !== 'TASK')
+        .sort((a, b) => a.localeCompare(b))
     } catch { /* leave empty */ }
   }
 
@@ -93,7 +114,7 @@ export const useAuditStore = defineStore('audit', () => {
     logs, total, loading,
     query, dateRange, pagination, sort,
     resourceTypes,
-    fetchLogs, fetchResourceTypes, resetQuery, setSort,
+    fetchLogs, fetchResourceTypes, fetchAllLogsForExport, resetQuery, setSort,
     buildQueryRequest,
   }
 })

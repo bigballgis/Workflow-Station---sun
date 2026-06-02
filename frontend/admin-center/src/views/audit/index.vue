@@ -42,7 +42,7 @@
             style="width: 180px"
           >
             <el-option
-              v-for="rt in resourceTypes"
+              v-for="rt in filterResourceTypes"
               :key="rt"
               :label="resourceTypeText(rt)"
               :value="rt"
@@ -337,7 +337,7 @@
       v-model:selected-fields="selectedExportFields"
       v-model:select-all="exportSelectAll"
       v-model:indeterminate="exportIndeterminate"
-      :total="total"
+      :total="exportRecordCount"
       :exporting="exporting"
       :export-fields="ALL_EXPORT_FIELDS"
       @export="doExport"
@@ -376,9 +376,10 @@ const {
   loading, exporting, logs, total, page, size,
   detailDialogVisible, currentLog, dateRange,
   tableRef, selectedRows,
-  query, resourceTypes,
+  query, resourceTypes, filterResourceTypes,
   refreshCountdown, autoRefreshPaused, toggleAutoRefresh,
   exportDialogVisible, exportSelectAll, exportIndeterminate,
+  exportRecordCount,
   ALL_EXPORT_FIELDS, selectedExportFields,
   openExportDialog, doExport, handleBatchExportCsv,
   dateShortcuts,

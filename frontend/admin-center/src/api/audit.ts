@@ -85,6 +85,8 @@ export interface AuditQueryRequest {
   ipAddress?: string
   startTime?: string
   endTime?: string
+  /** When set, export/query only these audit log IDs (batch export). */
+  ids?: string[]
 }
 
 export interface AnomalyDetectionResult {
