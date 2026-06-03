@@ -42,7 +42,8 @@ import {
   getFilenameFromUrl,
   syncFormCreateUploadFieldValue,
 } from '@/components/designer/uploadFieldUtils'
-import { ensureEmptyFormOptionsEvents } from '@/utils/formCreateDefaultEvents'
+import { ensureEmptyFormOptionsEvents, isEmptyFormCreateHandler } from '@/utils/formCreateDefaultEvents'
+import { wrapFormLevelOnChangeForFormCreate } from '@/utils/formCreateEventRuntime'
 
 /**
  * Collect upload rules from a form-create rule tree (including nested layout children).
@@ -197,7 +198,7 @@ export function mergeLoadedFormOptions(
   if (!stored || Object.keys(stored).length === 0) {
     return { ...baseDefaults }
   }
-  return ensureEmptyFormOptionsEvents({
+  const merged = ensureEmptyFormOptionsEvents({
     ...baseDefaults,
     ...stored,
     form: { ...baseDefaults.form, ...(stored.form || {}) },
@@ -211,4 +212,8 @@ export function mergeLoadedFormOptions(
       },
     },
   })
+  if (!isEmptyFormCreateHandler(merged.onChange)) {
+    merged.onChange = wrapFormLevelOnChangeForFormCreate(merged.onChange)
+  }
+  return merged
 }

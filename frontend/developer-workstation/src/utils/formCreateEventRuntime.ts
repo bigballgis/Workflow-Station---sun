@@ -180,10 +180,11 @@ export function parseFormCreateEventHandler(raw: unknown): ((ctx: FormCreateEven
     ) => void
 
     return (ctx) => {
+      const options = createFormEventOptionsBridge(ctx.api, ctx.rule)
       runner(
         ctx.field,
         ctx.value,
-        ctx.api,
+        options,
         ctx.api,
         ctx.rule,
         ctx.rule,
@@ -194,6 +195,53 @@ export function parseFormCreateEventHandler(raw: unknown): ((ctx: FormCreateEven
   } catch (err) {
     console.warn('[formCreateEventRuntime] Failed to parse handler:', err)
     return null
+  }
+}
+
+/** Form event scripts use `options`; form-create passes `{ api, rule }` as the 3rd arg. */
+export type FormEventOptionsBridge = PortalFormApi & {
+  api: PortalFormApi
+  rule?: Record<string, unknown>
+}
+
+export function createFormEventOptionsBridge(
+  api: PortalFormApi,
+  rule?: Record<string, unknown>,
+): FormEventOptionsBridge {
+  return {
+    api,
+    rule,
+    get form() {
+      return api.form
+    },
+    getValue: (field: string) => api.getValue(field),
+    setValue: (fieldOrData: string | Record<string, unknown>, value?: unknown) =>
+      api.setValue(fieldOrData, value),
+    hidden: (status: boolean, field?: string | string[]) => api.hidden(status, field),
+    display: (status: boolean, field?: string | string[]) => api.display(status, field),
+    hiddenStatus: (field: string) => api.hiddenStatus(field),
+    displayStatus: (field: string) => api.displayStatus(field),
+    setFieldError: (field: string, message: string) => api.setFieldError(field, message),
+    clearFieldError: (field: string) => api.clearFieldError(field),
+  }
+}
+
+/**
+ * Wrap persisted form-level onChange for form-create runtime.
+ * form-create invokes onChange(field, value, { api, rule, setFlag }) — not PortalFormApi directly.
+ */
+export function wrapFormLevelOnChangeForFormCreate(raw: unknown): unknown {
+  if (isEmptyFormCreateHandler(raw)) return raw
+  const stored = raw
+  return function formLevelOnChange(field: string, value: unknown, inject?: unknown) {
+    const bag =
+      inject && typeof inject === 'object'
+        ? (inject as { api?: PortalFormApi; rule?: Record<string, unknown> })
+        : {}
+    const fcApi = bag.api && typeof bag.api.getValue === 'function' ? bag.api : null
+    if (!fcApi) return
+    const options = createFormEventOptionsBridge(fcApi, bag.rule)
+    runFormOnChangeHandler(stored, field, value, options, bag.rule ?? {})
   }
 }
 

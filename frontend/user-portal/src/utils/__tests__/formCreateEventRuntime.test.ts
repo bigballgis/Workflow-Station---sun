@@ -4,6 +4,8 @@ import {
   createFieldKeyResolver,
   parseFormCreateFunction,
   runFormOnChangeHandler,
+  wrapFormLevelOnChangeForFormCreate,
+  type PortalFormApi,
 } from '../formCreateEventRuntime'
 
 describe('formCreateEventRuntime', () => {
@@ -117,6 +119,32 @@ describe('formCreateEventRuntime', () => {
 
     runFormOnChangeHandler(raw, 'test3', '2', api)
     expect(vis.hidden.get('tes2')).toBe(true)
+  })
+
+  it('wrapFormLevelOnChangeForFormCreate bridges form-create inject bag to options.hidden', () => {
+    const raw =
+      "[[FORM-CREATE-PREFIX-function onChange(field, value, options){\n  options.hidden(true, 'Dept')\n}-FORM-CREATE-SUFFIX]]"
+    const hiddenCalls: Array<{ status: boolean; field?: string | string[] }> = []
+    const fcApi = createPortalFormApi(
+      () => ({}),
+      () => {},
+      undefined,
+      {
+        state: { hidden: new Map(), display: new Map() },
+        notify: () => {},
+        getAllFieldKeys: () => ['Dept'],
+      },
+    )
+    fcApi.hidden = (status, field) => {
+      hiddenCalls.push({ status, field })
+    }
+    const wrapped = wrapFormLevelOnChangeForFormCreate(raw) as (
+      field: string,
+      value: unknown,
+      inject: { api: PortalFormApi; rule?: Record<string, unknown> },
+    ) => void
+    wrapped('Paid_By_Type', '1', { api: fcApi, rule: {} })
+    expect(hiddenCalls).toEqual([{ status: true, field: 'Dept' }])
   })
 
   it('setFieldError and clearFieldError invoke field error callbacks', () => {

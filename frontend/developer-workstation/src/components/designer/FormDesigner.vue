@@ -610,12 +610,14 @@ import {
   attachPreviewMountedDefaultSync,
   materializePreviewItemsEvents,
 } from '@/utils/formCreatePreviewEvents'
+import { wrapFormLevelOnChangeForFormCreate } from '@/utils/formCreateEventRuntime'
 import {
   flattenComponentEventsForPersist,
   inflateComponentEventsForDesigner,
   buildDefaultFormCreateOptions,
   buildDesignerUpdateDefaultRule,
   ensureEmptyRuleComponentEvents,
+  isEmptyFormCreateHandler,
   walkRulesEnsureComponentEvents,
 } from '@/utils/formCreateDefaultEvents'
 import {
@@ -3523,10 +3525,15 @@ async function handlePreview() {
   previewData.value = { ...previewData.value }
   applyPreviewDefaultsToItemRules(previewItems.value, previewData)
   materializePreviewItemsEvents(previewItems.value, previewData)
-  previewDialogOption.value = attachPreviewMountedDefaultSync(
-    getPreviewOption() as Record<string, unknown>,
-    previewData,
-  )
+  const previewOpt: Record<string, unknown> = {
+    ...getPreviewOption(),
+    ...(config.options && typeof config.options === 'object' ? config.options : {}),
+  }
+  const savedOnChange = config.options?.onChange
+  if (!isEmptyFormCreateHandler(savedOnChange)) {
+    previewOpt.onChange = wrapFormLevelOnChangeForFormCreate(savedOnChange)
+  }
+  previewDialogOption.value = attachPreviewMountedDefaultSync(previewOpt, previewData)
   // Keep previewRule for backward compat (used by previewSubBindings logic elsewhere if any)
   previewRule.value = rawRule.filter(r => r.type !== 'subTable')
   console.log('[Preview] previewItems:', items.map(i => i.kind === 'fields' ? `fields(${i.rule.length})` : i.kind))

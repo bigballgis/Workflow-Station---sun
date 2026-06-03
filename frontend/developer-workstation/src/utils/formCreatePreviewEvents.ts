@@ -176,6 +176,14 @@ export function attachPreviewMountedDefaultSync(
       if (!hasMeaningfulFormValue(val)) continue
       api.setValue(field, val)
     }
+    const onChangeFn = merged.onChange
+    if (typeof onChangeFn === 'function') {
+      try {
+        onChangeFn('__bootstrap__', null, { api })
+      } catch {
+        /* ignore bootstrap onChange errors */
+      }
+    }
     if (prevFn) {
       try {
         prevFn((rawApi ?? portalApi) as PortalFormApi)
