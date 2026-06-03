@@ -36,7 +36,7 @@ public class DashboardComponent {
 
     @Transactional(readOnly = true)
     public DashboardStats getStats() {
-        long totalUsers = userRepository.count();
+        long totalUsers = userRepository.countActive();
         long totalBusinessUnits = businessUnitRepository.count();
         long totalRoles = roleRepository.count();
 

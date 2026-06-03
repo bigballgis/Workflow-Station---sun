@@ -123,6 +123,13 @@ public interface UserRepository extends JpaRepository<User, String> {
      * Users created after the timestamp (e.g. today's new users).
      */
     long countByCreatedAtAfter(LocalDateTime timestamp);
+
+    /**
+     * Count non-deleted users (excludes soft-deleted rows).
+     * Dashboard 与用户列表保持同一软删口径。
+     */
+    @Query("SELECT COUNT(u) FROM User u WHERE u.deleted = false OR u.deleted IS NULL")
+    long countActive();
     
     /**
      * Count users created in the time range.
