@@ -4,6 +4,7 @@ import { resolve } from 'path'
 import AutoImport from 'unplugin-auto-import/vite'
 import Components from 'unplugin-vue-components/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
+import federation from '@originjs/vite-plugin-federation'
 
 const isTest = process.env.VITEST === 'true'
 
@@ -11,6 +12,10 @@ export default defineConfig({
   base: '/portal/',
   plugins: [
     vue(),
+    federation({
+      name: 'user_portal',
+      shared: ['vue', 'pinia', 'vue-router']
+    }),
     AutoImport({
       resolvers: [ElementPlusResolver({ importStyle: isTest ? false : 'css' })],
       imports: ['vue', 'vue-router', 'pinia'],
@@ -62,15 +67,6 @@ export default defineConfig({
     css: true
   },
   build: {
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          'vendor': ['vue', 'vue-router', 'pinia'],
-          'element-plus': ['element-plus'],
-          'echarts': ['echarts', 'vue-echarts'],
-          'bpmn': ['bpmn-js']
-        }
-      }
-    }
+    target: 'esnext'
   }
 })

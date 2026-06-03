@@ -29,7 +29,34 @@ export const PERMISSIONS = {
   LOG_READ: 'log:read',
   
   // Tenant admin
-  TENANT_ADMIN: 'tenant:admin'
+  TENANT_ADMIN: 'tenant:admin',
+
+  // Gateway Governance
+  GATEWAY_API_READ: 'gateway:api:read',
+  GATEWAY_API_WRITE: 'gateway:api:write',
+  GATEWAY_APP_READ: 'gateway:application:read',
+  GATEWAY_APP_WRITE: 'gateway:application:write',
+  GATEWAY_POLICY_READ: 'gateway:policy:read',
+  GATEWAY_POLICY_WRITE: 'gateway:policy:write',
+  GATEWAY_RELEASE_READ: 'gateway:release:read',
+  GATEWAY_RELEASE_EXECUTE: 'gateway:release:execute',
+  GATEWAY_ENV_READ: 'gateway:environment:read',
+  GATEWAY_ENV_WRITE: 'gateway:environment:write',
+  GATEWAY_AUDIT_READ: 'gateway:audit:read',
+  // Phase 2
+  GATEWAY_DRIFT_READ: 'gateway:drift:read',
+  GATEWAY_DRIFT_SYNC: 'gateway:drift:sync',
+  GATEWAY_MONITORING_READ: 'gateway:monitoring:read',
+  GATEWAY_RELEASE_APPROVE: 'gateway:release:approve',
+  GATEWAY_RELEASE_PROMOTE: 'gateway:release:promote',
+
+  // MFE Governance
+  MFE_MODULE_READ: 'frontend.module:read',
+  MFE_MODULE_WRITE: 'frontend.module:write',
+  MFE_MODULE_ENABLE: 'frontend.module:enable',
+  MFE_MODULE_VERSION_SWITCH: 'frontend.module:version:switch',
+  MFE_MODULE_VERSION_ROLLBACK: 'frontend.module:version:rollback',
+  MFE_MODULE_RUNTIME_READ: 'frontend.module:runtime:read'
 } as const
 
 // Route permission mapping
@@ -49,14 +76,21 @@ export const ROUTE_PERMISSIONS: Record<string, string[]> = {
   '/profile': [], // Everyone can access their profile
   '/relation-tables/structure': [PERMISSIONS.SYSTEM_ADMIN],
   '/relation-tables/structure/create': [PERMISSIONS.SYSTEM_ADMIN],
-  '/relation-tables/data': [PERMISSIONS.SYSTEM_ADMIN]
+  '/relation-tables/data': [PERMISSIONS.SYSTEM_ADMIN],
+
+  // Gateway Governance (Phase 3 MFE — consolidated catch-all route)
+  '/gateway': [PERMISSIONS.GATEWAY_API_READ, PERMISSIONS.GATEWAY_APP_READ, PERMISSIONS.GATEWAY_RELEASE_READ, PERMISSIONS.GATEWAY_AUDIT_READ, PERMISSIONS.GATEWAY_DRIFT_READ, PERMISSIONS.GATEWAY_MONITORING_READ],
+
+  // MFE Governance
+  '/mfe/modules': [PERMISSIONS.MFE_MODULE_READ]
 }
 
 // Hardcoded role -> permissions fallback for when sys_role_permissions is empty
 const ROLE_PERMISSION_DEFAULTS: Record<string, string[]> = {
-  SYS_ADMIN: ['user:read', 'user:write', 'user:delete', 'role:read', 'role:write', 'role:delete', 'system:admin', 'system:config', 'audit:read', 'log:read', 'basic:access'],
-  SUPER_ADMIN: ['user:read', 'user:write', 'user:delete', 'role:read', 'role:write', 'role:delete', 'system:admin', 'system:config', 'audit:read', 'log:read', 'basic:access'],
-  AUDITOR: ['audit:read', 'log:read', 'user:read', 'basic:access'],
+  SYS_ADMIN: ['user:read', 'user:write', 'user:delete', 'role:read', 'role:write', 'role:delete', 'system:admin', 'system:config', 'audit:read', 'log:read', 'basic:access', 'gateway:api:read', 'gateway:api:write', 'gateway:application:read', 'gateway:application:write', 'gateway:policy:read', 'gateway:policy:write', 'gateway:release:read', 'gateway:release:execute', 'gateway:environment:read', 'gateway:environment:write', 'gateway:audit:read', 'gateway:drift:read', 'gateway:drift:sync', 'gateway:monitoring:read', 'gateway:release:approve', 'gateway:release:promote', 'frontend.module:read', 'frontend.module:write', 'frontend.module:enable', 'frontend.module:version:switch', 'frontend.module:version:rollback', 'frontend.module:runtime:read'],
+  SUPER_ADMIN: ['user:read', 'user:write', 'user:delete', 'role:read', 'role:write', 'role:delete', 'system:admin', 'system:config', 'audit:read', 'log:read', 'basic:access', 'gateway:api:read', 'gateway:api:write', 'gateway:application:read', 'gateway:application:write', 'gateway:policy:read', 'gateway:policy:write', 'gateway:release:read', 'gateway:release:execute', 'gateway:environment:read', 'gateway:environment:write', 'gateway:audit:read', 'gateway:drift:read', 'gateway:drift:sync', 'gateway:monitoring:read', 'gateway:release:approve', 'gateway:release:promote', 'frontend.module:read', 'frontend.module:write', 'frontend.module:enable', 'frontend.module:version:switch', 'frontend.module:version:rollback', 'frontend.module:runtime:read'],
+  AUDITOR: ['audit:read', 'log:read', 'user:read', 'basic:access', 'gateway:drift:read', 'gateway:monitoring:read'],
+  SYS_ADMIN_GATEWAY: ['gateway:api:read', 'gateway:api:write', 'gateway:application:read', 'gateway:application:write', 'gateway:policy:read', 'gateway:policy:write', 'gateway:release:read', 'gateway:release:execute', 'gateway:environment:read', 'gateway:environment:write', 'gateway:audit:read', 'gateway:drift:read', 'gateway:drift:sync', 'gateway:monitoring:read', 'gateway:release:approve', 'gateway:release:promote'],
 }
 
 /**

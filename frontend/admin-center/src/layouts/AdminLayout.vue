@@ -133,6 +133,61 @@
                 {{ t('menu.tableData') }}
               </el-menu-item>
             </el-sub-menu>
+
+            <!-- Gateway Governance - requires any gateway permission -->
+            <el-sub-menu
+              v-if="canReadGateway"
+              index="gateway"
+            >
+              <template #title>
+                <el-icon><Connection /></el-icon>
+                <span>{{ t('gateway.title') }}</span>
+              </template>
+              <el-menu-item
+                v-if="canReadGatewayApi"
+                index="/gateway/apis"
+              >
+                {{ t('gateway.apis') }}
+              </el-menu-item>
+              <el-menu-item
+                v-if="canReadGatewayApp"
+                index="/gateway/applications"
+              >
+                {{ t('gateway.applications') }}
+              </el-menu-item>
+              <el-menu-item
+                v-if="canReadGatewayRelease"
+                index="/gateway/releases"
+              >
+                {{ t('gateway.releases') }}
+              </el-menu-item>
+              <el-menu-item
+                v-if="canReadGatewayAudit"
+                index="/gateway/audit"
+              >
+                {{ t('gateway.audit') }}
+              </el-menu-item>
+              <el-menu-item
+                v-if="canReadGatewayDrift"
+                index="/gateway/drift"
+              >
+                {{ t('gateway.driftDetection') }}
+              </el-menu-item>
+              <el-menu-item
+                v-if="canReadGatewayMonitoring"
+                index="/gateway/monitoring"
+              >
+                {{ t('gateway.monitoring') }}
+              </el-menu-item>
+            </el-sub-menu>
+            <!-- MFE Governance -->
+            <el-menu-item
+              v-if="canReadMfeModule"
+              index="/mfe/modules"
+            >
+              <el-icon><Grid /></el-icon>
+              <span>{{ t('mfe.title') }}</span>
+            </el-menu-item>
           </el-menu>
         </el-scrollbar>
         <div
@@ -172,7 +227,7 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { 
   Fold, Expand,
-  Odometer, Box, User, Lock, Document, DataAnalysis, Grid
+  Odometer, Box, User, Lock, Document, DataAnalysis, Grid, Connection
 } from '@element-plus/icons-vue'
 import UserProfileDropdown from '@/components/UserProfileDropdown.vue'
 import { hasPermission, PERMISSIONS } from '@/utils/permission'
@@ -188,6 +243,25 @@ const isSystemAdmin = computed(() => hasPermission(PERMISSIONS.SYSTEM_ADMIN))
 const canReadUser = computed(() => hasPermission(PERMISSIONS.USER_READ))
 const canReadRole = computed(() => hasPermission(PERMISSIONS.ROLE_READ))
 const canReadAudit = computed(() => hasPermission(PERMISSIONS.AUDIT_READ) || hasPermission(PERMISSIONS.LOG_READ))
+
+// Gateway permissions (Phase 3 — consolidated)
+const canReadGateway = computed(() =>
+  hasPermission(PERMISSIONS.GATEWAY_API_READ) ||
+  hasPermission(PERMISSIONS.GATEWAY_APP_READ) ||
+  hasPermission(PERMISSIONS.GATEWAY_RELEASE_READ) ||
+  hasPermission(PERMISSIONS.GATEWAY_AUDIT_READ) ||
+  hasPermission(PERMISSIONS.GATEWAY_DRIFT_READ) ||
+  hasPermission(PERMISSIONS.GATEWAY_MONITORING_READ)
+)
+const canReadGatewayApi = computed(() => hasPermission(PERMISSIONS.GATEWAY_API_READ))
+const canReadGatewayApp = computed(() => hasPermission(PERMISSIONS.GATEWAY_APP_READ))
+const canReadGatewayRelease = computed(() => hasPermission(PERMISSIONS.GATEWAY_RELEASE_READ))
+const canReadGatewayAudit = computed(() => hasPermission(PERMISSIONS.GATEWAY_AUDIT_READ))
+const canReadGatewayDrift = computed(() => hasPermission(PERMISSIONS.GATEWAY_DRIFT_READ))
+const canReadGatewayMonitoring = computed(() => hasPermission(PERMISSIONS.GATEWAY_MONITORING_READ))
+
+// MFE permissions
+const canReadMfeModule = computed(() => hasPermission(PERMISSIONS.MFE_MODULE_READ))
 
 const toggleCollapse = () => {
   isCollapse.value = !isCollapse.value

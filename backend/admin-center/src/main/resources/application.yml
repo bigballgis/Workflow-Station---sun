@@ -315,3 +315,8 @@ platform:
           - http://localhost:3002/dev/sso/callback
           - http://127.0.0.1:3000/dev/sso/callback
           - http://127.0.0.1:3102/dev/sso/callback
+
+# MFE Package Store — shared volume path for import/export
+mfe:
+  store:
+    path: ${MFE_STORE_PATH:${user.home}/.hermes/mfe-store}

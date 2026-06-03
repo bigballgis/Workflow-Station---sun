@@ -112,3 +112,8 @@ logging:
     root: INFO
     com.admin: INFO
     org.hibernate.SQL: WARN
+
+# MFE Package Store — Docker shared volume
+mfe:
+  store:
+    path: ${MFE_STORE_PATH:/mfe-store}

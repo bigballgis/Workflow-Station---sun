@@ -37,6 +37,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class PortalSessionIssuerService {
 
+    private static final String AUTH_COOKIE_PATH = "/api/portal";
     private static final String CLAIM_ACTIVE_BUSINESS_UNIT_ID = "activeBusinessUnitId";
     private static final String CLAIM_ACTIVE_ROLE_ID = "activeRoleId";
     private static final String CLAIM_PORTAL_ACCESS_MODE = "portalAccessMode";
@@ -315,7 +316,7 @@ public class PortalSessionIssuerService {
         Cookie cookie = new Cookie(name, value);
         cookie.setHttpOnly(true);
         cookie.setSecure(false);  // false for dev HTTP
-        cookie.setPath("/");
+        cookie.setPath(AUTH_COOKIE_PATH);
         cookie.setMaxAge(maxAge);
         cookie.setAttribute("SameSite", "Lax");
         response.addCookie(cookie);

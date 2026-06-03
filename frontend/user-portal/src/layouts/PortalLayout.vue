@@ -55,69 +55,6 @@
             </template>
           </el-menu-item>
           <el-menu-item
-            v-if="showFullPortal"
-            index="/tasks"
-            class="menu-item-tasks"
-          >
-            <el-badge
-              :value="pendingTaskCount"
-              :max="99"
-              :hidden="pendingTaskCount === 0"
-              type="danger"
-              class="task-menu-badge-icon"
-            >
-              <el-icon><List /></el-icon>
-            </el-badge>
-            <template #title>
-              <span class="task-menu-title-with-badge">
-                <span class="task-menu-title-text">{{ t('menu.tasks') }}</span>
-                <el-badge
-                  :value="pendingTaskCount"
-                  :max="99"
-                  :hidden="pendingTaskCount === 0"
-                  type="danger"
-                  class="task-menu-badge-text"
-                />
-              </span>
-            </template>
-          </el-menu-item>
-          <el-menu-item
-            v-if="showFullPortal"
-            index="/tasks/completed"
-          >
-            <el-icon><Finished /></el-icon>
-            <template #title>
-              {{ t('menu.completedTasks') }}
-            </template>
-          </el-menu-item>
-          <el-menu-item
-            v-if="showFullPortal"
-            index="/processes"
-          >
-            <el-icon><Plus /></el-icon>
-            <template #title>
-              {{ t('menu.processes') }}
-            </template>
-          </el-menu-item>
-          <el-menu-item
-            v-if="showFullPortal"
-            index="/my-applications"
-          >
-            <el-icon><Document /></el-icon>
-            <template #title>
-              {{ t('menu.myApplications') }}
-            </template>
-          </el-menu-item>
-          <el-menu-item
-            v-if="showFullPortal"
-            index="/delegations"
-          >
-            <el-icon><Share /></el-icon>
-            <template #title>
-              {{ t('menu.delegations') }}
-            </template>
-          </el-menu-item>
-          <el-menu-item
             index="/permissions"
             class="menu-item-permissions"
           >
@@ -152,6 +89,17 @@
               Relation Tables
             </template>
           </el-menu-item>
+            <!-- Dynamic MFE modules -->
+            <template v-if="showFullPortal">
+              <el-menu-item
+                v-for="mod in mfeNavModules"
+                :key="mod.moduleCode"
+                :index="mod.routePath"
+              >
+                <el-icon><component :is="resolveMfeIcon(mod.icon)" /></el-icon>
+                <template #title>{{ mod.displayName }}</template>
+              </el-menu-item>
+            </template>
         </el-menu>
         <div
           class="collapse-btn"
@@ -184,10 +132,12 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import router from '@/router'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import {
   HomeFilled, List, Plus, Document, Share, Key,
+  Bell, Setting, Connection, Monitor, Tickets, Management,
   Fold, Expand, Finished, DataAnalysis, Grid
 } from '@element-plus/icons-vue'
 import SelfServiceBanner from '@/components/SelfServiceBanner.vue'
@@ -205,6 +155,7 @@ import UserProfileDropdown from '@/components/UserProfileDropdown.vue'
 import NotificationBadge from '@/components/NotificationBadge.vue'
 import { biDashboardApi } from '@/api/biDashboard'
 import { usePendingApprovalStore } from '@/stores/pendingApproval'
+import { useMfeRegistryStore } from '@/stores/mfeRegistry'
 import { usePendingTaskStore } from '@/stores/pendingTask'
 
 const { t } = useI18n()
@@ -213,6 +164,17 @@ const pendingApprovalStore = usePendingApprovalStore()
 const { count: pendingApprovalCount } = storeToRefs(pendingApprovalStore)
 const pendingTaskStore = usePendingTaskStore()
 const { count: pendingTaskCount } = storeToRefs(pendingTaskStore)
+const mfeStore = useMfeRegistryStore()
+const { navModules: mfeNavModules, loading: mfeLoading } = storeToRefs(mfeStore)
+
+/** Map icon name strings from MFE config to actual Element Plus icon components */
+const MFE_ICON_MAP: Record<string, any> = {
+  Bell, Setting, Connection, Monitor, Grid, Tickets, Management,
+  List, Plus, Document, Share, HomeFilled, Finished, DataAnalysis, Key
+}
+function resolveMfeIcon(iconName: string) {
+  return MFE_ICON_MAP[iconName] || Grid
+}
 
 const isCollapsed = ref(false)
 const cachedViews = ref(['Dashboard', 'Tasks', 'MyApplications'])
@@ -277,8 +239,51 @@ onMounted(() => {
     if (showFullPortal.value) {
       await checkBiDashboards()
     }
+    // Load MFE runtime config and register dynamic routes
+    try {
+      const modules = await mfeStore.load('user-portal', 'DEV')
+      modules.forEach(mod => {
+        router.addRoute('PortalRoot', {
+          path: mod.routePath.replace(/^\//, ''),
+          name: `MFE_${mod.moduleCode}`,
+          component: () => import('@/components/RemoteLoader.vue'),
+          props: {
+            remoteEntryUrl: mod.remoteEntryUrl,
+            exposedModule: mod.exposedModule,
+            moduleCode: mod.moduleCode
+          },
+          meta: {
+            title: mod.displayName
+          }
+        })
+      })
+    } catch (e) {
+      console.warn('[MFE] Failed to register dynamic routes:', e)
+    }
+    // If redirected from a direct MFE URL, navigate back
+    const mfeRedirectRaw = route.query.mfe_redirect as string
+    if (mfeRedirectRaw) {
+      const mfeRedirect = decodeURIComponent(mfeRedirectRaw)
+      router.replace(mfeRedirect).catch((e: any) => console.warn("[MFE] redirect failed:", e))
+      return
+    }
   })()
 })
+
+// Bridge: pushState does not fire hashchange → MFE hash router misses host navigation.
+// Dispatch synthetic HashChangeEvent for MFE routes on hash change.
+watch(
+  () => route.hash,
+  (newHash, oldHash) => {
+    if (!route.path.startsWith('/mfe/')) return
+    if (newHash === oldHash) return
+    const base = window.location.href.replace(/#.*$/, '')
+    window.dispatchEvent(new HashChangeEvent('hashchange', {
+      oldURL: base + (oldHash || ''),
+      newURL: base + (newHash || '')
+    }))
+  }
+)
 
 watch(
   () => route.path,

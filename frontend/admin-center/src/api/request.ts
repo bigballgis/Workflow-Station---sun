@@ -37,6 +37,10 @@ request.interceptors.request.use(
     if (username) {
       config.headers['X-Username'] = username
     }
+    // Gateway governance and multi-tenant APIs require X-Tenant-Id
+    if (!config.headers['X-Tenant-Id']) {
+      config.headers['X-Tenant-Id'] = localStorage.getItem('tenantId') || 'DEFAULT'
+    }
     return config
   },
   (error) => Promise.reject(error)

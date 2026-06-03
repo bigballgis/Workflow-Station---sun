@@ -1,0 +1,179 @@
+import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
+import { ElMessage } from 'element-plus'
+import { refreshToken as refreshAuthToken, USER_KEY, USER_ID_KEY, clearAuth } from './auth'
+import i18n from '@/i18n'
+import { pickHttpErrorBodyMessage } from '@/utils/httpErrorMessage'
+import { redirectToUnifiedLogin, setSsoReturnPath } from '@/utils/sso'
+
+let isRefreshing = false
+let failedQueue: Array<{ resolve: Function; reject: Function }> = []
+
+const processQueue = (error: unknown, token: string | null = null) => {
+  failedQueue.forEach(prom => {
+    if (error) {
+      prom.reject(error)
+    } else {
+      prom.resolve(token)
+    }
+  })
+  failedQueue = []
+}
+
+// 创建axios实例
+const service: AxiosInstance = axios.create({
+  baseURL: '/api/portal',
+  timeout: 600000, // 10 minutes - N8N workflows (e.g. AI invoice recognition) can take several minutes
+  withCredentials: true,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+})
+
+// 请求拦截器
+service.interceptors.request.use(
+  (config) => {
+    // 添加用户ID头 - 从存储的用户对象中获取
+    let userId = localStorage.getItem(USER_ID_KEY)
+    if (!userId) {
+      // 尝试从 user 对象中获取
+      const userStr = localStorage.getItem(USER_KEY)
+      if (userStr) {
+        try {
+          const user = JSON.parse(userStr)
+          userId = user.userId || user.id
+        } catch (e) {
+          console.error('Failed to parse user from localStorage:', e)
+        }
+      }
+    }
+    if (userId) {
+      config.headers['X-User-Id'] = userId
+    }
+    
+    return config
+  },
+  (error) => {
+    console.error('Request error:', error)
+    return Promise.reject(error)
+  }
+)
+
+// 响应拦截器
+service.interceptors.response.use(
+  (response: AxiosResponse) => {
+    const res = response.data
+    
+    if (res.success === false) {
+      const msg = pickHttpErrorBodyMessage(res) || i18n.global.t('api.requestFailed')
+      ElMessage.error(msg)
+      return Promise.reject(new Error(msg))
+    }
+    
+    return res
+  },
+  async (error) => {
+    const originalRequest = error.config
+    
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject })
+        }).then(token => {
+          originalRequest.headers.Authorization = `Bearer ${token}`
+          return service(originalRequest)
+        }).catch(err => Promise.reject(err))
+      }
+
+      originalRequest._retry = true
+      isRefreshing = true
+
+      try {
+        const tokenResponse = await refreshAuthToken()
+        const newToken = tokenResponse.accessToken
+
+        processQueue(null, newToken)
+        originalRequest.headers.Authorization = `Bearer ${newToken}`
+        return service(originalRequest)
+      } catch (refreshError) {
+        processQueue(refreshError, null)
+        clearAuth()
+        setSsoReturnPath(window.location.pathname + window.location.search)
+        redirectToUnifiedLogin('portal')
+        return Promise.reject(refreshError)
+      } finally {
+        isRefreshing = false
+      }
+    }
+    
+    console.error('Response error:', error)
+
+    const skipGlobal = (originalRequest as { skipGlobalErrorHandler?: boolean } | undefined)?.skipGlobalErrorHandler
+    if (skipGlobal) {
+      return Promise.reject(error)
+    }
+
+    if (error.response) {
+      const { status, data } = error.response
+      const errorMsg = pickHttpErrorBodyMessage(data)
+      if (errorMsg && error instanceof Error) {
+        error.message = errorMsg
+      }
+      
+      switch (status) {
+        case 400:
+          ElMessage.error(errorMsg || i18n.global.t('api.invalidParams'))
+          break
+        case 403:
+          ElMessage.error(errorMsg || i18n.global.t('api.noPermission'))
+          break
+        case 404:
+          ElMessage.error(errorMsg || i18n.global.t('api.notFound'))
+          break
+        case 422:
+          ElMessage.error(errorMsg || i18n.global.t('api.businessError'))
+          break
+        case 429:
+          ElMessage.error(errorMsg || i18n.global.t('api.tooManyRequests'))
+          break
+        case 500:
+          ElMessage.error(errorMsg || i18n.global.t('api.serverError'))
+          break
+        case 502:
+          ElMessage.error(i18n.global.t('api.serviceUnavailable'))
+          break
+        case 503:
+          ElMessage.error(i18n.global.t('api.serviceMaintenance'))
+          break
+        default:
+          ElMessage.error(errorMsg || `${i18n.global.t('api.requestFailed')} (${status})`)
+      }
+    } else if (error.request) {
+      ElMessage.error(i18n.global.t('api.networkError'))
+    } else {
+      ElMessage.error(i18n.global.t('api.configError'))
+    }
+    
+    return Promise.reject(error)
+  }
+)
+
+// 封装请求方法
+export const request = {
+  get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
+    return service.get(url, config)
+  },
+  
+  post<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+    return service.post(url, data, config)
+  },
+  
+  put<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+    return service.put(url, data, config)
+  },
+  
+  delete<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
+    return service.delete(url, config)
+  }
+}
+
+export default service

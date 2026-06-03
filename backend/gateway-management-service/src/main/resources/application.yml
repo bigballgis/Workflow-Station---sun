@@ -1,0 +1,39 @@
+server:
+  port: ${SERVER_PORT:8091}
+  servlet:
+    context-path: /api/v1/admin
+
+spring:
+  application:
+    name: gateway-management-service
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/workflow_platform}
+    username: ${SPRING_DATASOURCE_USERNAME:platform}
+    password: ${SPRING_DATASOURCE_PASSWORD:platform123}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+gateway:
+  adapter:
+    mode: ${GATEWAY_ADAPTER_MODE:stub}
+  drift:
+    sync-interval-ms: ${GATEWAY_DRIFT_SYNC_INTERVAL:1800000}
+  metrics:
+    collect-interval-ms: ${GATEWAY_METRICS_COLLECT_INTERVAL:60000}
+
+app:
+  security:
+    jwt-secret-key: ${JWT_SECRET:default-jwt-secret-key}
+    jwt-expiration-ms: ${JWT_EXPIRATION:86400000}
+    jwt-refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION:604800000}
+
+logging:
+  level:
+    com.platform.gateway: INFO
+    com.admin.adapter.gateway: DEBUG

@@ -134,6 +134,20 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/relation-table/data/index.vue'),
         meta: { titleKey: 'menu.tableData', icon: 'Coin', permissions: [PERMISSIONS.SYSTEM_ADMIN] }
       },
+      // ==================== Gateway Governance (Phase 3 MFE) ====================
+      {
+        path: 'gateway/:pathMatch(.*)*',
+        name: 'GatewayMFE',
+        component: () => import('@/components/remote/GatewayRemoteLoader.vue'),
+        meta: { titleKey: 'gateway.title', icon: 'Connection', permissions: [PERMISSIONS.GATEWAY_API_READ, PERMISSIONS.GATEWAY_APP_READ, PERMISSIONS.GATEWAY_RELEASE_READ, PERMISSIONS.GATEWAY_AUDIT_READ] }
+      },
+      // MFE Governance
+      {
+        path: 'mfe/modules',
+        name: 'MfeModuleRegistry',
+        component: () => import('@/domains/mfe/pages/module-registry/index.vue'),
+        meta: { titleKey: 'mfe.title', icon: 'Grid', permissions: [PERMISSIONS.MFE_MODULE_READ] }
+      },
       {
         path: '403',
         name: 'Forbidden',

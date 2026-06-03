@@ -40,6 +40,7 @@ COMMIT;
 \i /docker-entrypoint-initdb.d/00-schema/11-add-unique-enabled-constraint.sql
 \i /docker-entrypoint-initdb.d/00-schema/12-add-enabled-field-to-dw-function-units.sql
 \i /docker-entrypoint-initdb.d/00-schema/13-add-notification-table.sql
+\i /docker-entrypoint-initdb.d/00-schema/14-create-superset-schema.sql
 \i /docker-entrypoint-initdb.d/00-schema/15-bi-management-schema.sql
 \i /docker-entrypoint-initdb.d/00-schema/16-add-decision-and-relations-tables.sql
 \i /docker-entrypoint-initdb.d/00-schema/17-add-lock-version-to-user-portal-tables.sql
@@ -61,5 +62,32 @@ COMMIT;
 \i /docker-entrypoint-initdb.d/00-schema/32-add-dw-form-table-binding-subview-columns.sql
 \i /docker-entrypoint-initdb.d/00-schema/33-dw-sub-table-view-tables.sql
 \i /docker-entrypoint-initdb.d/00-schema/34-dw-link-form-components.sql
+\echo 'Extending function unit status check...'
+\i /docker-entrypoint-initdb.d/00-schema/34-extend-function-unit-status-check.sql
+\echo 'Dropping init function unit status...'
+\i /docker-entrypoint-initdb.d/00-schema/35-drop-init-function-unit-status.sql
+
+
+
+\echo 'Creating Gateway Governance Schema (ac_gateway_*)...'
+\i /docker-entrypoint-initdb.d/00-schema/36-gateway-governance-schema.sql
+\i /docker-entrypoint-initdb.d/00-schema/37-gateway-governance-phase2.sql
+
+\echo 'Creating MFE Governance Schema (ac_frontend_module_registry)...'
+\i /docker-entrypoint-initdb.d/00-schema/38-mfe-governance-phase1.sql
+
+\echo 'Creating MFE Phase 2 Schema (version history + health log)...'
+\i /docker-entrypoint-initdb.d/00-schema/39-mfe-governance-phase2.sql
+
+\echo 'Seeding MFE Phase 2 pilot modules...'
+\i /docker-entrypoint-initdb.d/00-schema/40-mfe-governance-phase2-pilot-seed.sql
+\echo 'Creating Gateway Phase 3 Schema (MFE deploy tracking)...'
+\i /docker-entrypoint-initdb.d/00-schema/41-gateway-governance-phase3.sql
+\i /docker-entrypoint-initdb.d/00-schema/42-gateway-governance-phase4.sql
+\i /docker-entrypoint-initdb.d/00-schema/43-gateway-governance-phase5.sql
+
+\echo 'Creating MFE Governance Phase 3 Schema (warmup/preload)...'
+\i /docker-entrypoint-initdb.d/00-schema/44-mfe-governance-phase3.sql
+
 
 \echo 'All schemas created successfully.'

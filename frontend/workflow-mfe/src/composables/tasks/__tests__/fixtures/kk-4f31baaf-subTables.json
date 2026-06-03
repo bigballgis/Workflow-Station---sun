@@ -1,0 +1,56 @@
+{
+  "64": [],
+  "66": [
+    {
+      "id": 44,
+      "name": "44",
+      "task_status": "IN_PROGRESS"
+    },
+    {
+      "id": 666,
+      "name": "66",
+      "file": "/api/v1/upload/files/ba771856-9d7b-482b-",
+      "task_status": "COMPLETED",
+      "__subTables__": {
+        "69": [
+          { "id": 44, "name": "44", "task_status": "IN_PROGRESS" },
+          { "id": 666, "name": "66", "task_status": "COMPLETED" }
+        ],
+        "90": [{ "id": 666, "name": "66", "task_status": "COMPLETED" }],
+        "104": [
+          { "id": "77777", "file": "/api/v1/upload/files/ba771856-9d7b-482b-" },
+          { "id": 44, "name": "44", "task_status": "IN_PROGRESS" },
+          { "id": 666, "name": "66", "task_status": "COMPLETED" }
+        ],
+        "subtable": [
+          { "id": 44, "name": "44", "task_status": "IN_PROGRESS" },
+          { "id": 666, "name": "66", "task_status": "COMPLETED" }
+        ],
+        "subtable2": [{ "id": 666, "name": "66", "task_status": "COMPLETED" }],
+        "attachment": [
+          { "id": "77777", "file": "/api/v1/upload/files/ba771856-9d7b-482b-" },
+          { "id": 44, "name": "44", "task_status": "IN_PROGRESS" },
+          { "id": 666, "name": "66", "task_status": "COMPLETED" }
+        ]
+      }
+    }
+  ],
+  "103": [
+    { "id": "77777", "file": "/api/v1/upload/files/ba771856-9d7b-482b-" },
+    { "id": 666, "file": "/api/v1/upload/files/ba771856-9d7b-482b-", "name": "66" },
+    { "id": "633", "file": "/api/v1/upload/files/d84f4138-21f1-4835-" }
+  ],
+  "104": [
+    { "id": 666, "file": "/api/v1/upload/files/ba771856-9d7b-482b-", "name": "66" },
+    { "id": "77777", "file": "/api/v1/upload/files/ba771856-9d7b-482b-" },
+    { "id": "633", "file": "/api/v1/upload/files/d84f4138-21f1-4835-" },
+    { "id": "343", "file": "/api/v1/upload/files/c5de3c34-1030-4861-" }
+  ],
+  "attachment": [
+    { "id": 666, "file": "/api/v1/upload/files/ba771856-9d7b-482b-", "name": "66" },
+    { "id": "77777", "file": "/api/v1/upload/files/ba771856-9d7b-482b-" },
+    { "id": "633", "file": "/api/v1/upload/files/d84f4138-21f1-4835-" },
+    { "id": "343", "file": "/api/v1/upload/files/c5de3c34-1030-4861-" }
+  ],
+  "subtable": [{ "id": 44, "name": "44", "task_status": "IN_PROGRESS" }]
+}

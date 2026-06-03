@@ -128,3 +128,47 @@
   fix_note: |
     复测 `mvn -pl backend/developer-workstation -am package -DskipTests` 已 BUILD SUCCESS，
     当前工作区未复现缺类编译错误，先转 fixed。
+- id: "1416"
+  status: fixed
+  fixed_at: "2026-05-28"
+  severity: major
+  category: deploy
+  summary: "Dev Postgres init 中断：sys_roles 类型约束与网关/审计角色种子不一致，且权限脚本误写 \\echo"
+  detail: |
+    根因1：`deploy/init-scripts/00-schema/01-platform-security-schema.sql` 的 `chk_role_type`
+    仅允许 ADMIN/DEVELOPER/BU_*，而 `01-admin/01-create-roles-and-groups.sql` 新增了
+    `GATEWAY`、`AUDITOR` 类型角色，导致初始化在 role seed 阶段失败并中断。
+    根因2：`01-admin/04-admin-permissions.sql` 多处写成 `\\echo`，psql 解析为非法命令，
+    在权限绑定阶段再次中断初始化。
+    修复：扩展 `chk_role_type` 允许 `GATEWAY`、`AUDITOR`；将 `\\echo` 更正为 `\echo`。
+    验证：执行 `docker compose ... down -v` 后重启 `postgres`，日志出现
+    `Database Initialization Complete!`；随后 `build-and-deploy.ps1 -SkipMaven -SkipFrontend -SkipInfra`
+    启动全栈成功（superset-final 仍有独立重启，不阻塞主链路）。
+- id: "1417"
+  status: fixed
+  fixed_at: "2026-05-28"
+  severity: major
+  category: bug
+  summary: "Portal 登录鉴权接口 500：AuthController 残留编译错误导致 /auth/me 与 /auth/workspace-contexts 崩溃"
+  detail: |
+    根因：`backend/user-portal/src/main/java/com/portal/controller/AuthController.java` 中
+    `getCurrentUser` 方法存在残留编译错误（缺少 `SecurityContextUtils` import、重复定义
+    `activeBu/activeRoleId`、引用不存在的 `claims`），运行时抛 `Unresolved compilation problem(s)`，
+    导致 `/api/portal/auth/me` 与 `/api/portal/auth/workspace-contexts` 返回 500。
+    修复：补齐 `com.platform.security.util.SecurityContextUtils` 导入，删除重复局部变量与无效 `claims` 引用。
+    验证：重新 `mvn -pl backend/user-portal -am package -DskipTests` 后重建 `user-portal` 容器，
+    两接口由 500 恢复为 401（未携带登录态的预期返回），日志不再出现上述编译异常关键字。
+- id: "1418"
+  status: fixed
+  fixed_at: "2026-05-28"
+  severity: major
+  category: bug
+  summary: "Portal SSO 后 /auth/me 与 /auth/workspace-contexts 持续 401：JWT 过滤器误跳过整个 /auth/**"
+  detail: |
+    根因：`backend/platform-security/src/main/java/com/platform/security/filter/JwtAuthenticationFilter.java`
+    的 `shouldNotFilter` 使用 `path.startsWith("/auth/")`，导致 `/auth/me`、`/auth/workspace-contexts`
+    不执行 JWT 解析；在 user-portal 采用 httpOnly cookie 会话下，SecurityContext 为空，接口持续 401。
+    修复：将放行逻辑收敛为公开端点白名单（`/auth/login`、`/auth/refresh`、`/auth/validate`、
+    `/auth/sso/exchange`、`/auth/logout`），不再跳过受保护的 `/auth/me` 与 workspace 接口。
+    验证：`mvn -pl backend/user-portal -am compile -DskipTests` 通过；重建
+    `user-portal/admin-center/developer-workstation/workflow-engine` 后服务均 healthy。

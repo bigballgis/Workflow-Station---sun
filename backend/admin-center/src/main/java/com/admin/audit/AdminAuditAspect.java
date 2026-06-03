@@ -10,6 +10,12 @@ import com.admin.repository.RelationTableDefinitionRepository;
 import com.admin.repository.RoleRepository;
 import com.admin.repository.UserRepository;
 import com.admin.repository.VirtualGroupRepository;
+import com.admin.repository.gateway.ApiDefinitionRepository;
+import com.admin.repository.gateway.ApplicationRepository;
+import com.admin.repository.gateway.DriftReportRepository;
+import com.admin.repository.gateway.GatewayReleaseRepository;
+import com.admin.repository.gateway.ReleaseApprovalRepository;
+import com.admin.repository.module.FrontendModuleRegistryRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -24,7 +30,7 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-import java.util.*;;
+import java.util.*;
 
 /**
  * AOP aspect that automatically records audit logs for all mutating operations
@@ -48,6 +54,12 @@ public class AdminAuditAspect {
     private final BiDashboardRegistryRepository biDashboardRegistryRepository;
     private final BiDashboardAssignmentRepository biDashboardAssignmentRepository;
     private final BiRbacMappingRepository biRbacMappingRepository;
+    private final ApiDefinitionRepository apiDefinitionRepository;
+    private final ApplicationRepository applicationRepository;
+    private final GatewayReleaseRepository gatewayReleaseRepository;
+    private final DriftReportRepository driftReportRepository;
+    private final ReleaseApprovalRepository releaseApprovalRepository;
+    private final FrontendModuleRegistryRepository frontendModuleRegistryRepository;
     private final TransactionTemplate auditTxTemplate;
     private final ObjectMapper mapper;
 
@@ -60,6 +72,12 @@ public class AdminAuditAspect {
                              BiDashboardRegistryRepository biDashboardRegistryRepository,
                              BiDashboardAssignmentRepository biDashboardAssignmentRepository,
                              BiRbacMappingRepository biRbacMappingRepository,
+                         ApiDefinitionRepository apiDefinitionRepository,
+                         ApplicationRepository applicationRepository,
+                         GatewayReleaseRepository gatewayReleaseRepository,
+                         DriftReportRepository driftReportRepository,
+                         ReleaseApprovalRepository releaseApprovalRepository,
+                         FrontendModuleRegistryRepository frontendModuleRegistryRepository,
                              PlatformTransactionManager transactionManager,
                              ObjectMapper objectMapper) {
         this.securityAuditComponent = securityAuditComponent;
@@ -71,6 +89,12 @@ public class AdminAuditAspect {
         this.biDashboardRegistryRepository = biDashboardRegistryRepository;
         this.biDashboardAssignmentRepository = biDashboardAssignmentRepository;
         this.biRbacMappingRepository = biRbacMappingRepository;
+        this.apiDefinitionRepository = apiDefinitionRepository;
+        this.applicationRepository = applicationRepository;
+        this.gatewayReleaseRepository = gatewayReleaseRepository;
+        this.driftReportRepository = driftReportRepository;
+        this.releaseApprovalRepository = releaseApprovalRepository;
+        this.frontendModuleRegistryRepository = frontendModuleRegistryRepository;
         // REQUIRES_NEW + readOnly: isolate audit lookups from the controller's
         // Hibernate session so eager-fetching lazy collections (for JSON
         // serialisation) does not pollute the caller's persistence context.
@@ -175,6 +199,45 @@ public class AdminAuditAspect {
         return audit(pjp, "BI_RBAC");
     }
 
+    @Around("within(com.admin.controller.gateway.ApiDefinitionController) "
+            + "&& !execution(* *.listApis(..)) "
+            + "&& !execution(* *.getApi(..)) "
+            + "&& !execution(* *.listVersions(..))")
+    public Object auditGatewayApi(ProceedingJoinPoint pjp) throws Throwable {
+        return audit(pjp, "GATEWAY_API");
+    }
+
+    @Around("within(com.admin.controller.gateway.ApplicationController) "
+            + "&& !execution(* *.listApps(..)) "
+            + "&& !execution(* *.getApp(..)) "
+            + "&& !execution(* *.listCredentials(..))")
+    public Object auditGatewayApp(ProceedingJoinPoint pjp) throws Throwable {
+        return audit(pjp, "GATEWAY_APP");
+    }
+
+    @Around("within(com.admin.controller.gateway.ReleaseController) "
+            + "&& !execution(* *.listReleases(..)) "
+            + "&& !execution(* *.getRelease(..)) "
+            + "&& !execution(* *.getReleaseHistory(..))")
+    public Object auditGatewayRelease(ProceedingJoinPoint pjp) throws Throwable {
+        return audit(pjp, "GATEWAY_RELEASE");
+    }
+
+    @Around("within(com.admin.controller.gateway.DriftController) "
+            + "&& !execution(* *.listReports(..)) "
+            + "&& !execution(* *.getReport(..))")
+    public Object auditGatewayDrift(ProceedingJoinPoint pjp) throws Throwable {
+        return audit(pjp, "GATEWAY_DRIFT");
+    }
+
+    @Around("within(com.admin.controller.module.FrontendModuleController) "
+            + "&& !execution(* *.list(..)) "
+            + "&& !execution(* *.getRuntime(..)) "
+            + "&& !execution(* *.getVersions(..))")
+    public Object auditFrontendModule(ProceedingJoinPoint pjp) throws Throwable {
+        return audit(pjp, "FRONTEND_MODULE");
+    }
+
     // =========================================================================
     // Core audit logic
     // =========================================================================
@@ -234,6 +297,11 @@ public class AdminAuditAspect {
             case "BI_DASHBOARD"        -> resolveBiDashboardMeta(methodName, args);
             case "BI_ASSIGNMENT"       -> resolveBiAssignmentMeta(methodName, args);
             case "BI_RBAC"             -> resolveBiRbacMeta(methodName, args);
+            case "GATEWAY_API"        -> resolveGatewayApiMeta(methodName, args);
+            case "GATEWAY_APP"        -> resolveGatewayAppMeta(methodName, args);
+            case "GATEWAY_RELEASE"    -> resolveGatewayReleaseMeta(methodName, args);
+            case "GATEWAY_DRIFT"      -> resolveGatewayDriftMeta(methodName, args);
+            case "FRONTEND_MODULE"    -> resolveFrontendModuleMeta(methodName, args);
             default -> new AuditMeta(AuditAction.QUERY, domain, null);
         };
     }
@@ -373,6 +441,70 @@ public class AdminAuditAspect {
         };
     }
 
+    private AuditMeta resolveGatewayApiMeta(String method, Object[] args) {
+        String resourceId = extractGatewayResourceId(args, 1);
+        return switch (method) {
+            case "createApi", "createVersion", "importOpenApi" -> new AuditMeta(AuditAction.CREATE, "GATEWAY_API", null);
+            case "updateApi"   -> new AuditMeta(AuditAction.UPDATE, "GATEWAY_API", resourceId);
+            default            -> AuditMeta.skip();
+        };
+    }
+
+    private AuditMeta resolveGatewayAppMeta(String method, Object[] args) {
+        String resourceId = extractGatewayResourceId(args, 1);
+        return switch (method) {
+            case "createApp", "createCredential" -> new AuditMeta(AuditAction.CREATE, "GATEWAY_APP", null);
+            case "updateApp"                     -> new AuditMeta(AuditAction.UPDATE, "GATEWAY_APP", resourceId);
+            default                              -> AuditMeta.skip();
+        };
+    }
+
+    private AuditMeta resolveGatewayReleaseMeta(String method, Object[] args) {
+        String resourceId = extractGatewayResourceId(args, 2);
+        return switch (method) {
+            case "createRelease"    -> new AuditMeta(AuditAction.CREATE, "GATEWAY_RELEASE", null);
+            case "submitTesting"    -> new AuditMeta(AuditAction.UPDATE, "GATEWAY_RELEASE", resourceId);
+            case "publishRelease"   -> new AuditMeta(AuditAction.UPDATE, "GATEWAY_RELEASE", resourceId);
+            case "rollbackRelease"  -> new AuditMeta(AuditAction.UPDATE, "GATEWAY_RELEASE", resourceId);
+            case "promoteRelease"   -> new AuditMeta(AuditAction.UPDATE, "GATEWAY_RELEASE", resourceId);
+            case "requestApproval"  -> new AuditMeta(AuditAction.UPDATE, "GATEWAY_RELEASE_APPROVAL", resourceId);
+            case "approve"          -> new AuditMeta(AuditAction.UPDATE, "GATEWAY_RELEASE_APPROVAL", resourceId);
+            default                 -> AuditMeta.skip();
+        };
+    }
+
+    private AuditMeta resolveGatewayDriftMeta(String method, Object[] args) {
+        String resourceId = extractGatewayResourceId(args, 1);
+        return switch (method) {
+            case "triggerSync" -> new AuditMeta(AuditAction.UPDATE, "GATEWAY_DRIFT", resourceId);
+            default            -> AuditMeta.skip();
+        };
+    }
+
+    private AuditMeta resolveFrontendModuleMeta(String method, Object[] args) {
+        // args[0]=tenantId, args[1]=moduleId
+        String resourceId = extractGatewayResourceId(args, 1);
+        return switch (method) {
+            case "create"          -> new AuditMeta(AuditAction.CREATE, "FRONTEND_MODULE", null);
+            case "update"          -> new AuditMeta(AuditAction.UPDATE, "FRONTEND_MODULE", resourceId);
+            case "enable"          -> new AuditMeta(AuditAction.UPDATE, "FRONTEND_MODULE", resourceId);
+            case "disable"         -> new AuditMeta(AuditAction.UPDATE, "FRONTEND_MODULE", resourceId);
+            case "switchVersion"   -> new AuditMeta(AuditAction.UPDATE, "FRONTEND_MODULE", resourceId);
+            case "rollbackVersion" -> new AuditMeta(AuditAction.UPDATE, "FRONTEND_MODULE", resourceId);
+            default                -> AuditMeta.skip();
+        };
+    }
+
+    /** Extract resource ID from gateway controller args — skips tenantId (args[0]). */
+    private String extractGatewayResourceId(Object[] args, int resourceIdx) {
+        if (args.length > resourceIdx) {
+            Object arg = args[resourceIdx];
+            if (arg instanceof Long l) return String.valueOf(l);
+            if (arg instanceof String s) return s;
+        }
+        return null;
+    }
+
     // =========================================================================
     // Old value — fetch entity state BEFORE the operation
     // =========================================================================
@@ -411,6 +543,24 @@ public class AdminAuditAspect {
                     case "BI_DASHBOARD"   -> biDashboardRegistryRepository.findById(resourceId).orElse(null);
                     case "BI_ASSIGNMENT"  -> biDashboardAssignmentRepository.findById(resourceId).orElse(null);
                     case "BI_RBAC"        -> biRbacMappingRepository.findById(resourceId).orElse(null);
+                    case "GATEWAY_API"    -> parseLong(resourceId)
+                            .flatMap(apiDefinitionRepository::findById)
+                            .orElse(null);
+                    case "GATEWAY_APP"    -> parseLong(resourceId)
+                            .flatMap(applicationRepository::findById)
+                            .orElse(null);
+                    case "GATEWAY_RELEASE" -> parseLong(resourceId)
+                            .flatMap(gatewayReleaseRepository::findById)
+                            .orElse(null);
+                    case "GATEWAY_DRIFT"  -> parseLong(resourceId)
+                            .flatMap(driftReportRepository::findById)
+                            .orElse(null);
+                    case "GATEWAY_RELEASE_APPROVAL" -> parseLong(resourceId)
+                            .flatMap(releaseApprovalRepository::findById)
+                            .orElse(null);
+                    case "FRONTEND_MODULE" -> parseLong(resourceId)
+                            .flatMap(frontendModuleRegistryRepository::findById)
+                            .orElse(null);
                     // RELATION_TABLE_ROW uses a composite id (tableId:rowId) and row data is
                     // schema-less — skip DB lookup and rely on response body / request args.
                     default               -> null;

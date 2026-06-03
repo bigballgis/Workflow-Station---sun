@@ -31,6 +31,21 @@ export default defineConfig({
   server: {
     port: 3000,
     proxy: {
+      '/mfe-gateway': {
+        target: 'http://localhost:3220',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/mfe-gateway/, '')
+      },
+            '/mfe-notification': {
+        target: 'http://localhost:3120',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/mfe-notification/, '')
+      },
+      '/mfe-delegation': {
+        target: 'http://localhost:3121',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/mfe-delegation/, '')
+      },
       '/api/v1/auth': {
         target: 'http://localhost:8090',
         changeOrigin: true,

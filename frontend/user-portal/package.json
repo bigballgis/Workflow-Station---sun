@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.0",
+    "@originjs/vite-plugin-federation": "^1.4.1",
     "@stomp/stompjs": "^7.3.0",
     "@superset-ui/embedded-sdk": "^0.3.0",
     "@vueuse/core": "^10.7.0",

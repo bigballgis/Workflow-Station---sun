@@ -1,7 +1,7 @@
 -- =====================================================
 -- System Default Roles and Virtual Groups Initialization
 -- =====================================================
--- This script creates 6 system default roles and 6 virtual groups
+-- This script creates 10 system default roles and 6 virtual groups
 -- Password for all users: password (BCrypt hash: $2a$10$P/xQaseE4Hr8/9fhSws86ez3nTUDLUGC8XeQueVX4QKZmdM/LeiYa)
 -- =====================================================
 
@@ -59,7 +59,43 @@ ON CONFLICT (code) DO UPDATE SET
     description = EXCLUDED.description,
     updated_at = CURRENT_TIMESTAMP;
 
-\echo '✓ 5 system roles created successfully'
+-- 7. Gateway Viewer Role (Phase 2)
+INSERT INTO sys_roles (id, code, name, type, description, status, is_system, created_at, updated_at)
+VALUES 
+('role-gw-viewer', 'GATEWAY_VIEWER', 'Gateway Viewer', 'GATEWAY', 'Read-only access to gateway APIs, applications, drift reports, and monitoring', 'ACTIVE', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+ON CONFLICT (code) DO UPDATE SET 
+    name = EXCLUDED.name,
+    description = EXCLUDED.description,
+    updated_at = CURRENT_TIMESTAMP;
+
+-- 8. Gateway Operator Role (Phase 2)
+INSERT INTO sys_roles (id, code, name, type, description, status, is_system, created_at, updated_at)
+VALUES 
+('role-gw-operator', 'GATEWAY_OPERATOR', 'Gateway Operator', 'GATEWAY', 'Operator access: create APIs/apps, trigger drift sync, promote releases', 'ACTIVE', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+ON CONFLICT (code) DO UPDATE SET 
+    name = EXCLUDED.name,
+    description = EXCLUDED.description,
+    updated_at = CURRENT_TIMESTAMP;
+
+-- 9. Gateway Admin Role (Phase 2)
+INSERT INTO sys_roles (id, code, name, type, description, status, is_system, created_at, updated_at)
+VALUES 
+('role-gw-admin', 'GATEWAY_ADMIN', 'Gateway Admin', 'GATEWAY', 'Full gateway administration: manage APIs/apps/policies, approve PROD releases', 'ACTIVE', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+ON CONFLICT (code) DO UPDATE SET 
+    name = EXCLUDED.name,
+    description = EXCLUDED.description,
+    updated_at = CURRENT_TIMESTAMP;
+
+-- 10. Security Auditor Role (Phase 2)
+INSERT INTO sys_roles (id, code, name, type, description, status, is_system, created_at, updated_at)
+VALUES 
+('role-sec-auditor', 'SECURITY_AUDITOR', 'Security Auditor', 'AUDITOR', 'Security audit access: view drift reports and monitoring dashboards', 'ACTIVE', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+ON CONFLICT (code) DO UPDATE SET 
+    name = EXCLUDED.name,
+    description = EXCLUDED.description,
+    updated_at = CURRENT_TIMESTAMP;
+
+\echo '✓ 9 system roles created successfully'
 \echo ''
 
 \echo '========================================='
@@ -168,3 +204,5 @@ INSERT INTO sys_virtual_group_roles (id, virtual_group_id, role_id, created_at, 
 VALUES 
 ('vgr-developer-001', 'vg-developers', 'role-developer', CURRENT_TIMESTAMP, 'system')
 ON CONFLICT (virtual_group_id, role_id) DO NOTHING;
+
+\echo '✓ 6 roles and virtual groups initialized successfully'

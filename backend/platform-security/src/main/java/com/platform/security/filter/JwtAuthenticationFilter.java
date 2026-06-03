@@ -108,8 +108,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getServletPath();
-        // Skip filter for public endpoints (use servletPath which excludes context-path)
-        return path.startsWith("/auth/") ||
+        // Skip filter only for truly public auth endpoints.
+        // Do NOT skip all /auth/**, otherwise cookie-based /auth/me and /auth/workspace-contexts
+        // never populate SecurityContext and will always return 401.
+        boolean isPublicAuthEndpoint =
+                "/auth/login".equals(path) ||
+                "/auth/refresh".equals(path) ||
+                "/auth/validate".equals(path) ||
+                "/auth/sso/exchange".equals(path) ||
+                "/auth/logout".equals(path);
+        // use servletPath which excludes context-path
+        return isPublicAuthEndpoint ||
                path.startsWith("/sso/") ||
                path.startsWith("/internal/sso/") ||
                path.startsWith("/actuator/") ||

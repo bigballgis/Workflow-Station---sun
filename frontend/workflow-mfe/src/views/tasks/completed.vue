@@ -1,0 +1,307 @@
+<template>
+  <div class="completed-tasks-page">
+    <div class="page-header">
+      <h1>{{ t('task.completedTasks') }}</h1>
+    </div>
+
+    <!-- 筛选条件 -->
+    <div class="portal-card filter-card">
+      <el-form
+        :inline="true"
+        :model="filterForm"
+      >
+        <el-form-item :label="t('task.processName')">
+          <el-input
+            v-model="filterForm.keyword"
+            :placeholder="t('common.search')"
+            clearable
+            style="width: 200px;"
+          >
+            <template #prefix>
+              <el-icon><Search /></el-icon>
+            </template>
+          </el-input>
+        </el-form-item>
+        <el-form-item :label="t('task.completedTime')">
+          <el-date-picker
+            v-model="filterForm.dateRange"
+            type="daterange"
+            :start-placeholder="t('common.startDate')"
+            :end-placeholder="t('common.endDate')"
+            value-format="YYYY-MM-DDTHH:mm:ss"
+            style="width: 260px;"
+          />
+        </el-form-item>
+        <el-form-item>
+          <el-button
+            type="primary"
+            @click="handleSearch"
+          >
+            {{ t('common.search') }}
+          </el-button>
+          <el-button @click="handleReset">
+            {{ t('common.reset') }}
+          </el-button>
+        </el-form-item>
+      </el-form>
+    </div>
+
+    <!-- 任务列表：与待办一致 — 无整表 v-loading 遮罩，首屏空表显示加载提示，翻页保留旧数据 -->
+    <div class="portal-card">
+      <el-table
+        :data="taskList"
+        stripe
+        table-layout="auto"
+      >
+        <template #empty>
+          <div
+            v-if="loading"
+            class="table-empty-loading"
+          >
+            <el-icon class="table-empty-loading__icon is-loading">
+              <Loading />
+            </el-icon>
+            <span>{{ t('common.loading') }}</span>
+          </div>
+          <span v-else>{{ t('task.noCompletedTasks') }}</span>
+        </template>
+        <el-table-column
+          prop="taskName"
+          :label="t('task.taskName')"
+          min-width="160"
+          show-overflow-tooltip
+        >
+          <template #default="{ row }">
+            <el-link
+              type="primary"
+              @click="viewTask(row)"
+            >
+              {{ row.taskName }}
+            </el-link>
+          </template>
+        </el-table-column>
+        <el-table-column
+          prop="processDefinitionName"
+          :label="t('task.processName')"
+          min-width="140"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="action"
+          :label="t('task.action')"
+          width="130"
+        >
+          <template #default="{ row }">
+            <el-tag
+              v-if="!row.multiInstanceSubTask"
+              :type="getActionTagType(row.action)"
+              size="small"
+              style="white-space: nowrap;"
+            >
+              {{ t(`action.${row.action || 'completed'}`) }}
+            </el-tag>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
+        <el-table-column
+          prop="createTime"
+          :label="t('task.createTime')"
+          width="160"
+        >
+          <template #default="{ row }">
+            <span style="white-space: nowrap;">{{ formatDate(row.createTime) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column
+          prop="completedTime"
+          :label="t('task.completedTime')"
+          width="160"
+        >
+          <template #default="{ row }">
+            <span style="white-space: nowrap;">{{ formatDate(row.completedTime) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column
+          prop="durationInMillis"
+          :label="t('task.duration')"
+          width="100"
+        >
+          <template #default="{ row }">
+            <span style="white-space: nowrap;">{{ formatDuration(row.durationInMillis) }}</span>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <el-pagination
+        v-model:current-page="pagination.page"
+        v-model:page-size="pagination.size"
+        :disabled="loading"
+        :total="pagination.total"
+        :page-sizes="[10, 20, 50, 100]"
+        layout="total, sizes, prev, pager, next, jumper"
+        style="margin-top: 16px; justify-content: flex-end;"
+        @size-change="handleSizeChange"
+        @current-change="handlePageChange"
+      />
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, reactive, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
+import { Search, Loading } from '@element-plus/icons-vue'
+import { queryCompletedTasks, TaskInfo } from '@/api/task'
+import { formatDate } from '@/utils/dateFormat'
+
+const { t } = useI18n()
+const router = useRouter()
+
+const loading = ref(true)
+const taskList = ref<TaskInfo[]>([])
+
+const filterForm = reactive({
+  keyword: '',
+  dateRange: null as [string, string] | null
+})
+
+const pagination = reactive({
+  page: 1,
+  size: 20,
+  total: 0
+})
+
+const loadTasks = async () => {
+  loading.value = true
+  try {
+    const res = await queryCompletedTasks({
+      keyword: filterForm.keyword || undefined,
+      startTime: filterForm.dateRange?.[0] || undefined,
+      endTime: filterForm.dateRange?.[1] || undefined,
+      page: pagination.page - 1,
+      size: pagination.size
+    })
+    const data = res.data || res
+    taskList.value = data.content || []
+    pagination.total = data.totalElements || 0
+  } catch (error) {
+    console.error('Failed to load completed tasks:', error)
+    taskList.value = []
+    pagination.total = 0
+  } finally {
+    loading.value = false
+  }
+}
+
+const handleSearch = () => {
+  pagination.page = 1
+  loadTasks()
+}
+
+const handleReset = () => {
+  filterForm.keyword = ''
+  filterForm.dateRange = null
+  handleSearch()
+}
+
+const handleSizeChange = () => {
+  pagination.page = 1
+  loadTasks()
+}
+
+const handlePageChange = () => {
+  loadTasks()
+}
+
+const viewTask = (task: TaskInfo) => {
+  const query: Record<string, string> = {}
+  if (task.completedTime) {
+    query.snapshotTime = task.completedTime
+  }
+  if (task.taskName) {
+    query.snapshotTaskName = task.taskName
+  }
+  if (task.taskId) {
+    query.snapshotTaskId = task.taskId
+  }
+  if (task.taskDefinitionKey) {
+    query.snapshotTaskDefinitionKey = task.taskDefinitionKey
+  }
+  if ((task as any).processInstanceId) {
+    query.processInstanceId = String((task as any).processInstanceId)
+  }
+  if ((task as any).processDefinitionKey) {
+    query.processDefinitionKey = String((task as any).processDefinitionKey)
+  }
+  router.push({ path: `/tasks/${task.taskId}`, query })
+}
+
+const formatDuration = (ms: number | undefined) => {
+  if (!ms) return '-'
+  const seconds = Math.floor(ms / 1000)
+  const minutes = Math.floor(seconds / 60)
+  const hours = Math.floor(minutes / 60)
+  const days = Math.floor(hours / 24)
+  
+  if (days > 0) {
+    return `${days}d${hours % 24}h`
+  } else if (hours > 0) {
+    return `${hours}h${minutes % 60}m`
+  } else if (minutes > 0) {
+    return `${minutes}m`
+  } else {
+    return `${seconds}s`
+  }
+}
+
+const getActionTagType = (action: string): 'success' | 'warning' | 'info' | 'danger' | 'primary' => {
+  const typeMap: Record<string, 'success' | 'warning' | 'info' | 'danger' | 'primary'> = {
+    'approved': 'success',
+    'rejected': 'danger',
+    'transferred': 'warning',
+    'delegated': 'info',
+    'completed': 'primary'
+  }
+  return typeMap[action] || 'primary'
+}
+
+onMounted(() => {
+  loadTasks()
+})
+</script>
+
+<style lang="scss" scoped>
+.table-empty-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  padding: 24px 0;
+
+  &__icon {
+    font-size: 18px;
+  }
+}
+
+.completed-tasks-page {
+  .page-header {
+    margin-bottom: 20px;
+    
+    h1 {
+      font-size: 24px;
+      font-weight: 500;
+      color: var(--text-primary);
+      margin: 0;
+    }
+  }
+  
+  .filter-card {
+    margin-bottom: 20px;
+    
+    .el-form {
+      margin-bottom: -18px;
+    }
+  }
+}
+</style>

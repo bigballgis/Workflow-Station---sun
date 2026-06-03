@@ -39,6 +39,7 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/',
+    name: 'PortalRoot',
     component: () => import('@/layouts/PortalLayout.vue'),
     redirect: '/dashboard',
     meta: { requiresAuth: true },
@@ -51,45 +52,31 @@ const routes: RouteRecordRaw[] = [
       },
       {
         path: 'tasks',
-        name: 'Tasks',
-        component: () => import('@/views/tasks/index.vue'),
-        meta: { titleKey: 'menu.tasks', icon: 'List' }
+        redirect: '/mfe/workflow#/tasks'
       },
       {
         path: 'tasks/completed',
-        name: 'CompletedTasks',
-        component: () => import('@/views/tasks/completed.vue'),
-        meta: { titleKey: 'menu.completedTasks', icon: 'Finished' }
+        redirect: '/mfe/workflow#/tasks/completed'
       },
       {
         path: 'tasks/:id',
-        name: 'TaskDetail',
-        component: () => import('@/views/tasks/detail.vue'),
-        meta: { titleKey: 'task.detail', hidden: true }
+        redirect: (to: any) => `/mfe/workflow#/tasks/detail?id=${to.params.id}`
       },
       {
         path: 'processes',
-        name: 'Processes',
-        component: () => import('@/views/processes/index.vue'),
-        meta: { titleKey: 'menu.processes', icon: 'Plus' }
+        redirect: '/mfe/workflow#/processes'
       },
       {
         path: 'processes/start/:key',
-        name: 'ProcessStart',
-        component: () => import('@/views/processes/start.vue'),
-        meta: { titleKey: 'process.startProcess', hidden: true }
+        redirect: (to: any) => `/mfe/workflow#/processes/start?key=${to.params.key}`
       },
       {
         path: 'my-applications',
-        name: 'MyApplications',
-        component: () => import('@/views/applications/index.vue'),
-        meta: { titleKey: 'menu.myApplications', icon: 'Document' }
+        redirect: '/mfe/workflow#/applications'
       },
       {
         path: 'applications/:id',
-        name: 'ApplicationDetail',
-        component: () => import('@/views/applications/detail.vue'),
-        meta: { titleKey: 'application.title', hidden: true }
+        redirect: (to: any) => `/mfe/workflow#/applications/detail?id=${to.params.id}`
       },
       {
         path: 'delegations',
@@ -102,6 +89,12 @@ const routes: RouteRecordRaw[] = [
         name: 'Permissions',
         component: () => import('@/views/permissions/index.vue'),
         meta: { titleKey: 'menu.permissions', icon: 'Key' }
+      },
+      {
+        path: 'gateway/approvals',
+        name: 'GatewayApprovals',
+        component: () => import('@/views/gateway/approvals.vue'),
+        meta: { titleKey: 'gateway.subscriptionApprovals', icon: 'Connection' }
       },
       {
         path: 'my-requests',
@@ -185,23 +178,27 @@ router.beforeEach(async (to, _from, next) => {
 
   // Auth checked via httpOnly cookie — let API calls handle 401 redirect
   if (to.meta.requiresAuth !== false && to.path !== '/sso/callback') {
-    await reconcilePortalWorkspaceSession()
-    const cached = getStoredUser()
-    if (cached?.portalAccessMode === 'PERMISSION_SELF_SERVICE_ONLY') {
-      try {
-        let contexts: Awaited<ReturnType<typeof listWorkspaceContexts>> = []
+    try {
+      await reconcilePortalWorkspaceSession()
+      const cached = getStoredUser()
+      if (cached?.portalAccessMode === 'PERMISSION_SELF_SERVICE_ONLY') {
         try {
-          contexts = await listWorkspaceContexts()
+          let contexts: Awaited<ReturnType<typeof listWorkspaceContexts>> = []
+          try {
+            contexts = await listWorkspaceContexts()
+          } catch {
+            contexts = []
+          }
+          const fresh = await getCurrentUser()
+          const merged = applyWorkspaceAwarePortalAccess(fresh, contexts.length > 0)
+          saveUser(merged)
+          localStorage.setItem(USER_ID_KEY, merged.userId)
         } catch {
-          contexts = []
+          // 保持缓存
         }
-        const fresh = await getCurrentUser()
-        const merged = applyWorkspaceAwarePortalAccess(fresh, contexts.length > 0)
-        saveUser(merged)
-        localStorage.setItem(USER_ID_KEY, merged.userId)
-      } catch {
-        // 保持缓存
       }
+    } catch {
+      // Auth not available — continue without (API calls will handle 401)
     }
   }
 
@@ -228,6 +225,17 @@ router.beforeEach(async (to, _from, next) => {
       next('/permissions')
       return
     }
+  }
+
+
+  // If navigating to a likely MFE route that doesn't exist yet,
+  // redirect to dashboard first so PortalLayout mounts and registers MFE routes
+  if (to.path.startsWith('/mfe/') && (!to.name || to.name === 'NotFound') && !to.query.mfe_redirect) {
+    // Encode hash with encodeURIComponent so it survives query parameter parsing
+    const hashPart = to.hash ? encodeURIComponent(to.hash) : ''
+    const redirectPath = to.path + hashPart
+    next({ path: '/dashboard', query: { mfe_redirect: redirectPath } })
+    return
   }
 
   next()

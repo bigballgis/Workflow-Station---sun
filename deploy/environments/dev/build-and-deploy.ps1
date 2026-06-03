@@ -17,7 +17,7 @@
 #
 # Valid -Service values:
 #   Backend:  workflow-engine, admin-center, user-portal, developer-workstation
-#   Frontend: admin-center-frontend, user-portal-frontend, developer-workstation-frontend, platform-login-frontend
+#   Frontend: admin-center-frontend, user-portal-frontend, developer-workstation-frontend, platform-login-frontend, notification-mfe, delegation-mfe
 #   Edge:     edge-frontend (nginx single-origin — no Maven/npm; restarts container from compose)
 
 param(
@@ -80,6 +80,16 @@ $ServiceRegistry = @{
     "platform-login-frontend" = @{
         FrontendDir = "frontend/login"
         Container   = "platform-login-frontend-dev"
+        Type        = "frontend"
+    }
+    "notification-mfe" = @{
+        FrontendDir = "frontend/notification-mfe"
+        Container   = "platform-notification-mfe-dev"
+        Type        = "frontend"
+    }
+    "delegation-mfe" = @{
+        FrontendDir = "frontend/delegation-mfe"
+        Container   = "platform-delegation-mfe-dev"
         Type        = "frontend"
     }
     "edge-frontend" = @{
@@ -309,7 +319,9 @@ if (-not $SkipFrontend) {
         @{ Name = "admin-center-frontend"; Dir = "frontend/admin-center" },
         @{ Name = "user-portal-frontend"; Dir = "frontend/user-portal" },
         @{ Name = "developer-workstation-frontend"; Dir = "frontend/developer-workstation" },
-        @{ Name = "platform-login-frontend"; Dir = "frontend/login" }
+        @{ Name = "platform-login-frontend"; Dir = "frontend/login" },
+        @{ Name = "notification-mfe"; Dir = "frontend/notification-mfe" },
+        @{ Name = "delegation-mfe"; Dir = "frontend/delegation-mfe" }
     )
     
     foreach ($fe in $frontends) {
@@ -330,9 +342,13 @@ if (-not $SkipFrontend) {
             Pop-Location
         }
         
-        Write-Host "  Docker build $($fe.Name) (Dockerfile.local, --no-cache)..."
-        docker build --no-cache -f "$feDir/Dockerfile.local" -t "dev-$($fe.Name)" $feDir
-        if ($LASTEXITCODE -ne 0) { throw "$($fe.Name) docker build failed" }
+        if (Test-Path -LiteralPath "$feDir/Dockerfile.local") {
+            Write-Host "  Docker build $($fe.Name) (Dockerfile.local, --no-cache)..."
+            docker build --no-cache -f "$feDir/Dockerfile.local" -t "dev-$($fe.Name)" $feDir
+            if ($LASTEXITCODE -ne 0) { throw "$($fe.Name) docker build failed" }
+        } else {
+            Write-Host "  Skipping pre-build image for $($fe.Name) (compose Dockerfile; dist required in context)" -ForegroundColor DarkGray
+        }
     }
     
     Write-Host "  Frontend images built." -ForegroundColor Green
@@ -402,6 +418,8 @@ $AdminFePort = "3100"
 $PortalFePort = "3101"
 $DevFePort = "3102"
 $LoginFePort = "3110"
+$NotificationMfePort = "3120"
+$DelegationMfePort = "3121"
 if (Test-Path $EnvFile) {
     foreach ($line in Get-Content $EnvFile) {
         if ($line -match '^\s*EDGE_FRONTEND_PORT\s*=\s*(\S+)') {
@@ -411,6 +429,8 @@ if (Test-Path $EnvFile) {
         if ($line -match '^\s*USER_PORTAL_FRONTEND_PORT\s*=\s*(\S+)') { $PortalFePort = $Matches[1] }
         if ($line -match '^\s*DEVELOPER_WORKSTATION_FRONTEND_PORT\s*=\s*(\S+)') { $DevFePort = $Matches[1] }
         if ($line -match '^\s*PLATFORM_LOGIN_FRONTEND_PORT\s*=\s*(\S+)') { $LoginFePort = $Matches[1] }
+        if ($line -match '^\s*NOTIFICATION_MFE_PORT\s*=\s*(\S+)') { $NotificationMfePort = $Matches[1] }
+        if ($line -match '^\s*DELEGATION_MFE_PORT\s*=\s*(\S+)') { $DelegationMfePort = $Matches[1] }
     }
 }
 
@@ -435,6 +455,8 @@ Write-Host "  Admin Center:           http://localhost:$AdminFePort"
 Write-Host "  User Portal:            http://localhost:$PortalFePort"
 Write-Host "  Developer Workstation:  http://localhost:$DevFePort"
 Write-Host "  Platform Login:         http://localhost:$LoginFePort"
+Write-Host "  Notification MFE:       http://localhost:$NotificationMfePort"
+Write-Host "  Delegation MFE:         http://localhost:$DelegationMfePort"
 Write-Host ""
 Write-Host "Infrastructure:" -ForegroundColor Cyan
 Write-Host "  PostgreSQL:             localhost:5432"
@@ -442,8 +464,8 @@ Write-Host "  Redis:                  localhost:6379"
 Write-Host "  Kafka:                  localhost:9092"
 Write-Host "  N8N (edge):             http://localhost:$EdgePort/n8n/"
 Write-Host "  N8N (direct):           http://localhost:5678"
-Write-Host "  Superset (direct):      http://localhost:8088/superset/welcome/"
 Write-Host "  Superset (edge):        http://localhost:$EdgePort/superset/"
+Write-Host "  Superset (direct):      http://localhost:8088/superset/welcome/"
 Write-Host ""
 Write-Host "Commands:" -ForegroundColor DarkGray
 Write-Host "  Logs:   docker compose -f docker-compose.dev.yml --env-file .env logs -f [service]"

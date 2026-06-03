@@ -1,0 +1,10 @@
+{
+  "moduleCode": "test-import-mfe",
+  "version": "1.0.0",
+  "displayName": "Test Import MFE",
+  "hostApp": "user-portal",
+  "routePath": "/mfe/test-import",
+  "icon": "Star",
+  "orderNo": 60,
+  "exposedModule": "./App"
+}

@@ -61,6 +61,8 @@ CREATE INDEX IF NOT EXISTS idx_sys_users_deleted ON sys_users(deleted);
 --   DEVELOPER: Developer roles for Developer Workstation
 --   BU_BOUNDED: Business unit bound roles
 --   BU_UNBOUNDED: Business unit independent roles
+--   GATEWAY: Gateway governance roles
+--   AUDITOR: Security audit focused roles
 -- =====================================================
 CREATE TABLE IF NOT EXISTS sys_roles (
     id VARCHAR(64) PRIMARY KEY,
@@ -75,7 +77,9 @@ CREATE TABLE IF NOT EXISTS sys_roles (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_by VARCHAR(64),
     lock_version BIGINT NOT NULL DEFAULT 0,
-    CONSTRAINT chk_role_type CHECK (type IN ('ADMIN', 'DEVELOPER', 'BU_BOUNDED', 'BU_UNBOUNDED'))
+    CONSTRAINT chk_role_type CHECK (
+        type IN ('ADMIN', 'DEVELOPER', 'BU_BOUNDED', 'BU_UNBOUNDED', 'GATEWAY', 'AUDITOR')
+    )
 );
 
 CREATE INDEX IF NOT EXISTS idx_sys_roles_code ON sys_roles(code);

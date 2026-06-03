@@ -1,0 +1,84 @@
+name: MFE CI/CD
+
+on:
+  push:
+    paths:
+      - 'frontend/notification-mfe/**'
+      - 'frontend/delegation-mfe/**'
+  pull_request:
+    paths:
+      - 'frontend/notification-mfe/**'
+      - 'frontend/delegation-mfe/**'
+  workflow_dispatch:
+    inputs:
+      mfe:
+        description: 'Which MFE to build'
+        required: true
+        type: choice
+        options:
+          - both
+          - notification-mfe
+          - delegation-mfe
+      version:
+        description: 'Version tag (e.g. 1.0.1)'
+        required: false
+        type: string
+
+jobs:
+  notification-mfe:
+    if: ${{ github.event.inputs.mfe == 'both' || github.event.inputs.mfe == 'notification-mfe' || github.event_name != 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend/notification-mfe
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/notification-mfe/package-lock.json
+
+      - run: npm ci
+      - run: npx vite build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: notification-mfe-dist
+          path: frontend/notification-mfe/dist/
+
+      - name: Tag version
+        if: ${{ github.event.inputs.version != '' }}
+        run: |
+          git tag notification-mfe-v${{ github.event.inputs.version }}
+          git push origin notification-mfe-v${{ github.event.inputs.version }}
+
+  delegation-mfe:
+    if: ${{ github.event.inputs.mfe == 'both' || github.event.inputs.mfe == 'delegation-mfe' || github.event_name != 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend/delegation-mfe
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/delegation-mfe/package-lock.json
+
+      - run: npm ci
+      - run: npx vite build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: delegation-mfe-dist
+          path: frontend/delegation-mfe/dist/
+
+      - name: Tag version
+        if: ${{ github.event.inputs.version != '' }}
+        run: |
+          git tag delegation-mfe-v${{ github.event.inputs.version }}
+          git push origin delegation-mfe-v${{ github.event.inputs.version }}

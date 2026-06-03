@@ -6,6 +6,7 @@ import com.platform.security.entity.User;
 import com.platform.security.model.UserStatus;
 import com.platform.security.service.JwtTokenService;
 import com.platform.security.service.UserRoleService;
+import com.platform.security.util.SecurityContextUtils;
 import com.platform.common.i18n.I18nService;
 import com.portal.dto.ChangePasswordRequest;
 import com.portal.dto.LoginRequest;
@@ -49,6 +50,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AuthController {
 
+    private static final String AUTH_COOKIE_PATH = "/api/portal";
     private static final String CLAIM_ACTIVE_BUSINESS_UNIT_ID = "activeBusinessUnitId";
     private static final String CLAIM_ACTIVE_ROLE_ID = "activeRoleId";
     private static final String CLAIM_PORTAL_ACCESS_MODE = "portalAccessMode";
@@ -177,7 +179,7 @@ public class AuthController {
             Cookie accessTokenCookie = new Cookie(jwtProperties.getPrimaryCookieName(), newAccessToken);
             accessTokenCookie.setHttpOnly(true);
             accessTokenCookie.setSecure(false);
-            accessTokenCookie.setPath("/");
+            accessTokenCookie.setPath(AUTH_COOKIE_PATH);
             accessTokenCookie.setMaxAge((int)(jwtExpiration / 1000));
             accessTokenCookie.setAttribute("SameSite", "Lax");
             httpResponse.addCookie(accessTokenCookie);
@@ -185,7 +187,7 @@ public class AuthController {
             Cookie refreshTokenCookie = new Cookie(jwtProperties.getRefreshCookieName(), newRefreshToken);
             refreshTokenCookie.setHttpOnly(true);
             refreshTokenCookie.setSecure(false);
-            refreshTokenCookie.setPath("/");
+            refreshTokenCookie.setPath(AUTH_COOKIE_PATH);
             refreshTokenCookie.setMaxAge(7 * 24 * 60 * 60);
             refreshTokenCookie.setAttribute("SameSite", "Lax");
             httpResponse.addCookie(refreshTokenCookie);
@@ -227,17 +229,28 @@ public class AuthController {
     }
 
     @GetMapping("/me")
-    public ResponseEntity<LoginResponse.UserLoginInfo> getCurrentUser(@RequestHeader("Authorization") String authHeader) {
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            return ResponseEntity.status(401).build();
+    public ResponseEntity<LoginResponse.UserLoginInfo> getCurrentUser(@RequestHeader(value = "Authorization", required = false) String authHeader) {
+        // If no Authorization header, try SecurityContext (set by JwtAuthenticationFilter from cookie)
+        String userId;
+        String activeBu = null;
+        String activeRoleId = null;
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            try {
+                String token = authHeader.substring(7);
+                Claims claims = parseToken(token);
+                userId = claims.getSubject();
+                activeBu = claims.get(CLAIM_ACTIVE_BUSINESS_UNIT_ID, String.class);
+                activeRoleId = claims.get(CLAIM_ACTIVE_ROLE_ID, String.class);
+            } catch (Exception e) {
+                return ResponseEntity.status(401).build();
+            }
+        } else {
+            userId = SecurityContextUtils.getCurrentUserId().orElse(null);
+            if (userId == null) {
+                return ResponseEntity.status(401).build();
+            }
         }
         try {
-            String token = authHeader.substring(7);
-            Claims claims = parseToken(token);
-            String userId = claims.getSubject();
-            String activeBu = claims.get(CLAIM_ACTIVE_BUSINESS_UNIT_ID, String.class);
-            String activeRoleId = claims.get(CLAIM_ACTIVE_ROLE_ID, String.class);
-
             User user = userRepository.findById(userId)
                     .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.user_not_found")));
 
@@ -261,14 +274,23 @@ public class AuthController {
     }
 
     @GetMapping("/workspace-contexts")
-    public ResponseEntity<List<Map<String, String>>> listWorkspaceContexts(@RequestHeader("Authorization") String authHeader) {
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            return ResponseEntity.status(401).build();
+    public ResponseEntity<List<Map<String, String>>> listWorkspaceContexts(@RequestHeader(value = "Authorization", required = false) String authHeader) {
+        String userId;
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            try {
+                String token = authHeader.substring(7);
+                Claims claims = parseToken(token);
+                userId = claims.getSubject();
+            } catch (Exception e) {
+                return ResponseEntity.status(401).build();
+            }
+        } else {
+            userId = SecurityContextUtils.getCurrentUserId().orElse(null);
+            if (userId == null) {
+                return ResponseEntity.status(401).build();
+            }
         }
         try {
-            String token = authHeader.substring(7);
-            Claims claims = parseToken(token);
-            String userId = claims.getSubject();
             List<Map<String, String>> out = portalWorkspaceAuthService.listWorkspaceContexts(userId).stream()
                     .map(r -> {
                         Map<String, String> m = new LinkedHashMap<>();
@@ -322,7 +344,7 @@ public class AuthController {
     }
 
     @GetMapping("/validate")
-    public ResponseEntity<Boolean> validateToken(@RequestHeader("Authorization") String authHeader) {
+    public ResponseEntity<Boolean> validateToken(@RequestHeader(value = "Authorization", required = false) String authHeader) {
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             return ResponseEntity.ok(false);
         }

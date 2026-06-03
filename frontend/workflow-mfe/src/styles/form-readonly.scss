@@ -1,0 +1,57 @@
+/**
+ * Disabled / read-only form controls — parity with Developer Workstation Preview.
+ */
+.form-readonly-surface {
+  :deep(.el-input.is-disabled),
+  :deep(.el-textarea.is-disabled),
+  :deep(.el-input-number.is-disabled),
+  :deep(.el-select .is-disabled),
+  :deep(.el-date-editor.is-disabled),
+  :deep(.el-time-editor.is-disabled),
+  :deep(.el-cascader.is-disabled) {
+    cursor: not-allowed;
+  }
+
+  :deep(.el-input.is-disabled .el-input__wrapper),
+  :deep(.el-textarea.is-disabled .el-textarea__inner),
+  :deep(.el-input-number.is-disabled .el-input__wrapper),
+  :deep(.el-select .el-select__wrapper.is-disabled),
+  :deep(.el-date-editor.is-disabled .el-input__wrapper),
+  :deep(.el-cascader.is-disabled .el-input__wrapper) {
+    background-color: var(--el-disabled-bg-color, #f5f7fa);
+    box-shadow: 0 0 0 1px var(--el-disabled-border-color, #e4e7ed) inset;
+    cursor: not-allowed;
+  }
+
+  :deep(.el-input.is-disabled .el-input__inner),
+  :deep(.el-input.is-disabled .el-input__wrapper),
+  :deep(.el-textarea.is-disabled .el-textarea__inner),
+  :deep(.el-input-number.is-disabled),
+  :deep(.el-select .is-disabled),
+  :deep(.el-radio.is-disabled),
+  :deep(.el-checkbox.is-disabled),
+  :deep(.el-switch.is-disabled),
+  :deep(.el-rate.is-disabled),
+  :deep(.el-slider.is-disabled) {
+    pointer-events: none;
+  }
+
+  :deep(.el-radio-group.is-disabled),
+  :deep(.el-checkbox-group.is-disabled) {
+    pointer-events: none;
+    cursor: not-allowed;
+  }
+
+  /* Lookup readonly — empty state uses disabled el-input; selected state uses bordered wrapper */
+  :deep(.lookup-field.readonly .el-input.is-disabled .el-input__wrapper),
+  :deep(.lookup-field.readonly .lookup-selected-wrapper) {
+    background-color: var(--el-disabled-bg-color, #f5f7fa);
+    border-color: var(--el-disabled-border-color, #e4e7ed);
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
+  :deep(.lookup-field.readonly .el-input.is-disabled .el-input__wrapper) {
+    box-shadow: 0 0 0 1px var(--el-disabled-border-color, #e4e7ed) inset;
+  }
+}
