@@ -25,10 +25,7 @@ import { FcEditor, FcTransfer, FcCascader, FcSlider } from './components/designe
 import LookupComponent from './components/designer/LookupComponent.vue'
 import LookupBindingSelect from './components/designer/LookupBindingSelect.vue'
 import { registerFormCreateReadonlyParser } from './utils/registerFormCreateReadonlyParser'
-import { installDesignerFieldPanelRules } from './utils/designerPropsPanelRules'
 import formCreateFactory from '@form-create/element-ui'
-
-installDesignerFieldPanelRules(FcDesigner as { addDragRule: (config: Record<string, unknown>) => void })
 
 // Force set HTML lang attribute to English
 document.documentElement.lang = 'en'

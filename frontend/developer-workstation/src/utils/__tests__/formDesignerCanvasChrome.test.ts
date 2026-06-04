@@ -4,6 +4,7 @@ import {
   collectHiddenDesignerTargets,
   findDesignerDragElement,
   pickInnermostDragTool,
+  syncDesignerHiddenFieldMarkers,
 } from '../formDesignerCanvasChrome'
 
 describe('formDesignerCanvasChrome', () => {
@@ -85,5 +86,43 @@ describe('formDesignerCanvasChrome', () => {
     canvas.appendChild(card)
 
     expect(collectDragToolsWithHiddenOverlay(canvas)).toEqual([field])
+  })
+
+  it('syncDesignerHiddenFieldMarkers toggles wrapper class and concealed state', () => {
+    const wrapper = document.createElement('div')
+    wrapper.className = 'fc-designer-wrapper'
+    const stage = document.createElement('div')
+    stage.className = 'fc-designer-zoom-stage'
+    const canvas = document.createElement('div')
+    canvas.className = '_fc-designer'
+    const drag = document.createElement('div')
+    drag.className = '_fd-drag-tool'
+    Object.defineProperty(drag, 'offsetWidth', { value: 120 })
+    Object.defineProperty(drag, 'offsetHeight', { value: 40 })
+    const overlay = document.createElement('div')
+    overlay.className = '_fd-drag-hidden'
+    const input = document.createElement('input')
+    input.setAttribute('name', 'fld')
+    drag.appendChild(overlay)
+    drag.appendChild(input)
+    canvas.appendChild(drag)
+    stage.appendChild(canvas)
+    wrapper.appendChild(stage)
+
+    syncDesignerHiddenFieldMarkers(
+      wrapper,
+      [{ type: 'input', field: 'fld', hidden: true }],
+      false,
+    )
+    expect(wrapper.classList.contains('fc-designer-show-hidden')).toBe(false)
+    expect(drag.classList.contains('fc-designer-hidden-field--concealed')).toBe(true)
+
+    syncDesignerHiddenFieldMarkers(
+      wrapper,
+      [{ type: 'input', field: 'fld', hidden: true }],
+      true,
+    )
+    expect(wrapper.classList.contains('fc-designer-show-hidden')).toBe(true)
+    expect(drag.classList.contains('fc-designer-hidden-field--concealed')).toBe(false)
   })
 })

@@ -621,10 +621,6 @@ import {
   walkRulesEnsureComponentEvents,
 } from '@/utils/formCreateDefaultEvents'
 import {
-  buildDesignerBaseRulePrependHiddenReadonly,
-  buildDesignerComponentRuleDefaultStripHiddenReadonly,
-} from '@/utils/designerPropsPanelRules'
-import {
   applyTableFieldDefaultToRule,
   applyTableFieldDefaultsToRulesAndModel,
   resolveRuleDefaultValue,
@@ -1586,20 +1582,29 @@ const designerConfig = computed(() => ({
     ensureEmptyRuleComponentEvents(rule)
   },
   updateDefaultRule: buildDesignerUpdateDefaultRule(),
-  baseRule: buildDesignerBaseRulePrependHiddenReadonly(),
   componentRule: {
-    default: buildDesignerComponentRuleDefaultStripHiddenReadonly(),
+    // Hide is handled by form-create's built-in top toggle (toolHidden → rule-level `_hidden`),
+    // which marks the field with a badge WITHOUT collapsing its content. We only append Readonly.
+    default: {
+      append: true,
+      rule(rule: { type?: string }) {
+        const builtInReadonly = new Set(['input', 'textarea', 'password', 'timePicker', 'datePicker', 'lookup'])
+        if (builtInReadonly.has(String(rule.type ?? ''))) return []
+        return [{ type: 'switch', field: 'readonly', title: 'Readonly' }]
+      },
+    },
   },
   hiddenItemConfig: {
-    // Keep disabled in library position; Hidden/Readonly are prepended via baseRule.
-    default: ['disabled'],
-    lookup: ['disabled'],
-    subTable: ['disabled'],
-    linkForm: ['disabled'],
-    editor: ['disabled'],
-    transfer: ['disabled'],
-    cascader: ['disabled'],
-    slider: ['disabled'],
+    // Hide the built-in Basic "Hidden" (rule-level `hidden`) — it collapses field content on the
+    // canvas. The built-in top toggle (props.hide → `_hidden`) is the single Hide control.
+    default: ['disabled', 'hidden'],
+    lookup: ['disabled', 'hidden'],
+    subTable: ['disabled', 'hidden'],
+    linkForm: ['disabled', 'hidden'],
+    editor: ['disabled', 'hidden'],
+    transfer: ['disabled', 'hidden'],
+    cascader: ['disabled', 'hidden'],
+    slider: ['disabled', 'hidden'],
   },
 }))
 
@@ -4019,6 +4024,21 @@ onMounted(() => {
     }
   }
 
+  /* Show hidden ON: reveal drag chrome and hide the eye-close overlay so the field is editable */
+  &.fc-designer-show-hidden {
+    :deep(._fd-drag-tool:has(> ._fd-drag-hidden)) {
+      display: block !important;
+    }
+
+    :deep(._fd-drag-hidden) {
+      display: none !important;
+    }
+
+    :deep(.fc-designer-hidden-field.fc-designer-hidden-field--concealed) {
+      display: block !important;
+    }
+  }
+
   :deep(.fc-designer-hidden-field) {
     position: relative;
 
@@ -4078,6 +4098,7 @@ onMounted(() => {
     width: 100%;
   }
 }
+
 
 .designer-tabs {
   flex: 1;

@@ -218,3 +218,17 @@
     过滤工作区角色池任务，当前工作区（如共享财务中心）与 BPMN BU 不一致时被剔除。
     修复：引擎 applyActiveWorkspaceBuTaskFilter、门户 filterFixedBuRoleTasksForActiveWorkspace 对「当前用户已是 assignee/candidate」的任务跳过 BU 过滤。
     路径：TaskManagerComponent、TaskQueryComponent。
+- id: "1423"
+  status: fixed
+  fixed_at: "2026-06-04"
+  severity: major
+  category: bug
+  summary: "表单设计器「显示已隐藏」开关无法露出 Hidden 控件"
+  detail: |
+    根因：(1) 表单设计器曾出现两个 Hide 开关，且自定义的 Basis `field: hidden` 会设置规则级 `hidden`，
+    令画布字段内容塌缩（非期望的「角标」效果）；(2) 打开 Show hidden 时仅去掉 Hermes concealed 类，
+    未隐藏 form-create 的 `._fd-drag-hidden` 遮罩层，字段仍被盖住无法编辑。
+    最终方案：唯一 Hide 控件 = form-create 原生顶部开关（props.hide → 规则级 `_hidden`，仅显示角标不塌缩内容）；
+    通过 hiddenItemConfig 隐藏会塌缩内容的内置 Basic `hidden`；删除中间方案 designerPropsPanelRules（baseRule prepend）；
+    `.fc-designer-show-hidden` 下隐藏 `._fd-drag-hidden` overlay 并强制显示 drag-tool / 取消 concealed。
+    路径：FormDesigner.vue、main.ts、formDesignerCanvasChrome.test.ts。
