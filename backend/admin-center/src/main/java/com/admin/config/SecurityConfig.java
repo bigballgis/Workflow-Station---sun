@@ -1,6 +1,8 @@
 package com.admin.config;
 
+import com.admin.audit.AuditContextHolder;
 import com.admin.audit.AuditRequestFilter;
+import com.platform.security.util.SecurityContextUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.platform.common.dto.UserPrincipal;
 import com.platform.security.filter.JwtAuthenticationFilter;
@@ -67,7 +69,8 @@ public class SecurityConfig {
                 .anyRequest().permitAll()
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-            .addFilterAfter(serviceCallAuthenticationFilter(), JwtAuthenticationFilter.class);
+            .addFilterAfter(serviceCallAuthenticationFilter(), JwtAuthenticationFilter.class)
+            .addFilterAfter(auditContextEnrichmentFilter(), ServiceCallAuthenticationFilter.class);
 
         // HSTS: only enabled in production (HTTPS). Setting on HTTP dev env breaks browser access.
         if (hstsEnabled) {
@@ -89,6 +92,45 @@ public class SecurityConfig {
     @Bean
     public OncePerRequestFilter serviceCallAuthenticationFilter() {
         return new ServiceCallAuthenticationFilter();
+    }
+
+    /**
+     * After JWT / header auth, merge SecurityContext identity into AuditContextHolder
+     * so AdminAuditAspect records the real operator (cookie JWT does not pass Authorization header).
+     */
+    @Bean
+    public OncePerRequestFilter auditContextEnrichmentFilter() {
+        return new OncePerRequestFilter() {
+            @Override
+            protected void doFilterInternal(HttpServletRequest request,
+                                            HttpServletResponse response,
+                                            FilterChain filterChain) throws ServletException, IOException {
+                AuditContextHolder.AuditContext ctx = AuditContextHolder.get();
+                if (ctx == null) {
+                    ctx = new AuditContextHolder.AuditContext();
+                    AuditContextHolder.set(ctx);
+                }
+                SecurityContextUtils.getCurrentUserId()
+                        .filter(id -> id != null && !id.isBlank())
+                        .ifPresent(ctx::setUserId);
+                SecurityContextUtils.getCurrentUsername()
+                        .filter(name -> name != null && !name.isBlank())
+                        .ifPresent(ctx::setUserName);
+                if (ctx.getUserId() == null || ctx.getUserId().isBlank()) {
+                    String headerUserId = request.getHeader("X-User-Id");
+                    if (headerUserId != null && !headerUserId.isBlank()) {
+                        ctx.setUserId(headerUserId);
+                    }
+                }
+                if (ctx.getUserName() == null || ctx.getUserName().isBlank()) {
+                    String headerUsername = request.getHeader("X-Username");
+                    if (headerUsername != null && !headerUsername.isBlank()) {
+                        ctx.setUserName(headerUsername);
+                    }
+                }
+                filterChain.doFilter(request, response);
+            }
+        };
     }
 
     @Bean

@@ -3,8 +3,10 @@ package com.admin.component;
 import com.admin.entity.AuditLog;
 import com.admin.entity.SecurityPolicy;
 import com.admin.enums.AuditAction;
+import com.admin.audit.AuditActorResolver;
 import com.admin.repository.AuditLogRepository;
 import com.admin.repository.SecurityPolicyRepository;
+import com.admin.repository.UserRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.criteria.Predicate;
@@ -31,6 +33,7 @@ public class SecurityAuditComponent {
     
     private final SecurityPolicyRepository policyRepository;
     private final AuditLogRepository auditLogRepository;
+    private final UserRepository userRepository;
     private final ObjectMapper objectMapper;
     
     // ==================== 安全策略管理 ====================
@@ -174,7 +177,9 @@ public class SecurityAuditComponent {
     
     public Page<AuditLog> queryAuditLogs(AuditQueryRequest request, Pageable pageable) {
         Specification<AuditLog> spec = buildSpecification(request);
-        return auditLogRepository.findAll(spec, pageable);
+        Page<AuditLog> page = auditLogRepository.findAll(spec, pageable);
+        AuditActorResolver.enrichOperatorUsernames(page.getContent(), userRepository);
+        return page;
     }
     
     private Specification<AuditLog> buildSpecification(AuditQueryRequest request) {

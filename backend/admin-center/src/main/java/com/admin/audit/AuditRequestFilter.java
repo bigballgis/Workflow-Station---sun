@@ -35,8 +35,9 @@ public class AuditRequestFilter extends OncePerRequestFilter {
         try {
             AuditContextHolder.AuditContext ctx = new AuditContextHolder.AuditContext();
 
-            // User ID from header sent by frontend
+            // User identity from headers sent by frontend (JWT is often in httpOnly cookie, not Authorization)
             ctx.setUserId(req.getHeader("X-User-Id"));
+            ctx.setUserName(req.getHeader("X-Username"));
 
             // Extract claims from JWT Bearer token
             String auth = req.getHeader("Authorization");
@@ -56,7 +57,9 @@ public class AuditRequestFilter extends OncePerRequestFilter {
                         if (ctx.getUserId() == null) {
                             ctx.setUserId((String) claims.get("sub"));
                         }
-                        ctx.setUserName((String) claims.get("username"));
+                        if (ctx.getUserName() == null || ctx.getUserName().isBlank()) {
+                            ctx.setUserName((String) claims.get("username"));
+                        }
                     }
                 } catch (Exception e) {
                     log.debug("Failed to parse JWT claims for audit context: {}", e.getMessage());

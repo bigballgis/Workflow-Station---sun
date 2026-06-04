@@ -538,8 +538,14 @@ public class AdminAuditAspect {
         }
 
         AuditContextHolder.AuditContext ctx = AuditContextHolder.get();
-        String userId   = ctx != null && ctx.getUserId()   != null ? ctx.getUserId()   : "unknown";
-        String userName = ctx != null && ctx.getUserName() != null ? ctx.getUserName() : "unknown";
+        String userId = AuditActorResolver.resolveUserId(ctx);
+        String userName = AuditActorResolver.resolveUserName(ctx, userId, userRepository);
+        if (AuditActorResolver.isUnknown(userId)) {
+            userId = "unknown";
+        }
+        if (AuditActorResolver.isUnknown(userName)) {
+            userName = "unknown";
+        }
 
         // For auth operations (login/logout), user is not yet authenticated in context
         if ("AUTH".equals(meta.resourceType) && "unknown".equals(userId)) {

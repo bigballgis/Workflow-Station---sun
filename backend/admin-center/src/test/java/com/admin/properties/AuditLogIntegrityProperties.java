@@ -6,6 +6,7 @@ import com.admin.entity.AuditLog;
 import com.admin.enums.AuditAction;
 import com.admin.repository.AuditLogRepository;
 import com.admin.repository.SecurityPolicyRepository;
+import com.admin.repository.UserRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import net.jqwik.api.*;
 import net.jqwik.api.lifecycle.BeforeTry;
@@ -31,8 +32,9 @@ class AuditLogIntegrityProperties {
     void setUp() {
         var policyRepo = Mockito.mock(SecurityPolicyRepository.class);
         auditLogRepository = Mockito.mock(AuditLogRepository.class);
+        var userRepository = Mockito.mock(UserRepository.class);
         var objectMapper = new ObjectMapper();
-        component = new SecurityAuditComponent(policyRepo, auditLogRepository, objectMapper);
+        component = new SecurityAuditComponent(policyRepo, auditLogRepository, userRepository, objectMapper);
         
         when(auditLogRepository.save(any(AuditLog.class))).thenAnswer(inv -> inv.getArgument(0));
     }
