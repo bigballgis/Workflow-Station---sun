@@ -95,6 +95,8 @@ public class UserManagerComponent {
                 .email(request.getEmail())
                 .fullName(request.getFullName())
                 .employeeId(request.getEmployeeId())
+                .entityManagerId(request.getEntityManagerId())
+                .functionManagerId(request.getFunctionManagerId())
                 .position(request.getPosition())
                 .status(UserStatus.ACTIVE)
                 .mustChangePassword(true)
@@ -127,6 +129,8 @@ public class UserManagerComponent {
         user.setFullName(request.getFullName());
         user.setEmployeeId(request.getEmployeeId());
         user.setPosition(request.getPosition());
+        user.setEntityManagerId(request.getEntityManagerId());
+        user.setFunctionManagerId(request.getFunctionManagerId());
         user.setStatus(UserStatus.ACTIVE);
         user.setMustChangePassword(true);
         user.setPasswordExpiredAt(LocalDateTime.now().plusDays(90));

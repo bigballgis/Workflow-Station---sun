@@ -36,6 +36,10 @@ public class UserCreateRequest {
     
     @Size(max = 100, message = "职位长度不能超过100")
     private String position;
+
+    private String entityManagerId;
+
+    private String functionManagerId;
     
     @NotBlank(message = "初始密码不能为空")
     @Size(min = 8, max = 128, message = "密码长度必须在8-128之间")
