@@ -58,7 +58,7 @@ export function useUserForm(options: { user: Ref<UserData | null>; onSuccess: ()
   const loadDefaultUsers = async () => {
     userSearchLoading.value = true
     try {
-      const res = await userApi.list({ page: 0, size: 3 })
+      const res = await userApi.list({ page: 0, size: 50 })
       userOptions.value = (res.content || []).map((u: User) => ({ id: u.id, fullName: u.fullName, username: u.username }))
     } catch { userOptions.value = [] } finally { userSearchLoading.value = false }
   }
@@ -67,7 +67,7 @@ export function useUserForm(options: { user: Ref<UserData | null>; onSuccess: ()
     if (!query) { await loadDefaultUsers(); return }
     userSearchLoading.value = true
     try {
-      const res = await userApi.list({ keyword: query, page: 0, size: 20 })
+      const res = await userApi.list({ keyword: query, page: 0, size: 50 })
       userOptions.value = (res.content || []).map((u: User) => ({ id: u.id, fullName: u.fullName, username: u.username }))
     } catch { userOptions.value = [] } finally { userSearchLoading.value = false }
   }
