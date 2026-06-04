@@ -234,6 +234,13 @@ export default {
     urgeSuccess: '催辦成功',
     configParseFailed: '配置解析失敗',
     unknownActionType: '未知的操作類型: {type}',
+    withdrawNoProcess: '無法撤回：缺少流程實例',
+    rollbackNoTask: '無法回退：缺少任務資訊',
+    rollbackNoTarget: '沒有可回退的上一個節點',
+    rollbackConfirm: '確定將流程退回到「{node}」嗎？上一節點負責人將重新處理。',
+    rollbackConfirmTitle: '確認回退',
+    rollbackSuccess: '已回退到上一節點',
+    rollbackFailed: '回退失敗',
     formNotFound: '未找到表單: {name}',
     formMissingId: '表單配置缺少 formId',
     formOpenFailed: '開啟表單失敗',
@@ -786,6 +793,7 @@ export default {
     delegated: '已委託',
     withdraw: '撤回',
     submit: '提交',
+    return: '回退',
     completed: '已完成'
   },
   upload: {

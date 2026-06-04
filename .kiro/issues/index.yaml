@@ -185,3 +185,36 @@
     新增单元测试 3 项。数据修复：按 lookupConfig.tableId 匹配各表单新 binding，回填 dw_form_definitions.config_json
     （已导入的 FU 49/50/51，forms 166-174）。
     路径：backend/developer-workstation/.../util/FormConfigJsonBindingIdRewriter.java（+Test）。
+- id: "1420"
+  status: fixed
+  fixed_at: "2026-06-04"
+  severity: minor
+  category: bug
+  summary: "Admin Center 审计日志耗时始终显示 0ms，请求方法与路径为空"
+  detail: |
+    根因：AuditLog.getDuration() 硬编码返回 0；requestMethod/requestPath 同为桩实现；库表无对应列。
+    修复：admin_audit_logs 增加 duration_ms、request_method、request_path（V206 + init 脚本）；
+    AdminAuditAspect 计时写入；AuditRequestFilter 采集 HTTP 元数据；移除实体桩 getter。
+    路径：backend/admin-center entity/audit + Flyway V206；dev DB 已手工 ALTER。
+- id: "1421"
+  status: fixed
+  fixed_at: "2026-06-04"
+  severity: major
+  category: bug
+  summary: "Rollback 后 BPMN 解析不到负责人时任务成为孤儿，待办不可见"
+  detail: |
+    根因：returnTask 仅 moveActivityIdTo，新任务按 BPMN 重新解析；BU_ROLE 角色空/不合法时 assignee 与 candidate 均为 null。
+    修复：returnTask 设置 _rollbackAssigneeFallback/_rollbackTargetActivityId；TaskAssignmentListener 解析失败时
+    回退到该 activity 最近一次已完成任务的 assignee，若无则流程发起人；LastUserTaskAssigneeQuery.findLastCompletedAssigneeForActivity。
+    路径：TaskManagerComponent、TaskAssignmentListener、RollbackAssigneeFallbackSupport。
+- id: "1422"
+  status: fixed
+  fixed_at: "2026-06-04"
+  severity: major
+  category: bug
+  summary: "Rollback 已指派 user-dev 的 Case Submission 仍不出现在待办（工作区 BU 过滤）"
+  detail: |
+    根因：任务 assignee=user-dev 已写入 Flowable，但 BPMN 仍为 BU_ROLE+固定华东 BU；门户/引擎待办查询按 JWT activeBusinessUnitId
+    过滤工作区角色池任务，当前工作区（如共享财务中心）与 BPMN BU 不一致时被剔除。
+    修复：引擎 applyActiveWorkspaceBuTaskFilter、门户 filterFixedBuRoleTasksForActiveWorkspace 对「当前用户已是 assignee/candidate」的任务跳过 BU 过滤。
+    路径：TaskManagerComponent、TaskQueryComponent。

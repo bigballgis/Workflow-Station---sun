@@ -15,19 +15,21 @@ export function useTaskDisplay(taskInfo: Ref<Record<string, any>>) {
       'DELEGATE': 'completed',
       'TRANSFER': 'completed',
       'CLAIM': 'current',
-      'PENDING': 'pending'
+      'PENDING': 'pending',
+      'RETURN': 'completed'
     }
     return map[operationType] || 'completed'
   }
 
-  function getHistoryAction(operationType: string): 'approve' | 'reject' | 'transfer' | 'delegate' | 'withdraw' | 'submit' | undefined {
-    const map: Record<string, 'approve' | 'reject' | 'transfer' | 'delegate' | 'withdraw' | 'submit'> = {
+  function getHistoryAction(operationType: string): 'approve' | 'reject' | 'transfer' | 'delegate' | 'withdraw' | 'submit' | 'return' | undefined {
+    const map: Record<string, 'approve' | 'reject' | 'transfer' | 'delegate' | 'withdraw' | 'submit' | 'return'> = {
       'SUBMIT': 'submit',
       'APPROVE': 'approve',
       'REJECT': 'reject',
       'TRANSFER': 'transfer',
       'DELEGATE': 'delegate',
-      'WITHDRAW': 'withdraw'
+      'WITHDRAW': 'withdraw',
+      'RETURN': 'return'
     }
     return map[operationType]
   }

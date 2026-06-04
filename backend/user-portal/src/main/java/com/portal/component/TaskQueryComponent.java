@@ -378,7 +378,7 @@ public class TaskQueryComponent {
                     .filter(t -> !taskProcessComponent.shouldHideTaskInTodoList(t, userId, portalUsername))
                     .collect(Collectors.toList());
         }
-        return filterFixedBuRoleTasksForActiveWorkspace(filtered);
+        return filterFixedBuRoleTasksForActiveWorkspace(filtered, userId);
     }
 
     private static long extractEngineTotalCount(Map<String, Object> responseBody) {
@@ -934,8 +934,13 @@ public class TaskQueryComponent {
      * in some environments, UBR data may be out of sync with the workspace switcher,
      * causing VG-only filtering to misclassify the situation as "non-workspace mode" and skip this filter.</p>
      */
-    private List<TaskInfo> filterFixedBuRoleTasksForActiveWorkspace(List<TaskInfo> tasks) {
+    /**
+     * Workspace BU filter applies to role-pool tasks only. Direct assignee/candidate tasks must remain visible
+     * (e.g. rollback fallback assigned user-dev while BPMN still marks BU_ROLE + another BU id).
+     */
+    private List<TaskInfo> filterFixedBuRoleTasksForActiveWorkspace(List<TaskInfo> tasks, String userId) {
         Optional<String> activeBuOpt = SecurityContextUtils.getCurrentActiveBusinessUnitId();
+        String portalUsername = SecurityContextUtils.getCurrentUsername().orElse(null);
         if (activeBuOpt.isEmpty()) {
             return tasks;
         }
@@ -943,6 +948,11 @@ public class TaskQueryComponent {
         List<TaskInfo> out = new ArrayList<>();
         for (TaskInfo t : tasks) {
             if (t == null) {
+                continue;
+            }
+            if (isDirectAssigneeForPortalUser(t, userId, portalUsername)
+                    || isCandidateForPortalUser(t, userId, portalUsername)) {
+                out.add(t);
                 continue;
             }
             if (!isWorkspaceScopedBuPoolSemantics(t)) {
@@ -959,6 +969,42 @@ public class TaskQueryComponent {
             }
         }
         return out;
+    }
+
+    private static boolean isDirectAssigneeForPortalUser(TaskInfo t, String userId, String portalUsername) {
+        if (t == null || userId == null || userId.isBlank()) {
+            return false;
+        }
+        String assignee = t.getAssignee();
+        if (assignee == null || assignee.isBlank()) {
+            return false;
+        }
+        String a = assignee.trim();
+        if (userId.trim().equals(a)) {
+            return true;
+        }
+        return portalUsername != null && !portalUsername.isBlank()
+                && portalUsername.trim().equalsIgnoreCase(a);
+    }
+
+    private static boolean isCandidateForPortalUser(TaskInfo t, String userId, String portalUsername) {
+        if (t == null || userId == null || userId.isBlank() || t.getCandidateUserIds() == null) {
+            return false;
+        }
+        for (String cid : t.getCandidateUserIds()) {
+            if (cid == null || cid.isBlank()) {
+                continue;
+            }
+            String c = cid.trim();
+            if (userId.trim().equals(c)) {
+                return true;
+            }
+            if (portalUsername != null && !portalUsername.isBlank()
+                    && portalUsername.trim().equalsIgnoreCase(c)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static String normalizeBuId(String raw) {

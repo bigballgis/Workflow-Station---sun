@@ -75,6 +75,8 @@ public class AuditRequestFilter extends OncePerRequestFilter {
             }
             ctx.setIpAddress(ip);
             ctx.setUserAgent(req.getHeader("User-Agent"));
+            ctx.setRequestMethod(req.getMethod());
+            ctx.setRequestPath(req.getRequestURI());
 
             AuditContextHolder.set(ctx);
             chain.doFilter(req, res);

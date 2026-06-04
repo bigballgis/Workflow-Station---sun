@@ -169,6 +169,9 @@ public class SecurityAuditComponent {
                 .changeDetails(request.getChangeDetails())
                 .success(request.getSuccess())
                 .failureReason(request.getFailureReason())
+                .durationMs(request.getDurationMs())
+                .requestMethod(request.getRequestMethod())
+                .requestPath(request.getRequestPath())
                 .build();
         return auditLogRepository.save(auditLog);
     }
@@ -422,6 +425,9 @@ public class SecurityAuditComponent {
         private String changeDetails;
         private Boolean success;
         private String failureReason;
+        private Integer durationMs;
+        private String requestMethod;
+        private String requestPath;
     }
     
     @lombok.Data

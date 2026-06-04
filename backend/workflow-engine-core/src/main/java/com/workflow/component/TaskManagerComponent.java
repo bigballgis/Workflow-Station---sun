@@ -19,6 +19,7 @@ import com.workflow.exception.WorkflowValidationException;
 import com.workflow.repository.ExtendedTaskInfoRepository;
 import com.workflow.service.UserPermissionService;
 import com.workflow.util.InitiatorOrphanRepairEligibility;
+import com.workflow.util.RollbackAssigneeFallbackSupport;
 
 import com.platform.messaging.support.NotificationDispatchHelper;
 import com.platform.common.i18n.I18nService;
@@ -149,7 +150,7 @@ public class TaskManagerComponent {
             
             List<Task> uniqueTasks = new ArrayList<>(taskMap.values());
             uniqueTasks.sort((t1, t2) -> t2.getCreateTime().compareTo(t1.getCreateTime()));
-            uniqueTasks = applyActiveWorkspaceBuTaskFilter(uniqueTasks, activeBusinessUnitId);
+            uniqueTasks = applyActiveWorkspaceBuTaskFilter(uniqueTasks, activeBusinessUnitId, userId);
             
             long totalCount;
             if (uniqueTasks.size() < fetchLimit) {
@@ -362,7 +363,7 @@ public class TaskManagerComponent {
             
             List<Task> uniqueTasks = new ArrayList<>(taskMap.values());
             uniqueTasks.sort((t1, t2) -> t2.getCreateTime().compareTo(t1.getCreateTime()));
-            uniqueTasks = applyActiveWorkspaceBuTaskFilter(uniqueTasks, activeBusinessUnitId);
+            uniqueTasks = applyActiveWorkspaceBuTaskFilter(uniqueTasks, activeBusinessUnitId, userId);
             
             long totalCount;
             if (uniqueTasks.size() < fetchLimit) {
@@ -1321,6 +1322,13 @@ public class TaskManagerComponent {
                 multiInstanceCanceller.cancelMultiInstanceTasks(processInstanceId);
             }
             
+            // Record typed Flowable comment so portal flow history shows RETURN (not generic APPROVE)
+            recordReturnTaskComment(taskId, processInstanceId, currentTask, targetActivityId, request);
+
+            // Signal TaskAssignmentListener to fall back to previous handler if BPMN resolve fails
+            runtimeService.setVariable(processInstanceId, RollbackAssigneeFallbackSupport.VAR_FALLBACK_ACTIVE, Boolean.TRUE);
+            runtimeService.setVariable(processInstanceId, RollbackAssigneeFallbackSupport.VAR_TARGET_ACTIVITY_ID, targetActivityId);
+
             // Use Flowable createChangeActivityStateBuilder to perform rollback
             runtimeService.createChangeActivityStateBuilder()
                 .processInstanceId(processInstanceId)
@@ -1765,7 +1773,7 @@ public class TaskManagerComponent {
      * When portal passes current workspace BU, filter out tasks before pagination where BPMN FIXED_BU_ROLE fixed BU mismatches JWT workspace.
      * Depends on bpmnAssigneeType / bpmnBusinessUnitId / variables in {@link #buildTaskInfoFromFlowableTask}.
      */
-    private List<Task> applyActiveWorkspaceBuTaskFilter(List<Task> tasks, String activeBusinessUnitId) {
+    private List<Task> applyActiveWorkspaceBuTaskFilter(List<Task> tasks, String activeBusinessUnitId, String queryUserId) {
         if (!StringUtils.hasText(activeBusinessUnitId) || tasks == null || tasks.isEmpty()) {
             return tasks;
         }
@@ -1773,14 +1781,25 @@ public class TaskManagerComponent {
         List<Task> out = new ArrayList<>();
         for (Task t : tasks) {
             TaskListResult.TaskInfo info = buildTaskInfoFromFlowableTask(t);
-            if (fixedBuRoleVisibleForActiveWorkspace(info, activeBu)) {
+            if (fixedBuRoleVisibleForActiveWorkspace(info, activeBu, t, queryUserId)) {
                 out.add(t);
             }
         }
         return out;
     }
 
-    private boolean fixedBuRoleVisibleForActiveWorkspace(TaskListResult.TaskInfo info, String activeBu) {
+    /**
+     * Role-pool tasks are workspace-scoped; direct assignee/candidate rows stay visible across workspace mismatch
+     * (rollback fallback may assign user while BPMN still carries a fixed BU id).
+     */
+    private boolean fixedBuRoleVisibleForActiveWorkspace(TaskListResult.TaskInfo info, String activeBu,
+                                                       Task flowableTask, String queryUserId) {
+        if (flowableTask != null && StringUtils.hasText(queryUserId)) {
+            String assignee = flowableTask.getAssignee();
+            if (StringUtils.hasText(assignee) && queryUserId.trim().equals(assignee.trim())) {
+                return true;
+            }
+        }
         if (info == null || !StringUtils.hasText(activeBu)) {
             return true;
         }
@@ -2368,6 +2387,45 @@ public class TaskManagerComponent {
                 "workflow-engine");
     }
     
+    private void recordReturnTaskComment(String taskId, String processInstanceId, Task currentTask,
+                                       String targetActivityId, TaskReturnRequest request) {
+        String targetLabel = resolveActivityDisplayName(currentTask.getProcessDefinitionId(), targetActivityId);
+        StringBuilder msg = new StringBuilder();
+        msg.append("Returned to ").append(targetLabel);
+        if (request.getReason() != null && !request.getReason().isBlank()) {
+            msg.append(": ").append(request.getReason().trim());
+        }
+        String previousActor = Authentication.getAuthenticatedUserId();
+        try {
+            Authentication.setAuthenticatedUserId(request.getUserId());
+            taskService.addComment(taskId, processInstanceId, "return", msg.toString());
+        } catch (Exception e) {
+            log.warn("Failed to record return comment on task {}: {}", taskId, e.getMessage());
+        } finally {
+            Authentication.setAuthenticatedUserId(previousActor);
+        }
+    }
+
+    private String resolveActivityDisplayName(String processDefinitionId, String activityId) {
+        if (!StringUtils.hasText(activityId)) {
+            return "previous step";
+        }
+        try {
+            if (StringUtils.hasText(processDefinitionId)) {
+                BpmnModel model = repositoryService.getBpmnModel(processDefinitionId);
+                if (model != null) {
+                    FlowElement el = model.getFlowElement(activityId.trim());
+                    if (el != null && StringUtils.hasText(el.getName())) {
+                        return el.getName().trim();
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.debug("Could not resolve activity display name for {}: {}", activityId, e.getMessage());
+        }
+        return activityId.trim();
+    }
+
     private void publishTaskReturnEvent(String taskId, String processInstanceId,
                                         String fromActivityId, String toActivityId,
                                         TaskReturnRequest request) {

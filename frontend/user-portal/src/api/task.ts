@@ -91,6 +91,14 @@ export interface TaskCompleteRequest {
   returnActivityId?: string
 }
 
+/** Historic user-task node that the current task may be returned to (engine uses taskId = activityId). */
+export interface ReturnableActivity {
+  taskId: string
+  taskName?: string
+  processInstanceId?: string
+  status?: string
+}
+
 export interface TaskHistoryInfo {
   id: string
   taskId: string
@@ -132,6 +140,11 @@ export function getTaskDetail(taskId: string) {
 // Get task flow history
 export function getTaskHistory(taskId: string) {
   return request.get<{ data: TaskHistoryInfo[] }>(`/tasks/${taskId}/history`)
+}
+
+// Nodes available for rollback (RETURN)
+export function getReturnableActivities(taskId: string) {
+  return request.get<{ data: ReturnableActivity[] }>(`/tasks/${taskId}/returnable-activities`)
 }
 
 // Get task statistics

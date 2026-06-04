@@ -151,7 +151,7 @@ export interface HistoryRecord {
   assigneeId?: string
   assigneeName?: string
   status: 'completed' | 'current' | 'pending' | 'rejected' | 'cancelled'
-  action?: 'approve' | 'reject' | 'transfer' | 'delegate' | 'withdraw' | 'submit'
+  action?: 'approve' | 'reject' | 'transfer' | 'delegate' | 'withdraw' | 'submit' | 'return'
   comment?: string
   createdTime: string
   completedTime?: string
@@ -249,7 +249,8 @@ const getActionText = (action: string) => {
     transfer: t('action.transfer'),
     delegate: t('action.delegate'),
     withdraw: t('action.withdraw'),
-    submit: t('action.submit')
+    submit: t('action.submit'),
+    return: t('action.return')
   }
   return actionMap[action] || action
 }

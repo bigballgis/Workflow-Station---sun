@@ -52,4 +52,38 @@ public class LastUserTaskAssigneeQuery {
         }
         return Optional.empty();
     }
+
+    /**
+     * Last user who completed a specific user-task activity in this process instance
+     * (e.g. Case Submission after rollback).
+     */
+    public Optional<String> findLastCompletedAssigneeForActivity(String processInstanceId,
+                                                                 String taskDefinitionKey) {
+        if (processInstanceId == null || processInstanceId.isBlank()
+                || taskDefinitionKey == null || taskDefinitionKey.isBlank()) {
+            return Optional.empty();
+        }
+        try {
+            List<HistoricTaskInstance> list = historyService.createHistoricTaskInstanceQuery()
+                    .processInstanceId(processInstanceId.trim())
+                    .taskDefinitionKey(taskDefinitionKey.trim())
+                    .finished()
+                    .orderByHistoricTaskInstanceEndTime()
+                    .desc()
+                    .list();
+            for (HistoricTaskInstance hti : list) {
+                if (hti == null) {
+                    continue;
+                }
+                String assignee = hti.getAssignee();
+                if (assignee != null && !assignee.isBlank()) {
+                    return Optional.of(assignee.trim());
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to query last assignee for activity {} in instance {}: {}",
+                    taskDefinitionKey, processInstanceId, e.getMessage());
+        }
+        return Optional.empty();
+    }
 }

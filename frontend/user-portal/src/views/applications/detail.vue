@@ -4572,6 +4572,7 @@ const loadProcessHistory = async () => {
         nodeId: item.activityId || `node_${index}`,
         nodeName: item.activityName || item.taskName || t('applicationDetail.unknownNode'),
         status: getHistoryStatus(item.operationType),
+        action: getHistoryAction(item.operationType),
         assigneeName: item.operatorName || '-',
         comment: item.comment,
         createdTime: item.operationTime || '',
@@ -4594,10 +4595,24 @@ const getHistoryStatus = (operationType: string): 'completed' | 'current' | 'pen
     'REJECT': 'rejected',
     'DELEGATE': 'completed',
     'TRANSFER': 'completed',
+    'RETURN': 'completed',
     'CLAIM': 'completed',
     'PENDING': 'current'
   }
   return map[operationType] || 'completed'
+}
+
+const getHistoryAction = (operationType: string): 'approve' | 'reject' | 'transfer' | 'delegate' | 'withdraw' | 'submit' | 'return' | undefined => {
+  const map: Record<string, 'approve' | 'reject' | 'transfer' | 'delegate' | 'withdraw' | 'submit' | 'return'> = {
+    SUBMIT: 'submit',
+    APPROVE: 'approve',
+    REJECT: 'reject',
+    TRANSFER: 'transfer',
+    DELEGATE: 'delegate',
+    WITHDRAW: 'withdraw',
+    RETURN: 'return'
+  }
+  return map[operationType]
 }
 
 // Initialize flow history records

@@ -214,6 +214,7 @@ public class TaskController {
         // For each task, take the latest comment message.
         // Transfer-typed comments are tracked separately so we can inject synthetic TRANSFER entries.
         Map<String, String> taskComments = new HashMap<>();
+        Map<String, String> taskReturnComments = new HashMap<>();
         // Same runtime userTask keeps one taskId across multiple transfers; keep every transfer comment.
         Map<String, List<Comment>> taskTransferCommentsByTaskId = new HashMap<>();
         try {
@@ -221,7 +222,11 @@ public class TaskController {
             if (allComments != null) {
                 for (Comment c : allComments) {
                     if (c.getTaskId() == null) continue;
-                    if ("transfer".equals(c.getType())) {
+                    if ("return".equals(c.getType())) {
+                        if (c.getFullMessage() != null && !c.getFullMessage().isBlank()) {
+                            taskReturnComments.put(c.getTaskId(), c.getFullMessage());
+                        }
+                    } else if ("transfer".equals(c.getType())) {
                         taskTransferCommentsByTaskId.computeIfAbsent(c.getTaskId(), k -> new ArrayList<>()).add(c);
                     } else if (c.getFullMessage() != null && !c.getFullMessage().isBlank()) {
                         taskComments.put(c.getTaskId(), c.getFullMessage());
@@ -270,24 +275,30 @@ public class TaskController {
                                "inclusiveGateway".equals(activityType)) {
                         operationType = "GATEWAY";
                     } else if ("userTask".equals(activityType)) {
-                        // Use deleteReason to distinguish APPROVE vs REJECT
-                        String deleteReason = taskDeleteReasons.get(activity.getTaskId());
-                        if (deleteReason != null) {
-                            if (deleteReason.contains("rejected") || deleteReason.contains("REJECTED") ||
-                                deleteReason.contains("reject") || deleteReason.contains("REJECT")) {
-                                operationType = "REJECT";
-                            } else if (deleteReason.contains("approved") || deleteReason.contains("APPROVED") ||
-                                      deleteReason.contains("approve") || deleteReason.contains("APPROVE")) {
-                                operationType = "APPROVE";
-                            } else if (deleteReason.contains("transfer") || deleteReason.contains("TRANSFER")) {
-                                operationType = "TRANSFER";
-                            } else if (deleteReason.contains("delegate") || deleteReason.contains("DELEGATE")) {
-                                operationType = "DELEGATE";
+                        String taskIdForActivity = activity.getTaskId();
+                        if (taskIdForActivity != null && taskReturnComments.containsKey(taskIdForActivity)) {
+                            operationType = "RETURN";
+                        } else {
+                            // Use deleteReason to distinguish APPROVE vs REJECT vs rollback
+                            String deleteReason = taskDeleteReasons.get(taskIdForActivity);
+                            if (deleteReason != null) {
+                                String dr = deleteReason.toLowerCase(java.util.Locale.ROOT);
+                                if (isFlowableReturnDeleteReason(dr)) {
+                                    operationType = "RETURN";
+                                } else if (dr.contains("rejected") || dr.contains("reject")) {
+                                    operationType = "REJECT";
+                                } else if (dr.contains("approved") || dr.contains("approve")) {
+                                    operationType = "APPROVE";
+                                } else if (dr.contains("transfer")) {
+                                    operationType = "TRANSFER";
+                                } else if (dr.contains("delegate")) {
+                                    operationType = "DELEGATE";
+                                } else {
+                                    operationType = "APPROVE";
+                                }
                             } else {
                                 operationType = "APPROVE";
                             }
-                        } else {
-                            operationType = "APPROVE";
                         }
                     } else {
                         operationType = "APPROVE";
@@ -336,11 +347,17 @@ public class TaskController {
                     activity.getEndTime().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime().toString() :
                     activity.getStartTime().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime().toString());
 
-                // Prefer Flowable native comment; fall back to deleteReason for legacy data
+                // Prefer return/transfer typed comments, then generic comment; avoid raw deleteReason for RETURN
                 String taskId = activity.getTaskId();
-                String comment = taskId != null ? taskComments.get(taskId) : null;
-                if (comment == null && taskId != null) {
-                    comment = taskDeleteReasons.get(taskId);
+                String comment = null;
+                if (taskId != null) {
+                    comment = taskReturnComments.get(taskId);
+                    if (comment == null) {
+                        comment = taskComments.get(taskId);
+                    }
+                    if (comment == null && !"RETURN".equals(operationType) && taskDeleteReasons.containsKey(taskId)) {
+                        comment = taskDeleteReasons.get(taskId);
+                    }
                 }
                 item.put("comment", comment);
                 item.put("duration", activity.getDurationInMillis());
@@ -410,6 +427,17 @@ public class TaskController {
         }
         
         return ResponseEntity.ok(ApiResponse.success(historyList));
+    }
+
+    /** Flowable changeActivityState sets deleteReason like "Change activity to Activity_xxx". */
+    private static boolean isFlowableReturnDeleteReason(String deleteReasonLower) {
+        if (deleteReasonLower == null || deleteReasonLower.isBlank()) {
+            return false;
+        }
+        return deleteReasonLower.contains("change activity")
+                || deleteReasonLower.contains("changeactivity")
+                || deleteReasonLower.contains("rollback")
+                || deleteReasonLower.contains("returned to");
     }
 
     /**

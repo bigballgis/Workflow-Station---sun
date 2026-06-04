@@ -187,6 +187,7 @@ public class AdminAuditAspect {
         if (!meta.shouldRecord()) {
             return pjp.proceed();
         }
+        long startNanos = System.nanoTime();
         String oldValue = fetchOldValue(meta);
 
         boolean success = true;
@@ -200,6 +201,8 @@ public class AdminAuditAspect {
             failureReason = t.getMessage();
             throw t;
         } finally {
+            int durationMs = (int) Math.min(Integer.MAX_VALUE,
+                    Math.max(0L, (System.nanoTime() - startNanos) / 1_000_000L));
             try {
                 String newValue;
                 if (success && isUpdateAction(meta.action) && meta.resourceId != null) {
@@ -208,7 +211,7 @@ public class AdminAuditAspect {
                 } else {
                     newValue = resolveNewValue(meta, args, result, success);
                 }
-                persist(meta, oldValue, newValue, success, failureReason);
+                persist(meta, oldValue, newValue, success, failureReason, durationMs);
             } catch (Exception e) {
                 log.warn("Failed to persist audit log for {}.{}: {}", domain, methodName, e.getMessage());
             }
@@ -527,7 +530,7 @@ public class AdminAuditAspect {
     }
 
     private void persist(AuditMeta meta, String oldValue, String newValue,
-                         boolean success, String failureReason) {
+                         boolean success, String failureReason, int durationMs) {
         if (meta.action == AuditAction.QUERY && newValue == null) {
             return;
         }
@@ -555,6 +558,8 @@ public class AdminAuditAspect {
 
         String ip = ctx != null ? ctx.getIpAddress() : null;
         String ua = ctx != null ? ctx.getUserAgent() : null;
+        String requestMethod = ctx != null ? ctx.getRequestMethod() : null;
+        String requestPath = ctx != null ? ctx.getRequestPath() : null;
 
         SecurityAuditComponent.AuditLogRequest req = new SecurityAuditComponent.AuditLogRequest();
         req.setAction(meta.action);
@@ -568,6 +573,9 @@ public class AdminAuditAspect {
         req.setNewValue(newValue);
         req.setSuccess(success);
         req.setFailureReason(failureReason);
+        req.setDurationMs(durationMs);
+        req.setRequestMethod(requestMethod);
+        req.setRequestPath(requestPath);
 
         securityAuditComponent.recordAudit(req);
     }

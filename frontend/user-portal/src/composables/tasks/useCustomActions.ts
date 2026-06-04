@@ -1,6 +1,8 @@
 import { ref, type Ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
+import { completeTask, getReturnableActivities, type ReturnableActivity } from '@/api/task'
 import { processApi } from '@/api/process'
 import { applyAutoFill } from '@/utils/n8nAutoFillEngine'
 import type { TaskActionInfo } from '@/api/task'
@@ -50,6 +52,7 @@ export function useCustomActions(options: {
   preparePopupContext?: (formContent: any, formConfig: Record<string, unknown>) => PreparedFormPopupContext | null
 }) {
   const { t } = useI18n()
+  const router = useRouter()
 
   // N8N Action state
   const n8nActionDialogVisible = ref(false)
@@ -113,6 +116,12 @@ export function useCustomActions(options: {
           ElMessage.error(t('task.configParseFailed'))
         }
         break
+      case 'ROLLBACK':
+        handleRollbackAction(action)
+        break
+      case 'WITHDRAW':
+        handleWithdrawAction(action)
+        break
       case 'N8N_ACTION':
         try {
           const config = action.configJson ? JSON.parse(action.configJson) : {}
@@ -151,6 +160,171 @@ export function useCustomActions(options: {
         break
       default:
         ElMessage.warning(t('task.unknownActionType', { type: action.actionType }))
+    }
+  }
+
+  function resolveRollbackTargetActivityId(
+    targetStep: string,
+    config: Record<string, unknown>,
+    activities: ReturnableActivity[],
+  ): { activityId: string; taskName?: string } | null {
+    if (!activities.length) return null
+    const step = (targetStep || 'previous').trim().toLowerCase()
+    if (step === 'initiator') {
+      const last = activities[activities.length - 1]
+      return last?.taskId ? { activityId: last.taskId, taskName: last.taskName } : null
+    }
+    if (step === 'specific') {
+      const configured =
+        (typeof config.targetActivityId === 'string' && config.targetActivityId.trim())
+        || (typeof config.activityId === 'string' && config.activityId.trim())
+        || ''
+      if (configured) {
+        const hit = activities.find((a) => a.taskId === configured)
+        return { activityId: configured, taskName: hit?.taskName }
+      }
+    }
+    const first = activities[0]
+    return first?.taskId ? { activityId: first.taskId, taskName: first.taskName } : null
+  }
+
+  async function handleRollbackAction(action: TaskActionInfo) {
+    const taskId =
+      (options.taskInfo.value?.id ?? options.taskInfo.value?.taskId) as string | undefined
+    if (!taskId) {
+      ElMessage.error(t('task.rollbackNoTask'))
+      return
+    }
+    let config: Record<string, unknown> = {}
+    try {
+      config = action.configJson ? JSON.parse(action.configJson) : {}
+    } catch {
+      config = {}
+    }
+    const targetStep =
+      typeof config.targetStep === 'string' && config.targetStep.trim()
+        ? config.targetStep
+        : 'previous'
+
+    let comment = ''
+    if (config.requireComment === true) {
+      try {
+        const { value } = await ElMessageBox.prompt(
+          t('task.commentPlaceholder'),
+          t('task.return'),
+          {
+            confirmButtonText: t('common.confirm'),
+            cancelButtonText: t('common.cancel'),
+            inputValidator: (v) =>
+              v != null && String(v).trim() !== '' ? true : t('task.commentRequired'),
+          },
+        )
+        comment = String(value).trim()
+      } catch {
+        return
+      }
+    }
+
+    options.submitting.value = true
+    try {
+      const res = await getReturnableActivities(taskId)
+      const activities = (res as { data?: ReturnableActivity[] })?.data ?? (res as ReturnableActivity[])
+      const list = Array.isArray(activities) ? activities : []
+      const target = resolveRollbackTargetActivityId(targetStep, config, list)
+      if (!target) {
+        ElMessage.error(t('task.rollbackNoTarget'))
+        return
+      }
+      const nodeLabel = target.taskName || target.activityId
+      try {
+        await ElMessageBox.confirm(
+          t('task.rollbackConfirm', { node: nodeLabel }),
+          t('task.rollbackConfirmTitle'),
+          { type: 'warning' },
+        )
+      } catch {
+        return
+      }
+      await completeTask(taskId, {
+        taskId,
+        action: 'RETURN',
+        comment,
+        returnActivityId: target.activityId,
+      })
+      ElMessage.success(t('task.rollbackSuccess'))
+      await router.push('/tasks')
+    } catch (err: unknown) {
+      const msg =
+        err && typeof err === 'object' && 'message' in err
+        && typeof (err as { message: unknown }).message === 'string'
+          ? (err as { message: string }).message
+          : t('task.rollbackFailed')
+      ElMessage.error(msg)
+    } finally {
+      options.submitting.value = false
+    }
+  }
+
+  async function handleWithdrawAction(action: TaskActionInfo) {
+    const processId = options.taskInfo.value?.processInstanceId as string | undefined
+    if (!processId) {
+      ElMessage.error(t('task.withdrawNoProcess'))
+      return
+    }
+    let config: Record<string, unknown> = {}
+    try {
+      config = action.configJson ? JSON.parse(action.configJson) : {}
+    } catch {
+      config = {}
+    }
+    const confirmMsg =
+      (typeof config.confirmMessage === 'string' && config.confirmMessage.trim())
+        ? config.confirmMessage
+        : t('applicationDetail.withdrawConfirm')
+    try {
+      await ElMessageBox.confirm(confirmMsg, t('applicationDetail.withdrawConfirmTitle'), {
+        type: 'warning',
+      })
+    } catch {
+      return
+    }
+    let reason =
+      (typeof config.defaultReason === 'string' && config.defaultReason.trim())
+        ? config.defaultReason
+        : t('applicationDetail.userWithdraw')
+    if (config.requireComment === true || config.requireReason === true) {
+      try {
+        const { value } = await ElMessageBox.prompt(
+          t('task.commentPlaceholder'),
+          t('task.reason'),
+          {
+            confirmButtonText: t('common.confirm'),
+            cancelButtonText: t('common.cancel'),
+            inputValidator: (v) => (v != null && String(v).trim() !== '' ? true : t('task.commentRequired')),
+          },
+        )
+        reason = String(value).trim()
+      } catch {
+        return
+      }
+    }
+    options.submitting.value = true
+    try {
+      await processApi.withdrawProcess(processId, reason)
+      const successMsg =
+        (typeof config.successMessage === 'string' && config.successMessage.trim())
+          ? config.successMessage
+          : t('applicationDetail.withdrawSuccess')
+      ElMessage.success(successMsg)
+      await router.push('/tasks')
+    } catch (err: unknown) {
+      const msg =
+        err && typeof err === 'object' && 'message' in err && typeof (err as { message: unknown }).message === 'string'
+          ? (err as { message: string }).message
+          : t('applicationDetail.withdrawFailed')
+      ElMessage.error(msg)
+    } finally {
+      options.submitting.value = false
     }
   }
 

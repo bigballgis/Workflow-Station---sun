@@ -234,6 +234,13 @@ export default {
     urgeSuccess: 'Urge sent successfully',
     configParseFailed: 'Failed to parse config',
     unknownActionType: 'Unknown action type: {type}',
+    withdrawNoProcess: 'Cannot withdraw: process instance is missing',
+    rollbackNoTask: 'Cannot rollback: task is missing',
+    rollbackNoTarget: 'No previous node available to return to',
+    rollbackConfirm: 'Return the process to "{node}"? The previous assignee will handle it again.',
+    rollbackConfirmTitle: 'Confirm rollback',
+    rollbackSuccess: 'Returned to previous node successfully',
+    rollbackFailed: 'Rollback failed',
     formNotFound: 'Form not found: {name}',
     formMissingId: 'Form config missing formId',
     formOpenFailed: 'Failed to open form',
@@ -814,6 +821,7 @@ export default {
     delegated: 'Delegated',
     withdraw: 'Withdraw',
     submit: 'Submit',
+    return: 'Rollback',
     completed: 'Completed'
   },
   upload: {

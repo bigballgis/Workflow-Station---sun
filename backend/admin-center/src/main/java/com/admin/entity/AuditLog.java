@@ -58,6 +58,13 @@ public class AuditLog {
     
     private Boolean success;
     private String failureReason;
+
+    /** Operation duration in milliseconds (JSON: duration) */
+    @JsonProperty("duration")
+    private Integer durationMs;
+
+    private String requestMethod;
+    private String requestPath;
     
     @CreationTimestamp
     private Instant timestamp;
@@ -78,24 +85,6 @@ public class AuditLog {
     @JsonGetter("description")
     public String getDescription() {
         return changeDetails;
-    }
-
-    /** 前端兼容：duration (ms)，实体无此字段时返回 0 */
-    @JsonGetter("duration")
-    public int getDuration() {
-        return 0;
-    }
-
-    /** 前端兼容：requestMethod，实体无此字段 */
-    @JsonGetter("requestMethod")
-    public String getRequestMethod() {
-        return null;
-    }
-
-    /** 前端兼容：requestPath，实体无此字段 */
-    @JsonGetter("requestPath")
-    public String getRequestPath() {
-        return null;
     }
 
     /** 前端兼容：requestParams，实体无此字段 */

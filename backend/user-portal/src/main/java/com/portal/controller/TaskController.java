@@ -103,6 +103,25 @@ public class TaskController {
         return ApiResponse.success(i18nService.getMessage("portal.task_unclaimed"), task);
     }
 
+    @Operation(summary = "List historic activities available for rollback/return")
+    @GetMapping("/{taskId}/returnable-activities")
+    public ApiResponse<List<Map<String, Object>>> getReturnableActivities(
+            @PathVariable String taskId,
+            @CurrentUserId String userId) {
+        if (userId == null || userId.isBlank()) {
+            throw new PortalException("401", "Authentication required");
+        }
+        TaskInfo task = taskQueryComponent.getTaskById(taskId)
+                .orElseThrow(() -> new PortalException("404", "Task not found: " + taskId));
+        if (!taskProcessComponent.canViewTaskForm(task, userId,
+                SecurityContextUtils.getCurrentUsername().orElse(null))) {
+            throw new PortalException("403", "You do not have permission to access this task");
+        }
+        List<Map<String, Object>> activities = workflowEngineClient.getReturnableActivities(taskId)
+                .orElse(Collections.emptyList());
+        return ApiResponse.success(activities);
+    }
+
     @Operation(summary = "Complete task")
     @PostMapping("/{taskId}/complete")
     public ApiResponse<Void> completeTask(

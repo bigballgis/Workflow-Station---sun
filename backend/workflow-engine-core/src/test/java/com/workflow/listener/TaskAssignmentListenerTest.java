@@ -4,6 +4,7 @@ import com.workflow.component.BpmnActionParser;
 import com.workflow.repository.ExtendedTaskInfoRepository;
 import com.workflow.service.LastUserTaskAssigneeQuery;
 import com.workflow.service.TaskAssigneeResolver;
+import com.workflow.util.RollbackAssigneeFallbackSupport;
 import org.flowable.bpmn.model.BpmnModel;
 import org.flowable.bpmn.model.ExtensionAttribute;
 import org.flowable.bpmn.model.ExtensionElement;
@@ -98,6 +99,47 @@ class TaskAssignmentListenerTest {
         }
     }
     
+    @Nested
+    @DisplayName("Rollback assignee fallback")
+    class RollbackAssigneeFallbackTests {
+
+        private static final String PREVIOUS_HANDLER = "user-previous";
+
+        @Test
+        @DisplayName("Should assign previous activity handler when BPMN resolve fails after rollback")
+        void shouldFallbackToPreviousHandlerOnRollback() {
+            TaskEntity task = createMockTask();
+            when(task.getAssignee()).thenReturn(null);
+
+            BpmnModel bpmnModel = createBpmnModelWithExtensions("BU_ROLE", null, BU_ID);
+            when(repositoryService.getBpmnModel(PROCESS_DEFINITION_ID)).thenReturn(bpmnModel);
+
+            Map<String, Object> variables = new HashMap<>();
+            variables.put("initiator", INITIATOR_ID);
+            when(runtimeService.getVariables(PROCESS_INSTANCE_ID)).thenReturn(variables);
+
+            when(runtimeService.getVariable(PROCESS_INSTANCE_ID, RollbackAssigneeFallbackSupport.VAR_FALLBACK_ACTIVE))
+                    .thenReturn(Boolean.TRUE);
+            when(runtimeService.getVariable(PROCESS_INSTANCE_ID, RollbackAssigneeFallbackSupport.VAR_TARGET_ACTIVITY_ID))
+                    .thenReturn(TASK_DEFINITION_KEY);
+
+            TaskAssigneeResolver.ResolveResult failed = TaskAssigneeResolver.ResolveResult.builder()
+                    .errorMessage("Assignee type Specified BU Role requires a role ID")
+                    .build();
+            when(taskAssigneeResolver.resolve(eq("BU_ROLE"), isNull(), eq(BU_ID), eq(INITIATOR_ID), isNull(), isNull()))
+                    .thenReturn(failed);
+
+            when(lastUserTaskAssigneeQuery.findLastCompletedAssigneeForActivity(PROCESS_INSTANCE_ID, TASK_DEFINITION_KEY))
+                    .thenReturn(Optional.of(PREVIOUS_HANDLER));
+
+            listener.onEvent(createTaskCreatedEvent(task));
+
+            verify(taskService).setAssignee(TASK_ID, PREVIOUS_HANDLER);
+            verify(runtimeService).removeVariable(PROCESS_INSTANCE_ID, RollbackAssigneeFallbackSupport.VAR_FALLBACK_ACTIVE);
+            verify(runtimeService).removeVariable(PROCESS_INSTANCE_ID, RollbackAssigneeFallbackSupport.VAR_TARGET_ACTIVITY_ID);
+        }
+    }
+
     @Nested
     @DisplayName("BPMN Extension Property Parsing Tests")
     class BpmnExtensionParsingTests {

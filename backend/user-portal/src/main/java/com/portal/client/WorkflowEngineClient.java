@@ -729,6 +729,9 @@ public class WorkflowEngineClient {
             String url = workflowEngineUrl + "/api/v1/tasks/" + taskId + "/return";
             
             Map<String, Object> request = new HashMap<>();
+            // Engine validates @NotBlank taskId on the request body before binding @PathVariable,
+            // so taskId must be present in the payload too (path value alone is not enough).
+            request.put("taskId", taskId);
             request.put("targetActivityId", targetActivityId);
             request.put("userId", userId);
             request.put("reason", reason);

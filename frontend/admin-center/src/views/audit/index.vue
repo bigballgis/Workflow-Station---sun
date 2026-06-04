@@ -266,7 +266,7 @@
         show-overflow-tooltip
       >
         <template #default="{ row }">
-          <span style="white-space: nowrap">{{ row.duration }}ms</span>
+          <span style="white-space: nowrap">{{ row.duration != null ? row.duration + 'ms' : '-' }}</span>
         </template>
       </el-table-column>
       <el-table-column

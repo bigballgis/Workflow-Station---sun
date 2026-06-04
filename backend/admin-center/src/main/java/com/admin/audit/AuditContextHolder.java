@@ -28,5 +28,7 @@ public class AuditContextHolder {
         private String userName;
         private String ipAddress;
         private String userAgent;
+        private String requestMethod;
+        private String requestPath;
     }
 }

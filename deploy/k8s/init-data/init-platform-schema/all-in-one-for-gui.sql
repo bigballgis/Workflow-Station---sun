@@ -1830,6 +1830,9 @@ CREATE TABLE IF NOT EXISTS admin_audit_logs (
     change_details TEXT,
     success BOOLEAN,
     failure_reason VARCHAR(500),
+    duration_ms INTEGER,
+    request_method VARCHAR(10),
+    request_path VARCHAR(500),
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

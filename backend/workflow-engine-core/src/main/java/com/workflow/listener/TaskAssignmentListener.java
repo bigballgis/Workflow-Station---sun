@@ -13,6 +13,7 @@ import com.platform.messaging.support.NotificationDispatchHelper;
 import com.workflow.repository.ExtendedTaskInfoRepository;
 import com.workflow.service.LastUserTaskAssigneeQuery;
 import com.workflow.service.TaskAssigneeResolver;
+import com.workflow.util.RollbackAssigneeFallbackSupport;
 import lombok.extern.slf4j.Slf4j;
 import org.flowable.bpmn.model.BpmnModel;
 import org.flowable.bpmn.model.ExtensionElement;
@@ -343,6 +344,10 @@ public class TaskAssignmentListener implements FlowableEventListener {
         }
         if (result.getErrorMessage() != null) {
             log.error("Failed to resolve assignee for task {}: {}", taskId, result.getErrorMessage());
+            if (tryRollbackPreviousHandlerFallback(taskId, task, processInstanceId, processDefinitionId,
+                    taskDefinitionKey)) {
+                return;
+            }
             return;
         }
         if (result.getAssignee() != null && !result.getAssignee().isBlank()) {
@@ -377,7 +382,100 @@ public class TaskAssignmentListener implements FlowableEventListener {
             }
         } else {
             log.error("Task {}: no assignee and no candidates (assigneeType={})", taskId, assigneeTypeRaw);
+            tryRollbackPreviousHandlerFallback(taskId, task, processInstanceId, processDefinitionId, taskDefinitionKey);
         }
+    }
+
+    /**
+     * After rollback, BPMN assignee rules may fail (e.g. empty BU role). Assign the task to whoever
+     * last completed this activity in the same process instance; if none, use process initiator.
+     */
+    private boolean tryRollbackPreviousHandlerFallback(String taskId, TaskEntity task,
+                                                       String processInstanceId,
+                                                       String processDefinitionId,
+                                                       String taskDefinitionKey) {
+        if (!isRollbackAssigneeFallbackActive(processInstanceId, taskDefinitionKey)) {
+            return false;
+        }
+        clearRollbackAssigneeFallbackFlags(processInstanceId);
+
+        Optional<String> prior = lastUserTaskAssigneeQuery.findLastCompletedAssigneeForActivity(
+                processInstanceId, taskDefinitionKey);
+        if (prior.isEmpty()) {
+            prior = resolveInitiatorUserIdOptional(processInstanceId);
+            if (prior.isPresent()) {
+                log.info("Rollback assignee fallback for task {}: no prior assignee on activity {}; using initiator {}",
+                        taskId, taskDefinitionKey, prior.get());
+            }
+        } else {
+            log.info("Rollback assignee fallback for task {}: assigning previous handler {} on activity {}",
+                    taskId, prior.get(), taskDefinitionKey);
+        }
+        if (prior.isEmpty()) {
+            log.warn("Rollback assignee fallback for task {}: no previous handler or initiator found", taskId);
+            return false;
+        }
+
+        String assignee = prior.get();
+        taskService.setAssignee(taskId, assignee);
+        notifyNewTask(assignee, taskId, task.getName(), processInstanceId);
+        try {
+            ensureMultiInstanceExtendedTaskForPreassignedTask(task, taskId, processInstanceId,
+                    processDefinitionId, taskDefinitionKey, assignee);
+        } catch (Exception e) {
+            log.warn("ensureMultiInstanceExtendedTaskForPreassignedTask after rollback fallback failed for {}: {}",
+                    taskId, e.getMessage());
+        }
+        return true;
+    }
+
+    private boolean isRollbackAssigneeFallbackActive(String processInstanceId, String taskDefinitionKey) {
+        if (processInstanceId == null || taskDefinitionKey == null) {
+            return false;
+        }
+        Object active = runtimeService.getVariable(processInstanceId, RollbackAssigneeFallbackSupport.VAR_FALLBACK_ACTIVE);
+        if (!Boolean.TRUE.equals(active)) {
+            return false;
+        }
+        Object target = runtimeService.getVariable(processInstanceId,
+                RollbackAssigneeFallbackSupport.VAR_TARGET_ACTIVITY_ID);
+        return target != null && taskDefinitionKey.equals(String.valueOf(target).trim());
+    }
+
+    private void clearRollbackAssigneeFallbackFlags(String processInstanceId) {
+        if (processInstanceId == null) {
+            return;
+        }
+        runtimeService.removeVariable(processInstanceId, RollbackAssigneeFallbackSupport.VAR_FALLBACK_ACTIVE);
+        runtimeService.removeVariable(processInstanceId, RollbackAssigneeFallbackSupport.VAR_TARGET_ACTIVITY_ID);
+    }
+
+    private Optional<String> resolveInitiatorUserIdOptional(String processInstanceId) {
+        if (processInstanceId == null || processInstanceId.isBlank()) {
+            return Optional.empty();
+        }
+        try {
+            Map<String, Object> vars = runtimeService.getVariables(processInstanceId);
+            String fromVar = getStringVariable(vars, "initiator");
+            if (fromVar != null && !fromVar.isBlank()) {
+                return Optional.of(fromVar.trim());
+            }
+            ProcessInstance pi = runtimeService.createProcessInstanceQuery()
+                    .processInstanceId(processInstanceId)
+                    .singleResult();
+            if (pi != null && pi.getStartUserId() != null && !pi.getStartUserId().isBlank()) {
+                return Optional.of(pi.getStartUserId().trim());
+            }
+            HistoricProcessInstance hpi = historyService.createHistoricProcessInstanceQuery()
+                    .processInstanceId(processInstanceId)
+                    .singleResult();
+            if (hpi != null && hpi.getStartUserId() != null && !hpi.getStartUserId().isBlank()) {
+                return Optional.of(hpi.getStartUserId().trim());
+            }
+        } catch (Exception e) {
+            log.debug("Could not resolve initiator for rollback fallback on {}: {}", processInstanceId, e.getMessage());
+        }
+        return Optional.empty();
     }
 
     private TaskAssigneeResolver.ResolveResult resolveManualAssign(String taskDefKey,
