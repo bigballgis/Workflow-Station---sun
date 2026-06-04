@@ -85,7 +85,7 @@ public class UserController {
         UserQueryRequest request = UserQueryRequest.builder()
                 .keyword(keyword)
                 .businessUnitId(businessUnitId)
-                .status(status != null ? com.platform.security.model.UserStatus.valueOf(status) : null)
+                .status(status != null ? com.platform.security.model.UserStatus.fromString(status) : null)
                 .page(page)
                 .size(size)
                 .build();

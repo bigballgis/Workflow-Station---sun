@@ -1,6 +1,7 @@
 package com.platform.security.entity;
 
 import com.platform.security.model.UserStatus;
+import com.platform.security.model.UserStatusConverter;
 
 import jakarta.persistence.*;
 import lombok.*;
@@ -51,7 +52,7 @@ public class User {
     @Column(name = "employee_id", length = 50)
     private String employeeId;
 
-    @Enumerated(EnumType.STRING)
+    @Convert(converter = UserStatusConverter.class)
     @Column(nullable = false, length = 20)
     @Builder.Default
     private UserStatus status = UserStatus.ACTIVE;
