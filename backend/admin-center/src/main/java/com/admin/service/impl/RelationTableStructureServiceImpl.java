@@ -43,10 +43,7 @@ public class RelationTableStructureServiceImpl implements RelationTableStructure
     public RelationTableResponse createTable(CreateRelationTableRequest request) {
         log.info("Creating relation table: {}", request.getTableName());
 
-        // 验证表名唯一性
-        if (tableDefinitionRepository.existsByTableName(request.getTableName())) {
-            throw new RelationTableNameDuplicateException(request.getTableName());
-        }
+        assertTableNameAvailable(request.getTableName(), null);
 
         // 创建表定义
         RelationTableDefinition tableDefinition = RelationTableDefinition.builder()
@@ -74,7 +71,8 @@ public class RelationTableStructureServiceImpl implements RelationTableStructure
                         .nullable(fieldReq.getNullable() != null ? fieldReq.getNullable() : true)
                         .isPrimaryKey(fieldReq.getIsPrimaryKey() != null ? fieldReq.getIsPrimaryKey() : false)
                         .defaultValue(fieldReq.getDefaultValue())
-                        .comment(fieldReq.getComment())
+                        .displayName(fieldReq.getDisplayName())
+                        .pkGenerationJson(fieldReq.getPkGeneration())
                         .sortOrder(fieldReq.getSortOrder() != null ? fieldReq.getSortOrder() : i)
                         .build();
                 fieldDefinitions.add(field);
@@ -92,7 +90,7 @@ public class RelationTableStructureServiceImpl implements RelationTableStructure
                     .tableDefinition(tableDefinition)
                     .fieldName("created_at").dataType(RelationDataType.TIMESTAMP)
                     .nullable(true).isPrimaryKey(false)
-                    .comment("Created At").sortOrder(nextSortOrder++)
+                    .displayName("Created At").sortOrder(nextSortOrder++)
                     .build());
         }
         if (!existingFieldNames.contains("created_by")) {
@@ -100,7 +98,7 @@ public class RelationTableStructureServiceImpl implements RelationTableStructure
                     .tableDefinition(tableDefinition)
                     .fieldName("created_by").dataType(RelationDataType.VARCHAR).length(64)
                     .nullable(true).isPrimaryKey(false)
-                    .comment("Created By").sortOrder(nextSortOrder++)
+                    .displayName("Created By").sortOrder(nextSortOrder++)
                     .build());
         }
         if (!existingFieldNames.contains("updated_at")) {
@@ -108,7 +106,7 @@ public class RelationTableStructureServiceImpl implements RelationTableStructure
                     .tableDefinition(tableDefinition)
                     .fieldName("updated_at").dataType(RelationDataType.TIMESTAMP)
                     .nullable(true).isPrimaryKey(false)
-                    .comment("Updated At").sortOrder(nextSortOrder++)
+                    .displayName("Updated At").sortOrder(nextSortOrder++)
                     .build());
         }
         if (!existingFieldNames.contains("updated_by")) {
@@ -116,7 +114,7 @@ public class RelationTableStructureServiceImpl implements RelationTableStructure
                     .tableDefinition(tableDefinition)
                     .fieldName("updated_by").dataType(RelationDataType.VARCHAR).length(64)
                     .nullable(true).isPrimaryKey(false)
-                    .comment("Updated By").sortOrder(nextSortOrder++)
+                    .displayName("Updated By").sortOrder(nextSortOrder++)
                     .build());
         }
 
@@ -138,9 +136,7 @@ public class RelationTableStructureServiceImpl implements RelationTableStructure
 
         // 如果更新了表名，验证唯一性
         if (request.getTableName() != null && !request.getTableName().equals(tableDefinition.getTableName())) {
-            if (tableDefinitionRepository.existsByTableName(request.getTableName())) {
-                throw new RelationTableNameDuplicateException(request.getTableName());
-            }
+            assertTableNameAvailable(request.getTableName(), id);
             tableDefinition.setTableName(request.getTableName());
         }
 
@@ -274,8 +270,13 @@ public class RelationTableStructureServiceImpl implements RelationTableStructure
                 if (fieldReq.getDefaultValue() != null) {
                     existing.setDefaultValue(fieldReq.getDefaultValue());
                 }
-                if (fieldReq.getComment() != null) {
-                    existing.setComment(fieldReq.getComment());
+                if (fieldReq.getDisplayName() != null) {
+                    existing.setDisplayName(fieldReq.getDisplayName());
+                }
+                if (fieldReq.getIsPrimaryKey() != null && !Boolean.TRUE.equals(fieldReq.getIsPrimaryKey())) {
+                    existing.setPkGenerationJson(null);
+                } else if (fieldReq.getPkGeneration() != null) {
+                    existing.setPkGenerationJson(fieldReq.getPkGeneration());
                 }
                 existing.setSortOrder(fieldReq.getSortOrder() != null ? fieldReq.getSortOrder() : i);
                 updatedFields.add(existing);
@@ -291,7 +292,8 @@ public class RelationTableStructureServiceImpl implements RelationTableStructure
                         .nullable(fieldReq.getNullable() != null ? fieldReq.getNullable() : true)
                         .isPrimaryKey(fieldReq.getIsPrimaryKey() != null ? fieldReq.getIsPrimaryKey() : false)
                         .defaultValue(fieldReq.getDefaultValue())
-                        .comment(fieldReq.getComment())
+                        .displayName(fieldReq.getDisplayName())
+                        .pkGenerationJson(fieldReq.getPkGeneration())
                         .sortOrder(fieldReq.getSortOrder() != null ? fieldReq.getSortOrder() : i)
                         .build();
                 updatedFields.add(newField);
@@ -320,5 +322,38 @@ public class RelationTableStructureServiceImpl implements RelationTableStructure
             // If the table doesn't exist yet or query fails, assume no bindings
             return false;
         }
+    }
+
+    @Override
+    public boolean isTableNameAvailable(String tableName, Long excludeTableId) {
+        if (tableName == null || tableName.isBlank()) {
+            return false;
+        }
+        return !isTableNameTaken(tableName, excludeTableId);
+    }
+
+    private void assertTableNameAvailable(String tableName, Long excludeTableId) {
+        if (isTableNameTaken(tableName, excludeTableId)) {
+            throw new RelationTableNameDuplicateException(tableName);
+        }
+    }
+
+    private boolean isTableNameTaken(String tableName, Long excludeTableId) {
+        if (excludeTableId != null) {
+            if (tableDefinitionRepository.existsByTableNameAndIdNot(tableName, excludeTableId)) {
+                return true;
+            }
+        } else if (tableDefinitionRepository.existsByTableName(tableName)) {
+            return true;
+        }
+        return existsInDwTables(tableName);
+    }
+
+    private boolean existsInDwTables(String tableName) {
+        Integer count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM dw_table_definitions WHERE table_name = ?",
+                Integer.class,
+                tableName);
+        return count != null && count > 0;
     }
 }

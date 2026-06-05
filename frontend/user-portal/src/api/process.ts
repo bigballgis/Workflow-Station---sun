@@ -178,5 +178,16 @@ export const processApi = {
   // 根据ID列表获取动作定义
   getActionsByIds(ids: string[]) {
     return request.get('/processes/actions', { params: { ids: ids.join(',') } })
-  }
+  },
+
+  /** Allocate PK for sub-table add-row (PRD S5) */
+  allocatePrimaryKeys(
+    functionUnitId: string,
+    payload: { tableId: number; fieldName: string; count?: number; scopeKey?: string },
+  ) {
+    return request.post<{ values: string[] }>(
+      `/processes/function-units/${functionUnitId}/tables/primary-keys/allocate`,
+      payload,
+    )
+  },
 }

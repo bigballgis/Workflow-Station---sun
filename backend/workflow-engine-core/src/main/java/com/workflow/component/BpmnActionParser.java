@@ -21,6 +21,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -53,6 +54,16 @@ public class BpmnActionParser {
     );
 
     /**
+     * Deployed BPMN is immutable per {@code processDefinitionId} (id carries version + uuid, so a redeploy
+     * yields a new id and naturally invalidates these caches). The To Do list + BU filter + orphan repair
+     * read the same XML / userTask properties dozens of times per request, so cache them. Empty string is a
+     * tombstone for "resolved to null" to allow caching negative lookups.
+     */
+    private static final String NULL_SENTINEL = "";
+    private final Map<String, String> bpmnXmlByProcessDef = new ConcurrentHashMap<>();
+    private final Map<String, String> userTaskPropertyValueCache = new ConcurrentHashMap<>();
+
+    /**
      * Read the value of a custom:property (name/value) on the specified UserTask
      * from the deployed BPMN XML.
      * <p>Consistent with {@link #extractActionIds}: the Flowable in-memory model
@@ -70,6 +81,19 @@ public class BpmnActionParser {
                 || propertyName == null || propertyName.isBlank()) {
             return null;
         }
+        String trimmedProp = propertyName.trim();
+        String cacheKey = processDefinitionId + '|' + userTaskElementId + '|' + trimmedProp;
+        String cached = userTaskPropertyValueCache.get(cacheKey);
+        if (cached != null) {
+            return NULL_SENTINEL.equals(cached) ? null : cached;
+        }
+        String resolved = computeUserTaskExtensionPropertyValue(processDefinitionId, userTaskElementId, trimmedProp);
+        userTaskPropertyValueCache.put(cacheKey, resolved != null ? resolved : NULL_SENTINEL);
+        return resolved;
+    }
+
+    private String computeUserTaskExtensionPropertyValue(String processDefinitionId, String userTaskElementId,
+                                                         String propertyName) {
         try {
             ProcessDefinition pd = repositoryService.createProcessDefinitionQuery()
                     .processDefinitionId(processDefinitionId)
@@ -81,11 +105,11 @@ public class BpmnActionParser {
             if (xml == null || xml.isBlank()) {
                 return null;
             }
-            String v = findUserTaskPropertyValueDom(xml, userTaskElementId, propertyName.trim());
+            String v = findUserTaskPropertyValueDom(xml, userTaskElementId, propertyName);
             if (v != null && !v.isBlank()) {
                 return v.trim();
             }
-            v = findUserTaskPropertyValueRegex(xml, userTaskElementId, propertyName.trim());
+            v = findUserTaskPropertyValueRegex(xml, userTaskElementId, propertyName);
             return v != null && !v.isBlank() ? v.trim() : null;
         } catch (Exception e) {
             log.debug("getUserTaskExtensionPropertyValue {} / {} failed: {}", userTaskElementId, propertyName,
@@ -178,6 +202,16 @@ public class BpmnActionParser {
     }
 
     private String readDeploymentBpmnXml(ProcessDefinition pd) throws IOException {
+        String cached = bpmnXmlByProcessDef.get(pd.getId());
+        if (cached != null) {
+            return NULL_SENTINEL.equals(cached) ? null : cached;
+        }
+        String xml = readDeploymentBpmnXmlUncached(pd);
+        bpmnXmlByProcessDef.put(pd.getId(), xml != null ? xml : NULL_SENTINEL);
+        return xml;
+    }
+
+    private String readDeploymentBpmnXmlUncached(ProcessDefinition pd) throws IOException {
         String resourceName = pd.getResourceName();
         String rn = resourceName != null ? resourceName.toLowerCase() : "";
         if (resourceName == null || (!rn.endsWith(".bpmn20.xml") && !rn.endsWith(".bpmn"))) {

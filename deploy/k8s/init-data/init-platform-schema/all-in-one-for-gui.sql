@@ -82,7 +82,7 @@ CREATE TABLE IF NOT EXISTS sys_roles (
     code VARCHAR(50) NOT NULL UNIQUE,
     name VARCHAR(100) NOT NULL,
     type VARCHAR(20) NOT NULL DEFAULT 'BU_UNBOUNDED',
-    description TEXT,
+    display_name TEXT,
     status VARCHAR(20) DEFAULT 'ACTIVE',
     is_system BOOLEAN DEFAULT false,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -110,7 +110,7 @@ CREATE TABLE IF NOT EXISTS sys_business_units (
     path VARCHAR(500),
     sort_order INTEGER,
     status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
-    description TEXT,
+    display_name TEXT,
     cost_center VARCHAR(50),
     location VARCHAR(200),
     phone VARCHAR(50),
@@ -177,7 +177,7 @@ CREATE TABLE IF NOT EXISTS sys_permissions (
     type VARCHAR(50),
     resource VARCHAR(100),
     action VARCHAR(50),
-    description TEXT,
+    display_name TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     parent_id VARCHAR(64),
     sort_order INTEGER
@@ -229,7 +229,7 @@ CREATE TABLE IF NOT EXISTS sys_virtual_groups (
     id VARCHAR(64) PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     code VARCHAR(50) NOT NULL UNIQUE,
-    description TEXT,
+    display_name TEXT,
     type VARCHAR(50) DEFAULT 'CUSTOM',
     rule_expression TEXT,
     ad_group VARCHAR(100),
@@ -440,7 +440,7 @@ CREATE TABLE IF NOT EXISTS sys_dictionaries (
     code VARCHAR(50) NOT NULL UNIQUE,
     name VARCHAR(100) NOT NULL,
     type VARCHAR(50),
-    description TEXT,
+    display_name TEXT,
     status VARCHAR(20) DEFAULT 'ACTIVE',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -534,7 +534,7 @@ CREATE TABLE IF NOT EXISTS sys_function_units (
     code VARCHAR(50) NOT NULL,
     created_at TIMESTAMP(6) WITH TIME ZONE,
     created_by VARCHAR(64),
-    description TEXT,
+    display_name TEXT,
     digital_signature TEXT,
     enabled BOOLEAN NOT NULL,
     imported_at TIMESTAMP(6) WITH TIME ZONE,
@@ -1240,7 +1240,7 @@ CREATE TABLE IF NOT EXISTS dw_function_units (
     id BIGSERIAL PRIMARY KEY,
     code VARCHAR(50) NOT NULL UNIQUE,
     name VARCHAR(100) NOT NULL UNIQUE,
-    description TEXT,
+    display_name TEXT,
     icon_id BIGINT,
     status VARCHAR(20) NOT NULL DEFAULT 'DRAFT',
     current_version VARCHAR(20),
@@ -1289,7 +1289,7 @@ CREATE TABLE IF NOT EXISTS dw_table_definitions (
     table_name VARCHAR(100) NOT NULL,
     table_display_name VARCHAR(200),
     table_type VARCHAR(20) NOT NULL,
-    description TEXT,
+    display_name TEXT,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_table_function_unit FOREIGN KEY (function_unit_id) REFERENCES dw_function_units(id) ON DELETE CASCADE,
@@ -1314,7 +1314,7 @@ CREATE TABLE IF NOT EXISTS dw_field_definitions (
     default_value VARCHAR(500),
     is_primary_key BOOLEAN DEFAULT FALSE,
     is_unique BOOLEAN DEFAULT FALSE,
-    description TEXT,
+    display_name TEXT,
     sort_order INTEGER NOT NULL DEFAULT 0,
     CONSTRAINT fk_field_table FOREIGN KEY (table_id) REFERENCES dw_table_definitions(id) ON DELETE CASCADE,
     CONSTRAINT uk_field_name_table UNIQUE (table_id, field_name)
@@ -1350,7 +1350,7 @@ CREATE TABLE IF NOT EXISTS dw_form_definitions (
     form_name VARCHAR(100) NOT NULL,
     form_type VARCHAR(20) NOT NULL,
     config_json JSONB NOT NULL DEFAULT '{}',
-    description TEXT,
+    display_name TEXT,
     bound_table_id BIGINT,
     lock_version BIGINT NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -1397,7 +1397,7 @@ CREATE TABLE IF NOT EXISTS dw_action_definitions (
     config_json JSONB NOT NULL DEFAULT '{}',
     icon VARCHAR(50),
     button_color VARCHAR(20),
-    description TEXT,
+    display_name TEXT,
     is_default BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -1942,7 +1942,7 @@ CREATE TABLE IF NOT EXISTS sys_action_definitions (
     function_unit_id VARCHAR(64) NOT NULL,
     action_name VARCHAR(100) NOT NULL,
     action_type VARCHAR(50) NOT NULL,
-    description TEXT,
+    display_name TEXT,
     config_json JSONB DEFAULT '{}'::jsonb,
     icon VARCHAR(50),
     button_color VARCHAR(20),
@@ -2580,6 +2580,7 @@ CREATE TABLE IF NOT EXISTS rt_table_definitions (
     id                  BIGSERIAL       PRIMARY KEY,
     table_name          VARCHAR(100)    NOT NULL UNIQUE,
     display_name        VARCHAR(200),
+    deployed_display_name VARCHAR(200),
     description         TEXT,
     status              VARCHAR(20)     NOT NULL DEFAULT 'DRAFT',
     enabled             BOOLEAN         NOT NULL DEFAULT TRUE,
@@ -2595,6 +2596,7 @@ COMMENT ON TABLE rt_table_definitions IS 'Relation Table definitions with metada
 COMMENT ON COLUMN rt_table_definitions.status IS 'DRAFT / DEPLOYED / ROLLBACK';
 COMMENT ON COLUMN rt_table_definitions.portal_visible IS 'Controls visibility in User Portal';
 COMMENT ON COLUMN rt_table_definitions.current_version IS 'Current deployed version number';
+COMMENT ON COLUMN rt_table_definitions.deployed_display_name IS 'Display name captured on last deploy; Table Data uses this while status is UPDATED/ROLLBACK';
 
 -- 2. Field Definitions (rt_field_definitions)
 CREATE TABLE IF NOT EXISTS rt_field_definitions (
@@ -2608,7 +2610,7 @@ CREATE TABLE IF NOT EXISTS rt_field_definitions (
     nullable            BOOLEAN         DEFAULT TRUE,
     is_primary_key      BOOLEAN         DEFAULT FALSE,
     default_value       VARCHAR(500),
-    comment             TEXT,
+    display_name        TEXT,
     sort_order          INTEGER         NOT NULL
 );
 

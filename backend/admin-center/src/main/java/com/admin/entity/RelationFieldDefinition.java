@@ -4,6 +4,11 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.platform.common.enums.RelationDataType;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
+import java.util.List;
+import java.util.Map;
 
 /**
  * Relation Table 字段定义实体
@@ -55,8 +60,27 @@ public class RelationFieldDefinition {
     @Column(name = "default_value", length = 500)
     private String defaultValue;
 
-    @Column(name = "comment", columnDefinition = "TEXT")
-    private String comment;
+    @Column(name = "display_name", columnDefinition = "TEXT")
+    private String displayName;
+
+    @Column(name = "is_foreign_key")
+    @Builder.Default
+    private Boolean isForeignKey = false;
+
+    @Column(name = "ref_table_id")
+    private Long refTableId;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "ref_primary_key_fields", columnDefinition = "jsonb")
+    private List<String> refPrimaryKeyFields;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "pk_generation_json", columnDefinition = "jsonb")
+    private Map<String, Object> pkGenerationJson;
+
+    @Column(name = "fk_display_mode", length = 20)
+    @Builder.Default
+    private String fkDisplayMode = "readonly";
 
     @Column(name = "sort_order", nullable = false)
     private Integer sortOrder;

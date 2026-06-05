@@ -55,13 +55,14 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
     }
 
     /**
-     * Maps table definition entity to response DTO.
-     * For UPDATED / ROLLBACK tables, field list comes from the latest deployed version snapshot,
-     * not rt_field_definitions (which may contain undeployed draft fields).
+     * Maps table definition entity to response DTO for Table Data.
+     * Field list and table display name come from the latest deployed version snapshot / deployed_display_name,
+     * not draft rt_field_definitions or display_name while status is UPDATED/ROLLBACK.
      */
     private RelationTableResponse toDeployedTableResponse(RelationTableDefinition entity) {
-        if (entity.getStatus() == RelationTableStatus.UPDATED
-                || entity.getStatus() == RelationTableStatus.ROLLBACK) {
+        String deployedDisplayName = resolveDeployedDisplayName(entity);
+
+        if (entity.getCurrentVersion() != null && entity.getCurrentVersion() > 0) {
             Optional<RelationTableVersion> latestVersion =
                     versionRepository.findLatestVersion(entity.getId());
             if (latestVersion.isPresent()) {
@@ -69,7 +70,7 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
                     List<RelationFieldDTO> snapshotFields =
                             parseSnapshotData(latestVersion.get().getSnapshotData());
                     if (!snapshotFields.isEmpty()) {
-                        return buildResponseWithSnapshotFields(entity, snapshotFields);
+                        return buildResponseWithSnapshotFields(entity, snapshotFields, deployedDisplayName);
                     }
                 } catch (Exception e) {
                     log.warn("Cannot parse snapshot for table {}, falling back to JPA fields",
@@ -77,11 +78,27 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
                 }
             }
         }
-        return RelationTableResponse.fromEntity(entity);
+
+        RelationTableResponse response = RelationTableResponse.fromEntity(entity);
+        response.setDisplayName(deployedDisplayName);
+        return response;
+    }
+
+    private String resolveDeployedDisplayName(RelationTableDefinition entity) {
+        if (entity.getStatus() == RelationTableStatus.UPDATED
+                || entity.getStatus() == RelationTableStatus.ROLLBACK) {
+            if (entity.getDeployedDisplayName() != null
+                    && !entity.getDeployedDisplayName().isBlank()) {
+                return entity.getDeployedDisplayName();
+            }
+            // Legacy rows: avoid exposing draft display_name before next deploy
+            return entity.getTableName();
+        }
+        return entity.getDisplayName();
     }
 
     private RelationTableResponse buildResponseWithSnapshotFields(
-            RelationTableDefinition entity, List<RelationFieldDTO> snapshotFields) {
+            RelationTableDefinition entity, List<RelationFieldDTO> snapshotFields, String displayName) {
         List<RelationTableResponse.FieldDefinitionResponse> fields = snapshotFields.stream()
                 .map(f -> RelationTableResponse.FieldDefinitionResponse.builder()
                         .id(f.getId())
@@ -93,14 +110,14 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
                         .nullable(f.getNullable())
                         .isPrimaryKey(f.getIsPrimaryKey())
                         .defaultValue(f.getDefaultValue())
-                        .comment(f.getComment())
+                        .displayName(f.getDisplayName())
                         .sortOrder(f.getSortOrder())
                         .build())
                 .collect(Collectors.toList());
         return RelationTableResponse.builder()
                 .id(entity.getId())
                 .tableName(entity.getTableName())
-                .displayName(entity.getDisplayName())
+                .displayName(displayName)
                 .description(entity.getDescription())
                 .status(entity.getStatus())
                 .enabled(entity.getEnabled())
@@ -351,8 +368,7 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
      * Field list for Data Management queries, aligned with deployed version snapshot when applicable.
      */
     private List<RelationFieldDTO> getDeployedFields(RelationTableDefinition tableDef) {
-        if (tableDef.getStatus() == RelationTableStatus.UPDATED
-                || tableDef.getStatus() == RelationTableStatus.ROLLBACK) {
+        if (tableDef.getCurrentVersion() != null && tableDef.getCurrentVersion() > 0) {
             Optional<RelationTableVersion> latestVersion =
                     versionRepository.findLatestVersion(tableDef.getId());
             if (latestVersion.isPresent()) {
@@ -360,8 +376,8 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
                     List<RelationFieldDTO> snapshotFields =
                             parseSnapshotData(latestVersion.get().getSnapshotData());
                     if (!snapshotFields.isEmpty()) {
-                        log.debug("Using snapshot fields for {}-status table '{}' to match deployed schema",
-                                tableDef.getStatus(), tableDef.getTableName());
+                        log.debug("Using snapshot fields for table '{}' (version {}) to match deployed schema",
+                                tableDef.getTableName(), tableDef.getCurrentVersion());
                         return snapshotFields;
                     }
                 } catch (Exception e) {
@@ -371,7 +387,7 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
             }
         }
         List<RelationFieldDTO> fields = jdbcTemplate.query(
-                "SELECT id, field_name, data_type, length, precision_value, scale, nullable, is_primary_key, default_value, comment, sort_order "
+                "SELECT id, field_name, data_type, length, precision_value, scale, nullable, is_primary_key, default_value, display_name, sort_order "
                 + "FROM rt_field_definitions WHERE table_id = ? ORDER BY sort_order ASC",
                 (rs, rowNum) -> RelationFieldDTO.builder()
                         .id(rs.getLong("id"))
@@ -383,7 +399,7 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
                         .nullable(rs.getBoolean("nullable"))
                         .isPrimaryKey(rs.getBoolean("is_primary_key"))
                         .defaultValue(rs.getString("default_value"))
-                        .comment(rs.getString("comment"))
+                        .displayName(rs.getString("display_name"))
                         .sortOrder(rs.getInt("sort_order"))
                         .build(),
                 tableDef.getId());

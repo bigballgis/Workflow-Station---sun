@@ -304,7 +304,7 @@ class AiTransactionAtomicityProperties {
                 .id(functionUnitId)
                 .code("fu-test-" + functionUnitId)
                 .name("Original Name")
-                .description("Original Description")
+                .displayName("Original Description")
                 .tableDefinitions(new ArrayList<>())
                 .formDefinitions(new ArrayList<>())
                 .actionDefinitions(new ArrayList<>())
@@ -342,7 +342,7 @@ class AiTransactionAtomicityProperties {
             assertThat(fu.getName()).isEqualTo(name);
         }
         if (description != null && !description.isBlank()) {
-            assertThat(fu.getDescription()).isEqualTo(description);
+            assertThat(fu.getDisplayName()).isEqualTo(description);
         }
     }
 

@@ -256,7 +256,7 @@ public class VersionComponentImpl implements VersionComponent {
         Map<String, Object> snapshot = new HashMap<>();
         snapshot.put("name", functionUnit.getName());
         snapshot.put("code", functionUnit.getCode());
-        snapshot.put("description", functionUnit.getDescription());
+        snapshot.put("description", functionUnit.getDisplayName());
         snapshot.put("status", functionUnit.getStatus() != null ? functionUnit.getStatus().name() : null);
         
         if (functionUnit.getProcessDefinition() != null) {
@@ -270,7 +270,7 @@ public class VersionComponentImpl implements VersionComponent {
             tableSnap.put("tableName", table.getTableName());
             tableSnap.put("tableType", table.getTableType() != null ? table.getTableType().name() : null);
             tableSnap.put("tableDisplayName", table.getTableDisplayName());
-            tableSnap.put("description", table.getDescription());
+            tableSnap.put("description", table.getDisplayName());
             
             List<Map<String, Object>> fieldSnapshots = new ArrayList<>();
             for (FieldDefinition field : table.getFieldDefinitions()) {
@@ -284,7 +284,7 @@ public class VersionComponentImpl implements VersionComponent {
                 fieldSnap.put("defaultValue", field.getDefaultValue());
                 fieldSnap.put("isPrimaryKey", field.getIsPrimaryKey());
                 fieldSnap.put("isUnique", field.getIsUnique());
-                fieldSnap.put("description", field.getDescription());
+                fieldSnap.put("displayName", field.getDisplayName());
                 fieldSnap.put("sortOrder", field.getSortOrder());
                 fieldSnapshots.add(fieldSnap);
             }
@@ -300,7 +300,7 @@ public class VersionComponentImpl implements VersionComponent {
             formSnap.put("formName", form.getFormName());
             formSnap.put("formType", form.getFormType() != null ? form.getFormType().name() : null);
             formSnap.put("configJson", form.getConfigJson());
-            formSnap.put("description", form.getDescription());
+            formSnap.put("description", form.getDisplayName());
             formSnap.put("boundTableName", form.getBoundTableName());
             formSnapshots.add(formSnap);
         }
@@ -315,7 +315,7 @@ public class VersionComponentImpl implements VersionComponent {
             actionSnap.put("configJson", action.getConfigJson());
             actionSnap.put("icon", action.getIcon());
             actionSnap.put("buttonColor", action.getButtonColor());
-            actionSnap.put("description", action.getDescription());
+            actionSnap.put("description", action.getDisplayName());
             actionSnap.put("isDefault", action.getIsDefault());
             actionSnapshots.add(actionSnap);
         }
@@ -340,7 +340,7 @@ public class VersionComponentImpl implements VersionComponent {
     @SuppressWarnings("unchecked")
     private void restoreFromSnapshot(FunctionUnit functionUnit, Map<String, Object> snapshot) {
         if (snapshot.containsKey("description")) {
-            functionUnit.setDescription((String) snapshot.get("description"));
+            functionUnit.setDisplayName((String) snapshot.get("description"));
         }
         
         // Restore process XML
@@ -362,7 +362,7 @@ public class VersionComponentImpl implements VersionComponent {
                             .tableName((String) tableSnap.get("tableName"))
                             .tableType(tableSnap.get("tableType") != null ? TableType.valueOf((String) tableSnap.get("tableType")) : null)
                             .tableDisplayName((String) tableSnap.get("tableDisplayName"))
-                            .description((String) tableSnap.get("description"))
+                            .displayName((String) tableSnap.get("description"))
                             .build();
                     
                     List<Map<String, Object>> fieldSnapshots = (List<Map<String, Object>>) tableSnap.get("fieldDefinitions");
@@ -379,7 +379,7 @@ public class VersionComponentImpl implements VersionComponent {
                                     .defaultValue((String) fieldSnap.get("defaultValue"))
                                     .isPrimaryKey(fieldSnap.get("isPrimaryKey") != null ? (Boolean) fieldSnap.get("isPrimaryKey") : false)
                                     .isUnique(fieldSnap.get("isUnique") != null ? (Boolean) fieldSnap.get("isUnique") : false)
-                                    .description((String) fieldSnap.get("description"))
+                                    .displayName((String) fieldSnap.get("displayName"))
                                     .sortOrder(fieldSnap.get("sortOrder") != null ? ((Number) fieldSnap.get("sortOrder")).intValue() : 0)
                                     .build();
                             table.getFieldDefinitions().add(field);
@@ -401,7 +401,7 @@ public class VersionComponentImpl implements VersionComponent {
                             .formName((String) formSnap.get("formName"))
                             .formType(formSnap.get("formType") != null ? FormType.valueOf((String) formSnap.get("formType")) : null)
                             .configJson(formSnap.get("configJson") != null ? (Map<String, Object>) formSnap.get("configJson") : null)
-                            .description((String) formSnap.get("description"))
+                            .displayName((String) formSnap.get("description"))
                             .build();
                     functionUnit.getFormDefinitions().add(form);
                 }
@@ -421,7 +421,7 @@ public class VersionComponentImpl implements VersionComponent {
                             .configJson(actionSnap.get("configJson") != null ? (Map<String, Object>) actionSnap.get("configJson") : null)
                             .icon((String) actionSnap.get("icon"))
                             .buttonColor((String) actionSnap.get("buttonColor"))
-                            .description((String) actionSnap.get("description"))
+                            .displayName((String) actionSnap.get("description"))
                             .isDefault(actionSnap.get("isDefault") != null ? (Boolean) actionSnap.get("isDefault") : false)
                             .build();
                     functionUnit.getActionDefinitions().add(action);

@@ -102,7 +102,7 @@
             {{ row.left.nullable ? ', nullable' : ', NOT NULL' }}
             {{ row.left.isPrimaryKey ? ', PK' : '' }}
             {{ row.left.defaultValue ? ', default=' + row.left.defaultValue : '' }}
-            {{ row.left.comment ? ' — ' + row.left.comment : '' }}
+            {{ row.left.displayName ? ' — ' + row.left.displayName : '' }}
           </span>
           <span
             v-else
@@ -123,7 +123,7 @@
             {{ row.right.nullable ? ', nullable' : ', NOT NULL' }}
             {{ row.right.isPrimaryKey ? ', PK' : '' }}
             {{ row.right.defaultValue ? ', default=' + row.right.defaultValue : '' }}
-            {{ row.right.comment ? ' — ' + row.right.comment : '' }}
+            {{ row.right.displayName ? ' — ' + row.right.displayName : '' }}
           </span>
           <span
             v-else
@@ -157,7 +157,7 @@ interface SnapshotField {
   nullable?: boolean
   isPrimaryKey?: boolean
   defaultValue?: string
-  comment?: string
+  displayName?: string
 }
 
 interface DiffRow {
@@ -215,7 +215,7 @@ const fieldsEqual = (a: SnapshotField, b: SnapshotField): boolean => {
     && a.nullable === b.nullable
     && a.isPrimaryKey === b.isPrimaryKey
     && (a.defaultValue || '') === (b.defaultValue || '')
-    && (a.comment || '') === (b.comment || '')
+    && (a.displayName || '') === (b.displayName || '')
 }
 
 const computeDiff = () => {

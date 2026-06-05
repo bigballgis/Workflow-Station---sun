@@ -28,6 +28,8 @@ public interface RelationTableDefinitionRepository extends JpaRepository<Relatio
      */
     boolean existsByTableName(String tableName);
 
+    boolean existsByTableNameAndIdNot(String tableName, Long id);
+
     /**
      * 根据状态查找表定义列表
      */
@@ -68,4 +70,7 @@ public interface RelationTableDefinitionRepository extends JpaRepository<Relatio
      * 根据ID列表查找表定义
      */
     List<RelationTableDefinition> findByIdIn(List<Long> ids);
+
+    @Query("SELECT t FROM RelationTableDefinition t LEFT JOIN FETCH t.fieldDefinitions WHERE t.id = :id")
+    Optional<RelationTableDefinition> findByIdWithFields(@Param("id") Long id);
 }

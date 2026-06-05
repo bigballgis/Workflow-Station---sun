@@ -39,7 +39,7 @@ BEGIN
     )
     ON CONFLICT (function_unit_id, table_name) DO UPDATE SET
         table_type = EXCLUDED.table_type,
-        description = EXCLUDED.description,
+        display_name = EXCLUDED.display_name,
         updated_at = CURRENT_TIMESTAMP
     RETURNING id INTO v_table_id;
 
@@ -67,7 +67,7 @@ BEGIN
         default_value,
         is_primary_key,
         is_unique,
-        description,
+        display_name,
         sort_order
     ) VALUES (
         v_table_id,
@@ -96,7 +96,7 @@ BEGIN
         default_value,
         is_primary_key,
         is_unique,
-        description,
+        display_name,
         sort_order
     ) VALUES (
         v_table_id,
@@ -125,7 +125,7 @@ BEGIN
         default_value,
         is_primary_key,
         is_unique,
-        description,
+        display_name,
         sort_order
     ) VALUES (
         v_table_id,
@@ -154,7 +154,7 @@ BEGIN
         default_value,
         is_primary_key,
         is_unique,
-        description,
+        display_name,
         sort_order
     ) VALUES (
         v_table_id,
@@ -183,7 +183,7 @@ BEGIN
         default_value,
         is_primary_key,
         is_unique,
-        description,
+        display_name,
         sort_order
     ) VALUES (
         v_table_id,
@@ -212,7 +212,7 @@ BEGIN
         default_value,
         is_primary_key,
         is_unique,
-        description,
+        display_name,
         sort_order
     ) VALUES (
         v_table_id,
@@ -241,7 +241,7 @@ BEGIN
         default_value,
         is_primary_key,
         is_unique,
-        description,
+        display_name,
         sort_order
     ) VALUES (
         v_table_id,
@@ -270,7 +270,7 @@ BEGIN
         default_value,
         is_primary_key,
         is_unique,
-        description,
+        display_name,
         sort_order
     ) VALUES (
         v_table_id,
@@ -299,7 +299,7 @@ BEGIN
         default_value,
         is_primary_key,
         is_unique,
-        description,
+        display_name,
         sort_order
     ) VALUES (
         v_table_id,
@@ -328,7 +328,7 @@ BEGIN
         default_value,
         is_primary_key,
         is_unique,
-        description,
+        display_name,
         sort_order
     ) VALUES (
         v_table_id,

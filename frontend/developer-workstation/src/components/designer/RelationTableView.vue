@@ -52,7 +52,7 @@
           <el-icon class="field-icon">
             <component :is="getFieldIcon(field.dataType)" />
           </el-icon>
-          <span class="field-name">{{ field.comment || field.fieldName }}</span>
+          <span class="field-name">{{ field.displayName || field.fieldName }}</span>
         </div>
         <el-empty
           v-if="!loadingFields && filteredAvailableFields.length === 0"
@@ -121,7 +121,7 @@
           @dragend="onColDragEnd"
         >
           <div class="column-row-label">
-            <span class="col-name">{{ field.comment || field.fieldName }}</span>
+            <span class="col-name">{{ field.displayName || field.fieldName }}</span>
             <el-icon
               class="col-remove"
               @click.stop="removeField(index)"
@@ -148,6 +148,7 @@
       width="800px"
       destroy-on-close
     >
+      <div class="table-scroll-wrap">
       <el-table
         :data="previewFieldRows"
         border
@@ -164,6 +165,7 @@
           min-width="200"
         />
       </el-table>
+      </div>
     </el-dialog>
   </div>
 </template>
@@ -259,7 +261,7 @@ const filteredAvailableFields = computed(() => {
   const inView = new Set(viewFields.value.map(f => f.fieldName))
   let list = allFields.value.filter(f => !inView.has(f.fieldName))
   if (kw) {
-    list = list.filter(f => f.fieldName.toLowerCase().includes(kw) || (f.comment || '').toLowerCase().includes(kw))
+    list = list.filter(f => f.fieldName.toLowerCase().includes(kw) || (f.displayName || '').toLowerCase().includes(kw))
   }
   return list
 })
@@ -299,7 +301,7 @@ const previewRows = computed(() => {
 
 const previewFieldRows = computed(() => {
   return viewFields.value.map(f => ({
-    label: f.comment || f.fieldName,
+    label: f.displayName || f.fieldName,
     value: getMockValue(f)
   }))
 })

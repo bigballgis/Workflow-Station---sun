@@ -15,11 +15,13 @@ import com.developer.enums.DatabaseDialect;
 import com.developer.exception.DeveloperBusinessException;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.*;
+import com.developer.service.FieldFkPkSyncService;
 import com.developer.service.FormConfigFieldRenamer;
 import com.developer.util.DeveloperWorkstationSequenceSynchronizer;
 import com.platform.common.i18n.I18nService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -45,6 +47,8 @@ public class TableDesignComponentImpl implements TableDesignComponent {
     private final FormTableBindingRepository formTableBindingRepository;
     private final I18nService i18nService;
     private final DeveloperWorkstationSequenceSynchronizer sequenceSynchronizer;
+    private final FieldFkPkSyncService fieldFkPkSyncService;
+    private final JdbcTemplate jdbcTemplate;
     
     @Override
     @Transactional
@@ -52,7 +56,7 @@ public class TableDesignComponentImpl implements TableDesignComponent {
         FunctionUnit functionUnit = functionUnitRepository.findById(functionUnitId)
                 .orElseThrow(() -> new ResourceNotFoundException("FunctionUnit", functionUnitId));
         
-        if (tableDefinitionRepository.existsByFunctionUnitIdAndTableName(functionUnitId, request.getTableName())) {
+        if (isTableNameTaken(request.getTableName(), null)) {
             throw new DeveloperBusinessException("CONFLICT_TABLE_NAME_EXISTS", 
                     i18nService.getMessage("table.name_exists", request.getTableName()),
                     i18nService.getMessage("table.use_other_name"));
@@ -63,7 +67,7 @@ public class TableDesignComponentImpl implements TableDesignComponent {
                 .tableName(request.getTableName())
                 .tableDisplayName(request.getTableDisplayName())
                 .tableType(request.getTableType())
-                .description(request.getDescription())
+                .displayName(request.getDescription())
                 .build();
         
         tableDefinition = tableDefinitionRepository.save(tableDefinition);
@@ -76,6 +80,8 @@ public class TableDesignComponentImpl implements TableDesignComponent {
                         i18nService.getMessage("table.field_count_exceeded",
                                 request.getFields().size(), MAX_FIELD_DEFINITIONS));
             }
+            List<TableDefinition> allTables = tableDefinitionRepository.findByFunctionUnitIdWithFields(functionUnitId);
+            fieldFkPkSyncService.validateIncomingFields(tableDefinition, request.getFields(), allTables);
             sequenceSynchronizer.synchronizeFieldDefinitions();
             int sortOrder = 0;
             for (FieldDefinitionRequest fieldRequest : request.getFields()) {
@@ -84,7 +90,9 @@ public class TableDesignComponentImpl implements TableDesignComponent {
             }
         }
         
-        return tableDefinitionRepository.save(tableDefinition);
+        TableDefinition saved = tableDefinitionRepository.save(tableDefinition);
+        fieldFkPkSyncService.syncForeignKeysForFunctionUnit(functionUnitId);
+        return saved;
     }
     
     @Override
@@ -92,8 +100,7 @@ public class TableDesignComponentImpl implements TableDesignComponent {
     public TableDefinition update(Long id, TableDefinitionRequest request) {
         TableDefinition tableDefinition = getById(id);
         
-        if (tableDefinitionRepository.existsByFunctionUnitIdAndTableNameAndIdNot(
-                tableDefinition.getFunctionUnit().getId(), request.getTableName(), id)) {
+        if (isTableNameTaken(request.getTableName(), id)) {
             throw new DeveloperBusinessException("CONFLICT_TABLE_NAME_EXISTS", 
                     i18nService.getMessage("table.name_exists", request.getTableName()),
                     i18nService.getMessage("table.use_other_name"));
@@ -106,7 +113,7 @@ public class TableDesignComponentImpl implements TableDesignComponent {
             if (existing.getId() == null) continue;
             originals.put(existing.getId(), new OldFieldSnapshot(
                     existing.getFieldName(),
-                    existing.getDescription(),
+                    existing.getDisplayName(),
                     existing.getDataType() != null ? existing.getDataType().name() : null,
                     existing.getLength(),
                     existing.getScale(),
@@ -119,7 +126,12 @@ public class TableDesignComponentImpl implements TableDesignComponent {
         tableDefinition.setTableName(request.getTableName());
         tableDefinition.setTableDisplayName(request.getTableDisplayName());
         tableDefinition.setTableType(request.getTableType());
-        tableDefinition.setDescription(request.getDescription());
+        tableDefinition.setDisplayName(request.getDescription());
+
+        List<TableDefinition> allTables = tableDefinitionRepository.findByFunctionUnitIdWithFields(functionUnitId);
+        if (request.getFields() != null && !request.getFields().isEmpty()) {
+            fieldFkPkSyncService.validateIncomingFields(tableDefinition, request.getFields(), allTables);
+        }
         
         // Refresh field definitions: cascade=CascadeType.ALL + orphanRemoval=true → clear memory, delete rows explicitly
         // to avoid unique constraint races.
@@ -161,6 +173,8 @@ public class TableDesignComponentImpl implements TableDesignComponent {
             propagateFieldChangesToForms(functionUnitId, saved, changes);
         }
 
+        fieldFkPkSyncService.syncForeignKeysForFunctionUnit(functionUnitId);
+
         // Reload with fields to ensure consistent state for serialization
         return tableDefinitionRepository.findByIdWithFields(saved.getId())
                 .orElse(saved);
@@ -194,8 +208,8 @@ public class TableDesignComponentImpl implements TableDesignComponent {
             FormConfigFieldRenamer.FieldChange ch = new FormConfigFieldRenamer.FieldChange(
                     oldName,
                     f.getFieldName(),
-                    orig.description(),
-                    f.getDescription(),
+                    orig.displayName(),
+                    f.getDisplayName(),
                     orig.dataType(),
                     f.getDataType() != null ? f.getDataType().name() : null,
                     orig.length(),
@@ -207,7 +221,7 @@ public class TableDesignComponentImpl implements TableDesignComponent {
             );
             // Skip emitting FieldChange when every tracked axis is unchanged.
             if (!ch.fieldNameChanged()
-                    && !ch.descriptionChanged()
+                    && !ch.displayNameChanged()
                     && !ch.lengthChanged()
                     && !ch.scaleChanged()
                     && !ch.nullableChanged()) {
@@ -219,7 +233,7 @@ public class TableDesignComponentImpl implements TableDesignComponent {
     }
 
     private record OldFieldSnapshot(String fieldName,
-                                    String description,
+                                    String displayName,
                                     String dataType,
                                     Integer length,
                                     Integer scale,
@@ -350,8 +364,14 @@ public class TableDesignComponentImpl implements TableDesignComponent {
                 .defaultValue(request.getDefaultValue())
                 .isPrimaryKey(request.getIsPrimaryKey())
                 .isUnique(request.getIsUnique())
-                .description(request.getDescription())
+                .displayName(request.getDisplayName())
                 .sortOrder(request.getSortOrder() != null ? request.getSortOrder() : sortOrder)
+                .isForeignKey(Boolean.TRUE.equals(request.getIsForeignKey()))
+                .refTableId(request.getRefTableId())
+                .refPrimaryKeyFields(request.getRefPrimaryKeyFields())
+                .pkGenerationJson(request.getPkGeneration())
+                .fkDisplayMode(request.getFkDisplayMode() != null ? request.getFkDisplayMode() : "readonly")
+                .relationCardinality(request.getRelationCardinality())
                 .build();
     }
     
@@ -499,5 +519,32 @@ public class TableDesignComponentImpl implements TableDesignComponent {
             case BYTEA -> "VARBINARY(MAX)";
             case FILE -> "NVARCHAR(500)";
         };
+    }
+
+    @Override
+    public boolean isTableNameAvailable(String tableName, Long excludeTableId) {
+        if (tableName == null || tableName.isBlank()) {
+            return false;
+        }
+        return !isTableNameTaken(tableName, excludeTableId);
+    }
+
+    private boolean isTableNameTaken(String tableName, Long excludeTableId) {
+        if (excludeTableId != null) {
+            if (tableDefinitionRepository.existsByTableNameAndIdNot(tableName, excludeTableId)) {
+                return true;
+            }
+        } else if (tableDefinitionRepository.existsByTableName(tableName)) {
+            return true;
+        }
+        return existsInRelationTables(tableName);
+    }
+
+    private boolean existsInRelationTables(String tableName) {
+        Integer count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM rt_table_definitions WHERE table_name = ?",
+                Integer.class,
+                tableName);
+        return count != null && count > 0;
     }
 }

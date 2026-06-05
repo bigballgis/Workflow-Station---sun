@@ -345,7 +345,7 @@ public class AiGenerationServiceImpl implements AiGenerationService {
         return FunctionUnitContextDTO.builder()
                 .functionUnitId(fu.getId())
                 .name(fu.getName())
-                .description(fu.getDescription())
+                .description(fu.getDisplayName())
                 .tableDefinitions(serializeTableDefinitions(tables))
                 .formDefinitions(serializeFormDefinitions(forms))
                 .actionDefinitions(serializeActionDefinitions(actions))
@@ -365,7 +365,7 @@ public class AiGenerationServiceImpl implements AiGenerationService {
             map.put("tableName", t.getTableName());
             map.put("tableType", t.getTableType() != null ? t.getTableType().name() : null);
             map.put("tableDisplayName", t.getTableDisplayName());
-            map.put("description", t.getDescription());
+            map.put("description", t.getDisplayName());
             map.put("fieldDefinitions", serializeFieldDefinitions(t.getFieldDefinitions()));
             map.put("foreignKeys", serializeForeignKeys(t.getForeignKeys()));
             return map;
@@ -387,7 +387,7 @@ public class AiGenerationServiceImpl implements AiGenerationService {
             map.put("defaultValue", f.getDefaultValue());
             map.put("isPrimaryKey", f.getIsPrimaryKey());
             map.put("isUnique", f.getIsUnique());
-            map.put("description", f.getDescription());
+            map.put("displayName", f.getDisplayName());
             map.put("sortOrder", f.getSortOrder());
             return map;
         }).collect(Collectors.toList());
@@ -417,7 +417,7 @@ public class AiGenerationServiceImpl implements AiGenerationService {
             map.put("formName", f.getFormName());
             map.put("formType", f.getFormType() != null ? f.getFormType().name() : null);
             map.put("configJson", f.getConfigJson());
-            map.put("description", f.getDescription());
+            map.put("description", f.getDisplayName());
             map.put("tableBindings", serializeTableBindings(f.getTableBindings()));
             map.put("fieldPermissions", f.getFieldPermissions() != null ? f.getFieldPermissions() : Map.of());
             map.put("showLiveValues", f.getShowLiveValues());
@@ -464,7 +464,7 @@ public class AiGenerationServiceImpl implements AiGenerationService {
             map.put("configJson", a.getConfigJson());
             map.put("icon", a.getIcon());
             map.put("buttonColor", a.getButtonColor());
-            map.put("description", a.getDescription());
+            map.put("description", a.getDisplayName());
             map.put("isDefault", a.getIsDefault());
             return map;
         }).collect(Collectors.toList());

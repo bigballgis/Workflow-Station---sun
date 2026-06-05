@@ -105,7 +105,7 @@
               <el-option
                 v-for="field in assigneeFieldOptions"
                 :key="field.fieldName"
-                :label="`${field.description || field.fieldName} (${field.fieldName})`"
+                :label="`${field.displayName || field.fieldName} (${field.fieldName})`"
                 :value="field.fieldName"
               />
             </el-select>
@@ -453,7 +453,7 @@
                 <el-option
                   v-for="field in assigneeFieldOptions"
                   :key="field.fieldName"
-                  :label="`${field.description || field.fieldName} (${field.fieldName})`"
+                  :label="`${field.displayName || field.fieldName} (${field.fieldName})`"
                   :value="field.fieldName"
                 />
               </el-select>

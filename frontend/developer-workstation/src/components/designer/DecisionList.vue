@@ -33,6 +33,7 @@
         </el-button>
       </div>
 
+      <div class="table-scroll-wrap">
       <el-table
         v-if="decisions.length > 0"
         v-loading="loading"
@@ -59,21 +60,22 @@
           min-width="150"
         >
           <template #default="{ row }">
-            <template v-if="getBoundNodes(row.id).length > 0">
-              <el-tag
-                v-for="node in getBoundNodes(row.id)"
-                :key="node.nodeId"
-                size="small"
-                type="success"
-                style="margin-right: 4px;"
-              >
-                {{ node.nodeName }}
-              </el-tag>
-            </template>
-            <span
-              v-else
-              class="text-muted"
-            >{{ t('decision.notBound') }}</span>
+            <div class="table-cell-tags">
+              <template v-if="getBoundNodes(row.id).length > 0">
+                <el-tag
+                  v-for="node in getBoundNodes(row.id)"
+                  :key="node.nodeId"
+                  size="small"
+                  type="success"
+                >
+                  {{ node.nodeName }}
+                </el-tag>
+              </template>
+              <span
+                v-else
+                class="text-muted"
+              >{{ t('decision.notBound') }}</span>
+            </div>
           </template>
         </el-table-column>
         <el-table-column
@@ -87,37 +89,40 @@
         </el-table-column>
         <el-table-column
           :label="t('common.actions')"
-          width="220"
+          min-width="240"
           fixed="right"
         >
           <template #default="{ row }">
-            <el-button
-              link
-              type="primary"
-              @click="handleEdit(row)"
-            >
-              {{ t('common.edit') }}
-            </el-button>
-            <el-button
-              link
-              type="warning"
-              @click="handleBindToNode(row)"
-            >
-              {{ t('decision.bindToNode') }}
-            </el-button>
-            <el-button
-              link
-              type="danger"
-              @click="handleDelete(row)"
-            >
-              {{ t('common.delete') }}
-            </el-button>
+            <div class="table-row-actions">
+              <el-button
+                link
+                type="primary"
+                @click="handleEdit(row)"
+              >
+                {{ t('common.edit') }}
+              </el-button>
+              <el-button
+                link
+                type="warning"
+                @click="handleBindToNode(row)"
+              >
+                {{ t('decision.bindToNode') }}
+              </el-button>
+              <el-button
+                link
+                type="danger"
+                @click="handleDelete(row)"
+              >
+                {{ t('common.delete') }}
+              </el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
+      </div>
 
       <el-empty
-        v-else-if="!loading"
+        v-if="decisions.length === 0 && !loading"
         :description="t('decision.noDecisions')"
       />
     </template>

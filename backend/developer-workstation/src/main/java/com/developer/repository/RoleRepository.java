@@ -27,7 +27,7 @@ public interface RoleRepository extends JpaRepository<Role, String> {
      * @param username the username to query roles for
      * @return list of roles the user has
      */
-    @Query(value = "SELECT DISTINCT r.id, r.code, r.name, r.description " +
+    @Query(value = "SELECT DISTINCT r.id, r.code, r.name, r.display_name " +
            "FROM sys_roles r " +
            "WHERE r.id IN ( " +
            "  SELECT ur.role_id " +
@@ -79,7 +79,7 @@ public interface RoleRepository extends JpaRepository<Role, String> {
      * @param userId the user ID to query roles for
      * @return list of roles the user has
      */
-    @Query(value = "SELECT DISTINCT r.id, r.code, r.name, r.description " +
+    @Query(value = "SELECT DISTINCT r.id, r.code, r.name, r.display_name " +
            "FROM sys_roles r " +
            "WHERE r.id IN ( " +
            "  SELECT ur.role_id " +

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.*;
 import com.portal.entity.ProcessInstance;
+import com.portal.util.SubTableNestingSanitizer;
 import com.portal.exception.PortalException;
 import com.portal.repository.ProcessInstanceRepository;
 import lombok.RequiredArgsConstructor;
@@ -83,10 +84,14 @@ public class TaskFormComponent {
     public TaskFormData getTaskFormData(String taskId) {
         log.debug("Getting task form data for task: {}", taskId);
 
+        long __t = System.nanoTime();
         TaskInfo taskInfo = getTaskInfo(taskId);
+        log.info("[PERF] form-data.getTaskInfo(engine) took {} ms", (System.nanoTime() - __t) / 1_000_000L);
 
         // Find FormStageBinding by taskDefinitionKey
+        __t = System.nanoTime();
         Map<String, Object> formDefinition = fetchTaskFormByStageId(taskInfo.taskDefinitionKey);
+        log.info("[PERF] form-data.fetchTaskFormByStageId took {} ms", (System.nanoTime() - __t) / 1_000_000L);
 
         // Get process instance for variables
         ProcessInstance processInstance = processInstanceRepository.findById(taskInfo.processInstanceId)
@@ -98,11 +103,15 @@ public class TaskFormComponent {
                 : Collections.emptyMap();
         Map<String, Object> hydratedVariables = new HashMap<>(allVariables);
         if (processComponent != null) {
+            __t = System.nanoTime();
             processComponent.enrichSubTablesVariablesFromPhysicalTables(taskInfo.processInstanceId, hydratedVariables);
+            log.info("[PERF] form-data.enrichSubTables took {} ms", (System.nanoTime() - __t) / 1_000_000L);
         }
 
         // Get Process Form reference data
+        __t = System.nanoTime();
         ProcessFormData processFormRef = processFormComponent.getProcessFormData(taskInfo.processInstanceId);
+        log.info("[PERF] form-data.nested.getProcessFormData took {} ms", (System.nanoTime() - __t) / 1_000_000L);
 
         if (formDefinition == null) {
             // Fallback: no Task Form binding, return only ProcessFormData in read-only mode
@@ -216,6 +225,9 @@ public class TaskFormComponent {
 
             Map<String, Object> updatedVariables = new HashMap<>(currentVariables);
             updatedVariables.putAll(editableData);
+            // Prevent geometric __subTables__ bloat: drop deep nested copies before persisting so each
+            // task save stores the canonical one-level structure instead of compounding prior rounds.
+            SubTableNestingSanitizer.stripDeepNestedSubTables(updatedVariables);
             processInstance.setVariables(updatedVariables);
             processInstanceRepository.save(processInstance);
 
@@ -547,6 +559,7 @@ public class TaskFormComponent {
         merged.putAll(completedVariables != null ? completedVariables : Collections.emptyMap());
 
         Set<String> snapshotFieldKeys = mergeCompletedTaskSnapshotIntoVariables(taskId, userId, taskDefinitionKey, merged);
+        SubTableNestingSanitizer.stripDeepNestedSubTables(merged);
         processInstance.setVariables(merged);
         processInstanceRepository.save(processInstance);
 
@@ -673,15 +686,21 @@ public class TaskFormComponent {
      */
     @SuppressWarnings("unchecked")
     private Map<String, Object> fetchTaskFormByStageId(String stageId) {
-        Map<String, Object> fromRemote = fetchTaskFormFromDeveloperWorkstation(stageId);
-        if (fromRemote != null) {
-            return fromRemote;
-        }
+        // Try local DB first (millisecond-level) — avoids expensive cross-container HTTP call.
         Map<String, Object> fromDb = fetchTaskFormFromLocalDw(stageId);
         if (fromDb != null) {
+            if (fromDb.isEmpty()) {
+                // Definitive negative: local DB queried successfully but found no binding.
+                // Since both services share the same PostgreSQL, HTTP fallback would also miss — skip it.
+                log.debug("No task form binding found in local DB for stage '{}', skipping remote lookup", stageId);
+                return null;
+            }
             log.debug("Resolved task form for stage '{}' from local dw_form_stage_bindings", stageId);
+            return fromDb;
         }
-        return fromDb;
+        // fromDb == null means local query threw an exception (e.g. table doesn't exist).
+        // Fallback: HTTP call to developer-workstation.
+        return fetchTaskFormFromDeveloperWorkstation(stageId);
     }
 
     @SuppressWarnings("unchecked")
@@ -730,7 +749,7 @@ public class TaskFormComponent {
                             """,
                     (ResultSet rs, int rowNum) -> mapRowToTaskFormDefinition(rs),
                     stageId.trim());
-            return rows.isEmpty() ? null : rows.get(0);
+            return rows.isEmpty() ? Collections.emptyMap() : rows.get(0);
         } catch (Exception e) {
             log.debug("Local dw_form_stage_bindings lookup failed for stage {}: {}", stageId, e.getMessage());
             return null;

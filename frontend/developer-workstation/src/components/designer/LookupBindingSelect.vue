@@ -7,7 +7,7 @@ interface FieldInfo {
   fieldName: string
   dataType: string
   isPrimaryKey: boolean
-  description?: string
+  displayName?: string
 }
 
 interface LookupFilterCondition {
@@ -51,7 +51,7 @@ const availableFields = computed<FieldInfo[]>(() => {
         fieldName: f.fieldName,
         dataType: f.dataType,
         isPrimaryKey: f.isPrimaryKey ?? false,
-        description: f.description || f.comment || '',
+        displayName: f.displayName || '',
       }))
     }
   }
@@ -71,7 +71,7 @@ async function loadFieldsFromApi(tableId: number) {
         fieldName: f.fieldName,
         dataType: f.dataType,
         isPrimaryKey: f.isPrimaryKey ?? false,
-        description: f.comment || '',
+        displayName: f.displayName || '',
       }))
       apiFields.value = fields
       // Cache in lookupStore so FormDesigner preview can use it
@@ -133,7 +133,7 @@ function emitUpdate() {
 }
 
 function getFieldLabel(f: FieldInfo): string {
-  const name = f.description || f.fieldName
+  const name = f.displayName || f.fieldName
   return f.isPrimaryKey ? `🔑 ${name} (PK)` : name
 }
 

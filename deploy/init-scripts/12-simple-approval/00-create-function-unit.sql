@@ -18,7 +18,7 @@ BEGIN
     -- Step 1: Function Unit
     -- =========================================================================
     INSERT INTO dw_function_units (
-        code, name, description, status,
+        code, name, display_name, status,
         current_version, version, is_active, enabled,
         deployed_at, lock_version, created_by, created_at, updated_by, updated_at
     ) VALUES (
@@ -33,7 +33,7 @@ BEGIN
     )
     ON CONFLICT (code) DO UPDATE SET
         name             = EXCLUDED.name,
-        description      = EXCLUDED.description,
+        display_name      = EXCLUDED.display_name,
         status           = EXCLUDED.status,
         current_version  = EXCLUDED.current_version,
         updated_by       = EXCLUDED.updated_by,
@@ -48,7 +48,7 @@ BEGIN
 
     -- Request Form (id=6 in source) — config_json includes subForms for table 9 (RequestItems) and 11 (RequestAttachments)
     INSERT INTO dw_form_definitions (
-        function_unit_id, form_name, form_type, description, config_json, created_at, updated_at
+        function_unit_id, form_name, form_type, display_name, config_json, created_at, updated_at
     ) VALUES (
         v_function_unit_id,
         'Request Form',
@@ -59,7 +59,7 @@ BEGIN
     )
     ON CONFLICT (function_unit_id, form_name) DO UPDATE SET
         config_json = EXCLUDED.config_json,
-        description = EXCLUDED.description,
+        display_name = EXCLUDED.display_name,
         updated_at  = CURRENT_TIMESTAMP
     RETURNING id INTO v_request_form_id;
 
@@ -67,7 +67,7 @@ BEGIN
 
     -- Approval Form (id=7 in source)
     INSERT INTO dw_form_definitions (
-        function_unit_id, form_name, form_type, description, config_json, created_at, updated_at
+        function_unit_id, form_name, form_type, display_name, config_json, created_at, updated_at
     ) VALUES (
         v_function_unit_id,
         'Approval Form',
@@ -78,7 +78,7 @@ BEGIN
     )
     ON CONFLICT (function_unit_id, form_name) DO UPDATE SET
         config_json = EXCLUDED.config_json,
-        description = EXCLUDED.description,
+        display_name = EXCLUDED.display_name,
         updated_at  = CURRENT_TIMESTAMP
     RETURNING id INTO v_approval_form_id;
 
@@ -86,7 +86,7 @@ BEGIN
 
     -- sub form (id=8 in source)
     INSERT INTO dw_form_definitions (
-        function_unit_id, form_name, form_type, description, config_json, created_at, updated_at
+        function_unit_id, form_name, form_type, display_name, config_json, created_at, updated_at
     ) VALUES (
         v_function_unit_id,
         'sub form',
@@ -109,7 +109,7 @@ BEGIN
     -- Submit Request (id=16 in source) — actual config from DB includes url/body/method fields
     INSERT INTO dw_action_definitions (
         function_unit_id, action_name, action_type, config_json,
-        icon, button_color, description, is_default, created_at, updated_at
+        icon, button_color, display_name, is_default, created_at, updated_at
     ) VALUES (
         v_function_unit_id,
         'Submit Request',
@@ -123,7 +123,7 @@ BEGIN
     ON CONFLICT (function_unit_id, action_name) DO UPDATE SET
         action_type  = EXCLUDED.action_type,
         config_json  = EXCLUDED.config_json,
-        description  = EXCLUDED.description,
+        display_name  = EXCLUDED.display_name,
         updated_at   = CURRENT_TIMESTAMP
     RETURNING id INTO v_action_submit_id;
 
@@ -132,7 +132,7 @@ BEGIN
     -- Approve (id=17 in source)
     INSERT INTO dw_action_definitions (
         function_unit_id, action_name, action_type, config_json,
-        icon, button_color, description, is_default, created_at, updated_at
+        icon, button_color, display_name, is_default, created_at, updated_at
     ) VALUES (
         v_function_unit_id,
         'Approve',
@@ -148,7 +148,7 @@ BEGIN
         config_json  = EXCLUDED.config_json,
         icon         = EXCLUDED.icon,
         button_color = EXCLUDED.button_color,
-        description  = EXCLUDED.description,
+        display_name  = EXCLUDED.display_name,
         updated_at   = CURRENT_TIMESTAMP
     RETURNING id INTO v_action_approve_id;
 
@@ -157,7 +157,7 @@ BEGIN
     -- Reject (id=18 in source)
     INSERT INTO dw_action_definitions (
         function_unit_id, action_name, action_type, config_json,
-        icon, button_color, description, is_default, created_at, updated_at
+        icon, button_color, display_name, is_default, created_at, updated_at
     ) VALUES (
         v_function_unit_id,
         'Reject',
@@ -173,7 +173,7 @@ BEGIN
         config_json  = EXCLUDED.config_json,
         icon         = EXCLUDED.icon,
         button_color = EXCLUDED.button_color,
-        description  = EXCLUDED.description,
+        display_name  = EXCLUDED.display_name,
         updated_at   = CURRENT_TIMESTAMP
     RETURNING id INTO v_action_reject_id;
 

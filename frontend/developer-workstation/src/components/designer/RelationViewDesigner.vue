@@ -14,7 +14,7 @@
 
     <div
       v-loading="loading"
-      class="field-list"
+      class="field-list table-scroll-wrap"
     >
       <el-table
         :data="viewFields"
@@ -125,7 +125,7 @@ async function loadViewConfig() {
       const existing = existingMap.get(field.fieldName)
       return {
         fieldName: field.fieldName,
-        displayLabel: existing?.displayLabel || field.comment || field.fieldName,
+        displayLabel: existing?.displayLabel || field.displayName || field.fieldName,
         columnWidth: existing?.columnWidth || 150,
         sortOrder: existing?.sortOrder ?? index,
         visible: existing?.visible ?? true

@@ -155,3 +155,137 @@
     修复：formCreateEventRuntime.ts 解析 FORM-CREATE-PREFIX 并提供 setValue/getValue/hidden/display（api/options 双别名）；
     flattenAllFormFieldSegments 合并 tabs 前/中/后字段；createFieldKeyResolver 按 label 解析 setValue/hidden 目标；
     FormRenderer.handleFieldChange 触发 onChange；start/tasks/applications 传入 formOptions。
+- id: "1418"
+  status: fixed
+  fixed_at: "2026-05-29"
+  severity: major
+  category: bug
+  summary: "Developer Workstation 登录后 Function Unit 列表为空（platform-security / DW 实体与 DB display_name 不一致）"
+  detail: |
+    根因：（1）sys_roles 列为 display_name，Role 实体映射 description → admin-center developer-permissions API 500；
+    （2）sys_virtual_groups 列为 display_name，VirtualGroup 实体映射 description → GET /users/{id}/virtual-groups 500；
+    （3）dw_function_units / dw_table_definitions / dw_form_definitions / dw_action_definitions 列为 display_name，
+    对应实体仍映射 description → 列表查询及懒加载子表时 SQL 报错，前端收到 SYS_REQUEST_PROCESSING_ERROR。
+    修复：上述实体改为 displayName @Column(name=display_name)；DW JSON 仍用 @JsonProperty("description") 兼容前端。
+- id: "1419"
+  status: fixed
+  fixed_at: "2026-05-29"
+  severity: major
+  category: bug
+  summary: "Form Preview 子表 Add 报错 common.operationFailed（PK allocate 权限码不存在）"
+  detail: |
+    根因：POST /function-units/{id}/tables/primary-keys/allocate 使用 @RequireDeveloperPermission("FUNCTION_UNIT_EDIT")，
+    但 init 脚本从未授予 function_unit:edit（开发者仅有 function_unit:update），导致 403；
+    前端 SubTableField openRowDialog catch 使用不存在的 i18n key common.operationFailed，界面显示原始 key。
+    修复：allocate 端点改为 FUNCTION_UNIT_UPDATE；catch 展示 API 错误信息；pkNeedsAllocation 兼容 pkGenerationJson 字段名。
+- id: "1420"
+  status: fixed
+  fixed_at: "2026-06-01"
+  severity: major
+  category: bug
+  summary: "Developer Workstation deploy 500 admin.fu.import_unexpected_error（sys_function_units 缺 description 列）"
+  detail: |
+    根因：admin-center FunctionUnit 实体映射 description 列，但 DB sys_function_units 仍为 display_name；
+    导入/部署时 JPA 查询报错 column fu1_0.description does not exist，事务 rollback 后返回 import_unexpected_error。
+    修复：V209 + init 脚本 36 将 display_name 重命名为 description；基线 schema 01-platform-security-schema.sql 同步；
+    dev 库已执行 ALTER RENAME。无需重建 admin-center 镜像（纯 schema 修复）。
+- id: "1421"
+  status: fixed
+  fixed_at: "2026-06-02"
+  severity: major
+  category: bug
+  summary: "Developer Workstation deploy 500 admin.fu.import_unexpected_error（sys_action_definitions 缺 description 列）"
+  detail: |
+    根因：admin-center ActionDefinition 实体映射 description 列，但 DB sys_action_definitions 仍为 display_name；
+    导入 ZIP 后 deleteByFunctionUnitId / save 动作定义时 JPA 查询报错 column ad1_0.description does not exist。
+    修复：V210 + init 脚本 37 将 display_name 重命名为 description；07 基线建表同步；dev 库已执行 ALTER RENAME。
+    无需重建 admin-center 镜像（纯 schema 修复）。
+- id: "1422"
+  status: fixed
+  fixed_at: "2026-06-02"
+  severity: major
+  category: bug
+  summary: "User Portal 流程发起 Sub Task Add 报错 NOT_PK_FIELD（主表 PK 无 pk_generation_json）"
+  detail: |
+    根因：ensureParentRowsForChildAdd 为子表 FK 引用主表时调用 PK allocate；主表字段 id 虽 is_primary_key=true 但 pk_generation_json 为空。
+    PortalPrimaryKeyAllocationComponent.loadPkGenerationJson 将空 JSON 与「字段不存在」同等抛 NOT_PK_FIELD，而 Developer Workstation 对空 JSON 默认 uuid 策略。
+    连带：admin-center attachTableBindings 曾用 td.description（列不存在）导致 tableBindings 为空，已在 FunctionUnitManagerComponent 改为 td.display_name。
+    修复：Portal loadPkGenerationJson 先校验 is_primary_key，空 pk_generation_json 返回空 Map 走 uuid 默认；user-portal 已重建部署。
+    后续：Sub Task PK id_idw 为 prefixedSequence（Test-000001）但 subForm 用 inputNumber，el-input-number 无法绑定字符串 → Add 对话框校验「id is required」；
+    applyFkPresentationToDialogColumns 对 uuid/prefixedSequence auto-PK 将 number 列降级为 text（Portal + DW parity）。
+- id: "1423"
+  status: fixed
+  fixed_at: "2026-06-02"
+  severity: major
+  category: bug
+  summary: "My Request MI Demo 流程图误标 Current Step（hasIncompleteMiRows 未校验 enteredSubProcesses）"
+  detail: |
+    根因：applications/detail.vue parseBpmnXml 在 RUNNING 时若子表存在未 COMPLETED 的 MI 行（发起人 Add Sub Task 后 task_status=PENDING），
+    hasIncompleteMiRows() 为 true 即把 MI subProcess 标为 current（橙色），未要求流程已进入该 subProcess（enteredSubProcesses）。
+    修复：hasIncompleteMiRows / hasCompletedMiRows 分支增加 enteredSubProcesses.has(spId) && isMiSubProcess 守卫；user-portal-frontend 已重建。
+- id: "1424"
+  status: fixed
+  fixed_at: "2026-06-02"
+  severity: major
+  category: bug
+  summary: "User Portal Assignment 节点绑定 Action 按钮不展示（dw_action_definitions 列名漂移）"
+  detail: |
+    根因：TaskActionService 对 BPMN actionIds（dw 整数 ID）回退查询 findFromDwByIds 仍 SELECT d.description，
+    而 dw_action_definitions 已改为 display_name → PostgreSQL column d.description does not exist，actions 解析为空数组。
+    前端 TaskActionBar 在 actions=[] 时不显示自定义按钮也不显示默认 Approve/Reject。
+    修复：ActionDefinitionRepository.findFromDwByIds 改为 d.display_name AS description；user-portal 已重建部署。
+    验证：assignment 任务 actionIds [46,49] 返回 Complete Assignment + Save。
+- id: "1425"
+  status: fixed
+  fixed_at: "2026-06-02"
+  severity: major
+  category: bug
+  summary: "User Portal To Do 子表 Add PK allocate FUNCTION_UNIT_NOT_FOUND（processDefinitionKey 未解析）"
+  detail: |
+    根因：tasks/detail.vue 将 processDefinitionKey（如 Process_1_KK）作为 functionUnitId 传给 primary-keys/allocate；
+    PortalPrimaryKeyAllocationComponent 仅解析 dw numeric id / FU code，无法识别 Flowable process key。
+    修复：注入 FunctionUnitAccessComponent 解析 process key → catalog id，再 JOIN sys/dw code 映射 dw_function_units.id；user-portal 已重建部署。
+- id: "1426"
+  status: fixed
+  fixed_at: "2026-06-02"
+  severity: major
+  category: bug
+  summary: "MI sub form1 Save 污染主表 id 且 People 子表 FK 未持久化"
+  detail: |
+    根因（Save）：isolateMiSubTaskData 将 MI collection 行同名键覆盖 PRIMARY UUID；People binding 30 FK 未 seed。
+    根因（刷新后仍空）：inputNumber 无法显示 Test-* 字符串；sub_task_id 未 seed。
+    根因（id=Test-000044 误写）：binding.foreignKeyField=id 与 People 行 PK 同名，旧逻辑把父 id_idw 写入 id；正确语义为 id=UUID、sub_task_id←id_idw。
+    修复：seedLinkChildForeignKeysFromParentRow 跳过 row PK；repairMisassignedPrimaryKeyFromParentId + ensureAutoPrimaryKeysForRows（allocate UUID）；
+    miRowBelongsToCurrentParticipant / miParentRowAlignsWithChildRow 改以 sub_task_id 关联参与者；user-portal-frontend 已重建部署。
+- id: "1427"
+  status: fixed
+  fixed_at: "2026-06-03"
+  severity: major
+  category: bug
+  summary: "MI sub form2 HMDC Attachment 子表 Add 无响应（未 seed 当前参与者 row_id）"
+  detail: |
+    根因：HMDC_Attachment（bindingLinkMode miParticipantRow，foreignKeyField/ PK 均为 row_id）在 To Do 点击 Add 时
+    prepareSubTableAddRow 未接收 currentMiRowId，尝试为 row_id 重新 allocate PK 或 FK guard 失败，对话框不打开。
+    SubTableField 也未从 FormRenderer 传入 MI 父行上下文。
+    修复：applyMiParticipantRowSeedToInitialRow + prepareSubTableAddRow 跳过对已 seed 的 row_id PK 做 allocate；
+    FormRenderer.resolveMiParticipantSeedForSubTableAdd → SubTableField；shared MI_PARTICIPANT_SUB_TABLE_FK 增加 row_id；
+    tasks/detail primaryTableBinding 携带 fieldDefinitions；user-portal-frontend 已重建部署。
+- id: "1428"
+  status: fixed
+  fixed_at: "2026-06-04"
+  severity: major
+  category: performance
+  summary: "Portal To Do 多实例子任务详情加载慢（MI enrich + 历史 N+1 + 前端阻塞 history）"
+  detail: |
+    根因（Docker [PERF] 2026-06-04，task f422fb7e，22 个 MI 实例）：
+    1) GET /tasks/{id} ~647ms：enrichSubTables 冷路径 ~397ms（getMultiInstanceStatus ~185ms）；
+    2) GET /tasks/{id}/history ~774ms：workflow-engine 对每条 activity 单独 admin-center getUserInfo（N+1）；
+    3) 前端 loadTaskDetail 在 finally 前 await historyPromise，MI 表单 hydrate 完成后仍被 history 阻塞 skeleton；
+    4) 历史请求经 taskId 路径多一次 engine getTaskInfo。
+    早前另有加载期 100+ 次 PK allocate 风暴（已 2026-06-03 修：seedMiParticipantScopedBindingForeignKeys 仅 save/complete allocate）。
+    修复（2026-06-04）：
+    - workflow-engine TaskController：流程历史按 distinct userId 批量 resolve 显示名；
+    - user-portal：history 支持 processInstanceId 查询参数，跳过冗余 getTaskInfo；
+    - ProcessComponent：getMultiInstanceStatus 5s TTL 缓存（与 enrich 缓存配套）；
+    - tasks/detail.vue：FU 与 form prefetch 并行、history 后台加载不阻塞 loading=false；
+    已重建 workflow-engine、user-portal、user-portal-frontend。

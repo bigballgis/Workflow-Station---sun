@@ -135,7 +135,7 @@ public class FunctionUnitPropertyTest {
         FunctionUnit original = new FunctionUnit();
         original.setId(1L);
         original.setName(originalName);
-        original.setDescription("Original description");
+        original.setDisplayName("Original description");
         original.setStatus(FunctionUnitStatus.PUBLISHED);
         
         when(repository.findById(1L)).thenReturn(Optional.of(original));
@@ -154,7 +154,7 @@ public class FunctionUnitPropertyTest {
         FunctionUnit cloned = component.clone(1L, cloneName);
         
         assertThat(cloned.getName()).isEqualTo(cloneName);
-        assertThat(cloned.getDescription()).isEqualTo(original.getDescription());
+        assertThat(cloned.getDisplayName()).isEqualTo(original.getDisplayName());
         assertThat(cloned.getStatus()).isEqualTo(FunctionUnitStatus.DRAFT);
         assertThat(cloned.getId()).isNotEqualTo(original.getId());
     }
@@ -200,7 +200,7 @@ public class FunctionUnitPropertyTest {
         FunctionUnit original = new FunctionUnit();
         original.setId(1L);
         original.setName(originalName);
-        original.setDescription("Original description");
+        original.setDisplayName("Original description");
         original.setStatus(FunctionUnitStatus.PUBLISHED);
         ProcessDefinition originalProcess = ProcessDefinition.builder()
                 .functionUnit(original)

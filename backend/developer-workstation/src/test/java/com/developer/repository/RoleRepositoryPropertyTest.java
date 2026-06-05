@@ -232,7 +232,7 @@ public class RoleRepositoryPropertyTest {
         @Override
         public List<Object[]> findRolesByUsername(String username) {
             return jdbcTemplate.query(
-                    "SELECT DISTINCT r.id, r.code, r.name, r.description " +
+                    "SELECT DISTINCT r.id, r.code, r.name, r.display_name " +
                     "FROM sys_roles r " +
                     "JOIN sys_user_roles ur ON r.id = ur.role_id " +
                     "JOIN sys_users u ON ur.user_id = u.id " +
@@ -241,7 +241,7 @@ public class RoleRepositoryPropertyTest {
                             rs.getString("id"),
                             rs.getString("code"),
                             rs.getString("name"),
-                            rs.getString("description")
+                            rs.getString("display_name")
                     },
                     username);
         }
@@ -262,7 +262,7 @@ public class RoleRepositoryPropertyTest {
         @Override
         public List<Object[]> findRolesByUserId(String userId) {
             return jdbcTemplate.query(
-                    "SELECT DISTINCT r.id, r.code, r.name, r.description " +
+                    "SELECT DISTINCT r.id, r.code, r.name, r.display_name " +
                     "FROM sys_roles r " +
                     "JOIN sys_user_roles ur ON r.id = ur.role_id " +
                     "WHERE ur.user_id = ? AND r.status = 'ACTIVE'",
@@ -270,7 +270,7 @@ public class RoleRepositoryPropertyTest {
                             rs.getString("id"),
                             rs.getString("code"),
                             rs.getString("name"),
-                            rs.getString("description")
+                            rs.getString("display_name")
                     },
                     userId);
         }

@@ -55,7 +55,7 @@ public class RelationTableBindingServiceImpl implements RelationTableBindingServ
 
         // Load field definitions for each table
         String fieldSql = "SELECT id, field_name, data_type, length, precision_value, scale, "
-                + "nullable, is_primary_key, default_value, comment, sort_order "
+                + "nullable, is_primary_key, default_value, display_name, sort_order "
                 + "FROM rt_field_definitions WHERE table_id = ? ORDER BY sort_order ASC";
         for (RelationTableDTO table : tables) {
             List<RelationFieldDTO> fields = jdbcTemplate.query(fieldSql, (rs, rowNum) -> RelationFieldDTO.builder()
@@ -68,7 +68,7 @@ public class RelationTableBindingServiceImpl implements RelationTableBindingServ
                     .nullable(rs.getBoolean("nullable"))
                     .isPrimaryKey(rs.getBoolean("is_primary_key"))
                     .defaultValue(rs.getString("default_value"))
-                    .comment(rs.getString("comment"))
+                    .displayName(rs.getString("display_name"))
                     .sortOrder(rs.getInt("sort_order"))
                     .build(), table.getId());
             table.setFieldDefinitions(fields);
@@ -191,7 +191,7 @@ public class RelationTableBindingServiceImpl implements RelationTableBindingServ
     }
 
     private RelationFieldDTO systemUserField(int sortOrder, String fieldName, RelationDataType dataType,
-            boolean primaryKey, String comment) {
+            boolean primaryKey, String displayName) {
         return RelationFieldDTO.builder()
                 .id((long) -sortOrder)
                 .fieldName(fieldName)
@@ -199,7 +199,7 @@ public class RelationTableBindingServiceImpl implements RelationTableBindingServ
                 .length(255)
                 .nullable(!primaryKey)
                 .isPrimaryKey(primaryKey)
-                .comment(comment)
+                .displayName(displayName)
                 .sortOrder(sortOrder)
                 .build();
     }

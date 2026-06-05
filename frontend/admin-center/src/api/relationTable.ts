@@ -31,8 +31,13 @@ export interface FieldDefinitionResponse {
   nullable: boolean
   isPrimaryKey: boolean
   defaultValue?: string
-  comment?: string
+  displayName?: string
   sortOrder: number
+  isForeignKey?: boolean
+  refTableId?: number
+  refPrimaryKeyFields?: string[]
+  pkGeneration?: Record<string, unknown>
+  fkDisplayMode?: string
 }
 
 /** 表定义响应 */
@@ -106,8 +111,9 @@ export interface CreateFieldDefinitionRequest {
   nullable?: boolean
   isPrimaryKey?: boolean
   defaultValue?: string
-  comment?: string
+  displayName?: string
   sortOrder?: number
+  pkGeneration?: Record<string, unknown>
 }
 
 /** 创建表请求 */
@@ -129,8 +135,9 @@ export interface UpdateFieldDefinitionRequest {
   nullable?: boolean
   isPrimaryKey?: boolean
   defaultValue?: string
-  comment?: string
+  displayName?: string
   sortOrder?: number
+  pkGeneration?: Record<string, unknown>
 }
 
 /** 更新表请求 */
@@ -156,6 +163,12 @@ export const relationTableStructureApi = {
   /** 获取表定义列表 */
   list: () =>
     get<RelationTableResponse[]>('/relation-tables/structures'),
+
+  /** 检查表名是否全平台可用 */
+  checkTableNameAvailable: (tableName: string, excludeTableId?: number) =>
+    get<{ available: boolean; tableName: string }>('/relation-tables/structures/name-available', {
+      params: { tableName, excludeTableId },
+    }),
 
   /** 获取表定义详情 */
   getById: (id: number) =>
@@ -245,5 +258,9 @@ export const relationTableDataApi = {
     get<Blob>(`/relation-tables/data/${tableId}/export`, {
       params: { maxRows },
       responseType: 'blob'
-    })
+    }),
+
+  /** 分配主键值（非 manual 策略） */
+  allocatePrimaryKeys: (tableId: number, payload: { fieldName: string; count?: number; scopeKey?: string }) =>
+    post<{ values: string[] }>(`/relation-tables/data/${tableId}/primary-keys/allocate`, payload),
 }

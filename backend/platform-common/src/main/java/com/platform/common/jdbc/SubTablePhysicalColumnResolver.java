@@ -8,7 +8,7 @@ import java.util.regex.Pattern;
 
 /**
  * Map form / variable keys to physical sub-table column names for data merge and write-back.
- * <p>Uses {@code field_name} and designer {@code dw_field_definitions.description} (UI label, often same as form
+ * <p>Uses {@code field_name} and designer {@code dw_field_definitions.display_name} (UI label, often same as form
  * {@code title}); never treats arbitrary strings as SQL identifiers.</p>
  */
 public final class SubTablePhysicalColumnResolver {
@@ -20,7 +20,7 @@ public final class SubTablePhysicalColumnResolver {
 
     /**
      * Resolves {@code candidateKey} to a key present in {@code physicalColumns}: exact match, then
-     * case-insensitive identifier match, then a single designer field whose {@code description} equals the candidate
+     * case-insensitive identifier match, then a single designer field whose {@code display_name} equals the candidate
      * (trimmed) for the given {@code designerTableName}.
      *
      * @param jdbcTemplate      optional; if null, only exact / case-insensitive column match is attempted
@@ -63,8 +63,8 @@ public final class SubTablePhysicalColumnResolver {
                                 ORDER BY td.id DESC
                                 LIMIT 1
                             )
-                              AND fd.description IS NOT NULL
-                              AND TRIM(fd.description) = TRIM(?)
+                              AND fd.display_name IS NOT NULL
+                              AND TRIM(fd.display_name) = TRIM(?)
                             """,
                     (rs, i) -> rs.getString(1),
                     designerTableName,

@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS dw_function_units (
     id BIGSERIAL PRIMARY KEY,
     code VARCHAR(50) NOT NULL UNIQUE,
     name VARCHAR(100) NOT NULL UNIQUE,
-    description TEXT,
+    display_name TEXT,
     icon_id BIGINT,
     status VARCHAR(20) NOT NULL DEFAULT 'DRAFT',
     current_version VARCHAR(20),
@@ -86,11 +86,11 @@ CREATE TABLE IF NOT EXISTS dw_table_definitions (
     table_name VARCHAR(100) NOT NULL,
     table_display_name VARCHAR(200),
     table_type VARCHAR(20) NOT NULL,
-    description TEXT,
+    display_name TEXT,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_table_function_unit FOREIGN KEY (function_unit_id) REFERENCES dw_function_units(id) ON DELETE CASCADE,
-    CONSTRAINT uk_table_name_fu UNIQUE (function_unit_id, table_name),
+    CONSTRAINT uk_dw_table_name UNIQUE (table_name),
     CONSTRAINT chk_table_type CHECK (table_type IN ('MAIN', 'SUB', 'ACTION', 'RELATION'))
 );
 
@@ -111,9 +111,16 @@ CREATE TABLE IF NOT EXISTS dw_field_definitions (
     default_value VARCHAR(500),
     is_primary_key BOOLEAN DEFAULT FALSE,
     is_unique BOOLEAN DEFAULT FALSE,
-    description TEXT,
+    display_name TEXT,
     sort_order INTEGER NOT NULL DEFAULT 0,
+    is_foreign_key BOOLEAN NOT NULL DEFAULT FALSE,
+    ref_table_id BIGINT,
+    ref_primary_key_fields JSONB,
+    pk_generation_json JSONB,
+    fk_display_mode VARCHAR(20) DEFAULT 'readonly',
+    relation_cardinality VARCHAR(20),
     CONSTRAINT fk_field_table FOREIGN KEY (table_id) REFERENCES dw_table_definitions(id) ON DELETE CASCADE,
+    CONSTRAINT fk_field_ref_table FOREIGN KEY (ref_table_id) REFERENCES dw_table_definitions(id) ON DELETE SET NULL,
     CONSTRAINT uk_field_name_table UNIQUE (table_id, field_name)
 );
 
@@ -139,6 +146,24 @@ CREATE TABLE IF NOT EXISTS dw_foreign_keys (
 CREATE INDEX IF NOT EXISTS idx_dw_foreign_keys_table ON dw_foreign_keys(table_id);
 
 -- =====================================================
+-- 6b. PK Sequence Counters (dw_pk_sequences)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS dw_pk_sequences (
+    id BIGSERIAL PRIMARY KEY,
+    table_id BIGINT NOT NULL,
+    field_name VARCHAR(100) NOT NULL,
+    scope_type VARCHAR(32) NOT NULL DEFAULT 'perTable',
+    scope_key VARCHAR(128) NOT NULL DEFAULT '',
+    prefix VARCHAR(64) DEFAULT '',
+    pad_width INTEGER DEFAULT 6,
+    current_value BIGINT NOT NULL DEFAULT 0,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uk_dw_pk_seq UNIQUE (table_id, field_name, scope_type, scope_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_dw_pk_sequences_table ON dw_pk_sequences(table_id);
+
+-- =====================================================
 -- 7. Form Definitions Table (dw_form_definitions)
 -- =====================================================
 CREATE TABLE IF NOT EXISTS dw_form_definitions (
@@ -147,7 +172,7 @@ CREATE TABLE IF NOT EXISTS dw_form_definitions (
     form_name VARCHAR(100) NOT NULL,
     form_type VARCHAR(20) NOT NULL,
     config_json JSONB NOT NULL DEFAULT '{}',
-    description TEXT,
+    display_name TEXT,
     bound_table_id BIGINT,
     lock_version BIGINT NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -171,6 +196,7 @@ CREATE TABLE IF NOT EXISTS dw_form_table_bindings (
     binding_type VARCHAR(20) NOT NULL,
     binding_mode VARCHAR(20) NOT NULL DEFAULT 'READONLY',
     foreign_key_field VARCHAR(100),
+    binding_link_mode VARCHAR(32) NOT NULL DEFAULT 'structuralFk',
     sort_order INTEGER DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP,
@@ -194,7 +220,7 @@ CREATE TABLE IF NOT EXISTS dw_action_definitions (
     config_json JSONB NOT NULL DEFAULT '{}',
     icon VARCHAR(50),
     button_color VARCHAR(20),
-    description TEXT,
+    display_name TEXT,
     is_default BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

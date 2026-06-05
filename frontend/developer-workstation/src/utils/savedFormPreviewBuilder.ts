@@ -6,6 +6,8 @@
 import type { FormDefinition, TableBinding, TableDefinition } from '@/api/functionUnit'
 import type { FormPreviewItem, PreviewSubTableBinding, SubTablePortalViewsPreview } from '@/components/designer/formPreviewTypes'
 import { getRuleChildren, isCardRule, getLayoutLabel } from '@/utils/formDesigner'
+import { mapFormCreateRulesReadonlyDeep } from '@/utils/formCreateRuleUtils'
+import { syncFormRulesWithTableFields } from '@/utils/formFieldMeta'
 import { derivePreviewColumns, parseLookupConfig } from '@/utils/formPreview'
 
 const DEFAULT_PORTAL_VIEWS: SubTablePortalViewsPreview = {
@@ -107,7 +109,7 @@ function deriveColumnsFromTable(tables: TableDefinition[], tableId: number): any
       const type = mapDataTypeToPreviewColumnType(String(f.dataType ?? ''))
       return {
         field: String(f.fieldName ?? ''),
-        label: String(f.description || f.comment || f.fieldName || ''),
+        label: String(f.displayName || f.fieldName || ''),
         type,
         minWidth: type === 'upload' ? 180 : 100,
       }
@@ -128,8 +130,7 @@ function resolveLookupPreviewConfig(
   const fieldDefs = ((table as any)?.fieldDefinitions || []).map((f: any) => ({
     fieldName: f.fieldName,
     dataType: f.dataType,
-    comment: f.comment || f.description,
-    description: f.description || f.comment,
+    displayName: f.displayName,
   }))
   return {
     placeholder: 'Click to search',
@@ -181,7 +182,7 @@ function toSubTablePreviewColumns(
         const targetDesign = getSubFormDesign(Number(targetBindingId))
         return {
           field: column.fieldName || `linkForm:${column.componentId || bindingId}`,
-          label: column.columnLabel || column.comment || column.linkText || t('linkForm.defaultLinkText'),
+          label: column.columnLabel || column.displayName || column.linkText || t('linkForm.defaultLinkText'),
           type: 'linkForm',
           minWidth: 120,
           props: {
@@ -200,7 +201,7 @@ function toSubTablePreviewColumns(
           : mapDataTypeToPreviewColumnType(String(column.dataType ?? column.fieldType ?? ''))
       return {
         field: column.fieldName,
-        label: column.comment || column.columnLabel || fieldRule?.title || column.fieldName,
+        label: column.displayName || column.columnLabel || fieldRule?.title || column.fieldName,
         type: colType,
         minWidth: colType === 'upload' ? 180 : 100,
       }
@@ -348,6 +349,20 @@ export function buildSavedFormPreviewItems(options: SavedFormPreviewBuildOptions
     return []
   }
   rawRule = normalizeRulesForPreview(rawRule)
+
+  const bindings = options.tableBindings?.length
+    ? options.tableBindings
+    : (options.form.tableBindings || [])
+  const primaryBinding = bindings.find(b => b.bindingType === 'PRIMARY')
+  const primaryTable = primaryBinding
+    ? options.tables.find(t => t.id === primaryBinding.tableId)
+    : undefined
+  const primaryFields = primaryTable?.fieldDefinitions || []
+  if (primaryFields.length) {
+    rawRule = syncFormRulesWithTableFields(rawRule, primaryFields) as typeof rawRule
+  }
+  rawRule = mapFormCreateRulesReadonlyDeep(rawRule) as typeof rawRule
+
   const bindingMap = buildBindingMap(options)
   try {
     return buildPreviewItems(rawRule, bindingMap, config, options.tables)

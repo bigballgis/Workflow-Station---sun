@@ -16,7 +16,7 @@ BEGIN
     -- Step 1: Function Unit
     -- =========================================================================
     INSERT INTO dw_function_units (
-        code, name, description, status,
+        code, name, display_name, status,
         current_version, version, is_active, enabled,
         deployed_at, lock_version, created_by, created_at, updated_by, updated_at
     ) VALUES (
@@ -31,7 +31,7 @@ BEGIN
     )
     ON CONFLICT (code) DO UPDATE SET
         name             = EXCLUDED.name,
-        description      = EXCLUDED.description,
+        display_name      = EXCLUDED.display_name,
         status           = EXCLUDED.status,
         current_version  = EXCLUDED.current_version,
         updated_by       = EXCLUDED.updated_by,
@@ -47,7 +47,7 @@ BEGIN
     -- Request Form (MAIN) — rule 包含 5 个主表字段
     -- subForms 和 subTable placeholder 在 03-form-table-bindings.sql 中填充
     INSERT INTO dw_form_definitions (
-        function_unit_id, form_name, form_type, description, config_json, created_at, updated_at
+        function_unit_id, form_name, form_type, display_name, config_json, created_at, updated_at
     ) VALUES (
         v_function_unit_id,
         'Request Form',
@@ -58,7 +58,7 @@ BEGIN
     )
     ON CONFLICT (function_unit_id, form_name) DO UPDATE SET
         config_json = EXCLUDED.config_json,
-        description = EXCLUDED.description,
+        display_name = EXCLUDED.display_name,
         updated_at  = CURRENT_TIMESTAMP
     RETURNING id INTO v_request_form_id;
 
@@ -66,7 +66,7 @@ BEGIN
 
     -- Approval Form（任务节点表单 → TASK）
     INSERT INTO dw_form_definitions (
-        function_unit_id, form_name, form_type, description, config_json, created_at, updated_at
+        function_unit_id, form_name, form_type, display_name, config_json, created_at, updated_at
     ) VALUES (
         v_function_unit_id,
         'Approval Form',
@@ -77,7 +77,7 @@ BEGIN
     )
     ON CONFLICT (function_unit_id, form_name) DO UPDATE SET
         config_json = EXCLUDED.config_json,
-        description = EXCLUDED.description,
+        display_name = EXCLUDED.display_name,
         updated_at  = CURRENT_TIMESTAMP
     RETURNING id INTO v_approval_form_id;
 
@@ -85,7 +85,7 @@ BEGIN
 
     -- Review Form（任务节点表单 → TASK）
     INSERT INTO dw_form_definitions (
-        function_unit_id, form_name, form_type, description, config_json, created_at, updated_at
+        function_unit_id, form_name, form_type, display_name, config_json, created_at, updated_at
     ) VALUES (
         v_function_unit_id,
         'Review Form',
@@ -103,7 +103,7 @@ BEGIN
 
     -- sub form (SUB)
     INSERT INTO dw_form_definitions (
-        function_unit_id, form_name, form_type, description, config_json, created_at, updated_at
+        function_unit_id, form_name, form_type, display_name, config_json, created_at, updated_at
     ) VALUES (
         v_function_unit_id,
         'sub form',
@@ -126,19 +126,19 @@ BEGIN
     -- Submit Request
     INSERT INTO dw_action_definitions (
         function_unit_id, action_name, action_type, config_json,
-        icon, button_color, description, is_default, created_at, updated_at
+        icon, button_color, display_name, is_default, created_at, updated_at
     ) VALUES (
         v_function_unit_id, 'Submit Request', 'PROCESS_SUBMIT',
         '{"url":"","body":"","formId":null,"method":"POST","script":"","headers":"","targetStep":"","dialogTitle":"","dialogWidth":"600px","targetStatus":"","confirmMessage":"Confirm submitting this request?","requireComment":true,"successMessage":"Request submitted successfully","requireAssignee":false}',
         NULL, NULL, 'Submit request to start approval workflow', false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     ) ON CONFLICT (function_unit_id, action_name) DO UPDATE SET
         action_type = EXCLUDED.action_type, config_json = EXCLUDED.config_json,
-        description = EXCLUDED.description, updated_at = CURRENT_TIMESTAMP;
+        display_name = EXCLUDED.display_name, updated_at = CURRENT_TIMESTAMP;
 
     -- Approve
     INSERT INTO dw_action_definitions (
         function_unit_id, action_name, action_type, config_json,
-        icon, button_color, description, is_default, created_at, updated_at
+        icon, button_color, display_name, is_default, created_at, updated_at
     ) VALUES (
         v_function_unit_id, 'Approve', 'APPROVE',
         '{"targetStatus":"APPROVED","confirmMessage":"Confirm approving this request?","requireComment":true,"successMessage":"Request approved"}',
@@ -146,12 +146,12 @@ BEGIN
     ) ON CONFLICT (function_unit_id, action_name) DO UPDATE SET
         action_type = EXCLUDED.action_type, config_json = EXCLUDED.config_json,
         icon = EXCLUDED.icon, button_color = EXCLUDED.button_color,
-        description = EXCLUDED.description, updated_at = CURRENT_TIMESTAMP;
+        display_name = EXCLUDED.display_name, updated_at = CURRENT_TIMESTAMP;
 
     -- Reject
     INSERT INTO dw_action_definitions (
         function_unit_id, action_name, action_type, config_json,
-        icon, button_color, description, is_default, created_at, updated_at
+        icon, button_color, display_name, is_default, created_at, updated_at
     ) VALUES (
         v_function_unit_id, 'Reject', 'REJECT',
         '{"targetStatus":"REJECTED","requireReason":true,"confirmMessage":"Confirm rejecting this request?","requireComment":true,"successMessage":"Request rejected"}',
@@ -159,12 +159,12 @@ BEGIN
     ) ON CONFLICT (function_unit_id, action_name) DO UPDATE SET
         action_type = EXCLUDED.action_type, config_json = EXCLUDED.config_json,
         icon = EXCLUDED.icon, button_color = EXCLUDED.button_color,
-        description = EXCLUDED.description, updated_at = CURRENT_TIMESTAMP;
+        display_name = EXCLUDED.display_name, updated_at = CURRENT_TIMESTAMP;
 
     -- Confirm
     INSERT INTO dw_action_definitions (
         function_unit_id, action_name, action_type, config_json,
-        icon, button_color, description, is_default, created_at, updated_at
+        icon, button_color, display_name, is_default, created_at, updated_at
     ) VALUES (
         v_function_unit_id, 'Confirm', 'APPROVE', '{}',
         NULL, NULL, NULL, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
@@ -175,31 +175,31 @@ BEGIN
     -- Transfer
     INSERT INTO dw_action_definitions (
         function_unit_id, action_name, action_type, config_json,
-        icon, button_color, description, is_default, created_at, updated_at
+        icon, button_color, display_name, is_default, created_at, updated_at
     ) VALUES (
         v_function_unit_id, 'Transfer', 'TRANSFER',
         '{"confirmMessage":"Confirm transferring this task?","requireComment":false,"successMessage":"Task transferred successfully"}',
         'Switch', NULL, 'Transfer task to another user', false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     ) ON CONFLICT (function_unit_id, action_name) DO UPDATE SET
         action_type = EXCLUDED.action_type, config_json = EXCLUDED.config_json,
-        icon = EXCLUDED.icon, description = EXCLUDED.description, updated_at = CURRENT_TIMESTAMP;
+        icon = EXCLUDED.icon, display_name = EXCLUDED.display_name, updated_at = CURRENT_TIMESTAMP;
 
     -- Delegate
     INSERT INTO dw_action_definitions (
         function_unit_id, action_name, action_type, config_json,
-        icon, button_color, description, is_default, created_at, updated_at
+        icon, button_color, display_name, is_default, created_at, updated_at
     ) VALUES (
         v_function_unit_id, 'Delegate', 'DELEGATE',
         '{"confirmMessage":"Confirm delegating this task?","requireComment":false,"successMessage":"Task delegated successfully"}',
         'User', NULL, 'Delegate task to another user', false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     ) ON CONFLICT (function_unit_id, action_name) DO UPDATE SET
         action_type = EXCLUDED.action_type, config_json = EXCLUDED.config_json,
-        icon = EXCLUDED.icon, description = EXCLUDED.description, updated_at = CURRENT_TIMESTAMP;
+        icon = EXCLUDED.icon, display_name = EXCLUDED.display_name, updated_at = CURRENT_TIMESTAMP;
 
     -- Approve First
     INSERT INTO dw_action_definitions (
         function_unit_id, action_name, action_type, config_json,
-        icon, button_color, description, is_default, created_at, updated_at
+        icon, button_color, display_name, is_default, created_at, updated_at
     ) VALUES (
         v_function_unit_id, 'Approve First', 'APPROVE', '{}',
         NULL, NULL, NULL, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
@@ -210,7 +210,7 @@ BEGIN
     -- Rejected First
     INSERT INTO dw_action_definitions (
         function_unit_id, action_name, action_type, config_json,
-        icon, button_color, description, is_default, created_at, updated_at
+        icon, button_color, display_name, is_default, created_at, updated_at
     ) VALUES (
         v_function_unit_id, 'Rejected First', 'REJECT',
         '{"url":"","body":"","formId":null,"method":"POST","script":"","headers":"","targetStep":"","webhookUrl":"","dialogTitle":"","dialogWidth":"600px","n8nConfigId":"","inputMapping":[],"targetStatus":"","n8nWorkflowId":"","outputMapping":[],"confirmMessage":"","requireComment":false,"timeoutSeconds":120,"requireAssignee":false}',

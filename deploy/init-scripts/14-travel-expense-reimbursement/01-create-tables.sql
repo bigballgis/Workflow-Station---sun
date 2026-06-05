@@ -25,14 +25,14 @@ BEGIN
     -- Table 1: Reimbursement (MAIN)
     -- =========================================================================
     INSERT INTO dw_table_definitions (
-        function_unit_id, table_name, table_display_name, table_type, description, created_at, updated_at
+        function_unit_id, table_name, table_display_name, table_type, display_name, created_at, updated_at
     ) VALUES (
         v_function_unit_id, 'reimbursement', 'Reimbursement', 'MAIN', 'Main reimbursement request table', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
     ON CONFLICT (function_unit_id, table_name) DO UPDATE SET
         table_display_name = EXCLUDED.table_display_name,
         table_type  = EXCLUDED.table_type,
-        description = EXCLUDED.description,
+        display_name = EXCLUDED.display_name,
         updated_at  = CURRENT_TIMESTAMP
     RETURNING id INTO v_reimbursement_table_id;
 
@@ -40,7 +40,7 @@ BEGIN
 
     INSERT INTO dw_field_definitions (
         table_id, field_name, data_type, length, precision_value, scale,
-        nullable, default_value, is_primary_key, is_unique, description, sort_order
+        nullable, default_value, is_primary_key, is_unique, display_name, sort_order
     ) VALUES
     (v_reimbursement_table_id, 'id',                     'BIGINT',    NULL, NULL, NULL, false, NULL, false, false, 'Primary key',              1),
     (v_reimbursement_table_id, 'reimbursement_number',  'VARCHAR',   50,   NULL, NULL, false, NULL, false, false, 'Reimbursement Number',     2),
@@ -64,14 +64,14 @@ BEGIN
     -- Table 2: ExpenseItems (SUB)
     -- =========================================================================
     INSERT INTO dw_table_definitions (
-        function_unit_id, table_name, table_display_name, table_type, description, created_at, updated_at
+        function_unit_id, table_name, table_display_name, table_type, display_name, created_at, updated_at
     ) VALUES (
         v_function_unit_id, 'expense_items', 'Expense Items', 'SUB', 'Sub table for expense line items', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
     ON CONFLICT (function_unit_id, table_name) DO UPDATE SET
         table_display_name = EXCLUDED.table_display_name,
         table_type  = EXCLUDED.table_type,
-        description = EXCLUDED.description,
+        display_name = EXCLUDED.display_name,
         updated_at  = CURRENT_TIMESTAMP
     RETURNING id INTO v_items_table_id;
 
@@ -79,7 +79,7 @@ BEGIN
 
     INSERT INTO dw_field_definitions (
         table_id, field_name, data_type, length, precision_value, scale,
-        nullable, default_value, is_primary_key, is_unique, description, sort_order
+        nullable, default_value, is_primary_key, is_unique, display_name, sort_order
     ) VALUES
     (v_items_table_id, 'id',               'BIGINT',  NULL, NULL, NULL, false, NULL, false, false, 'Item ID',                              1),
     (v_items_table_id, 'reimbursement_id', 'BIGINT',  NULL, NULL, NULL, false, NULL, false, false, 'Foreign key to Reimbursement table',   2),
@@ -95,14 +95,14 @@ BEGIN
     -- Table 3: Invoices (SUB)
     -- =========================================================================
     INSERT INTO dw_table_definitions (
-        function_unit_id, table_name, table_display_name, table_type, description, created_at, updated_at
+        function_unit_id, table_name, table_display_name, table_type, display_name, created_at, updated_at
     ) VALUES (
         v_function_unit_id, 'invoices', 'Invoices', 'SUB', 'Sub table for invoice attachments and recognition results', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
     ON CONFLICT (function_unit_id, table_name) DO UPDATE SET
         table_display_name = EXCLUDED.table_display_name,
         table_type  = EXCLUDED.table_type,
-        description = EXCLUDED.description,
+        display_name = EXCLUDED.display_name,
         updated_at  = CURRENT_TIMESTAMP
     RETURNING id INTO v_invoices_table_id;
 
@@ -110,7 +110,7 @@ BEGIN
 
     INSERT INTO dw_field_definitions (
         table_id, field_name, data_type, length, precision_value, scale,
-        nullable, default_value, is_primary_key, is_unique, description, sort_order
+        nullable, default_value, is_primary_key, is_unique, display_name, sort_order
     ) VALUES
     (v_invoices_table_id, 'id',                  'BIGINT',    NULL, NULL, NULL, false, NULL, false, false, 'Invoice ID',                          1),
     (v_invoices_table_id, 'reimbursement_id',    'BIGINT',    NULL, NULL, NULL, false, NULL, false, false, 'Foreign key to Reimbursement table',  2),
@@ -134,14 +134,14 @@ BEGIN
     -- Table 4: ApprovalActions (ACTION)
     -- =========================================================================
     INSERT INTO dw_table_definitions (
-        function_unit_id, table_name, table_display_name, table_type, description, created_at, updated_at
+        function_unit_id, table_name, table_display_name, table_type, display_name, created_at, updated_at
     ) VALUES (
         v_function_unit_id, 'approval_actions', 'Approval Actions', 'ACTION', 'Action table for tracking approval history', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
     ON CONFLICT (function_unit_id, table_name) DO UPDATE SET
         table_display_name = EXCLUDED.table_display_name,
         table_type  = EXCLUDED.table_type,
-        description = EXCLUDED.description,
+        display_name = EXCLUDED.display_name,
         updated_at  = CURRENT_TIMESTAMP
     RETURNING id INTO v_action_table_id;
 
@@ -149,7 +149,7 @@ BEGIN
 
     INSERT INTO dw_field_definitions (
         table_id, field_name, data_type, length, precision_value, scale,
-        nullable, default_value, is_primary_key, is_unique, description, sort_order
+        nullable, default_value, is_primary_key, is_unique, display_name, sort_order
     ) VALUES
     (v_action_table_id, 'id',              'BIGINT',    NULL, NULL, NULL, false, NULL, false, false, 'Action ID',                              1),
     (v_action_table_id, 'reimbursement_id','BIGINT',    NULL, NULL, NULL, false, NULL, false, false, 'Foreign key to Reimbursement table',     2),

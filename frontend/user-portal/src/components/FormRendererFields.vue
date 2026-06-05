@@ -1,8 +1,11 @@
 <script setup lang="ts">
-import { inject, ref } from 'vue'
+import { inject, ref, defineAsyncComponent } from 'vue'
 import { Search } from '@element-plus/icons-vue'
 import FieldRenderer from './FieldRenderer.vue'
-import SubTableField from './SubTableField.vue'
+const SubTableField = defineAsyncComponent({
+  loader: () => import('./SubTableField.vue'),
+  delay: 0,
+})
 import SubTableInlineForm from './SubTableInlineForm.vue'
 import LookupField from './lookup/LookupField.vue'
 import LookupViewDisplay from './lookup/LookupViewDisplay.vue'
@@ -243,6 +246,9 @@ function onCollapseActiveChange(fieldKey: string, names: string | string[]) {
           :title="String(ctx.resolveBinding(field._bindingId)?.tableName ?? '')"
           :columns="(ctx.resolveBinding(field._bindingId)?.columns as any[]) || []"
           :model-value="(ctx.resolveBinding(field._bindingId)?.data as any[]) || []"
+          :mi-participant-row-id="ctx.resolveMiParticipantSeedForSubTableAdd?.(field._bindingId).rowId ?? null"
+          :mi-parent-participant-row="ctx.resolveMiParticipantSeedForSubTableAdd?.(field._bindingId).parentRow ?? null"
+          :mi-parent-table-id="ctx.resolveMiParticipantSeedForSubTableAdd?.(field._bindingId).parentTableId ?? null"
           :editable="ctx.isSubTableEditable(field._bindingId)"
           :row-formulas="ctx.getSubFormRowFormulas(field._bindingId)"
           :summary-columns="ctx.getSummaryColumns(field._bindingId)"
@@ -263,8 +269,19 @@ function onCollapseActiveChange(fieldKey: string, names: string | string[]) {
           :show-view-detail="ctx.subTableShowViewDetailInitiator(field)"
           :compact-lookup-cells="ctx.subTableCompactLookupCells(field)"
           :primary-key-fields="ctx.resolveBinding(field._bindingId)?.primaryKeyFields as string[] | undefined"
+          :field-definitions="ctx.resolveBinding(field._bindingId)?.fieldDefinitions as any"
+          :binding-link-mode="ctx.resolveBinding(field._bindingId)?.bindingLinkMode"
+          :binding-foreign-key-field="ctx.resolveBinding(field._bindingId)?.foreignKeyField"
+          :table-id="ctx.resolveBinding(field._bindingId)?.tableId"
+          :function-unit-id="ctx.functionUnitId"
+          :primary-form-data="ctx.primaryFormData"
+          :sub-table-bindings-for-context="ctx.subTableBindingsForContext"
+          :primary-table-display-name="ctx.primaryTableDisplayName"
+          :primary-table-id="ctx.primaryTableId"
+          :parent-tables-by-id="ctx.parentTablesById"
           style="margin-bottom: 16px;"
           @update:model-value="(rows: any[]) => ctx.handleSubTableUpdate(field._bindingId!, rows)"
+          @update:primary-form-data="ctx.handlePrimaryFormDataPatch?.($event)"
           @update:linked-sub-table-data="ctx.handleSubTableUpdate"
           @view-detail="(row: any) => ctx.emitViewSubtaskDetail(row, ctx.resolveBinding(field._bindingId)?.data as any[])"
           @link-form-scroll-to-inline="ctx.scrollSubTableInlineIntoView(field._bindingId)"
@@ -296,6 +313,9 @@ function onCollapseActiveChange(fieldKey: string, names: string | string[]) {
           :title="String(ctx.resolveBinding(field._bindingId)?.tableName ?? '')"
           :columns="(ctx.resolveBinding(field._bindingId)?.columns as any[]) || []"
           :model-value="(ctx.resolveBinding(field._bindingId)?.data as any[]) || []"
+          :mi-participant-row-id="ctx.resolveMiParticipantSeedForSubTableAdd?.(field._bindingId).rowId ?? null"
+          :mi-parent-participant-row="ctx.resolveMiParticipantSeedForSubTableAdd?.(field._bindingId).parentRow ?? null"
+          :mi-parent-table-id="ctx.resolveMiParticipantSeedForSubTableAdd?.(field._bindingId).parentTableId ?? null"
           :editable="ctx.isSubTableEditable(field._bindingId)"
           :row-formulas="ctx.getSubFormRowFormulas(field._bindingId)"
           :summary-columns="ctx.getSummaryColumns(field._bindingId)"
@@ -316,8 +336,19 @@ function onCollapseActiveChange(fieldKey: string, names: string | string[]) {
           :show-view-detail="ctx.subTableShowViewDetailInitiator(field)"
           :compact-lookup-cells="ctx.subTableCompactLookupCells(field)"
           :primary-key-fields="ctx.resolveBinding(field._bindingId)?.primaryKeyFields as string[] | undefined"
+          :field-definitions="ctx.resolveBinding(field._bindingId)?.fieldDefinitions as any"
+          :binding-link-mode="ctx.resolveBinding(field._bindingId)?.bindingLinkMode"
+          :binding-foreign-key-field="ctx.resolveBinding(field._bindingId)?.foreignKeyField"
+          :table-id="ctx.resolveBinding(field._bindingId)?.tableId"
+          :function-unit-id="ctx.functionUnitId"
+          :primary-form-data="ctx.primaryFormData"
+          :sub-table-bindings-for-context="ctx.subTableBindingsForContext"
+          :primary-table-display-name="ctx.primaryTableDisplayName"
+          :primary-table-id="ctx.primaryTableId"
+          :parent-tables-by-id="ctx.parentTablesById"
           style="margin-bottom: 16px;"
           @update:model-value="(rows: any[]) => ctx.handleSubTableUpdate(field._bindingId!, rows)"
+          @update:primary-form-data="ctx.handlePrimaryFormDataPatch?.($event)"
           @update:linked-sub-table-data="ctx.handleSubTableUpdate"
           @view-detail="(row: any) => ctx.emitViewSubtaskDetail(row, ctx.resolveBinding(field._bindingId)?.data as any[])"
           @link-form-scroll-to-inline="ctx.scrollSubTableInlineIntoView(field._bindingId)"

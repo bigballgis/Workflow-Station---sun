@@ -122,7 +122,14 @@ export interface FieldDefinition {
   nullable: boolean
   isPrimaryKey: boolean
   defaultValue?: string
-  description?: string
+  displayName?: string
+  isForeignKey?: boolean
+  refTableId?: number
+  refPrimaryKeyFields?: string[]
+  pkGeneration?: Record<string, unknown>
+  pkGenerationJson?: Record<string, unknown>
+  fkDisplayMode?: 'readonly' | 'hidden'
+  relationCardinality?: string
 }
 
 export type FormType = 'PROCESS' | 'TASK' | 'ACTION'
@@ -158,6 +165,8 @@ export type SubBindingMode = 'FULL' | 'FORM_ONLY'
 export type BindingMode = 'EDITABLE' | 'READONLY'
 
 // Table binding interface
+export type BindingLinkMode = 'structuralFk' | 'miParticipantRow'
+
 export interface TableBinding {
   id?: number
   tableId: number
@@ -166,6 +175,7 @@ export interface TableBinding {
   bindingType: BindingType
   bindingMode: BindingMode
   foreignKeyField?: string
+  bindingLinkMode?: BindingLinkMode
   sortOrder: number
   subListViewId?: number
   subMode?: SubBindingMode
@@ -178,6 +188,7 @@ export interface TableBindingRequest {
   bindingType: BindingType
   bindingMode?: BindingMode
   foreignKeyField?: string
+  bindingLinkMode?: BindingLinkMode
   sortOrder?: number
   subMode?: SubBindingMode
 }
@@ -322,6 +333,12 @@ export const functionUnitApi = {
   
   createTable: (functionUnitId: number, data: Partial<TableDefinition>) =>
     functionUnitAxios.post<any, { data: TableDefinition }>(`/api/v1/function-units/${functionUnitId}/tables`, data),
+
+  checkTableNameAvailable: (functionUnitId: number, tableName: string, excludeTableId?: number) =>
+    functionUnitAxios.get<any, { data: { available: boolean; tableName: string } }>(
+      `/api/v1/function-units/${functionUnitId}/tables/name-available`,
+      { params: { tableName, excludeTableId } },
+    ),
   
   updateTable: (functionUnitId: number, tableId: number, data: Partial<TableDefinition>) =>
     functionUnitAxios.put<any, { data: TableDefinition }>(`/api/v1/function-units/${functionUnitId}/tables/${tableId}`, data),
@@ -393,6 +410,17 @@ export const functionUnitApi = {
   // Foreign Keys
   getForeignKeys: (functionUnitId: number) =>
     functionUnitAxios.get<any, { data: ForeignKeyDTO[] }>(`/api/v1/function-units/${functionUnitId}/tables/foreign-keys`),
+
+  allocatePrimaryKeys: (functionUnitId: number, payload: {
+    tableId: number
+    fieldName: string
+    count?: number
+    scopeKey?: string
+  }) =>
+    functionUnitAxios.post<any, { data: { values: string[] } }>(
+      `/api/v1/function-units/${functionUnitId}/tables/primary-keys/allocate`,
+      payload,
+    ),
 
   // Action test
   testAction: (functionUnitId: number, actionId: string | number, testData: any) =>

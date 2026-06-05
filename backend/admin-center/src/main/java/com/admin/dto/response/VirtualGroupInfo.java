@@ -46,7 +46,7 @@ public class VirtualGroupInfo {
                 .name(group.getName())
                 .code(group.getCode())
                 .type(EntityTypeConverter.toVirtualGroupType(group.getType()))
-                .description(group.getDescription())
+                .description(group.getDisplayName())
                 .adGroup(group.getAdGroup())
                 .status(group.getStatus())
                 .memberCount(0) // Will be set by helper service

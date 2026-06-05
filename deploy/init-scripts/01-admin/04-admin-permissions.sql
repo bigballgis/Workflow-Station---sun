@@ -10,8 +10,8 @@
 \echo '========================================='
 
 -- ---- Permissions ----
--- sys_permissions columns: id, code, name, type, resource, action, description, created_at, parent_id, sort_order
-INSERT INTO sys_permissions (id, code, name, type, resource, action, description, sort_order, created_at) VALUES
+-- sys_permissions columns: id, code, name, type, resource, action, display_name, created_at, parent_id, sort_order
+INSERT INTO sys_permissions (id, code, name, type, resource, action, display_name, sort_order, created_at) VALUES
   ('perm-basic-access', 'basic:access',  'Basic Access',     'PLATFORM', 'platform', 'access', 'Basic access to the platform',              1,  CURRENT_TIMESTAMP),
   ('perm-user-read',    'user:read',     'Read Users',       'USER',     'user',     'read',   'View user list and details',                10, CURRENT_TIMESTAMP),
   ('perm-user-write',   'user:write',    'Write Users',      'USER',     'user',     'write',  'Create and update users',                   11, CURRENT_TIMESTAMP),

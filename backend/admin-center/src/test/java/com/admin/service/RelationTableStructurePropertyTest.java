@@ -148,7 +148,7 @@ class RelationTableStructurePropertyTest {
                         Arbitraries.of(true, false),
                         Arbitraries.of(true, false),
                         Arbitraries.strings().alpha().ofMinLength(0).ofMaxLength(20)
-                ).as((name, type, len, nullable, pk, comment) ->
+                ).as((name, type, len, nullable, pk, displayName) ->
                         UpdateRelationTableRequest.FieldDefinitionRequest.builder()
                                 .fieldName(name)
                                 .dataType(type)
@@ -156,7 +156,7 @@ class RelationTableStructurePropertyTest {
                                 .nullable(nullable)
                                 .isPrimaryKey(pk)
                                 .defaultValue(null)
-                                .comment(comment)
+                                .displayName(displayName)
                                 .build()
                 );
         return fieldArb.list().ofMinSize(1).ofMaxSize(5)
@@ -235,7 +235,7 @@ class RelationTableStructurePropertyTest {
             assertThat(resField.getLength()).isEqualTo(reqField.getLength());
             assertThat(resField.getNullable()).isEqualTo(reqField.getNullable());
             assertThat(resField.getIsPrimaryKey()).isEqualTo(reqField.getIsPrimaryKey());
-            assertThat(resField.getComment()).isEqualTo(reqField.getComment());
+            assertThat(resField.getDisplayName()).isEqualTo(reqField.getDisplayName());
             assertThat(resField.getSortOrder()).isEqualTo(reqField.getSortOrder());
         }
     }

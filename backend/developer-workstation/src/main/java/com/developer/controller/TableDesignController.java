@@ -4,6 +4,7 @@ import com.developer.component.TableDesignComponent;
 import com.developer.dto.ApiResponse;
 import com.developer.dto.ForeignKeyDTO;
 import com.developer.dto.TableDefinitionRequest;
+import com.developer.dto.TableNameAvailabilityResponse;
 import com.developer.dto.ValidationResult;
 import com.developer.entity.TableDefinition;
 import com.developer.enums.DatabaseDialect;
@@ -27,9 +28,12 @@ import java.util.List;
 public class TableDesignController extends BaseController {
     
     private final TableDesignComponent tableDesignComponent;
+    private final com.developer.component.PrimaryKeyAllocationComponent primaryKeyAllocationComponent;
     
-    public TableDesignController(TableDesignComponent tableDesignComponent) {
+    public TableDesignController(TableDesignComponent tableDesignComponent,
+                                 com.developer.component.PrimaryKeyAllocationComponent primaryKeyAllocationComponent) {
         this.tableDesignComponent = tableDesignComponent;
+        this.primaryKeyAllocationComponent = primaryKeyAllocationComponent;
     }
     
     @GetMapping
@@ -95,11 +99,33 @@ public class TableDesignController extends BaseController {
     public ResponseEntity<ApiResponse<ValidationResult>> validate(@PathVariable Long functionUnitId) {
         return handleRequest(() -> tableDesignComponent.validateRelationships(functionUnitId));
     }
+
+    @GetMapping("/name-available")
+    @Operation(summary = "Check if table name is globally available")
+    @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
+    public ResponseEntity<ApiResponse<TableNameAvailabilityResponse>> checkTableNameAvailable(
+            @PathVariable Long functionUnitId,
+            @RequestParam String tableName,
+            @RequestParam(required = false) Long excludeTableId) {
+        return handleRequest(() -> TableNameAvailabilityResponse.builder()
+                .tableName(tableName)
+                .available(tableDesignComponent.isTableNameAvailable(tableName, excludeTableId))
+                .build());
+    }
     
     @GetMapping("/foreign-keys")
     @Operation(summary = "Get all foreign key relationships")
     @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<List<ForeignKeyDTO>>> getForeignKeys(@PathVariable Long functionUnitId) {
         return handleRequest(() -> tableDesignComponent.getForeignKeys(functionUnitId));
+    }
+
+    @PostMapping("/primary-keys/allocate")
+    @Operation(summary = "Allocate primary key value(s) for a table field")
+    @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
+    public ResponseEntity<ApiResponse<com.developer.dto.AllocatePrimaryKeyResponse>> allocatePrimaryKeys(
+            @PathVariable Long functionUnitId,
+            @Valid @RequestBody com.developer.dto.AllocatePrimaryKeyRequest request) {
+        return handleRequest(() -> primaryKeyAllocationComponent.allocate(request, functionUnitId));
     }
 }

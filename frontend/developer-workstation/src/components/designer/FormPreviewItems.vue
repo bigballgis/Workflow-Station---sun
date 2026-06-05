@@ -41,17 +41,24 @@
           lazy
         >
           <SubTableField
-            :config="{ title: item.binding.tableName, columns: item.binding.columns }"
+            :config="{ title: item.binding.tableName, columns: item.binding.columns, tableId: item.binding.tableId, fieldDefinitions: item.binding.fieldDefinitions, bindingLinkMode: item.binding.bindingLinkMode, bindingForeignKeyField: item.binding.bindingForeignKeyField }"
             :model-value="previewTableRows[item.binding.bindingId]"
             :editable="true"
             :form-rule="item.binding.rule"
             :form-option="item.binding.option"
+            :primary-form-data="previewModel"
+            :function-unit-id="functionUnitId"
+            :primary-table-display-name="primaryTableDisplayName"
+            :primary-table-id="primaryTableId"
+            :parent-tables-by-id="parentTablesById"
+            :preview-table-bindings="previewTableBindings"
             :preview-inline-form-rule="inlineFormBelowForBinding(item.binding).rule"
             :preview-inline-form-option="inlineFormBelowForBinding(item.binding).option"
             :preview-show-form-below="item.binding.portalViews?.assigneeTodo === 'formBelowTable'"
             :preview-link-form-scroll-to-inline="item.binding.portalViews?.assigneeTodo === 'formBelowTable'"
             :preview-lookup-compact="false"
             @update:model-value="(rows: any[]) => updateTableRows(item.binding.bindingId, rows)"
+            @update:primary-form-data="mergePrimaryFormData"
           />
         </el-tab-pane>
         <el-tab-pane
@@ -60,14 +67,21 @@
           lazy
         >
           <SubTableField
-            :config="{ title: item.binding.tableName, columns: item.binding.columns }"
+            :config="{ title: item.binding.tableName, columns: item.binding.columns, tableId: item.binding.tableId, fieldDefinitions: item.binding.fieldDefinitions, bindingLinkMode: item.binding.bindingLinkMode, bindingForeignKeyField: item.binding.bindingForeignKeyField }"
             :model-value="previewTableRows[item.binding.bindingId]"
             :editable="false"
             :form-rule="item.binding.rule"
             :form-option="item.binding.option"
+            :primary-form-data="previewModel"
+            :function-unit-id="functionUnitId"
+            :primary-table-display-name="primaryTableDisplayName"
+            :primary-table-id="primaryTableId"
+            :parent-tables-by-id="parentTablesById"
+            :preview-table-bindings="previewTableBindings"
             :preview-show-form-below="false"
             :preview-lookup-compact="initiatorPreviewIsSummary(item.binding)"
             @update:model-value="(rows: any[]) => updateTableRows(item.binding.bindingId, rows)"
+            @update:primary-form-data="mergePrimaryFormData"
           />
         </el-tab-pane>
       </el-tabs>
@@ -88,13 +102,20 @@
       </div>
       <SubTableField
         v-if="hasSubTablePreviewSurface(item.binding)"
-        :config="{ title: item.binding.tableName, columns: item.binding.columns || [] }"
+        :config="{ title: item.binding.tableName, columns: item.binding.columns || [], tableId: item.binding.tableId, fieldDefinitions: item.binding.fieldDefinitions, bindingLinkMode: item.binding.bindingLinkMode, bindingForeignKeyField: item.binding.bindingForeignKeyField }"
         :model-value="previewTableRows[item.binding.bindingId]"
         :editable="!isMyRequestsPreview"
         :form-rule="item.binding.rule"
         :form-option="item.binding.option"
+        :primary-form-data="previewModel"
+        :function-unit-id="functionUnitId"
+        :primary-table-display-name="primaryTableDisplayName"
+        :primary-table-id="primaryTableId"
+        :parent-tables-by-id="parentTablesById"
+        :preview-table-bindings="previewTableBindings"
         :preview-lookup-compact="isMyRequestsPreview"
         @update:model-value="(rows: any[]) => updateTableRows(item.binding.bindingId, rows)"
+        @update:primary-form-data="mergePrimaryFormData"
       />
       <el-empty
         v-else
@@ -106,7 +127,7 @@
 
     <div
       v-else-if="item.kind === 'relationTable'"
-      class="relation-preview-wrapper"
+      class="relation-preview-wrapper table-scroll-wrap"
     >
       <el-table
         :data="item.fields"
@@ -161,6 +182,11 @@
         :items="item.items"
         :preview-option="previewOption"
         :preview-table-rows="previewTableRows"
+        :function-unit-id="functionUnitId"
+        :primary-table-display-name="primaryTableDisplayName"
+        :primary-table-id="primaryTableId"
+        :parent-tables-by-id="parentTablesById"
+        :preview-table-bindings="previewTableBindings"
         @update:preview-table-rows="emit('update:previewTableRows', $event)"
       />
     </el-card>
@@ -191,6 +217,11 @@ const props = defineProps<{
   previewData: Record<string, any>
   previewOption: Record<string, any>
   previewTableRows: Record<number, any[]>
+  functionUnitId?: number
+  primaryTableDisplayName?: string
+  primaryTableId?: number | null
+  parentTablesById?: Record<number, { fieldDefinitions: import('@/api/functionUnit').FieldDefinition[] }>
+  previewTableBindings?: Array<{ tableId?: number | null; bindingType?: string }>
 }>()
 
 const emit = defineEmits<{
@@ -259,6 +290,10 @@ function updateTableRows(bindingId: number, rows: any[]) {
     ...props.previewTableRows,
     [bindingId]: rows,
   })
+}
+
+function mergePrimaryFormData(patch: Record<string, unknown>) {
+  emit('update:previewData', { ...props.previewData, ...patch })
 }
 </script>
 

@@ -99,7 +99,7 @@ public class TaskFormCopyPropertyTest {
                 .formName(source.getFormName() + "_copy")
                 .formType(source.getFormType())
                 .configJson(new HashMap<>(source.getConfigJson()))
-                .description(source.getDescription())
+                .displayName(source.getDisplayName())
                 .boundTable(source.getBoundTable())
                 .fieldPermissions(source.getFieldPermissions() != null
                         ? new HashMap<>(source.getFieldPermissions())

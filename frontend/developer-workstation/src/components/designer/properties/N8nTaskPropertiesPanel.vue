@@ -84,6 +84,7 @@
           + {{ t('common.add') }}
         </el-button>
       </div>
+      <div class="table-scroll-wrap">
       <el-table
         v-if="n8nConfig.inputMapping.length > 0"
         :data="n8nConfig.inputMapping"
@@ -132,6 +133,7 @@
           </template>
         </el-table-column>
       </el-table>
+      </div>
     </div>
 
     <!-- Output Mapping -->
@@ -147,6 +149,7 @@
           + {{ t('common.add') }}
         </el-button>
       </div>
+      <div class="table-scroll-wrap">
       <el-table
         v-if="n8nConfig.outputMapping.length > 0"
         :data="n8nConfig.outputMapping"
@@ -195,6 +198,7 @@
           </template>
         </el-table-column>
       </el-table>
+      </div>
     </div>
   </div>
 </template>

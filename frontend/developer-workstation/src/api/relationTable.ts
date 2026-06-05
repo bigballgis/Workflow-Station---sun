@@ -79,7 +79,7 @@ export interface RelationFieldDTO {
   nullable: boolean
   isPrimaryKey: boolean
   defaultValue?: string
-  comment?: string
+  displayName?: string
   sortOrder: number
 }
 

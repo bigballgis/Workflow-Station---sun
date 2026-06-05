@@ -278,7 +278,7 @@ class RelationTableDeployServiceTest {
                             .length(100)
                             .nullable(true)
                             .isPrimaryKey(false)
-                            .comment("Original name field")
+                            .displayName("Original name field")
                             .sortOrder(1)
                             .build()
             );

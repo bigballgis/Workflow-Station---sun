@@ -41,7 +41,7 @@ export interface SubTableFieldDTO {
   nullable: boolean
   isPrimaryKey: boolean
   defaultValue?: string
-  comment?: string
+  displayName?: string
 }
 
 export interface SubTableViewFieldDTO {

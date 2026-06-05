@@ -39,7 +39,7 @@ public interface ActionDefinitionRepository extends JpaRepository<ActionDefiniti
      */
     @Query(value = "SELECT CAST(d.id AS VARCHAR) AS id, " +
             "CAST(d.function_unit_id AS VARCHAR) AS function_unit_id, " +
-            "d.action_name, d.action_type, d.description, d.config_json, " +
+            "d.action_name, d.action_type, d.display_name AS description, d.config_json, " +
             "d.icon, d.button_color, d.is_default, " +
             "d.created_at, d.updated_at, " +
             "NULL AS created_by, NULL AS updated_by " +

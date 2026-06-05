@@ -1,5 +1,6 @@
 package com.developer.dto;
 
+import com.developer.enums.BindingLinkMode;
 import com.developer.enums.BindingMode;
 import com.developer.enums.BindingType;
 import com.developer.enums.SubMode;
@@ -43,6 +44,9 @@ public class FormTableBindingRequest {
      * 外键字段名（子表/关联表需要）
      */
     private String foreignKeyField;
+
+    /** structuralFk (default) | miParticipantRow */
+    private BindingLinkMode bindingLinkMode;
 
     /**
      * 排序顺序

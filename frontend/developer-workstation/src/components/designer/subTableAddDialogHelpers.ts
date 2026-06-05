@@ -117,6 +117,27 @@ export function buildInitialRow(columns: DialogColumn[]): Record<string, unknown
   return row
 }
 
+function isEmptyFormValue(value: unknown): boolean {
+  if (value == null) return true
+  if (typeof value === 'string' && value.trim() === '') return true
+  return false
+}
+
+/** Keep seeded PK/FK/runtime values when form-create or empty inputs omit them on save. */
+export function mergeFormRowWithSeed(
+  seed: Record<string, unknown> | null | undefined,
+  form: Record<string, unknown>,
+): Record<string, unknown> {
+  const row = { ...form }
+  if (!seed) return row
+  for (const [key, seedVal] of Object.entries(seed)) {
+    if (isEmptyFormValue(row[key]) && !isEmptyFormValue(seedVal)) {
+      row[key] = seedVal
+    }
+  }
+  return row
+}
+
 export function buildRules(columns: DialogColumn[]): FormRules {
   const rules: FormRules = {}
   for (const col of columns) {

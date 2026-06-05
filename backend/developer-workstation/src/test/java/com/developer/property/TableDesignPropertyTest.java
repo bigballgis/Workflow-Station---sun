@@ -11,6 +11,7 @@ import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.TableDefinitionRepository;
 import net.jqwik.api.*;
 import com.platform.common.i18n.I18nService;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -37,7 +38,9 @@ public class TableDesignPropertyTest {
         
         TableDesignComponent component = new TableDesignComponentImpl(
                 tableRepo, fieldRepo, fkRepo, functionUnitRepo, formRepo, formTableBindingRepo, i18nService,
-                mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class));
+                mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class),
+                mock(com.developer.service.FieldFkPkSyncService.class),
+                mock(JdbcTemplate.class));
         
         assertThat(component).isNotNull();
         assertThat(tableName).matches("tbl_[a-z]+");
@@ -62,7 +65,9 @@ public class TableDesignPropertyTest {
         
         TableDesignComponent component = new TableDesignComponentImpl(
                 tableRepo, fieldRepo, fkRepo, functionUnitRepo, formRepo, formTableBindingRepo, i18nService,
-                mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class));
+                mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class),
+                mock(com.developer.service.FieldFkPkSyncService.class),
+                mock(JdbcTemplate.class));
         
         assertThat(component).isNotNull();
         assertThat(dialect).isNotNull();

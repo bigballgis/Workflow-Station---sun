@@ -328,7 +328,7 @@ import { ref, watch, computed } from 'vue'
 import { Upload } from '@element-plus/icons-vue'
 import type { FormInstance } from 'element-plus'
 import { ElMessage } from 'element-plus'
-import { buildInitialRow, buildRules, isColReadonly } from './subTableAddDialogHelpers'
+import { buildInitialRow, buildRules, isColReadonly, mergeFormRowWithSeed } from './subTableAddDialogHelpers'
 import type { DialogColumn } from './subTableAddDialogHelpers'
 import SubTableNestedModalShell from './SubTableNestedModalShell.vue'
 import { getFilenameFromUrl, extractUploadUrlFromResponse, normalizeUploadFieldsInRow } from './uploadFieldUtils'
@@ -407,16 +407,15 @@ watch(
   (open) => {
     if (!open) return
     uploadNames.value = {}
+    const seed = props.initialData ? JSON.parse(JSON.stringify(props.initialData)) : {}
+    formData.value = { ...buildInitialRow(props.columns), ...seed }
     if (props.mode === 'edit' && props.initialData) {
-      formData.value = { ...buildInitialRow(props.columns), ...JSON.parse(JSON.stringify(props.initialData)) }
       for (const col of props.columns) {
         if (col.type === 'upload' && formData.value[col.field]) {
           const url: string = formData.value[col.field]
           uploadNames.value[col.field] = getFilenameFromUrl(url)
         }
       }
-    } else {
-      formData.value = buildInitialRow(props.columns)
     }
   },
   { immediate: false },
@@ -437,7 +436,7 @@ async function handleSave() {
   if (!formRef.value) return
   const valid = await formRef.value.validate().catch(() => false)
   if (!valid) return
-  const row = { ...formData.value }
+  const row = mergeFormRowWithSeed(props.initialData, formData.value)
   normalizeUploadFieldsInRow(row, props.columns)
   emit('save', row)
   visibleModel.value = false

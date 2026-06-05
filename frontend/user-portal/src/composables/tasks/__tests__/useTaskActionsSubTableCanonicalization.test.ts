@@ -16,6 +16,7 @@ vi.mock('element-plus', () => ({
   ElMessage: {
     success: vi.fn(),
     warning: vi.fn(),
+    error: vi.fn(),
   },
 }))
 
@@ -82,6 +83,45 @@ describe('useTaskActions submitApprove __subTables__ canonicalization', () => {
     expect(Object.keys(subTables).sort()).toEqual(['30', '69'])
     expect(subTables.participants).toBeUndefined()
     expect(subTables.subtable2).toBeUndefined()
+  })
+
+  it('uses buildFormPayloadForComplete when provided (Save parity path)', async () => {
+    const buildFormPayloadForComplete = vi.fn(() => ({
+      fieldA: 'x',
+      __subTables__: {
+        '69': [{ id: 1 }],
+        participants: [{ id: 1 }],
+      },
+    }))
+    const prepareBeforeComplete = vi.fn(async () => {})
+
+    const taskActions = useTaskActions({
+      taskId: 'task-1',
+      taskInfo: ref({}),
+      subTableBindings: ref([]),
+      formData: ref({}),
+      submitting: ref(false),
+      approveDialogVisible: ref(true),
+      approveDialogTitle: ref(''),
+      currentApproveAction: ref('APPROVE'),
+      approveForm: { comment: '' },
+      actionDialogVisible: ref(false),
+      actionDialogTitle: ref(''),
+      currentAction: ref(''),
+      actionForm: { targetUserId: '', reason: '' },
+      userOptions: ref([]),
+      userSearchLoading: ref(false),
+      loadTaskDetail: vi.fn(async () => {}),
+      prepareBeforeComplete,
+      buildFormPayloadForComplete,
+    })
+
+    await taskActions.submitApprove()
+
+    expect(prepareBeforeComplete).toHaveBeenCalledTimes(1)
+    expect(buildFormPayloadForComplete).toHaveBeenCalledTimes(1)
+    const payload = completeTaskMock.mock.calls[0]?.[1]
+    expect(Object.keys(payload?.formData?.__subTables__ ?? {}).sort()).toEqual(['69'])
   })
 })
 

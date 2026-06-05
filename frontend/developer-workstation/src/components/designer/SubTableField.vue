@@ -17,6 +17,7 @@
       </div>
     </div>
 
+    <div class="table-scroll-wrap">
     <el-table
       v-loading="loading"
       :data="tableData"
@@ -185,6 +186,7 @@
         />
       </template>
     </el-table>
+    </div>
 
     <div
       v-if="previewShowFormBelow"
@@ -279,7 +281,7 @@ import DOMPurify from 'dompurify'
 import SubTableAddDialog from './SubTableAddDialog.vue'
 import SubTableFormDialog from './SubTableFormDialog.vue'
 import LookupPreview from './LookupPreview.vue'
-import type { DialogColumn } from './subTableAddDialogHelpers'
+import { mergeFormRowWithSeed, type DialogColumn } from './subTableAddDialogHelpers'
 import {
   alignUploadFieldsToColumns,
   getFilenameFromUrl,
@@ -291,6 +293,13 @@ import {
 } from './uploadFieldUtils'
 import { collectUploadRulesFromTree } from '@/utils/formDesigner'
 import { PREVIEW_SUBTABLE_DIALOG_KEY, PREVIEW_MY_REQUESTS_ACTIVE_KEY } from './previewSubTableDialog'
+import { functionUnitApi } from '@/api/functionUnit'
+import {
+  buildRowAddContext,
+  prepareSubTableAddRow,
+  applyFkPresentationToDialogColumns,
+  toFieldFkMetas,
+} from '@/utils/subTableRowRuntime'
 
 const { t } = useI18n()
 const previewDialogHost = inject(PREVIEW_SUBTABLE_DIALOG_KEY, null)
@@ -327,6 +336,9 @@ interface SubTableConfig {
   bindingId?: number
   tableId?: number
   columns: ColumnConfig[]
+  fieldDefinitions?: import('@/utils/subTableRowRuntime').BindingFieldDefinition[]
+  bindingLinkMode?: 'structuralFk' | 'miParticipantRow' | string
+  bindingForeignKeyField?: string | null
   pagination?: boolean
   pageSize?: number
   maxHeight?: number
@@ -350,10 +362,18 @@ const props = defineProps<{
   /** Form Preview: override schema for form-below strip (linkForm → target sub-table) */
   previewInlineFormRule?: any[]
   previewInlineFormOption?: any
+  /** Form Preview: main form data for FK fill */
+  primaryFormData?: Record<string, unknown>
+  functionUnitId?: number
+  primaryTableDisplayName?: string
+  primaryTableId?: number | null
+  parentTablesById?: Record<number, { fieldDefinitions: BindingFieldDefinition[] }>
+  previewTableBindings?: Array<{ tableId?: number | null; bindingType?: string }>
 }>()
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: any[]): void
+  (e: 'update:primaryFormData', value: Record<string, unknown>): void
   (e: 'add', row: any): void
   (e: 'edit', row: any, index: number): void
   (e: 'delete', row: any, index: number): void
@@ -373,6 +393,7 @@ const linkFormDialogVisible = ref(false)
 const dialogMode = ref<'add' | 'edit'>('add')
 const editingRowIndex = ref<number | null>(null)
 const dialogInitialData = ref<Record<string, any> | undefined>(undefined)
+const dialogAddColumns = ref<DialogColumn[] | null>(null)
 const linkFormDialogTitle = ref('')
 const linkFormInitialData = ref<Record<string, any> | undefined>(undefined)
 const linkFormRule = ref<any[]>([])
@@ -423,7 +444,8 @@ const hasFormRule = computed(() => props.formRule && props.formRule.length > 0)
 
 // 将 ColumnConfig 转换为 DialogColumn（兼容 SubTableAddDialog 的类型）
 const dialogColumns = computed<DialogColumn[]>(() => {
-  return displayColumns.value.map(col => {
+  const source = dialogAddColumns.value ?? displayColumns.value
+  return source.map(col => {
     // 将旧的 'input' type 映射到 'text'
     const type = col.type === 'input' ? 'text' : (col.type as DialogColumn['type'])
     return {
@@ -517,11 +539,74 @@ async function downloadFile(
 }
 
 // 添加/编辑行 — preview 走 FormDesigner 顶层弹层，避免嵌在 Preview Dialog 内被遮罩挡住
-function openRowDialog(mode: 'add' | 'edit', index?: number) {
+async function openRowDialog(mode: 'add' | 'edit', index?: number) {
   dialogMode.value = mode
   editingRowIndex.value = mode === 'edit' && index != null ? index : null
-  dialogInitialData.value =
-    mode === 'edit' && index != null ? { ...tableData.value[index] } : undefined
+  dialogAddColumns.value = null
+
+  if (mode === 'add') {
+    const fkMetas = toFieldFkMetas(props.config.fieldDefinitions)
+    const baseCols = fkMetas.length
+      ? applyFkPresentationToDialogColumns(
+          displayColumns.value.map(col => ({
+            field: col.field,
+            label: col.label,
+            type: col.type === 'input' ? 'text' : (col.type as DialogColumn['type']),
+            required: col.required,
+            placeholder: col.placeholder,
+            options: col.options,
+            props: col.props,
+          })),
+          fkMetas,
+          props.config.fieldDefinitions,
+        ).visibleColumns
+      : undefined
+
+    const rowAddContext = buildRowAddContext(
+      props.primaryFormData ?? {},
+      props.previewTableBindings,
+    )
+    try {
+      const result = await prepareSubTableAddRow({
+        columns: baseCols ?? dialogColumns.value,
+        fieldDefinitions: props.config.fieldDefinitions,
+        rowAddContext,
+        tableId: props.config.tableId,
+        tableDisplayName: props.config.title,
+        primaryTableDisplayName: props.primaryTableDisplayName,
+        primaryTableId: props.primaryTableId,
+        parentTablesById: props.parentTablesById,
+        functionUnitId: props.functionUnitId != null ? String(props.functionUnitId) : undefined,
+        autoEnsurePrimaryRecord: props.primaryFormData != null,
+        bindingLinkMode: props.config.bindingLinkMode,
+        bindingForeignKeyField: props.config.bindingForeignKeyField,
+        allocatePrimaryKeys:
+          props.functionUnitId != null && props.config.tableId != null
+            ? async (payload) => {
+                const res = await functionUnitApi.allocatePrimaryKeys(props.functionUnitId!, payload)
+                return res?.data?.values ?? []
+              }
+            : undefined,
+        t,
+      })
+      if (!result.ok) {
+        ElMessage.warning(result.message)
+        return
+      }
+      if (result.primaryFormDataPatch && Object.keys(result.primaryFormDataPatch).length > 0) {
+        emit('update:primaryFormData', result.primaryFormDataPatch)
+      }
+      dialogAddColumns.value = result.dialogColumns
+      dialogInitialData.value = result.initialRow as Record<string, any>
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : t('common.error')
+      ElMessage.error(message || t('common.error'))
+      return
+    }
+  } else {
+    dialogInitialData.value =
+      index != null ? { ...tableData.value[index] } : undefined
+  }
 
   if (previewDialogHost) {
     linkFormDialogVisible.value = false
@@ -550,12 +635,12 @@ function openRowDialog(mode: 'add' | 'edit', index?: number) {
 }
 
 function handleAdd() {
-  openRowDialog('add')
+  void openRowDialog('add')
 }
 
 // 编辑行 — 打开 Dialog 并预填数据
 function openEditDialog(index: number) {
-  openRowDialog('edit', index)
+  void openRowDialog('edit', index)
 }
 
 function linkFormTitleTableName(raw: string): string {
@@ -600,7 +685,7 @@ function handleLinkFormSave(rowData: Record<string, any>) {
 
 // Dialog 保存回调
 function handleDialogSave(rowData: Record<string, any>) {
-  const savedRow = { ...rowData }
+  const savedRow = mergeFormRowWithSeed(dialogInitialData.value, rowData)
   if (hasFormRule.value && props.formRule?.length) {
     const uploadRuleFields = collectUploadRulesFromTree(props.formRule).map((r) => r.field)
     alignUploadFieldsToColumns(savedRow, displayColumns.value, uploadRuleFields)

@@ -2,6 +2,7 @@ package com.developer.entity;
 
 import com.developer.enums.ActionType;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -52,8 +53,9 @@ public class ActionDefinition {
     @Column(name = "button_color", length = 20)
     private String buttonColor;
     
-    @Column(name = "description", columnDefinition = "TEXT")
-    private String description;
+    @JsonProperty("description")
+    @Column(name = "display_name", columnDefinition = "TEXT")
+    private String displayName;
     
     @Column(name = "is_default")
     @Builder.Default

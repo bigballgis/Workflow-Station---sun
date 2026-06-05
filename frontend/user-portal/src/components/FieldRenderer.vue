@@ -44,6 +44,14 @@
       />
     </template>
 
+    <!-- number (readonly non-numeric PK/FK strings e.g. Test-000017 cannot bind el-input-number) -->
+    <template v-else-if="field.type === 'number' && showNumberAsText">
+      <el-input
+        :model-value="numberAsTextDisplay"
+        disabled
+      />
+    </template>
+
     <!-- number -->
     <template v-else-if="field.type === 'number'">
       <el-input-number
@@ -659,6 +667,21 @@ const emit = defineEmits<{
 }>()
 
 const isDisabled = computed(() => props.readonly || props.disabled)
+
+/** Prefixed-sequence / uuid PK bound to inputNumber shows blank in el-input-number. */
+const showNumberAsText = computed(() => {
+  if (props.field.type !== 'number' || !isDisabled.value) return false
+  const v = props.modelValue
+  if (v == null || v === '') return false
+  if (typeof v === 'number') return Number.isNaN(v)
+  const s = String(v).trim()
+  return s !== '' && Number.isNaN(Number(s))
+})
+
+const numberAsTextDisplay = computed(() => {
+  const v = props.modelValue
+  return v == null ? '' : String(v)
+})
 
 function onUpdate(value: any) {
   if (props.readonly) return

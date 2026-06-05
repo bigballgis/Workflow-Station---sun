@@ -22,7 +22,7 @@ BEGIN
     -- Step 1: Function Unit
     -- =========================================================================
     INSERT INTO dw_function_units (
-        code, name, description, status,
+        code, name, display_name, status,
         current_version, version, is_active, enabled,
         deployed_at, lock_version, created_by, created_at, updated_by, updated_at
     ) VALUES (
@@ -37,7 +37,7 @@ BEGIN
     )
     ON CONFLICT (code) DO UPDATE SET
         name            = EXCLUDED.name,
-        description     = EXCLUDED.description,
+        display_name     = EXCLUDED.display_name,
         status          = EXCLUDED.status,
         current_version = EXCLUDED.current_version,
         version         = EXCLUDED.version,
@@ -67,7 +67,7 @@ BEGIN
 
     -- 2.1 创建会议表单 (Create Meeting Form) - 主表单：创建会议与分配参与人节点共用
     INSERT INTO dw_form_definitions (
-        function_unit_id, form_name, form_type, description, config_json, created_at, updated_at
+        function_unit_id, form_name, form_type, display_name, config_json, created_at, updated_at
     ) VALUES (
         v_function_unit_id,
         'Create Meeting Form',
@@ -89,7 +89,7 @@ BEGIN
             '{subForms}',
             COALESCE((dw_form_definitions.config_json::jsonb)->'subForms', '{}'::jsonb)
         ),
-        description = EXCLUDED.description,
+        display_name = EXCLUDED.display_name,
         updated_at  = CURRENT_TIMESTAMP
     RETURNING id INTO v_create_meeting_form_id;
 
@@ -97,7 +97,7 @@ BEGIN
 
     -- 2.2 填写参会信息表单 (Participant Info Form) - 子任务表单，参与人填写自己的信息
     INSERT INTO dw_form_definitions (
-        function_unit_id, form_name, form_type, description, config_json, created_at, updated_at
+        function_unit_id, form_name, form_type, display_name, config_json, created_at, updated_at
     ) VALUES (
         v_function_unit_id,
         'Participant Info Form',
@@ -108,7 +108,7 @@ BEGIN
     )
     ON CONFLICT (function_unit_id, form_name) DO UPDATE SET
         config_json = EXCLUDED.config_json,
-        description = EXCLUDED.description,
+        display_name = EXCLUDED.display_name,
         updated_at  = CURRENT_TIMESTAMP
     RETURNING id INTO v_participant_form_id;
 
@@ -121,7 +121,7 @@ BEGIN
     -- 3.1 提交会议 (Submit Meeting)
     INSERT INTO dw_action_definitions (
         function_unit_id, action_name, action_type, config_json,
-        icon, button_color, description, is_default, created_at, updated_at
+        icon, button_color, display_name, is_default, created_at, updated_at
     ) VALUES (
         v_function_unit_id,
         'Submit Meeting',
@@ -135,7 +135,7 @@ BEGIN
     ON CONFLICT (function_unit_id, action_name) DO UPDATE SET
         action_type = EXCLUDED.action_type,
         config_json = EXCLUDED.config_json,
-        description = EXCLUDED.description,
+        display_name = EXCLUDED.display_name,
         updated_at  = CURRENT_TIMESTAMP
     RETURNING id INTO v_action_submit_id;
 
@@ -144,7 +144,7 @@ BEGIN
     -- 3.2 Complete Assignment
     INSERT INTO dw_action_definitions (
         function_unit_id, action_name, action_type, config_json,
-        icon, button_color, description, is_default, created_at, updated_at
+        icon, button_color, display_name, is_default, created_at, updated_at
     ) VALUES (
         v_function_unit_id,
         'Complete Assignment',
@@ -158,7 +158,7 @@ BEGIN
     ON CONFLICT (function_unit_id, action_name) DO UPDATE SET
         action_type = EXCLUDED.action_type,
         config_json = EXCLUDED.config_json,
-        description = EXCLUDED.description,
+        display_name = EXCLUDED.display_name,
         updated_at  = CURRENT_TIMESTAMP
     RETURNING id INTO v_action_complete_assign_id;
 
@@ -167,7 +167,7 @@ BEGIN
     -- 3.3 Submit Participant Info
     INSERT INTO dw_action_definitions (
         function_unit_id, action_name, action_type, config_json,
-        icon, button_color, description, is_default, created_at, updated_at
+        icon, button_color, display_name, is_default, created_at, updated_at
     ) VALUES (
         v_function_unit_id,
         'Submit Participant Info',
@@ -181,7 +181,7 @@ BEGIN
     ON CONFLICT (function_unit_id, action_name) DO UPDATE SET
         action_type = EXCLUDED.action_type,
         config_json = EXCLUDED.config_json,
-        description = EXCLUDED.description,
+        display_name = EXCLUDED.display_name,
         updated_at  = CURRENT_TIMESTAMP
     RETURNING id INTO v_action_submit_info_id;
 

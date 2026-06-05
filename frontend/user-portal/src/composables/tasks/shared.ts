@@ -573,6 +573,7 @@ const SHARED_PROCESS_SUB_TABLE_FK = new Set([
 
 const MI_PARTICIPANT_SUB_TABLE_FK = new Set([
   'id_idw',
+  'row_id',
   'participant_id',
   'parent_id',
   'meeting_participant_id',
@@ -1988,6 +1989,7 @@ export function miParentRowAlignsWithChildRow(
   if (!parentPkNorm) return false
 
   for (const fk of [
+    'sub_task_id',
     'id_idw',
     'participant_id',
     'participantId',
@@ -1996,6 +1998,11 @@ export function miParentRowAlignsWithChildRow(
     'meeting_participant_id',
   ]) {
     const cv = normalizeMiLinkMatchId(childRow[fk])
+    if (cv && cv === parentPkNorm) return true
+  }
+  /** Legacy link-form rows keyed child PK `id` to parent id_idw — skip when structural FK present. */
+  if (childRow.sub_task_id == null || childRow.sub_task_id === '') {
+    const cv = normalizeMiLinkMatchId(childRow.id)
     if (cv && cv === parentPkNorm) return true
   }
   return false

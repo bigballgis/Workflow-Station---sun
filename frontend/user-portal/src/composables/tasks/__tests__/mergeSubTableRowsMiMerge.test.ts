@@ -163,6 +163,15 @@ describe('mergeSubTableRowsByRowId MI dashboard columns', () => {
     ).toBe(false)
   })
 
+  it('miParentRowAlignsWithChildRow matches link child id FK to parent id_idw', () => {
+    expect(
+      miParentRowAlignsWithChildRow(
+        { id_idw: 'Test-000017', task_status: 'IN_PROGRESS' },
+        { id: 'Test-000017', sex: true },
+      ),
+    ).toBe(true)
+  })
+
   it('enrichChild does not copy another subtask current node onto a different row', () => {
     const bindings = [
       {

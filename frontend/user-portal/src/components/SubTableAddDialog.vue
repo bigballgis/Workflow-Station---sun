@@ -454,7 +454,7 @@ import type { FormInstance } from 'element-plus'
 import { ElMessage } from 'element-plus'
 import { Editor, Toolbar } from '@wangeditor/editor-for-vue'
 import '@wangeditor/editor/dist/css/style.css'
-import { buildInitialRow, buildRules, resolveDisplayValue, isUploadColumn, getLookupSelectedDisplayField } from './subTableAddDialogHelpers'
+import { buildInitialRow, buildRules, mergeFormRowWithSeed, resolveDisplayValue, isUploadColumn, getLookupSelectedDisplayField } from './subTableAddDialogHelpers'
 import type { DialogColumn } from './subTableAddDialogHelpers'
 import type { RowFormulaRule, ValidationRule } from './formRendererHelpers'
 import { evaluateFormula, validateField } from './businessLogicEngine'
@@ -766,7 +766,9 @@ function initDialogFormState(trigger: 'open' | 'data-change') {
       }
     }
   } else {
-    formData.value = buildInitialRow(props.columns)
+    formData.value = props.initialData
+      ? { ...buildInitialRow(props.columns), ...JSON.parse(JSON.stringify(props.initialData)) }
+      : buildInitialRow(props.columns)
   }
 
   // Element Plus Form keeps some per-field state; ensure each init starts clean.
@@ -831,7 +833,8 @@ async function handleSave() {
   if (!valid) return
   // Run column validation rules (Task 8.7)
   if (!validateColumns()) return
-  emit('save', { ...formData.value })
+  const seed = props.mode === 'add' ? props.initialData : undefined
+  emit('save', mergeFormRowWithSeed(seed, formData.value as Record<string, unknown>))
   emit('update:visible', false)
 }
 

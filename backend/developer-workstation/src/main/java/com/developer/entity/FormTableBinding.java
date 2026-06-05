@@ -2,6 +2,7 @@ package com.developer.entity;
 
 import com.developer.enums.BindingMode;
 import com.developer.enums.BindingType;
+import com.developer.enums.BindingLinkMode;
 import com.developer.enums.SubMode;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
@@ -61,6 +62,11 @@ public class FormTableBinding {
      */
     @Column(name = "foreign_key_field", length = 100)
     private String foreignKeyField;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "binding_link_mode", length = 32)
+    @Builder.Default
+    private BindingLinkMode bindingLinkMode = BindingLinkMode.structuralFk;
 
     /**
      * 排序顺序

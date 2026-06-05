@@ -32,6 +32,7 @@ public class ProcessController {
     private final ProcessComponent processComponent;
     private final I18nService i18nService;
     private final FunctionUnitAccessComponent functionUnitAccessComponent;
+    private final com.portal.component.PortalPrimaryKeyAllocationComponent portalPrimaryKeyAllocationComponent;
 
     @GetMapping("/definitions")
     @Operation(summary = "获取可发起的流程定义列表")
@@ -73,6 +74,17 @@ public class ProcessController {
         requireFunctionUnitContentAccess(userId, functionUnitId);
         List<Map<String, Object>> contents = processComponent.getFunctionUnitContents(functionUnitId, contentType);
         return ApiResponse.success(contents);
+    }
+
+    @PostMapping("/function-units/{functionUnitId}/tables/primary-keys/allocate")
+    @Operation(summary = "Allocate primary key value(s) for a sub-table field",
+            description = "Used by Portal sub-table add-row when PK strategy is not manual (PRD S5)")
+    public ApiResponse<com.portal.dto.AllocatePrimaryKeyResponse> allocatePrimaryKeys(
+            @CurrentUserId String userId,
+            @PathVariable String functionUnitId,
+            @Valid @RequestBody com.portal.dto.AllocatePrimaryKeyRequest request) {
+        requireFunctionUnitContentAccess(userId, functionUnitId);
+        return ApiResponse.success(portalPrimaryKeyAllocationComponent.allocate(functionUnitId, request));
     }
     
     /**

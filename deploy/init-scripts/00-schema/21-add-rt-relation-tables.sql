@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS rt_table_definitions (
     id                  BIGSERIAL       PRIMARY KEY,
     table_name          VARCHAR(100)    NOT NULL UNIQUE,
     display_name        VARCHAR(200),
+    deployed_display_name VARCHAR(200),
     description         TEXT,
     status              VARCHAR(20)     NOT NULL DEFAULT 'DRAFT',
     enabled             BOOLEAN         NOT NULL DEFAULT TRUE,
@@ -24,6 +25,7 @@ COMMENT ON TABLE rt_table_definitions IS 'Relation Table definitions with metada
 COMMENT ON COLUMN rt_table_definitions.status IS 'DRAFT / DEPLOYED / ROLLBACK';
 COMMENT ON COLUMN rt_table_definitions.portal_visible IS 'Controls visibility in User Portal';
 COMMENT ON COLUMN rt_table_definitions.current_version IS 'Current deployed version number';
+COMMENT ON COLUMN rt_table_definitions.deployed_display_name IS 'Display name captured on last deploy; Table Data uses this while status is UPDATED/ROLLBACK';
 
 -- 2. Field Definitions (rt_field_definitions)
 CREATE TABLE IF NOT EXISTS rt_field_definitions (
@@ -37,8 +39,13 @@ CREATE TABLE IF NOT EXISTS rt_field_definitions (
     nullable            BOOLEAN         DEFAULT TRUE,
     is_primary_key      BOOLEAN         DEFAULT FALSE,
     default_value       VARCHAR(500),
-    comment             TEXT,
-    sort_order          INTEGER         NOT NULL
+    display_name        TEXT,
+    sort_order          INTEGER         NOT NULL,
+    is_foreign_key      BOOLEAN         NOT NULL DEFAULT FALSE,
+    ref_table_id        BIGINT          REFERENCES rt_table_definitions(id) ON DELETE SET NULL,
+    ref_primary_key_fields JSONB,
+    pk_generation_json  JSONB,
+    fk_display_mode     VARCHAR(20)     DEFAULT 'readonly'
 );
 
 CREATE INDEX IF NOT EXISTS idx_rt_field_table_id ON rt_field_definitions(table_id);

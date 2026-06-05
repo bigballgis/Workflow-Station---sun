@@ -10,6 +10,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 更新 Relation Table 请求 DTO
@@ -65,8 +66,10 @@ public class UpdateRelationTableRequest {
         @Size(max = 500, message = "默认值长度不能超过500")
         private String defaultValue;
 
-        private String comment;
+        private String displayName;
 
         private Integer sortOrder;
+
+        private Map<String, Object> pkGeneration;
     }
 }
