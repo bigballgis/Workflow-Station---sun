@@ -1,4 +1,5 @@
 import { get, post, put, del } from './request'
+import type { PageResult } from '@/types/common'
 
 /** 角色类型 */
 export type RoleType = 'BU_BOUNDED' | 'BU_UNBOUNDED' | 'BUSINESS' | 'ADMIN' | 'DEVELOPER'
@@ -57,9 +58,9 @@ const ROLE_BASE = '/roles'
 const PERMISSION_BASE = '/permissions'
 
 export const roleApi = {
-  /** 获取角色列表，支持按类型筛选 */
-  list: (params?: { type?: RoleType; status?: string }) => 
-    get<Role[]>(ROLE_BASE, { params }),
+  /** 获取角色列表，支持按类型筛选和分页 */
+  list: (params?: { type?: RoleType; status?: string; page?: number; size?: number }) => 
+    get<PageResult<Role>>(ROLE_BASE, { params }),
   
   /** 获取业务角色列表（用于功能单元访问配置） */
   getBusinessRoles: () => 

@@ -251,6 +251,18 @@ public class RolePermissionManagerComponent {
     public List<Role> getRolesByType(String type) {
         return roleRepository.findByType(type);
     }
+
+    /**
+     * 分页获取角色，支持按类型筛选。
+     * 不使用 findByConditions 因为其 LOWER() 在 PostgreSQL bytea 列上报错。
+     */
+    public org.springframework.data.domain.Page<Role> getRolesPaged(int page, int size, String type) {
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size, org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.ASC, "name"));
+        if (type != null && !type.isEmpty()) {
+            return roleRepository.findByType(type, pageable);
+        }
+        return roleRepository.findAll(pageable);
+    }
     
     /**
      * 获取所有业务角色（BU_BOUNDED 和 BU_UNBOUNDED）

@@ -29,7 +29,7 @@ export function useBusinessUnitRoles(businessUnit: Ref<BusinessUnit | null>) {
     loading.value = true
     try {
       const [roles, bound] = await Promise.all([
-        roleApi.list(),
+        roleApi.list({ size: 9999 }).then(r => r.content),
         businessUnitApi.getBoundRoles(businessUnit.value.id)
       ])
       allRoles.value = roles

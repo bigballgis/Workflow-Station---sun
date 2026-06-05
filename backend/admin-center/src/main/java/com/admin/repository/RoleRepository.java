@@ -32,6 +32,11 @@ public interface RoleRepository extends JpaRepository<Role, String> {
      * Note: Role.type is String, not enum
      */
     List<Role> findByType(String type);
+
+    /**
+     * 根据类型分页查询角色（不含 LOWER 以避免 bytea 兼容问题）
+     */
+    Page<Role> findByType(String type, Pageable pageable);
     
     /**
      * 查找所有活跃角色

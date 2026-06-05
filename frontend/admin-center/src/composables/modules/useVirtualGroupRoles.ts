@@ -38,7 +38,7 @@ export function useVirtualGroupRoles(group: Ref<VirtualGroup | null>) {
     if (!group.value) return
     loading.value = true
     try {
-      const [roles, boundRoles] = await Promise.all([roleApi.list(), virtualGroupApi.getBoundRoles(group.value.id)])
+      const [roles, boundRoles] = await Promise.all([roleApi.list({ size: 9999 }).then(r => r.content), virtualGroupApi.getBoundRoles(group.value.id)])
       allRoles.value = roles
       boundRole.value = boundRoles.length > 0 ? boundRoles[0] : null
     } catch { notifyError(terr(AppErrorCode.BUSINESS_UNIT_OPERATION_FAILED)) }

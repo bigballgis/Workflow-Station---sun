@@ -143,7 +143,7 @@ export function useBiAssignmentForm(options: BiAssignmentFormOptions) {
     targetsLoading.value = true
     try {
       if (targetType === 'ROLE') {
-        const roles = await roleApi.list()
+        const res = await roleApi.list({ size: 9999 }); const roles = res.content
         if (seq !== targetsSeq.value) return
         targetSelectOptions.value = roles.map((r: Role) => ({ id: r.id, label: r.name }))
       } else {

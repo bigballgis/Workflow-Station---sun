@@ -168,6 +168,18 @@
       </el-table-column>
     </el-table>
     
+    <div class="pagination-container">
+      <el-pagination
+        v-model:current-page="query.page"
+        v-model:page-size="query.size"
+        :total="roleStore.total"
+        :page-sizes="[10, 20, 50, 100]"
+        layout="total, sizes, prev, pager, next, jumper"
+        @size-change="handleSearch"
+        @current-change="handleSearch"
+      />
+    </div>
+    
     <RoleFormDialog
       v-model="formDialogVisible"
       :role="currentRole"
@@ -201,7 +213,7 @@ const roleStore = useRoleStore()
 const canWriteRole = hasPermission(PERMISSIONS.ROLE_WRITE)
 const canDeleteRole = hasPermission(PERMISSIONS.ROLE_DELETE)
 
-const query = reactive<{ type: RoleType | '' }>({ type: '' })
+const query = reactive<{ type: RoleType | ''; page: number; size: number }>({ type: '', page: 1, size: 20 })
 const formDialogVisible = ref(false)
 const membersDialogVisible = ref(false)
 const currentRole = ref<Role | null>(null)
@@ -214,8 +226,8 @@ const sortedRoles = computed(() => {
   })
 })
 
-const handleSearch = () => roleStore.fetchRoles(query.type ? { type: query.type as RoleType } : undefined)
-const handleReset = () => { query.type = ''; handleSearch() }
+const handleSearch = () => roleStore.fetchRoles({ type: query.type as RoleType || undefined, page: query.page - 1, size: query.size })
+const handleReset = () => { query.type = ''; query.page = 1; handleSearch() }
 
 const showCreateDialog = () => { currentRole.value = null; formDialogVisible.value = true }
 const showEditDialog = (role: Role) => { currentRole.value = role; formDialogVisible.value = true }

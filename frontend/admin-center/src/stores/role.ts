@@ -7,11 +7,19 @@ export const useRoleStore = defineStore('role', () => {
   const permissions = ref<Permission[]>([])
   const loading = ref(false)
   const currentRole = ref<Role | null>(null)
+  const total = ref(0)
+  const currentPage = ref(0)
+  const pageSize = ref(20)
 
-  const fetchRoles = async (params?: { type?: RoleType; status?: string }) => {
+  const fetchRoles = async (params?: { type?: RoleType; status?: string; page?: number; size?: number }) => {
     loading.value = true
     try {
-      roles.value = await roleApi.list(params)
+      const p = { page: params?.page ?? currentPage.value, size: params?.size ?? pageSize.value, ...(params?.type ? { type: params.type } : {}), ...(params?.status ? { status: params.status } : {}) }
+      const res = await roleApi.list(p)
+      roles.value = res.content
+      total.value = res.totalElements
+      currentPage.value = p.page
+      pageSize.value = p.size
     } finally {
       loading.value = false
     }
@@ -40,5 +48,5 @@ export const useRoleStore = defineStore('role', () => {
     await roleApi.updatePermissions(id, permissions)
   }
 
-  return { roles, permissions, loading, currentRole, fetchRoles, fetchPermissionTree, createRole, updateRole, deleteRole, updateRolePermissions }
+  return { roles, permissions, loading, total, currentPage, pageSize, currentRole, fetchRoles, fetchPermissionTree, createRole, updateRole, deleteRole, updateRolePermissions }
 })

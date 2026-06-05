@@ -60,20 +60,21 @@ public class RoleController {
     }
     
     @GetMapping
-    @Operation(summary = "Get role list", description = "Supports filtering roles by type")
-    public ResponseEntity<List<Role>> getRoles(
-            @RequestParam(required = false) RoleType type) {
-        List<Role> roles;
-        if (type != null) {
-            // Convert enum to String since Role.type is String
-            String typeStr = EntityTypeConverter.fromRoleType(type);
-            roles = rolePermissionManager.getRolesByType(typeStr);
-        } else {
-            roles = rolePermissionManager.getAllRoles();
-        }
-        return ResponseEntity.ok(roles);
+    @Operation(summary = "Get role list", description = "Supports filtering roles by type, paginated")
+    public ResponseEntity<com.admin.dto.response.PageResult<Role>> getRoles(
+            @RequestParam(required = false) RoleType type,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        String typeStr = type != null ? EntityTypeConverter.fromRoleType(type) : null;
+        org.springframework.data.domain.Page<Role> rolePage = rolePermissionManager.getRolesPaged(page, size, typeStr);
+        com.admin.dto.response.PageResult<Role> result = com.admin.dto.response.PageResult.of(
+                rolePage.getContent(),
+                rolePage.getNumber(),
+                rolePage.getSize(),
+                rolePage.getTotalElements());
+        return ResponseEntity.ok(result);
     }
-    
+
     @GetMapping("/business")
     @Operation(summary = "Get business role list", description = "Get all business roles for function unit access configuration")
     public ResponseEntity<List<Role>> getBusinessRoles() {

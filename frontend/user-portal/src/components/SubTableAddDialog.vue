@@ -861,7 +861,7 @@ function clearUpload(col: DialogColumn) {
 </script>
 
 <style>
-@import '@/styles/form-readonly.scss';
+@use '@/styles/form-readonly.scss';
 
 /* 遮罩经 Teleport 挂 body；z-index 2009 低于 dialog(2010)，picker 用 popper-class 抬到 2050 */
 .sub-table-backdrop {

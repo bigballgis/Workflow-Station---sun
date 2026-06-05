@@ -1544,7 +1544,7 @@ defineExpose({
 </script>
 
 <style scoped lang="scss">
-@import '@/styles/form-readonly.scss';
+@use '@/styles/form-readonly.scss';
 
 .form-renderer {
   width: 100%;
