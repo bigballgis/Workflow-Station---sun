@@ -2309,7 +2309,6 @@ function fieldToFormRule(field: FieldDefinition): Record<string, unknown> | null
     })
   }
   
-  let rule: any
   // Map data type to form component
   let rule: Record<string, unknown>
   switch (field.dataType) {
