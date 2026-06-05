@@ -343,7 +343,7 @@
 
     <SubTableAddDialog
       :visible="dialogVisible"
-      :columns="editableColumns"
+      :columns="subTableDialogColumns"
       :mode="dialogMode"
       :initial-data="dialogInitialData"
       :row-formulas="rowFormulas"
@@ -495,9 +495,34 @@ import { ref, watch, computed, nextTick, withDefaults } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Plus, Document, Loading, Search, Close } from '@element-plus/icons-vue'
 import { ElMessageBox, ElMessage } from 'element-plus'
-import DOMPurify from 'dompurify'
+import type DOMPurifyType from 'dompurify'
+let _domPurify: DOMPurifyType | null = null
+
+/** Sanitize HTML content to prevent XSS — lazy-loads DOMPurify on first call */
+async function getDomPurify(): Promise<DOMPurifyType> {
+  if (!_domPurify) {
+    const mod = await import('dompurify')
+    _domPurify = mod.default
+  }
+  return _domPurify
+}
+
+function sanitizeHtml(html: string): string {
+  // Synchronous fallback: strip all tags if DOMPurify not yet loaded
+  if (!_domPurify) {
+    // Trigger lazy load (fire-and-forget, next render will use cached instance)
+    getDomPurify()
+    return html.replace(/<[^>]*>/g, '')
+  }
+  return _domPurify.sanitize(html, {
+    ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 's', 'ol', 'ul', 'li',
+      'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'a', 'img', 'table', 'tr', 'td', 'th', 'span', 'div'],
+    ALLOWED_ATTR: ['href', 'src', 'alt', 'class', 'style', 'target', 'rel'],
+  })
+}
+
 import SubTableAddDialog from './SubTableAddDialog.vue'
-import { resolveDisplayValue, getLookupSelectedDisplayField, resolveLookupCellTagText, parseLookupConfig, unwrapUserLikeValueToDisplayString, extractUserIdFromCellValue, isUserSnapshotLikeObject, userObjectTagDisplayString, userSnapshotViewFieldsFromRow, formatUserSnapshotCellValue, isUploadColumn, normalizeSubTableColumns } from './subTableAddDialogHelpers'
+import { resolveDisplayValue, getLookupSelectedDisplayField, resolveLookupCellTagText, parseLookupConfig, unwrapUserLikeValueToDisplayString, extractUserIdFromCellValue, isUserSnapshotLikeObject, userObjectTagDisplayString, userSnapshotViewFieldsFromRow, formatUserSnapshotCellValue, isUploadColumn, normalizeSubTableColumns, mergeFormRowWithSeed } from './subTableAddDialogHelpers'
 import { fetchLookupRowByPrimaryKey } from './lookup/fetchLookupRowByPrimaryKey'
 import type { DialogColumn } from './subTableAddDialogHelpers'
 import type { FormField, RowFormulaRule, SubTableValidationConfig } from './formRendererHelpers'
@@ -512,6 +537,14 @@ import {
   resolveUserFacingHttpMessage
 } from '@/utils/httpErrorMessage'
 import { userApi } from '@/api/user'
+import { processApi } from '@/api/process'
+import {
+  type BindingFieldDefinition,
+  applyFkPresentationToDialogColumns,
+  buildRowAddContext,
+  prepareSubTableAddRow,
+  toFieldFkMetas,
+} from '@/utils/subTableRowRuntime'
 import { onMounted, onBeforeUnmount } from 'vue'
 import { useSubTableWebSocket, type SubTableUpdateMessage } from '@/composables/useSubTableWebSocket'
 import {
@@ -522,6 +555,7 @@ import {
   stripLinkFormDesignerTableLabel
 } from '@/composables/tasks/shared'
 
+console.log(`[PERF-ST] setup start @${performance.now().toFixed(0)}`)
 const { t } = useI18n()
 
 function formatTaskStatus(status: unknown): string {
@@ -530,14 +564,6 @@ function formatTaskStatus(status: unknown): string {
   return t('subTable.taskPending')
 }
 
-/** Sanitize HTML content to prevent XSS */
-function sanitizeHtml(html: string): string {
-  return DOMPurify.sanitize(html, {
-    ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 's', 'ol', 'ul', 'li',
-      'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'a', 'img', 'table', 'tr', 'td', 'th', 'span', 'div'],
-    ALLOWED_ATTR: ['href', 'src', 'alt', 'class', 'style', 'target', 'rel'],
-  })
-}
 
 type Column = DialogColumn & {
   type?: DialogColumn['type'] | 'linkForm'
@@ -672,6 +698,29 @@ const props = withDefaults(defineProps<{
    * 仅单列时参与 assignment / 行定位；多列主键仍回退到既有 id/rowId 等待办路径。
    */
   primaryKeyFields?: string[]
+  /** Field FK/PK metadata from tableBindings (PRD S5). */
+  fieldDefinitions?: BindingFieldDefinition[]
+  tableId?: number | null
+  functionUnitId?: string
+  primaryFormData?: Record<string, unknown>
+  subTableBindingsForContext?: Array<{
+    tableId?: number | null
+    bindingType?: string
+    tableName?: string
+    tableDisplayName?: string
+  }>
+  parentRow?: Record<string, unknown> | null
+  parentTableId?: number | null
+  primaryTableDisplayName?: string
+  primaryTableId?: number | null
+  parentTablesById?: Record<number, { fieldDefinitions: BindingFieldDefinition[] }>
+  /** PRD S6: structural FK vs MI participant row link. */
+  bindingLinkMode?: 'structuralFk' | 'miParticipantRow' | string
+  bindingForeignKeyField?: string | null
+  /** Flowable MI element id — seeds attachment/link-child row_id on Add (To Do sub form2). */
+  miParticipantRowId?: string | number | null
+  miParentParticipantRow?: Record<string, unknown> | null
+  miParentTableId?: number | null
 }>(), {
   showLinkFormDialogFooter: false,
   linkFormClickScrollToInline: false,
@@ -803,6 +852,7 @@ const effectiveShowViewDetail = computed(() => {
 
 const emit = defineEmits<{
   (e: 'update:modelValue', val: any[]): void
+  (e: 'update:primaryFormData', val: Record<string, unknown>): void
   (e: 'assignmentChanged'): void
   (e: 'dataRefreshed', rows: any[]): void
   (e: 'viewDetail', row: any, index: number): void
@@ -845,9 +895,9 @@ async function hydrateLookupScalarsInTable() {
 watch(
   () => [rows.value, props.columns],
   () => {
-    void hydrateLookupScalarsInTable()
+    nextTick(() => { void hydrateLookupScalarsInTable() })
   },
-  { deep: true, immediate: true }
+  { immediate: true }
 )
 // key = "{rowIndex}_{field}" -> original filename (recorded during current session upload)
 const uploadNames = ref<Record<string, string>>({})
@@ -1518,6 +1568,16 @@ const editableColumns = computed(() =>
   ),
 )
 
+const dialogAddColumns = ref<DialogColumn[] | null>(null)
+
+const subTableDialogColumns = computed(() => {
+  if (dialogAddColumns.value) return dialogAddColumns.value
+  const base = editableColumns.value
+  const fkMetas = toFieldFkMetas(props.fieldDefinitions)
+  if (!fkMetas.length) return base
+  return applyFkPresentationToDialogColumns(base, fkMetas, props.fieldDefinitions).visibleColumns
+})
+
 // Summary row support
 const hasSummary = computed(() => (props.summaryColumns?.length ?? 0) > 0)
 
@@ -1540,7 +1600,7 @@ function getSummaryMethod({ columns: tableCols }: { columns: any[] }) {
   return sums
 }
 
-watch(() => props.modelValue, (v) => { rows.value = v ? [...v] : [] }, { immediate: true, deep: true })
+watch(() => props.modelValue, (v) => { rows.value = v ? [...v] : [] }, { immediate: true })
 
 /** Header close / Cancel: with To Do footer, discard edits; otherwise auto-save field link form when editable. */
 function closeLinkFormDetailDialog() {
@@ -2404,11 +2464,65 @@ async function downloadFile(url: string, savedName: string | undefined, rowIndex
 }
 
 function handleAdd() {
-  dialogMode.value = 'add'
-  dialogInitialData.value = undefined
-  editingRowIndex.value = null
-  dialogVisible.value = true
+  void openAddRowDialog()
 }
+
+async function openAddRowDialog() {
+  if (!props.editable) return
+  const rowAddContext = buildRowAddContext(
+    props.primaryFormData ?? {},
+    props.subTableBindingsForContext ?? props.linkedSubTableBindings,
+    props.parentRow,
+    props.parentTableId,
+  )
+  try {
+    const result = await prepareSubTableAddRow({
+      columns: editableColumns.value,
+      fieldDefinitions: props.fieldDefinitions,
+      rowAddContext,
+      tableId: props.tableId,
+      tableDisplayName: props.title,
+      primaryTableDisplayName: props.primaryTableDisplayName,
+      primaryTableId: props.primaryTableId,
+      parentTablesById: props.parentTablesById,
+      functionUnitId: props.functionUnitId,
+      autoEnsurePrimaryRecord: props.primaryFormData != null,
+      bindingLinkMode: props.bindingLinkMode,
+      bindingForeignKeyField: props.bindingForeignKeyField,
+      primaryKeyFields: props.primaryKeyFields,
+      miParticipantRowId: props.miParticipantRowId,
+      miParentParticipantRow: props.miParentParticipantRow,
+      miParentTableId: props.miParentTableId,
+      allocatePrimaryKeys:
+        props.functionUnitId && props.tableId != null
+          ? async (payload) => {
+              const res = await processApi.allocatePrimaryKeys(props.functionUnitId!, payload)
+              const body = unwrapPortalApiPayload(res) as { values?: string[] }
+              return body?.values ?? []
+            }
+          : undefined,
+      t,
+    })
+    if (!result.ok) {
+      ElMessage.warning(result.message)
+      return
+    }
+    if (result.primaryFormDataPatch && Object.keys(result.primaryFormDataPatch).length > 0) {
+      emit('update:primaryFormData', result.primaryFormDataPatch)
+    }
+    dialogAddColumns.value = result.dialogColumns
+    dialogMode.value = 'add'
+    dialogInitialData.value = result.initialRow as Record<string, any>
+    editingRowIndex.value = null
+    dialogVisible.value = true
+  } catch (e) {
+    ElMessage.error(resolveUserFacingHttpMessage(e, t('common.operationFailed')))
+  }
+}
+
+watch(dialogVisible, (open) => {
+  if (!open) dialogAddColumns.value = null
+})
 
 function openEditDialog(i: number) {
   dialogMode.value = 'edit'
@@ -2418,10 +2532,11 @@ function openEditDialog(i: number) {
 }
 
 function handleDialogSave(rowData: Record<string, any>) {
+  const savedRow = mergeFormRowWithSeed(dialogInitialData.value, rowData)
   if (dialogMode.value === 'add') {
-    rows.value.push(rowData)
+    rows.value.push(savedRow)
   } else if (dialogMode.value === 'edit' && editingRowIndex.value !== null) {
-    rows.value[editingRowIndex.value] = rowData
+    rows.value[editingRowIndex.value] = savedRow
   }
   emit('update:modelValue', [...rows.value])
 }
@@ -2574,7 +2689,7 @@ async function hydrateAssigneeDisplayNamesFromUserDirectory() {
 watch(
   () => [props.assigneeField, props.modelValue],
   () => scheduleHydrateAssigneeDisplayNames(),
-  { deep: true, immediate: true }
+  { immediate: true }
 )
 
 const ROW_KEY_MERGE_SEP = '\u001f'
@@ -2954,6 +3069,8 @@ function stopWebSocketSubscription() {
 
 // Lifecycle hooks for polling
 onMounted(() => {
+  const _t0 = performance.now()
+  console.log(`[PERF-ST] SubTable "${props.title}" mounted (${(props.modelValue as any[])?.length ?? 0} rows) @${_t0.toFixed(0)}`)
   if (props.enablePolling) {
     startPolling()
   }

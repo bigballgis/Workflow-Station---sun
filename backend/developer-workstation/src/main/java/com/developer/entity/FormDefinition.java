@@ -2,6 +2,7 @@ package com.developer.entity;
 
 import com.developer.enums.FormType;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -49,8 +50,9 @@ public class FormDefinition {
     @Column(name = "config_json", nullable = false, columnDefinition = "jsonb")
     private Map<String, Object> configJson;
     
-    @Column(name = "description", columnDefinition = "TEXT")
-    private String description;
+    @JsonProperty("description")
+    @Column(name = "display_name", columnDefinition = "TEXT")
+    private String displayName;
     
     @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)

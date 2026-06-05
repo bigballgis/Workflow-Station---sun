@@ -43,8 +43,8 @@ public class Role implements Serializable {
     @Builder.Default
     private String type = "BU_UNBOUNDED";
     
-    @Column(columnDefinition = "TEXT")
-    private String description;
+    @Column(name = "display_name", columnDefinition = "TEXT")
+    private String displayName;
     
     @Column(length = 20)
     @Builder.Default

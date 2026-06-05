@@ -2,6 +2,7 @@ package com.developer.entity;
 
 import com.developer.enums.TableType;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import lombok.*;
 import org.springframework.data.annotation.CreatedDate;
@@ -44,8 +45,9 @@ public class TableDefinition {
     @Column(name = "table_display_name", length = 200)
     private String tableDisplayName;
 
-    @Column(name = "description", columnDefinition = "TEXT")
-    private String description;
+    @JsonProperty("description")
+    @Column(name = "display_name", columnDefinition = "TEXT")
+    private String displayName;
     
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)

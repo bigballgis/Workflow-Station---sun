@@ -125,6 +125,27 @@ export function buildInitialRow(columns: DialogColumn[]): Record<string, unknown
   return row
 }
 
+function isEmptyFormValue(value: unknown): boolean {
+  if (value == null) return true
+  if (typeof value === 'string' && value.trim() === '') return true
+  return false
+}
+
+/** Keep seeded PK/FK/runtime values when form-create or empty inputs omit them on save. */
+export function mergeFormRowWithSeed(
+  seed: Record<string, unknown> | null | undefined,
+  form: Record<string, unknown>,
+): Record<string, unknown> {
+  const row = { ...form }
+  if (!seed) return row
+  for (const [key, seedVal] of Object.entries(seed)) {
+    if (isEmptyFormValue(row[key]) && !isEmptyFormValue(seedVal)) {
+      row[key] = seedVal
+    }
+  }
+  return row
+}
+
 export function buildRules(columns: DialogColumn[]): FormRules {
   const rules: FormRules = {}
   for (const col of columns) {
@@ -360,7 +381,7 @@ export function mergeListViewFieldColumn(
   fieldRule?: { type?: string; title?: string; props?: Record<string, unknown> } | null,
 ): DialogColumn {
   const type = resolveListColumnFieldType(column, fieldRule, baseColumn)
-  const label = column.comment || column.columnLabel || baseColumn?.label || fieldRule?.title || column.fieldName
+  const label = column.displayName || column.columnLabel || baseColumn?.label || fieldRule?.title || column.fieldName
   const minWidth = column.minWidth || baseColumn?.minWidth || (type === 'upload' ? 180 : 100)
   const props: Record<string, unknown> = { ...(baseColumn?.props || {}) }
   if (type === 'upload') {
@@ -383,10 +404,90 @@ export function mergeListViewFieldColumn(
 
 export type RelationFieldDef = {
   fieldName?: string
+  displayName?: string
   description?: string
   comment?: string
   dataType?: string
   sortOrder?: number
+  isPrimaryKey?: boolean
+  isForeignKey?: boolean
+  refTableId?: number
+  refPrimaryKeyFields?: string[]
+  pkGeneration?: Record<string, unknown>
+  pkGenerationJson?: Record<string, unknown>
+  fkDisplayMode?: string
+}
+
+/** Apply designer table display names to list / dialog column labels. */
+export function enrichColumnsWithTableFieldDisplayNames(
+  columns: DialogColumn[],
+  tableId: number | null | undefined,
+  fieldIndex: Map<number, RelationFieldDef[]>,
+): DialogColumn[] {
+  if (tableId == null || !Number.isFinite(Number(tableId))) return columns
+  const fields = fieldIndex.get(Number(tableId))
+  if (!fields?.length) return columns
+  const labelByField = new Map(
+    fields
+      .filter(f => f.fieldName)
+      .map(f => [String(f.fieldName), String(f.displayName || f.fieldName)]),
+  )
+  return columns.map(col => {
+    const label = labelByField.get(col.field)
+    return label ? { ...col, label } : col
+  })
+}
+
+/** Resolve FK/PK metadata: prefer tableBindings payload, fall back to function-unit dataTables. */
+export function resolveBindingFieldDefinitions(
+  binding: {
+    tableId?: number | null
+    fieldDefinitions?: Array<Record<string, unknown>>
+  },
+  fieldIndex: Map<number, RelationFieldDef[]>,
+): Array<Record<string, unknown>> {
+  const fromBinding = binding.fieldDefinitions
+  if (Array.isArray(fromBinding) && fromBinding.length > 0) {
+    return fromBinding
+  }
+  const tableId = binding.tableId != null ? Number(binding.tableId) : NaN
+  if (!Number.isFinite(tableId)) return []
+  const fields = fieldIndex.get(tableId)
+  if (!fields?.length) return []
+  return fields
+    .filter(f => f.fieldName)
+    .map(f => ({
+      fieldName: f.fieldName,
+      isPrimaryKey: f.isPrimaryKey,
+      isForeignKey: f.isForeignKey,
+      refTableId: f.refTableId,
+      refPrimaryKeyFields: f.refPrimaryKeyFields,
+      pkGeneration: f.pkGeneration ?? f.pkGenerationJson,
+      pkGenerationJson: f.pkGenerationJson ?? f.pkGeneration,
+      fkDisplayMode: f.fkDisplayMode,
+    }))
+}
+
+/** Build parent table metadata map for ensureParentRowsForChildAdd (PRIMARY + SUB tables). */
+export function buildParentTablesByIdFromBindings(
+  bindings: Array<{
+    tableId?: number | null
+    bindingType?: string
+    fieldDefinitions?: Array<Record<string, unknown>>
+  }>,
+  fieldIndex: Map<number, RelationFieldDef[]>,
+): Record<number, { fieldDefinitions: Array<Record<string, unknown>> }> {
+  const out: Record<number, { fieldDefinitions: Array<Record<string, unknown>> }> = {}
+  for (const b of bindings) {
+    if (b.bindingType !== 'PRIMARY' && b.bindingType !== 'SUB') continue
+    if (b.tableId == null) continue
+    const tid = Number(b.tableId)
+    const defs = resolveBindingFieldDefinitions(b, fieldIndex)
+    if (defs.length > 0) {
+      out[tid] = { fieldDefinitions: defs }
+    }
+  }
+  return out
 }
 
 /** Map dw_field_definitions / dataTables dataType to portal sub-table column type (aligns with developer-workstation preview). */
@@ -432,7 +533,7 @@ export function deriveColumnsFromRelationFieldDefinitions(fields: RelationFieldD
       const fieldName = String(f.fieldName ?? '').trim()
       if (!fieldName) return null
       const type = mapRelationFieldDataTypeToColumnType(String(f.dataType ?? ''))
-      const label = String(f.description || f.comment || fieldName)
+      const label = String(f.displayName || fieldName)
       if (type === 'upload') {
         return mergeListViewFieldColumn(
           { fieldName, comment: label, dataType: 'FILE' },

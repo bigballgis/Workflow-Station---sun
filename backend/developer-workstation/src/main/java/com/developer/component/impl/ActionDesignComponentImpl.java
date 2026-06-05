@@ -54,7 +54,7 @@ public class ActionDesignComponentImpl implements ActionDesignComponent {
                 .configJson(request.getConfigJson())
                 .icon(request.getIcon())
                 .buttonColor(request.getButtonColor())
-                .description(request.getDescription())
+                .displayName(request.getDescription())
                 .isDefault(isDefaultActionType(request.getActionType()))
                 .build();
         
@@ -80,7 +80,7 @@ public class ActionDesignComponentImpl implements ActionDesignComponent {
         actionDefinition.setConfigJson(request.getConfigJson());
         actionDefinition.setIcon(request.getIcon());
         actionDefinition.setButtonColor(request.getButtonColor());
-        actionDefinition.setDescription(request.getDescription());
+        actionDefinition.setDisplayName(request.getDescription());
         
         validateFormPopupType(actionDefinition);
         

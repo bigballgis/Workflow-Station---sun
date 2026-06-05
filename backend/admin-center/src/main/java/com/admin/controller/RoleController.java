@@ -47,7 +47,7 @@ public class RoleController {
                 request.getName(),
                 request.getCode(),
                 request.getType(),
-                request.getDescription()
+                request.getDisplayName()
         );
         return ResponseEntity.ok(role);
     }
@@ -103,7 +103,7 @@ public class RoleController {
         Role role = rolePermissionManager.updateRole(
                 roleId,
                 request.getName(),
-                request.getDescription(),
+                request.getDisplayName(),
                 request.getStatus()
         );
         return ResponseEntity.ok(role);
@@ -233,13 +233,13 @@ public class RoleController {
         @jakarta.validation.constraints.NotNull(message = "{validation.role_type_required}")
         private RoleType type;
         
-        private String description;
+        private String displayName;
     }
     
     @lombok.Data
     public static class UpdateRoleRequest {
         private String name;
-        private String description;
+        private String displayName;
         private String status;
     }
 }

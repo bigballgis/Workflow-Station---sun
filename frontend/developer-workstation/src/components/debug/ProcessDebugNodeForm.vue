@@ -93,6 +93,7 @@
         :title="t('debug.lookupProbeResultTitle')"
         width="760px"
       >
+        <div class="table-scroll-wrap">
         <el-table
           v-if="lookupProbeRows.length"
           :data="lookupProbeRows"
@@ -109,8 +110,9 @@
             min-width="160"
           />
         </el-table>
+        </div>
         <el-empty
-          v-else
+          v-if="!lookupProbeRows.length"
           :description="t('debug.lookupProbeNoRows')"
         />
       </el-dialog>

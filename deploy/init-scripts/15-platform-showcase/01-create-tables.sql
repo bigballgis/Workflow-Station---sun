@@ -17,18 +17,18 @@ BEGIN
     END IF;
 
     INSERT INTO dw_table_definitions (
-        function_unit_id, table_name, table_type, description, created_at, updated_at
+        function_unit_id, table_name, table_type, display_name, created_at, updated_at
     ) VALUES (
         v_fu_id, 'ShowcaseApp', 'MAIN', '演示主表', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
     ON CONFLICT (function_unit_id, table_name) DO UPDATE SET
-        table_type = EXCLUDED.table_type, description = EXCLUDED.description, updated_at = CURRENT_TIMESTAMP
+        table_type = EXCLUDED.table_type, display_name = EXCLUDED.display_name, updated_at = CURRENT_TIMESTAMP
     RETURNING id INTO v_main_id;
 
     DELETE FROM dw_field_definitions WHERE table_id = v_main_id;
     INSERT INTO dw_field_definitions (
         table_id, field_name, data_type, length, precision_value, scale,
-        nullable, default_value, is_primary_key, is_unique, description, sort_order
+        nullable, default_value, is_primary_key, is_unique, display_name, sort_order
     ) VALUES
     (v_main_id, 'id', 'BIGINT', NULL, NULL, NULL, false, NULL, false, false, '主键', 1),
     (v_main_id, 'app_no', 'VARCHAR', 50, NULL, NULL, false, NULL, false, true, '申请编号', 2),
@@ -40,18 +40,18 @@ BEGIN
     (v_main_id, 'created_at', 'TIMESTAMP', NULL, NULL, NULL, false, NULL, false, false, '创建时间', 8);
 
     INSERT INTO dw_table_definitions (
-        function_unit_id, table_name, table_type, description, created_at, updated_at
+        function_unit_id, table_name, table_type, display_name, created_at, updated_at
     ) VALUES (
         v_fu_id, 'ShowcaseLine', 'SUB', '演示子表', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
     ON CONFLICT (function_unit_id, table_name) DO UPDATE SET
-        table_type = EXCLUDED.table_type, description = EXCLUDED.description, updated_at = CURRENT_TIMESTAMP
+        table_type = EXCLUDED.table_type, display_name = EXCLUDED.display_name, updated_at = CURRENT_TIMESTAMP
     RETURNING id INTO v_sub_id;
 
     DELETE FROM dw_field_definitions WHERE table_id = v_sub_id;
     INSERT INTO dw_field_definitions (
         table_id, field_name, data_type, length, precision_value, scale,
-        nullable, default_value, is_primary_key, is_unique, description, sort_order
+        nullable, default_value, is_primary_key, is_unique, display_name, sort_order
     ) VALUES
     (v_sub_id, 'id', 'BIGINT', NULL, NULL, NULL, false, NULL, false, false, '行 ID', 1),
     (v_sub_id, 'showcase_app_id', 'BIGINT', NULL, NULL, NULL, false, NULL, false, false, '主表外键', 2),
@@ -59,18 +59,18 @@ BEGIN
     (v_sub_id, 'quantity', 'INTEGER', NULL, NULL, NULL, false, '1', false, false, '数量', 4);
 
     INSERT INTO dw_table_definitions (
-        function_unit_id, table_name, table_type, description, created_at, updated_at
+        function_unit_id, table_name, table_type, display_name, created_at, updated_at
     ) VALUES (
         v_fu_id, 'ShowcaseDoc', 'RELATION', '演示关联附件表', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
     ON CONFLICT (function_unit_id, table_name) DO UPDATE SET
-        table_type = EXCLUDED.table_type, description = EXCLUDED.description, updated_at = CURRENT_TIMESTAMP
+        table_type = EXCLUDED.table_type, display_name = EXCLUDED.display_name, updated_at = CURRENT_TIMESTAMP
     RETURNING id INTO v_relation_id;
 
     DELETE FROM dw_field_definitions WHERE table_id = v_relation_id;
     INSERT INTO dw_field_definitions (
         table_id, field_name, data_type, length, precision_value, scale,
-        nullable, default_value, is_primary_key, is_unique, description, sort_order
+        nullable, default_value, is_primary_key, is_unique, display_name, sort_order
     ) VALUES
     (v_relation_id, 'id', 'BIGINT', NULL, NULL, NULL, false, NULL, false, false, 'ID', 1),
     (v_relation_id, 'showcase_app_id', 'BIGINT', NULL, NULL, NULL, false, NULL, false, false, '主表外键', 2),
@@ -78,18 +78,18 @@ BEGIN
     (v_relation_id, 'file_type', 'VARCHAR', 100, NULL, NULL, true, NULL, false, false, '类型', 4);
 
     INSERT INTO dw_table_definitions (
-        function_unit_id, table_name, table_type, description, created_at, updated_at
+        function_unit_id, table_name, table_type, display_name, created_at, updated_at
     ) VALUES (
         v_fu_id, 'ShowcaseAudit', 'ACTION', '演示动作审计表', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
     ON CONFLICT (function_unit_id, table_name) DO UPDATE SET
-        table_type = EXCLUDED.table_type, description = EXCLUDED.description, updated_at = CURRENT_TIMESTAMP
+        table_type = EXCLUDED.table_type, display_name = EXCLUDED.display_name, updated_at = CURRENT_TIMESTAMP
     RETURNING id INTO v_action_tbl_id;
 
     DELETE FROM dw_field_definitions WHERE table_id = v_action_tbl_id;
     INSERT INTO dw_field_definitions (
         table_id, field_name, data_type, length, precision_value, scale,
-        nullable, default_value, is_primary_key, is_unique, description, sort_order
+        nullable, default_value, is_primary_key, is_unique, display_name, sort_order
     ) VALUES
     (v_action_tbl_id, 'id', 'BIGINT', NULL, NULL, NULL, false, NULL, false, false, 'ID', 1),
     (v_action_tbl_id, 'showcase_app_id', 'BIGINT', NULL, NULL, NULL, false, NULL, false, false, '主表外键', 2),

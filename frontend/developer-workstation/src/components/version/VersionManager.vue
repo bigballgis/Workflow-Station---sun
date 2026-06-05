@@ -1,5 +1,5 @@
 <template>
-  <div class="version-manager">
+  <div class="version-manager table-scroll-wrap">
     <el-table
       v-loading="loading"
       :data="store.versions"
@@ -39,8 +39,9 @@
       </el-table-column>
       <el-table-column
         :label="t('common.actions')"
-        width="240"
+        min-width="240"
         align="center"
+        fixed="right"
       >
         <template #default="{ row }">
           <div class="action-buttons">
@@ -428,11 +429,7 @@ onMounted(loadVersions)
   min-height: 300px;
 
   .action-buttons {
-    display: flex;
-    align-items: center;
     justify-content: center;
-    gap: 8px;
-    white-space: nowrap;
   }
 }
 

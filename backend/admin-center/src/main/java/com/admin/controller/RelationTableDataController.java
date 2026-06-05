@@ -1,9 +1,12 @@
 package com.admin.controller;
 
 import com.admin.entity.RelationTableAuditLog;
+import com.admin.dto.request.AllocatePrimaryKeyRequest;
+import com.admin.dto.response.AllocatePrimaryKeyResponse;
 import com.admin.dto.response.RelationTableResponse;
 import com.admin.service.RelationTableAuditService;
 import com.admin.service.RelationTableDataService;
+import com.admin.service.RelationTablePrimaryKeyAllocationService;
 import com.platform.common.dto.RelationTableDataRowDTO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -18,6 +21,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import jakarta.validation.Valid;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -35,6 +39,7 @@ public class RelationTableDataController {
 
     private final RelationTableDataService dataService;
     private final RelationTableAuditService auditService;
+    private final RelationTablePrimaryKeyAllocationService primaryKeyAllocationService;
 
     // ==================== Deployed Table List ====================
 
@@ -70,6 +75,17 @@ public class RelationTableDataController {
         log.info("Querying data for table: tableId={}, search={}, page={}", tableId, search, pageable);
         Page<RelationTableDataRowDTO> page = dataService.queryData(tableId, search, pageable);
         return ResponseEntity.ok(page);
+    }
+
+    @PostMapping("/{tableId}/primary-keys/allocate")
+    @Operation(summary = "Allocate primary key value(s)", description = "Backend PK allocation for Relation Table data add-row (PRD S5)")
+    public ResponseEntity<AllocatePrimaryKeyResponse> allocatePrimaryKeys(
+            @Parameter(description = "Table definition ID") @PathVariable Long tableId,
+            @Valid @RequestBody AllocatePrimaryKeyRequest request) {
+        log.info("Allocating PK for relation table: tableId={}, field={}", tableId, request.getFieldName());
+        AllocatePrimaryKeyResponse response = primaryKeyAllocationService.allocate(
+                tableId, request.getFieldName(), request.getCount(), request.getScopeKey());
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/{tableId}")

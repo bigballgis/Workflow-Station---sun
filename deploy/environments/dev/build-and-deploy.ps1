@@ -214,7 +214,8 @@ if (-not $SkipImagePull) {
         @{ Mirror = $JavaBaseImage; Target = "eclipse-temurin:17-jre" },
         @{ Mirror = "docker.m.daocloud.io/library/nginx:alpine";                  Target = "nginx:alpine"                  },
         @{ Mirror = "docker.m.daocloud.io/library/postgres:16.5-alpine";          Target = "postgres:16.5-alpine"          },
-        @{ Mirror = "docker.m.daocloud.io/library/redis:7.2-alpine";              Target = "redis:7.2-alpine"              }
+        @{ Mirror = "docker.m.daocloud.io/library/redis:7.2-alpine";              Target = "redis:7.2-alpine"              },
+        @{ Mirror = "docker.m.daocloud.io/apache/superset:6.0.0";                 Target = "apache/superset:6.0.0"         }
     )
 
     foreach ($img in $images) {
@@ -336,6 +337,9 @@ if (-not $SkipFrontend) {
     }
     
     Write-Host "  Frontend images built." -ForegroundColor Green
+    # Edge nginx proxies to frontend containers by Docker DNS; recreate edge after any SPA image rebuild
+    # or /portal/ may 404 until edge is manually restarted (stale upstream IP).
+    $script:RecreateEdgeFrontendAfterFeBuild = $true
 } else {
     Write-Host "`n[2/4] Skipping frontend build" -ForegroundColor DarkGray
 }
@@ -380,6 +384,12 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host "  docker compose failed. Current service status:" -ForegroundColor Red
     docker compose -f $ComposeFile --env-file $EnvFile ps
     throw "Docker compose service startup failed"
+}
+
+if ($RecreateEdgeFrontendAfterFeBuild) {
+    Write-Host "  Recreating edge-frontend (refresh SPA upstream DNS after frontend rebuild)..." -ForegroundColor Cyan
+    docker compose -f $ComposeFile --env-file $EnvFile up -d --force-recreate edge-frontend
+    if ($LASTEXITCODE -ne 0) { throw "edge-frontend recreate failed" }
 }
 
 Write-Host "  Waiting for backend health checks..." -ForegroundColor Cyan

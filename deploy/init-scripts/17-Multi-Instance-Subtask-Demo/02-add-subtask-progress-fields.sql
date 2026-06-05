@@ -45,7 +45,7 @@ BEGIN
 
   INSERT INTO dw_field_definitions (
     table_id, field_name, data_type, length, precision_value, scale,
-    nullable, default_value, is_primary_key, is_unique, description, sort_order
+    nullable, default_value, is_primary_key, is_unique, display_name, sort_order
   ) VALUES
     (v_subtable_id, 'task_status', 'VARCHAR', 20, NULL, NULL, false, '''PENDING''', false, false, 'Multi-instance subtask status', 3),
     (v_subtable_id, 'task_current_node', 'VARCHAR', 255, NULL, NULL, true, NULL, false, false, 'Current node inside the multi-instance subtask flow', 4)
@@ -54,7 +54,7 @@ BEGIN
     length = EXCLUDED.length,
     nullable = EXCLUDED.nullable,
     default_value = EXCLUDED.default_value,
-    description = EXCLUDED.description,
+    display_name = EXCLUDED.display_name,
     sort_order = EXCLUDED.sort_order;
 
   FOR v_form IN

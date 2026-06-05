@@ -12,6 +12,7 @@ import com.developer.entity.FunctionUnit;
 import com.developer.entity.SubTableViewConfig;
 import com.developer.entity.SubTableViewField;
 import com.developer.entity.TableDefinition;
+import com.developer.enums.BindingLinkMode;
 import com.developer.enums.BindingMode;
 import com.developer.enums.BindingType;
 import com.developer.enums.FormType;
@@ -80,7 +81,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
                 .formName(request.getFormName())
                 .formType(request.getFormType())
                 .configJson(request.getConfigJson())
-                .description(request.getDescription())
+                .displayName(request.getDescription())
                 .build();
         
         if (request.getBoundTableId() != null) {
@@ -119,7 +120,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         formDefinition.setFormName(request.getFormName());
         formDefinition.setFormType(request.getFormType());
         formDefinition.setConfigJson(mergedConfigJson);
-        formDefinition.setDescription(request.getDescription());
+        formDefinition.setDisplayName(request.getDescription());
         
         if (request.getBoundTableId() != null) {
             TableDefinition boundTable = tableDefinitionRepository.findById(request.getBoundTableId())
@@ -320,6 +321,8 @@ public class FormDesignComponentImpl implements FormDesignComponent {
                 .bindingType(request.getBindingType())
                 .bindingMode(bindingMode)
                 .foreignKeyField(request.getForeignKeyField())
+                .bindingLinkMode(request.getBindingLinkMode() != null
+                        ? request.getBindingLinkMode() : BindingLinkMode.structuralFk)
                 .sortOrder(sortOrder)
                 .build();
 
@@ -380,6 +383,9 @@ public class FormDesignComponentImpl implements FormDesignComponent {
             binding.setBindingMode(request.getBindingMode());
         }
         binding.setForeignKeyField(request.getForeignKeyField());
+        if (request.getBindingLinkMode() != null) {
+            binding.setBindingLinkMode(request.getBindingLinkMode());
+        }
         if (request.getSortOrder() != null) {
             binding.setSortOrder(request.getSortOrder());
         }
@@ -535,7 +541,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
                 .formName(source.getFormName() + "_copy")
                 .formType(source.getFormType())
                 .configJson(copiedConfig)
-                .description(source.getDescription())
+                .displayName(source.getDisplayName())
                 .boundTable(source.getBoundTable())
                 .fieldPermissions(copiedFieldPermissions)
                 .showLiveValues(source.getShowLiveValues())
@@ -641,7 +647,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
                 .formName(copyName)
                 .formType(FormType.TASK)  // Changed from PROCESS to TASK
                 .configJson(copiedConfig)
-                .description(source.getDescription())
+                .displayName(source.getDisplayName())
                 .boundTable(source.getBoundTable())
                 .fieldPermissions(copiedFieldPermissions)
                 .showLiveValues(source.getShowLiveValues())

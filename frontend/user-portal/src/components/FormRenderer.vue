@@ -55,7 +55,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick, provide, reactive } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick, provide, reactive, shallowReactive, toRefs } from 'vue'
 import { watchThrottled } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { isEqual } from 'lodash-es'
@@ -88,6 +88,11 @@ import {
   findMiIsolatedParentRow,
   pickMiLinkChildRowsForParent
 } from '@/composables/tasks/shared'
+import {
+  applyFieldDefinitionsToFormFields,
+  bindingForeignKeyFieldIsRowPrimaryKey,
+  seedLinkChildForeignKeysFromParentRow,
+} from '@/utils/subTableRowRuntime'
 import { createPortalFormApi, createFieldKeyResolver, runFormOnChangeHandler, type PortalFormVisibilityState } from '@/utils/formCreateEventRuntime'
 import {
   collectFieldComponentEventsFromRules,
@@ -98,6 +103,7 @@ import {
 
 export type { FormField, FormTab }
 
+console.log(`[PERF-FR] setup start @${performance.now().toFixed(0)}`)
 const { t } = useI18n()
 
 // ---------------------------------------------------------------------------
@@ -124,6 +130,17 @@ interface SubTableBinding {
   portalViews?: Partial<import('./formRendererHelpers').SubTablePortalViews> | null
   /** dw_field_definitions PK columns (from admin tableBindings). */
   primaryKeyFields?: string[]
+  fieldDefinitions?: Array<{
+    fieldName: string
+    isPrimaryKey?: boolean
+    isForeignKey?: boolean
+    refTableId?: number
+    refPrimaryKeyFields?: string[]
+    pkGeneration?: Record<string, unknown>
+    fkDisplayMode?: string
+  }>
+  bindingLinkMode?: string
+  foreignKeyField?: string | null
 }
 
 interface Props {
@@ -180,6 +197,12 @@ interface Props {
   nativeSubTableBindingIds?: number[]
   /** Designer configJson — used to resolve link-form targets from {@code subListViews}. */
   formConfig?: Record<string, unknown> | null
+  /** PRIMARY table binding metadata (not in subTableBindings list). */
+  primaryTableBinding?: {
+    tableId?: number | null
+    tableName?: string
+    fieldDefinitions?: SubTableBinding['fieldDefinitions']
+  }
   /** form-create designer options (Form event onChange, labelWidth, etc.). */
   formOptions?: Record<string, unknown> | null
   /** Raw form-create rule tree (for per-component on/_hook events). Falls back to formConfig.rule. */
@@ -262,6 +285,39 @@ const bindingMap = computed(() => {
   return map
 })
 const linkableSubTableBindings = computed(() => props.linkedSubTableBindings ?? props.subTableBindings)
+
+const primaryTableDisplayName = computed(() => props.primaryTableBinding?.tableName ?? '')
+
+const primaryTableId = computed(() => props.primaryTableBinding?.tableId ?? null)
+
+const parentTablesById = computed(() => {
+  const out: Record<number, { fieldDefinitions: NonNullable<SubTableBinding['fieldDefinitions']> }> = {}
+  const primary = props.primaryTableBinding
+  if (primary?.tableId != null && primary.fieldDefinitions?.length) {
+    out[Number(primary.tableId)] = { fieldDefinitions: primary.fieldDefinitions }
+  }
+  for (const b of props.subTableBindings ?? []) {
+    if (b.tableId == null || !b.fieldDefinitions?.length) continue
+    if (b.bindingType !== 'PRIMARY' && b.bindingType !== 'SUB') continue
+    out[Number(b.tableId)] = { fieldDefinitions: b.fieldDefinitions }
+  }
+  return out
+})
+
+const subTableBindingsForContext = computed(() => {
+  const list: Array<{ tableId?: number | null; bindingType?: string; tableName?: string }> = [
+    ...(props.subTableBindings ?? []),
+  ]
+  const primary = props.primaryTableBinding
+  if (primary?.tableId != null) {
+    list.unshift({
+      tableId: primary.tableId,
+      bindingType: 'PRIMARY',
+      tableName: primary.tableName,
+    })
+  }
+  return list
+})
 const resolveBinding = (id?: number) => {
   const binding = id != null ? bindingMap.value.get(id) : undefined
   return binding
@@ -285,6 +341,32 @@ function subTableAssigneeField(bindingId?: number): string | undefined {
     b.columns as Array<{ field?: string }>,
     b.tableName
   )
+}
+
+/** MI To Do: seed link-child / attachment Add dialog with the active collection row (e.g. row_id). */
+function resolveMiParticipantSeedForSubTableAdd(bindingId?: number): {
+  rowId: string | number | null
+  parentRow: Record<string, unknown> | null
+  parentTableId: number | null
+} {
+  const rowId = props.currentMiRowId
+  if (rowId == null || String(rowId).trim() === '') {
+    return { rowId: null, parentRow: null, parentTableId: null }
+  }
+  const peers = props.subTableBindings ?? []
+  for (const b of peers) {
+    if (bindingId != null && b.bindingId === bindingId) continue
+    const rows = Array.isArray(b.data) ? b.data : []
+    const parent = findMiIsolatedParentRow(rows, rowId)
+    if (parent) {
+      return {
+        rowId,
+        parentRow: parent as Record<string, unknown>,
+        parentTableId: b.tableId != null && Number.isFinite(Number(b.tableId)) ? Number(b.tableId) : null,
+      }
+    }
+  }
+  return { rowId, parentRow: { row_id: rowId } as Record<string, unknown>, parentTableId: null }
 }
 
 function showSubTableAssignColumn(bindingId?: number): boolean {
@@ -513,17 +595,61 @@ function resolveInlineFormTableTitle(field: FormField): string {
  */
 function resolveInlineFormFields(field: FormField): FormField[] {
   const source = resolveInlineFormSourceBinding(field)
+  const own = resolveBinding(field._bindingId)
   const fields = Array.isArray(source?.formFields) ? source!.formFields : []
-  return fields
+  return applyFieldDefinitionsToFormFields(fields, source?.fieldDefinitions ?? own?.fieldDefinitions)
+}
+
+/** MI link-form inline: pre-fill empty FK columns (People.id / sub_task_id ← parent id_idw). */
+function seedMiLinkInlineRowFkFromParent(
+  row: Record<string, any> | null,
+  target: SubTableBinding,
+  parentId: string | number | null | undefined,
+  isLinkTarget: boolean,
+  parentBinding?: SubTableBinding | null,
+  parentRow?: Record<string, unknown> | null,
+): Record<string, any> | null {
+  if (!row || parentId == null || String(parentId).trim() === '') return row
+  if (!isLinkTarget) return row
+  const parentParticipantRow =
+    parentRow && typeof parentRow === 'object'
+      ? parentRow
+      : ({ id_idw: parentId } as Record<string, unknown>)
+  const parentTableId =
+    parentBinding?.tableId != null && Number.isFinite(Number(parentBinding.tableId))
+      ? Number(parentBinding.tableId)
+      : null
+  return seedLinkChildForeignKeysFromParentRow(row, target.fieldDefinitions, {
+    bindingForeignKeyField: target.foreignKeyField,
+    bindingLinkMode: target.bindingLinkMode,
+    primaryKeyFields: target.primaryKeyFields,
+    parentParticipantRow,
+    parentTableId,
+    legacyFkSeed: parentId,
+  }) as Record<string, any>
 }
 
 /** FK candidates used to align a child (linkForm target) row to a parent row. */
 function resolveLinkFkCandidates(target: SubTableBinding): string[] {
   const list: string[] = []
+  for (const fd of target.fieldDefinitions ?? []) {
+    if (fd.isForeignKey && fd.fieldName && !list.includes(fd.fieldName)) {
+      list.push(fd.fieldName)
+    }
+  }
   const explicit = (target as any).foreignKeyField
-  if (explicit && String(explicit).trim()) list.push(String(explicit))
-  // Same heuristic used by SubTableField's Link Form modal so designer/runtime agree.
-  for (const k of ['participant_id', 'participantId', 'parent_id', 'parentId', 'meeting_participant_id']) {
+  if (
+    explicit
+    && String(explicit).trim()
+    && !bindingForeignKeyFieldIsRowPrimaryKey(String(explicit), {
+      primaryKeyFields: target.primaryKeyFields,
+      fieldDefinitions: target.fieldDefinitions,
+    })
+    && !list.includes(String(explicit))
+  ) {
+    list.push(String(explicit))
+  }
+  for (const k of ['sub_task_id', 'participant_id', 'participantId', 'parent_id', 'parentId', 'meeting_participant_id']) {
     if (!list.includes(k)) list.push(k)
   }
   return list
@@ -767,6 +893,25 @@ function getCurrentRowForInlineForm(field: FormField): Record<string, any> | nul
     pickReason = pickReason === 'none' ? 'pickPreferred' : `${pickReason}+pickPreferred`
   }
 
+  if (result && isLinkTarget && parentId != null && String(parentId).trim() !== '') {
+    const own = resolveBinding(field._bindingId)
+    const parentRow = own
+      ? findMiIsolatedParentRow(Array.isArray(own.data) ? own.data : [], parentId)
+      : null
+    const fkSeed =
+      parentRow?.id_idw != null && parentRow.id_idw !== ''
+        ? (parentRow.id_idw as string | number)
+        : parentId
+    result = seedMiLinkInlineRowFkFromParent(
+      result,
+      pack.target,
+      fkSeed,
+      isLinkTarget,
+      own ?? undefined,
+      parentRow,
+    )
+  }
+
   return result
 }
 
@@ -785,6 +930,21 @@ function handleInlineFormUpdate(field: FormField, mergedRow: Record<string, any>
   if (!pack) return
   const { target, rows, isLinkTarget } = pack
   const parentId = props.currentMiRowId
+
+  const resolveLinkParentContext = () => {
+    if (parentId == null || String(parentId).trim() === '') {
+      return { fkSeed: parentId, own: null as SubTableBinding | null, parentRow: null as Record<string, unknown> | null }
+    }
+    const own = resolveBinding(field._bindingId)
+    const parentRow = own
+      ? findMiIsolatedParentRow(Array.isArray(own.data) ? own.data : [], parentId)
+      : null
+    const fkSeed =
+      parentRow?.id_idw != null && parentRow.id_idw !== ''
+        ? (parentRow.id_idw as string | number)
+        : parentId
+    return { fkSeed, own, parentRow }
+  }
 
   let idx = -1
   if (isLinkTarget && parentId != null && String(parentId).trim() !== '') {
@@ -811,14 +971,36 @@ function handleInlineFormUpdate(field: FormField, mergedRow: Record<string, any>
   }
 
   if (idx >= 0) {
-    rows[idx] = { ...rows[idx], ...mergedRow }
+    let updated: Record<string, any> = { ...rows[idx], ...mergedRow }
+    if (isLinkTarget) {
+      const { fkSeed, own, parentRow } = resolveLinkParentContext()
+      const seeded = seedMiLinkInlineRowFkFromParent(
+        updated,
+        target,
+        fkSeed,
+        true,
+        own ?? undefined,
+        parentRow,
+      )
+      if (seeded) updated = seeded
+    }
+    rows[idx] = updated
   } else {
     const fresh: Record<string, any> = { ...mergedRow }
     if (isLinkTarget && parentId != null && String(parentId).trim() !== '') {
-      // Seed the FK so the new child row aligns with the parent participant.
+      const { fkSeed, own, parentRow } = resolveLinkParentContext()
       const explicit = (target as any).foreignKeyField
       const fkField = explicit && String(explicit).trim() ? String(explicit) : 'parent_id'
-      if (fresh[fkField] == null || fresh[fkField] === '') fresh[fkField] = parentId
+      if (fresh[fkField] == null || fresh[fkField] === '') fresh[fkField] = fkSeed ?? parentId
+      const seeded = seedMiLinkInlineRowFkFromParent(
+        fresh,
+        target,
+        fkSeed ?? parentId,
+        true,
+        own ?? undefined,
+        parentRow,
+      )
+      if (seeded) Object.assign(fresh, seeded)
     }
     if (!isLinkTarget && parentId != null && String(parentId).trim() !== '') {
       const fkList = resolveLinkFkCandidates(target)
@@ -872,7 +1054,7 @@ const fieldComponentEvents = computed(() =>
 // ---------------------------------------------------------------------------
 const engine = new BusinessLogicEngine()
 const engineVisibility = ref(new Map<string, boolean>())
-const eventVisibilityState = reactive<PortalFormVisibilityState>({
+const eventVisibilityState = shallowReactive<PortalFormVisibilityState>({
   hidden: new Map<string, boolean>(),
   display: new Map<string, boolean>(),
 })
@@ -1200,6 +1382,12 @@ function handleSubTableUpdate(bindingId: number, rows: any[]) {
   }
 }
 
+function handlePrimaryFormDataPatch(patch: Record<string, unknown>) {
+  if (!patch || typeof patch !== 'object') return
+  Object.assign(formData.value, patch)
+  emit('update:modelValue', { ...formData.value })
+}
+
 // ---------------------------------------------------------------------------
 // Watchers
 // ---------------------------------------------------------------------------
@@ -1210,14 +1398,22 @@ watchThrottled(
       emit('update:modelValue', { ...newVal })
     }
   },
-  { deep: true, throttle: 150 },
+  { throttle: 150 },
 )
 
-watch(() => props.modelValue, (newVal, oldVal) => {
-  if (!isEqual(newVal, oldVal)) {
+// Watch modelValue changes — use JSON fingerprint instead of deep watch
+// to avoid recursive traversal of the entire modelValue object tree.
+let _modelValueFingerprint = ''
+watch(() => props.modelValue, (newVal) => {
+  // Exclude __subTables__ from comparison — sub-table data updates via
+  // patchFormDataSubTablesFromCurrentBindings() should NOT trigger initFormData().
+  const { __subTables__: _, ...rest } = newVal || {}
+  const fp = JSON.stringify(rest)
+  if (fp !== _modelValueFingerprint) {
+    _modelValueFingerprint = fp
     initFormData()
   }
-}, { deep: true })
+})
 
 watch(allFields, (newFields, oldFields) => {
   const hasChanged = newFields.length !== oldFields.length ||
@@ -1451,19 +1647,41 @@ const setFieldValue = (key: string, value: any) => {
   formData.value[key] = value
 }
 
+// Use toRefs(props) instead of 10 individual computed() wrappers — cheaper to create,
+// same reactivity behavior (refs auto-unwrap inside reactive() provide).
+const {
+  labelWidth: propLabelWidth,
+  uploadUrl: propUploadUrl,
+  taskId: propTaskId,
+  viewContext: propViewContext,
+  subTableBindings: propSubTableBindings,
+  functionUnitId: propFunctionUnitId,
+  enableSubTablePolling: propEnableSubTablePolling,
+  subTablePollingInterval: propSubTablePollingInterval,
+  suppressLinkFormInitialData: propSuppressLinkFormInitialData,
+  showLinkFormDialogFooter: propShowLinkFormDialogFooter,
+} = toRefs(props)
+
 provide(FORM_RENDERER_FIELDS_CTX, reactive({
   formData,
   readonly: effectiveReadonly,
-  labelWidth: computed(() => props.labelWidth),
-  uploadUrl: computed(() => props.uploadUrl),
-  taskId: computed(() => props.taskId),
-  viewContext: computed(() => props.viewContext),
-  subTableBindings: computed(() => props.subTableBindings),
+  labelWidth: propLabelWidth,
+  uploadUrl: propUploadUrl,
+  taskId: propTaskId,
+  viewContext: propViewContext,
+  subTableBindings: propSubTableBindings,
   linkableSubTableBindings,
-  enableSubTablePolling: computed(() => props.enableSubTablePolling),
-  subTablePollingInterval: computed(() => props.subTablePollingInterval),
-  suppressLinkFormInitialData: computed(() => props.suppressLinkFormInitialData),
-  showLinkFormDialogFooter: computed(() => props.showLinkFormDialogFooter),
+  functionUnitId: propFunctionUnitId,
+  resolveMiParticipantSeedForSubTableAdd,
+  primaryFormData: formData,
+  primaryTableDisplayName,
+  primaryTableId,
+  parentTablesById,
+  subTableBindingsForContext,
+  enableSubTablePolling: propEnableSubTablePolling,
+  subTablePollingInterval: propSubTablePollingInterval,
+  suppressLinkFormInitialData: propSuppressLinkFormInitialData,
+  showLinkFormDialogFooter: propShowLinkFormDialogFooter,
   lookupSelectedData,
   lookupLoadedViewFields,
   engineVisibility,
@@ -1492,6 +1710,7 @@ provide(FORM_RENDERER_FIELDS_CTX, reactive({
   inlineSubTableFormReadonly,
   lookupShowBackfillView,
   handleSubTableUpdate,
+  handlePrimaryFormDataPatch,
   handleInlineFormUpdate,
   scrollSubTableInlineIntoView,
   setSubTableInlineAnchor,
@@ -1507,17 +1726,24 @@ provide(FORM_RENDERER_FIELDS_CTX, reactive({
     emit('viewSubtaskDetail', row, siblingRows)
   },
 }))
+console.log(`[PERF-FR] setup done (before template) @${performance.now().toFixed(0)}`)
 
 // ---------------------------------------------------------------------------
 // Lifecycle
 // ---------------------------------------------------------------------------
 onMounted(() => {
+  const _t0 = performance.now()
+  console.log(`[PERF-FR] mounted @${_t0.toFixed(0)}`)
   initFormData()
+  console.log(`[PERF-FR] initFormData done @${performance.now().toFixed(0)} (+${(performance.now()-_t0).toFixed(0)}ms)`)
   initEngine()
+  console.log(`[PERF-FR] initEngine done @${performance.now().toFixed(0)} (+${(performance.now()-_t0).toFixed(0)}ms)`)
   bootstrapComponentHookEvents()
   bootstrapFormOptionsOnChange()
+  console.log(`[PERF-FR] bootstrap done @${performance.now().toFixed(0)} (+${(performance.now()-_t0).toFixed(0)}ms)`)
   // Task 7.5: Check for auto-saved data, then start auto-save timer
   checkAutoSaveRestore().then(() => {
+    console.log(`[PERF-FR] autoSaveRestore done @${performance.now().toFixed(0)} (+${(performance.now()-_t0).toFixed(0)}ms)`)
     startAutoSave()
   })
 })

@@ -105,10 +105,40 @@ export function useRelationTableData() {
   const handleSizeChange = (size: number) => { pageSize.value = size; currentPage.value = 1; fetchData() }
 
   // ---- CRUD ----
-  const openAddDialog = () => {
-    dialogMode.value = 'add'; editingRowId.value = null; formData.value = {}
-    fieldColumns.value.forEach(f => { (formData.value as Record<string, unknown>)[f.fieldName] = f.defaultValue ?? (f.dataType === 'BOOLEAN' ? false : null) })
-    dialogVisible.value = true
+  const visibleFieldColumns = computed(() =>
+    fieldColumns.value.filter(f => !(f.isForeignKey && f.fkDisplayMode === 'hidden')),
+  )
+
+  const isFkFieldDisabled = (field: FieldDefinitionResponse) =>
+    !!field.isForeignKey && (field.fkDisplayMode == null || field.fkDisplayMode === 'readonly')
+
+  const openAddDialog = async () => {
+    if (!selectedTableId.value) return
+    dialogMode.value = 'add'
+    editingRowId.value = null
+    formData.value = {}
+    for (const f of fieldColumns.value) {
+      if (f.isForeignKey && f.fkDisplayMode === 'hidden') continue
+      ;(formData.value as Record<string, unknown>)[f.fieldName] =
+        f.defaultValue ?? (f.dataType === 'BOOLEAN' ? false : null)
+    }
+    try {
+      for (const f of fieldColumns.value) {
+        if (!f.isPrimaryKey) continue
+        const strategy = (f.pkGeneration as { strategy?: string } | undefined)?.strategy ?? 'uuid'
+        if (strategy === 'manual') continue
+        const res = await relationTableDataApi.allocatePrimaryKeys(selectedTableId.value, {
+          fieldName: f.fieldName,
+        })
+        const values = (res as { values?: string[] })?.values ?? (res as { data?: { values?: string[] } })?.data?.values
+        if (values?.[0] != null) {
+          ;(formData.value as Record<string, unknown>)[f.fieldName] = values[0]
+        }
+      }
+      dialogVisible.value = true
+    } catch (e: unknown) {
+      notifyError((e as Error)?.message || 'Failed to prepare new record')
+    }
   }
 
   const openEditDialog = (row: RelationTableDataRow) => {
@@ -193,8 +223,8 @@ export function useRelationTableData() {
     tableListLoading, dataLoading, exporting, saving,
     tables, selectedTableId, searchKeyword, tableSearchKeyword, currentPage, pageSize, totalElements, dataRows,
     fetchDataError, dialogVisible, dialogMode, editingRowId, formData,
-    selectedTable, fieldColumns, filteredTables,
-    isNumericType, isRowDisabled,
+    selectedTable, fieldColumns, visibleFieldColumns, filteredTables,
+    isNumericType, isRowDisabled, isFkFieldDisabled,
     fetchTables, fetchData, handleSelectTable, handlePageChange, handleSizeChange,
     openAddDialog, openEditDialog, handleSaveRecord, handleDisable, handleEnable, handleDelete,
     formatHKT, handleExport, init, refresh,

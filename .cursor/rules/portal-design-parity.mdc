@@ -19,6 +19,20 @@ alwaysApply: true
 | 主表单渲染（Portal 侧） | `FormRenderer.vue` — 画布 `rule` + `subTableBindings` + `viewContext` |
 | Preview ↔ Portal merge 对齐 | `mergePortalViewsForPreview`（DW）与 `mergeSubTablePortalViewsForRuntime`（Portal）MUST 同一语义 |
 | **My Request × MI 子表数据** | `portal-mi-subtable-my-request.mdc` — 发起人全案 vs 办理人切片；file-only 附件禁止 global MI merge |
+| **Form Preview FK/PK 运行时** | `form-preview-fk-pk-runtime.mdc` — auto-PK 只读（含 card 深度 sync）、子表 Add 自动建主表、对话框 seed PK |
+| **待办节点 Action 按钮** | BPMN `actionIds` → `TaskActionService` → `TaskActionBar.vue`（见下文 §待办 Action 按钮） |
+
+## 待办 Action 按钮（BPMN 绑定）
+
+Designer 在 userTask 上配置的 **Actions**（`custom:actionIds`，值为 `dw_action_definitions` 整数 ID）MUST 在 Portal 待办详情底部展示。
+
+**解析链：** workflow-engine 返回 `actionIds` → `TaskActionService.getTaskActions` → `sys_action_definitions.findAllById` → 缺失时 **`findFromDwByIds`**（`ActionDefinitionRepository`）。
+
+| 要点 | 说明 |
+|---|---|
+| DW 列名 | `dw_action_definitions` 描述列为 **`display_name`**（非 `description`）；native SQL MUST **`d.display_name AS description`** 映射到 `ActionDefinition.description` |
+| 前端展示 | `TaskActionBar`：`actions.length > 0` → 自定义按钮；`actions == null` → 默认 Approve/Reject；**`actions === []`** → 两者皆不显示（仅转办/委派/催办） |
+| 典型症状 | 节点已绑 Action 但底部无按钮 + 日志 `column d.description does not exist` → 修 `findFromDwByIds` |
 
 ## 必须遵守
 
@@ -36,6 +50,7 @@ alwaysApply: true
 - [ ] 设计师改了 Portal Display 后，**Form Preview 弹窗**与 Portal 是否仍同一 merge 函数、同一布局？
 - [ ] 新增/修改 Preview 组件时，Portal 对应路径是否已同步（反之亦然）？
 - [ ] 是否与 `tasks/detail.vue` 行为对齐（My Request 见 `applications/detail.vue`）？
+- [ ] BPMN 节点绑定的 **Action 按钮**是否经 `TaskActionService` 正确解析并在 `TaskActionBar` 展示？`findFromDwByIds` 是否用 `display_name AS description`？
 
 ## 禁止
 
@@ -51,3 +66,4 @@ alwaysApply: true
 - 契约类型：`frontend/user-portal/src/components/formRendererHelpers.ts`
 - 内联/弹窗子表：`SubTableInlineForm.vue`、`SubTableField.vue`（Link Form 区 MUST 支持 `type === 'subTable'`）
 - Schema 回退：`resolveSubTableSchemaByTableId` in `subTableAddDialogHelpers.ts`
+- 待办 Action：`TaskActionService.java`、`ActionDefinitionRepository.findFromDwByIds`、`TaskActionBar.vue`

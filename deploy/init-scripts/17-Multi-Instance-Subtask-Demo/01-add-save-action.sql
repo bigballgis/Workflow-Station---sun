@@ -45,7 +45,7 @@ BEGIN
   IF v_save_action IS NULL THEN
     INSERT INTO dw_action_definitions (
       function_unit_id, action_name, action_type, config_json,
-      icon, button_color, description, is_default,
+      icon, button_color, display_name, is_default,
       created_at, updated_at
     ) VALUES (
       v_fu_id,

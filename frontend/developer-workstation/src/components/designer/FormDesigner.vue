@@ -275,6 +275,7 @@
         <el-divider content-position="left">
           {{ t('form.fieldPermission') }}
         </el-divider>
+        <div class="table-scroll-wrap">
         <el-table
           :data="currentFormFields"
           size="small"
@@ -314,6 +315,7 @@
             </template>
           </el-table-column>
         </el-table>
+        </div>
       </div>
     </div>
 
@@ -356,6 +358,11 @@
           v-model:preview-table-rows="previewTableRows"
           :items="previewItems"
           :preview-option="previewDialogOption"
+          :function-unit-id="functionUnitId"
+          :primary-table-display-name="previewPrimaryTableDisplayName"
+          :primary-table-id="previewPrimaryTableId"
+          :parent-tables-by-id="previewParentTablesById"
+          :preview-table-bindings="previewTableBindingsForContext"
         />
         <el-empty
           v-else
@@ -487,6 +494,7 @@
             </el-tag>
           </div>
           
+          <div class="import-fields-table-wrap">
           <el-table
             :data="availableFields"
             size="small"
@@ -549,6 +557,7 @@
               </template>
             </el-table-column>
           </el-table>
+          </div>
         </div>
         
         <el-empty
@@ -671,6 +680,12 @@ import {
   mapFormCreateRulesReadonlyDeep,
   stripFormCreateRulesDisabledDeep,
 } from '@/utils/formCreateRuleUtils'
+import {
+  applyTaskFieldPermissionsFromTableFields,
+  applyTableFieldMetaToFormRule,
+  shouldIncludeFieldOnFormCanvas,
+  syncFormRulesWithTableFields,
+} from '@/utils/formFieldMeta'
 
 const { t } = useI18n()
 
@@ -735,6 +750,37 @@ const previewSubBindings = ref<Array<{
 }>>([])
 const previewSubData = ref<Record<number, any>>({})
 const previewTableRows = ref<Record<number, any[]>>({})
+
+const previewPrimaryTableDisplayName = computed(() => {
+  const primary = selectedForm.value?.tableBindings?.find((b: TableBinding) => b.bindingType === 'PRIMARY')
+  if (!primary) return ''
+  const table = store.tables.find(t => t.id === primary.tableId)
+  return table?.tableDisplayName || table?.tableName || ''
+})
+
+const previewPrimaryTableId = computed(() => {
+  const primary = selectedForm.value?.tableBindings?.find((b: TableBinding) => b.bindingType === 'PRIMARY')
+  return primary?.tableId ?? null
+})
+
+const previewParentTablesById = computed(() => {
+  const out: Record<number, { fieldDefinitions: import('@/api/functionUnit').FieldDefinition[] }> = {}
+  for (const b of selectedForm.value?.tableBindings ?? []) {
+    if (b.bindingType !== 'PRIMARY' && b.bindingType !== 'SUB') continue
+    const table = store.tables.find(t => t.id === b.tableId)
+    if (table?.fieldDefinitions?.length) {
+      out[b.tableId] = { fieldDefinitions: table.fieldDefinitions }
+    }
+  }
+  return out
+})
+
+const previewTableBindingsForContext = computed(() =>
+  (selectedForm.value?.tableBindings ?? []).map((b: TableBinding) => ({
+    tableId: b.tableId,
+    bindingType: b.bindingType,
+  })),
+)
 
 const previewRowDialog = reactive({
   visible: false,
@@ -982,7 +1028,7 @@ async function handleSubTableViewSave(bindingId: number) {
     .filter(f => !f.columnType || f.columnType === 'field')
     .map((f, index) => ({
     fieldName: f.fieldName,
-    displayLabel: f.comment || f.fieldName,
+    displayLabel: f.displayName || f.fieldName,
     columnWidth: 150,
     sortOrder: index,
     visible: true
@@ -1044,7 +1090,7 @@ async function loadSubTableViewConfig(bindingId: number, binding: any) {
         return {
           fieldName: f.fieldName,
           dataType: available?.dataType || 'VARCHAR',
-          comment: f.displayLabel || f.fieldName,
+          displayName: f.displayLabel || f.fieldName,
         } as SubTableFieldDTO
       })
     if (viewFields.length === 0 && availableFields.length > 0) {
@@ -1112,7 +1158,7 @@ function subTableFieldColumnsFromFormRule(rule: any[]): SubTableFieldDTO[] {
       dataType: 'VARCHAR',
       nullable: true,
       isPrimaryKey: false,
-      comment: r.title || r.field,
+      displayName: r.title || r.field,
     }))
 }
 
@@ -1142,7 +1188,7 @@ function mergeSubTableListColumns(
         if (column?.columnType === 'lookup') return hydrateLookupColumn(column)
         const field = fieldByName.get(column?.fieldName)
         if (field) {
-          return { ...field, comment: column.comment || column.displayLabel || field.comment }
+          return { ...field, displayName: column.displayName || column.displayLabel || field.displayName }
         }
         // Keep columns that exist only in configJson (e.g. server dw_sub_table view config was cleared
         // or field names temporarily out of sync) — otherwise merge drops everything and save wipes subListViews.
@@ -1152,7 +1198,7 @@ function mergeSubTableListColumns(
             dataType: column.dataType || 'VARCHAR',
             nullable: column.nullable !== false,
             isPrimaryKey: !!column.isPrimaryKey,
-            comment: column.displayLabel || column.comment || column.fieldName,
+            displayName: column.displayLabel || column.displayName || column.fieldName,
             columnType: 'field' as const,
           } as SubTableListColumnDTO
         }
@@ -1181,8 +1227,8 @@ function hydrateLookupColumn(column: any): SubTableListColumnDTO {
     dataType: 'LOOKUP',
     nullable: true,
     isPrimaryKey: false,
-    comment: column.comment || column.columnLabel || 'Lookup',
-    columnLabel: column.columnLabel || column.comment || 'Lookup',
+    displayName: column.displayName || column.columnLabel || 'Lookup',
+    columnLabel: column.columnLabel || column.displayName || 'Lookup',
     lookupConfig: column.lookupConfig || '{}'
   }
 }
@@ -1199,7 +1245,7 @@ function hydrateLinkFormColumn(column: any): SubTableListColumnDTO {
     componentId,
     linkedFormId: column.linkedFormId ?? component?.linkedFormId,
     linkedFormName: column.linkedFormName ?? component?.linkedFormName,
-    comment: column.comment || column.columnLabel || component?.columnLabel || component?.componentName || t('linkForm.defaultLinkText'),
+    displayName: column.displayName || column.columnLabel || component?.columnLabel || component?.componentName || t('linkForm.defaultLinkText'),
     columnLabel: column.columnLabel ?? component?.columnLabel,
     linkText: column.linkText || component?.linkText || t('linkForm.defaultLinkText'),
     boundSubTableBindingId: column.boundSubTableBindingId,
@@ -1416,7 +1462,7 @@ function computeDesignerLinkFormColumns(): Record<number, DesignerLinkFormColumn
         boundSubTableName: (c as any).boundSubTableName
           || resolveDesignerBindingDisplayName((c as any).boundSubTableBindingId)
           || null,
-        columnLabel: (c as any).columnLabel || (c as any).comment || (c as any).linkText || `linkForm:${stableId}`,
+        columnLabel: (c as any).columnLabel || (c as any).displayName || (c as any).linkText || `linkForm:${stableId}`,
         linkText: (c as any).linkText || ''
       })
     }
@@ -1743,8 +1789,7 @@ function getRelationFieldDefs(bindingId?: number, config: any = {}) {
     return fields.map((f: any) => ({
       fieldName: f.fieldName,
       dataType: f.dataType,
-      comment: f.comment,
-      description: f.description || f.comment
+      displayName: f.displayName,
     }))
   }
 
@@ -1753,8 +1798,7 @@ function getRelationFieldDefs(bindingId?: number, config: any = {}) {
   return ((table as any)?.fieldDefinitions || []).map((f: any) => ({
     fieldName: f.fieldName,
     dataType: f.dataType,
-    comment: f.comment || f.description,
-    description: f.description || f.comment
+    displayName: f.displayName,
   }))
 }
 
@@ -1820,7 +1864,7 @@ function derivePreviewColumnsFromTable(bindingId: number) {
       const type = mapDataTypeToPreviewColumnType(String(f.dataType ?? ''))
       return {
         field: String(f.fieldName ?? ''),
-        label: String(f.description || f.comment || f.fieldName || ''),
+        label: String(f.displayName || f.fieldName || ''),
         type,
         minWidth: type === 'upload' ? 180 : 100,
         ...(type === 'upload' ? { props: { action: '/api/v1/upload' } } : {}),
@@ -1843,7 +1887,7 @@ function toSubTablePreviewColumns(bindingId: number, rule: any[], config: any) {
           || resolveDesignerBindingDisplayName(targetBindingId)
         return {
           field: column.fieldName || `linkForm:${column.componentId || bindingId}`,
-          label: column.columnLabel || column.comment || column.linkText || t('linkForm.defaultLinkText'),
+          label: column.columnLabel || column.displayName || column.linkText || t('linkForm.defaultLinkText'),
           type: 'linkForm',
           minWidth: 120,
           props: {
@@ -1860,7 +1904,7 @@ function toSubTablePreviewColumns(bindingId: number, rule: any[], config: any) {
         const lookupPreviewConfig = resolveLookupPreviewConfig(column.lookupConfig || '{}', config)
         return {
           field: column.fieldName || `lookup:${bindingId}`,
-          label: column.columnLabel || column.comment || 'Lookup',
+          label: column.columnLabel || column.displayName || 'Lookup',
           type: 'lookup',
           minWidth: 260,
           placeholder: lookupPreviewConfig.placeholder,
@@ -1880,7 +1924,7 @@ function toSubTablePreviewColumns(bindingId: number, rule: any[], config: any) {
         const lookupPreviewConfig = resolveLookupPreviewConfig(fieldRule.props?.lookupConfig || '{}', config)
         return {
           field: column.fieldName,
-          label: column.comment || column.columnLabel || fieldRule.title || column.fieldName,
+          label: column.displayName || column.columnLabel || fieldRule.title || column.fieldName,
           type: 'lookup',
           minWidth: 260,
           placeholder: fieldRule.props?.placeholder || lookupPreviewConfig.placeholder,
@@ -1910,7 +1954,7 @@ function toSubTablePreviewColumns(bindingId: number, rule: any[], config: any) {
         : null
       return {
         field: column.fieldName,
-        label: column.comment || column.columnLabel || fieldRule?.title || column.fieldName,
+        label: column.displayName || column.columnLabel || fieldRule?.title || column.fieldName,
         type: colType,
         minWidth: colType === 'upload' ? 180 : 100,
         ...(fieldRule && isFormCreateRuleReadonly(fieldRule) ? { readonly: true } : {}),
@@ -2053,7 +2097,7 @@ async function handleTableChange() {
           nullable: f.nullable,
           isPrimaryKey: f.isPrimaryKey,
           defaultValue: f.defaultValue,
-          description: f.comment,
+          displayName: f.displayName,
         } as FieldDefinition))
       }
     } catch {
@@ -2088,20 +2132,23 @@ async function handleImportFieldsToDesigner() {
       formBindings.value = []
     }
     
-    // If active tab is a RELATED binding, auto-select its table from store.tables
+    // If a non-primary tab (SUB or RELATED) is active, default to that tab's table
     if (activeDesignerTab.value !== 'main') {
       const bindingId = Number(activeDesignerTab.value)
-      const subBinding = designerSubBindings.value.find(b => b.bindingId === bindingId && b.bindingType === 'RELATED')
+      const subBinding = designerSubBindings.value.find(b => b.bindingId === bindingId)
       if (subBinding) {
-        // Find the table in store.tables by name (since dw_table_definitions has RELATION type tables)
-        const dwTable = store.tables.find(t => t.tableName === subBinding.tableName || t.tableDisplayName === subBinding.tableName)
-        if (dwTable) {
-          importTableId.value = dwTable.id
+        if (subBinding.bindingType === 'RELATED') {
+          // RELATED tables live in dw_table_definitions with RELATION type — match by name
+          const dwTable = store.tables.find(t => t.tableName === subBinding.tableName || t.tableDisplayName === subBinding.tableName)
+          importTableId.value = dwTable ? dwTable.id : (subBinding.tableId ?? null)
+        } else {
+          // SUB (and any other) bindings reference a dw_table_definitions id directly
+          importTableId.value = subBinding.tableId ?? null
         }
         selectedImportFields.value = []
         relationTableFields.value = []
         showImportFieldsDialog.value = true
-        // Fetch relation table fields
+        // Fetch relation table fields if applicable
         await handleTableChange()
         return
       }
@@ -2184,10 +2231,71 @@ function refreshActiveDesignerRulesFromTableDefaults(): void {
 /**
  * Convert database field type to form-create rule
  */
-function fieldToFormRule(field: FieldDefinition): any {
+function getTableFieldDefinitions(tableId: number): FieldDefinition[] {
+  const table = store.tables.find(t => t.id === tableId)
+  return table?.fieldDefinitions ? [...table.fieldDefinitions] : []
+}
+
+function mergeTaskPermissionsForFields(fields: FieldDefinition[]) {
+  if (!selectedForm.value || selectedForm.value.formType !== 'TASK' || !fields.length) return
+  selectedForm.value.fieldPermissions = applyTaskFieldPermissionsFromTableFields(
+    selectedForm.value.fieldPermissions,
+    fields,
+  )
+}
+
+function refreshFormRulesFromTableMetadata() {
+  if (!selectedForm.value) return
+  const bindings = selectedForm.value.tableBindings || []
+
+  const primary = bindings.find(b => b.bindingType === 'PRIMARY')
+  if (primary && designerRef.value) {
+    const fields = getTableFieldDefinitions(primary.tableId)
+    if (fields.length) {
+      try {
+        const currentRules = designerRef.value.getRule() || []
+        const synced = syncFormRulesWithTableFields(currentRules, fields)
+        injectUploadButtonLabels(synced as any[], t('form.clickToUpload'))
+        designerRef.value.setRule(synced)
+        mergeTaskPermissionsForFields(fields)
+      } catch {
+        // designer not ready
+      }
+    }
+  }
+
+  designerSubBindings.value.forEach((binding, index) => {
+    const subRef = subDesignerRefs.value[index]
+    if (!subRef) return
+    const fields = getTableFieldDefinitions(binding.tableId)
+    if (!fields.length) return
+    try {
+      const currentRules = subRef.getRule() || []
+      const synced = syncFormRulesWithTableFields(currentRules, fields)
+      injectUploadButtonLabels(synced as any[], t('form.clickToUpload'))
+      subRef.setRule(synced)
+      mergeTaskPermissionsForFields(fields)
+    } catch {
+      // sub designer not ready
+    }
+  })
+}
+
+function mapFieldsToFormRules(fields: FieldDefinition[]): any[] {
+  return fields
+    .filter(shouldIncludeFieldOnFormCanvas)
+    .map(fieldToFormRule)
+    .filter((rule): rule is Record<string, unknown> => rule != null)
+}
+
+function fieldToFormRule(field: FieldDefinition): Record<string, unknown> | null {
+  if (!shouldIncludeFieldOnFormCanvas(field)) {
+    return null
+  }
+
   const baseRule = {
     field: field.fieldName,
-    title: field.description || field.fieldName,
+    title: field.displayName || field.fieldName,
     props: {},
     validate: [] as any[]
   }
@@ -2196,20 +2304,21 @@ function fieldToFormRule(field: FieldDefinition): any {
   if (!field.nullable) {
     baseRule.validate.push({
       required: true,
-      message: `${field.description || field.fieldName} ${t('form.required').toLowerCase()}`,
+      message: `${field.displayName || field.fieldName} ${t('form.required').toLowerCase()}`,
       trigger: 'blur'
     })
   }
   
   let rule: any
   // Map data type to form component
+  let rule: Record<string, unknown>
   switch (field.dataType) {
     case 'VARCHAR':
       rule = {
         ...baseRule,
         type: 'input',
         props: {
-          placeholder: `${t('common.inputPlaceholder')} ${field.description || field.fieldName}`,
+          placeholder: `${t('common.inputPlaceholder')} ${field.displayName || field.fieldName}`,
           maxlength: field.length || 255,
           showWordLimit: true
         }
@@ -2221,7 +2330,7 @@ function fieldToFormRule(field: FieldDefinition): any {
         type: 'input',
         props: {
           type: 'textarea',
-          placeholder: `${t('common.inputPlaceholder')} ${field.description || field.fieldName}`,
+          placeholder: `${t('common.inputPlaceholder')} ${field.displayName || field.fieldName}`,
           rows: 3
         }
       }
@@ -2232,7 +2341,7 @@ function fieldToFormRule(field: FieldDefinition): any {
         ...baseRule,
         type: 'inputNumber',
         props: {
-          placeholder: `${t('common.inputPlaceholder')} ${field.description || field.fieldName}`,
+          placeholder: `${t('common.inputPlaceholder')} ${field.displayName || field.fieldName}`,
           precision: 0
         }
       }
@@ -2242,7 +2351,7 @@ function fieldToFormRule(field: FieldDefinition): any {
         ...baseRule,
         type: 'inputNumber',
         props: {
-          placeholder: `${t('common.inputPlaceholder')} ${field.description || field.fieldName}`,
+          placeholder: `${t('common.inputPlaceholder')} ${field.displayName || field.fieldName}`,
           precision: field.scale || 2
         }
       }
@@ -2260,7 +2369,7 @@ function fieldToFormRule(field: FieldDefinition): any {
         type: 'datePicker',
         props: {
           type: 'date',
-          placeholder: `${t('common.inputPlaceholder')} ${field.description || field.fieldName}`,
+          placeholder: `${t('common.inputPlaceholder')} ${field.displayName || field.fieldName}`,
           valueFormat: 'YYYY-MM-DD'
         }
       }
@@ -2271,7 +2380,7 @@ function fieldToFormRule(field: FieldDefinition): any {
         type: 'datePicker',
         props: {
           type: 'datetime',
-          placeholder: `${t('common.inputPlaceholder')} ${field.description || field.fieldName}`,
+          placeholder: `${t('common.inputPlaceholder')} ${field.displayName || field.fieldName}`,
           valueFormat: 'YYYY-MM-DD HH:mm:ss'
         }
       }
@@ -2296,12 +2405,12 @@ function fieldToFormRule(field: FieldDefinition): any {
         ...baseRule,
         type: 'input',
         props: {
-          placeholder: `${t('common.inputPlaceholder')} ${field.description || field.fieldName}`
+          placeholder: `${t('common.inputPlaceholder')} ${field.displayName || field.fieldName}`
         }
       }
   }
   applyTableFieldDefaultToRule(rule, field)
-  return rule
+  return applyTableFieldMetaToFormRule(field, rule)
 }
 
 /**
@@ -2338,7 +2447,7 @@ function buildEffectiveMainFormConfig(
   if (fields.length === 0) {
     return base
   }
-  base.rule = fields.map((f) => fieldToFormRule(f))
+  base.rule = mapFieldsToFormRules(fields)
   return base
 }
 
@@ -2365,7 +2474,7 @@ async function handleConfirmImportFields() {
         nullable: f.nullable ?? true,
         isPrimaryKey: f.isPrimaryKey ?? false,
         defaultValue: f.defaultValue,
-        comment: f.description,
+        displayName: f.displayName,
         sortOrder: idx,
       }))
       // Convert ALL available fields (not just selected) for the left panel
@@ -2379,7 +2488,7 @@ async function handleConfirmImportFields() {
         nullable: f.nullable ?? true,
         isPrimaryKey: f.isPrimaryKey ?? false,
         defaultValue: f.defaultValue,
-        comment: f.description,
+        displayName: f.displayName,
         sortOrder: idx,
       }))
       // Update relation view state directly
@@ -2404,19 +2513,20 @@ async function handleConfirmImportFields() {
       const subFields = selectedImportFields.value.map((f, idx) => ({
         fieldName: f.fieldName,
         dataType: f.dataType || 'VARCHAR',
-        comment: f.description || f.fieldName,
+        displayName: f.displayName || f.fieldName,
       })) as SubTableFieldDTO[]
       const allSubFields = availableFields.value.map((f) => ({
         fieldName: f.fieldName,
         dataType: f.dataType || 'VARCHAR',
-        comment: f.description || f.fieldName,
+        displayName: f.displayName || f.fieldName,
       })) as SubTableFieldDTO[]
 
       const bindingId = importTableId.value
         ? getBindingIdForTable(importTableId.value)
         : Number(activeDesignerTab.value)
       // Also import to sub-table form designer
-      const rules = selectedImportFields.value.map(fieldToFormRule)
+      const rules = mapFieldsToFormRules(selectedImportFields.value)
+      mergeTaskPermissionsForFields(selectedImportFields.value)
 
       // Find target sub designer ref
       let targetRef: any = null
@@ -2452,12 +2562,15 @@ async function handleConfirmImportFields() {
         }
       }
 
+      refreshFormRulesFromTableMetadata()
+
       ElMessage.success(t('form.importedSuccess', { count: selectedImportFields.value.length }))
       showImportFieldsDialog.value = false
       return
     }
 
-    const rules = selectedImportFields.value.map(fieldToFormRule)
+    const rules = mapFieldsToFormRules(selectedImportFields.value)
+    mergeTaskPermissionsForFields(selectedImportFields.value)
 
     // Determine target designer: active sub tab or main
     let targetRef: any = null
@@ -2508,6 +2621,7 @@ async function loadForms() {
           tableBindings: selectedForm.value.tableBindings
         }
       }
+      refreshFormRulesFromTableMetadata()
     }
     // 解析BPMN XML获取表单绑定信息
     parseFormBindingsFromBpmn()
@@ -2728,6 +2842,15 @@ async function handleSelectForm(row: FormDefinition) {
   subTableViewState.value = initialSubTableViewState
 
   const effectiveMain = buildEffectiveMainFormConfig(row, bindings)
+  const primaryBinding = bindings.find((b) => b.bindingType === 'PRIMARY')
+  const primaryFields = primaryBinding ? getTableFieldDefinitions(primaryBinding.tableId) : []
+  if (effectiveMain.rule?.length && primaryFields.length) {
+    effectiveMain.rule = syncFormRulesWithTableFields(effectiveMain.rule, primaryFields)
+    mergeTaskPermissionsForFields(primaryFields)
+  } else if (effectiveMain.rule?.length === 0 && primaryFields.length) {
+    mergeTaskPermissionsForFields(primaryFields)
+  }
+
   const mergedConfig: Record<string, any> = {
     ...(row.configJson || {}),
     ...effectiveMain
@@ -2789,11 +2912,17 @@ function loadSubDesigners(row: FormDefinition) {
       setTimeout(() => {
         const subRef = subDesignerRefs.value[index]
         if (subRef) {
-          const subConfig = subForms[binding.bindingId] || {}
-          try {
-            const rules = stripFormCreateRulesDisabledDeep(
-              cloneFormRules(subConfig.rule && subConfig.rule.length ? subConfig.rule : []) as unknown[]
-            ) as ReturnType<typeof cloneFormRules>
+        const subConfig = subForms[binding.bindingId] || {}
+        try {
+          const subFields = getTableFieldDefinitions(binding.tableId)
+          let rawRules = subConfig.rule && subConfig.rule.length ? subConfig.rule : []
+          if (rawRules.length && subFields.length) {
+            rawRules = syncFormRulesWithTableFields(rawRules, subFields)
+            mergeTaskPermissionsForFields(subFields)
+          }
+          const rules = stripFormCreateRulesDisabledDeep(
+            cloneFormRules(rawRules) as unknown[]
+          ) as ReturnType<typeof cloneFormRules>
             injectUploadButtonLabels(rules, t('form.clickToUpload'))
             inflateComponentEventsForDesigner(rules)
             walkRulesEnsureComponentEvents(rules)
@@ -2858,8 +2987,14 @@ function handleTabChange(tabName: TabPaneName) {
         const cached = subFormCache.value[bindingId]
         const subConfig = cached || subForms[bindingId] || {}
         try {
+          const subFields = getTableFieldDefinitions(binding.tableId)
+          let rawRules = subConfig.rule && subConfig.rule.length ? subConfig.rule : []
+          if (rawRules.length && subFields.length) {
+            rawRules = syncFormRulesWithTableFields(rawRules, subFields)
+            mergeTaskPermissionsForFields(subFields)
+          }
           const rules = stripFormCreateRulesDisabledDeep(
-            cloneFormRules(subConfig.rule && subConfig.rule.length ? subConfig.rule : []) as unknown[]
+            cloneFormRules(rawRules) as unknown[]
           ) as ReturnType<typeof cloneFormRules>
           injectUploadButtonLabels(rules, t('form.clickToUpload'))
           inflateComponentEventsForDesigner(rules)
@@ -3284,12 +3419,12 @@ async function handleSaveForm(isManual = false) {
 
 async function handlePreview() {
   console.log('[DEBUG] ==================== handlePreview START ====================')
-
   try {
     await store.fetchTables(props.functionUnitId)
   } catch (e) {
     console.warn('[FormDesigner] fetchTables before preview failed:', e)
   }
+  refreshFormRulesFromTableMetadata()
 
   // Wrapper to catch errors during preview generation
   async function buildPreview() {
@@ -3305,6 +3440,13 @@ async function handlePreview() {
   } catch {}
   if (!rawRule.length) {
     rawRule = selectedForm.value.configJson?.rule || []
+  }
+  const primaryBinding = (selectedForm.value.tableBindings || []).find(
+    (b: TableBinding) => b.bindingType === 'PRIMARY',
+  )
+  const primaryFields = primaryBinding ? getTableFieldDefinitions(primaryBinding.tableId) : []
+  if (rawRule.length && primaryFields.length) {
+    rawRule = syncFormRulesWithTableFields(rawRule, primaryFields) as any[]
   }
   console.log('[DEBUG] rawRule fetched, length:', rawRule.length, 'lookup items:', rawRule.filter(r => r?.type === 'lookup').length)
   console.log('[DEBUG] rawRule items:', rawRule.map(r => ({ type: r?.type, field: r?.field, title: r?.title })))
@@ -3367,6 +3509,10 @@ async function handlePreview() {
       rule = subFormCache.value[bindingId]?.rule || subForms[bindingId]?.rule || []
       option = subFormCache.value[bindingId]?.options || subForms[bindingId]?.options || {}
     }
+    const tableFields = (store.tables.find(t => t.id === b.tableId)?.fieldDefinitions) || []
+    if (rule.length && tableFields.length) {
+      rule = syncFormRulesWithTableFields(rule, tableFields) as any[]
+    }
     rule = mapFormCreateRulesReadonlyDeep(rule) as any[]
     const columns = toSubTablePreviewColumns(bindingId, rule, config)
     previewTableRows.value[bindingId] = []
@@ -3377,6 +3523,10 @@ async function handlePreview() {
       tableName: getTableName(b.tableId, b.tableName),
       tableType: (store.tables.find(t => t.id === b.tableId)?.tableType) || (b.bindingType === 'RELATED' ? 'RELATION' : ''),
       tableDescription: (store.tables.find(t => t.id === b.tableId)?.description) || '',
+      tableId: b.tableId,
+      fieldDefinitions: (store.tables.find(t => t.id === b.tableId)?.fieldDefinitions) || [],
+      bindingLinkMode: b.bindingLinkMode,
+      bindingForeignKeyField: b.foreignKeyField,
       rule,
       option,
       columns,
@@ -4204,6 +4354,16 @@ onMounted(() => {
   .source-table {
     font-size: 12px;
     color: #909399;
+  }
+
+  // Keep the field table at full dialog width (avoid global .table-scroll-wrap
+  // max-content sizing which adds an inner scrollbar that clips the last row).
+  .import-fields-table-wrap {
+    width: 100%;
+
+    :deep(.el-table) {
+      width: 100%;
+    }
   }
 }
 

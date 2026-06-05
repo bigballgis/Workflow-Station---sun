@@ -277,6 +277,8 @@
               :form-config="mainFormConfig"
               view-context="initiatorRequest"
               :initiator-snapshot-mode="!!snapshotTaskName"
+              :function-unit-id="functionUnitIdRef"
+              :primary-table-binding="primaryTableBinding ?? undefined"
               @view-subtask-detail="(row: any, sib?: any[]) => openSubTaskDetailDialog(row, sib)"
               @update:sub-table-data="(id: number, rows: any[]) => { const b = subTableBindings.find(x => x.bindingId === id); if (b) b.data = rows }"
             />
@@ -622,7 +624,11 @@ const subTableBindings = ref<Array<{
   portalViews?: Record<string, any> | null
   /** From dw_field_definitions via admin assembleFunctionUnitContent; drives row merge / PK resolution. */
   primaryKeyFields?: string[]
+  fieldDefinitions?: Array<Record<string, unknown>>
 }>>([])
+
+const primaryTableBinding = ref<{ tableId?: number | null; tableName?: string } | null>(null)
+const functionUnitIdRef = ref('')
 
 /** Cached from loadFunctionUnitContent — shared attachment slice merge (parity with tasks/detail.vue). */
 const lastBindingRelationTableMap = ref<Map<number, number | null>>(new Map())
@@ -2337,6 +2343,7 @@ const loadProcessDetail = async () => {
       }
 
       const processKey = data.processDefinitionKey
+      if (processKey) functionUnitIdRef.value = String(processKey)
       const historyPromise = loadProcessHistory()
       const fuFetchPromise = processKey
         ? processApi.getFunctionUnitContent(processKey).then(r => r.data || r).catch(err => {
@@ -2470,7 +2477,14 @@ const loadFunctionUnitContent = async (processKey: string, prefetchedContent?: a
       const subFormsPayload = selectedFormConfig.subForms || {}
       const subTablePortalViewsPayload = selectedFormConfig.subTablePortalViews || {}
       for (const b of tableBindings) {
-        if (b.bindingType === 'PRIMARY') continue
+        if (b.bindingType === 'PRIMARY') {
+          primaryTableBinding.value = {
+            tableId: b.tableId != null ? Number(b.tableId) : null,
+            tableName: b.tableDisplayName || b.tableName,
+            fieldDefinitions: b.fieldDefinitions ?? [],
+          }
+          continue
+        }
         let columns = resolveSubTableBindingColumnsForPortal(b, selectedFormConfig, content.forms)
         if ((!Array.isArray(columns) || columns.length === 0) && isPortalSharedAttachmentTableBinding(b)) {
           columns = defaultAttachmentListColumns()
@@ -2501,7 +2515,8 @@ const loadFunctionUnitContent = async (processKey: string, prefetchedContent?: a
             b.primaryKeyFields,
             b.bindingId,
             selectedFormConfig
-          )
+          ),
+          fieldDefinitions: b.fieldDefinitions ?? [],
         })
       }
 
@@ -3530,9 +3545,19 @@ const parseBpmnXml = (xml: string) => {
         isMiSubProcess
       ) {
         spStatus = 'completed'
-      } else if (processInfo.value.status === 'COMPLETED' && hasCompletedMiRows()) {
+      } else if (
+        processInfo.value.status === 'COMPLETED' &&
+        hasCompletedMiRows() &&
+        enteredSubProcesses.has(spId) &&
+        isMiSubProcess
+      ) {
         spStatus = 'completed'
-      } else if (processInfo.value.status === 'RUNNING' && hasIncompleteMiRows()) {
+      } else if (
+        processInfo.value.status === 'RUNNING' &&
+        hasIncompleteMiRows() &&
+        enteredSubProcesses.has(spId) &&
+        isMiSubProcess
+      ) {
         spStatus = 'current'
       } else if (snapshotActive && completedSnapshotSingleTaskSubProcesses.has(spId)) {
         spStatus = 'completed'
@@ -4095,7 +4120,7 @@ const deriveColumnsFromBinding = (binding: any, formConfig?: Record<string, any>
         if (column.columnType === 'linkForm') {
           return {
             field: column.fieldName || `linkForm:${column.componentId || binding.bindingId}`,
-            label: column.columnLabel || column.comment || column.linkText || 'Link Form',
+            label: column.columnLabel || column.displayName || column.linkText || 'Link Form',
             type: 'linkForm',
             minWidth: column.minWidth || 120,
             props: {
@@ -4107,7 +4132,7 @@ const deriveColumnsFromBinding = (binding: any, formConfig?: Record<string, any>
           }
         }
         if (column.columnType === 'lookup') {
-          const label = column.columnLabel || column.comment || 'Lookup'
+          const label = column.columnLabel || column.displayName || 'Lookup'
           const field =
             isSyntheticLookupField(column.fieldName) && isAssigneeLikeLabel(label) && assigneeField
               ? assigneeField
@@ -4127,7 +4152,7 @@ const deriveColumnsFromBinding = (binding: any, formConfig?: Record<string, any>
           return {
             ...(baseColumn || {}),
             field: column.fieldName,
-            label: column.comment || column.columnLabel || baseColumn?.label || fieldRule?.title || column.fieldName,
+            label: column.displayName || column.columnLabel || baseColumn?.label || fieldRule?.title || column.fieldName,
             type: 'lookup',
             minWidth: column.minWidth || baseColumn?.minWidth || 260,
             props: buildLookupColumnProps(fieldRule?.props?.lookupConfig || baseColumn?.props?.lookupConfig || '{}')

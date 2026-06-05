@@ -64,6 +64,7 @@ import {
   normalizeUploadFieldsInRow,
   resolveUploadCellUrl,
 } from './uploadFieldUtils'
+import { mergeFormRowWithSeed } from './subTableAddDialogHelpers'
 
 export interface SubTableFormDialogProps {
   visible: boolean
@@ -136,6 +137,8 @@ function buildDialogFormOption(option: Record<string, any> = {}) {
 
 const formOption = ref(buildDialogFormOption(props.option))
 const formRule = ref<any[]>([])
+/** Allocated PK / FK values seeded on add — merged back on save when form-create omits disabled fields. */
+const seedRow = ref<Record<string, any>>({})
 
 watch(
   () => [props.visible, props.initialData, props.mode, props.rule, props.option, props.readOnly] as const,
@@ -149,8 +152,13 @@ watch(
     formRule.value = mapFormCreateRulesReadonlyDeep(cloneFormRules(rule || [])) as any[]
     injectPreviewUploadHandlers(formRule.value, formData, uploadSession)
     if (mode === 'edit' && data) {
-      formData.value = { ...(data as Record<string, any>) }
+      seedRow.value = { ...(data as Record<string, any>) }
+      formData.value = { ...seedRow.value }
+    } else if (mode === 'add' && data) {
+      seedRow.value = { ...(data as Record<string, any>) }
+      formData.value = { ...seedRow.value }
     } else {
+      seedRow.value = {}
       formData.value = {}
     }
     hydrateUploadFieldsForFormCreate(formData.value, collectUploadRulesFromTree(formRule.value))
@@ -165,11 +173,12 @@ watch(
 function handleClosed() {
   formCreateMounted.value = false
   formData.value = {}
+  seedRow.value = {}
   uploadSession.value = {}
 }
 
 function handleSave() {
-  const row = { ...formData.value }
+  const row = mergeFormRowWithSeed(seedRow.value, formData.value)
   const uploadRules = collectUploadRulesFromTree(formRule.value)
   const uploadRuleFields = uploadRules.map((r) => r.field)
 

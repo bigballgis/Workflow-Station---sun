@@ -189,10 +189,12 @@ public class TaskManagerComponent {
     }
     
     /**
-     * Convert Flowable Task to TaskInfo (shared logic with detail query, includes candidate users/groups)
+     * Convert Flowable Task to TaskInfo for the To Do list. Skips loading the full process-variable bag
+     * (portal discards it via {@code clearTaskVariablesForList}); only the lightweight initiator fallback
+     * is loaded on demand. Detail queries use {@link #buildTaskInfoFromFlowableTask(Task)} (variables included).
      */
     private TaskListResult.TaskInfo convertFlowableTaskToTaskInfo(Task task) {
-        return buildTaskInfoFromFlowableTask(task);
+        return buildTaskInfoFromFlowableTask(task, false);
     }
     
     /**
@@ -205,27 +207,49 @@ public class TaskManagerComponent {
         }
         try {
             Map<String, Object> userInfo = adminCenterClient.getUserInfo(userId);
-            if (userInfo != null) {
-                // Prefer fullName
-                String fullName = (String) userInfo.get("fullName");
-                if (fullName != null && !fullName.isEmpty()) {
-                    return fullName;
-                }
-                // Then displayName
-                String displayName = (String) userInfo.get("displayName");
-                if (displayName != null && !displayName.isEmpty()) {
-                    return displayName;
-                }
-                // Then username
-                String username = (String) userInfo.get("username");
-                if (username != null && !username.isEmpty()) {
-                    return username;
-                }
-            }
+            String resolved = pickDisplayNameFromUserInfo(userInfo, userId);
+            return resolved != null ? resolved : userId;
         } catch (Exception e) {
             log.warn("Failed to resolve user display name for {}: {}", userId, e.getMessage());
         }
         return userId;
+    }
+
+    /**
+     * Resolve display names once per distinct user id (avoids N+1 admin-center HTTP on MI process history).
+     */
+    public Map<String, String> resolveUserDisplayNames(java.util.Collection<String> userIds) {
+        Map<String, String> out = new java.util.LinkedHashMap<>();
+        if (userIds == null || userIds.isEmpty()) {
+            return out;
+        }
+        for (String userId : userIds) {
+            if (userId == null || userId.isBlank()) {
+                continue;
+            }
+            String key = userId.trim();
+            out.computeIfAbsent(key, this::resolveUserDisplayName);
+        }
+        return out;
+    }
+
+    static String pickDisplayNameFromUserInfo(Map<String, Object> userInfo, String fallback) {
+        if (userInfo == null) {
+            return fallback;
+        }
+        String fullName = (String) userInfo.get("fullName");
+        if (fullName != null && !fullName.isEmpty()) {
+            return fullName;
+        }
+        String displayName = (String) userInfo.get("displayName");
+        if (displayName != null && !displayName.isEmpty()) {
+            return displayName;
+        }
+        String username = (String) userInfo.get("username");
+        if (username != null && !username.isEmpty()) {
+            return username;
+        }
+        return fallback;
     }
     
     /**
@@ -334,8 +358,7 @@ public class TaskManagerComponent {
             validateUserId(userId);
             
             int fetchLimit = (page + 1) * size;
-            repairOrphanBuRolePoolTasks(fetchLimit);
-            repairOrphanMultiInstanceTasks(fetchLimit);
+            maybeRepairOrphanTasks(fetchLimit);
             
             List<Task> assignedTasks = taskService.createTaskQuery()
                 .taskAssignee(userId)
@@ -403,6 +426,32 @@ public class TaskManagerComponent {
             throw new WorkflowBusinessException("TASK_QUERY_ERROR", 
                 "Failed to query user visible tasks: " + e.getMessage(), e);
         }
+    }
+
+    private static final long ORPHAN_REPAIR_MIN_INTERVAL_MS = 30_000L;
+    private volatile long lastOrphanRepairAtMs = 0L;
+
+    /**
+     * Orphan-task repair (BU_ROLE pool + MI) scans ALL unassigned tasks and writes back assignees — it is pure
+     * data maintenance, independent of the requesting user. Running it on every To Do request was a large fixed
+     * cost (two global unassigned scans + per-task BPMN/admin work + writes). Throttle to at most once per
+     * {@link #ORPHAN_REPAIR_MIN_INTERVAL_MS}; a newly produced orphan (only happens on assignee-listener failure)
+     * becomes visible within that window. The per-user initiator repair stays inline (it affects the current
+     * user's task visibility) and is intentionally not throttled here.
+     */
+    private void maybeRepairOrphanTasks(int fetchLimit) {
+        long now = System.currentTimeMillis();
+        if (now - lastOrphanRepairAtMs < ORPHAN_REPAIR_MIN_INTERVAL_MS) {
+            return;
+        }
+        synchronized (this) {
+            if (System.currentTimeMillis() - lastOrphanRepairAtMs < ORPHAN_REPAIR_MIN_INTERVAL_MS) {
+                return;
+            }
+            lastOrphanRepairAtMs = System.currentTimeMillis();
+        }
+        repairOrphanBuRolePoolTasks(fetchLimit);
+        repairOrphanMultiInstanceTasks(fetchLimit);
     }
 
     /**
@@ -1568,9 +1617,21 @@ public class TaskManagerComponent {
     }
     
     /**
-     * Build TaskInfo from Flowable Task
+     * Build TaskInfo from Flowable Task, including the full process-variable bag (detail path).
      */
     private TaskListResult.TaskInfo buildTaskInfoFromFlowableTask(Task task) {
+        return buildTaskInfoFromFlowableTask(task, true);
+    }
+
+    /**
+     * Build TaskInfo from Flowable Task.
+     *
+     * @param includeVariables when {@code true} (detail), loads the full process variables + {@code _currentItem}
+     *                         and returns them in the DTO; when {@code false} (To Do list), skips the heavy
+     *                         {@code runtimeService.getVariables()} call entirely and loads only the single
+     *                         {@code initiator} variable on demand for the initiator-name fallback.
+     */
+    private TaskListResult.TaskInfo buildTaskInfoFromFlowableTask(Task task, boolean includeVariables) {
         // Extract processDefinitionKey from processDefinitionId
         // Flowable 7.0 may return UUID only; extractProcessDefinitionKey auto-queries repositoryService
         String processDefinitionId = task.getProcessDefinitionId();
@@ -1609,9 +1670,11 @@ public class TaskManagerComponent {
             assignmentTarget = null;
         }
 
-        // Get process variables (before initiator resolution, so variables.initiator can fallback if startUserId is empty)
+        // Get process variables (before initiator resolution, so variables.initiator can fallback if startUserId is empty).
+        // The To Do list (includeVariables=false) skips this heavy call: the full bag (with large __subTables__)
+        // is discarded by the portal anyway; only the single initiator variable is fetched lazily below.
         Map<String, Object> variables = null;
-        if (task.getProcessInstanceId() != null) {
+        if (includeVariables && task.getProcessInstanceId() != null) {
             try {
                 variables = runtimeService.getVariables(task.getProcessInstanceId());
                 log.debug("Retrieved {} variables for task {}",
@@ -1621,19 +1684,19 @@ public class TaskManagerComponent {
                     task.getProcessInstanceId(), e.getMessage());
                 variables = new HashMap<>();
             }
-        }
 
-        // Multi-instance sub-task: include execution-scoped currentItem so the frontend
-        // can determine which sub-table row belongs to this specific sub-task instance.
-        if (task.getExecutionId() != null && variables != null) {
-            try {
-                Object currentItemObj = runtimeService.getVariable(task.getExecutionId(), "currentItem");
-                if (currentItemObj instanceof Map) {
-                    variables.put("_currentItem", currentItemObj);
-                    log.debug("Injected _currentItem for MI sub-task {}: {}", task.getId(), currentItemObj);
+            // Multi-instance sub-task: include execution-scoped currentItem so the frontend
+            // can determine which sub-table row belongs to this specific sub-task instance.
+            if (task.getExecutionId() != null && variables != null) {
+                try {
+                    Object currentItemObj = runtimeService.getVariable(task.getExecutionId(), "currentItem");
+                    if (currentItemObj instanceof Map) {
+                        variables.put("_currentItem", currentItemObj);
+                        log.debug("Injected _currentItem for MI sub-task {}: {}", task.getId(), currentItemObj);
+                    }
+                } catch (Exception e) {
+                    log.debug("No currentItem for task {}: {}", task.getId(), e.getMessage());
                 }
-            } catch (Exception e) {
-                log.debug("No currentItem for task {}: {}", task.getId(), e.getMessage());
             }
         }
 
@@ -1651,11 +1714,25 @@ public class TaskManagerComponent {
                 }
             }
         }
-        if (!StringUtils.hasText(initiatorId) && variables != null && variables.get("initiator") != null) {
-            String iv = variables.get("initiator").toString().trim();
-            if (StringUtils.hasText(iv)) {
-                initiatorId = iv;
-                initiatorName = resolveUserDisplayName(initiatorId);
+        if (!StringUtils.hasText(initiatorId)) {
+            Object initiatorVar = null;
+            if (variables != null) {
+                initiatorVar = variables.get("initiator");
+            } else if (task.getProcessInstanceId() != null) {
+                // List path skipped the full variable bag; fetch just the initiator variable.
+                try {
+                    initiatorVar = runtimeService.getVariable(task.getProcessInstanceId(), "initiator");
+                } catch (Exception e) {
+                    log.debug("Failed to read initiator variable for {}: {}",
+                            task.getProcessInstanceId(), e.getMessage());
+                }
+            }
+            if (initiatorVar != null) {
+                String iv = initiatorVar.toString().trim();
+                if (StringUtils.hasText(iv)) {
+                    initiatorId = iv;
+                    initiatorName = resolveUserDisplayName(initiatorId);
+                }
             }
         }
 
@@ -1772,26 +1849,34 @@ public class TaskManagerComponent {
         String activeBu = activeBusinessUnitId.trim();
         List<Task> out = new ArrayList<>();
         for (Task t : tasks) {
-            TaskListResult.TaskInfo info = buildTaskInfoFromFlowableTask(t);
-            if (fixedBuRoleVisibleForActiveWorkspace(info, activeBu)) {
+            if (fixedBuRoleVisibleForActiveWorkspace(t, activeBu)) {
                 out.add(t);
             }
         }
         return out;
     }
 
-    private boolean fixedBuRoleVisibleForActiveWorkspace(TaskListResult.TaskInfo info, String activeBu) {
-        if (info == null || !StringUtils.hasText(activeBu)) {
+    /**
+     * Lightweight FIXED_BU_ROLE workspace-visibility check. Reads only the (cached) BPMN assigneeType /
+     * businessUnitId extension props of the task's user node instead of doing a full
+     * {@link #buildTaskInfoFromFlowableTask} per candidate task (no variables / identity links / display-name HTTP).
+     */
+    private boolean fixedBuRoleVisibleForActiveWorkspace(Task t, String activeBu) {
+        if (t == null || !StringUtils.hasText(activeBu)) {
             return true;
         }
-        if (!isWorkspaceScopedBuPoolSemantics(info)) {
+        String bpmnAssigneeType = bpmnActionParser.getUserTaskExtensionPropertyValue(
+                t.getProcessDefinitionId(), t.getTaskDefinitionKey(), "assigneeType");
+        String bpmnBusinessUnitId = bpmnActionParser.getUserTaskExtensionPropertyValue(
+                t.getProcessDefinitionId(), t.getTaskDefinitionKey(), "businessUnitId");
+        bpmnBusinessUnitId = StringUtils.hasText(bpmnBusinessUnitId) ? bpmnBusinessUnitId.trim() : null;
+        if (!isWorkspaceScopedBuPoolSemantics(bpmnAssigneeType, bpmnBusinessUnitId)) {
             return true;
         }
-        String fixed = resolveFixedBuIdFromTaskInfo(info);
-        if (!StringUtils.hasText(fixed)) {
+        if (!StringUtils.hasText(bpmnBusinessUnitId)) {
             return true;
         }
-        return equalsNormalizedBuId(activeBu, fixed);
+        return equalsNormalizedBuId(activeBu, bpmnBusinessUnitId);
     }
 
     /**
@@ -1799,14 +1884,13 @@ public class TaskManagerComponent {
      * <p>Judged solely by current user task BPMN extensions, not process-instance-level {@code assigneeType}/{@code businessUnitId} variables:
      * those leak across nodes, misidentifying downstream nodes as fixed BU pool and filtering them all out in {@link #applyActiveWorkspaceBuTaskFilter}.</p>
      */
-    private static boolean isWorkspaceScopedBuPoolSemantics(TaskListResult.TaskInfo info) {
-        String bpmn = info.getBpmnAssigneeType();
-        if (bpmn != null) {
-            String u = bpmn.trim().toUpperCase(Locale.ROOT);
+    private static boolean isWorkspaceScopedBuPoolSemantics(String bpmnAssigneeType, String bpmnBusinessUnitId) {
+        if (bpmnAssigneeType != null) {
+            String u = bpmnAssigneeType.trim().toUpperCase(Locale.ROOT);
             if ("FIXED_BU_ROLE".equals(u)) {
                 return true;
             }
-            if ("BU_ROLE".equals(u) && StringUtils.hasText(info.getBpmnBusinessUnitId())) {
+            if ("BU_ROLE".equals(u) && StringUtils.hasText(bpmnBusinessUnitId)) {
                 return true;
             }
         }
@@ -1831,13 +1915,6 @@ public class TaskManagerComponent {
             // fall through
         }
         return false;
-    }
-
-    private static String resolveFixedBuIdFromTaskInfo(TaskListResult.TaskInfo info) {
-        if (StringUtils.hasText(info.getBpmnBusinessUnitId())) {
-            return info.getBpmnBusinessUnitId().trim();
-        }
-        return null;
     }
     
     

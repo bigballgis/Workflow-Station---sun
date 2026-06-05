@@ -65,7 +65,7 @@ public class UserDetailInfo {
         private String roleId;
         private String roleCode;
         private String roleName;
-        private String description;
+        private String displayName;
     }
     
     /**

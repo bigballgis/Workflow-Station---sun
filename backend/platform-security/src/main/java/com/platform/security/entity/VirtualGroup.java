@@ -43,8 +43,8 @@ public class VirtualGroup {
     @Builder.Default
     private String type = "CUSTOM";
     
-    @Column(columnDefinition = "TEXT")
-    private String description;
+    @Column(name = "display_name", columnDefinition = "TEXT")
+    private String displayName;
     
     /**
      * Rule expression for dynamic group membership

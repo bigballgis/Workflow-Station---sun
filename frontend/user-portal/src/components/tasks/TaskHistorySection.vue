@@ -31,7 +31,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { Clock } from '@element-plus/icons-vue'
-import ProcessHistory, { type HistoryRecord } from '@/components/ProcessHistory.vue'
+import ProcessHistory from '@/components/ProcessHistory.vue'
+import type { HistoryRecord } from '@/types/historyRecord'
 
 const props = defineProps<{
   historyRecords: HistoryRecord[]

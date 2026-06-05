@@ -183,6 +183,49 @@ class RelationTableDataServiceTest {
 
             assertThat(result).isEmpty();
         }
+
+        @Test
+        @DisplayName("UPDATED table should expose deployed display name and snapshot field labels in Table Data")
+        void updatedTableShouldUseDeployedDisplayNameAndSnapshotFields() throws JsonProcessingException {
+            RelationTableDefinition updatedTable = RelationTableDefinition.builder()
+                    .id(3L)
+                    .tableName("customer")
+                    .displayName("Customer Draft")
+                    .deployedDisplayName("Customer")
+                    .status(RelationTableStatus.UPDATED)
+                    .enabled(true)
+                    .portalVisible(false)
+                    .currentVersion(2)
+                    .createdAt(Instant.now())
+                    .updatedAt(Instant.now())
+                    .fieldDefinitions(new ArrayList<>())
+                    .versions(new ArrayList<>())
+                    .build();
+
+            String snapshotJson = "snapshot_json";
+            RelationTableVersion version = buildVersion(updatedTable, snapshotJson);
+            List<RelationFieldDTO> snapshotFields = List.of(
+                    RelationFieldDTO.builder()
+                            .fieldName("name")
+                            .dataType(RelationDataType.VARCHAR)
+                            .displayName("Name Deployed")
+                            .sortOrder(0)
+                            .build());
+
+            when(tableDefinitionRepository.findByStatusInAndEnabledTrue(
+                    List.of(RelationTableStatus.DEPLOYED, RelationTableStatus.UPDATED, RelationTableStatus.ROLLBACK)))
+                    .thenReturn(List.of(updatedTable));
+            when(versionRepository.findLatestVersion(3L)).thenReturn(Optional.of(version));
+            when(objectMapper.readValue(eq(snapshotJson), any(TypeReference.class))).thenReturn(snapshotFields);
+
+            List<RelationTableResponse> result = service.getDeployedTables();
+
+            assertThat(result).hasSize(1);
+            assertThat(result.get(0).getDisplayName()).isEqualTo("Customer");
+            assertThat(result.get(0).getFieldDefinitions()).singleElement()
+                    .extracting(RelationTableResponse.FieldDefinitionResponse::getDisplayName)
+                    .isEqualTo("Name Deployed");
+        }
     }
 
     // ==================== queryData Tests ====================

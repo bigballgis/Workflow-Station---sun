@@ -17,7 +17,7 @@
     
     <div
       v-if="!selectedAction"
-      class="action-list"
+      class="action-list table-scroll-wrap"
     >
       <el-table
         v-loading="loading"
@@ -72,30 +72,33 @@
         />
         <el-table-column
           :label="t('action.operation')"
-          width="200"
+          min-width="200"
+          fixed="right"
         >
           <template #default="{ row }">
-            <el-button
-              link
-              type="primary"
-              @click.stop="handleSelectAction(row)"
-            >
-              {{ t('action.edit') }}
-            </el-button>
-            <el-button
-              link
-              type="success"
-              @click.stop="handleTestAction(row)"
-            >
-              {{ t('action.test') }}
-            </el-button>
-            <el-button
-              link
-              type="danger"
-              @click.stop="handleDeleteAction(row)"
-            >
-              {{ t('action.delete') }}
-            </el-button>
+            <div class="table-row-actions">
+              <el-button
+                link
+                type="primary"
+                @click.stop="handleSelectAction(row)"
+              >
+                {{ t('action.edit') }}
+              </el-button>
+              <el-button
+                link
+                type="success"
+                @click.stop="handleTestAction(row)"
+              >
+                {{ t('action.test') }}
+              </el-button>
+              <el-button
+                link
+                type="danger"
+                @click.stop="handleDeleteAction(row)"
+              >
+                {{ t('action.delete') }}
+              </el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -366,6 +369,7 @@
                 + {{ t('common.add') }}
               </el-button>
             </div>
+            <div class="table-scroll-wrap">
             <el-table
               v-if="actionConfig.inputMapping && actionConfig.inputMapping.length > 0"
               :data="actionConfig.inputMapping"
@@ -449,6 +453,7 @@
                 </template>
               </el-table-column>
             </el-table>
+            </div>
           </div>
 
           <!-- Output Result Mapping -->
@@ -464,6 +469,7 @@
                 + {{ t('common.add') }}
               </el-button>
             </div>
+            <div class="table-scroll-wrap">
             <el-table
               v-if="actionConfig.outputMapping && actionConfig.outputMapping.length > 0"
               :data="actionConfig.outputMapping"
@@ -510,6 +516,7 @@
                 </template>
               </el-table-column>
             </el-table>
+            </div>
           </div>
         </template>
 
@@ -1502,12 +1509,6 @@ onMounted(loadActions)
   flex: 1;
   font-size: 18px;
   font-weight: bold;
-}
-
-.bound-nodes {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
 }
 
 .node-tag {

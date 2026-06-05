@@ -35,7 +35,7 @@ BEGIN
     -- 1. Function Unit description
     -- =========================================================================
     UPDATE dw_function_units
-    SET description = 'Meeting participant info collection workflow: demonstrates multi-instance subprocess with dynamic task distribution. The organizer creates a meeting and adds participants; after assigning a handler for each participant, the system auto-creates parallel sub-tasks so each participant independently fills in their attendance info, and the process advances once all are complete.',
+    SET display_name = 'Meeting participant info collection workflow: demonstrates multi-instance subprocess with dynamic task distribution. The organizer creates a meeting and adds participants; after assigning a handler for each participant, the system auto-creates parallel sub-tasks so each participant independently fills in their attendance info, and the process advances once all are complete.',
         updated_at  = CURRENT_TIMESTAMP
     WHERE code = 'fu-20260403-a1b2c5';
 
@@ -99,12 +99,12 @@ BEGIN
     -- 4. Form description column
     -- =========================================================================
     UPDATE dw_form_definitions
-    SET description = 'Create meeting form: fill in basic meeting info and add participants in the sub-table',
+    SET display_name = 'Create meeting form: fill in basic meeting info and add participants in the sub-table',
         updated_at  = CURRENT_TIMESTAMP
     WHERE id = v_create_form_id;
 
     UPDATE dw_form_definitions
-    SET description = 'Participant info form: used in sub-tasks for participants to fill in their attendance details (attendance status, dietary preference, remarks)',
+    SET display_name = 'Participant info form: used in sub-tasks for participants to fill in their attendance details (attendance status, dietary preference, remarks)',
         updated_at  = CURRENT_TIMESTAMP
     WHERE id = v_participant_form_id;
 

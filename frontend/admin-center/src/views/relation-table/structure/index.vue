@@ -20,12 +20,6 @@
         style="width: 100%"
       >
         <el-table-column
-          prop="tableName"
-          label="Name"
-          min-width="120"
-          show-overflow-tooltip
-        />
-        <el-table-column
           prop="displayName"
           label="Display Name"
           min-width="120"

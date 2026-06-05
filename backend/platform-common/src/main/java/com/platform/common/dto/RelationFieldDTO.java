@@ -68,9 +68,9 @@ public class RelationFieldDTO implements Serializable {
     private String defaultValue;
 
     /**
-     * Field comment / description
+     * Display name shown to end users in the form designer / runtime UI.
      */
-    private String comment;
+    private String displayName;
 
     /**
      * Display order of the field

@@ -197,6 +197,8 @@
               :form-options="formFormOptions"
               :form-config="formConfigJson"
               :sub-table-bindings="subTableBindings"
+              :function-unit-id="functionUnitId"
+              :primary-table-binding="primaryTableBinding ?? undefined"
               @update:sub-table-data="(id: number, rows: any[]) => { const b = subTableBindings.find(x => x.bindingId === id); if (b) b.data = rows }"
             />
           </div>
@@ -304,6 +306,14 @@ import {
   mergeListViewFieldColumn,
   parseLookupConfig,
   resolveSubListViewColumnsForBinding,
+  buildRelationTableFieldIndexFromDataTables,
+  deriveColumnsFromRelationFieldDefinitions,
+  resolveSubTableSchemaByTableId,
+  enrichColumnsWithTableFieldDisplayNames,
+  resolveBindingFieldDefinitions,
+  defaultAttachmentListColumns,
+  SHARED_ATTACHMENT_RELATION_TABLE_ID,
+  type RelationFieldDef,
 } from '@/components/subTableAddDialogHelpers'
 import { resolveAssigneeFieldForBinding } from '@/utils/subTableAssignment'
 
@@ -370,7 +380,63 @@ const subTableBindings = ref<Array<{
   columns: Array<{ field: string; label: string; type?: string }>
   portalViews?: Record<string, unknown> | null
   data: any[]
+  fieldDefinitions?: Array<Record<string, unknown>>
+  bindingLinkMode?: string
+  foreignKeyField?: string | null
 }>>([])
+
+const primaryTableBinding = ref<{
+  tableId?: number | null
+  tableName?: string
+  fieldDefinitions?: Array<Record<string, unknown>>
+} | null>(null)
+
+let cachedContentForms: unknown[] = []
+let cachedRelationTableFieldIndex = new Map<number, RelationFieldDef>()
+
+function isPortalSharedAttachmentTableBinding(b: {
+  bindingId?: number
+  tableId?: number | null
+  tableName?: string
+  foreignKeyField?: string | null
+}): boolean {
+  const tableIdNum = b.tableId != null ? Number(b.tableId) : NaN
+  const tn = normalizeSubTableName(String(b.tableName ?? ''))
+  if (Number.isFinite(tableIdNum) && tableIdNum === SHARED_ATTACHMENT_RELATION_TABLE_ID) return true
+  if (tn === 'attachment') return true
+  return String(b.foreignKeyField ?? '').trim().toLowerCase() === 'main_id' && tn === 'attachment'
+}
+
+function resolveSubTableBindingColumnsForStart(
+  b: {
+    bindingId?: number
+    tableId?: number | null
+    tableName?: string
+    foreignKeyField?: string | null
+    subFormConfig?: { rule?: unknown[] }
+  },
+  subForms: Record<string, any>,
+  formConfig: Record<string, any>,
+): ReturnType<typeof deriveColumnsFromBinding> {
+  let columns = deriveColumnsFromBinding(b, subForms, formConfig)
+  const tableIdNum = b.tableId != null ? Number(b.tableId) : NaN
+  if ((!Array.isArray(columns) || columns.length === 0) && Number.isFinite(tableIdNum) && cachedContentForms.length > 0) {
+    const alt = resolveSubTableSchemaByTableId(tableIdNum, cachedContentForms, b.bindingId)
+    if (alt) {
+      columns = deriveColumnsFromBinding({ ...b, bindingId: alt.bindingId }, alt.subForms, alt.formConfig)
+    }
+    if ((!columns || columns.length === 0) && cachedRelationTableFieldIndex.has(tableIdNum)) {
+      columns = deriveColumnsFromRelationFieldDefinitions(cachedRelationTableFieldIndex.get(tableIdNum)!)
+    }
+  }
+  if ((!columns || columns.length === 0) && isPortalSharedAttachmentTableBinding(b)) {
+    columns = defaultAttachmentListColumns()
+  }
+  if (Number.isFinite(tableIdNum) && columns?.length) {
+    columns = enrichColumnsWithTableFieldDisplayNames(columns, tableIdNum, cachedRelationTableFieldIndex)
+  }
+  return Array.isArray(columns) ? columns : []
+}
 
 /** Match task detail / autosave: key __subTables__ by binding id and table display name so downstream forms with new bindingIds can resolve rows. */
 function buildStartFormSubTablesPayload(): Record<string, unknown> {
@@ -433,6 +499,9 @@ const loadFunctionUnitContent = async () => {
       loadError.value = content.error
       return
     }
+
+    cachedContentForms = content.forms || []
+    cachedRelationTableFieldIndex = buildRelationTableFieldIndexFromDataTables(content.dataTables)
     
     // 设置基本信息
     functionUnitName.value = content.name || ''
@@ -526,13 +595,25 @@ const loadFunctionUnitContent = async () => {
       // Load sub-table bindings (SUB / RELATED, skip PRIMARY)
       const subTablePortalViewsPayload = formConfigForPk.subTablePortalViews || {}
       const bindings: typeof subTableBindings.value = []
+      let primaryBindingMeta: { tableId?: number | null; tableName?: string } | null = null
       for (const b of (selectedForm.tableBindings || [])) {
-        if (b.bindingType === 'PRIMARY') continue
+        if (b.bindingType === 'PRIMARY') {
+          primaryBindingMeta = {
+            tableId: (b as { tableId?: number | null }).tableId ?? null,
+            tableName: b.tableDisplayName || b.tableName,
+            fieldDefinitions: resolveBindingFieldDefinitions(
+              { tableId: (b as { tableId?: number | null }).tableId, fieldDefinitions: (b as { fieldDefinitions?: Array<Record<string, unknown>> }).fieldDefinitions },
+              cachedRelationTableFieldIndex,
+            ),
+          }
+          continue
+        }
         const tid = (b as { tableId?: number | null }).tableId
         const bindingPortalViews =
           subTablePortalViewsPayload[b.bindingId]
           ?? subTablePortalViewsPayload[String(b.bindingId)]
           ?? null
+        const columns = resolveSubTableBindingColumnsForStart(b, subForms, formConfigForPk)
         bindings.push({
           bindingId: b.bindingId,
           tableId: tid != null ? Number(tid) : null,
@@ -546,11 +627,18 @@ const loadFunctionUnitContent = async () => {
             b.bindingId,
             formConfigForPk
           ),
-          columns: deriveColumnsFromBinding(b, subForms, formConfigForPk),
+          columns,
           portalViews: bindingPortalViews,
+          fieldDefinitions: resolveBindingFieldDefinitions(
+            { tableId: tid, fieldDefinitions: (b as { fieldDefinitions?: Array<Record<string, unknown>> }).fieldDefinitions },
+            cachedRelationTableFieldIndex,
+          ),
+          bindingLinkMode: (b as { bindingLinkMode?: string }).bindingLinkMode,
+          foreignKeyField: (b as { foreignKeyField?: string | null }).foreignKeyField ?? null,
           data: []
         })
       }
+      primaryTableBinding.value = primaryBindingMeta
 
       // Fallback: tableBindings 为空但 subForms 有数据时，直接从 subForms 构建
       if (bindings.length === 0 && Object.keys(subForms).length > 0) {
@@ -568,7 +656,8 @@ const loadFunctionUnitContent = async () => {
             tableType: 'SUB',
             tableDescription: '',
             primaryKeyFields: undefined,
-            columns: deriveColumnsFromBinding(fakeBinding, subForms, formConfigForPk),
+            columns: resolveSubTableBindingColumnsForStart(fakeBinding, subForms, formConfigForPk),
+            fieldDefinitions: [],
             data: []
           })
         }
@@ -1369,7 +1458,7 @@ const deriveColumnsFromBinding = (
       if (column.columnType === 'linkForm') {
         return {
           field: column.fieldName || `linkForm:${column.componentId || binding.bindingId}`,
-          label: column.columnLabel || column.comment || column.linkText || 'Link Form',
+          label: column.columnLabel || column.displayName || column.linkText || 'Link Form',
           type: 'linkForm',
           minWidth: column.minWidth || 120,
           props: {
@@ -1381,7 +1470,7 @@ const deriveColumnsFromBinding = (
         }
       }
       if (column.columnType === 'lookup') {
-        const label = column.columnLabel || column.comment || 'Lookup'
+        const label = column.columnLabel || column.displayName || 'Lookup'
         const field =
           isSyntheticLookupField(column.fieldName) && isAssigneeLikeLabel(label) && assigneeField
             ? assigneeField
@@ -1413,7 +1502,7 @@ const deriveColumnsFromBinding = (
         return {
           ...(baseColumn || {}),
           field: column.fieldName,
-          label: column.comment || column.columnLabel || baseColumn?.label || fieldRule?.title || column.fieldName,
+          label: column.displayName || column.columnLabel || baseColumn?.label || fieldRule?.title || column.fieldName,
           type: 'lookup',
           minWidth: column.minWidth || baseColumn?.minWidth || 260,
           placeholder: fieldRule?.props?.placeholder || baseColumn?.placeholder,

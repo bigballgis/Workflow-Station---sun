@@ -129,9 +129,13 @@ export function getTaskDetail(taskId: string) {
   return request.get<{ data: TaskInfo }>(`/tasks/${taskId}`)
 }
 
-// Get task flow history
-export function getTaskHistory(taskId: string) {
-  return request.get<{ data: TaskHistoryInfo[] }>(`/tasks/${taskId}/history`)
+// Get task flow history (pass processInstanceId when already loaded from task detail — avoids extra engine lookup)
+export function getTaskHistory(taskId: string, processInstanceId?: string) {
+  const params =
+    processInstanceId && processInstanceId.trim()
+      ? { processInstanceId: processInstanceId.trim() }
+      : undefined
+  return request.get<{ data: TaskHistoryInfo[] }>(`/tasks/${taskId}/history`, { params })
 }
 
 // Get task statistics

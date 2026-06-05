@@ -17,7 +17,7 @@ DECLARE
     v_save_id          BIGINT;
 BEGIN
     INSERT INTO dw_function_units (
-        code, name, description, status,
+        code, name, display_name, status,
         current_version, version, is_active, enabled,
         deployed_at, lock_version, created_by, created_at, updated_by, updated_at
     ) VALUES (
@@ -38,7 +38,7 @@ BEGIN
     )
     ON CONFLICT (code) DO UPDATE SET
         name            = EXCLUDED.name,
-        description     = EXCLUDED.description,
+        display_name     = EXCLUDED.display_name,
         status          = EXCLUDED.status,
         current_version = EXCLUDED.current_version,
         version         = EXCLUDED.version,
@@ -53,7 +53,7 @@ BEGIN
 
     -- 流程表单（每功能单元唯一）：仅发起人/Requestor 使用 PROCESS
     INSERT INTO dw_form_definitions (
-        function_unit_id, form_name, form_type, description, config_json, created_at, updated_at
+        function_unit_id, form_name, form_type, display_name, config_json, created_at, updated_at
     ) VALUES (
         v_fu_id,
         'Showcase Request Form',
@@ -65,13 +65,13 @@ BEGIN
     ON CONFLICT (function_unit_id, form_name) DO UPDATE SET
         form_type   = EXCLUDED.form_type,
         config_json = EXCLUDED.config_json,
-        description = EXCLUDED.description,
+        display_name = EXCLUDED.display_name,
         updated_at  = CURRENT_TIMESTAMP
     RETURNING id INTO v_request_form_id;
 
     -- 任务节点表单：审批等 UserTask 使用 TASK（非 PROCESS）
     INSERT INTO dw_form_definitions (
-        function_unit_id, form_name, form_type, description, config_json, created_at, updated_at
+        function_unit_id, form_name, form_type, display_name, config_json, created_at, updated_at
     ) VALUES (
         v_fu_id,
         'Showcase Approval Form',
@@ -83,12 +83,12 @@ BEGIN
     ON CONFLICT (function_unit_id, form_name) DO UPDATE SET
         form_type   = EXCLUDED.form_type,
         config_json = EXCLUDED.config_json,
-        description = EXCLUDED.description,
+        display_name = EXCLUDED.display_name,
         updated_at  = CURRENT_TIMESTAMP
     RETURNING id INTO v_approval_form_id;
 
     INSERT INTO dw_form_definitions (
-        function_unit_id, form_name, form_type, description, config_json, created_at, updated_at
+        function_unit_id, form_name, form_type, display_name, config_json, created_at, updated_at
     ) VALUES (
         v_fu_id,
         'Showcase Task Form',
@@ -100,12 +100,12 @@ BEGIN
     ON CONFLICT (function_unit_id, form_name) DO UPDATE SET
         form_type   = EXCLUDED.form_type,
         config_json = EXCLUDED.config_json,
-        description = EXCLUDED.description,
+        display_name = EXCLUDED.display_name,
         updated_at  = CURRENT_TIMESTAMP
     RETURNING id INTO v_task_form_id;
 
     INSERT INTO dw_form_definitions (
-        function_unit_id, form_name, form_type, description, config_json, created_at, updated_at
+        function_unit_id, form_name, form_type, display_name, config_json, created_at, updated_at
     ) VALUES (
         v_fu_id,
         'Showcase Popup Form',
@@ -117,7 +117,7 @@ BEGIN
     ON CONFLICT (function_unit_id, form_name) DO UPDATE SET
         form_type   = EXCLUDED.form_type,
         config_json = EXCLUDED.config_json,
-        description = EXCLUDED.description,
+        display_name = EXCLUDED.display_name,
         updated_at  = CURRENT_TIMESTAMP
     RETURNING id INTO v_popup_form_id;
 
@@ -160,7 +160,7 @@ BEGIN
     -- ---------- 动作（覆盖 ActionType 主要枚举）----------
     INSERT INTO dw_action_definitions (
         function_unit_id, action_name, action_type, config_json,
-        icon, button_color, description, is_default, created_at, updated_at
+        icon, button_color, display_name, is_default, created_at, updated_at
     ) VALUES (
         v_fu_id, '提交申请', 'PROCESS_SUBMIT',
         '{"confirmMessage":"确认提交？","requireComment":false,"successMessage":"已提交"}'::jsonb,
@@ -168,12 +168,12 @@ BEGIN
     )
     ON CONFLICT (function_unit_id, action_name) DO UPDATE SET
         action_type = EXCLUDED.action_type, config_json = EXCLUDED.config_json,
-        description = EXCLUDED.description, updated_at = CURRENT_TIMESTAMP
+        display_name = EXCLUDED.display_name, updated_at = CURRENT_TIMESTAMP
     RETURNING id INTO v_submit_id;
 
     INSERT INTO dw_action_definitions (
         function_unit_id, action_name, action_type, config_json,
-        icon, button_color, description, is_default, created_at, updated_at
+        icon, button_color, display_name, is_default, created_at, updated_at
     ) VALUES (
         v_fu_id, '保存草稿', 'SAVE',
         '{}'::jsonb,
@@ -181,23 +181,23 @@ BEGIN
     )
     ON CONFLICT (function_unit_id, action_name) DO UPDATE SET
         action_type = EXCLUDED.action_type, config_json = EXCLUDED.config_json,
-        description = EXCLUDED.description, updated_at = CURRENT_TIMESTAMP
+        display_name = EXCLUDED.display_name, updated_at = CURRENT_TIMESTAMP
     RETURNING id INTO v_save_id;
 
     INSERT INTO dw_action_definitions (
         function_unit_id, action_name, action_type, config_json,
-        icon, button_color, description, is_default, created_at, updated_at
+        icon, button_color, display_name, is_default, created_at, updated_at
     ) VALUES (
         v_fu_id, '流程驳回', 'PROCESS_REJECT',
         '{"confirmMessage":"确认驳回到上一环节？","requireComment":true}'::jsonb,
         NULL, NULL, '流程驳回', false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     ) ON CONFLICT (function_unit_id, action_name) DO UPDATE SET
         action_type = EXCLUDED.action_type, config_json = EXCLUDED.config_json,
-        description = EXCLUDED.description, updated_at = CURRENT_TIMESTAMP;
+        display_name = EXCLUDED.display_name, updated_at = CURRENT_TIMESTAMP;
 
     INSERT INTO dw_action_definitions (
         function_unit_id, action_name, action_type, config_json,
-        icon, button_color, description, is_default, created_at, updated_at
+        icon, button_color, display_name, is_default, created_at, updated_at
     ) VALUES (
         v_fu_id, '审批通过', 'APPROVE',
         '{"targetStatus":"APPROVED","confirmMessage":"确认通过？","requireComment":true,"successMessage":"已通过"}'::jsonb,
@@ -205,11 +205,11 @@ BEGIN
     ) ON CONFLICT (function_unit_id, action_name) DO UPDATE SET
         action_type = EXCLUDED.action_type, config_json = EXCLUDED.config_json,
         icon = EXCLUDED.icon, button_color = EXCLUDED.button_color,
-        description = EXCLUDED.description, updated_at = CURRENT_TIMESTAMP;
+        display_name = EXCLUDED.display_name, updated_at = CURRENT_TIMESTAMP;
 
     INSERT INTO dw_action_definitions (
         function_unit_id, action_name, action_type, config_json,
-        icon, button_color, description, is_default, created_at, updated_at
+        icon, button_color, display_name, is_default, created_at, updated_at
     ) VALUES (
         v_fu_id, '审批拒绝', 'REJECT',
         '{"targetStatus":"REJECTED","requireReason":true,"confirmMessage":"确认拒绝？","requireComment":true}'::jsonb,
@@ -217,88 +217,88 @@ BEGIN
     ) ON CONFLICT (function_unit_id, action_name) DO UPDATE SET
         action_type = EXCLUDED.action_type, config_json = EXCLUDED.config_json,
         icon = EXCLUDED.icon, button_color = EXCLUDED.button_color,
-        description = EXCLUDED.description, updated_at = CURRENT_TIMESTAMP;
+        display_name = EXCLUDED.display_name, updated_at = CURRENT_TIMESTAMP;
 
     INSERT INTO dw_action_definitions (
         function_unit_id, action_name, action_type, config_json,
-        icon, button_color, description, is_default, created_at, updated_at
+        icon, button_color, display_name, is_default, created_at, updated_at
     ) VALUES (
         v_fu_id, '转办', 'TRANSFER',
         '{"confirmMessage":"确认转办？","requireComment":false,"successMessage":"已转办"}'::jsonb,
         'Switch', NULL, '转办', false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     ) ON CONFLICT (function_unit_id, action_name) DO UPDATE SET
         action_type = EXCLUDED.action_type, config_json = EXCLUDED.config_json,
-        description = EXCLUDED.description, updated_at = CURRENT_TIMESTAMP;
+        display_name = EXCLUDED.display_name, updated_at = CURRENT_TIMESTAMP;
 
     INSERT INTO dw_action_definitions (
         function_unit_id, action_name, action_type, config_json,
-        icon, button_color, description, is_default, created_at, updated_at
+        icon, button_color, display_name, is_default, created_at, updated_at
     ) VALUES (
         v_fu_id, '委派', 'DELEGATE',
         '{"confirmMessage":"确认委派？","requireComment":false,"successMessage":"已委派"}'::jsonb,
         'User', NULL, '委派', false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     ) ON CONFLICT (function_unit_id, action_name) DO UPDATE SET
         action_type = EXCLUDED.action_type, config_json = EXCLUDED.config_json,
-        description = EXCLUDED.description, updated_at = CURRENT_TIMESTAMP;
+        display_name = EXCLUDED.display_name, updated_at = CURRENT_TIMESTAMP;
 
     INSERT INTO dw_action_definitions (
         function_unit_id, action_name, action_type, config_json,
-        icon, button_color, description, is_default, created_at, updated_at
+        icon, button_color, display_name, is_default, created_at, updated_at
     ) VALUES (
         v_fu_id, '回退', 'ROLLBACK',
         '{"confirmMessage":"确认回退？","requireComment":true}'::jsonb,
         NULL, NULL, '回退', false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     ) ON CONFLICT (function_unit_id, action_name) DO UPDATE SET
         action_type = EXCLUDED.action_type, config_json = EXCLUDED.config_json,
-        description = EXCLUDED.description, updated_at = CURRENT_TIMESTAMP;
+        display_name = EXCLUDED.display_name, updated_at = CURRENT_TIMESTAMP;
 
     INSERT INTO dw_action_definitions (
         function_unit_id, action_name, action_type, config_json,
-        icon, button_color, description, is_default, created_at, updated_at
+        icon, button_color, display_name, is_default, created_at, updated_at
     ) VALUES (
         v_fu_id, '撤回', 'WITHDRAW',
         '{"confirmMessage":"确认撤回？","requireComment":false}'::jsonb,
         NULL, NULL, '撤回', false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     ) ON CONFLICT (function_unit_id, action_name) DO UPDATE SET
         action_type = EXCLUDED.action_type, config_json = EXCLUDED.config_json,
-        description = EXCLUDED.description, updated_at = CURRENT_TIMESTAMP;
+        display_name = EXCLUDED.display_name, updated_at = CURRENT_TIMESTAMP;
 
     INSERT INTO dw_action_definitions (
         function_unit_id, action_name, action_type, config_json,
-        icon, button_color, description, is_default, created_at, updated_at
+        icon, button_color, display_name, is_default, created_at, updated_at
     ) VALUES (
         v_fu_id, '取消', 'CANCEL',
         '{"confirmMessage":"确认取消？","requireComment":false}'::jsonb,
         NULL, NULL, '取消', false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     ) ON CONFLICT (function_unit_id, action_name) DO UPDATE SET
         action_type = EXCLUDED.action_type, config_json = EXCLUDED.config_json,
-        description = EXCLUDED.description, updated_at = CURRENT_TIMESTAMP;
+        display_name = EXCLUDED.display_name, updated_at = CURRENT_TIMESTAMP;
 
     INSERT INTO dw_action_definitions (
         function_unit_id, action_name, action_type, config_json,
-        icon, button_color, description, is_default, created_at, updated_at
+        icon, button_color, display_name, is_default, created_at, updated_at
     ) VALUES (
         v_fu_id, '导出', 'EXPORT',
         '{}'::jsonb,
         'Download', NULL, '导出数据', false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     ) ON CONFLICT (function_unit_id, action_name) DO UPDATE SET
         action_type = EXCLUDED.action_type, config_json = EXCLUDED.config_json,
-        description = EXCLUDED.description, updated_at = CURRENT_TIMESTAMP;
+        display_name = EXCLUDED.display_name, updated_at = CURRENT_TIMESTAMP;
 
     INSERT INTO dw_action_definitions (
         function_unit_id, action_name, action_type, config_json,
-        icon, button_color, description, is_default, created_at, updated_at
+        icon, button_color, display_name, is_default, created_at, updated_at
     ) VALUES (
         v_fu_id, 'HTTP调用', 'API_CALL',
         '{"url":"/api/v1/actuator/health","method":"GET","headers":"","body":""}'::jsonb,
         NULL, NULL, '示例 GET（需按环境调整）', false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     ) ON CONFLICT (function_unit_id, action_name) DO UPDATE SET
         action_type = EXCLUDED.action_type, config_json = EXCLUDED.config_json,
-        description = EXCLUDED.description, updated_at = CURRENT_TIMESTAMP;
+        display_name = EXCLUDED.display_name, updated_at = CURRENT_TIMESTAMP;
 
     INSERT INTO dw_action_definitions (
         function_unit_id, action_name, action_type, config_json,
-        icon, button_color, description, is_default, created_at, updated_at
+        icon, button_color, display_name, is_default, created_at, updated_at
     ) VALUES (
         v_fu_id, '打开弹窗表单', 'FORM_POPUP',
         jsonb_build_object(
@@ -309,22 +309,22 @@ BEGIN
         NULL, NULL, '弹窗表单动作', false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     ) ON CONFLICT (function_unit_id, action_name) DO UPDATE SET
         action_type = EXCLUDED.action_type, config_json = EXCLUDED.config_json,
-        description = EXCLUDED.description, updated_at = CURRENT_TIMESTAMP;
+        display_name = EXCLUDED.display_name, updated_at = CURRENT_TIMESTAMP;
 
     INSERT INTO dw_action_definitions (
         function_unit_id, action_name, action_type, config_json,
-        icon, button_color, description, is_default, created_at, updated_at
+        icon, button_color, display_name, is_default, created_at, updated_at
     ) VALUES (
         v_fu_id, '演示N8N', 'N8N_ACTION',
         '{"n8nConfigId":"showcase-demo","n8nWorkflowId":"showcase-demo","webhookUrl":"","timeoutSeconds":60,"inputMapping":[],"outputMapping":[],"frontendOutputMapping":[]}'::jsonb,
         NULL, NULL, '与差旅报销脚本一致的扩展位：outputMapping 供后端，frontendOutputMapping 供前端自动回填（演示为空数组）', false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     ) ON CONFLICT (function_unit_id, action_name) DO UPDATE SET
         action_type = EXCLUDED.action_type, config_json = EXCLUDED.config_json,
-        description = EXCLUDED.description, updated_at = CURRENT_TIMESTAMP;
+        display_name = EXCLUDED.display_name, updated_at = CURRENT_TIMESTAMP;
 
     INSERT INTO dw_action_definitions (
         function_unit_id, action_name, action_type, config_json,
-        icon, button_color, description, is_default, created_at, updated_at
+        icon, button_color, display_name, is_default, created_at, updated_at
     ) VALUES (
         v_fu_id, '决策表评估', 'DECISION_TABLE',
         jsonb_build_object(
@@ -335,33 +335,33 @@ BEGIN
         NULL, NULL, '绑定本单元 DMN showcase_amount_tier', false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     ) ON CONFLICT (function_unit_id, action_name) DO UPDATE SET
         action_type = EXCLUDED.action_type, config_json = EXCLUDED.config_json,
-        description = EXCLUDED.description, updated_at = CURRENT_TIMESTAMP;
+        display_name = EXCLUDED.display_name, updated_at = CURRENT_TIMESTAMP;
 
     INSERT INTO dw_action_definitions (
         function_unit_id, action_name, action_type, config_json,
-        icon, button_color, description, is_default, created_at, updated_at
+        icon, button_color, display_name, is_default, created_at, updated_at
     ) VALUES (
         v_fu_id, '脚本动作', 'SCRIPT',
         '{"script":"// 演示占位，勿在生产使用"}'::jsonb,
         NULL, NULL, '脚本类动作占位', false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     ) ON CONFLICT (function_unit_id, action_name) DO UPDATE SET
         action_type = EXCLUDED.action_type, config_json = EXCLUDED.config_json,
-        description = EXCLUDED.description, updated_at = CURRENT_TIMESTAMP;
+        display_name = EXCLUDED.display_name, updated_at = CURRENT_TIMESTAMP;
 
     INSERT INTO dw_action_definitions (
         function_unit_id, action_name, action_type, config_json,
-        icon, button_color, description, is_default, created_at, updated_at
+        icon, button_color, display_name, is_default, created_at, updated_at
     ) VALUES (
         v_fu_id, '自定义脚本', 'CUSTOM_SCRIPT',
         '{"script":"return true;"}'::jsonb,
         NULL, NULL, '自定义脚本占位', false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     ) ON CONFLICT (function_unit_id, action_name) DO UPDATE SET
         action_type = EXCLUDED.action_type, config_json = EXCLUDED.config_json,
-        description = EXCLUDED.description, updated_at = CURRENT_TIMESTAMP;
+        display_name = EXCLUDED.display_name, updated_at = CURRENT_TIMESTAMP;
 
     INSERT INTO dw_action_definitions (
         function_unit_id, action_name, action_type, config_json,
-        icon, button_color, description, is_default, created_at, updated_at
+        icon, button_color, display_name, is_default, created_at, updated_at
     ) VALUES (
         v_fu_id, '组合动作', 'COMPOSITE',
         jsonb_build_object(
@@ -371,7 +371,7 @@ BEGIN
         NULL, NULL, '顺序执行：提交 + 保存草稿（演示配置）', false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     ) ON CONFLICT (function_unit_id, action_name) DO UPDATE SET
         action_type = EXCLUDED.action_type, config_json = EXCLUDED.config_json,
-        description = EXCLUDED.description, updated_at = CURRENT_TIMESTAMP;
+        display_name = EXCLUDED.display_name, updated_at = CURRENT_TIMESTAMP;
 
     UPDATE dw_action_definitions ad
     SET config_json   = jsonb_set(

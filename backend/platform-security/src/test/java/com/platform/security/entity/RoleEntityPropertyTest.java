@@ -45,7 +45,7 @@ class RoleEntityPropertyTest {
         String name = "Role-" + UUID.randomUUID().toString().substring(0, 8);
         String code = "CODE_" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
         String type = new String[]{"BU_UNBOUNDED", "BU_BOUNDED", "DEVELOPER", "SYSTEM"}[(int)(Math.random() * 4)];
-        String description = "Description " + UUID.randomUUID().toString();
+        String displayName = "Display Name " + UUID.randomUUID().toString();
         String status = Math.random() > 0.5 ? "ACTIVE" : "INACTIVE";
         Boolean isSystem = Math.random() > 0.5;
         
@@ -55,7 +55,7 @@ class RoleEntityPropertyTest {
                 .name(name)
                 .code(code)
                 .type(type)
-                .description(description)
+                .displayName(displayName)
                 .status(status)
                 .isSystem(isSystem)
                 .createdBy("test-user")
@@ -78,19 +78,19 @@ class RoleEntityPropertyTest {
         assertThat(foundRole.getName()).isEqualTo(name);
         assertThat(foundRole.getCode()).isEqualTo(code);
         assertThat(foundRole.getType()).isEqualTo(type);
-        assertThat(foundRole.getDescription()).isEqualTo(description);
+        assertThat(foundRole.getDisplayName()).isEqualTo(displayName);
         assertThat(foundRole.getStatus()).isEqualTo(status);
         assertThat(foundRole.getIsSystem()).isEqualTo(isSystem);
         
         // When: Updating the role
-        foundRole.setDescription("Updated: " + description);
+        foundRole.setDisplayName("Updated: " + displayName);
         entityManager.merge(foundRole);
         entityManager.flush();
         
         // Then: The update should succeed without SQL errors
         entityManager.clear();
         Role updatedRole = entityManager.find(Role.class, role.getId());
-        assertThat(updatedRole.getDescription()).startsWith("Updated:");
+        assertThat(updatedRole.getDisplayName()).startsWith("Updated:");
         
         // When: Deleting the role
         entityManager.remove(updatedRole);

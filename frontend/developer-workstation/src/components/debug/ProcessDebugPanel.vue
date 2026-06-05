@@ -94,6 +94,7 @@
                   {{ t('debug.gatewaySelectedFlow', { flowId: currentGatewayEval.selectedFlowId || '-' }) }}
                 </span>
               </div>
+              <div class="table-scroll-wrap">
               <el-table
                 :data="currentGatewayEval.evaluations || []"
                 size="small"
@@ -110,6 +111,7 @@
                 </el-table-column>
                 <el-table-column prop="reason" :label="t('debug.gatewayReason')" min-width="220" />
               </el-table>
+              </div>
               <p
                 v-if="currentGatewayEval.defaultFlowId"
                 class="decision-default"

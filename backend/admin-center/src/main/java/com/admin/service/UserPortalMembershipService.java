@@ -80,7 +80,7 @@ public class UserPortalMembershipService {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("groupId", group.getId());
             row.put("groupName", group.getName());
-            row.put("groupDescription", group.getDescription());
+            row.put("groupDescription", group.getDisplayName());
             row.put("joinedAt", m.getJoinedAt());
             List<Map<String, Object>> boundRoles = new ArrayList<>();
             for (String rid : groupToRoleIds.getOrDefault(group.getId(), List.of())) {

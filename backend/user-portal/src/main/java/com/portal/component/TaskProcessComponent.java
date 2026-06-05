@@ -3,6 +3,7 @@ package com.portal.component;
 import com.platform.common.jdbc.PostgresPhysicalTablePrimaryKeys;
 import com.platform.common.jdbc.SubTableRowKeySupport;
 import com.portal.client.WorkflowEngineClient;
+import com.portal.util.SubTableNestingSanitizer;
 import com.portal.dto.TaskCompleteRequest;
 import com.portal.dto.TaskInfo;
 import com.portal.dto.ChangeHistoryContext;
@@ -1250,6 +1251,9 @@ public class TaskProcessComponent {
                 mergedVars.putAll(variables);
                 taskFormComponent.mergeCompletedTaskSnapshotIntoVariables(
                         taskId, userId, task.getTaskDefinitionKey(), mergedVars);
+                // Prevent geometric __subTables__ bloat: collapse deep nested copies to the canonical
+                // one-level structure before persisting the approval write-back.
+                SubTableNestingSanitizer.stripDeepNestedSubTables(mergedVars);
                 syncInstance.setVariables(mergedVars);
 
                 processInstanceRepository.save(syncInstance);

@@ -219,3 +219,51 @@ svg:empty {
 ._fd-drag-mask {
   background: transparent;
 }
+
+// Element Plus tables: flat single-line rows; parent .table-scroll-wrap enables horizontal scroll
+.table-scroll-wrap {
+  width: 100%;
+  overflow-x: auto;
+
+  > .el-table {
+    width: max-content;
+    min-width: 100%;
+  }
+}
+
+.el-table {
+  th.el-table__cell,
+  td.el-table__cell {
+    white-space: nowrap !important;
+  }
+
+  .cell {
+    white-space: nowrap !important;
+  }
+
+  .el-input__inner,
+  .el-select__selected-item,
+  .el-select__placeholder {
+    white-space: nowrap;
+  }
+}
+
+.table-row-actions,
+.action-buttons {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  white-space: nowrap;
+  gap: 4px;
+}
+
+.table-cell-tags,
+.bound-nodes {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow-x: auto;
+}

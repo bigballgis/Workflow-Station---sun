@@ -26,7 +26,7 @@
       </el-button>
     </div>
 
-    <div class="variable-list">
+    <div class="variable-list table-scroll-wrap">
       <el-table
         :data="filteredVariables"
         size="small"
@@ -60,7 +60,7 @@
           <template #default="{ row }">
             <div
               v-if="editingKey === row.name && editable"
-              class="edit-value"
+              class="edit-value table-row-actions"
             >
               <el-input
                 v-model="editValue"
