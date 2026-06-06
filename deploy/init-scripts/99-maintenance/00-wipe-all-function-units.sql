@@ -128,6 +128,10 @@ DELETE FROM sys_function_units;
 -- ---------------------------------------------------------------------------
 -- 8) Developer workstation catalog (cascades to dw_* design artifacts)
 -- ---------------------------------------------------------------------------
+-- Sub-table view configs/fields have NO FK constraints (orphan-safe cleanup)
+DELETE FROM dw_sub_table_view_fields;
+DELETE FROM dw_sub_table_view_configs;
+
 -- Bindings reference dw_table_definitions without ON DELETE CASCADE; delete them
 -- before dw_function_units so CASCADE can drop tables vs. forms in any order.
 DELETE FROM dw_form_table_bindings;

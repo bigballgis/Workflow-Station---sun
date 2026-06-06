@@ -90,7 +90,7 @@ CREATE TABLE IF NOT EXISTS dw_table_definitions (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_table_function_unit FOREIGN KEY (function_unit_id) REFERENCES dw_function_units(id) ON DELETE CASCADE,
-    CONSTRAINT uk_dw_table_name UNIQUE (table_name),
+    CONSTRAINT uk_dw_table_name UNIQUE (function_unit_id, table_name),
     CONSTRAINT chk_table_type CHECK (table_type IN ('MAIN', 'SUB', 'ACTION', 'RELATION'))
 );
 
