@@ -55,7 +55,7 @@
             <el-timeline-item
               v-for="activity in activities"
               :key="activity.id"
-              :timestamp="activity.createdAt"
+              :timestamp="formatDateTime(activity.createdAt)"
             >
               {{ activity.description || `${activity.username} ${activity.action} ${activity.resourceName || activity.resourceType}` }}
             </el-timeline-item>
@@ -74,6 +74,7 @@
 import { useI18n } from 'vue-i18n'
 import { onActivated } from 'vue'
 import { useDashboard } from '@/composables/modules/useDashboard'
+import { formatDateTime } from '@/utils/format'
 
 const { t } = useI18n()
 
@@ -83,6 +84,7 @@ const {
 } = useDashboard()
 
 onActivated(() => { loadStats(); loadActivities() })
+
 </script>
 
 <style scoped lang="scss">

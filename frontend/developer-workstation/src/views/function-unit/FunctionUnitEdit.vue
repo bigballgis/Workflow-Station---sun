@@ -588,6 +588,8 @@ async function handleDeploy() {
         ? t('functionUnit.deploySuccessWithVersion', { version: response.data.versionNumber })
         : t('functionUnit.deploySuccess')
       ElMessage.success(versionInfo)
+      if (response.data.versionNumber) store.current.currentVersion = response.data.versionNumber
+      store.fetchVersions(functionUnitId.value)
     }
   } catch (e: any) {
     ElMessage.error(e.response?.data?.message || t('functionUnit.deployFailed'))
@@ -616,6 +618,8 @@ function startDeployPolling(deploymentId: string) {
           ? t('functionUnit.deploySuccessWithVersion', { version: response.data.versionNumber })
           : t('functionUnit.deploySuccess')
         ElMessage.success(versionInfo)
+        if (response.data.versionNumber) store.current.currentVersion = response.data.versionNumber
+      store.fetchVersions(functionUnitId.value)
         stopDeployPolling()
       } else if (response.data.status === 'FAILED') {
         ElMessage.error(t('functionUnit.deployFailedWithMessage', { message: response.data.message }))

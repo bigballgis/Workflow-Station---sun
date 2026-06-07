@@ -459,7 +459,7 @@ public class DecisionDesignPropertyTest {
                     mock(VersionRepository.class),
                     mock(FunctionUnitRepository.class),
                     objectMapper,
-                    mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class)
+                    mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class), null
             );
 
             // Build a fresh FunctionUnit to restore into

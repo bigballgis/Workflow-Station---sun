@@ -12,6 +12,8 @@ import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.VersionRepository;
 import com.developer.util.DeveloperWorkstationSequenceSynchronizer;
+import com.developer.util.XmlEncodingUtil;
+import com.developer.component.impl.ProcessDesignComponentImpl;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.platform.security.util.SecurityContextUtils;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +36,7 @@ public class VersionComponentImpl implements VersionComponent {
     private final FunctionUnitRepository functionUnitRepository;
     private final ObjectMapper objectMapper;
     private final DeveloperWorkstationSequenceSynchronizer sequenceSynchronizer;
+    private final ProcessDesignComponentImpl processDesignComponent;
     
     /**
      * Resolves current operator username.
@@ -174,6 +177,7 @@ public class VersionComponentImpl implements VersionComponent {
             // Restore target snapshot content.
             Map<String, Object> snapshot = objectMapper.readValue(targetVersion.getSnapshotData(), Map.class);
             restoreFromSnapshot(functionUnit, snapshot);
+
             functionUnitRepository.saveAndFlush(functionUnit);
             
             sequenceSynchronizer.synchronizeVersions();
@@ -348,6 +352,13 @@ public class VersionComponentImpl implements VersionComponent {
             String processXml = (String) snapshot.get("processXml");
             if (processXml != null && functionUnit.getProcessDefinition() != null) {
                 functionUnit.getProcessDefinition().setBpmnXml(processXml);
+
+        // Fix stale IDs in restored BPMN (snapshot stores base64-encoded XML)
+        if (functionUnit.getProcessDefinition() != null && functionUnit.getProcessDefinition().getBpmnXml() != null) {
+            String decoded = XmlEncodingUtil.smartDecode(functionUnit.getProcessDefinition().getBpmnXml());
+            String fixed = processDesignComponent.fixStaleIds(functionUnit.getId(), decoded);
+            functionUnit.getProcessDefinition().setBpmnXml(XmlEncodingUtil.encode(fixed));
+        }
             }
         }
         

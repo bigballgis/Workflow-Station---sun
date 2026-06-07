@@ -124,7 +124,7 @@ public class GlobalExceptionHandler {
         
         ErrorResponse errorResponse = ErrorResponse.builder()
                 .code("VAL_INVALID_INPUT")
-                .message("Validation failed")
+                .message("Validation failed: " + errors)
                 .details(errors)
                 .timestamp(Instant.now())
                 .traceId(traceId)
