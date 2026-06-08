@@ -181,6 +181,7 @@
 </template>
 
 <script setup lang="ts">
+import { onActivated, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useProfile } from '@/composables/modules/useProfile'
 
@@ -188,8 +189,16 @@ const { t } = useI18n()
 
 const {
   defaultAvatar, loading, userInfo, passwordFormRef, changingPassword,
-  languageLabel, passwordForm, passwordRules, handleChangePassword,
+  languageLabel, passwordForm, passwordRules, loadUserInfo, handleChangePassword,
 } = useProfile()
+
+onMounted(() => {
+  loadUserInfo()
+})
+
+onActivated(() => {
+  loadUserInfo()
+})
 </script>
 
 <style scoped>
