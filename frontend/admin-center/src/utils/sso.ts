@@ -28,14 +28,39 @@ function newSsoState(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 15)}`
 }
 
+/** Browser pathname (/admin/dashboard) → vue-router path (/dashboard) for apps with a non-root base. */
+export function toRouterPath(fullPath: string): string {
+  const base = import.meta.env.BASE_URL || '/'
+  let path = fullPath.trim()
+  if (!path) return '/'
+
+  if (path.startsWith('http://') || path.startsWith('https://')) {
+    try {
+      const u = new URL(path)
+      path = u.pathname + u.search + u.hash
+    } catch {
+      /* keep path as-is */
+    }
+  }
+
+  if (base !== '/' && path.startsWith(base)) {
+    path = path.slice(base.length) || '/'
+  }
+
+  if (!path.startsWith('/')) {
+    path = '/' + path
+  }
+  return path
+}
+
 export function setSsoReturnPath(fullPath: string) {
-  sessionStorage.setItem(STORAGE_KEY, fullPath)
+  sessionStorage.setItem(STORAGE_KEY, toRouterPath(fullPath))
 }
 
 export function consumeSsoReturnPath(fallback: string) {
   const v = sessionStorage.getItem(STORAGE_KEY)
   sessionStorage.removeItem(STORAGE_KEY)
-  return v || fallback
+  return v ? toRouterPath(v) : toRouterPath(fallback)
 }
 
 /** 跳转独立 /login/ 应用（单域多路径时同样为 /login/） */

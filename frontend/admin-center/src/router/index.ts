@@ -238,7 +238,7 @@ router.beforeEach(async (to, _from, next) => {
   if (to.matched.some((r) => r.meta && r.meta.requiresAuth)) {
     const stored = getUser();
     if (!stored) {
-      setSsoReturnPath(window.location.pathname + window.location.search);
+      setSsoReturnPath(to.fullPath);
       redirectToUnifiedLogin("admin");
       return next(false);
     }
@@ -247,7 +247,7 @@ router.beforeEach(async (to, _from, next) => {
       await getCurrentUser();
     } catch (e) {
       clearAuth();
-      setSsoReturnPath(window.location.pathname + window.location.search);
+      setSsoReturnPath(to.fullPath);
       redirectToUnifiedLogin("admin");
       return next(false);
     }
