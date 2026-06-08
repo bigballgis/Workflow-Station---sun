@@ -4,6 +4,8 @@ import com.admin.dto.request.ChangePasswordRequest;
 import com.admin.dto.request.LoginRequest;
 import com.admin.dto.response.LoginResponse;
 import com.admin.service.AuthService;
+import com.platform.security.config.JwtProperties;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -13,6 +15,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
+import java.util.List;
 
 /**
  * Authentication controller
@@ -24,6 +27,7 @@ import java.util.Map;
 public class AuthController {
 
     private final AuthService authService;
+    private final JwtProperties jwtProperties;
 
     /**
      * User login
@@ -56,15 +60,62 @@ public class AuthController {
      * User logout
      */
     @PostMapping("/logout")
-    public ResponseEntity<Void> logout(
-            @RequestHeader(value = "Authorization", required = false) String authHeader) {
-        
+    public ResponseEntity<Void> logout(HttpServletRequest request, HttpServletResponse response,
+                                       @RequestHeader(value = "Authorization", required = false) String authHeader) {
+
+        // If Authorization header present, blacklist the provided bearer token
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             String token = authHeader.substring(7);
             authService.logout(token);
         }
-        
+
+        // Also inspect cookies (access + refresh) and blacklist them if present
+        jakarta.servlet.http.Cookie[] cookies = request.getCookies();
+        if (cookies != null) {
+            List<String> accessNames = jwtProperties.getCookieNames();
+            String refreshName = jwtProperties.getRefreshCookieName();
+            for (jakarta.servlet.http.Cookie c : cookies) {
+                String name = c.getName();
+                String val = c.getValue();
+                if (val == null || val.isBlank()) continue;
+                if (accessNames != null && accessNames.contains(name)) {
+                    try { authService.logout(val); } catch (Exception ignored) {}
+                }
+                if (refreshName != null && refreshName.equals(name)) {
+                    try { authService.logout(val); } catch (Exception ignored) {}
+                }
+            }
+        }
+
+        // Clear authentication cookies for this service (access + refresh)
+        clearAuthCookies(response);
+
         return ResponseEntity.ok().build();
+    }
+
+    private void clearAuthCookies(HttpServletResponse response) {
+        List<String> names = jwtProperties.getCookieNames();
+        if (names != null) {
+            for (String n : names) {
+                jakarta.servlet.http.Cookie cookie = new jakarta.servlet.http.Cookie(n, "");
+                cookie.setPath("/");
+                cookie.setHttpOnly(true);
+                cookie.setMaxAge(0);
+                cookie.setSecure(false);
+                cookie.setAttribute("SameSite", "Lax");
+                response.addCookie(cookie);
+            }
+        }
+        String refresh = jwtProperties.getRefreshCookieName();
+        if (refresh != null) {
+            jakarta.servlet.http.Cookie rc = new jakarta.servlet.http.Cookie(refresh, "");
+            rc.setPath("/");
+            rc.setHttpOnly(true);
+            rc.setMaxAge(0);
+            rc.setSecure(false);
+            rc.setAttribute("SameSite", "Lax");
+            response.addCookie(rc);
+        }
     }
 
     /**
@@ -72,14 +123,18 @@ public class AuthController {
      */
     @PostMapping("/refresh")
     public ResponseEntity<LoginResponse> refresh(
-            @RequestBody Map<String, String> request,
+            @RequestBody(required = false) Map<String, String> request,
+            HttpServletRequest httpRequest,
             HttpServletResponse httpResponse) {
-        
-        String refreshToken = request.get("refreshToken");
+
+        String refreshToken = request != null ? request.get("refreshToken") : null;
+        if (refreshToken == null || refreshToken.isBlank()) {
+            refreshToken = extractRefreshTokenFromCookie(httpRequest);
+        }
         if (refreshToken == null || refreshToken.isBlank()) {
             return ResponseEntity.badRequest().build();
         }
-        
+
         try {
             return ResponseEntity.ok(authService.refreshLogin(refreshToken, httpResponse));
         } catch (RuntimeException e) {
@@ -92,14 +147,14 @@ public class AuthController {
      */
     @GetMapping("/me")
     public ResponseEntity<LoginResponse.UserLoginInfo> getCurrentUser(
-            @RequestHeader("Authorization") String authHeader) {
-        
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            HttpServletRequest httpRequest) {
+
+        String token = extractAccessToken(authHeader, httpRequest);
+        if (token == null || token.isBlank()) {
             return ResponseEntity.status(401).build();
         }
-        
-        String token = authHeader.substring(7);
-        
+
         try {
             LoginResponse.UserLoginInfo userInfo = authService.getCurrentUser(token);
             return ResponseEntity.ok(userInfo);
@@ -113,15 +168,16 @@ public class AuthController {
      */
     @GetMapping("/validate")
     public ResponseEntity<Boolean> validateToken(
-            @RequestHeader("Authorization") String authHeader) {
-        
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            HttpServletRequest httpRequest) {
+
+        String token = extractAccessToken(authHeader, httpRequest);
+        if (token == null || token.isBlank()) {
             return ResponseEntity.ok(false);
         }
-        
-        String token = authHeader.substring(7);
+
         boolean isValid = authService.validateToken(token);
-        
+
         return ResponseEntity.ok(isValid);
     }
 
@@ -131,12 +187,13 @@ public class AuthController {
     @PostMapping("/change-password")
     public ResponseEntity<Void> changePassword(
             @RequestHeader(value = "Authorization", required = false) String authHeader,
+            HttpServletRequest httpRequest,
             @Valid @RequestBody ChangePasswordRequest body) {
 
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+        String token = extractAccessToken(authHeader, httpRequest);
+        if (token == null || token.isBlank()) {
             return ResponseEntity.status(401).build();
         }
-        String token = authHeader.substring(7);
         try {
             authService.changePassword(token, body.getOldPassword(), body.getNewPassword());
             return ResponseEntity.ok().build();
@@ -147,6 +204,49 @@ public class AuthController {
             }
             return ResponseEntity.status(401).build();
         }
+    }
+
+    private String extractAccessToken(String authHeader, HttpServletRequest request) {
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            return authHeader.substring(7);
+        }
+        Cookie[] cookies = request.getCookies();
+        if (cookies == null) {
+            return null;
+        }
+        List<String> names = jwtProperties.getCookieNames();
+        if (names == null || names.isEmpty()) {
+            names = List.of("access_token");
+        }
+        for (String name : names) {
+            for (Cookie cookie : cookies) {
+                if (name.equals(cookie.getName())
+                        && cookie.getValue() != null
+                        && !cookie.getValue().isBlank()) {
+                    return cookie.getValue();
+                }
+            }
+        }
+        return null;
+    }
+
+    private String extractRefreshTokenFromCookie(HttpServletRequest request) {
+        String refreshName = jwtProperties.getRefreshCookieName();
+        if (refreshName == null || refreshName.isBlank()) {
+            return null;
+        }
+        Cookie[] cookies = request.getCookies();
+        if (cookies == null) {
+            return null;
+        }
+        for (Cookie cookie : cookies) {
+            if (refreshName.equals(cookie.getName())
+                    && cookie.getValue() != null
+                    && !cookie.getValue().isBlank()) {
+                return cookie.getValue();
+            }
+        }
+        return null;
     }
 
     private String getClientIpAddress(HttpServletRequest request) {
