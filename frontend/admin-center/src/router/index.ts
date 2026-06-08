@@ -115,6 +115,16 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: "config",
+        name: "Config",
+        component: () => import("@/views/config/index.vue"),
+        meta: {
+          titleKey: "menu.config",
+          icon: "Setting",
+          permissions: [PERMISSIONS.SYSTEM_ADMIN, PERMISSIONS.SYSTEM_CONFIG],
+        },
+      },
+      {
         path: "profile",
         name: "Profile",
         component: () => import("@/views/profile/index.vue"),
