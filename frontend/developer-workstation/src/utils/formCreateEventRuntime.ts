@@ -233,7 +233,7 @@ export function createFormEventOptionsBridge(
 export function wrapFormLevelOnChangeForFormCreate(raw: unknown): unknown {
   if (isEmptyFormCreateHandler(raw)) return raw
   const stored = raw
-  return function formLevelOnChange(field: string, value: unknown, inject?: unknown) {
+  const fn = function formLevelOnChange(field: string, value: unknown, inject?: unknown) {
     const bag =
       inject && typeof inject === 'object'
         ? (inject as { api?: PortalFormApi; rule?: Record<string, unknown> })
@@ -243,6 +243,12 @@ export function wrapFormLevelOnChangeForFormCreate(raw: unknown): unknown {
     const options = createFormEventOptionsBridge(fcApi, bag.rule)
     runFormOnChangeHandler(stored, field, value, options, bag.rule ?? {})
   }
+  ;(fn as FormLevelOnChangeWrapper).__hermesFormEventSource = stored
+  return fn
+}
+
+type FormLevelOnChangeWrapper = ((field: string, value: unknown, inject?: unknown) => void) & {
+  __hermesFormEventSource?: unknown
 }
 
 export function createPortalFormApi(

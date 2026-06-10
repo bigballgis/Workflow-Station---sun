@@ -241,6 +241,66 @@ export function flattenComponentEventsForPersist(rules: unknown[]): void {
 }
 
 /**
+ * Persist component handlers as EventConfig `$FNX:` strings.
+ * Designer / preview runtime may hold function handlers — JSON drops them.
+ */
+export function serializeComponentEventHandlerForPersist(raw: unknown): string {
+  if (typeof raw === 'function') {
+    const source = (raw as { __hermesFormEventSource?: unknown }).__hermesFormEventSource
+    if (source != null) {
+      return normalizeComponentEventHandler(source)
+    }
+    const body = extractFormCreateHandlerBody(String(raw))
+    return emptyComponentEventFunction(body)
+  }
+  return normalizeComponentEventHandler(raw)
+}
+
+function serializeComponentHandlerBucket(bucket: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(bucket)) {
+    const serialized = serializeComponentEventHandlerForPersist(value)
+    if (!isEmptyFormCreateHandler(serialized)) {
+      out[key] = serialized
+    }
+  }
+  return out
+}
+
+function serializeComponentEventsOnRule(rule: Record<string, unknown>): void {
+  for (const key of ['on', 'hook'] as const) {
+    const bucket = rule[key]
+    if (!bucket || typeof bucket !== 'object') continue
+    const out = serializeComponentHandlerBucket(bucket as Record<string, unknown>)
+    if (Object.keys(out).length > 0) {
+      rule[key] = out
+    } else {
+      delete rule[key]
+    }
+  }
+  delete rule._on
+  delete rule._hook
+}
+
+/** Walk rule tree; convert on/hook function handlers to `$FNX:` strings (call after flatten). */
+export function serializeComponentEventsForPersist(rules: unknown[]): void {
+  if (!Array.isArray(rules)) return
+  for (const raw of rules) {
+    if (!raw || typeof raw !== 'object') continue
+    const rule = raw as Record<string, unknown>
+    serializeComponentEventsOnRule(rule)
+    const children = getRuleChildren(rule)
+    if (children.length) serializeComponentEventsForPersist(children)
+  }
+}
+
+/** Flatten designer `_on` / `_hook` and serialize handlers before writing configJson. */
+export function prepareFormCreateRulesForPersist(rules: unknown[]): void {
+  flattenComponentEventsForPersist(rules)
+  serializeComponentEventsForPersist(rules)
+}
+
+/**
  * After loading config_json into fc-designer: copy persisted `on` / `hook` into `_on` / `_hook`
  * so Hermes EventConfig reads scripts (inverse of {@link flattenComponentEventsForPersist}).
  */
@@ -422,6 +482,40 @@ export function buildDefaultFormCreateOptions(
   base: Record<string, unknown> = {},
 ): Record<string, unknown> {
   return ensureEmptyFormOptionsEvents(base)
+}
+
+/**
+ * Persist form-level handlers as fc-designer FnConfig strings.
+ * Designer runtime may hold {@link wrapFormLevelOnChangeForFormCreate} functions — JSON drops them.
+ */
+export function serializeFormLevelEventHandlerForPersist(
+  eventName: string,
+  params: string,
+  raw: unknown,
+): string {
+  if (typeof raw === 'function') {
+    const source = (raw as { __hermesFormEventSource?: unknown }).__hermesFormEventSource
+    if (source != null) {
+      return normalizeFormLevelEventHandler(eventName, params, source)
+    }
+    const body = extractFormCreateHandlerBody(String(raw))
+    return emptyFormLevelEventFunction(eventName, params, body)
+  }
+  return normalizeFormLevelEventHandler(eventName, params, raw)
+}
+
+/** Normalize options from designer getOption() before writing configJson. */
+export function serializeFormCreateOptionsForPersist(
+  options: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+  if (!options || typeof options !== 'object') return {}
+  const next: Record<string, unknown> = { ...options }
+  for (const { name, params } of FORM_LEVEL_EVENT_DEFS) {
+    if (name in next) {
+      next[name] = serializeFormLevelEventHandlerForPersist(name, params, next[name])
+    }
+  }
+  return next
 }
 
 /** fc-designer `config.updateDefaultRule` — seed events when dragging components in. */

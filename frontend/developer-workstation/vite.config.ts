@@ -6,11 +6,12 @@ import Components from 'unplugin-vue-components/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 
 const HERMES_EVENT_CONFIG = resolve(__dirname, 'src/components/designer/HermesEventConfig.vue')
+const HERMES_FN_CONFIG = resolve(__dirname, 'src/components/designer/HermesFnConfig.vue')
 
-/** Redirect fc-designer `./EventConfig.vue` import to HermesEventConfig (Vite string alias misses relative imports). */
-function hermesEventConfigPlugin(): Plugin {
+/** Redirect fc-designer stock panels to Hermes overrides (Vite string alias misses relative imports). */
+function hermesDesignerOverridePlugin(): Plugin {
   return {
-    name: 'hermes-event-config',
+    name: 'hermes-designer-overrides',
     enforce: 'pre',
     resolveId(source, importer) {
       if (!importer) return null
@@ -20,20 +21,25 @@ function hermesEventConfigPlugin(): Plugin {
         source === './EventConfig.vue'
         || source.endsWith('/components/EventConfig.vue')
         || source === '@form-create/designer/src/components/EventConfig.vue'
-      if (!isEventConfig) return null
-      return HERMES_EVENT_CONFIG
+      if (isEventConfig) return HERMES_EVENT_CONFIG
+      const isFnConfig =
+        source === './FnConfig.vue'
+        || source.endsWith('/components/FnConfig.vue')
+        || source === '@form-create/designer/src/components/FnConfig.vue'
+      if (isFnConfig) return HERMES_FN_CONFIG
+      return null
     },
   }
 }
 
 export default defineConfig({
   base: '/dev/',
-  /** Prebundle would bake stock EventConfig.vue and ignore hermesEventConfigPlugin. */
+  /** Prebundle would bake stock EventConfig/FnConfig and ignore hermesDesignerOverridePlugin. */
   optimizeDeps: {
     exclude: ['@form-create/designer'],
   },
   plugins: [
-    hermesEventConfigPlugin(),
+    hermesDesignerOverridePlugin(),
     vue(),
     AutoImport({
       resolvers: [ElementPlusResolver()],
@@ -49,8 +55,8 @@ export default defineConfig({
     alias: [
       { find: '@', replacement: resolve(__dirname, 'src') },
       /**
-       * Package `main` points at dist/index.es.js (stock EventConfig baked in).
-       * Use source entry so hermesEventConfigPlugin can replace EventConfig.vue.
+       * Package `main` points at dist/index.es.js (stock EventConfig/FnConfig baked in).
+       * Use source entry so hermesDesignerOverridePlugin can replace panel components.
        */
       {
         find: /^@form-create\/designer$/,

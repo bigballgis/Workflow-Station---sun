@@ -614,6 +614,7 @@ import {
 import { ensureFormCreateRulesValidationDeep } from '@/utils/formCreateValidateRules'
 import {
   flushDesignerValidatePanelToActiveRule,
+  commitDesignerPanelEditsBeforePreview,
   installFcDesignerPreviewCapture,
   installPreviewValidationDomProbe,
   mergePreviewValidateFormOption,
@@ -621,12 +622,13 @@ import {
 } from '@/utils/formDesignerPreviewValidation'
 import { wrapFormLevelOnChangeForFormCreate } from '@/utils/formCreateEventRuntime'
 import {
-  flattenComponentEventsForPersist,
+  prepareFormCreateRulesForPersist,
   inflateComponentEventsForDesigner,
   buildDefaultFormCreateOptions,
   buildDesignerUpdateDefaultRule,
   ensureEmptyRuleComponentEvents,
   isEmptyFormCreateHandler,
+  serializeFormCreateOptionsForPersist,
   walkRulesEnsureComponentEvents,
 } from '@/utils/formCreateDefaultEvents'
 import {
@@ -944,11 +946,15 @@ function setSubDesignerRef(el: any, index: number) {
       const binding = designerSubBindings.value[index]
       if (binding) {
         try {
+          const rawRule = stripFormCreateRulesDisabledDeep(prev.getRule() || []) as any[]
+          prepareFormCreateRulesForPersist(rawRule)
           subFormCache.value[binding.bindingId] = {
-            rule: prev.getRule() || [],
-            options: prev.getOption() || {}
+            rule: rawRule,
+            options: serializeFormCreateOptionsForPersist(
+              prev.getOption() as Record<string, unknown>,
+            ),
           }
-          console.log('[FormDesigner] Cached sub form:', { bindingId: binding.bindingId, ruleCount: prev.getRule()?.length })
+          console.log('[FormDesigner] Cached sub form:', { bindingId: binding.bindingId, ruleCount: rawRule.length })
         } catch {}
       }
     }
@@ -3138,6 +3144,7 @@ async function handleSaveForm(isManual = false) {
   }
 
   try {
+    commitDesignerPanelEditsBeforePreview()
     flushDesignerValidatePanelToActiveRule(getActiveDesignerRef())
     Object.values(subDesignerRefs.value).forEach((subRef) => {
       if (subRef) flushDesignerValidatePanelToActiveRule(subRef as Parameters<typeof flushDesignerValidatePanelToActiveRule>[0])
@@ -3146,9 +3153,11 @@ async function handleSaveForm(isManual = false) {
     const rule = stripFormCreateRulesDisabledDeep(designerRef.value.getRule() || []) as any[]
     ensureFormCreateRulesValidationDeep(rule)
     walkRulesApplyTableFieldDefaultsToPersistedRules(rule, getPrimaryBindingFieldDefinitions())
-    flattenComponentEventsForPersist(rule)
+    prepareFormCreateRulesForPersist(rule)
     walkRulesEnsureComponentEvents(rule)
-    const options = designerRef.value.getOption()
+    const options = serializeFormCreateOptionsForPersist(
+      designerRef.value.getOption() as Record<string, unknown>,
+    )
 
     const subTableRules = collectSubTableRules(rule)
 
@@ -3208,7 +3217,10 @@ async function handleSaveForm(isManual = false) {
           flushDesignerValidatePanelToActiveRule(subRef as Parameters<typeof flushDesignerValidatePanelToActiveRule>[0])
           const liveRule = stripFormCreateRulesDisabledDeep(subRef.getRule() || []) as any[]
           ensureFormCreateRulesValidationDeep(liveRule)
-          const liveOptions = subRef.getOption() || {}
+          prepareFormCreateRulesForPersist(liveRule)
+          const liveOptions = serializeFormCreateOptionsForPersist(
+            subRef.getOption() as Record<string, unknown>,
+          )
           subForms[binding.bindingId] = { rule: liveRule, options: liveOptions }
           // Also update cache
           subFormCache.value[binding.bindingId] = { rule: liveRule, options: liveOptions }
@@ -3216,17 +3228,21 @@ async function handleSaveForm(isManual = false) {
       } else if (subFormCache.value[binding.bindingId]) {
         // Tab was visited but is now unmounted — use cache
         const cached = subFormCache.value[binding.bindingId]
+        const cachedRule = stripFormCreateRulesDisabledDeep(cached.rule || []) as any[]
+        prepareFormCreateRulesForPersist(cachedRule)
         subForms[binding.bindingId] = {
-          rule: stripFormCreateRulesDisabledDeep(cached.rule || []) as any[],
-          options: cached.options,
+          rule: cachedRule,
+          options: serializeFormCreateOptionsForPersist(cached.options),
         }
       } else {
         // Tab never visited — preserve previously saved data
         const existing = (selectedForm.value!.configJson?.subForms || {})[binding.bindingId]
         if (existing) {
+          const existingRule = stripFormCreateRulesDisabledDeep(existing.rule || []) as any[]
+          prepareFormCreateRulesForPersist(existingRule)
           subForms[binding.bindingId] = {
-            rule: stripFormCreateRulesDisabledDeep(existing.rule || []) as any[],
-            options: existing.options,
+            rule: existingRule,
+            options: serializeFormCreateOptionsForPersist(existing.options),
           }
         }
       }

@@ -1,11 +1,16 @@
 import { ref, watch, onUnmounted } from 'vue'
 import type { Ref } from 'vue'
+import {
+  prepareFormCreateRulesForPersist,
+  serializeFormCreateOptionsForPersist,
+} from '@/utils/formCreateDefaultEvents'
+import { stripFormCreateRulesDisabledDeep } from '@/utils/formCreateRuleUtils'
 
 export interface FormAutoSaveOptions {
   /** Reactive ref pointing to the currently selected form */
   selectedForm: Ref<any>
   /** Template ref to the main fc-designer component */
-  designerRef: Ref<{ getRule: () => any[] } | undefined>
+  designerRef: Ref<{ getRule: () => any[]; getOption?: () => Record<string, unknown> } | undefined>
   /** The save function to call on auto-save (should set autoSaving appropriately) */
   handleSaveForm: (isManual: boolean) => Promise<void>
   /** Reactive state for relation table views (triggers auto-save on change) */
@@ -61,6 +66,15 @@ export function useFormAutoSave(options: FormAutoSaveOptions) {
     lastDesignerState.value = ''
   }
 
+  function buildDesignerPollSnapshot(): string {
+    const rawRule = stripFormCreateRulesDisabledDeep(designerRef.value?.getRule() || [])
+    prepareFormCreateRulesForPersist(rawRule)
+    const options = serializeFormCreateOptionsForPersist(
+      designerRef.value?.getOption?.() as Record<string, unknown> | undefined,
+    )
+    return JSON.stringify({ rule: rawRule, options })
+  }
+
   function setupAutoSavePolling() {
     cleanupAutoSavePolling()
 
@@ -69,9 +83,9 @@ export function useFormAutoSave(options: FormAutoSaveOptions) {
       return
     }
 
-    // Initialize the state tracker with current rule
+    // Initialize the state tracker with current rule + form-level options (events)
     try {
-      lastDesignerState.value = JSON.stringify(designerRef.value.getRule() || [])
+      lastDesignerState.value = buildDesignerPollSnapshot()
       console.log('[FormDesigner] Auto-save polling started, initial state length:', lastDesignerState.value.length)
     } catch {
       lastDesignerState.value = ''
@@ -81,9 +95,9 @@ export function useFormAutoSave(options: FormAutoSaveOptions) {
     pollTimerRef.value = setInterval(() => {
       if (!selectedForm.value || autoSaving.value) return
       try {
-        const currentRule = JSON.stringify(designerRef.value?.getRule() || [])
-        if (currentRule !== lastDesignerState.value) {
-          lastDesignerState.value = currentRule
+        const currentState = buildDesignerPollSnapshot()
+        if (currentState !== lastDesignerState.value) {
+          lastDesignerState.value = currentState
           console.log('[FormDesigner] Change detected, scheduling auto-save')
           scheduleAutoSave()
         }

@@ -21,8 +21,13 @@ import {
   normalizeEventEditorBody,
 
   walkRulesEnsureComponentEvents,
-
+  serializeFormCreateOptionsForPersist,
+  prepareFormCreateRulesForPersist,
+  serializeComponentEventHandlerForPersist,
+  FORM_LEVEL_EVENT_DEFS,
 } from '../formCreateDefaultEvents'
+import { mergeLoadedFormOptions } from '../formDesigner'
+import { wrapFormLevelOnChangeForFormCreate } from '../formCreateEventRuntime'
 
 
 
@@ -238,6 +243,70 @@ describe('formCreateDefaultEvents', () => {
 }`,
       ),
     ).toContain("$inject.api.setValue('legal_hold', true)")
+  })
+
+  it('serializeFormCreateOptionsForPersist keeps onChange body as FnConfig string', () => {
+    const stored = emptyFormLevelEventFunction('onChange', 'field, value, options', 'var api = options.api')
+    const serialized = serializeFormCreateOptionsForPersist({ onChange: stored })
+    expect(typeof serialized.onChange).toBe('string')
+    expect(String(serialized.onChange)).toContain('var api = options.api')
+    expect(isEmptyFormCreateHandler(serialized.onChange)).toBe(false)
+  })
+
+  it('serializeFormCreateOptionsForPersist converts runtime function handlers to strings', () => {
+    const wrapped = wrapFormLevelOnChangeForFormCreate(
+      emptyFormLevelEventFunction('onChange', 'field, value, options', 'var api = options.api'),
+    )
+    expect(typeof wrapped).toBe('function')
+    const serialized = serializeFormCreateOptionsForPersist({ onChange: wrapped })
+    expect(typeof serialized.onChange).toBe('string')
+    expect(JSON.stringify({ onChange: serialized.onChange })).toContain('options.api')
+  })
+
+  it('mergeLoadedFormOptions keeps onChange as string for designer FnConfig', () => {
+    const stored = emptyFormLevelEventFunction('onChange', 'field, value, options', 'var api = options.api')
+    const merged = mergeLoadedFormOptions({ onChange: stored }, {}, 'Upload')
+    expect(typeof merged.onChange).toBe('string')
+    expect(String(merged.onChange)).toContain('var api = options.api')
+  })
+
+  it('prepareFormCreateRulesForPersist serializes component function handlers for JSON', () => {
+    const stored = emptyComponentEventFunction('$inject.api.setValue("legal_hold", true)')
+    const fn = () => {}
+    ;(fn as { __hermesFormEventSource?: unknown }).__hermesFormEventSource = stored
+    const rules = [
+      {
+        type: 'input',
+        field: 'case_number',
+        _on: { blur: fn },
+      },
+    ] as Record<string, unknown>[]
+    prepareFormCreateRulesForPersist(rules)
+    const rule = rules[0] as Record<string, unknown>
+    expect(rule._on).toBeUndefined()
+    const blur = String((rule.on as Record<string, unknown>).blur)
+    expect(blur).toMatch(/^\$FNX:/)
+    expect(blur).toContain('legal_hold')
+    expect(JSON.stringify(rule)).toContain('legal_hold')
+  })
+
+  it('serializeComponentEventHandlerForPersist extracts body from runtime function', () => {
+    const stored = emptyComponentEventFunction('if (true) { $inject.api.setValue("x", 1) }')
+    const serialized = serializeComponentEventHandlerForPersist(stored)
+    expect(serialized).toContain('$inject.api.setValue("x", 1)')
+  })
+
+  it('serializeFormCreateOptionsForPersist covers all form-level event keys', () => {
+    const options: Record<string, unknown> = {}
+    for (const { name, params } of FORM_LEVEL_EVENT_DEFS) {
+      options[name] = emptyFormLevelEventFunction(name, params, `// ${name}`)
+    }
+    const serialized = serializeFormCreateOptionsForPersist(options)
+    for (const { name } of FORM_LEVEL_EVENT_DEFS) {
+      expect(typeof serialized[name]).toBe('string')
+      expect(String(serialized[name])).toContain(`// ${name}`)
+      expect(JSON.stringify({ [name]: serialized[name] })).toContain(name)
+    }
   })
 
 })

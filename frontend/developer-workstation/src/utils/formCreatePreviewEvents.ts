@@ -38,7 +38,7 @@ function bindDomOnEvent(
     : {}) as Record<string, unknown>
   rule.on = on
   const previous = on[eventName]
-  on[eventName] = (...args: unknown[]) => {
+  const wrapped = (...args: unknown[]) => {
     if (typeof previous === 'function') {
       try {
         ;(previous as (...a: unknown[]) => void)(...args)
@@ -53,6 +53,8 @@ function bindDomOnEvent(
       rule,
     })
   }
+  ;(wrapped as { __hermesFormEventSource?: unknown }).__hermesFormEventSource = stored
+  on[eventName] = wrapped
 }
 
 export function materializePreviewComponentEvents(
