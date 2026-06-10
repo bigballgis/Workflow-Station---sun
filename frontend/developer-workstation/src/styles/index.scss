@@ -106,17 +106,33 @@ svg style {
   all: revert !important;
 }
 
-// 隐藏 Element Plus 表单项的错误占位
-.el-form-item {
-  .el-form-item__error {
+// 隐藏 Element Plus 表单项的错误占位（仅设计器右侧配置面板 — 勿全局隐藏，否则 Preview 校验错误不可见）
+._fc-r .el-form-item__error,
+._fd-config .el-form-item__error {
+  display: none;
+}
+
+._fc-r .el-form-item .el-form-item__content {
+  &:empty {
     display: none;
   }
-  .el-form-item__content {
-    // 确保内容区域没有多余的空白
-    &:empty {
-      display: none;
-    }
-  }
+}
+
+// Preview 弹窗（含 append-to-body）显式展示校验错误
+._fd-preview-dialog .el-form-item__error,
+.form-preview-dialog .el-form-item__error,
+.form-preview-wrapper .el-form-item__error {
+  display: block !important;
+  position: static;
+}
+
+._fd-preview-dialog .el-form-item.is-error .el-input__wrapper,
+._fd-preview-dialog .el-form-item.is-error .el-textarea__inner,
+.form-preview-dialog .el-form-item.is-error .el-input__wrapper,
+.form-preview-dialog .el-form-item.is-error .el-textarea__inner,
+.form-preview-wrapper .el-form-item.is-error .el-input__wrapper,
+.form-preview-wrapper .el-form-item.is-error .el-textarea__inner {
+  box-shadow: 0 0 0 1px var(--el-color-danger) inset;
 }
 
 // 隐藏空的 SVG 元素
@@ -133,8 +149,7 @@ svg:empty {
 }
 
 
-// 表单 label 不折行（Dialog 内 + form-create 设计器内）
-// 注意：不包含 form-preview-wrapper，它有单独规则
+// 表单 label 不折行（Dialog 内 + form-create 设计器画布 — 不含右侧属性面板 _fc-r）
 .el-dialog {
   .el-form-item__label,
   .__fc_label,
@@ -145,13 +160,22 @@ svg:empty {
   }
 }
 
-.fc-designer-wrapper {
+.fc-designer-wrapper ._fc-m-drag,
+.fc-designer-wrapper ._fc-m-con,
+.fc-designer-wrapper ._fd-drag-box {
   .el-form-item__label,
   .__fc_label,
   .form-create-label {
     white-space: nowrap !important;
     overflow: hidden;
     text-overflow: ellipsis;
+    width: auto !important;
+    min-width: fit-content !important;
+  }
+
+  .el-form-item {
+    display: flex;
+    align-items: flex-start;
   }
 }
 
@@ -179,19 +203,6 @@ svg:empty {
   }
 }
 
-// form-create 设计器画布内 label 不折行，自动撑开宽度
-.fc-designer-wrapper {
-  .el-form-item__label {
-    white-space: nowrap !important;
-    width: auto !important;
-    min-width: fit-content !important;
-  }
-  .el-form-item {
-    display: flex;
-    align-items: flex-start;
-  }
-}
-
 // fc-designer 右侧属性面板配置项 label 和控件之间加间距
 ._fd-ci-head {
   gap: 12px !important;
@@ -205,6 +216,8 @@ svg:empty {
 ._fd-ci-con {
   flex-shrink: 1 !important;
 }
+
+// Validation 面板样式见 designer-validate-panel.scss
 
 // 确保 Element Plus 输入框使用正确的字体
 .el-input__inner,

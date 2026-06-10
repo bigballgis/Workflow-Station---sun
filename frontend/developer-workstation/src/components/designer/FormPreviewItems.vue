@@ -287,6 +287,7 @@ function onPreviewFieldChange(segmentRules: unknown[], field: string, value: unk
     fieldType: ev?.rule?.type != null ? String(ev.rule.type) : undefined,
   })
 }
+
 </script>
 
 <style scoped lang="scss">
@@ -322,6 +323,17 @@ function onPreviewFieldChange(segmentRules: unknown[], field: string, value: unk
 
   :deep(.el-button) {
     margin-right: 10px;
+  }
+
+  /* index.scss hides .el-form-item__error globally for the designer canvas — re-enable in preview */
+  :deep(.el-form-item__error) {
+    display: block !important;
+    position: static;
+  }
+
+  :deep(.el-form-item.is-error .el-input__wrapper),
+  :deep(.el-form-item.is-error .el-textarea__inner) {
+    box-shadow: 0 0 0 1px var(--el-color-danger) inset;
   }
 }
 

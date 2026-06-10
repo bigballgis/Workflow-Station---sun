@@ -37,7 +37,15 @@ function bindDomOnEvent(
     ? { ...(rule.on as Record<string, unknown>) }
     : {}) as Record<string, unknown>
   rule.on = on
-  on[eventName] = () => {
+  const previous = on[eventName]
+  on[eventName] = (...args: unknown[]) => {
+    if (typeof previous === 'function') {
+      try {
+        ;(previous as (...a: unknown[]) => void)(...args)
+      } catch {
+        /* keep form-create / Element Plus handlers (e.g. blur validation) */
+      }
+    }
     fn({
       field,
       value: api.getValue(field),

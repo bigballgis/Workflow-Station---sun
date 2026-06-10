@@ -449,6 +449,7 @@ import {
   collectPlacedSubTableBindingIds,
 } from '@/components/formRendererHelpers'
 import { applyRuleDefaultToFormField } from '@/utils/formCreateRuleDefaults'
+import { applyFormCreateValidationToFormField, isFormCreateRuleRequired } from '@/utils/formCreateValidateRules'
 import SubTableField from '@/components/SubTableField.vue'
 import SubTableInlineForm from '@/components/SubTableInlineForm.vue'
 import ChangeHistoryPanel from '@/components/ChangeHistoryPanel.vue'
@@ -3889,7 +3890,8 @@ const convertFormCreateRule = (rule: any): FormField | null => {
   if (rule.props?.type === 'datetime') dateType = 'datetime'
   else if (rule.props?.type === 'daterange') dateType = 'daterange'
   const typeMap: Record<string, string> = { 'input': 'text', 'inputNumber': 'number', 'select': 'select', 'radio': 'radio', 'checkbox': 'checkbox', 'switch': 'switch', 'datePicker': dateType, 'DatePicker': dateType, 'date-picker': dateType, 'el-date-picker': dateType, 'timePicker': 'time', 'cascader': 'cascader', 'rate': 'rate', 'slider': 'slider', 'colorPicker': 'colorPicker', 'treeSelect': 'treeselect', 'upload': 'upload', 'editor': 'editor', 'signature': 'signature', 'transfer': 'transfer' }
-  const field: FormField = { key: rule.field, label: rule.title || rule.field, type: typeMap[rule.type] || 'text', required: rule.validate?.some((v: any) => v.required) || false, placeholder: rule.props?.placeholder || '', span: rule.col?.span || 24 }
+  const field: FormField = { key: rule.field, label: rule.title || rule.field, type: typeMap[rule.type] || 'text', placeholder: rule.props?.placeholder || '', span: rule.col?.span || 24 }
+  applyFormCreateValidationToFormField(field, rule as Record<string, unknown>)
   const rawOptions = rule.options || rule.props?.options
   if (rawOptions) {
     if (rule.type === 'cascader') {
@@ -4058,7 +4060,7 @@ const deriveColumnsFromBinding = (binding: any, formConfig?: Record<string, any>
       // Sync options into props.options so SubTableAddDialog can read from col.props?.options
       if (options) passProps.options = options
 
-      const required = r.validate?.some((v: any) => v.required) || false
+      const required = isFormCreateRuleRequired(r as Record<string, unknown>)
       // form-create uses `disabled` to mark a field as read-only
       const readonly = isFormCreateRuleReadonly(r)
 

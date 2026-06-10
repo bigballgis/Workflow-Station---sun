@@ -285,6 +285,7 @@ import ProcessHistory, { type HistoryRecord } from '@/components/ProcessHistory.
 import FormRenderer, { type FormField, type FormTab } from '@/components/FormRenderer.vue'
 import { normalizePortalViews, isFormCreateRuleReadonly, isFormCreateRuleHidden, isRowRule, isColRule, getRuleChildren, getRowGutter, getColSpan, extractRowColumnFields, parseFormRulesLayout, isTabsRule, isCardRule, isCollapseRule, convertAuxiliaryLayoutField, extractTabsFromTabsRule, extractCollapsePanelsFromRule, getLayoutKey, getLayoutLabel, collectPlacedSubTableBindingIds, computeNeededSubTableBindingIds } from '@/components/formRendererHelpers'
 import { applyRuleDefaultToFormField } from '@/utils/formCreateRuleDefaults'
+import { applyFormCreateValidationToFormField, isFormCreateRuleRequired } from '@/utils/formCreateValidateRules'
 import N8nActionDialog from '@/components/N8nActionDialog.vue'
 import type { ActionDefinition } from '@/components/N8nActionDialog.vue'
 import { applyAutoFill } from '@/utils/n8nAutoFillEngine'
@@ -1143,10 +1144,10 @@ const convertFormCreateRule = (rule: any): FormField | null => {
     key: rule.field,
     label: rule.title || rule.field,
     type: typeMap[rule.type] || 'text',
-    required: rule.validate?.some((v: any) => v.required) || false,
     placeholder: rule.props?.placeholder || '',
     span: rule.col?.span || 24
   }
+  applyFormCreateValidationToFormField(field, rule as Record<string, unknown>)
   
   // 处理选项 (rule.options or rule.props.options)
   const rawOptions = rule.options || rule.props?.options
@@ -1333,7 +1334,7 @@ const deriveColumnsFromBinding = (
 
         if (options) passProps.options = options
 
-        const required = r.validate?.some((v: any) => v.required) || false
+        const required = isFormCreateRuleRequired(r as Record<string, unknown>)
         const readonly = isFormCreateRuleReadonly(r)
 
         return {

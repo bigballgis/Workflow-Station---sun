@@ -63,6 +63,7 @@ export default {
     inputPlaceholder: 'Please input',
     logout: 'Logout',
     logoutSuccess: 'Logged out successfully',
+    validate: 'Validate',
     add: 'Add',
     operation: 'Operation',
     deleteSuccess: 'Deleted successfully',

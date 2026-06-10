@@ -7,6 +7,8 @@
       :rules="formRules"
       :label-width="labelWidth"
       :label-position="labelPosition"
+      :hide-required-asterisk="hideRequiredAsterisk"
+      :show-message="showValidationMessage"
       :disabled="readonly"
       :size="size"
       :validate-on-rule-change="false"
@@ -855,6 +857,15 @@ const allFields = computed(() =>
   flattenAllFormFieldSegments(props.fields, props.tabs, props.fieldsAfterTabs),
 )
 
+const resolvedFormOptionForm = computed(() => {
+  const raw = props.formOptions?.form
+  return raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+})
+
+/** Designer Preview forces showMessage on; Portal keeps parity unless explicitly disabled. */
+const showValidationMessage = computed(() => resolvedFormOptionForm.value.showMessage !== false)
+const hideRequiredAsterisk = computed(() => resolvedFormOptionForm.value.hideRequiredAsterisk === true)
+
 const formCreateRulesResolved = computed(() => {
   if (Array.isArray(props.formCreateRules) && props.formCreateRules.length) {
     return props.formCreateRules
@@ -1095,18 +1106,17 @@ const formRules = computed<FormRules>(() => {
   if (props.readonly) return {}
   const rules: FormRules = {}
   allFields.value.forEach(field => {
-    if (field.required || field.rules) {
-      const fieldRules: any[] = []
-      if (field.required) {
-        fieldRules.push({
-          required: true,
-          message: t('common.pleaseInput', { label: field.label }),
-          trigger: field.type === 'select' ? 'change' : 'blur'
-        })
-      }
-      if (field.rules) {
-        fieldRules.push(...field.rules)
-      }
+    const fieldRules: any[] = []
+    if (field.rules?.length) {
+      fieldRules.push(...field.rules)
+    } else if (field.required) {
+      fieldRules.push({
+        required: true,
+        message: t('common.pleaseInput', { label: field.label }),
+        trigger: field.type === 'select' || field.type === 'checkbox' ? 'change' : 'blur',
+      })
+    }
+    if (fieldRules.length > 0) {
       rules[field.key] = fieldRules
     }
   })

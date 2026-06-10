@@ -232,3 +232,26 @@
     通过 hiddenItemConfig 隐藏会塌缩内容的内置 Basic `hidden`；删除中间方案 designerPropsPanelRules（baseRule prepend）；
     `.fc-designer-show-hidden` 下隐藏 `._fd-drag-hidden` overlay 并强制显示 drag-tool / 取消 concealed。
     路径：FormDesigner.vue、main.ts、formDesignerCanvasChrome.test.ts。
+- id: "1424"
+  status: fixed
+  fixed_at: "2026-06-08"
+  severity: major
+  category: bug
+  summary: "表单设计器设置的校验（required / 长度 len 等）在 User Portal 运行时不生效"
+  detail: |
+    根因（运行时真 bug）：User Portal 的 convertFormCreateRule 仅从 rule.validate[].required 取必填，
+    丢弃了 form-create 的 $required 标志以及 len/pattern 等 validate 条目，导致 configJson 里的校验在门户静默丢失。
+    修复：新增 user-portal/src/utils/formCreateValidateRules.ts —— isFormCreateRuleRequired（读 $required 或 validate[].required）
+    + mapFormCreateValidateToElementPlusRules（剥离 form-create 专用键 mode/adapter，保留 len/min/max/pattern + trigger/message，
+    必要时前置 required），applyFormCreateValidationToFormField 写入 FormField.required + FormField.rules；
+    FormRenderer.vue 的 formRules 优先消费 field.rules；processes/start.vue、tasks/detail.vue、applications/detail.vue
+    的 convertFormCreateRule / extractFieldsRecursive 改用上述工具。
+    关于 Preview：form-create 运行时（设计器原生 Preview 与 FormPreviewItems）通过内置 required 插件处理 $required、
+    并将 validate（__$validate）合并进 el-form-item.rules，本就原生校验；故回退上一轮误判（以为 $required 不触发校验）
+    而往 validate[] 注入 {required:true} 的设计器侧改动——该注入被 Validate.vue parseValue 规整为 {mode:'required'} 多余规则行，
+    且 mutate 了 designer 实时规则并被持久化。删除 developer-workstation 侧 formCreateValidateRules.ts 注入工具及调用点。
+    formCreatePreviewEvents.ts 的 bindDomOnEvent 改为链式调用既有 on[event]（保留 form-create/EP 的 blur 校验）。
+    重建并部署 developer-workstation-frontend、user-portal-frontend。
+    路径：user-portal/{utils/formCreateValidateRules.ts, components/FormRenderer.vue, views/processes/start.vue,
+    views/tasks/detail.vue, views/applications/detail.vue}；developer-workstation/{components/designer/FormDesigner.vue,
+    utils/formCreatePreviewEvents.ts}。

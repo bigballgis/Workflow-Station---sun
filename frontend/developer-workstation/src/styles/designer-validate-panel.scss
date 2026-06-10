@@ -1,0 +1,108 @@
+/**
+ * fc-designer right property panel — default 320px (280px content grid + 20px padding).
+ */
+.fc-designer-wrapper {
+  --fc-designer-side-r-width: 320px;
+}
+
+.fc-designer-wrapper ._fc-r {
+  width: var(--fc-designer-side-r-width) !important;
+  flex: 0 0 var(--fc-designer-side-r-width) !important;
+  max-width: var(--fc-designer-side-r-width) !important;
+  min-width: var(--fc-designer-side-r-width) !important;
+}
+
+/**
+ * fc-designer Validate tab — property panel layout.
+ * Canvas-wide .el-form-item flex rules must not apply here (they squeeze numeric inputs).
+ */
+._fc-r ._fd-validate {
+  width: 100%;
+
+  .el-row {
+    display: flex;
+    flex-direction: column;
+    row-gap: 6px;
+  }
+
+  .el-col-12,
+  .el-col-24 {
+    flex: 0 0 100%;
+    max-width: 100%;
+    width: 100%;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  ._fd-validate-item {
+    margin-bottom: 8px;
+  }
+
+  .el-form-item {
+    display: block !important;
+    margin-bottom: 12px;
+  }
+
+  .el-form-item__label {
+    display: block !important;
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    height: auto !important;
+    line-height: 1.4 !important;
+    padding: 0 0 6px !important;
+    margin: 0 !important;
+    text-align: left !important;
+    justify-content: flex-start !important;
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    float: none !important;
+  }
+
+  .el-form-item__content {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-left: 0 !important;
+    flex: none !important;
+    min-width: 0 !important;
+  }
+
+  .el-select,
+  .el-input,
+  .el-input-number {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* Stepper buttons on the right — leaves room for the numeric value */
+  .el-input-number {
+    position: relative;
+
+    .el-input {
+      width: 100%;
+    }
+
+    .el-input__wrapper {
+      width: 100%;
+      padding-left: 11px;
+      padding-right: 64px;
+    }
+
+    .el-input-number__decrease,
+    .el-input-number__increase {
+      width: 30px;
+    }
+
+    .el-input-number__decrease {
+      left: auto;
+      right: 31px;
+    }
+
+    .el-input-number__increase {
+      left: auto;
+      right: 1px;
+    }
+  }
+}

@@ -63,6 +63,7 @@ export default {
     inputPlaceholder: '請輸入',
     logout: '登出',
     logoutSuccess: '已登出',
+    validate: '驗證',
     add: '新增',
     operation: '操作',
     deleteSuccess: '刪除成功',

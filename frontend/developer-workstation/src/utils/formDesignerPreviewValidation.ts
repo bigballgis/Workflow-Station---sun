@@ -1,0 +1,302 @@
+/**
+ * fc-designer built-in Preview (toolbar) — normalize validation before preview opens.
+ */
+
+import { getRuleChildren } from '@/utils/formDesigner'
+import { ensureFormCreateRulesValidationDeep } from '@/utils/formCreateValidateRules'
+
+export type DesignerPreviewRef = {
+  openPreview?: () => void
+  getRule?: () => unknown[]
+  setRule?: (rules: unknown[]) => void
+  getOption?: () => Record<string, unknown>
+  setOption?: (opt: Record<string, unknown>) => void
+  __hermesPreviewCapture?: boolean
+  activeRule?: Record<string, unknown> | null
+  baseForm?: {
+    api?: { formData?: () => Record<string, unknown> }
+  }
+  validateForm?: {
+    api?: { formData?: () => Record<string, unknown> }
+    value?: Record<string, unknown> | unknown[]
+  }
+}
+
+function findRuleByField(rules: unknown[], field: string): Record<string, unknown> | null {
+  for (const raw of rules || []) {
+    if (!raw || typeof raw !== 'object') continue
+    const rule = raw as Record<string, unknown>
+    if (rule.field === field) return rule
+    const children = getRuleChildren(rule)
+    const nested = findRuleByField(children, field)
+    if (nested) return nested
+  }
+  return null
+}
+
+function resolveFlushTargetRule(ref: DesignerPreviewRef): Record<string, unknown> | null {
+  if (ref.activeRule && typeof ref.activeRule === 'object') {
+    return ref.activeRule
+  }
+  const baseField = ref.baseForm?.api?.formData?.()?.field
+  if (typeof baseField !== 'string' || !baseField || !ref.getRule) return null
+  return findRuleByField(ref.getRule() || [], baseField)
+}
+
+export type FlushValidatePanelResult = {
+  flushed: boolean
+  field?: string
+  validate?: unknown
+  $required?: unknown
+  source?: 'formData' | 'value' | 'none'
+}
+
+/** Blur focused config-panel control so fc-designer commits pending validate/base edits. */
+export function commitDesignerPanelEditsBeforePreview(): void {
+  const active = document.activeElement
+  if (!(active instanceof HTMLElement)) return
+  if (!active.closest('._fc-m-con, ._fc-r, ._fd-config, .form-editor-view')) return
+  active.blur()
+}
+
+/** fc-designer validate panel uses blur emit — flush pending edits onto live activeRule before getJson/getRule. */
+export function flushDesignerValidatePanelToActiveRule(
+  ref: DesignerPreviewRef | null | undefined,
+): FlushValidatePanelResult {
+  commitDesignerPanelEditsBeforePreview()
+  if (!ref || typeof ref !== 'object') {
+    return { flushed: false, source: 'none' }
+  }
+  const activeRule = resolveFlushTargetRule(ref)
+  if (!activeRule) {
+    return { flushed: false, source: 'none' }
+  }
+
+  let panelData: Record<string, unknown> | null = null
+  let source: FlushValidatePanelResult['source'] = 'none'
+  const formData = ref.validateForm?.api?.formData
+  if (typeof formData === 'function') {
+    try {
+      const data = formData()
+      if (data && typeof data === 'object' && Object.keys(data).length > 0) {
+        panelData = data
+        source = 'formData'
+      }
+    } catch {
+      /* ignore designer panel read errors */
+    }
+  }
+  if (!panelData) {
+    const rawValue = ref.validateForm?.value
+    if (rawValue && typeof rawValue === 'object' && !Array.isArray(rawValue)) {
+      panelData = rawValue as Record<string, unknown>
+      source = 'value'
+    }
+  }
+  if (!panelData) {
+    return { flushed: false, field: String(activeRule.field ?? ''), source: 'none' }
+  }
+
+  let flushed = false
+  if ('validate' in panelData) {
+    const nextValidate = panelData.validate
+    if (Array.isArray(nextValidate)) {
+      if (nextValidate.length === 0) {
+        delete activeRule.validate
+      } else {
+        activeRule.validate = [...nextValidate]
+      }
+    } else {
+      activeRule.validate = nextValidate
+    }
+    flushed = true
+  }
+  if ('$required' in panelData) {
+    activeRule.$required = panelData.$required
+    flushed = true
+  }
+
+  return {
+    flushed,
+    field: String(activeRule.field ?? ''),
+    validate: activeRule.validate,
+    $required: activeRule.$required,
+    source,
+  }
+}
+
+/** Options merged into designer state for the built-in preview dialog. */
+export function mergePreviewValidateFormOption(
+  option: Record<string, unknown> | undefined,
+  validateButtonText: string,
+): Record<string, unknown> {
+  const base = option && typeof option === 'object' ? { ...option } : {}
+  const form =
+    base.form && typeof base.form === 'object'
+      ? { ...(base.form as Record<string, unknown>) }
+      : {}
+  form.showMessage = true
+  base.form = form
+  base.validateOnSubmit = true
+  const prevSubmit =
+    base.submitBtn && typeof base.submitBtn === 'object'
+      ? (base.submitBtn as Record<string, unknown>)
+      : {}
+  const prevClick = prevSubmit.click
+  base.submitBtn = {
+    ...prevSubmit,
+    show: true,
+    innerText: validateButtonText,
+    click: (api: { submit?: (ok?: unknown, fail?: unknown) => Promise<unknown> }) => {
+      if (typeof prevClick === 'function') {
+        return (prevClick as (a: unknown) => unknown)(api)
+      }
+      if (typeof api?.submit !== 'function') return
+      return api.submit().catch(function () {})
+    },
+  }
+  const prevReset =
+    base.resetBtn && typeof base.resetBtn === 'object'
+      ? (base.resetBtn as Record<string, unknown>)
+      : {}
+  base.resetBtn = { ...prevReset, show: false }
+  base.onSubmit = base.onSubmit ?? (() => {
+    /* preview-only validate; no submit action */
+  })
+  return base
+}
+
+export function snapshotDesignerFieldValidate(rules: unknown[]): Array<Record<string, unknown>> {
+  const out: Array<Record<string, unknown>> = []
+
+  function walk(items: unknown[]) {
+    for (const raw of items || []) {
+      if (!raw || typeof raw !== 'object') continue
+      const rule = raw as Record<string, unknown>
+      if (rule.field) {
+        out.push({
+          field: rule.field,
+          type: rule.type,
+          $required: rule.$required,
+          validate: rule.validate,
+        })
+      }
+      const children = getRuleChildren(rule)
+      if (children.length) walk(children)
+    }
+  }
+
+  walk(rules)
+  return out
+}
+
+/**
+ * Persist normalized validation onto the live designer (getRule() alone is a parsed copy).
+ * Must run before fc-designer openPreview → getJson().
+ */
+export function prepareDesignerPreviewValidation(
+  ref: DesignerPreviewRef | null | undefined,
+  validateButtonText: string,
+): {
+  applied: boolean
+  fieldRules: Array<Record<string, unknown>>
+  flush: FlushValidatePanelResult
+  validateOnSubmit?: unknown
+} {
+  const flush = flushDesignerValidatePanelToActiveRule(ref)
+  logValidatePanelFlush('prepare', flush)
+  if (!ref?.getRule || !ref?.setRule) {
+    return { applied: false, fieldRules: [], flush }
+  }
+  const rules = ref.getRule() || []
+  ensureFormCreateRulesValidationDeep(rules)
+  ref.setRule(rules)
+  const option = ref.getOption?.()
+  if (option && ref.setOption) {
+    ref.setOption(mergePreviewValidateFormOption(option, validateButtonText))
+  }
+  const fieldRules = snapshotDesignerFieldValidate(rules)
+  return {
+    applied: true,
+    fieldRules,
+    flush,
+    validateOnSubmit: ref.getOption?.()?.validateOnSubmit,
+  }
+}
+
+function logValidatePanelFlush(_source: string, _flush: FlushValidatePanelResult): void {
+  /* no-op */
+}
+
+function logPreviewPrep(
+  _source: string,
+  _result: {
+    applied: boolean
+    fieldRules: Array<Record<string, unknown>>
+    flush: FlushValidatePanelResult
+    validateOnSubmit?: unknown
+  },
+): void {
+  /* no-op */
+}
+
+function isFcDesignerPreviewToolbarButton(target: EventTarget | null): boolean {
+  const btn = (target as HTMLElement | null)?.closest?.('button')
+  return !!btn?.querySelector?.('.icon-preview')
+}
+
+function runPreviewToolbarPrep(
+  source: string,
+  getDesignerRef: () => DesignerPreviewRef | null | undefined,
+  validateButtonText: string,
+): void {
+  const result = prepareDesignerPreviewValidation(getDesignerRef(), validateButtonText)
+  logPreviewPrep(`capture-${source}`, result)
+}
+
+/** Capture toolbar Preview mousedown/click — click runs after focus leaves canvas and may clear activeRule. */
+export function installFcDesignerPreviewCapture(
+  root: Element | null | undefined,
+  getDesignerRef: () => DesignerPreviewRef | null | undefined,
+  validateButtonText: string,
+): void {
+  if (!root || (root as DesignerPreviewRef).__hermesPreviewCapture) return
+  const onPreviewToolbarEvent = (source: string) => (ev: Event) => {
+    if (!isFcDesignerPreviewToolbarButton(ev.target)) return
+    runPreviewToolbarPrep(source, getDesignerRef, validateButtonText)
+  }
+  root.addEventListener('mousedown', onPreviewToolbarEvent('mousedown'), true)
+  root.addEventListener('click', onPreviewToolbarEvent('click'), true)
+  ;(root as DesignerPreviewRef).__hermesPreviewCapture = true
+}
+
+export function installPreviewValidationDomProbe(): void {
+  /* no-op */
+}
+
+export function patchDesignerOpenPreview(
+  ref: DesignerPreviewRef | null | undefined,
+  validateButtonText: string,
+): void {
+  if (!ref) return
+  const result = prepareDesignerPreviewValidation(ref, validateButtonText)
+  logPreviewPrep('patch-call', result)
+}
+
+export function patchDesignerOpenPreviewAll(
+  refs: Array<DesignerPreviewRef | null | undefined>,
+  validateButtonText: string,
+): void {
+  for (const ref of refs) patchDesignerOpenPreview(ref, validateButtonText)
+}
+
+export function syncDesignerRulesValidationToCanvas(
+  ref: DesignerPreviewRef | null | undefined,
+): boolean {
+  flushDesignerValidatePanelToActiveRule(ref)
+  if (!ref?.getRule || !ref?.setRule) return false
+  const rules = ref.getRule() || []
+  ensureFormCreateRulesValidationDeep(rules)
+  ref.setRule(rules)
+  return true
+}

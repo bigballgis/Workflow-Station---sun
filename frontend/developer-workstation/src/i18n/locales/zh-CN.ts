@@ -63,6 +63,7 @@ export default {
     inputPlaceholder: '请输入',
     logout: '退出登录',
     logoutSuccess: '已退出登录',
+    validate: '验证',
     add: '添加',
     operation: '操作',
     deleteSuccess: '删除成功',

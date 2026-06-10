@@ -162,6 +162,7 @@
             class="form-container"
           >
             <FormRenderer
+              ref="diagramFormRendererRef"
               :fields="selectedNodeForm.isCurrentTask ? formFields : selectedNodeForm.fields"
               :tabs="selectedNodeForm.isCurrentTask ? formTabs : selectedNodeForm.tabs"
               :model-value="selectedNodeForm.isCurrentTask ? formData : selectedNodeForm.values"
@@ -225,6 +226,7 @@
             <div class="section-content">
               <FormRenderer
                 v-if="processFormFields.length > 0 || processFormTabs.length > 0 || processFormSubTableBindings.length > 0"
+                ref="processFormRendererRef"
                 :fields="processFormFields"
                 :tabs="processFormTabs"
                 :model-value="processFormValues"
@@ -280,6 +282,7 @@
             class="form-container"
           >
             <FormRenderer
+              ref="taskFormRendererRef"
               :fields="formFields"
               :tabs="formTabs"
               :fields-after-tabs="formFieldsAfterTabs"
@@ -437,6 +440,7 @@ import ProcessHistory, { type HistoryRecord } from '@/components/ProcessHistory.
 import FormRenderer, { type FormField, type FormTab } from '@/components/FormRenderer.vue'
 import { normalizePortalViews, collectLeafFormFieldKeys, isFormCreateRuleReadonly, isFormCreateRuleHidden, isRowRule, isColRule, getRuleChildren, getRowGutter, getColSpan, extractRowColumnFields, parseFormRulesLayout, isTabsRule, isCardRule, isCollapseRule, convertAuxiliaryLayoutField, extractTabsFromTabsRule, extractCollapsePanelsFromRule, findTabsRule, isTabPaneRule, getLayoutKey, getLayoutLabel } from '@/components/formRendererHelpers'
 import { applyRuleDefaultToFormField } from '@/utils/formCreateRuleDefaults'
+import { applyFormCreateValidationToFormField, isFormCreateRuleRequired } from '@/utils/formCreateValidateRules'
 import SubTableField from '@/components/SubTableField.vue'
 import N8nActionDialog from '@/components/N8nActionDialog.vue'
 import {
@@ -519,6 +523,18 @@ const fallbackProcessInstanceId = computed(() => {
 
 const loading = ref(true)
 const submitting = ref(false)
+const taskFormRendererRef = ref<InstanceType<typeof FormRenderer> | null>(null)
+const diagramFormRendererRef = ref<InstanceType<typeof FormRenderer> | null>(null)
+const processFormRendererRef = ref<InstanceType<typeof FormRenderer> | null>(null)
+
+async function validateMainTaskForm(): Promise<boolean> {
+  if (formReadOnly.value) return true
+  const activeRenderer = selectedNodeId.value && selectedNodeForm.value?.isCurrentTask
+    ? diagramFormRendererRef.value
+    : taskFormRendererRef.value
+  if (!activeRenderer) return true
+  return activeRenderer.validate()
+}
 const taskInfo = ref<Partial<TaskInfo>>({})
 const effectiveTaskId = computed(() => {
   const currentTaskId = (taskInfo.value as Record<string, unknown>)?.taskId
@@ -2350,7 +2366,8 @@ const taskActions = useTaskActions({
   actionForm,
   userOptions,
   userSearchLoading,
-  loadTaskDetail
+  loadTaskDetail,
+  validateTaskForm: validateMainTaskForm,
 })
 const {
   validateSubTableAssigneesForComplete,
@@ -3278,6 +3295,13 @@ function buildProcessFormSubTableBindings(pfData: ProcessFormData) {
 // Task 17.4: Submit Process Form update (Return_To_Requester state)
 const handleProcessFormSubmit = async () => {
   if (!taskInfo.value.processInstanceId) return
+  if (processFormRendererRef.value) {
+    const valid = await processFormRendererRef.value.validate()
+    if (!valid) {
+      ElMessage.warning(t('processStart.pleaseCompleteForm'))
+      return
+    }
+  }
   submitting.value = true
   try {
     await submitProcessFormUpdate(taskInfo.value.processInstanceId, processFormValues.value)
@@ -3446,7 +3470,7 @@ const deriveColumnsFromBinding = (binding: any, subForms?: Record<string, any>, 
       // Sync options into props.options so SubTableAddDialog can read from col.props?.options
       if (options) passProps.options = options
 
-      const required = r.validate?.some((v: any) => v.required) || false
+      const required = isFormCreateRuleRequired(r as Record<string, unknown>)
       // form-create uses `disabled` to mark a field as read-only
       const readonly = isFormCreateRuleReadonly(r)
 
@@ -3934,7 +3958,8 @@ const convertFormCreateRule = (rule: any): FormField | null => {
   if (rule.props?.type === 'datetime') dateType = 'datetime'
   else if (rule.props?.type === 'daterange') dateType = 'daterange'
   const typeMap: Record<string, string> = { 'input': 'text', 'inputNumber': 'number', 'select': 'select', 'radio': 'radio', 'checkbox': 'checkbox', 'switch': 'switch', 'datePicker': dateType, 'DatePicker': dateType, 'date-picker': dateType, 'el-date-picker': dateType, 'timePicker': 'time', 'cascader': 'cascader', 'rate': 'rate', 'slider': 'slider', 'colorPicker': 'colorPicker', 'treeSelect': 'treeselect', 'upload': 'upload', 'editor': 'editor', 'signature': 'signature', 'transfer': 'transfer' }
-  const field: FormField = { key: rule.field, label: rule.title || rule.field, type: typeMap[rule.type] || 'text', required: rule.validate?.some((v: any) => v.required) || false, placeholder: rule.props?.placeholder || '', span: rule.col?.span || 24 }
+  const field: FormField = { key: rule.field, label: rule.title || rule.field, type: typeMap[rule.type] || 'text', placeholder: rule.props?.placeholder || '', span: rule.col?.span || 24 }
+  applyFormCreateValidationToFormField(field, rule as Record<string, unknown>)
   const rawOptions = rule.options || rule.props?.options
   if (rawOptions) {
     if (rule.type === 'cascader') {

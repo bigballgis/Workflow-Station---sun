@@ -82,7 +82,7 @@
           <el-button @click="handleBindNode(selectedForm)">
             {{ t('form.bindProcessNode') }}
           </el-button>
-          <el-button @click="handlePreview">
+          <el-button @mousedown.capture="prepareCustomPreviewValidation" @click="handlePreview">
             {{ t('common.preview') }}
           </el-button>
           <el-button
@@ -342,6 +342,7 @@
     <!-- Preview dialog -->
     <el-dialog
       v-model="showPreviewDialog"
+      class="form-preview-dialog"
       :title="t('form.previewTitle')"
       width="900px"
       append-to-body
@@ -610,6 +611,14 @@ import {
   attachPreviewMountedDefaultSync,
   materializePreviewItemsEvents,
 } from '@/utils/formCreatePreviewEvents'
+import { ensureFormCreateRulesValidationDeep } from '@/utils/formCreateValidateRules'
+import {
+  flushDesignerValidatePanelToActiveRule,
+  installFcDesignerPreviewCapture,
+  installPreviewValidationDomProbe,
+  mergePreviewValidateFormOption,
+  prepareDesignerPreviewValidation,
+} from '@/utils/formDesignerPreviewValidation'
 import { wrapFormLevelOnChangeForFormCreate } from '@/utils/formCreateEventRuntime'
 import {
   flattenComponentEventsForPersist,
@@ -667,7 +676,6 @@ import {
   mapFormCreateRulesReadonlyDeep,
   stripFormCreateRulesDisabledDeep,
 } from '@/utils/formCreateRuleUtils'
-
 const { t } = useI18n()
 
 type SubTableListColumnDTO = SubTableFieldDTO & {
@@ -770,7 +778,9 @@ provide(PREVIEW_SUBTABLE_DIALOG_KEY, {
 })
 
 watch(showPreviewDialog, (open) => {
-  if (open) return
+  if (open) {
+    return
+  }
   previewFormReady.value = false
   previewRowDialog.visible = false
   previewRowDialog.onSave = null
@@ -1306,7 +1316,19 @@ function patchDesignerRulesDefaultEvents() {
 
 function onDesignerStructureChange() {
   scheduleSyncHiddenMarkers()
-  nextTick(() => patchDesignerRulesDefaultEvents())
+  nextTick(() => {
+    patchDesignerRulesDefaultEvents()
+  })
+}
+
+function installDesignerPreviewCaptureHooks() {
+  installPreviewValidationDomProbe()
+  const root = document.querySelector('.form-editor-view')
+  installFcDesignerPreviewCapture(
+    root,
+    () => getActiveDesignerRef() as ReturnType<typeof getActiveDesignerRef>,
+    t('common.validate'),
+  )
 }
 
 // Provide subBindings to SubTablePlaceholderWidget via inject
@@ -1455,6 +1477,11 @@ watch(
   { deep: true },
 )
 
+watch([() => selectedForm.value?.id], ([formId]) => {
+  if (!formId) return
+  nextTick(() => installDesignerPreviewCaptureHooks())
+})
+
 // Watch for selectedForm changes and load linkFormComponents
 watch([() => selectedForm.value, () => props.functionUnitId], async ([form, fuId]) => {
   if (form && fuId) {
@@ -1575,10 +1602,13 @@ const designerConfig = computed(() => ({
   showDevice: true,
   showSave: false, // Use custom save button
   fieldReadonly: false,
+  /** Validation / props panel: commit on change (not blur) so deletes persist when re-selecting a field. */
+  updateConfigOnBlur: false,
   formOptions: buildDefaultFormCreateOptions({
     form: { labelPosition: 'left' },
   }),
   beforeActiveRule: ({ rule }: { rule: Record<string, unknown> }) => {
+    flushDesignerValidatePanelToActiveRule(getActiveDesignerRef())
     ensureEmptyRuleComponentEvents(rule)
   },
   updateDefaultRule: buildDesignerUpdateDefaultRule(),
@@ -1636,7 +1666,10 @@ const previewOption = computed(() => ({
 }))
 
 const getPreviewOption = (): Record<string, any> => ({
-  submitBtn: false,
+  submitBtn: {
+    show: true,
+    innerText: t('common.validate'),
+  },
   resetBtn: false,
   language: {
     en: {
@@ -2760,7 +2793,10 @@ async function handleSelectForm(row: FormDefinition) {
         walkRulesEnsureComponentEvents(rules)
         hydrateDesignerRulesFromLatestTableDefaults(rules, getPrimaryBindingFieldDefinitions())
         designerRef.value.setRule(rules)
-        nextTick(() => patchDesignerRulesDefaultEvents())
+        nextTick(() => {
+          patchDesignerRulesDefaultEvents()
+          installDesignerPreviewCaptureHooks()
+        })
         designerRef.value.setOption(
           mergeLoadedFormOptions(
             effectiveMain.options && Object.keys(effectiveMain.options).length
@@ -2780,6 +2816,7 @@ async function handleSelectForm(row: FormDefinition) {
       setupAutoSavePolling()
       setupMarkerObserver()
       scheduleSyncHiddenMarkers()
+      installDesignerPreviewCaptureHooks()
     }, 100)
   })
 
@@ -2811,6 +2848,7 @@ function loadSubDesigners(row: FormDefinition) {
                 t('form.clickToUpload')
               )
             )
+            installDesignerPreviewCaptureHooks()
           } catch {}
         }
       }, 150)
@@ -3100,7 +3138,13 @@ async function handleSaveForm(isManual = false) {
   }
 
   try {
+    flushDesignerValidatePanelToActiveRule(getActiveDesignerRef())
+    Object.values(subDesignerRefs.value).forEach((subRef) => {
+      if (subRef) flushDesignerValidatePanelToActiveRule(subRef as Parameters<typeof flushDesignerValidatePanelToActiveRule>[0])
+    })
+
     const rule = stripFormCreateRulesDisabledDeep(designerRef.value.getRule() || []) as any[]
+    ensureFormCreateRulesValidationDeep(rule)
     walkRulesApplyTableFieldDefaultsToPersistedRules(rule, getPrimaryBindingFieldDefinitions())
     flattenComponentEventsForPersist(rule)
     walkRulesEnsureComponentEvents(rule)
@@ -3161,7 +3205,9 @@ async function handleSaveForm(isManual = false) {
       if (subRef) {
         // Tab is currently active and mounted
         try {
+          flushDesignerValidatePanelToActiveRule(subRef as Parameters<typeof flushDesignerValidatePanelToActiveRule>[0])
           const liveRule = stripFormCreateRulesDisabledDeep(subRef.getRule() || []) as any[]
+          ensureFormCreateRulesValidationDeep(liveRule)
           const liveOptions = subRef.getOption() || {}
           subForms[binding.bindingId] = { rule: liveRule, options: liveOptions }
           // Also update cache
@@ -3287,6 +3333,10 @@ async function handleSaveForm(isManual = false) {
   }
 }
 
+function prepareCustomPreviewValidation() {
+  const result = prepareDesignerPreviewValidation(getActiveDesignerRef(), t('common.validate'))
+}
+
 async function handlePreview() {
   console.log('[DEBUG] ==================== handlePreview START ====================')
 
@@ -3306,7 +3356,8 @@ async function handlePreview() {
   // Fall back to saved configJson rule only when the designer ref is unavailable.
   let rawRule: any[] = []
   try {
-    rawRule = designerRef.value?.getRule() || []
+    const prepResult = prepareDesignerPreviewValidation(getActiveDesignerRef(), t('common.validate'))
+    rawRule = getActiveDesignerRef()?.getRule?.() || designerRef.value?.getRule() || []
   } catch {}
   if (!rawRule.length) {
     rawRule = selectedForm.value.configJson?.rule || []
@@ -3341,7 +3392,10 @@ async function handlePreview() {
 
   // Sync label position from designer option
   Object.assign(previewOptionState, {
-    submitBtn: false,
+    submitBtn: {
+      show: true,
+      innerText: t('common.validate'),
+    },
     resetBtn: false,
   })
 
@@ -3373,6 +3427,7 @@ async function handlePreview() {
       option = subFormCache.value[bindingId]?.options || subForms[bindingId]?.options || {}
     }
     rule = mapFormCreateRulesReadonlyDeep(rule) as any[]
+    ensureFormCreateRulesValidationDeep(rule)
     const columns = toSubTablePreviewColumns(bindingId, rule, config)
     previewTableRows.value[bindingId] = []
     bindingMap.set(bindingId, {
@@ -3433,6 +3488,13 @@ async function handlePreview() {
   })
 
   rawRule = mapFormCreateRulesReadonlyDeep(rawRule) as any[]
+
+  ensureFormCreateRulesValidationDeep(rawRule)
+  try {
+    designerRef.value?.setRule?.(rawRule)
+  } catch {
+    /* ignore designer setRule sync errors */
+  }
 
   const tableFieldDefs = getPrimaryBindingFieldDefinitions()
   applyTableFieldDefaultsToRulesAndModel(rawRule, tableFieldDefs, previewData.value, true, {
@@ -3530,9 +3592,15 @@ async function handlePreview() {
   previewData.value = { ...previewData.value }
   applyPreviewDefaultsToItemRules(previewItems.value, previewData)
   materializePreviewItemsEvents(previewItems.value, previewData)
-  const previewOpt: Record<string, unknown> = {
-    ...getPreviewOption(),
-    ...(config.options && typeof config.options === 'object' ? config.options : {}),
+  const previewOpt = mergePreviewValidateFormOption(
+    {
+      ...getPreviewOption(),
+      ...(config.options && typeof config.options === 'object' ? config.options : {}),
+    },
+    t('common.validate'),
+  )
+  previewOpt.onSubmit = () => {
+    /* Preview-only: submit button triggers form-create validation; no data action. */
   }
   const savedOnChange = config.options?.onChange
   if (!isEmptyFormCreateHandler(savedOnChange)) {
@@ -3981,7 +4049,7 @@ onMounted(() => {
 }
 
 .fc-designer-wrapper {
-  /* form-create 左侧组件栏 / 右侧属性栏 / 顶栏 Preview·Clear 区宽度 */
+  /* form-create 右侧属性栏：320px（与 _fc-r-config 280px 内容区 + 内边距一致，同 Control「Edit」按钮列宽） */
   --fc-designer-menu-width: 251px;
   --fc-designer-side-r-width: 320px;
   --fc-designer-top-actions-width: 200px;
@@ -4078,6 +4146,35 @@ onMounted(() => {
   
   :deep(.fc-designer) {
     height: 100% !important;
+  }
+
+  /* fc-designer 右侧属性栏默认 320px — 覆盖为 --fc-designer-side-r-width */
+  :deep(._fc-r) {
+    width: var(--fc-designer-side-r-width) !important;
+    flex: 0 0 var(--fc-designer-side-r-width) !important;
+    max-width: var(--fc-designer-side-r-width) !important;
+    min-width: var(--fc-designer-side-r-width) !important;
+  }
+
+  /* Validate tab — reinforce layout (see designer-validate-panel.scss) */
+  :deep(._fc-r ._fd-validate) {
+    .el-form-item {
+      display: block !important;
+    }
+
+    .el-form-item__label {
+      width: 100% !important;
+      min-width: 0 !important;
+    }
+
+    .el-form-item__content {
+      width: 100% !important;
+      margin-left: 0 !important;
+    }
+
+    .el-input-number .el-input__wrapper {
+      padding-right: 64px;
+    }
   }
   
   // 确保 form-create 设计器内的样式正确应用
@@ -4191,6 +4288,12 @@ onMounted(() => {
     // 确保按钮样式正确
     :deep(.el-button) {
       margin-right: 10px;
+    }
+
+    // index.scss hides validation errors globally — show them in custom preview
+    :deep(.el-form-item__error) {
+      display: block !important;
+      position: static;
     }
   }
 }

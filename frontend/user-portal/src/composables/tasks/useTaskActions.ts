@@ -52,6 +52,8 @@ export function useTaskActions(options: {
   userOptions: Ref<UserOption[]>
   userSearchLoading: Ref<boolean>
   loadTaskDetail: () => Promise<void>
+  /** Portal form validation before approve/submit (Element Plus + designer rules). */
+  validateTaskForm?: () => Promise<boolean>
 }) {
   const { t } = useI18n()
   const router = useRouter()
@@ -126,6 +128,13 @@ export function useTaskActions(options: {
 
   async function submitApprove() {
     if (options.currentApproveAction.value === 'APPROVE' && !validateSubTableAssigneesForComplete()) return
+    if (options.currentApproveAction.value === 'APPROVE' && options.validateTaskForm) {
+      const valid = await options.validateTaskForm()
+      if (!valid) {
+        ElMessage.warning(t('processStart.pleaseCompleteForm'))
+        return
+      }
+    }
     options.submitting.value = true
     try {
       const variables: Record<string, any> = {}
