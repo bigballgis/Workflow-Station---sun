@@ -1,4 +1,13 @@
 import type { FormField } from '@/components/formRendererHelpers'
+import {
+  bindFormCreateValidatorForElementPlus,
+  createFieldKeyResolver,
+  isEmptyFormCreateHandler,
+} from '@/utils/formCreateEventRuntime'
+
+/** Deferred designer validator — resolved in FormRenderer when form data is available. */
+export const FORM_CREATE_VALIDATOR_SOURCE_KEY = '__formCreateValidatorSource'
+export const FORM_CREATE_VALIDATOR_ADAPTER_KEY = '__formCreateValidatorAdapter'
 
 
 
@@ -207,15 +216,18 @@ export function convertFormCreateDesignerValidateEntry(
 
         return { type: 'number', trigger, ...(message != null && message !== '' ? { message } : {}) }
 
-      case 'validator':
-
-        if (typeof item.validator === 'function') {
-
-          return { validator: item.validator, trigger, ...(message != null && message !== '' ? { message } : {}) }
-
+      case 'validator': {
+        const raw = item.validator
+        const base = {
+          trigger,
+          ...(message != null && message !== '' ? { message } : {}),
+          ...(item.adapter === true ? { [FORM_CREATE_VALIDATOR_ADAPTER_KEY]: true } : {}),
         }
-
+        if (typeof raw === 'function' || (typeof raw === 'string' && !isEmptyFormCreateHandler(raw))) {
+          return { ...base, [FORM_CREATE_VALIDATOR_SOURCE_KEY]: raw }
+        }
         return null
+      }
 
       default:
 
@@ -225,7 +237,17 @@ export function convertFormCreateDesignerValidateEntry(
 
   }
 
-
+  const deferredValidator = item.validator
+  if (
+    typeof deferredValidator === 'function'
+    || (typeof deferredValidator === 'string' && !isEmptyFormCreateHandler(deferredValidator))
+  ) {
+    return {
+      ...baseEntry(item, fieldType),
+      [FORM_CREATE_VALIDATOR_SOURCE_KEY]: deferredValidator,
+      ...(item.adapter === true ? { [FORM_CREATE_VALIDATOR_ADAPTER_KEY]: true } : {}),
+    }
+  }
 
   const entry: Record<string, unknown> = { ...item }
 
@@ -344,6 +366,36 @@ export function applyFormCreateValidationToFormField(
   }
 
   field.rules = elRules.length > 0 ? elRules : undefined
+}
+
+/**
+ * Resolve deferred designer validators into Element Plus async-validator functions.
+ * Must run where current form values are available (FormRenderer).
+ */
+export function materializeFormCreateValidationRules(
+  rules: Array<Record<string, unknown>> | undefined,
+  getFormData: () => Record<string, unknown>,
+  getFields?: () => Array<{ key: string; label?: string }>,
+): Array<Record<string, unknown>> {
+  if (!rules?.length) return []
+  const resolveFieldKey = getFields ? createFieldKeyResolver(getFields) : undefined
+  return rules.map((rule) => {
+    const raw = rule[FORM_CREATE_VALIDATOR_SOURCE_KEY]
+    if (raw == null) return rule
+    const bound = bindFormCreateValidatorForElementPlus(
+      raw,
+      getFormData,
+      resolveFieldKey,
+      { adapter: rule[FORM_CREATE_VALIDATOR_ADAPTER_KEY] === true },
+    )
+    if (!bound) return rule
+    const {
+      [FORM_CREATE_VALIDATOR_SOURCE_KEY]: _source,
+      [FORM_CREATE_VALIDATOR_ADAPTER_KEY]: _adapter,
+      ...rest
+    } = rule
+    return { ...rest, validator: bound }
+  })
 }
 
 

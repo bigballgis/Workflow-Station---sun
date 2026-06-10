@@ -91,6 +91,7 @@ import {
   pickMiLinkChildRowsForParent
 } from '@/composables/tasks/shared'
 import { createPortalFormApi, createFieldKeyResolver, runFormOnChangeHandler, type PortalFormVisibilityState } from '@/utils/formCreateEventRuntime'
+import { materializeFormCreateValidationRules } from '@/utils/formCreateValidateRules'
 import {
   collectFieldComponentEventsFromRules,
   runAllComponentHookEvents,
@@ -1108,7 +1109,13 @@ const formRules = computed<FormRules>(() => {
   allFields.value.forEach(field => {
     const fieldRules: any[] = []
     if (field.rules?.length) {
-      fieldRules.push(...field.rules)
+      fieldRules.push(
+        ...materializeFormCreateValidationRules(
+          field.rules,
+          () => formData.value,
+          () => allFields.value,
+        ),
+      )
     } else if (field.required) {
       fieldRules.push({
         required: true,

@@ -255,3 +255,19 @@
     路径：user-portal/{utils/formCreateValidateRules.ts, components/FormRenderer.vue, views/processes/start.vue,
     views/tasks/detail.vue, views/applications/detail.vue}；developer-workstation/{components/designer/FormDesigner.vue,
     utils/formCreatePreviewEvents.ts}。
+- id: "1425"
+  status: fixed
+  fixed_at: "2026-06-10"
+  severity: major
+  category: bug
+  summary: "表单设计器自定义 validator 在 Preview 生效、User Portal 不生效"
+  detail: |
+    根因：设计器将 validator 存为 FORM-CREATE-PREFIX 字符串；form-create Preview 原生解析执行，
+    但 user-portal 的 convertFormCreateDesignerValidateEntry 仅在 typeof validator === 'function' 时保留规则，
+    JSON 反序列化后字符串 validator 被丢弃，跨字段校验（如 b>a 且 b>c）在门户静默失效。
+    修复：formCreateEventRuntime 新增 parseFormCreateValidator / bindFormCreateValidatorForElementPlus（解析字符串并绑定 this.api）；
+    formCreateValidateRules 对 validator 存 __formCreateValidatorSource 延迟标记，FormRenderer.formRules 调用
+    materializeFormCreateValidationRules 在运行时注入 api.getValue。单测覆盖 b>a&&b>c 场景。
+    路径：user-portal/{utils/formCreateEventRuntime.ts, utils/formCreateValidateRules.ts, components/FormRenderer.vue}。
+    补充（2026-06-10）：adapter:true 与三参 validator(rule,value,callback) 冲突导致误报 — detectValidatorArity 优先按参数个数
+    判定签名；callback 桥接为 Element Plus Error 对象。
