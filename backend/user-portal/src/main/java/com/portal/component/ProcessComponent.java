@@ -2589,6 +2589,125 @@ public class ProcessComponent {
     }
 
     /**
+     * Return running process to the first completed user-task node (initiator revision).
+     * Only the process starter may invoke this (My Requests → Draft).
+     */
+    public boolean returnProcessToFirstStep(String userId, String processId, String comment) {
+        Optional<ProcessInstance> optInstance = processInstanceRepository.findById(processId);
+        if (optInstance.isEmpty()) {
+            return false;
+        }
+        ProcessInstance instance = optInstance.get();
+        if (!instance.getStartUserId().equals(userId)) {
+            return false;
+        }
+        if (!"RUNNING".equals(instance.getStatus())) {
+            return false;
+        }
+        if (!workflowEngineClient.isAvailable()) {
+            log.warn("Workflow engine not available, cannot return process {} to first step", processId);
+            return false;
+        }
+
+        Optional<String> activeTaskId = findActiveEngineTaskId(processId);
+        if (activeTaskId.isEmpty()) {
+            log.warn("No active task for process {} — cannot return to first step", processId);
+            return false;
+        }
+        Optional<String> firstActivityId = findFirstReturnableActivityId(activeTaskId.get());
+        if (firstActivityId.isEmpty()) {
+            log.warn("No returnable first activity for task {} (process {})", activeTaskId.get(), processId);
+            return false;
+        }
+
+        String reason = comment != null && !comment.isBlank()
+                ? comment
+                : i18nService.getMessage("portal.process.return_to_first.default_reason");
+
+        Optional<Map<String, Object>> returnResult = workflowEngineClient.returnTask(
+                activeTaskId.get(), firstActivityId.get(), userId, reason, "DRAFT");
+        if (returnResult.isEmpty()) {
+            return false;
+        }
+        Map<String, Object> data = returnResult.get();
+        if (Boolean.FALSE.equals(data.get("success"))) {
+            log.warn("Engine return-to-first failed for process {}: {}", processId, data.get("message"));
+            return false;
+        }
+
+        refreshRunningProcessCurrentNodeFromEngine(processId, instance);
+        log.info("Process {} returned to first step ({}) by initiator {}", processId, firstActivityId.get(), userId);
+        return true;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Optional<String> findActiveEngineTaskId(String processInstanceId) {
+        Optional<Map<String, Object>> tasksResult = workflowEngineClient.getProcessInstanceTasks(processInstanceId);
+        if (tasksResult.isEmpty()) {
+            return Optional.empty();
+        }
+        Object tasksObj = tasksResult.get().get("tasks");
+        if (!(tasksObj instanceof List<?> tasks) || tasks.isEmpty()) {
+            return Optional.empty();
+        }
+        Object first = tasks.get(0);
+        if (!(first instanceof Map<?, ?> taskMap)) {
+            return Optional.empty();
+        }
+        Object taskId = taskMap.get("taskId");
+        if (taskId == null) {
+            taskId = taskMap.get("id");
+        }
+        return taskId != null ? Optional.of(String.valueOf(taskId)) : Optional.empty();
+    }
+
+    private Optional<String> findFirstReturnableActivityId(String taskId) {
+        Optional<List<Map<String, Object>>> activitiesOpt = workflowEngineClient.getReturnableActivities(taskId);
+        if (activitiesOpt.isEmpty() || activitiesOpt.get().isEmpty()) {
+            return Optional.empty();
+        }
+        List<Map<String, Object>> activities = activitiesOpt.get();
+        Map<String, Object> firstStep = activities.get(activities.size() - 1);
+        Object activityId = firstStep.get("taskId");
+        if (activityId == null) {
+            activityId = firstStep.get("activityId");
+        }
+        return activityId != null ? Optional.of(String.valueOf(activityId)) : Optional.empty();
+    }
+
+    @SuppressWarnings("unchecked")
+    private void refreshRunningProcessCurrentNodeFromEngine(String processId, ProcessInstance instance) {
+        if (!"RUNNING".equals(instance.getStatus()) || !workflowEngineClient.isAvailable()) {
+            return;
+        }
+        try {
+            Optional<Map<String, Object>> tasksResult = workflowEngineClient.getProcessInstanceTasks(processId);
+            if (tasksResult.isEmpty()) {
+                return;
+            }
+            Map<String, Object> tasksData = tasksResult.get();
+            if (tasksData == null) {
+                return;
+            }
+            List<Map<String, Object>> tasks = (List<Map<String, Object>>) tasksData.get("tasks");
+            if (tasks == null || tasks.isEmpty()) {
+                return;
+            }
+            Map<String, Object> currentTask = tasks.get(0);
+            String currentNodeName = (String) currentTask.get("taskName");
+            ProcessAssigneeSnapshot snapshot = ProcessAssigneeSnapshot.fromEngineTask(currentTask);
+            if (currentNodeName != null && !currentNodeName.isEmpty()) {
+                instance.setCurrentNode(currentNodeName);
+                instance.setCurrentAssignee(snapshot.getAssigneeUserId());
+                instance.setCandidateUsers(snapshot.getCandidateUserIds());
+                processInstanceRepository.save(instance);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to refresh currentNode after return-to-first for process {}: {}", processId, e.getMessage());
+        }
+    }
+
+    /**
      * Urges process
      */
     public boolean urgeProcess(String userId, String processId) {

@@ -97,6 +97,11 @@ export const processApi = {
     return request.post(`/processes/${processId}/urge`)
   },
 
+  // 退回第一个用户任务节点（起草）
+  returnProcessToFirstStep(processId: string, comment?: string) {
+    return request.post(`/processes/${processId}/return-to-first`, { comment })
+  },
+
   // 切换收藏状态
   toggleFavorite(processKey: string) {
     return request.post<boolean>(`/processes/${processKey}/favorite`)

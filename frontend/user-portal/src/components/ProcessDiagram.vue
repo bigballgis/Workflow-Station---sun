@@ -188,17 +188,18 @@ const applyStatusColors = () => {
     const paths = visual.querySelectorAll('path')
     paths.forEach(path => {
       const el = path as SVGElement
-      if (node.type === 'gateway') {
+      const attrFill = path.getAttribute('fill')
+      const isOpenPath = (!el.style.fill || el.style.fill === 'none') && (!attrFill || attrFill === 'none')
+      if (node.type === 'gateway' || node.type === 'start' || node.type === 'end') {
         el.style.stroke = stroke
         el.style.strokeWidth = '2px'
-        const attrFill = path.getAttribute('fill')
-        const isOpenPath = (!el.style.fill || el.style.fill === 'none') && (!attrFill || attrFill === 'none')
-        if (!isOpenPath) {
+        // BPMN start/end circles are often stroke-only; still paint fill so completed green is visible.
+        if (node.type === 'start' || node.type === 'end' || !isOpenPath) {
           el.style.fill = fill
         }
         return
       }
-      if (!el.style.fill || el.style.fill === 'none') return
+      if (isOpenPath) return
       el.style.fill = fill
       el.style.stroke = stroke
     })

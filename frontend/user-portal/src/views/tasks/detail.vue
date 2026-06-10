@@ -115,8 +115,8 @@
             :completed-node-ids="completedNodeIds"
             :selected-node-id="selectedNodeId ?? ''"
             :show-toolbar="true"
-            :show-legend="true"
-            :show-current-step="!isCompletedTask"
+            :show-legend="diagramSuppressMode === 'none'"
+            :show-current-step="diagramSuppressMode !== 'full' && !isCompletedTask"
             @node-click="handleNodeClick"
           />
           <el-empty
@@ -2071,8 +2071,24 @@ const showImplicitSaveAction = computed(() =>
 const completedFormData = ref<CompletedTaskFormData | null>(null)
 const isCompletedTask = ref(false)
 
-const bpmnParser = useBpmnParser({ taskInfo: taskInfo as any, historyRecords, isCompletedTask })
-const { processNodes, processFlows, completedNodeIds, currentNodeId, bpmnXml, parseBpmnXml, parseBpmnXmlAndGetFormId, parseBpmnXmlAndGetPreviousFormIds } = bpmnParser
+const processFormState = computed(() => processFormData.value?.processState)
+const bpmnParser = useBpmnParser({
+  taskInfo: taskInfo as any,
+  historyRecords,
+  isCompletedTask,
+  processState: processFormState,
+})
+const {
+  processNodes,
+  processFlows,
+  completedNodeIds,
+  currentNodeId,
+  bpmnXml,
+  diagramSuppressMode,
+  parseBpmnXml,
+  parseBpmnXmlAndGetFormId,
+  parseBpmnXmlAndGetPreviousFormIds,
+} = bpmnParser
 
 const miSubProcessScope = ref<MiSubProcessScopeConfig | null>(null)
 
@@ -3148,10 +3164,14 @@ const loadProcessAndTaskFormData = async (taskData: any, prefetched?: Prefetched
     processFormData.value = pfData
     processFormValues.value = pfData.fieldValues || {}
 
-    if (pfData.processState === 'Return_To_Requester' && pfData.editable) {
+    const normalizedProcessState = String(pfData.processState ?? '').trim().toUpperCase()
+    if (normalizedProcessState === 'RETURN_TO_REQUESTER' && pfData.editable) {
       isReturnToRequester.value = true
       processFormEditable.value = true
       processFormCollapse.value = ['processForm']
+      if (bpmnXml.value) {
+        parseBpmnXml(bpmnXml.value)
+      }
     }
 
     if (pfData.configJson) {

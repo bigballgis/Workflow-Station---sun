@@ -131,7 +131,8 @@
           <el-table-column
             prop="businessKey"
             :label="t('application.processTitle')"
-            min-width="200"
+            min-width="160"
+            show-overflow-tooltip
           >
             <template #default="{ row }">
               <el-link
@@ -146,7 +147,7 @@
           <el-table-column
             prop="currentNode"
             :label="t('application.currentStep')"
-            min-width="120"
+            min-width="100"
             show-overflow-tooltip
           >
             <template #default="{ row }">
@@ -156,7 +157,7 @@
           <el-table-column
             prop="currentAssignee"
             :label="t('application.currentAssignee')"
-            min-width="100"
+            width="120"
             show-overflow-tooltip
           >
             <template #default="{ row }">
@@ -190,7 +191,7 @@
           </el-table-column>
           <el-table-column
             :label="t('common.actions')"
-            width="120"
+            width="200"
             fixed="right"
             align="center"
           >
@@ -206,6 +207,15 @@
                   @click="handleUrge(row)"
                 >
                   {{ t('application.urge') }}
+                </el-button>
+                <el-divider direction="vertical" />
+                <el-button
+                  type="primary"
+                  size="small"
+                  link
+                  @click="handleReturnToDraft(row)"
+                >
+                  {{ t('application.returnToDraft') }}
                 </el-button>
                 <el-divider direction="vertical" />
                 <el-button
@@ -369,6 +379,23 @@ const handleUrge = async (row: any) => {
     ElMessage.success(t('application.urgeSuccess'))
   } catch (error) {
     ElMessage.error(t('application.urgeFailed'))
+  }
+}
+
+const handleReturnToDraft = async (row: any) => {
+  try {
+    await ElMessageBox.confirm(
+      t('application.returnToDraftConfirm'),
+      t('application.returnToDraftConfirmTitle'),
+      { type: 'warning' }
+    )
+    await processApi.returnProcessToFirstStep(row.id)
+    ElMessage.success(t('application.returnToDraftSuccess'))
+    loadApplications()
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error(t('application.returnToDraftFailed'))
+    }
   }
 }
 

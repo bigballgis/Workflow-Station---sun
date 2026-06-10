@@ -42,6 +42,11 @@ public class TaskReturnRequest {
     private String reason;
 
     /**
+     * Return semantics: {@code RETURN} (default rollback) or {@code DRAFT} (return to first step for revision).
+     */
+    private String returnKind;
+
+    /**
      * 是否发送回退通知
      */
     @Builder.Default
@@ -74,6 +79,11 @@ public class TaskReturnRequest {
      */
     public boolean shouldSendNotification() {
         return sendNotification != null && sendNotification;
+    }
+
+    /** Whether this return should be recorded as DRAFT (vs generic RETURN/rollback). */
+    public boolean isDraftReturn() {
+        return returnKind != null && "DRAFT".equalsIgnoreCase(returnKind.trim());
     }
 
     /**

@@ -44,6 +44,10 @@
               :label="$t('action.withdraw')"
               value="WITHDRAW"
             />
+            <el-option
+              :label="$t('action.draft')"
+              value="DRAFT"
+            />
           </el-option-group>
           <el-option-group :label="$t('action.processOperations')">
             <el-option

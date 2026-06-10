@@ -21,7 +21,7 @@ public class TaskCompleteRequest {
     @NotBlank(message = "{validation.task_id_required}")
     private String taskId;
 
-    /** 操作类型：APPROVE, REJECT, TRANSFER, DELEGATE, RETURN */
+    /** 操作类型：APPROVE, REJECT, TRANSFER, DELEGATE, RETURN, DRAFT */
     @NotBlank(message = "{validation.operation_type_required}")
     private String action;
 

@@ -2,6 +2,12 @@ import { ref, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ProcessNode, ProcessFlow } from '@/components/ProcessDiagram.vue'
 import { getCachedBpmnDocument } from '@/utils/bpmnParseCache'
+import {
+  applyDraftReturnDiagramStatus,
+  applyFullNeutralDiagramStatus,
+  resolveDiagramStatusSuppressMode,
+  type DiagramStatusSuppressMode,
+} from '@/utils/bpmnDiagramDraftReturn'
 
 const ck = (s: unknown) => String(s ?? '').trim()
 const normLabel = (s: unknown) => ck(s).replace(/\s+/g, ' ')
@@ -10,6 +16,8 @@ export function useBpmnParser(options: {
   taskInfo: Ref<Record<string, any>>
   historyRecords: Ref<any[]>
   isCompletedTask: Ref<boolean>
+  /** When RETURN_TO_REQUESTER, diagram stays neutral (no completed/current colors). */
+  processState?: Ref<string | undefined>
 }) {
   const { t } = useI18n()
 
@@ -18,6 +26,7 @@ export function useBpmnParser(options: {
   const completedNodeIds = ref<string[]>([])
   const currentNodeId = ref('')
   const bpmnXml = ref('')
+  const diagramSuppressMode = ref<DiagramStatusSuppressMode>('none')
 
   function parseBpmnXmlAndGetFormId(xml: string): { formId: string | null; formName: string | null; readOnly: boolean } {
     if (!xml) return { formId: null, formName: null, readOnly: false }
@@ -682,9 +691,27 @@ export function useBpmnParser(options: {
         flows.push({ id, sourceRef: flow.getAttribute('sourceRef') || '', targetRef: flow.getAttribute('targetRef') || '', name: flow.getAttribute('name') || '', waypoints: waypointsMap.get(id) })
       })
 
-      processNodes.value = nodes
+      const suppressMode = resolveDiagramStatusSuppressMode(xml, {
+        processState: options.processState?.value,
+        currentTaskName: options.taskInfo.value.taskName || '',
+        currentTaskDefinitionKey: options.taskInfo.value.taskDefinitionKey,
+        historyRecords: options.historyRecords.value,
+      })
+      diagramSuppressMode.value = suppressMode
       processFlows.value = flows
-      completedNodeIds.value = completed
+      if (suppressMode === 'full') {
+        const neutral = applyFullNeutralDiagramStatus(nodes)
+        processNodes.value = neutral.nodes
+        completedNodeIds.value = neutral.completedNodeIds
+        currentNodeId.value = neutral.currentNodeId
+      } else if (suppressMode === 'draft-return') {
+        const draftReturn = applyDraftReturnDiagramStatus(nodes, xml, currentNodeId.value)
+        processNodes.value = draftReturn.nodes
+        completedNodeIds.value = draftReturn.completedNodeIds
+      } else {
+        processNodes.value = nodes
+        completedNodeIds.value = completed
+      }
     } catch (error) {
       console.error('Failed to parse BPMN XML:', error)
     }
@@ -696,6 +723,7 @@ export function useBpmnParser(options: {
     completedNodeIds,
     currentNodeId,
     bpmnXml,
+    diagramSuppressMode,
     parseBpmnXml,
     parseBpmnXmlAndGetFormId,
     parseBpmnXmlAndGetPreviousFormIds,

@@ -230,3 +230,76 @@ describe('parseBpmnXmlAndGetPreviousFormIds — MI field carry-forward scenarios
     expect(parseBpmnXmlAndGetPreviousFormIds(xml)).toEqual([])
   })
 })
+
+describe('parseBpmnXml — draft return diagram status', () => {
+  const draftReturnXml = bpmn(`
+    <bpmn:startEvent id="Start_1" />
+    ${userTask('UserTask_Submit', 'Submit', '10')}
+    ${userTask('UserTask_Approve1', 'Approve1', '11')}
+    ${userTask('UserTask_Approve2', 'Approve2', '12')}
+    <bpmn:endEvent id="End_1" />
+    ${flow('flow_s1', 'Start_1', 'UserTask_Submit')}
+    ${flow('flow_12', 'UserTask_Submit', 'UserTask_Approve1')}
+    ${flow('flow_23', 'UserTask_Approve1', 'UserTask_Approve2')}
+    ${flow('flow_3e', 'UserTask_Approve2', 'End_1')}
+  `)
+
+  it('first visit: normal completed/current colors apply', () => {
+    clearBpmnParseCache()
+    const taskInfo = ref({ taskDefinitionKey: 'UserTask_Submit', taskName: 'Submit' })
+    const historyRecords = ref<any[]>([])
+    const isCompletedTask = ref(false)
+    const { parseBpmnXml, processNodes, completedNodeIds, currentNodeId, diagramSuppressMode } =
+      useBpmnParser({ taskInfo, historyRecords, isCompletedTask })
+
+    parseBpmnXml(draftReturnXml)
+
+    expect(diagramSuppressMode.value).toBe('none')
+    expect(currentNodeId.value).toBe('UserTask_Submit')
+    expect(completedNodeIds.value).toContain('Start_1')
+    expect(processNodes.value.find(n => n.id === 'UserTask_Approve1')?.status).toBe('pending')
+  })
+
+  it('after draft return: keep current node, strip prior completed greens', () => {
+    clearBpmnParseCache()
+    const taskInfo = ref({ taskDefinitionKey: 'UserTask_Submit', taskName: 'Submit' })
+    const historyRecords = ref([
+      { nodeId: 'Start_1', nodeName: 'Start', status: 'completed', action: 'submit' },
+      { nodeId: 'UserTask_Submit', nodeName: 'Submit', status: 'completed', action: 'approve' },
+      { nodeId: 'UserTask_Approve1', nodeName: 'Approve1', status: 'completed', action: 'approve' },
+      { nodeId: 'UserTask_Approve1', nodeName: 'Approve1', status: 'completed', action: 'draft' },
+    ])
+    const isCompletedTask = ref(false)
+    const { parseBpmnXml, processNodes, completedNodeIds, currentNodeId, diagramSuppressMode } =
+      useBpmnParser({ taskInfo, historyRecords, isCompletedTask })
+
+    parseBpmnXml(draftReturnXml)
+
+    expect(diagramSuppressMode.value).toBe('draft-return')
+    expect(currentNodeId.value).toBe('UserTask_Submit')
+    expect(completedNodeIds.value).toContain('Start_1')
+    expect(processNodes.value.find(n => n.id === 'UserTask_Submit')?.status).toBe('current')
+    expect(processNodes.value.find(n => n.id === 'UserTask_Approve1')?.status).toBe('pending')
+    expect(processNodes.value.find(n => n.id === 'Start_1')?.status).toBe('completed')
+  })
+
+  it('after draft return without explicit draft history: infer from first-step re-open', () => {
+    clearBpmnParseCache()
+    const taskInfo = ref({ taskDefinitionKey: 'UserTask_Submit', taskName: 'Submit' })
+    const historyRecords = ref([
+      { nodeId: 'UserTask_Submit', nodeName: 'Submit', status: 'completed', action: 'approve' },
+      { nodeId: 'UserTask_Approve1', nodeName: 'Approve1', status: 'completed', action: 'approve' },
+    ])
+    const isCompletedTask = ref(false)
+    const { parseBpmnXml, processNodes, completedNodeIds, currentNodeId, diagramSuppressMode } =
+      useBpmnParser({ taskInfo, historyRecords, isCompletedTask })
+
+    parseBpmnXml(draftReturnXml)
+
+    expect(diagramSuppressMode.value).toBe('draft-return')
+    expect(currentNodeId.value).toBe('UserTask_Submit')
+    expect(completedNodeIds.value).toContain('Start_1')
+    expect(processNodes.value.find(n => n.id === 'UserTask_Approve1')?.status).toBe('pending')
+    expect(processNodes.value.find(n => n.id === 'Start_1')?.status).toBe('completed')
+  })
+})

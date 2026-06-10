@@ -160,6 +160,10 @@
                 :label="t('action.withdraw')"
                 value="WITHDRAW"
               />
+              <el-option
+                :label="t('action.draft')"
+                value="DRAFT"
+              />
             </el-option-group>
             <el-option-group :label="t('action.processOperations')">
               <el-option
@@ -568,6 +572,20 @@
           </el-form-item>
         </template>
 
+        <!-- Draft Config (return to first user task) -->
+        <template v-if="selectedAction.actionType === 'DRAFT'">
+          <el-divider>{{ t('action.draftConfig') }}</el-divider>
+          <el-form-item :label="t('action.requireComment')">
+            <el-switch v-model="actionConfig.requireComment" />
+          </el-form-item>
+          <el-form-item :label="t('action.confirmMessage')">
+            <el-input
+              v-model="actionConfig.confirmMessage"
+              :placeholder="t('action.draftConfirmPlaceholder')"
+            />
+          </el-form-item>
+        </template>
+
         <!-- Withdraw Config -->
         <template v-if="selectedAction.actionType === 'WITHDRAW'">
           <el-divider>{{ t('action.withdrawConfig') }}</el-divider>
@@ -824,6 +842,7 @@ const actionTypeLabel = (type: string) => {
     DELEGATE: t('action.delegate'),
     ROLLBACK: t('action.rollback'),
     WITHDRAW: t('action.withdraw'),
+    DRAFT: t('action.draft'),
     SAVE: t('action.saveDraft'),
     PROCESS_SUBMIT: t('action.processSubmit'),
     PROCESS_REJECT: t('action.processReject'),

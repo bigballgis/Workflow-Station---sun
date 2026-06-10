@@ -239,6 +239,20 @@ public class ProcessController {
         return ApiResponse.error(i18nService.getMessage("portal.urge_failed"));
     }
 
+    @PostMapping("/{processId}/return-to-first")
+    @Operation(summary = "退回第一个用户任务节点（起草）")
+    public ApiResponse<Void> returnProcessToFirstStep(
+            @CurrentUserId String userId,
+            @PathVariable String processId,
+            @RequestBody(required = false) Map<String, String> body) {
+        String comment = body != null ? body.get("comment") : null;
+        boolean success = processComponent.returnProcessToFirstStep(userId, processId, comment);
+        if (success) {
+            return ApiResponse.success(null);
+        }
+        return ApiResponse.error(i18nService.getMessage("portal.return_to_first_failed"));
+    }
+
     @PostMapping("/{processKey}/favorite")
     @Operation(summary = "切换收藏状态")
     public ApiResponse<Boolean> toggleFavorite(

@@ -202,7 +202,8 @@ public class TaskProcessComponent {
             case "APPROVE", "REJECT" -> handleApproval(task, request, userId);
             case "TRANSFER" -> handleTransfer(task, request, userId);
             case "DELEGATE" -> handleDelegate(task, request, userId);
-            case "RETURN" -> handleReturn(task, request, userId);
+            case "RETURN" -> handleReturn(task, request, userId, "RETURN");
+            case "DRAFT" -> handleReturn(task, request, userId, "DRAFT");
             default -> throw new PortalException("400", "Unsupported action type: " + action);
         }
     }
@@ -1444,7 +1445,7 @@ public class TaskProcessComponent {
      * Handles return (rollback) action
      * Via WorkflowEngineClient calling Flowable engine
      */
-    private void handleReturn(TaskInfo task, TaskCompleteRequest request, String userId) {
+    private void handleReturn(TaskInfo task, TaskCompleteRequest request, String userId, String returnKind) {
         String taskId = task.getTaskId();
         String targetActivityId = request.getReturnActivityId();
         
@@ -1456,9 +1457,9 @@ public class TaskProcessComponent {
             throw new IllegalStateException("Flowable engine unavailable, please check if workflow-engine-core service is running");
         }
         
-        log.info("Using Flowable engine to return task: {} to activity: {}", taskId, targetActivityId);
+        log.info("Using Flowable engine to return task: {} to activity: {} (kind={})", taskId, targetActivityId, returnKind);
         Optional<Map<String, Object>> result = workflowEngineClient.returnTask(
-            taskId, targetActivityId, userId, request.getComment());
+            taskId, targetActivityId, userId, request.getComment(), returnKind);
         
         if (result.isEmpty()) {
             throw new PortalException("500", "Failed to return task: " + taskId);
@@ -1471,17 +1472,18 @@ public class TaskProcessComponent {
         }
         
         // Record audit log
+        String auditOp = "DRAFT".equals(returnKind) ? "DRAFT_TASK" : "RETURN_TASK";
         DelegationAudit audit = DelegationAudit.builder()
                 .delegatorId(userId)
                 .delegateId(targetActivityId)
                 .taskId(taskId)
-                .operationType("RETURN_TASK")
+                .operationType(auditOp)
                 .operationResult("SUCCESS")
                 .operationDetail(request.getComment())
                 .build();
         delegationAuditRepository.save(audit);
         
-        log.info("Task {} returned via Flowable to activity {} by user {}", taskId, targetActivityId, userId);
+        log.info("Task {} returned via Flowable to activity {} (kind={}) by user {}", taskId, targetActivityId, returnKind, userId);
     }
 
     /**

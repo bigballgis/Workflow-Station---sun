@@ -720,8 +720,17 @@ public class WorkflowEngineClient {
     /**
      * Returns task to specified historic activity
      */
-    public Optional<Map<String, Object>> returnTask(String taskId, String targetActivityId, 
+    public Optional<Map<String, Object>> returnTask(String taskId, String targetActivityId,
                                                      String userId, String reason) {
+        return returnTask(taskId, targetActivityId, userId, reason, null);
+    }
+
+    /**
+     * Returns task to specified historic activity.
+     * @param returnKind {@code DRAFT} for return-to-first-step revision, {@code RETURN} or null for rollback
+     */
+    public Optional<Map<String, Object>> returnTask(String taskId, String targetActivityId,
+                                                     String userId, String reason, String returnKind) {
         if (!isAvailable()) {
             return Optional.empty();
         }
@@ -735,6 +744,9 @@ public class WorkflowEngineClient {
             request.put("targetActivityId", targetActivityId);
             request.put("userId", userId);
             request.put("reason", reason);
+            if (returnKind != null && !returnKind.isBlank()) {
+                request.put("returnKind", returnKind);
+            }
             
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);

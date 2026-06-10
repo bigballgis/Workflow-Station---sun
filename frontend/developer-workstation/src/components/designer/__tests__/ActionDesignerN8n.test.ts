@@ -16,7 +16,7 @@ interface N8nActionConfig {
 
 const ACTION_TYPE_LABELS: Record<string, string> = {
   APPROVE: 'approve', REJECT: 'reject', TRANSFER: 'transfer',
-  DELEGATE: 'delegate', ROLLBACK: 'rollback', WITHDRAW: 'withdraw',
+  DELEGATE: 'delegate', ROLLBACK: 'rollback', WITHDRAW: 'withdraw', DRAFT: 'draft',
   PROCESS_SUBMIT: 'processSubmit', PROCESS_REJECT: 'processReject',
   COMPOSITE: 'composite', API_CALL: 'apiCall', FORM_POPUP: 'formPopup',
   CUSTOM_SCRIPT: 'customScript', N8N_ACTION: 'N8N Action',

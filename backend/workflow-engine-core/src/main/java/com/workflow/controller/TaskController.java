@@ -215,6 +215,7 @@ public class TaskController {
         // Transfer-typed comments are tracked separately so we can inject synthetic TRANSFER entries.
         Map<String, String> taskComments = new HashMap<>();
         Map<String, String> taskReturnComments = new HashMap<>();
+        Map<String, String> taskDraftComments = new HashMap<>();
         // Same runtime userTask keeps one taskId across multiple transfers; keep every transfer comment.
         Map<String, List<Comment>> taskTransferCommentsByTaskId = new HashMap<>();
         try {
@@ -224,7 +225,16 @@ public class TaskController {
                     if (c.getTaskId() == null) continue;
                     if ("return".equals(c.getType())) {
                         if (c.getFullMessage() != null && !c.getFullMessage().isBlank()) {
-                            taskReturnComments.put(c.getTaskId(), c.getFullMessage());
+                            String msg = c.getFullMessage();
+                            if (isDraftReturnCommentMessage(msg)) {
+                                taskDraftComments.put(c.getTaskId(), msg);
+                            } else {
+                                taskReturnComments.put(c.getTaskId(), msg);
+                            }
+                        }
+                    } else if ("draft".equals(c.getType())) {
+                        if (c.getFullMessage() != null && !c.getFullMessage().isBlank()) {
+                            taskDraftComments.put(c.getTaskId(), c.getFullMessage());
                         }
                     } else if ("transfer".equals(c.getType())) {
                         taskTransferCommentsByTaskId.computeIfAbsent(c.getTaskId(), k -> new ArrayList<>()).add(c);
@@ -276,7 +286,9 @@ public class TaskController {
                         operationType = "GATEWAY";
                     } else if ("userTask".equals(activityType)) {
                         String taskIdForActivity = activity.getTaskId();
-                        if (taskIdForActivity != null && taskReturnComments.containsKey(taskIdForActivity)) {
+                        if (taskIdForActivity != null && taskDraftComments.containsKey(taskIdForActivity)) {
+                            operationType = "DRAFT";
+                        } else if (taskIdForActivity != null && taskReturnComments.containsKey(taskIdForActivity)) {
                             operationType = "RETURN";
                         } else {
                             // Use deleteReason to distinguish APPROVE vs REJECT vs rollback
@@ -351,11 +363,15 @@ public class TaskController {
                 String taskId = activity.getTaskId();
                 String comment = null;
                 if (taskId != null) {
-                    comment = taskReturnComments.get(taskId);
+                    comment = taskDraftComments.get(taskId);
+                    if (comment == null) {
+                        comment = taskReturnComments.get(taskId);
+                    }
                     if (comment == null) {
                         comment = taskComments.get(taskId);
                     }
-                    if (comment == null && !"RETURN".equals(operationType) && taskDeleteReasons.containsKey(taskId)) {
+                    if (comment == null && !"RETURN".equals(operationType) && !"DRAFT".equals(operationType)
+                            && taskDeleteReasons.containsKey(taskId)) {
                         comment = taskDeleteReasons.get(taskId);
                     }
                 }
@@ -438,6 +454,15 @@ public class TaskController {
                 || deleteReasonLower.contains("changeactivity")
                 || deleteReasonLower.contains("rollback")
                 || deleteReasonLower.contains("returned to");
+    }
+
+    /** Draft returns use comment prefix when Flowable stores type as {@code return}. */
+    private static boolean isDraftReturnCommentMessage(String message) {
+        if (message == null || message.isBlank()) {
+            return false;
+        }
+        String trimmed = message.trim();
+        return trimmed.regionMatches(true, 0, "Drafted to ", 0, "Drafted to ".length());
     }
 
     /**
@@ -635,8 +660,8 @@ public class TaskController {
         }
         request.setUserId(actor.get());
 
-        log.info("Returning task: {} to activity: {} by user: {}",
-                taskId, request.getTargetActivityId(), request.getUserId());
+        log.info("Returning task: {} to activity: {} by user: {} (returnKind={})",
+                taskId, request.getTargetActivityId(), request.getUserId(), request.getReturnKind());
         
         TaskAssignmentResult result = taskManagerComponent.returnTask(taskId, request);
         

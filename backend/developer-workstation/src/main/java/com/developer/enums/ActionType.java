@@ -16,6 +16,8 @@ public enum ActionType {
     ROLLBACK,
     /** 默认动作 - 撤回 */
     WITHDRAW,
+    /** 默认动作 - 退回第一个用户任务节点（起草/修改） */
+    DRAFT,
     /** 取消/撤回操作 */
     CANCEL,
     /** 保存草稿 */

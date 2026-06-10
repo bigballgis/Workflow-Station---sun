@@ -241,6 +241,12 @@ export default {
     rollbackConfirmTitle: 'Confirm rollback',
     rollbackSuccess: 'Returned to previous node successfully',
     rollbackFailed: 'Rollback failed',
+    draftNoTask: 'Cannot return to draft: task is missing',
+    draftNoTarget: 'No first step available to return to',
+    draftConfirm: 'Return the process to "{node}" (first step) for revision?',
+    draftConfirmTitle: 'Confirm return to draft',
+    draftSuccess: 'Returned to first step successfully',
+    draftFailed: 'Return to draft failed',
     formNotFound: 'Form not found: {name}',
     formMissingId: 'Form config missing formId',
     formOpenFailed: 'Failed to open form',
@@ -447,7 +453,12 @@ export default {
     withdrawConfirm: 'Are you sure to withdraw this process?',
     withdrawSuccess: 'Withdrawn successfully',
     withdrawFailed: 'Withdraw failed',
-    userWithdraw: 'User withdrawal'
+    userWithdraw: 'User withdrawal',
+    returnToDraft: 'Draft',
+    returnToDraftConfirm: 'Return this process to the first step for revision?',
+    returnToDraftConfirmTitle: 'Confirm return to draft',
+    returnToDraftSuccess: 'Returned to first step successfully',
+    returnToDraftFailed: 'Return to draft failed'
   },
   delegation: {
     title: 'Delegations',
@@ -822,6 +833,7 @@ export default {
     withdraw: 'Withdraw',
     submit: 'Submit',
     return: 'Rollback',
+    draft: 'Draft',
     completed: 'Completed'
   },
   upload: {

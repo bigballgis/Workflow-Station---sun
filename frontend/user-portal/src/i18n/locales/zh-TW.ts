@@ -241,6 +241,12 @@ export default {
     rollbackConfirmTitle: '確認回退',
     rollbackSuccess: '已回退到上一節點',
     rollbackFailed: '回退失敗',
+    draftNoTask: '無法退回起草：缺少任務資訊',
+    draftNoTarget: '沒有可退回的第一個節點',
+    draftConfirm: '確定將流程退回到「{node}」（第一個節點）供修改嗎？',
+    draftConfirmTitle: '確認退回起草',
+    draftSuccess: '已退回到第一個節點',
+    draftFailed: '退回起草失敗',
     formNotFound: '未找到表單: {name}',
     formMissingId: '表單配置缺少 formId',
     formOpenFailed: '開啟表單失敗',
@@ -406,7 +412,12 @@ export default {
     withdrawConfirm: '確定要撤回該流程嗎？',
     withdrawSuccess: '撤回成功',
     withdrawFailed: '撤回失敗',
-    userWithdraw: '使用者主動撤回'
+    userWithdraw: '使用者主動撤回',
+    returnToDraft: '起草',
+    returnToDraftConfirm: '確定將流程退回到第一個節點供修改嗎？',
+    returnToDraftConfirmTitle: '確認退回起草',
+    returnToDraftSuccess: '已退回到第一個節點',
+    returnToDraftFailed: '退回起草失敗'
   },
   delegation: {
     title: '委託管理',
@@ -794,6 +805,7 @@ export default {
     withdraw: '撤回',
     submit: '提交',
     return: '回退',
+    draft: '起草',
     completed: '已完成'
   },
   upload: {

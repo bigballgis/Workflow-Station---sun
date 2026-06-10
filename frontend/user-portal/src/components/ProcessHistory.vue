@@ -151,7 +151,7 @@ export interface HistoryRecord {
   assigneeId?: string
   assigneeName?: string
   status: 'completed' | 'current' | 'pending' | 'rejected' | 'cancelled'
-  action?: 'approve' | 'reject' | 'transfer' | 'delegate' | 'withdraw' | 'submit' | 'return'
+  action?: 'approve' | 'reject' | 'transfer' | 'delegate' | 'withdraw' | 'submit' | 'return' | 'draft'
   comment?: string
   createdTime: string
   completedTime?: string
@@ -250,7 +250,8 @@ const getActionText = (action: string) => {
     delegate: t('action.delegate'),
     withdraw: t('action.withdraw'),
     submit: t('action.submit'),
-    return: t('action.return')
+    return: t('action.return'),
+    draft: t('action.draft')
   }
   return actionMap[action] || action
 }
@@ -383,6 +384,10 @@ const handleDownload = (file: { id: string; name: string; url: string }) => {
             &.transfer,
             &.delegate {
               color: #FF6600;
+            }
+
+            &.draft {
+              color: #409EFF;
             }
           }
 

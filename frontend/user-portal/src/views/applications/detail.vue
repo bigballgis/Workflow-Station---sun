@@ -117,7 +117,8 @@
             :completed-node-ids="completedNodeIds"
             :selected-node-id="selectedNodeId ?? ''"
             :show-toolbar="true"
-            :show-legend="true"
+            :show-legend="diagramSuppressMode === 'none'"
+            :show-current-step="diagramSuppressMode !== 'full' && processInfo.status === 'RUNNING'"
             @node-click="handleDiagramNodeClick"
           />
           <el-empty
@@ -500,6 +501,12 @@ import {
 } from '@/composables/tasks/miSubProcessScope'
 import { USER_ID_KEY, USER_KEY } from '@/api/auth'
 import { clearBpmnParseCache, getCachedBpmnDocument } from '@/utils/bpmnParseCache'
+import {
+  applyDraftReturnDiagramStatus,
+  applyFullNeutralDiagramStatus,
+  resolveDiagramStatusSuppressMode,
+  type DiagramStatusSuppressMode,
+} from '@/utils/bpmnDiagramDraftReturn'
 
 const route = useRoute()
 const router = useRouter()
@@ -557,6 +564,7 @@ const processNodes = ref<ProcessNode[]>([])
 const processFlows = ref<ProcessFlow[]>([])
 const currentNodeId = ref('')
 const completedNodeIds = ref<string[]>([])
+const diagramSuppressMode = ref<DiagramStatusSuppressMode>('none')
 const bpmnXml = ref('')
 const activeMiSubProcessScope = ref<MiSubProcessScopeConfig | null>(null)
 const miMissingPrimaryKeyWarned = new Set<string>()
@@ -3015,6 +3023,7 @@ const parseBpmnXml = (xml: string) => {
     const nodes: ProcessNode[] = []
     const flows: ProcessFlow[] = []
     const completed: string[] = []
+    currentNodeId.value = ''
     // Only enable snapshot view while process is RUNNING; show real completed state when ended (avoid orange Current Step)
     const snapshotNodeKey = snapshotActivityId.value || snapshotTaskDefinitionKey || snapshotTaskName || ''
     const snapshotActive = !!(snapshotNodeKey && processInfo.value.status === 'RUNNING')
@@ -3390,8 +3399,15 @@ const parseBpmnXml = (xml: string) => {
       const parentSpId = getParentSubProcessId(task)
       const inActiveMi = !!(parentSpId && activeMultiInstanceSubProcesses.has(parentSpId))
 
-      // Prefer status from history records
       const historyStatus = nodeStatusMap.get(name)
+      const openTaskMatches =
+        processInfo.value.status === 'RUNNING'
+        && !snapshotActive
+        && !inActiveMi
+        && (
+          normLabDiag(name) === normLabDiag(currentNodeName)
+          || ckDiag(id) === ckDiag(currentNodeName)
+        )
       if (snapshotActive) {
         // Snapshot mode: only show status up to snapshotTaskName
         if (name === snapshotNodeKey || id === snapshotNodeKey) {
@@ -3463,6 +3479,11 @@ const parseBpmnXml = (xml: string) => {
             }
           }
         }
+      } else if (openTaskMatches) {
+        /** Align with todo (`useBpmnParser`): open task wins over stale completed history after draft return. */
+        status = 'current'
+        currentNodeId.value = id
+        foundCurrentNode = true
       } else if (historyStatus) {
         status = historyStatus
         if (status === 'completed' || status === 'rejected') {
@@ -3679,9 +3700,26 @@ const parseBpmnXml = (xml: string) => {
       flows.push({ id, sourceRef: flow.getAttribute('sourceRef') || '', targetRef: flow.getAttribute('targetRef') || '', name: flow.getAttribute('name') || '', waypoints: waypointsMap.get(id) })
     })
     
-    processNodes.value = nodes
+    const suppressMode = resolveDiagramStatusSuppressMode(xml, {
+      currentTaskName: processInfo.value.currentNode || '',
+      currentTaskDefinitionKey: currentNodeId.value || undefined,
+      historyRecords: historyRecords.value,
+    })
+    diagramSuppressMode.value = suppressMode
     processFlows.value = flows
-    completedNodeIds.value = completed
+    if (suppressMode === 'full') {
+      const neutral = applyFullNeutralDiagramStatus(nodes)
+      processNodes.value = neutral.nodes
+      completedNodeIds.value = neutral.completedNodeIds
+      currentNodeId.value = neutral.currentNodeId
+    } else if (suppressMode === 'draft-return') {
+      const draftReturn = applyDraftReturnDiagramStatus(nodes, xml, currentNodeId.value)
+      processNodes.value = draftReturn.nodes
+      completedNodeIds.value = draftReturn.completedNodeIds
+    } else {
+      processNodes.value = nodes
+      completedNodeIds.value = completed
+    }
   } catch (error) {
     console.error('Failed to parse BPMN XML:', error)
   }
@@ -4598,21 +4636,24 @@ const getHistoryStatus = (operationType: string): 'completed' | 'current' | 'pen
     'DELEGATE': 'completed',
     'TRANSFER': 'completed',
     'RETURN': 'completed',
+    'DRAFT': 'completed',
     'CLAIM': 'completed',
     'PENDING': 'current'
   }
   return map[operationType] || 'completed'
 }
 
-const getHistoryAction = (operationType: string): 'approve' | 'reject' | 'transfer' | 'delegate' | 'withdraw' | 'submit' | 'return' | undefined => {
-  const map: Record<string, 'approve' | 'reject' | 'transfer' | 'delegate' | 'withdraw' | 'submit' | 'return'> = {
+const getHistoryAction = (operationType: string): 'approve' | 'reject' | 'transfer' | 'delegate' | 'withdraw' | 'submit' | 'return' | 'draft' | undefined => {
+  const map: Record<string, 'approve' | 'reject' | 'transfer' | 'delegate' | 'withdraw' | 'submit' | 'return' | 'draft'> = {
     SUBMIT: 'submit',
     APPROVE: 'approve',
     REJECT: 'reject',
     TRANSFER: 'transfer',
     DELEGATE: 'delegate',
     WITHDRAW: 'withdraw',
-    RETURN: 'return'
+    RETURN: 'return',
+    DRAFT: 'draft',
+    DRAFT_TASK: 'draft',
   }
   return map[operationType]
 }

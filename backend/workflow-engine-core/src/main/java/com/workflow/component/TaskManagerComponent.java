@@ -2390,17 +2390,19 @@ public class TaskManagerComponent {
     private void recordReturnTaskComment(String taskId, String processInstanceId, Task currentTask,
                                        String targetActivityId, TaskReturnRequest request) {
         String targetLabel = resolveActivityDisplayName(currentTask.getProcessDefinitionId(), targetActivityId);
+        boolean draft = request.isDraftReturn();
         StringBuilder msg = new StringBuilder();
-        msg.append("Returned to ").append(targetLabel);
+        msg.append(draft ? "Drafted to " : "Returned to ").append(targetLabel);
         if (request.getReason() != null && !request.getReason().isBlank()) {
             msg.append(": ").append(request.getReason().trim());
         }
+        String commentType = draft ? "draft" : "return";
         String previousActor = Authentication.getAuthenticatedUserId();
         try {
             Authentication.setAuthenticatedUserId(request.getUserId());
-            taskService.addComment(taskId, processInstanceId, "return", msg.toString());
+            taskService.addComment(taskId, processInstanceId, commentType, msg.toString());
         } catch (Exception e) {
-            log.warn("Failed to record return comment on task {}: {}", taskId, e.getMessage());
+            log.warn("Failed to record {} comment on task {}: {}", commentType, taskId, e.getMessage());
         } finally {
             Authentication.setAuthenticatedUserId(previousActor);
         }

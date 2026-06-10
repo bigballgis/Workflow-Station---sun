@@ -1332,6 +1332,7 @@ const actionTypeLabel = (type: string) => {
     DELEGATE: t('action.delegate'),
     ROLLBACK: t('action.rollback'),
     WITHDRAW: t('action.withdraw'),
+    DRAFT: t('action.draft'),
     SAVE: t('action.saveDraft'),
     PROCESS_SUBMIT: t('action.processSubmit'),
     PROCESS_REJECT: t('action.processReject'),

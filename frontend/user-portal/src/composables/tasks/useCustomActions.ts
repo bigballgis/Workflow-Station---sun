@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router'
 import { completeTask, getReturnableActivities, type ReturnableActivity } from '@/api/task'
 import { processApi } from '@/api/process'
 import { applyAutoFill } from '@/utils/n8nAutoFillEngine'
+import { resolveRollbackTargetActivityId } from '@/utils/taskReturnTarget'
 import type { TaskActionInfo } from '@/api/task'
 import type { FormField, FormTab, PortalViewContext } from '@/components/formRendererHelpers'
 
@@ -119,6 +120,9 @@ export function useCustomActions(options: {
       case 'ROLLBACK':
         handleRollbackAction(action)
         break
+      case 'DRAFT':
+        handleDraftAction(action)
+        break
       case 'WITHDRAW':
         handleWithdrawAction(action)
         break
@@ -163,36 +167,23 @@ export function useCustomActions(options: {
     }
   }
 
-  function resolveRollbackTargetActivityId(
+  async function handleReturnToActivityAction(
+    action: TaskActionInfo,
     targetStep: string,
-    config: Record<string, unknown>,
-    activities: ReturnableActivity[],
-  ): { activityId: string; taskName?: string } | null {
-    if (!activities.length) return null
-    const step = (targetStep || 'previous').trim().toLowerCase()
-    if (step === 'initiator') {
-      const last = activities[activities.length - 1]
-      return last?.taskId ? { activityId: last.taskId, taskName: last.taskName } : null
-    }
-    if (step === 'specific') {
-      const configured =
-        (typeof config.targetActivityId === 'string' && config.targetActivityId.trim())
-        || (typeof config.activityId === 'string' && config.activityId.trim())
-        || ''
-      if (configured) {
-        const hit = activities.find((a) => a.taskId === configured)
-        return { activityId: configured, taskName: hit?.taskName }
-      }
-    }
-    const first = activities[0]
-    return first?.taskId ? { activityId: first.taskId, taskName: first.taskName } : null
-  }
-
-  async function handleRollbackAction(action: TaskActionInfo) {
+    completeAction: 'DRAFT' | 'RETURN',
+    messages: {
+      noTask: string
+      noTarget: string
+      confirm: (node: string) => string
+      confirmTitle: string
+      success: string
+      failed: string
+    },
+  ) {
     const taskId =
       (options.taskInfo.value?.id ?? options.taskInfo.value?.taskId) as string | undefined
     if (!taskId) {
-      ElMessage.error(t('task.rollbackNoTask'))
+      ElMessage.error(messages.noTask)
       return
     }
     let config: Record<string, unknown> = {}
@@ -201,10 +192,6 @@ export function useCustomActions(options: {
     } catch {
       config = {}
     }
-    const targetStep =
-      typeof config.targetStep === 'string' && config.targetStep.trim()
-        ? config.targetStep
-        : 'previous'
 
     let comment = ''
     if (config.requireComment === true) {
@@ -232,37 +219,69 @@ export function useCustomActions(options: {
       const list = Array.isArray(activities) ? activities : []
       const target = resolveRollbackTargetActivityId(targetStep, config, list)
       if (!target) {
-        ElMessage.error(t('task.rollbackNoTarget'))
+        ElMessage.error(messages.noTarget)
         return
       }
       const nodeLabel = target.taskName || target.activityId
+      const confirmMsg =
+        (typeof config.confirmMessage === 'string' && config.confirmMessage.trim())
+          ? String(config.confirmMessage).trim()
+          : messages.confirm(nodeLabel)
       try {
-        await ElMessageBox.confirm(
-          t('task.rollbackConfirm', { node: nodeLabel }),
-          t('task.rollbackConfirmTitle'),
-          { type: 'warning' },
-        )
+        await ElMessageBox.confirm(confirmMsg, messages.confirmTitle, { type: 'warning' })
       } catch {
         return
       }
       await completeTask(taskId, {
         taskId,
-        action: 'RETURN',
+        action: completeAction,
         comment,
         returnActivityId: target.activityId,
       })
-      ElMessage.success(t('task.rollbackSuccess'))
+      ElMessage.success(messages.success)
       await router.push('/tasks')
     } catch (err: unknown) {
       const msg =
         err && typeof err === 'object' && 'message' in err
         && typeof (err as { message: unknown }).message === 'string'
           ? (err as { message: string }).message
-          : t('task.rollbackFailed')
+          : messages.failed
       ElMessage.error(msg)
     } finally {
       options.submitting.value = false
     }
+  }
+
+  async function handleRollbackAction(action: TaskActionInfo) {
+    let config: Record<string, unknown> = {}
+    try {
+      config = action.configJson ? JSON.parse(action.configJson) : {}
+    } catch {
+      config = {}
+    }
+    const targetStep =
+      typeof config.targetStep === 'string' && config.targetStep.trim()
+        ? config.targetStep
+        : 'previous'
+    await handleReturnToActivityAction(action, targetStep, 'RETURN', {
+      noTask: t('task.rollbackNoTask'),
+      noTarget: t('task.rollbackNoTarget'),
+      confirm: (node) => t('task.rollbackConfirm', { node }),
+      confirmTitle: t('task.rollbackConfirmTitle'),
+      success: t('task.rollbackSuccess'),
+      failed: t('task.rollbackFailed'),
+    })
+  }
+
+  async function handleDraftAction(action: TaskActionInfo) {
+    await handleReturnToActivityAction(action, 'first', 'DRAFT', {
+      noTask: t('task.draftNoTask'),
+      noTarget: t('task.draftNoTarget'),
+      confirm: (node) => t('task.draftConfirm', { node }),
+      confirmTitle: t('task.draftConfirmTitle'),
+      success: t('task.draftSuccess'),
+      failed: t('task.draftFailed'),
+    })
   }
 
   async function handleWithdrawAction(action: TaskActionInfo) {
