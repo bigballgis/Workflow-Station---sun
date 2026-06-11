@@ -32,7 +32,7 @@
         <!-- Spring Boot -->
         <spring-boot.version>3.2.1</spring-boot.version>
         <tomcat.version>10.1.55</tomcat.version>
-        <spring-security.version>6.5.1</spring-security.version>
+        <spring-security.version>6.5.9</spring-security.version>
         <spring-cloud.version>2023.0.0</spring-cloud.version>
         
         <!-- Database -->
@@ -83,13 +83,38 @@
                 <scope>import</scope>
             </dependency>
 
-            <!-- Spring Security (Boot 3.2.1 BOM ships 6.2.1; pinned to 6.5.1) -->
+            <!-- Spring Security (Boot 3.2.1 BOM ships 6.2.1; pin full stack to 6.5.9) -->
             <dependency>
                 <groupId>org.springframework.security</groupId>
                 <artifactId>spring-security-bom</artifactId>
                 <version>${spring-security.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.springframework.security</groupId>
+                <artifactId>spring-security-config</artifactId>
+                <version>${spring-security.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.springframework.security</groupId>
+                <artifactId>spring-security-core</artifactId>
+                <version>${spring-security.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.springframework.security</groupId>
+                <artifactId>spring-security-crypto</artifactId>
+                <version>${spring-security.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.springframework.security</groupId>
+                <artifactId>spring-security-web</artifactId>
+                <version>${spring-security.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.springframework.security</groupId>
+                <artifactId>spring-security-test</artifactId>
+                <version>${spring-security.version}</version>
             </dependency>
 
             <!-- Embedded Tomcat -->
@@ -107,11 +132,6 @@
                 <groupId>org.apache.tomcat.embed</groupId>
                 <artifactId>tomcat-embed-websocket</artifactId>
                 <version>${tomcat.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.springframework.security</groupId>
-                <artifactId>spring-security-web</artifactId>
-                <version>${spring-security.version}</version>
             </dependency>
 
             <!-- Platform Modules -->
