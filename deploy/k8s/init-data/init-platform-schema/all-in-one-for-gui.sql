@@ -110,7 +110,7 @@ CREATE TABLE IF NOT EXISTS sys_business_units (
     path VARCHAR(500),
     sort_order INTEGER,
     status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
-    display_name TEXT,
+    description TEXT,
     cost_center VARCHAR(50),
     location VARCHAR(200),
     phone VARCHAR(50),

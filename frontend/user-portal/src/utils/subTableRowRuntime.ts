@@ -272,6 +272,72 @@ function parentRowHasRequiredPk(
   return true
 }
 
+/** Allocate auto-PKs on a child row (Save path). Honors MI participant seed skip rules. */
+export async function allocateChildRowAutoPrimaryKeys(options: {
+  row: Record<string, unknown>
+  fieldDefinitions: BindingFieldDefinition[]
+  tableId: number
+  allocatePrimaryKeys: AllocatePrimaryKeysFn
+  functionUnitId?: string
+  bindingLinkMode?: BindingLinkMode | string | null
+  bindingForeignKeyField?: string | null
+  primaryKeyFields?: string[] | null
+  miParticipantRowId?: string | number | null
+}): Promise<Record<string, unknown>> {
+  const {
+    row: inputRow,
+    fieldDefinitions,
+    tableId,
+    allocatePrimaryKeys,
+    functionUnitId,
+  } = options
+  const legacyFk = options.bindingForeignKeyField?.trim()
+  const legacyFkIsRowPk =
+    !!legacyFk
+    && bindingForeignKeyFieldIsRowPrimaryKey(legacyFk, {
+      primaryKeyFields: options.primaryKeyFields,
+      fieldDefinitions,
+    })
+  const miParticipantSeedPresent =
+    options.miParticipantRowId != null && String(options.miParticipantRowId).trim() !== ''
+
+  let row = { ...inputRow }
+  const normalizedFields = fieldDefinitions.map(f =>
+    normalizeFieldDefinitionForRuntime(f as RuntimeFieldDefinition),
+  )
+  const pendingPk = normalizedFields.filter(field => {
+    if (!pkNeedsAllocation(field)) return false
+    if (
+      options.bindingLinkMode === 'miParticipantRow'
+      && legacyFkIsRowPk
+      && field.fieldName === legacyFk
+      && miParticipantSeedPresent
+    ) {
+      return false
+    }
+    const existing = row[field.fieldName]
+    return existing == null || String(existing).trim() === ''
+  })
+  if (pendingPk.length === 0) return row
+
+  const allocated = await Promise.all(
+    pendingPk.map(async field => {
+      const values = await allocatePrimaryKeys({
+        tableId: Number(tableId),
+        fieldName: field.fieldName,
+        scopeKey: functionUnitId,
+      })
+      return { fieldName: field.fieldName, value: values?.[0] }
+    }),
+  )
+  for (const { fieldName, value } of allocated) {
+    if (value != null) {
+      row = { ...row, [fieldName]: value }
+    }
+  }
+  return row
+}
+
 async function allocateAutoPrimaryKeysForRow(
   fieldDefinitions: BindingFieldDefinition[],
   tableId: number,
@@ -420,6 +486,13 @@ export async function prepareSubTableAddRow(options: {
   allocatePrimaryKeys?: AllocatePrimaryKeysFn
   requireFkGuard?: boolean
   autoEnsurePrimaryRecord?: boolean
+  /**
+   * When true, all PK allocation (parent + child) is deferred until Save.
+   * Add dialog opens without allocating keys; FK fill uses existing parent values only.
+   */
+  deferPkAllocationUntilSave?: boolean
+  /** @deprecated Use deferPkAllocationUntilSave */
+  deferChildPkAllocationUntilSave?: boolean
   bindingLinkMode?: BindingLinkMode | string | null
   bindingForeignKeyField?: string | null
   primaryKeyFields?: string[] | null
@@ -452,7 +525,11 @@ export async function prepareSubTableAddRow(options: {
 
   let primaryFormDataPatch: Record<string, unknown> | undefined
 
-  if (requireFkGuard && fkMetas.length > 0) {
+  const deferPkUntilSave =
+    options.deferPkAllocationUntilSave === true
+    || options.deferChildPkAllocationUntilSave === true
+
+  if (requireFkGuard && fkMetas.length > 0 && !deferPkUntilSave) {
     let missing = guardBeforeChildRowAdd(fkMetas, rowAddContext)
     if (
       missing.length > 0
@@ -496,53 +573,128 @@ export async function prepareSubTableAddRow(options: {
     miParentTableId: options.miParentTableId,
   })
 
-  const legacyFk = options.bindingForeignKeyField?.trim()
-  const legacyFkIsRowPk =
-    !!legacyFk
-    && bindingForeignKeyFieldIsRowPrimaryKey(legacyFk, {
-      primaryKeyFields: options.primaryKeyFields,
+  if (tableId != null && allocatePrimaryKeys && !deferPkUntilSave) {
+    row = await allocateChildRowAutoPrimaryKeys({
+      row,
       fieldDefinitions,
+      tableId: Number(tableId),
+      allocatePrimaryKeys,
+      functionUnitId: options.functionUnitId ?? undefined,
+      bindingLinkMode: options.bindingLinkMode,
+      bindingForeignKeyField: options.bindingForeignKeyField,
+      primaryKeyFields: options.primaryKeyFields,
+      miParticipantRowId: options.miParticipantRowId,
     })
-
-  if (tableId != null && allocatePrimaryKeys) {
-    const normalizedFields = fieldDefinitions.map(f =>
-      normalizeFieldDefinitionForRuntime(f as RuntimeFieldDefinition),
-    )
-    const pendingPk = normalizedFields.filter(field => {
-      if (!pkNeedsAllocation(field)) return false
-      if (
-        options.bindingLinkMode === 'miParticipantRow'
-        && legacyFkIsRowPk
-        && field.fieldName === legacyFk
-      ) {
-        return false
-      }
-      const existing = row[field.fieldName]
-      return existing == null || String(existing).trim() === ''
-    })
-    if (pendingPk.length > 0) {
-      const allocated = await Promise.all(
-        pendingPk.map(async field => {
-          const values = await allocatePrimaryKeys({
-            tableId: Number(tableId),
-            fieldName: field.fieldName,
-            scopeKey: options.functionUnitId ?? undefined,
-          })
-          return { fieldName: field.fieldName, value: values?.[0] }
-        }),
-      )
-      for (const { fieldName, value } of allocated) {
-        if (value != null) {
-          row[fieldName] = value
-        }
-      }
-    }
   }
 
   return {
     ok: true,
     initialRow: row,
     dialogColumns: visibleColumns,
+    ...(primaryFormDataPatch ? { primaryFormDataPatch } : {}),
+  }
+}
+
+/**
+ * Save-time orchestration: ensure parent auto-PKs → fill structural FKs → allocate child auto-PKs.
+ * Parent keys are always allocated before child keys when the main row is still empty.
+ */
+export async function finalizeSubTableRowOnSave(options: {
+  row: Record<string, unknown>
+  fieldDefinitions?: BindingFieldDefinition[]
+  rowAddContext: RowAddContext
+  tableId: number
+  allocatePrimaryKeys: AllocatePrimaryKeysFn
+  functionUnitId?: string
+  parentTablesById?: Record<number, { fieldDefinitions: BindingFieldDefinition[] }>
+  primaryTableId?: number | null
+  primaryTableDisplayName?: string
+  tableDisplayName?: string
+  autoEnsurePrimaryRecord?: boolean
+  bindingLinkMode?: BindingLinkMode | string | null
+  bindingForeignKeyField?: string | null
+  primaryKeyFields?: string[] | null
+  miParticipantRowId?: string | number | null
+  miParentParticipantRow?: Record<string, unknown> | null
+  miParentTableId?: number | null
+  t?: (key: string, params?: Record<string, unknown>) => string
+}): Promise<
+  | { ok: true; row: Record<string, unknown>; primaryFormDataPatch?: Record<string, unknown> }
+  | { ok: false; message: string }
+> {
+  const {
+    row: inputRow,
+    fieldDefinitions = [],
+    allocatePrimaryKeys,
+    parentTablesById,
+    autoEnsurePrimaryRecord = false,
+    t = (k) => k,
+  } = options
+
+  let rowAddContext = options.rowAddContext
+  const fkMetas = filterStructuralFkMetasForBinding(toFieldFkMetas(fieldDefinitions), {
+    bindingLinkMode: options.bindingLinkMode,
+    bindingForeignKeyField: options.bindingForeignKeyField,
+  })
+
+  let primaryFormDataPatch: Record<string, unknown> | undefined
+
+  if (fkMetas.length > 0) {
+    let missing = guardBeforeChildRowAdd(fkMetas, rowAddContext)
+    if (
+      missing.length > 0
+      && autoEnsurePrimaryRecord
+      && parentTablesById
+      && Object.keys(parentTablesById).length > 0
+    ) {
+      const ensured = await ensureParentRowsForChildAdd({
+        fkMetas,
+        rowAddContext,
+        parentTablesById,
+        allocatePrimaryKeys,
+        functionUnitId: options.functionUnitId,
+        primaryTableId: options.primaryTableId,
+      })
+      rowAddContext = ensured.rowAddContext
+      primaryFormDataPatch = ensured.primaryFormDataPatch
+      missing = guardBeforeChildRowAdd(fkMetas, rowAddContext)
+    }
+    if (missing.length > 0) {
+      const parentName = options.primaryTableDisplayName || t('subTable.mainTableDefault')
+      const childName = options.tableDisplayName || t('subTable.childTableDefault')
+      return {
+        ok: false,
+        message: t('subTable.fkGuardMainNotReady', { parentTableName: parentName, childTableName: childName }),
+      }
+    }
+  }
+
+  let row = applyFkToInitialRow({ ...inputRow }, fkMetas, rowAddContext)
+  row = applyMiParticipantRowSeedToInitialRow(row, {
+    fieldDefinitions,
+    bindingLinkMode: options.bindingLinkMode,
+    bindingForeignKeyField: options.bindingForeignKeyField,
+    primaryKeyFields: options.primaryKeyFields,
+    miParticipantRowId: options.miParticipantRowId,
+    miParentParticipantRow: options.miParentParticipantRow,
+    miParentTableId: options.miParentTableId,
+  })
+
+  row = await allocateChildRowAutoPrimaryKeys({
+    row,
+    fieldDefinitions,
+    tableId: options.tableId,
+    allocatePrimaryKeys,
+    functionUnitId: options.functionUnitId,
+    bindingLinkMode: options.bindingLinkMode,
+    bindingForeignKeyField: options.bindingForeignKeyField,
+    primaryKeyFields: options.primaryKeyFields,
+    miParticipantRowId: options.miParticipantRowId,
+  })
+
+  return {
+    ok: true,
+    row,
     ...(primaryFormDataPatch ? { primaryFormDataPatch } : {}),
   }
 }

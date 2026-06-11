@@ -205,6 +205,7 @@
                 :title="binding.tableName"
                 :columns="binding.columns"
                 :editable="false"
+                :primary-form-data="formData"
                 :assignee-field="resolveBindingAssigneeField(binding)"
                 :show-task-status="shouldShowBindingTaskStatus(binding)"
                 :show-view-detail="shouldShowBindingDetailsModal(binding)"
@@ -300,6 +301,7 @@
                 :title="binding.tableName"
                 :columns="binding.columns"
                 :editable="false"
+                :primary-form-data="formData"
                 :assignee-field="resolveBindingAssigneeField(binding)"
                 :show-task-status="shouldShowBindingTaskStatus(binding)"
                 :show-view-detail="shouldShowBindingDetailsModal(binding)"
@@ -487,8 +489,12 @@ import {
   isSharedAttachmentFileBinding,
   isFileOnlySubTableBinding,
   isMiParticipantScopedSubTableBinding,
+  isMiDashboardSubTableBinding,
   filterRowsForMiParticipantSubTableBinding,
   filterRowsForSharedProcessSubTableBinding,
+  filterRowsForMiCollectionSubTableBinding,
+  collapseMiLinkChildRowsToOnePerParticipant,
+  getSavedSubTableRows,
 } from '@/composables/tasks/shared'
 import {
   resolveMiSubProcessScopeFromBpmn,
@@ -1003,6 +1009,7 @@ function alignMainSubTableBindingsOnly() {
   applyUnionFindMergeToBindingList(main)
   enrichChildBindingRowsFromParentsNestedSubTables(subTableBindings.value)
   resyncMiDashboardFieldsFromVariablesOnBindings(main)
+  hydrateMiLinkChildBindingsForInitiatorMyRequest()
   backfillSubTableBindingsFromVariables(main)
   applySharedAttachmentHydrationToAllBindings()
 }
@@ -1029,6 +1036,7 @@ function alignProcessSubTableBindingsBySharedTable() {
     ...Array.from(nodeFormMap.value.values()).flatMap(n => n.subTableBindings)
   ])
   resyncMiDashboardFieldsFromVariablesOnBindings(all)
+  hydrateMiLinkChildBindingsForInitiatorMyRequest()
   filterRunningMiBindingsByProcessDesignScope(subTableBindings.value)
   for (const prevForm of previousForms.value) {
     filterRunningMiBindingsByProcessDesignScope(prevForm.subTableBindings as typeof subTableBindings.value)
@@ -1043,6 +1051,55 @@ function alignProcessSubTableBindingsBySharedTable() {
  * After hydrate/enrich passes, re-merge each binding from {@code __subTables__} so MI columns match
  * backend overlay (sub form2) — intermediate steps may have frozen stale task_current_node on row 0.
  */
+/**
+ * My Request initiator: link-form child bindings (People / subtable2) often have a stale per-bindingId slice
+ * (COMPLETED placeholders without age) while richer rows live under sibling __subTables__ keys (e.g. 30 vs 69).
+ * Union all overlapping variable slices so Details modal can resolve payload by parent sub_task_id.
+ */
+function hydrateMiLinkChildBindingsForInitiatorMyRequest() {
+  if (!isInitiatorMyRequestView.value) return
+  const savedMap = coerceSubTablesVariableToMap(formData.value.__subTables__)
+  if (!savedMap) return
+  const all = [
+    ...subTableBindings.value,
+    ...previousForms.value.flatMap(f => f.subTableBindings),
+    ...Array.from(nodeFormMap.value.values()).flatMap(n => n.subTableBindings),
+  ]
+  for (const binding of all) {
+    const hasLinkFormSchema = Array.isArray(binding.formFields) && binding.formFields.length > 0
+    if (isMiDashboardSubTableBinding(binding)) continue
+    if (!isMiParticipantScopedSubTableBinding(binding) && !hasLinkFormSchema) continue
+    const fieldKeys = collectSubTableBindingMatchKeys(binding)
+    if (fieldKeys.size === 0) continue
+    const pk = binding.primaryKeyFields ?? null
+    let merged: any[] = Array.isArray(binding.data) ? cloneSubTableRows(binding.data) : []
+    const ownSlice = getSavedSubTableRows(savedMap as Record<string, any>, binding as any, false) ?? []
+    merged = mergeSubTableRowsByRowId(merged, ownSlice, pk)
+    const threshold =
+      fieldKeys.size <= 2 ? 1 : Math.min(fieldKeys.size, Math.max(2, Math.ceil(fieldKeys.size * 0.25)))
+    for (const val of Object.values(savedMap)) {
+      if (!Array.isArray(val) || val.length === 0) continue
+      const overlap = val.filter(row => {
+        if (!row || typeof row !== 'object') return false
+        let score = 0
+        for (const k of fieldKeys) {
+          const v = pickSubTableRowValueIgnoreKeyCase(row as Record<string, unknown>, k)
+          if (v !== undefined && v !== null && v !== '') score++
+        }
+        return score >= threshold
+      })
+      if (overlap.length > 0) {
+        merged = mergeSubTableRowsByRowId(merged, overlap, pk)
+      }
+    }
+    if (merged.length > 0) {
+      binding.data = dropSubsumedSubTableRows(
+        collapseMiLinkChildRowsToOnePerParticipant(merged),
+      )
+    }
+  }
+}
+
 function resyncMiDashboardFieldsFromVariablesOnBindings(all: SubTableBindingAlignable[]) {
   const savedSubTables = formData.value.__subTables__
   if (!savedSubTables || typeof savedSubTables !== 'object') return
@@ -1065,10 +1122,36 @@ function resyncMiDashboardFieldsFromVariablesOnBindings(all: SubTableBindingAlig
     if (isSharedAttachmentFileBinding(b as { columns?: Array<{ field?: string }>; foreignKeyField?: string | null; tableName?: string; physicalTableName?: string; tableId?: number | null })) {
       continue
     }
+    /** Initiator full case: MI collection rows come from this binding's slice only — never global allSlices (injects People / duplicate placeholders). */
+    if (
+      isInitiatorMyRequestView.value
+      && isMiDashboardSubTableBinding(
+        b as { columns?: Array<{ field?: string }> | null; tableName?: string },
+      )
+    ) {
+      const fromOwnSlice = bindingSaved ?? []
+      if (fromOwnSlice.length === 0 && !(Array.isArray(b.data) && b.data.length > 0)) continue
+      b.data = dropSubsumedSubTableRows(
+        filterRowsForMiCollectionSubTableBinding(
+          mergeSubTableRowsByRowId(Array.isArray(b.data) ? b.data : [], fromOwnSlice, pk),
+          b as { primaryKeyFields?: string[] | null; columns?: Array<{ field?: string }> | null },
+        ),
+      )
+      continue
+    }
     if (
       isMiParticipantScopedSubTableBinding(
         b as { columns?: Array<{ field?: string }>; foreignKeyField?: string | null; tableName?: string },
       )
+      && isInitiatorMyRequestView.value
+    ) {
+      continue
+    }
+    if (
+      isMiParticipantScopedSubTableBinding(
+        b as { columns?: Array<{ field?: string }>; foreignKeyField?: string | null; tableName?: string },
+      )
+      && !isInitiatorMyRequestView.value
     ) {
       const fromOwnSlice = bindingSaved ?? []
       if (fromOwnSlice.length === 0 && !(Array.isArray(b.data) && b.data.length > 0)) continue
@@ -1152,7 +1235,17 @@ const SUB_TABLE_MI_PLACEHOLDER_KEYS = new Set([
   'sub_task_status',
   'sub_task_current_node',
   'task_id',
-  'task_definition_key'
+  'task_definition_key',
+])
+
+/** FK / MI keys that must not satisfy {@link subTableRowsLackSavedFieldPayload} alone (sub_task_id without age still blank). */
+const SUB_TABLE_STRUCTURAL_FK_KEYS = new Set([
+  'sub_task_id',
+  'sub_taskid',
+  'id_idw',
+  'participant_id',
+  'parent_id',
+  'row_id',
 ])
 
 function pickSubTableRowValueIgnoreKeyCase(o: Record<string, unknown>, key: string): unknown {
@@ -1171,7 +1264,10 @@ function pickSubTableRowValueIgnoreKeyCase(o: Record<string, unknown>, key: stri
 function subTableRowsLackSavedFieldPayload(rows: unknown[] | undefined, fieldKeys: Set<string>): boolean {
   if (fieldKeys.size === 0) return false
   if (!Array.isArray(rows) || rows.length === 0) return true
-  const checkKeys = [...fieldKeys].filter(k => !SUB_TABLE_MI_PLACEHOLDER_KEYS.has(k))
+  const checkKeys = [...fieldKeys].filter(k => {
+    const lk = k.toLowerCase()
+    return !SUB_TABLE_MI_PLACEHOLDER_KEYS.has(lk) && !SUB_TABLE_STRUCTURAL_FK_KEYS.has(lk)
+  })
   if (checkKeys.length === 0) return true
   for (const row of rows) {
     if (!row || typeof row !== 'object') continue
@@ -4384,6 +4480,8 @@ function mergeLinkFormTargetBindingsInto(
             raw.bindingId,
             effFormConfig
           ),
+          fieldDefinitions: raw.fieldDefinitions ?? [],
+          bindingLinkMode: raw.bindingLinkMode,
           data: []
         })
         known.add(Number(raw.bindingId))
@@ -4431,6 +4529,7 @@ function mergeLinkFormTargetBindingsInto(
         formOptions: subFormDesign.formOptions,
         portalViews: bindingPortalViews,
         primaryKeyFields: resolveSubTablePrimaryKeyFields(null, tid, syntheticSchema.formConfig),
+        fieldDefinitions: [],
         data: []
       })
       known.add(tid)

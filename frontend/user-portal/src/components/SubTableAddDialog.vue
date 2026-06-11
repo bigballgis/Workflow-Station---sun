@@ -438,6 +438,7 @@
       </el-button>
       <el-button
         type="primary"
+        :loading="saving"
         @click="handleSave"
       >
         {{ t('common.save') }}
@@ -494,6 +495,8 @@ const props = defineProps<{
   rowFormulas?: RowFormulaRule[]
   columnValidationRules?: Record<string, ValidationRule[]>
   uploadUrl?: string
+  /** When set, awaited before closing (supports async PK allocate on Save). */
+  saveRow?: (row: Record<string, unknown>) => void | Promise<void>
 }>()
 
 const emit = defineEmits<{
@@ -502,6 +505,7 @@ const emit = defineEmits<{
 }>()
 
 const formRef = ref<FormInstance>()
+const saving = ref(false)
 const formData = ref<Record<string, any>>({})
 const uploadNames = ref<Record<string, string>>({})
 const dialogKey = ref(0)
@@ -828,14 +832,28 @@ function handleClose() {
 }
 
 async function handleSave() {
-  if (!formRef.value) return
+  if (!formRef.value || saving.value) return
   const valid = await formRef.value.validate().catch(() => false)
   if (!valid) return
   // Run column validation rules (Task 8.7)
   if (!validateColumns()) return
   const seed = props.mode === 'add' ? props.initialData : undefined
-  emit('save', mergeFormRowWithSeed(seed, formData.value as Record<string, unknown>))
-  emit('update:visible', false)
+  const row = mergeFormRowWithSeed(seed, formData.value as Record<string, unknown>)
+  saving.value = true
+  try {
+    if (props.saveRow) {
+      await props.saveRow(row)
+    } else {
+      emit('save', row)
+    }
+    emit('update:visible', false)
+  } catch (e) {
+    ElMessage.error(
+      e instanceof Error && e.message ? e.message : t('common.operationFailed'),
+    )
+  } finally {
+    saving.value = false
+  }
 }
 
 // ─── Upload helpers ───────────────────────────────────────────────────────────

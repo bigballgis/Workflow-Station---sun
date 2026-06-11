@@ -82,6 +82,26 @@ public class FunctionUnitManagerComponent {
     
     // Semantic version regex
     private static final Pattern VERSION_PATTERN = Pattern.compile("^\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9]+)?$");
+
+    /**
+     * In-memory cache for assembled function unit content (forms + bindings + BPMN + data tables).
+     * Key: functionUnitId. TTL: 5 min. Avoids repeated DB queries + JOINs for the same FU.
+     */
+    private final Map<String, CachedContent> assembledContentCache = java.util.Collections.synchronizedMap(
+            new java.util.LinkedHashMap<>(32, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, CachedContent> eldest) {
+                    return size() > 50;
+                }
+            });
+
+    private static final long CONTENT_CACHE_TTL_MS = java.util.concurrent.TimeUnit.MINUTES.toMillis(5);
+
+    private record CachedContent(com.admin.dto.response.FunctionUnitContentResponse response, long cachedAt) {
+        boolean isExpired() {
+            return System.currentTimeMillis() - cachedAt > CONTENT_CACHE_TTL_MS;
+        }
+    }
         
     /**
      * Import function package
@@ -777,6 +797,12 @@ public class FunctionUnitManagerComponent {
      */
     @Transactional(readOnly = true)
     public FunctionUnitContentResponse assembleFunctionUnitContent(String id) {
+        // Check cache first
+        CachedContent cached = assembledContentCache.get(id);
+        if (cached != null && !cached.isExpired()) {
+            return cached.response();
+        }
+
         FunctionUnit unit = getFunctionUnitById(id);
         List<FunctionUnitContent> contents = contentRepository.findByFunctionUnitId(id);
 
@@ -823,7 +849,7 @@ public class FunctionUnitManagerComponent {
         // Attach tableBindings to each form
         attachTableBindings(forms);
 
-        return FunctionUnitContentResponse.builder()
+        FunctionUnitContentResponse response = FunctionUnitContentResponse.builder()
                 .id(unit.getId())
                 .name(unit.getName())
                 .code(unit.getCode())
@@ -834,6 +860,9 @@ public class FunctionUnitManagerComponent {
                 .processes(processes)
                 .dataTables(dataTables)
                 .build();
+        // Cache the assembled result
+        assembledContentCache.put(id, new CachedContent(response, System.currentTimeMillis()));
+        return response;
     }
 
     /**

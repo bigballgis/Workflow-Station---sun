@@ -9,6 +9,10 @@ target/
 build/
 out/
 dist/
+
+# Playwright UI verification screenshots (kept locally; see frontend/*/verification-screenshots/README.md)
+frontend/*/verification-screenshots/*.png
+
 *.class
 *.jar
 *.war
@@ -314,3 +318,5 @@ frontend/user-portal/package-lock.json
 !documentation/*.md
 # Windows 上 core.ignorecase 会导致 *.MD 误匹配小写 .md；显式放行版本库文档目录
 !docs/**/*.md
+# Claude Code personal settings
+.claude/settings.local.json

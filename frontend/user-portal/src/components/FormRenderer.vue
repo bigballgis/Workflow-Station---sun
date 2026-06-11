@@ -77,6 +77,7 @@ import {
   extractFieldsRecursive,
   flattenAllFormFieldSegments,
   isFormFieldReadonly,
+  legacyBindingIdAliases,
   mergeSubTablePortalViewsForRuntime,
   resolveSubTableDisplayMode,
   shouldSuppressStandaloneSubTableInInitiatorRequest,
@@ -86,8 +87,15 @@ import {
   collectNestedChildRowsFromPeerBindings,
   pullNestedRowsForBindingFromParentRows,
   findMiIsolatedParentRow,
-  pickMiLinkChildRowsForParent
+  pickMiLinkChildRowsForParent,
+  isMiDashboardSubTableBinding,
+  scoreMiLinkChildRowQuality,
+  collapseMiLinkChildRowsToOnePerParticipant,
+  getSavedSubTableRows,
+  miParentRowAlignsWithChildRow,
+  miLinkChildRowBelongsToParticipant,
 } from '@/composables/tasks/shared'
+import { resolveMiLinkIsolateInlineRow } from '@/utils/inlineFormBelowTableRuntime'
 import {
   applyFieldDefinitionsToFormFields,
   bindingForeignKeyFieldIsRowPrimaryKey,
@@ -233,6 +241,8 @@ const emit = defineEmits<{
   (e: 'update:modelValue', value: Record<string, any>): void
   (e: 'change', key: string, value: any): void
   (e: 'update:subTableData', bindingId: number, rows: any[]): void
+  /** Form-below-table inline save — same persist path as task action SAVE. */
+  (e: 'save'): void
   /** Optional `siblingRows`: that sub-table's row list only (not all bindings). My Request Detail merge uses it. */
   (e: 'viewSubtaskDetail', row: any, siblingRows?: any[]): void
 }>()
@@ -281,7 +291,11 @@ watch(
 
 const bindingMap = computed(() => {
   const map = new Map<number, SubTableBinding>()
-  for (const b of (props.subTableBindings ?? [])) map.set(b.bindingId, b)
+  for (const b of (props.subTableBindings ?? [])) {
+    for (const alias of legacyBindingIdAliases(b.bindingId)) {
+      if (!map.has(alias)) map.set(alias, b)
+    }
+  }
   return map
 })
 const linkableSubTableBindings = computed(() => props.linkedSubTableBindings ?? props.subTableBindings)
@@ -319,8 +333,17 @@ const subTableBindingsForContext = computed(() => {
   return list
 })
 const resolveBinding = (id?: number) => {
-  const binding = id != null ? bindingMap.value.get(id) : undefined
-  return binding
+  if (id == null || !Number.isFinite(Number(id))) return undefined
+  const direct = bindingMap.value.get(Number(id))
+  if (direct) return direct
+  for (const alias of legacyBindingIdAliases(id)) {
+    const hit = bindingMap.value.get(alias)
+    if (hit) return hit
+  }
+  for (const b of props.subTableBindings ?? []) {
+    if (legacyBindingIdAliases(b.bindingId).includes(Number(id))) return b
+  }
+  return undefined
 }
 
 function isBindingModeEditable(bindingMode: string | undefined | null): boolean {
@@ -450,6 +473,12 @@ function scrollSubTableInlineIntoView(bindingId: number | undefined) {
 }
 
 function subTableShowTaskStatusInitiator(field: FormField): boolean {
+  // Assignee To Do: MI collection (e.g. Assign Task "Title" card → Sub Task) shows per-row Status,
+  // matching the runtime MI dashboard. Rendered in-place inside the designer card (design parity).
+  if (props.viewContext === 'assigneeTodo') {
+    const binding = resolveBinding(field._bindingId)
+    return !!binding && isMiDashboardSubTableBinding(binding)
+  }
   if (props.viewContext !== 'initiatorRequest') return false
   if (subTableMode(field) !== 'summaryWithLinkFormModal') return false
   // Initiator + summary+Link Form: list columns come from designer `subListViews`; runtime Status/Actions
@@ -678,6 +707,15 @@ function buildBindingTableIdMap(peers: SubTableBinding[]): Map<number, number | 
   return m
 }
 
+function resolveTopLevelRowsForInlineTarget(target: SubTableBinding): any[] {
+  const fromBinding = Array.isArray(target.data) ? target.data : []
+  if (fromBinding.length > 0) return fromBinding
+  const st = props.modelValue?.__subTables__
+  if (!st || typeof st !== 'object') return []
+  const saved = getSavedSubTableRows(st as Record<string, unknown>, target)
+  return Array.isArray(saved) ? saved.map(r => ({ ...(r as Record<string, any>) })) : []
+}
+
 function mergeRowsForInlineFormTarget(field: FormField): {
   target: SubTableBinding
   rows: any[]
@@ -713,8 +751,12 @@ function mergeRowsForInlineFormTarget(field: FormField): {
         [parentRow],
         peerMap
       )
-      let rows = nestedOnly.map(r => ({ ...(r as Record<string, any>) }))
-      const topLevel = Array.isArray(target.data) ? target.data : []
+      let rows = pickMiLinkChildRowsForParent(
+        parentRow,
+        nestedOnly,
+        pk,
+      ).map(r => ({ ...(r as Record<string, any>) }))
+      const topLevel = resolveTopLevelRowsForInlineTarget(target)
       const topForParent = pickMiLinkChildRowsForParent(
         parentRow,
         topLevel,
@@ -724,6 +766,24 @@ function mergeRowsForInlineFormTarget(field: FormField): {
         rows = mergeSubTableRowsByRowId(rows, topForParent, pk).map(r => ({
           ...(r as Record<string, any>)
         }))
+      }
+      rows = collapseMiLinkChildRowsToOnePerParticipant(rows)
+      // Nested __subTables__ copy may lag behind the top-level slice and lack auto-PK id even when
+      // binding.data / variables already hold the allocated UUID — prefer the richer top-level row.
+      if (
+        topForParent.length > 0
+        && (
+          rows.length === 0
+          || (
+            rows.length === 1
+            && (rows[0]?.id == null || String(rows[0]?.id ?? '').trim() === '')
+          )
+        )
+      ) {
+        rows = collapseMiLinkChildRowsToOnePerParticipant([
+          ...rows,
+          ...topForParent.map(r => ({ ...(r as Record<string, any>) })),
+        ])
       }
       return {
         target,
@@ -771,12 +831,15 @@ function scoreInlineRowCompleteness(row: unknown, field: FormField): number {
 function pickPreferredInlineRow(rows: any[], field: FormField): any | null {
   if (!rows.length) return null
   if (rows.length === 1) return rows[0]
-  if (!(effectiveReadonly.value && props.previewSubTables)) return rows[0]
+  const useQualityScore =
+    props.suppressLinkFormInitialData
+    || (effectiveReadonly.value && props.previewSubTables)
+  if (!useQualityScore) return rows[0]
   let best = rows[0]
-  let bestScore = scoreInlineRowCompleteness(best, field)
+  let bestScore = scoreInlineRowCompleteness(best, field) + scoreMiLinkChildRowQuality(best as Record<string, unknown>)
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i]
-    const s = scoreInlineRowCompleteness(r, field)
+    const s = scoreInlineRowCompleteness(r, field) + scoreMiLinkChildRowQuality(r as Record<string, unknown>)
     if (s > bestScore) {
       best = r
       bestScore = s
@@ -804,16 +867,31 @@ function findInlineRowIndexForMi(
 ): number {
   if (parentId == null || String(parentId).trim() === '') return -1
   const fkList = resolveLinkFkCandidates(pack.target)
-  let idx = rows.findIndex(r => {
-    if (!r || typeof r !== 'object') return false
+  const matched: number[] = []
+  rows.forEach((r, i) => {
+    if (!r || typeof r !== 'object') return
     const rec = r as Record<string, unknown>
-    return fkList.some(k => {
+    const hit = fkList.some(k => {
       const v = rec[k]
       return v != null && v !== '' && String(v) === String(parentId)
     })
+    if (hit) matched.push(i)
   })
-  if (idx >= 0) return idx
-  idx = rows.findIndex(r => {
+  if (matched.length === 1) return matched[0]!
+  if (matched.length > 1) {
+    let bestIdx = matched[0]!
+    let bestScore = scoreMiLinkChildRowQuality(rows[bestIdx] as Record<string, unknown>)
+    for (let j = 1; j < matched.length; j++) {
+      const idx = matched[j]!
+      const s = scoreMiLinkChildRowQuality(rows[idx] as Record<string, unknown>)
+      if (s > bestScore) {
+        bestIdx = idx
+        bestScore = s
+      }
+    }
+    return bestIdx
+  }
+  let idx = rows.findIndex(r => {
     if (!r || typeof r !== 'object') return false
     return rowMatchesMiElementId(r as Record<string, unknown>, parentId)
   })
@@ -836,12 +914,20 @@ function getCurrentRowForInlineForm(field: FormField): Record<string, any> | nul
     && isLinkTarget
 
   if (miLinkIsolate) {
-    if (rows.length === 1) {
-      result = { ...(rows[0] as Record<string, any>) }
-      pickReason = 'mi-nested-only'
-    } else if (rows.length === 0) {
-      result = {}
-      pickReason = 'mi-nested-empty'
+    const isolated = resolveMiLinkIsolateInlineRow(
+      rows,
+      parentId,
+      (list, pid) => findInlineRowIndexForMi(list as any[], pack, pid),
+      list => pickPreferredInlineRow(list as any[], field),
+    )
+    if (isolated != null) {
+      result = isolated as Record<string, any>
+      pickReason =
+        rows.length === 1
+          ? 'mi-nested-only'
+          : rows.length === 0
+            ? 'mi-nested-empty'
+            : 'mi-nested-pick'
     }
   } else if (isLinkTarget && parentId != null && String(parentId).trim() !== '') {
     const own = resolveBinding(field._bindingId)
@@ -910,6 +996,47 @@ function getCurrentRowForInlineForm(field: FormField): Record<string, any> | nul
       own ?? undefined,
       parentRow,
     )
+  }
+
+  // Last-resort: nested stub may still lack id while another merged row carries the allocated PK.
+  if (
+    result
+    && (result.id == null || String(result.id ?? '').trim() === '')
+    && Array.isArray(pack.rows)
+    && pack.rows.length > 1
+  ) {
+    const own = resolveBinding(field._bindingId)
+    const parentRow =
+      parentId != null && String(parentId).trim() !== '' && own
+        ? findMiIsolatedParentRow(Array.isArray(own.data) ? own.data : [], parentId)
+        : null
+    const scopedRows =
+      parentRow != null
+        ? pack.rows.filter(
+            r =>
+              r &&
+              typeof r === 'object' &&
+              miParentRowAlignsWithChildRow(parentRow, r as Record<string, unknown>),
+          )
+        : parentId != null && String(parentId).trim() !== ''
+          ? pack.rows.filter(
+              r =>
+                r &&
+                typeof r === 'object' &&
+                miLinkChildRowBelongsToParticipant(r as Record<string, unknown>, parentId),
+            )
+          : pack.rows
+    let best = result
+    let bestScore = scoreMiLinkChildRowQuality(best as Record<string, unknown>)
+    for (const r of scopedRows) {
+      if (!r || typeof r !== 'object') continue
+      const s = scoreMiLinkChildRowQuality(r as Record<string, unknown>)
+      if (s > bestScore) {
+        best = { ...best, ...(r as Record<string, any>) }
+        bestScore = s
+      }
+    }
+    result = best
   }
 
   return result
@@ -1015,6 +1142,11 @@ function handleInlineFormUpdate(field: FormField, mergedRow: Record<string, any>
   }
   handleSubTableUpdate(target.bindingId, rows)
 }
+
+function handleInlineFormSave() {
+  emit('save')
+}
+
 // Lookup selected data state
 const lookupSelectedData = ref<Record<string, Record<string, any>>>({})
 const lookupLoadedViewFields = ref<Record<string, any[]>>({})
@@ -1711,6 +1843,7 @@ provide(FORM_RENDERER_FIELDS_CTX, reactive({
   lookupShowBackfillView,
   handleSubTableUpdate,
   handlePrimaryFormDataPatch,
+  handleInlineFormSave,
   handleInlineFormUpdate,
   scrollSubTableInlineIntoView,
   setSubTableInlineAnchor,

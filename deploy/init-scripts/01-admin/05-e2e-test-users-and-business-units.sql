@@ -25,7 +25,7 @@ ON CONFLICT (code) DO UPDATE SET
 
 -- 业务单元：总部 + 财务共享 + 数字化部门
 INSERT INTO sys_business_units (
-    id, code, name, parent_id, level, path, sort_order, status, display_name,
+    id, code, name, parent_id, level, path, sort_order, status, description,
     created_at, created_by, updated_at, updated_by
 )
 VALUES
@@ -79,7 +79,7 @@ ON CONFLICT (code) DO UPDATE SET
     parent_id   = EXCLUDED.parent_id,
     level       = EXCLUDED.level,
     path        = EXCLUDED.path,
-    display_name = EXCLUDED.display_name,
+    description = EXCLUDED.description,
     updated_at  = CURRENT_TIMESTAMP,
     updated_by  = 'system';
 

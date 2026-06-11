@@ -81,6 +81,28 @@ public class ProcessComponent {
     @Value("${admin-center.url:http://localhost:8090}")
     private String adminCenterUrl;
 
+    /**
+     * In-memory cache for function unit content payloads (forms + BPMN + data tables).
+     * Key: resolved functionUnitId. TTL: 5 minutes (matching FunctionUnitAccessComponent).
+     * Same process key → same content for all tasks, so caching eliminates repeated
+     * admin-center HTTP round-trips when users navigate between To Do detail pages.
+     */
+    private final Map<String, CachedFuContent> fuContentCache = Collections.synchronizedMap(
+            new LinkedHashMap<>(32, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, CachedFuContent> eldest) {
+                    return size() > 100;
+                }
+            });
+
+    private static final long FU_CONTENT_CACHE_TTL_MS = java.util.concurrent.TimeUnit.MINUTES.toMillis(5);
+
+    private record CachedFuContent(Map<String, Object> payload, long cachedAt) {
+        boolean isExpired() {
+            return System.currentTimeMillis() - cachedAt > FU_CONTENT_CACHE_TTL_MS;
+        }
+    }
+
     // ==================== Process definitions and start ====================
 
     /**
@@ -2816,7 +2838,8 @@ public class ProcessComponent {
     
     /**
      * Returns full function unit content (BPMN, forms, action bindings, etc.)
-     * Checks function unit is enabled; throws when disabled
+     * Checks function unit is enabled; throws when disabled.
+     * Results are cached in-memory (5 min TTL) to avoid repeated admin-center HTTP round-trips.
      */
     public Map<String, Object> getFunctionUnitContent(String userId, String functionUnitIdOrCode) {
         log.info("Getting function unit content for: {}, user: {}", functionUnitIdOrCode, userId);
@@ -2825,6 +2848,12 @@ public class ProcessComponent {
         functionUnitAccessComponent.checkFunctionUnitAccess(userId, functionUnitIdOrCode);
         String functionUnitId = functionUnitAccessComponent.resolveFunctionUnitId(functionUnitIdOrCode);
         log.info("Resolved function unit ID: {}", functionUnitId);
+
+        // Check cache before making HTTP call to admin-center
+        CachedFuContent cached = fuContentCache.get(functionUnitId);
+        if (cached != null && !cached.isExpired()) {
+            return cached.payload();
+        }
         
         try {
             String url = adminCenterUrl + "/api/v1/admin/function-units/" + functionUnitId + "/content";
@@ -2836,6 +2865,7 @@ public class ProcessComponent {
             Map<String, Object> payload = ApiResponseBodyUnwrap.unwrapDataMap(response);
             if (!payload.isEmpty()) {
                 log.info("Got function unit content: name={}", payload.get("name"));
+                fuContentCache.put(functionUnitId, new CachedFuContent(payload, System.currentTimeMillis()));
                 return payload;
             }
             
@@ -2856,6 +2886,7 @@ public class ProcessComponent {
      * Returns full function unit content without permission check (internal).
      * Primary source: admin-center (function unit catalog with BPMN, forms, etc.).
      * If admin-center returns no BPMN, falls back to workflow-engine (deployed BPMN by functionUnitCode).
+     * Results are cached in-memory (5 min TTL) to avoid repeated admin-center HTTP round-trips.
      */
     public Map<String, Object> getFunctionUnitContent(String functionUnitIdOrCode) {
         log.info("Getting function unit content for: {}", functionUnitIdOrCode);
@@ -2863,34 +2894,41 @@ public class ProcessComponent {
         try {
             // Resolve function unit ID (code or ID)
             String functionUnitId = functionUnitIdOrCode;
-            long __tr = System.nanoTime();
             try {
                 functionUnitId = functionUnitAccessComponent.resolveFunctionUnitId(functionUnitIdOrCode);
                 log.info("Resolved function unit ID: {}", functionUnitId);
             } catch (Exception e) {
                 log.warn("Could not resolve functionUnitId for {}, using as-is: {}", functionUnitIdOrCode, e.getMessage());
             }
-            log.info("[PERF] getFunctionUnitContent.resolveFunctionUnitId({}) took {} ms",
-                    functionUnitIdOrCode, (System.nanoTime() - __tr) / 1_000_000L);
+
+            // Check cache before making HTTP call
+            CachedFuContent cached = fuContentCache.get(functionUnitId);
+            if (cached != null && !cached.isExpired()) {
+                return cached.payload();
+            }
 
             String url = adminCenterUrl + "/api/v1/admin/function-units/" + functionUnitId + "/content";
             log.info("Fetching function unit content from: {}", url);
 
-            long __th = System.nanoTime();
             @SuppressWarnings("unchecked")
             Map<String, Object> response = restTemplate.getForObject(url, Map.class);
-            log.info("[PERF] getFunctionUnitContent.adminCenterHttp took {} ms", (System.nanoTime() - __th) / 1_000_000L);
 
             Map<String, Object> payload = ApiResponseBodyUnwrap.unwrapDataMap(response);
             if (!payload.isEmpty()) {
                 log.info("Got function unit content from admin-center: name={}", payload.get("name"));
+                // Cache successful result
+                fuContentCache.put(functionUnitId, new CachedFuContent(payload, System.currentTimeMillis()));
                 return payload;
             }
 
             log.warn("Admin-center returned empty content for functionUnitId={}; attempting fallback to workflow-engine BPMN", functionUnitId);
 
             // Fallback: fetch BPMN from workflow-engine by functionUnitCode, wrap in same shape
-            return loadBpmnFallbackFromEngine(functionUnitIdOrCode);
+            Map<String, Object> fallbackResult = loadBpmnFallbackFromEngine(functionUnitIdOrCode);
+            if (fallbackResult != null && !fallbackResult.isEmpty() && !fallbackResult.containsKey("error")) {
+                fuContentCache.put(functionUnitId, new CachedFuContent(fallbackResult, System.currentTimeMillis()));
+            }
+            return fallbackResult;
 
         } catch (Exception e) {
             log.error("Failed to get function unit content for {}: {}", functionUnitIdOrCode, e.getMessage(), e);

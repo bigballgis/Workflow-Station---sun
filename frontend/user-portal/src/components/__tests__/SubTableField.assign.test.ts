@@ -7,7 +7,10 @@ import { userApi } from '@/api/user'
 
 // Mock API calls
 vi.mock('@/api/task', () => ({
-  assignSubTableRow: vi.fn()
+  assignSubTableRow: vi.fn(),
+  assignSubTableRowByIdentity: vi.fn(),
+  getSubTableData: vi.fn(),
+  getTaskDetail: vi.fn(),
 }))
 
 vi.mock('@/api/user', () => ({
@@ -17,11 +20,15 @@ vi.mock('@/api/user', () => ({
 }))
 
 // Mock i18n
-vi.mock('vue-i18n', () => ({
-  useI18n: () => ({
-    t: (key: string) => key
-  })
-}))
+vi.mock('vue-i18n', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('vue-i18n')>()
+  return {
+    ...actual,
+    useI18n: () => ({
+      t: (key: string) => key,
+    }),
+  }
+})
 
 // Mock Element Plus Message
 vi.mock('element-plus', async () => {
@@ -479,6 +486,106 @@ describe('SubTableField - Assign Button', () => {
       // Check that we have assigned rows
       const assignedRows = wrapper.vm.rows.filter((row: any) => row.assignee)
       expect(assignedRows.length).toBeGreaterThan(0)
+    })
+  })
+
+  describe('Edit dialog assignee sync', () => {
+    it('updates assignee_display_name and calls assign API when assignee changes via edit', async () => {
+      const rowsWithAssignee = [{
+        id: 101,
+        name: '112',
+        assignee: 'user-001',
+        assignee_display_name: 'User One',
+      }]
+      const columnsWithAssignee = [
+        { field: 'name', label: 'Name', type: 'text' },
+        { field: 'assignee', label: 'assignee', type: 'lookup' },
+      ]
+      vi.mocked(assignSubTableRow).mockResolvedValue({
+        data: {
+          success: true,
+          rowId: 101,
+          assigneeId: 'user-002',
+          assigneeName: 'User Two',
+        },
+      })
+
+      const wrapper = mount(SubTableField, {
+        props: {
+          title: 'Sub Task',
+          columns: columnsWithAssignee,
+          modelValue: [...rowsWithAssignee],
+          primaryKeyFields: ['id'],
+          showAssignButton: true,
+          assigneeField: 'assignee',
+          canAssign: true,
+          taskId: 'task-123',
+          editable: true,
+        },
+        global: {
+          stubs: globalStubs,
+        },
+      })
+
+      wrapper.vm.dialogMode = 'edit'
+      wrapper.vm.editingRowIndex = 0
+      wrapper.vm.dialogInitialData = { ...rowsWithAssignee[0] }
+
+      await wrapper.vm.handleDialogSave({
+        name: '112',
+        assignee: {
+          id: 'user-002',
+          display_name: 'User Two',
+          username: 'user2',
+        },
+      })
+
+      await wrapper.vm.$nextTick()
+      expect(wrapper.vm.rows[0].assignee_display_name).toBe('User Two')
+      expect(assignSubTableRow).toHaveBeenCalledWith('task-123', 101, 'user-002')
+      expect(wrapper.emitted('assignmentChanged')).toBeTruthy()
+    })
+
+    it('does not call assign API when assignee is unchanged in edit', async () => {
+      const rowsWithAssignee = [{
+        id: 101,
+        name: '112',
+        assignee: 'user-001',
+        assignee_display_name: 'User One',
+      }]
+      const columnsWithAssignee = [
+        { field: 'name', label: 'Name', type: 'text' },
+        { field: 'assignee', label: 'assignee', type: 'lookup' },
+      ]
+
+      const wrapper = mount(SubTableField, {
+        props: {
+          title: 'Sub Task',
+          columns: columnsWithAssignee,
+          modelValue: [...rowsWithAssignee],
+          primaryKeyFields: ['id'],
+          showAssignButton: true,
+          assigneeField: 'assignee',
+          canAssign: true,
+          taskId: 'task-123',
+          editable: true,
+        },
+        global: {
+          stubs: globalStubs,
+        },
+      })
+
+      wrapper.vm.dialogMode = 'edit'
+      wrapper.vm.editingRowIndex = 0
+      wrapper.vm.dialogInitialData = { ...rowsWithAssignee[0] }
+
+      await wrapper.vm.handleDialogSave({
+        name: '113',
+        assignee: 'user-001',
+      })
+
+      expect(assignSubTableRow).not.toHaveBeenCalled()
+      expect(wrapper.vm.rows[0].assignee_display_name).toBe('User One')
     })
   })
 })

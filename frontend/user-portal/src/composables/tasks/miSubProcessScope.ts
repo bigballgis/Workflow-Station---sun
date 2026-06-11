@@ -464,15 +464,31 @@ export function filterBindingsToMiParticipantRow<T extends SubTableBindingLike &
   bindings: T[],
   scope: MiSubProcessScopeConfig,
   participantRowId: MiParticipantRowId,
-  options?: { includeParticipantScopedChildren?: boolean },
+  options?: {
+    includeParticipantScopedChildren?: boolean
+    /** When the collection binding lives on another form (e.g. previousForms), pass its PK here. */
+    participantPrimaryKeyFields?: string[] | null
+    /** Shared relation-table id for MI collection bindings copied across forms (binding 66 vs 69). */
+    collectionTableId?: number | null
+  },
 ): void {
   const collectionBinding = findBindingForMiSubTableName(bindings, scope.subTableName)
-  const participantPk = collectionBinding?.primaryKeyFields ?? null
+  const participantPk =
+    options?.participantPrimaryKeyFields ?? collectionBinding?.primaryKeyFields ?? null
   if (!hasConfiguredPrimaryKeyFields(participantPk)) return
   const includeChildren = options?.includeParticipantScopedChildren !== false
+  const collectionTid =
+    options?.collectionTableId ??
+    (collectionBinding?.tableId != null && Number.isFinite(Number(collectionBinding.tableId))
+      ? Number(collectionBinding.tableId)
+      : null)
 
   for (const binding of bindings) {
-    const isCollection = bindingMatchesMiSubTableName(binding, scope.subTableName)
+    const isCollection =
+      bindingMatchesMiSubTableName(binding, scope.subTableName)
+      || (collectionTid != null
+        && binding.tableId != null
+        && Number(binding.tableId) === collectionTid)
     if (!isCollection && !includeChildren) continue
 
     const rows = Array.isArray(binding.data) ? binding.data : []

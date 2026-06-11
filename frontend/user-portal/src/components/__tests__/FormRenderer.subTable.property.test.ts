@@ -2,7 +2,7 @@
 
 import { describe, it, expect } from 'vitest'
 import * as fc from 'fast-check'
-import { extractFieldsRecursive, parseFormConfigToTabs, extractTabsFromTabsRule, parseFormRulesLayout, collectPlacedSubTableBindingIds, flattenAllFormFieldSegments } from '../formRendererHelpers'
+import { extractFieldsRecursive, parseFormConfigToTabs, extractTabsFromTabsRule, parseFormRulesLayout, collectPlacedSubTableBindingIds, collectSubTableFieldsFromLayout, mergeMissingSubTableFieldsIntoLayout, ensureSubTableBindingsOnFormLayout, removeSubTableFieldsByBindingIds, flattenAllFormFieldSegments, legacyBindingIdAliases } from '../formRendererHelpers'
 
 // A no-op converter — regular fields are not the focus of this property test
 const noopConverter = () => null
@@ -122,6 +122,49 @@ describe('Property 1: parseFormConfig round-trip for subTable rules', () => {
     }]
     const ids = collectPlacedSubTableBindingIds([], [], fieldsAfterTabs as any)
     expect(ids.has(64)).toBe(true)
+  })
+
+  it('mergeMissingSubTableFieldsIntoLayout restores FU subTable after task-form overwrite', () => {
+    const fuField = { type: 'subTable' as const, key: '__subTable_64', label: '', _bindingId: 64, span: 24 }
+    const layout = { fields: [{ key: 'a', label: 'a', type: 'text' as const }], tabs: [], fieldsAfterTabs: [] as any[] }
+    mergeMissingSubTableFieldsIntoLayout(layout, [fuField], new Set([64]))
+    expect(collectPlacedSubTableBindingIds(layout.fields, layout.tabs, layout.fieldsAfterTabs).has(64)).toBe(true)
+  })
+
+  it('ensureSubTableBindingsOnFormLayout appends widget when binding exists but layout has none', () => {
+    const layout = { fields: [], tabs: [], fieldsAfterTabs: [] as any[] }
+    ensureSubTableBindingsOnFormLayout(layout, [{ bindingId: 88 }], {})
+    expect(collectPlacedSubTableBindingIds(layout.fields, layout.tabs, layout.fieldsAfterTabs).has(88)).toBe(true)
+    expect(layout.fieldsAfterTabs[0].type).toBe('subTable')
+  })
+
+  it('mergeMissingSubTableFieldsIntoLayout accepts native binding id array (not only Set)', () => {
+    const fuField = { type: 'subTable' as const, key: '__subTable_66', label: '', _bindingId: 66, span: 24 }
+    const layout = { fields: [], tabs: [], fieldsAfterTabs: [] as any[] }
+    expect(() => mergeMissingSubTableFieldsIntoLayout(layout, [fuField], [66, 103])).not.toThrow()
+    expect(collectPlacedSubTableBindingIds(layout.fields, layout.tabs, layout.fieldsAfterTabs).has(66)).toBe(true)
+  })
+
+  it('removeSubTableFieldsByBindingIds accepts native binding id array (not only Set)', () => {
+    const layout = {
+      fields: [{ type: 'subTable' as const, key: '__subTable_66', _bindingId: 66 }],
+      tabs: [],
+      fieldsAfterTabs: [{ type: 'subTable' as const, key: '__subTable_103', _bindingId: 103 }],
+    }
+    expect(() => removeSubTableFieldsByBindingIds(layout, [66, 103])).not.toThrow()
+    expect(collectPlacedSubTableBindingIds(layout.fields, layout.tabs, layout.fieldsAfterTabs).size).toBe(0)
+  })
+
+  it('collectSubTableFieldsFromLayout walks nested card children', () => {
+    const fieldsAfterTabs = [{
+      type: 'card' as const,
+      key: 'c1',
+      label: 'Card',
+      children: [{ type: 'subTable' as const, key: 'st', label: '', _bindingId: 12, span: 24 }],
+    }]
+    const found = collectSubTableFieldsFromLayout([], [], fieldsAfterTabs)
+    expect(found).toHaveLength(1)
+    expect(found[0]._bindingId).toBe(12)
   })
 
   it('preserves elCard and elCollapse after tabs (designer camelCase layout)', () => {
@@ -329,5 +372,48 @@ describe('flattenAllFormFieldSegments includes before/after tab fields', () => {
     const keys = flattenAllFormFieldSegments(beforeTabs, tabs, afterTabs).map(f => f.key)
     expect(keys).toEqual(expect.arrayContaining(['test1', 'test2', 'test3', 'inTab', 'afterTab']))
     expect(keys.filter(k => k === 'test2')).toHaveLength(1)
+  })
+})
+
+describe('legacyBindingIdAliases', () => {
+  it('maps dw binding ids to designer short keys', () => {
+    expect(legacyBindingIdAliases(50066)).toEqual(expect.arrayContaining([50066, 66]))
+    expect(legacyBindingIdAliases(50103)).toEqual(expect.arrayContaining([50103, 103]))
+    expect(legacyBindingIdAliases(64)).toEqual([64])
+  })
+})
+
+describe('resolveSubTableRowsForBinding — assignment sibling binding id', () => {
+  it('resolves rows from sibling binding id and table name when own key is missing', async () => {
+    const { resolveSubTableRowsForBinding } = await import('@/composables/tasks/shared')
+    const rows64 = [{ id: 1, assignee: 'u1' }, { id: 2, assignee: 'u2' }]
+    const saved = {
+      '64': rows64,
+      'Sub Task': rows64,
+    }
+    const rtMap = new Map<number, number | null>([
+      [64, 20],
+      [66, 20],
+    ])
+    const binding = {
+      bindingId: 66,
+      tableName: 'Sub Task',
+      physicalTableName: 'subtable',
+      tableId: 20,
+      columns: [{ field: 'assignee' }, { field: 'task_status' }],
+    }
+    const bySibling = resolveSubTableRowsForBinding(saved, binding, {
+      forbidNameFallback: true,
+      bindingTableById: rtMap,
+      mergeSiblingSlices: false,
+    })
+    expect(bySibling).toEqual(rows64)
+
+    const byName = resolveSubTableRowsForBinding(saved, binding, {
+      forbidNameFallback: false,
+      bindingTableById: rtMap,
+      mergeSiblingSlices: false,
+    })
+    expect(byName).toEqual(rows64)
   })
 })

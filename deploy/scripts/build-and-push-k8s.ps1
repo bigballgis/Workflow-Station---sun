@@ -70,8 +70,14 @@ Write-Host "=========================================" -ForegroundColor Yellow
 # 0. Pre-pull Java runtime base (avoids docker build hitting Docker Hub for FROM metadata)
 if (-not $SkipBackend -and -not $PushOnly) {
     Write-Step "Pre-pulling Java base image..."
-    $pulled = $false
-    for ($attempt = 1; $attempt -le 3; $attempt++) {
+    docker image inspect $JavaBaseImage 2>&1 | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+        Write-Ok "Java base image already present locally (skipping pull)"
+        $pulled = $true
+    } else {
+        $pulled = $false
+    }
+    for ($attempt = 1; -not $pulled -and $attempt -le 3; $attempt++) {
         Write-Host "   Pulling $JavaBaseImage (attempt $attempt/3)..." -ForegroundColor Gray
         docker pull $JavaBaseImage 2>&1 | Out-Null
         if ($LASTEXITCODE -eq 0) {
@@ -94,7 +100,8 @@ if (-not $SkipBackend -and -not $PushOnly) {
     Write-Step "Building backend with Maven..."
 
     $modules = "backend/platform-common,backend/platform-cache,backend/platform-security,backend/platform-messaging," + (($selectedBackend | ForEach-Object { $_.Dir }) -join ",")
-    $mvnArgs = @("clean", "package", "-pl", $modules, "-am")
+    # -T 1C builds independent modules in parallel (one thread per CPU core)
+    $mvnArgs = @("clean", "package", "-T", "1C", "-pl", $modules, "-am")
     if ($SkipTests) { $mvnArgs += "-DskipTests" }
 
     Push-Location $ProjectRoot
@@ -146,8 +153,18 @@ if (-not $SkipFrontend) {
             Write-Host "   npm install & build $($svc.Name)..." -ForegroundColor Gray
             Push-Location $contextDir
             try {
-                npm install --prefer-offline --no-audit 2>&1 | Out-Null
-                if ($LASTEXITCODE -ne 0) { Pop-Location; Write-Fail "npm install failed: $($svc.Name)" }
+                # Skip npm install when node_modules is already up to date with
+                # package.json / package-lock.json (mtime comparison)
+                $marker = Join-Path $contextDir "node_modules\.package-lock.json"
+                $manifests = @("package.json", "package-lock.json") |
+                    ForEach-Object { Join-Path $contextDir $_ } | Where-Object { Test-Path $_ }
+                $newestManifest = ($manifests | ForEach-Object { (Get-Item $_).LastWriteTime } | Measure-Object -Maximum).Maximum
+                if ((Test-Path $marker) -and ((Get-Item $marker).LastWriteTime -ge $newestManifest)) {
+                    Write-Host "   node_modules up to date, skipping npm install" -ForegroundColor DarkGray
+                } else {
+                    npm install --prefer-offline --no-audit 2>&1 | Out-Null
+                    if ($LASTEXITCODE -ne 0) { Pop-Location; Write-Fail "npm install failed: $($svc.Name)" }
+                }
                 npx vite build
                 if ($LASTEXITCODE -ne 0) { Pop-Location; Write-Fail "vite build failed: $($svc.Name)" }
             } finally {

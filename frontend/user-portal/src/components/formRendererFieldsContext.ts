@@ -54,6 +54,8 @@ export interface FormRendererFieldsContext {
   }
   handlePrimaryFormDataPatch?: (patch: Record<string, unknown>) => void
   handleSubTableUpdate: (bindingId: number, rows: unknown[]) => void
+  /** Persist task form (form-below-table Save — same as action bar SAVE). */
+  handleInlineFormSave?: () => void
   handleInlineFormUpdate: (field: FormField, row: Record<string, unknown>) => void
   scrollSubTableInlineIntoView: (bindingId?: number) => void
   setSubTableInlineAnchor: (bindingId: number | undefined, el: HTMLElement | null) => void

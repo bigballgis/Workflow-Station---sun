@@ -297,6 +297,18 @@
                   :description="t('subTable.noFormDesign')"
                   :image-size="48"
                 />
+                <div
+                  v-if="inlineFormBelowDesign.rule.length"
+                  class="inline-form-actions"
+                >
+                  <el-button
+                    type="primary"
+                    disabled
+                    @click="handleInlineFormBelowPreviewSave"
+                  >
+                    {{ t('common.save') }}
+                  </el-button>
+                </div>
               </div>
             </div>
           </div>
@@ -921,6 +933,11 @@ async function openLinkFormDialog(column: SubTableListColumnDTO) {
   })
 }
 
+/** Portal parity: Save control on assignee form-below-table strip (design-time preview is read-only). */
+function handleInlineFormBelowPreviewSave() {
+  ElMessage.success(t('common.saveSuccess'))
+}
+
 async function handleLinkFormSave() {
   if (selectedLinkColumn.value?.componentId === undefined || selectedLinkColumn.value?.componentId === null) return
   savingLinkForm.value = true
@@ -1213,5 +1230,12 @@ defineExpose({
 
 .inline-form-below-body :deep(.form-create) {
   width: 100%;
+}
+
+.inline-form-actions {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
+  padding-bottom: 8px;
 }
 </style>

@@ -31,6 +31,7 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{
   (e: 'update:row', row: Record<string, unknown>): void
   (e: 'change', key: string, value: unknown): void
+  (e: 'save'): void
 }>()
 
 const { t } = useI18n()
@@ -50,6 +51,14 @@ function handleFieldUpdate(key: string, value: unknown) {
   rowModel.value = merged
   emit('update:row', merged)
   emit('change', key, value)
+}
+
+/** Flush row model into bindings before persist so Save allocates PK on the latest inline edits. */
+function handleSaveClick() {
+  const merged = { ...rowModel.value }
+  rowModel.value = merged
+  emit('update:row', merged)
+  emit('save')
 }
 
 const cardTitle = computed(() =>
@@ -87,6 +96,17 @@ const cardTitle = computed(() =>
         v-if="fields.length === 0"
         :description="t('subTable.formBelowTableEmpty')"
       />
+      <div
+        v-if="!readonly && fields.length > 0"
+        class="inline-form-actions"
+      >
+        <el-button
+          type="primary"
+          @click="handleSaveClick"
+        >
+          {{ t('common.save') }}
+        </el-button>
+      </div>
     </el-form>
   </el-card>
 </template>
@@ -99,5 +119,11 @@ const cardTitle = computed(() =>
 .sub-table-inline-form .title {
   font-weight: 600;
   font-size: 14px;
+}
+
+.inline-form-actions {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
 }
 </style>

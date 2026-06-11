@@ -114,13 +114,13 @@
         </div>
         <div class="section-content">
           <el-alert
-            v-if="processError"
+            v-if="processError && !bpmnXml && processNodes.length === 0"
             :title="processError"
             type="warning"
             show-icon
             :closable="false"
           />
-          <template v-else-if="bpmnXml || processNodes.length > 0">
+          <template v-if="bpmnXml || processNodes.length > 0">
             <el-skeleton
               v-if="!diagramInViewport"
               animated
@@ -312,6 +312,7 @@
             class="form-container"
           >
             <FormRenderer
+              v-if="formRenderReady"
               :fields="formFields"
               :tabs="formTabs"
               :fields-after-tabs="formFieldsAfterTabs"
@@ -335,6 +336,7 @@
               :primary-table-binding="primaryTableBinding ?? undefined"
               @update:model-value="val => formData = { ...formData, ...val }"
               @update:sub-table-data="syncMainSubTableRows"
+              @save="saveCurrentTaskFormWithMiPersist"
             />
           </div>
           <el-empty :description="t('task.noFormData')" />
@@ -455,7 +457,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onBeforeUnmount, computed, nextTick, watch, defineAsyncComponent, toRaw, triggerRef } from 'vue'
+import { ref, reactive, onMounted, onBeforeUnmount, computed, nextTick, watch, defineAsyncComponent, toRaw, triggerRef, markRaw } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
@@ -476,7 +478,7 @@ const ProcessDiagramAsync = defineAsyncComponent(
 )
 import type { HistoryRecord } from '@/types/historyRecord'
 import FormRenderer, { type FormField, type FormTab } from '@/components/FormRenderer.vue'
-import { normalizePortalViews, collectLeafFormFieldKeys, isFormCreateRuleReadonly, isFormCreateRuleHidden, isRowRule, isColRule, getRuleChildren, getRowGutter, getColSpan, extractRowColumnFields, parseFormRulesLayout, isTabsRule, isCardRule, isCollapseRule, convertAuxiliaryLayoutField, extractTabsFromTabsRule, extractCollapsePanelsFromRule, findTabsRule, isTabPaneRule, getLayoutKey, getLayoutLabel } from '@/components/formRendererHelpers'
+import { normalizePortalViews, collectLeafFormFieldKeys, collectSubTableFieldsFromLayout, mergeMissingSubTableFieldsIntoLayout, ensureSubTableBindingsOnFormLayout, collectPlacedSubTableBindingIds, legacyBindingIdAliases, isFormCreateRuleReadonly, isFormCreateRuleHidden, isRowRule, isColRule, getRuleChildren, getRowGutter, getColSpan, extractRowColumnFields, parseFormRulesLayout, isTabsRule, isCardRule, isCollapseRule, convertAuxiliaryLayoutField, extractTabsFromTabsRule, extractCollapsePanelsFromRule, findTabsRule, isTabPaneRule, getLayoutKey, getLayoutLabel } from '@/components/formRendererHelpers'
 import { applyRuleDefaultToFormField } from '@/utils/formCreateRuleDefaults'
 import SubTableField from '@/components/SubTableField.vue'
 import N8nActionDialog from '@/components/N8nActionDialog.vue'
@@ -500,6 +502,7 @@ import {
   buildBindingIdToRelationTableIdMap,
   hydrateBindingsRowsFromVariablesBySharedRelationTableId,
   enrichChildBindingRowsFromParentsNestedSubTables,
+  stripNestedSubTablesFromRows,
   findSubTableRowByMiExpansionId,
   findMiIsolatedParentRow,
   pullNestedRowsForBindingFromParentRows,
@@ -508,8 +511,9 @@ import {
   collectSubTableSliceArraysDeep,
   scrubMiCorruptLinkChildRowsForParent,
   mergeAllSubTableSlicesFromVariables,
-  mergeSubTableSlicesForRelationTableId,
+  collectSubTableSliceRowsForRelationTableId,
   mergeAllSlicesForSharedProcessSubTableBinding,
+  resolveSubTableRowsForBinding,
   isSubTableRowMetaField,
   isMiDashboardSubTableBinding,
   isMiParticipantScopedSubTableBinding,
@@ -517,12 +521,21 @@ import {
   finalizeSharedProcessSubTableBindingRows,
   applySharedAttachmentFinalizeAndMaterialize,
   isSharedAttachmentFileBinding,
+  filterRowsForMiParticipantSubTableBinding,
+  finalizeMiCollectionSubTableBindingRows,
+  miLinkChildRowBelongsToParticipant,
+  collapseMiLinkChildRowsToOnePerParticipant,
+  backfillMiLinkChildPrimaryKeysFromVariables,
+  repairMisassignedLinkChildStructuralFk,
+  miParentRowAlignsWithChildRow,
+  scopeMiLinkChildRowsForParentRow,
 } from '@/composables/tasks/shared'
 import {
   rowMatchesSubTablePrimaryKey,
   bindingMatchesMiSubTableName,
   resolveMiSubProcessScopeFromBpmn,
   findBindingForMiSubTableName,
+  filterBindingsToMiParticipantRow,
   extractMiParticipantRowIdFromCurrentItem,
   hasConfiguredPrimaryKeyFields,
   describeSubTableBindingLabel,
@@ -558,6 +571,34 @@ import {
 import { relationTableApi } from '@/api/relationTable'
 import { unwrapUserLikeValueToDisplayString, extractUserIdFromCellValue, mergeListViewFieldColumn, inferColumnTypeFromFieldAndValue, deriveColumnsFromRelationFieldDefinitions, buildRelationTableFieldIndexFromDataTables, resolveSubTableSchemaByTableId, resolveSubListViewColumnsForBinding, defaultAttachmentListColumns, SHARED_ATTACHMENT_RELATION_TABLE_ID, type RelationFieldDef } from '@/components/subTableAddDialogHelpers'
 import { clearBpmnParseCache, getCachedBpmnDocument } from '@/utils/bpmnParseCache'
+import { resolveUserFacingHttpMessage } from '@/utils/httpErrorMessage'
+import { reconcilePortalWorkspaceSession } from '@/api/auth'
+/**
+ * Module-level FU content cache: same processDefinitionKey → same FU content.
+ * Survives component remount when navigating between To Do detail pages of the same process.
+ * TTL 5 min; max 10 entries (LRU via Map insertion order).
+ */
+const __fuContentCache = new Map<string, { payload: any; ts: number }>()
+const FU_CACHE_TTL = 5 * 60 * 1000
+const FU_CACHE_MAX = 10
+function getCachedFuContent(key: string): any | null {
+  const entry = __fuContentCache.get(key)
+  if (!entry) return null
+  if (Date.now() - entry.ts > FU_CACHE_TTL) {
+    __fuContentCache.delete(key)
+    return null
+  }
+  return entry.payload
+}
+function setCachedFuContent(key: string, payload: any) {
+  if (__fuContentCache.size >= FU_CACHE_MAX) {
+    // Delete oldest entry (first key in insertion order)
+    const oldest = __fuContentCache.keys().next().value
+    if (oldest) __fuContentCache.delete(oldest)
+  }
+  __fuContentCache.set(key, { payload, ts: Date.now() })
+}
+
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
@@ -605,7 +646,16 @@ watch(
       disconnectDiagramViewportObserver()
       return
     }
-    void nextTick(() => connectDiagramViewportObserver())
+    void buildNodeFormMapIfNeeded()
+    void nextTick(() => {
+      connectDiagramViewportObserver()
+      // Fallback: if observer misses (already in viewport), still mount diagram after phase 3.
+      setTimeout(() => {
+        if (detailUiPhase.value >= 3 && !diagramInViewport.value && (bpmnXml.value || processNodes.value.length > 0)) {
+          diagramInViewport.value = true
+        }
+      }, 400)
+    })
   },
 )
 const submitting = ref(false)
@@ -660,8 +710,261 @@ interface NodeFormInfo {
   nativeSubTableBindingIds: number[]
 }
 const nodeFormMap = ref<Map<string, NodeFormInfo>>(new Map())
+/** Deferred BPM node→form map build (diagram clicks only) — avoids blocking first paint on MI cases. */
+let deferredNodeFormMapContent: { content: any; bindingRelationTableMap: Map<number, number | null> } | null = null
+/** Gate FormRenderer mount until MI hydrate yields — prevents RESULT_CODE_HUNG on heavy el-table trees. */
+const formRenderReady = ref(false)
+/** FU canvas subTable widgets — preserved when task-form configJson overwrites layout. */
+const fuFormSubTableFields = ref<FormField[]>([])
 /** Cached from last successful loadFunctionUnitContent — refreshes nodeFormMap after loadProcessAndTaskFormData merges variables. */
 const lastBindingRelationTableMap = ref<Map<number, number | null>>(new Map())
+
+/** MI sub-task Save/display must read the full process snapshot — not the post-isolate truncated {@code formData.__subTables__}. */
+function miSubTaskSubTablesLoadSource(): Record<string, unknown> | null {
+  if (isMiSubTaskMode.value && miFullSubTablesSnapshotRef.value) {
+    return miFullSubTablesSnapshotRef.value
+  }
+  const saved = formData.value.__subTables__
+  return saved && typeof saved === 'object' ? (saved as Record<string, unknown>) : null
+}
+
+/** Synthesize bindings for canvas subTable widgets when FU tableBindings metadata is missing/stale. */
+function ensureSubTableBindingsFromLayoutAndConfig(
+  bindings: typeof subTableBindings.value,
+  formConfig: Record<string, any>,
+) {
+  const placed = collectPlacedSubTableBindingIds(
+    formFields.value,
+    formTabs.value,
+    formFieldsAfterTabs.value,
+  )
+  if (placed.size === 0) return
+  const have = new Set(bindings.map(b => Number(b.bindingId)))
+  const subForms = (formConfig?.subForms ?? {}) as Record<string, any>
+  const portalViewsMap = (formConfig?.subTablePortalViews ?? {}) as Record<string, any>
+
+  for (const bid of placed) {
+    if (legacyBindingIdAliases(bid).some(alias => have.has(alias))) continue
+    const hit = findRawBindingInForms(cachedContentForms, bid)
+    const cfg = hit?.formConfig ?? formConfig
+    const raw = hit?.raw ?? {
+      bindingId: bid,
+      bindingType: 'SUB',
+      bindingMode: 'EDITABLE',
+      tableName: '',
+      tableDisplayName: '',
+    }
+    const columns = deriveColumnsFromBinding(raw, cfg.subForms ?? subForms, cfg)
+    if (!Array.isArray(columns) || columns.length === 0) continue
+    const subFormDesign = resolveSubFormDesign(raw, cfg.subForms ?? subForms)
+    bindings.push({
+      bindingId: bid,
+      tableId: raw.tableId ?? null,
+      bindingType: raw.bindingType ?? 'SUB',
+      bindingMode: raw.bindingMode ?? 'EDITABLE',
+      foreignKeyField: raw.foreignKeyField ?? null,
+      tableName: raw.tableDisplayName || raw.tableName || `Sub Table ${bid}`,
+      physicalTableName: raw.tableName,
+      tableType: raw.tableType ?? '',
+      tableDescription: raw.tableDescription ?? '',
+      columns,
+      formFields: subFormDesign.formFields,
+      formOptions: subFormDesign.formOptions,
+      portalViews: portalViewsMap[bid] ?? portalViewsMap[String(bid)] ?? null,
+      primaryKeyFields: resolveSubTablePrimaryKeyFields(raw.primaryKeyFields, bid, cfg),
+      fieldDefinitions: raw.fieldDefinitions ?? [],
+      bindingLinkMode: raw.bindingLinkMode,
+      data: [],
+    } as any)
+    have.add(bid)
+  }
+
+  const saved = miSubTaskSubTablesLoadSource()
+  if (saved) {
+    const ambiguous = bindingIdsPreferStrictSubTableLookup(bindings)
+    for (const binding of bindings) {
+      if (Array.isArray(binding.data) && binding.data.length > 0) continue
+      const rows = getSavedSubTableRows(saved, binding, ambiguous.has(binding.bindingId))
+      if (rows?.length) {
+        binding.data = cloneSubTableRows(
+          isMiDashboardSubTableBinding(binding)
+            ? finalizeMiCollectionSubTableBindingRows(rows, binding)
+            : rows,
+        )
+      }
+    }
+  }
+}
+
+function reScopeMiSubTaskParticipantBindings() {
+  const myRowId = currentMiRowId.value
+  if (!isMiSubTaskMode.value || myRowId == null) return
+  scopeMiSubTaskBindingsToCurrentParticipant(subTableBindings.value, myRowId)
+  for (const pf of previousForms.value) {
+    scopeMiSubTaskBindingsToCurrentParticipant(
+      pf.subTableBindings as typeof subTableBindings.value,
+      myRowId,
+    )
+  }
+}
+
+function syncFormLayoutWithSubTableBindings() {
+  ensureSubTableBindingsFromLayoutAndConfig(subTableBindings.value, mainFormConfig.value)
+
+  const layout = {
+    fields: formFields.value,
+    tabs: formTabs.value,
+    fieldsAfterTabs: formFieldsAfterTabs.value,
+  }
+  if (fuFormSubTableFields.value.length > 0) {
+    const activeIds = new Set(
+      subTableBindings.value.map(b => Number(b.bindingId)).filter(n => Number.isFinite(n)),
+    )
+    mergeMissingSubTableFieldsIntoLayout(layout, fuFormSubTableFields.value, activeIds)
+  }
+  ensureSubTableBindingsOnFormLayout(
+    layout,
+    subTableBindings.value,
+    mainFormConfig.value,
+  )
+  // Native SUB tables (e.g. Assign Task "Title" card → Sub Task / Attachment) render in-place inside
+  // the designer card via FormRenderer — design parity with developer-workstation Form Preview.
+  formFields.value = layout.fields
+  formTabs.value = layout.tabs
+  formFieldsAfterTabs.value = layout.fieldsAfterTabs
+  /** Layout sync may synthesize bindings + reload slices — re-scope MI sub-task participant rows. */
+  reScopeMiSubTaskParticipantBindings()
+  forceSeedMiCollectionBindingForCurrentParticipant()
+}
+
+/** Last-resort: ensure the MI collection grid has the current participant row from the full snapshot. */
+function forceSeedMiCollectionBindingForCurrentParticipant() {
+  ;(window as any).__miDbgEntry = {
+    isMiSubTaskMode: isMiSubTaskMode.value,
+    currentMiRowId: currentMiRowId.value,
+    hasFlat: !!miFullSubTablesSnapshotRef.value,
+    participantPk: resolveMiCollectionParticipantPkFields(),
+    scope: miSubProcessScope.value,
+  }
+  if (!isMiSubTaskMode.value || currentMiRowId.value == null) return
+  const flat = miFullSubTablesSnapshotRef.value
+  if (!flat) return
+  const myRowId = currentMiRowId.value
+  const participantPk = resolveMiCollectionParticipantPkFields()
+  if (!hasConfiguredPrimaryKeyFields(participantPk)) return
+  const rtMap = lastBindingRelationTableMap.value
+
+  for (const binding of subTableBindings.value) {
+    if (!isCurrentMiCollectionSubTableBinding(binding)) continue
+    const existing = Array.isArray(binding.data) ? binding.data : []
+    if (existing.some(row => rowMatchesSubTablePrimaryKey(row, myRowId, participantPk))) continue
+
+    let candidates: any[] = []
+    const tableIdRaw =
+      binding.tableId != null && Number.isFinite(Number(binding.tableId))
+        ? Number(binding.tableId)
+        : rtMap.get(binding.bindingId)
+    if (Number.isFinite(Number(tableIdRaw))) {
+      candidates = collectSubTableSliceRowsForRelationTableId(
+        flat,
+        Number(tableIdRaw),
+        rtMap,
+        binding.tableName,
+        binding.physicalTableName,
+      )
+    }
+    if (candidates.length === 0) {
+      candidates = getSavedSubTableRows(flat, binding) ?? []
+    }
+    const hit = candidates.filter(row => rowMatchesSubTablePrimaryKey(row, myRowId, participantPk))
+    if (hit.length > 0) {
+      binding.data = cloneSubTableRows(finalizeMiCollectionSubTableBindingRows(hit, binding))
+    }
+  }
+
+  backfillMiParticipantScopedBindingsFromSnapshot(subTableBindings.value, myRowId)
+  hydrateMiLinkChildBindingsFromFullSnapshot(myRowId)
+
+  const dumpSlice = (k: string) => {
+    const v = (flat as any)[k]
+    return Array.isArray(v)
+      ? v.map((r: any) => ({ id_idw: r?.id_idw, id: r?.id, name: r?.name, hasFile: !!r?.file }))
+      : null
+  }
+  const collBinding = subTableBindings.value.find(b => isCurrentMiCollectionSubTableBinding(b))
+  const collCandidates = collBinding
+    ? collectSubTableSliceRowsForRelationTableId(
+        flat,
+        20,
+        rtMap,
+        collBinding.tableName,
+        collBinding.physicalTableName,
+      ).map((r: any) => ({ id_idw: r?.id_idw, name: r?.name, hasFile: !!r?.file }))
+    : null
+  ;(window as any).__miDebug = {
+    myRowId,
+    participantPk,
+    scope: miSubProcessScope.value,
+    flatKeys: Object.keys(flat).filter(k => !k.startsWith('__')),
+    rtMapEntries: Array.from(rtMap.entries()),
+    slice64: dumpSlice('64'),
+    slice66: dumpSlice('66'),
+    slice69: dumpSlice('69'),
+    sliceSubtable: dumpSlice('subtable'),
+    sliceSubTask: dumpSlice('Sub Task'),
+    collCandidates,
+    collCandidateHits: (collCandidates ?? []).filter((r: any) => String(r.id_idw) === 'Test-000069').length,
+    bindings: subTableBindings.value.map(b => ({
+      bindingId: b.bindingId,
+      tableName: b.tableName,
+      physicalTableName: b.physicalTableName,
+      tableId: b.tableId,
+      pk: b.primaryKeyFields,
+      isCollection: isCurrentMiCollectionSubTableBinding(b),
+      isDashboard: isMiDashboardSubTableBinding(b),
+      isParticipantScoped: isMiParticipantScopedSubTableBinding(b),
+      dataLen: Array.isArray(b.data) ? b.data.length : null,
+      firstRow: Array.isArray(b.data) && b.data[0] ? JSON.parse(JSON.stringify(b.data[0])) : null,
+    })),
+  }
+}
+
+function yieldToMain(): Promise<void> {
+  return new Promise(resolve => {
+    requestAnimationFrame(() => { setTimeout(resolve, 0) })
+  })
+}
+
+function markBindingRowsNonReactive() {
+  const markList = (bindings: typeof subTableBindings.value) => {
+    for (const b of bindings) {
+      if (!Array.isArray(b.data)) continue
+      for (let i = 0; i < b.data.length; i++) {
+        const row = b.data[i]
+        if (row && typeof row === 'object') b.data[i] = markRaw(row)
+      }
+    }
+  }
+  markList(subTableBindings.value)
+  for (const pf of previousForms.value) markList(pf.subTableBindings)
+}
+
+async function buildNodeFormMapIfNeeded() {
+  const pending = deferredNodeFormMapContent
+  if (!pending || nodeFormMap.value.size > 0) return
+  await yieldToMain()
+  try {
+    nodeFormMap.value = buildNodeFormMapFromContent(pending.content, pending.bindingRelationTableMap)
+    alignNodeFormMapSubTableBindingsOnly()
+    refreshNodeFormMapFromFormData({
+      subTablesSource: formData.value.__subTables__ as Record<string, unknown> | undefined,
+    })
+  } catch (e) {
+    console.warn('[NodeFormMap] Deferred build failed:', e)
+  } finally {
+    deferredNodeFormMapContent = null
+  }
+}
 
 function rehydrateSharedAttachmentBindings(
   bindings: typeof subTableBindings.value,
@@ -818,25 +1121,28 @@ function subTableBindingMatches(
 }
 
 /** Recursively unwrap Vue Proxy at every level — returns a plain clone. */
-function deepToRaw(obj: any): any {
+function deepToRaw(obj: any, seen?: WeakSet<object>): any {
   const raw = toRaw(obj)
   if (raw === null || raw === undefined || typeof raw !== 'object') return raw
-  if (Array.isArray(raw)) return raw.map(deepToRaw)
+  const visited = seen instanceof WeakSet ? seen : new WeakSet<object>()
+  if (visited.has(raw)) return raw
+  visited.add(raw)
+  if (Array.isArray(raw)) return raw.map(item => deepToRaw(item, visited))
   if (raw instanceof Date) return new Date(raw.getTime())
   if (raw instanceof Map) {
     const m = new Map()
-    raw.forEach((v, k) => m.set(deepToRaw(k), deepToRaw(v)))
+    raw.forEach((v, k) => m.set(deepToRaw(k, visited), deepToRaw(v, visited)))
     return m
   }
   if (raw instanceof Set) {
     const s = new Set()
-    raw.forEach(v => s.add(deepToRaw(v)))
+    raw.forEach(v => s.add(deepToRaw(v, visited)))
     return s
   }
   const result: Record<string, any> = {}
   for (const key in raw) {
     if (Object.prototype.hasOwnProperty.call(raw, key)) {
-      result[key] = deepToRaw(raw[key])
+      result[key] = deepToRaw(raw[key], visited)
     }
   }
   return result
@@ -845,7 +1151,26 @@ function deepToRaw(obj: any): any {
 function cloneSubTableRows(rows: any[]): any[] {
   // Deep-unwrap all Vue proxies recursively — avoids JSON.stringify getter traps.
   // For 41 rows × ~10 cols this is ~410 property reads, no serialization overhead.
-  return rows.map(deepToRaw)
+  return rows.map(row => deepToRaw(row))
+}
+
+/** Clone + flatten __subTables__ once for rehydrate / MI resync (JSON clone avoids reactive getter traps). */
+function cloneAndFlattenSubTablesMap(savedMap: Record<string, unknown>): Record<string, unknown> {
+  const flattened = JSON.parse(JSON.stringify(savedMap)) as Record<string, unknown>
+  flattenNestedSubTableRowsIntoPayload(flattened)
+  return flattened
+}
+
+/** Strip nested row.__subTables__ before Vue mounts el-table — only safe AFTER MI isolate completes. */
+function stripNestedFromAllTaskBindings() {
+  const strip = (bindings: typeof subTableBindings.value) => {
+    for (const b of bindings) {
+      if (Array.isArray(b.data)) stripNestedSubTablesFromRows(b.data)
+    }
+  }
+  strip(subTableBindings.value)
+  for (const pf of previousForms.value) strip(pf.subTableBindings)
+  for (const info of nodeFormMap.value.values()) strip(info.subTableBindings)
 }
 
 function cloneSubTableBindings<T extends Array<{ data: any[] }>>(bindings: T): T {
@@ -901,12 +1226,13 @@ function patchMiParentRowsWithNestedChildSlice(
     ) {
       return row
     }
+    const scopedSlice = scopeMiLinkChildRowsForParentRow(rec, childSlice)
     const nest = {
       ...(rec.__subTables__ && typeof rec.__subTables__ === 'object'
         ? (rec.__subTables__ as Record<string, unknown>)
         : {})
     }
-    const slice = cloneSubTableRows(childSlice)
+    const slice = cloneSubTableRows(scopedSlice)
     nest[childBinding.bindingId] = slice
     nest[String(childBinding.bindingId)] = slice
     if (childBinding.tableName) {
@@ -952,7 +1278,6 @@ function materializeMiLinkChildBindingRowsFromParents(myRowId: MiParticipantRowI
     if (!isMiParticipantScopedSubTableBinding(b)) continue
     if (b.bindingId === parentBinding.bindingId) continue
     const existing = Array.isArray(b.data) ? b.data : []
-    if (existing.length > 0) continue
     const nested = pullNestedRowsForBindingFromParentRows(
       {
         bindingId: b.bindingId,
@@ -963,8 +1288,16 @@ function materializeMiLinkChildBindingRowsFromParents(myRowId: MiParticipantRowI
       [parentRow],
       peerMap,
     )
-    if (nested.length > 0) {
+    if (nested.length === 0) continue
+    if (existing.length === 0) {
       b.data = cloneSubTableRows(nested)
+      continue
+    }
+    const fieldKeys = collectSubTableBindingMatchKeys(b as any)
+    if (subTableRowsLackSavedFieldPayload(existing, fieldKeys)) {
+      b.data = cloneSubTableRows(
+        mergeSubTableRowsByRowId(existing, nested, b.primaryKeyFields ?? null),
+      )
     }
   }
 }
@@ -1033,6 +1366,7 @@ async function seedMiParticipantScopedBindingForeignKeys(
         },
       )
       next = repairMisassignedPrimaryKeyFromParentId(next, b.fieldDefinitions, fkSeed)
+      next = repairMisassignedLinkChildStructuralFk(next, fkSeed)
       b.data[i] = next
     }
     if (allocateFn && b.tableId != null && b.fieldDefinitions?.length) {
@@ -1044,6 +1378,7 @@ async function seedMiParticipantScopedBindingForeignKeys(
         fuId,
       )
     }
+    b.data = cloneSubTableRows(collapseMiLinkChildRowsToOnePerParticipant(Array.isArray(b.data) ? b.data : []))
     syncMiLinkChildRowsIntoParentNested(
       { bindingId: b.bindingId, tableName: b.tableName ?? '' },
       cloneSubTableRows(Array.isArray(b.data) ? b.data : []),
@@ -1076,14 +1411,6 @@ function syncMainSubTableRows(bindingId: number, rows: any[]) {
   if (!source) return
 
   const nextRows = Array.isArray(rows) ? rows : []
-  const sync = (binding: { bindingId: number; tableName: string; physicalTableName?: string; tableId?: number | null; data: any[] }) => {
-    if (subTableBindingMatches(binding, source)) {
-      binding.data = binding === source ? nextRows : cloneSubTableRows(nextRows)
-    }
-  }
-  subTableBindings.value.forEach(sync)
-  // Never push current-task sub-table edits into previousForms — those are read-only snapshots
-  // (MI isolation + matching bindingIds would wipe other sub-tasks' rows).
 
   const subTables = { ...((formData.value.__subTables__ as Record<string, any>) || {}) }
   const strictSlices = bindingIdsPreferStrictSubTableLookup(subTableBindings.value)
@@ -1092,6 +1419,16 @@ function syncMainSubTableRows(bindingId: number, rows: any[]) {
     ? mergeSubTableRowsByRowId(existing, nextRows, source.primaryKeyFields)
     : nextRows
   const out = cloneSubTableRows(merged)
+
+  const sync = (binding: { bindingId: number; tableName: string; physicalTableName?: string; tableId?: number | null; data: any[] }) => {
+    if (subTableBindingMatches(binding, source)) {
+      binding.data = binding === source ? out : cloneSubTableRows(out)
+    }
+  }
+  subTableBindings.value.forEach(sync)
+  // Never push current-task sub-table edits into previousForms — those are read-only snapshots
+  // (MI isolation + matching bindingIds would wipe other sub-tasks' rows).
+
   subTables[source.bindingId] = out
   subTables[String(source.bindingId)] = out
   if (source.tableName) {
@@ -1123,8 +1460,196 @@ function syncMainSubTableRows(bindingId: number, rows: any[]) {
   scheduleSubTableAutosave()
 }
 
+function sanitizeMiCollectionBindingsData(bindings: typeof subTableBindings.value) {
+  for (const binding of bindings) {
+    if (!isMiDashboardSubTableBinding(binding)) continue
+    binding.data = finalizeMiCollectionSubTableBindingRows(
+      Array.isArray(binding.data) ? binding.data : [],
+      binding,
+    )
+  }
+}
+
+function resolveMiCollectionBindingAcrossTaskForms(): (typeof subTableBindings.value)[0] | undefined {
+  const scope = miSubProcessScope.value
+  if (!scope?.subTableName) return undefined
+  const all = [
+    ...subTableBindings.value,
+    ...previousForms.value.flatMap(pf => pf.subTableBindings),
+  ] as typeof subTableBindings.value
+  const matches = all.filter(b => bindingMatchesMiSubTableName(b, scope.subTableName))
+  if (matches.length === 0) return undefined
+  return (
+    matches.find(b => hasConfiguredPrimaryKeyFields(b.primaryKeyFields))
+    ?? matches[0]
+  )
+}
+
+function isCurrentMiCollectionSubTableBinding(binding: {
+  tableName?: string
+  physicalTableName?: string
+  tableId?: number | null
+}): boolean {
+  const scope = miSubProcessScope.value
+  if (!scope?.subTableName) return false
+  if (bindingMatchesMiSubTableName(binding, scope.subTableName)) return true
+  const coll = resolveMiCollectionBindingAcrossTaskForms()
+  return (
+    coll?.tableId != null
+    && binding.tableId != null
+    && Number(binding.tableId) === Number(coll.tableId)
+  )
+}
+
+function resolveMiCollectionParticipantPkFields(): string[] | null {
+  const b = resolveMiCollectionBindingAcrossTaskForms()
+  if (b && hasConfiguredPrimaryKeyFields(b.primaryKeyFields)) {
+    return b.primaryKeyFields!
+  }
+  return null
+}
+
+/** MI sub-task To Do: Sub Task grid + related bindings scoped to {@link currentMiRowId} only. */
+function scopeMiSubTaskBindingsToCurrentParticipant(
+  bindings: typeof subTableBindings.value,
+  myRowId: MiParticipantRowId | null | undefined,
+) {
+  if (!isMiSubTaskMode.value || myRowId == null) return
+  sanitizeMiCollectionBindingsData(bindings)
+  const scope = miSubProcessScope.value
+  if (!scope?.subTableName) return
+  const collectionBinding = resolveMiCollectionBindingAcrossTaskForms()
+  const participantPk =
+    collectionBinding?.primaryKeyFields ?? resolveMiCollectionParticipantPkFields()
+  if (
+    collectionBinding
+    && !hasConfiguredPrimaryKeyFields(participantPk)
+  ) {
+    warnMiMissingPrimaryKey(collectionBinding)
+    return
+  }
+  filterBindingsToMiParticipantRow(bindings as typeof subTableBindings.value, scope, myRowId, {
+    participantPrimaryKeyFields: participantPk,
+    collectionTableId:
+      collectionBinding?.tableId != null && Number.isFinite(Number(collectionBinding.tableId))
+        ? Number(collectionBinding.tableId)
+        : null,
+  })
+  backfillEmptyMiCollectionBindingsFromSnapshot(
+    bindings,
+    myRowId,
+    participantPk,
+    collectionBinding?.tableId ?? null,
+  )
+  backfillMiParticipantScopedBindingsFromSnapshot(bindings, myRowId)
+}
+
+/** People / link-child: merge prior-step business fields from the full MI snapshot when binding.data is empty or FK-only. */
+function backfillMiParticipantScopedBindingsFromSnapshot(
+  bindings: typeof subTableBindings.value,
+  myRowId: MiParticipantRowId,
+) {
+  const flat = miFullSubTablesSnapshotRef.value
+  if (!flat) return
+  const rtMap = lastBindingRelationTableMap.value
+
+  for (const binding of bindings) {
+    if (!isMiParticipantScopedSubTableBinding(binding)) continue
+    const existing = Array.isArray(binding.data) ? binding.data : []
+    const fieldKeys = collectSubTableBindingMatchKeys(binding as any)
+    const lacksPayload =
+      existing.length === 0 || subTableRowsLackSavedFieldPayload(existing, fieldKeys)
+
+    if (!lacksPayload) continue
+
+    const candidates: any[] = cloneSubTableRows(existing)
+    const tableIdRaw =
+      binding.tableId != null && Number.isFinite(Number(binding.tableId))
+        ? Number(binding.tableId)
+        : rtMap.get(binding.bindingId)
+    if (Number.isFinite(Number(tableIdRaw))) {
+      candidates.push(
+        ...collectSubTableSliceRowsForRelationTableId(
+          flat,
+          Number(tableIdRaw),
+          rtMap,
+          binding.tableName,
+          binding.physicalTableName,
+        ),
+      )
+    } else {
+      const own = getSavedSubTableRows(flat, binding) ?? []
+      candidates.push(...own)
+    }
+    const scoped = candidates
+      .map(r => repairMisassignedLinkChildStructuralFk(r as Record<string, unknown>, myRowId))
+      .filter(r => rowBelongsToCurrentMiScope(r, myRowId, binding))
+    let merged = collapseMiLinkChildRowsToOnePerParticipant(scoped)
+    if (merged.length > 0) {
+      const temp = { ...binding, data: merged } as typeof binding
+      backfillMiLinkChildPrimaryKeysFromVariables([temp], flat, myRowId)
+      merged = collapseMiLinkChildRowsToOnePerParticipant(temp.data)
+      binding.data = cloneSubTableRows(
+        filterRowsForMiParticipantSubTableBinding(merged, binding),
+      )
+    }
+  }
+}
+
+/** When layout-sync adds a collection binding with an empty slice, seed the current participant row from the full snapshot. */
+function backfillEmptyMiCollectionBindingsFromSnapshot(
+  bindings: typeof subTableBindings.value,
+  myRowId: MiParticipantRowId,
+  participantPk: string[] | null | undefined,
+  collectionTableId: number | null | undefined,
+) {
+  const scope = miSubProcessScope.value
+  if (!scope?.subTableName || !hasConfiguredPrimaryKeyFields(participantPk)) return
+  const flat = miFullSubTablesSnapshotRef.value
+  if (!flat) return
+  const rtMap = lastBindingRelationTableMap.value
+  const tid =
+    collectionTableId != null && Number.isFinite(Number(collectionTableId))
+      ? Number(collectionTableId)
+      : null
+
+  for (const binding of bindings) {
+    const isCollection =
+      isCurrentMiCollectionSubTableBinding(binding)
+      || bindingMatchesMiSubTableName(binding, scope.subTableName)
+      || (tid != null && binding.tableId != null && Number(binding.tableId) === tid)
+    if (!isCollection) continue
+    if (Array.isArray(binding.data) && binding.data.length > 0) continue
+
+    let candidates: any[] = []
+    const bindingTid =
+      binding.tableId != null && Number.isFinite(Number(binding.tableId))
+        ? Number(binding.tableId)
+        : rtMap.get(binding.bindingId) ?? tid
+    if (bindingTid != null && Number.isFinite(Number(bindingTid))) {
+      candidates = collectSubTableSliceRowsForRelationTableId(
+        flat,
+        Number(bindingTid),
+        rtMap,
+        binding.tableName,
+        binding.physicalTableName,
+      )
+    } else {
+      candidates = getSavedSubTableRows(flat, binding) ?? []
+    }
+    const hit = candidates.filter(row =>
+      rowMatchesSubTablePrimaryKey(row, myRowId, participantPk),
+    )
+    if (hit.length > 0) {
+      binding.data = cloneSubTableRows(finalizeMiCollectionSubTableBindingRows(hit, binding))
+    }
+  }
+}
+
 function rehydrateSharedProcessSubTableBindings(
   savedSubTablesSource?: Record<string, unknown> | null,
+  /** Pre-flattened copy to avoid redundant deep-clone + flatten (perf). */
+  preFlattened?: Record<string, unknown>,
 ) {
   const savedMap = coerceSubTablesVariableToMap(
     savedSubTablesSource ?? formData.value.__subTables__,
@@ -1135,12 +1660,35 @@ function rehydrateSharedProcessSubTableBindings(
     return
   }
 
-  const flattened = JSON.parse(JSON.stringify(savedMap)) as Record<string, unknown>
-  flattenNestedSubTableRowsIntoPayload(flattened)
+  const flattened = preFlattened ?? cloneAndFlattenSubTablesMap(savedMap)
   const rtMap = lastBindingRelationTableMap.value
 
   const applyTo = (bindings: typeof subTableBindings.value) => {
+    const ambiguous = bindingIdsPreferStrictSubTableLookup(bindings)
     for (const binding of bindings) {
+      if (isMiDashboardSubTableBinding(binding)) {
+        const resolved =
+          resolveSubTableRowsForBinding(flattened, binding, {
+            forbidNameFallback: ambiguous.has(binding.bindingId),
+            bindingTableById: rtMap,
+            mergeSiblingSlices: !isMiSubTaskMode.value,
+          }) ?? []
+        const existing = Array.isArray(binding.data) ? binding.data : []
+        let combined: any[]
+        if (isMiSubTaskMode.value) {
+          /** MI sub-task: own slice only — global allSlices merge injects attachment / ghost rows. */
+          combined = mergeSubTableRowsByRowId(existing, resolved, binding.primaryKeyFields ?? null)
+        } else {
+          const merged = mergeAllSlicesForSharedProcessSubTableBinding(flattened, binding, rtMap)
+          combined = mergeSubTableRowsByRowId(
+            mergeSubTableRowsByRowId(resolved, merged, binding.primaryKeyFields ?? null),
+            existing,
+            binding.primaryKeyFields ?? null,
+          )
+        }
+        binding.data = finalizeMiCollectionSubTableBindingRows(combined, binding)
+        continue
+      }
       if (isMiParticipantScopedSubTableBinding(binding)) continue
       const merged = mergeAllSlicesForSharedProcessSubTableBinding(flattened, binding, rtMap)
       const existing = Array.isArray(binding.data) ? binding.data : []
@@ -1168,25 +1716,22 @@ function rehydrateSharedProcessSubTableBindings(
 
 function getSavedSubTableRows(
   savedSubTables: any,
-  binding: { bindingId: number; tableName: string; physicalTableName?: string },
+  binding: {
+    bindingId: number
+    tableName: string
+    physicalTableName?: string
+    tableId?: number | null
+    primaryKeyFields?: string[] | null
+    columns?: Array<{ field?: string }> | null
+  },
   forbidNameFallback = false,
 ): any[] | undefined {
-  if (!savedSubTables || typeof savedSubTables !== 'object') return undefined
-
-  const byBindingId =
-    savedSubTables[binding.bindingId] ?? savedSubTables[String(binding.bindingId)]
-  if (Array.isArray(byBindingId)) {
-    return byBindingId
-  }
-  if (forbidNameFallback) {
-    return undefined
-  }
-  const phys = binding.physicalTableName
-  const saved =
-    savedSubTables[binding.tableName] ??
-    savedSubTables[normalizeSubTableName(binding.tableName)] ??
-    (phys ? savedSubTables[phys] ?? savedSubTables[normalizeSubTableName(phys)] : undefined)
-  return Array.isArray(saved) ? saved : undefined
+  return resolveSubTableRowsForBinding(savedSubTables, binding, {
+    forbidNameFallback,
+    bindingTableById: lastBindingRelationTableMap.value,
+    mergeSiblingSlices:
+      isMiDashboardSubTableBinding(binding) && !isMiSubTaskMode.value,
+  })
 }
 
 function applySavedRowsToBindings<T extends Array<{ bindingId: number; tableName: string; data: any[] }>>(bindings: T, savedSubTables: any): T {
@@ -1195,7 +1740,11 @@ function applySavedRowsToBindings<T extends Array<{ bindingId: number; tableName
   bindings.forEach(binding => {
     const saved = getSavedSubTableRows(savedSubTables, binding, ambiguous.has(binding.bindingId))
     if (saved) {
-      binding.data = cloneSubTableRows(saved)
+      binding.data = cloneSubTableRows(
+        isMiDashboardSubTableBinding(binding)
+          ? finalizeMiCollectionSubTableBindingRows(saved, binding)
+          : saved,
+      )
     }
   })
   return bindings
@@ -1223,17 +1772,228 @@ function applyCompletedSnapshotToForm(data: CompletedTaskFormData | null) {
   alignProcessSubTableBindingsBySharedTable()
 }
 
+/** Re-load previousForms slices from the flattened MI snapshot (sub form1 attachment often nested-only). */
+function refreshPreviousFormsSubTableDataFromSnapshot(flat: Record<string, unknown> | null) {
+  if (!flat) return
+  for (const pf of previousForms.value) {
+    const ambiguous = bindingIdsPreferStrictSubTableLookup(pf.subTableBindings as any[])
+    for (const binding of pf.subTableBindings) {
+      const saved = getSavedSubTableRows(flat, binding, ambiguous.has(binding.bindingId))
+      if (Array.isArray(saved) && saved.length > 0) {
+        binding.data = cloneSubTableRows(
+          isMiDashboardSubTableBinding(binding)
+            ? finalizeMiCollectionSubTableBindingRows(saved, binding)
+            : saved,
+        )
+      }
+      if (isSharedAttachmentFileBinding(binding)) {
+        applySharedAttachmentFinalizeAndMaterialize([binding as typeof subTableBindings.value[0]], null, {
+          flattened: flat,
+          bindingTableById: lastBindingRelationTableMap.value,
+        })
+      }
+    }
+  }
+}
+
+/**
+ * After MI isolate/resync, merge sub form1 (and earlier) sub-table rows into the current sub form2 bindings.
+ * Previous step rows are merged first; current binding.data wins on conflicts so sub form2 edits are kept.
+ */
+function mergePriorStepSubTablesAfterMiIsolate(myRowId: MiParticipantRowId | null) {
+  const flat = miFullSubTablesSnapshotRef.value
+  refreshPreviousFormsSubTableDataFromSnapshot(flat)
+
+  for (const current of subTableBindings.value) {
+    const pk = current.primaryKeyFields ?? null
+
+    if (
+      myRowId != null
+      && flat
+      && isCurrentMiCollectionSubTableBinding(current)
+    ) {
+      const participantPk = pk ?? miCollectionPrimaryKeyFields()
+      let candidates: any[] = cloneSubTableRows(Array.isArray(current.data) ? current.data : [])
+      const tableIdRaw =
+        current.tableId != null
+          ? Number(current.tableId)
+          : lastBindingRelationTableMap.value.get(current.bindingId)
+      if (Number.isFinite(Number(tableIdRaw))) {
+        candidates.push(
+          ...collectSubTableSliceRowsForRelationTableId(
+            flat,
+            Number(tableIdRaw),
+            lastBindingRelationTableMap.value,
+            current.tableName,
+            current.physicalTableName,
+          ),
+        )
+      } else {
+        candidates.push(...(getSavedSubTableRows(flat, current) ?? []))
+      }
+      const scoped = candidates.filter(row =>
+        rowMatchesSubTablePrimaryKey(row, myRowId, participantPk),
+      )
+      if (scoped.length > 0) {
+        current.data = cloneSubTableRows(finalizeMiCollectionSubTableBindingRows(scoped, current))
+      }
+      continue
+    }
+
+    if (isMiParticipantScopedSubTableBinding(current) && myRowId != null) {
+      const candidates: any[] = cloneSubTableRows(Array.isArray(current.data) ? current.data : [])
+      for (const pf of previousForms.value) {
+        for (const prev of pf.subTableBindings) {
+          if (!subTableBindingMatches(current, prev)) continue
+          if (!Array.isArray(prev.data) || prev.data.length === 0) continue
+          const prevRows = prev.data
+            .map(r => repairMisassignedLinkChildStructuralFk(r as Record<string, unknown>, myRowId))
+            .filter(r => rowBelongsToCurrentMiScope(r, myRowId, current))
+          candidates.push(...cloneSubTableRows(prevRows))
+        }
+      }
+      if (flat) {
+        const tableIdRaw =
+          current.tableId != null
+            ? Number(current.tableId)
+            : lastBindingRelationTableMap.value.get(current.bindingId)
+        if (Number.isFinite(Number(tableIdRaw))) {
+          const slices = collectSubTableSliceRowsForRelationTableId(
+            flat,
+            Number(tableIdRaw),
+            lastBindingRelationTableMap.value,
+            current.tableName,
+            current.physicalTableName,
+          )
+          const scoped = slices
+            .map(r => repairMisassignedLinkChildStructuralFk(r as Record<string, unknown>, myRowId))
+            .filter(r => rowBelongsToCurrentMiScope(r, myRowId, current))
+          candidates.push(...cloneSubTableRows(scoped))
+        }
+      }
+      let merged = collapseMiLinkChildRowsToOnePerParticipant(candidates)
+      if (flat && merged.length > 0) {
+        const tempBinding = { ...current, data: merged } as typeof current
+        backfillMiLinkChildPrimaryKeysFromVariables([tempBinding], flat, myRowId)
+        merged = collapseMiLinkChildRowsToOnePerParticipant(tempBinding.data)
+      }
+      if (merged.length > 0) {
+        current.data = cloneSubTableRows(merged)
+      }
+      continue
+    }
+
+    let merged = cloneSubTableRows(Array.isArray(current.data) ? current.data : [])
+
+    if (isSharedAttachmentFileBinding(current)) {
+      for (const pf of previousForms.value) {
+        for (const prev of pf.subTableBindings) {
+          if (!subTableBindingMatches(current, prev)) continue
+          if (!Array.isArray(prev.data) || prev.data.length === 0) continue
+          merged = mergeSubTableRowsByRowId(merged, cloneSubTableRows(prev.data), pk)
+        }
+      }
+      if (flat) {
+        const snap = mergeAllSlicesForSharedProcessSubTableBinding(
+          flat,
+          current,
+          lastBindingRelationTableMap.value,
+        )
+        merged = mergeSubTableRowsByRowId(merged, snap, pk)
+      }
+      current.data = cloneSubTableRows(
+        finalizeSharedProcessSubTableBindingRows(merged, current),
+      )
+    }
+  }
+
+  applySharedAttachmentFinalizeAndMaterialize(
+    subTableBindings.value,
+    formData.value as Record<string, unknown>,
+    { flattened: flat, bindingTableById: lastBindingRelationTableMap.value },
+  )
+
+  if (myRowId != null) {
+    for (const b of subTableBindings.value) {
+      if (!isMiParticipantScopedSubTableBinding(b)) continue
+      syncMiLinkChildRowsIntoParentNested(
+        { bindingId: b.bindingId, tableName: b.tableName ?? '' },
+        cloneSubTableRows(Array.isArray(b.data) ? b.data : []),
+      )
+    }
+  }
+}
+
+/** Rebuild MI link-child bindings (People, …) solely from the flattened variables snapshot + previousForms. */
+function hydrateMiLinkChildBindingsFromFullSnapshot(myRowId: MiParticipantRowId) {
+  const flat = miFullSubTablesSnapshotRef.value
+  if (!flat) return
+  const rtMap = lastBindingRelationTableMap.value
+  refreshPreviousFormsSubTableDataFromSnapshot(flat)
+
+  for (const binding of subTableBindings.value) {
+    if (!isMiParticipantScopedSubTableBinding(binding)) continue
+    const candidates: any[] = []
+    const tableIdRaw =
+      binding.tableId != null ? Number(binding.tableId) : rtMap.get(binding.bindingId)
+    if (Number.isFinite(Number(tableIdRaw))) {
+      candidates.push(
+        ...collectSubTableSliceRowsForRelationTableId(
+          flat,
+          Number(tableIdRaw),
+          rtMap,
+          binding.tableName,
+          binding.physicalTableName,
+        ),
+      )
+    } else {
+      const own = getSavedSubTableRows(flat, binding) ?? []
+      candidates.push(...own)
+    }
+    for (const pf of previousForms.value) {
+      for (const prev of pf.subTableBindings) {
+        if (!subTableBindingMatches(binding, prev)) continue
+        if (Array.isArray(prev.data)) candidates.push(...prev.data)
+      }
+    }
+    const scoped = candidates
+      .map(r => repairMisassignedLinkChildStructuralFk(r as Record<string, unknown>, myRowId))
+      .filter(r => rowBelongsToCurrentMiScope(r, myRowId, binding))
+    let merged = collapseMiLinkChildRowsToOnePerParticipant(scoped)
+    if (merged.length > 0) {
+      const temp = { ...binding, data: merged }
+      backfillMiLinkChildPrimaryKeysFromVariables([temp as typeof binding], flat, myRowId)
+      merged = collapseMiLinkChildRowsToOnePerParticipant(temp.data)
+      binding.data = cloneSubTableRows(merged)
+    }
+  }
+}
+
 function hydrateCurrentSubTablesFromPreviousForms() {
   for (const current of subTableBindings.value) {
-    if (Array.isArray(current.data) && current.data.length > 0) continue
-    const previous = previousForms.value
+    const prevMatches = previousForms.value
       .flatMap(form => form.subTableBindings)
-      .find(binding =>
+      .filter(binding =>
         binding.data?.length > 0 &&
         subTableBindingMatches(current, binding)
       )
-    if (previous) {
-      current.data = cloneSubTableRows(previous.data)
+    if (prevMatches.length === 0) continue
+
+    const fieldKeys = collectSubTableBindingMatchKeys(current as any)
+    const lacksPayload =
+      !Array.isArray(current.data) ||
+      current.data.length === 0 ||
+      subTableRowsLackSavedFieldPayload(current.data, fieldKeys)
+
+    if (!lacksPayload) continue
+
+    const pk = current.primaryKeyFields ?? null
+    let merged: any[] = Array.isArray(current.data) ? cloneSubTableRows(current.data) : []
+    for (const prev of prevMatches) {
+      merged = mergeSubTableRowsByRowId(merged, prev.data, pk)
+    }
+    if (merged.length > 0) {
+      current.data = cloneSubTableRows(merged)
     }
   }
 }
@@ -1393,8 +2153,10 @@ function refreshNodeFormMapFromFormData(opts?: {
     nodeFormMap.value = nextEarly
     return
   }
-  const flattened = JSON.parse(JSON.stringify(raw)) as Record<string, unknown>
-  flattenNestedSubTableRowsIntoPayload(flattened)
+  // Reuse pre-flattened copy if provided (avoids deep-clone per call)
+  const flattened =
+    (opts as any)?._preFlattened ??
+    cloneAndFlattenSubTablesMap(raw as Record<string, unknown>)
   const rtMap = lastBindingRelationTableMap.value
   const next = new Map<string, NodeFormInfo>()
   for (const [nodeId, info] of nodeFormMap.value.entries()) {
@@ -1450,10 +2212,26 @@ function collectSubTableBindingMatchKeys(b: {
 
 const SUB_TABLE_MI_PLACEHOLDER_KEYS = new Set([
   'assignee_user_id',
+  'assignee_id',
   'assignee_display_name',
   'task_status',
+  'task_current_node',
+  'sub_task_status',
+  'sub_task_current_node',
   'task_id',
-  'task_definition_key'
+  'task_definition_key',
+])
+
+/** FK / MI keys that must not satisfy {@link subTableRowsLackSavedFieldPayload} alone (sub_task_id without age still blank). */
+const SUB_TABLE_STRUCTURAL_FK_KEYS = new Set([
+  'sub_task_id',
+  'sub_taskid',
+  'id_idw',
+  'id',
+  'participant_id',
+  'parent_id',
+  'row_id',
+  'main_id',
 ])
 
 function pickSubTableRowValueIgnoreKeyCase(o: Record<string, unknown>, key: string): unknown {
@@ -1468,7 +2246,10 @@ function pickSubTableRowValueIgnoreKeyCase(o: Record<string, unknown>, key: stri
 function subTableRowsLackSavedFieldPayload(rows: unknown[] | undefined, fieldKeys: Set<string>): boolean {
   if (fieldKeys.size === 0) return false
   if (!Array.isArray(rows) || rows.length === 0) return true
-  const checkKeys = [...fieldKeys].filter(k => !SUB_TABLE_MI_PLACEHOLDER_KEYS.has(k))
+  const checkKeys = [...fieldKeys].filter(k => {
+    const lk = k.toLowerCase()
+    return !SUB_TABLE_MI_PLACEHOLDER_KEYS.has(lk) && !SUB_TABLE_STRUCTURAL_FK_KEYS.has(lk)
+  })
   if (checkKeys.length === 0) return true
   for (const row of rows) {
     if (!row || typeof row !== 'object') continue
@@ -1532,10 +2313,14 @@ function backfillEmptySubTableBindingsFromVariables() {
   }
 }
 
-/** Only show sub-table Assign on the BPMN "Assign Participants" user task; initiator/other tasks only fill rows without per-row assignment */
+/** Show sub-table Assign on participant-assignment tasks and any assignee form with an editable MI collection grid. */
 const allowSubTableAssignForCurrentTask = computed(() => {
   const tdk = (taskInfo.value as { taskDefinitionKey?: string }).taskDefinitionKey || ''
-  return tdk === 'Task_AssignParticipants'
+  if (tdk === 'Task_AssignParticipants' || tdk === 'Activity_0hwtl8v') return true
+  if (isMiSubTaskMode.value) return false
+  return subTableBindings.value.some(
+    b => isMiDashboardSubTableBinding(b) && b.bindingMode !== 'READONLY',
+  )
 })
 
 function isParticipantsBinding(binding: { tableName: string }): boolean {
@@ -1718,6 +2503,14 @@ function miRowBelongsToCurrentParticipant(
     }
     return rowMatchesSubTablePrimaryKey(row, myRowId, pks)
   }
+  const scopeName = miSubProcessScope.value?.subTableName ?? ''
+  if (
+    isMiParticipantScopedSubTableBinding(binding)
+    && scopeName
+    && !bindingMatchesMiSubTableName(binding, scopeName)
+  ) {
+    return miLinkChildRowBelongsToParticipant(row as Record<string, unknown>, myRowId)
+  }
   const fk = binding.foreignKeyField
   const fkStr = fk ? String(fk).trim() : ''
   const fkIsRowOwnPrimaryKey =
@@ -1779,6 +2572,14 @@ const isMiSubTask = (taskData: any): boolean => {
 const isMiSubTaskMode = ref(false)
 
 /**
+ * Full (pre-isolation) {@code __subTables__} snapshot from the task variables, flattened.
+ * MI isolation filters {@code binding.data} to the current participant for DISPLAY, but Save must NOT
+ * persist that truncated slice or it wipes every other participant's MI-scoped rows (People, Sub Task …).
+ * Kept so {@link patchFormDataSubTablesFromCurrentBindings} can re-merge the other participants' rows back.
+ */
+const miFullSubTablesSnapshotRef = ref<Record<string, unknown> | null>(null)
+
+/**
  * Current MI participant row id from {@code _currentItem} + designer {@code primaryKeyFields}
  * (single PK scalar or composite {@code v1|v2|...} from {@code rowKey}).
  */
@@ -1810,6 +2611,7 @@ async function isolateMiSubTaskData(taskData: any) {
   // Multi-instance data isolation: only the **current** task form is scoped to this participant.
   // Previous-node forms stay read-only with full snapshot (other sub-tasks' sub form2 data must remain visible).
   for (const binding of subTableBindings.value) {
+    if (isCurrentMiCollectionSubTableBinding(binding)) continue
     if (!isMiParticipantScopedSubTableBinding(binding)) continue
     const rows = Array.isArray(binding.data) ? binding.data : []
     binding.data = rows.filter((row: any) => rowBelongsToCurrentMiScope(row, myRowId, binding))
@@ -2004,7 +2806,21 @@ async function isolateMiSubTaskData(taskData: any) {
         ? merged.filter((row: any) => rowBelongsToCurrentMiScope(row, myRowId, binding))
         : merged
 
-      const rows = cloneSubTableRows(scopedMerged)
+      const tempBinding = { ...binding, data: scopedMerged }
+      if (isMiParticipantScopedSubTableBinding(binding)) {
+        backfillMiLinkChildPrimaryKeysFromVariables(
+          [tempBinding as typeof binding],
+          origSt ?? rebuilt,
+          myRowId,
+        )
+      }
+      const rows = cloneSubTableRows(
+        isCurrentMiCollectionSubTableBinding(binding)
+          ? finalizeMiCollectionSubTableBindingRows(scopedMerged, binding)
+          : isMiParticipantScopedSubTableBinding(binding)
+            ? collapseMiLinkChildRowsToOnePerParticipant(tempBinding.data)
+            : scopedMerged,
+      )
       nextRowSub[binding.bindingId] = rows
       nextRowSub[String(binding.bindingId)] = rows
       if (binding.tableName) {
@@ -2032,9 +2848,11 @@ async function isolateMiSubTaskData(taskData: any) {
  */
 function applyMiParticipantFilterToCurrentSubTableBindings(myRowId: MiParticipantRowId) {
   for (const binding of subTableBindings.value) {
+    if (isCurrentMiCollectionSubTableBinding(binding)) continue
     if (!isMiParticipantScopedSubTableBinding(binding)) continue
     const rows = Array.isArray(binding.data) ? binding.data : []
-    binding.data = cloneSubTableRows(rows.filter((row: any) => rowBelongsToCurrentMiScope(row, myRowId, binding)))
+    const scoped = rows.filter((row: any) => rowBelongsToCurrentMiScope(row, myRowId, binding))
+    binding.data = cloneSubTableRows(filterRowsForMiParticipantSubTableBinding(scoped, binding))
   }
 }
 
@@ -2046,34 +2864,91 @@ function applyMiParticipantFilterToCurrentSubTableBindings(myRowId: MiParticipan
 async function resyncMiParticipantSubTablesFromVariables(
   myRowId: MiParticipantRowId,
   subTablesSource?: Record<string, unknown> | null,
+  /** Reuse flattened snapshot from loadTaskDetail to skip a second deep clone. */
+  preFlattened?: Record<string, unknown>,
 ): Promise<void> {
   const savedMap = coerceSubTablesVariableToMap(subTablesSource ?? formData.value.__subTables__)
   if (!savedMap) return
 
-  const flattened = JSON.parse(JSON.stringify(savedMap)) as Record<string, unknown>
-  flattenNestedSubTableRowsIntoPayload(flattened)
+  const flattened = preFlattened ?? cloneAndFlattenSubTablesMap(savedMap)
   scrubMiCorruptLinkChildRowsForParent(flattened, myRowId)
+  for (const slice of Object.values(flattened)) {
+    if (!Array.isArray(slice)) continue
+    for (let i = 0; i < slice.length; i++) {
+      const r = slice[i]
+      if (r && typeof r === 'object') {
+        slice[i] = repairMisassignedLinkChildStructuralFk(r as Record<string, unknown>, myRowId)
+      }
+    }
+  }
+  // Strip nested __subTables__ from rows to prevent circular deep-reactivity freeze
+  for (const _slice of Object.values(flattened)) {
+    if (Array.isArray(_slice)) stripNestedSubTablesFromRows(_slice as any[])
+  }
 
   const rtMap = lastBindingRelationTableMap.value
   const ambiguous = bindingIdsPreferStrictSubTableLookup(subTableBindings.value)
 
   for (const binding of subTableBindings.value) {
+    const isCollection = isCurrentMiCollectionSubTableBinding(binding)
     const byKey = getSavedSubTableRows(flattened, binding, ambiguous.has(binding.bindingId)) ?? []
-    const participantScoped = isMiParticipantScopedSubTableBinding(binding)
+    const participantScoped = isMiParticipantScopedSubTableBinding(binding) && !isCollection
     const tableIdRaw =
       binding.tableId != null ? Number(binding.tableId) : rtMap.get(binding.bindingId)
+    const participantPk = resolveMiCollectionParticipantPkFields()
     const siblingSlices =
-      !participantScoped
-        ? mergeAllSlicesForSharedProcessSubTableBinding(flattened, binding, rtMap)
-        : mergeAllSubTableSlicesFromVariables(flattened, binding.primaryKeyFields ?? null)
-    const candidateRows = [...byKey, ...siblingSlices]
-    const scoped = participantScoped
-      ? candidateRows.filter((row: unknown) => rowBelongsToCurrentMiScope(row, myRowId, binding))
-      : candidateRows
+      isCollection
+        ? Number.isFinite(Number(tableIdRaw))
+          ? collectSubTableSliceRowsForRelationTableId(
+              flattened,
+              Number(tableIdRaw),
+              rtMap,
+              binding.tableName,
+              binding.physicalTableName,
+            )
+          : (getSavedSubTableRows(flattened, binding, ambiguous.has(binding.bindingId)) ?? [])
+        : !participantScoped
+          ? isMiDashboardSubTableBinding(binding)
+            ? []
+            : mergeAllSlicesForSharedProcessSubTableBinding(flattened, binding, rtMap)
+          : Number.isFinite(Number(tableIdRaw))
+            ? collectSubTableSliceRowsForRelationTableId(
+                flattened,
+                Number(tableIdRaw),
+                rtMap,
+                binding.tableName,
+                binding.physicalTableName,
+              )
+            : mergeAllSubTableSlicesFromVariables(flattened, binding.primaryKeyFields ?? null)
+    const candidateRows = isCollection ? [...byKey, ...siblingSlices] : [...byKey, ...siblingSlices]
+    const scoped = isCollection
+      ? candidateRows.filter((row: unknown) =>
+          rowMatchesSubTablePrimaryKey(row, myRowId, participantPk ?? binding.primaryKeyFields),
+        )
+      : participantScoped
+        ? candidateRows.filter((row: unknown) => rowBelongsToCurrentMiScope(row, myRowId, binding))
+        : candidateRows
     const existing = Array.isArray(binding.data) ? binding.data : []
-    binding.data = cloneSubTableRows(
-      mergeSubTableRowsByRowId(existing, scoped, binding.primaryKeyFields ?? null),
-    )
+    if (isCollection) {
+      binding.data = cloneSubTableRows(
+        finalizeMiCollectionSubTableBindingRows(
+          mergeSubTableRowsByRowId(existing, scoped, participantPk ?? binding.primaryKeyFields ?? null),
+          binding,
+        ),
+      )
+    } else if (participantScoped) {
+      binding.data = cloneSubTableRows(
+        collapseMiLinkChildRowsToOnePerParticipant([...existing, ...scoped]),
+      )
+    } else {
+      let merged = cloneSubTableRows(
+        mergeSubTableRowsByRowId(existing, scoped, binding.primaryKeyFields ?? null),
+      )
+      if (isMiDashboardSubTableBinding(binding)) {
+        merged = finalizeMiCollectionSubTableBindingRows(merged, binding)
+      }
+      binding.data = merged
+    }
   }
 
   hydrateChildSubTablesFromParentsNestedRows(
@@ -2081,9 +2956,24 @@ async function resyncMiParticipantSubTablesFromVariables(
     flattened,
     rtMap.size > 0 ? rtMap : undefined,
   )
-  hydrateBindingsRowsFromVariablesBySharedRelationTableId(subTableBindings.value, flattened, rtMap)
+  hydrateBindingsRowsFromVariablesBySharedRelationTableId(subTableBindings.value, flattened, rtMap, {
+    // MI participant-scoped bindings (e.g. People link child) already hydrated their own slice
+    // filtered to this participant above. Pulling sibling same-tableId slices here would merge
+    // other participants' PK-colliding rows back in and overwrite the current participant's data.
+    excludeBinding: bb => isMiParticipantScopedSubTableBinding(bb as any),
+  })
   enrichChildBindingRowsFromParentsNestedSubTables(subTableBindings.value)
+  // Strip nested __subTables__ from binding rows to prevent Vue deep-reactivity freeze
+  for (const b of subTableBindings.value) {
+    if (Array.isArray(b.data)) stripNestedSubTablesFromRows(b.data)
+  }
   await seedMiParticipantScopedBindingForeignKeys(myRowId)
+  backfillMiLinkChildPrimaryKeysFromVariables(subTableBindings.value, flattened, myRowId)
+  for (const binding of subTableBindings.value) {
+    if (isCurrentMiCollectionSubTableBinding(binding)) continue
+    if (!isMiParticipantScopedSubTableBinding(binding)) continue
+    binding.data = cloneSubTableRows(collapseMiLinkChildRowsToOnePerParticipant(binding.data))
+  }
   applyMiParticipantFilterToCurrentSubTableBindings(myRowId)
 
   applySharedAttachmentFinalizeAndMaterialize(
@@ -2119,20 +3009,49 @@ async function resyncMiParticipantSubTablesFromVariables(
 /** After MI refilter, align {@link formData}.__subTables__ keys for current bindings so autosave/submit matches the grid. */
 function patchFormDataSubTablesFromCurrentBindings() {
   // Use toRaw to bypass Vue's reactivity during bulk mutation, then trigger one update at the end.
-  // This avoids triggering deep watchers on every property assignment (~3s savings).
-  const _t0 = performance.now()
   const rawFormData = toRaw(formData.value)
   if (!rawFormData.__subTables__ || typeof rawFormData.__subTables__ !== 'object') {
     rawFormData.__subTables__ = {}
   }
   const tbl = rawFormData.__subTables__ as Record<string, any>
-  const _t1 = performance.now()
-  let totalCloneMs = 0
+  const myRowId = isMiSubTaskMode.value ? currentMiRowId.value : null
+  const fullSnap = miFullSubTablesSnapshotRef.value
   for (const binding of subTableBindings.value) {
-    const _c0 = performance.now()
     const rawRows = toRaw(Array.isArray(binding.data) ? binding.data : [])
-    const rows = cloneSubTableRows(rawRows)
-    totalCloneMs += performance.now() - _c0
+    let rows = cloneSubTableRows(rawRows)
+    /**
+     * MI participant-scoped slices are SHARED across all sub-tasks at the process level. {@code binding.data}
+     * holds only the current participant after isolation, so writing it back verbatim would drop every other
+     * participant's rows from the persisted slice (root cause of cross-participant data loss). Merge the other
+     * participants' rows back from the pre-isolation snapshot; current participant's edits still win by row PK.
+     */
+    if (myRowId != null && fullSnap && isMiParticipantScopedSubTableBinding(binding)) {
+      const snapRows = getSavedSubTableRows(fullSnap, binding) ?? []
+      const otherParticipantRows = (Array.isArray(snapRows) ? snapRows : []).filter(
+        (row: any) => !rowBelongsToCurrentMiScope(row, myRowId, binding),
+      )
+      if (otherParticipantRows.length > 0) {
+        rows = cloneSubTableRows(
+          mergeSubTableRowsByRowId(
+            cloneSubTableRows(otherParticipantRows),
+            rows,
+            binding.primaryKeyFields ?? null,
+          ),
+        )
+      }
+    }
+    if (fullSnap && isSharedAttachmentFileBinding(binding)) {
+      const snapRows = getSavedSubTableRows(fullSnap, binding) ?? []
+      if (Array.isArray(snapRows) && snapRows.length > 0) {
+        rows = cloneSubTableRows(
+          mergeSubTableRowsByRowId(
+            cloneSubTableRows(snapRows),
+            rows,
+            binding.primaryKeyFields ?? null,
+          ),
+        )
+      }
+    }
     tbl[binding.bindingId] = rows
     tbl[String(binding.bindingId)] = rows
     if (binding.tableName) {
@@ -2145,10 +3064,7 @@ function patchFormDataSubTablesFromCurrentBindings() {
       tbl[normalizeSubTableName(phys)] = rows
     }
   }
-  const _t2 = performance.now()
-  console.log(`[PERF-patch] toRaw: ${(_t1 - _t0).toFixed(0)}ms, clone(5x41rows): ${totalCloneMs.toFixed(0)}ms, assign: ${(_t2 - _t1).toFixed(0)}ms`)
-  // Defer triggerRef to next macrotask — avoids synchronous watcher cascade
-  // during MI isolate. The SubTableField watchers will fire after components mount.
+  // Defer triggerRef to next macrotask — avoids synchronous watcher cascade during MI isolate.
   setTimeout(() => triggerRef(formData), 0)
 }
 
@@ -2310,7 +3226,9 @@ const handleNodeClick = (node: ProcessNode) => {
     clearNodeSelection()
     return
   }
-  selectedNodeId.value = node.id
+  void buildNodeFormMapIfNeeded().then(() => {
+    selectedNodeId.value = node.id
+  })
 }
 
 const clearNodeSelection = () => {
@@ -2375,9 +3293,7 @@ function refreshMiSubProcessScopeFromBpmn() {
 }
 
 function miCollectionPrimaryKeyFields(): string[] | undefined {
-  const scope = miSubProcessScope.value
-  if (!scope?.subTableName) return undefined
-  const b = findBindingForMiSubTableName(subTableBindings.value, scope.subTableName)
+  const b = resolveMiCollectionBindingAcrossTaskForms()
   return b?.primaryKeyFields ?? undefined
 }
 
@@ -2446,7 +3362,8 @@ const primaryTableFieldNames = ref<Set<string>>(new Set())
 const functionUnitIdRef = ref<string>('')
 
 function getPrimaryTableFieldNames(): Set<string> {
-  return primaryTableFieldNames.value
+  const v = primaryTableFieldNames.value
+  return v instanceof Set ? v : new Set<string>()
 }
 
 function protectMainRecordScalarsInSubmitPayload(payload: { formData: Record<string, unknown> }) {
@@ -2493,6 +3410,11 @@ async function mergeMiParticipantScalarsFromForm() {
   }
   if (myRowId != null) {
     await seedMiParticipantScopedBindingForeignKeys(myRowId, { allocateMissingPrimaryKeys: true })
+    backfillMiLinkChildPrimaryKeysFromVariables(
+      subTableBindings.value,
+      miFullSubTablesSnapshotRef.value ?? (formData.value.__subTables__ as Record<string, unknown>),
+      myRowId,
+    )
   }
   patchFormDataSubTablesFromCurrentBindings()
 }
@@ -2575,21 +3497,17 @@ function shouldKeepCompletedHistoryItem(item: TaskHistoryInfo): boolean {
 }
 
 /** Mount heavy UI in frames so the shell paints before bpmn-js + FormRenderer block the main thread. */
-function scheduleDetailUiPhases(onPainted?: () => void, perfMark?: (label: string) => void) {
+function scheduleDetailUiPhases(onPainted?: () => void) {
   detailUiPhase.value = 1
-  perfMark?.('phase 1 (skeleton)')
   void nextTick(() => {
     requestAnimationFrame(() => {
-      perfMark?.('phase 2 start (form)')
       detailUiPhase.value = 2
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          perfMark?.('phase 3 start (diagram+history)')
           detailUiPhase.value = 3
           void nextTick(() => {
             requestAnimationFrame(() => {
               requestAnimationFrame(() => {
-                perfMark?.('all phases painted')
                 onPainted?.()
               })
             })
@@ -2602,17 +3520,16 @@ function scheduleDetailUiPhases(onPainted?: () => void, perfMark?: (label: strin
 
 const loadTaskDetail = async () => {
   loading.value = true
+  formRenderReady.value = false
+  fuFormSubTableFields.value = []
   detailUiPhase.value = 0
   diagramInViewport.value = false
   disconnectDiagramViewportObserver()
+  deferredNodeFormMapContent = null
+  nodeFormMap.value = new Map()
   taskError.value = null
-  clearBpmnParseCache()
-  const __perfT0 = performance.now()
-  const __perfMark = (label: string) =>
-    console.log(`[PERF-detail] ${label}: +${Math.round(performance.now() - __perfT0)}ms`)
   try {
     const res = await getTaskDetail(taskId)
-    __perfMark('getTaskDetail done')
     const data = res.data || res
     if (data) {
       taskInfo.value = data
@@ -2633,80 +3550,105 @@ const loadTaskDetail = async () => {
 
       // Parallel fetch: history, FU content, process/task forms — do not block FU/form CPU on history.
       const historyPromise = loadTaskHistory().then(() => {
-        __perfMark('history(network) done')
         if (bpmnXml.value) parseBpmnXml(bpmnXml.value)
       })
       const fuFetchPromise = data.processDefinitionKey
         ? processApi
             .getFunctionUnitContent(data.processDefinitionKey)
             .then(r => (r as { data?: unknown }).data ?? r)
-            .then(r => { __perfMark('FU content(network) done'); return r })
             .catch((err: unknown) => {
               console.error('Failed to prefetch function unit content:', err)
               return null
             })
         : Promise.resolve(null)
       const formPrefetchPromise = prefetchProcessAndTaskFormData(data)
-        .then(r => { __perfMark('form prefetch(network) done'); return r })
 
       const [prefetchedFu, prefetchedForms] = await Promise.all([
         fuFetchPromise,
         formPrefetchPromise,
       ])
+      // Pre-compute flattened sub-tables once — shared by FU load, rehydrate, and MI resync.
+      const preFlattenedSubTables = processSubTablesSnapshot
+        ? cloneAndFlattenSubTablesMap(processSubTablesSnapshot)
+        : undefined
       if (data.processDefinitionKey) {
         functionUnitIdRef.value = String(data.processDefinitionKey)
-        await loadFunctionUnitContent(data.processDefinitionKey, prefetchedFu ?? undefined)
-        __perfMark('loadFunctionUnitContent(CPU) done')
+        await loadFunctionUnitContent(
+          data.processDefinitionKey,
+          prefetchedFu ?? undefined,
+          preFlattenedSubTables,
+        )
       }
 
       await loadProcessAndTaskFormData(data, prefetchedForms)
-      __perfMark('loadProcessAndTaskFormData done')
-      rehydrateSharedProcessSubTableBindings(processSubTablesSnapshot ?? undefined)
-      __perfMark('rehydrate done (ready)')
+      rehydrateSharedProcessSubTableBindings(processSubTablesSnapshot ?? undefined, preFlattenedSubTables)
 
       const miIsolatePromise = isMiSubTask(data)
         ? (async () => {
-            __perfMark('MI isolate: start')
             isMiSubTaskMode.value = true
             const preIsolateTopLevelForDiagram: Record<string, unknown> = { ...formData.value }
-            __perfMark('MI isolate: spread formData')
             const miFullSubTablesSnapshot =
               processSubTablesSnapshot ??
               (formData.value.__subTables__ && typeof formData.value.__subTables__ === 'object'
                 ? (JSON.parse(JSON.stringify(formData.value.__subTables__)) as Record<string, unknown>)
                 : null)
-            __perfMark('MI isolate: snapshot subTables')
+            // Persist-side guard source: flatten so nested participant rows are reachable per binding.
+            miFullSubTablesSnapshotRef.value = miFullSubTablesSnapshot
+              ? (preFlattenedSubTables ?? cloneAndFlattenSubTablesMap(miFullSubTablesSnapshot))
+              : null
             await isolateMiSubTaskData(data)
-            __perfMark('MI isolate: isolateMiSubTaskData done')
+            await yieldToMain()
             enrichChildBindingRowsFromParentsNestedSubTables(subTableBindings.value)
-            __perfMark('MI isolate: enrichChildBindingRows done')
+            await yieldToMain()
+            const miRowIdAfterEnrich = resolveCurrentMiParticipantRowIdFromTaskVars(data?.variables ?? {})
+            if (miRowIdAfterEnrich != null) {
+              applyMiParticipantFilterToCurrentSubTableBindings(miRowIdAfterEnrich)
+            }
             // Enrich re-aggregates nested rows across peer parents — scope again to this MI element (one task ↔ one participant row).
             const miVarsRef = data?.variables ?? {}
             const miRowIdPostEnrich = resolveCurrentMiParticipantRowIdFromTaskVars(miVarsRef)
             if (miRowIdPostEnrich != null) {
-              await resyncMiParticipantSubTablesFromVariables(miRowIdPostEnrich, miFullSubTablesSnapshot)
+              await resyncMiParticipantSubTablesFromVariables(
+                miRowIdPostEnrich,
+                miFullSubTablesSnapshot,
+                preFlattenedSubTables,
+              )
             }
-            __perfMark('MI isolate: resyncSubTables done')
+            await yieldToMain()
             rehydrateSharedAttachmentBindings(
               subTableBindings.value,
               preIsolateTopLevelForDiagram,
-              miFullSubTablesSnapshot,
+              miFullSubTablesSnapshotRef.value ?? preFlattenedSubTables ?? miFullSubTablesSnapshot,
             )
-            __perfMark('MI isolate: rehydrateAttachments done')
+            mergePriorStepSubTablesAfterMiIsolate(miRowIdPostEnrich ?? null)
+            if (miRowIdPostEnrich != null) {
+              hydrateMiLinkChildBindingsFromFullSnapshot(miRowIdPostEnrich)
+            }
+            if (miRowIdPostEnrich != null) {
+              scopeMiSubTaskBindingsToCurrentParticipant(subTableBindings.value, miRowIdPostEnrich)
+              for (const pf of previousForms.value) {
+                scopeMiSubTaskBindingsToCurrentParticipant(
+                  pf.subTableBindings as typeof subTableBindings.value,
+                  miRowIdPostEnrich,
+                )
+              }
+            } else {
+              sanitizeMiCollectionBindingsData(subTableBindings.value)
+              for (const pf of previousForms.value) {
+                sanitizeMiCollectionBindingsData(pf.subTableBindings as typeof subTableBindings.value)
+              }
+            }
             patchFormDataSubTablesFromCurrentBindings()
-            __perfMark('MI isolate: patchFormData done')
-            refreshNodeFormMapFromFormData({
-              subTablesSource: miFullSubTablesSnapshot ?? undefined,
-              topLevelValuesSource: preIsolateTopLevelForDiagram,
-            })
-            __perfMark('MI isolate: refreshNodeFormMap done')
+            // nodeFormMap refresh deferred until diagram panel (buildNodeFormMapIfNeeded)
             const formKeys = getCurrentFormFieldKeys()
             miFilled.value = formKeys.some(key => {
               const val = formData.value[key]
               return val != null && val !== '' && val !== false
             })
-            __perfMark('MI isolate: complete')
-          })()
+          })().catch((err: unknown) => {
+            console.error('[detail] MI isolate failed:', err)
+            throw err
+          })
         : Promise.resolve()
 
       if (isCompletedTask.value) {
@@ -2715,17 +3657,45 @@ const loadTaskDetail = async () => {
 
       // History feeds diagram node status — load in background so MI form hydrate does not block the shell.
       await miIsolatePromise
+      // Safe only after MI nested slices are merged — stripping earlier breaks link-form / participant isolation.
+      stripNestedFromAllTaskBindings()
+      if (isMiSubTaskMode.value && currentMiRowId.value != null) {
+        hydrateMiLinkChildBindingsFromFullSnapshot(currentMiRowId.value)
+        for (const b of subTableBindings.value) {
+          if (!isMiParticipantScopedSubTableBinding(b)) continue
+          syncMiLinkChildRowsIntoParentNested(
+            { bindingId: b.bindingId, tableName: b.tableName ?? '' },
+            cloneSubTableRows(Array.isArray(b.data) ? b.data : []),
+          )
+        }
+        scopeMiSubTaskBindingsToCurrentParticipant(subTableBindings.value, currentMiRowId.value)
+        for (const pf of previousForms.value) {
+          scopeMiSubTaskBindingsToCurrentParticipant(
+            pf.subTableBindings as typeof subTableBindings.value,
+            currentMiRowId.value,
+          )
+        }
+        patchFormDataSubTablesFromCurrentBindings()
+      }
+      markBindingRowsNonReactive()
+      syncFormLayoutWithSubTableBindings()
+      forceSeedMiCollectionBindingForCurrentParticipant()
+      await yieldToMain()
       void historyPromise.catch((err: unknown) => {
         console.warn('[detail] Background history load failed:', err)
       })
     }
   } catch (error: any) {
     console.error('Failed to load task detail:', error)
-    // Show different error messages based on error status code
     const status = error.response?.status
-    if (status === 404) {
+    const msg = resolveUserFacingHttpMessage(error, t)
+    const notFound = status === 404 || /task not found/i.test(msg)
+    const forbidden =
+      status === 403 ||
+      /permission|denied|do not have permission|无权|無權/i.test(msg)
+    if (notFound) {
       taskError.value = t('task.notFound')
-    } else if (status === 403) {
+    } else if (forbidden) {
       // Completed tasks should still be able to render workflow diagram for process participants.
       // Fallback to process detail (read-only) when task-level permission is denied.
       if (fallbackProcessInstanceId.value) {
@@ -2768,7 +3738,7 @@ const loadTaskDetail = async () => {
             await loadProcessAndTaskFormData(fallbackTask, await formPrefetchPromise)
             await historyPromise
             loading.value = false
-            scheduleDetailUiPhases(undefined, __perfMark)
+            scheduleDetailUiPhases()
             return
           }
         } catch (e) {
@@ -2777,16 +3747,14 @@ const loadTaskDetail = async () => {
       }
       taskError.value = t('task.noPermission')
     } else {
-      taskError.value = t('task.serverError')
+      taskError.value = msg || t('task.serverError')
     }
     ElMessage.error(taskError.value)
   } finally {
     loading.value = false
     if (!taskError.value) {
-      const stBindings = subTableBindings.value
-      const totalRows = stBindings.reduce((sum: number, b: any) => sum + (Array.isArray(b.data) ? b.data.length : 0), 0)
-      console.log(`[PERF-detail] Data size: ${formFields.value.length + formTabs.value.reduce((s: number, t: any) => s + (t.fields?.length || 0), 0)} form fields, ${stBindings.length} sub-table bindings, ${totalRows} total sub-table rows`)
-      scheduleDetailUiPhases(() => __perfMark('render committed (painted)'), __perfMark)
+      formRenderReady.value = true
+      scheduleDetailUiPhases()
     }
   }
 }
@@ -2809,8 +3777,13 @@ const taskActions = useTaskActions({
   userSearchLoading,
   loadTaskDetail,
   prepareBeforeComplete: async () => {
-    if (!isMiSubTaskMode.value) return
-    await mergeMiParticipantScalarsFromForm()
+    if (isMiSubTaskMode.value) {
+      await mergeMiParticipantScalarsFromForm()
+      return
+    }
+    if (!formReadOnly.value && allowSubTableAssignForCurrentTask.value) {
+      patchFormDataSubTablesFromCurrentBindings()
+    }
   },
   buildFormPayloadForComplete: () => {
     const payload = buildCurrentTaskFormSubmitPayload()
@@ -2994,13 +3967,178 @@ const loadTaskHistory = async () => {
   }
 }
 
+/** Build BPM node → form snapshot map (diagram clicks). Expensive — call only after first paint. */
+function buildNodeFormMapFromContent(
+  content: any,
+  bindingRelationTableMap: Map<number, number | null>,
+): Map<string, NodeFormInfo> {
+  const newMap = new Map<string, NodeFormInfo>()
+  const bpmnData = content.processes?.[0]?.data
+  if (!bpmnData) return newMap
+  const doc = getCachedBpmnDocument(bpmnData)
+  const allElements = doc?.getElementsByTagName('*')
+  if (!allElements) return newMap
+  for (let i = 0; i < allElements.length; i++) {
+    const el = allElements[i]
+    const localName = el.localName || el.nodeName.split(':').pop()
+    if (localName !== 'userTask' && localName !== 'subProcess' && localName !== 'serviceTask') continue
+    const nodeId = el.getAttribute('id') || ''
+    if (!nodeId) continue
+    let formId: string | null = null
+    let formName: string | null = null
+    const props = el.getElementsByTagName('*')
+    for (let j = 0; j < props.length; j++) {
+      const p = props[j]
+      const ln = p.localName || p.nodeName.split(':').pop()
+      if (ln === 'property' || ln === 'values') {
+        const n = p.getAttribute('name'), v = p.getAttribute('value')
+        if (n === 'formId' && v) formId = v
+        if (n === 'formName' && v) formName = v
+      }
+    }
+    if (localName === 'subProcess' && !formId && !formName) {
+      const innerTasks = el.getElementsByTagName('userTask')
+      for (let k = 0; k < innerTasks.length; k++) {
+        let fid: string | null = null
+        let fnm: string | null = null
+        const inner = innerTasks[k]
+        const iprops = inner.getElementsByTagName('*')
+        for (let j = 0; j < iprops.length; j++) {
+          const p = iprops[j]
+          const ln = p.localName || p.nodeName.split(':').pop()
+          if (ln === 'property' || ln === 'values') {
+            const n = p.getAttribute('name'), v = p.getAttribute('value')
+            if (n === 'formId' && v) fid = v
+            if (n === 'formName' && v) fnm = v
+          }
+        }
+        if (fid || fnm) {
+          formId = fid
+          formName = fnm
+          break
+        }
+      }
+    }
+    let matchedForm: any = null
+    if (formId) matchedForm = content.forms.find((f: any) => String(f.sourceId) === formId)
+    if (!matchedForm && formName) matchedForm = content.forms.find((f: any) => f.name === formName)
+    if (!matchedForm) continue
+
+    const nodeFields: FormField[] = []
+    const nodeTabs: FormTab[] = []
+    const nodeBindings: PreviousFormEntry['subTableBindings'] = []
+    let nodeFormConfig: Record<string, any> = {}
+    const nodeNativeIds: number[] = []
+    try {
+      const cfg = typeof matchedForm.data === 'string' ? JSON.parse(matchedForm.data) : (matchedForm.data || {})
+      nodeFormConfig = cfg
+      const rules = cfg.rule && Array.isArray(cfg.rule) ? cfg.rule : (Array.isArray(cfg) ? cfg : null)
+      if (rules) {
+        const tabsRule = findTabsRule(rules)
+        if (tabsRule?.children) {
+          for (const tabPane of tabsRule.children as Record<string, unknown>[]) {
+            if (isTabPaneRule(tabPane) && tabPane.props) {
+              const tabFields: FormField[] = []
+              if (tabPane.children) tabFields.push(...extractFieldsRecursive(tabPane.children))
+              nodeTabs.push({
+                name: tabPane.props.name || `tab_${nodeTabs.length}`,
+                label: tabPane.props.label || `Tab ${nodeTabs.length + 1}`,
+                fields: tabFields,
+              })
+            }
+          }
+        } else {
+          nodeFields.push(...extractFieldsRecursive(rules))
+        }
+      }
+      let subForms: Record<string, any> = {}
+      let configForSubTables: Record<string, any> = {}
+      let subTablePortalViewsNode: Record<string, any> = {}
+      configForSubTables = cfg
+      subForms = cfg.subForms || {}
+      subTablePortalViewsNode = cfg.subTablePortalViews || {}
+      for (const b of (matchedForm.tableBindings || [])) {
+        if (b.bindingType === 'PRIMARY') continue
+        const cols = deriveColumnsFromBinding(b, subForms, configForSubTables)
+        const subFormDesign = resolveSubFormDesign(b, subForms)
+        const bindingPortalViews =
+          subTablePortalViewsNode[b.bindingId] ?? subTablePortalViewsNode[String(b.bindingId)] ?? null
+        const binding = {
+          bindingId: b.bindingId, tableId: b.tableId ?? null, bindingType: b.bindingType, bindingMode: b.bindingMode,
+          foreignKeyField: b.foreignKeyField, tableName: b.tableDisplayName || b.tableName, physicalTableName: b.tableName,
+          tableType: b.tableType, tableDescription: b.tableDescription, columns: cols,
+          formFields: subFormDesign.formFields,
+          formOptions: subFormDesign.formOptions,
+          portalViews: bindingPortalViews,
+          primaryKeyFields: resolveSubTablePrimaryKeyFields(b.primaryKeyFields, b.bindingId, configForSubTables),
+          data: [] as any[],
+        }
+        nodeBindings.push(binding)
+        const bid = Number(b.bindingId)
+        if (Number.isFinite(bid)) nodeNativeIds.push(bid)
+      }
+      mergeLinkFormTargetBindingsInto(nodeBindings as any, content.forms, configForSubTables, subForms)
+      const ambiguousNodeDiagram = bindingIdsPreferStrictSubTableLookup(nodeBindings as any[])
+      const _stForNested = formData.value.__subTables__
+      if (_stForNested && typeof _stForNested === 'object') {
+        nodeBindings.forEach(binding => {
+          const saved = getSavedSubTableRows(_stForNested, binding, ambiguousNodeDiagram.has(binding.bindingId))
+          if (saved) binding.data = cloneSubTableRows(saved)
+        })
+      }
+      hydrateChildSubTablesFromParentsNestedRows(
+        nodeBindings,
+        _stForNested && typeof _stForNested === 'object' ? (_stForNested as Record<string, unknown>) : null,
+        bindingRelationTableMap,
+      )
+      if (_stForNested && typeof _stForNested === 'object') {
+        hydrateBindingsRowsFromVariablesBySharedRelationTableId(
+          nodeBindings,
+          _stForNested as Record<string, unknown>,
+          bindingRelationTableMap,
+        )
+      }
+      enrichChildBindingRowsFromParentsNestedSubTables(nodeBindings)
+      rehydrateSharedAttachmentBindings(
+        nodeBindings,
+        formData.value as Record<string, unknown>,
+        _stForNested && typeof _stForNested === 'object' ? (_stForNested as Record<string, unknown>) : null,
+      )
+    } catch { /* node snapshot best-effort */ }
+
+    const nodeName = el.getAttribute('name') || nodeId
+    const currentDefKey = (taskInfo.value as any).taskDefinitionKey || ''
+    const isCurrentTask = !isCompletedTask.value && (nodeId === currentDefKey || nodeName === taskInfo.value.taskName)
+    newMap.set(nodeId, {
+      formName: matchedForm.name || nodeName,
+      isCurrentTask,
+      fields: nodeFields,
+      tabs: nodeTabs,
+      values: { ...formData.value },
+      subTableBindings: nodeBindings,
+      formConfig: nodeFormConfig,
+      nativeSubTableBindingIds: nodeNativeIds,
+    })
+  }
+  return newMap
+}
+
 // Load function unit content (optional prefetched payload avoids duplicate HTTP when parallel with history)
-const loadFunctionUnitContent = async (processKey: string, prefetchedContent?: any) => {
+const loadFunctionUnitContent = async (
+  processKey: string,
+  prefetchedContent?: any,
+  preFlattenedSubTables?: Record<string, unknown>,
+) => {
   processError.value = null
   try {
-    const content: any =
-      prefetchedContent ??
-      (await processApi.getFunctionUnitContent(processKey).then(r => (r as any).data || r))
+    // Check module-level cache first (avoids re-parsing when navigating between tasks of same process)
+    let content: any = prefetchedContent ?? getCachedFuContent(processKey)
+    if (!content) {
+      content = await processApi.getFunctionUnitContent(processKey).then(r => (r as any).data || r)
+      if (content && !content.error) {
+        setCachedFuContent(processKey, content)
+      }
+    }
     if (content.error) {
       console.error('Function unit content error:', content.error)
       processError.value = t('task.processLoadFailed')
@@ -3021,8 +4159,9 @@ const loadFunctionUnitContent = async (processKey: string, prefetchedContent?: a
       refreshMiSubProcessScopeFromBpmn()
     }
     
-    // Parse forms - select the correct form based on the current node formId
+    // Parse forms — failures must not block workflow diagram (bpmnXml already set above).
     if (content.forms?.length > 0) {
+      try {
       let selectedForm = content.forms[0] // Default to first
       
       // Prefer matching formId to sourceId (original form ID)
@@ -3053,16 +4192,20 @@ const loadFunctionUnitContent = async (processKey: string, prefetchedContent?: a
 
       // Load lookup configs from rt_lookup_configs before parsing form
       lookupDbConfigs.value = {}
-      if (selectedForm.sourceId) {
-        try {
-          const lcRes = await relationTableApi.getLookupConfigs(Number(selectedForm.sourceId))
-          for (const lc of (lcRes.data || [])) {
-            let sf: string[] = []
-            try { sf = typeof lc.searchFields === 'string' ? JSON.parse(lc.searchFields || '[]') : (lc.searchFields || []) } catch { sf = [] }
-            lookupDbConfigs.value[lc.componentId] = { tableId: lc.tableId, searchFields: sf, displayField: lc.displayField || '', viewFields: lc.viewFields || [] }
-          }
-        } catch (e) { console.warn('[task] Failed to load lookup configs:', e) }
-      }
+      // Start lookup configs fetch in parallel (non-blocking) — will be awaited before binding column derivation
+      const lookupConfigsPromise = selectedForm.sourceId
+        ? relationTableApi.getLookupConfigs(Number(selectedForm.sourceId))
+            .then(lcRes => {
+              const configs: Record<string, { tableId: number; searchFields: string[]; displayField: string; viewFields: string[] }> = {}
+              for (const lc of (lcRes.data || [])) {
+                let sf: string[] = []
+                try { sf = typeof lc.searchFields === 'string' ? JSON.parse(lc.searchFields || '[]') : (lc.searchFields || []) } catch { sf = [] }
+                configs[lc.componentId] = { tableId: lc.tableId, searchFields: sf, displayField: lc.displayField || '', viewFields: lc.viewFields || [] }
+              }
+              return configs
+            })
+            .catch(e => { console.warn('[task] Failed to load lookup configs:', e); return {} as Record<string, any> })
+        : Promise.resolve({} as Record<string, any>)
 
       // Parse relationViews from configJson BEFORE parseFormConfig so lookup view fields are available
       try {
@@ -3071,7 +4214,12 @@ const loadFunctionUnitContent = async (processKey: string, prefetchedContent?: a
       } catch { relationViewConfigs.value = {} }
 
       parseFormConfig(selectedForm.data)
-      
+      fuFormSubTableFields.value = collectSubTableFieldsFromLayout(
+        formFields.value,
+        formTabs.value,
+        formFieldsAfterTabs.value,
+      )
+
       // If BPMN explicitly marks readOnly, override the form config value
       if (currentFormInfo.readOnly) {
         formReadOnly.value = true
@@ -3126,6 +4274,10 @@ const loadFunctionUnitContent = async (processKey: string, prefetchedContent?: a
         primaryReadOnly.value = true
       }
 
+      // Await lookup configs before deriving columns (needs lookupDbConfigs for lookup-type fields)
+      const resolvedLookups = await lookupConfigsPromise
+      lookupDbConfigs.value = resolvedLookups
+
       for (const b of tableBindings) {
         if (b.bindingType === 'PRIMARY') continue
         const columns = deriveColumnsFromBinding(b, subForms, formConfigForSubTables)
@@ -3164,8 +4316,7 @@ const loadFunctionUnitContent = async (processKey: string, prefetchedContent?: a
       lastBindingRelationTableMap.value = bindingRelationTableMap
       const rawSubTables = coerceSubTablesVariableToMap(formData.value.__subTables__)
       if (rawSubTables) {
-        const flattened = JSON.parse(JSON.stringify(rawSubTables)) as Record<string, unknown>
-        flattenNestedSubTableRowsIntoPayload(flattened)
+        const flattened = preFlattenedSubTables ?? cloneAndFlattenSubTablesMap(rawSubTables)
         const ciLoad = (formData.value._currentItem ?? formData.value.currentItem) as
           | Record<string, unknown>
           | undefined
@@ -3246,7 +4397,9 @@ const loadFunctionUnitContent = async (processKey: string, prefetchedContent?: a
           },
         )
       }
+      ensureSubTableBindingsFromLayoutAndConfig(bindings, formConfigForSubTables)
       subTableBindings.value = bindings
+      syncFormLayoutWithSubTableBindings()
       // Collect all distinct forms bound to nodes before the current one (read-only display)
       // Only consider when the current node successfully matched its own form
       if (content.processes?.length > 0 && (currentFormInfo.formId || currentFormInfo.formName)) {
@@ -3332,29 +4485,16 @@ const loadFunctionUnitContent = async (processKey: string, prefetchedContent?: a
           if (savedSubTables && typeof savedSubTables === 'object') {
             for (const binding of prevBindings) {
               const saved = getSavedSubTableRows(savedSubTables, binding, ambiguousPrev.has(binding.bindingId))
-              if (saved) binding.data = cloneSubTableRows(saved)
+              if (saved) {
+                binding.data = cloneSubTableRows(
+                  isMiDashboardSubTableBinding(binding)
+                    ? finalizeMiCollectionSubTableBindingRows(saved, binding)
+                    : saved,
+                )
+              }
             }
           }
-          hydrateChildSubTablesFromParentsNestedRows(
-            prevBindings,
-            savedSubTables && typeof savedSubTables === 'object' ? (savedSubTables as Record<string, unknown>) : null,
-            bindingRelationTableMap
-          )
-          if (savedSubTables && typeof savedSubTables === 'object') {
-            hydrateBindingsRowsFromVariablesBySharedRelationTableId(
-              prevBindings,
-              savedSubTables as Record<string, unknown>,
-              bindingRelationTableMap
-            )
-          }
-          enrichChildBindingRowsFromParentsNestedSubTables(prevBindings)
-          rehydrateSharedAttachmentBindings(
-            prevBindings,
-            formData.value as Record<string, unknown>,
-            savedSubTables && typeof savedSubTables === 'object'
-              ? (savedSubTables as Record<string, unknown>)
-              : null,
-          )
+          // Previous forms: field metadata only on critical path — full sub-table enrich deferred with nodeFormMap.
 
           collectedPrevForms.push({
             formId: String(prevForm.id),
@@ -3368,197 +4508,41 @@ const loadFunctionUnitContent = async (processKey: string, prefetchedContent?: a
 
         previousForms.value = collectedPrevForms
         hydrateCurrentSubTablesFromPreviousForms()
-        rehydrateSharedProcessSubTableBindings(savedSubTables as Record<string, unknown>)
       } else {
         previousForms.value = []
       }
 
-      // Build node-to-form map for diagram click interaction
       try {
-        const newMap = new Map<string, NodeFormInfo>()
-        const bpmnData = content.processes[0]?.data
-        if (bpmnData) {
-          const doc = getCachedBpmnDocument(bpmnData)
-          const allElements = doc?.getElementsByTagName('*')
-          if (allElements) for (let i = 0; i < allElements.length; i++) {
-            const el = allElements[i]
-            const localName = el.localName || el.nodeName.split(':').pop()
-            if (localName !== 'userTask' && localName !== 'subProcess' && localName !== 'serviceTask') continue
-            const nodeId = el.getAttribute('id') || ''
-            if (!nodeId) continue
-            // Extract formId/formName from node properties
-            let formId: string | null = null
-            let formName: string | null = null
-            const props = el.getElementsByTagName('*')
-            for (let j = 0; j < props.length; j++) {
-              const p = props[j]
-              const ln = p.localName || p.nodeName.split(':').pop()
-              if (ln === 'property' || ln === 'values') {
-                const n = p.getAttribute('name'), v = p.getAttribute('value')
-                if (n === 'formId' && v) formId = v
-                if (n === 'formName' && v) formName = v
-              }
-            }
-            // Embedded subprocess shapes usually have no form reference on the container — Flowable/Camunda
-            // attach formKey to the first inner userTask. Diagram clicks use subprocess id → nodeFormMap.
-            if (localName === 'subProcess' && !formId && !formName) {
-              const innerTasks = el.getElementsByTagName('userTask')
-              for (let k = 0; k < innerTasks.length; k++) {
-                let fid: string | null = null
-                let fnm: string | null = null
-                const inner = innerTasks[k]
-                const iprops = inner.getElementsByTagName('*')
-                for (let j = 0; j < iprops.length; j++) {
-                  const p = iprops[j]
-                  const ln = p.localName || p.nodeName.split(':').pop()
-                  if (ln === 'property' || ln === 'values') {
-                    const n = p.getAttribute('name'), v = p.getAttribute('value')
-                    if (n === 'formId' && v) fid = v
-                    if (n === 'formName' && v) fnm = v
-                  }
-                }
-                if (fid || fnm) {
-                  formId = fid
-                  formName = fnm
-                  break
-                }
-              }
-            }
-            // Try to match a form from content.forms
-            let matchedForm: any = null
-            if (formId) {
-              matchedForm = content.forms.find((f: any) => String(f.sourceId) === formId)
-            }
-            if (!matchedForm && formName) {
-              matchedForm = content.forms.find((f: any) => f.name === formName)
-            }
-            if (!matchedForm) continue
-
-            // Parse form fields
-            const nodeFields: FormField[] = []
-            const nodeTabs: FormTab[] = []
-            const nodeBindings: PreviousFormEntry['subTableBindings'] = []
-            // Hoisted so the newMap.set below can attach them to NodeFormInfo —
-            // FormRenderer needs configJson (Link Form / portalViews) and the
-            // native binding-id set to render the snapshot at parity with the
-            // current task form (#1395 / portal-design-parity).
-            let nodeFormConfig: Record<string, any> = {}
-            const nodeNativeIds: number[] = []
-            try {
-              const cfg = typeof matchedForm.data === 'string' ? JSON.parse(matchedForm.data) : (matchedForm.data || {})
-              nodeFormConfig = cfg
-              const rules = cfg.rule && Array.isArray(cfg.rule) ? cfg.rule : (Array.isArray(cfg) ? cfg : null)
-              if (rules) {
-    const tabsRule = findTabsRule(rules)
-    if (tabsRule?.children) {
-      for (const tabPane of tabsRule.children as Record<string, unknown>[]) {
-        if (isTabPaneRule(tabPane) && tabPane.props) {
-                      const tabFields: FormField[] = []
-                      if (tabPane.children) tabFields.push(...extractFieldsRecursive(tabPane.children))
-                      nodeTabs.push({ name: tabPane.props.name || `tab_${nodeTabs.length}`, label: tabPane.props.label || `Tab ${nodeTabs.length + 1}`, fields: tabFields })
-                    }
-                  }
-                } else {
-                  nodeFields.push(...extractFieldsRecursive(rules))
-                }
-              }
-              // Parse sub-table bindings
-              let subForms: Record<string, any> = {}
-              let configForSubTables: Record<string, any> = {}
-              let subTablePortalViewsNode: Record<string, any> = {}
-              try {
-                configForSubTables = cfg
-                subForms = cfg.subForms || {}
-                subTablePortalViewsNode = cfg.subTablePortalViews || {}
-              } catch {}
-              for (const b of (matchedForm.tableBindings || [])) {
-                if (b.bindingType === 'PRIMARY') continue
-                const cols = deriveColumnsFromBinding(b, subForms, configForSubTables)
-                const subFormDesign = resolveSubFormDesign(b, subForms)
-                const bindingPortalViews =
-                  subTablePortalViewsNode[b.bindingId] ?? subTablePortalViewsNode[String(b.bindingId)] ?? null
-                const binding = {
-                  bindingId: b.bindingId, tableId: b.tableId ?? null, bindingType: b.bindingType, bindingMode: b.bindingMode,
-                  foreignKeyField: b.foreignKeyField, tableName: b.tableDisplayName || b.tableName, physicalTableName: b.tableName,
-                  tableType: b.tableType, tableDescription: b.tableDescription, columns: cols,
-                  formFields: subFormDesign.formFields,
-                  formOptions: subFormDesign.formOptions,
-                  portalViews: bindingPortalViews,
-                  primaryKeyFields: resolveSubTablePrimaryKeyFields(
-                    b.primaryKeyFields,
-                    b.bindingId,
-                    configForSubTables
-                  ),
-                  data: [] as any[]
-                }
-                nodeBindings.push(binding)
-                const bid = Number(b.bindingId)
-                if (Number.isFinite(bid)) nodeNativeIds.push(bid)
-              }
-              // Capture native bindings BEFORE Link Form merge so FormRenderer
-              // can distinguish "placed on this form's canvas" vs "pulled in
-              // as a Link Form target from another FU form".
-              mergeLinkFormTargetBindingsInto(nodeBindings as any, content.forms, configForSubTables, subForms)
-              const ambiguousNodeDiagram = bindingIdsPreferStrictSubTableLookup(nodeBindings as any[])
-              const _stForNested = formData.value.__subTables__
-              if (_stForNested && typeof _stForNested === 'object') {
-                nodeBindings.forEach(binding => {
-                  const saved = getSavedSubTableRows(_stForNested, binding, ambiguousNodeDiagram.has(binding.bindingId))
-                  if (saved) binding.data = cloneSubTableRows(saved)
-                })
-              }
-              hydrateChildSubTablesFromParentsNestedRows(
-                nodeBindings,
-                _stForNested && typeof _stForNested === 'object' ? (_stForNested as Record<string, unknown>) : null,
-                bindingRelationTableMap
-              )
-              if (_stForNested && typeof _stForNested === 'object') {
-                hydrateBindingsRowsFromVariablesBySharedRelationTableId(
-                  nodeBindings,
-                  _stForNested as Record<string, unknown>,
-                  bindingRelationTableMap
-                )
-              }
-              enrichChildBindingRowsFromParentsNestedSubTables(nodeBindings)
-              rehydrateSharedAttachmentBindings(
-                nodeBindings,
-                formData.value as Record<string, unknown>,
-                _stForNested && typeof _stForNested === 'object'
-                  ? (_stForNested as Record<string, unknown>)
-                  : null,
-              )
-            } catch {}
-
-            const nodeName = el.getAttribute('name') || nodeId
-            const currentDefKey = (taskInfo.value as any).taskDefinitionKey || ''
-            const isCurrentTask = !isCompletedTask.value && (nodeId === currentDefKey || nodeName === taskInfo.value.taskName)
-
-            newMap.set(nodeId, {
-              formName: matchedForm.name || nodeName,
-              isCurrentTask,
-              fields: nodeFields,
-              tabs: nodeTabs,
-              values: { ...formData.value },
-              subTableBindings: nodeBindings,
-              formConfig: nodeFormConfig,
-              nativeSubTableBindingIds: nodeNativeIds,
-            })
-          }
-        }
-        nodeFormMap.value = newMap
         alignProcessSubTableBindingsBySharedTable()
-      } catch (e) {
-        console.warn('[NodeFormMap] Failed to build:', e)
-        alignProcessSubTableBindingsBySharedTable()
+      } catch (alignErr) {
+        console.warn('[detail] Sub-table align skipped (diagram kept):', alignErr)
       }
+      } catch (formLoadErr) {
+        console.error('Task form binding load failed (diagram kept):', formLoadErr)
+      }
+    } else {
+      previousForms.value = []
+    }
+
+    // Defer nodeFormMap (diagram node clicks) — independent of form hydrate success.
+    if (content.processes?.length > 0) {
+      deferredNodeFormMapContent = {
+        content,
+        bindingRelationTableMap: lastBindingRelationTableMap.value,
+      }
+      nodeFormMap.value = new Map()
+    } else {
+      processError.value = t('task.processLoadFailed')
     }
   } catch (error: any) {
     console.error('Failed to load function unit content:', error)
-    // 403 error indicates function unit is disabled or no permission
-    if (error.response?.status === 403) {
-      processError.value = t('task.noPermission')
-    } else {
-      processError.value = t('task.processLoadFailed')
+    // Only surface diagram error when BPMN was not loaded — form/sub-table failures are non-fatal.
+    if (!bpmnXml.value && processNodes.value.length === 0) {
+      if (error.response?.status === 403) {
+        processError.value = t('task.noPermission')
+      } else {
+        processError.value = t('task.processLoadFailed')
+      }
     }
   }
 }
@@ -3672,6 +4656,7 @@ const loadProcessAndTaskFormData = async (taskData: any, prefetched?: Prefetched
       }
     }
   }
+  syncFormLayoutWithSubTableBindings()
   refreshNodeFormMapFromFormData()
   rehydrateSharedProcessSubTableBindings()
 }
@@ -3826,10 +4811,18 @@ function isPortalSharedAttachmentTableBinding(b: {
 // Derive display columns for a sub-table binding based on table metadata
 const deriveColumnsFromBinding = (binding: any, subForms?: Record<string, any>, config?: Record<string, any>): Array<{ field: string; label: string; type?: string; required?: boolean; options?: Array<{ label: string; value: any }>; props?: Record<string, any> }> => {
   // Consistent with process/start: prefer subFormConfig on binding, then configJson.subForms (supports string/number key)
-  const subFormRule =
-    binding.subFormConfig?.rule ||
-    subForms?.[binding.bindingId]?.rule ||
-    subForms?.[String(binding.bindingId)]?.rule
+  let subFormRule: any[] | undefined
+  if (binding.subFormConfig?.rule) {
+    subFormRule = binding.subFormConfig.rule
+  } else if (subForms) {
+    for (const alias of legacyBindingIdAliases(binding.bindingId)) {
+      const entry = subForms[alias] ?? subForms[String(alias)]
+      if (entry?.rule) {
+        subFormRule = entry.rule
+        break
+      }
+    }
+  }
 
   const subFormColumns =
     subFormRule && Array.isArray(subFormRule) && subFormRule.length > 0
@@ -4191,6 +5184,8 @@ function mergeLinkFormTargetBindingsInto(
             raw.bindingId,
             effFormConfig
           ),
+          fieldDefinitions: raw.fieldDefinitions ?? [],
+          bindingLinkMode: raw.bindingLinkMode,
           data: []
         })
         known.add(Number(raw.bindingId))
@@ -4238,6 +5233,7 @@ function mergeLinkFormTargetBindingsInto(
         formOptions: subFormDesign.formOptions,
         portalViews: bindingPortalViews,
         primaryKeyFields: resolveSubTablePrimaryKeyFields(null, tid, syntheticSchema.formConfig),
+        fieldDefinitions: [],
         data: []
       })
       known.add(tid)
@@ -4457,8 +5453,9 @@ const convertFormCreateRule = (rule: any): FormField | null => {
 
 // custom action handlers moved to useCustomActions composable
 
-onMounted(() => {
-  loadTaskDetail()
+onMounted(async () => {
+  await reconcilePortalWorkspaceSession()
+  await loadTaskDetail()
 })
 
 onBeforeUnmount(() => {

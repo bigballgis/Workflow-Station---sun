@@ -301,6 +301,7 @@ function onCollapseActiveChange(fieldKey: string, names: string | string[]) {
             :linked-sub-table-bindings="ctx.linkableSubTableBindings as any[]"
             :suppress-link-only-standalone-sub-tables="ctx.viewContext === 'initiatorRequest'"
             @update:row="(row: Record<string, any>) => ctx.handleInlineFormUpdate(field, row)"
+            @save="ctx.handleInlineFormSave?.()"
           />
         </div>
       </el-col>

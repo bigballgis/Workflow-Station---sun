@@ -209,6 +209,18 @@
           :description="t('subTable.noFormDesign')"
           :image-size="48"
         />
+        <div
+          v-if="effectiveInlineFormRule.length"
+          class="inline-form-actions"
+        >
+          <el-button
+            type="primary"
+            :disabled="!editable"
+            @click="handleInlineFormBelowSave"
+          >
+            {{ t('common.save') }}
+          </el-button>
+        </div>
       </div>
     </div>
 
@@ -683,6 +695,12 @@ function handleLinkFormSave(rowData: Record<string, any>) {
   linkFormInitialData.value = rowData
 }
 
+/** Form Preview parity with Portal SubTableInlineForm — inline Save below the table. */
+function handleInlineFormBelowSave() {
+  if (!editable.value) return
+  ElMessage.success(t('common.saveSuccess'))
+}
+
 // Dialog 保存回调
 function handleDialogSave(rowData: Record<string, any>) {
   const savedRow = mergeFormRowWithSeed(dialogInitialData.value, rowData)
@@ -840,6 +858,13 @@ defineExpose({
     :deep(.form-create) {
       width: 100%;
     }
+  }
+
+  .inline-form-actions {
+    margin-top: 12px;
+    display: flex;
+    justify-content: flex-end;
+    padding-bottom: 8px;
   }
 }
 </style>

@@ -309,10 +309,10 @@
                 {{ formatAssigneeDisplayLabel(scope.row.assignee_display_name) }}
               </span>
               <span
-                v-else-if="assigneeField && scope.row[assigneeField]"
+                v-else-if="resolveRowAssigneeCell(scope.row)"
                 class="assignee-name"
               >
-                {{ getUserDisplayName(scope.row[assigneeField]) }}
+                {{ getUserDisplayName(resolveRowAssigneeCell(scope.row)) }}
               </span>
               <span
                 v-else
@@ -326,7 +326,7 @@
                 class="assign-btn"
                 @click="openAssignDialog(scope.row, scope.$index)"
               >
-                {{ scope.row[assigneeField] ? t('subTable.reassign') : t('subTable.assign') }}
+                {{ resolveRowAssigneeCell(scope.row) ? t('subTable.reassign') : t('subTable.assign') }}
               </el-button>
             </div>
           </template>
@@ -350,7 +350,7 @@
       :column-validation-rules="validationConfig?.columnRules"
       :upload-url="uploadUrl"
       @update:visible="dialogVisible = $event"
-      @save="handleDialogSave"
+      :save-row="handleDialogSave"
     />
 
     <Teleport to="body">
@@ -491,7 +491,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed, nextTick, withDefaults } from 'vue'
+import { ref, watch, computed, nextTick, withDefaults, unref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Plus, Document, Loading, Search, Close } from '@element-plus/icons-vue'
 import { ElMessageBox, ElMessage } from 'element-plus'
@@ -542,8 +542,10 @@ import {
   type BindingFieldDefinition,
   applyFkPresentationToDialogColumns,
   buildRowAddContext,
+  finalizeSubTableRowOnSave,
   prepareSubTableAddRow,
   toFieldFkMetas,
+  type AllocatePrimaryKeysFn,
 } from '@/utils/subTableRowRuntime'
 import { onMounted, onBeforeUnmount } from 'vue'
 import { useSubTableWebSocket, type SubTableUpdateMessage } from '@/composables/useSubTableWebSocket'
@@ -555,7 +557,6 @@ import {
   stripLinkFormDesignerTableLabel
 } from '@/composables/tasks/shared'
 
-console.log(`[PERF-ST] setup start @${performance.now().toFixed(0)}`)
 const { t } = useI18n()
 
 function formatTaskStatus(status: unknown): string {
@@ -865,6 +866,8 @@ const rows = ref<any[]>([])
 
 async function hydrateLookupScalarsInTable() {
   const tableRows = rows.value || []
+  const pending: Promise<void>[] = []
+  const resolvedScalars: Record<string, Record<string, any>> = {}
   for (const col of props.columns || []) {
     if (col.type !== 'lookup') continue
     const tableId = col.props?.tableId
@@ -879,23 +882,44 @@ async function hydrateLookupScalarsInTable() {
       if (raw == null || typeof raw === 'object') continue
       const ck = `${Number(tableId)}:${String(raw).trim()}`
       if (lookupHydratedScalar.value[ck]) continue
-      const loaded = await fetchLookupRowByPrimaryKey(Number(tableId), raw, {
-        searchFields: (col.props?.searchFields as string[]) || [],
-        displayField: (col.props?.displayField as string) || '',
-        filterConditions: (col.props?.filterConditions as { fieldName: string; value: string }[]) || [],
-        primaryKeyField: pk
-      })
-      if (loaded) {
-        lookupHydratedScalar.value = { ...lookupHydratedScalar.value, [ck]: loaded }
-      }
+      pending.push(
+        fetchLookupRowByPrimaryKey(Number(tableId), raw, {
+          searchFields: (col.props?.searchFields as string[]) || [],
+          displayField: (col.props?.displayField as string) || '',
+          filterConditions: (col.props?.filterConditions as { fieldName: string; value: string }[]) || [],
+          primaryKeyField: pk,
+        }).then(loaded => {
+          if (loaded) resolvedScalars[ck] = loaded
+        }),
+      )
     }
+  }
+  if (pending.length === 0) return
+  const BATCH = 12
+  for (let i = 0; i < pending.length; i += BATCH) {
+    await Promise.all(pending.slice(i, i + BATCH))
+  }
+  if (Object.keys(resolvedScalars).length > 0) {
+    lookupHydratedScalar.value = { ...lookupHydratedScalar.value, ...resolvedScalars }
   }
 }
 
+let lookupHydrateSeq = 0
 watch(
   () => [rows.value, props.columns],
   () => {
-    nextTick(() => { void hydrateLookupScalarsInTable() })
+    const seq = ++lookupHydrateSeq
+    const run = () => {
+      if (seq !== lookupHydrateSeq) return
+      void hydrateLookupScalarsInTable()
+    }
+    nextTick(() => {
+      if (typeof requestIdleCallback === 'function') {
+        requestIdleCallback(run, { timeout: 2000 })
+      } else {
+        setTimeout(run, 80)
+      }
+    })
   },
   { immediate: true }
 )
@@ -1018,14 +1042,36 @@ function subTableBindingMatches(
 
 function resolveLinkedFallbackRows(binding?: SubTableBinding): any[] {
   if (!binding) return []
-  if (Array.isArray(binding.data) && binding.data.length > 0) return binding.data
-  const sameTableBinding = props.linkedSubTableBindings?.find(item =>
-    item !== binding &&
-    Array.isArray(item.data) &&
-    item.data.length > 0 &&
-    subTableBindingMatches(item, binding)
-  )
-  return Array.isArray(sameTableBinding?.data) ? sameTableBinding.data : []
+  let pool: any[] = Array.isArray(binding.data) ? [...binding.data] : []
+  const mergeAllMatchingPeers = () => {
+    for (const item of props.linkedSubTableBindings ?? []) {
+      if (item === binding || !subTableBindingMatches(item, binding)) continue
+      if (!Array.isArray(item.data) || item.data.length === 0) continue
+      pool = mergeSubTableRowsByRowId(pool, item.data, binding.primaryKeyFields ?? null)
+    }
+  }
+  if (pool.length === 0) {
+    const sameTableBinding = props.linkedSubTableBindings?.find(item =>
+      item !== binding &&
+      Array.isArray(item.data) &&
+      item.data.length > 0 &&
+      subTableBindingMatches(item, binding)
+    )
+    pool = Array.isArray(sameTableBinding?.data) ? [...sameTableBinding.data] : []
+  }
+  if (
+    pool.length === 0
+    || (binding.formFields?.length && linkFormRowsLackFormPayload(pool, binding.formFields))
+  ) {
+    mergeAllMatchingPeers()
+    if (binding.formFields?.length && linkFormRowsLackFormPayload(pool, binding.formFields)) {
+      const overlap = peerSubTableDataByFormFieldOverlap(binding, props.linkedSubTableBindings ?? [])
+      if (overlap.length > 0) {
+        pool = mergeSubTableRowsByRowId(pool, overlap, binding.primaryKeyFields ?? null)
+      }
+    }
+  }
+  return pool
 }
 
 /** When copied forms / Link merge use a different bindingId than variables, {@link subTableBindingMatches} may miss; score by form field keys vs row keys. */
@@ -1095,6 +1141,8 @@ function buildFkListForChildMatch(binding?: SubTableBinding): string[] {
     fkList.push(String(binding.foreignKeyField))
   }
   for (const k of [
+    'sub_task_id',
+    'subTaskId',
     'participant_id',
     'participantId',
     'parent_id',
@@ -1224,11 +1272,45 @@ function parentChildTaskStatusesMatch(parentRow: Record<string, any>, childRow: 
   return !!cs && ps === cs
 }
 
+function linkFormChildRowHasBusinessPayload(row: unknown): boolean {
+  if (!row || typeof row !== 'object') return false
+  const rec = row as Record<string, unknown>
+  for (const [k, v] of Object.entries(rec)) {
+    if (k.startsWith('__')) continue
+    if (
+      k === 'task_status'
+      || k === 'task_current_node'
+      || k === 'task_id'
+      || k === 'task_definition_key'
+      || k === 'assignee'
+      || k === 'assignee_user_id'
+      || k === 'assignee_display_name'
+      || k === 'sub_task_status'
+      || k === 'sub_task_current_node'
+    ) {
+      continue
+    }
+    if (v === undefined || v === null || v === '') continue
+    return true
+  }
+  return false
+}
+
 /** MI Details: never pick another participant's link-form row purely because it has more filled fields. */
 function filterLinkedChildRowsByMiTaskStatus(parentRow: Record<string, any>, rows: any[]): any[] {
   if (!isMiStyleParentRowForLinkForm(parentRow) || !Array.isArray(rows) || rows.length === 0) return rows
-  const matched = rows.filter(r => parentChildTaskStatusesMatch(parentRow, r))
-  if (matched.length > 0) return matched
+  const withStatus = rows.filter(
+    r => String((r as { task_status?: unknown })?.task_status ?? '').trim() !== '',
+  )
+  /** Link-child rows (People) omit task_status — FK / miLinkFormChildRowMatchesParent scopes them. */
+  if (withStatus.length === 0) return rows
+  const matched = withStatus.filter(r => parentChildTaskStatusesMatch(parentRow, r))
+  if (matched.length > 0) {
+    const withPayload = matched.filter(r => linkFormChildRowHasBusinessPayload(r))
+    if (withPayload.length > 0) return withPayload
+    /** Stale slice: status-matched row is MI placeholder only (e.g. IN_PROGRESS shell); keep FK-scoped rows. */
+    return rows
+  }
   if (isTerminalMiParticipantRow(parentRow)) return []
   return rows
 }
@@ -1249,6 +1331,8 @@ function miLinkFormChildRowMatchesParent(
     ?? normalizeFkIdForMatch(resolveSubTableRowPk(parentRow))
   if (parentKey == null) return true
   const rec = childRow as Record<string, unknown>
+  const subTaskId = normalizeFkIdForMatch(rec.sub_task_id ?? rec.subTaskId)
+  if (subTaskId != null && subTaskId === parentKey) return true
   const fkList = buildFkListForChildMatch(binding)
   for (const k of fkList) {
     const v = rec[k]
@@ -1557,7 +1641,7 @@ const showAssigneeColumn = computed(() => {
   if (props.showAssignButton && props.assigneeField) return true
   if (!props.assigneeField) return false
   return rows.value.some(r =>
-    r && (r.assignee_display_name || r[props.assigneeField!])
+    r && (r.assignee_display_name || resolveRowAssigneeCell(r as Record<string, unknown>))
   )
 })
 
@@ -1686,6 +1770,22 @@ function collectNestedSavedRowsForLinkForm(
   for (const chunk of chunks) {
     merged = mergeSubTableRowsByRowId(merged, chunk, binding?.primaryKeyFields ?? null)
   }
+  /** MI parent rows may nest link-form payload under a sibling binding id (e.g. 30) while the column binds 69. */
+  if (binding?.formFields?.length) {
+    const fieldKeys = collectLinkTargetFormFieldKeys(binding)
+    if (fieldKeys.size > 0) {
+      const threshold =
+        fieldKeys.size <= 2 ? 1 : Math.min(fieldKeys.size, Math.max(2, Math.ceil(fieldKeys.size * 0.25)))
+      for (const v of Object.values(rowSub)) {
+        if (!Array.isArray(v) || v.length === 0 || seenArr.has(v)) continue
+        if (maxFormFieldOverlapScore(v, fieldKeys) >= threshold) addArr(v)
+      }
+      merged = []
+      for (const chunk of chunks) {
+        merged = mergeSubTableRowsByRowId(merged, chunk, binding?.primaryKeyFields ?? null)
+      }
+    }
+  }
   return merged
 }
 
@@ -1761,7 +1861,11 @@ function deepCollectLinkFormFieldRows(root: unknown, binding: SubTableBinding, m
   return hits
 }
 
-function resolveLinkFormFieldValueForModal(field: FormField, raw: unknown): unknown {
+function resolveLinkFormFieldValueForModal(
+  field: FormField,
+  raw: unknown,
+  opts?: { readonly?: boolean },
+): unknown {
   if (!isPresentLinkedModalValue(raw)) return field.defaultValue ?? null
   if (field.type === 'number') {
     if (typeof raw === 'number') return Number.isNaN(raw) ? (field.defaultValue ?? null) : raw
@@ -1769,7 +1873,10 @@ function resolveLinkFormFieldValueForModal(field: FormField, raw: unknown): unkn
       const t = raw.trim()
       if (t === '') return field.defaultValue ?? null
       const n = Number(t)
-      return Number.isNaN(n) ? (field.defaultValue ?? null) : n
+      if (!Number.isNaN(n)) return n
+      /** Readonly Details: designer PK may be number while runtime stores UUID / Test-xxxx scalar. */
+      if (opts?.readonly) return t
+      return field.defaultValue ?? null
     }
     return field.defaultValue ?? null
   }
@@ -1865,17 +1972,21 @@ function handleLinkFormClick(col: Column, row: Record<string, any>, rowIndex: nu
       effectiveSavedRows = []
     }
   } else if (readOnlyIsolateLinkForm && row) {
+    let pool: any[] = savedRows.length > 0 ? [...savedRows] : []
     if (fallbackRows.length > 0) {
-      const narrowed = filterLinkedChildRowsForParentRow(row, [...fallbackRows], binding)
-      effectiveSavedRows =
-        narrowed.length > 0 &&
-        fallbackRows.length > 1 &&
-        narrowed.length === fallbackRows.length
-          ? []
-          : narrowed
-    } else {
-      effectiveSavedRows = []
+      let narrowed = filterLinkedChildRowsForParentRow(row, [...fallbackRows], binding)
+      if (isMiStyleParentRowForLinkForm(row as Record<string, unknown>)) {
+        narrowed = filterRowsByMiLinkFormParent(
+          row,
+          narrowed.length > 0 ? narrowed : fallbackRows,
+          binding,
+        )
+      }
+      if (narrowed.length > 0 && binding) {
+        pool = mergeSubTableRowsByRowId(pool, narrowed, binding.primaryKeyFields ?? null)
+      }
     }
+    effectiveSavedRows = pool
   } else {
     effectiveSavedRows = savedRows.length > 0 ? savedRows : fallbackRows
     if (savedRows.length === 0 && effectiveSavedRows.length > 0 && row) {
@@ -1889,7 +2000,6 @@ function handleLinkFormClick(col: Column, row: Record<string, any>, rowIndex: nu
   if (
     !miIsolateTodo &&
     !linkFormNestedOnlyMi &&
-    !readOnlyIsolateLinkForm &&
     binding?.formFields?.length &&
     fallbackRows.length > 0 &&
     effectiveSavedRows.length > 0 &&
@@ -1904,7 +2014,6 @@ function handleLinkFormClick(col: Column, row: Record<string, any>, rowIndex: nu
   if (
     !miIsolateTodo &&
     !linkFormNestedOnlyMi &&
-    !readOnlyIsolateLinkForm &&
     effectiveSavedRows.length === 0 &&
     binding &&
     Array.isArray(props.linkedSubTableBindings) &&
@@ -1958,8 +2067,6 @@ function handleLinkFormClick(col: Column, row: Record<string, any>, rowIndex: nu
     r && typeof r === 'object' ? Object.keys(r as object).filter(k => !k.startsWith('__')).length : 0
   if (
     !miIsolateTodo &&
-    !linkFormNestedOnlyMi &&
-    !readOnlyIsolateLinkForm &&
     binding &&
     effectiveSavedRows.length > 0 &&
     rowDataKeyCount(effectiveSavedRows[0]) <= 2 &&
@@ -1983,9 +2090,12 @@ function handleLinkFormClick(col: Column, row: Record<string, any>, rowIndex: nu
   if (row && binding && effectiveSavedRows.length > 0) {
     const idIdwScoped = filterLinkedChildRowsByParentIdIdw(row, effectiveSavedRows)
     if (idIdwScoped.length > 0) {
-      effectiveSavedRows = isMiStyleParentRowForLinkForm(row as Record<string, unknown>)
+      const narrowed = isMiStyleParentRowForLinkForm(row as Record<string, unknown>)
         ? filterRowsByMiLinkFormParent(row, idIdwScoped, binding)
         : idIdwScoped
+      if (narrowed.length > 0) {
+        effectiveSavedRows = narrowed
+      }
     }
   }
 
@@ -2057,6 +2167,7 @@ function handleLinkFormClick(col: Column, row: Record<string, any>, rowIndex: nu
         const miOk =
           !isMiStyleParentRowForLinkForm(row as Record<string, unknown>)
           || parentChildTaskStatusesMatch(row, best[0])
+          || !String((best[0] as { task_status?: unknown })?.task_status ?? '').trim()
         if (miOk && bestScore > curScore) effectiveSavedRows = best
       }
     }
@@ -2149,27 +2260,47 @@ function handleLinkFormClick(col: Column, row: Record<string, any>, rowIndex: nu
       }
     }
   }
-  linkedSubTableRows.value = [...effectiveSavedRows]
-  linkedFormData.value = buildLinkedFormData({ ...(binding || ({} as any)), data: effectiveSavedRows })
-  if (row && binding?.formFields?.length && !linkFormNestedOnlyMi) {
-    const idField = binding.formFields.find(f => f.key === 'id' && f.type !== 'card')
-    if (idField) {
-      const cur = linkedFormData.value.id
-      const invalid =
-        cur === null
-        || cur === undefined
-        || cur === ''
-        || (idField.type === 'number' && typeof cur === 'string' && Number.isNaN(Number(String(cur).trim())))
-      if (invalid) {
-        const parentId = row.id_idw ?? resolveSubTableRowPk(row as Record<string, unknown>)
-        if (parentId != null && parentId !== '') {
-          linkedFormData.value = {
-            ...linkedFormData.value,
-            id: resolveLinkFormFieldValueForModal(idField, parentId)
-          }
+  if (
+    !props.editable
+    && row
+    && binding?.formFields?.length
+    && linkFormRowsLackFormPayload(effectiveSavedRows, binding.formFields)
+  ) {
+    const fromVariables = collectLinkFormRowsFromProcessVariables(binding, row)
+    if (fromVariables.length > 0) {
+      const best = pickBestLinkedChildRowsForParentRow(row, fromVariables, binding)
+      if (best.length > 0) {
+        effectiveSavedRows = best
+      }
+    }
+    if (linkFormRowsLackFormPayload(effectiveSavedRows, binding.formFields)) {
+      const allPeerRows = (props.linkedSubTableBindings ?? []).flatMap(b =>
+        Array.isArray(b.data) ? b.data : [],
+      )
+      const scoped = allPeerRows.filter(r =>
+        miLinkFormChildRowMatchesParent(row as Record<string, unknown>, r, binding),
+      )
+      if (scoped.length > 0) {
+        const best = pickBestLinkedChildRowsForParentRow(row, scoped, binding)
+        if (best.length > 0) {
+          effectiveSavedRows = best
         }
       }
     }
+  }
+  linkedSubTableRows.value = [...effectiveSavedRows]
+  linkedFormData.value = buildLinkedFormData(
+    { ...(binding || ({} as any)), data: effectiveSavedRows },
+    { readonly: !props.editable },
+  )
+  if (row && binding?.formFields?.length && !linkFormNestedOnlyMi) {
+    backfillMiLinkFormModalFieldsFromParent(
+      linkedFormData.value,
+      row as Record<string, unknown>,
+      binding.formFields,
+      effectiveSavedRows[0] as Record<string, unknown> | undefined,
+      !props.editable,
+    )
   }
   const bindingForFooter = resolveLinkBindingForColumn(col)
   const formFieldsLen = bindingForFooter?.formFields?.length ?? 0
@@ -2306,7 +2437,8 @@ function promoteBestRowForLinkFormModal(
 
 /** True when saved nested rows carry no real values for any designer link-form field (placeholders only). */
 function linkFormRowsLackFormPayload(rows: any[], formFields: FormField[] | undefined): boolean {
-  if (!formFields?.length || !Array.isArray(rows) || rows.length === 0) return false
+  if (!formFields?.length) return false
+  if (!Array.isArray(rows) || rows.length === 0) return true
   const row0 = rows[0]
   if (!row0 || typeof row0 !== 'object') return true
   const score = scoreRowForLinkedFormFields(row0, formFields)
@@ -2315,22 +2447,111 @@ function linkFormRowsLackFormPayload(rows: any[], formFields: FormField[] | unde
   return total > 1 && score < total
 }
 
-function buildLinkedFormData(binding?: SubTableBinding): Record<string, any> {
+function collectLinkFormRowsFromProcessVariables(
+  binding: SubTableBinding,
+  parentRow: Record<string, any> | null | undefined,
+): any[] {
+  const pd = unref(props.primaryFormData) as Record<string, unknown> | undefined
+  const raw = pd?.__subTables__
+  if (!raw || typeof raw !== 'object') return []
+  const fieldKeys = collectLinkTargetFormFieldKeys(binding)
+  if (fieldKeys.size === 0) return []
+  const threshold =
+    fieldKeys.size <= 2 ? 1 : Math.min(fieldKeys.size, Math.max(2, Math.ceil(fieldKeys.size * 0.25)))
+  let merged: any[] = []
+  for (const v of Object.values(raw as Record<string, unknown>)) {
+    if (!Array.isArray(v) || v.length === 0) continue
+    if (maxFormFieldOverlapScore(v, fieldKeys) < threshold) continue
+    merged = mergeSubTableRowsByRowId(merged, v as any[], binding.primaryKeyFields ?? null)
+  }
+  if (parentRow && merged.length > 0 && isMiStyleParentRowForLinkForm(parentRow as Record<string, unknown>)) {
+    merged = filterRowsByMiLinkFormParent(parentRow, merged, binding)
+  }
+  return merged
+}
+
+function resolveMiLinkFormParentParticipantKey(
+  parentRow: Record<string, unknown>,
+): string | null {
+  return (
+    normalizeFkIdForMatch(parentRow.id_idw)
+    ?? normalizeFkIdForMatch(resolveSubTableRowPk(parentRow))
+  )
+}
+
+/** Link-child {@code id} is an allocated row PK (UUID / numeric). Parent MI {@code id_idw} belongs in {@code sub_task_id} only. */
+function isAllocatedLinkChildBusinessId(
+  childId: unknown,
+  parentKey: string | null,
+): boolean {
+  const n = normalizeFkIdForMatch(childId)
+  if (n == null) return false
+  if (parentKey != null && n === parentKey) return false
+  if (/^test-\d+$/i.test(n)) return false
+  return true
+}
+
+function backfillMiLinkFormModalFieldsFromParent(
+  formData: Record<string, any>,
+  parentRow: Record<string, unknown>,
+  formFields: FormField[],
+  savedRow: Record<string, unknown> | undefined,
+  readonly: boolean,
+): void {
+  const parentKey = resolveMiLinkFormParentParticipantKey(parentRow)
+  const parentScalar = parentRow.id_idw ?? resolveSubTableRowPk(parentRow)
+
+  const walk = (fields: FormField[]) => {
+    for (const field of fields) {
+      if (field.type === 'card') {
+        walk(field.children || [])
+        continue
+      }
+      const lk = String(field.key || '').toLowerCase()
+      if (lk === 'sub_task_id' || lk === 'subtaskid') {
+        const cur = formData[field.key]
+        if (!isPresentLinkedModalValue(cur) && parentScalar != null && String(parentScalar).trim() !== '') {
+          formData[field.key] = resolveLinkFormFieldValueForModal(field, parentScalar, { readonly })
+        }
+      }
+    }
+  }
+  walk(formFields)
+
+  const idField = formFields.find(f => f.key === 'id' && f.type !== 'card')
+  if (!idField) return
+  const cur = formData.id
+  const invalid =
+    cur === null
+    || cur === undefined
+    || cur === ''
+    || (idField.type === 'number' && typeof cur === 'string' && Number.isNaN(Number(String(cur).trim())))
+  if (!invalid) return
+  const rowPk = savedRow?.id
+  if (!isAllocatedLinkChildBusinessId(rowPk, parentKey)) return
+  formData.id = resolveLinkFormFieldValueForModal(idField, rowPk, { readonly })
+}
+
+function buildLinkedFormData(
+  binding?: SubTableBinding,
+  opts?: { readonly?: boolean },
+): Record<string, any> {
   const raw =
     binding?.data?.[0] && typeof binding.data[0] === 'object'
       ? (binding.data[0] as Record<string, any>)
       : {}
   const next: Record<string, any> = {}
+  const modalOpts = { readonly: opts?.readonly ?? !props.editable }
   if (binding?.formFields?.length) {
     binding.formFields.forEach(field => {
       if (field.type === 'card') {
         field.children?.forEach(child => {
           const v = rowValueForLinkedFormField(raw, child.key)
-          next[child.key] = resolveLinkFormFieldValueForModal(child, v)
+          next[child.key] = resolveLinkFormFieldValueForModal(child, v, modalOpts)
         })
       } else {
         const v = rowValueForLinkedFormField(raw, field.key)
-        next[field.key] = resolveLinkFormFieldValueForModal(field, v)
+        next[field.key] = resolveLinkFormFieldValueForModal(field, v, modalOpts)
       }
     })
     return next
@@ -2467,6 +2688,15 @@ function handleAdd() {
   void openAddRowDialog()
 }
 
+function createAllocatePrimaryKeysFn(): AllocatePrimaryKeysFn | undefined {
+  if (!props.functionUnitId || props.tableId == null) return undefined
+  return async (payload) => {
+    const res = await processApi.allocatePrimaryKeys(props.functionUnitId!, payload)
+    const body = unwrapPortalApiPayload(res) as { values?: string[] }
+    return body?.values ?? []
+  }
+}
+
 async function openAddRowDialog() {
   if (!props.editable) return
   const rowAddContext = buildRowAddContext(
@@ -2487,20 +2717,14 @@ async function openAddRowDialog() {
       parentTablesById: props.parentTablesById,
       functionUnitId: props.functionUnitId,
       autoEnsurePrimaryRecord: props.primaryFormData != null,
+      deferPkAllocationUntilSave: true,
       bindingLinkMode: props.bindingLinkMode,
       bindingForeignKeyField: props.bindingForeignKeyField,
       primaryKeyFields: props.primaryKeyFields,
       miParticipantRowId: props.miParticipantRowId,
       miParentParticipantRow: props.miParentParticipantRow,
       miParentTableId: props.miParentTableId,
-      allocatePrimaryKeys:
-        props.functionUnitId && props.tableId != null
-          ? async (payload) => {
-              const res = await processApi.allocatePrimaryKeys(props.functionUnitId!, payload)
-              const body = unwrapPortalApiPayload(res) as { values?: string[] }
-              return body?.values ?? []
-            }
-          : undefined,
+      allocatePrimaryKeys: createAllocatePrimaryKeysFn(),
       t,
     })
     if (!result.ok) {
@@ -2531,12 +2755,69 @@ function openEditDialog(i: number) {
   dialogVisible.value = true
 }
 
-function handleDialogSave(rowData: Record<string, any>) {
-  const savedRow = mergeFormRowWithSeed(dialogInitialData.value, rowData)
+async function handleDialogSave(rowData: Record<string, any>) {
+  let savedRow = mergeFormRowWithSeed(dialogInitialData.value, rowData)
   if (dialogMode.value === 'add') {
+    const allocate = createAllocatePrimaryKeysFn()
+    if (allocate && props.tableId != null && props.fieldDefinitions?.length) {
+      const rowAddContext = buildRowAddContext(
+        props.primaryFormData ?? {},
+        props.subTableBindingsForContext ?? props.linkedSubTableBindings,
+        props.parentRow,
+        props.parentTableId,
+      )
+      const result = await finalizeSubTableRowOnSave({
+        row: savedRow,
+        fieldDefinitions: props.fieldDefinitions,
+        rowAddContext,
+        tableId: Number(props.tableId),
+        allocatePrimaryKeys: allocate,
+        functionUnitId: props.functionUnitId,
+        parentTablesById: props.parentTablesById,
+        primaryTableId: props.primaryTableId,
+        primaryTableDisplayName: props.primaryTableDisplayName,
+        tableDisplayName: props.title,
+        autoEnsurePrimaryRecord: props.primaryFormData != null,
+        bindingLinkMode: props.bindingLinkMode,
+        bindingForeignKeyField: props.bindingForeignKeyField,
+        primaryKeyFields: props.primaryKeyFields,
+        miParticipantRowId: props.miParticipantRowId,
+        miParentParticipantRow: props.miParentParticipantRow,
+        miParentTableId: props.miParentTableId,
+        t,
+      })
+      if (!result.ok) {
+        throw new Error(result.message)
+      }
+      savedRow = result.row
+      if (result.primaryFormDataPatch && Object.keys(result.primaryFormDataPatch).length > 0) {
+        emit('update:primaryFormData', result.primaryFormDataPatch)
+      }
+    }
     rows.value.push(savedRow)
   } else if (dialogMode.value === 'edit' && editingRowIndex.value !== null) {
-    rows.value[editingRowIndex.value] = savedRow
+    const idx = editingRowIndex.value
+    const prevRow = rows.value[idx] as Record<string, any> | undefined
+    const af = props.assigneeField
+    const prevAssigneeId = af && prevRow ? extractUserIdFromCellValue(prevRow[af]) : ''
+    if (af) {
+      savedRow = applyAssigneeDisplayNameToRow(savedRow, prevAssigneeId)
+    }
+    rows.value[idx] = savedRow
+    emit('update:modelValue', [...rows.value])
+
+    const newAssigneeId = af ? extractUserIdFromCellValue(savedRow[af]) : ''
+    if (
+      props.canAssign &&
+      props.showAssignButton &&
+      props.taskId &&
+      af &&
+      newAssigneeId &&
+      newAssigneeId !== prevAssigneeId
+    ) {
+      await performSubTableRowAssignment(idx, newAssigneeId, { fromEditDialog: true })
+    }
+    return
   }
   emit('update:modelValue', [...rows.value])
 }
@@ -2595,10 +2876,74 @@ function getUserDisplayName(userId: unknown): string {
   return sid.startsWith('user-') ? sid.substring(5) : sid
 }
 
+/** Resolve assignee cell when BPMN assigneeField differs from designer column (e.g. assignee_user_id vs assignee). */
+function resolveRowAssigneeCell(row: Record<string, unknown> | null | undefined): unknown {
+  if (!row) return undefined
+  const af = props.assigneeField
+  if (af && row[af] != null && String(row[af]).trim() !== '') return row[af]
+  for (const key of ['assignee', 'assignee_user_id', 'assignee_id']) {
+    const raw = row[key]
+    if (raw == null) continue
+    if (typeof raw === 'string' && raw.trim() === '') continue
+    return raw
+  }
+  return undefined
+}
+
 function formatAssigneeDisplayLabel(raw: unknown): string {
   if (raw == null || raw === '') return ''
   if (typeof raw === 'string' || typeof raw === 'number') return String(raw)
   return unwrapUserLikeValueToDisplayString(raw)
+}
+
+function resolveDisplayNameFromAssigneeCell(raw: unknown): string | undefined {
+  if (raw == null) return undefined
+  if (typeof raw === 'object' && !Array.isArray(raw)) {
+    const s = unwrapUserLikeValueToDisplayString(raw)
+    if (s && s !== '-') return s
+  }
+  return undefined
+}
+
+/** Keep {@code assignee_display_name} aligned with the assignee field (Edit dialog / lookup object / cache). */
+function applyAssigneeDisplayNameToRow(
+  row: Record<string, any>,
+  previousAssigneeId?: string,
+): Record<string, any> {
+  const af = props.assigneeField
+  if (!af) return row
+  const raw = row[af]
+  const sid = extractUserIdFromCellValue(raw)
+  if (!sid) {
+    const next = { ...row }
+    delete next.assignee_display_name
+    return next
+  }
+  const sidChanged = previousAssigneeId !== undefined && sid !== previousAssigneeId
+  let displayName = resolveDisplayNameFromAssigneeCell(raw)
+  if (!displayName && !sidChanged) {
+    const existing = row.assignee_display_name
+    if (existing != null && String(existing).trim() !== '') {
+      displayName = String(existing).trim()
+    }
+  }
+  if (!displayName) {
+    displayName = userNameCache.value[sid]
+  }
+  if (displayName) {
+    userNameCache.value = { ...userNameCache.value, [sid]: displayName }
+    const next = { ...row, assignee_display_name: displayName }
+    if (af) {
+      next[af] = sid
+    }
+    return next
+  }
+  if (sidChanged) {
+    const next = { ...row }
+    delete next.assignee_display_name
+    return next
+  }
+  return row
 }
 
 /** Align sub-table assignee column with task detail: resolve display names when only IDs are stored (e.g. completed tasks). */
@@ -2623,8 +2968,20 @@ async function hydrateAssigneeDisplayNamesFromUserDirectory() {
   let changed = false
   let next = rows.value.map(r => {
     if (!r || typeof r !== 'object') return r
-    const sid = extractUserIdFromCellValue((r as Record<string, unknown>)[af])
+    const rec = r as Record<string, unknown>
+    const rawAssignee = resolveRowAssigneeCell(rec)
+    const sid = extractUserIdFromCellValue(rawAssignee)
     if (!sid) return r
+    const fromCell = resolveDisplayNameFromAssigneeCell(rawAssignee)
+    if (fromCell) {
+      const existing = r.assignee_display_name
+      if (existing !== fromCell) {
+        changed = true
+        userNameCache.value = { ...userNameCache.value, [sid]: fromCell }
+        return { ...r, assignee_display_name: fromCell }
+      }
+      return r
+    }
     const existing = r.assignee_display_name
     if (existing != null && String(existing).trim() !== '') return r
     const cached = userNameCache.value[sid]
@@ -2639,11 +2996,11 @@ async function hydrateAssigneeDisplayNamesFromUserDirectory() {
 
   const idsToFetch = [...new Set(
     rows.value
-      .map(r => (r && typeof r === 'object' ? extractUserIdFromCellValue((r as Record<string, unknown>)[af]) : ''))
+      .map(r => (r && typeof r === 'object' ? extractUserIdFromCellValue(resolveRowAssigneeCell(r as Record<string, unknown>)) : ''))
       .filter(s => s.length > 0)
   )].filter(sid => {
     const row = rows.value.find(
-      r => r && extractUserIdFromCellValue((r as Record<string, unknown>)[af]) === sid
+      r => r && extractUserIdFromCellValue(resolveRowAssigneeCell(r as Record<string, unknown>)) === sid
     )
     if (!row) return false
     const hasName = row.assignee_display_name != null && String(row.assignee_display_name).trim() !== ''
@@ -2671,7 +3028,7 @@ async function hydrateAssigneeDisplayNamesFromUserDirectory() {
   let changed2 = false
   const merged = rows.value.map(r => {
     if (!r || typeof r !== 'object') return r
-    const sid = extractUserIdFromCellValue((r as Record<string, unknown>)[af])
+    const sid = extractUserIdFromCellValue(resolveRowAssigneeCell(r as Record<string, unknown>))
     if (!sid) return r
     const existing = r.assignee_display_name
     if (existing != null && String(existing).trim() !== '') return r
@@ -2824,16 +3181,37 @@ async function resolveMissingRowIdFromTaskDetail(
   }
 }
 
-async function confirmAssignment() {
-  if (!selectedAssigneeId.value) {
-    ElMessage.warning(t('subTable.pleaseSelectUser'))
-    return
+function applyAssignmentResultToRow(rowIndex: number, result: AssignSubTableRowResponse) {
+  if (!props.assigneeField) return
+  const targetRow = rows.value[rowIndex]
+  if (!targetRow) return
+  targetRow[props.assigneeField] = result.assigneeId
+  const rawDisplay = result.assigneeName ?? result.assigneeId
+  const displayName =
+    typeof rawDisplay === 'string' || typeof rawDisplay === 'number'
+      ? String(rawDisplay)
+      : unwrapUserLikeValueToDisplayString(rawDisplay)
+  targetRow.assignee_display_name = displayName
+  userNameCache.value[String(result.assigneeId)] = displayName
+  emit('update:modelValue', [...rows.value])
+  emit('assignmentChanged')
+}
+
+async function performSubTableRowAssignment(
+  rowIndex: number,
+  assigneeId: string,
+  opts?: { fromEditDialog?: boolean },
+): Promise<boolean> {
+  const row = rows.value[rowIndex] as Record<string, unknown> | undefined
+  if (!row || !props.taskId) {
+    if (!opts?.fromEditDialog) {
+      ElMessage.error(t('subTable.assignmentFailed'))
+    }
+    return false
   }
 
-  const row = currentAssignRow.value as Record<string, unknown> | null | undefined
   const rowPk = resolveSubTableRowPk(row)
-  const rowKeyRaw =
-    row && typeof row === 'object' ? (row as Record<string, unknown>).rowKey : undefined
+  const rowKeyRaw = row.rowKey
   const rowKeyForAssign =
     rowKeyRaw && typeof rowKeyRaw === 'object' && !Array.isArray(rowKeyRaw)
       ? (rowKeyRaw as Record<string, unknown>)
@@ -2842,10 +3220,10 @@ async function confirmAssignment() {
   let effectiveTaskId = props.taskId
   let meetingHints: { topic?: string; location?: string; organizerName?: string } | undefined
   let rowIdNum = rowPk != null ? Number(rowPk) : NaN
-  if (props.taskId && (rowPk == null || Number.isNaN(rowIdNum)) && row) {
-    let recovered = await resolveMissingRowIdFromServer(props.taskId, row, currentAssignRowIndex.value)
+  if (props.taskId && (rowPk == null || Number.isNaN(rowIdNum))) {
+    let recovered = await resolveMissingRowIdFromServer(props.taskId, row, rowIndex)
     if (recovered == null) {
-      const fromDetail = await resolveMissingRowIdFromTaskDetail(props.taskId, row, currentAssignRowIndex.value)
+      const fromDetail = await resolveMissingRowIdFromTaskDetail(props.taskId, row, rowIndex)
       recovered = fromDetail.rowId
       meetingHints = fromDetail.meetingHints
       if (fromDetail.effectiveTaskId && fromDetail.effectiveTaskId.trim()) {
@@ -2856,69 +3234,36 @@ async function confirmAssignment() {
       rowIdNum = recovered
     }
   }
-  if (!props.taskId) {
-    ElMessage.error(t('subTable.assignmentFailed'))
-    return
-  }
 
   assigning.value = true
   try {
     let response: unknown
     if (rowKeyForAssign != null && Object.keys(rowKeyForAssign).length > 0) {
-      response = await assignSubTableRow(
-        props.taskId,
-        0,
-        selectedAssigneeId.value,
-        rowKeyForAssign
-      )
+      response = await assignSubTableRow(props.taskId, 0, assigneeId, rowKeyForAssign)
       if (effectiveTaskId !== props.taskId) {
-        response = await assignSubTableRow(
-          effectiveTaskId,
-          0,
-          selectedAssigneeId.value,
-          rowKeyForAssign
-        )
+        response = await assignSubTableRow(effectiveTaskId, 0, assigneeId, rowKeyForAssign)
       }
     } else if (!Number.isNaN(rowIdNum)) {
-      response = await assignSubTableRow(
-        props.taskId,
-        rowIdNum,
-        selectedAssigneeId.value
-      )
+      response = await assignSubTableRow(props.taskId, rowIdNum, assigneeId)
     } else {
-      const identityRow = row || {}
       response = await assignSubTableRowByIdentity(props.taskId, {
-        // taskId may differ from route param in some task detail payloads
-        assigneeId: selectedAssigneeId.value,
-        email: typeof (identityRow as Record<string, unknown>).email === 'string'
-          ? String((identityRow as Record<string, unknown>).email)
-          : undefined,
-        name: typeof (identityRow as Record<string, unknown>).name === 'string'
-          ? String((identityRow as Record<string, unknown>).name)
-          : undefined,
-        department: typeof (identityRow as Record<string, unknown>).department === 'string'
-          ? String((identityRow as Record<string, unknown>).department)
-          : undefined,
+        assigneeId,
+        email: typeof row.email === 'string' ? String(row.email) : undefined,
+        name: typeof row.name === 'string' ? String(row.name) : undefined,
+        department: typeof row.department === 'string' ? String(row.department) : undefined,
         topic: meetingHints?.topic,
         location: meetingHints?.location,
-        organizerName: meetingHints?.organizerName
+        organizerName: meetingHints?.organizerName,
       })
-      // retry with effective task id from detail if route task id is stale
       if (effectiveTaskId !== props.taskId) {
         response = await assignSubTableRowByIdentity(effectiveTaskId, {
-          assigneeId: selectedAssigneeId.value,
-          email: typeof (identityRow as Record<string, unknown>).email === 'string'
-            ? String((identityRow as Record<string, unknown>).email)
-            : undefined,
-          name: typeof (identityRow as Record<string, unknown>).name === 'string'
-            ? String((identityRow as Record<string, unknown>).name)
-            : undefined,
-          department: typeof (identityRow as Record<string, unknown>).department === 'string'
-            ? String((identityRow as Record<string, unknown>).department)
-            : undefined,
+          assigneeId,
+          email: typeof row.email === 'string' ? String(row.email) : undefined,
+          name: typeof row.name === 'string' ? String(row.name) : undefined,
+          department: typeof row.department === 'string' ? String(row.department) : undefined,
           topic: meetingHints?.topic,
           location: meetingHints?.location,
-          organizerName: meetingHints?.organizerName
+          organizerName: meetingHints?.organizerName,
         })
       }
     }
@@ -2928,38 +3273,27 @@ async function confirmAssignment() {
       result != null &&
       result.assigneeId != null &&
       String(result.assigneeId).trim().length > 0
-    // When success is absent but assigneeId is returned, treat as success (serialization compat); success===false triggers error message
     const ok =
       result != null &&
       result.success !== false &&
       (result.success === true || assigneePresent)
 
     if (ok && result) {
-      // Update the row data
-      if (currentAssignRowIndex.value !== null && props.assigneeField) {
-        const targetRow = rows.value[currentAssignRowIndex.value]
-        targetRow[props.assigneeField] = result.assigneeId
-        const rawDisplay = result.assigneeName ?? result.assigneeId
-        const displayName =
-          typeof rawDisplay === 'string' || typeof rawDisplay === 'number'
-            ? String(rawDisplay)
-            : unwrapUserLikeValueToDisplayString(rawDisplay)
-        targetRow.assignee_display_name = displayName
-        userNameCache.value[String(result.assigneeId)] = displayName
-        emit('update:modelValue', [...rows.value])
-        emit('assignmentChanged')
+      applyAssignmentResultToRow(rowIndex, result)
+      if (!opts?.fromEditDialog) {
+        ElMessage.success(t('subTable.assignmentSuccess'))
+        assignDialogVisible.value = false
       }
-
-      ElMessage.success(t('subTable.assignmentSuccess'))
-      assignDialogVisible.value = false
-    } else {
-      const r = result as Record<string, unknown> | null
-      const hint =
-        (r && typeof r.errorMessage === 'string' && r.errorMessage.trim()) ||
-        (r && typeof r.message === 'string' && r.message.trim()) ||
-        t('subTable.assignmentFailed')
-      ElMessage.error(hint)
+      return true
     }
+
+    const r = result as Record<string, unknown> | null
+    const hint =
+      (r && typeof r.errorMessage === 'string' && r.errorMessage.trim()) ||
+      (r && typeof r.message === 'string' && r.message.trim()) ||
+      t('subTable.assignmentFailed')
+    ElMessage.error(hint)
+    return false
   } catch (error: unknown) {
     console.error('Failed to assign sub-table row:', error)
     const ax = error as { response?: { status?: number; data?: unknown }; message?: string }
@@ -2976,9 +3310,19 @@ async function confirmAssignment() {
       (typeof ax.message === 'string' && ax.message.trim().length > 0 ? ax.message.trim() : undefined) ||
       t('subTable.assignmentFailed')
     ElMessage.error(msg)
+    return false
   } finally {
     assigning.value = false
   }
+}
+
+async function confirmAssignment() {
+  if (!selectedAssigneeId.value) {
+    ElMessage.warning(t('subTable.pleaseSelectUser'))
+    return
+  }
+  if (currentAssignRowIndex.value == null) return
+  await performSubTableRowAssignment(currentAssignRowIndex.value, selectedAssigneeId.value)
 }
 
 // Real-time polling functionality
@@ -3069,8 +3413,6 @@ function stopWebSocketSubscription() {
 
 // Lifecycle hooks for polling
 onMounted(() => {
-  const _t0 = performance.now()
-  console.log(`[PERF-ST] SubTable "${props.title}" mounted (${(props.modelValue as any[])?.length ?? 0} rows) @${_t0.toFixed(0)}`)
   if (props.enablePolling) {
     startPolling()
   }

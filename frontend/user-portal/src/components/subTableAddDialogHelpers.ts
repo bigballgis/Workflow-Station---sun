@@ -1,4 +1,5 @@
 import type { FormRules } from 'element-plus'
+import { legacyBindingIdAliases } from './formRendererHelpers'
 
 export type ColumnType =
   | 'text'
@@ -149,7 +150,8 @@ export function mergeFormRowWithSeed(
 export function buildRules(columns: DialogColumn[]): FormRules {
   const rules: FormRules = {}
   for (const col of columns) {
-    if (col.required) {
+    // Auto-PK / readonly FK are system-filled; form-create disabled fields often fail required checks.
+    if (col.required && !col.readonly) {
       const trigger =
         col.type === 'select' || col.type === 'date' || col.type === 'datetime' || col.type === 'checkbox'
         || col.type === 'cascader' || col.type === 'transfer' || col.type === 'lookup'
@@ -625,8 +627,14 @@ export function resolveSubListViewColumnsForBinding(
   if (!formConfig || typeof formConfig !== 'object') return null
   const stv = formConfig.subListViews as Record<string, { columns?: SubListViewColumn[] }> | undefined
   if (!stv || typeof stv !== 'object') return null
-  const sid = String(bindingId)
-  const direct = stv[bindingId]?.columns ?? stv[sid]?.columns
+  let direct: SubListViewColumn[] | undefined
+  for (const alias of legacyBindingIdAliases(bindingId)) {
+    const cols = stv[alias]?.columns ?? stv[String(alias)]?.columns
+    if (Array.isArray(cols) && cols.length > 0) {
+      direct = cols
+      break
+    }
+  }
   if (!Array.isArray(direct) || direct.length === 0) return null
 
   const subFormCount = subFormFieldNames.length

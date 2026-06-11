@@ -48,6 +48,20 @@ alwaysApply: true
 5. 变更端口/context-path → 更新 Kong 路由和 Healthcheck 路径
 ```
 
+## 性能优化（Performance）
+
+**完整协议见 `performance-change-safety.mdc`。**
+
+```
+1. 识别变更类型 — 若含 cache / 并行 API / 少 clone / 合并 hydrate → 视为性能变更
+2. 与功能/fix 分 PR — 禁止同一 diff 既优化又改 MI merge/filter 语义
+3. 默认只动「取数层」— API、prefetch、TTL cache、flatten；语义层（viewContext、binding 类型、scope/backfill）须先 failing test
+4. 触达热路径（detail.vue、shared.ts、SubTableField.vue 等）→ 必跑：
+   cd frontend && npm run regression:mi
+5. PR 描述：动哪一层 + invariant I1–I7 勾选 + **单元输出 + 截图路径列表**
+6. 禁止：为快跳过 isInitiatorMyRequestView；无 viewContext 的缓存 key；allSlices merge 替代 binding 分支
+```
+
 ## 风险评级
 
 | 爆炸半径 | 风险 | 策略 |

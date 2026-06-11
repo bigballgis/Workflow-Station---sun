@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  allocateChildRowAutoPrimaryKeys,
   applyFieldDefinitionsToFormFields,
   applyFkPresentationToDialogColumns,
   applyMiParticipantRowSeedToInitialRow,
   filterStructuralFkMetasForBinding,
+  finalizeSubTableRowOnSave,
   prepareSubTableAddRow,
   repairMisassignedPrimaryKeyFromParentId,
   seedLinkChildForeignKeysFromParentRow,
@@ -166,6 +168,151 @@ describe('prepareSubTableAddRow miParticipantRow', () => {
       expect(result.initialRow.case_id).toBe('CASE-1')
       expect(result.initialRow.row_id).toBeUndefined()
     }
+  })
+
+  it('defers all PK allocate until Save when deferPkAllocationUntilSave', async () => {
+    const allocate = vi.fn().mockResolvedValue(['Test-000001'])
+    const fieldDefinitions = [
+      {
+        fieldName: 'id_idw',
+        isPrimaryKey: true,
+        pkGeneration: { strategy: 'prefixedSequence', prefix: 'Test-', padWidth: 6 },
+      },
+      {
+        fieldName: 'main_id',
+        isForeignKey: true,
+        refTableId: 19,
+        refPrimaryKeyFields: ['id'],
+        fkDisplayMode: 'readonly',
+      },
+    ]
+    const result = await prepareSubTableAddRow({
+      columns: [
+        { field: 'id_idw', label: 'id', type: 'number', required: true },
+        { field: 'main_id', label: 'main id', type: 'text', required: true },
+      ],
+      fieldDefinitions,
+      rowAddContext: {
+        primaryFormData: { id: '9f3e1925-25bf-4f06-a39a-3ba2dcb87b13' },
+        ancestorRowsByTableId: { 19: { id: '9f3e1925-25bf-4f06-a39a-3ba2dcb87b13' } },
+      },
+      tableId: 20,
+      bindingLinkMode: 'miParticipantRow',
+      bindingForeignKeyField: 'id_idw',
+      primaryKeyFields: ['id_idw'],
+      deferPkAllocationUntilSave: true,
+      allocatePrimaryKeys: allocate,
+      functionUnitId: 'Process_1_KK',
+    })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.initialRow.id_idw == null || result.initialRow.id_idw === '').toBe(true)
+      expect(result.initialRow.main_id).toBe('9f3e1925-25bf-4f06-a39a-3ba2dcb87b13')
+      expect(result.dialogColumns.find(c => c.field === 'id_idw')?.type).toBe('text')
+      expect(result.dialogColumns.find(c => c.field === 'id_idw')?.readonly).toBe(true)
+    }
+    expect(allocate).not.toHaveBeenCalled()
+
+    const saved = await finalizeSubTableRowOnSave({
+      row: { ...(result.ok ? result.initialRow : {}), name: '33' },
+      fieldDefinitions,
+      rowAddContext: {
+        primaryFormData: { id: '9f3e1925-25bf-4f06-a39a-3ba2dcb87b13' },
+        ancestorRowsByTableId: { 19: { id: '9f3e1925-25bf-4f06-a39a-3ba2dcb87b13' } },
+      },
+      tableId: 20,
+      allocatePrimaryKeys: allocate,
+      functionUnitId: 'Process_1_KK',
+      bindingLinkMode: 'miParticipantRow',
+      bindingForeignKeyField: 'id_idw',
+      primaryKeyFields: ['id_idw'],
+      autoEnsurePrimaryRecord: true,
+    })
+    expect(saved.ok).toBe(true)
+    if (saved.ok) {
+      expect(saved.row.id_idw).toBe('Test-000001')
+      expect(saved.row.main_id).toBe('9f3e1925-25bf-4f06-a39a-3ba2dcb87b13')
+    }
+    expect(allocate).toHaveBeenCalledWith({
+      tableId: 20,
+      fieldName: 'id_idw',
+      scopeKey: 'Process_1_KK',
+    })
+  })
+
+  it('finalizeSubTableRowOnSave allocates main PK before child PK when main row is empty', async () => {
+    const allocate = vi.fn(async (payload: { tableId: number; fieldName: string }) => {
+      if (payload.tableId === 19 && payload.fieldName === 'id') return ['main-uuid-1']
+      if (payload.tableId === 20 && payload.fieldName === 'id_idw') return ['Test-000002']
+      return []
+    })
+    const fieldDefinitions = [
+      {
+        fieldName: 'id_idw',
+        isPrimaryKey: true,
+        pkGeneration: { strategy: 'prefixedSequence', prefix: 'Test-', padWidth: 6 },
+      },
+      {
+        fieldName: 'main_id',
+        isForeignKey: true,
+        refTableId: 19,
+        refPrimaryKeyFields: ['id'],
+        fkDisplayMode: 'readonly',
+      },
+    ]
+    const addOpen = await prepareSubTableAddRow({
+      columns: [
+        { field: 'id_idw', label: 'id', type: 'text' },
+        { field: 'main_id', label: 'main id', type: 'text' },
+      ],
+      fieldDefinitions,
+      rowAddContext: { primaryFormData: {}, ancestorRowsByTableId: { 19: {} } },
+      tableId: 20,
+      primaryTableId: 19,
+      parentTablesById: {
+        19: {
+          fieldDefinitions: [{
+            fieldName: 'id',
+            isPrimaryKey: true,
+            pkGeneration: { strategy: 'uuid' },
+          }],
+        },
+      },
+      autoEnsurePrimaryRecord: true,
+      deferPkAllocationUntilSave: true,
+      allocatePrimaryKeys: allocate,
+      functionUnitId: 'Process_1_KK',
+    })
+    expect(addOpen.ok).toBe(true)
+    expect(allocate).not.toHaveBeenCalled()
+
+    const saved = await finalizeSubTableRowOnSave({
+      row: { name: 'row-1' },
+      fieldDefinitions,
+      rowAddContext: { primaryFormData: {}, ancestorRowsByTableId: { 19: {} } },
+      tableId: 20,
+      primaryTableId: 19,
+      parentTablesById: {
+        19: {
+          fieldDefinitions: [{
+            fieldName: 'id',
+            isPrimaryKey: true,
+            pkGeneration: { strategy: 'uuid' },
+          }],
+        },
+      },
+      autoEnsurePrimaryRecord: true,
+      allocatePrimaryKeys: allocate,
+      functionUnitId: 'Process_1_KK',
+    })
+    expect(saved.ok).toBe(true)
+    if (saved.ok) {
+      expect(saved.primaryFormDataPatch).toEqual({ id: 'main-uuid-1' })
+      expect(saved.row.main_id).toBe('main-uuid-1')
+      expect(saved.row.id_idw).toBe('Test-000002')
+    }
+    expect(allocate.mock.calls[0]?.[0]).toEqual(expect.objectContaining({ tableId: 19, fieldName: 'id' }))
+    expect(allocate.mock.calls[1]?.[0]).toEqual(expect.objectContaining({ tableId: 20, fieldName: 'id_idw' }))
   })
 
   it('seeds attachment row_id from MI participant and skips PK allocate for that field', async () => {
