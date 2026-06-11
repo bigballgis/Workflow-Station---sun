@@ -19,7 +19,6 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <spring-boot.version>3.2.1</spring-boot.version>
         <tomcat.version>10.1.55</tomcat.version>
-        <spring-security.version>6.2.2</spring-security.version>
         <jjwt.version>0.12.3</jjwt.version>
         <jqwik.version>1.8.2</jqwik.version>
         <h2.version>2.2.224</h2.version>

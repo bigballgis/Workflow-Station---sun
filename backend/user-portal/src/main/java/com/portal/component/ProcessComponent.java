@@ -3,6 +3,7 @@ package com.portal.component;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portal.client.WorkflowEngineClient;
+import com.portal.util.SubTableNestingSanitizer;
 import com.portal.dto.ChangeHistoryContext;
 import com.portal.dto.SubTableChange;
 import com.portal.exception.PortalException;
@@ -48,6 +49,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -78,6 +80,28 @@ public class ProcessComponent {
     
     @Value("${admin-center.url:http://localhost:8090}")
     private String adminCenterUrl;
+
+    /**
+     * In-memory cache for function unit content payloads (forms + BPMN + data tables).
+     * Key: resolved functionUnitId. TTL: 5 minutes (matching FunctionUnitAccessComponent).
+     * Same process key → same content for all tasks, so caching eliminates repeated
+     * admin-center HTTP round-trips when users navigate between To Do detail pages.
+     */
+    private final Map<String, CachedFuContent> fuContentCache = Collections.synchronizedMap(
+            new LinkedHashMap<>(32, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, CachedFuContent> eldest) {
+                    return size() > 100;
+                }
+            });
+
+    private static final long FU_CONTENT_CACHE_TTL_MS = java.util.concurrent.TimeUnit.MINUTES.toMillis(5);
+
+    private record CachedFuContent(Map<String, Object> payload, long cachedAt) {
+        boolean isExpired() {
+            return System.currentTimeMillis() - cachedAt > FU_CONTENT_CACHE_TTL_MS;
+        }
+    }
 
     // ==================== Process definitions and start ====================
 
@@ -1311,6 +1335,34 @@ public class ProcessComponent {
                 || variables == null || variables.isEmpty()) {
             return;
         }
+        // Collapse any geometrically bloated __subTables__ (rows that embed full nested copies of the whole
+        // sub-table tree from prior task rounds) down to the canonical one-level nesting BEFORE enriching.
+        // This both fixes already-persisted bloat on read and bounds the recursive overlay cost.
+        int strippedNested = SubTableNestingSanitizer.stripDeepNestedSubTables(variables);
+        if (strippedNested > 0) {
+            log.info("[PERF] enrich(public) stripped {} deep nested __subTables__ for {}",
+                    strippedNested, processInstanceId);
+        }
+        // Same process instance is enriched up to 3x per detail page load (detail endpoint, /form, /form-data).
+        // The recursive __subTables__ overlay is expensive on large payloads, so reuse a freshly computed result
+        // across those calls when the input __subTables__ is byte-identical (fingerprint) and recent. The short
+        // TTL guards MI/runtime freshness (a participant advancing must re-run within seconds).
+        Object baseSub = variables.get("__subTables__");
+        String enrichFingerprint = fingerprintForEnrichCache(baseSub);
+        if (enrichFingerprint != null) {
+            EnrichedSubTablesCacheEntry hit = enrichedSubTablesCache.get(processInstanceId);
+            if (hit != null
+                    && enrichFingerprint.equals(hit.baseFingerprint())
+                    && System.currentTimeMillis() - hit.timestampMs() < ENRICH_RESULT_TTL_MS) {
+                Object restored = readEnrichCacheValue(hit.enrichedJson());
+                if (restored != null) {
+                    variables.put("__subTables__", restored);
+                    log.info("[PERF] enrich(public) CACHE HIT for {}", processInstanceId);
+                    return;
+                }
+            }
+        }
+
         ProcessInstanceInfo synthetic = new ProcessInstanceInfo();
         synthetic.setId(processInstanceId);
         synthetic.setVariables(variables);
@@ -1320,7 +1372,57 @@ public class ProcessComponent {
             synthetic.setProcessDefinitionKey(pi.getProcessDefinitionKey());
             synthetic.setStatus(pi.getStatus());
         });
+        long __t = System.nanoTime();
         enrichSubTablesWithAssignmentData(synthetic);
+        log.info("[PERF] enrichSubTablesWithAssignmentData(public) took {} ms", (System.nanoTime() - __t) / 1_000_000L);
+
+        if (enrichFingerprint != null) {
+            String enrichedJson = writeEnrichCacheValue(variables.get("__subTables__"));
+            if (enrichedJson != null) {
+                enrichedSubTablesCache.put(processInstanceId,
+                        new EnrichedSubTablesCacheEntry(enrichFingerprint, enrichedJson, System.currentTimeMillis()));
+            }
+        }
+    }
+
+    private static final long ENRICH_RESULT_TTL_MS = 5000L;
+    private final Map<String, EnrichedSubTablesCacheEntry> enrichedSubTablesCache = new ConcurrentHashMap<>();
+    private final ObjectMapper enrichCacheMapper = new ObjectMapper();
+
+    private record EnrichedSubTablesCacheEntry(String baseFingerprint, String enrichedJson, long timestampMs) {}
+
+    private String fingerprintForEnrichCache(Object subTables) {
+        if (subTables == null) {
+            return null;
+        }
+        try {
+            String json = enrichCacheMapper.writeValueAsString(subTables);
+            return json.length() + ":" + Integer.toHexString(json.hashCode());
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private String writeEnrichCacheValue(Object subTables) {
+        if (subTables == null) {
+            return null;
+        }
+        try {
+            return enrichCacheMapper.writeValueAsString(subTables);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private Object readEnrichCacheValue(String json) {
+        if (json == null) {
+            return null;
+        }
+        try {
+            return enrichCacheMapper.readValue(json, Object.class);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     /**
@@ -1405,11 +1507,20 @@ public class ProcessComponent {
             return;
         }
         Map<String, Object> subTables = (Map<String, Object>) subTablesObj;
+        long __t1 = System.nanoTime();
         Map<String, String> bindingTableNames = resolveSubTableBindingTableNames(info);
+        log.info("[PERF] enrich.resolveSubTableBindingTableNames took {} ms", (System.nanoTime() - __t1) / 1_000_000L);
+        long __t2 = System.nanoTime();
+        ENRICH_SQL_STATS.set(new long[4]);
         enrichSubTablesMapPayload(info, subTables, bindingTableNames, miProgressByTable);
+        long[] __s = ENRICH_SQL_STATS.get();
+        log.info("[PERF] enrich.enrichSubTablesMapPayload took {} ms | perRowSelect={} (sum {} ms), subTableExists={}, resolvePk={}",
+                (System.nanoTime() - __t2) / 1_000_000L, __s[0], __s[1], __s[2], __s[3]);
         // Numeric bindingIds (64/66) and legacy keys (90/subtable2) share the same MI rows; only slices with a
         // designer binding name were overlaid above — propagate engine state to every duplicate row in __subTables__.
+        long __t3 = System.nanoTime();
         propagateMiOverlayAcrossAllSubTableSlices(subTables, miProgressByTable, info);
+        log.info("[PERF] enrich.propagateMiOverlayAcrossAllSubTableSlices took {} ms", (System.nanoTime() - __t3) / 1_000_000L);
     }
 
     /**
@@ -1431,7 +1542,7 @@ public class ProcessComponent {
             }
             try {
                 String safe = requireSafeIdentifier(tableName);
-                pkColsByTable.put(tableName, PostgresPhysicalTablePrimaryKeys.resolvePrimaryKeyColumns(jdbcTemplate, safe));
+                pkColsByTable.put(tableName, resolvePkColumnsCached(safe));
             } catch (Exception e) {
                 log.debug("propagateMiOverlay: skip PK for {}: {}", tableName, e.getMessage());
             }
@@ -1841,6 +1952,8 @@ public class ProcessComponent {
      * Physical-row merge + MI overlay for one {@code __subTables__}-shaped map (top-level or nested under a row).
      * Recurses into each row's {@code __subTables__} so link-form child slices persisted only under parent rows still hydrate.
      */
+    private static final ThreadLocal<long[]> ENRICH_SQL_STATS = ThreadLocal.withInitial(() -> new long[4]);
+
     @SuppressWarnings("unchecked")
     private void enrichSubTablesMapPayload(
             ProcessInstanceInfo info,
@@ -1867,7 +1980,8 @@ public class ProcessComponent {
                 String safeTableName = requireSafeIdentifier(tableName);
                 List<String> pkCols;
                 try {
-                    pkCols = PostgresPhysicalTablePrimaryKeys.resolvePrimaryKeyColumns(jdbcTemplate, safeTableName);
+                    ENRICH_SQL_STATS.get()[3]++;
+                    pkCols = resolvePkColumnsCached(safeTableName);
                 } catch (Exception e) {
                     log.debug("enrichSubTablesMapPayload: skip table {} (PK): {}", safeTableName, e.getMessage());
                     continue;
@@ -1877,6 +1991,7 @@ public class ProcessComponent {
                 // relation exists; SELECT against a missing relation aborts the whole PostgreSQL transaction and
                 // the request later fails with UnexpectedRollbackException despite catch blocks here (see Docker
                 // logs: ERROR relation "subtable" does not exist → current transaction is aborted).
+                ENRICH_SQL_STATS.get()[2]++;
                 final boolean physicalTablePresent = subTableExists(safeTableName);
 
                 // Legacy: physical table merge first (assignee, persisted field values). DB may still hold stale
@@ -1892,6 +2007,8 @@ public class ProcessComponent {
                     if (canQueryDb) {
                         String where = SubTableRowKeySupport.buildPkWhereClause(pkCols);
                         Object[] args = SubTableRowKeySupport.orderedPkParams(pkCols, rowKey);
+                        long __tsel = System.nanoTime();
+                        ENRICH_SQL_STATS.get()[0]++;
                         List<Map<String, Object>> dbRows = jdbcTemplate.query(
                                 "SELECT * FROM " + safeTableName + " WHERE " + where,
                                 (rs, i) -> {
@@ -1902,6 +2019,7 @@ public class ProcessComponent {
                                     }
                                     return m;
                                 }, args);
+                        ENRICH_SQL_STATS.get()[1] += (System.nanoTime() - __tsel) / 1_000_000L;
                         if (!dbRows.isEmpty()) {
                             Map<String, Object> dbRow = dbRows.get(0);
                             String displayName = (String) dbRow.get("assignee_display_name");
@@ -1967,13 +2085,40 @@ public class ProcessComponent {
         }
     }
 
+    /**
+     * Sub-table physical-table metadata (PK columns, existence) is queried per row/slice while walking the
+     * recursive {@code __subTables__} payload, which previously fired tens of thousands of identical
+     * information_schema / to_regclass queries for the same handful of table names (see issue: portal task
+     * detail 30s load). Schema is stable at runtime, so memoize per table name. Business tables are JSON-row
+     * stored (no physical table) per json-row-storage rule, so most lookups are stable "absent" results.
+     */
+    private final Map<String, List<String>> pkColumnsCache = new ConcurrentHashMap<>();
+    private final Map<String, Boolean> tableExistsCache = new ConcurrentHashMap<>();
+
+    private List<String> resolvePkColumnsCached(String safeTableName) {
+        List<String> cached = pkColumnsCache.get(safeTableName);
+        if (cached != null) {
+            return cached;
+        }
+        List<String> resolved = PostgresPhysicalTablePrimaryKeys.resolvePrimaryKeyColumns(jdbcTemplate, safeTableName);
+        pkColumnsCache.put(safeTableName, resolved);
+        return resolved;
+    }
+
     private boolean subTableExists(String tableName) {
+        Boolean cached = tableExistsCache.get(tableName);
+        if (cached != null) {
+            return cached;
+        }
+        boolean exists;
         try {
             String resolved = jdbcTemplate.queryForObject("SELECT to_regclass(?)::text", String.class, tableName);
-            return resolved != null && !resolved.isBlank();
+            exists = resolved != null && !resolved.isBlank();
         } catch (Exception e) {
-            return false;
+            exists = false;
         }
+        tableExistsCache.put(tableName, exists);
+        return exists;
     }
 
     private record MiRowProgress(String statusColumn, String nodeColumn, String status, String currentNode) {}
@@ -2049,6 +2194,11 @@ public class ProcessComponent {
         return s == null ? "" : s.trim().toLowerCase(Locale.ROOT);
     }
 
+    private static final long MI_STATUS_CACHE_TTL_MS = 5000L;
+    private final Map<String, MiStatusCacheEntry> miStatusCache = new ConcurrentHashMap<>();
+
+    private record MiStatusCacheEntry(Map<String, Object> payload, long timestampMs) {}
+
     @SuppressWarnings("unchecked")
     private Map<String, Map<String, MiRowProgress>> resolveMiRowProgress(String processInstanceId, String processInstanceStatus) {
         if (processInstanceId == null || processInstanceId.isBlank()) {
@@ -2058,15 +2208,29 @@ public class ProcessComponent {
             return Collections.emptyMap();
         }
         try {
-            Optional<Map<String, Object>> opt = workflowEngineClient.getMultiInstanceStatus(processInstanceId);
-            if (opt.isEmpty()) {
-                return Collections.emptyMap();
+            long __t = System.nanoTime();
+            Map<String, Object> data;
+            MiStatusCacheEntry cached = miStatusCache.get(processInstanceId);
+            if (cached != null
+                    && System.currentTimeMillis() - cached.timestampMs() < MI_STATUS_CACHE_TTL_MS) {
+                data = cached.payload();
+                log.info("[PERF] resolveMiRowProgress.getMultiInstanceStatus CACHE HIT for {}", processInstanceId);
+            } else {
+                Optional<Map<String, Object>> opt = workflowEngineClient.getMultiInstanceStatus(processInstanceId);
+                log.info("[PERF] resolveMiRowProgress.getMultiInstanceStatus(engine) took {} ms",
+                        (System.nanoTime() - __t) / 1_000_000L);
+                if (opt.isEmpty()) {
+                    return Collections.emptyMap();
+                }
+                data = opt.get();
+                miStatusCache.put(processInstanceId, new MiStatusCacheEntry(data, System.currentTimeMillis()));
             }
-            Map<String, Object> data = opt.get();
             Object tasksObj = data.get("tasks");
             if (!(tasksObj instanceof List<?> tasks)) {
                 return Collections.emptyMap();
             }
+            long __tpk = System.nanoTime();
+            int[] __pkCalls = {0};
             Map<String, Map<String, List<Map<String, Object>>>> byTableRow = new HashMap<>();
             for (Object o : tasks) {
                 if (!(o instanceof Map<?, ?> raw)) {
@@ -2081,7 +2245,8 @@ public class ProcessComponent {
                 }
                 List<String> pkCols;
                 try {
-                    pkCols = PostgresPhysicalTablePrimaryKeys.resolvePrimaryKeyColumns(jdbcTemplate, tn);
+                    __pkCalls[0]++;
+                    pkCols = resolvePkColumnsCached(tn);
                 } catch (Exception e) {
                     continue;
                 }
@@ -2100,6 +2265,8 @@ public class ProcessComponent {
                         .computeIfAbsent(canon, k -> new ArrayList<>())
                         .add(t);
             }
+            log.info("[PERF] resolveMiRowProgress: {} MI tasks, {} resolvePrimaryKeyColumns(JDBC) calls, loop took {} ms",
+                    tasks.size(), __pkCalls[0], (System.nanoTime() - __tpk) / 1_000_000L);
 
             Map<String, Map<String, MiRowProgress>> out = new HashMap<>();
             boolean processEndedCompleted = processInstanceStatus != null
@@ -2790,7 +2957,8 @@ public class ProcessComponent {
     
     /**
      * Returns full function unit content (BPMN, forms, action bindings, etc.)
-     * Checks function unit is enabled; throws when disabled
+     * Checks function unit is enabled; throws when disabled.
+     * Results are cached in-memory (5 min TTL) to avoid repeated admin-center HTTP round-trips.
      */
     public Map<String, Object> getFunctionUnitContent(String userId, String functionUnitIdOrCode) {
         log.info("Getting function unit content for: {}, user: {}", functionUnitIdOrCode, userId);
@@ -2799,6 +2967,12 @@ public class ProcessComponent {
         functionUnitAccessComponent.checkFunctionUnitAccess(userId, functionUnitIdOrCode);
         String functionUnitId = functionUnitAccessComponent.resolveFunctionUnitId(functionUnitIdOrCode);
         log.info("Resolved function unit ID: {}", functionUnitId);
+
+        // Check cache before making HTTP call to admin-center
+        CachedFuContent cached = fuContentCache.get(functionUnitId);
+        if (cached != null && !cached.isExpired()) {
+            return cached.payload();
+        }
         
         try {
             String url = adminCenterUrl + "/api/v1/admin/function-units/" + functionUnitId + "/content";
@@ -2810,6 +2984,7 @@ public class ProcessComponent {
             Map<String, Object> payload = ApiResponseBodyUnwrap.unwrapDataMap(response);
             if (!payload.isEmpty()) {
                 log.info("Got function unit content: name={}", payload.get("name"));
+                fuContentCache.put(functionUnitId, new CachedFuContent(payload, System.currentTimeMillis()));
                 return payload;
             }
             
@@ -2830,6 +3005,7 @@ public class ProcessComponent {
      * Returns full function unit content without permission check (internal).
      * Primary source: admin-center (function unit catalog with BPMN, forms, etc.).
      * If admin-center returns no BPMN, falls back to workflow-engine (deployed BPMN by functionUnitCode).
+     * Results are cached in-memory (5 min TTL) to avoid repeated admin-center HTTP round-trips.
      */
     public Map<String, Object> getFunctionUnitContent(String functionUnitIdOrCode) {
         log.info("Getting function unit content for: {}", functionUnitIdOrCode);
@@ -2844,6 +3020,12 @@ public class ProcessComponent {
                 log.warn("Could not resolve functionUnitId for {}, using as-is: {}", functionUnitIdOrCode, e.getMessage());
             }
 
+            // Check cache before making HTTP call
+            CachedFuContent cached = fuContentCache.get(functionUnitId);
+            if (cached != null && !cached.isExpired()) {
+                return cached.payload();
+            }
+
             String url = adminCenterUrl + "/api/v1/admin/function-units/" + functionUnitId + "/content";
             log.info("Fetching function unit content from: {}", url);
 
@@ -2853,13 +3035,19 @@ public class ProcessComponent {
             Map<String, Object> payload = ApiResponseBodyUnwrap.unwrapDataMap(response);
             if (!payload.isEmpty()) {
                 log.info("Got function unit content from admin-center: name={}", payload.get("name"));
+                // Cache successful result
+                fuContentCache.put(functionUnitId, new CachedFuContent(payload, System.currentTimeMillis()));
                 return payload;
             }
 
             log.warn("Admin-center returned empty content for functionUnitId={}; attempting fallback to workflow-engine BPMN", functionUnitId);
 
             // Fallback: fetch BPMN from workflow-engine by functionUnitCode, wrap in same shape
-            return loadBpmnFallbackFromEngine(functionUnitIdOrCode);
+            Map<String, Object> fallbackResult = loadBpmnFallbackFromEngine(functionUnitIdOrCode);
+            if (fallbackResult != null && !fallbackResult.isEmpty() && !fallbackResult.containsKey("error")) {
+                fuContentCache.put(functionUnitId, new CachedFuContent(fallbackResult, System.currentTimeMillis()));
+            }
+            return fallbackResult;
 
         } catch (Exception e) {
             log.error("Failed to get function unit content for {}: {}", functionUnitIdOrCode, e.getMessage(), e);

@@ -9,6 +9,9 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+import java.util.Map;
+
 /** Request DTO for a table field definition. */
 @Data
 @Builder
@@ -46,6 +49,15 @@ public class FieldDefinitionRequest {
     @Builder.Default
     private Boolean isUnique = false;
     
-    private String description;
+    private String displayName;
     private Integer sortOrder;
+
+    private Boolean isForeignKey;
+    private Long refTableId;
+    private List<String> refPrimaryKeyFields;
+    private Map<String, Object> pkGeneration;
+    /** readonly | hidden */
+    private String fkDisplayMode;
+    /** oneToOne | oneToMany | manyToMany */
+    private String relationCardinality;
 }

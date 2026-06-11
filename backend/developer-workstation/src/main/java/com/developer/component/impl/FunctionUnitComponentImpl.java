@@ -149,7 +149,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         FunctionUnit functionUnit = FunctionUnit.builder()
                 .name(request.getName())
                 .code(code)
-                .description(request.getDescription())
+                .displayName(request.getDescription())
                 .status(FunctionUnitStatus.DRAFT)
                 .build();
         
@@ -301,7 +301,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         }
         
         functionUnit.setName(request.getName());
-        functionUnit.setDescription(request.getDescription());
+        functionUnit.setDisplayName(request.getDescription());
         
         if (request.getIconId() != null) {
             Icon icon = iconRepository.findById(request.getIconId())
@@ -480,7 +480,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         FunctionUnit cloned = FunctionUnit.builder()
                 .name(newName)
                 .code(generateUniqueCode(newName))
-                .description(source.getDescription())
+                .displayName(source.getDisplayName())
                 .icon(source.getIcon())
                 .status(FunctionUnitStatus.DRAFT)
                 .build();
@@ -1022,7 +1022,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
                 .id(entity.getId())
                 .code(entity.getCode())
                 .name(entity.getName())
-                .description(entity.getDescription())
+                .description(entity.getDisplayName())
                 .iconId(entity.getIcon() != null ? entity.getIcon().getId() : null)
                 .icon(iconInfo)
                 .status(entity.getStatus())
@@ -1100,7 +1100,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         Map<String, Object> snapshot = new HashMap<>();
         snapshot.put("name", functionUnit.getName());
         snapshot.put("code", functionUnit.getCode());
-        snapshot.put("description", functionUnit.getDescription());
+        snapshot.put("description", functionUnit.getDisplayName());
         snapshot.put("status", functionUnit.getStatus() != null ? functionUnit.getStatus().name() : null);
         snapshot.put("processXml", functionUnit.getProcessDefinition() != null ? 
                 functionUnit.getProcessDefinition().getBpmnXml() : null);
@@ -1112,7 +1112,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
             tableSnap.put("tableName", table.getTableName());
             tableSnap.put("tableType", table.getTableType() != null ? table.getTableType().name() : null);
             tableSnap.put("tableDisplayName", table.getTableDisplayName());
-            tableSnap.put("description", table.getDescription());
+            tableSnap.put("description", table.getDisplayName());
             
             List<Map<String, Object>> fieldSnapshots = new ArrayList<>();
             for (FieldDefinition field : table.getFieldDefinitions()) {
@@ -1126,7 +1126,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
                 fieldSnap.put("defaultValue", field.getDefaultValue());
                 fieldSnap.put("isPrimaryKey", field.getIsPrimaryKey());
                 fieldSnap.put("isUnique", field.getIsUnique());
-                fieldSnap.put("description", field.getDescription());
+                fieldSnap.put("displayName", field.getDisplayName());
                 fieldSnap.put("sortOrder", field.getSortOrder());
                 fieldSnapshots.add(fieldSnap);
             }
@@ -1142,7 +1142,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
             formSnap.put("formName", form.getFormName());
             formSnap.put("formType", form.getFormType() != null ? form.getFormType().name() : null);
             formSnap.put("configJson", form.getConfigJson());
-            formSnap.put("description", form.getDescription());
+            formSnap.put("description", form.getDisplayName());
             formSnap.put("boundTableName", form.getBoundTableName());
             formSnapshots.add(formSnap);
         }
@@ -1157,7 +1157,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
             actionSnap.put("configJson", action.getConfigJson());
             actionSnap.put("icon", action.getIcon());
             actionSnap.put("buttonColor", action.getButtonColor());
-            actionSnap.put("description", action.getDescription());
+            actionSnap.put("description", action.getDisplayName());
             actionSnap.put("isDefault", action.getIsDefault());
             actionSnapshots.add(actionSnap);
         }
@@ -1185,7 +1185,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
                 .tableName(source.getTableName())
                 .tableType(source.getTableType())
                 .tableDisplayName(source.getTableDisplayName())
-                .description(source.getDescription())
+                .displayName(source.getDisplayName())
                 .build();
         cloned = tableDefinitionRepository.save(cloned);
         
@@ -1202,7 +1202,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
                     .defaultValue(sourceField.getDefaultValue())
                     .isPrimaryKey(sourceField.getIsPrimaryKey())
                     .isUnique(sourceField.getIsUnique())
-                    .description(sourceField.getDescription())
+                    .displayName(sourceField.getDisplayName())
                     .sortOrder(sourceField.getSortOrder())
                     .build();
             cloned.getFieldDefinitions().add(clonedField);
@@ -1244,7 +1244,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
                 .formName(source.getFormName())
                 .formType(source.getFormType())
                 .configJson(configJson != null ? configJson : new HashMap<>())
-                .description(source.getDescription())
+                .displayName(source.getDisplayName())
                 .fieldPermissions(fieldPermissions)
                 .showLiveValues(source.getShowLiveValues())
                 .build();
@@ -1345,7 +1345,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
                 .configJson(new HashMap<>(source.getConfigJson()))
                 .icon(source.getIcon())
                 .buttonColor(source.getButtonColor())
-                .description(source.getDescription())
+                .displayName(source.getDisplayName())
                 .isDefault(source.getIsDefault())
                 .build();
         return actionDefinitionRepository.save(cloned);

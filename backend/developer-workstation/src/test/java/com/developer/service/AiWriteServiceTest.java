@@ -90,7 +90,7 @@ class AiWriteServiceTest {
 
         FunctionUnit saved = captor.getValue();
         assertEquals("Updated Name", saved.getName());
-        assertEquals("Updated Desc", saved.getDescription());
+        assertEquals("Updated Desc", saved.getDisplayName());
         assertFalse(saved.getTableDefinitions().isEmpty(), "Table definitions should be written");
         assertEquals("orders", saved.getTableDefinitions().get(0).getTableName());
 

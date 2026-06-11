@@ -48,7 +48,7 @@ BEGIN
     )
     ON CONFLICT (code) DO UPDATE SET
         name = EXCLUDED.name,
-        description = EXCLUDED.description,
+        display_name = EXCLUDED.display_name,
         status = EXCLUDED.status,
         current_version = EXCLUDED.current_version,
         updated_by = EXCLUDED.updated_by,
@@ -81,7 +81,7 @@ BEGIN
     )
     ON CONFLICT (function_unit_id, form_name) DO UPDATE SET
         config_json = EXCLUDED.config_json,
-        description = EXCLUDED.description,
+        display_name = EXCLUDED.display_name,
         updated_at = CURRENT_TIMESTAMP
     RETURNING id INTO v_request_form_id;
 
@@ -107,7 +107,7 @@ BEGIN
     )
     ON CONFLICT (function_unit_id, form_name) DO UPDATE SET
         config_json = EXCLUDED.config_json,
-        description = EXCLUDED.description,
+        display_name = EXCLUDED.display_name,
         updated_at = CURRENT_TIMESTAMP
     RETURNING id INTO v_approval_form_id;
 
@@ -146,7 +146,7 @@ BEGIN
         config_json = EXCLUDED.config_json,
         icon = EXCLUDED.icon,
         button_color = EXCLUDED.button_color,
-        description = EXCLUDED.description,
+        display_name = EXCLUDED.display_name,
         updated_at = CURRENT_TIMESTAMP
     RETURNING id INTO v_action_submit_id;
 
@@ -181,7 +181,7 @@ BEGIN
         config_json = EXCLUDED.config_json,
         icon = EXCLUDED.icon,
         button_color = EXCLUDED.button_color,
-        description = EXCLUDED.description,
+        display_name = EXCLUDED.display_name,
         updated_at = CURRENT_TIMESTAMP
     RETURNING id INTO v_action_approve_id;
 
@@ -216,7 +216,7 @@ BEGIN
         config_json = EXCLUDED.config_json,
         icon = EXCLUDED.icon,
         button_color = EXCLUDED.button_color,
-        description = EXCLUDED.description,
+        display_name = EXCLUDED.display_name,
         updated_at = CURRENT_TIMESTAMP
     RETURNING id INTO v_action_reject_id;
 

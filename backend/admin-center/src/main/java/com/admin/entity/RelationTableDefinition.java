@@ -37,6 +37,12 @@ public class RelationTableDefinition {
     @Column(name = "display_name", length = 200)
     private String displayName;
 
+    /**
+     * Display name at last successful deploy; Table Data reads this when status is UPDATED/ROLLBACK.
+     */
+    @Column(name = "deployed_display_name", length = 200)
+    private String deployedDisplayName;
+
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 

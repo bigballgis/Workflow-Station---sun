@@ -90,6 +90,30 @@ describe('miSubProcessScope', () => {
     ).toBe(true)
   })
 
+  it('filterBindingsToMiParticipantRow scopes child rows when PK supplied but collection binding is absent', () => {
+    const scope = resolveMiSubProcessScopeFromBpmn(MCY_MI_BPMN_SNIPPET, {
+      userTaskName: 'Transaction Investigation',
+    })!
+    const bindings = [
+      {
+        bindingId: 63,
+        physicalTableName: 'People',
+        tableName: 'People',
+        foreignKeyField: 'sub_task_id',
+        primaryKeyFields: ['id'],
+        data: [
+          { id: 'a', sub_task_id: 'Test-001', age: 5 },
+          { id: 'b', sub_task_id: 'Test-002', age: 6 },
+        ],
+      },
+    ]
+    filterBindingsToMiParticipantRow(bindings, scope, 'Test-001', {
+      participantPrimaryKeyFields: ['row_id'],
+    })
+    expect(bindings[0].data).toHaveLength(1)
+    expect((bindings[0].data![0] as { sub_task_id: string }).sub_task_id).toBe('Test-001')
+  })
+
   it('filterBindingsToMiParticipantRow scopes collection table by designer PK', () => {
     const scope = resolveMiSubProcessScopeFromBpmn(MCY_MI_BPMN_SNIPPET, {
       userTaskName: 'Transaction Investigation',

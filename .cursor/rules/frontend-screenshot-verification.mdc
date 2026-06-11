@@ -1,0 +1,90 @@
+---
+description: 前端页面改动必须用 Playwright 截图验证，UI parity 截图保留不删
+globs: frontend/**/*.{vue,ts,tsx,scss}
+alwaysApply: true
+---
+
+# 前端截图验证 — Playwright 必跑
+
+**全局 skill（所有项目 / 同事个人环境）：** `~/.cursor/skills/verify-ui-fix-with-screenshot/SKILL.md`  
+**仓库副本：** `.cursor/skills/verify-ui-fix-with-screenshot/SKILL.md`
+
+凡改动**可见 UI**（布局、表单、子表、卡片、弹窗、列表、设计 parity），在 **build + 部署对应 frontend 服务之后** MUST 用 Playwright 截图验证，**不得**仅凭单元测试或「应该对了」收尾。
+
+与 `portal-design-parity.mdc` 配套：Preview ↔ Portal 结构对齐时，**截图是唯一验收物**（含 card 内嵌 subTable、Portal Display 模式等）。
+
+## 何时必须截图
+
+| 触发 | 示例 |
+|---|---|
+| 页面/路由视图 | `views/tasks/detail.vue`、`applications/detail.vue` |
+| 共享渲染器 | `FormRenderer.vue`、`FormRendererFields.vue`、`SubTableField.vue` |
+| 设计 parity | DW Form Preview 与 Portal 应对齐的任意改动 |
+| 回归缺陷 | 用户报「和设计不一致」「某块没渲染」 |
+
+纯逻辑/类型/API 层且**不改变 DOM** 可豁免；**MI 回归套件（`regression:mi`）不受此豁免** — 其单测与 Playwright 场景 MUST 同时通过并保留截图。
+
+## MI 回归截图（与单元测试绑定）
+
+```bash
+cd frontend && npm run regression:mi          # 完整：99 unit tests + 6 截图场景
+cd frontend && npm run regression:mi:screenshots   # 仅 Playwright
+```
+
+场景映射：`frontend/user-portal/MI_REGRESSION.md`、`frontend/scripts/mi-regression-scenarios.mjs`。
+
+## 怎么跑（仓库标准脚本）
+
+```bash
+cd frontend
+npm install                    # 首次：安装 playwright devDep
+npx playwright install chromium  # 首次：下载浏览器
+
+# User Portal — 全页
+npm run verify:screenshot -- --app portal --url "http://localhost:3000/portal/tasks/<taskId>" --name task-detail
+
+# User Portal — 指定区域（parity：card 内 subTable）
+npm run verify:screenshot -- --app portal --url "http://localhost:3000/portal/tasks/<taskId>" --selector ".form-layout-card" --name task-title-card
+
+# Admin / Developer Workstation
+npm run verify:screenshot -- --app admin --url "http://localhost:3000/admin/..." --name dashboard
+npm run verify:screenshot -- --app dw --url "http://localhost:3000/dev/..." --name form-preview
+```
+
+环境变量（可选）：`LOGIN_USER`、`LOGIN_PASS`（默认 `developer` / `password`）。
+
+脚本路径：`frontend/scripts/verify-page-screenshot.mjs`；登录逻辑：`frontend/scripts/playwright-login.mjs`。
+
+## 截图存放 — 必须保留，禁止验证后删除
+
+| 应用 | 目录 |
+|---|---|
+| user-portal | `frontend/user-portal/verification-screenshots/` |
+| admin-center | `frontend/admin-center/verification-screenshots/` |
+| developer-workstation | `frontend/developer-workstation/verification-screenshots/` |
+
+命名：`{YYYY-MM-DD}_{slug}.png`（脚本自动加日期前缀）。parity 任务至少保留：
+
+1. **全页** — `--name <feature>-full`
+2. **关键区域** — `--selector '<css>'` + `--name <feature>-<region>`
+
+在对话 / issue / PR 中**写明截图绝对路径**，便于人工对照 Designer Form Preview。
+
+##  agent 自检清单（改完 frontend 页面后）
+
+- [ ] 已 `npm run build` 并重建对应 `*-frontend` Docker 服务（见 `debug-mode-docker-workflow.mdc`）
+- [ ] 已跑 `npm run verify:screenshot`，截图落在 `verification-screenshots/`，**未删除**
+- [ ] parity 改动：目标 selector 的 DOM 断言通过（脚本 `--expect-selector` / 日志中 `CARDS REPORT`）
+- [ ] 对话中引用了截图路径；若与 DW Preview 对比，说明两边一致点
+
+## 禁止
+
+- 验证完成后删除 `verification-screenshots/` 内 PNG（与临时 `scripts/_*.png` 不同）
+- 仅用「我修了代码」代替截图（parity / 布局类缺陷）
+- 把 subTable 挪到 FormRenderer 外「绕过」而不截图证明 card 内仍正确
+
+## 参考
+
+- 脚本：`frontend/scripts/verify-page-screenshot.mjs`
+- Parity 总纲：`portal-design-parity.mdc`
+- 部署：`debug-mode-docker-workflow.mdc` §3

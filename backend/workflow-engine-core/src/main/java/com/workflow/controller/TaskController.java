@@ -42,9 +42,11 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -257,6 +259,29 @@ public class TaskController {
             .singleResult();
         String processStartUserId = processInstance != null ? processInstance.getStartUserId() : null;
 
+        Set<String> userIdsToResolve = new LinkedHashSet<>();
+        if (processStartUserId != null && !processStartUserId.isBlank()) {
+            userIdsToResolve.add(processStartUserId.trim());
+        }
+        for (HistoricActivityInstance activity : activities) {
+            String assignee = activity.getAssignee();
+            if (assignee != null && !assignee.isBlank()) {
+                userIdsToResolve.add(assignee.trim());
+            }
+        }
+        for (List<Comment> transferComments : taskTransferCommentsByTaskId.values()) {
+            for (Comment tc : transferComments) {
+                String transferUserId = tc.getUserId();
+                if (transferUserId != null && !transferUserId.isBlank()) {
+                    userIdsToResolve.add(transferUserId.trim());
+                }
+            }
+        }
+        long __tNames = System.nanoTime();
+        Map<String, String> displayNamesByUserId = taskManagerComponent.resolveUserDisplayNames(userIdsToResolve);
+        log.info("[PERF] processInstanceHistory.resolveDisplayNames {} distinct users took {} ms",
+                userIdsToResolve.size(), (System.nanoTime() - __tNames) / 1_000_000L);
+
         // Shape response for the portal UI
         List<Map<String, Object>> historyList = activities.stream()
             .filter(activity -> "userTask".equals(activity.getActivityType()) || 
@@ -324,34 +349,12 @@ public class TaskController {
                     assignee = processStartUserId;
                 }
                 item.put("operatorId", assignee);
-                
-                // Resolve user display name
+
                 String operatorName = assignee;
                 if (assignee != null && !assignee.isEmpty()) {
-                    try {
-                        Map<String, Object> userInfo = adminCenterClient.getUserInfo(assignee);
-                        if (userInfo != null) {
-                            // Prefer fullName
-                            String fullName = (String) userInfo.get("fullName");
-                            if (fullName != null && !fullName.isEmpty()) {
-                                operatorName = fullName;
-                            } else {
-                                // Then displayName
-                                String displayName = (String) userInfo.get("displayName");
-                                if (displayName != null && !displayName.isEmpty()) {
-                                    operatorName = displayName;
-                                } else {
-                                    // Finally username
-                                    String username = (String) userInfo.get("username");
-                                    if (username != null && !username.isEmpty()) {
-                                        operatorName = username;
-                                    }
-                                }
-                            }
-                        }
-                    } catch (Exception e) {
-                        log.warn("Failed to resolve user display name for {}: {}", assignee, e.getMessage());
-                    }
+                    operatorName = displayNamesByUserId.getOrDefault(assignee.trim(), assignee);
+                } else if ("startEvent".equals(activityType) && processStartUserId != null) {
+                    operatorName = displayNamesByUserId.getOrDefault(processStartUserId.trim(), processStartUserId);
                 }
                 item.put("operatorName", operatorName);
                 
@@ -407,23 +410,8 @@ public class TaskController {
                         transferItem.put("operatorId", transferUserId);
                         String transferOperatorName = transferUserId;
                         if (transferUserId != null && !transferUserId.isEmpty()) {
-                            try {
-                                Map<String, Object> userInfo = adminCenterClient.getUserInfo(transferUserId);
-                                if (userInfo != null) {
-                                    String fn = (String) userInfo.get("fullName");
-                                    if (fn != null && !fn.isEmpty()) { transferOperatorName = fn; }
-                                    else {
-                                        String dn = (String) userInfo.get("displayName");
-                                        if (dn != null && !dn.isEmpty()) { transferOperatorName = dn; }
-                                        else {
-                                            String un = (String) userInfo.get("username");
-                                            if (un != null && !un.isEmpty()) { transferOperatorName = un; }
-                                        }
-                                    }
-                                }
-                            } catch (Exception e) {
-                                log.warn("Failed to resolve transfer user name for {}: {}", transferUserId, e.getMessage());
-                            }
+                            transferOperatorName = displayNamesByUserId.getOrDefault(
+                                    transferUserId.trim(), transferUserId);
                         }
                         transferItem.put("operatorName", transferOperatorName);
 

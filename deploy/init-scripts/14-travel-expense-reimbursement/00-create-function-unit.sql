@@ -20,7 +20,7 @@ BEGIN
     -- Step 1: Function Unit
     -- =========================================================================
     INSERT INTO dw_function_units (
-        code, name, description, status,
+        code, name, display_name, status,
         current_version, version, is_active, enabled,
         deployed_at, lock_version, created_by, created_at, updated_by, updated_at
     ) VALUES (
@@ -35,7 +35,7 @@ BEGIN
     )
     ON CONFLICT (code) DO UPDATE SET
         name             = EXCLUDED.name,
-        description      = EXCLUDED.description,
+        display_name      = EXCLUDED.display_name,
         status           = EXCLUDED.status,
         current_version  = EXCLUDED.current_version,
         updated_by       = EXCLUDED.updated_by,
@@ -53,7 +53,7 @@ BEGIN
     -- department, travel_destination, travel_start_date, travel_end_date, travel_purpose, total_amount
     -- subForms are populated later in 03-form-table-bindings.sql after binding IDs are known
     INSERT INTO dw_form_definitions (
-        function_unit_id, form_name, form_type, description, config_json, created_at, updated_at
+        function_unit_id, form_name, form_type, display_name, config_json, created_at, updated_at
     ) VALUES (
         v_function_unit_id,
         'Reimbursement Form',
@@ -64,7 +64,7 @@ BEGIN
     )
     ON CONFLICT (function_unit_id, form_name) DO UPDATE SET
         config_json = EXCLUDED.config_json,
-        description = EXCLUDED.description,
+        display_name = EXCLUDED.display_name,
         updated_at  = CURRENT_TIMESTAMP
     RETURNING id INTO v_reimbursement_form_id;
 
@@ -72,7 +72,7 @@ BEGIN
 
     -- Approval Form（任务节点 → TASK）
     INSERT INTO dw_form_definitions (
-        function_unit_id, form_name, form_type, description, config_json, created_at, updated_at
+        function_unit_id, form_name, form_type, display_name, config_json, created_at, updated_at
     ) VALUES (
         v_function_unit_id,
         'Approval Form',
@@ -83,7 +83,7 @@ BEGIN
     )
     ON CONFLICT (function_unit_id, form_name) DO UPDATE SET
         config_json = EXCLUDED.config_json,
-        description = EXCLUDED.description,
+        display_name = EXCLUDED.display_name,
         updated_at  = CURRENT_TIMESTAMP
     RETURNING id INTO v_approval_form_id;
 
@@ -96,7 +96,7 @@ BEGIN
     -- 提交报销 (Submit Reimbursement)
     INSERT INTO dw_action_definitions (
         function_unit_id, action_name, action_type, config_json,
-        icon, button_color, description, is_default, created_at, updated_at
+        icon, button_color, display_name, is_default, created_at, updated_at
     ) VALUES (
         v_function_unit_id,
         '提交报销',
@@ -110,7 +110,7 @@ BEGIN
     ON CONFLICT (function_unit_id, action_name) DO UPDATE SET
         action_type  = EXCLUDED.action_type,
         config_json  = EXCLUDED.config_json,
-        description  = EXCLUDED.description,
+        display_name  = EXCLUDED.display_name,
         updated_at   = CURRENT_TIMESTAMP
     RETURNING id INTO v_action_submit_id;
 
@@ -119,7 +119,7 @@ BEGIN
     -- AI 识别发票 (AI Invoice Recognition)
     INSERT INTO dw_action_definitions (
         function_unit_id, action_name, action_type, config_json,
-        icon, button_color, description, is_default, created_at, updated_at
+        icon, button_color, display_name, is_default, created_at, updated_at
     ) VALUES (
         v_function_unit_id,
         'AI 识别发票',
@@ -133,7 +133,7 @@ BEGIN
     ON CONFLICT (function_unit_id, action_name) DO UPDATE SET
         action_type  = EXCLUDED.action_type,
         config_json  = EXCLUDED.config_json,
-        description  = EXCLUDED.description,
+        display_name  = EXCLUDED.display_name,
         updated_at   = CURRENT_TIMESTAMP
     RETURNING id INTO v_action_n8n_id;
 
@@ -142,7 +142,7 @@ BEGIN
     -- 审批通过 (Approve)
     INSERT INTO dw_action_definitions (
         function_unit_id, action_name, action_type, config_json,
-        icon, button_color, description, is_default, created_at, updated_at
+        icon, button_color, display_name, is_default, created_at, updated_at
     ) VALUES (
         v_function_unit_id,
         '审批通过',
@@ -158,7 +158,7 @@ BEGIN
         config_json  = EXCLUDED.config_json,
         icon         = EXCLUDED.icon,
         button_color = EXCLUDED.button_color,
-        description  = EXCLUDED.description,
+        display_name  = EXCLUDED.display_name,
         updated_at   = CURRENT_TIMESTAMP
     RETURNING id INTO v_action_approve_id;
 
@@ -167,7 +167,7 @@ BEGIN
     -- 审批驳回 (Reject)
     INSERT INTO dw_action_definitions (
         function_unit_id, action_name, action_type, config_json,
-        icon, button_color, description, is_default, created_at, updated_at
+        icon, button_color, display_name, is_default, created_at, updated_at
     ) VALUES (
         v_function_unit_id,
         '审批驳回',
@@ -183,7 +183,7 @@ BEGIN
         config_json  = EXCLUDED.config_json,
         icon         = EXCLUDED.icon,
         button_color = EXCLUDED.button_color,
-        description  = EXCLUDED.description,
+        display_name  = EXCLUDED.display_name,
         updated_at   = CURRENT_TIMESTAMP
     RETURNING id INTO v_action_reject_id;
 

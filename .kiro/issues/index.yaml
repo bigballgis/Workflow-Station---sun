@@ -187,6 +187,440 @@
     路径：backend/developer-workstation/.../util/FormConfigJsonBindingIdRewriter.java（+Test）。
 - id: "1420"
   status: fixed
+  fixed_at: "2026-05-29"
+  severity: major
+  category: bug
+  summary: "Developer Workstation 登录后 Function Unit 列表为空（platform-security / DW 实体与 DB display_name 不一致）"
+  detail: |
+    根因：（1）sys_roles 列为 display_name，Role 实体映射 description → admin-center developer-permissions API 500；
+    （2）sys_virtual_groups 列为 display_name，VirtualGroup 实体映射 description → GET /users/{id}/virtual-groups 500；
+    （3）dw_function_units / dw_table_definitions / dw_form_definitions / dw_action_definitions 列为 display_name，
+    对应实体仍映射 description → 列表查询及懒加载子表时 SQL 报错，前端收到 SYS_REQUEST_PROCESSING_ERROR。
+    修复：上述实体改为 displayName @Column(name=display_name)；DW JSON 仍用 @JsonProperty("description") 兼容前端。
+- id: "1421"
+  status: fixed
+  fixed_at: "2026-05-29"
+  severity: major
+  category: bug
+  summary: "Form Preview 子表 Add 报错 common.operationFailed（PK allocate 权限码不存在）"
+  detail: |
+    根因：POST /function-units/{id}/tables/primary-keys/allocate 使用 @RequireDeveloperPermission("FUNCTION_UNIT_EDIT")，
+    但 init 脚本从未授予 function_unit:edit（开发者仅有 function_unit:update），导致 403；
+    前端 SubTableField openRowDialog catch 使用不存在的 i18n key common.operationFailed，界面显示原始 key。
+    修复：allocate 端点改为 FUNCTION_UNIT_UPDATE；catch 展示 API 错误信息；pkNeedsAllocation 兼容 pkGenerationJson 字段名。
+- id: "1422"
+  status: fixed
+  fixed_at: "2026-06-01"
+  severity: major
+  category: bug
+  summary: "Developer Workstation deploy 500 admin.fu.import_unexpected_error（sys_function_units 缺 description 列）"
+  detail: |
+    根因：admin-center FunctionUnit 实体映射 description 列，但 DB sys_function_units 仍为 display_name；
+    导入/部署时 JPA 查询报错 column fu1_0.description does not exist，事务 rollback 后返回 import_unexpected_error。
+    修复：V209 + init 脚本 36 将 display_name 重命名为 description；基线 schema 01-platform-security-schema.sql 同步；
+    dev 库已执行 ALTER RENAME。无需重建 admin-center 镜像（纯 schema 修复）。
+- id: "1423"
+  status: fixed
+  fixed_at: "2026-06-02"
+  severity: major
+  category: bug
+  summary: "Developer Workstation deploy 500 admin.fu.import_unexpected_error（sys_action_definitions 缺 description 列）"
+  detail: |
+    根因：admin-center ActionDefinition 实体映射 description 列，但 DB sys_action_definitions 仍为 display_name；
+    导入 ZIP 后 deleteByFunctionUnitId / save 动作定义时 JPA 查询报错 column ad1_0.description does not exist。
+    修复：V210 + init 脚本 37 将 display_name 重命名为 description；07 基线建表同步；dev 库已执行 ALTER RENAME。
+    无需重建 admin-center 镜像（纯 schema 修复）。
+- id: "1424"
+  status: fixed
+  fixed_at: "2026-06-02"
+  severity: major
+  category: bug
+  summary: "User Portal 流程发起 Sub Task Add 报错 NOT_PK_FIELD（主表 PK 无 pk_generation_json）"
+  detail: |
+    根因：ensureParentRowsForChildAdd 为子表 FK 引用主表时调用 PK allocate；主表字段 id 虽 is_primary_key=true 但 pk_generation_json 为空。
+    PortalPrimaryKeyAllocationComponent.loadPkGenerationJson 将空 JSON 与「字段不存在」同等抛 NOT_PK_FIELD，而 Developer Workstation 对空 JSON 默认 uuid 策略。
+    连带：admin-center attachTableBindings 曾用 td.description（列不存在）导致 tableBindings 为空，已在 FunctionUnitManagerComponent 改为 td.display_name。
+    修复：Portal loadPkGenerationJson 先校验 is_primary_key，空 pk_generation_json 返回空 Map 走 uuid 默认；user-portal 已重建部署。
+    后续：Sub Task PK id_idw 为 prefixedSequence（Test-000001）但 subForm 用 inputNumber，el-input-number 无法绑定字符串 → Add 对话框校验「id is required」；
+    applyFkPresentationToDialogColumns 对 uuid/prefixedSequence auto-PK 将 number 列降级为 text（Portal + DW parity）。
+- id: "1425"
+  status: fixed
+  fixed_at: "2026-06-02"
+  severity: major
+  category: bug
+  summary: "My Request MI Demo 流程图误标 Current Step（hasIncompleteMiRows 未校验 enteredSubProcesses）"
+  detail: |
+    根因：applications/detail.vue parseBpmnXml 在 RUNNING 时若子表存在未 COMPLETED 的 MI 行（发起人 Add Sub Task 后 task_status=PENDING），
+    hasIncompleteMiRows() 为 true 即把 MI subProcess 标为 current（橙色），未要求流程已进入该 subProcess（enteredSubProcesses）。
+    修复：hasIncompleteMiRows / hasCompletedMiRows 分支增加 enteredSubProcesses.has(spId) && isMiSubProcess 守卫；user-portal-frontend 已重建。
+- id: "1426"
+  status: fixed
+  fixed_at: "2026-06-02"
+  severity: major
+  category: bug
+  summary: "User Portal Assignment 节点绑定 Action 按钮不展示（dw_action_definitions 列名漂移）"
+  detail: |
+    根因：TaskActionService 对 BPMN actionIds（dw 整数 ID）回退查询 findFromDwByIds 仍 SELECT d.description，
+    而 dw_action_definitions 已改为 display_name → PostgreSQL column d.description does not exist，actions 解析为空数组。
+    前端 TaskActionBar 在 actions=[] 时不显示自定义按钮也不显示默认 Approve/Reject。
+    修复：ActionDefinitionRepository.findFromDwByIds 改为 d.display_name AS description；user-portal 已重建部署。
+    验证：assignment 任务 actionIds [46,49] 返回 Complete Assignment + Save。
+- id: "1427"
+  status: fixed
+  fixed_at: "2026-06-02"
+  severity: major
+  category: bug
+  summary: "User Portal To Do 子表 Add PK allocate FUNCTION_UNIT_NOT_FOUND（processDefinitionKey 未解析）"
+  detail: |
+    根因：tasks/detail.vue 将 processDefinitionKey（如 Process_1_KK）作为 functionUnitId 传给 primary-keys/allocate；
+    PortalPrimaryKeyAllocationComponent 仅解析 dw numeric id / FU code，无法识别 Flowable process key。
+    修复：注入 FunctionUnitAccessComponent 解析 process key → catalog id，再 JOIN sys/dw code 映射 dw_function_units.id；user-portal 已重建部署。
+- id: "1428"
+  status: fixed
+  fixed_at: "2026-06-02"
+  severity: major
+  category: bug
+  summary: "MI sub form1 Save 污染主表 id 且 People 子表 FK 未持久化"
+  detail: |
+    根因（Save）：isolateMiSubTaskData 将 MI collection 行同名键覆盖 PRIMARY UUID；People binding 30 FK 未 seed。
+    根因（刷新后仍空）：inputNumber 无法显示 Test-* 字符串；sub_task_id 未 seed。
+    根因（id=Test-000044 误写）：binding.foreignKeyField=id 与 People 行 PK 同名，旧逻辑把父 id_idw 写入 id；正确语义为 id=UUID、sub_task_id←id_idw。
+    修复：seedLinkChildForeignKeysFromParentRow 跳过 row PK；repairMisassignedPrimaryKeyFromParentId + ensureAutoPrimaryKeysForRows（allocate UUID）；
+    miRowBelongsToCurrentParticipant / miParentRowAlignsWithChildRow 改以 sub_task_id 关联参与者；user-portal-frontend 已重建部署。
+- id: "1429"
+  status: fixed
+  fixed_at: "2026-06-03"
+  severity: major
+  category: bug
+  summary: "MI sub form2 HMDC Attachment 子表 Add 无响应（未 seed 当前参与者 row_id）"
+  detail: |
+    根因：HMDC_Attachment（bindingLinkMode miParticipantRow，foreignKeyField/ PK 均为 row_id）在 To Do 点击 Add 时
+    prepareSubTableAddRow 未接收 currentMiRowId，尝试为 row_id 重新 allocate PK 或 FK guard 失败，对话框不打开。
+    SubTableField 也未从 FormRenderer 传入 MI 父行上下文。
+    修复：applyMiParticipantRowSeedToInitialRow + prepareSubTableAddRow 跳过对已 seed 的 row_id PK 做 allocate；
+    FormRenderer.resolveMiParticipantSeedForSubTableAdd → SubTableField；shared MI_PARTICIPANT_SUB_TABLE_FK 增加 row_id；
+    tasks/detail primaryTableBinding 携带 fieldDefinitions；user-portal-frontend 已重建部署。
+- id: "1430"
+  status: fixed
+  fixed_at: "2026-06-04"
+  severity: major
+  category: performance
+  summary: "Portal To Do 多实例子任务详情加载慢（MI enrich + 历史 N+1 + 前端阻塞 history）"
+  detail: |
+    根因（Docker [PERF] 2026-06-04，task f422fb7e，22 个 MI 实例）：
+    1) GET /tasks/{id} ~647ms：enrichSubTables 冷路径 ~397ms（getMultiInstanceStatus ~185ms）；
+    2) GET /tasks/{id}/history ~774ms：workflow-engine 对每条 activity 单独 admin-center getUserInfo（N+1）；
+    3) 前端 loadTaskDetail 在 finally 前 await historyPromise，MI 表单 hydrate 完成后仍被 history 阻塞 skeleton；
+    4) 历史请求经 taskId 路径多一次 engine getTaskInfo。
+    早前另有加载期 100+ 次 PK allocate 风暴（已 2026-06-03 修：seedMiParticipantScopedBindingForeignKeys 仅 save/complete allocate）。
+    修复（2026-06-04）：
+    - workflow-engine TaskController：流程历史按 distinct userId 批量 resolve 显示名；
+    - user-portal：history 支持 processInstanceId 查询参数，跳过冗余 getTaskInfo；
+    - ProcessComponent：getMultiInstanceStatus 5s TTL 缓存（与 enrich 缓存配套）；
+    - tasks/detail.vue：FU 与 form prefetch 并行、history 后台加载不阻塞 loading=false；
+    已重建 workflow-engine、user-portal、user-portal-frontend。
+- id: "1431"
+  status: fixed
+  fixed_at: "2026-06-08"
+  severity: major
+  category: bug
+  summary: "流程发起 Sub Task Add 对话框 id 未按 prefixedSequence 生成（id is required）"
+  detail: |
+    根因：binding 64（Sub Task，miParticipantRow，foreignKeyField=id_idw 即行 PK）在 prepareSubTableAddRow 中
+    无条件跳过 id_idw 的 allocatePrimaryKeys（#1429 为 MI 附件 seed row_id 引入），流程发起页无 miParticipantRowId 时 PK 仍为空；
+    subForm inputNumber + prefixedSequence 字符串无法绑定，叠加 buildRules 对 readonly 列仍 required →「id is required」。
+    修复：仅当 miParticipantRowId 存在时才跳过 row PK allocate；buildRules 跳过 readonly 列 required；
+    applyFkPresentationToDialogColumns 仍将 auto-PK number 降级 text。
+    后续（2026-06-08）：所有子表新增统一 Save 时分配 PK（deferPkAllocationUntilSave + finalizeSubTableRowOnSave）；
+    Add 不分配主/子 PK；Save 顺序：ensureParentRowsForChildAdd（主表 auto-PK）→ applyFkToInitialRow → allocateChildRowAutoPrimaryKeys。
+    user-portal-frontend 已重建部署。
+- id: "1432"
+  status: fixed
+  fixed_at: "2026-06-08"
+  severity: major
+  category: bug
+  summary: "To Do Assignment 子表不渲染（布局丢失 + binding 66 数据在 key 64/Sub Task）"
+  detail: |
+    根因 1：loadProcessAndTaskFormData 中 parseFormConfig 可能覆盖 FU 画布 subTable widget。
+    根因 2：Assignment 表单 binding 66 与发起人 binding 64 同 tableId，流程变量行存于 __subTables__["64"]/["Sub Task"]；
+    rehydrateSharedProcessSubTableBindings 将 isMiDashboardSubTableBinding 视为 participant-scoped 并跳过 hydrate。
+    修复：resolveSubTableRowsForBinding（sibling binding id + 表名 + MI merge）；非 MI 待办对 MI collection 显式 rehydrate；
+    assigneeMiCollectionSubTableBindings 在 FormRenderer 下方独立渲染 Sub Task 表；allowSubTableAssign 含 Activity_0hwtl8v。
+    布局：syncFormLayoutWithSubTableBindings 仍 mergeMissingSubTableFieldsIntoLayout + ensureSubTableBindingsOnFormLayout；
+    taskNativeSubTableBindings 在 FormRenderer 下方独立渲染。
+    流程图节点点击前 await buildNodeFormMapIfNeeded。assignmentTaskLayoutSync + FormRenderer.subTable 单元测试回归。
+    「n.has is not a function」真实根因（2026-06-08 浏览器复现定位，非 binding-id Set 路径）：
+    detail.vue cloneSubTableRows 用 rows.map(deepToRaw) 直接把 deepToRaw 当 map 回调，
+    Array.map 以 (item,index,array) 调用 → deepToRaw 第二参 seen 被赋成 index 数字，
+    visited = seen ?? new WeakSet 得到数字（如 1），随后 visited.has(raw) → TypeError。
+    修复：rows.map(row => deepToRaw(row)) 不透传 index；deepToRaw 守卫改 seen instanceof WeakSet ? seen : new WeakSet。
+    （早前 formRendererHelpers.asNumberSet 防御性归一保留，但非本崩溃根因。）
+    user-portal-frontend / edge-frontend 已重建部署，Playwright 端到端复现确认 n.has 消失。
+    parity 修正（2026-06-08）：此前「在 FormRenderer 下方独立渲染 Sub Task/Attachment」违反 portal-design-parity——
+    设计侧 Assign Task 表单为 elCard(props.header="Title") 内嵌 subTable bindingId=66(Sub Task)/103(Attachment)。
+    改回 in-place：删除 syncFormLayoutWithSubTableBindings 末尾 removeSubTableFieldsByBindingIds strip 与 detail.vue
+    模板内 taskNativeSubTableBindings 独立块（及该 computed）；由 FormRenderer/FormRendererFields 在 card 内渲染。
+    为保留 MI dashboard 行为：FormRenderer.subTableShowTaskStatusInitiator 增加 assigneeTodo 分支——
+    viewContext==='assigneeTodo' 且 isMiDashboardSubTableBinding(binding) 时显示 Status 列；assign 按钮经 showSubTableAssignColumn。
+    Playwright 截图确认 card「Title」内含 Sub Task（Status/Assignee/Add）+ Attachment（无 Status），无下方独立块。
+    assignmentTaskLayoutSync + FormRenderer.subTable 测试 20/20 通过。
+- id: "1433"
+  status: open
+  severity: major
+  category: bug
+  summary: "portal /api/portal/auth/me 500 — admin-center users/{id}/business-units 内部错误"
+  detail: |
+    复现 task detail（user developer/user-dev）时 /api/portal/auth/me 与 /auth/workspace-contexts 返回 500。
+    user-portal 日志：UserPermissionController 调 admin-center
+    /api/v1/admin/users/user-dev/business-units 及 /business-unit-roles 均 500（SYS_INTERNAL_ERROR）。
+    与 n.has 前端崩溃无关（独立后端问题）；需查 admin-center business-units 接口对 user-dev 报错根因。
+- id: "1434"
+  status: fixed
+  fixed_at: "2026-06-08"
+  severity: major
+  category: bug
+  summary: "Assignment 待办 Sub Task assignee 发起已填但显示 Unassigned / 空 lookup"
+  detail: |
+    根因链（Process_1_KK Assign Task binding 66）：
+    1) 发起人 slice __subTables__["64"] 含 assignee 用户快照，assignment 表单 slice ["66"] 仅 id/name 瘦行；
+    2) resolveSubTableRowsForBinding 命中 66 后直接返回，未合并同 tableId 的 64；
+    3) forbidNameFallback（ambiguous binding）曾关闭 mergeSiblingSlices，阻止 sibling 合并；
+    4) rehydrate 后 finalizeSharedProcessSubTableBindingRows 对 MI dashboard 仍 stripSubTableRowMetaFields，
+       把 assignee / assignee_display_name / task_status 当 meta 删掉。
+    修复：enrichMiDashboardResolvedRows 在 binding-id 命中时 mergeAllSlicesForSharedProcessSubTableBinding；
+    mergeSiblingSlices 与 forbidNameFallback 解耦；finalize 对 isMiDashboardSubTableBinding 保留 MI 字段。
+    截图：frontend/user-portal/verification-screenshots/2026-06-08_task-assignee-fixed.png（Developer Tester 显示正常）。
+- id: "1435"
+  status: fixed
+  fixed_at: "2026-06-08"
+  severity: major
+  category: bug
+  summary: "MI sub form1 People form-below-table 未 hydrate / Save 无感知"
+  detail: |
+    任务 091efdec（sub form1，_currentItem.id_idw=Test-000057）流程变量 __subTables__ 已有 People 行（sub_task_id FK），
+    但 MI link-form 隔离（suppressLinkFormInitialData）下 getCurrentRowForInlineForm 在 nested rows.length>1 时未选行，内联表单空白。
+    修复：resolveMiLinkIsolateInlineRow — 多行时按 sub_task_id/FK 对齐 currentMiRowId；SubTableInlineForm 增加内联 Save（与 Action SAVE 同路径 saveCurrentTaskFormWithMiPersist）。
+    截图：frontend/user-portal/verification-screenshots/2026-06-08_2026-06-08_task-people-inline-form.png（age/sex/sub_task_id 已带出）。
+    追加：mergeLinkFormTargetBindingsInto 合并 Link 目标绑定时遗漏 fieldDefinitions → Save 时 ensureAutoPrimaryKeysForRows 跳过 People.id；
+    SubTableInlineForm Save 先 flush update:row 再 persist；DW SubTableField/SubTableListView form-below-table 增加 Save 按钮 parity。
+    追加（保存后 People 表单被清空，task 09367c90 复现）：根因为跨参与者 PK 冲突——同一 People 行 id 因旧顺序 PK 分配在不同参与者间重复（如 id=Test-000058 同时存在于
+    当前表单 slice 30（sub_task_id=Test-000058, age=ii66）与上一步 slice 63（sub_task_id=Test-000057, age=ii））。resyncMiParticipantSubTablesFromVariables 及
+    hydrateBindingsRowsFromVariablesBySharedRelationTableId 先按 id merge 再按参与者过滤，导致他人切片覆盖本参与者行后被过滤掉 → 内联表单空白。
+    修复：(1) 新增 collectSubTableSliceRowsForRelationTableId（同表 RAW 行不按 id 合并），resync 对 participant-scoped 绑定改为「先按参与者过滤、后 merge」；
+    (2) hydrateBindingsRowsFromVariablesBySharedRelationTableId 增加 excludeBinding 谓词，resync 调用时跳过 MI participant-scoped 绑定（避免兄弟同表切片二次串入他人行）。
+    验证：Playwright 提取 People 内联表单 age=ii66（修复前为空）；单测 subTableRowMetaFields.test.ts +3。user-portal-frontend 已重建部署。
+    追加（Save 后 age/sex 正常但 People.id 内联输入框为空，task 09367c90）：流程变量已含 allocate UUID，但 resync 入口
+    scrubMiCorruptLinkChildRowsForParent 将 id_idw=父参与者 且 id=UUID 的行误判为「id 脏写」，把 UUID 覆写为 Test-000058；
+    随后 repairMisassignedPrimaryKeyFromParentId 因 id 等于父 FK 清空 id → 内联表单 id 空。修复：UUID PK 时保留 id、仅删 erroneous id_idw；
+    isolateMiSubTaskData 重建 nested 时 backfill+collapseMiLinkChildRowsToOnePerParticipant。Playwright 验证 id=7a0099b0-… 已显示。
+- id: "1436"
+  status: fixed
+  fixed_at: "2026-06-08"
+  severity: major
+  category: bug
+  summary: "Admin Center /organization Internal Server Error — sys_business_units.description 列缺失"
+  detail: |
+    根因：JPA BusinessUnit 实体映射 description，但 DB 仍为 display_name（V209/V210 已修 function_units/action_definitions，漏 business_units）。
+    修复：V211 Flyway 重命名列；init-scripts / k8s schema 与 seed 同步为 description；dev DB 已 ALTER RENAME。
+- id: "1437"
+  status: fixed
+  fixed_at: "2026-06-08"
+  severity: major
+  category: bug
+  summary: "MI 子任务 People 隔离：子任务间串数据 / 保存时丢失其他参与者(及本人上一步)行"
+  detail: |
+    根因①（读取侧串数据）：People 链接子表行的 id_idw 是其「自身 PK」（如 Test-000058），连接参与者的是 sub_task_id（如 Test-000057）。
+    PK 顺序分配使 People.id_idw 可与另一参与者 id 碰撞。旧 miParentRowAlignsWithChildRow / miRowBelongsToCurrentParticipant
+    在 id_idw 相等时即配对 → 参与者 2 误得参与者 1 的 People。
+    根因②（保存侧丢数据，真正根因）：patchFormDataSubTablesFromCurrentBindings 把「按当前参与者过滤后的」binding.data 覆盖回
+    formData.__subTables__[bindingId]，buildSubTableSubmitPayload 再从该已截断切片合并 → 提交载荷只剩当前参与者的 MI 行；
+    后端按切片落库时，其他参与者（及本人上一步残留的同切片）People/Sub Task 行被整体抹掉。运行时实证（任务 75d662ec，实例 e6b0e7c6）：
+    People 22 行 sub_task_id 全被盖成最后参与者 Test-000044，且 age/sex/file 全丢——读取侧再正确也无法恢复已坏实例。
+    修复：
+    - 结构 FK（sub_task_id 等）为唯一权威；新增 miLinkChildRowBelongsToParticipant；findMiIsolatedParentRow 单行 fallback 校验 id_idw。
+    - 持久化保护：保留 miFullSubTablesSnapshotRef（载入期 flatten 的全量切片）；patchFormDataSubTablesFromCurrentBindings 对
+      MI participant-scoped binding 在写回 formData.__subTables__ 时，先 merge 回快照中「不属于当前参与者」的行（按 row PK，当前编辑胜出），
+      保证保存切片含全部参与者。
+    - enrich 后再次 applyMiParticipantFilterToCurrentSubTableBindings。
+    回归：linkFormMiIsolation.test.ts（sub_task_id 归属 + 不串 + 保存合并保留其他参与者）；user-portal-frontend 已重建部署。
+    注：已坏实例 e6b0e7c6 数据不可恢复，需新流程实例验证。
+    路径：composables/tasks/shared.ts、views/tasks/detail.vue、composables/tasks/useTaskForm.ts。
+- id: "1438"
+  status: fixed
+  fixed_at: "2026-06-08"
+  severity: major
+  category: bug
+  summary: "MI sub form1 新增 Attachment 后原有 2 条附件在 UI 消失"
+  detail: |
+    任务 093962c4（sub form1，Test-000059）：流程变量 Attachment 切片仍有 3 行，但 UI 只显示新增的第 3 条。
+    根因：Attachment UUID 行误写入 Sub Task 切片 → collectForeignSubTableRowIdsFromVariables 将其 id 登记为 foreign；
+    isLeakedForeignRowOnSharedAttachment 在 file 校验之前按 foreign id 过滤，误删合法附件行。Sub Task 列表含 file 列时
+    filterRowsForMiParticipantSubTableBinding 的 colFields.has('file') 早退也会保留纯附件泄漏行。
+    修复：isLeakedForeignRowOnSharedAttachment 对有 file 的行直接保留；collectForeignSubTableRowIdsFromRowWalk 跳过纯附件行；
+    filterRowsForMiParticipantSubTableBinding 在含 file 列时仍剔除 id+file-only 泄漏；patchFormDataSubTablesFromCurrentBindings
+    对 shared attachment 从 miFullSubTablesSnapshot merge 全量行。截图：verification-screenshots/2026-06-08_task-093962-subform1-attachment-table.png（3 行）。
+- id: "1439"
+  status: fixed
+  fixed_at: "2026-06-08"
+  severity: major
+  category: bug
+  summary: "MI sub form2 People 未继承 sub form1 填写的 age/sex/name 等字段"
+  detail: |
+    任务 61a40a76（sub form2，参与者 Test-000059）：sub form1 保存的 People 业务字段落在 binding 63 切片，
+    但 sub_task_id 仍为 Test-000057（错误 FK）；sub form2 resync 按 miLinkChildRowBelongsToParticipant 过滤时丢弃该行，
+    仅保留 binding 30 的 UUID stub（无 age/sex）。collapseMiLinkChildRowsToOnePerParticipant 亦只 pick-best 不 merge 字段。
+    修复：repairMisassignedLinkChildStructuralFk；collapse 按 businessFieldRank 合并并保留 UUID id；
+    hydrateMiLinkChildBindingsFromFullSnapshot（从 flatten 快照 + previousForms 重建 People）；
+    mergePriorStepSubTablesAfterMiIsolate（Attachment 含 nested 切片）；applySharedAttachment 不再 omitNestedSlices。
+    回归：linkFormMiIsolation.test.ts、subForm2CarryForward.test.ts。
+- id: "1440"
+  status: fixed
+  fixed_at: "2026-06-09"
+  severity: major
+  category: bug
+  summary: "MI People 内联表单切换 sex 时串入上一参与者/子任务数据（age/id）"
+  detail: |
+    任务 6c6c5cc6（sub form1，参与者 Test-000062）：People 内联表单 age 为空，打开 sex 开关后 age=88、id=UUID 突然出现
+    （与上一参与者 Test-000061 在 sub form1 填写的数据相同）。
+    根因链（禁止再犯）：
+    1. syncMiLinkChildRowsIntoParentNested → patchMiParentRowsWithNestedChildSlice 把 **整份 People binding.data 全参与者切片**
+       写入当前参与者的 parentRow.__subTables__[childBindingId]，nested 内混有他人行。
+    2. FormRenderer mergeRowsForInlineFormTarget（MI isolate）pullNestedRowsForBindingFromParentRows 后 **未按 parent 过滤**，
+       直接与 topLevel merge + collapse；getCurrentRowForInlineForm 的 PK backfill 亦跨参与者 spread 字段。
+    3. syncMainSubTableRows 先把 binding.data 设为 inline 传来的 nextRows（常仅当前参与者 1 行），
+       再 merge 进 __subTables__；binding.data 与快照不一致，加剧 inline 重读时误合并。
+    修复：
+    - 新增 scopeMiLinkChildRowsForParentRow（miParentRowAlignsWithChildRow 过滤）；patch 时 nested 只存本 parent 对齐子行。
+    - syncMainSubTableRows：binding.data 写 merge 后的 out（与 __subTables__ 一致）。
+    - FormRenderer：nested 先 pickMiLinkChildRowsForParent；PK backfill 仅 merge 同参与者 scopedRows。
+    回归：linkFormMiIsolation.test.ts（scopeMiLinkChildRowsForParentRow）；scripts/verify-sex-toggle-isolation.mjs。
+    截图：verification-screenshots/2026-06-09_task-6c6c-sex-before.png、…-after.png、…-sex-toggle-fixed.png。
+    路径：shared.ts、views/tasks/detail.vue、components/FormRenderer.vue。
+    手测：新流程两参与者 sub form1 — 参与者 B People 空 → 仅开 sex → age/id 不得出现参与者 A 的值。
+- id: "1441"
+  status: fixed
+  fixed_at: "2026-06-09"
+  severity: major
+  category: bug
+  summary: "My Request Details / Link Form 弹窗对 IN_PROGRESS 子任务 People 空白"
+  detail: |
+    申请详情 3777ff51（My Requests，Sub Task 行 Test-000061 IN_PROGRESS）：点击 Details 打开
+    「Add subtable2 A」弹窗，id/age/sub_task_id 空（仅 sex 占位）。
+    根因链：
+    1. filterLinkedChildRowsByParentIdIdw 命中 id_idw 后 filterRowsByMiLinkFormParent 返回 [] 仍赋值
+       → effectiveSavedRows 被清成 []。
+    2. linkFormRowsLackFormPayload([]) 误 return false → 变量/peer 回填与 readOnly 最终兜底不跑。
+    3. 发起人视图 link-child binding 仅 own __subTables__ key（如 69）为 COMPLETED 占位行，富数据在 sibling key（30/63）。
+    修复：
+    - id_idw 收窄：mi 过滤为空时保留原 effectiveSavedRows。
+    - linkFormRowsLackFormPayload：空 rows → true（缺 payload）。
+    - filterLinkedChildRowsByMiTaskStatus：status 占位行无业务字段时不独占匹配。
+    - miLinkFormChildRowMatchesParent + buildFkList：sub_task_id ↔ parent id_idw。
+    - resolveLinkedFallbackRows：thin binding.data 时 union 全部 peer + formField overlap。
+    - collectNestedSavedRowsForLinkForm：扫描 parent __subTables__ 全 key 按 formField overlap。
+    - collectLinkFormRowsFromProcessVariables：从 primaryFormData.__subTables__ 回填（unref）。
+    - applications/detail：hydrateMiLinkChildBindingsForInitiatorMyRequest；发起人 resync 跳过 MI 参与者窄化。
+    验证：scripts/verify-myrequest-details-modal.mjs PASS（age=666, sub_task_id=Test-000061）；
+    截图 verification-screenshots/2026-06-09_app-3777ff51-details-modal.png。
+    路径：SubTableField.vue、views/applications/detail.vue。
+- id: "1442"
+  status: fixed
+  fixed_at: "2026-06-10"
+  severity: major
+  category: bug
+  summary: "待办 Sub Task Edit 改 assignee 后 Assignee 列未更新 / MI 子任务仍分给旧 assignee"
+  detail: |
+    待办 task 84559a96 / 申请 83a77ff8：Sub Task Test-000063 Edit 改为 e2e_sunqiang，My Request 显示正确，
+    但 sub form1 待办仍分给 developer（user-dev）。
+    根因链：
+    1. UI：handleDialogSave（edit）未同步 assignee_display_name；hydrate 在 display 非空时跳过（#1442a）。
+    2. Edit 改 assignee 未调 assignSubTableRow（仅 Reassign 按钮会调）（#1442a，已补 performSubTableRowAssignment）。
+    3. **MI 分发（主因）**：完成 assignment 任务时 __subTables__ 同时存在 sibling slice key 64（stale developer）
+       与 66（编辑后 sunqiang）。TaskProcessComponent.selectRowsForMiCollection 同分 slice 去重时 **先写入 64 即锁定 PK**，
+       66 被跳过 → multiInstance_subtable_collection Test-000063 assignee=user-dev（workflow-engine 日志 13:58:41 可证）。
+    修复：
+    - SubTableField.vue：applyAssigneeDisplayNameToRow、edit save 调 performSubTableRowAssignment、assignee 存 user id 字符串。
+    - useTaskForm.ts：submit 前 syncStaleSiblingSubTableSlicesFromActiveBindings（66→64 merge）；
+      **后续收紧**：仅同 tableId MI collection sibling；MI 子任务 Save 禁止 sync；避免 104/attachment 被注入 Sub Task 行（09be69f8）。
+    - applications/detail.vue：发起人 My Request MI collection 用 filterRowsForMiCollectionSubTableBinding 剔除附件泄漏行。
+    - shared.ts：merge assignee 时清除 stale assignee_display_name；shouldSyncStaleSiblingSubTableSlice。
+    - tasks/detail.vue：assignment 任务 Approve 前 patchFormDataSubTablesFromCurrentBindings。
+    - TaskProcessComponent：selectRowsForMiCollection 按 numeric binding id 升序 merge row（高 id 覆盖）；
+      normalizeMiAssigneeText 写入 collection。
+    验证：SubTableField.assign.test.ts、useTaskFormSiblingSliceSync.test.ts、TaskProcessComponentMiCollectionTest PASS。
+    手测：新流程 assignment Edit 改 assignee → Approve → 对应 MI 子任务应进 e2e_sunqiang 待办（非 developer）。
+    注：已完成的 83a77ff8 实例不会自动改派，需新发起或手工转办。
+- id: "1443"
+  status: fixed
+  fixed_at: "2026-06-11"
+  severity: major
+  category: bug
+  summary: "MI 办理人 sub form2：Sub Task 子表空 + People 未带入 sub form1 的 age/sex（id_idw 被 scrub 误删）"
+  detail: |
+    任务 95233afa（Process_1_KK，sub form2，当前参与者 Test-000069）：办理人待办里 Sub Task 子表无当前任务行（空），
+    且 People 内联表单未带入上一节点 sub form1 填写的 age/sex（age 空、id 空）。
+    根因（单一）：当前在办参与者的 MI collection（Sub Task）行同时携带 participant PK `id_idw=Test-000069`、
+    allocate 的 UUID `id`、以及业务 payload（age/sex）。scrubMiCorruptLinkChildRowsForParent（#1435，本为修复 People link-child
+    的 id_idw 误镜像父参与者）对**整份 __subTables__**（含 collection slice 64/66/69）执行，把 collection 行也当成「脏 link-child」
+    → `delete id_idw`。flattened 与 miFullSubTablesSnapshotRef 为同一引用，被原地改写。随后：
+    1) collection 过滤 rowMatchesSubTablePrimaryKey(row, Test-000069, [id_idw]) 0 命中 → Sub Task 空；
+    2) People 内联无 collection 父行可锚定 → 取到 thin 切片 → age/sex 丢失。
+    （raw data.variables.__subTables__["64"] 与 flatten 后均保留 id_idw；丢失发生在 scrub。已用单测证实。）
+    修复：scrub 增加可选 skipSliceKeys，跳过 MI collection slice（buildMiCollectionSliceKeySet：collection binding id/
+    table name + 同 collection tableId 的 sibling binding id），collection 行保留 id_idw；People link-child slice 仍照常 scrub
+    （#1435 行为不变）。三处调用同步传入：tasks/detail.vue resync（load）、loadFunctionUnitContent（FU load）、
+    useTaskForm.ts buildSubTableSubmitPayload（save，经新增 options.bindingRelationTableMap/miSubProcessScopeName）。
+    顺带清理 forceSeedMiCollectionBindingForCurrentParticipant 内遗留的 window.__miDebug 调试转储。
+    验证：单测 miCollectionIdIdwScrub.test.ts（已纳入 vitest.mi-regression.config.ts）；MI 回归单元 104 passed；
+    Playwright verify-subform2-people-carry-forward.mjs 95233afa Test-000069 PASS（age=jj0）；
+    截图 verification-screenshots/2026-06-11_task-95233afa-subform2-fixed.png（Sub Task 显示 Test-000069 行，People age=jj0/sex=on/id=UUID）。
+    路径：shared.ts（scrubMiCorruptLinkChildRowsForParent、buildMiCollectionSliceKeySet）、views/tasks/detail.vue、composables/tasks/useTaskForm.ts。
+- id: "1444"
+  status: fixed
+  fixed_at: "2026-06-12"
+  severity: major
+  category: bug
+  summary: "MI 办理人 People Save 后 inline form 回显 stale 值（persisted 已更新）"
+  detail: |
+    任务 e921c696-65a5-11f1-abdc-eed41327e6f6（Process_1_KK，当前参与者 Test-000071）：People 内联表单填写 age/sex
+    点击 Save 后，流程变量 __subTables__["30"] 已持久化为新 age，但表单仍显示旧值（如 age=5）；reload 后同样 stale。
+    根因链（禁止再犯）：
+    1) seedMiParticipantScopedBindingForeignKeys 对 binding 内全部行（含其它参与者占位行 Test-000072/073）执行当前参与者
+       FK/PK seed + collapse → 跨参与者 id_idw 污染（提交 payload 中 Test-000071 行 id_idw 被写成 Test-000073）。
+    2) backfillMiLinkChildPrimaryKeysFromVariables 把当前参与者 UUID 回填到 foreign 占位行 → PK 碰撞 → collapse 再次污染 id_idw。
+    3) buildSubTableSubmitPayload 合并 formData.__subTables__ 快照时，快照内 stale id_idw 被 re-introduce（merge 不传播删除）。
+    4) flattenNestedSubTableRowsIntoPayload 以 nested 为 incoming 合并到顶层 slice → 旧 userTask collection 行内 nested
+       （age=5）覆盖当前任务已 persist 的顶层 slice（age=88）；flat 快照被污染。
+    5) hydrateMiLinkChildBindingsFromFullSnapshot 经 collectSubTableSliceRowsForRelationTableId 收集同 tableId 全部 sibling
+       slice（如 binding 63 age=5 与 binding 30 age=88）；collapse 同分时后写入者赢 → binding.data 仍为 stale。
+    6) 历史污染：当前参与者行（id=UUID, sub_task_id=Test-000071）泄漏到 foreign 参与者 Test-000073 的 nested slice，
+       与 (4)(5) 叠加放大 reload 回显错误。
+    修复（commit c0b64c30）：
+    - shared.ts：linkChildRowIsForeignParticipantPlaceholder、stripForeignParticipantIdIdwFromLinkChildRow；
+      scrub 对 link-child slice 调用 strip；flatten 时若顶层 slice 已存在则以 nested 为 base、顶层 filled 字段优先覆盖。
+    - detail.vue：seedMiParticipantScopedBindingForeignKeys 分离 foreign 占位行，仅对当前参与者 seed/allocate/collapse；
+      hydrateMiLinkChildBindingsFromFullSnapshot 在 collapse 后以当前 binding 的 ownSlice merge 覆盖 stale sibling。
+    验证：MI 回归单元 104 passed（vitest.mi-regression.config.ts）；Playwright 调试脚本 frontend/scripts/_cap-e921.mjs
+    （persisted after save 正确；hydrate 修复合入后须 rebuild user-portal-frontend 再跑 FORM after reload 断言）。
+    路径：shared.ts、views/tasks/detail.vue；与 #1443 同 commit，独立 issue 便于排查 Save 回显 vs Sub Task 空表。
+- id: "1445"
+  status: fixed
+  fixed_at: "2026-06-10"
+  severity: major
+  category: bug
+  summary: "表单设计器自定义 validator 在 Preview 生效、User Portal 不生效"
+  detail: |
+    根因：设计器将 validator 存为 FORM-CREATE-PREFIX 字符串；form-create Preview 原生解析执行，
+    但 user-portal 的 convertFormCreateDesignerValidateEntry 仅在 typeof validator === 'function' 时保留规则，
+    JSON 反序列化后字符串 validator 被丢弃，跨字段校验（如 b>a 且 b>c）在门户静默失效。
+    修复：formCreateEventRuntime 新增 parseFormCreateValidator / bindFormCreateValidatorForElementPlus（解析字符串并绑定 this.api）；
+    formCreateValidateRules 对 validator 存 __formCreateValidatorSource 延迟标记，FormRenderer.formRules 调用
+    materializeFormCreateValidationRules 在运行时注入 api.getValue。单测覆盖 b>a&&b>c 场景。
+    路径：user-portal/{utils/formCreateEventRuntime.ts, utils/formCreateValidateRules.ts, components/FormRenderer.vue}。
+    补充（2026-06-10）：adapter:true 与三参 validator(rule,value,callback) 冲突导致误报 — detectValidatorArity 优先按参数个数
+    判定签名；callback 桥接为 Element Plus Error 对象。
+- id: "1446"
+  status: fixed
   fixed_at: "2026-06-04"
   severity: minor
   category: bug
@@ -196,7 +630,7 @@
     修复：admin_audit_logs 增加 duration_ms、request_method、request_path（V206 + init 脚本）；
     AdminAuditAspect 计时写入；AuditRequestFilter 采集 HTTP 元数据；移除实体桩 getter。
     路径：backend/admin-center entity/audit + Flyway V206；dev DB 已手工 ALTER。
-- id: "1421"
+- id: "1447"
   status: fixed
   fixed_at: "2026-06-04"
   severity: major
@@ -207,7 +641,7 @@
     修复：returnTask 设置 _rollbackAssigneeFallback/_rollbackTargetActivityId；TaskAssignmentListener 解析失败时
     回退到该 activity 最近一次已完成任务的 assignee，若无则流程发起人；LastUserTaskAssigneeQuery.findLastCompletedAssigneeForActivity。
     路径：TaskManagerComponent、TaskAssignmentListener、RollbackAssigneeFallbackSupport。
-- id: "1422"
+- id: "1448"
   status: fixed
   fixed_at: "2026-06-04"
   severity: major
@@ -218,7 +652,7 @@
     过滤工作区角色池任务，当前工作区（如共享财务中心）与 BPMN BU 不一致时被剔除。
     修复：引擎 applyActiveWorkspaceBuTaskFilter、门户 filterFixedBuRoleTasksForActiveWorkspace 对「当前用户已是 assignee/candidate」的任务跳过 BU 过滤。
     路径：TaskManagerComponent、TaskQueryComponent。
-- id: "1423"
+- id: "1449"
   status: fixed
   fixed_at: "2026-06-04"
   severity: major
@@ -232,7 +666,7 @@
     通过 hiddenItemConfig 隐藏会塌缩内容的内置 Basic `hidden`；删除中间方案 designerPropsPanelRules（baseRule prepend）；
     `.fc-designer-show-hidden` 下隐藏 `._fd-drag-hidden` overlay 并强制显示 drag-tool / 取消 concealed。
     路径：FormDesigner.vue、main.ts、formDesignerCanvasChrome.test.ts。
-- id: "1424"
+- id: "1450"
   status: fixed
   fixed_at: "2026-06-08"
   severity: major
@@ -255,19 +689,3 @@
     路径：user-portal/{utils/formCreateValidateRules.ts, components/FormRenderer.vue, views/processes/start.vue,
     views/tasks/detail.vue, views/applications/detail.vue}；developer-workstation/{components/designer/FormDesigner.vue,
     utils/formCreatePreviewEvents.ts}。
-- id: "1425"
-  status: fixed
-  fixed_at: "2026-06-10"
-  severity: major
-  category: bug
-  summary: "表单设计器自定义 validator 在 Preview 生效、User Portal 不生效"
-  detail: |
-    根因：设计器将 validator 存为 FORM-CREATE-PREFIX 字符串；form-create Preview 原生解析执行，
-    但 user-portal 的 convertFormCreateDesignerValidateEntry 仅在 typeof validator === 'function' 时保留规则，
-    JSON 反序列化后字符串 validator 被丢弃，跨字段校验（如 b>a 且 b>c）在门户静默失效。
-    修复：formCreateEventRuntime 新增 parseFormCreateValidator / bindFormCreateValidatorForElementPlus（解析字符串并绑定 this.api）；
-    formCreateValidateRules 对 validator 存 __formCreateValidatorSource 延迟标记，FormRenderer.formRules 调用
-    materializeFormCreateValidationRules 在运行时注入 api.getValue。单测覆盖 b>a&&b>c 场景。
-    路径：user-portal/{utils/formCreateEventRuntime.ts, utils/formCreateValidateRules.ts, components/FormRenderer.vue}。
-    补充（2026-06-10）：adapter:true 与三参 validator(rule,value,callback) 冲突导致误报 — detectValidatorArity 优先按参数个数
-    判定签名；callback 桥接为 Element Plus Error 对象。

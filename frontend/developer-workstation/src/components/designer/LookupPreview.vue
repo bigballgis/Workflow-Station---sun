@@ -55,6 +55,7 @@
         @mousedown.stop
         @click.stop
       >
+        <div class="table-scroll-wrap">
         <el-table
           :data="filteredResults"
           size="small"
@@ -70,6 +71,7 @@
             min-width="120"
           />
         </el-table>
+        </div>
         <div
           v-if="filteredResults.length === 0"
           class="lookup-no-data"
@@ -161,13 +163,13 @@ const visibleColumns = computed(() => {
   if (props.displayFields?.length > 0) {
     return props.displayFields.map(f => {
       const fd = props.fieldDefs.find(d => d.fieldName === f)
-      return { prop: f, label: fd?.comment || fd?.description || f }
+      return { prop: f, label: fd?.displayName || f }
     })
   }
   if (props.searchFields?.length > 0) {
     return props.searchFields.map(f => {
       const fd = props.fieldDefs.find(d => d.fieldName === f)
-      return { prop: f, label: fd?.comment || fd?.description || f }
+      return { prop: f, label: fd?.displayName || f }
     })
   }
   return []

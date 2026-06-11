@@ -11,6 +11,7 @@
       </el-button>
     </div>
 
+    <div class="table-scroll-wrap">
     <el-table
       v-loading="loading"
       :data="bindings"
@@ -71,6 +72,7 @@
         </template>
       </el-table-column>
     </el-table>
+    </div>
 
     <el-empty
       v-if="bindings.length === 0 && !loading"
@@ -84,6 +86,7 @@
       title="Add Relation Table Binding"
       width="500px"
     >
+      <div class="table-scroll-wrap">
       <el-table
         v-loading="loadingTables"
         :data="availableTables"
@@ -129,6 +132,7 @@
           </template>
         </el-table-column>
       </el-table>
+      </div>
       <template #footer>
         <el-button @click="showAddDialog = false">
           Close

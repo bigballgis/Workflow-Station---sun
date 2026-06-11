@@ -80,7 +80,7 @@ public class VirtualGroupManagerComponent {
                 .name(request.getName())
                 .code(code)
                 .type(EntityTypeConverter.fromVirtualGroupType(request.getType()))
-                .description(request.getDescription())
+                .displayName(request.getDescription())
                 .adGroup(request.getAdGroup())
                 .status("ACTIVE")
                 .build();
@@ -127,7 +127,7 @@ public class VirtualGroupManagerComponent {
         
         group.setName(request.getName());
         group.setType(EntityTypeConverter.fromVirtualGroupType(request.getType()));
-        group.setDescription(request.getDescription());
+        group.setDisplayName(request.getDescription());
         group.setAdGroup(request.getAdGroup());
         
         virtualGroupRepository.save(group);

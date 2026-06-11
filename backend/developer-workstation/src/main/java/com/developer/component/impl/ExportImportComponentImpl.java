@@ -213,7 +213,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
                     .name(functionUnit.getName())
                     .code(functionUnit.getCode()) // Use actual code field
                     .version(functionUnit.getCurrentVersion())
-                    .description(functionUnit.getDescription())
+                    .description(functionUnit.getDisplayName())
                     .exportedAt(LocalDateTime.now())
                     .exportedBy(getCurrentOperator())
                     .platformVersion(platformVersion)
@@ -313,7 +313,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
         FunctionUnit functionUnit = FunctionUnit.builder()
                 .name(name)
                 .code(code)
-                .description(description)
+                .displayName(description)
                 .currentVersion(version)
                 .deployedAt(Instant.now()) // Set deployed_at to avoid null constraint violation
                 .build();
@@ -431,7 +431,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
                 .tableName((String) tableData.get("tableName"))
                 .tableType(TableType.valueOf((String) tableData.get("tableType")))
                 .tableDisplayName((String) tableData.get("tableDisplayName"))
-                .description((String) tableData.get("description"))
+                .displayName((String) tableData.get("description"))
                 .build();
         table = tableDefinitionRepository.save(table);
         
@@ -458,7 +458,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
                         .defaultValue((String) fieldData.get("defaultValue"))
                         .isPrimaryKey(isPrimaryKey)
                         .isUnique(isUnique)
-                        .description((String) fieldData.get("description"))
+                        .displayName((String) fieldData.get("displayName"))
                         .sortOrder(sortOrder)
                         .build();
                 table.getFieldDefinitions().add(field);
@@ -552,7 +552,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
                 .functionUnit(functionUnit)
                 .formName((String) formData.get("formName"))
                 .formType(FormType.valueOf((String) formData.get("formType")))
-                .description((String) formData.get("description"))
+                .displayName((String) formData.get("description"))
                 .configJson(configJsonMap != null ? configJsonMap : new HashMap<>())
                 .fieldPermissions(fieldPermissions)
                 .showLiveValues(showLiveValues)
@@ -983,7 +983,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
         map.put("tableName", table.getTableName());
         map.put("tableDisplayName", table.getTableDisplayName());
         map.put("tableType", table.getTableType().name());
-        map.put("description", table.getDescription());
+        map.put("description", table.getDisplayName());
         map.put("fields", table.getFieldDefinitions().stream().map(this::serializeField).toList());
         if (table.getForeignKeys() != null && !table.getForeignKeys().isEmpty()) {
             map.put("foreignKeys", table.getForeignKeys().stream()
@@ -1188,7 +1188,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
         map.put("defaultValue", field.getDefaultValue());
         map.put("isPrimaryKey", field.getIsPrimaryKey());
         map.put("isUnique", field.getIsUnique());
-        map.put("description", field.getDescription());
+        map.put("displayName", field.getDisplayName());
         map.put("sortOrder", field.getSortOrder());
         return map;
     }
@@ -1198,7 +1198,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
         map.put("formId", form.getId());
         map.put("formName", form.getFormName());
         map.put("formType", form.getFormType().name());
-        map.put("description", form.getDescription());
+        map.put("description", form.getDisplayName());
         map.put("boundTableName", form.getBoundTableName());
         map.put("showLiveValues", form.getShowLiveValues());
         map.put("fieldPermissions", form.getFieldPermissions());

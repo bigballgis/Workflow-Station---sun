@@ -2,7 +2,7 @@
 -- Create Virtual Groups for Digital Lending System
 -- =============================================================================
 
-INSERT INTO sys_virtual_groups (id, code, name, description, type, status, created_by, created_at)
+INSERT INTO sys_virtual_groups (id, code, name, display_name, type, status, created_by, created_at)
 VALUES
 ('vg-doc-verifiers', 'DOCUMENT_VERIFIERS', 'Document Verifiers', 'Responsible for verifying loan application documents and materials', 'CUSTOM', 'ACTIVE', 'system', CURRENT_TIMESTAMP),
 ('vg-credit-officers', 'CREDIT_OFFICERS', 'Credit Officers', 'Responsible for performing credit checks and assessments', 'CUSTOM', 'ACTIVE', 'system', CURRENT_TIMESTAMP),

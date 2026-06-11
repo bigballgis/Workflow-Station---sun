@@ -13,6 +13,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
+import java.util.Map;
 
 @Data
 @Builder
@@ -61,7 +62,10 @@ public class CreateRelationTableRequest {
         @Size(max = 500, message = "{validation.defaultValue.size}")
         private String defaultValue;
 
-        private String comment;
+        private String displayName;
+
         private Integer sortOrder;
+
+        private Map<String, Object> pkGeneration;
     }
 }

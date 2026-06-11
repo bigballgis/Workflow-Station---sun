@@ -569,12 +569,12 @@ public class ProcessDesignComponentImpl implements ProcessDesignComponent {
             return Map.of();
         }
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                "SELECT field_name, comment FROM rt_field_definitions WHERE table_id = ?",
+                "SELECT field_name, display_name FROM rt_field_definitions WHERE table_id = ?",
                 relationTableId);
         Map<String, String> labels = new LinkedHashMap<>();
         for (Map<String, Object> row : rows) {
             String fieldName = String.valueOf(row.get("field_name"));
-            Object label = row.get("comment");
+            Object label = row.get("display_name");
             labels.put(fieldName, label == null ? fieldName : String.valueOf(label));
         }
         return labels;

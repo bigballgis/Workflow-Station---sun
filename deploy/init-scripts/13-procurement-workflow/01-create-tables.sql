@@ -23,14 +23,14 @@ BEGIN
     -- Table 1: Request (MAIN) — 11 fields
     -- =========================================================================
     INSERT INTO dw_table_definitions (
-        function_unit_id, table_name, table_display_name, table_type, description, created_at, updated_at
+        function_unit_id, table_name, table_display_name, table_type, display_name, created_at, updated_at
     ) VALUES (
         v_function_unit_id, 'Request', 'Request', 'MAIN', 'Main request table', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
     ON CONFLICT (function_unit_id, table_name) DO UPDATE SET
         table_display_name = EXCLUDED.table_display_name,
         table_type  = EXCLUDED.table_type,
-        description = EXCLUDED.description,
+        display_name = EXCLUDED.display_name,
         updated_at  = CURRENT_TIMESTAMP
     RETURNING id INTO v_main_table_id;
 
@@ -38,7 +38,7 @@ BEGIN
 
     INSERT INTO dw_field_definitions (
         table_id, field_name, data_type, length, precision_value, scale,
-        nullable, default_value, is_primary_key, is_unique, description, sort_order
+        nullable, default_value, is_primary_key, is_unique, display_name, sort_order
     ) VALUES
     (v_main_table_id, 'id',                     'BIGINT',    NULL, NULL, NULL, false, NULL, false, false, 'Primary key',              1),
     (v_main_table_id, 'request_number',         'VARCHAR',   50,   NULL, NULL, false, NULL, false, false, 'Request Number',           2),
@@ -58,14 +58,14 @@ BEGIN
     -- Table 2: RequestItems (SUB) — 28 fields (覆盖所有控件类型)
     -- =========================================================================
     INSERT INTO dw_table_definitions (
-        function_unit_id, table_name, table_display_name, table_type, description, created_at, updated_at
+        function_unit_id, table_name, table_display_name, table_type, display_name, created_at, updated_at
     ) VALUES (
         v_function_unit_id, 'RequestItems', 'Request Items', 'SUB', 'Sub table for request line items', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
     ON CONFLICT (function_unit_id, table_name) DO UPDATE SET
         table_display_name = EXCLUDED.table_display_name,
         table_type  = EXCLUDED.table_type,
-        description = EXCLUDED.description,
+        display_name = EXCLUDED.display_name,
         updated_at  = CURRENT_TIMESTAMP
     RETURNING id INTO v_items_table_id;
 
@@ -73,7 +73,7 @@ BEGIN
 
     INSERT INTO dw_field_definitions (
         table_id, field_name, data_type, length, precision_value, scale,
-        nullable, default_value, is_primary_key, is_unique, description, sort_order
+        nullable, default_value, is_primary_key, is_unique, display_name, sort_order
     ) VALUES
     -- 基础字段
     (v_items_table_id, 'id',              'BIGINT',    NULL, NULL, NULL, false, NULL, false, false, 'Item ID',                           1),
@@ -114,14 +114,14 @@ BEGIN
     -- Table 3: ApprovalActions (ACTION) — 9 fields
     -- =========================================================================
     INSERT INTO dw_table_definitions (
-        function_unit_id, table_name, table_display_name, table_type, description, created_at, updated_at
+        function_unit_id, table_name, table_display_name, table_type, display_name, created_at, updated_at
     ) VALUES (
         v_function_unit_id, 'ApprovalActions', 'Approval Actions', 'ACTION', 'Action table for tracking approval history', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
     ON CONFLICT (function_unit_id, table_name) DO UPDATE SET
         table_display_name = EXCLUDED.table_display_name,
         table_type  = EXCLUDED.table_type,
-        description = EXCLUDED.description,
+        display_name = EXCLUDED.display_name,
         updated_at  = CURRENT_TIMESTAMP
     RETURNING id INTO v_action_table_id;
 
@@ -129,7 +129,7 @@ BEGIN
 
     INSERT INTO dw_field_definitions (
         table_id, field_name, data_type, length, precision_value, scale,
-        nullable, default_value, is_primary_key, is_unique, description, sort_order
+        nullable, default_value, is_primary_key, is_unique, display_name, sort_order
     ) VALUES
     (v_action_table_id, 'id',              'BIGINT',    NULL, NULL, NULL, false, NULL, false, false, 'Action ID',                          1),
     (v_action_table_id, 'request_id',      'BIGINT',    NULL, NULL, NULL, false, NULL, false, false, 'Foreign key to Request table',       2),
@@ -147,14 +147,14 @@ BEGIN
     -- Table 4: RequestAttachments (SUB) — 10 fields
     -- =========================================================================
     INSERT INTO dw_table_definitions (
-        function_unit_id, table_name, table_display_name, table_type, description, created_at, updated_at
+        function_unit_id, table_name, table_display_name, table_type, display_name, created_at, updated_at
     ) VALUES (
         v_function_unit_id, 'RequestAttachments', 'Request Attachments', 'SUB', 'Relation table for request attachments', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
     ON CONFLICT (function_unit_id, table_name) DO UPDATE SET
         table_display_name = EXCLUDED.table_display_name,
         table_type  = EXCLUDED.table_type,
-        description = EXCLUDED.description,
+        display_name = EXCLUDED.display_name,
         updated_at  = CURRENT_TIMESTAMP
     RETURNING id INTO v_attach_table_id;
 
@@ -162,7 +162,7 @@ BEGIN
 
     INSERT INTO dw_field_definitions (
         table_id, field_name, data_type, length, precision_value, scale,
-        nullable, default_value, is_primary_key, is_unique, description, sort_order
+        nullable, default_value, is_primary_key, is_unique, display_name, sort_order
     ) VALUES
     (v_attach_table_id, 'id',          'BIGINT',    NULL, NULL, NULL, false, NULL, false, false, 'Attachment ID',                1),
     (v_attach_table_id, 'request_id',  'BIGINT',    NULL, NULL, NULL, false, NULL, false, false, 'Foreign key to Request table', 2),
@@ -181,7 +181,7 @@ BEGIN
     -- Table 5: Review Table (SUB) — 3 fields
     -- =========================================================================
     INSERT INTO dw_table_definitions (
-        function_unit_id, table_name, table_display_name, table_type, description, created_at, updated_at
+        function_unit_id, table_name, table_display_name, table_type, display_name, created_at, updated_at
     ) VALUES (
         v_function_unit_id, 'Review Table', '', 'SUB', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
@@ -194,7 +194,7 @@ BEGIN
 
     INSERT INTO dw_field_definitions (
         table_id, field_name, data_type, length, precision_value, scale,
-        nullable, default_value, is_primary_key, is_unique, description, sort_order
+        nullable, default_value, is_primary_key, is_unique, display_name, sort_order
     ) VALUES
     (v_review_table_id, 'Item',    'TEXT',    255,  NULL, NULL, true,  NULL, false, false, 'item',    0),
     (v_review_table_id, 'Comment', 'VARCHAR', 255,  NULL, NULL, true,  NULL, false, false, 'comment', 1),

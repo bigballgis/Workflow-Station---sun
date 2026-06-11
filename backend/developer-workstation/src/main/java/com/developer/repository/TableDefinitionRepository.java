@@ -27,6 +27,12 @@ public interface TableDefinitionRepository extends JpaRepository<TableDefinition
     List<TableDefinition> findByFunctionUnitIdAndTableType(Long functionUnitId, TableType tableType);
     
     Optional<TableDefinition> findByFunctionUnitIdAndTableName(Long functionUnitId, String tableName);
+
+    Optional<TableDefinition> findByTableName(String tableName);
+    
+    boolean existsByTableName(String tableName);
+
+    boolean existsByTableNameAndIdNot(String tableName, Long id);
     
     /**
      * 获取表定义，同时加载字段定义

@@ -51,7 +51,7 @@ public class ExportImportPropertyTest {
         FunctionUnit fu = new FunctionUnit();
         fu.setId(1L);
         fu.setName(name);
-        fu.setDescription("Test for export/import");
+        fu.setDisplayName("Test for export/import");
         fu.setStatus(FunctionUnitStatus.DRAFT);
         
         when(repository.findById(1L)).thenReturn(Optional.of(fu));

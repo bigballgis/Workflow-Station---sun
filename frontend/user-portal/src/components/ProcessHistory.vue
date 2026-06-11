@@ -143,23 +143,9 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Refresh, Document, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
+import type { HistoryRecord } from '@/types/historyRecord'
 
-export interface HistoryRecord {
-  id: string
-  nodeId: string
-  nodeName: string
-  assigneeId?: string
-  assigneeName?: string
-  status: 'completed' | 'current' | 'pending' | 'rejected' | 'cancelled'
-  action?: 'approve' | 'reject' | 'transfer' | 'delegate' | 'withdraw' | 'submit' | 'return' | 'draft'
-  comment?: string
-  createdTime: string
-  completedTime?: string
-  duration?: number // 毫秒
-  attachments?: Array<{ id: string; name: string; url: string }>
-  signatureUrl?: string
-  activityType?: string
-}
+export type { HistoryRecord } from '@/types/historyRecord'
 
 interface Props {
   records: HistoryRecord[]

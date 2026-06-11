@@ -12,6 +12,7 @@ import lombok.NoArgsConstructor;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Relation Table 响应 DTO
@@ -54,8 +55,13 @@ public class RelationTableResponse {
         private Boolean nullable;
         private Boolean isPrimaryKey;
         private String defaultValue;
-        private String comment;
+        private String displayName;
         private Integer sortOrder;
+        private Boolean isForeignKey;
+        private Long refTableId;
+        private List<String> refPrimaryKeyFields;
+        private Map<String, Object> pkGeneration;
+        private String fkDisplayMode;
 
         /**
          * 从字段定义实体转换
@@ -74,8 +80,13 @@ public class RelationTableResponse {
                     .nullable(entity.getNullable())
                     .isPrimaryKey(entity.getIsPrimaryKey())
                     .defaultValue(entity.getDefaultValue())
-                    .comment(entity.getComment())
+                    .displayName(entity.getDisplayName())
                     .sortOrder(entity.getSortOrder())
+                    .isForeignKey(entity.getIsForeignKey())
+                    .refTableId(entity.getRefTableId())
+                    .refPrimaryKeyFields(entity.getRefPrimaryKeyFields())
+                    .pkGeneration(entity.getPkGenerationJson())
+                    .fkDisplayMode(entity.getFkDisplayMode())
                     .build();
         }
     }

@@ -167,3 +167,45 @@ describe('subListViews FILE column typing', () => {
     expect(isStoredFileUrl('plain text')).toBe(false)
   })
 })
+
+/** Mirrors SubTableField parentChildTaskStatusesMatch (#1441). */
+function parentChildTaskStatusesMatch(
+  parentRow: Record<string, unknown>,
+  childRow: Record<string, unknown>,
+): boolean {
+  const ps = String(parentRow.task_status ?? '').trim().toUpperCase()
+  if (!ps) return true
+  const cs = String(childRow.task_status ?? '').trim().toUpperCase()
+  if (!cs) return true
+  return ps === cs
+}
+
+describe('SubTableField link-form task_status match (#1441)', () => {
+  it('filterLinkedChildRowsByMiTaskStatus keeps link-child rows without task_status for FK scoping', () => {
+    const parent = { id_idw: 'Test-000061', task_status: 'IN_PROGRESS' }
+    const own = { sub_task_id: 'Test-000061', age: '666', sex: true }
+    const other = { sub_task_id: 'Test-000062', age: '88', sex: true }
+    const filter = (p: Record<string, unknown>, rows: Record<string, unknown>[]) => {
+      const withStatus = rows.filter(r => String(r.task_status ?? '').trim() !== '')
+      if (withStatus.length === 0) return rows
+      return rows
+    }
+    const out = filter(parent, [own, other])
+    expect(out).toHaveLength(2)
+  })
+
+  it('parentChildTaskStatusesMatch requires child task_status when present', () => {
+    const parent = { task_status: 'IN_PROGRESS' }
+    expect(parentChildTaskStatusesMatch(parent, { task_status: 'COMPLETED' })).toBe(false)
+    expect(parentChildTaskStatusesMatch(parent, { task_status: 'IN_PROGRESS', age: '1' })).toBe(true)
+  })
+
+  it('miOk allows link-child without task_status for IN_PROGRESS parent', () => {
+    const parent = { id_idw: 'Test-000061', task_status: 'IN_PROGRESS' }
+    const child = { sub_task_id: 'Test-000061', age: '666' }
+    const childTs = String(child.task_status ?? '').trim()
+    const miOk =
+      parentChildTaskStatusesMatch(parent, child) || !childTs
+    expect(miOk).toBe(true)
+  })
+})

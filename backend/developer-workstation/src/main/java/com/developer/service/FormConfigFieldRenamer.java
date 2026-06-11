@@ -19,7 +19,7 @@ import java.util.Objects;
  * referencing that table. Scope (hard sync balance to avoid wiping designer tweaks):
  * <ul>
  *   <li>{@code fieldName} → {@code rule.field} + {@code fieldPermissions} keys (always);</li>
- *   <li>{@code description} (display name) → {@code rule.title} (always);</li>
+ *   <li>{@code displayName} → {@code rule.title} (always);</li>
  *   <li>{@code length} → {@code props.maxlength} ({@code type=="input"} and dataType still VARCHAR);</li>
  *   <li>{@code scale} → {@code props.precision} ({@code type=="inputNumber"} and dataType DECIMAL);</li>
  *   <li>{@code nullable} → add/remove {@code validate[].required} for the matching control node.</li>
@@ -48,12 +48,12 @@ public final class FormConfigFieldRenamer {
      * Captures per-field attribute deltas used by form sync for one save.
      *
      * <p>Each {@code old*}/{@code new*} pair lines up; equal pairs mean no change on that axis.
-     * Kept name {@code FieldChange} for history (older builds only renamed field/description).
+     * Kept name {@code FieldChange} for history (older builds only renamed field/displayName).
      */
     public record FieldChange(String oldFieldName,
                               String newFieldName,
-                              String oldDescription,
-                              String newDescription,
+                              String oldDisplayName,
+                              String newDisplayName,
                               String oldDataType,
                               String newDataType,
                               Integer oldLength,
@@ -65,13 +65,13 @@ public final class FormConfigFieldRenamer {
 
         /** Legacy convenience ctor syncing only field/title dimensions. */
         public FieldChange(String oldFieldName, String newFieldName,
-                           String oldDescription, String newDescription) {
-            this(oldFieldName, newFieldName, oldDescription, newDescription,
+                           String oldDisplayName, String newDisplayName) {
+            this(oldFieldName, newFieldName, oldDisplayName, newDisplayName,
                     null, null, null, null, null, null, null, null);
         }
 
         public boolean fieldNameChanged() { return !Objects.equals(oldFieldName, newFieldName); }
-        public boolean descriptionChanged() { return !Objects.equals(oldDescription, newDescription); }
+        public boolean displayNameChanged() { return !Objects.equals(oldDisplayName, newDisplayName); }
         public boolean lengthChanged() { return !Objects.equals(oldLength, newLength); }
         public boolean scaleChanged() { return !Objects.equals(oldScale, newScale); }
         public boolean nullableChanged() { return !Objects.equals(oldNullable, newNullable); }
@@ -227,11 +227,11 @@ public final class FormConfigFieldRenamer {
                     n.put("field", c.newFieldName());
                     changed = true;
                 }
-                // Title mirrors FormDesigner.fieldToFormRule (`title: field.description || field.fieldName`):
+                // Title mirrors FormDesigner.fieldToFormRule (`title: field.displayName || field.fieldName`):
                 // rewrite when display name or field name changes; prefer display name, fall back to field name.
-                if (c.descriptionChanged() || c.fieldNameChanged()) {
-                    String nextTitle = !isBlank(c.newDescription())
-                            ? c.newDescription()
+                if (c.displayNameChanged() || c.fieldNameChanged()) {
+                    String nextTitle = !isBlank(c.newDisplayName())
+                            ? c.newDisplayName()
                             : c.newFieldName();
                     if (nextTitle != null) {
                         Object curTitle = n.get("title");
@@ -262,8 +262,8 @@ public final class FormConfigFieldRenamer {
                 }
 
                 if (c.nullableChanged() && c.newNullable() != null) {
-                    String labelForMessage = !isBlank(c.newDescription())
-                            ? c.newDescription()
+                    String labelForMessage = !isBlank(c.newDisplayName())
+                            ? c.newDisplayName()
                             : (c.newFieldName() != null ? c.newFieldName() : oldField);
                     if (syncRequiredValidate(n, c.newNullable(), labelForMessage)) {
                         changed = true;

@@ -66,9 +66,9 @@
           </el-radio>
         </el-radio-group>
       </el-form-item>
-      <el-form-item :label="t('role.description')">
+      <el-form-item :label="t('role.displayName')">
         <el-input
-          v-model="form.description"
+          v-model="form.displayName"
           type="textarea"
           :rows="3"
         />
@@ -107,8 +107,8 @@ const formRef = ref<FormInstance>()
 const loading = ref(false)
 const isEdit = computed(() => !!props.role)
 
-const form = reactive<{ name: string; code: string; type: RoleType; description: string; status: 'ACTIVE' | 'INACTIVE' }>({
-  name: '', code: '', type: 'BU_BOUNDED', description: '', status: 'ACTIVE',
+const form = reactive<{ name: string; code: string; type: RoleType; displayName: string; status: 'ACTIVE' | 'INACTIVE' }>({
+  name: '', code: '', type: 'BU_BOUNDED', displayName: '', status: 'ACTIVE',
 })
 
 const rules = computed(() => ({
@@ -123,11 +123,11 @@ watch(() => props.modelValue, (val) => {
       name: props.role.name, 
       code: props.role.code, 
       type: props.role.type || 'BU_BOUNDED',
-      description: props.role.description || '',
+      displayName: props.role.displayName || '',
       status: props.role.status || 'ACTIVE'
     })
   } else if (val) {
-    Object.assign(form, { name: '', code: '', type: 'BU_BOUNDED', description: '', status: 'ACTIVE' })
+    Object.assign(form, { name: '', code: '', type: 'BU_BOUNDED', displayName: '', status: 'ACTIVE' })
   }
 })
 
@@ -140,7 +140,7 @@ const handleSubmit = async () => {
     if (isEdit.value) {
       await roleStore.updateRole(props.role!.id, {
         name: form.name,
-        description: form.description,
+        displayName: form.displayName,
         status: form.status,
       })
     } else {

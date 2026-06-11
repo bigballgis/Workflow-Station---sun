@@ -76,8 +76,10 @@ public class TaskController {
 
     @Operation(summary = "Get task history")
     @GetMapping("/{taskId}/history")
-    public ApiResponse<List<TaskHistoryInfo>> getTaskHistory(@PathVariable String taskId) {
-        List<TaskHistoryInfo> history = taskQueryComponent.getTaskHistory(taskId);
+    public ApiResponse<List<TaskHistoryInfo>> getTaskHistory(
+            @PathVariable String taskId,
+            @RequestParam(value = "processInstanceId", required = false) String processInstanceId) {
+        List<TaskHistoryInfo> history = taskQueryComponent.getTaskHistory(taskId, processInstanceId);
         return ApiResponse.success(history);
     }
 

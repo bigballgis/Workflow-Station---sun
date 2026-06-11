@@ -19,7 +19,8 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <spring-boot.version>3.2.1</spring-boot.version>
         <tomcat.version>10.1.55</tomcat.version>
-        <spring-security.version>6.2.2</spring-security.version>
+        <spring-security.version>6.5.9</spring-security.version>
+        <spring-framework.version>6.2.17</spring-framework.version>
         <jackson.version>2.15.3</jackson.version>
         <lombok.version>1.18.30</lombok.version>
     </properties>
@@ -100,7 +101,7 @@
         <dependency>
             <groupId>org.springframework</groupId>
             <artifactId>spring-jdbc</artifactId>
-            <version>6.1.1</version>
+            <version>${spring-framework.version}</version>
             <scope>provided</scope>
         </dependency>
 
@@ -132,7 +133,7 @@
         <dependency>
             <groupId>org.springframework</groupId>
             <artifactId>spring-test</artifactId>
-            <version>6.1.1</version>
+            <version>${spring-framework.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>

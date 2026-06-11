@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS meeting (
     meeting_time TIMESTAMP NOT NULL,
     location VARCHAR(200) NOT NULL DEFAULT '',
     organizer_name VARCHAR(100) NOT NULL DEFAULT '',
-    description TEXT,
+    display_name TEXT,
     status VARCHAR(30) NOT NULL DEFAULT 'DRAFT',
     created_by VARCHAR(100),
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

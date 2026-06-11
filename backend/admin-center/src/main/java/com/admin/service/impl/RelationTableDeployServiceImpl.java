@@ -89,6 +89,7 @@ public class RelationTableDeployServiceImpl implements RelationTableDeployServic
         versionRepository.save(version);
 
         // Update table status and version number
+        tableDefinition.setDeployedDisplayName(tableDefinition.getDisplayName());
         tableDefinition.setStatus(RelationTableStatus.DEPLOYED);
         tableDefinition.setCurrentVersion(newVersion);
         RelationTableDefinition saved = tableDefinitionRepository.save(tableDefinition);
@@ -134,7 +135,7 @@ public class RelationTableDeployServiceImpl implements RelationTableDeployServic
                     .nullable(dto.getNullable() != null ? dto.getNullable() : true)
                     .isPrimaryKey(dto.getIsPrimaryKey() != null ? dto.getIsPrimaryKey() : false)
                     .defaultValue(dto.getDefaultValue())
-                    .comment(dto.getComment())
+                    .displayName(dto.getDisplayName())
                     .sortOrder(dto.getSortOrder() != null ? dto.getSortOrder() : i)
                     .build();
             restoredFields.add(field);
@@ -393,28 +394,28 @@ public class RelationTableDeployServiceImpl implements RelationTableDeployServic
             fields.add(RelationFieldDefinition.builder()
                     .tableDefinition(tableDefinition).fieldName("created_at")
                     .dataType(RelationDataType.TIMESTAMP).nullable(true).isPrimaryKey(false)
-                    .comment("Created At").sortOrder(nextSortOrder++).build());
+                    .displayName("Created At").sortOrder(nextSortOrder++).build());
             added = true;
         }
         if (!existingNames.contains("created_by")) {
             fields.add(RelationFieldDefinition.builder()
                     .tableDefinition(tableDefinition).fieldName("created_by")
                     .dataType(RelationDataType.VARCHAR).length(64).nullable(true).isPrimaryKey(false)
-                    .comment("Created By").sortOrder(nextSortOrder++).build());
+                    .displayName("Created By").sortOrder(nextSortOrder++).build());
             added = true;
         }
         if (!existingNames.contains("updated_at")) {
             fields.add(RelationFieldDefinition.builder()
                     .tableDefinition(tableDefinition).fieldName("updated_at")
                     .dataType(RelationDataType.TIMESTAMP).nullable(true).isPrimaryKey(false)
-                    .comment("Updated At").sortOrder(nextSortOrder++).build());
+                    .displayName("Updated At").sortOrder(nextSortOrder++).build());
             added = true;
         }
         if (!existingNames.contains("updated_by")) {
             fields.add(RelationFieldDefinition.builder()
                     .tableDefinition(tableDefinition).fieldName("updated_by")
                     .dataType(RelationDataType.VARCHAR).length(64).nullable(true).isPrimaryKey(false)
-                    .comment("Updated By").sortOrder(nextSortOrder++).build());
+                    .displayName("Updated By").sortOrder(nextSortOrder++).build());
             added = true;
         }
 
@@ -475,7 +476,7 @@ public class RelationTableDeployServiceImpl implements RelationTableDeployServic
                             ? ((Number) col.get("numeric_scale")).intValue() : null)
                     .nullable(true)
                     .isPrimaryKey(pkColumns.contains(colName))
-                    .comment("(auto-recovered from physical schema)")
+                    .displayName("(auto-recovered from physical schema)")
                     .sortOrder(sortOrder)
                     .build();
             repaired.add(field);
@@ -569,7 +570,7 @@ public class RelationTableDeployServiceImpl implements RelationTableDeployServic
                         .nullable(f.getNullable())
                         .isPrimaryKey(f.getIsPrimaryKey())
                         .defaultValue(f.getDefaultValue())
-                        .comment(f.getComment())
+                        .displayName(f.getDisplayName())
                         .sortOrder(f.getSortOrder())
                         .build())
                 .collect(Collectors.toList());

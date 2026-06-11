@@ -3,7 +3,7 @@
     <div class="designer-toolbar">
       <el-button
         type="primary"
-        @click="showCreateDialog = true"
+        @click="openCreateDialog"
       >
         {{ t('table.title') }}
       </el-button>
@@ -39,7 +39,7 @@
     
     <div
       v-if="!selectedTable"
-      class="table-list"
+      class="table-list table-scroll-wrap"
     >
       <el-table
         v-loading="loading"
@@ -104,30 +104,33 @@
         </el-table-column>
         <el-table-column
           :label="t('common.actions')"
-          min-width="150"
+          min-width="240"
+          fixed="right"
         >
           <template #default="{ row }">
-            <el-button
-              link
-              type="primary"
-              @click.stop="handleSelectTable(row)"
-            >
-              {{ t('common.edit') }}
-            </el-button>
-            <el-button
-              link
-              type="success"
-              @click.stop="handleExportTable(row)"
-            >
-              {{ t('table.exportTemplate') }}
-            </el-button>
-            <el-button
-              link
-              type="danger"
-              @click.stop="handleDeleteTable(row)"
-            >
-              {{ t('common.delete') }}
-            </el-button>
+            <div class="table-row-actions">
+              <el-button
+                link
+                type="primary"
+                @click.stop="handleSelectTable(row)"
+              >
+                {{ t('common.edit') }}
+              </el-button>
+              <el-button
+                link
+                type="success"
+                @click.stop="handleExportTable(row)"
+              >
+                {{ t('table.exportTemplate') }}
+              </el-button>
+              <el-button
+                link
+                type="danger"
+                @click.stop="handleDeleteTable(row)"
+              >
+                {{ t('common.delete') }}
+              </el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -138,281 +141,389 @@
       class="table-editor"
     >
       <div class="editor-header">
-        <el-button @click="handleBackToList">
-          <el-icon><ArrowLeft /></el-icon> {{ t('table.backToList') }}
-        </el-button>
-        <span class="table-name">{{ selectedTable.tableName }}</span>
-        <el-button
-          type="primary"
-          @click="handleSaveTable"
-        >
-          {{ t('table.save') }}
-        </el-button>
-        <el-button @click="handleGenerateDDL">
-          {{ t('table.ddlPreview') }}
-        </el-button>
+        <div class="editor-header-left">
+          <el-button
+            text
+            class="back-btn"
+            @click="handleBackToList"
+          >
+            <el-icon><ArrowLeft /></el-icon> {{ t('table.backToList') }}
+          </el-button>
+          <span class="table-name">{{ selectedTable.tableDisplayName || selectedTable.tableName }}</span>
+          <el-tag
+            size="small"
+            type="info"
+            effect="plain"
+          >
+            {{ tableTypeLabel(selectedTable.tableType) }}
+          </el-tag>
+        </div>
+        <div class="editor-header-actions">
+          <el-button
+            size="small"
+            @click="handleGenerateDDL"
+          >
+            {{ t('table.ddlPreview') }}
+          </el-button>
+          <el-button
+            type="primary"
+            size="small"
+            @click="handleSaveTable"
+          >
+            {{ t('table.save') }}
+          </el-button>
+        </div>
       </div>
-      
-      <el-form
-        :model="selectedTable"
-        label-width="140px"
-        label-position="left"
-        style="max-width: 640px; margin-bottom: 20px;"
-      >
-        <el-form-item :label="t('table.tableName')">
-          <el-input v-model="selectedTable.tableName" />
-        </el-form-item>
-        <el-form-item :label="t('table.tableDisplayName')">
-          <el-input v-model="selectedTable.tableDisplayName" />
-        </el-form-item>
-        <el-form-item :label="t('table.tableType')">
-          <el-select v-model="selectedTable.tableType">
-            <el-option
-              :label="t('table.mainTable')"
-              value="MAIN"
-            />
-            <el-option
-              :label="t('table.subTable')"
-              value="SUB"
-            />
-            <el-option
-              :label="t('table.actionTable')"
-              value="ACTION"
-            />
-            <el-option
-              :label="t('table.relationTable')"
-              value="RELATION"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item :label="t('table.description')">
-          <el-input
-            v-model="selectedTable.description"
-            type="textarea"
-          />
-        </el-form-item>
-      </el-form>
 
-      <h4>{{ t('table.fields') }}</h4>
-      <el-button
-        size="small"
-        style="margin-top: 8px; margin-bottom: 10px;"
-        @click="handleAddField"
+      <el-card
+        shadow="never"
+        class="table-meta-card"
       >
-        {{ t('table.addField') }}
-      </el-button>
-      <el-table
-        :data="selectedTable.fieldDefinitions"
-        size="small"
-        border
-        row-key="__uid"
-      >
-        <el-table-column
-          width="50"
-          align="center"
-        >
-          <template #header>
-            ⇅
-          </template>
-          <template #default="{ $index }">
-            <div style="display: flex; flex-direction: column; align-items: center; gap: 2px;">
-              <el-button
-                v-if="$index > 0"
-                link
-                size="small"
-                @click="moveFieldUp($index)"
-              >
-                ↑
-              </el-button>
-              <el-button
-                v-if="$index < selectedTable.fieldDefinitions.length - 1"
-                link
-                size="small"
-                @click="moveFieldDown($index)"
-              >
-                ↓
-              </el-button>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column
-          prop="description"
-          :label="t('table.fieldDisplayName')"
-          min-width="180"
-        >
-          <template #default="{ row }">
+        <div class="table-meta-grid">
+          <div class="meta-field">
+            <label class="meta-label">{{ t('table.tableDisplayName') }}</label>
             <el-input
-              v-model="row.description"
-              size="small"
+              v-model="selectedTable.tableDisplayName"
+              @input="onTableDisplayNameInput"
             />
-          </template>
-        </el-table-column>
-        <el-table-column
-          prop="fieldName"
-          :label="t('table.fieldName')"
-          min-width="120"
-        >
-          <template #default="{ row }">
+          </div>
+          <div class="meta-field">
+            <label class="meta-label">{{ t('table.tableName') }}</label>
             <el-input
-              v-model="row.fieldName"
-              size="small"
+              v-model="selectedTable.tableName"
+              @input="onTableNameManualInput"
             />
-          </template>
-        </el-table-column>
-        <el-table-column
-          prop="dataType"
-          :label="t('table.dataType')"
-          min-width="100"
-        >
-          <template #default="{ row }">
+          </div>
+          <div class="meta-field meta-field--type">
+            <label class="meta-label">{{ t('table.tableType') }}</label>
             <el-select
-              v-model="row.dataType"
-              size="small"
+              v-model="selectedTable.tableType"
+              class="table-type-select"
             >
               <el-option
-                label="VARCHAR"
-                value="VARCHAR"
+                :label="t('table.mainTable')"
+                value="MAIN"
               />
               <el-option
-                label="INTEGER"
-                value="INTEGER"
+                :label="t('table.subTable')"
+                value="SUB"
               />
               <el-option
-                label="BIGINT"
-                value="BIGINT"
+                :label="t('table.actionTable')"
+                value="ACTION"
               />
               <el-option
-                label="DECIMAL"
-                value="DECIMAL"
-              />
-              <el-option
-                label="BOOLEAN"
-                value="BOOLEAN"
-              />
-              <el-option
-                label="DATE"
-                value="DATE"
-              />
-              <el-option
-                label="TIMESTAMP"
-                value="TIMESTAMP"
-              />
-              <el-option
-                label="TEXT"
-                value="TEXT"
-              />
-              <el-option
-                label="FILE"
-                value="FILE"
+                :label="t('table.relationTable')"
+                value="RELATION"
               />
             </el-select>
-          </template>
-        </el-table-column>
-        <el-table-column
-          prop="length"
-          :label="t('table.length')"
-          min-width="92"
-        >
-          <template #default="{ row }">
-            <el-input-number
-              v-model="row.length"
-              size="small"
-              :min="0"
-              controls-position="right"
-            />
-          </template>
-        </el-table-column>
-        <el-table-column
-          prop="nullable"
-          :label="t('table.nullable')"
-          min-width="63"
-          align="center"
-        >
-          <template #default="{ row }">
-            <el-checkbox v-model="row.nullable" />
-          </template>
-        </el-table-column>
-        <el-table-column
-          prop="isPrimaryKey"
-          :label="t('table.primaryKey')"
-          min-width="68"
-          align="center"
-        >
-          <template #default="{ row }">
-            <el-checkbox v-model="row.isPrimaryKey" />
-          </template>
-        </el-table-column>
-        <el-table-column
-          prop="defaultValue"
-          :label="t('table.defaultValue')"
-          min-width="120"
-        >
-          <template #default="{ row }">
+          </div>
+          <div class="meta-field meta-field--description">
+            <label class="meta-label">{{ t('table.description') }}</label>
             <el-input
-              v-model="row.defaultValue"
-              size="small"
-              :placeholder="t('common.inputPlaceholder')"
+              v-model="selectedTable.description"
+              type="textarea"
+              :rows="2"
+              autosize
             />
-          </template>
-        </el-table-column>
-        <el-table-column
-          v-if="hasDecimalFields"
-          prop="precision"
-          :label="t('table.precision')"
-          min-width="92"
-        >
-          <template #default="{ row }">
-            <el-input-number
-              v-if="row.dataType === 'DECIMAL'"
-              v-model="row.precision"
+          </div>
+        </div>
+      </el-card>
+
+      <el-card
+        shadow="never"
+        class="table-fields-card"
+      >
+        <div class="fields-card-header">
+          <div class="fields-header-left">
+            <h4 class="fields-title">
+              {{ t('table.fields') }}
+            </h4>
+            <el-tag
               size="small"
-              :min="1"
-              :max="38"
-              controls-position="right"
-            />
-            <span
-              v-else
-              class="text-muted"
-            >-</span>
-          </template>
-        </el-table-column>
-        <el-table-column
-          v-if="hasDecimalFields"
-          prop="scale"
-          :label="t('table.scale')"
-          min-width="92"
-        >
-          <template #default="{ row }">
-            <el-input-number
-              v-if="row.dataType === 'DECIMAL'"
-              v-model="row.scale"
-              size="small"
-              :min="0"
-              :max="20"
-              controls-position="right"
-            />
-            <span
-              v-else
-              class="text-muted"
-            >-</span>
-          </template>
-        </el-table-column>
-        <el-table-column
-          :label="t('table.operation')"
-          min-width="90"
-          align="center"
-        >
-          <template #default="{ $index }">
-            <el-button
-              link
-              type="danger"
-              @click="handleRemoveField($index)"
+              round
+              type="info"
+              effect="plain"
             >
-              {{ t('table.delete') }}
-            </el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+              {{ selectedTable.fieldDefinitions.length }}
+            </el-tag>
+            <el-tooltip
+              :content="t('table.fieldsHint')"
+              placement="top"
+            >
+              <el-icon class="fields-info-icon">
+                <InfoFilled />
+              </el-icon>
+            </el-tooltip>
+          </div>
+          <el-button
+            type="primary"
+            plain
+            size="small"
+            @click="handleAddField"
+          >
+            {{ t('table.addField') }}
+          </el-button>
+        </div>
+        <div class="table-scroll-wrap table-fields-wrap">
+          <el-table
+            :data="selectedTable.fieldDefinitions"
+            size="small"
+            stripe
+            row-key="__uid"
+            class="table-fields-grid"
+          >
+            <el-table-column
+              width="36"
+              align="center"
+              class-name="col-order"
+            >
+              <template #default="{ $index }">
+                <div class="field-order-btns">
+                  <el-button
+                    v-if="$index > 0"
+                    link
+                    size="small"
+                    class="order-btn"
+                    @click="moveFieldUp($index)"
+                  >
+                    <el-icon><CaretTop /></el-icon>
+                  </el-button>
+                  <el-button
+                    v-if="$index < selectedTable.fieldDefinitions.length - 1"
+                    link
+                    size="small"
+                    class="order-btn"
+                    @click="moveFieldDown($index)"
+                  >
+                    <el-icon><CaretBottom /></el-icon>
+                  </el-button>
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column
+              prop="displayName"
+              :label="t('table.fieldDisplayName')"
+              min-width="128"
+            >
+              <template #default="{ row, $index }">
+                <el-input
+                  v-model="row.displayName"
+                  size="small"
+                  @update:model-value="onFieldDisplayNameInput(row, $index)"
+                />
+              </template>
+            </el-table-column>
+            <el-table-column
+              prop="fieldName"
+              :label="t('table.fieldName')"
+              min-width="100"
+            >
+              <template #default="{ row }">
+                <el-input
+                  v-model="row.fieldName"
+                  size="small"
+                  @input="onFieldNameManualInput(row)"
+                />
+              </template>
+            </el-table-column>
+            <el-table-column
+              prop="dataType"
+              :label="t('table.dataType')"
+              width="100"
+            >
+              <template #default="{ row }">
+                <el-select
+                  v-model="row.dataType"
+                  size="small"
+                >
+                  <el-option
+                    label="VARCHAR"
+                    value="VARCHAR"
+                  />
+                  <el-option
+                    label="INTEGER"
+                    value="INTEGER"
+                  />
+                  <el-option
+                    label="BIGINT"
+                    value="BIGINT"
+                  />
+                  <el-option
+                    label="DECIMAL"
+                    value="DECIMAL"
+                  />
+                  <el-option
+                    label="BOOLEAN"
+                    value="BOOLEAN"
+                  />
+                  <el-option
+                    label="DATE"
+                    value="DATE"
+                  />
+                  <el-option
+                    label="TIMESTAMP"
+                    value="TIMESTAMP"
+                  />
+                  <el-option
+                    label="TEXT"
+                    value="TEXT"
+                  />
+                  <el-option
+                    label="FILE"
+                    value="FILE"
+                  />
+                </el-select>
+              </template>
+            </el-table-column>
+            <el-table-column
+              prop="length"
+              :label="t('table.length')"
+              width="88"
+            >
+              <template #default="{ row }">
+                <el-input-number
+                  v-model="row.length"
+                  size="small"
+                  :min="0"
+                  controls-position="right"
+                  class="compact-number length-number"
+                />
+              </template>
+            </el-table-column>
+            <el-table-column
+              :label="t('table.nullable')"
+              width="72"
+              align="center"
+            >
+              <template #default="{ row }">
+                <el-checkbox v-model="row.nullable" />
+              </template>
+            </el-table-column>
+            <el-table-column
+              :label="t('table.primaryKey')"
+              min-width="120"
+              align="center"
+              class-name="col-pk"
+            >
+              <template #default="{ row }">
+                <div class="constraint-cell">
+                  <el-checkbox
+                    v-model="row.isPrimaryKey"
+                    @change="(val: boolean) => onPrimaryKeyChange(row, val)"
+                  />
+                  <PkGenerationEditor
+                    v-if="row.isPrimaryKey"
+                    v-model="row.pkGeneration"
+                    :enabled="true"
+                    variant="popover"
+                  />
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column
+              :label="t('table.foreignKey')"
+              min-width="100"
+              align="center"
+            >
+              <template #default="{ row }">
+                <FieldForeignKeyEditor
+                  :is-foreign-key="row.isForeignKey"
+                  :ref-table-id="row.refTableId"
+                  :ref-primary-key-fields="row.refPrimaryKeyFields"
+                  :ref-tables="otherTables"
+                  :ref-pk-field-options="getTableFields(row.refTableId).filter(f => f.isPrimaryKey)"
+                  @update:is-foreign-key="row.isForeignKey = $event"
+                  @update:ref-table-id="row.refTableId = $event"
+                  @update:ref-primary-key-fields="row.refPrimaryKeyFields = $event"
+                />
+              </template>
+            </el-table-column>
+            <el-table-column
+              prop="defaultValue"
+              :label="t('table.defaultValue')"
+              min-width="88"
+              show-overflow-tooltip
+            >
+              <template #default="{ row }">
+                <el-input
+                  v-model="row.defaultValue"
+                  size="small"
+                  :placeholder="t('common.inputPlaceholder')"
+                />
+              </template>
+            </el-table-column>
+            <el-table-column
+              v-if="hasDecimalFields"
+              prop="precision"
+              :label="t('table.precision')"
+              width="76"
+            >
+              <template #default="{ row }">
+                <el-input-number
+                  v-if="row.dataType === 'DECIMAL'"
+                  v-model="row.precision"
+                  size="small"
+                  :min="1"
+                  :max="38"
+                  controls-position="right"
+                  class="compact-number"
+                />
+                <span
+                  v-else
+                  class="text-muted"
+                >—</span>
+              </template>
+            </el-table-column>
+            <el-table-column
+              v-if="hasDecimalFields"
+              prop="scale"
+              :label="t('table.scale')"
+              width="76"
+            >
+              <template #default="{ row }">
+                <el-input-number
+                  v-if="row.dataType === 'DECIMAL'"
+                  v-model="row.scale"
+                  size="small"
+                  :min="0"
+                  :max="20"
+                  controls-position="right"
+                  class="compact-number"
+                />
+                <span
+                  v-else
+                  class="text-muted"
+                >—</span>
+              </template>
+            </el-table-column>
+            <el-table-column
+              width="48"
+              align="center"
+              fixed="right"
+            >
+              <template #header>
+                <span class="col-header-short">&nbsp;</span>
+              </template>
+              <template #default="{ $index }">
+                <el-tooltip
+                  :content="t('table.delete')"
+                  placement="top"
+                >
+                  <el-button
+                    link
+                    type="danger"
+                    class="delete-btn"
+                    @click="handleRemoveField($index)"
+                  >
+                    <el-icon><Delete /></el-icon>
+                  </el-button>
+                </el-tooltip>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+      </el-card>
     </div>
 
     <!-- Create Table Dialog -->
@@ -423,14 +534,26 @@
     >
       <el-form
         :model="createForm"
-        label-width="100px"
+        label-width="140px"
         label-position="left"
       >
+        <el-form-item
+          :label="t('table.tableDisplayName')"
+          required
+        >
+          <el-input
+            v-model="createForm.tableDisplayName"
+            @input="onCreateTableDisplayNameInput"
+          />
+        </el-form-item>
         <el-form-item
           :label="t('table.tableName')"
           required
         >
-          <el-input v-model="createForm.tableName" />
+          <el-input
+            v-model="createForm.tableName"
+            @input="onCreateTableNameManualInput"
+          />
         </el-form-item>
         <el-form-item :label="t('table.tableType')">
           <el-select v-model="createForm.tableType">
@@ -515,108 +638,15 @@
     <el-dialog
       v-model="showRelationDialog"
       :title="t('table.relationConfig')"
-      width="800px"
+      width="80%"
+      top="6vh"
+      class="relation-diagram-dialog"
     >
-      <div class="relation-config">
-        <el-alert
-          type="info"
-          :closable="false"
-          style="margin-bottom: 16px;"
-        >
-          {{ t('table.relationConfigHint') }}
-        </el-alert>
-        
-        <div class="relation-list">
-          <div
-            v-for="(rel, index) in relations"
-            :key="index"
-            class="relation-item"
-          >
-            <el-select
-              v-model="rel.sourceTableId"
-              :placeholder="t('table.sourceTable')"
-              style="width: 150px;"
-            >
-              <el-option
-                v-for="t in store.tables"
-                :key="t.id"
-                :label="t.tableName"
-                :value="t.id"
-              />
-            </el-select>
-            <el-select
-              v-model="rel.sourceFieldName"
-              :placeholder="t('table.sourceField')"
-              style="width: 120px;" 
-              :disabled="!rel.sourceTableId"
-            >
-              <el-option
-                v-for="f in getTableFields(rel.sourceTableId)"
-                :key="f.fieldName" 
-                :label="f.fieldName"
-                :value="f.fieldName"
-              />
-            </el-select>
-            <el-select
-              v-model="rel.relationType"
-              :placeholder="t('table.relationType')"
-              style="width: 120px;"
-            >
-              <el-option
-                :label="t('table.oneToOne')"
-                value="ONE_TO_ONE"
-              />
-              <el-option
-                :label="t('table.oneToMany')"
-                value="ONE_TO_MANY"
-              />
-              <el-option
-                :label="t('table.manyToMany')"
-                value="MANY_TO_MANY"
-              />
-            </el-select>
-            <el-select
-              v-model="rel.targetTableId"
-              :placeholder="t('table.targetTable')"
-              style="width: 150px;"
-            >
-              <el-option
-                v-for="t in store.tables"
-                :key="t.id"
-                :label="t.tableName"
-                :value="t.id"
-              />
-            </el-select>
-            <el-select
-              v-model="rel.targetFieldName"
-              :placeholder="t('table.targetField')"
-              style="width: 120px;"
-              :disabled="!rel.targetTableId"
-            >
-              <el-option
-                v-for="f in getTableFields(rel.targetTableId)"
-                :key="f.fieldName" 
-                :label="f.fieldName"
-                :value="f.fieldName"
-              />
-            </el-select>
-            <el-button
-              link
-              type="danger"
-              @click="removeRelation(index)"
-            >
-              <el-icon><Delete /></el-icon>
-            </el-button>
-          </div>
-        </div>
-        
-        <el-button
-          style="margin-top: 12px;"
-          @click="addRelation"
-        >
-          <el-icon><Plus /></el-icon> {{ t('table.addRelation') }}
-        </el-button>
-      </div>
+      <RelationDiagramEditor
+        v-if="showRelationDialog"
+        v-model="relations"
+        :tables="store.tables"
+      />
       <template #footer>
         <el-button @click="showRelationDialog = false">
           {{ t('common.cancel') }}
@@ -633,15 +663,25 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, Delete, Plus, Refresh } from '@element-plus/icons-vue'
+import { ArrowLeft, Refresh, InfoFilled, CaretTop, CaretBottom, Delete } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
 import { functionUnitApi, type TableDefinition, type FieldDefinition, type ForeignKeyDTO } from '@/api/functionUnit'
-import draggable from 'vuedraggable'
+import { suggestFieldName, suggestTableName } from '@/utils/fieldNameSlug'
+import RelationDiagramEditor from '@/components/designer/RelationDiagramEditor.vue'
+import PkGenerationEditor from '@/components/designer/PkGenerationEditor.vue'
+import FieldForeignKeyEditor from '@/components/designer/FieldForeignKeyEditor.vue'
+import { serializePkGeneration } from '@/utils/pkGenerationConfig'
 
 const { t } = useI18n()
+
+type FieldRow = FieldDefinition & {
+  __uid?: number
+  fieldNameTouched?: boolean
+  autoFieldName?: string
+}
 
 interface TableRelation {
   id?: number
@@ -657,12 +697,14 @@ const props = defineProps<{ functionUnitId: number }>()
 const store = useFunctionUnitStore()
 const loading = ref(false)
 const selectedTable = ref<TableDefinition | null>(null)
+const tableNameTouched = ref(false)
 const showCreateDialog = ref(false)
 const showDDLDialog = ref(false)
 const showRelationDialog = ref(false)
 const ddlDialect = ref('POSTGRESQL')
 const ddlContent = ref('')
-const createForm = reactive({ tableName: '', tableType: 'MAIN', description: '' })
+const createForm = reactive({ tableName: '', tableDisplayName: '', tableType: 'MAIN', description: '' })
+const createTableNameTouched = ref(false)
 const relations = ref<TableRelation[]>([])
 const foreignKeys = ref<ForeignKeyDTO[]>([])
 const importing = ref(false)
@@ -672,6 +714,11 @@ const NAME_REGEX = /^[a-zA-Z][a-zA-Z0-9_]*$/
 
 const hasDecimalFields = computed(() => {
   return selectedTable.value?.fieldDefinitions?.some(f => f.dataType === 'DECIMAL') ?? false
+})
+
+const otherTables = computed(() => {
+  const currentId = selectedTable.value?.id
+  return store.tables.filter(t => t.id !== currentId)
 })
 
 function validateName(name: string): boolean {
@@ -711,7 +758,7 @@ async function loadTables() {
       if (updatedTable) {
         selectedTable.value = { 
           ...updatedTable, 
-          fieldDefinitions: [...(updatedTable.fieldDefinitions || []).map(f => ({ ...f }))] 
+          fieldDefinitions: [...(updatedTable.fieldDefinitions || []).map(f => normalizeFieldRow(f))] 
         }
         console.log('[TableDesigner] Updated selected table with', selectedTable.value.fieldDefinitions?.length || 0, 'fields')
       }
@@ -739,28 +786,143 @@ async function loadRelations() {
   }
 }
 
-function handleSelectTable(row: TableDefinition) {
-  selectedTable.value = { 
-    ...row, 
-    fieldDefinitions: [...(row.fieldDefinitions || []).map(f => ({ ...f }))] 
+function existingTableNames(excludeId?: number): string[] {
+  return store.tables
+    .filter(t => t.id !== excludeId)
+    .map(t => t.tableName)
+    .filter(Boolean)
+}
+
+function onTableDisplayNameInput() {
+  if (!selectedTable.value || tableNameTouched.value) return
+  selectedTable.value.tableName = suggestTableName(
+    selectedTable.value.tableDisplayName || '',
+    existingTableNames(selectedTable.value.id),
+  )
+}
+
+function onTableNameManualInput() {
+  tableNameTouched.value = true
+}
+
+async function assertTableNameAvailable(tableName: string, excludeTableId?: number): Promise<boolean> {
+  const trimmed = tableName?.trim()
+  if (!trimmed) return false
+  try {
+    const res = await functionUnitApi.checkTableNameAvailable(props.functionUnitId, trimmed, excludeTableId)
+    if (!res?.data?.available) {
+      ElMessage.warning(t('table.nameAlreadyExists', { name: trimmed }))
+      return false
+    }
+    return true
+  } catch {
+    ElMessage.error(t('common.error'))
+    return false
   }
+}
+
+function handleSelectTable(row: TableDefinition) {
+  tableNameTouched.value = !!row.id
+  selectedTable.value = {
+    ...row,
+    fieldDefinitions: [...(row.fieldDefinitions || []).map(f => normalizeFieldRow(f))],
+  }
+}
+
+function existingFieldNames(excludeIndex?: number): string[] {
+  if (!selectedTable.value) return []
+  return selectedTable.value.fieldDefinitions
+    .map((f, i) => (excludeIndex === i ? '' : f.fieldName))
+    .filter(Boolean)
+}
+
+let _fieldUidCounter = 0
+let _autoSyncingFieldName = false
+
+function normalizeFieldRow(f: FieldDefinition): FieldRow {
+  const row = { ...f } as FieldRow
+  row.__uid = row.__uid ?? ++_fieldUidCounter
+  row.autoFieldName = row.fieldName || suggestFieldName(row.displayName || '', [])
+  // Only lock auto-generation when the field already has a persisted technical name.
+  row.fieldNameTouched = !!(row.id && row.fieldName?.trim())
+  row.isForeignKey = row.isForeignKey || false
+  row.refPrimaryKeyFields = row.refPrimaryKeyFields || []
+  row.fkDisplayMode = row.fkDisplayMode || 'readonly'
+  row.pkGeneration = row.pkGeneration ?? row.pkGenerationJson
+  if (row.isPrimaryKey && !row.pkGeneration) {
+    row.pkGeneration = { strategy: 'uuid' }
+  }
+  return row
+}
+
+function onPrimaryKeyChange(row: FieldRow, checked: boolean) {
+  if (!checked) {
+    row.pkGeneration = undefined
+    return
+  }
+  if (!row.pkGeneration) {
+    row.pkGeneration = { strategy: 'uuid' }
+  }
+}
+
+function onFieldDisplayNameInput(row: FieldRow, index: number) {
+  if (row.fieldNameTouched) return
+  const suggested = suggestFieldName(row.displayName || '', existingFieldNames(index))
+  _autoSyncingFieldName = true
+  row.fieldName = suggested
+  row.autoFieldName = suggested
+  nextTick(() => {
+    _autoSyncingFieldName = false
+  })
+}
+
+function onFieldNameManualInput(row: FieldRow) {
+  if (_autoSyncingFieldName) return
+  row.fieldNameTouched = !!row.fieldName?.trim()
+}
+
+function resetCreateForm() {
+  Object.assign(createForm, { tableName: '', tableDisplayName: '', tableType: 'MAIN', description: '' })
+  createTableNameTouched.value = false
+}
+
+function openCreateDialog() {
+  resetCreateForm()
+  showCreateDialog.value = true
+}
+
+function onCreateTableDisplayNameInput() {
+  if (createTableNameTouched.value) return
+  createForm.tableName = suggestTableName(createForm.tableDisplayName || '', existingTableNames())
+}
+
+function onCreateTableNameManualInput() {
+  createTableNameTouched.value = true
 }
 
 function handleBackToList() {
   selectedTable.value = null
+  tableNameTouched.value = false
 }
 
 async function handleCreateTable() {
+  if (!createForm.tableDisplayName?.trim()) {
+    ElMessage.warning(t('table.displayNameRequired'))
+    return
+  }
   // Validate table name
   if (!validateName(createForm.tableName)) {
     ElMessage.warning(t('table.invalidTableName'))
+    return
+  }
+  if (!await assertTableNameAvailable(createForm.tableName)) {
     return
   }
   try {
     await store.createTable(props.functionUnitId, createForm)
     ElMessage.success(t('functionUnit.createSuccess'))
     showCreateDialog.value = false
-    Object.assign(createForm, { tableName: '', tableType: 'MAIN', description: '' })
+    resetCreateForm()
     loadTables()
   } catch (e: any) {
     ElMessage.error(e.response?.data?.message || t('common.error'))
@@ -772,6 +934,9 @@ async function handleSaveTable() {
   // Validate table name
   if (!validateName(selectedTable.value.tableName)) {
     ElMessage.warning(t('table.invalidTableName'))
+    return
+  }
+  if (!await assertTableNameAvailable(selectedTable.value.tableName, selectedTable.value.id)) {
     return
   }
   // Validate field names
@@ -815,7 +980,13 @@ async function handleSaveTable() {
         nullable: f.nullable !== undefined ? f.nullable : true,
         defaultValue: f.defaultValue,
         isPrimaryKey: f.isPrimaryKey || false,
-        description: f.description,
+        displayName: f.displayName,
+        isForeignKey: f.isForeignKey || false,
+        refTableId: f.refTableId,
+        refPrimaryKeyFields: f.refPrimaryKeyFields,
+        pkGeneration: serializePkGeneration(f.pkGeneration, f.isPrimaryKey),
+        fkDisplayMode: f.fkDisplayMode || 'readonly',
+        relationCardinality: f.relationCardinality,
         sortOrder: index
       }))
     
@@ -845,7 +1016,7 @@ async function handleSaveTable() {
     if (result) {
       selectedTable.value = { 
         ...result, 
-        fieldDefinitions: [...(result.fieldDefinitions || []).map(f => ({ ...f }))] 
+        fieldDefinitions: [...(result.fieldDefinitions || []).map(f => normalizeFieldRow(f))] 
       }
       console.log('[TableDesigner] Updated selected table after save with', selectedTable.value.fieldDefinitions?.length || 0, 'fields')
     } else {
@@ -907,7 +1078,7 @@ function handleExportTable(row: TableDefinition) {
       nullable: f.nullable,
       isPrimaryKey: f.isPrimaryKey,
       defaultValue: f.defaultValue,
-      description: f.description,
+      displayName: f.displayName,
     })),
   }
   const json = JSON.stringify(template, null, 2)
@@ -946,6 +1117,9 @@ async function handleImportFile(event: Event) {
       ElMessage.warning(t('table.invalidTableName'))
       return
     }
+    if (!await assertTableNameAvailable(template.tableName)) {
+      return
+    }
     if (!template.fieldDefinitions || !Array.isArray(template.fieldDefinitions)) {
       ElMessage.warning(t('table.importNoFields'))
       return
@@ -968,7 +1142,8 @@ async function handleImportFile(event: Event) {
           nullable: f.nullable !== undefined ? f.nullable : true,
           defaultValue: f.defaultValue,
           isPrimaryKey: f.isPrimaryKey || false,
-          description: f.description,
+          displayName: f.displayName,
+          pkGeneration: serializePkGeneration(f.pkGeneration, f.isPrimaryKey),
           sortOrder: index,
         })),
     }
@@ -993,18 +1168,21 @@ async function handleImportFile(event: Event) {
   }
 }
 
-let _fieldUid = 0
 function handleAddField() {
   if (!selectedTable.value) return
   selectedTable.value.fieldDefinitions.push({
-    __uid: ++_fieldUid,
+    __uid: ++_fieldUidCounter,
     fieldName: '',
     dataType: 'VARCHAR',
     length: 255,
     nullable: true,
     isPrimaryKey: false,
-    description: ''
-  })
+    isForeignKey: false,
+    refPrimaryKeyFields: [],
+    fkDisplayMode: 'readonly',
+    displayName: '',
+    fieldNameTouched: false,
+  } as FieldRow)
 }
 
 function handleRemoveField(index: number) {
@@ -1064,20 +1242,6 @@ function handleCopyDDL() {
   ElMessage.success(t('common.success'))
 }
 
-function addRelation() {
-  relations.value.push({
-    sourceTableId: null,
-    sourceFieldName: '',
-    relationType: 'ONE_TO_MANY',
-    targetTableId: null,
-    targetFieldName: ''
-  })
-}
-
-function removeRelation(index: number) {
-  relations.value.splice(index, 1)
-}
-
 async function handleSaveRelations() {
   // Validate relations
   const validRelations = relations.value.filter(r => 
@@ -1090,6 +1254,8 @@ async function handleSaveRelations() {
     relations.value = res?.data || validRelations
     ElMessage.success(t('common.success'))
     showRelationDialog.value = false
+    // Refresh tables so PK/FK badges reflect the applied field metadata
+    loadTables()
   } catch (e: any) {
     ElMessage.error(e.response?.data?.message || t('common.error'))
   }
@@ -1101,19 +1267,67 @@ onMounted(loadTables)
 <style lang="scss" scoped>
 .table-designer {
   min-height: 400px;
-  
-  // 确保表格内容不折行
-  :deep(.el-table) {
-    .el-table__cell {
-      white-space: nowrap;
-    }
+  width: 100%;
+  min-width: 0;
+}
+
+.table-meta-card {
+  margin-bottom: 12px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+
+  :deep(.el-card__body) {
+    padding: 16px 20px;
   }
 }
 
-.table-list {
-  // 为表格列表添加水平滚动
-  :deep(.el-table) {
-    overflow-x: auto;
+.table-meta-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) minmax(180px, 220px);
+  gap: 14px 20px;
+  align-items: start;
+}
+
+.meta-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.meta-field--description {
+  grid-column: 1 / -1;
+}
+
+.meta-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--el-text-color-secondary);
+  line-height: 1.2;
+}
+
+.table-type-select {
+  width: 100%;
+}
+
+@media (max-width: 960px) {
+  .table-meta-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .meta-field--type {
+    grid-column: 1 / -1;
+    max-width: 280px;
+  }
+}
+
+@media (max-width: 640px) {
+  .table-meta-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .meta-field--type {
+    max-width: none;
   }
 }
 
@@ -1121,40 +1335,170 @@ onMounted(loadTables)
   display: flex;
   gap: 10px;
   margin-bottom: 16px;
+  flex-wrap: wrap;
 }
 
 .editor-header {
   display: flex;
   align-items: center;
-  gap: 16px;
-  margin-bottom: 20px;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: var(--el-fill-color-lighter);
+  border: 1px solid var(--el-border-color-extra-light);
+  border-radius: 8px;
+}
+
+.editor-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.back-btn {
+  padding-left: 4px;
+  padding-right: 8px;
+  flex-shrink: 0;
+}
+
+.editor-header-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .table-name {
-  font-size: 18px;
-  font-weight: bold;
-  flex: 1;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.table-editor {
+  min-width: 0;
+}
+
+.table-fields-wrap {
+  margin-top: 0;
+}
+
+.table-fields-card {
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+
+  :deep(.el-card__body) {
+    padding: 16px;
+  }
+}
+
+.fields-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.fields-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.fields-info-icon {
+  font-size: 14px;
+  color: var(--el-text-color-secondary);
+  cursor: help;
+}
+
+.fields-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.col-header-short {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.table-fields-grid {
+  :deep(.el-table__header th) {
+    background: var(--el-fill-color-light);
+    font-size: 12px;
+    padding: 6px 0;
+  }
+
+  :deep(.el-table__cell) {
+    vertical-align: middle;
+    padding: 6px 0;
+  }
+
+  :deep(.col-pk .cell),
+  :deep(.col-order .cell) {
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+
+  :deep(.el-input-number.compact-number) {
+    width: 100%;
+  }
+
+  :deep(.el-input-number.length-number) {
+    width: 72px;
+
+    .el-input__wrapper {
+      padding-left: 6px;
+      padding-right: 24px;
+    }
+  }
+}
+
+.constraint-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  flex-wrap: nowrap;
+}
+
+.field-order-btns {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+}
+
+.order-btn {
+  height: 16px;
+  padding: 0;
+  margin: 0;
+
+  .el-icon {
+    font-size: 12px;
+  }
+}
+
+.delete-btn {
+  padding: 4px;
 }
 
 .text-muted {
-  color: #909399;
+  color: var(--el-text-color-placeholder);
   font-size: 12px;
 }
 
-.relation-config {
-  .relation-list {
-    max-height: 350px;
-    overflow-y: auto;
-  }
-  
-  .relation-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px;
-    margin-bottom: 8px;
-    background: #f5f7fa;
-    border-radius: 4px;
-  }
+.table-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 </style>

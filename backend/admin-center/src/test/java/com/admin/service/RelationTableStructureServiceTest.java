@@ -55,6 +55,11 @@ class RelationTableStructureServiceTest {
     @InjectMocks
     private RelationTableStructureServiceImpl service;
 
+    private void stubNoDwTableNameConflict() {
+        when(jdbcTemplate.queryForObject(contains("dw_table_definitions"), eq(Integer.class), anyString()))
+                .thenReturn(0);
+    }
+
     private RelationTableDefinition buildTableDefinition(Long id, String tableName) {
         RelationTableDefinition table = RelationTableDefinition.builder()
                 .id(id)
@@ -101,6 +106,7 @@ class RelationTableStructureServiceTest {
             CreateRelationTableRequest request = buildCreateRequest("test_table");
 
             when(tableDefinitionRepository.existsByTableName("test_table")).thenReturn(false);
+            stubNoDwTableNameConflict();
             when(tableDefinitionRepository.save(any(RelationTableDefinition.class)))
                     .thenAnswer(inv -> {
                         RelationTableDefinition saved = inv.getArgument(0);
@@ -167,6 +173,7 @@ class RelationTableStructureServiceTest {
                     .build();
 
             when(tableDefinitionRepository.existsByTableName("multi_field_table")).thenReturn(false);
+            stubNoDwTableNameConflict();
             when(tableDefinitionRepository.save(any(RelationTableDefinition.class)))
                     .thenAnswer(inv -> {
                         RelationTableDefinition saved = inv.getArgument(0);
@@ -231,7 +238,8 @@ class RelationTableStructureServiceTest {
             RelationTableDefinition existing = buildTableDefinition(1L, "old_name");
 
             when(tableDefinitionRepository.findById(1L)).thenReturn(Optional.of(existing));
-            when(tableDefinitionRepository.existsByTableName("new_name")).thenReturn(false);
+            when(tableDefinitionRepository.existsByTableNameAndIdNot("new_name", 1L)).thenReturn(false);
+            stubNoDwTableNameConflict();
             when(tableDefinitionRepository.save(any(RelationTableDefinition.class)))
                     .thenAnswer(inv -> inv.getArgument(0));
 
@@ -250,7 +258,7 @@ class RelationTableStructureServiceTest {
             RelationTableDefinition existing = buildTableDefinition(1L, "old_name");
 
             when(tableDefinitionRepository.findById(1L)).thenReturn(Optional.of(existing));
-            when(tableDefinitionRepository.existsByTableName("taken_name")).thenReturn(true);
+            when(tableDefinitionRepository.existsByTableNameAndIdNot("taken_name", 1L)).thenReturn(true);
 
             UpdateRelationTableRequest request = UpdateRelationTableRequest.builder()
                     .tableName("taken_name")

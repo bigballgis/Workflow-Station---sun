@@ -1,0 +1,189 @@
+/**
+ * Regression: assignment task (Activity_0hwtl8v) load pipeline must not throw
+ * "n.has is not a function" during sub-table layout sync / hydration.
+ */
+import { describe, expect, it } from 'vitest'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import {
+  collectPlacedSubTableBindingIds,
+  collectSubTableFieldsFromLayout,
+  ensureSubTableBindingsOnFormLayout,
+  extractFieldsRecursive,
+  legacyBindingIdAliases,
+  mergeMissingSubTableFieldsIntoLayout,
+  parseFormRulesLayout,
+} from '@/components/formRendererHelpers'
+import {
+  applySharedAttachmentFinalizeAndMaterialize,
+  buildBindingIdToRelationTableIdMap,
+  coerceSubTablesVariableToMap,
+  enrichChildBindingRowsFromParentsNestedSubTables,
+  finalizeSharedProcessSubTableBindingRows,
+  flattenNestedSubTableRowsIntoPayload,
+  hydrateBindingsRowsFromVariablesBySharedRelationTableId,
+  hydrateChildSubTablesFromParentsNestedRows,
+  isMiDashboardSubTableBinding,
+  mergeAllSlicesForSharedProcessSubTableBinding,
+  resolveSubTableRowsForBinding,
+} from '@/composables/tasks/shared'
+
+function bindingIdsPreferStrictSubTableLookup(
+  bindings: Array<{ bindingId: number; tableId?: number | null; tableName: string; physicalTableName?: string }>,
+): Set<number> {
+  const ambiguous = new Set<number>()
+  if (!Array.isArray(bindings) || bindings.length <= 1) return ambiguous
+  const normalize = (name?: string) => String(name || '').trim().toLowerCase()
+  const buckets = new Map<string, Set<number>>()
+  const bump = (key: string, bid: number) => {
+    const nk = normalize(key)
+    if (!nk) return
+    let s = buckets.get(nk)
+    if (!s) {
+      s = new Set()
+      buckets.set(nk, s)
+    }
+    s.add(bid)
+  }
+  for (const b of bindings) {
+    bump(b.tableName, b.bindingId)
+    if (typeof b.physicalTableName === 'string' && b.physicalTableName.trim())
+      bump(b.physicalTableName, b.bindingId)
+    if (b.tableId != null && Number.isFinite(Number(b.tableId))) {
+      bump(`__rtid:${Number(b.tableId)}`, b.bindingId)
+    }
+  }
+  for (const s of buckets.values()) {
+    if (s.size > 1) {
+      for (const id of s) ambiguous.add(id)
+    }
+  }
+  return ambiguous
+}
+
+function loadFuContent(): any {
+  const p = path.join(os.tmpdir(), 'fu2.json')
+  const raw = JSON.parse(fs.readFileSync(p, 'utf8'))
+  return raw.data ?? raw
+}
+
+function loadTaskVariables(): Record<string, unknown> {
+  const p = path.join(os.tmpdir(), 'task.json')
+  const raw = JSON.parse(fs.readFileSync(p, 'utf8'))
+  return (raw.data ?? raw).variables as Record<string, unknown>
+}
+
+describe('assignment task layout sync (Process_1_KK / Activity_0hwtl8v)', () => {
+  it('hydration + layout sync pipeline completes without TypeError', () => {
+    const content = loadFuContent()
+    const variables = loadTaskVariables()
+    const assignForm = content.forms.find((f: { name: string }) => f.name === 'Assign Task')
+    expect(assignForm).toBeTruthy()
+
+    const cfg = typeof assignForm.data === 'string' ? JSON.parse(assignForm.data) : assignForm.data
+    const layout = parseFormRulesLayout(cfg.rule, items => extractFieldsRecursive(items))
+    const fuSubTables = collectSubTableFieldsFromLayout(layout.fields, layout.tabs, layout.fieldsAfterTabs)
+    const placed = collectPlacedSubTableBindingIds(layout.fields, layout.tabs, layout.fieldsAfterTabs)
+    expect(placed.has(66)).toBe(true)
+    expect(placed.has(103)).toBe(true)
+
+    const nativeIds = (assignForm.tableBindings || [])
+      .filter((b: { bindingType: string }) => b.bindingType !== 'PRIMARY')
+      .map((b: { bindingId: number }) => Number(b.bindingId))
+      .filter((n: number) => Number.isFinite(n))
+
+    const bindings: any[] = []
+    for (const b of assignForm.tableBindings || []) {
+      if (b.bindingType === 'PRIMARY') continue
+      bindings.push({
+        bindingId: b.bindingId,
+        tableId: b.tableId ?? null,
+        bindingType: b.bindingType,
+        bindingMode: b.bindingMode,
+        foreignKeyField: b.foreignKeyField ?? null,
+        tableName: b.tableDisplayName || b.tableName,
+        physicalTableName: b.tableName,
+        columns:
+          cfg.subListViews?.[String(b.bindingId)]?.columns?.map((c: { fieldName: string; displayName?: string }) => ({
+            field: c.fieldName,
+            label: c.displayName || c.fieldName,
+            type: 'text',
+          })) ?? [],
+        primaryKeyFields: b.primaryKeyFields ?? null,
+        data: [],
+      })
+    }
+
+    const rtMap = buildBindingIdToRelationTableIdMap(content.forms)
+    const savedMap = coerceSubTablesVariableToMap(variables.__subTables__)
+    expect(savedMap).toBeTruthy()
+    const flattened = structuredClone(savedMap) as Record<string, unknown>
+    flattenNestedSubTableRowsIntoPayload(flattened)
+
+    const ambiguous = bindingIdsPreferStrictSubTableLookup(bindings)
+    for (const binding of bindings) {
+      const saved = resolveSubTableRowsForBinding(flattened, binding, {
+        forbidNameFallback: ambiguous.has(binding.bindingId),
+        bindingTableById: rtMap,
+        mergeSiblingSlices: isMiDashboardSubTableBinding(binding),
+      })
+      if (saved?.length) binding.data = [...saved]
+    }
+
+    hydrateChildSubTablesFromParentsNestedRows(bindings, flattened, rtMap)
+    hydrateBindingsRowsFromVariablesBySharedRelationTableId(bindings, flattened, rtMap)
+    enrichChildBindingRowsFromParentsNestedSubTables(bindings)
+
+    for (const binding of bindings) {
+      if (isMiDashboardSubTableBinding(binding)) {
+        const merged = mergeAllSlicesForSharedProcessSubTableBinding(flattened, binding, rtMap)
+        if (merged.length > 0) binding.data = merged
+      } else if (Array.isArray(binding.data)) {
+        binding.data = finalizeSharedProcessSubTableBindingRows(binding.data, binding)
+      }
+    }
+    applySharedAttachmentFinalizeAndMaterialize(bindings, variables, {
+      flattened,
+      bindingTableById: rtMap,
+    })
+
+    // binding 66 should resolve rows from sibling key 64 (incl. assignee from initiator slice)
+    const subTask = bindings.find(b => b.bindingId === 66)
+    expect(subTask?.data?.length).toBe(3)
+    expect(subTask?.data?.[0]?.assignee).toBeTruthy()
+    expect(subTask?.data?.[0]?.assignee_display_name).toBe('Developer Tester')
+
+    // taskNativeSubTableBindings filter logic
+    const nativeIdSet = new Set(nativeIds.map(Number).filter(Number.isFinite))
+    const taskNative = bindings.filter(b => {
+      if (b.bindingType === 'PRIMARY') return false
+      const bid = Number(b.bindingId)
+      const isNative =
+        nativeIdSet.has(bid) || legacyBindingIdAliases(bid).some(alias => nativeIdSet.has(alias))
+      const isPlaced = legacyBindingIdAliases(bid).some(alias => placed.has(alias))
+      if (!isNative && !isPlaced) return false
+      return (b.columns?.length ?? 0) > 0 || (b.data?.length ?? 0) > 0
+    })
+    expect(taskNative.map((b: { bindingId: number }) => b.bindingId).sort((a, c) => a - c)).toEqual([66, 103])
+
+    // syncFormLayoutWithSubTableBindings equivalent
+    const layoutBuckets = {
+      fields: [...layout.fields],
+      tabs: [...layout.tabs],
+      fieldsAfterTabs: [...layout.fieldsAfterTabs],
+    }
+    const activeIds = new Set(bindings.map((b: { bindingId: number }) => Number(b.bindingId)).filter(Number.isFinite))
+    mergeMissingSubTableFieldsIntoLayout(layoutBuckets, fuSubTables, activeIds)
+    ensureSubTableBindingsOnFormLayout(layoutBuckets, bindings, cfg)
+
+    const placedAfter = collectPlacedSubTableBindingIds(
+      layoutBuckets.fields,
+      layoutBuckets.tabs,
+      layoutBuckets.fieldsAfterTabs,
+    )
+    // Design parity: Sub Task / Attachment stay inside Title card in FormRenderer layout
+    expect(placedAfter.has(66)).toBe(true)
+    expect(placedAfter.has(103)).toBe(true)
+  })
+})

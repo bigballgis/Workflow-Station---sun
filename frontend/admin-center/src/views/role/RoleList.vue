@@ -68,9 +68,9 @@
       >
         <template #default="{ row }">
           <el-tooltip
-            :content="row.description || '-'"
+            :content="row.displayName || '-'"
             placement="top-start"
-            :disabled="!row.description"
+            :disabled="!row.displayName"
             popper-class="role-desc-tooltip"
           >
             <span style="cursor: default">{{ row.name }}</span>

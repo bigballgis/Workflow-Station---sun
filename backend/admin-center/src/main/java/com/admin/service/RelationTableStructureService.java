@@ -48,4 +48,9 @@ public interface RelationTableStructureService {
      * 切换门户可见性
      */
     RelationTableResponse togglePortalVisibility(Long id, Boolean portalVisible);
+
+    /**
+     * Check whether a table name is available platform-wide (RT + DW).
+     */
+    boolean isTableNameAvailable(String tableName, Long excludeTableId);
 }

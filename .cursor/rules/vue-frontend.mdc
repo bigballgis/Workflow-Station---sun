@@ -50,3 +50,7 @@ src/
 - 禁止 `v-html` 未经 DOMPurify 净化
 - 禁止 `any` 类型
 - 构建使用 `vite build`，Docker 必须用 `Dockerfile.local`
+
+## UI 截图验证
+
+改动可见页面后 MUST 跑 Playwright 截图（见 `frontend-screenshot-verification.mdc`）：`cd frontend && npm run verify:screenshot -- --app portal --url ... --name ...`

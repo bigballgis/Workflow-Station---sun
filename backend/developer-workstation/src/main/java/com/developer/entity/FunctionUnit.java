@@ -41,8 +41,8 @@ public class FunctionUnit {
     @Column(name = "name", nullable = false, unique = true, length = 100)
     private String name;
     
-    @Column(name = "description", columnDefinition = "TEXT")
-    private String description;
+    @Column(name = "display_name", columnDefinition = "TEXT")
+    private String displayName;
     
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "icon_id")

@@ -36,6 +36,7 @@ import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
@@ -214,12 +215,18 @@ public class TaskQueryComponent {
                 runWithInheritedRequestAndSecurity(ctx, attrs, () -> queryDelegatedTasks(userId)))
                 : CompletableFuture.completedFuture(Collections.emptyList());
 
+        long __tF0 = System.nanoTime();
         List<TaskInfo> engineTasks = engineAllFuture.join();
         List<TaskInfo> delegated = delegatedFuture.join();
+        long __tFJoin = System.nanoTime();
 
         List<TaskInfo> allTasks = new ArrayList<>(engineTasks);
         allTasks.addAll(delegated);
         allTasks = applyPortalPostEngineFilters(userId, allTasks);
+        long __tFFilter = System.nanoTime();
+        log.info("[PERF] query.fullScan parallel(engineAllPages+delegated)={}ms postFilter={}ms engineTasks={} delegated={} merged={}",
+                (__tFJoin - __tF0) / 1_000_000L, (__tFFilter - __tFJoin) / 1_000_000L,
+                engineTasks.size(), delegated.size(), allTasks.size());
         allTasks = applyFilters(allTasks, request);
         allTasks = applySorting(allTasks, request);
         int start = page * size;
@@ -246,13 +253,18 @@ public class TaskQueryComponent {
         List<TaskInfo> engineTasks = new ArrayList<>();
         long engineTotal = 0L;
         try {
+            long __tw0 = System.nanoTime();
             List<String> groupIds = getUserVirtualGroups(userId);
             groupIds = filterVirtualGroupsForActiveWorkspace(userId, groupIds);
+            long __twVg = System.nanoTime();
             boolean includeGroups = assignmentTypes == null || assignmentTypes.isEmpty()
                     || assignmentTypes.contains("VIRTUAL_GROUP");
             Optional<Map<String, Object>> result = includeGroups
                     ? workflowEngineClient.getUserAllVisibleTasks(userId, groupIds, Collections.emptyList(), page, size)
                     : workflowEngineClient.getUserTasks(userId, page, size);
+            log.info("[PERF] engineWindow vgroups={}ms engineHttp={}ms groupCount={} includeGroups={}",
+                    (__twVg - __tw0) / 1_000_000L, (System.nanoTime() - __twVg) / 1_000_000L,
+                    groupIds != null ? groupIds.size() : 0, includeGroups);
             if (result.isPresent()) {
                 Map<String, Object> responseBody = result.get();
                 engineTotal = extractEngineTotalCount(responseBody);
@@ -300,14 +312,20 @@ public class TaskQueryComponent {
                 runWithInheritedRequestAndSecurity(ctx, attrs, () -> queryDelegatedTasks(userId)))
                 : CompletableFuture.completedFuture(Collections.emptyList());
 
+        long __tQ0 = System.nanoTime();
         EngineWindowResult engineResult = engineFuture.join();
         List<TaskInfo> engineTasks = engineResult.tasks();
         long engineTotal = engineResult.engineTotal();
         List<TaskInfo> delegated = delegatedFuture.join();
+        long __tQJoin = System.nanoTime();
 
         List<TaskInfo> allTasks = new ArrayList<>(engineTasks);
         allTasks.addAll(delegated);
         allTasks = applyPortalPostEngineFilters(userId, allTasks);
+        long __tQFilter = System.nanoTime();
+        log.info("[PERF] query.window parallel(engine+delegated)={}ms postFilter={}ms engineTasks={} delegated={} merged={}",
+                (__tQJoin - __tQ0) / 1_000_000L, (__tQFilter - __tQJoin) / 1_000_000L,
+                engineTasks.size(), delegated.size(), allTasks.size());
         allTasks = applySorting(allTasks, request);
 
         int start = page * size;
@@ -781,7 +799,9 @@ public class TaskQueryComponent {
         log.debug("Workflow engine is available, calling getTaskById");
         
         try {
+            long __tEngine = System.nanoTime();
             Optional<Map<String, Object>> result = workflowEngineClient.getTaskById(taskId);
+            log.info("[PERF] detail.getTaskById(engine) took {} ms", (System.nanoTime() - __tEngine) / 1_000_000L);
             log.debug("Got result from workflow engine: {}", result.isPresent());
             
             if (result.isPresent()) {
@@ -813,8 +833,12 @@ public class TaskQueryComponent {
                                 mergePortalProcessVariablesPreferringFlowableMiElementItem(
                                         merged, taskInfo.getVariables(), pi.getVariables());
                                 enrichMissingParticipantRowIdsInSubTables(merged);
+                                long __tEnrich = System.nanoTime();
                                 processComponent.enrichSubTablesVariablesFromPhysicalTables(processInstanceId, merged);
+                                log.info("[PERF] detail.enrichSubTables took {} ms", (System.nanoTime() - __tEnrich) / 1_000_000L);
+                                long __tPart = System.nanoTime();
                                 enrichParticipantAssignmentData(merged);
+                                log.info("[PERF] detail.enrichParticipantAssignmentData took {} ms", (System.nanoTime() - __tPart) / 1_000_000L);
                                 taskInfo.setVariables(merged);
                                 log.debug("Merged variables from local DB for process {}, keys: {}", 
                                     processInstanceId, merged.keySet());
@@ -827,7 +851,9 @@ public class TaskQueryComponent {
                     Object rawActionIds = data.get("actionIds");
                     if (rawActionIds != null) {
                         try {
+                            long __tActions = System.nanoTime();
                             List<TaskActionInfo> actions = taskActionService.getTaskActions(taskId);
+                            log.info("[PERF] detail.getTaskActions took {} ms", (System.nanoTime() - __tActions) / 1_000_000L);
                             log.debug("Got {} actions from TaskActionService", actions != null ? actions.size() : 0);
                             taskInfo.setActions(actions != null ? actions : Collections.emptyList());
                         } catch (Exception e) {
@@ -1100,7 +1126,31 @@ public class TaskQueryComponent {
      * Retrieved via workflow-engine-core calling admin-center.
      */
     @SuppressWarnings("unchecked")
+    private static final long VIRTUAL_GROUPS_CACHE_TTL_MS = 30_000L;
+    private final Map<String, VirtualGroupsCacheEntry> virtualGroupsCache = new ConcurrentHashMap<>();
+
+    private record VirtualGroupsCacheEntry(List<String> groupIds, long timestampMs) {}
+
+    /**
+     * A user's virtual-group membership changes rarely, but every To Do refresh resolves it via a
+     * portal→engine→admin-center triple-hop ({@link WorkflowEngineClient#getUserTaskPermissions}) costing
+     * ~0.3-1s. Cache the result per user for a short TTL so repeated list/statistics queries reuse it; an
+     * admin membership change becomes effective within the TTL.
+     */
     private List<String> getUserVirtualGroups(String userId) {
+        if (userId == null || userId.isBlank()) {
+            return Collections.emptyList();
+        }
+        VirtualGroupsCacheEntry hit = virtualGroupsCache.get(userId);
+        if (hit != null && System.currentTimeMillis() - hit.timestampMs() < VIRTUAL_GROUPS_CACHE_TTL_MS) {
+            return hit.groupIds();
+        }
+        List<String> resolved = fetchUserVirtualGroups(userId);
+        virtualGroupsCache.put(userId, new VirtualGroupsCacheEntry(resolved, System.currentTimeMillis()));
+        return resolved;
+    }
+
+    private List<String> fetchUserVirtualGroups(String userId) {
         try {
             Optional<Map<String, Object>> result = workflowEngineClient.getUserTaskPermissions(userId);
             if (result.isPresent()) {
@@ -1197,6 +1247,14 @@ public class TaskQueryComponent {
      * Get task flow history.
      */
     public List<TaskHistoryInfo> getTaskHistory(String taskId) {
+        return getTaskHistory(taskId, null);
+    }
+
+    /**
+     * Get task flow history. When {@code processInstanceId} is known (e.g. from task detail), skip an extra
+     * workflow-engine {@code getTaskInfo} round-trip inside {@code GET /tasks/{taskId}/history}.
+     */
+    public List<TaskHistoryInfo> getTaskHistory(String taskId, String processInstanceId) {
         // Check if the Flowable engine is available
         if (!workflowEngineClient.isAvailable()) {
             throw new IllegalStateException("Flowable engine unavailable, please check if workflow-engine-core service is running");
@@ -1205,7 +1263,12 @@ public class TaskQueryComponent {
         List<TaskHistoryInfo> history = new ArrayList<>();
         
         // Get task history from Flowable (includes user name resolution)
-        Optional<List<Map<String, Object>>> historyResult = workflowEngineClient.getTaskHistoryByTaskId(taskId);
+        Optional<List<Map<String, Object>>> historyResult;
+        if (processInstanceId != null && !processInstanceId.isBlank()) {
+            historyResult = workflowEngineClient.getProcessInstanceHistory(processInstanceId.trim());
+        } else {
+            historyResult = workflowEngineClient.getTaskHistoryByTaskId(taskId);
+        }
         if (historyResult.isPresent()) {
             List<Map<String, Object>> historyList = historyResult.get();
             for (int i = 0; i < historyList.size(); i++) {
@@ -1240,14 +1303,17 @@ public class TaskQueryComponent {
         
         // If Flowable has no history records, try fetching from the local database
         try {
-            // First try to get task info from Flowable to obtain processInstanceId
-            Optional<TaskInfo> taskInfoOpt = getTaskById(taskId);
-            if (taskInfoOpt.isPresent()) {
-                String processInstanceId = taskInfoOpt.get().getProcessInstanceId();
-                
+            String resolvedProcessInstanceId = processInstanceId;
+            if (resolvedProcessInstanceId == null || resolvedProcessInstanceId.isBlank()) {
+                Optional<TaskInfo> taskInfoOpt = getTaskById(taskId);
+                if (taskInfoOpt.isPresent()) {
+                    resolvedProcessInstanceId = taskInfoOpt.get().getProcessInstanceId();
+                }
+            }
+            if (resolvedProcessInstanceId != null && !resolvedProcessInstanceId.isBlank()) {
                 // Try to get history from the local database
                 List<ProcessHistory> dbHistory = processHistoryRepository
-                        .findByProcessInstanceIdOrderByOperationTimeAsc(processInstanceId);
+                        .findByProcessInstanceIdOrderByOperationTimeAsc(resolvedProcessInstanceId);
                 
                 for (int i = 0; i < dbHistory.size(); i++) {
                     ProcessHistory ph = dbHistory.get(i);

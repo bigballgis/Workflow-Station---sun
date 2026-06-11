@@ -2,6 +2,7 @@ package com.developer.dto;
 
 import com.developer.entity.FormTableBinding;
 import com.developer.entity.TableDefinition;
+import com.developer.enums.BindingLinkMode;
 import com.developer.enums.BindingMode;
 import com.developer.enums.BindingType;
 import com.developer.enums.SubMode;
@@ -29,6 +30,7 @@ public class FormTableBindingResponse {
     private BindingType bindingType;
     private BindingMode bindingMode;
     private String foreignKeyField;
+    private BindingLinkMode bindingLinkMode;
     private Integer sortOrder;
     private Instant createdAt;
     private Instant updatedAt;
@@ -69,6 +71,7 @@ public class FormTableBindingResponse {
                 .bindingType(binding.getBindingType())
                 .bindingMode(binding.getBindingMode())
                 .foreignKeyField(binding.getForeignKeyField())
+                .bindingLinkMode(binding.getBindingLinkMode())
                 .sortOrder(binding.getSortOrder())
                 .createdAt(binding.getCreatedAt())
                 .updatedAt(binding.getUpdatedAt())
@@ -112,6 +115,7 @@ public class FormTableBindingResponse {
                 .bindingType(binding.getBindingType())
                 .bindingMode(binding.getBindingMode())
                 .foreignKeyField(binding.getForeignKeyField())
+                .bindingLinkMode(binding.getBindingLinkMode())
                 .sortOrder(binding.getSortOrder())
                 .createdAt(binding.getCreatedAt())
                 .updatedAt(binding.getUpdatedAt())

@@ -42,4 +42,12 @@ public class TableBindingDTO {
      * Used by portals to merge / identify sub-table rows without hardcoding {@code id}/{@code rowId}.
      */
     private List<String> primaryKeyFields;
+    /**
+     * When bindingType is SUB: {@code structuralFk} (default) or {@code miParticipantRow} for MI slice bindings.
+     */
+    private String bindingLinkMode;
+    /**
+     * Table field metadata (FK/PK) for Portal / Preview row-add runtime (PRD S5).
+     */
+    private List<TableFieldDefinitionDTO> fieldDefinitions;
 }

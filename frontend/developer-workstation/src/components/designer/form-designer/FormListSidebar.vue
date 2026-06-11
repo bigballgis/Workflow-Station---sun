@@ -21,6 +21,7 @@
       </el-button>
     </div>
     
+    <div class="table-scroll-wrap">
     <el-table
       v-loading="loading"
       :data="forms"
@@ -109,7 +110,7 @@
       />
       <el-table-column
         :label="$t('common.actions')"
-        width="200"
+        min-width="220"
         fixed="right"
         align="left"
       >
@@ -173,6 +174,7 @@
         </template>
       </el-table-column>
     </el-table>
+    </div>
   </div>
 </template>
 
@@ -208,24 +210,6 @@ defineEmits<{
 .text-muted {
   color: #909399;
   font-size: 12px;
-}
-
-.bound-nodes {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.node-tag {
-  margin: 0;
-}
-
-.action-buttons {
-  display: inline-flex;
-  flex-wrap: nowrap;
-  align-items: center;
-  gap: 2px;
-  white-space: nowrap;
 }
 
 .action-more-icon {

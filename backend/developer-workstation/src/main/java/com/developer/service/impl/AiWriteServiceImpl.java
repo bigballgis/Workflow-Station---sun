@@ -78,7 +78,7 @@ public class AiWriteServiceImpl implements AiWriteService {
             functionUnit.setName(generatedData.getName());
         }
         if (generatedData.getDescription() != null && !generatedData.getDescription().isBlank()) {
-            functionUnit.setDescription(generatedData.getDescription());
+            functionUnit.setDisplayName(generatedData.getDescription());
         }
 
         // Save — JPA cascades will persist all children
@@ -185,7 +185,7 @@ public class AiWriteServiceImpl implements AiWriteService {
                     .tableName((String) tableData.get("tableName"))
                     .tableType(tableType)
                     .tableDisplayName((String) (tableData.get("tableDisplayName") != null ? tableData.get("tableDisplayName") : tableData.get("displayName")))
-                    .description((String) (tableData.get("description") != null ? tableData.get("description") : tableData.get("comment")))
+                    .displayName((String) (tableData.get("description") != null ? tableData.get("description") : tableData.get("comment")))
                     .build();
 
             // Write field definitions — support both "fieldDefinitions" and "fields" key names
@@ -216,7 +216,7 @@ public class AiWriteServiceImpl implements AiWriteService {
                                     fieldData.get("isPrimaryKey") != null ? fieldData.get("isPrimaryKey") : fieldData.get("primaryKey"),
                                     false))
                             .isUnique(toBoolean(fieldData.get("isUnique"), false))
-                            .description((String) (fieldData.get("description") != null ? fieldData.get("description") : fieldData.get("comment")))
+                            .displayName((String) fieldData.get("displayName"))
                             .sortOrder(toInt(fieldData.get("sortOrder")))
                             .build();
                     table.getFieldDefinitions().add(field);
@@ -348,7 +348,7 @@ public class AiWriteServiceImpl implements AiWriteService {
                     .formName((String) formData.get("formName"))
                     .formType(formType)
                     .configJson(configJson)
-                    .description((String) formData.get("description"))
+                    .displayName((String) formData.get("description"))
                     .build();
 
             // Write table bindings — support both "tableBindings" and legacy "fieldBindings"+"bindingTableId" format
@@ -510,8 +510,8 @@ public class AiWriteServiceImpl implements AiWriteService {
     }
 
     private Map<String, Object> fieldToFormCreateRule(FieldDefinition field) {
-        String title = field.getDescription() != null && !field.getDescription().isBlank()
-                ? field.getDescription()
+        String title = field.getDisplayName() != null && !field.getDisplayName().isBlank()
+                ? field.getDisplayName()
                 : field.getFieldName();
         Map<String, Object> rule = new LinkedHashMap<>();
         rule.put("field", field.getFieldName());
@@ -632,7 +632,7 @@ public class AiWriteServiceImpl implements AiWriteService {
                     .configJson(configJson)
                     .icon((String) actionData.get("icon"))
                     .buttonColor((String) actionData.get("buttonColor"))
-                    .description((String) actionData.get("description"))
+                    .displayName((String) actionData.get("description"))
                     .isDefault(toBoolean(actionData.get("isDefault"), false))
                     .build();
 

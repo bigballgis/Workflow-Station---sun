@@ -149,6 +149,12 @@ describe('buildRules', () => {
     expect(rules.qty[0].trigger).toBe('blur')
   })
 
+  it('readonly required column — no rule generated (auto-PK / system-filled FK)', () => {
+    const col: DialogColumn = { field: 'id_idw', label: 'id', type: 'text', required: true, readonly: true }
+    const rules = buildRules([col])
+    expect(rules.id_idw).toBeUndefined()
+  })
+
   it('multiple columns — only required ones get rules', () => {
     const columns: DialogColumn[] = [
       { field: 'name', label: 'Name', type: 'text', required: true },

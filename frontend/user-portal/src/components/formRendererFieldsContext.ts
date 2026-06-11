@@ -41,7 +41,21 @@ export interface FormRendererFieldsContext {
   getCurrentRowForInlineForm: (field: FormField) => Record<string, unknown> | null
   inlineSubTableFormReadonly: (field: FormField) => boolean
   lookupShowBackfillView: (field: FormField) => boolean
+  primaryFormData?: Ref<Record<string, unknown>> | Record<string, unknown>
+  primaryTableDisplayName?: Ref<string> | string
+  primaryTableId?: Ref<number | null> | number | null
+  parentTablesById?: Ref<Record<number, { fieldDefinitions: unknown[] }>>
+  subTableBindingsForContext?: Ref<unknown[]> | unknown[]
+  functionUnitId?: Ref<string | undefined> | string
+  resolveMiParticipantSeedForSubTableAdd?: (bindingId?: number) => {
+    rowId: string | number | null
+    parentRow: Record<string, unknown> | null
+    parentTableId: number | null
+  }
+  handlePrimaryFormDataPatch?: (patch: Record<string, unknown>) => void
   handleSubTableUpdate: (bindingId: number, rows: unknown[]) => void
+  /** Persist task form (form-below-table Save — same as action bar SAVE). */
+  handleInlineFormSave?: () => void
   handleInlineFormUpdate: (field: FormField, row: Record<string, unknown>) => void
   scrollSubTableInlineIntoView: (bindingId?: number) => void
   setSubTableInlineAnchor: (bindingId: number | undefined, el: HTMLElement | null) => void

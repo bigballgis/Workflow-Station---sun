@@ -22,6 +22,7 @@
         </el-button>
       </div>
       
+      <div class="table-scroll-wrap">
       <el-table
         v-loading="loading"
         :data="bindings"
@@ -78,6 +79,21 @@
           </template>
         </el-table-column>
         <el-table-column
+          prop="bindingLinkMode"
+          :label="t('tableBinding.linkMode')"
+          width="130"
+        >
+          <template #default="{ row }">
+            <span v-if="row.bindingType === 'SUB'">
+              {{ bindingLinkModeLabel(row.bindingLinkMode) }}
+            </span>
+            <span
+              v-else
+              class="text-muted"
+            >-</span>
+          </template>
+        </el-table-column>
+        <el-table-column
           prop="subMode"
           :label="t('tableBinding.subMode')"
           width="130"
@@ -99,29 +115,33 @@
         </el-table-column>
         <el-table-column
           :label="t('tableBinding.operations')"
-          width="120"
+          min-width="120"
+          fixed="right"
         >
           <template #default="{ row }">
-            <el-button
-              link
-              type="primary"
-              size="small"
-              @click="handleEdit(row)"
-            >
-              {{ t('common.edit') }}
-            </el-button>
-            <el-button
-              link
-              type="danger"
-              size="small"
-              :disabled="row.bindingType === 'PRIMARY'"
-              @click="handleDelete(row)"
-            >
-              {{ t('common.delete') }}
-            </el-button>
+            <div class="table-row-actions">
+              <el-button
+                link
+                type="primary"
+                size="small"
+                @click="handleEdit(row)"
+              >
+                {{ t('common.edit') }}
+              </el-button>
+              <el-button
+                link
+                type="danger"
+                size="small"
+                :disabled="row.bindingType === 'PRIMARY'"
+                @click="handleDelete(row)"
+              >
+                {{ t('common.delete') }}
+              </el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
+      </div>
       
       <el-empty
         v-if="bindings.length === 0 && !loading"
@@ -251,9 +271,50 @@
           </el-radio-group>
         </el-form-item>
         
+        <el-form-item
+          v-if="bindingForm.bindingType === 'SUB'"
+          :label="t('tableBinding.linkMode')"
+          prop="bindingLinkMode"
+        >
+          <el-radio-group v-model="bindingForm.bindingLinkMode">
+            <el-radio :value="'structuralFk'">
+              {{ t('tableBinding.linkModeStructuralFk') }}
+            </el-radio>
+            <el-radio :value="'miParticipantRow'">
+              {{ t('tableBinding.linkModeMiParticipantRow') }}
+            </el-radio>
+          </el-radio-group>
+          <div class="form-item-tip">
+            {{ t('tableBinding.linkModeTip') }}
+          </div>
+        </el-form-item>
+
+        <el-form-item
+          v-if="bindingForm.bindingType === 'SUB' && bindingForm.bindingLinkMode === 'structuralFk'"
+          :label="t('tableBinding.structuralFkFields')"
+        >
+          <div v-if="structuralFkFieldNames.length">
+            <el-tag
+              v-for="name in structuralFkFieldNames"
+              :key="name"
+              size="small"
+              style="margin-right: 6px;"
+            >
+              {{ name }}
+            </el-tag>
+          </div>
+          <span
+            v-else
+            class="text-muted"
+          >{{ t('tableBinding.noStructuralFkFields') }}</span>
+          <div class="form-item-tip">
+            {{ t('tableBinding.structuralFkTip') }}
+          </div>
+        </el-form-item>
+        
         <el-form-item 
-          v-if="bindingForm.bindingType === 'SUB'" 
-          :label="t('tableBinding.foreignKeyField')"
+          v-if="bindingForm.bindingType === 'SUB' && bindingForm.bindingLinkMode === 'miParticipantRow'" 
+          :label="t('tableBinding.participantRowField')"
           prop="foreignKeyField"
         >
           <el-select 
@@ -270,7 +331,7 @@
             />
           </el-select>
           <div class="form-item-tip">
-            {{ t('tableBinding.foreignKeyTip') }}
+            {{ t('tableBinding.miParticipantRowTip') }}
           </div>
         </el-form-item>
       </el-form>
@@ -296,7 +357,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { Plus } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { useI18n } from 'vue-i18n'
-import { functionUnitApi, type TableBinding, type TableBindingRequest, type TableDefinition, type BindingType } from '@/api/functionUnit'
+import { functionUnitApi, type TableBinding, type TableBindingRequest, type TableDefinition, type BindingType, type BindingLinkMode } from '@/api/functionUnit'
 import { relationTableBindingApi, type RelationTableDTO } from '@/api/relationTable'
 import { pickHttpErrorBodyMessage, resolveUserFacingHttpMessage } from '@/utils/httpErrorMessage'
 
@@ -340,6 +401,7 @@ function makeEmptyBindingForm(): TableBindingRequest {
     bindingType: defaultType,
     bindingMode: defaultType === 'PRIMARY' ? 'EDITABLE' : 'READONLY',
     foreignKeyField: undefined,
+    bindingLinkMode: defaultType === 'SUB' ? 'structuralFk' : undefined,
     subMode: defaultType === 'SUB' ? 'FULL' : undefined
   }
 }
@@ -352,10 +414,16 @@ const formRules = computed<FormRules>(() => {
     bindingType: [{ required: true, message: t('tableBinding.selectBindingTypeRequired'), trigger: 'change' }],
     bindingMode: [{ required: true, message: t('tableBinding.selectBindingModeRequired'), trigger: 'change' }]
   }
-  if (restrictPrimarySubOnly.value && (bindingForm.value.bindingType === 'SUB')) {
-    base.foreignKeyField = [
-      { required: true, message: t('tableBinding.foreignKeyRequired'), trigger: 'change' }
-    ]
+  if (restrictPrimarySubOnly.value && bindingForm.value.bindingType === 'SUB') {
+    if (bindingForm.value.bindingLinkMode === 'miParticipantRow') {
+      base.foreignKeyField = [
+        { required: true, message: t('tableBinding.foreignKeyRequired'), trigger: 'change' }
+      ]
+    } else if (structuralFkFieldNames.value.length === 0) {
+      base.foreignKeyField = [
+        { required: true, message: t('tableBinding.structuralFkRequired'), trigger: 'change' }
+      ]
+    }
   }
   return base
 })
@@ -422,10 +490,25 @@ const selectedTableFields = computed(() => {
     const table = props.tables.find(t => t.id === bindingForm.value.tableId)
     return table?.fieldDefinitions || []
   }
-  // For deployed/system relation tables (negative ID), look up from loaded data.
   const table = deployedRelationTables.value.find(t => toRelationTableOptionId(t.id) === bindingForm.value.tableId)
   return table?.fieldDefinitions || []
 })
+
+const structuralFkFieldNames = computed(() =>
+  selectedTableFields.value.filter(f => f.isForeignKey).map(f => f.fieldName),
+)
+
+function bindingLinkModeLabel(mode?: BindingLinkMode | string | null): string {
+  if (mode === 'miParticipantRow') return t('tableBinding.linkModeMiParticipantRow')
+  return t('tableBinding.linkModeStructuralFk')
+}
+
+function suggestParticipantRowField() {
+  const pk = selectedTableFields.value.find(f => f.isPrimaryKey)
+  if (pk?.fieldName) {
+    bindingForm.value.foreignKeyField = pk.fieldName
+  }
+}
 
 // Check if table is already bound
 function isTableBound(tableId: number): boolean {
@@ -491,8 +574,10 @@ function handleBindingTypeChange() {
   bindingForm.value.foreignKeyField = undefined
   if (bindingForm.value.bindingType === 'SUB') {
     bindingForm.value.subMode = bindingForm.value.subMode || 'FULL'
+    bindingForm.value.bindingLinkMode = bindingForm.value.bindingLinkMode || 'structuralFk'
   } else {
     bindingForm.value.subMode = undefined
+    bindingForm.value.bindingLinkMode = undefined
   }
   // RELATED type must be READONLY
   if (bindingForm.value.bindingType === 'RELATED') {
@@ -536,6 +621,7 @@ function handleEdit(binding: TableBinding) {
     bindingType: binding.bindingType,
     bindingMode: binding.bindingMode,
     foreignKeyField: binding.foreignKeyField,
+    bindingLinkMode: binding.bindingType === 'SUB' ? (binding.bindingLinkMode || 'structuralFk') : undefined,
     sortOrder: binding.sortOrder,
     subMode: binding.bindingType === 'SUB' ? (binding.subMode || 'FULL') : undefined
   }
@@ -615,6 +701,14 @@ async function handleSubmit() {
   try {
     // For deployed/system relation tables (negative ID), convert to relationTableId
     const requestData = { ...bindingForm.value }
+    if (
+      requestData.bindingType === 'SUB'
+      && requestData.bindingLinkMode !== 'miParticipantRow'
+      && !requestData.foreignKeyField
+      && structuralFkFieldNames.value.length > 0
+    ) {
+      requestData.foreignKeyField = structuralFkFieldNames.value[0]
+    }
     // tableId < 0 means it's a deployed/system relation table option
     if (requestData.tableId && requestData.tableId < 0) {
       const remoteTable = deployedRelationTables.value.find(t => toRelationTableOptionId(t.id) === requestData.tableId)
@@ -663,6 +757,32 @@ watch(showAddDialog, (open) => {
     }
   }
 })
+
+watch(
+  () => bindingForm.value.bindingLinkMode,
+  (mode) => {
+    if (bindingForm.value.bindingType !== 'SUB') return
+    if (mode === 'miParticipantRow' && !bindingForm.value.foreignKeyField) {
+      suggestParticipantRowField()
+    }
+    if (mode === 'structuralFk') {
+      bindingForm.value.foreignKeyField = structuralFkFieldNames.value[0] || undefined
+    }
+  },
+)
+
+watch(
+  () => bindingForm.value.tableId,
+  () => {
+    if (bindingForm.value.bindingType !== 'SUB') return
+    if (bindingForm.value.bindingLinkMode === 'miParticipantRow' && !bindingForm.value.foreignKeyField) {
+      suggestParticipantRowField()
+    }
+    if (bindingForm.value.bindingLinkMode === 'structuralFk') {
+      bindingForm.value.foreignKeyField = structuralFkFieldNames.value[0] || undefined
+    }
+  },
+)
 
 // Reload when formId changes
 watch(() => props.formId, () => {

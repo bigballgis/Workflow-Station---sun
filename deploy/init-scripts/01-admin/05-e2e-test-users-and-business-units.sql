@@ -7,7 +7,7 @@
 -- =====================================================
 
 -- 虚拟组：聚合所有 E2E 账号（不绑定额外角色亦可登录门户）
-INSERT INTO sys_virtual_groups (id, code, name, type, description, status, created_at, updated_at)
+INSERT INTO sys_virtual_groups (id, code, name, type, display_name, status, created_at, updated_at)
 VALUES (
     'vg-e2e-workflow',
     'E2E_WORKFLOW_SIMULATION',
@@ -20,7 +20,7 @@ VALUES (
 )
 ON CONFLICT (code) DO UPDATE SET
     name        = EXCLUDED.name,
-    description = EXCLUDED.description,
+    display_name = EXCLUDED.display_name,
     updated_at  = CURRENT_TIMESTAMP;
 
 -- 业务单元：总部 + 财务共享 + 数字化部门

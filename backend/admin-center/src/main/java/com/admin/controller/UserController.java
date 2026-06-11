@@ -214,7 +214,7 @@ public class UserController {
                     Map<String, Object> groupInfo = new HashMap<>();
                     groupInfo.put("groupId", group.getId());
                     groupInfo.put("groupName", group.getName());
-                    groupInfo.put("groupDescription", group.getDescription());
+                    groupInfo.put("groupDescription", group.getDisplayName());
                     groupInfo.put("joinedAt", m.getJoinedAt());
                     return groupInfo;
                 })

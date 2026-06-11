@@ -22,7 +22,7 @@ BEGIN
     -- Table 1: meeting (MAIN)
     -- =========================================================================
     INSERT INTO dw_table_definitions (
-        function_unit_id, table_name, table_display_name, table_type, description, created_at, updated_at
+        function_unit_id, table_name, table_display_name, table_type, display_name, created_at, updated_at
     ) VALUES (
         v_function_unit_id, 'meeting', 'Meeting Info', 'MAIN',
         'Main meeting table - stores meeting basic info',
@@ -31,7 +31,7 @@ BEGIN
     ON CONFLICT (function_unit_id, table_name) DO UPDATE SET
         table_display_name = EXCLUDED.table_display_name,
         table_type  = EXCLUDED.table_type,
-        description = EXCLUDED.description,
+        display_name = EXCLUDED.display_name,
         updated_at  = CURRENT_TIMESTAMP
     RETURNING id INTO v_meeting_table_id;
 
@@ -39,7 +39,7 @@ BEGIN
 
     INSERT INTO dw_field_definitions (
         table_id, field_name, data_type, length, precision_value, scale,
-        nullable, default_value, is_primary_key, is_unique, description, sort_order
+        nullable, default_value, is_primary_key, is_unique, display_name, sort_order
     ) VALUES
     (v_meeting_table_id, 'id',             'BIGINT',    NULL, NULL, NULL, false, NULL, false, false, 'Primary key',    1),
     (v_meeting_table_id, 'topic',          'VARCHAR',   200,  NULL, NULL, false, NULL, false, false, 'Meeting topic',  2),
@@ -58,7 +58,7 @@ BEGIN
     -- Table 2: participants (SUB) - 多实例子流程数据源
     -- =========================================================================
     INSERT INTO dw_table_definitions (
-        function_unit_id, table_name, table_display_name, table_type, description, created_at, updated_at
+        function_unit_id, table_name, table_display_name, table_type, display_name, created_at, updated_at
     ) VALUES (
         v_function_unit_id, 'participants', 'Participants', 'SUB',
         'Sub table for meeting participants - serves as multi-instance data source',
@@ -67,7 +67,7 @@ BEGIN
     ON CONFLICT (function_unit_id, table_name) DO UPDATE SET
         table_display_name = EXCLUDED.table_display_name,
         table_type  = EXCLUDED.table_type,
-        description = EXCLUDED.description,
+        display_name = EXCLUDED.display_name,
         updated_at  = CURRENT_TIMESTAMP
     RETURNING id INTO v_participant_table_id;
 
@@ -75,7 +75,7 @@ BEGIN
 
     INSERT INTO dw_field_definitions (
         table_id, field_name, data_type, length, precision_value, scale,
-        nullable, default_value, is_primary_key, is_unique, description, sort_order
+        nullable, default_value, is_primary_key, is_unique, display_name, sort_order
     ) VALUES
     (v_participant_table_id, 'id',                  'BIGINT',  NULL, NULL, NULL, false, NULL, false, false, 'Primary key',                                      1),
     (v_participant_table_id, 'meeting_id',          'BIGINT',  NULL, NULL, NULL, false, NULL, false, false, 'Foreign key - references meeting table',            2),

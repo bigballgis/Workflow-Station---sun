@@ -15,6 +15,7 @@
         :label="$t('form.portalViews.toDoDisplay')"
         name="todo"
       >
+        <div class="table-scroll-wrap">
         <el-table
           :data="splitPreviewRows.todo"
           border
@@ -31,11 +32,13 @@
             min-width="200"
           />
         </el-table>
+        </div>
       </el-tab-pane>
       <el-tab-pane
         :label="$t('form.portalViews.myRequestsDisplay')"
         name="myRequest"
       >
+        <div class="table-scroll-wrap">
         <el-table
           :data="splitPreviewRows.myRequest"
           border
@@ -52,10 +55,14 @@
             min-width="200"
           />
         </el-table>
+        </div>
       </el-tab-pane>
     </el-tabs>
-    <el-table
+    <div
       v-else
+      class="table-scroll-wrap"
+    >
+    <el-table
       :data="previewFieldRows"
       border
       style="width: 100%;"
@@ -71,6 +78,7 @@
         min-width="200"
       />
     </el-table>
+    </div>
   </el-dialog>
 </template>
 

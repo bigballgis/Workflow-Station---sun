@@ -57,4 +57,9 @@ public interface TableDesignComponent {
      * 获取功能单元的所有外键关系
      */
     List<ForeignKeyDTO> getForeignKeys(Long functionUnitId);
+
+    /**
+     * Check whether a table name is globally available (unique across all function units).
+     */
+    boolean isTableNameAvailable(String tableName, Long excludeTableId);
 }

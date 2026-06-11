@@ -60,8 +60,7 @@ const previewConfig = computed(() => {
     .map((field: any) => ({
       fieldName: field.fieldName,
       dataType: field.dataType,
-      comment: field.comment || field.description,
-      description: field.description || field.comment,
+      displayName: field.displayName,
     }))
   const displayFields = config.displayFields || []
 
@@ -75,7 +74,7 @@ const previewConfig = computed(() => {
       ? []
       : displayFields.map((fieldName: string, index: number) => ({
         fieldName,
-        displayLabel: fields.find((field: any) => field.fieldName === fieldName)?.comment || fieldName,
+        displayLabel: fields.find((field: any) => field.fieldName === fieldName)?.displayName || fieldName,
         sortOrder: index,
         visible: true,
       })),

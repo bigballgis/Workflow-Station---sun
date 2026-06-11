@@ -53,7 +53,7 @@
             <el-icon class="field-icon">
               <component :is="getFieldIcon(field.dataType)" />
             </el-icon>
-            <span class="field-name">{{ field.comment || field.fieldName }}</span>
+            <span class="field-name">{{ field.displayName || field.fieldName }}</span>
           </div>
           <el-empty
             v-if="!loadingFields && filteredAvailableFields.length === 0"
@@ -297,6 +297,18 @@
                   :description="t('subTable.noFormDesign')"
                   :image-size="48"
                 />
+                <div
+                  v-if="inlineFormBelowDesign.rule.length"
+                  class="inline-form-actions"
+                >
+                  <el-button
+                    type="primary"
+                    disabled
+                    @click="handleInlineFormBelowPreviewSave"
+                  >
+                    {{ t('common.save') }}
+                  </el-button>
+                </div>
               </div>
             </div>
           </div>
@@ -629,7 +641,7 @@ const filteredAvailableFields = computed(() => {
   const inView = new Set(viewColumns.value.filter(c => !isLinkColumn(c)).map(f => f.fieldName))
   let list = allFields.value.filter(f => !inView.has(f.fieldName))
   if (kw) {
-    list = list.filter(f => f.fieldName.toLowerCase().includes(kw) || (f.comment || '').toLowerCase().includes(kw))
+    list = list.filter(f => f.fieldName.toLowerCase().includes(kw) || (f.displayName || '').toLowerCase().includes(kw))
   }
   return list
 })
@@ -646,12 +658,12 @@ const getColumnKey = (column: SubTableListColumnDTO) => isLinkColumn(column)
     : column.fieldName
 const getColumnLabel = (column: SubTableListColumnDTO) => {
   if (isLinkColumn(column)) {
-    return column.columnLabel || column.comment || column.linkText || t('linkForm.defaultLinkText')
+    return column.columnLabel || column.displayName || column.linkText || t('linkForm.defaultLinkText')
   }
   if (isLookupColumn(column)) {
-    return column.columnLabel || column.comment || 'Lookup'
+    return column.columnLabel || column.displayName || 'Lookup'
   }
-  return column.comment || column.fieldName
+  return column.displayName || column.fieldName
 }
 const getLinkText = (column: SubTableListColumnDTO) => column.linkText || t('linkForm.defaultLinkText')
 
@@ -762,7 +774,7 @@ const makeLinkFormColumn = (): SubTableListColumnDTO => ({
   nullable: true,
   isPrimaryKey: false,
   componentId: genericLinkFormComponentId.value,
-  comment: 'Link Form',
+  displayName: 'Link Form',
   columnLabel: 'Link Form',
   linkText: t('linkForm.defaultLinkText'),
   boundSubTableBindingId: props.binding.bindingId,
@@ -782,7 +794,7 @@ const makeLookupColumn = (): SubTableListColumnDTO => ({
   dataType: 'LOOKUP',
   nullable: true,
   isPrimaryKey: false,
-  comment: 'Lookup',
+  displayName: 'Lookup',
   columnLabel: 'Lookup',
   lookupConfig: '{}'
 })
@@ -921,6 +933,11 @@ async function openLinkFormDialog(column: SubTableListColumnDTO) {
   })
 }
 
+/** Portal parity: Save control on assignee form-below-table strip (design-time preview is read-only). */
+function handleInlineFormBelowPreviewSave() {
+  ElMessage.success(t('common.saveSuccess'))
+}
+
 async function handleLinkFormSave() {
   if (selectedLinkColumn.value?.componentId === undefined || selectedLinkColumn.value?.componentId === null) return
   savingLinkForm.value = true
@@ -944,13 +961,13 @@ function openActionColumnConfig(column: SubTableListColumnDTO, index: number) {
   editingActionColumnType.value = isLookupColumn(column) ? 'lookup' : 'linkForm'
   if (isLookupColumn(column)) {
     lookupColumnConfig.value = {
-      columnLabel: column.columnLabel || column.comment || 'Lookup',
+      columnLabel: column.columnLabel || column.displayName || 'Lookup',
       lookupConfig: column.lookupConfig || '{}'
     }
   } else {
     linkColumnConfig.value = {
       boundSubTableBindingId: column.boundSubTableBindingId || props.binding.bindingId,
-      columnLabel: column.columnLabel || column.comment || 'Link Form',
+      columnLabel: column.columnLabel || column.displayName || 'Link Form',
       linkText: column.linkText || t('linkForm.defaultLinkText')
     }
   }
@@ -965,13 +982,13 @@ function saveActionColumnConfig() {
   columns[editingActionColumnIndex.value] = isLookupColumn(current)
     ? {
       ...current,
-      comment: lookupColumnConfig.value.columnLabel || 'Lookup',
+      displayName: lookupColumnConfig.value.columnLabel || 'Lookup',
       columnLabel: lookupColumnConfig.value.columnLabel || 'Lookup',
       lookupConfig: lookupColumnConfig.value.lookupConfig || '{}'
     }
     : {
       ...current,
-      comment: linkColumnConfig.value.columnLabel || 'Link Form',
+      displayName: linkColumnConfig.value.columnLabel || 'Link Form',
       columnLabel: linkColumnConfig.value.columnLabel || 'Link Form',
       linkText: linkColumnConfig.value.linkText || t('linkForm.defaultLinkText'),
       boundSubTableBindingId: linkColumnConfig.value.boundSubTableBindingId || props.binding.bindingId,
@@ -1213,5 +1230,12 @@ defineExpose({
 
 .inline-form-below-body :deep(.form-create) {
   width: 100%;
+}
+
+.inline-form-actions {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
+  padding-bottom: 8px;
 }
 </style>

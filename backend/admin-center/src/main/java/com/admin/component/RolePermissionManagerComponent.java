@@ -43,7 +43,7 @@ public class RolePermissionManagerComponent {
      * 创建角色
      */
     @Transactional
-    public Role createRole(String name, String code, RoleType type, String description) {
+    public Role createRole(String name, String code, RoleType type, String displayName) {
         log.info("Creating role: {}", code);
         
         // 验证编码唯一性
@@ -59,7 +59,7 @@ public class RolePermissionManagerComponent {
                 .name(name)
                 .code(code)
                 .type(typeStr)
-                .description(description)
+                .displayName(displayName)
                 .status("ACTIVE")
                 .build();
         
@@ -333,7 +333,7 @@ public class RolePermissionManagerComponent {
      * 更新角色
      */
     @Transactional
-    public Role updateRole(String roleId, String name, String description, String status) {
+    public Role updateRole(String roleId, String name, String displayName, String status) {
         log.info("Updating role: {}", roleId);
         
         Role role = roleRepository.findById(roleId)
@@ -347,8 +347,8 @@ public class RolePermissionManagerComponent {
         if (name != null) {
             role.setName(name);
         }
-        if (description != null) {
-            role.setDescription(description);
+        if (displayName != null) {
+            role.setDisplayName(displayName);
         }
         if (status != null) {
             role.setStatus(status);

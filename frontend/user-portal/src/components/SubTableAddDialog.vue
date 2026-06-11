@@ -438,6 +438,7 @@
       </el-button>
       <el-button
         type="primary"
+        :loading="saving"
         @click="handleSave"
       >
         {{ t('common.save') }}
@@ -454,7 +455,7 @@ import type { FormInstance } from 'element-plus'
 import { ElMessage } from 'element-plus'
 import { Editor, Toolbar } from '@wangeditor/editor-for-vue'
 import '@wangeditor/editor/dist/css/style.css'
-import { buildInitialRow, buildRules, resolveDisplayValue, isUploadColumn, getLookupSelectedDisplayField } from './subTableAddDialogHelpers'
+import { buildInitialRow, buildRules, mergeFormRowWithSeed, resolveDisplayValue, isUploadColumn, getLookupSelectedDisplayField } from './subTableAddDialogHelpers'
 import type { DialogColumn } from './subTableAddDialogHelpers'
 import type { RowFormulaRule, ValidationRule } from './formRendererHelpers'
 import { evaluateFormula, validateField } from './businessLogicEngine'
@@ -494,6 +495,8 @@ const props = defineProps<{
   rowFormulas?: RowFormulaRule[]
   columnValidationRules?: Record<string, ValidationRule[]>
   uploadUrl?: string
+  /** When set, awaited before closing (supports async PK allocate on Save). */
+  saveRow?: (row: Record<string, unknown>) => void | Promise<void>
 }>()
 
 const emit = defineEmits<{
@@ -502,6 +505,7 @@ const emit = defineEmits<{
 }>()
 
 const formRef = ref<FormInstance>()
+const saving = ref(false)
 const formData = ref<Record<string, any>>({})
 const uploadNames = ref<Record<string, string>>({})
 const dialogKey = ref(0)
@@ -766,7 +770,9 @@ function initDialogFormState(trigger: 'open' | 'data-change') {
       }
     }
   } else {
-    formData.value = buildInitialRow(props.columns)
+    formData.value = props.initialData
+      ? { ...buildInitialRow(props.columns), ...JSON.parse(JSON.stringify(props.initialData)) }
+      : buildInitialRow(props.columns)
   }
 
   // Element Plus Form keeps some per-field state; ensure each init starts clean.
@@ -826,13 +832,28 @@ function handleClose() {
 }
 
 async function handleSave() {
-  if (!formRef.value) return
+  if (!formRef.value || saving.value) return
   const valid = await formRef.value.validate().catch(() => false)
   if (!valid) return
   // Run column validation rules (Task 8.7)
   if (!validateColumns()) return
-  emit('save', { ...formData.value })
-  emit('update:visible', false)
+  const seed = props.mode === 'add' ? props.initialData : undefined
+  const row = mergeFormRowWithSeed(seed, formData.value as Record<string, unknown>)
+  saving.value = true
+  try {
+    if (props.saveRow) {
+      await props.saveRow(row)
+    } else {
+      emit('save', row)
+    }
+    emit('update:visible', false)
+  } catch (e) {
+    ElMessage.error(
+      e instanceof Error && e.message ? e.message : t('common.operationFailed'),
+    )
+  } finally {
+    saving.value = false
+  }
 }
 
 // ─── Upload helpers ───────────────────────────────────────────────────────────

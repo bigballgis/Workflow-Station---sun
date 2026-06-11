@@ -11,6 +11,10 @@ import {
   normalizeSubTableName,
   flattenNestedSubTableRowsIntoPayload,
   scrubMiCorruptLinkChildRowsForParent,
+  buildMiCollectionSliceKeySet,
+  collapseMiLinkChildRowsToOnePerParticipant,
+  isMiParticipantScopedSubTableBinding,
+  shouldSyncStaleSiblingSubTableSlice,
 } from './shared'
 
 export function useTaskForm(options: {
@@ -19,6 +23,9 @@ export function useTaskForm(options: {
   isCompletedTask: Ref<boolean>
   effectiveTaskId: Ref<string>
   taskFormDTO?: Ref<{ fieldValues?: Record<string, any> } | null>
+  /** Binding-id → relation-table-id map; used to protect MI collection slices from id_idw scrub on save. */
+  bindingRelationTableMap?: Ref<Map<number, number | null>>
+  miSubProcessScopeName?: Ref<string | null | undefined>
   onFormReadOnlyChange?: (readonly: boolean) => void
 }) {
   const { t } = useI18n()
@@ -36,6 +43,36 @@ export function useTaskForm(options: {
   const taskFormDTO = options.taskFormDTO ?? ref<{ fieldValues?: Record<string, any> } | null>(null)
   let subTableAutosaveTimer: ReturnType<typeof setTimeout> | null = null
 
+  /** Assignment task: merge active binding rows into stale sibling slices for the same MI collection table only. */
+  function syncStaleSiblingSubTableSlicesFromActiveBindings(
+    subTables: Record<string, any>,
+    bindings: Array<{
+      bindingId: number
+      primaryKeyFields?: string[] | null
+      data?: unknown[]
+      tableId?: number | null
+      tableName?: string
+      columns?: Array<{ field?: string }> | null
+    }>,
+  ) {
+    for (const binding of bindings) {
+      const source =
+        subTables[binding.bindingId] ??
+        subTables[String(binding.bindingId)] ??
+        binding.data
+      if (!Array.isArray(source) || source.length === 0) continue
+      const pk = Array.isArray(binding.primaryKeyFields) ? binding.primaryKeyFields : null
+      for (const key of Object.keys(subTables)) {
+        if (!/^\d+$/.test(key)) continue
+        if (Number(key) === Number(binding.bindingId)) continue
+        const target = subTables[key]
+        if (!Array.isArray(target) || target.length === 0) continue
+        if (!shouldSyncStaleSiblingSubTableSlice(target, binding, bindings, key)) continue
+        subTables[key] = mergeSubTableRowsByRowId(target, source as any[], pk)
+      }
+    }
+  }
+
   function buildSubTableSubmitPayload() {
     const subTables: Record<string, any> = { ...((formData.value.__subTables__ as Record<string, any>) || {}) }
     flattenNestedSubTableRowsIntoPayload(subTables as Record<string, unknown>)
@@ -45,7 +82,13 @@ export function useTaskForm(options: {
         | undefined
       const parentIdIdw = ci?.rowId ?? ci?.rowKey?.id
       if (parentIdIdw != null && String(parentIdIdw).trim() !== '') {
-        scrubMiCorruptLinkChildRowsForParent(subTables as Record<string, unknown>, parentIdIdw)
+        scrubMiCorruptLinkChildRowsForParent(subTables as Record<string, unknown>, parentIdIdw, {
+          skipSliceKeys: buildMiCollectionSliceKeySet(
+            options.subTableBindings.value,
+            options.bindingRelationTableMap?.value ?? new Map<number, number | null>(),
+            options.miSubProcessScopeName?.value,
+          ),
+        })
       }
     }
     const subTableData: Record<string, Array<Record<string, unknown>>> = {}
@@ -62,7 +105,11 @@ export function useTaskForm(options: {
               : null
           )
         : rows
-      const out = cloneSubTableRows(merged)
+      const out = cloneSubTableRows(
+        options.isMiSubTaskMode.value && isMiParticipantScopedSubTableBinding(binding)
+          ? collapseMiLinkChildRowsToOnePerParticipant(merged)
+          : merged,
+      )
       subTables[binding.bindingId] = out
       subTables[String(binding.bindingId)] = out
       subTableData[String(binding.bindingId)] = out
@@ -71,6 +118,13 @@ export function useTaskForm(options: {
         subTables[normalizeSubTableName(binding.tableName)] = out
         subTableData[binding.tableName] = out
       }
+    }
+
+    if (!options.isMiSubTaskMode.value) {
+      syncStaleSiblingSubTableSlicesFromActiveBindings(
+        subTables,
+        options.subTableBindings.value,
+      )
     }
 
     return {

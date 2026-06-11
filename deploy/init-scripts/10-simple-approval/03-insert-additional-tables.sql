@@ -48,7 +48,7 @@ BEGIN
     )
     ON CONFLICT (function_unit_id, table_name) DO UPDATE SET
         table_type = EXCLUDED.table_type,
-        description = EXCLUDED.description,
+        display_name = EXCLUDED.display_name,
         updated_at = CURRENT_TIMESTAMP
     RETURNING id INTO v_sub_table_id;
 
@@ -60,7 +60,7 @@ BEGIN
     -- Create fields for SUB table
     INSERT INTO dw_field_definitions (
         table_id, field_name, data_type, length, precision_value, scale,
-        nullable, default_value, is_primary_key, is_unique, description, sort_order
+        nullable, default_value, is_primary_key, is_unique, display_name, sort_order
     ) VALUES
     (v_sub_table_id, 'id', 'BIGINT', NULL, NULL, NULL, false, NULL, false, false, 'Item ID', 1),
     (v_sub_table_id, 'request_id', 'BIGINT', NULL, NULL, NULL, false, NULL, false, false, 'Foreign key to Request table', 2),
@@ -93,7 +93,7 @@ BEGIN
     )
     ON CONFLICT (function_unit_id, table_name) DO UPDATE SET
         table_type = EXCLUDED.table_type,
-        description = EXCLUDED.description,
+        display_name = EXCLUDED.display_name,
         updated_at = CURRENT_TIMESTAMP
     RETURNING id INTO v_action_table_id;
 
@@ -105,7 +105,7 @@ BEGIN
     -- Create fields for ACTION table
     INSERT INTO dw_field_definitions (
         table_id, field_name, data_type, length, precision_value, scale,
-        nullable, default_value, is_primary_key, is_unique, description, sort_order
+        nullable, default_value, is_primary_key, is_unique, display_name, sort_order
     ) VALUES
     (v_action_table_id, 'id', 'BIGINT', NULL, NULL, NULL, false, NULL, false, false, 'Action ID', 1),
     (v_action_table_id, 'request_id', 'BIGINT', NULL, NULL, NULL, false, NULL, false, false, 'Foreign key to Request table', 2),
@@ -139,7 +139,7 @@ BEGIN
     )
     ON CONFLICT (function_unit_id, table_name) DO UPDATE SET
         table_type = EXCLUDED.table_type,
-        description = EXCLUDED.description,
+        display_name = EXCLUDED.display_name,
         updated_at = CURRENT_TIMESTAMP
     RETURNING id INTO v_relation_table_id;
 
@@ -151,7 +151,7 @@ BEGIN
     -- Create fields for RELATION table
     INSERT INTO dw_field_definitions (
         table_id, field_name, data_type, length, precision_value, scale,
-        nullable, default_value, is_primary_key, is_unique, description, sort_order
+        nullable, default_value, is_primary_key, is_unique, display_name, sort_order
     ) VALUES
     (v_relation_table_id, 'id', 'BIGINT', NULL, NULL, NULL, false, NULL, false, false, 'Attachment ID', 1),
     (v_relation_table_id, 'request_id', 'BIGINT', NULL, NULL, NULL, false, NULL, false, false, 'Foreign key to Request table', 2),

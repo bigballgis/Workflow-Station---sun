@@ -54,6 +54,13 @@ export function useTaskActions(options: {
   loadTaskDetail: () => Promise<void>
   /** Portal form validation before approve/submit (Element Plus + designer rules). */
   validateTaskForm?: () => Promise<boolean>
+  /** MI Save parity: seed FK / merge participant scalars before complete. */
+  prepareBeforeComplete?: () => Promise<void>
+  /**
+   * Build Task Form payload for complete (clone rows, flatten nested __subTables__, MI scrub).
+   * When omitted, falls back to legacy merge from formData + bindings (tests only).
+   */
+  buildFormPayloadForComplete?: () => Record<string, any>
 }) {
   const { t } = useI18n()
   const router = useRouter()
@@ -126,6 +133,33 @@ export function useTaskActions(options: {
     options.actionDialogVisible.value = true
   }
 
+  function buildLegacyCompleteFormData(): Record<string, any> {
+    const currentFormData: Record<string, any> = {}
+    for (const key of Object.keys(options.formData.value)) {
+      if (!key.startsWith('__')) {
+        currentFormData[key] = options.formData.value[key]
+      }
+    }
+    const mergedSub: Record<string, any> = canonicalizeSubTablesForSubmit({
+      ...(options.formData.value.__subTables__ || {})
+    })
+    for (const b of options.subTableBindings.value) {
+      const bindingId = b?.bindingId
+      if (bindingId === null || bindingId === undefined || bindingId === '') continue
+      mergedSub[String(bindingId)] = b.data
+    }
+    const participantsBinding = options.subTableBindings.value.find(
+      b => b.tableName === 'participants' || resolveAssigneeFieldForBinding(b.columns, b.tableName)
+    )
+    if (participantsBinding?.bindingId !== null
+      && participantsBinding?.bindingId !== undefined
+      && participantsBinding?.bindingId !== '') {
+      mergedSub[String(participantsBinding.bindingId)] = participantsBinding.data
+    }
+    currentFormData.__subTables__ = mergedSub
+    return currentFormData
+  }
+
   async function submitApprove() {
     if (options.currentApproveAction.value === 'APPROVE' && !validateSubTableAssigneesForComplete()) return
     if (options.currentApproveAction.value === 'APPROVE' && options.validateTaskForm) {
@@ -137,6 +171,10 @@ export function useTaskActions(options: {
     }
     options.submitting.value = true
     try {
+      if (options.prepareBeforeComplete) {
+        await options.prepareBeforeComplete()
+      }
+
       const variables: Record<string, any> = {}
       if (options.currentApproveAction.value === 'APPROVE') {
         variables.approval_result = 'approved'
@@ -148,31 +186,21 @@ export function useTaskActions(options: {
       if (options.approveForm.comment) {
         variables.approval_comment = options.approveForm.comment
       }
-      const currentFormData: Record<string, any> = {}
-      for (const key of Object.keys(options.formData.value)) {
-        if (!key.startsWith('__') && !variables[key]) {
-          currentFormData[key] = options.formData.value[key]
-        }
-      }
-      const mergedSub: Record<string, any> = canonicalizeSubTablesForSubmit({
-        ...(options.formData.value.__subTables__ || {})
-      })
-      for (const b of options.subTableBindings.value) {
-        const bindingId = b?.bindingId
-        if (bindingId === null || bindingId === undefined || bindingId === '') continue
-        mergedSub[String(bindingId)] = b.data
-      }
-      const participantsBinding = options.subTableBindings.value.find(
-        b => b.tableName === 'participants' || resolveAssigneeFieldForBinding(b.columns, b.tableName)
+
+      const built = options.buildFormPayloadForComplete
+        ? options.buildFormPayloadForComplete()
+        : buildLegacyCompleteFormData()
+      const currentFormData: Record<string, any> = { ...built }
+      currentFormData.__subTables__ = canonicalizeSubTablesForSubmit(
+        (built.__subTables__ as Record<string, any>) || {}
       )
-      if (participantsBinding?.bindingId !== null
-        && participantsBinding?.bindingId !== undefined
-        && participantsBinding?.bindingId !== '') {
-        mergedSub[String(participantsBinding.bindingId)] = participantsBinding.data
-      }
-      currentFormData.__subTables__ = mergedSub
       Object.assign(variables, currentFormData)
+
       const pid = resolveProcessTaskId(options.taskId)
+      if (!pid) {
+        ElMessage.warning(t('task.operationFailed'))
+        return
+      }
       await completeTask(pid, {
         taskId: pid,
         action: options.currentApproveAction.value,
@@ -186,6 +214,9 @@ export function useTaskActions(options: {
     } catch (e) {
       console.error('submitApprove failed:', e)
       // Axios interceptor already showed ApiResponse / HTTP error body; avoid duplicate generic toast.
+      if (!(e as { response?: unknown })?.response) {
+        ElMessage.error(t('task.operationFailed'))
+      }
     } finally {
       options.submitting.value = false
     }

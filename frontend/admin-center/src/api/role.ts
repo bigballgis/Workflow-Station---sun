@@ -9,7 +9,7 @@ export interface Role {
   name: string
   code: string
   type: RoleType
-  description?: string
+  displayName?: string
   parentRoleId?: string
   status: 'ACTIVE' | 'INACTIVE'
   isSystem?: boolean
@@ -43,13 +43,13 @@ export interface CreateRoleRequest {
   name: string
   code: string
   type: RoleType
-  description?: string
+  displayName?: string
   parentRoleId?: string
 }
 
 export interface UpdateRoleRequest {
   name?: string
-  description?: string
+  displayName?: string
   status?: 'ACTIVE' | 'INACTIVE'
 }
 

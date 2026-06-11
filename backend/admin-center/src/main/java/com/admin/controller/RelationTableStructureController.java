@@ -5,6 +5,7 @@ import com.admin.dto.request.RollbackRequest;
 import com.admin.dto.request.UpdateRelationTableRequest;
 import com.admin.dto.response.RelationTableResponse;
 import com.admin.dto.response.RelationTableVersionResponse;
+import com.admin.dto.response.TableNameAvailabilityResponse;
 import com.admin.entity.RelationTableAccess;
 import com.admin.service.RelationTableAccessService;
 import com.admin.service.RelationTableDeployService;
@@ -53,6 +54,17 @@ public class RelationTableStructureController {
         log.info("Getting relation table list");
         List<RelationTableResponse> list = structureService.getTableList();
         return ResponseEntity.ok(list);
+    }
+
+    @GetMapping("/name-available")
+    @Operation(summary = "检查表名是否可用", description = "全平台校验：Relation Table 与 Table Design 表名不可重复")
+    public ResponseEntity<TableNameAvailabilityResponse> checkTableNameAvailable(
+            @RequestParam String tableName,
+            @RequestParam(required = false) Long excludeTableId) {
+        return ResponseEntity.ok(TableNameAvailabilityResponse.builder()
+                .tableName(tableName)
+                .available(structureService.isTableNameAvailable(tableName, excludeTableId))
+                .build());
     }
 
     @GetMapping("/{id}")

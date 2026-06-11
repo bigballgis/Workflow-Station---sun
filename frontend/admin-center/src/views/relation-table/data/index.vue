@@ -92,7 +92,7 @@
               v-for="field in fieldColumns"
               :key="field.fieldName"
               :prop="'data.' + field.fieldName"
-              :label="field.fieldName"
+              :label="field.displayName || field.fieldName"
               :min-width="120"
               sortable
               show-overflow-tooltip
@@ -236,22 +236,22 @@
         label-position="left"
       >
         <el-form-item
-          v-for="field in fieldColumns"
+          v-for="field in visibleFieldColumns"
           :key="field.fieldName"
-          :label="field.fieldName"
+          :label="field.displayName || field.fieldName"
           :required="!field.nullable"
         >
           <el-switch
             v-if="field.dataType === 'BOOLEAN'"
             v-model="formData[field.fieldName]"
-            :disabled="dialogMode === 'edit' && field.isPrimaryKey"
+            :disabled="(dialogMode === 'edit' && field.isPrimaryKey) || isFkFieldDisabled(field)"
           />
           <el-input-number
             v-else-if="isNumericType(field.dataType)"
             v-model="formData[field.fieldName]"
             :precision="field.dataType === 'DECIMAL' ? (field.scale || 2) : 0"
             style="width: 100%;"
-            :disabled="dialogMode === 'edit' && field.isPrimaryKey"
+            :disabled="(dialogMode === 'edit' && field.isPrimaryKey) || isFkFieldDisabled(field)"
           />
           <el-date-picker
             v-else-if="field.dataType === 'DATE'"
@@ -259,7 +259,7 @@
             type="date"
             value-format="YYYY-MM-DD"
             style="width: 100%;"
-            :disabled="dialogMode === 'edit' && field.isPrimaryKey"
+            :disabled="(dialogMode === 'edit' && field.isPrimaryKey) || isFkFieldDisabled(field)"
           />
           <el-date-picker
             v-else-if="field.dataType === 'TIMESTAMP'"
@@ -267,20 +267,20 @@
             type="datetime"
             value-format="YYYY-MM-DD HH:mm:ss"
             style="width: 100%;"
-            :disabled="dialogMode === 'edit' && field.isPrimaryKey"
+            :disabled="(dialogMode === 'edit' && field.isPrimaryKey) || isFkFieldDisabled(field)"
           />
           <el-input
             v-else-if="field.dataType === 'TEXT'"
             v-model="formData[field.fieldName]"
             type="textarea"
             :rows="3"
-            :disabled="dialogMode === 'edit' && field.isPrimaryKey"
+            :disabled="(dialogMode === 'edit' && field.isPrimaryKey) || isFkFieldDisabled(field)"
           />
           <el-input
             v-else
             v-model="formData[field.fieldName]"
             :maxlength="field.length || undefined"
-            :disabled="dialogMode === 'edit' && field.isPrimaryKey"
+            :disabled="(dialogMode === 'edit' && field.isPrimaryKey) || isFkFieldDisabled(field)"
           />
         </el-form-item>
       </el-form>
@@ -310,8 +310,8 @@ const {
   tableListLoading, dataLoading, exporting, saving,
   selectedTableId, searchKeyword, tableSearchKeyword, currentPage, pageSize, totalElements, dataRows,
   fetchDataError, dialogVisible, dialogMode, formData,
-  selectedTable, fieldColumns, filteredTables,
-  isNumericType, isRowDisabled,
+  selectedTable, fieldColumns, visibleFieldColumns, filteredTables,
+  isNumericType, isRowDisabled, isFkFieldDisabled,
   fetchData, handleSelectTable, handlePageChange, handleSizeChange,
   openAddDialog, openEditDialog, handleSaveRecord, handleDisable, handleEnable, handleDelete,
   formatHKT, handleExport, init, refresh,

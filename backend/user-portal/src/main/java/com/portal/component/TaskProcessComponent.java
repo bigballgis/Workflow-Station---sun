@@ -3,6 +3,7 @@ package com.portal.component;
 import com.platform.common.jdbc.PostgresPhysicalTablePrimaryKeys;
 import com.platform.common.jdbc.SubTableRowKeySupport;
 import com.portal.client.WorkflowEngineClient;
+import com.portal.util.SubTableNestingSanitizer;
 import com.portal.dto.TaskCompleteRequest;
 import com.portal.dto.TaskInfo;
 import com.portal.dto.ChangeHistoryContext;
@@ -39,6 +40,7 @@ import java.io.StringReader;
 import java.time.LocalDateTime;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -1251,6 +1253,9 @@ public class TaskProcessComponent {
                 mergedVars.putAll(variables);
                 taskFormComponent.mergeCompletedTaskSnapshotIntoVariables(
                         taskId, userId, task.getTaskDefinitionKey(), mergedVars);
+                // Prevent geometric __subTables__ bloat: collapse deep nested copies to the canonical
+                // one-level structure before persisting the approval write-back.
+                SubTableNestingSanitizer.stripDeepNestedSubTables(mergedVars);
                 syncInstance.setVariables(mergedVars);
 
                 processInstanceRepository.save(syncInstance);
@@ -1972,7 +1977,7 @@ public class TaskProcessComponent {
                 rowId = rowKey.get(pkCols.get(0));
             }
             Object assigneeValue = resolveMiAssigneeRaw(row, assigneeField);
-            String assigneeText = assigneeValue != null ? String.valueOf(assigneeValue).trim() : "";
+            String assigneeText = normalizeMiAssigneeText(assigneeValue);
             if (assigneeText.isEmpty()) {
                 emptyAssigneeRows.add(i + 1);
                 continue;
@@ -2152,6 +2157,7 @@ public class TaskProcessComponent {
 
     /**
      * Picks the sub-table list most likely for the current MI physical table, avoiding cross-table flattening that explodes instance count.
+     * When multiple {@code __subTables__} slices tie (same table, e.g. binding 64 vs 66), merge rows by PK and let later numeric binding keys win field conflicts (Edit on canvas binding must not lose to stale sibling slice).
      */
     private List<Map<String, Object>> selectRowsForMiCollection(Map<String, Object> subTables,
                                                                 List<String> pkCols,
@@ -2159,11 +2165,11 @@ public class TaskProcessComponent {
         if (subTables == null || subTables.isEmpty() || pkCols == null || pkCols.isEmpty()) {
             return List.of();
         }
-        int bestScore = -1;
-        int bestTotalSize = Integer.MAX_VALUE;
-        List<List<Map<String, Object>>> bestLists = new ArrayList<>();
-        for (Object v : subTables.values()) {
-            if (!(v instanceof List<?> rawList)) {
+        record ScoredSlice(String sliceKey, List<Map<String, Object>> rows, int score) {
+        }
+        List<ScoredSlice> scored = new ArrayList<>();
+        for (Map.Entry<String, Object> entry : subTables.entrySet()) {
+            if (!(entry.getValue() instanceof List<?> rawList)) {
                 continue;
             }
             List<Map<String, Object>> typed = new ArrayList<>();
@@ -2173,48 +2179,83 @@ public class TaskProcessComponent {
                 }
             }
             int score = scoreRowsEligibleForMi(typed, pkCols, assigneeField);
-            if (score <= 0) {
-                continue;
-            }
-            int totalSize = typed.size();
-            if (score > bestScore) {
-                bestScore = score;
-                bestTotalSize = totalSize;
-                bestLists.clear();
-                bestLists.add(typed);
-            } else if (score == bestScore) {
-                if (totalSize < bestTotalSize) {
-                    bestTotalSize = totalSize;
-                    bestLists.clear();
-                    bestLists.add(typed);
-                } else if (totalSize == bestTotalSize) {
-                    bestLists.add(typed);
-                }
+            if (score > 0) {
+                scored.add(new ScoredSlice(entry.getKey(), typed, score));
             }
         }
+        if (scored.isEmpty()) {
+            return List.of();
+        }
+        int bestScore = scored.stream().mapToInt(ScoredSlice::score).max().orElse(-1);
         if (bestScore <= 0) {
             return List.of();
         }
-        Set<String> seen = new LinkedHashSet<>();
-        List<Map<String, Object>> merged = new ArrayList<>();
-        for (List<Map<String, Object>> lst : bestLists) {
-            for (Map<String, Object> row : lst) {
+        List<ScoredSlice> best = scored.stream().filter(s -> s.score == bestScore).toList();
+        int bestTotalSize = best.stream().mapToInt(s -> s.rows.size()).min().orElse(Integer.MAX_VALUE);
+        best = best.stream().filter(s -> s.rows.size() == bestTotalSize).toList();
+
+        List<ScoredSlice> mergeOrder = best.stream()
+                .sorted(Comparator.comparingInt(s -> parseNumericSubTableSliceKey(s.sliceKey())))
+                .toList();
+
+        Map<String, Map<String, Object>> mergedByPk = new LinkedHashMap<>();
+        for (ScoredSlice slice : mergeOrder) {
+            for (Map<String, Object> row : slice.rows) {
                 Map<String, Object> rowKey = SubTableRowKeySupport.rowKeyFromVariableRow(row, pkCols);
                 if (rowKey == null) {
                     continue;
                 }
                 Object assigneeValue = resolveMiAssigneeRaw(row, assigneeField);
-                if (assigneeValue == null || String.valueOf(assigneeValue).trim().isEmpty()) {
+                if (assigneeValue == null || normalizeMiAssigneeText(assigneeValue).isEmpty()) {
                     continue;
                 }
                 String dedup = SubTableRowKeySupport.canonicalRowKeyString(pkCols, rowKey);
-                if (dedup.isEmpty() || !seen.add(dedup)) {
+                if (dedup.isEmpty()) {
                     continue;
                 }
-                merged.add(row);
+                mergedByPk.merge(dedup, new LinkedHashMap<>(row), TaskProcessComponent::mergeMiCollectionRowPreferIncoming);
             }
         }
-        return merged;
+        return new ArrayList<>(mergedByPk.values());
+    }
+
+    /** Numeric binding ids sort ascending so higher ids (runtime canvas binding) overwrite stale sibling slices on merge. */
+    static int parseNumericSubTableSliceKey(String sliceKey) {
+        if (sliceKey != null && sliceKey.matches("\\d+")) {
+            try {
+                return Integer.parseInt(sliceKey);
+            } catch (NumberFormatException ignored) {
+                // fall through
+            }
+        }
+        return Integer.MAX_VALUE;
+    }
+
+    static Map<String, Object> mergeMiCollectionRowPreferIncoming(Map<String, Object> existing, Map<String, Object> incoming) {
+        Map<String, Object> out = new LinkedHashMap<>(existing);
+        for (Map.Entry<String, Object> e : incoming.entrySet()) {
+            if (e.getValue() != null) {
+                out.put(e.getKey(), e.getValue());
+            }
+        }
+        return out;
+    }
+
+    /** Extract Flowable user id from assignee cell (plain id or user snapshot map). */
+    static String normalizeMiAssigneeText(Object assigneeValue) {
+        if (assigneeValue == null) {
+            return "";
+        }
+        if (assigneeValue instanceof Map<?, ?> map) {
+            for (String key : new String[]{"id", "userId", "user_id", "value"}) {
+                Object v = map.get(key);
+                if (v != null && !String.valueOf(v).trim().isEmpty()) {
+                    return String.valueOf(v).trim();
+                }
+            }
+            return "";
+        }
+        return String.valueOf(assigneeValue).trim();
     }
 
     private int scoreRowsEligibleForMi(List<Map<String, Object>> rows, List<String> pkCols, String assigneeField) {

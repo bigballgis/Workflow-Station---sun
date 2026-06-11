@@ -4,6 +4,7 @@
  */
 
 import { resolveAssigneeFieldForBinding } from '@/utils/subTableAssignment'
+import { legacyBindingIdAliases } from '@/components/formRendererHelpers'
 
 export function normalizeSubTableName(name?: string): string {
   return String(name || '').trim().toLowerCase()
@@ -89,6 +90,19 @@ export function cloneSubTableRows(rows: any[]): any[] {
     return rows.map(row => ({ ...row }))
   }
 }
+
+/** Strip nested {@code __subTables__} from each row to prevent Vue deep-reactivity freeze
+ *  and circular traversal when rows reference each other across sub-table slices. */
+export function stripNestedSubTablesFromRows(rows: any[]): any[] {
+  for (const row of rows) {
+    if (row && typeof row === 'object' && row.__subTables__) {
+      delete row.__subTables__
+    }
+  }
+  return rows
+}
+
+
 
 export function cloneSubTableBindings<T extends Array<{ data: any[] }>>(bindings: T): T {
   return bindings.map(binding => ({
@@ -389,6 +403,14 @@ export function mergeSubTableRowsByRowId(
       if (val === undefined) continue
       if (key === MI_STATUS_KEY || key === MI_NODE_KEY) continue
 
+      if (key === 'assignee' || key === 'assignee_user_id' || key === 'assignee_id') {
+        out[key] = val
+        if (!('assignee_display_name' in incoming)) {
+          delete out.assignee_display_name
+        }
+        continue
+      }
+
       if (key === '__subTables__') {
         const pSub = previous[key]
         if (val !== null && typeof val === 'object' && !Array.isArray(val)) {
@@ -504,6 +526,100 @@ export function mergeSubTableRowsByRowId(
 }
 
 /**
+ * Resolve saved rows for a binding — tolerates sibling binding-id keys and display/physical table names.
+ * Assignment tasks often store MI collection rows under initiator binding id {@code 64} while the
+ * Assign Task form uses binding {@code 66} for the same {@code tableId}.
+ */
+type ResolveSubTableRowsBinding = {
+  bindingId: number
+  tableName?: string
+  physicalTableName?: string
+  tableId?: number | null
+  primaryKeyFields?: string[] | null
+  columns?: Array<{ field?: string }> | null
+}
+
+type ResolveSubTableRowsOpts = {
+  forbidNameFallback?: boolean
+  bindingTableById?: Map<number, number | null>
+  mergeSiblingSlices?: boolean
+}
+
+/**
+ * Assignment / copied-form MI collection: own binding slice (e.g. {@code 66}) is often list-only while
+ * initiator slice {@code 64} carries assignee snapshots — merge before returning.
+ */
+function enrichMiDashboardResolvedRows(
+  rows: any[],
+  savedSubTables: Record<string, unknown>,
+  binding: ResolveSubTableRowsBinding,
+  opts?: ResolveSubTableRowsOpts,
+): any[] {
+  // Always merge initiator / sibling binding-id slices for MI collection grids.
+  // {@link forbidNameFallback} only disables table-name slice keys — not numeric id union.
+  if (!isMiDashboardSubTableBinding(binding)) return rows
+  if (opts?.mergeSiblingSlices === false) return rows
+  const rtMap = opts?.bindingTableById ?? new Map<number, number | null>()
+  const allSlices = mergeAllSlicesForSharedProcessSubTableBinding(savedSubTables, binding, rtMap)
+  return mergeSubTableRowsByRowId(rows, allSlices, binding.primaryKeyFields ?? null)
+}
+
+export function resolveSubTableRowsForBinding(
+  savedSubTables: Record<string, unknown> | null | undefined,
+  binding: ResolveSubTableRowsBinding,
+  opts?: ResolveSubTableRowsOpts,
+): any[] | undefined {
+  if (!savedSubTables || typeof savedSubTables !== 'object') return undefined
+
+  const tryKey = (key: string | number): any[] | undefined => {
+    const v = savedSubTables[key] ?? savedSubTables[String(key)]
+    return Array.isArray(v) && v.length > 0 ? (v as any[]) : undefined
+  }
+
+  let rows: any[] | undefined
+  for (const alias of legacyBindingIdAliases(binding.bindingId)) {
+    rows = tryKey(alias)
+    if (rows) return enrichMiDashboardResolvedRows(rows, savedSubTables, binding, opts)
+  }
+
+  if (!opts?.forbidNameFallback) {
+    const nameKeys = [
+      binding.tableName,
+      binding.physicalTableName,
+      binding.tableName ? normalizeSubTableName(binding.tableName) : '',
+      binding.physicalTableName ? normalizeSubTableName(binding.physicalTableName) : '',
+    ].filter((k): k is string => typeof k === 'string' && k.trim().length > 0)
+    for (const key of nameKeys) {
+      rows = tryKey(key)
+      if (rows) return enrichMiDashboardResolvedRows(rows, savedSubTables, binding, opts)
+    }
+  }
+
+  const selfTid =
+    binding.tableId != null && Number.isFinite(Number(binding.tableId))
+      ? Number(binding.tableId)
+      : null
+  const rtMap = opts?.bindingTableById
+  if (selfTid != null && rtMap) {
+    for (const [bid, tid] of rtMap.entries()) {
+      if (legacyBindingIdAliases(binding.bindingId).includes(Number(bid))) continue
+      if (tid == null || Number(tid) !== selfTid) continue
+      for (const alias of legacyBindingIdAliases(bid)) {
+        rows = tryKey(alias)
+        if (rows) return enrichMiDashboardResolvedRows(rows, savedSubTables, binding, opts)
+      }
+    }
+  }
+
+  if (opts?.mergeSiblingSlices !== false && isMiDashboardSubTableBinding(binding)) {
+    const merged = mergeAllSubTableSlicesFromVariables(savedSubTables, binding.primaryKeyFields ?? null)
+    if (merged.length > 0) return merged
+  }
+
+  return undefined
+}
+
+/**
  * Merge every array value under {@code variables.__subTables__} (all binding-id / label keys).
  * Backend MI overlay may live only under a sibling slice (e.g. original binding id) while the UI
  * binding for a copied form (subform_copy) reads a different key — per-binding lookup alone is stale.
@@ -573,6 +689,7 @@ const SHARED_PROCESS_SUB_TABLE_FK = new Set([
 
 const MI_PARTICIPANT_SUB_TABLE_FK = new Set([
   'id_idw',
+  'row_id',
   'participant_id',
   'parent_id',
   'meeting_participant_id',
@@ -638,6 +755,53 @@ export function mergeSubTableSlicesForRelationTableId(
   }
 
   return merged
+}
+
+/**
+ * Like {@link mergeSubTableSlicesForRelationTableId} but returns the RAW concatenated rows of all
+ * same-relation-table slices WITHOUT collapsing by primary key.
+ *
+ * MI participant-scoped bindings can legitimately have rows from different participants that share the
+ * same row PK (legacy/sequential PK allocation). Merging by id BEFORE the participant filter collapses
+ * those distinct rows, letting another participant's slice overwrite the current participant's data
+ * (e.g. People age/sex), which then gets dropped by the participant filter — surfacing as a blank form.
+ * Callers MUST filter to the current participant first, then merge.
+ */
+export function collectSubTableSliceRowsForRelationTableId(
+  savedSubTables: Record<string, unknown> | null | undefined,
+  tableId: number,
+  bindingTableById: Map<number, number | null>,
+  tableName?: string | null,
+  physicalTableName?: string | null,
+): any[] {
+  if (!savedSubTables || typeof savedSubTables !== 'object') return []
+  if (!Number.isFinite(tableId)) return []
+
+  const seenArrays = new Set<unknown>()
+  const out: any[] = []
+  const ingest = (val: unknown) => {
+    if (!Array.isArray(val) || val.length === 0 || seenArrays.has(val)) return
+    seenArrays.add(val)
+    for (const r of val) out.push(r)
+  }
+
+  for (const label of [tableName, physicalTableName]) {
+    if (label == null || String(label).trim() === '') continue
+    const t = String(label).trim()
+    ingest(savedSubTables[t])
+    ingest(savedSubTables[normalizeSubTableName(t)])
+  }
+
+  for (const [key, val] of Object.entries(savedSubTables)) {
+    const kid = Number(key)
+    if (!Number.isFinite(kid)) continue
+    const otherTid = bindingTableById.get(kid)
+    if (otherTid == null || Number.isNaN(Number(otherTid))) continue
+    if (Number(otherTid) !== tableId) continue
+    ingest(val)
+  }
+
+  return out
 }
 
 /**
@@ -773,6 +937,27 @@ export function mergeAllSlicesForSharedProcessSubTableBinding(
   return merged
 }
 
+/** Count designer business columns filled on a link-child row (excludes id/FK/MI meta). */
+export function miLinkChildRowBusinessFieldRank(row: Record<string, unknown>): number {
+  let n = 0
+  for (const [k, v] of Object.entries(row)) {
+    if (k.startsWith('__') || MI_LINK_CHILD_SCALAR_KEYS.has(k)) continue
+    if (k === 'sub_task_id' || k === 'main_id') continue
+    if (v === undefined || v === null) continue
+    if (typeof v === 'string' && v.trim() === '') continue
+    n++
+  }
+  return n
+}
+
+function pickAllocatedUuidFromLinkChildGroup(group: Record<string, unknown>[]): string | undefined {
+  for (const r of group) {
+    const id = r.id
+    if (id != null && isAllocatedUuidPrimaryKey(id)) return String(id).trim()
+  }
+  return undefined
+}
+
 function pickNonEmptyAttachmentFile(row: unknown): boolean {
   if (!row || typeof row !== 'object') return false
   const file = (row as Record<string, unknown>).file
@@ -855,7 +1040,6 @@ export function applySharedAttachmentFinalizeAndMaterialize<
           primaryKeyFields?: string[] | null
         },
         rtMap,
-        { omitNestedSlices: true },
       )
       let canonical = merged
       if (canonical.length === 0) {
@@ -953,8 +1137,10 @@ function collectForeignSubTableRowIdsFromRowWalk(
 ): void {
   for (const row of rows) {
     if (!row || typeof row !== 'object') continue
-    addRowIdToForeignSet(row, ids)
     const rec = row as Record<string, unknown>
+    if (!isPureSharedAttachmentFileRow(rec)) {
+      addRowIdToForeignSet(row, ids)
+    }
     const nest = rec.__subTables__
     if (!nest || typeof nest !== 'object') continue
     for (const [childKey, childVal] of Object.entries(nest as Record<string, unknown>)) {
@@ -1000,6 +1186,15 @@ export function collectForeignSubTableRowIdsFromVariables(
   return ids
 }
 
+function isPureSharedAttachmentFileRow(rec: Record<string, unknown>): boolean {
+  if (!pickNonEmptyAttachmentFile(rec)) return false
+  if (isSubTableMiDashboardRow(rec)) return false
+  if (rec.sub_task_id != null && String(rec.sub_task_id).trim() !== '') return false
+  if (rec.id_idw != null && String(rec.id_idw).trim() !== '') return false
+  if (rec.name != null && String(rec.name).trim() !== '') return false
+  return true
+}
+
 function isLeakedForeignRowOnSharedAttachment(
   rec: Record<string, unknown>,
   colFields: Set<string>,
@@ -1007,10 +1202,8 @@ function isLeakedForeignRowOnSharedAttachment(
 ): boolean {
   if (isSubTableMiDashboardRow(rec)) return true
 
-  const rowId = rec.id != null ? String(rec.id).trim() : ''
-  if (rowId && foreignSubTableRowIds?.has(rowId)) return true
-
-  // Backend MI overlay may stamp id_idw on persisted attachment rows — not a subtable leak.
+  // Genuine attachment rows are never foreign leaks — even when the same UUID was
+  // incorrectly duplicated into a subtable slice and registered as "foreign".
   if (pickNonEmptyAttachmentFile(rec)) {
     if (rec.name != null && String(rec.name).trim() !== '' && !colFields.has('name')) {
       return true
@@ -1018,6 +1211,18 @@ function isLeakedForeignRowOnSharedAttachment(
     return false
   }
 
+  const rowId = rec.id != null ? String(rec.id).trim() : ''
+  if (rowId && foreignSubTableRowIds) {
+    const foreign =
+      foreignSubTableRowIds instanceof Set
+        ? foreignSubTableRowIds
+        : new Set(
+            [...(foreignSubTableRowIds as Iterable<unknown>)].map(v => String(v).trim()).filter(Boolean),
+          )
+    if (foreign.has(rowId)) return true
+  }
+
+  // Backend MI overlay may stamp id_idw on persisted attachment rows — not a subtable leak.
   if (rec.id_idw != null && String(rec.id_idw).trim() !== '' && !colFields.has('id_idw')) {
     return true
   }
@@ -1047,7 +1252,13 @@ export function filterRowsForMiParticipantSubTableBinding(
     .filter(row => {
       if (!row || typeof row !== 'object') return false
       const rec = row as Record<string, unknown>
-      if (colFields.has('file')) return true
+      if (colFields.has('file') && pickNonEmptyAttachmentFile(row)) {
+        if (isSubTableMiDashboardRow(rec)) return true
+        if (rec.sub_task_id != null && String(rec.sub_task_id).trim() !== '') return true
+        if (rec.id_idw != null && String(rec.id_idw).trim() !== '') return true
+        if (rec.name != null && String(rec.name).trim() !== '') return true
+        return false
+      }
       if (!pickNonEmptyAttachmentFile(row)) return true
       if (isSubTableMiDashboardRow(rec)) return true
       const name = rec.name
@@ -1131,11 +1342,13 @@ export function finalizeSharedProcessSubTableBindingRows(
   },
   filterContext?: SharedProcessSubTableFilterContext,
 ): any[] {
-  const cleaned = filterRowsForSharedProcessSubTableBinding(rows, binding, filterContext).map(row =>
-    row && typeof row === 'object'
-      ? stripSubTableRowMetaFields(row as Record<string, unknown>)
-      : row,
-  )
+  const preserveMiFields = isMiDashboardSubTableBinding(binding)
+  const cleaned = filterRowsForSharedProcessSubTableBinding(rows, binding, filterContext).map(row => {
+    if (!row || typeof row !== 'object') return row
+    return preserveMiFields
+      ? row
+      : stripSubTableRowMetaFields(row as Record<string, unknown>)
+  })
   return dropSubsumedSubTableRows(cleaned)
 }
 
@@ -1149,6 +1362,19 @@ export function stripSubTableRowMetaFields(row: Record<string, unknown>): Record
   return out
 }
 
+const MI_ASSIGNEE_FIELD_KEYS = ['assignee', 'assignee_user_id', 'assignee_id'] as const
+
+function rowHasMiAssigneeField(row: Record<string, unknown>): boolean {
+  for (const key of MI_ASSIGNEE_FIELD_KEYS) {
+    const raw = row[key]
+    if (raw == null) continue
+    if (typeof raw === 'string' && raw.trim() === '') continue
+    if (typeof raw === 'object' && !Array.isArray(raw)) return true
+    if (typeof raw === 'string' && raw.startsWith('user-')) return true
+  }
+  return false
+}
+
 /** True when a row carries MI dashboard columns (assignee / per-row task status). */
 export function isSubTableMiDashboardRow(row: Record<string, unknown> | null | undefined): boolean {
   if (!row) return false
@@ -1158,7 +1384,86 @@ export function isSubTableMiDashboardRow(row: Record<string, unknown> | null | u
   if (row.task_definition_key != null && String(row.task_definition_key).trim() !== '') return true
   if (row.assignee_user_id != null && String(row.assignee_user_id).trim() !== '') return true
   if (row.assignee_id != null && String(row.assignee_id).trim() !== '') return true
+  if (rowHasMiAssigneeField(row)) return true
   return false
+}
+
+/** Drop attachment/file-only leak rows from an MI collection binding slice (stale sibling sync pollution). */
+export function filterRowsForMiCollectionSubTableBinding(
+  rows: any[] | undefined | null,
+  binding: { primaryKeyFields?: string[] | null; columns?: Array<{ field?: string }> | null },
+): any[] {
+  if (!Array.isArray(rows) || rows.length === 0) return []
+  const pkCols = (binding.primaryKeyFields ?? ['id_idw'])
+    .map(f => String(f).trim())
+    .filter(Boolean)
+  return rows.filter(row => {
+    if (!row || typeof row !== 'object') return false
+    const rec = row as Record<string, unknown>
+    const hasPk = pkCols.some(col => {
+      const v = rec[col]
+      if (v == null) return false
+      const s = String(v).trim()
+      return s !== '' && s !== '-'
+    })
+    if (!hasPk) return false
+    if (pickNonEmptyAttachmentFile(rec)) return false
+    return true
+  })
+}
+
+export function finalizeMiCollectionSubTableBindingRows(
+  rows: any[] | undefined | null,
+  binding: { primaryKeyFields?: string[] | null; columns?: Array<{ field?: string }> | null },
+): any[] {
+  return dropSubsumedSubTableRows(filterRowsForMiCollectionSubTableBinding(rows, binding))
+}
+
+/**
+ * Assignment task only: merge active binding rows into another numeric slice when both describe
+ * the same MI collection table — never into attachment / link-child bindings.
+ */
+export function shouldSyncStaleSiblingSubTableSlice(
+  target: unknown[],
+  sourceBinding: {
+    bindingId?: number
+    tableId?: number | null
+    tableName?: string
+    columns?: Array<{ field?: string }> | null
+    primaryKeyFields?: string[] | null
+  },
+  allBindings: Array<{
+    bindingId: number
+    tableId?: number | null
+    tableName?: string
+    columns?: Array<{ field?: string }> | null
+  }>,
+  sliceKey: string,
+): boolean {
+  if (!isMiDashboardSubTableBinding(sourceBinding)) return false
+  const pkCol = sourceBinding.primaryKeyFields?.[0] ?? 'id_idw'
+  const bid = Number(sliceKey)
+  const peer = allBindings.find(b => Number(b.bindingId) === bid)
+  if (peer) {
+    if (isFileOnlySubTableBinding(peer)) return false
+    if (
+      isMiParticipantScopedSubTableBinding(peer as { columns?: Array<{ field?: string }> | null; foreignKeyField?: string | null; tableName?: string })
+      && !isMiDashboardSubTableBinding(peer)
+    ) {
+      return false
+    }
+    const srcTid = sourceBinding.tableId != null ? Number(sourceBinding.tableId) : NaN
+    const peerTid = peer.tableId != null ? Number(peer.tableId) : NaN
+    if (Number.isFinite(srcTid) && Number.isFinite(peerTid) && srcTid !== peerTid) return false
+    return isMiDashboardSubTableBinding(peer)
+  }
+  const hasPk = target.some(
+    r => r && typeof r === 'object' && (r as Record<string, unknown>)[pkCol] != null,
+  )
+  if (!hasPk) return false
+  return !target.every(
+    r => r && typeof r === 'object' && pickNonEmptyAttachmentFile(r) && !(r as Record<string, unknown>)[pkCol],
+  )
 }
 
 export function subTableVariablesIncludeMiRows(
@@ -1314,17 +1619,24 @@ export function resolveSubTablePrimaryKeyFields(
   return undefined
 }
 
-export function getSavedSubTableRows(subTables: Record<string, any>, binding: {
-  bindingId: number
-  tableName: string
-  physicalTableName?: string
-  tableId?: number | null
-}): any[] | undefined {
-  const key = String(binding.bindingId)
-  const byId = (subTables[key] as any[] | undefined) || (subTables[String(binding.bindingId)] as any[] | undefined)
-  if (Array.isArray(byId)) return byId as any[]
-  if (binding.tableName && Array.isArray(subTables[binding.tableName])) return subTables[binding.tableName] as any[]
-  return undefined
+export function getSavedSubTableRows(
+  subTables: Record<string, any>,
+  binding: {
+    bindingId: number
+    tableName: string
+    physicalTableName?: string
+    tableId?: number | null
+    primaryKeyFields?: string[] | null
+    columns?: Array<{ field?: string }> | null
+  },
+  forbidNameFallback = false,
+  bindingTableById?: Map<number, number | null>,
+): any[] | undefined {
+  return resolveSubTableRowsForBinding(subTables, binding, {
+    forbidNameFallback,
+    bindingTableById,
+    mergeSiblingSlices: isMiDashboardSubTableBinding(binding),
+  })
 }
 
 /**
@@ -1420,19 +1732,35 @@ function repairMiCorruptLinkChildRowId(
   return { ...rec, id: fixedId }
 }
 
+function isAllocatedUuidPrimaryKey(value: unknown): boolean {
+  const s = value == null ? '' : String(value).trim()
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s)
+}
+
 /**
  * MI link-child rows may carry another participant's stale {@code id} while {@code id_idw} matches the parent
  * expansion key (runtime: id=44, id_idw=88). Thin placeholders are dropped; rows with real form payload keep
  * sex/age/etc. and get {@code id} aligned to the parent expansion key.
+ *
+ * When {@code id} is already an allocated UUID PK, {@code id_idw} mirroring the parent expansion key is
+ * erroneous — strip {@code id_idw} instead of overwriting the UUID (People Save path).
  */
 export function scrubMiCorruptLinkChildRowsForParent(
   subTables: Record<string, unknown>,
-  parentIdIdw: string | number
+  parentIdIdw: string | number,
+  options?: { skipSliceKeys?: Set<string> | null },
 ): void {
   const key = normalizeFkIdForMatchLocal(parentIdIdw)
   if (key == null) return
+  const skipKeys = options?.skipSliceKeys ?? null
 
-  const repairSlice = (rows: unknown[]): unknown[] => {
+  /**
+   * MI collection (Sub Task / dashboard) slices keep {@code id_idw} as the participant primary key, so
+   * {@code id_idw === parentIdIdw} is legitimate — never strip it there. The strip/repair logic targets
+   * link-child slices (People etc.) only; on collection slices we leave rows untouched but still recurse
+   * nested so genuine link-child rows under a participant parent are still cleaned.
+   */
+  const repairSlice = (rows: unknown[], isCollectionSlice: boolean): unknown[] => {
     const out: unknown[] = []
     for (const row of rows) {
       if (!row || typeof row !== 'object') {
@@ -1442,32 +1770,96 @@ export function scrubMiCorruptLinkChildRowsForParent(
       const rec = row as Record<string, unknown>
       const cidw = normalizeFkIdForMatchLocal(rec.id_idw)
       const cid = normalizeFkIdForMatchLocal(rec.id)
-      if (cidw === key && cid != null && cid !== key) {
+      if (!isCollectionSlice && cidw === key && cid != null && cid !== key) {
         if (miLinkChildRowHasFormPayload(rec)) {
-          const repaired = repairMiCorruptLinkChildRowId(rec, key)
-          const nest = repaired.__subTables__
-          if (nest && typeof nest === 'object' && !Array.isArray(nest)) {
-            scrubMiCorruptLinkChildRowsForParent(nest as Record<string, unknown>, parentIdIdw)
+          if (isAllocatedUuidPrimaryKey(rec.id)) {
+            const cleaned = { ...rec }
+            delete cleaned.id_idw
+            const nest = cleaned.__subTables__
+            if (nest && typeof nest === 'object' && !Array.isArray(nest)) {
+              scrubMiCorruptLinkChildRowsForParent(nest as Record<string, unknown>, parentIdIdw, options)
+            }
+            out.push(cleaned)
+          } else {
+            const repaired = repairMiCorruptLinkChildRowId(rec, key)
+            const nest = repaired.__subTables__
+            if (nest && typeof nest === 'object' && !Array.isArray(nest)) {
+              scrubMiCorruptLinkChildRowsForParent(nest as Record<string, unknown>, parentIdIdw, options)
+            }
+            out.push(repaired)
           }
-          out.push(repaired)
         }
         continue
       }
-      const nest = rec.__subTables__
+      // Heal a current-participant link-child row that carries a DIFFERENT participant's id_idw (legacy
+      // corruption from the seed/collapse leak, #1444): structural FK already anchors it here and id is a
+      // UUID, so the foreign id_idw is spurious and would make load-side participant filters reject the row.
+      const healed =
+        !isCollectionSlice
+          ? stripForeignParticipantIdIdwFromLinkChildRow(rec, parentIdIdw)
+          : rec
+      const nest = healed.__subTables__
       if (nest && typeof nest === 'object' && !Array.isArray(nest)) {
-        scrubMiCorruptLinkChildRowsForParent(nest as Record<string, unknown>, parentIdIdw)
+        scrubMiCorruptLinkChildRowsForParent(nest as Record<string, unknown>, parentIdIdw, options)
       }
-      out.push(rec)
+      out.push(healed)
     }
     return out
   }
 
   for (const [sliceKey, val] of Object.entries(subTables)) {
     if (!Array.isArray(val)) continue
-    const cleaned = repairSlice(val)
+    const cleaned = repairSlice(val, skipKeys?.has(String(sliceKey)) ?? false)
     subTables[sliceKey] = cleaned
     subTables[String(sliceKey)] = cleaned
   }
+}
+
+/**
+ * Slice keys in {@code __subTables__} that hold MI collection (Sub Task / dashboard) rows, so callers can tell
+ * {@link scrubMiCorruptLinkChildRowsForParent} to leave their {@code id_idw} (the participant primary key) intact.
+ * Covers binding-id keys (current + sibling/copied ids sharing the collection {@code tableId}) and table-name keys.
+ */
+export function buildMiCollectionSliceKeySet(
+  bindings: Array<{
+    bindingId: number
+    tableName?: string
+    physicalTableName?: string
+    tableId?: number | null
+    columns?: Array<{ field?: string }> | null
+  }>,
+  bindingTableById: Map<number, number | null>,
+  scopeSubTableName?: string | null,
+): Set<string> {
+  const keys = new Set<string>()
+  const addName = (s?: string | null) => {
+    if (s == null) return
+    const t = String(s).trim()
+    if (!t) return
+    keys.add(t)
+    const n = normalizeSubTableName(t)
+    if (n) keys.add(n)
+  }
+  const collTids = new Set<number>()
+  const wantName = scopeSubTableName ? normalizeSubTableName(String(scopeSubTableName)) : null
+  addName(scopeSubTableName)
+  for (const b of bindings) {
+    const matchesName =
+      wantName != null &&
+      [b.physicalTableName, b.tableName].some(c => c != null && normalizeSubTableName(String(c)) === wantName)
+    if (!matchesName && !isMiDashboardSubTableBinding(b)) continue
+    keys.add(String(b.bindingId))
+    addName(b.tableName)
+    addName(b.physicalTableName)
+    const tid = b.tableId != null ? Number(b.tableId) : bindingTableById.get(b.bindingId)
+    if (tid != null && Number.isFinite(Number(tid))) collTids.add(Number(tid))
+  }
+  if (collTids.size > 0) {
+    for (const [bid, tid] of bindingTableById.entries()) {
+      if (tid != null && collTids.has(Number(tid))) keys.add(String(bid))
+    }
+  }
+  return keys
 }
 
 export function flattenNestedSubTableRowsIntoPayload(subTables: Record<string, unknown>, maxPasses = 8): void {
@@ -1483,7 +1875,15 @@ export function flattenNestedSubTableRowsIntoPayload(subTables: Record<string, u
           if (!Array.isArray(childVal) || childVal.length === 0) continue
           const prev = subTables[childKey]
           const prevRows = Array.isArray(prev) ? [...(prev as any[])] : []
-          const merged = mergeSubTableRowsByRowId(prevRows, childVal as any[], null)
+          // The existing top-level slice is the authoritative binding data; a nested copy is a
+          // derivative cache that may lag behind (e.g. a prior userTask's collection row still holds a
+          // stale link-child age while the current task already persisted a fresh one). Merge with the
+          // nested copy as the base so the authoritative top-level row's filled fields win, while
+          // nested-only rows are still hoisted and empty top-level fields are filled. (#1443)
+          const merged =
+            prevRows.length > 0
+              ? mergeSubTableRowsByRowId(childVal as any[], prevRows, null)
+              : mergeSubTableRowsByRowId(prevRows, childVal as any[], null)
           subTables[childKey] = merged
           subTables[String(childKey)] = merged
           touched = true
@@ -1802,10 +2202,15 @@ export function hydrateBindingsRowsFromVariablesBySharedRelationTableId<
   bindings: T[],
   savedSubTables: Record<string, unknown>,
   bindingTableById: Map<number, number | null>,
+  options?: { excludeBinding?: (b: T) => boolean },
 ): void {
   const strictAssignmentByTid = new Map<number, Map<number, any[]>>()
 
   for (const b of bindings) {
+    // Caller-controlled opt-out: e.g. MI participant-scoped bindings hydrate their own slice (filtered to the
+    // current participant) elsewhere; pulling sibling same-tableId slices here would re-introduce other
+    // participants' rows that collide by PK and overwrite the current participant's data.
+    if (options?.excludeBinding?.(b)) continue
     // attachment (main_id / table 74): shared across bindings 103+104 — handled by applySharedAttachmentFinalizeAndMaterialize.
     if (
       isSharedAttachmentFileBinding(
@@ -1966,10 +2371,259 @@ function normalizeMiLinkMatchId(v: unknown): string | null {
  * MI parent row ↔ child binding row pairing for nested {@code __subTables__} patch.
  * Must be the same multi-instance element — never match on shared {@code task_status} alone (all active rows are IN_PROGRESS).
  */
+/** Structural FK field names linking a child row to its MI participant (sub task) row. */
+const MI_STRUCTURAL_PARENT_FK_FIELDS = [
+  'sub_task_id',
+  'participant_id',
+  'participantId',
+  'parent_id',
+  'parentId',
+  'meeting_participant_id',
+] as const
+
+/** First non-empty structural FK on a link-child row (e.g. People.sub_task_id → participant). */
+export function resolveMiChildStructuralParentFk(childRow: Record<string, unknown>): string | null {
+  for (const fk of MI_STRUCTURAL_PARENT_FK_FIELDS) {
+    const cv = normalizeMiLinkMatchId(childRow[fk])
+    if (cv) return cv
+  }
+  return null
+}
+
+/**
+ * Legacy People rows sometimes carry another participant's stale {@code sub_task_id} while
+ * {@code id}/{@code id_idw} already match the current MI element (sub form1 save → sub form2 load).
+ * Participant filter would drop those rows and lose age/sex/name from the prior step.
+ */
+export function repairMisassignedLinkChildStructuralFk(
+  row: Record<string, unknown>,
+  participantId: string | number,
+): Record<string, unknown> {
+  const pid = normalizeMiLinkMatchId(participantId)
+  if (!pid) return row
+
+  const structuralFk = resolveMiChildStructuralParentFk(row)
+  if (structuralFk === pid) return row
+
+  const childIdIdw = normalizeMiLinkMatchId(row.id_idw)
+  const legacyId = normalizeMiLinkMatchId(row.id)
+  const rowKeyedToParticipant =
+    (childIdIdw === pid && !isAllocatedUuidPrimaryKey(childIdIdw))
+    || (legacyId === pid && !isAllocatedUuidPrimaryKey(legacyId))
+
+  if (!rowKeyedToParticipant) return row
+
+  const out = { ...row }
+  for (const fk of MI_STRUCTURAL_PARENT_FK_FIELDS) {
+    const cv = normalizeMiLinkMatchId(out[fk])
+    if (!cv || cv !== pid) {
+      out[fk] = pid
+    }
+  }
+  return out
+}
+
+/**
+ * True when a link-child row already belongs to a DIFFERENT MI participant (e.g. People placeholder
+ * rows for sibling sub-tasks carried in the same binding). The current participant's Save MUST NOT
+ * seed the current FK / allocate a PK on these rows — doing so makes them falsely claim the current
+ * participant and {@link collapseMiLinkChildRowsToOnePerParticipant} then merges them into one corrupt
+ * row (cross-participant {@code id_idw} contamination, #1444). Fresh rows with no participant identity
+ * yet (new current row) and the current participant's own rows are NOT foreign.
+ */
+export function linkChildRowIsForeignParticipantPlaceholder(
+  row: Record<string, unknown>,
+  myRowId: string | number,
+): boolean {
+  const pid = normalizeMiLinkMatchId(myRowId)
+  if (!pid) return false
+  const structuralFk = resolveMiChildStructuralParentFk(row)
+  if (structuralFk) return structuralFk !== pid
+  const idIdw = normalizeMiLinkMatchId(row.id_idw)
+  // No structural FK yet: a participant-style id_idw pointing at someone else marks a foreign placeholder.
+  return !!idIdw && idIdw !== pid && !isAllocatedUuidPrimaryKey(idIdw)
+}
+
+/**
+ * The current participant's link-child row (People) uses {@code id} (UUID) as PK and a structural FK
+ * ({@code sub_task_id}) as the participant link. Its own {@code id_idw} must NEVER hold a participant id
+ * — least of all a DIFFERENT participant's — or load-side participant filters reject the fresh row and
+ * fall back to a stale nested copy (#1444). Strip such a corrupt {@code id_idw} when the structural FK
+ * already anchors the row to the current participant and {@code id} is an allocated UUID.
+ */
+export function stripForeignParticipantIdIdwFromLinkChildRow(
+  row: Record<string, unknown>,
+  myRowId: string | number,
+): Record<string, unknown> {
+  const pid = normalizeMiLinkMatchId(myRowId)
+  if (!pid) return row
+  const idIdw = normalizeMiLinkMatchId(row.id_idw)
+  if (!idIdw || idIdw === pid) return row
+  if (isAllocatedUuidPrimaryKey(idIdw)) return row
+  const structuralFk = resolveMiChildStructuralParentFk(row)
+  if (structuralFk !== pid) return row
+  if (!isAllocatedUuidPrimaryKey(normalizeMiLinkMatchId(row.id))) return row
+  const out = { ...row }
+  delete out.id_idw
+  return out
+}
+
+function resolveParticipantMergePkField(group: Record<string, unknown>[]): string {
+  for (const rec of group) {
+    for (const fk of MI_STRUCTURAL_PARENT_FK_FIELDS) {
+      if (normalizeMiLinkMatchId(rec[fk])) return fk
+    }
+  }
+  return 'sub_task_id'
+}
+
+/** Prefer rows with backend-allocated PK (UUID) over legacy rows where {@code id} was copied from participant id. */
+export function scoreMiLinkChildRowQuality(row: Record<string, unknown>): number {
+  let score = 0
+  const structuralFk = resolveMiChildStructuralParentFk(row)
+  const id = normalizeMiLinkMatchId(row.id)
+  if (id) {
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      score += 100
+    } else if (structuralFk && id !== structuralFk) {
+      score += 40
+    } else if (structuralFk && id === structuralFk) {
+      score -= 80
+    }
+  } else {
+    score -= 50
+  }
+  for (const [k, v] of Object.entries(row)) {
+    if (k.startsWith('__') || MI_LINK_CHILD_SCALAR_KEYS.has(k)) continue
+    if (v === undefined || v === null) continue
+    if (typeof v === 'string' && v.trim() === '') continue
+    score += 1
+  }
+  return score
+}
+
+/**
+ * After {@link repairMisassignedPrimaryKeyFromParentId} clears a misassigned {@code id}, re-copy the
+ * allocated PK from the persisted variables slice when the in-memory row still carries form payload
+ * but lost its id. Without this, inline form-below-table reads nested stubs with empty id even though
+ * {@code __subTables__} already holds the UUID from a prior Save.
+ */
+export function backfillMiLinkChildPrimaryKeysFromVariables<
+  T extends {
+    bindingId: number
+    tableName?: string
+    physicalTableName?: string
+    data: any[]
+    foreignKeyField?: string | null
+    columns?: Array<{ field?: string }> | null
+  },
+>(
+  bindings: T[],
+  savedSubTables: Record<string, unknown> | null | undefined,
+  myRowId: string | number | null | undefined,
+): void {
+  if (!savedSubTables || typeof savedSubTables !== 'object') return
+  for (const binding of bindings) {
+    if (!isMiParticipantScopedSubTableBinding(binding)) continue
+    const saved = getSavedSubTableRows(savedSubTables, binding) ?? []
+    if (!Array.isArray(binding.data) || binding.data.length === 0) continue
+    for (let i = 0; i < binding.data.length; i++) {
+      const row = binding.data[i]
+      if (!row || typeof row !== 'object') continue
+      const rec = row as Record<string, unknown>
+      const existingId = rec.id
+      if (existingId != null && String(existingId).trim() !== '') continue
+      // A sibling participant's placeholder row (id_idw points elsewhere, no structural FK) must NOT inherit
+      // the current participant's allocated id — that collides PKs and collapse then leaks its id_idw onto the
+      // current row (#1444). Only backfill rows that actually belong to the current participant.
+      if (myRowId != null && linkChildRowIsForeignParticipantPlaceholder(rec, myRowId)) continue
+      const participantKey =
+        resolveMiChildStructuralParentFk(rec)
+        ?? (myRowId != null ? normalizeMiLinkMatchId(myRowId) : null)
+      if (!participantKey) continue
+      const donor = saved.find(s => {
+        if (!s || typeof s !== 'object') return false
+        const sr = s as Record<string, unknown>
+        const sid = sr.id
+        if (sid == null || String(sid).trim() === '') return false
+        const sidNorm = normalizeMiLinkMatchId(sid)
+        if (!sidNorm || sidNorm === participantKey) return false
+        const sParticipant = resolveMiChildStructuralParentFk(sr) ?? sidNorm
+        return sParticipant === participantKey
+      }) as Record<string, unknown> | undefined
+      if (donor?.id != null && String(donor.id).trim() !== '') {
+        binding.data[i] = { ...rec, id: donor.id }
+      }
+    }
+  }
+}
+
+/** When multiple link-child rows share the same participant FK, merge payloads (sub form1 → sub form2). */
+export function collapseMiLinkChildRowsToOnePerParticipant(rows: unknown[]): any[] {
+  if (!Array.isArray(rows) || rows.length <= 1) return Array.isArray(rows) ? [...rows] : []
+  const byParticipant = new Map<string, Record<string, unknown>[]>()
+  const ungrouped: Record<string, unknown>[] = []
+  for (const raw of rows) {
+    if (!raw || typeof raw !== 'object') continue
+    const rec = raw as Record<string, unknown>
+    const pid = resolveMiChildStructuralParentFk(rec)
+    if (!pid) {
+      ungrouped.push(rec)
+      continue
+    }
+    const g = byParticipant.get(pid) ?? []
+    g.push(rec)
+    byParticipant.set(pid, g)
+  }
+  const out: any[] = [...ungrouped]
+  for (const group of byParticipant.values()) {
+    if (group.length === 1) {
+      out.push(group[0])
+      continue
+    }
+    const pkField = resolveParticipantMergePkField(group)
+    const sorted = [...group].sort(
+      (a, b) =>
+        miLinkChildRowBusinessFieldRank(a) - miLinkChildRowBusinessFieldRank(b)
+        || scoreMiLinkChildRowQuality(a) - scoreMiLinkChildRowQuality(b),
+    )
+    let merged: any[] = []
+    for (const r of sorted) {
+      merged = mergeSubTableRowsByRowId(merged, [r], [pkField])
+    }
+    const allocatedId = pickAllocatedUuidFromLinkChildGroup(group)
+    const row = merged[0] ?? sorted[sorted.length - 1]
+    if (row && allocatedId) {
+      out.push({ ...(row as Record<string, unknown>), id: allocatedId })
+    } else if (row) {
+      out.push(row)
+    }
+  }
+  return out
+}
+
 export function miParentRowAlignsWithChildRow(
   parentRow: Record<string, unknown>,
   childRow: Record<string, unknown>,
 ): boolean {
+  const parentPk =
+    parentRow.id_idw
+    ?? parentRow.rowId
+    ?? parentRow.participant_id
+    ?? parentRow.participantId
+    ?? parentRow.id
+  const parentPkNorm = normalizeMiLinkMatchId(parentPk)
+
+  /**
+   * Structural FK is authoritative for link-child rows: a child's own {@code id_idw} is its OWN PK
+   * (sequential ids can collide with another participant's id), so once {@code sub_task_id} etc. is set
+   * parentage MUST be decided by it alone — never by comparing the child's id_idw.
+   */
+  const structuralFk = resolveMiChildStructuralParentFk(childRow)
+  if (structuralFk) {
+    return parentPkNorm != null && structuralFk === parentPkNorm
+  }
+
   const parentIdIdw = normalizeMiLinkMatchId(parentRow.id_idw)
   const childIdIdw = normalizeMiLinkMatchId(childRow.id_idw)
   if (parentIdIdw && childIdIdw && parentIdIdw === childIdIdw) return true
@@ -1978,26 +2632,52 @@ export function miParentRowAlignsWithChildRow(
   const childId = normalizeMiLinkMatchId(childRow.id)
   if (parentId && childId && parentId === childId) return true
 
-  const parentPk =
-    parentRow.id_idw
-    ?? parentRow.rowId
-    ?? parentRow.participant_id
-    ?? parentRow.participantId
-    ?? parentRow.id
-  const parentPkNorm = normalizeMiLinkMatchId(parentPk)
   if (!parentPkNorm) return false
+  /** Legacy link-form rows keyed child PK {@code id} to parent id_idw when no structural FK. */
+  const cv = normalizeMiLinkMatchId(childRow.id)
+  if (cv && cv === parentPkNorm) return true
+  return false
+}
 
-  for (const fk of [
-    'id_idw',
-    'participant_id',
-    'participantId',
-    'parent_id',
-    'parentId',
-    'meeting_participant_id',
-  ]) {
-    const cv = normalizeMiLinkMatchId(childRow[fk])
-    if (cv && cv === parentPkNorm) return true
+/**
+ * True when a link-child row (People, subtable2, …) belongs to the current MI participant.
+ * Normally {@code sub_task_id} (structural FK) is authoritative; the child's own {@code id_idw} is NOT a
+ * participant key (it is the child's own PK and may collide with another participant's id).
+ * Exception: when structural FK is stale but {@code id_idw} + allocated UUID {@code id} still anchor the row
+ * to the current participant (sub form1 save → sub form2 load).
+ */
+export function miLinkChildRowBelongsToParticipant(
+  row: Record<string, unknown>,
+  participantId: string | number,
+): boolean {
+  const pid = normalizeMiLinkMatchId(participantId)
+  if (!pid) return false
+
+  const childIdIdw = normalizeMiLinkMatchId(row.id_idw)
+  const legacyId = normalizeMiLinkMatchId(row.id)
+  const structuralFk = resolveMiChildStructuralParentFk(row)
+
+  if (structuralFk) {
+    if (structuralFk === pid) {
+      if (
+        childIdIdw
+        && childIdIdw !== structuralFk
+        && !isAllocatedUuidPrimaryKey(childIdIdw)
+        && (isAllocatedUuidPrimaryKey(legacyId) || legacyId === childIdIdw)
+      ) {
+        return false
+      }
+      return true
+    }
+    if (childIdIdw === pid && !isAllocatedUuidPrimaryKey(childIdIdw)) {
+      if (isAllocatedUuidPrimaryKey(legacyId) || legacyId === pid) return true
+      return false
+    }
+    return false
   }
+
+  if (childIdIdw === pid) return true
+  if (legacyId === pid && !isAllocatedUuidPrimaryKey(legacyId)) return true
   return false
 }
 
@@ -2178,8 +2858,8 @@ export function pickMiLinkChildRowsForParent(
       miParentRowAlignsWithChildRow(parentRow, r as Record<string, unknown>),
   )
   if (matched.length === 0) return []
-  const collapsed = collapseSubTableRowsPreferFilled(matched)
-  return mergeSubTableRowsByRowId([], collapsed, primaryKeyFields ?? null)
+  const deduped = collapseMiLinkChildRowsToOnePerParticipant(matched)
+  return mergeSubTableRowsByRowId([], deduped, primaryKeyFields ?? null)
 }
 
 /** Find the participant row in a sub-table binding for the current MI sub-task. */
@@ -2210,7 +2890,14 @@ export function findMiIsolatedParentRow(
   if (matched) return matched
   if (!Array.isArray(rows) || rows.length !== 1) return null
   const only = rows[0]
-  return only && typeof only === 'object' ? (only as Record<string, unknown>) : null
+  if (!only || typeof only !== 'object') return null
+  const rec = only as Record<string, unknown>
+  if (miRowId != null && String(miRowId).trim() !== '') {
+    const rowIdw = normalizeMiLinkMatchId(rec.id_idw)
+    const mid = normalizeMiLinkMatchId(miRowId)
+    if (rowIdw && mid && rowIdw !== mid) return null
+  }
+  return rec
 }
 
 /**
@@ -2218,6 +2905,19 @@ export function findMiIsolatedParentRow(
  * Exported for FormRenderer inline form-below-table when {@code target.data} is thin/empty but rows nest under
  * parent rows (e.g. legacy {@code bindingId} keys after BPMN form copy).
  */
+export function scopeMiLinkChildRowsForParentRow(
+  parentRow: Record<string, unknown>,
+  candidateRows: unknown[],
+): Record<string, unknown>[] {
+  if (!Array.isArray(candidateRows)) return []
+  return candidateRows.filter(
+    (r): r is Record<string, unknown> =>
+      !!r &&
+      typeof r === 'object' &&
+      miParentRowAlignsWithChildRow(parentRow, r as Record<string, unknown>),
+  )
+}
+
 export function pullNestedRowsForBindingFromParentRows(
   child: { bindingId: number; tableName: string; physicalTableName?: string; tableId?: number | null },
   parentRows: any[],

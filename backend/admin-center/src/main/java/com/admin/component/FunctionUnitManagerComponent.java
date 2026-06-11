@@ -8,6 +8,7 @@ import com.admin.dto.response.FormContentDTO;
 import com.admin.dto.response.ProcessContentDTO;
 import com.admin.dto.response.DataTableContentDTO;
 import com.admin.dto.response.TableBindingDTO;
+import com.admin.dto.response.TableFieldDefinitionDTO;
 import com.admin.dto.response.ImportResult;
 import com.admin.dto.response.ValidationResult;
 import com.admin.entity.FunctionUnit;
@@ -81,6 +82,26 @@ public class FunctionUnitManagerComponent {
     
     // Semantic version regex
     private static final Pattern VERSION_PATTERN = Pattern.compile("^\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9]+)?$");
+
+    /**
+     * In-memory cache for assembled function unit content (forms + bindings + BPMN + data tables).
+     * Key: functionUnitId. TTL: 5 min. Avoids repeated DB queries + JOINs for the same FU.
+     */
+    private final Map<String, CachedContent> assembledContentCache = java.util.Collections.synchronizedMap(
+            new java.util.LinkedHashMap<>(32, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, CachedContent> eldest) {
+                    return size() > 50;
+                }
+            });
+
+    private static final long CONTENT_CACHE_TTL_MS = java.util.concurrent.TimeUnit.MINUTES.toMillis(5);
+
+    private record CachedContent(com.admin.dto.response.FunctionUnitContentResponse response, long cachedAt) {
+        boolean isExpired() {
+            return System.currentTimeMillis() - cachedAt > CONTENT_CACHE_TTL_MS;
+        }
+    }
         
     /**
      * Import function package
@@ -776,6 +797,12 @@ public class FunctionUnitManagerComponent {
      */
     @Transactional(readOnly = true)
     public FunctionUnitContentResponse assembleFunctionUnitContent(String id) {
+        // Check cache first
+        CachedContent cached = assembledContentCache.get(id);
+        if (cached != null && !cached.isExpired()) {
+            return cached.response();
+        }
+
         FunctionUnit unit = getFunctionUnitById(id);
         List<FunctionUnitContent> contents = contentRepository.findByFunctionUnitId(id);
 
@@ -822,7 +849,7 @@ public class FunctionUnitManagerComponent {
         // Attach tableBindings to each form
         attachTableBindings(forms);
 
-        return FunctionUnitContentResponse.builder()
+        FunctionUnitContentResponse response = FunctionUnitContentResponse.builder()
                 .id(unit.getId())
                 .name(unit.getName())
                 .code(unit.getCode())
@@ -833,6 +860,9 @@ public class FunctionUnitManagerComponent {
                 .processes(processes)
                 .dataTables(dataTables)
                 .build();
+        // Cache the assembled result
+        assembledContentCache.put(id, new CachedContent(response, System.currentTimeMillis()));
+        return response;
     }
 
     /**
@@ -874,6 +904,102 @@ public class FunctionUnitManagerComponent {
                     content.getSourceId(), e.getMessage());
         }
         return fallbackData;
+    }
+
+    private void enrichBindingsWithFieldDefinitions(List<TableBindingDTO> bindings) {
+        if (bindings == null || bindings.isEmpty()) {
+            return;
+        }
+        Set<Long> dwTableIds = new HashSet<>();
+        Set<Long> rtTableIds = new HashSet<>();
+        for (TableBindingDTO binding : bindings) {
+            if (binding.getTableId() == null) {
+                continue;
+            }
+            if ("RELATION".equalsIgnoreCase(binding.getTableType())) {
+                rtTableIds.add(binding.getTableId());
+            } else {
+                dwTableIds.add(binding.getTableId());
+            }
+        }
+        Map<Long, List<TableFieldDefinitionDTO>> dwFields = loadDwFieldDefinitions(dwTableIds);
+        Map<Long, List<TableFieldDefinitionDTO>> rtFields = loadRtFieldDefinitions(rtTableIds);
+        for (TableBindingDTO binding : bindings) {
+            if (binding.getTableId() == null) {
+                binding.setFieldDefinitions(Collections.emptyList());
+                continue;
+            }
+            if ("RELATION".equalsIgnoreCase(binding.getTableType())) {
+                binding.setFieldDefinitions(rtFields.getOrDefault(binding.getTableId(), Collections.emptyList()));
+            } else {
+                binding.setFieldDefinitions(dwFields.getOrDefault(binding.getTableId(), Collections.emptyList()));
+            }
+        }
+    }
+
+    private Map<Long, List<TableFieldDefinitionDTO>> loadDwFieldDefinitions(Set<Long> tableIds) {
+        return loadFieldDefinitionsFromTable("dw_field_definitions", tableIds);
+    }
+
+    private Map<Long, List<TableFieldDefinitionDTO>> loadRtFieldDefinitions(Set<Long> tableIds) {
+        return loadFieldDefinitionsFromTable("rt_field_definitions", tableIds);
+    }
+
+    private Map<Long, List<TableFieldDefinitionDTO>> loadFieldDefinitionsFromTable(String table, Set<Long> tableIds) {
+        if (tableIds == null || tableIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        String placeholders = tableIds.stream().map(id -> "?").collect(Collectors.joining(","));
+        String sql =
+                "SELECT table_id, field_name, is_primary_key, is_foreign_key, ref_table_id, " +
+                "       ref_primary_key_fields, pk_generation_json, fk_display_mode " +
+                "FROM " + table + " WHERE table_id IN (" + placeholders + ") " +
+                "ORDER BY table_id, sort_order NULLS LAST, id";
+        Map<Long, List<TableFieldDefinitionDTO>> byTable = new LinkedHashMap<>();
+        jdbcTemplate.query(sql, rs -> {
+            Long tableId = readNullableLong(rs, "table_id");
+            if (tableId == null) {
+                return;
+            }
+            TableFieldDefinitionDTO field = TableFieldDefinitionDTO.builder()
+                    .fieldName(rs.getString("field_name"))
+                    .isPrimaryKey(rs.getBoolean("is_primary_key"))
+                    .isForeignKey(rs.getBoolean("is_foreign_key"))
+                    .refTableId(readNullableLong(rs, "ref_table_id"))
+                    .refPrimaryKeyFields(readJsonStringList(rs, "ref_primary_key_fields"))
+                    .pkGeneration(readJsonMap(rs, "pk_generation_json"))
+                    .fkDisplayMode(rs.getString("fk_display_mode"))
+                    .build();
+            byTable.computeIfAbsent(tableId, k -> new ArrayList<>()).add(field);
+        }, tableIds.toArray());
+        return byTable;
+    }
+
+    private List<String> readJsonStringList(java.sql.ResultSet rs, String column) throws java.sql.SQLException {
+        String json = rs.getString(column);
+        if (json == null || json.isBlank()) {
+            return Collections.emptyList();
+        }
+        try {
+            return objectMapper.readValue(json, objectMapper.getTypeFactory().constructCollectionType(List.class, String.class));
+        } catch (Exception e) {
+            log.warn("Failed to parse JSON list column {}: {}", column, e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> readJsonMap(java.sql.ResultSet rs, String column) throws java.sql.SQLException {
+        String json = rs.getString(column);
+        if (json == null || json.isBlank()) {
+            return Collections.emptyMap();
+        }
+        try {
+            return objectMapper.readValue(json, Map.class);
+        } catch (Exception e) {
+            log.warn("Failed to parse JSON map column {}: {}", column, e.getMessage());
+            return Collections.emptyMap();
+        }
     }
 
     private static List<String> readTextArrayColumn(java.sql.ResultSet rs, String column) throws java.sql.SQLException {
@@ -940,12 +1066,12 @@ public class FunctionUnitManagerComponent {
                 // for all binding types — mirrors user-portal ProcessFormComponent.loadSubTableBindingMapsForForm.
                 String sql =
                         "SELECT fd.id as form_id, ftb.id as binding_id, ftb.binding_type, ftb.binding_mode, " +
-                        "       ftb.sub_mode, ftb.foreign_key_field, ftb.sort_order, " +
+                        "       ftb.sub_mode, ftb.foreign_key_field, ftb.binding_link_mode, ftb.sort_order, " +
                         "       COALESCE(td.id, rt.id) as table_id, " +
                         "       COALESCE(td.table_name, rt.table_name) AS table_name, " +
                         "       COALESCE(td.table_display_name, rt.display_name) AS table_display_name, " +
                         "       COALESCE(td.table_type, 'RELATION') as table_type, " +
-                        "       COALESCE(td.description, rt.description) as table_description, " +
+                        "       COALESCE(td.display_name, rt.description) as table_description, " +
                         "       (SELECT array_agg(fd_inner.field_name ORDER BY fd_inner.sort_order NULLS LAST, fd_inner.id) " +
                         "        FROM dw_field_definitions fd_inner " +
                         "        WHERE fd_inner.table_id = td.id AND COALESCE(fd_inner.is_primary_key, false) = true) AS primary_key_fields " +
@@ -964,6 +1090,7 @@ public class FunctionUnitManagerComponent {
                             .bindingMode(rs.getString("binding_mode"))
                             .subMode(rs.getString("sub_mode"))
                             .foreignKeyField(rs.getString("foreign_key_field"))
+                            .bindingLinkMode(rs.getString("binding_link_mode"))
                             .sortOrder(rs.getInt("sort_order"))
                             .tableName(rs.getString("table_name"))
                             .tableDisplayName(rs.getString("table_display_name"))
@@ -979,12 +1106,12 @@ public class FunctionUnitManagerComponent {
                 String placeholders = formNamesForFallback.stream().map(n -> "?").collect(Collectors.joining(","));
                 String sql =
                         "SELECT latest.form_name, ftb.id as binding_id, ftb.binding_type, ftb.binding_mode, " +
-                        "       ftb.sub_mode, ftb.foreign_key_field, ftb.sort_order, " +
+                        "       ftb.sub_mode, ftb.foreign_key_field, ftb.binding_link_mode, ftb.sort_order, " +
                         "       COALESCE(td.id, rt.id) as table_id, " +
                         "       COALESCE(td.table_name, rt.table_name) AS table_name, " +
                         "       COALESCE(td.table_display_name, rt.display_name) AS table_display_name, " +
                         "       COALESCE(td.table_type, 'RELATION') as table_type, " +
-                        "       COALESCE(td.description, rt.description) as table_description, " +
+                        "       COALESCE(td.display_name, rt.description) as table_description, " +
                         "       (SELECT array_agg(fd_inner.field_name ORDER BY fd_inner.sort_order NULLS LAST, fd_inner.id) " +
                         "        FROM dw_field_definitions fd_inner " +
                         "        WHERE fd_inner.table_id = td.id AND COALESCE(fd_inner.is_primary_key, false) = true) AS primary_key_fields " +
@@ -1003,6 +1130,7 @@ public class FunctionUnitManagerComponent {
                             .bindingMode(rs.getString("binding_mode"))
                             .subMode(rs.getString("sub_mode"))
                             .foreignKeyField(rs.getString("foreign_key_field"))
+                            .bindingLinkMode(rs.getString("binding_link_mode"))
                             .sortOrder(rs.getInt("sort_order"))
                             .tableName(rs.getString("table_name"))
                             .tableDisplayName(rs.getString("table_display_name"))
@@ -1012,6 +1140,13 @@ public class FunctionUnitManagerComponent {
                             .build();
                     bindingsByFormName.computeIfAbsent(formName, k -> new ArrayList<>()).add(binding);
                 }, formNamesForFallback.toArray());
+            }
+
+            for (List<TableBindingDTO> list : bindingsBySourceId.values()) {
+                enrichBindingsWithFieldDefinitions(list);
+            }
+            for (List<TableBindingDTO> list : bindingsByFormName.values()) {
+                enrichBindingsWithFieldDefinitions(list);
             }
 
             // Attach bindings: prefer sourceId match, fallback to form_name
