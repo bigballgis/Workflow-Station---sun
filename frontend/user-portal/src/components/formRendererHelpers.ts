@@ -113,6 +113,27 @@ export function isFormCreateRuleHidden(rule: unknown): boolean {
   )
 }
 
+/** Copy designer Hide flag onto parsed {@link FormField} (runtime visibility via event script). */
+export function applyDesignerHideFlagToFormField(field: FormField, rule: unknown): void {
+  if (isFormCreateRuleHidden(rule)) {
+    field.hidden = true
+  }
+}
+
+/** Seed script visibility map from designer-hidden fields (overridable via `options.hidden(false, …)`). */
+export function seedDesignerHiddenFieldVisibility(
+  fields: FormField[] | undefined,
+  tabs: FormTab[] | undefined,
+  fieldsAfterTabs: FormField[] | undefined,
+  state: { hidden: Map<string, boolean>; display: Map<string, boolean> },
+): void {
+  for (const field of flattenAllFormFieldSegments(fields, tabs, fieldsAfterTabs)) {
+    if (field.hidden === true && field.key) {
+      state.hidden.set(String(field.key), true)
+    }
+  }
+}
+
 export function isFormFieldReadonly(field: FormField, formReadonly = false): boolean {
   return formReadonly || field.readonly === true
 }
@@ -464,26 +485,22 @@ export function extractFieldsRecursive(
   const fields: FormField[] = []
   for (let index = 0; index < items.length; index++) {
     const item = items[index]
-    if (item.field && isFormCreateRuleHidden(item)) {
-      continue
-    }
     const props = item.props as Record<string, unknown> | undefined
     const bindingId = item._bindingId ?? props?._bindingId
     if (item.type === 'subTable' && bindingId != null) {
-      if (isFormCreateRuleHidden(item)) {
-        continue
-      }
       const rawPv = props?.portalViews as Partial<SubTablePortalViews> | undefined
       const hasWidgetPortalViews =
         rawPv != null && typeof rawPv === 'object' && Object.keys(rawPv).length > 0
-      fields.push({
+      const subTableField: FormField = {
         key: `__subTable_${bindingId}`,
         label: '',
         type: 'subTable',
         _bindingId: Number(bindingId),
         ...(hasWidgetPortalViews ? { portalViews: normalizePortalViews(rawPv) } : {}),
-        span: 24
-      })
+        span: 24,
+      }
+      applyDesignerHideFlagToFormField(subTableField, item)
+      fields.push(subTableField)
       continue
     }
     if (isCardRule(item)) {
@@ -543,7 +560,10 @@ export function extractFieldsRecursive(
     }
     if (item.field) {
       const field = converter(item)
-      if (field) fields.push(field)
+      if (field) {
+        applyDesignerHideFlagToFormField(field, item)
+        fields.push(field)
+      }
     }
     if (!isLayoutContainerRule(item) && getRuleChildren(item).length > 0) {
       fields.push(...extractFieldsRecursive(getRuleChildren(item), converter))

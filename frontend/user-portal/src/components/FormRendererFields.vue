@@ -328,7 +328,7 @@ function onCollapseActiveChange(fieldKey: string, names: string | string[]) {
     <!-- Lookup -->
     <template v-else-if="field.type === 'lookup'">
       <el-col
-        v-if="!inColumn"
+        v-if="!inColumn && ctx.isFieldVisible(field.key)"
         :span="field.span || 24"
       >
         <el-form-item
@@ -366,7 +366,7 @@ function onCollapseActiveChange(fieldKey: string, names: string | string[]) {
         </el-form-item>
       </el-col>
       <div
-        v-else
+        v-else-if="inColumn && ctx.isFieldVisible(field.key)"
         class="form-col-field"
       >
         <el-form-item

@@ -283,7 +283,7 @@ import { processApi } from '@/api/process'
 import ProcessDiagram, { type ProcessNode, type ProcessFlow } from '@/components/ProcessDiagram.vue'
 import ProcessHistory, { type HistoryRecord } from '@/components/ProcessHistory.vue'
 import FormRenderer, { type FormField, type FormTab } from '@/components/FormRenderer.vue'
-import { normalizePortalViews, isFormCreateRuleReadonly, isFormCreateRuleHidden, isRowRule, isColRule, getRuleChildren, getRowGutter, getColSpan, extractRowColumnFields, parseFormRulesLayout, isTabsRule, isCardRule, isCollapseRule, convertAuxiliaryLayoutField, extractTabsFromTabsRule, extractCollapsePanelsFromRule, getLayoutKey, getLayoutLabel, collectPlacedSubTableBindingIds, computeNeededSubTableBindingIds } from '@/components/formRendererHelpers'
+import { normalizePortalViews, isFormCreateRuleReadonly, isFormCreateRuleHidden, applyDesignerHideFlagToFormField, isRowRule, isColRule, getRuleChildren, getRowGutter, getColSpan, extractRowColumnFields, parseFormRulesLayout, isTabsRule, isCardRule, isCollapseRule, convertAuxiliaryLayoutField, extractTabsFromTabsRule, extractCollapsePanelsFromRule, getLayoutKey, getLayoutLabel, collectPlacedSubTableBindingIds, computeNeededSubTableBindingIds } from '@/components/formRendererHelpers'
 import { applyRuleDefaultToFormField } from '@/utils/formCreateRuleDefaults'
 import { applyFormCreateValidationToFormField, isFormCreateRuleRequired } from '@/utils/formCreateValidateRules'
 import N8nActionDialog from '@/components/N8nActionDialog.vue'
@@ -968,25 +968,21 @@ const FC_SKIP_TYPES = new Set(['subForm', 'tableForm', 'tableFormColumn'])
 const extractFieldsRecursive = (items: any[]): FormField[] => {
   const fields: FormField[] = []
   for (const item of items) {
-    if (item.field && isFormCreateRuleHidden(item)) {
-      continue
-    }
     const bindingId = item._bindingId ?? item.props?._bindingId
     if (item.type === 'subTable' && bindingId != null) {
-      if (isFormCreateRuleHidden(item)) {
-        continue
-      }
       const rawPv = item.props?.portalViews
       const hasWidgetPortalViews =
         rawPv != null && typeof rawPv === 'object' && Object.keys(rawPv).length > 0
-      fields.push({
+      const subTableField: FormField = {
         key: `__subTable_${bindingId}`,
         label: '',
         type: 'subTable',
         _bindingId: Number(bindingId),
         ...(hasWidgetPortalViews ? { portalViews: normalizePortalViews(rawPv) } : {}),
-        span: 24
-      })
+        span: 24,
+      }
+      applyDesignerHideFlagToFormField(subTableField, item)
+      fields.push(subTableField)
       continue
     }
     const auxField = convertAuxiliaryLayoutField(item, fields.length)
@@ -1085,6 +1081,7 @@ const extractFieldsRecursive = (items: any[]): FormField[] => {
       if (isFormCreateRuleReadonly(item)) {
         field.readonly = true
       }
+      applyDesignerHideFlagToFormField(field, item)
       fields.push(field)
     } else if (FC_SKIP_TYPES.has(item.type)) {
       // Traverse children only; `continue` would drop nested sub-table row fields.
@@ -1215,6 +1212,8 @@ const convertFormCreateRule = (rule: any): FormField | null => {
   if (isFormCreateRuleReadonly(rule)) {
     field.readonly = true
   }
+
+  applyDesignerHideFlagToFormField(field, rule)
   
   // 调试输出
   console.log('Converting rule:', rule.type, '->', field.type, rule)
