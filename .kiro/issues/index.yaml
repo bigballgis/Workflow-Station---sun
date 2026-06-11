@@ -550,3 +550,28 @@
     验证：SubTableField.assign.test.ts、useTaskFormSiblingSliceSync.test.ts、TaskProcessComponentMiCollectionTest PASS。
     手测：新流程 assignment Edit 改 assignee → Approve → 对应 MI 子任务应进 e2e_sunqiang 待办（非 developer）。
     注：已完成的 83a77ff8 实例不会自动改派，需新发起或手工转办。
+- id: "1443"
+  status: fixed
+  fixed_at: "2026-06-11"
+  severity: major
+  category: bug
+  summary: "MI 办理人 sub form2：Sub Task 子表空 + People 未带入 sub form1 的 age/sex（id_idw 被 scrub 误删）"
+  detail: |
+    任务 95233afa（Process_1_KK，sub form2，当前参与者 Test-000069）：办理人待办里 Sub Task 子表无当前任务行（空），
+    且 People 内联表单未带入上一节点 sub form1 填写的 age/sex（age 空、id 空）。
+    根因（单一）：当前在办参与者的 MI collection（Sub Task）行同时携带 participant PK `id_idw=Test-000069`、
+    allocate 的 UUID `id`、以及业务 payload（age/sex）。scrubMiCorruptLinkChildRowsForParent（#1435，本为修复 People link-child
+    的 id_idw 误镜像父参与者）对**整份 __subTables__**（含 collection slice 64/66/69）执行，把 collection 行也当成「脏 link-child」
+    → `delete id_idw`。flattened 与 miFullSubTablesSnapshotRef 为同一引用，被原地改写。随后：
+    1) collection 过滤 rowMatchesSubTablePrimaryKey(row, Test-000069, [id_idw]) 0 命中 → Sub Task 空；
+    2) People 内联无 collection 父行可锚定 → 取到 thin 切片 → age/sex 丢失。
+    （raw data.variables.__subTables__["64"] 与 flatten 后均保留 id_idw；丢失发生在 scrub。已用单测证实。）
+    修复：scrub 增加可选 skipSliceKeys，跳过 MI collection slice（buildMiCollectionSliceKeySet：collection binding id/
+    table name + 同 collection tableId 的 sibling binding id），collection 行保留 id_idw；People link-child slice 仍照常 scrub
+    （#1435 行为不变）。三处调用同步传入：tasks/detail.vue resync（load）、loadFunctionUnitContent（FU load）、
+    useTaskForm.ts buildSubTableSubmitPayload（save，经新增 options.bindingRelationTableMap/miSubProcessScopeName）。
+    顺带清理 forceSeedMiCollectionBindingForCurrentParticipant 内遗留的 window.__miDebug 调试转储。
+    验证：单测 miCollectionIdIdwScrub.test.ts（已纳入 vitest.mi-regression.config.ts）；MI 回归单元 104 passed；
+    Playwright verify-subform2-people-carry-forward.mjs 95233afa Test-000069 PASS（age=jj0）；
+    截图 verification-screenshots/2026-06-11_task-95233afa-subform2-fixed.png（Sub Task 显示 Test-000069 行，People age=jj0/sex=on/id=UUID）。
+    路径：shared.ts（scrubMiCorruptLinkChildRowsForParent、buildMiCollectionSliceKeySet）、views/tasks/detail.vue、composables/tasks/useTaskForm.ts。

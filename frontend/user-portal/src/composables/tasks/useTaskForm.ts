@@ -11,6 +11,7 @@ import {
   normalizeSubTableName,
   flattenNestedSubTableRowsIntoPayload,
   scrubMiCorruptLinkChildRowsForParent,
+  buildMiCollectionSliceKeySet,
   collapseMiLinkChildRowsToOnePerParticipant,
   isMiParticipantScopedSubTableBinding,
   shouldSyncStaleSiblingSubTableSlice,
@@ -22,6 +23,9 @@ export function useTaskForm(options: {
   isCompletedTask: Ref<boolean>
   effectiveTaskId: Ref<string>
   taskFormDTO?: Ref<{ fieldValues?: Record<string, any> } | null>
+  /** Binding-id → relation-table-id map; used to protect MI collection slices from id_idw scrub on save. */
+  bindingRelationTableMap?: Ref<Map<number, number | null>>
+  miSubProcessScopeName?: Ref<string | null | undefined>
   onFormReadOnlyChange?: (readonly: boolean) => void
 }) {
   const { t } = useI18n()
@@ -78,7 +82,13 @@ export function useTaskForm(options: {
         | undefined
       const parentIdIdw = ci?.rowId ?? ci?.rowKey?.id
       if (parentIdIdw != null && String(parentIdIdw).trim() !== '') {
-        scrubMiCorruptLinkChildRowsForParent(subTables as Record<string, unknown>, parentIdIdw)
+        scrubMiCorruptLinkChildRowsForParent(subTables as Record<string, unknown>, parentIdIdw, {
+          skipSliceKeys: buildMiCollectionSliceKeySet(
+            options.subTableBindings.value,
+            options.bindingRelationTableMap?.value ?? new Map<number, number | null>(),
+            options.miSubProcessScopeName?.value,
+          ),
+        })
       }
     }
     const subTableData: Record<string, Array<Record<string, unknown>>> = {}

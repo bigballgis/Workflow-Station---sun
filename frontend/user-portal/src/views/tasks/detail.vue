@@ -510,6 +510,7 @@ import {
   coerceSubTablesVariableToMap,
   collectSubTableSliceArraysDeep,
   scrubMiCorruptLinkChildRowsForParent,
+  buildMiCollectionSliceKeySet,
   mergeAllSubTableSlicesFromVariables,
   collectSubTableSliceRowsForRelationTableId,
   mergeAllSlicesForSharedProcessSubTableBinding,
@@ -527,6 +528,8 @@ import {
   collapseMiLinkChildRowsToOnePerParticipant,
   backfillMiLinkChildPrimaryKeysFromVariables,
   repairMisassignedLinkChildStructuralFk,
+  linkChildRowIsForeignParticipantPlaceholder,
+  stripForeignParticipantIdIdwFromLinkChildRow,
   miParentRowAlignsWithChildRow,
   scopeMiLinkChildRowsForParentRow,
 } from '@/composables/tasks/shared'
@@ -839,13 +842,6 @@ function syncFormLayoutWithSubTableBindings() {
 
 /** Last-resort: ensure the MI collection grid has the current participant row from the full snapshot. */
 function forceSeedMiCollectionBindingForCurrentParticipant() {
-  ;(window as any).__miDbgEntry = {
-    isMiSubTaskMode: isMiSubTaskMode.value,
-    currentMiRowId: currentMiRowId.value,
-    hasFlat: !!miFullSubTablesSnapshotRef.value,
-    participantPk: resolveMiCollectionParticipantPkFields(),
-    scope: miSubProcessScope.value,
-  }
   if (!isMiSubTaskMode.value || currentMiRowId.value == null) return
   const flat = miFullSubTablesSnapshotRef.value
   if (!flat) return
@@ -884,49 +880,6 @@ function forceSeedMiCollectionBindingForCurrentParticipant() {
 
   backfillMiParticipantScopedBindingsFromSnapshot(subTableBindings.value, myRowId)
   hydrateMiLinkChildBindingsFromFullSnapshot(myRowId)
-
-  const dumpSlice = (k: string) => {
-    const v = (flat as any)[k]
-    return Array.isArray(v)
-      ? v.map((r: any) => ({ id_idw: r?.id_idw, id: r?.id, name: r?.name, hasFile: !!r?.file }))
-      : null
-  }
-  const collBinding = subTableBindings.value.find(b => isCurrentMiCollectionSubTableBinding(b))
-  const collCandidates = collBinding
-    ? collectSubTableSliceRowsForRelationTableId(
-        flat,
-        20,
-        rtMap,
-        collBinding.tableName,
-        collBinding.physicalTableName,
-      ).map((r: any) => ({ id_idw: r?.id_idw, name: r?.name, hasFile: !!r?.file }))
-    : null
-  ;(window as any).__miDebug = {
-    myRowId,
-    participantPk,
-    scope: miSubProcessScope.value,
-    flatKeys: Object.keys(flat).filter(k => !k.startsWith('__')),
-    rtMapEntries: Array.from(rtMap.entries()),
-    slice64: dumpSlice('64'),
-    slice66: dumpSlice('66'),
-    slice69: dumpSlice('69'),
-    sliceSubtable: dumpSlice('subtable'),
-    sliceSubTask: dumpSlice('Sub Task'),
-    collCandidates,
-    collCandidateHits: (collCandidates ?? []).filter((r: any) => String(r.id_idw) === 'Test-000069').length,
-    bindings: subTableBindings.value.map(b => ({
-      bindingId: b.bindingId,
-      tableName: b.tableName,
-      physicalTableName: b.physicalTableName,
-      tableId: b.tableId,
-      pk: b.primaryKeyFields,
-      isCollection: isCurrentMiCollectionSubTableBinding(b),
-      isDashboard: isMiDashboardSubTableBinding(b),
-      isParticipantScoped: isMiParticipantScopedSubTableBinding(b),
-      dataLen: Array.isArray(b.data) ? b.data.length : null,
-      firstRow: Array.isArray(b.data) && b.data[0] ? JSON.parse(JSON.stringify(b.data[0])) : null,
-    })),
-  }
 }
 
 function yieldToMain(): Promise<void> {
@@ -1350,11 +1303,24 @@ async function seedMiParticipantScopedBindingForeignKeys(
         continue
       }
     }
-    for (let i = 0; i < b.data.length; i++) {
-      const row = b.data[i]
-      if (!row || typeof row !== 'object') continue
+    // Sibling participants' placeholder rows live in this same binding. Seeding/allocating them with the
+    // CURRENT participant FK makes them falsely claim this participant; collapse then merges all into one
+    // corrupt row (cross-participant id_idw leak). Only seed rows that belong to (or are fresh for) the
+    // current participant; leave foreign placeholders byte-for-byte intact. (#1444)
+    const foreignRows: Record<string, unknown>[] = []
+    const seedableRows: Record<string, unknown>[] = []
+    for (const raw of b.data) {
+      if (!raw || typeof raw !== 'object') {
+        foreignRows.push(raw as Record<string, unknown>)
+        continue
+      }
+      const row = raw as Record<string, unknown>
+      if (linkChildRowIsForeignParticipantPlaceholder(row, myRowId)) {
+        foreignRows.push(row)
+        continue
+      }
       let next = seedLinkChildForeignKeysFromParentRow(
-        row as Record<string, unknown>,
+        row,
         b.fieldDefinitions,
         {
           bindingForeignKeyField: b.foreignKeyField,
@@ -1367,18 +1333,22 @@ async function seedMiParticipantScopedBindingForeignKeys(
       )
       next = repairMisassignedPrimaryKeyFromParentId(next, b.fieldDefinitions, fkSeed)
       next = repairMisassignedLinkChildStructuralFk(next, fkSeed)
-      b.data[i] = next
+      next = stripForeignParticipantIdIdwFromLinkChildRow(next, myRowId)
+      seedableRows.push(next)
     }
+    let allocated = seedableRows
     if (allocateFn && b.tableId != null && b.fieldDefinitions?.length) {
-      b.data = await ensureAutoPrimaryKeysForRows(
+      allocated = await ensureAutoPrimaryKeysForRows(
         b.fieldDefinitions,
         b.tableId,
-        (Array.isArray(b.data) ? b.data : []) as Record<string, unknown>[],
+        seedableRows,
         allocateFn,
         fuId,
       )
     }
-    b.data = cloneSubTableRows(collapseMiLinkChildRowsToOnePerParticipant(Array.isArray(b.data) ? b.data : []))
+    b.data = cloneSubTableRows(
+      collapseMiLinkChildRowsToOnePerParticipant([...foreignRows, ...allocated]),
+    )
     syncMiLinkChildRowsIntoParentNested(
       { bindingId: b.bindingId, tableName: b.tableName ?? '' },
       cloneSubTableRows(Array.isArray(b.data) ? b.data : []),
@@ -1933,6 +1903,7 @@ function hydrateMiLinkChildBindingsFromFullSnapshot(myRowId: MiParticipantRowId)
 
   for (const binding of subTableBindings.value) {
     if (!isMiParticipantScopedSubTableBinding(binding)) continue
+    const ownSlice = getSavedSubTableRows(flat, binding, false, rtMap) ?? []
     const candidates: any[] = []
     const tableIdRaw =
       binding.tableId != null ? Number(binding.tableId) : rtMap.get(binding.bindingId)
@@ -1947,8 +1918,7 @@ function hydrateMiLinkChildBindingsFromFullSnapshot(myRowId: MiParticipantRowId)
         ),
       )
     } else {
-      const own = getSavedSubTableRows(flat, binding) ?? []
-      candidates.push(...own)
+      candidates.push(...ownSlice)
     }
     for (const pf of previousForms.value) {
       for (const prev of pf.subTableBindings) {
@@ -1960,6 +1930,17 @@ function hydrateMiLinkChildBindingsFromFullSnapshot(myRowId: MiParticipantRowId)
       .map(r => repairMisassignedLinkChildStructuralFk(r as Record<string, unknown>, myRowId))
       .filter(r => rowBelongsToCurrentMiScope(r, myRowId, binding))
     let merged = collapseMiLinkChildRowsToOnePerParticipant(scoped)
+    const ownScoped = ownSlice
+      .map(r => repairMisassignedLinkChildStructuralFk(r as Record<string, unknown>, myRowId))
+      .filter(r => rowBelongsToCurrentMiScope(r, myRowId, binding))
+    if (ownScoped.length > 0) {
+      // Current task binding slice wins over stale sibling slices (e.g. prior userTask binding 63 vs 30).
+      merged = mergeSubTableRowsByRowId(
+        merged,
+        collapseMiLinkChildRowsToOnePerParticipant(ownScoped),
+        binding.primaryKeyFields,
+      )
+    }
     if (merged.length > 0) {
       const temp = { ...binding, data: merged }
       backfillMiLinkChildPrimaryKeysFromVariables([temp as typeof binding], flat, myRowId)
@@ -2871,7 +2852,13 @@ async function resyncMiParticipantSubTablesFromVariables(
   if (!savedMap) return
 
   const flattened = preFlattened ?? cloneAndFlattenSubTablesMap(savedMap)
-  scrubMiCorruptLinkChildRowsForParent(flattened, myRowId)
+  scrubMiCorruptLinkChildRowsForParent(flattened, myRowId, {
+    skipSliceKeys: buildMiCollectionSliceKeySet(
+      [...subTableBindings.value, ...previousForms.value.flatMap(pf => pf.subTableBindings)],
+      lastBindingRelationTableMap.value,
+      miSubProcessScope.value?.subTableName,
+    ),
+  })
   for (const slice of Object.values(flattened)) {
     if (!Array.isArray(slice)) continue
     for (let i = 0; i < slice.length; i++) {
@@ -3332,7 +3319,8 @@ function resolveCurrentMiParticipantRowIdFromTaskVars(
   })
 }
 
-const taskForm = useTaskForm({ subTableBindings, isMiSubTaskMode, isCompletedTask, effectiveTaskId, taskFormDTO: taskFormDTO as any })
+const miSubProcessScopeName = computed(() => miSubProcessScope.value?.subTableName ?? null)
+const taskForm = useTaskForm({ subTableBindings, isMiSubTaskMode, isCompletedTask, effectiveTaskId, taskFormDTO: taskFormDTO as any, bindingRelationTableMap: lastBindingRelationTableMap, miSubProcessScopeName })
 const { formFields, formTabs, formFieldsAfterTabs, formData, currentFormName, formReadOnly, formLabelWidth, formFormOptions, savingTaskForm, saveCurrentTaskForm, buildCurrentTaskFormSubmitPayload, scheduleSubTableAutosave, getCurrentFormFieldKeys, clearAutosaveTimer: clearFormAutosaveTimer } = taskForm
 
 // Task 17.4: Return_To_Requester state
@@ -4328,7 +4316,13 @@ const loadFunctionUnitContent = async (
           rowIdVariable: scopeLoad?.rowIdVariable ?? 'currentItem.rowId',
         })
         if (ridLoad != null) {
-          scrubMiCorruptLinkChildRowsForParent(flattened, ridLoad)
+          scrubMiCorruptLinkChildRowsForParent(flattened, ridLoad, {
+            skipSliceKeys: buildMiCollectionSliceKeySet(
+              bindings,
+              bindingRelationTableMap,
+              scopeLoad?.subTableName,
+            ),
+          })
         }
         formData.value = { ...formData.value, __subTables__: flattened }
       }
