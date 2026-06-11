@@ -31,7 +31,8 @@
         
         <!-- Spring Boot -->
         <spring-boot.version>3.2.1</spring-boot.version>
-        <tomcat.version>10.1.52</tomcat.version>
+        <tomcat.version>10.1.55</tomcat.version>
+        <spring-security.version>6.2.2</spring-security.version>
         <spring-cloud.version>2023.0.0</spring-cloud.version>
         
         <!-- Database -->
@@ -69,6 +70,15 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-dependencies</artifactId>
                 <version>${spring-boot.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- Spring Security BOM (override Boot default 6.2.1) -->
+            <dependency>
+                <groupId>org.springframework.security</groupId>
+                <artifactId>spring-security-bom</artifactId>
+                <version>${spring-security.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
