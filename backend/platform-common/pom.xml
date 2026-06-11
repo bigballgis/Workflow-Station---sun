@@ -18,7 +18,8 @@
         <maven.compiler.target>17</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <spring-boot.version>3.2.1</spring-boot.version>
-        <tomcat.version>10.1.52</tomcat.version>
+        <tomcat.version>10.1.55</tomcat.version>
+        <spring-security.version>6.2.2</spring-security.version>
         <jackson.version>2.15.3</jackson.version>
         <lombok.version>1.18.30</lombok.version>
     </properties>
@@ -64,7 +65,7 @@
         <dependency>
             <groupId>org.springframework.security</groupId>
             <artifactId>spring-security-core</artifactId>
-            <version>6.2.1</version>
+            <version>${spring-security.version}</version>
             <scope>provided</scope>
         </dependency>
 
