@@ -430,6 +430,7 @@ import {
   collectLeafFormFieldKeys,
   isFormCreateRuleReadonly,
   isFormCreateRuleHidden,
+  applyDesignerHideFlagToFormField,
   isRowRule,
   isColRule,
   getRuleChildren,
@@ -3761,26 +3762,22 @@ const extractFieldsRecursive = (
 ): FormField[] => {
   const fields: FormField[] = []
   for (const item of items) {
-    if (item.field && isFormCreateRuleHidden(item)) {
-      continue
-    }
     const bindingId = item._bindingId ?? item.props?._bindingId
     if (item.type === 'subTable' && bindingId != null) {
-      if (isFormCreateRuleHidden(item)) {
-        continue
-      }
       if (!ctx.skipSubTable) {
         const rawPv = item.props?.portalViews
         const hasWidgetPortalViews =
           rawPv != null && typeof rawPv === 'object' && Object.keys(rawPv).length > 0
-        fields.push({
+        const subTableField: FormField = {
           key: `__subTable_${bindingId}`,
           label: '',
           type: 'subTable',
           _bindingId: Number(bindingId),
           ...(hasWidgetPortalViews ? { portalViews: normalizePortalViews(rawPv) } : {}),
           span: 24,
-        })
+        }
+        applyDesignerHideFlagToFormField(subTableField, item)
+        fields.push(subTableField)
       }
       continue
     }
@@ -3878,6 +3875,7 @@ const extractFieldsRecursive = (
       if (isFormCreateRuleReadonly(item)) {
         field.readonly = true
       }
+      applyDesignerHideFlagToFormField(field, item)
       fields.push(field)
     } else if (FC_SKIP_TYPES.has(item.type)) {
       // Traverse children only; `continue` would drop nested sub-table row fields.
@@ -3954,6 +3952,7 @@ const convertFormCreateRule = (rule: any): FormField | null => {
     field.readonly = true
   }
   applyRuleDefaultToFormField(field, rule as Record<string, unknown>)
+  applyDesignerHideFlagToFormField(field, rule)
   return field
 }
 

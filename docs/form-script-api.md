@@ -147,7 +147,7 @@ function (field, value, options) {
 
 **`hidden` vs `display`**：`hidden` 不渲染 DOM；`display` 仍占位、CSS 隐藏。
 
-**设计时固定隐藏**：Props → **Hide**（`rule.hidden: true`）或 Basis → **Hidden**（`_hidden`）。门户加载时跳过，**无需**脚本。
+**设计时固定隐藏**：Props → **Hide**（`rule.hidden: true`）或 Basis → **Hidden**（`_hidden`）。门户仍会解析该字段并默认隐藏；用 **`options.hidden(false, 'field')`** 可在运行时显示（Form event `onChange` / 初次 `__bootstrap__`）。
 
 ### 2.2 获取某一个字段的值
 

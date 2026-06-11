@@ -81,6 +81,7 @@ import {
   isFormFieldReadonly,
   mergeSubTablePortalViewsForRuntime,
   resolveSubTableDisplayMode,
+  seedDesignerHiddenFieldVisibility,
   shouldSuppressStandaloneSubTableInInitiatorRequest,
 } from './formRendererHelpers'
 import {
@@ -982,6 +983,12 @@ function handleFieldBlur(key: string) {
   }
 }
 
+function syncDesignerHiddenFieldVisibility() {
+  eventVisibilityState.hidden = new Map<string, boolean>()
+  seedDesignerHiddenFieldVisibility(props.fields, props.tabs, props.fieldsAfterTabs, eventVisibilityState)
+  notifyEventVisibilityChange()
+}
+
 function bootstrapFormOptionsOnChange() {
   if (!props.formOptions?.onChange) return
   runFormOptionsOnChange('__bootstrap__', null)
@@ -1531,6 +1538,7 @@ provide(FORM_RENDERER_FIELDS_CTX, reactive({
 onMounted(() => {
   initFormData()
   initEngine()
+  syncDesignerHiddenFieldVisibility()
   bootstrapComponentHookEvents()
   bootstrapFormOptionsOnChange()
   // Task 7.5: Check for auto-saved data, then start auto-save timer

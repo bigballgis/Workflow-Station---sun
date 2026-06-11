@@ -198,10 +198,15 @@ function handleClear() {
 }
 
 // Initialize selectedRow and searchKeyword from modelValue (for saved form data)
+function clearLookupSelectionFromModel(emitClearEvent = true) {
+  selectedRow.value = null
+  searchKeyword.value = ''
+  if (emitClearEvent) emit('clear')
+}
+
 function initFromModelValue(val: any) {
   if (val == null || val === '') {
-    selectedRow.value = null
-    searchKeyword.value = ''
+    clearLookupSelectionFromModel()
     return
   }
   // Process variables often persist lookup as a scalar id/string — readonly inline rows otherwise render "-" forever.
@@ -216,8 +221,7 @@ function initFromModelValue(val: any) {
   if (typeof val === 'string') {
     const trimmed = val.trim()
     if (trimmed === '') {
-      selectedRow.value = null
-      searchKeyword.value = ''
+      clearLookupSelectionFromModel()
       return
     }
     const scalarRow = buildSyntheticLookupRow(trimmed)
