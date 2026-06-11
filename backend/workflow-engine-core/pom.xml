@@ -22,6 +22,7 @@
         <java.version>17</java.version>
         <tomcat.version>10.1.55</tomcat.version>
         <spring-security.version>6.5.9</spring-security.version>
+        <spring-framework.version>6.2.17</spring-framework.version>
         <kafka.version>4.2.0</kafka.version>
         <postgresql.version>42.7.10</postgresql.version>
         <flowable.version>7.0.0</flowable.version>
