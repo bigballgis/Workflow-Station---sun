@@ -1,7 +1,7 @@
 package com.developer.controller;
 
 import com.developer.component.DecisionDesignComponent;
-import com.developer.dto.ApiResponse;
+import com.platform.common.dto.ApiResponse;
 import com.developer.dto.DecisionDefinitionRequest;
 import com.developer.dto.DecisionTableModel;
 import com.developer.dto.ValidationResult;

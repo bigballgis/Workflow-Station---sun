@@ -263,7 +263,7 @@ public class ProcessController {
         if (success) {
             return ApiResponse.success(null);
         }
-        return ApiResponse.error(i18nService.getMessage("portal.return_to_first_failed"));
+        return ApiResponse.error("500", i18nService.getMessage("portal.return_to_first_failed"));
     }
 
     @PostMapping("/{processKey}/favorite")

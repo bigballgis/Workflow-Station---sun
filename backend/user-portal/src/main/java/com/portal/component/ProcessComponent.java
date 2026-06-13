@@ -11,6 +11,7 @@ import com.portal.entity.ActionDefinition;
 import com.portal.repository.FavoriteProcessRepository;
 import com.portal.repository.ProcessInstanceRepository;
 import com.portal.repository.ActionDefinitionRepository;
+import com.portal.service.ProcessAssigneeSnapshot;
 import com.platform.common.i18n.I18nService;
 import com.platform.common.util.ApiResponseBodyUnwrap;
 

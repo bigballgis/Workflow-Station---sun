@@ -1,6 +1,6 @@
 package com.developer.controller;
 
-import com.developer.dto.ApiResponse;
+import com.platform.common.dto.ApiResponse;
 import com.developer.security.RequireDeveloperPermission;
 import com.developer.service.RelationTableBindingService;
 import com.developer.service.RelationTableBindingService.RelationTableBindingDTO;

@@ -1,8 +1,8 @@
 package com.developer.controller;
 
 import com.developer.component.FileUploadComponent;
-import com.developer.dto.ApiResponse;
-import com.developer.dto.ErrorResponse;
+import com.platform.common.dto.ApiResponse;
+import com.platform.common.exception.ErrorResponse;
 import com.developer.entity.UploadedFile;
 import com.developer.exception.DeveloperBusinessException;
 import com.developer.exception.ResourceNotFoundException;

@@ -1,6 +1,6 @@
 package com.developer.controller;
 
-import com.developer.dto.ApiResponse;
+import com.platform.common.dto.ApiResponse;
 import com.developer.dto.MemberRequest;
 import com.developer.dto.MemberResponse;
 import com.developer.dto.MemberUpdateRequest;

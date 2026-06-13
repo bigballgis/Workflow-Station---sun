@@ -262,6 +262,12 @@ CREATE TABLE IF NOT EXISTS admin_audit_logs (
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Idempotent backfill for pre-existing databases created before these columns were added
+-- (CREATE TABLE IF NOT EXISTS is a no-op on an existing table, so new columns need explicit ALTERs).
+ALTER TABLE admin_audit_logs ADD COLUMN IF NOT EXISTS duration_ms INTEGER;
+ALTER TABLE admin_audit_logs ADD COLUMN IF NOT EXISTS request_method VARCHAR(10);
+ALTER TABLE admin_audit_logs ADD COLUMN IF NOT EXISTS request_path VARCHAR(500);
+
 CREATE INDEX IF NOT EXISTS idx_audit_action ON admin_audit_logs(action);
 CREATE INDEX IF NOT EXISTS idx_audit_user ON admin_audit_logs(user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON admin_audit_logs(timestamp);

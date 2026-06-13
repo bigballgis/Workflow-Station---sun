@@ -2,7 +2,7 @@ package com.developer.controller;
 
 import com.developer.component.ActionDesignComponent;
 import com.developer.dto.ActionDefinitionRequest;
-import com.developer.dto.ApiResponse;
+import com.platform.common.dto.ApiResponse;
 import com.developer.entity.ActionDefinition;
 import com.developer.security.RequireDeveloperPermission;
 import io.swagger.v3.oas.annotations.Operation;

@@ -1,7 +1,7 @@
 package com.developer.controller;
 
 import com.developer.component.TableRelationComponent;
-import com.developer.dto.ApiResponse;
+import com.platform.common.dto.ApiResponse;
 import com.developer.dto.TableRelationDTO;
 import com.developer.security.RequireDeveloperPermission;
 import io.swagger.v3.oas.annotations.Operation;

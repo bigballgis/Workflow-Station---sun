@@ -1,6 +1,6 @@
 package com.developer.controller;
 
-import com.developer.dto.ApiResponse;
+import com.platform.common.dto.ApiResponse;
 import com.developer.resilience.ResilienceHealthStatus;
 import com.developer.resilience.ResilienceService;
 import io.swagger.v3.oas.annotations.Operation;

@@ -1,7 +1,7 @@
 package com.developer.controller;
 
 import com.developer.component.FormDesignComponent;
-import com.developer.dto.ApiResponse;
+import com.platform.common.dto.ApiResponse;
 import com.developer.dto.FormDefinitionRequest;
 import com.developer.dto.FormTableBindingRequest;
 import com.developer.dto.FormTableBindingResponse;

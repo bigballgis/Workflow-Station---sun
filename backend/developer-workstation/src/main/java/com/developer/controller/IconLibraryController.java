@@ -1,7 +1,7 @@
 package com.developer.controller;
 
 import com.developer.component.IconLibraryComponent;
-import com.developer.dto.ApiResponse;
+import com.platform.common.dto.ApiResponse;
 import com.developer.dto.IconDTO;
 import com.developer.entity.Icon;
 import com.developer.enums.IconCategory;

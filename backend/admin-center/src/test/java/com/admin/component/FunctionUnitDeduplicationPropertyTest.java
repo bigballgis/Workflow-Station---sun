@@ -36,7 +36,7 @@ class FunctionUnitDeduplicationPropertyTest {
         when(repo.findByStatusAndEnabled(FunctionUnitStatus.DEPLOYED, true))
                 .thenReturn(deployedUnits);
         
-        return new FunctionUnitManagerComponent(
+        return FunctionUnitManagerTestFactory.createManager(
                 repo,
                 dependencyRepository,
                 contentRepository,

@@ -41,7 +41,7 @@ class FunctionPackageValidationProperties {
         dependencyRepository = Mockito.mock(FunctionUnitDependencyRepository.class);
         contentRepository = Mockito.mock(FunctionUnitContentRepository.class);
         accessRepository = Mockito.mock(FunctionUnitAccessRepository.class);
-        component = new FunctionUnitManagerComponent(
+        component = com.admin.component.FunctionUnitManagerTestFactory.createManager(
                 functionUnitRepository, dependencyRepository, contentRepository, accessRepository,
                 Mockito.mock(com.admin.component.FunctionUnitValidationComponent.class),
                 Mockito.mock(com.admin.component.FunctionUnitPackageParser.class),

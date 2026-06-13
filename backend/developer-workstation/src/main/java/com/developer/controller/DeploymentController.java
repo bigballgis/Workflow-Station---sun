@@ -2,7 +2,7 @@ package com.developer.controller;
 
 import com.developer.component.DeploymentComponent;
 import com.developer.component.ExportImportComponent;
-import com.developer.dto.ApiResponse;
+import com.platform.common.dto.ApiResponse;
 import com.developer.dto.DeployRequest;
 import com.developer.dto.DeployResponse;
 import com.developer.security.RequireDeveloperPermission;
