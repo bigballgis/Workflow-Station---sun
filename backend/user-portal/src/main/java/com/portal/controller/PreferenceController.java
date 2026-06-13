@@ -1,7 +1,7 @@
 package com.portal.controller;
 
 import com.portal.component.UserPreferenceComponent;
-import com.portal.dto.ApiResponse;
+import com.platform.common.dto.ApiResponse;
 import com.portal.security.CurrentUserId;
 import com.portal.entity.DashboardLayout;
 import com.portal.entity.NotificationPreference;
@@ -39,7 +39,7 @@ public class PreferenceController {
             @CurrentUserId String userId,
             @RequestBody @Valid UserPreference preference) {
         UserPreference updated = userPreferenceComponent.updateUserPreference(userId, preference);
-        return ApiResponse.success("偏好设置更新成功", updated);
+        return ApiResponse.success(updated);
     }
 
     @Operation(summary = "获取工作台布局")
@@ -56,7 +56,7 @@ public class PreferenceController {
             @CurrentUserId String userId,
             @RequestBody List<DashboardLayout> layouts) {
         List<DashboardLayout> saved = userPreferenceComponent.saveDashboardLayout(userId, layouts);
-        return ApiResponse.success("工作台布局保存成功", saved);
+        return ApiResponse.success(saved);
     }
 
     @Operation(summary = "获取通知偏好")
@@ -73,6 +73,6 @@ public class PreferenceController {
             @CurrentUserId String userId,
             @RequestBody @Valid NotificationPreference preference) {
         NotificationPreference updated = userPreferenceComponent.updateNotificationPreference(userId, preference);
-        return ApiResponse.success("通知偏好更新成功", updated);
+        return ApiResponse.success(updated);
     }
 }

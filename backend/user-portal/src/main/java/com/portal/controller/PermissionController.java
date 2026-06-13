@@ -2,7 +2,7 @@ package com.portal.controller;
 
 import com.portal.component.PermissionComponent;
 import com.portal.component.RoleAccessComponent;
-import com.portal.dto.ApiResponse;
+import com.platform.common.dto.ApiResponse;
 import com.portal.security.CurrentUserId;
 import com.portal.dto.PageResponse;
 import com.portal.dto.PermissionRequestDto;
@@ -50,7 +50,7 @@ public class PermissionController {
     @Operation(summary = "Get available virtual groups", description = "Disabled: virtual groups are not available in User Portal")
     public ApiResponse<List<Map<String, Object>>> getAvailableVirtualGroups(
             @CurrentUserId String userId) {
-        return ApiResponse.error(i18nService.getMessage("portal.virtual_group_not_in_portal"));
+        return ApiResponse.error("500", i18nService.getMessage("portal.virtual_group_not_in_portal"));
     }
 
     @GetMapping("/users/search")
@@ -97,20 +97,20 @@ public class PermissionController {
         String reason = body.get("reason");
         
         if (roleId == null || roleId.isEmpty()) {
-            return ApiResponse.error(i18nService.getMessage("validation.role_id_required"));
+            return ApiResponse.error("500", i18nService.getMessage("validation.role_id_required"));
         }
         if (organizationUnitId == null || organizationUnitId.isEmpty()) {
-            return ApiResponse.error(i18nService.getMessage("portal.org_unit_id_required"));
+            return ApiResponse.error("500", i18nService.getMessage("portal.org_unit_id_required"));
         }
         if (reason == null || reason.isEmpty()) {
-            return ApiResponse.error(i18nService.getMessage("portal.reason_required"));
+            return ApiResponse.error("500", i18nService.getMessage("portal.reason_required"));
         }
         
         try {
             PermissionRequest request = permissionComponent.requestRoleAssignment(userId, roleId, organizationUnitId, reason);
             return ApiResponse.success(request);
         } catch (IllegalArgumentException e) {
-            return ApiResponse.error(e.getMessage());
+            return ApiResponse.error("500", e.getMessage());
         }
     }
 
@@ -119,7 +119,7 @@ public class PermissionController {
     public ApiResponse<PermissionRequest> requestVirtualGroup(
             @CurrentUserId String userId,
             @RequestBody Map<String, String> body) {
-        return ApiResponse.error(i18nService.getMessage("portal.virtual_group_not_in_portal"));
+        return ApiResponse.error("500", i18nService.getMessage("portal.virtual_group_not_in_portal"));
     }
 
     @PostMapping("/request-business-unit")
@@ -132,17 +132,17 @@ public class PermissionController {
         String beneficiaryUserId = beneficiaryUserIdFromBody(body, userId);
 
         if (businessUnitId == null || businessUnitId.isEmpty()) {
-            return ApiResponse.error(i18nService.getMessage("portal.bu_id_required"));
+            return ApiResponse.error("500", i18nService.getMessage("portal.bu_id_required"));
         }
         if (reason == null || reason.isEmpty()) {
-            return ApiResponse.error(i18nService.getMessage("portal.reason_required"));
+            return ApiResponse.error("500", i18nService.getMessage("portal.reason_required"));
         }
 
         try {
             PermissionRequest request = permissionComponent.requestBusinessUnitJoin(userId, beneficiaryUserId, businessUnitId, reason);
             return ApiResponse.success(request);
         } catch (IllegalArgumentException e) {
-            return ApiResponse.error(e.getMessage());
+            return ApiResponse.error("500", e.getMessage());
         }
     }
 
@@ -169,20 +169,20 @@ public class PermissionController {
         }
 
         if (businessUnitId == null || businessUnitId.isEmpty()) {
-            return ApiResponse.error(i18nService.getMessage("portal.bu_id_required"));
+            return ApiResponse.error("500", i18nService.getMessage("portal.bu_id_required"));
         }
         if (reason == null || reason.isEmpty()) {
-            return ApiResponse.error(i18nService.getMessage("portal.reason_required"));
+            return ApiResponse.error("500", i18nService.getMessage("portal.reason_required"));
         }
         if (roleId == null || roleId.isBlank()) {
-            return ApiResponse.error(i18nService.getMessage("validation.role_id_required"));
+            return ApiResponse.error("500", i18nService.getMessage("validation.role_id_required"));
         }
 
         try {
             PermissionRequest request = permissionComponent.requestBusinessUnitJoinWithRole(userId, beneficiaryUserId, businessUnitId, roleId, reason);
             return ApiResponse.success(request);
         } catch (IllegalArgumentException e) {
-            return ApiResponse.error(e.getMessage());
+            return ApiResponse.error("500", e.getMessage());
         }
     }
 
@@ -195,16 +195,16 @@ public class PermissionController {
         String reason = body.get("reason") != null ? body.get("reason").toString() : null;
         String beneficiaryUserId = beneficiaryUserIdFromBody(body, userId);
         if (businessUnitId == null || businessUnitId.isEmpty()) {
-            return ApiResponse.error(i18nService.getMessage("portal.bu_id_required"));
+            return ApiResponse.error("500", i18nService.getMessage("portal.bu_id_required"));
         }
         if (reason == null || reason.isEmpty()) {
-            return ApiResponse.error(i18nService.getMessage("portal.reason_required"));
+            return ApiResponse.error("500", i18nService.getMessage("portal.reason_required"));
         }
         try {
             PermissionRequest request = permissionComponent.requestBusinessUnitExit(userId, beneficiaryUserId, businessUnitId, reason);
             return ApiResponse.success(request);
         } catch (IllegalArgumentException e) {
-            return ApiResponse.error(e.getMessage());
+            return ApiResponse.error("500", e.getMessage());
         }
     }
 
@@ -219,7 +219,7 @@ public class PermissionController {
         try {
             return ApiResponse.success(permissionComponent.buildRoleRemovalOptionsByFunctionUnit(beneficiary));
         } catch (IllegalArgumentException e) {
-            return ApiResponse.error(e.getMessage());
+            return ApiResponse.error("500", e.getMessage());
         }
     }
 
@@ -236,20 +236,20 @@ public class PermissionController {
         String beneficiaryUserId = beneficiaryUserIdFromBody(body, userId);
 
         if (businessUnitId == null || businessUnitId.isEmpty()) {
-            return ApiResponse.error(i18nService.getMessage("portal.bu_id_required"));
+            return ApiResponse.error("500", i18nService.getMessage("portal.bu_id_required"));
         }
         if (roleId == null || roleId.isBlank()) {
-            return ApiResponse.error(i18nService.getMessage("validation.role_id_required"));
+            return ApiResponse.error("500", i18nService.getMessage("validation.role_id_required"));
         }
         if (reason == null || reason.isEmpty()) {
-            return ApiResponse.error(i18nService.getMessage("portal.reason_required"));
+            return ApiResponse.error("500", i18nService.getMessage("portal.reason_required"));
         }
 
         try {
             PermissionRequest request = permissionComponent.requestBusinessUnitRoleRemoval(userId, beneficiaryUserId, businessUnitId, roleId, reason);
             return ApiResponse.success(request);
         } catch (IllegalArgumentException e) {
-            return ApiResponse.error(e.getMessage());
+            return ApiResponse.error("500", e.getMessage());
         }
     }
 
@@ -265,7 +265,7 @@ public class PermissionController {
     @Operation(summary = "Get my virtual groups", description = "Disabled: virtual groups are not available in User Portal")
     public ApiResponse<List<Map<String, Object>>> getMyVirtualGroups(
             @CurrentUserId String userId) {
-        return ApiResponse.error(i18nService.getMessage("portal.virtual_group_not_in_portal"));
+        return ApiResponse.error("500", i18nService.getMessage("portal.virtual_group_not_in_portal"));
     }
 
     // ==================== Approval API endpoints ====================
@@ -278,7 +278,7 @@ public class PermissionController {
             @RequestParam(defaultValue = "20") int size) {
         // Check approval permission
         if (!permissionComponent.isApprover(userId)) {
-            return ApiResponse.error(i18nService.getMessage("portal.no_approval_permission"));
+            return ApiResponse.error("500", i18nService.getMessage("portal.no_approval_permission"));
         }
 
         int safePage = Math.max(0, page);
@@ -296,7 +296,7 @@ public class PermissionController {
             @RequestBody(required = false) Map<String, String> body) {
         // Check approval permission
         if (!permissionComponent.isApprover(userId)) {
-            return ApiResponse.error(i18nService.getMessage("portal.no_approval_permission"));
+            return ApiResponse.error("500", i18nService.getMessage("portal.no_approval_permission"));
         }
         
         String comment = body != null ? body.get("comment") : null;
@@ -305,7 +305,7 @@ public class PermissionController {
             PermissionRequest request = permissionComponent.approveRequest(requestId, userId, comment);
             return ApiResponse.success(request);
         } catch (IllegalArgumentException e) {
-            return ApiResponse.error(e.getMessage());
+            return ApiResponse.error("500", e.getMessage());
         }
     }
 
@@ -317,19 +317,19 @@ public class PermissionController {
             @RequestBody Map<String, String> body) {
         // Check approval permission
         if (!permissionComponent.isApprover(userId)) {
-            return ApiResponse.error(i18nService.getMessage("portal.no_approval_permission"));
+            return ApiResponse.error("500", i18nService.getMessage("portal.no_approval_permission"));
         }
         
         String comment = body != null ? body.get("comment") : null;
         if (comment == null || comment.trim().isEmpty()) {
-            return ApiResponse.error(i18nService.getMessage("portal.reject_reason_required"));
+            return ApiResponse.error("500", i18nService.getMessage("portal.reject_reason_required"));
         }
         
         try {
             PermissionRequest request = permissionComponent.rejectRequest(requestId, userId, comment);
             return ApiResponse.success(request);
         } catch (IllegalArgumentException e) {
-            return ApiResponse.error(e.getMessage());
+            return ApiResponse.error("500", e.getMessage());
         }
     }
 
@@ -351,7 +351,7 @@ public class PermissionController {
             @RequestParam(defaultValue = "20") int size) {
         // Check approval permission
         if (!permissionComponent.isApprover(userId)) {
-            return ApiResponse.error(i18nService.getMessage("portal.no_approval_permission"));
+            return ApiResponse.error("500", i18nService.getMessage("portal.no_approval_permission"));
         }
 
         int safePage = Math.max(0, page);
@@ -403,7 +403,7 @@ public class PermissionController {
             @PathVariable Long requestId) {
         return permissionComponent.getRequestDetailForViewer(requestId, userId)
                 .map(ApiResponse::success)
-                .orElse(ApiResponse.error(i18nService.getMessage("portal.request_not_found_or_forbidden")));
+                .orElse(ApiResponse.error("500", i18nService.getMessage("portal.request_not_found_or_forbidden")));
     }
 
     @DeleteMapping("/requests/{requestId}")
@@ -415,7 +415,7 @@ public class PermissionController {
         if (success) {
             return ApiResponse.success(null);
         }
-        return ApiResponse.error(i18nService.getMessage("portal.cancel_request_failed"));
+        return ApiResponse.error("500", i18nService.getMessage("portal.cancel_request_failed"));
     }
 
     @PostMapping("/renew")

@@ -4,6 +4,7 @@ import com.portal.component.TaskProcessComponent;
 import com.portal.client.WorkflowEngineClient;
 import com.platform.common.util.ApiResponseBodyUnwrap;
 import com.portal.component.TaskQueryComponent;
+import com.platform.common.dto.ApiResponse;
 import com.portal.dto.*;
 import com.portal.exception.PortalException;
 import com.portal.security.CurrentUserId;
@@ -90,7 +91,7 @@ public class TaskController {
             @CurrentUserId String userId) {
         TaskInfo task = taskProcessComponent.claimTask(taskId, userId,
                 SecurityContextUtils.getCurrentUsername().orElse(null));
-        return ApiResponse.success(i18nService.getMessage("portal.task_claimed"), task);
+        return ApiResponse.success(task);
     }
 
     @Operation(summary = "Unclaim task")
@@ -102,7 +103,7 @@ public class TaskController {
             @RequestParam String originalAssignee) {
         TaskInfo task = taskProcessComponent.unclaimTask(taskId, userId, originalAssignmentType, originalAssignee,
                 SecurityContextUtils.getCurrentUsername().orElse(null));
-        return ApiResponse.success(i18nService.getMessage("portal.task_unclaimed"), task);
+        return ApiResponse.success(task);
     }
 
     @Operation(summary = "Complete task")
@@ -117,7 +118,7 @@ public class TaskController {
         request.setTaskId(taskId);
         taskProcessComponent.completeTask(request, userId,
                 SecurityContextUtils.getCurrentUsername().orElse(null));
-        return ApiResponse.success(i18nService.getMessage("portal.task_completed"), null);
+        return ApiResponse.success();
     }
 
     @Operation(summary = "Delegate task")
@@ -128,7 +129,7 @@ public class TaskController {
             @RequestParam String delegateId,
             @RequestParam(required = false) String reason) {
         taskProcessComponent.delegateTask(taskId, userId, delegateId, reason);
-        return ApiResponse.success(i18nService.getMessage("portal.task_delegated"), null);
+        return ApiResponse.success();
     }
 
     @Operation(summary = "Transfer task")
@@ -139,7 +140,7 @@ public class TaskController {
             @RequestParam String toUserId,
             @RequestParam(required = false) String reason) {
         taskProcessComponent.transferTask(taskId, userId, toUserId, reason);
-        return ApiResponse.success(i18nService.getMessage("portal.task_transferred"), null);
+        return ApiResponse.success();
     }
 
     @Operation(summary = "Urge task")
@@ -149,7 +150,7 @@ public class TaskController {
             @CurrentUserId String userId,
             @RequestParam(required = false) String message) {
         taskProcessComponent.urgeTask(taskId, userId, message);
-        return ApiResponse.success(i18nService.getMessage("portal.task_urged"), null);
+        return ApiResponse.success();
     }
 
     @Operation(summary = "Batch urge tasks")
@@ -158,7 +159,7 @@ public class TaskController {
             @CurrentUserId String userId,
             @RequestBody @Valid TaskBatchUrgeRequest request) {
         taskProcessComponent.batchUrgeTasks(request.getTaskIds(), userId, request.getMessage());
-        return ApiResponse.success(i18nService.getMessage("portal.batch_urged"), null);
+        return ApiResponse.success();
     }
 
     @Operation(summary = "Get task statistics")

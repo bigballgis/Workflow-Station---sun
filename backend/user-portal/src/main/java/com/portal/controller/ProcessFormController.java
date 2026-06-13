@@ -1,7 +1,7 @@
 package com.portal.controller;
 
 import com.portal.component.ProcessFormComponent;
-import com.portal.dto.ApiResponse;
+import com.platform.common.dto.ApiResponse;
 import com.portal.security.CurrentUserId;
 import com.portal.dto.ProcessFormData;
 import com.portal.exception.PortalException;

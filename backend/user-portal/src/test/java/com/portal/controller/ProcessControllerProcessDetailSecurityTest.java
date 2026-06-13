@@ -2,7 +2,7 @@ package com.portal.controller;
 
 import com.portal.component.FunctionUnitAccessComponent;
 import com.portal.component.ProcessComponent;
-import com.portal.dto.ApiResponse;
+import com.platform.common.dto.ApiResponse;
 import com.portal.dto.ProcessInstanceInfo;
 import com.platform.common.i18n.I18nService;
 import org.junit.jupiter.api.Test;
@@ -66,7 +66,7 @@ class ProcessControllerProcessDetailSecurityTest {
         ApiResponse<ProcessInstanceInfo> response = processController.getProcessDetail("viewer", "proc-1");
 
         assertThat(response.isSuccess()).isFalse();
-        assertThat(response.getCode()).isEqualTo("403");
+        assertThat(response.getError().getCode()).isEqualTo("403");
         verify(processComponent).getProcessDetail("proc-1");
     }
 

@@ -145,7 +145,7 @@ class NotificationControllerTest {
                         .param("type", "INVALID"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.code").value("400"));
+                .andExpect(jsonPath("$.error.code").value("400"));
 
         verify(notificationService, never()).getNotifications(any(), anyInt(), anyInt(), any(), any());
     }

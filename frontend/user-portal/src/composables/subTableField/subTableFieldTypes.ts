@@ -1,0 +1,116 @@
+import type { DialogColumn } from '@/components/subTableAddDialogHelpers'
+import type { FormField, RowFormulaRule, SubTableValidationConfig } from '@/components/formRendererHelpers'
+import type { BindingFieldDefinition } from '@/utils/subTableRowRuntime'
+
+export type Column = DialogColumn & {
+  type?: DialogColumn['type'] | 'linkForm'
+  props?: DialogColumn['props'] & {
+    linkText?: string
+    componentId?: number
+    boundSubTableBindingId?: number
+    boundSubTableName?: string
+  }
+}
+
+export interface SubTableBinding {
+  bindingId: number
+  tableId?: number | null
+  bindingType: string
+  bindingMode: string
+  foreignKeyField?: string | null
+  tableName: string
+  physicalTableName?: string
+  tableType: string
+  tableDescription: string
+  columns: Column[]
+  /** Designer PK field names (from admin tableBindings); preferred over hardcoded id/rowId. */
+  primaryKeyFields?: string[]
+  data: any[]
+  formFields?: FormField[]
+  formOptions?: Record<string, any>
+}
+
+/** Structural mirror of SubTableField.vue props — composables accept the component's props object. */
+export interface SubTableFieldProps {
+  title: string
+  columns: Column[]
+  modelValue?: any[]
+  editable?: boolean
+  loading?: boolean
+  rowFormulas?: RowFormulaRule[]
+  summaryColumns?: string[]
+  summaryAggregations?: Record<string, 'SUM' | 'AVG' | 'COUNT' | 'MIN' | 'MAX'>
+  validationConfig?: SubTableValidationConfig
+  uploadUrl?: string
+  // Multi-instance assignment props
+  taskId?: string
+  assigneeField?: string
+  canAssign?: boolean
+  showAssignButton?: boolean
+  // Real-time sync props
+  enablePolling?: boolean
+  pollingInterval?: number
+  enableWebSocket?: boolean
+  // View detail props (application detail read-only mode)
+  showViewDetail?: boolean
+  showTaskStatus?: boolean
+  // Fill form button (todo detail for MI subtask)
+  showFillButton?: boolean
+  fillButtonLabel?: string
+  linkedSubTableBindings?: SubTableBinding[]
+  suppressLinkFormInitialData?: boolean
+  /** Task To Do only: show Cancel/Save on Link Form detail (completed / My Request omit). */
+  showLinkFormDialogFooter?: boolean
+  /**
+   * 办理人待办 + form below table + 表单来源为 Link 子表时：点击链接不打开弹层，由宿主滚动到表格下方内联表单。
+   */
+  linkFormClickScrollToInline?: boolean
+  /**
+   * My Request + 「汇总列表 + Link/Details」：表格内 lookup / 用户快照只显示摘要标签，不在单元格内展开 el-descriptions，
+   * 避免与「详情走 Link 弹层」的设计冲突（否则看起来像待办的 inline 表单区）。
+   */
+  compactLookupCells?: boolean
+  /**
+   * 表设计器在 dw_field_definitions 中标记的主键列名（经 admin-center 随 tableBindings 下发）。
+   * 仅单列时参与 assignment / 行定位；多列主键仍回退到既有 id/rowId 等待办路径。
+   */
+  primaryKeyFields?: string[]
+  /** Field FK/PK metadata from tableBindings (PRD S5). */
+  fieldDefinitions?: BindingFieldDefinition[]
+  tableId?: number | null
+  functionUnitId?: string
+  primaryFormData?: Record<string, unknown>
+  subTableBindingsForContext?: Array<{
+    tableId?: number | null
+    bindingType?: string
+    tableName?: string
+    tableDisplayName?: string
+  }>
+  parentRow?: Record<string, unknown> | null
+  parentTableId?: number | null
+  primaryTableDisplayName?: string
+  primaryTableId?: number | null
+  parentTablesById?: Record<number, { fieldDefinitions: BindingFieldDefinition[] }>
+  /** PRD S6: structural FK vs MI participant row link. */
+  bindingLinkMode?: 'structuralFk' | 'miParticipantRow' | string
+  bindingForeignKeyField?: string | null
+  /** Flowable MI element id — seeds attachment/link-child row_id on Add (To Do sub form2). */
+  miParticipantRowId?: string | number | null
+  miParentParticipantRow?: Record<string, unknown> | null
+  miParentTableId?: number | null
+}
+
+/** Structural mirror of SubTableField.vue emits — composables accept the component's emit function. */
+export interface SubTableFieldEmit {
+  (e: 'update:modelValue', val: any[]): void
+  (e: 'update:primaryFormData', val: Record<string, unknown>): void
+  (e: 'assignmentChanged'): void
+  (e: 'dataRefreshed', rows: any[]): void
+  (e: 'viewDetail', row: any, index: number): void
+  (e: 'fillForm', row: any, index: number): void
+  (e: 'update:linkedSubTableData', bindingId: number, rows: any[]): void
+  (e: 'linkFormScrollToInline'): void
+}
+
+/** Loose i18n translate signature (same shape as utils/subTableRowRuntime). */
+export type SubTableFieldT = (key: string, params?: Record<string, unknown>) => string

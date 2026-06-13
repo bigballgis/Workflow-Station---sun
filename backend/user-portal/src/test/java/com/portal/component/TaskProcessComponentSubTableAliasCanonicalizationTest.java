@@ -12,7 +12,7 @@ class TaskProcessComponentSubTableAliasCanonicalizationTest {
 
     @SuppressWarnings("unchecked")
     private static Map<String, Object> canonicalizeReflect(Map<String, Object> in) throws Exception {
-        Method m = TaskProcessComponent.class.getDeclaredMethod(
+        Method m = MiSubTableVariableSupport.class.getDeclaredMethod(
                 "canonicalizeSubTablesAliasKeys", Map.class);
         m.setAccessible(true);
         return (Map<String, Object>) m.invoke(null, in);

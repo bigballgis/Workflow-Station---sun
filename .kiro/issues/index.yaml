@@ -575,3 +575,95 @@
     Playwright verify-subform2-people-carry-forward.mjs 95233afa Test-000069 PASS（age=jj0）；
     截图 verification-screenshots/2026-06-11_task-95233afa-subform2-fixed.png（Sub Task 显示 Test-000069 行，People age=jj0/sex=on/id=UUID）。
     路径：shared.ts（scrubMiCorruptLinkChildRowsForParent、buildMiCollectionSliceKeySet）、views/tasks/detail.vue、composables/tasks/useTaskForm.ts。
+- id: "1444"
+  status: open
+  severity: major
+  category: testing
+  summary: "user-portal 后端测试套件存在 35F+14E 历史遗留失败（HEAD 基线即失败，与 ApiResponse 迁移无关）"
+  detail: |
+    2026-06-12 做 user-portal ApiResponse 迁移（code-quality 第 1 阶段）时，用 git stash 对照 HEAD 基线确认
+    以下失败在迁移前即存在（共 11 个测试类，35 failures + 14 errors）：
+    - N8nActionControllerTest 8F：standalone MockMvc 全部 404（路由/上下文配置问题，未到断言层）
+    - NotificationControllerTest 3F+10E：Mockito strict stubbing 不匹配 + missing header 期望 400 实得 200
+    - ApprovalControllerProperties 10F+2E：mock 下 AdminCenter 不可用 → 期望 200 实得 503；
+      reject 校验路径对 data=null 调 .get() NPE（测试自身缺陷）
+    - NotificationKafkaConsumerTest 2F / FunctionUnitAccessProperties 3F / PermissionRequestProperties 3F：
+      异常消息/过滤逻辑断言与实现漂移
+    - PortalRelationTablePropertyTest 1F、ProcessOperationProperties 3F+1E、
+      ProcessFormUpdateRejectionPropertyTest 1F、SecurityVulnerabilityBugConditionPropertyTest 1F、
+      PortalRelationTableQueryDataSearchTest 1E
+    另：本地 ~/.m2 中 platform-common/security/messaging 旧版会额外引爆 500+ 错误，
+    跑 user-portal 测试前需先 `mvn -pl backend/user-portal -am install -DskipTests` 收口。
+    建议另开任务逐类修复（多为测试自身与实现漂移，非业务 bug）。
+- id: "1445"
+  status: open
+  severity: minor
+  category: testing
+  summary: "MI 截图回归 2 个场景的硬编码 live-DB fixture 已失效（1439-subform2、1435-people-inline-uuid）"
+  detail: |
+    2026-06-12 对重构后构建跑完整 regression:mi 时发现，6 个截图场景中 2 个的默认参数指向失效数据：
+    - verify-subform2-people-carry-forward.mjs 默认 task 75d662ec / participant Test-000059：
+      该实例（e6b0e7c6）参与者自 6 月 2 日起即为 Test-000024~044，从未包含 Test-000059；
+      当前办理人 Test-000043 的 age 在库中本就为空（sub form1 未填）。
+    - verify-mi-people-inline-uuid.mjs 默认 task 09367c90 / Test-000058：该任务 2026-06-08 19:01 已办结。
+    另：screenshotPath slug 硬编码（如 task-75d662-subform2-people），换 task 参数跑时文件名仍是旧 slug，易误导对比。
+    本次用仍在办的 95233afa-6493-11f1-ab3a-ee47801f8369 / Test-000069 显式参数重跑，两场景均 PASS
+    且与 #1443 重构前验证结果逐项一致（age=jj0、id=1fe66960-5fff-4080-98b0-f9baee07490e）。
+    建议：场景改为自播种（脚本内发起新流程、填 sub form1、推进到 sub form2）或至少把默认参数与 slug 参数化；
+    修复前跑全量 regression:mi 需对这两个场景手工传入有效 task/participant。
+- id: "1446"
+  status: fixed
+  fixed_at: "2026-06-12"
+  severity: major
+  category: bug
+  summary: "MI 子任务 People link-form Save 后刷新丢值：编辑值未同步到同 relation table 的兄弟切片，hydration 读到 stale 切片（HEAD 既有，非重构引起）"
+  detail: |
+    复现（2026-06-12，task 068c85ab-662d-11f1-9300-06a11faaf5f7 / Test-000074，Process instance cfa61c3b）：
+    People 内联改 age → 卡片 Save → 200、up_process_instance 快照已更新 → 刷新后页面回显旧值。
+    取证链：
+    1) 保存确实落库：slice 30/"People"/"people" 写入了新值（age=57/58）。
+    2) 但提交 payload 中同一行在 slice 63 仍是旧值（抓包：30:{age:58} | 63:{age:55}）——
+       前端 buildSubTableSubmitPayload 只把编辑值写进部分切片，#1443 的
+       syncStaleSiblingSubTableSlicesFromActiveBindings 在 09be69f8 收紧后
+       （仅同 tableId 的 MI collection sibling、MI 子任务 Save 禁止 sync）不再覆盖
+       People link-form 这类非 collection 兄弟切片。
+    3) 刷新后该节点 People 绑定从 slice 63 hydrate → 显示 stale 值；用户首保存场景下表现为全空。
+    4) A/B 实锤非重构回归：git stash 还原 HEAD 前端、重建镜像后同一流程同样失败
+       （payload 同形：30 新值 / 63 旧值，刷新回显旧值）。
+    修复（2026-06-12）：新增 syncMiLinkChildEditedRowsIntoSiblingSlices（subTableSliceMerge.ts，经 shared barrel 导出）；
+    MI 子任务 Save 时按行主键（People 的 id UUID）把编辑行**只更新不追加**地同步进非 collection 兄弟切片；
+    MI collection 切片经 buildMiCollectionSliceKeySet 排除、dashboard/file-only 来源绑定直接跳过——
+    09be69f8 / #1442 防泄漏语义不变。接线点：useTaskForm.ts buildSubTableSubmitPayload 的 MI 分支（else 侧）。
+    验证：新单测 miLinkChildSiblingSliceSync.test.ts 6 例先红后绿；vitest 全量 507 过/2 失败（同基线）；
+    regression:mi 单元 104 全绿；重建镜像后 Playwright 保存循环 e2e PASS（payload 30/63 同值 5588、刷新回显 5588）；
+    verify-sex-toggle-isolation（无跨参与者渗漏）、verify-subform2-people-carry-forward（95233afa age=jj0）守卫 PASS。
+    取证/复跑脚本：frontend/scripts/_inspect-068c.mjs、_save-cycle-068c.mjs（保存循环 e2e harness，可纳入 #1445 场景化）。
+    —— 第二部分（同日跟进）：Save 后**页内**不即时回显（需手动 F5）。取证：保存后 loadTaskDetail 已重拉
+    且 API 全为新值，但 MI 管线把上一步快照/上轮绑定里的 stale 行并回候选并在行 pick 中胜出
+    （form-data 中存在按设计落后一拍的上一步表单快照值，页内重载与冷加载的应用顺序存在竞态）。
+    修复（三层，全部保留）：1) useTaskForm.saveCurrentTaskForm 提交后把已提交 __subTables__ 写回本地 formData；
+    2) tasks/detail.vue loadTaskDetail 起始清空 previousForms 与 subTableBindings（页内重载与 F5 同一起点）；
+    3) 决定性收尾：useTaskDetailMiPersist.saveCurrentTaskFormWithMiPersist 在 loadTaskDetail 完成后
+    reapplySavedLinkRowsToBindings —— 把服务器已确认的保存行按主键 merge 回 participant-scoped link 绑定
+    （dashboard/file-only 绑定跳过，MI 状态与附件不受影响）并 patchFormDataSubTablesFromCurrentBindings。
+    验证：保存循环 e2e 页内即时显示新值（t+1s 即 7005、无回退）+ F5 后一致；vitest 全量 507/2（基线持平）；
+    MI 单元 104 全绿；sex-toggle / carry-forward / assignee-subtask-slice 三个 e2e 守卫 PASS。
+    —— 第三部分（同日跟进，用户报「每次 Save 后 People 行 id 都变」）：
+    根因链：行创建时 seedLinkChildForeignKeysFromParentRow 按绑定 FK 配置把参与者键 id_idw 种到
+    People link-child 行上（#1435 定义的腐坏镜像）→ 持久化后 hydration 拒绑该行 → 表单以空行起步 →
+    每次 Save 当新行分配新 UUID（id 漂移）。保存侧原 scrub 只清快照切片，绑定实时行在 merge 后把
+    id_idw 重新写回 payload（074 的行天生干净所以无此症状）。
+    修复（两跳）：1) subTableRowRuntime.seedLinkChildForeignKeysFromParentRow 增加守卫——行主键非
+    id_idw 时 legacy FK 与 fieldDef FK meta 均禁写 id_idw（失败测试先行，2 红→绿）；
+    2) useTaskForm.buildSubTableSubmitPayload 在绑定循环输出上对非 collection 绑定二次执行
+    scrubMiCorruptLinkChildRowsForParent，阻断存量腐坏行的重感染（payload 实测 idw 从 Test-000076
+    变为 undefined）。另把 #1446 sibling 同步收紧为仅 UUID 形态 PK 参与匹配（参与者键永不驱动同步，
+    +1 防回归用例）。
+    验证：单测 21/21（seeding 14 + sync 7）；MI 回归单元 106/106；vitest 全量与基线持平（差异项隔离重跑绿）；
+    sex-toggle / carry-forward / assignee-subtask-slice e2e 守卫 PASS。
+    备注：e2e 无法替任务 owner 驱动写路径（脚本默认用户对他人任务 submit 返回 403 —— 也据此发现
+    UI 在 403 时仍可能给人「已保存」观感，已由用户在真实会话复核 id 稳定性）；旧腐坏行（075/076）
+    在 owner 下一次 Save 时会被二次 scrub 清洗，此后 id 稳定。
+    另发现待办：mergeMiParticipantScalarsFromForm 会把顶层 formData 残留字段（含他人行的 id/age）
+    Object.assign 到当前参与者 collection 行（已观测 64/66/69 被写入 age/id/sex），属 #1443 era 既有
+    行为，需单独评估收紧。

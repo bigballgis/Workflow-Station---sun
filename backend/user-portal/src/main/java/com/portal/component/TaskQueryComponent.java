@@ -7,65 +7,57 @@ import com.portal.dto.TaskInfo;
 import com.portal.dto.TaskQueryRequest;
 import com.portal.dto.TaskStatistics;
 import com.portal.dto.TaskHistoryInfo;
+import com.portal.util.RequestContextInheritanceUtils;
 import com.portal.util.WorkflowEnginePayloadHelper;
 import com.platform.security.util.SecurityContextUtils;
-import com.portal.entity.DelegationRule;
-import com.portal.entity.ProcessHistory;
 import com.portal.entity.ProcessInstance;
-import com.portal.enums.DelegationStatus;
-import com.portal.repository.DelegationRuleRepository;
-import com.portal.repository.ProcessHistoryRepository;
 import com.portal.repository.ProcessInstanceRepository;
 import com.portal.service.TaskActionService;
-import com.portal.service.PortalWorkspaceAuthService;
 import com.portal.exception.PortalException;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.*;
-import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
  * Task query component.
  * Supports multi-dimensional task queries: direct assignment, virtual groups, department roles, delegated tasks.
- * 
+ *
  * Primary path queries the Flowable engine, then drops only {@link TaskProcessComponent#shouldHideTaskInTodoList}
- * (initiator incorrectly occupying a downstream empty pool), then {@link #filterFixedBuRoleTasksForActiveWorkspace} for FIXED_BU_ROLE vs JWT active BU.
+ * (initiator incorrectly occupying a downstream empty pool), then
+ * {@link WorkspaceTaskFilterComponent#filterFixedBuRoleTasksForActiveWorkspace} for FIXED_BU_ROLE vs JWT active BU.
  * Full {@link TaskProcessComponent#canProcessTask} is not applied to the list — engine
  * membership is authoritative; complete/claim still enforce canProcessTask.
  * When the engine returns an empty list, {@link #mergeTasksFromRunningProcessInstancesForUser} merges from
  * RUNNING instances with {@code canProcessTask} (initiator fallback path only).
+ *
+ * <p>Acts as a facade: delegated-task querying lives in {@link DelegatedTaskQueryComponent}, workspace/BU
+ * scoping in {@link WorkspaceTaskFilterComponent}, participant sub-table enrichment in
+ * {@link MiParticipantEnrichmentComponent}, history/statistics/completed queries in {@link TaskHistoryComponent},
+ * and engine payload mapping in {@link EngineTaskMapper}.</p>
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class TaskQueryComponent {
 
-    /** Page size for a single delegator task fetch (avoid oversized responses) */
-    private static final int DELEGATOR_ENGINE_PAGE_SIZE = 200;
-
-    private final DelegationRuleRepository delegationRuleRepository;
     private final ProcessInstanceRepository processInstanceRepository;
-    private final ProcessHistoryRepository processHistoryRepository;
     private final WorkflowEngineClient workflowEngineClient;
     private final TaskActionService taskActionService;
-    private final JdbcTemplate jdbcTemplate;
-    private final VirtualGroupAccessComponent virtualGroupAccessComponent;
-    private final PortalWorkspaceAuthService portalWorkspaceAuthService;
+    private final DelegatedTaskQueryComponent delegatedTaskQueryComponent;
+    private final WorkspaceTaskFilterComponent workspaceTaskFilter;
+    private final MiParticipantEnrichmentComponent miParticipantEnricher;
+    private final TaskHistoryComponent taskHistoryComponent;
 
     /** Lazy: breaks cycle with {@link TaskProcessComponent} which depends on this component. */
     @Lazy
@@ -80,34 +72,6 @@ public class TaskQueryComponent {
     @PostConstruct
     public void init() {
         log.info("TaskQueryComponent initialized, workflow engine available: {}", workflowEngineClient.isAvailable());
-    }
-
-    /**
-     * Copies Flowable task variables then overlays portal {@link ProcessInstance} snapshot variables (richer payloads
-     * such as {@code __subTables__}). Keeps Flowable-supplied execution-scoped {@code _currentItem}/{@code currentItem}
-     * when present: the portal snapshot is single process-wide JSON and would otherwise overwrite MI iteration context.
-     */
-    private static void mergePortalProcessVariablesPreferringFlowableMiElementItem(
-            Map<String, Object> mergedOut,
-            Map<String, Object> flowableVariables,
-            Map<String, Object> portalProcessVariables) {
-        mergedOut.clear();
-        if (flowableVariables != null) {
-            mergedOut.putAll(flowableVariables);
-        }
-        boolean hadUnderscore = mergedOut.containsKey("_currentItem");
-        Object underscoreVal = mergedOut.get("_currentItem");
-        boolean hadBare = mergedOut.containsKey("currentItem");
-        Object bareVal = mergedOut.get("currentItem");
-        if (portalProcessVariables != null) {
-            mergedOut.putAll(portalProcessVariables);
-        }
-        if (hadUnderscore) {
-            mergedOut.put("_currentItem", underscoreVal);
-        }
-        if (hadBare) {
-            mergedOut.put("currentItem", bareVal);
-        }
     }
 
     /**
@@ -190,7 +154,7 @@ public class TaskQueryComponent {
         List<TaskInfo> pagedTasks = start < allTasks.size()
                 ? allTasks.subList(start, end)
                 : Collections.emptyList();
-        clearTaskVariablesForList(pagedTasks);
+        EngineTaskMapper.clearTaskVariablesForList(pagedTasks);
         return PageResponse.of(pagedTasks, page, size, allTasks.size());
     }
 
@@ -207,12 +171,12 @@ public class TaskQueryComponent {
         ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
 
         CompletableFuture<List<TaskInfo>> engineAllFuture = CompletableFuture.supplyAsync(() ->
-                runWithInheritedRequestAndSecurity(ctx, attrs,
+                RequestContextInheritanceUtils.runWithInheritedRequestAndSecurity(ctx, attrs,
                         () -> fetchAllEngineTasksPaged(userId, assignmentTypes, size)));
 
         CompletableFuture<List<TaskInfo>> delegatedFuture = includeDelegated
                 ? CompletableFuture.supplyAsync(() ->
-                runWithInheritedRequestAndSecurity(ctx, attrs, () -> queryDelegatedTasks(userId)))
+                RequestContextInheritanceUtils.runWithInheritedRequestAndSecurity(ctx, attrs, () -> queryDelegatedTasks(userId)))
                 : CompletableFuture.completedFuture(Collections.emptyList());
 
         long __tF0 = System.nanoTime();
@@ -234,7 +198,7 @@ public class TaskQueryComponent {
         List<TaskInfo> pagedTasks = start < allTasks.size()
                 ? allTasks.subList(start, end)
                 : Collections.emptyList();
-        clearTaskVariablesForList(pagedTasks);
+        EngineTaskMapper.clearTaskVariablesForList(pagedTasks);
         return PageResponse.of(pagedTasks, page, size, allTasks.size());
     }
 
@@ -254,8 +218,8 @@ public class TaskQueryComponent {
         long engineTotal = 0L;
         try {
             long __tw0 = System.nanoTime();
-            List<String> groupIds = getUserVirtualGroups(userId);
-            groupIds = filterVirtualGroupsForActiveWorkspace(userId, groupIds);
+            List<String> groupIds = workspaceTaskFilter.getUserVirtualGroups(userId);
+            groupIds = workspaceTaskFilter.filterVirtualGroupsForActiveWorkspace(userId, groupIds);
             long __twVg = System.nanoTime();
             boolean includeGroups = assignmentTypes == null || assignmentTypes.isEmpty()
                     || assignmentTypes.contains("VIRTUAL_GROUP");
@@ -267,11 +231,11 @@ public class TaskQueryComponent {
                     groupIds != null ? groupIds.size() : 0, includeGroups);
             if (result.isPresent()) {
                 Map<String, Object> responseBody = result.get();
-                engineTotal = extractEngineTotalCount(responseBody);
+                engineTotal = EngineTaskMapper.extractEngineTotalCount(responseBody);
                 List<Map<String, Object>> tasks = WorkflowEnginePayloadHelper.taskListFromPayload(responseBody);
                 if (tasks != null) {
                     for (Map<String, Object> taskMap : tasks) {
-                        engineTasks.add(convertMapToTaskInfo(taskMap));
+                        engineTasks.add(EngineTaskMapper.convertMapToTaskInfo(taskMap));
                     }
                 }
             }
@@ -304,12 +268,12 @@ public class TaskQueryComponent {
         ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
 
         CompletableFuture<EngineWindowResult> engineFuture = CompletableFuture.supplyAsync(() ->
-                runWithInheritedRequestAndSecurity(ctx, attrs,
+                RequestContextInheritanceUtils.runWithInheritedRequestAndSecurity(ctx, attrs,
                         () -> fetchEngineTaskPageWindow(userId, assignmentTypes, page, size)));
 
         CompletableFuture<List<TaskInfo>> delegatedFuture = includeDelegated
                 ? CompletableFuture.supplyAsync(() ->
-                runWithInheritedRequestAndSecurity(ctx, attrs, () -> queryDelegatedTasks(userId)))
+                RequestContextInheritanceUtils.runWithInheritedRequestAndSecurity(ctx, attrs, () -> queryDelegatedTasks(userId)))
                 : CompletableFuture.completedFuture(Collections.emptyList());
 
         long __tQ0 = System.nanoTime();
@@ -339,13 +303,13 @@ public class TaskQueryComponent {
                 ? allTasks.size()
                 : Math.max(engineTotal + (long) delegated.size(), (long) allTasks.size());
 
-        clearTaskVariablesForList(pagedTasks);
+        EngineTaskMapper.clearTaskVariablesForList(pagedTasks);
         return PageResponse.of(pagedTasks, page, size, totalElements);
     }
 
     private List<TaskInfo> fetchAllEngineTasksPaged(String userId, List<String> assignmentTypes, int pageSize) {
-        List<String> groupIds = getUserVirtualGroups(userId);
-        groupIds = filterVirtualGroupsForActiveWorkspace(userId, groupIds);
+        List<String> groupIds = workspaceTaskFilter.getUserVirtualGroups(userId);
+        groupIds = workspaceTaskFilter.filterVirtualGroupsForActiveWorkspace(userId, groupIds);
         boolean includeGroups = assignmentTypes == null || assignmentTypes.isEmpty()
                 || assignmentTypes.contains("VIRTUAL_GROUP");
         List<TaskInfo> out = new ArrayList<>();
@@ -361,7 +325,7 @@ public class TaskQueryComponent {
                 break;
             }
             for (Map<String, Object> taskMap : tasks) {
-                out.add(convertMapToTaskInfo(taskMap));
+                out.add(EngineTaskMapper.convertMapToTaskInfo(taskMap));
             }
             if (tasks.size() < pageSize) {
                 break;
@@ -396,29 +360,7 @@ public class TaskQueryComponent {
                     .filter(t -> !taskProcessComponent.shouldHideTaskInTodoList(t, userId, portalUsername))
                     .collect(Collectors.toList());
         }
-        return filterFixedBuRoleTasksForActiveWorkspace(filtered);
-    }
-
-    private static long extractEngineTotalCount(Map<String, Object> responseBody) {
-        if (responseBody == null) {
-            return 0L;
-        }
-        Object tc = responseBody.get("totalCount");
-        if (tc instanceof Number n) {
-            return Math.max(n.longValue(), 0L);
-        }
-        return 0L;
-    }
-
-    private static void clearTaskVariablesForList(List<TaskInfo> tasks) {
-        if (tasks == null) {
-            return;
-        }
-        for (TaskInfo t : tasks) {
-            if (t != null) {
-                t.setVariables(null);
-            }
-        }
+        return workspaceTaskFilter.filterFixedBuRoleTasksForActiveWorkspace(filtered);
     }
 
     /**
@@ -455,7 +397,7 @@ public class TaskQueryComponent {
                     continue;
                 }
                 for (Map<String, Object> taskMap : tasks) {
-                    TaskInfo taskInfo = convertMapToTaskInfo(taskMap);
+                    TaskInfo taskInfo = EngineTaskMapper.convertMapToTaskInfo(taskMap);
                     if (taskInfo.getTaskId() == null || seen.contains(taskInfo.getTaskId())) {
                         continue;
                     }
@@ -472,7 +414,7 @@ public class TaskQueryComponent {
             }
         }
     }
-    
+
     /**
      * Single round-trip to local portal DB: which of these process instances are withdrawn.
      * (Avoids N+1 {@code findById} per task in the hot path.)
@@ -489,300 +431,12 @@ public class TaskQueryComponent {
     }
 
     /**
-     * When the engine REST response uses Map deserialization, user IDs may come as JSON numbers
-     * (Long) and cannot be cast directly to (String); doing so causes a runtime exception or
-     * field loss, making the portal see an empty assignee and fail permission checks.
-     */
-    private static String engineStringField(Object value) {
-        if (value == null) {
-            return null;
-        }
-        if (value instanceof String s) {
-            return s.isBlank() ? null : s.trim();
-        }
-        if (value instanceof Number n) {
-            double d = n.doubleValue();
-            if (Double.isFinite(d) && Math.floor(d) == d) {
-                return String.valueOf(n.longValue());
-            }
-            return n.toString();
-        }
-        if (value instanceof Boolean b) {
-            return b.toString();
-        }
-        String t = value.toString().trim();
-        return t.isEmpty() ? null : t;
-    }
-    
-    /**
-     * Convert a Map to TaskInfo.
-     */
-    private TaskInfo convertMapToTaskInfo(Map<String, Object> taskMap) {
-        // Prefer processDefinitionKey; extract from processDefinitionId if absent
-        String processDefinitionKey = (String) taskMap.get("processDefinitionKey");
-        if (processDefinitionKey == null || processDefinitionKey.isEmpty()) {
-            String processDefinitionId = engineStringField(taskMap.get("processDefinitionId"));
-            processDefinitionKey = extractProcessDefinitionKey(processDefinitionId);
-        }
-        
-        // Get process definition name; fall back to processDefinitionKey if not returned
-        String processDefinitionName = (String) taskMap.get("processDefinitionName");
-        if (processDefinitionName == null || processDefinitionName.isEmpty()) {
-            processDefinitionName = processDefinitionKey;
-        }
-        
-        // Get initiator info
-        String initiatorId = engineStringField(taskMap.get("initiatorId"));
-        String initiatorName = engineStringField(taskMap.get("initiatorName"));
-        
-        // Get current assignee
-        String currentAssignee = engineStringField(taskMap.get("currentAssignee"));
-        // Get current assignee name; fall back to currentAssignee if not available
-        String currentAssigneeName = engineStringField(taskMap.get("currentAssigneeName"));
-        if (currentAssigneeName == null || currentAssigneeName.isEmpty()) {
-            currentAssigneeName = currentAssignee;
-        }
-        
-        List<String> candidateUserIds = parseStringIdList(taskMap.get("candidateUserIds"));
-        List<String> candidateGroupIds = parseStringIdList(taskMap.get("candidateGroupIds"));
-        String assignmentTarget = engineStringField(taskMap.get("assignmentTarget"));
-
-        // Determine assignment type: prefer engine value, otherwise infer
-        String assignmentType = null;
-        Object atObj = taskMap.get("assignmentType");
-        if (atObj instanceof Enum<?> en) {
-            assignmentType = en.name();
-        } else if (atObj != null) {
-            assignmentType = atObj.toString().trim();
-        }
-        if (assignmentType == null || assignmentType.isEmpty()) {
-            if (currentAssignee != null && !currentAssignee.isEmpty()) {
-                assignmentType = "USER";
-            } else if (candidateUserIds != null && !candidateUserIds.isEmpty()) {
-                assignmentType = "CANDIDATE_USERS";
-            } else {
-                assignmentType = "VIRTUAL_GROUP";
-            }
-        }
-        
-        // Get process variables
-        @SuppressWarnings("unchecked")
-        Map<String, Object> variables = (Map<String, Object>) taskMap.get("variables");
-        
-        return TaskInfo.builder()
-                .taskId(engineStringField(taskMap.get("taskId")))
-                .taskName((String) taskMap.get("taskName"))
-                .description((String) taskMap.get("taskDescription"))
-                .processInstanceId(engineStringField(taskMap.get("processInstanceId")))
-                .processDefinitionKey(processDefinitionKey)
-                .processDefinitionName(processDefinitionName)
-                .assignmentType(assignmentType)
-                .bpmnAssigneeType(engineStringField(taskMap.get("bpmnAssigneeType")))
-                .bpmnBusinessUnitId(engineStringField(taskMap.get("bpmnBusinessUnitId")))
-                .assignmentTarget(assignmentTarget)
-                .assignee(currentAssignee)
-                .assigneeName(currentAssigneeName)
-                .initiatorId(initiatorId)
-                .initiatorName(initiatorName)
-                .priority(taskMap.get("priority") != null ? taskMap.get("priority").toString() : "NORMAL")
-                .status((String) taskMap.get("status"))
-                .createTime(parseDateTime(taskMap.get("createdTime")))
-                .completedTime(parseDateTime(taskMap.get("completedTime")))
-                .dueDate(parseDateTime(taskMap.get("dueDate")))
-                .isOverdue(taskMap.get("isOverdue") != null ? (Boolean) taskMap.get("isOverdue") : false)
-                .formKey((String) taskMap.get("formKey"))
-                .taskDefinitionKey((String) taskMap.get("taskDefinitionKey"))
-                .variables(variables)
-                .candidateUserIds(candidateUserIds)
-                .candidateGroupIds(candidateGroupIds)
-                .build();
-    }
-
-    /**
-     * Parse the candidate user/group ID lists returned by the engine (JSON array or comma-separated string).
-     */
-    private List<String> parseStringIdList(Object raw) {
-        if (raw == null) {
-            return null;
-        }
-        if (raw instanceof List<?> list) {
-            List<String> out = new ArrayList<>();
-            for (Object o : list) {
-                if (o != null && !o.toString().isBlank()) {
-                    out.add(o.toString().trim());
-                }
-            }
-            return out.isEmpty() ? null : out;
-        }
-        if (raw instanceof String s && !s.isBlank()) {
-            List<String> out = new ArrayList<>();
-            for (String part : s.split(",")) {
-                if (!part.isBlank()) {
-                    out.add(part.trim());
-                }
-            }
-            return out.isEmpty() ? null : out;
-        }
-        return null;
-    }
-    
-    /**
-     * Extract processDefinitionKey from processDefinitionId.
-     * Format: key:version:uuid (e.g. Process_PurchaseRequest:2:b550b1fe-f0b0-11f0-b82f-00ff197375e0)
-     */
-    private String extractProcessDefinitionKey(String processDefinitionId) {
-        if (processDefinitionId == null || processDefinitionId.isEmpty()) {
-            return null;
-        }
-        int colonIndex = processDefinitionId.indexOf(':');
-        if (colonIndex > 0) {
-            return processDefinitionId.substring(0, colonIndex);
-        }
-        return processDefinitionId;
-    }
-    
-    /**
-     * Parse a date-time value.
-     */
-    private LocalDateTime parseDateTime(Object value) {
-        if (value == null) {
-            return null;
-        }
-        if (value instanceof LocalDateTime) {
-            return (LocalDateTime) value;
-        }
-        if (value instanceof String) {
-            try {
-                return LocalDateTime.parse((String) value);
-            } catch (Exception e) {
-                log.warn("Failed to parse datetime: {}", value);
-                return null;
-            }
-        }
-        return null;
-    }
-
-    /**
-     * Inherit the current request's Authorization and security context in an async thread
-     * for forwarding to workflow-engine.
-     */
-    private static <T> T runWithInheritedRequestAndSecurity(
-            SecurityContext securityContext,
-            ServletRequestAttributes requestAttributes,
-            Callable<T> action) {
-        try {
-            if (requestAttributes != null) {
-                RequestContextHolder.setRequestAttributes(requestAttributes, true);
-            }
-            SecurityContextHolder.setContext(securityContext);
-            return action.call();
-        } catch (RuntimeException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new IllegalStateException(e);
-        } finally {
-            SecurityContextHolder.clearContext();
-            RequestContextHolder.resetRequestAttributes();
-        }
-    }
-
-    /**
-     * Convert one delegator's pending tasks into a list with the delegate as assignee
-     * (single delegator; can query multiple delegators in parallel).
-     */
-    private List<TaskInfo> loadDelegatedTasksForDelegator(String delegateUserId, String delegatorId) {
-        List<TaskInfo> delegatedTasks = new ArrayList<>();
-        try {
-            for (int p = 0; ; p++) {
-                Optional<Map<String, Object>> result =
-                        workflowEngineClient.getUserTasks(delegatorId, p, DELEGATOR_ENGINE_PAGE_SIZE);
-                if (result.isEmpty()) {
-                    break;
-                }
-                Map<String, Object> responseBody = result.get();
-                List<Map<String, Object>> tasks = WorkflowEnginePayloadHelper.taskListFromPayload(responseBody);
-                if (tasks == null || tasks.isEmpty()) {
-                    break;
-                }
-                for (Map<String, Object> taskMap : tasks) {
-                    TaskInfo taskInfo = convertMapToTaskInfo(taskMap);
-                    TaskInfo delegatedTask = TaskInfo.builder()
-                            .taskId(taskInfo.getTaskId())
-                            .taskName(taskInfo.getTaskName())
-                            .description(taskInfo.getDescription())
-                            .processInstanceId(taskInfo.getProcessInstanceId())
-                            .processDefinitionKey(taskInfo.getProcessDefinitionKey())
-                            .processDefinitionName(taskInfo.getProcessDefinitionName())
-                            .bpmnAssigneeType(taskInfo.getBpmnAssigneeType())
-                            .bpmnBusinessUnitId(taskInfo.getBpmnBusinessUnitId())
-                            .assignmentType("DELEGATED")
-                            .assignee(delegateUserId)
-                            .delegatorId(delegatorId)
-                            .delegatorName(delegatorId)
-                            .initiatorId(taskInfo.getInitiatorId())
-                            .initiatorName(taskInfo.getInitiatorName())
-                            .priority(taskInfo.getPriority())
-                            .status(taskInfo.getStatus())
-                            .createTime(taskInfo.getCreateTime())
-                            .dueDate(taskInfo.getDueDate())
-                            .isOverdue(taskInfo.getIsOverdue())
-                            .formKey(taskInfo.getFormKey())
-                            .variables(taskInfo.getVariables())
-                            .build();
-                    delegatedTasks.add(delegatedTask);
-                }
-                if (tasks.size() < DELEGATOR_ENGINE_PAGE_SIZE) {
-                    break;
-                }
-            }
-        } catch (Exception e) {
-            log.warn("Failed to get delegated tasks for delegator {}: {}", delegatorId, e.getMessage());
-        }
-        return delegatedTasks;
-    }
-
-    /**
      * Query tasks delegated to a user.
-     * 
+     *
      * Delegation info is stored in the local database and combined with Flowable task info.
      */
     public List<TaskInfo> queryDelegatedTasks(String userId) {
-        // Check if the Flowable engine is available
-        if (!workflowEngineClient.isAvailable()) {
-            throw new IllegalStateException("Flowable engine unavailable, please check if workflow-engine-core service is running");
-        }
-        
-        // Get active delegation rules where the current user is the delegate
-        List<DelegationRule> delegations = delegationRuleRepository
-                .findActiveDelegationsForDelegate(userId, LocalDateTime.now());
-
-        if (delegations.isEmpty()) {
-            return Collections.emptyList();
-        }
-
-        // Get list of delegators
-        Set<String> delegatorIds = delegations.stream()
-                .map(DelegationRule::getDelegatorId)
-                .collect(Collectors.toSet());
-
-        SecurityContext ctx = SecurityContextHolder.getContext();
-        ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
-
-        List<CompletableFuture<List<TaskInfo>>> futures = delegatorIds.stream()
-                .map(delegatorId -> CompletableFuture.supplyAsync(() -> runWithInheritedRequestAndSecurity(
-                        ctx, attrs, () -> loadDelegatedTasksForDelegator(userId, delegatorId))))
-                .toList();
-
-        List<TaskInfo> delegatedTasks = new ArrayList<>();
-        for (CompletableFuture<List<TaskInfo>> f : futures) {
-            try {
-                delegatedTasks.addAll(f.join());
-            } catch (Exception e) {
-                log.warn("Failed to join delegated task future: {}", e.getMessage());
-            }
-        }
-
-        return delegatedTasks;
+        return delegatedTaskQueryComponent.queryDelegatedTasks(userId);
     }
 
     /**
@@ -790,27 +444,27 @@ public class TaskQueryComponent {
      */
     public Optional<TaskInfo> getTaskById(String taskId) {
         log.debug("getTaskById called with taskId: {}", taskId);
-        
+
         // Check if the Flowable engine is available
         if (!workflowEngineClient.isAvailable()) {
             throw new IllegalStateException("Flowable engine unavailable, please check if workflow-engine-core service is running");
         }
-        
+
         log.debug("Workflow engine is available, calling getTaskById");
-        
+
         try {
             long __tEngine = System.nanoTime();
             Optional<Map<String, Object>> result = workflowEngineClient.getTaskById(taskId);
             log.info("[PERF] detail.getTaskById(engine) took {} ms", (System.nanoTime() - __tEngine) / 1_000_000L);
             log.debug("Got result from workflow engine: {}", result.isPresent());
-            
+
             if (result.isPresent()) {
                 Map<String, Object> responseBody = result.get();
                 Map<String, Object> data = WorkflowEnginePayloadHelper.singleTaskFromPayload(responseBody);
                 if (data != null) {
                     log.debug("Converting task data to TaskInfo");
-                    TaskInfo taskInfo = convertMapToTaskInfo(data);
-                    
+                    TaskInfo taskInfo = EngineTaskMapper.convertMapToTaskInfo(data);
+
                     // Supplement variables from local ProcessInstance (Flowable may lose data when serializing complex nested objects)
                     String processInstanceId = taskInfo.getProcessInstanceId();
                     if (processInstanceId != null) {
@@ -830,22 +484,22 @@ public class TaskQueryComponent {
                             if (pi.getVariables() != null) {
                                 Map<String, Object> merged = new java.util.HashMap<>();
                                 // Flowable first, then portal snapshot — but do not squash MI element item from engine.
-                                mergePortalProcessVariablesPreferringFlowableMiElementItem(
+                                EngineTaskMapper.mergePortalProcessVariablesPreferringFlowableMiElementItem(
                                         merged, taskInfo.getVariables(), pi.getVariables());
-                                enrichMissingParticipantRowIdsInSubTables(merged);
+                                miParticipantEnricher.enrichMissingParticipantRowIdsInSubTables(merged);
                                 long __tEnrich = System.nanoTime();
                                 processComponent.enrichSubTablesVariablesFromPhysicalTables(processInstanceId, merged);
                                 log.info("[PERF] detail.enrichSubTables took {} ms", (System.nanoTime() - __tEnrich) / 1_000_000L);
                                 long __tPart = System.nanoTime();
-                                enrichParticipantAssignmentData(merged);
+                                miParticipantEnricher.enrichParticipantAssignmentData(merged);
                                 log.info("[PERF] detail.enrichParticipantAssignmentData took {} ms", (System.nanoTime() - __tPart) / 1_000_000L);
                                 taskInfo.setVariables(merged);
-                                log.debug("Merged variables from local DB for process {}, keys: {}", 
+                                log.debug("Merged variables from local DB for process {}, keys: {}",
                                     processInstanceId, merged.keySet());
                             }
                         });
                     }
-                    
+
                     // Get available task actions: only query DB and set actions when the engine returns actionIds (including empty array);
                     // if the engine did not return actionIds (node has no Actions configured), keep actions=null so the frontend does not show default Approve/Reject.
                     Object rawActionIds = data.get("actionIds");
@@ -862,14 +516,14 @@ public class TaskQueryComponent {
                         }
                     }
                     // When rawActionIds == null, do not set actions; keep null to indicate no Actions configured on this node
-                    
+
                     return Optional.of(taskInfo);
                 }
             }
         } catch (Exception e) {
             log.warn("Failed to get task by id {} from Flowable: {}", taskId, e.getMessage());
         }
-        
+
         return Optional.empty();
     }
 
@@ -953,255 +607,17 @@ public class TaskQueryComponent {
     }
 
     /**
-     * FIXED_BU_ROLE or BU_ROLE with an explicit businessUnitId in BPMN extensions:
-     * the engine merges into taskCandidateUser, unrelated to candidate group filtering.
-     * When the JWT contains {@code activeBusinessUnitId}, the pool's BU must match the current workspace.
-     * <p>No longer relies on {@link PortalWorkspaceAuthService#listWorkspaceContexts} being non-empty:
-     * in some environments, UBR data may be out of sync with the workspace switcher,
-     * causing VG-only filtering to misclassify the situation as "non-workspace mode" and skip this filter.</p>
-     */
-    private List<TaskInfo> filterFixedBuRoleTasksForActiveWorkspace(List<TaskInfo> tasks) {
-        Optional<String> activeBuOpt = SecurityContextUtils.getCurrentActiveBusinessUnitId();
-        if (activeBuOpt.isEmpty()) {
-            return tasks;
-        }
-        String activeBu = normalizeBuId(activeBuOpt.get());
-        List<TaskInfo> out = new ArrayList<>();
-        for (TaskInfo t : tasks) {
-            if (t == null) {
-                continue;
-            }
-            if (!isWorkspaceScopedBuPoolSemantics(t)) {
-                out.add(t);
-                continue;
-            }
-            String fixedBu = resolveFixedBusinessUnitForBpmnTask(t);
-            if (fixedBu == null || fixedBu.isBlank()) {
-                out.add(t);
-                continue;
-            }
-            if (equalsNormalizedBuId(activeBu, fixedBu)) {
-                out.add(t);
-            }
-        }
-        return out;
-    }
-
-    private static String normalizeBuId(String raw) {
-        if (raw == null) {
-            return "";
-        }
-        return raw.trim();
-    }
-
-    /**
-     * FIXED_BU_ROLE, or BU_ROLE with an explicit businessUnitId in BPMN extensions
-     * (aligned with engine {@code isWorkspaceScopedBuPoolSemantics}).
-     * <p>BPMN extensions only; does not read process variables (to avoid stale cross-node variable spillover).</p>
-     */
-    private boolean isWorkspaceScopedBuPoolSemantics(TaskInfo t) {
-        String bpmn = t.getBpmnAssigneeType();
-        if (bpmn != null) {
-            String u = bpmn.trim().toUpperCase(java.util.Locale.ROOT);
-            if ("FIXED_BU_ROLE".equals(u)) {
-                return true;
-            }
-            if ("BU_ROLE".equals(u) && t.getBpmnBusinessUnitId() != null && !t.getBpmnBusinessUnitId().isBlank()) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static boolean equalsNormalizedBuId(String a, String b) {
-        if (a == null || b == null) {
-            return false;
-        }
-        String x = a.trim();
-        String y = b.trim();
-        if (x.equals(y)) {
-            return true;
-        }
-        try {
-            if (x.matches("^-?\\d+$") && y.matches("^-?\\d+$")) {
-                return Long.parseLong(x) == Long.parseLong(y);
-            }
-        } catch (NumberFormatException ignored) {
-            // fall through
-        }
-        return false;
-    }
-
-    /**
-     * Fixed business unit: BPMN extension {@code bpmnBusinessUnitId} only
-     * (consistent with workflow-engine task list filtering semantics; does not use process variables).
-     */
-    private String resolveFixedBusinessUnitForBpmnTask(TaskInfo t) {
-        String bu = t.getBpmnBusinessUnitId();
-        if (bu != null && !bu.isBlank()) {
-            return bu.trim();
-        }
-        return null;
-    }
-
-    /**
-     * In workspace context: keep only virtual groups where the current user has a UBR
-     * for the bound role within the active business unit, preventing users with multiple BUs
-     * from seeing candidate group tasks in other BU workspaces (engine user-permissions
-     * returns all virtualGroupIds).
-     */
-    private List<String> filterVirtualGroupsForActiveWorkspace(String userId, List<String> groupIds) {
-        if (groupIds == null || groupIds.isEmpty()) {
-            return groupIds == null ? Collections.emptyList() : groupIds;
-        }
-        Optional<String> activeBu = SecurityContextUtils.getCurrentActiveBusinessUnitId();
-        if (activeBu.isEmpty()) {
-            return groupIds;
-        }
-        if (portalWorkspaceAuthService.listWorkspaceContexts(userId).isEmpty()) {
-            return groupIds;
-        }
-        List<String> kept = new ArrayList<>();
-        for (String gid : groupIds) {
-            Optional<String> boundRoleId = virtualGroupAccessComponent.getBoundRoleIdForVirtualGroup(gid);
-            if (boundRoleId.isEmpty()) {
-                log.debug("Workspace VG filter: group {} has no bound role; excluded from candidate-group query", gid);
-                continue;
-            }
-            if (portalWorkspaceAuthService.hasContext(userId, activeBu.get(), boundRoleId.get())) {
-                kept.add(gid);
-            }
-        }
-        return kept;
-    }
-
-    /**
-     * Get virtual groups the user belongs to.
-     * Retrieved via workflow-engine-core calling admin-center.
-     */
-    @SuppressWarnings("unchecked")
-    private static final long VIRTUAL_GROUPS_CACHE_TTL_MS = 30_000L;
-    private final Map<String, VirtualGroupsCacheEntry> virtualGroupsCache = new ConcurrentHashMap<>();
-
-    private record VirtualGroupsCacheEntry(List<String> groupIds, long timestampMs) {}
-
-    /**
-     * A user's virtual-group membership changes rarely, but every To Do refresh resolves it via a
-     * portal→engine→admin-center triple-hop ({@link WorkflowEngineClient#getUserTaskPermissions}) costing
-     * ~0.3-1s. Cache the result per user for a short TTL so repeated list/statistics queries reuse it; an
-     * admin membership change becomes effective within the TTL.
-     */
-    private List<String> getUserVirtualGroups(String userId) {
-        if (userId == null || userId.isBlank()) {
-            return Collections.emptyList();
-        }
-        VirtualGroupsCacheEntry hit = virtualGroupsCache.get(userId);
-        if (hit != null && System.currentTimeMillis() - hit.timestampMs() < VIRTUAL_GROUPS_CACHE_TTL_MS) {
-            return hit.groupIds();
-        }
-        List<String> resolved = fetchUserVirtualGroups(userId);
-        virtualGroupsCache.put(userId, new VirtualGroupsCacheEntry(resolved, System.currentTimeMillis()));
-        return resolved;
-    }
-
-    private List<String> fetchUserVirtualGroups(String userId) {
-        try {
-            Optional<Map<String, Object>> result = workflowEngineClient.getUserTaskPermissions(userId);
-            if (result.isPresent()) {
-                Map<String, Object> data = result.get();
-                List<String> groupIds = (List<String>) data.get("virtualGroupIds");
-                if (groupIds != null && !groupIds.isEmpty()) {
-                    return groupIds;
-                }
-            }
-        } catch (Exception e) {
-            log.warn("Failed to get user virtual groups from workflow engine: {}", e.getMessage());
-        }
-        // Return empty list; do not use mock data
-        return Collections.emptyList();
-    }
-
-    /**
      * Get task statistics.
      */
     public TaskStatistics getTaskStatistics(String userId) {
-        // Check if the Flowable engine is available
-        if (!workflowEngineClient.isAvailable()) {
-            throw new IllegalStateException("Flowable engine unavailable, please check if workflow-engine-core service is running");
-        }
-        
-        // Get task statistics from Flowable
-        Optional<Map<String, Object>> countResult = workflowEngineClient.countUserTasks();
-        
-        long totalCount = 0;
-        long overdueCount = 0;
-        
-        if (countResult.isPresent()) {
-            Map<String, Object> data = WorkflowEnginePayloadHelper.taskCountFromPayload(countResult.get());
-            if (data != null) {
-                totalCount = data.get("totalCount") != null ? ((Number) data.get("totalCount")).longValue() : 0;
-                overdueCount = data.get("overdueCount") != null ? ((Number) data.get("overdueCount")).longValue() : 0;
-            }
-        }
-        
-        // Query all tasks for detailed statistics
-        TaskQueryRequest request = TaskQueryRequest.builder()
-                .userId(userId)
-                .page(0)
-                .size(10_000)
-                .build();
-
-        PageResponse<TaskInfo> tasksResponse = queryTasks(request);
-        List<TaskInfo> allTasks = tasksResponse.getContent();
-        long totalTodo = tasksResponse.getTotalElements();
-
-        LocalDate today = LocalDate.now();
-        LocalDateTime todayStart = today.atStartOfDay();
-        long todayCompletedTasks = countCompletedTasksInRange(
-                userId, todayStart.toString(), LocalDateTime.now().toString());
-
-        return TaskStatistics.builder()
-                .totalTasks(totalTodo)
-                .directTasks(allTasks.stream().filter(t -> "USER".equals(t.getAssignmentType())).count())
-                .groupTasks(allTasks.stream().filter(t -> "VIRTUAL_GROUP".equals(t.getAssignmentType())).count())
-                .deptRoleTasks(allTasks.stream().filter(t -> "DEPT_ROLE".equals(t.getAssignmentType())).count())
-                .delegatedTasks(allTasks.stream().filter(t -> "DELEGATED".equals(t.getAssignmentType())).count())
-                .overdueTasks(overdueCount > 0 ? overdueCount : allTasks.stream().filter(t -> Boolean.TRUE.equals(t.getIsOverdue())).count())
-                .urgentTasks(allTasks.stream().filter(t -> "URGENT".equals(t.getPriority())).count())
-                .highPriorityTasks(allTasks.stream().filter(t -> "HIGH".equals(t.getPriority())).count())
-                .todayNewTasks(allTasks.stream()
-                        .filter(t -> t.getCreateTime() != null && t.getCreateTime().isAfter(todayStart))
-                        .count())
-                .todayCompletedTasks(todayCompletedTasks)
-                .build();
-    }
-
-    /**
-     * Count tasks the user completed within a time range (via workflow-engine history API).
-     * Aligns with {@link DashboardComponent} completedTodayCount aggregation.
-     */
-    private long countCompletedTasksInRange(String userId, String startIso, String endIso) {
-        try {
-            Optional<Map<String, Object>> result = workflowEngineClient.getCompletedTasks(
-                    userId, 0, 1, null, startIso, endIso);
-            if (result.isPresent()) {
-                Object totalElements = result.get().get("totalElements");
-                if (totalElements instanceof Number) {
-                    return ((Number) totalElements).longValue();
-                }
-            }
-        } catch (Exception e) {
-            log.warn("Failed to count completed tasks for user {} in range {} - {}: {}",
-                    userId, startIso, endIso, e.getMessage());
-        }
-        return 0L;
+        return taskHistoryComponent.getTaskStatistics(userId);
     }
 
     /**
      * Get task flow history.
      */
     public List<TaskHistoryInfo> getTaskHistory(String taskId) {
-        return getTaskHistory(taskId, null);
+        return taskHistoryComponent.getTaskHistory(taskId);
     }
 
     /**
@@ -1209,446 +625,13 @@ public class TaskQueryComponent {
      * workflow-engine {@code getTaskInfo} round-trip inside {@code GET /tasks/{taskId}/history}.
      */
     public List<TaskHistoryInfo> getTaskHistory(String taskId, String processInstanceId) {
-        // Check if the Flowable engine is available
-        if (!workflowEngineClient.isAvailable()) {
-            throw new IllegalStateException("Flowable engine unavailable, please check if workflow-engine-core service is running");
-        }
-        
-        List<TaskHistoryInfo> history = new ArrayList<>();
-        
-        // Get task history from Flowable (includes user name resolution)
-        Optional<List<Map<String, Object>>> historyResult;
-        if (processInstanceId != null && !processInstanceId.isBlank()) {
-            historyResult = workflowEngineClient.getProcessInstanceHistory(processInstanceId.trim());
-        } else {
-            historyResult = workflowEngineClient.getTaskHistoryByTaskId(taskId);
-        }
-        if (historyResult.isPresent()) {
-            List<Map<String, Object>> historyList = historyResult.get();
-            for (int i = 0; i < historyList.size(); i++) {
-                Map<String, Object> historyMap = historyList.get(i);
-                Long duration = null;
-                if (i > 0) {
-                    // Calculate duration
-                    LocalDateTime prevTime = parseDateTime(historyList.get(i-1).get("operationTime"));
-                    LocalDateTime currTime = parseDateTime(historyMap.get("operationTime"));
-                    if (prevTime != null && currTime != null) {
-                        duration = java.time.Duration.between(prevTime, currTime).toMillis();
-                    }
-                }
-                
-                history.add(TaskHistoryInfo.builder()
-                        .id((String) historyMap.get("id"))
-                        .taskId((String) historyMap.get("taskId"))
-                        .taskName((String) historyMap.get("taskName"))
-                        .activityId((String) historyMap.get("activityId"))
-                        .activityName((String) historyMap.get("activityName"))
-                        .activityType((String) historyMap.get("activityType"))
-                        .operationType((String) historyMap.get("operationType"))
-                        .operatorId((String) historyMap.get("operatorId"))
-                        .operatorName((String) historyMap.get("operatorName"))
-                        .operationTime(parseDateTime(historyMap.get("operationTime")))
-                        .comment((String) historyMap.get("comment"))
-                        .duration(duration)
-                        .build());
-            }
-            return history;
-        }
-        
-        // If Flowable has no history records, try fetching from the local database
-        try {
-            String resolvedProcessInstanceId = processInstanceId;
-            if (resolvedProcessInstanceId == null || resolvedProcessInstanceId.isBlank()) {
-                Optional<TaskInfo> taskInfoOpt = getTaskById(taskId);
-                if (taskInfoOpt.isPresent()) {
-                    resolvedProcessInstanceId = taskInfoOpt.get().getProcessInstanceId();
-                }
-            }
-            if (resolvedProcessInstanceId != null && !resolvedProcessInstanceId.isBlank()) {
-                // Try to get history from the local database
-                List<ProcessHistory> dbHistory = processHistoryRepository
-                        .findByProcessInstanceIdOrderByOperationTimeAsc(resolvedProcessInstanceId);
-                
-                for (int i = 0; i < dbHistory.size(); i++) {
-                    ProcessHistory ph = dbHistory.get(i);
-                    Long duration = null;
-                    if (i > 0 && ph.getOperationTime() != null && dbHistory.get(i-1).getOperationTime() != null) {
-                        duration = java.time.Duration.between(
-                                dbHistory.get(i-1).getOperationTime(), 
-                                ph.getOperationTime()
-                        ).toMillis();
-                    }
-                    
-                    history.add(TaskHistoryInfo.builder()
-                            .id("history_" + ph.getId())
-                            .taskId(ph.getTaskId())
-                            .taskName(ph.getActivityName())
-                            .activityId(ph.getActivityId())
-                            .activityName(ph.getActivityName())
-                            .activityType(ph.getActivityType())
-                            .operationType(ph.getOperationType())
-                            .operatorId(ph.getOperatorId())
-                            .operatorName(ph.getOperatorName())
-                            .operationTime(ph.getOperationTime())
-                            .comment(ph.getComment())
-                            .duration(duration)
-                            .build());
-                }
-            }
-        } catch (Exception e) {
-            log.warn("Failed to get process history from database: {}", e.getMessage());
-        }
-        
-        return history;
+        return taskHistoryComponent.getTaskHistory(taskId, processInstanceId);
     }
-    
+
     /**
      * Query tasks completed by a user.
-     * Multi-instance subtasks are flagged so the frontend can hide
-     * the Action tag and Detail link (their detail is already visible
-     * in the Participant Info Form on the application detail page).
      */
-    @SuppressWarnings("unchecked")
     public PageResponse<TaskInfo> queryCompletedTasks(TaskQueryRequest request) {
-        if (!workflowEngineClient.isAvailable()) {
-            throw new IllegalStateException("Flowable engine unavailable, please check if workflow-engine-core service is running");
-        }
-        
-        String userId = request.getUserId();
-        int page = request.getPage() != null ? request.getPage() : 0;
-        int size = request.getSize() != null ? request.getSize() : 20;
-        String keyword = request.getKeyword();
-        String startTime = request.getStartTime() != null ? request.getStartTime().toString() : null;
-        String endTime = request.getEndTime() != null ? request.getEndTime().toString() : null;
-        
-        try {
-            Optional<Map<String, Object>> result = workflowEngineClient.getCompletedTasks(
-                userId, page, size, keyword, startTime, endTime);
-            
-            if (result.isPresent()) {
-                Map<String, Object> data = result.get();
-                List<Map<String, Object>> content = (List<Map<String, Object>>) data.get("content");
-                long totalElements = data.get("totalElements") != null 
-                    ? ((Number) data.get("totalElements")).longValue() : 0;
-                
-                List<TaskInfo> tasks = new ArrayList<>();
-                if (content != null) {
-                    for (Map<String, Object> taskMap : content) {
-                        tasks.add(convertCompletedTaskToTaskInfo(taskMap));
-                    }
-                }
-
-                // Tag multi-instance subtasks so the frontend can suppress
-                // the Action column and Detail link for them.
-                Set<String> miTaskIds = findMultiInstanceTaskIds(
-                        tasks.stream().map(TaskInfo::getTaskId).filter(Objects::nonNull).toList());
-                if (!miTaskIds.isEmpty()) {
-                    for (TaskInfo t : tasks) {
-                        if (miTaskIds.contains(t.getTaskId())) {
-                            t.setMultiInstanceSubTask(true);
-                        }
-                    }
-                }
-                
-                return PageResponse.of(tasks, page, size, totalElements);
-            }
-        } catch (Exception e) {
-            log.error("Failed to query completed tasks from Flowable: {}", e.getMessage(), e);
-            throw new IllegalStateException("Failed to query completed tasks: " + e.getMessage(), e);
-        }
-        
-        return PageResponse.of(Collections.emptyList(), page, size, 0);
-    }
-
-    /**
-     * Batch-check which of the given task IDs are multi-instance subtasks
-     * by looking at wf_extended_task_info.extended_properties.
-     */
-    private Set<String> findMultiInstanceTaskIds(List<String> taskIds) {
-        if (taskIds == null || taskIds.isEmpty()) return Collections.emptySet();
-        try {
-            String placeholders = String.join(",", Collections.nCopies(taskIds.size(), "?"));
-            String sql = "SELECT task_id FROM wf_extended_task_info "
-                    + "WHERE task_id IN (" + placeholders + ") "
-                    + "AND is_deleted = false "
-                    + "AND extended_properties LIKE '%\"multiInstance\":true%'";
-            List<String> ids = jdbcTemplate.query(sql,
-                    (rs, i) -> rs.getString("task_id"),
-                    taskIds.toArray());
-            return new HashSet<>(ids);
-        } catch (Exception e) {
-            log.debug("findMultiInstanceTaskIds skipped: {}", e.getMessage());
-            return Collections.emptySet();
-        }
-    }
-    
-    /**
-     * Convert a completed task Map to TaskInfo.
-     */
-    private TaskInfo convertCompletedTaskToTaskInfo(Map<String, Object> taskMap) {
-        String processDefinitionKey = (String) taskMap.get("processDefinitionKey");
-        String processDefinitionName = (String) taskMap.get("processDefinitionName");
-        if (processDefinitionName == null || processDefinitionName.isEmpty()) {
-            processDefinitionName = processDefinitionKey;
-        }
-
-        // Look up the actual function unit name from up_process_instance by processInstanceId, overriding the BPMN name returned by Flowable
-        String processInstanceId = engineStringField(taskMap.get("processInstanceId"));
-        if (processInstanceId != null && !processInstanceId.isEmpty()) {
-            try {
-                processInstanceRepository.findById(processInstanceId).ifPresent(instance -> {
-                    // instance.getProcessDefinitionName() stores the function unit name
-                });
-                // Cannot assign to outer variable from lambda in findById; use direct assignment instead
-                Optional<ProcessInstance> instanceOpt = processInstanceRepository.findById(processInstanceId);
-                if (instanceOpt.isPresent() && instanceOpt.get().getProcessDefinitionName() != null) {
-                    processDefinitionName = instanceOpt.get().getProcessDefinitionName();
-                }
-            } catch (Exception e) {
-                log.warn("Failed to get process definition name from up_process_instance for {}: {}", processInstanceId, e.getMessage());
-            }
-        }
-        
-        return TaskInfo.builder()
-                .taskId(engineStringField(taskMap.get("taskId")))
-                .taskName((String) taskMap.get("taskName"))
-                .description((String) taskMap.get("taskDescription"))
-                .processInstanceId(engineStringField(taskMap.get("processInstanceId")))
-                .processDefinitionKey(processDefinitionKey)
-                .processDefinitionName(processDefinitionName)
-                .taskDefinitionKey((String) taskMap.get("taskDefinitionKey"))
-                .assignee(engineStringField(taskMap.get("assignee")))
-                .status("COMPLETED")
-                .createTime(parseDateTime(taskMap.get("startTime")))
-                .completedTime(parseDateTime(taskMap.get("endTime")))
-                .durationInMillis(taskMap.get("durationInMillis") != null 
-                    ? ((Number) taskMap.get("durationInMillis")).longValue() : null)
-                .action((String) taskMap.get("action"))
-                .build();
-    }
-
-    /**
-     * Rows in process variable {@code __subTables__} may only contain form fields (no {@code id});
-     * portal Assign needs rowId. When the relation table has been persisted, backfill the primary key
-     * from the {@code participants} table by email (with name disambiguation when needed).
-     */
-    @SuppressWarnings("unchecked")
-    private void enrichMissingParticipantRowIdsInSubTables(Map<String, Object> variables) {
-        if (variables == null || variables.isEmpty()) {
-            return;
-        }
-        Object subTablesObj = variables.get("__subTables__");
-        if (!(subTablesObj instanceof Map<?, ?>)) {
-            return;
-        }
-        Map<String, Object> subTables = (Map<String, Object>) subTablesObj;
-        List<Map<String, Object>> pending = new ArrayList<>();
-        for (Object v : subTables.values()) {
-            if (!(v instanceof List<?> list)) {
-                continue;
-            }
-            for (Object rowObj : list) {
-                if (!(rowObj instanceof Map<?, ?>)) {
-                    continue;
-                }
-                Map<String, Object> row = (Map<String, Object>) rowObj;
-                if (row.get("id") != null || row.get("rowId") != null) {
-                    continue;
-                }
-                Object email = row.get("email");
-                Object name = row.get("name");
-                if ((email == null || String.valueOf(email).isBlank())
-                        && (name == null || String.valueOf(name).isBlank())) {
-                    continue;
-                }
-                pending.add(row);
-            }
-        }
-        if (pending.isEmpty()) {
-            return;
-        }
-        String table = "participants";
-        if (!table.matches("[a-zA-Z0-9_]+")) {
-            return;
-        }
-        try {
-            Long meetingId = null;
-            Object midObj = variables.get("meeting_id");
-            if (midObj == null) {
-                midObj = variables.get("mainRecordId");
-            }
-            if (midObj instanceof Number n) {
-                meetingId = n.longValue();
-            } else if (midObj != null) {
-                try {
-                    meetingId = Long.parseLong(String.valueOf(midObj).trim());
-                } catch (Exception ignored) {
-                    meetingId = null;
-                }
-            }
-            int enriched = 0;
-            for (Map<String, Object> row : pending) {
-                String em = row.get("email") == null ? "" : String.valueOf(row.get("email")).trim();
-                String nm = row.get("name") == null ? "" : String.valueOf(row.get("name")).trim();
-                String dept = row.get("department") == null ? "" : String.valueOf(row.get("department")).trim();
-
-                Long id = null;
-                if (!em.isBlank()) {
-                    if (meetingId != null) {
-                        List<Long> ids = jdbcTemplate.query(
-                                "SELECT id FROM " + table + " WHERE meeting_id = ? AND lower(trim(email)) = lower(trim(?)) ORDER BY id LIMIT 1",
-                                (rs, i) -> rs.getLong("id"),
-                                meetingId, em);
-                        if (!ids.isEmpty()) id = ids.get(0);
-                    } else {
-                        List<Long> ids = jdbcTemplate.query(
-                                "SELECT id FROM " + table + " WHERE lower(trim(email)) = lower(trim(?)) ORDER BY id LIMIT 1",
-                                (rs, i) -> rs.getLong("id"),
-                                em);
-                        if (!ids.isEmpty()) id = ids.get(0);
-                    }
-                }
-
-                if (id == null && !nm.isBlank() && !dept.isBlank()) {
-                    if (meetingId != null) {
-                        List<Long> ids = jdbcTemplate.query(
-                                "SELECT id FROM " + table + " WHERE meeting_id = ? AND lower(trim(name)) = lower(trim(?)) AND lower(trim(department)) = lower(trim(?)) ORDER BY id LIMIT 1",
-                                (rs, i) -> rs.getLong("id"),
-                                meetingId, nm, dept);
-                        if (!ids.isEmpty()) id = ids.get(0);
-                    } else {
-                        List<Long> ids = jdbcTemplate.query(
-                                "SELECT id FROM " + table + " WHERE lower(trim(name)) = lower(trim(?)) AND lower(trim(department)) = lower(trim(?)) ORDER BY id LIMIT 1",
-                                (rs, i) -> rs.getLong("id"),
-                                nm, dept);
-                        if (!ids.isEmpty()) id = ids.get(0);
-                    }
-                }
-
-                if (id == null && !nm.isBlank()) {
-                    if (meetingId != null) {
-                        List<Long> ids = jdbcTemplate.query(
-                                "SELECT id FROM " + table + " WHERE meeting_id = ? AND lower(trim(name)) = lower(trim(?)) ORDER BY id LIMIT 1",
-                                (rs, i) -> rs.getLong("id"),
-                                meetingId, nm);
-                        if (!ids.isEmpty()) id = ids.get(0);
-                    } else {
-                        List<Long> ids = jdbcTemplate.query(
-                                "SELECT id FROM " + table + " WHERE lower(trim(name)) = lower(trim(?)) ORDER BY id LIMIT 1",
-                                (rs, i) -> rs.getLong("id"),
-                                nm);
-                        if (!ids.isEmpty()) id = ids.get(0);
-                    }
-                }
-
-                if (id != null) {
-                    row.put("id", id);
-                    enriched++;
-                }
-            }
-            if (enriched > 0) {
-                log.debug("Enriched {} sub-table rows with DB id from {}", enriched, table);
-            } else {
-                log.debug("No participant row id enriched from {}", table);
-            }
-        } catch (Exception e) {
-            log.debug("enrichMissingParticipantRowIdsInSubTables skipped: {}", e.getMessage());
-        }
-    }
-
-    /**
-     * Backfill assignee_display_name and attend_status from the participants physical table
-     * into __subTables__ rows, so the completed tasks view can display assignment results.
-     */
-    @SuppressWarnings("unchecked")
-    private void enrichParticipantAssignmentData(Map<String, Object> variables) {
-        if (variables == null || variables.isEmpty()) {
-            return;
-        }
-        Object subTablesObj = variables.get("__subTables__");
-        if (!(subTablesObj instanceof Map<?, ?>)) {
-            return;
-        }
-        Map<String, Object> subTables = (Map<String, Object>) subTablesObj;
-        List<Map<String, Object>> rowsWithId = new ArrayList<>();
-        for (Object v : subTables.values()) {
-            if (!(v instanceof List<?> list)) {
-                continue;
-            }
-            for (Object rowObj : list) {
-                if (!(rowObj instanceof Map<?, ?>)) {
-                    continue;
-                }
-                Map<String, Object> row = (Map<String, Object>) rowObj;
-                Object rowId = row.get("id");
-                if (rowId == null) {
-                    rowId = row.get("rowId");
-                }
-                if (rowId != null) {
-                    rowsWithId.add(row);
-                }
-            }
-        }
-        if (rowsWithId.isEmpty()) {
-            return;
-        }
-        try {
-            for (Map<String, Object> row : rowsWithId) {
-                Object rowId = row.get("id");
-                if (rowId == null) {
-                    rowId = row.get("rowId");
-                }
-                Long id;
-                if (rowId instanceof Number n) {
-                    id = n.longValue();
-                } else {
-                    try {
-                        id = Long.parseLong(String.valueOf(rowId).trim());
-                    } catch (Exception ignored) {
-                        continue;
-                    }
-                }
-                List<Map<String, Object>> dbRows = jdbcTemplate.query(
-                        "SELECT assignee_user_id, assignee_display_name, attend_status FROM participants WHERE id = ?",
-                        (rs, i) -> {
-                            Map<String, Object> m = new HashMap<>();
-                            m.put("assignee_user_id", rs.getString("assignee_user_id"));
-                            m.put("assignee_display_name", rs.getString("assignee_display_name"));
-                            m.put("attend_status", rs.getString("attend_status"));
-                            return m;
-                        },
-                        id);
-                if (!dbRows.isEmpty()) {
-                    Map<String, Object> dbRow = dbRows.get(0);
-                    String displayName = (String) dbRow.get("assignee_display_name");
-                    String assigneeUserId = (String) dbRow.get("assignee_user_id");
-                    if (displayName == null && assigneeUserId != null && !assigneeUserId.isBlank()) {
-                        displayName = resolveUsernameByUserId(assigneeUserId);
-                    }
-                    if (displayName != null) {
-                        row.put("assignee_display_name", displayName);
-                    }
-                    if (dbRow.get("attend_status") != null) {
-                        row.put("attend_status", dbRow.get("attend_status"));
-                    }
-                    if (assigneeUserId != null && row.get("assignee_user_id") == null) {
-                        row.put("assignee_user_id", assigneeUserId);
-                    }
-                }
-            }
-        } catch (Exception e) {
-            log.debug("enrichParticipantAssignmentData skipped: {}", e.getMessage());
-        }
-    }
-
-    private String resolveUsernameByUserId(String userId) {
-        try {
-            List<String> names = jdbcTemplate.query(
-                    "SELECT COALESCE(username, display_name) FROM sys_users WHERE id = ? LIMIT 1",
-                    (rs, i) -> rs.getString(1), userId);
-            return names.isEmpty() ? userId : names.get(0);
-        } catch (Exception e) {
-            return userId;
-        }
+        return taskHistoryComponent.queryCompletedTasks(request);
     }
 }

@@ -15,6 +15,7 @@ import {
   collapseMiLinkChildRowsToOnePerParticipant,
   isMiParticipantScopedSubTableBinding,
   shouldSyncStaleSiblingSubTableSlice,
+  syncMiLinkChildEditedRowsIntoSiblingSlices,
 } from './shared'
 
 export function useTaskForm(options: {
@@ -76,18 +77,22 @@ export function useTaskForm(options: {
   function buildSubTableSubmitPayload() {
     const subTables: Record<string, any> = { ...((formData.value.__subTables__ as Record<string, any>) || {}) }
     flattenNestedSubTableRowsIntoPayload(subTables as Record<string, unknown>)
+    let miParentIdIdw: string | number | null = null
+    let miCollectionSliceKeys: Set<string> | null = null
     if (options.isMiSubTaskMode.value) {
       const ci = (formData.value._currentItem ?? formData.value.currentItem) as
         | { rowId?: string | number; rowKey?: { id?: string | number } }
         | undefined
       const parentIdIdw = ci?.rowId ?? ci?.rowKey?.id
       if (parentIdIdw != null && String(parentIdIdw).trim() !== '') {
+        miParentIdIdw = parentIdIdw
+        miCollectionSliceKeys = buildMiCollectionSliceKeySet(
+          options.subTableBindings.value,
+          options.bindingRelationTableMap?.value ?? new Map<number, number | null>(),
+          options.miSubProcessScopeName?.value,
+        )
         scrubMiCorruptLinkChildRowsForParent(subTables as Record<string, unknown>, parentIdIdw, {
-          skipSliceKeys: buildMiCollectionSliceKeySet(
-            options.subTableBindings.value,
-            options.bindingRelationTableMap?.value ?? new Map<number, number | null>(),
-            options.miSubProcessScopeName?.value,
-          ),
+          skipSliceKeys: miCollectionSliceKeys,
         })
       }
     }
@@ -105,11 +110,24 @@ export function useTaskForm(options: {
               : null
           )
         : rows
-      const out = cloneSubTableRows(
+      let out = cloneSubTableRows(
         options.isMiSubTaskMode.value && isMiParticipantScopedSubTableBinding(binding)
           ? collapseMiLinkChildRowsToOnePerParticipant(merged)
           : merged,
       )
+      // #1446: live binding rows may still carry the #1435 corrupt id_idw mirror (rows created
+      // before the seed-side guard, or hydrated from corrupt persisted slices) and would reinfect
+      // the payload after the snapshot scrub above. Scrub the merged binding output too — link
+      // bindings only, never collection slices.
+      if (
+        miParentIdIdw != null
+        && miCollectionSliceKeys != null
+        && !miCollectionSliceKeys.has(String(binding.bindingId))
+      ) {
+        const wrap: Record<string, unknown> = { rows: out }
+        scrubMiCorruptLinkChildRowsForParent(wrap, miParentIdIdw, { skipSliceKeys: null })
+        out = wrap.rows as typeof out
+      }
       subTables[binding.bindingId] = out
       subTables[String(binding.bindingId)] = out
       subTableData[String(binding.bindingId)] = out
@@ -125,6 +143,23 @@ export function useTaskForm(options: {
         subTables,
         options.subTableBindings.value,
       )
+    } else {
+      // #1446: link-form (People) edits must also reach the same relation table's stale sibling
+      // slices (other nodes' binding ids), or reload hydrates the old value. Update-only by row PK;
+      // MI collection slices stay excluded (09be69f8 / #1442 leak guards).
+      const collectionSliceKeys = buildMiCollectionSliceKeySet(
+        options.subTableBindings.value,
+        options.bindingRelationTableMap?.value ?? new Map<number, number | null>(),
+        options.miSubProcessScopeName?.value,
+      )
+      for (const binding of options.subTableBindings.value) {
+        syncMiLinkChildEditedRowsIntoSiblingSlices(
+          subTables,
+          binding,
+          subTables[String(binding.bindingId)],
+          collectionSliceKeys,
+        )
+      }
     }
 
     return {
@@ -149,7 +184,12 @@ export function useTaskForm(options: {
     if (formReadOnly.value || !options.effectiveTaskId.value) return
     savingTaskForm.value = true
     try {
-      await submitTaskForm(options.effectiveTaskId.value, buildCurrentTaskFormSubmitPayload())
+      const payload = buildCurrentTaskFormSubmitPayload()
+      await submitTaskForm(options.effectiveTaskId.value, payload)
+      // #1446: align local slices with what was just persisted; otherwise post-save
+      // re-hydration (variables resync / polling) reverts the link form to the
+      // page-load snapshot until a full refresh.
+      formData.value = { ...formData.value, __subTables__: payload.formData.__subTables__ }
       ElMessage.success(t('task.operationSuccess'))
     } catch (error) {
       console.error('[TaskForm] save failed:', error)
