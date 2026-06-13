@@ -2,6 +2,7 @@ package com.portal.controller;
 
 import com.portal.component.FunctionUnitAccessComponent;
 import com.portal.component.ProcessComponent;
+import com.platform.common.dto.ApiResponse;
 import com.portal.dto.*;
 import com.portal.exception.PortalException;
 import com.portal.entity.ActionDefinition;
@@ -236,7 +237,7 @@ public class ProcessController {
         if (success) {
             return ApiResponse.success(null);
         }
-        return ApiResponse.error(i18nService.getMessage("portal.withdraw_failed"));
+        return ApiResponse.error("500", i18nService.getMessage("portal.withdraw_failed"));
     }
 
     @PostMapping("/{processId}/urge")
@@ -248,7 +249,7 @@ public class ProcessController {
         if (success) {
             return ApiResponse.success(null);
         }
-        return ApiResponse.error(i18nService.getMessage("portal.urge_failed"));
+        return ApiResponse.error("500", i18nService.getMessage("portal.urge_failed"));
     }
 
     @PostMapping("/{processId}/return-to-first")

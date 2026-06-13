@@ -227,6 +227,12 @@ export function seedLinkChildForeignKeysFromParentRow(
   },
 ): Record<string, unknown> {
   const out = { ...row }
+  // id_idw is the MI collection participant key. Writing it onto a link-child row whose own
+  // PK differs creates the #1435 corrupt mirror: hydration then refuses to bind the row and
+  // every Save allocates a fresh row UUID (id churn). Structural linkage uses sub_task_id etc.
+  const rowPks = (options.primaryKeyFields ?? []).map(f => String(f).trim().toLowerCase())
+  const isForbiddenParticipantMirror = (col: string): boolean =>
+    col.trim().toLowerCase() === 'id_idw' && !rowPks.includes('id_idw')
   const legacy = options.bindingForeignKeyField?.trim()
   const legacyIsRowPk = bindingForeignKeyFieldIsRowPrimaryKey(legacy, {
     primaryKeyFields: options.primaryKeyFields,
@@ -235,6 +241,7 @@ export function seedLinkChildForeignKeysFromParentRow(
   if (
     legacy
     && !legacyIsRowPk
+    && !isForbiddenParticipantMirror(legacy)
     && options.legacyFkSeed != null
     && String(options.legacyFkSeed).trim() !== ''
     && (out[legacy] == null || out[legacy] === '')
@@ -254,6 +261,7 @@ export function seedLinkChildForeignKeysFromParentRow(
   }
   const fkValues = resolveForeignKeyValues(fkMetas, ctx)
   for (const [k, v] of Object.entries(fkValues)) {
+    if (isForbiddenParticipantMirror(k)) continue
     if (out[k] == null || out[k] === '') out[k] = v
   }
   return out

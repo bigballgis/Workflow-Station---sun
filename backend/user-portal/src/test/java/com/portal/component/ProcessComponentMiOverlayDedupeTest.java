@@ -11,13 +11,14 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 /**
- * {@link ProcessComponent#resolveMiRowProgress} overlays {@code task_current_node}; selection must not
+ * {@link MiOverlayComponent#resolveMiRowProgress} overlays {@code task_current_node}; selection must not
  * let orphan extended rows overshadow the user's real runtime step ("My Requests" parity with task detail).
+ * Static selection helpers were extracted from {@code ProcessComponent} into {@link MiOverlaySupport}.
  */
 class ProcessComponentMiOverlayDedupeTest {
 
     private static Method requireStatic(String name, Class<?>... p) throws Exception {
-        Method m = ProcessComponent.class.getDeclaredMethod(name, p);
+        Method m = MiOverlaySupport.class.getDeclaredMethod(name, p);
         m.setAccessible(true);
         return m;
     }

@@ -3,7 +3,7 @@ package com.portal.controller;
 import com.portal.component.TaskFormComponent;
 import com.portal.component.TaskProcessComponent;
 import com.portal.component.TaskQueryComponent;
-import com.portal.dto.ApiResponse;
+import com.platform.common.dto.ApiResponse;
 import com.portal.dto.TaskInfo;
 import com.portal.security.CurrentUserId;
 import com.platform.security.util.SecurityContextUtils;

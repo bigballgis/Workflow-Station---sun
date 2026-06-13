@@ -95,6 +95,49 @@ describe('seedLinkChildForeignKeysFromParentRow', () => {
     expect(row.sex).toBe(true)
   })
 
+  // #1446 跟进：id_idw 是 MI collection 的参与者主键；link-child（People，行 PK=id）一旦被种入
+  // id_idw 即成 #1435 腐坏镜像 → hydration 拒绝绑定 → 每次 Save 重新分配 UUID（id 漂移）。
+  it('never seeds id_idw onto a link-child row whose own PK is not id_idw (legacy fk path)', () => {
+    const row = seedLinkChildForeignKeysFromParentRow(
+      { sex: true, age: '344' },
+      [
+        { fieldName: 'id', isPrimaryKey: true },
+        { fieldName: 'sub_task_id', isForeignKey: true, refTableId: 20, refPrimaryKeyFields: ['id_idw'] },
+      ],
+      {
+        bindingForeignKeyField: 'id_idw',
+        bindingLinkMode: 'structuralFk',
+        primaryKeyFields: ['id'],
+        parentParticipantRow: { id_idw: 'Test-000076' },
+        parentTableId: 20,
+        legacyFkSeed: 'Test-000076',
+      },
+    )
+    expect(row.id_idw).toBeUndefined()
+    expect(row.sub_task_id).toBe('Test-000076')
+  })
+
+  it('never seeds id_idw via designer fieldDef FK meta when row PK is not id_idw', () => {
+    const row = seedLinkChildForeignKeysFromParentRow(
+      { sex: true },
+      [
+        { fieldName: 'id', isPrimaryKey: true },
+        { fieldName: 'id_idw', isForeignKey: true, refTableId: 20, refPrimaryKeyFields: ['id_idw'] },
+        { fieldName: 'sub_task_id', isForeignKey: true, refTableId: 20, refPrimaryKeyFields: ['id_idw'] },
+      ],
+      {
+        bindingForeignKeyField: null,
+        bindingLinkMode: 'structuralFk',
+        primaryKeyFields: ['id'],
+        parentParticipantRow: { id_idw: 'Test-000076' },
+        parentTableId: 20,
+        legacyFkSeed: 'Test-000076',
+      },
+    )
+    expect(row.id_idw).toBeUndefined()
+    expect(row.sub_task_id).toBe('Test-000076')
+  })
+
   it('repairMisassignedPrimaryKeyFromParentId does not strip collection id_idw PK', () => {
     const row = repairMisassignedPrimaryKeyFromParentId(
       { id_idw: 'Test-000044', name: 'dev', assignee: { id: 'u1' } },

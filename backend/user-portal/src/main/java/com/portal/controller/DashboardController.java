@@ -1,7 +1,7 @@
 package com.portal.controller;
 
 import com.portal.component.DashboardComponent;
-import com.portal.dto.ApiResponse;
+import com.platform.common.dto.ApiResponse;
 import com.portal.dto.DashboardOverview;
 import com.portal.dto.TeamRequestsResponse;
 import com.portal.security.CurrentUserId;

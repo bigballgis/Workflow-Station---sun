@@ -3,8 +3,13 @@ package com.portal.properties;
 import com.portal.client.WorkflowEngineClient;
 import com.portal.component.ChangeHistoryComponent;
 import com.portal.component.FunctionUnitAccessComponent;
+import com.portal.component.MiOverlayComponent;
+import com.portal.component.ProcessApplicationQueryComponent;
 import com.portal.component.ProcessComponent;
 import com.portal.component.ProcessDraftComponent;
+import com.portal.component.ProcessStartComponent;
+import com.portal.component.SubTableEnrichmentComponent;
+import com.portal.component.SubTablePhysicalMetadataCache;
 import com.portal.component.TaskFormComponent;
 import com.portal.dto.ProcessDefinitionInfo;
 import com.portal.dto.ProcessInstanceInfo;
@@ -55,7 +60,38 @@ class ProcessOperationProperties {
                 Mockito.mock(com.portal.service.PortalWorkspaceAuthService.class);
         Mockito.when(portalWorkspaceAuthService.listWorkspaceContexts(Mockito.any()))
                 .thenReturn(Collections.emptyList());
-        processComponent = Mockito.spy(new ProcessComponent(favoriteProcessRepository, processDraftRepository, processInstanceRepository, processHistoryRepository, Mockito.mock(com.portal.repository.ActionDefinitionRepository.class), functionUnitAccessComponent, workflowEngineClient, processDraftComponent, Mockito.mock(ChangeHistoryComponent.class), portalWorkspaceAuthService, Mockito.mock(RestTemplate.class), Mockito.mock(org.springframework.jdbc.core.JdbcTemplate.class), Mockito.mock(com.portal.component.MeetingParticipantVariablesPersistence.class), Mockito.mock(TaskFormComponent.class), Mockito.mock(com.portal.service.UserDisplayNameResolver.class), Mockito.mock(com.platform.common.i18n.I18nService.class)));
+        org.springframework.jdbc.core.JdbcTemplate jdbcTemplate =
+                Mockito.mock(org.springframework.jdbc.core.JdbcTemplate.class);
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        com.portal.service.UserDisplayNameResolver userDisplayNameResolver =
+                Mockito.mock(com.portal.service.UserDisplayNameResolver.class);
+        com.platform.common.i18n.I18nService i18nService =
+                Mockito.mock(com.platform.common.i18n.I18nService.class);
+
+        SubTablePhysicalMetadataCache subTablePhysicalMetadataCache = new SubTablePhysicalMetadataCache(jdbcTemplate);
+        MiOverlayComponent miOverlayComponent = new MiOverlayComponent(workflowEngineClient, subTablePhysicalMetadataCache);
+        SubTableEnrichmentComponent subTableEnrichmentComponent = new SubTableEnrichmentComponent(
+                processInstanceRepository, jdbcTemplate, miOverlayComponent, subTablePhysicalMetadataCache);
+        ProcessApplicationQueryComponent processApplicationQueryComponent = new ProcessApplicationQueryComponent(
+                processInstanceRepository, workflowEngineClient, userDisplayNameResolver,
+                miOverlayComponent, subTableEnrichmentComponent);
+        ProcessStartComponent processStartComponent = new ProcessStartComponent(
+                processInstanceRepository,
+                processHistoryRepository,
+                functionUnitAccessComponent,
+                workflowEngineClient,
+                Mockito.mock(ChangeHistoryComponent.class),
+                portalWorkspaceAuthService,
+                restTemplate,
+                jdbcTemplate,
+                Mockito.mock(com.portal.component.MeetingParticipantVariablesPersistence.class),
+                Mockito.mock(TaskFormComponent.class),
+                userDisplayNameResolver,
+                i18nService);
+        processComponent = Mockito.spy(new ProcessComponent(favoriteProcessRepository, processInstanceRepository, Mockito.mock(com.portal.repository.ActionDefinitionRepository.class), functionUnitAccessComponent, workflowEngineClient, processDraftComponent, restTemplate, i18nService, processStartComponent, processApplicationQueryComponent, subTableEnrichmentComponent));
+        // ProcessStartComponent resolves FU content via the (lazy) ProcessComponent facade — point it at the spy
+        // so the getFunctionUnitContent stub below stays effective for startProcess.
+        org.springframework.test.util.ReflectionTestUtils.setField(processStartComponent, "processComponent", processComponent);
         
         // Mock getFunctionUnitContent 返回包含 BPMN XML 的内容
         String mockBpmnXml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><bpmn:definitions></bpmn:definitions>";
