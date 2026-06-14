@@ -1,5 +1,6 @@
 package com.portal.controller;
 
+import com.portal.exception.PortalException;
 import com.platform.common.dto.ApiResponse;
 import com.portal.dto.MainTableViewImportResult;
 import com.portal.dto.MainTableViewPortalDtos.FunctionUnitViewMenuItem;
@@ -15,7 +16,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
 import java.util.List;
 
 @RestController
@@ -87,16 +87,16 @@ public class PortalMainTableViewController {
             @PathVariable Long viewId,
             @RequestParam("file") MultipartFile file) {
         if (userId == null || userId.isBlank()) {
-            return ResponseEntity.status(403).build();
+            throw new PortalException("403", "User context required");
         }
         try {
             MainTableViewImportResult result = portalMainTableViewService.importViewCsv(
                     userId, viewId, file.getBytes());
             return ResponseEntity.ok(ApiResponse.success(result));
         } catch (IllegalArgumentException ex) {
-            return ResponseEntity.badRequest().body(ApiResponse.error("400", ex.getMessage()));
-        } catch (IOException ex) {
-            return ResponseEntity.badRequest().body(ApiResponse.error("400", "Failed to read uploaded file"));
+            throw new PortalException("400", ex.getMessage());
+        } catch (java.io.IOException ex) {
+            throw new PortalException("400", "Failed to read uploaded file", ex);
         }
     }
 }

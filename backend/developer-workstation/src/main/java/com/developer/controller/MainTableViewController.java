@@ -54,7 +54,7 @@ public class MainTableViewController {
     public ResponseEntity<ApiResponse<MainTableViewDTO>> update(
             @PathVariable Long functionUnitId,
             @PathVariable Long viewId,
-            @RequestBody UpdateMainTableViewRequest request) {
+            @Valid @RequestBody UpdateMainTableViewRequest request) {
         return ResponseEntity.ok(ApiResponse.success(mainTableViewService.updateView(functionUnitId, viewId, request)));
     }
 

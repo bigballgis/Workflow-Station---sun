@@ -15,6 +15,8 @@ import com.portal.dto.MainTableViewPortalDtos.MainTableViewSummary;
 import com.portal.entity.ProcessInstance;
 import com.portal.repository.ProcessInstanceRepository;
 import com.portal.service.PortalMainTableViewService;
+import com.portal.util.PortalMainTableViewCsvUtils;
+import com.portal.util.PortalMainTableViewFilterUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -26,8 +28,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -36,7 +36,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class PortalMainTableViewServiceImpl implements PortalMainTableViewService {
 
-    private static final DateTimeFormatter DT_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final String PROCESS_INSTANCE_ID_FIELD = "processInstanceId";
     private static final Set<String> PROCESS_INSTANCE_ID_HEADERS = Set.of(
             PROCESS_INSTANCE_ID_FIELD,
@@ -124,7 +123,7 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
 
         List<MainTableViewFieldColumn> columns = visibleColumns(view);
         List<Map<String, Object>> allRows = loadAndProjectRows(userId, view, search);
-        applyViewSort(allRows, view.sortConfig());
+        PortalMainTableViewFilterUtils.applyViewSort(allRows, view.sortConfig());
 
         int safeSize = Math.min(Math.max(size, 1), 200);
         int safePage = Math.max(page, 0);
@@ -158,25 +157,25 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
 
         List<MainTableViewFieldColumn> columns = visibleColumns(view);
         List<Map<String, Object>> allRows = loadAndProjectRows(userId, view, null);
-        applyViewSort(allRows, view.sortConfig());
+        PortalMainTableViewFilterUtils.applyViewSort(allRows, view.sortConfig());
         int limit = Math.min(Math.max(maxRows, 1), 10000);
         List<Map<String, Object>> slice = allRows.size() <= limit ? allRows : allRows.subList(0, limit);
 
         StringBuilder sb = new StringBuilder();
-        sb.append(csvEscape(PROCESS_INSTANCE_ID_FIELD));
+        sb.append(PortalMainTableViewCsvUtils.csvEscape(PROCESS_INSTANCE_ID_FIELD));
         if (!columns.isEmpty()) {
             sb.append(',');
         }
-        sb.append(columns.stream().map(c -> csvEscape(c.displayLabel())).collect(Collectors.joining(",")));
+        sb.append(columns.stream().map(c -> PortalMainTableViewCsvUtils.csvEscape(c.displayLabel())).collect(Collectors.joining(",")));
         sb.append('\n');
         for (Map<String, Object> row : slice) {
             Map<String, Object> values = stripInternalKeys(row);
-            sb.append(csvEscape(String.valueOf(row.get("_processInstanceId"))));
+            sb.append(PortalMainTableViewCsvUtils.csvEscape(String.valueOf(row.get("_processInstanceId"))));
             if (!columns.isEmpty()) {
                 sb.append(',');
             }
             sb.append(columns.stream()
-                    .map(c -> csvEscape(formatCell(values.get(c.fieldName()))))
+                    .map(c -> PortalMainTableViewCsvUtils.csvEscape(PortalMainTableViewCsvUtils.formatCell(values.get(c.fieldName()))))
                     .collect(Collectors.joining(",")));
             sb.append('\n');
         }
@@ -203,13 +202,13 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
             headerToField.put(col.fieldName(), col.fieldName());
         }
 
-        List<String[]> parsedRows = parseCsvRows(csvBytes);
+        List<String[]> parsedRows = PortalMainTableViewCsvUtils.parseCsvRows(csvBytes);
         if (parsedRows.isEmpty()) {
             throw new IllegalArgumentException("CSV has no data rows");
         }
 
         String[] headers = parsedRows.get(0);
-        int processIdCol = findProcessInstanceIdColumn(headers);
+        int processIdCol = PortalMainTableViewCsvUtils.findProcessInstanceIdColumn(headers, PROCESS_INSTANCE_ID_HEADERS);
 
         int created = 0;
         int updated = 0;
@@ -218,11 +217,11 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
 
         for (int rowIdx = 1; rowIdx < parsedRows.size(); rowIdx++) {
             String[] cells = parsedRows.get(rowIdx);
-            if (cells.length == 0 || isBlankRow(cells)) {
+            if (cells.length == 0 || PortalMainTableViewCsvUtils.isBlankRow(cells)) {
                 skipped++;
                 continue;
             }
-            String processInstanceId = processIdCol >= 0 ? cellValue(cells, processIdCol) : "";
+            String processInstanceId = processIdCol >= 0 ? PortalMainTableViewCsvUtils.cellValue(cells, processIdCol) : "";
             if (processInstanceId.isBlank()) {
                 if (createProcessFromCsvRow(userId, view, headers, cells, processIdCol, headerToField, rowIdx + 1, errors)) {
                     created++;
@@ -260,7 +259,7 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                 if (fieldName == null) {
                     continue;
                 }
-                String raw = cellValue(cells, col);
+                String raw = PortalMainTableViewCsvUtils.cellValue(cells, col);
                 Object parsed = raw.isBlank() ? null : raw;
                 Object existing = vars.get(fieldName);
                 if (!Objects.equals(existing, parsed)) {
@@ -315,7 +314,7 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
             if (fieldName == null) {
                 continue;
             }
-            String raw = cellValue(cells, col);
+            String raw = PortalMainTableViewCsvUtils.cellValue(cells, col);
             if (raw.isBlank()) {
                 continue;
             }
@@ -365,10 +364,10 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
 
         for (ProcessInstance pi : instances.getContent()) {
             Map<String, Object> row = projectInstanceRow(pi, view);
-            if (!matchesFilter(row, view.filterConfig())) {
+            if (!PortalMainTableViewFilterUtils.matchesFilter(row, view.filterConfig())) {
                 continue;
             }
-            if (needle != null && !needle.isEmpty() && !matchesSearch(row, needle)) {
+            if (needle != null && !needle.isEmpty() && !PortalMainTableViewFilterUtils.matchesSearch(row, needle)) {
                 continue;
             }
             rows.add(row);
@@ -402,182 +401,6 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
             case "current_step" -> pi.getCurrentNode();
             default -> null;
         };
-    }
-
-    @SuppressWarnings("unchecked")
-    private boolean matchesFilter(Map<String, Object> row, Map<String, Object> filterConfig) {
-        if (filterConfig == null || filterConfig.isEmpty()) {
-            return true;
-        }
-        return matchesFilterNode(row, filterConfig);
-    }
-
-    @SuppressWarnings("unchecked")
-    private boolean matchesFilterNode(Map<String, Object> row, Map<String, Object> node) {
-        if (node == null || node.isEmpty()) {
-            return true;
-        }
-        String logic = stringVal(node.get("logic"));
-        boolean useOr = "or".equalsIgnoreCase(logic);
-
-        Object conditionsObj = node.get("conditions");
-        List<Map<String, Object>> conditions = new ArrayList<>();
-        if (conditionsObj instanceof List<?> rawConditions) {
-            for (Object condObj : rawConditions) {
-                if (condObj instanceof Map<?, ?> cond) {
-                    conditions.add((Map<String, Object>) cond);
-                }
-            }
-        }
-
-        Object groupsObj = node.get("groups");
-        List<Map<String, Object>> groups = new ArrayList<>();
-        if (groupsObj instanceof List<?> rawGroups) {
-            for (Object groupObj : rawGroups) {
-                if (groupObj instanceof Map<?, ?> group) {
-                    groups.add((Map<String, Object>) group);
-                }
-            }
-        }
-
-        if (conditions.isEmpty() && groups.isEmpty()) {
-            return true;
-        }
-
-        if (useOr) {
-            for (Map<String, Object> cond : conditions) {
-                if (evaluateFilterCondition(row, cond)) {
-                    return true;
-                }
-            }
-            for (Map<String, Object> group : groups) {
-                if (matchesFilterNode(row, group)) {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        for (Map<String, Object> cond : conditions) {
-            if (!evaluateFilterCondition(row, cond)) {
-                return false;
-            }
-        }
-        for (Map<String, Object> group : groups) {
-            if (!matchesFilterNode(row, group)) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private boolean evaluateFilterCondition(Map<String, Object> row, Map<String, Object> cond) {
-        String fieldName = stringVal(cond.get("fieldName"));
-        String operator = stringVal(cond.get("operator"));
-        Object expected = cond.get("value");
-        Object actual = row.get(fieldName);
-        return evaluateCondition(actual, operator, expected);
-    }
-
-    private boolean evaluateCondition(Object actual, String operator, Object expected) {
-        if (operator == null || operator.isBlank()) {
-            return true;
-        }
-        String op = operator.trim();
-        if ("isNull".equals(op)) {
-            return actual == null || String.valueOf(actual).isBlank();
-        }
-        if ("isNotNull".equals(op)) {
-            return actual != null && !String.valueOf(actual).isBlank();
-        }
-        if (actual == null) {
-            return false;
-        }
-        String actualStr = String.valueOf(actual);
-        String expectedStr = expected != null ? String.valueOf(expected) : "";
-        return switch (op) {
-            case "eq" -> actualStr.equalsIgnoreCase(expectedStr);
-            case "ne" -> !actualStr.equalsIgnoreCase(expectedStr);
-            case "contains" -> actualStr.toLowerCase(Locale.ROOT).contains(expectedStr.toLowerCase(Locale.ROOT));
-            case "notContains" -> !actualStr.toLowerCase(Locale.ROOT).contains(expectedStr.toLowerCase(Locale.ROOT));
-            case "startsWith" -> actualStr.toLowerCase(Locale.ROOT).startsWith(expectedStr.toLowerCase(Locale.ROOT));
-            case "notStartsWith" -> !actualStr.toLowerCase(Locale.ROOT).startsWith(expectedStr.toLowerCase(Locale.ROOT));
-            case "endsWith" -> actualStr.toLowerCase(Locale.ROOT).endsWith(expectedStr.toLowerCase(Locale.ROOT));
-            case "notEndsWith" -> !actualStr.toLowerCase(Locale.ROOT).endsWith(expectedStr.toLowerCase(Locale.ROOT));
-            case "gt" -> compareAsDouble(actualStr, expectedStr) > 0;
-            case "lt" -> compareAsDouble(actualStr, expectedStr) < 0;
-            case "in" -> {
-                if (expected instanceof Collection<?> col) {
-                    yield col.stream().anyMatch(v -> actualStr.equalsIgnoreCase(String.valueOf(v)));
-                }
-                yield Arrays.stream(expectedStr.split(","))
-                        .map(String::trim)
-                        .anyMatch(v -> actualStr.equalsIgnoreCase(v));
-            }
-            default -> true;
-        };
-    }
-
-    private int compareAsDouble(String a, String b) {
-        try {
-            return Double.compare(Double.parseDouble(a), Double.parseDouble(b));
-        } catch (NumberFormatException e) {
-            return a.compareToIgnoreCase(b);
-        }
-    }
-
-    private boolean matchesSearch(Map<String, Object> row, String needle) {
-        for (Map.Entry<String, Object> e : row.entrySet()) {
-            if (e.getKey().startsWith("_")) {
-                continue;
-            }
-            if (e.getValue() != null && String.valueOf(e.getValue()).toLowerCase(Locale.ROOT).contains(needle)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    @SuppressWarnings("unchecked")
-    private void applyViewSort(List<Map<String, Object>> rows, List<Map<String, Object>> sortConfig) {
-        if (sortConfig == null || sortConfig.isEmpty()) {
-            return;
-        }
-        rows.sort((a, b) -> {
-            for (Map<String, Object> spec : sortConfig) {
-                String field = stringVal(spec.get("fieldName"));
-                if (field == null) {
-                    continue;
-                }
-                Object va = a.get(field);
-                Object vb = b.get(field);
-                int cmp = compareSortValues(va, vb);
-                if (cmp != 0) {
-                    String dir = stringVal(spec.get("direction"));
-                    return "DESC".equalsIgnoreCase(dir) ? -cmp : cmp;
-                }
-            }
-            return 0;
-        });
-    }
-
-    private int compareSortValues(Object a, Object b) {
-        if (a == null && b == null) {
-            return 0;
-        }
-        if (a == null) {
-            return -1;
-        }
-        if (b == null) {
-            return 1;
-        }
-        if (a instanceof LocalDateTime ta && b instanceof LocalDateTime tb) {
-            return ta.compareTo(tb);
-        }
-        if (a instanceof Number na && b instanceof Number nb) {
-            return Double.compare(na.doubleValue(), nb.doubleValue());
-        }
-        return String.valueOf(a).compareToIgnoreCase(String.valueOf(b));
     }
 
     private List<MainTableViewFieldColumn> visibleColumns(ViewDefinition view) {
@@ -676,26 +499,6 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
         return o != null ? String.valueOf(o) : null;
     }
 
-    private String formatCell(Object value) {
-        if (value == null) {
-            return "";
-        }
-        if (value instanceof LocalDateTime dt) {
-            return DT_FMT.format(dt);
-        }
-        return String.valueOf(value);
-    }
-
-    private String csvEscape(String value) {
-        if (value == null) {
-            return "";
-        }
-        if (value.contains(",") || value.contains("\"") || value.contains("\n")) {
-            return "\"" + value.replace("\"", "\"\"") + "\"";
-        }
-        return value;
-    }
-
     @SuppressWarnings("unchecked")
     private Map<String, Object> parseToolbarConfig(String filterConfigJson) {
         Map<String, Object> filter = parseJsonMap(filterConfigJson);
@@ -715,81 +518,6 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
             return b;
         }
         return Boolean.parseBoolean(String.valueOf(val));
-    }
-
-    private int findProcessInstanceIdColumn(String[] headers) {
-        for (int i = 0; i < headers.length; i++) {
-            String h = headers[i] != null ? headers[i].trim() : "";
-            if (PROCESS_INSTANCE_ID_HEADERS.contains(h)) {
-                return i;
-            }
-        }
-        return -1;
-    }
-
-    private List<String[]> parseCsvRows(byte[] csvBytes) {
-        String text = new String(csvBytes, StandardCharsets.UTF_8);
-        if (text.startsWith("\uFEFF")) {
-            text = text.substring(1);
-        }
-        List<String[]> rows = new ArrayList<>();
-        List<String> fields = new ArrayList<>();
-        StringBuilder current = new StringBuilder();
-        boolean inQuotes = false;
-        for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
-            if (inQuotes) {
-                if (c == '"') {
-                    if (i + 1 < text.length() && text.charAt(i + 1) == '"') {
-                        current.append('"');
-                        i++;
-                    } else {
-                        inQuotes = false;
-                    }
-                } else {
-                    current.append(c);
-                }
-            } else if (c == '"') {
-                inQuotes = true;
-            } else if (c == ',') {
-                fields.add(current.toString());
-                current.setLength(0);
-            } else if (c == '\r') {
-                // skip
-            } else if (c == '\n') {
-                fields.add(current.toString());
-                current.setLength(0);
-                if (!fields.isEmpty()) {
-                    rows.add(fields.toArray(new String[0]));
-                }
-                fields = new ArrayList<>();
-            } else {
-                current.append(c);
-            }
-        }
-        if (current.length() > 0 || !fields.isEmpty()) {
-            fields.add(current.toString());
-            if (!fields.isEmpty()) {
-                rows.add(fields.toArray(new String[0]));
-            }
-        }
-        return rows;
-    }
-
-    private boolean isBlankRow(String[] cells) {
-        for (String cell : cells) {
-            if (cell != null && !cell.isBlank()) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private String cellValue(String[] cells, int index) {
-        if (index < 0 || index >= cells.length || cells[index] == null) {
-            return "";
-        }
-        return cells[index].trim();
     }
 
     private record ViewFieldDef(
