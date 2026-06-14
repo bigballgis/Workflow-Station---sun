@@ -66,6 +66,9 @@ class TableDesignComponentRowVersionTest {
 
     @Mock
     private JdbcTemplate jdbcTemplate;
+
+    @Mock
+    private com.developer.service.MainTableViewService mainTableViewService;
     
     private TableDesignComponent tableDesignComponent;
     
@@ -81,7 +84,8 @@ class TableDesignComponentRowVersionTest {
             i18nService,
             sequenceSynchronizer,
             fieldFkPkSyncService,
-            jdbcTemplate
+            jdbcTemplate,
+            mainTableViewService
         );
     }
     

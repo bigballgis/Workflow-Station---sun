@@ -3,7 +3,7 @@ import { getUser } from './auth'
 import i18n from '@/i18n'
 
 // Create a separate axios instance for function unit API
-const functionUnitAxios = axios.create({
+export const functionUnitAxios = axios.create({
   baseURL: '',
   timeout: 30000,
   withCredentials: true

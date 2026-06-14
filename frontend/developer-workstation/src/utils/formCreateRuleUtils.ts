@@ -3,8 +3,17 @@
  * Designer stores per-field read-only as props.readonly; form-create preview respects props.disabled.
  */
 
+/** User explicitly turned Readonly off in fc-designer (must win over stale parser-injected disabled). */
+export function isFormCreateRuleExplicitlyEditable(rule: unknown): boolean {
+  if (!rule || typeof rule !== 'object') return false
+  const r = rule as Record<string, unknown>
+  const props = (r.props as Record<string, unknown> | undefined) || {}
+  return r.readonly === false || props.readonly === false
+}
+
 export function isFormCreateRuleReadonly(rule: unknown): boolean {
   if (!rule || typeof rule !== 'object') return false
+  if (isFormCreateRuleExplicitlyEditable(rule)) return false
   const r = rule as Record<string, unknown>
   const props = (r.props as Record<string, unknown> | undefined) || {}
   return (
@@ -38,12 +47,26 @@ export function applyFormCreateRuleReadonly(rule: unknown): unknown {
   const mappedChildren = Array.isArray(children)
     ? mapFormCreateRulesReadonlyDeep(children)
     : children
+  const props = (r.props as Record<string, unknown> | undefined) || {}
   const readonly = isFormCreateRuleReadonly(r)
   const childrenChanged = mappedChildren !== children
 
+  if (isFormCreateRuleExplicitlyEditable(r)) {
+    const { disabled: _omitDisabled, readonly: _omitReadonly, ...restProps } = props
+    const next: Record<string, unknown> = {
+      ...r,
+      readonly: false,
+      props: { ...restProps, readonly: false },
+    }
+    delete next.disabled
+    if (childrenChanged) {
+      next.children = mappedChildren
+    }
+    return next
+  }
+
   if (!readonly && !childrenChanged) return rule
 
-  const props = (r.props as Record<string, unknown> | undefined) || {}
   const { readonly: _omitReadonly, disabled: _omitDisabled, ...restProps } = props
   const next: Record<string, unknown> = readonly
     ? {
@@ -69,14 +92,20 @@ export function stripFormCreateRuleDisabled(rule: unknown): unknown {
   if (!rule || typeof rule !== 'object') return rule
   const r = rule as Record<string, unknown>
   const props = { ...((r.props as Record<string, unknown> | undefined) || {}) }
+  const explicitlyOff = r.readonly === false || props.readonly === false
+  const explicitlyOn = r.readonly === true || props.readonly === true
   const hadDisabled = r.disabled === true || props.disabled === true
-  const readonly = props.readonly === true || r.readonly === true || hadDisabled
+  const readonly = !explicitlyOff && (explicitlyOn || hadDisabled)
 
   delete props.disabled
   const next: Record<string, unknown> = { ...r, props }
   delete next.disabled
 
-  if (readonly) {
+  if (explicitlyOff) {
+    props.readonly = false
+    next.readonly = false
+    next.props = props
+  } else if (readonly) {
     props.readonly = true
     next.props = props
   }

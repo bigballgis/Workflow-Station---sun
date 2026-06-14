@@ -18,6 +18,7 @@ import com.developer.component.VersionComponent;
 import com.developer.util.DeveloperWorkstationSequenceSynchronizer;
 import com.developer.util.MinimalBpmnTemplate;
 import com.developer.util.XmlEncodingUtil;
+import com.developer.service.MainTableViewService;
 import com.developer.service.UserDisplayNameService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.criteria.Predicate;
@@ -35,13 +36,13 @@ import java.util.*;
 /**
  * Function unit component implementation.
  *
- * 门面（facade）：实现 {@link FunctionUnitComponent} 接口，保持全部 public 方法签名与事务/鉴权语义不变。
- * 具体业务逻辑委托给同包的协作类：
- * - {@link FunctionUnitCodeGenerator}：唯一 code 生成与名称规范化
- * - {@link FunctionUnitValidator}：发布前完整性校验（含 BPMN-DMN 交叉引用、DECISION_TABLE 配置）
- * - {@link FunctionUnitSnapshotFactory}：版本号计算与发布快照序列化
- * - {@link FunctionUnitCloner}：功能单元深拷贝
- * - {@link FunctionUnitResponseAssembler}：实体到响应 DTO 的安全转换
+ * 闂ㄩ潰锛坒acade锛夛細瀹炵幇 {@link FunctionUnitComponent} 鎺ュ彛锛屼繚鎸佸叏閮?public 鏂规硶绛惧悕涓庝簨鍔?閴存潈璇箟涓嶅彉銆?
+ * 鍏蜂綋涓氬姟閫昏緫濮旀墭缁欏悓鍖呯殑鍗忎綔绫伙細
+ * - {@link FunctionUnitCodeGenerator}锛氬敮涓€ code 鐢熸垚涓庡悕绉拌鑼冨寲
+ * - {@link FunctionUnitValidator}锛氬彂甯冨墠瀹屾暣鎬ф牎楠岋紙鍚?BPMN-DMN 浜ゅ弶寮曠敤銆丏ECISION_TABLE 閰嶇疆锛?
+ * - {@link FunctionUnitSnapshotFactory}锛氱増鏈彿璁＄畻涓庡彂甯冨揩鐓у簭鍒楀寲
+ * - {@link FunctionUnitCloner}锛氬姛鑳藉崟鍏冩繁鎷疯礉
+ * - {@link FunctionUnitResponseAssembler}锛氬疄浣撳埌鍝嶅簲 DTO 鐨勫畨鍏ㄨ浆鎹?
  */
 @Component
 @Slf4j
@@ -55,8 +56,9 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     private final FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService;
     private final FunctionUnitDevGroupAssignmentRepository functionUnitDevGroupAssignmentRepository;
     private final VersionComponent versionComponent;
+    private final MainTableViewService mainTableViewService;
 
-    // 协作类（门面内部构建，依赖来自构造注入的仓库/服务）
+    // 鍗忎綔绫伙紙闂ㄩ潰鍐呴儴鏋勫缓锛屼緷璧栨潵鑷瀯閫犳敞鍏ョ殑浠撳簱/鏈嶅姟锛?
     private final FunctionUnitCodeGenerator codeGenerator;
     private final FunctionUnitValidator validator;
     private final FunctionUnitSnapshotFactory snapshotFactory;
@@ -81,7 +83,8 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
             FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService,
             FunctionUnitDevGroupAssignmentRepository functionUnitDevGroupAssignmentRepository,
             VersionComponent versionComponent,
-            DeveloperWorkstationSequenceSynchronizer sequenceSynchronizer) {
+            DeveloperWorkstationSequenceSynchronizer sequenceSynchronizer,
+            MainTableViewService mainTableViewService) {
         this.functionUnitRepository = functionUnitRepository;
         this.processDefinitionRepository = processDefinitionRepository;
         this.versionRepository = versionRepository;
@@ -90,8 +93,9 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         this.functionUnitWorkspaceAccessService = functionUnitWorkspaceAccessService;
         this.functionUnitDevGroupAssignmentRepository = functionUnitDevGroupAssignmentRepository;
         this.versionComponent = versionComponent;
+        this.mainTableViewService = mainTableViewService;
 
-        // 构建协作类：在 Spring 与测试 new 两条路径下行为一致。
+        // 鏋勫缓鍗忎綔绫伙細鍦?Spring 涓庢祴璇?new 涓ゆ潯璺緞涓嬭涓轰竴鑷淬€?
         this.codeGenerator = new FunctionUnitCodeGenerator(functionUnitRepository);
         this.validator = new FunctionUnitValidator();
         this.snapshotFactory = new FunctionUnitSnapshotFactory(objectMapper);
@@ -109,7 +113,8 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
                 objectMapper,
                 functionUnitWorkspaceAccessService,
                 sequenceSynchronizer,
-                this.codeGenerator);
+                this.codeGenerator,
+                mainTableViewService);
         this.responseAssembler = new FunctionUnitResponseAssembler(functionUnitDevGroupAssignmentRepository);
     }
 
@@ -341,6 +346,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         // Update function unit status
         functionUnit.setStatus(FunctionUnitStatus.PUBLISHED);
         functionUnit.setCurrentVersion(newVersion);
+        mainTableViewService.publishViewsForFunctionUnit(id);
 
         return functionUnitRepository.save(functionUnit);
     }
@@ -435,8 +441,8 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     }
 
     /**
-     * 委托给 {@link FunctionUnitSnapshotFactory#createSnapshot(FunctionUnit)}。
-     * 保留此私有方法以兼容通过反射调用 createSnapshot 的既有测试。
+     * 濮旀墭缁?{@link FunctionUnitSnapshotFactory#createSnapshot(FunctionUnit)}銆?
+     * 淇濈暀姝ょ鏈夋柟娉曚互鍏煎閫氳繃鍙嶅皠璋冪敤 createSnapshot 鐨勬棦鏈夋祴璇曘€?
      */
     private byte[] createSnapshot(FunctionUnit functionUnit) throws Exception {
         return snapshotFactory.createSnapshot(functionUnit);

@@ -839,7 +839,27 @@ public ResponseEntity<ApiResponse<Entity>> create(@Valid @RequestBody Request re
 | POST | `/api/forms/{formId}/relation-bindings` | 绑定（body 含 `tableId`） |
 | DELETE | `/api/forms/{formId}/relation-bindings/{bindingId}` | 解除绑定 |
 
-### 7.19 关联视图 — RelationTableViewController
+### 7.19 主表视图 — MainTableViewController
+
+基础路径: `/api/v1/function-units/{functionUnitId}/main-table-views`
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/` | 列出 FU 下 Main Table 视图 |
+| POST | `/` | 创建视图（body: `viewName`） |
+| GET | `/{viewId}` | 视图详情（含列/排序/筛选） |
+| PUT | `/{viewId}` | 更新视图 |
+| DELETE | `/{viewId}` | 删除非默认视图 |
+
+**设计端 Tab**：Function Unit Edit → **View Design**（Forms 之后）。创建 `MAIN` 表时自动 seed **Main view**。
+
+**发布**：Function Unit **Publish** 将视图 `status` 置为 `PUBLISHED` 并写入版本快照 `mainTableViews`。
+
+**Portal 运行时**：User Portal → Relation Table → **Views**；数据来自 `up_process_instance` 主表流程变量（每实例一行），支持 CSV 导出。
+
+持久化表：`dw_main_table_view_configs`、`dw_main_table_view_fields`。
+
+### 7.20 关联视图 — RelationTableViewController
 
 基础路径: `/api/forms/{formId}/relation-views`（见本节开头「双前缀」说明）
 

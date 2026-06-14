@@ -56,6 +56,9 @@ public interface ProcessInstanceRepository extends JpaRepository<ProcessInstance
     @Query("SELECT p FROM ProcessInstance p WHERE p.status = :status AND (p.currentAssignee = :userId OR p.candidateUsers LIKE %:userId%)")
     Page<ProcessInstance> findByAssigneeOrCandidateAndStatus(@Param("userId") String userId, @Param("status") String status, Pageable pageable);
 
+    Page<ProcessInstance> findByFunctionUnitCodeAndStartUserIdOrderByStartTimeDesc(
+            String functionUnitCode, String startUserId, Pageable pageable);
+
 
     /**
      * Conditional update: updates {@code currentNode} and {@code currentAssignee} only when status is not COMPLETED.

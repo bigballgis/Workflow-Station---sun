@@ -58,7 +58,7 @@ public class FunctionUnitPropertyTest {
                 mock(com.developer.repository.TableRelationRepository.class),
                 mock(com.developer.repository.SubTableViewConfigRepository.class),
                 versionRepo, iconRepo, objectMapper, userDisplayNameService,
-                workspaceAccessService, devGroupAssignmentRepository, mock(com.developer.component.VersionComponent.class), mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class));
+                workspaceAccessService, devGroupAssignmentRepository, mock(com.developer.component.VersionComponent.class), mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class), mock(com.developer.service.MainTableViewService.class));
     }
     
     /**
@@ -194,7 +194,7 @@ public class FunctionUnitPropertyTest {
                 mock(com.developer.repository.SubTableViewConfigRepository.class),
                 versionRepo, iconRepo, objectMapper, userDisplayNameService,
                 workspaceAccessService, devGroupAssignmentRepository,
-                mock(com.developer.component.VersionComponent.class), mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class));
+                mock(com.developer.component.VersionComponent.class), mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class), mock(com.developer.service.MainTableViewService.class));
 
         // 原始功能单元 + 流程定义
         FunctionUnit original = new FunctionUnit();
@@ -272,7 +272,7 @@ public class FunctionUnitPropertyTest {
                 mock(com.developer.repository.SubTableViewConfigRepository.class),
                 versionRepo, iconRepo, objectMapper, userDisplayNameService,
                 workspaceAccessService, devGroupAssignmentRepository,
-                mock(com.developer.component.VersionComponent.class), mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class));
+                mock(com.developer.component.VersionComponent.class), mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class), mock(com.developer.service.MainTableViewService.class));
 
         // 源功能单元：含 1 sub 表（id=13）、1 表单（id=11）、1 动作（id=12），
         // BPMN 中 subTableId=13 / formId=11 / actionIds=[12]

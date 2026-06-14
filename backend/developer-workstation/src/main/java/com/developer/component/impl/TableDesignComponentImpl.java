@@ -12,6 +12,8 @@ import com.developer.entity.FunctionUnit;
 import com.developer.entity.TableDefinition;
 import com.developer.enums.DataType;
 import com.developer.enums.DatabaseDialect;
+import com.developer.enums.TableType;
+import com.developer.service.MainTableViewService;
 import com.developer.exception.DeveloperBusinessException;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.*;
@@ -49,6 +51,7 @@ public class TableDesignComponentImpl implements TableDesignComponent {
     private final DeveloperWorkstationSequenceSynchronizer sequenceSynchronizer;
     private final FieldFkPkSyncService fieldFkPkSyncService;
     private final JdbcTemplate jdbcTemplate;
+    private final MainTableViewService mainTableViewService;
     
     @Override
     @Transactional
@@ -92,6 +95,9 @@ public class TableDesignComponentImpl implements TableDesignComponent {
         
         TableDefinition saved = tableDefinitionRepository.save(tableDefinition);
         fieldFkPkSyncService.syncForeignKeysForFunctionUnit(functionUnitId);
+        if (saved.getTableType() == TableType.MAIN) {
+            mainTableViewService.seedDefaultViewIfAbsent(functionUnitId, saved.getId());
+        }
         return saved;
     }
     

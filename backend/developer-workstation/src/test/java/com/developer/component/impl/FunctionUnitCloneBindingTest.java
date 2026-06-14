@@ -73,7 +73,8 @@ class FunctionUnitCloneBindingTest {
                 functionUnitWorkspaceAccessService,
                 functionUnitDevGroupAssignmentRepository,
                 versionComponent,
-                sequenceSynchronizer);
+                sequenceSynchronizer,
+                mock(com.developer.service.MainTableViewService.class));
     }
 
     @Test

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   flushDesignerValidatePanelToActiveRule,
+  flushDesignerPropsPanelToActiveRule,
   installFcDesignerPreviewCapture,
   mergePreviewValidateFormOption,
   prepareDesignerPreviewValidation,
@@ -46,6 +47,31 @@ describe('formDesignerPreviewValidation', () => {
     const result = flushDesignerValidatePanelToActiveRule(ref)
     expect(result.flushed).toBe(true)
     expect(activeRule.validate).toEqual([{ len: 2, message: 'two chars' }])
+  })
+
+  it('flushDesignerPropsPanelToActiveRule copies readonly=false from props panel onto stale PK rule', () => {
+    const activeRule: Record<string, unknown> = {
+      field: 'case_number',
+      type: 'input',
+      readonly: true,
+      disabled: true,
+      props: { disabled: true },
+    }
+    const ref = {
+      activeRule,
+      propsForm: {
+        api: {
+          formData: () => ({ readonly: false }),
+        },
+      },
+    }
+    const result = flushDesignerPropsPanelToActiveRule(ref)
+    expect(result.flushed).toBe(true)
+    expect(result.readonly).toBe(false)
+    expect(activeRule.readonly).toBe(false)
+    expect((activeRule.props as Record<string, unknown>).readonly).toBe(false)
+    expect(activeRule.disabled).toBeUndefined()
+    expect((activeRule.props as Record<string, unknown>).disabled).toBeUndefined()
   })
 
   it('flushDesignerValidatePanelToActiveRule copies pending validate panel data onto activeRule', () => {

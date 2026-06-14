@@ -2,6 +2,7 @@ package com.admin.service;
 
 import com.admin.entity.RelationTableAuditLog;
 import com.admin.repository.RelationTableAuditLogRepository;
+import com.admin.repository.UserRepository;
 import com.admin.service.impl.RelationTableAuditServiceImpl;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -36,14 +37,17 @@ import static org.mockito.Mockito.*;
 class RelationTableAuditPropertyTest {
 
     private RelationTableAuditLogRepository auditLogRepository;
+    private UserRepository userRepository;
     private ObjectMapper objectMapper;
     private RelationTableAuditServiceImpl auditService;
 
     @BeforeTry
     void setUp() {
         auditLogRepository = mock(RelationTableAuditLogRepository.class);
+        userRepository = mock(UserRepository.class);
+        when(userRepository.findById(any())).thenReturn(Optional.empty());
         objectMapper = new ObjectMapper();
-        auditService = new RelationTableAuditServiceImpl(auditLogRepository, objectMapper);
+        auditService = new RelationTableAuditServiceImpl(auditLogRepository, objectMapper, userRepository);
     }
 
     // ==================== Arbitraries ====================

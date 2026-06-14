@@ -12,8 +12,9 @@ import { errorTranslator } from '@/utils/errorTranslator'
 import { storeToRefs } from 'pinia'
 import { notifyError, notifySuccess } from '@/utils/notify'
 import type { TableInstance } from 'element-plus'
-import { exportAuditLogs, type AuditLog } from '@/api/audit'
+import { type AuditLog } from '@/api/audit'
 import { useAuditStore } from '@/stores/audit'
+import * as XLSX from 'xlsx'
 import {
   actionType,
   actionText as actionTextImpl,
@@ -231,23 +232,38 @@ export function useAudit() {
   // ==================== Export ====================
 
   const exportAsCsv = (data: AuditLog[], filename: string) => {
-    const headers = [
-      t('audit.actionType'), t('audit.resourceType'), t('audit.operator'),
-      t('audit.ipAddress'), t('audit.result'), t('audit.duration'), t('audit.time')
-    ]
-    const rows = data.map(row => [
-      actionText(row.action),
-      row.resourceType || '',
-      row.username || '',
-      row.ipAddress || '',
-      row.result,
-      row.duration + 'ms',
-      formatTime(row.createdAt)
-    ])
-    const csv = [headers, ...rows]
-      .map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
-      .join('\n')
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' })
+    const fieldLabels = ALL_EXPORT_FIELDS.value
+    const { headers, rows } = buildExportRows(store.sortLogs(data), fieldLabels)
+    downloadBlob(buildCsvBlob(headers, rows), filename)
+  }
+
+  const openExportDialog = () => {
+    exportDialogVisible.value = true
+  }
+
+  const resolveOperatorUsername = (row: AuditLog): string => {
+    const raw = row.username ?? (row as AuditLog & { userName?: string }).userName
+    const name = typeof raw === 'string' ? raw.trim() : ''
+    if (name && name.toLowerCase() !== 'unknown') return name
+    return '-'
+  }
+
+  const getRowValue = (row: AuditLog, key: string): string => {
+    switch (key) {
+      case 'action':       return actionText(row.action)
+      case 'resourceType': return resourceTypeText(row.resourceType) || ''
+      case 'resourceId':   return row.resourceId || ''
+      case 'username':
+        return resolveOperatorUsername(row)
+      case 'ipAddress':    return row.ipAddress || ''
+      case 'result':       return row.result === 'SUCCESS' ? t('audit.success') : row.result === 'PENDING' ? t('audit.pending') : t('audit.failed')
+      case 'duration':     return row.duration != null ? row.duration + 'ms' : '-'
+      case 'createdAt':    return formatTime(row.createdAt)
+      default:             return ''
+    }
+  }
+
+  const downloadBlob = (blob: Blob, filename: string) => {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -258,64 +274,77 @@ export function useAudit() {
     URL.revokeObjectURL(url)
   }
 
-  const openExportDialog = () => {
-    exportDialogVisible.value = true
+  const buildExportRows = (data: AuditLog[], fieldKeys: { key: string; label: string }[]) => {
+    const headers = fieldKeys.map(f => f.label)
+    const rows = data.map(row => fieldKeys.map(f => getRowValue(row, f.key)))
+    return { headers, rows }
   }
 
-  const getRowValue = (row: AuditLog, key: string): string => {
-    switch (key) {
-      case 'action':       return actionText(row.action)
-      case 'resourceType': return row.resourceType || ''
-      case 'resourceId':   return row.resourceId || ''
-      case 'username':     return row.username || ''
-      case 'ipAddress':    return row.ipAddress || ''
-      case 'result':       return row.result === 'SUCCESS' ? t('audit.success') : row.result === 'PENDING' ? t('audit.pending') : t('audit.failed')
-      case 'duration':     return row.duration + 'ms'
-      case 'createdAt':    return formatTime(row.createdAt)
-      default:             return ''
+  const buildCsvBlob = (headers: string[], rows: string[][]) => {
+    const csv = [headers, ...rows]
+      .map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
+      .join('\n')
+    return new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' })
+  }
+
+  const downloadXlsx = (
+    headers: string[],
+    rows: string[][],
+    filename: string,
+    fieldKeys: { key: string; label: string }[]
+  ) => {
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
+    const textColumnKeys = new Set(['createdAt', 'duration'])
+    const textColIndexes = fieldKeys
+      .map((f, idx) => (textColumnKeys.has(f.key) ? idx : -1))
+      .filter(idx => idx >= 0)
+
+    for (let r = 1; r <= rows.length; r++) {
+      for (const c of textColIndexes) {
+        const ref = XLSX.utils.encode_cell({ r, c })
+        const val = rows[r - 1]?.[c]
+        if (val != null && val !== '') {
+          ws[ref] = { t: 's', v: String(val), z: '@' }
+        }
+      }
     }
+
+    const timeColIdx = fieldKeys.findIndex(f => f.key === 'createdAt')
+    if (timeColIdx >= 0) {
+      const cols = [...(ws['!cols'] ?? [])]
+      cols[timeColIdx] = { wch: 26 }
+      ws['!cols'] = cols
+    }
+
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Audit Log')
+    XLSX.writeFile(wb, filename)
   }
 
-  const doExport = async (format: 'csv' | 'excel') => {
-    const fields = selectedExportFields.value
-    if (fields.length === 0) return
-    const fieldLabels = ALL_EXPORT_FIELDS.value.filter(f => fields.includes(f.key))
+  const doExport = async (format: 'csv' | 'excel', fields?: string[]) => {
+    const exportFields = fields?.length ? fields : selectedExportFields.value
+    if (exportFields.length === 0) return
+    const fieldLabels = ALL_EXPORT_FIELDS.value.filter(f => exportFields.includes(f.key))
 
     exporting.value = true
     try {
       let dataToExport: AuditLog[]
       if (selectedRows.value.length > 0) {
-        dataToExport = selectedRows.value
-      } else if (format === 'csv') {
-        dataToExport = await store.fetchAllLogsForExport()
+        dataToExport = store.sortLogs([...selectedRows.value])
       } else {
-        dataToExport = []
+        dataToExport = await store.fetchAllLogsForExport()
       }
 
+      const { headers, rows } = buildExportRows(dataToExport, fieldLabels)
+      const dateSuffix = new Date().toISOString().slice(0, 10)
+
       if (format === 'csv') {
-        const headers = fieldLabels.map(f => f.label)
-        const rows = dataToExport.map(row => fieldLabels.map(f => getRowValue(row, f.key)))
-        const csv = [headers, ...rows]
-          .map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
-          .join('\n')
-        const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' })
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `audit-logs-${new Date().toISOString().slice(0, 10)}.csv`
-        document.body.appendChild(a)
-        a.click()
-        document.body.removeChild(a)
-        URL.revokeObjectURL(url)
-        exportDialogVisible.value = false
+        downloadBlob(buildCsvBlob(headers, rows), `audit-logs-${dateSuffix}.csv`)
       } else {
-        const query = selectedRows.value.length > 0
-          ? { ids: selectedRows.value.map(r => r.id) }
-          : store.buildQueryRequest()
-        await exportAuditLogs(query)
-        notifySuccess(t('common.success'))
-        exportDialogVisible.value = false
+        downloadXlsx(headers, rows, `audit-logs-${dateSuffix}.xlsx`, fieldLabels)
       }
+      notifySuccess(t('common.success'))
+      exportDialogVisible.value = false
     } catch (e) {
       notifyError(t(errorTranslator(AppErrorCode.AUDIT_EXPORT_FAILED)))
     } finally {

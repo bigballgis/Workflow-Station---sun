@@ -154,14 +154,16 @@ public class SecurityAuditComponent {
     
     @Transactional
     public AuditLog recordAudit(AuditLogRequest request) {
+        AuditActorResolver.OperatorIdentity operator = AuditActorResolver.normalizeOperator(
+                request.getUserId(), request.getUserName(), userRepository);
         AuditLog auditLog = AuditLog.builder()
                 .id(UUID.randomUUID().toString())
                 .action(request.getAction())
                 .resourceType(request.getResourceType())
                 .resourceId(request.getResourceId())
                 .resourceName(request.getResourceName())
-                .userId(request.getUserId())
-                .userName(request.getUserName())
+                .userId(operator.userId())
+                .userName(operator.userName())
                 .ipAddress(request.getIpAddress())
                 .userAgent(request.getUserAgent())
                 .oldValue(request.getOldValue())
@@ -227,11 +229,15 @@ public class SecurityAuditComponent {
     }
     
     public Page<AuditLog> getAuditLogsByUser(String userId, Pageable pageable) {
-        return auditLogRepository.findByUserId(userId, pageable);
+        Page<AuditLog> page = auditLogRepository.findByUserId(userId, pageable);
+        AuditActorResolver.enrichOperatorUsernames(page.getContent(), userRepository);
+        return page;
     }
     
     public Page<AuditLog> getAuditLogsByResource(String resourceType, String resourceId, Pageable pageable) {
-        return auditLogRepository.findByResourceTypeAndResourceId(resourceType, resourceId, pageable);
+        Page<AuditLog> page = auditLogRepository.findByResourceTypeAndResourceId(resourceType, resourceId, pageable);
+        AuditActorResolver.enrichOperatorUsernames(page.getContent(), userRepository);
+        return page;
     }
     
     // ==================== 异常行为检测 ====================

@@ -83,7 +83,8 @@ public abstract class DecisionDesignPropertyTestBase {
                 mock(FunctionUnitWorkspaceAccessService.class),
                 functionUnitDevGroupAssignmentRepository,
                 mock(com.developer.component.VersionComponent.class),
-                mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class)
+                mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class),
+                mock(com.developer.service.MainTableViewService.class)
         );
 
         idGenerator = new AtomicLong(1L);

@@ -22,4 +22,47 @@ describe('registerFormCreateReadonlyParser', () => {
     expect(ctx.prop.props?.disabled).toBe(true)
     expect(ctx.prop.props?.readonly).toBeUndefined()
   })
+
+  it('clears stale disabled when readonly is explicitly off (re-select field)', () => {
+    const parser = vi.fn()
+    registerFormCreateReadonlyParser({ parser })
+    const config = parser.mock.calls.find(([type]) => type === 'input')?.[1]
+
+    const ctx = {
+      rule: {
+        field: 'case_number',
+        readonly: false,
+        disabled: true,
+        props: { disabled: true, readonly: false },
+      },
+      prop: { props: { disabled: true, readonly: false } },
+    }
+    config?.mergeProp(ctx)
+    expect(ctx.rule.disabled).toBeUndefined()
+    expect(ctx.rule.readonly).toBe(false)
+    expect(ctx.prop.props?.disabled).toBeUndefined()
+    expect(ctx.prop.props?.readonly).toBe(false)
+  })
+
+  it('clears stale disabled when props panel readonly is off but rule.readonly is still true', () => {
+    const parser = vi.fn()
+    registerFormCreateReadonlyParser({ parser })
+    const config = parser.mock.calls.find(([type]) => type === 'input')?.[1]
+
+    const ctx = {
+      rule: {
+        field: 'case_number',
+        type: 'input',
+        readonly: true,
+        disabled: true,
+        props: { disabled: true, readonly: true },
+      },
+      prop: { props: { readonly: false } },
+    }
+    config?.mergeProp(ctx)
+    expect(ctx.rule.readonly).toBe(false)
+    expect(ctx.rule.disabled).toBeUndefined()
+    expect(ctx.prop.props?.readonly).toBe(false)
+    expect(ctx.prop.props?.disabled).toBeUndefined()
+  })
 })

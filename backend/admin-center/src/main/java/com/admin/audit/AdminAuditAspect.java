@@ -249,7 +249,7 @@ public class AdminAuditAspect {
             case "updateUserStatus" -> new AuditMeta(AuditAction.UPDATE, "USER", userId);
             case "resetPassword"    -> new AuditMeta(AuditAction.UPDATE, "USER", userId);
             case "deleteUser"       -> new AuditMeta(AuditAction.DELETE, "USER", userId);
-            case "getUser"          -> new AuditMeta(AuditAction.QUERY,  "USER", userId);
+            case "getUser"          -> AuditMeta.skip();
             case "listUsers"        -> AuditMeta.skip();
             default                 -> AuditMeta.skip();
         };
@@ -541,19 +541,13 @@ public class AdminAuditAspect {
         }
 
         AuditContextHolder.AuditContext ctx = AuditContextHolder.get();
-        String userId = AuditActorResolver.resolveUserId(ctx);
-        String userName = AuditActorResolver.resolveUserName(ctx, userId, userRepository);
-        if (AuditActorResolver.isUnknown(userId)) {
-            userId = "unknown";
-        }
-        if (AuditActorResolver.isUnknown(userName)) {
-            userName = "unknown";
-        }
-
-        // For auth operations (login/logout), user is not yet authenticated in context
-        if ("AUTH".equals(meta.resourceType) && "unknown".equals(userId)) {
-            userId   = meta.resourceId != null ? meta.resourceId : "unknown";
-            userName = "unknown".equals(userName) && meta.resourceId != null ? meta.resourceId : userName;
+        AuditActorResolver.OperatorIdentity operator;
+        if ("AUTH".equals(meta.resourceType)) {
+            operator = AuditActorResolver.resolveAuthOperator(meta.resourceId, userRepository);
+        } else {
+            String rawUserId = AuditActorResolver.resolveUserId(ctx);
+            String rawUserName = AuditActorResolver.resolveUserName(ctx, rawUserId, userRepository);
+            operator = AuditActorResolver.normalizeOperator(rawUserId, rawUserName, userRepository);
         }
 
         String ip = ctx != null ? ctx.getIpAddress() : null;
@@ -565,8 +559,8 @@ public class AdminAuditAspect {
         req.setAction(meta.action);
         req.setResourceType(meta.resourceType);
         req.setResourceId(meta.resourceId);
-        req.setUserId(userId);
-        req.setUserName(userName);
+        req.setUserId(operator.userId());
+        req.setUserName(operator.userName());
         req.setIpAddress(ip);
         req.setUserAgent(ua);
         req.setOldValue(oldValue);

@@ -14,6 +14,7 @@ import com.developer.repository.VersionRepository;
 import com.developer.util.DeveloperWorkstationSequenceSynchronizer;
 import com.developer.util.XmlEncodingUtil;
 import com.developer.component.impl.ProcessDesignComponentImpl;
+import com.developer.service.MainTableViewService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.platform.security.util.SecurityContextUtils;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +38,7 @@ public class VersionComponentImpl implements VersionComponent {
     private final ObjectMapper objectMapper;
     private final DeveloperWorkstationSequenceSynchronizer sequenceSynchronizer;
     private final ProcessDesignComponentImpl processDesignComponent;
+    private final MainTableViewService mainTableViewService;
     
     /**
      * Resolves current operator username.
@@ -337,6 +339,7 @@ public class VersionComponentImpl implements VersionComponent {
             decisionSnapshots.add(decisionSnap);
         }
         snapshot.put("decisionDefinitions", decisionSnapshots);
+        snapshot.put("mainTableViews", mainTableViewService.snapshotViewsForFunctionUnit(functionUnit.getId()));
         
         return objectMapper.writeValueAsBytes(snapshot);
     }

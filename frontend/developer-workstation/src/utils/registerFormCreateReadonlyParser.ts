@@ -1,4 +1,7 @@
-import { isFormCreateRuleReadonly } from './formCreateRuleUtils'
+import {
+  isFormCreateRuleExplicitlyEditable,
+  isFormCreateRuleReadonly,
+} from './formCreateRuleUtils'
 
 /** form-create component types that honor props.disabled (built-in + custom). */
 const READONLY_PARSER_TYPES = [
@@ -43,7 +46,28 @@ type FormCreateParserCtx = {
   prop: { props?: Record<string, unknown> }
 }
 
+function clearStaleReadonlyDisabled(ctx: FormCreateParserCtx): void {
+  delete ctx.rule.disabled
+  ctx.rule.readonly = false
+  const ruleProps = { ...((ctx.rule.props as Record<string, unknown> | undefined) || {}) }
+  delete ruleProps.disabled
+  ruleProps.readonly = false
+  ctx.rule.props = ruleProps
+
+  const props = ctx.prop.props ?? (ctx.prop.props = {})
+  delete props.disabled
+  props.readonly = false
+}
+
+function isPanelReadonlyExplicitlyOff(ctx: FormCreateParserCtx): boolean {
+  return ctx.prop.props?.readonly === false
+}
+
 function applyReadonlyToParserCtx(ctx: FormCreateParserCtx): void {
+  if (isFormCreateRuleExplicitlyEditable(ctx.rule) || isPanelReadonlyExplicitlyOff(ctx)) {
+    clearStaleReadonlyDisabled(ctx)
+    return
+  }
   if (!isFormCreateRuleReadonly(ctx.rule)) return
 
   ctx.rule.disabled = true

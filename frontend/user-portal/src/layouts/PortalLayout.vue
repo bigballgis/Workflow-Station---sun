@@ -143,15 +143,41 @@
               </span>
             </template>
           </el-menu-item>
-          <el-menu-item
+          <el-sub-menu
             v-if="showFullPortal"
-            index="/relation-tables"
+            index="relation-table-group"
           >
-            <el-icon><Grid /></el-icon>
             <template #title>
-              Relation Tables
+              <el-icon><Grid /></el-icon>
+              <span>{{ t('menu.relationTableGroup') }}</span>
             </template>
-          </el-menu-item>
+            <el-menu-item index="/relation-tables">
+              {{ t('menu.relationTables') }}
+            </el-menu-item>
+          </el-sub-menu>
+          <el-sub-menu
+            v-if="showFullPortal"
+            index="views-group"
+          >
+            <template #title>
+              <el-icon><ViewIcon /></el-icon>
+              <span>{{ t('menu.views') }}</span>
+            </template>
+            <el-menu-item
+              v-for="fu in viewFunctionUnits"
+              :key="fu.functionUnitCode"
+              :index="`/views/${fu.functionUnitCode}`"
+            >
+              {{ fu.functionUnitName }}
+            </el-menu-item>
+            <el-menu-item
+              v-if="!viewFuLoading && viewFunctionUnits.length === 0"
+              index="/views"
+              disabled
+            >
+              {{ t('mainTableView.noPublishedFu') }}
+            </el-menu-item>
+          </el-sub-menu>
         </el-menu>
         <div
           class="collapse-btn"
@@ -183,12 +209,12 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import {
   HomeFilled, List, Plus, Document, Share, Key,
-  Fold, Expand, Finished, DataAnalysis, Grid
+  Fold, Expand, Finished, DataAnalysis, Grid, View as ViewIcon
 } from '@element-plus/icons-vue'
 import SelfServiceBanner from '@/components/SelfServiceBanner.vue'
 import WorkspaceContextBar from '@/components/WorkspaceContextBar.vue'
@@ -206,9 +232,11 @@ import NotificationBadge from '@/components/NotificationBadge.vue'
 import { biDashboardApi } from '@/api/biDashboard'
 import { usePendingApprovalStore } from '@/stores/pendingApproval'
 import { usePendingTaskStore } from '@/stores/pendingTask'
+import { mainTableViewApi, type FunctionUnitViewMenuItem } from '@/api/mainTableView'
 
 const { t } = useI18n()
 const route = useRoute()
+const router = useRouter()
 const pendingApprovalStore = usePendingApprovalStore()
 const { count: pendingApprovalCount } = storeToRefs(pendingApprovalStore)
 const pendingTaskStore = usePendingTaskStore()
@@ -217,6 +245,8 @@ const { count: pendingTaskCount } = storeToRefs(pendingTaskStore)
 const isCollapsed = ref(false)
 const cachedViews = ref(['Dashboard', 'Tasks', 'MyApplications'])
 const hasBiDashboards = ref(false)
+const viewFunctionUnits = ref<FunctionUnitViewMenuItem[]>([])
+const viewFuLoading = ref(false)
 
 const activeMenu = computed(() => route.path)
 
@@ -271,11 +301,26 @@ async function syncPortalAccessFromServer() {
   }
 }
 
+async function loadViewFunctionUnits() {
+  viewFuLoading.value = true
+  try {
+    const res = await mainTableViewApi.listFunctionUnits()
+    viewFunctionUnits.value = res.data || []
+    if (route.path === '/views' && viewFunctionUnits.value.length) {
+      await router.replace(`/views/${viewFunctionUnits.value[0].functionUnitCode}`)
+    }
+  } catch {
+    viewFunctionUnits.value = []
+  } finally {
+    viewFuLoading.value = false
+  }
+}
+
 onMounted(() => {
   void (async () => {
     await syncPortalAccessFromServer()
     if (showFullPortal.value) {
-      await checkBiDashboards()
+      await Promise.all([checkBiDashboards(), loadViewFunctionUnits()])
     }
   })()
 })
@@ -284,8 +329,6 @@ watch(
   () => route.path,
   () => {
     void pendingApprovalStore.fetchPendingCount()
-    // 待办角标：勿在每次路由切换时调用 queryTasks（全量引擎+过滤），否则与列表页请求叠加会体感极慢。
-    // 初次进入由 onMounted 拉取；进入 /tasks 时由列表 totalElements 同步（pendingTask.syncCountFromListTotal）。
   }
 )
 
@@ -465,5 +508,6 @@ const toggleCollapse = () => {
   background-color: var(--background-light);
   padding: 20px;
   overflow-y: auto;
+  min-width: 0;
 }
 </style>

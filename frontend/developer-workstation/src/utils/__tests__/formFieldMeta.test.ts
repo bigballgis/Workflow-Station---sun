@@ -51,6 +51,22 @@ describe('formFieldMeta', () => {
     expect(taskFieldPermissionForField(pk)).toBe('READONLY')
   })
 
+  it('respects designer readonly=false override on auto PK after save reload sync', () => {
+    const pk = field({
+      fieldName: 'case_number',
+      isPrimaryKey: true,
+      pkGeneration: { strategy: 'uuid' },
+    })
+    const rule = applyTableFieldMetaToFormRule(pk, {
+      field: 'case_number',
+      type: 'input',
+      props: { readonly: false },
+      readonly: false,
+    }) as Record<string, unknown>
+    expect(rule.readonly).toBe(false)
+    expect((rule.props as Record<string, unknown>).readonly).toBe(false)
+  })
+
   it('syncs existing canvas rules from table metadata', () => {
     const fields = [
       field({

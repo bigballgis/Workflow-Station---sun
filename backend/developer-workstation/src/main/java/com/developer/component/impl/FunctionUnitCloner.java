@@ -28,6 +28,7 @@ import com.developer.repository.TableDefinitionRepository;
 import com.developer.repository.TableRelationRepository;
 import com.developer.security.FunctionUnitWorkspaceAccessService;
 import com.developer.security.WorkspaceAccessAction;
+import com.developer.service.MainTableViewService;
 import com.developer.util.BpmnIdRewriter;
 import com.developer.util.BpmnProcessIdRewriter;
 import com.developer.util.DeveloperWorkstationSequenceSynchronizer;
@@ -68,6 +69,7 @@ class FunctionUnitCloner {
     private final FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService;
     private final DeveloperWorkstationSequenceSynchronizer sequenceSynchronizer;
     private final FunctionUnitCodeGenerator codeGenerator;
+    private final MainTableViewService mainTableViewService;
 
     @Transactional
     FunctionUnit clone(Long id, String newName) {
@@ -201,6 +203,7 @@ class FunctionUnitCloner {
             processDefinitionRepository.save(clonedProcess);
         }
 
+        mainTableViewService.cloneViewsForFunctionUnit(id, cloned, tableMapping);
         return cloned;
     }
 

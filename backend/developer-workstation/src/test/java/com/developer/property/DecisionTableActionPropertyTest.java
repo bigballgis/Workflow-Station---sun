@@ -58,7 +58,8 @@ public class DecisionTableActionPropertyTest {
                 mock(FunctionUnitWorkspaceAccessService.class),
                 devGroupAssignmentRepository,
                 mock(com.developer.component.VersionComponent.class),
-                mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class)
+                mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class),
+                mock(com.developer.service.MainTableViewService.class)
         );
         idGenerator = new AtomicLong(1L);
     }

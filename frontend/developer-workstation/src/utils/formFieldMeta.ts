@@ -51,6 +51,15 @@ export function applyTableFieldMetaToFormRule(
   rule: Record<string, unknown>,
 ): Record<string, unknown> {
   const props = { ...((rule.props as Record<string, unknown> | undefined) || {}) }
+
+  // Designer explicitly turned Readonly off — do not re-apply PK/FK readonly after Save reload.
+  if (props.readonly === false || rule.readonly === false) {
+    delete props.disabled
+    const next: Record<string, unknown> = { ...rule, props, readonly: false }
+    delete next.disabled
+    return next
+  }
+
   let readonly = props.readonly === true || rule.readonly === true
 
   if (field.isForeignKey && isFkReadonly(toFkMeta(field))) {

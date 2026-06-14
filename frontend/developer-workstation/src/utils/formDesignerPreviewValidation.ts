@@ -20,6 +20,10 @@ export type DesignerPreviewRef = {
     api?: { formData?: () => Record<string, unknown> }
     value?: Record<string, unknown> | unknown[]
   }
+  propsForm?: {
+    api?: { formData?: () => Record<string, unknown> }
+    value?: Record<string, unknown> | unknown[]
+  }
 }
 
 function findRuleByField(rules: unknown[], field: string): Record<string, unknown> | null {
@@ -49,6 +53,114 @@ export type FlushValidatePanelResult = {
   validate?: unknown
   $required?: unknown
   source?: 'formData' | 'value' | 'none'
+}
+
+export type FlushPropsPanelResult = {
+  flushed: boolean
+  field?: string
+  readonly?: boolean
+  source?: 'propsForm' | 'baseForm' | 'none'
+}
+
+function readDesignerPanelFormData(
+  api?: { formData?: () => Record<string, unknown> },
+  fallbackValue?: Record<string, unknown> | unknown[],
+): Record<string, unknown> | null {
+  if (typeof api?.formData === 'function') {
+    try {
+      const data = api.formData()
+      if (data && typeof data === 'object' && !Array.isArray(data) && Object.keys(data).length > 0) {
+        return data as Record<string, unknown>
+      }
+    } catch {
+      /* ignore designer panel read errors */
+    }
+  }
+  if (fallbackValue && typeof fallbackValue === 'object' && !Array.isArray(fallbackValue)) {
+    return fallbackValue as Record<string, unknown>
+  }
+  return null
+}
+
+/** fc-designer stores some props as `formCreateProps>readonly` in the props panel formData. */
+function extractReadonlyFromDesignerPanel(panel: Record<string, unknown> | null): boolean | undefined {
+  if (!panel) return undefined
+  if ('readonly' in panel && typeof panel.readonly === 'boolean') return panel.readonly
+  if ('formCreateProps>readonly' in panel && typeof panel['formCreateProps>readonly'] === 'boolean') {
+    return panel['formCreateProps>readonly'] as boolean
+  }
+  if ('props>readonly' in panel && typeof panel['props>readonly'] === 'boolean') {
+    return panel['props>readonly'] as boolean
+  }
+  const nestedProps = panel.props
+  if (nestedProps && typeof nestedProps === 'object' && !Array.isArray(nestedProps)) {
+    const ro = (nestedProps as Record<string, unknown>).readonly
+    if (typeof ro === 'boolean') return ro
+  }
+  return undefined
+}
+
+function applyReadonlyFlushToActiveRule(
+  activeRule: Record<string, unknown>,
+  panelReadonly: boolean,
+): boolean {
+  const props = { ...((activeRule.props as Record<string, unknown> | undefined) || {}) }
+  if (panelReadonly === false) {
+    activeRule.readonly = false
+    props.readonly = false
+    delete props.disabled
+    delete activeRule.disabled
+    activeRule.props = props
+    return true
+  }
+  if (panelReadonly === true) {
+    activeRule.readonly = true
+    props.readonly = true
+    activeRule.props = props
+    return true
+  }
+  return false
+}
+
+/**
+ * fc-designer props panel can show Readonly OFF while rule.readonly (PK sync) stays true.
+ * Flush panel state onto activeRule before getRule()/Save so persist + metadata sync respect designer intent.
+ */
+export function flushDesignerPropsPanelToActiveRule(
+  ref: DesignerPreviewRef | null | undefined,
+): FlushPropsPanelResult {
+  commitDesignerPanelEditsBeforePreview()
+  if (!ref || typeof ref !== 'object') {
+    return { flushed: false, source: 'none' }
+  }
+  const activeRule = resolveFlushTargetRule(ref)
+  if (!activeRule) {
+    return { flushed: false, source: 'none' }
+  }
+
+  const propsPanel = readDesignerPanelFormData(ref.propsForm?.api, ref.propsForm?.value)
+  let panelReadonly = extractReadonlyFromDesignerPanel(propsPanel)
+  let source: FlushPropsPanelResult['source'] = propsPanel ? 'propsForm' : 'none'
+
+  if (panelReadonly === undefined) {
+    const basePanel = readDesignerPanelFormData(ref.baseForm?.api)
+    panelReadonly = extractReadonlyFromDesignerPanel(basePanel)
+    if (basePanel && panelReadonly !== undefined) {
+      source = 'baseForm'
+    }
+  }
+
+  if (panelReadonly === undefined) {
+    return { flushed: false, field: String(activeRule.field ?? ''), source: 'none' }
+  }
+
+  const flushed = applyReadonlyFlushToActiveRule(activeRule, panelReadonly)
+  return {
+    flushed,
+    field: String(activeRule.field ?? ''),
+    readonly: panelReadonly,
+    source,
+  }
 }
 
 /** Blur focused config-panel control so fc-designer commits pending validate/base edits. */

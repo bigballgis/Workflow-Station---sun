@@ -144,6 +144,12 @@ const routes: RouteRecordRaw[] = [
         name: 'RelationTables',
         component: () => import('@/views/relation-tables/index.vue'),
         meta: { titleKey: 'menu.relationTables', icon: 'Grid' }
+      },
+      {
+        path: 'views/:functionUnitCode?',
+        name: 'MainTableViews',
+        component: () => import('@/views/main-table-views/index.vue'),
+        meta: { titleKey: 'menu.views', icon: 'View' }
       }
     ]
   },

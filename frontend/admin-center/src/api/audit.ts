@@ -87,6 +87,10 @@ export interface AuditQueryRequest {
   endTime?: string
   /** When set, export/query only these audit log IDs (batch export). */
   ids?: string[]
+  /** Export sort field (frontend column prop, e.g. createdAt). */
+  sortField?: string
+  /** Export sort order: asc | desc */
+  sortOrder?: 'asc' | 'desc'
 }
 
 export interface AnomalyDetectionResult {
@@ -141,14 +145,23 @@ export const validatePassword = (password: string): Promise<PasswordValidationRe
 export const getAuditResourceTypes = (): Promise<string[]> =>
   request.get('/security/audit-logs/resource-types')
 
-export const queryAuditLogs = (
+export const queryAuditLogs = async (
   query: AuditQueryRequest,
   page: number = 0,
   size: number = 20,
   sortField: string = 'createdAt',
   sortOrder: string = 'desc'
-): Promise<PageResult<AuditLog>> =>
-  request.post(`/security/audit-logs/query?page=${page}&size=${size}&sort=${sortField},${sortOrder}`, query)
+): Promise<PageResult<AuditLog>> => {
+  const result = await request.post(
+    `/security/audit-logs/query?page=${page}&size=${size}&sort=${sortField},${sortOrder}`,
+    query
+  ) as PageResult<AuditLog>
+  result.content = result.content.map(row => {
+    const r = row as AuditLog & { userName?: string }
+    return { ...row, username: r.username ?? r.userName ?? row.username }
+  })
+  return result
+}
 
 export const getAuditLogsByUser = (
   userId: string,
@@ -177,10 +190,16 @@ export const generateComplianceReport = (days: number = 30): Promise<ComplianceR
 
 // ==================== 导出 API ====================
 
-export const exportAuditLogs = async (query: AuditQueryRequest): Promise<void> => {
-  const response = await request.post('/security/audit-logs/export', query, {
-    responseType: 'blob'
-  })
+export const exportAuditLogs = async (
+  query: AuditQueryRequest,
+  sortField: string = 'timestamp',
+  sortOrder: 'asc' | 'desc' = 'desc'
+): Promise<void> => {
+  const response = await request.post(
+    `/security/audit-logs/export?sort=${encodeURIComponent(sortField)},${sortOrder}`,
+    { ...query, sortField, sortOrder },
+    { responseType: 'blob' }
+  )
   const blob = new Blob([response as unknown as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
   const url = window.URL.createObjectURL(blob)
   const link = document.createElement('a')

@@ -33,9 +33,38 @@ export const useAuditStore = defineStore('audit', () => {
   // ==================== Actions ====================
 
   const SORT_FIELD_MAP: Record<string, string> = {
-    createdAt: 'timestamp', username: 'userName', result: 'success', duration: 'timestamp',
+    createdAt: 'timestamp',
+    username: 'userName',
+    result: 'success',
+    duration: 'durationMs',
+    action: 'action',
+    resourceType: 'resourceType',
+    ipAddress: 'ipAddress',
   }
   const toEntityField = (field: string) => SORT_FIELD_MAP[field] ?? field
+
+  const getSortParams = () => ({
+    field: toEntityField(sort.field),
+    order: (sort.order === 'ascending' ? 'asc' : 'desc') as 'asc' | 'desc',
+  })
+
+  const compareLogField = (field: string, a: AuditLog, b: AuditLog): number => {
+    const av = a[field as keyof AuditLog]
+    const bv = b[field as keyof AuditLog]
+    if (av == null && bv == null) return 0
+    if (av == null) return -1
+    if (bv == null) return 1
+    if (field === 'createdAt') {
+      return new Date(String(av)).getTime() - new Date(String(bv)).getTime()
+    }
+    if (field === 'duration') {
+      return Number(av) - Number(bv)
+    }
+    if (typeof av === 'number' && typeof bv === 'number') {
+      return av - bv
+    }
+    return String(av).localeCompare(String(bv))
+  }
 
   const buildQueryRequest = (): AuditQueryRequest => {
     const req: AuditQueryRequest = { ...query }
@@ -50,8 +79,7 @@ export const useAuditStore = defineStore('audit', () => {
   }
 
   const fetchAllLogsForExport = async (): Promise<AuditLog[]> => {
-    const sortDir = sort.order === 'ascending' ? 'asc' : 'desc'
-    const entityField = toEntityField(sort.field)
+    const { field: entityField, order: sortDir } = getSortParams()
     const pageSize = 500
     const all: AuditLog[] = []
     let page = 0
@@ -65,14 +93,13 @@ export const useAuditStore = defineStore('audit', () => {
       page += 1
     }
 
-    return all
+    return sortLogs(all)
   }
 
   const fetchLogs = async () => {
     loading.value = true
     try {
-      const sortDir = sort.order === 'ascending' ? 'asc' : 'desc'
-      const entityField = toEntityField(sort.field)
+      const { field: entityField, order: sortDir } = getSortParams()
       const result = await queryAuditLogs(buildQueryRequest(), pagination.page - 1, pagination.size, entityField, sortDir)
       logs.value = result.content
       total.value = result.totalElements
@@ -110,11 +137,17 @@ export const useAuditStore = defineStore('audit', () => {
     pagination.page = 1
   }
 
+  const sortLogs = (items: AuditLog[]): AuditLog[] => {
+    const field = sort.field
+    const dir = sort.order === 'ascending' ? 1 : -1
+    return [...items].sort((a, b) => compareLogField(field, a, b) * dir)
+  }
+
   return {
     logs, total, loading,
     query, dateRange, pagination, sort,
     resourceTypes,
     fetchLogs, fetchResourceTypes, fetchAllLogsForExport, resetQuery, setSort,
-    buildQueryRequest,
+    buildQueryRequest, sortLogs, toEntityField, getSortParams,
   }
 })

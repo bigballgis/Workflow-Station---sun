@@ -1,12 +1,14 @@
 package com.admin.service.impl;
 
+import com.admin.audit.AuditActorResolver;
+import com.admin.audit.AuditContextHolder;
 import com.admin.entity.RelationTableAuditLog;
 import com.admin.repository.RelationTableAuditLogRepository;
+import com.admin.repository.UserRepository;
 import com.admin.service.RelationTableAuditService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.platform.common.enums.RelationAuditAction;
-import com.platform.security.util.SecurityContextUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -27,6 +29,7 @@ public class RelationTableAuditServiceImpl implements RelationTableAuditService 
 
     private final RelationTableAuditLogRepository auditLogRepository;
     private final ObjectMapper objectMapper;
+    private final UserRepository userRepository;
 
     @Override
     @Transactional
@@ -71,8 +74,11 @@ public class RelationTableAuditServiceImpl implements RelationTableAuditService 
 
     private void saveAuditLog(Long tableId, String tableName, String rowId,
                               RelationAuditAction action, String oldValue, String newValue) {
-        String operatorId = SecurityContextUtils.getCurrentUserId().orElse("system");
-        String operatorName = SecurityContextUtils.getCurrentUsername().orElse("system");
+        AuditContextHolder.AuditContext ctx = AuditContextHolder.get();
+        String rawUserId = AuditActorResolver.resolveUserId(ctx);
+        String rawUserName = AuditActorResolver.resolveUserName(ctx, rawUserId, userRepository);
+        AuditActorResolver.OperatorIdentity operator = AuditActorResolver.normalizeOperator(
+                rawUserId, rawUserName, userRepository);
 
         RelationTableAuditLog auditLog = RelationTableAuditLog.builder()
                 .tableId(tableId)
@@ -81,8 +87,8 @@ public class RelationTableAuditServiceImpl implements RelationTableAuditService 
                 .action(action.getCode())
                 .oldValue(oldValue)
                 .newValue(newValue)
-                .operatorId(operatorId)
-                .operatorName(operatorName)
+                .operatorId(operator.userId())
+                .operatorName(operator.userName())
                 .operatedAt(Instant.now())
                 .build();
 

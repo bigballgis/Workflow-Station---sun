@@ -1,5 +1,6 @@
 package com.admin.controller;
 
+import com.admin.audit.AuditActorResolver;
 import com.admin.component.SecurityAuditComponent;
 import com.admin.component.SecurityAuditComponent.*;
 import com.admin.entity.AuditLog;
@@ -26,6 +27,8 @@ import org.springframework.web.bind.annotation.*;
 
 import java.io.ByteArrayOutputStream;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 import com.platform.security.util.SecurityContextUtils;
@@ -170,21 +173,55 @@ public class SecurityAuditController {
     
     @PostMapping("/audit-logs/export")
     @Operation(summary = "Export audit logs")
-    public ResponseEntity<byte[]> exportAuditLogs(@RequestBody AuditQueryRequestDto requestDto) {
+    public ResponseEntity<byte[]> exportAuditLogs(
+            @RequestBody AuditQueryRequestDto requestDto,
+            Pageable pageable) {
         AuditQueryRequest request = toInternalRequest(requestDto);
-        Page<AuditLog> page = securityAuditComponent.queryAuditLogs(request, Pageable.unpaged());
+        Sort sort = resolveExportSort(pageable, requestDto);
+        Page<AuditLog> page = securityAuditComponent.queryAuditLogs(
+                request, PageRequest.of(0, Integer.MAX_VALUE, sort));
         byte[] excel = buildAuditLogExcel(page.getContent());
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=audit-logs.xlsx")
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .body(excel);
     }
+
+    private Sort resolveExportSort(Pageable pageable, AuditQueryRequestDto dto) {
+        if (pageable.getSort().isSorted()) {
+            return pageable.getSort();
+        }
+        String field = mapSortField(dto.getSortField());
+        if (field != null && !field.isBlank()) {
+            Sort.Direction dir = "asc".equalsIgnoreCase(dto.getSortOrder())
+                    ? Sort.Direction.ASC : Sort.Direction.DESC;
+            return Sort.by(dir, field);
+        }
+        return Sort.by(Sort.Direction.DESC, "timestamp");
+    }
+
+    private static String mapSortField(String field) {
+        if (field == null || field.isBlank()) {
+            return null;
+        }
+        return switch (field) {
+            case "createdAt" -> "timestamp";
+            case "username" -> "userName";
+            case "duration" -> "durationMs";
+            case "result" -> "success";
+            default -> field;
+        };
+    }
     
+    private static final ZoneId EXPORT_ZONE = ZoneId.of("Asia/Shanghai");
+    private static final DateTimeFormatter EXPORT_TIME_FORMAT =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS").withZone(EXPORT_ZONE);
+
     private byte[] buildAuditLogExcel(List<AuditLog> logs) {
         try (Workbook wb = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             Sheet sheet = wb.createSheet("Audit Log");
             Row header = sheet.createRow(0);
-            String[] headers = {"Action", "Operator", "Resource Type", "Resource ID", "IP Address", "Result", "Time"};
+            String[] headers = {"Action", "Operator", "Resource Type", "Resource ID", "IP Address", "Result", "Duration", "Time"};
             for (int i = 0; i < headers.length; i++) {
                 header.createCell(i).setCellValue(headers[i]);
             }
@@ -192,12 +229,14 @@ public class SecurityAuditController {
                 AuditLog log = logs.get(i);
                 Row row = sheet.createRow(i + 1);
                 row.createCell(0).setCellValue(log.getAction() != null ? log.getAction().name() : "");
-                row.createCell(1).setCellValue(log.getUserName() != null ? log.getUserName() : "");
+                row.createCell(1).setCellValue(AuditActorResolver.operatorDisplayName(log));
                 row.createCell(2).setCellValue(log.getResourceType() != null ? log.getResourceType() : "");
                 row.createCell(3).setCellValue(log.getResourceId() != null ? log.getResourceId() : "");
                 row.createCell(4).setCellValue(log.getIpAddress() != null ? log.getIpAddress() : "");
                 row.createCell(5).setCellValue(Boolean.TRUE.equals(log.getSuccess()) ? "Success" : "Failure");
-                row.createCell(6).setCellValue(log.getTimestamp() != null ? log.getTimestamp().toString() : "");
+                row.createCell(6).setCellValue(log.getDurationMs() != null ? log.getDurationMs() + "ms" : "");
+                row.createCell(7).setCellValue(log.getTimestamp() != null
+                        ? EXPORT_TIME_FORMAT.format(log.getTimestamp()) : "");
             }
             wb.write(out);
             return out.toByteArray();
@@ -219,6 +258,10 @@ public class SecurityAuditController {
         private String startTime;
         private String endTime;
         private Boolean success;
+        /** Frontend sort field (e.g. createdAt, username); mapped to entity property names. */
+        private String sortField;
+        /** asc or desc */
+        private String sortOrder;
     }
     
     // ==================== Anomaly Detection ====================

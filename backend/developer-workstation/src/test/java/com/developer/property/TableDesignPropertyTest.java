@@ -40,7 +40,8 @@ public class TableDesignPropertyTest {
                 tableRepo, fieldRepo, fkRepo, functionUnitRepo, formRepo, formTableBindingRepo, i18nService,
                 mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class),
                 mock(com.developer.service.FieldFkPkSyncService.class),
-                mock(JdbcTemplate.class));
+                mock(JdbcTemplate.class),
+                mock(com.developer.service.MainTableViewService.class));
         
         assertThat(component).isNotNull();
         assertThat(tableName).matches("tbl_[a-z]+");
@@ -67,7 +68,8 @@ public class TableDesignPropertyTest {
                 tableRepo, fieldRepo, fkRepo, functionUnitRepo, formRepo, formTableBindingRepo, i18nService,
                 mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class),
                 mock(com.developer.service.FieldFkPkSyncService.class),
-                mock(JdbcTemplate.class));
+                mock(JdbcTemplate.class),
+                mock(com.developer.service.MainTableViewService.class));
         
         assertThat(component).isNotNull();
         assertThat(dialect).isNotNull();

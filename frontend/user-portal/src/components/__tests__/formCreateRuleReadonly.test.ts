@@ -5,6 +5,11 @@ describe('isFormCreateRuleReadonly', () => {
   it('honours designer props.readonly', () => {
     expect(isFormCreateRuleReadonly({ props: { readonly: true } })).toBe(true)
     expect(isFormCreateRuleReadonly({ props: { readonly: false } })).toBe(false)
+    expect(isFormCreateRuleReadonly({
+      readonly: false,
+      disabled: true,
+      props: { readonly: false, disabled: true },
+    })).toBe(false)
   })
 })
 
