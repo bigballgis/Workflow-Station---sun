@@ -20,7 +20,7 @@ export const MI_REGRESSION_SCENARIOS = [
   {
     id: '1438-attachment-rows',
     issue: '#1438',
-    unitTests: ['subTableRowMetaFields.test.ts'],
+    unitTests: ['subTableRowMetaFields.predicates.test.ts', 'subTableRowMetaFields.merge.test.ts'],
     script: 'verify-mi-attachment-rows.mjs',
     screenshots: ['task-093962-attachment-table.png', 'task-093962-subtask-grid.png'],
   },
