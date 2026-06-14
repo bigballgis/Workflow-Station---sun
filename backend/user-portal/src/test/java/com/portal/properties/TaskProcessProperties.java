@@ -4,7 +4,9 @@ import com.portal.client.WorkflowEngineClient;
 import com.portal.component.ChangeHistoryComponent;
 import com.portal.component.DelegatedTaskQueryComponent;
 import com.portal.component.MiCollectionVariableBuilder;
+import com.portal.component.MiOverlayComponent;
 import com.portal.component.MiParticipantEnrichmentComponent;
+import com.portal.component.SubTablePhysicalMetadataCache;
 import com.portal.component.ProcessInstanceSyncComponent;
 import com.portal.component.SubTableRowAssignmentComponent;
 import com.portal.component.TaskApprovalCompletionComponent;
@@ -123,6 +125,10 @@ class TaskProcessProperties {
             jdbcTemplate,
             taskPermissionEvaluator
         );
+        MiOverlayComponent miOverlayComponent = new MiOverlayComponent(
+            workflowEngineClient,
+            new SubTablePhysicalMetadataCache(jdbcTemplate)
+        );
         taskProcessComponent = new TaskProcessComponent(
             taskQueryComponent,
             delegationAuditRepository,
@@ -130,7 +136,8 @@ class TaskProcessProperties {
             taskPermissionEvaluator,
             subTableRowAssignmentComponent,
             taskApprovalCompletionComponent,
-            processInstanceSyncComponent
+            processInstanceSyncComponent,
+            miOverlayComponent
         );
         random = new Random();
 
