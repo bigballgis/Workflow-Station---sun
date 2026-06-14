@@ -4,9 +4,6 @@ import com.workflow.entity.ExceptionRecord;
 import com.workflow.entity.ExceptionRecord.ExceptionSeverity;
 import com.workflow.entity.ExceptionRecord.ExceptionStatus;
 import com.workflow.repository.ExceptionRecordRepository;
-import org.flowable.engine.RuntimeService;
-import org.flowable.engine.runtime.Execution;
-import org.flowable.engine.runtime.ProcessInstance;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,16 +34,19 @@ public class RetryAndCompensationComponent {
     
     @Autowired
     private ExceptionRecordRepository exceptionRecordRepository;
-    
-    @Autowired(required = false)
-    private RuntimeService runtimeService;
-    
+
     @Autowired(required = false)
     private ExceptionHandlerComponent exceptionHandler;
-    
+
     @Autowired(required = false)
     private NotificationManagerComponent notificationManager;
-    
+
+    @Autowired
+    private RetryPolicy retryPolicy;
+
+    @Autowired
+    private CompensationExecutor compensationExecutor;
+
     // 死信队列
     private final Queue<DeadLetterMessage> deadLetterQueue = new ConcurrentLinkedQueue<>();
     
@@ -56,13 +56,7 @@ public class RetryAndCompensationComponent {
     // 重试配置
     @Value("${workflow.retry.max-attempts:3}")
     private int maxRetryAttempts = 3;
-    
-    @Value("${workflow.retry.base-delay-seconds:30}")
-    private int baseDelaySeconds = 30;
-    
-    @Value("${workflow.retry.max-delay-minutes:60}")
-    private int maxDelayMinutes = 60;
-    
+
     @Value("${workflow.deadletter.retention-days:30}")
     private int deadLetterRetentionDays = 30;
 
@@ -218,7 +212,7 @@ public class RetryAndCompensationComponent {
             record.setLastRetryTime(LocalDateTime.now());
             
             // 尝试执行重试逻辑
-            boolean retrySuccess = attemptRetryExecution(record);
+            boolean retrySuccess = retryPolicy.attemptRetryExecution(record);
             
             if (retrySuccess) {
                 // 重试成功
@@ -233,7 +227,7 @@ public class RetryAndCompensationComponent {
                         "重试成功", null, false);
             } else {
                 // 重试失败，计算下次重试时间
-                LocalDateTime nextRetryTime = calculateNextRetryTime(record.getRetryCount());
+                LocalDateTime nextRetryTime = retryPolicy.calculateNextRetryTime(record.getRetryCount());
                 record.setNextRetryTime(nextRetryTime);
                 record.setStatus(ExceptionStatus.PENDING);
                 exceptionRecordRepository.save(record);
@@ -484,7 +478,7 @@ public class RetryAndCompensationComponent {
                     .toList();
             
             for (CompensationTransaction transaction : transactions) {
-                Map<String, Object> result = executeCompensationTransaction(transaction);
+                Map<String, Object> result = compensationExecutor.executeCompensationTransaction(transaction);
                 results.add(result);
             }
             
@@ -495,144 +489,6 @@ public class RetryAndCompensationComponent {
             log.error("执行补偿事务失败: {}", e.getMessage(), e);
             throw new RuntimeException("执行补偿事务失败: " + e.getMessage(), e);
         }
-    }
-
-    /**
-     * 执行单个补偿事务
-     */
-    private Map<String, Object> executeCompensationTransaction(CompensationTransaction transaction) {
-        log.info("执行补偿事务: id={}, type={}", transaction.getId(), transaction.getCompensationType());
-        
-        Map<String, Object> result = new HashMap<>();
-        result.put("transactionId", transaction.getId());
-        result.put("activityId", transaction.getActivityId());
-        result.put("compensationType", transaction.getCompensationType());
-        result.put("executedTime", LocalDateTime.now());
-        
-        try {
-            // 根据补偿类型执行不同的补偿逻辑
-            switch (transaction.getCompensationType().toUpperCase()) {
-                case "ROLLBACK_VARIABLES":
-                    executeVariableRollback(transaction);
-                    break;
-                    
-                case "CANCEL_TASK":
-                    executeCancelTask(transaction);
-                    break;
-                    
-                case "TERMINATE_PROCESS":
-                    executeTerminateProcess(transaction);
-                    break;
-                    
-                case "CUSTOM":
-                    executeCustomCompensation(transaction);
-                    break;
-                    
-                default:
-                    log.warn("未知的补偿类型: {}", transaction.getCompensationType());
-            }
-            
-            transaction.setExecuted(true);
-            transaction.setExecutedTime(LocalDateTime.now());
-            transaction.setSuccess(true);
-            
-            result.put("success", true);
-            result.put("message", "补偿执行成功");
-            
-        } catch (Exception e) {
-            log.error("执行补偿事务失败: {}", e.getMessage(), e);
-            
-            transaction.setExecuted(true);
-            transaction.setExecutedTime(LocalDateTime.now());
-            transaction.setSuccess(false);
-            transaction.setErrorMessage(e.getMessage());
-            
-            result.put("success", false);
-            result.put("error", e.getMessage());
-        }
-        
-        return result;
-    }
-
-    /**
-     * 执行变量回滚补偿
-     */
-    private void executeVariableRollback(CompensationTransaction transaction) {
-        log.info("执行变量回滚: processInstanceId={}", transaction.getProcessInstanceId());
-        
-        if (runtimeService == null) {
-            log.warn("RuntimeService不可用，跳过变量回滚");
-            return;
-        }
-        
-        Map<String, Object> originalValues = transaction.getCompensationData();
-        if (originalValues != null && !originalValues.isEmpty()) {
-            try {
-                ProcessInstance instance = runtimeService.createProcessInstanceQuery()
-                        .processInstanceId(transaction.getProcessInstanceId())
-                        .singleResult();
-                
-                if (instance != null) {
-                    runtimeService.setVariables(transaction.getProcessInstanceId(), originalValues);
-                    log.info("变量已回滚: {} 个变量", originalValues.size());
-                }
-            } catch (Exception e) {
-                log.error("变量回滚失败: {}", e.getMessage());
-                throw e;
-            }
-        }
-    }
-
-    /**
-     * 执行取消任务补偿
-     */
-    private void executeCancelTask(CompensationTransaction transaction) {
-        log.info("执行取消任务: activityId={}", transaction.getActivityId());
-        
-        // 任务取消逻辑（简化实现）
-        log.info("任务取消补偿已执行");
-    }
-
-    /**
-     * 执行终止流程补偿
-     */
-    private void executeTerminateProcess(CompensationTransaction transaction) {
-        log.info("执行终止流程: processInstanceId={}", transaction.getProcessInstanceId());
-        
-        if (runtimeService == null) {
-            log.warn("RuntimeService不可用，跳过流程终止");
-            return;
-        }
-        
-        try {
-            ProcessInstance instance = runtimeService.createProcessInstanceQuery()
-                    .processInstanceId(transaction.getProcessInstanceId())
-                    .singleResult();
-            
-            if (instance != null) {
-                String reason = (String) transaction.getCompensationData().getOrDefault("reason", "补偿终止");
-                runtimeService.deleteProcessInstance(transaction.getProcessInstanceId(), reason);
-                log.info("流程已终止: {}", transaction.getProcessInstanceId());
-            }
-        } catch (Exception e) {
-            log.error("终止流程失败: {}", e.getMessage());
-            throw e;
-        }
-    }
-
-    /**
-     * 执行自定义补偿
-     */
-    private void executeCustomCompensation(CompensationTransaction transaction) {
-        log.info("执行自定义补偿: activityId={}", transaction.getActivityId());
-        
-        // 自定义补偿逻辑（可以通过回调或事件扩展）
-        Map<String, Object> data = transaction.getCompensationData();
-        if (data.containsKey("callback")) {
-            log.info("执行自定义补偿回调: {}", data.get("callback"));
-        }
-        
-        log.info("自定义补偿已执行");
     }
 
     /**
@@ -664,64 +520,6 @@ public class RetryAndCompensationComponent {
     }
 
     // ==================== 辅助方法 ====================
-
-    /**
-     * 尝试执行重试逻辑
-     */
-    private boolean attemptRetryExecution(ExceptionRecord record) {
-        log.info("尝试重试执行: processInstanceId={}, taskId={}", 
-                record.getProcessInstanceId(), record.getTaskId());
-        
-        try {
-            // 检查流程实例是否仍然存在
-            if (runtimeService != null && record.getProcessInstanceId() != null) {
-                ProcessInstance instance = runtimeService.createProcessInstanceQuery()
-                        .processInstanceId(record.getProcessInstanceId())
-                        .singleResult();
-                
-                if (instance == null) {
-                    // 流程实例已不存在，视为成功（无需重试）
-                    log.info("流程实例已不存在，标记为成功");
-                    return true;
-                }
-                
-                // 如果流程被挂起，尝试激活
-                if (instance.isSuspended()) {
-                    runtimeService.activateProcessInstanceById(record.getProcessInstanceId());
-                    log.info("流程实例已激活");
-                }
-                
-                // 尝试触发流程继续执行
-                List<Execution> executions = runtimeService.createExecutionQuery()
-                        .processInstanceId(record.getProcessInstanceId())
-                        .list();
-                
-                if (!executions.isEmpty()) {
-                    // 流程有活跃的执行，视为重试成功
-                    log.info("流程有活跃执行，重试成功");
-                    return true;
-                }
-            }
-            
-            // 默认返回false，表示需要继续重试
-            return false;
-            
-        } catch (Exception e) {
-            log.error("重试执行失败: {}", e.getMessage(), e);
-            return false;
-        }
-    }
-
-    /**
-     * 计算下次重试时间（指数退避）
-     */
-    private LocalDateTime calculateNextRetryTime(int retryCount) {
-        long delaySeconds = (long) (baseDelaySeconds * Math.pow(2, retryCount));
-        long maxDelaySeconds = maxDelayMinutes * 60L;
-        delaySeconds = Math.min(delaySeconds, maxDelaySeconds);
-        
-        return LocalDateTime.now().plusSeconds(delaySeconds);
-    }
 
     /**
      * 发送死信队列告警

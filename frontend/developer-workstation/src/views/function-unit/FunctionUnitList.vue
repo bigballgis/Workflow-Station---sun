@@ -309,154 +309,71 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ElMessage, ElMessageBox, type FormInstance } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Plus, Upload, Download } from '@element-plus/icons-vue'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
-import { functionUnitApi, type FunctionUnitResponse } from '@/api/functionUnit'
+import { type FunctionUnitResponse } from '@/api/functionUnit'
 import IconUploadField from '@/components/icon/IconUploadField.vue'
 import FunctionUnitCard from '@/components/function-unit/FunctionUnitCard.vue'
 import FunctionUnitImportDialog from '@/components/function-unit/FunctionUnitImportDialog.vue'
-import { getTags, setTags, getAllAvailableTags, matchesTags } from '@/utils/tagStorage'
 import { isAuthenticated } from '@/api/auth'
 import { permissions } from '@/utils/permission'
 import { redirectToUnifiedLogin } from '@/utils/sso'
 import { resolveUserFacingHttpMessage } from '@/utils/httpErrorMessage'
+import { useFunctionUnitFilters } from '@/composables/functionUnitList/useFunctionUnitFilters'
+import { useFunctionUnitForm } from '@/composables/functionUnitList/useFunctionUnitForm'
+import { useFunctionUnitExport } from '@/composables/functionUnitList/useFunctionUnitExport'
 
 const { t } = useI18n()
 const router = useRouter()
 const store = useFunctionUnitStore()
 
-const searchForm = reactive({ name: '', status: '', tags: [] as string[] })
 const pagination = reactive({ page: 1, size: 20 })
-const showFormDialog = ref(false)
 const showImportDialog = ref(false)
-const showExportDialog = ref(false)
-const exporting = ref(false)
-const exportTargetId = ref<number | null>(null)
-const formDialogMode = ref<'create' | 'settings'>('create')
-const settingsItemId = ref<number | null>(null)
-const formSubmitting = ref(false)
-const formRef = ref<FormInstance>()
-const basicForm = reactive({ 
-  name: '', 
-  description: '', 
-  iconId: null as number | null,
-  tags: [] as string[]
-})
-const formDialogTitle = computed(() =>
-  formDialogMode.value === 'create' ? t('functionUnit.create') : t('functionUnit.settings')
-)
-const formRules = computed(() => ({
-  name: [{ required: true, message: t('functionUnit.enterName'), trigger: 'blur' }]
-}))
 
-function resetBasicForm() {
-  basicForm.name = ''
-  basicForm.description = ''
-  basicForm.iconId = null
-  basicForm.tags = []
-}
-
-function openCreateDialog() {
-  formDialogMode.value = 'create'
-  settingsItemId.value = null
-  resetBasicForm()
-  showFormDialog.value = true
-}
-
-function handleFormDialogClosed() {
-  formRef.value?.resetFields()
-  settingsItemId.value = null
-}
-
-// Get all available tags for filter dropdown
-const availableTags = computed(() => getAllAvailableTags())
-
-// Get tags for a specific item
-function getItemTags(id: number): string[] {
-  return getTags(id)
-}
-
-// Filter list based on search criteria
-const filteredList = computed(() => {
-  return store.list.filter(item => {
-    // Filter by name
-    if (searchForm.name && !item.name.toLowerCase().includes(searchForm.name.toLowerCase())) {
-      return false
-    }
-    // Filter by status
-    if (searchForm.status && item.status !== searchForm.status) {
-      return false
-    }
-    // Filter by tags
-    if (searchForm.tags.length > 0) {
-      const itemTags = getTags(item.id)
-      if (!matchesTags(itemTags, searchForm.tags)) {
-        return false
-      }
-    }
-    return true
-  })
-})
+const storeList = computed(() => store.list)
 
 function loadData() {
   store.fetchList({ page: pagination.page - 1, size: pagination.size })
 }
 
-function handleSearch() {
-  pagination.page = 1
-  // Client-side filtering, no need to reload
-}
+const {
+  searchForm,
+  availableTags,
+  filteredList,
+  getItemTags,
+  handleSearch,
+  clearFilters,
+} = useFunctionUnitFilters({
+  list: storeList,
+  resetPage: () => { pagination.page = 1 },
+})
 
-function clearFilters() {
-  searchForm.name = ''
-  searchForm.status = ''
-  searchForm.tags = []
-}
+const {
+  showFormDialog,
+  formDialogMode,
+  formSubmitting,
+  formRef,
+  basicForm,
+  formDialogTitle,
+  formRules,
+  openCreateDialog,
+  handleFormDialogClosed,
+  handleSettings,
+  handleFormSubmit,
+} = useFunctionUnitForm({ store, reload: loadData })
+
+const {
+  showExportDialog,
+  exporting,
+  exportTargetId,
+  openExportDialog,
+  initExportSelection,
+  handleExport,
+} = useFunctionUnitExport({ list: storeList, filteredList })
 
 function handleEdit(item: FunctionUnitResponse) {
   router.push(`/function-units/${item.id}`)
-}
-
-function handleSettings(item: FunctionUnitResponse) {
-  formDialogMode.value = 'settings'
-  settingsItemId.value = item.id
-  basicForm.name = item.name
-  basicForm.description = item.description ?? ''
-  basicForm.iconId = item.iconId ?? null
-  basicForm.tags = [...getTags(item.id)]
-  showFormDialog.value = true
-}
-
-async function handleFormSubmit() {
-  await formRef.value?.validate()
-  formSubmitting.value = true
-  try {
-    const payload = {
-      name: basicForm.name.trim(),
-      description: basicForm.description?.trim() || undefined,
-      iconId: basicForm.iconId ?? undefined
-    }
-    if (formDialogMode.value === 'create') {
-      const result = await store.create(payload)
-      if (result) {
-        setTags(result.id, basicForm.tags)
-      }
-      ElMessage.success(t('functionUnit.createSuccess'))
-    } else if (settingsItemId.value != null) {
-      await store.update(settingsItemId.value, payload)
-      setTags(settingsItemId.value, basicForm.tags)
-      ElMessage.success(t('functionUnit.saveSuccess'))
-    }
-    showFormDialog.value = false
-    resetBasicForm()
-    loadData()
-  } catch (e: unknown) {
-    const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message
-    ElMessage.error(message || t('functionUnit.saveFailed'))
-  } finally {
-    formSubmitting.value = false
-  }
 }
 
 async function handleClone(item: FunctionUnitResponse) {
@@ -500,46 +417,6 @@ async function handleDelete(item: FunctionUnitResponse) {
   await store.remove(item.id)
   ElMessage.success(isArchived ? t('functionUnit.deletePermanentSuccess') : t('functionUnit.archiveSuccess'))
   loadData()
-}
-
-function openExportDialog() {
-  if (store.list.length === 0) return
-  showExportDialog.value = true
-}
-
-function initExportSelection() {
-  if (filteredList.value.length === 1) {
-    exportTargetId.value = filteredList.value[0].id
-  } else if (store.list.length === 1) {
-    exportTargetId.value = store.list[0].id
-  } else {
-    exportTargetId.value = null
-  }
-}
-
-async function handleExport() {
-  if (exportTargetId.value == null) return
-  const target = store.list.find(item => item.id === exportTargetId.value)
-  exporting.value = true
-  try {
-    const response = await functionUnitApi.exportFunctionUnit(exportTargetId.value)
-    const blob = new Blob([response as BlobPart], { type: 'application/zip' })
-    const url = window.URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `function-unit-${target?.name || exportTargetId.value}.zip`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    window.URL.revokeObjectURL(url)
-    ElMessage.success(t('functionUnit.exportSuccess'))
-    showExportDialog.value = false
-  } catch (e: unknown) {
-    const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message
-    ElMessage.error(message || t('functionUnit.exportFailed'))
-  } finally {
-    exporting.value = false
-  }
 }
 
 onMounted(() => {

@@ -127,26 +127,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick, shallowRef } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ProcessImportDialog from './process-designer/ProcessImportDialog.vue'
 import { ZoomIn, ZoomOut, Monitor, RefreshLeft, RefreshRight, Loading, CircleCheck } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
-import { functionUnitApi } from '@/api/functionUnit'
 import ProcessDebugPanel from '@/components/debug/ProcessDebugPanel.vue'
 import NodePropertiesPanel from '@/components/designer/properties/NodePropertiesPanel.vue'
-import {
-  bpmnIoCustomModdleDescriptor,
-  workflowPlatformModdleDescriptor,
-  flowableModdleDescriptor
-} from '@/utils/customModdle'
-import { customTranslateModule } from '@/utils/customTranslate'
-import { findLastTaskAssigneeTopologyViolations } from '@/utils/bpmnAssigneeTopology'
-
-// @ts-ignore - bpmn-js types
-import BpmnModeler from 'bpmn-js/lib/Modeler'
-import { layoutProcess } from 'bpmn-auto-layout'
+import { useProcessModeler } from '@/composables/processDesigner/useProcessModeler'
+import { useProcessCanvasControls } from '@/composables/processDesigner/useProcessCanvasControls'
+import { useProcessActions } from '@/composables/processDesigner/useProcessActions'
 
 // bpmn-js CSS must be imported in JS for Vite bundling compatibility
 import 'bpmn-js/dist/assets/diagram-js.css'
@@ -158,354 +148,59 @@ const props = defineProps<{ functionUnitId: number }>()
 
 const store = useFunctionUnitStore()
 const canvasRef = ref<HTMLElement>()
-const modelerReady = ref(false)
-const bpmnModelerRef = shallowRef<any>(null)
 const showDebugPanel = ref(false)
 const debugDrawerExpanded = ref(false)
 const showImportDialog = ref(false)
 const importXml = ref('')
-const saving = ref(false)
-const autoSaving = ref(false)
-const lastAutoSaveTime = ref<Date | null>(null)
-const currentZoom = ref(1)
-let highlightedDebugNodeId: string | null = null
 
-let bpmnModeler: any = null
-let autoSaveTimer: ReturnType<typeof setTimeout> | null = null
+// Modeler lifecycle: owns the bpmn-js instance and exposes a live accessor.
+const {
+  modelerReady,
+  bpmnModelerRef,
+  getModeler,
+  initModeler,
+  destroyModeler,
+} = useProcessModeler({
+  functionUnitId: props.functionUnitId,
+  canvasRef,
+  store,
+  // Wrapper closure breaks the cycle: scheduleAutoSave is defined below in useProcessActions.
+  onCommandStackChanged: () => scheduleAutoSave(),
+  t,
+})
 
-/** Fallback when no saved BPMN yet (legacy units): unique process id per function unit. */
-function defaultBpmnXml(processElementId: string) {
-  const safeId = /^[a-zA-Z][a-zA-Z0-9_.-]*$/.test(processElementId)
-    ? processElementId
-    : `Process_${props.functionUnitId}`
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<bpmn:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
-  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
-  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
-  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
-  id="Definitions_1"
-  targetNamespace="http://bpmn.io/schema/bpmn">
-  <bpmn:process id="${safeId}" isExecutable="true">
-    <bpmn:startEvent id="StartEvent_1" name="Start">
-      <bpmn:outgoing>Flow_1</bpmn:outgoing>
-    </bpmn:startEvent>
-    <bpmn:endEvent id="EndEvent_1" name="End">
-      <bpmn:incoming>Flow_1</bpmn:incoming>
-    </bpmn:endEvent>
-    <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="EndEvent_1" />
-  </bpmn:process>
-  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
-    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="${safeId}">
-      <bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1">
-        <dc:Bounds x="180" y="160" width="36" height="36" />
-        <bpmndi:BPMNLabel>
-          <dc:Bounds x="187" y="203" width="22" height="14" />
-        </bpmndi:BPMNLabel>
-      </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="EndEvent_1_di" bpmnElement="EndEvent_1">
-        <dc:Bounds x="400" y="160" width="36" height="36" />
-        <bpmndi:BPMNLabel>
-          <dc:Bounds x="407" y="203" width="22" height="14" />
-        </bpmndi:BPMNLabel>
-      </bpmndi:BPMNShape>
-      <bpmndi:BPMNEdge id="Flow_1_di" bpmnElement="Flow_1">
-        <di:waypoint x="216" y="178" />
-        <di:waypoint x="400" y="178" />
-      </bpmndi:BPMNEdge>
-    </bpmndi:BPMNPlane>
-  </bpmndi:BPMNDiagram>
-</bpmn:definitions>`
-}
+// Canvas viewport controls + debug-node highlight marker.
+const {
+  handleZoomIn,
+  handleZoomOut,
+  handleFitViewport,
+  handleUndo,
+  handleRedo,
+  handleDebugNodeChange,
+} = useProcessCanvasControls({ getModeler })
 
-/** AI / backend may attach an empty BPMNDiagram (plane only). bpmn-js imports it but renders nothing. */
-async function ensureBpmnHasVisualLayout(bpmnXml: string): Promise<string> {
-  if (!bpmnXml || /BPMNShape/i.test(bpmnXml)) {
-    return bpmnXml
-  }
-  try {
-    return await layoutProcess(bpmnXml)
-  } catch (e) {
-    console.warn('bpmn-auto-layout failed, using raw BPMN XML', e)
-    return bpmnXml
-  }
-}
-
-async function initModeler() {
-  if (!canvasRef.value) return
-  
-  try {
-    bpmnModeler = new BpmnModeler({
-      container: canvasRef.value,
-      keyboard: {
-        bindTo: document
-      },
-      moddleExtensions: {
-        custom: workflowPlatformModdleDescriptor,
-        custom_1: bpmnIoCustomModdleDescriptor,
-        flowable: flowableModdleDescriptor
-      },
-      additionalModules: [
-        customTranslateModule
-      ]
-    })
-
-    // Load existing process or default
-    await store.fetchProcess(props.functionUnitId)
-    const fallbackProcessId = `Process_${props.functionUnitId}`
-    let xml = store.process?.bpmnXml || defaultBpmnXml(fallbackProcessId)
-    xml = await ensureBpmnHasVisualLayout(xml)
-
-    console.log('Loading BPMN XML:', xml)
-    
-    try {
-      const result = await bpmnModeler.importXML(xml)
-      console.log('Import result:', result)
-    } catch (importErr: any) {
-      const importMessage = String(importErr?.message || '')
-      const missingDiagram = importMessage.includes('no diagram to display')
-      if (!missingDiagram) {
-        throw importErr
-      }
-
-      // Some AI-generated BPMN XML may contain semantic nodes but no BPMN DI section,
-      // which bpmn-js cannot render directly.
-      console.warn('BPMN XML has no DI diagram info, falling back to default diagram')
-      await bpmnModeler.importXML(defaultBpmnXml(fallbackProcessId))
-      ElMessage.warning(t('process.initializationFailed'))
-    }
-    
-    // Check if connections exist
-    const elementRegistry = bpmnModeler.get('elementRegistry')
-    const connections = elementRegistry.filter((element: any) => element.type === 'bpmn:SequenceFlow')
-    console.log('Connections found:', connections.length, connections)
-    
-    bpmnModelerRef.value = bpmnModeler
-    modelerReady.value = true
-    
-    // Fit to viewport after import
-    const canvas = bpmnModeler.get('canvas')
-    canvas.zoom('fit-viewport')
-    
-    // Listen for changes and trigger auto-save
-    bpmnModeler.on('commandStack.changed', () => {
-      scheduleAutoSave()
-    })
-    
-  } catch (err: any) {
-    console.error('Failed to initialize BPMN modeler:', err)
-    ElMessage.error(t('process.initializationFailed') + ': ' + (err.message || t('common.error')))
-  }
-}
-
-function handleZoomIn() {
-  if (!bpmnModeler) return
-  const canvas = bpmnModeler.get('canvas')
-  currentZoom.value = Math.min(currentZoom.value + 0.1, 3)
-  canvas.zoom(currentZoom.value)
-}
-
-function handleZoomOut() {
-  if (!bpmnModeler) return
-  const canvas = bpmnModeler.get('canvas')
-  currentZoom.value = Math.max(currentZoom.value - 0.1, 0.3)
-  canvas.zoom(currentZoom.value)
-}
-
-function handleFitViewport() {
-  if (!bpmnModeler) return
-  const canvas = bpmnModeler.get('canvas')
-  canvas.zoom('fit-viewport')
-  currentZoom.value = 1
-}
-
-function handleUndo() {
-  if (!bpmnModeler) return
-  const commandStack = bpmnModeler.get('commandStack')
-  commandStack.undo()
-}
-
-function handleRedo() {
-  if (!bpmnModeler) return
-  const commandStack = bpmnModeler.get('commandStack')
-  commandStack.redo()
-}
-
-function formatLastTaskTopologyViolations(): string {
-  if (!bpmnModeler) return ''
-  const violations = findLastTaskAssigneeTopologyViolations(bpmnModeler)
-  return violations
-    .map((v) => `${v.taskName || v.taskId} (${v.incomingCount})`)
-    .join('; ')
-}
-
-async function exportCurrentBpmnXml(): Promise<string> {
-  if (!bpmnModeler) return store.process?.bpmnXml || ''
-  try {
-    const { xml } = await bpmnModeler.saveXML({ format: true })
-    return xml || store.process?.bpmnXml || ''
-  } catch {
-    return store.process?.bpmnXml || ''
-  }
-}
-
-function handleDebugNodeChange(nodeId: string | null) {
-  if (!bpmnModeler) return
-  const canvas = bpmnModeler.get('canvas')
-  if (highlightedDebugNodeId) {
-    canvas.removeMarker(highlightedDebugNodeId, 'debug-current')
-    highlightedDebugNodeId = null
-  }
-  if (!nodeId) return
-  const elementRegistry = bpmnModeler.get('elementRegistry')
-  const element = elementRegistry.get(nodeId)
-  if (!element) return
-  canvas.addMarker(nodeId, 'debug-current')
-  highlightedDebugNodeId = nodeId
-  try {
-    canvas.scrollToElement(element, { top: 80, bottom: 80, left: 80, right: 80 })
-  } catch {
-    // ignore scroll errors for unknown layout nodes
-  }
-}
-
-async function handleValidate() {
-  if (!bpmnModeler) return
-  const detail = formatLastTaskTopologyViolations()
-  if (detail) {
-    ElMessage.error(t('process.lastTaskAnchorBlocked', { detail }))
-    return
-  }
-  try {
-    const res = await functionUnitApi.validateProcess?.(props.functionUnitId)
-    if (res?.data?.valid) {
-      ElMessage.success(t('process.validationPassed'))
-    } else {
-      const errors = res?.data?.errors || []
-      const warnings = res?.data?.warnings || []
-      if (errors.length) {
-        ElMessage.error(`${t('process.validationError')}: ${errors.join(', ')}`)
-      } else if (warnings.length) {
-        ElMessage.warning(`${t('process.validationWarning')}: ${warnings.join(', ')}`)
-      }
-    }
-  } catch (e: any) {
-    ElMessage.error(e.response?.data?.message || t('process.validationError'))
-  }
-}
-
-async function handleExportSVG() {
-  if (!bpmnModeler) return
-  try {
-    const { svg } = await bpmnModeler.saveSVG()
-    downloadFile(svg, 'process.svg', 'image/svg+xml')
-    ElMessage.success(t('process.svgExportSuccess'))
-  } catch (err) {
-    ElMessage.error(t('process.svgExportFailed'))
-  }
-}
-
-async function handleExportXML() {
-  if (!bpmnModeler) return
-  try {
-    const { xml } = await bpmnModeler.saveXML({ format: true })
-    downloadFile(xml, 'process.bpmn', 'application/xml')
-    ElMessage.success(t('process.xmlExportSuccess'))
-  } catch (err) {
-    ElMessage.error(t('process.xmlExportFailed'))
-  }
-}
-
-function downloadFile(content: string, filename: string, type: string) {
-  const blob = new Blob([content], { type })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  a.click()
-  URL.revokeObjectURL(url)
-}
-
-async function handleImportXML() {
-  if (!bpmnModeler || !importXml.value.trim()) return
-  try {
-    await bpmnModeler.importXML(importXml.value)
-    showImportDialog.value = false
-    importXml.value = ''
-    ElMessage.success(t('process.importSuccess'))
-  } catch (err: any) {
-    ElMessage.error(t('process.importFailed') + ': ' + (err.message || t('process.importFailed')))
-  }
-}
-
-async function handleSave(isAutoSave = false) {
-  if (!bpmnModeler) return
-  const detail = formatLastTaskTopologyViolations()
-  if (detail) {
-    if (!isAutoSave) {
-      ElMessage.error(t('process.lastTaskAnchorBlocked', { detail }))
-    }
-    return
-  }
-  
-  if (isAutoSave) {
-    autoSaving.value = true
-  } else {
-    saving.value = true
-  }
-  
-  try {
-    const { xml } = await bpmnModeler.saveXML({ format: true })
-    await store.saveProcess(props.functionUnitId, { bpmnXml: xml })
-    
-    if (isAutoSave) {
-      lastAutoSaveTime.value = new Date()
-    } else {
-      ElMessage.success(t('process.saveSuccess'))
-    }
-  } catch (e: any) {
-    const msg =
-      e?.message ||
-      e?.response?.data?.error?.message ||
-      e?.response?.data?.message ||
-      t('process.saveFailed')
-    if (!isAutoSave) {
-      ElMessage.error(msg)
-    }
-  } finally {
-    if (isAutoSave) {
-      autoSaving.value = false
-    } else {
-      saving.value = false
-    }
-  }
-}
-
-function scheduleAutoSave() {
-  // Clear existing timer
-  if (autoSaveTimer) {
-    clearTimeout(autoSaveTimer)
-  }
-  
-  // Schedule auto-save after 2 seconds of inactivity
-  autoSaveTimer = setTimeout(() => {
-    handleSave(true)
-  }, 2000)
-}
-
-function formatAutoSaveTime(time: Date): string {
-  const now = new Date()
-  const diff = Math.floor((now.getTime() - time.getTime()) / 1000)
-  
-  if (diff < 60) {
-    return t('process.justNow')
-  } else if (diff < 3600) {
-    const minutes = Math.floor(diff / 60)
-    return t('process.minutesAgo', { count: minutes })
-  } else {
-    return time.toLocaleTimeString()
-  }
-}
+// Validation / export / import / save / auto-save.
+const {
+  saving,
+  autoSaving,
+  lastAutoSaveTime,
+  exportCurrentBpmnXml,
+  handleValidate,
+  handleExportSVG,
+  handleExportXML,
+  handleImportXML,
+  handleSave,
+  scheduleAutoSave,
+  clearAutoSaveTimer,
+  formatAutoSaveTime,
+} = useProcessActions({
+  functionUnitId: props.functionUnitId,
+  getModeler,
+  store,
+  showImportDialog,
+  importXml,
+  t,
+})
 
 onMounted(async () => {
   await nextTick()
@@ -515,15 +210,9 @@ onMounted(async () => {
 onUnmounted(() => {
   handleDebugNodeChange(null)
   // Clear auto-save timer
-  if (autoSaveTimer) {
-    clearTimeout(autoSaveTimer)
-    autoSaveTimer = null
-  }
-  
-  if (bpmnModeler) {
-    bpmnModeler.destroy()
-    bpmnModeler = null
-  }
+  clearAutoSaveTimer()
+
+  destroyModeler()
 })
 </script>
 

@@ -21,6 +21,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -30,8 +31,15 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
- * TaskManagerComponent 多实例功能单元测试
- * 
+ * 多实例 completeTask 功能单元测试
+ *
+ * 说明：原本针对 TaskManagerComponent 的门面方法。TaskManagerComponent 已拆分为
+ * 门面 + 协作类，completeTask 的实际逻辑现位于 {@link TaskCompletionService}，
+ * 其中多实例检测/注入/回写逻辑由 {@link TaskMultiInstanceService} 执行
+ * （TaskCompletionService 以 @Lazy 调用）。因此本测试直接对 TaskCompletionService
+ * 注入被测 mock，并注入一个【真实】TaskMultiInstanceService（同样喂同一批 mock），
+ * 保证 MI 行为真实执行、原断言（subTableDataInjector / multiInstanceDataResolver 交互）依旧有效。
+ *
  * 测试场景：
  * 1. 前置任务完成时检测多实例子流程并注入数据
  * 2. 子任务完成时检测多实例标记并回写数据
@@ -39,31 +47,39 @@ import static org.mockito.Mockito.*;
  */
 @ExtendWith(MockitoExtension.class)
 class TaskManagerComponentMultiInstanceTest {
-    
+
     @Mock
     private TaskService taskService;
-    
+
     @Mock
     private RuntimeService runtimeService;
-    
+
     @Mock
     private RepositoryService repositoryService;
-    
+
     @Mock
     private ExtendedTaskInfoRepository extendedTaskInfoRepository;
-    
+
     @Mock
     private SubTableDataInjector subTableDataInjector;
-    
+
     @Mock
     private MultiInstanceDataResolver multiInstanceDataResolver;
-    
+
     @Mock
     private UserPermissionService userPermissionService;
-    
+
+    @Mock
+    private BpmnActionParser bpmnActionParser;
+
+    // completeTask 主体现在落在 TaskCompletionService；@InjectMocks 注入其同名字段
+    // （taskService/runtimeService/repositoryService/extendedTaskInfoRepository/userPermissionService）。
     @InjectMocks
-    private TaskManagerComponent taskManagerComponent;
-    
+    private TaskCompletionService taskCompletionService;
+
+    // MI 检测/注入/回写逻辑真正执行处；用真实实例（喂同一批 mock）保证断言真实校验 MI 行为。
+    private TaskMultiInstanceService taskMultiInstanceService;
+
     private static final String TASK_ID = "task-001";
     private static final String USER_ID = "user-001";
     private static final String PROCESS_INSTANCE_ID = "process-001";
@@ -74,6 +90,25 @@ class TaskManagerComponentMultiInstanceTest {
     
     @BeforeEach
     void setUp() {
+        // 构建真实的 TaskMultiInstanceService 并注入同一批 mock，使 MI 检测/注入/回写真实执行。
+        taskMultiInstanceService = new TaskMultiInstanceService();
+        ReflectionTestUtils.setField(taskMultiInstanceService, "runtimeService", runtimeService);
+        ReflectionTestUtils.setField(taskMultiInstanceService, "repositoryService", repositoryService);
+        ReflectionTestUtils.setField(taskMultiInstanceService, "extendedTaskInfoRepository", extendedTaskInfoRepository);
+        ReflectionTestUtils.setField(taskMultiInstanceService, "bpmnActionParser", bpmnActionParser);
+        ReflectionTestUtils.setField(taskMultiInstanceService, "subTableDataInjector", subTableDataInjector);
+        ReflectionTestUtils.setField(taskMultiInstanceService, "multiInstanceDataResolver", multiInstanceDataResolver);
+
+        // TaskCompletionService 以 @Lazy 调用 MI 协作类；注入真实实例。
+        ReflectionTestUtils.setField(taskCompletionService, "taskMultiInstanceService", taskMultiInstanceService);
+
+        // completeTask 经 taskActionService.engineActorMatchesPortalUser 做完成授权（assignee 等于 userId 时短路通过）。
+        // 用真实 TaskActionService 保证授权判断真实执行（equals 短路，不触达其它依赖）。
+        TaskActionService taskActionService = new TaskActionService();
+        ReflectionTestUtils.setField(taskActionService, "taskService", taskService);
+        ReflectionTestUtils.setField(taskActionService, "userPermissionService", userPermissionService);
+        ReflectionTestUtils.setField(taskCompletionService, "taskActionService", taskActionService);
+
         // 默认 mock 设置
         TaskQuery taskQuery = mock(TaskQuery.class);
         when(taskService.createTaskQuery()).thenReturn(taskQuery);
@@ -111,7 +146,7 @@ class TaskManagerComponentMultiInstanceTest {
         Map<String, Object> variables = new HashMap<>();
         variables.put("approved", true);
         
-        TaskAssignmentResult result = taskManagerComponent.completeTask(TASK_ID, USER_ID, variables);
+        TaskAssignmentResult result = taskCompletionService.completeTask(TASK_ID, USER_ID, variables);
         
         // Then: 验证 SubTableDataInjector 被调用
         verify(subTableDataInjector, times(1)).injectSubTableData(
@@ -156,7 +191,7 @@ class TaskManagerComponentMultiInstanceTest {
         variables.put("formData", formData);
         variables.put("rowVersion", 1L);
         
-        TaskAssignmentResult result = taskManagerComponent.completeTask(TASK_ID, USER_ID, variables);
+        TaskAssignmentResult result = taskCompletionService.completeTask(TASK_ID, USER_ID, variables);
         
         // Then: 验证 MultiInstanceDataResolver 被调用
         verify(multiInstanceDataResolver, times(1)).writeBackSubTableRow(
@@ -192,7 +227,7 @@ class TaskManagerComponentMultiInstanceTest {
         // When: 完成子任务，但未提供 formData
         Map<String, Object> variables = new HashMap<>();
         
-        TaskAssignmentResult result = taskManagerComponent.completeTask(TASK_ID, USER_ID, variables);
+        TaskAssignmentResult result = taskCompletionService.completeTask(TASK_ID, USER_ID, variables);
         
         // Then: 验证 MultiInstanceDataResolver 未被调用
         verify(multiInstanceDataResolver, never()).writeBackSubTableRow(any(), any(), any());
@@ -233,7 +268,7 @@ class TaskManagerComponentMultiInstanceTest {
         variables.put("formData", formData);
         variables.put("rowVersion", 1L);
         
-        assertThatThrownBy(() -> taskManagerComponent.completeTask(TASK_ID, USER_ID, variables))
+        assertThatThrownBy(() -> taskCompletionService.completeTask(TASK_ID, USER_ID, variables))
             .isInstanceOf(MultiInstanceDataResolver.OptimisticLockException.class)
             .hasMessageContaining("数据已被修改");
         
@@ -264,7 +299,7 @@ class TaskManagerComponentMultiInstanceTest {
         Map<String, Object> variables = new HashMap<>();
         variables.put("approved", true);
         
-        TaskAssignmentResult result = taskManagerComponent.completeTask(TASK_ID, USER_ID, variables);
+        TaskAssignmentResult result = taskCompletionService.completeTask(TASK_ID, USER_ID, variables);
         
         // Then: 验证 SubTableDataInjector 未被调用
         verify(subTableDataInjector, never()).injectSubTableData(any(), any(), any(), any(), any(), any());

@@ -202,7 +202,9 @@ export function normalizeUploadFieldsInRow(
 }
 
 export function isUploadColumn(
-  col: Pick<DialogColumn, 'type' | 'field'>,
+  // Accepts any column shape exposing string `type`/`field` (DialogColumn, designer ColumnConfig, …);
+  // only these two members are read.
+  col: { type?: string; field: string },
   cellValue?: unknown,
 ): boolean {
   if (col.type === 'upload') return true

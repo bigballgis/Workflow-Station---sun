@@ -540,192 +540,43 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Plus, List, Document, Share, Key, Loading } from '@element-plus/icons-vue'
-import { getDashboardOverview, getTeamRequests, TaskOverview, ProcessOverview, PerformanceOverview, TeamRequestsResponse } from '@/api/dashboard'
 import { formatDate } from '@/utils/dateFormat'
-import { usePendingTaskStore } from '@/stores/pendingTask'
+import { useDashboardOverview } from '@/composables/dashboard/useDashboardOverview'
+import { useTeamRequests } from '@/composables/dashboard/useTeamRequests'
+import { useTaskPriority } from '@/composables/dashboard/useTaskPriority'
 
 const { t } = useI18n()
-const pendingTaskStore = usePendingTaskStore()
 
-const loading = ref(true)
+// 仪表盘概览数据（任务 / 流程 / 绩效 / 最近任务）
+const {
+  loading,
+  taskOverview,
+  processOverview,
+  performanceOverview,
+  recentTasks,
+  loadDashboardData
+} = useDashboardOverview()
 
-const taskOverview = ref<TaskOverview>({
-  pendingCount: 0,
-  overdueCount: 0,
-  completedTodayCount: 0,
-  avgProcessingHours: 0,
-  urgentCount: 0,
-  highPriorityCount: 0,
-  teamPendingCount: 0,
-  teamOverdueCount: 0,
-  teamCompletedTodayCount: 0
-})
+// 团队请求弹窗
+const {
+  teamDialogVisible,
+  teamLoading,
+  teamActiveTab,
+  teamPagination,
+  teamRequests,
+  openTeamRequestsDialog,
+  switchTeamTab,
+  handleTeamTabChange,
+  handleTeamPageChange,
+  getTeamStatusType,
+  getTeamStatusLabel
+} = useTeamRequests()
 
-const processOverview = ref<ProcessOverview>({
-  initiatedCount: 0,
-  inProgressCount: 0,
-  completedThisMonthCount: 0,
-  approvalRate: 0,
-  typeDistribution: {}
-})
-
-const performanceOverview = ref<PerformanceOverview>({
-  efficiencyScore: 0,
-  qualityScore: 0,
-  collaborationScore: 0,
-  monthlyRank: 0,
-  totalUsers: 0
-})
-
-const recentTasks = ref<any[]>([])
-
-// ── Team Requests Dialog ──
-const teamDialogVisible = ref(false)
-const teamLoading = ref(false)
-const teamActiveTab = ref('all')
-const teamPagination = reactive({ page: 1, size: 10 })
-const teamRequests = ref<TeamRequestsResponse>({
-  overallCount: 0,
-  runningCount: 0,
-  completedCount: 0,
-  withdrawnCount: 0,
-  content: [],
-  totalElements: 0,
-  totalPages: 0,
-  page: 0,
-  size: 10
-})
-
-const openTeamRequestsDialog = async () => {
-  teamActiveTab.value = 'all'
-  teamPagination.page = 1
-  teamDialogVisible.value = true
-  await loadTeamRequests()
-}
-
-const loadTeamRequests = async () => {
-  teamLoading.value = true
-  try {
-    const status = teamActiveTab.value === 'all' ? undefined : teamActiveTab.value
-    const res = await getTeamRequests({
-      status,
-      page: teamPagination.page - 1,
-      size: teamPagination.size
-    })
-    const data = res.data || res
-    if (data) {
-      teamRequests.value = data as unknown as TeamRequestsResponse
-    }
-  } catch (error) {
-    console.error('Failed to load team requests:', error)
-  } finally {
-    teamLoading.value = false
-  }
-}
-
-const switchTeamTab = (tab: string) => {
-  teamActiveTab.value = tab
-  teamPagination.page = 1
-  loadTeamRequests()
-}
-
-const handleTeamTabChange = () => {
-  teamPagination.page = 1
-  loadTeamRequests()
-}
-
-const handleTeamPageChange = () => {
-  loadTeamRequests()
-}
-
-const getTeamStatusType = (status: string): 'success' | 'warning' | 'info' | 'danger' | 'primary' => {
-  const map: Record<string, 'success' | 'warning' | 'info' | 'danger' | 'primary'> = {
-    RUNNING: 'warning',
-    COMPLETED: 'success',
-    WITHDRAWN: 'info'
-  }
-  return map[status] || 'info'
-}
-
-const getTeamStatusLabel = (status: string) => {
-  const map: Record<string, string> = {
-    RUNNING: t('application.running'),
-    COMPLETED: t('application.completed'),
-    WITHDRAWN: t('application.withdrawn')
-  }
-  return map[status] || status
-}
-
-const loadDashboardData = async () => {
-  loading.value = true
-  try {
-    const res = await getDashboardOverview()
-    // API 返回格式: { success: true, data: { taskOverview, processOverview, performanceOverview, recentTasks } }
-    const data = res.data || res
-    if (data) {
-      taskOverview.value = data.taskOverview || taskOverview.value
-      processOverview.value = data.processOverview || processOverview.value
-      performanceOverview.value = data.performanceOverview || performanceOverview.value
-      recentTasks.value = data.recentTasks || []
-      if (data.taskOverview != null && typeof data.taskOverview.pendingCount === 'number') {
-        pendingTaskStore.syncCountFromListTotal(data.taskOverview.pendingCount)
-      }
-    }
-  } catch (error) {
-    console.error('Failed to load dashboard data:', error)
-  } finally {
-    loading.value = false
-  }
-}
-
-// 将优先级转换为翻译键
-const getPriorityLabel = (priority: any): string => {
-  if (!priority) return t('task.normal')
-  
-  // 如果是字符串，直接使用
-  if (typeof priority === 'string') {
-    const upperPriority = priority.toUpperCase()
-    if (['URGENT', 'HIGH', 'NORMAL', 'LOW'].includes(upperPriority)) {
-      return t(`task.${upperPriority.toLowerCase()}`)
-    }
-  }
-  
-  // 如果是数字，映射到对应的优先级
-  if (typeof priority === 'number') {
-    if (priority >= 75) return t('task.urgent')
-    if (priority >= 50) return t('task.high')
-    if (priority >= 25) return t('task.normal')
-    return t('task.low')
-  }
-  
-  return t('task.normal')
-}
-
-// 获取优先级 CSS 类名
-const getPriorityClass = (priority: any): string => {
-  if (!priority) return 'normal'
-  
-  // 如果是字符串，直接使用
-  if (typeof priority === 'string') {
-    const upperPriority = priority.toUpperCase()
-    if (['URGENT', 'HIGH', 'NORMAL', 'LOW'].includes(upperPriority)) {
-      return upperPriority.toLowerCase()
-    }
-  }
-  
-  // 如果是数字，映射到对应的优先级
-  if (typeof priority === 'number') {
-    if (priority >= 75) return 'urgent'
-    if (priority >= 50) return 'high'
-    if (priority >= 25) return 'normal'
-    return 'low'
-  }
-  
-  return 'normal'
-}
+// 最近任务优先级标签与样式
+const { getPriorityLabel, getPriorityClass } = useTaskPriority()
 
 onMounted(() => {
   loadDashboardData()

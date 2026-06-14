@@ -15,16 +15,17 @@ import type { ApplicationDetailHistoryFns } from './useApplicationDetailHistory'
 import type { ApplicationDetailSecondaryFns } from './useApplicationDetailSecondary'
 import type { ApplicationDetailLoadersFns } from './useApplicationDetailLoaders'
 import type { ApplicationDetailActionsFns } from './useApplicationDetailActions'
+import type { ApplicationDetailDiagramParserFns } from './useApplicationDetailDiagramParser'
 
 /**
- * Late-bound externals provided by the SFC. `scheduleParseApplicationBpmnDiagram`
- * stays in applications/detail.vue (the heavy `parseBpmnXml` is intentionally kept
- * inline in the SFC) and is registered onto the shared context during setup.
+ * Late-bound externals provided by the SFC: i18n + router only. The BPMN
+ * diagram parse (`scheduleParseApplicationBpmnDiagram` / `parseBpmnXml`) now
+ * lives in `useApplicationDetailDiagramParser` and is registered onto the
+ * shared context like the other composable function groups.
  */
 export interface ApplicationDetailExternals {
   t: ReturnType<typeof useI18n>['t']
   router: Router
-  scheduleParseApplicationBpmnDiagram: (xml: string) => void
 }
 
 /**
@@ -47,6 +48,7 @@ export type ApplicationDetailFns =
   ApplicationDetailHistoryFns &
   ApplicationDetailSecondaryFns &
   ApplicationDetailLoadersFns &
-  ApplicationDetailActionsFns
+  ApplicationDetailActionsFns &
+  ApplicationDetailDiagramParserFns
 
 export type ApplicationDetailCtx = ApplicationDetailState & ApplicationDetailExternals & ApplicationDetailFns

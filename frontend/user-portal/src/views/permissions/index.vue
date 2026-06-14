@@ -998,812 +998,140 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue'
+import { onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import {
-  permissionApi,
-  type BusinessUnit,
-  type FunctionUnitRemovalGroup,
-  type PermissionRequestRecord,
-  type RemovalAssignmentRow,
-  type RemovalOptionsByFunctionUnitPayload,
-  type RoleInfo,
-  type UserBusinessUnitRole
-} from '@/api/permission'
-import { getStoredUser } from '@/api/auth'
 import { usePendingApprovalStore } from '@/stores/pendingApproval'
+import { usePermissionFormatters } from '@/composables/permissions/usePermissionFormatters'
+import { useMyBuRoles } from '@/composables/permissions/useMyBuRoles'
+import { useMyRequests } from '@/composables/permissions/useMyRequests'
+import { useApprovals } from '@/composables/permissions/useApprovals'
+import { useApplyPermission } from '@/composables/permissions/useApplyPermission'
+import { useExitBu } from '@/composables/permissions/useExitBu'
+import { useRemovePermission } from '@/composables/permissions/useRemovePermission'
 
 const { t } = useI18n()
 const pendingApprovalStore = usePendingApprovalStore()
 
-const myRequestTab = ref('inProgress')
-const approvalTab = ref('pendingApproval')
-const isApprover = ref(false)
-const approverPendingList = ref<PermissionRequestRecord[]>([])
-const approverHistoryList = ref<PermissionRequestRecord[]>([])
-const loadingApproverPending = ref(false)
-const loadingApproverHistory = ref(false)
-const approveDialogVisible = ref(false)
-const rejectDialogVisible = ref(false)
-const currentApproverRequest = ref<PermissionRequestRecord | null>(null)
-const approveComment = ref('')
-const rejectComment = ref('')
-const submittingApproval = ref(false)
+// 纯展示/格式化辅助（状态、类型标签、目标名称、时间格式化等）
+const {
+  getApplicantDisplay,
+  getSubmitterDisplay,
+  rowRemovalKey,
+  removalRowLabel,
+  beneficiaryOptionLabel,
+  canCancelAsBeneficiary,
+  getStatusType,
+  getStatusLabel,
+  getRequestTypeTag,
+  getRequestTypeLabel,
+  getTargetName,
+  formatDateTime
+} = usePermissionFormatters(t)
 
-const applyDialogVisible = ref(false)
-const submitting = ref(false)
-const loadingPending = ref(false)
-const loadingHistory = ref(false)
-const loadingBusinessUnits = ref(false)
-const loadingRoles = ref(false)
-const loadingBeneficiarySearch = ref(false)
-const beneficiaryOptions = ref<{ userId: string; username: string; displayName?: string }[]>([])
-const loadingMyBuRoles = ref(false)
+// 我的业务单元角色
+const { loadingMyBuRoles, myBuRoles, loadMyBuRoles } = useMyBuRoles()
 
-/** 移除权限对话框 */
-const removePermissionDialogVisible = ref(false)
-const removalBeneficiaryUserId = ref('')
-const removalBeneficiaryOptions = ref<{ userId: string; username: string; displayName?: string }[]>([])
-const loadingRemovalBeneficiarySearch = ref(false)
-const removalPayload = ref<RemovalOptionsByFunctionUnitPayload | null>(null)
-const loadingRemovalOptions = ref(false)
-const selectedRemovalKeys = ref<string[]>([])
-const activeFuCollapseNames = ref<string[]>([])
-const removePermissionReason = ref('')
-const submittingRemovalBatch = ref(false)
+// 我的申请（进行中 / 已完成、取消申请）
+const {
+  myRequestTab,
+  loadingPending,
+  loadingHistory,
+  pendingList,
+  historyList,
+  pendingCount,
+  loadPendingRequests,
+  loadHistoryRequests,
+  cancelRequest
+} = useMyRequests(t)
 
-/** 退出业务单元 */
-const loadingExitBu = ref(false)
-const exitBuRows = ref<{ businessUnitId: string; businessUnitName: string; joinedAt?: string }[]>([])
-const exitBuDialogVisible = ref(false)
-const exitBuSubmitting = ref(false)
-const loadingExitBuBeneficiarySearch = ref(false)
-const exitBuBeneficiaryOptions = ref<{ userId: string; username: string; displayName?: string }[]>([])
-const exitBuForm = reactive({
-  businessUnitId: '',
-  businessUnitName: '',
-  beneficiaryUserId: '' as string,
-  reason: ''
+// 审批侧（审批人列表、批准/拒绝）
+const {
+  approvalTab,
+  isApprover,
+  approverPendingList,
+  approverHistoryList,
+  loadingApproverPending,
+  loadingApproverHistory,
+  approveDialogVisible,
+  rejectDialogVisible,
+  currentApproverRequest,
+  approveComment,
+  rejectComment,
+  submittingApproval,
+  approvalPendingCount,
+  checkApproverStatus,
+  loadApproverPending,
+  onApprovalTabChange,
+  showApproveDialog,
+  showRejectDialog,
+  handleApprove,
+  handleReject
+} = useApprovals(t, {
+  loadPendingRequests,
+  loadHistoryRequests,
+  fetchPendingCount: () => pendingApprovalStore.fetchPendingCount()
 })
 
-// 数据
-const myBuRoles = ref<UserBusinessUnitRole[]>([])
-const pendingList = ref<PermissionRequestRecord[]>([])
-const historyList = ref<PermissionRequestRecord[]>([])
-const applicableBusinessUnits = ref<BusinessUnit[]>([])
-const eligibleRoles = ref<RoleInfo[]>([])
+// 申请权限对话框
+const {
+  applyDialogVisible,
+  submitting,
+  loadingBusinessUnits,
+  loadingRoles,
+  loadingBeneficiarySearch,
+  beneficiaryOptions,
+  applicableBusinessUnits,
+  eligibleRoles,
+  applyForm,
+  searchBeneficiaryUsers,
+  showApplyDialog,
+  onBusinessUnitChange,
+  submitApply
+} = useApplyPermission(t, { loadPendingRequests, loadHistoryRequests })
 
-// 待处理数量
-const pendingCount = computed(() => pendingList.value.length)
-const approvalPendingCount = computed(() => approverPendingList.value.length)
+// 退出业务单元（先于移除权限创建，供其刷新成员关系）
+const {
+  loadingExitBu,
+  exitBuRows,
+  exitBuDialogVisible,
+  exitBuSubmitting,
+  loadingExitBuBeneficiarySearch,
+  exitBuBeneficiaryOptions,
+  exitBuForm,
+  loadExitBuMemberships,
+  searchExitBuBeneficiaries,
+  openExitBuDialog,
+  submitExitBu
+} = useExitBu(t, { loadPendingRequests, loadHistoryRequests, loadMyBuRoles })
 
-const totalRemovableCount = computed(() => {
-  const p = removalPayload.value
-  if (!p) return 0
-  const inFu = p.functionUnitGroups.reduce((n, g) => n + g.assignments.length, 0)
-  return inFu + p.otherAssignments.length
+// 移除权限对话框（按功能单元批量移除 BU 角色）
+const {
+  removePermissionDialogVisible,
+  removalBeneficiaryUserId,
+  removalBeneficiaryOptions,
+  loadingRemovalBeneficiarySearch,
+  removalPayload,
+  loadingRemovalOptions,
+  selectedRemovalKeys,
+  activeFuCollapseNames,
+  removePermissionReason,
+  submittingRemovalBatch,
+  totalRemovableCount,
+  groupCheckState,
+  toggleRemovalKey,
+  toggleGroupAll,
+  toggleOtherAll,
+  searchRemovalBeneficiaries,
+  openRemovePermissionDialog,
+  loadRemovalOptions,
+  submitRemovalBatch
+} = useRemovePermission(t, {
+  rowRemovalKey,
+  loadPendingRequests,
+  loadHistoryRequests,
+  loadMyBuRoles,
+  loadExitBuMemberships
 })
-
-// 申请表单
-const applyForm = reactive({
-  beneficiaryUserId: '' as string,
-  businessUnitId: '',
-  roleId: '',
-  reason: ''
-})
-
-const checkApproverStatus = async () => {
-  try {
-    const res = (await permissionApi.isApprover()) as { data?: { isApprover?: boolean }; isApprover?: boolean }
-    isApprover.value = res?.data?.isApprover ?? res?.isApprover ?? false
-  } catch (e) {
-    console.error('Failed to check approver status:', e)
-    isApprover.value = false
-  }
-}
-
-const loadApproverPending = async () => {
-  if (!isApprover.value) return
-  loadingApproverPending.value = true
-  try {
-    const res = (await permissionApi.getPendingApprovals({ page: 0, size: 100 })) as any
-    if (res?.data?.content) {
-      approverPendingList.value = res.data.content
-    } else if (res?.content) {
-      approverPendingList.value = res.content
-    } else if (Array.isArray(res)) {
-      approverPendingList.value = res
-    } else {
-      approverPendingList.value = []
-    }
-  } catch (e) {
-    console.error('Failed to load pending approvals:', e)
-    approverPendingList.value = []
-  } finally {
-    loadingApproverPending.value = false
-  }
-}
-
-const loadApproverHistory = async () => {
-  if (!isApprover.value) return
-  loadingApproverHistory.value = true
-  try {
-    const res = (await permissionApi.getApprovalHistory({ page: 0, size: 100 })) as any
-    if (res?.data?.content) {
-      approverHistoryList.value = res.data.content
-    } else if (res?.content) {
-      approverHistoryList.value = res.content
-    } else if (Array.isArray(res)) {
-      approverHistoryList.value = res
-    } else {
-      approverHistoryList.value = []
-    }
-  } catch (e) {
-    console.error('Failed to load approval history:', e)
-    approverHistoryList.value = []
-  } finally {
-    loadingApproverHistory.value = false
-  }
-}
-
-const onApprovalTabChange = (tab: string | number) => {
-  if (String(tab) === 'approvalHistory') {
-    loadApproverHistory()
-  }
-}
-
-const getApplicantDisplay = (row: PermissionRequestRecord | null | undefined) => {
-  if (!row) return '-'
-  return row.applicantName || row.applicantUsername || row.applicantId || '-'
-}
-
-const getSubmitterDisplay = (row: PermissionRequestRecord | null | undefined) => {
-  if (!row?.submittedByUserId) return '—'
-  if (row.submittedByUserId === row.applicantId) return t('permission.selfBeneficiary')
-  return row.submittedByUsername || row.submittedByUserId
-}
-
-const showApproveDialog = (row: PermissionRequestRecord) => {
-  currentApproverRequest.value = row
-  approveComment.value = ''
-  approveDialogVisible.value = true
-}
-
-const showRejectDialog = (row: PermissionRequestRecord) => {
-  currentApproverRequest.value = row
-  rejectComment.value = ''
-  rejectDialogVisible.value = true
-}
-
-const handleApprove = async () => {
-  if (!currentApproverRequest.value) return
-  submittingApproval.value = true
-  try {
-    await permissionApi.approveRequest(currentApproverRequest.value.id, approveComment.value || undefined)
-    ElMessage.success(t('approval.approveSuccess'))
-    approveDialogVisible.value = false
-    await loadApproverPending()
-    await pendingApprovalStore.fetchPendingCount()
-    approverHistoryList.value = []
-    loadPendingRequests()
-    loadHistoryRequests()
-  } catch (e: any) {
-    const msg = e.response?.data?.message || e.message || t('approval.approveFailed')
-    ElMessage.error(msg)
-  } finally {
-    submittingApproval.value = false
-  }
-}
-
-const handleReject = async () => {
-  if (!currentApproverRequest.value) return
-  if (!rejectComment.value.trim()) {
-    ElMessage.warning(t('approval.rejectReasonRequired'))
-    return
-  }
-  submittingApproval.value = true
-  try {
-    await permissionApi.rejectRequest(currentApproverRequest.value.id, rejectComment.value)
-    ElMessage.success(t('approval.rejectSuccess'))
-    rejectDialogVisible.value = false
-    await loadApproverPending()
-    await pendingApprovalStore.fetchPendingCount()
-    approverHistoryList.value = []
-    loadPendingRequests()
-    loadHistoryRequests()
-  } catch (e: any) {
-    const msg = e.response?.data?.message || e.message || t('approval.rejectFailed')
-    ElMessage.error(msg)
-  } finally {
-    submittingApproval.value = false
-  }
-}
-
-// 加载待处理申请
-const loadPendingRequests = async () => {
-  loadingPending.value = true
-  try {
-    const res = await permissionApi.getRequestHistory({ status: 'PENDING', page: 0, size: 100 }) as any
-    if (res?.data?.content) {
-      pendingList.value = res.data.content
-    } else if (res?.content) {
-      pendingList.value = res.content
-    } else if (Array.isArray(res)) {
-      pendingList.value = res
-    } else {
-      pendingList.value = []
-    }
-  } catch (e) {
-    console.error('Failed to load pending requests:', e)
-    pendingList.value = []
-  } finally {
-    loadingPending.value = false
-  }
-}
-
-// 加载历史记录（已批准和已拒绝）
-const loadHistoryRequests = async () => {
-  loadingHistory.value = true
-  try {
-    const res = await permissionApi.getRequestHistory({ page: 0, size: 50 }) as any
-    let allRequests: any[] = []
-    if (res?.data?.content) {
-      allRequests = res.data.content
-    } else if (res?.content) {
-      allRequests = res.content
-    } else if (Array.isArray(res)) {
-      allRequests = res
-    }
-    // 过滤出已完成的申请（APPROVED, REJECTED, CANCELLED）
-    historyList.value = allRequests.filter(
-      (r: any) => r.status !== 'PENDING'
-    )
-  } catch (e) {
-    console.error('Failed to load history requests:', e)
-    historyList.value = []
-  } finally {
-    loadingHistory.value = false
-  }
-}
-
-const loadMyBuRoles = async () => {
-  loadingMyBuRoles.value = true
-  try {
-    const res = (await permissionApi.getMyMemberships()) as any
-    const payload = res?.data ?? res
-    const raw = payload?.businessUnitRoles
-    if (Array.isArray(raw)) {
-      myBuRoles.value = raw as UserBusinessUnitRole[]
-    } else {
-      myBuRoles.value = []
-    }
-  } catch (e) {
-    console.error('Failed to load my BU roles:', e)
-    myBuRoles.value = []
-  } finally {
-    loadingMyBuRoles.value = false
-  }
-}
-
-const rowRemovalKey = (businessUnitId: string, roleId: string) => `${businessUnitId}::${roleId}`
-
-const removalRowLabel = (a: RemovalAssignmentRow) =>
-  t('permission.removalRowLabel', {
-    bu: a.businessUnitName || a.businessUnitId,
-    role: a.roleName || a.roleId
-  })
-
-const groupCheckState = (group: FunctionUnitRemovalGroup) => {
-  const keys = group.assignments.map((x) => rowRemovalKey(x.businessUnitId, x.roleId))
-  const n = keys.filter((k) => selectedRemovalKeys.value.includes(k)).length
-  return {
-    checked: n === keys.length && n > 0,
-    indeterminate: n > 0 && n < keys.length
-  }
-}
-
-const toggleRemovalKey = (key: string, on: boolean) => {
-  const s = new Set(selectedRemovalKeys.value)
-  if (on) s.add(key)
-  else s.delete(key)
-  selectedRemovalKeys.value = [...s]
-}
-
-const toggleGroupAll = (group: FunctionUnitRemovalGroup, checked: boolean) => {
-  const s = new Set(selectedRemovalKeys.value)
-  for (const a of group.assignments) {
-    const k = rowRemovalKey(a.businessUnitId, a.roleId)
-    if (checked) s.add(k)
-    else s.delete(k)
-  }
-  selectedRemovalKeys.value = [...s]
-}
-
-const toggleOtherAll = (checked: boolean) => {
-  const p = removalPayload.value
-  if (!p) return
-  const s = new Set(selectedRemovalKeys.value)
-  for (const a of p.otherAssignments) {
-    const k = rowRemovalKey(a.businessUnitId, a.roleId)
-    if (checked) s.add(k)
-    else s.delete(k)
-  }
-  selectedRemovalKeys.value = [...s]
-}
-
-const searchRemovalBeneficiaries = async (query: string) => {
-  loadingRemovalBeneficiarySearch.value = true
-  try {
-    const res = (await permissionApi.searchUsersForDelegation({
-      keyword: query || undefined,
-      page: 0,
-      size: 20
-    })) as any
-    const payload = res?.data ?? res
-    removalBeneficiaryOptions.value = Array.isArray(payload?.content) ? payload.content : []
-  } catch {
-    removalBeneficiaryOptions.value = []
-  } finally {
-    loadingRemovalBeneficiarySearch.value = false
-  }
-}
-
-const openRemovePermissionDialog = () => {
-  removalBeneficiaryUserId.value = ''
-  removalBeneficiaryOptions.value = []
-  removalPayload.value = null
-  selectedRemovalKeys.value = []
-  activeFuCollapseNames.value = []
-  removePermissionReason.value = ''
-  removePermissionDialogVisible.value = true
-}
-
-const loadRemovalOptions = async () => {
-  loadingRemovalOptions.value = true
-  try {
-    const res = (await permissionApi.getRemovalOptionsByFunctionUnit(
-      removalBeneficiaryUserId.value || undefined
-    )) as any
-    const data = res?.data ?? res
-    const payload: RemovalOptionsByFunctionUnitPayload = {
-      functionUnitGroups: Array.isArray(data?.functionUnitGroups) ? data.functionUnitGroups : [],
-      otherAssignments: Array.isArray(data?.otherAssignments) ? data.otherAssignments : []
-    }
-    removalPayload.value = payload
-    selectedRemovalKeys.value = []
-    activeFuCollapseNames.value = payload.functionUnitGroups.map((g) => g.functionUnitId)
-  } catch (e: any) {
-    const msg = e.response?.data?.message || e.message || t('permission.requestRemoveBuRoleFailed')
-    ElMessage.error(msg)
-    removalPayload.value = { functionUnitGroups: [], otherAssignments: [] }
-  } finally {
-    loadingRemovalOptions.value = false
-  }
-}
-
-const submitRemovalBatch = async () => {
-  if (!removePermissionReason.value.trim()) {
-    ElMessage.warning(t('permission.enterReason'))
-    return
-  }
-  if (selectedRemovalKeys.value.length === 0) {
-    return
-  }
-  const reason = removePermissionReason.value.trim()
-  const beneficiary = removalBeneficiaryUserId.value || undefined
-  submittingRemovalBatch.value = true
-  let ok = 0
-  let fail = 0
-  try {
-    for (const key of selectedRemovalKeys.value) {
-      const sep = key.indexOf('::')
-      if (sep < 0) continue
-      const businessUnitId = key.slice(0, sep)
-      const roleId = key.slice(sep + 2)
-      try {
-        await permissionApi.requestBusinessUnitRoleRemoval({
-          businessUnitId,
-          roleId,
-          reason,
-          beneficiaryUserId: beneficiary
-        })
-        ok++
-      } catch {
-        fail++
-      }
-    }
-    if (ok > 0) {
-      ElMessage.success(t('permission.requestRemoveBuRoleSuccess'))
-      removePermissionDialogVisible.value = false
-      loadPendingRequests()
-      loadHistoryRequests()
-      loadMyBuRoles()
-      loadExitBuMemberships()
-      if (fail > 0) {
-        ElMessage.warning(t('permission.removalPartialFailures'))
-      }
-    } else if (fail > 0) {
-      ElMessage.error(t('permission.requestRemoveBuRoleFailed'))
-    }
-  } finally {
-    submittingRemovalBatch.value = false
-  }
-}
-
-const loadExitBuMemberships = async () => {
-  loadingExitBu.value = true
-  try {
-    const res = await permissionApi.getMyMemberships()
-    const data = (res as any)?.data?.data || (res as any)?.data || res
-    const buMap = new Map<string, { businessUnitId: string; businessUnitName: string; joinedAt?: string }>()
-    if (data?.businessUnitRoles) {
-      for (const role of data.businessUnitRoles as UserBusinessUnitRole[]) {
-        if (!buMap.has(role.businessUnitId)) {
-          buMap.set(role.businessUnitId, {
-            businessUnitId: role.businessUnitId,
-            businessUnitName: role.businessUnitName,
-            joinedAt: role.assignedAt
-          })
-        }
-      }
-    }
-    if (data?.businessUnits) {
-      for (const bu of data.businessUnits as { businessUnitId?: string; id?: string; businessUnitName?: string; name?: string; joinedAt?: string }[]) {
-        const id = bu.businessUnitId || bu.id
-        if (id && !buMap.has(id)) {
-          buMap.set(id, {
-            businessUnitId: id,
-            businessUnitName: bu.businessUnitName || bu.name || id,
-            joinedAt: bu.joinedAt
-          })
-        }
-      }
-    }
-    exitBuRows.value = Array.from(buMap.values())
-  } catch (e) {
-    console.error('Failed to load exit BU memberships:', e)
-    exitBuRows.value = []
-  } finally {
-    loadingExitBu.value = false
-  }
-}
-
-const searchExitBuBeneficiaries = async (query: string) => {
-  loadingExitBuBeneficiarySearch.value = true
-  try {
-    const res = (await permissionApi.searchUsersForDelegation({
-      keyword: query || undefined,
-      page: 0,
-      size: 20
-    })) as any
-    const payload = res?.data ?? res
-    exitBuBeneficiaryOptions.value = Array.isArray(payload?.content) ? payload.content : []
-  } catch {
-    exitBuBeneficiaryOptions.value = []
-  } finally {
-    loadingExitBuBeneficiarySearch.value = false
-  }
-}
-
-const openExitBuDialog = (row: { businessUnitId: string; businessUnitName: string }) => {
-  exitBuForm.businessUnitId = row.businessUnitId
-  exitBuForm.businessUnitName = row.businessUnitName
-  exitBuForm.beneficiaryUserId = ''
-  exitBuForm.reason = ''
-  exitBuBeneficiaryOptions.value = []
-  exitBuDialogVisible.value = true
-}
-
-const submitExitBu = async () => {
-  if (!exitBuForm.reason.trim()) {
-    ElMessage.warning(t('permission.enterReason'))
-    return
-  }
-  try {
-    await ElMessageBox.confirm(
-      t('exitRole.exitBuConfirm', { bu: exitBuForm.businessUnitName || exitBuForm.businessUnitId }),
-      t('common.confirm'),
-      { type: 'warning' }
-    )
-  } catch {
-    return
-  }
-  exitBuSubmitting.value = true
-  try {
-    const body: { businessUnitId: string; reason: string; beneficiaryUserId?: string } = {
-      businessUnitId: exitBuForm.businessUnitId,
-      reason: exitBuForm.reason.trim()
-    }
-    const me = getStoredUser()?.userId
-    if (exitBuForm.beneficiaryUserId && exitBuForm.beneficiaryUserId !== me) {
-      body.beneficiaryUserId = exitBuForm.beneficiaryUserId
-    }
-    await permissionApi.requestBusinessUnitExit(body)
-    ElMessage.success(t('exitRole.exitRequestSuccess'))
-    exitBuDialogVisible.value = false
-    loadExitBuMemberships()
-    loadPendingRequests()
-    loadHistoryRequests()
-    loadMyBuRoles()
-  } catch (e: unknown) {
-    const err = e as { message?: string }
-    ElMessage.error(err.message || t('exitRole.exitFailed'))
-  } finally {
-    exitBuSubmitting.value = false
-  }
-}
-
-const loadApplicableBusinessUnits = async () => {
-  loadingBusinessUnits.value = true
-  try {
-    const res = await permissionApi.getApplicableBusinessUnits() as any
-    // axios 拦截器返回 response.data，即 ApiResponse { success, data: [...] }
-    if (res?.data && Array.isArray(res.data)) {
-      applicableBusinessUnits.value = res.data
-    } else if (Array.isArray(res)) {
-      applicableBusinessUnits.value = res
-    } else {
-      applicableBusinessUnits.value = []
-    }
-    if (applicableBusinessUnits.value.length === 0) {
-      const cat = await permissionApi.getBusinessUnits() as any
-      const raw = cat?.data ?? cat
-      if (Array.isArray(raw)) {
-        applicableBusinessUnits.value = raw.map((b: BusinessUnit) => ({
-          id: b.id,
-          name: b.name || b.id
-        })) as BusinessUnit[]
-      }
-    }
-  } catch (e) {
-    console.error('Failed to load applicable business units:', e)
-    applicableBusinessUnits.value = []
-  } finally {
-    loadingBusinessUnits.value = false
-  }
-}
-
-const searchBeneficiaryUsers = async (query: string) => {
-  loadingBeneficiarySearch.value = true
-  try {
-    const res = (await permissionApi.searchUsersForDelegation({
-      keyword: query || undefined,
-      page: 0,
-      size: 20
-    })) as any
-    const payload = res?.data ?? res
-    beneficiaryOptions.value = Array.isArray(payload?.content) ? payload.content : []
-  } catch {
-    beneficiaryOptions.value = []
-  } finally {
-    loadingBeneficiarySearch.value = false
-  }
-}
-
-const beneficiaryOptionLabel = (u: { userId: string; username: string; displayName?: string }) => {
-  const name = u.displayName || u.username || u.userId
-  return `${u.username || u.userId}${name !== u.username ? ` · ${name}` : ''}`
-}
-
-const canCancelAsBeneficiary = (row: PermissionRequestRecord) => {
-  const me = getStoredUser()?.userId
-  return !!(me && row.applicantId === me)
-}
-
-const loadEligibleRoles = async (businessUnitId: string) => {
-  if (!businessUnitId) {
-    eligibleRoles.value = []
-    return
-  }
-  loadingRoles.value = true
-  try {
-    const res = await permissionApi.getBusinessUnitRoles(businessUnitId) as any
-    if (res?.data && Array.isArray(res.data)) {
-      eligibleRoles.value = res.data
-    } else if (Array.isArray(res)) {
-      eligibleRoles.value = res
-    } else {
-      eligibleRoles.value = []
-    }
-  } catch (e) {
-    console.error('Failed to load eligible roles:', e)
-    eligibleRoles.value = []
-  } finally {
-    loadingRoles.value = false
-  }
-}
-
-// 状态和类型处理
-type TagType = 'primary' | 'success' | 'warning' | 'info' | 'danger'
-
-const getStatusType = (status: string): TagType => {
-  const map: Record<string, TagType> = {
-    PENDING: 'warning',
-    APPROVED: 'success',
-    REJECTED: 'danger',
-    CANCELLED: 'info'
-  }
-  return map[status] || 'info'
-}
-
-const getStatusLabel = (status: string) => {
-  const map: Record<string, string> = {
-    PENDING: t('permission.pending'),
-    APPROVED: t('permission.approved'),
-    REJECTED: t('permission.rejected'),
-    CANCELLED: t('permission.cancelled')
-  }
-  return map[status] || status
-}
-
-const getRequestTypeTag = (type: string): TagType => {
-  const map: Record<string, TagType> = {
-    VIRTUAL_GROUP: 'success',
-    VIRTUAL_GROUP_JOIN: 'success',
-    BUSINESS_UNIT: 'primary',
-    BUSINESS_UNIT_JOIN: 'primary',
-    BUSINESS_UNIT_ROLE: 'primary',
-    BUSINESS_UNIT_ROLE_REMOVAL: 'warning',
-    BUSINESS_UNIT_EXIT: 'danger',
-    ROLE_ASSIGNMENT: 'info'
-  }
-  return map[type] || 'info'
-}
-
-const getRequestTypeLabel = (type: string | undefined) => {
-  if (!type) return '-'
-  const map: Record<string, string> = {
-    VIRTUAL_GROUP: t('permission.virtualGroupJoin'),
-    VIRTUAL_GROUP_JOIN: t('permission.virtualGroupJoin'),
-    BUSINESS_UNIT: t('permission.businessUnitJoin'),
-    BUSINESS_UNIT_JOIN: t('permission.businessUnitJoin'),
-    BUSINESS_UNIT_ROLE: t('permission.businessUnitRole'),
-    BUSINESS_UNIT_ROLE_REMOVAL: t('permission.businessUnitRoleRemoval'),
-    BUSINESS_UNIT_EXIT: t('permission.businessUnitExit'),
-    ROLE_ASSIGNMENT: t('permission.roleAssignment')
-  }
-  return map[type] || type
-}
-
-/** 「我的申请」列表接口返回 PermissionRequestListItem：仅有 targetId/targetName，无 businessUnit* 扁平字段 */
-const meaningfulListTargetName = (row: any): string | undefined => {
-  const n = row?.targetName
-  if (typeof n !== 'string') return undefined
-  const t = n.trim()
-  if (t && t !== '-') return t
-  return undefined
-}
-
-// 获取申请目标名称
-const getTargetName = (row: any) => {
-  if (!row) return '-'
-  const listTn = meaningfulListTargetName(row)
-  const listTid =
-    row.targetId != null && String(row.targetId).trim() !== '' ? String(row.targetId).trim() : undefined
-
-  if (row.requestType === 'BUSINESS_UNIT_EXIT') {
-    return row.businessUnitName || listTn || row.businessUnitId || listTid || '-'
-  }
-  if (row.requestType === 'BUSINESS_UNIT_ROLE_REMOVAL') {
-    const bu = row.businessUnitName || listTn || row.businessUnitId || listTid || ''
-    const role =
-      row.roleName ||
-      row.roleId ||
-      (Array.isArray(row.roleNames)
-        ? row.roleNames.find((x: unknown) => x != null && String(x).trim() !== '')
-        : undefined)
-    const roleStr = role != null ? String(role).trim() : ''
-    const joined = [bu, roleStr].filter(Boolean).join(' / ')
-    return joined || '-'
-  }
-  if (listTn) return listTn
-  if (row.targetName) return row.targetName
-  if (row.virtualGroupName) return row.virtualGroupName
-  if (row.businessUnitName) return row.businessUnitName
-  if (row.roleName) return row.roleName
-  return listTid || '-'
-}
-
-const formatDateTime = (dateStr: string) => {
-  if (!dateStr) return '-'
-  try {
-    const date = new Date(dateStr)
-    return date.toLocaleString('zh-CN', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
-  } catch {
-    return dateStr
-  }
-}
-
-// 取消申请
-const cancelRequest = async (row: PermissionRequestRecord) => {
-  try {
-    await ElMessageBox.confirm(t('permission.cancelConfirm'), t('common.warning'), {
-      type: 'warning'
-    })
-    
-    await permissionApi.cancelRequest(row.id)
-    ElMessage.success(t('permission.cancelSuccess'))
-    // Keep UI consistent immediately even if history API is paginated/filtered.
-    const cancelledRecord: PermissionRequestRecord = {
-      ...row,
-      status: 'CANCELLED',
-      updatedAt: new Date().toISOString()
-    }
-    pendingList.value = pendingList.value.filter(item => item.id !== row.id)
-    historyList.value = [cancelledRecord, ...historyList.value.filter(item => item.id !== row.id)]
-    // Refresh pending from server, but keep cancelled item visible in history list.
-    loadPendingRequests()
-  } catch (e: any) {
-    if (e !== 'cancel') {
-      ElMessage.error(t('permission.cancelFailed'))
-    }
-  }
-}
-
-// 对话框操作
-const showApplyDialog = () => {
-  applyForm.beneficiaryUserId = ''
-  applyForm.businessUnitId = ''
-  applyForm.roleId = ''
-  applyForm.reason = ''
-  beneficiaryOptions.value = []
-  eligibleRoles.value = []
-  applyDialogVisible.value = true
-
-  loadApplicableBusinessUnits()
-}
-
-const onBusinessUnitChange = async (businessUnitId: string) => {
-  applyForm.roleId = ''
-  await loadEligibleRoles(businessUnitId)
-}
-
-const submitApply = async () => {
-  if (!applyForm.businessUnitId) {
-    ElMessage.warning(t('permission.selectBusinessUnit'))
-    return
-  }
-
-  if (!applyForm.roleId) {
-    ElMessage.warning(t('permission.selectRole'))
-    return
-  }
-  
-  if (!applyForm.reason.trim()) {
-    ElMessage.warning(t('permission.enterReason'))
-    return
-  }
-
-  submitting.value = true
-  try {
-    const payload: Record<string, unknown> = {
-      businessUnitId: applyForm.businessUnitId,
-      roleIds: [applyForm.roleId],
-      reason: applyForm.reason.trim()
-    }
-    if (applyForm.beneficiaryUserId) {
-      payload.beneficiaryUserId = applyForm.beneficiaryUserId
-    }
-    await permissionApi.requestBusinessUnitRole(payload as any)
-    ElMessage.success(t('permission.businessUnitRequestSuccess'))
-    
-    applyDialogVisible.value = false
-    loadPendingRequests()
-    loadHistoryRequests()
-  } catch (e: any) {
-    const msg = e.response?.data?.message || e.message || t('permission.requestFailed')
-    ElMessage.error(msg)
-  } finally {
-    submitting.value = false
-  }
-}
 
 // 初始化
 onMounted(async () => {

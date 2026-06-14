@@ -448,20 +448,23 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed, shallowRef, onBeforeUnmount, inject, nextTick } from 'vue'
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Upload } from '@element-plus/icons-vue'
-import type { FormInstance } from 'element-plus'
-import { ElMessage } from 'element-plus'
 import { Editor, Toolbar } from '@wangeditor/editor-for-vue'
 import '@wangeditor/editor/dist/css/style.css'
-import { buildInitialRow, buildRules, mergeFormRowWithSeed, resolveDisplayValue, isUploadColumn, getLookupSelectedDisplayField } from './subTableAddDialogHelpers'
+import { isUploadColumn, getLookupSelectedDisplayField } from './subTableAddDialogHelpers'
 import type { DialogColumn } from './subTableAddDialogHelpers'
 import type { RowFormulaRule, ValidationRule } from './formRendererHelpers'
-import { evaluateFormula, validateField } from './businessLogicEngine'
 import DOMPurify from 'dompurify'
 import LookupField from './lookup/LookupField.vue'
 import LookupViewDisplay from './lookup/LookupViewDisplay.vue'
+import { useSubTableDialogLookup } from '@/composables/subTableAddDialog/useSubTableDialogLookup'
+import { useSubTableDialogSignature } from '@/composables/subTableAddDialog/useSubTableDialogSignature'
+import { useSubTableDialogEditor } from '@/composables/subTableAddDialog/useSubTableDialogEditor'
+import { useSubTableDialogRelations } from '@/composables/subTableAddDialog/useSubTableDialogRelations'
+import { useSubTableDialogUpload } from '@/composables/subTableAddDialog/useSubTableDialogUpload'
+import { useSubTableDialogForm } from '@/composables/subTableAddDialog/useSubTableDialogForm'
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -504,381 +507,75 @@ const emit = defineEmits<{
   (e: 'save', rowData: Record<string, any>): void
 }>()
 
-const formRef = ref<FormInstance>()
-const saving = ref(false)
+// Shared model owned by the SFC and threaded through the composables below.
 const formData = ref<Record<string, any>>({})
-const uploadNames = ref<Record<string, string>>({})
-const dialogKey = ref(0)
-/** View-field metadata for lookup backfill (from column props or LookupField API load). */
-const lookupLoadedViewFields = ref<Record<string, any[]>>({})
-/** Hydrated lookup row for backfill when modelValue is still a scalar PK (matches FormRenderer). */
-const lookupSelectedData = ref<Record<string, Record<string, unknown>>>({})
 
-function isLookupRowSelected(val: unknown): boolean {
-  return (
-    val != null &&
-    typeof val === 'object' &&
-    !Array.isArray(val) &&
-    Object.keys(val as Record<string, unknown>).length > 0
-  )
-}
+// ─── Lookup backfill ────────────────────────────────────────────────────────
+const {
+  effectiveLookupViewFieldsForDialog,
+  onLookupViewFieldsLoaded,
+  onLookupSelect,
+  effectiveLookupSelectedRow,
+  resetLookupState,
+} = useSubTableDialogLookup(formData)
 
-function effectiveLookupViewFieldsForDialog(col: DialogColumn): any[] {
-  const fromCol = col.props?.viewFields
-  if (Array.isArray(fromCol) && fromCol.length > 0) return fromCol as any[]
-  return lookupLoadedViewFields.value[col.field] || []
-}
+// ─── Signature canvas ─────────────────────────────────────────────────────────
+const {
+  signatureCanvasRefs,
+  startSign,
+  drawSign,
+  endSign,
+  clearSignature,
+  startSignTouch,
+  drawSignTouch,
+} = useSubTableDialogSignature(formData)
 
-function onLookupViewFieldsLoaded(field: string, fields: any[]) {
-  lookupLoadedViewFields.value = { ...lookupLoadedViewFields.value, [field]: fields }
-}
+// ─── Editor (wangeditor) ──────────────────────────────────────────────────────
+const {
+  editorInstances,
+  onEditorCreated,
+  onEditorChange,
+  destroyEditors,
+} = useSubTableDialogEditor(formData)
 
-function onLookupSelect(field: string, row: Record<string, unknown>) {
-  lookupSelectedData.value = { ...lookupSelectedData.value, [field]: row }
-}
-
-function effectiveLookupSelectedRow(field: string): Record<string, unknown> | null {
-  const fromSelect = lookupSelectedData.value[field]
-  if (fromSelect && Object.keys(fromSelect).length > 0) return fromSelect
-  const val = formData.value[field]
-  if (isLookupRowSelected(val)) return val as Record<string, unknown>
-  return null
-}
-
-// ─── Signature canvas state ───────────────────────────────────────────────────
-const signatureCanvasRefs = ref<Record<string, HTMLCanvasElement>>({})
-const signingField = ref<string | null>(null)
-
-// ─── Editor (wangeditor) state ────────────────────────────────────────────────
-const editorInstances = shallowRef<Record<string, any>>({})
-
-function onEditorCreated(editor: any, field: string) {
-  editorInstances.value = { ...editorInstances.value, [field]: editor }
-}
-
-function onEditorChange(editor: any, field: string) {
-  formData.value[field] = editor.getHtml()
-}
-
-function destroyEditors() {
-  for (const editor of Object.values(editorInstances.value)) {
-    if (editor && typeof editor.destroy === 'function') {
-      editor.destroy()
-    }
-  }
-  editorInstances.value = {}
-}
-
-onBeforeUnmount(() => {
-  destroyEditors()
-})
-
-// ─── User search state (Req 37.1) ────────────────────────────────────────────
-const userSearchOptions = ref<Record<string, Array<{ id: string; name: string }>>>({})
-const userSearchLoading = ref<Record<string, boolean>>({})
-
-async function handleUserSearch(query: string, field: string) {
-  if (query.length < 2) return
-  userSearchLoading.value = { ...userSearchLoading.value, [field]: true }
-  try {
-    const { userApi } = await import('@/api/user')
-    const results = await userApi.searchUsers(query)
-    userSearchOptions.value = { ...userSearchOptions.value, [field]: results }
-  } catch {
-    userSearchOptions.value = { ...userSearchOptions.value, [field]: [] }
-  } finally {
-    userSearchLoading.value = { ...userSearchLoading.value, [field]: false }
-  }
-}
-
-// ─── Department tree state (Req 37.2) ─────────────────────────────────────────
-
-const departmentTreeData = ref<any[]>([])
-const departmentLoading = ref(false)
-
-// Use injected shared cache from FormRenderer if available
-const sharedDepartmentData = inject<typeof departmentTreeData>('departmentTreeData', undefined)
-const sharedDepartmentLoading = inject<typeof departmentLoading>('departmentTreeLoading', undefined)
-
-async function fetchDepartmentTree() {
-  if (sharedDepartmentData?.value && sharedDepartmentData.value.length > 0) {
-    departmentTreeData.value = sharedDepartmentData.value
-    return
-  }
-  if (departmentTreeData.value.length > 0) return
-  departmentLoading.value = true
-  if (sharedDepartmentLoading) sharedDepartmentLoading.value = true
-  try {
-    const api = (await import('@/api/request')).default
-    const res = await api.get('/api/portal/departments/tree')
-    const data = res.data?.data ?? res.data ?? []
-    departmentTreeData.value = data
-    if (sharedDepartmentData) sharedDepartmentData.value = data
-  } catch (err) {
-    console.warn('[SubTableAddDialog] Failed to fetch department tree:', err)
-  } finally {
-    departmentLoading.value = false
-    if (sharedDepartmentLoading) sharedDepartmentLoading.value = false
-  }
-}
-
-function startSign(e: MouseEvent, field: string) {
-  signingField.value = field
-  const canvas = signatureCanvasRefs.value[field]
-  if (!canvas) return
-  const ctx = canvas.getContext('2d')
-  if (!ctx) return
-  const rect = canvas.getBoundingClientRect()
-  ctx.beginPath()
-  ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top)
-}
-
-function drawSign(e: MouseEvent, field: string) {
-  if (signingField.value !== field) return
-  const canvas = signatureCanvasRefs.value[field]
-  if (!canvas) return
-  const ctx = canvas.getContext('2d')
-  if (!ctx) return
-  const rect = canvas.getBoundingClientRect()
-  ctx.lineWidth = 2
-  ctx.lineCap = 'round'
-  ctx.strokeStyle = '#000'
-  ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top)
-  ctx.stroke()
-}
-
-function endSign(field: string) {
-  if (signingField.value !== field) return
-  signingField.value = null
-  const canvas = signatureCanvasRefs.value[field]
-  if (!canvas) return
-  formData.value[field] = canvas.toDataURL('image/png')
-}
-
-function clearSignature(field: string) {
-  const canvas = signatureCanvasRefs.value[field]
-  if (!canvas) return
-  const ctx = canvas.getContext('2d')
-  if (!ctx) return
-  ctx.clearRect(0, 0, canvas.width, canvas.height)
-  formData.value[field] = ''
-}
-
-// Touch event handlers for mobile signature support (Req 42)
-function startSignTouch(e: TouchEvent, field: string) {
-  signingField.value = field
-  const canvas = signatureCanvasRefs.value[field]
-  if (!canvas) return
-  const ctx = canvas.getContext('2d')
-  if (!ctx) return
-  const rect = canvas.getBoundingClientRect()
-  const touch = e.touches[0]
-  ctx.beginPath()
-  ctx.moveTo(touch.clientX - rect.left, touch.clientY - rect.top)
-}
-
-function drawSignTouch(e: TouchEvent, field: string) {
-  if (signingField.value !== field) return
-  const canvas = signatureCanvasRefs.value[field]
-  if (!canvas) return
-  const ctx = canvas.getContext('2d')
-  if (!ctx) return
-  const rect = canvas.getBoundingClientRect()
-  const touch = e.touches[0]
-  ctx.lineWidth = 2
-  ctx.lineCap = 'round'
-  ctx.strokeStyle = '#000'
-  ctx.lineTo(touch.clientX - rect.left, touch.clientY - rect.top)
-  ctx.stroke()
-}
-
-const formRules = computed(() => buildRules(props.columns))
-
-// ─── Row formula calculation (Task 8.6) ───────────────────────────────────────
-const calculatedColumns = computed(() => {
-  if (!props.rowFormulas?.length) return new Set<string>()
-  return new Set(props.rowFormulas.map(f => f.targetColumn))
-})
-
-function isColDisabled(col: DialogColumn): boolean {
-  return col.readonly === true || calculatedColumns.value.has(col.field)
-}
-
-// Watch dependent column values and compute target columns
-watch(
-  () => {
-    if (!props.rowFormulas?.length) return null
-    // Collect all dependent field values to trigger reactivity
-    const deps: Record<string, unknown> = {}
-    for (const formula of props.rowFormulas!) {
-      for (const dep of formula.dependsOn) {
-        deps[dep] = formData.value[dep]
-      }
-    }
-    return deps
-  },
-  () => {
-    if (!props.rowFormulas?.length) return
-    for (const formula of props.rowFormulas!) {
-      const fieldValues: Record<string, unknown> = {}
-      for (const dep of formula.dependsOn) {
-        fieldValues[dep] = formData.value[dep]
-      }
-      formData.value[formula.targetColumn] = evaluateFormula(formula.expression, fieldValues)
-    }
-  },
-  { deep: true }
-)
-
-// ─── Column validation errors (Task 8.7) ──────────────────────────────────────
-const columnErrors = ref<Record<string, string[]>>({})
-
-function validateColumns(): boolean {
-  columnErrors.value = {}
-  if (!props.columnValidationRules) return true
-  let allValid = true
-  for (const [colName, rules] of Object.entries(props.columnValidationRules)) {
-    const errors = validateField(formData.value[colName], rules)
-    if (errors.length > 0) {
-      columnErrors.value[colName] = errors
-      allValid = false
-    }
-  }
-  return allValid
-}
-
-function initDialogFormState(trigger: 'open' | 'data-change') {
-  if (!props.visible) return
-  // Force re-mount on open to reset internal control state.
-  if (trigger === 'open') dialogKey.value += 1
-  uploadNames.value = {}
-  columnErrors.value = {}
-  lookupLoadedViewFields.value = {}
-  lookupSelectedData.value = {}
-  // Fetch department tree if any column is of type 'department'
-  if (props.columns.some(c => c.type === 'department')) {
-    fetchDepartmentTree()
-  }
-  if (props.mode === 'edit' && props.initialData) {
-    // Deep-clone to avoid mutating the original row
-    formData.value = { ...buildInitialRow(props.columns), ...JSON.parse(JSON.stringify(props.initialData)) }
-    // Back-fill upload file names from URL (prefer originalName query param if present)
-    for (const col of props.columns) {
-      if (isUploadColumn(col, formData.value[col.field]) && formData.value[col.field]) {
-        const url: string = formData.value[col.field]
-        uploadNames.value[col.field] = extractFilenameFromUrl(url)
-      }
-    }
-  } else {
-    formData.value = props.initialData
-      ? { ...buildInitialRow(props.columns), ...JSON.parse(JSON.stringify(props.initialData)) }
-      : buildInitialRow(props.columns)
-  }
-
-  // Element Plus Form keeps some per-field state; ensure each init starts clean.
-  nextTick(() => {
-    formRef.value?.clearValidate()
-  })
-}
-
-function extractFilenameFromUrl(url: string): string {
-  if (!url) return ''
-  try {
-    const parsed = new URL(url, window.location.origin)
-    const fromQuery = parsed.searchParams.get('originalName')
-      || parsed.searchParams.get('fileName')
-      || parsed.searchParams.get('filename')
-      || parsed.searchParams.get('name')
-    if (fromQuery) return decodeURIComponent(fromQuery)
-    const pathPart = parsed.pathname.split('/').pop() || url
-    return decodeURIComponent(pathPart)
-  } catch {
-    const [pathPart] = String(url).split('?')
-    return decodeURIComponent(pathPart.split('/').pop() || url)
-  }
-}
-
-// Initialise / reset form whenever dialog opens
-watch(
-  () => props.visible,
-  (open) => {
-    if (!open) return
-    initDialogFormState('open')
-  },
-  { immediate: false }
-)
-
-// Also re-init while visible if caller swaps initialData/mode without fully closing.
-watch(
-  () => [props.mode, props.initialData] as const,
-  () => {
-    if (!props.visible) return
-    initDialogFormState('data-change')
-  },
-  { deep: false }
-)
-
-function handleClose() {
-  destroyEditors()
-  // Avoid resetFields(): it resets to the first-mounted "initial model" snapshot and
-  // can leak previous values between different row edits. We explicitly reset our model.
-  uploadNames.value = {}
-  columnErrors.value = {}
-  lookupLoadedViewFields.value = {}
-  lookupSelectedData.value = {}
-  formData.value = buildInitialRow(props.columns)
-  formRef.value?.clearValidate()
-  emit('update:visible', false)
-}
-
-async function handleSave() {
-  if (!formRef.value || saving.value) return
-  const valid = await formRef.value.validate().catch(() => false)
-  if (!valid) return
-  // Run column validation rules (Task 8.7)
-  if (!validateColumns()) return
-  const seed = props.mode === 'add' ? props.initialData : undefined
-  const row = mergeFormRowWithSeed(seed, formData.value as Record<string, unknown>)
-  saving.value = true
-  try {
-    if (props.saveRow) {
-      await props.saveRow(row)
-    } else {
-      emit('save', row)
-    }
-    emit('update:visible', false)
-  } catch (e) {
-    ElMessage.error(
-      e instanceof Error && e.message ? e.message : t('common.operationFailed'),
-    )
-  } finally {
-    saving.value = false
-  }
-}
+// ─── User search + department tree ────────────────────────────────────────────
+const {
+  userSearchOptions,
+  userSearchLoading,
+  handleUserSearch,
+  departmentTreeData,
+  departmentLoading,
+  fetchDepartmentTree,
+} = useSubTableDialogRelations()
 
 // ─── Upload helpers ───────────────────────────────────────────────────────────
+const {
+  uploadNames,
+  resetUploadNames,
+  backfillUploadNames,
+  handleUploadSuccess,
+  handleUploadError,
+  clearUpload,
+} = useSubTableDialogUpload(formData, () => props.columns, t)
 
-function handleUploadSuccess(res: any, file: any, col: DialogColumn) {
-  const url: string = res?.data?.url || ''
-  formData.value[col.field] = url
-  uploadNames.value = { ...uploadNames.value, [col.field]: file.name }
-  // Auto-fill filename to the configured target column (if any)
-  const target = col.props?.fileNameTargetField
-  if (target && props.columns.some(c => c.field === target)) {
-    formData.value[target] = file.name
-  }
-}
-
-function handleUploadError(col: DialogColumn) {
-  ElMessage.error(t('subTable.uploadFailed', { field: col.label }))
-}
-
-function clearUpload(col: DialogColumn) {
-  formData.value[col.field] = ''
-  const next = { ...uploadNames.value }
-  delete next[col.field]
-  uploadNames.value = next
-}
+// ─── Form core (state / rules / formulas / validation / open / save) ───────────
+const {
+  formRef,
+  saving,
+  dialogKey,
+  formRules,
+  isColDisabled,
+  columnErrors,
+  handleClose,
+  handleSave,
+} = useSubTableDialogForm(props, emit, t, {
+  formData,
+  resetUploadNames,
+  backfillUploadNames,
+  resetLookupState,
+  destroyEditors,
+  fetchDepartmentTree,
+})
 </script>
 
 <style>

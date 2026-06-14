@@ -622,26 +622,28 @@
 </template>
 
 <script setup lang="ts">
-import {
-  ref,
-  computed,
-  onMounted,
-  onBeforeUnmount,
-  shallowRef,
-  nextTick,
-  watch,
-  inject,
-} from 'vue'
-import type { Ref } from 'vue'
+// ---------------------------------------------------------------------------
+// FieldRenderer — orchestrator. Single field renderer (render hot-path).
+// Behaviour is unchanged: logic lives in src/composables/fieldRenderer/*,
+// invoked here in the original registration order so watcher / lifecycle-hook
+// ordering is preserved (lookup watch → upload watch; editor onBeforeUnmount →
+// signature onBeforeUnmount; combined onMounted for signature + department).
+// ---------------------------------------------------------------------------
+import { onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Upload } from '@element-plus/icons-vue'
-import DOMPurify from 'dompurify'
 import { Editor, Toolbar } from '@wangeditor/editor-for-vue'
 import '@wangeditor/editor/dist/css/style.css'
 import type { FormField } from './formRendererHelpers'
-import api from '@/api/request'
 import LookupField from './lookup/LookupField.vue'
 import LookupViewDisplay from './lookup/LookupViewDisplay.vue'
+import { useFieldCore } from '@/composables/fieldRenderer/useFieldCore'
+import { useFieldSanitize } from '@/composables/fieldRenderer/useFieldSanitize'
+import { useFieldLookup } from '@/composables/fieldRenderer/useFieldLookup'
+import { useFieldUpload } from '@/composables/fieldRenderer/useFieldUpload'
+import { useFieldEditor } from '@/composables/fieldRenderer/useFieldEditor'
+import { useFieldSignature } from '@/composables/fieldRenderer/useFieldSignature'
+import { useFieldDepartment } from '@/composables/fieldRenderer/useFieldDepartment'
 
 // ---------------------------------------------------------------------------
 // i18n
@@ -677,418 +679,83 @@ const emit = defineEmits<{
   (e: 'search:users', query: string, fieldKey: string): void
 }>()
 
-const isDisabled = computed(() => props.readonly || props.disabled)
-
-/** Prefixed-sequence / uuid PK bound to inputNumber shows blank in el-input-number. */
-const showNumberAsText = computed(() => {
-  if (props.field.type !== 'number' || !isDisabled.value) return false
-  const v = props.modelValue
-  if (v == null || v === '') return false
-  if (typeof v === 'number') return Number.isNaN(v)
-  const s = String(v).trim()
-  return s !== '' && Number.isNaN(Number(s))
-})
-
-const numberAsTextDisplay = computed(() => {
-  const v = props.modelValue
-  return v == null ? '' : String(v)
-})
-
-function onUpdate(value: any) {
-  if (props.readonly) return
-  emit('update:modelValue', value)
-}
-
-function onBlur() {
-  if (props.readonly) return
-  emit('field-blur', props.field.key)
-}
-
 // ---------------------------------------------------------------------------
-// Lookup state — mirrors FormRenderer's lookupSelectedData / lookupLoadedViewFields
-// so the LookupViewDisplay backfill panel shows up inside SubTableInlineForm /
-// Link Form modal / SubTaskForm (which all go through FieldRenderer, not FormRenderer).
+// Composables — invoked in original registration order (see header note).
 // ---------------------------------------------------------------------------
-const lookupSelectedRow = ref<Record<string, any> | null>(null)
-const lookupLoadedViewFields = ref<any[]>([])
+// Core bindings: disabled state, number-as-text fallback, options, emitters.
+const {
+  isDisabled,
+  showNumberAsText,
+  numberAsTextDisplay,
+  onUpdate,
+  onBlur,
+  resolvedOptions,
+  searchUsers,
+} = useFieldCore(props, emit)
 
-const lookupShowBackfillView = computed<boolean>(() => {
-  if (props.field.type !== 'lookup') return false
-  return (props.field as any)._lookupShowBackfillView !== false
-})
-
-const effectiveLookupViewFields = computed(() => {
-  const configured = (props.field as any)._lookupViewFields
-  if (Array.isArray(configured) && configured.length > 0) return configured
-  return lookupLoadedViewFields.value
-})
-
-function onLookupSelect(row: Record<string, any>) {
-  lookupSelectedRow.value = row && typeof row === 'object' ? row : null
-}
-
-function onLookupClear() {
-  lookupSelectedRow.value = null
-}
-
-function onLookupViewFieldsLoaded(vfs: any[]) {
-  lookupLoadedViewFields.value = Array.isArray(vfs) ? vfs : []
-}
-
-watch(
-  () => [props.modelValue, props.field?.type] as const,
-  ([val, type]) => {
-    if (type !== 'lookup') {
-      lookupSelectedRow.value = null
-      return
-    }
-    if (val && typeof val === 'object' && !Array.isArray(val) && Object.keys(val).length > 0) {
-      lookupSelectedRow.value = val as Record<string, any>
-    } else if (val == null || val === '') {
-      lookupSelectedRow.value = null
-    }
-  },
-  { immediate: true, deep: true },
-)
-
-// ---------------------------------------------------------------------------
-// Resolved options — linkage override takes priority (Task 6.1)
-// ---------------------------------------------------------------------------
-const resolvedOptions = computed(() => {
-  return props.options ?? props.field.options ?? []
-})
-
-// ---------------------------------------------------------------------------
 // XSS sanitization (Task 6.5)
-// ---------------------------------------------------------------------------
-const SAFE_TAGS = [
-  'p', 'br', 'strong', 'em', 'u', 's',
-  'ol', 'ul', 'li',
-  'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-  'a', 'img',
-  'table', 'tr', 'td', 'th',
-  'span', 'div',
-]
+const { sanitize } = useFieldSanitize()
 
-function sanitize(html: string): string {
-  return DOMPurify.sanitize(html, {
-    ALLOWED_TAGS: SAFE_TAGS,
-    ALLOWED_ATTR: [
-      'href', 'target', 'rel',
-      'src', 'alt', 'width', 'height',
-      'class', 'style',
-      'colspan', 'rowspan',
-    ],
-  })
-}
+// Lookup backfill state — registers the modelValue/type watch first.
+const {
+  lookupSelectedRow,
+  lookupShowBackfillView,
+  effectiveLookupViewFields,
+  onLookupSelect,
+  onLookupClear,
+  onLookupViewFieldsLoaded,
+} = useFieldLookup(props)
 
-// ---------------------------------------------------------------------------
-// Editor — wangeditor (Task 6.2)
-// ---------------------------------------------------------------------------
-const editorInstance = shallowRef<any>(null)
+// Upload URL + file list — registers the modelValue watch second.
+const {
+  resolvedUploadUrl,
+  fileList,
+  onUploadSuccess,
+  onUploadRemove,
+} = useFieldUpload(props, emit)
 
-const editorToolbarConfig = {}
+// Editor — registers onBeforeUnmount first (matches original order).
+const {
+  editorInstance,
+  editorToolbarConfig,
+  editorConfig,
+  onEditorCreated,
+  onEditorChange,
+} = useFieldEditor(props, emit)
 
-const editorConfig = computed(() => ({
-  placeholder: props.field.placeholder || t('fieldRenderer.editorPlaceholder'),
-  readOnly: props.disabled,
-}))
+// Signature canvas — registers onBeforeUnmount second; setup called in onMounted.
+const {
+  signatureCanvasRef,
+  signatureHistory,
+  onSigDown,
+  onSigMove,
+  onSigUp,
+  onTouchStart,
+  onTouchMove,
+  undoSignature,
+  clearSignature,
+  setupSignatureCanvas,
+} = useFieldSignature(props, emit)
 
-function onEditorCreated(editor: any) {
-  editorInstance.value = editor
-}
-
-function onEditorChange(editor: any) {
-  const html = editor.getHtml()
-  emit('update:modelValue', html)
-}
-
-onBeforeUnmount(() => {
-  if (editorInstance.value) {
-    editorInstance.value.destroy()
-    editorInstance.value = null
-  }
-})
-
-// ---------------------------------------------------------------------------
-// Signature canvas (Task 6.3)
-// ---------------------------------------------------------------------------
-const signatureCanvasRef = ref<HTMLCanvasElement | null>(null)
-let signing = false
-let sigObserver: ResizeObserver | null = null
-
-// Signature history stack for Undo (Req 28, max 20 snapshots)
-const signatureHistory = ref<string[]>([])
-const MAX_SIGNATURE_HISTORY = 20
-
-function getSigCtx() {
-  return signatureCanvasRef.value?.getContext('2d') ?? null
-}
-
-function syncCanvasSize() {
-  const canvas = signatureCanvasRef.value
-  if (!canvas) return
-  const w = canvas.parentElement?.clientWidth || canvas.offsetWidth || 400
-  if (canvas.width !== w || canvas.height !== 120) {
-    canvas.width = w
-    canvas.height = 120
-  }
-}
-
-function getCanvasPos(e: MouseEvent | Touch) {
-  const canvas = signatureCanvasRef.value
-  if (!canvas) return { x: 0, y: 0 }
-  const r = canvas.getBoundingClientRect()
-  return { x: e.clientX - r.left, y: e.clientY - r.top }
-}
-
-function onSigDown(e: MouseEvent) {
-  if (props.disabled) return
-  syncCanvasSize()
-  // Save snapshot before new stroke for Undo (Req 28)
-  saveSignatureSnapshot()
-  signing = true
-  const ctx = getSigCtx()
-  if (!ctx) return
-  const pos = getCanvasPos(e)
-  ctx.beginPath()
-  ctx.moveTo(pos.x, pos.y)
-}
-
-function onSigMove(e: MouseEvent) {
-  if (!signing) return
-  const ctx = getSigCtx()
-  if (!ctx) return
-  const pos = getCanvasPos(e)
-  ctx.lineWidth = 2
-  ctx.lineCap = 'round'
-  ctx.strokeStyle = '#000'
-  ctx.lineTo(pos.x, pos.y)
-  ctx.stroke()
-}
-
-function onSigUp() {
-  if (!signing) return
-  signing = false
-  if (signatureCanvasRef.value) {
-    emit('update:modelValue', signatureCanvasRef.value.toDataURL('image/png'))
-  }
-}
-
-function onTouchStart(e: TouchEvent) {
-  if (props.disabled || !e.touches.length) return
-  syncCanvasSize()
-  // Save snapshot before new stroke for Undo (Req 28)
-  saveSignatureSnapshot()
-  signing = true
-  const ctx = getSigCtx()
-  if (!ctx) return
-  const pos = getCanvasPos(e.touches[0])
-  ctx.beginPath()
-  ctx.moveTo(pos.x, pos.y)
-}
-
-function onTouchMove(e: TouchEvent) {
-  if (!signing || !e.touches.length) return
-  const ctx = getSigCtx()
-  if (!ctx) return
-  const pos = getCanvasPos(e.touches[0])
-  ctx.lineWidth = 2
-  ctx.lineCap = 'round'
-  ctx.strokeStyle = '#000'
-  ctx.lineTo(pos.x, pos.y)
-  ctx.stroke()
-}
-
-function saveSignatureSnapshot() {
-  const canvas = signatureCanvasRef.value
-  if (!canvas) return
-  const snapshot = canvas.toDataURL('image/png')
-  if (signatureHistory.value.length >= MAX_SIGNATURE_HISTORY) {
-    signatureHistory.value.shift() // FIFO: remove oldest
-  }
-  signatureHistory.value.push(snapshot)
-}
-
-function undoSignature() {
-  if (signatureHistory.value.length === 0) return
-  const snapshot = signatureHistory.value.pop()!
-  const canvas = signatureCanvasRef.value
-  if (!canvas) return
-  const ctx = canvas.getContext('2d')
-  if (!ctx) return
-  const img = new Image()
-  img.onload = () => {
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
-    ctx.drawImage(img, 0, 0)
-    emit('update:modelValue', canvas.toDataURL('image/png'))
-  }
-  img.src = snapshot
-}
-
-function clearSignature() {
-  const ctx = getSigCtx()
-  if (ctx && signatureCanvasRef.value) {
-    ctx.clearRect(0, 0, signatureCanvasRef.value.width, signatureCanvasRef.value.height)
-  }
-  signatureHistory.value = []
-  emit('update:modelValue', '')
-}
-
-// ---------------------------------------------------------------------------
-// Department tree-select (Task 6.4)
-// ---------------------------------------------------------------------------
-interface DepartmentNode {
-  id: string
-  name: string
-  children?: DepartmentNode[]
-}
-
-const departmentTreeData = ref<DepartmentNode[]>([])
-const departmentLoading = ref(false)
-
-// Use injected shared cache from FormRenderer if available (Req 27)
-const sharedDepartmentData = inject<Ref<DepartmentNode[]> | undefined>('departmentTreeData')
-const sharedDepartmentLoading = inject<Ref<boolean> | undefined>('departmentTreeLoading')
-
-/** Recursively find a node by id to resolve display name */
-function findDepartmentName(
-  nodes: DepartmentNode[],
-  id: string,
-): string | undefined {
-  for (const node of nodes) {
-    if (node.id === id) return node.name
-    if (node.children) {
-      const found = findDepartmentName(node.children, id)
-      if (found) return found
-    }
-  }
-  return undefined
-}
-
-const departmentDisplayName = computed(() => {
-  if (!props.modelValue || departmentTreeData.value.length === 0) return ''
-  return findDepartmentName(departmentTreeData.value, props.modelValue) ?? ''
-})
-
-async function fetchDepartmentTree() {
-  // Use shared cache from FormRenderer if available (Req 27)
-  if (sharedDepartmentData?.value && sharedDepartmentData.value.length > 0) {
-    departmentTreeData.value = sharedDepartmentData.value
-    return
-  }
-  if (departmentTreeData.value.length > 0) return // already cached locally
-  departmentLoading.value = true
-  if (sharedDepartmentLoading) sharedDepartmentLoading.value = true
-  try {
-    const res = await api.get('/api/portal/departments/tree')
-    const data = res.data?.data ?? res.data ?? []
-    departmentTreeData.value = data
-    // Write back to shared cache
-    if (sharedDepartmentData) sharedDepartmentData.value = data
-  } catch (err) {
-    console.warn('[FieldRenderer] Department API error:', err)
-  } finally {
-    departmentLoading.value = false
-    if (sharedDepartmentLoading) sharedDepartmentLoading.value = false
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Upload URL resolution (Task 6.8)
-// Priority: props.uploadUrl → field.uploadUrl → default '/api/v1/upload'
-// ---------------------------------------------------------------------------
-const DEFAULT_UPLOAD_URL = '/api/v1/upload'
-
-const resolvedUploadUrl = computed(() => {
-  if (props.uploadUrl) return props.uploadUrl
-  if (props.field.uploadUrl && props.field.uploadUrl !== '/') return props.field.uploadUrl
-  return DEFAULT_UPLOAD_URL
-})
-
-// Upload file list (local state for display)
-const fileList = ref<Array<{ name: string; url: string; uid?: number }>>([])
-
-function extractFileNameFromUrl(url: string): string {
-  if (!url) return ''
-  try {
-    const parsed = new URL(url, window.location.origin)
-    const fromQuery = parsed.searchParams.get('originalName')
-      || parsed.searchParams.get('fileName')
-      || parsed.searchParams.get('filename')
-      || parsed.searchParams.get('name')
-    if (fromQuery) return decodeURIComponent(fromQuery)
-    const pathPart = parsed.pathname.split('/').pop() || url
-    return decodeURIComponent(pathPart)
-  } catch {
-    const [pathPart] = String(url).split('?')
-    return decodeURIComponent(pathPart.split('/').pop() || url)
-  }
-}
-
-// Initialise file list from modelValue when it's a URL string
-watch(
-  () => props.modelValue,
-  (val) => {
-    if (props.field.type === 'upload' && val && fileList.value.length === 0) {
-      const url = String(val)
-      const targetField = (props.field as any).fileNameTargetField
-      const targetName = targetField ? props.formData?.[targetField] : undefined
-      const fileName = (typeof targetName === 'string' && targetName.trim().length > 0)
-        ? targetName
-        : extractFileNameFromUrl(url)
-      fileList.value = [{ name: fileName, url }]
-    }
-  },
-  { immediate: true },
-)
-
-function onUploadSuccess(response: any, file: any) {
-  const url = response?.data?.url || ''
-  fileList.value = [{ name: file.name, url, uid: file.uid }]
-  emit('update:modelValue', url)
-  emit('upload:success', response, file, props.field.key)
-}
-
-function onUploadRemove(file: any) {
-  fileList.value = []
-  emit('update:modelValue', '')
-  emit('upload:remove', file, props.field.key)
-}
-
-// ---------------------------------------------------------------------------
-// User search — emit to parent FormRenderer (Req 11.1, 11.3)
-// ---------------------------------------------------------------------------
-function searchUsers(query: string, field: FormField) {
-  if (query.length < 2) return
-  emit('search:users', query, field.key)
-}
+// Department tree-select — fetch triggered in onMounted.
+const {
+  departmentTreeData,
+  departmentLoading,
+  departmentDisplayName,
+  fetchDepartmentTree,
+} = useFieldDepartment(props)
 
 // ---------------------------------------------------------------------------
 // Lifecycle
 // ---------------------------------------------------------------------------
 onMounted(() => {
   // Signature canvas setup
-  if (props.field.type === 'signature' && !props.readonly) {
-    nextTick(() => {
-      setTimeout(syncCanvasSize, 50)
-      if (signatureCanvasRef.value) {
-        sigObserver = new ResizeObserver(syncCanvasSize)
-        sigObserver.observe(
-          signatureCanvasRef.value.parentElement || signatureCanvasRef.value,
-        )
-      }
-    })
-  }
+  setupSignatureCanvas()
 
   // Department data fetch
   if (props.field.type === 'department') {
     fetchDepartmentTree()
   }
-})
-
-onBeforeUnmount(() => {
-  sigObserver?.disconnect()
 })
 </script>
 

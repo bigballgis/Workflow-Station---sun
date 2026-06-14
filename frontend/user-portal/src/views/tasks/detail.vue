@@ -458,34 +458,17 @@
 
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount, computed, nextTick, watch, defineAsyncComponent } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ElMessage } from 'element-plus'
 import { ArrowLeft } from '@element-plus/icons-vue'
-import {
-  getTaskDetail,
-  TaskActionInfo
-} from '@/api/task'
-import { processApi } from '@/api/process'
-import type { ProcessNode, ProcessFlow } from '@/components/ProcessDiagram.vue'
+import type { ProcessNode } from '@/components/ProcessDiagram.vue'
 
 /** Lazy-load bpmn-js (~190kB gzip) only when the diagram section enters the viewport. */
 const ProcessDiagramAsync = defineAsyncComponent(
   () => import('@/components/ProcessDiagram.vue'),
 )
 import FormRenderer from '@/components/FormRenderer.vue'
-import SubTableField from '@/components/SubTableField.vue'
 import N8nActionDialog from '@/components/N8nActionDialog.vue'
-import {
-  allSubTableRowsHaveAssignee
-} from '@/utils/subTableAssignment'
-import {
-  cloneSubTableRows,
-  coerceSubTablesVariableToMap,
-  enrichChildBindingRowsFromParentsNestedSubTables,
-  isMiParticipantScopedSubTableBinding,
-  miParentRowAlignsWithChildRow,
-} from '@/composables/tasks/shared'
 import ChangeHistoryPanel from '@/components/ChangeHistoryPanel.vue'
 import TaskBasicInfo from '@/components/tasks/TaskBasicInfo.vue'
 import ApproveDialog from '@/components/tasks/ApproveDialog.vue'
@@ -501,15 +484,9 @@ import { useTaskDisplay } from '@/composables/tasks/useTaskDisplay'
 import { useTaskActions } from '@/composables/tasks/useTaskActions'
 import { useCustomActions } from '@/composables/tasks/useCustomActions'
 import { clearBpmnParseCache } from '@/utils/bpmnParseCache'
-import { resolveUserFacingHttpMessage } from '@/utils/httpErrorMessage'
 import { reconcilePortalWorkspaceSession } from '@/api/auth'
 import type { TaskDetailCtx } from '@/composables/taskDetail/context'
 import { createTaskDetailState } from '@/composables/taskDetail/useTaskDetailState'
-import {
-  cloneSubTableRows as cloneSubTableRowsImpl,
-  cloneAndFlattenSubTablesMap,
-  yieldToMain,
-} from '@/composables/taskDetail/subTableRowUtils'
 import { createTaskDetailFormSchema } from '@/composables/taskDetail/useTaskDetailFormSchema'
 import { createTaskDetailFieldExtraction } from '@/composables/taskDetail/useTaskDetailFieldExtraction'
 import { createTaskDetailLinkTargets } from '@/composables/taskDetail/useTaskDetailLinkTargets'
@@ -528,10 +505,10 @@ import { createTaskDetailFuLoader } from '@/composables/taskDetail/useTaskDetail
 import { createTaskDetailPrevForms } from '@/composables/taskDetail/useTaskDetailPrevForms'
 import { createTaskDetailFormsLoader } from '@/composables/taskDetail/useTaskDetailFormsLoader'
 import { createTaskDetailPopupHelpers } from '@/composables/taskDetail/useTaskDetailPopup'
+import { createTaskDetailLoader } from '@/composables/taskDetail/useTaskDetailLoader'
 
 const { t } = useI18n()
 const route = useRoute()
-const router = useRouter()
 
 const taskId = route.params.id as string
 const fallbackProcessInstanceId = computed(() => {
@@ -553,20 +530,15 @@ const {
   processError,
   historyError,
   selectedNodeId,
-  nodeFormMap,
   formRenderReady,
-  fuFormSubTableFields,
   lastBindingRelationTableMap,
   selectedNodeForm,
-  previousForms,
   subTableBindings,
   linkableSubTableBindings,
   isMiSubTaskMode,
-  miFullSubTablesSnapshotRef,
   miFillDialogVisible,
   miFillDialogData,
   miFillSubTableBindings,
-  miFilled,
   miFillDialogReadOnly,
   historyRecords,
   approveDialogVisible,
@@ -636,18 +608,11 @@ const {
   getIconComponent
 } = taskDisplay
 
-const hasConfiguredSaveAction = computed(() =>
-  (taskInfo.value.actions || []).some(action => (action.actionType || '').trim().toUpperCase() === 'SAVE')
-)
-
 const bpmnParser = useBpmnParser({ taskInfo: taskInfo as any, historyRecords, isCompletedTask })
-const { processNodes, processFlows, completedNodeIds, currentNodeId, bpmnXml, parseBpmnXml } = bpmnParser
+const { processNodes, processFlows, completedNodeIds, currentNodeId, bpmnXml } = bpmnParser
 
 const taskForm = useTaskForm({ subTableBindings, isMiSubTaskMode, isCompletedTask, effectiveTaskId, taskFormDTO: taskFormDTO as any, bindingRelationTableMap: lastBindingRelationTableMap, miSubProcessScopeName })
-const { formFields, formTabs, formFieldsAfterTabs, formData, currentFormName, formReadOnly, formLabelWidth, formFormOptions, savingTaskForm, saveCurrentTaskForm, buildCurrentTaskFormSubmitPayload, getCurrentFormFieldKeys, clearAutosaveTimer: clearFormAutosaveTimer } = taskForm
-
-/** Local alias preserves the original setup-scope shadowing of the shared import. */
-const cloneSubTableRows = cloneSubTableRowsImpl
+const { formFields, formTabs, formFieldsAfterTabs, formData, currentFormName, formReadOnly, formLabelWidth, formFormOptions, savingTaskForm, buildCurrentTaskFormSubmitPayload, clearAutosaveTimer: clearFormAutosaveTimer } = taskForm
 
 /**
  * Shared mutable context — the function clusters extracted to
@@ -682,46 +647,25 @@ Object.assign(ctx, createTaskDetailPrevForms(ctx))
 Object.assign(ctx, createTaskDetailFuLoader(ctx))
 Object.assign(ctx, createTaskDetailFormsLoader(ctx))
 
+// Cross-module fns still referenced directly by the SFC (template bindings,
+// the phase watcher, lifecycle, and the taskActions/customActions wiring).
+// The remaining clusters are invoked through `ctx.*` inside the extracted
+// composables (e.g. useTaskDetailLoader), so they are not destructured here.
 const {
   currentMiRowId,
-  rehydrateSharedAttachmentBindings,
-  resolveCurrentMiParticipantRowIdFromTaskVars,
-  isMiSubTask,
-  sanitizeMiCollectionBindingsData,
-  isolateMiSubTaskData,
-  applyMiParticipantFilterToCurrentSubTableBindings,
-  resyncMiParticipantSubTablesFromVariables,
-  mergePriorStepSubTablesAfterMiIsolate,
-  hydrateMiLinkChildBindingsFromFullSnapshot,
-  scopeMiSubTaskBindingsToCurrentParticipant,
-  syncMiLinkChildRowsIntoParentNested,
-  rehydrateSharedProcessSubTableBindings,
   patchFormDataSubTablesFromCurrentBindings,
-  stripNestedFromAllTaskBindings,
-  markBindingRowsNonReactive,
-  applyTaskAssigneeNameToMatchingSubTableRows,
   syncMainSubTableRows,
-  syncFormLayoutWithSubTableBindings,
-  forceSeedMiCollectionBindingForCurrentParticipant,
   mergeMiParticipantScalarsFromForm,
   protectMainRecordScalarsInSubmitPayload,
   saveCurrentTaskFormWithMiPersist,
-  openMiFillDialog,
   syncMiFillSubTableRows,
   saveMiFillDialog,
   buildNodeFormMapIfNeeded,
   disconnectDiagramViewportObserver,
   connectDiagramViewportObserver,
-  loadFunctionUnitContent,
-  prefetchProcessAndTaskFormData,
-  loadProcessAndTaskFormData,
   handleProcessFormSubmit,
-  isCompletedTaskData,
-  hasCompletedSnapshotRoute,
   completedHistorySnapshotTime,
   completedHistoryTaskId,
-  loadTaskHistory,
-  scheduleDetailUiPhases,
 } = ctx
 
 // ── Node click handlers for diagram ──────────────────────────────────────
@@ -740,252 +684,8 @@ const clearNodeSelection = () => {
   selectedNodeId.value = null
 }
 
-const loadTaskDetail = async () => {
-  loading.value = true
-  formRenderReady.value = false
-  fuFormSubTableFields.value = []
-  detailUiPhase.value = 0
-  diagramInViewport.value = false
-  disconnectDiagramViewportObserver()
-  ctx.deferredNodeFormMapContent = null
-  nodeFormMap.value = new Map()
-  // #1446: in-place reload (e.g. after MI save) must start from the same blank slate as a fresh
-  // mount — stale previous-step rows / pre-save binding rows would otherwise re-enter the MI
-  // merge candidates (mergePriorStepSubTablesAfterMiIsolate seeds from current binding data)
-  // and win over the refetched values.
-  previousForms.value = []
-  subTableBindings.value = []
-  taskError.value = null
-  try {
-    const res = await getTaskDetail(taskId)
-    const data = res.data || res
-    if (data) {
-      taskInfo.value = data
-      isCompletedTask.value = isCompletedTaskData(data) || hasCompletedSnapshotRoute()
-      if (isCompletedTask.value) {
-        formReadOnly.value = true
-        currentNodeId.value = ''
-      }
-      if (data.variables) formData.value = data.variables
-      const processSubTablesSnapshot =
-        data.variables?.__subTables__ && typeof data.variables.__subTables__ === 'object'
-          ? (JSON.parse(JSON.stringify(data.variables.__subTables__)) as Record<string, unknown>)
-          : null
-      const st0 = coerceSubTablesVariableToMap(formData.value.__subTables__)
-      if (st0) {
-        formData.value = { ...formData.value, __subTables__: st0 }
-      }
-
-      // Parallel fetch: history, FU content, process/task forms — do not block FU/form CPU on history.
-      const historyPromise = loadTaskHistory().then(() => {
-        if (bpmnXml.value) parseBpmnXml(bpmnXml.value)
-      })
-      const fuFetchPromise = data.processDefinitionKey
-        ? processApi
-            .getFunctionUnitContent(data.processDefinitionKey)
-            .then(r => (r as { data?: unknown }).data ?? r)
-            .catch((err: unknown) => {
-              console.error('Failed to prefetch function unit content:', err)
-              return null
-            })
-        : Promise.resolve(null)
-      const formPrefetchPromise = prefetchProcessAndTaskFormData(data)
-
-      const [prefetchedFu, prefetchedForms] = await Promise.all([
-        fuFetchPromise,
-        formPrefetchPromise,
-      ])
-      // Pre-compute flattened sub-tables once — shared by FU load, rehydrate, and MI resync.
-      const preFlattenedSubTables = processSubTablesSnapshot
-        ? cloneAndFlattenSubTablesMap(processSubTablesSnapshot)
-        : undefined
-      if (data.processDefinitionKey) {
-        functionUnitIdRef.value = String(data.processDefinitionKey)
-        await loadFunctionUnitContent(
-          data.processDefinitionKey,
-          prefetchedFu ?? undefined,
-          preFlattenedSubTables,
-        )
-      }
-
-      await loadProcessAndTaskFormData(data, prefetchedForms)
-      rehydrateSharedProcessSubTableBindings(processSubTablesSnapshot ?? undefined, preFlattenedSubTables)
-
-      const miIsolatePromise = isMiSubTask(data)
-        ? (async () => {
-            isMiSubTaskMode.value = true
-            const preIsolateTopLevelForDiagram: Record<string, unknown> = { ...formData.value }
-            const miFullSubTablesSnapshot =
-              processSubTablesSnapshot ??
-              (formData.value.__subTables__ && typeof formData.value.__subTables__ === 'object'
-                ? (JSON.parse(JSON.stringify(formData.value.__subTables__)) as Record<string, unknown>)
-                : null)
-            // Persist-side guard source: flatten so nested participant rows are reachable per binding.
-            miFullSubTablesSnapshotRef.value = miFullSubTablesSnapshot
-              ? (preFlattenedSubTables ?? cloneAndFlattenSubTablesMap(miFullSubTablesSnapshot))
-              : null
-            await isolateMiSubTaskData(data)
-            await yieldToMain()
-            enrichChildBindingRowsFromParentsNestedSubTables(subTableBindings.value)
-            await yieldToMain()
-            const miRowIdAfterEnrich = resolveCurrentMiParticipantRowIdFromTaskVars(data?.variables ?? {})
-            if (miRowIdAfterEnrich != null) {
-              applyMiParticipantFilterToCurrentSubTableBindings(miRowIdAfterEnrich)
-            }
-            // Enrich re-aggregates nested rows across peer parents — scope again to this MI element (one task ↔ one participant row).
-            const miVarsRef = data?.variables ?? {}
-            const miRowIdPostEnrich = resolveCurrentMiParticipantRowIdFromTaskVars(miVarsRef)
-            if (miRowIdPostEnrich != null) {
-              await resyncMiParticipantSubTablesFromVariables(
-                miRowIdPostEnrich,
-                miFullSubTablesSnapshot,
-                preFlattenedSubTables,
-              )
-            }
-            await yieldToMain()
-            rehydrateSharedAttachmentBindings(
-              subTableBindings.value,
-              preIsolateTopLevelForDiagram,
-              miFullSubTablesSnapshotRef.value ?? preFlattenedSubTables ?? miFullSubTablesSnapshot,
-            )
-            mergePriorStepSubTablesAfterMiIsolate(miRowIdPostEnrich ?? null)
-            if (miRowIdPostEnrich != null) {
-              hydrateMiLinkChildBindingsFromFullSnapshot(miRowIdPostEnrich)
-            }
-            if (miRowIdPostEnrich != null) {
-              scopeMiSubTaskBindingsToCurrentParticipant(subTableBindings.value, miRowIdPostEnrich)
-              for (const pf of previousForms.value) {
-                scopeMiSubTaskBindingsToCurrentParticipant(
-                  pf.subTableBindings as typeof subTableBindings.value,
-                  miRowIdPostEnrich,
-                )
-              }
-            } else {
-              sanitizeMiCollectionBindingsData(subTableBindings.value)
-              for (const pf of previousForms.value) {
-                sanitizeMiCollectionBindingsData(pf.subTableBindings as typeof subTableBindings.value)
-              }
-            }
-            patchFormDataSubTablesFromCurrentBindings()
-            // nodeFormMap refresh deferred until diagram panel (buildNodeFormMapIfNeeded)
-            const formKeys = getCurrentFormFieldKeys()
-            miFilled.value = formKeys.some(key => {
-              const val = formData.value[key]
-              return val != null && val !== '' && val !== false
-            })
-          })().catch((err: unknown) => {
-            console.error('[detail] MI isolate failed:', err)
-            throw err
-          })
-        : Promise.resolve()
-
-      if (isCompletedTask.value) {
-        applyTaskAssigneeNameToMatchingSubTableRows(data)
-      }
-
-      // History feeds diagram node status — load in background so MI form hydrate does not block the shell.
-      await miIsolatePromise
-      // Safe only after MI nested slices are merged — stripping earlier breaks link-form / participant isolation.
-      stripNestedFromAllTaskBindings()
-      if (isMiSubTaskMode.value && currentMiRowId.value != null) {
-        hydrateMiLinkChildBindingsFromFullSnapshot(currentMiRowId.value)
-        for (const b of subTableBindings.value) {
-          if (!isMiParticipantScopedSubTableBinding(b)) continue
-          syncMiLinkChildRowsIntoParentNested(
-            { bindingId: b.bindingId, tableName: b.tableName ?? '' },
-            cloneSubTableRows(Array.isArray(b.data) ? b.data : []),
-          )
-        }
-        scopeMiSubTaskBindingsToCurrentParticipant(subTableBindings.value, currentMiRowId.value)
-        for (const pf of previousForms.value) {
-          scopeMiSubTaskBindingsToCurrentParticipant(
-            pf.subTableBindings as typeof subTableBindings.value,
-            currentMiRowId.value,
-          )
-        }
-        patchFormDataSubTablesFromCurrentBindings()
-      }
-      markBindingRowsNonReactive()
-      syncFormLayoutWithSubTableBindings()
-      forceSeedMiCollectionBindingForCurrentParticipant()
-      await yieldToMain()
-      void historyPromise.catch((err: unknown) => {
-        console.warn('[detail] Background history load failed:', err)
-      })
-    }
-  } catch (error: any) {
-    console.error('Failed to load task detail:', error)
-    const status = error.response?.status
-    const msg = resolveUserFacingHttpMessage(error, t)
-    const notFound = status === 404 || /task not found/i.test(msg)
-    const forbidden =
-      status === 403 ||
-      /permission|denied|do not have permission|无权|無權/i.test(msg)
-    if (notFound) {
-      taskError.value = t('task.notFound')
-    } else if (forbidden) {
-      // Completed tasks should still be able to render workflow diagram for process participants.
-      // Fallback to process detail (read-only) when task-level permission is denied.
-      if (fallbackProcessInstanceId.value) {
-        try {
-          const pr = await processApi.getProcessDetail(fallbackProcessInstanceId.value)
-          const p = (pr as any).data || pr
-          if (p) {
-            taskInfo.value = {
-              taskId,
-              id: taskId,
-              taskName: String(route.query.snapshotTaskName || ''),
-              processInstanceId: p.id,
-              processDefinitionKey: p.processDefinitionKey || (route.query.processDefinitionKey as any),
-              variables: p.variables || {}
-            } as any
-            isCompletedTask.value = true
-            formReadOnly.value = true
-            currentNodeId.value = ''
-            if (p.variables) formData.value = p.variables
-            const stP = coerceSubTablesVariableToMap(formData.value.__subTables__)
-            if (stP) {
-              formData.value = { ...formData.value, __subTables__: stP }
-            }
-            const historyPromise = loadTaskHistory().then(() => {
-              if (bpmnXml.value) parseBpmnXml(bpmnXml.value)
-            })
-            const key = (taskInfo.value as any).processDefinitionKey
-            const fuFetchPromise = key
-              ? processApi
-                  .getFunctionUnitContent(String(key))
-                  .then(r => (r as { data?: unknown }).data ?? r)
-                  .catch(() => null)
-              : Promise.resolve(null)
-            const fallbackTask = { ...(taskInfo.value as any), processInstanceId: p.id, id: taskId }
-            const formPrefetchPromise = prefetchProcessAndTaskFormData(fallbackTask)
-            const prefetchedFu = await fuFetchPromise
-            if (key) {
-              await loadFunctionUnitContent(String(key), prefetchedFu ?? undefined)
-            }
-            await loadProcessAndTaskFormData(fallbackTask, await formPrefetchPromise)
-            await historyPromise
-            loading.value = false
-            scheduleDetailUiPhases()
-            return
-          }
-        } catch (e) {
-          console.warn('[detail] Fallback process detail failed:', e)
-        }
-      }
-      taskError.value = t('task.noPermission')
-    } else {
-      taskError.value = msg || t('task.serverError')
-    }
-    ElMessage.error(taskError.value)
-  } finally {
-    loading.value = false
-    if (!taskError.value) {
-      formRenderReady.value = true
-      scheduleDetailUiPhases()
-    }
-  }
-}
+/** Top-level load orchestrator — extracted to composables/taskDetail/useTaskDetailLoader.ts (behavior unchanged). */
+const { loadTaskDetail } = createTaskDetailLoader(ctx, { fallbackProcessInstanceId })
 ctx.loadTaskDetail = loadTaskDetail
 
 const taskActions = useTaskActions({
@@ -1024,7 +724,6 @@ const taskActions = useTaskActions({
 })
 const {
   validateSubTableAssigneesForComplete,
-  searchUsers,
   onActionDialogOpened,
   handleApprove,
   handleReject,
@@ -1070,10 +769,8 @@ const {
   formPopupNativeSubTableBindingIds,
   formPopupFormConfig,
   formPopupViewContext,
-  currentFormPopupAction: currentFormPopupActionRef,
   handleCustomAction,
   handleN8nActionExecuted,
-  openFormPopup,
   submitFormPopup,
   handleFormPopupSubTableUpdate,
 } = customActions

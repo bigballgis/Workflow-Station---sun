@@ -1,7 +1,7 @@
 package com.developer.property;
 
 import com.developer.component.ExportImportComponent;
-import com.developer.component.impl.ExportImportComponentImpl;
+import com.developer.component.impl.ExportImportTestComponents;
 import com.developer.entity.FunctionUnit;
 import com.developer.enums.FunctionUnitStatus;
 import com.developer.repository.*;
@@ -34,9 +34,8 @@ public class ExportImportPropertyTest {
         ActionDefinitionRepository actionRepo = mock(ActionDefinitionRepository.class);
         DecisionDefinitionRepository decisionRepo = mock(DecisionDefinitionRepository.class);
         ObjectMapper objectMapper = new ObjectMapper();
-        ExportImportComponent component = new ExportImportComponentImpl(
-                repository, processRepo, tableRepo, formRepo, actionRepo,
-                decisionRepo,
+        ExportImportComponent component = ExportImportTestComponents.build(
+                repository, processRepo, tableRepo, formRepo, actionRepo, decisionRepo,
                 mock(FormTableBindingRepository.class),
                 mock(FormStageBindingRepository.class),
                 mock(TableRelationRepository.class),
@@ -46,7 +45,7 @@ public class ExportImportPropertyTest {
                 mock(jakarta.persistence.EntityManager.class),
                 objectMapper,
                 mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class));
-        
+
         // 创建模拟功能单元
         FunctionUnit fu = new FunctionUnit();
         fu.setId(1L);
@@ -79,9 +78,8 @@ public class ExportImportPropertyTest {
         ActionDefinitionRepository actionRepo = mock(ActionDefinitionRepository.class);
         DecisionDefinitionRepository decisionRepo = mock(DecisionDefinitionRepository.class);
         ObjectMapper objectMapper = new ObjectMapper();
-        ExportImportComponent component = new ExportImportComponentImpl(
-                repository, processRepo, tableRepo, formRepo, actionRepo,
-                decisionRepo,
+        ExportImportComponent component = ExportImportTestComponents.build(
+                repository, processRepo, tableRepo, formRepo, actionRepo, decisionRepo,
                 mock(FormTableBindingRepository.class),
                 mock(FormStageBindingRepository.class),
                 mock(TableRelationRepository.class),
@@ -91,7 +89,7 @@ public class ExportImportPropertyTest {
                 mock(jakarta.persistence.EntityManager.class),
                 objectMapper,
                 mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class));
-        
+
         // 模拟已存在同名功能单元
         when(repository.existsByName(name)).thenReturn(true);
         

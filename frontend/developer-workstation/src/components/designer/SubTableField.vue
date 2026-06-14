@@ -285,33 +285,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, inject, nextTick } from 'vue'
+import { computed, inject } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Plus, Loading, Document } from '@element-plus/icons-vue'
-import { ElMessageBox, ElMessage } from 'element-plus'
-import DOMPurify from 'dompurify'
 import SubTableAddDialog from './SubTableAddDialog.vue'
 import SubTableFormDialog from './SubTableFormDialog.vue'
 import LookupPreview from './LookupPreview.vue'
-import { mergeFormRowWithSeed, type DialogColumn } from './subTableAddDialogHelpers'
-import {
-  alignUploadFieldsToColumns,
-  getFilenameFromUrl,
-  isUploadColumn,
-  normalizeSubTableColumns,
-  normalizeUploadFieldsInRow,
-  resolveFileFetchUrl,
-  resolveUploadCellUrl,
-} from './uploadFieldUtils'
-import { collectUploadRulesFromTree } from '@/utils/formDesigner'
+import { getFilenameFromUrl, isUploadColumn } from './uploadFieldUtils'
 import { PREVIEW_SUBTABLE_DIALOG_KEY, PREVIEW_MY_REQUESTS_ACTIVE_KEY } from './previewSubTableDialog'
-import { functionUnitApi } from '@/api/functionUnit'
-import {
-  buildRowAddContext,
-  prepareSubTableAddRow,
-  applyFkPresentationToDialogColumns,
-  toFieldFkMetas,
-} from '@/utils/subTableRowRuntime'
+import type { SubTableConfig } from '@/composables/designerSubTableField/types'
+import type { BindingFieldDefinition } from '@/utils/subTableRowRuntime'
+import { useSubTableData } from '@/composables/designerSubTableField/useSubTableData'
+import { useSubTableUploadCells } from '@/composables/designerSubTableField/useSubTableUploadCells'
+import { useSubTableInlineForm } from '@/composables/designerSubTableField/useSubTableInlineForm'
+import { useSubTableLinkForm } from '@/composables/designerSubTableField/useSubTableLinkForm'
+import { useSubTableRowDialog } from '@/composables/designerSubTableField/useSubTableRowDialog'
 
 const { t } = useI18n()
 const previewDialogHost = inject(PREVIEW_SUBTABLE_DIALOG_KEY, null)
@@ -319,42 +307,6 @@ const previewMyRequestsActive = inject(PREVIEW_MY_REQUESTS_ACTIVE_KEY, undefined
 const hideInlineFormForRowDialog = computed(
   () => previewDialogHost?.rowDialogOpen.value === true,
 )
-
-function sanitizeHtml(html: string): string {
-  if (!html) return ''
-  return DOMPurify.sanitize(html, {
-    ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 's', 'ol', 'ul', 'li',
-      'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'a', 'img', 'table', 'tr', 'td', 'th', 'span', 'div'],
-    ALLOWED_ATTR: ['href', 'src', 'alt', 'class', 'style', 'target', 'rel'],
-  })
-}
-
-// 列配置接口
-interface ColumnConfig {
-  field: string
-  label: string
-  type?: 'input' | 'number' | 'date' | 'switch' | 'text' | 'textarea' | 'select' | 'radio' | 'checkbox' | 'datetime' | 'upload' | 'user' | 'department' | 'password' | 'timerange' | 'treeselect' | 'colorPicker' | 'rate' | 'slider' | 'tree' | 'editor' | 'signature' | 'transfer' | 'cascader' | 'linkForm' | 'lookup'
-  width?: number
-  minWidth?: number
-  required?: boolean
-  placeholder?: string
-  options?: Array<{ label: string; value: any }>
-  props?: Record<string, any>
-}
-
-// 子表配置接口
-interface SubTableConfig {
-  title?: string
-  bindingId?: number
-  tableId?: number
-  columns: ColumnConfig[]
-  fieldDefinitions?: import('@/utils/subTableRowRuntime').BindingFieldDefinition[]
-  bindingLinkMode?: 'structuralFk' | 'miParticipantRow' | string
-  bindingForeignKeyField?: string | null
-  pagination?: boolean
-  pageSize?: number
-  maxHeight?: number
-}
 
 const props = defineProps<{
   config: SubTableConfig
@@ -391,365 +343,79 @@ const emit = defineEmits<{
   (e: 'delete', row: any, index: number): void
 }>()
 
-const loading = ref(false)
-const tableData = ref<any[]>([])
-const currentPage = ref(1)
-const total = ref(0)
-const uploadNames = ref<Record<string, string>>({})
-const downloadingKeys = ref<Record<string, boolean>>({})
-
-// Dialog state - 使用两个独立的 dialog 来避免状态冲突
-const formDialogVisible = ref(false)
-const simpleDialogVisible = ref(false)
-const linkFormDialogVisible = ref(false)
-const dialogMode = ref<'add' | 'edit'>('add')
-const editingRowIndex = ref<number | null>(null)
-const dialogInitialData = ref<Record<string, any> | undefined>(undefined)
-const dialogAddColumns = ref<DialogColumn[] | null>(null)
-const linkFormDialogTitle = ref('')
-const linkFormInitialData = ref<Record<string, any> | undefined>(undefined)
-const linkFormRule = ref<any[]>([])
-const linkFormOption = ref<any>({})
-
-const previewInlineFormData = ref<Record<string, unknown>>({})
-const inlineFormBelowRef = ref<HTMLElement | null>(null)
-const effectiveInlineFormRule = computed(
-  () => (props.previewInlineFormRule?.length ? props.previewInlineFormRule : props.formRule) || [],
-)
-const effectiveInlineFormOptionSource = computed(
-  () => props.previewInlineFormOption ?? props.formOption,
-)
-const previewInlineFormOption = computed(() => {
-  const saved = { ...((effectiveInlineFormOptionSource.value || {}) as Record<string, unknown>) }
-  delete saved.title
-  return {
-    showMsg: true,
-    form: {
-      labelPosition: 'left',
-      labelWidth: '140px',
-      disabled: true,
-    },
-    language: {
-      en: {
-        clickToUpload: t('form.clickToUpload'),
-      },
-    },
-    ...saved,
-    resetBtn: false,
-    submitBtn: false,
-  }
-})
-
 // 计算属性：是否可编辑（Form Preview My Requests 全局只读覆盖 props.editable）
 const editable = computed(() => {
   if (previewMyRequestsActive?.value === true) return false
   return props.editable !== false
 })
 
-// 计算属性：显示的列（FILE / file 字段归一为 upload，便于文件名展示与下载）
-const displayColumns = computed(() =>
-  normalizeSubTableColumns(props.config.columns || [], tableData.value),
-)
+// 表格数据模型：行数据、分页、上传文件名缓存、显示列
+const {
+  loading,
+  tableData,
+  currentPage,
+  total,
+  uploadNames,
+  displayColumns,
+  handlePageChange,
+  exposed,
+} = useSubTableData(props)
 
-// 是否使用 form-create 对话框（当有 formRule 时优先使用）
-const hasFormRule = computed(() => props.formRule && props.formRule.length > 0)
+// 单元格富文本净化 + 上传文件展示/下载
+const {
+  downloadingKeys,
+  sanitizeHtml,
+  resolveRowUploadUrl,
+  rememberUploadNamesForRow,
+  downloadFile,
+} = useSubTableUploadCells({ displayColumns, uploadNames, t })
 
-// 将 ColumnConfig 转换为 DialogColumn（兼容 SubTableAddDialog 的类型）
-const dialogColumns = computed<DialogColumn[]>(() => {
-  const source = dialogAddColumns.value ?? displayColumns.value
-  return source.map(col => {
-    // 将旧的 'input' type 映射到 'text'
-    const type = col.type === 'input' ? 'text' : (col.type as DialogColumn['type'])
-    return {
-      field: col.field,
-      label: col.label,
-      type,
-      required: col.required,
-      placeholder: col.placeholder,
-      minWidth: col.minWidth,
-      options: col.options,
-      props: col.props,
-      readonly: (col as { readonly?: boolean }).readonly,
-    }
-  })
+// Form Preview：表格下方只读内联表单
+const {
+  previewInlineFormData,
+  inlineFormBelowRef,
+  effectiveInlineFormRule,
+  previewInlineFormOption,
+  handleInlineFormBelowSave,
+} = useSubTableInlineForm({ props, editable, t })
+
+// linkForm 关联表单弹层
+const {
+  linkFormDialogVisible,
+  linkFormDialogTitle,
+  linkFormInitialData,
+  linkFormRule,
+  linkFormOption,
+  openLinkFormDialog,
+  handleLinkFormSave,
+} = useSubTableLinkForm({ props, editable, previewInlineFormData, inlineFormBelowRef, t })
+
+// 行的添加/编辑弹层编排 + 增删改
+const {
+  formDialogVisible,
+  simpleDialogVisible,
+  dialogMode,
+  dialogInitialData,
+  dialogColumns,
+  handleAdd,
+  openEditDialog,
+  handleDialogSave,
+  handleDelete,
+} = useSubTableRowDialog({
+  props,
+  emit,
+  displayColumns,
+  tableData,
+  total,
+  previewDialogHost,
+  // 循环依赖破环：弹层编排器需要关闭 linkForm 弹层，但 linkForm 编排器无需感知行弹层
+  setLinkFormDialogVisible: (value: boolean) => { linkFormDialogVisible.value = value },
+  rememberUploadNamesForRow,
+  t,
 })
-
-// 监听 modelValue 变化
-watch(() => props.modelValue, (newVal) => {
-  if (newVal) {
-    tableData.value = [...newVal]
-    total.value = newVal.length
-    const nextNames: Record<string, string> = {}
-    newVal.forEach((row: Record<string, unknown>, rowIndex: number) => {
-      for (const col of displayColumns.value) {
-        if (!isUploadColumn(col, row[col.field])) continue
-        const url = resolveUploadCellUrl(row[col.field])
-        if (!url) continue
-        nextNames[`${rowIndex}_${col.field}`] = getFilenameFromUrl(String(url))
-      }
-    })
-    uploadNames.value = nextNames
-  }
-}, { immediate: true, deep: true })
-
-function resolveRowUploadUrl(row: Record<string, unknown>, col: ColumnConfig): string | null {
-  return resolveUploadCellUrl(row[col.field])
-}
-
-function rememberUploadNamesForRow(rowIndex: number, rowData: Record<string, any>) {
-  for (const col of displayColumns.value) {
-    if (!isUploadColumn(col, rowData[col.field])) continue
-    const url = resolveUploadCellUrl(rowData[col.field])
-    if (!url) continue
-    const target = col.props?.fileNameTargetField as string | undefined
-    const saved = (target && rowData[target] != null ? String(rowData[target]) : undefined)
-      || getFilenameFromUrl(String(url))
-    uploadNames.value = { ...uploadNames.value, [`${rowIndex}_${col.field}`]: saved }
-  }
-}
-
-async function downloadFile(
-  url: string,
-  savedName: string | undefined,
-  rowIndex: number,
-  field: string,
-) {
-  if (!url) return
-  const key = `${rowIndex}_${field}`
-  if (downloadingKeys.value[key]) return
-
-  const filename = getFilenameFromUrl(url, savedName)
-  const fetchUrl = resolveFileFetchUrl(url)
-  downloadingKeys.value = { ...downloadingKeys.value, [key]: true }
-  const msg = ElMessage({ message: t('common.downloading'), type: 'info', duration: 0 })
-
-  try {
-    const response = await fetch(fetchUrl, { credentials: 'include' })
-    if (!response.ok) {
-      msg.close()
-      ElMessage.error(response.status === 404 ? t('common.fileNotFound') : t('common.downloadFailed'))
-      return
-    }
-    const blob = await response.blob()
-    const blobUrl = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = blobUrl
-    a.download = filename
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(blobUrl)
-    msg.close()
-  } catch {
-    msg.close()
-    ElMessage.error(t('common.downloadFailed'))
-  } finally {
-    const next = { ...downloadingKeys.value }
-    delete next[key]
-    downloadingKeys.value = next
-  }
-}
-
-// 添加/编辑行 — preview 走 FormDesigner 顶层弹层，避免嵌在 Preview Dialog 内被遮罩挡住
-async function openRowDialog(mode: 'add' | 'edit', index?: number) {
-  dialogMode.value = mode
-  editingRowIndex.value = mode === 'edit' && index != null ? index : null
-  dialogAddColumns.value = null
-
-  if (mode === 'add') {
-    const fkMetas = toFieldFkMetas(props.config.fieldDefinitions)
-    const baseCols = fkMetas.length
-      ? applyFkPresentationToDialogColumns(
-          displayColumns.value.map(col => ({
-            field: col.field,
-            label: col.label,
-            type: col.type === 'input' ? 'text' : (col.type as DialogColumn['type']),
-            required: col.required,
-            placeholder: col.placeholder,
-            options: col.options,
-            props: col.props,
-          })),
-          fkMetas,
-          props.config.fieldDefinitions,
-        ).visibleColumns
-      : undefined
-
-    const rowAddContext = buildRowAddContext(
-      props.primaryFormData ?? {},
-      props.previewTableBindings,
-    )
-    try {
-      const result = await prepareSubTableAddRow({
-        columns: baseCols ?? dialogColumns.value,
-        fieldDefinitions: props.config.fieldDefinitions,
-        rowAddContext,
-        tableId: props.config.tableId,
-        tableDisplayName: props.config.title,
-        primaryTableDisplayName: props.primaryTableDisplayName,
-        primaryTableId: props.primaryTableId,
-        parentTablesById: props.parentTablesById,
-        functionUnitId: props.functionUnitId != null ? String(props.functionUnitId) : undefined,
-        autoEnsurePrimaryRecord: props.primaryFormData != null,
-        bindingLinkMode: props.config.bindingLinkMode,
-        bindingForeignKeyField: props.config.bindingForeignKeyField,
-        allocatePrimaryKeys:
-          props.functionUnitId != null && props.config.tableId != null
-            ? async (payload) => {
-                const res = await functionUnitApi.allocatePrimaryKeys(props.functionUnitId!, payload)
-                return res?.data?.values ?? []
-              }
-            : undefined,
-        t,
-      })
-      if (!result.ok) {
-        ElMessage.warning(result.message)
-        return
-      }
-      if (result.primaryFormDataPatch && Object.keys(result.primaryFormDataPatch).length > 0) {
-        emit('update:primaryFormData', result.primaryFormDataPatch)
-      }
-      dialogAddColumns.value = result.dialogColumns
-      dialogInitialData.value = result.initialRow as Record<string, any>
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : t('common.error')
-      ElMessage.error(message || t('common.error'))
-      return
-    }
-  } else {
-    dialogInitialData.value =
-      index != null ? { ...tableData.value[index] } : undefined
-  }
-
-  if (previewDialogHost) {
-    linkFormDialogVisible.value = false
-    previewDialogHost.openRowDialog({
-      mode,
-      title: props.config.title || t('subTable.defaultTitle'),
-      initialData: dialogInitialData.value,
-      formRule: props.formRule,
-      formOption: props.formOption,
-      columns: dialogColumns.value,
-      onSave: (rowData) => handleDialogSave(rowData),
-    })
-    return
-  }
-
-  linkFormDialogVisible.value = false
-  formDialogVisible.value = false
-  simpleDialogVisible.value = false
-  window.setTimeout(() => {
-    if (hasFormRule.value) {
-      formDialogVisible.value = true
-    } else {
-      simpleDialogVisible.value = true
-    }
-  }, 0)
-}
-
-function handleAdd() {
-  void openRowDialog('add')
-}
-
-// 编辑行 — 打开 Dialog 并预填数据
-function openEditDialog(index: number) {
-  void openRowDialog('edit', index)
-}
-
-function linkFormTitleTableName(raw: string): string {
-  return String(raw || '')
-    .trim()
-    .replace(/^ADD\s*\+\s*/i, '')
-    .trim()
-}
-
-function openLinkFormDialog(col: ColumnConfig, row: Record<string, any>) {
-  if (props.previewLinkFormScrollToInline) {
-    previewInlineFormData.value = { ...row }
-    nextTick(() => {
-      inlineFormBelowRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    })
-    return
-  }
-
-  const raw = col.props?.boundSubTableName || props.config.title || ''
-  const tableName = linkFormTitleTableName(raw)
-  linkFormDialogTitle.value = tableName
-    ? t('linkForm.dialogTitleAddTable', { tableName })
-    : t('linkForm.linkedForm')
-  linkFormInitialData.value = { ...row }
-  linkFormRule.value = col.props?.formRule || props.formRule || []
-  const opt = { ...((col.props?.formOption || props.formOption || {}) as Record<string, unknown>) }
-  delete opt.title
-  if (!editable.value) {
-    opt.form = {
-      ...((opt.form as Record<string, unknown>) || {}),
-      disabled: true,
-    }
-  }
-  linkFormOption.value = opt
-  linkFormDialogVisible.value = true
-}
-
-function handleLinkFormSave(rowData: Record<string, any>) {
-  linkFormDialogVisible.value = false
-  linkFormInitialData.value = rowData
-}
-
-/** Form Preview parity with Portal SubTableInlineForm — inline Save below the table. */
-function handleInlineFormBelowSave() {
-  if (!editable.value) return
-  ElMessage.success(t('common.saveSuccess'))
-}
-
-// Dialog 保存回调
-function handleDialogSave(rowData: Record<string, any>) {
-  const savedRow = mergeFormRowWithSeed(dialogInitialData.value, rowData)
-  if (hasFormRule.value && props.formRule?.length) {
-    const uploadRuleFields = collectUploadRulesFromTree(props.formRule).map((r) => r.field)
-    alignUploadFieldsToColumns(savedRow, displayColumns.value, uploadRuleFields)
-  }
-  normalizeUploadFieldsInRow(savedRow, displayColumns.value)
-  if (dialogMode.value === 'add') {
-    const rowIndex = tableData.value.length
-    tableData.value.push(savedRow)
-    rememberUploadNamesForRow(rowIndex, savedRow)
-    emit('add', savedRow)
-  } else if (dialogMode.value === 'edit' && editingRowIndex.value !== null) {
-    tableData.value[editingRowIndex.value] = savedRow
-    rememberUploadNamesForRow(editingRowIndex.value, savedRow)
-    emit('edit', savedRow, editingRowIndex.value)
-  }
-  total.value = tableData.value.length
-  emit('update:modelValue', [...tableData.value])
-  formDialogVisible.value = false
-  simpleDialogVisible.value = false
-}
-
-// 删除行
-async function handleDelete(index: number) {
-  await ElMessageBox.confirm(t('subTable.deleteConfirm'), t('common.confirmTitle'), { type: 'warning' })
-  const deletedRow = tableData.value[index]
-  tableData.value.splice(index, 1)
-  total.value = tableData.value.length
-  emit('update:modelValue', [...tableData.value])
-  emit('delete', deletedRow, index)
-  ElMessage.success(t('common.deleteSuccess'))
-}
-
-// 分页变化
-function handlePageChange(page: number) {
-  currentPage.value = page
-}
 
 // 暴露方法
-defineExpose({
-  getData: () => tableData.value,
-  setData: (data: any[]) => {
-    tableData.value = [...data]
-    total.value = data.length
-  },
-  refresh: () => {}
-})
+defineExpose(exposed)
 </script>
 
 <style lang="scss" scoped>

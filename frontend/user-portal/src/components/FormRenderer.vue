@@ -57,104 +57,42 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick, provide, reactive, shallowReactive, toRefs } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount, provide, reactive, toRefs } from 'vue'
 import { watchThrottled } from '@vueuse/core'
-import { useI18n } from 'vue-i18n'
-import { isEqual } from 'lodash-es'
-import { ElMessageBox } from 'element-plus'
-import type { FormInstance, FormRules } from 'element-plus'
+import type { FormInstance } from 'element-plus'
 import FormRendererFields from './FormRendererFields.vue'
-import { FORM_RENDERER_FIELDS_CTX } from './formRendererFieldsContext'
-import { BusinessLogicEngine } from './businessLogicEngine'
+import { FORM_RENDERER_FIELDS_CTX, type FormRendererFieldsContext } from './formRendererFieldsContext'
 import { userApi } from '@/api/user'
-import { resolveAssigneeFieldForBinding } from '@/utils/subTableAssignment'
 import type {
   FormField,
   FormTab,
   FormBusinessLogicConfig,
   PortalViewContext,
-  SubTablePortalViews
 } from './formRendererHelpers'
 import {
-  extractFieldsRecursive,
   flattenAllFormFieldSegments,
   isFormFieldReadonly,
-  legacyBindingIdAliases,
-  mergeSubTablePortalViewsForRuntime,
-  resolveSubTableDisplayMode,
-  seedDesignerHiddenFieldVisibility,
-  shouldSuppressStandaloneSubTableInInitiatorRequest,
 } from './formRendererHelpers'
 import {
-  mergeSubTableRowsByRowId,
-  collectNestedChildRowsFromPeerBindings,
-  pullNestedRowsForBindingFromParentRows,
-  findMiIsolatedParentRow,
-  pickMiLinkChildRowsForParent,
-  isMiDashboardSubTableBinding,
-  scoreMiLinkChildRowQuality,
-  collapseMiLinkChildRowsToOnePerParticipant,
-  getSavedSubTableRows,
-  miParentRowAlignsWithChildRow,
-  miLinkChildRowBelongsToParticipant,
-} from '@/composables/tasks/shared'
-import { resolveMiLinkIsolateInlineRow } from '@/utils/inlineFormBelowTableRuntime'
-import {
-  applyFieldDefinitionsToFormFields,
-  bindingForeignKeyFieldIsRowPrimaryKey,
-  seedLinkChildForeignKeysFromParentRow,
-} from '@/utils/subTableRowRuntime'
-import { createPortalFormApi, createFieldKeyResolver, runFormOnChangeHandler, type PortalFormVisibilityState } from '@/utils/formCreateEventRuntime'
-import { materializeFormCreateValidationRules } from '@/utils/formCreateValidateRules'
-import {
   collectFieldComponentEventsFromRules,
-  runAllComponentHookEvents,
-  runComponentFieldEvents,
-  runComponentFieldEventsOnValueChange,
 } from '@/utils/formCreateComponentEvents'
+import { useSubTableBindings, type SubTableBinding } from '@/composables/formRenderer/useSubTableBindings'
+import { useSubTablePortalViews } from '@/composables/formRenderer/useSubTablePortalViews'
+import { useInlineSubTableForm } from '@/composables/formRenderer/useInlineSubTableForm'
+import { useBusinessLogicEngine } from '@/composables/formRenderer/useBusinessLogicEngine'
+import { useFormCreateEvents } from '@/composables/formRenderer/useFormCreateEvents'
+import { useFormData } from '@/composables/formRenderer/useFormData'
+import { useFormValidation } from '@/composables/formRenderer/useFormValidation'
+import { useFormAutoSave } from '@/composables/formRenderer/useFormAutoSave'
 
 export type { FormField, FormTab }
+export type { SubTableBinding }
 
 console.log(`[PERF-FR] setup start @${performance.now().toFixed(0)}`)
-const { t } = useI18n()
 
 // ---------------------------------------------------------------------------
-// Types
+// Props / Emits
 // ---------------------------------------------------------------------------
-interface SubTableBinding {
-  bindingId: number
-  tableId?: number | null
-  bindingType: string
-  bindingMode: string
-  tableName: string
-  physicalTableName?: string
-  tableType: string
-  tableDescription: string
-  columns: any[]
-  data: any[]
-  formFields?: FormField[]
-  formOptions?: Record<string, any>
-  /**
-   * Per-binding portalViews loaded from form configJson.subTablePortalViews[bindingId].
-   * Used as the fallback when a placed `subTable` rule node has no `props.portalViews`,
-   * and as the primary source for unplaced bindings (e.g. sub-tables accessed only via Link Form).
-   */
-  portalViews?: Partial<import('./formRendererHelpers').SubTablePortalViews> | null
-  /** dw_field_definitions PK columns (from admin tableBindings). */
-  primaryKeyFields?: string[]
-  fieldDefinitions?: Array<{
-    fieldName: string
-    isPrimaryKey?: boolean
-    isForeignKey?: boolean
-    refTableId?: number
-    refPrimaryKeyFields?: string[]
-    pkGeneration?: Record<string, unknown>
-    fkDisplayMode?: string
-  }>
-  bindingLinkMode?: string
-  foreignKeyField?: string | null
-}
-
 interface Props {
   fields: FormField[]
   tabs?: FormTab[]
@@ -255,8 +193,8 @@ const emit = defineEmits<{
 // Core refs
 // ---------------------------------------------------------------------------
 const formRef = ref<FormInstance>()
-const formData = ref<Record<string, any>>({})
 let isInternalUpdate = false
+function setInternalUpdate(v: boolean) { isInternalUpdate = v }
 
 // Department data cache shared via provide/inject (Req 27)
 const departmentTreeData = ref<any[]>([])
@@ -273,7 +211,7 @@ function isFieldReadonly(field: FormField): boolean {
 const activeTab = ref('')
 
 watch(
-  () => props.tabs?.map(t => String(t.name)).join('\u0001') ?? '',
+  () => props.tabs?.map(t => String(t.name)).join('') ?? '',
   () => {
     const newTabs = props.tabs
     if (!newTabs?.length) {
@@ -293,881 +231,9 @@ watch(
   { immediate: true },
 )
 
-const bindingMap = computed(() => {
-  const map = new Map<number, SubTableBinding>()
-  for (const b of (props.subTableBindings ?? [])) {
-    for (const alias of legacyBindingIdAliases(b.bindingId)) {
-      if (!map.has(alias)) map.set(alias, b)
-    }
-  }
-  return map
-})
-const linkableSubTableBindings = computed(() => props.linkedSubTableBindings ?? props.subTableBindings)
-
-const primaryTableDisplayName = computed(() => props.primaryTableBinding?.tableName ?? '')
-
-const primaryTableId = computed(() => props.primaryTableBinding?.tableId ?? null)
-
-const parentTablesById = computed(() => {
-  const out: Record<number, { fieldDefinitions: NonNullable<SubTableBinding['fieldDefinitions']> }> = {}
-  const primary = props.primaryTableBinding
-  if (primary?.tableId != null && primary.fieldDefinitions?.length) {
-    out[Number(primary.tableId)] = { fieldDefinitions: primary.fieldDefinitions }
-  }
-  for (const b of props.subTableBindings ?? []) {
-    if (b.tableId == null || !b.fieldDefinitions?.length) continue
-    if (b.bindingType !== 'PRIMARY' && b.bindingType !== 'SUB') continue
-    out[Number(b.tableId)] = { fieldDefinitions: b.fieldDefinitions }
-  }
-  return out
-})
-
-const subTableBindingsForContext = computed(() => {
-  const list: Array<{ tableId?: number | null; bindingType?: string; tableName?: string }> = [
-    ...(props.subTableBindings ?? []),
-  ]
-  const primary = props.primaryTableBinding
-  if (primary?.tableId != null) {
-    list.unshift({
-      tableId: primary.tableId,
-      bindingType: 'PRIMARY',
-      tableName: primary.tableName,
-    })
-  }
-  return list
-})
-const resolveBinding = (id?: number) => {
-  if (id == null || !Number.isFinite(Number(id))) return undefined
-  const direct = bindingMap.value.get(Number(id))
-  if (direct) return direct
-  for (const alias of legacyBindingIdAliases(id)) {
-    const hit = bindingMap.value.get(alias)
-    if (hit) return hit
-  }
-  for (const b of props.subTableBindings ?? []) {
-    if (legacyBindingIdAliases(b.bindingId).includes(Number(id))) return b
-  }
-  return undefined
-}
-
-function isBindingModeEditable(bindingMode: string | undefined | null): boolean {
-  return String(bindingMode ?? '').trim().toUpperCase() === 'EDITABLE'
-}
-
-/** Sub-table CRUD follows developer-workstation table binding mode; whole-form readonly wins via {@link Props.readonly}. */
-function isSubTableEditable(bindingId?: number): boolean {
-  const binding = resolveBinding(bindingId)
-  if (!binding || props.readonly) return false
-  return isBindingModeEditable(binding.bindingMode)
-}
-
-function subTableAssigneeField(bindingId?: number): string | undefined {
-  const b = resolveBinding(bindingId)
-  if (!b) return undefined
-  return resolveAssigneeFieldForBinding(
-    b.columns as Array<{ field?: string }>,
-    b.tableName
-  )
-}
-
-/** MI To Do: seed link-child / attachment Add dialog with the active collection row (e.g. row_id). */
-function resolveMiParticipantSeedForSubTableAdd(bindingId?: number): {
-  rowId: string | number | null
-  parentRow: Record<string, unknown> | null
-  parentTableId: number | null
-} {
-  const rowId = props.currentMiRowId
-  if (rowId == null || String(rowId).trim() === '') {
-    return { rowId: null, parentRow: null, parentTableId: null }
-  }
-  const peers = props.subTableBindings ?? []
-  for (const b of peers) {
-    if (bindingId != null && b.bindingId === bindingId) continue
-    const rows = Array.isArray(b.data) ? b.data : []
-    const parent = findMiIsolatedParentRow(rows, rowId)
-    if (parent) {
-      return {
-        rowId,
-        parentRow: parent as Record<string, unknown>,
-        parentTableId: b.tableId != null && Number.isFinite(Number(b.tableId)) ? Number(b.tableId) : null,
-      }
-    }
-  }
-  return { rowId, parentRow: { row_id: rowId } as Record<string, unknown>, parentTableId: null }
-}
-
-function showSubTableAssignColumn(bindingId?: number): boolean {
-  if (props.allowSubTableAssign === false) {
-    return false
-  }
-  return !!(props.taskId && subTableAssigneeField(bindingId))
-}
-
 // ---------------------------------------------------------------------------
-// Portal-views driven rendering helpers (designer → Portal contract)
+// Derived field collections / form-create rules
 // ---------------------------------------------------------------------------
-/**
- * Effective sub-table display mode at the current view context. Returns one of:
- *   - 'tableOnly': just the SubTableField, nothing else
- *   - 'formBelowTable': SubTableField + inline form below (binds to current row)
- *   - 'summaryWithLinkFormModal': SubTableField; Details modal flow handled by existing
- *      Link Form column logic inside SubTableField (no inline form below)
- *
- * Uses the same portalViews merge as developer-workstation form preview — canvas props and
- * per-binding {@code configJson.subTablePortalViews[bindingId]} combine per field; explicit canvas
- * `assigneeTodo` / `initiatorRequest` overrides still win when set.
- */
-function subTableMode(field: FormField): 'tableOnly' | 'formBelowTable' | 'summaryWithLinkFormModal' {
-  const binding = resolveBinding(field._bindingId)
-  const merged = mergeSubTablePortalViewsForRuntime(field.portalViews, binding?.portalViews)
-  return resolveSubTableDisplayMode(merged, props.viewContext)
-}
-
-function mergedPortalViewsForSubTable(field: FormField): SubTablePortalViews {
-  const binding = resolveBinding(field._bindingId)
-  return mergeSubTablePortalViewsForRuntime(field.portalViews, binding?.portalViews)
-}
-
-/** My Request: link-form targets (e.g. subtable2) render only via Link Form modal, not duplicate tables. */
-function shouldRenderPlacedSubTableField(field: FormField): boolean {
-  if (props.viewContext !== 'initiatorRequest') return true
-  if (field._bindingId == null) return true
-  const binding = resolveBinding(field._bindingId)
-  if (!binding) return false
-  const merged = mergeSubTablePortalViewsForRuntime(field.portalViews, binding?.portalViews)
-  const nativeIds = props.nativeSubTableBindingIds?.length
-    ? new Set(props.nativeSubTableBindingIds.map(Number))
-    : null
-  return !shouldSuppressStandaloneSubTableInInitiatorRequest(
-    field._bindingId,
-    linkableSubTableBindings.value ?? [],
-    merged,
-    nativeIds,
-    props.formConfig,
-  )
-}
-
-/** 发起人「汇总 + Link/Details」：子表单元格内不展开 lookup / 用户快照明细，与设计师意图一致。 */
-function subTableCompactLookupCells(field: FormField): boolean {
-  if (props.viewContext !== 'initiatorRequest') return false
-  return subTableMode(field) === 'summaryWithLinkFormModal'
-}
-
-/**
- * 办理人待办 + 表格下内联表单：无论「表单来源」是 subForm 还是 Link 子表，只要列上存在 linkForm，
- * 点击链接只滚动到下方内联区，不打开 Link 弹层（与设计师 form below table 单一路径一致）。
- */
-function linkFormScrollToInlineEnabled(field: FormField): boolean {
-  if (props.viewContext !== 'assigneeTodo') return false
-  return subTableMode(field) === 'formBelowTable'
-}
-
-const subTableInlineAnchors = new Map<number, HTMLElement>()
-function setSubTableInlineAnchor(bindingId: number | undefined, el: HTMLElement | null) {
-  if (bindingId == null) return
-  if (el) subTableInlineAnchors.set(bindingId, el)
-  else subTableInlineAnchors.delete(bindingId)
-}
-
-function scrollSubTableInlineIntoView(bindingId: number | undefined) {
-  if (bindingId == null) return
-  nextTick(() => {
-    subTableInlineAnchors.get(bindingId)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  })
-}
-
-function subTableShowTaskStatusInitiator(field: FormField): boolean {
-  // Assignee To Do: MI collection (e.g. Assign Task "Title" card → Sub Task) shows per-row Status,
-  // matching the runtime MI dashboard. Rendered in-place inside the designer card (design parity).
-  if (props.viewContext === 'assigneeTodo') {
-    const binding = resolveBinding(field._bindingId)
-    return !!binding && isMiDashboardSubTableBinding(binding)
-  }
-  if (props.viewContext !== 'initiatorRequest') return false
-  if (subTableMode(field) !== 'summaryWithLinkFormModal') return false
-  // Initiator + summary+Link Form: list columns come from designer `subListViews`; runtime Status/Actions
-  // duplicate MI state and designer Actions/Detail columns (My Request / subform_copy).
-  return false
-}
-
-function subTableShowViewDetailInitiator(field: FormField): boolean {
-  if (props.viewContext !== 'initiatorRequest') return false
-  if (subTableMode(field) !== 'summaryWithLinkFormModal') return false
-  return false
-}
-
-/** Form-below 「表单来源」— follows merged portal views (aligned with developer-workstation preview). */
-function resolveAssigneeTodoFormSource(field: FormField): {
-  type: 'subForm' | 'linkForm' | 'formId'
-  formId?: number | string | null
-  linkFormColumnId?: number | string | null
-} {
-  const src = mergedPortalViewsForSubTable(field).assigneeTodoFormSource ?? {
-    type: 'subForm',
-    formId: null,
-    linkFormColumnId: null
-  }
-  return {
-    type: src.type,
-    formId: src.formId ?? null,
-    linkFormColumnId: src.linkFormColumnId ?? null
-  }
-}
-
-/**
- * For a placed sub-table `field`, resolve which Link Form column on the binding's
- * list view drives the inline form-below-table when `assigneeTodoFormSource.type === 'linkForm'`,
- * then return that column's target sub-table binding.
- *
- * Selection precedence:
- *   1. Explicit `assigneeTodoFormSource.linkFormColumnId` (designer pick) — matches the
- *      column whose `props.componentId` equals the configured id.
- *   2. Legacy fallback — the first `type='linkForm'` column on the binding.
- *
- * Returns null when no Link Form column is configured or the target binding isn't loaded;
- * caller falls back to the binding's own subForm in that case.
- */
-function findLinkFormTargetBinding(field: FormField): SubTableBinding | null {
-  const binding = resolveBinding(field._bindingId)
-  if (!binding) return null
-  const cols = Array.isArray(binding.columns) ? binding.columns : []
-  const source = resolveAssigneeTodoFormSource(field)
-  const picked = source.linkFormColumnId
-  const pickedKey = picked != null && String(picked).trim() !== '' ? String(picked) : null
-
-  // Helper: read `componentId` off a column regardless of whether it's nested under
-  // `props` (live designer state) or hoisted directly (some serialized shapes).
-  const componentIdOf = (col: any): string | null => {
-    const cid = col?.props?.componentId ?? col?.componentId
-    return cid != null ? String(cid) : null
-  }
-  const targetBindingIdOf = (col: any): number | null => {
-    const t = col?.props?.boundSubTableBindingId ?? col?.boundSubTableBindingId
-    return t != null ? Number(t) : null
-  }
-
-  if (pickedKey) {
-    for (const col of cols) {
-      if (!col || col.type !== 'linkForm') continue
-      if (componentIdOf(col) !== pickedKey) continue
-      const targetId = targetBindingIdOf(col)
-      if (targetId == null) continue
-      const target = resolveBinding(targetId)
-      if (target) {
-        return target
-      }
-    }
-    // Picked id no longer exists (e.g. column was removed) — fall through to legacy first-match.
-  }
-
-  for (const col of cols) {
-    if (!col || col.type !== 'linkForm') continue
-    const targetId = targetBindingIdOf(col)
-    if (targetId == null) continue
-    const target = resolveBinding(targetId)
-    if (target) {
-      return target
-    }
-  }
-  return null
-}
-
-/**
- * Decide which binding's data should actually back the inline form-below-table.
- * - `subForm` (or unsupported `formId`): keep the field's own binding.
- * - `linkForm`: switch to the Link Form's target binding so the inline form mirrors
- *   exactly what would show in the Link Form modal — keeping designer and runtime
- *   contracts aligned. Falls back to the own binding when no Link Form column exists,
- *   so a misconfiguration never produces an empty section.
- */
-function resolveInlineFormSourceBinding(field: FormField): SubTableBinding | null {
-  const own = resolveBinding(field._bindingId)
-  if (!own) return null
-  const source = resolveAssigneeTodoFormSource(field)
-  if (source.type === 'linkForm') {
-    const target = findLinkFormTargetBinding(field)
-    if (target) {
-      return target
-    }
-  }
-  // 待办 + 表格下表单：列表上存在 Link Form 列即以内联展示其目标子表（subtable2），避免仅靠绑定 JSON 未写 type=linkForm 时用错主表 subForm。
-  if (props.viewContext === 'assigneeTodo' && subTableMode(field) === 'formBelowTable') {
-    const target = findLinkFormTargetBinding(field)
-    if (target && target.bindingId !== own.bindingId) {
-      return target
-    }
-  }
-  // `formId` is not yet runtime-resolved here (would need cross-form schema lookup); fall through.
-  return own
-}
-
-/**
- * 「表格下内联表单」应对齐 Link 目标子表/自身子表的 bindingMode，而不是 {@code primaryReadOnly}
- * （主表只读时子表仍可编辑 — 与同页的 {@code SubTableField} 一致）。
- */
-function inlineSubTableFormReadonly(field: FormField): boolean {
-  if (props.readonly) return true
-  const src = resolveInlineFormSourceBinding(field)
-  if (!src) return true
-  return !isBindingModeEditable(src.bindingMode)
-}
-
-/** 内联表单标题：与字段/schema 来源一致（linkForm→subtable2 时显示子表名，而非父表）。 */
-function resolveInlineFormTableTitle(field: FormField): string {
-  const src = resolveInlineFormSourceBinding(field)
-  if (src?.tableName) return String(src.tableName)
-  const own = resolveBinding(field._bindingId)
-  return own?.tableName ? String(own.tableName) : ''
-}
-
-/**
- * Resolve the form schema for the inline form-below-table. Per the designer contract:
- *   - `subForm` (default): use the binding's own `formFields`
- *   - `linkForm`: use the Link Form target binding's `formFields`
- *   - `formId`: not yet runtime-supported; falls back to `subForm`
- */
-function resolveInlineFormFields(field: FormField): FormField[] {
-  const source = resolveInlineFormSourceBinding(field)
-  const own = resolveBinding(field._bindingId)
-  const fields = Array.isArray(source?.formFields) ? source!.formFields : []
-  return applyFieldDefinitionsToFormFields(fields, source?.fieldDefinitions ?? own?.fieldDefinitions)
-}
-
-/** MI link-form inline: pre-fill empty FK columns (People.id / sub_task_id ← parent id_idw). */
-function seedMiLinkInlineRowFkFromParent(
-  row: Record<string, any> | null,
-  target: SubTableBinding,
-  parentId: string | number | null | undefined,
-  isLinkTarget: boolean,
-  parentBinding?: SubTableBinding | null,
-  parentRow?: Record<string, unknown> | null,
-): Record<string, any> | null {
-  if (!row || parentId == null || String(parentId).trim() === '') return row
-  if (!isLinkTarget) return row
-  const parentParticipantRow =
-    parentRow && typeof parentRow === 'object'
-      ? parentRow
-      : ({ id_idw: parentId } as Record<string, unknown>)
-  const parentTableId =
-    parentBinding?.tableId != null && Number.isFinite(Number(parentBinding.tableId))
-      ? Number(parentBinding.tableId)
-      : null
-  return seedLinkChildForeignKeysFromParentRow(row, target.fieldDefinitions, {
-    bindingForeignKeyField: target.foreignKeyField,
-    bindingLinkMode: target.bindingLinkMode,
-    primaryKeyFields: target.primaryKeyFields,
-    parentParticipantRow,
-    parentTableId,
-    legacyFkSeed: parentId,
-  }) as Record<string, any>
-}
-
-/** FK candidates used to align a child (linkForm target) row to a parent row. */
-function resolveLinkFkCandidates(target: SubTableBinding): string[] {
-  const list: string[] = []
-  for (const fd of target.fieldDefinitions ?? []) {
-    if (fd.isForeignKey && fd.fieldName && !list.includes(fd.fieldName)) {
-      list.push(fd.fieldName)
-    }
-  }
-  const explicit = (target as any).foreignKeyField
-  if (
-    explicit
-    && String(explicit).trim()
-    && !bindingForeignKeyFieldIsRowPrimaryKey(String(explicit), {
-      primaryKeyFields: target.primaryKeyFields,
-      fieldDefinitions: target.fieldDefinitions,
-    })
-    && !list.includes(String(explicit))
-  ) {
-    list.push(String(explicit))
-  }
-  for (const k of ['sub_task_id', 'participant_id', 'participantId', 'parent_id', 'parentId', 'meeting_participant_id']) {
-    if (!list.includes(k)) list.push(k)
-  }
-  return list
-}
-
-/** Match sub-table row to Flowable multi-instance element id (designer PK e.g. id_idw). */
-function rowMatchesMiElementId(rec: Record<string, unknown>, parentId: string | number): boolean {
-  const keys = ['id', 'rowId', 'id_idw', 'ID', 'RowId'] as const
-  for (const k of keys) {
-    const v = rec[k]
-    if (v != null && v !== '' && String(v) === String(parentId)) return true
-  }
-  return false
-}
-
-/**
- * Persisted {@code target.data} may be empty/thin while child rows still live under parent rows'
- * {@code __subTables__}; merge those for inline form-below-table display and save.
- */
-function buildBindingTableIdMap(peers: SubTableBinding[]): Map<number, number | null> {
-  const m = new Map<number, number | null>()
-  for (const b of peers) {
-    const tid = b.tableId != null ? Number(b.tableId) : null
-    if (tid != null && Number.isFinite(tid)) m.set(b.bindingId, tid)
-  }
-  return m
-}
-
-function resolveTopLevelRowsForInlineTarget(target: SubTableBinding): any[] {
-  const fromBinding = Array.isArray(target.data) ? target.data : []
-  if (fromBinding.length > 0) return fromBinding
-  const st = props.modelValue?.__subTables__
-  if (!st || typeof st !== 'object') return []
-  const saved = getSavedSubTableRows(st as Record<string, unknown>, target)
-  return Array.isArray(saved) ? saved.map(r => ({ ...(r as Record<string, any>) })) : []
-}
-
-function mergeRowsForInlineFormTarget(field: FormField): {
-  target: SubTableBinding
-  rows: any[]
-  isLinkTarget: boolean
-} | null {
-  const own = resolveBinding(field._bindingId)
-  if (!own) return null
-  const target = resolveInlineFormSourceBinding(field) ?? own
-  const isLinkTarget = target.bindingId !== own.bindingId
-  const peers = linkableSubTableBindings.value ?? []
-  const pk = target.primaryKeyFields ?? own.primaryKeyFields ?? null
-  const parentId = props.currentMiRowId
-  const miIsolate =
-    props.suppressLinkFormInitialData
-    && parentId != null
-    && String(parentId).trim() !== ''
-    && isLinkTarget
-
-  if (miIsolate) {
-    const parentRow = findMiIsolatedParentRow(
-      Array.isArray(own.data) ? own.data : [],
-      parentId
-    )
-    if (parentRow) {
-      const peerMap = buildBindingTableIdMap(peers)
-      const nestedOnly = pullNestedRowsForBindingFromParentRows(
-        {
-          bindingId: target.bindingId,
-          tableName: target.tableName,
-          physicalTableName: target.physicalTableName,
-          tableId: target.tableId ?? null
-        },
-        [parentRow],
-        peerMap
-      )
-      let rows = pickMiLinkChildRowsForParent(
-        parentRow,
-        nestedOnly,
-        pk,
-      ).map(r => ({ ...(r as Record<string, any>) }))
-      const topLevel = resolveTopLevelRowsForInlineTarget(target)
-      const topForParent = pickMiLinkChildRowsForParent(
-        parentRow,
-        topLevel,
-        pk,
-      )
-      if (topForParent.length > 0) {
-        rows = mergeSubTableRowsByRowId(rows, topForParent, pk).map(r => ({
-          ...(r as Record<string, any>)
-        }))
-      }
-      rows = collapseMiLinkChildRowsToOnePerParticipant(rows)
-      // Nested __subTables__ copy may lag behind the top-level slice and lack auto-PK id even when
-      // binding.data / variables already hold the allocated UUID — prefer the richer top-level row.
-      if (
-        topForParent.length > 0
-        && (
-          rows.length === 0
-          || (
-            rows.length === 1
-            && (rows[0]?.id == null || String(rows[0]?.id ?? '').trim() === '')
-          )
-        )
-      ) {
-        rows = collapseMiLinkChildRowsToOnePerParticipant([
-          ...rows,
-          ...topForParent.map(r => ({ ...(r as Record<string, any>) })),
-        ])
-      }
-      return {
-        target,
-        isLinkTarget,
-        rows
-      }
-    }
-    return { target, isLinkTarget, rows: [] }
-  }
-
-  const nestedFromTarget = collectNestedChildRowsFromPeerBindings(target, peers, null)
-  /** Table grid uses `own.data`; link-form inline uses `target` — merge both so the row list matches the grid. */
-  let merged = mergeSubTableRowsByRowId(
-    Array.isArray(own.data) ? own.data : [],
-    Array.isArray(target.data) ? target.data : [],
-    pk,
-  )
-  merged = mergeSubTableRowsByRowId(merged, nestedFromTarget, pk)
-  return {
-    target,
-    isLinkTarget,
-    rows: merged.map(r => ({ ...(r as Record<string, any>) })),
-  }
-}
-
-/** Prefer "fat" snapshot rows when many duplicates exist (preview/read-only diagram clicks often defaulted to rows[0] thin placeholders). */
-function scoreInlineRowCompleteness(row: unknown, field: FormField): number {
-  if (!row || typeof row !== 'object') return 0
-  const rec = row as Record<string, unknown>
-  const layoutKeys = resolveInlineFormFields(field).map(f => f.key).filter((k): k is string => typeof k === 'string' && k.length > 0)
-  const keys =
-    layoutKeys.length > 0
-      ? layoutKeys
-      : Object.keys(rec).filter(k => !k.startsWith('__'))
-  let score = 0
-  for (const k of keys) {
-    const v = rec[k]
-    if (v === undefined || v === null) continue
-    if (typeof v === 'string' && v.trim() === '') continue
-    score++
-  }
-  return score
-}
-
-function pickPreferredInlineRow(rows: any[], field: FormField): any | null {
-  if (!rows.length) return null
-  if (rows.length === 1) return rows[0]
-  const useQualityScore =
-    props.suppressLinkFormInitialData
-    || (effectiveReadonly.value && props.previewSubTables)
-  if (!useQualityScore) return rows[0]
-  let best = rows[0]
-  let bestScore = scoreInlineRowCompleteness(best, field) + scoreMiLinkChildRowQuality(best as Record<string, unknown>)
-  for (let i = 1; i < rows.length; i++) {
-    const r = rows[i]
-    const s = scoreInlineRowCompleteness(r, field) + scoreMiLinkChildRowQuality(r as Record<string, unknown>)
-    if (s > bestScore) {
-      best = r
-      bestScore = s
-    }
-  }
-  return best
-}
-
-/**
- * Find the "current row" for inline form-below-table binding.
- *
- * For `subForm` source (own binding):
- *   1. If `currentMiRowId` is provided, prefer the matching row (handles MI sub-task).
- *   2. Else fall back to the single available row (普通单任务 single-row table).
- *
- * For `linkForm` source (target binding, e.g. subtable2):
- *   1. If `currentMiRowId` is provided, find the target row whose FK === parent rowId.
- *   2. Else if target has a single row, use it.
- *   3. Else `null` — host renders with empty defaults; first edit creates a new row.
- */
-function findInlineRowIndexForMi(
-  rows: any[],
-  pack: { target: SubTableBinding; isLinkTarget: boolean },
-  parentId: string | number | null | undefined,
-): number {
-  if (parentId == null || String(parentId).trim() === '') return -1
-  const fkList = resolveLinkFkCandidates(pack.target)
-  const matched: number[] = []
-  rows.forEach((r, i) => {
-    if (!r || typeof r !== 'object') return
-    const rec = r as Record<string, unknown>
-    const hit = fkList.some(k => {
-      const v = rec[k]
-      return v != null && v !== '' && String(v) === String(parentId)
-    })
-    if (hit) matched.push(i)
-  })
-  if (matched.length === 1) return matched[0]!
-  if (matched.length > 1) {
-    let bestIdx = matched[0]!
-    let bestScore = scoreMiLinkChildRowQuality(rows[bestIdx] as Record<string, unknown>)
-    for (let j = 1; j < matched.length; j++) {
-      const idx = matched[j]!
-      const s = scoreMiLinkChildRowQuality(rows[idx] as Record<string, unknown>)
-      if (s > bestScore) {
-        bestIdx = idx
-        bestScore = s
-      }
-    }
-    return bestIdx
-  }
-  let idx = rows.findIndex(r => {
-    if (!r || typeof r !== 'object') return false
-    return rowMatchesMiElementId(r as Record<string, unknown>, parentId)
-  })
-  return idx
-}
-
-function getCurrentRowForInlineForm(field: FormField): Record<string, any> | null {
-  const pack = mergeRowsForInlineFormTarget(field)
-  if (!pack) return null
-  const { rows, isLinkTarget } = pack
-  const parentId = props.currentMiRowId
-
-  let result: Record<string, any> | null = null
-  let pickReason = 'none'
-
-  const miLinkIsolate =
-    props.suppressLinkFormInitialData
-    && parentId != null
-    && String(parentId).trim() !== ''
-    && isLinkTarget
-
-  if (miLinkIsolate) {
-    const isolated = resolveMiLinkIsolateInlineRow(
-      rows,
-      parentId,
-      (list, pid) => findInlineRowIndexForMi(list as any[], pack, pid),
-      list => pickPreferredInlineRow(list as any[], field),
-    )
-    if (isolated != null) {
-      result = isolated as Record<string, any>
-      pickReason =
-        rows.length === 1
-          ? 'mi-nested-only'
-          : rows.length === 0
-            ? 'mi-nested-empty'
-            : 'mi-nested-pick'
-    }
-  } else if (isLinkTarget && parentId != null && String(parentId).trim() !== '') {
-    const own = resolveBinding(field._bindingId)
-    const parentRow = own
-      ? findMiIsolatedParentRow(Array.isArray(own.data) ? own.data : [], parentId)
-      : null
-    if (parentRow) {
-      const aligned = pickMiLinkChildRowsForParent(
-        parentRow,
-        rows,
-        pack.target.primaryKeyFields ?? null
-      )
-      if (aligned.length > 0) {
-        result = { ...(aligned[0] as Record<string, any>) }
-        pickReason = 'mi-link-parent-align'
-      }
-    }
-    if (!result) {
-      const fkList = resolveLinkFkCandidates(pack.target)
-      const match = rows.find(r => {
-        if (!r || typeof r !== 'object') return false
-        const rec = r as Record<string, unknown>
-        return fkList.some(k => {
-          const v = rec[k]
-          return v != null && v !== '' && String(v) === String(parentId)
-        })
-      })
-      if (match) {
-        result = { ...(match as Record<string, any>) }
-        pickReason = 'link-fk'
-      } else if (!props.suppressLinkFormInitialData) {
-        const pick = pickPreferredInlineRow(rows, field)
-        result = pick ? { ...(pick as Record<string, any>) } : null
-        pickReason = 'link-fallback-pick'
-      }
-    }
-  } else if (parentId != null && String(parentId).trim() !== '') {
-    // subForm path: MI element id often matches a *parent* FK on this row, not the child row PK (e.g. id=999).
-    const idx = findInlineRowIndexForMi(rows, pack, parentId)
-    if (idx >= 0) {
-      result = { ...(rows[idx] as Record<string, any>) }
-      pickReason = 'mi-idx'
-    }
-  }
-
-  if (!result && !miLinkIsolate) {
-    const pick = pickPreferredInlineRow(rows, field)
-    result = pick ? { ...(pick as Record<string, any>) } : null
-    pickReason = pickReason === 'none' ? 'pickPreferred' : `${pickReason}+pickPreferred`
-  }
-
-  if (result && isLinkTarget && parentId != null && String(parentId).trim() !== '') {
-    const own = resolveBinding(field._bindingId)
-    const parentRow = own
-      ? findMiIsolatedParentRow(Array.isArray(own.data) ? own.data : [], parentId)
-      : null
-    const fkSeed =
-      parentRow?.id_idw != null && parentRow.id_idw !== ''
-        ? (parentRow.id_idw as string | number)
-        : parentId
-    result = seedMiLinkInlineRowFkFromParent(
-      result,
-      pack.target,
-      fkSeed,
-      isLinkTarget,
-      own ?? undefined,
-      parentRow,
-    )
-  }
-
-  // Last-resort: nested stub may still lack id while another merged row carries the allocated PK.
-  if (
-    result
-    && (result.id == null || String(result.id ?? '').trim() === '')
-    && Array.isArray(pack.rows)
-    && pack.rows.length > 1
-  ) {
-    const own = resolveBinding(field._bindingId)
-    const parentRow =
-      parentId != null && String(parentId).trim() !== '' && own
-        ? findMiIsolatedParentRow(Array.isArray(own.data) ? own.data : [], parentId)
-        : null
-    const scopedRows =
-      parentRow != null
-        ? pack.rows.filter(
-            r =>
-              r &&
-              typeof r === 'object' &&
-              miParentRowAlignsWithChildRow(parentRow, r as Record<string, unknown>),
-          )
-        : parentId != null && String(parentId).trim() !== ''
-          ? pack.rows.filter(
-              r =>
-                r &&
-                typeof r === 'object' &&
-                miLinkChildRowBelongsToParticipant(r as Record<string, unknown>, parentId),
-            )
-          : pack.rows
-    let best = result
-    let bestScore = scoreMiLinkChildRowQuality(best as Record<string, unknown>)
-    for (const r of scopedRows) {
-      if (!r || typeof r !== 'object') continue
-      const s = scoreMiLinkChildRowQuality(r as Record<string, unknown>)
-      if (s > bestScore) {
-        best = { ...best, ...(r as Record<string, any>) }
-        bestScore = s
-      }
-    }
-    result = best
-  }
-
-  return result
-}
-
-/**
- * When the inline form below is edited, merge the new values back into the matching
- * row in the EFFECTIVE source binding (own binding for `subForm`, link target for
- * `linkForm`) and emit `update:subTableData` so the host (tasks/detail or
- * applications/detail) can persist it via the existing data flow.
- *
- * When no matching child row exists in the link-target binding yet, a fresh row is
- * appended and the FK column is populated with `currentMiRowId` so persistence stays
- * within the existing dw_table_data → child-rows pipeline.
- */
-function handleInlineFormUpdate(field: FormField, mergedRow: Record<string, any>) {
-  const pack = mergeRowsForInlineFormTarget(field)
-  if (!pack) return
-  const { target, rows, isLinkTarget } = pack
-  const parentId = props.currentMiRowId
-
-  const resolveLinkParentContext = () => {
-    if (parentId == null || String(parentId).trim() === '') {
-      return { fkSeed: parentId, own: null as SubTableBinding | null, parentRow: null as Record<string, unknown> | null }
-    }
-    const own = resolveBinding(field._bindingId)
-    const parentRow = own
-      ? findMiIsolatedParentRow(Array.isArray(own.data) ? own.data : [], parentId)
-      : null
-    const fkSeed =
-      parentRow?.id_idw != null && parentRow.id_idw !== ''
-        ? (parentRow.id_idw as string | number)
-        : parentId
-    return { fkSeed, own, parentRow }
-  }
-
-  let idx = -1
-  if (isLinkTarget && parentId != null && String(parentId).trim() !== '') {
-    const fkList = resolveLinkFkCandidates(target)
-    idx = rows.findIndex(r => {
-      if (!r || typeof r !== 'object') return false
-      const rec = r as Record<string, unknown>
-      return fkList.some(k => {
-        const v = rec[k]
-        return v != null && v !== '' && String(v) === String(parentId)
-      })
-    })
-    if (idx < 0 && rows.length === 1) idx = 0
-  } else if (isLinkTarget && rows.length === 1) {
-    idx = 0
-  } else if (parentId != null && String(parentId).trim() !== '') {
-    idx = findInlineRowIndexForMi(rows, pack, parentId)
-  } else if (rows.length === 1) {
-    idx = 0
-  }
-
-  if (idx < 0 && rows.length > 0) {
-    idx = 0
-  }
-
-  if (idx >= 0) {
-    let updated: Record<string, any> = { ...rows[idx], ...mergedRow }
-    if (isLinkTarget) {
-      const { fkSeed, own, parentRow } = resolveLinkParentContext()
-      const seeded = seedMiLinkInlineRowFkFromParent(
-        updated,
-        target,
-        fkSeed,
-        true,
-        own ?? undefined,
-        parentRow,
-      )
-      if (seeded) updated = seeded
-    }
-    rows[idx] = updated
-  } else {
-    const fresh: Record<string, any> = { ...mergedRow }
-    if (isLinkTarget && parentId != null && String(parentId).trim() !== '') {
-      const { fkSeed, own, parentRow } = resolveLinkParentContext()
-      const explicit = (target as any).foreignKeyField
-      const fkField = explicit && String(explicit).trim() ? String(explicit) : 'parent_id'
-      if (fresh[fkField] == null || fresh[fkField] === '') fresh[fkField] = fkSeed ?? parentId
-      const seeded = seedMiLinkInlineRowFkFromParent(
-        fresh,
-        target,
-        fkSeed ?? parentId,
-        true,
-        own ?? undefined,
-        parentRow,
-      )
-      if (seeded) Object.assign(fresh, seeded)
-    }
-    if (!isLinkTarget && parentId != null && String(parentId).trim() !== '') {
-      const fkList = resolveLinkFkCandidates(target)
-      for (const k of fkList) {
-        if (fresh[k] == null || fresh[k] === '') {
-          fresh[k] = parentId
-          break
-        }
-      }
-    }
-    rows.push(fresh)
-  }
-  handleSubTableUpdate(target.bindingId, rows)
-}
-
-function handleInlineFormSave() {
-  emit('save')
-}
-
-// Lookup selected data state
-const lookupSelectedData = ref<Record<string, Record<string, any>>>({})
-const lookupLoadedViewFields = ref<Record<string, any[]>>({})
-/** Parity with Form Preview / FieldRenderer — honor lookupConfig.showBackfillView === false. */
-function lookupShowBackfillView(field: FormField): boolean {
-  return (field as any)._lookupShowBackfillView !== false
-}
-const handleLookupSelect = (fieldKey: string, row: Record<string, any>) => {
-  lookupSelectedData.value[fieldKey] = row
-}
-const handleLookupClear = (fieldKey: string) => {
-  delete lookupSelectedData.value[fieldKey]
-}
-
-// Manage file upload lists independently to avoid re-render issues when deriving from formData
-const uploadFileLists = ref<Record<string, Array<{ name: string; url: string; uid?: number }>>>({})
-
 // Get all fields (including fields in tabs)
 const allFields = computed(() =>
   flattenAllFormFieldSegments(props.fields, props.tabs, props.fieldsAfterTabs),
@@ -1195,155 +261,99 @@ const fieldComponentEvents = computed(() =>
 )
 
 // ---------------------------------------------------------------------------
-// Task 7.2: BusinessLogicEngine integration
+// Composables — sub-table bindings / portal views / inline form
 // ---------------------------------------------------------------------------
-const engine = new BusinessLogicEngine()
-const engineVisibility = ref(new Map<string, boolean>())
-const eventVisibilityState = shallowReactive<PortalFormVisibilityState>({
-  hidden: new Map<string, boolean>(),
-  display: new Map<string, boolean>(),
+const subTableBindingsApi = useSubTableBindings({
+  subTableBindings: () => props.subTableBindings,
+  linkedSubTableBindings: () => props.linkedSubTableBindings,
+  primaryTableBinding: () => props.primaryTableBinding,
+  readonly: () => props.readonly,
+  allowSubTableAssign: () => props.allowSubTableAssign,
+  taskId: () => props.taskId,
+  currentMiRowId: () => props.currentMiRowId,
 })
-const eventVisibilityTick = ref(0)
+const {
+  linkableSubTableBindings,
+  primaryTableDisplayName,
+  primaryTableId,
+  parentTablesById,
+  subTableBindingsForContext,
+  resolveBinding,
+  isBindingModeEditable,
+  isSubTableEditable,
+  subTableAssigneeField,
+  resolveMiParticipantSeedForSubTableAdd,
+  showSubTableAssignColumn,
+} = subTableBindingsApi
 
-function notifyEventVisibilityChange() {
-  eventVisibilityState.hidden = new Map(eventVisibilityState.hidden)
-  eventVisibilityState.display = new Map(eventVisibilityState.display)
-  eventVisibilityTick.value++
-}
+const portalViewsApi = useSubTablePortalViews({
+  viewContext: () => props.viewContext,
+  nativeSubTableBindingIds: () => props.nativeSubTableBindingIds,
+  formConfig: () => props.formConfig,
+  readonly: () => props.readonly,
+  resolveBinding,
+  linkableSubTableBindings,
+  isBindingModeEditable,
+})
+const {
+  subTableMode,
+  shouldRenderPlacedSubTableField,
+  subTableCompactLookupCells,
+  linkFormScrollToInlineEnabled,
+  setSubTableInlineAnchor,
+  scrollSubTableInlineIntoView,
+  subTableShowTaskStatusInitiator,
+  subTableShowViewDetailInitiator,
+  resolveInlineFormSourceBinding,
+  inlineSubTableFormReadonly,
+  resolveInlineFormTableTitle,
+  resolveInlineFormFields,
+} = portalViewsApi
 
-function isFieldVisible(fieldKey: string): boolean {
-  void eventVisibilityTick.value
-  if (eventVisibilityState.hidden.get(fieldKey) === true) return false
-  if (eventVisibilityState.display.get(fieldKey) === false) return false
-  return engineVisibility.value.get(fieldKey) ?? true
-}
+// ---------------------------------------------------------------------------
+// Composable — BusinessLogicEngine (Task 7.2)
+// ---------------------------------------------------------------------------
+const engineApi = useBusinessLogicEngine({
+  config: () => props.config,
+  // wrapper closure breaks ordering dependency with useFormData (formData created later)
+  formData: { get value() { return formData.value }, set value(v: Record<string, any>) { formData.value = v } } as { value: Record<string, any> },
+})
+const {
+  engine,
+  engineVisibility,
+  engineOptions,
+  engineFieldStates,
+  engineCalculatedValues,
+  initEngine,
+  applyEngineResult,
+} = engineApi
 
-/** Errors from Form/Component event scripts (`api.setFieldError`). */
-const scriptFieldErrors = ref<Record<string, string>>({})
-
-function setScriptFieldError(fieldKey: string, message: string) {
-  scriptFieldErrors.value = { ...scriptFieldErrors.value, [fieldKey]: message }
-}
-
-function clearScriptFieldError(fieldKey: string) {
-  if (!(fieldKey in scriptFieldErrors.value)) return
-  const next = { ...scriptFieldErrors.value }
-  delete next[fieldKey]
-  scriptFieldErrors.value = next
-}
-
-function createFormEventApi() {
-  const resolveFieldKey = createFieldKeyResolver(() => allFields.value)
-  return createPortalFormApi(
-    () => formData.value,
-    (patch) => {
-      formData.value = { ...formData.value, ...patch }
-    },
-    resolveFieldKey,
-    {
-      state: eventVisibilityState,
-      notify: notifyEventVisibilityChange,
-      getAllFieldKeys: () => allFields.value.map(f => f.key),
-    },
-    {
-      setFieldError: (fieldKey, message) => {
-        setScriptFieldError(fieldKey, message)
-      },
-      clearFieldError: (fieldKey) => {
-        clearScriptFieldError(fieldKey)
-      },
-    },
-  )
-}
-
-function runFormOptionsOnChange(field: string, value: unknown) {
-  const onChangeHandler = props.formOptions?.onChange
-  if (!onChangeHandler) return
-  const api = createFormEventApi()
-  const rule = fieldComponentEvents.value.get(field)?.rule ?? {}
-  runFormOnChangeHandler(onChangeHandler, field, value, api, rule)
-}
-
-function runComponentEventsOnFieldChange(key: string, value: unknown) {
-  const api = createFormEventApi()
-  const ev = fieldComponentEvents.value.get(key)
-  const fieldType = allFields.value.find(f => f.key === key)?.type
-  runComponentFieldEventsOnValueChange(ev, {
-    field: key,
-    value,
-    api,
-    onEvent: 'change',
-    hookEvent: 'value',
-    fieldType,
-  })
-}
-
-/** Component `on.blur` — runs when focus leaves input/textarea (not on each keystroke). */
-function handleFieldBlur(key: string) {
-  const value = formData.value[key]
-  const api = createFormEventApi()
-  const ev = fieldComponentEvents.value.get(key)
-  runComponentFieldEvents(ev, {
-    field: key,
-    value,
-    api,
-    onEvent: 'blur',
-  })
-  const onChangeHandler = props.formOptions?.onChange
-  if (onChangeHandler || fieldComponentEvents.value.has(key)) {
-    if (!props.readonly) {
-      emit('update:modelValue', { ...formData.value })
-    }
-  }
-}
-
-function syncDesignerHiddenFieldVisibility() {
-  eventVisibilityState.hidden = new Map<string, boolean>()
-  seedDesignerHiddenFieldVisibility(props.fields, props.tabs, props.fieldsAfterTabs, eventVisibilityState)
-  notifyEventVisibilityChange()
-}
-
-function bootstrapFormOptionsOnChange() {
-  if (!props.formOptions?.onChange) return
-  runFormOptionsOnChange('__bootstrap__', null)
-}
-
-function bootstrapComponentHookEvents() {
-  if (!formCreateRulesResolved.value.length) return
-  runAllComponentHookEvents(
-    formCreateRulesResolved.value,
-    'load',
-    () => formData.value,
-    (patch) => { formData.value = { ...formData.value, ...patch } },
-    createFieldKeyResolver(() => allFields.value),
-    {
-      state: eventVisibilityState,
-      notify: notifyEventVisibilityChange,
-      getAllFieldKeys: () => allFields.value.map(f => f.key),
-    },
-  )
-  runAllComponentHookEvents(
-    formCreateRulesResolved.value,
-    'mounted',
-    () => formData.value,
-    (patch) => { formData.value = { ...formData.value, ...patch } },
-    createFieldKeyResolver(() => allFields.value),
-    {
-      state: eventVisibilityState,
-      notify: notifyEventVisibilityChange,
-      getAllFieldKeys: () => allFields.value.map(f => f.key),
-    },
-  )
-}
-const engineOptions = ref(new Map<string, Array<{ label: string; value: any }>>())
-const engineFieldStates = ref(new Map<string, { disabled?: boolean; required?: boolean }>())
-const engineCalculatedValues = ref(new Map<string, number>())
-
-function initEngine() {
-  if (props.config) {
-    engine.init(props.config)
-  }
-}
+// ---------------------------------------------------------------------------
+// Composable — form-create Form/Component events + visibility
+// ---------------------------------------------------------------------------
+const eventsApi = useFormCreateEvents({
+  formData: { get value() { return formData.value }, set value(v: Record<string, any>) { formData.value = v } } as { value: Record<string, any> },
+  allFields,
+  fieldComponentEvents,
+  formCreateRulesResolved,
+  formOptionsOnChange: () => props.formOptions?.onChange,
+  fields: () => props.fields,
+  tabs: () => props.tabs,
+  fieldsAfterTabs: () => props.fieldsAfterTabs,
+  readonly: () => props.readonly,
+  engineVisibility,
+  emitModelValue: (value) => emit('update:modelValue', value),
+})
+const {
+  isFieldVisible,
+  scriptFieldErrors,
+  runFormOptionsOnChange,
+  runComponentEventsOnFieldChange,
+  handleFieldBlur,
+  syncDesignerHiddenFieldVisibility,
+  bootstrapFormOptionsOnChange,
+  bootstrapComponentHookEvents,
+} = eventsApi
 
 // ---------------------------------------------------------------------------
 // User search — listen to FieldRenderer search:users event (Req 11.2)
@@ -1361,188 +371,107 @@ async function handleUserSearch(query: string, fieldKey: string) {
   }
 }
 
-function applyEngineResult(result: {
-  visibilityChanges: Map<string, boolean>
-  calculatedValues: Map<string, number>
-  optionChanges: Map<string, Array<{ label: string; value: any }>>
-  stateChanges: Map<string, { disabled?: boolean; required?: boolean }>
-}) {
-  // Merge visibility changes
-  for (const [k, v] of result.visibilityChanges) {
-    engineVisibility.value.set(k, v)
-  }
-  // Merge calculated values and update formData
-  for (const [k, v] of result.calculatedValues) {
-    engineCalculatedValues.value.set(k, v)
-    formData.value[k] = v
-  }
-  // Merge option changes
-  for (const [k, v] of result.optionChanges) {
-    engineOptions.value.set(k, v)
-  }
-  // Merge state changes
-  for (const [k, v] of result.stateChanges) {
-    engineFieldStates.value.set(k, v)
-  }
-  // Trigger reactivity
-  engineVisibility.value = new Map(engineVisibility.value)
-  engineOptions.value = new Map(engineOptions.value)
-  engineFieldStates.value = new Map(engineFieldStates.value)
-  engineCalculatedValues.value = new Map(engineCalculatedValues.value)
-}
+// ---------------------------------------------------------------------------
+// Composable — form data, rules, field/upload/lookup handlers
+// ---------------------------------------------------------------------------
+const formDataApi = useFormData({
+  formRef,
+  allFields,
+  modelValue: () => props.modelValue,
+  readonly: () => props.readonly,
+  config: () => props.config,
+  getInternalUpdate: () => isInternalUpdate,
+  setInternalUpdate,
+  emitChange: (key, value) => emit('change', key, value),
+  emitModelValue: (value) => emit('update:modelValue', value),
+  emitSubTableData: (bindingId, rows) => emit('update:subTableData', bindingId, rows),
+  runComponentEventsOnFieldChange,
+  formOptionsOnChange: () => props.formOptions?.onChange,
+  fieldComponentEventsHas: (key) => fieldComponentEvents.value.has(key),
+  runFormOptionsOnChange,
+  engineOnFieldChange: (key, value, fd) => engine.onFieldChange(key, value, fd),
+  applyEngineResult,
+  engineOnSubTableChange: (bindingId, rows, fd) => engine.onSubTableChange(bindingId, rows, fd),
+  engineCalculatedValues,
+})
+const {
+  formData,
+  lookupSelectedData,
+  lookupLoadedViewFields,
+  lookupShowBackfillView,
+  handleLookupSelect,
+  handleLookupClear,
+  initFormData,
+  formRules,
+  handleFieldChange,
+  handleUploadSuccess,
+  handleUploadRemove,
+  getSubFormRowFormulas,
+  getSummaryColumns,
+  getSummaryAggregations,
+  getSubTableValidation,
+  handleSubTableUpdate,
+  handlePrimaryFormDataPatch,
+  resetForm,
+  getFormData,
+  setFieldValue,
+} = formDataApi
 
 // ---------------------------------------------------------------------------
-// Form data initialization
+// Composable — inline sub-table form (MI row picking / update)
 // ---------------------------------------------------------------------------
-const initFormData = () => {
-  const data: Record<string, any> = {}
-  allFields.value.forEach(field => {
-    const bound = props.modelValue[field.key]
-    if (bound !== undefined && bound !== null && bound !== '') {
-      data[field.key] = bound
-    } else if (field.defaultValue !== undefined && field.defaultValue !== null && field.defaultValue !== '') {
-      data[field.key] = field.defaultValue
-    } else if (field.type === 'checkbox') {
-      data[field.key] = []
-    } else {
-      data[field.key] = null
-    }
-  })
-  isInternalUpdate = true
-  formData.value = data
-  setTimeout(() => { isInternalUpdate = false }, 0)
-  // Element Plus AsyncValidator resolves as micro-tasks after nextTick;
-  // use setTimeout (macro-task) to guarantee clearValidate runs last.
-  setTimeout(() => {
-    const el = formRef.value
-    if (el && typeof (el as { clearValidate?: () => void }).clearValidate === 'function') {
-      el.clearValidate()
-    }
-  }, 0)
-}
+const inlineFormApi = useInlineSubTableForm({
+  currentMiRowId: () => props.currentMiRowId,
+  suppressLinkFormInitialData: () => props.suppressLinkFormInitialData,
+  previewSubTables: () => props.previewSubTables,
+  modelValue: () => props.modelValue,
+  effectiveReadonly,
+  linkableSubTableBindings,
+  resolveBinding,
+  resolveInlineFormSourceBinding,
+  resolveInlineFormFields,
+  handleSubTableUpdate,
+  emitSave: () => emit('save'),
+})
+const {
+  getCurrentRowForInlineForm,
+  handleInlineFormUpdate,
+  handleInlineFormSave,
+} = inlineFormApi
 
 // ---------------------------------------------------------------------------
-// Form rules
+// Composable — validation (Task 7.3)
 // ---------------------------------------------------------------------------
-const formRules = computed<FormRules>(() => {
-  if (props.readonly) return {}
-  const rules: FormRules = {}
-  allFields.value.forEach(field => {
-    const fieldRules: any[] = []
-    if (field.rules?.length) {
-      fieldRules.push(
-        ...materializeFormCreateValidationRules(
-          field.rules,
-          () => formData.value,
-          () => allFields.value,
-        ),
-      )
-    } else if (field.required) {
-      fieldRules.push({
-        required: true,
-        message: t('common.pleaseInput', { label: field.label }),
-        trigger: field.type === 'select' || field.type === 'checkbox' ? 'change' : 'blur',
-      })
-    }
-    if (fieldRules.length > 0) {
-      rules[field.key] = fieldRules
-    }
-  })
-  return rules
+const { validate } = useFormValidation({
+  formRef,
+  formData,
+  config: () => props.config,
+  engine,
+  scriptFieldErrors,
 })
 
 // ---------------------------------------------------------------------------
-// Field change handler (Task 7.1 + 7.2)
+// Composable — auto-save to localStorage (Task 7.5)
 // ---------------------------------------------------------------------------
-function handleFieldChange(key: string, value: any) {
-  formData.value[key] = value
-  emit('change', key, value)
-
-  runComponentEventsOnFieldChange(key, value)
-
-  const onChangeHandler = props.formOptions?.onChange
-  if (onChangeHandler) {
-    runFormOptionsOnChange(key, value)
-  }
-  if (onChangeHandler || fieldComponentEvents.value.has(key)) {
-    if (!props.readonly) {
-      emit('update:modelValue', { ...formData.value })
+const { clearAutoSave, startAutoSave, stopAutoSave, checkAutoSaveRestore } = useFormAutoSave({
+  functionUnitId: () => props.functionUnitId,
+  formId: () => props.formId,
+  readonly: () => props.readonly,
+  formData,
+  setInternalUpdate,
+  emitModelValue: (value) => emit('update:modelValue', value),
+  onRestored: (data) => {
+    // Trigger engine re-evaluation for all restored fields (Req 12.1, 12.2)
+    if (props.config) {
+      for (const [key, value] of Object.entries(data)) {
+        if (value != null && value !== '') {
+          const result = engine.onFieldChange(key, value, formData.value)
+          applyEngineResult(result)
+        }
+      }
     }
-  }
-
-  // Task 7.2: Trigger engine evaluation on field change
-  if (props.config) {
-    const result = engine.onFieldChange(key, value, formData.value)
-    applyEngineResult(result)
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Upload handlers
-// ---------------------------------------------------------------------------
-function handleUploadSuccess(response: any, _file: any, fieldKey: string) {
-  const url = response?.data?.url || ''
-  formData.value[fieldKey] = url
-  emit('update:modelValue', { ...formData.value })
-}
-
-function handleUploadRemove(_file: any, fieldKey: string) {
-  formData.value[fieldKey] = ''
-  emit('update:modelValue', { ...formData.value })
-}
-
-// ---------------------------------------------------------------------------
-// Task 7.4: Sub-table summary integration
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
-// SubTableField config helpers (Req 10.1, 10.2, 10.3)
-// ---------------------------------------------------------------------------
-function getSubFormRowFormulas(bindingId?: number) {
-  if (!bindingId || !props.config?.subForms) return undefined
-  return props.config.subForms[String(bindingId)]?.rowFormulas
-}
-
-function getSummaryColumns(bindingId?: number) {
-  if (!bindingId || !props.config?.summaryRules) return undefined
-  return props.config.summaryRules
-    .filter(r => r.sourceBindingId === bindingId)
-    .map(r => r.sourceColumn)
-}
-
-function getSummaryAggregations(bindingId?: number) {
-  if (!bindingId || !props.config?.summaryRules) return undefined
-  const aggs: Record<string, 'SUM' | 'AVG' | 'COUNT' | 'MIN' | 'MAX'> = {}
-  props.config.summaryRules
-    .filter(r => r.sourceBindingId === bindingId)
-    .forEach(r => { aggs[r.sourceColumn] = r.aggregation })
-  return Object.keys(aggs).length > 0 ? aggs : undefined
-}
-
-function getSubTableValidation(bindingId?: number) {
-  if (!bindingId || !props.config?.subTableValidation) return undefined
-  return props.config.subTableValidation[String(bindingId)]
-}
-
-function handleSubTableUpdate(bindingId: number, rows: any[]) {
-  emit('update:subTableData', bindingId, rows)
-
-  // Trigger engine summary calculations
-  if (props.config) {
-    const summaryResult = engine.onSubTableChange(bindingId, rows, formData.value)
-    for (const [targetField, value] of summaryResult.summaryValues) {
-      formData.value[targetField] = value
-      engineCalculatedValues.value.set(targetField, value)
-    }
-    engineCalculatedValues.value = new Map(engineCalculatedValues.value)
-  }
-}
-
-function handlePrimaryFormDataPatch(patch: Record<string, unknown>) {
-  if (!patch || typeof patch !== 'object') return
-  Object.assign(formData.value, patch)
-  emit('update:modelValue', { ...formData.value })
-}
+  },
+})
 
 // ---------------------------------------------------------------------------
 // Watchers
@@ -1587,222 +516,8 @@ watch(
 )
 
 // ---------------------------------------------------------------------------
-// Task 7.3: Form validation with engine integration
+// provide/inject context for FormRendererFields tree
 // ---------------------------------------------------------------------------
-
-function findFormItemEl(fieldKey: string): HTMLElement | null {
-  const root = formRef.value?.$el as HTMLElement | undefined
-  if (!root) return null
-  return root.querySelector(
-    `.el-form-item[data-field-key="${CSS.escape(fieldKey)}"]`,
-  ) as HTMLElement | null
-}
-
-/**
- * Inject an engine validation error into an Element Plus form-item via DOM.
- * Adds the `is-error` class and appends an `.el-form-item__error` element.
- */
-function injectFieldError(fieldKey: string, message: string) {
-  const itemEl = findFormItemEl(fieldKey)
-  if (!itemEl) return
-  itemEl.classList.add('is-error')
-  const contentEl = itemEl.querySelector('.el-form-item__content')
-  if (!contentEl) return
-  contentEl.querySelectorAll('.engine-error').forEach(el => el.remove())
-  const errorDiv = document.createElement('div')
-  errorDiv.className = 'el-form-item__error engine-error'
-  errorDiv.textContent = message
-  contentEl.appendChild(errorDiv)
-}
-
-function clearInjectedFieldError(fieldKey: string) {
-  const itemEl = findFormItemEl(fieldKey)
-  if (!itemEl) return
-  const contentEl = itemEl.querySelector('.el-form-item__content')
-  contentEl?.querySelectorAll('.engine-error').forEach(el => el.remove())
-  if (!contentEl?.querySelector('.el-form-item__error:not(.engine-error)')) {
-    itemEl.classList.remove('is-error')
-  }
-}
-
-/**
- * Clear all previously injected engine validation errors from the form.
- */
-function clearEngineErrors() {
-  document.querySelectorAll('.engine-error').forEach(el => el.remove())
-  // Note: we don't remove is-error class here because Element Plus may have its own errors
-}
-
-const validate = async (): Promise<boolean> => {
-  if (!formRef.value) return false
-
-  // Clear previously injected engine errors before re-validating
-  clearEngineErrors()
-
-  let elPlusValid = true
-  try {
-    await formRef.value.validate()
-  } catch {
-    elPlusValid = false
-  }
-
-  // Engine validation (cross-field + custom rules)
-  if (props.config) {
-    const engineResult = engine.validateAll(formData.value)
-    const crossResult = engine.validateCrossField(formData.value)
-
-    if (!engineResult.valid || !crossResult.valid) {
-      // Inject engine field errors into Element Plus form-item error state via DOM
-      for (const [fieldKey, errors] of engineResult.fieldErrors) {
-        if (errors.length > 0) {
-          injectFieldError(fieldKey, errors[0])
-        }
-      }
-      // Inject cross-field errors into targetField form-items
-      for (const err of crossResult.errors) {
-        injectFieldError(err.targetField, err.message)
-      }
-      // Scroll to first error field
-      nextTick(() => {
-        const firstError = document.querySelector('.el-form-item.is-error')
-        firstError?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      })
-      return false
-    }
-  }
-
-  const scriptErrorKeys = Object.keys(scriptFieldErrors.value)
-  if (scriptErrorKeys.length > 0) {
-    nextTick(() => {
-      const root = formRef.value?.$el as HTMLElement | undefined
-      const firstKey = scriptErrorKeys[0]
-      const firstError = firstKey && root
-        ? root.querySelector(`.el-form-item[data-field-key="${CSS.escape(firstKey)}"]`)
-        : document.querySelector('.el-form-item.is-error')
-      firstError?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    })
-    return false
-  }
-
-  if (!elPlusValid) {
-    // Scroll to first Element Plus error
-    nextTick(() => {
-      const firstError = document.querySelector('.el-form-item.is-error')
-      if (firstError) {
-        firstError.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      }
-    })
-  }
-
-  return elPlusValid
-}
-
-// ---------------------------------------------------------------------------
-// Task 7.5: Auto-save to localStorage
-// ---------------------------------------------------------------------------
-const AUTO_SAVE_INTERVAL = 30_000 // 30 seconds
-let autoSaveTimer: ReturnType<typeof setInterval> | null = null
-
-function getAutoSaveKey(): string | null {
-  if (props.functionUnitId && props.formId) {
-    return `form_autosave_${props.functionUnitId}_${props.formId}`
-  }
-  return null
-}
-
-function autoSave() {
-  const key = getAutoSaveKey()
-  if (!key || props.readonly) return
-  try {
-    localStorage.setItem(key, JSON.stringify(formData.value))
-  } catch (err) {
-    console.warn('[FormRenderer] Auto-save to localStorage failed:', err)
-  }
-}
-
-function startAutoSave() {
-  stopAutoSave()
-  if (getAutoSaveKey() && !props.readonly) {
-    autoSaveTimer = setInterval(autoSave, AUTO_SAVE_INTERVAL)
-  }
-}
-
-function stopAutoSave() {
-  if (autoSaveTimer) {
-    clearInterval(autoSaveTimer)
-    autoSaveTimer = null
-  }
-}
-
-function clearAutoSave() {
-  const key = getAutoSaveKey()
-  if (key) {
-    try {
-      localStorage.removeItem(key)
-    } catch (err) {
-      console.warn('[FormRenderer] Failed to clear auto-save:', err)
-    }
-  }
-  stopAutoSave()
-}
-
-async function checkAutoSaveRestore() {
-  const key = getAutoSaveKey()
-  if (!key || props.readonly) return
-
-  try {
-    const saved = localStorage.getItem(key)
-    if (!saved) return
-
-    const savedData = JSON.parse(saved)
-    if (!savedData || typeof savedData !== 'object') return
-
-    await ElMessageBox.confirm(
-      t('formRenderer.autoSaveRestorePrompt'),
-      t('formRenderer.autoSaveTitle'),
-      {
-        confirmButtonText: t('formRenderer.restore'),
-        cancelButtonText: t('formRenderer.discard'),
-        type: 'info',
-      }
-    )
-    // User chose to restore
-    isInternalUpdate = true
-    formData.value = { ...formData.value, ...savedData }
-    setTimeout(() => { isInternalUpdate = false }, 0)
-    emit('update:modelValue', { ...formData.value })
-
-    // Trigger engine re-evaluation for all restored fields (Req 12.1, 12.2)
-    if (props.config) {
-      for (const [key, value] of Object.entries(formData.value)) {
-        if (value != null && value !== '') {
-          const result = engine.onFieldChange(key, value, formData.value)
-          applyEngineResult(result)
-        }
-      }
-    }
-  } catch {
-    // User chose to discard or parse error — clear saved data
-    clearAutoSave()
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Existing exposed methods
-// ---------------------------------------------------------------------------
-const resetForm = () => {
-  formRef.value?.resetFields()
-  initFormData()
-}
-
-const getFormData = () => {
-  return { ...formData.value }
-}
-
-const setFieldValue = (key: string, value: any) => {
-  formData.value[key] = value
-}
-
 // Use toRefs(props) instead of 10 individual computed() wrappers — cheaper to create,
 // same reactivity behavior (refs auto-unwrap inside reactive() provide).
 const {
@@ -1882,7 +597,7 @@ provide(FORM_RENDERER_FIELDS_CTX, reactive({
   emitViewSubtaskDetail: (row: unknown, siblingRows?: unknown[]) => {
     emit('viewSubtaskDetail', row, siblingRows)
   },
-}))
+}) as unknown as FormRendererFieldsContext)
 console.log(`[PERF-FR] setup done (before template) @${performance.now().toFixed(0)}`)
 
 // ---------------------------------------------------------------------------

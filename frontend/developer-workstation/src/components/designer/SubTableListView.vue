@@ -380,134 +380,39 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from 'vue'
-import { Search, Close, Menu, DArrowRight, EditPen, Calendar, Document, Coin, Switch as SwitchIcon, Link, Operation } from '@element-plus/icons-vue'
+import { computed, onMounted, ref } from 'vue'
+import { Search, Close, Menu, DArrowRight, EditPen, Link, Operation } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
-import { subTableViewApi, type SubTableFieldDTO } from '@/api/subTableView'
-import { resolveBindingDisplayName } from '@/utils/bindingDisplayHelpers'
-import { linkFormComponentApi } from '@/api/linkFormComponent'
 import SubTablePreviewDialog from './sub-table-list/SubTablePreviewDialog.vue'
 import SubTableColumnConfigDialog from './sub-table-list/SubTableColumnConfigDialog.vue'
 import LookupPreview from './LookupPreview.vue'
-import { resolveInlineFormBelowDesign } from './formPreviewTypes'
+import type {
+  SubTableBindingOption,
+  SubTableListViewEmit,
+  SubTableListViewProps,
+} from '@/composables/subTableListView/types'
+import { useColumnHelpers } from '@/composables/subTableListView/useColumnHelpers'
+import { useViewColumns } from '@/composables/subTableListView/useViewColumns'
+import { useColumnDrag } from '@/composables/subTableListView/useColumnDrag'
+import { useLinkFormDialog } from '@/composables/subTableListView/useLinkFormDialog'
+import { useActionColumnConfig } from '@/composables/subTableListView/useActionColumnConfig'
+import { usePortalPreview } from '@/composables/subTableListView/usePortalPreview'
 
-interface LinkFormComponentInfo {
-  id: number
-  componentName: string
-  linkedFormId: number
-  linkedFormName?: string
-  displayField?: string
-  linkText?: string
-  columnLabel?: string
-}
-
-interface SubTableBindingOption {
-  bindingId: number
-  tableName: string
-  /** Table Display Name 来自 dw_table_definitions.tableDisplayName，渲染优先于 tableName。 */
-  tableDisplayName?: string
-  tableId?: number
-  tableDescription?: string
-}
-
-interface SubTableFormDesign {
-  rule: any[]
-  options?: Record<string, unknown>
-}
-
-interface LookupPreviewConfig {
-  placeholder: string
-  searchFields: string[]
-  displayFields: string[]
-  selectedDisplayField: string
-  filterConditions: any[]
-  viewFields: any[]
-  fieldDefs: any[]
-  showBackfillView: boolean
-}
-
-export interface SubTableListColumnDTO extends SubTableFieldDTO {
-  columnType?: 'field' | 'linkForm' | 'lookup'
-  componentId?: number
-  linkedFormId?: number
-  linkedFormName?: string
-  linkText?: string
-  columnLabel?: string
-  boundSubTableBindingId?: number
-  boundSubTableName?: string
-  lookupConfig?: string
-}
+export type { SubTableListColumnDTO } from '@/composables/subTableListView/types'
 
 const { t } = useI18n()
 
-const props = defineProps<{
-  binding: {
-    bindingId: number
-    bindingType: string
-    bindingMode: string
-    tableName: string
-    tableDisplayName?: string
-    tableId: number
-    tableType: string
-    tableDescription: string
-  }
-  functionUnitId: number
-  formId: number
-  /** All available fields for this sub-table */
-  availableFields?: SubTableFieldDTO[]
-  /** Fields currently shown in the view (ordered) */
-  modelValue?: SubTableListColumnDTO[]
-  linkFormComponents?: LinkFormComponentInfo[]
-  subTableBindings?: SubTableBindingOption[]
-  resolveSubTableFormDesign?: (bindingId: number) => SubTableFormDesign
-  resolveLookupPreviewConfig?: (lookupConfig: string) => LookupPreviewConfig
-  /** Sub-table form design rendered when a Link Form column is clicked */
-  formRule?: any[]
-  formOption?: Record<string, unknown>
-  /**
-   * Binding-level portal display (User Portal To Do / My Requests). When To Do is
-   * "form below table" and My Requests is not "same as To Do", the list preview shows
-   * two panes and the preview dialog uses two tabs.
-   */
-  portalViews?: {
-    assigneeTodo: 'formBelowTable' | 'tableOnly'
-    initiatorRequest: 'mirrorTodo' | 'summaryWithLinkFormModal' | 'tableOnly'
-  } | null
-}>()
+const props = defineProps<SubTableListViewProps>()
 
-const emit = defineEmits<{
-  (e: 'update:modelValue', fields: SubTableListColumnDTO[]): void
-  (e: 'update:availableFields', fields: SubTableFieldDTO[]): void
-  (e: 'save'): void
-}>()
+const emit = defineEmits<SubTableListViewEmit>()
 
 const columnsPanelOpen = ref(true)
 const fieldSearchKeyword = ref('')
 const showPreview = ref(false)
 /** Dummy model for read-only inline form-below preview (assignee pane). */
 const inlineFormPreviewData = ref<Record<string, unknown>>({})
-const loadingFields = ref(false)
-const showLinkFormDialog = ref(false)
-const formCreateMounted = ref(false)
-const savingLinkForm = ref(false)
-const selectedLinkColumn = ref<SubTableListColumnDTO | null>(null)
-const linkFormData = ref<Record<string, any>>({})
-const showActionColumnConfig = ref(false)
-const editingActionColumnIndex = ref<number | null>(null)
-const editingActionColumnType = ref<'linkForm' | 'lookup'>('linkForm')
-const linkColumnConfig = ref({ boundSubTableBindingId: 0, columnLabel: '', linkText: '' })
-const lookupColumnConfig = ref({ columnLabel: 'Lookup', lookupConfig: '{}' })
 
-// Local fallback: when parent doesn't yet have allFields, store the loaded value here
-const localAvailableFields = ref<SubTableFieldDTO[]>([])
-const mockSubTableRowId = 1
-const genericLinkFormComponentId = computed(() => -Math.abs(props.binding.bindingId || 0))
-const genericLinkFormKey = computed(() => getLinkColumnKey(genericLinkFormComponentId.value))
-const genericLookupKey = computed(() => `lookup:${props.binding.bindingId || 0}`)
-
-// All available fields: prefer prop (parent-managed), fall back to locally loaded
-const allFields = computed(() => props.availableFields?.length ? props.availableFields : localAvailableFields.value)
 const subTableBindingOptions = computed<SubTableBindingOption[]>(() => {
   if (props.subTableBindings?.length) return props.subTableBindings
   return [{
@@ -519,114 +424,126 @@ const subTableBindingOptions = computed<SubTableBindingOption[]>(() => {
   }]
 })
 
-// Fields currently in the view (user-selected, ordered)
-const viewColumns = computed({
-  get: () => props.modelValue || [],
-  set: (val) => emit('update:modelValue', val)
+// --- Column classification, labels, icons and mock values ---
+const {
+  isLinkColumn,
+  isLookupColumn,
+  isConfigurableActionColumn,
+  getLinkColumnKey,
+  getColumnKey,
+  getColumnLabel,
+  getLinkText,
+  resolveSubTableBindingDisplayName,
+  getLinkFormBoundTableName,
+  getLookupPreviewConfig,
+  getFieldIcon,
+  getMockValue,
+} = useColumnHelpers({ props, subTableBindingOptions, t })
+
+// --- View columns, available fields, and field/action add/remove/clear ---
+const {
+  loadingFields,
+  genericLinkFormKey,
+  genericLookupKey,
+  allFields,
+  viewColumns,
+  loadFields,
+  filteredAvailableFields,
+  isFieldInView,
+  addFieldToView,
+  addLinkFormToView,
+  addLookupToView,
+  removeField,
+  handleClear,
+} = useViewColumns({
+  props,
+  emit,
+  fieldSearchKeyword,
+  isLinkColumn,
+  isLookupColumn,
+  getLinkColumnKey,
+  t,
 })
 
-// Drag state
-const dragSourceKey = ref<string | null>(null)
-const dragColIndex = ref<number | null>(null)
-const dragOverIndex = ref<number | null>(null)
-const isDraggingFromPanel = ref(false)
-type DragPayload = { kind: 'field'; fieldName: string } | { kind: 'linkForm' } | { kind: 'lookup' }
-const dragPayload = ref<DragPayload | null>(null)
-const dragMime = 'application/x-sub-table-list-column'
-const linkFormOption = computed(() => {
-  const saved = { ...((selectedSubTableFormDesign.value.options || props.formOption || {}) as Record<string, unknown>) }
-  // Persisted designer option often includes `title`; form-create renders it inside the dialog and
-  // it may still be the legacy "ADD + …" string — remove so only `el-dialog` shows `linkFormDialogTitle`.
-  delete saved.title
-  return {
-    showMsg: true,
-    form: {
-      labelPosition: 'left',
-      labelWidth: '140px',
-    },
-    language: {
-      en: {
-        clickToUpload: t('form.clickToUpload'),
-      },
-    },
-    ...saved,
-    resetBtn: false,
-    submitBtn: false,
-  }
+// --- Drag from panel to grid + column reorder ---
+const {
+  dragSourceKey,
+  dragOverIndex,
+  onFieldDragStart,
+  onLinkFormDragStart,
+  onLookupDragStart,
+  onDragEnd,
+  onGridDragOver,
+  onGridDrop,
+  onColDragStart,
+  onColDragOver,
+  onColDragLeave,
+  onColDrop,
+  onColDragEnd,
+} = useColumnDrag({
+  emit,
+  viewColumns,
+  allFields,
+  genericLinkFormKey,
+  genericLookupKey,
+  isFieldInView,
+  addLinkFormToView,
+  addLookupToView,
 })
 
-/** Read-only form-create option for the assignee "form below table" strip in dual list preview. */
-const inlineFormBelowDesign = computed(() =>
-  resolveInlineFormBelowDesign({
-    ownBindingId: props.binding.bindingId,
-    ownRule: props.formRule || [],
-    ownOption: props.formOption,
-    columns: viewColumns.value,
-    portalViews: props.portalViews,
-    resolveSubTableFormDesign: props.resolveSubTableFormDesign,
-  }),
-)
+// --- Link Form dialog (open / save / form-create option / title) ---
+const {
+  showLinkFormDialog,
+  formCreateMounted,
+  savingLinkForm,
+  linkFormData,
+  selectedSubTableFormDesign,
+  linkFormOption,
+  linkFormDialogTitle,
+  openLinkFormDialog,
+  handleLinkFormSave,
+  handleLinkFormDialogClosed,
+} = useLinkFormDialog({ props, getLinkFormBoundTableName, t })
 
-const inlineFormPreviewOption = computed(() => {
-  const saved = { ...((inlineFormBelowDesign.value.option || props.formOption || {}) as Record<string, unknown>) }
-  delete saved.title
-  return {
-    showMsg: true,
-    form: {
-      labelPosition: 'left',
-      labelWidth: '140px',
-      disabled: true,
-    },
-    language: {
-      en: {
-        clickToUpload: t('form.clickToUpload'),
-      },
-    },
-    ...saved,
-    resetBtn: false,
-    submitBtn: false,
-  }
+// --- Action column (Link Form / Lookup) config dialog ---
+const {
+  showActionColumnConfig,
+  editingActionColumnType,
+  linkColumnConfig,
+  lookupColumnConfig,
+  openActionColumnConfig,
+  saveActionColumnConfig,
+} = useActionColumnConfig({
+  props,
+  emit,
+  viewColumns,
+  subTableBindingOptions,
+  isLookupColumn,
+  isConfigurableActionColumn,
+  resolveSubTableBindingDisplayName,
+  t,
 })
 
-const dualPortalListPreview = computed(() => {
-  const v = props.portalViews
-  if (!v || typeof v !== 'object') return false
-  const init = v.initiatorRequest
-  if (init == null || init === 'mirrorTodo') return false
-  return true
+// --- User Portal dual-view preview (To Do / My Requests) ---
+const {
+  inlineFormBelowDesign,
+  inlineFormPreviewOption,
+  dualPortalListPreview,
+  assigneeTodoIsFormBelow,
+  initiatorIsSummary,
+  dualPreviewPanes,
+  previewFieldRows,
+  splitPreviewRows,
+} = usePortalPreview({
+  props,
+  viewColumns,
+  isLinkColumn,
+  isLookupColumn,
+  getLinkText,
+  getColumnLabel,
+  getMockValue,
+  t,
 })
-
-const assigneeTodoIsFormBelow = computed(() => props.portalViews?.assigneeTodo === 'formBelowTable')
-
-const initiatorIsSummary = computed(() => props.portalViews?.initiatorRequest === 'summaryWithLinkFormModal')
-
-const dualPreviewPanes = computed(() => [
-  { key: 'todo' as const, title: t('form.portalViews.toDoDisplay') },
-  { key: 'initiator' as const, title: t('form.portalViews.myRequestsDisplay') },
-])
-
-const selectedSubTableFormDesign = computed<SubTableFormDesign>(() => {
-  const bindingId = selectedLinkColumn.value?.boundSubTableBindingId || props.binding.bindingId
-  return props.resolveSubTableFormDesign?.(bindingId) || {
-    rule: props.formRule || [],
-    options: props.formOption
-  }
-})
-
-async function loadFields() {
-  if (!props.formId || !props.binding?.bindingId) return
-  loadingFields.value = true
-  try {
-    const res = await subTableViewApi.getAvailableFields(props.formId, props.binding.bindingId)
-    const fields: SubTableFieldDTO[] = res.data || []
-    localAvailableFields.value = fields
-    emit('update:availableFields', fields)
-  } catch (e) {
-    console.error('[SubTableListView] failed to load fields:', e)
-  } finally {
-    loadingFields.value = false
-  }
-}
 
 // If parent hasn't populated allFields yet, load from API on mount
 onMounted(() => {
@@ -635,386 +552,11 @@ onMounted(() => {
   }
 })
 
-const filteredAvailableFields = computed(() => {
-  const kw = fieldSearchKeyword.value.trim().toLowerCase()
-  // Only show fields NOT already in the view
-  const inView = new Set(viewColumns.value.filter(c => !isLinkColumn(c)).map(f => f.fieldName))
-  let list = allFields.value.filter(f => !inView.has(f.fieldName))
-  if (kw) {
-    list = list.filter(f => f.fieldName.toLowerCase().includes(kw) || (f.displayName || '').toLowerCase().includes(kw))
-  }
-  return list
-})
-
-const isFieldInView = (fieldName: string) => viewColumns.value.some(f => !isLinkColumn(f) && f.fieldName === fieldName)
-const isLinkColumn = (column: SubTableListColumnDTO) => column.columnType === 'linkForm'
-const isLookupColumn = (column: SubTableListColumnDTO) => column.columnType === 'lookup'
-const isConfigurableActionColumn = (column: SubTableListColumnDTO) => isLinkColumn(column) || isLookupColumn(column)
-const getLinkColumnKey = (componentId: number) => `linkForm:${componentId}`
-const getColumnKey = (column: SubTableListColumnDTO) => isLinkColumn(column)
-  ? getLinkColumnKey(column.componentId || 0)
-  : isLookupColumn(column)
-    ? column.fieldName
-    : column.fieldName
-const getColumnLabel = (column: SubTableListColumnDTO) => {
-  if (isLinkColumn(column)) {
-    return column.columnLabel || column.displayName || column.linkText || t('linkForm.defaultLinkText')
-  }
-  if (isLookupColumn(column)) {
-    return column.columnLabel || column.displayName || 'Lookup'
-  }
-  return column.displayName || column.fieldName
-}
-const getLinkText = (column: SubTableListColumnDTO) => column.linkText || t('linkForm.defaultLinkText')
-
-function resolveSubTableBindingDisplayName(bindingId: unknown): string {
-  return resolveBindingDisplayName(bindingId, subTableBindingOptions.value)
-}
-
-function getLinkFormBoundTableName(column: SubTableListColumnDTO | null): string {
-  if (!column || !isLinkColumn(column)) {
-    return props.binding.tableDisplayName || props.binding.tableName
-  }
-  return (
-    column.boundSubTableName
-    || resolveSubTableBindingDisplayName(column.boundSubTableBindingId)
-    || props.binding.tableDisplayName
-    || props.binding.tableName
-  )
-}
-
-/** Legacy titles used "ADD + name"; strip if that prefix was stored on the table display name. */
-function linkFormTitleTableName(raw: string): string {
-  return String(raw || '')
-    .trim()
-    .replace(/^ADD\s*\+\s*/i, '')
-    .trim()
-}
-
-const linkFormDialogTitle = computed(() => {
-  const tableName = linkFormTitleTableName(getLinkFormBoundTableName(selectedLinkColumn.value))
-  if (!tableName) return t('linkForm.linkedForm')
-  return t('linkForm.dialogTitleAddTable', { tableName })
-})
-
-const defaultLookupPreviewConfig: LookupPreviewConfig = {
-  placeholder: 'Click to search',
-  searchFields: [],
-  displayFields: [],
-  selectedDisplayField: '',
-  filterConditions: [],
-  viewFields: [],
-  fieldDefs: [],
-  showBackfillView: true
-}
-const getLookupPreviewConfig = (column: SubTableListColumnDTO): LookupPreviewConfig => {
-  return props.resolveLookupPreviewConfig?.(column.lookupConfig || '{}') || defaultLookupPreviewConfig
-}
-
-const getFieldIcon = (dataType: string) => {
-  const type = (dataType || '').toUpperCase()
-  if (type.includes('INT') || type.includes('DECIMAL') || type.includes('NUMERIC')) return Coin
-  if (type.includes('DATE') || type.includes('TIME') || type.includes('TIMESTAMP')) return Calendar
-  if (type.includes('BOOL')) return SwitchIcon
-  if (type.includes('TEXT') || type.includes('CLOB')) return Document
-  return EditPen
-}
-
-const getMockValue = (field: SubTableFieldDTO): string => {
-  const type = (field.dataType || '').toUpperCase()
-  if (type.includes('INT') || type === 'BIGINT') return '1'
-  if (type.includes('DECIMAL') || type.includes('NUMERIC') || type.includes('FLOAT') || type.includes('DOUBLE')) return '100.00'
-  if (type === 'BOOLEAN' || type === 'BOOL') return 'true'
-  if (type === 'DATE') return '2026-01-01'
-  if (type.includes('TIMESTAMP') || type === 'DATETIME') return '2026-01-01 00:00:00'
-  if (type.includes('TIME')) return '00:00:00'
-  if (type === 'TEXT' || type.includes('CLOB')) return 'Sample text'
-  if (type === 'FILE') return 'file.pdf'
-  return 'Sample'
-}
-
-function previewDialogCellValue(f: SubTableListColumnDTO, pane: 'todo' | 'initiator'): string {
-  if (isLinkColumn(f)) return getLinkText(f)
-  if (isLookupColumn(f)) {
-    if (pane === 'initiator' && initiatorIsSummary.value) {
-      return t('subTableView.previewLookupSummaryCell')
-    }
-    return 'Lookup'
-  }
-  return getMockValue(f)
-}
-
-function buildPreviewFieldRows(pane: 'todo' | 'initiator'): Array<{ label: string; value: string }> {
-  return viewColumns.value.map(f => ({
-    label: getColumnLabel(f),
-    value: previewDialogCellValue(f, pane),
-  }))
-}
-
-const previewFieldRows = computed(() => buildPreviewFieldRows('todo'))
-
-const splitPreviewRows = computed(() =>
-  dualPortalListPreview.value
-    ? { todo: buildPreviewFieldRows('todo'), myRequest: buildPreviewFieldRows('initiator') }
-    : null
-)
-
-// --- Field operations ---
-const addFieldToView = (field: SubTableFieldDTO) => {
-  if (!isFieldInView(field.fieldName)) {
-    emit('update:modelValue', [...viewColumns.value, { ...field, columnType: 'field' }])
-    emit('save')
-  }
-}
-
-const makeLinkFormColumn = (): SubTableListColumnDTO => ({
-  columnType: 'linkForm',
-  fieldName: genericLinkFormKey.value,
-  dataType: 'LINK_FORM',
-  nullable: true,
-  isPrimaryKey: false,
-  componentId: genericLinkFormComponentId.value,
-  displayName: 'Link Form',
-  columnLabel: 'Link Form',
-  linkText: t('linkForm.defaultLinkText'),
-  boundSubTableBindingId: props.binding.bindingId,
-  boundSubTableName: props.binding.tableName
-})
-
-const addLinkFormToView = () => {
-  if (!viewColumns.value.some(c => isLinkColumn(c) && c.componentId === genericLinkFormComponentId.value)) {
-    emit('update:modelValue', [...viewColumns.value, makeLinkFormColumn()])
-    emit('save')
-  }
-}
-
-const makeLookupColumn = (): SubTableListColumnDTO => ({
-  columnType: 'lookup',
-  fieldName: genericLookupKey.value,
-  dataType: 'LOOKUP',
-  nullable: true,
-  isPrimaryKey: false,
-  displayName: 'Lookup',
-  columnLabel: 'Lookup',
-  lookupConfig: '{}'
-})
-
-const addLookupToView = () => {
-  if (!viewColumns.value.some(c => isLookupColumn(c))) {
-    emit('update:modelValue', [...viewColumns.value, makeLookupColumn()])
-    emit('save')
-  }
-}
-
-const removeField = (index: number) => {
-  emit('update:modelValue', viewColumns.value.filter((_, i) => i !== index))
-  emit('save')
-}
-
 const handlePreview = () => { showPreview.value = true }
-
-const handleClear = () => {
-  emit('update:modelValue', [])
-  emit('save')
-}
-
-// --- Drag from left panel to grid ---
-const onFieldDragStart = (e: DragEvent, field: SubTableFieldDTO) => {
-  dragSourceKey.value = field.fieldName
-  dragPayload.value = { kind: 'field', fieldName: field.fieldName }
-  isDraggingFromPanel.value = true
-  e.dataTransfer!.effectAllowed = 'copy'
-  e.dataTransfer!.setData(dragMime, JSON.stringify(dragPayload.value))
-  e.dataTransfer!.setData('text/plain', field.fieldName)
-}
-
-const onLinkFormDragStart = (e: DragEvent) => {
-  dragSourceKey.value = genericLinkFormKey.value
-  dragPayload.value = { kind: 'linkForm' }
-  isDraggingFromPanel.value = true
-  e.dataTransfer!.effectAllowed = 'copy'
-  e.dataTransfer!.setData(dragMime, JSON.stringify(dragPayload.value))
-  e.dataTransfer!.setData('text/plain', genericLinkFormKey.value)
-}
-
-const onLookupDragStart = (e: DragEvent) => {
-  dragSourceKey.value = genericLookupKey.value
-  dragPayload.value = { kind: 'lookup' }
-  isDraggingFromPanel.value = true
-  e.dataTransfer!.effectAllowed = 'copy'
-  e.dataTransfer!.setData(dragMime, JSON.stringify(dragPayload.value))
-  e.dataTransfer!.setData('text/plain', genericLookupKey.value)
-}
-
-const onDragEnd = () => {
-  dragSourceKey.value = null
-  dragPayload.value = null
-  isDraggingFromPanel.value = false
-}
-
-const onGridDragOver = (e: DragEvent) => {
-  if (isDraggingFromPanel.value) {
-    e.dataTransfer!.dropEffect = 'copy'
-  }
-}
-
-const onGridDrop = (e: DragEvent) => {
-  if (!isDraggingFromPanel.value) return
-  let payload = dragPayload.value
-  const rawPayload = e.dataTransfer?.getData(dragMime)
-  if (!payload && rawPayload) {
-    try {
-      payload = JSON.parse(rawPayload) as DragPayload
-    } catch {
-      payload = null
-    }
-  }
-
-  if (payload?.kind === 'field') {
-    const field = allFields.value.find(f => f.fieldName === payload.fieldName)
-    if (field && !isFieldInView(payload.fieldName)) {
-      emit('update:modelValue', [...viewColumns.value, { ...field, columnType: 'field' }])
-      emit('save')
-    }
-  } else if (payload?.kind === 'linkForm') {
-    addLinkFormToView()
-  } else if (payload?.kind === 'lookup') {
-    addLookupToView()
-  }
-  onDragEnd()
-}
-
-// --- Drag to reorder columns ---
-const onColDragStart = (e: DragEvent, index: number) => {
-  dragColIndex.value = index
-  isDraggingFromPanel.value = false
-  e.dataTransfer!.effectAllowed = 'move'
-  e.dataTransfer!.setData('text/plain', String(index))
-}
-
-const onColDragOver = (_e: DragEvent, index: number) => {
-  if (dragColIndex.value !== null && dragColIndex.value !== index) {
-    dragOverIndex.value = index
-  }
-}
-
-const onColDragLeave = () => { dragOverIndex.value = null }
-
-const onColDrop = (_e: DragEvent, targetIndex: number) => {
-  if (dragColIndex.value !== null && dragColIndex.value !== targetIndex) {
-    const arr = [...viewColumns.value]
-    const [moved] = arr.splice(dragColIndex.value, 1)
-    arr.splice(targetIndex, 0, moved)
-    emit('update:modelValue', arr)
-    emit('save')
-  }
-  dragColIndex.value = null
-  dragOverIndex.value = null
-}
-
-async function openLinkFormDialog(column: SubTableListColumnDTO) {
-  if (column.componentId === undefined || column.componentId === null) return
-  selectedLinkColumn.value = column
-  linkFormData.value = {}
-  formCreateMounted.value = false
-  showLinkFormDialog.value = true
-
-  try {
-    const res = await linkFormComponentApi.getFormData(props.functionUnitId, column.componentId, mockSubTableRowId)
-    linkFormData.value = res.data?.formData || {}
-  } catch (e: any) {
-    if (e?.response?.status !== 404) {
-      console.error('[SubTableListView] failed to load link form data:', e)
-    }
-  }
-
-  nextTick(() => {
-    formCreateMounted.value = true
-  })
-}
 
 /** Portal parity: Save control on assignee form-below-table strip (design-time preview is read-only). */
 function handleInlineFormBelowPreviewSave() {
   ElMessage.success(t('common.saveSuccess'))
-}
-
-async function handleLinkFormSave() {
-  if (selectedLinkColumn.value?.componentId === undefined || selectedLinkColumn.value?.componentId === null) return
-  savingLinkForm.value = true
-  try {
-    await linkFormComponentApi.saveFormData(props.functionUnitId, {
-      componentId: selectedLinkColumn.value.componentId,
-      subTableRowId: mockSubTableRowId,
-      formData: linkFormData.value
-    })
-    ElMessage.success(t('common.saveSuccess'))
-    showLinkFormDialog.value = false
-  } catch (e: any) {
-    ElMessage.error(e?.response?.data?.message || t('common.saveFailed'))
-  } finally {
-    savingLinkForm.value = false
-  }
-}
-
-function openActionColumnConfig(column: SubTableListColumnDTO, index: number) {
-  editingActionColumnIndex.value = index
-  editingActionColumnType.value = isLookupColumn(column) ? 'lookup' : 'linkForm'
-  if (isLookupColumn(column)) {
-    lookupColumnConfig.value = {
-      columnLabel: column.columnLabel || column.displayName || 'Lookup',
-      lookupConfig: column.lookupConfig || '{}'
-    }
-  } else {
-    linkColumnConfig.value = {
-      boundSubTableBindingId: column.boundSubTableBindingId || props.binding.bindingId,
-      columnLabel: column.columnLabel || column.displayName || 'Link Form',
-      linkText: column.linkText || t('linkForm.defaultLinkText')
-    }
-  }
-  showActionColumnConfig.value = true
-}
-
-function saveActionColumnConfig() {
-  if (editingActionColumnIndex.value === null) return
-  const columns = [...viewColumns.value]
-  const current = columns[editingActionColumnIndex.value]
-  if (!current || !isConfigurableActionColumn(current)) return
-  columns[editingActionColumnIndex.value] = isLookupColumn(current)
-    ? {
-      ...current,
-      displayName: lookupColumnConfig.value.columnLabel || 'Lookup',
-      columnLabel: lookupColumnConfig.value.columnLabel || 'Lookup',
-      lookupConfig: lookupColumnConfig.value.lookupConfig || '{}'
-    }
-    : {
-      ...current,
-      displayName: linkColumnConfig.value.columnLabel || 'Link Form',
-      columnLabel: linkColumnConfig.value.columnLabel || 'Link Form',
-      linkText: linkColumnConfig.value.linkText || t('linkForm.defaultLinkText'),
-      boundSubTableBindingId: linkColumnConfig.value.boundSubTableBindingId || props.binding.bindingId,
-      boundSubTableName: subTableBindingOptions.value.find(
-        option => option.bindingId === linkColumnConfig.value.boundSubTableBindingId
-      )?.tableDisplayName
-        || subTableBindingOptions.value.find(
-          option => option.bindingId === linkColumnConfig.value.boundSubTableBindingId
-        )?.tableName
-        || resolveSubTableBindingDisplayName(linkColumnConfig.value.boundSubTableBindingId)
-  }
-  emit('update:modelValue', columns)
-  emit('save')
-  showActionColumnConfig.value = false
-  editingActionColumnIndex.value = null
-}
-
-function handleLinkFormDialogClosed() {
-  formCreateMounted.value = false
-  selectedLinkColumn.value = null
-  linkFormData.value = {}
-}
-
-const onColDragEnd = () => {
-  dragColIndex.value = null
-  dragOverIndex.value = null
 }
 
 // --- Expose for parent (getters for save) ---
