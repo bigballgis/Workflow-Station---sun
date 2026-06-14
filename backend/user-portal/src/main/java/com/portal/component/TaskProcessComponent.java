@@ -40,6 +40,7 @@ public class TaskProcessComponent {
     private final SubTableRowAssignmentComponent subTableRowAssignmentComponent;
     private final TaskApprovalCompletionComponent taskApprovalCompletionComponent;
     private final ProcessInstanceSyncComponent processInstanceSyncComponent;
+    private final MiOverlayComponent miOverlayComponent;
 
     /**
      * Claims task
@@ -177,6 +178,11 @@ public class TaskProcessComponent {
             case "DRAFT" -> handleReturn(task, request, userId, "DRAFT");
             default -> throw new PortalException("400", "Unsupported action type: " + action);
         }
+
+        // Completing/transferring/returning a task changes sub-task task_status; drop the MI status
+        // cache so the next My Request / process detail load reflects it immediately (otherwise the
+        // 5s TTL serves a stale snapshot and the page needs two refreshes to update).
+        miOverlayComponent.invalidate(task.getProcessInstanceId());
     }
 
     /**

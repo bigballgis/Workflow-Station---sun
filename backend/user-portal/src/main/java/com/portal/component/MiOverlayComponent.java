@@ -35,6 +35,19 @@ public class MiOverlayComponent {
 
     private record MiStatusCacheEntry(Map<String, Object> payload, long timestampMs) {}
 
+    /**
+     * Drop the cached MI status for a process instance so the next {@link #resolveMiRowProgress}
+     * re-queries the engine. Called when a task in this process completes/transfers/returns, since
+     * those change sub-task {@code task_status} but the {@value #MI_STATUS_CACHE_TTL_MS}ms TTL would
+     * otherwise serve a stale snapshot — surfacing as "My Request needs two refreshes to update".
+     */
+    public void invalidate(String processInstanceId) {
+        if (processInstanceId == null || processInstanceId.isBlank()) {
+            return;
+        }
+        miStatusCache.remove(processInstanceId);
+    }
+
     @SuppressWarnings("unchecked")
     Map<String, Map<String, MiRowProgress>> resolveMiRowProgress(String processInstanceId, String processInstanceStatus) {
         if (processInstanceId == null || processInstanceId.isBlank()) {
