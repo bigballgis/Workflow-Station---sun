@@ -224,6 +224,10 @@ public class ProcessBpmnValidator {
                         String subTableName = userTaskProps.get("subTableName");
                         if (subTableName != null && !subTableName.isEmpty()) {
                             tableOpt = tableDefinitionRepository.findByFunctionUnitIdAndTableName(functionUnitId, subTableName);
+                            // Reload with JOIN FETCH to avoid LazyInitializationException on fieldDefinitions
+                            if (tableOpt.isPresent()) {
+                                tableOpt = tableDefinitionRepository.findByIdWithFields(tableOpt.get().getId());
+                            }
                         }
                     }
                     if (tableOpt.isEmpty()) {
@@ -287,6 +291,10 @@ public class ProcessBpmnValidator {
                         String formName = userTaskProps.get("formName");
                         if (formName != null && !formName.isEmpty()) {
                             formOpt = formDefinitionRepository.findByFunctionUnitIdAndFormName(functionUnitId, formName);
+                            // Reload to ensure entity is managed in current session
+                            if (formOpt.isPresent()) {
+                                formOpt = formDefinitionRepository.findById(formOpt.get().getId());
+                            }
                         }
                     }
                     if (formOpt.isEmpty()) {
