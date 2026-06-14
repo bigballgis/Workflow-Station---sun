@@ -1,0 +1,313 @@
+import { isFormCreateRuleReadonly } from '@/components/formRendererHelpers'
+import { resolveAssigneeFieldForBinding } from '@/utils/subTableAssignment'
+import {
+  mergeListViewFieldColumn,
+  deriveColumnsFromRelationFieldDefinitions,
+  resolveSubTableSchemaByTableId,
+  resolveSubListViewColumnsForBinding,
+  defaultAttachmentListColumns,
+} from '@/components/subTableAddDialogHelpers'
+import {
+  isSyntheticLookupField,
+  isAssigneeLikeLabel,
+  isPortalSharedAttachmentTableBinding,
+} from './subTableRowHelpers'
+import type { ApplicationDetailCtx } from './context'
+
+type DerivedColumn = {
+  field: string
+  label: string
+  type?: string
+  required?: boolean
+  options?: Array<{ label: string; value: any }>
+  props?: Record<string, any>
+}
+
+export interface ApplicationDetailColumnsFns {
+  buildLookupColumnProps: (rawLookupConfig: unknown) => Record<string, any>
+  deriveColumnsFromBinding: (binding: any, formConfig?: Record<string, any>) => DerivedColumn[]
+  resolveSubTableBindingColumnsForPortal: (
+    b: {
+      bindingId?: number
+      tableId?: number | null
+      tableName?: string
+      foreignKeyField?: string | null
+    },
+    formConfig: Record<string, any>,
+    contentForms?: any[] | null,
+  ) => DerivedColumn[]
+}
+
+export function createApplicationDetailColumns(ctx: ApplicationDetailCtx): ApplicationDetailColumnsFns {
+  const { lookupDbConfigs, relationViewConfigs } = ctx
+
+  /** Align with tasks/detail.vue: relation view + lookup config for sub-table list columns. */
+  function buildLookupColumnProps(rawLookupConfig: unknown): Record<string, any> {
+    let lookupCfg: any = {}
+    try {
+      lookupCfg = typeof rawLookupConfig === 'string' ? JSON.parse(rawLookupConfig || '{}') : (rawLookupConfig || {})
+    } catch {
+      lookupCfg = {}
+    }
+    const relationView = lookupCfg.bindingId ? relationViewConfigs.value[lookupCfg.bindingId] : undefined
+    return {
+      lookupConfig: typeof rawLookupConfig === 'string' ? rawLookupConfig : JSON.stringify(lookupCfg || {}),
+      tableId: lookupCfg.tableId || 0,
+      searchFields: lookupCfg.searchFields || [],
+      displayField: lookupCfg.displayFields?.[0] || '',
+      displayFields: lookupCfg.displayFields || [],
+      selectedDisplayField: lookupCfg.selectedDisplayField || lookupCfg.displayField || '',
+      filterConditions: Array.isArray(lookupCfg.filterConditions) ? lookupCfg.filterConditions : [],
+      viewFields: lookupCfg.showBackfillView === false ? [] : (relationView?.viewFields || []),
+      showBackfillView: lookupCfg.showBackfillView !== false
+    }
+  }
+
+  // Derive display columns for a sub-table binding from the designer config.
+  // List-view column order comes from subListViews; control types/options come from subForm (same as process start / task detail).
+  const deriveColumnsFromBinding = (binding: any, formConfig?: Record<string, any>): Array<{ field: string; label: string; type?: string; required?: boolean; options?: Array<{ label: string; value: any }>; props?: Record<string, any> }> => {
+    const subFormRule =
+      binding.subFormConfig?.rule ||
+      formConfig?.subForms?.[binding.bindingId]?.rule ||
+      formConfig?.subForms?.[String(binding.bindingId)]?.rule
+
+    const subFormColumns =
+      subFormRule && Array.isArray(subFormRule) && subFormRule.length > 0
+        ? subFormRule.map((r: any) => {
+        const rProps = r.props || {}
+        let type: string | undefined
+
+        if (r.type === 'input') {
+          if (rProps.type === 'textarea') type = 'textarea'
+          else if (rProps.type === 'password') type = 'password'
+          else type = 'text'
+        } else if (r.type === 'inputNumber') {
+          type = 'number'
+        } else if (r.type === 'select') {
+          type = 'select'
+        } else if (r.type === 'radio') {
+          type = 'radio'
+        } else if (r.type === 'switch') {
+          type = 'switch'
+        } else if (r.type === 'datePicker') {
+          type = rProps.type === 'datetime' ? 'datetime' : 'date'
+        } else if (r.type === 'timePicker') {
+          type = rProps.isRange === true ? 'timerange' : 'time'
+        } else if (r.type === 'treeSelect') {
+          type = 'treeselect'
+        } else if (r.type === 'elTreeSelect') {
+          type = 'treeselect'
+        } else if (r.type === 'tree') {
+          type = 'tree'
+        } else if (r.type === 'upload') {
+          type = 'upload'
+        } else if (r.type === 'userSelect' || r.type === 'user') {
+          type = 'user'
+        } else if (r.type === 'departmentSelect' || r.type === 'department') {
+          type = 'department'
+        } else if (r.type === 'colorPicker') {
+          type = 'colorPicker'
+        } else if (r.type === 'rate') {
+          type = 'rate'
+        } else if (r.type === 'slider') {
+          type = 'slider'
+        } else if (r.type === 'editor') {
+          type = 'editor'
+        } else if (r.type === 'signature') {
+          type = 'signature'
+        } else if (r.type === 'transfer') {
+          type = 'transfer'
+        } else if (r.type === 'cascader') {
+          type = 'cascader'
+        } else if (r.type === 'lookup') {
+          type = 'lookup'
+        } else {
+          type = r.type as any
+        }
+
+        // Collect options from rule.options or rule.props.options
+        const rawOptions = r.options || rProps.options
+        const options = rawOptions
+          ? (type === 'cascader' ? rawOptions : rawOptions.map((o: any) => ({ label: o.label ?? o.value, value: o.value })))
+          : undefined
+
+        // Pass through relevant props
+        const passProps: Record<string, any> = {}
+        const propKeys = [
+          'action', 'accept', 'multiple', 'precision', 'min', 'max', 'rows', 'maxlength', 'fileNameTargetField',
+          'isRange', 'valueFormat', 'startPlaceholder', 'endPlaceholder', 'treeData', 'checkStrictly',
+          'showAlpha', 'allowHalf', 'step', 'cascaderProps', 'leftTitle', 'rightTitle',
+        ]
+        for (const key of propKeys) {
+          if (rProps[key] !== undefined) passProps[key] = rProps[key]
+        }
+        if (rProps.data !== undefined) passProps.treeData = rProps.data
+        if (rProps.nodeKey !== undefined) passProps.nodeKey = rProps.nodeKey
+        if (rProps.showCheckbox !== undefined) passProps.showCheckbox = rProps.showCheckbox
+        if (rProps.props !== undefined) passProps.labelProps = rProps.props
+        // cascader: map props.props to cascaderProps if not already set
+        if (type === 'cascader' && rProps.props && !passProps.cascaderProps) passProps.cascaderProps = rProps.props
+
+        // lookup — same merge as tasks/detail.vue (rt_lookup_configs + relationViews)
+        if (type === 'lookup') {
+          let lookupCfg: any = {}
+          try {
+            const raw = rProps.lookupConfig
+            lookupCfg = typeof raw === 'string' ? JSON.parse(raw || '{}') : (raw || {})
+          } catch { lookupCfg = {} }
+          const dbCfg = lookupDbConfigs.value[r.field]
+          const relationView = lookupCfg.bindingId ? relationViewConfigs.value[lookupCfg.bindingId] : undefined
+          passProps.lookupConfig = rProps.lookupConfig || '{}'
+          passProps.tableId = lookupCfg.tableId || dbCfg?.tableId || 0
+          passProps.searchFields = lookupCfg.searchFields || dbCfg?.searchFields || []
+          passProps.displayField = lookupCfg.displayFields?.[0] || dbCfg?.displayField || ''
+          passProps.displayFields = lookupCfg.displayFields || []
+          passProps.selectedDisplayField = lookupCfg.selectedDisplayField || lookupCfg.displayField || ''
+          passProps.filterConditions = Array.isArray(lookupCfg.filterConditions) ? lookupCfg.filterConditions : []
+          passProps.viewFields = lookupCfg.showBackfillView === false
+            ? []
+            : (relationView?.viewFields || dbCfg?.viewFields || [])
+          passProps.showBackfillView = lookupCfg.showBackfillView !== false
+        }
+
+        // Sync options into props.options so SubTableAddDialog can read from col.props?.options
+        if (options) passProps.options = options
+
+        const required = r.validate?.some((v: any) => v.required) || false
+        // form-create uses `disabled` to mark a field as read-only
+        const readonly = isFormCreateRuleReadonly(r)
+
+        return {
+          field: r.field,
+          label: r.title || r.field,
+          type,
+          required,
+          ...(readonly ? { readonly } : {}),
+          ...(options ? { options } : {}),
+          ...(Object.keys(passProps).length > 0 ? { props: passProps } : {}),
+        }
+      })
+        : []
+
+    const listColumns = resolveSubListViewColumnsForBinding(
+      formConfig,
+      binding.bindingId,
+      subFormColumns.map(c => c.field),
+    )
+
+    if (Array.isArray(listColumns) && listColumns.length > 0) {
+      const ruleByField = new Map(
+        (Array.isArray(subFormRule) ? subFormRule : []).map((ruleItem: any) => [ruleItem?.field, ruleItem])
+      )
+      const subFormColumnByField = new Map(subFormColumns.map(col => [col.field, col]))
+      const assigneeField = resolveAssigneeFieldForBinding(
+        subFormColumns as Array<{ field?: string }>,
+        binding.tableDisplayName || binding.tableName
+      )
+      return listColumns
+        .filter((col: any) => col && col.fieldName)
+        .map((column: any) => {
+          if (column.columnType === 'linkForm') {
+            return {
+              field: column.fieldName || `linkForm:${column.componentId || binding.bindingId}`,
+              label: column.columnLabel || column.displayName || column.linkText || 'Link Form',
+              type: 'linkForm',
+              minWidth: column.minWidth || 120,
+              props: {
+                linkText: column.linkText || 'Details',
+                componentId: column.componentId,
+                boundSubTableBindingId: column.boundSubTableBindingId,
+                boundSubTableName: column.boundSubTableName
+              }
+            }
+          }
+          if (column.columnType === 'lookup') {
+            const label = column.columnLabel || column.displayName || 'Lookup'
+            const field =
+              isSyntheticLookupField(column.fieldName) && isAssigneeLikeLabel(label) && assigneeField
+                ? assigneeField
+                : (column.fieldName || `lookup:${binding.bindingId}`)
+            return {
+              field,
+              label,
+              type: 'lookup',
+              minWidth: 260,
+              props: buildLookupColumnProps(column.lookupConfig || '{}')
+            }
+          }
+
+          const fieldRule = ruleByField.get(column.fieldName)
+          const baseColumn = subFormColumnByField.get(column.fieldName)
+          if (fieldRule?.type === 'lookup' || fieldRule?.props?.lookupConfig || baseColumn?.type === 'lookup') {
+            return {
+              ...(baseColumn || {}),
+              field: column.fieldName,
+              label: column.displayName || column.columnLabel || baseColumn?.label || fieldRule?.title || column.fieldName,
+              type: 'lookup',
+              minWidth: column.minWidth || baseColumn?.minWidth || 260,
+              props: buildLookupColumnProps(fieldRule?.props?.lookupConfig || baseColumn?.props?.lookupConfig || '{}')
+            }
+          }
+
+          return mergeListViewFieldColumn(column, baseColumn, fieldRule)
+        })
+    }
+
+    const tableId = binding.tableId != null ? Number(binding.tableId) : NaN
+    if (Number.isFinite(tableId) && ctx.cachedContentForms.length > 0) {
+      const alt = resolveSubTableSchemaByTableId(tableId, ctx.cachedContentForms, binding.bindingId)
+      if (alt) {
+        const fromAlt = deriveColumnsFromBinding(
+          { ...binding, bindingId: alt.bindingId },
+          alt.formConfig,
+        )
+        if (fromAlt.length > 0) return fromAlt
+      }
+      const tableFields = ctx.cachedRelationTableFieldIndex.get(tableId)
+      if (tableFields?.length) {
+        const fromTable = deriveColumnsFromRelationFieldDefinitions(tableFields)
+        if (fromTable.length > 0) return fromTable
+      }
+    }
+
+    if (isPortalSharedAttachmentTableBinding(binding)) {
+      return defaultAttachmentListColumns()
+    }
+
+    return subFormColumns
+  }
+
+  function resolveSubTableBindingColumnsForPortal(
+    b: {
+      bindingId?: number
+      tableId?: number | null
+      tableName?: string
+      foreignKeyField?: string | null
+    },
+    formConfig: Record<string, any>,
+    contentForms?: any[] | null,
+  ): ReturnType<typeof deriveColumnsFromBinding> {
+    let columns = deriveColumnsFromBinding(b, formConfig)
+    const tableIdNum = b.tableId != null ? Number(b.tableId) : NaN
+    const forms = contentForms ?? ctx.cachedContentForms
+    if ((!Array.isArray(columns) || columns.length === 0) && Number.isFinite(tableIdNum) && forms.length > 0) {
+      const alt = resolveSubTableSchemaByTableId(tableIdNum, forms, b.bindingId)
+      if (alt) {
+        columns = deriveColumnsFromBinding({ ...b, bindingId: alt.bindingId }, alt.formConfig)
+      }
+      if ((!columns || columns.length === 0) && ctx.cachedRelationTableFieldIndex.has(tableIdNum)) {
+        columns = deriveColumnsFromRelationFieldDefinitions(ctx.cachedRelationTableFieldIndex.get(tableIdNum)!)
+      }
+    }
+    if ((!columns || columns.length === 0) && isPortalSharedAttachmentTableBinding(b)) {
+      columns = defaultAttachmentListColumns()
+    }
+    return Array.isArray(columns) ? columns : []
+  }
+
+  return {
+    buildLookupColumnProps,
+    deriveColumnsFromBinding,
+    resolveSubTableBindingColumnsForPortal,
+  }
+}

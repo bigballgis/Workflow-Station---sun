@@ -1,8 +1,8 @@
 package com.developer.controller;
 
 import com.developer.component.ProcessDesignComponent;
-import com.developer.dto.ApiResponse;
-import com.developer.dto.ErrorResponse;
+import com.platform.common.dto.ApiResponse;
+import com.platform.common.exception.ErrorResponse;
 import com.developer.dto.ValidationResult;
 import com.developer.entity.ProcessDefinition;
 import com.developer.security.RequireDeveloperPermission;

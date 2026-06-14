@@ -227,11 +227,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ArrowDown, ArrowRight, Document, Warning } from '@element-plus/icons-vue'
-import { getChangeHistory, type ChangeHistoryRecord } from '@/api/processForm'
 import dayjs from 'dayjs'
+import { useChangeHistoryFormatting } from '@/composables/changeHistoryPanel/useChangeHistoryFormatting'
+import { useChangeHistoryLoader } from '@/composables/changeHistoryPanel/useChangeHistoryLoader'
+import { useChangeHistoryBatches } from '@/composables/changeHistoryPanel/useChangeHistoryBatches'
+import { useChangeHistoryExpansion } from '@/composables/changeHistoryPanel/useChangeHistoryExpansion'
 
 const { t } = useI18n()
 
@@ -243,256 +245,28 @@ interface Props {
 
 const props = defineProps<Props>()
 
-interface ChangeBatch {
-  timestamp: string
-  userId: string
-  userName: string
-  displayOperator: string
-  taskInstanceId: string | null
-  stageId: string | null
-  displayStage: string
-  /** 与展示名不同或需补充技术 ID 时的 tooltip */
-  stageTooltip: string | null
-  /** 关联任务展示：优先 BPMN/环节解析名，否则短 ID；完整 ID 见 tooltip */
-  taskDisplayLabel: string
-  concurrent: boolean
-  rows: ChangeHistoryRecord[]
-}
+// 展示格式化、字段标签与变更类型映射（纯函数）
+const formatting = useChangeHistoryFormatting(t, dayjs)
+const {
+  fieldLocationLabel,
+  formatDisplayValue,
+  formatTimestamp,
+  getChangeTypeLabel,
+  getChangeTypeTag,
+} = formatting
 
-const loading = ref(false)
-const error = ref<string | null>(null)
-const records = ref<ChangeHistoryRecord[]>([])
+// 拉取历史并按快照时间/任务过滤
+const { loading, error, records } = useChangeHistoryLoader(props, t, dayjs)
 
-/** 整块「变更历史」折叠；默认展开 */
-const sectionExpandedNames = ref<string[]>(['history'])
+// 按「同一保存动作」分组为批次
+const { groupedBatches } = useChangeHistoryBatches(records, formatting, dayjs)
 
-/** 每批次的明细表格是否展开；默认展开 */
-const batchTableOpen = ref<Record<number, boolean>>({})
-
-/** 同一操作：同一用户、同一任务/环节，且时间戳间隔在阈值内（一次保存内多条字段记录） */
-const SAME_ACTION_MS = 80
-
-function sameSaveAction(a: ChangeHistoryRecord, b: ChangeHistoryRecord): boolean {
-  if (a.userId !== b.userId) return false
-  if ((a.taskInstanceId ?? '') !== (b.taskInstanceId ?? '')) return false
-  if ((a.stageId ?? '') !== (b.stageId ?? '')) return false
-  const da = dayjs(a.timestamp)
-  const db = dayjs(b.timestamp)
-  if (!da.isValid() || !db.isValid()) return false
-  return Math.abs(da.diff(db)) <= SAME_ACTION_MS
-}
-
-function resolveOperator(row: ChangeHistoryRecord): string {
-  const n = row.userName?.trim()
-  if (n) return n
-  return row.userId
-}
-
-function humanizeStageKey(stageId: string | null | undefined): string {
-  if (!stageId) return ''
-  let s = stageId
-  if (/^Task_/i.test(s) && s.length > 5) {
-    s = s.slice(5)
-  }
-  return s.replace(/_/g, ' ')
-}
-
-function resolveStageDisplay(row: ChangeHistoryRecord): string {
-  const n = row.stageName?.trim()
-  if (n) return n
-  if (row.stageId === 'RETURN_TO_REQUESTER') {
-    return t('changeHistory.stageReturnToRequester')
-  }
-  return humanizeStageKey(row.stageId)
-}
-
-function resolveStageTooltip(row: ChangeHistoryRecord, displayStage: string): string | null {
-  if (!row.stageId) return null
-  if (displayStage !== row.stageId) {
-    return row.stageId
-  }
-  return null
-}
-
-function resolveTaskDisplayLabel(row: ChangeHistoryRecord): string {
-  if (!row.taskInstanceId) return ''
-  const stageText = resolveStageDisplay(row).trim()
-  if (stageText) return stageText
-  return shortId(row.taskInstanceId)
-}
-
-function batchHeaderFields(row: ChangeHistoryRecord) {
-  const displayStage = resolveStageDisplay(row)
-  return {
-    displayOperator: resolveOperator(row),
-    displayStage,
-    stageTooltip: resolveStageTooltip(row, displayStage),
-    taskDisplayLabel: resolveTaskDisplayLabel(row),
-  }
-}
-
-const groupedBatches = computed<ChangeBatch[]>(() => {
-  const sorted = [...records.value].sort((a, b) => {
-    const ta = dayjs(a.timestamp).valueOf()
-    const tb = dayjs(b.timestamp).valueOf()
-    if (ta !== tb) return ta - tb
-    return (Number(a.id) || 0) - (Number(b.id) || 0)
-  })
-
-  const batches: ChangeBatch[] = []
-  for (const r of sorted) {
-    const last = batches[batches.length - 1]
-    const header = batchHeaderFields(r)
-    if (last && last.rows.length > 0 && sameSaveAction(last.rows[last.rows.length - 1]!, r)) {
-      last.rows.push(r)
-      if (r.concurrent) last.concurrent = true
-    } else {
-      batches.push({
-        timestamp: r.timestamp,
-        userId: r.userId,
-        userName: r.userName,
-        displayOperator: header.displayOperator,
-        taskInstanceId: r.taskInstanceId,
-        stageId: r.stageId,
-        displayStage: header.displayStage,
-        stageTooltip: header.stageTooltip,
-        taskDisplayLabel: header.taskDisplayLabel,
-        concurrent: r.concurrent,
-        rows: [r],
-      })
-    }
-  }
-  return batches
-})
-
-watch(
-  groupedBatches,
-  (batches) => {
-    const next: Record<number, boolean> = {}
-    batches.forEach((_, i) => {
-      next[i] = batchTableOpen.value[i] ?? true
-    })
-    batchTableOpen.value = next
-  },
-  { immediate: true },
-)
-
-function toggleBatchTable(index: number) {
-  const cur = batchTableOpen.value[index] ?? true
-  batchTableOpen.value = { ...batchTableOpen.value, [index]: !cur }
-}
-
-function isBatchTableOpen(index: number): boolean {
-  return batchTableOpen.value[index] !== false
-}
-
-function shortId(id: string): string {
-  if (!id || id.length <= 14) return id
-  return `${id.slice(0, 8)}…${id.slice(-4)}`
-}
-
-function fieldLocationLabel(row: ChangeHistoryRecord): string {
-  if (row.changeType === 'PROCESS_INITIATION') {
-    return t('changeHistory.processInitiation')
-  }
-  if (row.subTableName) {
-    const parts = [
-      `${t('changeHistory.subTable')}: ${row.subTableName}`,
-      `${t('changeHistory.row')}: ${row.rowIdentifier ?? '—'}`,
-    ]
-    const field = row.fieldLabel?.trim() || row.fieldName
-    if (field) parts.push(field)
-    return parts.join(' · ')
-  }
-  return row.fieldLabel?.trim() || row.fieldName || '—'
-}
-
-function formatDisplayValue(raw: string | null | undefined, maxLen = 240): string {
-  if (raw === null || raw === undefined || raw === '') return '—'
-  const s = String(raw).trim()
-  if (!s) return '—'
-  if ((s.startsWith('{') && s.endsWith('}')) || (s.startsWith('[') && s.endsWith(']'))) {
-    try {
-      const parsed = JSON.parse(s) as unknown
-      const compact = JSON.stringify(parsed)
-      if (compact.length <= maxLen) return compact
-      return `${compact.slice(0, maxLen)}…`
-    } catch {
-      /* fall through */
-    }
-  }
-  if (s.length <= maxLen) return s
-  return `${s.slice(0, maxLen)}…`
-}
-
-async function loadHistory() {
-  if (!props.processInstanceId) return
-  loading.value = true
-  error.value = null
-  try {
-    const res = await getChangeHistory(props.processInstanceId) as Record<string, unknown>
-    const raw = res?.data ?? res
-    records.value = Array.isArray(raw) ? raw.filter(shouldKeepRecordInSnapshot) : []
-  } catch (e: unknown) {
-    console.error('Failed to load change history:', e)
-    error.value = t('changeHistory.loadFailed')
-    records.value = []
-  } finally {
-    loading.value = false
-  }
-}
-
-function shouldKeepRecordInSnapshot(row: ChangeHistoryRecord): boolean {
-  if (!props.snapshotTime && !props.taskInstanceId) return true
-  if (props.taskInstanceId && row.taskInstanceId === props.taskInstanceId) return true
-  if (!props.snapshotTime) return true
-
-  const item = dayjs(row.timestamp)
-  const cutoff = dayjs(props.snapshotTime)
-  if (!item.isValid() || !cutoff.isValid()) return true
-  return item.valueOf() <= cutoff.valueOf()
-}
-
-function formatTimestamp(ts: string): string {
-  if (!ts) return '-'
-  const d = dayjs(ts)
-  return d.isValid() ? d.format('YYYY-MM-DD HH:mm:ss') : ts
-}
-
-function getChangeTypeLabel(changeType: string): string {
-  const map: Record<string, string> = {
-    FIELD_UPDATE: t('changeHistory.fieldUpdate'),
-    SUB_TABLE_ROW_ADD: t('changeHistory.subTableRowAdd'),
-    SUB_TABLE_ROW_UPDATE: t('changeHistory.subTableRowUpdate'),
-    SUB_TABLE_ROW_DELETE: t('changeHistory.subTableRowDelete'),
-    PROCESS_INITIATION: t('changeHistory.processInitiation'),
-  }
-  return map[changeType] || changeType
-}
-
-function getChangeTypeTag(changeType: string): 'success' | 'warning' | 'danger' | 'info' {
-  const map: Record<string, 'success' | 'warning' | 'danger' | 'info'> = {
-    FIELD_UPDATE: 'info',
-    SUB_TABLE_ROW_ADD: 'success',
-    SUB_TABLE_ROW_UPDATE: 'warning',
-    SUB_TABLE_ROW_DELETE: 'danger',
-    PROCESS_INITIATION: 'success',
-  }
-  return map[changeType] || 'info'
-}
-
-watch(() => [props.processInstanceId, props.snapshotTime, props.taskInstanceId], () => {
-  loadHistory()
-})
-
-onMounted(() => {
-  // Defer below-the-fold history so My Request detail can paint form + sub-tables first.
-  if (typeof requestIdleCallback === 'function') {
-    requestIdleCallback(() => loadHistory(), { timeout: 2500 })
-  } else {
-    setTimeout(() => loadHistory(), 50)
-  }
-})
+// 折叠面板与各批次明细表格的展开/收起状态
+const {
+  sectionExpandedNames,
+  toggleBatchTable,
+  isBatchTableOpen,
+} = useChangeHistoryExpansion(groupedBatches)
 </script>
 
 <style scoped lang="scss">

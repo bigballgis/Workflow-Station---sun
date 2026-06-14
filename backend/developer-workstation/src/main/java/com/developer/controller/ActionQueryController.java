@@ -1,6 +1,6 @@
 package com.developer.controller;
 
-import com.developer.dto.ApiResponse;
+import com.platform.common.dto.ApiResponse;
 import com.developer.entity.ActionDefinition;
 import com.developer.repository.ActionDefinitionRepository;
 import io.swagger.v3.oas.annotations.Operation;

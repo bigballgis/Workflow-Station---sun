@@ -2,7 +2,7 @@ package com.portal.controller;
 
 import com.platform.common.util.ApiResponseBodyUnwrap;
 import com.platform.security.util.SecurityContextUtils;
-import com.portal.dto.ApiResponse;
+import com.platform.common.dto.ApiResponse;
 import com.portal.security.CurrentUserId;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;

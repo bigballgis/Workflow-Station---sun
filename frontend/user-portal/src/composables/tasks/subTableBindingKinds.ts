@@ -1,0 +1,132 @@
+/**
+ * Sub-table binding / row classification: MI dashboard bindings, participant-scoped bindings,
+ * attachment bindings, MI dashboard rows and runtime meta fields.
+ */
+
+import { resolveAssigneeFieldForBinding } from '@/utils/subTableAssignment'
+import { SUB_TABLE_ROW_META_KEYS } from './internal'
+import { normalizeSubTableName } from './subTableCore'
+
+/** Runtime / MI dashboard keys that must not become inferred sub-table columns or leak into non-MI bindings. */
+export function isSubTableRowMetaField(key: string): boolean {
+  if (!key || key.startsWith('__')) return true
+  return SUB_TABLE_ROW_META_KEYS.has(key)
+}
+
+/** Remove MI / runtime meta fields from a sub-table row (non-MI bindings after hydration). */
+export function stripSubTableRowMetaFields(row: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(row)) {
+    if (isSubTableRowMetaField(k)) continue
+    out[k] = v
+  }
+  return out
+}
+
+const MI_DASHBOARD_STATUS_FIELDS = new Set([
+  'task_status',
+  'task_current_node',
+  'sub_task_status',
+  'sub_task_current_node',
+])
+
+/** True when designer schema declares this binding as a multi-instance participant dashboard (not a plain related table). */
+export function isMiDashboardSubTableBinding(binding: {
+  columns?: Array<{ field?: string }> | null
+  tableName?: string
+}): boolean {
+  const cols = binding.columns ?? []
+  if (cols.some(c => c?.field != null && MI_DASHBOARD_STATUS_FIELDS.has(String(c.field)))) return true
+  const assigneeField = resolveAssigneeFieldForBinding(cols, binding.tableName)
+  if (assigneeField && cols.some(c => c?.field === assigneeField)) return true
+  const tn = (binding.tableName || '').toLowerCase()
+  return tn === 'participants' || tn.endsWith('participants')
+}
+
+const SHARED_PROCESS_SUB_TABLE_FK = new Set([
+  'main_id',
+  'mainid',
+  'process_id',
+  'processid',
+  'main_record_id',
+])
+
+const MI_PARTICIPANT_SUB_TABLE_FK = new Set([
+  'id_idw',
+  'row_id',
+  'participant_id',
+  'parent_id',
+  'meeting_participant_id',
+])
+
+/**
+ * True when sub-table rows are scoped to one MI participant (assignee dashboard, link-form child, etc.).
+ * False for process-level tables keyed to the main form (e.g. attachment.main_id) — those rows are shared by every MI sub-task.
+ */
+export function isMiParticipantScopedSubTableBinding(binding: {
+  columns?: Array<{ field?: string }> | null
+  tableName?: string
+  foreignKeyField?: string | null
+}): boolean {
+  if (isMiDashboardSubTableBinding(binding)) return true
+  const fk = String(binding.foreignKeyField || '').trim().toLowerCase()
+  if (!fk) return false
+  if (SHARED_PROCESS_SUB_TABLE_FK.has(fk)) return false
+  if (MI_PARTICIPANT_SUB_TABLE_FK.has(fk)) return true
+  // Link-form child rows often FK via generic {@code id} to the parent MI row.
+  if (fk === 'id') return true
+  return false
+}
+
+/** Designer list columns are file-only (e.g. HMDC Attachment) — not {@link isSharedAttachmentFileBinding} (main_id). */
+export function isFileOnlySubTableBinding(binding: {
+  columns?: Array<{ field?: string }> | null
+}): boolean {
+  const fields = (binding.columns ?? [])
+    .map(c => String(c?.field ?? '').trim())
+    .filter(Boolean)
+  return fields.length > 0 && fields.every(f => f === 'file')
+}
+
+export function isSharedAttachmentFileBinding(binding: {
+  bindingId?: number
+  tableId?: number | null
+  tableName?: string
+  physicalTableName?: string
+  foreignKeyField?: string | null
+  columns?: Array<{ field?: string }> | null
+}): boolean {
+  const tn = normalizeSubTableName(binding.tableName ?? binding.physicalTableName ?? '')
+  if (tn === 'attachment') return true
+  if (binding.tableId != null && Number(binding.tableId) === 74) return true
+  const fk = String(binding.foreignKeyField ?? '').trim().toLowerCase()
+  if (fk !== 'main_id') return false
+  const cols = binding.columns ?? []
+  return cols.some(c => String(c?.field ?? '').trim() === 'file')
+}
+
+const MI_ASSIGNEE_FIELD_KEYS = ['assignee', 'assignee_user_id', 'assignee_id'] as const
+
+function rowHasMiAssigneeField(row: Record<string, unknown>): boolean {
+  for (const key of MI_ASSIGNEE_FIELD_KEYS) {
+    const raw = row[key]
+    if (raw == null) continue
+    if (typeof raw === 'string' && raw.trim() === '') continue
+    if (typeof raw === 'object' && !Array.isArray(raw)) return true
+    if (typeof raw === 'string' && raw.startsWith('user-')) return true
+  }
+  return false
+}
+
+/** True when a row carries MI dashboard columns (assignee / per-row task status). */
+export function isSubTableMiDashboardRow(row: Record<string, unknown> | null | undefined): boolean {
+  if (!row) return false
+  if (row.task_status !== undefined && row.task_status !== null) return true
+  if (row.sub_task_status !== undefined && row.sub_task_status !== null) return true
+  if (row.task_id != null && String(row.task_id).trim() !== '') return true
+  if (row.task_definition_key != null && String(row.task_definition_key).trim() !== '') return true
+  if (row.assignee_user_id != null && String(row.assignee_user_id).trim() !== '') return true
+  if (row.assignee_id != null && String(row.assignee_id).trim() !== '') return true
+  if (rowHasMiAssigneeField(row)) return true
+  return false
+}

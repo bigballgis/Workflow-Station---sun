@@ -10,13 +10,14 @@ import com.portal.repository.PermissionRequestRepository;
 import com.platform.common.i18n.I18nService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.InsufficientAuthenticationException;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -25,22 +26,24 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
-import java.util.stream.Collectors;
 
 /**
  * 权限申请组件
  * 支持角色申请和虚拟组加入申请
+ *
+ * <p>门面：保留全部 public 方法签名与构造签名不变，按职责委托同包协作类：
+ * <ul>
+ *   <li>{@link PermissionCatalogComponent} —— 只读目录与「可申请项」查询</li>
+ *   <li>{@link PermissionRequestSubmissionComponent} —— 申请创建</li>
+ *   <li>{@link PermissionApprovalComponent} —— 审批/拒绝/审批人判定（安全敏感）</li>
+ *   <li>{@link PermissionRequestEnrichmentComponent} —— 展示字段填充与字符串工具</li>
+ * </ul>
+ * 新协作类经 {@code @Lazy @Autowired} 字段注入，构造签名保持原样（兼容测试直接 new）。
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class PermissionComponent {
-
-    /** 门户「待我审批」中的业务单元类申请类型 */
-    private static final List<PermissionRequestType> BU_APPROVER_REQUEST_TYPES = List.of(
-            PermissionRequestType.BUSINESS_UNIT_JOIN,
-            PermissionRequestType.BUSINESS_UNIT_ROLE_REMOVAL,
-            PermissionRequestType.BUSINESS_UNIT_EXIT);
 
     private final PermissionRequestRepository permissionRequestRepository;
     private final RoleAccessComponent roleAccessComponent;
@@ -50,167 +53,75 @@ public class PermissionComponent {
     private final JdbcTemplate jdbcTemplate;
     private final I18nService i18nService;
 
+    /** Lazy: 委托目录/可申请项查询，破除门面与协作类的构造环、保持构造签名不变。 */
+    @Lazy
+    @Autowired
+    private PermissionCatalogComponent catalogComponent;
+
+    /** Lazy: 委托申请创建。 */
+    @Lazy
+    @Autowired
+    private PermissionRequestSubmissionComponent submissionComponent;
+
+    /** Lazy: 委托审批/拒绝/审批人判定（安全敏感路径）。 */
+    @Lazy
+    @Autowired
+    private PermissionApprovalComponent approvalComponent;
+
+    /** Lazy: 委托展示字段填充与字符串工具。 */
+    @Lazy
+    @Autowired
+    private PermissionRequestEnrichmentComponent enrichmentComponent;
+
     // ==================== 新的权限申请方法 ====================
 
     /**
      * 获取用户可申请的业务角色（排除已拥有的）
      */
     public List<Map<String, Object>> getAvailableRoles(String userId) {
-        // 获取所有业务角色
-        List<Map<String, Object>> allRoles = roleAccessComponent.getBusinessRoles();
-        
-        // 获取用户已有的角色ID
-        List<Map<String, Object>> userRoles = roleAccessComponent.getUserBusinessRoles(userId);
-        Set<String> userRoleIds = userRoles.stream()
-                .map(r -> (String) r.get("id"))
-                .collect(Collectors.toSet());
-        
-        // 过滤掉已有的角色
-        return allRoles.stream()
-                .filter(r -> !userRoleIds.contains(r.get("id")))
-                .collect(Collectors.toList());
+        return catalogComponent.getAvailableRoles(userId);
     }
 
     /**
      * 获取用户可加入的虚拟组（排除已加入的）
      */
     public List<Map<String, Object>> getAvailableVirtualGroups(String userId) {
-        // 获取所有虚拟组
-        List<Map<String, Object>> allGroups = virtualGroupAccessComponent.getVirtualGroups();
-        
-        // 获取用户已加入的虚拟组ID
-        List<Map<String, Object>> userGroups = virtualGroupAccessComponent.getUserVirtualGroups(userId);
-        Set<String> userGroupIds = userGroups.stream()
-                .map(g -> (String) g.get("groupId"))
-                .collect(Collectors.toSet());
-        
-        // 过滤掉已加入的虚拟组
-        return allGroups.stream()
-                .filter(g -> !userGroupIds.contains(g.get("id")))
-                .collect(Collectors.toList());
+        return catalogComponent.getAvailableVirtualGroups(userId);
     }
 
     /**
      * 获取用户可加入的业务单元（排除已加入的）
      */
     public List<Map<String, Object>> getAvailableBusinessUnits(String userId) {
-        // 获取所有业务单元
-        List<Map<String, Object>> allBusinessUnits = virtualGroupAccessComponent.getBusinessUnits();
-        
-        // 获取用户已加入的业务单元ID
-        List<Map<String, Object>> userBusinessUnits = virtualGroupAccessComponent.getUserBusinessUnits(userId);
-        Set<String> userBuIds = userBusinessUnits.stream()
-                .map(bu -> {
-                    Object id = bu.get("id");
-                    if (id == null) id = bu.get("businessUnitId");
-                    return id != null ? id.toString() : null;
-                })
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
-        
-        // 过滤掉已加入的业务单元
-        return allBusinessUnits.stream()
-                .filter(bu -> !userBuIds.contains(bu.get("id")))
-                .collect(Collectors.toList());
+        return catalogComponent.getAvailableBusinessUnits(userId);
     }
 
     /**
      * 业务单元全量目录（扁平列表，供成员管理等场景下拉）
      */
     public List<Map<String, Object>> getBusinessUnitsCatalog() {
-        return virtualGroupAccessComponent.getBusinessUnits();
+        return catalogComponent.getBusinessUnitsCatalog();
     }
 
     /**
      * 指定业务单元已绑定的业务角色
      */
     public List<Map<String, Object>> getBusinessUnitRoles(String businessUnitId) {
-        return virtualGroupAccessComponent.getBusinessUnitBoundRoles(businessUnitId);
+        return catalogComponent.getBusinessUnitRoles(businessUnitId);
     }
 
     /**
      * 申请角色分配（自动批准）
      */
     public PermissionRequest requestRoleAssignment(String userId, String roleId, String organizationUnitId, String reason) {
-        // 获取角色信息
-        Map<String, Object> role = roleAccessComponent.getRoleById(roleId);
-        if (role == null) {
-            throw new IllegalArgumentException("Role does not exist: " + roleId);
-        }
-        
-        // 获取组织单元信息（使用 BusinessUnit API）
-        Map<String, Object> orgUnit = virtualGroupAccessComponent.getBusinessUnitById(organizationUnitId);
-        if (orgUnit == null) {
-            throw new IllegalArgumentException("Organization unit does not exist: " + organizationUnitId);
-        }
-        
-        // 创建申请记录
-        PermissionRequest request = PermissionRequest.builder()
-                .applicantId(userId)
-                .submittedByUserId(userId)
-                .requestType(PermissionRequestType.ROLE_ASSIGNMENT)
-                .roleId(roleId)
-                .roleName((String) role.get("name"))
-                .organizationUnitId(organizationUnitId)
-                .organizationUnitName((String) orgUnit.get("name"))
-                .reason(reason)
-                .status(PermissionRequestStatus.PENDING)
-                .createdAt(LocalDateTime.now())
-                .build();
-        
-        // 保存申请记录
-        request = permissionRequestRepository.save(request);
-        
-        // 自动批准：调用 Admin Center API 分配角色
-        boolean success = roleAccessComponent.assignRoleToUser(userId, roleId, userId, reason);
-        
-        if (success) {
-            request.setStatus(PermissionRequestStatus.APPROVED);
-            request.setApproveTime(LocalDateTime.now());
-            request.setApproveComment("System auto-approved");
-            log.info("Role assignment auto-approved: user={}, role={}", userId, roleId);
-        } else {
-            request.setStatus(PermissionRequestStatus.REJECTED);
-            request.setApproveTime(LocalDateTime.now());
-            request.setApproveComment("Role assignment failed");
-            log.error("Role assignment failed: user={}, role={}", userId, roleId);
-        }
-        
-        return permissionRequestRepository.save(request);
+        return submissionComponent.requestRoleAssignment(userId, roleId, organizationUnitId, reason);
     }
 
     /**
      * 申请加入虚拟组（需要审批）
      */
     public PermissionRequest requestVirtualGroupJoin(String userId, String virtualGroupId, String reason) {
-        // 获取虚拟组信息
-        Map<String, Object> group = virtualGroupAccessComponent.getVirtualGroupById(virtualGroupId);
-        if (group == null) {
-            throw new IllegalArgumentException("Virtual group does not exist: " + virtualGroupId);
-        }
-        
-        // 检查是否已是成员
-        if (virtualGroupAccessComponent.isUserInVirtualGroup(userId, virtualGroupId)) {
-            throw new IllegalArgumentException("You are already a member of this virtual group");
-        }
-        
-        // 创建申请记录 - 状态为 PENDING，等待审批
-        PermissionRequest request = PermissionRequest.builder()
-                .applicantId(userId)
-                .submittedByUserId(userId)
-                .requestType(PermissionRequestType.VIRTUAL_GROUP_JOIN)
-                .virtualGroupId(virtualGroupId)
-                .virtualGroupName((String) group.get("name"))
-                .reason(reason)
-                .status(PermissionRequestStatus.PENDING)
-                .createdAt(LocalDateTime.now())
-                .build();
-        
-        // 保存申请记录
-        request = permissionRequestRepository.save(request);
-        log.info("Virtual group join request created: user={}, group={}, requestId={}", userId, virtualGroupId, request.getId());
-        
-        return request;
+        return submissionComponent.requestVirtualGroupJoin(userId, virtualGroupId, reason);
     }
 
     /**
@@ -218,7 +129,7 @@ public class PermissionComponent {
      */
     public PermissionRequest requestBusinessUnitJoin(String submittedByUserId, String beneficiaryUserId,
                                                      String businessUnitId, String reason) {
-        return requestBusinessUnitJoinWithRole(submittedByUserId, beneficiaryUserId, businessUnitId, null, reason);
+        return submissionComponent.requestBusinessUnitJoin(submittedByUserId, beneficiaryUserId, businessUnitId, reason);
     }
 
     /**
@@ -229,55 +140,7 @@ public class PermissionComponent {
      */
     public PermissionRequest requestBusinessUnitJoinWithRole(String submittedByUserId, String beneficiaryUserId,
                                                              String businessUnitId, String roleId, String reason) {
-        Objects.requireNonNull(submittedByUserId, "submittedByUserId");
-        String beneficiary = normalizeUserIdOrDefault(beneficiaryUserId, submittedByUserId);
-        assertActiveBeneficiary(beneficiary);
-
-        // 获取业务单元信息
-        Map<String, Object> businessUnit = virtualGroupAccessComponent.getBusinessUnitById(businessUnitId);
-        if (businessUnit == null) {
-            throw new IllegalArgumentException("Business unit does not exist: " + businessUnitId);
-        }
-
-        // 检查是否已是成员
-        if (virtualGroupAccessComponent.isUserInBusinessUnit(beneficiary, businessUnitId)) {
-            throw new IllegalArgumentException("This user is already a member of this business unit");
-        }
-
-        String roleName = null;
-        if (roleId != null && !roleId.isBlank()) {
-            List<Map<String, Object>> bound = virtualGroupAccessComponent.getBusinessUnitBoundRoles(businessUnitId);
-            boolean eligible = bound.stream().anyMatch(r -> roleId.equals(String.valueOf(r.get("id"))));
-            if (!eligible) {
-                throw new IllegalArgumentException("Selected role is not in the available roles list for this business unit");
-            }
-            roleName = bound.stream()
-                    .filter(r -> roleId.equals(String.valueOf(r.get("id"))))
-                    .map(r -> Objects.toString(r.get("name"), null))
-                    .findFirst()
-                    .orElse(null);
-        }
-
-        // 创建申请记录 - 状态为 PENDING，等待审批
-        PermissionRequest request = PermissionRequest.builder()
-                .applicantId(beneficiary)
-                .submittedByUserId(submittedByUserId)
-                .requestType(PermissionRequestType.BUSINESS_UNIT_JOIN)
-                .businessUnitId(businessUnitId)
-                .businessUnitName((String) businessUnit.get("name"))
-                .roleId(roleId != null && !roleId.isBlank() ? roleId : null)
-                .roleName(roleName)
-                .reason(reason)
-                .status(PermissionRequestStatus.PENDING)
-                .createdAt(LocalDateTime.now())
-                .build();
-
-        // 保存申请记录
-        request = permissionRequestRepository.save(request);
-        log.info("Business unit join request created: beneficiary={}, submittedBy={}, businessUnit={}, roleId={}, requestId={}",
-                beneficiary, submittedByUserId, businessUnitId, roleId, request.getId());
-
-        return request;
+        return submissionComponent.requestBusinessUnitJoinWithRole(submittedByUserId, beneficiaryUserId, businessUnitId, roleId, reason);
     }
 
     /**
@@ -285,33 +148,7 @@ public class PermissionComponent {
      */
     public PermissionRequest requestBusinessUnitExit(String submittedByUserId, String beneficiaryUserId,
                                                      String businessUnitId, String reason) {
-        Objects.requireNonNull(submittedByUserId, "submittedByUserId");
-        String beneficiary = normalizeUserIdOrDefault(beneficiaryUserId, submittedByUserId);
-        assertActiveBeneficiary(beneficiary);
-        if (reason == null || reason.isBlank()) {
-            throw new IllegalArgumentException("Please provide a reason for the request");
-        }
-        Map<String, Object> businessUnit = virtualGroupAccessComponent.getBusinessUnitById(businessUnitId);
-        if (businessUnit == null) {
-            throw new IllegalArgumentException("Business unit does not exist: " + businessUnitId);
-        }
-        if (!virtualGroupAccessComponent.isUserInBusinessUnit(beneficiary, businessUnitId)) {
-            throw new IllegalArgumentException("This user is not a member of this business unit and cannot request exit");
-        }
-        PermissionRequest request = PermissionRequest.builder()
-                .applicantId(beneficiary)
-                .submittedByUserId(submittedByUserId)
-                .requestType(PermissionRequestType.BUSINESS_UNIT_EXIT)
-                .businessUnitId(businessUnitId)
-                .businessUnitName((String) businessUnit.get("name"))
-                .reason(reason)
-                .status(PermissionRequestStatus.PENDING)
-                .createdAt(LocalDateTime.now())
-                .build();
-        request = permissionRequestRepository.save(request);
-        log.info("Business unit exit request created: beneficiary={}, submittedBy={}, bu={}, requestId={}",
-                beneficiary, submittedByUserId, businessUnitId, request.getId());
-        return request;
+        return submissionComponent.requestBusinessUnitExit(submittedByUserId, beneficiaryUserId, businessUnitId, reason);
     }
 
     /**
@@ -319,51 +156,7 @@ public class PermissionComponent {
      */
     public PermissionRequest requestBusinessUnitRoleRemoval(String submittedByUserId, String beneficiaryUserId,
                                                             String businessUnitId, String roleId, String reason) {
-        Objects.requireNonNull(submittedByUserId, "submittedByUserId");
-        String beneficiary = normalizeUserIdOrDefault(beneficiaryUserId, submittedByUserId);
-        assertActiveBeneficiary(beneficiary);
-        if (reason == null || reason.isBlank()) {
-            throw new IllegalArgumentException("Please provide a reason for the request");
-        }
-        if (roleId == null || roleId.isBlank()) {
-            throw new IllegalArgumentException("Role cannot be empty");
-        }
-        Map<String, Object> businessUnit = virtualGroupAccessComponent.getBusinessUnitById(businessUnitId);
-        if (businessUnit == null) {
-            throw new IllegalArgumentException("Business unit does not exist: " + businessUnitId);
-        }
-        if (!virtualGroupAccessComponent.userHasBusinessUnitRole(beneficiary, businessUnitId, roleId)) {
-            throw new IllegalArgumentException("This user does not have this role in this business unit, cannot request removal");
-        }
-        List<Map<String, Object>> bound = virtualGroupAccessComponent.getBusinessUnitBoundRoles(businessUnitId);
-        String roleName = bound.stream()
-                .filter(r -> roleId.equals(String.valueOf(r.get("id"))))
-                .map(r -> Objects.toString(r.get("name"), null))
-                .findFirst()
-                .orElse(null);
-        if (roleName == null) {
-            roleName = virtualGroupAccessComponent.listUserBusinessUnitRolesInBusinessUnit(beneficiary, businessUnitId).stream()
-                    .filter(r -> roleId.equals(String.valueOf(r.get("roleId"))))
-                    .map(r -> Objects.toString(r.get("roleName"), null))
-                    .findFirst()
-                    .orElse(null);
-        }
-        PermissionRequest request = PermissionRequest.builder()
-                .applicantId(beneficiary)
-                .submittedByUserId(submittedByUserId)
-                .requestType(PermissionRequestType.BUSINESS_UNIT_ROLE_REMOVAL)
-                .businessUnitId(businessUnitId)
-                .businessUnitName((String) businessUnit.get("name"))
-                .roleId(roleId)
-                .roleName(roleName)
-                .reason(reason)
-                .status(PermissionRequestStatus.PENDING)
-                .createdAt(LocalDateTime.now())
-                .build();
-        request = permissionRequestRepository.save(request);
-        log.info("BU role removal request created: beneficiary={}, submittedBy={}, bu={}, roleId={}, requestId={}",
-                beneficiary, submittedByUserId, businessUnitId, roleId, request.getId());
-        return request;
+        return submissionComponent.requestBusinessUnitRoleRemoval(submittedByUserId, beneficiaryUserId, businessUnitId, roleId, reason);
     }
 
     /**
@@ -372,85 +165,14 @@ public class PermissionComponent {
      * 其余分配单独放在 otherAssignments。
      */
     public Map<String, Object> buildRoleRemovalOptionsByFunctionUnit(String beneficiaryUserId) {
-        assertActiveBeneficiary(beneficiaryUserId);
-        List<Map<String, Object>> allBuRoles = virtualGroupAccessComponent.listAllUserBusinessUnitRoles(beneficiaryUserId);
-        List<Map<String, Object>> units = functionUnitAccessComponent.fetchLatestDeployedFunctionUnits();
-        List<Map<String, Object>> groups = new ArrayList<>();
-        Set<String> groupedKey = new LinkedHashSet<>();
-
-        for (Map<String, Object> unit : units) {
-            Object idObj = unit.get("id");
-            if (idObj == null) {
-                continue;
-            }
-            String unitId = idObj.toString();
-            Boolean enabled = (Boolean) unit.get("enabled");
-            if (Boolean.FALSE.equals(enabled)) {
-                continue;
-            }
-            Set<String> allowed = functionUnitAccessComponent.getFunctionUnitAllowedRoles(unitId);
-            if (allowed == null || allowed.isEmpty()) {
-                continue;
-            }
-            List<Map<String, Object>> assignments = new ArrayList<>();
-            for (Map<String, Object> row : allBuRoles) {
-                String roleId = row.get("roleId") != null ? row.get("roleId").toString() : null;
-                if (roleId == null || !allowed.contains(roleId)) {
-                    continue;
-                }
-                String buId = row.get("businessUnitId") != null ? row.get("businessUnitId").toString() : null;
-                if (buId == null) {
-                    continue;
-                }
-                Map<String, Object> a = new LinkedHashMap<>();
-                a.put("assignmentId", row.get("id") != null ? row.get("id").toString() : null);
-                a.put("businessUnitId", buId);
-                a.put("businessUnitName", row.get("businessUnitName"));
-                a.put("roleId", roleId);
-                a.put("roleName", row.get("roleName"));
-                assignments.add(a);
-                groupedKey.add(buId + "\0" + roleId);
-            }
-            if (!assignments.isEmpty()) {
-                Map<String, Object> g = new LinkedHashMap<>();
-                g.put("functionUnitId", unitId);
-                g.put("functionUnitName", unit.get("name"));
-                g.put("functionUnitCode", unit.get("code"));
-                g.put("assignments", assignments);
-                groups.add(g);
-            }
-        }
-
-        List<Map<String, Object>> other = new ArrayList<>();
-        for (Map<String, Object> row : allBuRoles) {
-            String buId = row.get("businessUnitId") != null ? row.get("businessUnitId").toString() : null;
-            String roleId = row.get("roleId") != null ? row.get("roleId").toString() : null;
-            if (buId == null || roleId == null) {
-                continue;
-            }
-            if (groupedKey.contains(buId + "\0" + roleId)) {
-                continue;
-            }
-            Map<String, Object> a = new LinkedHashMap<>();
-            a.put("assignmentId", row.get("id") != null ? row.get("id").toString() : null);
-            a.put("businessUnitId", buId);
-            a.put("businessUnitName", row.get("businessUnitName"));
-            a.put("roleId", roleId);
-            a.put("roleName", row.get("roleName"));
-            other.add(a);
-        }
-
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("functionUnitGroups", groups);
-        result.put("otherAssignments", other);
-        return result;
+        return catalogComponent.buildRoleRemovalOptionsByFunctionUnit(beneficiaryUserId);
     }
 
     /**
      * 获取用户当前的角色列表
      */
     public List<Map<String, Object>> getUserCurrentRoles(String userId) {
-        return roleAccessComponent.getUserBusinessRoles(userId);
+        return catalogComponent.getUserCurrentRoles(userId);
     }
 
     // ==================== 审批相关方法 ====================
@@ -461,267 +183,49 @@ public class PermissionComponent {
      */
     @Deprecated
     public Page<PermissionRequest> getPendingApprovals(Pageable pageable) {
-        return permissionRequestRepository.findByStatus(PermissionRequestStatus.PENDING, pageable);
+        return approvalComponent.getPendingApprovals(pageable);
     }
-    
+
     /**
      * 获取用户可以审批的待审批申请：业务单元相关（加入/移除角色/退出）+ 虚拟组加入（若该用户为对应 VG 审批人）。
      */
     public Page<PermissionRequest> getPendingApprovalsForUser(String userId, Pageable pageable) {
-        List<String> buIds = Optional.ofNullable(virtualGroupAccessComponent.getApproverBusinessUnitIds(userId))
-                .orElseGet(Collections::emptyList);
-        List<String> vgIds = Optional.ofNullable(virtualGroupAccessComponent.getApproverVirtualGroupIds(userId))
-                .orElseGet(Collections::emptyList);
-        boolean hasBu = !buIds.isEmpty();
-        boolean hasVg = !vgIds.isEmpty();
-        if (!hasBu && !hasVg) {
-            return Page.empty(pageable);
-        }
-        Page<PermissionRequest> page;
-        if (hasBu && hasVg) {
-            page = permissionRequestRepository.findPendingForBuOrVirtualGroupApprovers(
-                    PermissionRequestStatus.PENDING,
-                    BU_APPROVER_REQUEST_TYPES,
-                    buIds,
-                    PermissionRequestType.VIRTUAL_GROUP_JOIN,
-                    vgIds,
-                    pageable);
-        } else if (hasBu) {
-            page = permissionRequestRepository.findPendingForBusinessUnitApprovers(
-                    PermissionRequestStatus.PENDING,
-                    BU_APPROVER_REQUEST_TYPES,
-                    buIds,
-                    pageable);
-        } else {
-            page = permissionRequestRepository.findPendingForVirtualGroupJoinApprovers(
-                    PermissionRequestStatus.PENDING,
-                    PermissionRequestType.VIRTUAL_GROUP_JOIN,
-                    vgIds,
-                    pageable);
-        }
-        enrichDisplayFields(page.getContent());
-        return page;
+        return approvalComponent.getPendingApprovalsForUser(userId, pageable);
     }
 
     /**
      * 获取当前用户作为审批人处理过的记录（批准/拒绝；不含他人代批的同 BU 记录）。
      */
     public Page<PermissionRequest> getApprovalHistoryForUser(String userId, Pageable pageable) {
-        List<PermissionRequestStatus> processedStatuses = Arrays.asList(
-                PermissionRequestStatus.APPROVED,
-                PermissionRequestStatus.REJECTED,
-                PermissionRequestStatus.CANCELLED);
-        Page<PermissionRequest> page = permissionRequestRepository.findProcessedHistoryByApproverId(
-                userId, processedStatuses, pageable);
-        enrichDisplayFields(page.getContent());
-        return page;
+        return approvalComponent.getApprovalHistoryForUser(userId, pageable);
     }
 
     /**
      * 批准申请
      */
-    @Transactional
     public PermissionRequest approveRequest(Long requestId, String approverId, String comment) {
-        Optional<PermissionRequest> requestOpt = permissionRequestRepository.findById(requestId);
-        if (requestOpt.isEmpty()) {
-            throw new IllegalArgumentException("Request does not exist: " + requestId);
-        }
-        
-        PermissionRequest request = requestOpt.get();
-        if (request.getStatus() != PermissionRequestStatus.PENDING) {
-            throw new IllegalArgumentException("Request has already been processed, cannot approve again");
-        }
-
-        assertApproverNotSameAsApplicant(approverId, request);
-        
-        // 验证审批人权限
-        if (!canApproveRequest(approverId, request)) {
-            throw new IllegalArgumentException("You do not have permission to approve this request");
-        }
-        
-        // 执行实际的权限分配
-        boolean success = false;
-        String errorMessage = null;
-        
-        try {
-            if (request.getRequestType() == PermissionRequestType.VIRTUAL_GROUP_JOIN) {
-                success = virtualGroupAccessComponent.addUserToVirtualGroup(
-                        request.getApplicantId(), 
-                        request.getVirtualGroupId(), 
-                        "Approved: " + (comment != null ? comment : "")
-                );
-                if (!success) {
-                    errorMessage = "Failed to add user to virtual group";
-                }
-            } else if (request.getRequestType() == PermissionRequestType.BUSINESS_UNIT_JOIN) {
-                success = virtualGroupAccessComponent.addUserToBusinessUnit(
-                        request.getApplicantId(), 
-                        request.getBusinessUnitId(), 
-                        "Approved: " + (comment != null ? comment : "")
-                );
-                if (!success) {
-                    errorMessage = "Failed to add user to business unit";
-                } else if (request.getRoleId() != null && !request.getRoleId().isBlank()) {
-                    boolean roleOk = virtualGroupAccessComponent.assignUserBusinessUnitRole(
-                            request.getApplicantId(),
-                            request.getBusinessUnitId(),
-                            request.getRoleId());
-                    if (!roleOk) {
-                        success = false;
-                        errorMessage = "User joined business unit, but failed to assign business unit role";
-                        try {
-                            virtualGroupAccessComponent.exitBusinessUnit(
-                                    request.getApplicantId(), request.getBusinessUnitId());
-                        } catch (Exception rollbackEx) {
-                            log.error("Failed to roll back BU membership after role assignment failure for request {}: {}",
-                                    requestId, rollbackEx.getMessage());
-                            errorMessage = errorMessage + " (and automatic membership revocation failed, please contact administrator)";
-                        }
-                    } else {
-                        // Role Members page在 admin-center 里是按“角色绑定的虚拟组成员”展示。
-                        // 为了让 BU join + 选角后的结果在该页面可见，同步把用户加入该虚拟组。
-                        String boundVirtualGroupId = virtualGroupAccessComponent
-                                .getVirtualGroupIdByBoundRoleId(request.getRoleId());
-                        if (boundVirtualGroupId != null && !boundVirtualGroupId.isBlank()) {
-                            virtualGroupAccessComponent.addUserToVirtualGroup(
-                                    request.getApplicantId(),
-                                    boundVirtualGroupId,
-                                    "Approved: " + (comment != null ? comment : "")
-                            );
-                        }
-                    }
-                }
-            } else if (request.getRequestType() == PermissionRequestType.ROLE_ASSIGNMENT) {
-                success = roleAccessComponent.assignRoleToUser(
-                        request.getApplicantId(),
-                        request.getRoleId(),
-                        approverId,
-                        "Approved: " + (comment != null ? comment : "")
-                );
-                if (!success) {
-                    errorMessage = "Failed to assign role";
-                }
-            } else if (request.getRequestType() == PermissionRequestType.BUSINESS_UNIT_ROLE_REMOVAL) {
-                success = virtualGroupAccessComponent.removeUserBusinessUnitRole(
-                        request.getApplicantId(),
-                        request.getBusinessUnitId(),
-                        request.getRoleId());
-                if (!success) {
-                    errorMessage = "Failed to remove business unit role";
-                } else {
-                    List<Map<String, Object>> remaining = virtualGroupAccessComponent
-                            .listUserBusinessUnitRolesInBusinessUnit(
-                                    request.getApplicantId(),
-                                    request.getBusinessUnitId());
-                    if (remaining.isEmpty()) {
-                        boolean exited = virtualGroupAccessComponent.exitBusinessUnit(
-                                request.getApplicantId(),
-                                request.getBusinessUnitId());
-                        if (!exited) {
-                            success = false;
-                            errorMessage = "Last business unit role removed, but automatic exit from business unit failed";
-                        } else {
-                            log.info("User {} left business unit {} after last BU role removed (request {})",
-                                    request.getApplicantId(), request.getBusinessUnitId(), requestId);
-                        }
-                    }
-                    // 加入 BU 角色时曾同步加入绑定虚拟组（供 admin 角色页「Role Members」展示）；全局无该角色分配时从 VG 移除
-                    virtualGroupAccessComponent.removeFromBoundVirtualGroupIfNoBuRoleAssignmentRemaining(
-                            request.getApplicantId(),
-                            request.getRoleId());
-                }
-            } else if (request.getRequestType() == PermissionRequestType.BUSINESS_UNIT_EXIT) {
-                success = virtualGroupAccessComponent.exitBusinessUnit(
-                        request.getApplicantId(),
-                        request.getBusinessUnitId());
-                if (!success) {
-                    errorMessage = "Failed to exit business unit";
-                }
-            } else {
-                errorMessage = "Unsupported request type: " + request.getRequestType();
-            }
-        } catch (Exception e) {
-            log.error("Failed to execute approval action for request {}: {}", requestId, e.getMessage());
-            errorMessage = "Approval execution failed: " + e.getMessage();
-        }
-        
-        if (success) {
-            request.setStatus(PermissionRequestStatus.APPROVED);
-            request.setApproverId(approverId);
-            request.setApproveTime(LocalDateTime.now());
-            request.setApproveComment(comment != null ? comment : "Approved");
-            log.info("Request {} approved by {}", requestId, approverId);
-        } else {
-            String detail = errorMessage != null ? errorMessage : "Unknown error";
-            request.setStatus(PermissionRequestStatus.REJECTED);
-            request.setApproverId(approverId);
-            request.setApproveTime(LocalDateTime.now());
-            request.setApproveComment((comment != null ? comment + " — " : "")
-                    + "Approval attempted but execution failed: " + detail);
-            log.warn("Request {} marked REJECTED after failed post-approval execution: {}", requestId, detail);
-        }
-
-        return permissionRequestRepository.save(request);
+        return approvalComponent.approveRequest(requestId, approverId, comment);
     }
 
     /**
      * 拒绝申请
      */
-    @Transactional
     public PermissionRequest rejectRequest(Long requestId, String approverId, String comment) {
-        Optional<PermissionRequest> requestOpt = permissionRequestRepository.findById(requestId);
-        if (requestOpt.isEmpty()) {
-            throw new IllegalArgumentException("Request does not exist: " + requestId);
-        }
-        
-        PermissionRequest request = requestOpt.get();
-        if (request.getStatus() != PermissionRequestStatus.PENDING) {
-            throw new IllegalArgumentException("Request has already been processed, cannot approve again");
-        }
-
-        assertApproverNotSameAsApplicant(approverId, request);
-        
-        // 验证审批人权限
-        if (!canApproveRequest(approverId, request)) {
-            throw new IllegalArgumentException("You do not have permission to approve this request");
-        }
-        
-        if (comment == null || comment.trim().isEmpty()) {
-            throw new IllegalArgumentException("Rejection must include a reason");
-        }
-        
-        request.setStatus(PermissionRequestStatus.REJECTED);
-        request.setApproverId(approverId);
-        request.setApproveTime(LocalDateTime.now());
-        request.setApproveComment(comment);
-        
-        log.info("Request {} rejected by {}: {}", requestId, approverId, comment);
-        
-        return permissionRequestRepository.save(request);
+        return approvalComponent.rejectRequest(requestId, approverId, comment);
     }
 
     /**
      * 检查用户是否有审批权限（是否是任何VG或BU的审批人）
      */
     public boolean isApprover(String userId) {
-        return virtualGroupAccessComponent.isAnyApprover(userId);
+        return approvalComponent.isApprover(userId);
     }
-    
+
     /**
      * 检查用户是否可以审批特定的申请
      */
     public boolean canApproveRequest(String userId, PermissionRequest request) {
-        if (request.getRequestType() == PermissionRequestType.VIRTUAL_GROUP_JOIN) {
-            return virtualGroupAccessComponent.isApproverForVirtualGroup(userId, request.getVirtualGroupId());
-        } else if (request.getRequestType() == PermissionRequestType.BUSINESS_UNIT_JOIN) {
-            return virtualGroupAccessComponent.isApproverForBusinessUnit(userId, request.getBusinessUnitId());
-        } else if (request.getRequestType() == PermissionRequestType.BUSINESS_UNIT_ROLE_REMOVAL) {
-            return virtualGroupAccessComponent.isApproverForBusinessUnit(userId, request.getBusinessUnitId());
-        } else if (request.getRequestType() == PermissionRequestType.BUSINESS_UNIT_EXIT) {
-            return virtualGroupAccessComponent.isApproverForBusinessUnit(userId, request.getBusinessUnitId());
-        }
-        // 角色分配暂时不需要审批（自动批准）
-        return false;
+        return approvalComponent.canApproveRequest(userId, request);
     }
 
     /**
@@ -740,146 +244,10 @@ public class PermissionComponent {
     }
 
     /**
-     * 为审批列表填充申请人登录名等信息（供前端展示，避免只显示 applicantId UUID）
-     */
-    private void enrichDisplayFields(List<PermissionRequest> requests) {
-        if (requests == null || requests.isEmpty()) {
-            return;
-        }
-        LinkedHashSet<String> ids = new LinkedHashSet<>();
-        for (PermissionRequest r : requests) {
-            if (r.getApplicantId() != null && !r.getApplicantId().isBlank()) {
-                ids.add(r.getApplicantId().trim());
-            }
-            if (r.getSubmittedByUserId() != null && !r.getSubmittedByUserId().isBlank()) {
-                ids.add(r.getSubmittedByUserId().trim());
-            }
-        }
-        Map<String, Map<String, Object>> userById = new HashMap<>();
-        for (String id : ids) {
-            Map<String, Object> info = roleAccessComponent.getUserById(id);
-            if (info != null) {
-                userById.put(id, info);
-            }
-        }
-        for (PermissionRequest r : requests) {
-            Map<String, Object> ainfo = userById.get(r.getApplicantId());
-            if (ainfo != null) {
-                String shown = firstNonBlank(
-                        nonBlankString(ainfo.get("username")),
-                        nonBlankString(ainfo.get("fullName")),
-                        nonBlankString(ainfo.get("displayName")));
-                if (shown != null) {
-                    r.setApplicantUsername(shown);
-                }
-            }
-            if (r.getSubmittedByUserId() != null && !r.getSubmittedByUserId().isBlank()) {
-                Map<String, Object> sinfo = userById.get(r.getSubmittedByUserId().trim());
-                if (sinfo != null) {
-                    String subShown = firstNonBlank(
-                            nonBlankString(sinfo.get("username")),
-                            nonBlankString(sinfo.get("fullName")),
-                            nonBlankString(sinfo.get("displayName")));
-                    if (subShown != null) {
-                        r.setSubmittedByUsername(subShown);
-                    }
-                }
-            }
-        }
-    }
-
-    private void enrichListItemUsernames(List<PermissionRequestListItem> items) {
-        if (items == null || items.isEmpty()) {
-            return;
-        }
-        LinkedHashSet<String> ids = new LinkedHashSet<>();
-        for (PermissionRequestListItem r : items) {
-            if (r.getApplicantId() != null && !r.getApplicantId().isBlank()) {
-                ids.add(r.getApplicantId().trim());
-            }
-            if (r.getSubmittedByUserId() != null && !r.getSubmittedByUserId().isBlank()) {
-                ids.add(r.getSubmittedByUserId().trim());
-            }
-        }
-        Map<String, Map<String, Object>> userById = new HashMap<>();
-        for (String id : ids) {
-            Map<String, Object> info = roleAccessComponent.getUserById(id);
-            if (info != null) {
-                userById.put(id, info);
-            }
-        }
-        for (PermissionRequestListItem r : items) {
-            Map<String, Object> ainfo = userById.get(r.getApplicantId());
-            if (ainfo != null) {
-                String shown = firstNonBlank(
-                        nonBlankString(ainfo.get("username")),
-                        nonBlankString(ainfo.get("fullName")),
-                        nonBlankString(ainfo.get("displayName")));
-                if (shown != null) {
-                    r.setApplicantUsername(shown);
-                }
-            }
-            if (r.getSubmittedByUserId() != null && !r.getSubmittedByUserId().isBlank()) {
-                Map<String, Object> sinfo = userById.get(r.getSubmittedByUserId().trim());
-                if (sinfo != null) {
-                    String subShown = firstNonBlank(
-                            nonBlankString(sinfo.get("username")),
-                            nonBlankString(sinfo.get("fullName")),
-                            nonBlankString(sinfo.get("displayName")));
-                    if (subShown != null) {
-                        r.setSubmittedByUsername(subShown);
-                    }
-                }
-            }
-        }
-    }
-
-    private static String normalizeUserIdOrDefault(String beneficiaryUserId, String submittedByUserId) {
-        if (beneficiaryUserId == null || beneficiaryUserId.isBlank()) {
-            return submittedByUserId;
-        }
-        return beneficiaryUserId.trim();
-    }
-
-    private void assertActiveBeneficiary(String beneficiaryUserId) {
-        if (!roleAccessComponent.isActivePortalUser(beneficiaryUserId)) {
-            throw new IllegalArgumentException("Beneficiary does not exist or account is not available");
-        }
-    }
-
-    /** 防止受益人与审批人为同一人时自批自申请 */
-    private void assertApproverNotSameAsApplicant(String approverId, PermissionRequest request) {
-        if (approverId != null && request.getApplicantId() != null
-                && approverId.equals(request.getApplicantId())) {
-            throw new IllegalArgumentException(i18nService.getMessage("portal.cannot_approve_own_request"));
-        }
-    }
-
-    private static String nonBlankString(Object v) {
-        if (v == null) {
-            return null;
-        }
-        String s = String.valueOf(v).trim();
-        return s.isEmpty() ? null : s;
-    }
-
-    private static String firstNonBlank(String... parts) {
-        if (parts == null) {
-            return null;
-        }
-        for (String p : parts) {
-            if (p != null && !p.isBlank()) {
-                return p;
-            }
-        }
-        return null;
-    }
-
-    /**
      * 获取用户当前的虚拟组成员身份
      */
     public List<Map<String, Object>> getUserCurrentVirtualGroups(String userId) {
-        return virtualGroupAccessComponent.getUserVirtualGroups(userId);
+        return catalogComponent.getUserCurrentVirtualGroups(userId);
     }
 
     // ==================== 旧的方法（保留兼容） ====================
@@ -891,7 +259,7 @@ public class PermissionComponent {
     @Deprecated
     public List<Map<String, Object>> getUserPermissions(String userId) {
         List<Map<String, Object>> permissions = new ArrayList<>();
-        
+
         // 添加角色权限
         List<Map<String, Object>> roles = getUserCurrentRoles(userId);
         for (Map<String, Object> role : roles) {
@@ -901,7 +269,7 @@ public class PermissionComponent {
             perm.put("type", "ROLE");
             permissions.add(perm);
         }
-        
+
         // 添加虚拟组权限
         List<Map<String, Object>> groups = getUserCurrentVirtualGroups(userId);
         for (Map<String, Object> group : groups) {
@@ -911,7 +279,7 @@ public class PermissionComponent {
             perm.put("type", "VIRTUAL_GROUP");
             permissions.add(perm);
         }
-        
+
         return permissions;
     }
 
@@ -976,7 +344,7 @@ public class PermissionComponent {
         dataArgs.add(pageable.getOffset());
 
         List<PermissionRequestListItem> content = jdbcTemplate.query(dataSql, this::mapPermissionRequestListRow, dataArgs.toArray());
-        enrichListItemUsernames(content);
+        enrichmentComponent.enrichListItemUsernames(content);
         return new PageImpl<>(content, pageable, totalLong);
     }
 
@@ -984,35 +352,38 @@ public class PermissionComponent {
         String buName = rs.getString("business_unit_name");
         String vgName = rs.getString("virtual_group_name");
         String ouName = rs.getString("organization_unit_name");
-        String targetName = firstNonBlank(
-                nonBlankString(buName),
-                nonBlankString(vgName),
-                nonBlankString(ouName));
+        String targetName = enrichmentComponent.firstNonBlank(
+                enrichmentComponent.nonBlankString(buName),
+                enrichmentComponent.nonBlankString(vgName),
+                enrichmentComponent.nonBlankString(ouName));
         if (targetName == null) {
             targetName = "-";
         }
         String buId = rs.getString("business_unit_id");
         String vgId = rs.getString("virtual_group_id");
         String ouId = rs.getString("organization_unit_id");
-        String targetId = firstNonBlank(nonBlankString(buId), nonBlankString(vgId), nonBlankString(ouId));
+        String targetId = enrichmentComponent.firstNonBlank(
+                enrichmentComponent.nonBlankString(buId),
+                enrichmentComponent.nonBlankString(vgId),
+                enrichmentComponent.nonBlankString(ouId));
         if (targetId == null) {
             targetId = "";
         }
-        String roleName = nonBlankString(rs.getString("role_name"));
+        String roleName = enrichmentComponent.nonBlankString(rs.getString("role_name"));
         List<String> roleNames = roleName != null ? List.of(roleName) : List.of();
 
         return PermissionRequestListItem.builder()
                 .id(rs.getObject("id", Long.class))
-                .applicantId(nonBlankString(rs.getString("applicant_id")))
-                .submittedByUserId(nonBlankString(rs.getString("submitted_by_user_id")))
-                .requestType(nonBlankString(rs.getString("request_type")))
+                .applicantId(enrichmentComponent.nonBlankString(rs.getString("applicant_id")))
+                .submittedByUserId(enrichmentComponent.nonBlankString(rs.getString("submitted_by_user_id")))
+                .requestType(enrichmentComponent.nonBlankString(rs.getString("request_type")))
                 .targetId(targetId)
                 .targetName(targetName)
                 .roleNames(roleNames)
-                .reason(nonBlankString(rs.getString("reason")))
-                .status(nonBlankString(rs.getString("status")))
-                .approverId(nonBlankString(rs.getString("approver_id")))
-                .approverComment(nonBlankString(rs.getString("approve_comment")))
+                .reason(enrichmentComponent.nonBlankString(rs.getString("reason")))
+                .status(enrichmentComponent.nonBlankString(rs.getString("status")))
+                .approverId(enrichmentComponent.nonBlankString(rs.getString("approver_id")))
+                .approverComment(enrichmentComponent.nonBlankString(rs.getString("approve_comment")))
                 .approvedAt(formatTimestampUtc(rs.getTimestamp("approve_time")))
                 .createdAt(formatTimestampUtc(rs.getTimestamp("created_at")))
                 .updatedAt(formatTimestampUtc(rs.getTimestamp("updated_at")))
@@ -1044,7 +415,7 @@ public class PermissionComponent {
         if (!beneficiary && !submitter && !legacySelf) {
             return Optional.empty();
         }
-        enrichDisplayFields(List.of(r));
+        enrichmentComponent.enrichDisplayFields(List.of(r));
         return opt;
     }
 

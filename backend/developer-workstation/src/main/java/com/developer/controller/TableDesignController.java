@@ -1,7 +1,7 @@
 package com.developer.controller;
 
 import com.developer.component.TableDesignComponent;
-import com.developer.dto.ApiResponse;
+import com.platform.common.dto.ApiResponse;
 import com.developer.dto.ForeignKeyDTO;
 import com.developer.dto.TableDefinitionRequest;
 import com.developer.dto.TableNameAvailabilityResponse;

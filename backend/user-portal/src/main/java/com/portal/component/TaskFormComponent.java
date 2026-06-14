@@ -1,6 +1,5 @@
 package com.portal.component;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.*;
@@ -19,21 +18,19 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.client.RestTemplate;
-import org.springframework.web.util.UriComponentsBuilder;
 
-import com.platform.common.util.ApiResponseBodyUnwrap;
-
-import java.nio.charset.StandardCharsets;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Collectors;
 
 /**
  * Task Form component.
  * Loads Task Form data, submit handling, snapshot capture, and completed-task form queries.
+ *
+ * <p>本类为门面：保留全部 public 方法签名与 public 内部类型，方法体委托同包协作类——
+ * {@link TaskFormFieldMapper}（字段/快照纯函数）、{@link TaskFormDefinitionLoader}（表单定义加载）、
+ * {@link TaskFormSubTableChangeRecorder}（子表变更历史）。协作类以 {@code @Lazy @Autowired} 字段注入，
+ * 不拓宽构造器，沿用仓库既定破环模式（见 {@code processComponent}）。</p>
  */
 @Slf4j
 @Component
@@ -70,6 +67,50 @@ public class TaskFormComponent {
     @Lazy
     @Autowired
     private ProcessComponent processComponent;
+
+    /**
+     * 协作类以 {@code @Lazy @Autowired} 字段注入——保持 8 参 {@code @RequiredArgsConstructor} 不变，不破坏测试构造点。
+     * 测试以 {@code new TaskFormComponent(...)} 构造时 Spring 不参与注入，这些字段为 null；
+     * 故下方 accessor 在为 null 时用门面自身已持有的依赖按需构造一份（协作类无额外状态），行为与注入版本一致。
+     */
+    @Lazy
+    @Autowired
+    private TaskFormFieldMapper fieldMapper;
+
+    @Lazy
+    @Autowired
+    private TaskFormDefinitionLoader formDefinitionLoader;
+
+    @Lazy
+    @Autowired
+    private TaskFormSubTableChangeRecorder subTableChangeRecorder;
+
+    private TaskFormFieldMapper fieldMapper() {
+        TaskFormFieldMapper m = fieldMapper;
+        if (m == null) {
+            m = new TaskFormFieldMapper();
+            fieldMapper = m;
+        }
+        return m;
+    }
+
+    private TaskFormDefinitionLoader formDefinitionLoader() {
+        TaskFormDefinitionLoader l = formDefinitionLoader;
+        if (l == null) {
+            l = new TaskFormDefinitionLoader(restTemplate, objectMapper, jdbcTemplate);
+            formDefinitionLoader = l;
+        }
+        return l;
+    }
+
+    private TaskFormSubTableChangeRecorder subTableChangeRecorder() {
+        TaskFormSubTableChangeRecorder r = subTableChangeRecorder;
+        if (r == null) {
+            r = new TaskFormSubTableChangeRecorder(changeHistoryComponent);
+            subTableChangeRecorder = r;
+        }
+        return r;
+    }
 
     @Value("${developer-workstation.url:http://localhost:8091}")
     private String developerWorkstationUrl;
@@ -130,8 +171,8 @@ public class TaskFormComponent {
         }
 
         // Extract Task Form layout and field permissions
-        Map<String, Object> configJson = extractMapField(formDefinition, "configJson");
-        Map<String, String> fieldPermissions = extractFieldPermissions(formDefinition);
+        Map<String, Object> configJson = fieldMapper().extractMapField(formDefinition, "configJson");
+        Map<String, String> fieldPermissions = fieldMapper().extractFieldPermissions(formDefinition);
         String formName = formDefinition.get("formName") != null
                 ? (String) formDefinition.get("formName")
                 : "Task Form";
@@ -140,7 +181,7 @@ public class TaskFormComponent {
                 : false;
 
         // Get field values from process variables (subset based on fieldPermissions keys)
-        Map<String, Object> fieldValues = extractFieldSubset(hydratedVariables, fieldPermissions.keySet());
+        Map<String, Object> fieldValues = fieldMapper().extractFieldSubset(hydratedVariables, fieldPermissions.keySet());
         // Mirror persistTaskFormSnapshot: always attach live __subTables__ when present so nested /
         // copied-task bindings hydrate even if fieldPermissions omits or carries a stale __subTables__ entry.
         if (hydratedVariables.containsKey("__subTables__")) {
@@ -189,7 +230,7 @@ public class TaskFormComponent {
         // Get field permissions to filter out READONLY fields
         Map<String, Object> formDefinition = fetchTaskFormByStageId(taskInfo.taskDefinitionKey);
         Map<String, String> fieldPermissions = formDefinition != null
-                ? extractFieldPermissions(formDefinition)
+                ? fieldMapper().extractFieldPermissions(formDefinition)
                 : Collections.emptyMap();
 
         // Filter: only accept EDITABLE fields
@@ -259,127 +300,12 @@ public class TaskFormComponent {
                         taskInfo.processInstanceId, field, "unknown", userId);
             }
             changeHistoryComponent.recordFieldChanges(context, snapshotOldVars, editableData);
-            recordSubTableChangeHistory(context,
+            subTableChangeRecorder().recordSubTableChangeHistory(context,
                     snapshotOldVars.get("__subTables__"),
                     editableData.get("__subTables__"));
         } catch (RuntimeException ex) {
             log.warn("task form change-history skipped for task {}: {}", taskId, ex.getMessage());
         }
-    }
-
-    @SuppressWarnings("unchecked")
-    private void recordSubTableChangeHistory(ChangeHistoryContext context,
-                                              Object oldSubTablesObj,
-                                              Object newSubTablesObj) {
-        if (newSubTablesObj == null) {
-            return;
-        }
-        try {
-            Map<String, Object> oldMap = oldSubTablesObj instanceof Map
-                    ? (Map<String, Object>) oldSubTablesObj
-                    : Collections.emptyMap();
-            Map<String, Object> newMap = (Map<String, Object>) newSubTablesObj;
-
-            for (Map.Entry<String, Object> subTableEntry : newMap.entrySet()) {
-                String subTableKey = subTableEntry.getKey();
-                List<Map<String, Object>> newRows = subTableEntry.getValue() instanceof List
-                        ? (List<Map<String, Object>>) subTableEntry.getValue()
-                        : Collections.emptyList();
-                List<Map<String, Object>> oldRows = oldMap.get(subTableKey) instanceof List
-                        ? (List<Map<String, Object>>) oldMap.get(subTableKey)
-                        : Collections.emptyList();
-
-                List<SubTableChange> changes = computeSubTableRowChanges(oldRows, newRows);
-                if (!changes.isEmpty()) {
-                    changeHistoryComponent.recordSubTableChanges(
-                            context, subTableKey, changes);
-                }
-            }
-        } catch (Exception e) {
-            log.warn("Failed to record sub-table changes for process {}: {}",
-                    context.getProcessInstanceId(), e.getMessage());
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    private List<SubTableChange> computeSubTableRowChanges(
-            List<Map<String, Object>> oldRows,
-            List<Map<String, Object>> newRows) {
-        List<SubTableChange> changes = new ArrayList<>();
-
-        // Build row lookup maps by row id
-        Map<Object, Map<String, Object>> oldRowMap = new HashMap<>();
-        for (Map<String, Object> row : oldRows) {
-            Object rowId = row.get("id");
-            if (rowId != null) {
-                oldRowMap.put(rowId, row);
-            }
-        }
-        Map<Object, Map<String, Object>> newRowMap = new HashMap<>();
-        for (Map<String, Object> row : newRows) {
-            Object rowId = row.get("id");
-            if (rowId != null) {
-                newRowMap.put(rowId, row);
-            }
-        }
-
-        // Detect ROW_ADD (in new but not in old)
-        for (Map.Entry<Object, Map<String, Object>> entry : newRowMap.entrySet()) {
-            Object rowId = entry.getKey();
-            if (!oldRowMap.containsKey(rowId)) {
-                changes.add(SubTableChange.builder()
-                        .changeType("ROW_ADD")
-                        .rowIdentifier(String.valueOf(rowId))
-                        .oldValues(null)
-                        .newValues(entry.getValue())
-                        .build());
-            }
-        }
-
-        // Detect ROW_DELETE (in old but not in new)
-        for (Map.Entry<Object, Map<String, Object>> entry : oldRowMap.entrySet()) {
-            Object rowId = entry.getKey();
-            if (!newRowMap.containsKey(rowId)) {
-                changes.add(SubTableChange.builder()
-                        .changeType("ROW_DELETE")
-                        .rowIdentifier(String.valueOf(rowId))
-                        .oldValues(entry.getValue())
-                        .newValues(null)
-                        .build());
-            }
-        }
-
-        // Detect ROW_UPDATE (in both but field values differ)
-        for (Map.Entry<Object, Map<String, Object>> entry : newRowMap.entrySet()) {
-            Object rowId = entry.getKey();
-            Map<String, Object> oldRow = oldRowMap.get(rowId);
-            if (oldRow != null) {
-                Map<String, Object> newRow = entry.getValue();
-                Map<String, Object> changedFields = new HashMap<>();
-                Map<String, Object> oldChangedFields = new HashMap<>();
-                boolean hasChanges = false;
-                // Compare all fields except 'id' (the row key)
-                for (Map.Entry<String, Object> field : newRow.entrySet()) {
-                    if ("id".equals(field.getKey())) continue;
-                    Object oldFieldVal = oldRow.get(field.getKey());
-                    if (!Objects.equals(oldFieldVal, field.getValue())) {
-                        changedFields.put(field.getKey(), field.getValue());
-                        oldChangedFields.put(field.getKey(), oldFieldVal);
-                        hasChanges = true;
-                    }
-                }
-                if (hasChanges) {
-                    changes.add(SubTableChange.builder()
-                            .changeType("ROW_UPDATE")
-                            .rowIdentifier(String.valueOf(rowId))
-                            .oldValues(oldChangedFields)
-                            .newValues(changedFields)
-                            .build());
-                }
-            }
-        }
-
-        return changes;
     }
 
     /**
@@ -394,23 +320,7 @@ public class TaskFormComponent {
     public Set<String> detectConcurrentModifications(Map<String, Object> baselineValues,
                                                       Map<String, Object> currentVariables,
                                                       Set<String> submittedFieldNames) {
-        Set<String> concurrentFields = new java.util.HashSet<>();
-
-        if (baselineValues == null || baselineValues.isEmpty()) {
-            return concurrentFields;
-        }
-
-        for (String fieldName : submittedFieldNames) {
-            if (baselineValues.containsKey(fieldName)) {
-                Object baselineVal = baselineValues.get(fieldName);
-                Object currentVal = currentVariables.get(fieldName);
-                if (!Objects.equals(baselineVal, currentVal)) {
-                    concurrentFields.add(fieldName);
-                }
-            }
-        }
-
-        return concurrentFields;
+        return fieldMapper().detectConcurrentModifications(baselineValues, currentVariables, submittedFieldNames);
     }
 
     /**
@@ -434,13 +344,13 @@ public class TaskFormComponent {
 
         // Get snapshot from process variable _snapshot_{taskId}
         String snapshotKey = "_snapshot_" + taskId;
-        TaskFormSnapshot snapshot = extractSnapshot(allVariables, snapshotKey);
+        TaskFormSnapshot snapshot = fieldMapper().extractSnapshot(allVariables, snapshotKey);
 
         // Get current live values from process variables
         Map<String, Object> liveValues;
         if (snapshot != null && snapshot.getFieldValues() != null) {
             // Get live values for the same field subset as the snapshot
-            liveValues = extractFieldSubset(allVariables, snapshot.getFieldValues().keySet());
+            liveValues = fieldMapper().extractFieldSubset(allVariables, snapshot.getFieldValues().keySet());
         } else {
             liveValues = Collections.emptyMap();
         }
@@ -491,7 +401,7 @@ public class TaskFormComponent {
         }
         Map<String, Object> formDefinition = fetchTaskFormByStageId(taskDefinitionKey);
         Map<String, String> fieldPermissions = formDefinition != null
-                ? extractFieldPermissions(formDefinition)
+                ? fieldMapper().extractFieldPermissions(formDefinition)
                 : Collections.emptyMap();
 
         // Empty snapshot when no Task Form binding—avoid writing __subTables__ (with alias copies) with no UI consumer.
@@ -499,7 +409,7 @@ public class TaskFormComponent {
         if (fieldPermissions.isEmpty()) {
             fieldValues = new HashMap<>();
         } else {
-            fieldValues = extractFieldSubset(mergedVariables, fieldPermissions.keySet());
+            fieldValues = fieldMapper().extractFieldSubset(mergedVariables, fieldPermissions.keySet());
             if (mergedVariables.containsKey("__subTables__")) {
                 fieldValues.put("__subTables__", mergedVariables.get("__subTables__"));
             }
@@ -574,14 +484,7 @@ public class TaskFormComponent {
      */
     public Map<String, Object> filterEditableFields(Map<String, Object> formData,
                                                      Map<String, String> fieldPermissions) {
-        if (fieldPermissions == null || fieldPermissions.isEmpty()) {
-            return new HashMap<>(formData);
-        }
-
-        return formData.entrySet().stream()
-                .filter(entry -> "__subTables__".equals(entry.getKey())
-                        || "EDITABLE".equals(fieldPermissions.get(entry.getKey())))
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+        return fieldMapper().filterEditableFields(formData, fieldPermissions);
     }
 
     /**
@@ -589,69 +492,28 @@ public class TaskFormComponent {
      */
     public Map<String, Object> extractFieldSubset(Map<String, Object> allVariables,
                                                    Set<String> fieldNames) {
-        if (fieldNames == null || fieldNames.isEmpty()) {
-            return new HashMap<>(allVariables);
-        }
-
-        Map<String, Object> subset = new HashMap<>();
-        for (String fieldName : fieldNames) {
-            if (allVariables.containsKey(fieldName)) {
-                subset.put(fieldName, allVariables.get(fieldName));
-            }
-        }
-        return subset;
+        return fieldMapper().extractFieldSubset(allVariables, fieldNames);
     }
 
     /**
      * Counts fields that differ between snapshot and live values.
      */
     public int countSnapshotDiffs(Map<String, Object> snapshotValues, Map<String, Object> liveValues) {
-        if (snapshotValues == null || liveValues == null) {
-            return 0;
-        }
-
-        int diffCount = 0;
-        for (Map.Entry<String, Object> entry : snapshotValues.entrySet()) {
-            Object snapshotVal = entry.getValue();
-            Object liveVal = liveValues.get(entry.getKey());
-            if (!Objects.equals(snapshotVal, liveVal)) {
-                diffCount++;
-            }
-        }
-        return diffCount;
+        return fieldMapper().countSnapshotDiffs(snapshotValues, liveValues);
     }
 
     /**
      * Converts snapshot DTO to Map for storage in process variables.
      */
     public Map<String, Object> snapshotToMap(TaskFormSnapshot snapshot) {
-        Map<String, Object> map = new HashMap<>();
-        map.put("taskId", snapshot.getTaskId());
-        map.put("taskDefinitionKey", snapshot.getTaskDefinitionKey());
-        map.put("assignee", snapshot.getAssignee());
-        map.put("completedAt", snapshot.getCompletedAt() != null
-                ? snapshot.getCompletedAt().toString() : null);
-        map.put("fieldValues", snapshot.getFieldValues());
-        return map;
+        return fieldMapper().snapshotToMap(snapshot);
     }
 
     /**
      * Restores snapshot DTO from Map (read from process variables).
      */
-    @SuppressWarnings("unchecked")
     public TaskFormSnapshot mapToSnapshot(Map<String, Object> map) {
-        if (map == null) {
-            return null;
-        }
-        return TaskFormSnapshot.builder()
-                .taskId((String) map.get("taskId"))
-                .taskDefinitionKey((String) map.get("taskDefinitionKey"))
-                .assignee((String) map.get("assignee"))
-                .completedAt(map.get("completedAt") != null
-                        ? Instant.parse((String) map.get("completedAt")) : null)
-                .fieldValues(map.get("fieldValues") instanceof Map
-                        ? (Map<String, Object>) map.get("fieldValues") : Collections.emptyMap())
-                .build();
+        return fieldMapper().mapToSnapshot(map);
     }
 
     // ==================== Private Helper Methods ====================
@@ -665,18 +527,18 @@ public class TaskFormComponent {
             Optional<Map<String, Object>> result = workflowEngineClient.getTaskById(taskId);
             if (result.isPresent()) {
                 Map<String, Object> body = result.get();
-                Map<String, Object> data = body.containsKey("data") 
+                Map<String, Object> data = body.containsKey("data")
                         ? (Map<String, Object>) body.get("data") : body;
-                
+
                 String taskDefinitionKey = (String) data.get("taskDefinitionKey");
                 String processInstanceId = (String) data.get("processInstanceId");
-                
+
                 if (taskDefinitionKey != null && processInstanceId != null) {
                     return new TaskInfo(taskDefinitionKey, processInstanceId);
                 }
             }
         }
-        
+
         throw new PortalException("404", "Task not found: " + taskId);
     }
 
@@ -684,159 +546,8 @@ public class TaskFormComponent {
      * Loads Task Form definition by stageId (taskDefinitionKey).
      * Prefers developer-workstation; falls back to local {@code dw_form_stage_bindings} when unreachable (shared PostgreSQL with DW).
      */
-    @SuppressWarnings("unchecked")
     private Map<String, Object> fetchTaskFormByStageId(String stageId) {
-        // Try local DB first (millisecond-level) — avoids expensive cross-container HTTP call.
-        Map<String, Object> fromDb = fetchTaskFormFromLocalDw(stageId);
-        if (fromDb != null) {
-            if (fromDb.isEmpty()) {
-                // Definitive negative: local DB queried successfully but found no binding.
-                // Since both services share the same PostgreSQL, HTTP fallback would also miss — skip it.
-                log.debug("No task form binding found in local DB for stage '{}', skipping remote lookup", stageId);
-                return null;
-            }
-            log.debug("Resolved task form for stage '{}' from local dw_form_stage_bindings", stageId);
-            return fromDb;
-        }
-        // fromDb == null means local query threw an exception (e.g. table doesn't exist).
-        // Fallback: HTTP call to developer-workstation.
-        return fetchTaskFormFromDeveloperWorkstation(stageId);
-    }
-
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> fetchTaskFormFromDeveloperWorkstation(String stageId) {
-        try {
-            String base = normalizeDeveloperWorkstationBase(developerWorkstationUrl);
-            String url = UriComponentsBuilder
-                    .fromHttpUrl(base + "/api/v1/form-stage-bindings")
-                    .queryParam("stageId", stageId)
-                    .encode(StandardCharsets.UTF_8)
-                    .toUriString();
-            log.debug("Fetching Task Form definition from: {}", url);
-
-            Map<String, Object> response = restTemplate.getForObject(url, Map.class);
-            if (response == null) {
-                return null;
-            }
-            Map<String, Object> payload = ApiResponseBodyUnwrap.unwrapDataMap(response);
-            if (payload.containsKey("form")) {
-                return (Map<String, Object>) payload.get("form");
-            }
-            if (response.containsKey("form")) {
-                return (Map<String, Object>) response.get("form");
-            }
-        } catch (Exception e) {
-            log.warn("Failed to fetch Task Form definition for stage {}: {}", stageId, e.getMessage());
-        }
-        return null;
-    }
-
-    /**
-     * Local lookup when sharing DB with developer-workstation (avoids localhost misconfiguration inside containers).
-     */
-    private Map<String, Object> fetchTaskFormFromLocalDw(String stageId) {
-        if (stageId == null || stageId.isBlank()) {
-            return null;
-        }
-        try {
-            List<Map<String, Object>> rows = jdbcTemplate.query(
-                    """
-                            SELECT fd.form_name, fd.config_json, fd.field_permissions, b.read_only
-                            FROM dw_form_stage_bindings b
-                            INNER JOIN dw_form_definitions fd ON fd.id = b.form_id
-                            WHERE b.stage_id = ?
-                            LIMIT 1
-                            """,
-                    (ResultSet rs, int rowNum) -> mapRowToTaskFormDefinition(rs),
-                    stageId.trim());
-            return rows.isEmpty() ? Collections.emptyMap() : rows.get(0);
-        } catch (Exception e) {
-            log.debug("Local dw_form_stage_bindings lookup failed for stage {}: {}", stageId, e.getMessage());
-            return null;
-        }
-    }
-
-    private Map<String, Object> mapRowToTaskFormDefinition(ResultSet rs) throws SQLException {
-        Map<String, Object> form = new HashMap<>();
-        form.put("formName", rs.getString("form_name"));
-        form.put("configJson", readJsonObjectMap(rs, "config_json"));
-        form.put("fieldPermissions", readJsonStringMap(rs, "field_permissions"));
-        form.put("readOnly", rs.getBoolean("read_only"));
-        return form;
-    }
-
-    private Map<String, Object> readJsonObjectMap(ResultSet rs, String col) throws SQLException {
-        String raw = rs.getString(col);
-        if (raw == null || raw.isBlank()) {
-            return Collections.emptyMap();
-        }
-        try {
-            return objectMapper.readValue(raw, new TypeReference<Map<String, Object>>() {});
-        } catch (Exception e) {
-            log.debug("Could not parse JSON object column {}: {}", col, e.getMessage());
-            return Collections.emptyMap();
-        }
-    }
-
-    private Map<String, String> readJsonStringMap(ResultSet rs, String col) throws SQLException {
-        String raw = rs.getString(col);
-        if (raw == null || raw.isBlank()) {
-            return Collections.emptyMap();
-        }
-        try {
-            return objectMapper.readValue(raw, new TypeReference<Map<String, String>>() {});
-        } catch (Exception e) {
-            log.debug("Could not parse JSON string map column {}: {}", col, e.getMessage());
-            return Collections.emptyMap();
-        }
-    }
-
-    private static String trimTrailingSlash(String base) {
-        if (base == null || base.isEmpty()) {
-            return "";
-        }
-        return base.endsWith("/") ? base.substring(0, base.length() - 1) : base;
-    }
-
-    /** Supports {@code DEVELOPER_WORKSTATION_URL} as host:port only or with a mistaken {@code /api/v1} suffix. */
-    private static String normalizeDeveloperWorkstationBase(String url) {
-        String b = trimTrailingSlash(url != null ? url : "");
-        if (b.endsWith("/api/v1")) {
-            return trimTrailingSlash(b.substring(0, b.length() - "/api/v1".length()));
-        }
-        return b;
-    }
-
-    @SuppressWarnings("unchecked")
-    private Map<String, String> extractFieldPermissions(Map<String, Object> formDefinition) {
-        Object fp = formDefinition.get("fieldPermissions");
-        if (fp instanceof Map) {
-            Map<String, Object> raw = (Map<String, Object>) fp;
-            Map<String, String> result = new HashMap<>();
-            for (Map.Entry<String, Object> entry : raw.entrySet()) {
-                result.put(entry.getKey(), entry.getValue() != null ? entry.getValue().toString() : "READONLY");
-            }
-            return result;
-        }
-        return Collections.emptyMap();
-    }
-
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> extractMapField(Map<String, Object> source, String fieldName) {
-        Object value = source.get(fieldName);
-        if (value instanceof Map) {
-            return (Map<String, Object>) value;
-        }
-        return Collections.emptyMap();
-    }
-
-    @SuppressWarnings("unchecked")
-    private TaskFormSnapshot extractSnapshot(Map<String, Object> allVariables, String snapshotKey) {
-        Object snapshotObj = allVariables.get(snapshotKey);
-        if (snapshotObj instanceof Map) {
-            return mapToSnapshot((Map<String, Object>) snapshotObj);
-        }
-        return null;
+        return formDefinitionLoader().fetchTaskFormByStageId(stageId, developerWorkstationUrl);
     }
 
     // ========== Inner data class ==========

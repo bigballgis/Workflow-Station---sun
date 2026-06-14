@@ -3,7 +3,7 @@ package com.portal.controller;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portal.client.WorkflowEngineClient;
-import com.portal.dto.ApiResponse;
+import com.platform.common.dto.ApiResponse;
 import com.portal.entity.ActionDefinition;
 import com.portal.repository.ActionDefinitionRepository;
 import com.portal.security.CurrentUserId;

@@ -353,13 +353,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { computed, watch, onMounted } from 'vue'
 import { Plus } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { useI18n } from 'vue-i18n'
-import { functionUnitApi, type TableBinding, type TableBindingRequest, type TableDefinition, type BindingType, type BindingLinkMode } from '@/api/functionUnit'
-import { relationTableBindingApi, type RelationTableDTO } from '@/api/relationTable'
-import { pickHttpErrorBodyMessage, resolveUserFacingHttpMessage } from '@/utils/httpErrorMessage'
+import { type TableDefinition } from '@/api/functionUnit'
+import { useTableBindingList } from '@/composables/tableBindingManager/useTableBindingList'
+import { useTableBindingForm } from '@/composables/tableBindingManager/useTableBindingForm'
+import { useTableBindingSubmit } from '@/composables/tableBindingManager/useTableBindingSubmit'
 
 const { t } = useI18n()
 
@@ -381,408 +381,75 @@ const emit = defineEmits<{
   (e: 'update'): void
 }>()
 
-const loading = ref(false)
-const submitting = ref(false)
-const bindings = ref<TableBinding[]>([])
-const showAddDialog = ref(false)
-const editingBinding = ref<TableBinding | null>(null)
-const formRef = ref<FormInstance>()
-const deployedRelationTables = ref<RelationTableDTO[]>([])
-
-function toRelationTableOptionId(tableId: number): number {
-  return tableId < 0 ? tableId : -tableId
-}
-
-function makeEmptyBindingForm(): TableBindingRequest {
-  // 默认类型：若尚无 PRIMARY 就让用户先建 PRIMARY，否则默认 SUB
-  const defaultType: BindingType = bindings.value.some(b => b.bindingType === 'PRIMARY') ? 'SUB' : 'PRIMARY'
-  return {
-    tableId: undefined as unknown as number,
-    bindingType: defaultType,
-    bindingMode: defaultType === 'PRIMARY' ? 'EDITABLE' : 'READONLY',
-    foreignKeyField: undefined,
-    bindingLinkMode: defaultType === 'SUB' ? 'structuralFk' : undefined,
-    subMode: defaultType === 'SUB' ? 'FULL' : undefined
-  }
-}
-
-const bindingForm = ref<TableBindingRequest>(makeEmptyBindingForm())
-
-const formRules = computed<FormRules>(() => {
-  const base: FormRules = {
-    tableId: [{ required: true, message: t('tableBinding.selectTableRequired'), trigger: 'change' }],
-    bindingType: [{ required: true, message: t('tableBinding.selectBindingTypeRequired'), trigger: 'change' }],
-    bindingMode: [{ required: true, message: t('tableBinding.selectBindingModeRequired'), trigger: 'change' }]
-  }
-  if (restrictPrimarySubOnly.value && bindingForm.value.bindingType === 'SUB') {
-    if (bindingForm.value.bindingLinkMode === 'miParticipantRow') {
-      base.foreignKeyField = [
-        { required: true, message: t('tableBinding.foreignKeyRequired'), trigger: 'change' }
-      ]
-    } else if (structuralFkFieldNames.value.length === 0) {
-      base.foreignKeyField = [
-        { required: true, message: t('tableBinding.structuralFkRequired'), trigger: 'change' }
-      ]
-    }
-  }
-  return base
+// 列表状态与展示/删除逻辑
+const {
+  loading,
+  bindings,
+  loadBindings,
+  getTableName: getTableNameRaw,
+  bindingTypeLabel,
+  bindingTypeTag,
+  tableTypeLabel,
+  handleDelete,
+} = useTableBindingList({
+  functionUnitId: props.functionUnitId,
+  getFormId: () => props.formId,
+  t,
+  emitUpdate: () => emit('update'),
 })
-
-// Whether a primary binding already exists
-const hasPrimaryBinding = computed(() => {
-  return bindings.value.some(b => b.bindingType === 'PRIMARY')
-})
-
-/** 对 PROCESS / TASK 表单：SUB 必须在有 PRIMARY 之后才能添加（后端 SUB_REQUIRES_PRIMARY）。
- *  RELATED 不受此限制（它是 Lookup 参考数据，与主从关系无关）。 */
-const needsPrimaryFirst = computed(
-  () => restrictPrimarySubOnly.value && !hasPrimaryBinding.value
-)
-
-// Available tables
-const availableTables = computed(() => {
-  return props.tables
-})
-
-// Filtered tables based on binding type — 严格按类型过滤，避免用户在 SUB 里看到 MAIN 再报错
-const filteredAvailableTables = computed(() => {
-  const bt = bindingForm.value.bindingType
-  if (bt === 'PRIMARY') {
-    return props.tables
-      .filter(t => t.tableType === 'MAIN')
-      .map(t => ({ id: t.id, displayLabel: `${t.tableDisplayName || t.tableName} (${tableTypeLabel(t.tableType)})`, fieldDefinitions: t.fieldDefinitions }))
-  }
-  if (bt === 'SUB') {
-    return props.tables
-      .filter(t => t.tableType === 'SUB')
-      .map(t => ({ id: t.id, displayLabel: `${t.tableDisplayName || t.tableName} (${tableTypeLabel(t.tableType)})`, fieldDefinitions: t.fieldDefinitions }))
-  }
-  // RELATED：列出本功能单元的 RELATION 表 + 管理中心已部署的关联表
-  const localRelation = props.tables
-    .filter(t => t.tableType === 'RELATION')
-    .map(t => ({ id: t.id, displayLabel: `${t.tableDisplayName || t.tableName} (${tableTypeLabel(t.tableType)})`, fieldDefinitions: t.fieldDefinitions }))
-  const deployedLabel = t('tableBinding.deployedRelationTable')
-  const remote = deployedRelationTables.value.map(r => ({
-    id: toRelationTableOptionId(r.id), // negative ID to distinguish from local tables
-    displayLabel: `${r.displayName || r.tableName} (${deployedLabel})`,
-    fieldDefinitions: r.fieldDefinitions || []
-  }))
-  return [...localRelation, ...remote]
-})
-
-const selectTablePlaceholder = computed(() => {
-  if (needsPrimaryFirst.value) return t('tableBinding.primaryFirstHint')
-  return t('tableBinding.selectTablePlaceholder')
-})
-
-const emptyTableListHint = computed(() => {
-  const bt = bindingForm.value.bindingType
-  if (bt === 'PRIMARY') return t('tableBinding.noMainTableAvailable')
-  if (bt === 'SUB') return t('tableBinding.noSubTableAvailable')
-  if (bt === 'RELATED') return t('tableBinding.noRelationTableAvailable')
-  return t('tableBinding.selectBindingTypeFirst')
-})
-
-// Fields of the selected table
-const selectedTableFields = computed(() => {
-  if (!bindingForm.value.tableId) return []
-  if (bindingForm.value.tableId > 0) {
-    const table = props.tables.find(t => t.id === bindingForm.value.tableId)
-    return table?.fieldDefinitions || []
-  }
-  const table = deployedRelationTables.value.find(t => toRelationTableOptionId(t.id) === bindingForm.value.tableId)
-  return table?.fieldDefinitions || []
-})
-
-const structuralFkFieldNames = computed(() =>
-  selectedTableFields.value.filter(f => f.isForeignKey).map(f => f.fieldName),
-)
-
-function bindingLinkModeLabel(mode?: BindingLinkMode | string | null): string {
-  if (mode === 'miParticipantRow') return t('tableBinding.linkModeMiParticipantRow')
-  return t('tableBinding.linkModeStructuralFk')
-}
-
-function suggestParticipantRowField() {
-  const pk = selectedTableFields.value.find(f => f.isPrimaryKey)
-  if (pk?.fieldName) {
-    bindingForm.value.foreignKeyField = pk.fieldName
-  }
-}
-
-// Check if table is already bound
-function isTableBound(tableId: number): boolean {
-  if (editingBinding.value?.tableId === tableId) return false
-  return bindings.value.some(b => {
-    if (bindingForm.value.bindingType === 'RELATED' && b.bindingType === 'RELATED') {
-      return toRelationTableOptionId(b.tableId) === tableId
-    }
-    return b.tableId === tableId
-  })
-}
 
 // Get table name by ID
 function getTableName(tableId: number, fallback?: string): string {
-  const table = props.tables.find(t => t.id === tableId)
-  return table?.tableDisplayName || table?.tableName || fallback || t('tableBinding.unknownTable')
+  return getTableNameRaw(props.tables, tableId, fallback)
 }
 
-// Binding type label
-function bindingTypeLabel(type: BindingType): string {
-  const map: Record<BindingType, string> = {
-    PRIMARY: t('tableBinding.primaryTable'),
-    SUB: t('tableBinding.subTable'),
-    RELATED: t('tableBinding.relatedTable')
-  }
-  return map[type] || type
-}
-
-// Binding type tag color
-function bindingTypeTag(type: BindingType): 'primary' | 'success' | 'warning' | 'info' | 'danger' {
-  const map: Record<BindingType, 'primary' | 'success' | 'warning' | 'info' | 'danger'> = { PRIMARY: 'primary', SUB: 'success', RELATED: 'warning' }
-  return map[type] || 'info'
-}
-
-// Table type label
-function tableTypeLabel(type: string): string {
-  const map: Record<string, string> = {
-    MAIN: t('tableBinding.mainTableType'),
-    SUB: t('tableBinding.subTableType'),
-    ACTION: t('tableBinding.actionTableType'),
-    RELATION: t('tableBinding.relationTableType')
-  }
-  return map[type] || type
-}
-
-// Load bindings
-async function loadBindings() {
-  loading.value = true
-  try {
-    const res = await functionUnitApi.getFormBindings(props.functionUnitId, props.formId)
-    bindings.value = res.data || []
-  } catch (e: any) {
-    console.error('Failed to load bindings:', e)
-    bindings.value = []
-  } finally {
-    loading.value = false
-  }
-}
-
-// Handle binding type change - reset table selection
-function handleBindingTypeChange() {
-  bindingForm.value.tableId = undefined as unknown as number
-  bindingForm.value.foreignKeyField = undefined
-  if (bindingForm.value.bindingType === 'SUB') {
-    bindingForm.value.subMode = bindingForm.value.subMode || 'FULL'
-    bindingForm.value.bindingLinkMode = bindingForm.value.bindingLinkMode || 'structuralFk'
-  } else {
-    bindingForm.value.subMode = undefined
-    bindingForm.value.bindingLinkMode = undefined
-  }
-  // RELATED type must be READONLY
-  if (bindingForm.value.bindingType === 'RELATED') {
-    bindingForm.value.bindingMode = 'READONLY'
-  }
-  if (
-    bindingForm.value.bindingType === 'RELATED'
-    && deployedRelationTables.value.length === 0
-  ) {
-    loadDeployedRelationTables()
-  }
-}
-
-// Load deployed relation tables from admin center
-async function loadDeployedRelationTables() {
-  try {
-    const res = await relationTableBindingApi.getAvailableTables()
-    deployedRelationTables.value = res.data || []
-  } catch (e: any) {
-    console.error('Failed to load deployed relation tables:', e)
-    deployedRelationTables.value = []
-  }
-}
-
-// Handle table selection change — 仅调整 bindingMode 默认值，bindingType 由用户主动选择，
-// 这样 filteredAvailableTables 已经保证了 tableType 与 bindingType 一致，不会再出现后端报错
-function handleTableSelect(_tableId?: number) {
-  const bt = bindingForm.value.bindingType
-  if (bt === 'PRIMARY') {
-    bindingForm.value.bindingMode = 'EDITABLE'
-  } else {
-    bindingForm.value.bindingMode = 'READONLY'
-  }
-}
-
-// Edit binding
-function handleEdit(binding: TableBinding) {
-  editingBinding.value = binding
-  bindingForm.value = {
-    tableId: binding.tableId,
-    bindingType: binding.bindingType,
-    bindingMode: binding.bindingMode,
-    foreignKeyField: binding.foreignKeyField,
-    bindingLinkMode: binding.bindingType === 'SUB' ? (binding.bindingLinkMode || 'structuralFk') : undefined,
-    sortOrder: binding.sortOrder,
-    subMode: binding.bindingType === 'SUB' ? (binding.subMode || 'FULL') : undefined
-  }
-  showAddDialog.value = true
-}
-
-// Delete binding
-async function handleDelete(binding: TableBinding) {
-  if (binding.bindingType === 'PRIMARY') {
-    ElMessage.warning(t('tableBinding.cannotDeletePrimary'))
-    return
-  }
-  
-  await ElMessageBox.confirm(t('tableBinding.deleteConfirm'), t('tableBinding.confirmTitle'), { type: 'warning' })
-  
-  try {
-    await functionUnitApi.deleteFormBinding(props.functionUnitId, props.formId, binding.id!)
-    ElMessage.success(t('tableBinding.deleteSuccess'))
-    loadBindings()
-    emit('update')
-  } catch (e: any) {
-    ElMessage.error(e.response?.data?.message || t('tableBinding.deleteFailed'))
-  }
-}
-
-/** 从响应体取出业务错误码（platform.common 与手写 JSON） */
-function extractBindingErrorCode(data: unknown): string | undefined {
-  if (!data || typeof data !== 'object') return undefined
-  const o = data as Record<string, unknown>
-  const nested = o.error
-  if (nested && typeof nested === 'object') {
-    const e = nested as Record<string, unknown>
-    const c = e.code ?? e.errorCode
-    if (typeof c === 'string' && c.trim()) return c.trim()
-  }
-  const top = o.code ?? o.errorCode
-  if (typeof top === 'string' && top.trim()) return top.trim()
-  return undefined
-}
-
-/** 把后端业务错误码映射成对用户友好的提示 */
-function mapBackendError(err: any): string {
-  const data = err?.response?.data
-  const code = extractBindingErrorCode(data)
-  const codeMap: Record<string, string> = {
-    SUB_REQUIRES_PRIMARY: t('tableBinding.primaryFirstHint'),
-    PRIMARY_BINDING_EXISTS: t('tableBinding.primaryBindingExists'),
-    BINDING_EXISTS: t('tableBinding.bindingExists'),
-    PRIMARY_REQUIRES_MAIN_TABLE: t('tableBinding.primaryRequiresMainTable'),
-    SUB_BINDING_REQUIRES_SUB_TABLE: t('tableBinding.subBindingRequiresSubTable'),
-    SUB_REQUIRES_FOREIGN_KEY: t('tableBinding.foreignKeyRequired'),
-    INVALID_FOREIGN_KEY: t('tableBinding.invalidForeignKey'),
-    RELATED_BINDING_REQUIRES_RELATION_TABLE: t('tableBinding.relatedBindingRequiresRelationTable'),
-    SYS_INTERNAL_ERROR: t('api.serverError'),
-    RES_NOT_FOUND: t('api.notFound'),
-    VAL_INVALID_INPUT: t('api.invalidParams')
-  }
-  if (code && codeMap[code]) return codeMap[code]
-
-  const fromBody = pickHttpErrorBodyMessage(data)
-  if (fromBody) return fromBody
-
-  return resolveUserFacingHttpMessage(err, t)
-}
-
-// Submit form
-async function handleSubmit() {
-  if (!formRef.value) return
-
-  try {
-    await formRef.value.validate()
-  } catch {
-    return
-  }
-
-  submitting.value = true
-  try {
-    // For deployed/system relation tables (negative ID), convert to relationTableId
-    const requestData = { ...bindingForm.value }
-    if (
-      requestData.bindingType === 'SUB'
-      && requestData.bindingLinkMode !== 'miParticipantRow'
-      && !requestData.foreignKeyField
-      && structuralFkFieldNames.value.length > 0
-    ) {
-      requestData.foreignKeyField = structuralFkFieldNames.value[0]
-    }
-    // tableId < 0 means it's a deployed/system relation table option
-    if (requestData.tableId && requestData.tableId < 0) {
-      const remoteTable = deployedRelationTables.value.find(t => toRelationTableOptionId(t.id) === requestData.tableId)
-      requestData.relationTableId = remoteTable ? remoteTable.id : -requestData.tableId
-      requestData.tableId = undefined
-    }
-    
-    if (editingBinding.value) {
-      await functionUnitApi.updateFormBinding(
-        props.functionUnitId, 
-        props.formId, 
-        editingBinding.value.id!, 
-        requestData
-      )
-      ElMessage.success(t('tableBinding.updateSuccess'))
-    } else {
-      await functionUnitApi.createFormBinding(props.functionUnitId, props.formId, requestData)
-      ElMessage.success(t('tableBinding.addSuccess'))
-    }
-    showAddDialog.value = false
-    loadBindings()
-    emit('update')
-  } catch (e: any) {
-    console.error('[TableBindingManager] submit failed:', e?.response?.data || e)
-    ElMessage({ type: 'error', message: mapBackendError(e), duration: 5000 })
-  } finally {
-    submitting.value = false
-  }
-}
-
-// Reset form
-function resetForm() {
-  editingBinding.value = null
-  bindingForm.value = makeEmptyBindingForm()
-  formRef.value?.resetFields()
-}
-
-// 打开 Add 对话框前根据当前 bindings 刷新默认值，并预加载已部署的关联表（RELATED 选项可能被切换到）
-watch(showAddDialog, (open) => {
-  if (open) {
-    if (!editingBinding.value) {
-      bindingForm.value = makeEmptyBindingForm()
-    }
-    if (deployedRelationTables.value.length === 0) {
-      loadDeployedRelationTables()
-    }
-  }
+// Add/Edit 表单状态与逻辑
+const {
+  submitting,
+  showAddDialog,
+  editingBinding,
+  formRef,
+  deployedRelationTables,
+  bindingForm,
+  formRules,
+  hasPrimaryBinding,
+  needsPrimaryFirst,
+  filteredAvailableTables,
+  selectTablePlaceholder,
+  emptyTableListHint,
+  selectedTableFields,
+  structuralFkFieldNames,
+  toRelationTableOptionId,
+  bindingLinkModeLabel,
+  isTableBound,
+  handleBindingTypeChange,
+  handleTableSelect,
+  handleEdit,
+  resetForm,
+} = useTableBindingForm({
+  getTables: () => props.tables,
+  bindings,
+  restrictPrimarySubOnly,
+  tableTypeLabel,
+  t,
 })
 
-watch(
-  () => bindingForm.value.bindingLinkMode,
-  (mode) => {
-    if (bindingForm.value.bindingType !== 'SUB') return
-    if (mode === 'miParticipantRow' && !bindingForm.value.foreignKeyField) {
-      suggestParticipantRowField()
-    }
-    if (mode === 'structuralFk') {
-      bindingForm.value.foreignKeyField = structuralFkFieldNames.value[0] || undefined
-    }
-  },
-)
-
-watch(
-  () => bindingForm.value.tableId,
-  () => {
-    if (bindingForm.value.bindingType !== 'SUB') return
-    if (bindingForm.value.bindingLinkMode === 'miParticipantRow' && !bindingForm.value.foreignKeyField) {
-      suggestParticipantRowField()
-    }
-    if (bindingForm.value.bindingLinkMode === 'structuralFk') {
-      bindingForm.value.foreignKeyField = structuralFkFieldNames.value[0] || undefined
-    }
-  },
-)
+// 提交与后端错误映射
+const { handleSubmit } = useTableBindingSubmit({
+  functionUnitId: props.functionUnitId,
+  getFormId: () => props.formId,
+  formRef,
+  bindingForm,
+  submitting,
+  editingBinding,
+  showAddDialog,
+  structuralFkFieldNames,
+  deployedRelationTables,
+  toRelationTableOptionId,
+  reloadBindings: loadBindings,
+  emitUpdate: () => emit('update'),
+  t,
+})
 
 // Reload when formId changes
 watch(() => props.formId, () => {

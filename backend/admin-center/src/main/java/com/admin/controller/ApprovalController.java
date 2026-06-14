@@ -1,11 +1,11 @@
 package com.admin.controller;
 
 import com.admin.dto.request.ApprovalRequest;
-import com.admin.dto.response.ErrorResponse;
 import com.admin.dto.response.PermissionRequestInfo;
 import com.admin.entity.PermissionRequest;
 import com.admin.repository.UserRepository;
 import com.admin.service.PermissionRequestService;
+import com.platform.common.exception.ErrorResponse;
 import com.platform.common.security.SecurityIntegrationService;
 import com.platform.security.entity.User;
 import io.swagger.v3.oas.annotations.Operation;

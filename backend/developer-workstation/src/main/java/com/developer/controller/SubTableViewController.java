@@ -1,6 +1,6 @@
 package com.developer.controller;
 
-import com.developer.dto.ApiResponse;
+import com.platform.common.dto.ApiResponse;
 import com.developer.entity.FormTableBinding;
 import com.developer.entity.SubTableViewConfig;
 import com.developer.repository.FormTableBindingRepository;

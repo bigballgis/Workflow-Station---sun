@@ -689,3 +689,53 @@
     路径：user-portal/{utils/formCreateValidateRules.ts, components/FormRenderer.vue, views/processes/start.vue,
     views/tasks/detail.vue, views/applications/detail.vue}；developer-workstation/{components/designer/FormDesigner.vue,
     utils/formCreatePreviewEvents.ts}。
+- id: "1451"
+  status: open
+  severity: major
+  category: testing
+  summary: "user-portal 后端测试套件存在 35F+14E 历史遗留失败（HEAD 基线即失败，与 ApiResponse 迁移无关）"
+  detail: |
+    2026-06-12 做 user-portal ApiResponse 迁移（code-quality 第 1 阶段）时，用 git stash 对照 HEAD 基线确认
+    以下失败在迁移前即存在（共 11 个测试类，35 failures + 14 errors）：
+    - N8nActionControllerTest 8F：standalone MockMvc 全部 404（路由/上下文配置问题，未到断言层）
+    - NotificationControllerTest 3F+10E：Mockito strict stubbing 不匹配 + missing header 期望 400 实得 200
+    - ApprovalControllerProperties 10F+2E：mock 下 AdminCenter 不可用 → 期望 200 实得 503；
+      reject 校验路径对 data=null 调 .get() NPE（测试自身缺陷）
+    - NotificationKafkaConsumerTest 2F / FunctionUnitAccessProperties 3F / PermissionRequestProperties 3F：
+      异常消息/过滤逻辑断言与实现漂移
+    - PortalRelationTablePropertyTest 1F、ProcessOperationProperties 3F+1E、
+      ProcessFormUpdateRejectionPropertyTest 1F、SecurityVulnerabilityBugConditionPropertyTest 1F、
+      PortalRelationTableQueryDataSearchTest 1E
+    另：本地 ~/.m2 中 platform-common/security/messaging 旧版会额外引爆 500+ 错误，
+    跑 user-portal 测试前需先 `mvn -pl backend/user-portal -am install -DskipTests` 收口。
+    建议另开任务逐类修复（多为测试自身与实现漂移，非业务 bug）。
+- id: "1452"
+  status: open
+  severity: minor
+  category: testing
+  summary: "MI 截图回归 2 个场景的硬编码 live-DB fixture 已失效（1439-subform2、1435-people-inline-uuid）"
+  detail: |
+    2026-06-12 对重构后构建跑完整 regression:mi 时发现，6 个截图场景中 2 个的默认参数指向失效数据：
+    - verify-subform2-people-carry-forward.mjs 默认 task 75d662ec / participant Test-000059：
+      该实例（e6b0e7c6）参与者自 6 月 2 日起即为 Test-000024~044，从未包含 Test-000059；
+      当前办理人 Test-000043 的 age 在库中本就为空（sub form1 未填）。
+    - verify-mi-people-inline-uuid.mjs 默认 task 09367c90 / Test-000058：该任务 2026-06-08 19:01 已办结。
+    另：screenshotPath slug 硬编码（如 task-75d662-subform2-people），换 task 参数跑时文件名仍是旧 slug，易误导对比。
+    本次用仍在办的 95233afa-6493-11f1-ab3a-ee47801f8369 / Test-000069 显式参数重跑，两场景均 PASS
+    且与 #1443 重构前验证结果逐项一致（age=jj0、id=1fe66960-5fff-4080-98b0-f9baee07490e）。
+    建议：场景改为自播种（脚本内发起新流程、填 sub form1、推进到 sub form2）或至少把默认参数与 slug 参数化；
+    修复前跑全量 regression:mi 需对这两个场景手工传入有效 task/participant。
+- id: "1453"
+  status: fixed
+  fixed_at: "2026-06-12"
+  severity: major
+  category: bug
+  summary: "MI 子任务 People link-form Save 后刷新丢值：兄弟切片未同步导致 hydration 读到 stale 数据"
+  detail: |
+    复现（task 068c85ab / Test-000074）：People 内联改 age → Save → 刷新后回显旧值。
+    根因：buildSubTableSubmitPayload 只更新部分切片；#1443 收紧 sync 后 People link-form 兄弟切片未同步。
+    修复：syncMiLinkChildEditedRowsIntoSiblingSlices（subTableSliceMerge.ts）；useTaskForm MI Save 分支；
+    useTaskDetailMiPersist 页内即时回显三层收尾；seedLinkChildForeignKeysFromParentRow 禁写 id_idw 防 id 漂移。
+    验证：miLinkChildSiblingSliceSync.test.ts；MI 回归单元 106/106；保存循环 e2e PASS。
+    路径：composables/tasks/subTableSliceMerge.ts、useTaskForm.ts、composables/taskDetail/useTaskDetailMiPersist.ts、
+    utils/subTableRowRuntime.ts。

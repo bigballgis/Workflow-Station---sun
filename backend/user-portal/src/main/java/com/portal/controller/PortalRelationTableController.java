@@ -1,7 +1,7 @@
 package com.portal.controller;
 
 import com.platform.common.dto.RelationTableDTO;
-import com.portal.dto.ApiResponse;
+import com.platform.common.dto.ApiResponse;
 import com.portal.security.CurrentUserId;
 import com.portal.dto.PageResponse;
 import com.portal.service.PortalRelationTableService;

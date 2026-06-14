@@ -350,18 +350,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+/**
+ * 事件（Start / End / Intermediate / Boundary）节点属性面板。
+ *
+ * 本 SFC 为精简编排器：响应式状态与各职责逻辑已抽到
+ * `@/composables/eventProperties/*`。此处仅做组装、加载编排与生命周期绑定，
+ * 模板/样式与拆分前逐字节一致，props/i18n key/行为均零变化。
+ */
+import { ref, reactive, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { BpmnElement, BpmnModeler } from '@/types/bpmn'
-import type { FormDefinition } from '@/api/functionUnit'
-import { functionUnitApi } from '@/api/functionUnit'
-import {
-  getBasicProperties,
-  setBasicProperties,
-  getExtensionProperties,
-  setExtensionProperty,
-  getElementType
-} from '@/utils/bpmnExtensions'
+import { useEventState } from '@/composables/eventProperties/useEventState'
+import { useEventDefinitions } from '@/composables/eventProperties/useEventDefinitions'
 
 const { t } = useI18n()
 
@@ -373,315 +373,65 @@ const props = defineProps<{
 
 const activeGroups = ref(['basic', 'start', 'end', 'timer', 'message', 'signal', 'error'])
 
-const eventType = ref('bpmn:StartEvent')
-const eventName = ref('')
-const eventDefinitionType = ref<'none' | 'timer' | 'message' | 'signal' | 'error' | 'terminate'>('none')
-
-const startFormId = ref<number | null>(null)
-const initiator = ref('initiator')
-const forms = ref<FormDefinition[]>([])
-
-const endAction = ref<'none' | 'notify' | 'service'>('none')
-const notifyType = ref('email')
-const notifyRecipient = ref('')
-const notifyContent = ref('')
-const serviceUrl = ref('')
-const serviceMethod = ref('POST')
-
-const timerType = ref<'date' | 'duration' | 'cycle'>('duration')
-const timerValue = ref('')
-
-const messageName = ref('')
-const correlationKey = ref('')
-
-const signalName = ref('')
-const signalScope = ref<'global' | 'processInstance'>('global')
-
-const errorCode = ref('')
-const errorMessage = ref('')
-
-const basicProps = computed(() => getBasicProperties(props.element))
-const isStart = computed(() => eventType.value === 'bpmn:StartEvent')
-const isEnd = computed(() => eventType.value === 'bpmn:EndEvent')
-
-const eventTypeLabel = computed(() => {
-  const names: Record<string, string> = {
-    'bpmn:StartEvent': t('properties.eventTypeStartEvent'),
-    'bpmn:EndEvent': t('properties.eventTypeEndEvent'),
-    'bpmn:IntermediateCatchEvent': t('properties.eventTypeIntermediateCatchEvent'),
-    'bpmn:IntermediateThrowEvent': t('properties.eventTypeIntermediateThrowEvent'),
-    'bpmn:BoundaryEvent': t('properties.eventTypeBoundaryEvent')
+// 以 reactive 适配器透传 props，使 composable 读取 props.element/modeler 时保持响应性
+const propsAccessor = reactive({
+  get modeler() {
+    return props.modeler
+  },
+  get element() {
+    return props.element
+  },
+  get functionUnitId() {
+    return props.functionUnitId
   }
-  return names[eventType.value] || t('properties.eventTypeEvent')
 })
 
-const eventDefinitionLabel = computed(() => {
-  const names: Record<string, string> = {
-    'none': t('properties.eventDefNone'),
-    'timer': t('properties.eventDefTimer'),
-    'message': t('properties.eventDefMessage'),
-    'signal': t('properties.eventDefSignal'),
-    'error': t('properties.eventDefError'),
-    'terminate': t('properties.eventDefTerminate')
-  }
-  return names[eventDefinitionType.value] || t('properties.eventDefNone')
-})
+// 共享状态（全部顶层 ref/computed + updateBasicProp/updateExtProp）
+const ctx = useEventState(propsAccessor, t)
+const {
+  eventName,
+  eventDefinitionType,
+  startFormId,
+  initiator,
+  forms,
+  endAction,
+  notifyType,
+  notifyRecipient,
+  notifyContent,
+  serviceUrl,
+  serviceMethod,
+  timerType,
+  timerValue,
+  messageName,
+  correlationKey,
+  signalName,
+  signalScope,
+  errorCode,
+  errorMessage,
+  basicProps,
+  isStart,
+  isEnd,
+  eventTypeLabel,
+  eventDefinitionLabel,
+  timerPlaceholder,
+  timerTip,
+  updateBasicProp,
+  updateExtProp
+} = ctx
 
-const timerPlaceholder = computed(() => {
-  const placeholders: Record<string, string> = {
-    date: '2026-12-31T23:59:59',
-    duration: 'PT1H',
-    cycle: 'R3/PT10M'
-  }
-  return placeholders[timerType.value]
-})
-
-const timerTip = computed(() => {
-  const tips: Record<string, string> = {
-    date: t('properties.timerTipDate'),
-    duration: t('properties.timerTipDuration'),
-    cycle: t('properties.timerTipCycle')
-  }
-  return tips[timerType.value]
-})
-
-function loadProperties() {
-  if (!props.element) return
-  
-  const currentType = getElementType(props.element)
-  const ext = getExtensionProperties(props.element)
-  
-  if (currentType.includes('Event')) {
-    eventType.value = currentType
-  } else {
-    eventType.value = ext.eventType || 'bpmn:StartEvent'
-  }
-  
-  const basic = getBasicProperties(props.element)
-  eventName.value = basic.name
-  
-  detectEventDefinition()
-  
-  startFormId.value = ext.formId || null
-  initiator.value = ext.initiator || 'initiator'
-  
-  endAction.value = ext.endAction || 'none'
-  const notifyConfig = ext.notifyConfig || {}
-  notifyType.value = notifyConfig.type || 'email'
-  notifyRecipient.value = notifyConfig.recipient || ''
-  notifyContent.value = notifyConfig.content || ''
-  const serviceConfig = ext.serviceConfig || {}
-  serviceUrl.value = serviceConfig.url || ''
-  serviceMethod.value = serviceConfig.method || 'POST'
-  
-  timerType.value = ext.timerType || 'duration'
-  loadTimerDefinition()
-  
-  correlationKey.value = ext.correlationKey || ''
-  loadMessageDefinition()
-  
-  signalScope.value = ext.signalScope || 'global'
-  loadSignalDefinition()
-  
-  errorMessage.value = ext.errorMessage || ''
-  loadErrorDefinition()
-}
-
-function detectEventDefinition() {
-  const bo = props.element?.businessObject
-  const eventDefs = bo?.eventDefinitions || []
-  
-  if (eventDefs.length === 0) {
-    eventDefinitionType.value = 'none'
-    return
-  }
-  
-  const def = eventDefs[0]
-  const defType = def.$type
-  
-  if (defType === 'bpmn:TimerEventDefinition') {
-    eventDefinitionType.value = 'timer'
-  } else if (defType === 'bpmn:MessageEventDefinition') {
-    eventDefinitionType.value = 'message'
-  } else if (defType === 'bpmn:SignalEventDefinition') {
-    eventDefinitionType.value = 'signal'
-  } else if (defType === 'bpmn:ErrorEventDefinition') {
-    eventDefinitionType.value = 'error'
-  } else if (defType === 'bpmn:TerminateEventDefinition') {
-    eventDefinitionType.value = 'terminate'
-  } else {
-    eventDefinitionType.value = 'none'
-  }
-}
-
-function loadTimerDefinition() {
-  const bo = props.element?.businessObject
-  const timerDef = bo?.eventDefinitions?.find((def: any) => def.$type === 'bpmn:TimerEventDefinition')
-  if (timerDef) {
-    timerValue.value = timerDef.timeDuration?.body || timerDef.timeDate?.body || timerDef.timeCycle?.body || ''
-  }
-}
-
-function loadMessageDefinition() {
-  const bo = props.element?.businessObject
-  const msgDef = bo?.eventDefinitions?.find((def: any) => def.$type === 'bpmn:MessageEventDefinition')
-  if (msgDef?.messageRef) {
-    messageName.value = msgDef.messageRef.name || ''
-  }
-}
-
-function loadSignalDefinition() {
-  const bo = props.element?.businessObject
-  const sigDef = bo?.eventDefinitions?.find((def: any) => def.$type === 'bpmn:SignalEventDefinition')
-  if (sigDef?.signalRef) {
-    signalName.value = sigDef.signalRef.name || ''
-  }
-}
-
-function loadErrorDefinition() {
-  const bo = props.element?.businessObject
-  const errDef = bo?.eventDefinitions?.find((def: any) => def.$type === 'bpmn:ErrorEventDefinition')
-  if (errDef?.errorRef) {
-    errorCode.value = errDef.errorRef.errorCode || ''
-  }
-}
-
-function updateBasicProp(name: string, value: any) {
-  if (!props.element || !props.modeler) return
-  setBasicProperties(props.modeler, props.element, { [name]: value })
-}
-
-function updateExtProp(name: string, value: any) {
-  if (!props.element || !props.modeler) return
-  setExtensionProperty(props.modeler, props.element, name, value)
-}
-
-function handleStartFormChange(id: number | null) {
-  updateExtProp('formId', id)
-  const form = forms.value.find(f => f.id === id)
-  if (form) {
-    updateExtProp('formName', form.formName)
-  }
-}
-
-function updateNotifyConfig() {
-  updateExtProp('notifyConfig', {
-    type: notifyType.value,
-    recipient: notifyRecipient.value,
-    content: notifyContent.value
-  })
-}
-
-function updateServiceConfig() {
-  updateExtProp('serviceConfig', {
-    url: serviceUrl.value,
-    method: serviceMethod.value
-  })
-}
-
-function setTimerValue(value: string) {
-  timerValue.value = value
-  updateTimerDefinition()
-}
-
-function updateTimerDefinition() {
-  if (!props.element || !props.modeler) return
-  
-  const modeling = props.modeler.get('modeling')
-  const moddle = props.modeler.get('moddle')
-  const bo = props.element.businessObject
-  
-  const timerDef = bo.eventDefinitions?.find((def: any) => def.$type === 'bpmn:TimerEventDefinition')
-  if (!timerDef) return
-  
-  timerDef.timeDuration = undefined
-  timerDef.timeDate = undefined
-  timerDef.timeCycle = undefined
-  
-  if (timerValue.value) {
-    const expression = moddle.create('bpmn:FormalExpression', { body: timerValue.value })
-    
-    if (timerType.value === 'date') {
-      timerDef.timeDate = expression
-    } else if (timerType.value === 'duration') {
-      timerDef.timeDuration = expression
-    } else {
-      timerDef.timeCycle = expression
-    }
-  }
-  
-  modeling.updateProperties(props.element, { eventDefinitions: bo.eventDefinitions })
-  updateExtProp('timerType', timerType.value)
-}
-
-function updateMessageDefinition() {
-  if (!props.element || !props.modeler) return
-  
-  const modeling = props.modeler.get('modeling')
-  const moddle = props.modeler.get('moddle')
-  const bo = props.element.businessObject
-  
-  const msgDef = bo.eventDefinitions?.find((def: any) => def.$type === 'bpmn:MessageEventDefinition')
-  if (!msgDef) return
-  
-  if (messageName.value) {
-    const message = moddle.create('bpmn:Message', { name: messageName.value })
-    msgDef.messageRef = message
-  } else {
-    msgDef.messageRef = undefined
-  }
-  
-  modeling.updateProperties(props.element, { eventDefinitions: bo.eventDefinitions })
-}
-
-function updateSignalDefinition() {
-  if (!props.element || !props.modeler) return
-  
-  const modeling = props.modeler.get('modeling')
-  const moddle = props.modeler.get('moddle')
-  const bo = props.element.businessObject
-  
-  const sigDef = bo.eventDefinitions?.find((def: any) => def.$type === 'bpmn:SignalEventDefinition')
-  if (!sigDef) return
-  
-  if (signalName.value) {
-    const signal = moddle.create('bpmn:Signal', { name: signalName.value })
-    sigDef.signalRef = signal
-  } else {
-    sigDef.signalRef = undefined
-  }
-  
-  modeling.updateProperties(props.element, { eventDefinitions: bo.eventDefinitions })
-}
-
-function updateErrorDefinition() {
-  if (!props.element || !props.modeler) return
-  
-  const modeling = props.modeler.get('modeling')
-  const moddle = props.modeler.get('moddle')
-  const bo = props.element.businessObject
-  
-  const errDef = bo.eventDefinitions?.find((def: any) => def.$type === 'bpmn:ErrorEventDefinition')
-  if (!errDef) return
-  
-  if (errorCode.value) {
-    const error = moddle.create('bpmn:Error', { errorCode: errorCode.value })
-    errDef.errorRef = error
-  } else {
-    errDef.errorRef = undefined
-  }
-  
-  modeling.updateProperties(props.element, { eventDefinitions: bo.eventDefinitions })
-}
-
-async function loadForms() {
-  try {
-    const res = await functionUnitApi.getForms(props.functionUnitId)
-    forms.value = res.data || []
-  } catch {
-    forms.value = []
-  }
-}
+// 事件定义读写与配置处理逻辑
+const {
+  loadProperties,
+  handleStartFormChange,
+  updateNotifyConfig,
+  updateServiceConfig,
+  setTimerValue,
+  updateTimerDefinition,
+  updateMessageDefinition,
+  updateSignalDefinition,
+  updateErrorDefinition,
+  loadForms
+} = useEventDefinitions(propsAccessor, ctx)
 
 watch(() => props.element, loadProperties, { immediate: true })
 

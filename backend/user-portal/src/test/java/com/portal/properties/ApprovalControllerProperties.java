@@ -1,6 +1,6 @@
 package com.portal.properties;
 
-import com.portal.dto.ApiResponse;
+import com.platform.common.dto.ApiResponse;
 import org.mockito.Mockito;
 import com.portal.controller.ApprovalController;
 import net.jqwik.api.*;
@@ -225,8 +225,9 @@ public class ApprovalControllerProperties {
         ResponseEntity<ApiResponse<Map<String, Object>>> response1 = approvalController.isApprover(userId);
         ResponseEntity<ApiResponse<Map<String, Object>>> response2 = approvalController.isApprover(userId);
         
-        // Then: Both should return same result
-        assertThat(response1.getBody()).isEqualTo(response2.getBody());
+        // Then: Both should return same result (compare business fields; timestamps differ per call)
+        assertThat(response1.getBody().isSuccess()).isEqualTo(response2.getBody().isSuccess());
+        assertThat(response1.getBody().getData()).isEqualTo(response2.getBody().getData());
     }
     
     // ==================== Property 10: Approver-Only Application Requirement ====================

@@ -1,7 +1,7 @@
 package com.admin.controller;
 
 import com.admin.dto.response.BatchExitResult;
-import com.admin.dto.response.ErrorResponse;
+import com.platform.common.exception.ErrorResponse;
 import com.admin.service.MemberManagementService;
 import com.platform.common.security.SecurityIntegrationService;
 import io.swagger.v3.oas.annotations.Operation;

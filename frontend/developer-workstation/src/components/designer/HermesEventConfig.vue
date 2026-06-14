@@ -135,18 +135,11 @@
 
 <script>
 import unique from '@form-create/utils/lib/unique';
-import deepExtend from '@form-create/utils/lib/deepextend';
-import is from '@form-create/utils/lib/type';
 import {defineComponent} from 'vue';
 import FnEditor from '@form-create/designer/src/components/FnEditor.vue';
 import {getInjectArg} from '@form-create/designer/src/utils';
 import {normalizeEventEditorBody} from '@/utils/formCreateDefaultEvents';
-
-const $T = '$FNX:';
-
-const isFNX = v => {
-    return is.String(v) && v.indexOf($T) === 0;
-};
+import {loadEventData, parseEventData} from '@/composables/hermesEventConfig/eventSerialization';
 
 export default defineComponent({
     name: 'HermesEventConfig',
@@ -257,63 +250,10 @@ export default defineComponent({
             this.cus = true;
         },
         loadFN() {
-            const e = deepExtend({}, this.modelValue || {});
-            const hooks = this.activeRule ? {...this.activeRule._hook || {}} : {};
-            Object.keys(hooks).forEach(k => {
-                e['hook_' + k] = hooks[k];
-            })
-            const val = {};
-            Object.keys(e).forEach(k => {
-                if (Array.isArray(e[k])) {
-                    const data = [];
-                    e[k].forEach(v => {
-                        if (isFNX(v)) {
-                            data.push(v.replace($T, ''));
-                        } else if (is.Function(v) && isFNX(v.__json)) {
-                            data.push(v.__json.replace($T, ''));
-                        } else if (v && v.indexOf('$GLOBAL:') === 0) {
-                            data.push(v);
-                        } else if (typeof v === 'string' && v.trim()) {
-                            data.push(normalizeEventEditorBody(v));
-                        }
-                    });
-                    val[k] = data;
-                } else if (isFNX(e[k])) {
-                    val[k] = [e[k].replace($T, '')];
-                } else if (is.Function(e[k])) {
-                    const json = e[k].__json || '';
-                    if (!json) {
-                        val[k] = ['' + e[k]];
-                    } else if (isFNX(json)) {
-                        val[k] = [json.replace($T, '')];
-                    } else {
-                        val[k] = [json];
-                    }
-                } else if (e[k] && e[k].indexOf('$GLOBAL:') === 0) {
-                    val[k] = [e[k]];
-                } else if (typeof e[k] === 'string' && e[k].trim()) {
-                    val[k] = [normalizeEventEditorBody(e[k])];
-                }
-            });
-            return val;
+            return loadEventData(this.modelValue, this.activeRule);
         },
         parseFN(e) {
-            const on = {};
-            const hooks = {};
-            Object.keys(e).forEach(k => {
-                const lst = [];
-                e[k].forEach((v, i) => {
-                    lst[i] = v.indexOf('$GLOBAL:') !== 0 ? ($T + v) : v;
-                });
-                if (lst.length > 0) {
-                    if (k.indexOf('hook_') > -1) {
-                        hooks[k.replace('hook_', '')] = lst.length === 1 ? lst[0] : lst;
-                    } else {
-                        on[k] = lst.length === 1 ? lst[0] : lst;
-                    }
-                }
-            });
-            return {hooks, on};
+            return parseEventData(e);
         },
         add(name) {
             let data = {};

@@ -25,6 +25,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -34,37 +35,49 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
- * TaskManagerComponent.returnTask() 多实例回退功能单元测试
- * 
+ * returnTask() 多实例回退功能单元测试
+ *
+ * 说明：原本针对 TaskManagerComponent 的门面方法。TaskManagerComponent 已拆分为
+ * 门面 + 协作类，returnTask 的实际逻辑现位于 {@link TaskCompletionService}
+ * （MultiInstanceCanceller 仍由 TaskCompletionService 直接持有/调用）。
+ * 判断回退目标是否在多实例子流程之前时，会用 {@link TaskMultiInstanceService#isMultiInstanceTask}
+ * 过滤活跃 MI 子任务（@Lazy 调用）。因此本测试直接对 TaskCompletionService 注入被测 mock，
+ * 并注入一个【真实】TaskMultiInstanceService，保证 MI 过滤逻辑真实执行、原断言依旧有效。
+ *
  * 测试场景：
  * 1. 回退目标在多实例子流程之前，应调用 MultiInstanceCanceller 级联取消
  * 2. 回退目标不在多实例子流程之前，不应调用 MultiInstanceCanceller
  * 3. 无活跃多实例子任务时，不应调用 MultiInstanceCanceller
- * 
+ *
  * **Validates: Requirements 9.2**
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class TaskManagerComponentReturnTaskMultiInstanceTest {
-    
+
     @Mock
     private TaskService taskService;
-    
+
     @Mock
     private RuntimeService runtimeService;
-    
+
     @Mock
     private HistoryService historyService;
-    
+
     @Mock
     private ExtendedTaskInfoRepository extendedTaskInfoRepository;
-    
+
     @Mock
     private MultiInstanceCanceller multiInstanceCanceller;
-    
+
+    // returnTask 主体现在落在 TaskCompletionService；@InjectMocks 注入其同名字段
+    // （taskService/runtimeService/historyService/extendedTaskInfoRepository/multiInstanceCanceller）。
     @InjectMocks
-    private TaskManagerComponent taskManagerComponent;
-    
+    private TaskCompletionService taskCompletionService;
+
+    // 回退前 MI 过滤（isMultiInstanceTask）真正执行处；用真实实例保证过滤逻辑真实运行。
+    private TaskMultiInstanceService taskMultiInstanceService;
+
     private static final String TASK_ID = "task-current";
     private static final String USER_ID = "user-001";
     private static final String PROCESS_INSTANCE_ID = "process-001";
@@ -76,6 +89,10 @@ class TaskManagerComponentReturnTaskMultiInstanceTest {
     
     @BeforeEach
     void setUp() {
+        // isMultiInstanceTask 仅解析 extendedProperties JSON，无需注入字段；用真实实例保证过滤真实执行。
+        taskMultiInstanceService = new TaskMultiInstanceService();
+        ReflectionTestUtils.setField(taskCompletionService, "taskMultiInstanceService", taskMultiInstanceService);
+
         // 默认 mock 设置
         TaskQuery taskQuery = mock(TaskQuery.class);
         when(taskService.createTaskQuery()).thenReturn(taskQuery);
@@ -137,7 +154,7 @@ class TaskManagerComponentReturnTaskMultiInstanceTest {
         request.setTargetActivityId(TARGET_ACTIVITY_ID);
         request.setReason("需要重新审批");
         
-        TaskAssignmentResult result = taskManagerComponent.returnTask(TASK_ID, request);
+        TaskAssignmentResult result = taskCompletionService.returnTask(TASK_ID, request);
         
         // Then: 验证 MultiInstanceCanceller 被调用
         verify(multiInstanceCanceller, times(1)).cancelMultiInstanceTasks(PROCESS_INSTANCE_ID);
@@ -208,7 +225,7 @@ class TaskManagerComponentReturnTaskMultiInstanceTest {
         request.setTargetActivityId(targetActivityId);
         request.setReason("需要重新审批");
         
-        TaskAssignmentResult result = taskManagerComponent.returnTask(TASK_ID, request);
+        TaskAssignmentResult result = taskCompletionService.returnTask(TASK_ID, request);
         
         // Then: 验证 MultiInstanceCanceller 未被调用
         verify(multiInstanceCanceller, never()).cancelMultiInstanceTasks(any());
@@ -264,7 +281,7 @@ class TaskManagerComponentReturnTaskMultiInstanceTest {
         request.setTargetActivityId(TARGET_ACTIVITY_ID);
         request.setReason("需要重新审批");
         
-        TaskAssignmentResult result = taskManagerComponent.returnTask(TASK_ID, request);
+        TaskAssignmentResult result = taskCompletionService.returnTask(TASK_ID, request);
         
         // Then: 验证 MultiInstanceCanceller 未被调用
         verify(multiInstanceCanceller, never()).cancelMultiInstanceTasks(any());
@@ -302,7 +319,7 @@ class TaskManagerComponentReturnTaskMultiInstanceTest {
         request.setTargetActivityId(TARGET_ACTIVITY_ID);
         request.setReason("需要重新审批");
         
-        assertThatThrownBy(() -> taskManagerComponent.returnTask(TASK_ID, request))
+        assertThatThrownBy(() -> taskCompletionService.returnTask(TASK_ID, request))
             .isInstanceOf(WorkflowValidationException.class)
             .hasMessageContaining("Target activity is not a valid historic activity");
         

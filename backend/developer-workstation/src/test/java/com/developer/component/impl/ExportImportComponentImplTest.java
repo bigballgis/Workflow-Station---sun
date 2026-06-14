@@ -13,7 +13,6 @@ import com.platform.common.dto.UserPrincipal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
@@ -89,13 +88,23 @@ class ExportImportComponentImplTest {
     @Mock
     private com.developer.util.DeveloperWorkstationSequenceSynchronizer sequenceSynchronizer;
     
-    @InjectMocks
-    private ExportImportComponentImpl exportImportComponent;
-    
+    private FunctionUnitExporter functionUnitExporter;
+
     @BeforeEach
     void setUp() {
         // 清理 SecurityContext
         SecurityContextHolder.clearContext();
+        // getCurrentOperator 已随导出职责迁移到 FunctionUnitExporter，这里单独装配以保持原测试覆盖
+        functionUnitExporter = ExportImportTestComponents.exporter(
+                functionUnitRepository,
+                tableDefinitionRepository,
+                formDefinitionRepository,
+                actionDefinitionRepository,
+                decisionDefinitionRepository,
+                formStageBindingRepository,
+                tableRelationRepository,
+                functionUnitWorkspaceAccessService,
+                new ObjectMapper());
     }
     
     /**
@@ -114,7 +123,7 @@ class ExportImportComponentImplTest {
         SecurityContextHolder.setContext(securityContext);
         
         // When: 通过反射调用 getCurrentOperator 方法
-        String operator = (String) ReflectionTestUtils.invokeMethod(exportImportComponent, "getCurrentOperator");
+        String operator = (String) ReflectionTestUtils.invokeMethod(functionUnitExporter, "getCurrentOperator");
         
         // Then: 验证返回认证用户名
         assertEquals("testuser", operator);
@@ -130,7 +139,7 @@ class ExportImportComponentImplTest {
         SecurityContextHolder.clearContext();
         
         // When: 通过反射调用 getCurrentOperator 方法
-        String operator = (String) ReflectionTestUtils.invokeMethod(exportImportComponent, "getCurrentOperator");
+        String operator = (String) ReflectionTestUtils.invokeMethod(functionUnitExporter, "getCurrentOperator");
         
         // Then: 验证返回 "system"
         assertEquals("system", operator);
@@ -151,7 +160,7 @@ class ExportImportComponentImplTest {
         SecurityContextHolder.setContext(securityContext);
         
         // When: 通过反射调用 getCurrentOperator 方法
-        String operator = (String) ReflectionTestUtils.invokeMethod(exportImportComponent, "getCurrentOperator");
+        String operator = (String) ReflectionTestUtils.invokeMethod(functionUnitExporter, "getCurrentOperator");
         
         // Then: 验证返回 "system"
         assertEquals("system", operator);
@@ -169,7 +178,7 @@ class ExportImportComponentImplTest {
         SecurityContextHolder.setContext(securityContext);
         
         // When: 通过反射调用 getCurrentOperator 方法
-        String operator = (String) ReflectionTestUtils.invokeMethod(exportImportComponent, "getCurrentOperator");
+        String operator = (String) ReflectionTestUtils.invokeMethod(functionUnitExporter, "getCurrentOperator");
         
         // Then: 验证返回 "system"
         assertEquals("system", operator);
@@ -178,7 +187,7 @@ class ExportImportComponentImplTest {
     @Test
     void validateImportPackage_acceptsManifestWithoutMetadata() throws Exception {
         ObjectMapper om = new ObjectMapper();
-        ExportImportComponentImpl impl = new ExportImportComponentImpl(
+        ExportImportComponentImpl impl = ExportImportTestComponents.build(
                 functionUnitRepository,
                 processDefinitionRepository,
                 tableDefinitionRepository,
@@ -208,7 +217,7 @@ class ExportImportComponentImplTest {
     @Test
     void validateImportPackage_stillAcceptsLegacyMetadataJson() throws Exception {
         ObjectMapper om = new ObjectMapper();
-        ExportImportComponentImpl impl = new ExportImportComponentImpl(
+        ExportImportComponentImpl impl = ExportImportTestComponents.build(
                 functionUnitRepository,
                 processDefinitionRepository,
                 tableDefinitionRepository,
@@ -235,7 +244,7 @@ class ExportImportComponentImplTest {
     @Test
     void importFunctionUnit_renameStrategy_generatesNewCodeWhenCodeAlreadyExists() throws Exception {
         ObjectMapper om = new ObjectMapper();
-        ExportImportComponentImpl impl = new ExportImportComponentImpl(
+        ExportImportComponentImpl impl = ExportImportTestComponents.build(
                 functionUnitRepository,
                 processDefinitionRepository,
                 tableDefinitionRepository,
@@ -280,7 +289,7 @@ class ExportImportComponentImplTest {
     @Test
     void importFunctionUnit_rewritesBpmnIdsAfterImport() throws Exception {
         ObjectMapper om = new ObjectMapper();
-        ExportImportComponentImpl impl = new ExportImportComponentImpl(
+        ExportImportComponentImpl impl = ExportImportTestComponents.build(
                 functionUnitRepository,
                 processDefinitionRepository,
                 tableDefinitionRepository,
@@ -389,7 +398,7 @@ class ExportImportComponentImplTest {
     @Test
     void importFunctionUnit_remapsBindingIdsInConfigJson() throws Exception {
         ObjectMapper om = new ObjectMapper();
-        ExportImportComponentImpl impl = new ExportImportComponentImpl(
+        ExportImportComponentImpl impl = ExportImportTestComponents.build(
                 functionUnitRepository,
                 processDefinitionRepository,
                 tableDefinitionRepository,

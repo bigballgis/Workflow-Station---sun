@@ -24,21 +24,21 @@ class TaskProcessComponentMiCollectionTest {
         fresh.put("id_idw", "Test-000063");
         fresh.put("assignee", Map.of("id", "user-e2e-sunqiang", "display_name", "孙强"));
 
-        Map<String, Object> merged = TaskProcessComponent.mergeMiCollectionRowPreferIncoming(stale, fresh);
-        assertEquals("user-e2e-sunqiang", TaskProcessComponent.normalizeMiAssigneeText(merged.get("assignee")));
+        Map<String, Object> merged = MiSubTableVariableSupport.mergeMiCollectionRowPreferIncoming(stale, fresh);
+        assertEquals("user-e2e-sunqiang", MiSubTableVariableSupport.normalizeMiAssigneeText(merged.get("assignee")));
     }
 
     @Test
     @DisplayName("normalizeMiAssigneeText extracts user id from snapshot map")
     void normalizeMiAssigneeText_fromMap() {
         Object raw = Map.of("id", "user-e2e-sunqiang", "username", "e2e_sunqiang");
-        assertEquals("user-e2e-sunqiang", TaskProcessComponent.normalizeMiAssigneeText(raw));
+        assertEquals("user-e2e-sunqiang", MiSubTableVariableSupport.normalizeMiAssigneeText(raw));
     }
 
     @Test
     @DisplayName("parseNumericSubTableSliceKey orders binding 66 after 64")
     void parseNumericSubTableSliceKey_numericOrder() {
-        assertTrue(TaskProcessComponent.parseNumericSubTableSliceKey("64")
-                < TaskProcessComponent.parseNumericSubTableSliceKey("66"));
+        assertTrue(MiSubTableVariableSupport.parseNumericSubTableSliceKey("64")
+                < MiSubTableVariableSupport.parseNumericSubTableSliceKey("66"));
     }
 }

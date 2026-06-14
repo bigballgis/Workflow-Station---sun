@@ -30,6 +30,7 @@
 @.cursor/rules/ai-guardrails.mdc
 @.cursor/rules/cross-cutting.mdc
 @.cursor/rules/change-playbook.mdc
+@.cursor/rules/code-quality-standards.mdc
 @.cursor/rules/debug-mode-docker-workflow.mdc
 @.cursor/rules/issue-radar.mdc
 @.cursor/rules/json-row-storage-no-physical-tables.mdc

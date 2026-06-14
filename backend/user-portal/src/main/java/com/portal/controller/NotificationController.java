@@ -1,6 +1,6 @@
 package com.portal.controller;
 
-import com.portal.dto.ApiResponse;
+import com.platform.common.dto.ApiResponse;
 import com.portal.dto.NotificationDto;
 import com.portal.security.CurrentUserId;
 import com.portal.dto.PageResponse;

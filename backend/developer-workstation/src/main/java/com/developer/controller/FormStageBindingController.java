@@ -1,7 +1,7 @@
 package com.developer.controller;
 
 import com.developer.component.FormDesignComponent;
-import com.developer.dto.ApiResponse;
+import com.platform.common.dto.ApiResponse;
 import com.developer.entity.FormDefinition;
 import com.developer.entity.FormStageBinding;
 import com.developer.repository.FormStageBindingRepository;

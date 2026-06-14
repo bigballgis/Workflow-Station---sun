@@ -416,14 +416,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, reactive, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, Setting, Download, Upload, CircleCheck, CircleClose, Loading, Clock, MagicStick } from '@element-plus/icons-vue'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
-import type { ValidationResult, DeployRequest, DeployResponse } from '@/api/functionUnit'
-import { functionUnitApi } from '@/api/functionUnit'
 import ProcessDesigner from '@/components/designer/ProcessDesigner.vue'
 import TableDesigner from '@/components/designer/TableDesigner.vue'
 import FormDesigner from '@/components/designer/FormDesigner.vue'
@@ -433,7 +430,10 @@ import VersionManager from '@/components/version/VersionManager.vue'
 import IconPreview from '@/components/icon/IconPreview.vue'
 import IconUploadField from '@/components/icon/IconUploadField.vue'
 import AiPanel from '@/components/ai/AiPanel.vue'
-import { getTags, setTags, getAllAvailableTags } from '@/utils/tagStorage'
+import { useFunctionUnitStatus } from '@/composables/functionUnitEdit/useFunctionUnitStatus'
+import { useFunctionUnitSettings } from '@/composables/functionUnitEdit/useFunctionUnitSettings'
+import { useFunctionUnitActions } from '@/composables/functionUnitEdit/useFunctionUnitActions'
+import { useFunctionUnitDeploy } from '@/composables/functionUnitEdit/useFunctionUnitDeploy'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -448,206 +448,43 @@ watch(activeTab, (tab) => {
     void store.fetchTables(functionUnitId.value)
   }
 })
-const validating = ref(false)
-const saving = ref(false)
-const exporting = ref(false)
-const deploying = ref(false)
-const showValidationDialog = ref(false)
-const showEditDialog = ref(false)
-const showDeployDialog = ref(false)
-const validationResult = ref<ValidationResult | null>(null)
+
 const showAiPanel = ref(false)
-const deployStatus = ref<DeployResponse | null>(null)
-const deployPollingTimer = ref<number | null>(null)
 
-const deployForm = reactive({
-  autoEnable: true,
-  changeLog: ''
-})
+const { statusTagType, statusLabel } = useFunctionUnitStatus()
 
-const editForm = reactive({
-  name: '',
-  description: '',
-  iconId: undefined as number | null | undefined,
-  tags: [] as string[]
-})
+const {
+  saving,
+  showEditDialog,
+  editForm,
+  availableTags,
+  openEditDialog,
+  handleSaveEdit
+} = useFunctionUnitSettings({ functionUnitId, store })
 
-const availableTags = computed(() => getAllAvailableTags())
+const {
+  validating,
+  exporting,
+  showValidationDialog,
+  validationResult,
+  handleValidate,
+  handlePublish,
+  handleExport
+} = useFunctionUnitActions({ functionUnitId, store })
 
-const statusTagType = (status?: string): 'primary' | 'success' | 'warning' | 'info' | 'danger' => {
-  const map: Record<string, 'primary' | 'success' | 'warning' | 'info' | 'danger'> = { DRAFT: 'info', PUBLISHED: 'success', ARCHIVED: 'warning' }
-  return map[status || ''] || 'info'
-}
-
-const statusLabel = (status?: string) => {
-  const map: Record<string, string> = { 
-    DRAFT: t('functionUnit.draft'), 
-    PUBLISHED: t('functionUnit.published'), 
-    ARCHIVED: t('functionUnit.archived') 
-  }
-  return map[status || ''] || status
-}
-
-function openEditDialog() {
-  editForm.name = store.current?.name || ''
-  editForm.description = store.current?.description || ''
-  editForm.iconId = store.current?.icon?.id ?? undefined
-  editForm.tags = [...getTags(functionUnitId.value)]
-  showEditDialog.value = true
-}
-
-async function handleSaveEdit() {
-  if (!editForm.name.trim()) {
-    ElMessage.warning(t('functionUnit.enterName'))
-    return
-  }
-  saving.value = true
-  try {
-    await store.update(functionUnitId.value, {
-      name: editForm.name.trim(),
-      description: editForm.description?.trim() || undefined,
-      iconId: editForm.iconId ?? undefined
-    })
-    setTags(functionUnitId.value, editForm.tags)
-    ElMessage.success(t('functionUnit.saveSuccess'))
-    showEditDialog.value = false
-    store.fetchById(functionUnitId.value)
-  } catch (e: any) {
-    ElMessage.error(e.response?.data?.message || t('functionUnit.saveFailed'))
-  } finally {
-    saving.value = false
-  }
-}
-
-async function handleValidate() {
-  validating.value = true
-  try {
-    validationResult.value = await store.validate(functionUnitId.value)
-    showValidationDialog.value = true
-  } catch (e: any) {
-    ElMessage.error(e.response?.data?.message || t('functionUnit.validationFailed'))
-  } finally {
-    validating.value = false
-  }
-}
-
-async function handlePublish() {
-  try {
-    const { value } = await ElMessageBox.prompt(t('functionUnit.enterChangeLogPrompt'), t('functionUnit.publishFunctionUnit'), { 
-      inputType: 'textarea',
-      inputPlaceholder: t('functionUnit.publishChangeLogPlaceholder')
-    })
-    await store.publish(functionUnitId.value, value)
-    ElMessage.success(t('functionUnit.publishSuccess'))
-    store.fetchById(functionUnitId.value)
-  } catch (e: any) {
-    if (e !== 'cancel') {
-      ElMessage.error(e.response?.data?.message || t('functionUnit.publishFailed'))
-    }
-  }
-}
-
-async function handleExport() {
-  exporting.value = true
-  try {
-    const response = await functionUnitApi.exportFunctionUnit(functionUnitId.value)
-    // Create download link
-    const blob = new Blob([response as any], { type: 'application/zip' })
-    const url = window.URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `function-unit-${store.current?.name || functionUnitId.value}.zip`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    window.URL.revokeObjectURL(url)
-    ElMessage.success(t('functionUnit.exportSuccess'))
-  } catch (e: any) {
-    ElMessage.error(e.response?.data?.message || t('functionUnit.exportFailed'))
-  } finally {
-    exporting.value = false
-  }
-}
-
-async function handleDeploy() {
-  deploying.value = true
-  deployStatus.value = null
-  try {
-    const request: DeployRequest = {
-      autoEnable: deployForm.autoEnable,
-      changeLog: deployForm.changeLog || undefined
-    }
-    const response = await functionUnitApi.deploy(functionUnitId.value, request)
-    deployStatus.value = response.data
-    
-    // Start polling for status
-    if (response.data.status === 'DEPLOYING') {
-      startDeployPolling(response.data.deploymentId)
-    } else if (response.data.status === 'SUCCESS') {
-      const versionInfo = response.data.versionNumber
-        ? t('functionUnit.deploySuccessWithVersion', { version: response.data.versionNumber })
-        : t('functionUnit.deploySuccess')
-      ElMessage.success(versionInfo)
-      if (response.data.versionNumber) store.current.currentVersion = response.data.versionNumber
-      store.fetchVersions(functionUnitId.value)
-    }
-  } catch (e: any) {
-    ElMessage.error(e.response?.data?.message || t('functionUnit.deployFailed'))
-    deployStatus.value = {
-      deploymentId: '',
-      status: 'FAILED',
-      message: e.response?.data?.message || t('functionUnit.deployFailed')
-    }
-  } finally {
-    deploying.value = false
-  }
-}
-
-function startDeployPolling(deploymentId: string) {
-  if (deployPollingTimer.value) {
-    clearInterval(deployPollingTimer.value)
-  }
-  
-  deployPollingTimer.value = window.setInterval(async () => {
-    try {
-      const response = await functionUnitApi.getDeploymentStatus(deploymentId)
-      deployStatus.value = response.data
-      
-      if (response.data.status === 'SUCCESS') {
-        const versionInfo = response.data.versionNumber
-          ? t('functionUnit.deploySuccessWithVersion', { version: response.data.versionNumber })
-          : t('functionUnit.deploySuccess')
-        ElMessage.success(versionInfo)
-        if (response.data.versionNumber) store.current.currentVersion = response.data.versionNumber
-      store.fetchVersions(functionUnitId.value)
-        stopDeployPolling()
-      } else if (response.data.status === 'FAILED') {
-        ElMessage.error(t('functionUnit.deployFailedWithMessage', { message: response.data.message }))
-        stopDeployPolling()
-      }
-    } catch (e) {
-      stopDeployPolling()
-    }
-  }, 2000)
-}
-
-function stopDeployPolling() {
-  if (deployPollingTimer.value) {
-    clearInterval(deployPollingTimer.value)
-    deployPollingTimer.value = null
-  }
-}
-
-/** Clears deploy UI state whenever the dialog finishes closing (X, overlay, Esc, or footer Close). */
-function cleanupDeployDialogState() {
-  deployStatus.value = null
-  deployForm.changeLog = ''
-  stopDeployPolling()
-}
-
-function closeDeployDialog() {
-  showDeployDialog.value = false
-}
+const {
+  deploying,
+  showDeployDialog,
+  deployStatus,
+  deployForm,
+  handleDeploy,
+  stopDeployPolling,
+  cleanupDeployDialogState,
+  closeDeployDialog,
+  getDeployStatusType,
+  getDeployStatusLabel,
+  translateStep
+} = useFunctionUnitDeploy({ functionUnitId, store })
 
 async function handleAiDataApplied() {
   await store.refreshAll(functionUnitId.value)
@@ -660,35 +497,6 @@ onMounted(() => {
 onUnmounted(() => {
   stopDeployPolling()
 })
-
-function getDeployStatusType(status: string): 'primary' | 'success' | 'warning' | 'info' | 'danger' {
-  const map: Record<string, 'primary' | 'success' | 'warning' | 'info' | 'danger'> = {
-    PENDING: 'info',
-    DEPLOYING: 'warning',
-    SUCCESS: 'success',
-    FAILED: 'danger',
-    ROLLED_BACK: 'info'
-  }
-  return map[status] || 'info'
-}
-
-function getDeployStatusLabel(status: string) {
-  const map: Record<string, string> = {
-    PENDING: t('functionUnit.statusPending'),
-    DEPLOYING: t('functionUnit.statusDeploying'),
-    SUCCESS: t('functionUnit.statusSuccess'),
-    FAILED: t('functionUnit.statusFailed'),
-    ROLLED_BACK: t('functionUnit.statusRolledBack')
-  }
-  return map[status] || status
-}
-
-function translateStep(text: string) {
-  if (!text) return text
-  // 尝试用 te() 检查 key 是否存在，存在则翻译
-  const translated = t(text)
-  return translated !== text ? translated : text
-}
 </script>
 
 <style lang="scss" scoped>

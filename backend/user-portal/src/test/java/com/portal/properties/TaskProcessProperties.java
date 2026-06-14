@@ -2,10 +2,21 @@ package com.portal.properties;
 
 import com.portal.client.WorkflowEngineClient;
 import com.portal.component.ChangeHistoryComponent;
+import com.portal.component.DelegatedTaskQueryComponent;
+import com.portal.component.MiCollectionVariableBuilder;
+import com.portal.component.MiOverlayComponent;
+import com.portal.component.MiParticipantEnrichmentComponent;
+import com.portal.component.SubTablePhysicalMetadataCache;
+import com.portal.component.ProcessInstanceSyncComponent;
+import com.portal.component.SubTableRowAssignmentComponent;
+import com.portal.component.TaskApprovalCompletionComponent;
 import com.portal.component.TaskFormComponent;
+import com.portal.component.TaskHistoryComponent;
+import com.portal.component.TaskPermissionEvaluator;
 import com.portal.component.TaskProcessComponent;
 import com.portal.component.TaskQueryComponent;
 import com.portal.component.VirtualGroupAccessComponent;
+import com.portal.component.WorkspaceTaskFilterComponent;
 import com.portal.dto.TaskCompleteRequest;
 import com.portal.dto.TaskInfo;
 import com.portal.entity.DelegationRule;
@@ -86,24 +97,47 @@ class TaskProcessProperties {
     void setUp() {
         MockitoAnnotations.openMocks(this);
         taskQueryComponent = new TaskQueryComponent(
-            delegationRuleRepository, 
-            processInstanceRepository, 
-            processHistoryRepository,
+            processInstanceRepository,
             workflowEngineClient,
             taskActionService,
-            jdbcTemplate,
-            virtualGroupAccessComponent,
-            portalWorkspaceAuthService
+            new DelegatedTaskQueryComponent(workflowEngineClient, delegationRuleRepository),
+            new WorkspaceTaskFilterComponent(workflowEngineClient, virtualGroupAccessComponent, portalWorkspaceAuthService),
+            new MiParticipantEnrichmentComponent(jdbcTemplate),
+            new TaskHistoryComponent(workflowEngineClient, processInstanceRepository, processHistoryRepository, jdbcTemplate)
         );
-        taskProcessComponent = new TaskProcessComponent(
-            taskQueryComponent, 
-            delegationRuleRepository, 
-            delegationAuditRepository, 
+        TaskPermissionEvaluator taskPermissionEvaluator =
+            new TaskPermissionEvaluator(delegationRuleRepository, workflowEngineClient);
+        ProcessInstanceSyncComponent processInstanceSyncComponent =
+            new ProcessInstanceSyncComponent(workflowEngineClient, processInstanceRepository);
+        MiCollectionVariableBuilder miCollectionVariableBuilder =
+            new MiCollectionVariableBuilder(workflowEngineClient, jdbcTemplate);
+        TaskApprovalCompletionComponent taskApprovalCompletionComponent = new TaskApprovalCompletionComponent(
             workflowEngineClient,
             processInstanceRepository,
             changeHistoryComponent,
             taskFormComponent,
-            jdbcTemplate
+            miCollectionVariableBuilder,
+            processInstanceSyncComponent
+        );
+        SubTableRowAssignmentComponent subTableRowAssignmentComponent = new SubTableRowAssignmentComponent(
+            workflowEngineClient,
+            processInstanceRepository,
+            jdbcTemplate,
+            taskPermissionEvaluator
+        );
+        MiOverlayComponent miOverlayComponent = new MiOverlayComponent(
+            workflowEngineClient,
+            new SubTablePhysicalMetadataCache(jdbcTemplate)
+        );
+        taskProcessComponent = new TaskProcessComponent(
+            taskQueryComponent,
+            delegationAuditRepository,
+            workflowEngineClient,
+            taskPermissionEvaluator,
+            subTableRowAssignmentComponent,
+            taskApprovalCompletionComponent,
+            processInstanceSyncComponent,
+            miOverlayComponent
         );
         random = new Random();
 

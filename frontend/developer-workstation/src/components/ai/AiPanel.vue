@@ -167,7 +167,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, reactive } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Close, Lock, MagicStick, Loading, FullScreen, ScaleToOriginal } from '@element-plus/icons-vue'
@@ -179,6 +179,8 @@ import { useAiLock } from '@/composables/useAiLock'
 import { useAiSession } from '@/composables/useAiSession'
 import { useAiEvents } from '@/composables/useAiEvents'
 import { useAiChat } from '@/composables/useAiChat'
+import { useAiPanelSidebar } from '@/composables/aiPanel/useAiPanelSidebar'
+import { useAiPanelLayout } from '@/composables/aiPanel/useAiPanelLayout'
 import { aiGenerationApi } from '@/api/aiGeneration'
 import type {
   AiPhase,
@@ -210,120 +212,22 @@ const currentMode = ref<AiMode>('NEW')
 const completedPhases = ref<AiPhase[]>([])
 const initialMessages = ref<AiMessage[]>([])
 
-// Sidebar state — read actual sidebar width from DOM and watch for changes
-const sidebarWidth = ref('240px')
-let sidebarObserver: MutationObserver | null = null
+// Sidebar width tracking (docked-mode left offset)
+const {
+  sidebarWidth,
+  updateSidebarWidth,
+  startWatchingSidebar,
+  stopWatchingSidebar
+} = useAiPanelSidebar()
 
-function updateSidebarWidth() {
-  const aside = document.querySelector('.sidebar') as HTMLElement
-  if (aside) {
-    sidebarWidth.value = aside.offsetWidth + 'px'
-  } else {
-    try {
-      const collapsed = localStorage.getItem('sidebar-collapsed') === 'true'
-      sidebarWidth.value = collapsed ? '64px' : '240px'
-    } catch {
-      sidebarWidth.value = '240px'
-    }
-  }
-}
-
-function startWatchingSidebar() {
-  const aside = document.querySelector('.sidebar') as HTMLElement
-  if (!aside) return
-  sidebarObserver = new MutationObserver(() => {
-    sidebarWidth.value = aside.offsetWidth + 'px'
-  })
-  sidebarObserver.observe(aside, { attributes: true, attributeFilter: ['style'] })
-  // Also listen for transition end (el-aside animates width)
-  aside.addEventListener('transitionend', updateSidebarWidth)
-}
-
-function stopWatchingSidebar() {
-  if (sidebarObserver) {
-    sidebarObserver.disconnect()
-    sidebarObserver = null
-  }
-  const aside = document.querySelector('.sidebar') as HTMLElement
-  if (aside) {
-    aside.removeEventListener('transitionend', updateSidebarWidth)
-  }
-}
-
-// Detach / pop-out state
-const isDetached = ref(false)
-const dragPos = reactive({ x: 0, y: 0 })
-const detachedSize = reactive({ width: 900, height: 620 })
-const isDragging = ref(false)
-const isResizing = ref(false)
-
-const panelStyle = computed(() => {
-  if (isDetached.value) {
-    return {
-      left: `${dragPos.x}px`,
-      top: `${dragPos.y}px`,
-      width: `${detachedSize.width}px`,
-      height: `${detachedSize.height}px`
-    }
-  }
-  return { left: sidebarWidth.value }
-})
-
-function toggleDetach() {
-  isDetached.value = !isDetached.value
-  if (isDetached.value) {
-    // Center the window
-    const vw = window.innerWidth
-    const vh = window.innerHeight
-    dragPos.x = Math.max(0, (vw - detachedSize.width) / 2)
-    dragPos.y = Math.max(0, (vh - detachedSize.height) / 2)
-  }
-}
-
-// Drag logic (header as handle)
-function onHeaderMouseDown(e: MouseEvent) {
-  if (!isDetached.value) return
-  // Don't drag if clicking a button
-  if ((e.target as HTMLElement).closest('button, .el-button')) return
-  isDragging.value = true
-  const startX = e.clientX - dragPos.x
-  const startY = e.clientY - dragPos.y
-
-  function onMouseMove(ev: MouseEvent) {
-    dragPos.x = ev.clientX - startX
-    dragPos.y = ev.clientY - startY
-  }
-  function onMouseUp() {
-    isDragging.value = false
-    document.removeEventListener('mousemove', onMouseMove)
-    document.removeEventListener('mouseup', onMouseUp)
-  }
-  document.addEventListener('mousemove', onMouseMove)
-  document.addEventListener('mouseup', onMouseUp)
-}
-
-// Resize logic
-function onResizeMouseDown(e: MouseEvent) {
-  if (!isDetached.value) return
-  e.preventDefault()
-  isResizing.value = true
-  const startX = e.clientX
-  const startY = e.clientY
-  const startW = detachedSize.width
-  const startH = detachedSize.height
-
-  function onMouseMove(ev: MouseEvent) {
-    detachedSize.width = Math.max(600, startW + (ev.clientX - startX))
-    detachedSize.height = Math.max(400, startH + (ev.clientY - startY))
-  }
-  function onMouseUp() {
-    isResizing.value = false
-    document.removeEventListener('mousemove', onMouseMove)
-    document.removeEventListener('mouseup', onMouseUp)
-  }
-  document.addEventListener('mousemove', onMouseMove)
-  document.addEventListener('mouseup', onMouseUp)
-}
+// Docked/detached layout: panel style, drag + resize interactions
+const {
+  isDetached,
+  panelStyle,
+  toggleDetach,
+  onHeaderMouseDown,
+  onResizeMouseDown
+} = useAiPanelLayout(sidebarWidth)
 
 // Composables
 const lockComposable = useAiLock()

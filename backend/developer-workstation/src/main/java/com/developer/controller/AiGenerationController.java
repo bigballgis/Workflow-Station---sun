@@ -4,7 +4,7 @@ import com.developer.component.AiGenerationComponent;
 import com.developer.dto.AiChatRequest;
 import com.developer.dto.AiMessageResponse;
 import com.developer.dto.AiSessionResponse;
-import com.developer.dto.ApiResponse;
+import com.platform.common.dto.ApiResponse;
 import com.developer.dto.ApplyGeneratedDataRequest;
 import com.developer.dto.ForceUnlockResponseRequest;
 import com.developer.dto.LockInfoResponse;

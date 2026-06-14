@@ -8,17 +8,6 @@ import com.developer.entity.AiDocument;
 import com.developer.entity.AiMessage;
 import com.developer.entity.AiSession;
 import com.developer.entity.FunctionUnit;
-import com.developer.entity.ActionDefinition;
-import com.developer.entity.DecisionDefinition;
-import com.developer.entity.FieldDefinition;
-import com.developer.entity.ForeignKey;
-import com.developer.entity.FormDefinition;
-import com.developer.entity.FormStageBinding;
-import com.developer.entity.FormTableBinding;
-import com.developer.entity.Icon;
-import com.developer.entity.ProcessDefinition;
-import com.developer.entity.TableDefinition;
-import com.developer.entity.TableRelation;
 import com.developer.enums.AiDocumentType;
 import com.developer.enums.AiMessageRole;
 import com.developer.enums.AiMode;
@@ -35,6 +24,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -48,18 +38,13 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Collectors;
 
 /**
@@ -88,14 +73,20 @@ public class AiGenerationServiceImpl implements AiGenerationService {
     /** Cached N8N RestTemplate (initialized at startup via @PostConstruct) */
     private RestTemplate n8nRestTemplate;
 
-    /** Chat SSE emitters: key = "functionUnitId:userId" → SseEmitter */
-    private final ConcurrentHashMap<String, SseEmitter> chatEmitters = new ConcurrentHashMap<>();
-
-    /** Event SSE emitters: key = functionUnitId → list of (userId, SseEmitter) pairs */
-    private final ConcurrentHashMap<Long, CopyOnWriteArrayList<EventEmitterEntry>> eventEmitters = new ConcurrentHashMap<>();
-
     /** Timestamp of the last successful N8N call, used for degradation info (requirements 45 linkage) */
     private volatile Instant lastN8NSuccessTime;
+
+    // 协作类（单一职责拆分）。Spring 通过字段注入用容器托管的 Bean 覆盖默认实例；
+    // 默认实例保证脱离 Spring 上下文直接 new 本类时（单元测试）委托路径仍可用。
+    // 两者均无状态、无外部依赖，故行为与原内联实现逐字一致。
+
+    /** 上下文序列化协作类 */
+    @Autowired
+    private AiContextSerializer contextSerializer = new AiContextSerializer();
+
+    /** SSE emitter 管理协作类 */
+    @Autowired
+    private AiSseEmitterManager sseEmitterManager = new AiSseEmitterManager();
 
     public AiGenerationServiceImpl(
             AiSessionRepository aiSessionRepository,
@@ -298,7 +289,7 @@ public class AiGenerationServiceImpl implements AiGenerationService {
         FunctionUnit fu = functionUnitRepository.findById(functionUnitId)
                 .orElseThrow(() -> new AiGenerationException("AI_FUNCTION_UNIT_NOT_FOUND", "Function unit not found"));
 
-        FunctionUnitContextDTO dto = buildContextDTO(fu);
+        FunctionUnitContextDTO dto = contextSerializer.buildContextDTO(fu);
 
         // Check size and truncate if needed
         byte[] jsonBytes = toJsonBytes(dto);
@@ -325,216 +316,6 @@ public class AiGenerationServiceImpl implements AiGenerationService {
 
         throw new AiGenerationException("AI_CONTEXT_TOO_LARGE",
                 String.format("Serialized context size %dB exceeds limit %dB", jsonBytes.length, maxContextSizeBytes));
-    }
-
-    private FunctionUnitContextDTO buildContextDTO(FunctionUnit fu) {
-        // Explicitly trigger lazy loading (ensure all associations are loaded within @Transactional)
-        List<TableDefinition> tables = fu.getTableDefinitions();
-        if (tables != null) tables.size();
-        List<FormDefinition> forms = fu.getFormDefinitions();
-        if (forms != null) forms.size();
-        List<ActionDefinition> actions = fu.getActionDefinitions();
-        if (actions != null) actions.size();
-        List<DecisionDefinition> decisions = fu.getDecisionDefinitions();
-        if (decisions != null) decisions.size();
-        List<TableRelation> relations = fu.getTableRelations();
-        if (relations != null) relations.size();
-        ProcessDefinition pd = fu.getProcessDefinition();
-        Icon icon = fu.getIcon();
-
-        return FunctionUnitContextDTO.builder()
-                .functionUnitId(fu.getId())
-                .name(fu.getName())
-                .description(fu.getDisplayName())
-                .tableDefinitions(serializeTableDefinitions(tables))
-                .formDefinitions(serializeFormDefinitions(forms))
-                .actionDefinitions(serializeActionDefinitions(actions))
-                .decisionDefinitions(serializeDecisionDefinitions(decisions))
-                .tableRelations(serializeTableRelations(relations, tables))
-                .processDefinition(serializeProcessDefinition(pd))
-                .icon(serializeIcon(icon))
-                .build();
-    }
-
-    private List<Map<String, Object>> serializeTableDefinitions(List<TableDefinition> tables) {
-        if (tables == null || tables.isEmpty()) {
-            return List.of();
-        }
-        return tables.stream().map(t -> {
-            Map<String, Object> map = new LinkedHashMap<>();
-            map.put("tableName", t.getTableName());
-            map.put("tableType", t.getTableType() != null ? t.getTableType().name() : null);
-            map.put("tableDisplayName", t.getTableDisplayName());
-            map.put("description", t.getDisplayName());
-            map.put("fieldDefinitions", serializeFieldDefinitions(t.getFieldDefinitions()));
-            map.put("foreignKeys", serializeForeignKeys(t.getForeignKeys()));
-            return map;
-        }).collect(Collectors.toList());
-    }
-
-    private List<Map<String, Object>> serializeFieldDefinitions(List<FieldDefinition> fields) {
-        if (fields == null || fields.isEmpty()) {
-            return List.of();
-        }
-        return fields.stream().map(f -> {
-            Map<String, Object> map = new LinkedHashMap<>();
-            map.put("fieldName", f.getFieldName());
-            map.put("dataType", f.getDataType() != null ? f.getDataType().name() : null);
-            map.put("length", f.getLength());
-            map.put("precision", f.getPrecision());
-            map.put("scale", f.getScale());
-            map.put("nullable", f.getNullable());
-            map.put("defaultValue", f.getDefaultValue());
-            map.put("isPrimaryKey", f.getIsPrimaryKey());
-            map.put("isUnique", f.getIsUnique());
-            map.put("displayName", f.getDisplayName());
-            map.put("sortOrder", f.getSortOrder());
-            return map;
-        }).collect(Collectors.toList());
-    }
-
-    private List<Map<String, Object>> serializeForeignKeys(List<ForeignKey> foreignKeys) {
-        if (foreignKeys == null || foreignKeys.isEmpty()) {
-            return List.of();
-        }
-        return foreignKeys.stream().map(fk -> {
-            Map<String, Object> map = new LinkedHashMap<>();
-            map.put("fieldName", fk.getFieldDefinition() != null ? fk.getFieldDefinition().getFieldName() : null);
-            map.put("refTableName", fk.getRefTableDefinition() != null ? fk.getRefTableDefinition().getTableName() : null);
-            map.put("refFieldName", fk.getRefFieldDefinition() != null ? fk.getRefFieldDefinition().getFieldName() : null);
-            map.put("onDelete", fk.getOnDelete());
-            map.put("onUpdate", fk.getOnUpdate());
-            return map;
-        }).collect(Collectors.toList());
-    }
-
-    private List<Map<String, Object>> serializeFormDefinitions(List<FormDefinition> forms) {
-        if (forms == null || forms.isEmpty()) {
-            return List.of();
-        }
-        return forms.stream().map(f -> {
-            Map<String, Object> map = new LinkedHashMap<>();
-            map.put("formName", f.getFormName());
-            map.put("formType", f.getFormType() != null ? f.getFormType().name() : null);
-            map.put("configJson", f.getConfigJson());
-            map.put("description", f.getDisplayName());
-            map.put("tableBindings", serializeTableBindings(f.getTableBindings()));
-            map.put("fieldPermissions", f.getFieldPermissions() != null ? f.getFieldPermissions() : Map.of());
-            map.put("showLiveValues", f.getShowLiveValues());
-            map.put("stageBindings", serializeStageBindings(f.getStageBindings()));
-            return map;
-        }).collect(Collectors.toList());
-    }
-
-    private List<Map<String, Object>> serializeStageBindings(List<FormStageBinding> bindings) {
-        if (bindings == null || bindings.isEmpty()) {
-            return List.of();
-        }
-        return bindings.stream().map(b -> {
-            Map<String, Object> map = new LinkedHashMap<>();
-            map.put("stageId", b.getStageId());
-            map.put("stageName", b.getStageName());
-            return map;
-        }).collect(Collectors.toList());
-    }
-
-    private List<Map<String, Object>> serializeTableBindings(List<FormTableBinding> bindings) {
-        if (bindings == null || bindings.isEmpty()) {
-            return List.of();
-        }
-        return bindings.stream().map(b -> {
-            Map<String, Object> map = new LinkedHashMap<>();
-            map.put("tableName", b.getTableName());
-            map.put("bindingType", b.getBindingType() != null ? b.getBindingType().name() : null);
-            map.put("bindingMode", b.getBindingMode() != null ? b.getBindingMode().name() : null);
-            map.put("foreignKeyField", b.getForeignKeyField());
-            map.put("sortOrder", b.getSortOrder());
-            return map;
-        }).collect(Collectors.toList());
-    }
-
-    private List<Map<String, Object>> serializeActionDefinitions(List<ActionDefinition> actions) {
-        if (actions == null || actions.isEmpty()) {
-            return List.of();
-        }
-        return actions.stream().map(a -> {
-            Map<String, Object> map = new LinkedHashMap<>();
-            map.put("actionName", a.getActionName());
-            map.put("actionType", a.getActionType() != null ? a.getActionType().name() : null);
-            map.put("configJson", a.getConfigJson());
-            map.put("icon", a.getIcon());
-            map.put("buttonColor", a.getButtonColor());
-            map.put("description", a.getDisplayName());
-            map.put("isDefault", a.getIsDefault());
-            return map;
-        }).collect(Collectors.toList());
-    }
-
-    private List<Map<String, Object>> serializeDecisionDefinitions(List<DecisionDefinition> decisions) {
-        if (decisions == null || decisions.isEmpty()) {
-            return List.of();
-        }
-        return decisions.stream().map(d -> {
-            Map<String, Object> map = new LinkedHashMap<>();
-            map.put("decisionKey", d.getDecisionKey());
-            map.put("decisionName", d.getDecisionName());
-            map.put("dmnXml", d.getDmnXml());
-            map.put("hitPolicy", d.getHitPolicy());
-            map.put("description", d.getDescription());
-            return map;
-        }).collect(Collectors.toList());
-    }
-
-    /**
-     * Serialize table relations, resolving sourceTableId/targetTableId to corresponding tableName
-     * (AI does not know internal IDs).
-     */
-    private List<Map<String, Object>> serializeTableRelations(
-            List<TableRelation> relations, List<TableDefinition> tables) {
-        if (relations == null || relations.isEmpty()) {
-            return List.of();
-        }
-
-        // Build ID → tableName lookup table
-        Map<Long, String> idToName = new HashMap<>();
-        if (tables != null) {
-            for (TableDefinition t : tables) {
-                if (t.getId() != null) {
-                    idToName.put(t.getId(), t.getTableName());
-                }
-            }
-        }
-
-        return relations.stream().map(r -> {
-            Map<String, Object> map = new LinkedHashMap<>();
-            map.put("sourceTableName", idToName.getOrDefault(r.getSourceTableId(), "unknown_" + r.getSourceTableId()));
-            map.put("sourceFieldName", r.getSourceFieldName());
-            map.put("relationType", r.getRelationType());
-            map.put("targetTableName", idToName.getOrDefault(r.getTargetTableId(), "unknown_" + r.getTargetTableId()));
-            map.put("targetFieldName", r.getTargetFieldName());
-            return map;
-        }).collect(Collectors.toList());
-    }
-
-    private Map<String, Object> serializeProcessDefinition(ProcessDefinition pd) {
-        if (pd == null) {
-            return null;
-        }
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("bpmnXml", pd.getBpmnXml());
-        return map;
-    }
-
-    private Map<String, Object> serializeIcon(Icon icon) {
-        if (icon == null) {
-            return null;
-        }
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("name", icon.getName());
-        map.put("category", icon.getCategory() != null ? icon.getCategory().name() : null);
-        map.put("svgContent", icon.getSvgContent());
-        map.put("description", icon.getDescription());
-        return map;
     }
 
     private byte[] toJsonBytes(FunctionUnitContextDTO dto) {
@@ -849,193 +630,45 @@ public class AiGenerationServiceImpl implements AiGenerationService {
 
     // ==================== SSE Emitter Management ====================
 
-    private static final long EVENT_EMITTER_TIMEOUT = 300_000L; // 300 seconds
     private static final int MAX_DOCUMENT_CONTENT_LENGTH = 50000;
 
     @Override
     public SseEmitter createChatEmitter(Long functionUnitId, String userId) {
-        String key = buildChatEmitterKey(functionUnitId, userId);
+        // Compute timeout here so it stays aligned with the configured N8N timeout (incl. one retry),
+        // then delegate emitter lifecycle management to the SSE collaborator.
         long chatEmitterTimeout = (long) n8nTimeoutSeconds * 2 * 1000 + 60_000L;
-        SseEmitter emitter = new SseEmitter(chatEmitterTimeout);
-
-        // If there's already an active emitter, complete it first to prevent overwriting
-        SseEmitter existingEmitter = chatEmitters.get(key);
-        if (existingEmitter != null) {
-            log.warn("Existing chat SSE emitter found for key={}, completing it before creating new one", key);
-            try {
-                existingEmitter.complete();
-            } catch (Exception e) {
-                log.debug("Failed to complete existing emitter: {}", e.getMessage());
-            }
-            chatEmitters.remove(key);
-        }
-
-        emitter.onCompletion(() -> {
-            chatEmitters.remove(key);
-            log.debug("Chat SSE completed: functionUnitId={}, userId={}", functionUnitId, userId);
-        });
-        emitter.onTimeout(() -> {
-            chatEmitters.remove(key);
-            log.debug("Chat SSE timed out: functionUnitId={}, userId={}", functionUnitId, userId);
-            safeComplete(emitter);
-        });
-        emitter.onError(ex -> {
-            log.warn("Chat SSE error for functionUnit {}, userId {}: {}", functionUnitId, userId, ex.getMessage());
-            chatEmitters.remove(key);
-            safeComplete(emitter);
-        });
-
-        chatEmitters.put(key, emitter);
-        log.info("Created chat SSE emitter: functionUnitId={}, userId={}", functionUnitId, userId);
-        return emitter;
+        return sseEmitterManager.createChatEmitter(functionUnitId, userId, chatEmitterTimeout);
     }
 
     @Override
     public SseEmitter createEventEmitter(Long functionUnitId, String userId) {
-        SseEmitter emitter = new SseEmitter(EVENT_EMITTER_TIMEOUT);
-        EventEmitterEntry entry = new EventEmitterEntry(userId, emitter);
-
-        CopyOnWriteArrayList<EventEmitterEntry> entries = eventEmitters.computeIfAbsent(
-                functionUnitId, k -> new CopyOnWriteArrayList<>());
-
-        emitter.onCompletion(() -> {
-            entries.remove(entry);
-            if (entries.isEmpty()) {
-                eventEmitters.remove(functionUnitId, entries);
-            }
-            log.debug("Event SSE completed: functionUnitId={}, userId={}", functionUnitId, userId);
-        });
-        emitter.onTimeout(() -> {
-            entries.remove(entry);
-            if (entries.isEmpty()) {
-                eventEmitters.remove(functionUnitId, entries);
-            }
-            log.debug("Event SSE timed out: functionUnitId={}, userId={}", functionUnitId, userId);
-            safeComplete(emitter);
-        });
-        emitter.onError(ex -> {
-            log.warn("Event SSE error for functionUnit {}, userId {}: {}", functionUnitId, userId, ex.getMessage());
-            entries.remove(entry);
-            if (entries.isEmpty()) {
-                eventEmitters.remove(functionUnitId, entries);
-            }
-            safeComplete(emitter);
-        });
-
-        entries.add(entry);
-        log.info("Created event SSE emitter: functionUnitId={}, userId={}", functionUnitId, userId);
-        return emitter;
+        return sseEmitterManager.createEventEmitter(functionUnitId, userId);
     }
 
     @Override
     public void sendChatEvent(Long functionUnitId, String userId, AiChatSseEvent event) {
-        String key = buildChatEmitterKey(functionUnitId, userId);
-        SseEmitter emitter = chatEmitters.get(key);
-        if (emitter == null) {
-            log.warn("No chat SSE emitter found for functionUnitId={}, userId={}", functionUnitId, userId);
-            return;
-        }
-        try {
-            SseEmitter.SseEventBuilder sseEvent = SseEmitter.event().name(event.getEventType());
-            if (event.getData() != null) {
-                Object data = event.getData();
-                // Plain strings (token stream, phase name) as text — avoids JSON quoting edge cases
-                // on very large markdown payloads when frontends concatenate raw data lines.
-                if (data instanceof String str) {
-                    sseEvent.data(str, MediaType.TEXT_PLAIN);
-                } else {
-                    sseEvent.data(data, MediaType.APPLICATION_JSON);
-                }
-            } else {
-                sseEvent.data("", MediaType.TEXT_PLAIN);
-            }
-            emitter.send(sseEvent);
-        } catch (IOException e) {
-            log.warn("Failed to send chat SSE event: functionUnitId={}, userId={}, error={}",
-                    functionUnitId, userId, e.getMessage());
-            chatEmitters.remove(key);
-        } catch (IllegalStateException e) {
-            log.warn("Chat SSE emitter already completed: functionUnitId={}, userId={}, error={}",
-                    functionUnitId, userId, e.getMessage());
-            chatEmitters.remove(key);
-        }
+        sseEmitterManager.sendChatEvent(functionUnitId, userId, event);
     }
 
     @Override
     public void sendEventNotification(Long functionUnitId, AiChatSseEvent event) {
-        CopyOnWriteArrayList<EventEmitterEntry> entries = eventEmitters.get(functionUnitId);
-        if (entries == null || entries.isEmpty()) {
-            log.debug("No event SSE emitters for functionUnitId={}", functionUnitId);
-            return;
-        }
-
-        Iterator<EventEmitterEntry> iterator = entries.iterator();
-        while (iterator.hasNext()) {
-            EventEmitterEntry entry = iterator.next();
-            try {
-                entry.emitter().send(SseEmitter.event()
-                        .name(event.getEventType())
-                        .data(event.getData(), MediaType.APPLICATION_JSON));
-            } catch (IOException e) {
-                log.warn("Failed to send event SSE notification to userId={}: {}", entry.userId(), e.getMessage());
-                entries.remove(entry);
-            }
-        }
-
-        if (entries.isEmpty()) {
-            eventEmitters.remove(functionUnitId, entries);
-        }
+        sseEmitterManager.sendEventNotification(functionUnitId, event);
     }
 
     @Override
     public void completeChatEmitter(Long functionUnitId, String userId) {
-        String key = buildChatEmitterKey(functionUnitId, userId);
-        SseEmitter emitter = chatEmitters.remove(key);
-        if (emitter != null) {
-            safeComplete(emitter);
-            log.debug("Completed chat SSE emitter: functionUnitId={}, userId={}", functionUnitId, userId);
-        }
-    }
-
-    /**
-     * Safely complete an SseEmitter, suppressing IllegalStateException caused by
-     * Spring's async response finalization after the OutputStream was already committed by SSE.
-     */
-    private void safeComplete(SseEmitter emitter) {
-        try {
-            emitter.complete();
-        } catch (IllegalStateException e) {
-            log.debug("Emitter already completed or response committed: {}", e.getMessage());
-        } catch (Exception e) {
-            log.debug("Failed to complete emitter: {}", e.getMessage());
-        }
+        sseEmitterManager.completeChatEmitter(functionUnitId, userId);
     }
 
     @Override
     public void removeChatEmitter(Long functionUnitId, String userId) {
-        String key = buildChatEmitterKey(functionUnitId, userId);
-        chatEmitters.remove(key);
-        log.debug("Removed chat SSE emitter: functionUnitId={}, userId={}", functionUnitId, userId);
+        sseEmitterManager.removeChatEmitter(functionUnitId, userId);
     }
 
     @Override
     public void removeEventEmitter(Long functionUnitId, String userId) {
-        CopyOnWriteArrayList<EventEmitterEntry> entries = eventEmitters.get(functionUnitId);
-        if (entries != null) {
-            entries.removeIf(entry -> entry.userId().equals(userId));
-            if (entries.isEmpty()) {
-                eventEmitters.remove(functionUnitId, entries);
-            }
-            log.debug("Removed event SSE emitter: functionUnitId={}, userId={}", functionUnitId, userId);
-        }
+        sseEmitterManager.removeEventEmitter(functionUnitId, userId);
     }
-
-    private String buildChatEmitterKey(Long functionUnitId, String userId) {
-        return functionUnitId + ":" + userId;
-    }
-
-    /** Internal record to track event emitter ownership */
-    private record EventEmitterEntry(String userId, SseEmitter emitter) {}
 
     // ==================== Private Helpers ====================
 

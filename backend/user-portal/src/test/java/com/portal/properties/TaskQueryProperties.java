@@ -1,8 +1,12 @@
 package com.portal.properties;
 
 import com.portal.client.WorkflowEngineClient;
+import com.portal.component.DelegatedTaskQueryComponent;
+import com.portal.component.MiParticipantEnrichmentComponent;
+import com.portal.component.TaskHistoryComponent;
 import com.portal.component.TaskQueryComponent;
 import com.portal.component.VirtualGroupAccessComponent;
+import com.portal.component.WorkspaceTaskFilterComponent;
 import com.portal.dto.PageResponse;
 import com.portal.dto.TaskInfo;
 import com.portal.dto.TaskQueryRequest;
@@ -70,14 +74,13 @@ class TaskQueryProperties {
     void setUp() {
         MockitoAnnotations.openMocks(this);
         taskQueryComponent = new TaskQueryComponent(
-            delegationRuleRepository, 
-            processInstanceRepository, 
-            processHistoryRepository,
+            processInstanceRepository,
             workflowEngineClient,
             taskActionService,
-            jdbcTemplate,
-            virtualGroupAccessComponent,
-            portalWorkspaceAuthService
+            new DelegatedTaskQueryComponent(workflowEngineClient, delegationRuleRepository),
+            new WorkspaceTaskFilterComponent(workflowEngineClient, virtualGroupAccessComponent, portalWorkspaceAuthService),
+            new MiParticipantEnrichmentComponent(jdbcTemplate),
+            new TaskHistoryComponent(workflowEngineClient, processInstanceRepository, processHistoryRepository, jdbcTemplate)
         );
         random = new Random();
         

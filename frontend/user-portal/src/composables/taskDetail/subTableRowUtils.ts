@@ -1,0 +1,271 @@
+import { toRaw } from 'vue'
+import type { FormField } from '@/components/FormRenderer.vue'
+import {
+  flattenNestedSubTableRowsIntoPayload,
+  mergeSubTableRowsByRowId,
+} from '@/composables/tasks/shared'
+
+export function normalizeSubTableName(name?: string): string {
+  return String(name || '').trim().toLowerCase()
+}
+
+/** Same form / node may place multiple sub-tables backed by identical relation-table metadata — never resolve {@code __subTables__} by display/physical/tableId keys then (everyone steals the same slice). */
+export function bindingIdsPreferStrictSubTableLookup(
+  bindings: Array<{ bindingId: number; tableId?: number | null; tableName: string; physicalTableName?: string }>,
+): Set<number> {
+  const ambiguous = new Set<number>()
+  if (!Array.isArray(bindings) || bindings.length <= 1) return ambiguous
+
+  const bump = (m: Map<string, Set<number>>, key: string, bid: number) => {
+    if (!key) return
+    const nk = normalizeSubTableName(key)
+    if (!nk) return
+    let s = m.get(nk)
+    if (!s) {
+      s = new Set()
+      m.set(nk, s)
+    }
+    s.add(bid)
+  }
+
+  const buckets = new Map<string, Set<number>>()
+  for (const b of bindings) {
+    bump(buckets, b.tableName, b.bindingId)
+    if (typeof b.physicalTableName === 'string' && b.physicalTableName.trim())
+      bump(buckets, b.physicalTableName, b.bindingId)
+    if (b.tableId != null && Number.isFinite(Number(b.tableId))) {
+      bump(buckets, `__rtid:${Number(b.tableId)}`, b.bindingId)
+    }
+  }
+  for (const s of buckets.values()) {
+    if (s.size > 1) {
+      for (const id of s) ambiguous.add(id)
+    }
+  }
+  return ambiguous
+}
+
+export function subTableBindingMatches(
+  target: { bindingId: number; tableName: string; physicalTableName?: string; tableId?: number | null },
+  source: { bindingId: number; tableName: string; physicalTableName?: string; tableId?: number | null }
+): boolean {
+  const targetPhysicalName = normalizeSubTableName(target.physicalTableName)
+  const sourcePhysicalName = normalizeSubTableName(source.physicalTableName)
+  if (targetPhysicalName && sourcePhysicalName && targetPhysicalName === sourcePhysicalName) return true
+  const targetName = normalizeSubTableName(target.tableName)
+  const sourceName = normalizeSubTableName(source.tableName)
+  const samePhysicalTable = target.tableId != null && source.tableId != null && Number(target.tableId) === Number(source.tableId)
+  return target.bindingId === source.bindingId || samePhysicalTable || (!!targetName && targetName === sourceName)
+}
+
+/** Recursively unwrap Vue Proxy at every level — returns a plain clone. */
+export function deepToRaw(obj: any, seen?: WeakSet<object>): any {
+  const raw = toRaw(obj)
+  if (raw === null || raw === undefined || typeof raw !== 'object') return raw
+  const visited = seen instanceof WeakSet ? seen : new WeakSet<object>()
+  if (visited.has(raw)) return raw
+  visited.add(raw)
+  if (Array.isArray(raw)) return raw.map(item => deepToRaw(item, visited))
+  if (raw instanceof Date) return new Date(raw.getTime())
+  if (raw instanceof Map) {
+    const m = new Map()
+    raw.forEach((v, k) => m.set(deepToRaw(k, visited), deepToRaw(v, visited)))
+    return m
+  }
+  if (raw instanceof Set) {
+    const s = new Set()
+    raw.forEach(v => s.add(deepToRaw(v, visited)))
+    return s
+  }
+  const result: Record<string, any> = {}
+  for (const key in raw) {
+    if (Object.prototype.hasOwnProperty.call(raw, key)) {
+      result[key] = deepToRaw(raw[key], visited)
+    }
+  }
+  return result
+}
+
+export function cloneSubTableRows(rows: any[]): any[] {
+  // Deep-unwrap all Vue proxies recursively — avoids JSON.stringify getter traps.
+  // For 41 rows × ~10 cols this is ~410 property reads, no serialization overhead.
+  return rows.map(row => deepToRaw(row))
+}
+
+/** Clone + flatten __subTables__ once for rehydrate / MI resync (JSON clone avoids reactive getter traps). */
+export function cloneAndFlattenSubTablesMap(savedMap: Record<string, unknown>): Record<string, unknown> {
+  const flattened = JSON.parse(JSON.stringify(savedMap)) as Record<string, unknown>
+  flattenNestedSubTableRowsIntoPayload(flattened)
+  return flattened
+}
+
+export function cloneSubTableBindings<T extends Array<{ data: any[] }>>(bindings: T): T {
+  return bindings.map(binding => ({
+    ...binding,
+    data: cloneSubTableRows(Array.isArray(binding.data) ? binding.data : [])
+  })) as T
+}
+
+export function yieldToMain(): Promise<void> {
+  return new Promise(resolve => {
+    requestAnimationFrame(() => { setTimeout(resolve, 0) })
+  })
+}
+
+/** When no binding key matches variables, pick a saved row list by column / sub-form field overlap. */
+export function collectSubTableBindingMatchKeys(b: {
+  columns?: Array<{ field?: string }>
+  formFields?: FormField[]
+}): Set<string> {
+  const fieldSet = new Set<string>()
+  for (const c of b.columns || []) {
+    if (typeof c?.field === 'string' && c.field.length > 0) fieldSet.add(c.field)
+  }
+  const walkFormFields = (fields?: FormField[]) => {
+    if (!Array.isArray(fields)) return
+    for (const f of fields) {
+      if (f.type === 'tabs' && Array.isArray(f.tabs)) {
+        for (const tab of f.tabs) walkFormFields(tab.fields)
+      } else if (f.type === 'collapse' && Array.isArray(f.collapsePanels)) {
+        for (const panel of f.collapsePanels) walkFormFields(panel.fields)
+      } else if (f.type === 'card' || f.type === 'row' || f.type === 'col') walkFormFields(f.children)
+      else if (typeof f.key === 'string' && f.key.length > 0) fieldSet.add(f.key)
+    }
+  }
+  walkFormFields(b.formFields)
+  return fieldSet
+}
+
+export const SUB_TABLE_MI_PLACEHOLDER_KEYS = new Set([
+  'assignee_user_id',
+  'assignee_id',
+  'assignee_display_name',
+  'task_status',
+  'task_current_node',
+  'sub_task_status',
+  'sub_task_current_node',
+  'task_id',
+  'task_definition_key',
+])
+
+/** FK / MI keys that must not satisfy {@link subTableRowsLackSavedFieldPayload} alone (sub_task_id without age still blank). */
+export const SUB_TABLE_STRUCTURAL_FK_KEYS = new Set([
+  'sub_task_id',
+  'sub_taskid',
+  'id_idw',
+  'id',
+  'participant_id',
+  'parent_id',
+  'row_id',
+  'main_id',
+])
+
+export function pickSubTableRowValueIgnoreKeyCase(o: Record<string, unknown>, key: string): unknown {
+  if (Object.prototype.hasOwnProperty.call(o, key)) return o[key]
+  const want = key.toLowerCase()
+  for (const rk of Object.keys(o)) {
+    if (rk.toLowerCase() === want) return o[rk]
+  }
+  return undefined
+}
+
+export function subTableRowsLackSavedFieldPayload(rows: unknown[] | undefined, fieldKeys: Set<string>): boolean {
+  if (fieldKeys.size === 0) return false
+  if (!Array.isArray(rows) || rows.length === 0) return true
+  const checkKeys = [...fieldKeys].filter(k => {
+    const lk = k.toLowerCase()
+    return !SUB_TABLE_MI_PLACEHOLDER_KEYS.has(lk) && !SUB_TABLE_STRUCTURAL_FK_KEYS.has(lk)
+  })
+  if (checkKeys.length === 0) return true
+  for (const row of rows) {
+    if (!row || typeof row !== 'object') continue
+    const o = row as Record<string, unknown>
+    for (const k of checkKeys) {
+      const v = pickSubTableRowValueIgnoreKeyCase(o, k)
+      if (v === undefined || v === null || v === '') continue
+      if (typeof v === 'boolean') return false
+      if (typeof v === 'number' && !Number.isNaN(v)) return false
+      if (typeof v === 'string' && v.trim() !== '') return false
+    }
+  }
+  return true
+}
+
+export type SubTableBindingAlignable = {
+  bindingId?: number
+  tableId?: number | null
+  tableName: string
+  data: any[]
+  primaryKeyFields?: string[]
+}
+
+/** Union-find + merged snapshot assignment — shared by full-cardinality align vs diagram-only align. */
+export function applyUnionFindMergedRowSnapshots(all: SubTableBindingAlignable[]): void {
+  if (all.length === 0) return
+
+  const parent = all.map((_, i) => i)
+  const find = (i: number): number => {
+    if (parent[i] !== i) parent[i] = find(parent[i])
+    return parent[i]
+  }
+  const union = (i: number, j: number) => {
+    const ri = find(i)
+    const rj = find(j)
+    if (ri !== rj) parent[ri] = rj
+  }
+
+  for (let i = 0; i < all.length; i++) {
+    for (let j = i + 1; j < all.length; j++) {
+      const a = all[i]!
+      const b = all[j]!
+      const tnA = normalizeSubTableName(a.tableName)
+      const tnB = normalizeSubTableName(b.tableName)
+      const tidA = a.tableId != null && !Number.isNaN(Number(a.tableId)) ? Number(a.tableId) : null
+      const tidB = b.tableId != null && !Number.isNaN(Number(b.tableId)) ? Number(b.tableId) : null
+      const sameById = tidA != null && tidB != null && tidA === tidB
+      const sameByName = tnA.length > 0 && tnA === tnB
+      if (!sameById && !sameByName) continue
+
+      const bidA = a.bindingId
+      const bidB = b.bindingId
+      if (
+        bidA !== undefined &&
+        bidB !== undefined &&
+        bidA !== bidB &&
+        Array.isArray(a.data) &&
+        Array.isArray(b.data) &&
+        a.data.length > 0 &&
+        b.data.length > 0
+      ) {
+        continue
+      }
+      union(i, j)
+    }
+  }
+
+  const byRoot = new Map<number, SubTableBindingAlignable[]>()
+  for (let i = 0; i < all.length; i++) {
+    const r = find(i)
+    if (!byRoot.has(r)) byRoot.set(r, [])
+    byRoot.get(r)!.push(all[i]!)
+  }
+
+  for (const group of byRoot.values()) {
+    let pkFields: string[] | undefined
+    for (const b of group) {
+      const pks = b.primaryKeyFields
+      if (!pkFields?.length && Array.isArray(pks) && pks.length > 0) {
+        pkFields = pks.map(f => String(f).trim()).filter(Boolean)
+      }
+    }
+    let merged: any[] = []
+    for (const b of group) {
+      merged = mergeSubTableRowsByRowId(merged, Array.isArray(b.data) ? b.data : [], pkFields)
+    }
+    if (merged.length === 0) continue
+    const snapshot = merged.map(r => ({ ...r }))
+    for (const b of group) {
+      b.data = snapshot
+    }
+  }
+}

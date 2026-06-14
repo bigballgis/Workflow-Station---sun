@@ -1,7 +1,7 @@
 package com.developer.controller;
 
 import com.developer.component.FunctionUnitComponent;
-import com.developer.dto.ApiResponse;
+import com.platform.common.dto.ApiResponse;
 import com.developer.dto.DevGroupAssignmentRequest;
 import com.developer.dto.FunctionUnitRequest;
 import com.developer.dto.FunctionUnitResponse;

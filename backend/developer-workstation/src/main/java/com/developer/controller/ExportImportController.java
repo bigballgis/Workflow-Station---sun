@@ -1,7 +1,7 @@
 package com.developer.controller;
 
 import com.developer.component.ExportImportComponent;
-import com.developer.dto.ApiResponse;
+import com.platform.common.dto.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;

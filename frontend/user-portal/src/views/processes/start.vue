@@ -276,47 +276,39 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, Share, Document, Clock, FolderOpened, Promotion, Loading } from '@element-plus/icons-vue'
 import { processApi } from '@/api/process'
-import ProcessDiagram, { type ProcessNode, type ProcessFlow } from '@/components/ProcessDiagram.vue'
-import ProcessHistory, { type HistoryRecord } from '@/components/ProcessHistory.vue'
-import FormRenderer, { type FormField, type FormTab } from '@/components/FormRenderer.vue'
-import { normalizePortalViews, isFormCreateRuleReadonly, isFormCreateRuleHidden, applyDesignerHideFlagToFormField, isRowRule, isColRule, getRuleChildren, getRowGutter, getColSpan, extractRowColumnFields, parseFormRulesLayout, isTabsRule, isCardRule, isCollapseRule, convertAuxiliaryLayoutField, extractTabsFromTabsRule, extractCollapsePanelsFromRule, getLayoutKey, getLayoutLabel, collectPlacedSubTableBindingIds, computeNeededSubTableBindingIds } from '@/components/formRendererHelpers'
-import { applyRuleDefaultToFormField } from '@/utils/formCreateRuleDefaults'
-import { applyFormCreateValidationToFormField, isFormCreateRuleRequired } from '@/utils/formCreateValidateRules'
+import ProcessDiagram from '@/components/ProcessDiagram.vue'
+import ProcessHistory from '@/components/ProcessHistory.vue'
+import FormRenderer from '@/components/FormRenderer.vue'
+import { collectPlacedSubTableBindingIds, computeNeededSubTableBindingIds } from '@/components/formRendererHelpers'
 import N8nActionDialog from '@/components/N8nActionDialog.vue'
-import type { ActionDefinition } from '@/components/N8nActionDialog.vue'
 import { applyAutoFill } from '@/utils/n8nAutoFillEngine'
 import { relationTableApi } from '@/api/relationTable'
 import { isDisabledMessage } from '@/utils/statusMatcher'
 import { getUser } from '@/api/auth'
 import { isProcessStartBlockedByWorkspace } from '@/utils/workspaceProcessGuard'
 import {
-  normalizeSubTableName,
   resolveSubTablePrimaryKeyFields,
   flattenNestedSubTableRowsIntoPayload,
-  normalizeSubTableRowsForBinding
+  normalizeSubTableRowsForBinding,
 } from '@/composables/tasks/shared'
 import {
-  buildLookupColumnProps,
-  enrichLookupColumnPropsFromSubFormRule,
-  mergeListViewFieldColumn,
-  parseLookupConfig,
-  resolveSubListViewColumnsForBinding,
   buildRelationTableFieldIndexFromDataTables,
-  deriveColumnsFromRelationFieldDefinitions,
-  resolveSubTableSchemaByTableId,
-  enrichColumnsWithTableFieldDisplayNames,
   resolveBindingFieldDefinitions,
-  defaultAttachmentListColumns,
-  SHARED_ATTACHMENT_RELATION_TABLE_ID,
-  type RelationFieldDef,
 } from '@/components/subTableAddDialogHelpers'
-import { resolveAssigneeFieldForBinding } from '@/utils/subTableAssignment'
+import type { BindingFieldDefinition } from '@/utils/subTableRowRuntime'
+import { createProcessStartState } from '@/composables/processStart/useProcessStartState'
+import { createProcessStartFormParsing } from '@/composables/processStart/useProcessStartFormParsing'
+import { createProcessStartSubTables } from '@/composables/processStart/useProcessStartSubTables'
+import {
+  parseBpmnXmlAndGetStartFormId,
+  createBpmnDiagramParser,
+} from '@/composables/processStart/useProcessStartBpmn'
 
 const route = useRoute()
 const router = useRouter()
@@ -333,156 +325,94 @@ function isSubmitLikeAction(action: { action?: string; actionType?: string }) {
 const functionUnitId = computed(() => route.params.key as string)
 const isDraftMode = computed(() => route.query.draft === 'true')
 
-// 状态
-const loading = ref(true)
-const loadError = ref('')
-const isDisabled = ref(false)
-const isAccessDenied = ref(false)
-const noProcessForm = ref(false)
-const submitting = ref(false)
-const savingDraft = ref(false)
-const currentAction = ref('')
+// 响应式状态 + 可变缓存（容器，无行为）
+const state = createProcessStartState()
+const {
+  loading,
+  loadError,
+  isDisabled,
+  isAccessDenied,
+  noProcessForm,
+  submitting,
+  savingDraft,
+  currentAction,
+  functionUnitName,
+  functionUnitVersion,
+  functionUnitCode,
+  processNodes,
+  processFlows,
+  currentNodeId,
+  completedNodeIds,
+  bpmnXml,
+  formFields,
+  formTabs,
+  formFieldsAfterTabs,
+  formData,
+  currentFormName,
+  formLabelWidth,
+  formLabelPosition,
+  formFormOptions,
+  formConfigJson,
+  formRendererRef,
+  subTableBindings,
+  primaryTableBinding,
+  caches,
+  lookupDbConfigs,
+  relationViewConfigs,
+  historyRecords,
+  availableActions,
+  n8nActionDialogVisible,
+  n8nActionDefinition,
+  n8nInitialData,
+} = state
 
-// 功能单元信息
-const functionUnitName = ref('')
-const functionUnitVersion = ref('')
-const functionUnitCode = ref('')
+// 表单解析（form-create 规则 → 字段、子表列推导）
+const { parseFormConfig, deriveColumnsFromBinding } = createProcessStartFormParsing({
+  lookupDbConfigs,
+  relationViewConfigs,
+  formConfigJson,
+  formLabelPosition,
+  formFormOptions,
+  formTabs,
+  formFields,
+  formFieldsAfterTabs,
+})
 
-// 流程图数据
-const processNodes = ref<ProcessNode[]>([])
-const processFlows = ref<ProcessFlow[]>([])
-const currentNodeId = ref('')
-const completedNodeIds = ref<string[]>([])
-const bpmnXml = ref('')
+// 子表列解析 + 草稿/提交载荷
+const {
+  resolveSubTableBindingColumnsForStart,
+  buildStartFormSubTablesPayload,
+} = createProcessStartSubTables({
+  caches,
+  subTableBindings,
+  deriveColumnsFromBinding,
+})
 
-// 表单数据
-const formFields = ref<FormField[]>([])
-const formTabs = ref<FormTab[]>([])
-const formFieldsAfterTabs = ref<FormField[]>([])
-const formData = ref<Record<string, any>>({})
-const currentFormName = ref('')
-const formLabelWidth = ref('160px')
-const formLabelPosition = ref<'left' | 'right' | 'top'>('left')
-const formFormOptions = ref<Record<string, unknown>>({})
-const formConfigJson = ref<Record<string, unknown> | null>(null)
-const formRendererRef = ref<InstanceType<typeof FormRenderer> | null>(null)
-
-// Sub-table bindings for the start form
-const subTableBindings = ref<Array<{
-  bindingId: number
-  tableId?: number | null
-  bindingType: string
-  bindingMode: string
-  tableName: string
-  tableType: string
-  tableDescription: string
-  /** Designer PK columns from tableBindings (admin-center); avoids hardcoding id/rowId. */
-  primaryKeyFields?: string[]
-  columns: Array<{ field: string; label: string; type?: string }>
-  portalViews?: Record<string, unknown> | null
-  data: any[]
-  fieldDefinitions?: Array<Record<string, unknown>>
-  bindingLinkMode?: string
-  foreignKeyField?: string | null
-}>>([])
-
-const primaryTableBinding = ref<{
-  tableId?: number | null
-  tableName?: string
-  fieldDefinitions?: Array<Record<string, unknown>>
-} | null>(null)
-
-let cachedContentForms: unknown[] = []
-let cachedRelationTableFieldIndex = new Map<number, RelationFieldDef>()
-
-function isPortalSharedAttachmentTableBinding(b: {
-  bindingId?: number
-  tableId?: number | null
-  tableName?: string
-  foreignKeyField?: string | null
-}): boolean {
-  const tableIdNum = b.tableId != null ? Number(b.tableId) : NaN
-  const tn = normalizeSubTableName(String(b.tableName ?? ''))
-  if (Number.isFinite(tableIdNum) && tableIdNum === SHARED_ATTACHMENT_RELATION_TABLE_ID) return true
-  if (tn === 'attachment') return true
-  return String(b.foreignKeyField ?? '').trim().toLowerCase() === 'main_id' && tn === 'attachment'
-}
-
-function resolveSubTableBindingColumnsForStart(
-  b: {
-    bindingId?: number
-    tableId?: number | null
-    tableName?: string
-    foreignKeyField?: string | null
-    subFormConfig?: { rule?: unknown[] }
-  },
-  subForms: Record<string, any>,
-  formConfig: Record<string, any>,
-): ReturnType<typeof deriveColumnsFromBinding> {
-  let columns = deriveColumnsFromBinding(b, subForms, formConfig)
-  const tableIdNum = b.tableId != null ? Number(b.tableId) : NaN
-  if ((!Array.isArray(columns) || columns.length === 0) && Number.isFinite(tableIdNum) && cachedContentForms.length > 0) {
-    const alt = resolveSubTableSchemaByTableId(tableIdNum, cachedContentForms, b.bindingId)
-    if (alt) {
-      columns = deriveColumnsFromBinding({ ...b, bindingId: alt.bindingId }, alt.subForms, alt.formConfig)
-    }
-    if ((!columns || columns.length === 0) && cachedRelationTableFieldIndex.has(tableIdNum)) {
-      columns = deriveColumnsFromRelationFieldDefinitions(cachedRelationTableFieldIndex.get(tableIdNum)!)
-    }
-  }
-  if ((!columns || columns.length === 0) && isPortalSharedAttachmentTableBinding(b)) {
-    columns = defaultAttachmentListColumns()
-  }
-  if (Number.isFinite(tableIdNum) && columns?.length) {
-    columns = enrichColumnsWithTableFieldDisplayNames(columns, tableIdNum, cachedRelationTableFieldIndex)
-  }
-  return Array.isArray(columns) ? columns : []
-}
-
-/** Match task detail / autosave: key __subTables__ by binding id and table display name so downstream forms with new bindingIds can resolve rows. */
-function buildStartFormSubTablesPayload(): Record<string, unknown> {
-  const subTables: Record<string, unknown> = {}
-  for (const b of subTableBindings.value) {
-    const rows = normalizeSubTableRowsForBinding(Array.isArray(b.data) ? b.data : [])
-    subTables[b.bindingId] = rows
-    subTables[String(b.bindingId)] = rows
-    const tn = String(b.tableName || '').trim()
-    if (tn) {
-      subTables[tn] = rows
-      subTables[normalizeSubTableName(tn)] = rows
-    }
-  }
-  flattenNestedSubTableRowsIntoPayload(subTables)
-  return subTables
-}
+// BPMN 流程图解析
+const { parseBpmnXml } = createBpmnDiagramParser({
+  t,
+  processNodes,
+  processFlows,
+  currentNodeId,
+  completedNodeIds,
+})
 
 const placedBindingIds = computed((): Set<number> => {
   return collectPlacedSubTableBindingIds(formFields.value, formTabs.value, formFieldsAfterTabs.value)
 })
 
-// Lookup config fallback map (from rt_lookup_configs)
-const lookupDbConfigs = ref<Record<string, { tableId: number; searchFields: string[]; displayField: string; viewFields: any[] }>>({})
-
-// Relation view configs from configJson (designed in developer-workstation)
-const relationViewConfigs = ref<Record<string, { viewFields: any[]; allFields: any[] }>>({})
-
-// 流转记录
-const historyRecords = ref<HistoryRecord[]>([])
-
-// 可用动作
-const availableActions = ref<Array<{
+/**
+ * 功能单元内容里的表单项（admin-center FormContentDTO）真实形状：在 API 的 `{ id; name; data; type }`
+ * 之外还携带 `sourceId` / `tableBindings` 等字段。仅放宽类型注解，运行时取值不变。
+ */
+interface StartFormContentItem {
   id: string
-  label: string
-  type?: 'primary' | 'success' | 'warning' | 'danger' | 'info'
-  action?: string
-  actionType?: string
-  configJson?: string
-}>>([])
-
-// N8N Action 对话框状态
-const n8nActionDialogVisible = ref(false)
-const n8nActionDefinition = ref<ActionDefinition>({ id: 0 })
-const n8nInitialData = ref<Record<string, any> | undefined>(undefined)
+  name: string
+  data: string
+  type: string
+  sourceId?: string | number
+  tableBindings?: any[]
+}
 
 // 加载功能单元内容
 const loadFunctionUnitContent = async () => {
@@ -501,8 +431,8 @@ const loadFunctionUnitContent = async () => {
       return
     }
 
-    cachedContentForms = content.forms || []
-    cachedRelationTableFieldIndex = buildRelationTableFieldIndexFromDataTables(content.dataTables)
+    caches.cachedContentForms = content.forms || []
+    caches.cachedRelationTableFieldIndex = buildRelationTableFieldIndexFromDataTables(content.dataTables)
     
     // 设置基本信息
     functionUnitName.value = content.name || ''
@@ -531,11 +461,14 @@ const loadFunctionUnitContent = async () => {
         return
       }
 
-      let selectedForm = content.forms[0] // 默认第一个
-      
+      // 功能单元内容项实际含 sourceId / tableBindings / fieldDefinitions（admin-center FormContentDTO）；
+      // 此处把 API 的窄声明放宽到运行时真实形状，仅为类型注解，不改任何取值逻辑。
+      const contentForms = content.forms as StartFormContentItem[]
+      let selectedForm = contentForms[0] // 默认第一个
+
       // 优先使用 formId 匹配 sourceId（原始表单ID）
       if (startFormInfo.formId) {
-        const matchedForm = content.forms.find((f: any) => 
+        const matchedForm = contentForms.find((f: any) =>
           String(f.sourceId) === startFormInfo.formId
         )
         if (matchedForm) {
@@ -596,7 +529,7 @@ const loadFunctionUnitContent = async () => {
       // Load sub-table bindings (SUB / RELATED, skip PRIMARY)
       const subTablePortalViewsPayload = formConfigForPk.subTablePortalViews || {}
       const bindings: typeof subTableBindings.value = []
-      let primaryBindingMeta: { tableId?: number | null; tableName?: string } | null = null
+      let primaryBindingMeta: typeof primaryTableBinding.value = null
       for (const b of (selectedForm.tableBindings || [])) {
         if (b.bindingType === 'PRIMARY') {
           primaryBindingMeta = {
@@ -604,8 +537,8 @@ const loadFunctionUnitContent = async () => {
             tableName: b.tableDisplayName || b.tableName,
             fieldDefinitions: resolveBindingFieldDefinitions(
               { tableId: (b as { tableId?: number | null }).tableId, fieldDefinitions: (b as { fieldDefinitions?: Array<Record<string, unknown>> }).fieldDefinitions },
-              cachedRelationTableFieldIndex,
-            ),
+              caches.cachedRelationTableFieldIndex,
+            ) as unknown as BindingFieldDefinition[],
           }
           continue
         }
@@ -632,8 +565,8 @@ const loadFunctionUnitContent = async () => {
           portalViews: bindingPortalViews,
           fieldDefinitions: resolveBindingFieldDefinitions(
             { tableId: tid, fieldDefinitions: (b as { fieldDefinitions?: Array<Record<string, unknown>> }).fieldDefinitions },
-            cachedRelationTableFieldIndex,
-          ),
+            caches.cachedRelationTableFieldIndex,
+          ) as unknown as BindingFieldDefinition[],
           bindingLinkMode: (b as { bindingLinkMode?: string }).bindingLinkMode,
           foreignKeyField: (b as { foreignKeyField?: string | null }).foreignKeyField ?? null,
           data: []
@@ -699,100 +632,6 @@ const loadFunctionUnitContent = async () => {
   }
 }
 
-// 解析 BPMN XML 并获取开始节点后第一个用户任务的 formId
-const parseBpmnXmlAndGetStartFormId = (xml: string): { formId: string | null, formName: string | null, actionIds: string[] | null } => {
-  if (!xml) return { formId: null, formName: null, actionIds: null }
-  
-  try {
-    const parser = new DOMParser()
-    const doc = parser.parseFromString(xml, 'text/xml')
-    
-    // 查找开始事件
-    const allElements = doc.getElementsByTagName('*')
-    let startEventId: string | null = null
-    
-    for (let i = 0; i < allElements.length; i++) {
-      const el = allElements[i]
-      const localName = el.localName || el.nodeName.split(':').pop()
-      
-      if (localName === 'startEvent') {
-        startEventId = el.getAttribute('id')
-        break
-      }
-    }
-    
-    if (!startEventId) return { formId: null, formName: null, actionIds: null }
-    
-    // 查找从开始事件出发的顺序流
-    let firstTaskId: string | null = null
-    for (let i = 0; i < allElements.length; i++) {
-      const el = allElements[i]
-      const localName = el.localName || el.nodeName.split(':').pop()
-      
-      if (localName === 'sequenceFlow') {
-        const sourceRef = el.getAttribute('sourceRef')
-        if (sourceRef === startEventId) {
-          firstTaskId = el.getAttribute('targetRef')
-          break
-        }
-      }
-    }
-    
-    if (!firstTaskId) return { formId: null, formName: null, actionIds: null }
-    
-    // 查找第一个用户任务的 formId、formName 和 actionIds
-    let formId: string | null = null
-    let formName: string | null = null
-    let actionIds: string[] | null = null
-    
-    for (let i = 0; i < allElements.length; i++) {
-      const el = allElements[i]
-      const localName = el.localName || el.nodeName.split(':').pop()
-      
-      if (localName === 'userTask') {
-        const taskId = el.getAttribute('id')
-        
-        if (taskId === firstTaskId) {
-          // 查找 formId、formName 和 actionIds 属性
-          const taskProps = el.getElementsByTagName('*')
-          for (let j = 0; j < taskProps.length; j++) {
-            const prop = taskProps[j]
-            const propLocalName = prop.localName || prop.nodeName.split(':').pop()
-            
-            if (propLocalName === 'property' || propLocalName === 'values') {
-              const name = prop.getAttribute('name')
-              const value = prop.getAttribute('value')
-              
-              if (name === 'formId' && value) {
-                formId = value
-              }
-              if (name === 'formName' && value) {
-                formName = value
-              }
-              if (name === 'actionIds' && value) {
-                try {
-                  // actionIds 格式: "[46,47]" 或 "46,47"
-                  const cleaned = value.replace(/[\[\]\s]/g, '')
-                  actionIds = cleaned.split(',').filter(Boolean)
-                } catch (e) {
-                  console.error('Failed to parse actionIds:', value, e)
-                }
-              }
-            }
-          }
-          break
-        }
-      }
-    }
-    
-    return { formId, formName, actionIds }
-  } catch (error) {
-    console.error('Failed to parse BPMN for start formId:', error)
-  }
-  
-  return { formId: null, formName: null, actionIds: null }
-}
-
 // 加载草稿数据
 const loadDraftData = async () => {
   try {
@@ -818,708 +657,6 @@ const loadDraftData = async () => {
   } catch (error) {
     console.error('Failed to load draft:', error)
   }
-}
-
-// 解析 BPMN XML
-const parseBpmnXml = (xml: string) => {
-  if (!xml) return
-  
-  try {
-    const parser = new DOMParser()
-    const doc = parser.parseFromString(xml, 'text/xml')
-    
-    const nodes: ProcessNode[] = []
-    const flows: ProcessFlow[] = []
-    const completed: string[] = []
-    
-    // Parse position info from BPMN DI
-    const positionMap = new Map<string, { x: number; y: number; width: number; height: number }>()
-    doc.querySelectorAll('BPMNShape, bpmndi\\:BPMNShape').forEach(shape => {
-      const bpmnElement = shape.getAttribute('bpmnElement')
-      if (bpmnElement) {
-        const bounds = shape.querySelector('Bounds, dc\\:Bounds')
-        if (bounds) {
-          positionMap.set(bpmnElement, {
-            x: parseFloat(bounds.getAttribute('x') || '0'),
-            y: parseFloat(bounds.getAttribute('y') || '0'),
-            width: parseFloat(bounds.getAttribute('width') || '100'),
-            height: parseFloat(bounds.getAttribute('height') || '80')
-          })
-        }
-      }
-    })
-
-    const getParentSubProcessId = (element: Element): string | null => {
-      let node: Node | null = element.parentNode
-      while (node && node.nodeType === 1) {
-        const el = node as Element
-        const localName = el.localName || el.nodeName.split(':').pop()
-        if (localName === 'subProcess') return el.getAttribute('id')
-        if (localName === 'process' || localName === 'definitions') return null
-        node = el.parentNode
-      }
-      return null
-    }
-
-    // Pre-parse sequence flows for BFS to find the first userTask
-    const seqFlows: Array<{sourceRef: string, targetRef: string}> = []
-    doc.querySelectorAll('sequenceFlow').forEach(flow => {
-      seqFlows.push({
-        sourceRef: flow.getAttribute('sourceRef') || '',
-        targetRef: flow.getAttribute('targetRef') || ''
-      })
-    })
-
-    // Collect element types by ID for BFS traversal
-    const allElements = doc.getElementsByTagName('*')
-    const elementTypeById = new Map<string, string>()
-    for (let i = 0; i < allElements.length; i++) {
-      const el = allElements[i]
-      const id = el.getAttribute('id')
-      const localName = el.localName || el.nodeName.split(':').pop() || ''
-      if (id) elementTypeById.set(id, localName)
-    }
-
-    // BFS from main-process startEvents to find the first userTask
-    let firstUserTaskId = ''
-    const mainStartIds: string[] = []
-    doc.querySelectorAll('startEvent').forEach(event => {
-      if (!getParentSubProcessId(event)) {
-        mainStartIds.push(event.getAttribute('id') || '')
-      }
-    })
-    const visited = new Set<string>(mainStartIds)
-    const queue = [...mainStartIds]
-    while (queue.length > 0 && !firstUserTaskId) {
-      const currentId = queue.shift()!
-      const elType = elementTypeById.get(currentId)
-      if (elType === 'userTask') {
-        firstUserTaskId = currentId
-        break
-      }
-      for (const f of seqFlows) {
-        if (f.sourceRef === currentId && !visited.has(f.targetRef)) {
-          visited.add(f.targetRef)
-          queue.push(f.targetRef)
-        }
-      }
-    }
-
-    // Parse start events: main-process starts are completed, subprocess starts are pending
-    doc.querySelectorAll('startEvent').forEach((event, index) => {
-      const id = event.getAttribute('id') || `start_${index}`
-      const name = event.getAttribute('name') || t('task.startNode')
-      const pos = positionMap.get(id)
-      const parentSpId = getParentSubProcessId(event)
-      const status = parentSpId ? 'pending' : 'completed'
-      nodes.push({ id, name, type: 'start', status, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
-      if (status === 'completed') completed.push(id)
-    })
-
-    currentNodeId.value = firstUserTaskId
-
-    // Parse user tasks: the first userTask is current, rest are pending
-    doc.querySelectorAll('userTask').forEach((task, index) => {
-      const id = task.getAttribute('id') || `task_${index}`
-      const name = task.getAttribute('name') || t('task.taskFallbackName', { index: index + 1 })
-      const pos = positionMap.get(id)
-      const status = (id === firstUserTaskId) ? 'current' : 'pending'
-      nodes.push({ id, name, type: 'task', status, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
-    })
-    
-    // Parse service tasks
-    doc.querySelectorAll('serviceTask').forEach((task, index) => {
-      const id = task.getAttribute('id') || `service_${index}`
-      const name = task.getAttribute('name') || t('processStart.serviceFallbackName', { index: index + 1 })
-      const pos = positionMap.get(id)
-      nodes.push({ id, name, type: 'task', status: 'pending', x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
-    })
-
-    // Parse subProcess elements
-    const subProcessMap = new Map<string, Element>()
-    for (let i = 0; i < allElements.length; i++) {
-      const el = allElements[i]
-      const localName = el.localName || el.nodeName.split(':').pop()
-      if (localName === 'subProcess') {
-        const spId = el.getAttribute('id')
-        if (spId) subProcessMap.set(spId, el)
-      }
-    }
-    for (const [spId] of subProcessMap) {
-      const pos = positionMap.get(spId)
-      const sp = subProcessMap.get(spId)!
-      const name = sp.getAttribute('name') || ''
-      nodes.push({ id: spId, name, type: 'subprocess', status: 'pending', x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
-    }
-    
-    // Parse gateways
-    doc.querySelectorAll('exclusiveGateway, parallelGateway, inclusiveGateway').forEach((gateway, index) => {
-      const id = gateway.getAttribute('id') || `gateway_${index}`
-      const name = gateway.getAttribute('name') || ''
-      const pos = positionMap.get(id)
-      nodes.push({ id, name, type: 'gateway', status: 'pending', x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
-    })
-    
-    // Parse end events
-    doc.querySelectorAll('endEvent').forEach((event, index) => {
-      const id = event.getAttribute('id') || `end_${index}`
-      const name = event.getAttribute('name') || t('task.endNode')
-      const pos = positionMap.get(id)
-      nodes.push({ id, name, type: 'end', status: 'pending', x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
-    })
-
-    completedNodeIds.value = completed
-
-    
-    // 解析连线的路径点（waypoints）
-    const waypointsMap = new Map<string, Array<{ x: number; y: number }>>()
-    const bpmnEdges = doc.querySelectorAll('BPMNEdge, bpmndi\\:BPMNEdge')
-    bpmnEdges.forEach(edge => {
-      const bpmnElement = edge.getAttribute('bpmnElement')
-      if (bpmnElement) {
-        const waypoints: Array<{ x: number; y: number }> = []
-        const waypointElements = edge.querySelectorAll('waypoint, di\\:waypoint')
-        waypointElements.forEach(wp => {
-          const x = parseFloat(wp.getAttribute('x') || '0')
-          const y = parseFloat(wp.getAttribute('y') || '0')
-          waypoints.push({ x, y })
-        })
-        if (waypoints.length > 0) {
-          waypointsMap.set(bpmnElement, waypoints)
-        }
-      }
-    })
-    
-    // 解析顺序流
-    const sequenceFlows = doc.querySelectorAll('sequenceFlow')
-    sequenceFlows.forEach((flow, index) => {
-      const id = flow.getAttribute('id') || `flow_${index}`
-      const sourceRef = flow.getAttribute('sourceRef') || ''
-      const targetRef = flow.getAttribute('targetRef') || ''
-      const name = flow.getAttribute('name') || ''
-      const waypoints = waypointsMap.get(id)
-      flows.push({ id, sourceRef, targetRef, name, waypoints })
-    })
-    
-    processNodes.value = nodes
-    processFlows.value = flows
-    
-  } catch (error) {
-    console.error('Failed to parse BPMN XML:', error)
-  }
-}
-
-// 解析表单配置 - 将 form-create 规则转换为 FormRenderer 字段
-const parseFormConfig = (configStr: string) => {
-  if (!configStr) return
-  
-  try {
-    const config = typeof configStr === 'string' ? JSON.parse(configStr) : configStr
-    formConfigJson.value = config && typeof config === 'object' ? config as Record<string, unknown> : null
-    console.log('Parsing form config:', config)
-    
-    // 支持两种格式：
-    // 1. { rule: [...], options: {...} } - form-create 设计器格式
-    // 2. 直接的规则数组 [...]
-    let rules = null
-    if (config.rule && Array.isArray(config.rule)) {
-      rules = config.rule
-    } else if (Array.isArray(config)) {
-      rules = config
-    }
-    
-    if (rules) {
-      // 提取 labelWidth 配置（忽略后端配置，使用固定值避免 label 被截断）
-      // if (config.options?.form?.labelWidth) {
-      //   formLabelWidth.value = config.options.form.labelWidth
-      // }
-      // 提取 labelPosition 配置
-      if (config.options?.form?.labelPosition) {
-        formLabelPosition.value = config.options.form.labelPosition
-      }
-      formFormOptions.value = (config.options && typeof config.options === 'object') ? config.options : {}
-      
-      const layout = parseFormRulesLayout(rules, (items) => extractFieldsRecursive(items))
-      formTabs.value = layout.tabs
-      formFields.value = layout.fields
-      formFieldsAfterTabs.value = layout.fieldsAfterTabs
-      console.log('Parsed form layout:', layout)
-    }
-  } catch (error) {
-    console.error('Failed to parse form config:', error)
-  }
-}
-
-// 递归提取字段。form-create 的 subForm/tableForm/tableFormColumn 为包装节点：不生成字段，
-// 但必须落到下方对 `children` 的递归，否则子表行内字段全部丢失。
-const FC_SKIP_TYPES = new Set(['subForm', 'tableForm', 'tableFormColumn'])
-
-const extractFieldsRecursive = (items: any[]): FormField[] => {
-  const fields: FormField[] = []
-  for (const item of items) {
-    const bindingId = item._bindingId ?? item.props?._bindingId
-    if (item.type === 'subTable' && bindingId != null) {
-      const rawPv = item.props?.portalViews
-      const hasWidgetPortalViews =
-        rawPv != null && typeof rawPv === 'object' && Object.keys(rawPv).length > 0
-      const subTableField: FormField = {
-        key: `__subTable_${bindingId}`,
-        label: '',
-        type: 'subTable',
-        _bindingId: Number(bindingId),
-        ...(hasWidgetPortalViews ? { portalViews: normalizePortalViews(rawPv) } : {}),
-        span: 24,
-      }
-      applyDesignerHideFlagToFormField(subTableField, item)
-      fields.push(subTableField)
-      continue
-    }
-    const auxField = convertAuxiliaryLayoutField(item, fields.length)
-    if (auxField) {
-      fields.push(auxField)
-      continue
-    }
-    if (isRowRule(item)) {
-      fields.push({
-        key: getLayoutKey(item, fields.length, 'row'),
-        label: '',
-        type: 'row',
-        span: 24,
-        gutter: getRowGutter(item),
-        children: extractRowColumnFields(item, (children) => extractFieldsRecursive(children)),
-      } as any)
-      continue
-    } else if (isColRule(item)) {
-      fields.push({
-        key: getLayoutKey(item, fields.length, 'col'),
-        label: '',
-        type: 'col',
-        span: getColSpan(item),
-        children: extractFieldsRecursive(getRuleChildren(item)),
-      } as any)
-      continue
-    }
-    if (isTabsRule(item)) {
-      const nestedTabs = extractTabsFromTabsRule(item, (children) => extractFieldsRecursive(children))
-      if (nestedTabs.length > 0) {
-        fields.push({
-          key: getLayoutKey(item, fields.length, 'tabs'),
-          label: '',
-          type: 'tabs',
-          span: 24,
-          tabs: nestedTabs,
-        } as any)
-      }
-      continue
-    }
-    if (isCollapseRule(item)) {
-      const collapsePanels = extractCollapsePanelsFromRule(item, (children) => extractFieldsRecursive(children))
-      if (collapsePanels.length > 0) {
-        fields.push({
-          key: getLayoutKey(item, fields.length, 'collapse'),
-          label: '',
-          type: 'collapse',
-          span: 24,
-          collapsePanels,
-        } as any)
-      }
-      continue
-    }
-    if (isCardRule(item)) {
-      fields.push({
-        key: getLayoutKey(item, fields.length, 'card'),
-        label: getLayoutLabel(item),
-        type: 'card',
-        span: item.col?.span || 24,
-        children: extractFieldsRecursive(getRuleChildren(item))
-      } as any)
-      continue
-    } else if (item.type === 'lookup' && item.field) {
-      // Lookup field — parse config from form-create rule props.lookupConfig
-      let lookupCfg: any = {}
-      try {
-        const raw = item.props?.lookupConfig
-        lookupCfg = typeof raw === 'string' ? JSON.parse(raw || '{}') : (raw || {})
-      } catch { lookupCfg = {} }
-      // Merge with rt_lookup_configs fallback
-      const dbCfg = lookupDbConfigs.value[item.field]
-      // Resolve view fields: prefer configJson.relationViews (designed in developer-workstation),
-      // then fall back to rt_view_fields (from getLookupConfigs)
-      let resolvedViewFields: any[] = []
-      if (lookupCfg.bindingId && relationViewConfigs.value[lookupCfg.bindingId]) {
-        resolvedViewFields = relationViewConfigs.value[lookupCfg.bindingId].viewFields || []
-      }
-      if (!resolvedViewFields.length) {
-        resolvedViewFields = dbCfg?.viewFields || []
-      }
-      const field: any = {
-        key: item.field,
-        label: item.title || item.field,
-        type: 'lookup',
-        placeholder: item.props?.placeholder || 'Click to search',
-        span: item.col?.span || 24,
-        _lookupTableId: lookupCfg.tableId || dbCfg?.tableId || 0,
-        _lookupSearchFields: (lookupCfg.searchFields?.length ? lookupCfg.searchFields : null) || dbCfg?.searchFields || [],
-        _lookupDisplayField: (lookupCfg.displayFields?.[0]) || dbCfg?.displayField || '',
-        _lookupDisplayFields: lookupCfg.displayFields || [],
-        _lookupSelectedDisplayField: lookupCfg.selectedDisplayField || lookupCfg.displayField || '',
-        _lookupFilterConditions: Array.isArray(lookupCfg.filterConditions) ? lookupCfg.filterConditions : [],
-        _lookupViewFields: lookupCfg.showBackfillView === false ? [] : resolvedViewFields,
-        _lookupShowBackfillView: lookupCfg.showBackfillView !== false
-      }
-      if (isFormCreateRuleReadonly(item)) {
-        field.readonly = true
-      }
-      applyDesignerHideFlagToFormField(field, item)
-      fields.push(field)
-    } else if (FC_SKIP_TYPES.has(item.type)) {
-      // Traverse children only; `continue` would drop nested sub-table row fields.
-    } else if (item.field) {
-      const field = convertFormCreateRule(item)
-      if (field) fields.push(field)
-    }
-    const childItems = getRuleChildren(item)
-    if (childItems.length > 0) {
-      if (FC_SKIP_TYPES.has(item.type) || (!isCardRule(item) && !isRowRule(item) && !isColRule(item) && !isTabsRule(item) && !isCollapseRule(item))) {
-        fields.push(...extractFieldsRecursive(childItems))
-      }
-    }
-  }
-  return fields
-}
-
-// 将 form-create 规则转换为 FormRenderer 字段
-const convertFormCreateRule = (rule: any): FormField | null => {
-  if (!rule || !rule.field) return null
-  
-  // 确定日期类型
-  let dateType = 'date'
-  if (rule.props?.type === 'datetime' || rule.props?.type === 'datetimerange') {
-    dateType = 'datetime'
-  } else if (rule.props?.type === 'daterange') {
-    dateType = 'daterange'
-  }
-  
-  const typeMap: Record<string, string> = {
-    'input': 'text',
-    'inputNumber': 'number',
-    'select': 'select',
-    'radio': 'radio',
-    'checkbox': 'checkbox',
-    'switch': 'switch',
-    'datePicker': dateType,
-    'DatePicker': dateType,
-    'date-picker': dateType,
-    'el-date-picker': dateType,
-    'timePicker': 'time',
-    'TimePicker': 'time',
-    'time-picker': 'time',
-    'el-time-picker': 'time',
-    'cascader': 'cascader',
-    'rate': 'rate',
-    'slider': 'slider',
-    'colorPicker': 'colorPicker',
-    'treeSelect': 'treeselect',
-    'upload': 'upload',
-    'editor': 'editor',
-    'signature': 'signature',
-    'transfer': 'transfer'
-  }
-  
-  const field: FormField = {
-    key: rule.field,
-    label: rule.title || rule.field,
-    type: typeMap[rule.type] || 'text',
-    placeholder: rule.props?.placeholder || '',
-    span: rule.col?.span || 24
-  }
-  applyFormCreateValidationToFormField(field, rule as Record<string, unknown>)
-  
-  // 处理选项 (rule.options or rule.props.options)
-  const rawOptions = rule.options || rule.props?.options
-  if (rawOptions) {
-    if (rule.type === 'cascader') {
-      // Cascader needs full hierarchical options with children
-      field.options = rawOptions
-    } else {
-      field.options = rawOptions.map((opt: any) => ({
-        label: opt.label || opt.value,
-        value: opt.value
-      }))
-    }
-  }
-
-  // 处理级联选择器 props
-  if (rule.type === 'cascader') {
-    field.cascaderProps = rule.props?.props || rule.props?.cascaderProps
-  }
-  
-  // 处理 textarea
-  if (rule.type === 'input' && rule.props?.type === 'textarea') {
-    field.type = 'textarea'
-    field.rows = rule.props?.rows || 3
-  }
-
-  // 处理 password
-  if (rule.type === 'input' && rule.props?.type === 'password') {
-    field.type = 'password'
-  }
-
-  // 处理 timePicker isRange → timerange
-  if (rule.type === 'timePicker' && rule.props?.isRange === true) {
-    field.type = 'timerange'
-  }
-  
-  // 处理数字输入
-  if (rule.type === 'inputNumber') {
-    field.min = rule.props?.min
-    field.max = rule.props?.max
-    field.step = rule.props?.step
-    field.precision = rule.props?.precision
-  }
-
-  // 处理评分
-  if (rule.type === 'rate') { field.max = rule.props?.max || 5 }
-
-  // 处理滑块
-  if (rule.type === 'slider') { field.min = rule.props?.min ?? 0; field.max = rule.props?.max ?? 100; field.step = rule.props?.step || 1 }
-  
-  applyRuleDefaultToFormField(field, rule as Record<string, unknown>)
-
-  // 处理文件上传
-  if (rule.type === 'upload') {
-    const action = rule.props?.action
-    field.uploadUrl = (action && action !== '/') ? action : '/api/v1/upload'
-    field.uploadAccept = rule.props?.accept || '.jpg,.jpeg,.png,.pdf,.docx,.xlsx'
-    field.uploadLimit = rule.props?.limit || 1
-  }
-
-  if (rule.type === 'userSelect' || rule.type === 'user') {
-    field.type = 'user'
-  }
-
-  if (isFormCreateRuleReadonly(rule)) {
-    field.readonly = true
-  }
-
-  applyDesignerHideFlagToFormField(field, rule)
-  
-  // 调试输出
-  console.log('Converting rule:', rule.type, '->', field.type, rule)
-  
-  return field
-}
-
-function isSyntheticLookupField(fieldName?: string): boolean {
-  return !fieldName || String(fieldName).startsWith('lookup:')
-}
-
-function isAssigneeLikeLabel(label?: string): boolean {
-  const normalized = String(label || '').trim().toLowerCase()
-  return /assignee|处理人|負責人|经办人|經辦人/.test(normalized)
-}
-
-// Derive display columns for a sub-table binding based on table type
-const deriveColumnsFromBinding = (
-  binding: any,
-  subForms?: Record<string, any>,
-  formConfig?: Record<string, any>,
-): Array<{ field: string; label: string; type?: string; required?: boolean; options?: Array<{ label: string; value: any }>; props?: Record<string, any> }> => {
-  const subFormRule =
-    binding.subFormConfig?.rule ||
-    subForms?.[binding.bindingId]?.rule ||
-    subForms?.[String(binding.bindingId)]?.rule
-
-  const subFormColumns =
-    subFormRule && Array.isArray(subFormRule) && subFormRule.length > 0
-      ? subFormRule.map((r: any) => {
-        const rProps = r.props || {}
-        let type: string | undefined
-
-        if (r.type === 'input') {
-          if (rProps.type === 'textarea') type = 'textarea'
-          else if (rProps.type === 'password') type = 'password'
-          else type = 'text'
-        } else if (r.type === 'inputNumber') {
-          type = 'number'
-        } else if (r.type === 'select') {
-          type = 'select'
-        } else if (r.type === 'radio') {
-          type = 'radio'
-        } else if (r.type === 'switch') {
-          type = 'switch'
-        } else if (r.type === 'datePicker') {
-          type = rProps.type === 'datetime' ? 'datetime' : 'date'
-        } else if (r.type === 'timePicker') {
-          type = rProps.isRange === true ? 'timerange' : 'time'
-        } else if (r.type === 'treeSelect' || r.type === 'elTreeSelect') {
-          type = 'treeselect'
-        } else if (r.type === 'tree') {
-          type = 'tree'
-        } else if (r.type === 'upload') {
-          type = 'upload'
-        } else if (r.type === 'userSelect' || r.type === 'user') {
-          type = 'user'
-        } else if (r.type === 'departmentSelect' || r.type === 'department') {
-          type = 'department'
-        } else if (r.type === 'colorPicker') {
-          type = 'colorPicker'
-        } else if (r.type === 'rate') {
-          type = 'rate'
-        } else if (r.type === 'slider') {
-          type = 'slider'
-        } else if (r.type === 'editor') {
-          type = 'editor'
-        } else if (r.type === 'signature') {
-          type = 'signature'
-        } else if (r.type === 'transfer') {
-          type = 'transfer'
-        } else if (r.type === 'cascader') {
-          type = 'cascader'
-        } else if (r.type === 'lookup') {
-          type = 'lookup'
-        } else {
-          type = r.type as any
-        }
-
-        const rawOptions = r.options || rProps.options
-        const options = rawOptions
-          ? (type === 'cascader' ? rawOptions : rawOptions.map((o: any) => ({ label: o.label ?? o.value, value: o.value })))
-          : undefined
-
-        const passProps: Record<string, any> = {}
-        const propKeys = [
-          'action', 'accept', 'multiple', 'precision', 'min', 'max', 'rows', 'maxlength', 'fileNameTargetField',
-          'isRange', 'valueFormat', 'startPlaceholder', 'endPlaceholder', 'treeData', 'checkStrictly',
-          'showAlpha', 'allowHalf', 'step', 'cascaderProps', 'leftTitle', 'rightTitle',
-          'boundSubTableBindingId',
-        ]
-        for (const key of propKeys) {
-          if (rProps[key] !== undefined) passProps[key] = rProps[key]
-        }
-        if (rProps.data !== undefined) passProps.treeData = rProps.data
-        if (rProps.nodeKey !== undefined) passProps.nodeKey = rProps.nodeKey
-        if (rProps.showCheckbox !== undefined) passProps.showCheckbox = rProps.showCheckbox
-        if (rProps.props !== undefined) passProps.labelProps = rProps.props
-        if (type === 'cascader' && rProps.props && !passProps.cascaderProps) passProps.cascaderProps = rProps.props
-
-        if (type === 'lookup') {
-          const dbCfg = lookupDbConfigs.value[r.field]
-          const lookupCfg = parseLookupConfig(rProps.lookupConfig)
-          const relationView = lookupCfg.bindingId ? relationViewConfigs.value[lookupCfg.bindingId] : undefined
-          Object.assign(
-            passProps,
-            buildLookupColumnProps(rProps.lookupConfig || '{}', {
-              dbCfg,
-              relationViewFields: relationView?.viewFields as Array<Record<string, unknown>> | undefined,
-            }),
-          )
-          if (typeof rProps.selectedDisplayField === 'string' && rProps.selectedDisplayField.trim() !== '') {
-            passProps.selectedDisplayField = rProps.selectedDisplayField.trim()
-            passProps._lookupSelectedDisplayField = rProps.selectedDisplayField.trim()
-          }
-        }
-
-        if (options) passProps.options = options
-
-        const required = isFormCreateRuleRequired(r as Record<string, unknown>)
-        const readonly = isFormCreateRuleReadonly(r)
-
-        return {
-          field: r.field,
-          label: r.title || r.field,
-          type,
-          required,
-          ...(readonly ? { readonly } : {}),
-          ...(options ? { options } : {}),
-          ...(Object.keys(passProps).length > 0 ? { props: passProps } : {}),
-        }
-      })
-      : []
-
-  const config = formConfig || {}
-  const listColumns = resolveSubListViewColumnsForBinding(
-    config,
-    binding.bindingId,
-    subFormColumns.map(col => col.field),
-  )
-
-  if (Array.isArray(listColumns) && listColumns.length > 0) {
-    const ruleByField = new Map(
-      (Array.isArray(subFormRule) ? subFormRule : []).map((ruleItem: any) => [ruleItem?.field, ruleItem]),
-    )
-    const subFormColumnByField = new Map(subFormColumns.map(col => [col.field, col]))
-    const assigneeField = resolveAssigneeFieldForBinding(
-      subFormColumns as Array<{ field?: string }>,
-      binding.tableDisplayName || binding.tableName,
-    )
-    return enrichLookupColumnPropsFromSubFormRule(
-      listColumns.map((column: any) => {
-      if (column.columnType === 'linkForm') {
-        return {
-          field: column.fieldName || `linkForm:${column.componentId || binding.bindingId}`,
-          label: column.columnLabel || column.displayName || column.linkText || 'Link Form',
-          type: 'linkForm',
-          minWidth: column.minWidth || 120,
-          props: {
-            linkText: column.linkText || 'Details',
-            componentId: column.componentId,
-            boundSubTableBindingId: column.boundSubTableBindingId,
-            boundSubTableName: column.boundSubTableName,
-          },
-        }
-      }
-      if (column.columnType === 'lookup') {
-        const label = column.columnLabel || column.displayName || 'Lookup'
-        const field =
-          isSyntheticLookupField(column.fieldName) && isAssigneeLikeLabel(label) && assigneeField
-            ? assigneeField
-            : (column.fieldName || `lookup:${binding.bindingId}`)
-        const listLookupCfg = parseLookupConfig(column.lookupConfig || '{}')
-        const relationView = listLookupCfg.bindingId
-          ? relationViewConfigs.value[listLookupCfg.bindingId]
-          : undefined
-        return {
-          field,
-          label,
-          type: 'lookup',
-          minWidth: 260,
-          props: buildLookupColumnProps(column.lookupConfig || '{}', {
-            relationViewFields: relationView?.viewFields as Array<Record<string, unknown>> | undefined,
-          }),
-        }
-      }
-
-      const fieldRule = ruleByField.get(column.fieldName)
-      const baseColumn = subFormColumnByField.get(column.fieldName)
-      if (fieldRule?.type === 'lookup' || fieldRule?.props?.lookupConfig || baseColumn?.type === 'lookup') {
-        const rawCfg = fieldRule?.props?.lookupConfig || baseColumn?.props?.lookupConfig || '{}'
-        const mergedLookupCfg = parseLookupConfig(rawCfg)
-        const dbCfg = lookupDbConfigs.value[column.fieldName]
-        const relationView = mergedLookupCfg.bindingId
-          ? relationViewConfigs.value[mergedLookupCfg.bindingId]
-          : undefined
-        return {
-          ...(baseColumn || {}),
-          field: column.fieldName,
-          label: column.displayName || column.columnLabel || baseColumn?.label || fieldRule?.title || column.fieldName,
-          type: 'lookup',
-          minWidth: column.minWidth || baseColumn?.minWidth || 260,
-          placeholder: fieldRule?.props?.placeholder || baseColumn?.placeholder,
-          props: buildLookupColumnProps(rawCfg, {
-            dbCfg,
-            relationViewFields: relationView?.viewFields as Array<Record<string, unknown>> | undefined,
-          }),
-        }
-      }
-
-      return mergeListViewFieldColumn(column, baseColumn, fieldRule)
-    }),
-      subFormRule,
-    )
-  }
-
-  return enrichLookupColumnPropsFromSubFormRule(subFormColumns, subFormRule)
 }
 
 // 初始化流转记录

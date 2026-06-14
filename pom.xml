@@ -93,7 +93,6 @@
                 <scope>import</scope>
             </dependency>
 
-
             <!-- Spring Framework 6.2.x (required by Spring Security 6.5.9; Boot 3.2.1 ships 6.1.x) -->
             <dependency>
                 <groupId>org.springframework</groupId>

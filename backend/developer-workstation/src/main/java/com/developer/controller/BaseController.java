@@ -1,7 +1,7 @@
 package com.developer.controller;
 
-import com.developer.dto.ApiResponse;
-import com.developer.dto.ErrorResponse;
+import com.platform.common.dto.ApiResponse;
+import com.platform.common.exception.ErrorResponse;
 import com.developer.dto.ValidationResult;
 import com.developer.exception.DeveloperBusinessException;
 import com.developer.exception.ResourceNotFoundException;
@@ -28,9 +28,8 @@ import java.util.function.Supplier;
  * Enhanced base controller class that provides common functionality for all API controllers
  * in the developer-workstation module.
  *
- * <p>This module uses its own {@code com.developer.dto.ApiResponse} (not platform-common's),
- * so it does NOT extend AbstractBaseController. admin-center extends AbstractBaseController
- * directly since it uses platform-common's ApiResponse.
+ * <p>Uses platform-common's {@code ApiResponse}/{@code ErrorResponse} (the module-local
+ * duplicates were removed in the code-quality remediation).
  *
  * <p><b>Validates: Requirements 1.1, 3.1, 4.2, 5.1, 7.5</b>
  */

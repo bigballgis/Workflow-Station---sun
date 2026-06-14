@@ -356,15 +356,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount, provide } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Promotion, Grid, Stamp, EditPen, DataAnalysis, ArrowDown, ArrowUp, MagicStick } from '@element-plus/icons-vue'
+import { Promotion, ArrowDown, ArrowUp, MagicStick } from '@element-plus/icons-vue'
 import PhaseIndicator from './PhaseIndicator.vue'
 import ChatMessage from './ChatMessage.vue'
 import GenerationPreview from './GenerationPreview.vue'
 import InlineDocumentViewer from './InlineDocumentViewer.vue'
 import { useAiChat } from '@/composables/useAiChat'
-import { loadDraft as loadGenerationDraft, clearDraft as clearGenerationDraft } from '@/composables/useAiChat'
+import { clearDraft as clearGenerationDraft } from '@/composables/useAiChat'
 import { useAiTemplates } from '@/composables/useAiTemplates'
 import type {
   AiPhase,
@@ -380,7 +380,11 @@ import type {
 import { computeDiff } from '@/types/aiGeneration'
 import type { AiTemplate } from '@/composables/useAiTemplates'
 import { functionUnitApi } from '@/api/functionUnit'
-import { aiGenerationApi } from '@/api/aiGeneration'
+import { useChatDialogScope } from '@/composables/chatDialog/useChatDialogScope'
+import { useChatDialogPreview } from '@/composables/chatDialog/useChatDialogPreview'
+import { useChatDialogUndo } from '@/composables/chatDialog/useChatDialogUndo'
+import { useChatDialogDraft, type RestoredGenerationDraft } from '@/composables/chatDialog/useChatDialogDraft'
+import { useChatDialogMessagesHeight } from '@/composables/chatDialog/useChatDialogMessagesHeight'
 
 const props = withDefaults(defineProps<{
   functionUnitId: number
@@ -446,37 +450,61 @@ const validationWarnings = ref<AiValidationError[]>([])
 const diffResult = ref<DiffResult | null>(null)
 const currentFunctionUnitData = ref<AiGeneratedData | null>(null)
 
-// Task 17.3: Undo state
-const showUndoButton = ref(false)
-const undoCountdown = ref(0)
-let undoTimer: ReturnType<typeof setInterval> | null = null
 // Inline documents state
 const inlineDocuments = ref<InlineDocument[]>([])
 let inlineDocIdCounter = 0
 
+// Preview/degradation helpers (pure)
+const { computePreviewData, formatRelativeTime } = useChatDialogPreview()
+
 // Task 16.3: Regenerate scope selection
-const SCOPE_OPTIONS = ['TABLES', 'FORMS', 'ACTIONS', 'DECISIONS', 'PROCESS', 'TABLE_RELATIONS'] as const
-const selectedScopes = ref<string[]>([...SCOPE_OPTIONS])
-const showScopeSelector = ref(false)
+const {
+  SCOPE_OPTIONS,
+  selectedScopes,
+  showScopeSelector,
+  scopeKeyMap,
+  regenerateScope
+} = useChatDialogScope()
 
-const scopeKeyMap: Record<string, string> = {
-  TABLES: 'tables',
-  FORMS: 'forms',
-  ACTIONS: 'actions',
-  DECISIONS: 'decisions',
-  PROCESS: 'process',
-  TABLE_RELATIONS: 'tableRelations'
-}
+// Task 17.3: Undo state
+const {
+  showUndoButton,
+  undoCountdown,
+  startUndoCountdown,
+  handleUndo,
+  clearUndoTimer
+} = useChatDialogUndo(
+  () => props.functionUnitId,
+  t,
+  () => emit('regenerate') // Refresh data
+)
 
-const regenerateScope = computed(() => {
-  if (selectedScopes.value.length === SCOPE_OPTIONS.length) return undefined // ALL
-  return selectedScopes.value.join(',')
-})
+// Task 16.4 + 17.1: Draft state (degradation draft + generation draft)
+const {
+  hasDraft,
+  hasGenerationDraft,
+  checkForDraft,
+  saveDraftToLocalStorage: saveDraftToStorage,
+  restoreDraft,
+  restoreGenerationDraft,
+  dismissDraft,
+  dismissGenerationDraft
+} = useChatDialogDraft(
+  () => props.functionUnitId,
+  () => props.sessionId,
+  t,
+  {
+    setInputText: (text: string) => { inputText.value = text },
+    restoreGeneration: (draft: RestoredGenerationDraft) => {
+      generatedData.value = draft.generatedData
+      previewData.value = draft.previewData || computePreviewData(draft.generatedData)
+    }
+  }
+)
 
 // Messages container height for InlineDocumentViewer max-height
-const messagesHeight = ref(400)
-let resizeObserver: ResizeObserver | null = null
-provide('chatMessagesHeight', messagesHeight)
+useChatDialogMessagesHeight()
+
 // Streaming message placeholder
 const streamingMessage = computed<AiMessage>(() => ({
   id: -1,
@@ -518,26 +546,11 @@ onMounted(() => {
   if (props.mode === 'MODIFY') {
     fetchCurrentFunctionUnitData()
   }
-  // Observe messages container height for InlineDocumentViewer
-  const messagesEl = document.querySelector('.chat-dialog__messages')
-  if (messagesEl) {
-    resizeObserver = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        messagesHeight.value = entry.contentRect.height
-      }
-    })
-    resizeObserver.observe(messagesEl)
-  }
 })
 
 onBeforeUnmount(() => {
-  resizeObserver?.disconnect()
-  resizeObserver = null
   // Task 17.3: Clear undo timer
-  if (undoTimer) {
-    clearInterval(undoTimer)
-    undoTimer = null
-  }
+  clearUndoTimer()
 })
 
 /**
@@ -548,7 +561,7 @@ async function fetchCurrentFunctionUnitData() {
     const res = await functionUnitApi.getById(props.functionUnitId)
     if (res.data) {
       // Map the function unit response to AiGeneratedData-like structure for diff
-      const fu = res.data as Record<string, unknown>
+      const fu = res.data as unknown as Record<string, unknown>
       currentFunctionUnitData.value = {
         tableDefinitions: (fu.tableDefinitions || []) as any[],
         formDefinitions: (fu.formDefinitions || []) as any[],
@@ -598,47 +611,6 @@ onValidationWarning((warnings: any[]) => {
 onSession((sessionId: string) => {
   emit('sessionCreated', sessionId)
 })
-
-// Compute GenerationPreviewData from AiGeneratedData
-function computePreviewData(data: AiGeneratedData): GenerationPreviewData {
-  const tables = data.tableDefinitions || []
-  const forms = data.formDefinitions || []
-  const actions = data.actionDefinitions || []
-  const process = data.processDefinition
-
-  let totalFieldCount = 0
-  for (const table of tables) {
-    totalFieldCount += (table.fieldDefinitions || []).length
-  }
-
-  let processNodeCount = 0
-  let processGatewayCount = 0
-  if (process?.bpmnXml) {
-    // Simple counting from BPMN XML — supports both prefixed (bpmn:tag) and unprefixed (tag) forms
-    const xml = process.bpmnXml as string
-    const nodePattern = /<(?:bpmn:)?(?:userTask|serviceTask|scriptTask|startEvent|endEvent|task)\b/g
-    const gatewayPattern = /<(?:bpmn:)?(?:exclusiveGateway|parallelGateway|inclusiveGateway|eventBasedGateway)\b/g
-    const taskMatches = xml.match(nodePattern)
-    processNodeCount = taskMatches ? taskMatches.length : 0
-    const gatewayMatches = xml.match(gatewayPattern)
-    processGatewayCount = gatewayMatches ? gatewayMatches.length : 0
-  }
-
-  const actionTypes = [...new Set(actions.map((a: any) => a.actionType).filter(Boolean))]
-
-  return {
-    tableCount: tables.length,
-    totalFieldCount,
-    formCount: forms.length,
-    actionCount: actions.length,
-    actionTypes,
-    processNodeCount,
-    processGatewayCount,
-    decisionCount: data.decisionDefinitions?.length || 0,
-    tableRelationCount: data.tableRelations?.length || 0,
-    iconSvg: data.icon?.svgContent
-  }
-}
 
 // Send message
 function handleSend() {
@@ -690,134 +662,19 @@ function handleRegenerate() {
   emit('regenerate')
 }
 
-// Task 17.3: Undo countdown and handler
-function startUndoCountdown() {
-  showUndoButton.value = true
-  undoCountdown.value = 30
-  if (undoTimer) clearInterval(undoTimer)
-  undoTimer = setInterval(() => {
-    undoCountdown.value--
-    if (undoCountdown.value <= 0) {
-      showUndoButton.value = false
-      if (undoTimer) {
-        clearInterval(undoTimer)
-        undoTimer = null
-      }
-    }
-  }, 1000)
-}
-
-async function handleUndo() {
-  try {
-    await aiGenerationApi.undoLastApply(props.functionUnitId)
-    showUndoButton.value = false
-    if (undoTimer) {
-      clearInterval(undoTimer)
-      undoTimer = null
-    }
-    ElMessage.success(t('ai.undo.success'))
-    emit('regenerate') // Refresh data
-  } catch {
-    ElMessage.error(t('ai.error.AI_UNDO_EXPIRED'))
-  }
-}
-
 function applyTemplate(tpl: AiTemplate) {
   inputText.value = tpl.promptTemplate
 }
 
-// Task 16.4: Degradation helpers
-function formatRelativeTime(isoTime: string): string {
-  try {
-    const diff = Date.now() - new Date(isoTime).getTime()
-    const minutes = Math.floor(diff / 60000)
-    if (minutes < 1) return '< 1 min ago'
-    if (minutes < 60) return `${minutes} min ago`
-    const hours = Math.floor(minutes / 60)
-    return `${hours}h ago`
-  } catch {
-    return isoTime
-  }
-}
-
+// Wrap the draft composable so the template can call it without arguments.
 function saveDraftToLocalStorage() {
-  const draft = { prompt: inputText.value, timestamp: Date.now(), functionUnitId: props.functionUnitId }
-  localStorage.setItem(`ai_draft_${props.functionUnitId}`, JSON.stringify(draft))
-  ElMessage.success(t('ai.degradation.draftSaved'))
+  saveDraftToStorage(inputText.value)
 }
 
 function navigateToManualCreate() {
   // Navigate to the function unit designer manual edit mode
   // This emits an event for the parent to handle navigation
   emit('regenerate')
-}
-
-// Task 16.4 + 17.1: Draft state (degradation draft + generation draft)
-const hasDraft = ref(false)
-let draftData: { prompt: string; timestamp: number; functionUnitId: number } | null = null
-const hasGenerationDraft = ref(false)
-let generationDraftData: { generatedData: AiGeneratedData; previewData: GenerationPreviewData | null; timestamp: number; sessionId: string } | null = null
-
-function checkForDraft() {
-  // Check for degradation draft (ai_draft_{functionUnitId})
-  const draftKey = `ai_draft_${props.functionUnitId}`
-  const raw = localStorage.getItem(draftKey)
-  if (raw) {
-    try {
-      const parsed = JSON.parse(raw)
-      if (Date.now() - parsed.timestamp < 24 * 60 * 60 * 1000) {
-        draftData = parsed
-        hasDraft.value = true
-      } else {
-        localStorage.removeItem(draftKey)
-      }
-    } catch {
-      localStorage.removeItem(draftKey)
-    }
-  }
-
-  // Check for generation draft (ai_generation_draft_{functionUnitId}_{sessionId})
-  if (props.sessionId) {
-    const genDraft = loadGenerationDraft(props.functionUnitId, props.sessionId)
-    if (genDraft) {
-      generationDraftData = genDraft
-      hasGenerationDraft.value = true
-    }
-  }
-}
-
-function restoreDraft() {
-  if (draftData) {
-    inputText.value = draftData.prompt
-    ElMessage.info(t('ai.degradation.draftRestored'))
-  }
-  hasDraft.value = false
-  draftData = null
-  localStorage.removeItem(`ai_draft_${props.functionUnitId}`)
-}
-
-function restoreGenerationDraft() {
-  if (generationDraftData) {
-    generatedData.value = generationDraftData.generatedData
-    previewData.value = generationDraftData.previewData || computePreviewData(generationDraftData.generatedData)
-    ElMessage.info(t('ai.draft.restore'))
-  }
-  hasGenerationDraft.value = false
-  generationDraftData = null
-}
-
-function dismissDraft() {
-  hasDraft.value = false
-  draftData = null
-  localStorage.removeItem(`ai_draft_${props.functionUnitId}`)
-}
-
-function dismissGenerationDraft() {
-  hasGenerationDraft.value = false
-  if (generationDraftData && props.sessionId) {
-    clearGenerationDraft(props.functionUnitId, props.sessionId)
-  }
-  generationDraftData = null
 }
 
 // Auto-scroll to bottom

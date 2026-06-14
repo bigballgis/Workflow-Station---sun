@@ -1,0 +1,163 @@
+package com.portal.component;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.platform.common.util.ApiResponseBodyUnwrap;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.UriComponentsBuilder;
+
+import java.nio.charset.StandardCharsets;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * Task Form 定义加载协作类。
+ * 单一职责：按 stageId（taskDefinitionKey）解析 Task Form 定义——优先本地共享 PostgreSQL（dw_form_stage_bindings），
+ * 不可达时回退 developer-workstation HTTP。行为与拆分前 {@link TaskFormComponent} 中的对应私有方法逐字一致。
+ *
+ * <p>{@code developerWorkstationUrl} 作为入参传入而非注入字段：门面 {@link TaskFormComponent} 通过
+ * {@code @Value} 持有该配置且测试以反射方式覆盖它，故由门面在调用时透传，避免该协作类持有与门面不同步的副本。</p>
+ */
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class TaskFormDefinitionLoader {
+
+    private final RestTemplate restTemplate;
+    private final ObjectMapper objectMapper;
+    private final JdbcTemplate jdbcTemplate;
+
+    /**
+     * Loads Task Form definition by stageId (taskDefinitionKey).
+     * Prefers developer-workstation; falls back to local {@code dw_form_stage_bindings} when unreachable (shared PostgreSQL with DW).
+     */
+    public Map<String, Object> fetchTaskFormByStageId(String stageId, String developerWorkstationUrl) {
+        // Try local DB first (millisecond-level) — avoids expensive cross-container HTTP call.
+        Map<String, Object> fromDb = fetchTaskFormFromLocalDw(stageId);
+        if (fromDb != null) {
+            if (fromDb.isEmpty()) {
+                // Definitive negative: local DB queried successfully but found no binding.
+                // Since both services share the same PostgreSQL, HTTP fallback would also miss — skip it.
+                log.debug("No task form binding found in local DB for stage '{}', skipping remote lookup", stageId);
+                return null;
+            }
+            log.debug("Resolved task form for stage '{}' from local dw_form_stage_bindings", stageId);
+            return fromDb;
+        }
+        // fromDb == null means local query threw an exception (e.g. table doesn't exist).
+        // Fallback: HTTP call to developer-workstation.
+        return fetchTaskFormFromDeveloperWorkstation(stageId, developerWorkstationUrl);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> fetchTaskFormFromDeveloperWorkstation(String stageId, String developerWorkstationUrl) {
+        try {
+            String base = normalizeDeveloperWorkstationBase(developerWorkstationUrl);
+            String url = UriComponentsBuilder
+                    .fromHttpUrl(base + "/api/v1/form-stage-bindings")
+                    .queryParam("stageId", stageId)
+                    .encode(StandardCharsets.UTF_8)
+                    .toUriString();
+            log.debug("Fetching Task Form definition from: {}", url);
+
+            Map<String, Object> response = restTemplate.getForObject(url, Map.class);
+            if (response == null) {
+                return null;
+            }
+            Map<String, Object> payload = ApiResponseBodyUnwrap.unwrapDataMap(response);
+            if (payload.containsKey("form")) {
+                return (Map<String, Object>) payload.get("form");
+            }
+            if (response.containsKey("form")) {
+                return (Map<String, Object>) response.get("form");
+            }
+        } catch (Exception e) {
+            log.warn("Failed to fetch Task Form definition for stage {}: {}", stageId, e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * Local lookup when sharing DB with developer-workstation (avoids localhost misconfiguration inside containers).
+     */
+    private Map<String, Object> fetchTaskFormFromLocalDw(String stageId) {
+        if (stageId == null || stageId.isBlank()) {
+            return null;
+        }
+        try {
+            List<Map<String, Object>> rows = jdbcTemplate.query(
+                    """
+                            SELECT fd.form_name, fd.config_json, fd.field_permissions, b.read_only
+                            FROM dw_form_stage_bindings b
+                            INNER JOIN dw_form_definitions fd ON fd.id = b.form_id
+                            WHERE b.stage_id = ?
+                            LIMIT 1
+                            """,
+                    (ResultSet rs, int rowNum) -> mapRowToTaskFormDefinition(rs),
+                    stageId.trim());
+            return rows.isEmpty() ? Collections.emptyMap() : rows.get(0);
+        } catch (Exception e) {
+            log.debug("Local dw_form_stage_bindings lookup failed for stage {}: {}", stageId, e.getMessage());
+            return null;
+        }
+    }
+
+    private Map<String, Object> mapRowToTaskFormDefinition(ResultSet rs) throws SQLException {
+        Map<String, Object> form = new HashMap<>();
+        form.put("formName", rs.getString("form_name"));
+        form.put("configJson", readJsonObjectMap(rs, "config_json"));
+        form.put("fieldPermissions", readJsonStringMap(rs, "field_permissions"));
+        form.put("readOnly", rs.getBoolean("read_only"));
+        return form;
+    }
+
+    private Map<String, Object> readJsonObjectMap(ResultSet rs, String col) throws SQLException {
+        String raw = rs.getString(col);
+        if (raw == null || raw.isBlank()) {
+            return Collections.emptyMap();
+        }
+        try {
+            return objectMapper.readValue(raw, new TypeReference<Map<String, Object>>() {});
+        } catch (Exception e) {
+            log.debug("Could not parse JSON object column {}: {}", col, e.getMessage());
+            return Collections.emptyMap();
+        }
+    }
+
+    private Map<String, String> readJsonStringMap(ResultSet rs, String col) throws SQLException {
+        String raw = rs.getString(col);
+        if (raw == null || raw.isBlank()) {
+            return Collections.emptyMap();
+        }
+        try {
+            return objectMapper.readValue(raw, new TypeReference<Map<String, String>>() {});
+        } catch (Exception e) {
+            log.debug("Could not parse JSON string map column {}: {}", col, e.getMessage());
+            return Collections.emptyMap();
+        }
+    }
+
+    private static String trimTrailingSlash(String base) {
+        if (base == null || base.isEmpty()) {
+            return "";
+        }
+        return base.endsWith("/") ? base.substring(0, base.length() - 1) : base;
+    }
+
+    /** Supports {@code DEVELOPER_WORKSTATION_URL} as host:port only or with a mistaken {@code /api/v1} suffix. */
+    private static String normalizeDeveloperWorkstationBase(String url) {
+        String b = trimTrailingSlash(url != null ? url : "");
+        if (b.endsWith("/api/v1")) {
+            return trimTrailingSlash(b.substring(0, b.length() - "/api/v1".length()));
+        }
+        return b;
+    }
+}
