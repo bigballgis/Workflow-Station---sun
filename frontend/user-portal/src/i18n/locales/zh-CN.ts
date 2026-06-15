@@ -901,6 +901,8 @@ export default {
     mainTableDefault: '主表',
     childTableDefault: '子表',
     fkGuardMainNotReady: '请先创建{parentTableName}记录，再添加{childTableName}数据。',
+import: '导入',
+exportWithData: '导出',
     startTime: '开始时间',
     endTime: '结束时间',
     upload: '上传',

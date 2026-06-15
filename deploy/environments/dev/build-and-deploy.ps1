@@ -191,6 +191,9 @@ if ($Service) {
     Write-Host " $Service deployed successfully!" -ForegroundColor Green
     Write-Host "========================================" -ForegroundColor Green
     docker compose -f $ComposeFile --env-file $EnvFile ps $Service
+
+    Write-Host "  Cleaning dangling images... (docker image prune -f)" -ForegroundColor DarkGray
+    docker image prune -f 2>&1 | Out-Null
     exit 0
 }
 
@@ -401,6 +404,9 @@ Wait-ForContainerHealth -ContainerName "platform-edge-frontend-dev" -DisplayName
 
 Write-Host "  Current service status:" -ForegroundColor Cyan
 docker compose -f $ComposeFile --env-file $EnvFile ps
+
+    Write-Host "  Cleaning dangling images..." -ForegroundColor DarkGray
+    docker image prune -f 2>&1 | Out-Null
 
 Write-Host "`n========================================" -ForegroundColor Green
 Write-Host " Deployment Complete!" -ForegroundColor Green
