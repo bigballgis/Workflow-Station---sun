@@ -210,6 +210,7 @@
               :current-mi-row-id="currentMiRowId"
               :function-unit-id="functionUnitIdRef"
               :primary-table-binding="primaryTableBinding ?? undefined"
+              :request-id-config="requestIdConfig"
               @update:model-value="val => { if (selectedNodeForm.isCurrentTask) formData = { ...formData, ...val } }"
               @update:sub-table-data="(bindingId, rows) => { if (selectedNodeForm.isCurrentTask) syncMainSubTableRows(bindingId, rows) }"
             />
@@ -269,6 +270,7 @@
                 :show-link-form-dialog-footer="processFormEditable"
                 :function-unit-id="functionUnitIdRef"
                 :primary-table-binding="primaryTableBinding ?? undefined"
+                :request-id-config="requestIdConfig"
                 @update:model-value="val => processFormValues = { ...processFormValues, ...val }"
                 @update:sub-table-data="(bindingId: number, rows: any[]) => {
                   const target = processFormSubTableBindings.find((b: any) => Number(b?.bindingId) === Number(bindingId))
@@ -334,6 +336,7 @@
               :current-mi-row-id="currentMiRowId"
               :function-unit-id="functionUnitIdRef"
               :primary-table-binding="primaryTableBinding ?? undefined"
+              :request-id-config="requestIdConfig"
               @update:model-value="val => formData = { ...formData, ...val }"
               @update:sub-table-data="syncMainSubTableRows"
               @save="saveCurrentTaskFormWithMiPersist"
@@ -574,6 +577,17 @@ const {
   mainFormNativeSubTableBindingIds,
   allowSubTableAssignForCurrentTask,
 } = state
+
+// Main-table Request ID config — enables live recompute of the readonly __request_id field
+// on the To-Do form; completed/process forms reuse it for display parity.
+const requestIdConfig = computed<{ fieldNames: string[]; separator?: string } | null>(() => {
+  const fromTask = (taskFormDTO.value as { requestIdConfig?: { fieldNames: string[]; separator?: string } | null } | null)?.requestIdConfig
+  if (fromTask) return fromTask
+  const fromProcessRef = (taskFormDTO.value as { processFormRef?: { requestIdConfig?: { fieldNames: string[]; separator?: string } | null } } | null)?.processFormRef?.requestIdConfig
+  if (fromProcessRef) return fromProcessRef
+  const fromCompleted = (completedFormData.value as { processFormRef?: { requestIdConfig?: { fieldNames: string[]; separator?: string } | null } } | null)?.processFormRef?.requestIdConfig
+  return fromCompleted ?? null
+})
 
 watch(
   () => detailUiPhase.value >= 3,

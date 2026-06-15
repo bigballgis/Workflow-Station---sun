@@ -384,6 +384,7 @@ export default {
     draftSaveFailed: 'Failed to save draft',
     loadFailed: 'Failed to load function unit content',
     pleaseCompleteForm: 'Please complete the form',
+    pkGenerateFailed: 'Failed to generate the primary key, please retry',
     processSubmitSuccess: 'Process submitted successfully',
     submitFailed: 'Submission failed',
     serviceFallbackName: 'Service {index}',

@@ -3,6 +3,12 @@ import { useI18n } from 'vue-i18n'
 import type { FormInstance, FormRules } from 'element-plus'
 import { materializeFormCreateValidationRules } from '../../utils/formCreateValidateRules'
 import type { FormField, FormBusinessLogicConfig } from '../../components/formRendererHelpers'
+import {
+  REQUEST_ID_FIELD,
+  fieldFeedsRequestId,
+  computeRequestId,
+  type RequestIdConfig,
+} from '../../utils/formFieldMeta'
 
 interface FormDataDeps {
   formRef: Ref<FormInstance | undefined>
@@ -24,6 +30,8 @@ interface FormDataDeps {
   applyEngineResult: (result: any) => void
   engineOnSubTableChange: (bindingId: number, rows: any[], formData: Record<string, any>) => any
   engineCalculatedValues: Ref<Map<string, number>>
+  /** Main-table Request ID config — drives live recompute of the readonly __request_id field. */
+  requestIdConfig?: () => RequestIdConfig | null | undefined
 }
 
 export function useFormData(deps: FormDataDeps) {
@@ -64,6 +72,16 @@ export function useFormData(deps: FormDataDeps) {
         data[field.key] = null
       }
     })
+    // Seed the readonly Request ID: prefer the backend-filled value, else compute from
+    // the contributing fields already present (e.g. new-request page has no backend fill yet).
+    const ridCfg = deps.requestIdConfig?.()
+    if (ridCfg) {
+      const seeded = data[REQUEST_ID_FIELD]
+      if (seeded === undefined || seeded === null || seeded === '') {
+        const computed = computeRequestId(data, ridCfg)
+        if (computed !== undefined) data[REQUEST_ID_FIELD] = computed
+      }
+    }
     deps.setInternalUpdate(true)
     formData.value = data
     setTimeout(() => { deps.setInternalUpdate(false) }, 0)
@@ -112,6 +130,13 @@ export function useFormData(deps: FormDataDeps) {
   // ---------------------------------------------------------------------------
   function handleFieldChange(key: string, value: any) {
     formData.value[key] = value
+
+    // Live Request ID: recompute the readonly __request_id when a contributing field changes.
+    const ridCfg = deps.requestIdConfig?.()
+    if (fieldFeedsRequestId(key, ridCfg)) {
+      formData.value[REQUEST_ID_FIELD] = computeRequestId(formData.value, ridCfg) ?? ''
+    }
+
     deps.emitChange(key, value)
 
     deps.runComponentEventsOnFieldChange(key, value)
@@ -197,6 +222,12 @@ export function useFormData(deps: FormDataDeps) {
   function handlePrimaryFormDataPatch(patch: Record<string, unknown>) {
     if (!patch || typeof patch !== 'object') return
     Object.assign(formData.value, patch)
+    // Live Request ID: a programmatic patch (e.g. main PK generated on sub-table add)
+    // bypasses handleFieldChange, so recompute here if it touched a contributing field.
+    const ridCfg = deps.requestIdConfig?.()
+    if (ridCfg && ridCfg.fieldNames.some((name) => Object.prototype.hasOwnProperty.call(patch, name))) {
+      formData.value[REQUEST_ID_FIELD] = computeRequestId(formData.value, ridCfg) ?? ''
+    }
     deps.emitModelValue({ ...formData.value })
   }
 

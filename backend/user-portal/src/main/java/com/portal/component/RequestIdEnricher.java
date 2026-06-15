@@ -56,6 +56,24 @@ public class RequestIdEnricher {
         }
     }
 
+    /** Public Request ID config shipped to the portal frontend so it can recompute the field live. */
+    public record RequestIdConfigView(List<String> fieldNames, String separator) {}
+
+    /**
+     * 解析功能单元主表的 Request ID 配置并以可序列化形式返回(供前端实时拼接)。
+     * 未配置 → 返回 {@code null}(前端不显示该字段值来源)。
+     */
+    public RequestIdConfigView resolveConfigView(String functionUnitCode) {
+        if (functionUnitCode == null || functionUnitCode.isBlank()) {
+            return null;
+        }
+        RequestIdSpec spec = resolveSpec(functionUnitCode);
+        if (!spec.isConfigured()) {
+            return null;
+        }
+        return new RequestIdConfigView(spec.fieldNames(), spec.separator());
+    }
+
     /**
      * 给一个功能单元主表的 config + 一行流程变量,拼出 Request ID。
      * 主表未配置或所有字段都为空 → 返回 {@code null}。

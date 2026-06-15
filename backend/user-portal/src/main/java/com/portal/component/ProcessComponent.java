@@ -17,7 +17,9 @@ import com.platform.common.util.ApiResponseBodyUnwrap;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
@@ -55,6 +57,11 @@ public class ProcessComponent {
 
     @Value("${admin-center.url:http://localhost:8090}")
     private String adminCenterUrl;
+
+    /** Lazy: resolves the main-table Request ID config so the start page can recompute it live. */
+    @Lazy
+    @Autowired(required = false)
+    private RequestIdEnricher requestIdEnricher;
 
     /**
      * In-memory cache for function unit content payloads (forms + BPMN + data tables).
@@ -522,6 +529,7 @@ public class ProcessComponent {
             Map<String, Object> payload = ApiResponseBodyUnwrap.unwrapDataMap(response);
             if (!payload.isEmpty()) {
                 log.info("Got function unit content from admin-center: name={}", payload.get("name"));
+                attachRequestIdConfig(payload);
                 // Cache successful result
                 fuContentCache.put(functionUnitId, new CachedFuContent(payload, System.currentTimeMillis()));
                 return payload;
@@ -549,6 +557,32 @@ public class ProcessComponent {
             Map<String, Object> errorResult = new HashMap<>();
             errorResult.put("error", e.getMessage());
             return errorResult;
+        }
+    }
+
+    /**
+     * Attach the main-table Request ID config ({fieldNames, separator}) to the content payload
+     * so the start (new request) page can recompute the readonly Request ID field live.
+     * No-op when the main table has no config, or the enricher bean is unavailable (e.g. unit tests).
+     */
+    private void attachRequestIdConfig(Map<String, Object> payload) {
+        if (payload == null || requestIdEnricher == null) {
+            return;
+        }
+        Object code = payload.get("code");
+        if (!(code instanceof String functionUnitCode) || functionUnitCode.isBlank()) {
+            return;
+        }
+        try {
+            RequestIdEnricher.RequestIdConfigView cfg = requestIdEnricher.resolveConfigView(functionUnitCode);
+            if (cfg != null) {
+                Map<String, Object> map = new HashMap<>();
+                map.put("fieldNames", cfg.fieldNames());
+                map.put("separator", cfg.separator());
+                payload.put("requestIdConfig", map);
+            }
+        } catch (Exception e) {
+            log.debug("Could not attach requestIdConfig for code {}: {}", functionUnitCode, e.getMessage());
         }
     }
 

@@ -143,6 +143,8 @@ interface Props {
    * inline form-below-table binds to that row; otherwise it falls back to the first sub-table row.
    */
   currentMiRowId?: number | string | null
+  /** Main-table Request ID config — enables live recompute of the readonly __request_id field. */
+  requestIdConfig?: { fieldNames: string[]; separator?: string } | null
   /** Binding ids declared on this form's tableBindings (excludes merge-only link targets). */
   nativeSubTableBindingIds?: number[]
   /** Designer configJson — used to resolve link-form targets from {@code subListViews}. */
@@ -393,6 +395,7 @@ const formDataApi = useFormData({
   applyEngineResult,
   engineOnSubTableChange: (bindingId, rows, fd) => engine.onSubTableChange(bindingId, rows, fd),
   engineCalculatedValues,
+  requestIdConfig: () => props.requestIdConfig,
 })
 const {
   formData,

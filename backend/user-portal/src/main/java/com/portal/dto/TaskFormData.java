@@ -22,4 +22,6 @@ public class TaskFormData {
     private List<SubTableBindingData> subTableBindings;
     private ProcessFormData processFormRef;
     private Boolean formReadOnly;
+    /** Main-table Request ID config ({fieldNames, separator}) so the portal can recompute it live. */
+    private Map<String, Object> requestIdConfig;
 }

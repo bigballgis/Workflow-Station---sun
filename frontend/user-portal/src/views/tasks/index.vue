@@ -119,23 +119,20 @@
           show-overflow-tooltip
         >
           <template #default="{ row }">
-            {{ row.requestId || '-' }}
+            <el-link
+              type="primary"
+              @click="viewTask(row)"
+            >
+              {{ row.requestId || '-' }}
+            </el-link>
           </template>
         </el-table-column>
         <el-table-column
           prop="taskName"
           :label="t('task.taskName')"
           min-width="160"
-        >
-          <template #default="{ row }">
-            <el-link
-              type="primary"
-              @click="viewTask(row)"
-            >
-              {{ row.taskName }}
-            </el-link>
-          </template>
-        </el-table-column>
+          show-overflow-tooltip
+        />
         <el-table-column
           prop="processDefinitionName"
           :label="t('task.processName')"

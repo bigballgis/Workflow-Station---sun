@@ -247,6 +247,8 @@ export default {
       metaHint: '從主表欄位裡選取若干欄位拼成一條 request 的人類可讀標識,展示在表單和 Portal 列表上(如 HR-2026-001)。',
       configure: '設定',
       notConfigured: '未設定',
+      requiredTitle: '必須設定 Request ID',
+      requiredHint: '主表儲存前必須設定 Request ID。請點擊 Request ID 列的「設定」按鈕,至少選擇一個欄位。',
       dialogTitle: '設定 Request ID',
       dialogHint: '從本主表的欄位裡勾選並排序,系統用分隔符把它們拼成 Request ID,展示在表單(唯讀)和 Portal 的我的申請 / 待辦 / 已完成列表上。',
       availableFields: '可選欄位',

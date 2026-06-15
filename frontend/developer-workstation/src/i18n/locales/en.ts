@@ -210,6 +210,8 @@ export default {
       metaHint: 'Combine main-table fields into a human-readable identifier shown on the form and portal lists (e.g. HR-2026-001).',
       configure: 'Configure',
       notConfigured: 'Not configured',
+      requiredTitle: 'Request ID required',
+      requiredHint: 'The main table must configure a Request ID before saving. Click "Configure" on the Request ID row and pick at least one field.',
       dialogTitle: 'Configure Request ID',
       dialogHint: 'Pick fields from this main table and order them; they are joined by the separator into the Request ID shown on the form (readonly) and the portal My Request / To Do / Completed lists.',
       availableFields: 'Available Fields',

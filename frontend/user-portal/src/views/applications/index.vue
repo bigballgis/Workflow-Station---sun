@@ -135,7 +135,12 @@
             show-overflow-tooltip
           >
             <template #default="{ row }">
-              {{ row.requestId || '-' }}
+              <el-link
+                type="primary"
+                @click="viewDetail(row)"
+              >
+                {{ row.requestId || '-' }}
+              </el-link>
             </template>
           </el-table-column>
           <el-table-column
@@ -145,12 +150,7 @@
             show-overflow-tooltip
           >
             <template #default="{ row }">
-              <el-link
-                type="primary"
-                @click="viewDetail(row)"
-              >
-                {{ row.businessKey || row.processDefinitionName }}
-              </el-link>
+              {{ row.businessKey || row.processDefinitionName }}
             </template>
           </el-table-column>
           <!-- Process Type column hidden -->

@@ -1,4 +1,5 @@
 import { request } from './request'
+import type { RequestIdConfig } from '../utils/formFieldMeta'
 
 // --- TypeScript interfaces matching backend DTOs ---
 
@@ -20,6 +21,7 @@ export interface ProcessFormData {
   subTableBindings: SubTableBindingData[]
   editable: boolean
   processState: string
+  requestIdConfig?: RequestIdConfig | null
 }
 
 export interface TaskFormData {
@@ -32,6 +34,7 @@ export interface TaskFormData {
   subTableBindings: SubTableBindingData[]
   processFormRef: ProcessFormData
   formReadOnly?: boolean
+  requestIdConfig?: RequestIdConfig | null
 }
 
 export interface TaskFormSnapshot {

@@ -189,6 +189,7 @@ public class TaskFormComponent {
                     .fieldValues(fallbackFieldValues)
                     .subTableBindings(null)
                     .processFormRef(processFormRef)
+                    .requestIdConfig(processFormRef != null ? processFormRef.getRequestIdConfig() : null)
                     .build();
         }
 
@@ -222,6 +223,7 @@ public class TaskFormComponent {
                 .subTableBindings(Collections.emptyList())
                 .processFormRef(processFormRef)
                 .formReadOnly(formReadOnly)
+                .requestIdConfig(processFormRef != null ? processFormRef.getRequestIdConfig() : null)
                 .build();
     }
 

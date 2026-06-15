@@ -21,4 +21,6 @@ public class ProcessFormData {
     private List<SubTableBindingData> subTableBindings;
     private boolean editable;
     private String processState;
+    /** Main-table Request ID config ({fieldNames, separator}) so the portal can recompute it live. */
+    private Map<String, Object> requestIdConfig;
 }

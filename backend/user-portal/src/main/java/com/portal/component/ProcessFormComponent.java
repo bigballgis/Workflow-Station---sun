@@ -130,7 +130,20 @@ public class ProcessFormComponent {
                 .subTableBindings(subTableBindings)
                 .editable(editable)
                 .processState(processInstance.getStatus())
+                .requestIdConfig(buildRequestIdConfigMap(processInstance.getFunctionUnitCode()))
                 .build();
+    }
+
+    /** Serialize the main-table Request ID config so the portal can recompute the field live. */
+    Map<String, Object> buildRequestIdConfigMap(String functionUnitCode) {
+        RequestIdEnricher.RequestIdConfigView cfg = requestIdEnricher().resolveConfigView(functionUnitCode);
+        if (cfg == null) {
+            return null;
+        }
+        Map<String, Object> map = new HashMap<>();
+        map.put("fieldNames", cfg.fieldNames());
+        map.put("separator", cfg.separator());
+        return map;
     }
 
     /**

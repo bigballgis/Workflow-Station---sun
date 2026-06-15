@@ -1,9 +1,10 @@
 import { computed, nextTick } from 'vue'
 import type { Ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { type TableDefinition, type FieldDefinition } from '@/api/functionUnit'
 import { suggestFieldName, suggestTableName } from '@/utils/fieldNameSlug'
 import { serializePkGeneration } from '@/utils/pkGenerationConfig'
+import { hasRequestIdConfig } from '@/utils/formFieldMeta'
 
 type FieldRow = FieldDefinition & {
   __uid?: number
@@ -163,6 +164,15 @@ export function useTableEditor(options: UseTableEditorOptions) {
 
   async function handleSaveTable() {
     if (!selectedTable.value) return
+    // MAIN tables must configure Request ID before saving — block with a popup.
+    if (selectedTable.value.tableType === 'MAIN' && !hasRequestIdConfig(selectedTable.value.requestIdConfig)) {
+      await ElMessageBox.alert(
+        t('table.requestId.requiredHint'),
+        t('table.requestId.requiredTitle'),
+        { type: 'warning', confirmButtonText: t('common.confirm') },
+      ).catch(() => {})
+      return
+    }
     // Validate table name
     if (!validateName(selectedTable.value.tableName)) {
       ElMessage.warning(t('table.invalidTableName'))

@@ -1,6 +1,44 @@
 import { parsePkGeneration } from './pkGenerationConfig'
 import type { PkGenerationConfig } from './tableFkRuntime'
 
+/** Reserved field code of the derived readonly Request ID field (matches backend REQUEST_ID_FIELD). */
+export const REQUEST_ID_FIELD = '__request_id'
+
+/** Main-table Request ID config: ordered field names joined by a separator. */
+export interface RequestIdConfig {
+  fieldNames: string[]
+  separator?: string
+}
+
+/** Whether a main table actually configures a Request ID. */
+export function hasRequestIdConfig(config?: RequestIdConfig | null): boolean {
+  return !!config && Array.isArray(config.fieldNames) && config.fieldNames.length > 0
+}
+
+/** True when the changed field feeds the Request ID (so it should be recomputed). */
+export function fieldFeedsRequestId(fieldKey: string, config?: RequestIdConfig | null): boolean {
+  return !!config?.fieldNames?.includes(fieldKey)
+}
+
+/**
+ * Compute the Request ID from the live form model + config. Empty fields are skipped
+ * (mirrors backend RequestIdEnricher). Returns '' when configured but all parts empty,
+ * undefined when unconfigured.
+ */
+export function computeRequestId(
+  model: Record<string, unknown>,
+  config?: RequestIdConfig | null,
+): string | undefined {
+  if (!hasRequestIdConfig(config)) return undefined
+  const parts = config!.fieldNames
+    .map((name) => {
+      const v = model?.[name]
+      return v == null ? '' : String(v).trim()
+    })
+    .filter((s) => s !== '')
+  return parts.length ? parts.join(config!.separator ?? '') : ''
+}
+
 export type RuntimeFieldDefinition = {
   fieldName: string
   isPrimaryKey?: boolean

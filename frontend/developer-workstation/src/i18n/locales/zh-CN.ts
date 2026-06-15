@@ -247,6 +247,8 @@ export default {
       metaHint: '从主表字段里选取若干字段拼成一条 request 的人类可读标识,展示在表单和 Portal 列表上(如 HR-2026-001)。',
       configure: '配置',
       notConfigured: '未配置',
+      requiredTitle: '必须配置 Request ID',
+      requiredHint: '主表保存前必须配置 Request ID。请点击 Request ID 行的"配置"按钮,至少选择一个字段。',
       dialogTitle: '配置 Request ID',
       dialogHint: '从本主表的字段里勾选并排序,系统用分隔符把它们拼成 Request ID,展示在表单(只读)和 Portal 的我的申请 / 待办 / 已完成列表上。',
       availableFields: '可选字段',

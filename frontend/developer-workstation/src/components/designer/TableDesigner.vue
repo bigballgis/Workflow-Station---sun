@@ -227,30 +227,6 @@
               autosize
             />
           </div>
-          <div
-            v-if="selectedTable.tableType === 'MAIN'"
-            class="meta-field meta-field--request-id"
-          >
-            <label class="meta-label">
-              {{ t('table.requestId.label') }}
-              <el-tooltip
-                :content="t('table.requestId.metaHint')"
-                placement="top"
-              >
-                <el-icon class="fields-info-icon"><InfoFilled /></el-icon>
-              </el-tooltip>
-            </label>
-            <div class="request-id-meta-row">
-              <code class="request-id-meta-preview">{{ requestIdPreview }}</code>
-              <el-button
-                size="small"
-                plain
-                @click="showRequestIdDialog = true"
-              >
-                {{ t('table.requestId.configure') }}
-              </el-button>
-            </div>
-          </div>
         </div>
       </el-card>
 
@@ -546,6 +522,43 @@
               </template>
             </el-table-column>
           </el-table>
+          <!-- Request ID: reads as the last row of the MAIN table fields grid -->
+          <div
+            v-if="selectedTable.tableType === 'MAIN'"
+            class="request-id-field-row"
+          >
+            <div class="request-id-field-main">
+              <span class="request-id-field-name">{{ t('table.requestId.label') }}</span>
+              <el-tag
+                size="small"
+                type="info"
+                effect="plain"
+                round
+                class="request-id-field-badge"
+              >
+                {{ t('form.virtualField') }}
+              </el-tag>
+              <code
+                v-if="hasRequestIdConfigured"
+                class="request-id-field-preview"
+              >{{ requestIdPreview }}</code>
+              <span
+                v-else
+                class="request-id-field-hint"
+              >
+                <el-icon><WarningFilled /></el-icon>
+                {{ t('table.requestId.notConfigured') }}
+              </span>
+            </div>
+            <el-button
+              link
+              type="primary"
+              size="small"
+              @click="showRequestIdDialog = true"
+            >
+              {{ t('table.requestId.configure') }}
+            </el-button>
+          </div>
         </div>
       </el-card>
     </div>
@@ -698,13 +711,14 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, Refresh, InfoFilled, CaretTop, CaretBottom, Delete } from '@element-plus/icons-vue'
+import { ArrowLeft, Refresh, InfoFilled, WarningFilled, CaretTop, CaretBottom, Delete } from '@element-plus/icons-vue'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
 import { type TableDefinition, type ForeignKeyDTO, type RequestIdConfig } from '@/api/functionUnit'
 import RelationDiagramEditor from '@/components/designer/RelationDiagramEditor.vue'
 import RequestIdConfigDialog from '@/components/designer/RequestIdConfigDialog.vue'
 import PkGenerationEditor from '@/components/designer/PkGenerationEditor.vue'
 import FieldForeignKeyEditor from '@/components/designer/FieldForeignKeyEditor.vue'
+import { hasRequestIdConfig } from '@/utils/formFieldMeta'
 import { useTableNaming } from '@/composables/tableDesigner/useTableNaming'
 import { useTableList } from '@/composables/tableDesigner/useTableList'
 import { useTableEditor } from '@/composables/tableDesigner/useTableEditor'
@@ -744,6 +758,11 @@ const requestIdPreview = computed(() => {
     fields.find((f) => f.fieldName === name)?.displayName || name
   return fieldNames.map((n) => `[${labelOf(n)}]`).join(cfg?.separator ?? '-')
 })
+
+/** MAIN 表是否已配置 Request ID(决定 Save 是否放行 + 行的高亮态)。 */
+const hasRequestIdConfigured = computed(() =>
+  hasRequestIdConfig(selectedTable.value?.requestIdConfig),
+)
 
 function onRequestIdConfirm(cfg: RequestIdConfig | null) {
   if (selectedTable.value) {
@@ -983,6 +1002,54 @@ onMounted(loadTables)
 
 .table-fields-wrap {
   margin-top: 0;
+}
+
+/* Request ID virtual row — reads as the last row of the fields grid */
+.request-id-field-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  /* match el-table small cell horizontal padding so it lines up with the grid */
+  padding: 8px 12px;
+  border-top: 1px solid var(--el-border-color-lighter);
+  background: var(--el-fill-color-light);
+  font-size: var(--el-font-size-small);
+}
+
+.request-id-field-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.request-id-field-name {
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+  white-space: nowrap;
+}
+
+.request-id-field-badge {
+  flex-shrink: 0;
+}
+
+.request-id-field-preview {
+  color: var(--el-text-color-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.request-id-field-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--el-color-warning);
+}
+
+.request-id-field-hint .el-icon {
+  font-size: 14px;
 }
 
 .table-fields-card {

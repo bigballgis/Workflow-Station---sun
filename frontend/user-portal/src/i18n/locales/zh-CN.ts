@@ -384,6 +384,7 @@ export default {
     draftSaveFailed: '保存草稿失败',
     loadFailed: '加载功能单元内容失败',
     pleaseCompleteForm: '请完善表单信息',
+    pkGenerateFailed: '主键生成失败，请重试',
     processSubmitSuccess: '流程提交成功',
     submitFailed: '提交失败',
     serviceFallbackName: '服务{index}',
