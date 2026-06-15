@@ -290,7 +290,7 @@ export default {
     invalidFieldName: 'Field name "{name}" is invalid. Must start with a letter and contain only letters, digits, and underscores',
     pkNotNullable: 'Primary key field cannot be nullable. Please uncheck "Nullable" before saving.',
     compositePkNotNullable: 'At least one field in the composite primary key must not be nullable.',
-    exportTemplate: 'Export Template',
+    exportWithData: 'Export',
     importTemplate: 'Import Template',
     exportSuccess: 'Template exported successfully',
     importSuccess: 'Template imported successfully',
@@ -1370,6 +1370,8 @@ export default {
     mainTableDefault: 'Main table',
     childTableDefault: 'Sub-table',
     fkGuardMainNotReady: 'Please create a {parentTableName} record before adding {childTableName} data.',
+    import: 'Import',
+    exportWithData: 'Export',
   },
   subTableView: {
     formDesign: 'Form Design',

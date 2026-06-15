@@ -327,7 +327,7 @@ export default {
     invalidFieldName: '欄位名 "{name}" 無效，必須以字母開頭，只能包含字母、數字和底線',
     pkNotNullable: '主鍵欄位不能勾選「可空」，請取消勾選後儲存',
     compositePkNotNullable: '聯合主鍵中至少需要有一個欄位不勾選「可空」',
-    exportTemplate: '匯出範本',
+    exportWithData: '匯出',
     importTemplate: '匯入範本',
     exportSuccess: '範本匯出成功',
     importSuccess: '範本匯入成功',
@@ -1362,6 +1362,8 @@ export default {
     mainTableDefault: '主表',
     childTableDefault: '子表',
     fkGuardMainNotReady: '請先建立{parentTableName}記錄，再新增{childTableName}資料。',
+    import: '匯入',
+    exportWithData: '匯出',
   },
   subTableView: {
     formDesign: '表單設計',

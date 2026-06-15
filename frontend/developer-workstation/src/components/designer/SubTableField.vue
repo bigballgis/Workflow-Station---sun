@@ -7,6 +7,19 @@
         class="actions"
       >
         <el-button
+          size="small"
+          @click.stop="handleExport"
+        >
+          <el-icon><Download /></el-icon> {{ t('subTable.exportWithData') }}
+        </el-button>
+        <el-button
+          v-if="!hasFileColumn"
+          size="small"
+          @click.stop="triggerImport"
+        >
+          <el-icon><Upload /></el-icon> {{ t('subTable.import') }}
+        </el-button>
+        <el-button
           type="primary"
           native-type="button"
           size="small"
@@ -15,6 +28,13 @@
           <el-icon><Plus /></el-icon> {{ t('common.add') }}
         </el-button>
       </div>
+      <input
+        ref="importInputRef"
+        type="file"
+        accept=".csv,.xlsx,.xls"
+        style="display:none"
+        @change="handleImportFile"
+      >
     </div>
 
     <div class="table-scroll-wrap">
@@ -285,9 +305,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, inject } from 'vue'
+import { computed, inject, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Plus, Loading, Document } from '@element-plus/icons-vue'
+import { Plus, Loading, Document, Download, Upload } from '@element-plus/icons-vue'
 import SubTableAddDialog from './SubTableAddDialog.vue'
 import SubTableFormDialog from './SubTableFormDialog.vue'
 import LookupPreview from './LookupPreview.vue'
@@ -348,6 +368,138 @@ const editable = computed(() => {
   if (previewMyRequestsActive?.value === true) return false
   return props.editable !== false
 })
+
+// 判断列中是否存在 FILE 类型的字段（有 FILE 列时隐藏 Import 按钮）
+const hasFileColumn = computed(() => {
+  return displayColumns.value.some(col => col.type === 'upload')
+})
+
+// 隐藏的文件 input，用于触发 CSV 文件选择
+const importInputRef = ref<HTMLInputElement | null>(null)
+
+function triggerImport() {
+  importInputRef.value?.click()
+}
+
+// 解析 CSV 文本为行数组
+function parseCSV(text: string): string[][] {
+  const rows: string[][] = []
+  const lines = text.split(/\r?\n/).filter(line => line.trim())
+  for (const line of lines) {
+    const cols: string[] = []
+    let current = ''
+    let inQuotes = false
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i]
+      if (inQuotes) {
+        if (ch === '"') {
+          if (i + 1 < line.length && line[i + 1] === '"') {
+            current += '"'
+            i++
+          } else {
+            inQuotes = false
+          }
+        } else {
+          current += ch
+        }
+      } else {
+        if (ch === '"') {
+          inQuotes = true
+        } else if (ch === ',') {
+          cols.push(current.trim())
+          current = ''
+        } else {
+          current += ch
+        }
+      }
+    }
+    cols.push(current.trim())
+    rows.push(cols)
+  }
+  return rows
+}
+
+function handleImportFile(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    const text = e.target?.result as string
+    if (!text) return
+
+    const rows = parseCSV(text)
+    if (rows.length < 1) return
+
+    // 第一行是 header，映射到 displayColumns 的 field
+    const headers = rows[0]
+    const colFieldSet = new Set(displayColumns.value.map(c => c.field))
+    const headerToField = new Map<number, string>()
+    for (let i = 0; i < headers.length; i++) {
+      const h = headers[i]
+      if (colFieldSet.has(h)) {
+        headerToField.set(i, h)
+      }
+    }
+
+    // 从第二行开始解析数据
+    const newRows: any[] = []
+    for (let r = 1; r < rows.length; r++) {
+      const row: Record<string, unknown> = {}
+      for (const [colIdx, field] of headerToField.entries()) {
+        const val = rows[r][colIdx] || ''
+        const col = displayColumns.value.find(c => c.field === field)
+        // 根据列类型做基本的类型转换
+        if (col?.type === 'number') {
+          const num = Number(val)
+          row[field] = isNaN(num) ? val : num
+        } else if (col?.type === 'switch') {
+          row[field] = val.toLowerCase() === 'true' || val === '1'
+        } else {
+          row[field] = val
+        }
+      }
+      if (Object.keys(row).length > 0) {
+        newRows.push(row)
+      }
+    }
+
+    if (newRows.length > 0) {
+      tableData.value = [...tableData.value, ...newRows]
+      total.value = tableData.value.length
+      emit('update:modelValue', [...tableData.value])
+    }
+  }
+  reader.readAsText(file)
+  // Reset input so the same file can be re-imported
+  input.value = ''
+}
+
+function handleExport() {
+  const cols = displayColumns.value.filter(c => c.type !== 'linkForm' && c.type !== 'lookup')
+  const headers = cols.map(c => c.field)
+  // BOM for Excel UTF-8 compatibility
+  let csv = '\uFEFF' + headers.map(h => `"${h.replace(/"/g, '""')}"`).join(',') + '\n'
+  // Append data rows
+  for (const row of tableData.value) {
+    const values = cols.map(c => {
+      const v = row[c.field]
+      if (v == null || v === '') return ''
+      return `"${String(v).replace(/"/g, '""')}"`
+    })
+    csv += values.join(',') + '\n'
+  }
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `${props.config.title || 'subtable'}_export.csv`
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+}
 
 // 表格数据模型：行数据、分页、上传文件名缓存、显示列
 const {

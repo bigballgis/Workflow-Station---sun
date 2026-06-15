@@ -356,12 +356,6 @@ public class VersionComponentImpl implements VersionComponent {
             if (processXml != null && functionUnit.getProcessDefinition() != null) {
                 functionUnit.getProcessDefinition().setBpmnXml(processXml);
 
-        // Fix stale IDs in restored BPMN (snapshot stores base64-encoded XML)
-        if (functionUnit.getProcessDefinition() != null && functionUnit.getProcessDefinition().getBpmnXml() != null) {
-            String decoded = XmlEncodingUtil.smartDecode(functionUnit.getProcessDefinition().getBpmnXml());
-            String fixed = processDesignComponent.fixStaleIds(functionUnit.getId(), decoded);
-            functionUnit.getProcessDefinition().setBpmnXml(XmlEncodingUtil.encode(fixed));
-        }
             }
         }
         
@@ -460,6 +454,13 @@ public class VersionComponentImpl implements VersionComponent {
                     functionUnit.getDecisionDefinitions().add(decision);
                 }
             }
+        }
+
+        // Fix stale IDs in restored BPMN — must run AFTER all forms/tables/actions are restored
+        if (functionUnit.getProcessDefinition() != null && functionUnit.getProcessDefinition().getBpmnXml() != null) {
+            String decoded = XmlEncodingUtil.smartDecode(functionUnit.getProcessDefinition().getBpmnXml());
+            String fixed = processDesignComponent.fixStaleIds(functionUnit.getId(), decoded);
+            functionUnit.getProcessDefinition().setBpmnXml(XmlEncodingUtil.encode(fixed));
         }
     }
     

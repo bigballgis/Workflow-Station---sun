@@ -220,6 +220,17 @@ public class ProcessBpmnValidator {
                     Optional<TableDefinition> tableOpt = tableDefinitionRepository.findByIdWithFields(subTableId);
 
                     if (tableOpt.isEmpty()) {
+                        // Fallback: lookup by subTableName within the same FU
+                        String subTableName = userTaskProps.get("subTableName");
+                        if (subTableName != null && !subTableName.isEmpty()) {
+                            tableOpt = tableDefinitionRepository.findByFunctionUnitIdAndTableName(functionUnitId, subTableName);
+                            // Reload with JOIN FETCH to avoid LazyInitializationException on fieldDefinitions
+                            if (tableOpt.isPresent()) {
+                                tableOpt = tableDefinitionRepository.findByIdWithFields(tableOpt.get().getId());
+                            }
+                        }
+                    }
+                    if (tableOpt.isEmpty()) {
                         result.addError("SUBTABLE_NOT_FOUND",
                             "SubTable with id " + subTableId + " not found",
                             subProcessId);
@@ -275,6 +286,17 @@ public class ProcessBpmnValidator {
                     Long formId = Long.parseLong(formIdStr);
                     Optional<FormDefinition> formOpt = formDefinitionRepository.findById(formId);
 
+                    if (formOpt.isEmpty()) {
+                        // Fallback: lookup by formName within the same FU
+                        String formName = userTaskProps.get("formName");
+                        if (formName != null && !formName.isEmpty()) {
+                            formOpt = formDefinitionRepository.findByFunctionUnitIdAndFormName(functionUnitId, formName);
+                            // Reload to ensure entity is managed in current session
+                            if (formOpt.isPresent()) {
+                                formOpt = formDefinitionRepository.findById(formOpt.get().getId());
+                            }
+                        }
+                    }
                     if (formOpt.isEmpty()) {
                         result.addError("FORM_NOT_FOUND",
                             "Form with id " + formId + " not found",

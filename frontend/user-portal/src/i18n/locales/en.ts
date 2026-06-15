@@ -960,6 +960,8 @@ export default {
     mainTableDefault: 'Main table',
     childTableDefault: 'Sub-table',
     fkGuardMainNotReady: 'Please create a {parentTableName} record before adding {childTableName} data.',
+import: 'Import',
+exportWithData: 'Export',
     startTime: 'Start time',
     endTime: 'End time',
     upload: 'Upload',

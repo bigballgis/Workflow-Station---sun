@@ -2,14 +2,37 @@
   <div class="sub-table-field">
     <div class="sub-table-header">
       <span class="title">{{ title }}</span>
-      <el-button
-        v-if="editable"
-        type="primary"
-        size="small"
-        @click="handleAdd"
+      <div class="actions">
+        <el-button
+          v-if="editable"
+          size="small"
+          @click="handleExport"
+        >
+          <el-icon><Download /></el-icon> {{ t('subTable.exportWithData') }}
+        </el-button>
+        <el-button
+          v-if="editable && !hasFileColumn"
+          size="small"
+          @click="triggerImport"
+        >
+          <el-icon><Upload /></el-icon> {{ t('subTable.import') }}
+        </el-button>
+        <el-button
+          v-if="editable"
+          type="primary"
+          size="small"
+          @click="handleAdd"
+        >
+          <el-icon><Plus /></el-icon> {{ t('subTable.add') }}
+        </el-button>
+      </div>
+      <input
+        ref="importInputRef"
+        type="file"
+        accept=".csv,.xlsx,.xls"
+        style="display:none"
+        @change="handleImportFile"
       >
-        <el-icon><Plus /></el-icon> {{ t('subTable.add') }}
-      </el-button>
     </div>
 
     <div class="sub-table-scroll-wrapper">
@@ -493,7 +516,7 @@
 <script setup lang="ts">
 import { ref, watch, computed, withDefaults, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Plus, Document, Loading, Search, Close } from '@element-plus/icons-vue'
+import { Plus, Document, Loading, Search, Close, Download, Upload } from '@element-plus/icons-vue'
 import SubTableAddDialog from './SubTableAddDialog.vue'
 import {
   resolveDisplayValue,
@@ -613,6 +636,139 @@ const emit = defineEmits<{
   (e: 'update:linkedSubTableData', bindingId: number, rows: any[]): void
   (e: 'linkFormScrollToInline'): void
 }>()
+
+// 判断列中是否存在 FILE 类型的字段（有 FILE 列时隐藏 Import 按钮）
+const hasFileColumn = computed(() => {
+  return props.columns.some(col => col.type === 'upload' || isUploadColumn(col))
+})
+
+// 隐藏的文件 input，用于触发 CSV 文件选择
+const importInputRef = ref<HTMLInputElement | null>(null)
+
+function triggerImport() {
+  importInputRef.value?.click()
+}
+
+// 解析 CSV 文本为行数组
+function parseCSV(text: string): string[][] {
+  const rows: string[][] = []
+  const lines = text.split(/\r?\n/).filter(line => line.trim())
+  for (const line of lines) {
+    const cols: string[] = []
+    let current = ''
+    let inQuotes = false
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i]
+      if (inQuotes) {
+        if (ch === '"') {
+          if (i + 1 < line.length && line[i + 1] === '"') {
+            current += '"'
+            i++
+          } else {
+            inQuotes = false
+          }
+        } else {
+          current += ch
+        }
+      } else {
+        if (ch === '"') {
+          inQuotes = true
+        } else if (ch === ',') {
+          cols.push(current.trim())
+          current = ''
+        } else {
+          current += ch
+        }
+      }
+    }
+    cols.push(current.trim())
+    rows.push(cols)
+  }
+  return rows
+}
+
+function handleImportFile(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    const text = e.target?.result as string
+    if (!text) return
+
+    const csvRows = parseCSV(text)
+    if (csvRows.length < 1) return
+
+    // 第一行是 header，映射到 props.columns 的 field
+    const headers = csvRows[0]
+    const colFieldSet = new Set(props.columns.map(c => c.field))
+    const headerToField = new Map<number, string>()
+    for (let i = 0; i < headers.length; i++) {
+      const h = headers[i]
+      if (colFieldSet.has(h)) {
+        headerToField.set(i, h)
+      }
+    }
+
+    // 从第二行开始解析数据
+    const newRows: any[] = []
+    for (let r = 1; r < csvRows.length; r++) {
+      const row: Record<string, unknown> = {}
+      for (const [colIdx, field] of headerToField.entries()) {
+        const val = csvRows[r][colIdx] || ''
+        const col = props.columns.find(c => c.field === field)
+        // 根据列类型做基本的类型转换
+        if (col?.type === 'number') {
+          const num = Number(val)
+          row[field] = isNaN(num) ? val : num
+        } else if (col?.type === 'switch') {
+          row[field] = val.toLowerCase() === 'true' || val === '1'
+        } else {
+          row[field] = val
+        }
+      }
+      if (Object.keys(row).length > 0) {
+        newRows.push(row)
+      }
+    }
+
+    if (newRows.length > 0) {
+      rows.value = [...rows.value, ...newRows]
+      emit('update:modelValue', [...rows.value])
+    }
+  }
+  reader.readAsText(file)
+  // Reset input so the same file can be re-imported
+  input.value = ''
+}
+
+function handleExport() {
+  const cols = props.columns.filter(
+    c => c.type !== 'linkForm' && c.type !== 'lookup'
+  )
+  const headers = cols.map(c => c.field)
+  // BOM for Excel UTF-8 compatibility
+  let csv = '\uFEFF' + headers.map(h => `"${h.replace(/"/g, '""')}"`).join(',') + '\n'
+  // Append data rows
+  for (const row of rows.value) {
+    const values = cols.map(c => {
+      const v = row[c.field]
+      if (v == null || v === '') return ''
+      return `"${String(v).replace(/"/g, '""')}"`
+    })
+    csv += values.join(',') + '\n'
+  }
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `${props.title || 'subtable'}_export.csv`
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+}
 
 const rows = ref<any[]>([])
 

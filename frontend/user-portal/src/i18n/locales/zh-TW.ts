@@ -955,6 +955,8 @@ export default {
     mainTableDefault: '主表',
     childTableDefault: '子表',
     fkGuardMainNotReady: '請先建立{parentTableName}記錄，再新增{childTableName}資料。',
+import: '匯入',
+exportWithData: '匯出',
     startTime: '開始時間',
     endTime: '結束時間',
     upload: '上傳',

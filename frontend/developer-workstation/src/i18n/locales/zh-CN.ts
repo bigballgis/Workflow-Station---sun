@@ -327,7 +327,7 @@ export default {
     invalidFieldName: '字段名 "{name}" 无效，必须以字母开头，只能包含字母、数字和下划线',
     pkNotNullable: '主键字段不能勾选"可空"，请取消勾选后保存',
     compositePkNotNullable: '联合主键中至少需要有一个字段不勾选"可空"',
-    exportTemplate: '导出模板',
+    exportWithData: '导出',
     importTemplate: '导入模板',
     exportSuccess: '模板导出成功',
     importSuccess: '模板导入成功',
@@ -1361,6 +1361,8 @@ export default {
     mainTableDefault: '主表',
     childTableDefault: '子表',
     fkGuardMainNotReady: '请先创建{parentTableName}记录，再添加{childTableName}数据。',
+    import: '导入',
+    exportWithData: '导出',
   },
   subTableView: {
     formDesign: '表单设计',
