@@ -87,6 +87,7 @@ CREATE TABLE IF NOT EXISTS dw_table_definitions (
     table_display_name VARCHAR(200),
     table_type VARCHAR(20) NOT NULL,
     display_name TEXT,
+    request_id_config JSONB,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_table_function_unit FOREIGN KEY (function_unit_id) REFERENCES dw_function_units(id) ON DELETE CASCADE,

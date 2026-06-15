@@ -11,7 +11,10 @@ import {
   applyTableFieldMetaToFormRule,
   shouldIncludeFieldOnFormCanvas,
   syncFormRulesWithTableFields,
+  buildRequestIdFormRule,
+  isRequestIdSyntheticField,
 } from '@/utils/formFieldMeta'
+import type { RequestIdConfig } from '@/api/functionUnit'
 
 type DesignerLike = { getRule?: () => unknown[]; setRule?: (r: unknown[]) => void } | null | undefined
 
@@ -146,6 +149,10 @@ export function useTableFieldRules(options: UseTableFieldRulesOptions) {
     })
   }
 
+  /**
+   * 主表字段 → form-create rule。Request ID 作为可勾选虚拟字段混在 {@code fields} 里时,
+   * 由 {@link fieldToFormRule} 转成派生只读 rule。
+   */
   function mapFieldsToFormRules(fields: FieldDefinition[]): any[] {
     return fields
       .filter(shouldIncludeFieldOnFormCanvas)
@@ -153,9 +160,21 @@ export function useTableFieldRules(options: UseTableFieldRulesOptions) {
       .filter((rule): rule is Record<string, unknown> => rule != null)
   }
 
+  /** 取 tableId 对应表的 Request ID 配置(仅 MAIN 表会有)。 */
+  function getRequestIdConfigByTableId(tableId?: number | null): RequestIdConfig | null {
+    if (!tableId) return null
+    const table = store.tables.find(t => t.id === tableId)
+    return table?.requestIdConfig ?? null
+  }
+
   function fieldToFormRule(field: FieldDefinition): Record<string, unknown> | null {
     if (!shouldIncludeFieldOnFormCanvas(field)) {
       return null
+    }
+
+    // Request ID 虚拟字段 → 派生只读 rule(值由运行时后端填充)
+    if (isRequestIdSyntheticField(field)) {
+      return buildRequestIdFormRule(field.displayName || t('form.requestId'))
     }
 
     const baseRule = {
@@ -324,6 +343,7 @@ export function useTableFieldRules(options: UseTableFieldRulesOptions) {
     mergeTaskPermissionsForFields,
     refreshFormRulesFromTableMetadata,
     mapFieldsToFormRules,
+    getRequestIdConfigByTableId,
     fieldToFormRule,
     buildEffectiveMainFormConfig,
   }

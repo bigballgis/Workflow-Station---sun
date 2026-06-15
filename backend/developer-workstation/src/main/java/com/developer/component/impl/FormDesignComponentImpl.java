@@ -50,6 +50,13 @@ public class FormDesignComponentImpl implements FormDesignComponent {
 
     private static final Long SYSTEM_USER_TABLE_ID = -1_000_000_001L;
 
+    /**
+     * Reserved synthetic field names that are NOT Data_Table columns and must be exempt from
+     * field-name validation. Keep in sync with the developer-workstation frontend
+     * REQUEST_ID_FIELD and the user-portal RequestIdEnricher.REQUEST_ID_FIELD.
+     */
+    private static final Set<String> RESERVED_VIRTUAL_FIELD_NAMES = Set.of("__request_id");
+
     private final FormDefinitionRepository formDefinitionRepository;
     private final FunctionUnitRepository functionUnitRepository;
     private final TableDefinitionRepository tableDefinitionRepository;
@@ -503,8 +510,10 @@ public class FormDesignComponentImpl implements FormDesignComponent {
     public void validateFieldNames(Long functionUnitId, List<String> fieldNames) {
         List<String> dataTableColumns = getDataTableColumns(functionUnitId);
         Set<String> columnSet = new HashSet<>(dataTableColumns);
-        
+
         List<String> invalidFields = fieldNames.stream()
+                // Request ID is a derived virtual field (not a Data_Table column) — exempt it.
+                .filter(name -> !RESERVED_VIRTUAL_FIELD_NAMES.contains(name))
                 .filter(name -> !columnSet.contains(name))
                 .toList();
         

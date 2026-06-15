@@ -205,6 +205,7 @@ export default {
     completedTasks: 'Completed Tasks',
     completedTime: 'Completed Time',
     taskName: 'Task Name',
+    requestId: 'Request ID',
     processName: 'Process Name',
     initiator: 'Initiator',
     assignee: 'Assignee',
@@ -478,6 +479,7 @@ export default {
   application: {
     title: 'My Requests',
     processTitle: 'Process Title',
+    requestId: 'Request ID',
     currentStep: 'Current Step',
     startTime: 'Start Time',
     status: 'Status',

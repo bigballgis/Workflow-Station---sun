@@ -25,6 +25,8 @@ export interface ProcessInstance {
   currentNode?: string
   currentAssignee?: string
   candidateUsers?: string
+  /** Request ID: main-table configured human-readable identifier (e.g. HR-2026-001); null when unconfigured. */
+  requestId?: string | null
   variables?: Record<string, unknown>
 }
 

@@ -58,6 +58,7 @@ public class TaskQueryComponent {
     private final WorkspaceTaskFilterComponent workspaceTaskFilter;
     private final MiParticipantEnrichmentComponent miParticipantEnricher;
     private final TaskHistoryComponent taskHistoryComponent;
+    private final RequestIdEnricher requestIdEnricher;
 
     /** Lazy: breaks cycle with {@link TaskProcessComponent} which depends on this component. */
     @Lazy
@@ -154,6 +155,7 @@ public class TaskQueryComponent {
         List<TaskInfo> pagedTasks = start < allTasks.size()
                 ? allTasks.subList(start, end)
                 : Collections.emptyList();
+        requestIdEnricher.enrichTaskRequestIds(pagedTasks);
         EngineTaskMapper.clearTaskVariablesForList(pagedTasks);
         return PageResponse.of(pagedTasks, page, size, allTasks.size());
     }
@@ -198,6 +200,7 @@ public class TaskQueryComponent {
         List<TaskInfo> pagedTasks = start < allTasks.size()
                 ? allTasks.subList(start, end)
                 : Collections.emptyList();
+        requestIdEnricher.enrichTaskRequestIds(pagedTasks);
         EngineTaskMapper.clearTaskVariablesForList(pagedTasks);
         return PageResponse.of(pagedTasks, page, size, allTasks.size());
     }
@@ -303,6 +306,7 @@ public class TaskQueryComponent {
                 ? allTasks.size()
                 : Math.max(engineTotal + (long) delegated.size(), (long) allTasks.size());
 
+        requestIdEnricher.enrichTaskRequestIds(pagedTasks);
         EngineTaskMapper.clearTaskVariablesForList(pagedTasks);
         return PageResponse.of(pagedTasks, page, size, totalElements);
     }

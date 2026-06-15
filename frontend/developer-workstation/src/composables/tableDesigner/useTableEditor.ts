@@ -227,6 +227,10 @@ export function useTableEditor(options: UseTableEditorOptions) {
         tableDisplayName: selectedTable.value.tableDisplayName,
         tableType: selectedTable.value.tableType,
         description: selectedTable.value.description,
+        // Request ID 仅对 MAIN 表有意义;其它表类型不持久化该配置
+        requestIdConfig: selectedTable.value.tableType === 'MAIN'
+          ? (selectedTable.value.requestIdConfig ?? null)
+          : null,
         fields: fields
       }
 

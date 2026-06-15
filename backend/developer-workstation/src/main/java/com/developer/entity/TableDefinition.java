@@ -1,10 +1,13 @@
 package com.developer.entity;
 
+import com.developer.dto.RequestIdConfig;
 import com.developer.enums.TableType;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
@@ -48,7 +51,12 @@ public class TableDefinition {
     @JsonProperty("description")
     @Column(name = "display_name", columnDefinition = "TEXT")
     private String displayName;
-    
+
+    /** 主表 Request ID 配置:有序字段 + 分隔符,拼成一条 request 的人类可读标识。仅 MAIN 表有意义,可空。 */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "request_id_config", columnDefinition = "jsonb")
+    private RequestIdConfig requestIdConfig;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

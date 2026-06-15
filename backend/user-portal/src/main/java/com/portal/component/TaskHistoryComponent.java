@@ -42,6 +42,7 @@ public class TaskHistoryComponent {
     private final ProcessInstanceRepository processInstanceRepository;
     private final ProcessHistoryRepository processHistoryRepository;
     private final JdbcTemplate jdbcTemplate;
+    private final RequestIdEnricher requestIdEnricher;
 
     /** Lazy: breaks cycle with {@link TaskQueryComponent} which delegates to this component. */
     @Lazy
@@ -276,6 +277,9 @@ public class TaskHistoryComponent {
                         }
                     }
                 }
+
+                // Request ID from the completed process instances' frozen variables.
+                requestIdEnricher.enrichTaskRequestIds(tasks);
 
                 return PageResponse.of(tasks, page, size, totalElements);
             }

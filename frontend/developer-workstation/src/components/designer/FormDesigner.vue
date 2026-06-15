@@ -364,6 +364,7 @@
           :primary-table-id="previewPrimaryTableId"
           :parent-tables-by-id="previewParentTablesById"
           :preview-table-bindings="previewTableBindingsForContext"
+          :request-id-config="previewRequestIdConfig"
         />
         <el-empty
           v-else
@@ -513,19 +514,36 @@
               prop="fieldName"
               :label="t('form.fieldName')"
               width="150"
-            />
+            >
+              <template #default="{ row }">
+                <span>{{ isRequestIdSyntheticField(row) ? (row.displayName || row.fieldName) : row.fieldName }}</span>
+                <el-tag
+                  v-if="isRequestIdSyntheticField(row)"
+                  size="small"
+                  type="info"
+                  effect="plain"
+                  class="virtual-field-tag"
+                >
+                  {{ t('form.virtualField') }}
+                </el-tag>
+              </template>
+            </el-table-column>
             <el-table-column
               prop="dataType"
               :label="t('form.dataType')"
               width="100"
-            />
+            >
+              <template #default="{ row }">
+                {{ isRequestIdSyntheticField(row) ? '—' : row.dataType }}
+              </template>
+            </el-table-column>
             <el-table-column
               :label="t('form.formComponent')"
               width="120"
             >
               <template #default="{ row }">
                 <el-tag size="small">
-                  {{ getFormComponentType(row.dataType) }}
+                  {{ isRequestIdSyntheticField(row) ? t('form.readonlyText') : getFormComponentType(row.dataType) }}
                 </el-tag>
               </template>
             </el-table-column>
@@ -632,6 +650,7 @@ import {
 } from './previewSubTableDialog'
 import { cloneFormRules } from '@/utils/formDesigner'
 import { mapFormCreateRulesReadonlyDeep } from '@/utils/formCreateRuleUtils'
+import { isRequestIdSyntheticField } from '@/utils/formFieldMeta'
 import TableBindingManager from './TableBindingManager.vue'
 import FormRenameDialog from './form-designer/FormRenameDialog.vue'
 import FormCreateDialog from './form-designer/FormCreateDialog.vue'
@@ -814,6 +833,7 @@ const {
   mergeTaskPermissionsForFields,
   refreshFormRulesFromTableMetadata,
   mapFieldsToFormRules,
+  getRequestIdConfigByTableId,
   buildEffectiveMainFormConfig,
 } = tableFieldRules
 
@@ -928,6 +948,14 @@ const {
   t,
 })
 
+// Request ID config of the preview's PRIMARY main table — preview recomputes the
+// readonly Request ID live from these fields (no backend in preview).
+const previewRequestIdConfig = computed(() => {
+  const id = previewPrimaryTableId.value
+  if (id == null) return null
+  return store.tables.find(tbl => tbl.id === id)?.requestIdConfig ?? null
+})
+
 // ── Import-fields dialog ────────────────────────────────────────────────────
 const {
   showImportFieldsDialog,
@@ -958,6 +986,7 @@ const {
   getSubTableListViewBaseColumns,
   appendSubTableListFieldColumns,
   mapFieldsToFormRules,
+  getRequestIdConfigByTableId,
   mergeTaskPermissionsForFields,
   refreshFormRulesFromTableMetadata,
   t,

@@ -31,6 +31,9 @@ public class TableDefinitionRequest {
     private String tableDisplayName;
 
     private String description;
-    
+
+    /** 主表 Request ID 配置(有序字段 + 分隔符);仅 MAIN 表有意义,可空。 */
+    private RequestIdConfig requestIdConfig;
+
     private List<FieldDefinitionRequest> fields;
 }

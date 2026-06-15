@@ -131,10 +131,8 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
   }))
 
   const getPreviewOption = (): Record<string, any> => ({
-    submitBtn: {
-      show: true,
-      innerText: t('common.validate'),
-    },
+    // Built-in bottom submit/validate button hidden in preview (see mergePreviewValidateFormOption).
+    submitBtn: false,
     resetBtn: false,
     language: {
       en: {
@@ -185,10 +183,8 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
 
     // Sync label position from designer option
     Object.assign(previewOptionState, {
-      submitBtn: {
-        show: true,
-        innerText: t('common.validate'),
-      },
+      // Built-in bottom submit/validate button hidden in preview.
+      submitBtn: false,
       resetBtn: false,
     })
 

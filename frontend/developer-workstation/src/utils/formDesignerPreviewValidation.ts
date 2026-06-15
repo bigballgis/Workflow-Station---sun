@@ -240,7 +240,8 @@ export function flushDesignerValidatePanelToActiveRule(
 /** Options merged into designer state for the built-in preview dialog. */
 export function mergePreviewValidateFormOption(
   option: Record<string, unknown> | undefined,
-  validateButtonText: string,
+  // Kept for call-site compatibility; the built-in submit/validate button is now hidden.
+  _validateButtonText?: string,
 ): Record<string, unknown> {
   const base = option && typeof option === 'object' ? { ...option } : {}
   const form =
@@ -250,23 +251,10 @@ export function mergePreviewValidateFormOption(
   form.showMessage = true
   base.form = form
   base.validateOnSubmit = true
-  const prevSubmit =
-    base.submitBtn && typeof base.submitBtn === 'object'
-      ? (base.submitBtn as Record<string, unknown>)
-      : {}
-  const prevClick = prevSubmit.click
-  base.submitBtn = {
-    ...prevSubmit,
-    show: true,
-    innerText: validateButtonText,
-    click: (api: { submit?: (ok?: unknown, fail?: unknown) => Promise<unknown> }) => {
-      if (typeof prevClick === 'function') {
-        return (prevClick as (a: unknown) => unknown)(api)
-      }
-      if (typeof api?.submit !== 'function') return
-      return api.submit().catch(function () {})
-    },
-  }
+  // Preview is for layout/field inspection only — hide form-create's built-in bottom
+  // submit/validate button (it ran api.submit() silently, looking like it did nothing).
+  // Designer-placed Validate button components in the form rules are unaffected.
+  base.submitBtn = false
   const prevReset =
     base.resetBtn && typeof base.resetBtn === 'object'
       ? (base.resetBtn as Record<string, unknown>)

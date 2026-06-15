@@ -227,6 +227,30 @@
               autosize
             />
           </div>
+          <div
+            v-if="selectedTable.tableType === 'MAIN'"
+            class="meta-field meta-field--request-id"
+          >
+            <label class="meta-label">
+              {{ t('table.requestId.label') }}
+              <el-tooltip
+                :content="t('table.requestId.metaHint')"
+                placement="top"
+              >
+                <el-icon class="fields-info-icon"><InfoFilled /></el-icon>
+              </el-tooltip>
+            </label>
+            <div class="request-id-meta-row">
+              <code class="request-id-meta-preview">{{ requestIdPreview }}</code>
+              <el-button
+                size="small"
+                plain
+                @click="showRequestIdDialog = true"
+              >
+                {{ t('table.requestId.configure') }}
+              </el-button>
+            </div>
+          </div>
         </div>
       </el-card>
 
@@ -659,16 +683,26 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- Request ID Config Dialog (MAIN tables only) -->
+    <RequestIdConfigDialog
+      v-if="selectedTable"
+      v-model="showRequestIdDialog"
+      :fields="selectedTable.fieldDefinitions"
+      :config="selectedTable.requestIdConfig"
+      @confirm="onRequestIdConfirm"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ArrowLeft, Refresh, InfoFilled, CaretTop, CaretBottom, Delete } from '@element-plus/icons-vue'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
-import { type TableDefinition, type ForeignKeyDTO } from '@/api/functionUnit'
+import { type TableDefinition, type ForeignKeyDTO, type RequestIdConfig } from '@/api/functionUnit'
 import RelationDiagramEditor from '@/components/designer/RelationDiagramEditor.vue'
+import RequestIdConfigDialog from '@/components/designer/RequestIdConfigDialog.vue'
 import PkGenerationEditor from '@/components/designer/PkGenerationEditor.vue'
 import FieldForeignKeyEditor from '@/components/designer/FieldForeignKeyEditor.vue'
 import { useTableNaming } from '@/composables/tableDesigner/useTableNaming'
@@ -698,6 +732,24 @@ const selectedTable = ref<TableDefinition | null>(null)
 const tableNameTouched = ref(false)
 const relations = ref<TableRelation[]>([])
 const foreignKeys = ref<ForeignKeyDTO[]>([])
+const showRequestIdDialog = ref(false)
+
+// table-meta-card 的 Request ID 只读预览:用已选字段的 displayName 占位拼出形态
+const requestIdPreview = computed(() => {
+  const cfg = selectedTable.value?.requestIdConfig
+  const fieldNames = cfg?.fieldNames
+  if (!fieldNames || !fieldNames.length) return t('table.requestId.notConfigured')
+  const fields = selectedTable.value?.fieldDefinitions ?? []
+  const labelOf = (name: string) =>
+    fields.find((f) => f.fieldName === name)?.displayName || name
+  return fieldNames.map((n) => `[${labelOf(n)}]`).join(cfg?.separator ?? '-')
+})
+
+function onRequestIdConfirm(cfg: RequestIdConfig | null) {
+  if (selectedTable.value) {
+    selectedTable.value.requestIdConfig = cfg
+  }
+}
 
 // Shared technical-name primitives (validation + availability check).
 const { validateName, existingTableNames, assertTableNameAvailable } = useTableNaming({

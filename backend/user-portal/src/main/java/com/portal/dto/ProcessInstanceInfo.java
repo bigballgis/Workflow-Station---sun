@@ -31,6 +31,12 @@ public class ProcessInstanceInfo {
     private String candidateUsers;
     private Map<String, Object> variables;
 
+    /**
+     * Request ID:主表配置的有序字段 + 分隔符拼成的人类可读标识(如 HR-2026-001),
+     * 由 RequestIdEnricher 填充;主表未配置时为 null(前端列表渲染 '-')。
+     */
+    private String requestId;
+
     /** 发起时钉死的功能单元目录 ID（admin sys_function_units.id） */
     private String functionUnitCatalogId;
     private String functionUnitCode;

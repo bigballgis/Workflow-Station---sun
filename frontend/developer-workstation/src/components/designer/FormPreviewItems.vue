@@ -215,6 +215,7 @@ import {
   runComponentFieldEventsOnValueChange,
 } from '@/utils/formCreateComponentEvents'
 import { createPortalFormApi } from '@/utils/formCreateEventRuntime'
+import { REQUEST_ID_FIELD } from '@/utils/formFieldMeta'
 
 defineOptions({ name: 'FormPreviewItems' })
 
@@ -228,6 +229,8 @@ const props = defineProps<{
   primaryTableId?: number | null
   parentTablesById?: Record<number, { fieldDefinitions: import('@/api/functionUnit').FieldDefinition[] }>
   previewTableBindings?: Array<{ tableId?: number | null; bindingType?: string }>
+  /** Main table Request ID config — preview recomputes the readonly Request ID live from these fields. */
+  requestIdConfig?: import('@/api/functionUnit').RequestIdConfig | null
 }>()
 
 const emit = defineEmits<{
@@ -298,9 +301,27 @@ function updateTableRows(bindingId: number, rows: any[]) {
   })
 }
 
+/** Live-compute the readonly Request ID from configured fields + separator (preview has no backend). */
+function recomputeRequestId(model: Record<string, any>): string | undefined {
+  const cfg = props.requestIdConfig
+  if (!cfg || !Array.isArray(cfg.fieldNames) || cfg.fieldNames.length === 0) return undefined
+  const parts = cfg.fieldNames
+    .map((name) => {
+      const v = model[name]
+      return v == null ? '' : String(v).trim()
+    })
+    .filter((s) => s !== '') // skip empty fields, mirrors backend RequestIdEnricher
+  return parts.length ? parts.join(cfg.separator ?? '') : ''
+}
+
 function onPreviewFieldChange(segmentRules: unknown[], field: string, value: unknown) {
   if (!field || isMyRequestsPreview.value) return
-  const patch = { [field]: value }
+  const patch: Record<string, any> = { [field]: value }
+  const nextModel = { ...previewModel.value, ...patch }
+  // If this field feeds the Request ID, recompute the readonly Request ID live.
+  if (props.requestIdConfig?.fieldNames?.includes(field)) {
+    patch[REQUEST_ID_FIELD] = recomputeRequestId(nextModel)
+  }
   previewModel.value = { ...previewModel.value, ...patch }
   const api = createPortalFormApi(
     () => previewModel.value,

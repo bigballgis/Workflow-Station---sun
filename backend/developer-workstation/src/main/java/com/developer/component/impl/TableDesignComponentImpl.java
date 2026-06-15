@@ -71,6 +71,7 @@ public class TableDesignComponentImpl implements TableDesignComponent {
                 .tableDisplayName(request.getTableDisplayName())
                 .tableType(request.getTableType())
                 .displayName(request.getDescription())
+                .requestIdConfig(request.getRequestIdConfig())
                 .build();
         
         tableDefinition = tableDefinitionRepository.save(tableDefinition);
@@ -133,6 +134,7 @@ public class TableDesignComponentImpl implements TableDesignComponent {
         tableDefinition.setTableDisplayName(request.getTableDisplayName());
         tableDefinition.setTableType(request.getTableType());
         tableDefinition.setDisplayName(request.getDescription());
+        tableDefinition.setRequestIdConfig(request.getRequestIdConfig());
 
         List<TableDefinition> allTables = tableDefinitionRepository.findByFunctionUnitIdWithFields(functionUnitId);
         if (request.getFields() != null && !request.getFields().isEmpty()) {

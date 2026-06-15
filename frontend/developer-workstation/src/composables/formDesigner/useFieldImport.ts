@@ -1,7 +1,8 @@
 import { computed, ref } from 'vue'
 import type { ComputedRef, Ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import type { FieldDefinition, FormDefinition, TableBinding } from '@/api/functionUnit'
+import type { FieldDefinition, FormDefinition, RequestIdConfig, TableBinding } from '@/api/functionUnit'
+import { isRequestIdRule, buildRequestIdSyntheticField } from '@/utils/formFieldMeta'
 import { functionUnitApi } from '@/api/functionUnit'
 import { relationTableBindingApi } from '@/api/relationTable'
 import type { SubTableFieldDTO } from '@/api/subTableView'
@@ -23,7 +24,8 @@ interface UseFieldImportOptions {
   subTableViewState: Ref<Record<number, { allFields: SubTableFieldDTO[]; viewFields: SubTableListColumnDTO[] }>>
   getSubTableListViewBaseColumns: (bindingId: number) => SubTableListColumnDTO[]
   appendSubTableListFieldColumns: (existing: SubTableListColumnDTO[], newFields: SubTableFieldDTO[]) => SubTableListColumnDTO[]
-  mapFieldsToFormRules: (fields: FieldDefinition[]) => any[]
+  mapFieldsToFormRules: (fields: FieldDefinition[], requestIdConfig?: RequestIdConfig | null) => any[]
+  getRequestIdConfigByTableId: (tableId?: number | null) => RequestIdConfig | null
   mergeTaskPermissionsForFields: (fields: FieldDefinition[]) => void
   refreshFormRulesFromTableMetadata: () => void
   t: (key: string, params?: Record<string, unknown>) => string
@@ -39,7 +41,8 @@ export function useFieldImport(options: UseFieldImportOptions) {
     functionUnitId, store, selectedForm, designerRef, subDesignerRefs, designerSubBindings,
     activeDesignerTab, relationViewState, subTableViewState,
     getSubTableListViewBaseColumns, appendSubTableListFieldColumns,
-    mapFieldsToFormRules, mergeTaskPermissionsForFields, refreshFormRulesFromTableMetadata, t,
+    mapFieldsToFormRules, getRequestIdConfigByTableId, mergeTaskPermissionsForFields,
+    refreshFormRulesFromTableMetadata, t,
   } = options
 
   // Import fields state
@@ -99,7 +102,16 @@ export function useFieldImport(options: UseFieldImportOptions) {
       return relationTableFields.value
     }
     const table = store.tables.find(t => t.id === importTableId.value)
-    return table?.fieldDefinitions || []
+    const fields = table?.fieldDefinitions ? [...table.fieldDefinitions] : []
+    // Importing into the MAIN designer from a table that configures Request ID:
+    // expose Request ID as a checkable virtual field at the top of the list.
+    if (
+      activeDesignerTab.value === 'main' &&
+      getRequestIdConfigByTableId(importTableId.value) != null
+    ) {
+      fields.unshift(buildRequestIdSyntheticField(t('form.requestId')))
+    }
+    return fields
   })
 
   // Computed: all fields selected
@@ -373,6 +385,8 @@ export function useFieldImport(options: UseFieldImportOptions) {
         return
       }
 
+      // Request ID (when checked) rides along in selectedImportFields as a virtual
+      // field and is turned into a readonly rule by fieldToFormRule.
       const rules = mapFieldsToFormRules(selectedImportFields.value)
       mergeTaskPermissionsForFields(selectedImportFields.value)
 
@@ -388,8 +402,12 @@ export function useFieldImport(options: UseFieldImportOptions) {
 
       if (targetRef) {
         const currentRules: any[] = targetRef.getRule() || []
+        const hasRequestIdAlready = currentRules.some(isRequestIdRule)
         const existingFields = new Set(currentRules.map((r: any) => r.field))
-        const newRules = rules.filter(r => !existingFields.has(r.field))
+        // Skip fields already on canvas; also skip a duplicate Request ID rule.
+        const newRules = rules.filter(
+          r => !existingFields.has(r.field) && !(hasRequestIdAlready && isRequestIdRule(r)),
+        )
         const duplicateCount = rules.length - newRules.length
 
         if (duplicateCount > 0) {

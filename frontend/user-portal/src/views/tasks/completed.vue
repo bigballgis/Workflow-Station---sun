@@ -66,6 +66,16 @@
           <span v-else>{{ t('task.noCompletedTasks') }}</span>
         </template>
         <el-table-column
+          prop="requestId"
+          :label="t('task.requestId')"
+          min-width="130"
+          show-overflow-tooltip
+        >
+          <template #default="{ row }">
+            {{ row.requestId || '-' }}
+          </template>
+        </el-table-column>
+        <el-table-column
           prop="taskName"
           :label="t('task.taskName')"
           min-width="160"

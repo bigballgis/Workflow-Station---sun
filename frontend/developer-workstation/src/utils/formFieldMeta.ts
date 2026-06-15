@@ -1,9 +1,69 @@
-import type { FieldDefinition } from '@/api/functionUnit'
+import type { FieldDefinition, RequestIdConfig } from '@/api/functionUnit'
 import { getRuleChildren } from '@/utils/formDesigner'
 import { parsePkGeneration } from '@/utils/pkGenerationConfig'
 import { isFkHidden, isFkReadonly, type FieldFkMeta } from '@/utils/tableFkRuntime'
 
 export type TaskFieldPermission = 'EDITABLE' | 'READONLY'
+
+/**
+ * 保留 field 名:Request ID 是一个跨字段拼接的派生只读字段,作为一条 synthetic form-create
+ * rule 默认导入到 main form。不能与真实 fieldName 冲突(双下划线前缀约定保留)。
+ */
+export const REQUEST_ID_FIELD = '__request_id'
+
+/** 该 rule 是否是 Request ID synthetic 字段(用于去重 / 运行时取值识别)。 */
+export function isRequestIdRule(rule: unknown): boolean {
+  if (!rule || typeof rule !== 'object') return false
+  const r = rule as Record<string, unknown>
+  return r._requestId === true || r.field === REQUEST_ID_FIELD
+}
+
+/**
+ * 构建 Request ID 的 synthetic 只读 form-create rule。
+ * 复用现有 readonly 机制(props.readonly → 渲染时转 disabled);值在运行时由后端填充。
+ */
+export function buildRequestIdFormRule(label: string): Record<string, unknown> {
+  return {
+    field: REQUEST_ID_FIELD,
+    title: label,
+    type: 'input',
+    _requestId: true,
+    readonly: true,
+    props: { readonly: true },
+    validate: [],
+  }
+}
+
+/** 主表配了 Request ID 才需要 synthetic 字段。 */
+export function hasRequestIdConfig(config?: RequestIdConfig | null): boolean {
+  return !!config && Array.isArray(config.fieldNames) && config.fieldNames.length > 0
+}
+
+/** 导入字段对话框里展示该 synthetic 字段的 dataType 标记(虚拟,非真实列类型)。 */
+export const REQUEST_ID_DATA_TYPE = 'REQUEST_ID'
+
+/**
+ * 构建一个"可勾选的虚拟字段",注入到导入对话框的可选字段列表里。
+ * 勾选并导入后,由 {@link fieldToFormRule}(经 {@link isRequestIdSyntheticField})转成只读 rule。
+ */
+export function buildRequestIdSyntheticField(label: string): FieldDefinition {
+  return {
+    fieldName: REQUEST_ID_FIELD,
+    dataType: REQUEST_ID_DATA_TYPE,
+    nullable: true,
+    isPrimaryKey: false,
+    displayName: label,
+    // 标记位:identifies this as the virtual Request ID field across the import flow
+    _requestId: true,
+  } as FieldDefinition & { _requestId: boolean }
+}
+
+/** 该 FieldDefinition 是否是 Request ID 虚拟字段(import 列表 / 已选列表识别)。 */
+export function isRequestIdSyntheticField(field?: { fieldName?: string; dataType?: string } | null): boolean {
+  if (!field) return false
+  const f = field as { fieldName?: string; dataType?: string; _requestId?: boolean }
+  return f._requestId === true || f.dataType === REQUEST_ID_DATA_TYPE || f.fieldName === REQUEST_ID_FIELD
+}
 
 function toFkMeta(field: FieldDefinition): FieldFkMeta {
   return {

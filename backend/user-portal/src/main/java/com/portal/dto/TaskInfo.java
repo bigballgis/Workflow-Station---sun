@@ -95,7 +95,13 @@ public class TaskInfo {
 
     /** 流程变量 */
     private Map<String, Object> variables;
-    
+
+    /**
+     * Request ID:主表配置的有序字段 + 分隔符拼成的人类可读标识(如 HR-2026-001),
+     * 由后端 RequestIdEnricher 填充;主表未配置时为 null(前端列表渲染 '-')。
+     */
+    private String requestId;
+
     /** 完成时间（已处理任务） */
     private LocalDateTime completedTime;
     

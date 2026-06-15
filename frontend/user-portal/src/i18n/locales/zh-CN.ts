@@ -205,6 +205,7 @@ export default {
     completedTasks: '已处理任务',
     completedTime: '完成时间',
     taskName: '任务名称',
+    requestId: 'Request ID',
     processName: '流程名称',
     initiator: '发起人',
     assignee: '处理人',
@@ -478,6 +479,7 @@ export default {
   application: {
     title: '我的请求',
     processTitle: '流程标题',
+    requestId: 'Request ID',
     currentStep: '当前步骤',
     startTime: '发起时间',
     status: '状态',

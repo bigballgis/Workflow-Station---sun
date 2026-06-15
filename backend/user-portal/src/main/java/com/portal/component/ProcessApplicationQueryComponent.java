@@ -36,6 +36,7 @@ public class ProcessApplicationQueryComponent {
     private final UserDisplayNameResolver userDisplayNameResolver;
     private final MiOverlayComponent miOverlayComponent;
     private final SubTableEnrichmentComponent subTableEnrichmentComponent;
+    private final RequestIdEnricher requestIdEnricher;
 
     /**
      * For running processes with incomplete local assignee data, backfill user/candidate ids from engine and persist.
@@ -118,9 +119,20 @@ public class ProcessApplicationQueryComponent {
                         inst.getCurrentAssignee(), inst.getCandidateUsers()).stream())
                 .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
         Map<String, String> userNameCache = userDisplayNameResolver.resolveBatch(assigneeKeys);
+
+        // Resolve Request ID config once per function unit (no per-row DB hit).
+        Set<String> functionUnitCodes = pageContent.stream()
+                .map(ProcessInstance::getFunctionUnitCode)
+                .filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        RequestIdEnricher.SpecCache requestIdSpecs = requestIdEnricher.resolveSpecs(functionUnitCodes);
+
         // List API omits variables: JSONB may contain Jackson-unfriendly nesting → HttpMessageNotWritableException → SYS_INTERNAL_ERROR
+        // Request ID is computed from the (still present) variables before they are nulled.
         List<ProcessInstanceInfo> instances = pageContent.stream()
                 .map(inst -> toProcessInstanceInfoForList(inst, userNameCache))
+                .peek(info -> info.setRequestId(
+                        requestIdEnricher.buildRequestId(requestIdSpecs, info.getFunctionUnitCode(), info.getVariables())))
                 .peek(info -> info.setVariables(null))
                 .toList();
 

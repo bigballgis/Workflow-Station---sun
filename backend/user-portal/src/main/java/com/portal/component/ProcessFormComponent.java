@@ -11,7 +11,9 @@ import com.portal.exception.PortalException;
 import com.portal.repository.ProcessInstanceRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -41,6 +43,20 @@ public class ProcessFormComponent {
     private final ObjectMapper objectMapper;
     private final JdbcTemplate jdbcTemplate;
     private final PlatformTransactionManager platformTransactionManager;
+
+    /** Lazy: computes the readonly Request ID value; injected as a field to keep ctor arity stable for tests. */
+    @Lazy
+    @Autowired
+    private RequestIdEnricher requestIdEnricher;
+
+    private RequestIdEnricher requestIdEnricher() {
+        RequestIdEnricher r = requestIdEnricher;
+        if (r == null) {
+            r = new RequestIdEnricher(jdbcTemplate, objectMapper, processInstanceRepository);
+            requestIdEnricher = r;
+        }
+        return r;
+    }
 
     private volatile TransactionTemplate processFormWriteTxTemplate;
 
@@ -98,12 +114,19 @@ public class ProcessFormComponent {
 
         boolean editable = RETURN_TO_REQUESTER.equals(processInstance.getStatus());
 
+        // Readonly Request ID synthetic field: compute from the main-table config + variables.
+        Map<String, Object> fieldValues = new HashMap<>(variables);
+        String requestId = requestIdEnricher().buildRequestId(processInstance.getFunctionUnitCode(), variables);
+        if (requestId != null) {
+            fieldValues.put(RequestIdEnricher.REQUEST_ID_FIELD, requestId);
+        }
+
         return ProcessFormData.builder()
                 .processInstanceId(processInstanceId)
                 .formName(formName)
                 .formType("PROCESS")
                 .configJson(configJson)
-                .fieldValues(new HashMap<>(variables))
+                .fieldValues(fieldValues)
                 .subTableBindings(subTableBindings)
                 .editable(editable)
                 .processState(processInstance.getStatus())

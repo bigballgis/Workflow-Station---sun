@@ -103,12 +103,21 @@ export interface FunctionUnitRequest {
   iconId?: number
 }
 
+/** 主表 Request ID 配置:有序字段 + 分隔符,拼成一条 request 的人类可读标识(如 HR-2026-001)。仅 MAIN 表有意义。 */
+export interface RequestIdConfig {
+  /** 有序字段名;顺序即拼接先后(存 fieldName) */
+  fieldNames: string[]
+  /** 字段间分隔符,如 '-' / '/' / '_' / '.' / ' ' / ''(无) */
+  separator: string
+}
+
 export interface TableDefinition {
   id: number
   tableName: string
   tableDisplayName?: string
   tableType: string
   description?: string
+  requestIdConfig?: RequestIdConfig | null
   fieldDefinitions: FieldDefinition[]
 }
 

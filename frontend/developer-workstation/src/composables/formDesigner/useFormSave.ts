@@ -17,6 +17,7 @@ import {
 } from '@/utils/formDesignerPreviewValidation'
 import { walkRulesApplyTableFieldDefaultsToPersistedRules } from '@/utils/formCreateRuleDefaults'
 import { stripFormCreateRulesDisabledDeep } from '@/utils/formCreateRuleUtils'
+import { isRequestIdRule } from '@/utils/formFieldMeta'
 import type { SubTableListColumnDTO } from './useSubTableViews'
 import type { PortalViewsValue } from './useSubTablePortalViews'
 
@@ -155,7 +156,8 @@ export function useFormSave(options: UseFormSaveOptions) {
       // Validate field names against Data_Table columns (for PROCESS and TASK forms)
       if (selectedForm.value.formType === 'PROCESS' || selectedForm.value.formType === 'TASK') {
         const fieldNames = rule
-          .filter((r: any) => r.field && r.type !== 'subTable')
+          // Request ID is a derived virtual field, not a Data_Table column — skip it.
+          .filter((r: any) => r.field && r.type !== 'subTable' && !isRequestIdRule(r))
           .map((r: any) => r.field as string)
         const invalidFields = validateFieldNames(fieldNames)
         if (invalidFields.length > 0) {

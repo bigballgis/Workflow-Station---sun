@@ -129,6 +129,16 @@
             <span v-else>{{ t('application.noApplications') }}</span>
           </template>
           <el-table-column
+            prop="requestId"
+            :label="t('application.requestId')"
+            min-width="130"
+            show-overflow-tooltip
+          >
+            <template #default="{ row }">
+              {{ row.requestId || '-' }}
+            </template>
+          </el-table-column>
+          <el-table-column
             prop="businessKey"
             :label="t('application.processTitle')"
             min-width="160"

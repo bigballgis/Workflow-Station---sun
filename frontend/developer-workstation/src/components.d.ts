@@ -131,6 +131,7 @@ declare module 'vue' {
     RelationDiagramEditor: typeof import('./components/designer/RelationDiagramEditor.vue')['default']
     RelationTableView: typeof import('./components/designer/RelationTableView.vue')['default']
     RelationViewDesigner: typeof import('./components/designer/RelationViewDesigner.vue')['default']
+    RequestIdConfigDialog: typeof import('./components/designer/RequestIdConfigDialog.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     RowFormulaEditor: typeof import('./components/designer/RowFormulaEditor.vue')['default']

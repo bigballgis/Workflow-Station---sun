@@ -85,6 +85,20 @@ public class TaskFormComponent {
     @Autowired
     private TaskFormSubTableChangeRecorder subTableChangeRecorder;
 
+    /** Lazy: computes the readonly Request ID value so the form field matches DW preview / portal lists. */
+    @Lazy
+    @Autowired
+    private RequestIdEnricher requestIdEnricher;
+
+    private RequestIdEnricher requestIdEnricher() {
+        RequestIdEnricher r = requestIdEnricher;
+        if (r == null) {
+            r = new RequestIdEnricher(jdbcTemplate, objectMapper, processInstanceRepository);
+            requestIdEnricher = r;
+        }
+        return r;
+    }
+
     private TaskFormFieldMapper fieldMapper() {
         TaskFormFieldMapper m = fieldMapper;
         if (m == null) {
@@ -155,16 +169,24 @@ public class TaskFormComponent {
         log.info("[PERF] form-data.nested.getProcessFormData took {} ms", (System.nanoTime() - __t) / 1_000_000L);
 
         if (formDefinition == null) {
-            // Fallback: no Task Form binding, return only ProcessFormData in read-only mode
+            // Fallback: no Task Form binding, return only ProcessFormData in read-only mode.
+            // Still surface the readonly Request ID so the rendered field isn't blank.
             log.info("No Task Form binding found for stage '{}', falling back to Process Form",
                     taskInfo.taskDefinitionKey);
+            Map<String, Object> fallbackFieldValues = null;
+            String fallbackRequestId = requestIdEnricher()
+                    .buildRequestId(processInstance.getFunctionUnitCode(), hydratedVariables);
+            if (fallbackRequestId != null) {
+                fallbackFieldValues = new HashMap<>();
+                fallbackFieldValues.put(RequestIdEnricher.REQUEST_ID_FIELD, fallbackRequestId);
+            }
             return TaskFormData.builder()
                     .taskId(taskId)
                     .taskDefinitionKey(taskInfo.taskDefinitionKey)
                     .formName(null)
                     .configJson(null)
                     .fieldPermissions(null)
-                    .fieldValues(null)
+                    .fieldValues(fallbackFieldValues)
                     .subTableBindings(null)
                     .processFormRef(processFormRef)
                     .build();
@@ -187,6 +209,8 @@ public class TaskFormComponent {
         if (hydratedVariables.containsKey("__subTables__")) {
             fieldValues.put("__subTables__", hydratedVariables.get("__subTables__"));
         }
+        // Readonly Request ID synthetic field: render the same value as DW preview / portal lists.
+        applyRequestIdFieldValue(fieldValues, processInstance, hydratedVariables);
 
         return TaskFormData.builder()
                 .taskId(taskId)
@@ -199,6 +223,20 @@ public class TaskFormComponent {
                 .processFormRef(processFormRef)
                 .formReadOnly(formReadOnly)
                 .build();
+    }
+
+    /**
+     * Fill the synthetic {@code __request_id} field value when the main table configures a Request ID.
+     * No-op (leaves the field absent) when unconfigured — the readonly input then shows empty.
+     */
+    private void applyRequestIdFieldValue(Map<String, Object> fieldValues,
+                                          ProcessInstance processInstance,
+                                          Map<String, Object> variables) {
+        String requestId = requestIdEnricher()
+                .buildRequestId(processInstance.getFunctionUnitCode(), variables);
+        if (requestId != null) {
+            fieldValues.put(RequestIdEnricher.REQUEST_ID_FIELD, requestId);
+        }
     }
 
     /**
@@ -353,6 +391,19 @@ public class TaskFormComponent {
             liveValues = fieldMapper().extractFieldSubset(allVariables, snapshot.getFieldValues().keySet());
         } else {
             liveValues = Collections.emptyMap();
+        }
+
+        // Readonly Request ID synthetic field: same value as DW preview / portal lists (frozen variables).
+        String requestId = requestIdEnricher().buildRequestId(processInstance.getFunctionUnitCode(), allVariables);
+        if (requestId != null) {
+            if (!(liveValues instanceof HashMap)) {
+                liveValues = new HashMap<>(liveValues);
+            }
+            liveValues.put(RequestIdEnricher.REQUEST_ID_FIELD, requestId);
+            if (snapshot != null && snapshot.getFieldValues() != null
+                    && !snapshot.getFieldValues().containsKey(RequestIdEnricher.REQUEST_ID_FIELD)) {
+                snapshot.getFieldValues().put(RequestIdEnricher.REQUEST_ID_FIELD, requestId);
+            }
         }
 
         // Get showLiveValues config from form definition
