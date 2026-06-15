@@ -7,7 +7,6 @@ Hand-maintained SQL init for Function Unit `Multi-Instance Subtask Demo` (`fu-20
 | File | Purpose |
 |---|---|
 | `00-init-kk.sql` | Full idempotent init: cleanup + INSERT snapshot (exported from dev DB) |
-| `export-from-db.mjs` | Regenerate `00-init-kk.sql` from running `platform-postgres-dev` (FU id=5) |
 | `01-add-save-action.sql` | Standalone SAVE action patch (legacy; already in `00-init-kk.sql`) |
 | `02-add-subtask-progress-fields.sql` | Standalone patch for `task_status` / `task_current_node` (legacy; already in `00-init-kk.sql`) |
 
@@ -26,13 +25,3 @@ Get-Content deploy/init-scripts/17-Multi-Instance-Subtask-Demo/00-init-kk.sql | 
 ```
 
 Use `01-*` / `02-*` only when patching an existing database without re-running the full init.
-
-### Regenerate from dev DB
-
-After editing the Function Unit in Developer Workstation, re-export:
-
-```powershell
-node deploy/init-scripts/17-Multi-Instance-Subtask-Demo/export-from-db.mjs
-```
-
-Requires `platform-postgres-dev` running with FU `fu-20260422-23tfag` (id=5).
