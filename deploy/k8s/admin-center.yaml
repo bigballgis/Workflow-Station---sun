@@ -36,6 +36,11 @@ spec:
       - name: admin-center
         image: nexus3.hk.hsbc:18080/hsbc-238092-cmbhase-bisp/workflow-station2/admin-center:__IMAGE_TAG__
         imagePullPolicy: Always
+        command:
+        - sh
+        - -c
+        args:
+        - java $JAVA_OPTS -cp /app org.springframework.boot.loader.launch.JarLauncher
         envFrom:
         - configMapRef:
             name: workflow-platform-config
