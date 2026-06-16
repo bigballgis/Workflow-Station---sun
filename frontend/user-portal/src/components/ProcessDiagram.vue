@@ -69,7 +69,11 @@ import { computed, ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ZoomIn, ZoomOut, RefreshRight, FullScreen } from '@element-plus/icons-vue'
 // @ts-ignore
-import NavigatedViewer from 'bpmn-js/lib/NavigatedViewer'
+import Viewer from 'bpmn-js/lib/Viewer'
+// 只引入"拖拽平移"模块，刻意不引入 zoomscroll（鼠标滚轮缩放），
+// 这样滚动鼠标时图不会跟着移动/缩放，但仍可用鼠标拖拽平移。
+// @ts-ignore
+import MoveCanvasModule from 'diagram-js/lib/navigation/movecanvas'
 
 // bpmn-js CSS must be imported in JS for Vite bundling compatibility
 import 'bpmn-js/dist/assets/diagram-js.css'
@@ -266,7 +270,10 @@ const renderBpmn = async () => {
 
   // 第一步：用临时高度创建 viewer，先 fit-viewport 得到真实的图形像素尺寸
   el.style.height = '400px'
-  viewer = new NavigatedViewer({ container: el })
+  viewer = new Viewer({
+    container: el,
+    additionalModules: [MoveCanvasModule]
+  })
 
   try {
     await viewer.importXML(props.bpmnXml)
