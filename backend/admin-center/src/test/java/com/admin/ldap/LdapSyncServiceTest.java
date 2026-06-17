@@ -15,17 +15,18 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.core.env.Environment;
-
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -57,10 +58,10 @@ class LdapSyncServiceTest {
     void setUp() {
         attributes = new LdapProperties.Attributes();
         groupSync = new LdapProperties.GroupSync();
-
         lenient().when(ldapProperties.getAttributes()).thenReturn(attributes);
         lenient().when(ldapProperties.getGroupSync()).thenReturn(groupSync);
-
+        lenient().when(ldapProperties.getHermesEnv()).thenReturn("");
+        lenient().when(environment.getActiveProfiles()).thenReturn(new String[]{});
         // 默认：显式映射未配置
         groupSync.setGroups("");
         groupSync.setRoles("");
@@ -170,5 +171,56 @@ class LdapSyncServiceTest {
 
         // 不应抛异常
         ldapSyncService.ensureHermesBindings(groupDefs);
+    }
+
+        @Test
+    @DisplayName("配置 whenChanged 时支持按用户变更做增量同步")
+    void supportsUserChangeIncrementalSyncWhenWhenChangedConfigured() {
+        attributes.setWhenChanged("whenChanged");
+        assertTrue(ldapSyncService.supportsUserChangeIncrementalSync());
+    }
+    @Test
+    @DisplayName("组对象未变化时仍会同步目标组内资料变更用户")
+    void incrementalSyncStillProcessesChangedUsersWhenGroupsUnchanged() throws Exception {
+        groupSync.setGroups("User=Infodir-PowerPlatform-WPBPP-DEV-User");
+        LdapSyncAudit baseline = LdapSyncAudit.builder()
+                .id("audit-1")
+                .syncType("HERMES_AD_GROUP")
+                .status("SUCCESS")
+                .snapshotAt(java.time.Instant.parse("2026-06-17T07:00:00Z"))
+                .startedAt(java.time.Instant.parse("2026-06-17T07:00:00Z"))
+                .build();
+        when(auditRepository.findTopBySyncTypeInAndStatusOrderByStartedAtDesc(anyList(), anyString()))
+                .thenReturn(Optional.of(baseline));
+        when(auditRepository.save(any(LdapSyncAudit.class))).thenAnswer(i -> i.getArgument(0));
+        when(roleRepository.findByCode(anyString()))
+                .thenReturn(Optional.of(Role.builder().id("role-1").code("HERMES_USER").build()));
+        VirtualGroup usersVg = VirtualGroup.builder().id("vg-users").code("HERMES_USERS").name("Users").build();
+        when(virtualGroupRepository.findByCode(anyString())).thenReturn(Optional.of(usersVg));
+        when(virtualGroupRoleRepository.existsByVirtualGroupIdAndRoleId(anyString(), anyString())).thenReturn(true);
+        when(roleAssignmentRepository.existsByRoleIdAndTargetTypeAndTargetId(anyString(), any(), anyString())).thenReturn(true);
+        when(virtualGroupMemberRepository.existsByGroupIdAndUserId(anyString(), anyString())).thenReturn(false);
+        when(virtualGroupMemberRepository.findByUserId(anyString())).thenReturn(List.of());
+        when(virtualGroupMemberRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(ldapClient.hasGroupChangedSince("Infodir-PowerPlatform-WPBPP-DEV-User", baseline.getSnapshotAt()))
+                .thenReturn(false);
+        Map<String, String> changedUser = new HashMap<>();
+        changedUser.put("employeeID", "45455063");
+        changedUser.put("uid", "45455063");
+        changedUser.put("displayName", "Test User");
+        changedUser.put("memberOf", "CN=Infodir-PowerPlatform-WPBPP-DEV-User,OU=Groups,DC=InfoDir,DC=Prod,DC=HSBC");
+        when(ldapClient.fetchUsersWithFilter(anyString())).thenReturn(List.of(changedUser));
+        when(ldapUserMapper.mapToUser(any())).thenReturn(Optional.of(LdapUserData.builder()
+                .id("45455063")
+                .employeeId("45455063")
+                .username("45455063")
+                .displayName("Test User")
+                .build()));
+        when(ldapUserSyncService.upsertUser(any()))
+            .thenReturn(new LdapUserSyncService.UpsertResult("45455063", false));
+        LdapSyncAudit audit = ldapSyncService.runHermesAdGroupIncrementalSync();
+        assertEquals("SUCCESS", audit.getStatus());
+        assertEquals(1, audit.getUpserted());
+        verify(ldapClient).fetchUsersWithFilter(anyString());
     }
 }

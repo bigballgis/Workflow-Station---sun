@@ -1,5 +1,4 @@
 package com.admin.ldap;
-
 import com.admin.repository.RoleRepository;
 import com.admin.repository.VirtualGroupMemberRepository;
 import com.admin.repository.VirtualGroupRepository;
@@ -18,7 +17,6 @@ import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
-
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -28,7 +26,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-
 import static com.admin.ldap.LdapConstants.AD_ATTR_MEMBER_OF;
 import static com.admin.ldap.LdapConstants.GROUP_ROLE_KEY_ADMIN;
 import static com.admin.ldap.LdapConstants.GROUP_ROLE_KEY_DEVELOPER;
@@ -43,7 +40,6 @@ import static com.admin.ldap.LdapConstants.SYNC_TYPE_HERMES_AD_INCR;
 import static com.admin.ldap.LdapConstants.VG_HERMES_ADMINS;
 import static com.admin.ldap.LdapConstants.VG_HERMES_DEVELOPERS;
 import static com.admin.ldap.LdapConstants.VG_HERMES_USERS;
-
 /**
  * Hermes AD Group → Admin Center 用户/虚拟组/角色 同步服务。
  *
@@ -66,17 +62,14 @@ import static com.admin.ldap.LdapConstants.VG_HERMES_USERS;
 @RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "ldap", name = {"enabled", "sync-enabled"}, havingValue = "true")
 public class LdapSyncService {
-
     private static final String STATUS_RUNNING = "RUNNING";
     private static final String STATUS_SUCCESS = "SUCCESS";
     private static final String STATUS_FAILED = "FAILED";
-
     /** Hermes 角色 → 虚拟组 → 角色编码 预定义绑定。 */
     private static final List<HermesGroupBinding> HERMES_BINDINGS = List.of(
             new HermesGroupBinding(GROUP_ROLE_KEY_ADMIN, VG_HERMES_ADMINS, ROLE_HERMES_ADMIN, "Hermes Administrators"),
             new HermesGroupBinding(GROUP_ROLE_KEY_USER, VG_HERMES_USERS, ROLE_HERMES_USER, "Hermes Default Users"),
             new HermesGroupBinding(GROUP_ROLE_KEY_DEVELOPER, VG_HERMES_DEVELOPERS, ROLE_HERMES_DEVELOPER, "Hermes Developers"));
-
     private final LdapClient ldapClient;
     private final LdapUserMapper ldapUserMapper;
     private final LdapUserSyncService ldapUserSyncService;
@@ -88,9 +81,7 @@ public class LdapSyncService {
     private final RoleRepository roleRepository;
     private final RoleAssignmentRepository roleAssignmentRepository;
     private final Environment environment;
-
     // ==================== 全量 AD 组同步 ====================
-
     /**
      * 全量 Hermes AD 组同步：解析目标组 → 确保绑定存在 → 清理旧成员 → 拉取 → upsert → 写组成员关系。
      */
@@ -103,13 +94,10 @@ public class LdapSyncService {
                 return finishSuccess(audit, 0, start, "No Hermes AD groups configured");
             }
             audit.setGroups(String.join(",", groupDefs.values()));
-
             // 1. 确保 Admin Center 侧角色/虚拟组/绑定存在
             ensureHermesBindings(groupDefs);
-
             // 2. 清理本次涉及虚拟组的旧 LDAP 管理成员
             cleanOldLdapMembershipsForBindings();
-
             // 3. 按组拉取成员并聚合（一个用户可命中多个组）
             Map<String, LdapGroupUserAccumulator> accumulator = new LinkedHashMap<>();
             int totalFetched = 0;
@@ -133,17 +121,16 @@ public class LdapSyncService {
             }
             log.info("Hermes AD group sync: {} unique users from {} groups",
                     accumulator.size(), groupDefs.size());
-
             // 4. 分批 upsert 用户（含逐条失败降级）
             int successCount = 0;
             int insertCount = 0;
             int updateCount = 0;
             int skippedMissingKey = 0;
+            Map<String, String> syncedUserIdsByEmployeeId = new LinkedHashMap<>();
             int batchSize = ldapProperties.getGroupSync().getBatchSize();
             if (batchSize <= 0) {
                 batchSize = 20;
             }
-
             List<Map.Entry<String, LdapGroupUserAccumulator>> entries =
                     new ArrayList<>(accumulator.entrySet());
             for (int i = 0; i < entries.size(); i += batchSize) {
@@ -151,25 +138,25 @@ public class LdapSyncService {
                 List<Map.Entry<String, LdapGroupUserAccumulator>> batch =
                         entries.subList(i, end);
                 try {
-                    int[] result = upsertBatchWithFallback(batch);
-                    successCount += result[0];
-                    insertCount += result[1];
-                    updateCount += result[2];
-                    skippedMissingKey += result[3];
+                    UpsertBatchResult result = upsertBatchWithFallback(batch);
+                    successCount += result.success();
+                    insertCount += result.insert();
+                    updateCount += result.update();
+                    skippedMissingKey += result.skipped();
+                    syncedUserIdsByEmployeeId.putAll(result.syncedUserIdsByEmployeeId());
                 } catch (Exception e) {
                     // 整批失败时降级为逐条
                     log.warn("Batch upsert failed, falling back to individual: {}", e.getMessage());
-                    int[] result = upsertBatchWithFallback(batch);
-                    successCount += result[0];
-                    insertCount += result[1];
-                    updateCount += result[2];
-                    skippedMissingKey += result[3];
+                    UpsertBatchResult result = upsertBatchWithFallback(batch);
+                    successCount += result.success();
+                    insertCount += result.insert();
+                    updateCount += result.update();
+                    skippedMissingKey += result.skipped();
+                    syncedUserIdsByEmployeeId.putAll(result.syncedUserIdsByEmployeeId());
                 }
             }
-
             // 5. 同步用户与虚拟组关系
-            syncVirtualGroupMemberships(entries, groupDefs);
-
+            syncVirtualGroupMemberships(entries, groupDefs, syncedUserIdsByEmployeeId);
             audit.setSuccessCount(successCount);
             audit.setInsertCount(insertCount);
             audit.setUpdateCount(updateCount);
@@ -181,9 +168,7 @@ public class LdapSyncService {
             return finishFailed(audit, e, start);
         }
     }
-
     // ==================== 增量 AD 组同步 ====================
-
     /**
      * 增量 Hermes AD 组同步：找基线 → 检测变更组 → 只同步变化部分。
      * 无历史基线时自动降级为全量同步。
@@ -193,18 +178,15 @@ public class LdapSyncService {
         Optional<LdapSyncAudit> baseline = auditRepository
                 .findTopBySyncTypeInAndStatusOrderByStartedAtDesc(
                         List.of(SYNC_TYPE_HERMES_AD_GROUP, SYNC_TYPE_HERMES_AD_INCR), STATUS_SUCCESS);
-
         if (baseline.isEmpty()) {
             log.info("No Hermes AD group sync baseline; incremental falls back to full");
             return runHermesAdGroupSync();
         }
-
         LdapSyncAudit prev = baseline.get();
         Instant watermark = prev.getSnapshotAt() != null ? prev.getSnapshotAt() : prev.getStartedAt();
         auditRepository.findById(prev.getId()).ifPresent(a -> {
             // Refresh watermark from the most recent record
         });
-
         long start = System.currentTimeMillis();
         LdapSyncAudit audit = startAudit(SYNC_TYPE_HERMES_AD_INCR);
         try {
@@ -214,9 +196,8 @@ public class LdapSyncService {
             }
             audit.setGroups(String.join(",", groupDefs.values()));
             audit.setHighWaterMark(watermark.toString());
-
             ensureHermesBindings(groupDefs);
-
+            boolean supportsUserDelta = supportsUserChangeIncrementalSync();
             // 检测哪些组发生了变化
             List<String> changedGroupKeys = new ArrayList<>();
             for (Map.Entry<String, String> entry : groupDefs.entrySet()) {
@@ -224,40 +205,39 @@ public class LdapSyncService {
                     changedGroupKeys.add(entry.getKey());
                 }
             }
-
-            if (changedGroupKeys.isEmpty()) {
-                log.info("No Hermes AD groups changed since {}; skipping sync", watermark);
-                return finishSuccess(audit, 0, start, "No groups changed");
-            }
-
-            log.info("Changed Hermes AD groups: {}", changedGroupKeys);
-
-            // 只清理变化组对应的虚拟组成员关系
-            cleanOldLdapMembershipsForChangedBindings(changedGroupKeys);
-
-            // 拉取变化组的成员
             Map<String, LdapGroupUserAccumulator> accumulator = new LinkedHashMap<>();
             int totalFetched = 0;
-            for (String roleKey : changedGroupKeys) {
-                String groupCn = groupDefs.get(roleKey);
-                try {
-                    List<Map<String, String>> users = ldapClient.fetchUsersInGroup(groupCn);
-                    totalFetched += users.size();
-                    for (Map<String, String> userAttrs : users) {
-                        String employeeId = userAttrs.get(ldapProperties.getAttributes().getEmployeeId());
-                        if (!StringUtils.hasText(employeeId)) {
-                            continue;
+            if (!changedGroupKeys.isEmpty()) {
+                log.info("Changed Hermes AD groups: {}", changedGroupKeys);
+                // 只清理变化组对应的虚拟组成员关系
+                cleanOldLdapMembershipsForChangedBindings(changedGroupKeys);
+                // 拉取变化组的成员
+                for (String roleKey : changedGroupKeys) {
+                    String groupCn = groupDefs.get(roleKey);
+                    try {
+                        List<Map<String, String>> users = ldapClient.fetchUsersInGroup(groupCn);
+                        totalFetched += users.size();
+                        for (Map<String, String> userAttrs : users) {
+                            String employeeId = userAttrs.get(ldapProperties.getAttributes().getEmployeeId());
+                            if (!StringUtils.hasText(employeeId)) {
+                                continue;
+                            }
+                            accumulator.computeIfAbsent(employeeId, k -> new LdapGroupUserAccumulator(userAttrs))
+                                    .addHitGroup(groupCn, roleKey);
                         }
-                        accumulator.computeIfAbsent(employeeId, k -> new LdapGroupUserAccumulator(userAttrs))
-                                .addHitGroup(groupCn, roleKey);
+                    } catch (Exception e) {
+                        log.warn("Failed to fetch users from changed AD group CN={}: {}", groupCn, e.getMessage());
                     }
-                } catch (Exception e) {
-                    log.warn("Failed to fetch users from changed AD group CN={}: {}", groupCn, e.getMessage());
                 }
+            } else if (supportsUserDelta) {
+                log.info("No Hermes AD groups changed since {}; checking user whenChanged deltas in target groups", watermark);
+            } else {
+                log.info("No Hermes AD groups changed since {} and no LDAP user change watermark attribute is configured; skipping sync", watermark);
+                return finishSuccess(audit, 0, start, "No groups changed");
             }
-
             // 补充用户侧变更：通过 whenChanged 拉取变化用户，过滤 memberOf
-            try {
+            if (supportsUserDelta) {
+                try {
                 String whenChangedAttr = ldapProperties.getAttributes().getWhenChanged();
                 String whenStr = java.time.format.DateTimeFormatter
                         .ofPattern("yyyyMMddHHmmss").withZone(java.time.ZoneOffset.UTC)
@@ -280,32 +260,36 @@ public class LdapSyncService {
                     }
                 }
                 totalFetched += changedUsers.size();
-            } catch (Exception e) {
-                log.warn("Failed to fetch changed users for incremental sync: {}", e.getMessage());
+                } catch (Exception e) {
+                    log.warn("Failed to fetch changed users for incremental sync: {}", e.getMessage());
+                }
             }
-
+            if (changedGroupKeys.isEmpty() && accumulator.isEmpty()) {
+                log.info("No Hermes AD groups or in-scope users changed since {}; skipping sync", watermark);
+                return finishSuccess(audit, 0, start, "No groups or users changed");
+            }
             // 分批 upsert
             int batchSize = ldapProperties.getGroupSync().getBatchSize();
             if (batchSize <= 0) {
                 batchSize = 20;
             }
             int successCount = 0, insertCount = 0, updateCount = 0, skippedMissingKey = 0;
+            Map<String, String> syncedUserIdsByEmployeeId = new LinkedHashMap<>();
             List<Map.Entry<String, LdapGroupUserAccumulator>> entries =
                     new ArrayList<>(accumulator.entrySet());
             for (int i = 0; i < entries.size(); i += batchSize) {
                 int end = Math.min(i + batchSize, entries.size());
                 List<Map.Entry<String, LdapGroupUserAccumulator>> batch =
                         entries.subList(i, end);
-                int[] result = upsertBatchWithFallback(batch);
-                successCount += result[0];
-                insertCount += result[1];
-                updateCount += result[2];
-                skippedMissingKey += result[3];
+                UpsertBatchResult result = upsertBatchWithFallback(batch);
+                successCount += result.success();
+                insertCount += result.insert();
+                updateCount += result.update();
+                skippedMissingKey += result.skipped();
+                syncedUserIdsByEmployeeId.putAll(result.syncedUserIdsByEmployeeId());
             }
-
             // 同步虚拟组关系
-            syncVirtualGroupMemberships(entries, groupDefs);
-
+            syncVirtualGroupMemberships(entries, groupDefs, syncedUserIdsByEmployeeId);
             audit.setSuccessCount(successCount);
             audit.setInsertCount(insertCount);
             audit.setUpdateCount(updateCount);
@@ -317,9 +301,11 @@ public class LdapSyncService {
             return finishFailed(audit, e, start);
         }
     }
-
+    /** LDAP 若提供用户变更水位字段（如 AD 的 whenChanged），即可安全执行增量组同步。 */
+    boolean supportsUserChangeIncrementalSync() {
+        return StringUtils.hasText(ldapProperties.getAttributes().getWhenChanged());
+    }
     // ==================== 环境解析 ====================
-
     /**
      * 解析 Hermes 环境名。优先级：
      * <ol>
@@ -347,9 +333,7 @@ public class LdapSyncService {
         }
         return "DEV";
     }
-
     // ==================== 组定义解析 ====================
-
     /**
      * 解析「角色标识 → AD 组名」映射。优先使用显式映射
      * ({@code ldap.group-sync.groups})；未配置时使用 roles + pattern 拼接。
@@ -357,7 +341,6 @@ public class LdapSyncService {
     Map<String, String> resolveGroupDefinitions() {
         String env = resolveHermesEnvironment();
         LdapProperties.GroupSync gs = ldapProperties.getGroupSync();
-
         // 显式映射优先
         String explicitGroups = gs.getGroups();
         if (StringUtils.hasText(explicitGroups)) {
@@ -373,7 +356,6 @@ public class LdapSyncService {
                 return map;
             }
         }
-
         // roles + pattern 拼接
         String roles = gs.getRoles();
         String pattern = gs.getPattern();
@@ -389,7 +371,6 @@ public class LdapSyncService {
             log.debug("Resolved Hermes group mapping via pattern: {}", map);
             return map;
         }
-
         // 兜底：使用默认 Hermes 模式
         log.warn("No Hermes group mapping configured; using default pattern");
         Map<String, String> map = new LinkedHashMap<>();
@@ -398,9 +379,7 @@ public class LdapSyncService {
         }
         return map;
     }
-
     // ==================== 绑定确保 ====================
-
     /**
      * 确保 Hermes 角色、虚拟组、角色绑定、权限分配基础数据存在。
      * 幂等——已存在的跳过创建。
@@ -423,7 +402,6 @@ public class LdapSyncService {
             ensureRoleAssignment(role.getId(), AssignmentTargetType.VIRTUAL_GROUP, vg.getId(), LDAP_SYNC_ACTOR);
         }
     }
-
     private Role ensureRole(String code, String displayName, String type, String actor) {
         return roleRepository.findByCode(code)
                 .orElseGet(() -> {
@@ -441,9 +419,24 @@ public class LdapSyncService {
                     return roleRepository.save(r);
                 });
     }
-
     private VirtualGroup ensureVirtualGroup(String code, String name, String adGroup, String actor) {
         return virtualGroupRepository.findByCode(code)
+                .map(existing -> {
+                    boolean changed = false;
+                    if (StringUtils.hasText(adGroup) && !adGroup.equals(existing.getAdGroup())) {
+                        existing.setAdGroup(adGroup);
+                        changed = true;
+                    }
+                    if (!"ACTIVE".equals(existing.getStatus())) {
+                        existing.setStatus("ACTIVE");
+                        changed = true;
+                    }
+                    if (changed) {
+                        existing.setUpdatedBy(actor);
+                        return virtualGroupRepository.save(existing);
+                    }
+                    return existing;
+                })
                 .orElseGet(() -> {
                     VirtualGroup vg = VirtualGroup.builder()
                             .id(UUID.randomUUID().toString())
@@ -471,7 +464,6 @@ public class LdapSyncService {
             virtualGroupRoleRepository.save(vgr);
         }
     }
-
     private void ensureRoleAssignment(String roleId, AssignmentTargetType targetType,
                                       String targetId, String actor) {
         if (!roleAssignmentRepository.existsByRoleIdAndTargetTypeAndTargetId(
@@ -486,9 +478,7 @@ public class LdapSyncService {
             roleAssignmentRepository.save(ra);
         }
     }
-
     // ==================== 成员清理 ====================
-
     /** 清理所有 Hermes 虚拟组中由 LDAP 同步添加的旧成员关系。 */
     private void cleanOldLdapMembershipsForBindings() {
         for (HermesGroupBinding binding : HERMES_BINDINGS) {
@@ -501,8 +491,7 @@ public class LdapSyncService {
             });
         }
     }
-
-    /** 只清理变更组对应的虚拟组的旧成员关系。 */
+   /** 只清理变更组对应的虚拟组的旧成员关系。 */
     private void cleanOldLdapMembershipsForChangedBindings(List<String> changedRoleKeys) {
         for (HermesGroupBinding binding : HERMES_BINDINGS) {
             if (!changedRoleKeys.contains(binding.roleKey)) {
@@ -517,16 +506,15 @@ public class LdapSyncService {
             });
         }
     }
-
     // ==================== 批量 Upsert ====================
-
     /**
      * 批量 upsert 用户，返回 [success, insert, update, skipped]。
      * 单条失败不影响同批其他记录。
      */
-    private int[] upsertBatchWithFallback(
+    private UpsertBatchResult upsertBatchWithFallback(
             List<Map.Entry<String, LdapGroupUserAccumulator>> batch) {
         int success = 0, insert = 0, update = 0, skipped = 0;
+        Map<String, String> syncedUserIdsByEmployeeId = new LinkedHashMap<>();
         for (Map.Entry<String, LdapGroupUserAccumulator> entry : batch) {
             Map<String, String> attrs = entry.getValue().userAttrs;
             Optional<LdapUserData> mapped = ldapUserMapper.mapToUser(attrs);
@@ -535,9 +523,13 @@ public class LdapSyncService {
                 continue;
             }
             try {
-                boolean isNew = ldapUserSyncService.upsertUserReturningIsNew(mapped.get());
+                LdapUserSyncService.UpsertResult upsertResult = ldapUserSyncService.upsertUser(mapped.get());
+                String employeeId = mapped.get().getId();
+                if (StringUtils.hasText(employeeId) && StringUtils.hasText(upsertResult.userId())) {
+                    syncedUserIdsByEmployeeId.put(employeeId, upsertResult.userId());
+                }
                 success++;
-                if (isNew) {
+                if (upsertResult.isNew()) {
                     insert++;
                 } else {
                     update++;
@@ -547,11 +539,10 @@ public class LdapSyncService {
                 skipped++;
             }
         }
-        return new int[]{success, insert, update, skipped};
+        return new UpsertBatchResult(success, insert, update, skipped, syncedUserIdsByEmployeeId);
     }
 
     // ==================== 虚拟组成员关系同步 ====================
-
     /**
      * 为用户同步 Hermes 虚拟组成员关系。
      * <p>规则：
@@ -565,8 +556,8 @@ public class LdapSyncService {
     @Transactional
     void syncVirtualGroupMemberships(
             List<Map.Entry<String, LdapGroupUserAccumulator>> entries,
-            Map<String, String> groupDefs) {
-
+            Map<String, String> groupDefs,
+            Map<String, String> syncedUserIdsByEmployeeId) {
         // 构建组名 → 虚拟组的快速查找
         Map<String, VirtualGroup> groupToVg = new LinkedHashMap<>();
         for (HermesGroupBinding binding : HERMES_BINDINGS) {
@@ -578,39 +569,36 @@ public class LdapSyncService {
         }
         // 默认 Users 虚拟组
         VirtualGroup defaultVg = virtualGroupRepository.findByCode(VG_HERMES_USERS).orElse(null);
-
         for (Map.Entry<String, LdapGroupUserAccumulator> entry : entries) {
             String employeeId = entry.getKey();
+            String actualUserId = syncedUserIdsByEmployeeId.getOrDefault(employeeId, employeeId);
             LdapGroupUserAccumulator acc = entry.getValue();
             // 通过 memberOf 确定目标虚拟组
             Set<String> targetVgCodes = resolveTargetVirtualGroups(
                     acc.userAttrs, acc.hitGroupNames, acc.hitRoleKeys, groupDefs, groupToVg);
-
             if (targetVgCodes.isEmpty() && defaultVg != null) {
                 targetVgCodes = Set.of(defaultVg.getCode());
             }
-
             // 写入组成员关系
             for (String vgCode : targetVgCodes) {
                 virtualGroupRepository.findByCode(vgCode).ifPresent(vg -> {
-                    if (!virtualGroupMemberRepository.existsByGroupIdAndUserId(vg.getId(), employeeId)) {
+                    if (!virtualGroupMemberRepository.existsByGroupIdAndUserId(vg.getId(), actualUserId)) {
                         VirtualGroupMember member = VirtualGroupMember.builder()
                                 .id(UUID.randomUUID().toString())
                                 .groupId(vg.getId())
-                                .userId(employeeId)
+                                .userId(actualUserId)
                                 .addedBy(HERMES_SYNC_MEMBER_ADDED_BY)
                                 .build();
                         virtualGroupMemberRepository.save(member);
                     }
                 });
             }
-
             // 清理该用户不再属于的 Hermes LDAP 管理虚拟组
-            cleanStaleMembershipsForUser(employeeId, targetVgCodes);
+            cleanStaleMembershipsForUser(actualUserId, targetVgCodes);
         }
     }
 
-    /**
+   /**
      * 根据 {@code memberOf} 属性解析目标虚拟组集合。
      */
     private Set<String> resolveTargetVirtualGroups(
@@ -619,9 +607,7 @@ public class LdapSyncService {
             Set<String> hitRoleKeys,
             Map<String, String> groupDefs,
             Map<String, VirtualGroup> groupToVg) {
-
         Set<String> result = new java.util.LinkedHashSet<>();
-
         // 1. 通过 memberOf 匹配
         Set<String> memberOfCns = parseMemberOfCns(userAttrs);
         for (Map.Entry<String, String> defEntry : groupDefs.entrySet()) {
@@ -634,7 +620,6 @@ public class LdapSyncService {
                 }
             }
         }
-
         // 2. memberOf 无命中时，使用 fallback（本次同步命中组）
         if (result.isEmpty()) {
             for (String groupCn : fallbackGroupCns) {
@@ -644,7 +629,6 @@ public class LdapSyncService {
                 }
             }
         }
-
         // 3. 仍未命中：从 hitRoleKeys 推断
         if (result.isEmpty()) {
             for (String roleKey : hitRoleKeys) {
@@ -654,10 +638,8 @@ public class LdapSyncService {
                 }
             }
         }
-
         return result;
     }
-
     /** 从用户属性中解析 {@code memberOf}，提取每个 DN 的 CN 部分。 */
     Set<String> parseMemberOfCns(Map<String, String> userAttrs) {
         String memberOf = userAttrs.get(AD_ATTR_MEMBER_OF);
@@ -683,7 +665,7 @@ public class LdapSyncService {
         return cns;
     }
 
-    /** 清理用户在 Hermes 虚拟组中不再需要的旧 LDAP 管理成员关系。 */
+   /** 清理用户在 Hermes 虚拟组中不再需要的旧 LDAP 管理成员关系。 */
     private void cleanStaleMembershipsForUser(String userId, Set<String> targetVgCodes) {
         List<VirtualGroupMember> allMemberships =
                 virtualGroupMemberRepository.findByUserId(userId);
@@ -704,16 +686,13 @@ public class LdapSyncService {
             }
         }
     }
-
     private HermesGroupBinding findBinding(String roleKey) {
         return HERMES_BINDINGS.stream()
                 .filter(b -> b.roleKey.equals(roleKey))
                 .findFirst()
                 .orElse(null);
     }
-
     // ==================== 审计 ====================
-
     private LdapSyncAudit startAudit(String type) {
         return auditRepository.save(LdapSyncAudit.builder()
                 .id(UUID.randomUUID().toString())
@@ -723,7 +702,6 @@ public class LdapSyncService {
                 .startedAt(Instant.now())
                 .build());
     }
-
     private LdapSyncAudit finishSuccess(LdapSyncAudit audit, int totalFetched,
                                         long startMs, String overrideMessage) {
         audit.setStatus(STATUS_SUCCESS);
@@ -739,7 +717,6 @@ public class LdapSyncService {
                 audit.getSkippedMissingKey(), audit.getDurationMs());
         return auditRepository.save(audit);
     }
-
     private LdapSyncAudit finishFailed(LdapSyncAudit audit, Exception e, long startMs) {
         audit.setStatus(STATUS_FAILED);
         audit.setFinishedAt(Instant.now());
@@ -748,14 +725,11 @@ public class LdapSyncService {
         log.error("Hermes AD group sync ({}) failed: {}", audit.getSyncType(), e.getMessage());
         return auditRepository.save(audit);
     }
-
     private String truncate(String v, int max) {
         if (v == null) return null;
         return v.length() <= max ? v : v.substring(0, max);
     }
-
     // ==================== 内部类型 ====================
-
     /** Hermes 角色 → 虚拟组 → 角色编码 绑定定义。 */
     record HermesGroupBinding(
             String roleKey,
@@ -767,6 +741,14 @@ public class LdapSyncService {
         }
     }
 
+
+    record UpsertBatchResult(
+            int success,
+            int insert,
+            int update,
+            int skipped,
+            Map<String, String> syncedUserIdsByEmployeeId) {
+    }
     /**
      * 按 employeeID 聚合的 LDAP 用户数据。
      * 同一用户可能出现在多个 AD 组中，本对象累积其命中。
@@ -775,11 +757,9 @@ public class LdapSyncService {
         final Map<String, String> userAttrs;
         final Set<String> hitGroupNames = new java.util.LinkedHashSet<>();
         final Set<String> hitRoleKeys = new java.util.LinkedHashSet<>();
-
         LdapGroupUserAccumulator(Map<String, String> attrs) {
             this.userAttrs = attrs;
         }
-
         void addHitGroup(String groupCn, String roleKey) {
             hitGroupNames.add(groupCn);
             hitRoleKeys.add(roleKey);

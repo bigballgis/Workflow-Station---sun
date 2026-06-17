@@ -43,6 +43,12 @@ public class SsoAuthController {
         } catch (IllegalArgumentException e) {
             log.warn("SSO login failed: {}", e.getMessage());
             return ResponseEntity.badRequest().build();
+        } catch (IllegalStateException e) {
+            log.error("SSO login unavailable: {}", e.getMessage());
+            return ResponseEntity.status(503).build();
+        } catch (RuntimeException e) {
+            log.error("SSO login unexpected failure", e);
+            return ResponseEntity.badRequest().build();
         }
     }
 

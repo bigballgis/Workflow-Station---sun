@@ -109,7 +109,13 @@ public class LdapProperties {
         private String title = "title";
         /** position 次选。 */
         private String workRole = "hsbc-ad-WorkRole";
-        /** entity/function manager id 首选。 */
+         /** position 兜底（部分目录把岗位信息放在 postalAddress）。 */
+        private String postalAddress = "postalAddress";
+        /** entity manager（可为姓名或工号）首选。 */
+        private String lineManagerName = "hsbc-ad-LineManagerName";
+        /** function manager（可为姓名或工号）首选。 */
+        private String authManagerName = "hsbc-ad-AuthManagerName";
+        /** entity/function manager id 次选。 */
         private String lineManagerId = "hsbc-ad-LineManagerID";
         /** manager id 次选。 */
         private String managerEmpId = "hsbc-ad-managerEmpId";

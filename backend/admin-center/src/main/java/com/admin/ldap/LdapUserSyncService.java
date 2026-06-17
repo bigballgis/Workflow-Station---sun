@@ -104,32 +104,59 @@ public class LdapUserSyncService {
      *
      * @return {@code true} 为新插入，{@code false} 为已存在更新
      */
-    @Transactional
+        @Transactional
     public boolean upsertUserReturningIsNew(LdapUserData data) {
-        Optional<User> existing = userRepository.findById(data.getId());
-        if (existing.isPresent()) {
-            applyProfile(existing.get(), data, false);
-            userRepository.save(existing.get());
-            return false;
+        return upsertUser(data).isNew();
+    }
+    /**
+     * Upsert 单个用户并返回落库后的真实 userId（用于登录后鉴权链路）。
+     */
+    @Transactional
+    public String upsertUserReturningId(LdapUserData data) {
+        return upsertUser(data).userId();
+    }
+    /**
+     * Upsert 单个用户并返回真实 userId 与是否新建。
+     */
+    @Transactional
+    public UpsertResult upsertUser(LdapUserData data) {
+        return upsertUserReturningResult(data);
+    }
+    /**
+     * Upsert 结果：返回真实 userId 与是否新建。
+     *
+     * <p>策略：
+     * 1) 先按 employeeID（主键）匹配；
+     * 2) 未命中时按 username 兜底合并（解决历史 UUID 本地用户与 LDAP 用户名重叠）；
+     * 3) 仍未命中则新建 LDAP-only 用户。</p>
+     */
+    public UpsertResult upsertUserReturningResult(LdapUserData data) {
+        Optional<User> existingById = userRepository.findById(data.getId());
+        if (existingById.isPresent()) {
+            User user = existingById.get();
+            applyProfile(user, data, false);
+            userRepository.save(user);
+            return new UpsertResult(user.getId(), false);
+        }
+        String username = resolveUsername(data);
+        Optional<User> existingByUsername = Optional.ofNullable(userRepository.findByUsername(username))
+                .orElse(Optional.empty());
+        if (existingByUsername.isPresent()) {
+            User user = existingByUsername.get();
+            applyProfile(user, data, false);
+            userRepository.save(user);
+            return new UpsertResult(user.getId(), false);
         }
         // 新用户：employeeID 作为 id；占位密码禁止本地登录
         User user = User.builder()
                 .id(data.getId())
-                .username(resolveUsername(data))
+                .username(username)
                 .passwordHash(ldapOnlyPlaceholderHash())
                 .createdBy(LdapConstants.LDAP_SYNC_ACTOR)
                 .build();
         applyProfile(user, data, true);
         userRepository.save(user);
-        return true;
-    }
-
-    /**
-     * Upsert 单个用户（兼容旧调用方）。
-     */
-    @Transactional
-    public void upsertUser(LdapUserData data) {
-        upsertUserReturningIsNew(data);
+        return new UpsertResult(user.getId(), true);
     }
 
     /** 写入画像字段（updatedBy=LDAP_SYNC_JOB）。{@code isNew} 时一并设置 username。 */
@@ -199,5 +226,8 @@ public class LdapUserSyncService {
             return null;
         }
         return v.length() <= max ? v : v.substring(0, max);
+    }
+
+    public record UpsertResult(String userId, boolean isNew) {
     }
 }

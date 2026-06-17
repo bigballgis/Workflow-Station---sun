@@ -33,15 +33,14 @@ class LdapUserMapperTest {
         m.put("mail", "alice@example.org");
         m.put("telephoneNumber", "+852 1234-0001");
         m.put("title", "Engineering Manager");
-        m.put("hsbc-ad-LineManagerID", "100000");
+        m.put("hsbc-ad-LineManagerID", "44027893");
+        m.put("hsbc-ad-AuthManagerEmpId", "44026666");
         return m;
     }
-
     @Test
-    @DisplayName("完整属性 → 全字段映射，phone 去空格/横线，manager 双写")
+    @DisplayName("完整属性 → 全字段映射，phone 去空格/横线，manager 映射到 em/fm")
     void mapsFullAttributes() {
         Optional<LdapUserData> result = newMapper().mapToUser(baseAttrs());
-
         assertTrue(result.isPresent());
         LdapUserData u = result.get();
         assertEquals("100001", u.getId());
@@ -52,11 +51,30 @@ class LdapUserMapperTest {
         assertEquals("alice@example.org", u.getEmail());
         assertEquals("+85212340001", u.getPhone());
         assertEquals("Engineering Manager", u.getPosition());
-        assertEquals("100000", u.getEntityManagerId());
-        assertEquals("100000", u.getFunctionManagerId());
+        assertEquals("44027893", u.getEntityManagerId());
+        assertEquals("44026666", u.getFunctionManagerId());
         assertEquals(UserStatus.ACTIVE, u.getStatus());
     }
-
+    @Test
+    @DisplayName("line manager id 缺失时回退到 managerEmpId")
+    void managerFallsBackToIdAttributes() {
+        Map<String, String> attrs = baseAttrs();
+        attrs.remove("hsbc-ad-LineManagerID");
+        attrs.put("hsbc-ad-managerEmpId", "LM100");
+        attrs.put("hsbc-ad-AuthManagerEmpId", "AM200");
+        LdapUserData u = newMapper().mapToUser(attrs).orElseThrow();
+        assertEquals("LM100", u.getEntityManagerId());
+        assertEquals("AM200", u.getFunctionManagerId());
+    }
+    @Test
+    @DisplayName("title/workRole 缺失时回退 postalAddress 作为岗位")
+    void positionFallsBackToPostalAddress() {
+        Map<String, String> attrs = baseAttrs();
+        attrs.remove("title");
+        attrs.put("postalAddress", "SW Engineer");
+        LdapUserData u = newMapper().mapToUser(attrs).orElseThrow();
+        assertEquals("SW Engineer", u.getPosition());
+    }
     @Test
     @DisplayName("缺 employeeID → 跳过该条（Optional.empty）")
     void skipsWhenNoEmployeeId() {
@@ -64,7 +82,6 @@ class LdapUserMapperTest {
         attrs.remove("employeeID");
         assertTrue(newMapper().mapToUser(attrs).isEmpty());
     }
-
     @Test
     @DisplayName("username 优先级：uid 缺失时回退 samAccountName")
     void usernameFallsBackToSamAccountName() {
@@ -73,7 +90,6 @@ class LdapUserMapperTest {
         attrs.put("hsbc-ad-SAMAccountName", "alice.sam");
         assertEquals("alice.sam", newMapper().mapToUser(attrs).orElseThrow().getUsername());
     }
-
     @Test
     @DisplayName("username 全部来源缺失时回退 employeeID")
     void usernameFallsBackToEmployeeId() {
@@ -81,7 +97,6 @@ class LdapUserMapperTest {
         attrs.put("employeeID", "100009");
         assertEquals("100009", newMapper().mapToUser(attrs).orElseThrow().getUsername());
     }
-
     @Test
     @DisplayName("displayName 缺失 → givenName + sn 拼装")
     void displayNameComposedFromGivenAndSurname() {
@@ -90,6 +105,14 @@ class LdapUserMapperTest {
         attrs.put("givenName", "Alice");
         attrs.put("sn", "Anderson");
         assertEquals("Alice Anderson", newMapper().mapToUser(attrs).orElseThrow().getDisplayName());
+    }
+    @Test
+    @DisplayName("displayName 为账号技术值时回退 cn")
+    void displayNameFallsBackWhenTechnicalValue() {
+        Map<String, String> attrs = baseAttrs();
+        attrs.put("displayName", "alice");
+        attrs.put("cn", "Alice Cn");
+        assertEquals("Alice Cn", newMapper().mapToUser(attrs).orElseThrow().getDisplayName());
     }
 
     @Test

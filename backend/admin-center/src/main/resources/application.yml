@@ -369,6 +369,9 @@ ldap:
     intl-tel-number: ${LDAP_ATTR_INTL_TEL:hsbc-ad-IntlTelNumber}
     title: ${LDAP_ATTR_TITLE:title}
     work-role: ${LDAP_ATTR_WORK_ROLE:hsbc-ad-WorkRole}
+    postal-address: ${LDAP_ATTR_POSTAL_ADDRESS:postalAddress}
+    line-manager-name: ${LDAP_ATTR_LINE_MANAGER_NAME:hsbc-ad-LineManagerName}
+    auth-manager-name: ${LDAP_ATTR_AUTH_MANAGER_NAME:hsbc-ad-AuthManagerName}
     line-manager-id: ${LDAP_ATTR_LINE_MANAGER_ID:hsbc-ad-LineManagerID}
     manager-emp-id: ${LDAP_ATTR_MANAGER_EMP_ID:hsbc-ad-managerEmpId}
     auth-manager-emp-id: ${LDAP_ATTR_AUTH_MANAGER_EMP_ID:hsbc-ad-AuthManagerEmpId}

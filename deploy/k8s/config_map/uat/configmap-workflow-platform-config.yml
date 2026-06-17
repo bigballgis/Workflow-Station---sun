@@ -114,6 +114,13 @@ data:
   LDAP_HERMES_GROUP_SYNC_ROLES: "Admin,User,Developer"
   LDAP_HERMES_GROUP_SYNC_PATTERN: "Infodir-Hermes-Default-{env}-{role}"
   LDAP_HERMES_GROUP_SYNC_BATCH_SIZE: "20"
+  # --- Hermes AD 组 → 角色同步 ---
+  LDAP_HERMES_ENV: "UAT"
+  LDAP_GROUP_SEARCH_BASE_DN: "DC=InfoDir,DC=Prod,DC=HSBC"
+  LDAP_HERMES_GROUP_SYNC_GROUPS: "Admin=Infodir-Hermes-Default-UAT-Admin,User=Infodir-Hermes-Default-UAT-User,Developer=Infodir-Hermes-Default-UAT-Developer"
+  LDAP_HERMES_GROUP_SYNC_ROLES: "Admin,User,Developer"
+  LDAP_HERMES_GROUP_SYNC_PATTERN: "Infodir-Hermes-Default-{env}-{role}"
+  LDAP_HERMES_GROUP_SYNC_BATCH_SIZE: "20"
   # AD 组 → 角色同步（二期预留；本实现承接配置但暂不执行绑定）。源项目 LDAP_HERMES_* → 本实现 LDAP_GROUP_*
   LDAP_GROUP_ENV: "UAT"
   LDAP_GROUP_SEARCH_BASE_DN: "DC=InfoDir,DC=Prod,DC=HSBC"

@@ -74,6 +74,7 @@ class LdapUserSyncServiceTest {
                 .status(UserStatus.ACTIVE).build();
         when(userRepository.findById("100001")).thenReturn(Optional.of(existing));
         when(userRepository.findById("100002")).thenReturn(Optional.empty());
+        when(userRepository.findByUsername("bob")).thenReturn(Optional.empty());
 
         LdapSyncAudit audit = service.runFullSync();
 
@@ -132,5 +133,29 @@ class LdapUserSyncServiceTest {
         assertThat(audit.getStatus()).isEqualTo("SUCCESS");
         org.mockito.Mockito.verify(ldapClient, org.mockito.Mockito.never())
                 .fetchUsersWithFilter(eq(""));
+    }
+
+    @Test
+    @DisplayName("按用户名命中历史本地账号时合并并返回真实数据库ID")
+    void upsertByUsernameFallbackReturnsPersistedId() {
+        LdapUserData ldapUser = LdapUserData.builder()
+                .id("45455063")
+                .employeeId("45455063")
+                .username("45455063")
+                .displayName("Liam")
+                .build();
+        User local = User.builder()
+                .id("7cb77cda-f836-47c7-84ef-c4ac9d7e95fe")
+                .username("45455063")
+                .passwordHash("LOCAL_HASH")
+                .status(UserStatus.ACTIVE)
+                .build();
+        when(userRepository.findById("45455063")).thenReturn(Optional.empty());
+        when(userRepository.findByUsername("45455063")).thenReturn(Optional.of(local));
+        when(userRepository.save(any(User.class))).thenAnswer(i -> i.getArgument(0));
+        String persistedId = service.upsertUserReturningId(ldapUser);
+        assertThat(persistedId).isEqualTo("7cb77cda-f836-47c7-84ef-c4ac9d7e95fe");
+        assertThat(local.getEmployeeId()).isEqualTo("45455063");
+        assertThat(local.getDisplayName()).isEqualTo("Liam");
     }
 }

@@ -39,12 +39,14 @@ public class LdapUserMapper {
                 attrs.get(names.getCn()),
                 employeeId);
 
-        String displayName = resolveDisplayName(attrs, names);
-        String managerId = firstNonBlank(
+        String displayName = resolveDisplayName(attrs, names, username, employeeId);
+        String entityManager = firstNonBlank(
                 attrs.get(names.getLineManagerId()),
+                attrs.get(names.getManagerEmpId()));
+        String functionManager = firstNonBlank(
+                attrs.get(names.getAuthManagerEmpId()),
                 attrs.get(names.getManagerEmpId()),
-                attrs.get(names.getAuthManagerEmpId()));
-
+                attrs.get(names.getLineManagerId()));
         return Optional.of(LdapUserData.builder()
                 .id(employeeId)
                 .employeeId(employeeId)
@@ -55,24 +57,49 @@ public class LdapUserMapper {
                 .phone(normalizePhone(firstNonBlank(
                         attrs.get(names.getTelephoneNumber()),
                         attrs.get(names.getIntlTelNumber()))))
-                .position(firstNonBlank(attrs.get(names.getTitle()), attrs.get(names.getWorkRole())))
-                .entityManagerId(managerId)
-                // 初期 function manager 与 entity manager 同值（见映射表）
-                .functionManagerId(managerId)
+                .position(firstNonBlank(
+                    attrs.get(names.getTitle()),
+                    attrs.get(names.getWorkRole()),
+                    attrs.get(names.getPostalAddress())))
+                .entityManagerId(entityManager)
+                .functionManagerId(functionManager)
                 .status(resolveStatus(attrs.get(names.getLockoutTime())))
                 .build());
     }
-
     /** displayName → (givenName + ' ' + sn)，去重空格。 */
-    private String resolveDisplayName(Map<String, String> attrs, LdapProperties.Attributes names) {
+    private String resolveDisplayName(
+            Map<String, String> attrs,
+            LdapProperties.Attributes names,
+            String username,
+            String employeeId) {
         String display = trimToNull(attrs.get(names.getDisplayName()));
-        if (display != null) {
+        if (display != null && !looksTechnicalDisplayName(display, username, employeeId)) {
             return display;
+        }
+        String cn = trimToNull(attrs.get(names.getCn()));
+        if (cn != null) {
+            return cn;
         }
         String given = trimToNull(attrs.get(names.getGivenName()));
         String surname = trimToNull(attrs.get(names.getSn()));
         String joined = ((given == null ? "" : given) + " " + (surname == null ? "" : surname)).trim();
         return joined.isEmpty() ? null : joined.replaceAll("\\s+", " ");
+    }
+    /**
+     * 一些目录里 displayName 会回传账号/工号等技术值；此时回退到更可读的人名来源。
+     */
+    private boolean looksTechnicalDisplayName(String display, String username, String employeeId) {
+        String normalized = display.trim();
+        if (normalized.isEmpty()) {
+            return true;
+        }
+        if (normalized.contains("=") || normalized.contains(",")) {
+            return true;
+        }
+        return equalsIgnoreCase(normalized, username) || equalsIgnoreCase(normalized, employeeId);
+    }
+    private boolean equalsIgnoreCase(String a, String b) {
+        return a != null && b != null && a.equalsIgnoreCase(b);
     }
 
     /** lockoutTime 非空且不等于 "0" → LOCKED，否则 ACTIVE。 */
