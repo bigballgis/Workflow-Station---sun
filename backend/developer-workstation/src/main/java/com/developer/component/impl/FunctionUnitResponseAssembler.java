@@ -85,6 +85,7 @@ class FunctionUnitResponseAssembler {
                 .code(entity.getCode())
                 .name(entity.getName())
                 .description(entity.getDisplayName())
+                .tags(entity.getTags() != null ? entity.getTags() : java.util.List.of())
                 .iconId(entity.getIcon() != null ? entity.getIcon().getId() : null)
                 .icon(iconInfo)
                 .status(entity.getStatus())

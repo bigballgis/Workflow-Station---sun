@@ -7,6 +7,7 @@ export const useFunctionUnitStore = defineStore('functionUnit', () => {
   const current = ref<FunctionUnit | null>(null)
   const loading = ref(false)
   const total = ref(0)
+  const allTags = ref<string[]>([])
 
   // Tables, forms, actions for current function unit
   const tables = ref<TableDefinition[]>([])
@@ -15,7 +16,7 @@ export const useFunctionUnitStore = defineStore('functionUnit', () => {
   const process = ref<ProcessDefinition | null>(null)
   const versions = ref<Version[]>([])
 
-  async function fetchList(params: { name?: string; status?: string; page?: number; size?: number }) {
+  async function fetchList(params: { name?: string; status?: string; tags?: string[]; page?: number; size?: number }) {
     loading.value = true
     try {
       const res = await functionUnitApi.list(params)
@@ -27,6 +28,15 @@ export const useFunctionUnitStore = defineStore('functionUnit', () => {
       total.value = 0
     } finally {
       loading.value = false
+    }
+  }
+
+  async function fetchAllTags() {
+    try {
+      const res = await functionUnitApi.getAllTags()
+      allTags.value = res.data ?? []
+    } catch {
+      allTags.value = []
     }
   }
 
@@ -186,9 +196,10 @@ export const useFunctionUnitStore = defineStore('functionUnit', () => {
     ])
   }
 
-  return { 
-    list, current, loading, total, tables, forms, actions, process, versions,
+  return {
+    list, current, loading, total, allTags, tables, forms, actions, process, versions,
     fetchList, fetchById, create, update, remove, publish, clone, validate,
+    fetchAllTags,
     fetchTables, createTable, updateTable, deleteTable,
     fetchForms, createForm, updateForm, deleteForm,
     fetchActions, createAction, updateAction, deleteAction,

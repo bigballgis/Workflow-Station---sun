@@ -23,6 +23,7 @@ public class FunctionUnitResponse {
     private String name;
     private String description;
     private Long iconId;
+    private List<String> tags;
     private IconInfo icon;
     private FunctionUnitStatus status;
     private String currentVersion;

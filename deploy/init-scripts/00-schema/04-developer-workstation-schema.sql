@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS dw_function_units (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_by VARCHAR(64),
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    tags JSONB NOT NULL DEFAULT '[]'::jsonb,
     CONSTRAINT fk_function_unit_icon FOREIGN KEY (icon_id) REFERENCES dw_icons(id) ON DELETE SET NULL,
     CONSTRAINT fk_dw_function_unit_previous_version FOREIGN KEY (previous_version_id) REFERENCES dw_function_units(id) ON DELETE SET NULL,
     CONSTRAINT chk_function_unit_status CHECK (status IN ('DRAFT', 'PUBLISHED', 'ARCHIVED'))

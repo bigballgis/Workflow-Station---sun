@@ -6,7 +6,24 @@ import i18n from '@/i18n'
 export const functionUnitAxios = axios.create({
   baseURL: '',
   timeout: 30000,
-  withCredentials: true
+  withCredentials: true,
+  // Serialize array params as repeated keys (tags=A&tags=B) for Spring MVC compatibility
+  paramsSerializer: {
+    serialize: (params: Record<string, unknown>): string => {
+      const parts: string[] = []
+      for (const [key, value] of Object.entries(params)) {
+        if (value === undefined || value === null) continue
+        if (Array.isArray(value)) {
+          for (const item of value) {
+            parts.push(encodeURIComponent(key) + '=' + encodeURIComponent(String(item)))
+          }
+        } else {
+          parts.push(encodeURIComponent(key) + '=' + encodeURIComponent(String(value)))
+        }
+      }
+      return parts.join('&')
+    }
+  }
 })
 
 functionUnitAxios.interceptors.request.use(config => {
@@ -68,6 +85,7 @@ export interface FunctionUnit {
   id: number
   name: string
   description?: string
+  tags?: string[]
   icon?: { id: number; name: string; url: string }
   status: string
   currentVersion?: string
@@ -85,6 +103,7 @@ export interface FunctionUnitResponse {
   id: number
   name: string
   description?: string
+  tags?: string[]
   iconId?: number
   iconUrl?: string
   status: string
@@ -101,6 +120,7 @@ export interface FunctionUnitRequest {
   name: string
   description?: string
   iconId?: number
+  tags?: string[]
 }
 
 /** 主表 Request ID 配置:有序字段 + 分隔符,拼成一条 request 的人类可读标识(如 HR-2026-001)。仅 MAIN 表有意义。 */
@@ -312,8 +332,12 @@ export interface Version {
 
 export const functionUnitApi = {
   // Function Unit CRUD
-  list: (params: { name?: string; status?: string; page?: number; size?: number }) =>
+  list: (params: { name?: string; status?: string; tags?: string[]; page?: number; size?: number }) =>
     functionUnitAxios.get<any, { data: { content: FunctionUnitResponse[]; totalElements: number } }>('/api/v1/function-units', { params }),
+
+  /** Get all distinct tags across all enabled function units (for filter dropdown). */
+  getAllTags: () =>
+    functionUnitAxios.get<any, { data: string[] }>('/api/v1/function-units/tags'),
   
   getById: (id: number) => 
     functionUnitAxios.get<any, { data: FunctionUnit }>(`/api/v1/function-units/${id}`),

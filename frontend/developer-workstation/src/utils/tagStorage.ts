@@ -1,125 +1,50 @@
 /**
- * Tag storage utility for function units
- * Stores tags in localStorage until backend support is added
+ * Function Unit 标签工具（纯函数，无 localStorage）。
+ * 标签持久化在 dw_function_units.tags（JSONB），由后端 API 读写。
  */
 
-import i18n from '@/i18n'
+const MAX_TAGS = 20
+const MAX_TAG_LENGTH = 50
 
-const TAGS_STORAGE_KEY = 'function-unit-tags'
-
-/**
- * Get predefined tags with i18n translations
- */
-export const getPredefinedTags = (): string[] => {
-  const { t } = i18n.global
-  return [
-    t('tags.coreBusiness'),
-    t('tags.reports'),
-    t('tags.approvalProcess'),
-    t('tags.dataManagement'),
-    t('tags.systemIntegration'),
-    t('tags.userManagement'),
-  ]
-}
-
-/**
- * @deprecated Use getPredefinedTags() instead for dynamic i18n support
- */
-export const PREDEFINED_TAGS = getPredefinedTags()
-
-interface TagData {
-  [functionUnitId: number]: string[]
-}
-
-/**
- * Get all tags data from localStorage
- */
-export function getAllTagsData(): TagData {
-  try {
-    const stored = localStorage.getItem(TAGS_STORAGE_KEY)
-    return stored ? JSON.parse(stored) : {}
-  } catch (e) {
-    console.error('Failed to parse tags data:', e)
-    return {}
+/** 规范化标签：trim、去空、去重、长度与数量上限。 */
+export function normalizeTags(tags: string[] | undefined | null): string[] {
+  if (!tags?.length) return []
+  const unique = new Set<string>()
+  for (const raw of tags) {
+    const trimmed = raw?.trim()
+    if (!trimmed || trimmed.length > MAX_TAG_LENGTH) continue
+    unique.add(trimmed)
+    if (unique.size >= MAX_TAGS) break
   }
+  return Array.from(unique)
 }
 
-/**
- * Get tags for a specific function unit
- */
-export function getTags(functionUnitId: number): string[] {
-  const data = getAllTagsData()
-  return data[functionUnitId] || []
-}
-
-/**
- * Set tags for a specific function unit
- */
-export function setTags(functionUnitId: number, tags: string[]): void {
-  try {
-    const data = getAllTagsData()
-    data[functionUnitId] = tags
-    localStorage.setItem(TAGS_STORAGE_KEY, JSON.stringify(data))
-  } catch (e) {
-    console.error('Failed to save tags:', e)
+/** 从功能单元列表收集所有已用标签（供 Filter 下拉，随 list 响应式更新）。 */
+export function collectAvailableTags(items: Array<{ tags?: string[] }>): string[] {
+  const all = new Set<string>()
+  for (const item of items) {
+    normalizeTags(item.tags).forEach(tag => all.add(tag))
   }
+  return Array.from(all).sort()
 }
 
-/**
- * Remove tags for a specific function unit
- */
-export function removeTags(functionUnitId: number): void {
-  try {
-    const data = getAllTagsData()
-    delete data[functionUnitId]
-    localStorage.setItem(TAGS_STORAGE_KEY, JSON.stringify(data))
-  } catch (e) {
-    console.error('Failed to remove tags:', e)
-  }
-}
-
-/**
- * Get all unique tags used across all function units
- */
-export function getAllUsedTags(): string[] {
-  const data = getAllTagsData()
-  const allTags = new Set<string>()
-  
-  Object.values(data).forEach(tags => {
-    tags.forEach(tag => allTags.add(tag))
-  })
-  
-  return Array.from(allTags)
-}
-
-/**
- * Get all available tags (predefined + custom used tags)
- */
-export function getAllAvailableTags(): string[] {
-  const usedTags = getAllUsedTags()
-  const allTags = new Set([...getPredefinedTags(), ...usedTags])
-  return Array.from(allTags).sort()
-}
-
-/**
- * Filter function for tag display logic
- * Returns the tags to display and the count of extra tags
- */
-export function getDisplayTags(tags: string[], maxDisplay: number = 3): { 
+/** 卡片展示：最多 maxDisplay 个 + 余量计数。 */
+export function getDisplayTags(tags: string[], maxDisplay: number = 3): {
   displayTags: string[]
-  extraCount: number 
+  extraCount: number
 } {
+  const normalized = normalizeTags(tags)
   return {
-    displayTags: tags.slice(0, maxDisplay),
-    extraCount: Math.max(0, tags.length - maxDisplay)
+    displayTags: normalized.slice(0, maxDisplay),
+    extraCount: Math.max(0, normalized.length - maxDisplay),
   }
 }
 
-/**
- * Filter function units by tags
- * Returns true if the function unit has ALL the specified tags
- */
+/** 筛选：item 须包含 filter 中的全部 tag（AND 语义）。 */
 export function matchesTags(functionUnitTags: string[], filterTags: string[]): boolean {
   if (filterTags.length === 0) return true
-  return filterTags.every(tag => functionUnitTags.includes(tag))
+  const itemTags = normalizeTags(functionUnitTags)
+  const normalizedFilterTags = normalizeTags(filterTags)
+  if (normalizedFilterTags.length === 0) return true
+  return normalizedFilterTags.every(tag => itemTags.includes(tag))
 }
