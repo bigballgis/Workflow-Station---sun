@@ -806,6 +806,12 @@
       LDAP_HERMES_ENV → LDAP_GROUP_ENV；LDAP_HERMES_GROUP_SYNC_* → LDAP_GROUP_*；
       DSP_EMPLOYEE_ID_CLAIM_NAMES/USERNAME_CLAIM_NAMES → DSP_EMPLOYEE_ID_CLAIMS/DSP_USERNAME_CLAIMS；
       LDAP_RETRIEVE_ATTRS（单串）在本实现无对应键，拆为逐属性 LDAP_ATTR_*（默认已是 HSBC 名）。
-    前端缺口：frontend/login/src/composables/useDspLogin.ts 仅从 cookie/?am_token= 读取已存在 AMToken，
-      未像源项目那样浏览器侧 POST dspAuthenticate.jsp（X-Client-Id/Secret）主动获取 AMToken；
-      故 VITE_DSP_AUTHENTICATE_URL/CLIENT_ID/SECRET 当前不被消费。二期需补浏览器取 AMToken + DSP E2E 验签 + manifest 使用。
+    前端缺口（2026-06-17 已实现浏览器侧主动取 AMToken）：
+      新增 frontend/login/src/api/dsp.ts（acquireAmToken：POST VITE_DSP_AUTHENTICATE_URL，带
+      X-Client-Id/X-Client-Secret/Accept-API-Version/X-Requested-With + credentials:include，取 tokenId 为 AMToken）；
+      useDspLogin 改为「无现成 token 且已配置 authenticate 端点时主动获取」，保留 ?am_token=/cookie 兼容路径。
+      新增错误码 DSP_AUTH_FAILED + en/zh-CN 文案；vite-env.d.ts 补 VITE_DSP_* 类型；uat/.env 补 VITE_DSP_*，
+      VITE_DSP_CLIENT_SECRET 真实值入 secrets.env。vite build 通过。
+      待用户 UAT 内部验证（DSP 端需放行本前端 origin 的 CORS + 凭据；tokenId 字段名以实际响应为准）。
+    仍未做（用户要求验证可用后再开）：AD group 定期自动增量同步；DSP E2E JWT 验签 + manifest 使用（后端二期）。
+      安全：VITE_DSP_CLIENT_SECRET 浏览器侧暴露（public client），生产宜改由网关注入。

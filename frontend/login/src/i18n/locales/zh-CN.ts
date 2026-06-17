@@ -20,6 +20,7 @@ export default {
       invalidCredentials: '用户名或密码错误，或 SSO redirect_uri 被拒绝。',
       dspDisabled: '免密登录当前不可用。',
       dspNoToken: '未找到 DSP 令牌，请使用密码登录。',
+      dspAuthFailed: '无法获取 DSP 令牌（{detail}），请使用密码登录。',
       dspFailed: '免密登录失败（{detail}）。',
     },
   },

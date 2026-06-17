@@ -21,6 +21,7 @@ export default {
         'Invalid username or password, or SSO redirect_uri was rejected.',
       dspDisabled: 'Passwordless sign-in is not available.',
       dspNoToken: 'No DSP token found. Please sign in with your password.',
+      dspAuthFailed: 'Could not obtain a DSP token ({detail}). Please sign in with your password.',
       dspFailed: 'Passwordless sign-in failed ({detail}).',
     },
   },

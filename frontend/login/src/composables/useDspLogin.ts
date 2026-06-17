@@ -1,24 +1,19 @@
 /**
  * DSP 免密登录 composable
  *
- * 流程：取浏览器侧 AMToken（mock 验证经 ?am_token= 注入；真实环境由 DSP/网关写入 cookie/header）
- *      → 调 /sso/passwordless 换 SSO code → OAuth 重定向（与账号口令登录一致）。
+ * 流程（对齐源项目）：
+ *   1) 取浏览器侧 AMToken：优先已存在（URL ?am_token= / cookie AMToken）；
+ *      否则在配置了 VITE_DSP_AUTHENTICATE_URL 时，主动 POST dspAuthenticate 获取（带 client 头 + credentials）。
+ *   2) 用 AMToken 调后端 /sso/passwordless 换 SSO code；
+ *   3) OAuth 重定向（与账号口令登录一致）。
  *
  * 纯业务逻辑：不依赖 vue-i18n，返回 errorCode + errorDetails 交 UI 层翻译。
  */
 
 import { ref, type Ref } from 'vue'
 import { passwordlessLogin, type LoginResult } from '@/api/auth'
+import { acquireAmToken, isDspAuthenticateConfigured, readExistingAmToken } from '@/api/dsp'
 import { AppErrorCode } from '@/types/errors'
-
-/** 从 URL ?am_token= 或 cookie AMToken 读取浏览器侧 AMToken。 */
-function readAmToken(): string {
-  const q = new URLSearchParams(window.location.search)
-  const fromQuery = q.get('am_token')
-  if (fromQuery) return fromQuery
-  const match = document.cookie.match(/(?:^|;\s*)AMToken=([^;]+)/)
-  return match ? decodeURIComponent(match[1]) : ''
-}
 
 export function useDspLogin(
   clientId: Ref<string>,
@@ -40,11 +35,24 @@ export function useDspLogin(
 
     dspLoading.value = true
     try {
+      // 1) 取 AMToken：先用已存在的；没有且配置了 authenticate 端点时，主动获取（源项目浏览器侧 POST）。
+      let amToken = readExistingAmToken()
+      if (!amToken && isDspAuthenticateConfigured()) {
+        const acquired = await acquireAmToken()
+        if (!acquired.ok) {
+          errorCode.value = acquired.code ?? AppErrorCode.DSP_AUTH_FAILED
+          errorDetails.value = acquired.detail ? { detail: acquired.detail } : {}
+          return
+        }
+        amToken = acquired.token ?? ''
+      }
+
+      // 2) 用 AMToken 换 SSO code（未取到则传 undefined，留给网关/后端从 header 注入的场景）。
       const result: LoginResult = await passwordlessLogin({
         clientId: clientId.value,
         redirectUri: redirectUri.value,
         state: state.value || undefined,
-        amToken: readAmToken() || undefined,
+        amToken: amToken || undefined,
       })
 
       if (!result.ok) {
@@ -53,6 +61,7 @@ export function useDspLogin(
         return
       }
 
+      // 3) 重定向回子系统回调，附带授权码。
       const { data } = result
       const u = new URL(data.redirectUri)
       u.searchParams.set('code', data.authorizationCode)

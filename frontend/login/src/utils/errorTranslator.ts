@@ -22,6 +22,8 @@ export function errorTranslator(code: AppErrorCode): string {
       return 'login.error.dspDisabled'
     case AppErrorCode.DSP_NO_TOKEN:
       return 'login.error.dspNoToken'
+    case AppErrorCode.DSP_AUTH_FAILED:
+      return 'login.error.dspAuthFailed'
     case AppErrorCode.DSP_FAILED:
       return 'login.error.dspFailed'
     default:
