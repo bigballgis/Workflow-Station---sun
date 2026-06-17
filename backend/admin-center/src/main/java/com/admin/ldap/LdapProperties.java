@@ -73,7 +73,10 @@ public class LdapProperties {
     /** LDAP 属性名映射（默认 HSBC AD 命名；本地 mock 可经 env 覆盖为标准 schema 属性名）。 */
     private Attributes attributes = new Attributes();
 
-    /** 第二阶段：Hermes AD 组→角色/虚拟组同步配置（本期仅预留，不执行）。 */
+    /** Hermes 环境名（DEV/UAT/PPD/PRD）。未显式配置时从 spring profile 推断。 */
+    private String hermesEnv = "";
+
+    /** 第二阶段：Hermes AD 组→角色/虚拟组同步配置。 */
     private GroupSync groupSync = new GroupSync();
 
     /**

@@ -21,6 +21,7 @@ import javax.naming.ldap.LdapContext;
 import javax.naming.ldap.PagedResultsControl;
 import javax.naming.ldap.PagedResultsResponseControl;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Hashtable;
 import java.util.List;
@@ -140,6 +141,217 @@ public class LdapClient {
         }
     }
 
+    /**
+     * 在 group-search-base-dn 下按 CN 搜索组，返回组 DN。
+     *
+     * @param groupCn 组的 CN（如 {@code Infodir-Hermes-Default-UAT-User}）
+     * @return 组 DN；未命中返回 empty
+     */
+    public Optional<String> findGroupDnByCn(String groupCn) throws NamingException {
+        String escaped = escapeFilterValue(groupCn);
+        String groupSearchBase = getGroupSearchBaseDn();
+        DirContext ctx = openServiceContext();
+        try {
+            SearchControls controls = new SearchControls();
+            controls.setSearchScope(SearchControls.SUBTREE_SCOPE);
+            controls.setReturningAttributes(new String[]{"cn", "member", "whenChanged"});
+            controls.setCountLimit(1);
+            NamingEnumeration<SearchResult> results =
+                    ctx.search(groupSearchBase, "(cn=" + escaped + ")", controls);
+            try {
+                if (results.hasMore()) {
+                    SearchResult sr = results.next();
+                    String dn = sr.getNameInNamespace();
+                    log.debug("Resolved group DN for CN {}: {}", groupCn, dn);
+                    return Optional.of(dn);
+                }
+                return Optional.empty();
+            } finally {
+                closeQuietly(results);
+            }
+        } finally {
+            closeQuietly(ctx);
+        }
+    }
+
+    /**
+     * 读取组的 member 属性（支持 AD ranged 分段读取，步长 500），返回所有 member DN 列表。
+     * <p>AD 大组场景：member 属性值过多时，AD 返回 {@code member;range=0-499} 而非完整 member。
+     * 本方法自动检测 range 分段并迭代拉取直到返回 {@code member} 或 {@code member;range=xxx-*}。</p>
+     */
+    public List<String> fetchGroupMemberDns(String groupDn) throws NamingException {
+        List<String> members = new ArrayList<>();
+        DirContext ctx = openServiceContext();
+        try {
+            int step = 500;
+            int start = 0;
+            while (true) {
+                String rangedAttr = "member;range=" + start + "-" + (start + step - 1);
+                // 首次尝试 ranged；若不存在则回退普通 member
+                String[] attrIds = start == 0
+                        ? new String[]{rangedAttr, "member"}
+                        : new String[]{rangedAttr};
+                boolean viaRanged = true;
+                Attributes attrs;
+                try {
+                    attrs = ctx.getAttributes(groupDn, attrIds);
+                } catch (NamingException e) {
+                    // 当前没有更多 ranged 段或属性不存在，回退尝试普通 member（仅首次）
+                    if (start == 0) {
+                        attrs = ctx.getAttributes(groupDn, new String[]{"member"});
+                        viaRanged = false;
+                    } else {
+                        break;
+                    }
+                }
+
+                Attribute memberAttr = attrs.get(rangedAttr);
+                if (memberAttr == null && start == 0) {
+                    memberAttr = attrs.get("member");
+                    viaRanged = false;
+                }
+                if (memberAttr == null) {
+                    break;
+                }
+
+                int count = 0;
+                NamingEnumeration<?> values = memberAttr.getAll();
+                try {
+                    while (values.hasMore()) {
+                        Object v = values.next();
+                        if (v != null) {
+                            members.add(String.valueOf(v));
+                            count++;
+                        }
+                    }
+                } finally {
+                    closeQuietly(values);
+                }
+
+                // 判断是否读取结束
+                String attrId = memberAttr.getID();
+                if (!viaRanged || attrId.equalsIgnoreCase("member") || attrId.endsWith("*")) {
+                    break;
+                }
+                start += count;
+                if (count < step) {
+                    break;
+                }
+            }
+        } finally {
+            closeQuietly(ctx);
+        }
+        log.debug("Fetched {} member DNs from group DN {}", members.size(), groupDn);
+        return members;
+    }
+
+    /**
+     * 拉取一个 AD 组内的所有用户（完整 pipeline：按 CN 找组 DN → 读取 member DNs → 逐个取用户属性）。
+     *
+     * @param groupCn 组的 CN
+     * @return 扁平化的用户属性列表（每行包含 memberOf 等完整属性）
+     */
+    public List<Map<String, String>> fetchUsersInGroup(String groupCn) throws NamingException {
+        Optional<String> groupDnOpt = findGroupDnByCn(groupCn);
+        if (groupDnOpt.isEmpty()) {
+            log.warn("AD group not found: CN={}", groupCn);
+            return List.of();
+        }
+        String groupDn = groupDnOpt.get();
+        List<String> memberDns = fetchGroupMemberDns(groupDn);
+        log.info("AD group CN={} has {} member DNs", groupCn, memberDns.size());
+
+        List<Map<String, String>> users = new ArrayList<>();
+        for (String memberDn : memberDns) {
+            try {
+                Attributes attrs = getRawAttributes(memberDn);
+                Map<String, String> flat = flatten(attrs);
+                // 注入命中组名，用于后续虚拟组映射
+                flat.put("_hitGroupCn", groupCn);
+                users.add(flat);
+            } catch (NamingException e) {
+                log.warn("Failed to read attributes for member DN {}: {}", memberDn, e.getMessage());
+            }
+            if (reachedLimit(users)) {
+                break;
+            }
+        }
+        return users;
+    }
+
+    /**
+     * 检查 AD 组对象自 {@code watermark} 以来是否发生变更。
+     * <p>在 group-search-base-dn 中按 CN 查询组，读取 whenChanged 属性与 watermark 比较。</p>
+     *
+     * @return {@code true}=已变更（需要重新同步）；{@code false}=未变更或组不存在
+     */
+    public boolean hasGroupChangedSince(String groupCn, Instant watermark) {
+        try {
+            String escaped = escapeFilterValue(groupCn);
+            String groupSearchBase = getGroupSearchBaseDn();
+            DirContext ctx = openServiceContext();
+            try {
+                SearchControls controls = new SearchControls();
+                controls.setSearchScope(SearchControls.SUBTREE_SCOPE);
+                controls.setReturningAttributes(new String[]{"whenChanged", "modifyTimestamp"});
+                controls.setCountLimit(1);
+                NamingEnumeration<SearchResult> results =
+                        ctx.search(groupSearchBase, "(cn=" + escaped + ")", controls);
+                try {
+                    if (results.hasMore()) {
+                        Attributes attrs = results.next().getAttributes();
+                        Attribute whenChangedAttr = attrs.get("whenChanged");
+                        if (whenChangedAttr != null && whenChangedAttr.size() > 0) {
+                            String whenChangedStr = String.valueOf(whenChangedAttr.get(0));
+                            Instant groupChanged = parseGeneralizedTime(whenChangedStr);
+                            if (groupChanged != null) {
+                                return !groupChanged.isBefore(watermark);
+                            }
+                        }
+                    }
+                } finally {
+                    closeQuietly(results);
+                }
+            } finally {
+                closeQuietly(ctx);
+            }
+        } catch (NamingException e) {
+            log.warn("Failed to check group change for CN={}: {}", groupCn, e.getMessage());
+        }
+        // 查询失败时保守处理：认为有变更，触发同步
+        return true;
+    }
+
+    /** 按 DN 获取原始 Attributes（用于内部 pipeline）。 */
+    Attributes getRawAttributes(String dn) throws NamingException {
+        DirContext ctx = openServiceContext();
+        try {
+            return ctx.getAttributes(dn, retrieveAttributeNames());
+        } finally {
+            closeQuietly(ctx);
+        }
+    }
+
+    /** 解析 AD generalized time 格式（yyyyMMddHHmmss[.0Z]）。 */
+    static Instant parseGeneralizedTime(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String cleaned = value.replaceAll("\\..*", "").trim();
+        if (cleaned.length() >= 14) {
+            cleaned = cleaned.substring(0, 14);
+        }
+        try {
+            return java.time.LocalDateTime.parse(cleaned,
+                            java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmss"))
+                    .atZone(java.time.ZoneOffset.UTC)
+                    .toInstant();
+        } catch (Exception e) {
+            log.debug("Failed to parse AD generalized time: {}", value);
+            return null;
+        }
+    }
+
     // ==================== 内部实现 ====================
 
     /** 在 baseDn 下做 SUBTREE 搜索，返回首个命中 DN。 */
@@ -232,6 +444,12 @@ public class LdapClient {
             closeQuietly(all);
         }
         return map;
+    }
+
+    /** 获取组搜索基准 DN（优先 group-sync.search-base-dn，其次 ldap.base-dn）。 */
+    private String getGroupSearchBaseDn() {
+        String specific = props.getGroupSync().getSearchBaseDn();
+        return (specific != null && !specific.isBlank()) ? specific : props.getBaseDn();
     }
 
     private String[] retrieveAttributeNames() {

@@ -25,6 +25,7 @@ import java.util.List;
 public class LdapSyncAuditService {
 
     private final LdapUserSyncService ldapUserSyncService;
+    private final LdapSyncService ldapSyncService;
     private final LdapSyncAuditRepository auditRepository;
 
     /** 异步触发全量同步。 */
@@ -44,6 +45,26 @@ public class LdapSyncAuditService {
             ldapUserSyncService.runIncrementalSync();
         } catch (Exception e) {
             log.error("Async incremental LDAP sync error: {}", e.getMessage());
+        }
+    }
+
+    /** 异步触发 Hermes AD 组全量同步。 */
+    @Async
+    public void triggerHermesGroupFullAsync() {
+        try {
+            ldapSyncService.runHermesAdGroupSync();
+        } catch (Exception e) {
+            log.error("Async Hermes AD group full sync error: {}", e.getMessage());
+        }
+    }
+
+    /** 异步触发 Hermes AD 组增量同步。 */
+    @Async
+    public void triggerHermesGroupIncrementalAsync() {
+        try {
+            ldapSyncService.runHermesAdGroupIncrementalSync();
+        } catch (Exception e) {
+            log.error("Async Hermes AD group incremental sync error: {}", e.getMessage());
         }
     }
 

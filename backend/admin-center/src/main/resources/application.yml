@@ -374,11 +374,13 @@ ldap:
     auth-manager-emp-id: ${LDAP_ATTR_AUTH_MANAGER_EMP_ID:hsbc-ad-AuthManagerEmpId}
     lockout-time: ${LDAP_ATTR_LOCKOUT_TIME:lockoutTime}
     when-changed: ${LDAP_ATTR_WHEN_CHANGED:whenChanged}
-  # 第二阶段预留：AD 组→角色/虚拟组同步（本期仅承接配置，不执行绑定）
+  # Hermes AD 组同步：环境名（DEV/UAT/PPD/PRD），用于构建 AD 组名
+  hermes-env: ${LDAP_HERMES_ENV:}
+  # AD 组→角色/虚拟组同步配置
   group-sync:
     env: ${LDAP_GROUP_ENV:}
     search-base-dn: ${LDAP_GROUP_SEARCH_BASE_DN:}
-    groups: ${LDAP_GROUP_GROUPS:}
-    roles: ${LDAP_GROUP_ROLES:}
-    pattern: ${LDAP_GROUP_PATTERN:}
-    batch-size: ${LDAP_GROUP_BATCH_SIZE:20}
+    groups: ${LDAP_HERMES_GROUP_SYNC_GROUPS:${LDAP_GROUP_GROUPS:}}
+    roles: ${LDAP_HERMES_GROUP_SYNC_ROLES:${LDAP_GROUP_ROLES:}}
+    pattern: ${LDAP_HERMES_GROUP_SYNC_PATTERN:${LDAP_GROUP_PATTERN:Infodir-Hermes-Default-{env}-{role}}}
+    batch-size: ${LDAP_HERMES_GROUP_SYNC_BATCH_SIZE:${LDAP_GROUP_BATCH_SIZE:20}}

@@ -25,4 +25,7 @@ public interface LdapSyncAuditRepository extends JpaRepository<LdapSyncAudit, St
 
     /** 同步历史（前 N 条，时间倒序）。 */
     List<LdapSyncAudit> findTop20ByOrderByStartedAtDesc();
+
+    /** 最近一次成功的 Hermes 组同步（HERMES_AD_GROUP 或 HERMES_AD_INCR），用于增量水位。 */
+    Optional<LdapSyncAudit> findTopBySyncTypeInAndStatusOrderByStartedAtDesc(List<String> syncTypes, String status);
 }

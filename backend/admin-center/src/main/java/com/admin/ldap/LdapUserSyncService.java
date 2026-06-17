@@ -101,14 +101,16 @@ public class LdapUserSyncService {
 
     /**
      * Upsert 单个用户。新用户写占位密码；已存在用户仅更新画像字段，保留其 passwordHash。
+     *
+     * @return {@code true} 为新插入，{@code false} 为已存在更新
      */
     @Transactional
-    public void upsertUser(LdapUserData data) {
+    public boolean upsertUserReturningIsNew(LdapUserData data) {
         Optional<User> existing = userRepository.findById(data.getId());
         if (existing.isPresent()) {
             applyProfile(existing.get(), data, false);
             userRepository.save(existing.get());
-            return;
+            return false;
         }
         // 新用户：employeeID 作为 id；占位密码禁止本地登录
         User user = User.builder()
@@ -119,6 +121,15 @@ public class LdapUserSyncService {
                 .build();
         applyProfile(user, data, true);
         userRepository.save(user);
+        return true;
+    }
+
+    /**
+     * Upsert 单个用户（兼容旧调用方）。
+     */
+    @Transactional
+    public void upsertUser(LdapUserData data) {
+        upsertUserReturningIsNew(data);
     }
 
     /** 写入画像字段（updatedBy=LDAP_SYNC_JOB）。{@code isNew} 时一并设置 username。 */

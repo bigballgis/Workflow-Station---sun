@@ -14,7 +14,14 @@ public record LdapSyncAuditView(
         Integer failed,
         String message,
         Instant startedAt,
-        Instant finishedAt) {
+        Instant finishedAt,
+        String highWaterMark,
+        String groups,
+        Integer successCount,
+        Integer skippedMissingKey,
+        Integer insertCount,
+        Integer updateCount,
+        Long durationMs) {
 
     public static LdapSyncAuditView from(LdapSyncAudit audit) {
         return new LdapSyncAuditView(
@@ -26,6 +33,13 @@ public record LdapSyncAuditView(
                 audit.getFailed(),
                 audit.getMessage(),
                 audit.getStartedAt(),
-                audit.getFinishedAt());
+                audit.getFinishedAt(),
+                audit.getHighWaterMark(),
+                audit.getGroups(),
+                audit.getSuccessCount(),
+                audit.getSkippedMissingKey(),
+                audit.getInsertCount(),
+                audit.getUpdateCount(),
+                audit.getDurationMs());
     }
 }

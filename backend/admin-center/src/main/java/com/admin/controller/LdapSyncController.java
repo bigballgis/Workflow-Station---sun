@@ -56,6 +56,24 @@ public class LdapSyncController {
         return accepted("INCREMENTAL");
     }
 
+    @PostMapping("/hermes-groups")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> triggerHermesGroups() {
+        if (!isSystemAdmin()) {
+            return forbidden();
+        }
+        ldapSyncAuditService.triggerHermesGroupFullAsync();
+        return accepted("HERMES_AD_GROUP");
+    }
+
+    @PostMapping("/hermes-groups/incremental")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> triggerHermesGroupsIncremental() {
+        if (!isSystemAdmin()) {
+            return forbidden();
+        }
+        ldapSyncAuditService.triggerHermesGroupIncrementalAsync();
+        return accepted("HERMES_AD_INCR");
+    }
+
     @GetMapping("/status")
     public ResponseEntity<ApiResponse<List<LdapSyncAuditView>>> status() {
         if (!isSystemAdmin()) {
