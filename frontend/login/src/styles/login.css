@@ -1,25 +1,36 @@
-/* Match legacy logon.html design — DM Sans, #D82028, #C60C12 */
+/* ==========================================
+   Login — 汇丰主题
+   ========================================== */
+
+/* --- 容器 --- */
 .login-container {
   width: 100vw;
   height: 100vh;
   overflow: hidden;
-  background-color: #d82028;
+  background: linear-gradient(135deg, #d82028 0%, #b8000e 40%, #60050a 100%);
   position: relative;
   font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
+/* --- 背景装饰形状 --- */
 .bg-shape {
-  left: 5%;
   position: absolute;
   top: 0;
   right: 0;
   width: 54%;
   height: 100%;
-  background: linear-gradient(90deg, #60050a 0%, #d82028 82.69%);
+  background: linear-gradient(90deg, rgba(96, 5, 10, 0.6) 0%, rgba(216, 32, 40, 0.4) 82.69%);
   clip-path: polygon(59% 0, 100% 0, 100% 100%, 59% 100%, 0% 50%);
   z-index: 1;
+  animation: bgShapePulse 8s ease-in-out infinite alternate;
 }
 
+@keyframes bgShapePulse {
+  0% { opacity: 0.8; }
+  100% { opacity: 1; }
+}
+
+/* --- 右侧登录区域 --- */
 .login-right {
   position: absolute;
   top: 50%;
@@ -29,19 +40,40 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  animation: loginRightSlideIn 0.6s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+@keyframes loginRightSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-50%) translateX(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-50%) translateX(0);
+  }
+}
+
+/* --- 登录卡片 --- */
 .login-card {
   width: 120%;
   min-width: 380px;
   max-width: 456px;
   padding: 40px 45px;
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(20px);
+  border-radius: 16px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.2);
   text-align: center;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
+.login-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 32px 96px rgba(0, 0, 0, 0.35), 0 12px 32px rgba(0, 0, 0, 0.25);
+}
+
+/* --- Header --- */
 .login-header {
   text-align: center;
   margin-bottom: 20px;
@@ -63,10 +95,12 @@
 .login-title {
   font-size: 36px;
   font-weight: 800;
-  color: #2f2f2f;
+  color: #1d1d1f;
   margin: 0 0 30px;
+  letter-spacing: -0.5px;
 }
 
+/* --- Form --- */
 .login-form {
   text-align: left;
 }
@@ -77,69 +111,94 @@
 
 .field-label {
   display: block;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
-  color: #666;
+  color: #555;
   margin-bottom: 8px;
   line-height: normal;
+  letter-spacing: 0.2px;
 }
 
 .login-form input {
   width: 100%;
-  padding: 12px 15px;
-  border: 1px solid #e0e0e0;
-  border-radius: 6px;
+  padding: 14px 16px;
+  border: 2px solid #e8e8e8;
+  border-radius: 8px;
   font-size: 16px;
   font-weight: 500;
   font-family: inherit;
   box-sizing: border-box;
-  color: #2f2f2f;
-  background: #fff;
-  transition: border-color 0.2s;
+  color: #1d1d1f;
+  background: #fafafa;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  outline: none;
 }
 
 .login-form input::placeholder {
-  color: #969696;
+  color: #aaa;
 }
 
-.login-form input:hover,
+.login-form input:hover {
+  border-color: #d0d0d0;
+  background: #fff;
+}
+
 .login-form input:focus {
   outline: none;
   border-color: #c60c12;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(198, 12, 18, 0.12);
 }
 
+/* --- Error --- */
 .form-error {
   color: #c60c12;
   font-size: 14px;
   margin: 0 0 12px;
   text-align: left;
+  animation: errorShake 0.4s ease;
 }
 
+@keyframes errorShake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+
+/* --- Button --- */
 .btn-item {
-  margin-top: 10px;
+  margin-top: 16px;
 }
 
 .login-btn {
   width: 100%;
-  padding: 14px;
+  padding: 15px;
   font-size: 18px;
   font-weight: 600;
-  border-radius: 6px;
-  background: #c60c12;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #d82028, #c60c12);
   color: #fff;
   border: none;
   cursor: pointer;
   font-family: inherit;
-  transition: background 0.2s;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(198, 12, 18, 0.3);
+  position: relative;
+  overflow: hidden;
 }
 
-.login-btn:hover:not(:disabled),
-.login-btn:focus:not(:disabled) {
-  background: #a00a0f;
+.login-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #e03038, #d62028);
+  box-shadow: 0 6px 20px rgba(198, 12, 18, 0.4);
+  transform: translateY(-1px);
 }
 
 .login-btn:active:not(:disabled) {
-  background: #8a080c;
+  background: linear-gradient(135deg, #a00a0f, #8a080c);
+  box-shadow: 0 2px 8px rgba(198, 12, 18, 0.3);
+  transform: translateY(0);
 }
 
 .login-btn:disabled {
@@ -147,6 +206,31 @@
   cursor: not-allowed;
 }
 
+/* Loading spinner inside button */
+.login-btn.is-loading {
+  color: transparent;
+  pointer-events: none;
+}
+
+.login-btn.is-loading::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 22px;
+  height: 22px;
+  margin: -11px 0 0 -11px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: loginBtnSpin 0.6s linear infinite;
+}
+
+@keyframes loginBtnSpin {
+  to { transform: rotate(360deg); }
+}
+
+/* --- Footer --- */
 .login-footer {
   text-align: center;
   margin-top: 20px;
@@ -159,6 +243,7 @@
   color: #bbb;
 }
 
+/* --- Responsive --- */
 @media (max-width: 768px) {
   .login-right {
     right: 50%;

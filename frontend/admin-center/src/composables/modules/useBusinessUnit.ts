@@ -24,6 +24,7 @@ export function useBusinessUnit() {
   const filterText = ref('')
   const selectedBusinessUnit = ref<BusinessUnit | null>(null)
   const businessUnitMembers = ref<any[]>([])
+  const membersLoading = ref(false)
   const businessUnitApprovers = ref<Approver[]>([])
   const dialogVisible = ref(false)
   const rolesDialogVisible = ref(false)
@@ -43,11 +44,14 @@ export function useBusinessUnit() {
 
   const fetchMembers = async () => {
     if (!selectedBusinessUnit.value) return
+    membersLoading.value = true
     try {
       const result = await organizationApi.getMembers(selectedBusinessUnit.value.id, { page: 0, size: 50 })
       businessUnitMembers.value = result.content || []
     } catch (e) {
       businessUnitMembers.value = []
+    } finally {
+      membersLoading.value = false
     }
   }
 
@@ -184,6 +188,7 @@ export function useBusinessUnit() {
     showApproversDialog,
     showMembersDialog,
     showUserDetail,
+    membersLoading,
     handleMembersChange,
     refreshDetail,
   }
