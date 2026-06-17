@@ -1,0 +1,507 @@
+# =====================================================
+# Development Environment - Docker Compose
+# =====================================================
+# Local Docker Desktop only. Infrastructure (PG, Redis) runs locally.
+# SIT/UAT/PROD use company K8S — see deploy/k8s/
+# developer-workstation（设计器）仅 DEV 使用；K8S 部署脚本已不包含该服务，勿将设计器发布到 SIT/UAT/PROD。
+#
+# IMPORTANT: All images use "local build + copy" approach.
+# Docker multi-stage builds are NOT used due to local Docker limitations.
+# You MUST build artifacts locally before running docker compose:
+#
+# Backend (requires Maven):
+#   mvn clean package -DskipTests -pl backend/workflow-engine-core,backend/admin-center,backend/user-portal,backend/developer-workstation -am
+#
+# Frontend (requires Node.js):
+#   cd frontend/admin-center && npm run build
+#   cd frontend/user-portal && npm run build
+#   cd frontend/developer-workstation && npm run build
+#   cd frontend/login && npm run build
+#
+# Then start:
+#   docker compose -f docker-compose.dev.yml --env-file .env up -d --build
+#
+# Demo / 演示约定：界面与种子数据以英文为准（无单独的 LOCALE 环境变量；
+# 前端语言在 frontend/*/src/i18n/index.ts 固定为 en，需改语言请改源码后重建镜像）。
+# 详见仓库根目录 BUILD_GUIDE.md §2.5 与 docs/demo-data-requirements.md。
+# =====================================================
+
+services:
+  # ==================== Infrastructure ====================
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16.5-alpine
+    container_name: platform-postgres-dev
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+      - ../../../deploy/init-scripts:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
+    networks:
+      - platform-dev-network
+
+  # Redis Cache
+  redis:
+    image: redis:7.2-alpine
+    container_name: platform-redis-dev
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    ports:
+      - "${REDIS_PORT}:6379"
+    volumes:
+      - redis_dev_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - platform-dev-network
+
+  # Kafka (KRaft mode - no ZooKeeper needed)
+  kafka:
+    image: confluentinc/cp-kafka:7.5.3
+    container_name: platform-kafka-dev
+    ports:
+      - "${KAFKA_PORT}:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093,EXTERNAL://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,EXTERNAL://localhost:${KAFKA_PORT:-19092}
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:29092 > /dev/null 2>&1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    networks:
+      - platform-dev-network
+
+  # N8N Automation Engine
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    container_name: platform-n8n-dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${N8N_PORT:-5678}:5678"
+    environment:
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: ${N8N_DB_NAME:-n8n_dev}
+      DB_POSTGRESDB_USER: ${POSTGRES_USER:-postgres}
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+      # Public URL via edge (http://localhost:3000/n8n/). Do not set N8N_PATH — nginx strips /n8n/ prefix.
+      N8N_EDITOR_BASE_URL: ${N8N_EDITOR_BASE_URL:-http://localhost:3000/n8n/}
+      WEBHOOK_URL: ${N8N_WEBHOOK_URL:-http://localhost:3000/n8n/}
+      N8N_PROXY_HOPS: ${N8N_PROXY_HOPS:-1}
+      N8N_PORT: 5678
+      N8N_SECURE_COOKIE: "false"
+      N8N_RESTRICT_ENVIRONMENT_VARIABLES_ACCESS: "false"
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      NODE_FUNCTION_ALLOW_EXTERNAL: "pg"
+      DOUBAO_MODEL_ID: ${DOUBAO_MODEL_ID:-doubao-1-5-vision-pro-32k-250115}
+      DOUBAO_API_KEY: ${DOUBAO_API_KEY:-your-doubao-api-key-here}
+    volumes:
+      - n8n_data:/home/node/.n8n
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:5678/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - platform-dev-network
+    restart: unless-stopped
+
+  # Superset BI
+  superset-final:
+    build:
+      context: ../../superset
+      dockerfile: Dockerfile
+    image: dev-superset
+    container_name: platform-superset-dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8088:8088"
+    environment:
+      # Keep Superset metadata in dedicated schema.
+      SQLALCHEMY_DATABASE_URI: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?options=-csearch_path%3D${SUPERSET_DB_SCHEMA:-superset}
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY:-replace_this_with_a_real_secert_key}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8088/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+    networks:
+      - platform-dev-network
+    restart: unless-stopped
+
+  # ==================== Backend Services ====================
+
+  # Workflow Engine Core
+  workflow-engine:
+    build:
+      context: ../../../backend/workflow-engine-core
+      dockerfile: Dockerfile
+    image: dev-workflow-engine
+    container_name: platform-workflow-engine-dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "${WORKFLOW_ENGINE_PORT}:8080"
+    volumes:
+      - ./logs:/app/logs
+      - ../../../.cursor:/.cursor-debug
+    environment:
+      DEBUG_LOG_PATH: /.cursor-debug/debug-8aa4e2.log
+      SERVER_PORT: 8080
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://${POSTGRES_HOST:-postgres}:5432/${POSTGRES_DB}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD}
+      ADMIN_CENTER_URL: http://admin-center:8080
+      USER_PORTAL_URL: http://user-portal:8080
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION: ${JWT_EXPIRATION}
+      JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION}
+      ENCRYPTION_SECRET_KEY: ${ENCRYPTION_SECRET_KEY}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+      SWAGGER_ENABLED: ${SWAGGER_ENABLED:-true}
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    networks:
+      - platform-dev-network
+    restart: unless-stopped
+
+  # Admin Center Backend
+  admin-center:
+    build:
+      context: ../../../backend/admin-center
+      dockerfile: Dockerfile
+    image: dev-admin-center
+    container_name: platform-admin-center-dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      workflow-engine:
+        condition: service_healthy
+      superset-final:
+        condition: service_started
+    ports:
+      - "${ADMIN_CENTER_PORT}:8080"
+    environment:
+      SERVER_PORT: 8080
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://${POSTGRES_HOST:-postgres}:5432/${POSTGRES_DB}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD}
+      WORKFLOW_ENGINE_URL: http://workflow-engine:8080
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION: ${JWT_EXPIRATION}
+      JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION}
+      ENCRYPTION_SECRET_KEY: ${ENCRYPTION_SECRET_KEY}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+      SWAGGER_ENABLED: ${SWAGGER_ENABLED:-true}
+      SPRING_FLYWAY_ENABLED: "false"
+      SSO_INTERNAL_TOKEN: ${SSO_INTERNAL_TOKEN:-dev-sso-internal-token-change-me}
+      # 默认与 edge-frontend（EDGE_FRONTEND_PORT）单源路径一致；直连前端端口时见 application.yml 额外前缀
+      SSO_REDIRECT_ADMIN_PREFIX: ${SSO_REDIRECT_ADMIN_PREFIX:-http://localhost:3000/admin/sso/callback}
+      SSO_REDIRECT_ADMIN_HTTP_PREFIX: ${SSO_REDIRECT_ADMIN_HTTP_PREFIX:-http://localhost:3000/admin/sso/callback}
+      SSO_REDIRECT_PORTAL_PREFIX: ${SSO_REDIRECT_PORTAL_PREFIX:-http://localhost:3000/portal/sso/callback}
+      SSO_REDIRECT_PORTAL_HTTP_PREFIX: ${SSO_REDIRECT_PORTAL_HTTP_PREFIX:-http://localhost:3000/portal/sso/callback}
+      SSO_REDIRECT_DW_PREFIX: ${SSO_REDIRECT_DW_PREFIX:-http://localhost:3000/dev/sso/callback}
+      SSO_REDIRECT_DW_HTTP_PREFIX: ${SSO_REDIRECT_DW_HTTP_PREFIX:-http://localhost:3000/dev/sso/callback}
+      SUPERSET_HOST: ${SUPERSET_HOST:-http://superset-final:8088}
+      SUPERSET_DB_SCHEMA: ${SUPERSET_DB_SCHEMA:-public}
+      # Admin UI「重置密码」后的明文密码（仅 dev 默认 password；生产务必在 .env 中改为强密码）
+      USER_RESET_PASSWORD: ${USER_RESET_PASSWORD:-password}
+      # AgentNdjsonLog：与下方 volumes 的 /app/logs 对齐，宿主机见 deploy/environments/dev/logs/debug-864cd4.log
+      WORKFLOW_DEBUG_NDJSON_PATH: ${WORKFLOW_DEBUG_NDJSON_PATH:-/app/logs/debug-864cd4.log}
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - platform-dev-network
+    restart: unless-stopped
+
+  # User Portal Backend
+  user-portal:
+    build:
+      context: ../../../backend/user-portal
+      dockerfile: Dockerfile
+    image: dev-user-portal
+    container_name: platform-user-portal-dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      workflow-engine:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "${USER_PORTAL_PORT}:8080"
+    environment:
+      SERVER_PORT: 8080
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://${POSTGRES_HOST:-postgres}:5432/${POSTGRES_DB}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD}
+      ADMIN_CENTER_URL: http://admin-center:8080
+      WORKFLOW_ENGINE_URL: http://workflow-engine:8080
+      DEVELOPER_WORKSTATION_URL: ${DEVELOPER_WORKSTATION_URL:-http://developer-workstation:8080}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION: ${JWT_EXPIRATION}
+      JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION}
+      ENCRYPTION_SECRET_KEY: ${ENCRYPTION_SECRET_KEY}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+      SWAGGER_ENABLED: ${SWAGGER_ENABLED:-true}
+      SPRING_FLYWAY_ENABLED: false
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SSO_INTERNAL_TOKEN: ${SSO_INTERNAL_TOKEN:-dev-sso-internal-token-change-me}
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - platform-dev-network
+    restart: unless-stopped
+
+  # Developer Workstation Backend
+  developer-workstation:
+    build:
+      context: ../../../backend/developer-workstation
+      dockerfile: Dockerfile
+    image: dev-developer-workstation
+    container_name: platform-developer-workstation-dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      workflow-engine:
+        condition: service_healthy
+    ports:
+      - "${DEVELOPER_WORKSTATION_PORT}:8080"
+    environment:
+      SERVER_PORT: 8080
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://${POSTGRES_HOST:-postgres}:5432/${POSTGRES_DB}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD}
+      ADMIN_CENTER_URL: http://admin-center:8080
+      WORKFLOW_ENGINE_URL: http://workflow-engine:8080
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION: ${JWT_EXPIRATION}
+      JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION}
+      ENCRYPTION_SECRET_KEY: ${ENCRYPTION_SECRET_KEY}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+      SWAGGER_ENABLED: ${SWAGGER_ENABLED:-true}
+      SPRING_FLYWAY_ENABLED: false
+      SSO_INTERNAL_TOKEN: ${SSO_INTERNAL_TOKEN:-dev-sso-internal-token-change-me}
+      FILE_UPLOAD_BASE_URL: /api/v1/upload/files
+    networks:
+      - platform-dev-network
+    restart: unless-stopped
+
+  # ==================== Kong Gateway ====================
+
+  kong:
+    image: kong:3.9
+    container_name: platform-kong-dev
+    depends_on:
+      redis:
+        condition: service_healthy
+    ports:
+      - "${KONG_PROXY_PORT:-8000}:8000"
+      - "${KONG_ADMIN_PORT:-8001}:8001"
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /kong/kong.yml
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_PROXY_LISTEN: "0.0.0.0:8000"
+      KONG_ADMIN_LISTEN: "0.0.0.0:8001"
+      KONG_NGINX_PROXY_CLIENT_MAX_BODY_SIZE: "100m"
+      # Larger buffer for upstream status + headers (default is small). Undersized buffers can
+      # cause nginx inside Kong to mis-parse Spring SSE responses and return 502 with
+      # "upstream sent invalid header" when streaming /api/v1/ai-generation/chat/stream.
+      KONG_NGINX_PROXY_PROXY_BUFFER_SIZE: "32k"
+      KONG_NGINX_PROXY_PROXY_BUFFERS: "64 32k"
+      # Kong `services[].url` uses Compose service hostnames (not literal IPs). Nginx error logs
+      # still print the resolved A record. Recreated containers get new IPs — cap DNS TTL in DEV
+      # so upstream addresses refresh within a few seconds without restarting Kong.
+      # See: https://docs.konghq.com/gateway/latest/reference/configuration/#dns_valid_ttl
+      KONG_DNS_ORDER: "LAST,A,SRV,CNAME"
+      KONG_DNS_VALID_TTL: "5"
+      # Environment variables used by entrypoint script for sed replacement
+      JWT_SECRET: ${JWT_SECRET}
+      REDIS_HOST: redis
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+    volumes:
+      - ../../../deploy/kong/kong.yml.template:/kong/kong.yml.template:ro
+      - ../../../deploy/kong/docker-entrypoint-kong.sh:/kong/docker-entrypoint-kong.sh:ro
+    entrypoint: ["/bin/sh", "/kong/docker-entrypoint-kong.sh"]
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - platform-dev-network
+    restart: unless-stopped
+
+  # ==================== Frontend Services ====================
+  # Uses Dockerfile.local — requires pre-built dist/ in each frontend project.
+  # Build steps before docker compose up:
+  #   1. cd frontend/admin-center && npm run build
+  #   2. cd frontend/user-portal && npm run build
+  #   3. cd frontend/developer-workstation && npm run build
+
+  admin-center-frontend:
+    build:
+      context: ../../../frontend/admin-center
+      dockerfile: Dockerfile.local
+    image: dev-admin-center-frontend
+    container_name: platform-admin-center-frontend-dev
+    depends_on:
+      - admin-center
+      - kong
+    ports:
+      - "${ADMIN_CENTER_FRONTEND_PORT}:80"
+    environment:
+      KONG_PROXY_URL: http://kong:8000
+    networks:
+      - platform-dev-network
+    restart: unless-stopped
+
+  user-portal-frontend:
+    build:
+      context: ../../../frontend/user-portal
+      dockerfile: Dockerfile.local
+    image: dev-user-portal-frontend
+    container_name: platform-user-portal-frontend-dev
+    depends_on:
+      - user-portal
+      - kong
+    ports:
+      - "${USER_PORTAL_FRONTEND_PORT}:80"
+    environment:
+      KONG_PROXY_URL: http://kong:8000
+    networks:
+      - platform-dev-network
+    restart: unless-stopped
+
+  developer-workstation-frontend:
+    build:
+      context: ../../../frontend/developer-workstation
+      dockerfile: Dockerfile.local
+    image: dev-developer-workstation-frontend
+    container_name: platform-developer-workstation-frontend-dev
+    depends_on:
+      - developer-workstation
+      - kong
+    ports:
+      - "${DEVELOPER_WORKSTATION_FRONTEND_PORT}:80"
+    environment:
+      KONG_PROXY_URL: http://kong:8000
+    networks:
+      - platform-dev-network
+    restart: unless-stopped
+
+  # 统一登录页 /login/（独立静态站点；与三前端同域生产环境由边缘 Nginx 反代到本容器）
+  platform-login-frontend:
+    build:
+      context: ../../../frontend/login
+      dockerfile: Dockerfile.local
+    image: dev-platform-login-frontend
+    container_name: platform-login-frontend-dev
+    depends_on:
+      - kong
+    ports:
+      - "${PLATFORM_LOGIN_FRONTEND_PORT:-3110}:80"
+    environment:
+      KONG_PROXY_URL: http://kong:8000
+    networks:
+      - platform-dev-network
+    restart: unless-stopped
+
+  # ==================== Edge (single-origin multi-path) ====================
+  # Use this for local testing of production-like routing:
+  #   http://localhost:${EDGE_FRONTEND_PORT}/admin/
+  #   http://localhost:${EDGE_FRONTEND_PORT}/portal/
+  #   http://localhost:${EDGE_FRONTEND_PORT}/login/
+  #   http://localhost:${EDGE_FRONTEND_PORT}/dev/   (DEV only)
+  edge-frontend:
+    image: nginx:alpine
+    container_name: platform-edge-frontend-dev
+    depends_on:
+      - kong
+      - admin-center-frontend
+      - user-portal-frontend
+      - developer-workstation-frontend
+      - platform-login-frontend
+    ports:
+      - "${EDGE_FRONTEND_PORT:-3000}:80"
+    volumes:
+      - ./nginx-edge.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      # edge-frontend 不提供根路径静态资源，探活走 /login/（由 platform-login-frontend 提供）
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/login/"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    networks:
+      - platform-dev-network
+    restart: unless-stopped
+
+volumes:
+  postgres_dev_data:
+  redis_dev_data:
+  n8n_data:
+
+networks:
+  platform-dev-network:
+    driver: bridge
+    name: platform-dev-network

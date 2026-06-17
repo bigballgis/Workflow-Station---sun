@@ -29,6 +29,8 @@
         <testcontainers.version>2.0.3</testcontainers.version>
         <poi.version>5.4.1</poi.version>
         <minio.version>8.6.0</minio.version>
+        <!-- 仅测试期使用：内存 LDAP 目录服务器，用于验证 LDAP bind/search/同步逻辑（不打入运行时） -->
+        <unboundid.version>7.0.1</unboundid.version>
     </properties>
 
     <dependencyManagement>
@@ -225,6 +227,13 @@
             <groupId>org.testcontainers</groupId>
             <artifactId>testcontainers-postgresql</artifactId>
             <version>${testcontainers.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- 内存 LDAP 目录（仅测试）：LdapClient / 同步 / 映射 的可重复单测，无需真实 AD -->
+        <dependency>
+            <groupId>com.unboundid</groupId>
+            <artifactId>unboundid-ldapsdk</artifactId>
+            <version>${unboundid.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

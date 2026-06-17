@@ -18,6 +18,12 @@ export function errorTranslator(code: AppErrorCode): string {
       return 'login.error.serverError'
     case AppErrorCode.LOGIN_INVALID_CREDENTIALS:
       return 'login.error.invalidCredentials'
+    case AppErrorCode.DSP_DISABLED:
+      return 'login.error.dspDisabled'
+    case AppErrorCode.DSP_NO_TOKEN:
+      return 'login.error.dspNoToken'
+    case AppErrorCode.DSP_FAILED:
+      return 'login.error.dspFailed'
     default:
       return 'login.error.invalidCredentials'
   }

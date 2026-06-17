@@ -1,7 +1,9 @@
 package com.admin.service.impl;
 
+import com.admin.config.AdminAuthProperties;
 import com.admin.dto.request.LoginRequest;
 import com.admin.dto.response.LoginResponse;
+import com.admin.ldap.LdapAuthenticator;
 import com.platform.security.entity.User;
 import com.platform.security.model.UserStatus;
 import com.admin.repository.UserRepository;
@@ -14,6 +16,7 @@ import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,51 +37,27 @@ public class AuthServiceImpl implements AuthService {
     private final com.admin.service.TaskAssignmentQueryService taskAssignmentQueryService;
     private final JwtTokenService jwtTokenService;
     private final JwtProperties jwtProperties;
+    /** LDAP 认证器仅 {@code ldap.enabled=true} 时存在，故用 ObjectProvider 可选注入。 */
+    private final ObjectProvider<LdapAuthenticator> ldapAuthenticatorProvider;
+    private final AdminAuthProperties adminAuthProperties;
 
     @Override
     @Transactional
     public LoginResponse login(LoginRequest request, String ipAddress, String userAgent, HttpServletResponse response) {
         log.debug("Login attempt for user: {}", request.getUsername());
-        
-        User user = userRepository.findByUsername(request.getUsername())
-                .orElseThrow(() -> {
-                    log.warn("User not found: {}", request.getUsername());
-                    return new RuntimeException("Invalid username or password");
-                });
-        
-        if (user.getStatus() == UserStatus.LOCKED) {
-            log.warn("Account locked: {}", request.getUsername());
-            throw new RuntimeException("Account is locked");
-        }
-        
-        if (user.getStatus() == UserStatus.INACTIVE) {
-            log.warn("Account disabled: {}", request.getUsername());
-            throw new RuntimeException("Account is disabled");
-        }
-        
-        if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
-            log.warn("Invalid password for user: {}", request.getUsername());
-            user.incrementFailedLoginCount();
-            
-            if (user.getFailedLoginCount() >= 5) {
-                user.setStatus(UserStatus.LOCKED);
-                user.setLockedUntil(LocalDateTime.now().plusMinutes(30));
-            }
-            userRepository.save(user);
-            throw new RuntimeException("Invalid username or password");
-        }
-        
+
+        // LDAP 为权威源：优先走 LDAP bind 认证（成功即 JIT 回写 sys_users）；
+        // LDAP 关闭 / 用户不在 LDAP / LDAP 不可用时回退本地账号密码。
+        User user = authenticate(request);
+
+        // JIT 后仍按 sys_users 状态做最终拦截（LDAP lockoutTime 已推导为 LOCKED/INACTIVE）
+        assertAccountActive(user, request.getUsername());
+
         // Align with refresh / platform-security: UserRoleService (sys_role_assignments + virtual group members)
         List<String> userRoleCodes = userRoleService.getEffectiveRoleCodesForUser(user.getId());
-        
-        boolean hasAdminAccess = userRoleCodes.stream()
-                .anyMatch(code -> "SYS_ADMIN".equals(code) || "AUDITOR".equals(code));
-        
-        if (!hasAdminAccess) {
-            log.warn("User {} does not have admin center access. Roles: {}", request.getUsername(), userRoleCodes);
-            throw new RuntimeException("You do not have access to Admin Center");
-        }
-        
+
+        ensureAdminAccess(user, userRoleCodes);
+
         user.resetFailedLoginCount();
         user.setLastLoginAt(LocalDateTime.now());
         user.setLastLoginIp(ipAddress);
@@ -145,12 +124,7 @@ public class AuthServiceImpl implements AuthService {
         }
 
         List<String> userRoleCodes = userRoleService.getEffectiveRoleCodesForUser(user.getId());
-        boolean hasAdminAccess = userRoleCodes.stream()
-                .anyMatch(code -> "SYS_ADMIN".equals(code) || "AUDITOR".equals(code));
-        if (!hasAdminAccess) {
-            log.warn("User {} has no admin center access for SSO. Roles: {}", user.getUsername(), userRoleCodes);
-            throw new RuntimeException("You do not have access to Admin Center");
-        }
+        ensureAdminAccess(user, userRoleCodes);
 
         user.resetFailedLoginCount();
         user.setLastLoginAt(LocalDateTime.now());
@@ -330,6 +304,101 @@ public class AuthServiceImpl implements AuthService {
         log.info("Password changed for user {}", user.getUsername());
     }
     
+    /**
+     * 认证用户：LDAP 优先（权威源），失败语义决定是否回退本地。
+     *
+     * <ul>
+     *   <li>AUTHENTICATED：LDAP bind 通过且已 JIT，按 userId 取回库内用户。</li>
+     *   <li>NOT_IN_LDAP / UNAVAILABLE：回退本地账号密码（兼容本地管理员/LDAP 故障）。</li>
+     *   <li>BAD_CREDENTIALS：用户在 LDAP 但口令错误——权威拒绝，不回退（记一次本地失败计数）。</li>
+     * </ul>
+     */
+    private User authenticate(LoginRequest request) {
+        LdapAuthenticator ldap = ldapAuthenticatorProvider.getIfAvailable();
+        if (ldap != null) {
+            LdapAuthenticator.LdapAuthResult result =
+                    ldap.authenticate(request.getUsername(), request.getPassword());
+            if (result.isAuthenticated()) {
+                return userRepository.findById(result.userId())
+                        .orElseThrow(() -> new RuntimeException("Invalid username or password"));
+            }
+            if (!result.shouldFallbackToLocal()) {
+                log.warn("LDAP rejected credentials for user: {}", request.getUsername());
+                recordLocalFailure(request.getUsername());
+                throw new RuntimeException("Invalid username or password");
+            }
+            log.debug("LDAP fallback to local for user: {} (outcome={})",
+                    request.getUsername(), result.outcome());
+        }
+        return authenticateLocal(request);
+    }
+
+    /** 本地账号密码认证（含失败计数与连续失败锁定）。 */
+    private User authenticateLocal(LoginRequest request) {
+        User user = userRepository.findByUsername(request.getUsername())
+                .orElseThrow(() -> {
+                    log.warn("User not found: {}", request.getUsername());
+                    return new RuntimeException("Invalid username or password");
+                });
+
+        assertAccountActive(user, request.getUsername());
+
+        if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
+            log.warn("Invalid password for user: {}", request.getUsername());
+            user.incrementFailedLoginCount();
+            if (user.getFailedLoginCount() >= 5) {
+                user.setStatus(UserStatus.LOCKED);
+                user.setLockedUntil(LocalDateTime.now().plusMinutes(30));
+            }
+            userRepository.save(user);
+            throw new RuntimeException("Invalid username or password");
+        }
+        return user;
+    }
+
+    /** LDAP 拒绝时，对已存在的本地用户记一次失败计数（保留暴力破解防护），用户不存在则忽略。 */
+    private void recordLocalFailure(String username) {
+        userRepository.findByUsername(username).ifPresent(user -> {
+            user.incrementFailedLoginCount();
+            if (user.getFailedLoginCount() >= 5) {
+                user.setStatus(UserStatus.LOCKED);
+                user.setLockedUntil(LocalDateTime.now().plusMinutes(30));
+            }
+            userRepository.save(user);
+        });
+    }
+
+    /** 账号状态拦截：LOCKED / INACTIVE 直接拒绝。 */
+    private void assertAccountActive(User user, String username) {
+        if (user.getStatus() == UserStatus.LOCKED) {
+            log.warn("Account locked: {}", username);
+            throw new RuntimeException("Account is locked");
+        }
+        if (user.getStatus() == UserStatus.INACTIVE) {
+            log.warn("Account disabled: {}", username);
+            throw new RuntimeException("Account is disabled");
+        }
+    }
+
+    /**
+     * Admin Center 访问校验：需具备 SYS_ADMIN 或 AUDITOR。
+     *
+     * <p>{@code admin.auth.developer-bypass-role-check=true} 时跳过（仅本地联调，默认关闭）。</p>
+     */
+    private void ensureAdminAccess(User user, List<String> userRoleCodes) {
+        if (adminAuthProperties.isDeveloperBypassRoleCheck()) {
+            log.warn("DEV BYPASS enabled: skipping Admin Center role check for user {} (admin.auth.developer-bypass-role-check=true)",
+                    user.getUsername());
+            return;
+        }
+        boolean hasAdminAccess = userRoleCodes.stream()
+                .anyMatch(code -> "SYS_ADMIN".equals(code) || "AUDITOR".equals(code));
+        if (!hasAdminAccess) {
+            log.warn("User {} does not have admin center access. Roles: {}", user.getUsername(), userRoleCodes);
+            throw new RuntimeException("You do not have access to Admin Center");
+        }
+    }
+
     private List<LoginResponse.RoleWithSource> buildRolesWithSources(List<UserEffectiveRole> effectiveRoles) {
         List<LoginResponse.RoleWithSource> result = new ArrayList<>();
         

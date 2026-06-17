@@ -165,6 +165,8 @@ if (-not $SkipFrontend) {
                     npm install --prefer-offline --no-audit 2>&1 | Out-Null
                     if ($LASTEXITCODE -ne 0) { Pop-Location; Write-Fail "npm install failed: $($svc.Name)" }
                 }
+                # Remove auto-generated dts files before build to avoid Windows file locking (errno -4094)
+                Remove-Item -Path "src/components.d.ts", "src/auto-imports.d.ts" -Force -ErrorAction SilentlyContinue
                 npx vite build
                 if ($LASTEXITCODE -ne 0) { Pop-Location; Write-Fail "vite build failed: $($svc.Name)" }
             } finally {
