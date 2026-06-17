@@ -6,7 +6,7 @@ Hand-maintained SQL init for Function Unit `Multi-Instance Subtask Demo` (`fu-20
 
 | File | Purpose |
 |---|---|
-| `00-init-kk.sql` | Full idempotent init: cleanup + INSERT snapshot (exported from dev DB) |
+| `00-init-kk.sql` | Full idempotent init: cleanup + INSERT snapshot (exported from dev DB; includes `dw_main_table_view_*`) |
 | `01-add-save-action.sql` | Standalone SAVE action patch (legacy; already in `00-init-kk.sql`) |
 | `02-add-subtask-progress-fields.sql` | Standalone patch for `task_status` / `task_current_node` (legacy; already in `00-init-kk.sql`) |
 
