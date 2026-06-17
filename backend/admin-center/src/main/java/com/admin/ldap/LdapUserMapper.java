@@ -59,8 +59,7 @@ public class LdapUserMapper {
                         attrs.get(names.getIntlTelNumber()))))
                 .position(firstNonBlank(
                     attrs.get(names.getTitle()),
-                    attrs.get(names.getWorkRole()),
-                    attrs.get(names.getPostalAddress())))
+                    attrs.get(names.getWorkRole())))
                 .entityManagerId(entityManager)
                 .functionManagerId(functionManager)
                 .status(resolveStatus(attrs.get(names.getLockoutTime())))

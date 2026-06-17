@@ -67,13 +67,14 @@ class LdapUserMapperTest {
         assertEquals("AM200", u.getFunctionManagerId());
     }
     @Test
-    @DisplayName("title/workRole 缺失时回退 postalAddress 作为岗位")
-    void positionFallsBackToPostalAddress() {
+    @DisplayName("title/workRole 缺失时 postalAddress 不回填到岗位")
+    void positionDoesNotFallbackToPostalAddress() {
         Map<String, String> attrs = baseAttrs();
         attrs.remove("title");
+        attrs.remove("hsbc-ad-WorkRole");
         attrs.put("postalAddress", "SW Engineer");
         LdapUserData u = newMapper().mapToUser(attrs).orElseThrow();
-        assertEquals("SW Engineer", u.getPosition());
+        assertNull(u.getPosition());
     }
     @Test
     @DisplayName("缺 employeeID → 跳过该条（Optional.empty）")
