@@ -102,23 +102,20 @@ public class DashboardComponent {
         // Overlaps with history inside buildTaskOverviewFromPage (local CPU or light logic)
         CompletableFuture<DashboardOverview.PerformanceOverview> performanceFuture =
                 CompletableFuture.supplyAsync(() -> getPerformanceOverview(userId));
-        CompletableFuture<List<ProcessInfo>> recentProcessesFuture =
-                CompletableFuture.supplyAsync(() -> getRecentProcesses(userId, 5));
 
         DashboardOverview.TaskOverview taskOverview = buildTaskOverviewFromPage(userId, taskPage);
         List<TaskInfo> recentTasks = taskPage.getContent().stream().limit(5).toList();
 
-        CompletableFuture.allOf(processOverviewFuture, performanceFuture, recentProcessesFuture).join();
+        CompletableFuture.allOf(processOverviewFuture, performanceFuture).join();
         DashboardOverview.ProcessOverview processOverview = processOverviewFuture.join();
         DashboardOverview.PerformanceOverview performanceOverview = performanceFuture.join();
-        List<ProcessInfo> recentProcesses = recentProcessesFuture.join();
 
         DashboardOverview built = DashboardOverview.builder()
                 .taskOverview(taskOverview)
                 .processOverview(processOverview)
                 .performanceOverview(performanceOverview)
                 .recentTasks(recentTasks)
-                .recentProcesses(recentProcesses)
+                .recentProcesses(getRecentProcesses(userId, 5))
                 .build();
 
         if (overviewCacheTtlSeconds > 0) {

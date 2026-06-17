@@ -16,11 +16,13 @@ import org.springframework.stereotype.Component;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * "My applications" list / process detail queries and participant checks.
@@ -40,37 +42,39 @@ public class ProcessApplicationQueryComponent {
 
     /**
      * For running processes with incomplete local assignee data, backfill user/candidate ids from engine and persist.
+     *
+     * <p>The per-instance engine task lookup is a network round-trip; doing them sequentially makes the
+     * "my applications" list O(N) HTTP calls in series (slow when a page has many running rows). We fan the
+     * read-only fetches out concurrently, then apply the mutations + saves on the calling thread so JPA
+     * writes keep their original single-threaded semantics.</p>
      */
     private void enrichRunningAssigneesFromEngine(List<ProcessInstance> instances) {
         if (instances == null || instances.isEmpty() || !workflowEngineClient.isAvailable()) {
             return;
         }
-        for (ProcessInstance instance : instances) {
-            if (instance == null || !"RUNNING".equals(instance.getStatus())) {
-                continue;
-            }
-            if (!needsAssigneeEnrichment(instance)) {
-                continue;
-            }
+        List<ProcessInstance> needEnrich = instances.stream()
+                .filter(inst -> inst != null && "RUNNING".equals(inst.getStatus()))
+                .filter(this::needsAssigneeEnrichment)
+                .toList();
+        if (needEnrich.isEmpty()) {
+            return;
+        }
+
+        // Fan out the read-only engine lookups concurrently.
+        Map<ProcessInstance, CompletableFuture<Optional<ProcessAssigneeSnapshot>>> futures = new LinkedHashMap<>();
+        for (ProcessInstance instance : needEnrich) {
+            futures.put(instance, CompletableFuture.supplyAsync(() -> fetchAssigneeSnapshot(instance.getId())));
+        }
+
+        // Apply mutations + persist on the calling thread (preserves prior write ordering / tx behavior).
+        for (Map.Entry<ProcessInstance, CompletableFuture<Optional<ProcessAssigneeSnapshot>>> entry : futures.entrySet()) {
+            ProcessInstance instance = entry.getKey();
             try {
-                Optional<Map<String, Object>> tasksResult =
-                        workflowEngineClient.getProcessInstanceTasks(instance.getId());
-                if (tasksResult.isEmpty()) {
+                Optional<ProcessAssigneeSnapshot> snapshotOpt = entry.getValue().join();
+                if (snapshotOpt.isEmpty()) {
                     continue;
                 }
-                Map<String, Object> tasksData = tasksResult.get();
-                if (tasksData == null) {
-                    continue;
-                }
-                @SuppressWarnings("unchecked")
-                List<Map<String, Object>> tasks = (List<Map<String, Object>>) tasksData.get("tasks");
-                if (tasks == null || tasks.isEmpty()) {
-                    continue;
-                }
-                ProcessAssigneeSnapshot snapshot = ProcessAssigneeSnapshot.fromEngineTask(tasks.get(0));
-                if (snapshot.getAssigneeUserId() == null && snapshot.getCandidateUserIds() == null) {
-                    continue;
-                }
+                ProcessAssigneeSnapshot snapshot = snapshotOpt.get();
                 instance.setCurrentAssignee(snapshot.getAssigneeUserId());
                 instance.setCandidateUsers(snapshot.getCandidateUserIds());
                 processInstanceRepository.save(instance);
@@ -80,6 +84,34 @@ public class ProcessApplicationQueryComponent {
                 log.warn("Failed to enrich assignee from engine for process {}: {}",
                         instance.getId(), e.getMessage());
             }
+        }
+    }
+
+    /**
+     * Read-only engine lookup of the current task assignee snapshot for a process instance.
+     * Returns empty if the engine has no usable assignee/candidate data (caller skips the row).
+     */
+    private Optional<ProcessAssigneeSnapshot> fetchAssigneeSnapshot(String processInstanceId) {
+        try {
+            Optional<Map<String, Object>> tasksResult =
+                    workflowEngineClient.getProcessInstanceTasks(processInstanceId);
+            if (tasksResult.isEmpty() || tasksResult.get() == null) {
+                return Optional.empty();
+            }
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> tasks = (List<Map<String, Object>>) tasksResult.get().get("tasks");
+            if (tasks == null || tasks.isEmpty()) {
+                return Optional.empty();
+            }
+            ProcessAssigneeSnapshot snapshot = ProcessAssigneeSnapshot.fromEngineTask(tasks.get(0));
+            if (snapshot.getAssigneeUserId() == null && snapshot.getCandidateUserIds() == null) {
+                return Optional.empty();
+            }
+            return Optional.of(snapshot);
+        } catch (Exception e) {
+            log.warn("Failed to fetch assignee snapshot from engine for process {}: {}",
+                    processInstanceId, e.getMessage());
+            return Optional.empty();
         }
     }
 
@@ -299,6 +331,15 @@ public class ProcessApplicationQueryComponent {
         }
         if (hasSubTables) {
             subTableEnrichmentComponent.enrichSubTablesWithAssignmentData(info, miProgress);
+        }
+
+        // Request ID for the detail Basic Info (same derivation as the list); computed from the
+        // process variables which are still present on the detail DTO.
+        if (info.getFunctionUnitCode() != null) {
+            RequestIdEnricher.SpecCache specs = requestIdEnricher.resolveSpecs(
+                    java.util.Set.of(info.getFunctionUnitCode()));
+            info.setRequestId(requestIdEnricher.buildRequestId(
+                    specs, info.getFunctionUnitCode(), info.getVariables()));
         }
 
         return info;

@@ -50,7 +50,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useTaskStore } from '@/stores/task'
@@ -70,14 +70,30 @@ const taskStore = useTaskStore()
 const currentDate = ref(new Date())
 const tasks = ref<CalendarTask[]>([])
 
+// 按日期预分组一次，日历每格用 O(1) 查表替代对全量任务逐格 filter
+// （date-cell 模板每格会调 hasTasksOnDate + getTasksOnDate 两次，约 35 格）。
+const tasksByDate = computed(() => {
+  const map = new Map<string, CalendarTask[]>()
+  for (const task of tasks.value) {
+    if (!task.dueDate) continue
+    const list = map.get(task.dueDate)
+    if (list) {
+      list.push(task)
+    } else {
+      map.set(task.dueDate, [task])
+    }
+  }
+  return map
+})
+
 // 获取指定日期的任务
 const getTasksOnDate = (dateStr: string) => {
-  return tasks.value.filter(task => task.dueDate === dateStr)
+  return tasksByDate.value.get(dateStr) ?? []
 }
 
 // 检查日期是否有任务
 const hasTasksOnDate = (dateStr: string) => {
-  return getTasksOnDate(dateStr).length > 0
+  return tasksByDate.value.has(dateStr)
 }
 
 // 选中日期的任务

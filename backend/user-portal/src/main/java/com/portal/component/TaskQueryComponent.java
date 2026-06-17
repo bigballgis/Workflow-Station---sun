@@ -521,6 +521,10 @@ public class TaskQueryComponent {
                     }
                     // When rawActionIds == null, do not set actions; keep null to indicate no Actions configured on this node
 
+                    // Request ID for the detail Basic Info (same derivation as the list); runs after
+                    // variables are merged above so the configured fields are available.
+                    requestIdEnricher.enrichTaskRequestIds(java.util.List.of(taskInfo));
+
                     return Optional.of(taskInfo);
                 }
             }

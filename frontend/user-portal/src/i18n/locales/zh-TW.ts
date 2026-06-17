@@ -399,6 +399,7 @@ export default {
     refresh: '重新整理',
     applicationDetail: '申請詳情',
     basicInfo: '基本資訊',
+    requestId: 'Request ID',
     processTitle: '流程標題',
     processType: '流程類型',
     initiator: '發起人',

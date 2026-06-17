@@ -261,8 +261,10 @@ public class TaskHistoryComponent {
 
                 List<TaskInfo> tasks = new ArrayList<>();
                 if (content != null) {
+                    // Batch-fetch process definition names once (avoids one findById per task row).
+                    Map<String, String> processNameById = resolveProcessNamesForCompletedTasks(content);
                     for (Map<String, Object> taskMap : content) {
-                        tasks.add(convertCompletedTaskToTaskInfo(taskMap));
+                        tasks.add(convertCompletedTaskToTaskInfo(taskMap, processNameById));
                     }
                 }
 
@@ -314,25 +316,52 @@ public class TaskHistoryComponent {
     }
 
     /**
-     * Convert a completed task Map to TaskInfo.
+     * Batch-resolve the local function-unit process names for a page of completed tasks.
+     * One {@code findAllById} instead of a per-row {@code findById} (N+1 avoidance).
      */
-    private TaskInfo convertCompletedTaskToTaskInfo(Map<String, Object> taskMap) {
+    private Map<String, String> resolveProcessNamesForCompletedTasks(List<Map<String, Object>> content) {
+        Set<String> ids = new HashSet<>();
+        for (Map<String, Object> taskMap : content) {
+            String pid = EngineTaskMapper.engineStringField(taskMap.get("processInstanceId"));
+            if (pid != null && !pid.isEmpty()) {
+                ids.add(pid);
+            }
+        }
+        if (ids.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Map<String, String> nameById = new java.util.HashMap<>();
+        try {
+            for (ProcessInstance pi : processInstanceRepository.findAllById(ids)) {
+                if (pi.getProcessDefinitionName() != null) {
+                    nameById.put(pi.getId(), pi.getProcessDefinitionName());
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to batch-resolve process definition names for {} completed tasks: {}",
+                    ids.size(), e.getMessage());
+        }
+        return nameById;
+    }
+
+    /**
+     * Convert a completed task Map to TaskInfo.
+     *
+     * @param processNameById local function-unit names keyed by processInstanceId (batch-resolved by the caller)
+     */
+    private TaskInfo convertCompletedTaskToTaskInfo(Map<String, Object> taskMap, Map<String, String> processNameById) {
         String processDefinitionKey = (String) taskMap.get("processDefinitionKey");
         String processDefinitionName = (String) taskMap.get("processDefinitionName");
         if (processDefinitionName == null || processDefinitionName.isEmpty()) {
             processDefinitionName = processDefinitionKey;
         }
 
-        // Look up the actual function unit name from up_process_instance by processInstanceId, overriding the BPMN name returned by Flowable
+        // Override the BPMN name returned by Flowable with the local function-unit name (batch-resolved, no per-row query).
         String processInstanceId = EngineTaskMapper.engineStringField(taskMap.get("processInstanceId"));
         if (processInstanceId != null && !processInstanceId.isEmpty()) {
-            try {
-                Optional<ProcessInstance> instanceOpt = processInstanceRepository.findById(processInstanceId);
-                if (instanceOpt.isPresent() && instanceOpt.get().getProcessDefinitionName() != null) {
-                    processDefinitionName = instanceOpt.get().getProcessDefinitionName();
-                }
-            } catch (Exception e) {
-                log.warn("Failed to get process definition name from up_process_instance for {}: {}", processInstanceId, e.getMessage());
+            String localName = processNameById.get(processInstanceId);
+            if (localName != null) {
+                processDefinitionName = localName;
             }
         }
 

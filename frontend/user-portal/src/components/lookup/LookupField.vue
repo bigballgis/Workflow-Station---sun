@@ -35,34 +35,41 @@
       disabled
     />
 
-    <div
-      v-if="dropdownVisible"
-      class="lookup-dropdown"
-    >
-      <el-table
-        v-loading="loading"
-        :data="filteredResults"
-        size="small"
-        highlight-current-row
-        max-height="260"
-        @row-click="handleSelect"
+    <!-- Teleport to body so the dropdown is never clipped/occluded by following form cards
+         (the field's own .form-layout-card creates a stacking context that z-index can't escape). -->
+    <Teleport to="body">
+      <div
+        v-if="dropdownVisible"
+        ref="dropdownRef"
+        class="lookup-dropdown lookup-dropdown--floating"
+        :style="dropdownStyle"
       >
-        <el-table-column
-          v-for="col in visibleColumns"
-          :key="col.prop"
-          :prop="col.prop"
-          :label="col.label"
-          :min-width="col.width || 120"
-          show-overflow-tooltip
-        />
-      </el-table>
-    </div>
+        <el-table
+          v-loading="loading"
+          :data="filteredResults"
+          size="small"
+          highlight-current-row
+          max-height="260"
+          @row-click="handleSelect"
+        >
+          <el-table-column
+            v-for="col in visibleColumns"
+            :key="col.prop"
+            :prop="col.prop"
+            :label="col.label"
+            :min-width="col.width || 120"
+            show-overflow-tooltip
+          />
+        </el-table>
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
-import { Search, Close } from '@element-plus/icons-vue'
+import { useZIndex } from 'element-plus'
+import { Close } from '@element-plus/icons-vue'
 import { relationTableApi } from '@/api/relationTable'
 import { fetchLookupRowByPrimaryKey } from './fetchLookupRowByPrimaryKey'
 import { getLookupSelectedDisplayFieldFromProps, resolveLookupCellTagText } from '../subTableAddDialogHelpers'
@@ -102,7 +109,11 @@ const emit = defineEmits<{
 }>()
 
 const wrapperRef = ref<HTMLElement>()
+const dropdownRef = ref<HTMLElement>()
 const dropdownVisible = ref(false)
+// Floating dropdown position (teleported to body, position: fixed) — recomputed from the
+// field's viewport rect on open and on scroll/resize so it tracks the input.
+const dropdownStyle = ref<Record<string, string>>({})
 const searchKeyword = ref('')
 const selectedRow = ref<Record<string, any> | null>(null)
 const allRows = ref<Record<string, any>[]>([])
@@ -175,9 +186,31 @@ async function loadAllData() {
   }
 }
 
+const { nextZIndex } = useZIndex()
+const dropdownZIndex = ref(3000)
+
+// Position the teleported dropdown under the field using its viewport rect.
+function updateDropdownPosition() {
+  const el = wrapperRef.value
+  if (!el) return
+  const r = el.getBoundingClientRect()
+  dropdownStyle.value = {
+    position: 'fixed',
+    top: `${r.bottom + 4}px`,
+    left: `${r.left}px`,
+    width: `${r.width}px`,
+    zIndex: String(dropdownZIndex.value),
+  }
+}
+
 function handleFocus() {
   if (props.readonly) return
+  // Take a fresh z-index from Element Plus's shared counter so the dropdown sits above the current
+  // top overlay — critical when the lookup is rendered inside an el-dialog (Add Record), whose
+  // overlay z-index would otherwise cover a fixed-z dropdown.
+  dropdownZIndex.value = nextZIndex()
   dropdownVisible.value = true
+  updateDropdownPosition()
   loadAllData()
 }
 
@@ -285,13 +318,15 @@ function getDisplayValue(row: Record<string, any>) {
   return resolveLookupCellTagText(props, row)
 }
 
-// Watch for external modelValue changes (e.g. form data loaded after mount)
+// Watch for external modelValue changes (e.g. form data loaded after mount).
+// Lookup values change by wholesale replacement (select → new object, clear → null);
+// initFromModelValue re-derives from the value as a whole, so a shallow (reference) watch suffices.
 watch(
   () => props.modelValue,
   val => {
     initFromModelValue(val)
   },
-  { immediate: true, deep: true },
+  { immediate: true },
 )
 
 watch(
@@ -316,13 +351,27 @@ watch(
 )
 
 function onClickOutside(e: MouseEvent) {
-  if (wrapperRef.value && !wrapperRef.value.contains(e.target as Node)) {
+  const target = e.target as Node
+  // Dropdown is teleported to body, so a click on a result row is "outside" the wrapper —
+  // treat clicks inside either the wrapper or the floating dropdown as inside.
+  const insideWrapper = wrapperRef.value?.contains(target)
+  const insideDropdown = dropdownRef.value?.contains(target)
+  if (!insideWrapper && !insideDropdown) {
     dropdownVisible.value = false
+  }
+}
+
+// Keep the floating dropdown aligned while it's open; close on far scroll is acceptable but we just reposition.
+function onViewportChange() {
+  if (dropdownVisible.value) {
+    updateDropdownPosition()
   }
 }
 
 onMounted(() => {
   document.addEventListener('mousedown', onClickOutside)
+  window.addEventListener('scroll', onViewportChange, true)
+  window.addEventListener('resize', onViewportChange)
 
   // Eagerly load view fields so LookupViewDisplay can show them after selection
   if (props.tableId && !effectiveViewFields.value.length) {
@@ -337,7 +386,11 @@ onMounted(() => {
     emit('viewFieldsLoaded', effectiveViewFields.value as LookupViewField[])
   }
 })
-onBeforeUnmount(() => document.removeEventListener('mousedown', onClickOutside))
+onBeforeUnmount(() => {
+  document.removeEventListener('mousedown', onClickOutside)
+  window.removeEventListener('scroll', onViewportChange, true)
+  window.removeEventListener('resize', onViewportChange)
+})
 
 defineExpose({ effectiveViewFields })
 </script>
@@ -414,17 +467,17 @@ defineExpose({ effectiveViewFields })
   .lookup-input {
     width: 100%;
   }
+}
+</style>
 
-  .lookup-dropdown {
-    position: absolute;
-    z-index: 2050;
-    left: 0;
-    right: 0;
-    margin-top: 4px;
-    background: #fff;
-    border: 1px solid #dcdfe6;
-    border-radius: 4px;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
-  }
+<!-- Floating dropdown is teleported to <body>, so its styles must be global (scoped styles
+     would not reach it). z-index above form cards / dialogs; position is set inline. -->
+<style lang="scss">
+.lookup-dropdown--floating {
+  z-index: 3000;
+  background: #fff;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
 }
 </style>

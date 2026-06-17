@@ -10,6 +10,7 @@ import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * 权限申请展示字段填充与字符串工具。
@@ -39,13 +40,7 @@ public class PermissionRequestEnrichmentComponent {
                 ids.add(r.getSubmittedByUserId().trim());
             }
         }
-        Map<String, Map<String, Object>> userById = new HashMap<>();
-        for (String id : ids) {
-            Map<String, Object> info = roleAccessComponent.getUserById(id);
-            if (info != null) {
-                userById.put(id, info);
-            }
-        }
+        Map<String, Map<String, Object>> userById = resolveUsersByIds(ids);
         for (PermissionRequest r : requests) {
             Map<String, Object> ainfo = userById.get(r.getApplicantId());
             if (ainfo != null) {
@@ -85,13 +80,7 @@ public class PermissionRequestEnrichmentComponent {
                 ids.add(r.getSubmittedByUserId().trim());
             }
         }
-        Map<String, Map<String, Object>> userById = new HashMap<>();
-        for (String id : ids) {
-            Map<String, Object> info = roleAccessComponent.getUserById(id);
-            if (info != null) {
-                userById.put(id, info);
-            }
-        }
+        Map<String, Map<String, Object>> userById = resolveUsersByIds(ids);
         for (PermissionRequestListItem r : items) {
             Map<String, Object> ainfo = userById.get(r.getApplicantId());
             if (ainfo != null) {
@@ -116,6 +105,34 @@ public class PermissionRequestEnrichmentComponent {
                 }
             }
         }
+    }
+
+    /**
+     * Resolve user display info for a set of ids. Each lookup is a remote HTTP call to admin-center;
+     * fan them out concurrently so an approval page with many distinct applicants costs ~1 round-trip
+     * of wall time instead of N sequential ones. admin-center has no batch users-by-ids endpoint yet —
+     * when it does, replace this with a single batch call.
+     */
+    private Map<String, Map<String, Object>> resolveUsersByIds(LinkedHashSet<String> ids) {
+        Map<String, Map<String, Object>> userById = new HashMap<>();
+        if (ids.isEmpty()) {
+            return userById;
+        }
+        Map<String, CompletableFuture<Map<String, Object>>> futures = new HashMap<>();
+        for (String id : ids) {
+            futures.put(id, CompletableFuture.supplyAsync(() -> roleAccessComponent.getUserById(id)));
+        }
+        for (Map.Entry<String, CompletableFuture<Map<String, Object>>> e : futures.entrySet()) {
+            try {
+                Map<String, Object> info = e.getValue().join();
+                if (info != null) {
+                    userById.put(e.getKey(), info);
+                }
+            } catch (Exception ex) {
+                log.warn("Failed to resolve user {}: {}", e.getKey(), ex.getMessage());
+            }
+        }
+        return userById;
     }
 
     public String nonBlankString(Object v) {

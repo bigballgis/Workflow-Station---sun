@@ -9,6 +9,12 @@
         :column="3"
         border
       >
+        <el-descriptions-item
+          v-if="taskInfo.requestId"
+          :label="$t('task.requestId')"
+        >
+          {{ taskInfo.requestId }}
+        </el-descriptions-item>
         <el-descriptions-item :label="$t('task.taskName')">
           {{ taskInfo.taskName || $t('common.empty') }}
         </el-descriptions-item>

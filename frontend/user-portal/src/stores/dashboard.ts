@@ -7,14 +7,24 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const widgets = ref<DashboardWidget[]>([])
   const loading = ref(false)
 
-  const fetchOverview = async () => {
+  // Concurrent-call dedupe: multiple dashboard widgets call fetchOverview() on
+  // mount; without this each would fire its own identical request. Reuse the
+  // in-flight promise so the endpoint is hit once per dashboard load.
+  let overviewInFlight: Promise<void> | null = null
+
+  const fetchOverview = (): Promise<void> => {
+    if (overviewInFlight) return overviewInFlight
     loading.value = true
-    try {
-      const res = await dashboardApi.getOverview()
-      overview.value = res.data
-    } finally {
-      loading.value = false
-    }
+    overviewInFlight = (async () => {
+      try {
+        const res = await dashboardApi.getOverview()
+        overview.value = res.data
+      } finally {
+        loading.value = false
+        overviewInFlight = null
+      }
+    })()
+    return overviewInFlight
   }
 
   const fetchWidgets = async () => {
