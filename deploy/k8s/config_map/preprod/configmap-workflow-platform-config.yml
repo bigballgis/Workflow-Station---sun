@@ -85,7 +85,7 @@ data:
   # 默认关闭：各环境确认连通后再置 true（开发跳过角色校验生产恒为 false）。
   ADMIN_DEV_BYPASS_ROLE_CHECK: "false"
   LDAP_ENABLED: "true"
-   LDAP_PROVIDER_URL: "ldaps://aa-lds-prod.hk.hsbc:3269"
+  LDAP_PROVIDER_URL: "ldaps://aa-lds-prod.hk.hsbc:3269"
   LDAP_BASE_DN: "OU=HSBCPeople,DC=InfoDir,DC=Prod,DC=HSBC"
   LDAP_BIND_DN: "CN=HK-SVCA-HERMES,OU=Service Accounts,DC=InfoDir,DC=Prod,DC=HSBC"
   LDAP_TLS: "true"
