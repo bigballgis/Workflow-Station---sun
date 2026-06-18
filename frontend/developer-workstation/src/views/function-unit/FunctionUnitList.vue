@@ -161,7 +161,7 @@
           v-for="item in filteredList"
           :key="item.id"
           :item="item"
-          :tags="getItemTags(item.id)"
+          :tags="getItemTags(item)"
           @click="handleEdit"
           @edit="handleEdit"
           @settings="handleSettings"
@@ -332,9 +332,14 @@ const pagination = reactive({ page: 1, size: 20 })
 const showImportDialog = ref(false)
 
 const storeList = computed(() => store.list)
+const storeAllTags = computed(() => store.allTags)
 
 function loadData() {
-  store.fetchList({ page: pagination.page - 1, size: pagination.size })
+  store.fetchList({
+    tags: searchForm.tags.length > 0 ? searchForm.tags : undefined,
+    page: pagination.page - 1,
+    size: pagination.size,
+  })
 }
 
 const {
@@ -346,7 +351,9 @@ const {
   clearFilters,
 } = useFunctionUnitFilters({
   list: storeList,
+  allTags: storeAllTags,
   resetPage: () => { pagination.page = 1 },
+  reload: loadData,
 })
 
 const {
@@ -423,6 +430,7 @@ onMounted(() => {
   // Check if logged in
   if (isAuthenticated()) {
     loadData()
+    store.fetchAllTags()
   } else {
     // Not logged in, route guard should have redirected, but just in case
     redirectToUnifiedLogin('developer-workstation')

@@ -13,6 +13,8 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /**
  * Function Unit entity
@@ -43,6 +45,12 @@ public class FunctionUnit {
     
     @Column(name = "display_name", columnDefinition = "TEXT")
     private String displayName;
+
+    /** 用户自定义标签（JSON 字符串数组），用于 Developer Workstation 列表筛选。 */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "tags", nullable = false, columnDefinition = "jsonb")
+    @Builder.Default
+    private List<String> tags = new ArrayList<>();
     
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "icon_id")

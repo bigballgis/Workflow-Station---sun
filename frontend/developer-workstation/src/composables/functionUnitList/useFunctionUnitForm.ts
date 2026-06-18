@@ -3,7 +3,7 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage, type FormInstance } from 'element-plus'
 import type { FunctionUnitResponse } from '@/api/functionUnit'
 import type { useFunctionUnitStore } from '@/stores/functionUnit'
-import { getTags, setTags } from '@/utils/tagStorage'
+import { normalizeTags } from '@/utils/tagStorage'
 
 type FunctionUnitStore = ReturnType<typeof useFunctionUnitStore>
 
@@ -61,7 +61,7 @@ export function useFunctionUnitForm(options: UseFunctionUnitFormOptions) {
     basicForm.name = item.name
     basicForm.description = item.description ?? ''
     basicForm.iconId = item.iconId ?? null
-    basicForm.tags = [...getTags(item.id)]
+    basicForm.tags = [...normalizeTags(item.tags)]
     showFormDialog.value = true
   }
 
@@ -69,25 +69,24 @@ export function useFunctionUnitForm(options: UseFunctionUnitFormOptions) {
     await formRef.value?.validate()
     formSubmitting.value = true
     try {
+      const desc = basicForm.description?.trim()
       const payload = {
         name: basicForm.name.trim(),
-        description: basicForm.description?.trim() || undefined,
-        iconId: basicForm.iconId ?? undefined
+        description: desc || undefined,
+        iconId: basicForm.iconId ?? undefined,
+        tags: normalizeTags(basicForm.tags),
       }
       if (formDialogMode.value === 'create') {
-        const result = await store.create(payload)
-        if (result) {
-          setTags(result.id, basicForm.tags)
-        }
+        await store.create(payload)
         ElMessage.success(t('functionUnit.createSuccess'))
       } else if (settingsItemId.value != null) {
         await store.update(settingsItemId.value, payload)
-        setTags(settingsItemId.value, basicForm.tags)
         ElMessage.success(t('functionUnit.saveSuccess'))
       }
       showFormDialog.value = false
       resetBasicForm()
       reload()
+      store.fetchAllTags()
     } catch (e: unknown) {
       const message = (e as { response?: { data?: { message?: string } } })?.response?.data?.message
       ElMessage.error(message || t('functionUnit.saveFailed'))

@@ -7,6 +7,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 /**
  * 功能单元请求DTO
  */
@@ -23,4 +25,7 @@ public class FunctionUnitRequest {
     private String description;
     
     private Long iconId;
+
+    /** 用户自定义标签（最多 20 个，每项最长 50 字符）。 */
+    private List<String> tags;
 }
