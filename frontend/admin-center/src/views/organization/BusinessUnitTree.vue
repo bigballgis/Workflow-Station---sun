@@ -162,6 +162,7 @@
                 <el-scrollbar>
                   <el-table
                     :data="businessUnitMembers"
+                    v-loading="membersLoading"
                     stripe
                     size="small"
                     :show-header="businessUnitMembers.length > 0"
@@ -307,6 +308,7 @@ const {
   currentBusinessUnit,
   parentBusinessUnit,
   filterNode,
+  membersLoading,
   fetchMembers,
   fetchApprovers,
   handleNodeClick,

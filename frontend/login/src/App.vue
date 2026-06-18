@@ -58,7 +58,7 @@
               type="submit"
               class="login-btn"
               :disabled="loading"
-            >
+              :class="{ 'is-loading': loading }">
               {{ loading ? $t('login.submitting') : $t('login.submit') }}
             </button>
           </div>

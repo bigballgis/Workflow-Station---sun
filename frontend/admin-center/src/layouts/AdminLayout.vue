@@ -275,20 +275,18 @@ $main-bg: #f5f7fa;
     }
 
     :deep(.el-menu-item.is-active) {
-      background-color: rgba($primary-color, 0.12);
-      color: $primary-color;
-      font-weight: 500;
+      background-color: rgba(219, 0, 17, 0.1);
+      color: #DB0011;
+      font-weight: 600;
 
       &::before {
         content: '';
         position: absolute;
         left: 0;
-        top: 50%;
-        transform: translateY(-50%);
+        top: 0;
+        bottom: 0;
         width: 3px;
-        height: 24px;
-        background-color: $primary-color;
-        border-radius: 0 3px 3px 0;
+        background-color: #DB0011;
       }
     }
 

@@ -227,7 +227,7 @@ public class AuthController {
     }
 
     @GetMapping("/me")
-    public ResponseEntity<LoginResponse.UserLoginInfo> getCurrentUser(@RequestHeader("Authorization") String authHeader) {
+    public ResponseEntity<LoginResponse.UserLoginInfo> getCurrentUser(@RequestHeader(value = "Authorization", required = false) String authHeader) {
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             return ResponseEntity.status(401).build();
         }
@@ -261,7 +261,7 @@ public class AuthController {
     }
 
     @GetMapping("/workspace-contexts")
-    public ResponseEntity<List<Map<String, String>>> listWorkspaceContexts(@RequestHeader("Authorization") String authHeader) {
+    public ResponseEntity<List<Map<String, String>>> listWorkspaceContexts(@RequestHeader(value = "Authorization", required = false) String authHeader) {
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             return ResponseEntity.status(401).build();
         }
