@@ -195,7 +195,10 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         }
 
         functionUnit.setName(request.getName());
-        functionUnit.setDisplayName(request.getDescription());
+        // Only update description when explicitly provided (non-null); null means "keep existing"
+        if (request.getDescription() != null) {
+            functionUnit.setDisplayName(request.getDescription());
+        }
         if (request.getTags() != null) {
             functionUnit.setTags(FunctionUnitTagUtils.normalizeTags(request.getTags()));
         }

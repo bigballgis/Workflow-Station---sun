@@ -49,9 +49,10 @@ export function useFunctionUnitSettings(options: UseFunctionUnitSettingsOptions)
     }
     saving.value = true
     try {
+      const desc = editForm.description?.trim()
       await store.update(functionUnitId.value, {
         name: editForm.name.trim(),
-        description: editForm.description?.trim() || undefined,
+        description: desc || undefined,
         iconId: editForm.iconId ?? undefined,
         tags: normalizeTags(editForm.tags),
       })

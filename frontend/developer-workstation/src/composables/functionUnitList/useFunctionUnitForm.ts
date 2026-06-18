@@ -69,9 +69,10 @@ export function useFunctionUnitForm(options: UseFunctionUnitFormOptions) {
     await formRef.value?.validate()
     formSubmitting.value = true
     try {
+      const desc = basicForm.description?.trim()
       const payload = {
         name: basicForm.name.trim(),
-        description: basicForm.description?.trim() || undefined,
+        description: desc || undefined,
         iconId: basicForm.iconId ?? undefined,
         tags: normalizeTags(basicForm.tags),
       }
