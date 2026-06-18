@@ -17,6 +17,7 @@ RUN groupadd --system platform && useradd --system --gid platform --no-create-ho
 
 # Copy layers from least to most frequently changing (uses --chown instead of
 # a separate chown -R, which would duplicate the whole layer)
+COPY --from=extract --chown=platform:platform /extract/app.jar /app/app.jar
 COPY --from=extract --chown=platform:platform /extract/dependencies/ ./
 COPY --from=extract --chown=platform:platform /extract/spring-boot-loader/ ./
 COPY --from=extract --chown=platform:platform /extract/snapshot-dependencies/ ./
@@ -33,4 +34,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 
 EXPOSE 8080
 
-ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -cp /app org.springframework.boot.loader.launch.JarLauncher"]
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar /app/app.jar"]
