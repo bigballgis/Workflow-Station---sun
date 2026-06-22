@@ -350,7 +350,7 @@ if (-not $SkipFrontend) {
 # Step 3: Start infrastructure
 if (-not $SkipInfra) {
     Write-Host "`n[3/4] Starting infrastructure (postgres, redis, kafka, n8n)..." -ForegroundColor Yellow
-    docker compose -f $ComposeFile --env-file $EnvFile up -d postgres redis kafka n8n
+    docker compose -f $ComposeFile --env-file $EnvFile up -d postgres redis kafka n8n kestra
     
     # First boot runs large init-scripts (demo data + Flowable schema); allow more time.
     Wait-ForContainerHealth -ContainerName "platform-postgres-dev" -DisplayName "PostgreSQL" -MaxRetries 180
