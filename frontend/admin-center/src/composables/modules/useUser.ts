@@ -10,7 +10,7 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { notifyConfirm, notifyError, notifySuccess } from '@/utils/notify'
-import type { User } from '@/api/user'
+import type { User, UserQuery } from '@/api/user'
 import { userApi } from '@/api/user'
 import { useUserStore } from '@/stores/user'
 import { extractErrorDetail } from '@/utils/errorTranslator'
@@ -27,8 +27,7 @@ export function useUser() {
   const canDeleteUser = hasPermission(PERMISSIONS.USER_DELETE)
 
   // ==================== Data Fetching ====================
-
-  const fetchFn = async (params: any) => {
+  const fetchFn = async (params: UserQuery) => {
     await store.fetchUsers(params)
     return { content: store.users, totalElements: store.total }
   }
@@ -50,14 +49,19 @@ export function useUser() {
   const currentUserId = ref('')
 
   // ==================== Dialog Actions (UI helpers) ====================
-
+  
   const showCreateDialog = () => {
     currentUser.value = null
     formDialogVisible.value = true
   }
-
-  const showEditDialog = (user: User) => {
-    currentUser.value = user
+  const showEditDialog = async (user: User) => {
+    try {
+      const detail = await userApi.getById(user.id)
+      currentUser.value = detail
+    } catch {
+      // Fallback to row data to keep edit action available even when detail API fails.
+      currentUser.value = user
+    }
     formDialogVisible.value = true
   }
 

@@ -8,44 +8,80 @@ import { AppErrorCode } from '@/types/errors'
 import { errorTranslator } from '@/utils/errorTranslator'
 import { userApi, type User } from '@/api/user'
 import type { FormRules } from 'element-plus'
-
-interface UserData { id: string; username: string; fullName: string; email: string; employeeId?: string; position?: string; entityManagerId?: string; functionManagerId?: string }
-
+interface UserData {
+  id: string
+  username: string
+  fullName: string
+  email: string
+  employeeId?: string
+  position?: string
+  entityManagerId?: string
+  entityManagerName?: string
+  functionManagerId?: string
+  functionManagerName?: string
+}
+const UNRESOLVED_MANAGER_PREFIX = '__unresolved_manager__:'
+const toUnresolvedManagerValue = (name: string) => `${UNRESOLVED_MANAGER_PREFIX}${name}`
+const isUnresolvedManagerValue = (value: string) => value.startsWith(UNRESOLVED_MANAGER_PREFIX)
 export function useUserForm(options: { user: Ref<UserData | null>; onSuccess: () => void }) {
   const { user, onSuccess } = options
   const { t } = useI18n()
   const terr = (code: string) => t(errorTranslator(code))
   const isEdit = computed(() => !!user.value)
-
   const loading = ref(false)
   const userSearchLoading = ref(false)
   const userOptions = ref<{ id: string; fullName: string; username: string }[]>([])
-
   const form = reactive({
     username: '', fullName: '', email: '', employeeId: '', position: '',
     entityManagerId: '', functionManagerId: '', initialPassword: '',
   })
-
+  const ensureUnresolvedManagerOption = (value: string) => {
+    if (!value || !isUnresolvedManagerValue(value)) return
+    if (userOptions.value.some(o => o.id === value)) return
+    const displayName = value.slice(UNRESOLVED_MANAGER_PREFIX.length)
+    userOptions.value.push({ id: value, fullName: displayName, username: '-' })
+  }
+  const resolveManagerValue = (managerId?: string, managerName?: string) => {
+    if (managerId) return managerId
+    if (managerName) return toUnresolvedManagerValue(managerName)
+    return ''
+  }
+  const toSubmitManagerId = (value: string | undefined) => {
+    if (!value || isUnresolvedManagerValue(value)) return undefined
+    return value
+  }
   const rules = computed<FormRules>(() => ({
     username: [{ required: true, message: t('user.usernamePlaceholder'), trigger: 'blur' }, { min: 3, max: 50, message: t('user.usernamePlaceholder'), trigger: 'blur' }],
     fullName: [{ required: true, message: t('user.fullNamePlaceholder'), trigger: 'blur' }],
     email: [{ required: true, message: t('user.emailPlaceholder'), trigger: 'blur' }, { type: 'email', message: t('user.emailPlaceholder'), trigger: 'blur' }],
     initialPassword: [{ required: true, message: t('user.initialPasswordPlaceholder'), trigger: 'blur' }, { min: 8, message: t('user.initialPasswordPlaceholder'), trigger: 'blur' }],
   }))
-
   const initForm = async () => {
     if (user.value) {
       const u = user.value
-      Object.assign(form, { username: u.username, fullName: u.fullName, email: u.email, employeeId: u.employeeId || '', position: u.position || '', entityManagerId: u.entityManagerId || '', functionManagerId: u.functionManagerId || '', initialPassword: '' })
+      Object.assign(form, {
+        username: u.username,
+        fullName: u.fullName,
+        email: u.email,
+        employeeId: u.employeeId || '',
+        position: u.position || '',
+        entityManagerId: resolveManagerValue(u.entityManagerId, u.entityManagerName),
+        functionManagerId: resolveManagerValue(u.functionManagerId, u.functionManagerName),
+        initialPassword: ''
+      })
+      await loadDefaultUsers()
       await loadSelectedManagers()
+      ensureUnresolvedManagerOption(form.entityManagerId)
+      ensureUnresolvedManagerOption(form.functionManagerId)
     } else {
       Object.assign(form, { username: '', fullName: '', email: '', employeeId: '', position: '', entityManagerId: '', functionManagerId: '', initialPassword: '' })
+      await loadDefaultUsers()
     }
-    await loadDefaultUsers()
   }
-
   const loadSelectedManagers = async () => {
-    const ids = [form.entityManagerId, form.functionManagerId].filter(Boolean)
+    const ids = [form.entityManagerId, form.functionManagerId]
+      .filter(Boolean)
+      .filter(id => !isUnresolvedManagerValue(id))
     if (!ids.length) return
     try {
       const managers: { id: string; fullName: string; username: string }[] = []
@@ -54,7 +90,6 @@ export function useUserForm(options: { user: Ref<UserData | null>; onSuccess: ()
       for (const m of managers) { if (!existing.has(m.id)) userOptions.value.push(m) }
     } catch { /* silent */ }
   }
-
   const loadDefaultUsers = async () => {
     userSearchLoading.value = true
     try {
@@ -62,7 +97,6 @@ export function useUserForm(options: { user: Ref<UserData | null>; onSuccess: ()
       userOptions.value = (res.content || []).map((u: User) => ({ id: u.id, fullName: u.fullName, username: u.username }))
     } catch { userOptions.value = [] } finally { userSearchLoading.value = false }
   }
-
   const searchUsers = async (query: string) => {
     if (!query) { await loadDefaultUsers(); return }
     userSearchLoading.value = true
@@ -71,20 +105,34 @@ export function useUserForm(options: { user: Ref<UserData | null>; onSuccess: ()
       userOptions.value = (res.content || []).map((u: User) => ({ id: u.id, fullName: u.fullName, username: u.username }))
     } catch { userOptions.value = [] } finally { userSearchLoading.value = false }
   }
-
   const submit = async () => {
     loading.value = true
     try {
       if (isEdit.value) {
-        await userApi.update(user.value!.id, { fullName: form.fullName, email: form.email, employeeId: form.employeeId || undefined, position: form.position || undefined, entityManagerId: form.entityManagerId || undefined, functionManagerId: form.functionManagerId || undefined })
+        await userApi.update(user.value!.id, {
+          fullName: form.fullName,
+          email: form.email,
+          employeeId: form.employeeId || undefined,
+          position: form.position || undefined,
+          entityManagerId: toSubmitManagerId(form.entityManagerId),
+          functionManagerId: toSubmitManagerId(form.functionManagerId)
+        })
       } else {
-        await userApi.create({ username: form.username, fullName: form.fullName, email: form.email, employeeId: form.employeeId || undefined, position: form.position || undefined, entityManagerId: form.entityManagerId || undefined, functionManagerId: form.functionManagerId || undefined, initialPassword: form.initialPassword })
+        await userApi.create({
+          username: form.username,
+          fullName: form.fullName,
+          email: form.email,
+          employeeId: form.employeeId || undefined,
+          position: form.position || undefined,
+          entityManagerId: toSubmitManagerId(form.entityManagerId),
+          functionManagerId: toSubmitManagerId(form.functionManagerId),
+          initialPassword: form.initialPassword
+        })
       }
       notifySuccess(t('common.success'))
       onSuccess()
     } catch (e: unknown) { const msg = e instanceof Error ? e.message : undefined; notifyError(msg || terr(AppErrorCode.USER_ACTION_FAILED)) }
     finally { loading.value = false }
   }
-
   return { form, rules, loading, userSearchLoading, userOptions, isEdit, initForm, searchUsers, submit }
 }

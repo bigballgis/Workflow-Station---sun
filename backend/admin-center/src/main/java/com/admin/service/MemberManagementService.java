@@ -380,7 +380,7 @@ public class MemberManagementService {
      * @return 角色ID列表（最多一个元素，为了向后兼容返回List）
      */
     public List<String> getVirtualGroupRoleIds(String virtualGroupId) {
-        return virtualGroupRoleRepository.findByVirtualGroupId(virtualGroupId)
+        return virtualGroupRoleRepository.findSingleByVirtualGroupId(virtualGroupId)
                 .map(binding -> List.of(binding.getRoleId()))
                 .orElse(List.of());
     }

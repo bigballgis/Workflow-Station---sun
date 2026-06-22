@@ -44,15 +44,20 @@ public final class LdapConstants {
     /** 虚拟组成员添加者标识（AD 组同步）。 */
     public static final String HERMES_SYNC_MEMBER_ADDED_BY = "HERMES_AD_SYNC";
 
-    /** Hermes 预定义角色编码。 */
-    public static final String ROLE_HERMES_ADMIN = "HERMES_ADMIN";
-    public static final String ROLE_HERMES_USER = "HERMES_USER";
-    public static final String ROLE_HERMES_DEVELOPER = "HERMES_DEVELOPER";
-
-    /** Hermes 预定义虚拟组编码。 */
-    public static final String VG_HERMES_ADMINS = "HERMES_ADMINS";
+    /** 系统预定义角色编码。 */
+    public static final String ROLE_SYSTEM_ADMIN = "SYS_ADMIN";
+    public static final String ROLE_AUDITOR = "AUDITOR";
+    public static final String ROLE_TECH_LEAD = "TECH_LEAD";
+    public static final String ROLE_TEAM_LEAD = "TEAM_LEAD";
+    public static final String ROLE_DEVELOPER = "DEVELOPER";
+    
+    /** Hermes 预定义虚拟组编码（复用现有系统组 code，避免定时同步额外建组）。 */
+    public static final String VG_SYSTEM_ADMINISTRATORS = "SYSTEM_ADMINISTRATORS";
+    public static final String VG_AUDITORS = "AUDITORS";
+    public static final String VG_TECH_LEADS = "TECH_LEADS";
+    public static final String VG_TEAM_LEADS = "TEAM_LEADS";
+    public static final String VG_DEVELOPERS = "DEVELOPERS";
     public static final String VG_HERMES_USERS = "HERMES_DEFAULT_USERS";
-    public static final String VG_HERMES_DEVELOPERS = "HERMES_DEVELOPERS";
 
     /** 默认角色编码（用户无命中组时的兜底虚拟组）。 */
     public static final String VG_DEFAULT_USERS = "HERMES_DEFAULT_USERS";

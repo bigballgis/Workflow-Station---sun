@@ -54,7 +54,7 @@ public class UserPermissionService {
         // 获取每个虚拟组绑定的角色
         Set<String> roleIds = new HashSet<>();
         for (String vgId : virtualGroupIds) {
-            virtualGroupRoleRepository.findByVirtualGroupId(vgId)
+                virtualGroupRoleRepository.findSingleByVirtualGroupId(vgId)
                     .ifPresent(binding -> roleIds.add(binding.getRoleId()));
         }
         
@@ -104,7 +104,7 @@ public class UserPermissionService {
             return true;
         }
         String ctx = profileContext.trim();
-        return virtualGroupRoleRepository.findByVirtualGroupId(virtualGroupId)
+        return virtualGroupRoleRepository.findSingleByVirtualGroupId(virtualGroupId)
                 .flatMap(b -> roleRepository.findById(b.getRoleId()))
                 .filter(r -> "ACTIVE".equals(r.getStatus()))
                 .map(r -> roleMatchesProfile(r, ctx))

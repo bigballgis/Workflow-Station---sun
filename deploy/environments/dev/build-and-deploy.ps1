@@ -163,6 +163,30 @@ function Pull-ImageWithRetry {
     return $false
 }
 
+# Pull a base image with fallback mirrors. Returns the first pullable image name.
+# Used for Java and nginx base images that different registries may host.
+function Resolve-BaseImage {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string[]]$Candidates
+    )
+
+    foreach ($img in $Candidates) {
+        Write-Host "  Trying base image: $img" -ForegroundColor DarkGray
+        $pullOutput = docker pull $img 2>&1
+        $pullExit = $LASTEXITCODE
+        # Show last 3 lines of pull output for context (but keep function output stream clean)
+        $pullOutput | Select-Object -Last 3 | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray }
+        if ($pullExit -eq 0) {
+            Write-Host "  Base image resolved: $img" -ForegroundColor Green
+            return $img
+        }
+        Write-Host "  Pull failed for $img, trying next candidate..." -ForegroundColor Yellow
+    }
+
+    throw "Cannot pull any base image from candidates: $($Candidates -join ', '). Check Docker network/proxy."
+}
+
 # ==================== Single Service Mode ====================
 if ($Service) {
     $svc = $ServiceRegistry[$Service]
@@ -212,7 +236,13 @@ if ($Service) {
         # 仅 nginx:alpine + 挂载 nginx-edge.conf；无镜像构建，改配置后 up 会按 compose 重建/重启
         docker compose -f $ComposeFile --env-file $EnvFile up -d --no-deps --force-recreate $Service
     } else {
-        docker compose -f $ComposeFile --env-file $EnvFile build --build-arg "JAVA_BASE_IMAGE=$JavaBaseImage" $Service
+        # Resolve Java base image with fallback before single-service backend build
+        $resolvedJavaImage = Resolve-BaseImage -Candidates @(
+            $JavaBaseImage,
+            "eclipse-temurin:17-jre",
+            "docker.m.daocloud.io/library/eclipse-temurin:17-jre"
+        )
+        docker compose -f $ComposeFile --env-file $EnvFile build --build-arg "JAVA_BASE_IMAGE=$resolvedJavaImage" $Service
         if ($LASTEXITCODE -ne 0) { throw "Docker compose build failed for $Service" }
         docker compose -f $ComposeFile --env-file $EnvFile up -d --no-deps $Service
     }
@@ -304,7 +334,14 @@ if (-not $SkipMaven) {
 # Step 2: Build frontend
 if (-not $SkipFrontend) {
     Write-Host "`n[2/4] Building frontend (local npm build + Docker)..." -ForegroundColor Yellow
-    
+
+    # Pre-pull nginx:alpine (used by all frontend Dockerfile.local) with fallback mirrors
+    $resolvedNginx = Resolve-BaseImage -Candidates @(
+        "nginx:alpine",
+        "docker.m.daocloud.io/library/nginx:alpine"
+    )
+    Write-Host "  Frontend base image resolved: $resolvedNginx" -ForegroundColor DarkGray
+
     $frontends = @(
         @{ Name = "admin-center-frontend"; Dir = "frontend/admin-center" },
         @{ Name = "user-portal-frontend"; Dir = "frontend/user-portal" },
@@ -399,26 +436,72 @@ if (-not $SkipInfra) {
 
 # Step 4: Build and start all services
 Write-Host "`n[4/4] Starting all services..." -ForegroundColor Yellow
-docker compose -f $ComposeFile --env-file $EnvFile build --build-arg "JAVA_BASE_IMAGE=$JavaBaseImage"
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "  docker compose build failed. Attempting fallback: rebuild excluding superset-final..." -ForegroundColor Yellow
-    # Try rebuilding excluding heavy superset-final service to allow other services to come up
+
+# Resolve Java base image with fallback mirrors before the compose build.
+# DaoCloud and other domestic mirrors may be unreliable; fall back to Docker Hub.
+$resolvedJavaImage = Resolve-BaseImage -Candidates @(
+    $JavaBaseImage,
+    "eclipse-temurin:17-jre",
+    "docker.m.daocloud.io/library/eclipse-temurin:17-jre"
+)
+Write-Host "  Java base image resolved: $resolvedJavaImage" -ForegroundColor DarkGray
+
+$buildOk = $false
+$attemptedImages = @($resolvedJavaImage)
+
+while (-not $buildOk -and $attemptedImages.Count -le 3) {
+    $tryImage = $attemptedImages[-1]
+    if ($tryImage -ne $resolvedJavaImage) {
+        Write-Host "  Retrying build with Java base image: $tryImage" -ForegroundColor Yellow
+    }
+
+    docker compose -f $ComposeFile --env-file $EnvFile build --build-arg "JAVA_BASE_IMAGE=$tryImage"
+    if ($LASTEXITCODE -eq 0) {
+        $buildOk = $true
+        $resolvedJavaImage = $tryImage
+        break
+    }
+
+    Write-Host "  docker compose build failed with image: $tryImage" -ForegroundColor Yellow
+
+    # Fallback 1: try excluding superset-final (heavy, may have independent pull issues)
+    Write-Host "  Attempting fallback: rebuild excluding superset-final..." -ForegroundColor Yellow
     $svcList = docker compose -f $ComposeFile --env-file $EnvFile config --services 2>$null | Where-Object { $_ -ne 'superset-final' }
     if ($svcList -and $svcList.Count -gt 0) {
         Write-Host "  Rebuilding services: $($svcList -join ', ')" -ForegroundColor DarkGray
-        docker compose -f $ComposeFile --env-file $EnvFile build --build-arg "JAVA_BASE_IMAGE=$JavaBaseImage" $svcList
-        if ($LASTEXITCODE -ne 0) {
-            Write-Host "  Fallback build also failed." -ForegroundColor Red
-            docker compose -f $ComposeFile --env-file $EnvFile ps
-            throw "Docker compose image build failed (including fallback)"
-        } else {
+        docker compose -f $ComposeFile --env-file $EnvFile build --build-arg "JAVA_BASE_IMAGE=$tryImage" $svcList
+        if ($LASTEXITCODE -eq 0) {
             Write-Host "  Fallback build succeeded (superset-final skipped)." -ForegroundColor Green
+            $buildOk = $true
+            $resolvedJavaImage = $tryImage
+            break
         }
-    } else {
-        Write-Host "  Could not determine service list for fallback." -ForegroundColor Red
-        docker compose -f $ComposeFile --env-file $EnvFile ps
-        throw "Docker compose image build failed"
     }
+
+    # Fallback 2: try next Java base image candidate
+    $nextCandidates = @(
+        "eclipse-temurin:17-jre",
+        "docker.m.daocloud.io/library/eclipse-temurin:17-jre"
+    ) | Where-Object { $_ -notin $attemptedImages }
+    if ($nextCandidates.Count -gt 0) {
+        $nextImage = $nextCandidates[0]
+        Write-Host "  Trying alternative Java base image: $nextImage" -ForegroundColor Yellow
+        docker pull $nextImage 2>&1 | Select-Object -Last 3
+        if ($LASTEXITCODE -eq 0) {
+            $attemptedImages += $nextImage
+            continue
+        }
+        Write-Host "  Cannot pull $nextImage either." -ForegroundColor Yellow
+    }
+
+    # All fallbacks exhausted
+    break
+}
+
+if (-not $buildOk) {
+    Write-Host "  All build attempts failed." -ForegroundColor Red
+    docker compose -f $ComposeFile --env-file $EnvFile ps
+    throw "Docker compose image build failed (all fallbacks exhausted)"
 }
 if (-not $SkipImagePull) {
     Write-Host "`n[0.5] Pulling images listed in compose (sequential, retries)" -ForegroundColor Yellow

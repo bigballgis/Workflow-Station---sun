@@ -4,8 +4,9 @@ import com.platform.security.entity.VirtualGroupRole;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.dao.IncorrectResultSizeDataAccessException;
 import org.springframework.stereotype.Repository;
-
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
@@ -20,6 +21,21 @@ public interface VirtualGroupRoleRepository extends JpaRepository<VirtualGroupRo
      * 根据虚拟组ID查找角色绑定（单角色绑定，返回Optional）
      */
     Optional<VirtualGroupRole> findByVirtualGroupId(String virtualGroupId);
+    
+    /**
+     * Tolerates legacy data where one virtual group has multiple role bindings.
+     */
+    default Optional<VirtualGroupRole> findSingleByVirtualGroupId(String virtualGroupId) {
+        try {
+            return findByVirtualGroupId(virtualGroupId);
+        } catch (IncorrectResultSizeDataAccessException ex) {
+            return findAllByVirtualGroupId(virtualGroupId).stream()
+                    .sorted(Comparator
+                            .comparing(VirtualGroupRole::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder()))
+                            .thenComparing(VirtualGroupRole::getId, Comparator.nullsLast(Comparator.naturalOrder())))
+                    .findFirst();
+        }
+    }
     
     /**
      * 根据虚拟组ID查找所有角色绑定（兼容旧代码，已废弃）

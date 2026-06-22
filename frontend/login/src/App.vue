@@ -104,9 +104,10 @@ const logoUrl = `${import.meta.env.BASE_URL}hermes-logo.svg`
 const { clientId, redirectUri, state, missingParams } = useSsoParams()
 const { username, password, loading, errorCode, errorDetails, onSubmit } = useLogin(clientId, redirectUri, state)
 
-// DSP 免密入口显隐：默认所有环境都显示；仅当构建期显式 VITE_DSP_ENABLED=false 时隐藏。
+// DSP 免密入口显隐：默认所有环境都显示；仅当运行时/构建期显式 VITE_DSP_ENABLED=false 时隐藏。
 // （后端是否真正受理仍由 platform.sso.dsp.enabled 决定；按钮显示≠免密一定可用。）
-const dspEnabled = ref(import.meta.env.VITE_DSP_ENABLED !== 'false')
+const dspEnabledValue = window.__LOGIN_RUNTIME_CONFIG__?.VITE_DSP_ENABLED || import.meta.env.VITE_DSP_ENABLED
+const dspEnabled = ref(dspEnabledValue !== 'false')
 const { dspLoading, onDspLogin } = useDspLogin(clientId, redirectUri, state, errorCode, errorDetails)
 </script>
 

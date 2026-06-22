@@ -4,6 +4,7 @@ import com.admin.config.AdminAuthProperties;
 import com.admin.dto.request.LoginRequest;
 import com.admin.dto.response.LoginResponse;
 import com.admin.ldap.LdapAuthenticator;
+import com.admin.ldap.LdapConstants;
 import com.platform.security.entity.User;
 import com.platform.security.model.UserStatus;
 import com.admin.repository.UserRepository;
@@ -323,6 +324,10 @@ public class AuthServiceImpl implements AuthService {
                         .orElseThrow(() -> new RuntimeException("Invalid username or password"));
             }
             if (!result.shouldFallbackToLocal()) {
+                if (shouldFallbackToLocalAccount(request.getUsername())) {
+                    log.info("LDAP rejected credentials for local-managed user {}, will try local password", request.getUsername());
+                    return authenticateLocal(request);
+                }
                 log.warn("LDAP rejected credentials for user: {}", request.getUsername());
                 recordLocalFailure(request.getUsername());
                 throw new RuntimeException("Invalid username or password");
@@ -331,6 +336,11 @@ public class AuthServiceImpl implements AuthService {
                     request.getUsername(), result.outcome());
         }
         return authenticateLocal(request);
+    }
+    private boolean shouldFallbackToLocalAccount(String username) {
+        Optional<User> local = userRepository.findByUsername(username);
+        return local.isPresent()
+                && !LdapConstants.LDAP_SYNC_ACTOR.equals(local.get().getCreatedBy());
     }
 
     /** 本地账号密码认证（含失败计数与连续失败锁定）。 */

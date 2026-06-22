@@ -32,14 +32,19 @@ import static com.admin.ldap.LdapConstants.GROUP_ROLE_KEY_DEVELOPER;
 import static com.admin.ldap.LdapConstants.GROUP_ROLE_KEY_USER;
 import static com.admin.ldap.LdapConstants.HERMES_SYNC_MEMBER_ADDED_BY;
 import static com.admin.ldap.LdapConstants.LDAP_SYNC_ACTOR;
-import static com.admin.ldap.LdapConstants.ROLE_HERMES_ADMIN;
-import static com.admin.ldap.LdapConstants.ROLE_HERMES_DEVELOPER;
-import static com.admin.ldap.LdapConstants.ROLE_HERMES_USER;
+import static com.admin.ldap.LdapConstants.ROLE_AUDITOR;
+import static com.admin.ldap.LdapConstants.ROLE_DEVELOPER;
+import static com.admin.ldap.LdapConstants.ROLE_SYSTEM_ADMIN;
+import static com.admin.ldap.LdapConstants.ROLE_TEAM_LEAD;
+import static com.admin.ldap.LdapConstants.ROLE_TECH_LEAD;
 import static com.admin.ldap.LdapConstants.SYNC_TYPE_HERMES_AD_GROUP;
 import static com.admin.ldap.LdapConstants.SYNC_TYPE_HERMES_AD_INCR;
-import static com.admin.ldap.LdapConstants.VG_HERMES_ADMINS;
-import static com.admin.ldap.LdapConstants.VG_HERMES_DEVELOPERS;
+import static com.admin.ldap.LdapConstants.VG_AUDITORS;
+import static com.admin.ldap.LdapConstants.VG_DEVELOPERS;
 import static com.admin.ldap.LdapConstants.VG_HERMES_USERS;
+import static com.admin.ldap.LdapConstants.VG_SYSTEM_ADMINISTRATORS;
+import static com.admin.ldap.LdapConstants.VG_TEAM_LEADS;
+import static com.admin.ldap.LdapConstants.VG_TECH_LEADS;
 /**
  * Hermes AD Group → Admin Center 用户/虚拟组/角色 同步服务。
  *
@@ -65,12 +70,14 @@ public class LdapSyncService {
     private static final String STATUS_RUNNING = "RUNNING";
     private static final String STATUS_SUCCESS = "SUCCESS";
     private static final String STATUS_FAILED = "FAILED";
-    /** Hermes 角色 → 虚拟组 → 角色编码 预定义绑定。 */
+    /** Hermes AD 组键 → 虚拟组 → 角色编码 预定义绑定。 */
     private static final List<HermesGroupBinding> HERMES_BINDINGS = List.of(
-            new HermesGroupBinding(GROUP_ROLE_KEY_ADMIN, VG_HERMES_ADMINS, ROLE_HERMES_ADMIN, "Hermes Administrators"),
-            new HermesGroupBinding(GROUP_ROLE_KEY_USER, VG_HERMES_USERS, ROLE_HERMES_USER, "Hermes Default Users"),
-            new HermesGroupBinding(GROUP_ROLE_KEY_DEVELOPER, VG_HERMES_DEVELOPERS, ROLE_HERMES_DEVELOPER, "Hermes Developers"));
-    private final LdapClient ldapClient;
+            new HermesGroupBinding(GROUP_ROLE_KEY_ADMIN, VG_SYSTEM_ADMINISTRATORS, "System Administrators", ROLE_SYSTEM_ADMIN, "System Administrator", "ADMIN"),
+            new HermesGroupBinding(GROUP_ROLE_KEY_ADMIN, VG_AUDITORS, "Auditors", ROLE_AUDITOR, "Auditor", "ADMIN"),
+            new HermesGroupBinding(GROUP_ROLE_KEY_DEVELOPER, VG_TECH_LEADS, "Technical Leads", ROLE_TECH_LEAD, "Technical Lead", "DEVELOPER"),
+            new HermesGroupBinding(GROUP_ROLE_KEY_DEVELOPER, VG_TEAM_LEADS, "Team Leads", ROLE_TEAM_LEAD, "Team Lead", "DEVELOPER"),
+            new HermesGroupBinding(GROUP_ROLE_KEY_DEVELOPER, VG_DEVELOPERS, "Developers", ROLE_DEVELOPER, "Developer", "DEVELOPER"),
+            new HermesGroupBinding(GROUP_ROLE_KEY_USER, VG_HERMES_USERS, "Hermes Default Users", null, null, null));private final LdapClient ldapClient;
     private final LdapUserMapper ldapUserMapper;
     private final LdapUserSyncService ldapUserSyncService;
     private final LdapProperties ldapProperties;
@@ -348,7 +355,12 @@ public class LdapSyncService {
             for (String pair : explicitGroups.split(",")) {
                 String[] kv = pair.split("=", 2);
                 if (kv.length == 2) {
-                    map.put(kv[0].trim(), kv[1].trim());
+                    String roleKey = kv[0].trim();
+                    if (isSupportedGroupRoleKey(roleKey)) {
+                        map.put(roleKey, kv[1].trim());
+                    } else {
+                        log.warn("Ignoring unsupported Hermes AD group mapping key: {}", roleKey);
+                    }
                 }
             }
             if (!map.isEmpty()) {
@@ -365,12 +377,17 @@ public class LdapSyncService {
                 String trimmed = role.trim();
                 if (!trimmed.isEmpty()) {
                     String groupCn = pattern.replace("{env}", env).replace("{role}", trimmed);
-                    map.put(trimmed, groupCn);
+                    if (isSupportedGroupRoleKey(trimmed)) {
+                        map.put(trimmed, groupCn);
+                    } else {
+                        log.warn("Ignoring unsupported Hermes AD group role: {}", trimmed);
+                    }
                 }
             }
             log.debug("Resolved Hermes group mapping via pattern: {}", map);
             return map;
         }
+
         // 兜底：使用默认 Hermes 模式
         log.warn("No Hermes group mapping configured; using default pattern");
         Map<String, String> map = new LinkedHashMap<>();
@@ -378,6 +395,10 @@ public class LdapSyncService {
             map.put(role, "Infodir-Hermes-Default-" + env + "-" + role);
         }
         return map;
+    }
+
+    private static boolean isSupportedGroupRoleKey(String roleKey) {
+            return HERMES_BINDINGS.stream().anyMatch(binding -> binding.roleKey.equals(roleKey));
     }
     // ==================== 绑定确保 ====================
     /**
@@ -391,15 +412,16 @@ public class LdapSyncService {
             if (!groupDefs.containsKey(binding.roleKey)) {
                 continue;
             }
-            // Role（使用 BU_UNBOUNDED：不受业务单元限制，依赖虚拟组绑定授权）
-            Role role = ensureRole(binding.roleCode, binding.displayName, "BU_UNBOUNDED", LDAP_SYNC_ACTOR);
-            // VirtualGroup
-            VirtualGroup vg = ensureVirtualGroup(binding.vgCode, binding.roleKey + " Virtual Group",
+            VirtualGroup vg = ensureVirtualGroup(binding.vgCode, binding.vgName,
                     binding.adGroupCn(groupDefs), LDAP_SYNC_ACTOR);
-            // VirtualGroupRole binding
-            ensureVirtualGroupRole(vg.getId(), role.getId(), LDAP_SYNC_ACTOR);
-            // RoleAssignment (VIRTUAL_GROUP → Role)
-            ensureRoleAssignment(role.getId(), AssignmentTargetType.VIRTUAL_GROUP, vg.getId(), LDAP_SYNC_ACTOR);
+            // 仅对配置了角色编码的系统组确保角色绑定；Default Users 只维护成员关系。
+            if (StringUtils.hasText(binding.roleCode)) {
+                Role role = ensureRole(binding.roleCode, binding.displayName, binding.roleType, LDAP_SYNC_ACTOR);
+                // VirtualGroupRole binding
+                ensureVirtualGroupRole(vg.getId(), role.getId(), LDAP_SYNC_ACTOR);
+                // RoleAssignment (VIRTUAL_GROUP → Role)
+                ensureRoleAssignment(role.getId(), AssignmentTargetType.VIRTUAL_GROUP, vg.getId(), LDAP_SYNC_ACTOR);
+            }
         }
     }
     private Role ensureRole(String code, String displayName, String type, String actor) {
@@ -423,6 +445,14 @@ public class LdapSyncService {
         return virtualGroupRepository.findByCode(code)
                 .map(existing -> {
                     boolean changed = false;
+                    if (!name.equals(existing.getName())) {
+                        existing.setName(name);
+                        changed = true;
+                    }
+                    if (!"SYSTEM".equals(existing.getType())) {
+                        existing.setType("SYSTEM");
+                        changed = true;
+                    }
                     if (StringUtils.hasText(adGroup) && !adGroup.equals(existing.getAdGroup())) {
                         existing.setAdGroup(adGroup);
                         changed = true;
@@ -559,12 +589,13 @@ public class LdapSyncService {
             Map<String, String> groupDefs,
             Map<String, String> syncedUserIdsByEmployeeId) {
         // 构建组名 → 虚拟组的快速查找
-        Map<String, VirtualGroup> groupToVg = new LinkedHashMap<>();
+        Map<String, Set<String>> groupToVgCodes = new LinkedHashMap<>();
         for (HermesGroupBinding binding : HERMES_BINDINGS) {
             if (groupDefs.containsKey(binding.roleKey)) {
                 String adGroupCn = groupDefs.get(binding.roleKey);
                 virtualGroupRepository.findByCode(binding.vgCode)
-                        .ifPresent(vg -> groupToVg.put(adGroupCn, vg));
+                        .ifPresent(vg -> groupToVgCodes.computeIfAbsent(adGroupCn, k -> new java.util.LinkedHashSet<>())
+                                .add(vg.getCode()));
             }
         }
         // 默认 Users 虚拟组
@@ -575,7 +606,7 @@ public class LdapSyncService {
             LdapGroupUserAccumulator acc = entry.getValue();
             // 通过 memberOf 确定目标虚拟组
             Set<String> targetVgCodes = resolveTargetVirtualGroups(
-                    acc.userAttrs, acc.hitGroupNames, acc.hitRoleKeys, groupDefs, groupToVg);
+                    acc.userAttrs, acc.hitGroupNames, acc.hitRoleKeys, groupDefs, groupToVgCodes);
             if (targetVgCodes.isEmpty() && defaultVg != null) {
                 targetVgCodes = Set.of(defaultVg.getCode());
             }
@@ -606,7 +637,7 @@ public class LdapSyncService {
             Set<String> fallbackGroupCns,
             Set<String> hitRoleKeys,
             Map<String, String> groupDefs,
-            Map<String, VirtualGroup> groupToVg) {
+            Map<String, Set<String>> groupToVgCodes) {
         Set<String> result = new java.util.LinkedHashSet<>();
         // 1. 通过 memberOf 匹配
         Set<String> memberOfCns = parseMemberOfCns(userAttrs);
@@ -614,32 +645,24 @@ public class LdapSyncService {
             String roleKey = defEntry.getKey();
             String adGroupCn = defEntry.getValue();
             if (memberOfCns.contains(adGroupCn)) {
-                HermesGroupBinding binding = findBinding(roleKey);
-                if (binding != null) {
-                    result.add(binding.vgCode);
-                }
+                findBindings(roleKey).forEach(binding -> result.add(binding.vgCode));
             }
         }
         // 2. memberOf 无命中时，使用 fallback（本次同步命中组）
         if (result.isEmpty()) {
             for (String groupCn : fallbackGroupCns) {
-                VirtualGroup vg = groupToVg.get(groupCn);
-                if (vg != null) {
-                    result.add(vg.getCode());
-                }
+                result.addAll(groupToVgCodes.getOrDefault(groupCn, Collections.emptySet()));
             }
         }
         // 3. 仍未命中：从 hitRoleKeys 推断
         if (result.isEmpty()) {
             for (String roleKey : hitRoleKeys) {
-                HermesGroupBinding binding = findBinding(roleKey);
-                if (binding != null) {
-                    result.add(binding.vgCode);
-                }
+                findBindings(roleKey).forEach(binding -> result.add(binding.vgCode));
             }
         }
         return result;
     }
+
     /** 从用户属性中解析 {@code memberOf}，提取每个 DN 的 CN 部分。 */
     Set<String> parseMemberOfCns(Map<String, String> userAttrs) {
         String memberOf = userAttrs.get(AD_ATTR_MEMBER_OF);
@@ -686,11 +709,10 @@ public class LdapSyncService {
             }
         }
     }
-    private HermesGroupBinding findBinding(String roleKey) {
+    private List<HermesGroupBinding> findBindings(String roleKey) {
         return HERMES_BINDINGS.stream()
                 .filter(b -> b.roleKey.equals(roleKey))
-                .findFirst()
-                .orElse(null);
+                .toList();
     }
     // ==================== 审计 ====================
     private LdapSyncAudit startAudit(String type) {
@@ -734,8 +756,10 @@ public class LdapSyncService {
     record HermesGroupBinding(
             String roleKey,
             String vgCode,
+            String vgName,
             String roleCode,
-            String displayName) {
+            String displayName,
+            String roleType) {
         String adGroupCn(Map<String, String> groupDefs) {
             return groupDefs.getOrDefault(roleKey, "");
         }

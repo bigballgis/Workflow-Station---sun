@@ -6,11 +6,13 @@ import com.admin.repository.VirtualGroupRepository;
 import com.admin.repository.VirtualGroupRoleRepository;
 import com.platform.security.entity.Role;
 import com.platform.security.entity.VirtualGroup;
+import com.platform.security.entity.VirtualGroupMember;
 import com.platform.security.repository.RoleAssignmentRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -26,6 +28,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -113,7 +116,7 @@ class LdapSyncServiceTest {
     @DisplayName("使用 roles + pattern 拼接 AD 组")
     void patternBasedMapping() {
         lenient().when(ldapProperties.getHermesEnv()).thenReturn("DEV");
-        groupSync.setRoles("Admin,User,Developer");
+        groupSync.setRoles("Admin,User,Developer,Supervisor");
         groupSync.setPattern("Infodir-Hermes-Default-{env}-{role}");
 
         Map<String, String> defs = ldapSyncService.resolveGroupDefinitions();
@@ -152,8 +155,8 @@ class LdapSyncServiceTest {
     @Test
     @DisplayName("ensureBindings 创建缺失的角色和虚拟组")
     void ensureBindingsCreatesMissing() {
-        Role mockRole = Role.builder().id("role-1").code("HERMES_ADMIN").name("Hermes Admin").build();
-        VirtualGroup mockVg = VirtualGroup.builder().id("vg-1").code("HERMES_ADMINS").name("Hermes Admins").build();
+        Role mockRole = Role.builder().id("role-1").code("SYS_ADMIN").name("System Administrator").build();
+        VirtualGroup mockVg = VirtualGroup.builder().id("vg-1").code("SYSTEM_ADMINISTRATORS").name("System Administrators").build();
 
         when(roleRepository.findByCode(anyString())).thenReturn(Optional.empty());
         when(roleRepository.save(any(Role.class))).thenReturn(mockRole);
@@ -173,7 +176,44 @@ class LdapSyncServiceTest {
         ldapSyncService.ensureHermesBindings(groupDefs);
     }
 
-        @Test
+    @Test
+    @DisplayName("memberOf 命中 Admin/Developer AD 组时同步到对应多个系统虚拟组")
+    void syncMembershipMapsAdminAndDeveloperGroupsToSystemVirtualGroups() {
+        Map<String, VirtualGroup> groups = Map.of(
+                "SYSTEM_ADMINISTRATORS", VirtualGroup.builder().id("vg-sys-admins").code("SYSTEM_ADMINISTRATORS").name("System Administrators").build(),
+                "AUDITORS", VirtualGroup.builder().id("vg-auditors").code("AUDITORS").name("Auditors").build(),
+                "TECH_LEADS", VirtualGroup.builder().id("vg-tech-leads").code("TECH_LEADS").name("Technical Leads").build(),
+                "TEAM_LEADS", VirtualGroup.builder().id("vg-team-leads").code("TEAM_LEADS").name("Team Leads").build(),
+                "DEVELOPERS", VirtualGroup.builder().id("vg-developers").code("DEVELOPERS").name("Developers").build(),
+                "HERMES_DEFAULT_USERS", VirtualGroup.builder().id("vg-users").code("HERMES_DEFAULT_USERS").name("Hermes Default Users").build());
+        when(virtualGroupRepository.findByCode(anyString())).thenAnswer(invocation ->
+                Optional.ofNullable(groups.get(invocation.getArgument(0))));
+        when(virtualGroupMemberRepository.existsByGroupIdAndUserId(anyString(), anyString())).thenReturn(false);
+        when(virtualGroupMemberRepository.findByUserId("user-1")).thenReturn(List.of());
+        when(virtualGroupMemberRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        Map<String, String> attrs = new HashMap<>();
+        attrs.put("memberOf",
+                "CN=Infodir-Hermes-Default-UAT-Admin,OU=Groups,DC=InfoDir,DC=Prod,DC=HSBC;" +
+                "CN=Infodir-Hermes-Default-UAT-Developer,OU=Groups,DC=InfoDir,DC=Prod,DC=HSBC");
+        LdapSyncService.LdapGroupUserAccumulator accumulator = new LdapSyncService.LdapGroupUserAccumulator(attrs);
+        accumulator.addHitGroup("Infodir-Hermes-Default-UAT-Admin", "Admin");
+        accumulator.addHitGroup("Infodir-Hermes-Default-UAT-Developer", "Developer");
+        ldapSyncService.syncVirtualGroupMemberships(
+                List.of(Map.entry("45455063", accumulator)),
+                Map.of(
+                        "Admin", "Infodir-Hermes-Default-UAT-Admin",
+                        "User", "Infodir-Hermes-Default-UAT-User",
+                        "Developer", "Infodir-Hermes-Default-UAT-Developer"),
+                Map.of("45455063", "user-1"));
+        ArgumentCaptor<VirtualGroupMember> memberCaptor = ArgumentCaptor.forClass(VirtualGroupMember.class);
+        verify(virtualGroupMemberRepository, times(5)).save(memberCaptor.capture());
+        Set<String> savedGroupIds = memberCaptor.getAllValues().stream()
+                .map(VirtualGroupMember::getGroupId)
+                .collect(java.util.stream.Collectors.toSet());
+        assertEquals(Set.of("vg-sys-admins", "vg-auditors", "vg-tech-leads", "vg-team-leads", "vg-developers"), savedGroupIds);
+    }
+
+    @Test
     @DisplayName("配置 whenChanged 时支持按用户变更做增量同步")
     void supportsUserChangeIncrementalSyncWhenWhenChangedConfigured() {
         attributes.setWhenChanged("whenChanged");
@@ -193,12 +233,8 @@ class LdapSyncServiceTest {
         when(auditRepository.findTopBySyncTypeInAndStatusOrderByStartedAtDesc(anyList(), anyString()))
                 .thenReturn(Optional.of(baseline));
         when(auditRepository.save(any(LdapSyncAudit.class))).thenAnswer(i -> i.getArgument(0));
-        when(roleRepository.findByCode(anyString()))
-                .thenReturn(Optional.of(Role.builder().id("role-1").code("HERMES_USER").build()));
-        VirtualGroup usersVg = VirtualGroup.builder().id("vg-users").code("HERMES_USERS").name("Users").build();
+        VirtualGroup usersVg = VirtualGroup.builder().id("vg-users").code("HERMES_DEFAULT_USERS").name("Hermes Default Users").build();
         when(virtualGroupRepository.findByCode(anyString())).thenReturn(Optional.of(usersVg));
-        when(virtualGroupRoleRepository.existsByVirtualGroupIdAndRoleId(anyString(), anyString())).thenReturn(true);
-        when(roleAssignmentRepository.existsByRoleIdAndTargetTypeAndTargetId(anyString(), any(), anyString())).thenReturn(true);
         when(virtualGroupMemberRepository.existsByGroupIdAndUserId(anyString(), anyString())).thenReturn(false);
         when(virtualGroupMemberRepository.findByUserId(anyString())).thenReturn(List.of());
         when(virtualGroupMemberRepository.save(any())).thenAnswer(i -> i.getArgument(0));

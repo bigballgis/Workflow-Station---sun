@@ -6,6 +6,7 @@ import com.admin.dto.sso.SsoLoginResponse;
 import com.admin.dto.sso.SsoRedeemRequest;
 import com.admin.dto.sso.SsoRedeemResponse;
 import com.admin.ldap.LdapAuthenticator;
+import com.admin.ldap.LdapConstants;
 import com.admin.repository.UserRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -17,9 +18,9 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-
 import java.time.Duration;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -75,12 +76,22 @@ public class PlatformSsoService {
                         .orElseThrow(() -> new IllegalArgumentException("Invalid username or password"));
             }
             if (!result.shouldFallbackToLocal()) {
+                if (shouldFallbackToLocalAccount(username)) {
+                    log.info("SSO LDAP rejected credentials for local-managed user {}, will try local password", username);
+                    return authenticateLocal(username, password);
+                }
                 log.warn("SSO LDAP rejected credentials for user: {}", username);
                 throw new IllegalArgumentException("Invalid username or password");
             }
             log.debug("SSO LDAP fallback to local for user: {} (outcome={})", username, result.outcome());
         }
         return authenticateLocal(username, password);
+    }
+    
+    private boolean shouldFallbackToLocalAccount(String username) {
+        Optional<User> local = userRepository.findByUsername(username);
+        return local.isPresent()
+                && !LdapConstants.LDAP_SYNC_ACTOR.equals(local.get().getCreatedBy());
     }
 
     /** 本地账号密码认证（LDAP 关闭 / 不可用 / 用户不在 LDAP 时的回退路径）。 */

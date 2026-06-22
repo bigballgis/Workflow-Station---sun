@@ -18,16 +18,15 @@ import { AppErrorCode } from '@/types/errors'
 const DEFAULT_DSP_AUTHENTICATE_URL =
   'https://cmb-staff-dsp-uat.hk.hsbc:8443/dsp/dspAuthenticate.jsp?realm=staff&service=wdssoservice'
 const DEFAULT_DSP_CLIENT_ID = 'HERMES'
-const DEFAULT_DSP_ACCEPT_API_VERSION = 'protocol=1.0,resource=2.1'
-const DSP_AUTHENTICATE_URL =
-  (import.meta.env.VITE_DSP_AUTHENTICATE_URL as string | undefined)?.trim() ||
-  DEFAULT_DSP_AUTHENTICATE_URL
-const DSP_CLIENT_ID =
-  (import.meta.env.VITE_DSP_CLIENT_ID as string | undefined)?.trim() || DEFAULT_DSP_CLIENT_ID
-const DSP_CLIENT_SECRET = (import.meta.env.VITE_DSP_CLIENT_SECRET as string | undefined)?.trim() || ''
-const DSP_ACCEPT_API_VERSION =
-  (import.meta.env.VITE_DSP_ACCEPT_API_VERSION as string | undefined)?.trim() ||
-  DEFAULT_DSP_ACCEPT_API_VERSION
+const DEFAULT_DSP_ACCEPT_API_VERSION = 'protocol=1.0,resource=1.0'
+const runtimeConfig = window.__LOGIN_RUNTIME_CONFIG__ ?? {}
+function configValue(key: keyof ImportMetaEnv, fallback = ''): string {
+  return (runtimeConfig[key] || import.meta.env[key] || fallback).trim()
+}
+const DSP_AUTHENTICATE_URL = configValue('VITE_DSP_AUTHENTICATE_URL', DEFAULT_DSP_AUTHENTICATE_URL)
+const DSP_CLIENT_ID = configValue('VITE_DSP_CLIENT_ID', DEFAULT_DSP_CLIENT_ID)
+const DSP_CLIENT_SECRET = configValue('VITE_DSP_CLIENT_SECRET')
+const DSP_ACCEPT_API_VERSION = configValue('VITE_DSP_ACCEPT_API_VERSION', DEFAULT_DSP_ACCEPT_API_VERSION)
 /** 获取 AMToken 的结果（联合语义，避免 throw）。 */
 export interface AmTokenResult {
   ok: boolean

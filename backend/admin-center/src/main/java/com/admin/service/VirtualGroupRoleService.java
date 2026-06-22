@@ -59,10 +59,9 @@ public class VirtualGroupRoleService {
         validateBusinessRole(role);
         
         // 检查是否已有绑定，如果有则删除（单角色绑定，替换现有绑定）
-        Optional<VirtualGroupRole> existingBinding = virtualGroupRoleRepository.findByVirtualGroupId(virtualGroupId);
-        if (existingBinding.isPresent()) {
+        if (virtualGroupRoleRepository.countByVirtualGroupId(virtualGroupId) > 0) {
             log.info("Replacing existing role binding for virtual group {}", virtualGroupId);
-            virtualGroupRoleRepository.delete(existingBinding.get());
+            virtualGroupRoleRepository.deleteByVirtualGroupId(virtualGroupId);
         }
         
         VirtualGroupRole binding = VirtualGroupRole.builder()
@@ -92,7 +91,7 @@ public class VirtualGroupRoleService {
         }
         
         VirtualGroupRole binding = virtualGroupRoleRepository
-                .findByVirtualGroupId(virtualGroupId)
+                .findSingleByVirtualGroupId(virtualGroupId)
                 .orElseThrow(() -> new AdminBusinessException("NOT_BOUND", "该虚拟组未绑定角色"));
         
         virtualGroupRoleRepository.delete(binding);
@@ -108,7 +107,7 @@ public class VirtualGroupRoleService {
             throw new VirtualGroupNotFoundException(virtualGroupId);
         }
         
-        return virtualGroupRoleRepository.findByVirtualGroupId(virtualGroupId)
+        return virtualGroupRoleRepository.findSingleByVirtualGroupId(virtualGroupId)
                 .map(binding -> roleRepository.findById(binding.getRoleId()).orElse(null));
     }
     
@@ -116,7 +115,7 @@ public class VirtualGroupRoleService {
      * 获取虚拟组绑定的角色ID（单个）
      */
     public Optional<String> getBoundRoleId(String virtualGroupId) {
-        return virtualGroupRoleRepository.findByVirtualGroupId(virtualGroupId)
+        return virtualGroupRoleRepository.findSingleByVirtualGroupId(virtualGroupId)
                 .map(VirtualGroupRole::getRoleId);
     }
     
@@ -124,7 +123,7 @@ public class VirtualGroupRoleService {
      * 检查虚拟组是否已绑定角色
      */
     public boolean hasRole(String virtualGroupId) {
-        return virtualGroupRoleRepository.findByVirtualGroupId(virtualGroupId).isPresent();
+        return virtualGroupRoleRepository.findSingleByVirtualGroupId(virtualGroupId).isPresent();
     }
     
     /**
