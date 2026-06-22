@@ -1,77 +1,36 @@
-// ==========================================
-// Developer Workstation — 汇丰主题变量
-// ==========================================
-
-// 主色
+// HSBC Theme Colors
 $primary-color: #DB0011;
-$primary-light: #FF4D4F;
-$primary-dark: #A8000D;
-$primary-bg-soft: rgba(219, 0, 17, 0.06);
-$primary-bg-hover: rgba(219, 0, 17, 0.1);
-
-// 功能色
 $success-color: #00A651;
-$success-bg-soft: rgba(0, 166, 81, 0.06);
 $warning-color: #FF6600;
-$warning-bg-soft: rgba(255, 102, 0, 0.06);
 $danger-color: #DB0011;
-$info-color: #1890FF;
-$info-bg-soft: rgba(24, 144, 255, 0.06);
+$info-color: #333333;
 
-// 文字色
-$text-primary: #1D1D1F;
+// Text Colors
+$text-primary: #333333;
 $text-regular: #606266;
 $text-secondary: #909399;
 $text-placeholder: #C0C4CC;
 
-// 边框色
+// Border Colors
 $border-base: #DCDFE6;
 $border-light: #E4E7ED;
 $border-lighter: #EBEEF5;
 $border-extra-light: #F2F6FC;
 
-// 背景色
+// Background Colors
 $bg-base: #FFFFFF;
 $bg-page: #F5F7FA;
 $bg-hover: #F5F7FA;
 
-// 圆角
-$radius-sm: 4px;
-$radius-md: 8px;
-$radius-lg: 12px;
-$radius-xl: 16px;
-
-// 阴影
-$shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
-$shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
-$shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
-$shadow-dialog: 0 16px 48px rgba(0, 0, 0, 0.16);
-
-// 过渡
-$transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-$transition-base: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-$transition-slow: 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-
-// 布局
+// Layout
 $header-height: 60px;
 $sidebar-width: 240px;
 $sidebar-collapsed-width: 64px;
 
-// Element Plus 主题覆盖
+// Element Plus Overrides
 :root {
   --el-color-primary: #{$primary-color};
-  --el-color-primary-light-1: #e01a29;
-  --el-color-primary-light-2: #e43440;
-  --el-color-primary-light-3: #e84e58;
-  --el-color-primary-light-4: #ec686f;
-  --el-color-primary-light-5: #f08287;
-  --el-color-primary-light-6: #f49c9f;
-  --el-color-primary-light-7: #f8b6b7;
-  --el-color-primary-light-8: #fbd0d0;
-  --el-color-primary-light-9: #fdeaea;
-  --el-color-primary-dark-2: #af0010;
   --el-color-success: #{$success-color};
   --el-color-warning: #{$warning-color};
   --el-color-danger: #{$danger-color};
-  --el-color-info: #{$info-color};
 }

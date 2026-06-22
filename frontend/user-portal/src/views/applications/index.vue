@@ -46,7 +46,6 @@
       <template v-if="activeTab === 'DRAFT'">
         <el-table
           :data="draftList"
-          v-loading="loading"
           stripe
         >
           <template #empty>
@@ -113,7 +112,6 @@
       <template v-else>
         <el-table
           :data="applicationList"
-          v-loading="loading"
           stripe
           class="application-table"
           table-layout="fixed"

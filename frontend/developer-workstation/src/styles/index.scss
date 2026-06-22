@@ -1,9 +1,5 @@
 @use './variables.scss' as *;
 
-// ==========================================
-// Developer Workstation — 全局样式
-// ==========================================
-
 * {
   margin: 0;
   padding: 0;
@@ -15,335 +11,25 @@ html, body, #app {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
 }
 
-// ==================== 滚动条美化 ====================
+// Scrollbar
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background-color: rgba(0, 0, 0, 0.12);
+  background-color: #C0C4CC;
   border-radius: 3px;
-  transition: background-color $transition-fast;
-
-  &:hover {
-    background-color: rgba(0, 0, 0, 0.22);
-  }
 }
 
 ::-webkit-scrollbar-track {
-  background-color: transparent;
+  background-color: #F5F7FA;
 }
 
-* {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(0, 0, 0, 0.12) transparent;
-}
-
-// ==================== Element Plus 全局覆盖 ====================
-
-// --- Button ---
-.el-button {
-  font-weight: 500;
-  border-radius: $radius-sm;
-  transition: all $transition-fast;
-
-  &:active {
-    transform: scale(0.97);
-  }
-}
-
-.el-button--primary {
-  --el-button-bg-color: #{$primary-color};
-  --el-button-border-color: #{$primary-color};
-  --el-button-hover-bg-color: #{$primary-light};
-  --el-button-hover-border-color: #{$primary-light};
-  --el-button-active-bg-color: #{$primary-dark};
-  --el-button-active-border-color: #{$primary-dark};
-  box-shadow: 0 2px 4px rgba(219, 0, 17, 0.2);
-
-  &:hover {
-    box-shadow: 0 4px 8px rgba(219, 0, 17, 0.3);
-  }
-}
-
-// --- Card ---
-.el-card {
-  border-radius: $radius-md;
-  border: 1px solid $border-light;
-  box-shadow: $shadow-sm;
-  transition: box-shadow $transition-base;
-
-  &:hover {
-    box-shadow: $shadow-md;
-  }
-}
-
-// --- Dialog ---
-.el-dialog {
-  border-radius: $radius-lg;
-  box-shadow: $shadow-dialog;
-  animation: dwDialogSlideUp $transition-base;
-
-  .el-dialog__header {
-    padding: 20px 24px 16px;
-    border-bottom: 1px solid $border-lighter;
-    margin-right: 0;
-
-    .el-dialog__title {
-      font-size: 18px;
-      font-weight: 600;
-      color: $text-primary;
-    }
-  }
-
-  .el-dialog__body {
-    padding: 24px;
-  }
-
-  .el-dialog__footer {
-    padding: 16px 24px 20px;
-    border-top: 1px solid $border-lighter;
-  }
-}
-
-@keyframes dwDialogSlideUp {
-  from { opacity: 0; transform: translateY(20px) scale(0.97); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
-}
-
-// --- Table ---
-.el-table {
-  border-radius: $radius-md;
-
-  .el-table__header-wrapper th.el-table__cell {
-    background-color: #fafbfc;
-    color: $text-primary;
-    font-weight: 600;
-    font-size: 13px;
-    padding: 12px 0;
-    border-bottom: 2px solid $border-light;
-  }
-
-  .el-table__body-wrapper tr.el-table__row {
-    transition: background-color $transition-fast;
-
-    &:hover > td.el-table__cell {
-      background-color: rgba(219, 0, 17, 0.02);
-    }
-  }
-
-  &--striped .el-table__body-wrapper tr.el-table__row--striped td.el-table__cell {
-    background-color: #fafbfc;
-  }
-
-  .el-table__expanded-cell {
-    padding: 16px 20px;
-    background-color: #fafbfc;
-  }
-}
-
-// --- Form ---
-.el-form-item {
-  margin-bottom: 20px;
-
-  .el-form-item__label {
-    font-weight: 500;
-    color: $text-regular;
-  }
-}
-
-.el-input__wrapper {
-  border-radius: $radius-sm;
-  transition: all $transition-fast;
-  box-shadow: 0 0 0 1px $border-base inset;
-
-  &.is-focus {
-    box-shadow: 0 0 0 1px $primary-color inset, 0 0 0 3px rgba(219, 0, 17, 0.12);
-  }
-}
-
-.el-select .el-input__wrapper.is-focus {
-  box-shadow: 0 0 0 1px $primary-color inset, 0 0 0 3px rgba(219, 0, 17, 0.12);
-}
-
-.el-textarea__inner {
-  border-radius: $radius-sm;
-  transition: all $transition-fast;
-
-  &:focus {
-    border-color: $primary-color;
-    box-shadow: 0 0 0 3px rgba(219, 0, 17, 0.12);
-  }
-}
-
-// --- Menu/Sidebar ---
-.el-menu {
-  border-right: none;
-
-  .el-menu-item,
-  .el-sub-menu__title {
-    margin: 4px 8px;
-    border-radius: $radius-md;
-    transition: all $transition-fast;
-    font-weight: 500;
-
-    &:hover {
-      background-color: $primary-bg-soft;
-      color: $primary-color;
-    }
-  }
-
-  .el-menu-item.is-active {
-    color: $primary-color;
-    font-weight: 600;
-  }
-}
-
-// --- Horizontal menu ---
-.el-menu--horizontal > .el-menu-item.is-active {
-  border-bottom-color: $primary-color;
-  color: $primary-color;
-}
-
-// --- Pagination ---
-.el-pagination {
-  padding: 12px 0;
-  font-weight: 500;
-
-  .el-pager li {
-    border-radius: $radius-sm;
-    transition: all $transition-fast;
-    font-weight: 500;
-
-    &:hover { color: $primary-color; }
-
-    &.is-active {
-      background-color: $primary-color;
-      color: #fff;
-      box-shadow: 0 2px 6px rgba(219, 0, 17, 0.25);
-    }
-  }
-}
-
-// --- Tag ---
-.el-tag {
-  border-radius: $radius-sm;
-  font-weight: 500;
-}
-
-// --- Dropdown ---
-.el-dropdown-menu {
-  border-radius: $radius-md;
-  box-shadow: $shadow-lg;
-  border: 1px solid $border-light;
-  padding: 4px;
-
-  .el-dropdown-menu__item {
-    border-radius: $radius-sm;
-    margin: 2px 4px;
-    transition: all $transition-fast;
-
-    &:hover { background-color: $primary-bg-soft; }
-  }
-}
-
-// --- Message/Notification ---
-.el-message { border-radius: $radius-md; box-shadow: $shadow-lg; border: none; }
-.el-notification { border-radius: $radius-lg; box-shadow: $shadow-dialog; }
-
-// --- Tooltip/Popover ---
-.el-tooltip__popper, .el-popover {
-  border-radius: $radius-md;
-  box-shadow: $shadow-lg;
-}
-
-// --- Tabs ---
-.el-tabs {
-  .el-tabs__header { margin-bottom: 16px; }
-  .el-tabs__item {
-    font-weight: 500;
-    transition: all $transition-fast;
-    &:hover { color: $primary-color; }
-    &.is-active { font-weight: 600; }
-  }
-  .el-tabs__active-bar { height: 3px; border-radius: 2px; }
-  .el-tabs__nav-wrap::after {
-    height: 1px;
-    background-color: $border-lighter;
-  }
-}
-
-// --- Switch ---
-.el-switch.is-checked .el-switch__core {
-  background-color: $primary-color;
-  border-color: $primary-color;
-}
-
-// --- Checkbox/Radio ---
-.el-checkbox__input.is-checked .el-checkbox__inner,
-.el-radio__input.is-checked .el-radio__inner {
-  background-color: $primary-color;
-  border-color: $primary-color;
-}
-
-// --- Loading mask ---
-.el-loading-mask {
-  border-radius: inherit;
-  backdrop-filter: blur(1px);
-  background-color: rgba(255, 255, 255, 0.75);
-}
-
-// ==================== 骨架屏 ====================
-.skeleton-row {
+// Common Classes
+.flex {
   display: flex;
-  align-items: center;
-  padding: 12px 0;
-  gap: 16px;
-
-  .skeleton-cell {
-    height: 14px;
-    background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
-    background-size: 200% 100%;
-    border-radius: $radius-sm;
-    animation: skeletonShimmer 1.5s ease-in-out infinite;
-
-    &--sm { width: 60px; }
-    &--md { width: 120px; }
-    &--lg { width: 200px; }
-    &--full { flex: 1; }
-    &--circle {
-      width: 32px; height: 32px;
-      border-radius: 50%;
-      flex-shrink: 0;
-    }
-  }
 }
-
-.skeleton-card {
-  padding: 20px;
-  background: $bg-base;
-  border-radius: $radius-md;
-  border: 1px solid $border-lighter;
-}
-
-@keyframes skeletonShimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
-}
-
-// ==================== 页面过渡 ====================
-.page-container {
-  animation: dwPageFadeIn $transition-base;
-}
-
-@keyframes dwPageFadeIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-// ==================== Common Classes ====================
-.flex { display: flex; }
 
 .flex-center {
   display: flex;
@@ -363,7 +49,7 @@ html, body, #app {
   white-space: nowrap;
 }
 
-// ==================== Page Container ====================
+// Page Container
 .page-container {
   padding: 20px;
   background-color: $bg-page;
@@ -375,10 +61,10 @@ html, body, #app {
   flex-direction: column;
 }
 
-// ==================== Card ====================
+// Card
 .card {
   background-color: $bg-base;
-  border-radius: $radius-md;
+  border-radius: 4px;
   padding: 20px;
   width: 100%;
   box-sizing: border-box;
@@ -387,14 +73,15 @@ html, body, #app {
   flex-direction: column;
 }
 
-// ==================== Table Actions ====================
+// Table Actions
 .table-actions {
   .el-button + .el-button {
     margin-left: 8px;
   }
 }
 
-// ==================== SVG 样式隔离 ====================
+// SVG 样式隔离 - 仅针对图标库，防止 SVG 内部样式泄漏到全局
+// 注意：不要影响 BPMN 流程图的 SVG
 .icon-grid,
 .icon-preview,
 .icon-large-preview,
@@ -408,27 +95,30 @@ html, body, #app {
   }
 }
 
+// 全局隔离 SVG 内部样式，防止 .cls-1, .cls-2 等类名泄漏
+// 这些类名来自 SVG 图标文件，可能会影响页面其他元素
 svg style {
   display: none !important;
 }
 
+// 重置可能被 SVG 样式影响的类名
 .cls-1, .cls-2, .cls-3, .cls-4, .cls-5 {
   all: revert !important;
 }
 
-// ==================== Form Create 特定样式 ====================
-
-// 隐藏错误占位
+// 隐藏 Element Plus 表单项的错误占位（仅设计器右侧配置面板 — 勿全局隐藏，否则 Preview 校验错误不可见）
 ._fc-r .el-form-item__error,
 ._fd-config .el-form-item__error {
   display: none;
 }
 
-._fc-r .el-form-item .el-form-item__content:empty {
-  display: none;
+._fc-r .el-form-item .el-form-item__content {
+  &:empty {
+    display: none;
+  }
 }
 
-// Preview 弹窗校验错误
+// Preview 弹窗（含 append-to-body）显式展示校验错误
 ._fd-preview-dialog .el-form-item__error,
 .form-preview-dialog .el-form-item__error,
 .form-preview-wrapper .el-form-item__error {
@@ -445,11 +135,12 @@ svg style {
   box-shadow: 0 0 0 1px var(--el-color-danger) inset;
 }
 
+// 隐藏空的 SVG 元素
 svg:empty {
   display: none !important;
 }
 
-// Inline form 对齐
+// 修复 inline form 的对齐问题
 .el-form--inline {
   .el-form-item {
     margin-right: 10px;
@@ -457,7 +148,8 @@ svg:empty {
   }
 }
 
-// Label 不折行
+
+// 表单 label 不折行（Dialog 内 + form-create 设计器画布 — 不含右侧属性面板 _fc-r）
 .el-dialog {
   .el-form-item__label,
   .__fc_label,
@@ -477,6 +169,8 @@ svg:empty {
     white-space: nowrap !important;
     overflow: hidden;
     text-overflow: ellipsis;
+    width: auto !important;
+    min-width: fit-content !important;
   }
 
   .el-form-item {
@@ -485,7 +179,8 @@ svg:empty {
   }
 }
 
-// Preview 弹窗
+// Preview 弹窗内 label：左对齐、不截断、自动撑开宽度
+// 用更高优先级选择器覆盖 el-dialog 的规则
 .el-dialog .form-preview-wrapper,
 .form-preview-wrapper {
   .el-form-item__label {
@@ -502,45 +197,86 @@ svg:empty {
     display: flex !important;
     align-items: flex-start !important;
   }
-}
-
-// ==================== 统计卡片 ====================
-.stat-card {
-  padding: 20px 24px;
-  background: $bg-base;
-  border-radius: $radius-md;
-  border: 1px solid $border-light;
-  box-shadow: $shadow-sm;
-  transition: all $transition-base;
-
-  &:hover {
-    box-shadow: $shadow-md;
-    transform: translateY(-2px);
-  }
-
-  .stat-label {
-    font-size: 13px;
-    color: $text-secondary;
-    margin-bottom: 8px;
-  }
-
-  .stat-value {
-    font-size: 28px;
-    font-weight: 700;
-    color: $text-primary;
-    letter-spacing: -0.5px;
-  }
-
-  .stat-trend {
-    font-size: 12px;
-    margin-top: 8px;
-    &.up { color: $success-color; }
-    &.down { color: $danger-color; }
+  // fc-wrap-right 会强制右对齐，覆盖掉
+  .fc-wrap-right > .el-form-item__label {
+    justify-content: flex-start !important;
   }
 }
 
-// ==================== 辅助色文本 ====================
-.text-primary { color: $primary-color; }
-.text-success { color: $success-color; }
-.text-warning { color: $warning-color; }
-.text-danger { color: $danger-color; }
+// fc-designer 右侧属性面板配置项 label 和控件之间加间距
+._fd-ci-head {
+  gap: 12px !important;
+}
+
+._fd-ci-label {
+  flex-shrink: 0 !important;
+  margin-right: 4px !important;
+}
+
+._fd-ci-con {
+  flex-shrink: 1 !important;
+}
+
+// Validation 面板样式见 designer-validate-panel.scss
+
+// 确保 Element Plus 输入框使用正确的字体
+.el-input__inner,
+.el-input__wrapper,
+.el-select__placeholder,
+.el-input__inner::placeholder {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif !important;
+}
+
+// Fix: form-create designer drag mask needs a background to receive click events
+// Without a background, transparent divs don't receive pointer events in browsers
+._fd-drag-mask {
+  background: transparent;
+}
+
+// Element Plus tables: flat single-line rows; parent .table-scroll-wrap enables horizontal scroll
+.table-scroll-wrap {
+  width: 100%;
+  overflow-x: auto;
+
+  > .el-table {
+    width: max-content;
+    min-width: 100%;
+  }
+}
+
+.el-table {
+  th.el-table__cell,
+  td.el-table__cell {
+    white-space: nowrap !important;
+  }
+
+  .cell {
+    white-space: nowrap !important;
+  }
+
+  .el-input__inner,
+  .el-select__selected-item,
+  .el-select__placeholder {
+    white-space: nowrap;
+  }
+}
+
+.table-row-actions,
+.action-buttons {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  white-space: nowrap;
+  gap: 4px;
+}
+
+.table-cell-tags,
+.bound-nodes {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow-x: auto;
+}

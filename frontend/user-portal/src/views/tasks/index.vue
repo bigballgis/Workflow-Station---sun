@@ -92,7 +92,6 @@
     <div class="portal-card">
       <el-table
         :data="taskList"
-        v-loading="loading"
         stripe
         table-layout="fixed"
         @selection-change="handleSelectionChange"

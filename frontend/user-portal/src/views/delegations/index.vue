@@ -18,7 +18,6 @@
         <div class="portal-card">
           <el-table
             :data="delegationList"
-            v-loading="loading"
             stripe
             style="width: 100%;"
           >
@@ -253,7 +252,6 @@ const activeTab = ref('my')
 const createDialogVisible = ref(false)
 
 const delegationList = ref<any[]>([])
-const loading = ref(false)
 
 const auditList = ref<any[]>([])
 
@@ -334,7 +332,6 @@ const handleDelete = async (row: any) => {
 }
 
 const loadDelegations = async () => {
-  loading.value = true
   try {
     const res = await getDelegationRules()
     // API 返回格式: { success: true, data: [...] }
@@ -345,8 +342,6 @@ const loadDelegations = async () => {
   } catch (error) {
     console.error('Failed to load delegations:', error)
     delegationList.value = []
-  } finally {
-    loading.value = false
   }
 }
 
