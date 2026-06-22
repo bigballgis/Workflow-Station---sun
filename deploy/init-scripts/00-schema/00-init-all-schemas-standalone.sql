@@ -57,5 +57,12 @@ COMMIT;
 \i 00-schema/32-add-dw-form-table-binding-subview-columns.sql
 \i 00-schema/33-dw-sub-table-view-tables.sql
 \i 00-schema/34-dw-link-form-components.sql
+\i 00-schema/35-drop-init-function-unit-status.sql
+\i 00-schema/36-sys-function-units-description.sql
+\i 00-schema/37-sys-action-definitions-description.sql
+\i 00-schema/38-dw-main-table-view-tables.sql
+\i 00-schema/42-add-dw-binding-link-mode.sql
+\i 00-schema/43-add-dw-field-fk-pk-metadata.sql
+\i 00-schema/44-ac-ldap-sync-audit.sql
 
 \echo '=== All schemas created successfully ==='

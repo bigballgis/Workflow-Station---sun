@@ -126,35 +126,42 @@ public class FunctionUnit {
     
     @JsonIgnore
     @OneToOne(mappedBy = "functionUnit", cascade = CascadeType.ALL, orphanRemoval = true)
+    @org.hibernate.annotations.OnDelete(action = org.hibernate.annotations.OnDeleteAction.CASCADE)
     private ProcessDefinition processDefinition;
     
     @JsonIgnore
     @OneToMany(mappedBy = "functionUnit", cascade = CascadeType.ALL, orphanRemoval = true)
+    @org.hibernate.annotations.OnDelete(action = org.hibernate.annotations.OnDeleteAction.CASCADE)
     @Builder.Default
     private List<TableDefinition> tableDefinitions = new ArrayList<>();
     
     @JsonIgnore
     @OneToMany(mappedBy = "functionUnit", cascade = CascadeType.ALL, orphanRemoval = true)
+    @org.hibernate.annotations.OnDelete(action = org.hibernate.annotations.OnDeleteAction.CASCADE)
     @Builder.Default
     private List<FormDefinition> formDefinitions = new ArrayList<>();
     
     @JsonIgnore
     @OneToMany(mappedBy = "functionUnit", cascade = CascadeType.ALL, orphanRemoval = true)
+    @org.hibernate.annotations.OnDelete(action = org.hibernate.annotations.OnDeleteAction.CASCADE)
     @Builder.Default
     private List<ActionDefinition> actionDefinitions = new ArrayList<>();
     
     @JsonIgnore
     @OneToMany(mappedBy = "functionUnit", cascade = CascadeType.ALL, orphanRemoval = true)
+    @org.hibernate.annotations.OnDelete(action = org.hibernate.annotations.OnDeleteAction.CASCADE)
     @Builder.Default
     private List<DecisionDefinition> decisionDefinitions = new ArrayList<>();
     
     @JsonIgnore
     @OneToMany(mappedBy = "functionUnit", cascade = CascadeType.ALL, orphanRemoval = true)
+    @org.hibernate.annotations.OnDelete(action = org.hibernate.annotations.OnDeleteAction.CASCADE)
     @Builder.Default
     private List<TableRelation> tableRelations = new ArrayList<>();
     
     @JsonIgnore
     @OneToMany(mappedBy = "functionUnit", cascade = CascadeType.ALL, orphanRemoval = true)
+    @org.hibernate.annotations.OnDelete(action = org.hibernate.annotations.OnDeleteAction.CASCADE)
     @Builder.Default
     private List<Version> versions = new ArrayList<>();
 }

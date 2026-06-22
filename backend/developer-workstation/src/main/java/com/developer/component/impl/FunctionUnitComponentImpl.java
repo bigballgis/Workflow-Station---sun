@@ -225,7 +225,10 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
             log.info("Archived function unit id={}, name={}", id, functionUnit.getName());
             return;
         }
-        functionUnitDevGroupAssignmentRepository.deleteByFunctionUnitId(id);
+        // Note: dw_function_unit_dev_groups has ON DELETE CASCADE, so the FK
+        // constraint handles child-row removal automatically.  We must NOT issue a
+        // separate @Modifying JPQL DELETE here because it flushes the persistence
+        // context and creates stale state for JPA cascade operations.
         functionUnitRepository.delete(functionUnit);
         log.info("Permanently deleted archived function unit id={}", id);
     }

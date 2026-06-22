@@ -1314,6 +1314,12 @@ CREATE TABLE IF NOT EXISTS dw_field_definitions (
     default_value VARCHAR(500),
     is_primary_key BOOLEAN DEFAULT FALSE,
     is_unique BOOLEAN DEFAULT FALSE,
+    is_foreign_key BOOLEAN NOT NULL DEFAULT FALSE,
+    ref_table_id BIGINT,
+    ref_primary_key_fields JSONB,
+    pk_generation_json JSONB,
+    fk_display_mode VARCHAR(20) DEFAULT 'readonly',
+    relation_cardinality VARCHAR(20),
     display_name TEXT,
     sort_order INTEGER NOT NULL DEFAULT 0,
     CONSTRAINT fk_field_table FOREIGN KEY (table_id) REFERENCES dw_table_definitions(id) ON DELETE CASCADE,
@@ -1374,6 +1380,7 @@ CREATE TABLE IF NOT EXISTS dw_form_table_bindings (
     binding_type VARCHAR(20) NOT NULL,
     binding_mode VARCHAR(20) NOT NULL DEFAULT 'READONLY',
     foreign_key_field VARCHAR(100),
+    binding_link_mode VARCHAR(32) NOT NULL DEFAULT 'structuralFk',
     sort_order INTEGER DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP,
@@ -1385,6 +1392,40 @@ CREATE TABLE IF NOT EXISTS dw_form_table_bindings (
 
 CREATE INDEX IF NOT EXISTS idx_dw_form_table_bindings_form ON dw_form_table_bindings(form_id);
 CREATE INDEX IF NOT EXISTS idx_dw_form_table_bindings_table ON dw_form_table_bindings(table_id);
+
+-- =====================================================
+-- 8b. Main Table View Configs (dw_main_table_view_configs)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS dw_main_table_view_configs (
+    id BIGSERIAL PRIMARY KEY,
+    function_unit_id BIGINT NOT NULL REFERENCES dw_function_units(id) ON DELETE CASCADE,
+    main_table_id BIGINT NOT NULL REFERENCES dw_table_definitions(id) ON DELETE CASCADE,
+    view_name VARCHAR(200) NOT NULL,
+    is_default BOOLEAN NOT NULL DEFAULT FALSE,
+    sort_config JSONB,
+    filter_config JSONB,
+    status VARCHAR(20) NOT NULL DEFAULT 'DRAFT',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_main_table_view_configs_fu ON dw_main_table_view_configs(function_unit_id);
+
+-- =====================================================
+-- 8c. Main Table View Fields (dw_main_table_view_fields)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS dw_main_table_view_fields (
+    id BIGSERIAL PRIMARY KEY,
+    view_config_id BIGINT NOT NULL REFERENCES dw_main_table_view_configs(id) ON DELETE CASCADE,
+    field_name VARCHAR(100) NOT NULL,
+    display_label VARCHAR(200),
+    column_width INTEGER,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    visible BOOLEAN NOT NULL DEFAULT TRUE,
+    is_system_field BOOLEAN NOT NULL DEFAULT FALSE
+);
+
+CREATE INDEX IF NOT EXISTS idx_main_table_view_fields_config ON dw_main_table_view_fields(view_config_id, sort_order);
 
 -- =====================================================
 -- 9. Action Definitions Table (dw_action_definitions)
