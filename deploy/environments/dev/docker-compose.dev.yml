@@ -537,6 +537,7 @@ services:
     restart: unless-stopped
 
 volumes:
+  kestra_data:
   postgres_dev_data:
   redis_dev_data:
   n8n_data:
