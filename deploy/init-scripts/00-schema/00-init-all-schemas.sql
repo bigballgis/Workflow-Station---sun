@@ -61,5 +61,10 @@ COMMIT;
 \i /docker-entrypoint-initdb.d/00-schema/32-add-dw-form-table-binding-subview-columns.sql
 \i /docker-entrypoint-initdb.d/00-schema/33-dw-sub-table-view-tables.sql
 \i /docker-entrypoint-initdb.d/00-schema/34-dw-link-form-components.sql
+\i /docker-entrypoint-initdb.d/00-schema/34-extend-function-unit-status-check.sql
+\i /docker-entrypoint-initdb.d/00-schema/35-drop-init-function-unit-status.sql
+\i /docker-entrypoint-initdb.d/00-schema/36-sys-function-units-description.sql
+\i /docker-entrypoint-initdb.d/00-schema/37-sys-action-definitions-description.sql
+\i /docker-entrypoint-initdb.d/00-schema/38-dw-main-table-view-tables.sql
 
 \echo 'All schemas created successfully.'

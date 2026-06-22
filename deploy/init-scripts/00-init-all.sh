@@ -65,7 +65,8 @@ for f in /docker-entrypoint-initdb.d/00-schema/06-*.sql \
          /docker-entrypoint-initdb.d/00-schema/34-*.sql \
          /docker-entrypoint-initdb.d/00-schema/35-*.sql \
          /docker-entrypoint-initdb.d/00-schema/36-*.sql \
-         /docker-entrypoint-initdb.d/00-schema/37-*.sql; do
+         /docker-entrypoint-initdb.d/00-schema/37-*.sql \
+         /docker-entrypoint-initdb.d/00-schema/38-*.sql; do
     [ -f "$f" ] && echo "  Running $(basename $f)..." && $PSQL -f "$f"
 done
 
@@ -132,6 +133,10 @@ echo "[5d/6] Loading Function Unit Multi-Instance Subtask Demo..."
 if [ -f /docker-entrypoint-initdb.d/17-Multi-Instance-Subtask-Demo/00-init-kk.sql ]; then
   echo "  Running 00-init-kk.sql..."
   $PSQL -f /docker-entrypoint-initdb.d/17-Multi-Instance-Subtask-Demo/00-init-kk.sql
+  if [ -f /docker-entrypoint-initdb.d/17-Multi-Instance-Subtask-Demo/03-set-main-table-request-id-config.sql ]; then
+    echo "  Running 03-set-main-table-request-id-config.sql..."
+    $PSQL -f /docker-entrypoint-initdb.d/17-Multi-Instance-Subtask-Demo/03-set-main-table-request-id-config.sql
+  fi
 else
   echo "  ERROR: Multi-Instance Subtask Demo init script not found at /docker-entrypoint-initdb.d/17-Multi-Instance-Subtask-Demo/00-init-kk.sql"
   exit 1
