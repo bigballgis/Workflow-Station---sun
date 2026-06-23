@@ -86,6 +86,7 @@ class AiTransactionAtomicityProperties {
         @Override public boolean exists(org.springframework.data.jpa.domain.Specification<FunctionUnit> spec) { return false; }
         @Override public long delete(org.springframework.data.jpa.domain.Specification<FunctionUnit> spec) { return 0; }
         @Override public <S extends FunctionUnit, R> R findBy(org.springframework.data.jpa.domain.Specification<FunctionUnit> spec, java.util.function.Function<org.springframework.data.repository.query.FluentQuery.FetchableFluentQuery<S>, R> queryFunction) { return null; }
+        @Override public List<String> findAllDistinctTags() { return List.of(); }
     }
 
     /**

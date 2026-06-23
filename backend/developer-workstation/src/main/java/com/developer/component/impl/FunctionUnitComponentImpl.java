@@ -17,10 +17,12 @@ import com.developer.security.WorkspaceAccessAction;
 import com.developer.component.VersionComponent;
 import com.developer.util.DeveloperWorkstationSequenceSynchronizer;
 import com.developer.util.MinimalBpmnTemplate;
+import com.developer.util.FunctionUnitTagUtils;
 import com.developer.util.XmlEncodingUtil;
 import com.developer.service.MainTableViewService;
 import com.developer.service.UserDisplayNameService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Predicate;
 import com.platform.security.util.SecurityContextUtils;
 import lombok.extern.slf4j.Slf4j;
@@ -156,6 +158,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
                 .name(request.getName())
                 .code(code)
                 .displayName(request.getDescription())
+                .tags(FunctionUnitTagUtils.normalizeTags(request.getTags()))
                 .status(FunctionUnitStatus.DRAFT)
                 .build();
 
@@ -192,14 +195,19 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         }
 
         functionUnit.setName(request.getName());
-        functionUnit.setDisplayName(request.getDescription());
+        // Only update description when explicitly provided (non-null); null means "keep existing"
+        if (request.getDescription() != null) {
+            functionUnit.setDisplayName(request.getDescription());
+        }
+        if (request.getTags() != null) {
+            functionUnit.setTags(FunctionUnitTagUtils.normalizeTags(request.getTags()));
+        }
 
+        // Only update icon when iconId is provided (non-null); null means "keep existing"
         if (request.getIconId() != null) {
             Icon icon = iconRepository.findById(request.getIconId())
                     .orElseThrow(() -> new ResourceNotFoundException("Icon", request.getIconId()));
             functionUnit.setIcon(icon);
-        } else {
-            functionUnit.setIcon(null);
         }
 
         return functionUnitRepository.save(functionUnit);
@@ -239,7 +247,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<FunctionUnitResponse> list(String name, String status, Pageable pageable) {
+    public Page<FunctionUnitResponse> list(String name, String status, java.util.List<String> tags, Pageable pageable) {
         Specification<FunctionUnit> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
@@ -257,6 +265,21 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
 
             if (status != null && !status.trim().isEmpty()) {
                 predicates.add(cb.equal(root.get("status"), FunctionUnitStatus.valueOf(status)));
+            }
+
+            // Server-side tag filter (AND semantics): function unit must have ALL specified tags.
+            // Uses PostgreSQL JSONB ?& operator via FUNCTION('jsonb_exists_all', ...).
+            if (tags != null && !tags.isEmpty()) {
+                List<String> normalized = FunctionUnitTagUtils.normalizeTags(tags);
+                if (!normalized.isEmpty()) {
+                    Expression<String[]> tagArray = cb.literal(normalized.toArray(new String[0]));
+                    Expression<Boolean> tagExpr = cb.function(
+                            "jsonb_exists_all",
+                            Boolean.class,
+                            root.get("tags"),
+                            tagArray);
+                    predicates.add(cb.isTrue(tagExpr));
+                }
             }
 
             java.util.Set<Long> visible = functionUnitWorkspaceAccessService.visibleFunctionUnitIds();
@@ -298,6 +321,12 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         });
 
         return page.map(this::toResponse);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.List<String> getAllTags() {
+        return functionUnitRepository.findAllDistinctTags();
     }
 
     @Override

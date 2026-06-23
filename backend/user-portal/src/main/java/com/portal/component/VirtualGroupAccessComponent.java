@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
 import com.platform.common.util.ApiResponseBodyUnwrap;
+import com.platform.security.util.SecurityContextUtils;
 
 import java.util.*;
 
@@ -402,6 +403,8 @@ public class VirtualGroupAccessComponent {
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
+            SecurityContextUtils.getCurrentUserId().ifPresent(id -> headers.set("X-User-Id", id));
+            SecurityContextUtils.getCurrentUsername().ifPresent(name -> headers.set("X-Username", name));
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
 
             ResponseEntity<Void> response = restTemplate.exchange(

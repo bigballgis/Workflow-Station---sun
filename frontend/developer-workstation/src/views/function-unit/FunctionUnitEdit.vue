@@ -502,6 +502,7 @@ async function handleAiDataApplied() {
 
 onMounted(() => {
   store.fetchById(functionUnitId.value)
+  store.fetchAllTags()
 })
 
 onUnmounted(() => {

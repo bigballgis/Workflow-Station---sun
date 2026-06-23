@@ -490,6 +490,34 @@ public class AuthController {
                 .build();
     }
 
+    /**
+     * Extract access token from Authorization header or httpOnly cookie.
+     * The JwtAuthenticationFilter skips /auth/ paths, so we must read cookies
+     * directly for authenticated auth endpoints (me, workspace-contexts, etc.).
+     */
+    private String extractAccessToken(HttpServletRequest request, String authHeader) {
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            return authHeader.substring(7);
+        }
+        if (request != null) {
+            Cookie[] cookies = request.getCookies();
+            if (cookies != null) {
+                List<String> names = jwtProperties.getCookieNames();
+                if (names == null || names.isEmpty()) {
+                    names = List.of("up_access_token");
+                }
+                for (String name : names) {
+                    for (Cookie cookie : cookies) {
+                        if (name.equals(cookie.getName()) && cookie.getValue() != null && !cookie.getValue().isBlank()) {
+                            return cookie.getValue();
+                        }
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
     private Claims parseToken(String token) {
         return Jwts.parser()
                 .verifyWith(getSigningKey())

@@ -43,9 +43,14 @@ public interface FunctionUnitComponent {
     FunctionUnitResponse getByIdAsResponse(Long id);
     
     /**
-     * Paginated query of function units
+     * Paginated query of function units with optional tag filter (AND semantics).
      */
-    Page<FunctionUnitResponse> list(String name, String status, Pageable pageable);
+    Page<FunctionUnitResponse> list(String name, String status, List<String> tags, Pageable pageable);
+
+    /**
+     * Returns all distinct tags across all enabled function units.
+     */
+    List<String> getAllTags();
     
     /**
      * Publish a function unit

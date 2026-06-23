@@ -48,4 +48,11 @@ public interface FunctionUnitRepository extends JpaRepository<FunctionUnit, Long
     
     @Query("SELECT fu.id FROM FunctionUnit fu WHERE fu.createdBy = :username")
     List<Long> findIdsByCreatedBy(@Param("username") String username);
+
+    /**
+     * Returns all distinct tags across all enabled function units.
+     * Uses PostgreSQL jsonb_array_elements_text to unpack JSONB arrays.
+     */
+    @Query(value = "SELECT DISTINCT jsonb_array_elements_text(tags) AS tag FROM dw_function_units WHERE enabled = true ORDER BY tag", nativeQuery = true)
+    List<String> findAllDistinctTags();
 }

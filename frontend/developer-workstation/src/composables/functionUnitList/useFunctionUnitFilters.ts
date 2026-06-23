@@ -1,44 +1,41 @@
 import { reactive, computed } from 'vue'
 import type { Ref } from 'vue'
 import type { FunctionUnitResponse } from '@/api/functionUnit'
-import { getTags, getAllAvailableTags, matchesTags } from '@/utils/tagStorage'
+import { normalizeTags, collectAvailableTags } from '@/utils/tagStorage'
 
 interface UseFunctionUnitFiltersOptions {
   list: Ref<FunctionUnitResponse[]>
+  allTags: Ref<string[]>
   resetPage: () => void
+  reload: () => void
 }
 
-/** Search form state and client-side filtering for the function unit list. */
+/** Search form state and client-side filtering (name/status only; tags are server-filtered). */
 export function useFunctionUnitFilters(options: UseFunctionUnitFiltersOptions) {
-  const { list, resetPage } = options
+  const { list, allTags, resetPage, reload } = options
 
   const searchForm = reactive({ name: '', status: '', tags: [] as string[] })
 
-  // Get all available tags for filter dropdown
-  const availableTags = computed(() => getAllAvailableTags())
+  // 下拉选项来自服务端返回的全部 tag（跨所有功能单元），确保新建 tag 首次出现即可选
+  const availableTags = computed(() => {
+    // Merge: server-side allTags + any tags from current page (in case server hasn't picked up latest)
+    const fromList = collectAvailableTags(list.value)
+    const merged = new Set([...allTags.value, ...fromList])
+    return Array.from(merged).sort()
+  })
 
-  // Get tags for a specific item
-  function getItemTags(id: number): string[] {
-    return getTags(id)
+  function getItemTags(item: FunctionUnitResponse): string[] {
+    return normalizeTags(item.tags)
   }
 
-  // Filter list based on search criteria
+  // Client-side filtering: name and status only (tags are already filtered server-side via API param).
   const filteredList = computed(() => {
     return list.value.filter(item => {
-      // Filter by name
       if (searchForm.name && !item.name.toLowerCase().includes(searchForm.name.toLowerCase())) {
         return false
       }
-      // Filter by status
       if (searchForm.status && item.status !== searchForm.status) {
         return false
-      }
-      // Filter by tags
-      if (searchForm.tags.length > 0) {
-        const itemTags = getTags(item.id)
-        if (!matchesTags(itemTags, searchForm.tags)) {
-          return false
-        }
       }
       return true
     })
@@ -46,13 +43,14 @@ export function useFunctionUnitFilters(options: UseFunctionUnitFiltersOptions) {
 
   function handleSearch() {
     resetPage()
-    // Client-side filtering, no need to reload
+    reload()
   }
 
   function clearFilters() {
     searchForm.name = ''
     searchForm.status = ''
     searchForm.tags = []
+    handleSearch()
   }
 
   return {

@@ -259,8 +259,8 @@ bi:
     host: ${SUPERSET_HOST:http://localhost:8088}
     public-host: ${SUPERSET_PUBLIC_HOST:http://localhost:8088}
     db-schema: ${SUPERSET_DB_SCHEMA:public}
-    admin-username: ${SUPERSET_ADMIN_USERNAME:admin}
-    admin-password: ${SUPERSET_ADMIN_PASSWORD:admin123}
+    admin-username: ${BI_SUPERSET_USERNAME}
+    admin-password: ${BI_SUPERSET_PASSWORD}
     guest-token-timeout-seconds: 30
   sync:
     cron: ${BI_SYNC_CRON:0 0 */6 * * ?}

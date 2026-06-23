@@ -71,13 +71,21 @@ public class FunctionUnitController extends BaseController {
     }
     
     @GetMapping
-    @Operation(summary = "List function units (paginated)")
+    @Operation(summary = "List function units (paginated) with optional tag filter")
     @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<Page<FunctionUnitResponse>>> list(
             @RequestParam(required = false) String name,
             @RequestParam(required = false) String status,
+            @RequestParam(required = false) List<String> tags,
             Pageable pageable) {
-        return handleRequest(() -> functionUnitComponent.list(name, status, pageable));
+        return handleRequest(() -> functionUnitComponent.list(name, status, tags, pageable));
+    }
+
+    @GetMapping("/tags")
+    @Operation(summary = "List all distinct tags across all enabled function units")
+    @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
+    public ResponseEntity<ApiResponse<List<String>>> getAllTags() {
+        return handleRequest(() -> functionUnitComponent.getAllTags());
     }
     
     @PostMapping("/{id}/publish")

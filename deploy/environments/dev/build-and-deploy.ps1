@@ -411,6 +411,22 @@ if (-not $SkipInfra) {
 
     # First boot runs large init-scripts (demo data + Flowable schema); allow more time.
     Wait-ForContainerHealth -ContainerName "platform-postgres-dev" -DisplayName "PostgreSQL" -MaxRetries 180
+    
+    # Run incremental schema migrations (docker-entrypoint-initdb.d only runs on first init)
+    Write-Host "  Running DB schema migrations..." -ForegroundColor DarkGray
+    $InitScriptsDir = "$RootDir/deploy/init-scripts/00-schema"
+    if (Test-Path $InitScriptsDir) {
+        Get-ChildItem -Path $InitScriptsDir -Filter "*.sql" | Sort-Object Name | ForEach-Object {
+            $scriptName = $_.Name
+            Write-Host "    $scriptName" -ForegroundColor DarkGray
+            Get-Content $_.FullName | docker exec -i platform-postgres-dev psql -U $env:POSTGRES_USER -d $env:POSTGRES_DB -v ON_ERROR_STOP=0 2>&1 | Out-Null
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host "    WARNING: $scriptName had errors (may be expected for idempotent scripts)" -ForegroundColor Yellow
+            }
+        }
+        Write-Host "  Schema migrations complete." -ForegroundColor Green
+    }
+    
     Wait-ForContainerHealth -ContainerName "platform-redis-dev" -DisplayName "Redis" -MaxRetries 20
     Wait-ForContainerHealth -ContainerName "platform-kafka-dev" -DisplayName "Kafka" -MaxRetries 30 -SleepSeconds 3
 

@@ -10,7 +10,9 @@ import org.springframework.web.method.support.ModelAndViewContainer;
 
 /**
  * Resolves {@link CurrentUserId} annotated parameters from the JWT SecurityContext.
- * Returns {@code null} if no authenticated user id is in the security context (caller should reject).
+ * Falls back to {@code X-User-Id} header when SecurityContext has no authenticated user
+ * (e.g. when httpOnly cookies are unavailable).
+ * Returns {@code null} if no identity is available from either source.
  */
 @Component
 public class CurrentUserIdArgumentResolver implements HandlerMethodArgumentResolver {
@@ -23,6 +25,7 @@ public class CurrentUserIdArgumentResolver implements HandlerMethodArgumentResol
     @Override
     public Object resolveArgument(MethodParameter parameter, ModelAndViewContainer mavContainer,
                                   NativeWebRequest webRequest, WebDataBinderFactory binderFactory) {
-        return SecurityContextUtils.getCurrentUserId().orElse(null);
+        return SecurityContextUtils.getCurrentUserId()
+                .orElseGet(() -> webRequest.getHeader("X-User-Id"));
     }
 }

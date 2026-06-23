@@ -92,6 +92,7 @@ class FunctionUnitCloner {
                 .name(newName)
                 .code(codeGenerator.generateUniqueCode(newName))
                 .displayName(source.getDisplayName())
+                .tags(source.getTags() != null ? new java.util.ArrayList<>(source.getTags()) : new java.util.ArrayList<>())
                 .icon(source.getIcon())
                 .status(FunctionUnitStatus.DRAFT)
                 .build();
