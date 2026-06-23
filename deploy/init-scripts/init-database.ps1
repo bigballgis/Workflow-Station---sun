@@ -93,7 +93,13 @@ $migrations = @(
     "00-schema/31-widen-flowable-act-hi-comment-columns.sql",
     "00-schema/32-add-dw-form-table-binding-subview-columns.sql",
     "00-schema/33-dw-sub-table-view-tables.sql",
-    "00-schema/34-dw-link-form-components.sql"
+    "00-schema/34-dw-link-form-components.sql",
+    "00-schema/35-drop-init-function-unit-status.sql",
+    "00-schema/36-sys-function-units-description.sql",
+    "00-schema/37-sys-action-definitions-description.sql",
+    "00-schema/38-dw-main-table-view-tables.sql",
+    "00-schema/39-ac-ldap-sync-audit.sql",
+    "00-schema/41-dw-function-unit-tags.sql"
 )
 foreach ($m in $migrations) {
     $path = Join-Path $ScriptDir $m
