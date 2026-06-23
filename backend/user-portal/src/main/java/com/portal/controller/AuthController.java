@@ -123,17 +123,24 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<Void> logout(@RequestHeader(value = "Authorization", required = false) String authHeader) {
-        if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            String token = authHeader.substring(7);
+    public ResponseEntity<Void> logout(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            HttpServletRequest httpRequest) {
+        String token = resolveAccessToken(authHeader, httpRequest);
+        if (token != null) {
             jwtTokenService.blacklistToken(token);
         }
         return ResponseEntity.ok().build();
     }
-
     @PostMapping("/refresh")
-    public ResponseEntity<Map<String, Object>> refresh(@RequestBody Map<String, String> request, HttpServletResponse httpResponse) {
-        String refreshToken = request.get("refreshToken");
+    public ResponseEntity<Map<String, Object>> refresh(
+            @RequestBody(required = false) Map<String, String> request,
+            HttpServletRequest httpRequest,
+            HttpServletResponse httpResponse) {
+        String refreshToken = request != null ? request.get("refreshToken") : null;
+        if (refreshToken == null || refreshToken.isBlank()) {
+            refreshToken = resolveRefreshToken(httpRequest);
+        }
         if (refreshToken == null || refreshToken.isBlank()) {
             return ResponseEntity.badRequest().build();
         }
@@ -152,10 +159,8 @@ public class AuthController {
             }
             String activeBu = claims.get(CLAIM_ACTIVE_BUSINESS_UNIT_ID, String.class);
             String activeRoleId = claims.get(CLAIM_ACTIVE_ROLE_ID, String.class);
-
             User user = userRepository.findById(userId)
                     .orElseThrow(() -> new RuntimeException("User not found"));
-
             List<PortalWorkspaceAuthService.WorkspaceContextRow> wctx = portalWorkspaceAuthService.listWorkspaceContexts(userId);
             String[] resolved = resolveActiveWorkspaceClaims(wctx, activeBu, activeRoleId);
             activeBu = resolved[0];
@@ -166,30 +171,12 @@ public class AuthController {
                     return ResponseEntity.status(401).build();
                 }
             }
-
             String portalAccessMode = portalAccessModeForWorkspace(wctx);
             LoginBundle bundle = buildRolesAndPermissions(user, activeBu, activeRoleId);
             String newAccessToken = generateToken(user, bundle.roles, bundle.permissions, activeBu, activeRoleId, portalAccessMode);
             String newRefreshToken = generateRefreshToken(userId, activeBu, activeRoleId, portalAccessMode);
-
-            // Set httpOnly cookies for new tokens
-            // Service-specific cookie names (e.g. up_access_token) avoid cross-app overwrite on same origin. See JwtProperties#cookieNames.
-            Cookie accessTokenCookie = new Cookie(jwtProperties.getPrimaryCookieName(), newAccessToken);
-            accessTokenCookie.setHttpOnly(true);
-            accessTokenCookie.setSecure(false);
-            accessTokenCookie.setPath("/");
-            accessTokenCookie.setMaxAge((int)(jwtExpiration / 1000));
-            accessTokenCookie.setAttribute("SameSite", "Lax");
-            httpResponse.addCookie(accessTokenCookie);
-
-            Cookie refreshTokenCookie = new Cookie(jwtProperties.getRefreshCookieName(), newRefreshToken);
-            refreshTokenCookie.setHttpOnly(true);
-            refreshTokenCookie.setSecure(false);
-            refreshTokenCookie.setPath("/");
-            refreshTokenCookie.setMaxAge(7 * 24 * 60 * 60);
-            refreshTokenCookie.setAttribute("SameSite", "Lax");
-            httpResponse.addCookie(refreshTokenCookie);
-
+            setAuthCookie(httpResponse, jwtProperties.getPrimaryCookieName(), newAccessToken, (int)(jwtExpiration / 1000));
+            setAuthCookie(httpResponse, jwtProperties.getRefreshCookieName(), newRefreshToken, 7 * 24 * 60 * 60);
             return ResponseEntity.ok(Map.of(
                     "accessToken", newAccessToken,
                     "refreshToken", newRefreshToken,
@@ -199,16 +186,16 @@ public class AuthController {
             return ResponseEntity.status(401).build();
         }
     }
-
     @PostMapping("/change-password")
     @Transactional
     public ResponseEntity<Void> changePassword(
             @RequestHeader(value = "Authorization", required = false) String authHeader,
+            HttpServletRequest httpRequest,
             @Valid @RequestBody ChangePasswordRequest body) {
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+        String token = resolveAccessToken(authHeader, httpRequest);
+        if (token == null || token.isBlank()) {
             return ResponseEntity.status(401).build();
         }
-        String token = authHeader.substring(7);
         try {
             Claims claims = parseToken(token);
             String userId = claims.getSubject();
@@ -229,8 +216,8 @@ public class AuthController {
     @GetMapping("/me")
     public ResponseEntity<LoginResponse.UserLoginInfo> getCurrentUser(
             @RequestHeader(value = "Authorization", required = false) String authHeader,
-            HttpServletRequest request) {
-        String token = extractAccessToken(request, authHeader);
+            HttpServletRequest httpRequest) {
+        String token = resolveAccessToken(authHeader, httpRequest);
         if (token == null || token.isBlank()) {
             return ResponseEntity.status(401).build();
         }
@@ -239,10 +226,8 @@ public class AuthController {
             String userId = claims.getSubject();
             String activeBu = claims.get(CLAIM_ACTIVE_BUSINESS_UNIT_ID, String.class);
             String activeRoleId = claims.get(CLAIM_ACTIVE_ROLE_ID, String.class);
-
             User user = userRepository.findById(userId)
                     .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.user_not_found")));
-
             List<PortalWorkspaceAuthService.WorkspaceContextRow> wctx = portalWorkspaceAuthService.listWorkspaceContexts(userId);
             String[] resolved = resolveActiveWorkspaceClaims(wctx, activeBu, activeRoleId);
             activeBu = resolved[0];
@@ -253,7 +238,6 @@ public class AuthController {
                     return ResponseEntity.status(401).build();
                 }
             }
-
             String portalAccessMode = portalAccessModeForWorkspace(wctx);
             LoginBundle bundle = buildRolesAndPermissions(user, activeBu, activeRoleId);
             return ResponseEntity.ok(toUserLoginInfo(user, bundle, activeBu, activeRoleId, wctx.size() > 1, portalAccessMode));
@@ -261,12 +245,11 @@ public class AuthController {
             return ResponseEntity.status(401).build();
         }
     }
-
     @GetMapping("/workspace-contexts")
     public ResponseEntity<List<Map<String, String>>> listWorkspaceContexts(
             @RequestHeader(value = "Authorization", required = false) String authHeader,
-            HttpServletRequest request) {
-        String token = extractAccessToken(request, authHeader);
+            HttpServletRequest httpRequest) {
+        String token = resolveAccessToken(authHeader, httpRequest);
         if (token == null || token.isBlank()) {
             return ResponseEntity.status(401).build();
         }
@@ -293,10 +276,10 @@ public class AuthController {
     @PostMapping("/switch-workspace")
     public ResponseEntity<LoginResponse> switchWorkspace(
             @RequestHeader(value = "Authorization", required = false) String authHeader,
-            @Valid @RequestBody SwitchWorkspaceRequest body,
-            HttpServletRequest request,
-            HttpServletResponse httpResponse) {
-        String token = extractAccessToken(request, authHeader);
+            HttpServletRequest httpRequest,
+            HttpServletResponse httpResponse,
+            @Valid @RequestBody SwitchWorkspaceRequest body) {
+        String token = resolveAccessToken(authHeader, httpRequest);
         if (token == null || token.isBlank()) {
             return ResponseEntity.status(401).build();
         }
@@ -316,24 +299,8 @@ public class AuthController {
             LoginBundle bundle = buildRolesAndPermissions(user, activeBu, activeRoleId);
             String accessToken = generateToken(user, bundle.roles, bundle.permissions, activeBu, activeRoleId, portalAccessMode);
             String refreshToken = generateRefreshToken(userId, activeBu, activeRoleId, portalAccessMode);
-
-            // Set httpOnly cookies for new tokens (same pattern as /refresh and issuePortalSession)
-            Cookie accessTokenCookie = new Cookie(jwtProperties.getPrimaryCookieName(), accessToken);
-            accessTokenCookie.setHttpOnly(true);
-            accessTokenCookie.setSecure(false);
-            accessTokenCookie.setPath("/");
-            accessTokenCookie.setMaxAge((int)(jwtExpiration / 1000));
-            accessTokenCookie.setAttribute("SameSite", "Lax");
-            httpResponse.addCookie(accessTokenCookie);
-
-            Cookie refreshTokenCookie = new Cookie(jwtProperties.getRefreshCookieName(), refreshToken);
-            refreshTokenCookie.setHttpOnly(true);
-            refreshTokenCookie.setSecure(false);
-            refreshTokenCookie.setPath("/");
-            refreshTokenCookie.setMaxAge(7 * 24 * 60 * 60);
-            refreshTokenCookie.setAttribute("SameSite", "Lax");
-            httpResponse.addCookie(refreshTokenCookie);
-
+            setAuthCookie(httpResponse, jwtProperties.getPrimaryCookieName(), accessToken, (int)(jwtExpiration / 1000));
+            setAuthCookie(httpResponse, jwtProperties.getRefreshCookieName(), refreshToken, 7 * 24 * 60 * 60);
             return ResponseEntity.ok(LoginResponse.builder()
                     .accessToken(accessToken)
                     .refreshToken(refreshToken)
@@ -344,14 +311,16 @@ public class AuthController {
             return ResponseEntity.status(401).build();
         }
     }
-
     @GetMapping("/validate")
-    public ResponseEntity<Boolean> validateToken(@RequestHeader("Authorization") String authHeader) {
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+    public ResponseEntity<Boolean> validateToken(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            HttpServletRequest httpRequest) {
+        String token = resolveAccessToken(authHeader, httpRequest);
+        if (token == null || token.isBlank()) {
             return ResponseEntity.ok(false);
         }
         try {
-            parseToken(authHeader.substring(7));
+            parseToken(token);
             return ResponseEntity.ok(true);
         } catch (Exception e) {
             return ResponseEntity.ok(false);
@@ -555,6 +524,48 @@ public class AuthController {
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
+    }
+
+    /**
+     * Extract access token from Authorization header or httpOnly cookie.
+     * The JwtAuthenticationFilter skips /auth/ paths, so we must read cookies
+     * directly for authenticated auth endpoints (me, workspace-contexts, etc.).
+     */
+    private String resolveAccessToken(String authHeader, HttpServletRequest request) {
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            return authHeader.substring(7);
+        }
+        List<String> names = jwtProperties.getCookieNames();
+        if (names == null || names.isEmpty()) {
+            names = List.of("up_access_token");
+        }
+        return resolveCookie(request, names);
+    }
+    private String resolveRefreshToken(HttpServletRequest request) {
+        return resolveCookie(request, List.of(jwtProperties.getRefreshCookieName()));
+    }
+    private String resolveCookie(HttpServletRequest request, List<String> names) {
+        Cookie[] cookies = request != null ? request.getCookies() : null;
+        if (cookies == null || names == null || names.isEmpty()) {
+            return null;
+        }
+        for (String name : names) {
+            for (Cookie cookie : cookies) {
+                if (name.equals(cookie.getName()) && cookie.getValue() != null && !cookie.getValue().isBlank()) {
+                    return cookie.getValue();
+                }
+            }
+        }
+        return null;
+    }
+    private void setAuthCookie(HttpServletResponse response, String name, String value, int maxAge) {
+        Cookie cookie = new Cookie(name, value);
+        cookie.setHttpOnly(true);
+        cookie.setSecure(false);
+        cookie.setPath("/");
+        cookie.setMaxAge(maxAge);
+        cookie.setAttribute("SameSite", "Lax");
+        response.addCookie(cookie);
     }
 
     private SecretKey getSigningKey() {

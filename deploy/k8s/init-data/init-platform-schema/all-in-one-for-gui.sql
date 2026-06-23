@@ -1891,6 +1891,42 @@ CREATE TABLE IF NOT EXISTS ac_n8n_config (
 CREATE INDEX IF NOT EXISTS idx_n8n_config_active ON ac_n8n_config(is_active);
 
 -- =====================================================
+-- LDAP 同步审计表 (ac_ldap_sync_audit)
+-- 用途：①运维可视化 LDAP 用户/AD 组同步历史与失败原因；
+--      ②增量同步以最近一次 SUCCESS 记录的 snapshot_at 作为 AD whenChanged 水位起点。
+-- 对应 Flyway admin-center V212（建表） + V213（扩展 Hermes AD Group 同步审计字段）
+-- =====================================================
+CREATE TABLE IF NOT EXISTS ac_ldap_sync_audit (
+    id            VARCHAR(64)   NOT NULL,
+    sync_type     VARCHAR(20)   NOT NULL,           -- FULL / INCREMENTAL / HERMES_AD_GROUP / HERMES_AD_INCR
+    status        VARCHAR(20)   NOT NULL,           -- RUNNING / SUCCESS / FAILED
+    total_fetched INTEGER,
+    upserted      INTEGER,
+    failed        INTEGER,
+    message       VARCHAR(1000),                    -- 失败原因/摘要（脱敏，不含密码/DN 明文）
+    snapshot_at   TIMESTAMP,                        -- 本次同步开始时刻，作为下次增量水位
+    started_at    TIMESTAMP     NOT NULL,
+    finished_at   TIMESTAMP,
+    -- V213 Hermes AD Group 同步扩展列
+    high_water_mark   VARCHAR(1000),                -- 增量同步水位标记
+    groups            VARCHAR(2000),                -- 本次同步涉及的 AD 组清单（逗号分隔）
+    success_count     INTEGER,                      -- 成功 upsert 数量
+    skipped_missing_key INTEGER,                    -- 因缺少 employeeID 而跳过的条数
+    insert_count      INTEGER,                      -- 新用户插入数
+    update_count      INTEGER,                      -- 已存在用户更新数
+    duration_ms       BIGINT,                       -- 同步耗时（毫秒）
+    CONSTRAINT pk_ac_ldap_sync_audit PRIMARY KEY (id)
+);
+
+-- 按 (sync_type, status, started_at) 查询「最近一次成功的增量/全量」时使用
+CREATE INDEX IF NOT EXISTS idx_ac_ldap_sync_audit_type_status_started
+    ON ac_ldap_sync_audit (sync_type, status, started_at DESC);
+
+-- 列表分页（started_at 倒序）
+CREATE INDEX IF NOT EXISTS idx_ac_ldap_sync_audit_started
+    ON ac_ldap_sync_audit (started_at DESC);
+
+-- =====================================================
 -- Comments
 -- =====================================================
 COMMENT ON TABLE admin_password_history IS 'Password history for password policy enforcement';
@@ -1901,6 +1937,7 @@ COMMENT ON TABLE admin_system_configs IS 'System configuration';
 COMMENT ON TABLE admin_audit_logs IS 'Audit trail';
 COMMENT ON TABLE ac_n8n_config IS 'N8N 自动化引擎连接配置';
 COMMENT ON COLUMN ac_n8n_config.api_key IS 'AES-256-GCM 加密存储的 N8N API 密钥';
+COMMENT ON TABLE ac_ldap_sync_audit IS 'LDAP 用户/AD 组同步审计日志（record of full/incremental/user/adgroup sync operations）';
 
 
 -- =============================================================================

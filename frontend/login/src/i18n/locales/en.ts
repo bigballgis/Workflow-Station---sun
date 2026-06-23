@@ -9,6 +9,9 @@ export default {
     passwordPlaceholder: 'Enter Your Password',
     submit: 'Log in',
     submitting: 'Signing in...',
+    or: 'or',
+    dsp: 'Passwordless Sign-In (DSP)',
+    dspSubmitting: 'Signing in via DSP...',
     error: {
       missingParams: 'Missing client_id or redirect_uri parameter.',
       network: 'Network error.',
@@ -16,6 +19,10 @@ export default {
       serverError: 'Server error ({status}). Is Kong/admin-center healthy?',
       invalidCredentials:
         'Invalid username or password, or SSO redirect_uri was rejected.',
+      dspDisabled: 'Passwordless sign-in is not available.',
+      dspNoToken: 'No DSP token found. Please sign in with your password.',
+      dspAuthFailed: 'Could not obtain a DSP token ({detail}). Please sign in with your password.',
+      dspFailed: 'Passwordless sign-in failed ({detail}).',
     },
   },
 }

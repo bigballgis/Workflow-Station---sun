@@ -5,6 +5,8 @@ import com.admin.dto.sso.SsoLoginRequest;
 import com.admin.dto.sso.SsoLoginResponse;
 import com.admin.dto.sso.SsoRedeemRequest;
 import com.admin.dto.sso.SsoRedeemResponse;
+import com.admin.ldap.LdapAuthenticator;
+import com.admin.ldap.LdapConstants;
 import com.admin.repository.UserRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -12,12 +14,13 @@ import com.platform.security.entity.User;
 import com.platform.security.model.UserStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-
 import java.time.Duration;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -35,12 +38,15 @@ public class PlatformSsoService {
     private final PasswordEncoder passwordEncoder;
     private final StringRedisTemplate stringRedisTemplate;
     private final ObjectMapper objectMapper;
+    /** LDAP 认证器仅 {@code ldap.enabled=true} 时存在，故用 ObjectProvider 可选注入。 */
+    private final ObjectProvider<LdapAuthenticator> ldapAuthenticatorProvider;
 
     public SsoLoginResponse loginAndIssueCode(SsoLoginRequest request) {
         validateRedirectUri(request.getClientId(), request.getRedirectUri());
 
-        User user = userRepository.findByUsername(request.getUsername())
-                .orElseThrow(() -> new IllegalArgumentException("Invalid username or password"));
+        // LDAP 为权威源：统一登录页同样优先走 LDAP bind（成功即 JIT 回写 sys_users），
+        // 仅在 LDAP 关闭 / 用户不在 LDAP / LDAP 不可用时回退本地账号密码。
+        User user = authenticate(request.getUsername(), request.getPassword());
 
         if (user.getStatus() == UserStatus.LOCKED) {
             throw new IllegalArgumentException("Account is locked");
@@ -48,12 +54,60 @@ public class PlatformSsoService {
         if (user.getStatus() == UserStatus.INACTIVE) {
             throw new IllegalArgumentException("Account is disabled");
         }
-        if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
+
+        return buildCode(user.getId(), request.getClientId(), request.getRedirectUri(), request.getState());
+    }
+
+    /**
+     * 认证用户：LDAP 优先（权威源），失败语义决定是否回退本地。
+     *
+     * <ul>
+     *   <li>AUTHENTICATED：LDAP bind 通过且已 JIT，按 userId 取回库内用户。</li>
+     *   <li>NOT_IN_LDAP / UNAVAILABLE：回退本地账号密码（兼容本地管理员 / LDAP 故障）。</li>
+     *   <li>BAD_CREDENTIALS：用户在 LDAP 但口令错误——权威拒绝，不回退。</li>
+     * </ul>
+     */
+    private User authenticate(String username, String password) {
+        LdapAuthenticator ldap = ldapAuthenticatorProvider.getIfAvailable();
+        if (ldap != null) {
+            LdapAuthenticator.LdapAuthResult result = ldap.authenticate(username, password);
+            if (result.isAuthenticated()) {
+                return userRepository.findById(result.userId())
+                        .orElseThrow(() -> new IllegalArgumentException("Invalid username or password"));
+            }
+            if (!result.shouldFallbackToLocal()) {
+                if (shouldFallbackToLocalAccount(username)) {
+                    log.info("SSO LDAP rejected credentials for local-managed user {}, will try local password", username);
+                    return authenticateLocal(username, password);
+                }
+                log.warn("SSO LDAP rejected credentials for user: {}", username);
+                throw new IllegalArgumentException("Invalid username or password");
+            }
+            log.debug("SSO LDAP fallback to local for user: {} (outcome={})", username, result.outcome());
+        }
+        return authenticateLocal(username, password);
+    }
+    
+    private boolean shouldFallbackToLocalAccount(String username) {
+        Optional<User> local = userRepository.findByUsername(username);
+        return local.isPresent()
+                && !LdapConstants.LDAP_SYNC_ACTOR.equals(local.get().getCreatedBy());
+    }
+
+    /** 本地账号密码认证（LDAP 关闭 / 不可用 / 用户不在 LDAP 时的回退路径）。 */
+    private User authenticateLocal(String username, String password) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new IllegalArgumentException("Invalid username or password"));
+        if (!passwordEncoder.matches(password, user.getPasswordHash())) {
             throw new IllegalArgumentException("Invalid username or password");
         }
+        return user;
+    }
 
+    /** 签发短期 SSO code 并落库 Redis（loginAndIssueCode / issueCodeForUser 共用）。 */
+    private SsoLoginResponse buildCode(String userId, String clientId, String redirectUri, String state) {
         String code = UUID.randomUUID().toString();
-        Payload payload = new Payload(user.getId(), request.getClientId(), request.getState());
+        Payload payload = new Payload(userId, clientId, state);
         try {
             String json = objectMapper.writeValueAsString(payload);
             stringRedisTemplate.opsForValue().set(
@@ -63,12 +117,27 @@ public class PlatformSsoService {
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("Failed to serialize SSO payload", e);
         }
-
         return SsoLoginResponse.builder()
                 .authorizationCode(code)
-                .state(request.getState())
-                .redirectUri(request.getRedirectUri())
+                .state(state)
+                .redirectUri(redirectUri)
                 .build();
+    }
+
+    /**
+     * 为已通过外部机制（如 DSP 免密）确认身份的用户签发一次性 SSO code。
+     *
+     * <p>与 {@link #loginAndIssueCode} 共用 redirect 校验与 code 落库逻辑，区别仅在于身份已确定、
+     * 不再做账号口令校验。调用方须自行保证 userId 合法且状态可登录。</p>
+     *
+     * @param userId      已解析的用户 id
+     * @param clientId    SSO client
+     * @param redirectUri 回调地址（须命中允许前缀）
+     * @param state       透传 state
+     */
+    public SsoLoginResponse issueCodeForUser(String userId, String clientId, String redirectUri, String state) {
+        validateRedirectUri(clientId, redirectUri);
+        return buildCode(userId, clientId, redirectUri, state);
     }
 
     public SsoRedeemResponse redeem(SsoRedeemRequest request) {

@@ -108,7 +108,10 @@ function Wait-ForContainerHealth {
     Write-Host "  Waiting for $DisplayName..."
     $attempt = 0
     while ($attempt -lt $MaxRetries) {
-        $status = docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' $ContainerName 2>$null
+        $lb = [char]123 + [char]123
+        $rb = [char]125 + [char]125
+        $fmt = $lb + 'if .State.Health' + $rb + $lb + '.State.Health.Status' + $rb + $lb + 'else' + $rb + $lb + '.State.Status' + $rb + $lb + 'end' + $rb
+        $status = docker inspect --format=$fmt $ContainerName 2>$null
         if ($status -eq "healthy") {
             Write-Host "    $DisplayName is healthy." -ForegroundColor Green
             return
@@ -120,6 +123,68 @@ function Wait-ForContainerHealth {
         $attempt++
     }
     throw "$DisplayName failed to become healthy in time"
+}
+
+# Pull image with retries and simple fallback rules (sequential, reduces concurrent registry load)
+function Pull-ImageWithRetry {
+    param(
+        [Parameter(Mandatory=$true)] [string]$Image,
+        [int]$MaxAttempts = 5
+    )
+
+    $attempt = 0
+    while ($attempt -lt $MaxAttempts) {
+        Write-Host "  Pulling image: $Image (attempt $([int]($attempt+1))/$MaxAttempts)" -ForegroundColor DarkGray
+        docker pull $Image
+        if ($LASTEXITCODE -eq 0) { Write-Host "    Pulled: $Image" -ForegroundColor Green; return $true }
+
+        # Try a lightweight fallback: strip known registry host prefix (e.g. docker.n8n.io/... -> namespace/name)
+        if ($Image -match '^[^/]+/([^/]+/[^:]+(:.*)?)$') {
+            $short = $Matches[1]
+            if ($short -and $short -ne $Image) {
+                    Write-Host "    Fallback pull: $short" -ForegroundColor DarkGray
+                    docker pull $short
+                    if ($LASTEXITCODE -eq 0) {
+                        Write-Host "    Pulled fallback: $short" -ForegroundColor Green
+                        # Tag fallback image back to original name so compose finds it
+                        docker tag $short $Image 2>$null
+                        if ($LASTEXITCODE -eq 0) { Write-Host "    Tagged $short -> $Image" -ForegroundColor DarkGray }
+                        return $true
+                    }
+                }
+        }
+
+        $attempt++
+        $backoff = [Math]::Min(30, 5 * $attempt)
+        Write-Host "    Pull failed, sleeping $backoff seconds before retry..." -ForegroundColor Yellow
+        Start-Sleep -Seconds $backoff
+    }
+    Write-Host "    Failed to pull image: $Image after $MaxAttempts attempts" -ForegroundColor Red
+    return $false
+}
+
+# Pull a base image with fallback mirrors. Returns the first pullable image name.
+# Used for Java and nginx base images that different registries may host.
+function Resolve-BaseImage {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string[]]$Candidates
+    )
+
+    foreach ($img in $Candidates) {
+        Write-Host "  Trying base image: $img" -ForegroundColor DarkGray
+        $pullOutput = docker pull $img 2>&1
+        $pullExit = $LASTEXITCODE
+        # Show last 3 lines of pull output for context (but keep function output stream clean)
+        $pullOutput | Select-Object -Last 3 | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray }
+        if ($pullExit -eq 0) {
+            Write-Host "  Base image resolved: $img" -ForegroundColor Green
+            return $img
+        }
+        Write-Host "  Pull failed for $img, trying next candidate..." -ForegroundColor Yellow
+    }
+
+    throw "Cannot pull any base image from candidates: $($Candidates -join ', '). Check Docker network/proxy."
 }
 
 # ==================== Single Service Mode ====================
@@ -150,6 +215,8 @@ if ($Service) {
             $npmExit = $LASTEXITCODE
             $ErrorActionPreference = $prev
             if ($npmExit -ne 0) { throw "npm install failed: $Service" }
+            # Remove auto-generated dts files before build to avoid Windows file locking (errno -4094)
+            Remove-Item -Path "src/components.d.ts", "src/auto-imports.d.ts" -Force -ErrorAction SilentlyContinue
             npx vite build
             if ($LASTEXITCODE -ne 0) { throw "vite build failed: $Service" }
         } finally {
@@ -169,7 +236,13 @@ if ($Service) {
         # 仅 nginx:alpine + 挂载 nginx-edge.conf；无镜像构建，改配置后 up 会按 compose 重建/重启
         docker compose -f $ComposeFile --env-file $EnvFile up -d --no-deps --force-recreate $Service
     } else {
-        docker compose -f $ComposeFile --env-file $EnvFile build --build-arg "JAVA_BASE_IMAGE=$JavaBaseImage" $Service
+        # Resolve Java base image with fallback before single-service backend build
+        $resolvedJavaImage = Resolve-BaseImage -Candidates @(
+            $JavaBaseImage,
+            "eclipse-temurin:17-jre",
+            "docker.m.daocloud.io/library/eclipse-temurin:17-jre"
+        )
+        docker compose -f $ComposeFile --env-file $EnvFile build --build-arg "JAVA_BASE_IMAGE=$resolvedJavaImage" $Service
         if ($LASTEXITCODE -ne 0) { throw "Docker compose build failed for $Service" }
         docker compose -f $ComposeFile --env-file $EnvFile up -d --no-deps $Service
     }
@@ -179,7 +252,10 @@ if ($Service) {
         Wait-ForContainerHealth -ContainerName $svc.Container -DisplayName $Service
     } else {
         Start-Sleep -Seconds 3
-        $status = docker inspect --format='{{.State.Status}}' $svc.Container 2>$null
+        $lb = [char]123 + [char]123
+        $rb = [char]125 + [char]125
+        $fmt = $lb + '.State.Status' + $rb
+        $status = docker inspect --format=$fmt $svc.Container 2>$null
         if ($status -eq "running") {
             Write-Host "  $Service is running." -ForegroundColor Green
         } else {
@@ -191,9 +267,6 @@ if ($Service) {
     Write-Host " $Service deployed successfully!" -ForegroundColor Green
     Write-Host "========================================" -ForegroundColor Green
     docker compose -f $ComposeFile --env-file $EnvFile ps $Service
-
-    Write-Host "  Cleaning dangling images... (docker image prune -f)" -ForegroundColor DarkGray
-    docker image prune -f 2>&1 | Out-Null
     exit 0
 }
 
@@ -210,56 +283,9 @@ if ($ServicesOnly) {
 }
 
 # Step 0a: Pre-pull base images via domestic mirror
+# Note: prefer in-script sequential pulls (prepull-images.ps1 may fail to parse in some shells)
 if (-not $SkipImagePull) {
-    Write-Host "`n[0/4] Pre-pulling base images via domestic mirror..." -ForegroundColor Yellow
-
-    $images = @(
-        @{ Mirror = $JavaBaseImage; Target = "eclipse-temurin:17-jre" },
-        @{ Mirror = "docker.m.daocloud.io/library/nginx:alpine";                  Target = "nginx:alpine"                  },
-        @{ Mirror = "docker.m.daocloud.io/library/postgres:16.5-alpine";          Target = "postgres:16.5-alpine"          },
-        @{ Mirror = "docker.m.daocloud.io/library/redis:7.2-alpine";              Target = "redis:7.2-alpine"              },
-        @{ Mirror = "docker.m.daocloud.io/apache/superset:6.0.0";                 Target = "apache/superset:6.0.0"         }
-    )
-
-    foreach ($img in $images) {
-        $exists = docker image inspect $img.Target 2>$null
-        if ($LASTEXITCODE -eq 0) {
-            Write-Host "  Already cached, skipping: $($img.Target)" -ForegroundColor DarkGray
-            continue
-        }
-
-        $pulled = $false
-        for ($attempt = 1; $attempt -le 3; $attempt++) {
-            Write-Host "  Pulling $($img.Target) from mirror (attempt $attempt/3)..."
-            docker pull $img.Mirror 2>&1 | Out-Null
-            if ($LASTEXITCODE -eq 0) {
-                docker tag $img.Mirror $img.Target 2>&1 | Out-Null
-                Write-Host "  OK (mirror): $($img.Target)" -ForegroundColor Green
-                $pulled = $true
-                break
-            }
-            if ($attempt -lt 3) {
-                Write-Host "  Retrying in 5s..." -ForegroundColor DarkGray
-                Start-Sleep -Seconds 5
-            }
-        }
-
-        if (-not $pulled) {
-            Write-Host "  Mirror unavailable. Restoring $($img.Target) from BuildKit cache..." -ForegroundColor Yellow
-            $tmpFile = [System.IO.Path]::GetTempFileName() + ".Dockerfile"
-            "FROM $($img.Target)" | Set-Content $tmpFile
-            docker build --quiet -t $img.Target -f $tmpFile "$PSScriptRoot" 2>&1 | Out-Null
-            Remove-Item $tmpFile -ErrorAction SilentlyContinue
-
-            if ($LASTEXITCODE -eq 0) {
-                Write-Host "  OK (BuildKit cache): $($img.Target)" -ForegroundColor Green
-            } else {
-                Write-Host "  WARNING: Could not pull or restore $($img.Target). Continuing — actual builds may still succeed via BuildKit cache." -ForegroundColor Yellow
-            }
-        }
-    }
-
-    Write-Host "  Base images ready." -ForegroundColor Green
+    Write-Host "`n[0/4] Pre-pull disabled external script; continuing with in-script pulls" -ForegroundColor DarkGray
 } else {
     Write-Host "`n[0/4] Skipping image pre-pull" -ForegroundColor DarkGray
 }
@@ -308,7 +334,14 @@ if (-not $SkipMaven) {
 # Step 2: Build frontend
 if (-not $SkipFrontend) {
     Write-Host "`n[2/4] Building frontend (local npm build + Docker)..." -ForegroundColor Yellow
-    
+
+    # Pre-pull nginx:alpine (used by all frontend Dockerfile.local) with fallback mirrors
+    $resolvedNginx = Resolve-BaseImage -Candidates @(
+        "nginx:alpine",
+        "docker.m.daocloud.io/library/nginx:alpine"
+    )
+    Write-Host "  Frontend base image resolved: $resolvedNginx" -ForegroundColor DarkGray
+
     $frontends = @(
         @{ Name = "admin-center-frontend"; Dir = "frontend/admin-center" },
         @{ Name = "user-portal-frontend"; Dir = "frontend/user-portal" },
@@ -328,6 +361,8 @@ if (-not $SkipFrontend) {
             $npmExit = $LASTEXITCODE
             $ErrorActionPreference = $prev
             if ($npmExit -ne 0) { throw "npm install failed: $($fe.Name)" }
+            # Remove auto-generated dts files before build to avoid Windows file locking (errno -4094)
+            Remove-Item -Path "src/components.d.ts", "src/auto-imports.d.ts" -Force -ErrorAction SilentlyContinue
             npx vite build
             if ($LASTEXITCODE -ne 0) { throw "vite build failed: $($fe.Name)" }
         } finally {
@@ -340,9 +375,6 @@ if (-not $SkipFrontend) {
     }
     
     Write-Host "  Frontend images built." -ForegroundColor Green
-    # Edge nginx proxies to frontend containers by Docker DNS; recreate edge after any SPA image rebuild
-    # or /portal/ may 404 until edge is manually restarted (stale upstream IP).
-    $script:RecreateEdgeFrontendAfterFeBuild = $true
 } else {
     Write-Host "`n[2/4] Skipping frontend build" -ForegroundColor DarkGray
 }
@@ -350,8 +382,33 @@ if (-not $SkipFrontend) {
 # Step 3: Start infrastructure
 if (-not $SkipInfra) {
     Write-Host "`n[3/4] Starting infrastructure (postgres, redis, kafka, n8n)..." -ForegroundColor Yellow
+
+    # Pre-pull infra images sequentially to avoid concurrent registry failures
+    $infraImages = @(
+        "postgres:16.5-alpine",
+        "redis:7.2-alpine",
+        "confluentinc/cp-kafka:7.5.3",
+        "docker.n8n.io/n8nio/n8n:latest"
+    )
+    $failedInfra = @()
+    foreach ($img in $infraImages) {
+        $ok = Pull-ImageWithRetry -Image $img -MaxAttempts 5
+        if (-not $ok) { $failedInfra += $img }
+    }
+    if ($failedInfra.Count -gt 0) {
+        Write-Host "  Failed to pull infra images: $($failedInfra -join ', ')" -ForegroundColor Red
+        Write-Host "  Will still attempt to start infra; if pulls fail compose will exit with error." -ForegroundColor Yellow
+    }
+
     docker compose -f $ComposeFile --env-file $EnvFile up -d postgres redis kafka n8n
-    
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "  docker compose up failed during infrastructure startup." -ForegroundColor Red
+        Write-Host "  This usually means one or more required images could not be pulled." -ForegroundColor Red
+        Write-Host "  Check Docker network/proxy settings or ensure the mirror is reachable." -ForegroundColor Yellow
+        docker compose -f $ComposeFile --env-file $EnvFile ps
+        throw "Docker compose infra startup failed"
+    }
+
     # First boot runs large init-scripts (demo data + Flowable schema); allow more time.
     Wait-ForContainerHealth -ContainerName "platform-postgres-dev" -DisplayName "PostgreSQL" -MaxRetries 180
     
@@ -372,11 +429,14 @@ if (-not $SkipInfra) {
     
     Wait-ForContainerHealth -ContainerName "platform-redis-dev" -DisplayName "Redis" -MaxRetries 20
     Wait-ForContainerHealth -ContainerName "platform-kafka-dev" -DisplayName "Kafka" -MaxRetries 30 -SleepSeconds 3
-    
+
     Write-Host "  Waiting for n8n..."
     $retries = 0
     while ($retries -lt 20) {
-        $health = docker inspect --format='{{.State.Health.Status}}' platform-n8n-dev 2>$null
+        $lb = [char]123 + [char]123
+        $rb = [char]125 + [char]125
+        $fmt = $lb + '.State.Health.Status' + $rb
+        $health = docker inspect --format=$fmt platform-n8n-dev 2>$null
         if ($health -eq "healthy") { break }
         Start-Sleep -Seconds 3
         $retries++
@@ -392,23 +452,111 @@ if (-not $SkipInfra) {
 
 # Step 4: Build and start all services
 Write-Host "`n[4/4] Starting all services..." -ForegroundColor Yellow
-docker compose -f $ComposeFile --env-file $EnvFile build --build-arg "JAVA_BASE_IMAGE=$JavaBaseImage"
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "  docker compose build failed." -ForegroundColor Red
-    docker compose -f $ComposeFile --env-file $EnvFile ps
-    throw "Docker compose image build failed"
+
+# Resolve Java base image with fallback mirrors before the compose build.
+# DaoCloud and other domestic mirrors may be unreliable; fall back to Docker Hub.
+$resolvedJavaImage = Resolve-BaseImage -Candidates @(
+    $JavaBaseImage,
+    "eclipse-temurin:17-jre",
+    "docker.m.daocloud.io/library/eclipse-temurin:17-jre"
+)
+Write-Host "  Java base image resolved: $resolvedJavaImage" -ForegroundColor DarkGray
+
+$buildOk = $false
+$attemptedImages = @($resolvedJavaImage)
+
+while (-not $buildOk -and $attemptedImages.Count -le 3) {
+    $tryImage = $attemptedImages[-1]
+    if ($tryImage -ne $resolvedJavaImage) {
+        Write-Host "  Retrying build with Java base image: $tryImage" -ForegroundColor Yellow
+    }
+
+    docker compose -f $ComposeFile --env-file $EnvFile build --build-arg "JAVA_BASE_IMAGE=$tryImage"
+    if ($LASTEXITCODE -eq 0) {
+        $buildOk = $true
+        $resolvedJavaImage = $tryImage
+        break
+    }
+
+    Write-Host "  docker compose build failed with image: $tryImage" -ForegroundColor Yellow
+
+    # Fallback 1: try excluding superset-final (heavy, may have independent pull issues)
+    Write-Host "  Attempting fallback: rebuild excluding superset-final..." -ForegroundColor Yellow
+    $svcList = docker compose -f $ComposeFile --env-file $EnvFile config --services 2>$null | Where-Object { $_ -ne 'superset-final' }
+    if ($svcList -and $svcList.Count -gt 0) {
+        Write-Host "  Rebuilding services: $($svcList -join ', ')" -ForegroundColor DarkGray
+        docker compose -f $ComposeFile --env-file $EnvFile build --build-arg "JAVA_BASE_IMAGE=$tryImage" $svcList
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "  Fallback build succeeded (superset-final skipped)." -ForegroundColor Green
+            $buildOk = $true
+            $resolvedJavaImage = $tryImage
+            break
+        }
+    }
+
+    # Fallback 2: try next Java base image candidate
+    $nextCandidates = @(
+        "eclipse-temurin:17-jre",
+        "docker.m.daocloud.io/library/eclipse-temurin:17-jre"
+    ) | Where-Object { $_ -notin $attemptedImages }
+    if ($nextCandidates.Count -gt 0) {
+        $nextImage = $nextCandidates[0]
+        Write-Host "  Trying alternative Java base image: $nextImage" -ForegroundColor Yellow
+        docker pull $nextImage 2>&1 | Select-Object -Last 3
+        if ($LASTEXITCODE -eq 0) {
+            $attemptedImages += $nextImage
+            continue
+        }
+        Write-Host "  Cannot pull $nextImage either." -ForegroundColor Yellow
+    }
+
+    # All fallbacks exhausted
+    break
 }
-docker compose -f $ComposeFile --env-file $EnvFile up -d
+
+if (-not $buildOk) {
+    Write-Host "  All build attempts failed." -ForegroundColor Red
+    docker compose -f $ComposeFile --env-file $EnvFile ps
+    throw "Docker compose image build failed (all fallbacks exhausted)"
+}
+if (-not $SkipImagePull) {
+    Write-Host "`n[0.5] Pulling images listed in compose (sequential, retries)" -ForegroundColor Yellow
+    $images = docker compose -f $ComposeFile --env-file $EnvFile config --images 2>$null | Sort-Object -Unique
+    $failedImages = @()
+    foreach ($img in $images) {
+        # Skip local dev tags (built locally)
+        if ($img -like 'dev-*') { continue }
+        $ok = Pull-ImageWithRetry -Image $img -MaxAttempts 5
+        if (-not $ok) { $failedImages += $img }
+    }
+    if ($failedImages.Count -gt 0) {
+        Write-Host "  Some images failed to pull:" -ForegroundColor Red
+        $failedImages | ForEach-Object { Write-Host "    $_" }
+        Write-Host "  You may need to check Docker proxy/network or pull these images manually." -ForegroundColor Yellow
+        # Continue so fallback rebuild can still proceed for local images, but flag error for full up
+    } else {
+        Write-Host "  All external images pulled." -ForegroundColor Green
+    }
+}
+
+if ($ServicesOnly -or $SkipInfra) {
+    Write-Host "  Starting only non-infra services (skip infra)..." -ForegroundColor Yellow
+    $infra = @('postgres','redis','kafka','n8n','superset-final')
+    $allSvcs = docker compose -f $ComposeFile --env-file $EnvFile config --services 2>$null
+    $startSvcs = $allSvcs | Where-Object { $infra -notcontains $_ }
+    if ($startSvcs -and $startSvcs.Count -gt 0) {
+        docker compose -f $ComposeFile --env-file $EnvFile up -d --no-deps $startSvcs
+    } else {
+        Write-Host "  No non-infra services to start." -ForegroundColor DarkGray
+    }
+} else {
+    docker compose -f $ComposeFile --env-file $EnvFile up -d
+}
+
 if ($LASTEXITCODE -ne 0) {
     Write-Host "  docker compose failed. Current service status:" -ForegroundColor Red
     docker compose -f $ComposeFile --env-file $EnvFile ps
     throw "Docker compose service startup failed"
-}
-
-if ($RecreateEdgeFrontendAfterFeBuild) {
-    Write-Host "  Recreating edge-frontend (refresh SPA upstream DNS after frontend rebuild)..." -ForegroundColor Cyan
-    docker compose -f $ComposeFile --env-file $EnvFile up -d --force-recreate edge-frontend
-    if ($LASTEXITCODE -ne 0) { throw "edge-frontend recreate failed" }
 }
 
 Write-Host "  Waiting for backend health checks..." -ForegroundColor Cyan
@@ -420,9 +568,6 @@ Wait-ForContainerHealth -ContainerName "platform-edge-frontend-dev" -DisplayName
 
 Write-Host "  Current service status:" -ForegroundColor Cyan
 docker compose -f $ComposeFile --env-file $EnvFile ps
-
-    Write-Host "  Cleaning dangling images..." -ForegroundColor DarkGray
-    docker image prune -f 2>&1 | Out-Null
 
 Write-Host "`n========================================" -ForegroundColor Green
 Write-Host " Deployment Complete!" -ForegroundColor Green

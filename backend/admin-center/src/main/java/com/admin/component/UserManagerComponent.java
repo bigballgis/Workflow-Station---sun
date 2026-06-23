@@ -376,12 +376,16 @@ public class UserManagerComponent {
 
         if (user.getEntityManagerId() != null) {
             userRepository.findById(user.getEntityManagerId())
-                    .ifPresent(manager -> detail.setEntityManagerName(manager.getFullName()));
+                    .ifPresentOrElse(
+                    manager -> detail.setEntityManagerName(manager.getFullName()),
+                    () -> detail.setEntityManagerName(user.getEntityManagerId()));
         }
 
         if (user.getFunctionManagerId() != null) {
             userRepository.findById(user.getFunctionManagerId())
-                    .ifPresent(manager -> detail.setFunctionManagerName(manager.getFullName()));
+                    .ifPresentOrElse(
+                    manager -> detail.setFunctionManagerName(manager.getFullName()),
+                    () -> detail.setFunctionManagerName(user.getFunctionManagerId()));
         }
 
         // Recent login auditing will plug in via dedicated projections.
@@ -456,6 +460,9 @@ public class UserManagerComponent {
                 User manager = managerMap.get(user.getEntityManagerId());
                 if (manager != null) {
                     info.setEntityManagerName(manager.getFullName());
+                } else {
+                    info.setEntityManagerName(user.getEntityManagerId());
+                    info.setEntityManagerId(null);
                 }
             }
             
@@ -463,6 +470,9 @@ public class UserManagerComponent {
                 User manager = managerMap.get(user.getFunctionManagerId());
                 if (manager != null) {
                     info.setFunctionManagerName(manager.getFullName());
+                } else {
+                    info.setFunctionManagerName(user.getFunctionManagerId());
+                    info.setFunctionManagerId(null);
                 }
             }
             

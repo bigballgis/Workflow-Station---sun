@@ -1,0 +1,71 @@
+# =====================================================================
+# test-ldap 种子数据（OpenLDAP 标准 inetOrgPerson schema）
+# 仅本地端到端验证用。base dn = dc=example,dc=org（由 osixia LDAP_DOMAIN=example.org 推导）。
+#
+# 字段对应（本地 env 已覆盖 HSBC AD 属性名为标准 schema 属性）：
+#   uid            → username
+#   employeeNumber → sys_users.id / employee_id（LDAP_ATTR_EMPLOYEE_ID=employeeNumber）
+#   displayName    → display_name / full_name
+#   mail           → email
+#   telephoneNumber→ phone
+#   title          → position
+#   manager        → entity/function manager（LDAP_ATTR_LINE_MANAGER_ID=manager）
+# =====================================================================
+
+# 组织单元：people
+dn: ou=people,dc=example,dc=org
+objectClass: organizationalUnit
+ou: people
+
+# 用户 1：alice（DSP 免密桩固定指向此人 employeeNumber=100001）
+dn: uid=alice,ou=people,dc=example,dc=org
+objectClass: inetOrgPerson
+objectClass: organizationalPerson
+objectClass: person
+objectClass: top
+uid: alice
+cn: Alice Anderson
+sn: Anderson
+givenName: Alice
+displayName: Alice Anderson
+employeeNumber: 100001
+mail: alice@example.org
+telephoneNumber: +85212340001
+title: Engineering Manager
+userPassword: alicepw
+
+# 用户 2：bob（manager 指向 alice，验证 manager 字段映射）
+dn: uid=bob,ou=people,dc=example,dc=org
+objectClass: inetOrgPerson
+objectClass: organizationalPerson
+objectClass: person
+objectClass: top
+uid: bob
+cn: Bob Brown
+sn: Brown
+givenName: Bob
+displayName: Bob Brown
+employeeNumber: 100002
+mail: bob@example.org
+telephoneNumber: +85212340002
+title: Software Engineer
+manager: uid=alice,ou=people,dc=example,dc=org
+userPassword: bobpw
+
+# 用户 3：carol（验证全量同步多条）
+dn: uid=carol,ou=people,dc=example,dc=org
+objectClass: inetOrgPerson
+objectClass: organizationalPerson
+objectClass: person
+objectClass: top
+uid: carol
+cn: Carol Clarke
+sn: Clarke
+givenName: Carol
+displayName: Carol Clarke
+employeeNumber: 100003
+mail: carol@example.org
+telephoneNumber: +85212340003
+title: Business Analyst
+manager: uid=alice,ou=people,dc=example,dc=org
+userPassword: carolpw

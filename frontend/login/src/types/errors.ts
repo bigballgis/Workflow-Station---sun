@@ -19,6 +19,18 @@ export enum AppErrorCode {
 
   /** 后端 4xx 错误（凭证无效或 redirect_uri 被拒绝） */
   LOGIN_INVALID_CREDENTIALS = 'LOGIN_INVALID_CREDENTIALS',
+
+  /** DSP 免密不可用（后端未启用 / 503） */
+  DSP_DISABLED = 'DSP_DISABLED',
+
+  /** 浏览器侧未取得 DSP AMToken */
+  DSP_NO_TOKEN = 'DSP_NO_TOKEN',
+
+  /** 浏览器侧主动调用 DSP authenticate 获取 AMToken 失败（网络/CORS/4xx/5xx） */
+  DSP_AUTH_FAILED = 'DSP_AUTH_FAILED',
+
+  /** DSP 免密失败（4xx / 解析失败） */
+  DSP_FAILED = 'DSP_FAILED',
 }
 
 /** 标准化错误结构（RULES.md Rule 6） */

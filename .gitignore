@@ -89,6 +89,11 @@ yarn-error.log*
 .vite/
 *.timestamp-*.mjs
 
+# Auto-generated TypeScript declaration files (unplugin-vue-components / unplugin-auto-import)
+# These are regenerated on every build and must not be committed
+frontend/*/src/components.d.ts
+frontend/*/src/auto-imports.d.ts
+
 # =============================================================================
 # Logs
 # =============================================================================

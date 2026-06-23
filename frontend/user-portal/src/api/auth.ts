@@ -187,8 +187,25 @@ export const clearAuth = () => {
 }
 
 export const isAuthenticated = (): boolean => {
-  // Auth via httpOnly cookie — check for cached user profile as indicator
+  // Auth state is verified by /me because the real token is an httpOnly cookie.
   return !!getStoredUser()
+}
+export async function verifyPortalSession(): Promise<UserInfo> {
+  const fresh = await getCurrentUser()
+  saveUser(fresh)
+  localStorage.setItem(USER_ID_KEY, fresh.userId)
+  await reconcilePortalWorkspaceSession()
+  const current = getStoredUser() || fresh
+  let contexts: WorkspaceContextOption[] = []
+  try {
+    contexts = await listWorkspaceContexts()
+  } catch {
+    contexts = []
+  }
+  const merged = applyWorkspaceAwarePortalAccess(current, contexts.length > 0)
+  saveUser(merged)
+  localStorage.setItem(USER_ID_KEY, merged.userId)
+  return merged
 }
 
 /**
@@ -196,7 +213,6 @@ export const isAuthenticated = (): boolean => {
  * Security 仍按 JWT 拦截非白名单接口。若库中已有工作台，用第一条 UBR 调用 switch-workspace 换发 FULL token。
  */
 export async function reconcilePortalWorkspaceSession(): Promise<boolean> {
-  // Auth via httpOnly cookie — proceed if we have cached user info
   const stored = getStoredUser()
   if (!stored) return false
   const needReconcile =

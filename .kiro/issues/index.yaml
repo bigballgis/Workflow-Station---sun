@@ -739,3 +739,79 @@
     验证：miLinkChildSiblingSliceSync.test.ts；MI 回归单元 106/106；保存循环 e2e PASS。
     路径：composables/tasks/subTableSliceMerge.ts、useTaskForm.ts、composables/taskDetail/useTaskDetailMiPersist.ts、
     utils/subTableRowRuntime.ts。
+- id: "1454"
+  status: fixed
+  fixed_at: "2026-06-16"
+  severity: major
+  category: bug
+  summary: "统一登录页 /sso/login 绕过 LDAP：PlatformSsoService 仅做本地口令校验，LDAP 同步用户（占位密码）无法登录"
+  detail: |
+    现象：实现 LDAP 后，账号口令登录走的是登录页 /sso/login（PlatformSsoService.loginAndIssueCode），
+    该方法仅 passwordEncoder.matches(本地 passwordHash)，未走 LDAP bind；而 LDAP 同步入库的用户
+    passwordHash 为占位值，故 alice/alicepw 登录失败。LDAP-first 此前只接进了 AuthServiceImpl.login(/auth/login)。
+    修复：PlatformSsoService 注入 ObjectProvider<LdapAuthenticator>，loginAndIssueCode 改为 LDAP-first
+    （AUTHENTICATED→按 userId 取用户；BAD_CREDENTIALS→拒绝不回退；NOT_IN_LDAP/UNAVAILABLE→回退本地），
+    并抽出 buildCode 公共方法（与 issueCodeForUser 共用，去重）。
+    验证：alice/alicepw→200+code；错误口令→400；admin（不在 LDAP）→回退本地登录成功。
+    路径：backend/admin-center/src/main/java/com/admin/service/PlatformSsoService.java。
+- id: "1455"
+  status: fixed
+  fixed_at: "2026-06-16"
+  severity: major
+  category: deploy
+  summary: "本地旧 postgres 卷 schema 漂移：admin_audit_logs/sys_roles/sys_virtual_groups 缺列致仪表盘活动与虚拟组 500"
+  detail: |
+    现象：admin/password 登录后仪表盘 Recent Activities(/dashboard/activities) 与虚拟组(/virtual-groups) 报
+    Internal server error。根因：dev 用既有 postgres 卷，init-scripts 仅对全新卷生效、dev 关闭 Flyway，
+    故后加入 canonical schema 的列未落到旧库：admin_audit_logs.{duration_ms,request_method,request_path}、
+    sys_roles.display_name、sys_virtual_groups.display_name 缺失（CREATE TABLE IF NOT EXISTS 对已存在表 no-op）。
+    修复（不重建卷、保数据）：对运行库幂等补列，并重放幂等 00-schema/01-platform-security-schema.sql 与
+    05-admin-center-schema.sql（纯 DDL、IF NOT EXISTS）兜底同源漂移。
+    验证：/virtual-groups、/roles、/dashboard/activities、/dashboard/user-trends 均 200；
+    登录后仪表盘与虚拟组页截图无报错（admin-center/verification-screenshots/2026-06-16_admin-*-after-fix.png）。
+    备注：canonical init 脚本本身正确，属旧卷遗留；如需彻底对齐可重建 postgres 卷由 init 脚本全量初始化。
+- id: "1456"
+  status: fixed
+  fixed_at: "2026-06-16"
+  severity: minor
+  category: quality
+  summary: "统一登录页 DSP 免密按钮默认不显示：仅 am_token 或 VITE_DSP_ENABLED 时可见"
+  detail: |
+    现象：本地正常打开登录页（无 am_token）看不到 DSP 免密入口。
+    设计：按钮显隐 = 构建期 VITE_DSP_ENABLED===true 或 URL 带 am_token。
+    本地处理：新增 frontend/login/.env.production.local（*.local 默认 gitignore，不进库、不影响生产）
+    设 VITE_DSP_ENABLED=true，重建 login dist + 镜像。生产仍由真实 DSP/网关配置决定是否开启。
+    验证：默认 URL 截图按钮常显（verification-screenshots/2026-06-16_dsp-login-button-default.png）。
+- id: "1457"
+  status: open
+  severity: major
+  category: deploy
+  summary: "dev docker-compose 从未把 LDAP/DSP/ADMIN_DEV_BYPASS_ROLE_CHECK 注入 admin-center；容器用 yaml 默认值跑（bypass=false）导致无角色新用户登录闪回"
+  detail: |
+    现象：ADMIN_DEV_BYPASS_ROLE_CHECK=true 下，admin/password 能进（有 SYS_ADMIN），但 Create User 新建的无角色用户登录后闪回登录页。
+    根因：deploy/environments/dev/docker-compose.dev.yml 的 admin-center 服务没有映射 LDAP_*/DSP_*/ADMIN_DEV_BYPASS_ROLE_CHECK，
+      容器内 printenv 这些变量为空 → application.yml 默认值生效（ldap/dsp 默认 true、bypass 默认 false）。
+      登录链路 /sso/login(loginAndIssueCode 只认证) → redeem → issueSsoSession → ensureAdminAccess 要求 SYS_ADMIN/AUDITOR，
+      bypass 未生效 → 抛 "You do not have access to Admin Center" → 回调 catch → redirectToUnifiedLogin → 闪回。
+    本轮决定（用户选 role_only）：不重建 dev；正确测法是给新用户分配 SYS_ADMIN/AUDITOR 角色后再登录（即使 bypass 关也成立）。
+    待办：如需用假 LDAP 账号/真开 bypass 测，应把上述 env 注入 compose 并补 test-ldap/mock-dsp 后重建 admin-center。
+- id: "1458"
+  status: open
+  severity: major
+  category: quality
+  summary: "本仓库 admin-center 的 LDAP/DSP env 命名与源项目映射表不一致；登录前端未实现浏览器侧 dspAuthenticate 取 AMToken"
+  detail: |
+    env 命名差异（写 UAT 配置时已按本仓库实际读取名落地）：
+      LDAP_CONNECT_TIMEOUT/READ_TIMEOUT → LDAP_CONNECT_TIMEOUT_MS/READ_TIMEOUT_MS；
+      LDAP_HERMES_ENV → LDAP_GROUP_ENV；LDAP_HERMES_GROUP_SYNC_* → LDAP_GROUP_*；
+      DSP_EMPLOYEE_ID_CLAIM_NAMES/USERNAME_CLAIM_NAMES → DSP_EMPLOYEE_ID_CLAIMS/DSP_USERNAME_CLAIMS；
+      LDAP_RETRIEVE_ATTRS（单串）在本实现无对应键，拆为逐属性 LDAP_ATTR_*（默认已是 HSBC 名）。
+    前端缺口（2026-06-17 已实现浏览器侧主动取 AMToken）：
+      新增 frontend/login/src/api/dsp.ts（acquireAmToken：POST VITE_DSP_AUTHENTICATE_URL，带
+      X-Client-Id/X-Client-Secret/Accept-API-Version/X-Requested-With + credentials:include，取 tokenId 为 AMToken）；
+      useDspLogin 改为「无现成 token 且已配置 authenticate 端点时主动获取」，保留 ?am_token=/cookie 兼容路径。
+      新增错误码 DSP_AUTH_FAILED + en/zh-CN 文案；vite-env.d.ts 补 VITE_DSP_* 类型；uat/.env 补 VITE_DSP_*，
+      VITE_DSP_CLIENT_SECRET 真实值入 secrets.env。vite build 通过。
+      待用户 UAT 内部验证（DSP 端需放行本前端 origin 的 CORS + 凭据；tokenId 字段名以实际响应为准）。
+    仍未做（用户要求验证可用后再开）：AD group 定期自动增量同步；DSP E2E JWT 验签 + manifest 使用（后端二期）。
+      安全：VITE_DSP_CLIENT_SECRET 浏览器侧暴露（public client），生产宜改由网关注入。

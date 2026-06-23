@@ -42,6 +42,32 @@ spec:
             configMapKeyRef:
               name: workflow-platform-config
               key: KONG_PROXY_URL
+        - name: VITE_DSP_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: VITE_DSP_PASSWORDLESS_ENABLED
+        - name: VITE_DSP_AUTHENTICATE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: VITE_DSP_AUTHENTICATE_URL
+        - name: VITE_DSP_CLIENT_ID
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: VITE_DSP_CLIENT_ID
+        - name: VITE_DSP_ACCEPT_API_VERSION
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: VITE_DSP_ACCEPT_API_VERSION
+        - name: VITE_DSP_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: workflow-platform-secrets
+              key: VITE_DSP_CLIENT_SECRET
+              optional: true
         ports:
         - containerPort: 80
           name: http

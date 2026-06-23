@@ -1,14 +1,9 @@
 import { createRouter, createWebHistory, RouteRecordRaw } from 'vue-router'
 import {
-  applyWorkspaceAwarePortalAccess,
-  getCurrentUser,
+  clearAuth,
   getStoredUser,
-  listWorkspaceContexts,
-  reconcilePortalWorkspaceSession,
-  saveUser,
-  TOKEN_KEY,
-  USER_ID_KEY,
-  type UserInfo
+  type UserInfo,
+  verifyPortalSession
 } from '@/api/auth'
 import i18n from '@/i18n'
 import { redirectToUnifiedLogin, setSsoReturnPath } from '@/utils/sso'
@@ -170,7 +165,22 @@ const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes
 })
-
+let verifiedPortalUser: UserInfo | null = null
+let verifyingPortalSession: Promise<UserInfo> | null = null
+async function getVerifiedPortalUser(): Promise<UserInfo> {
+  if (verifiedPortalUser) return verifiedPortalUser
+  if (!verifyingPortalSession) {
+    verifyingPortalSession = verifyPortalSession()
+      .then((user) => {
+        verifiedPortalUser = user
+        return user
+      })
+      .finally(() => {
+        verifyingPortalSession = null
+      })
+  }
+  return verifyingPortalSession
+}
 // 路由守卫
 router.beforeEach(async (to, _from, next) => {
   const t = i18n.global.t
@@ -188,39 +198,29 @@ router.beforeEach(async (to, _from, next) => {
     if (typeof r === 'string') setSsoReturnPath(r)
     return next()
   }
-
-  // Auth checked via httpOnly cookie — let API calls handle 401 redirect
+  // Auth is verified by /me because the real session is an httpOnly cookie.
+  let verifiedUser: UserInfo | null = null
   if (to.meta.requiresAuth !== false && to.path !== '/sso/callback') {
-    await reconcilePortalWorkspaceSession()
-    const cached = getStoredUser()
-    if (cached?.portalAccessMode === 'PERMISSION_SELF_SERVICE_ONLY') {
-      try {
-        let contexts: Awaited<ReturnType<typeof listWorkspaceContexts>> = []
-        try {
-          contexts = await listWorkspaceContexts()
-        } catch {
-          contexts = []
-        }
-        const fresh = await getCurrentUser()
-        const merged = applyWorkspaceAwarePortalAccess(fresh, contexts.length > 0)
-        saveUser(merged)
-        localStorage.setItem(USER_ID_KEY, merged.userId)
-      } catch {
-        // 保持缓存
-      }
+    try {
+      const sessionUser = await getVerifiedPortalUser()
+      verifiedUser = getStoredUser() || sessionUser
+    } catch {
+      verifiedPortalUser = null
+      clearAuth()
+      setSsoReturnPath(to.fullPath)
+      redirectToUnifiedLogin('portal')
+      return next(false)
     }
   }
-
   const requiredRoles = to.meta.requiredRoles
   if (requiredRoles && requiredRoles.length > 0) {
-    const user = getStoredUser()
+    const user = verifiedUser || getStoredUser()
     if (!user?.roles || !requiredRoles.some(role => user.roles.includes(role))) {
       next('/403')
       return
     }
   }
-
-  const user: UserInfo | null = getStoredUser()
+  const user: UserInfo | null = verifiedUser || getStoredUser()
   if (user?.portalAccessMode === 'PERMISSION_SELF_SERVICE_ONLY' && to.path !== '/403') {
     const allowed = new Set([
       '/permissions',
@@ -235,8 +235,6 @@ router.beforeEach(async (to, _from, next) => {
       return
     }
   }
-
   next()
 })
-
 export default router
