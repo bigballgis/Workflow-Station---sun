@@ -147,6 +147,7 @@ services:
     ports:
       - "${KESTRA_PORT:-8085}:8080"
     environment:
+      MICRONAUT_SERVER_CONTEXT_PATH: /kestra
       KESTRA_CONFIGURATION: |
         kestra:
           server:
