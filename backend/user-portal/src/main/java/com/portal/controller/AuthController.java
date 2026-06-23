@@ -193,7 +193,7 @@ public class AuthController {
             HttpServletRequest httpRequest,
             @Valid @RequestBody ChangePasswordRequest body) {
         String token = resolveAccessToken(authHeader, httpRequest);
-        if (token == null) {
+        if (token == null || token.isBlank()) {
             return ResponseEntity.status(401).build();
         }
         try {
@@ -218,7 +218,7 @@ public class AuthController {
             @RequestHeader(value = "Authorization", required = false) String authHeader,
             HttpServletRequest httpRequest) {
         String token = resolveAccessToken(authHeader, httpRequest);
-        if (token == null) {
+        if (token == null || token.isBlank()) {
             return ResponseEntity.status(401).build();
         }
         try {
@@ -250,7 +250,7 @@ public class AuthController {
             @RequestHeader(value = "Authorization", required = false) String authHeader,
             HttpServletRequest httpRequest) {
         String token = resolveAccessToken(authHeader, httpRequest);
-        if (token == null) {
+        if (token == null || token.isBlank()) {
             return ResponseEntity.status(401).build();
         }
         try {
@@ -280,7 +280,7 @@ public class AuthController {
             HttpServletResponse httpResponse,
             @Valid @RequestBody SwitchWorkspaceRequest body) {
         String token = resolveAccessToken(authHeader, httpRequest);
-        if (token == null) {
+        if (token == null || token.isBlank()) {
             return ResponseEntity.status(401).build();
         }
         try {
@@ -316,7 +316,7 @@ public class AuthController {
             @RequestHeader(value = "Authorization", required = false) String authHeader,
             HttpServletRequest httpRequest) {
         String token = resolveAccessToken(authHeader, httpRequest);
-        if (token == null) {
+        if (token == null || token.isBlank()) {
             return ResponseEntity.ok(false);
         }
         try {
@@ -498,11 +498,20 @@ public class AuthController {
                 .getPayload();
     }
 
+    /**
+     * Extract access token from Authorization header or httpOnly cookie.
+     * The JwtAuthenticationFilter skips /auth/ paths, so we must read cookies
+     * directly for authenticated auth endpoints (me, workspace-contexts, etc.).
+     */
     private String resolveAccessToken(String authHeader, HttpServletRequest request) {
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             return authHeader.substring(7);
         }
-        return resolveCookie(request, jwtProperties.getCookieNames());
+        List<String> names = jwtProperties.getCookieNames();
+        if (names == null || names.isEmpty()) {
+            names = List.of("up_access_token");
+        }
+        return resolveCookie(request, names);
     }
     private String resolveRefreshToken(HttpServletRequest request) {
         return resolveCookie(request, List.of(jwtProperties.getRefreshCookieName()));
