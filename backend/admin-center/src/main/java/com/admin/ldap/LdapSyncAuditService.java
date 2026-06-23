@@ -21,7 +21,7 @@ import java.util.List;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-@ConditionalOnProperty(prefix = "ldap", name = "enabled", havingValue = "true")
+@ConditionalOnProperty(prefix = "ldap", name = {"enabled", "sync-enabled"}, havingValue = "true")
 public class LdapSyncAuditService {
 
     private final LdapUserSyncService ldapUserSyncService;

@@ -30,7 +30,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/ldap-sync")
 @RequiredArgsConstructor
-@ConditionalOnProperty(prefix = "ldap", name = "enabled", havingValue = "true")
+@ConditionalOnProperty(prefix = "ldap", name = {"enabled", "sync-enabled"}, havingValue = "true")
 public class LdapSyncController {
 
     private static final String ERR_FORBIDDEN = "FORBIDDEN";
