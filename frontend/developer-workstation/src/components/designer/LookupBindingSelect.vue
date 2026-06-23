@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { lookupStore } from './lookupStore'
 import { relationTableBindingApi } from '@/api/relationTable'
 
@@ -22,6 +23,13 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update:modelValue': (val: string) => void
 }>()
+
+const { t } = useI18n()
+// Use module-level store — fc-designer registers this component in its own Vue app context,
+// so provide/inject from FormDesigner doesn't reach here.
+function goToViewDesign() {
+  if (selectedBindingId.value != null) lookupStore.switchToBinding?.(selectedBindingId.value)
+}
 
 const relationBindings = computed(() => lookupStore.relationBindings)
 
@@ -248,6 +256,12 @@ watch(selectedBindingId, (val) => {
           <span class="el-select-dropdown__empty">No relation tables bound</span>
         </template>
       </el-select>
+      <a
+        v-if="selectedBindingId && lookupStore.switchToBinding"
+        class="binding-nav-link"
+        href="#"
+        @click.prevent="goToViewDesign"
+      >{{ t('form.lookupGoToViewDesign') }}</a>
     </div>
 
     <template v-if="selectedBindingId">
@@ -421,5 +435,15 @@ watch(selectedBindingId, (val) => {
   font-size: 12px;
   color: #909399;
   line-height: 1.4;
+}
+.binding-nav-link {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--el-color-primary);
+  text-decoration: none;
+}
+.binding-nav-link:hover {
+  text-decoration: underline;
 }
 </style>

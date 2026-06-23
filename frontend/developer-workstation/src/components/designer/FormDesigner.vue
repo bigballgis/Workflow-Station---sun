@@ -94,9 +94,89 @@
         </div>
       </div>
       
+      <!-- Grouped tab navigation: Main Table | Sub Tables ▾ | Relation Tables ▾ -->
+      <div class="designer-grouped-nav">
+        <button
+          class="designer-nav-btn"
+          :class="{ 'is-active': activeDesignerTab === 'main' }"
+          @click="switchToMain"
+        >
+          <el-tag type="primary" size="small" class="nav-tag">{{ t('form.mainTable') }}</el-tag>
+          <span class="nav-label">{{ selectedForm.formName }}</span>
+        </button>
+
+        <el-dropdown
+          v-if="designerSubBindingsGrouped.length > 0"
+          trigger="click"
+          placement="bottom-start"
+          @command="(id: string) => switchToBinding(id)"
+        >
+          <button
+            class="designer-nav-btn"
+            :class="{ 'is-active': activeTabGroup === 'sub' }"
+          >
+            <el-tag type="success" size="small" class="nav-tag">{{ t('tableBinding.subTableType') }}</el-tag>
+            <span class="nav-label">
+              <span v-if="activeTabGroup === 'sub'">{{ activeBindingLabel }}</span>
+              <span v-else>{{ designerSubBindingsGrouped.length }} {{ t('form.tabGroupTables') }}</span>
+            </span>
+            <el-icon class="nav-arrow"><ArrowDown /></el-icon>
+          </button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item
+                v-for="b in designerSubBindingsGrouped"
+                :key="b.bindingId"
+                :command="String(b.bindingId)"
+                :class="{ 'is-active-item': activeDesignerTab === String(b.bindingId) }"
+              >
+                <span class="dropdown-item-inner">
+                  <el-icon v-if="activeDesignerTab === String(b.bindingId)" class="check-icon"><Check /></el-icon>
+                  <span>{{ b.tableName }}</span>
+                </span>
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+
+        <el-dropdown
+          v-if="designerRelationBindingsGrouped.length > 0"
+          trigger="click"
+          placement="bottom-start"
+          @command="(id: string) => switchToBinding(id)"
+        >
+          <button
+            class="designer-nav-btn"
+            :class="{ 'is-active': activeTabGroup === 'relation' }"
+          >
+            <el-tag type="warning" size="small" class="nav-tag">{{ t('tableBinding.relationTableType') }}</el-tag>
+            <span class="nav-label">
+              <span v-if="activeTabGroup === 'relation'">{{ activeBindingLabel }}</span>
+              <span v-else>{{ designerRelationBindingsGrouped.length }} {{ t('form.tabGroupTables') }}</span>
+            </span>
+            <el-icon class="nav-arrow"><ArrowDown /></el-icon>
+          </button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item
+                v-for="b in designerRelationBindingsGrouped"
+                :key="b.bindingId"
+                :command="String(b.bindingId)"
+                :class="{ 'is-active-item': activeDesignerTab === String(b.bindingId) }"
+              >
+                <span class="dropdown-item-inner">
+                  <el-icon v-if="activeDesignerTab === String(b.bindingId)" class="check-icon"><Check /></el-icon>
+                  <span>{{ b.tableName }}</span>
+                </span>
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+      </div>
+
       <el-tabs
         v-model="activeDesignerTab"
-        class="designer-tabs"
+        class="designer-tabs designer-tabs--headless"
         @tab-change="handleTabChange"
       >
         <el-tab-pane name="main">
@@ -182,14 +262,22 @@
                 @update:model-value="(val: any) => updateBindingPortalViews(binding.bindingId, val)"
               />
             </div>
-            <el-tabs
-              v-model="subTableActiveTab"
-              @tab-change="(tabName: any) => handleSubTableInnerTabChange(tabName, binding)"
-            >
-              <el-tab-pane
-                :label="t('subTableView.formDesign')"
-                name="form"
-              >
+            <div class="sub-inner-tabs">
+              <div class="sub-inner-tabs__header">
+                <button
+                  class="sub-inner-tab-btn"
+                  :class="{ 'is-active': subTableActiveTab === 'form' }"
+                  @click="subTableActiveTab = 'form'"
+                >{{ t('subTableView.formDesign') }}</button>
+                <button
+                  v-if="binding.subMode !== 'FORM_ONLY'"
+                  class="sub-inner-tab-btn"
+                  :class="{ 'is-active': subTableActiveTab === 'listView' }"
+                  @click="handleSubTableInnerTabChange('listView', binding); subTableActiveTab = 'listView'"
+                >{{ t('subTableView.listView') }}</button>
+              </div>
+
+              <div v-show="subTableActiveTab === 'form'">
                 <div
                   class="fc-designer-wrapper"
                   :style="designerZoomStyle"
@@ -212,12 +300,9 @@
                     />
                   </div>
                 </div>
-              </el-tab-pane>
-              <el-tab-pane
-                v-if="binding.subMode !== 'FORM_ONLY'"
-                :label="t('subTableView.listView')"
-                name="listView"
-              >
+              </div>
+
+              <div v-show="subTableActiveTab === 'listView' && binding.subMode !== 'FORM_ONLY'">
                 <SubTableListView
                   :ref="(el: any) => setSubTableListViewRef(el, binding.bindingId)"
                   :binding="binding"
@@ -236,8 +321,8 @@
                   @update:available-fields="(val: any) => updateSubTableViewAllFields(binding.bindingId, val)"
                   @save="handleSubTableViewSave(binding.bindingId)"
                 />
-              </el-tab-pane>
-            </el-tabs>
+              </div>
+            </div>
           </div>
           <!-- Sub Table (non-SUB fallback, should not happen) -->
           <div
@@ -625,7 +710,7 @@
 <script setup lang="ts">
 import { ref, computed, provide, watch, toRef, reactive, nextTick, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, Connection, Loading, CircleCheck } from '@element-plus/icons-vue'
+import { ArrowLeft, ArrowDown, Check, Connection, Loading, CircleCheck } from '@element-plus/icons-vue'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
 import type { FormDefinition, TableBinding } from '@/api/functionUnit'
 import { functionUnitApi } from '@/api/functionUnit'
@@ -734,10 +819,51 @@ const designerSubBindings = computed(() => {
       tableId: b.tableId,
       tableType: tableInStore?.tableType || (b.bindingType === 'RELATED' ? 'RELATION' : ''),
       tableDescription: tableInStore?.description || '',
-      subMode: b.subMode,
+      subMode: (b.subMode === 'FORM_ONLY') ? 'FORM_ONLY' : 'FULL',
     }
   })
 })
+
+// Grouped sub/relation bindings for the grouped nav
+const designerSubBindingsGrouped = computed(() =>
+  designerSubBindings.value.filter(b => b.bindingType === 'SUB')
+)
+const designerRelationBindingsGrouped = computed(() =>
+  designerSubBindings.value.filter(b => b.bindingType === 'RELATED')
+)
+
+const activeTabGroup = computed<'main' | 'sub' | 'relation' | null>(() => {
+  if (activeDesignerTab.value === 'main') return 'main'
+  const id = Number(activeDesignerTab.value)
+  if (designerSubBindingsGrouped.value.some(b => b.bindingId === id)) return 'sub'
+  if (designerRelationBindingsGrouped.value.some(b => b.bindingId === id)) return 'relation'
+  return null
+})
+
+const activeBindingLabel = computed(() => {
+  const id = Number(activeDesignerTab.value)
+  const b = designerSubBindings.value.find(b => b.bindingId === id)
+  return b?.tableName ?? ''
+})
+
+function switchToMain() {
+  activeDesignerTab.value = 'main'
+  handleTabChange('main')
+  nextTick(() => {
+    if (designerRef.value?.activeModule) designerRef.value.activeModule = 'base'
+  })
+}
+
+function switchToBinding(id: string) {
+  subTableActiveTab.value = 'form'
+  activeDesignerTab.value = id
+  nextTick(() => {
+    handleTabChange(id)
+    const index = designerSubBindings.value.findIndex(b => String(b.bindingId) === id)
+    const subRef = index >= 0 ? subDesignerRefs.value[index] : null
+    if (subRef?.activeModule) subRef.activeModule = 'base'
+  })
+}
 
 // Default form options — label left-aligned + empty Form event handlers (onChange, onSubmit, …)
 const defaultFormOption = computed(() => buildDefaultFormCreateOptions({
@@ -1322,6 +1448,10 @@ provide('linkFormComponents', () => linkFormComponents.value.map(c => ({
 
 provide('designerLinkFormColumns', () => designerLinkFormColumnsMap.value)
 
+// Expose switchToBinding via module-level singleton so fc-designer property-panel components
+// (registered in a separate Vue app context where provide/inject doesn't reach) can navigate.
+lookupStore.switchToBinding = (id: number) => switchToBinding(String(id))
+
 // ── Watches ─────────────────────────────────────────────────────────────────
 // Sync relation bindings and formId to lookupStore for fc-designer property panel components
 watch([() => selectedForm.value?.id, designerSubBindings, () => store.tables], () => {
@@ -1383,6 +1513,34 @@ onMounted(() => {
 <style lang="scss" scoped>
 .form-designer {
   height: 100%;
+}
+
+.sub-inner-tabs__header {
+  display: flex;
+  border-bottom: 1px solid var(--el-border-color-light);
+  margin-bottom: 0;
+}
+
+.sub-inner-tab-btn {
+  padding: 8px 16px;
+  font-size: 14px;
+  color: var(--el-text-color-regular);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  outline: none;
+  transition: color 0.2s, border-color 0.2s;
+
+  &:hover {
+    color: var(--el-color-primary);
+  }
+
+  &.is-active {
+    color: var(--el-color-primary);
+    border-bottom-color: var(--el-color-primary);
+    font-weight: 500;
+  }
 }
 
 .sub-table-portal-views-bar {
@@ -1601,6 +1759,60 @@ onMounted(() => {
 }
 
 
+// Grouped navigation bar above the tabs
+.designer-grouped-nav {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  padding: 0 4px;
+  border-bottom: 1px solid var(--el-border-color);
+  background: var(--el-bg-color);
+  flex-shrink: 0;
+
+  .designer-nav-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 14px;
+    height: 40px;
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    cursor: pointer;
+    font-size: 14px;
+    color: var(--el-text-color-regular);
+    white-space: nowrap;
+    transition: color 0.2s, border-color 0.2s;
+    margin-bottom: -1px;
+
+    &:hover {
+      color: var(--el-color-primary);
+    }
+
+    &.is-active {
+      color: var(--el-color-primary);
+      border-bottom-color: var(--el-color-primary);
+    }
+
+    .nav-tag {
+      flex-shrink: 0;
+    }
+
+    .nav-label {
+      max-width: 160px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .nav-arrow {
+      font-size: 12px;
+      color: var(--el-text-color-secondary);
+      flex-shrink: 0;
+    }
+  }
+}
+
 .designer-tabs {
   flex: 1;
   display: flex;
@@ -1620,6 +1832,26 @@ onMounted(() => {
   :deep(.el-tab-pane) {
     height: 100%;
   }
+
+  // Hide the native tab header when using grouped nav
+  &.designer-tabs--headless :deep(.el-tabs__header) {
+    display: none;
+  }
+}
+
+.dropdown-item-inner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  .check-icon {
+    color: var(--el-color-primary);
+    font-size: 14px;
+  }
+}
+
+:deep(.is-active-item) {
+  background-color: var(--el-color-primary-light-9);
 }
 
 .designer-sub-tables {

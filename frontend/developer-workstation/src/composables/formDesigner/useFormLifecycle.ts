@@ -200,6 +200,7 @@ export function useFormLifecycle(options: UseFormLifecycleOptions) {
           walkRulesEnsureComponentEvents(rules)
           hydrateDesignerRulesFromLatestTableDefaults(rules, getPrimaryBindingFieldDefinitions())
           designerRef.value.setRule(rules)
+          if (designerRef.value.activeModule) designerRef.value.activeModule = 'base'
           nextTick(() => {
             patchDesignerRulesDefaultEvents()
             installDesignerPreviewCaptureHooks()
@@ -254,6 +255,7 @@ export function useFormLifecycle(options: UseFormLifecycleOptions) {
               walkRulesEnsureComponentEvents(rules)
               hydrateDesignerRulesFromLatestTableDefaults(rules, getTableFieldDefinitionsByTableId(binding.tableId))
               subRef.setRule(rules)
+              if (subRef.activeModule) subRef.activeModule = 'base'
               subRef.setOption(
                 mergeLoadedFormOptions(
                   subConfig.options && Object.keys(subConfig.options).length ? subConfig.options : undefined,
@@ -328,6 +330,7 @@ export function useFormLifecycle(options: UseFormLifecycleOptions) {
             walkRulesEnsureComponentEvents(rules)
             hydrateDesignerRulesFromLatestTableDefaults(rules, getTableFieldDefinitionsByTableId(binding.tableId))
             subRef.setRule(rules)
+            if (subRef.activeModule) subRef.activeModule = 'base'
             subRef.setOption(
               mergeLoadedFormOptions(
                 subConfig.options && Object.keys(subConfig.options).length ? subConfig.options : undefined,

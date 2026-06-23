@@ -2,6 +2,7 @@
 import { inject, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { normalizeBindingId } from '@/utils/bindingDisplayHelpers'
+import { lookupStore } from './lookupStore'
 
 interface DesignerSubBinding {
   id: number
@@ -31,14 +32,24 @@ const allSubBindings = computed(() => props.subBindings?.length ? props.subBindi
 // Only show SUB type bindings for sub-table widget binding selection
 const subBindings = computed(() => allSubBindings.value.filter(b => b.bindingType === 'SUB'))
 const normalizedModelValue = computed(() => normalizeBindingId(props.modelValue))
+
+// Use module-level store instead of inject — fc-designer registers this component in its own
+// Vue app context, so provide/inject from FormDesigner doesn't reach here.
+function goToDesigner() {
+  if (normalizedModelValue.value != null) lookupStore.switchToBinding?.(normalizedModelValue.value)
+}
+
+function handleChange(val: number | null) {
+  emit('update:modelValue', val ?? null)
+}
 </script>
 
 <template>
   <el-select
     :model-value="normalizedModelValue"
     clearable
-    :placeholder="t('designer.subTableSelectPlaceholder')"
-    @change="emit('update:modelValue', $event ?? null)"
+    :placeholder="t('form.subTableSelectPlaceholder')"
+    @change="handleChange($event ?? null)"
   >
     <el-option
       v-for="b in subBindings"
@@ -52,7 +63,26 @@ const normalizedModelValue = computed(() => normalizeBindingId(props.modelValue)
       v-if="subBindings.length === 0"
       #empty
     >
-      <span class="el-select-dropdown__empty">{{ t('designer.subTableSelectEmpty') }}</span>
+      <span class="el-select-dropdown__empty">{{ t('form.subTableSelectEmpty') }}</span>
     </template>
   </el-select>
+  <a
+    v-if="normalizedModelValue && lookupStore.switchToBinding"
+    class="binding-nav-link"
+    href="#"
+    @click.prevent="goToDesigner"
+  >{{ t('form.subTableGoToDesigner') }}</a>
 </template>
+
+<style scoped>
+.binding-nav-link {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--el-color-primary);
+  text-decoration: none;
+}
+.binding-nav-link:hover {
+  text-decoration: underline;
+}
+</style>

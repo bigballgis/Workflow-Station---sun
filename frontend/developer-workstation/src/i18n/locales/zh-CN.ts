@@ -496,6 +496,7 @@ export default {
     manageBindings: '管理表绑定',
     importTableFields: '导入表字段',
     closeButton: '关闭',
+    tabGroupTables: '张表',
     boundTableLabel: '绑定表',
     readOnly: '只读',
     inputBox: '输入框',
@@ -523,6 +524,8 @@ export default {
     subTableBindingRequired: '保存前，所有子表占位符必须选择绑定',
     subTableSelectPlaceholder: '请选择 Sub Table',
     subTableSelectEmpty: '暂无可用 Sub Table',
+    subTableGoToDesigner: 'Go To Designer',
+    lookupGoToViewDesign: 'Go To Designer',
     subTablePlaceholderUnconfigured: '未选择 Sub Table',
     subTablePlaceholderStale: '绑定已失效',
     portalViews: {

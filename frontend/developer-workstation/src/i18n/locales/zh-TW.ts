@@ -523,6 +523,8 @@ export default {
     subTableBindingRequired: '儲存前，所有子表佔位符必須選擇綁定',
     subTableSelectPlaceholder: '請選擇 Sub Table',
     subTableSelectEmpty: '暫無可用 Sub Table',
+    subTableGoToDesigner: 'Go To Designer',
+    lookupGoToViewDesign: 'Go To Designer',
     subTablePlaceholderUnconfigured: '未選擇 Sub Table',
     subTablePlaceholderStale: '綁定已失效',
     portalViews: {

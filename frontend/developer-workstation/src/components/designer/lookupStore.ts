@@ -37,4 +37,9 @@ export const lookupStore = reactive({
   tables: [] as TableDef[],
   /** Cache of relation table fields keyed by tableId (for deployed rt_table_definitions) */
   rtFieldCache: {} as Record<number, FieldDef[]>,
+  /**
+   * Navigation callback set by FormDesigner so property-panel components registered in
+   * fc-designer's separate Vue app (where provide/inject doesn't reach) can still switch tabs.
+   */
+  switchToBinding: null as ((id: number) => void) | null,
 })
