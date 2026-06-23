@@ -148,17 +148,24 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<Void> logout(@RequestHeader(value = "Authorization", required = false) String authHeader) {
-        if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            String token = authHeader.substring(7);
+    public ResponseEntity<Void> logout(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            HttpServletRequest request) {
+        String token = resolveAccessToken(authHeader, request);
+        if (token != null) {
             jwtTokenService.blacklistToken(token);
         }
         return ResponseEntity.ok().build();
     }
-
     @PostMapping("/refresh")
-    public ResponseEntity<Map<String, Object>> refresh(@RequestBody Map<String, String> request, HttpServletResponse response) {
-        String refreshToken = request.get("refreshToken");
+    public ResponseEntity<Map<String, Object>> refresh(
+            @RequestBody(required = false) Map<String, String> request,
+            HttpServletRequest httpRequest,
+            HttpServletResponse response) {
+        String refreshToken = request != null ? request.get("refreshToken") : null;
+        if (refreshToken == null || refreshToken.isBlank()) {
+            refreshToken = resolveRefreshToken(httpRequest);
+        }
         if (refreshToken == null || refreshToken.isBlank()) {
             return ResponseEntity.badRequest().build();
         }
@@ -184,23 +191,8 @@ public class AuthController {
             String newAccessToken = generateToken(user, roles, permissions);
             String newRefreshToken = generateRefreshToken(user.getId());
             
-            // Set httpOnly cookies for new tokens
-            // Service-specific cookie name (e.g. dw_access_token) so three apps on same origin do not overwrite each other. See JwtProperties#cookieNames.
-            Cookie accessTokenCookie = new Cookie(jwtProperties.getPrimaryCookieName(), newAccessToken);
-            accessTokenCookie.setHttpOnly(true);
-            accessTokenCookie.setSecure(false);
-            accessTokenCookie.setPath("/");
-            accessTokenCookie.setMaxAge((int)(jwtExpiration / 1000));
-            accessTokenCookie.setAttribute("SameSite", "Lax");
-            response.addCookie(accessTokenCookie);
-
-            Cookie refreshTokenCookie = new Cookie(jwtProperties.getRefreshCookieName(), newRefreshToken);
-            refreshTokenCookie.setHttpOnly(true);
-            refreshTokenCookie.setSecure(false);
-            refreshTokenCookie.setPath("/");
-            refreshTokenCookie.setMaxAge(7 * 24 * 60 * 60);
-            refreshTokenCookie.setAttribute("SameSite", "Lax");
-            response.addCookie(refreshTokenCookie);
+            setAuthCookie(response, jwtProperties.getPrimaryCookieName(), newAccessToken, (int)(jwtExpiration / 1000));
+            setAuthCookie(response, jwtProperties.getRefreshCookieName(), newRefreshToken, 7 * 24 * 60 * 60);
             
             return ResponseEntity.ok(Map.of(
                     "accessToken", newAccessToken,
@@ -216,11 +208,12 @@ public class AuthController {
     @Transactional
     public ResponseEntity<Void> changePassword(
             @RequestHeader(value = "Authorization", required = false) String authHeader,
+            HttpServletRequest request,
             @Valid @RequestBody ChangePasswordRequest body) {
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+        String token = resolveAccessToken(authHeader, request);
+        if (token == null) {
             return ResponseEntity.status(401).build();
         }
-        String token = authHeader.substring(7);
         try {
             Claims claims = parseToken(token);
             String userId = claims.getSubject();
@@ -237,14 +230,15 @@ public class AuthController {
             return ResponseEntity.status(401).build();
         }
     }
-
     @GetMapping("/me")
-    public ResponseEntity<LoginResponse.UserLoginInfo> getCurrentUser(@RequestHeader("Authorization") String authHeader) {
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+    public ResponseEntity<LoginResponse.UserLoginInfo> getCurrentUser(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            HttpServletRequest request) {
+        String token = resolveAccessToken(authHeader, request);
+        if (token == null) {
             return ResponseEntity.status(401).build();
         }
         try {
-            String token = authHeader.substring(7);
             Claims claims = parseToken(token);
             String userId = claims.getSubject();
             
@@ -281,14 +275,16 @@ public class AuthController {
             return ResponseEntity.status(401).build();
         }
     }
-
     @GetMapping("/validate")
-    public ResponseEntity<Boolean> validateToken(@RequestHeader("Authorization") String authHeader) {
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+    public ResponseEntity<Boolean> validateToken(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            HttpServletRequest request) {
+        String token = resolveAccessToken(authHeader, request);
+        if (token == null) {
             return ResponseEntity.ok(false);
         }
         try {
-            parseToken(authHeader.substring(7));
+            parseToken(token);
             return ResponseEntity.ok(true);
         } catch (Exception e) {
             return ResponseEntity.ok(false);
@@ -346,6 +342,39 @@ public class AuthController {
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
+    }
+
+    private String resolveAccessToken(String authHeader, HttpServletRequest request) {
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            return authHeader.substring(7);
+        }
+        return resolveCookie(request, jwtProperties.getCookieNames());
+    }
+    private String resolveRefreshToken(HttpServletRequest request) {
+        return resolveCookie(request, List.of(jwtProperties.getRefreshCookieName()));
+    }
+    private String resolveCookie(HttpServletRequest request, List<String> names) {
+        Cookie[] cookies = request != null ? request.getCookies() : null;
+        if (cookies == null || names == null || names.isEmpty()) {
+            return null;
+        }
+        for (String name : names) {
+            for (Cookie cookie : cookies) {
+                if (name.equals(cookie.getName()) && cookie.getValue() != null && !cookie.getValue().isBlank()) {
+                    return cookie.getValue();
+                }
+            }
+        }
+        return null;
+    }
+    private void setAuthCookie(HttpServletResponse response, String name, String value, int maxAge) {
+        Cookie cookie = new Cookie(name, value);
+        cookie.setHttpOnly(true);
+        cookie.setSecure(false);
+        cookie.setPath("/");
+        cookie.setMaxAge(maxAge);
+        cookie.setAttribute("SameSite", "Lax");
+        response.addCookie(cookie);
     }
 
     private SecretKey getSigningKey() {
