@@ -151,8 +151,6 @@ services:
       KESTRA_CONFIGURATION: |
         kestra:
           server:
-            basic-auth:
-              enabled: false
           repository:
             type: postgres
           storage:
