@@ -1,6 +1,7 @@
 package com.workflow.component;
 
 import com.workflow.client.AdminCenterClient;
+import com.workflow.util.AssigneeRoleIdsSupport;
 import com.workflow.util.InitiatorOrphanRepairEligibility;
 
 import org.flowable.bpmn.model.BpmnModel;
@@ -19,6 +20,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -100,31 +102,43 @@ public class TaskOrphanRepairService {
                     continue;
                 }
                 String roleId = bpmnActionParser.getUserTaskExtensionPropertyValue(pdId, defKey, "roleId");
+                String roleIdsRaw = bpmnActionParser.getUserTaskExtensionPropertyValue(pdId, defKey, "roleIds");
                 String buId = bpmnActionParser.getUserTaskExtensionPropertyValue(pdId, defKey, "businessUnitId");
-                if (roleId == null || roleId.isBlank() || buId == null || buId.isBlank()) {
-                    log.warn("Orphan BU_ROLE task {} has missing roleId/businessUnitId; skip repair", t.getId());
+                List<String> roleIds = AssigneeRoleIdsSupport.parseRoleIds(roleIdsRaw, roleId);
+                if (roleIds.isEmpty() || buId == null || buId.isBlank()) {
+                    log.warn("Orphan BU_ROLE task {} has missing roleIds/businessUnitId; skip repair", t.getId());
                     continue;
                 }
-                if (!adminCenterClient.isEligibleRole(buId.trim(), roleId.trim())) {
-                    log.warn("Orphan BU_ROLE task {} role {} not eligible for bu {}; skip repair",
-                            t.getId(), roleId, buId);
-                    continue;
-                }
-                List<String> users = adminCenterClient.getUsersByBusinessUnitAndRole(buId.trim(), roleId.trim());
-                if (users == null || users.isEmpty()) {
-                    log.warn("Orphan BU_ROLE task {} resolved no users for bu={} role={}", t.getId(), buId, roleId);
-                    continue;
-                }
-                if (users.size() == 1) {
-                    taskService.setAssignee(t.getId(), users.get(0).trim());
-                    log.info("Repaired orphan BU_ROLE task {} with direct assignee {}", t.getId(), users.get(0));
-                } else {
-                    for (String uid : users) {
-                        if (uid != null && !uid.isBlank()) {
-                            taskService.addCandidateUser(t.getId(), uid.trim());
+                LinkedHashSet<String> users = new LinkedHashSet<>();
+                for (String rid : roleIds) {
+                    if (!adminCenterClient.isEligibleRole(buId.trim(), rid.trim())) {
+                        log.warn("Orphan BU_ROLE task {} role {} not eligible for bu {}; skip repair",
+                                t.getId(), rid, buId);
+                        users.clear();
+                        break;
+                    }
+                    List<String> chunk = adminCenterClient.getUsersByBusinessUnitAndRole(buId.trim(), rid.trim());
+                    if (chunk != null) {
+                        for (String uid : chunk) {
+                            if (uid != null && !uid.isBlank()) {
+                                users.add(uid.trim());
+                            }
                         }
                     }
-                    log.info("Repaired orphan BU_ROLE task {} with {} candidate users", t.getId(), users.size());
+                }
+                if (users.isEmpty()) {
+                    log.warn("Orphan BU_ROLE task {} resolved no users for bu={} roleIds={}", t.getId(), buId, roleIds);
+                    continue;
+                }
+                List<String> userList = new ArrayList<>(users);
+                if (userList.size() == 1) {
+                    taskService.setAssignee(t.getId(), userList.get(0));
+                    log.info("Repaired orphan BU_ROLE task {} with direct assignee {}", t.getId(), userList.get(0));
+                } else {
+                    for (String uid : userList) {
+                        taskService.addCandidateUser(t.getId(), uid);
+                    }
+                    log.info("Repaired orphan BU_ROLE task {} with {} candidate users", t.getId(), userList.size());
                 }
             } catch (Exception ex) {
                 log.warn("Repair orphan BU_ROLE task {} failed: {}", t.getId(), ex.getMessage());

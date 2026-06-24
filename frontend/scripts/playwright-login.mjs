@@ -16,7 +16,7 @@ const APP_PRESETS = {
   },
   dw: {
     basePath: '/dev',
-    clientId: 'dw',
+    clientId: 'developer-workstation',
     redirectUri: 'http://localhost:3000/dev/sso/callback',
   },
 }
@@ -50,14 +50,24 @@ export async function loginViaUnifiedSso(page, app, opts = {}) {
   await userInput.fill(user)
   await page.locator('input[autocomplete="current-password"]').fill(pass)
   await Promise.all([
-    page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 25000 }).catch(() => {}),
+    page.waitForURL(
+      (url) => url.pathname.includes('/sso/callback') || url.pathname.startsWith(preset.basePath),
+      { timeout: 30000 },
+    ).catch(() => {}),
     page.locator('button[type="submit"]').click(),
   ])
-  await page.waitForTimeout(2000)
+  await page.waitForURL(
+    (url) => !url.pathname.includes('/login'),
+    { timeout: 15000 },
+  ).catch(() => {})
+  await page.waitForTimeout(1500)
 
   const url = page.url()
   if (url.includes('/login')) {
-    throw new Error(`SSO login failed — still on login page. Check LOGIN_USER / LOGIN_PASS and Kong/admin-center health.`)
+    const errText = await page.locator('.error-message, .el-message--error').first().textContent().catch(() => '')
+    throw new Error(
+      `SSO login failed — still on login page. Check LOGIN_USER / LOGIN_PASS and Kong/admin-center health.${errText ? ` (${errText.trim()})` : ''}`,
+    )
   }
   return url
 }

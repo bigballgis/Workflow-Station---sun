@@ -5,7 +5,8 @@
  * 行为零变化。
  */
 import { computed } from 'vue'
-import { adminCenterApi, type BusinessUnitInfo } from '@/api/adminCenter'
+import { adminCenterApi, type BusinessUnitInfo, type RoleInfo } from '@/api/adminCenter'
+import { parseRoleIdsFromExt, serializeRoleIds, filterRoleIdsForAssigneeType as filterRoleIdsPure, sanitizePersistedRoleIds as sanitizeRoleIdsPure } from '@/utils/assigneeRoleIds'
 import type {
   AssigneeTypeEnum,
   UserTaskPropertyContext
@@ -16,6 +17,7 @@ export function useUserTaskAssignee(ctx: UserTaskPropertyContext) {
     assigneeType,
     lastLoadedAssigneeType,
     roleId,
+    roleIds,
     businessUnitId,
     assigneeLabel,
     candidateUsers,
@@ -49,6 +51,16 @@ export function useUserTaskAssignee(ctx: UserTaskPropertyContext) {
     () => assigneeType.value === 'FIXED_BU_ROLE' || assigneeType.value === 'BU_ROLE'
   )
 
+  const needsInitiatorHierarchyMultiRole = computed(
+    () => assigneeType.value === 'INITIATOR_BU_ROLE'
+      || assigneeType.value === 'INITIATOR_PARENT_BU_ROLE'
+  )
+
+  /** Multi-select role picker (Fixed BU + role, or initiator hierarchy role types) */
+  const needsMultiRoleSelect = computed(
+    () => needsBuForRole.value || needsInitiatorHierarchyMultiRole.value
+  )
+
   // Whether role ID is needed
   const needsRoleId = computed(() => assigneeTypeNeedsRoleId(assigneeType.value))
 
@@ -61,6 +73,9 @@ export function useUserTaskAssignee(ctx: UserTaskPropertyContext) {
   const roleSelectPlaceholder = computed(() => {
     if (needsBuForRole.value && !businessUnitId.value) {
       return t('properties.selectBusinessUnitFirst')
+    }
+    if (needsMultiRoleSelect.value) {
+      return t('properties.selectRoles')
     }
     return t('properties.selectRole')
   })
@@ -82,6 +97,15 @@ export function useUserTaskAssignee(ctx: UserTaskPropertyContext) {
     ].includes(assigneeType.value)
   })
 
+  /** Roles fetched by id when selected ids are not yet in role lists (non–BU-scoped types only) */
+  const eligibleRoleIdSet = computed(
+    () => new Set(eligibleRoles.value.map(r => r.id).filter(Boolean))
+  )
+
+  const boundedRoleIdSet = computed(
+    () => new Set(buBoundedRoles.value.map(r => r.id).filter(Boolean))
+  )
+
   // Filter roles by assignment type
   const filteredRoles = computed(() => {
     if (assigneeType.value === 'BU_UNBOUNDED_ROLE') {
@@ -93,13 +117,65 @@ export function useUserTaskAssignee(ctx: UserTaskPropertyContext) {
     return buBoundedRoles.value
   })
 
+  /** el-select options — multi-select types only expose roles from the allowed catalog (no cross-list merge) */
+  const roleSelectOptions = computed(() => {
+    if (needsMultiRoleSelect.value) {
+      return filteredRoles.value
+    }
+    const seen = new Set<string>()
+    const out: RoleInfo[] = []
+    for (const role of filteredRoles.value) {
+      if (!seen.has(role.id)) {
+        seen.add(role.id)
+        out.push(role)
+      }
+    }
+    if (roleId.value && !seen.has(roleId.value)) {
+      const cached =
+        filteredRoles.value.find(r => r.id === roleId.value)
+        ?? buBoundedRoles.value.find(r => r.id === roleId.value)
+        ?? buUnboundedRoles.value.find(r => r.id === roleId.value)
+      out.push(cached ?? { id: roleId.value, name: roleId.value, code: '', type: 'BU_BOUNDED' })
+    }
+    return out
+  })
+
+  function filterRoleIdsForAssigneeType(ids: string[]): string[] {
+    return filterRoleIdsPure(ids, {
+      assigneeType: assigneeType.value,
+      businessUnitId: businessUnitId.value,
+      eligibleRoleIds: eligibleRoleIdSet.value,
+      boundedRoleIds: boundedRoleIdSet.value,
+    })
+  }
+
+  /** Drop persisted role ids outside the allowed catalog; sync BPMN extensions */
+  function sanitizePersistedRoleIds() {
+    const sanitized = sanitizeRoleIdsPure(
+      roleIds.value,
+      {
+        assigneeType: assigneeType.value,
+        businessUnitId: businessUnitId.value,
+        eligibleRoleIds: eligibleRoleIdSet.value,
+        boundedRoleIds: boundedRoleIdSet.value,
+      },
+      { needsMultiRoleSelect: needsMultiRoleSelect.value },
+    )
+    if (sanitized) {
+      syncRoleExtProps(sanitized)
+    }
+  }
+
   // Role selection tip
   const roleSelectTip = computed(() => {
     if (assigneeType.value === 'BU_UNBOUNDED_ROLE') {
       return t('properties.buUnboundedRoleTip')
     }
     if (assigneeType.value === 'FIXED_BU_ROLE' || assigneeType.value === 'BU_ROLE') {
-      return t('properties.fixedBuRoleTip')
+      return t('properties.fixedBuMultiRoleTip')
+    }
+    if (needsInitiatorHierarchyMultiRole.value) {
+      return t('properties.hierarchyMultiRoleTip')
     }
     return t('properties.buBoundedRoleTip')
   })
@@ -126,8 +202,10 @@ export function useUserTaskAssignee(ctx: UserTaskPropertyContext) {
     }
 
     roleId.value = ''
+    roleIds.value = []
     businessUnitId.value = ''
     updateExtProp('roleId', '')
+    updateExtProp('roleIds', '')
     updateExtProp('businessUnitId', '')
 
     if (!assigneeTypeNeedsRoleId(type)) {
@@ -152,28 +230,54 @@ export function useUserTaskAssignee(ctx: UserTaskPropertyContext) {
     updateExtProp('candidateGroups', '')
   }
 
-  function handleRoleChange(id: string) {
-    updateExtProp('roleId', id)
+  function syncRoleExtProps(ids: string[]) {
+    const normalized = filterRoleIdsForAssigneeType(ids)
+    roleIds.value = normalized
+    roleId.value = normalized[0] ?? ''
+    updateExtProp('roleIds', serializeRoleIds(normalized))
+    updateExtProp('roleId', roleId.value)
 
-    // Update label
-    const role = filteredRoles.value.find(r => r.id === id)
-    if (role) {
-      const typeLabel = getAssigneeTypeLabel(assigneeType.value)
-      assigneeLabel.value = `${typeLabel}: ${role.name}`
-      updateExtProp('assigneeLabel', assigneeLabel.value)
+    const typeLabel = getAssigneeTypeLabel(assigneeType.value)
+    const names = normalized
+      .map(id => filteredRoles.value.find(r => r.id === id)?.name ?? id)
+      .filter(Boolean)
+    if (names.length > 0) {
+      assigneeLabel.value = `${typeLabel}: ${names.join(', ')}`
+    } else if (needsBuForRole.value && businessUnitId.value) {
+      const bu = findBusinessUnitById(businessUnits.value, businessUnitId.value)
+      assigneeLabel.value = bu?.name ?? ''
+    } else {
+      assigneeLabel.value = ''
     }
+    updateExtProp('assigneeLabel', assigneeLabel.value)
   }
 
-  function handleBusinessUnitChange(id: string) {
+  function handleRoleChange(id: string) {
+    syncRoleExtProps(id ? [id] : [])
+  }
+
+  function handleRoleIdsChange(ids: string[]) {
+    syncRoleExtProps(ids)
+  }
+
+  function loadRoleIdsFromExt(ext: { roleIds?: string; roleId?: string }) {
+    const parsed = parseRoleIdsFromExt(ext)
+    roleIds.value = parsed
+    roleId.value = parsed[0] ?? ''
+  }
+
+  async function handleBusinessUnitChange(id: string) {
     updateExtProp('businessUnitId', id)
 
     // Clear role selection
     roleId.value = ''
+    roleIds.value = []
     updateExtProp('roleId', '')
+    updateExtProp('roleIds', '')
 
     // Load eligible roles for the business unit
     if (id) {
-      loadEligibleRoles(id)
+      await loadEligibleRoles(id)
     } else {
       eligibleRoles.value = []
     }
@@ -266,19 +370,25 @@ export function useUserTaskAssignee(ctx: UserTaskPropertyContext) {
   return {
     assigneeTypeNeedsRoleId,
     needsBuForRole,
+    needsInitiatorHierarchyMultiRole,
+    needsMultiRoleSelect,
     needsRoleId,
     showRoleSelector,
     roleSelectPlaceholder,
     needsClaim,
     filteredRoles,
+    roleSelectOptions,
     roleSelectTip,
     handleAssigneeTypeChange,
     handleRoleChange,
+    handleRoleIdsChange,
+    loadRoleIdsFromExt,
     handleBusinessUnitChange,
     getAssigneeTypeLabel,
     findBusinessUnitById,
     loadRoles,
     loadBusinessUnits,
-    loadEligibleRoles
+    loadEligibleRoles,
+    sanitizePersistedRoleIds
   }
 }

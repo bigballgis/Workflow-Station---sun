@@ -32,7 +32,11 @@ export function useFunctionUnitAccessConfig(functionUnitId: Ref<string | undefin
   const availableSystemRoles = computed(() => allRoles.value.filter(r => r.status === 'ACTIVE' && r.type !== 'BU_BOUNDED' && !assignedIds.value.has(r.id)))
   const availableBuRoles = computed(() => buRoles.value.filter(r => !assignedIds.value.has(r.id)))
 
-  const resolveRoleName = (roleId: string) => allRolesMap.value.get(roleId)?.name ?? roleId
+  const resolveRoleName = (roleId: string, fallbackName?: string | null) => {
+    const fromApi = fallbackName?.trim()
+    if (fromApi) return fromApi
+    return allRolesMap.value.get(roleId)?.name ?? roleId
+  }
   const resolveRoleTypeLabel = (roleId: string) => { const t = allRolesMap.value.get(roleId)?.type; return t ? (roleTypeDisplayLabel(t)) : '—' }
   const resolveRoleTagType = (roleId: string) => { const rt = allRolesMap.value.get(roleId)?.type; return rt ? roleTagType(rt) : 'info' }
   const formatDate = (d: string | undefined) => d ? fmtDate(d) : ''
@@ -47,8 +51,10 @@ export function useFunctionUnitAccessConfig(functionUnitId: Ref<string | undefin
   const fetchAllRoles = async () => {
     if (allRoles.value.length > 0) return
     rolesLoading.value = true
-    try { const r = await roleApi.list(); allRoles.value = Array.isArray(r) ? r : [] }
-    catch { /* silent */ } finally { rolesLoading.value = false }
+    try {
+      const r = await roleApi.list({ size: 9999 })
+      allRoles.value = r.content ?? []
+    } catch { /* silent */ } finally { rolesLoading.value = false }
   }
 
   const fetchBuTree = async () => {

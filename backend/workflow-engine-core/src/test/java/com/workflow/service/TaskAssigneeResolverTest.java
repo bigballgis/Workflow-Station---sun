@@ -132,6 +132,22 @@ class TaskAssigneeResolverTest {
 
             assertThat(result.getErrorMessage()).contains("No users");
         }
+
+        @Test
+        void multiRoleUnionCandidates() {
+            String role2 = "role-002";
+            when(adminCenterClient.getUserBusinessUnitId(eq(ANCHOR_USER_ID), isNull())).thenReturn(BU_ID);
+            when(adminCenterClient.collectUserIdsForRoleInBusinessUnitHierarchy(BU_ID, ROLE_ID))
+                    .thenReturn(List.of("u1"));
+            when(adminCenterClient.collectUserIdsForRoleInBusinessUnitHierarchy(BU_ID, role2))
+                    .thenReturn(List.of("u2"));
+
+            TaskAssigneeResolver.ResolveResult result = resolver.resolveWithRoleIds(
+                    "INITIATOR_BU_ROLE", List.of(ROLE_ID, role2), null, INITIATOR_ID, ANCHOR_USER_ID, null);
+
+            assertThat(result.getCandidateUsers()).containsExactlyInAnyOrder("u1", "u2");
+            assertThat(result.isRequiresClaim()).isTrue();
+        }
     }
 
     @Nested
@@ -148,6 +164,23 @@ class TaskAssigneeResolverTest {
                     AssigneeType.BU_ROLE, ROLE_ID, BU_ID, INITIATOR_ID, null);
 
             assertThat(result.getCandidateUsers()).containsExactly("a", "b");
+            assertThat(result.isRequiresClaim()).isTrue();
+        }
+
+        @Test
+        void multiRoleUnionCandidates() {
+            String role2 = "role-002";
+            when(adminCenterClient.isEligibleRole(BU_ID, ROLE_ID)).thenReturn(true);
+            when(adminCenterClient.isEligibleRole(BU_ID, role2)).thenReturn(true);
+            when(adminCenterClient.getUsersByBusinessUnitAndRole(BU_ID, ROLE_ID))
+                    .thenReturn(List.of("a", "b"));
+            when(adminCenterClient.getUsersByBusinessUnitAndRole(BU_ID, role2))
+                    .thenReturn(List.of("b", "c"));
+
+            TaskAssigneeResolver.ResolveResult result = resolver.resolveWithRoleIds(
+                    "BU_ROLE", List.of(ROLE_ID, role2), BU_ID, INITIATOR_ID, null, null);
+
+            assertThat(result.getCandidateUsers()).containsExactly("a", "b", "c");
             assertThat(result.isRequiresClaim()).isTrue();
         }
 

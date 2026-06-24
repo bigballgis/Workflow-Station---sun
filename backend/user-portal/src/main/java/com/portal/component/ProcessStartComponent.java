@@ -14,6 +14,7 @@ import com.portal.repository.ProcessHistoryRepository;
 import com.portal.repository.ProcessInstanceRepository;
 import com.portal.service.PortalWorkspaceAuthService;
 import com.portal.service.ProcessAssigneeSnapshot;
+import com.portal.util.BpmnInitiatorTaskDetection;
 import com.portal.service.UserDisplayNameResolver;
 import com.platform.common.i18n.I18nService;
 import com.platform.common.util.ApiResponseBodyUnwrap;
@@ -309,12 +310,11 @@ public class ProcessStartComponent {
 
     private FirstTaskOutcome autoCompleteFirstTask(
             String flowableProcessInstanceId, String userId, Map<String, Object> variables, ActiveCatalogPin pin) {
-        // Auto-complete first task (initiator task)
-        // After start, first task is usually initiator form — auto-complete to reach next approval
+        // Auto-complete only when the first user task is a true initiator / start-form node.
+        // Approval-first flows (BU_ROLE, INITIATOR_BU_ROLE, etc.) must stay open for assignees.
         FirstTaskOutcome outcome = new FirstTaskOutcome();
 
         try {
-            // Query tasks for process instance
             Optional<Map<String, Object>> tasksResult = workflowEngineClient.getProcessInstanceTasks(flowableProcessInstanceId);
             if (tasksResult.isPresent()) {
                 Map<String, Object> tasksData = tasksResult.get();
@@ -322,10 +322,13 @@ public class ProcessStartComponent {
                     @SuppressWarnings("unchecked")
                     List<Map<String, Object>> tasks = (List<Map<String, Object>>) tasksData.get("tasks");
                     if (tasks != null && !tasks.isEmpty()) {
-                        // Take first task
                         Map<String, Object> firstTask = tasks.get(0);
-                        completeFirstTaskAndCaptureNext(
-                                outcome, firstTask, flowableProcessInstanceId, userId, variables, pin);
+                        if (BpmnInitiatorTaskDetection.shouldAutoCompleteFirstTask(firstTask)) {
+                            completeFirstTaskAndCaptureNext(
+                                    outcome, firstTask, flowableProcessInstanceId, userId, variables, pin);
+                        } else {
+                            captureFirstTaskWithoutAutoComplete(outcome, firstTask);
+                        }
                     } else {
                         log.warn("No tasks found for process instance: {}", flowableProcessInstanceId);
                     }
@@ -338,6 +341,16 @@ public class ProcessStartComponent {
             // Do not throw; process already started successfully
         }
         return outcome;
+    }
+
+    private void captureFirstTaskWithoutAutoComplete(FirstTaskOutcome outcome, Map<String, Object> firstTask) {
+        outcome.currentNodeName = (String) firstTask.get("taskName");
+        outcome.nextAssigneeSnapshot = ProcessAssigneeSnapshot.fromEngineTask(firstTask);
+        log.info("Skipping auto-complete for first approval task: node={}, assignee={}, candidates={}, bpmnAssigneeType={}",
+                outcome.currentNodeName,
+                outcome.nextAssigneeSnapshot.getAssigneeUserId(),
+                outcome.nextAssigneeSnapshot.getCandidateUserIds(),
+                firstTask.get("bpmnAssigneeType"));
     }
 
     private void completeFirstTaskAndCaptureNext(

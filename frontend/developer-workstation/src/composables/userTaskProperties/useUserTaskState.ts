@@ -35,6 +35,7 @@ export function useUserTaskState(
   const assigneeType = ref<AssigneeTypeEnum>('INITIATOR')
   const lastLoadedAssigneeType = ref<AssigneeTypeEnum>('INITIATOR')
   const roleId = ref('')
+  const roleIds = ref<string[]>([])
   const businessUnitId = ref('')
   const assigneeLabel = ref('')
   const candidateUsers = ref('')
@@ -109,6 +110,7 @@ export function useUserTaskState(
     assigneeType,
     lastLoadedAssigneeType,
     roleId,
+    roleIds,
     businessUnitId,
     assigneeLabel,
     candidateUsers,

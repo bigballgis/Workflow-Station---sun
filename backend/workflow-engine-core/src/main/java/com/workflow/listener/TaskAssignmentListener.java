@@ -8,6 +8,7 @@ import com.platform.messaging.support.NotificationDispatchHelper;
 import com.workflow.repository.ExtendedTaskInfoRepository;
 import com.workflow.service.LastUserTaskAssigneeQuery;
 import com.workflow.service.TaskAssigneeResolver;
+import com.workflow.util.AssigneeRoleIdsSupport;
 import com.workflow.util.RollbackAssigneeFallbackSupport;
 import lombok.extern.slf4j.Slf4j;
 import org.flowable.bpmn.model.BpmnModel;
@@ -184,6 +185,7 @@ public class TaskAssignmentListener implements FlowableEventListener {
         try {
             String assigneeTypeRaw = null;
             String roleId = null;
+            String roleIdsRaw = null;
             String businessUnitId = null;
             String assigneeValue = null;
             String assigneeAnchorExt = null;
@@ -200,6 +202,7 @@ public class TaskAssignmentListener implements FlowableEventListener {
                     if (flowElement instanceof UserTask ut) {
                         assigneeTypeRaw = getExtensionProperty(ut, "assigneeType");
                         roleId = getExtensionProperty(ut, "roleId");
+                        roleIdsRaw = getExtensionProperty(ut, "roleIds");
                         businessUnitId = getExtensionProperty(ut, "businessUnitId");
                         assigneeValue = getExtensionProperty(ut, "assigneeValue");
                         assigneeAnchorExt = getExtensionProperty(ut, "assigneeAnchor");
@@ -216,8 +219,8 @@ public class TaskAssignmentListener implements FlowableEventListener {
                             }
                         }
 
-                        log.info("Found BPMN extension: assigneeType={}, roleId={}, businessUnitId={}, assigneeAnchor={}",
-                                assigneeTypeRaw, roleId, businessUnitId, assigneeAnchorExt);
+                        log.info("Found BPMN extension: assigneeType={}, roleId={}, roleIds={}, businessUnitId={}, assigneeAnchor={}",
+                                assigneeTypeRaw, roleId, roleIdsRaw, businessUnitId, assigneeAnchorExt);
                     }
                 }
             }
@@ -231,6 +234,9 @@ public class TaskAssignmentListener implements FlowableEventListener {
                 roleId = firstNonBlank(roleId,
                         bpmnActionParser.getUserTaskExtensionPropertyValue(processDefinitionId, taskDefinitionKey,
                                 "roleId"));
+                roleIdsRaw = firstNonBlank(roleIdsRaw,
+                        bpmnActionParser.getUserTaskExtensionPropertyValue(processDefinitionId, taskDefinitionKey,
+                                "roleIds"));
                 businessUnitId = firstNonBlank(businessUnitId,
                         bpmnActionParser.getUserTaskExtensionPropertyValue(processDefinitionId, taskDefinitionKey,
                                 "businessUnitId"));
@@ -359,11 +365,13 @@ public class TaskAssignmentListener implements FlowableEventListener {
 
             String activeBusinessUnitId = getStringVariable(processVariables, "activeBusinessUnitId");
 
-            log.info("Resolving assignee for task {}: rawType={}, resolvedType={}, anchor={}, anchorUser={}, roleId={}, buId={}, activeBu={}",
-                    taskId, assigneeTypeRaw, resolvedType, anchor, anchorUserId, roleId, businessUnitId, activeBusinessUnitId);
+            List<String> resolvedRoleIds = AssigneeRoleIdsSupport.parseRoleIds(roleIdsRaw, roleId);
 
-            TaskAssigneeResolver.ResolveResult result = taskAssigneeResolver.resolve(
-                    assigneeTypeRaw.trim(), roleId, businessUnitId, initiatorId, anchorUserId, activeBusinessUnitId);
+            log.info("Resolving assignee for task {}: rawType={}, resolvedType={}, anchor={}, anchorUser={}, roleIds={}, buId={}, activeBu={}",
+                    taskId, assigneeTypeRaw, resolvedType, anchor, anchorUserId, resolvedRoleIds, businessUnitId, activeBusinessUnitId);
+
+            TaskAssigneeResolver.ResolveResult result = taskAssigneeResolver.resolveWithRoleIds(
+                    assigneeTypeRaw.trim(), resolvedRoleIds, businessUnitId, initiatorId, anchorUserId, activeBusinessUnitId);
 
             log.info("TaskAssignmentListener: resolve result for task {}: assignee={}, candidateUsers={}, error={}",
                     taskId, result != null ? result.getAssignee() : "null",

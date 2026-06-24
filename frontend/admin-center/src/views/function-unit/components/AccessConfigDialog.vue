@@ -33,7 +33,7 @@
         min-width="180"
       >
         <template #default="{ row }">
-          {{ resolveRoleName(row.targetId || row.roleId) }}
+          {{ resolveRoleName(row.targetId || row.roleId, row.targetName || row.roleName) }}
         </template>
       </el-table-column>
       <el-table-column
@@ -226,7 +226,9 @@ const {
   resetAddForm, fetchAccessConfig, fetchAllRoles, openAddDialog, handleBuChange, handleAddRole, handleRemove,
 } = useFunctionUnitAccessConfig(toRef(props, 'functionUnitId'))
 
-watch(() => props.modelValue, val => { if (val) { fetchAccessConfig(); fetchAllRoles() } })
+watch(() => props.modelValue, async (val) => {
+  if (val) await Promise.all([fetchAccessConfig(), fetchAllRoles()])
+})
 </script>
 
 <style scoped>

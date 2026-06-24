@@ -815,3 +815,25 @@
       待用户 UAT 内部验证（DSP 端需放行本前端 origin 的 CORS + 凭据；tokenId 字段名以实际响应为准）。
     仍未做（用户要求验证可用后再开）：AD group 定期自动增量同步；DSP E2E JWT 验签 + manifest 使用（后端二期）。
       安全：VITE_DSP_CLIENT_SECRET 浏览器侧暴露（public client），生产宜改由网关注入。
+- id: "1459"
+  status: fixed
+  fixed_at: "2026-06-24"
+  severity: major
+  category: bug
+  summary: "Portal 发起流程时 autoCompleteFirstTask 无条件完成首个 UserTask，非发起人节点时审批人进不了 TODO"
+  file: "backend/user-portal/src/main/java/com/portal/component/ProcessStartComponent.java"
+  note: |
+    startProcess → autoCompleteFirstTask 对第一个 UserTask 始终 claim+complete（发起人身份），不区分 assigneeType。
+    当首节点为 BU_ROLE/FIXED_BU_ROLE 审批池时，发起人代批跳过 test1001 等待办；与设计师配置冲突。
+    修复：BpmnInitiatorTaskDetection 仅 INITIATOR/PROCESS_INITIATOR（及 legacy ${initiator} 回退）自动完成；
+    其余类型 captureFirstTaskWithoutAutoComplete 保留待办池。
+- id: "1460"
+  status: fixed
+  fixed_at: "2026-06-24"
+  severity: minor
+  category: quality
+  summary: "UserTaskProperties.vue 拆分至 495 行；assignee 单测与 Playwright 截图已完成"
+  file: "frontend/developer-workstation/src/components/designer/properties/UserTaskProperties.vue"
+  note: |
+    assigneeRoleIds.ts vitest 12 cases；verify-dw-assignee-multi-role.mjs 截图已绿。
+    UserTaskProperties.vue 拆分为 UserTaskAssigneeConfigSection + UserTaskSubTaskConfigSection（provide/inject），495 行。

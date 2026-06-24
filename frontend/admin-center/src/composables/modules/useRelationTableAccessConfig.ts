@@ -37,7 +37,8 @@ export function useRelationTableAccessConfig(entityId: Ref<number | undefined>) 
   )
   const availableBuRoles = computed(() => buRoles.value.filter(r => !assignedIds.value.has(r.id)))
 
-  const resolveRoleName = (roleId: string) => allRolesMap.value.get(roleId)?.name ?? roleId
+  const resolveRoleName = (roleId: string, fallbackName?: string | null) =>
+    allRolesMap.value.get(roleId)?.name ?? fallbackName ?? roleId
   const resolveRoleTagType = (roleId: string) => {
     const t = allRolesMap.value.get(roleId)?.type
     return t ? roleTagType(t) : 'info'
@@ -64,8 +65,8 @@ export function useRelationTableAccessConfig(entityId: Ref<number | undefined>) 
     if (allRoles.value.length > 0) return
     rolesLoading.value = true
     try {
-      const r = await roleApi.list()
-      allRoles.value = Array.isArray(r) ? r : []
+      const r = await roleApi.list({ size: 9999 })
+      allRoles.value = r.content ?? []
     } catch {
       /* silent */
     } finally {

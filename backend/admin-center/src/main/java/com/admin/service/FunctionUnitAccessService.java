@@ -57,8 +57,7 @@ public class FunctionUnitAccessService {
         FunctionUnit functionUnit = functionUnitRepository.findById(functionUnitId)
                 .orElseThrow(() -> new EntityNotFoundException("功能单元不存在: " + functionUnitId));
         
-        // 验证角色存在（不限制角色类型，与 Relation Table 行为一致）
-        roleRepository.findById(request.getRoleId())
+        Role role = roleRepository.findById(request.getRoleId())
                 .orElseThrow(() -> new EntityNotFoundException("角色不存在: " + request.getRoleId()));
         
         // 检查是否已存在相同配置
@@ -76,7 +75,9 @@ public class FunctionUnitAccessService {
         access = accessRepository.save(access);
         log.info("Added access config for function unit {}: roleId={}", functionUnitId, request.getRoleId());
         
-        return FunctionUnitAccessInfo.fromEntity(access);
+        FunctionUnitAccessInfo info = FunctionUnitAccessInfo.fromEntity(access);
+        info.setTargetName(role.getName());
+        return info;
     }
     
     /**

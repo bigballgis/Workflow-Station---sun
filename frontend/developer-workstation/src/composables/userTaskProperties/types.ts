@@ -52,6 +52,7 @@ export interface UserTaskPropertyContext {
   assigneeType: Ref<AssigneeTypeEnum>
   lastLoadedAssigneeType: Ref<AssigneeTypeEnum>
   roleId: Ref<string>
+  roleIds: Ref<string[]>
   businessUnitId: Ref<string>
   assigneeLabel: Ref<string>
   candidateUsers: Ref<string>
