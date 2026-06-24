@@ -9,6 +9,7 @@ export default {
     passwordPlaceholder: 'Enter Your Password',
     submit: 'Log in',
     submitting: 'Signing in...',
+    completingSignIn: 'Completing sign-in...',
     or: 'or',
     dsp: 'Passwordless Sign-In (DSP)',
     dspSubmitting: 'Signing in via DSP...',
@@ -23,6 +24,7 @@ export default {
       dspNoToken: 'No DSP token found. Please sign in with your password.',
       dspAuthFailed: 'Could not obtain a DSP token ({detail}). Please sign in with your password.',
       dspFailed: 'Passwordless sign-in failed ({detail}).',
+      ssoAutoFailed: 'SSO sign-in failed. Please sign in with your username and password.',
     },
   },
 }

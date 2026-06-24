@@ -65,7 +65,7 @@ api.interceptors.response.use(
         processQueue(refreshError, null)
         clearAuth()
         setSsoReturnPath(window.location.pathname + window.location.search)
-        redirectToUnifiedLogin('developer-workstation')
+        redirectToUnifiedLogin('developer-workstation', { autoSso: true })
         return Promise.reject(refreshError)
       } finally {
         isRefreshing = false
@@ -85,7 +85,7 @@ api.interceptors.response.use(
           if (!user) {
             clearAuth()
             setSsoReturnPath(window.location.pathname + window.location.search)
-            redirectToUnifiedLogin('developer-workstation')
+            redirectToUnifiedLogin('developer-workstation', { autoSso: true })
             ElMessage.warning(i18n.global.t('api.pleaseLogin'))
           } else {
             ElMessage.error(errorMsg || i18n.global.t('api.noPermission'))

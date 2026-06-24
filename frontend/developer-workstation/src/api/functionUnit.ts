@@ -60,7 +60,7 @@ functionUnitAxios.interceptors.response.use(
       const { clearAuth } = await import('./auth')
       const { redirectToUnifiedLogin } = await import('@/utils/sso')
       clearAuth()
-      redirectToUnifiedLogin('developer-workstation')
+      redirectToUnifiedLogin('developer-workstation', { autoSso: true })
       return Promise.reject(error)
     }
     
@@ -72,7 +72,7 @@ functionUnitAxios.interceptors.response.use(
       if (!user) {
         clearAuth()
         const { redirectToUnifiedLogin } = await import('@/utils/sso')
-        redirectToUnifiedLogin('developer-workstation')
+        redirectToUnifiedLogin('developer-workstation', { autoSso: true })
       }
       return Promise.reject(error)
     }

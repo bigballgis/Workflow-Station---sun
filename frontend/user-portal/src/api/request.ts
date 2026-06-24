@@ -98,7 +98,7 @@ service.interceptors.response.use(
         processQueue(refreshError, null)
         clearAuth()
         setSsoReturnPath(window.location.pathname + window.location.search)
-        redirectToUnifiedLogin('portal')
+        redirectToUnifiedLogin('portal', { autoSso: true })
         return Promise.reject(refreshError)
       } finally {
         isRefreshing = false

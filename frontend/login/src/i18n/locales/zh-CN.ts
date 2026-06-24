@@ -9,6 +9,7 @@ export default {
     passwordPlaceholder: '请输入密码',
     submit: '登录',
     submitting: '登录中...',
+    completingSignIn: '正在完成登录...',
     or: '或',
     dsp: 'DSP 免密登录',
     dspSubmitting: '正在通过 DSP 登录...',
@@ -22,6 +23,7 @@ export default {
       dspNoToken: '未找到 DSP 令牌，请使用密码登录。',
       dspAuthFailed: '无法获取 DSP 令牌（{detail}），请使用密码登录。',
       dspFailed: '免密登录失败（{detail}）。',
+      ssoAutoFailed: 'SSO方式登录失败，请使用账号密码登录。',
     },
   },
 }

@@ -63,6 +63,10 @@ export function consumeSsoReturnPath(fallback: string) {
   return v ? toRouterPath(v) : toRouterPath(fallback)
 }
 
+interface UnifiedLoginOptions {
+  autoSso?: boolean
+}
+
 /** 跳转独立 /login/ 应用（单域多路径时同样为 /login/） */
 export function redirectToUnifiedLogin(clientId: 'admin') {
   const redirectUri = new URL(

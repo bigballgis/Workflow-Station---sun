@@ -5,7 +5,6 @@
  * 由 UI 层调用：t(errorTranslator(code), details)
  */
 import { AppErrorCode } from '@/types/errors'
-
 export function errorTranslator(code: AppErrorCode): string {
   switch (code) {
     case AppErrorCode.LOGIN_MISSING_PARAMS:
@@ -26,6 +25,8 @@ export function errorTranslator(code: AppErrorCode): string {
       return 'login.error.dspAuthFailed'
     case AppErrorCode.DSP_FAILED:
       return 'login.error.dspFailed'
+    case AppErrorCode.SSO_AUTO_FAILED:
+      return 'login.error.ssoAutoFailed'
     default:
       return 'login.error.invalidCredentials'
   }

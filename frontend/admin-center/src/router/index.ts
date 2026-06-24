@@ -235,7 +235,7 @@ router.beforeEach(async (to, _from, next) => {
   if (to.path === "/login") {
     const r = to.query.redirect;
     setSsoReturnPath(typeof r === "string" ? r : "/dashboard");
-    redirectToUnifiedLogin("admin");
+    redirectToUnifiedLogin('admin', { autoSso: true });
     return next(false);
   }
 
@@ -249,7 +249,7 @@ router.beforeEach(async (to, _from, next) => {
     const stored = getUser();
     if (!stored) {
       setSsoReturnPath(to.fullPath);
-      redirectToUnifiedLogin("admin");
+      redirectToUnifiedLogin('admin', { autoSso: true });
       return next(false);
     }
 
@@ -258,7 +258,7 @@ router.beforeEach(async (to, _from, next) => {
     } catch (e) {
       clearAuth();
       setSsoReturnPath(to.fullPath);
-      redirectToUnifiedLogin("admin");
+      redirectToUnifiedLogin('admin', { autoSso: true });
       return next(false);
     }
   }

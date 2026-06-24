@@ -17,7 +17,18 @@
           </h2>
         </div>
 
+        <div
+          v-if="autoSsoInProgress"
+          class="auto-sso-status"
+          role="status"
+          aria-live="polite"
+        >
+          <span class="auto-sso-spinner" />
+          <p>{{ $t('login.completingSignIn') }}</p>
+        </div>
+
         <form
+          v-else
           class="login-form"
           @submit.prevent="onSubmit"
         >
@@ -64,7 +75,7 @@
           </div>
         </form>
 
-        <template v-if="dspEnabled">
+        <template v-if="!autoSsoInProgress && dspEnabled">
           <div class="login-divider">
             <span>{{ $t('login.or') }}</span>
           </div>
@@ -73,7 +84,7 @@
               type="button"
               class="login-btn login-btn-dsp"
               :disabled="dspLoading || loading"
-              @click="onDspLogin"
+              @click="() => onDspLogin()"
             >
               {{ dspLoading ? $t('login.dspSubmitting') : $t('login.dsp') }}
             </button>
@@ -95,13 +106,14 @@ import { useSsoParams } from '@/composables/useSsoParams'
 import { useLogin } from '@/composables/useLogin'
 import { useDspLogin } from '@/composables/useDspLogin'
 import { errorTranslator } from '@/utils/errorTranslator'
+import { AppErrorCode } from '@/types/errors'
 
 const { t } = useI18n()
 onMounted(() => { document.title = t('login.htmlTitle') })
 
 const logoUrl = `${import.meta.env.BASE_URL}hermes-logo.svg`
 
-const { clientId, redirectUri, state, missingParams } = useSsoParams()
+const { clientId, redirectUri, state, autoSso, missingParams } = useSsoParams()
 const { username, password, loading, errorCode, errorDetails, onSubmit } = useLogin(clientId, redirectUri, state)
 
 // DSP 免密入口显隐：默认所有环境都显示；仅当运行时/构建期显式 VITE_DSP_ENABLED=false 时隐藏。
@@ -109,6 +121,22 @@ const { username, password, loading, errorCode, errorDetails, onSubmit } = useLo
 const dspEnabledValue = window.__LOGIN_RUNTIME_CONFIG__?.VITE_DSP_ENABLED || import.meta.env.VITE_DSP_ENABLED
 const dspEnabled = ref(dspEnabledValue !== 'false')
 const { dspLoading, onDspLogin } = useDspLogin(clientId, redirectUri, state, errorCode, errorDetails)
+const autoSsoInProgress = ref(autoSso.value && !missingParams.value)
+
+onMounted(async () => {
+  if (!autoSso.value || missingParams.value) return
+  autoSsoInProgress.value = true
+  try {
+    await onDspLogin({ failureCode: AppErrorCode.SSO_AUTO_FAILED })
+  } finally {
+    autoSsoInProgress.value = false
+    if (window.location.search.includes('auto_sso=1')) {
+      const u = new URL(window.location.href)
+      u.searchParams.delete('auto_sso')
+      window.history.replaceState({}, document.title, u.toString())
+    }
+  }
+})
 </script>
 
 <style scoped>
@@ -138,5 +166,36 @@ const { dspLoading, onDspLogin } = useDspLogin(clientId, redirectUri, state, err
 .login-btn-dsp:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.auto-sso-status {
+  min-height: 204px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  color: #555;
+}
+
+.auto-sso-status p {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.auto-sso-spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid #f1d4d6;
+  border-top-color: #c60c12;
+  border-radius: 50%;
+  animation: auto-sso-spin 0.8s linear infinite;
+}
+
+@keyframes auto-sso-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>
