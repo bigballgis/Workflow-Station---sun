@@ -94,12 +94,18 @@ $migrations = @(
     "00-schema/32-add-dw-form-table-binding-subview-columns.sql",
     "00-schema/33-dw-sub-table-view-tables.sql",
     "00-schema/34-dw-link-form-components.sql",
+    "00-schema/34-extend-function-unit-status-check.sql",
     "00-schema/35-drop-init-function-unit-status.sql",
     "00-schema/36-sys-function-units-description.sql",
     "00-schema/37-sys-action-definitions-description.sql",
     "00-schema/38-dw-main-table-view-tables.sql",
     "00-schema/39-ac-ldap-sync-audit.sql",
-    "00-schema/41-dw-function-unit-tags.sql"
+    "00-schema/39-add-request-id-config-to-table-definitions.sql",
+    "00-schema/40-superset-schema.sql",
+    "00-schema/41-dw-function-unit-tags.sql",
+    "00-schema/42-add-dw-binding-link-mode.sql",
+    "00-schema/43-add-dw-field-fk-pk-metadata.sql",
+    "00-schema/44-ac-ldap-sync-audit.sql"
 )
 foreach ($m in $migrations) {
     $path = Join-Path $ScriptDir $m
@@ -180,6 +186,10 @@ Write-Step "Step 5d/6: Loading Function Unit Multi-Instance Subtask Demo..."
 $miSubtaskDemoInit = Join-Path $ScriptDir "17-Multi-Instance-Subtask-Demo/00-init-kk.sql"
 if (-not (Test-Path $miSubtaskDemoInit)) { Write-Fail "Missing: 17-Multi-Instance-Subtask-Demo/00-init-kk.sql"; exit 1 }
 if (-not (Exec-Sql -File $miSubtaskDemoInit -Desc "00-init-kk.sql")) { exit 1 }
+$miRequestIdPatch = Join-Path $ScriptDir "17-Multi-Instance-Subtask-Demo/03-set-main-table-request-id-config.sql"
+if (Test-Path $miRequestIdPatch) {
+    Exec-Sql -File $miRequestIdPatch -Desc "03-set-main-table-request-id-config.sql" | Out-Null
+}
 
 Write-Step "Step 5e/6: Loading MCY Debit Card..."
 $mcyInit = Join-Path $ScriptDir "18-MCY/init.sql"

@@ -82,6 +82,39 @@ export type SubTableBindingAlignable = {
  * `__subTables__` keys still match an earlier step. Union-find merges by equal numeric tableId OR equal normalized
  * display name, then a column-overlap pass fills bindings that still have no rows.
  */
+/**
+ * Stable display order for sub-table rows. The row data can be populated by more than one async source
+ * (process variables, MI overlay, sub-table enrichment), and whichever lands first sets the Map insertion
+ * order in the merge — so the rendered order can flip between page loads. Sorting by a stable per-row key
+ * here makes the order deterministic regardless of which source arrived first.
+ *
+ * Only sorts when EVERY row exposes the same stable key (id_idw → sub_task_id → id), so tables that have a
+ * meaningful insertion order but no such key keep their original order untouched.
+ */
+const STABLE_ORDER_KEYS = ['id_idw', 'sub_task_id', 'id'] as const
+
+function stableRowSortValue(row: Record<string, unknown>, key: string): string | null {
+  const v = row?.[key]
+  if (v == null) return null
+  const s = String(v).trim()
+  return s === '' ? null : s
+}
+
+function sortRowsByStableKey<T extends Record<string, unknown>>(rows: T[]): T[] {
+  if (rows.length < 2) return rows
+  const key = STABLE_ORDER_KEYS.find(k => rows.every(r => stableRowSortValue(r, k) != null))
+  if (!key) return rows
+  // Natural compare so Test-000002 < Test-000010 (numeric-aware), stable for ties.
+  const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
+  return rows
+    .map((row, index) => ({ row, index }))
+    .sort((a, b) => {
+      const c = collator.compare(stableRowSortValue(a.row, key)!, stableRowSortValue(b.row, key)!)
+      return c !== 0 ? c : a.index - b.index
+    })
+    .map(x => x.row)
+}
+
 /** Union-find merge of row snapshots across bindings that share tableId or display name. */
 export function applyUnionFindMergeToBindingList(all: SubTableBindingAlignable[]) {
   if (all.length === 0) return
@@ -143,7 +176,7 @@ export function applyUnionFindMergeToBindingList(all: SubTableBindingAlignable[]
       merged = mergeSubTableRowsByRowId(merged, Array.isArray(b.data) ? b.data : [], pkFields)
     }
     if (merged.length === 0) continue
-    const snapshot = merged.map(r => ({ ...r }))
+    const snapshot = sortRowsByStableKey(merged.map(r => ({ ...r })))
     for (const b of group) {
       b.data = snapshot
     }

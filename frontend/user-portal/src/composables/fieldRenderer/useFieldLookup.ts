@@ -36,6 +36,8 @@ export function useFieldLookup(props: FieldRendererProps) {
     lookupLoadedViewFields.value = Array.isArray(vfs) ? vfs : []
   }
 
+  // Lookup value changes by wholesale replacement; this only maps the value-as-a-whole to
+  // lookupSelectedRow, so a shallow (reference) watch is enough — no deep traversal needed.
   watch(
     () => [props.modelValue, props.field?.type] as const,
     ([val, type]) => {
@@ -49,7 +51,7 @@ export function useFieldLookup(props: FieldRendererProps) {
         lookupSelectedRow.value = null
       }
     },
-    { immediate: true, deep: true },
+    { immediate: true },
   )
 
   return {

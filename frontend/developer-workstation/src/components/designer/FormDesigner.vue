@@ -28,7 +28,22 @@
         <el-button @click="handleBackToList">
           <el-icon><ArrowLeft /></el-icon> {{ t('form.backToList') }}
         </el-button>
-        <span class="form-name">{{ selectedForm.formName }}</span>
+        <el-input
+          v-if="inlineRenaming"
+          ref="inlineRenameInputRef"
+          v-model="inlineRenameName"
+          class="form-name-input"
+          size="default"
+          @keyup.enter="handleInlineRenameConfirm"
+          @keyup.escape="inlineRenaming = false"
+          @blur="handleInlineRenameConfirm"
+        />
+        <span
+          v-else
+          class="form-name"
+          :title="t('form.clickToRename')"
+          @click="startInlineRename(selectedForm)"
+        >{{ selectedForm.formName }}</span>
         <el-tag
           v-if="selectedForm.boundTableId"
           type="success"
@@ -37,19 +52,6 @@
         >
           {{ t('form.boundTableLabel') }}: {{ getTableName(selectedForm.boundTableId) }}
         </el-tag>
-        <div
-          v-if="getFormBoundNodes(selectedForm.id).length > 0"
-          class="bound-nodes-header"
-        >
-          <el-tag 
-            v-for="node in getFormBoundNodes(selectedForm.id)" 
-            :key="node.nodeId"
-            :type="node.readOnly ? 'info' : 'success'" 
-            size="small"
-          >
-            {{ node.nodeName }}{{ node.readOnly ? `(${t('form.readOnly')})` : '' }}
-          </el-tag>
-        </div>
         <div class="header-actions">
           <div class="auto-save-status">
             <span
@@ -67,17 +69,14 @@
               {{ t('form.autoSaved') }} {{ formatAutoSaveTime(lastAutoSaveTime) }}
             </span>
           </div>
+          <el-button @click="handleManageBindings(selectedForm)">
+            {{ t('form.manageBindings') }}
+          </el-button>
           <el-button
             :disabled="!selectedForm.boundTableId && (!selectedForm.tableBindings || selectedForm.tableBindings.length === 0)"
             @click="handleImportFieldsToDesigner"
           >
             <el-icon><Connection /></el-icon> {{ t('form.importTableFields') }}
-          </el-button>
-          <el-button @click="openRenameDialog(selectedForm)">
-            {{ t('form.renameForm') }}
-          </el-button>
-          <el-button @click="handleManageBindings(selectedForm)">
-            {{ t('form.manageBindings') }}
           </el-button>
           <el-button @click="handleBindNode(selectedForm)">
             {{ t('form.bindProcessNode') }}
@@ -94,9 +93,89 @@
         </div>
       </div>
       
+      <!-- Grouped tab navigation: Main Table | Sub Tables ▾ | Relation Tables ▾ -->
+      <div class="designer-grouped-nav">
+        <button
+          class="designer-nav-btn"
+          :class="{ 'is-active': activeDesignerTab === 'main' }"
+          @click="switchToMain"
+        >
+          <el-tag type="primary" size="small" class="nav-tag">{{ t('form.mainTable') }}</el-tag>
+          <span class="nav-label">{{ selectedForm.formName }}</span>
+        </button>
+
+        <el-dropdown
+          v-if="designerSubBindingsGrouped.length > 0"
+          trigger="click"
+          placement="bottom-start"
+          @command="(id: string) => switchToBinding(id)"
+        >
+          <button
+            class="designer-nav-btn"
+            :class="{ 'is-active': activeTabGroup === 'sub' }"
+          >
+            <el-tag type="success" size="small" class="nav-tag">{{ t('tableBinding.subTableType') }}</el-tag>
+            <span class="nav-label">
+              <span v-if="activeTabGroup === 'sub'">{{ activeBindingLabel }}</span>
+              <span v-else>{{ designerSubBindingsGrouped.length }} {{ t('form.tabGroupTables') }}</span>
+            </span>
+            <el-icon class="nav-arrow"><ArrowDown /></el-icon>
+          </button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item
+                v-for="b in designerSubBindingsGrouped"
+                :key="b.bindingId"
+                :command="String(b.bindingId)"
+                :class="{ 'is-active-item': activeDesignerTab === String(b.bindingId) }"
+              >
+                <span class="dropdown-item-inner">
+                  <el-icon v-if="activeDesignerTab === String(b.bindingId)" class="check-icon"><Check /></el-icon>
+                  <span>{{ b.tableName }}</span>
+                </span>
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+
+        <el-dropdown
+          v-if="designerRelationBindingsGrouped.length > 0"
+          trigger="click"
+          placement="bottom-start"
+          @command="(id: string) => switchToBinding(id)"
+        >
+          <button
+            class="designer-nav-btn"
+            :class="{ 'is-active': activeTabGroup === 'relation' }"
+          >
+            <el-tag type="warning" size="small" class="nav-tag">{{ t('tableBinding.relationTableType') }}</el-tag>
+            <span class="nav-label">
+              <span v-if="activeTabGroup === 'relation'">{{ activeBindingLabel }}</span>
+              <span v-else>{{ designerRelationBindingsGrouped.length }} {{ t('form.tabGroupTables') }}</span>
+            </span>
+            <el-icon class="nav-arrow"><ArrowDown /></el-icon>
+          </button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item
+                v-for="b in designerRelationBindingsGrouped"
+                :key="b.bindingId"
+                :command="String(b.bindingId)"
+                :class="{ 'is-active-item': activeDesignerTab === String(b.bindingId) }"
+              >
+                <span class="dropdown-item-inner">
+                  <el-icon v-if="activeDesignerTab === String(b.bindingId)" class="check-icon"><Check /></el-icon>
+                  <span>{{ b.tableName }}</span>
+                </span>
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+      </div>
+
       <el-tabs
         v-model="activeDesignerTab"
-        class="designer-tabs"
+        class="designer-tabs designer-tabs--headless"
         @tab-change="handleTabChange"
       >
         <el-tab-pane name="main">
@@ -182,14 +261,22 @@
                 @update:model-value="(val: any) => updateBindingPortalViews(binding.bindingId, val)"
               />
             </div>
-            <el-tabs
-              v-model="subTableActiveTab"
-              @tab-change="(tabName: any) => handleSubTableInnerTabChange(tabName, binding)"
-            >
-              <el-tab-pane
-                :label="t('subTableView.formDesign')"
-                name="form"
-              >
+            <div class="sub-inner-tabs">
+              <div class="sub-inner-tabs__header">
+                <button
+                  class="sub-inner-tab-btn"
+                  :class="{ 'is-active': subTableActiveTab === 'form' }"
+                  @click="subTableActiveTab = 'form'"
+                >{{ t('subTableView.formDesign') }}</button>
+                <button
+                  v-if="binding.subMode !== 'FORM_ONLY'"
+                  class="sub-inner-tab-btn"
+                  :class="{ 'is-active': subTableActiveTab === 'listView' }"
+                  @click="handleSubTableInnerTabChange('listView', binding); subTableActiveTab = 'listView'"
+                >{{ t('subTableView.listView') }}</button>
+              </div>
+
+              <div v-show="subTableActiveTab === 'form'">
                 <div
                   class="fc-designer-wrapper"
                   :style="designerZoomStyle"
@@ -212,12 +299,9 @@
                     />
                   </div>
                 </div>
-              </el-tab-pane>
-              <el-tab-pane
-                v-if="binding.subMode !== 'FORM_ONLY'"
-                :label="t('subTableView.listView')"
-                name="listView"
-              >
+              </div>
+
+              <div v-show="subTableActiveTab === 'listView' && binding.subMode !== 'FORM_ONLY'">
                 <SubTableListView
                   :ref="(el: any) => setSubTableListViewRef(el, binding.bindingId)"
                   :binding="binding"
@@ -236,8 +320,8 @@
                   @update:available-fields="(val: any) => updateSubTableViewAllFields(binding.bindingId, val)"
                   @save="handleSubTableViewSave(binding.bindingId)"
                 />
-              </el-tab-pane>
-            </el-tabs>
+              </div>
+            </div>
           </div>
           <!-- Sub Table (non-SUB fallback, should not happen) -->
           <div
@@ -605,7 +689,7 @@
       width="700px"
       destroy-on-close
     >
-      <TableBindingManager 
+      <TableBindingManager
         v-if="bindingManagerForm"
         ref="bindingManagerRef"
         :function-unit-id="props.functionUnitId"
@@ -613,6 +697,7 @@
         :form-type="bindingManagerForm.formType"
         :tables="store.tables"
         @update="handleBindingUpdate"
+        @add="handleBindingAdded"
       />
       <template #footer>
         <el-button @click="showBindingManagerDialog = false">
@@ -625,7 +710,7 @@
 <script setup lang="ts">
 import { ref, computed, provide, watch, toRef, reactive, nextTick, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, Connection, Loading, CircleCheck } from '@element-plus/icons-vue'
+import { ArrowLeft, ArrowDown, Check, Connection, Loading, CircleCheck } from '@element-plus/icons-vue'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
 import type { FormDefinition, TableBinding } from '@/api/functionUnit'
 import { functionUnitApi } from '@/api/functionUnit'
@@ -648,7 +733,7 @@ import {
   PREVIEW_SUBTABLE_DIALOG_KEY,
   type PreviewSubTableRowDialogOpen,
 } from './previewSubTableDialog'
-import { cloneFormRules } from '@/utils/formDesigner'
+import { cloneFormRules, injectUploadButtonLabels } from '@/utils/formDesigner'
 import { mapFormCreateRulesReadonlyDeep } from '@/utils/formCreateRuleUtils'
 import { isRequestIdSyntheticField } from '@/utils/formFieldMeta'
 import TableBindingManager from './TableBindingManager.vue'
@@ -702,8 +787,13 @@ const showCreateDialog = ref(false)
 const showRenameDialog = ref(false)
 const renameFormName = ref('')
 const renameTargetForm = ref<FormDefinition | null>(null)
+const inlineRenaming = ref(false)
+const inlineRenameName = ref('')
+const inlineRenameInputRef = ref<{ focus: () => void } | null>(null)
 const showBindingManagerDialog = ref(false)
 const bindingManagerForm = ref<FormDefinition | null>(null)
+// Holds auto-fill rules for newly added sub-bindings so handleBindingUpdate can seed the cache
+const pendingSubFormCacheSeed = ref<Record<number, { rule: any[]; options: any }>>({})
 
 // ── Type/label helpers ──────────────────────────────────────────────────────
 const { formTypeLabel, nodeTypeLabel, tableTypeLabel, bindingTypeLabel, bindingTypeTag, getFormComponentType } = useFormLabels(t)
@@ -734,10 +824,51 @@ const designerSubBindings = computed(() => {
       tableId: b.tableId,
       tableType: tableInStore?.tableType || (b.bindingType === 'RELATED' ? 'RELATION' : ''),
       tableDescription: tableInStore?.description || '',
-      subMode: b.subMode,
+      subMode: (b.subMode === 'FORM_ONLY') ? 'FORM_ONLY' : 'FULL',
     }
   })
 })
+
+// Grouped sub/relation bindings for the grouped nav
+const designerSubBindingsGrouped = computed(() =>
+  designerSubBindings.value.filter(b => b.bindingType === 'SUB')
+)
+const designerRelationBindingsGrouped = computed(() =>
+  designerSubBindings.value.filter(b => b.bindingType === 'RELATED')
+)
+
+const activeTabGroup = computed<'main' | 'sub' | 'relation' | null>(() => {
+  if (activeDesignerTab.value === 'main') return 'main'
+  const id = Number(activeDesignerTab.value)
+  if (designerSubBindingsGrouped.value.some(b => b.bindingId === id)) return 'sub'
+  if (designerRelationBindingsGrouped.value.some(b => b.bindingId === id)) return 'relation'
+  return null
+})
+
+const activeBindingLabel = computed(() => {
+  const id = Number(activeDesignerTab.value)
+  const b = designerSubBindings.value.find(b => b.bindingId === id)
+  return b?.tableName ?? ''
+})
+
+function switchToMain() {
+  activeDesignerTab.value = 'main'
+  handleTabChange('main')
+  nextTick(() => {
+    if (designerRef.value?.activeModule) designerRef.value.activeModule = 'base'
+  })
+}
+
+function switchToBinding(id: string) {
+  subTableActiveTab.value = 'form'
+  activeDesignerTab.value = id
+  nextTick(() => {
+    handleTabChange(id)
+    const index = designerSubBindings.value.findIndex(b => String(b.bindingId) === id)
+    const subRef = index >= 0 ? subDesignerRefs.value[index] : null
+    if (subRef?.activeModule) subRef.activeModule = 'base'
+  })
+}
 
 // Default form options — label left-aligned + empty Form event handlers (onChange, onSubmit, …)
 const defaultFormOption = computed(() => buildDefaultFormCreateOptions({
@@ -1109,6 +1240,22 @@ function openRenameDialog(form: FormDefinition) {
   showRenameDialog.value = true
 }
 
+function startInlineRename(form: FormDefinition) {
+  renameTargetForm.value = form
+  inlineRenameName.value = form.formName
+  inlineRenaming.value = true
+  nextTick(() => inlineRenameInputRef.value?.focus())
+}
+
+async function handleInlineRenameConfirm() {
+  if (!inlineRenaming.value) return
+  inlineRenaming.value = false
+  const name = inlineRenameName.value.trim()
+  if (!name || name === renameTargetForm.value?.formName) return
+  renameFormName.value = name
+  await handleConfirmRename()
+}
+
 /**
  * Get PRIMARY binding for a form
  */
@@ -1165,7 +1312,9 @@ async function handleBindingUpdate() {
       selectedForm.value = { ...selectedForm.value, tableBindings: res.data || [] }
       // Reset sub designer state so new tabs render cleanly
       subDesignerRefs.value = []
-      subFormCache.value = {}
+      // Restore any pending auto-fill seeds before Vue renders the new tabs
+      subFormCache.value = { ...pendingSubFormCacheSeed.value }
+      pendingSubFormCacheSeed.value = {}
       // relationViewState is keyed by bindingId — rebuild it for all RELATED bindings so
       // newly added ones get initialised with empty state (rather than undefined → blank view)
       const updated: Record<number, { allFields: any[]; viewFields: any[] }> = {}
@@ -1182,6 +1331,122 @@ async function handleBindingUpdate() {
       relationViewState.value = updated
     } catch (e) {
       console.error('[FormDesigner] Failed to update bindings:', e)
+    }
+  }
+}
+
+/**
+ * Poll for the (re)mounted sub-designer ref of a binding and push the auto-fill rules onto it.
+ * el-tabs mounts all panes eagerly, so the ref appears within a few render ticks after
+ * handleBindingUpdate replaces the bindings list. We retry a handful of times to absorb the
+ * async fetch + re-render + designer init latency.
+ */
+async function applySubDesignerRulesWhenReady(bindingId: number, rules: any[], attempt = 0) {
+  await nextTick()
+  const index = designerSubBindings.value.findIndex(b => b.bindingId === bindingId)
+  const subRef = index >= 0 ? subDesignerRefs.value[index] : null
+  if (subRef && typeof subRef.setRule === 'function') {
+    try {
+      const current: any[] = subRef.getRule() || []
+      // Only fill an empty designer (don't clobber if the user already edited it)
+      if (current.length === 0) {
+        const merged = cloneFormRules(rules)
+        injectUploadButtonLabels(merged, t('form.clickToUpload'))
+        subRef.setRule(merged)
+        if (subRef.activeModule) subRef.activeModule = 'base'
+        // Keep the cache in sync with what we just applied
+        subFormCache.value[bindingId] = { rule: cloneFormRules(merged), options: subFormCache.value[bindingId]?.options || {} }
+      }
+    } catch { /* ignore */ }
+    return
+  }
+  if (attempt < 25) {
+    setTimeout(() => { void applySubDesignerRulesWhenReady(bindingId, rules, attempt + 1) }, 80)
+  }
+}
+
+/**
+ * Auto-fill all fields of a newly added binding into the appropriate designer tab / list view.
+ * Called after TableBindingManager emits 'add'.
+ *
+ * Timing challenge: @update fires first → handleBindingUpdate async-fetches bindings, then
+ * sets subFormCache = {} and subDesignerRefs = []. @add fires after @update starts but they
+ * run concurrently (both async). We use pendingSubFormCacheSeed so that handleBindingUpdate
+ * can restore the seed immediately after clearing the cache.
+ */
+async function handleBindingAdded(payload: { tableId: number; bindingType: string; bindingId: number }) {
+  const { tableId, bindingType, bindingId } = payload
+  const fields = getTableFieldDefinitions(tableId)
+  if (!fields || fields.length === 0) return
+
+  if (bindingType === 'PRIMARY') {
+    // Wait for handleBindingUpdate to have re-mounted the main designer
+    await nextTick()
+    await nextTick()
+    const targetRef = designerRef.value
+    if (!targetRef) return
+    const rules = mapFieldsToFormRules(fields)
+    mergeTaskPermissionsForFields(fields)
+    const currentRules: any[] = targetRef.getRule() || []
+    const existingFields = new Set(currentRules.map((r: any) => r.field))
+    const newRules = rules.filter(r => !existingFields.has(r.field))
+    if (newRules.length > 0) {
+      const merged = [...currentRules, ...newRules]
+      injectUploadButtonLabels(merged, t('form.clickToUpload'))
+      targetRef.setRule(merged)
+    }
+    refreshFormRulesFromTableMetadata()
+
+  } else if (bindingType === 'SUB') {
+    const rules = mapFieldsToFormRules(fields)
+    mergeTaskPermissionsForFields(fields)
+    injectUploadButtonLabels(rules, t('form.clickToUpload'))
+
+    // Seed the cache so handleTabChange / save persistence picks it up even before the
+    // designer ref mounts. handleBindingUpdate restores this after clearing the cache.
+    pendingSubFormCacheSeed.value[bindingId] = { rule: cloneFormRules(rules), options: {} }
+
+    // Also apply directly to the live sub-designer once handleBindingUpdate has re-rendered
+    // the tabs and the new designer ref is mounted (el-tabs mounts all panes eagerly).
+    void applySubDesignerRulesWhenReady(bindingId, rules)
+
+    // Populate the sub-table list view columns (this state is not cleared by handleBindingUpdate)
+    const subFields = fields.map(f => ({
+      fieldName: f.fieldName,
+      dataType: f.dataType || 'VARCHAR',
+      length: f.length,
+      precision: f.precision,
+      scale: f.scale,
+      nullable: f.nullable ?? true,
+      isPrimaryKey: f.isPrimaryKey ?? false,
+      defaultValue: f.defaultValue,
+      displayName: f.displayName || f.fieldName,
+    }))
+    const baseColumns = getSubTableListViewBaseColumns(bindingId)
+    const mergedViewFields = appendSubTableListFieldColumns(baseColumns, subFields)
+    subTableViewState.value = {
+      ...subTableViewState.value,
+      [bindingId]: { allFields: subFields, viewFields: mergedViewFields },
+    } as typeof subTableViewState.value
+
+  } else if (bindingType === 'RELATED') {
+    // Populate relation table view columns (state survives handleBindingUpdate)
+    const viewFields = fields.map((f, idx) => ({
+      id: idx,
+      fieldName: f.fieldName,
+      dataType: f.dataType || 'VARCHAR',
+      length: f.length,
+      precision: f.precision,
+      scale: f.scale,
+      nullable: f.nullable ?? true,
+      isPrimaryKey: f.isPrimaryKey ?? false,
+      defaultValue: f.defaultValue,
+      displayName: f.displayName,
+      sortOrder: idx,
+    }))
+    relationViewState.value = {
+      ...relationViewState.value,
+      [bindingId]: { allFields: viewFields, viewFields },
     }
   }
 }
@@ -1322,6 +1587,10 @@ provide('linkFormComponents', () => linkFormComponents.value.map(c => ({
 
 provide('designerLinkFormColumns', () => designerLinkFormColumnsMap.value)
 
+// Expose switchToBinding via module-level singleton so fc-designer property-panel components
+// (registered in a separate Vue app context where provide/inject doesn't reach) can navigate.
+lookupStore.switchToBinding = (id: number) => switchToBinding(String(id))
+
 // ── Watches ─────────────────────────────────────────────────────────────────
 // Sync relation bindings and formId to lookupStore for fc-designer property panel components
 watch([() => selectedForm.value?.id, designerSubBindings, () => store.tables], () => {
@@ -1385,6 +1654,34 @@ onMounted(() => {
   height: 100%;
 }
 
+.sub-inner-tabs__header {
+  display: flex;
+  border-bottom: 1px solid var(--el-border-color-light);
+  margin-bottom: 0;
+}
+
+.sub-inner-tab-btn {
+  padding: 8px 16px;
+  font-size: 14px;
+  color: var(--el-text-color-regular);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  outline: none;
+  transition: color 0.2s, border-color 0.2s;
+
+  &:hover {
+    color: var(--el-color-primary);
+  }
+
+  &.is-active {
+    color: var(--el-color-primary);
+    border-bottom-color: var(--el-color-primary);
+    font-weight: 500;
+  }
+}
+
 .sub-table-portal-views-bar {
   padding: 8px 12px;
   margin: 0 0 8px 0;
@@ -1420,6 +1717,18 @@ onMounted(() => {
     font-size: 18px;
     font-weight: 600;
     color: #303133;
+    cursor: pointer;
+    border-bottom: 1px dashed transparent;
+    &:hover {
+      border-bottom-color: #409eff;
+      color: #409eff;
+    }
+  }
+
+  .form-name-input {
+    width: 200px;
+    font-size: 18px;
+    font-weight: 600;
   }
   
   .header-actions {
@@ -1601,6 +1910,60 @@ onMounted(() => {
 }
 
 
+// Grouped navigation bar above the tabs
+.designer-grouped-nav {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  padding: 0 4px;
+  border-bottom: 1px solid var(--el-border-color);
+  background: var(--el-bg-color);
+  flex-shrink: 0;
+
+  .designer-nav-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 14px;
+    height: 40px;
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    cursor: pointer;
+    font-size: 14px;
+    color: var(--el-text-color-regular);
+    white-space: nowrap;
+    transition: color 0.2s, border-color 0.2s;
+    margin-bottom: -1px;
+
+    &:hover {
+      color: var(--el-color-primary);
+    }
+
+    &.is-active {
+      color: var(--el-color-primary);
+      border-bottom-color: var(--el-color-primary);
+    }
+
+    .nav-tag {
+      flex-shrink: 0;
+    }
+
+    .nav-label {
+      max-width: 160px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .nav-arrow {
+      font-size: 12px;
+      color: var(--el-text-color-secondary);
+      flex-shrink: 0;
+    }
+  }
+}
+
 .designer-tabs {
   flex: 1;
   display: flex;
@@ -1620,6 +1983,26 @@ onMounted(() => {
   :deep(.el-tab-pane) {
     height: 100%;
   }
+
+  // Hide the native tab header when using grouped nav
+  &.designer-tabs--headless :deep(.el-tabs__header) {
+    display: none;
+  }
+}
+
+.dropdown-item-inner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  .check-icon {
+    color: var(--el-color-primary);
+    font-size: 14px;
+  }
+}
+
+:deep(.is-active-item) {
+  background-color: var(--el-color-primary-light-9);
 }
 
 .designer-sub-tables {

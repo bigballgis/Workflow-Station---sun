@@ -325,7 +325,10 @@ export function useFieldImport(options: UseFieldImportOptions) {
       }
 
       // Check if importing into a sub table - update both form designer and list view
-      if (isImportingSubTable()) {
+      // Skip sub-table routing when the main tab is active: the user is explicitly
+      // importing into the main form canvas, even if the selected table happens to be
+      // of SUB type (e.g. a miParticipantRow binding without a PRIMARY binding).
+      if (activeDesignerTab.value !== 'main' && isImportingSubTable()) {
         // Update sub-table list view state
         const subFields = selectedImportFields.value.map((f) => ({
           fieldName: f.fieldName,

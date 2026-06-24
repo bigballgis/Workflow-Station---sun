@@ -523,6 +523,8 @@ export default {
     subTableBindingRequired: '儲存前，所有子表佔位符必須選擇綁定',
     subTableSelectPlaceholder: '請選擇 Sub Table',
     subTableSelectEmpty: '暫無可用 Sub Table',
+    subTableGoToDesigner: 'Go To Designer',
+    lookupGoToViewDesign: 'Go To Designer',
     subTablePlaceholderUnconfigured: '未選擇 Sub Table',
     subTablePlaceholderStale: '綁定已失效',
     portalViews: {
@@ -574,6 +576,7 @@ export default {
     copyProcessToTaskForm: '複製為任務表單',
     copyProcessToTaskFormSuccess: '流程表單已成功複製為任務表單',
     copyProcessToTaskFormFailed: '流程表單複製為任務表單失敗',
+    clickToRename: '點擊重新命名',
     renameForm: '重新命名',
     renameFormTitle: '重新命名表單',
     renameFormSuccess: '表單重新命名成功',

@@ -59,6 +59,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount, provide, reactive, toRefs } from 'vue'
 import { watchThrottled } from '@vueuse/core'
+import { debounce } from 'lodash-es'
 import type { FormInstance } from 'element-plus'
 import FormRendererFields from './FormRendererFields.vue'
 import { FORM_RENDERER_FIELDS_CTX, type FormRendererFieldsContext } from './formRendererFieldsContext'
@@ -362,7 +363,7 @@ const {
 // ---------------------------------------------------------------------------
 const userSearchResults = ref(new Map<string, Array<{ id: string; name: string }>>())
 
-async function handleUserSearch(query: string, fieldKey: string) {
+async function performUserSearch(query: string, fieldKey: string) {
   try {
     const results = await userApi.searchUsers(query)
     userSearchResults.value.set(fieldKey, results)
@@ -371,6 +372,20 @@ async function handleUserSearch(query: string, fieldKey: string) {
     userSearchResults.value.set(fieldKey, [])
     userSearchResults.value = new Map(userSearchResults.value)
   }
+}
+
+// Debounce per field key: el-select remote-method fires on every keystroke, so
+// without this each character would trigger a searchUsers request. One debounced
+// fn per field so concurrent user-pickers don't clobber each other's timers.
+const userSearchDebouncers = new Map<string, ReturnType<typeof debounce>>()
+
+function handleUserSearch(query: string, fieldKey: string) {
+  let fn = userSearchDebouncers.get(fieldKey)
+  if (!fn) {
+    fn = debounce((q: string) => { void performUserSearch(q, fieldKey) }, 300)
+    userSearchDebouncers.set(fieldKey, fn)
+  }
+  fn(query)
 }
 
 // ---------------------------------------------------------------------------
@@ -626,6 +641,8 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   stopAutoSave()
+  userSearchDebouncers.forEach(fn => fn.cancel())
+  userSearchDebouncers.clear()
 })
 
 // ---------------------------------------------------------------------------

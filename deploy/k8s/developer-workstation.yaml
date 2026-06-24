@@ -43,6 +43,11 @@ spec:
       - name: developer-workstation
         image: nexus3.hk.hsbc:18080/hsbc-238092-cmbhase-bisp/workflow-station2/developer-workstation:__IMAGE_TAG__
         imagePullPolicy: Always
+        command:
+        - sh
+        - -c
+        args:
+        - java $JAVA_OPTS -cp /app org.springframework.boot.loader.launch.JarLauncher
         envFrom:
         - configMapRef:
             name: workflow-platform-config

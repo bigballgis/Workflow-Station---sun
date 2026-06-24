@@ -399,6 +399,7 @@ export default {
     refresh: 'Refresh',
     applicationDetail: 'Application Detail',
     basicInfo: 'Basic Info',
+    requestId: 'Request ID',
     processTitle: 'Process Title',
     processType: 'Process Type',
     initiator: 'Initiator',

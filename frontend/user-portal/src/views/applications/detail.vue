@@ -68,6 +68,12 @@
             :column="3"
             border
           >
+            <el-descriptions-item
+              v-if="processInfo.requestId"
+              :label="t('applicationDetail.requestId')"
+            >
+              {{ processInfo.requestId }}
+            </el-descriptions-item>
             <el-descriptions-item :label="t('applicationDetail.processTitle')">
               {{ processInfo.businessKey || processInfo.processDefinitionName || '-' }}
             </el-descriptions-item>

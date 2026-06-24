@@ -169,6 +169,16 @@ export function parseBpmnDiagram(xml: string, inputs: BpmnDiagramParseInputs): B
       })
     }
 
+    const isMultiInstanceSubProcess = (sp: Element): boolean => {
+      const spChildren = sp.getElementsByTagName('*')
+      for (let i = 0; i < spChildren.length; i++) {
+        if ((spChildren[i].localName || spChildren[i].nodeName.split(':').pop()) === 'multiInstanceLoopCharacteristics') {
+          return true
+        }
+      }
+      return false
+    }
+
     const completedMultiInstanceSubProcesses = new Set<string>()
     for (const [spId, sp] of subProcessMap) {
       if (!enteredSubProcesses.has(spId) || activeMultiInstanceSubProcesses.has(spId)) continue
@@ -260,7 +270,16 @@ export function parseBpmnDiagram(xml: string, inputs: BpmnDiagramParseInputs): B
       const parentSpId = getParentSubProcessId(event)
       let status: ProcessNode['status'] = 'completed'
       if (parentSpId && !enteredSubProcesses.has(parentSpId)) status = 'pending'
-      else if (showCurrentStep && parentSpId && activeMultiInstanceSubProcesses.has(parentSpId)) {
+      else if (
+        parentSpId
+        && subProcessMap.has(parentSpId)
+        && isMultiInstanceSubProcess(subProcessMap.get(parentSpId)!)
+        && !activeMultiInstanceSubProcesses.has(parentSpId)
+        && !completedMultiInstanceSubProcesses.has(parentSpId)
+      ) {
+        // MI subprocess is "entered" only via a PENDING child record → not actually started yet.
+        status = 'pending'
+      } else if (showCurrentStep && parentSpId && activeMultiInstanceSubProcesses.has(parentSpId)) {
         status = 'completed'
       }
       nodes.push({ id, name: event.getAttribute('name') || inputs.t('task.startNode'), type: 'start', status, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
@@ -374,8 +393,15 @@ export function parseBpmnDiagram(xml: string, inputs: BpmnDiagramParseInputs): B
       if (!enteredSubProcesses.has(spId)) {
         status = 'pending'
       } else if (inputs.isCompletedTask) {
-        status = 'completed'
-        completed.push(spId)
+        // A subprocess is only "entered" because a child task has a history record — but for an MI
+        // subprocess that record may be PENDING (children not yet executed). Don't paint it completed
+        // unless its children are actually done; otherwise it stays pending (grey).
+        if (isMultiInstanceSubProcess(sp) && !completedMultiInstanceSubProcesses.has(spId)) {
+          status = 'pending'
+        } else {
+          status = 'completed'
+          completed.push(spId)
+        }
       } else if (
         showCurrentStep &&
         (activeMultiInstanceSubProcesses.has(spId) || subprocessContainsCurrentOpenTask(sp))

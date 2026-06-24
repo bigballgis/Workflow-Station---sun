@@ -325,8 +325,8 @@
     <!-- Preview dialog -->
     <SubTablePreviewDialog
       v-model="showPreview"
-      :preview-field-rows="previewFieldRows"
-      :split-preview-rows="splitPreviewRows"
+      :columns="previewColumns"
+      :split-columns="splitPreviewColumns"
     />
 
     <el-dialog
@@ -532,8 +532,8 @@ const {
   assigneeTodoIsFormBelow,
   initiatorIsSummary,
   dualPreviewPanes,
-  previewFieldRows,
-  splitPreviewRows,
+  previewColumns,
+  splitPreviewColumns,
 } = usePortalPreview({
   props,
   viewColumns,

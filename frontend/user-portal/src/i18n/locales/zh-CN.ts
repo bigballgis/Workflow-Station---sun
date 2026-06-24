@@ -399,6 +399,7 @@ export default {
     refresh: '刷新',
     applicationDetail: '申请详情',
     basicInfo: '基本信息',
+    requestId: 'Request ID',
     processTitle: '流程标题',
     processType: '流程类型',
     initiator: '发起人',

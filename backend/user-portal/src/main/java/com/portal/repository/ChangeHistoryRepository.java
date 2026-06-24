@@ -22,4 +22,9 @@ public interface ChangeHistoryRepository extends JpaRepository<ChangeHistory, Lo
     @Modifying
     @Query("DELETE FROM ChangeHistory c WHERE c.processInstanceId = :processInstanceId")
     void deleteByProcessInstanceId(@Param("processInstanceId") String processInstanceId);
+
+    /** Batch delete for purge flows — one statement instead of one per instance id. */
+    @Modifying
+    @Query("DELETE FROM ChangeHistory c WHERE c.processInstanceId IN :processInstanceIds")
+    void deleteByProcessInstanceIdIn(@Param("processInstanceIds") List<String> processInstanceIds);
 }

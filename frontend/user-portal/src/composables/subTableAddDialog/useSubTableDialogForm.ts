@@ -60,18 +60,19 @@ export function useSubTableDialogForm(props: FormProps, emit: FormEmit, t: Dialo
     return col.readonly === true || calculatedColumns.value.has(col.field)
   }
 
-  // Watch dependent column values and compute target columns
+  // Watch dependent column values and recompute target columns.
+  // The getter returns a stable primitive (joined dep values) instead of a fresh object, so the
+  // watch fires only when a dependency value actually changes — no { deep: true } traversal needed.
   watch(
     () => {
-      if (!props.rowFormulas?.length) return null
-      // Collect all dependent field values to trigger reactivity
-      const deps: Record<string, unknown> = {}
+      if (!props.rowFormulas?.length) return ''
+      const parts: string[] = []
       for (const formula of props.rowFormulas!) {
         for (const dep of formula.dependsOn) {
-          deps[dep] = formData.value[dep]
+          parts.push(`${dep}=${String(formData.value[dep] ?? '')}`)
         }
       }
-      return deps
+      return parts.join('|')
     },
     () => {
       if (!props.rowFormulas?.length) return
@@ -82,8 +83,7 @@ export function useSubTableDialogForm(props: FormProps, emit: FormEmit, t: Dialo
         }
         formData.value[formula.targetColumn] = evaluateFormula(formula.expression, fieldValues)
       }
-    },
-    { deep: true }
+    }
   )
 
   // ─── Column validation errors (Task 8.7) ────────────────────────────────────

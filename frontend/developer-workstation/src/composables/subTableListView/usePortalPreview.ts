@@ -6,6 +6,9 @@ import type {
   SubTableListViewProps,
   TFn,
 } from './types'
+import type { PreviewColumn } from '@/components/designer/sub-table-list/SubTablePreviewDialog.vue'
+
+const MOCK_ROW_COUNT = 3
 
 interface UsePortalPreviewOptions {
   props: SubTableListViewProps
@@ -84,29 +87,30 @@ export function usePortalPreview(options: UsePortalPreviewOptions) {
     { key: 'initiator' as const, title: t('form.portalViews.myRequestsDisplay') },
   ])
 
-  function previewDialogCellValue(f: SubTableListColumnDTO, pane: 'todo' | 'initiator'): string {
-    if (isLinkColumn(f)) return getLinkText(f)
-    if (isLookupColumn(f)) {
+  function cellMockValue(col: SubTableListColumnDTO, pane: 'todo' | 'initiator'): string {
+    if (isLinkColumn(col)) return getLinkText(col)
+    if (isLookupColumn(col)) {
       if (pane === 'initiator' && initiatorIsSummary.value) {
         return t('subTableView.previewLookupSummaryCell')
       }
       return 'Lookup'
     }
-    return getMockValue(f)
+    return getMockValue(col)
   }
 
-  function buildPreviewFieldRows(pane: 'todo' | 'initiator'): Array<{ label: string; value: string }> {
-    return viewColumns.value.map(f => ({
-      label: getColumnLabel(f),
-      value: previewDialogCellValue(f, pane),
+  function buildPreviewColumns(pane: 'todo' | 'initiator'): PreviewColumn[] {
+    return viewColumns.value.map(col => ({
+      key: col.fieldName ?? String(col.componentId ?? Math.random()),
+      label: getColumnLabel(col),
+      mockValues: Array.from({ length: MOCK_ROW_COUNT }, () => cellMockValue(col, pane)),
     }))
   }
 
-  const previewFieldRows = computed(() => buildPreviewFieldRows('todo'))
+  const previewColumns = computed(() => buildPreviewColumns('todo'))
 
-  const splitPreviewRows = computed(() =>
+  const splitPreviewColumns = computed(() =>
     dualPortalListPreview.value
-      ? { todo: buildPreviewFieldRows('todo'), myRequest: buildPreviewFieldRows('initiator') }
+      ? { todo: buildPreviewColumns('todo'), myRequest: buildPreviewColumns('initiator') }
       : null
   )
 
@@ -117,7 +121,7 @@ export function usePortalPreview(options: UsePortalPreviewOptions) {
     assigneeTodoIsFormBelow,
     initiatorIsSummary,
     dualPreviewPanes,
-    previewFieldRows,
-    splitPreviewRows,
+    previewColumns,
+    splitPreviewColumns,
   }
 }
