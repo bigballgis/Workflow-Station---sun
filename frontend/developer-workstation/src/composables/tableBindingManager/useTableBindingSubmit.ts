@@ -17,6 +17,7 @@ interface UseTableBindingSubmitOptions {
   toRelationTableOptionId: (tableId: number) => number
   reloadBindings: () => void
   emitUpdate: () => void
+  emitAdd?: (payload: { tableId: number; bindingType: string; bindingId: number }) => void
   t: (key: string, params?: Record<string, unknown>) => string
 }
 
@@ -37,6 +38,7 @@ export function useTableBindingSubmit(options: UseTableBindingSubmitOptions) {
     toRelationTableOptionId,
     reloadBindings,
     emitUpdate,
+    emitAdd,
     t,
   } = options
 
@@ -117,13 +119,27 @@ export function useTableBindingSubmit(options: UseTableBindingSubmitOptions) {
           requestData
         )
         ElMessage.success(t('tableBinding.updateSuccess'))
+        showAddDialog.value = false
+        reloadBindings()
+        emitUpdate()
       } else {
-        await functionUnitApi.createFormBinding(functionUnitId, getFormId(), requestData)
+        const res = await functionUnitApi.createFormBinding(functionUnitId, getFormId(), requestData)
         ElMessage.success(t('tableBinding.addSuccess'))
+        showAddDialog.value = false
+        reloadBindings()
+        emitUpdate()
+        const created = res?.data
+        // For SUB/PRIMARY the server echoes tableId; for RELATED it may use relationTableId.
+        // Fall back to the request's tableId so the handler always receives a usable id.
+        const resolvedTableId = created?.tableId ?? requestData.tableId
+        if (created?.id && resolvedTableId && emitAdd) {
+          emitAdd({
+            tableId: resolvedTableId,
+            bindingType: created.bindingType ?? requestData.bindingType,
+            bindingId: created.id,
+          })
+        }
       }
-      showAddDialog.value = false
-      reloadBindings()
-      emitUpdate()
     } catch (e: any) {
       console.error('[TableBindingManager] submit failed:', e?.response?.data || e)
       ElMessage({ type: 'error', message: mapBackendError(e), duration: 5000 })

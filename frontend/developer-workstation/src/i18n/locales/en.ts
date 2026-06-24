@@ -543,6 +543,7 @@ export default {
     copyProcessToTaskForm: 'Copy to Task Form',
     copyProcessToTaskFormSuccess: 'Process form copied to Task form successfully',
     copyProcessToTaskFormFailed: 'Failed to copy process form to task form',
+    clickToRename: 'Click to rename',
     renameForm: 'Rename',
     renameFormTitle: 'Rename Form',
     renameFormSuccess: 'Form renamed successfully',

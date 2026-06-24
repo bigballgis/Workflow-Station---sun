@@ -379,6 +379,7 @@ const restrictPrimarySubOnly = computed(
 
 const emit = defineEmits<{
   (e: 'update'): void
+  (e: 'add', payload: { tableId: number; bindingType: string; bindingId: number }): void
 }>()
 
 // 列表状态与展示/删除逻辑
@@ -448,6 +449,7 @@ const { handleSubmit } = useTableBindingSubmit({
   toRelationTableOptionId,
   reloadBindings: loadBindings,
   emitUpdate: () => emit('update'),
+  emitAdd: (payload) => emit('add', payload),
   t,
 })
 

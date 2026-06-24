@@ -576,6 +576,7 @@ export default {
     copyProcessToTaskForm: '複製為任務表單',
     copyProcessToTaskFormSuccess: '流程表單已成功複製為任務表單',
     copyProcessToTaskFormFailed: '流程表單複製為任務表單失敗',
+    clickToRename: '點擊重新命名',
     renameForm: '重新命名',
     renameFormTitle: '重新命名表單',
     renameFormSuccess: '表單重新命名成功',
