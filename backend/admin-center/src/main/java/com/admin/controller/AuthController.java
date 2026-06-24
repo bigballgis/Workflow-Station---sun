@@ -1,5 +1,4 @@
 package com.admin.controller;
-
 import com.admin.dto.request.ChangePasswordRequest;
 import com.admin.dto.request.LoginRequest;
 import com.admin.dto.response.LoginResponse;
@@ -11,9 +10,9 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
 import java.util.Map;
 import java.util.List;
 
@@ -46,6 +45,13 @@ public class AuthController {
         try {
             LoginResponse response = authService.login(request, ipAddress, userAgent, httpResponse);
             return ResponseEntity.ok(response);
+        } catch (AccessDeniedException e) {
+            log.warn("Login forbidden for user {}: {}", request.getUsername(), e.getMessage());
+            return ResponseEntity.status(403).body(
+                    LoginResponse.builder()
+                            .error(e.getMessage())
+                            .build()
+            );
         } catch (RuntimeException e) {
             log.warn("Login failed for user {}: {}", request.getUsername(), e.getMessage());
             return ResponseEntity.badRequest().body(

@@ -1,5 +1,4 @@
 package com.admin.controller;
-
 import com.admin.dto.response.LoginResponse;
 import com.admin.service.AuthService;
 import com.admin.service.PlatformSsoService;
@@ -10,12 +9,12 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
 /**
  * Admin frontend exchanges the code for a local JWT after the unified /login callback
  * (symmetric with portal / dw exchanges).
@@ -25,12 +24,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/auth/sso")
 @RequiredArgsConstructor
 public class AuthSsoExchangeController {
-
     private static final String ADMIN_CLIENT_ID = "admin";
-
     private final PlatformSsoService platformSsoService;
     private final AuthService authService;
-
     @PostMapping("/exchange")
     public ResponseEntity<LoginResponse> exchange(
             @RequestBody SsoExchangeBody body,
@@ -46,6 +42,10 @@ public class AuthSsoExchangeController {
             String ua = httpRequest.getHeader("User-Agent");
             LoginResponse session = authService.issueSsoSession(redeemed.getUserId(), ip, ua, httpResponse);
             return ResponseEntity.ok(session);
+        } catch (AccessDeniedException e) {
+            log.debug("Admin SSO exchange forbidden: {}", e.getMessage());
+            return ResponseEntity.status(403).body(
+                    LoginResponse.builder().error(e.getMessage()).build());
         } catch (IllegalArgumentException e) {
             log.debug("Admin SSO exchange failed: {}", e.getMessage());
             return ResponseEntity.badRequest().build();
@@ -55,14 +55,12 @@ public class AuthSsoExchangeController {
                     LoginResponse.builder().error(e.getMessage()).build());
         }
     }
-
     private static SsoRedeemRequest redeemRequest(String code) {
         SsoRedeemRequest r = new SsoRedeemRequest();
         r.setCode(code);
         r.setClientId(ADMIN_CLIENT_ID);
         return r;
     }
-
     private String getClientIpAddress(HttpServletRequest request) {
         String xForwardedFor = request.getHeader("X-Forwarded-For");
         if (xForwardedFor != null && !xForwardedFor.isEmpty()) {
@@ -74,7 +72,6 @@ public class AuthSsoExchangeController {
         }
         return request.getRemoteAddr();
     }
-
     @Data
     public static class SsoExchangeBody {
         private String code;

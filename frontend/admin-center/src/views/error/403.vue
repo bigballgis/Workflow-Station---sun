@@ -1,36 +1,47 @@
 <template>
-  <div class="forbidden-container">
-    <div class="forbidden-content">
-      <div class="forbidden-icon">
-        🚫
+  <div class="forbidden-page">
+    <header class="forbidden-header">
+      <div class="brand">
+        <el-icon class="brand-icon">
+          <Lock />
+        </el-icon>
+        <span class="brand-name">{{ t('app.name') }}</span>
       </div>
-      <h1 class="forbidden-title">
-        403
-      </h1>
-      <p class="forbidden-message">
-        抱歉，您没有权限访问此页面
-      </p>
-      <p class="forbidden-hint">
-        请联系管理员获取相应权限
-      </p>
-      <div class="forbidden-actions">
-        <el-button
-          type="primary"
-          @click="goBack"
-        >
-          返回上一页
-        </el-button>
-        <el-button @click="goHome">
-          返回首页
-        </el-button>
+    </header>
+
+    <main class="forbidden-main">
+      <div class="forbidden-content">
+        <div class="forbidden-code">
+          403
+        </div>
+        <div class="forbidden-message">
+          {{ t('error.forbidden') }}
+        </div>
+        <div class="forbidden-description">
+          {{ t('error.forbiddenDesc') }}
+        </div>
+        <div class="forbidden-actions">
+          <el-button
+            type="primary"
+            @click="goBack"
+          >
+            {{ t('error.goBack') }}
+          </el-button>
+          <el-button @click="goHome">
+            {{ t('error.backHome') }}
+          </el-button>
+        </div>
       </div>
-    </div>
+    </main>
   </div>
 </template>
 
 <script setup lang="ts">
+import { Lock } from '@element-plus/icons-vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
+const { t } = useI18n()
 const router = useRouter()
 
 const goBack = () => {
@@ -43,44 +54,94 @@ const goHome = () => {
 </script>
 
 <style scoped lang="scss">
-.forbidden-container {
+.forbidden-page {
+  min-height: 100vh;
+  background: #f5f7fa;
+}
+
+.forbidden-header {
+  height: 60px;
   display: flex;
-  justify-content: center;
   align-items: center;
-  min-height: 60vh;
+  padding: 0 20px;
+  color: #fff;
+  background: linear-gradient(135deg, #db0011 0%, #8b0000 100%);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.brand-icon {
+  flex: 0 0 auto;
+  font-size: 24px;
+}
+
+.brand-name {
+  overflow: hidden;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.forbidden-main {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100vh - 60px);
+  padding: 40px 20px;
 }
 
 .forbidden-content {
   text-align: center;
+  padding: 40px;
 }
 
-.forbidden-icon {
-  font-size: 80px;
+.forbidden-code {
+  color: #db0011;
+  font-size: 100px;
+  font-weight: 700;
+  line-height: 1;
   margin-bottom: 20px;
 }
 
-.forbidden-title {
-  font-size: 72px;
-  font-weight: 700;
-  color: #DB0011;
-  margin: 0 0 16px 0;
-}
-
 .forbidden-message {
-  font-size: 20px;
   color: #303133;
-  margin: 0 0 8px 0;
+  font-size: 22px;
+  margin-bottom: 10px;
 }
 
-.forbidden-hint {
-  font-size: 14px;
+.forbidden-description {
   color: #909399;
-  margin: 0 0 32px 0;
+  font-size: 14px;
+  margin-bottom: 30px;
 }
 
 .forbidden-actions {
   display: flex;
   justify-content: center;
   gap: 16px;
+}
+
+@media (max-width: 640px) {
+  .forbidden-content {
+    width: 100%;
+    padding: 32px 16px;
+  }
+
+  .forbidden-code {
+    font-size: 76px;
+  }
+
+  .forbidden-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 </style>

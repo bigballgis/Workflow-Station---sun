@@ -25,6 +25,12 @@ const routes: RouteRecordRaw[] = [
     meta: { titleKey: "login.title", hidden: true },
   },
   {
+    path: "/403",
+    name: "Forbidden",
+    component: () => import("@/views/error/403.vue"),
+    meta: { titleKey: "error.forbidden", hidden: true },
+  },
+  {
     path: "/",
     component: () => import("@/layouts/AdminLayout.vue"),
     redirect: "/dashboard",
@@ -210,12 +216,6 @@ const routes: RouteRecordRaw[] = [
           permissions: [PERMISSIONS.SYSTEM_ADMIN],
         },
       },
-      {
-        path: "403",
-        name: "Forbidden",
-        component: () => import("@/views/error/403.vue"),
-        meta: { titleKey: "error.forbidden", hidden: true },
-      },
     ],
   },
 ];
@@ -239,7 +239,7 @@ router.beforeEach(async (to, _from, next) => {
     return next(false);
   }
 
-  if (to.path === "/sso/callback") {
+  if (to.path === "/sso/callback" || to.path === "/403") {
     next();
     return;
   }

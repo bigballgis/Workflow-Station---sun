@@ -672,8 +672,11 @@ export default {
     path: '路径'
   },
   error: {
-    forbidden: '无权限',
-    noPermission: '您没有权限访问该页面'
+    forbidden: 'Forbidden',
+    forbiddenDesc: 'You do not have permission to access this page. Please contact your administrator if you need access.',
+    goBack: 'Go Back',
+    backHome: 'Back Home',
+    noPermission: 'You do not have permission to access this page'
   },
   api: {
     requestFailed: '请求失败',
