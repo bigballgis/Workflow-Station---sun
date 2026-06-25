@@ -42,6 +42,15 @@ spec:
             configMapKeyRef:
               name: workflow-platform-config
               key: KONG_PROXY_URL
+        # Runtime config -> /admin/config.js (docker-entrypoint.sh). Shows the admin
+        # "Activepieces" launcher pointing at the AP gateway bridge. Empty -> hidden
+        # (prod is runtime-only). optional so prod (no key) starts fine.
+        - name: AP_BRIDGE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: AP_BRIDGE_URL
+              optional: true
         ports:
         - containerPort: 80
           name: http

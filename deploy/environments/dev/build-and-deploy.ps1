@@ -39,6 +39,11 @@ $RootDir = Resolve-Path "$PSScriptRoot/../../.."
 $ComposeFile = "$PSScriptRoot/docker-compose.dev.yml"
 $EnvFile = "$PSScriptRoot/.env"
 
+# NOTE: the admin "Activepieces" launcher URL is injected at RUNTIME (not build time) via
+# AP_BRIDGE_URL on the admin-center-frontend container (docker-entrypoint.sh -> config.js).
+# See the compose service env. The frontend image is built once and promoted across envs,
+# so a build-time value can't differ per environment.
+
 # ==================== Service Registry ====================
 # Maps compose service name -> Maven module path, container name, type
 $ServiceRegistry = @{

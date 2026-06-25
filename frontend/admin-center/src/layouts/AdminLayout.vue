@@ -133,6 +133,21 @@
                 {{ t('menu.tableData') }}
               </el-menu-item>
             </el-sub-menu>
+
+            <!-- Activepieces - external tool (non-prod), opens the :8085 login bridge
+                 in a new tab. el-menu is in router mode, so bind :route to the current
+                 path (no-op navigation) and do the real action in @click. -->
+            <el-menu-item
+              v-if="isSystemAdmin && apBridgeUrl"
+              index="activepieces-launch"
+              :route="route.path"
+              @click="openActivepieces"
+            >
+              <el-icon><Connection /></el-icon>
+              <template #title>
+                {{ t('menu.activepieces') }}
+              </template>
+            </el-menu-item>
           </el-menu>
         </el-scrollbar>
         <div
@@ -170,9 +185,9 @@
 import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { 
+import {
   Fold, Expand,
-  Odometer, Box, User, Lock, Document, DataAnalysis, Grid
+  Odometer, Box, User, Lock, Document, DataAnalysis, Grid, Connection
 } from '@element-plus/icons-vue'
 import UserProfileDropdown from '@/components/UserProfileDropdown.vue'
 import { hasPermission, PERMISSIONS } from '@/utils/permission'
@@ -182,6 +197,28 @@ const { t } = useI18n()
 
 const isCollapse = ref(false)
 const activeMenu = computed(() => route.path)
+
+// Activepieces launcher (non-prod only). Opens the shared-account login bridge on the
+// AP gateway in a new tab. The URL comes from RUNTIME config (window.__APP_CONFIG__,
+// injected per-environment at container start) — the frontend image is built once and
+// promoted to uat/sit/prod, so this can't be a build-time value. Non-prod sets it ->
+// the entry shows; prod leaves it empty -> hidden (AP is runtime-only there). Empty or
+// an un-substituted "${...}" placeholder (e.g. `vite dev`) falls back to the dev default.
+const apBridgeUrl = computed(() => {
+  const rt = window.__APP_CONFIG__?.AP_BRIDGE_URL
+  if (rt && !rt.includes('${')) return rt
+  return import.meta.env.DEV ? 'http://localhost:8085/__ap/bridge' : ''
+})
+
+const openActivepieces = () => {
+  if (!apBridgeUrl.value) return
+  // Navigate THIS tab to the bridge — identical semantics to the user typing the URL
+  // (the verified-working path). A new tab opened via window.open/anchor can land in a
+  // separate storage partition where the bridge's localStorage['token'] write doesn't
+  // reach the AP app, leaving AP on its own login page. Same-tab avoids that entirely;
+  // the user returns to admin with the browser back button.
+  window.location.assign(apBridgeUrl.value)
+}
 
 // Permission checks
 const isSystemAdmin = computed(() => hasPermission(PERMISSIONS.SYSTEM_ADMIN))

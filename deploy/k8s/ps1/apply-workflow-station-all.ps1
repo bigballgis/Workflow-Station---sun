@@ -32,6 +32,8 @@ param(
   [string]$ImageRepositoryPrefix = '',
   [string[]]$Select = @(),
   [switch]$IncludeDeveloperWorkstation = $false,
+  # Non-prod only: include the Activepieces login-bridge UI gateway (ap-gateway.yaml).
+  [switch]$IncludeApBridgeGateway = $false,
   [switch]$DryRun = $false,
   [switch]$RenderOnly = $false,
   [string]$OutputDir = '',
@@ -94,6 +96,9 @@ if ($RenderOnly) {
   if ($IncludeDeveloperWorkstation) {
     $istioArgs['IncludeDeveloperWorkstation'] = $true
   }
+  if ($IncludeApBridgeGateway) {
+    $istioArgs['IncludeApBridgeGateway'] = $true
+  }
   if ($SkipIngressTlsSecretCheck) {
     $istioArgs['SkipIngressTlsSecretCheck'] = $true
   }
@@ -143,6 +148,9 @@ if ($InitializeDatabase) {
 }
 if ($IncludeDeveloperWorkstation) {
   $istioArgs['IncludeDeveloperWorkstation'] = $true
+}
+if ($IncludeApBridgeGateway) {
+  $istioArgs['IncludeApBridgeGateway'] = $true
 }
 if ($IncludeDemoData) {
   $istioArgs['IncludeDemoData'] = $true

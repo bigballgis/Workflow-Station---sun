@@ -504,6 +504,12 @@ public class AuthServiceImpl implements AuthService {
         cookie.setPath("/");
         cookie.setMaxAge(maxAge);
         cookie.setAttribute("SameSite", "Lax");
+        // Domain: empty -> host-only (dev). A parent domain (.example.com) shares the cookie
+        // across sub-domains for cross-subdomain SSO (AP / Superset gateway hosts).
+        String domain = jwtProperties.getCookieDomain();
+        if (domain != null && !domain.isBlank()) {
+            cookie.setDomain(domain.trim());
+        }
         response.addCookie(cookie);
     }
 }

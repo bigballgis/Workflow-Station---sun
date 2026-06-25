@@ -76,6 +76,23 @@ data:
   N8N_DIAGNOSTICS_ENABLED: "false"
   N8N_RESTRICT_ENVIRONMENT_VARIABLES_ACCESS: "false"
   N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+  # Activepieces (PROD runtime only — UI not exposed; Istio routes only /api/v1/webhooks).
+  ACTIVEPIECES_POSTGRES_HOST: "hkl25243602.hc.cloud.hk.hsbc"
+  ACTIVEPIECES_POSTGRES_PORT: "25011"
+  ACTIVEPIECES_POSTGRES_DATABASE: "hmhkdev"
+  ACTIVEPIECES_POSTGRES_USERNAME: "hmhkodev1"
+  ACTIVEPIECES_REDIS_HOST: "redis-service.__NAMESPACE__"
+  ACTIVEPIECES_REDIS_PORT: "6379"
+  ACTIVEPIECES_FRONTEND_URL: "https://sit-activepieces.company.com/"
+  ACTIVEPIECES_WEBHOOK_URL: "https://sit-activepieces.company.com/"
+  # --- AP shared-account login bridge (NON-PROD: uat/sit have the UI) ---
+  # Share the platform JWT across sub-domains so the AP gateway host receives it.
+  JWT_COOKIE_DOMAIN: ".__BASE_DOMAIN__"
+  ACTIVEPIECES_BRIDGE_ENABLED: "true"
+  ACTIVEPIECES_INTERNAL_URL: "http://activepieces-service:80"
+  ACTIVEPIECES_SHARED_EMAIL: "hermes-svc@platform.local"
+  # Frontend runtime config: admin "Activepieces" launcher -> AP gateway bridge.
+  AP_BRIDGE_URL: "http://hermes-workflow-activepieces.__BASE_DOMAIN__/__ap/bridge"
   SUPERSET_CONFIG_PATH: "/app/pythonpath/superset_config.py"
   SUPERSET_HOST: "http://hase-hermes-workflow-superset.__NAMESPACE__:80"
   SUPERSET_PUBLIC_HOST: "http://hermes-workflow-superset-internal-proxy.__BASE_DOMAIN__/"

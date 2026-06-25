@@ -28,8 +28,19 @@ function isAdminAccessDenied(error: unknown) {
 // with state=superset-author; after the cookie is set we jump back there.
 // Values are a HARDCODED allowlist (never derived from untrusted input) so this
 // cannot be abused as an open redirect.
+// AP login bridge URL from RUNTIME config (per-environment; empty in prod -> no return).
+// Mirrors AdminLayout: window.__APP_CONFIG__, falling back to the dev default under vite dev.
+function apBridgeReturn(): string {
+  const rt = window.__APP_CONFIG__?.AP_BRIDGE_URL
+  if (rt && !rt.includes('${')) return rt
+  return import.meta.env.DEV ? 'http://localhost:8085/__ap/bridge' : ''
+}
+
 const SSO_EXTERNAL_RETURNS: Record<string, string> = {
   'superset-author': import.meta.env.VITE_SUPERSET_AUTHOR_URL || 'http://localhost:8087/',
+  // Activepieces gateway bounces unauthenticated users to login with state=ap-bridge;
+  // after the cookie is set, jump back to the AP login bridge.
+  'ap-bridge': apBridgeReturn(),
 }
 
 onMounted(async () => {

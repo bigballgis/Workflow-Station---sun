@@ -58,6 +58,15 @@ public class JwtProperties {
     private String refreshCookieName = "refresh_token";
 
     /**
+     * Cookie {@code Domain} attribute for the auth cookies. Empty (default) -> host-only cookie
+     * (correct for single-host dev). Set to a parent domain like {@code .example.com} so the
+     * platform JWT is shared across sub-domains (e.g. the Activepieces / Superset gateway hosts),
+     * enabling cross-subdomain SSO. MUST be applied identically when setting AND clearing cookies,
+     * or a domain-scoped cookie can't be cleared on logout.
+     */
+    private String cookieDomain = "";
+
+    /**
      * Primary access cookie name for this service ({@link #cookieNames} first entry).
      */
     public String getPrimaryCookieName() {

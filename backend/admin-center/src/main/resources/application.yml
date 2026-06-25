@@ -266,6 +266,17 @@ bi:
     cron: ${BI_SYNC_CRON:0 0 */6 * * ?}
     enabled: ${BI_SYNC_ENABLED:true}
 
+# Activepieces integration (community edition + gateway shared account).
+# bridge.enabled is OFF by default — prod runs AP as runtime only (no UI login).
+# Non-prod enables the bridge so the :8085 gateway can mint AP tokens via the shared account.
+activepieces:
+  internal-url: ${ACTIVEPIECES_INTERNAL_URL:http://localhost:8086}
+  bridge:
+    enabled: ${ACTIVEPIECES_BRIDGE_ENABLED:false}
+  shared-account:
+    email: ${ACTIVEPIECES_SHARED_EMAIL:}
+    password: ${ACTIVEPIECES_SHARED_PASSWORD:}
+
 # JWT Configuration
 jwt:
   secret: ${JWT_SECRET:your-256-bit-secret-key-for-development-only}
@@ -285,6 +296,9 @@ platform:
         - ac_access_token
         - access_token
       refresh-cookie-name: ac_refresh_token
+      # Cookie Domain. Empty (dev, single host) -> host-only. k8s non-prod sets it to
+      # .<BASE_DOMAIN> so the platform JWT is shared across sub-domains (AP/Superset gateways).
+      cookie-domain: ${JWT_COOKIE_DOMAIN:}
       issuer: platform
       validate-issuer: false
   encryption:

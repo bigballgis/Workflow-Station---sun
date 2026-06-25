@@ -1,0 +1,116 @@
+# Activepieces 共享账号初始化 Job —— NON-PROD ONLY (uat/sit).
+# 新环境(空库)时把共享账号 sign-up 成 AP 的第一个用户(owner/ADMIN,自动建 platform+project)。
+# 幂等:已存在则 sign-in 探测通过、直接成功;未配置共享账号(prod runtime-only)则跳过。
+#
+# 与 ap-gateway.yaml 一样默认从部署集排除;用 -IncludeApBridgeGateway 一并纳入。
+# Istio:Job 默认关闭 sidecar 注入,否则 sidecar 不退出会让 Job 永不完成。若 mesh 是 STRICT mTLS、
+# 关闭 sidecar 后无法访问 activepieces-service,改为保留 sidecar 并在脚本结束后 curl
+# localhost:15020/quitquitquit(见 Istio 文档);或直接 kubectl exec 手工跑 deploy/scripts/ap-bootstrap-shared-account.js。
+#
+# 脚本与 deploy/scripts/ap-bootstrap-shared-account.js 保持一致(此处内嵌供集群内运行)。
+# Replace __NAMESPACE__, __IMAGE_TAG__(此处复用 AP 镜像,自带 node)。
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ap-bootstrap-script
+  namespace: __NAMESPACE__
+data:
+  ap-bootstrap-shared-account.js: |
+    'use strict';
+    const http = require('http');
+    const { URL } = require('url');
+    const BASE = (process.env.AP_INTERNAL_URL || 'http://localhost:80').replace(/\/+$/, '');
+    const EMAIL = process.env.ACTIVEPIECES_SHARED_EMAIL || '';
+    const PASSWORD = process.env.ACTIVEPIECES_SHARED_PASSWORD || '';
+    const TIMEOUT_MS = parseInt(process.env.AP_BOOTSTRAP_TIMEOUT_MS || '180000', 10);
+    function req(method, path, body) {
+      return new Promise((resolve, reject) => {
+        const u = new URL(BASE + path);
+        const payload = body ? JSON.stringify(body) : null;
+        const r = http.request({ method, hostname: u.hostname, port: u.port || 80, path: u.pathname + u.search,
+            headers: payload ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) } : {} },
+          (res) => { let d = ''; res.on('data', (c) => (d += c)); res.on('end', () => resolve({ status: res.statusCode, body: d })); });
+        r.on('error', reject); if (payload) r.write(payload); r.end();
+      });
+    }
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    async function waitReady() {
+      const deadline = Date.now() + TIMEOUT_MS;
+      while (Date.now() < deadline) {
+        try { const r = await req('GET', '/api/v1/flags'); if (r.status === 200) return; } catch (_) {}
+        await sleep(3000);
+      }
+      throw new Error('Activepieces did not become ready within ' + TIMEOUT_MS + 'ms');
+    }
+    async function main() {
+      if (!EMAIL || !PASSWORD) { console.log('[ap-bootstrap] shared account not configured -> skip.'); return; }
+      console.log('[ap-bootstrap] target=' + BASE + ' email=' + EMAIL);
+      await waitReady();
+      const signin = await req('POST', '/api/v1/authentication/sign-in', { email: EMAIL, password: PASSWORD });
+      if (signin.status === 200) { console.log('[ap-bootstrap] shared account already exists -> nothing to do.'); return; }
+      console.log('[ap-bootstrap] sign-in ' + signin.status + ' -> sign-up (first user = owner).');
+      const signup = await req('POST', '/api/v1/authentication/sign-up',
+        { email: EMAIL, password: PASSWORD, firstName: 'Hermes', lastName: 'Service', trackEvents: false, newsLetter: false });
+      if (signup.status >= 200 && signup.status < 300) { console.log('[ap-bootstrap] shared account created.'); return; }
+      throw new Error('[ap-bootstrap] sign-up failed: HTTP ' + signup.status + ' body=' + signup.body.slice(0, 300)
+        + ' (若账号已存在,请确认密码与 ACTIVEPIECES_SHARED_PASSWORD 一致)');
+    }
+    main().then(() => process.exit(0)).catch((e) => { console.error(String(e && e.message || e)); process.exit(1); });
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ap-bootstrap-shared-account
+  namespace: __NAMESPACE__
+  labels:
+    app: ap-bootstrap
+spec:
+  backoffLimit: 5
+  # Job 完成后保留 1 小时便于查日志,然后自动清理(需集群启用 TTLAfterFinished)。
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app: ap-bootstrap
+      annotations:
+        # 关闭 sidecar 注入,否则 Istio sidecar 常驻会让 Job 永不完成。见上方 STRICT mTLS 注记。
+        sidecar.istio.io/inject: "false"
+    spec:
+      restartPolicy: Never
+      imagePullSecrets:
+      - name: nexus3
+      containers:
+      - name: ap-bootstrap
+        image: nexus3.hk.hsbc:18080/hsbc-238092-cmbhase-bisp/workflow-station2/activepieces:0.84.0
+        imagePullPolicy: IfNotPresent
+        command: ["node", "/scripts/ap-bootstrap-shared-account.js"]
+        env:
+        - name: AP_INTERNAL_URL
+          value: "http://activepieces-service:80"
+        - name: ACTIVEPIECES_SHARED_EMAIL
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: ACTIVEPIECES_SHARED_EMAIL
+              optional: true
+        - name: ACTIVEPIECES_SHARED_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: workflow-platform-secrets
+              key: ACTIVEPIECES_SHARED_PASSWORD
+              optional: true
+        volumeMounts:
+        - name: script
+          mountPath: /scripts
+          readOnly: true
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "50m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+      volumes:
+      - name: script
+        configMap:
+          name: ap-bootstrap-script

@@ -137,25 +137,32 @@ public class AuthController {
         List<String> names = jwtProperties.getCookieNames();
         if (names != null) {
             for (String n : names) {
-                jakarta.servlet.http.Cookie cookie = new jakarta.servlet.http.Cookie(n, "");
-                cookie.setPath("/");
-                cookie.setHttpOnly(true);
-                cookie.setMaxAge(0);
-                cookie.setSecure(false);
-                cookie.setAttribute("SameSite", "Lax");
-                response.addCookie(cookie);
+                response.addCookie(expiredCookie(n));
             }
         }
         String refresh = jwtProperties.getRefreshCookieName();
         if (refresh != null) {
-            jakarta.servlet.http.Cookie rc = new jakarta.servlet.http.Cookie(refresh, "");
-            rc.setPath("/");
-            rc.setHttpOnly(true);
-            rc.setMaxAge(0);
-            rc.setSecure(false);
-            rc.setAttribute("SameSite", "Lax");
-            response.addCookie(rc);
+            response.addCookie(expiredCookie(refresh));
         }
+    }
+
+    /**
+     * A max-age=0 deletion cookie. MUST carry the same Domain as when it was set
+     * (see JwtProperties#cookieDomain) — a domain-scoped cookie can't be cleared
+     * by a host-only deletion cookie.
+     */
+    private jakarta.servlet.http.Cookie expiredCookie(String name) {
+        jakarta.servlet.http.Cookie cookie = new jakarta.servlet.http.Cookie(name, "");
+        cookie.setPath("/");
+        cookie.setHttpOnly(true);
+        cookie.setMaxAge(0);
+        cookie.setSecure(false);
+        cookie.setAttribute("SameSite", "Lax");
+        String domain = jwtProperties.getCookieDomain();
+        if (domain != null && !domain.isBlank()) {
+            cookie.setDomain(domain.trim());
+        }
+        return cookie;
     }
 
     /**

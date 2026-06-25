@@ -1,0 +1,235 @@
+# Activepieces — PRODUCTION RUNTIME ONLY.
+# Strategy: community edition + gateway shared account. In prod AP runs purely as a
+# workflow runtime: the UI is NOT exposed (no shared-account login bridge here — that
+# lives only in non-prod, see deploy/environments/dev). Istio exposes ONLY the webhook
+# ingress path so external systems can trigger flows; the internal API is reached
+# in-cluster via the ClusterIP Service (admin-center / workflow-engine -> activepieces-service:80).
+#
+# Replace __NAMESPACE__, __BASE_DOMAIN__, __IMAGE_TAG__ before applying.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: activepieces
+  namespace: __NAMESPACE__
+  labels:
+    app: activepieces
+    component: automation
+    app.kubernetes.io/name: activepieces
+    app.kubernetes.io/instance: activepieces
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: activepieces
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/proxyCPU: 50m
+        sidecar.istio.io/proxyCPULimit: 200m
+        sidecar.istio.io/proxyMemory: 400Mi
+        sidecar.istio.io/proxyMemoryLimit: 400Mi
+        sidecar.istio.io/inject: "true"
+        sidecar.istio.io/rewriteAppHTTPProbers: "true"
+        proxy.istio.io/config: '{ "holdApplicationUntilProxyStarts": true }'
+      labels:
+        app: activepieces
+        component: automation
+        app.kubernetes.io/name: activepieces
+        app.kubernetes.io/instance: activepieces
+    spec:
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+      imagePullSecrets:
+      - name: nexus3
+      containers:
+      - name: activepieces
+        #image: nexus3.hk.hsbc:18080/hsbc-238092-cmbhase-bisp/workflow-station2/activepieces:__IMAGE_TAG__
+        image: nexus3.hk.hsbc:18080/hsbc-238092-cmbhase-bisp/workflow-station2/activepieces:0.84.0
+        imagePullPolicy: Always
+        env:
+        - name: AP_DB_TYPE
+          value: "POSTGRES"
+        - name: AP_POSTGRES_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: ACTIVEPIECES_POSTGRES_HOST
+        - name: AP_POSTGRES_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: ACTIVEPIECES_POSTGRES_PORT
+        - name: AP_POSTGRES_DATABASE
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: ACTIVEPIECES_POSTGRES_DATABASE
+        - name: AP_POSTGRES_USERNAME
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: ACTIVEPIECES_POSTGRES_USERNAME
+        - name: AP_POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: workflow-platform-secrets
+              key: ACTIVEPIECES_POSTGRES_PASSWORD
+        - name: AP_REDIS_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: ACTIVEPIECES_REDIS_HOST
+        - name: AP_REDIS_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: ACTIVEPIECES_REDIS_PORT
+        - name: AP_REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: workflow-platform-secrets
+              key: ACTIVEPIECES_REDIS_PASSWORD
+        - name: AP_ENCRYPTION_KEY
+          valueFrom:
+            secretKeyRef:
+              name: workflow-platform-secrets
+              key: ACTIVEPIECES_ENCRYPTION_KEY
+        - name: AP_JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: workflow-platform-secrets
+              key: ACTIVEPIECES_JWT_SECRET
+        # External base used to build webhook URLs (the only externally-reachable path).
+        - name: AP_FRONTEND_URL
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: ACTIVEPIECES_FRONTEND_URL
+        - name: AP_WEBHOOK_URL
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: ACTIVEPIECES_WEBHOOK_URL
+        - name: AP_ENVIRONMENT
+          value: "prod"
+        - name: AP_TRIGGER_DEFAULT_POLL_INTERVAL
+          value: "5"
+        ports:
+        - containerPort: 80
+          name: http
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        readinessProbe:
+          httpGet:
+            path: /api/v1/flags
+            port: 80
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /api/v1/flags
+            port: 80
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        volumeMounts:
+        - name: activepieces-data
+          mountPath: /app/packages/server/data
+      volumes:
+      - name: activepieces-data
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: activepieces-service
+  namespace: __NAMESPACE__
+  labels:
+    app: activepieces
+spec:
+  selector:
+    app: activepieces
+  ports:
+  - name: http
+    protocol: TCP
+    port: 80
+    targetPort: 80
+  type: ClusterIP
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: activepieces-destination-rule
+  namespace: __NAMESPACE__
+spec:
+  host: activepieces-service
+  subsets:
+  - name: v1
+    labels:
+      app: activepieces
+---
+apiVersion: networking.istio.io/v1beta1
+kind: Sidecar
+metadata:
+  name: activepieces-sidecar
+  namespace: __NAMESPACE__
+spec:
+  workloadSelector:
+    labels:
+      app: activepieces
+  egress:
+  - hosts:
+    - ./*
+    - istio-system/*
+---
+# Webhook-only ingress. ONLY /api/v1/webhooks is routed from outside so external
+# systems can trigger flows. The UI (root) and the rest of the API are NOT matched
+# here -> Istio returns 404 -> no public UI. Internal API stays in-cluster (ClusterIP).
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: activepieces-virtual-service
+  namespace: __NAMESPACE__
+spec:
+  hosts:
+  - activepieces.__BASE_DOMAIN__
+  gateways:
+  - activepieces-gateway
+  http:
+  - match:
+    - uri:
+        prefix: /api/v1/webhooks
+    retries:
+      attempts: 0
+    route:
+    - destination:
+        host: activepieces-service
+        subset: v1
+        port:
+          number: 80
+    timeout: 120s
+---
+apiVersion: networking.istio.io/v1
+kind: Gateway
+metadata:
+  name: activepieces-gateway
+  namespace: __NAMESPACE__
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - activepieces.__BASE_DOMAIN__

@@ -91,6 +91,9 @@ param(
 	[string[]]$Select = @(),
 	[switch]$DryRun = $false,
 	[switch]$IncludeDeveloperWorkstation = $false,
+	# Non-prod only: include the Activepieces login-bridge UI gateway (ap-gateway.yaml).
+	# PROD is runtime-only (no AP UI) — leave this off there.
+	[switch]$IncludeApBridgeGateway = $false,
 	[switch]$InitializeDatabase = $false,
 	[string]$DbHost = '',
 	[int]$DbPort = 0,
@@ -110,7 +113,11 @@ $ErrorActionPreference = 'Stop'
 $Select = @($Select) + @($SelectRemainder)
 $defaultExcludedManifestNames = @(
 	'developer-workstation.yaml',
-	'developer-workstation-frontend.yaml'
+	'developer-workstation-frontend.yaml',
+	# AP login-bridge UI gateway + shared-account bootstrap Job — non-prod only;
+	# opt in with -IncludeApBridgeGateway.
+	'ap-gateway.yaml',
+	'ap-bootstrap-job.yaml'
 )
 function Normalize-ParameterValue {
 	param(
@@ -210,14 +217,21 @@ function Resolve-SelectedFiles {
 	param(
 		[Parameter(Mandatory = $true)][System.IO.FileInfo[]]$AllFiles,
 		[string[]]$Selection,
-		[switch]$IncludeDeveloperWorkstation
+		[switch]$IncludeDeveloperWorkstation,
+		[switch]$IncludeApBridgeGateway
 	)
 	if (-not $Selection -or $Selection.Count -eq 0) {
+		# Start from the default exclusions and selectively un-exclude per opt-in switch,
+		# so each optional component is gated independently (dev-workstation vs AP gateway).
+		$excluded = @($defaultExcludedManifestNames)
 		if ($IncludeDeveloperWorkstation) {
-			return $AllFiles
+			$excluded = @($excluded | Where-Object { $_ -notlike 'developer-workstation*' })
+		}
+		if ($IncludeApBridgeGateway) {
+			$excluded = @($excluded | Where-Object { $_ -ne 'ap-gateway.yaml' -and $_ -ne 'ap-bootstrap-job.yaml' })
 		}
 		return @(
-			$AllFiles | Where-Object { $defaultExcludedManifestNames -notcontains $_.Name }
+			$AllFiles | Where-Object { $excluded -notcontains $_.Name }
 		)
 	}
 	$byPath = @{}
@@ -520,6 +534,7 @@ Write-Host "IngressHost:           $IngressHost"
 Write-Host "IngressTlsSecret:      $IngressTlsSecret"
 Write-Host "IngressGatewayNs:      $IngressGatewayNamespace"
 Write-Host "IncludeDeveloperWs:    $IncludeDeveloperWorkstation"
+Write-Host "IncludeApBridgeGw:     $IncludeApBridgeGateway"
 Write-Host "ManifestDir:           $manifestDir"
 Write-Host "DryRun:                $DryRun"
 Write-Host "RenderOnly:            $RenderOnly"
@@ -530,7 +545,7 @@ $allFiles = @(Get-ManifestFiles -Dir $manifestDir)
 if ($allFiles.Count -eq 0) {
 	throw "No manifest files found at: $manifestDir"
 }
-$targetFiles = @(Resolve-SelectedFiles -AllFiles $allFiles -Selection $Select -IncludeDeveloperWorkstation:$IncludeDeveloperWorkstation)
+$targetFiles = @(Resolve-SelectedFiles -AllFiles $allFiles -Selection $Select -IncludeDeveloperWorkstation:$IncludeDeveloperWorkstation -IncludeApBridgeGateway:$IncludeApBridgeGateway)
 $renderDir = Ensure-OutputDirectory -Dir $OutputDir
 Write-Host "RenderedOutput:        $renderDir"
 Write-Host "`nRendering $($targetFiles.Count) manifest file(s)..." -ForegroundColor Yellow

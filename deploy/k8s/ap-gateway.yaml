@@ -1,0 +1,79 @@
+# Activepieces login-bridge gateway — NON-PROD ONLY (uat/sit).
+# The k8s equivalent of dev's :8085 nginx-edge AP block: users reach the AP UI through
+# this host; the shared-account login bridge mints an AP token into localStorage.
+#
+# Routing on hermes-workflow-activepieces.<BASE_DOMAIN>:
+#   /__ap/bridge  -> admin-center  (serves the bridge HTML; self-gates on the platform JWT)
+#   /__ap/token   -> admin-center  (mints the AP token via the shared account; self-gates)
+#   /             -> activepieces  (the AP app/API; AP self-protects with its own token)
+#
+# No Istio ext_authz/AuthorizationPolicy is needed (unlike the Superset author gateway):
+# the admin-center bridge/token endpoints already validate the platform JWT and return 401
+# when unauthenticated. The platform JWT reaches this sub-domain because admin-center sets
+# the cookie with Domain=.<BASE_DOMAIN> (JWT_COOKIE_DOMAIN, non-prod configmap).
+#
+# EXCLUDED from the default deploy set (see apply-workflow-station-istio-generated.ps1);
+# deploy to non-prod with -IncludeApBridgeGateway. PROD is runtime-only (webhooks via
+# activepieces.yaml) and must NOT apply this manifest.
+#
+# Replace __NAMESPACE__, __BASE_DOMAIN__ before applying.
+apiVersion: networking.istio.io/v1
+kind: Gateway
+metadata:
+  name: hase-hermes-workflow-activepieces-gateway
+  namespace: __NAMESPACE__
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - hermes-workflow-activepieces.__BASE_DOMAIN__
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: hase-hermes-workflow-activepieces-virtual-service
+  namespace: __NAMESPACE__
+spec:
+  hosts:
+  - hermes-workflow-activepieces.__BASE_DOMAIN__
+  gateways:
+  - hase-hermes-workflow-activepieces-gateway
+  http:
+  # Bridge page: served by admin-center, rewritten from the gateway path.
+  - match:
+    - uri:
+        exact: /__ap/bridge
+    rewrite:
+      uri: /api/v1/admin/internal/ap/bridge
+    route:
+    - destination:
+        host: admin-center-service
+        port:
+          number: 8080
+    timeout: 30s
+  # Token endpoint: served by admin-center.
+  - match:
+    - uri:
+        exact: /__ap/token
+    rewrite:
+      uri: /api/v1/admin/internal/ap/token
+    route:
+    - destination:
+        host: admin-center-service
+        port:
+          number: 8080
+    timeout: 30s
+  # Everything else -> Activepieces (the app + its own /api). AP self-protects with the
+  # localStorage token minted by the bridge; an un-platform-authed visitor just sees AP's
+  # own login (no token, harmless).
+  - route:
+    - destination:
+        host: activepieces-service
+        port:
+          number: 80
+    timeout: 120s

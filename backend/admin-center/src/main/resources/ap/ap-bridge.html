@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<!--
+  Activepieces 共享账号登录桥（社区版 + 网关共享账号方案）。
+  由 admin-center 提供，经 AP 网关在 /__ap/bridge 暴露（dev :8085 / 非生产 k8s），受平台 JWT 门禁保护。
+  浏览器看到的是网关 origin，故下方相对路径 /__ap/token、/ 都解析到网关。
+  作用：取共享账号 AP token → 写 localStorage['token'] → 跳网关根进入 AP。
+  AP token 存在 localStorage（非 cookie），故必须用此客户端桥而非服务端 cookie 注入。
+-->
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>正在进入 Activepieces…</title>
+  <style>
+    html, body { height: 100%; margin: 0; }
+    body {
+      display: flex; align-items: center; justify-content: center;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0b0f1a; color: #e6e8ee;
+    }
+    .box { text-align: center; max-width: 420px; padding: 24px; }
+    .spinner {
+      width: 36px; height: 36px; margin: 0 auto 18px;
+      border: 3px solid rgba(255,255,255,.18); border-top-color: #6c8cff;
+      border-radius: 50%; animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .msg { font-size: 14px; line-height: 1.6; color: #aab1c5; }
+    .err { color: #ff8088; }
+    a { color: #6c8cff; }
+    button {
+      margin-top: 14px; padding: 8px 18px; border: 0; border-radius: 8px;
+      background: #6c8cff; color: #fff; font-size: 14px; cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <div class="spinner" id="spinner"></div>
+    <div class="msg" id="msg">正在以共享账号登录 Activepieces…</div>
+  </div>
+  <script>
+    // AP 一个完整前端会话 = localStorage['token'] + localStorage['projectId']
+    // （AP 的 clearSession 同时清这两个 key）。只写 token 会让 AP 没有当前项目、
+    // 在 /flows <-> /sign-in 之间死循环，故两者都要写。
+    var AP_TOKEN_KEY = 'token';
+    var AP_PROJECT_KEY = 'projectId';
+    var TOKEN_ENDPOINT = '/__ap/token';
+    var AP_HOME = '/';
+
+    function fail(text) {
+      var sp = document.getElementById('spinner');
+      if (sp) sp.style.display = 'none';
+      var msg = document.getElementById('msg');
+      msg.className = 'msg err';
+      msg.innerHTML = text + '<br><button onclick="location.reload()">重试</button>';
+    }
+
+    fetch(TOKEN_ENDPOINT, { credentials: 'include', headers: { 'Accept': 'application/json' } })
+      .then(function (r) {
+        if (r.status === 401) { location.replace(TOKEN_ENDPOINT); return null; } // 网关会 302 到平台登录
+        if (!r.ok) { throw new Error('HTTP ' + r.status); }
+        return r.json();
+      })
+      .then(function (body) {
+        if (!body) return; // 401 分支已处理
+        // 兼容统一 ApiResponse 包装 {data:{...}} 与裸 {...}
+        var data = body.data || body;
+        var token = data.token;
+        var projectId = data.projectId;
+        if (!token) { throw new Error('响应无 token'); }
+        try {
+          // Clear any STALE AP auth state first (e.g. a token signed with a rotated
+          // AP_JWT_SECRET, or a stale 'projectId'). A stale-but-unexpired token makes
+          // AP's router bounce /sign-in <-> /flows forever. Then write a COMPLETE
+          // session: token + projectId (AP needs both, else no current project -> loop).
+          localStorage.clear();
+          localStorage.setItem(AP_TOKEN_KEY, token);
+          if (projectId) { localStorage.setItem(AP_PROJECT_KEY, projectId); }
+        } catch (e) { throw new Error('无法写入 localStorage：' + e.message); }
+        location.replace(AP_HOME);
+      })
+      .catch(function (e) {
+        fail('登录 Activepieces 失败：' + (e && e.message ? e.message : e));
+      });
+  </script>
+</body>
+</html>
