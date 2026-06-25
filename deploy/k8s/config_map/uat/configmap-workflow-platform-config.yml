@@ -88,6 +88,15 @@ data:
   SUPERSET_HOST: "http://hase-hermes-workflow-superset.__NAMESPACE__:80"
   SUPERSET_PUBLIC_HOST: "http://hermes-workflow-superset-internal-proxy.__BASE_DOMAIN__/"
   SUPERSET_DB_SCHEMA: "superset"
+  # Origins allowed to call Superset APIs (CORS) and to iframe it (CSP frame-ancestors).
+  # Must list the user-portal origin(s) that embed dashboards. Was implicitly "*".
+  SUPERSET_CORS_ORIGINS: "https://hermes-uat.hk.hsbc,http://hermes-uat.hk.hsbc,https://__INGRESS_HOST__,http://__INGRESS_HOST__"
+  # Superset Logout button -> platform endpoint that clears the JWT cookie, then login.
+  SUPERSET_LOGOUT_REDIRECT_URL: "https://__INGRESS_HOST__/api/v1/admin/auth/logout-redirect"
+  # Where /auth/logout-redirect lands after clearing the cookie: a WORKING login page
+  # (SSO params; redirect_uri percent-encoded). state=superset-author flows re-login
+  # back into Superset. Relative -> resolved against the ingress host.
+  APP_SECURITY_LOGOUT_REDIRECT_TARGET: "/login/?client_id=admin&redirect_uri=https%3A%2F%2F__INGRESS_HOST__%2Fadmin%2Fsso%2Fcallback&state=superset-author"
   # ==================== LDAP / SSO-DSP (admin-center, UAT 真实值) ====================
   # 非敏感配置；bind 密码 / DSP client secret / keystore 口令放 workflow-platform-secrets。
   # env 名为本仓库 admin-center 实际读取名（与源项目映射表有差异，见 deploy/environments/uat/.env 注释）。

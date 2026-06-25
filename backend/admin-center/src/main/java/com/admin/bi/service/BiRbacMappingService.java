@@ -53,4 +53,10 @@ public interface BiRbacMappingService {
      * 获取给定系统角色 ID 列表对应的有效（ACTIVE）Superset 角色 ID 列表（去重）
      */
     List<Integer> getEffectiveSupersetRoleIds(List<String> sysRoleIds);
+
+    /**
+     * 获取给定系统角色 ID 列表对应的有效（ACTIVE）Superset 角色名称列表（去重）。
+     * 供 Superset 网关鉴权端点注入 X-Remote-Roles 头使用（Superset 按角色名解析）。
+     */
+    List<String> getEffectiveSupersetRoleNames(List<String> sysRoleIds);
 }

@@ -147,12 +147,17 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    ports:
-      - "8088:8088"
+    # No host port: raw Superset (:8088) is NOT browser-reachable. It trusts
+    # X-Remote-* for REMOTE_USER auth, so it must only be reached via the edge
+    # (author gate :8087 / embed origin :8086). Reachable in-network as superset-final:8088.
+    expose:
+      - "8088"
     environment:
       # Keep Superset metadata in dedicated schema.
       SQLALCHEMY_DATABASE_URI: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?options=-csearch_path%3D${SUPERSET_DB_SCHEMA:-superset}
-      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY:-replace_this_with_a_real_secert_key}
+      # No insecure default: superset_config.py fails closed if this is unset (see .env).
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
+      SUPERSET_CORS_ORIGINS: ${SUPERSET_CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8088/health"]
       interval: 30s
@@ -249,6 +254,13 @@ services:
       SSO_REDIRECT_DW_PREFIX: ${SSO_REDIRECT_DW_PREFIX:-http://localhost:3000/dev/sso/callback}
       SSO_REDIRECT_DW_HTTP_PREFIX: ${SSO_REDIRECT_DW_HTTP_PREFIX:-http://localhost:3000/dev/sso/callback}
       SUPERSET_HOST: ${SUPERSET_HOST:-http://superset-final:8088}
+      # Browser-facing origin returned to the portal for embedding iframes (edge embed origin).
+      SUPERSET_PUBLIC_HOST: ${SUPERSET_PUBLIC_HOST:-http://localhost:8089}
+      # After /auth/logout-redirect clears the cookie, land on a WORKING login page
+      # (with SSO params, else it can't submit). Relative path -> resolved against the
+      # host the browser used. redirect_uri is percent-encoded; state=superset-author
+      # makes re-login flow straight back into Superset.
+      APP_SECURITY_LOGOUT_REDIRECT_TARGET: "/login/?client_id=admin&redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fadmin%2Fsso%2Fcallback&state=superset-author"
       SUPERSET_DB_SCHEMA: ${SUPERSET_DB_SCHEMA}
       BI_SUPERSET_USERNAME: ${BI_SUPERSET_USERNAME}
       BI_SUPERSET_PASSWORD: ${BI_SUPERSET_PASSWORD}
@@ -528,6 +540,11 @@ services:
       - platform-login-frontend
     ports:
       - "${EDGE_FRONTEND_PORT:-3000}:80"
+      # Gated Superset author UI (Phase 1 C1): JWT-enforced reverse proxy to Superset.
+      - "${SUPERSET_GATE_PORT:-8087}:8087"
+      # Embed origin (Phase 1 C2): ungated (guest-token auth) reverse proxy for iframes.
+      # 8086 is taken by activepieces on the host; use 8089.
+      - "${SUPERSET_EMBED_PORT:-8089}:8089"
     volumes:
       - ./nginx-edge.conf:/etc/nginx/conf.d/default.conf:ro
     healthcheck:

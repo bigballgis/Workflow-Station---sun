@@ -110,6 +110,9 @@ metadata:
   name: hase-hermes-workflow-superset-virtual-service
   namespace: __NAMESPACE__
 spec:
+  # EMBED host (ungated, guest-token auth) — used by the user-portal iframe
+  # (SUPERSET_PUBLIC_HOST). Strip any client-supplied X-Remote-* so this open
+  # host can never forge an authenticated REMOTE_USER (author) session.
   hosts:
   - hermes-workflow-superset-internal-proxy.__BASE_DOMAIN__
   gateways:
@@ -117,6 +120,14 @@ spec:
   http:
   - retries:
       attempts: 0
+    headers:
+      request:
+        remove:
+        - x-remote-user
+        - x-remote-roles
+        - x-remote-email
+        - x-remote-firstname
+        - x-remote-lastname
     route:
     - destination:
         host: hase-hermes-workflow-superset
@@ -140,3 +151,82 @@ spec:
       protocol: HTTP
     hosts:
     - hermes-workflow-superset-internal-proxy.__BASE_DOMAIN__
+---
+# =============================================================================
+# Superset AUTHOR UI gateway (Phase 1 "E") — JWT-gated via Istio ext_authz.
+# Authors reach Superset's native UI through this host. An AuthorizationPolicy
+# (CUSTOM action) calls the admin-center authorize endpoint, which validates the
+# platform JWT and returns X-Remote-User / X-Remote-Roles; Envoy injects those
+# upstream so the custom SecurityManager logs the author in (REMOTE_USER SSO).
+#
+# PREREQUISITE (cluster-ops, NOT in this repo): the ext_authz provider named
+# "superset-bi-ext-authz" must be declared in the mesh's meshConfig
+# extensionProviders. See deploy/k8s/SUPERSET_SSO_GATEWAY.md.
+# =============================================================================
+apiVersion: networking.istio.io/v1
+kind: Gateway
+metadata:
+  name: hase-hermes-workflow-superset-author-gateway
+  namespace: __NAMESPACE__
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - hermes-workflow-superset-author.__BASE_DOMAIN__
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: hase-hermes-workflow-superset-author-virtual-service
+  namespace: __NAMESPACE__
+spec:
+  hosts:
+  - hermes-workflow-superset-author.__BASE_DOMAIN__
+  gateways:
+  - hase-hermes-workflow-superset-author-gateway
+  http:
+  - retries:
+      attempts: 0
+    # Strip client-forged identity headers; the ext_authz provider re-injects the
+    # validated X-Remote-User / X-Remote-Roles (headersToUpstreamOnAllow).
+    headers:
+      request:
+        remove:
+        - x-remote-user
+        - x-remote-roles
+        - x-remote-email
+        - x-remote-firstname
+        - x-remote-lastname
+    route:
+    - destination:
+        host: hase-hermes-workflow-superset
+        subset: v1
+        port:
+          number: 80
+    timeout: 30s
+---
+# CUSTOM AuthorizationPolicy: gate ONLY the author host with ext_authz.
+# Embed-host traffic does not match (different host) and stays ungated.
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: hase-hermes-workflow-superset-author-extauthz
+  namespace: __NAMESPACE__
+spec:
+  selector:
+    matchLabels:
+      app: hase-hermes-workflow-superset
+  action: CUSTOM
+  provider:
+    # Must match a meshConfig extensionProviders[].name (cluster-ops managed).
+    name: superset-bi-ext-authz
+  rules:
+  - to:
+    - operation:
+        hosts:
+        - hermes-workflow-superset-author.__BASE_DOMAIN__

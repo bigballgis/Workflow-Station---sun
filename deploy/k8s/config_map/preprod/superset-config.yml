@@ -6,19 +6,59 @@ metadata:
 data:
   superset_config.py: |
     import os
-    
+
     FEATURE_FLAGS = {
         "EMBEDDED_SUPERSET": True,
     }
 
-    SECRET_KEY = os.getenv("SUPERSET_SECRET_KEY", "replace-this-with-a-real-secret-key")
-    GUEST_ROLE_NAME = os.getenv("SUPERSET_GUEST_ROLE_NAME", "Gamma")
+    # Secret key — injected via Secret (SUPERSET_SECRET_KEY). Fail closed if missing:
+    # a weak/default key lets anyone forge guest tokens.
+    SECRET_KEY = os.environ["SUPERSET_SECRET_KEY"]
+
     ENABLE_PROXY_FIX = True
     TALISMAN_ENABLED = False
     WTF_CSRF_ENABLED = True
+    # Let the backend mint guest tokens via the security API without a form CSRF token.
+    WTF_CSRF_EXEMPT_LIST = ["superset.security.api"]
 
     SESSION_COOKIE_SAMESITE = os.getenv("SUPERSET_SESSION_COOKIE_SAMESITE", "Lax")
     SESSION_COOKIE_SECURE = os.getenv("SUPERSET_SESSION_COOKIE_SECURE", "false").lower() == "true"
+
+    # ---- Guest token (embedded dashboards) ----
+    GUEST_ROLE_NAME = os.getenv("SUPERSET_GUEST_ROLE_NAME", "Gamma")
+    GUEST_TOKEN_JWT_SECRET = os.getenv("SUPERSET_GUEST_TOKEN_JWT_SECRET") or SECRET_KEY
+    GUEST_TOKEN_JWT_ALGO = "HS256"
+    GUEST_TOKEN_HEADER_NAME = "X-GuestToken"
+    GUEST_TOKEN_JWT_EXP_SECONDS = 300
+
+    # Superset 6.0's embedded-dashboard bootstrap reads these unconditionally;
+    # undefined -> HTTP 500 (KeyError: 'RECAPTCHA_PUBLIC_KEY') on embed render.
+    RECAPTCHA_PUBLIC_KEY = os.getenv("SUPERSET_RECAPTCHA_PUBLIC_KEY", "")
+    RECAPTCHA_PRIVATE_KEY = os.getenv("SUPERSET_RECAPTCHA_PRIVATE_KEY", "")
+
+    # Logout under gateway/REMOTE_USER SSO must clear the platform JWT cookie, not just
+    # the Superset session. Redirect Logout to the admin-center endpoint that does so.
+    LOGOUT_REDIRECT_URL = os.getenv("SUPERSET_LOGOUT_REDIRECT_URL", "/login/")
+
+    # ---- CORS — restrict to the portal origin(s) that embed dashboards (was "*") ----
+    _cors_origins = [
+        o.strip()
+        for o in os.getenv("SUPERSET_CORS_ORIGINS", "").split(",")
+        if o.strip()
+    ]
+    ENABLE_CORS = bool(_cors_origins)
+    CORS_OPTIONS = {
+        "supports_credentials": True,
+        "allow_headers": ["*"],
+        "resources": ["/api/*", "/superset/csrf_token/", "/guest_token/"],
+        "origins": _cors_origins,
+    }
+
+    # ---- Framing — allow only the portal origin(s) to iframe Superset (was ALLOWALL) ----
+    _frame_ancestors = " ".join(["'self'"] + _cors_origins)
+    HTTP_HEADERS = {
+        "Content-Security-Policy": f"frame-ancestors {_frame_ancestors};",
+    }
 
     SQLALCHEMY_DATABASE_URI = os.getenv(
         "SUPERSET_DATABASE_URI",

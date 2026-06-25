@@ -29,6 +29,11 @@ public class AuthController {
     private final AuthService authService;
     private final JwtProperties jwtProperties;
 
+    /** Where /auth/logout-redirect bounces after clearing the session (relative -> resolved
+     *  against the host the browser used). Used as Superset's LOGOUT_REDIRECT_URL. */
+    @org.springframework.beans.factory.annotation.Value("${app.security.logout-redirect-target:/login/}")
+    private String logoutRedirectTarget;
+
     /**
      * User login
      */
@@ -91,6 +96,35 @@ public class AuthController {
         clearAuthCookies(response);
 
         return ResponseEntity.ok().build();
+    }
+
+    /**
+     * Browser-navigable logout. Used as Superset's LOGOUT_REDIRECT_URL so its Logout
+     * button actually clears the platform session: under gateway/REMOTE_USER SSO,
+     * Superset's own logout is a no-op (the gate re-authenticates from the still-valid
+     * JWT cookie), so the cookie must be cleared here. Blacklists + clears cookies,
+     * then 302 to the login page.
+     */
+    @GetMapping("/logout-redirect")
+    public ResponseEntity<Void> logoutRedirect(HttpServletRequest request, HttpServletResponse response) {
+        jakarta.servlet.http.Cookie[] cookies = request.getCookies();
+        if (cookies != null) {
+            List<String> accessNames = jwtProperties.getCookieNames();
+            String refreshName = jwtProperties.getRefreshCookieName();
+            for (jakarta.servlet.http.Cookie c : cookies) {
+                String name = c.getName();
+                String val = c.getValue();
+                if (val == null || val.isBlank()) continue;
+                if ((accessNames != null && accessNames.contains(name))
+                        || (refreshName != null && refreshName.equals(name))) {
+                    try { authService.logout(val); } catch (Exception ignored) {}
+                }
+            }
+        }
+        clearAuthCookies(response);
+        return ResponseEntity.status(org.springframework.http.HttpStatus.FOUND)
+                .location(java.net.URI.create(logoutRedirectTarget))
+                .build();
     }
 
     private void clearAuthCookies(HttpServletResponse response) {

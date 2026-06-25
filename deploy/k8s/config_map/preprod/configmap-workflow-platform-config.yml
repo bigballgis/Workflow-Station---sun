@@ -80,6 +80,15 @@ data:
   SUPERSET_HOST: "http://hase-hermes-workflow-superset.__NAMESPACE__:80"
   SUPERSET_PUBLIC_HOST: "http://hermes-workflow-superset-internal-proxy.__BASE_DOMAIN__/"
   SUPERSET_DB_SCHEMA: "superset"
+  # Origins allowed to call Superset APIs (CORS) and to iframe it (CSP frame-ancestors).
+  # Must list the user-portal origin(s) that embed dashboards. Was implicitly "*".
+  SUPERSET_CORS_ORIGINS: "https://__INGRESS_HOST__,http://__INGRESS_HOST__,https://sit-portal.company.com"
+  # Superset Logout button -> platform endpoint that clears the JWT cookie, then login.
+  SUPERSET_LOGOUT_REDIRECT_URL: "https://__INGRESS_HOST__/api/v1/admin/auth/logout-redirect"
+  # Where /auth/logout-redirect lands after clearing the cookie: a WORKING login page
+  # (SSO params; redirect_uri percent-encoded). state=superset-author flows re-login
+  # back into Superset. Relative -> resolved against the ingress host.
+  APP_SECURITY_LOGOUT_REDIRECT_TARGET: "/login/?client_id=admin&redirect_uri=https%3A%2F%2F__INGRESS_HOST__%2Fadmin%2Fsso%2Fcallback&state=superset-author"
   # ==================== LDAP / SSO-DSP (admin-center) ====================
   # 非敏感配置；bind/client 密钥放 workflow-platform-secrets。连接细节按环境填 __LDAP_*__ / __DSP_*__。
   # 默认关闭：各环境确认连通后再置 true（开发跳过角色校验生产恒为 false）。
