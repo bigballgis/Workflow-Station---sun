@@ -1,5 +1,6 @@
 package com.admin.ldap;
 import com.admin.repository.RoleRepository;
+import com.admin.repository.UserRepository;
 import com.admin.repository.VirtualGroupMemberRepository;
 import com.admin.repository.VirtualGroupRepository;
 import com.admin.repository.VirtualGroupRoleRepository;
@@ -26,6 +27,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.LinkedHashSet;
 import static com.admin.ldap.LdapConstants.AD_ATTR_MEMBER_OF;
 import static com.admin.ldap.LdapConstants.GROUP_ROLE_KEY_ADMIN;
 import static com.admin.ldap.LdapConstants.GROUP_ROLE_KEY_DEVELOPER;
@@ -87,6 +89,7 @@ public class LdapSyncService {
     private final VirtualGroupRoleRepository virtualGroupRoleRepository;
     private final RoleRepository roleRepository;
     private final RoleAssignmentRepository roleAssignmentRepository;
+    private final UserRepository userRepository;
     private final Environment environment;
     // ==================== 全量 AD 组同步 ====================
     /**
@@ -128,6 +131,8 @@ public class LdapSyncService {
             }
             log.info("Hermes AD group sync: {} unique users from {} groups",
                     accumulator.size(), groupDefs.size());
+            int supplementalManagerFetched = supplementDirectManagers(accumulator);
+            totalFetched += supplementalManagerFetched;
             // 4. 分批 upsert 用户（含逐条失败降级）
             int successCount = 0;
             int insertCount = 0;
@@ -275,6 +280,8 @@ public class LdapSyncService {
                 log.info("No Hermes AD groups or in-scope users changed since {}; skipping sync", watermark);
                 return finishSuccess(audit, 0, start, "No groups or users changed");
             }
+            int supplementalManagerFetched = supplementDirectManagers(accumulator);
+            totalFetched += supplementalManagerFetched;
             // 分批 upsert
             int batchSize = ldapProperties.getGroupSync().getBatchSize();
             if (batchSize <= 0) {
@@ -312,6 +319,60 @@ public class LdapSyncService {
     boolean supportsUserChangeIncrementalSync() {
         return StringUtils.hasText(ldapProperties.getAttributes().getWhenChanged());
     }
+
+    /**
+     * 补齐本次 AD group 用户的一层 EM/FM 用户画像。
+     * <p>只根据同步前已有的组内用户收集 manager ID，补入的 manager 不再继续追踪其 EM/FM，避免递归。</p>
+     */
+    int supplementDirectManagers(Map<String, LdapGroupUserAccumulator> accumulator) {
+        Set<String> managerEmployeeIds = new LinkedHashSet<>();
+        List<LdapGroupUserAccumulator> primaryUsers = new ArrayList<>(accumulator.values());
+        for (LdapGroupUserAccumulator acc : primaryUsers) {
+            ldapUserMapper.mapToUser(acc.userAttrs).ifPresent(mapped -> {
+                addMissingManagerId(managerEmployeeIds, accumulator, mapped.getEntityManagerId());
+                addMissingManagerId(managerEmployeeIds, accumulator, mapped.getFunctionManagerId());
+            });
+        }
+        int fetched = 0;
+        for (String managerEmployeeId : managerEmployeeIds) {
+            if (userRepository.existsById(managerEmployeeId)) {
+                continue;
+            }
+            try {
+                Optional<Map<String, String>> managerAttrs = ldapClient.getUserAttributesByEmployeeId(managerEmployeeId);
+                if (managerAttrs.isEmpty()) {
+                    log.warn("LDAP manager supplemental import skipped: employeeID {} not found", managerEmployeeId);
+                    continue;
+                }
+                Optional<LdapUserData> mappedManager = ldapUserMapper.mapToUser(managerAttrs.get());
+                if (mappedManager.isEmpty()) {
+                    log.warn("LDAP manager supplemental import skipped: employeeID {} has no mappable employeeID", managerEmployeeId);
+                    continue;
+                }
+                String employeeId = mappedManager.get().getEmployeeId();
+                accumulator.computeIfAbsent(employeeId, k -> LdapGroupUserAccumulator.supplemental(managerAttrs.get()));
+                fetched++;
+            } catch (Exception e) {
+                log.warn("LDAP manager supplemental import failed for employeeID {}: {}", managerEmployeeId, e.getMessage());
+            }
+        }
+        if (fetched > 0) {
+            log.info("Hermes AD group sync supplemented {} direct EM/FM users", fetched);
+        }
+        return fetched;
+    }
+    private void addMissingManagerId(Set<String> managerEmployeeIds,
+                                     Map<String, LdapGroupUserAccumulator> accumulator,
+                                     String managerEmployeeId) {
+        if (!StringUtils.hasText(managerEmployeeId)) {
+            return;
+        }
+        String trimmed = managerEmployeeId.trim();
+        if (!accumulator.containsKey(trimmed)) {
+            managerEmployeeIds.add(trimmed);
+        }
+    }
+
     // ==================== 环境解析 ====================
     /**
      * 解析 Hermes 环境名。优先级：
@@ -601,6 +662,9 @@ public class LdapSyncService {
         // 默认 Users 虚拟组
         VirtualGroup defaultVg = virtualGroupRepository.findByCode(VG_HERMES_USERS).orElse(null);
         for (Map.Entry<String, LdapGroupUserAccumulator> entry : entries) {
+            if (entry.getValue().supplementalOnly) {
+                continue;
+            }
             String employeeId = entry.getKey();
             String actualUserId = syncedUserIdsByEmployeeId.getOrDefault(employeeId, employeeId);
             LdapGroupUserAccumulator acc = entry.getValue();
@@ -781,8 +845,16 @@ public class LdapSyncService {
         final Map<String, String> userAttrs;
         final Set<String> hitGroupNames = new java.util.LinkedHashSet<>();
         final Set<String> hitRoleKeys = new java.util.LinkedHashSet<>();
+        final boolean supplementalOnly;
         LdapGroupUserAccumulator(Map<String, String> attrs) {
+            this(attrs, false);
+        }
+        private LdapGroupUserAccumulator(Map<String, String> attrs, boolean supplementalOnly) {
             this.userAttrs = attrs;
+            this.supplementalOnly = supplementalOnly;
+        }
+        static LdapGroupUserAccumulator supplemental(Map<String, String> attrs) {
+            return new LdapGroupUserAccumulator(attrs, true);
         }
         void addHitGroup(String groupCn, String roleKey) {
             hitGroupNames.add(groupCn);

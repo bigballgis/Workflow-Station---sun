@@ -141,6 +141,25 @@ public class LdapClient {
         }
     }
 
+    /** 按 employeeID 取单用户属性（用于同步时补齐一层 EM/FM 画像）。 */
+    public Optional<Map<String, String>> getUserAttributesByEmployeeId(String employeeId) throws NamingException {
+        if (!StringUtils.hasText(employeeId)) {
+            return Optional.empty();
+        }
+        DirContext ctx = openServiceContext();
+        try {
+            String attr = props.getAttributes().getEmployeeId();
+            String dn = searchSingleDn(ctx, "(" + attr + "=" + escapeFilterValue(employeeId) + ")");
+            if (dn == null) {
+                return Optional.empty();
+            }
+            Attributes attrs = ctx.getAttributes(dn, retrieveAttributeNames());
+            return Optional.of(flatten(attrs));
+        } finally {
+            closeQuietly(ctx);
+        }
+    }
+
     /**
      * 在 group-search-base-dn 下按 CN 搜索组，返回组 DN。
      *
@@ -261,6 +280,10 @@ public class LdapClient {
         List<String> memberDns = fetchGroupMemberDns(groupDn);
         log.info("AD group CN={} has {} member DNs", groupCn, memberDns.size());
 
+        if (memberDns.isEmpty()) {
+            return fetchUsersByMemberOf(groupCn, groupDn);
+        }
+
         List<Map<String, String>> users = new ArrayList<>();
         for (String memberDn : memberDns) {
             try {
@@ -276,6 +299,15 @@ public class LdapClient {
                 break;
             }
         }
+        return users;
+    }
+
+    /** 组 member 属性为空或不可读时，反向搜索用户侧 memberOf。 */
+    private List<Map<String, String>> fetchUsersByMemberOf(String groupCn, String groupDn) throws NamingException {
+        String filter = "(memberOf=" + escapeFilterValue(groupDn) + ")";
+        List<Map<String, String>> users = fetchUsersWithFilter(filter);
+        users.forEach(user -> user.put("_hitGroupCn", groupCn));
+        log.info("AD group CN={} memberOf fallback matched {} users", groupCn, users.size());
         return users;
     }
 
