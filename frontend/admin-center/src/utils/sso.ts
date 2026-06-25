@@ -68,7 +68,7 @@ interface UnifiedLoginOptions {
 }
 
 /** 跳转独立 /login/ 应用（单域多路径时同样为 /login/） */
-export function redirectToUnifiedLogin(clientId: 'admin') {
+export function redirectToUnifiedLogin(clientId: 'admin', options: UnifiedLoginOptions = {}) {
   const redirectUri = new URL(
     (import.meta.env.BASE_URL || '/') + 'sso/callback',
     window.location.origin
@@ -77,5 +77,6 @@ export function redirectToUnifiedLogin(clientId: 'admin') {
   u.searchParams.set('client_id', clientId)
   u.searchParams.set('redirect_uri', redirectUri)
   u.searchParams.set('state', newSsoState())
+  if (options.autoSso) u.searchParams.set('auto_sso', '1')
   window.location.href = u.toString()
 }
