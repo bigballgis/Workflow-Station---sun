@@ -10,6 +10,8 @@ import com.developer.entity.FormStageBinding;
 import com.developer.entity.FormTableBinding;
 import com.developer.entity.FunctionUnit;
 import com.developer.entity.ProcessDefinition;
+import com.developer.entity.SubTableViewConfig;
+import com.developer.entity.SubTableViewField;
 import com.developer.entity.TableDefinition;
 import com.developer.entity.TableRelation;
 import com.developer.exception.DeveloperBusinessException;
@@ -19,6 +21,7 @@ import com.developer.repository.DecisionDefinitionRepository;
 import com.developer.repository.FormDefinitionRepository;
 import com.developer.repository.FormStageBindingRepository;
 import com.developer.repository.FunctionUnitRepository;
+import com.developer.repository.SubTableViewConfigRepository;
 import com.developer.repository.TableDefinitionRepository;
 import com.developer.repository.TableRelationRepository;
 import com.developer.security.FunctionUnitWorkspaceAccessService;
@@ -65,6 +68,8 @@ public class FunctionUnitExporter {
     private final DecisionDefinitionRepository decisionDefinitionRepository;
     private final FormStageBindingRepository formStageBindingRepository;
     private final TableRelationRepository tableRelationRepository;
+    private final SubTableViewConfigRepository subTableViewConfigRepository;
+    private final RelationTableStructurePortability relationTablePortability;
     private final FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService;
     private final ObjectMapper objectMapper;
 
@@ -164,6 +169,23 @@ public class FunctionUnitExporter {
                 addZipEntry(zos, fileName, data);
                 formFiles.add(fileName);
                 formIndex++;
+            }
+
+            // Export referenced relation-table (rt_) structures: collect relationTableId from RELATED bindings,
+            // serialize their structure by table_name so it can be re-created/remapped on import.
+            List<Long> relationTableIds = forms.stream()
+                    .filter(f -> f.getTableBindings() != null)
+                    .flatMap(f -> f.getTableBindings().stream())
+                    .map(FormTableBinding::getRelationTableId)
+                    .filter(java.util.Objects::nonNull)
+                    .distinct()
+                    .toList();
+            List<Map<String, Object>> relationTableStructures = relationTablePortability.exportByIds(relationTableIds);
+            if (!relationTableStructures.isEmpty()) {
+                String relTablesFile = "relation-tables/relation_tables.json";
+                byte[] relTablesData = objectMapper.writeValueAsBytes(relationTableStructures);
+                fileContents.put(relTablesFile, relTablesData);
+                addZipEntry(zos, relTablesFile, relTablesData);
             }
 
             // Export action definitions
@@ -289,7 +311,12 @@ public class FunctionUnitExporter {
         map.put("tableDisplayName", table.getTableDisplayName());
         map.put("tableType", table.getTableType().name());
         map.put("description", table.getDisplayName());
-        map.put("fields", table.getFieldDefinitions().stream().map(this::serializeField).toList());
+        if (table.getRequestIdConfig() != null) {
+            map.put("requestIdConfig", table.getRequestIdConfig());
+        }
+        map.put("fields", table.getFieldDefinitions().stream()
+                .map(field -> serializeField(field, tableIdToName))
+                .toList());
         if (table.getForeignKeys() != null && !table.getForeignKeys().isEmpty()) {
             map.put("foreignKeys", table.getForeignKeys().stream()
                     .map(fk -> serializeForeignKey(fk, tableIdToName))
@@ -320,7 +347,7 @@ public class FunctionUnitExporter {
         return map;
     }
 
-    private Map<String, Object> serializeField(FieldDefinition field) {
+    private Map<String, Object> serializeField(FieldDefinition field, Map<Long, String> tableIdToName) {
         Map<String, Object> map = new HashMap<>();
         map.put("fieldName", field.getFieldName());
         map.put("dataType", field.getDataType().name());
@@ -333,6 +360,13 @@ public class FunctionUnitExporter {
         map.put("isUnique", field.getIsUnique());
         map.put("displayName", field.getDisplayName());
         map.put("sortOrder", field.getSortOrder());
+        // FK/PK runtime metadata — refTableId exported by name so it survives id remap on import
+        map.put("isForeignKey", field.getIsForeignKey());
+        map.put("refTableName", field.getRefTableId() != null ? tableIdToName.get(field.getRefTableId()) : null);
+        map.put("refPrimaryKeyFields", field.getRefPrimaryKeyFields());
+        map.put("pkGenerationJson", field.getPkGenerationJson());
+        map.put("fkDisplayMode", field.getFkDisplayMode());
+        map.put("relationCardinality", field.getRelationCardinality());
         return map;
     }
 
@@ -366,9 +400,35 @@ public class FunctionUnitExporter {
         map.put("relationTableId", binding.getRelationTableId());
         map.put("foreignKeyField", binding.getForeignKeyField());
         map.put("sortOrder", binding.getSortOrder());
+        if (binding.getBindingLinkMode() != null) {
+            map.put("bindingLinkMode", binding.getBindingLinkMode().name());
+        }
         if (binding.getSubMode() != null) {
             map.put("subMode", binding.getSubMode().name());
         }
+        // Sub-table list view config (FULL mode); subListViewId is re-resolved on import, so export the config inline
+        if (binding.getSubListViewId() != null) {
+            subTableViewConfigRepository.findByBindingId(binding.getId())
+                    .ifPresent(config -> map.put("subTableViewConfig", serializeSubTableViewConfig(config)));
+        }
+        return map;
+    }
+
+    private Map<String, Object> serializeSubTableViewConfig(SubTableViewConfig config) {
+        Map<String, Object> map = new HashMap<>();
+        List<Map<String, Object>> fields = config.getViewFields() == null ? List.of()
+                : config.getViewFields().stream().map(this::serializeSubTableViewField).toList();
+        map.put("viewFields", fields);
+        return map;
+    }
+
+    private Map<String, Object> serializeSubTableViewField(SubTableViewField field) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("fieldName", field.getFieldName());
+        map.put("displayLabel", field.getDisplayLabel());
+        map.put("columnWidth", field.getColumnWidth());
+        map.put("sortOrder", field.getSortOrder());
+        map.put("visible", field.getVisible());
         return map;
     }
 
@@ -386,6 +446,10 @@ public class FunctionUnitExporter {
         map.put("actionName", action.getActionName());
         map.put("actionType", action.getActionType().name());
         map.put("configJson", action.getConfigJson());
+        map.put("icon", action.getIcon());
+        map.put("buttonColor", action.getButtonColor());
+        map.put("description", action.getDisplayName());
+        map.put("isDefault", action.getIsDefault());
         return map;
     }
 }

@@ -77,7 +77,7 @@
               v-for="col in columns"
               :key="col"
               :prop="col"
-              :label="col"
+              :label="columnLabel(col)"
               :min-width="isTimestampColumn(col) ? 180 : 120"
               sortable
               show-overflow-tooltip
@@ -129,6 +129,10 @@ const pageSize = ref(20)
 const totalElements = ref(0)
 const dataRows = ref<Record<string, any>[]>([])
 const columns = ref<string[]>([])
+// 字段名 → 显示名 映射，用于表头展示 Display Name 而非 Field Name
+const fieldDisplayNames = ref<Record<string, string>>({})
+
+const columnLabel = (col: string): string => fieldDisplayNames.value[col] || col
 
 const selectedTable = computed(() =>
   tables.value.find(t => t.id === selectedTableId.value) ?? null
@@ -150,6 +154,7 @@ const fetchTables = async () => {
     tables.value = res.data || []
     if (!selectedTableId.value && tables.value.length > 0) {
       selectedTableId.value = tables.value[0].id
+      fetchDisplayNames()
       fetchData()
     }
   } catch {
@@ -189,11 +194,29 @@ const fetchData = async () => {
   }
 }
 
+const fetchDisplayNames = async () => {
+  if (!selectedTableId.value) return
+  fieldDisplayNames.value = {}
+  try {
+    const res: any = await relationTableApi.getViewFields(selectedTableId.value)
+    const fields = res?.data ?? res ?? []
+    const map: Record<string, string> = {}
+    for (const f of fields) {
+      if (f?.fieldName) map[f.fieldName] = f.displayLabel || f.fieldName
+    }
+    fieldDisplayNames.value = map
+  } catch {
+    fieldDisplayNames.value = {}
+  }
+}
+
 const handleSelectTable = (index: string) => {
   selectedTableId.value = Number(index)
   searchKeyword.value = ''
   currentPage.value = 1
   columns.value = []
+  fieldDisplayNames.value = {}
+  fetchDisplayNames()
   fetchData()
 }
 

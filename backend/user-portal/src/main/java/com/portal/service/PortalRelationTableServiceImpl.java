@@ -346,34 +346,27 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
                 return systemUserViewFields();
             }
 
-            // First try rt_view_fields (configured view)
-            String sql = "SELECT vf.field_name, vf.display_label, vf.column_width, vf.sort_order, vf.visible "
-                    + "FROM rt_view_fields vf "
-                    + "JOIN rt_view_configs vc ON vc.id = vf.view_config_id "
-                    + "WHERE vc.table_id = ? ORDER BY vf.sort_order";
-            List<Map<String, Object>> result = jdbcTemplate.query(sql, (rs, rowNum) -> {
+            // rt_field_definitions 是字段「显示名」的权威来源（Admin Center 维护）。
+            // rt_view_fields 的 display_label 多为自动生成（常等于 field_name），且同一表可能
+            // 关联多个 view_config 造成字段重复，因此一律以字段定义的 display_name 为表头标签，
+            // 仅按字段名去重并按 sort_order 排序。
+            String sql = "SELECT field_name, display_name, sort_order "
+                    + "FROM rt_field_definitions WHERE table_id = ? ORDER BY sort_order ASC";
+            List<Map<String, Object>> result = new ArrayList<>();
+            Set<String> seen = new HashSet<>();
+            jdbcTemplate.query(sql, rs -> {
+                String fieldName = rs.getString("field_name");
+                if (fieldName == null || !seen.add(fieldName)) return;
+                String displayName = rs.getString("display_name");
                 Map<String, Object> vf = new java.util.HashMap<>();
-                vf.put("fieldName", rs.getString("field_name"));
-                vf.put("displayLabel", rs.getString("display_label"));
-                vf.put("columnWidth", rs.getObject("column_width"));
-                vf.put("sortOrder", rs.getInt("sort_order"));
-                vf.put("visible", rs.getBoolean("visible"));
-                return vf;
-            }, tableId);
-
-            if (!result.isEmpty()) return result;
-
-            // Fallback: use rt_field_definitions (table field definitions)
-            String fallbackSql = "SELECT field_name, comment, sort_order FROM rt_field_definitions WHERE table_id = ? ORDER BY sort_order ASC";
-            return jdbcTemplate.query(fallbackSql, (rs, rowNum) -> {
-                Map<String, Object> vf = new java.util.HashMap<>();
-                vf.put("fieldName", rs.getString("field_name"));
-                vf.put("displayLabel", rs.getString("comment") != null ? rs.getString("comment") : rs.getString("field_name"));
+                vf.put("fieldName", fieldName);
+                vf.put("displayLabel", displayName != null && !displayName.isBlank() ? displayName : fieldName);
                 vf.put("columnWidth", null);
                 vf.put("sortOrder", rs.getInt("sort_order"));
                 vf.put("visible", true);
-                return vf;
+                result.add(vf);
             }, tableId);
+            return result;
         } catch (Exception e) {
             log.warn("Failed to load view fields for tableId {}: {}", tableId, e.getMessage());
             return Collections.emptyList();

@@ -38,8 +38,8 @@ public class ExportImportComponentImpl implements ExportImportComponent {
 
     @Override
     @Transactional
-    public Map<String, Object> importFunctionUnit(MultipartFile file, String conflictStrategy) {
-        return functionUnitImporter.importFunctionUnit(file, conflictStrategy);
+    public Map<String, Object> importFunctionUnit(MultipartFile file, String changeLog) {
+        return functionUnitImporter.importFunctionUnit(file, changeLog);
     }
 
     @Override

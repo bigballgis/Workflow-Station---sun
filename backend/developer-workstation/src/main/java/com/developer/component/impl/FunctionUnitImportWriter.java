@@ -8,9 +8,13 @@ import com.developer.entity.FormDefinition;
 import com.developer.entity.FormStageBinding;
 import com.developer.entity.FormTableBinding;
 import com.developer.entity.FunctionUnit;
+import com.developer.entity.SubTableViewConfig;
+import com.developer.entity.SubTableViewField;
 import com.developer.entity.TableDefinition;
 import com.developer.entity.TableRelation;
+import com.developer.dto.RequestIdConfig;
 import com.developer.enums.ActionType;
+import com.developer.enums.BindingLinkMode;
 import com.developer.enums.BindingMode;
 import com.developer.enums.BindingType;
 import com.developer.enums.DataType;
@@ -22,6 +26,7 @@ import com.developer.repository.ActionDefinitionRepository;
 import com.developer.repository.DecisionDefinitionRepository;
 import com.developer.repository.FormDefinitionRepository;
 import com.developer.repository.FormTableBindingRepository;
+import com.developer.repository.SubTableViewConfigRepository;
 import com.developer.repository.TableDefinitionRepository;
 import com.developer.repository.TableRelationRepository;
 import com.developer.util.FormConfigJsonBindingIdRewriter;
@@ -51,6 +56,7 @@ public class FunctionUnitImportWriter {
     private final DecisionDefinitionRepository decisionDefinitionRepository;
     private final FormTableBindingRepository formTableBindingRepository;
     private final TableRelationRepository tableRelationRepository;
+    private final SubTableViewConfigRepository subTableViewConfigRepository;
     private final DmnXmlParser dmnXmlParser;
     private final ObjectMapper objectMapper;
 
@@ -67,6 +73,7 @@ public class FunctionUnitImportWriter {
                 .tableType(TableType.valueOf((String) tableData.get("tableType")))
                 .tableDisplayName((String) tableData.get("tableDisplayName"))
                 .displayName((String) tableData.get("description"))
+                .requestIdConfig(parseRequestIdConfig(tableData.get("requestIdConfig")))
                 .build();
         table = tableDefinitionRepository.save(table);
 
@@ -82,7 +89,8 @@ public class FunctionUnitImportWriter {
                 Boolean nullable = fieldData.get("nullable") instanceof Boolean boolVal ? boolVal : true;
                 Boolean isPrimaryKey = fieldData.get("isPrimaryKey") instanceof Boolean pkVal ? pkVal : false;
                 Boolean isUnique = fieldData.get("isUnique") instanceof Boolean uniqueVal ? uniqueVal : false;
-                FieldDefinition field = FieldDefinition.builder()
+                Boolean isForeignKey = fieldData.get("isForeignKey") instanceof Boolean fkVal ? fkVal : false;
+                FieldDefinition.FieldDefinitionBuilder fieldBuilder = FieldDefinition.builder()
                         .tableDefinition(table)
                         .fieldName((String) fieldData.get("fieldName"))
                         .dataType(DataType.valueOf((String) fieldData.get("dataType")))
@@ -95,8 +103,15 @@ public class FunctionUnitImportWriter {
                         .isUnique(isUnique)
                         .displayName((String) fieldData.get("displayName"))
                         .sortOrder(sortOrder)
-                        .build();
-                table.getFieldDefinitions().add(field);
+                        // FK/PK runtime metadata; refTableId is re-resolved by name in a second pass (importFieldRefMetadata)
+                        .isForeignKey(isForeignKey)
+                        .refPrimaryKeyFields(parseStringList(fieldData.get("refPrimaryKeyFields")))
+                        .pkGenerationJson(parseJsonMap(fieldData.get("pkGenerationJson")))
+                        .relationCardinality((String) fieldData.get("relationCardinality"));
+                if (fieldData.get("fkDisplayMode") instanceof String fkDisplayMode) {
+                    fieldBuilder.fkDisplayMode(fkDisplayMode);
+                }
+                table.getFieldDefinitions().add(fieldBuilder.build());
             }
             tableDefinitionRepository.save(table);
         }
@@ -145,6 +160,55 @@ public class FunctionUnitImportWriter {
                 table.getForeignKeys().add(foreignKey);
             }
             if (!table.getForeignKeys().isEmpty()) {
+                tableDefinitionRepository.save(table);
+            }
+        }
+    }
+
+    /**
+     * Second pass after all tables imported: resolve each field's refTableName back to the
+     * newly-assigned table id. Mirrors importForeignKeys which also needs the full table id map.
+     */
+    void importFieldRefMetadata(List<Map<String, Object>> tables,
+                                Map<String, Long> importedTableNameToId) {
+        for (Map<String, Object> tableData : tables) {
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> fields = (List<Map<String, Object>>) tableData.get("fields");
+            if (fields == null || fields.isEmpty()) {
+                continue;
+            }
+            boolean hasRefMetadata = fields.stream().anyMatch(f -> f.get("refTableName") != null);
+            if (!hasRefMetadata) {
+                continue;
+            }
+            String tableName = (String) tableData.get("tableName");
+            Long tableId = importedTableNameToId.get(tableName);
+            if (tableId == null) {
+                continue;
+            }
+            TableDefinition table = tableDefinitionRepository.findByIdWithFields(tableId)
+                    .orElseThrow(() -> new ResourceNotFoundException("TableDefinition", tableId));
+            Map<String, FieldDefinition> fieldByName = new HashMap<>();
+            for (FieldDefinition field : table.getFieldDefinitions()) {
+                fieldByName.put(field.getFieldName(), field);
+            }
+            boolean dirty = false;
+            for (Map<String, Object> fieldData : fields) {
+                String refTableName = (String) fieldData.get("refTableName");
+                if (refTableName == null) {
+                    continue;
+                }
+                Long refTableId = importedTableNameToId.get(refTableName);
+                FieldDefinition field = fieldByName.get((String) fieldData.get("fieldName"));
+                if (refTableId == null || field == null) {
+                    log.warn("Skipping field ref metadata for {}.{} -> {} (missing field/table)",
+                            tableName, fieldData.get("fieldName"), refTableName);
+                    continue;
+                }
+                field.setRefTableId(refTableId);
+                dirty = true;
+            }
+            if (dirty) {
                 tableDefinitionRepository.save(table);
             }
         }
@@ -202,8 +266,10 @@ public class FunctionUnitImportWriter {
 
     void finalizeFormImport(FormDefinition form,
                             Map<String, Object> formData,
-                            Map<String, Long> importedTableNameToId) {
-        Map<Long, Long> bindingIdMapping = importFormTableBindings(form, formData, importedTableNameToId);
+                            Map<String, Long> importedTableNameToId,
+                            Map<Long, Long> relationTableIdMapping) {
+        Map<Long, Long> bindingIdMapping =
+                importFormTableBindings(form, formData, importedTableNameToId, relationTableIdMapping);
 
         Map<String, Object> configJson = parseConfigJsonObject(formData.get("configJson"));
         if (configJson == null) {
@@ -220,7 +286,8 @@ public class FunctionUnitImportWriter {
 
     private Map<Long, Long> importFormTableBindings(FormDefinition form,
                                                     Map<String, Object> formData,
-                                                    Map<String, Long> importedTableNameToId) {
+                                                    Map<String, Long> importedTableNameToId,
+                                                    Map<Long, Long> relationTableIdMapping) {
         Map<Long, Long> bindingIdMapping = new HashMap<>();
         Object bindingsObj = formData.get("tableBindings");
         if (!(bindingsObj instanceof List<?> bindingsList)) {
@@ -243,12 +310,19 @@ public class FunctionUnitImportWriter {
 
             Long relationTableId = bindingData.get("relationTableId") instanceof Number number
                     ? number.longValue() : null;
+            // Remap RELATED binding's relationTableId from the source rt id to the freshly imported rt id.
+            if (relationTableId != null && relationTableIdMapping != null
+                    && relationTableIdMapping.containsKey(relationTableId)) {
+                relationTableId = relationTableIdMapping.get(relationTableId);
+            }
             Integer sortOrder = bindingData.get("sortOrder") instanceof Number number
                     ? number.intValue() : null;
             SubMode subMode = bindingData.get("subMode") instanceof String subModeStr
                     ? SubMode.valueOf(subModeStr) : null;
+            BindingLinkMode bindingLinkMode = bindingData.get("bindingLinkMode") instanceof String linkModeStr
+                    ? BindingLinkMode.valueOf(linkModeStr) : BindingLinkMode.structuralFk;
 
-            FormTableBinding binding = FormTableBinding.builder()
+            FormTableBinding.FormTableBindingBuilder bindingBuilder = FormTableBinding.builder()
                     .form(form)
                     .table(table)
                     .relationTableId(relationTableId)
@@ -256,15 +330,64 @@ public class FunctionUnitImportWriter {
                     .bindingMode(bindingMode)
                     .foreignKeyField((String) bindingData.get("foreignKeyField"))
                     .sortOrder(sortOrder)
-                    .subMode(subMode)
-                    .build();
-            FormTableBinding savedBinding = formTableBindingRepository.save(binding);
+                    .bindingLinkMode(bindingLinkMode)
+                    .subMode(subMode);
+            FormTableBinding savedBinding = formTableBindingRepository.save(bindingBuilder.build());
+
+            importSubTableViewConfigIfPresent(savedBinding, bindingData.get("subTableViewConfig"));
 
             if (bindingData.get("bindingId") instanceof Number sourceBindingId) {
                 bindingIdMapping.put(sourceBindingId.longValue(), savedBinding.getId());
             }
         }
         return bindingIdMapping;
+    }
+
+    /**
+     * Restore the sub-table list view config + fields for a FULL-mode SUB binding, and link the
+     * new config id back onto the binding (subListViewId). Mirrors FunctionUnitCloner.
+     */
+    private void importSubTableViewConfigIfPresent(FormTableBinding savedBinding, Object configObj) {
+        if (!(configObj instanceof Map<?, ?> configMapRaw)) {
+            return;
+        }
+        @SuppressWarnings("unchecked")
+        Map<String, Object> configData = (Map<String, Object>) configMapRaw;
+
+        SubTableViewConfig config = SubTableViewConfig.builder()
+                .binding(savedBinding)
+                .viewFields(new java.util.ArrayList<>())
+                .build();
+        SubTableViewConfig savedConfig = subTableViewConfigRepository.save(config);
+
+        if (configData.get("viewFields") instanceof List<?> viewFields) {
+            List<SubTableViewField> fields = new java.util.ArrayList<>();
+            for (Object fieldObj : viewFields) {
+                if (!(fieldObj instanceof Map<?, ?> fieldMapRaw)) {
+                    continue;
+                }
+                @SuppressWarnings("unchecked")
+                Map<String, Object> fieldData = (Map<String, Object>) fieldMapRaw;
+                Integer columnWidth = fieldData.get("columnWidth") instanceof Number number
+                        ? number.intValue() : null;
+                Integer sortOrder = fieldData.get("sortOrder") instanceof Number number
+                        ? number.intValue() : 0;
+                Boolean visible = fieldData.get("visible") instanceof Boolean boolVal ? boolVal : true;
+                fields.add(SubTableViewField.builder()
+                        .viewConfig(savedConfig)
+                        .fieldName((String) fieldData.get("fieldName"))
+                        .displayLabel((String) fieldData.get("displayLabel"))
+                        .columnWidth(columnWidth)
+                        .sortOrder(sortOrder)
+                        .visible(visible)
+                        .build());
+            }
+            savedConfig.setViewFields(fields);
+            savedConfig = subTableViewConfigRepository.save(savedConfig);
+        }
+
+        savedBinding.setSubListViewId(savedConfig.getId());
+        formTableBindingRepository.save(savedBinding);
     }
 
     private void importFormStageBindings(FormDefinition form, Map<String, Object> formData) {
@@ -304,6 +427,35 @@ public class FunctionUnitImportWriter {
         return null;
     }
 
+    private RequestIdConfig parseRequestIdConfig(Object requestIdConfigObj) {
+        if (requestIdConfigObj == null) {
+            return null;
+        }
+        return objectMapper.convertValue(requestIdConfigObj, RequestIdConfig.class);
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<String> parseStringList(Object obj) {
+        if (obj instanceof List<?> list) {
+            List<String> result = new java.util.ArrayList<>();
+            for (Object item : list) {
+                if (item != null) {
+                    result.add(String.valueOf(item));
+                }
+            }
+            return result;
+        }
+        return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> parseJsonMap(Object obj) {
+        if (obj instanceof Map<?, ?> map) {
+            return new HashMap<>((Map<String, Object>) map);
+        }
+        return null;
+    }
+
     private Map<String, String> parseFieldPermissions(Object fieldPermissionsObj) {
         if (fieldPermissionsObj instanceof Map<?, ?> map) {
             Map<String, String> result = new HashMap<>();
@@ -319,11 +471,16 @@ public class FunctionUnitImportWriter {
 
     ActionDefinition importAction(FunctionUnit functionUnit, Map<String, Object> actionData) {
         Map<String, Object> configJsonMap = parseConfigJsonObject(actionData.get("configJson"));
+        Boolean isDefault = actionData.get("isDefault") instanceof Boolean boolVal ? boolVal : false;
         ActionDefinition action = ActionDefinition.builder()
                 .functionUnit(functionUnit)
                 .actionName((String) actionData.get("actionName"))
                 .actionType(ActionType.valueOf((String) actionData.get("actionType")))
                 .configJson(configJsonMap != null ? configJsonMap : new HashMap<>())
+                .icon((String) actionData.get("icon"))
+                .buttonColor((String) actionData.get("buttonColor"))
+                .displayName((String) actionData.get("description"))
+                .isDefault(isDefault)
                 .build();
         return actionDefinitionRepository.save(action);
     }

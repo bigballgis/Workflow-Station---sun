@@ -8,6 +8,7 @@ import com.developer.repository.FormTableBindingRepository;
 import com.developer.repository.FunctionUnitDevGroupAssignmentRepository;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.ProcessDefinitionRepository;
+import com.developer.repository.SubTableViewConfigRepository;
 import com.developer.repository.TableDefinitionRepository;
 import com.developer.repository.TableRelationRepository;
 import com.developer.security.FunctionUnitWorkspaceAccessService;
@@ -15,6 +16,7 @@ import com.developer.util.DeveloperWorkstationSequenceSynchronizer;
 import com.developer.validation.DmnXmlParser;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
+import org.mockito.Mockito;
 import org.springframework.test.util.ReflectionTestUtils;
 
 /**
@@ -44,6 +46,8 @@ public final class ExportImportTestComponents {
                 decisionDefinitionRepository,
                 formStageBindingRepository,
                 tableRelationRepository,
+                Mockito.mock(SubTableViewConfigRepository.class),
+                Mockito.mock(RelationTableStructurePortability.class),
                 functionUnitWorkspaceAccessService,
                 objectMapper);
         ReflectionTestUtils.setField(exporter, "platformVersion", "1.0.0");
@@ -87,6 +91,7 @@ public final class ExportImportTestComponents {
                 decisionDefinitionRepository,
                 formTableBindingRepository,
                 tableRelationRepository,
+                Mockito.mock(SubTableViewConfigRepository.class),
                 dmnXmlParser,
                 objectMapper);
 
@@ -94,11 +99,12 @@ public final class ExportImportTestComponents {
                 functionUnitRepository,
                 processDefinitionRepository,
                 formDefinitionRepository,
-                functionUnitDevGroupAssignmentRepository,
                 entityManager,
                 sequenceSynchronizer,
                 packageParser,
-                importWriter);
+                importWriter,
+                Mockito.mock(com.developer.component.VersionComponent.class),
+                Mockito.mock(RelationTableStructurePortability.class));
 
         return new ExportImportComponentImpl(
                 functionUnitRepository,

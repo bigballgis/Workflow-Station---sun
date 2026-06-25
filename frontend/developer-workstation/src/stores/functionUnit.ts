@@ -64,6 +64,11 @@ export const useFunctionUnitStore = defineStore('functionUnit', () => {
     await functionUnitApi.delete(id)
   }
 
+  async function restore(id: number) {
+    const res = await functionUnitApi.restore(id)
+    return res.data
+  }
+
   async function publish(id: number, changeLog?: string) {
     const res = await functionUnitApi.publish(id, changeLog)
     return res.data
@@ -198,7 +203,7 @@ export const useFunctionUnitStore = defineStore('functionUnit', () => {
 
   return {
     list, current, loading, total, allTags, tables, forms, actions, process, versions,
-    fetchList, fetchById, create, update, remove, publish, clone, validate,
+    fetchList, fetchById, create, update, remove, restore, publish, clone, validate,
     fetchAllTags,
     fetchTables, createTable, updateTable, deleteTable,
     fetchForms, createForm, updateForm, deleteForm,

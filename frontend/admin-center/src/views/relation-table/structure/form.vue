@@ -179,6 +179,24 @@
           </template>
         </el-table-column>
         <el-table-column
+          :label="t('form.labelForeignKey')"
+          width="110"
+          align="center"
+        >
+          <template #default="{ row }">
+            <FieldForeignKeyEditor
+              :is-foreign-key="row.isForeignKey"
+              :ref-table-id="row.refTableId"
+              :ref-primary-key-fields="row.refPrimaryKeyFields"
+              :ref-tables="fkRefTables"
+              :disabled="isAuditField(row)"
+              @update:is-foreign-key="row.isForeignKey = $event"
+              @update:ref-table-id="row.refTableId = $event"
+              @update:ref-primary-key-fields="row.refPrimaryKeyFields = $event"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column
           :label="t('form.labelDefaultValue')"
           width="130"
         >
@@ -234,6 +252,7 @@ import { Plus, Delete } from '@element-plus/icons-vue'
 import type { FormInstance } from 'element-plus'
 import PageHeader from '@/components/PageHeader.vue'
 import PkGenerationEditor from '@/components/relation-table/PkGenerationEditor.vue'
+import FieldForeignKeyEditor from '@/components/relation-table/FieldForeignKeyEditor.vue'
 import { useTableStructureForm } from '@/composables/modules/useTableStructureForm'
 
 const { t } = useI18n()
@@ -244,7 +263,7 @@ const isEdit = computed(() => !!route.params.id)
 const tableId = computed(() => Number(route.params.id))
 const formRef = ref<FormInstance>()
 
-const { form, rules, submitting, dataTypes, isAuditField, addField, removeField, loadTableData, submit,
+const { form, rules, submitting, dataTypes, fkRefTables, isAuditField, addField, removeField, loadTableData, submit,
   onFieldDisplayNameInput, onFieldNameManualInput, onTableDisplayNameInput, onPrimaryKeyChange }
   = useTableStructureForm({ tableId, isEdit: toRef(isEdit) })
 

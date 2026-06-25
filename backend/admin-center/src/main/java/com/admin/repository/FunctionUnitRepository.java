@@ -53,6 +53,13 @@ public interface FunctionUnitRepository extends JpaRepository<FunctionUnit, Stri
      */
     @Query("SELECT f FROM FunctionUnit f WHERE f.code = :code ORDER BY f.version DESC LIMIT 1")
     Optional<FunctionUnit> findLatestByCode(@Param("code") String code);
+
+    /**
+     * Latest version row for the given name (newest version first).
+     * Name is not unique here (one row per version), so this returns the most recent.
+     */
+    @Query("SELECT f FROM FunctionUnit f WHERE f.name = :name ORDER BY f.version DESC LIMIT 1")
+    Optional<FunctionUnit> findLatestByName(@Param("name") String name);
     
     /**
      * Paged filter by code/name/status (nullable params = ignored).

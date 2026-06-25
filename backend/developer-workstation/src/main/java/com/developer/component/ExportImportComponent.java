@@ -15,12 +15,13 @@ public interface ExportImportComponent {
     byte[] exportFunctionUnit(Long functionUnitId);
     
     /**
-     * 导入功能单元
+     * 导入功能单元。
+     * 同名不存在 → 新建；同名已存在 → 加一个版本（快照现有内容后替换为导入包内容）。
      * @param file ZIP文件
-     * @param conflictStrategy 冲突策略: SKIP, OVERWRITE, RENAME
+     * @param changeLog 同名加版本时写入版本记录的变更说明，可空
      * @return 导入结果
      */
-    Map<String, Object> importFunctionUnit(MultipartFile file, String conflictStrategy);
+    Map<String, Object> importFunctionUnit(MultipartFile file, String changeLog);
     
     /**
      * 验证导入包

@@ -234,6 +234,22 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     }
 
     @Override
+    @Transactional
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('TECH_LEAD', 'TEAM_LEAD')")
+    public FunctionUnit restore(Long id) {
+        functionUnitWorkspaceAccessService.assertCanAccess(id, WorkspaceAccessAction.MODIFY);
+        FunctionUnit functionUnit = getById(id);
+        if (functionUnit.getStatus() != FunctionUnitStatus.ARCHIVED) {
+            throw new DeveloperBusinessException("BIZ_NOT_ARCHIVED",
+                    "Only an archived function unit can be restored");
+        }
+        functionUnit.setStatus(FunctionUnitStatus.DRAFT);
+        FunctionUnit saved = functionUnitRepository.save(functionUnit);
+        log.info("Restored function unit id={}, name={} to DRAFT", id, functionUnit.getName());
+        return saved;
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public FunctionUnit getById(Long id) {
         return functionUnitRepository.findById(id)

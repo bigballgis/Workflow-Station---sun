@@ -61,8 +61,7 @@ public class FunctionUnitImportController {
     @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "Import a function unit", description = "Upload a workstation ZIP archive")
     public ResponseEntity<Map<String, Object>> importFunctionUnit(
-            @Parameter(description = "Function unit ZIP") @RequestParam("file") MultipartFile file,
-            @Parameter(description = "Overwrite strategy token (e.g. OVERWRITE)") @RequestParam(defaultValue = "OVERWRITE") String conflictStrategy) {
+            @Parameter(description = "Function unit ZIP") @RequestParam("file") MultipartFile file) {
         String userId = SecurityContextUtils.getCurrentUserId()
                 .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.unauthorized")));
         
@@ -98,7 +97,6 @@ public class FunctionUnitImportController {
                     .version(version != null ? version : "1.0.0")
                     .description(description)
                     .fileContent((String) packageData.get("process"))
-                    .overwrite("OVERWRITE".equals(conflictStrategy))
                     .iconSvg(extractIconSvg(manifest))
                     .build();
             
@@ -174,6 +172,7 @@ public class FunctionUnitImportController {
                 result.put("functionUnitId", importResult.getFunctionUnit().getId());
                 result.put("name", importResult.getFunctionUnit().getName());
                 result.put("version", importResult.getFunctionUnit().getVersion());
+                result.put("versioned", importResult.isVersioned());
                 result.put("message", i18nService.getMessage("admin.fu.import_success"));
                 return ResponseEntity.ok(result);
             } else {

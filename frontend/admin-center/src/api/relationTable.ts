@@ -114,6 +114,10 @@ export interface CreateFieldDefinitionRequest {
   displayName?: string
   sortOrder?: number
   pkGeneration?: Record<string, unknown>
+  isForeignKey?: boolean
+  refTableId?: number
+  refPrimaryKeyFields?: string[]
+  fkDisplayMode?: string
 }
 
 /** 创建表请求 */
@@ -138,6 +142,10 @@ export interface UpdateFieldDefinitionRequest {
   displayName?: string
   sortOrder?: number
   pkGeneration?: Record<string, unknown>
+  isForeignKey?: boolean
+  refTableId?: number
+  refPrimaryKeyFields?: string[]
+  fkDisplayMode?: string
 }
 
 /** 更新表请求 */

@@ -43,7 +43,12 @@ public class ImportResult {
      * 错误消息
      */
     private String errorMessage;
-    
+
+    /**
+     * 是否为「同名加版本」导入（名称已存在，作为新版本导入）。
+     */
+    private boolean versioned;
+
     /**
      * 创建成功结果
      */
@@ -51,6 +56,17 @@ public class ImportResult {
         return ImportResult.builder()
                 .success(true)
                 .functionUnit(functionUnit)
+                .build();
+    }
+
+    /**
+     * 创建成功结果，并标记是否为同名加版本。
+     */
+    public static ImportResult success(FunctionUnitInfo functionUnit, boolean versioned) {
+        return ImportResult.builder()
+                .success(true)
+                .functionUnit(functionUnit)
+                .versioned(versioned)
                 .build();
     }
     

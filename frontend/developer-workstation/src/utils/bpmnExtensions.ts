@@ -3,9 +3,21 @@
  * 用于读写 BPMN 节点的自定义扩展属性
  */
 
+import { toRaw } from 'vue'
 import type { BpmnElement, BpmnModeler } from '@/types/bpmn'
 
 const CUSTOM_PREFIX = 'custom'
+
+/**
+ * bpmn-js 的 commandStack（modeling.updateProperties 等）会直接读写元素上的
+ * `labels` 等只读/不可配置内部属性。当元素来自 Vue 的 reactive 代理时，命令栈对
+ * 代理的写入会触发「'get' on proxy: property 'labels' is read-only…」TypeError，
+ * 中断后续逻辑（例如切换子表后 Sub-table name 不再回填）。因此凡是要交给 bpmn-js
+ * 改写的元素，先用 toRaw 脱壳成原始对象。
+ */
+function rawElement(element: BpmnElement): BpmnElement {
+  return toRaw(element) as BpmnElement
+}
 
 /** custom:Properties / custom_1:Properties 在 moddle 中的子项字段名（见 customModdle.ts） */
 function getCustomPropertyList(properties: any): any[] {
@@ -125,10 +137,11 @@ export function setExtensionProperty(
   name: string,
   value: any
 ): void {
+  element = rawElement(element)
   const modeling = modeler.get('modeling')
   const moddle = modeler.get('moddle')
   const businessObject = element.businessObject
-  
+
   // 获取或创建 extensionElements
   let extensionElements: any = businessObject.extensionElements
   if (!extensionElements) {
@@ -200,16 +213,17 @@ export function removeExtensionProperty(
   element: BpmnElement,
   name: string
 ): void {
+  element = rawElement(element)
   const modeling = modeler.get('modeling')
   const businessObject = element.businessObject
   const extensionElements = businessObject?.extensionElements
-  
+
   if (!extensionElements?.values) return
-  
+
   const properties = extensionElements.values.find(
     (ext: any) => ext.$type === `${CUSTOM_PREFIX}:Properties`
   )
-  
+
   const list = getCustomPropertyList(properties)
   if (!list.length) return
   
@@ -227,12 +241,13 @@ export function clearExtensionProperties(
   modeler: BpmnModeler,
   element: BpmnElement
 ): void {
+  element = rawElement(element)
   const modeling = modeler.get('modeling')
   const businessObject = element.businessObject
   const extensionElements = businessObject?.extensionElements
-  
+
   if (!extensionElements?.values) return
-  
+
   const propertiesIndex = extensionElements.values.findIndex(
     (ext: any) => ext.$type === `${CUSTOM_PREFIX}:Properties`
   )
@@ -360,5 +375,5 @@ export function setBasicProperties(
   props: { id?: string; name?: string }
 ): void {
   const modeling = modeler.get('modeling')
-  modeling.updateProperties(element, props)
+  modeling.updateProperties(rawElement(element), props)
 }

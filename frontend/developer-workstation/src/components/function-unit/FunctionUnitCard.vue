@@ -93,6 +93,15 @@
           {{ t('functionUnit.clone') }}
         </el-button>
         <el-button
+          v-if="item.status === 'ARCHIVED' && permissions.canEdit()"
+          size="small"
+          type="success"
+          @click="$emit('restore', item)"
+        >
+          <el-icon><RefreshLeft /></el-icon>
+          {{ t('functionUnit.restore') }}
+        </el-button>
+        <el-button
           v-if="permissions.canDelete()"
           size="small"
           type="danger"
@@ -109,7 +118,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Edit, CopyDocument, Delete, Setting } from '@element-plus/icons-vue'
+import { Edit, CopyDocument, Delete, Setting, RefreshLeft } from '@element-plus/icons-vue'
 import IconPreview from '@/components/icon/IconPreview.vue'
 import type { FunctionUnitResponse } from '@/api/functionUnit'
 import { permissions } from '@/utils/permission'
@@ -128,6 +137,7 @@ const emit = defineEmits<{
   (e: 'settings', item: FunctionUnitResponse): void
   (e: 'clone', item: FunctionUnitResponse): void
   (e: 'delete', item: FunctionUnitResponse): void
+  (e: 'restore', item: FunctionUnitResponse): void
 }>()
 
 const displayTags = computed(() => props.tags.slice(0, MAX_DISPLAY_TAGS))

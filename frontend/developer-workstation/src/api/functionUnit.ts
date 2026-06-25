@@ -348,10 +348,14 @@ export const functionUnitApi = {
   update: (id: number, data: FunctionUnitRequest) => 
     functionUnitAxios.put<any, { data: FunctionUnit }>(`/api/v1/function-units/${id}`, data),
   
-  delete: (id: number) => 
+  delete: (id: number) =>
     functionUnitAxios.delete(`/api/v1/function-units/${id}`),
-  
-  publish: (id: number, changeLog?: string) => 
+
+  // Restore an ARCHIVED function unit back to DRAFT
+  restore: (id: number) =>
+    functionUnitAxios.post<any, { data: FunctionUnit }>(`/api/v1/function-units/${id}/restore`),
+
+  publish: (id: number, changeLog?: string) =>
     functionUnitAxios.post<any, { data: FunctionUnit }>(`/api/v1/function-units/${id}/publish`, null, { params: { changeLog } }),
   
   clone: (id: number, newName: string) => 
@@ -508,13 +512,14 @@ export const functionUnitApi = {
   exportFunctionUnit: (functionUnitId: number) =>
     functionUnitAxios.get(`/api/v1/function-units/${functionUnitId}/export`, { responseType: 'blob' }),
 
-  importFunctionUnit: (file: File, conflictStrategy: 'SKIP' | 'OVERWRITE' | 'RENAME' = 'RENAME') => {
+  // Name does not exist → new import; name exists → add a version. Optional changeLog is recorded on the version.
+  importFunctionUnit: (file: File, changeLog?: string) => {
     const formData = new FormData()
     formData.append('file', file)
-    return functionUnitAxios.post<any, { data: { status: string; message?: string; functionUnitId?: number } }>(
+    return functionUnitAxios.post<any, { data: { status: string; message?: string; functionUnitId?: number; version?: string; versioned?: boolean } }>(
       '/api/v1/export-import/import',
       formData,
-      { params: { conflictStrategy } }
+      { params: changeLog ? { changeLog } : {} }
     )
   },
   

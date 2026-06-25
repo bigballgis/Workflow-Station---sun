@@ -97,6 +97,14 @@ public class FunctionUnitController extends BaseController {
         return handleRequest(() -> functionUnitComponent.publish(id, changeLog));
     }
     
+    @PostMapping("/{id}/restore")
+    @Operation(summary = "Restore archived function unit",
+            description = "Sets an ARCHIVED function unit back to DRAFT status")
+    @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
+    public ResponseEntity<ApiResponse<FunctionUnit>> restore(@PathVariable Long id) {
+        return handleRequest(() -> functionUnitComponent.restore(id));
+    }
+
     @PostMapping("/{id}/clone")
     @Operation(summary = "Clone function unit")
     @RequireDeveloperPermission("FUNCTION_UNIT_CREATE")

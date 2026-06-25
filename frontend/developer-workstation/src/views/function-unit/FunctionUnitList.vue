@@ -167,6 +167,7 @@
           @settings="handleSettings"
           @clone="handleClone"
           @delete="handleDelete"
+          @restore="handleRestore"
         />
       </div>
 
@@ -424,6 +425,28 @@ async function handleDelete(item: FunctionUnitResponse) {
   await store.remove(item.id)
   ElMessage.success(isArchived ? t('functionUnit.deletePermanentSuccess') : t('functionUnit.archiveSuccess'))
   loadData()
+}
+
+async function handleRestore(item: FunctionUnitResponse) {
+  try {
+    await ElMessageBox.confirm(
+      t('functionUnit.restoreConfirm', { name: item.name }),
+      t('functionUnit.restoreTitle'),
+      { type: 'warning' }
+    )
+  } catch {
+    return // user cancelled
+  }
+  try {
+    await store.restore(item.id)
+    ElMessage.success(t('functionUnit.restoreSuccess'))
+    loadData()
+  } catch (e: unknown) {
+    const message = (e as { response?: { data?: { error?: { message?: string }; message?: string } } })
+      ?.response?.data?.error?.message
+      || (e as { response?: { data?: { message?: string } } })?.response?.data?.message
+    ElMessage.error(message || t('functionUnit.restoreFailed'))
+  }
 }
 
 onMounted(() => {

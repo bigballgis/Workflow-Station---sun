@@ -199,19 +199,20 @@ public class DecisionDesignExportImportPropertyTest extends DecisionDesignProper
         }
     }
 
-    // ========== Property 15: 导入冲突策略 ==========
+    // ========== Property 15: 导入即版本（无冲突策略） ==========
 
     /**
-     * Property 15: When importing decisions with conflicting keys into a FunctionUnit
-     * that already has decisions:
-     * - SKIP strategy at the function-unit level preserves the original FU and all its decisions
-     * - OVERWRITE strategy at the function-unit level replaces the FU (deleting old decisions)
-     *   and the importDecision method overwrites any conflicting decision keys
+     * Property 15: Import behavior without conflict strategy:
+     * - When the function unit name does NOT exist → a new function unit is created and the
+     *   imported decision is saved (SUCCESS, not versioned).
+     * - When the function unit name already exists → the import adds a version onto the existing
+     *   unit: it snapshots+clears via VersionComponent, then re-imports the package content onto
+     *   the SAME function unit (SUCCESS, versioned=true, no delete of the existing unit).
      *
-     * **Validates: Requirements 15.4**
+     * **Validates: name-absent→new, name-exists→add-version**
      */
     @Property(tries = 100)
-    void importConflictStrategyBehavior(
+    void importAddsVersionWhenNameExistsElseCreatesNew(
             @ForAll("validDecisionRequests") DecisionDefinitionRequest originalRequest,
             @ForAll("validDecisionRequests") DecisionDefinitionRequest importedRequest,
             @ForAll("functionUnitIds") Long functionUnitId) {
@@ -219,96 +220,38 @@ public class DecisionDesignExportImportPropertyTest extends DecisionDesignProper
         // Use a real DmnXmlParser for extracting keys from XML
         DmnXmlParser realParser = new DmnXmlParser();
 
-        // --- Test SKIP strategy: original decisions should be preserved ---
+        // --- Name does NOT exist → new import ---
         {
-            FunctionUnitRepository skipFuRepo = mock(FunctionUnitRepository.class);
-            DecisionDefinitionRepository skipDecisionRepo = mock(DecisionDefinitionRepository.class);
+            FunctionUnitRepository newFuRepo = mock(FunctionUnitRepository.class);
+            DecisionDefinitionRepository newDecisionRepo = mock(DecisionDefinitionRepository.class);
 
-            // Simulate existing FU with the same name
-            String fuName = "ConflictFU_" + functionUnitId;
-            when(skipFuRepo.existsByName(fuName)).thenReturn(true);
+            String fuName = "FreshFU_" + functionUnitId;
+            when(newFuRepo.findByName(fuName)).thenReturn(Optional.empty());
+            when(newFuRepo.existsByCode(anyString())).thenReturn(false);
 
-            com.developer.component.impl.ExportImportComponentImpl skipComponent =
-                    com.developer.component.impl.ExportImportTestComponents.build(
-                            skipFuRepo,
-                            mock(ProcessDefinitionRepository.class),
-                            mock(TableDefinitionRepository.class),
-                            mock(FormDefinitionRepository.class),
-                            mock(ActionDefinitionRepository.class),
-                            skipDecisionRepo,
-                            mock(FormTableBindingRepository.class),
-                            mock(FormStageBindingRepository.class),
-                            mock(TableRelationRepository.class),
-                            realParser,
-                            mock(FunctionUnitWorkspaceAccessService.class),
-                            mock(FunctionUnitDevGroupAssignmentRepository.class),
-                            mock(jakarta.persistence.EntityManager.class),
-                            new ObjectMapper(),
-                            mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class)
-                    );
-
-            // Build a ZIP with one decision
-            byte[] zipBytes = buildTestZip(fuName, importedRequest.getDmnXml());
-
-            // Import with SKIP strategy
-            org.springframework.mock.web.MockMultipartFile mockFile =
-                    new org.springframework.mock.web.MockMultipartFile(
-                            "file", "test.zip", "application/zip", zipBytes);
-
-            Map<String, Object> result = skipComponent.importFunctionUnit(mockFile, "SKIP");
-
-            assertThat(result.get("status"))
-                    .as("SKIP strategy should return SKIPPED status when FU name conflicts")
-                    .isEqualTo("SKIPPED");
-
-            // Verify no decisions were saved (import was skipped entirely)
-            verify(skipDecisionRepo, never()).save(any(DecisionDefinition.class));
-        }
-
-        // --- Test OVERWRITE strategy: imported decisions should replace originals ---
-        {
-            FunctionUnitRepository overwriteFuRepo = mock(FunctionUnitRepository.class);
-            DecisionDefinitionRepository overwriteDecisionRepo = mock(DecisionDefinitionRepository.class);
-
-            String fuName = "ConflictFU_" + functionUnitId;
-
-            // Simulate existing FU
-            FunctionUnit existingFu = FunctionUnit.builder()
-                    .id(functionUnitId)
-                    .code("fu-existing-" + functionUnitId)
-                    .name(fuName)
-                    .build();
-
-            when(overwriteFuRepo.existsByName(fuName)).thenReturn(true);
-            when(overwriteFuRepo.findByName(fuName)).thenReturn(Optional.of(existingFu));
-            when(overwriteFuRepo.existsByCode(anyString())).thenReturn(false);
-
-            // After delete + save, return a new FU
             Long newFuId = idGenerator.getAndIncrement();
-            when(overwriteFuRepo.save(any(FunctionUnit.class))).thenAnswer(invocation -> {
+            when(newFuRepo.save(any(FunctionUnit.class))).thenAnswer(invocation -> {
                 FunctionUnit saved = invocation.getArgument(0);
                 if (saved.getId() == null) {
                     saved.setId(newFuId);
                 }
                 return saved;
             });
-
-            // importDecision will call findByFunctionUnitId to check for conflicts
-            when(overwriteDecisionRepo.findByFunctionUnitId(newFuId)).thenReturn(new ArrayList<>());
-            when(overwriteDecisionRepo.save(any(DecisionDefinition.class))).thenAnswer(invocation -> {
+            when(newDecisionRepo.findByFunctionUnitId(newFuId)).thenReturn(new ArrayList<>());
+            when(newDecisionRepo.save(any(DecisionDefinition.class))).thenAnswer(invocation -> {
                 DecisionDefinition saved = invocation.getArgument(0);
                 saved.setId(idGenerator.getAndIncrement());
                 return saved;
             });
 
-            com.developer.component.impl.ExportImportComponentImpl overwriteComponent =
+            com.developer.component.impl.ExportImportComponentImpl newComponent =
                     com.developer.component.impl.ExportImportTestComponents.build(
-                            overwriteFuRepo,
+                            newFuRepo,
                             mock(ProcessDefinitionRepository.class),
                             mock(TableDefinitionRepository.class),
                             mock(FormDefinitionRepository.class),
                             mock(ActionDefinitionRepository.class),
-                            overwriteDecisionRepo,
+                            newDecisionRepo,
                             mock(FormTableBindingRepository.class),
                             mock(FormStageBindingRepository.class),
                             mock(TableRelationRepository.class),
@@ -320,24 +263,82 @@ public class DecisionDesignExportImportPropertyTest extends DecisionDesignProper
                             mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class)
                     );
 
-            // Build a ZIP with one decision
             byte[] zipBytes = buildTestZip(fuName, importedRequest.getDmnXml());
-
             org.springframework.mock.web.MockMultipartFile mockFile =
                     new org.springframework.mock.web.MockMultipartFile(
                             "file", "test.zip", "application/zip", zipBytes);
 
-            Map<String, Object> result = overwriteComponent.importFunctionUnit(mockFile, "OVERWRITE");
+            Map<String, Object> result = newComponent.importFunctionUnit(mockFile, null);
 
             assertThat(result.get("status"))
-                    .as("OVERWRITE strategy should return SUCCESS status")
+                    .as("New import (name absent) should return SUCCESS")
                     .isEqualTo("SUCCESS");
+            assertThat(result.get("versioned"))
+                    .as("New import should not be versioned")
+                    .isEqualTo(false);
+            verify(newDecisionRepo).save(any(DecisionDefinition.class));
+        }
 
-            // Verify the existing FU was deleted
-            verify(overwriteFuRepo).deleteById(existingFu.getId());
+        // --- Name EXISTS → add a version onto the existing unit ---
+        {
+            FunctionUnitRepository versionFuRepo = mock(FunctionUnitRepository.class);
+            DecisionDefinitionRepository versionDecisionRepo = mock(DecisionDefinitionRepository.class);
 
-            // Verify a new decision was saved (the imported one)
-            verify(overwriteDecisionRepo).save(any(DecisionDefinition.class));
+            String fuName = "ExistingFU_" + functionUnitId;
+
+            FunctionUnit existingFu = FunctionUnit.builder()
+                    .id(functionUnitId)
+                    .code("fu-existing-" + functionUnitId)
+                    .name(fuName)
+                    .currentVersion("1.0.0")
+                    .build();
+
+            when(versionFuRepo.findByName(fuName)).thenReturn(Optional.of(existingFu));
+            when(versionFuRepo.existsByCode(anyString())).thenReturn(false);
+            when(versionFuRepo.save(any(FunctionUnit.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+            when(versionDecisionRepo.findByFunctionUnitId(functionUnitId)).thenReturn(new ArrayList<>());
+            when(versionDecisionRepo.save(any(DecisionDefinition.class))).thenAnswer(invocation -> {
+                DecisionDefinition saved = invocation.getArgument(0);
+                saved.setId(idGenerator.getAndIncrement());
+                return saved;
+            });
+
+            com.developer.component.impl.ExportImportComponentImpl versionComponent =
+                    com.developer.component.impl.ExportImportTestComponents.build(
+                            versionFuRepo,
+                            mock(ProcessDefinitionRepository.class),
+                            mock(TableDefinitionRepository.class),
+                            mock(FormDefinitionRepository.class),
+                            mock(ActionDefinitionRepository.class),
+                            versionDecisionRepo,
+                            mock(FormTableBindingRepository.class),
+                            mock(FormStageBindingRepository.class),
+                            mock(TableRelationRepository.class),
+                            realParser,
+                            mock(FunctionUnitWorkspaceAccessService.class),
+                            mock(FunctionUnitDevGroupAssignmentRepository.class),
+                            mock(jakarta.persistence.EntityManager.class),
+                            new ObjectMapper(),
+                            mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class)
+                    );
+
+            byte[] zipBytes = buildTestZip(fuName, importedRequest.getDmnXml());
+            org.springframework.mock.web.MockMultipartFile mockFile =
+                    new org.springframework.mock.web.MockMultipartFile(
+                            "file", "test.zip", "application/zip", zipBytes);
+
+            Map<String, Object> result = versionComponent.importFunctionUnit(mockFile, "my change log");
+
+            assertThat(result.get("status"))
+                    .as("Re-import onto existing name should return SUCCESS")
+                    .isEqualTo("SUCCESS");
+            assertThat(result.get("versioned"))
+                    .as("Re-import onto existing name should be versioned")
+                    .isEqualTo(true);
+            // Existing unit must NOT be deleted (we add a version, not overwrite-by-delete)
+            verify(versionFuRepo, never()).deleteById(any());
+            verify(versionDecisionRepo).save(any(DecisionDefinition.class));
         }
     }
 }

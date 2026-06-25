@@ -39,6 +39,8 @@ public class VersionComponentImpl implements VersionComponent {
     private final DeveloperWorkstationSequenceSynchronizer sequenceSynchronizer;
     private final ProcessDesignComponentImpl processDesignComponent;
     private final MainTableViewService mainTableViewService;
+    private final com.developer.repository.SubTableViewConfigRepository subTableViewConfigRepository;
+    private final com.developer.repository.ForeignKeyRepository foreignKeyRepository;
     
     /**
      * Resolves current operator username.
@@ -90,6 +92,52 @@ public class VersionComponentImpl implements VersionComponent {
         }
     }
     
+    @Override
+    @Transactional
+    public String snapshotAndClearForReimport(FunctionUnit functionUnit, String changeLog) {
+        try {
+            // Import/init/previous rollback may insert large IDs without advancing sequences; sync before any INSERT.
+            sequenceSynchronizer.synchronizeAll();
+
+            // 1. Snapshot current content into dw_versions so it stays rollback-able.
+            //    NOTE: import does NOT advance currentVersion — the imported content becomes the new
+            //    pending image; the version number is only bumped on deploy/publish. The snapshot is
+            //    stored under the next patch number purely to keep dw_versions' (fu_id, version) unique
+            //    and rollback-able; currentVersion itself is left unchanged below.
+            String snapshotVersion = nextFreeSnapshotVersion(functionUnit);
+            Version snapshot = Version.builder()
+                    .functionUnit(functionUnit)
+                    .versionNumber(snapshotVersion)
+                    .changeLog(changeLog != null && !changeLog.isBlank()
+                            ? changeLog : "Auto snapshot before re-import")
+                    .snapshotData(createSnapshot(functionUnit))
+                    .publishedBy(getCurrentOperator())
+                    .build();
+            versionRepository.saveAndFlush(snapshot);
+
+            // 2. Clear child collections (DELETE-before-INSERT ordering) + the OneToOne process definition,
+            //    so the caller can rebuild content under the same (function_unit_id, name) without unique conflicts.
+            clearChildCollectionsAndFlush(functionUnit);
+            if (functionUnit.getProcessDefinition() != null) {
+                functionUnit.setProcessDefinition(null);
+                functionUnitRepository.saveAndFlush(functionUnit);
+            }
+
+            // Sequence sync must run on the same transaction connection to see flushed deletes.
+            sequenceSynchronizer.synchronizeAllInTransaction();
+
+            // 3. Do NOT change currentVersion — deploy/publish owns version increments.
+            return functionUnit.getCurrentVersion();
+        } catch (DeveloperBusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Failed to snapshot/clear before re-import, functionUnitId={}: {}",
+                    functionUnit.getId(), e.getMessage(), e);
+            throw new DeveloperBusinessException("SYS_SNAPSHOT_ERROR",
+                    "Failed to snapshot before re-import: " + e.getMessage());
+        }
+    }
+
     @Override
     @Transactional(readOnly = true)
     public List<Version> getVersionHistory(Long functionUnitId) {
@@ -212,6 +260,29 @@ public class VersionComponentImpl implements VersionComponent {
      * so DELETE runs before INSERT, avoiding Hibernate's default INSERT-before-DELETE ordering conflicts.
      */
     private void clearChildCollectionsAndFlush(FunctionUnit functionUnit) {
+        // dw_sub_table_view_configs/_fields have no FK/cascade (neither JPA nor DB), so removing forms
+        // would orphan them — and the orphan's binding_id then collides with a freshly inserted binding's
+        // id (unique idx_sub_table_view_configs_binding_id) on the next import. Delete them explicitly
+        // BEFORE clearing forms, while the bindings still exist to join on.
+        subTableViewConfigRepository.deleteViewFieldsByFunctionUnitId(functionUnit.getId());
+        subTableViewConfigRepository.deleteConfigsByFunctionUnitId(functionUnit.getId());
+
+        // Delete foreign keys first. A ForeignKey's field_id/ref_field_id are NOT NULL; if we let the
+        // tableDefinitions clear() cascade-delete fields first, Hibernate dissociates the still-present FK
+        // rows (UPDATE dw_foreign_keys SET field_id=null) and violates the NOT NULL constraint. Clear the
+        // in-memory collections so the cascade re-processing is a no-op, then hard-delete the rows.
+        boolean hadForeignKeys = false;
+        for (TableDefinition table : functionUnit.getTableDefinitions()) {
+            if (table.getForeignKeys() != null && !table.getForeignKeys().isEmpty()) {
+                table.getForeignKeys().clear();
+                hadForeignKeys = true;
+            }
+        }
+        if (hadForeignKeys) {
+            foreignKeyRepository.deleteByFunctionUnitId(functionUnit.getId());
+            foreignKeyRepository.flush();
+        }
+
         boolean dirty = false;
         if (!functionUnit.getActionDefinitions().isEmpty()) {
             functionUnit.getActionDefinitions().clear();
@@ -250,14 +321,40 @@ public class VersionComponentImpl implements VersionComponent {
     }
     
     private String calculateNextVersion(String currentVersion) {
-        if (currentVersion == null || currentVersion.isEmpty()) {
+        // Tolerate non-semver/legacy values (null, empty, "20260525", "v1", trailing -suffix):
+        // fall back to 1.0.0 rather than throwing, so imports of older units never crash here.
+        if (currentVersion == null || currentVersion.isBlank()) {
             return "1.0.0";
         }
-        String[] parts = currentVersion.split("\\.");
-        int patch = Integer.parseInt(parts[2]) + 1;
-        return parts[0] + "." + parts[1] + "." + patch;
+        String clean = currentVersion.trim().split("-")[0];
+        String[] parts = clean.split("\\.");
+        if (parts.length < 3) {
+            return "1.0.0";
+        }
+        try {
+            int major = Integer.parseInt(parts[0].trim());
+            int minor = Integer.parseInt(parts[1].trim());
+            int patch = Integer.parseInt(parts[2].trim()) + 1;
+            return major + "." + minor + "." + patch;
+        } catch (NumberFormatException e) {
+            return "1.0.0";
+        }
     }
-    
+
+    /**
+     * Next patch version that is free in dw_versions for this function unit. Since import no longer
+     * advances currentVersion, repeated re-imports (without a deploy in between) would otherwise all
+     * try to snapshot under the same number; walk up until the (fu_id, version) pair is free.
+     */
+    private String nextFreeSnapshotVersion(FunctionUnit functionUnit) {
+        String candidate = calculateNextVersion(functionUnit.getCurrentVersion());
+        Long fuId = functionUnit.getId();
+        while (versionRepository.findByFunctionUnitIdAndVersionNumber(fuId, candidate).isPresent()) {
+            candidate = calculateNextVersion(candidate);
+        }
+        return candidate;
+    }
+
     private byte[] createSnapshot(FunctionUnit functionUnit) throws Exception {
         Map<String, Object> snapshot = new HashMap<>();
         snapshot.put("name", functionUnit.getName());

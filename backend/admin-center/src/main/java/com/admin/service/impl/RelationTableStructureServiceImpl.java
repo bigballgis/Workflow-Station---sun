@@ -73,6 +73,10 @@ public class RelationTableStructureServiceImpl implements RelationTableStructure
                         .defaultValue(fieldReq.getDefaultValue())
                         .displayName(fieldReq.getDisplayName())
                         .pkGenerationJson(fieldReq.getPkGeneration())
+                        .isForeignKey(fieldReq.getIsForeignKey() != null ? fieldReq.getIsForeignKey() : false)
+                        .refTableId(fieldReq.getRefTableId())
+                        .refPrimaryKeyFields(fieldReq.getRefPrimaryKeyFields())
+                        .fkDisplayMode(fieldReq.getFkDisplayMode() != null ? fieldReq.getFkDisplayMode() : "readonly")
                         .sortOrder(fieldReq.getSortOrder() != null ? fieldReq.getSortOrder() : i)
                         .build();
                 fieldDefinitions.add(field);
@@ -278,6 +282,17 @@ public class RelationTableStructureServiceImpl implements RelationTableStructure
                 } else if (fieldReq.getPkGeneration() != null) {
                     existing.setPkGenerationJson(fieldReq.getPkGeneration());
                 }
+                if (fieldReq.getIsForeignKey() != null) {
+                    existing.setIsForeignKey(fieldReq.getIsForeignKey());
+                    if (Boolean.TRUE.equals(fieldReq.getIsForeignKey())) {
+                        existing.setRefTableId(fieldReq.getRefTableId());
+                        existing.setRefPrimaryKeyFields(fieldReq.getRefPrimaryKeyFields());
+                        existing.setFkDisplayMode(fieldReq.getFkDisplayMode() != null ? fieldReq.getFkDisplayMode() : "readonly");
+                    } else {
+                        existing.setRefTableId(null);
+                        existing.setRefPrimaryKeyFields(null);
+                    }
+                }
                 existing.setSortOrder(fieldReq.getSortOrder() != null ? fieldReq.getSortOrder() : i);
                 updatedFields.add(existing);
             } else {
@@ -294,6 +309,10 @@ public class RelationTableStructureServiceImpl implements RelationTableStructure
                         .defaultValue(fieldReq.getDefaultValue())
                         .displayName(fieldReq.getDisplayName())
                         .pkGenerationJson(fieldReq.getPkGeneration())
+                        .isForeignKey(fieldReq.getIsForeignKey() != null ? fieldReq.getIsForeignKey() : false)
+                        .refTableId(fieldReq.getRefTableId())
+                        .refPrimaryKeyFields(fieldReq.getRefPrimaryKeyFields())
+                        .fkDisplayMode(fieldReq.getFkDisplayMode() != null ? fieldReq.getFkDisplayMode() : "readonly")
                         .sortOrder(fieldReq.getSortOrder() != null ? fieldReq.getSortOrder() : i)
                         .build();
                 updatedFields.add(newField);

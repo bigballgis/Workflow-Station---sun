@@ -201,6 +201,26 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: "relation-tables/structure/er-diagram",
+        name: "RelationTableERDiagramAll",
+        component: () => import("@/views/relation-table/structure/er-diagram.vue"),
+        meta: {
+          titleKey: "erDiagram.title",
+          hidden: true,
+          permissions: [PERMISSIONS.SYSTEM_ADMIN],
+        },
+      },
+      {
+        path: "relation-tables/structure/:id/er-diagram",
+        name: "RelationTableERDiagram",
+        component: () => import("@/views/relation-table/structure/er-diagram.vue"),
+        meta: {
+          titleKey: "erDiagram.title",
+          hidden: true,
+          permissions: [PERMISSIONS.SYSTEM_ADMIN],
+        },
+      },
+      {
         path: "relation-tables/data",
         name: "RelationTableData",
         component: () => import("@/views/relation-table/data/index.vue"),

@@ -83,6 +83,12 @@ public class ExportImportPackageParser {
                         rawFiles.get("relations/table_relations.json"), List.class));
             }
 
+            // Parse relation-table (rt_) structures
+            if (rawFiles.containsKey("relation-tables/relation_tables.json")) {
+                result.put("relationTables", objectMapper.readValue(
+                        rawFiles.get("relation-tables/relation_tables.json"), List.class));
+            }
+
             // Parse form definitions
             List<Map<String, Object>> forms = new ArrayList<>();
             if (rawFiles.containsKey("forms.json")) {

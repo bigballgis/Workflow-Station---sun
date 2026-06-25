@@ -33,11 +33,13 @@ public class ExportImportController {
     }
     
     @PostMapping("/import")
-    @Operation(summary = "Import function unit")
+    @Operation(summary = "Import function unit",
+            description = "Name does not exist → create a new function unit; name exists → add a version "
+                    + "(snapshot current content, then replace with the imported package).")
     public ResponseEntity<ApiResponse<Map<String, Object>>> importFunctionUnit(
             @RequestParam("file") MultipartFile file,
-            @RequestParam(defaultValue = "SKIP") String conflictStrategy) {
-        Map<String, Object> result = exportImportComponent.importFunctionUnit(file, conflictStrategy);
+            @RequestParam(required = false) String changeLog) {
+        Map<String, Object> result = exportImportComponent.importFunctionUnit(file, changeLog);
         return ResponseEntity.ok(ApiResponse.success(result));
     }
 

@@ -31,6 +31,11 @@ public interface FunctionUnitComponent {
      * Delete a function unit
      */
     void delete(Long id);
+
+    /**
+     * Restore an archived function unit back to DRAFT status.
+     */
+    FunctionUnit restore(Long id);
     
     /**
      * Get a function unit by ID

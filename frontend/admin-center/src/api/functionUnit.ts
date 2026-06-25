@@ -80,6 +80,8 @@ export interface ImportResult {
   errorMessage?: string
   errors?: string[]
   warnings?: string[]
+  // true when the name already existed and the package was imported as a new version
+  versioned?: boolean
 }
 
 export interface ValidationError {

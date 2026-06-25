@@ -254,8 +254,7 @@ public class DeploymentComponentImpl implements DeploymentComponent {
                 }
             };
             body.add("file", resource);
-            body.add("conflictStrategy", request.getConflictStrategy() != null
-                    ? request.getConflictStrategy() : "OVERWRITE");
+            // Admin-center import no longer takes a conflict strategy: same name → new version, else new unit.
 
             HttpEntity<MultiValueMap<String, Object>> requestEntity = new HttpEntity<>(body, importHeaders);
 

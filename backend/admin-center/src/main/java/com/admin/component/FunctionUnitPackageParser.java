@@ -70,6 +70,7 @@ public class FunctionUnitPackageParser {
         List<FunctionUnitManagerComponent.ContentInfo> contents = new ArrayList<>();
         List<FunctionUnitManagerComponent.ContentInfo> forms = new ArrayList<>();
         List<Map<String, Object>> actions = new ArrayList<>();
+        List<Map<String, Object>> relationTables = new ArrayList<>();
 
         for (Map.Entry<String, byte[]> file : rawFiles.entrySet()) {
             String fileName = file.getKey();
@@ -127,6 +128,16 @@ public class FunctionUnitPackageParser {
             }
         }
 
+        // Relation-table (rt_) structures exported by Developer Workstation
+        if (rawFiles.containsKey("relation-tables/relation_tables.json")) {
+            try {
+                relationTables.addAll(objectMapper.readValue(
+                        rawFiles.get("relation-tables/relation_tables.json"), List.class));
+            } catch (Exception e) {
+                log.warn("Failed to parse relation_tables.json: {}", e.getMessage());
+            }
+        }
+
         if (rawFiles.containsKey("actions.json")) {
             List<Map<String, Object>> actionList = objectMapper.readValue(rawFiles.get("actions.json"), List.class);
             actions.addAll(actionList);
@@ -157,6 +168,7 @@ public class FunctionUnitPackageParser {
                 .packageContent(packageContent)
                 .forms(forms)
                 .actions(actions)
+                .relationTables(relationTables)
                 .iconSvg(iconSvg)
                 .build();
     }
@@ -188,6 +200,7 @@ public class FunctionUnitPackageParser {
         private FunctionUnitManagerComponent.FunctionPackageContent packageContent;
         private List<FunctionUnitManagerComponent.ContentInfo> forms;
         private List<Map<String, Object>> actions;
+        private List<Map<String, Object>> relationTables;
         private String iconSvg;
     }
 }

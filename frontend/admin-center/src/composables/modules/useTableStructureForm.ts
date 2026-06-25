@@ -1,10 +1,10 @@
 /**
  * Table Structure Form 业务逻辑 composable
  */
-import { ref, reactive, type Ref } from 'vue'
+import { ref, reactive, computed, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { notifySuccess, notifyError, notifyWarning } from '@/utils/notify'
-import { relationTableStructureApi, type RelationDataType, type CreateFieldDefinitionRequest, type UpdateFieldDefinitionRequest } from '@/api/relationTable'
+import { relationTableStructureApi, type RelationDataType, type CreateFieldDefinitionRequest, type UpdateFieldDefinitionRequest, type RelationTableResponse } from '@/api/relationTable'
 import { suggestFieldName, suggestTableName } from '@/utils/fieldNameSlug'
 import { serializePkGeneration } from '@/utils/pkGenerationConfig'
 
@@ -20,6 +20,10 @@ interface FieldRow {
   sortOrder?: number
   fieldNameTouched?: boolean
   pkGeneration?: Record<string, unknown>
+  isForeignKey?: boolean
+  refTableId?: number
+  refPrimaryKeyFields?: string[]
+  fkDisplayMode?: string
 }
 
 export function useTableStructureForm(options: { tableId: Ref<number>; isEdit: Ref<boolean> }) {
@@ -29,6 +33,20 @@ export function useTableStructureForm(options: { tableId: Ref<number>; isEdit: R
   const submitting = ref(false)
   const dataTypes: RelationDataType[] = ['VARCHAR', 'INTEGER', 'BIGINT', 'DECIMAL', 'BOOLEAN', 'DATE', 'TIMESTAMP', 'TEXT']
   const AUDIT_FIELD_NAMES = new Set(['created_at', 'created_by', 'updated_at', 'updated_by'])
+
+  // Foreign Key 候选表：仅可引用其他 *已部署* 的 Relation Table（排除当前正在编辑的表）
+  const allTables = ref<RelationTableResponse[]>([])
+  const fkRefTables = computed<RelationTableResponse[]>(() =>
+    allTables.value.filter(tb => tb.status === 'DEPLOYED' && tb.id !== tableId.value),
+  )
+
+  const loadFkRefTables = async () => {
+    try {
+      allTables.value = await relationTableStructureApi.list()
+    } catch {
+      allTables.value = []
+    }
+  }
 
   const form = reactive({ tableName: '', displayName: '', description: '', fieldDefinitions: [] as FieldRow[] })
   const rules = {
@@ -82,6 +100,9 @@ export function useTableStructureForm(options: { tableId: Ref<number>; isEdit: R
     isPrimaryKey: false,
     defaultValue: '',
     displayName: '',
+    isForeignKey: false,
+    refPrimaryKeyFields: [],
+    fkDisplayMode: 'readonly',
   })
 
   const createAuditFields = (): FieldRow[] => [
@@ -117,6 +138,7 @@ export function useTableStructureForm(options: { tableId: Ref<number>; isEdit: R
   }
 
   const loadTableData = async () => {
+    await loadFkRefTables()
     if (!isEdit.value) return
     try {
       const data = await relationTableStructureApi.getById(tableId.value)
@@ -137,6 +159,10 @@ export function useTableStructureForm(options: { tableId: Ref<number>; isEdit: R
         pkGeneration: f.isPrimaryKey
           ? (f.pkGeneration ?? { strategy: 'uuid' })
           : undefined,
+        isForeignKey: f.isForeignKey || false,
+        refTableId: f.refTableId,
+        refPrimaryKeyFields: f.refPrimaryKeyFields || [],
+        fkDisplayMode: f.fkDisplayMode || 'readonly',
       }))
       const names = new Set(form.fieldDefinitions.map(f => f.fieldName))
       for (const af of createAuditFields()) {
@@ -172,6 +198,10 @@ export function useTableStructureForm(options: { tableId: Ref<number>; isEdit: R
           displayName: f.displayName || undefined,
           sortOrder: i,
           pkGeneration: serializePkGeneration(f.pkGeneration, f.isPrimaryKey),
+          isForeignKey: f.isForeignKey || false,
+          refTableId: f.isForeignKey ? f.refTableId : undefined,
+          refPrimaryKeyFields: f.isForeignKey ? f.refPrimaryKeyFields : undefined,
+          fkDisplayMode: f.isForeignKey ? (f.fkDisplayMode || 'readonly') : undefined,
         }))
         await relationTableStructureApi.update(tableId.value, {
           displayName: form.displayName || undefined,
@@ -190,6 +220,10 @@ export function useTableStructureForm(options: { tableId: Ref<number>; isEdit: R
           displayName: f.displayName || undefined,
           sortOrder: i,
           pkGeneration: serializePkGeneration(f.pkGeneration, f.isPrimaryKey),
+          isForeignKey: f.isForeignKey || false,
+          refTableId: f.isForeignKey ? f.refTableId : undefined,
+          refPrimaryKeyFields: f.isForeignKey ? f.refPrimaryKeyFields : undefined,
+          fkDisplayMode: f.isForeignKey ? (f.fkDisplayMode || 'readonly') : undefined,
         }))
         await relationTableStructureApi.create({
           tableName: form.tableName,
@@ -213,7 +247,7 @@ export function useTableStructureForm(options: { tableId: Ref<number>; isEdit: R
   }
 
   return {
-    form, rules, submitting, dataTypes, isAuditField, addField, removeField, loadTableData, submit,
+    form, rules, submitting, dataTypes, fkRefTables, isAuditField, addField, removeField, loadTableData, submit,
     onFieldDisplayNameInput, onFieldNameManualInput, onTableDisplayNameInput, onPrimaryKeyChange,
   }
 }

@@ -242,7 +242,7 @@ class ExportImportComponentImplTest {
     }
 
     @Test
-    void importFunctionUnit_renameStrategy_generatesNewCodeWhenCodeAlreadyExists() throws Exception {
+    void importFunctionUnit_newImport_generatesNewCodeWhenManifestCodeAlreadyExists() throws Exception {
         ObjectMapper om = new ObjectMapper();
         ExportImportComponentImpl impl = ExportImportTestComponents.build(
                 functionUnitRepository,
@@ -261,8 +261,9 @@ class ExportImportComponentImplTest {
                 om,
                 mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class));
 
+        // Name is free → new import; but the manifest code is already taken → generate a fresh code.
         String existingCode = "fu-20260422-23tfag";
-        when(functionUnitRepository.existsByName("kk")).thenReturn(true);
+        when(functionUnitRepository.findByName("kk")).thenReturn(java.util.Optional.empty());
         when(functionUnitRepository.existsByCode(existingCode)).thenReturn(true);
         when(functionUnitRepository.existsByCode(org.mockito.ArgumentMatchers.argThat(
                 candidate -> candidate != null && !candidate.equals(existingCode)))).thenReturn(false);
@@ -276,13 +277,14 @@ class ExportImportComponentImplTest {
                 "{\"name\":\"kk\",\"code\":\"" + existingCode + "\",\"version\":\"1.0.0\"}");
         MockMultipartFile file = new MockMultipartFile("file", "fu.zip", "application/zip", zip);
 
-        Map<String, Object> result = impl.importFunctionUnit(file, "RENAME");
+        Map<String, Object> result = impl.importFunctionUnit(file, null);
 
         assertEquals("SUCCESS", result.get("status"));
+        assertEquals(false, result.get("versioned"));
         org.mockito.ArgumentCaptor<FunctionUnit> captor = org.mockito.ArgumentCaptor.forClass(FunctionUnit.class);
         verify(functionUnitRepository).save(captor.capture());
         FunctionUnit saved = captor.getValue();
-        assertTrue(saved.getName().startsWith("kk_imported_"));
+        assertEquals("kk", saved.getName());
         assertNotEquals(existingCode, saved.getCode());
     }
 
@@ -306,7 +308,7 @@ class ExportImportComponentImplTest {
                 om,
                 mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class));
 
-        when(functionUnitRepository.existsByName("ImportedFU")).thenReturn(false);
+        when(functionUnitRepository.findByName("ImportedFU")).thenReturn(java.util.Optional.empty());
         when(functionUnitRepository.existsByCode(any())).thenReturn(false);
         when(functionUnitRepository.save(any(FunctionUnit.class))).thenAnswer(invocation -> {
             FunctionUnit saved = invocation.getArgument(0);
@@ -371,7 +373,7 @@ class ExportImportComponentImplTest {
         }
 
         MockMultipartFile file = new MockMultipartFile("file", "fu.zip", "application/zip", baos.toByteArray());
-        Map<String, Object> result = impl.importFunctionUnit(file, "RENAME");
+        Map<String, Object> result = impl.importFunctionUnit(file, null);
         assertEquals("SUCCESS", result.get("status"));
 
         org.mockito.ArgumentCaptor<FunctionUnit> functionUnitCaptor =
@@ -415,7 +417,7 @@ class ExportImportComponentImplTest {
                 om,
                 mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class));
 
-        when(functionUnitRepository.existsByName("BindingFU")).thenReturn(false);
+        when(functionUnitRepository.findByName("BindingFU")).thenReturn(java.util.Optional.empty());
         when(functionUnitRepository.existsByCode(any())).thenReturn(false);
         when(functionUnitRepository.save(any(FunctionUnit.class))).thenAnswer(invocation -> {
             FunctionUnit saved = invocation.getArgument(0);
@@ -494,7 +496,7 @@ class ExportImportComponentImplTest {
         }
 
         MockMultipartFile file = new MockMultipartFile("file", "fu.zip", "application/zip", baos.toByteArray());
-        Map<String, Object> result = impl.importFunctionUnit(file, "RENAME");
+        Map<String, Object> result = impl.importFunctionUnit(file, null);
         assertEquals("SUCCESS", result.get("status"));
 
         org.mockito.ArgumentCaptor<com.developer.entity.FormDefinition> formCaptor =

@@ -3,6 +3,11 @@
     <PageHeader title="Table Structure">
       <template #actions>
         <el-button
+          @click="router.push('/relation-tables/structure/er-diagram')"
+        >
+          <el-icon><Share /></el-icon>View ER Diagram
+        </el-button>
+        <el-button
           type="primary"
           @click="router.push('/relation-tables/structure/create')"
         >
@@ -111,7 +116,7 @@
         />
         <el-table-column
           label="Actions"
-          width="420"
+          width="470"
           fixed="right"
           align="center"
         >
@@ -124,6 +129,14 @@
                 @click="handleEdit(row)"
               >
                 Edit
+              </el-button>
+              <el-button
+                link
+                type="primary"
+                size="small"
+                @click="router.push(`/relation-tables/structure/${row.id}/er-diagram`)"
+              >
+                ER Diagram
               </el-button>
               <el-button
                 link
@@ -206,7 +219,7 @@
 <script setup lang="ts">
 import { onMounted, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
-import { Plus } from '@element-plus/icons-vue'
+import { Plus, Share } from '@element-plus/icons-vue'
 import PageHeader from '@/components/PageHeader.vue'
 import { relationTableStatusType as statusTagType, formatDate } from '@/utils/format'
 import VersionDialog from './components/VersionDialog.vue'

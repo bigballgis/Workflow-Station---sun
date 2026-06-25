@@ -67,5 +67,14 @@ public class CreateRelationTableRequest {
         private Integer sortOrder;
 
         private Map<String, Object> pkGeneration;
+
+        private Boolean isForeignKey;
+
+        private Long refTableId;
+
+        private List<String> refPrimaryKeyFields;
+
+        /** readonly | hidden */
+        private String fkDisplayMode;
     }
 }

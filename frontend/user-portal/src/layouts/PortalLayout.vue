@@ -143,18 +143,15 @@
               </span>
             </template>
           </el-menu-item>
-          <el-sub-menu
+          <el-menu-item
             v-if="showFullPortal"
-            index="relation-table-group"
+            index="/relation-tables"
           >
+            <el-icon><Grid /></el-icon>
             <template #title>
-              <el-icon><Grid /></el-icon>
-              <span>{{ t('menu.relationTableGroup') }}</span>
-            </template>
-            <el-menu-item index="/relation-tables">
               {{ t('menu.relationTables') }}
-            </el-menu-item>
-          </el-sub-menu>
+            </template>
+          </el-menu-item>
           <el-sub-menu
             v-if="showFullPortal"
             index="views-group"

@@ -113,7 +113,9 @@ public class DecisionDesignVersionSnapshotPropertyTest extends DecisionDesignPro
                     mock(FunctionUnitRepository.class),
                     objectMapper,
                     mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class), null,
-                    mock(com.developer.service.MainTableViewService.class)
+                    mock(com.developer.service.MainTableViewService.class),
+                    mock(com.developer.repository.SubTableViewConfigRepository.class),
+                    mock(com.developer.repository.ForeignKeyRepository.class)
             );
 
             // Build a fresh FunctionUnit to restore into

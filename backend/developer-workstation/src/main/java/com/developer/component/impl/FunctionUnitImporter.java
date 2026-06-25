@@ -1,5 +1,6 @@
 package com.developer.component.impl;
 
+import com.developer.component.VersionComponent;
 import com.developer.dto.ValidationResult;
 import com.developer.entity.FieldDefinition;
 import com.developer.entity.FormDefinition;
@@ -9,7 +10,6 @@ import com.developer.entity.TableDefinition;
 import com.developer.exception.DeveloperBusinessException;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.FormDefinitionRepository;
-import com.developer.repository.FunctionUnitDevGroupAssignmentRepository;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.ProcessDefinitionRepository;
 import com.developer.util.BpmnIdRewriter;
@@ -47,16 +47,26 @@ public class FunctionUnitImporter {
     private final FunctionUnitRepository functionUnitRepository;
     private final ProcessDefinitionRepository processDefinitionRepository;
     private final FormDefinitionRepository formDefinitionRepository;
-    private final FunctionUnitDevGroupAssignmentRepository functionUnitDevGroupAssignmentRepository;
     private final EntityManager entityManager;
     private final DeveloperWorkstationSequenceSynchronizer sequenceSynchronizer;
     private final ExportImportPackageParser packageParser;
     private final FunctionUnitImportWriter importWriter;
+    private final VersionComponent versionComponent;
+    private final RelationTableStructurePortability relationTablePortability;
 
-    private record ResolvedImportIdentity(String name, String code, boolean skipped, String skipMessage) {}
-
+    /**
+     * 导入功能单元。无冲突策略选项：
+     * <ul>
+     *   <li>同名功能单元不存在 → 新建一个功能单元。</li>
+     *   <li>同名功能单元已存在 → 在其之上「加一个版本」：先把现有内容快照存入 dw_versions，
+     *       再用导入包内容替换现有功能单元的子内容，currentVersion 递增。</li>
+     * </ul>
+     *
+     * @param file      导入包
+     * @param changeLog 同名加版本时写入版本记录的变更说明，可空
+     */
     @Transactional
-    public Map<String, Object> importFunctionUnit(MultipartFile file, String conflictStrategy) {
+    public Map<String, Object> importFunctionUnit(MultipartFile file, String changeLog) {
         sequenceSynchronizer.synchronizeAll();
         Map<String, Object> result = new HashMap<>();
         Map<String, Object> packageData = packageParser.parseImportPackage(file);
@@ -72,24 +82,31 @@ public class FunctionUnitImporter {
         String version = (String) manifest.get("version");
         String description = (String) manifest.get("description");
 
-        ResolvedImportIdentity resolved = resolveImportIdentity(name, code, conflictStrategy);
-        if (resolved.skipped()) {
-            result.put("status", "SKIPPED");
-            result.put("message", resolved.skipMessage());
-            return result;
+        // Name exists → replace the existing unit's content with the imported package (snapshotting the
+        // old content for rollback); the version number is NOT changed here — deploy/publish owns version
+        // increments. Otherwise create a new function unit.
+        FunctionUnit existing = functionUnitRepository.findByName(name).orElse(null);
+        final boolean versioned = existing != null;
+        FunctionUnit functionUnit;
+        if (versioned) {
+            functionUnit = existing;
+            // Snapshot current content into dw_versions and clear it; currentVersion stays unchanged.
+            versionComponent.snapshotAndClearForReimport(functionUnit, changeLog);
+            functionUnit.setDisplayName(description);
+            functionUnit = functionUnitRepository.save(functionUnit);
+            // Re-sync sequences after the snapshot/clear writes before rebuilding content.
+            sequenceSynchronizer.synchronizeAll();
+            version = functionUnit.getCurrentVersion();
+        } else {
+            functionUnit = FunctionUnit.builder()
+                    .name(name)
+                    .code(resolveNewImportCode(name, code))
+                    .displayName(description)
+                    .currentVersion(version)
+                    .deployedAt(Instant.now()) // Set deployed_at to avoid null constraint violation
+                    .build();
+            functionUnit = functionUnitRepository.save(functionUnit);
         }
-        name = resolved.name();
-        code = resolved.code();
-
-        // Create function unit
-        FunctionUnit functionUnit = FunctionUnit.builder()
-                .name(name)
-                .code(code)
-                .displayName(description)
-                .currentVersion(version)
-                .deployedAt(Instant.now()) // Set deployed_at to avoid null constraint violation
-                .build();
-        functionUnit = functionUnitRepository.save(functionUnit);
 
         Map<Long, Long> tableIdMapping = new HashMap<>();
         Map<String, Long> importedTableNameToId = new HashMap<>();
@@ -108,12 +125,29 @@ public class FunctionUnitImporter {
                 importedFieldLookup.put(table.getTableName(), fieldByName);
             }
             importWriter.importForeignKeys(tables, importedTableNameToId, importedFieldLookup);
+            importWriter.importFieldRefMetadata(tables, importedTableNameToId);
         }
 
         if (packageData.containsKey("tableRelations")) {
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> tableRelations = (List<Map<String, Object>>) packageData.get("tableRelations");
             importWriter.importTableRelations(functionUnit, tableRelations, importedTableNameToId);
+        }
+
+        // Import relation-table (rt_) structures and build source-rt-id → new-rt-id so RELATED bindings remap.
+        Map<Long, Long> relationTableIdMapping = new HashMap<>();
+        if (packageData.containsKey("relationTables")) {
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> relationTables =
+                    (List<Map<String, Object>>) packageData.get("relationTables");
+            Map<String, Long> rtNameToId = relationTablePortability.importAll(relationTables, currentOperator());
+            for (Map<String, Object> rt : relationTables) {
+                Object srcId = rt.get("relationTableId");
+                String rtName = (String) rt.get("tableName");
+                if (srcId instanceof Number srcNum && rtName != null && rtNameToId.containsKey(rtName)) {
+                    relationTableIdMapping.put(srcNum.longValue(), rtNameToId.get(rtName));
+                }
+            }
         }
 
         Map<Long, Long> formIdMapping = new HashMap<>();
@@ -139,7 +173,7 @@ public class FunctionUnitImporter {
                 }
                 FormDefinition form = formDefinitionRepository.findById(newFormId)
                         .orElseThrow(() -> new ResourceNotFoundException("FormDefinition", newFormId));
-                importWriter.finalizeFormImport(form, formData, importedTableNameToId);
+                importWriter.finalizeFormImport(form, formData, importedTableNameToId, relationTableIdMapping);
             }
         }
 
@@ -181,13 +215,18 @@ public class FunctionUnitImporter {
             processDefinitionRepository.save(process);
         }
 
-        sequenceSynchronizer.synchronizeAll();
+        // Flush this transaction's inserts first, then sync sequences IN-TRANSACTION so the
+        // synchronizer sees the freshly-inserted rows. (synchronizeAll runs NOT_SUPPORTED on a
+        // separate connection and cannot see uncommitted rows, which would leave sequences lagging
+        // MAX(id) and cause PK conflicts on the next IDENTITY insert — e.g. adding a form binding.)
         entityManager.flush();
+        sequenceSynchronizer.synchronizeAllInTransaction();
 
         result.put("status", "SUCCESS");
         result.put("functionUnitId", functionUnit.getId());
         result.put("name", functionUnit.getName());
         result.put("version", functionUnit.getCurrentVersion());
+        result.put("versioned", versioned);
         return result;
     }
 
@@ -207,69 +246,25 @@ public class FunctionUnitImporter {
         }
     }
 
-    private ResolvedImportIdentity resolveImportIdentity(String manifestName, String manifestCode, String conflictStrategy) {
-        String name = manifestName;
-        String manifestCodeNormalized = manifestCode != null && !manifestCode.isBlank() ? manifestCode : null;
-        boolean nameExists = functionUnitRepository.existsByName(name);
-        boolean codeExists = manifestCodeNormalized != null && functionUnitRepository.existsByCode(manifestCodeNormalized);
-
-        switch (conflictStrategy) {
-            case "SKIP" -> {
-                if (nameExists) {
-                    return new ResolvedImportIdentity(name, manifestCodeNormalized, true,
-                            "Function unit already exists, skipped");
-                }
-                if (codeExists) {
-                    return new ResolvedImportIdentity(name, manifestCodeNormalized, true,
-                            "Function unit code already exists, skipped");
-                }
-            }
-            case "OVERWRITE" -> {
-                if (nameExists) {
-                    deleteExistingFunctionUnitForImport(functionUnitRepository.findByName(name).orElse(null));
-                } else if (codeExists) {
-                    deleteExistingFunctionUnitForImport(functionUnitRepository.findByCode(manifestCodeNormalized).orElse(null));
-                }
-            }
-            case "RENAME" -> {
-                if (nameExists) {
-                    name = manifestName + "_imported_" + System.currentTimeMillis();
-                }
-            }
-            default -> throw new DeveloperBusinessException("BIZ_INVALID_STRATEGY", "Invalid conflict strategy");
+    /** Current operator for audit fields; falls back to "system" when unavailable. */
+    private String currentOperator() {
+        try {
+            return com.platform.security.util.SecurityContextUtils.getCurrentUsername().orElse("system");
+        } catch (Exception e) {
+            return "system";
         }
-
-        String code = resolveUniqueImportCode(name, manifestCodeNormalized, conflictStrategy, nameExists, codeExists);
-        return new ResolvedImportIdentity(name, code, false, null);
     }
 
-    private String resolveUniqueImportCode(
-            String resolvedName,
-            String manifestCode,
-            String conflictStrategy,
-            boolean nameConflict,
-            boolean codeConflict) {
-        if ("RENAME".equals(conflictStrategy) && (nameConflict || codeConflict)) {
-            return generateImportCode(resolvedName);
+    /**
+     * Resolve the code for a brand-new imported function unit (name is known not to exist).
+     * Reuse the manifest code when it is free; otherwise generate a unique one from the name.
+     */
+    private String resolveNewImportCode(String name, String manifestCode) {
+        String normalized = manifestCode != null && !manifestCode.isBlank() ? manifestCode : null;
+        if (normalized != null && !functionUnitRepository.existsByCode(normalized)) {
+            return normalized;
         }
-        if ("OVERWRITE".equals(conflictStrategy) && manifestCode != null && !functionUnitRepository.existsByCode(manifestCode)) {
-            return manifestCode;
-        }
-        if (manifestCode != null && !functionUnitRepository.existsByCode(manifestCode)) {
-            return manifestCode;
-        }
-        return generateImportCode(resolvedName);
-    }
-
-    private void deleteExistingFunctionUnitForImport(FunctionUnit existing) {
-        if (existing == null || existing.getId() == null) {
-            return;
-        }
-        Long functionUnitId = existing.getId();
-        functionUnitDevGroupAssignmentRepository.deleteByFunctionUnitId(functionUnitId);
-        functionUnitRepository.deleteById(functionUnitId);
-        entityManager.flush();
-        entityManager.clear();
+        return generateImportCode(name);
     }
 
     /**

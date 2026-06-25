@@ -50,6 +50,7 @@ public class FunctionUnitImportComponent {
     private final FunctionUnitPackageParser packageParser;
     private final ActionDefinitionRepository actionDefinitionRepository;
     private final FunctionUnitVersionComponent versionComponent;
+    private final RelationTableStructureImporter relationTableStructureImporter;
     private final ObjectMapper objectMapper;
     private final I18nService i18nService;
 
@@ -69,18 +70,19 @@ public class FunctionUnitImportComponent {
             FunctionUnitPackageParser.ParsedImportPackage parsed = parseImportRequest(request);
             FunctionUnitManagerComponent.FunctionPackageContent packageContent = parsed.getPackageContent();
 
-            // 3. Check whether version already exists
-            if (functionUnitRepository.existsByCodeAndVersion(packageContent.getCode(), packageContent.getVersion())) {
-                boolean shouldOverwrite = request.isOverwrite()
-                        || functionUnitRepository.findByCodeAndVersion(packageContent.getCode(), packageContent.getVersion())
-                        .map(u -> u.getStatus() == FunctionUnitStatus.ARCHIVED)
-                        .orElse(false);
-                if (!shouldOverwrite) {
-                    return ImportResult.failure("Function unit version already exists: "
-                            + packageContent.getCode() + ":" + packageContent.getVersion()
-                            + i18nService.getMessage("admin.fu.version_exists_suffix"));
-                }
-                deleteExistingVersion(packageContent.getCode(), packageContent.getVersion());
+            // 3. No conflict strategy: name absent → import as a new unit; name present → overwrite the
+            //    latest row's content in place. Import does NOT bump the version — version increments are
+            //    owned by deploy. The imported package just becomes the new pending image of that unit.
+            FunctionUnit existingByName = functionUnitRepository.findLatestByName(packageContent.getName()).orElse(null);
+            final boolean versioned = existingByName != null;
+            if (versioned) {
+                // Keep the existing code + version unchanged; reuse the same row.
+                packageContent.setCode(existingByName.getCode());
+                packageContent.setVersion(existingByName.getVersion());
+            } else if (packageContent.getCode() != null
+                    && functionUnitRepository.existsByCodeAndVersion(packageContent.getCode(), packageContent.getVersion())) {
+                // New name but the (code, version) pair is taken under another name → pick the next free version.
+                packageContent.setVersion(nextAvailableVersion(packageContent.getCode()));
             }
 
             if (parsed.getIconSvg() != null && request.getIconSvg() == null) {
@@ -90,8 +92,10 @@ public class FunctionUnitImportComponent {
             // 4. Detect dependency conflicts
             List<ImportResult.DependencyConflict> conflicts = detectConflicts(packageContent);
 
-            // 5. Create function unit(DRAFT after import; enable after validation/deploy)
-            FunctionUnit functionUnit = createFunctionUnit(packageContent, request, importerId);
+            // 5. Create a new unit, or overwrite the existing same-name unit's content in place.
+            FunctionUnit functionUnit = versioned
+                    ? overwriteFunctionUnit(existingByName, packageContent, request, importerId)
+                    : createFunctionUnit(packageContent, request, importerId);
 
             // 7. Save dependencies
             saveDependencies(functionUnit, packageContent.getDependencies());
@@ -103,13 +107,19 @@ public class FunctionUnitImportComponent {
             }
             saveImportedActions(functionUnit.getId(), parsed.getActions());
 
+            // Import relation-table (rt_) structures: absent name → INIT (version 1),
+            // existing name → UPDATED with version+1.
+            relationTableStructureImporter.importRelationTables(parsed.getRelationTables(), importerId);
+
             log.info("Function package imported successfully: {}", functionUnit.getId());
 
             FunctionUnitInfo info = FunctionUnitInfo.fromEntity(functionUnit);
             if (!conflicts.isEmpty()) {
-                return ImportResult.conflictDetected(info, conflicts);
+                ImportResult conflictResult = ImportResult.conflictDetected(info, conflicts);
+                conflictResult.setVersioned(versioned);
+                return conflictResult;
             }
-            return ImportResult.success(info);
+            return ImportResult.success(info, versioned);
 
         } catch (Exception e) {
             log.error("Failed to import function package", e);
@@ -305,6 +315,7 @@ public class FunctionUnitImportComponent {
                 .packageContent(legacy)
                 .forms(List.of())
                 .actions(List.of())
+                .relationTables(List.of())
                 .iconSvg(request.getIconSvg())
                 .build();
     }
@@ -361,6 +372,68 @@ public class FunctionUnitImportComponent {
             name = name.substring(0, dashIndex);
         }
         return name;
+    }
+
+    /**
+     * Next free version for a code when adding a version on same-name import.
+     * Bumps the latest existing version's patch number, then walks up until the
+     * (code, version) pair is free (defensive against gaps/duplicates).
+     */
+    private String nextAvailableVersion(String code) {
+        String latest = functionUnitRepository.findLatestByCode(code)
+                .map(FunctionUnit::getVersion)
+                .orElse("1.0.0");
+        String candidate = bumpPatch(latest);
+        while (functionUnitRepository.existsByCodeAndVersion(code, candidate)) {
+            candidate = bumpPatch(candidate);
+        }
+        return candidate;
+    }
+
+    /** Increment the patch component of a MAJOR.MINOR.PATCH version; falls back to 1.0.0 on bad input. */
+    private String bumpPatch(String version) {
+        if (version == null || version.isBlank()) {
+            return "1.0.0";
+        }
+        String clean = version.split("-")[0];
+        String[] parts = clean.split("\\.");
+        if (parts.length < 3) {
+            return "1.0.0";
+        }
+        try {
+            int patch = Integer.parseInt(parts[2]) + 1;
+            return parts[0] + "." + parts[1] + "." + patch;
+        } catch (NumberFormatException e) {
+            return "1.0.0";
+        }
+    }
+
+    /**
+     * Overwrite an existing same-name function unit's content in place: clear its old child content
+     * (contents/dependencies/access; actions are cleared by saveImportedActions) and refresh metadata,
+     * keeping the same id, code and version. Version is NOT changed — deploy owns version increments.
+     */
+    private FunctionUnit overwriteFunctionUnit(FunctionUnit existing,
+                                               FunctionUnitManagerComponent.FunctionPackageContent packageContent,
+                                               FunctionUnitImportRequest request,
+                                               String importerId) {
+        // Clear old child content so the imported package fully replaces it.
+        accessRepository.deleteByFunctionUnitId(existing.getId());
+        contentRepository.deleteByFunctionUnitId(existing.getId());
+        dependencyRepository.deleteByFunctionUnitId(existing.getId());
+        functionUnitRepository.flush();
+
+        existing.setDescription(packageContent.getDescription());
+        existing.setPackagePath(request.getFilePath());
+        existing.setPackageSize(request.getFileContent() != null ? (long) request.getFileContent().length() : 0L);
+        existing.setChecksum(ChecksumUtils.sha256Hex(request.getFileContent()));
+        existing.setStatus(FunctionUnitStatus.DRAFT);
+        existing.setImportedAt(Instant.now());
+        existing.setImportedBy(importerId);
+        if (request.getIconSvg() != null) {
+            existing.setIconSvg(request.getIconSvg());
+        }
+        return functionUnitRepository.save(existing);
     }
 
     /** Create function unit */

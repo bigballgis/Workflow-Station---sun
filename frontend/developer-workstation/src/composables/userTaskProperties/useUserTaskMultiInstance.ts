@@ -55,6 +55,14 @@ export function useUserTaskMultiInstance(
     }
   }
 
+  // 子表 id 在「el-select v-model / 选项 value / 后端 JSON」之间可能是 number 或
+  // string（后端把 Long 序列化为字符串时尤甚），严格 === 会漏匹配，导致切换子表后
+  // Sub-table name 不更新、指派字段列表为空。统一按字符串比较即可避免类型漂移。
+  function findSubTableById(id: number | string | '') {
+    if (id === '' || id === null || id === undefined) return undefined
+    return subTables.value.find(tb => String(tb.id) === String(id))
+  }
+
   function handleSubTableChange(id: number | '') {
     ensureSubTaskAssigneeMode()
     if (id === '' || id === null || id === undefined) {
@@ -68,7 +76,7 @@ export function useUserTaskMultiInstance(
       return
     }
     updateExtProp('subTableId', id)
-    const table = subTables.value.find(tb => tb.id === id)
+    const table = findSubTableById(id)
     if (table) {
       elementSubTableName.value = table.tableName
       updateExtProp('subTableName', table.tableName)
@@ -97,7 +105,7 @@ export function useUserTaskMultiInstance(
   }
 
   const assigneeFieldOptions = computed(() => {
-    const table = subTables.value.find(tb => tb.id === elementSubTableId.value)
+    const table = findSubTableById(elementSubTableId.value)
     return table?.fieldDefinitions || []
   })
 

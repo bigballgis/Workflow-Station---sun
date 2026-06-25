@@ -374,10 +374,11 @@ export function useFunctionUnit() {
           const result = await functionUnitApi.import({
             fileName: importFile.value!.name,
             fileContent: base64,
-            overwriteExisting: true,
           })
           if (result.success) {
-            notifySuccess(t('functionUnit.importSuccess'))
+            notifySuccess(result.versioned
+              ? t('functionUnit.importVersioned')
+              : t('functionUnit.importSuccess'))
             showImportDialog.value = false
             resetImportDialog()
             fetchFunctionUnits()
