@@ -40,8 +40,13 @@ public class RelationTableBindingServiceImpl implements RelationTableBindingServ
     @Override
     @Transactional(readOnly = true)
     public List<RelationTableDTO> getAvailableTables() {
+        // Include DEPLOYED, UPDATED and INIT: all have a real, usable rt_field_definitions structure.
+        // UPDATED = deployed structure since edited; INIT = created/imported but not yet deployed.
+        // Excluding non-DEPLOYED here previously made imported relation tables (which land as INIT/UPDATED)
+        // selectable in the lookup binding but with empty Search/Display field dropdowns.
         String sql = "SELECT id, table_name, display_name, description, status, enabled, "
-                + "portal_visible, current_version FROM rt_table_definitions WHERE status = ?";
+                + "portal_visible, current_version FROM rt_table_definitions "
+                + "WHERE status IN ('DEPLOYED', 'UPDATED', 'INIT')";
         List<RelationTableDTO> tables = new ArrayList<>(jdbcTemplate.query(sql, (rs, rowNum) -> RelationTableDTO.builder()
                 .id(rs.getLong("id"))
                 .tableName(rs.getString("table_name"))
@@ -51,7 +56,7 @@ public class RelationTableBindingServiceImpl implements RelationTableBindingServ
                 .enabled(rs.getBoolean("enabled"))
                 .portalVisible(rs.getBoolean("portal_visible"))
                 .currentVersion(rs.getInt("current_version"))
-                .build(), RelationTableStatus.DEPLOYED.getCode()));
+                .build()));
 
         // Load field definitions for each table
         String fieldSql = "SELECT id, field_name, data_type, length, precision_value, scale, "
