@@ -32,9 +32,9 @@ public class BiProperties {
          * Defaults to {@code public}; override via env var {@code SUPERSET_DB_SCHEMA} if Superset uses a dedicated schema (e.g. {@code superset}).
          */
         private String dbSchema = "superset";
-        /** Superset admin username (env var: BI_SUPERSET_ADMIN_USERNAME) */
+        /** Superset admin/service username (application.yml: bi.superset.admin-username = ${BI_SUPERSET_USERNAME}) */
         private String adminUsername;
-        /** Superset admin password (env var: BI_SUPERSET_ADMIN_PASSWORD) */
+        /** Superset admin/service password (application.yml: bi.superset.admin-password = ${BI_SUPERSET_PASSWORD}) */
         private String adminPassword;
         /** Guest token timeout in seconds */
         private int guestTokenTimeoutSeconds = 30;

@@ -222,6 +222,27 @@ public class BiRbacMappingServiceImpl implements BiRbacMappingService {
     @Override
     @Transactional(readOnly = true)
     public List<Integer> getEffectiveSupersetRoleIds(List<String> sysRoleIds) {
+        return resolveActiveSupersetRoles(sysRoleIds).stream()
+                .map(BiSupersetRole::getSupersetRoleId)
+                .distinct()
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<String> getEffectiveSupersetRoleNames(List<String> sysRoleIds) {
+        return resolveActiveSupersetRoles(sysRoleIds).stream()
+                .map(BiSupersetRole::getName)
+                .filter(Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 给定系统角色 ID 列表，解析出有效（ACTIVE）的 Superset 角色实体（去重前）。
+     * 供 getEffectiveSupersetRoleIds / getEffectiveSupersetRoleNames 共用。
+     */
+    private List<BiSupersetRole> resolveActiveSupersetRoles(List<String> sysRoleIds) {
         if (sysRoleIds == null || sysRoleIds.isEmpty()) {
             return Collections.emptyList();
         }
@@ -239,13 +260,9 @@ public class BiRbacMappingServiceImpl implements BiRbacMappingService {
         }
 
         // 3. Filter to only ACTIVE Superset_Roles
-        List<BiSupersetRole> supersetRoles = supersetRoleRepository
-                .findBySupersetRoleIdIn(new ArrayList<>(supersetRoleIds));
-
-        return supersetRoles.stream()
+        return supersetRoleRepository
+                .findBySupersetRoleIdIn(new ArrayList<>(supersetRoleIds)).stream()
                 .filter(r -> r.getStatus() == SupersetRoleStatus.ACTIVE)
-                .map(BiSupersetRole::getSupersetRoleId)
-                .distinct()
                 .collect(Collectors.toList());
     }
 

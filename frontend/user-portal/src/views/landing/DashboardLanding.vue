@@ -187,7 +187,7 @@ async function embedSupersetDashboard(
       supersetDomain.value = initialTokenPayload.supersetDomain
     }
     const runtimeSupersetDomain =
-      initialTokenPayload.supersetDomain || supersetDomain.value || 'http://localhost:8088'
+      initialTokenPayload.supersetDomain || supersetDomain.value || 'http://localhost:8089'
     let isFirstTokenRequest = true
 
     const result = await embedDashboard({
