@@ -38,7 +38,7 @@
 |---|---|
 | `Dockerfile` | 删除焊死的弱密钥 `ENV SUPERSET_SECRET_KEY=replace_…`；`COPY superset_security_manager.py` |
 | `superset_config.py` | `SECRET_KEY` 改为 fail-closed 读 env；CORS `*`→门户白名单(`SUPERSET_CORS_ORIGINS`)；`X-Frame-Options: ALLOWALL`→CSP `frame-ancestors`；`AUTH_TYPE=AUTH_REMOTE_USER` + `CUSTOM_SECURITY_MANAGER`；`RECAPTCHA_PUBLIC_KEY/PRIVATE_KEY`；`LOGOUT_REDIRECT_URL` |
-| `superset_security_manager.py` 🆕 | 自定义 `PlatformRemoteUserSecurityManager`：`register_views()` 完整镜像 Superset 逻辑但把 `/login` 换成 REMOTE_USER 子类；`auth_user_remote_user()` JIT 建号 + 每次登录同步**角色 + email + 姓名**（firstname 用 `unquote_plus` 解码，匹配 Java URLEncoder 的 `+`=空格） |
+| `superset_security_manager.py` 🆕 | 自定义 `PlatformRemoteUserSecurityManager`：`register_views()` 完整镜像 Superset 逻辑但把 `/login` 换成 REMOTE_USER 子类；`auth_user_remote_user()` JIT 建号 + 每次登录同步**角色 + email + 姓名**（firstname 用 `unquote_plus` 解码，匹配 Java URLEncoder 的 `+`=空格）；**重写 `sync_role_definitions()` 自愈钩子**：每次 `superset init` 给 `GUEST_ROLE_NAME`(Gamma) 补 `can_read on CurrentUserRestApi`（嵌入 SDK 调 /me/roles 需要），扛 init 重置 / 新库 / 升级 |
 
 ### 2.2 后端 admin-center `backend/admin-center/`
 
@@ -128,6 +128,7 @@
 | **List Users 空白页** | Settings 菜单出现「List Users」，点开空白 | 自定义 SM 的 `register_views` 跳过了 Superset 的逻辑（Superset 6.0 本应移除遗留 FAB user/role/group 视图+菜单） | `register_views` 完整镜像 Superset 逻辑，只把 `/login` 换成 REMOTE_USER 子类。注意 `superset.views.auth` 须**惰性导入**（配置加载极早，顶层导入会 "App not initialized yet"） |
 | **登录后「Unexpected error」** | 作者登入 Superset 弹错误 toast（对**所有**用户、与角色无关） | Superset 前端埋点 POST `/superset/log/` 带 `Origin: http://localhost:8087`；auth_request 子请求把 Origin 转发给 admin-center → CORS 白名单无 :8087 → admin-center 返回 403 → 网关拦下 | `_superset_authz` 加 `proxy_set_header Origin ""`（内部调用不需 Origin）。生产 Istio ext_authz 只转发 cookie/authorization，不受影响 |
 | **`BI_SUPERSET_ADMIN_*` 死变量** | — | app 实际读 `BI_SUPERSET_USERNAME`（application.yml），`BI_SUPERSET_ADMIN_*` 无人引用；且 k8s 只有 ADMIN 名、缺真正读的名 → 生产 guest token 凭据失效 | dev 删除、k8s 改名为 `BI_SUPERSET_USERNAME/PASSWORD` |
+| **嵌入「embedded authentication」失败** | guest token 已签发但嵌入报认证失败（**生产换新库后出现，dev 不复现**） | embed SDK 拿到 guest token 后调 `/api/v1/me/roles`(CurrentUserRestApi.can_read) 做会话校验；新库 `superset init` 出来的 Gamma 默认无此权限 → 403。dev 6.0.0 该端点权限项没生成、未设防 → 侥幸 200，所以 dev 看不到 | SM `sync_role_definitions()` 自愈钩子：每次 init 给 Gamma 补 `can_read on CurrentUserRestApi`（比一次性 SQL 稳——init 会重置 Gamma，钩子紧跟着重授）|
 | **登出回不去** | Superset Logout 无效 / 登出后落到裸 `/login` 登不回 | 网关 SSO 下 Superset 自带登出无效（cookie 还在会被登回）；裸 `/login` 缺 SSO 参数无法提交 | 新增 `/auth/logout-redirect`(清 cookie)；`LOGOUT_REDIRECT_URL` 指向它；登出目标设为带 SSO 参数的登录页 |
 
 ---

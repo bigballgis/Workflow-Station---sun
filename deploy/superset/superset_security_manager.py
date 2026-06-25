@@ -49,6 +49,13 @@ _EMAIL_ENV = "HTTP_X_REMOTE_EMAIL"
 _FIRST_ENV = "HTTP_X_REMOTE_FIRSTNAME"
 _LAST_ENV = "HTTP_X_REMOTE_LASTNAME"
 
+# Permissions the embedded-dashboard SDK needs on the GUEST role: after getting a
+# guest token it calls GET /api/v1/me/roles (CurrentUserRestApi.can_read) as a session
+# check. The builtin Gamma role omits it, so a fresh DB / `superset init` produces a
+# guest that gets 403 there -> the iframe shows "embedded authentication" failure.
+# We (re)grant it in sync_role_definitions so it survives every init/upgrade/new DB.
+_GUEST_EMBED_PVMS = [("can_read", "CurrentUserRestApi")]
+
 
 class PlatformRemoteUserSecurityManager(SupersetSecurityManager):
     def register_views(self) -> None:
@@ -111,6 +118,30 @@ class PlatformRemoteUserSecurityManager(SupersetSecurityManager):
                 ]:
                     security_menu.childs.remove(item)
         log.info("PlatformRemoteUserSecurityManager: /login bound to REMOTE_USER auth view")
+
+    def sync_role_definitions(self) -> None:
+        # Runs on `superset init` (incl. fresh DB / redeploy). The builtin sync RESETS
+        # each role's permissions to its default set, so any manual grant on Gamma is
+        # wiped here — that's why a one-off SQL grant doesn't survive. We re-apply it
+        # every time: create the embed permission-views first (so Admin/Alpha pick them
+        # up via their normal "all pvms" grant), run the builtin sync, then explicitly
+        # grant them to the guest role.
+        for perm, view in _GUEST_EMBED_PVMS:
+            self.add_permission_view_menu(perm, view)
+        super().sync_role_definitions()
+        self._grant_guest_embed_permissions()
+
+    def _grant_guest_embed_permissions(self) -> None:
+        from flask import current_app
+
+        role = self.find_role(current_app.config.get("GUEST_ROLE_NAME", "Public"))
+        if role is None:
+            return
+        for perm, view in _GUEST_EMBED_PVMS:
+            pvm = self.find_permission_view_menu(perm, view)
+            if pvm is not None:
+                self.add_permission_role(role, pvm)  # idempotent
+        log.info("Ensured embed permissions on guest role '%s'", role.name)
 
     def _resolve_roles(self):
         raw = request.environ.get(_ROLES_ENV, "") or ""
