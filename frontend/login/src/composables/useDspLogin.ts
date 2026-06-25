@@ -9,12 +9,13 @@
  *
  * 纯业务逻辑：不依赖 vue-i18n，返回 errorCode + errorDetails 交 UI 层翻译。
  */
-
 import { ref, type Ref } from 'vue'
 import { passwordlessLogin, type LoginResult } from '@/api/auth'
-import { acquireAmToken, isDspAuthenticateConfigured, readExistingAmToken } from '@/api/dsp'
+import { acquireAmToken, isDspAuthenticateConfigured, readExistingAmToken, readQueryAmToken } from '@/api/dsp'
 import { AppErrorCode } from '@/types/errors'
-
+interface DspLoginOptions {
+  failureCode?: AppErrorCode
+}
 export function useDspLogin(
   clientId: Ref<string>,
   redirectUri: Ref<string>,
@@ -23,30 +24,27 @@ export function useDspLogin(
   errorDetails: Ref<Record<string, unknown>>
 ) {
   const dspLoading = ref(false)
-
-  async function onDspLogin() {
+  async function onDspLogin(options: DspLoginOptions = {}) {
     errorCode.value = null
     errorDetails.value = {}
-
     if (!clientId.value || !redirectUri.value) {
       errorCode.value = AppErrorCode.LOGIN_MISSING_PARAMS
       return
     }
-
     dspLoading.value = true
     try {
-      // 1) 取 AMToken：先用已存在的；没有且配置了 authenticate 端点时，主动获取（源项目浏览器侧 POST）。
-      let amToken = readExistingAmToken()
+      // 1) 取 AMToken：显式 URL 注入优先；UAT/生产配置了 authenticate 时主动刷新，避免复用过期 cookie。
+      let amToken = readQueryAmToken()
       if (!amToken && isDspAuthenticateConfigured()) {
         const acquired = await acquireAmToken()
         if (!acquired.ok) {
-          errorCode.value = acquired.code ?? AppErrorCode.DSP_AUTH_FAILED
+          errorCode.value = options.failureCode ?? acquired.code ?? AppErrorCode.DSP_AUTH_FAILED
           errorDetails.value = acquired.detail ? { detail: acquired.detail } : {}
           return
         }
         amToken = acquired.token ?? ''
       }
-
+      if (!amToken) amToken = readExistingAmToken()
       // 2) 用 AMToken 换 SSO code（未取到则传 undefined，留给网关/后端从 header 注入的场景）。
       const result: LoginResult = await passwordlessLogin({
         clientId: clientId.value,
@@ -54,13 +52,11 @@ export function useDspLogin(
         state: state.value || undefined,
         amToken: amToken || undefined,
       })
-
       if (!result.ok) {
-        errorCode.value = result.error.code
+        errorCode.value = options.failureCode ?? result.error.code
         errorDetails.value = (result.error.details ?? {}) as Record<string, unknown>
         return
       }
-
       // 3) 重定向回子系统回调，附带授权码。
       const { data } = result
       const u = new URL(data.redirectUri)
@@ -71,6 +67,5 @@ export function useDspLogin(
       dspLoading.value = false
     }
   }
-
   return { dspLoading, onDspLogin }
 }

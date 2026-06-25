@@ -41,12 +41,18 @@ export interface AmTokenResult {
 export function isDspAuthenticateConfigured(): boolean {
   return !!DSP_AUTHENTICATE_URL
 }
-/** 从 URL ?am_token= 或 cookie AMToken 读取「已存在」的浏览器侧 AMToken。 */
-export function readExistingAmToken(): string {
-  const fromQuery = new URLSearchParams(window.location.search).get('am_token')
-  if (fromQuery) return fromQuery
+/** 从 URL ?am_token= 读取显式注入的浏览器侧 AMToken（主要用于 mock / 验证）。 */
+export function readQueryAmToken(): string {
+  return new URLSearchParams(window.location.search).get('am_token') || ''
+}
+/** 从 cookie AMToken 读取浏览器侧 AMToken。 */
+export function readCookieAmToken(): string {
   const match = document.cookie.match(/(?:^|;\s*)AMToken=([^;]+)/)
   return match ? decodeURIComponent(match[1]) : ''
+}
+/** 从 URL ?am_token= 或 cookie AMToken 读取「已存在」的浏览器侧 AMToken。 */
+export function readExistingAmToken(): string {
+  return readQueryAmToken() || readCookieAmToken()
 }
 /** DSP authenticate 响应体（仅取所需字段；不同环境字段名可能不同，做多重兼容）。 */
 interface DspAuthenticateBody {

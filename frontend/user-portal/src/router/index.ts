@@ -192,7 +192,7 @@ router.beforeEach(async (to, _from, next) => {
     const r = to.query.redirect
     if (import.meta.env.PROD) {
       setSsoReturnPath(typeof r === 'string' ? r : '/dashboard')
-      redirectToUnifiedLogin('portal')
+      redirectToUnifiedLogin('portal', { autoSso: true })
       return next(false)
     }
     if (typeof r === 'string') setSsoReturnPath(r)
@@ -208,7 +208,7 @@ router.beforeEach(async (to, _from, next) => {
       verifiedPortalUser = null
       clearAuth()
       setSsoReturnPath(to.fullPath)
-      redirectToUnifiedLogin('portal')
+      redirectToUnifiedLogin('portal', { autoSso: true })
       return next(false)
     }
   }

@@ -39,7 +39,10 @@ export function consumeSsoReturnPath(fallback: string) {
 }
 
 /** 仅 DEV：与设计器同域部署时 /login/ 为统一登录入口 */
-export function redirectToUnifiedLogin(_clientId: 'developer-workstation') {
+interface UnifiedLoginOptions {
+  autoSso?: boolean
+}
+export function redirectToUnifiedLogin(_clientId: 'developer-workstation', options: UnifiedLoginOptions = {}) {
   const redirectUri = new URL(
     (import.meta.env.BASE_URL || '/') + 'sso/callback',
     window.location.origin
@@ -48,5 +51,6 @@ export function redirectToUnifiedLogin(_clientId: 'developer-workstation') {
   u.searchParams.set('client_id', 'developer-workstation')
   u.searchParams.set('redirect_uri', redirectUri)
   u.searchParams.set('state', newSsoState())
+  if (options.autoSso) u.searchParams.set('auto_sso', '1')
   window.location.href = u.toString()
 }

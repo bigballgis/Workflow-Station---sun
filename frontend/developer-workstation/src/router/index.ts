@@ -70,7 +70,7 @@ router.beforeEach(async (to, _from, next) => {
   if (to.path === '/login') {
     const r = to.query.redirect
     setSsoReturnPath(typeof r === 'string' ? r : '/')
-    redirectToUnifiedLogin('developer-workstation')
+    redirectToUnifiedLogin('developer-workstation', { autoSso: true })
     return next(false)
   }
 
@@ -96,7 +96,7 @@ router.beforeEach(async (to, _from, next) => {
       const { clearAuth } = await import('@/api/auth')
       clearAuth()
       setSsoReturnPath(to.fullPath)
-      redirectToUnifiedLogin('developer-workstation')
+      redirectToUnifiedLogin('developer-workstation', { autoSso: true })
       return next(false)
     }
   }

@@ -37,7 +37,7 @@ public class DspTokenClient {
      * 用 AMToken 交换 E2E/JWT。
      *
      * @return issued_token 字符串
-     * @throws IllegalStateException translator 调用失败或响应中无可用 token
+    * @throws IllegalArgumentException translator 拒绝 AMToken、调用失败或响应中无可用 token
      */
     public String translate(String amToken) {
         PlatformSsoProperties.Dsp dsp = ssoProperties.getDsp();
@@ -47,17 +47,16 @@ public class DspTokenClient {
         headers.set("X-Client-Secret", dsp.getClientSecret());
         headers.set("Accept-API-Version", dsp.getAcceptApiVersion());
         headers.set("X-Requested-With", "XMLHttpRequest");
-
         HttpEntity<String> entity = new HttpEntity<>(buildBody(amToken, dsp), headers);
         try {
             String resp = restTemplate.postForObject(dsp.getTranslatorUrl(), entity, String.class);
             return extractIssuedToken(resp)
-                    .orElseThrow(() -> new IllegalStateException("DSP translator returned no issued_token"));
-        } catch (IllegalStateException e) {
+                    .orElseThrow(() -> new IllegalArgumentException("DSP translator returned no issued_token"));
+        } catch (IllegalArgumentException e) {
             throw e;
         } catch (Exception e) {
             log.warn("DSP token translation failed: {}", e.getMessage());
-            throw new IllegalStateException("DSP token translation failed", e);
+            throw new IllegalArgumentException("DSP token translation failed", e);
         }
     }
 

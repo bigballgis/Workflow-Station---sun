@@ -73,7 +73,7 @@ request.interceptors.response.use(
         processQueue(refreshError, null)
         clearAuth()
         setSsoReturnPath(window.location.pathname + window.location.search)
-        redirectToUnifiedLogin('admin')
+        redirectToUnifiedLogin('admin', { autoSso: true })
         return Promise.reject(refreshError)
       } finally {
         isRefreshing = false

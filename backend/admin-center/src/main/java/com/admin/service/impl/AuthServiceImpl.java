@@ -21,6 +21,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.access.AccessDeniedException;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -405,7 +406,7 @@ public class AuthServiceImpl implements AuthService {
                 .anyMatch(code -> "SYS_ADMIN".equals(code) || "AUDITOR".equals(code));
         if (!hasAdminAccess) {
             log.warn("User {} does not have admin center access. Roles: {}", user.getUsername(), userRoleCodes);
-            throw new RuntimeException("You do not have access to Admin Center");
+            throw new AccessDeniedException("You do not have access to Admin Center");
         }
     }
 

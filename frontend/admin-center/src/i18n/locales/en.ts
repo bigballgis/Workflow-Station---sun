@@ -684,6 +684,9 @@ export default {
   },
   error: {
     forbidden: 'Forbidden',
+    forbiddenDesc: 'You do not have permission to access this page. Please contact your administrator if you need access.',
+    goBack: 'Go Back',
+    backHome: 'Back Home',
     noPermission: 'You do not have permission to access this page'
   },
   api: {

@@ -41,7 +41,7 @@ public class DspSsoService {
     /**
      * 处理免密登录，签发一次性 SSO code。
      *
-     * @throws IllegalStateException    DSP 未启用 / token 交换失败
+     * @throws IllegalStateException    DSP 未启用
      * @throws IllegalArgumentException AMToken 缺失 / 无法定位用户 / 账号不可登录
      */
     public SsoLoginResponse passwordless(DspPasswordlessRequest request, String e2eHeaderToken) {

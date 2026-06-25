@@ -1,6 +1,7 @@
 package com.admin.ldap;
 
 import com.admin.repository.RoleRepository;
+import com.admin.repository.UserRepository;
 import com.admin.repository.VirtualGroupMemberRepository;
 import com.admin.repository.VirtualGroupRepository;
 import com.admin.repository.VirtualGroupRoleRepository;
@@ -26,8 +27,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -49,6 +52,7 @@ class LdapSyncServiceTest {
     @Mock private VirtualGroupRoleRepository virtualGroupRoleRepository;
     @Mock private RoleRepository roleRepository;
     @Mock private RoleAssignmentRepository roleAssignmentRepository;
+    @Mock private UserRepository userRepository;
     @Mock private Environment environment;
 
     @InjectMocks
@@ -211,6 +215,96 @@ class LdapSyncServiceTest {
                 .map(VirtualGroupMember::getGroupId)
                 .collect(java.util.stream.Collectors.toSet());
         assertEquals(Set.of("vg-sys-admins", "vg-auditors", "vg-tech-leads", "vg-team-leads", "vg-developers"), savedGroupIds);
+    }
+
+    @Test
+    @DisplayName("AD group sync 补齐一层 EM/FM 用户且不递归、不写虚拟组成员")
+    void hermesGroupSyncSupplementsDirectManagersOnly() throws Exception {
+        groupSync.setGroups("User=Infodir-Hermes-Default-UAT-User");
+        when(auditRepository.save(any(LdapSyncAudit.class))).thenAnswer(i -> i.getArgument(0));
+        VirtualGroup usersVg = VirtualGroup.builder()
+                .id("vg-users")
+                .code("HERMES_DEFAULT_USERS")
+                .name("Hermes Default Users")
+                .build();
+        when(virtualGroupRepository.findByCode(anyString())).thenReturn(Optional.of(usersVg));
+        when(virtualGroupMemberRepository.findByGroupId(anyString())).thenReturn(List.of());
+        when(virtualGroupMemberRepository.findByUserId(anyString())).thenReturn(List.of());
+        when(virtualGroupMemberRepository.existsByGroupIdAndUserId(anyString(), anyString())).thenReturn(false);
+        when(virtualGroupMemberRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        Map<String, String> groupUser = ldapAttrs("U100", "User One");
+        groupUser.put("memberOf", "CN=Infodir-Hermes-Default-UAT-User,OU=Groups,DC=example,DC=com");
+        Map<String, String> entityManager = ldapAttrs("M200", "Entity Manager");
+        Map<String, String> functionManager = ldapAttrs("M300", "Function Manager");
+        when(ldapClient.fetchUsersInGroup("Infodir-Hermes-Default-UAT-User")).thenReturn(List.of(groupUser));
+        when(userRepository.existsById("M200")).thenReturn(false);
+        when(userRepository.existsById("M300")).thenReturn(false);
+        when(ldapClient.getUserAttributesByEmployeeId("M200")).thenReturn(Optional.of(entityManager));
+        when(ldapClient.getUserAttributesByEmployeeId("M300")).thenReturn(Optional.of(functionManager));
+        when(ldapUserMapper.mapToUser(any())).thenAnswer(invocation -> {
+            Map<String, String> attrs = invocation.getArgument(0);
+            String employeeId = attrs.get("employeeID");
+            LdapUserData.LdapUserDataBuilder builder = LdapUserData.builder()
+                    .id(employeeId)
+                    .employeeId(employeeId)
+                    .username(employeeId)
+                    .displayName(attrs.get("displayName"));
+            if ("U100".equals(employeeId)) {
+                builder.entityManagerId("M200").functionManagerId("M300");
+            } else if ("M200".equals(employeeId)) {
+                builder.entityManagerId("M201").functionManagerId("M202");
+            } else if ("M300".equals(employeeId)) {
+                builder.entityManagerId("M301").functionManagerId("M302");
+            }
+            return Optional.of(builder.build());
+        });
+        when(ldapUserSyncService.upsertUser(any())).thenAnswer(invocation -> {
+            LdapUserData data = invocation.getArgument(0);
+            return new LdapUserSyncService.UpsertResult(data.getId(), true);
+        });
+        LdapSyncAudit audit = ldapSyncService.runHermesAdGroupSync();
+        assertEquals("SUCCESS", audit.getStatus());
+        assertEquals(3, audit.getUpserted());
+        assertEquals(3, audit.getTotalFetched());
+        ArgumentCaptor<LdapUserData> upsertCaptor = ArgumentCaptor.forClass(LdapUserData.class);
+        verify(ldapUserSyncService, times(3)).upsertUser(upsertCaptor.capture());
+        Set<String> upsertedEmployeeIds = upsertCaptor.getAllValues().stream()
+                .map(LdapUserData::getId)
+                .collect(java.util.stream.Collectors.toSet());
+        assertEquals(Set.of("U100", "M200", "M300"), upsertedEmployeeIds);
+        verify(ldapClient, never()).getUserAttributesByEmployeeId(eq("M201"));
+        verify(ldapClient, never()).getUserAttributesByEmployeeId(eq("M202"));
+        verify(ldapClient, never()).getUserAttributesByEmployeeId(eq("M301"));
+        verify(ldapClient, never()).getUserAttributesByEmployeeId(eq("M302"));
+        verify(virtualGroupMemberRepository, times(1)).save(any(VirtualGroupMember.class));
+    }
+    @Test
+    @DisplayName("已存在于 sys_users 的 EM/FM 不再从 LDAP 额外拉取")
+    void supplementDirectManagersSkipsExistingUsers() throws Exception {
+        Map<String, String> groupUser = ldapAttrs("U100", "User One");
+        LdapSyncService.LdapGroupUserAccumulator accumulator = new LdapSyncService.LdapGroupUserAccumulator(groupUser);
+        Map<String, LdapSyncService.LdapGroupUserAccumulator> users = new java.util.LinkedHashMap<>();
+        users.put("U100", accumulator);
+        when(ldapUserMapper.mapToUser(groupUser)).thenReturn(Optional.of(LdapUserData.builder()
+                .id("U100")
+                .employeeId("U100")
+                .username("U100")
+                .entityManagerId("M200")
+                .functionManagerId("M300")
+                .build()));
+        when(userRepository.existsById("M200")).thenReturn(true);
+        when(userRepository.existsById("M300")).thenReturn(true);
+        int supplemented = ldapSyncService.supplementDirectManagers(users);
+        assertEquals(0, supplemented);
+        assertEquals(1, users.size());
+        verify(ldapClient, never()).getUserAttributesByEmployeeId(anyString());
+    }
+    private Map<String, String> ldapAttrs(String employeeId, String displayName) {
+        Map<String, String> attrs = new HashMap<>();
+        attrs.put("employeeID", employeeId);
+        attrs.put("uid", employeeId);
+        attrs.put("displayName", displayName);
+        return attrs;
     }
 
     @Test

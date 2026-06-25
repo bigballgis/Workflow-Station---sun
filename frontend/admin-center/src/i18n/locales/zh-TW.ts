@@ -750,8 +750,11 @@ export default {
     }
   },
   error: {
-    forbidden: '無權限',
-    noPermission: '您沒有權限存取該頁面'
+    forbidden: 'Forbidden',
+    forbiddenDesc: 'You do not have permission to access this page. Please contact your administrator if you need access.',
+    goBack: 'Go Back',
+    backHome: 'Back Home',
+    noPermission: 'You do not have permission to access this page'
   },
   api: {
     requestFailed: '請求失敗',
