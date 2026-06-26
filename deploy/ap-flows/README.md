@@ -34,14 +34,15 @@ docker exec -e AP_INTERNAL_URL=http://localhost:80 \
 # 审阅 diff → 提交 git
 ```
 
-### 发布(到生产)
+### 发布(到生产)—— 走 Jenkins(已定案)
+生产发布由 **Jenkins 流水线**驱动(手动触发、带参数、prod 二次确认),不在本地手跑。
+模板:[../ci/Jenkinsfile.ap-flows-publish](../ci/Jenkinsfile.ap-flows-publish)
+(三处按环境填:agent / 各环境 AP_URL / Jenkins 凭据 id)。它内部就是对每个 flow JSON 跑:
 ```bash
-# CI / 能直连生产 AP 的环境:
-AP_INTERNAL_URL=https://activepieces.<生产域> \
-ACTIVEPIECES_SHARED_EMAIL=... ACTIVEPIECES_SHARED_PASSWORD=... \
-node deploy/scripts/ap-import.js deploy/ap-flows/aptest.json
-# 脚本 stdout 打印目标环境的 flowId
+AP_INTERNAL_URL=<目标AP> ACTIVEPIECES_SHARED_EMAIL=... ACTIVEPIECES_SHARED_PASSWORD=... \
+node deploy/scripts/ap-import.js deploy/ap-flows/<flow>.json   # stdout 打印目标环境 flowId
 ```
+> 本地想手动验证一条时也可直接跑上面这行(能直连目标 AP 的话)。
 
 ## 两个必须知道的坑
 
@@ -55,5 +56,5 @@ node deploy/scripts/ap-import.js deploy/ap-flows/aptest.json
 当前是 §7 的 **MVP(方案 B:API 导出/导入脚本)**,已跑通。三个待定项的 MVP 决策:
 
 - **① git 组织** → 一 flow 一 JSON,按 `displayName` 幂等对齐。
-- **② 发布触发** → 手动 / CI 调脚本。**尚未**做 k8s 一次性发布 Job(方案 A 的完整形态,下一步)。
+- **② 发布触发** → **Jenkins 流水线**(已定案,手动触发带参数;模板 `deploy/ci/Jenkinsfile.ap-flows-publish`)。
 - **③ 生产 connection** → 手动预建同名 connection(暂不脚本化引导)。

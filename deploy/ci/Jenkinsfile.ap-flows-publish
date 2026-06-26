@@ -1,0 +1,93 @@
+// =============================================================================
+// Activepieces flow 发布流水线(测试 → 生产),见 deploy/ACTIVEPIECES_INTEGRATION.md §7
+//
+// 做的事:checkout 本仓库 → 读 deploy/ap-flows/*.json(git 单一事实来源)→ 用
+//        deploy/scripts/ap-import.js 幂等地发到目标环境的 AP(创建/覆盖 → 发布 → 启用)。
+//
+// 触发:手动(带参数)。发生产是高风险动作,默认不自动触发——人选环境、选 flow、点运行。
+//
+// ⚠️ 三处必须按你们环境改(下方都标了 TODO):
+//   1. agent —— 用一个有 node 的 agent,或跑 node 容器(这里用 docker 镜像 node:20-alpine)。
+//   2. AP_URLS —— 各环境的 AP 可达地址(集群内 service 或对外域名)。
+//   3. credentialsId —— Jenkins 凭据里存的 AP 共享账号(username=email,password=密码),每环境一个。
+//
+// 前置(见 §7 / §11.5):生产必须**预先建好同名 connection**;flow 在目标环境是**新 flowId**,
+// 本流水线发布后会打印,需把生产 BPMN service task 的 ap:flowId 改成它。
+// =============================================================================
+
+pipeline {
+  // TODO(1): 换成你们有 node 的 agent;没有就用下面的 docker node 镜像
+  agent {
+    docker { image 'node:20-alpine' }
+  }
+
+  parameters {
+    choice(name: 'ENVIRONMENT', choices: ['uat', 'preprod', 'prod'], description: '发布到哪个环境的 AP')
+    string(name: 'FLOWS', defaultValue: 'all',
+           description: "要发布的 flow:'all' = deploy/ap-flows 下所有 .json;或填单个文件名,如 aptest.json")
+    booleanParam(name: 'CONFIRM_PROD', defaultValue: false,
+                 description: '发布到 prod 时必须勾选(二次确认)')
+  }
+
+  environment {
+    // TODO(2): 各环境 AP 可达地址(集群内用 service 名,跨集群用对外域名)
+    AP_URL_UAT     = 'http://activepieces-service.uat:80'
+    AP_URL_PREPROD = 'http://activepieces-service.preprod:80'
+    AP_URL_PROD    = 'https://activepieces.example.com'
+  }
+
+  stages {
+    stage('Guard') {
+      steps {
+        script {
+          if (params.ENVIRONMENT == 'prod' && !params.CONFIRM_PROD) {
+            error('发布到 prod 必须勾选 CONFIRM_PROD 二次确认。')
+          }
+          env.AP_INTERNAL_URL = [
+            uat: env.AP_URL_UAT, preprod: env.AP_URL_PREPROD, prod: env.AP_URL_PROD
+          ][params.ENVIRONMENT]
+          // TODO(3): 各环境的 Jenkins 凭据 id(username/password 类型,user=共享账号邮箱)
+          env.AP_CRED_ID = "ap-shared-account-${params.ENVIRONMENT}"
+          echo "目标 AP = ${env.AP_INTERNAL_URL}  (credentials: ${env.AP_CRED_ID})"
+        }
+      }
+    }
+
+    stage('Publish flows') {
+      steps {
+        withCredentials([usernamePassword(
+            credentialsId: "${env.AP_CRED_ID}",
+            usernameVariable: 'ACTIVEPIECES_SHARED_EMAIL',
+            passwordVariable: 'ACTIVEPIECES_SHARED_PASSWORD')]) {
+          sh '''
+            set -eu
+            if [ "$FLOWS" = "all" ]; then
+              files=$(ls deploy/ap-flows/*.json)
+            else
+              files="deploy/ap-flows/$FLOWS"
+            fi
+            echo "==> 待发布:"; echo "$files"
+            for f in $files; do
+              echo "---- publishing $f ----"
+              # ap-import.js 幂等:建/覆盖 → IMPORT_FLOW → LOCK_AND_PUBLISH → CHANGE_STATUS=ENABLED
+              # stdout 打印目标环境 flowId(收集起来,提醒去更新 BPMN 的 ap:flowId)
+              flowId=$(node deploy/scripts/ap-import.js "$f")
+              echo "$f -> flowId=$flowId" >> published-flow-ids.txt
+            done
+            echo "==== 发布完成,目标环境 flowId 一览 ===="
+            cat published-flow-ids.txt
+          '''
+        }
+      }
+    }
+
+    stage('Reminder') {
+      steps {
+        echo '''发布完成。别忘了两件事(否则 flow 在生产跑不起来 / 触发不到):
+  1) 生产里建好 flow 引用的同名 connection(凭据不跟着导)。
+  2) 把生产 BPMN service task 的 ap:flowId 改成上面打印的目标环境 flowId。'''
+        archiveArtifacts artifacts: 'published-flow-ids.txt', allowEmptyArchive: true
+      }
+    }
+  }
+}
