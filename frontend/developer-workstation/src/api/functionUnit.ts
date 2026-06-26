@@ -332,7 +332,7 @@ export interface Version {
 
 export const functionUnitApi = {
   // Function Unit CRUD
-  list: (params: { name?: string; status?: string; tags?: string[]; page?: number; size?: number }) =>
+  list: (params: { name?: string; status?: string; tags?: string[]; page?: number; size?: number; sort?: string }) =>
     functionUnitAxios.get<any, { data: { content: FunctionUnitResponse[]; totalElements: number } }>('/api/v1/function-units', { params }),
 
   /** Get all distinct tags across all enabled function units (for filter dropdown). */
