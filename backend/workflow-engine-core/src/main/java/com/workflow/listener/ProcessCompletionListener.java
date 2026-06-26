@@ -10,6 +10,8 @@ import org.flowable.engine.history.HistoricActivityInstance;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
@@ -35,6 +37,16 @@ public class ProcessCompletionListener implements FlowableEventListener {
     
     @Value("${user-portal.url:http://user-portal:8080}")
     private String userPortalUrl;
+
+    /**
+     * Internal service token for the user-portal completion callback. The portal's
+     * {@code /api/portal/processes/{id}/complete} endpoint requires a non-blank
+     * X-Internal-Service-Token header — without it the callback is rejected (403) and the
+     * application stays RUNNING. This matters for processes with no user task (e.g. pure
+     * automation: Start → AP service task → End), whose only completion path is this callback.
+     */
+    @Value("${platform.internal.service-token:wf-internal-service-call}")
+    private String internalServiceToken;
 
     @Override
     public void onEvent(FlowableEvent event) {
@@ -64,8 +76,10 @@ public class ProcessCompletionListener implements FlowableEventListener {
                         request.put("processInstanceId", processInstanceId);
                         request.put("endTime", System.currentTimeMillis());
                         request.put("lastActivityName", lastActivityName);
-                        
-                        restTemplate.postForObject(url, request, Map.class);
+
+                        HttpHeaders headers = new HttpHeaders();
+                        headers.set("X-Internal-Service-Token", internalServiceToken);
+                        restTemplate.postForObject(url, new HttpEntity<>(request, headers), Map.class);
                         log.info("Successfully notified user-portal about process completion: {} with lastActivity: {}", 
                                 processInstanceId, lastActivityName);
                     } catch (Exception e) {
