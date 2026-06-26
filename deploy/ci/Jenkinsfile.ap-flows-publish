@@ -48,7 +48,9 @@ pipeline {
           ][params.ENVIRONMENT]
           // TODO(3): 各环境的 Jenkins 凭据 id(username/password 类型,user=共享账号邮箱)
           env.AP_CRED_ID = "ap-shared-account-${params.ENVIRONMENT}"
-          echo "目标 AP = ${env.AP_INTERNAL_URL}  (credentials: ${env.AP_CRED_ID})"
+          // 显式把参数落到 env,避免依赖"参数隐式暴露为环境变量"的行为
+          env.FLOWS = params.FLOWS
+          echo "目标 AP = ${env.AP_INTERNAL_URL}  (credentials: ${env.AP_CRED_ID})  flows=${env.FLOWS}"
         }
       }
     }
@@ -62,12 +64,15 @@ pipeline {
           sh '''
             set -eu
             if [ "$FLOWS" = "all" ]; then
-              files=$(ls deploy/ap-flows/*.json)
+              files=$(ls deploy/ap-flows/*.json 2>/dev/null || true)
             else
               files="deploy/ap-flows/$FLOWS"
             fi
+            [ -n "$files" ] || { echo "没有可发布的 flow JSON(deploy/ap-flows/ 为空或 FLOWS 指向不存在的文件)"; exit 1; }
+            : > published-flow-ids.txt   # 截断:Jenkins 工作区会复用,避免上次运行的旧记录残留累加
             echo "==> 待发布:"; echo "$files"
             for f in $files; do
+              [ -f "$f" ] || { echo "文件不存在: $f"; exit 1; }
               echo "---- publishing $f ----"
               # ap-import.js 幂等:建/覆盖 → IMPORT_FLOW → LOCK_AND_PUBLISH → CHANGE_STATUS=ENABLED
               # stdout 打印目标环境 flowId(收集起来,提醒去更新 BPMN 的 ap:flowId)

@@ -89,6 +89,16 @@ async function main() {
     _exportedFrom: { flowId, projectId },
   };
   const json = JSON.stringify(out, null, 2);
+
+  // 提示:flow 引用的 connection 不跟着导(凭据是 per-环境)。扫出引用的 connection 名,
+  // 提醒操作者在目标环境**预先建好同名 connection**(否则发布/运行会失败)。
+  const conns = new Set();
+  for (const m of json.matchAll(/connections\[['"]([^'"]+)['"]\]/g)) conns.add(m[1]);
+  if (conns.size > 0) {
+    console.error('[ap-export] ⚠ 此 flow 引用了 ' + conns.size + ' 个 connection,目标环境须预建同名:'
+      + Array.from(conns).map((c) => '\n    - ' + c).join(''));
+  }
+
   if (OUT_FILE) { fs.writeFileSync(OUT_FILE, json + '\n'); console.error('[ap-export] wrote ' + OUT_FILE + ' (flow "' + v.displayName + '")'); }
   else { process.stdout.write(json + '\n'); }
 }
