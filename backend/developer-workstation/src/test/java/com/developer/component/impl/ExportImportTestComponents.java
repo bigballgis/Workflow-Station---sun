@@ -48,6 +48,7 @@ public final class ExportImportTestComponents {
                 tableRelationRepository,
                 Mockito.mock(SubTableViewConfigRepository.class),
                 Mockito.mock(RelationTableStructurePortability.class),
+                Mockito.mock(MainTableViewPortability.class),
                 functionUnitWorkspaceAccessService,
                 objectMapper);
         ReflectionTestUtils.setField(exporter, "platformVersion", "1.0.0");
@@ -104,7 +105,8 @@ public final class ExportImportTestComponents {
                 packageParser,
                 importWriter,
                 Mockito.mock(com.developer.component.VersionComponent.class),
-                Mockito.mock(RelationTableStructurePortability.class));
+                Mockito.mock(RelationTableStructurePortability.class),
+                Mockito.mock(MainTableViewPortability.class));
 
         return new ExportImportComponentImpl(
                 functionUnitRepository,

@@ -41,6 +41,7 @@ public class VersionComponentImpl implements VersionComponent {
     private final MainTableViewService mainTableViewService;
     private final com.developer.repository.SubTableViewConfigRepository subTableViewConfigRepository;
     private final com.developer.repository.ForeignKeyRepository foreignKeyRepository;
+    private final MainTableViewPortability mainTableViewPortability;
     
     /**
      * Resolves current operator username.
@@ -229,7 +230,10 @@ public class VersionComponentImpl implements VersionComponent {
             restoreFromSnapshot(functionUnit, snapshot);
 
             functionUnitRepository.saveAndFlush(functionUnit);
-            
+
+            // Restore Main Table views after tables exist (new ids), remapping by table name.
+            restoreMainTableViews(functionUnit, snapshot);
+
             sequenceSynchronizer.synchronizeVersions();
             
             // Create post-rollback version record.
@@ -306,6 +310,24 @@ public class VersionComponentImpl implements VersionComponent {
         }
     }
     
+    /**
+     * Recreate Main Table views from a rollback snapshot. The snapshot stores each view's
+     * {@code mainTableName}; map it to the just-restored table's new id and rebuild via the shared
+     * MainTableViewPortability (which also clears any pre-existing views on the FU).
+     */
+    @SuppressWarnings("unchecked")
+    private void restoreMainTableViews(FunctionUnit functionUnit, Map<String, Object> snapshot) {
+        Object viewsObj = snapshot.get("mainTableViews");
+        if (!(viewsObj instanceof List<?> views) || views.isEmpty()) {
+            return;
+        }
+        Map<String, Long> nameToId = new HashMap<>();
+        for (TableDefinition table : functionUnit.getTableDefinitions()) {
+            nameToId.put(table.getTableName(), table.getId());
+        }
+        mainTableViewPortability.importAll((List<Map<String, Object>>) viewsObj, functionUnit, nameToId);
+    }
+
     @Override
     @Transactional(readOnly = true)
     public byte[] exportVersion(Long versionId) {
@@ -436,8 +458,26 @@ public class VersionComponentImpl implements VersionComponent {
             decisionSnapshots.add(decisionSnap);
         }
         snapshot.put("decisionDefinitions", decisionSnapshots);
-        snapshot.put("mainTableViews", mainTableViewService.snapshotViewsForFunctionUnit(functionUnit.getId()));
-        
+
+        // Snapshot Main Table views. Enrich each view with its table NAME (snapshot stores mainTableId,
+        // but rollback recreates tables with NEW ids, so restore must match by name).
+        Map<Long, String> tableIdToName = new HashMap<>();
+        for (TableDefinition table : functionUnit.getTableDefinitions()) {
+            tableIdToName.put(table.getId(), table.getTableName());
+        }
+        List<Map<String, Object>> viewSnaps = new ArrayList<>(
+                mainTableViewService.snapshotViewsForFunctionUnit(functionUnit.getId()));
+        List<Map<String, Object>> enrichedViews = new ArrayList<>();
+        for (Map<String, Object> view : viewSnaps) {
+            Map<String, Object> copy = new HashMap<>(view);
+            Object mtId = view.get("mainTableId");
+            if (mtId instanceof Number num) {
+                copy.put("mainTableName", tableIdToName.get(num.longValue()));
+            }
+            enrichedViews.add(copy);
+        }
+        snapshot.put("mainTableViews", enrichedViews);
+
         return objectMapper.writeValueAsBytes(snapshot);
     }
     

@@ -59,6 +59,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     private final FunctionUnitDevGroupAssignmentRepository functionUnitDevGroupAssignmentRepository;
     private final VersionComponent versionComponent;
     private final MainTableViewService mainTableViewService;
+    private final ForeignKeyRepository foreignKeyRepository;
 
     // 鍗忎綔绫伙紙闂ㄩ潰鍐呴儴鏋勫缓锛屼緷璧栨潵鑷瀯閫犳敞鍏ョ殑浠撳簱/鏈嶅姟锛?
     private final FunctionUnitCodeGenerator codeGenerator;
@@ -86,7 +87,8 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
             FunctionUnitDevGroupAssignmentRepository functionUnitDevGroupAssignmentRepository,
             VersionComponent versionComponent,
             DeveloperWorkstationSequenceSynchronizer sequenceSynchronizer,
-            MainTableViewService mainTableViewService) {
+            MainTableViewService mainTableViewService,
+            ForeignKeyRepository foreignKeyRepository) {
         this.functionUnitRepository = functionUnitRepository;
         this.processDefinitionRepository = processDefinitionRepository;
         this.versionRepository = versionRepository;
@@ -96,6 +98,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         this.functionUnitDevGroupAssignmentRepository = functionUnitDevGroupAssignmentRepository;
         this.versionComponent = versionComponent;
         this.mainTableViewService = mainTableViewService;
+        this.foreignKeyRepository = foreignKeyRepository;
 
         // 鏋勫缓鍗忎綔绫伙細鍦?Spring 涓庢祴璇?new 涓ゆ潯璺緞涓嬭涓轰竴鑷淬€?
         this.codeGenerator = new FunctionUnitCodeGenerator(functionUnitRepository);
@@ -225,6 +228,23 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
             log.info("Archived function unit id={}, name={}", id, functionUnit.getName());
             return;
         }
+        // Foreign keys must be removed BEFORE the JPA cascade walks the table/field
+        // graph. A dw_foreign_keys row's field_id/ref_field_id are NOT NULL, and they
+        // are NOT mapped by an owning collection on FieldDefinition. So when the cascade
+        // deletes a FieldDefinition, Hibernate tries to dissociate the still-loaded
+        // ForeignKey via UPDATE ... SET field_id=null and violates the NOT NULL
+        // constraint (the delete of an ARCHIVED unit then fails entirely). Bulk-deleting
+        // the FU's foreign keys first clears those references; the same guard exists on
+        // the re-import/rollback path (see VersionComponentImpl). Mirror the entity
+        // collections too so the persistence context does not re-flush stale rows.
+        for (TableDefinition table : functionUnit.getTableDefinitions()) {
+            if (table.getForeignKeys() != null) {
+                table.getForeignKeys().clear();
+            }
+        }
+        foreignKeyRepository.deleteByFunctionUnitId(id);
+        foreignKeyRepository.flush();
+
         // Note: dw_function_unit_dev_groups has ON DELETE CASCADE, so the FK
         // constraint handles child-row removal automatically.  We must NOT issue a
         // separate @Modifying JPQL DELETE here because it flushes the persistence

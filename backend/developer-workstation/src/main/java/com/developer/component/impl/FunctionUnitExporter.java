@@ -70,6 +70,7 @@ public class FunctionUnitExporter {
     private final TableRelationRepository tableRelationRepository;
     private final SubTableViewConfigRepository subTableViewConfigRepository;
     private final RelationTableStructurePortability relationTablePortability;
+    private final MainTableViewPortability mainTableViewPortability;
     private final FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService;
     private final ObjectMapper objectMapper;
 
@@ -186,6 +187,15 @@ public class FunctionUnitExporter {
                 byte[] relTablesData = objectMapper.writeValueAsBytes(relationTableStructures);
                 fileContents.put(relTablesFile, relTablesData);
                 addZipEntry(zos, relTablesFile, relTablesData);
+            }
+
+            // Export "View Design": Main Table view configs (by table NAME so they survive id remap).
+            List<Map<String, Object>> mainTableViews = mainTableViewPortability.export(functionUnitId, tableIdToName);
+            if (!mainTableViews.isEmpty()) {
+                String viewsFile = "views/main_table_views.json";
+                byte[] viewsData = objectMapper.writeValueAsBytes(mainTableViews);
+                fileContents.put(viewsFile, viewsData);
+                addZipEntry(zos, viewsFile, viewsData);
             }
 
             // Export action definitions

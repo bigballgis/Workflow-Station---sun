@@ -74,7 +74,8 @@ class FunctionUnitCloneBindingTest {
                 functionUnitDevGroupAssignmentRepository,
                 versionComponent,
                 sequenceSynchronizer,
-                mock(com.developer.service.MainTableViewService.class));
+                mock(com.developer.service.MainTableViewService.class),
+                mock(com.developer.repository.ForeignKeyRepository.class));
     }
 
     @Test
