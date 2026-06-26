@@ -1,0 +1,107 @@
+{
+  "displayName": "aptest",
+  "schemaVersion": "20",
+  "externalId": "x2vPqkC2s5tr6rkak6uzO",
+  "trigger": {
+    "name": "trigger",
+    "valid": true,
+    "displayName": "Catch Webhook",
+    "nextAction": {
+      "name": "step_1",
+      "skip": false,
+      "type": "PIECE",
+      "valid": true,
+      "settings": {
+        "input": {
+          "fields": {
+            "body": {
+              "echo": "{{trigger.body.text}}"
+            },
+            "status": 200,
+            "headers": {}
+          },
+          "respond": "stop",
+          "responseType": "json"
+        },
+        "pieceName": "@activepieces/piece-webhook",
+        "actionName": "return_response",
+        "pieceVersion": "0.1.36",
+        "propertySettings": {
+          "fields": {
+            "type": "MANUAL",
+            "schema": {
+              "body": {
+                "type": "JSON",
+                "required": true,
+                "displayName": "JSON Body"
+              },
+              "status": {
+                "type": "NUMBER",
+                "required": false,
+                "displayName": "Status",
+                "defaultValue": 200
+              },
+              "headers": {
+                "type": "OBJECT",
+                "required": false,
+                "displayName": "Headers"
+              }
+            }
+          },
+          "respond": {
+            "type": "MANUAL"
+          },
+          "responseType": {
+            "type": "MANUAL"
+          }
+        },
+        "errorHandlingOptions": {
+          "retryOnFailure": {
+            "value": false
+          },
+          "continueOnFailure": {
+            "value": false
+          }
+        }
+      },
+      "displayName": "Return Response",
+      "lastUpdatedDate": "2026-06-25T15:32:43.295Z"
+    },
+    "lastUpdatedDate": "2026-06-25T15:31:47.244Z",
+    "type": "PIECE_TRIGGER",
+    "settings": {
+      "propertySettings": {
+        "authType": {
+          "type": "MANUAL"
+        },
+        "authFields": {
+          "type": "MANUAL",
+          "schema": {}
+        },
+        "liveMarkdown": {
+          "type": "MANUAL"
+        },
+        "syncMarkdown": {
+          "type": "MANUAL"
+        },
+        "testMarkdown": {
+          "type": "MANUAL"
+        }
+      },
+      "pieceName": "@activepieces/piece-webhook",
+      "pieceVersion": "0.1.36",
+      "triggerName": "catch_webhook",
+      "input": {
+        "authType": "none",
+        "authFields": {},
+        "liveMarkdown": "",
+        "syncMarkdown": "",
+        "testMarkdown": ""
+      }
+    }
+  },
+  "_exportedFrom": {
+    "flowId": "WIkVuyWuQuBcTblpChUeS",
+    "projectId": "gu1zw2PTFBlIroXbpZDcJ"
+  }
+}

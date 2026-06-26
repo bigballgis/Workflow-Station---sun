@@ -186,10 +186,14 @@ sign-in 探测 → 已存在则跳过；不存在则 sign-up；未配置则跳�
 - **生产无 UI**：发布纯走 API（服务端 token），不依赖桥。
 
 **实现路径**：
-- **MVP（方案 B）**：`deploy/scripts/ap-export.js` + `ap-import.js`（复用 bootstrap 的 http 调用），手动跑通一条 flow。
-- **完整（方案 A）**：加 git 目录约定 + 生产发布 Job。
+- ✅ **MVP（方案 B）已落地并实测**：`deploy/scripts/ap-export.js` + `ap-import.js`（自包含 node，照 bootstrap 范式）+
+  git 目录 `deploy/ap-flows/`（见其 [README](ap-flows/README.md)）。dev 实测:导出 aptest → JSON → 幂等 re-import（创建/覆盖/发布/启用全 200）。
+  各 AP CE flow 操作实测可用:`POST /flows`(201)/`IMPORT_FLOW`(200)/`LOCK_AND_PUBLISH`(200)/`CHANGE_STATUS`(200)。
+- **完整（方案 A）剩**：生产**一次性发布 Job**（k8s,包 ap-import.js + ap-flows 挂载）尚未做——脚本与 git 目录已就位,套个 Job 即可。
 
-**待定（实现前需拍板）**：① git 里 flow 的组织（一 flow 一 JSON vs 按项目分）；② 发布触发（CI 一步 vs k8s 一次性 Job）；③ 生产 connection（手动建一次 vs 脚本化引导）。
+**三个待定项的 MVP 决策**：① git 组织=**一 flow 一 JSON**,按 `displayName` 幂等对齐;② 触发=**手动/CI 调脚本**(k8s Job 留待方案 A);③ 生产 connection=**手动预建同名**(暂不脚本化引导)。
+
+**已知边界(实测)**:① connection 不跟着导,生产须预建同名(见 §11.5);② **flowId 跨环境会变**——目标环境新建 flow 有新 id,ap-import.js 末尾打印,BPMN 的 `ap:flowId` 按目标环境填。
 
 ---
 
@@ -209,7 +213,7 @@ sign-in 探测 → 已存在则跳过；不存在则 sign-up；未配置则跳�
 
 ## 9. 已知限制 / 待办
 
-- **flow 发布通道**：方案已定（见 §7，git 为源 + API 导入；Git Sync 经实测 CE 不可用）。**尚未实现**——待拍板 §7 三个待定项后落地 MVP。
+- **flow 发布通道**：✅ **MVP 已实现并实测**（见 §7,git 为源 + ap-export.js/ap-import.js + `deploy/ap-flows/`；Git Sync 经实测 CE 不可用）。剩生产 k8s 发布 Job(方案 A 完整形态)待做。
 - **k8s 未集群验证**：`ap-gateway.yaml`、`ap-bootstrap-job.yaml`、cookie-domain、configmap/secret 均为清单，待真集群验证。
 - **会话过期无自动跳登录**：k8s 未认证直接访问 AP host 返回 401（没用 ext_authz）。正常入口（从已登录 admin 点）不受影响。
 - **AP 共享平台库 `public`（已定案：维持不变）**：AP 用通用表名（user/project/flag/file/folder/platform/flow/app_connection…），
