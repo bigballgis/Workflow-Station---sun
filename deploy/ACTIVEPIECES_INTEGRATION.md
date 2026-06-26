@@ -230,9 +230,14 @@ sign-in 探测 → 已存在则跳过；不存在则 sign-up；未配置则跳�
 
 ## 10. 验证状态
 
-- ✅ **dev 全链路已实测**：admin 入口 → 桥 → 换 token → 进 AP（共享账号 ADMIN，/flows 正常、不循环）。
+- ✅ **AP 桥全链路已实测（dev）**：admin 入口 → 桥 → 换 token → 进 AP（共享账号 ADMIN，/flows 正常、不循环）。
 - ✅ 引导脚本三路径已测：幂等成功 / 未配置跳过 / 密码不符明确报错。
-- 📦 **k8s/生产**：清单齐全、YAML 校验通过、ps1 开关接通；需集群侧验证（DNS/secret/ext_authz/mTLS）。
+- ✅ **BPMN service-task → AP 端到端已实测（dev，2026-06-26）**：部署含 AP 节点的 BPMN（部署期自动绑 `${apTaskExecutor}`）→
+  起实例 → 调 aptest sync webhook（`http://activepieces:80/api/v1/webhooks/<flowId>/sync`）→ Return Response 结果按 outputMapping
+  回写流程变量 → 流程走到 End；`wf_ap_execution_record` 出 SUCCESS。
+- ✅ **flow 发布通道已实测（dev）**：`ap-export.js` 导出 aptest → JSON → 幂等 re-import（create/overwrite/publish/enable 全 2xx）。
+- ✅ **纯自动化流程门户完成状态修复已实测**：见 §11.5「卡 RUNNING」。
+- 📦 **k8s/生产**：清单齐全、YAML 校验通过、ps1 开关接通；Jenkins 发布流水线模板就绪；需集群侧验证（DNS/secret/ext_authz/mTLS、Jenkins 凭据与 AP 可达性）。
 
 ---
 
@@ -304,8 +309,16 @@ Flowable 继续往下（失败则抛异常，可被 BPMN 错误边界捕获）
 - **同步占线程**：service task 同步等待至多 `ap:timeoutSeconds`（受 RestTemplate 10 分钟读超时上限约束）。长流程慎用、设合理超时。
 - **SSRF**：URL 经 `SsrfProtection.validate`，仅把 `webhook-base-url` 的主机加白（docker 私网名 `activepieces` 因此放行；指向其它私网主机仍被拦）。
 - **文件**：inputData 里 `/api/*` 相对路径自动转 `file-service` 绝对 URL，便于 AP 经 Docker 网络取文件。
+- **纯自动化流程门户"卡 RUNNING"（已修，2026-06-26）**：无用户任务的流程（`Start → AP → End`）在 start 调用内**瞬间跑完**；
+  门户申请状态靠引擎 `PROCESS_COMPLETED` 回调 user-portal `POST /api/portal/processes/{id}/complete` 翻 COMPLETED，但该端点要
+  **非空 `X-Internal-Service-Token` 头**、引擎原来从不发（403 被拒）→ 申请永远 RUNNING。审批流靠"完成最后一个任务时置状态"
+  把这个潜伏 bug 遮住了，纯自动化流程才暴露。修复：`ProcessCompletionListener` 调用时带该头（`platform.internal.service-token`）。
+- **想在门户里像"正常申请"（有待办/可交互）**：纯自动化流程没人工步骤、瞬间结束，门户看不到"下一步"。
+  在 AP 节点前/后加一个**用户任务**（`assigneeType=INITIATOR` + 挂一个动作如 `PROCESS_SUBMIT`，动作存 `sys_action_definitions`），
+  流程才会停在待办、走正常完成路径。**正经做法是在设计器里建表单+任务**；只想要"有个步骤"则加一个无表单的用户任务即可。
+- **申请编号显示 `-` 属正常**：全库表定义 0 个用 `request_id_config`——编号功能没人用，`business_key` 空即显示 `-`，非缺陷。
 
 ### 11.6 待办
 
 - **AP Action 模式（用户态）**：后端 `POST /api/v1/ap/execute` 已就绪，但**前端用户态 Action UI 未实现**（随 n8n 一并移除了 n8n 的 Action 对话框/自动填充）。若需要，按 §11.3 后端能力补一套 AP Action 面板即可。
-- **端到端实测**：dev 起 AP + 建一条带 Webhook 触发 + Return Response 的 flow，部署一条含 AP service task 的 BPMN，跑通"触发→映射回写"。
+- **k8s/生产集群验证**：dev 端到端已通；生产需真集群跑一遍（含 Jenkins 发布流水线填好 3 处 env 信息后试跑、生产预建 connection）。
