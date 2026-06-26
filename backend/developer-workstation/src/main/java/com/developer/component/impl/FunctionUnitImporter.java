@@ -53,6 +53,7 @@ public class FunctionUnitImporter {
     private final FunctionUnitImportWriter importWriter;
     private final VersionComponent versionComponent;
     private final RelationTableStructurePortability relationTablePortability;
+    private final MainTableViewPortability mainTableViewPortability;
 
     /**
      * 导入功能单元。无冲突策略选项：
@@ -148,6 +149,14 @@ public class FunctionUnitImporter {
                     relationTableIdMapping.put(srcNum.longValue(), rtNameToId.get(rtName));
                 }
             }
+        }
+
+        // Import "View Design": recreate Main Table views, remapping mainTableName → new table id.
+        if (packageData.containsKey("mainTableViews")) {
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> mainTableViews =
+                    (List<Map<String, Object>>) packageData.get("mainTableViews");
+            mainTableViewPortability.importAll(mainTableViews, functionUnit, importedTableNameToId);
         }
 
         Map<Long, Long> formIdMapping = new HashMap<>();

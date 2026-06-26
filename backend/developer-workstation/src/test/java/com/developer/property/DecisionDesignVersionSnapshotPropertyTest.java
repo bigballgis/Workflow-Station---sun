@@ -115,7 +115,8 @@ public class DecisionDesignVersionSnapshotPropertyTest extends DecisionDesignPro
                     mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class), null,
                     mock(com.developer.service.MainTableViewService.class),
                     mock(com.developer.repository.SubTableViewConfigRepository.class),
-                    mock(com.developer.repository.ForeignKeyRepository.class)
+                    mock(com.developer.repository.ForeignKeyRepository.class),
+                    mock(com.developer.component.impl.MainTableViewPortability.class)
             );
 
             // Build a fresh FunctionUnit to restore into
@@ -276,7 +277,8 @@ public class DecisionDesignVersionSnapshotPropertyTest extends DecisionDesignPro
                 cloneDevGroupRepo,
                 mock(com.developer.component.VersionComponent.class),
                 mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class),
-                mock(com.developer.service.MainTableViewService.class)
+                mock(com.developer.service.MainTableViewService.class),
+                mock(com.developer.repository.ForeignKeyRepository.class)
         );
 
         // Mock: functionUnitRepository.save returns the entity with an ID.

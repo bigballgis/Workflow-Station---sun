@@ -33,6 +33,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 
 /**
  * 测试 FunctionUnitComponentImpl 的操作者信息获取功能
@@ -77,7 +78,13 @@ class FunctionUnitComponentImplTest {
 
     @Mock
     private VersionComponent versionComponent;
-    
+
+    @Mock
+    private ForeignKeyRepository foreignKeyRepository;
+
+    @Mock
+    private com.developer.service.MainTableViewService mainTableViewService;
+
     @InjectMocks
     private FunctionUnitComponentImpl functionUnitComponent;
     
@@ -330,8 +337,13 @@ class FunctionUnitComponentImplTest {
 
         functionUnitComponent.delete(2L);
 
-        verify(functionUnitDevGroupAssignmentRepository).deleteByFunctionUnitId(2L);
-        verify(functionUnitRepository).delete(functionUnit);
+        // Foreign keys must be bulk-deleted (and the context flushed) BEFORE the JPA
+        // cascade walks the table/field graph, otherwise Hibernate tries to null the
+        // NOT NULL dw_foreign_keys.field_id and the delete fails entirely.
+        InOrder order = inOrder(foreignKeyRepository, functionUnitRepository);
+        order.verify(foreignKeyRepository).deleteByFunctionUnitId(2L);
+        order.verify(foreignKeyRepository).flush();
+        order.verify(functionUnitRepository).delete(functionUnit);
         verify(functionUnitRepository, never()).save(any(FunctionUnit.class));
     }
 }

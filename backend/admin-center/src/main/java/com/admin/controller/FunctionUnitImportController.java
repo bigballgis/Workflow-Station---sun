@@ -3,13 +3,12 @@ package com.admin.controller;
 import com.admin.component.DeploymentManagerComponent;
 import com.admin.component.FunctionUnitManagerComponent;
 import com.admin.component.ProcessDeploymentComponent;
+import com.admin.component.ActionDefinitionImportWriter;
 import com.admin.dto.request.FunctionUnitImportRequest;
 import com.admin.dto.response.FunctionUnitInfo;
 import com.admin.dto.response.ImportResult;
-import com.admin.entity.ActionDefinition;
 import com.admin.entity.FunctionUnit;
 import com.admin.entity.FunctionUnitDeployment;
-import com.admin.repository.ActionDefinitionRepository;
 import com.admin.enums.DeploymentEnvironment;
 import com.admin.enums.DeploymentStrategy;
 import com.admin.enums.FunctionUnitStatus;
@@ -51,7 +50,7 @@ public class FunctionUnitImportController {
     private final FunctionUnitManagerComponent functionUnitManager;
     private final DeploymentManagerComponent deploymentManager;
     private final ProcessDeploymentComponent processDeploymentComponent;
-    private final ActionDefinitionRepository actionDefinitionRepository;
+    private final ActionDefinitionImportWriter actionDefinitionImportWriter;
     private final ObjectMapper objectMapper;
     private final I18nService i18nService;
     
@@ -135,38 +134,10 @@ public class FunctionUnitImportController {
                 
                 @SuppressWarnings("unchecked")
                 List<Map<String, Object>> actions = (List<Map<String, Object>>) packageData.get("actions");
-                if (actions != null && !actions.isEmpty()) {
-                    actionDefinitionRepository.deleteByFunctionUnitId(importResult.getFunctionUnit().getId());
-                    
-                    for (Map<String, Object> actionData : actions) {
-                        try {
-                            String actionName = (String) actionData.get("actionName");
-                            String actionType = (String) actionData.get("actionType");
-                            
-                            if (actionName != null && actionType != null) {
-                                Map<String, Object> configJson = parseActionConfigJson(actionData.get("configJson"));
-                                
-                                ActionDefinition actionDef = ActionDefinition.builder()
-                                        .functionUnitId(importResult.getFunctionUnit().getId())
-                                        .actionName(actionName)
-                                        .actionType(actionType)
-                                        .description((String) actionData.get("description"))
-                                        .configJson(configJson)
-                                        .icon((String) actionData.get("icon"))
-                                        .buttonColor((String) actionData.get("buttonColor"))
-                                        .isDefault(actionData.get("isDefault") instanceof Boolean ? 
-                                                (Boolean) actionData.get("isDefault") : false)
-                                        .build();
-                                
-                                actionDefinitionRepository.save(actionDef);
-                                log.info("Saved action definition: {} ({}) for function unit: {}", 
-                                        actionName, actionType, importResult.getFunctionUnit().getId());
-                            }
-                        } catch (Exception e) {
-                            log.warn("Failed to save action definition", e);
-                        }
-                    }
-                }
+                // Delegate to a transactional bean: the delete-then-insert must run in an active
+                // transaction (derived delete -> em.remove), which a plain controller method lacks.
+                actionDefinitionImportWriter.replaceActions(
+                        importResult.getFunctionUnit().getId(), actions);
                 
                 result.put("status", "SUCCESS");
                 result.put("functionUnitId", importResult.getFunctionUnit().getId());
@@ -667,20 +638,5 @@ public class FunctionUnitImportController {
         }
         String t = s.trim();
         return t.isEmpty() ? null : t;
-    }
-
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> parseActionConfigJson(Object configJsonObj) {
-        if (configJsonObj instanceof Map<?, ?> map) {
-            return (Map<String, Object>) map;
-        }
-        if (configJsonObj instanceof String s && !s.isBlank()) {
-            try {
-                return objectMapper.readValue(s, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
-            } catch (Exception e) {
-                log.warn("Failed to parse action config_json: {}", e.getMessage());
-            }
-        }
-        return Map.of();
     }
 }

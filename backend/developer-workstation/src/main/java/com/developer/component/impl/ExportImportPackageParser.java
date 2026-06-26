@@ -89,6 +89,12 @@ public class ExportImportPackageParser {
                         rawFiles.get("relation-tables/relation_tables.json"), List.class));
             }
 
+            // Parse "View Design" main-table view configs
+            if (rawFiles.containsKey("views/main_table_views.json")) {
+                result.put("mainTableViews", objectMapper.readValue(
+                        rawFiles.get("views/main_table_views.json"), List.class));
+            }
+
             // Parse form definitions
             List<Map<String, Object>> forms = new ArrayList<>();
             if (rawFiles.containsKey("forms.json")) {
