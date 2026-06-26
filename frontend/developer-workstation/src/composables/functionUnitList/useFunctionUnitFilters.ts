@@ -14,7 +14,8 @@ interface UseFunctionUnitFiltersOptions {
 export function useFunctionUnitFilters(options: UseFunctionUnitFiltersOptions) {
   const { list, allTags, resetPage, reload } = options
 
-  const searchForm = reactive({ name: '', status: '', tags: [] as string[] })
+  // Default to PUBLISHED status filter instead of showing all statuses
+  const searchForm = reactive({ name: '', status: 'PUBLISHED', tags: [] as string[] })
 
   // 下拉选项来自服务端返回的全部 tag（跨所有功能单元），确保新建 tag 首次出现即可选
   const availableTags = computed(() => {
@@ -29,8 +30,9 @@ export function useFunctionUnitFilters(options: UseFunctionUnitFiltersOptions) {
   }
 
   // Client-side filtering: name and status only (tags are already filtered server-side via API param).
+  // Results are also sorted alphabetically by name (first letter, locale-aware).
   const filteredList = computed(() => {
-    return list.value.filter(item => {
+    const filtered = list.value.filter(item => {
       if (searchForm.name && !item.name.toLowerCase().includes(searchForm.name.toLowerCase())) {
         return false
       }
@@ -39,6 +41,10 @@ export function useFunctionUnitFilters(options: UseFunctionUnitFiltersOptions) {
       }
       return true
     })
+    // Sort alphabetically by name, case-insensitive
+    return [...filtered].sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true })
+    )
   })
 
   function handleSearch() {
@@ -48,7 +54,7 @@ export function useFunctionUnitFilters(options: UseFunctionUnitFiltersOptions) {
 
   function clearFilters() {
     searchForm.name = ''
-    searchForm.status = ''
+    searchForm.status = 'PUBLISHED'
     searchForm.tags = []
     handleSearch()
   }

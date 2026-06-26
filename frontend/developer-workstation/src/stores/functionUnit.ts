@@ -19,7 +19,8 @@ export const useFunctionUnitStore = defineStore('functionUnit', () => {
   async function fetchList(params: { name?: string; status?: string; tags?: string[]; page?: number; size?: number }) {
     loading.value = true
     try {
-      const res = await functionUnitApi.list(params)
+      // Default sort by name ascending (A→Z) at API level
+      const res = await functionUnitApi.list({ sort: 'name,asc', ...params })
       const pageData = res?.data?.content !== undefined ? res.data : res?.data
       list.value = pageData?.content ?? []
       total.value = pageData?.totalElements ?? 0
