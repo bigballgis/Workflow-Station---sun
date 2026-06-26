@@ -7,17 +7,21 @@ import org.hibernate.annotations.Type;
 import java.time.Instant;
 
 /**
- * N8N workflow execution record entity
- * Records detailed information of each N8N task execution, including execution status, input/output data, duration, etc.
+ * Activepieces (AP) workflow execution record entity.
+ * Records each AP flow invocation triggered from a BPMN Service Task or a user Action,
+ * including execution status, input/output data and duration.
+ *
+ * <p>AP integration is synchronous: the engine POSTs to the AP sync webhook and the
+ * flow returns its result in the HTTP response (no callback token / async wait needed).
  */
 @Entity
-@Table(name = "wf_n8n_execution_record", indexes = {
-    @Index(name = "idx_n8n_exec_process_instance", columnList = "process_instance_id"),
-    @Index(name = "idx_n8n_exec_task_id", columnList = "task_id"),
-    @Index(name = "idx_n8n_exec_status", columnList = "status"),
-    @Index(name = "idx_n8n_exec_created_at", columnList = "created_at")
+@Table(name = "wf_ap_execution_record", indexes = {
+    @Index(name = "idx_ap_exec_process_instance", columnList = "process_instance_id"),
+    @Index(name = "idx_ap_exec_task_id", columnList = "task_id"),
+    @Index(name = "idx_ap_exec_status", columnList = "status"),
+    @Index(name = "idx_ap_exec_created_at", columnList = "created_at")
 })
-public class N8nExecutionRecord {
+public class ApExecutionRecord {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -27,25 +31,17 @@ public class N8nExecutionRecord {
     @Column(name = "process_instance_id", length = 64)
     private String processInstanceId;
 
-    /** Flowable task ID */
+    /** Flowable task / execution ID */
     @Column(name = "task_id", length = 64)
     private String taskId;
 
-    /** N8N config ID */
-    @Column(name = "n8n_config_id", length = 36)
-    private String n8nConfigId;
+    /** AP flow ID (the webhook flow identifier) */
+    @Column(name = "ap_flow_id", length = 100)
+    private String apFlowId;
 
-    /** N8N workflow ID */
-    @Column(name = "n8n_workflow_id", length = 100)
-    private String n8nWorkflowId;
-
-    /** Webhook URL */
+    /** Resolved AP sync webhook URL */
     @Column(name = "webhook_url", length = 500)
     private String webhookUrl;
-
-    /** Callback token */
-    @Column(name = "callback_token", length = 64)
-    private String callbackToken;
 
     /** Execution status: PENDING, RUNNING, SUCCESS, FAILED, TIMEOUT */
     @Column(name = "status", nullable = false, length = 20)
@@ -98,7 +94,7 @@ public class N8nExecutionRecord {
             retryCount = 0;
         }
         if (timeoutSeconds == null) {
-            timeoutSeconds = 300;
+            timeoutSeconds = 120;
         }
     }
 
@@ -112,17 +108,11 @@ public class N8nExecutionRecord {
     public String getTaskId() { return taskId; }
     public void setTaskId(String taskId) { this.taskId = taskId; }
 
-    public String getN8nConfigId() { return n8nConfigId; }
-    public void setN8nConfigId(String n8nConfigId) { this.n8nConfigId = n8nConfigId; }
-
-    public String getN8nWorkflowId() { return n8nWorkflowId; }
-    public void setN8nWorkflowId(String n8nWorkflowId) { this.n8nWorkflowId = n8nWorkflowId; }
+    public String getApFlowId() { return apFlowId; }
+    public void setApFlowId(String apFlowId) { this.apFlowId = apFlowId; }
 
     public String getWebhookUrl() { return webhookUrl; }
     public void setWebhookUrl(String webhookUrl) { this.webhookUrl = webhookUrl; }
-
-    public String getCallbackToken() { return callbackToken; }
-    public void setCallbackToken(String callbackToken) { this.callbackToken = callbackToken; }
 
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }

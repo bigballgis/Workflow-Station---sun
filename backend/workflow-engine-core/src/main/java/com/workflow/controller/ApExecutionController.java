@@ -1,12 +1,11 @@
 package com.workflow.controller;
 
-import com.workflow.component.N8nTaskExecutor;
-import com.workflow.dto.request.N8nActionRequest;
+import com.workflow.component.ApTaskExecutor;
+import com.workflow.dto.request.ApActionRequest;
 import com.workflow.dto.response.ApiResponse;
-import com.workflow.dto.response.N8nExecutionResult;
-import com.workflow.entity.N8nExecutionRecord;
-import com.workflow.repository.N8nExecutionRecordRepository;
-import com.platform.common.security.SsrfProtection;
+import com.workflow.dto.response.ApExecutionResult;
+import com.workflow.entity.ApExecutionRecord;
+import com.workflow.repository.ApExecutionRecordRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -27,33 +26,22 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * N8N execution record query and Action sync execution controller.
- *
- * Provides execution record queries (supporting filtering and pagination) and
- * the N8N Action synchronous execution internal API.
- *
- * Validates: Requirements 7.3, 7.4, 10.20, 10.21, 10.22, 10.23
+ * Activepieces execution record query and Action sync execution controller.
  */
 @Slf4j
 @RestController
 @RequiredArgsConstructor
-@Tag(name = "N8N Execution Records", description = "N8N execution record query and Action sync execution API")
-public class N8nExecutionController {
+@Tag(name = "AP Execution Records", description = "Activepieces execution record query and Action sync execution API")
+public class ApExecutionController {
 
-    private final N8nExecutionRecordRepository executionRecordRepository;
-    private final N8nTaskExecutor n8nTaskExecutor;
+    private final ApExecutionRecordRepository executionRecordRepository;
+    private final ApTaskExecutor apTaskExecutor;
 
     // ==================== Execution Record Queries ====================
 
-    /**
-     * Query N8N execution record list, supporting filtering by processInstanceId, status,
-     * time range, and pagination.
-     *
-     * Validates: Requirements 7.3
-     */
-    @GetMapping("/api/workflow/n8n/executions")
+    @GetMapping("/api/workflow/ap/executions")
     @Operation(summary = "Query execution record list", description = "Support filtering by process instance ID, status, time range and pagination")
-    public ResponseEntity<ApiResponse<Page<N8nExecutionRecord>>> listExecutions(
+    public ResponseEntity<ApiResponse<Page<ApExecutionRecord>>> listExecutions(
             @Parameter(description = "Process instance ID")
             @RequestParam(value = "processInstanceId", required = false) String processInstanceId,
             @Parameter(description = "Execution status: PENDING, RUNNING, SUCCESS, FAILED, TIMEOUT")
@@ -67,70 +55,48 @@ public class N8nExecutionController {
             @Parameter(description = "Page size")
             @RequestParam(value = "size", defaultValue = "20") int size) {
 
-        log.info("Querying N8N executions: processInstanceId={}, status={}, startTime={}, endTime={}, page={}, size={}",
-                processInstanceId, status, startTime, endTime, page, size);
+        log.info("Querying AP executions: processInstanceId={}, status={}, page={}, size={}",
+                processInstanceId, status, page, size);
 
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-
-        Specification<N8nExecutionRecord> spec = buildFilterSpecification(processInstanceId, status, startTime, endTime);
-        Page<N8nExecutionRecord> result = executionRecordRepository.findAll(spec, pageable);
+        Specification<ApExecutionRecord> spec = buildFilterSpecification(processInstanceId, status, startTime, endTime);
+        Page<ApExecutionRecord> result = executionRecordRepository.findAll(spec, pageable);
 
         return ResponseEntity.ok(ApiResponse.success(result));
     }
 
-    /**
-     * Query a single N8N execution record detail.
-     *
-     * Validates: Requirements 7.4
-     */
-    @GetMapping("/api/workflow/n8n/executions/{id}")
-    @Operation(summary = "Query execution record detail", description = "Returns complete execution record detail by ID")
-    public ResponseEntity<ApiResponse<N8nExecutionRecord>> getExecution(
-            @Parameter(description = "Execution record ID", required = true)
-            @PathVariable("id") Long id) {
-
-        log.info("Querying N8N execution detail: id={}", id);
-
+    @GetMapping("/api/workflow/ap/executions/{id}")
+    @Operation(summary = "Get single execution record")
+    public ResponseEntity<ApiResponse<ApExecutionRecord>> getExecution(@PathVariable("id") Long id) {
         return executionRecordRepository.findById(id)
                 .map(record -> ResponseEntity.ok(ApiResponse.success(record)))
-                .orElseGet(() -> ResponseEntity.ok(
-                        ApiResponse.error("NOT_FOUND", "Execution record not found: " + id)));
+                .orElseGet(() -> ResponseEntity.status(404)
+                        .body(ApiResponse.error("NOT_FOUND", "AP execution record not found: " + id)));
     }
 
-    // ==================== N8N Action Sync Execution ====================
+    // ==================== AP Action Sync Execution ====================
 
-    /**
-     * N8N Action synchronous execution internal API.
-     * Receives an N8N Action execution request and calls
-     * N8nTaskExecutor.executeSynchronous() to wait synchronously for the result.
-     *
-     * Validates: Requirements 10.20, 10.21, 10.22, 10.23
-     */
-    @PostMapping("/api/v1/n8n/execute")
-    @Operation(summary = "N8N Action sync execution", description = "Internal API: Synchronously execute N8N workflow and return result")
-    public ResponseEntity<ApiResponse<N8nExecutionResult>> executeSynchronous(
-            @RequestBody @Valid N8nActionRequest request) {
+    @PostMapping("/api/v1/ap/execute")
+    @Operation(summary = "AP Action sync execution", description = "Internal API: Synchronously execute AP flow and return result")
+    public ResponseEntity<ApiResponse<ApExecutionResult>> executeSynchronous(
+            @RequestBody @Valid ApActionRequest request) {
 
-        log.info("N8N Action sync execution request: webhookUrl={}, processInstanceId={}, timeoutSeconds={}",
-                request.getWebhookUrl(), request.getProcessInstanceId(), request.getTimeoutSeconds());
+        log.info("AP Action sync execution request: apFlowId={}, processInstanceId={}, timeoutSeconds={}",
+                request.getApFlowId(), request.getProcessInstanceId(), request.getTimeoutSeconds());
 
-        if (request.getWebhookUrl() == null || request.getWebhookUrl().isBlank()) {
+        if ((request.getApFlowId() == null || request.getApFlowId().isBlank())
+                && (request.getWebhookUrl() == null || request.getWebhookUrl().isBlank())) {
             return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("BAD_REQUEST", "webhookUrl is required"));
-        }
-        SsrfProtection.validate(request.getWebhookUrl());
-        if (request.getN8nConfigId() == null || request.getN8nConfigId().isBlank()) {
-            return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("BAD_REQUEST", "n8nConfigId is required"));
+                    .body(ApiResponse.error("BAD_REQUEST", "apFlowId or webhookUrl is required"));
         }
 
         try {
-            N8nExecutionResult result = n8nTaskExecutor.executeSynchronous(request);
+            ApExecutionResult result = apTaskExecutor.executeSynchronous(request);
 
             if (result.isSuccess()) {
                 return ResponseEntity.ok(ApiResponse.success(result));
             } else {
-                return ResponseEntity.ok(ApiResponse.<N8nExecutionResult>builder()
+                return ResponseEntity.ok(ApiResponse.<ApExecutionResult>builder()
                         .success(false)
                         .code(result.getStatus())
                         .message(result.getErrorMessage())
@@ -139,19 +105,15 @@ public class N8nExecutionController {
                         .build());
             }
         } catch (Exception e) {
-            log.error("N8N Action sync execution failed: {}", e.getMessage(), e);
+            log.error("AP Action sync execution failed: {}", e.getMessage(), e);
             return ResponseEntity.internalServerError()
-                    .body(ApiResponse.error("INTERNAL_ERROR", "N8N execution failed: " + e.getMessage()));
+                    .body(ApiResponse.error("INTERNAL_ERROR", "AP execution failed: " + e.getMessage()));
         }
     }
 
     // ==================== Internal Methods ====================
 
-    /**
-     * Build filter specification supporting combined filtering by processInstanceId,
-     * status, and time range.
-     */
-    Specification<N8nExecutionRecord> buildFilterSpecification(
+    Specification<ApExecutionRecord> buildFilterSpecification(
             String processInstanceId, String status, String startTime, String endTime) {
 
         return (root, query, criteriaBuilder) -> {
@@ -160,11 +122,9 @@ public class N8nExecutionController {
             if (processInstanceId != null && !processInstanceId.isBlank()) {
                 predicates.add(criteriaBuilder.equal(root.get("processInstanceId"), processInstanceId));
             }
-
             if (status != null && !status.isBlank()) {
                 predicates.add(criteriaBuilder.equal(root.get("status"), status));
             }
-
             if (startTime != null && !startTime.isBlank()) {
                 try {
                     Instant start = Instant.parse(startTime);
@@ -173,7 +133,6 @@ public class N8nExecutionController {
                     log.warn("Invalid startTime format: {}", startTime);
                 }
             }
-
             if (endTime != null && !endTime.isBlank()) {
                 try {
                     Instant end = Instant.parse(endTime);

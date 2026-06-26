@@ -411,16 +411,6 @@
       @opened="onActionDialogOpened"
     />
 
-    <!-- N8N Action dialog -->
-    <N8nActionDialog
-      v-model:visible="n8nActionDialogVisible"
-      :action-definition="n8nActionDefinition"
-      :task-id="effectiveTaskId"
-      :process-instance-id="taskInfo.processInstanceId || ''"
-      :initial-data="n8nInitialData"
-      @executed="handleN8nActionExecuted"
-    />
-
     <!-- Form popup dialog -->
     <FormPopupDialog
       v-model="formPopupVisible"
@@ -471,7 +461,6 @@ const ProcessDiagramAsync = defineAsyncComponent(
   () => import('@/components/ProcessDiagram.vue'),
 )
 import FormRenderer from '@/components/FormRenderer.vue'
-import N8nActionDialog from '@/components/N8nActionDialog.vue'
 import ChangeHistoryPanel from '@/components/ChangeHistoryPanel.vue'
 import TaskBasicInfo from '@/components/tasks/TaskBasicInfo.vue'
 import ApproveDialog from '@/components/tasks/ApproveDialog.vue'
@@ -767,9 +756,6 @@ const customActions = useCustomActions({
   preparePopupContext: popupHelpers.preparePopupContext,
 })
 const {
-  n8nActionDialogVisible,
-  n8nActionDefinition,
-  n8nInitialData,
   formPopupVisible,
   formPopupTitle,
   formPopupFields,
@@ -784,7 +770,6 @@ const {
   formPopupFormConfig,
   formPopupViewContext,
   handleCustomAction,
-  handleN8nActionExecuted,
   submitFormPopup,
   handleFormPopupSubTableUpdate,
 } = customActions

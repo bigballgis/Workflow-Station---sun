@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+  xmlns:custom="http://workflow.platform/schema/custom"
+  id="Definitions_ap_test"
+  targetNamespace="http://workflow.platform">
+
+  <bpmn:process id="ap_test_process" name="AP Test Process" isExecutable="true">
+
+    <bpmn:startEvent id="StartEvent_1" name="Start">
+      <bpmn:outgoing>flow_to_ap</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <!--
+      Activepieces service task.
+      The visual designer sets serviceType=ap + ap:* via <custom:property>.
+      ProcessDeploymentManager#bindActivepiecesServiceTasks injects
+      flowable:delegateExpression="${apTaskExecutor}" at deploy time because ap:flowId is present.
+      Engine calls (sync): <activepieces.webhook-base-url>/api/v1/webhooks/WIkVuyWuQuBcTblpChUeS/sync
+    -->
+    <bpmn:serviceTask id="ap_task_1" name="Call aptest (Activepieces)">
+      <bpmn:extensionElements>
+        <custom:properties>
+          <custom:property name="serviceType" value="ap" />
+          <custom:property name="ap:flowId" value="WIkVuyWuQuBcTblpChUeS" />
+          <custom:property name="ap:inputMapping" value="[{&quot;source&quot;:&quot;inputText&quot;,&quot;target&quot;:&quot;text&quot;}]" />
+          <custom:property name="ap:outputMapping" value="[{&quot;source&quot;:&quot;echo&quot;,&quot;target&quot;:&quot;apResult&quot;}]" />
+          <custom:property name="ap:timeoutSeconds" value="60" />
+          <custom:property name="ap:retryCount" value="2" />
+        </custom:properties>
+      </bpmn:extensionElements>
+      <bpmn:incoming>flow_to_ap</bpmn:incoming>
+      <bpmn:outgoing>flow_to_end</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:endEvent id="EndEvent_1" name="End">
+      <bpmn:incoming>flow_to_end</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <bpmn:sequenceFlow id="flow_to_ap" sourceRef="StartEvent_1" targetRef="ap_task_1" />
+    <bpmn:sequenceFlow id="flow_to_end" sourceRef="ap_task_1" targetRef="EndEvent_1" />
+
+  </bpmn:process>
+
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="ap_test_process">
+      <bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1">
+        <dc:Bounds x="160" y="100" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ap_task_1_di" bpmnElement="ap_task_1">
+        <dc:Bounds x="260" y="78" width="120" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_1_di" bpmnElement="EndEvent_1">
+        <dc:Bounds x="460" y="100" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="flow_to_ap_di" bpmnElement="flow_to_ap">
+        <di:waypoint x="196" y="118" />
+        <di:waypoint x="260" y="118" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow_to_end_di" bpmnElement="flow_to_end">
+        <di:waypoint x="380" y="118" />
+        <di:waypoint x="460" y="118" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

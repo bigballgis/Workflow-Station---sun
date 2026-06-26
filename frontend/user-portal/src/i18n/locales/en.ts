@@ -388,7 +388,6 @@ export default {
     processSubmitSuccess: 'Process submitted successfully',
     submitFailed: 'Submission failed',
     serviceFallbackName: 'Service {index}',
-    n8nAutoFillSuccess: 'Auto-filled {count} record(s) from recognition results',
     workspaceGuardTitle: 'Cannot submit: workspace identity incomplete',
     workspaceGuardHint:
       'Your account is tied to business-unit roles. Select your workspace (Business unit · Role) in the header, or sign out and sign in again. Saving drafts is still allowed.',
@@ -908,26 +907,6 @@ export default {
   user: {
     username: 'Username',
     email: 'Email'
-  },
-  n8nAction: {
-    title: 'N8N Workflow Execution',
-    workflowName: 'Workflow',
-    workflowDescription: 'Description',
-    inputParams: 'Input Parameters',
-    execute: 'Execute',
-    executing: 'Executing...',
-    retry: 'Retry',
-    close: 'Close',
-    success: 'Execution Successful',
-    failed: 'Execution Failed',
-    timeout: 'Execution Timeout',
-    resultData: 'Result Data',
-    errorMessage: 'Error Message',
-    requiredField: '{label} is required',
-    noInputParams: 'No input parameters required',
-    timeoutMessage: 'The workflow execution has timed out. Please try again.',
-    failedMessage: 'The workflow execution has failed.',
-    noResultData: 'No result data'
   },
   fieldRenderer: {
     signature: 'Signature',

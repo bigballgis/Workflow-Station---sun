@@ -15,13 +15,6 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 
 /**
  * Security configuration for user-portal.
- *
- * <p>Currently all endpoints use permitAll mode. In production, the following
- * N8N-related endpoints should follow standard authentication:
- * <ul>
- *   <li>{@code POST /api/portal/n8n/action/execute} - N8N Action execution,
- *       requires authenticated user context.</li>
- * </ul>
  */
 @Configuration
 @EnableWebSecurity

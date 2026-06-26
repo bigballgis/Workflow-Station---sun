@@ -92,6 +92,12 @@ user-portal:
 file-service:
   base-url: ${FILE_SERVICE_BASE_URL:http://localhost:8083}
 
+# Activepieces (AP) runtime — single shared instance per environment.
+# Service tasks store only ap:flowId; the sync webhook URL is built as
+# <webhook-base-url>/api/v1/webhooks/<flowId>/sync at runtime.
+activepieces:
+  webhook-base-url: ${ACTIVEPIECES_WEBHOOK_BASE_URL:http://localhost:8086}
+
 # JWT Configuration
 jwt:
   secret: ${JWT_SECRET:your-256-bit-secret-key-for-development-only}

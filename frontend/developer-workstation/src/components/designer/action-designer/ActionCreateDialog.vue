@@ -80,10 +80,6 @@
               :label="$t('action.customScript')"
               value="CUSTOM_SCRIPT"
             />
-            <el-option
-              :label="$t('action.n8nAction')"
-              value="N8N_ACTION"
-            />
           </el-option-group>
         </el-select>
       </el-form-item>

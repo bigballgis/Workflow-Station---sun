@@ -17,18 +17,6 @@ import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 /**
  * Security configuration for workflow engine.
  * Allows anonymous access to actuator endpoints for health checks.
- *
- * <p>Currently all endpoints use permitAll mode. In production, the following
- * N8N-related endpoints require specific security considerations:
- * <ul>
- *   <li>{@code POST /api/workflow/n8n/callback} - N8N callback endpoint, MUST remain
- *       permitAll since N8N calls it directly without authentication. Request
- *       authenticity is verified via callbackToken.</li>
- *   <li>{@code POST /api/v1/n8n/execute} - Internal API for N8N Action execution,
- *       called by user-portal via RestTemplate (inter-service communication).</li>
- *   <li>{@code GET /api/workflow/n8n/executions/**} - Execution record queries,
- *       should require authentication in production.</li>
- * </ul>
  */
 @Configuration
 @EnableWebSecurity
@@ -66,10 +54,6 @@ public class SecurityConfig {
                 .requestMatchers(new AntPathRequestMatcher("/form-api/**")).permitAll()
                 .requestMatchers(new AntPathRequestMatcher("/content-api/**")).permitAll()
                 .requestMatchers(new AntPathRequestMatcher("/app-api/**")).permitAll()
-                // N8N callback endpoint - must remain permitAll (N8N calls directly, auth via callbackToken)
-                .requestMatchers(new AntPathRequestMatcher("/api/workflow/n8n/callback")).permitAll()
-                // N8N internal execution endpoint - inter-service communication
-                .requestMatchers(new AntPathRequestMatcher("/api/v1/n8n/execute")).permitAll()
                 // Process definition deploy/delete - internal service-to-service calls from admin-center
                 .requestMatchers(new AntPathRequestMatcher("/api/v1/processes/definitions/deploy")).permitAll()
                 .requestMatchers(new AntPathRequestMatcher("/api/v1/processes/definitions/deployments/**")).permitAll()

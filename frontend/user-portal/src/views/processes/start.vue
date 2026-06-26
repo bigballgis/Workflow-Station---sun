@@ -263,16 +263,6 @@
         </div>
       </div>
     </div>
-
-    <!-- N8N Action 对话框 -->
-    <N8nActionDialog
-      v-model:visible="n8nActionDialogVisible"
-      :action-definition="n8nActionDefinition"
-      :task-id="''"
-      :process-instance-id="''"
-      :initial-data="n8nInitialData"
-      @executed="handleN8nActionExecuted"
-    />
   </div>
 </template>
 
@@ -293,8 +283,6 @@ import ProcessDiagram from '@/components/ProcessDiagram.vue'
 import ProcessHistory from '@/components/ProcessHistory.vue'
 import FormRenderer from '@/components/FormRenderer.vue'
 import { collectPlacedSubTableBindingIds, computeNeededSubTableBindingIds } from '@/components/formRendererHelpers'
-import N8nActionDialog from '@/components/N8nActionDialog.vue'
-import { applyAutoFill } from '@/utils/n8nAutoFillEngine'
 import { relationTableApi } from '@/api/relationTable'
 import { isDisabledMessage } from '@/utils/statusMatcher'
 import { getUser } from '@/api/auth'
@@ -371,9 +359,6 @@ const {
   relationViewConfigs,
   historyRecords,
   availableActions,
-  n8nActionDialogVisible,
-  n8nActionDefinition,
-  n8nInitialData,
 } = state
 
 // 表单解析（form-create 规则 → 字段、子表列推导）
@@ -697,7 +682,6 @@ const initActionButtons = async (actionIds: string[] | null) => {
             case 'PROCESS_SUBMIT': btnType = 'primary'; break
             case 'APPROVE': btnType = 'success'; break
             case 'REJECT': btnType = 'danger'; break
-            case 'N8N_ACTION': btnType = 'warning'; break
             default: btnType = action.buttonColor || undefined
           }
           return {
@@ -757,48 +741,6 @@ const handleAction = async (action: { id: string; label: string; action?: string
     case 'PROCESS_SUBMIT':
       await handleSubmit()
       break
-    case 'N8N_ACTION':
-      // 解析 configJson，根据 inputMapping 中的 sourceType 自动收集数据
-      const n8nInitData: Record<string, any> = {}
-      try {
-        const config = action.configJson ? JSON.parse(action.configJson) : {}
-        const inputMapping = config.inputMapping || []
-        for (const param of inputMapping) {
-          if (param.sourceType === 'sub_table' && param.sourceBindingId && param.sourceField) {
-            const targetBinding = subTableBindings.value.find(b => 
-              b.bindingId === param.sourceBindingId || String(b.bindingId) === String(param.sourceBindingId)
-            )
-            if (targetBinding) {
-              const files: string[] = []
-              for (const row of targetBinding.data) {
-                const val = row[param.sourceField]
-                if (val) {
-                  if (typeof val === 'string') {
-                    files.push(val)
-                  } else if (Array.isArray(val)) {
-                    val.forEach((f: any) => files.push(f.url || f.response?.url || f.name || String(f)))
-                  } else if (val.url) {
-                    files.push(val.url)
-                  }
-                }
-              }
-              if (files.length > 0) {
-                n8nInitData[param.paramName] = files
-              }
-            }
-          }
-        }
-      } catch (e) {
-        console.error('Failed to parse N8N action config for auto-fill:', e)
-      }
-      n8nActionDefinition.value = {
-        id: Number(action.id) || 0,
-        actionName: action.label,
-        configJson: action.configJson
-      }
-      n8nInitialData.value = Object.keys(n8nInitData).length > 0 ? n8nInitData : undefined
-      n8nActionDialogVisible.value = true
-      break
     default:
       // 对于未知类型，尝试作为提交处理
       if (action.action === 'submit') {
@@ -806,34 +748,6 @@ const handleAction = async (action: { id: string; label: string; action?: string
       } else {
         ElMessage.warning(t('process.unknownActionType', { type: action.actionType || action.action }))
       }
-  }
-}
-
-// N8N Action 执行完成回调 - 自动填充识别结果
-const handleN8nActionExecuted = (data: Record<string, any> | null) => {
-  try {
-    const n8nOutput = data?.outputData || data
-    if (!n8nOutput) return
-
-    const configJson = n8nActionDefinition.value?.configJson
-      ? JSON.parse(n8nActionDefinition.value.configJson)
-      : null
-
-    const frontendOutputMapping = configJson?.frontendOutputMapping
-    if (!frontendOutputMapping || !Array.isArray(frontendOutputMapping) || frontendOutputMapping.length === 0) {
-      return
-    }
-
-    const result = applyAutoFill(n8nOutput, frontendOutputMapping, subTableBindings.value, formData.value)
-
-    subTableBindings.value = result.updatedBindings as typeof subTableBindings.value
-    formData.value = result.updatedFormData
-
-    if (result.filledCount > 0) {
-      ElMessage.success(t('processStart.n8nAutoFillSuccess', { count: result.filledCount }))
-    }
-  } catch (e) {
-    console.error('[handleN8nActionExecuted] Error:', e)
   }
 }
 

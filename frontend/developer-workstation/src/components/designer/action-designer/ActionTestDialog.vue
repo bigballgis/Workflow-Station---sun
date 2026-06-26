@@ -6,51 +6,7 @@
     destroy-on-close
     @update:model-value="$emit('update:modelValue', $event)"
   >
-    <div
-      v-if="testActionType === 'N8N_ACTION' && testInputMapping.length > 0"
-      style="margin-bottom: 12px;"
-    >
-      <el-switch
-        :model-value="testRawJsonMode"
-        :active-text="$t('action.rawJson')"
-        :inactive-text="$t('action.structuredInput')"
-        @update:model-value="$emit('update:testRawJsonMode', $event)"
-      />
-    </div>
     <el-form
-      v-if="testActionType === 'N8N_ACTION' && testInputMapping.length > 0 && !testRawJsonMode"
-      label-width="120px"
-      label-position="left"
-    >
-      <el-form-item
-        v-for="param in testInputMapping"
-        :key="param.paramName"
-        :label="param.paramLabel || param.paramName"
-        :required="param.required"
-      >
-        <el-input
-          v-if="param.paramType === 'string' || !param.paramType"
-          v-model="testStructuredData[param.paramName]"
-          :placeholder="param.paramName"
-        />
-        <el-input-number
-          v-else-if="param.paramType === 'number'"
-          v-model="testStructuredData[param.paramName]"
-          controls-position="right"
-        />
-        <el-switch
-          v-else-if="param.paramType === 'boolean'"
-          v-model="testStructuredData[param.paramName]"
-        />
-        <el-input
-          v-else
-          v-model="testStructuredData[param.paramName]"
-          :placeholder="param.paramName"
-        />
-      </el-form-item>
-    </el-form>
-    <el-form
-      v-else
       label-width="120px"
       label-position="left"
     >

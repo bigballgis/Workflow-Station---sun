@@ -6,7 +6,7 @@
 -- Clears:
 --   • User Portal: process instances, drafts, favorites, delegation audit,
 --     in-app notifications, form change history
---   • Workflow engine extensions: wf_* (tasks, variables, audit, exceptions, n8n)
+--   • Workflow engine extensions: wf_* (tasks, variables, audit, exceptions)
 --   • Platform security history: login audit, member change logs, virtual-group
 --     task history, permission requests (portal-facing)
 --   • Admin-center audit / logs / password history (not users or roles)
@@ -43,7 +43,6 @@ RESTART IDENTITY CASCADE;
 -- 2) Workflow engine core extension tables
 -- ---------------------------------------------------------------------------
 TRUNCATE TABLE
-    wf_n8n_execution_record,
     wf_exception_records,
     wf_extended_task_info,
     wf_process_variables,

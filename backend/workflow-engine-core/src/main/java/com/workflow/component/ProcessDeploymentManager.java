@@ -8,6 +8,12 @@ import com.workflow.exception.WorkflowValidationException;
 
 import lombok.extern.slf4j.Slf4j;
 
+import org.flowable.bpmn.converter.BpmnXMLConverter;
+import org.flowable.bpmn.model.BpmnModel;
+import org.flowable.bpmn.model.ExtensionElement;
+import org.flowable.bpmn.model.ImplementationType;
+import org.flowable.bpmn.model.Process;
+import org.flowable.bpmn.model.ServiceTask;
 import org.flowable.engine.RepositoryService;
 import org.flowable.engine.RuntimeService;
 import org.flowable.engine.repository.Deployment;
@@ -17,7 +23,11 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import javax.xml.stream.XMLInputFactory;
+import javax.xml.stream.XMLStreamReader;
 import java.io.ByteArrayInputStream;
+import java.io.StringReader;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -366,7 +376,87 @@ public class ProcessDeploymentManager {
                 .replaceAll("(</\\s*[^\\s:>]+:)MultiInstanceLoopCharacteristics(\\s*>)", "$1multiInstanceLoopCharacteristics$2")
                 .replaceAll("(</\\s*)MultiInstanceLoopCharacteristics(\\s*>)", "$1multiInstanceLoopCharacteristics$2");
 
-        return normalized;
+        // Bind Activepieces service tasks to the apTaskExecutor delegate (see method doc).
+        return bindActivepiecesServiceTasks(normalized);
+    }
+
+    /**
+     * Bind BPMN Service Tasks that target Activepieces to the {@code ${apTaskExecutor}} delegate.
+     *
+     * <p>The visual designer marks an AP service task with a {@code serviceType=ap} (and
+     * {@code ap:flowId}) extension property but does not emit a Flowable implementation, so the
+     * deployed task would never invoke the executor. Here we use Flowable's own converter to set
+     * {@code flowable:delegateExpression="${apTaskExecutor}"} on those tasks at deploy time. This is
+     * environment-independent and leaves non-AP processes byte-for-byte untouched (we only
+     * re-serialize when at least one AP task is rebound).
+     */
+    private String bindActivepiecesServiceTasks(String bpmnXml) {
+        if (bpmnXml == null || bpmnXml.isBlank() || !bpmnXml.contains("ap:flowId")) {
+            // Fast path: nothing to bind when the AP marker is absent.
+            return bpmnXml;
+        }
+        try {
+            BpmnXMLConverter converter = new BpmnXMLConverter();
+            XMLInputFactory xif = XMLInputFactory.newInstance();
+            xif.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, Boolean.FALSE);
+            xif.setProperty(XMLInputFactory.SUPPORT_DTD, Boolean.FALSE);
+            XMLStreamReader reader = xif.createXMLStreamReader(new StringReader(bpmnXml));
+            BpmnModel model = converter.convertToBpmnModel(reader);
+
+            boolean changed = false;
+            for (Process process : model.getProcesses()) {
+                for (ServiceTask st : process.findFlowElementsOfType(ServiceTask.class, true)) {
+                    if (isActivepiecesServiceTask(st)
+                            && (st.getImplementation() == null || st.getImplementation().isBlank())) {
+                        st.setImplementationType(ImplementationType.IMPLEMENTATION_TYPE_DELEGATEEXPRESSION);
+                        st.setImplementation("${apTaskExecutor}");
+                        changed = true;
+                        log.info("Bound AP service task '{}' to ${{}}", st.getId(), "apTaskExecutor");
+                    }
+                }
+            }
+
+            if (!changed) {
+                return bpmnXml;
+            }
+            return new String(converter.convertToXML(model), StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            log.warn("AP service-task delegate binding skipped (deploy continues with original XML): {}",
+                    e.getMessage());
+            return bpmnXml;
+        }
+    }
+
+    /**
+     * An AP service task is identified by a {@code serviceType=ap} extension property, or by the
+     * presence of an {@code ap:flowId} extension property.
+     */
+    private boolean isActivepiecesServiceTask(ServiceTask serviceTask) {
+        Map<String, List<ExtensionElement>> extensionElements = serviceTask.getExtensionElements();
+        if (extensionElements == null || extensionElements.isEmpty()) {
+            return false;
+        }
+        List<ExtensionElement> propertiesElements = extensionElements.get("properties");
+        if (propertiesElements == null) {
+            return false;
+        }
+        for (ExtensionElement propertiesElement : propertiesElements) {
+            List<ExtensionElement> propertyElements = propertiesElement.getChildElements().get("property");
+            if (propertyElements == null) {
+                continue;
+            }
+            for (ExtensionElement propertyElement : propertyElements) {
+                String name = propertyElement.getAttributeValue(null, "name");
+                String value = propertyElement.getAttributeValue(null, "value");
+                if ("ap:flowId".equals(name) && value != null && !value.isBlank()) {
+                    return true;
+                }
+                if ("serviceType".equals(name) && "ap".equalsIgnoreCase(value)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private ProcessDefinitionResult convertToProcessDefinitionResult(ProcessDefinition processDefinition, Deployment deployment) {

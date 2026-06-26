@@ -5,29 +5,29 @@ import lombok.Data;
 import java.util.Map;
 
 /**
- * N8N 工作流执行结果 DTO
- * 用于返回 N8N Action 同步执行的结果
+ * Activepieces flow execution result DTO.
+ * Returned for AP Action synchronous execution.
  */
 @Data
-public class N8nExecutionResult {
+public class ApExecutionResult {
 
-    /** 是否执行成功 */
+    /** Whether the execution succeeded */
     private boolean success;
 
-    /** 执行记录 ID */
+    /** Execution record ID */
     private Long executionRecordId;
 
-    /** 执行状态: SUCCESS, FAILED, TIMEOUT */
+    /** Execution status: SUCCESS, FAILED, TIMEOUT */
     private String status;
 
-    /** N8N 返回的输出数据 */
+    /** Output data returned by the AP flow */
     private Map<String, Object> outputData;
 
-    /** 错误信息（失败时） */
+    /** Error message (on failure) */
     private String errorMessage;
 
-    public static N8nExecutionResult success(Long executionRecordId, Map<String, Object> outputData) {
-        N8nExecutionResult result = new N8nExecutionResult();
+    public static ApExecutionResult success(Long executionRecordId, Map<String, Object> outputData) {
+        ApExecutionResult result = new ApExecutionResult();
         result.setSuccess(true);
         result.setExecutionRecordId(executionRecordId);
         result.setStatus("SUCCESS");
@@ -35,8 +35,8 @@ public class N8nExecutionResult {
         return result;
     }
 
-    public static N8nExecutionResult failure(Long executionRecordId, String status, String errorMessage) {
-        N8nExecutionResult result = new N8nExecutionResult();
+    public static ApExecutionResult failure(Long executionRecordId, String status, String errorMessage) {
+        ApExecutionResult result = new ApExecutionResult();
         result.setSuccess(false);
         result.setExecutionRecordId(executionRecordId);
         result.setStatus(status);

@@ -3,7 +3,6 @@ import type { ProcessNode, ProcessFlow } from '@/components/ProcessDiagram.vue'
 import type { HistoryRecord } from '@/components/ProcessHistory.vue'
 import type { FormField, FormTab } from '@/components/FormRenderer.vue'
 import FormRenderer from '@/components/FormRenderer.vue'
-import type { ActionDefinition } from '@/components/N8nActionDialog.vue'
 import type { RelationFieldDef } from '@/components/subTableAddDialogHelpers'
 import type { BindingFieldDefinition } from '@/utils/subTableRowRuntime'
 import type { SubTablePortalViews } from '@/components/formRendererHelpers'
@@ -107,11 +106,6 @@ export function createProcessStartState() {
     configJson?: string
   }>>([])
 
-  // N8N Action 对话框状态
-  const n8nActionDialogVisible = ref(false)
-  const n8nActionDefinition = ref<ActionDefinition>({ id: 0 })
-  const n8nInitialData = ref<Record<string, any> | undefined>(undefined)
-
   return {
     loading,
     loadError,
@@ -146,9 +140,6 @@ export function createProcessStartState() {
     relationViewConfigs,
     historyRecords,
     availableActions,
-    n8nActionDialogVisible,
-    n8nActionDefinition,
-    n8nInitialData,
   }
 }
 

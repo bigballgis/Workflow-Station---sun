@@ -17,7 +17,7 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * 流程相关调用协作类：流程部署/启动/清理、流程状态&历史、取消、N8N 执行、BPMN XML 获取。
+ * 流程相关调用协作类：流程部署/启动/清理、流程状态&历史、取消、BPMN XML 获取。
  *
  * <p>底层 HTTP 调用、URL、headers、payload 构造逐字保留；探活/鉴权/错误解析等公共能力
  * 委托回门面 {@link WorkflowEngineClient}（{@code @Lazy} 破除构造期循环依赖）。
@@ -270,38 +270,6 @@ public class WorkflowEngineProcessClient {
             }
         } catch (Exception e) {
             log.warn("Failed to cancel process instance in workflow engine: {}", e.getMessage());
-        }
-        return Optional.empty();
-    }
-
-    /**
-     * Executes N8N action (synchronous)
-     * Forwards execution via workflow-engine-core POST /api/v1/n8n/execute internal endpoint
-     *
-     * Validates: Requirements 10.19
-     */
-    @SuppressWarnings("unchecked")
-    public Optional<Map<String, Object>> executeN8nAction(Map<String, Object> request) {
-        if (!engine.isAvailable()) {
-            return Optional.empty();
-        }
-        try {
-            String url = engine.engineUrl() + "/api/v1/n8n/execute";
-
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            engine.forwardInboundAuthorization(headers);
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
-
-            ResponseEntity<Map<String, Object>> response = engine.restTemplate().exchange(
-                url, HttpMethod.POST, entity,
-                new ParameterizedTypeReference<Map<String, Object>>() {});
-
-            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()));
-            }
-        } catch (Exception e) {
-            log.warn("Failed to execute N8N action via workflow engine: {}", e.getMessage());
         }
         return Optional.empty();
     }

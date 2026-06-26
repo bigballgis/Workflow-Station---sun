@@ -13,10 +13,8 @@ interface UseActionConfigOptions {
       configJson?: { rule?: Array<{ field?: string; type?: string }> }
     }>
   }
-  // 注入回调（wrapper 闭包破环，避免与 binding / n8n composable 的循环依赖）
+  // 注入回调（wrapper 闭包破环，避免与 binding composable 的循环依赖）
   loadActionBinding: (actionId: string | number) => void
-  loadN8nConfigs: () => void
-  loadN8nWorkflows: (configId: string) => void
 }
 
 /**
@@ -24,7 +22,7 @@ interface UseActionConfigOptions {
  * 以及表单/角色相关的 computed。
  */
 export function useActionConfig(options: UseActionConfigOptions) {
-  const { selectedAction, store, loadActionBinding, loadN8nConfigs, loadN8nWorkflows } = options
+  const { selectedAction, store, loadActionBinding } = options
 
   // FORM_POPUP action: only show ACTION type forms
   const actionFormOptions = computed(() => store.forms.filter(f => f.formType === 'ACTION'))
@@ -57,13 +55,6 @@ export function useActionConfig(options: UseActionConfigOptions) {
     targetStatus: '',
     requireAssignee: false,
     targetStep: '',
-    // N8N Action fields
-    n8nConfigId: '',
-    n8nWorkflowId: '',
-    webhookUrl: '',
-    timeoutSeconds: 120,
-    inputMapping: [] as Array<{ paramName: string; paramLabel: string; paramType: string; required: boolean }>,
-    outputMapping: [] as Array<{ source: string; target: string }>,
     // Visibility, roles & sort order
     visibilityCondition: null as ConditionExpression[] | null,
     allowedRoles: [] as string[],
@@ -73,11 +64,6 @@ export function useActionConfig(options: UseActionConfigOptions) {
   watch(selectedAction, (action) => {
     if (action?.configJson) {
       Object.assign(actionConfig, action.configJson)
-      // Ensure N8N arrays are initialized
-      if (action.actionType === 'N8N_ACTION') {
-        if (!Array.isArray(actionConfig.inputMapping)) actionConfig.inputMapping = []
-        if (!Array.isArray(actionConfig.outputMapping)) actionConfig.outputMapping = []
-      }
     } else {
       // Reset to defaults
       Object.assign(actionConfig, {
@@ -94,13 +80,6 @@ export function useActionConfig(options: UseActionConfigOptions) {
         targetStatus: '',
         requireAssignee: false,
         targetStep: '',
-        // N8N Action fields
-        n8nConfigId: '',
-        n8nWorkflowId: '',
-        webhookUrl: '',
-        timeoutSeconds: 120,
-        inputMapping: [],
-        outputMapping: [],
         // Visibility, roles & sort order
         visibilityCondition: null as ConditionExpression[] | null,
         allowedRoles: [] as string[],
@@ -111,13 +90,6 @@ export function useActionConfig(options: UseActionConfigOptions) {
     // 加载当前动作的绑定信息
     if (action) {
       loadActionBinding(action.id)
-      // Load N8N configs if action type is N8N_ACTION
-      if (action.actionType === 'N8N_ACTION') {
-        loadN8nConfigs()
-        if (actionConfig.n8nConfigId) {
-          loadN8nWorkflows(actionConfig.n8nConfigId)
-        }
-      }
     }
   })
 

@@ -7,17 +7,17 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.*;
 
 /**
- * N8N variable mapping utility class.
- * Handles mapping conversion between workflow process variables and N8N workflow
+ * Activepieces variable mapping utility.
+ * Handles mapping conversion between workflow process variables and AP flow
  * input/output parameters.
  * Mapping configuration is stored in BPMN extension attributes as a JSON string
  * in the format [{source, target}].
  */
-public final class N8nVariableMappingUtil {
+public final class ApVariableMappingUtil {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
-    private N8nVariableMappingUtil() {
+    private ApVariableMappingUtil() {
         // utility class
     }
 
@@ -64,60 +64,40 @@ public final class N8nVariableMappingUtil {
 
     /**
      * Apply input mapping (JSON string version): extract data from Flowable process
-     * variables and build N8N request parameters based on the mapping configuration.
-     *
-     * @param processVariables process variables (source data)
-     * @param inputMappingJson JSON-formatted input mapping configuration string
-     * @return mapped N8N request parameters
+     * variables and build AP request parameters based on the mapping configuration.
      */
     public static Map<String, Object> applyInputMapping(Map<String, Object> processVariables,
-                                                         String inputMappingJson) {
+                                                        String inputMappingJson) {
         List<VariableMapping> mappings = parseMappingJson(inputMappingJson);
         return applyInputMapping(mappings, processVariables);
     }
 
     /**
      * Apply output mapping (JSON string version): build process variables from
-     * N8N return data based on the mapping configuration.
-     *
-     * @param n8nOutputData    output data returned by the N8N workflow
-     * @param outputMappingJson JSON-formatted output mapping configuration string
-     * @return mapped process variable data
+     * AP return data based on the mapping configuration.
      */
-    public static Map<String, Object> applyOutputMapping(Map<String, Object> n8nOutputData,
-                                                          String outputMappingJson) {
+    public static Map<String, Object> applyOutputMapping(Map<String, Object> apOutputData,
+                                                         String outputMappingJson) {
         List<VariableMapping> mappings = parseMappingJson(outputMappingJson);
-        return applyOutputMapping(mappings, n8nOutputData);
+        return applyOutputMapping(mappings, apOutputData);
     }
 
     /**
-     * Apply input mapping: build target data (N8N request parameters) from source
+     * Apply input mapping: build target data (AP request parameters) from source
      * data (process variables) based on the mapping configuration.
-     * Each mapping entry writes the value of the source field from sourceVariables
-     * into the target field of the result Map.
-     *
-     * @param mappings        mapping configuration list
-     * @param sourceVariables source data (process variables)
-     * @return mapped target data
      */
     public static Map<String, Object> applyInputMapping(List<VariableMapping> mappings,
-                                                         Map<String, Object> sourceVariables) {
+                                                        Map<String, Object> sourceVariables) {
         return applyMapping(mappings, sourceVariables);
     }
 
     /**
-     * Apply output mapping: build target data (process variables) from N8N
+     * Apply output mapping: build target data (process variables) from AP
      * return data based on the mapping configuration.
-     * Each mapping entry writes the value of the source field from n8nOutput
-     * into the target field of the result Map.
-     *
-     * @param mappings  mapping configuration list
-     * @param n8nOutput output data returned by the N8N workflow
-     * @return mapped process variable data
      */
     public static Map<String, Object> applyOutputMapping(List<VariableMapping> mappings,
-                                                          Map<String, Object> n8nOutput) {
-        return applyMapping(mappings, n8nOutput);
+                                                         Map<String, Object> apOutput) {
+        return applyMapping(mappings, apOutput);
     }
 
     /**
@@ -126,7 +106,7 @@ public final class N8nVariableMappingUtil {
      * Supports dot notation nested path resolution (e.g., "summary.totalAmount").
      */
     private static Map<String, Object> applyMapping(List<VariableMapping> mappings,
-                                                     Map<String, Object> sourceData) {
+                                                    Map<String, Object> sourceData) {
         if (mappings == null || mappings.isEmpty()) {
             return Collections.emptyMap();
         }
@@ -148,10 +128,6 @@ public final class N8nVariableMappingUtil {
      * Resolve nested values using dot notation.
      * Example: resolveNestedValue({"a": {"b": 1}}, "a.b") → 1
      * For paths without dots, directly uses data.get(path) (backward compatible).
-     *
-     * @param data source data Map
-     * @param path dot notation path
-     * @return resolved value, returns null if path is invalid
      */
     @SuppressWarnings("unchecked")
     private static Object resolveNestedValue(Map<String, Object> data, String path) {

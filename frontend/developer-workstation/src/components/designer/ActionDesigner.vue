@@ -199,10 +199,6 @@
                 :label="t('action.customScript')"
                 value="CUSTOM_SCRIPT"
               />
-              <el-option
-                :label="t('action.n8nAction')"
-                value="N8N_ACTION"
-              />
             </el-option-group>
           </el-select>
         </el-form-item>
@@ -309,219 +305,6 @@
               :placeholder="t('action.scriptCodePlaceholder')"
             />
           </el-form-item>
-        </template>
-
-        <!-- N8N Action Config -->
-        <template v-if="selectedAction.actionType === 'N8N_ACTION'">
-          <el-divider>{{ t('action.n8nConfig') }}</el-divider>
-          <el-form-item :label="t('action.n8nConfigId')">
-            <el-select
-              v-model="actionConfig.n8nConfigId"
-              :placeholder="t('action.n8nConfigPlaceholder')"
-              filterable
-              @change="onN8nConfigChange"
-            >
-              <el-option
-                v-for="config in n8nConfigList"
-                :key="config.id"
-                :label="config.name"
-                :value="config.id"
-              />
-            </el-select>
-          </el-form-item>
-          <el-form-item :label="t('action.n8nWorkflowId')">
-            <el-select
-              v-model="actionConfig.n8nWorkflowId"
-              :placeholder="t('action.n8nWorkflowPlaceholder')"
-              filterable
-              :disabled="!actionConfig.n8nConfigId"
-              @change="onN8nWorkflowChange"
-            >
-              <el-option
-                v-for="wf in n8nWorkflowList"
-                :key="wf.id"
-                :label="wf.name"
-                :value="wf.id"
-              />
-            </el-select>
-          </el-form-item>
-          <el-form-item :label="t('action.n8nWebhookUrl')">
-            <el-input
-              v-model="actionConfig.webhookUrl"
-              :placeholder="t('action.n8nWebhookUrlPlaceholder')"
-            />
-          </el-form-item>
-          <el-form-item :label="t('action.n8nTimeout')">
-            <el-input-number
-              v-model="actionConfig.timeoutSeconds"
-              :min="1"
-              :max="3600"
-            />
-            <span style="font-size: 11px; color: #909399; margin-left: 8px;">{{ t('action.n8nTimeoutUnit') }}</span>
-          </el-form-item>
-
-          <!-- Input Parameter Mapping -->
-          <div class="mapping-section">
-            <div class="mapping-header">
-              <span>{{ t('action.n8nInputMapping') }}</span>
-              <el-button
-                type="primary"
-                link
-                size="small"
-                @click="addN8nInputParam"
-              >
-                + {{ t('common.add') }}
-              </el-button>
-            </div>
-            <div class="table-scroll-wrap">
-            <el-table
-              v-if="actionConfig.inputMapping && actionConfig.inputMapping.length > 0"
-              :data="actionConfig.inputMapping"
-              size="small"
-              border
-            >
-              <el-table-column
-                :label="t('action.n8nParamName')"
-                min-width="100"
-              >
-                <template #default="{ row }">
-                  <el-input
-                    v-model="row.paramName"
-                    size="small"
-                    :placeholder="t('action.n8nParamNamePlaceholder')"
-                  />
-                </template>
-              </el-table-column>
-              <el-table-column
-                :label="t('action.n8nParamLabel')"
-                min-width="100"
-              >
-                <template #default="{ row }">
-                  <el-input
-                    v-model="row.paramLabel"
-                    size="small"
-                    :placeholder="t('action.n8nParamLabelPlaceholder')"
-                  />
-                </template>
-              </el-table-column>
-              <el-table-column
-                :label="t('action.n8nParamType')"
-                width="110"
-              >
-                <template #default="{ row }">
-                  <el-select
-                    v-model="row.paramType"
-                    size="small"
-                  >
-                    <el-option
-                      label="string"
-                      value="string"
-                    />
-                    <el-option
-                      label="number"
-                      value="number"
-                    />
-                    <el-option
-                      label="boolean"
-                      value="boolean"
-                    />
-                    <el-option
-                      label="select"
-                      value="select"
-                    />
-                  </el-select>
-                </template>
-              </el-table-column>
-              <el-table-column
-                :label="t('action.n8nParamRequired')"
-                width="70"
-                align="center"
-              >
-                <template #default="{ row }">
-                  <el-checkbox v-model="row.required" />
-                </template>
-              </el-table-column>
-              <el-table-column
-                width="50"
-                align="center"
-              >
-                <template #default="{ $index }">
-                  <el-button
-                    type="danger"
-                    link
-                    size="small"
-                    @click="removeN8nInputParam($index)"
-                  >
-                    ✕
-                  </el-button>
-                </template>
-              </el-table-column>
-            </el-table>
-            </div>
-          </div>
-
-          <!-- Output Result Mapping -->
-          <div class="mapping-section">
-            <div class="mapping-header">
-              <span>{{ t('action.n8nOutputMapping') }}</span>
-              <el-button
-                type="primary"
-                link
-                size="small"
-                @click="addN8nOutputMapping"
-              >
-                + {{ t('common.add') }}
-              </el-button>
-            </div>
-            <div class="table-scroll-wrap">
-            <el-table
-              v-if="actionConfig.outputMapping && actionConfig.outputMapping.length > 0"
-              :data="actionConfig.outputMapping"
-              size="small"
-              border
-            >
-              <el-table-column
-                :label="t('action.n8nOutputSource')"
-                min-width="120"
-              >
-                <template #default="{ row }">
-                  <el-input
-                    v-model="row.source"
-                    size="small"
-                    :placeholder="t('action.n8nOutputSourcePlaceholder')"
-                  />
-                </template>
-              </el-table-column>
-              <el-table-column
-                :label="t('action.n8nOutputTarget')"
-                min-width="120"
-              >
-                <template #default="{ row }">
-                  <el-input
-                    v-model="row.target"
-                    size="small"
-                    :placeholder="t('action.n8nOutputTargetPlaceholder')"
-                  />
-                </template>
-              </el-table-column>
-              <el-table-column
-                width="50"
-                align="center"
-              >
-                <template #default="{ $index }">
-                  <el-button
-                    type="danger"
-                    link
-                    size="small"
-                    @click="removeN8nOutputMapping($index)"
-                  >
-                    ✕
-                  </el-button>
-                </template>
-              </el-table-column>
-            </el-table>
-            </div>
-          </div>
         </template>
 
         <!-- Approve/Reject Config -->
@@ -764,7 +547,6 @@ import ConditionBuilder from './ConditionBuilder.vue'
 import type { ConditionExpression } from './formBusinessLogicTypes'
 import { useActionNodeBinding } from '@/composables/actionDesigner/useActionNodeBinding'
 import { useActionConfig } from '@/composables/actionDesigner/useActionConfig'
-import { useN8nAction } from '@/composables/actionDesigner/useN8nAction'
 import { useActionList } from '@/composables/actionDesigner/useActionList'
 import { useActionTest } from '@/composables/actionDesigner/useActionTest'
 
@@ -779,7 +561,7 @@ const selectedAction = ref<ActionDefinition | null>(null)
 // availableRoles：模板的 allowedRoles 下拉用，始终为空（保持原行为）
 const availableRoles = ref<string[]>([])
 
-// 节点绑定（独立，不依赖 config/n8n）
+// 节点绑定（独立，不依赖 config）
 const {
   bindingType,
   selectedNodeIds,
@@ -791,7 +573,7 @@ const {
   handleSaveBinding,
 } = useActionNodeBinding({ functionUnitId: props.functionUnitId, selectedAction, store, t })
 
-// 动作配置（watch 通过 wrapper 闭包延迟引用 n8n composable，破除 config↔n8n 循环依赖）
+// 动作配置
 const {
   actionConfig,
   actionFormOptions,
@@ -800,23 +582,7 @@ const {
   selectedAction,
   store,
   loadActionBinding,
-  loadN8nConfigs: () => loadN8nConfigs(),
-  loadN8nWorkflows: (configId: string) => loadN8nWorkflows(configId),
 })
-
-// N8N Action（依赖 actionConfig）
-const {
-  n8nConfigList,
-  n8nWorkflowList,
-  loadN8nConfigs,
-  loadN8nWorkflows,
-  onN8nConfigChange,
-  onN8nWorkflowChange,
-  addN8nInputParam,
-  removeN8nInputParam,
-  addN8nOutputMapping,
-  removeN8nOutputMapping,
-} = useN8nAction({ actionConfig })
 
 // 列表与编辑器生命周期（loadActions 通过 wrapper 调用 binding 的解析）
 const {
@@ -897,20 +663,5 @@ onMounted(loadActions)
   color: #909399;
   font-size: 12px;
   margin-left: 12px;
-}
-
-.mapping-section {
-  margin-bottom: 16px;
-  padding: 0 100px 0 0;
-
-  .mapping-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 8px;
-    font-size: 12px;
-    font-weight: 600;
-    color: #606266;
-  }
 }
 </style>

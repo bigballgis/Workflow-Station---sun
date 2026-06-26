@@ -2,10 +2,8 @@ import { ref, type Ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import { applyAutoFill } from '@/utils/n8nAutoFillEngine'
 import type { TaskActionInfo } from '@/api/task'
 import type { FormField, FormTab, PortalViewContext } from '@/components/formRendererHelpers'
-import { buildN8nAutoData } from './customActionN8n'
 import { createCustomActionReturnFlows } from './customActionReturnFlows'
 import { createCustomActionFormPopup } from './customActionFormPopup'
 import type { PreparedFormPopupContext } from './customActionTypes'
@@ -41,11 +39,6 @@ export function useCustomActions(options: {
 }) {
   const { t } = useI18n()
   const router = useRouter()
-
-  // N8N Action state
-  const n8nActionDialogVisible = ref(false)
-  const n8nActionDefinition = ref<{ id: number; actionName: string; configJson: string }>({ id: 0, actionName: '', configJson: '' })
-  const n8nInitialData = ref<Record<string, any> | undefined>(undefined)
 
   // Form popup state
   const formPopupVisible = ref(false)
@@ -144,57 +137,12 @@ export function useCustomActions(options: {
       case 'WITHDRAW':
         handleWithdrawAction(action)
         break
-      case 'N8N_ACTION':
-        try {
-          const config = action.configJson ? JSON.parse(action.configJson) : {}
-          const n8nAutoData = buildN8nAutoData(config, options.subTableBindings.value)
-          n8nActionDefinition.value = { id: Number(action.actionId) || 0, actionName: action.actionName, configJson: action.configJson ?? '' }
-          n8nInitialData.value = Object.keys(n8nAutoData).length > 0 ? n8nAutoData : undefined
-          n8nActionDialogVisible.value = true
-        } catch {
-          ElMessage.error(t('task.configParseFailed'))
-        }
-        break
       default:
         ElMessage.warning(t('task.unknownActionType', { type: action.actionType }))
     }
   }
 
-  function handleN8nActionExecuted(data: Record<string, any> | null) {
-    if (!data) return
-    try {
-      const config = n8nActionDefinition.value.configJson ? JSON.parse(n8nActionDefinition.value.configJson) : {}
-      const outputMapping = config.frontendOutputMapping
-      if (outputMapping) {
-        const result = applyAutoFill(
-          data,
-          outputMapping,
-          options.subTableBindings.value,
-          options.formData.value,
-        )
-        if (result.updatedBindings) {
-          for (const b of options.subTableBindings.value) {
-            const updated = result.updatedBindings.find((x: any) => x.bindingId === b.bindingId)
-            if (updated) b.data = updated.data
-          }
-        }
-        if (result.updatedFormData) {
-          options.formData.value = { ...options.formData.value, ...result.updatedFormData }
-        }
-        const filledCount = result.filledCount || 0
-        if (filledCount > 0) {
-          ElMessage.success(t('processStart.n8nAutoFillSuccess', { count: filledCount }))
-        }
-      }
-    } catch {
-      // ignore auto-fill errors
-    }
-  }
-
   return {
-    n8nActionDialogVisible,
-    n8nActionDefinition,
-    n8nInitialData,
     formPopupVisible,
     formPopupTitle,
     formPopupFields,
@@ -210,7 +158,6 @@ export function useCustomActions(options: {
     formPopupViewContext,
     currentFormPopupAction,
     handleCustomAction,
-    handleN8nActionExecuted,
     openFormPopup,
     submitFormPopup,
     handleFormPopupSubTableUpdate,

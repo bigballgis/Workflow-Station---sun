@@ -388,7 +388,6 @@ export default {
     processSubmitSuccess: '流程提交成功',
     submitFailed: '提交失敗',
     serviceFallbackName: '服務{index}',
-    n8nAutoFillSuccess: '已自動填充 {count} 條辨識結果',
     workspaceGuardTitle: '無法提交：缺少完整工作臺身份',
     workspaceGuardHint:
       '您的帳號關聯業務單元角色，發起流程前請在頁面頂部選擇「業務單元 · 角色」工作臺，或登出後重新登入。僅儲存草稿不受影響。',
@@ -903,26 +902,6 @@ export default {
   user: {
     username: '使用者名稱',
     email: '電子郵件'
-  },
-  n8nAction: {
-    title: 'N8N 工作流執行',
-    workflowName: '工作流',
-    workflowDescription: '描述',
-    inputParams: '輸入參數',
-    execute: '執行',
-    executing: '執行中...',
-    retry: '重試',
-    close: '關閉',
-    success: '執行成功',
-    failed: '執行失敗',
-    timeout: '執行逾時',
-    resultData: '結果資料',
-    errorMessage: '錯誤訊息',
-    requiredField: '{label} 為必填項',
-    noInputParams: '無需輸入參數',
-    timeoutMessage: '工作流執行已逾時，請重試。',
-    failedMessage: '工作流執行失敗。',
-    noResultData: '無結果資料'
   },
   fieldRenderer: {
     signature: '簽名',

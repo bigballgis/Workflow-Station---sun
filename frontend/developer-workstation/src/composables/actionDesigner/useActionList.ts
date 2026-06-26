@@ -46,8 +46,7 @@ export function useActionList(options: UseActionListOptions) {
       COMPOSITE: t('action.composite'),
       API_CALL: t('action.apiCall'),
       FORM_POPUP: t('action.formPopup'),
-      CUSTOM_SCRIPT: t('action.customScript'),
-      N8N_ACTION: t('action.n8nAction')
+      CUSTOM_SCRIPT: t('action.customScript')
     }
     return map[type] || type
   }
@@ -92,18 +91,6 @@ export function useActionList(options: UseActionListOptions) {
 
   async function handleSaveAction() {
     if (!selectedAction.value) return
-
-    // Validate N8N_ACTION required fields
-    if (selectedAction.value.actionType === 'N8N_ACTION') {
-      if (!actionConfig.n8nConfigId) {
-        ElMessage.error(t('action.n8nConfigRequired'))
-        return
-      }
-      if (!actionConfig.webhookUrl) {
-        ElMessage.error(t('action.n8nWebhookUrlRequired'))
-        return
-      }
-    }
 
     try {
       await store.updateAction(functionUnitId, selectedAction.value.id, {

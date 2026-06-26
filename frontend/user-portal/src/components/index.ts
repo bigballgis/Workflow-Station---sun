@@ -5,7 +5,6 @@ export { default as ProcessHistory } from './ProcessHistory.vue'
 export { default as ActionButtons } from './ActionButtons.vue'
 export { default as FileUploader } from './FileUploader.vue'
 export { default as DraggableDashboard } from './DraggableDashboard.vue'
-export { default as N8nActionDialog } from './N8nActionDialog.vue'
 
 // 仪表盘小组件
 export * from './widgets'
@@ -17,4 +16,3 @@ export type { HistoryRecord } from '@/types/historyRecord'
 export type { ActionButton } from './ActionButtons.vue'
 export type { FileInfo } from './FileUploader.vue'
 export type { DashboardWidget, WidgetType } from './DraggableDashboard.vue'
-export type { InputMappingParam, ActionDefinition } from './N8nActionDialog.vue'

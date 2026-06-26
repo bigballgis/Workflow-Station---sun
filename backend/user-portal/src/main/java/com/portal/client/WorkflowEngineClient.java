@@ -34,7 +34,7 @@ import java.util.Optional;
  *
  * <p>门面（facade）：被各 component 广泛注入。public 方法签名逐字不变；具体调用逻辑按职责委托给
  * 同包协作类 {@link WorkflowEngineTaskClient}（任务查询/操作/历史/权限）、
- * {@link WorkflowEngineProcessClient}（流程部署/状态/历史/N8N/BPMN）。
+ * {@link WorkflowEngineProcessClient}（流程部署/状态/历史/BPMN）。
  * 探活与鉴权（{@link #isAvailable()} / {@link #forwardInboundAuthorization} / {@link #authorizedGetEntity}）
  * 及底层 {@link RestTemplate}、引擎 URL 等公共能力保留在本类，供协作类调用。
  */
@@ -512,16 +512,6 @@ public class WorkflowEngineClient {
      */
     public Optional<Map<String, Object>> cancelProcessInstance(String processInstanceId, String reason) {
         return processClient.cancelProcessInstance(processInstanceId, reason);
-    }
-
-    /**
-     * Executes N8N action (synchronous)
-     * Forwards execution via workflow-engine-core POST /api/v1/n8n/execute internal endpoint
-     *
-     * Validates: Requirements 10.19
-     */
-    public Optional<Map<String, Object>> executeN8nAction(Map<String, Object> request) {
-        return processClient.executeN8nAction(request);
     }
 
     /**

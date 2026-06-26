@@ -227,3 +227,79 @@ sign-in 探测 → 已存在则跳过；不存在则 sign-up；未配置则跳�
 - ✅ **dev 全链路已实测**：admin 入口 → 桥 → 换 token → 进 AP（共享账号 ADMIN，/flows 正常、不循环）。
 - ✅ 引导脚本三路径已测：幂等成功 / 未配置跳过 / 密码不符明确报错。
 - 📦 **k8s/生产**：清单齐全、YAML 校验通过、ps1 开关接通；需集群侧验证（DNS/secret/ext_authz/mTLS）。
+
+---
+
+## 11. BPMN Service Task 调用 AP flow（Path B，已实现）
+
+让 **BPMN 流程**走到某一步时自动触发一个 **AP flow** 并把结果写回流程变量。**取代已弃用的 n8n service-task 通道**
+（n8n 已整体移除，仅 developer-workstation 的 AI 生成 webhook 例外保留——那是另一套独立服务）。
+
+### 11.1 设计抉择（两条都选了"轻"的）
+
+| 抉择 | 选定 | 原因 |
+|---|---|---|
+| **连接建模** | **共享实例 + flowId**（不建 `ac_*_config` 配置表） | AP 是每环境单实例 runtime；service task 只存 `ap:flowId`，**跨环境可移植**（n8n 存全量 URL，promote 时要改）。webhook URL 由引擎按环境拼。AP CE webhook 免鉴权，无需 apiKey。 |
+| **执行模式** | **同步 webhook**（无回调/无 Redis/无超时扫描） | POST 到 AP 的 sync webhook，flow 末尾用 **Return Response** 直接把结果回在 HTTP 响应里；引擎拿到就地映射回流程变量。比异步回调少一整套 token 机制，flow 作者也不用每条都接回调节点。 |
+
+### 11.2 数据流
+
+```
+BPMN 流程 ──→ service task (serviceType=ap, ap:flowId=xxx)
+   │  部署时 ProcessDeploymentManager 给该 task 绑定 flowable:delegateExpression=${apTaskExecutor}
+   ▼
+ApTaskExecutor.execute()  (workflow-engine, 同步 JavaDelegate)
+   │  ① 读 ap:* 扩展属性；inputMapping 从流程变量抽数据；/api/* 相对路径转 file-service 绝对 URL
+   │  ② 拼 URL = <activepieces.webhook-base-url>/api/v1/webhooks/<flowId>/sync（SSRF 校验，AP 主机加白）
+   │  ③ 同步 POST（指数退避重试 ap:retryCount 次）；建 wf_ap_execution_record（SERVICE_TASK）
+   ▼
+AP flow 同步执行 → Return Response 返回 JSON
+   │  ④ outputMapping 把响应映射成流程变量 → execution.setVariables(...)；记录置 SUCCESS
+   ▼
+Flowable 继续往下（失败则抛异常，可被 BPMN 错误边界捕获）
+```
+
+### 11.3 落点（代码）
+
+**后端（workflow-engine-core，全部 `com.workflow`）**
+- `component/ApTaskExecutor.java` —— `@Component("apTaskExecutor")`，`JavaDelegate`。`execute()` 走 service task 同步；
+  `executeSynchronous(ApActionRequest)` 供未来 Action 模式（已暴露 REST，前端未接）。
+- `component/ProcessDeploymentManager.java#bindActivepiecesServiceTasks` —— **部署期绑定**：用 Flowable `BpmnXMLConverter`
+  解析 BPMN，给带 `serviceType=ap`/`ap:flowId` 的 service task 注入 `flowable:delegateExpression="${apTaskExecutor}"`。
+  *（这步是 n8n 当年从设计器这条路一直没接通的关键缺口——designer 只写扩展属性、从不写 delegate，故 n8n service task 实际从未经设计器跑通；AP 在部署期补上。）*
+- `entity/ApExecutionRecord.java` → 表 `wf_ap_execution_record`（无 callback_token；status/source_type 同 n8n）。
+- `repository/ApExecutionRecordRepository.java`、`util/ApVariableMappingUtil.java`（input/output 映射，支持点号嵌套路径）。
+- `dto/request/ApActionRequest.java`、`dto/response/ApExecutionResult.java`。
+- `controller/ApExecutionController.java` —— `GET /api/workflow/ap/executions[/{id}]`（执行记录查询）、`POST /api/v1/ap/execute`（Action 同步）。
+- 配置：`activepieces.webhook-base-url`（`application.yml` 默认 `http://localhost:8086`；`application-docker.yml` `http://activepieces:80`；prod 经 `ACTIVEPIECES_WEBHOOK_BASE_URL`）。`RestTemplate` 读超时 10 分钟，够同步等长 flow。
+
+**前端（developer-workstation 设计器）**
+- `components/designer/properties/ServiceTaskProperties.vue` —— 服务类型新增 `ap`（替原 `n8n`），选中渲染 `ApTaskPropertiesPanel`。
+- `components/designer/properties/ApTaskPropertiesPanel.vue` —— 配 flowId / 可选 URL 覆盖 / 超时 / 重试 / 输入输出映射表。
+- `utils/apConfigSerializer.ts` + `api/ap.ts` —— 把配置序列化进 `<custom:property name="ap:*">` 扩展属性。
+- i18n：`properties.serviceTypeAp` + `properties.ap*`（en/zh-CN/zh-TW）。
+
+### 11.4 BPMN 扩展属性（写在 service task 的 `<extensionElements>` 里）
+
+| 属性 | 必填 | 含义 |
+|---|---|---|
+| `serviceType` | 是 | 固定 `ap`（绑定标记之一） |
+| `ap:flowId` | 是 | AP flow 的 webhook flow id（绑定标记之一；拼 URL 用） |
+| `ap:webhookUrl` | 否 | 完整 sync webhook URL 覆盖；留空则按环境拼 |
+| `ap:inputMapping` | 否 | `[{"source":"流程变量","target":"AP参数"}]` |
+| `ap:outputMapping` | 否 | `[{"source":"AP输出字段","target":"流程变量"}]`（支持 `a.b.c` 嵌套） |
+| `ap:timeoutSeconds` | 否 | 默认 120 |
+| `ap:retryCount` | 否 | 默认 3（指数退避） |
+
+### 11.5 关键注意（坑）
+
+- **AP flow 必须以 Return Response 结尾**：同步 webhook 靠它回结果；否则 outputMapping 拿不到数据。
+- **connection 不跨环境**：flow 引用的凭据是 per-环境的，导出不含密钥——**生产须预建同名 connection**（见 §7）。
+- **同步占线程**：service task 同步等待至多 `ap:timeoutSeconds`（受 RestTemplate 10 分钟读超时上限约束）。长流程慎用、设合理超时。
+- **SSRF**：URL 经 `SsrfProtection.validate`，仅把 `webhook-base-url` 的主机加白（docker 私网名 `activepieces` 因此放行；指向其它私网主机仍被拦）。
+- **文件**：inputData 里 `/api/*` 相对路径自动转 `file-service` 绝对 URL，便于 AP 经 Docker 网络取文件。
+
+### 11.6 待办
+
+- **AP Action 模式（用户态）**：后端 `POST /api/v1/ap/execute` 已就绪，但**前端用户态 Action UI 未实现**（随 n8n 一并移除了 n8n 的 Action 对话框/自动填充）。若需要，按 §11.3 后端能力补一套 AP Action 面板即可。
+- **端到端实测**：dev 起 AP + 建一条带 Webhook 触发 + Return Response 的 flow，部署一条含 AP service task 的 BPMN，跑通"触发→映射回写"。

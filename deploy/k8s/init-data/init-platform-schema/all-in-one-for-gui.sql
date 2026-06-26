@@ -915,16 +915,14 @@ COMMENT ON COLUMN wf_exception_records.status IS 'Exception status: PENDING, PRO
 COMMENT ON COLUMN wf_exception_records.resolution_method IS 'Resolution method: AUTO_RETRY, MANUAL_FIX, IGNORED, COMPENSATED';
 
 -- =====================================================
--- 5. N8N 执行记录 (wf_n8n_execution_record)
+-- 5. Activepieces 执行记录 (wf_ap_execution_record)
 -- =====================================================
-CREATE TABLE IF NOT EXISTS wf_n8n_execution_record (
+CREATE TABLE IF NOT EXISTS wf_ap_execution_record (
     id BIGSERIAL PRIMARY KEY,
     process_instance_id VARCHAR(64),
     task_id VARCHAR(64),
-    n8n_config_id VARCHAR(36),
-    n8n_workflow_id VARCHAR(100),
+    ap_flow_id VARCHAR(100),
     webhook_url VARCHAR(500),
-    callback_token VARCHAR(64),
     status VARCHAR(20) NOT NULL,
     source_type VARCHAR(20) NOT NULL,
     input_data JSONB,
@@ -933,20 +931,20 @@ CREATE TABLE IF NOT EXISTS wf_n8n_execution_record (
     retry_count INTEGER DEFAULT 0,
     started_at TIMESTAMP,
     completed_at TIMESTAMP,
-    timeout_seconds INTEGER DEFAULT 300,
+    timeout_seconds INTEGER DEFAULT 120,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT wf_n8n_exec_status_check CHECK (status IN ('PENDING', 'RUNNING', 'SUCCESS', 'FAILED', 'TIMEOUT')),
-    CONSTRAINT wf_n8n_exec_source_check CHECK (source_type IN ('SERVICE_TASK', 'ACTION'))
+    CONSTRAINT wf_ap_exec_status_check CHECK (status IN ('PENDING', 'RUNNING', 'SUCCESS', 'FAILED', 'TIMEOUT')),
+    CONSTRAINT wf_ap_exec_source_check CHECK (source_type IN ('SERVICE_TASK', 'ACTION'))
 );
 
-CREATE INDEX IF NOT EXISTS idx_n8n_exec_process_instance ON wf_n8n_execution_record(process_instance_id);
-CREATE INDEX IF NOT EXISTS idx_n8n_exec_task_id ON wf_n8n_execution_record(task_id);
-CREATE INDEX IF NOT EXISTS idx_n8n_exec_status ON wf_n8n_execution_record(status);
-CREATE INDEX IF NOT EXISTS idx_n8n_exec_created_at ON wf_n8n_execution_record(created_at);
+CREATE INDEX IF NOT EXISTS idx_ap_exec_process_instance ON wf_ap_execution_record(process_instance_id);
+CREATE INDEX IF NOT EXISTS idx_ap_exec_task_id ON wf_ap_execution_record(task_id);
+CREATE INDEX IF NOT EXISTS idx_ap_exec_status ON wf_ap_execution_record(status);
+CREATE INDEX IF NOT EXISTS idx_ap_exec_created_at ON wf_ap_execution_record(created_at);
 
-COMMENT ON TABLE wf_n8n_execution_record IS 'N8N 工作流执行记录';
-COMMENT ON COLUMN wf_n8n_execution_record.status IS '执行状态: PENDING, RUNNING, SUCCESS, FAILED, TIMEOUT';
-COMMENT ON COLUMN wf_n8n_execution_record.source_type IS '执行来源: SERVICE_TASK（任务节点触发）, ACTION（用户操作触发）';
+COMMENT ON TABLE wf_ap_execution_record IS 'Activepieces 工作流执行记录';
+COMMENT ON COLUMN wf_ap_execution_record.status IS '执行状态: PENDING, RUNNING, SUCCESS, FAILED, TIMEOUT';
+COMMENT ON COLUMN wf_ap_execution_record.source_type IS '执行来源: SERVICE_TASK（任务节点触发）, ACTION（用户操作触发）';
 
 
 -- =============================================================================
@@ -1917,21 +1915,6 @@ CREATE TABLE IF NOT EXISTS admin_log_retention_policies (
 );
 
 -- =====================================================
--- 15. N8N 连接配置 (ac_n8n_config)
--- =====================================================
-CREATE TABLE IF NOT EXISTS ac_n8n_config (
-    id VARCHAR(36) PRIMARY KEY,
-    name VARCHAR(100) NOT NULL,
-    base_url VARCHAR(500) NOT NULL,
-    api_key TEXT NOT NULL,
-    is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX IF NOT EXISTS idx_n8n_config_active ON ac_n8n_config(is_active);
-
--- =====================================================
 -- LDAP 同步审计表 (ac_ldap_sync_audit)
 -- 用途：①运维可视化 LDAP 用户/AD 组同步历史与失败原因；
 --      ②增量同步以最近一次 SUCCESS 记录的 snapshot_at 作为 AD whenChanged 水位起点。
@@ -1976,8 +1959,6 @@ COMMENT ON TABLE admin_permission_conflicts IS 'Permission conflict tracking';
 COMMENT ON TABLE admin_alert_rules IS 'Alert rules configuration';
 COMMENT ON TABLE admin_system_configs IS 'System configuration';
 COMMENT ON TABLE admin_audit_logs IS 'Audit trail';
-COMMENT ON TABLE ac_n8n_config IS 'N8N 自动化引擎连接配置';
-COMMENT ON COLUMN ac_n8n_config.api_key IS 'AES-256-GCM 加密存储的 N8N API 密钥';
 COMMENT ON TABLE ac_ldap_sync_audit IS 'LDAP 用户/AD 组同步审计日志（record of full/incremental/user/adgroup sync operations）';
 
 

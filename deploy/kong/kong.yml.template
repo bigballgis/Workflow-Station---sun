@@ -153,19 +153,6 @@ services:
         strip_path: false
         preserve_host: false
 
-  # n8n 回调
-  - name: workflow-engine-callback-service
-    url: http://workflow-engine:8080
-    connect_timeout: 60000
-    write_timeout: 60000
-    read_timeout: 60000
-    routes:
-      - name: n8n-callback-route
-        paths:
-          - /api/workflow/n8n/callback
-        strip_path: false
-        preserve_host: false
-
 # ============================================================
 # Plugins (全局插件)
 # ============================================================

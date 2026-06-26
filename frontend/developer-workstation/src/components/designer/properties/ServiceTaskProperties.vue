@@ -62,8 +62,8 @@
                 value="message"
               />
               <el-option
-                :label="t('properties.serviceTypeN8n')"
-                value="n8n"
+                :label="t('properties.serviceTypeAp')"
+                value="ap"
               />
               <el-option
                 :label="t('properties.serviceTypeDmn')"
@@ -197,10 +197,10 @@
             </el-form-item>
           </template>
 
-          <!-- N8N config -->
-          <template v-if="serviceType === 'n8n'">
-            <N8nTaskPropertiesPanel
-              ref="n8nPanelRef"
+          <!-- Activepieces config -->
+          <template v-if="serviceType === 'ap'">
+            <ApTaskPropertiesPanel
+              ref="apPanelRef"
               :modeler="modeler"
               :element="element"
             />
@@ -278,7 +278,7 @@ import {
   getExtensionProperties,
   setExtensionProperty
 } from '@/utils/bpmnExtensions'
-import N8nTaskPropertiesPanel from './N8nTaskPropertiesPanel.vue'
+import ApTaskPropertiesPanel from './ApTaskPropertiesPanel.vue'
 
 const { t } = useI18n()
 
@@ -292,9 +292,9 @@ const activeGroups = ref(['basic', 'service'])
 const taskName = ref('')
 const taskDescription = ref('')
 
-const serviceType = ref<'http' | 'script' | 'message' | 'n8n' | 'dmn'>('http')
+const serviceType = ref<'http' | 'script' | 'message' | 'ap' | 'dmn'>('http')
 
-const n8nPanelRef = ref<InstanceType<typeof N8nTaskPropertiesPanel> | null>(null)
+const apPanelRef = ref<InstanceType<typeof ApTaskPropertiesPanel> | null>(null)
 
 const httpUrl = ref('')
 const httpMethod = ref<'GET' | 'POST' | 'PUT' | 'DELETE'>('POST')
