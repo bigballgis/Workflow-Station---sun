@@ -30,8 +30,9 @@ const { URL } = require('url');
 const BASE = (process.env.AP_INTERNAL_URL || 'http://localhost:80').replace(/\/+$/, '');
 const EMAIL = process.env.ACTIVEPIECES_SHARED_EMAIL || '';
 const PASSWORD = process.env.ACTIVEPIECES_SHARED_PASSWORD || '';
-const FLOW = process.argv[2] || process.env.AP_FLOW || '';
+const FLOW = process.argv[2] || process.env.AP_FLOW || '';   // flow id / displayName / 'all'
 const OUT_FILE = process.argv[3] || process.env.OUT_FILE || '';
+const OUT_DIR = process.env.OUT_DIR || 'deploy/ap-flows';     // 'all' 模式的输出目录
 
 function req(method, path, body, token) {
   return new Promise((resolve, reject) => {
@@ -71,35 +72,64 @@ async function resolveFlowId(token, projectId, flow) {
   return hit.id;
 }
 
-async function main() {
-  if (!EMAIL || !PASSWORD) throw new Error('ACTIVEPIECES_SHARED_EMAIL / ACTIVEPIECES_SHARED_PASSWORD required');
-  if (!FLOW) throw new Error('flow id or name required (arg1 or AP_FLOW)');
-  const { token, projectId } = await signIn();
-  const flowId = await resolveFlowId(token, projectId, FLOW);
-  const r = await req('GET', '/api/v1/flows/' + flowId, null, token);
-  if (r.status !== 200) throw new Error('export GET failed: HTTP ' + r.status);
-  const f = JSON.parse(r.body);
+// 只保留跨环境可移植的定义,丢掉 per-环境 id（id/projectId/publishedVersionId/connectionIds 等）
+function buildExport(f) {
   const v = f.version || {};
-  // 只保留跨环境可移植的定义,丢掉 per-环境 id（id/projectId/publishedVersionId/connectionIds 等）
-  const out = {
+  return {
     displayName: v.displayName,
     schemaVersion: v.schemaVersion,
     externalId: f.externalId || null, // 稳定标识(可选),便于跨环境对齐
     trigger: v.trigger,
-    _exportedFrom: { flowId, projectId },
+    _exportedFrom: { flowId: f.id, projectId: f.projectId },
   };
-  const json = JSON.stringify(out, null, 2);
+}
 
-  // 提示:flow 引用的 connection 不跟着导(凭据是 per-环境)。扫出引用的 connection 名,
-  // 提醒操作者在目标环境**预先建好同名 connection**(否则发布/运行会失败)。
+// flow 引用的 connection 不跟着导(凭据 per-环境)。扫出引用名,提醒目标环境**预建同名**。
+function warnConnections(json, label) {
   const conns = new Set();
   for (const m of json.matchAll(/connections\[['"]([^'"]+)['"]\]/g)) conns.add(m[1]);
   if (conns.size > 0) {
-    console.error('[ap-export] ⚠ 此 flow 引用了 ' + conns.size + ' 个 connection,目标环境须预建同名:'
+    console.error('[ap-export] ⚠ "' + label + '" 引用了 ' + conns.size + ' 个 connection,目标环境须预建同名:'
       + Array.from(conns).map((c) => '\n    - ' + c).join(''));
   }
+}
 
-  if (OUT_FILE) { fs.writeFileSync(OUT_FILE, json + '\n'); console.error('[ap-export] wrote ' + OUT_FILE + ' (flow "' + v.displayName + '")'); }
+// displayName → 安全文件名
+function safeName(name) {
+  return String(name || 'flow').replace(/[^\w.\- ]+/g, '_').trim().replace(/\s+/g, '-') || 'flow';
+}
+
+async function main() {
+  if (!EMAIL || !PASSWORD) throw new Error('ACTIVEPIECES_SHARED_EMAIL / ACTIVEPIECES_SHARED_PASSWORD required');
+  if (!FLOW) throw new Error("flow id / name or 'all' required (arg1 or AP_FLOW)");
+  const { token, projectId } = await signIn();
+
+  // 'all':导出项目里所有 flow → OUT_DIR/<name>.json(CI 全量导出用)
+  if (FLOW === 'all') {
+    const list = await req('GET', '/api/v1/flows?projectId=' + projectId + '&limit=100', null, token);
+    const flows = (JSON.parse(list.body).data) || [];
+    if (!fs.existsSync(OUT_DIR)) fs.mkdirSync(OUT_DIR, { recursive: true });
+    for (const lite of flows) {
+      const full = JSON.parse((await req('GET', '/api/v1/flows/' + lite.id, null, token)).body);
+      const out = buildExport(full);
+      const json = JSON.stringify(out, null, 2);
+      warnConnections(json, out.displayName);
+      const file = OUT_DIR + '/' + safeName(out.displayName) + '.json';
+      fs.writeFileSync(file, json + '\n');
+      console.error('[ap-export] wrote ' + file);
+    }
+    console.error('[ap-export] exported ' + flows.length + ' flow(s) to ' + OUT_DIR);
+    return;
+  }
+
+  // 单条:flow id / displayName
+  const flowId = await resolveFlowId(token, projectId, FLOW);
+  const r = await req('GET', '/api/v1/flows/' + flowId, null, token);
+  if (r.status !== 200) throw new Error('export GET failed: HTTP ' + r.status);
+  const out = buildExport(JSON.parse(r.body));
+  const json = JSON.stringify(out, null, 2);
+  warnConnections(json, out.displayName);
+  if (OUT_FILE) { fs.writeFileSync(OUT_FILE, json + '\n'); console.error('[ap-export] wrote ' + OUT_FILE + ' (flow "' + out.displayName + '")'); }
   else { process.stdout.write(json + '\n'); }
 }
 

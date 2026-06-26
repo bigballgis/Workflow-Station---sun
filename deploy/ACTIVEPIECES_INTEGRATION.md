@@ -189,11 +189,13 @@ sign-in 探测 → 已存在则跳过；不存在则 sign-up；未配置则跳�
 - ✅ **MVP（方案 B）已落地并实测**：`deploy/scripts/ap-export.js` + `ap-import.js`（自包含 node，照 bootstrap 范式）+
   git 目录 `deploy/ap-flows/`（见其 [README](ap-flows/README.md)）。dev 实测:导出 aptest → JSON → 幂等 re-import（创建/覆盖/发布/启用全 200）。
   各 AP CE flow 操作实测可用:`POST /flows`(201)/`IMPORT_FLOW`(200)/`LOCK_AND_PUBLISH`(200)/`CHANGE_STATUS`(200)。
-- **发布触发=Jenkins(已定案)**：生产发布走 **Jenkins 流水线**(不是 k8s Job)。模板见
-  [deploy/ci/Jenkinsfile.ap-flows-publish](ci/Jenkinsfile.ap-flows-publish):手动触发带参数(选环境/选 flow + prod 二次确认)→
-  checkout → 读 `deploy/ap-flows/*.json` → 跑 `ap-import.js` 发到目标 AP。凭据走 Jenkins credentials,**三处需按环境填**(agent/AP_URL/credentialsId,模板里已标 TODO)。
+- **导出 + 发布都走 Jenkins(已定案)**：整条 test→git→prod 生命周期由 **Jenkins** 驱动(不是 k8s Job):
+  - **导出**:[deploy/ci/Jenkinsfile.ap-flows-export](ci/Jenkinsfile.ap-flows-export) —— 从非生产导出(`FLOW=all`/单条)→ 写 `deploy/ap-flows/` → 提交推分支 → 开 PR。
+  - **发布**:[deploy/ci/Jenkinsfile.ap-flows-publish](ci/Jenkinsfile.ap-flows-publish) —— 手动触发带参数(选环境/选 flow + prod 二次确认)→ 读 git JSON → 跑 `ap-import.js` 发到目标 AP。
+  - 凭据走 Jenkins credentials;两份模板里都标了 **按环境填的 TODO**(agent/AP_URL/credentialsId/git-push 凭据)。
+- **admin-center 不再需要 AP 发布/导出 UI**：CI 全包了。admin 的「Activepieces」菜单(进 AP 搭 flow 的 SSO 桥)**保留**,那是另一回事。
 
-**三个待定项的决策**：① git 组织=**一 flow 一 JSON**,按 `displayName` 幂等对齐;② 触发=**Jenkins 手动流水线**;③ 生产 connection=**手动预建同名**(暂不脚本化引导)。
+**三个待定项的决策**：① git 组织=**一 flow 一 JSON**,按 `displayName` 幂等对齐;② 触发=**Jenkins 流水线(导出+发布两个 job)**;③ 生产 connection=**手动预建同名**(ap-export 导出时会提示引用了哪些 connection)。
 
 **已知边界(实测)**:① connection 不跟着导,生产须预建同名(见 §11.5);② **flowId 跨环境会变**——目标环境新建 flow 有新 id,ap-import.js 末尾打印,BPMN 的 `ap:flowId` 按目标环境填。
 

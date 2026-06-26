@@ -1,0 +1,102 @@
+// =============================================================================
+// Activepieces flow 导出流水线(非生产 → git),见 deploy/ACTIVEPIECES_INTEGRATION.md §7
+//
+// 做的事:从**非生产** AP(用共享账号)导出 flow 定义 → 写进 deploy/ap-flows/*.json →
+//        提交到一个新分支并推回 GitHub → 提示去开 PR。合并后由
+//        Jenkinsfile.ap-flows-publish 发到生产。
+//
+// 为什么用 job 而不是 admin 页:导出+发布两端都在 Jenkins,整条 test→git→prod 生命周期 CI 全包,
+// 不必再在 admin-center 做发布/导出 UI(admin 的「Activepieces」菜单=进 AP 搭 flow,那个仍保留)。
+//
+// ⚠️ 四处必须按你们环境改(下方都标了 TODO):
+//   1. agent —— 需含 node + git。alpine 默认无 git,这里启动时 apk add;或换成自带 git 的镜像。
+//   2. AP_URLS —— 各非生产环境 AP 可达地址。
+//   3. credentialsId(AP)—— 各环境 AP 共享账号(username=email)。
+//   4. GIT_PUSH_CRED + REPO_URL —— 推回 GitHub 的凭据(token/SSH)与仓库地址。
+// =============================================================================
+
+pipeline {
+  // TODO(1): 用含 node+git 的 agent;或保留下面的 node 镜像并在 Setup 阶段装 git
+  agent { docker { image 'node:20-alpine' } }
+
+  parameters {
+    choice(name: 'SOURCE_ENV', choices: ['dev', 'uat', 'sit'], description: '从哪个非生产环境导出')
+    string(name: 'FLOW', defaultValue: 'all',
+           description: "导出哪条 flow:'all' = 项目里全部;或填单条的 flow id / displayName")
+    string(name: 'BRANCH_PREFIX', defaultValue: 'ap-flows/export',
+           description: '推到 GitHub 的分支前缀(实际分支会带 build 号)')
+  }
+
+  environment {
+    // TODO(2): 各非生产环境 AP 可达地址
+    AP_URL_DEV = 'http://activepieces-service.dev:80'
+    AP_URL_UAT = 'http://activepieces-service.uat:80'
+    AP_URL_SIT = 'http://activepieces-service.sit:80'
+    // TODO(4): 仓库地址(给 git push 用)
+    REPO_URL   = 'github.com/bigballgis/Workflow-Station---sun.git'
+  }
+
+  stages {
+    stage('Setup') {
+      steps {
+        sh 'command -v git >/dev/null 2>&1 || apk add --no-cache git'  // alpine 无 git 时装上
+        script {
+          env.AP_INTERNAL_URL = [
+            dev: env.AP_URL_DEV, uat: env.AP_URL_UAT, sit: env.AP_URL_SIT
+          ][params.SOURCE_ENV]
+          // TODO(3): 各环境 AP 共享账号凭据 id
+          env.AP_CRED_ID = "ap-shared-account-${params.SOURCE_ENV}"
+          env.FLOW = params.FLOW
+          env.BRANCH = "${params.BRANCH_PREFIX}-${params.SOURCE_ENV}-${env.BUILD_NUMBER}"
+          echo "从 ${env.AP_INTERNAL_URL} 导出 flow=${env.FLOW} → 分支 ${env.BRANCH}"
+        }
+      }
+    }
+
+    stage('Export from AP') {
+      steps {
+        withCredentials([usernamePassword(
+            credentialsId: "${env.AP_CRED_ID}",
+            usernameVariable: 'ACTIVEPIECES_SHARED_EMAIL',
+            passwordVariable: 'ACTIVEPIECES_SHARED_PASSWORD')]) {
+          sh '''
+            set -eu
+            if [ "$FLOW" = "all" ]; then
+              # 全量:导出项目里所有 flow 到 deploy/ap-flows/<name>.json
+              AP_FLOW=all OUT_DIR=deploy/ap-flows node deploy/scripts/ap-export.js
+            else
+              # 单条:写到 deploy/ap-flows/<FLOW>.json(FLOW 用干净的名字)
+              node deploy/scripts/ap-export.js "$FLOW" "deploy/ap-flows/$FLOW.json"
+            fi
+            echo "==> 导出后 deploy/ap-flows:"; ls -1 deploy/ap-flows/*.json
+          '''
+        }
+      }
+    }
+
+    stage('Commit & push to git') {
+      steps {
+        // TODO(4): 推回 GitHub 的凭据(username/token 类型;SSH 则改用 sshagent)
+        withCredentials([usernamePassword(
+            credentialsId: 'github-ap-flows-push',
+            usernameVariable: 'GIT_USER',
+            passwordVariable: 'GIT_TOKEN')]) {
+          sh '''
+            set -eu
+            git config user.email "ci@platform.local"
+            git config user.name  "AP Export Bot"
+            if git diff --quiet -- deploy/ap-flows && git diff --cached --quiet -- deploy/ap-flows; then
+              echo "deploy/ap-flows 无变化,跳过提交(目标环境与 git 已一致)。"; exit 0
+            fi
+            git checkout -b "$BRANCH"
+            git add deploy/ap-flows
+            git commit -m "chore(ap): export flows from $SOURCE_ENV (build $BUILD_NUMBER)"
+            git push "https://${GIT_USER}:${GIT_TOKEN}@${REPO_URL}" "HEAD:$BRANCH"
+            echo "==== 已推送分支 $BRANCH ===="
+            echo "去 GitHub 开 PR 评审合并到主干;合并后用 Jenkinsfile.ap-flows-publish 发到生产。"
+          '''
+        }
+      }
+    }
+  }
+}

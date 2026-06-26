@@ -23,14 +23,19 @@ Activepieces flow 的**定义**单一事实来源。非生产搭好 flow → 导
 
 ## 用法
 
-### 导出(非生产)
+### 导出(非生产 → git)
+**首选走 Jenkins**:[../ci/Jenkinsfile.ap-flows-export](../ci/Jenkinsfile.ap-flows-export) —— 从指定非生产环境导出
+(`FLOW=all` 全量 / 或单条)→ 写进 `deploy/ap-flows/` → 提交并推一个新分支 → 你去开 PR 评审合并。
+
+本地一次性导出也行(dev,脚本经 stdin 喂进 AP 容器):
 ```bash
-# dev:脚本经 stdin 喂进 AP 容器,stdout 重定向到 git 文件
 PW=$(docker exec platform-admin-center-dev sh -c 'printf %s "$ACTIVEPIECES_SHARED_PASSWORD"')
+# 单条 → stdout 重定向到文件
 docker exec -e AP_INTERNAL_URL=http://localhost:80 \
   -e ACTIVEPIECES_SHARED_EMAIL=hermes-svc@platform.local -e ACTIVEPIECES_SHARED_PASSWORD="$PW" \
   -e AP_FLOW=aptest -i platform-activepieces-dev node - \
   < deploy/scripts/ap-export.js > deploy/ap-flows/aptest.json
+# 全量 → AP_FLOW=all + OUT_DIR(容器内路径,再 docker cp 出来)
 # 审阅 diff → 提交 git
 ```
 
