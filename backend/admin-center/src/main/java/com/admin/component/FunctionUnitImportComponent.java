@@ -71,14 +71,20 @@ public class FunctionUnitImportComponent {
             FunctionUnitManagerComponent.FunctionPackageContent packageContent = parsed.getPackageContent();
 
             // 3. No conflict strategy: name absent → import as a new unit; name present → overwrite the
-            //    latest row's content in place. Import does NOT bump the version — version increments are
-            //    owned by deploy. The imported package just becomes the new pending image of that unit.
+            //    latest row's content in place. The version number is the Developer Workstation's
+            //    currentVersion, carried in the export manifest (packageContent.getVersion()); adopt it so
+            //    sys_function_units.version tracks the published version and the portal stops showing a
+            //    stale number. Reusing the same row keeps idx_function_unit_code_enabled (unique on
+            //    code WHERE enabled) satisfied; (name, version) is non-unique so re-stamping is safe.
             FunctionUnit existingByName = functionUnitRepository.findLatestByName(packageContent.getName()).orElse(null);
             final boolean versioned = existingByName != null;
             if (versioned) {
-                // Keep the existing code + version unchanged; reuse the same row.
+                // Keep the existing code; reuse the same row. Adopt the manifest version, falling back to
+                // the existing version only when the package omits one (legacy / malformed export).
                 packageContent.setCode(existingByName.getCode());
-                packageContent.setVersion(existingByName.getVersion());
+                if (packageContent.getVersion() == null || packageContent.getVersion().isBlank()) {
+                    packageContent.setVersion(existingByName.getVersion());
+                }
             } else if (packageContent.getCode() != null
                     && functionUnitRepository.existsByCodeAndVersion(packageContent.getCode(), packageContent.getVersion())) {
                 // New name but the (code, version) pair is taken under another name → pick the next free version.
@@ -424,6 +430,11 @@ public class FunctionUnitImportComponent {
         functionUnitRepository.flush();
 
         existing.setDescription(packageContent.getDescription());
+        // Adopt the published version from the export manifest so the deployed row (and the portal
+        // catalog, which dedupes by code keeping the highest semver) reflects the real version.
+        if (packageContent.getVersion() != null && !packageContent.getVersion().isBlank()) {
+            existing.setVersion(packageContent.getVersion());
+        }
         existing.setPackagePath(request.getFilePath());
         existing.setPackageSize(request.getFileContent() != null ? (long) request.getFileContent().length() : 0L);
         existing.setChecksum(ChecksumUtils.sha256Hex(request.getFileContent()));
