@@ -96,15 +96,48 @@ async function loadSelectedView() {
 
 watch(selectedViewId, loadSelectedView)
 
-function openCreateDialog(tableId: number) {
-  createTableId.value = tableId
+// tableId pre-selects the table (per-group +). Omit it (top-level +) to let the user pick the table.
+function openCreateDialog(tableId?: number) {
+  createTableId.value = tableId ?? (viewableTables.value[0]?.id ?? null)
   newViewName.value = ''
   createDialogVisible.value = true
 }
 
+const seeding = ref(false)
+
+// Some viewable tables have no view yet (e.g. legacy function units created before per-table views).
+const hasTablesWithoutViews = computed(() => {
+  const tablesWithView = new Set(views.value.map(v => v.mainTableId))
+  return viewableTables.value.some(tbl => !tablesWithView.has(tbl.id))
+})
+
+async function handleSeedDefaults() {
+  seeding.value = true
+  try {
+    const res = await mainTableViewApi.seedDefaults(props.functionUnitId)
+    views.value = res.data || []
+    if (!selectedViewId.value && views.value.length) {
+      selectedViewId.value = views.value[0].id
+    }
+    await loadSelectedView()
+    ElMessage.success(t('mainTableView.defaultsGenerated'))
+  } catch (e: any) {
+    ElMessage.error(e?.message || t('common.saveFailed'))
+  } finally {
+    seeding.value = false
+  }
+}
+
 async function handleCreateView() {
   const name = newViewName.value.trim()
-  if (!name || !createTableId.value) return
+  if (!createTableId.value) {
+    ElMessage.warning(t('mainTableView.selectTablePlaceholder'))
+    return
+  }
+  if (!name) {
+    ElMessage.warning(t('mainTableView.viewNamePlaceholder'))
+    return
+  }
   try {
     const res = await mainTableViewApi.create(props.functionUnitId, name, createTableId.value)
     createDialogVisible.value = false
@@ -185,13 +218,33 @@ onMounted(async () => {
         >
           <div class="panel-header">
             <span v-show="!navCollapsed">{{ t('mainTableView.viewList') }}</span>
-            <el-button
-              text
-              size="small"
-              :icon="navCollapsed ? DArrowRight : DArrowLeft"
-              :title="navCollapsed ? t('mainTableView.expandNav') : t('mainTableView.collapseNav')"
-              @click="navCollapsed = !navCollapsed"
-            />
+            <div class="panel-header-actions">
+              <el-button
+                v-if="!navCollapsed && hasTablesWithoutViews"
+                type="primary"
+                size="small"
+                link
+                :loading="seeding"
+                @click="handleSeedDefaults"
+              >
+                {{ t('mainTableView.generateDefaults') }}
+              </el-button>
+              <el-button
+                v-if="!navCollapsed"
+                type="primary"
+                size="small"
+                :icon="Plus"
+                :title="t('mainTableView.createView')"
+                @click="openCreateDialog()"
+              />
+              <el-button
+                text
+                size="small"
+                :icon="navCollapsed ? DArrowRight : DArrowLeft"
+                :title="navCollapsed ? t('mainTableView.expandNav') : t('mainTableView.collapseNav')"
+                @click="navCollapsed = !navCollapsed"
+              />
+            </div>
           </div>
 
           <div
@@ -258,8 +311,17 @@ onMounted(async () => {
           />
           <el-empty
             v-else
-            :description="t('mainTableView.selectView')"
-          />
+            :description="views.length ? t('mainTableView.selectView') : t('mainTableView.noViewsYet')"
+          >
+            <el-button
+              v-if="hasTablesWithoutViews"
+              type="primary"
+              :loading="seeding"
+              @click="handleSeedDefaults"
+            >
+              {{ t('mainTableView.generateDefaults') }}
+            </el-button>
+          </el-empty>
         </div>
       </div>
     </template>
@@ -269,10 +331,31 @@ onMounted(async () => {
       :title="t('mainTableView.createView')"
       width="400px"
     >
-      <el-input
-        v-model="newViewName"
-        :placeholder="t('mainTableView.viewNamePlaceholder')"
-      />
+      <el-form
+        label-position="top"
+        @submit.prevent
+      >
+        <el-form-item :label="t('mainTableView.selectTable')">
+          <el-select
+            v-model="createTableId"
+            :placeholder="t('mainTableView.selectTablePlaceholder')"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="tbl in viewableTables"
+              :key="tbl.id"
+              :label="tableLabel(tbl)"
+              :value="tbl.id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item :label="t('mainTableView.viewName')">
+          <el-input
+            v-model="newViewName"
+            :placeholder="t('mainTableView.viewNamePlaceholder')"
+          />
+        </el-form-item>
+      </el-form>
       <template #footer>
         <el-button @click="createDialogVisible = false">
           {{ t('common.cancel') }}
@@ -317,6 +400,11 @@ onMounted(async () => {
   padding: 10px 8px 10px 12px;
   font-weight: 600;
   border-bottom: 1px solid var(--el-border-color-lighter);
+}
+.panel-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 .view-groups {
   flex: 1;

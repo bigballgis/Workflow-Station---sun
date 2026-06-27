@@ -48,6 +48,14 @@ public class MainTableViewController {
         return ResponseEntity.ok(ApiResponse.success(mainTableViewService.createView(functionUnitId, request)));
     }
 
+    @PostMapping("/seed-defaults")
+    @Operation(summary = "Generate default views for every MAIN/SUB table that has none")
+    @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
+    public ResponseEntity<ApiResponse<List<MainTableViewDTO>>> seedDefaults(@PathVariable Long functionUnitId) {
+        mainTableViewService.seedDefaultViewsForFunctionUnit(functionUnitId);
+        return ResponseEntity.ok(ApiResponse.success(mainTableViewService.listViews(functionUnitId)));
+    }
+
     @PutMapping("/{viewId}")
     @Operation(summary = "Update Main Table view")
     @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")

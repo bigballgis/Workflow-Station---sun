@@ -243,6 +243,13 @@
   .col-fk-icon { font-size: 12px; }
 }
 
+.cell-fk-link {
+  color: var(--el-color-primary);
+  cursor: pointer;
+
+  &:hover { text-decoration: underline; }
+}
+
 
 
 .sort-icon.active {
@@ -334,14 +341,18 @@
 
 
 .properties-header {
-  position: relative;
   margin-bottom: 16px;
 }
 
+.properties-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .props-collapse-btn {
-  position: absolute;
-  top: 0;
-  right: 0;
+  flex-shrink: 0;
   cursor: pointer;
   color: var(--el-text-color-secondary);
 

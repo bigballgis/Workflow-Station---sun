@@ -217,7 +217,8 @@ public class MainTableViewServiceImpl implements MainTableViewService {
                 // workflow runtime, so the default start_time sort only applies there. SUB tables sort
                 // by their own field order.
                 .sortConfig(isMain ? defaultSortConfig() : new ArrayList<>())
-                .viewName(DEFAULT_VIEW_NAME)
+                // Default view name mirrors the table's name (matches Table Design).
+                .viewName(defaultViewName(table))
                 .isDefault(true)
                 .filterConfig(Map.of("conditions", List.of()))
                 .status(MainTableViewStatus.DRAFT)
@@ -241,6 +242,16 @@ public class MainTableViewServiceImpl implements MainTableViewService {
             addDefaultSystemFields(config, order);
         }
         return config;
+    }
+
+    private String defaultViewName(TableDefinition table) {
+        if (table.getTableDisplayName() != null && !table.getTableDisplayName().isBlank()) {
+            return table.getTableDisplayName();
+        }
+        if (table.getTableName() != null && !table.getTableName().isBlank()) {
+            return table.getTableName();
+        }
+        return DEFAULT_VIEW_NAME;
     }
 
     private void addDefaultSystemFields(MainTableViewConfig config, int startOrder) {

@@ -27,15 +27,6 @@ const {
 <template>
 <div class="main-table-view-designer">
     <div class="designer-toolbar">
-      <div class="toolbar-left">
-        <el-button
-          size="small"
-          :icon="Plus"
-          @click="columnsPanelOpen = true"
-        >
-          {{ t('mainTableView.addViewColumn') }}
-        </el-button>
-      </div>
       <div class="toolbar-right">
         <el-button
           type="primary"
@@ -333,7 +324,13 @@ const {
 
             >
 
-              {{ getMockValue(field, rowIdx - 1) }}
+              <a
+                v-if="isFkField(field.fieldName)"
+                class="cell-fk-link"
+                :title="t('mainTableView.openRelatedView')"
+                @click="onFkColumnClick(field.fieldName)"
+              >{{ getMockValue(field, rowIdx - 1) }}</a>
+              <template v-else>{{ getMockValue(field, rowIdx - 1) }}</template>
 
             </div>
 
@@ -378,19 +375,18 @@ const {
 
         <div class="properties-header">
 
-          <div class="properties-title">
-
-            {{ viewName || props.view.viewName }}
-
+          <div class="properties-title-row">
+            <div class="properties-title">
+              {{ viewName || props.view.viewName }}
+            </div>
+            <el-icon
+              class="props-collapse-btn"
+              :title="t('mainTableView.collapseProps')"
+              @click="propsPanelOpen = false"
+            >
+              <DArrowRight />
+            </el-icon>
           </div>
-
-          <el-icon
-            class="props-collapse-btn"
-            :title="t('mainTableView.collapseProps')"
-            @click="propsPanelOpen = false"
-          >
-            <DArrowRight />
-          </el-icon>
 
           <div class="properties-subtitle">
 

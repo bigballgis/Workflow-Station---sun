@@ -93,4 +93,10 @@ export const mainTableViewApi = {
 
   delete: (functionUnitId: number, viewId: number) =>
     functionUnitAxios.delete(`/api/v1/function-units/${functionUnitId}/main-table-views/${viewId}`),
+
+  // Generate a default view for every MAIN/SUB table that has none (for legacy function units).
+  seedDefaults: (functionUnitId: number) =>
+    functionUnitAxios.post<any, { data: MainTableViewDefinition[] }>(
+      `/api/v1/function-units/${functionUnitId}/main-table-views/seed-defaults`,
+    ),
 }
