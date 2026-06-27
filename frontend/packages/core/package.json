@@ -1,0 +1,13 @@
+{
+  "name": "@workflow-station/core",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "三个前端 app（admin-center / user-portal / developer-workstation）的共享代码：消除 ISSUE-095 的复制粘贴。",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./languageLabel": "./src/languageLabel.ts"
+  }
+}

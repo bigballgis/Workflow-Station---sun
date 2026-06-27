@@ -4,6 +4,7 @@ import com.workflow.entity.ExceptionRecord;
 import com.workflow.entity.ExceptionRecord.ExceptionSeverity;
 import com.workflow.entity.ExceptionRecord.ExceptionStatus;
 import com.workflow.repository.ExceptionRecordRepository;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -287,6 +288,7 @@ public class RetryAndCompensationComponent {
      * 定时执行待重试任务
      */
     @Scheduled(fixedDelayString = "${workflow.retry.schedule-delay:60000}")
+    @SchedulerLock(name = "RetryAndCompensation_scheduledRetryExecution", lockAtMostFor = "PT5M", lockAtLeastFor = "PT5S")
     public void scheduledRetryExecution() {
         log.debug("定时执行待重试任务");
         try {
@@ -547,6 +549,7 @@ public class RetryAndCompensationComponent {
      * 清理过期的死信消息
      */
     @Scheduled(cron = "${workflow.deadletter.cleanup-cron:0 0 2 * * ?}")
+    @SchedulerLock(name = "RetryAndCompensation_cleanupExpiredDeadLetterMessages", lockAtMostFor = "PT10M", lockAtLeastFor = "PT30S")
     public void cleanupExpiredDeadLetterMessages() {
         log.info("清理过期的死信消息");
         

@@ -185,8 +185,9 @@ logging:
   file:
     name: logs/admin-center.log
   pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} [admin-center] [%thread] %-5level %logger{36} - %msg%n"
-    file: "%d{yyyy-MM-dd HH:mm:ss} [admin-center] [%thread] %-5level %logger{36} - %msg%n"
+    # [traceId,spanId] 由 Micrometer Tracing 填充，跨服务串联同一请求链路
+    console: "%d{yyyy-MM-dd HH:mm:ss} [admin-center] [%thread] [%X{traceId:-},%X{spanId:-}] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [admin-center] [%thread] [%X{traceId:-},%X{spanId:-}] %-5level %logger{36} - %msg%n"
   logback:
     rollingpolicy:
       max-file-size: 10MB
@@ -194,6 +195,10 @@ logging:
 
 # Actuator Configuration
 management:
+  tracing:
+    sampling:
+      # 100% 采样：保证每条日志都有 traceId（跨服务链路串联）。导出到追踪后端的采样可另配。
+      probability: 1.0
   endpoints:
     web:
       exposure:

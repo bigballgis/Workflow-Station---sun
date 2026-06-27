@@ -128,6 +128,10 @@ platform:
 
 # Actuator Configuration
 management:
+  tracing:
+    sampling:
+      # 100% 采样：保证每条日志都有 traceId（跨服务链路串联）
+      probability: 1.0
   endpoints:
     web:
       base-path: /actuator
@@ -157,7 +161,8 @@ logging:
     org.flowable: INFO
     org.hibernate.SQL: ${LOG_LEVEL_SQL:DEBUG}
   pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} [workflow-engine] [%thread] [%X{traceId}] %-5level %logger{36} - %msg%n"
+    # [traceId,spanId] 由 Micrometer Tracing 填充，跨服务串联同一请求链路
+    console: "%d{yyyy-MM-dd HH:mm:ss} [workflow-engine] [%thread] [%X{traceId:-},%X{spanId:-}] %-5level %logger{36} - %msg%n"
 
 ---
 # Development Profile

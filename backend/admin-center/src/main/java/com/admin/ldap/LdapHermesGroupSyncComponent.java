@@ -1,6 +1,7 @@
 package com.admin.ldap;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
@@ -34,6 +35,7 @@ public class LdapHermesGroupSyncComponent {
     }
     /** 定时增量同步。cron 可配置（{@code ldap.sync-cron}）。 */
     @Scheduled(cron = "${ldap.sync-cron:0 0 */2 * * ?}")
+    @SchedulerLock(name = "LdapHermesGroupSync_onSchedule", lockAtMostFor = "PT20M", lockAtLeastFor = "PT1M")
     public void onSchedule() {
         runIncrementalQuietly();
     }

@@ -8,6 +8,7 @@ import com.admin.bi.repository.BiSupersetRoleRepository;
 import com.admin.exception.SupersetSyncException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -40,6 +41,7 @@ public class SupersetRoleSyncComponent {
      * 定时同步入口
      */
     @Scheduled(cron = "${bi.sync.cron:0 0 */6 * * ?}")
+    @SchedulerLock(name = "SupersetRoleSync_scheduledSync", lockAtMostFor = "PT10M", lockAtLeastFor = "PT30S")
     public void scheduledSync() {
         if (!biProperties.getSync().isEnabled()) {
             log.debug("Superset Role scheduled sync is disabled, skipping");

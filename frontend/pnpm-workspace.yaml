@@ -1,0 +1,6 @@
+packages:
+  - 'packages/*'
+  - 'admin-center'
+  - 'user-portal'
+  - 'developer-workstation'
+  - 'login'

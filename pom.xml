@@ -34,8 +34,10 @@
         <tomcat.version>10.1.55</tomcat.version>
         <spring-security.version>6.5.9</spring-security.version>
         <spring-framework.version>6.2.17</spring-framework.version>
-        <spring-cloud.version>2023.0.0</spring-cloud.version>
-        
+        <!-- spring-cloud 已移除：零代码引用（无 Eureka/Config Server/Feign）。
+             服务发现用 K8s Service DNS（见 configmap 的 *_URL=http://<svc>-service.<ns>:8080），
+             配置用 ConfigMap/Secret。详见 docs/architecture-optimization-plan.md P1-3。 -->
+
         <!-- Database -->
         <postgresql.version>42.7.10</postgresql.version>
         <!-- Flyway 已清退：schema 唯一来源 = deploy/init-scripts；见 docs/schema-single-source-init-scripts-plan.md -->
@@ -48,7 +50,7 @@
         
         <!-- Workflow -->
         <flowable.version>7.0.0</flowable.version>
-        
+
         <!-- Utilities -->
         <lombok.version>1.18.38</lombok.version>
         <mapstruct.version>1.5.5.Final</mapstruct.version>
@@ -75,6 +77,7 @@
                 <scope>import</scope>
             </dependency>
 
+
             <!-- Spring Security BOM (override Boot default 6.2.1) -->
             <dependency>
                 <groupId>org.springframework.security</groupId>
@@ -84,14 +87,6 @@
                 <scope>import</scope>
             </dependency>
 
-            <!-- Spring Cloud BOM -->
-            <dependency>
-                <groupId>org.springframework.cloud</groupId>
-                <artifactId>spring-cloud-dependencies</artifactId>
-                <version>${spring-cloud.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
 
             <!-- Spring Framework 6.2.x (required by Spring Security 6.5.9; Boot 3.2.1 ships 6.1.x) -->
             <dependency>

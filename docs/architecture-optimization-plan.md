@@ -147,6 +147,18 @@
 - **meeting/participants demo 表列漂移**：V406(Flyway)有 `description`、缺 `task_status`;demo seed `16/06` 反之(有 `task_status`+`display_name`)。二者均 `CREATE TABLE IF NOT EXISTS`,谁先跑谁赢。**纯 demo 范畴、非生产表**,demo seed 自带 `ALTER ADD task_status` 自愈关键列,故不动 demo 脚本,仅此记录。
 - **P1-4 定时任务分布式锁**:见上,admin-center/workflow-engine 多副本的前置。
 
+## 2.6 剩余 7 项执行结果（2026-06-27，按风险从低到高）
+
+| 项 | 状态 | 实际做法 |
+|---|---|---|
+| **P1-3 配置收口** | ✅ 完成 | K8s configmap 已用 service DNS（`<svc>-service.<ns>:8080`）、代码无硬编码 IP；删根 pom 死 spring-cloud BOM（零代码引用） |
+| **P1-4 ShedLock** | ✅ 完成 | admin/workflow 共 5 个 `@Scheduled` 加 `@SchedulerLock`（`RedisLockProvider`，复用 Redis、无需表）；heartbeat（每节点各写）与 in-memory session cleanup **不锁**；BUILD SUCCESS |
+| **P1-2 Resilience4j** | ✅ 完成 | 删 developer-workstation 未被调用的手写熔断框架（15 类+controller+config+4 测试）；4 服务 RestTemplate 经 `ClientHttpRequestInterceptor` 织入 Resilience4j 熔断（失败抛原异常、不改返回语义）+ Micrometer 指标 |
+| **P0-4 Kafka/Redis HA** | ⏳ 跨过 | in-cluster 单实例→真 HA 需 StatefulSet 多节点+客户端重配+**真实故障切换测试**，属基础设施团队活、此环境无法实测，记待办 |
+| **P2-2 可观测性** | ✅ 完成 | 4 服务加 `micrometer-tracing-bridge-brave`，traceId/spanId 入 MDC+统一日志格式、跨 RestTemplate 透传、100% 采样；Prometheus 端点+熔断指标本就/已接入。Grafana/Jaeger 落地属 ops |
+| **P2-1 前端 monorepo** | ✅ 首切 | 建 `frontend/pnpm-workspace.yaml` + `packages/core`，抽三 app 完全一致的 `languageLabel`；**三 app import 未改**（需 pnpm 构建+截图验证）。auth/httpError/sso 分叉严重（diff 332/180/63 行）留专项，见 `packages/core/README.md` |
+| **P1-1 拆 platform-common** | 📋 设计 | 全局爆炸半径最大；出设计文档 `docs/p1-1-split-platform-common-plan.md`（模块划分、保留包名 vs 改名取舍、自底向上拆分顺序、逐步验证）。待评审后单独一轮执行 |
+
 ## 3. 分期与里程碑
 
 | 阶段 | 内容 | 目标 | 工作量 |

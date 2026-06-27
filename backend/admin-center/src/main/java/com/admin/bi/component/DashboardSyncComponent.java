@@ -8,6 +8,7 @@ import com.admin.bi.repository.BiDashboardRegistryRepository;
 import com.admin.exception.SupersetSyncException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -44,6 +45,7 @@ public class DashboardSyncComponent {
      * 定时同步入口
      */
     @Scheduled(cron = "${bi.sync.cron:0 0 */6 * * ?}")
+    @SchedulerLock(name = "DashboardSync_scheduledSync", lockAtMostFor = "PT10M", lockAtLeastFor = "PT30S")
     public void scheduledSync() {
         if (!biProperties.getSync().isEnabled()) {
             log.debug("Dashboard scheduled sync is disabled, skipping");

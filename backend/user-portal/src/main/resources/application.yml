@@ -133,6 +133,10 @@ logging:
 
 # Actuator Configuration
 management:
+  tracing:
+    sampling:
+      # 100% 采样：保证每条日志都有 traceId（跨服务链路串联）
+      probability: 1.0
   endpoints:
     web:
       exposure:
