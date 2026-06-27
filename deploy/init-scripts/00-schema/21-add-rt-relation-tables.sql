@@ -92,6 +92,7 @@ CREATE TABLE IF NOT EXISTS rt_table_access (
     table_id            BIGINT          NOT NULL REFERENCES rt_table_definitions(id),
     target_type         VARCHAR(20)     NOT NULL,
     target_id           VARCHAR(64)     NOT NULL,
+    permission_level    VARCHAR(20)     NOT NULL DEFAULT 'READ_WRITE',
     created_at          TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by          VARCHAR(64)
 );
@@ -101,6 +102,7 @@ CREATE INDEX IF NOT EXISTS idx_rt_access_target ON rt_table_access(target_type, 
 
 COMMENT ON TABLE rt_table_access IS 'Business Role access configuration for Relation Tables';
 COMMENT ON COLUMN rt_table_access.target_type IS 'ROLE';
+COMMENT ON COLUMN rt_table_access.permission_level IS 'READONLY | READ_WRITE — READONLY=view+export, READ_WRITE=full CRUD+import';
 
 -- 5. Audit Logs (rt_audit_logs)
 CREATE TABLE IF NOT EXISTS rt_audit_logs (

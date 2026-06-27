@@ -224,6 +224,25 @@
   align-items: center;
 }
 
+.col-key-icon {
+  font-size: 12px;
+  color: var(--el-color-warning);
+  margin-right: 4px;
+  flex-shrink: 0;
+}
+
+.col-fk-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--el-color-primary);
+  cursor: pointer;
+
+  &:hover { text-decoration: underline; }
+
+  .col-fk-icon { font-size: 12px; }
+}
+
 
 
 .sort-icon.active {
@@ -315,7 +334,29 @@
 
 
 .properties-header {
+  position: relative;
   margin-bottom: 16px;
+}
+
+.props-collapse-btn {
+  position: absolute;
+  top: 0;
+  right: 0;
+  cursor: pointer;
+  color: var(--el-text-color-secondary);
+
+  &:hover { color: var(--el-color-primary); }
+}
+
+.props-toggle {
+  width: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  background: #fafafa;
+  border-left: 1px solid var(--el-border-color-light);
+  flex-shrink: 0;
 }
 
 

@@ -66,6 +66,36 @@ public class RelationTableDataController {
                 .body(csv.getBytes());
     }
 
+    @GetMapping("/{tableId}/template")
+    @Operation(summary = "Download import template", description = "CSV/XLSX template with field-name headers")
+    public ResponseEntity<byte[]> downloadTemplate(
+            @Parameter(description = "Table definition ID") @PathVariable Long tableId,
+            @Parameter(description = "Format csv|xlsx") @RequestParam(defaultValue = "csv") String format) {
+        byte[] bytes = dataService.generateTemplate(tableId, format);
+        boolean xlsx = "xlsx".equalsIgnoreCase(format);
+        String filename = "template." + (xlsx ? "xlsx" : "csv");
+        MediaType ct = xlsx
+                ? MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                : MediaType.parseMediaType("text/csv");
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename)
+                .contentType(ct)
+                .body(bytes);
+    }
+
+    @PostMapping("/{tableId}/import")
+    @Operation(summary = "Import table data", description = "Validate a CSV/XLSX upload against the table structure and insert valid rows")
+    public ResponseEntity<Map<String, Object>> importData(
+            @Parameter(description = "Table definition ID") @PathVariable Long tableId,
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
+            @RequestParam(required = false) String format) throws java.io.IOException {
+        String fmt = (format != null && !format.isBlank()) ? format
+                : (file.getOriginalFilename() != null && file.getOriginalFilename().toLowerCase().endsWith(".xlsx") ? "xlsx" : "csv");
+        log.info("Importing data into table: tableId={}, format={}", tableId, fmt);
+        Map<String, Object> result = dataService.importData(tableId, file.getBytes(), fmt);
+        return ResponseEntity.ok(result);
+    }
+
     @GetMapping("/{tableId}")
     @Operation(summary = "Query table data paginated", description = "Dynamically query physical table data using the latest deployed table structure, with search filter support")
     public ResponseEntity<Page<RelationTableDataRowDTO>> queryData(

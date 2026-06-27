@@ -31,7 +31,13 @@ public final class MainTableViewPortalDtos {
             String fieldName,
             String displayLabel,
             Integer columnWidth,
-            Boolean systemField
+            Boolean systemField,
+            // FK drill-down hints: when isForeignKey, the portal renders a link to the referenced
+            // table's published default view (refViewId), pre-filtered by this column's value.
+            Boolean isForeignKey,
+            Long refViewId,
+            String refFunctionUnitCode,
+            List<String> refPrimaryKeyFields
     ) {}
 
     @Builder

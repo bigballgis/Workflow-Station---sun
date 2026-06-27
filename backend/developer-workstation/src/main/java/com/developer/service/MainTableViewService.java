@@ -21,7 +21,9 @@ public interface MainTableViewService {
 
     void deleteView(Long functionUnitId, Long viewId);
 
-    void seedDefaultViewIfAbsent(Long functionUnitId, Long mainTableId);
+    void seedDefaultViewIfAbsent(Long functionUnitId, Long tableId);
+
+    void seedDefaultViewsForFunctionUnit(Long functionUnitId);
 
     void publishViewsForFunctionUnit(Long functionUnitId);
 

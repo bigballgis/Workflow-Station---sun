@@ -104,6 +104,7 @@ export default {
     views: '視圖'
   },
   mainTableView: {
+    openRelatedRecord: '開啟關聯記錄',
     functionUnits: '功能單元',
     noPublishedFu: '暫無已發佈且配置了視圖的功能單元',
     selectFuAndView: '請選擇功能單元與視圖',

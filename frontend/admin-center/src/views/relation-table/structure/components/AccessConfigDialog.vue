@@ -50,6 +50,28 @@
         </template>
       </el-table-column>
       <el-table-column
+        label="Permission"
+        width="160"
+      >
+        <template #default="{ row }">
+          <el-select
+            v-model="row.permissionLevel"
+            size="small"
+            style="width: 100%;"
+            @change="handlePermissionLevelChange(row)"
+          >
+            <el-option
+              label="Read & Write"
+              value="READ_WRITE"
+            />
+            <el-option
+              label="Readonly"
+              value="READONLY"
+            />
+          </el-select>
+        </template>
+      </el-table-column>
+      <el-table-column
         prop="createdAt"
         label="Created At"
         width="170"
@@ -95,6 +117,23 @@
       append-to-body
       @closed="resetAddForm"
     >
+      <el-form
+        label-width="110px"
+        label-position="left"
+        style="margin-bottom: 4px;"
+      >
+        <el-form-item label="Permission">
+          <el-radio-group v-model="selectedPermissionLevel">
+            <el-radio value="READ_WRITE">
+              Read &amp; Write
+            </el-radio>
+            <el-radio value="READONLY">
+              Readonly
+            </el-radio>
+          </el-radio-group>
+        </el-form-item>
+      </el-form>
+
       <el-tabs
         v-model="addRoleTab"
         class="add-role-tabs"
@@ -105,7 +144,7 @@
           name="bu"
         >
           <p class="tab-hint">
-            Select a Business Unit, then choose one of its bound roles.
+            Select a Business Unit, then choose one or more of its bound roles.
           </p>
           <el-form
             label-width="110px"
@@ -132,9 +171,12 @@
               required
             >
               <el-select
-                v-model="selectedBuRoleId"
+                v-model="selectedBuRoleIds"
+                multiple
+                collapse-tags
+                collapse-tags-tooltip
                 filterable
-                placeholder="Select a role"
+                placeholder="Select one or more roles"
                 style="width: 100%;"
                 :loading="buRolesLoading"
                 :disabled="!selectedBuId"
@@ -218,11 +260,12 @@ const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()
 
 const {
   loading, accessList, rolesLoading,
-  showAddRole, adding, addRoleTab, selectedSystemRoleIds, selectedBuId, selectedBuRoleId,
+  showAddRole, adding, addRoleTab, selectedSystemRoleIds, selectedBuId, selectedBuRoleIds, selectedPermissionLevel,
   buCascaderOptions, buRolesLoading, buCascaderProps,
   availableSystemRoles, availableBuRoles, roleTypeDisplayLabel,
   resolveRoleName, resolveRoleTagType, resolveRoleTypeLabel, formatDate,
-  loadAccessList, loadAllRoles, resetAddForm, openAddDialog, handleBuChange, handleAddRole, handleRemove,
+  loadAccessList, loadAllRoles, resetAddForm, openAddDialog, handleBuChange, handleAddRole,
+  handlePermissionLevelChange, handleRemove,
 } = useRelationTableAccessConfig(toRef(props, 'tableId'))
 
 watch(() => props.modelValue, val => { if (val) { loadAccessList(); loadAllRoles() } })

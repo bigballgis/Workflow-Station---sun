@@ -404,16 +404,75 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
     }
 
     private List<MainTableViewFieldColumn> visibleColumns(ViewDefinition view) {
+        Map<String, FkColumnMeta> fkMeta = loadFkColumnMeta(view.id());
         return view.fields().stream()
                 .filter(f -> Boolean.TRUE.equals(f.visible()))
                 .sorted(Comparator.comparingInt(f -> f.sortOrder() != null ? f.sortOrder() : 0))
-                .map(f -> MainTableViewFieldColumn.builder()
-                        .fieldName(f.fieldName())
-                        .displayLabel(f.displayLabel() != null ? f.displayLabel() : f.fieldName())
-                        .columnWidth(f.columnWidth())
-                        .systemField(f.systemField())
-                        .build())
+                .map(f -> {
+                    FkColumnMeta fk = fkMeta.get(f.fieldName());
+                    return MainTableViewFieldColumn.builder()
+                            .fieldName(f.fieldName())
+                            .displayLabel(f.displayLabel() != null ? f.displayLabel() : f.fieldName())
+                            .columnWidth(f.columnWidth())
+                            .systemField(f.systemField())
+                            .isForeignKey(fk != null)
+                            .refViewId(fk != null ? fk.refViewId() : null)
+                            .refFunctionUnitCode(fk != null ? fk.refFunctionUnitCode() : null)
+                            .refPrimaryKeyFields(fk != null ? fk.refPrimaryKeyFields() : null)
+                            .build();
+                })
                 .toList();
+    }
+
+    /**
+     * For each FK field of the view's owning table, resolve the referenced table's PUBLISHED default
+     * view (id + FU code) so the portal can render a drill-down link. FK columns whose referenced table
+     * has no published default view are omitted from the map (rendered as plain text — graceful degrade).
+     */
+    private Map<String, FkColumnMeta> loadFkColumnMeta(Long viewId) {
+        try {
+            List<Map<String, Object>> rows = jdbcTemplate.queryForList("""
+                    SELECT fd.field_name,
+                           fd.ref_primary_key_fields::text AS ref_pk_fields,
+                           rv.id AS ref_view_id,
+                           rfu.code AS ref_fu_code
+                    FROM dw_main_table_view_configs v
+                    INNER JOIN dw_field_definitions fd ON fd.table_id = v.main_table_id
+                    INNER JOIN dw_table_definitions rt ON rt.id = fd.ref_table_id
+                    INNER JOIN dw_function_units rfu ON rfu.id = rt.function_unit_id
+                    INNER JOIN dw_main_table_view_configs rv
+                            ON rv.main_table_id = fd.ref_table_id
+                           AND rv.is_default = TRUE
+                           AND rv.status = 'PUBLISHED'
+                    WHERE v.id = ? AND fd.is_foreign_key = TRUE AND fd.ref_table_id IS NOT NULL
+                    """, viewId);
+            Map<String, FkColumnMeta> meta = new LinkedHashMap<>();
+            for (Map<String, Object> row : rows) {
+                String fieldName = stringVal(row.get("field_name"));
+                if (fieldName == null) {
+                    continue;
+                }
+                meta.put(fieldName, new FkColumnMeta(
+                        ((Number) row.get("ref_view_id")).longValue(),
+                        stringVal(row.get("ref_fu_code")),
+                        parseStringList(stringVal(row.get("ref_pk_fields")))));
+            }
+            return meta;
+        } catch (Exception e) {
+            log.warn("Failed to load FK column metadata for view {}: {}", viewId, e.getMessage());
+            return Map.of();
+        }
+    }
+
+    private List<String> parseStringList(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return List.of();
+        }
+        try {
+            return objectMapper.readValue(raw, new TypeReference<List<String>>() {});
+        } catch (Exception e) {
+            return List.of();
+        }
     }
 
     private Map<String, Object> stripInternalKeys(Map<String, Object> row) {
@@ -519,6 +578,11 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
         }
         return Boolean.parseBoolean(String.valueOf(val));
     }
+
+    private record FkColumnMeta(
+            Long refViewId,
+            String refFunctionUnitCode,
+            List<String> refPrimaryKeyFields) {}
 
     private record ViewFieldDef(
             String fieldName,

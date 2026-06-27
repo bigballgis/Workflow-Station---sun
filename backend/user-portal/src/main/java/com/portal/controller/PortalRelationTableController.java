@@ -118,22 +118,90 @@ public class PortalRelationTableController {
         }
     }
 
-    // Write operations are forbidden in Portal
+    @GetMapping("/{tableId}/fields")
+    @Operation(summary = "获取字段定义（含类型，供编辑表单使用）")
+    public ResponseEntity<ApiResponse<List<com.platform.common.dto.RelationFieldDTO>>> getFieldDefinitions(
+            @PathVariable Long tableId,
+            @CurrentUserId String userId) {
+        return ResponseEntity.ok(ApiResponse.success(service.getFieldDefinitions(tableId, userId)));
+    }
+
+    // ==================== Write operations (require READ_WRITE on the active role) ====================
+
     @PostMapping("/{tableId}")
-    @Operation(summary = "写操作 - 禁止")
-    public ResponseEntity<ApiResponse<Void>> forbiddenPost(@PathVariable Long tableId) {
-        return ResponseEntity.status(403).body(ApiResponse.error("403", "Write operations are not allowed in Portal"));
+    @Operation(summary = "新增数据（需要 READ_WRITE）")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> addData(
+            @PathVariable Long tableId,
+            @CurrentUserId String userId,
+            @RequestBody Map<String, Object> data) {
+        return ResponseEntity.ok(ApiResponse.success(service.addData(tableId, userId, data)));
     }
 
     @PutMapping("/{tableId}/{rowId}")
-    @Operation(summary = "写操作 - 禁止")
-    public ResponseEntity<ApiResponse<Void>> forbiddenPut(@PathVariable Long tableId, @PathVariable String rowId) {
-        return ResponseEntity.status(403).body(ApiResponse.error("403", "Write operations are not allowed in Portal"));
+    @Operation(summary = "更新数据（需要 READ_WRITE）")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> updateData(
+            @PathVariable Long tableId,
+            @PathVariable String rowId,
+            @CurrentUserId String userId,
+            @RequestBody Map<String, Object> data) {
+        return ResponseEntity.ok(ApiResponse.success(service.updateData(tableId, userId, rowId, data)));
     }
 
-    @DeleteMapping("/{tableId}/{rowId}")
-    @Operation(summary = "写操作 - 禁止")
-    public ResponseEntity<ApiResponse<Void>> forbiddenDelete(@PathVariable Long tableId, @PathVariable String rowId) {
-        return ResponseEntity.status(403).body(ApiResponse.error("403", "Write operations are not allowed in Portal"));
+    @PutMapping("/{tableId}/{rowId}/status")
+    @Operation(summary = "切换数据状态 ACTIVE/INACTIVE（需要 READ_WRITE）")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> changeStatus(
+            @PathVariable Long tableId,
+            @PathVariable String rowId,
+            @CurrentUserId String userId,
+            @RequestBody Map<String, String> request) {
+        String status = request.get("status");
+        return ResponseEntity.ok(ApiResponse.success(service.changeStatus(tableId, userId, rowId, status)));
+    }
+
+    @GetMapping("/{tableId}/template")
+    @Operation(summary = "下载导入模板 (csv|xlsx)")
+    public ResponseEntity<byte[]> downloadTemplate(
+            @PathVariable Long tableId,
+            @CurrentUserId String userId,
+            @RequestParam(defaultValue = "csv") String format) {
+        byte[] bytes = service.generateTemplate(tableId, userId, format);
+        boolean xlsx = "xlsx".equalsIgnoreCase(format);
+        String filename = "template." + (xlsx ? "xlsx" : "csv");
+        MediaType ct = xlsx
+                ? MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                : MediaType.parseMediaType("text/csv");
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename)
+                .contentType(ct)
+                .body(bytes);
+    }
+
+    @PostMapping("/{tableId}/import")
+    @Operation(summary = "导入数据 (csv|xlsx)（需要 READ_WRITE）")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> importData(
+            @PathVariable Long tableId,
+            @CurrentUserId String userId,
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
+            @RequestParam(required = false) String format) throws java.io.IOException {
+        String fmt = resolveFormat(format, file.getOriginalFilename());
+        Map<String, Object> result = service.importData(tableId, userId, file.getBytes(), fmt);
+        return ResponseEntity.ok(ApiResponse.success(result));
+    }
+
+    private String resolveFormat(String format, String filename) {
+        if (format != null && !format.isBlank()) return format;
+        if (filename != null && filename.toLowerCase().endsWith(".xlsx")) return "xlsx";
+        return "csv";
+    }
+
+    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAccessDenied(
+            org.springframework.security.access.AccessDeniedException e) {
+        return ResponseEntity.status(403).body(ApiResponse.error("403", e.getMessage()));
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiResponse<Void>> handleBadRequest(IllegalArgumentException e) {
+        return ResponseEntity.badRequest().body(ApiResponse.error("400", e.getMessage()));
     }
 }

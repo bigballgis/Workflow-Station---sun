@@ -4,17 +4,21 @@ import type { MainTableViewDefinition } from '@/api/mainTableView'
 import { useMainTableViewDesigner } from '@/composables/mainTableView/useMainTableViewDesigner'
 
 const props = defineProps<{ functionUnitId: number; view: MainTableViewDefinition }>()
-const emit = defineEmits<{ saved: [view: MainTableViewDefinition] }>()
+const emit = defineEmits<{
+  saved: [view: MainTableViewDefinition]
+  'navigate-to-table-view': [refTableId: number]
+}>()
 
 const {
-  t, Search, Close, Menu, DArrowRight, Plus, Filter, CaretTop, CaretBottom,
-  columnsPanelOpen, fieldSearchKeyword, saving, viewName, viewFields, sortConfig, filterConfig,
+  t, Search, Close, Menu, DArrowRight, DArrowLeft, Plus, Filter, CaretTop, CaretBottom, Connection, Key,
+  columnsPanelOpen, propsPanelOpen, fieldSearchKeyword, saving, viewName, viewFields, sortConfig, filterConfig,
   enableExport, enableImport, mainTableName, filterDialogVisible, addColumnPopoverVisible, thenSortField,
   dragOverIndex, dragSourceField, visibleColumns, displayFilterConditions,
   sortFieldOptions, filteredCatalog, previewRowCount, fieldLabel, getFieldIcon, getMockValue, sortIndicator,
   formatFilterTag, addField, removeField, toggleSortDirection, sortDirectionTooltip, onFilterEditorSave,
   removeDisplayFilterTag, addSortField, removeSort, handleSave, onFieldDragStart, onFieldDragEnd, onGridDrop,
   onColDragStart, onColDragOver, onColDragLeave, onColDrop, onColDragEnd,
+  isFkField, isPkField, onFkColumnClick,
 } = useMainTableViewDesigner(props, emit)
 </script>
 
@@ -195,7 +199,25 @@ const {
 
             >
 
-              <span class="col-name">{{ field.displayLabel || field.fieldName }}</span>
+              <el-icon
+                v-if="isPkField(field.fieldName)"
+                class="col-key-icon"
+                :title="t('mainTableView.primaryKeyField')"
+              ><Key /></el-icon>
+
+              <span
+                v-if="isFkField(field.fieldName)"
+                class="col-name col-fk-link"
+                :title="t('mainTableView.openRelatedView')"
+                @click.stop="onFkColumnClick(field.fieldName)"
+              >
+                {{ field.displayLabel || field.fieldName }}
+                <el-icon class="col-fk-icon"><Connection /></el-icon>
+              </span>
+              <span
+                v-else
+                class="col-name"
+              >{{ field.displayLabel || field.fieldName }}</span>
 
               <span class="col-sort-icons">
 
@@ -337,9 +359,22 @@ const {
 
 
 
+      <!-- Right: collapsed strip to re-open the properties panel -->
+      <div
+        v-if="!propsPanelOpen"
+        class="props-toggle"
+        :title="t('mainTableView.expandProps')"
+        @click="propsPanelOpen = true"
+      >
+        <el-icon><DArrowLeft /></el-icon>
+      </div>
+
       <!-- Right: View properties -->
 
-      <div class="properties-panel">
+      <div
+        v-if="propsPanelOpen"
+        class="properties-panel"
+      >
 
         <div class="properties-header">
 
@@ -348,6 +383,14 @@ const {
             {{ viewName || props.view.viewName }}
 
           </div>
+
+          <el-icon
+            class="props-collapse-btn"
+            :title="t('mainTableView.collapseProps')"
+            @click="propsPanelOpen = false"
+          >
+            <DArrowRight />
+          </el-icon>
 
           <div class="properties-subtitle">
 

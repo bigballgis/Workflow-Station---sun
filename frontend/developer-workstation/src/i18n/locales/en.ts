@@ -328,6 +328,13 @@ export default {
   },
   mainTableView: {
     viewList: 'Views',
+    collapseNav: 'Collapse views panel',
+    expandNav: 'Expand views panel',
+    collapseProps: 'Collapse properties panel',
+    expandProps: 'Expand properties panel',
+    primaryKeyField: 'Primary key',
+    openRelatedView: 'Open related table view',
+    noViewForRefTable: 'The referenced table has no view yet',
     fieldCatalog: 'Field catalog',
     tableColumns: 'Table columns',
     addViewColumn: '+ View column',

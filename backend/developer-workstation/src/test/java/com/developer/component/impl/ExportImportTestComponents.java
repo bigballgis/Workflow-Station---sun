@@ -106,7 +106,8 @@ public final class ExportImportTestComponents {
                 importWriter,
                 Mockito.mock(com.developer.component.VersionComponent.class),
                 Mockito.mock(RelationTableStructurePortability.class),
-                Mockito.mock(MainTableViewPortability.class));
+                Mockito.mock(MainTableViewPortability.class),
+                Mockito.mock(com.developer.service.MainTableViewService.class));
 
         return new ExportImportComponentImpl(
                 functionUnitRepository,

@@ -3,7 +3,7 @@
  */
 import { ref, computed, type Ref } from 'vue'
 import { notifySuccess, notifyError } from '@/utils/notify'
-import { relationTableStructureApi, type RelationTableAccess } from '@/api/relationTable'
+import { relationTableStructureApi, type RelationTableAccess, type RelationPermissionLevel } from '@/api/relationTable'
 import { roleApi, type Role } from '@/api/role'
 import { businessUnitApi, type BusinessUnit } from '@/api/businessUnit'
 import { formatDate as fmtDate, roleTypeDisplayLabel, roleTagType } from '@/utils/format'
@@ -24,7 +24,9 @@ export function useRelationTableAccessConfig(entityId: Ref<number | undefined>) 
   const addRoleTab = ref<'bu' | 'system'>('bu')
   const selectedSystemRoleIds = ref<string[]>([])
   const selectedBuId = ref<string | null>(null)
-  const selectedBuRoleId = ref('')
+  const selectedBuRoleIds = ref<string[]>([])
+  // Permission level chosen for the role(s) being added (shared across both tabs).
+  const selectedPermissionLevel = ref<RelationPermissionLevel>('READ_WRITE')
   const buCascaderOptions = ref<BusinessUnit[]>([])
   const buRoles = ref<Role[]>([])
   const buRolesLoading = ref(false)
@@ -87,7 +89,8 @@ export function useRelationTableAccessConfig(entityId: Ref<number | undefined>) 
     addRoleTab.value = 'bu'
     selectedSystemRoleIds.value = []
     selectedBuId.value = null
-    selectedBuRoleId.value = ''
+    selectedBuRoleIds.value = []
+    selectedPermissionLevel.value = 'READ_WRITE'
     buRoles.value = []
   }
 
@@ -111,7 +114,7 @@ export function useRelationTableAccessConfig(entityId: Ref<number | undefined>) 
   const handleBuChange = async (value: import('element-plus').CascaderValue | null | undefined) => {
     const buId = resolveCascaderBuId(value)
     selectedBuId.value = buId
-    selectedBuRoleId.value = ''
+    selectedBuRoleIds.value = []
     buRoles.value = []
     if (!buId) return
     buRolesLoading.value = true
@@ -124,40 +127,38 @@ export function useRelationTableAccessConfig(entityId: Ref<number | undefined>) 
     }
   }
 
+  const extractError = (e: unknown) =>
+    (e as { response?: { data?: { error?: { message?: string }; message?: string } } })?.response?.data?.error?.message
+    || (e as { response?: { data?: { message?: string } } })?.response?.data?.message
+    || 'Failed'
+
   const handleAddRole = async () => {
     if (!entityId.value) return
-    if (addRoleTab.value === 'system') {
-      const ids = selectedSystemRoleIds.value.filter(id => !assignedIds.value.has(id))
-      if (!ids.length) return
-      adding.value = true
-      try {
-        await Promise.all(ids.map(id => relationTableStructureApi.addAccess(entityId.value!, id)))
-        notifySuccess(`Added ${ids.length} role(s)`)
-        showAddRole.value = false
-        await loadAccessList()
-      } catch (e) {
-        notifyError((e as { response?: { data?: { error?: { message?: string }; message?: string } } })?.response?.data?.error?.message
-          || (e as { response?: { data?: { message?: string } } })?.response?.data?.message
-          || 'Failed')
-      } finally {
-        adding.value = false
-      }
-    } else {
-      const roleId = selectedBuRoleId.value
-      if (!roleId) return
-      adding.value = true
-      try {
-        await relationTableStructureApi.addAccess(entityId.value, roleId)
-        notifySuccess('Access added')
-        showAddRole.value = false
-        await loadAccessList()
-      } catch (e) {
-        notifyError((e as { response?: { data?: { error?: { message?: string }; message?: string } } })?.response?.data?.error?.message
-          || (e as { response?: { data?: { message?: string } } })?.response?.data?.message
-          || 'Failed')
-      } finally {
-        adding.value = false
-      }
+    const level = selectedPermissionLevel.value
+    const ids = (addRoleTab.value === 'system' ? selectedSystemRoleIds.value : selectedBuRoleIds.value)
+      .filter(id => !assignedIds.value.has(id))
+    if (!ids.length) return
+    adding.value = true
+    try {
+      await Promise.all(ids.map(id => relationTableStructureApi.addAccess(entityId.value!, id, level)))
+      notifySuccess(`Added ${ids.length} role(s)`)
+      showAddRole.value = false
+      await loadAccessList()
+    } catch (e) {
+      notifyError(extractError(e))
+    } finally {
+      adding.value = false
+    }
+  }
+
+  const handlePermissionLevelChange = async (access: RelationTableAccess) => {
+    if (!entityId.value) return
+    try {
+      await relationTableStructureApi.updatePermissionLevel(entityId.value, access.id, access.permissionLevel)
+      notifySuccess('Permission updated')
+    } catch (e) {
+      notifyError(extractError(e))
+      await loadAccessList() // revert UI to server state on failure
     }
   }
 
@@ -183,7 +184,8 @@ export function useRelationTableAccessConfig(entityId: Ref<number | undefined>) 
     addRoleTab,
     selectedSystemRoleIds,
     selectedBuId,
-    selectedBuRoleId,
+    selectedBuRoleIds,
+    selectedPermissionLevel,
     buCascaderOptions,
     buRoles,
     buRolesLoading,
@@ -202,6 +204,7 @@ export function useRelationTableAccessConfig(entityId: Ref<number | undefined>) 
     openAddDialog,
     handleBuChange,
     handleAddRole,
+    handlePermissionLevelChange,
     handleRemove,
   }
 }

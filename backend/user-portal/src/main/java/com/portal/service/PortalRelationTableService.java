@@ -46,4 +46,40 @@ public interface PortalRelationTableService {
      * 通过 tableId 获取 View 字段配置
      */
     List<Map<String, Object>> getViewFieldsByTableId(Long tableId);
+
+    /**
+     * 解析当前请求用户在某表上的权限级别（基于 JWT activeRoleId）。
+     * @return READONLY | READ_WRITE | null（无访问）
+     */
+    String resolvePermissionLevel(Long tableId, String userId);
+
+    /**
+     * 获取表字段定义（供 Portal 编辑表单按类型渲染输入）。需要访问权限。
+     */
+    List<com.platform.common.dto.RelationFieldDTO> getFieldDefinitions(Long tableId, String userId);
+
+    /**
+     * 新增一行数据（需要 READ_WRITE）。
+     */
+    Map<String, Object> addData(Long tableId, String userId, Map<String, Object> data);
+
+    /**
+     * 更新一行数据（需要 READ_WRITE）。
+     */
+    Map<String, Object> updateData(Long tableId, String userId, String rowId, Map<String, Object> data);
+
+    /**
+     * 修改一行数据状态 ACTIVE/INACTIVE（需要 READ_WRITE）。
+     */
+    Map<String, Object> changeStatus(Long tableId, String userId, String rowId, String status);
+
+    /**
+     * 生成导入模板（CSV / XLSX）。
+     */
+    byte[] generateTemplate(Long tableId, String userId, String format);
+
+    /**
+     * 导入数据（需要 READ_WRITE），返回 {inserted, failed, errors}。
+     */
+    Map<String, Object> importData(Long tableId, String userId, byte[] fileBytes, String format);
 }

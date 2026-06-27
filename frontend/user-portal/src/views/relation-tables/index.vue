@@ -59,11 +59,43 @@
               </template>
             </el-input>
             <el-button
+              v-if="canWrite"
               type="primary"
+              @click="openAddDialog"
+            >
+              <el-icon><Plus /></el-icon> Add
+            </el-button>
+            <el-button
               :loading="exporting"
               @click="handleExport"
             >
               <el-icon><Download /></el-icon> Export CSV
+            </el-button>
+            <el-dropdown
+              v-if="canWrite"
+              trigger="click"
+              @command="handleDownloadTemplate"
+            >
+              <el-button :loading="exportingTemplate">
+                <el-icon><Download /></el-icon> Export Template
+                <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+              </el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="csv">
+                    CSV (.csv)
+                  </el-dropdown-item>
+                  <el-dropdown-item command="xlsx">
+                    Excel (.xlsx)
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+            <el-button
+              v-if="canWrite"
+              @click="openImportDialog"
+            >
+              <el-icon><Upload /></el-icon> Import
             </el-button>
           </div>
 
@@ -84,6 +116,42 @@
             >
               <template #default="{ row }">
                 {{ isTimestampColumn(col) ? formatHKT(row[col]) : row[col] }}
+              </template>
+            </el-table-column>
+            <el-table-column
+              v-if="canWrite"
+              label="Actions"
+              width="200"
+              fixed="right"
+              align="center"
+            >
+              <template #default="{ row }">
+                <el-button
+                  link
+                  type="primary"
+                  size="small"
+                  @click="openEditDialog(row)"
+                >
+                  Edit
+                </el-button>
+                <el-button
+                  v-if="isRowInactive(row)"
+                  link
+                  type="success"
+                  size="small"
+                  @click="handleChangeStatus(row, 'ACTIVE')"
+                >
+                  Active
+                </el-button>
+                <el-button
+                  v-else
+                  link
+                  type="warning"
+                  size="small"
+                  @click="handleChangeStatus(row, 'INACTIVE')"
+                >
+                  Inactive
+                </el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -107,14 +175,155 @@
         />
       </div>
     </div>
+
+    <!-- Add/Edit Dialog -->
+    <el-dialog
+      v-model="dialogVisible"
+      :title="dialogMode === 'add' ? 'Add Record' : 'Edit Record'"
+      width="600px"
+      destroy-on-close
+    >
+      <el-form
+        :model="formData"
+        label-width="140px"
+        label-position="left"
+      >
+        <el-form-item
+          v-for="field in editableFields"
+          :key="field.fieldName"
+          :label="field.displayName || field.fieldName"
+          :required="field.nullable === false || field.isPrimaryKey"
+        >
+          <el-switch
+            v-if="field.dataType === 'BOOLEAN'"
+            v-model="formData[field.fieldName]"
+            :disabled="dialogMode === 'edit' && field.isPrimaryKey"
+          />
+          <el-input-number
+            v-else-if="['INTEGER', 'BIGINT', 'DECIMAL'].includes(field.dataType)"
+            v-model="formData[field.fieldName]"
+            :precision="field.dataType === 'DECIMAL' ? (field.scale || 2) : 0"
+            style="width: 100%;"
+            :disabled="dialogMode === 'edit' && field.isPrimaryKey"
+          />
+          <el-date-picker
+            v-else-if="field.dataType === 'DATE'"
+            v-model="formData[field.fieldName]"
+            type="date"
+            value-format="YYYY-MM-DD"
+            style="width: 100%;"
+            :disabled="dialogMode === 'edit' && field.isPrimaryKey"
+          />
+          <el-date-picker
+            v-else-if="field.dataType === 'TIMESTAMP'"
+            v-model="formData[field.fieldName]"
+            type="datetime"
+            value-format="YYYY-MM-DD HH:mm:ss"
+            style="width: 100%;"
+            :disabled="dialogMode === 'edit' && field.isPrimaryKey"
+          />
+          <el-input
+            v-else
+            v-model="formData[field.fieldName]"
+            :maxlength="field.length || undefined"
+            :disabled="dialogMode === 'edit' && field.isPrimaryKey"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="dialogVisible = false">
+          Cancel
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="saving"
+          @click="handleSaveRecord"
+        >
+          Save
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- Import Dialog -->
+    <el-dialog
+      v-model="importDialogVisible"
+      title="Import Data"
+      width="640px"
+    >
+      <el-alert
+        type="info"
+        :closable="false"
+        style="margin-bottom: 12px;"
+      >
+        Download a template first, fill it in, then upload (CSV or Excel). Rows are validated against the table structure; invalid rows are skipped.
+      </el-alert>
+      <el-upload
+        drag
+        :auto-upload="false"
+        :show-file-list="false"
+        accept=".csv,.xlsx"
+        :on-change="onImportFileChange"
+      >
+        <el-icon class="el-icon--upload"><Upload /></el-icon>
+        <div class="el-upload__text">
+          Drop file here or <em>click to upload</em>
+        </div>
+      </el-upload>
+      <div
+        v-if="importing"
+        style="margin-top: 12px;"
+      >
+        Importing...
+      </div>
+      <div
+        v-if="importResult"
+        style="margin-top: 12px;"
+      >
+        <el-alert
+          :type="importResult.failed > 0 ? 'warning' : 'success'"
+          :closable="false"
+          :title="`Inserted ${importResult.inserted}, Failed ${importResult.failed}`"
+          style="margin-bottom: 8px;"
+        />
+        <el-table
+          v-if="importResult.errors.length"
+          :data="importResult.errors"
+          stripe
+          max-height="240"
+          size="small"
+        >
+          <el-table-column
+            prop="row"
+            label="Row"
+            width="70"
+          />
+          <el-table-column
+            prop="field"
+            label="Field"
+            width="160"
+          />
+          <el-table-column
+            prop="message"
+            label="Error"
+          />
+        </el-table>
+      </div>
+      <template #footer>
+        <el-button @click="importDialogVisible = false">
+          Close
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { Search, Download } from '@element-plus/icons-vue'
+import { Search, Download, Plus, Upload, ArrowDown } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { relationTableApi, type RelationTableDTO } from '@/api/relationTable'
+import { relationTableApi, type RelationTableDTO, type RelationFieldDef, type RelationImportResult } from '@/api/relationTable'
+
+const SYSTEM_FIELDS = new Set(['created_at', 'created_by', 'updated_at', 'updated_by', 'status'])
 
 const tableListLoading = ref(false)
 const dataLoading = ref(false)
@@ -138,6 +347,30 @@ const selectedTable = computed(() =>
   tables.value.find(t => t.id === selectedTableId.value) ?? null
 )
 
+const canWrite = computed(() => selectedTable.value?.permissionLevel === 'READ_WRITE')
+
+// ---- Editing state ----
+const fieldDefs = ref<RelationFieldDef[]>([])
+const editableFields = computed(() => fieldDefs.value.filter(f => !SYSTEM_FIELDS.has(f.fieldName)))
+const pkField = computed(() => fieldDefs.value.find(f => f.isPrimaryKey)?.fieldName ?? null)
+
+const dialogVisible = ref(false)
+const dialogMode = ref<'add' | 'edit'>('add')
+const saving = ref(false)
+const editingRowId = ref<string | null>(null)
+const formData = ref<Record<string, any>>({})
+
+const exportingTemplate = ref(false)
+const importDialogVisible = ref(false)
+const importing = ref(false)
+const importResult = ref<RelationImportResult | null>(null)
+
+const isRowInactive = (row: Record<string, any>): boolean =>
+  String(row.status ?? '').toUpperCase() === 'INACTIVE'
+
+const rowId = (row: Record<string, any>): string | null =>
+  pkField.value ? String(row[pkField.value]) : null
+
 const filteredTables = computed(() => {
   const kw = tableSearchKeyword.value.trim().toLowerCase()
   if (!kw) return tables.value
@@ -155,12 +388,23 @@ const fetchTables = async () => {
     if (!selectedTableId.value && tables.value.length > 0) {
       selectedTableId.value = tables.value[0].id
       fetchDisplayNames()
+      fetchFieldDefs()
       fetchData()
     }
   } catch {
     tables.value = []
   } finally {
     tableListLoading.value = false
+  }
+}
+
+const fetchFieldDefs = async () => {
+  if (!selectedTableId.value) { fieldDefs.value = []; return }
+  try {
+    const res: any = await relationTableApi.getFieldDefinitions(selectedTableId.value)
+    fieldDefs.value = res?.data ?? res ?? []
+  } catch {
+    fieldDefs.value = []
   }
 }
 
@@ -217,6 +461,7 @@ const handleSelectTable = (index: string) => {
   columns.value = []
   fieldDisplayNames.value = {}
   fetchDisplayNames()
+  fetchFieldDefs()
   fetchData()
 }
 
@@ -265,6 +510,119 @@ const handleExport = async () => {
     ElMessage.error('Export failed')
   } finally {
     exporting.value = false
+  }
+}
+
+// ---- Add / Edit ----
+const openAddDialog = () => {
+  dialogMode.value = 'add'
+  editingRowId.value = null
+  const fd: Record<string, any> = {}
+  for (const f of editableFields.value) {
+    fd[f.fieldName] = f.dataType === 'BOOLEAN' ? false : null
+  }
+  formData.value = fd
+  dialogVisible.value = true
+}
+
+const openEditDialog = (row: Record<string, any>) => {
+  dialogMode.value = 'edit'
+  editingRowId.value = rowId(row)
+  const fd: Record<string, any> = {}
+  for (const f of editableFields.value) {
+    fd[f.fieldName] = row[f.fieldName] ?? null
+  }
+  formData.value = fd
+  dialogVisible.value = true
+}
+
+const handleSaveRecord = async () => {
+  if (!selectedTableId.value) return
+  saving.value = true
+  try {
+    const clean: Record<string, any> = {}
+    for (const [k, v] of Object.entries(formData.value)) {
+      if (v !== null && v !== undefined && v !== '') clean[k] = v
+    }
+    if (dialogMode.value === 'add') {
+      await relationTableApi.addData(selectedTableId.value, clean)
+      ElMessage.success('Record added')
+    } else if (editingRowId.value) {
+      await relationTableApi.updateData(selectedTableId.value, editingRowId.value, clean)
+      ElMessage.success('Record updated')
+    }
+    dialogVisible.value = false
+    await fetchData()
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.error?.message || e?.response?.data?.message || 'Save failed')
+  } finally {
+    saving.value = false
+  }
+}
+
+const handleChangeStatus = async (row: Record<string, any>, status: string) => {
+  if (!selectedTableId.value) return
+  const id = rowId(row)
+  if (!id) { ElMessage.error('No primary key on this table'); return }
+  try {
+    await relationTableApi.changeStatus(selectedTableId.value, id, status)
+    ElMessage.success(status === 'INACTIVE' ? 'Record set to inactive' : 'Record set to active')
+    await fetchData()
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.error?.message || e?.response?.data?.message || 'Failed')
+  }
+}
+
+// ---- Template / Import ----
+const handleDownloadTemplate = async (format: 'csv' | 'xlsx') => {
+  if (!selectedTableId.value) return
+  exportingTemplate.value = true
+  try {
+    const blob = await relationTableApi.downloadTemplate(selectedTableId.value, format)
+    const url = window.URL.createObjectURL(new Blob([blob as any]))
+    const link = document.createElement('a')
+    link.href = url
+    const name = selectedTable.value?.displayName || selectedTable.value?.tableName || 'template'
+    link.setAttribute('download', `${name}-template.${format}`)
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
+  } catch {
+    ElMessage.error('Template download failed')
+  } finally {
+    exportingTemplate.value = false
+  }
+}
+
+const openImportDialog = () => {
+  importResult.value = null
+  importDialogVisible.value = true
+}
+
+const onImportFileChange = (file: { raw?: File }) => {
+  if (file.raw) handleImportFile(file.raw)
+}
+
+const handleImportFile = async (file: File) => {
+  if (!selectedTableId.value) return
+  importing.value = true
+  importResult.value = null
+  try {
+    const format = file.name.toLowerCase().endsWith('.xlsx') ? 'xlsx' : 'csv'
+    const res: any = await relationTableApi.importData(selectedTableId.value, file, format)
+    importResult.value = res?.data ?? res
+    const r = importResult.value
+    if (r && r.inserted > 0) {
+      ElMessage.success(`Imported ${r.inserted} row(s)${r.failed ? `, ${r.failed} failed` : ''}`)
+      await fetchData()
+    } else if (r && r.failed > 0) {
+      ElMessage.error(`All ${r.failed} row(s) failed validation`)
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.error?.message || e?.response?.data?.message || 'Import failed')
+  } finally {
+    importing.value = false
   }
 }
 

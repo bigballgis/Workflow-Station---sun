@@ -55,7 +55,8 @@ class RelationTableDataPropertyTest {
         jdbcTemplate = mock(JdbcTemplate.class);
         objectMapper = new ObjectMapper();
         service = new RelationTableDataServiceImpl(
-                tableDefinitionRepository, versionRepository, auditService, jdbcTemplate, objectMapper);
+                tableDefinitionRepository, versionRepository, auditService,
+                mock(com.admin.service.RelationTableAccessService.class), jdbcTemplate, objectMapper);
     }
 
     // ==================== Arbitraries ====================

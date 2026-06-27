@@ -326,6 +326,9 @@ public class VersionComponentImpl implements VersionComponent {
             nameToId.put(table.getTableName(), table.getId());
         }
         mainTableViewPortability.importAll((List<Map<String, Object>>) viewsObj, functionUnit, nameToId);
+        // Older snapshots only carried the single MAIN default view; backfill per-table defaults
+        // (MAIN + SUB) so every table has one. Idempotent: never overwrites an existing default.
+        mainTableViewService.seedDefaultViewsForFunctionUnit(functionUnit.getId());
     }
 
     @Override

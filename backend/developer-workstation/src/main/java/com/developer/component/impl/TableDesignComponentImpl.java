@@ -96,7 +96,8 @@ public class TableDesignComponentImpl implements TableDesignComponent {
         
         TableDefinition saved = tableDefinitionRepository.save(tableDefinition);
         fieldFkPkSyncService.syncForeignKeysForFunctionUnit(functionUnitId);
-        if (saved.getTableType() == TableType.MAIN) {
+        // Seed a default view per table for MAIN + SUB (idempotent; SUB skipped until it has fields).
+        if (saved.getTableType() == TableType.MAIN || saved.getTableType() == TableType.SUB) {
             mainTableViewService.seedDefaultViewIfAbsent(functionUnitId, saved.getId());
         }
         return saved;
@@ -182,6 +183,12 @@ public class TableDesignComponentImpl implements TableDesignComponent {
         }
 
         fieldFkPkSyncService.syncForeignKeysForFunctionUnit(functionUnitId);
+
+        // Seed a default view if absent — covers a SUB table gaining its first field after creation
+        // (idempotent; no-op when a default already exists or the table is not MAIN/SUB).
+        if (saved.getTableType() == TableType.MAIN || saved.getTableType() == TableType.SUB) {
+            mainTableViewService.seedDefaultViewIfAbsent(functionUnitId, saved.getId());
+        }
 
         // Reload with fields to ensure consistent state for serialization
         return tableDefinitionRepository.findByIdWithFields(saved.getId())

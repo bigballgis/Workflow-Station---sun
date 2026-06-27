@@ -176,23 +176,44 @@ public class RelationTableStructureController {
         if (targetId == null) {
             return ResponseEntity.badRequest().build();
         }
-        log.info("Adding access config for relation table: id={}, targetType={}, targetId={}", id, targetType, targetId);
-        RelationTableAccess access = accessService.addAccess(id, targetType, targetId);
+        String permissionLevel = request.get("permissionLevel"); // null -> service defaults to READ_WRITE
+        log.info("Adding access config for relation table: id={}, targetType={}, targetId={}, level={}",
+                id, targetType, targetId, permissionLevel);
+        RelationTableAccess access = accessService.addAccess(id, targetType, targetId, permissionLevel);
         return ResponseEntity.status(HttpStatus.CREATED).body(access);
     }
 
     @PutMapping("/{id}/access")
     @Operation(summary = "批量设置访问配置", description = "替换 Relation Table 的所有 Business Role 访问配置")
+    @SuppressWarnings("unchecked")
     public ResponseEntity<Void> batchSetAccess(
             @Parameter(description = "表定义ID") @PathVariable Long id,
-            @RequestBody Map<String, List<String>> request) {
-        List<String> targetIds = request.get("targetIds");
-        if (targetIds == null) {
+            @RequestBody Map<String, Object> request) {
+        Object rawIds = request.get("targetIds");
+        if (!(rawIds instanceof List<?> targetIds)) {
             return ResponseEntity.badRequest().build();
         }
-        log.info("Batch setting access config for relation table: id={}, count={}", id, targetIds.size());
-        accessService.batchSetAccess(id, targetIds);
+        String permissionLevel = request.get("permissionLevel") != null
+                ? String.valueOf(request.get("permissionLevel")) : null;
+        log.info("Batch setting access config for relation table: id={}, count={}, level={}",
+                id, targetIds.size(), permissionLevel);
+        accessService.batchSetAccess(id, (List<String>) targetIds, permissionLevel);
         return ResponseEntity.ok().build();
+    }
+
+    @PutMapping("/{id}/access/{accessId}")
+    @Operation(summary = "修改授权权限级别", description = "原地切换某条角色授权的 READONLY / READ_WRITE")
+    public ResponseEntity<RelationTableAccess> updatePermissionLevel(
+            @Parameter(description = "表定义ID") @PathVariable Long id,
+            @Parameter(description = "访问配置ID") @PathVariable String accessId,
+            @RequestBody Map<String, String> request) {
+        String permissionLevel = request.get("permissionLevel");
+        if (permissionLevel == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        log.info("Updating access permission level: id={}, accessId={}, level={}", id, accessId, permissionLevel);
+        RelationTableAccess access = accessService.updatePermissionLevel(accessId, permissionLevel);
+        return ResponseEntity.ok(access);
     }
 
     @DeleteMapping("/{id}/access/{accessId}")

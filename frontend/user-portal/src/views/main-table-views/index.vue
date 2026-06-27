@@ -12,6 +12,7 @@ const {
   selectedFuCode, selectedViewMeta, showExportButton, showImportButton, selectedFu, displayColumns,
   MTV_SELECTION_COL_WIDTH, gridTotalColumnWidth, gridInnerStyle, processedRows, groupedRows, pagedRows, displayTotal,
   handleSearch, handlePageChange, formatCell, isRowSelectable, getRowKey, onSelectionChange, openRow, columnIndex,
+  isFkLinkCell, openFkTarget,
   handleColumnCommand, applyColumnFilter, clearColumnFilter, applyColumnWidth, handleColumnResize, handleColumnResizeEnd,
   handleExport, triggerImport, handleImportFile, mtvHeaderCellClassName, rowClassName, spanMethod,
   loadData, columnWidth, isGroupHeaderRow, COLUMN_WIDTH_MIN, COLUMN_WIDTH_MAX,
@@ -158,6 +159,13 @@ const {
                   <strong>{{ row._groupLabel }}</strong>
                   <span class="group-count">({{ row._groupCount }})</span>
                 </div>
+              </template>
+              <template v-else-if="isFkLinkCell(col, row)">
+                <a
+                  class="mtv-fk-link"
+                  :title="t('mainTableView.openRelatedRecord')"
+                  @click.stop="openFkTarget(col, row)"
+                >{{ formatCell(row.values[col.fieldName]) }}</a>
               </template>
               <template v-else>
                 {{ formatCell(row.values[col.fieldName]) }}
@@ -478,6 +486,13 @@ const {
   color: var(--el-text-color-secondary);
   font-weight: normal;
   font-size: 12px;
+}
+
+.mtv-fk-link {
+  color: var(--el-color-primary);
+  cursor: pointer;
+
+  &:hover { text-decoration: underline; }
 }
 
 .import-progress-file {

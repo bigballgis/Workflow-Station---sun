@@ -35,8 +35,16 @@ export function useRelationTableData() {
 
   const SYSTEM_COLUMNS = new Set(['created_at', 'created_by', 'updated_at', 'updated_by', 'status'])
 
+  const exportingTemplate = ref(false)
+  const importDialogVisible = ref(false)
+  const importing = ref(false)
+  const importResult = ref<{ inserted: number; failed: number; errors: Array<{ row: number; field: string; message: string }> } | null>(null)
+
   // ---- Computed ----
   const selectedTable = computed(() => tables.value.find(t => t.id === selectedTableId.value) ?? null)
+
+  /** Whether the current admin may write (add/edit/inactive/import) on the selected table. */
+  const canWrite = computed(() => selectedTable.value?.permissionLevel !== 'READONLY')
 
   const fieldColumns = computed<FieldDefinitionResponse[]>(() => {
     if (!selectedTable.value?.fieldDefinitions) return []
@@ -215,18 +223,55 @@ export function useRelationTableData() {
     finally { exporting.value = false }
   }
 
+  const handleDownloadTemplate = async (format: 'csv' | 'xlsx') => {
+    if (!selectedTableId.value) return
+    exportingTemplate.value = true
+    try {
+      const blob = await relationTableDataApi.downloadTemplate(selectedTableId.value, format)
+      const url = window.URL.createObjectURL(blob as Blob)
+      const link = document.createElement('a'); link.href = url
+      const name = selectedTable.value?.displayName || selectedTable.value?.tableName || 'template'
+      link.setAttribute('download', `${name}-template.${format}`)
+      document.body.appendChild(link); link.click(); link.remove(); window.URL.revokeObjectURL(url)
+    } catch { notifyError('Template download failed') }
+    finally { exportingTemplate.value = false }
+  }
+
+  const openImportDialog = () => { importResult.value = null; importDialogVisible.value = true }
+
+  const handleImportFile = async (file: File) => {
+    if (!selectedTableId.value) return
+    importing.value = true
+    importResult.value = null
+    try {
+      const format = file.name.toLowerCase().endsWith('.xlsx') ? 'xlsx' : 'csv'
+      const res = await relationTableDataApi.importData(selectedTableId.value, file, format)
+      importResult.value = res
+      if (res.inserted > 0) {
+        notifySuccess(`Imported ${res.inserted} row(s)${res.failed ? `, ${res.failed} failed` : ''}`)
+        await fetchData()
+      } else if (res.failed > 0) {
+        notifyError(`All ${res.failed} row(s) failed validation`)
+      }
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: { message?: string }; message?: string } }; message?: string }
+      notifyError(err?.response?.data?.error?.message || err?.response?.data?.message || err?.message || 'Import failed')
+    } finally { importing.value = false }
+  }
+
   // ---- Lifecycle ----
   const init = () => fetchTables()
   const refresh = () => { fetchTables(); if (selectedTableId.value) fetchData() }
 
   return {
     tableListLoading, dataLoading, exporting, saving,
+    exportingTemplate, importDialogVisible, importing, importResult,
     tables, selectedTableId, searchKeyword, tableSearchKeyword, currentPage, pageSize, totalElements, dataRows,
     fetchDataError, dialogVisible, dialogMode, editingRowId, formData,
-    selectedTable, fieldColumns, visibleFieldColumns, filteredTables,
+    selectedTable, canWrite, fieldColumns, visibleFieldColumns, filteredTables,
     isNumericType, isRowDisabled, isFkFieldDisabled,
     fetchTables, fetchData, handleSelectTable, handlePageChange, handleSizeChange,
     openAddDialog, openEditDialog, handleSaveRecord, handleDisable, handleEnable, handleDelete,
-    formatHKT, handleExport, init, refresh,
+    formatHKT, handleExport, handleDownloadTemplate, openImportDialog, handleImportFile, init, refresh,
   }
 }

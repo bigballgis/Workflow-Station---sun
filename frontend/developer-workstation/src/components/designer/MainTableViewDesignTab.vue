@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Delete } from '@element-plus/icons-vue'
+import { Plus, Delete, DArrowLeft, DArrowRight } from '@element-plus/icons-vue'
 import MainTableViewDesigner from './MainTableViewDesigner.vue'
 import { mainTableViewApi, type MainTableViewDefinition } from '@/api/mainTableView'
 import { functionUnitApi, type TableDefinition } from '@/api/functionUnit'
@@ -15,19 +15,52 @@ const { t } = useI18n()
 
 const loading = ref(false)
 const views = ref<MainTableViewDefinition[]>([])
+const tables = ref<TableDefinition[]>([])
 const selectedViewId = ref<number | null>(null)
 const hasMainTable = ref(false)
+const navCollapsed = ref(false)
 const createDialogVisible = ref(false)
 const newViewName = ref('')
+const createTableId = ref<number | null>(null)
 
 const selectedView = ref<MainTableViewDefinition | null>(null)
 
-async function checkMainTable() {
+// Only MAIN + SUB tables get views; RELATION tables are excluded.
+const viewableTables = computed(() =>
+  tables.value.filter(tbl => tbl.tableType === 'MAIN' || tbl.tableType === 'SUB'),
+)
+
+function tableLabel(table: TableDefinition): string {
+  return table.tableDisplayName || table.tableName
+}
+
+// Views grouped by their owning table, in viewable-table order (MAIN tables surface first naturally).
+const viewGroups = computed(() => {
+  const byTable = new Map<number, MainTableViewDefinition[]>()
+  for (const v of views.value) {
+    const list = byTable.get(v.mainTableId) || []
+    list.push(v)
+    byTable.set(v.mainTableId, list)
+  }
+  return viewableTables.value
+    .map(table => ({
+      table,
+      views: (byTable.get(table.id) || []).slice().sort((a, b) => {
+        if (a.isDefault && !b.isDefault) return -1
+        if (!a.isDefault && b.isDefault) return 1
+        return a.viewName.localeCompare(b.viewName)
+      }),
+    }))
+    .filter(group => group.views.length > 0)
+})
+
+async function loadTables() {
   try {
     const res = await functionUnitApi.getTables(props.functionUnitId)
-    const tables: TableDefinition[] = res.data || []
-    hasMainTable.value = tables.some(tbl => tbl.tableType === 'MAIN')
+    tables.value = res.data || []
+    hasMainTable.value = tables.value.some(tbl => tbl.tableType === 'MAIN')
   } catch {
+    tables.value = []
     hasMainTable.value = false
   }
 }
@@ -63,11 +96,17 @@ async function loadSelectedView() {
 
 watch(selectedViewId, loadSelectedView)
 
+function openCreateDialog(tableId: number) {
+  createTableId.value = tableId
+  newViewName.value = ''
+  createDialogVisible.value = true
+}
+
 async function handleCreateView() {
   const name = newViewName.value.trim()
-  if (!name) return
+  if (!name || !createTableId.value) return
   try {
-    const res = await mainTableViewApi.create(props.functionUnitId, name)
+    const res = await mainTableViewApi.create(props.functionUnitId, name, createTableId.value)
     createDialogVisible.value = false
     newViewName.value = ''
     await loadViews()
@@ -109,8 +148,19 @@ function onViewSaved(updated: MainTableViewDefinition) {
   }
 }
 
+// Designer-internal FK navigation: open the default view of the referenced table.
+function navigateToTableView(refTableId: number) {
+  const defaultView = views.value.find(v => v.mainTableId === refTableId && v.isDefault)
+    || views.value.find(v => v.mainTableId === refTableId)
+  if (defaultView) {
+    selectedViewId.value = defaultView.id
+  } else {
+    ElMessage.warning(t('mainTableView.noViewForRefTable'))
+  }
+}
+
 onMounted(async () => {
-  await checkMainTable()
+  await loadTables()
   if (hasMainTable.value) {
     await loadViews()
   }
@@ -129,53 +179,82 @@ onMounted(async () => {
 
     <template v-else>
       <div class="view-design-layout">
-        <div class="view-list-panel">
+        <div
+          class="view-list-panel"
+          :class="{ collapsed: navCollapsed }"
+        >
           <div class="panel-header">
-            <span>{{ t('mainTableView.viewList') }}</span>
+            <span v-show="!navCollapsed">{{ t('mainTableView.viewList') }}</span>
             <el-button
-              type="primary"
+              text
               size="small"
-              :icon="Plus"
-              @click="createDialogVisible = true"
+              :icon="navCollapsed ? DArrowRight : DArrowLeft"
+              :title="navCollapsed ? t('mainTableView.expandNav') : t('mainTableView.collapseNav')"
+              @click="navCollapsed = !navCollapsed"
             />
           </div>
-          <el-menu
-            :default-active="selectedViewId ? String(selectedViewId) : ''"
-            @select="(idx: string) => { selectedViewId = Number(idx) }"
+
+          <div
+            v-show="!navCollapsed"
+            class="view-groups"
           >
-            <el-menu-item
-              v-for="view in views"
-              :key="view.id"
-              :index="String(view.id)"
+            <div
+              v-for="group in viewGroups"
+              :key="group.table.id"
+              class="view-group"
             >
-              <div class="view-menu-row">
-                <span>{{ view.viewName }}</span>
-                <el-tag
-                  v-if="view.isDefault"
-                  size="small"
-                  type="info"
-                >
-                  {{ t('mainTableView.defaultTag') }}
-                </el-tag>
+              <div class="view-group-header">
+                <span class="view-group-title">{{ tableLabel(group.table) }}</span>
                 <el-button
-                  v-if="!view.isDefault"
-                  type="danger"
+                  type="primary"
                   size="small"
                   link
-                  :icon="Delete"
-                  @click.stop="handleDeleteView(view)"
+                  :icon="Plus"
+                  :title="t('mainTableView.createView')"
+                  @click="openCreateDialog(group.table.id)"
                 />
               </div>
-            </el-menu-item>
-          </el-menu>
+              <el-menu
+                :default-active="selectedViewId ? String(selectedViewId) : ''"
+                @select="(idx: string) => { selectedViewId = Number(idx) }"
+              >
+                <el-menu-item
+                  v-for="view in group.views"
+                  :key="view.id"
+                  :index="String(view.id)"
+                >
+                  <div class="view-menu-row">
+                    <span>{{ view.viewName }}</span>
+                    <el-tag
+                      v-if="view.isDefault"
+                      size="small"
+                      type="info"
+                    >
+                      {{ t('mainTableView.defaultTag') }}
+                    </el-tag>
+                    <el-button
+                      v-if="!view.isDefault"
+                      type="danger"
+                      size="small"
+                      link
+                      :icon="Delete"
+                      @click.stop="handleDeleteView(view)"
+                    />
+                  </div>
+                </el-menu-item>
+              </el-menu>
+            </div>
+          </div>
         </div>
 
         <div class="view-editor-panel">
           <MainTableViewDesigner
             v-if="selectedView"
+            :key="selectedView.id"
             :function-unit-id="functionUnitId"
             :view="selectedView"
             @saved="onViewSaved"
+            @navigate-to-table-view="navigateToTableView"
           />
           <el-empty
             v-else
@@ -218,18 +297,43 @@ onMounted(async () => {
   height: calc(100vh - 280px);
 }
 .view-list-panel {
-  width: 220px;
+  width: 240px;
   flex-shrink: 0;
   border: 1px solid var(--el-border-color-light);
   border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: width 0.2s ease;
+
+  &.collapsed {
+    width: 40px;
+  }
 }
 .panel-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 12px;
+  padding: 10px 8px 10px 12px;
   font-weight: 600;
   border-bottom: 1px solid var(--el-border-color-lighter);
+}
+.view-groups {
+  flex: 1;
+  overflow-y: auto;
+}
+.view-group + .view-group {
+  border-top: 1px solid var(--el-border-color-lighter);
+}
+.view-group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 8px 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--el-text-color-secondary);
+  background: var(--el-fill-color-light);
 }
 .view-menu-row {
   display: flex;

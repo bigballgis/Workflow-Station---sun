@@ -2,16 +2,26 @@ package com.portal.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.platform.common.dto.RelationFieldDTO;
 import com.platform.common.dto.RelationTableDTO;
+import com.platform.common.enums.RelationDataType;
+import com.platform.common.enums.RelationPermissionLevel;
 import com.platform.common.enums.RelationTableStatus;
+import com.platform.common.relationtable.RelationRowValidator;
+import com.platform.common.relationtable.RelationTableTemplateService;
+import com.platform.common.relationtable.RowValidationResult;
+import com.platform.security.util.SecurityContextUtils;
 import com.portal.component.RoleAccessComponent;
 import com.portal.dto.PageResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -32,6 +42,7 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
     private final JdbcTemplate jdbcTemplate;
     private final RoleAccessComponent roleAccessComponent;
     private final ObjectMapper objectMapper;
+    private final RelationTableTemplateService templateService = new RelationTableTemplateService();
 
     @Override
     @Transactional(readOnly = true)
@@ -67,16 +78,22 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
             return Collections.emptyList();
         }
 
-        // Filter by access permissions
+        // Resolve the permission level per table against the user's ACTIVE role (single role the user
+        // logged in / switched to). Tables with no grant for the active role are filtered out.
+        String activeRoleId = SecurityContextUtils.getCurrentActiveRoleId().orElse(null);
         return allVisible.stream()
-                .filter(table -> {
+                .map(table -> {
                     try {
-                        return hasAccess(table.getId(), userRoleIds);
+                        String level = resolvePermissionLevelForRoles(table.getId(), activeRoleId, userRoleIds);
+                        table.setPermissionLevel(level);
+                        return table;
                     } catch (Exception e) {
                         log.warn("Failed to check access for table {}: {}", table.getId(), e.getMessage());
-                        return false;
+                        table.setPermissionLevel(null);
+                        return table;
                     }
                 })
+                .filter(table -> table.getPermissionLevel() != null)
                 .collect(Collectors.toList());
     }
 
@@ -236,6 +253,13 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
             }
 
             if (!isDeployedRelationTable(tableId)) {
+                return Collections.emptyList();
+            }
+
+            // Read access guard: only roles granted access to the table may resolve lookups against it.
+            String currentUserId = SecurityContextUtils.getCurrentUserId().orElse(null);
+            if (currentUserId != null && !hasAccess(tableId, getUserRoleIds(currentUserId))) {
+                log.warn("Lookup search denied for user {} on table {}", currentUserId, tableId);
                 return Collections.emptyList();
             }
 
@@ -517,6 +541,235 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
         params.addAll(userRoleIds);
         Long count = jdbcTemplate.queryForObject(sql, Long.class, params.toArray());
         return count != null && count > 0;
+    }
+
+    /**
+     * Resolve the permission level for the given table, preferring the single active role.
+     * Falls back to the union of all roles for READ-ONLY visibility when no active role is present
+     * (legacy token) — the fallback never grants write.
+     *
+     * @return READONLY | READ_WRITE | null (no access)
+     */
+    private String resolvePermissionLevelForRoles(Long tableId, String activeRoleId, Set<String> allRoleIds) {
+        if (activeRoleId != null && !activeRoleId.isBlank()) {
+            String level = queryPermissionLevel(tableId, Collections.singletonList(activeRoleId));
+            if (level != null) {
+                return level;
+            }
+            // active role has no grant; do not silently widen to other roles for write — but allow
+            // read visibility if any other held role grants access.
+            return hasAccess(tableId, allRoleIds) ? RelationPermissionLevel.READONLY : null;
+        }
+        // No active role in token: read-only visibility based on any held role.
+        return hasAccess(tableId, allRoleIds) ? RelationPermissionLevel.READONLY : null;
+    }
+
+    /** Highest-privilege level across the given roles for the table, or null when none grant access. */
+    private String queryPermissionLevel(Long tableId, Collection<String> roleIds) {
+        if (roleIds == null || roleIds.isEmpty()) return null;
+        String placeholders = roleIds.stream().map(id -> "?").collect(Collectors.joining(","));
+        String sql = "SELECT permission_level FROM rt_table_access WHERE table_id = ? "
+                + "AND target_type = 'ROLE' AND target_id IN (" + placeholders + ")";
+        List<Object> params = new ArrayList<>();
+        params.add(tableId);
+        params.addAll(roleIds);
+        List<String> levels = jdbcTemplate.query(sql, (rs, n) -> rs.getString("permission_level"), params.toArray());
+        if (levels.isEmpty()) return null;
+        return levels.stream().anyMatch(RelationPermissionLevel::canWrite)
+                ? RelationPermissionLevel.READ_WRITE : RelationPermissionLevel.READONLY;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public String resolvePermissionLevel(Long tableId, String userId) {
+        String activeRoleId = SecurityContextUtils.getCurrentActiveRoleId().orElse(null);
+        return resolvePermissionLevelForRoles(tableId, activeRoleId, getUserRoleIds(userId));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<RelationFieldDTO> getFieldDefinitions(Long tableId, String userId) {
+        if (resolvePermissionLevel(tableId, userId) == null) {
+            throw new AccessDeniedException("No access to this table");
+        }
+        return loadFields(tableId);
+    }
+
+    /** Ensure the current user (active role) may write to the table; throws 403 otherwise. */
+    private void requireWriteAccess(Long tableId, String userId) {
+        String level = resolvePermissionLevel(tableId, userId);
+        if (!RelationPermissionLevel.canWrite(level)) {
+            throw new AccessDeniedException("Write access denied for this table");
+        }
+    }
+
+    /** Load full field definitions for a deployed relation table (for validation / import). */
+    private List<RelationFieldDTO> loadFields(Long tableId) {
+        String sql = "SELECT field_name, data_type, length, precision_value, scale, nullable, "
+                + "is_primary_key, default_value, display_name, sort_order "
+                + "FROM rt_field_definitions WHERE table_id = ? ORDER BY sort_order ASC";
+        return jdbcTemplate.query(sql, (rs, n) -> RelationFieldDTO.builder()
+                .fieldName(rs.getString("field_name"))
+                .dataType(RelationDataType.fromCode(rs.getString("data_type")))
+                .length((Integer) rs.getObject("length"))
+                .precision((Integer) rs.getObject("precision_value"))
+                .scale((Integer) rs.getObject("scale"))
+                .nullable(rs.getObject("nullable") == null || rs.getBoolean("nullable"))
+                .isPrimaryKey(rs.getBoolean("is_primary_key"))
+                .defaultValue(rs.getString("default_value"))
+                .displayName(rs.getString("display_name"))
+                .sortOrder((Integer) rs.getObject("sort_order"))
+                .build(), tableId);
+    }
+
+    private String findPrimaryKeyField(List<RelationFieldDTO> fields) {
+        return fields.stream()
+                .filter(f -> Boolean.TRUE.equals(f.getIsPrimaryKey()))
+                .map(RelationFieldDTO::getFieldName)
+                .findFirst().orElse(null);
+    }
+
+    @Override
+    @Transactional
+    public Map<String, Object> addData(Long tableId, String userId, Map<String, Object> data) {
+        requireWriteAccess(tableId, userId);
+        if (!isDeployedRelationTable(tableId)) {
+            throw new IllegalArgumentException("Table not found or not deployed: " + tableId);
+        }
+        List<RelationFieldDTO> fields = loadFields(tableId);
+        return insertRow(tableId, fields, data, userId);
+    }
+
+    /** Build + insert one row into rt_table_data_rows; shared by addData and importData. */
+    private Map<String, Object> insertRow(Long tableId, List<RelationFieldDTO> fields,
+                                          Map<String, Object> data, String userId) {
+        Set<String> validFieldNames = fields.stream()
+                .map(RelationFieldDTO::getFieldName).collect(Collectors.toSet());
+        Map<String, Object> row = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> e : data.entrySet()) {
+            if (validFieldNames.contains(e.getKey())) row.put(e.getKey(), e.getValue());
+        }
+
+        Timestamp now = Timestamp.from(Instant.now());
+        if (validFieldNames.contains("created_at")) row.put("created_at", now.toString());
+        if (validFieldNames.contains("created_by")) row.put("created_by", userId);
+        if (validFieldNames.contains("updated_at")) row.put("updated_at", now.toString());
+        if (validFieldNames.contains("updated_by")) row.put("updated_by", userId);
+
+        String pkField = findPrimaryKeyField(fields);
+        Object pkVal = pkField != null ? row.get(pkField) : null;
+        String rowId = pkVal != null ? String.valueOf(pkVal) : UUID.randomUUID().toString();
+
+        jdbcTemplate.update(
+                "INSERT INTO " + DATA_ROWS_TABLE
+                        + " (table_id, row_id, data, status, created_at, created_by, updated_at, updated_by)"
+                        + " VALUES (?, ?, ?::jsonb, 'ACTIVE', ?, ?, ?, ?)",
+                tableId, rowId, writeJson(row), now, userId, now, userId);
+        return row;
+    }
+
+    @Override
+    @Transactional
+    public Map<String, Object> updateData(Long tableId, String userId, String rowId, Map<String, Object> data) {
+        requireWriteAccess(tableId, userId);
+        List<RelationFieldDTO> fields = loadFields(tableId);
+        String pkField = findPrimaryKeyField(fields);
+        Set<String> validFieldNames = fields.stream()
+                .map(RelationFieldDTO::getFieldName).collect(Collectors.toSet());
+
+        Map<String, Object> oldData = loadRow(tableId, rowId);
+        if (oldData == null) {
+            throw new IllegalArgumentException("Row not found: " + rowId);
+        }
+        Map<String, Object> merged = new LinkedHashMap<>(oldData);
+        for (Map.Entry<String, Object> e : data.entrySet()) {
+            if (validFieldNames.contains(e.getKey()) && !e.getKey().equals(pkField)) {
+                merged.put(e.getKey(), e.getValue());
+            }
+        }
+        Timestamp now = Timestamp.from(Instant.now());
+        if (validFieldNames.contains("updated_at")) merged.put("updated_at", now.toString());
+        if (validFieldNames.contains("updated_by")) merged.put("updated_by", userId);
+
+        jdbcTemplate.update(
+                "UPDATE " + DATA_ROWS_TABLE + " SET data = ?::jsonb, updated_at = ?, updated_by = ? "
+                        + "WHERE table_id = ? AND row_id = ?",
+                writeJson(merged), now, userId, tableId, rowId);
+        return merged;
+    }
+
+    @Override
+    @Transactional
+    public Map<String, Object> changeStatus(Long tableId, String userId, String rowId, String status) {
+        requireWriteAccess(tableId, userId);
+        String normalized = "INACTIVE".equalsIgnoreCase(status) ? "INACTIVE" : "ACTIVE";
+        Map<String, Object> oldData = loadRow(tableId, rowId);
+        if (oldData == null) {
+            throw new IllegalArgumentException("Row not found: " + rowId);
+        }
+        Map<String, Object> merged = new LinkedHashMap<>(oldData);
+        if (merged.containsKey("status")) merged.put("status", normalized);
+        Timestamp now = Timestamp.from(Instant.now());
+        merged.put("updated_at", now.toString());
+        merged.put("updated_by", userId);
+        jdbcTemplate.update(
+                "UPDATE " + DATA_ROWS_TABLE + " SET status = ?, data = ?::jsonb, updated_at = ?, updated_by = ? "
+                        + "WHERE table_id = ? AND row_id = ?",
+                normalized, writeJson(merged), now, userId, tableId, rowId);
+        return merged;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public byte[] generateTemplate(Long tableId, String userId, String format) {
+        // Any role with access (read or write) may download the template; readers can inspect columns.
+        if (resolvePermissionLevel(tableId, userId) == null) {
+            throw new AccessDeniedException("No access to this table");
+        }
+        return templateService.generateTemplate(loadFields(tableId), format);
+    }
+
+    @Override
+    @Transactional
+    public Map<String, Object> importData(Long tableId, String userId, byte[] fileBytes, String format) {
+        requireWriteAccess(tableId, userId);
+        List<RelationFieldDTO> fields = loadFields(tableId);
+        List<Map<String, Object>> rawRows = templateService.parseImport(fileBytes, format);
+        List<RowValidationResult> results = RelationRowValidator.validateRows(rawRows, fields);
+
+        int inserted = 0;
+        List<Map<String, Object>> errors = new ArrayList<>();
+        for (RowValidationResult r : results) {
+            if (r.isValid()) {
+                insertRow(tableId, fields, r.getValues(), userId);
+                inserted++;
+            } else {
+                r.getErrors().forEach(err -> errors.add(Map.of(
+                        "row", err.getRow(),
+                        "field", err.getField() == null ? "" : err.getField(),
+                        "message", err.getMessage())));
+            }
+        }
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("inserted", inserted);
+        summary.put("failed", results.size() - inserted);
+        summary.put("errors", errors);
+        return summary;
+    }
+
+    private Map<String, Object> loadRow(Long tableId, String rowId) {
+        List<Map<String, Object>> rows = jdbcTemplate.query(
+                "SELECT data FROM " + DATA_ROWS_TABLE + " WHERE table_id = ? AND row_id = ?",
+                (rs, n) -> parseJsonRow(rs.getString("data")), tableId, rowId);
+        return rows.isEmpty() ? null : rows.get(0);
+    }
+
+    private String writeJson(Map<String, Object> row) {
+        try {
+            return objectMapper.writeValueAsString(row);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to serialize row JSON: " + e.getMessage(), e);
+        }
     }
 
     private boolean isDeployedRelationTable(Long tableId) {

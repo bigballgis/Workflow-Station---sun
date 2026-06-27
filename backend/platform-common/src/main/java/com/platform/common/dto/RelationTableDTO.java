@@ -68,6 +68,13 @@ public class RelationTableDTO implements Serializable {
     private List<RelationFieldDTO> fieldDefinitions;
 
     /**
+     * Permission level the current viewer holds on this table: READONLY | READ_WRITE.
+     * Resolved per request against the caller's active role; null when not applicable.
+     * @see com.platform.common.enums.RelationPermissionLevel
+     */
+    private String permissionLevel;
+
+    /**
      * Record creation timestamp
      */
     private Instant createdAt;

@@ -36,6 +36,11 @@ public class RelationTableAccess {
     @Column(name = "target_id", nullable = false, length = 64)
     private String targetId;
 
+    /** READONLY | READ_WRITE. READONLY = view + export, READ_WRITE = full CRUD + import. */
+    @Builder.Default
+    @Column(name = "permission_level", nullable = false, length = 20)
+    private String permissionLevel = "READ_WRITE";
+
     @CreatedDate
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;

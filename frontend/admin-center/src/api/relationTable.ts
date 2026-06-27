@@ -51,6 +51,8 @@ export interface RelationTableResponse {
   portalVisible: boolean
   currentVersion: number
   fieldDefinitions: FieldDefinitionResponse[]
+  /** 当前管理员对该表的权限级别：READONLY=只读, READ_WRITE=读写 */
+  permissionLevel?: 'READONLY' | 'READ_WRITE'
   createdAt: string
   createdBy: string
   updatedAt: string
@@ -67,12 +69,16 @@ export interface RelationTableVersionResponse {
   changeLog?: string
 }
 
+/** 权限级别 */
+export type RelationPermissionLevel = 'READONLY' | 'READ_WRITE'
+
 /** 访问权限配置 */
 export interface RelationTableAccess {
   id: string
   tableId: number
   targetType: string
   targetId: string
+  permissionLevel: RelationPermissionLevel
   createdAt: string
   createdBy: string
 }
@@ -215,12 +221,16 @@ export const relationTableStructureApi = {
     get<RelationTableAccess[]>(`/relation-tables/structures/${id}/access`),
 
   /** 添加访问配置 */
-  addAccess: (id: number, targetId: string, targetType = 'ROLE') =>
-    post<RelationTableAccess>(`/relation-tables/structures/${id}/access`, { targetType, targetId }),
+  addAccess: (id: number, targetId: string, permissionLevel: RelationPermissionLevel = 'READ_WRITE', targetType = 'ROLE') =>
+    post<RelationTableAccess>(`/relation-tables/structures/${id}/access`, { targetType, targetId, permissionLevel }),
 
   /** 批量设置访问配置 */
-  batchSetAccess: (id: number, targetIds: string[]) =>
-    put<void>(`/relation-tables/structures/${id}/access`, { targetIds }),
+  batchSetAccess: (id: number, targetIds: string[], permissionLevel: RelationPermissionLevel = 'READ_WRITE') =>
+    put<void>(`/relation-tables/structures/${id}/access`, { targetIds, permissionLevel }),
+
+  /** 修改某条授权的权限级别 */
+  updatePermissionLevel: (id: number, accessId: string, permissionLevel: RelationPermissionLevel) =>
+    put<RelationTableAccess>(`/relation-tables/structures/${id}/access/${accessId}`, { permissionLevel }),
 
   /** 删除访问配置 */
   removeAccess: (id: number, accessId: string) =>
@@ -271,4 +281,28 @@ export const relationTableDataApi = {
   /** 分配主键值（非 manual 策略） */
   allocatePrimaryKeys: (tableId: number, payload: { fieldName: string; count?: number; scopeKey?: string }) =>
     post<{ values: string[] }>(`/relation-tables/data/${tableId}/primary-keys/allocate`, payload),
+
+  /** 下载导入模板 (csv|xlsx) */
+  downloadTemplate: (tableId: number, format: 'csv' | 'xlsx' = 'csv') =>
+    get<Blob>(`/relation-tables/data/${tableId}/template`, {
+      params: { format },
+      responseType: 'blob'
+    }),
+
+  /** 导入数据 (csv|xlsx)，返回 {inserted, failed, errors} */
+  importData: (tableId: number, file: File, format?: 'csv' | 'xlsx') => {
+    const formData = new FormData()
+    formData.append('file', file)
+    if (format) formData.append('format', format)
+    return post<RelationImportResult>(`/relation-tables/data/${tableId}/import`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+  },
+}
+
+/** 导入结果 */
+export interface RelationImportResult {
+  inserted: number
+  failed: number
+  errors: Array<{ row: number; field: string; message: string }>
 }

@@ -48,4 +48,14 @@ public interface RelationTableDataService {
      * 导出表数据为 CSV
      */
     String exportCsv(Long tableId, int maxRows);
+
+    /**
+     * 生成导入模板（csv|xlsx）
+     */
+    byte[] generateTemplate(Long tableId, String format);
+
+    /**
+     * 导入数据（按公共校验器校验后插入），返回 {inserted, failed, errors}
+     */
+    Map<String, Object> importData(Long tableId, byte[] fileBytes, String format);
 }

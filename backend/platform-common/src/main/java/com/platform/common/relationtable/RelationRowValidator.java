@@ -1,0 +1,183 @@
+package com.platform.common.relationtable;
+
+import com.platform.common.dto.RelationFieldDTO;
+import com.platform.common.enums.RelationDataType;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Collection;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+/**
+ * Shared validator for Relation Table data imports.
+ *
+ * <p>Drives validation purely off the deployed {@link RelationFieldDTO} metadata (type, length,
+ * precision/scale, nullable, primary key), so a single implementation covers every relation table
+ * in both Admin Center and User Portal. For each input row it coerces cell strings to typed values
+ * and records per-cell errors; a row with any error is not safe to insert.
+ */
+public final class RelationRowValidator {
+
+    /** Fields managed by the server; never imported / validated from user input. */
+    public static final Set<String> SYSTEM_FIELDS = Set.of(
+            "created_at", "created_by", "updated_at", "updated_by", "status");
+
+    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm:ss");
+    private static final List<DateTimeFormatter> TS_FMTS = List.of(
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"),
+            DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"),
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+
+    private RelationRowValidator() {
+    }
+
+    /**
+     * Field names that should appear in an import template / be accepted from import input,
+     * i.e. all non-system fields, in sort order.
+     */
+    public static List<String> importableFieldNames(List<RelationFieldDTO> fields) {
+        return importableFields(fields).stream().map(RelationFieldDTO::getFieldName).toList();
+    }
+
+    public static List<RelationFieldDTO> importableFields(List<RelationFieldDTO> fields) {
+        return fields.stream()
+                .filter(f -> f.getFieldName() != null && !isSystemField(f.getFieldName()))
+                .toList();
+    }
+
+    public static boolean isSystemField(String fieldName) {
+        return fieldName != null && SYSTEM_FIELDS.contains(fieldName.toLowerCase());
+    }
+
+    /**
+     * Validate and coerce one row.
+     *
+     * @param rowNumber 1-based number shown to the user (excludes header)
+     * @param rawValues raw cell values keyed by field name (typically strings parsed from CSV/XLSX)
+     * @param fields    deployed field definitions
+     */
+    public static RowValidationResult validateRow(int rowNumber, Map<String, Object> rawValues,
+                                                  List<RelationFieldDTO> fields) {
+        RowValidationResult result = new RowValidationResult(rowNumber);
+
+        // Reject unknown columns to catch typos / wrong template early.
+        Set<String> known = new LinkedHashSet<>(importableFieldNames(fields));
+        for (String key : rawValues.keySet()) {
+            if (key != null && !isSystemField(key) && !known.contains(key)) {
+                result.addError(key, "Unknown field (not part of this table)");
+            }
+        }
+
+        for (RelationFieldDTO field : importableFields(fields)) {
+            String name = field.getFieldName();
+            Object raw = rawValues.get(name);
+            String text = raw == null ? null : raw.toString().trim();
+            boolean blank = text == null || text.isEmpty();
+
+            boolean required = Boolean.FALSE.equals(field.getNullable())
+                    || Boolean.TRUE.equals(field.getIsPrimaryKey());
+            if (blank) {
+                if (required) {
+                    result.addError(name, "Required field is empty");
+                }
+                continue; // empty optional -> leave unset (DB/default handles it)
+            }
+
+            Object coerced = coerce(field, text, result);
+            if (coerced != null) {
+                result.putValue(name, coerced);
+            }
+        }
+        return result;
+    }
+
+    private static Object coerce(RelationFieldDTO field, String text, RowValidationResult result) {
+        String name = field.getFieldName();
+        RelationDataType type = field.getDataType() != null ? field.getDataType() : RelationDataType.VARCHAR;
+
+        switch (type) {
+            case INTEGER:
+            case BIGINT:
+                try {
+                    return Long.parseLong(text);
+                } catch (NumberFormatException e) {
+                    result.addError(name, "Expected an integer, got: " + text);
+                    return null;
+                }
+            case DECIMAL:
+                try {
+                    BigDecimal bd = new BigDecimal(text);
+                    if (field.getScale() != null && bd.scale() > field.getScale()) {
+                        result.addError(name, "Too many decimal places (max " + field.getScale() + ")");
+                        return null;
+                    }
+                    if (field.getPrecision() != null && bd.precision() > field.getPrecision()) {
+                        result.addError(name, "Number exceeds precision (max " + field.getPrecision() + " digits)");
+                        return null;
+                    }
+                    return bd;
+                } catch (NumberFormatException e) {
+                    result.addError(name, "Expected a decimal number, got: " + text);
+                    return null;
+                }
+            case BOOLEAN:
+                if (text.equalsIgnoreCase("true") || text.equals("1") || text.equalsIgnoreCase("yes")) return Boolean.TRUE;
+                if (text.equalsIgnoreCase("false") || text.equals("0") || text.equalsIgnoreCase("no")) return Boolean.FALSE;
+                result.addError(name, "Expected true/false, got: " + text);
+                return null;
+            case DATE:
+                try {
+                    return LocalDate.parse(text, DATE_FMT).toString();
+                } catch (Exception e) {
+                    result.addError(name, "Expected date yyyy-MM-dd, got: " + text);
+                    return null;
+                }
+            case TIME:
+                try {
+                    return LocalTime.parse(text, TIME_FMT).toString();
+                } catch (Exception e) {
+                    result.addError(name, "Expected time HH:mm:ss, got: " + text);
+                    return null;
+                }
+            case TIMESTAMP:
+                for (DateTimeFormatter fmt : TS_FMTS) {
+                    try {
+                        return LocalDateTime.parse(text, fmt).toString();
+                    } catch (Exception ignored) {
+                        // try next format
+                    }
+                }
+                result.addError(name, "Expected timestamp yyyy-MM-dd HH:mm:ss, got: " + text);
+                return null;
+            case VARCHAR:
+            case TEXT:
+            case JSON:
+            case FILE:
+            case BYTEA:
+            default:
+                if (field.getLength() != null && field.getLength() > 0 && text.length() > field.getLength()) {
+                    result.addError(name, "Exceeds max length " + field.getLength());
+                    return null;
+                }
+                return text;
+        }
+    }
+
+    /** Convenience: validate a batch of rows. */
+    public static List<RowValidationResult> validateRows(Collection<Map<String, Object>> rows,
+                                                         List<RelationFieldDTO> fields) {
+        java.util.List<RowValidationResult> out = new java.util.ArrayList<>();
+        int n = 1;
+        for (Map<String, Object> row : rows) {
+            out.add(validateRow(n++, row, fields));
+        }
+        return out;
+    }
+}

@@ -116,7 +116,7 @@
         />
         <el-table-column
           label="Actions"
-          width="470"
+          width="240"
           fixed="right"
           align="center"
         >
@@ -134,33 +134,9 @@
                 link
                 type="primary"
                 size="small"
-                @click="router.push(`/relation-tables/structure/${row.id}/er-diagram`)"
-              >
-                ER Diagram
-              </el-button>
-              <el-button
-                link
-                type="danger"
-                size="small"
-                @click="handleDelete(row)"
-              >
-                Delete
-              </el-button>
-              <el-button
-                link
-                type="primary"
-                size="small"
                 @click="handleDeploy(row)"
               >
                 Deploy
-              </el-button>
-              <el-button
-                link
-                type="danger"
-                size="small"
-                @click="handleRollback(row)"
-              >
-                Rollback
               </el-button>
               <el-button
                 link
@@ -170,22 +146,40 @@
               >
                 Version
               </el-button>
-              <el-button
-                link
-                type="info"
-                size="small"
-                @click="handleCompare(row)"
+              <el-dropdown
+                trigger="click"
+                @command="(cmd: string) => handleActionCommand(cmd, row)"
               >
-                Compare
-              </el-button>
-              <el-button
-                link
-                type="primary"
-                size="small"
-                @click="handleAccess(row)"
-              >
-                Access
-              </el-button>
+                <el-button
+                  link
+                  type="primary"
+                  size="small"
+                >
+                  More<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+                </el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="erDiagram">
+                      ER Diagram
+                    </el-dropdown-item>
+                    <el-dropdown-item command="compare">
+                      Compare
+                    </el-dropdown-item>
+                    <el-dropdown-item command="rollback">
+                      Rollback
+                    </el-dropdown-item>
+                    <el-dropdown-item command="access">
+                      Access
+                    </el-dropdown-item>
+                    <el-dropdown-item
+                      command="delete"
+                      divided
+                    >
+                      <span class="danger-item">Delete</span>
+                    </el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
             </div>
           </template>
         </el-table-column>
@@ -219,7 +213,7 @@
 <script setup lang="ts">
 import { onMounted, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
-import { Plus, Share } from '@element-plus/icons-vue'
+import { Plus, Share, ArrowDown } from '@element-plus/icons-vue'
 import PageHeader from '@/components/PageHeader.vue'
 import { relationTableStatusType as statusTagType, formatDate } from '@/utils/format'
 import VersionDialog from './components/VersionDialog.vue'
@@ -250,6 +244,26 @@ const {
   handleDelete,
 } = useRelationTable()
 
+function handleActionCommand(command: string, row: any) {
+  switch (command) {
+    case 'erDiagram':
+      router.push(`/relation-tables/structure/${row.id}/er-diagram`)
+      break
+    case 'compare':
+      handleCompare(row)
+      break
+    case 'rollback':
+      handleRollback(row)
+      break
+    case 'access':
+      handleAccess(row)
+      break
+    case 'delete':
+      handleDelete(row)
+      break
+  }
+}
+
 onMounted(() => {
   fetchTableList()
 })
@@ -258,3 +272,9 @@ onActivated(() => {
   fetchTableList()
 })
 </script>
+
+<style scoped>
+.danger-item {
+  color: var(--el-color-danger);
+}
+</style>

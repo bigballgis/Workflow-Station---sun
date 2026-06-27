@@ -38,6 +38,13 @@ public class RelationTableResponse {
     private String updatedBy;
 
     /**
+     * Permission level the current admin holds on this table for the Table Data page:
+     * READONLY | READ_WRITE | null. Resolved against the admin's active role.
+     * @see com.platform.common.enums.RelationPermissionLevel
+     */
+    private String permissionLevel;
+
+    /**
      * 字段定义响应
      */
     @Data

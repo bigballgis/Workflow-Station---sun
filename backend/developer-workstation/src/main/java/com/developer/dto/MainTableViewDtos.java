@@ -1,6 +1,7 @@
 package com.developer.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import lombok.Builder;
 
 import java.util.List;
@@ -17,7 +18,13 @@ public final class MainTableViewDtos {
             Integer columnWidth,
             Integer sortOrder,
             Boolean visible,
-            Boolean systemField
+            Boolean systemField,
+            // Derived from FieldDefinition at read time (output-only; ignored on update).
+            // Drives designer-internal FK navigation and Portal FK drill-down.
+            Boolean isPrimaryKey,
+            Boolean isForeignKey,
+            Long refTableId,
+            List<String> refPrimaryKeyFields
     ) {}
 
     @Builder
@@ -34,7 +41,8 @@ public final class MainTableViewDtos {
     ) {}
 
     public record CreateMainTableViewRequest(
-            @NotBlank String viewName
+            @NotBlank String viewName,
+            @NotNull Long tableId
     ) {}
 
     public record UpdateMainTableViewRequest(

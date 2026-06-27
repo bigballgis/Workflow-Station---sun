@@ -64,7 +64,7 @@ class MainTableViewServiceImplTest {
                 .fieldDefinitions(new ArrayList<>(List.of(field)))
                 .build();
 
-        when(viewConfigRepository.existsByFunctionUnitIdAndIsDefaultTrue(1L)).thenReturn(false);
+        when(viewConfigRepository.existsByMainTableIdAndIsDefaultTrue(10L)).thenReturn(false);
         when(functionUnitRepository.findById(1L)).thenReturn(Optional.of(fu));
         when(tableDefinitionRepository.findById(10L)).thenReturn(Optional.of(main));
         when(viewConfigRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -77,12 +77,77 @@ class MainTableViewServiceImplTest {
         assertThat(saved.getViewName()).isEqualTo("Main view");
         assertThat(saved.getIsDefault()).isTrue();
         assertThat(saved.getViewFields()).anyMatch(f -> "title".equals(f.getFieldName()));
+        // MAIN tables get appended workflow system fields.
         assertThat(saved.getViewFields()).anyMatch(MainTableViewField::getIsSystemField);
     }
 
     @Test
+    void seedDefaultViewIfAbsent_subTableHasNoSystemFields() {
+        FunctionUnit fu = FunctionUnit.builder().id(1L).build();
+        FieldDefinition field = FieldDefinition.builder()
+                .fieldName("line_item")
+                .displayName("Line Item")
+                .sortOrder(0)
+                .build();
+        TableDefinition sub = TableDefinition.builder()
+                .id(20L)
+                .tableType(TableType.SUB)
+                .fieldDefinitions(new ArrayList<>(List.of(field)))
+                .build();
+
+        when(viewConfigRepository.existsByMainTableIdAndIsDefaultTrue(20L)).thenReturn(false);
+        when(functionUnitRepository.findById(1L)).thenReturn(Optional.of(fu));
+        when(tableDefinitionRepository.findById(20L)).thenReturn(Optional.of(sub));
+        when(viewConfigRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.seedDefaultViewIfAbsent(1L, 20L);
+
+        ArgumentCaptor<MainTableViewConfig> captor = ArgumentCaptor.forClass(MainTableViewConfig.class);
+        verify(viewConfigRepository).save(captor.capture());
+        MainTableViewConfig saved = captor.getValue();
+        assertThat(saved.getViewFields()).anyMatch(f -> "line_item".equals(f.getFieldName()));
+        assertThat(saved.getViewFields()).noneMatch(MainTableViewField::getIsSystemField);
+    }
+
+    @Test
+    void seedDefaultViewIfAbsent_skipsEmptySubTable() {
+        FunctionUnit fu = FunctionUnit.builder().id(1L).build();
+        TableDefinition emptySub = TableDefinition.builder()
+                .id(21L)
+                .tableType(TableType.SUB)
+                .fieldDefinitions(new ArrayList<>())
+                .build();
+
+        when(viewConfigRepository.existsByMainTableIdAndIsDefaultTrue(21L)).thenReturn(false);
+        when(functionUnitRepository.findById(1L)).thenReturn(Optional.of(fu));
+        when(tableDefinitionRepository.findById(21L)).thenReturn(Optional.of(emptySub));
+
+        service.seedDefaultViewIfAbsent(1L, 21L);
+
+        verify(viewConfigRepository, never()).save(any());
+    }
+
+    @Test
+    void seedDefaultViewIfAbsent_skipsRelationTable() {
+        FunctionUnit fu = FunctionUnit.builder().id(1L).build();
+        TableDefinition relation = TableDefinition.builder()
+                .id(22L)
+                .tableType(TableType.RELATION)
+                .fieldDefinitions(new ArrayList<>())
+                .build();
+
+        when(viewConfigRepository.existsByMainTableIdAndIsDefaultTrue(22L)).thenReturn(false);
+        when(functionUnitRepository.findById(1L)).thenReturn(Optional.of(fu));
+        when(tableDefinitionRepository.findById(22L)).thenReturn(Optional.of(relation));
+
+        service.seedDefaultViewIfAbsent(1L, 22L);
+
+        verify(viewConfigRepository, never()).save(any());
+    }
+
+    @Test
     void seedDefaultViewIfAbsent_skipsWhenDefaultExists() {
-        when(viewConfigRepository.existsByFunctionUnitIdAndIsDefaultTrue(1L)).thenReturn(true);
+        when(viewConfigRepository.existsByMainTableIdAndIsDefaultTrue(10L)).thenReturn(true);
         service.seedDefaultViewIfAbsent(1L, 10L);
         verify(viewConfigRepository, never()).save(any());
     }
@@ -119,11 +184,27 @@ class MainTableViewServiceImplTest {
     }
 
     @Test
-    void createView_requiresMainTable() {
+    void createView_failsWhenTableMissing() {
         when(functionUnitRepository.findById(1L)).thenReturn(Optional.of(FunctionUnit.builder().id(1L).build()));
-        when(tableDefinitionRepository.findByFunctionUnitIdWithFields(1L)).thenReturn(List.of());
+        when(tableDefinitionRepository.findByIdWithFields(99L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.createView(1L, new CreateMainTableViewRequest("Custom")))
+        assertThatThrownBy(() -> service.createView(1L, new CreateMainTableViewRequest("Custom", 99L)))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void createView_rejectsRelationTable() {
+        FunctionUnit fu = FunctionUnit.builder().id(1L).build();
+        TableDefinition relation = TableDefinition.builder()
+                .id(30L)
+                .functionUnit(fu)
+                .tableType(TableType.RELATION)
+                .fieldDefinitions(new ArrayList<>())
+                .build();
+        when(functionUnitRepository.findById(1L)).thenReturn(Optional.of(fu));
+        when(tableDefinitionRepository.findByIdWithFields(30L)).thenReturn(Optional.of(relation));
+
+        assertThatThrownBy(() -> service.createView(1L, new CreateMainTableViewRequest("Custom", 30L)))
                 .isInstanceOf(DeveloperBusinessException.class);
     }
 }

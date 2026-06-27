@@ -1,4 +1,4 @@
--- Main Table View configs (sync with V321 flyway migration)
+-- Main Table View configs (one default view per table: MAIN + SUB)
 CREATE TABLE IF NOT EXISTS dw_main_table_view_configs (
     id BIGSERIAL PRIMARY KEY,
     function_unit_id BIGINT NOT NULL REFERENCES dw_function_units(id) ON DELETE CASCADE,
@@ -13,8 +13,13 @@ CREATE TABLE IF NOT EXISTS dw_main_table_view_configs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_main_table_view_configs_fu ON dw_main_table_view_configs(function_unit_id);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_main_table_view_configs_fu_default
-    ON dw_main_table_view_configs(function_unit_id) WHERE is_default = TRUE;
+CREATE INDEX IF NOT EXISTS idx_main_table_view_configs_table ON dw_main_table_view_configs(main_table_id);
+-- Default view is now per-table (MAIN + SUB), not per-function-unit.
+-- Drop the legacy per-FU unique index explicitly so already-running databases are converted
+-- (snapshot-style CREATE IF NOT EXISTS does not replace an existing index).
+DROP INDEX IF EXISTS idx_main_table_view_configs_fu_default;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_mtv_configs_table_default
+    ON dw_main_table_view_configs(main_table_id) WHERE is_default = TRUE;
 
 CREATE TABLE IF NOT EXISTS dw_main_table_view_fields (
     id BIGSERIAL PRIMARY KEY,

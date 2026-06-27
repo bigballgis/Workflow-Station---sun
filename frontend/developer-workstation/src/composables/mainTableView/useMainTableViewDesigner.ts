@@ -1,9 +1,9 @@
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import {
-  Search, Close, Menu, DArrowRight, Plus, EditPen, Calendar, Document, Coin,
-  Switch as SwitchIcon, Filter, CaretTop, CaretBottom,
+  Search, Close, Menu, DArrowRight, DArrowLeft, Plus, EditPen, Calendar, Document, Coin,
+  Switch as SwitchIcon, Filter, CaretTop, CaretBottom, Connection, Key,
 } from '@element-plus/icons-vue'
 import {
   mainTableViewApi, SYSTEM_VIEW_FIELDS,
@@ -23,13 +23,17 @@ export interface MainTableViewDesignerProps {
 
 export function useMainTableViewDesigner(
   props: MainTableViewDesignerProps,
-  emit: (event: 'saved', view: MainTableViewDefinition) => void,
+  emit: {
+    (event: 'saved', view: MainTableViewDefinition): void
+    (event: 'navigate-to-table-view', refTableId: number): void
+  },
 ) {
   const { t } = useI18n()
 
 
 
 const columnsPanelOpen = ref(true)
+const propsPanelOpen = ref(true)
 const fieldSearchKeyword = ref('')
 const saving = ref(false)
 const viewName = ref('')
@@ -100,23 +104,42 @@ async function loadCatalog() {
   try {
     const res = await functionUnitApi.getTables(props.functionUnitId)
     const tables: TableDefinition[] = res.data || []
-    const main = tables.find(tbl => tbl.tableType === 'MAIN')
-    mainTableName.value = main?.tableName || main?.tableDisplayName || ''
-    const business: MainTableFieldCatalogItem[] = (main?.fieldDefinitions || []).map(f => ({
+    // Catalog is scoped to THIS view's owning table (not always MAIN).
+    const table = tables.find(tbl => tbl.id === props.view.mainTableId)
+    mainTableName.value = table?.tableDisplayName || table?.tableName || ''
+    const business: MainTableFieldCatalogItem[] = (table?.fieldDefinitions || []).map(f => ({
       fieldName: f.fieldName,
       displayName: f.displayName || f.fieldName,
       dataType: f.dataType,
       systemField: false,
     }))
-    catalogFields.value = [...business, ...SYSTEM_VIEW_FIELDS]
+    // System fields (process_status / start_time / …) only exist for the MAIN table runtime.
+    catalogFields.value = table?.tableType === 'MAIN'
+      ? [...business, ...SYSTEM_VIEW_FIELDS]
+      : business
   } catch {
-    catalogFields.value = [...SYSTEM_VIEW_FIELDS]
+    catalogFields.value = []
   }
 }
 
 
 
-onMounted(loadCatalog)
+// Load the catalog for the current view's table, and reload when switching to a different table.
+watch(() => props.view?.mainTableId, () => { loadCatalog() }, { immediate: true })
+
+// Designer-internal FK navigation: clicking a FK column opens the referenced table's default view.
+function isFkField(fieldName: string): boolean {
+  return !!viewFields.value.find(f => f.fieldName === fieldName)?.isForeignKey
+}
+function isPkField(fieldName: string): boolean {
+  return !!viewFields.value.find(f => f.fieldName === fieldName)?.isPrimaryKey
+}
+function onFkColumnClick(fieldName: string) {
+  const field = viewFields.value.find(f => f.fieldName === fieldName)
+  if (field?.isForeignKey && field.refTableId) {
+    emit('navigate-to-table-view', field.refTableId)
+  }
+}
 
 
 
@@ -375,13 +398,14 @@ function onColDragEnd() {
 
 const previewRowCount = 3
   return {
-    t, Search, Close, Menu, DArrowRight, Plus, EditPen, Calendar, Document, Coin, SwitchIcon, Filter, CaretTop, CaretBottom,
-    columnsPanelOpen, fieldSearchKeyword, saving, viewName, viewFields, sortConfig, filterConfig, filterEditorRoot,
+    t, Search, Close, Menu, DArrowRight, DArrowLeft, Plus, EditPen, Calendar, Document, Coin, SwitchIcon, Filter, CaretTop, CaretBottom, Connection, Key,
+    columnsPanelOpen, propsPanelOpen, fieldSearchKeyword, saving, viewName, viewFields, sortConfig, filterConfig, filterEditorRoot,
     enableExport, enableImport, catalogFields, mainTableName, filterDialogVisible, addColumnPopoverVisible, thenSortField,
     dragColIndex, dragOverIndex, isDraggingFromPanel, dragSourceField, visibleColumns, displayFilterConditions,
     sortFieldOptions, filteredCatalog, previewRowCount, fieldLabel, getFieldIcon, getMockValue, sortIndicator,
     formatFilterTag, addField, removeField, toggleSortDirection, sortDirectionTooltip, onFilterEditorSave,
     removeDisplayFilterTag, addSortField, removeSort, handleSave, onFieldDragStart, onFieldDragEnd, onGridDrop,
     onColDragStart, onColDragOver, onColDragLeave, onColDrop, onColDragEnd, getFieldDataType,
+    isFkField, isPkField, onFkColumnClick,
   }
 }

@@ -22,6 +22,7 @@
         <java.version>17</java.version>
         <jqwik.version>1.8.2</jqwik.version>
         <tomcat.version>10.1.55</tomcat.version>
+        <poi.version>5.4.1</poi.version>
     </properties>
 
     <!-- Align embedded Tomcat with other services (parent BOM alone keeps Boot's default). -->
@@ -176,6 +177,13 @@
             <groupId>io.hypersistence</groupId>
             <artifactId>hypersistence-utils-hibernate-63</artifactId>
             <version>3.7.0</version>
+        </dependency>
+
+        <!-- Apache POI: runtime jar for the shared Relation Table import/export template service -->
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>${poi.version}</version>
         </dependency>
 
         <!-- Testing -->

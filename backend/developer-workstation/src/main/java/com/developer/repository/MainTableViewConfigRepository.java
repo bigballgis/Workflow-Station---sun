@@ -20,6 +20,10 @@ public interface MainTableViewConfigRepository extends JpaRepository<MainTableVi
 
     boolean existsByFunctionUnitIdAndIsDefaultTrue(Long functionUnitId);
 
+    Optional<MainTableViewConfig> findByMainTableIdAndIsDefaultTrue(Long mainTableId);
+
+    boolean existsByMainTableIdAndIsDefaultTrue(Long mainTableId);
+
     @Query("SELECT v FROM MainTableViewConfig v LEFT JOIN FETCH v.viewFields WHERE v.id = :id")
     Optional<MainTableViewConfig> findByIdWithFields(@Param("id") Long id);
 

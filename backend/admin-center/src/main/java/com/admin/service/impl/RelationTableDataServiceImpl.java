@@ -7,6 +7,7 @@ import com.admin.entity.RelationTableVersion;
 import com.admin.exception.RelationTableNotFoundException;
 import com.admin.repository.RelationTableDefinitionRepository;
 import com.admin.repository.RelationTableVersionRepository;
+import com.admin.service.RelationTableAccessService;
 import com.admin.service.RelationTableAuditService;
 import com.admin.service.RelationTableDataService;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -14,8 +15,13 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.platform.common.dto.RelationFieldDTO;
 import com.platform.common.dto.RelationTableDataRowDTO;
+import com.platform.common.enums.RelationPermissionLevel;
 import com.platform.common.enums.RelationTableStatus;
+import com.platform.common.relationtable.RelationRowValidator;
+import com.platform.common.relationtable.RelationTableTemplateService;
+import com.platform.common.relationtable.RowValidationResult;
 import com.platform.security.util.SecurityContextUtils;
+import org.springframework.security.access.AccessDeniedException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -42,8 +48,37 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
     private final RelationTableDefinitionRepository tableDefinitionRepository;
     private final RelationTableVersionRepository versionRepository;
     private final RelationTableAuditService auditService;
+    private final RelationTableAccessService accessService;
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
+    private final RelationTableTemplateService templateService = new RelationTableTemplateService();
+
+    /**
+     * Resolve the current admin's permission level on a table for the Table Data page.
+     * Admin Center is default-open: super admins and users with no explicit grant for their active
+     * role are treated as READ_WRITE. Only an explicit READONLY grant restricts to view+export.
+     */
+    private String resolveCurrentLevel(Long tableId) {
+        if (SecurityContextUtils.isSuperAdmin()) {
+            return RelationPermissionLevel.READ_WRITE;
+        }
+        String activeRoleId = SecurityContextUtils.getCurrentActiveRoleId().orElse(null);
+        java.util.Collection<String> roles = activeRoleId != null
+                ? java.util.List.of(activeRoleId)
+                : SecurityContextUtils.getCurrentUser()
+                        .map(u -> (java.util.Collection<String>) u.getRoles())
+                        .orElse(java.util.Collections.emptyList());
+        String level = accessService.resolvePermissionLevel(tableId, roles);
+        // No explicit grant in admin context -> default-open (READ_WRITE).
+        return level == null ? RelationPermissionLevel.READ_WRITE : level;
+    }
+
+    /** Throw 403 when the current admin holds an explicit READONLY grant on the table. */
+    private void requireWriteAccess(Long tableId) {
+        if (!RelationPermissionLevel.canWrite(resolveCurrentLevel(tableId))) {
+            throw new AccessDeniedException("Write access denied: role is read-only for this table");
+        }
+    }
 
     @Override
     @Transactional(readOnly = true)
@@ -51,6 +86,7 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
         return tableDefinitionRepository.findByStatusInAndEnabledTrue(
                         List.of(RelationTableStatus.DEPLOYED, RelationTableStatus.UPDATED, RelationTableStatus.ROLLBACK)).stream()
                 .map(this::toDeployedTableResponse)
+                .peek(r -> r.setPermissionLevel(resolveCurrentLevel(r.getId())))
                 .collect(Collectors.toList());
     }
 
@@ -166,6 +202,7 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
     @Override
     @Transactional
     public RelationTableDataRowDTO addData(Long tableId, Map<String, Object> data) {
+        requireWriteAccess(tableId);
         RelationTableDefinition tableDef = getDeployedTableDefinition(tableId);
         List<RelationFieldDTO> fields = getDeployedFields(tableDef);
         String tableName = tableDef.getTableName();
@@ -206,6 +243,7 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
     @Override
     @Transactional
     public RelationTableDataRowDTO updateData(Long tableId, String rowId, Map<String, Object> data) {
+        requireWriteAccess(tableId);
         RelationTableDefinition tableDef = getDeployedTableDefinition(tableId);
         List<RelationFieldDTO> fields = getDeployedFields(tableDef);
         String tableName = tableDef.getTableName();
@@ -257,6 +295,7 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
     @Override
     @Transactional
     public void deleteData(Long tableId, String rowId) {
+        requireWriteAccess(tableId);
         RelationTableDefinition tableDef = getDeployedTableDefinition(tableId);
         String tableName = tableDef.getTableName();
 
@@ -275,6 +314,7 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
     @Override
     @Transactional
     public RelationTableDataRowDTO changeStatus(Long tableId, String rowId, String status) {
+        requireWriteAccess(tableId);
         RelationTableDefinition tableDef = getDeployedTableDefinition(tableId);
         List<RelationFieldDTO> fields = getDeployedFields(tableDef);
         String tableName = tableDef.getTableName();
@@ -348,6 +388,44 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
             return "\"" + str.replace("\"", "\"\"") + "\"";
         }
         return str;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public byte[] generateTemplate(Long tableId, String format) {
+        RelationTableDefinition tableDef = getDeployedTableDefinition(tableId);
+        return templateService.generateTemplate(getDeployedFields(tableDef), format);
+    }
+
+    @Override
+    @Transactional
+    public Map<String, Object> importData(Long tableId, byte[] fileBytes, String format) {
+        requireWriteAccess(tableId);
+        RelationTableDefinition tableDef = getDeployedTableDefinition(tableId);
+        List<RelationFieldDTO> fields = getDeployedFields(tableDef);
+
+        List<Map<String, Object>> rawRows = templateService.parseImport(fileBytes, format);
+        List<RowValidationResult> results = RelationRowValidator.validateRows(rawRows, fields);
+
+        int inserted = 0;
+        List<Map<String, Object>> errors = new ArrayList<>();
+        for (RowValidationResult r : results) {
+            if (r.isValid()) {
+                // Reuse addData for PK allocation, audit and timestamp handling.
+                addData(tableId, new LinkedHashMap<>(r.getValues()));
+                inserted++;
+            } else {
+                r.getErrors().forEach(err -> errors.add(Map.of(
+                        "row", err.getRow(),
+                        "field", err.getField() == null ? "" : err.getField(),
+                        "message", err.getMessage())));
+            }
+        }
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("inserted", inserted);
+        summary.put("failed", results.size() - inserted);
+        summary.put("errors", errors);
+        return summary;
     }
 
     /**

@@ -365,6 +365,13 @@ export default {
   },
   mainTableView: {
     viewList: '視圖列表',
+    collapseNav: '收起視圖欄',
+    expandNav: '展開視圖欄',
+    collapseProps: '收起屬性欄',
+    expandProps: '展開屬性欄',
+    primaryKeyField: '主鍵',
+    openRelatedView: '開啟關聯表視圖',
+    noViewForRefTable: '被引用的表還沒有視圖',
     fieldCatalog: '欄位目錄',
     tableColumns: '表欄',
     addViewColumn: '+ 視圖欄',

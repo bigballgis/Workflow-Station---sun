@@ -57,6 +57,7 @@
               </template>
             </el-input>
             <el-button
+              v-if="canWrite"
               type="primary"
               @click="openAddDialog"
             >
@@ -67,6 +68,32 @@
               @click="handleExport"
             >
               <el-icon><Download /></el-icon> Export CSV
+            </el-button>
+            <el-dropdown
+              v-if="canWrite"
+              trigger="click"
+              @command="handleDownloadTemplate"
+            >
+              <el-button :loading="exportingTemplate">
+                <el-icon><Download /></el-icon> Export Template
+                <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+              </el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="csv">
+                    CSV (.csv)
+                  </el-dropdown-item>
+                  <el-dropdown-item command="xlsx">
+                    Excel (.xlsx)
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+            <el-button
+              v-if="canWrite"
+              @click="openImportDialog"
+            >
+              <el-icon><Upload /></el-icon> Import
             </el-button>
           </div>
 
@@ -157,6 +184,7 @@
             </el-table-column>
             <!-- Action column -->
             <el-table-column
+              v-if="canWrite"
               label="Actions"
               width="240"
               fixed="right"
@@ -297,25 +325,101 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- Import Dialog -->
+    <el-dialog
+      v-model="importDialogVisible"
+      title="Import Data"
+      width="640px"
+    >
+      <el-alert
+        type="info"
+        :closable="false"
+        style="margin-bottom: 12px;"
+      >
+        Download a template first, fill it in, then upload (CSV or Excel). Rows are validated against the table structure; invalid rows are skipped.
+      </el-alert>
+      <el-upload
+        drag
+        :auto-upload="false"
+        :show-file-list="false"
+        accept=".csv,.xlsx"
+        :on-change="onImportFileChange"
+      >
+        <el-icon class="el-icon--upload"><Upload /></el-icon>
+        <div class="el-upload__text">
+          Drop file here or <em>click to upload</em>
+        </div>
+      </el-upload>
+      <div
+        v-if="importing"
+        style="margin-top: 12px;"
+      >
+        <el-icon class="is-loading"><Loading /></el-icon> Importing...
+      </div>
+      <div
+        v-if="importResult"
+        style="margin-top: 12px;"
+      >
+        <el-alert
+          :type="importResult.failed > 0 ? 'warning' : 'success'"
+          :closable="false"
+          :title="`Inserted ${importResult.inserted}, Failed ${importResult.failed}`"
+          style="margin-bottom: 8px;"
+        />
+        <el-table
+          v-if="importResult.errors.length"
+          :data="importResult.errors"
+          stripe
+          max-height="240"
+          size="small"
+        >
+          <el-table-column
+            prop="row"
+            label="Row"
+            width="70"
+          />
+          <el-table-column
+            prop="field"
+            label="Field"
+            width="160"
+          />
+          <el-table-column
+            prop="message"
+            label="Error"
+          />
+        </el-table>
+      </div>
+      <template #footer>
+        <el-button @click="importDialogVisible = false">
+          Close
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { onMounted, onActivated } from 'vue'
-import { Search, Download, Plus } from '@element-plus/icons-vue'
+import { Search, Download, Plus, Upload, ArrowDown, Loading } from '@element-plus/icons-vue'
 import PageHeader from '@/components/PageHeader.vue'
 import { useRelationTableData } from '@/composables/modules/useRelationTableData'
 
 const {
   tableListLoading, dataLoading, exporting, saving,
+  exportingTemplate, importDialogVisible, importing, importResult,
   selectedTableId, searchKeyword, tableSearchKeyword, currentPage, pageSize, totalElements, dataRows,
   fetchDataError, dialogVisible, dialogMode, formData,
-  selectedTable, fieldColumns, visibleFieldColumns, filteredTables,
+  selectedTable, canWrite, fieldColumns, visibleFieldColumns, filteredTables,
   isNumericType, isRowDisabled, isFkFieldDisabled,
   fetchData, handleSelectTable, handlePageChange, handleSizeChange,
   openAddDialog, openEditDialog, handleSaveRecord, handleDisable, handleEnable, handleDelete,
-  formatHKT, handleExport, init, refresh,
+  formatHKT, handleExport, handleDownloadTemplate, openImportDialog, handleImportFile, init, refresh,
 } = useRelationTableData()
+
+const onImportFileChange = (file: { raw?: File }) => {
+  if (file.raw) handleImportFile(file.raw)
+}
 
 onMounted(init)
 onActivated(refresh)

@@ -148,7 +148,11 @@ async function loadViews() {
   try {
     const res = await mainTableViewApi.listViews(selectedFuCode.value)
     views.value = res.data || []
-    if (!views.value.some(v => v.id === selectedViewId.value)) {
+    // FK drill-down: a `viewId` query param targets a specific view in this FU.
+    const targetViewId = route.query.viewId ? Number(route.query.viewId) : null
+    if (targetViewId && views.value.some(v => v.id === targetViewId)) {
+      selectedViewId.value = targetViewId
+    } else if (!views.value.some(v => v.id === selectedViewId.value)) {
       selectedViewId.value = views.value[0]?.id ?? null
     }
   } catch {
@@ -194,7 +198,8 @@ async function loadData() {
 watch(selectedFuCode, async (code) => {
   if (!code) return
   currentPage.value = 1
-  searchKeyword.value = ''
+  // FK drill-down passes the target FK value via the `fk` query param as the initial search filter.
+  searchKeyword.value = route.query.fk ? String(route.query.fk) : ''
   await loadViews()
   if (selectedViewId.value) {
     resetRuntimeForView(selectedViewId.value)
@@ -263,6 +268,24 @@ function openRow(row: GridDisplayRow) {
   if (row.processInstanceId) {
     router.push(`/applications/${row.processInstanceId}`)
   }
+}
+
+// A cell renders as a FK drill-down link when the column is a resolvable FK and the cell has a value.
+function isFkLinkCell(col: MainTableViewFieldColumn, row: GridDisplayRow): boolean {
+  if (isGroupHeaderRow(row)) return false
+  if (!col.isForeignKey || !col.refViewId || !col.refFunctionUnitCode) return false
+  const value = row.values?.[col.fieldName]
+  return value !== null && value !== undefined && String(value) !== ''
+}
+
+// Drill to the referenced table's published default view, pre-filtered by this cell's FK value.
+function openFkTarget(col: MainTableViewFieldColumn, row: GridDisplayRow) {
+  if (!isFkLinkCell(col, row)) return
+  const value = String(row.values?.[col.fieldName])
+  router.push({
+    path: `/views/${encodeURIComponent(col.refFunctionUnitCode as string)}`,
+    query: { viewId: String(col.refViewId), fk: value },
+  })
 }
 
 function columnIndex(fieldName: string): number {
@@ -458,6 +481,10 @@ function spanMethod({
 onMounted(async () => {
   await loadFunctionUnits()
   if (selectedFuCode.value) {
+    // Honor a FK drill-down landing directly on this route (viewId + fk query params).
+    if (route.query.fk) {
+      searchKeyword.value = String(route.query.fk)
+    }
     await loadViews()
     if (selectedViewId.value) {
       resetRuntimeForView(selectedViewId.value)
@@ -474,6 +501,7 @@ onMounted(async () => {
     selectedFuCode, selectedViewMeta, showExportButton, showImportButton, selectedFu, displayColumns,
     MTV_SELECTION_COL_WIDTH, gridTotalColumnWidth, gridInnerStyle, processedRows, groupedRows, pagedRows, displayTotal,
     handleSearch, handlePageChange, formatCell, isRowSelectable, getRowKey, onSelectionChange, openRow, columnIndex,
+    isFkLinkCell, openFkTarget,
     handleColumnCommand, applyColumnFilter, clearColumnFilter, applyColumnWidth, handleColumnResize, handleColumnResizeEnd,
     handleExport, triggerImport, handleImportFile, mtvHeaderCellClassName, rowClassName, spanMethod,
     loadData, columnWidth, isGroupHeaderRow, COLUMN_WIDTH_MIN, COLUMN_WIDTH_MAX,

@@ -12,6 +12,7 @@ import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.FormDefinitionRepository;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.ProcessDefinitionRepository;
+import com.developer.service.MainTableViewService;
 import com.developer.util.BpmnIdRewriter;
 import com.developer.util.BpmnLastTaskAssigneeTopologyValidator;
 import com.developer.util.BpmnProcessIdRewriter;
@@ -54,6 +55,7 @@ public class FunctionUnitImporter {
     private final VersionComponent versionComponent;
     private final RelationTableStructurePortability relationTablePortability;
     private final MainTableViewPortability mainTableViewPortability;
+    private final MainTableViewService mainTableViewService;
 
     /**
      * 导入功能单元。无冲突策略选项：
@@ -158,6 +160,9 @@ public class FunctionUnitImporter {
                     (List<Map<String, Object>>) packageData.get("mainTableViews");
             mainTableViewPortability.importAll(mainTableViews, functionUnit, importedTableNameToId);
         }
+        // Backfill per-table default views (MAIN + SUB). Older packages only carried the single MAIN
+        // default (or none at all); this is idempotent and never overwrites an imported default.
+        mainTableViewService.seedDefaultViewsForFunctionUnit(functionUnit.getId());
 
         Map<Long, Long> formIdMapping = new HashMap<>();
         Map<String, Long> importedFormNameToId = new HashMap<>();

@@ -80,6 +80,14 @@ public class AdminApiExceptionHandler {
         return respond(HttpStatus.CONFLICT, ex.getErrorCode(), ex.getErrorMessage(), traceId, request);
     }
 
+    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAccessDenied(
+            org.springframework.security.access.AccessDeniedException ex, HttpServletRequest request) {
+        String traceId = shortTraceId();
+        log.warn("Access denied [{}]: {}", traceId, ex.getMessage());
+        return respond(HttpStatus.FORBIDDEN, "403", ex.getMessage(), traceId, request);
+    }
+
     private static ResponseEntity<ApiResponse<Void>> respond(
             HttpStatus status, String code, String message, String traceId, HttpServletRequest request) {
         ErrorResponse err = ErrorResponse.builder()

@@ -365,6 +365,13 @@ export default {
   },
   mainTableView: {
     viewList: '视图列表',
+    collapseNav: '收起视图栏',
+    expandNav: '展开视图栏',
+    collapseProps: '收起属性栏',
+    expandProps: '展开属性栏',
+    primaryKeyField: '主键',
+    openRelatedView: '打开关联表视图',
+    noViewForRefTable: '被引用的表还没有视图',
     fieldCatalog: '字段目录',
     tableColumns: '表列',
     addViewColumn: '+ 视图列',

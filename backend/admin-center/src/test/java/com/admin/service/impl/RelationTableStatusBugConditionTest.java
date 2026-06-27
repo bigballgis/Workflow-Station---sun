@@ -55,7 +55,8 @@ class RelationTableStatusBugConditionTest {
         structureService = new RelationTableStructureServiceImpl(
                 tableDefinitionRepository, fieldDefinitionRepository, jdbcTemplate);
         dataService = new RelationTableDataServiceImpl(
-                tableDefinitionRepository, versionRepository, auditService, jdbcTemplate, objectMapper);
+                tableDefinitionRepository, versionRepository, auditService,
+                org.mockito.Mockito.mock(com.admin.service.RelationTableAccessService.class), jdbcTemplate, objectMapper);
     }
 
     // ==================== Helper Methods ====================

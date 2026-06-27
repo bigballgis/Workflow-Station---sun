@@ -59,14 +59,14 @@ public class MainTableViewServiceImpl implements MainTableViewService {
     @Transactional
     public MainTableViewDTO createView(Long functionUnitId, CreateMainTableViewRequest request) {
         FunctionUnit functionUnit = assertFunctionUnitExists(functionUnitId);
-        TableDefinition mainTable = resolveMainTable(functionUnitId);
+        TableDefinition table = resolveViewableTable(functionUnitId, request.tableId());
 
-        MainTableViewConfig defaultView = viewConfigRepository.findByFunctionUnitIdAndIsDefaultTrue(functionUnitId)
-                .orElseGet(() -> buildDefaultConfig(functionUnit, mainTable));
+        MainTableViewConfig defaultView = viewConfigRepository.findByMainTableIdAndIsDefaultTrue(table.getId())
+                .orElseGet(() -> buildDefaultConfig(functionUnit, table));
 
         MainTableViewConfig created = MainTableViewConfig.builder()
                 .functionUnit(functionUnit)
-                .mainTableId(mainTable.getId())
+                .mainTableId(table.getId())
                 .viewName(request.viewName().trim())
                 .isDefault(false)
                 .sortConfig(copySortConfig(defaultView.getSortConfig()))
@@ -125,17 +125,45 @@ public class MainTableViewServiceImpl implements MainTableViewService {
 
     @Override
     @Transactional
-    public void seedDefaultViewIfAbsent(Long functionUnitId, Long mainTableId) {
-        if (viewConfigRepository.existsByFunctionUnitIdAndIsDefaultTrue(functionUnitId)) {
+    public void seedDefaultViewIfAbsent(Long functionUnitId, Long tableId) {
+        if (viewConfigRepository.existsByMainTableIdAndIsDefaultTrue(tableId)) {
             return;
         }
         FunctionUnit functionUnit = assertFunctionUnitExists(functionUnitId);
-        TableDefinition mainTable = tableDefinitionRepository.findById(mainTableId)
-                .orElseThrow(() -> new ResourceNotFoundException("TableDefinition", mainTableId));
-        if (mainTable.getTableType() != TableType.MAIN) {
+        TableDefinition table = tableDefinitionRepository.findById(tableId)
+                .orElseThrow(() -> new ResourceNotFoundException("TableDefinition", tableId));
+        if (!isViewableTableType(table.getTableType())) {
             return;
         }
-        viewConfigRepository.save(buildDefaultConfig(functionUnit, mainTable));
+        // Defer SUB tables until they have at least one field (avoids empty default views).
+        if (table.getTableType() == TableType.SUB
+                && (table.getFieldDefinitions() == null || table.getFieldDefinitions().isEmpty())) {
+            return;
+        }
+        viewConfigRepository.save(buildDefaultConfig(functionUnit, table));
+    }
+
+    @Override
+    @Transactional
+    public void seedDefaultViewsForFunctionUnit(Long functionUnitId) {
+        FunctionUnit functionUnit = assertFunctionUnitExists(functionUnitId);
+        for (TableDefinition table : tableDefinitionRepository.findByFunctionUnitIdWithFields(functionUnitId)) {
+            if (!isViewableTableType(table.getTableType())) {
+                continue;
+            }
+            if (table.getTableType() == TableType.SUB
+                    && (table.getFieldDefinitions() == null || table.getFieldDefinitions().isEmpty())) {
+                continue;
+            }
+            if (viewConfigRepository.existsByMainTableIdAndIsDefaultTrue(table.getId())) {
+                continue;
+            }
+            viewConfigRepository.save(buildDefaultConfig(functionUnit, table));
+        }
+    }
+
+    private boolean isViewableTableType(TableType type) {
+        return type == TableType.MAIN || type == TableType.SUB;
     }
 
     @Override
@@ -180,20 +208,25 @@ public class MainTableViewServiceImpl implements MainTableViewService {
         }
     }
 
-    private MainTableViewConfig buildDefaultConfig(FunctionUnit functionUnit, TableDefinition mainTable) {
+    private MainTableViewConfig buildDefaultConfig(FunctionUnit functionUnit, TableDefinition table) {
+        boolean isMain = table.getTableType() == TableType.MAIN;
         MainTableViewConfig config = MainTableViewConfig.builder()
                 .functionUnit(functionUnit)
-                .mainTableId(mainTable.getId())
+                .mainTableId(table.getId())
+                // System fields (process_status / start_time / …) only exist for the MAIN table's
+                // workflow runtime, so the default start_time sort only applies there. SUB tables sort
+                // by their own field order.
+                .sortConfig(isMain ? defaultSortConfig() : new ArrayList<>())
                 .viewName(DEFAULT_VIEW_NAME)
                 .isDefault(true)
-                .sortConfig(defaultSortConfig())
                 .filterConfig(Map.of("conditions", List.of()))
                 .status(MainTableViewStatus.DRAFT)
                 .viewFields(new ArrayList<>())
                 .build();
 
+        // Default view includes ALL business fields (incl. PK and FK relationship fields).
         int order = 0;
-        for (FieldDefinition field : mainTable.getFieldDefinitions()) {
+        for (FieldDefinition field : table.getFieldDefinitions()) {
             config.getViewFields().add(MainTableViewField.builder()
                     .viewConfig(config)
                     .fieldName(field.getFieldName())
@@ -204,7 +237,9 @@ public class MainTableViewServiceImpl implements MainTableViewService {
                     .isSystemField(false)
                     .build());
         }
-        addDefaultSystemFields(config, order);
+        if (isMain) {
+            addDefaultSystemFields(config, order);
+        }
         return config;
     }
 
@@ -267,12 +302,18 @@ public class MainTableViewServiceImpl implements MainTableViewService {
         return new HashMap<>(filterConfig);
     }
 
-    private TableDefinition resolveMainTable(Long functionUnitId) {
-        return tableDefinitionRepository.findByFunctionUnitIdWithFields(functionUnitId).stream()
-                .filter(t -> t.getTableType() == TableType.MAIN)
-                .findFirst()
-                .orElseThrow(() -> new DeveloperBusinessException("BIZ_MISSING_MAIN_TABLE",
-                        "Function unit has no Main Table"));
+    private TableDefinition resolveViewableTable(Long functionUnitId, Long tableId) {
+        TableDefinition table = tableDefinitionRepository.findByIdWithFields(tableId)
+                .orElseThrow(() -> new ResourceNotFoundException("TableDefinition", tableId));
+        if (!table.getFunctionUnit().getId().equals(functionUnitId)) {
+            throw new DeveloperBusinessException("BIZ_VIEW_TABLE_FU_MISMATCH",
+                    "Table does not belong to this function unit");
+        }
+        if (!isViewableTableType(table.getTableType())) {
+            throw new DeveloperBusinessException("BIZ_VIEW_TABLE_TYPE",
+                    "Views can only be created for MAIN or SUB tables");
+        }
+        return table;
     }
 
     private MainTableViewConfig loadView(Long functionUnitId, Long viewId) {
@@ -290,15 +331,30 @@ public class MainTableViewServiceImpl implements MainTableViewService {
     }
 
     private MainTableViewDTO toDto(MainTableViewConfig config) {
+        // Enrich each view field with FK/PK metadata derived from the owning table's FieldDefinition.
+        // Drives designer-internal FK navigation and Portal FK drill-down; not persisted on the view.
+        Map<String, FieldDefinition> fieldMeta = tableDefinitionRepository.findByIdWithFields(config.getMainTableId())
+                .map(t -> t.getFieldDefinitions().stream()
+                        .collect(java.util.stream.Collectors.toMap(
+                                FieldDefinition::getFieldName, fd -> fd, (a, b) -> a)))
+                .orElse(Map.of());
+
         List<MainTableViewFieldDTO> fields = config.getViewFields().stream()
-                .map(f -> MainTableViewFieldDTO.builder()
-                        .fieldName(f.getFieldName())
-                        .displayLabel(f.getDisplayLabel())
-                        .columnWidth(f.getColumnWidth())
-                        .sortOrder(f.getSortOrder())
-                        .visible(f.getVisible())
-                        .systemField(f.getIsSystemField())
-                        .build())
+                .map(f -> {
+                    FieldDefinition fd = fieldMeta.get(f.getFieldName());
+                    return MainTableViewFieldDTO.builder()
+                            .fieldName(f.getFieldName())
+                            .displayLabel(f.getDisplayLabel())
+                            .columnWidth(f.getColumnWidth())
+                            .sortOrder(f.getSortOrder())
+                            .visible(f.getVisible())
+                            .systemField(f.getIsSystemField())
+                            .isPrimaryKey(fd != null ? fd.getIsPrimaryKey() : null)
+                            .isForeignKey(fd != null ? fd.getIsForeignKey() : null)
+                            .refTableId(fd != null ? fd.getRefTableId() : null)
+                            .refPrimaryKeyFields(fd != null ? fd.getRefPrimaryKeyFields() : null)
+                            .build();
+                })
                 .toList();
 
         return MainTableViewDTO.builder()

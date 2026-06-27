@@ -24,6 +24,11 @@ export interface MainTableViewFieldColumn {
   displayLabel: string
   columnWidth?: number
   systemField?: boolean
+  // FK drill-down: link to the referenced table's published default view, filtered by this cell's value.
+  isForeignKey?: boolean
+  refViewId?: number | null
+  refFunctionUnitCode?: string | null
+  refPrimaryKeyFields?: string[] | null
 }
 
 export interface MainTableViewDataRow {

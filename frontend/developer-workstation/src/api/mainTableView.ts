@@ -7,6 +7,11 @@ export interface MainTableViewField {
   sortOrder?: number | null
   visible?: boolean | null
   systemField?: boolean | null
+  // Derived from FieldDefinition (output-only); drives FK/PK column styling + designer FK navigation.
+  isPrimaryKey?: boolean | null
+  isForeignKey?: boolean | null
+  refTableId?: number | null
+  refPrimaryKeyFields?: string[] | null
 }
 
 export interface FilterCondition {
@@ -69,10 +74,10 @@ export const mainTableViewApi = {
       `/api/v1/function-units/${functionUnitId}/main-table-views/${viewId}`,
     ),
 
-  create: (functionUnitId: number, viewName: string) =>
+  create: (functionUnitId: number, viewName: string, tableId: number) =>
     functionUnitAxios.post<any, { data: MainTableViewDefinition }>(
       `/api/v1/function-units/${functionUnitId}/main-table-views`,
-      { viewName },
+      { viewName, tableId },
     ),
 
   update: (functionUnitId: number, viewId: number, payload: Partial<MainTableViewDefinition>) =>

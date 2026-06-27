@@ -11,6 +11,26 @@ export interface RelationTableDTO {
   enabled: boolean
   portalVisible: boolean
   currentVersion: number
+  /** 当前用户(按 active role)对该表的权限：READONLY=只读, READ_WRITE=读写 */
+  permissionLevel?: 'READONLY' | 'READ_WRITE'
+}
+
+export interface RelationFieldDef {
+  fieldName: string
+  dataType: string
+  length?: number
+  precision?: number
+  scale?: number
+  nullable?: boolean
+  isPrimaryKey?: boolean
+  displayName?: string
+  sortOrder?: number
+}
+
+export interface RelationImportResult {
+  inserted: number
+  failed: number
+  errors: Array<{ row: number; field: string; message: string }>
 }
 
 export interface PageResponse<T> {
@@ -71,4 +91,37 @@ export const relationTableApi = {
   /** 获取 Relation Table 的 View 字段配置 */
   getViewFields: (tableId: number) =>
     request.get<{ data: Array<{ fieldName: string; displayLabel: string; columnWidth?: number; sortOrder: number; visible: boolean }> }>(`/relation-tables/${tableId}/view-fields`),
+
+  /** 获取字段定义（含类型，供编辑表单使用） */
+  getFieldDefinitions: (tableId: number) =>
+    request.get<{ data: RelationFieldDef[] }>(`/relation-tables/${tableId}/fields`),
+
+  /** 新增数据（需要 READ_WRITE） */
+  addData: (tableId: number, data: Record<string, any>) =>
+    request.post<{ data: Record<string, any> }>(`/relation-tables/${tableId}`, data),
+
+  /** 更新数据（需要 READ_WRITE） */
+  updateData: (tableId: number, rowId: string, data: Record<string, any>) =>
+    request.put<{ data: Record<string, any> }>(`/relation-tables/${tableId}/${rowId}`, data),
+
+  /** 切换状态 ACTIVE/INACTIVE（需要 READ_WRITE） */
+  changeStatus: (tableId: number, rowId: string, status: string) =>
+    request.put<{ data: Record<string, any> }>(`/relation-tables/${tableId}/${rowId}/status`, { status }),
+
+  /** 下载导入模板 (csv|xlsx) */
+  downloadTemplate: (tableId: number, format: 'csv' | 'xlsx' = 'csv') =>
+    request.get<Blob>(`/relation-tables/${tableId}/template`, {
+      params: { format },
+      responseType: 'blob'
+    }),
+
+  /** 导入数据 (csv|xlsx) */
+  importData: (tableId: number, file: File, format?: 'csv' | 'xlsx') => {
+    const formData = new FormData()
+    formData.append('file', file)
+    if (format) formData.append('format', format)
+    return request.post<{ data: RelationImportResult }>(`/relation-tables/${tableId}/import`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+  },
 }
