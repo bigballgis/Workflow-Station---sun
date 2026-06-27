@@ -27,7 +27,7 @@ BEGIN
     ) VALUES (
         v_function_unit_id, 'Request', 'Request', 'MAIN', 'Main request table', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
-    ON CONFLICT (function_unit_id, table_name) DO UPDATE SET
+    ON CONFLICT (table_name) DO UPDATE SET
         table_display_name = EXCLUDED.table_display_name,
         table_type  = EXCLUDED.table_type,
         display_name = EXCLUDED.display_name,
@@ -62,7 +62,7 @@ BEGIN
     ) VALUES (
         v_function_unit_id, 'RequestItems', 'Request Items', 'SUB', 'Sub table for request line items', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
-    ON CONFLICT (function_unit_id, table_name) DO UPDATE SET
+    ON CONFLICT (table_name) DO UPDATE SET
         table_display_name = EXCLUDED.table_display_name,
         table_type  = EXCLUDED.table_type,
         display_name = EXCLUDED.display_name,
@@ -118,7 +118,7 @@ BEGIN
     ) VALUES (
         v_function_unit_id, 'ApprovalActions', 'Approval Actions', 'ACTION', 'Action table for tracking approval history', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
-    ON CONFLICT (function_unit_id, table_name) DO UPDATE SET
+    ON CONFLICT (table_name) DO UPDATE SET
         table_display_name = EXCLUDED.table_display_name,
         table_type  = EXCLUDED.table_type,
         display_name = EXCLUDED.display_name,
@@ -151,7 +151,7 @@ BEGIN
     ) VALUES (
         v_function_unit_id, 'RequestAttachments', 'Request Attachments', 'SUB', 'Relation table for request attachments', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
-    ON CONFLICT (function_unit_id, table_name) DO UPDATE SET
+    ON CONFLICT (table_name) DO UPDATE SET
         table_display_name = EXCLUDED.table_display_name,
         table_type  = EXCLUDED.table_type,
         display_name = EXCLUDED.display_name,
@@ -185,7 +185,7 @@ BEGIN
     ) VALUES (
         v_function_unit_id, 'Review Table', '', 'SUB', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
-    ON CONFLICT (function_unit_id, table_name) DO UPDATE SET
+    ON CONFLICT (table_name) DO UPDATE SET
         table_type  = EXCLUDED.table_type,
         updated_at  = CURRENT_TIMESTAMP
     RETURNING id INTO v_review_table_id;

@@ -28,7 +28,7 @@ BEGIN
         'Main meeting table - stores meeting basic info',
         CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
-    ON CONFLICT (function_unit_id, table_name) DO UPDATE SET
+    ON CONFLICT (table_name) DO UPDATE SET
         table_display_name = EXCLUDED.table_display_name,
         table_type  = EXCLUDED.table_type,
         display_name = EXCLUDED.display_name,
@@ -64,7 +64,7 @@ BEGIN
         'Sub table for meeting participants - serves as multi-instance data source',
         CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
-    ON CONFLICT (function_unit_id, table_name) DO UPDATE SET
+    ON CONFLICT (table_name) DO UPDATE SET
         table_display_name = EXCLUDED.table_display_name,
         table_type  = EXCLUDED.table_type,
         display_name = EXCLUDED.display_name,

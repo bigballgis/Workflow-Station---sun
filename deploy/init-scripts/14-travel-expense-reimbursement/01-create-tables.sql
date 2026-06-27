@@ -29,7 +29,7 @@ BEGIN
     ) VALUES (
         v_function_unit_id, 'reimbursement', 'Reimbursement', 'MAIN', 'Main reimbursement request table', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
-    ON CONFLICT (function_unit_id, table_name) DO UPDATE SET
+    ON CONFLICT (table_name) DO UPDATE SET
         table_display_name = EXCLUDED.table_display_name,
         table_type  = EXCLUDED.table_type,
         display_name = EXCLUDED.display_name,
@@ -68,7 +68,7 @@ BEGIN
     ) VALUES (
         v_function_unit_id, 'expense_items', 'Expense Items', 'SUB', 'Sub table for expense line items', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
-    ON CONFLICT (function_unit_id, table_name) DO UPDATE SET
+    ON CONFLICT (table_name) DO UPDATE SET
         table_display_name = EXCLUDED.table_display_name,
         table_type  = EXCLUDED.table_type,
         display_name = EXCLUDED.display_name,
@@ -99,7 +99,7 @@ BEGIN
     ) VALUES (
         v_function_unit_id, 'invoices', 'Invoices', 'SUB', 'Sub table for invoice attachments and recognition results', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
-    ON CONFLICT (function_unit_id, table_name) DO UPDATE SET
+    ON CONFLICT (table_name) DO UPDATE SET
         table_display_name = EXCLUDED.table_display_name,
         table_type  = EXCLUDED.table_type,
         display_name = EXCLUDED.display_name,
@@ -138,7 +138,7 @@ BEGIN
     ) VALUES (
         v_function_unit_id, 'approval_actions', 'Approval Actions', 'ACTION', 'Action table for tracking approval history', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
-    ON CONFLICT (function_unit_id, table_name) DO UPDATE SET
+    ON CONFLICT (table_name) DO UPDATE SET
         table_display_name = EXCLUDED.table_display_name,
         table_type  = EXCLUDED.table_type,
         display_name = EXCLUDED.display_name,

@@ -21,7 +21,7 @@ BEGIN
     ) VALUES (
         v_fu_id, 'ShowcaseApp', 'MAIN', '演示主表', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
-    ON CONFLICT (function_unit_id, table_name) DO UPDATE SET
+    ON CONFLICT (table_name) DO UPDATE SET
         table_type = EXCLUDED.table_type, display_name = EXCLUDED.display_name, updated_at = CURRENT_TIMESTAMP
     RETURNING id INTO v_main_id;
 
@@ -44,7 +44,7 @@ BEGIN
     ) VALUES (
         v_fu_id, 'ShowcaseLine', 'SUB', '演示子表', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
-    ON CONFLICT (function_unit_id, table_name) DO UPDATE SET
+    ON CONFLICT (table_name) DO UPDATE SET
         table_type = EXCLUDED.table_type, display_name = EXCLUDED.display_name, updated_at = CURRENT_TIMESTAMP
     RETURNING id INTO v_sub_id;
 
@@ -63,7 +63,7 @@ BEGIN
     ) VALUES (
         v_fu_id, 'ShowcaseDoc', 'RELATION', '演示关联附件表', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
-    ON CONFLICT (function_unit_id, table_name) DO UPDATE SET
+    ON CONFLICT (table_name) DO UPDATE SET
         table_type = EXCLUDED.table_type, display_name = EXCLUDED.display_name, updated_at = CURRENT_TIMESTAMP
     RETURNING id INTO v_relation_id;
 
@@ -82,7 +82,7 @@ BEGIN
     ) VALUES (
         v_fu_id, 'ShowcaseAudit', 'ACTION', '演示动作审计表', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
-    ON CONFLICT (function_unit_id, table_name) DO UPDATE SET
+    ON CONFLICT (table_name) DO UPDATE SET
         table_type = EXCLUDED.table_type, display_name = EXCLUDED.display_name, updated_at = CURRENT_TIMESTAMP
     RETURNING id INTO v_action_tbl_id;
 

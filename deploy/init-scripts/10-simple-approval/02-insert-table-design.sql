@@ -37,7 +37,7 @@ BEGIN
         CURRENT_TIMESTAMP,
         CURRENT_TIMESTAMP
     )
-    ON CONFLICT (function_unit_id, table_name) DO UPDATE SET
+    ON CONFLICT (table_name) DO UPDATE SET
         table_type = EXCLUDED.table_type,
         display_name = EXCLUDED.display_name,
         updated_at = CURRENT_TIMESTAMP
