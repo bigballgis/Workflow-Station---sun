@@ -59,6 +59,11 @@ public interface PortalRelationTableService {
     List<com.platform.common.dto.RelationFieldDTO> getFieldDefinitions(Long tableId, String userId);
 
     /**
+     * 为主键字段按其生成策略分配值（add-row 时自动生成）。需要 READ_WRITE。
+     */
+    List<String> allocatePrimaryKeys(Long tableId, String userId, String fieldName, Integer count);
+
+    /**
      * 新增一行数据（需要 READ_WRITE）。
      */
     Map<String, Object> addData(Long tableId, String userId, Map<String, Object> data);

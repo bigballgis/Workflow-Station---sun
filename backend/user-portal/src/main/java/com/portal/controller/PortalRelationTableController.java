@@ -126,6 +126,18 @@ public class PortalRelationTableController {
         return ResponseEntity.ok(ApiResponse.success(service.getFieldDefinitions(tableId, userId)));
     }
 
+    @PostMapping("/{tableId}/primary-keys/allocate")
+    @Operation(summary = "按策略分配主键值（add-row 自动生成，需要 READ_WRITE）")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> allocatePrimaryKeys(
+            @PathVariable Long tableId,
+            @CurrentUserId String userId,
+            @RequestBody Map<String, Object> request) {
+        String fieldName = String.valueOf(request.get("fieldName"));
+        Integer count = request.get("count") instanceof Number num ? num.intValue() : null;
+        List<String> values = service.allocatePrimaryKeys(tableId, userId, fieldName, count);
+        return ResponseEntity.ok(ApiResponse.success(Map.of("values", values)));
+    }
+
     // ==================== Write operations (require READ_WRITE on the active role) ====================
 
     @PostMapping("/{tableId}")

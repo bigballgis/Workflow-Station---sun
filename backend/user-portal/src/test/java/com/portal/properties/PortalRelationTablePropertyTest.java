@@ -63,7 +63,8 @@ class PortalRelationTablePropertyTest {
         when(jdbcTemplate.queryForObject(contains("rt_table_access"), eq(Long.class), any(Object[].class)))
                 .thenReturn(1L);
 
-        PortalRelationTableService service = new PortalRelationTableServiceImpl(jdbcTemplate, roleAccess, objectMapper);
+        PortalRelationTableService service = new PortalRelationTableServiceImpl(jdbcTemplate, roleAccess, objectMapper,
+                mock(com.platform.common.fk.PrimaryKeyAllocationService.class));
         List<RelationTableDTO> result = service.getVisibleTables(scenario.userId);
 
         // All returned tables should be portal_visible=true
@@ -108,7 +109,8 @@ class PortalRelationTablePropertyTest {
         // Mock no access
         when(roleAccess.getUserBusinessRoles(userId)).thenReturn(Collections.emptyList());
 
-        PortalRelationTableService service = new PortalRelationTableServiceImpl(jdbcTemplate, roleAccess, objectMapper);
+        PortalRelationTableService service = new PortalRelationTableServiceImpl(jdbcTemplate, roleAccess, objectMapper,
+                mock(com.platform.common.fk.PrimaryKeyAllocationService.class));
 
         // Verify: getVisibleTables returns empty when user has no roles
         List<RelationTableDTO> result = service.getVisibleTables(userId);
@@ -163,7 +165,8 @@ class PortalRelationTablePropertyTest {
         when(jdbcTemplate.queryForList(contains("ILIKE"), any(Object[].class)))
                 .thenReturn(mockResults);
 
-        PortalRelationTableService service = new PortalRelationTableServiceImpl(jdbcTemplate, roleAccess, objectMapper);
+        PortalRelationTableService service = new PortalRelationTableServiceImpl(jdbcTemplate, roleAccess, objectMapper,
+                mock(com.platform.common.fk.PrimaryKeyAllocationService.class));
         List<Map<String, Object>> results = service.searchForLookup(tableId, keyword, searchFields, "display_col", null, 10);
 
         // Each result should contain the keyword in at least one search field
@@ -182,7 +185,8 @@ class PortalRelationTablePropertyTest {
         JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
         RoleAccessComponent roleAccess = mock(RoleAccessComponent.class);
         ObjectMapper objectMapper = new ObjectMapper();
-        PortalRelationTableService service = new PortalRelationTableServiceImpl(jdbcTemplate, roleAccess, objectMapper);
+        PortalRelationTableService service = new PortalRelationTableServiceImpl(jdbcTemplate, roleAccess, objectMapper,
+                mock(com.platform.common.fk.PrimaryKeyAllocationService.class));
 
         List<Map<String, Object>> mockResults = List.of(Map.of(
                 "id", "user-1",
@@ -246,7 +250,8 @@ class PortalRelationTablePropertyTest {
         when(jdbcTemplate.queryForList(contains("SELECT"), eq(scenario.maxRows)))
                 .thenReturn(scenario.rows);
 
-        PortalRelationTableService service = new PortalRelationTableServiceImpl(jdbcTemplate, roleAccess, objectMapper);
+        PortalRelationTableService service = new PortalRelationTableServiceImpl(jdbcTemplate, roleAccess, objectMapper,
+                mock(com.platform.common.fk.PrimaryKeyAllocationService.class));
         String csv = service.exportCsv(tableId, userId, scenario.maxRows);
 
         // Parse CSV

@@ -42,6 +42,7 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
     private final JdbcTemplate jdbcTemplate;
     private final RoleAccessComponent roleAccessComponent;
     private final ObjectMapper objectMapper;
+    private final com.platform.common.fk.PrimaryKeyAllocationService primaryKeyAllocationService;
     private final RelationTableTemplateService templateService = new RelationTableTemplateService();
 
     @Override
@@ -595,6 +596,21 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
         return loadFields(tableId);
     }
 
+    @Override
+    @Transactional
+    public List<String> allocatePrimaryKeys(Long tableId, String userId, String fieldName, Integer count) {
+        requireWriteAccess(tableId, userId);
+        RelationFieldDTO pk = loadFields(tableId).stream()
+                .filter(f -> f.getFieldName().equals(fieldName) && Boolean.TRUE.equals(f.getIsPrimaryKey()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Primary key field not found: " + fieldName));
+        com.platform.common.dto.PkGenerationConfig config = (pk.getPkGeneration() == null || pk.getPkGeneration().isEmpty())
+                ? com.platform.common.dto.PkGenerationConfig.builder().strategy("uuid").build()
+                : objectMapper.convertValue(pk.getPkGeneration(), com.platform.common.dto.PkGenerationConfig.class);
+        int n = (count != null && count > 0) ? count : 1;
+        return primaryKeyAllocationService.allocate(tableId, fieldName, config, n, "rt-" + tableId);
+    }
+
     /** Ensure the current user (active role) may write to the table; throws 403 otherwise. */
     private void requireWriteAccess(Long tableId, String userId) {
         String level = resolvePermissionLevel(tableId, userId);
@@ -603,10 +619,10 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
         }
     }
 
-    /** Load full field definitions for a deployed relation table (for validation / import). */
+    /** Load full field definitions for a deployed relation table (for validation / import / edit form). */
     private List<RelationFieldDTO> loadFields(Long tableId) {
         String sql = "SELECT field_name, data_type, length, precision_value, scale, nullable, "
-                + "is_primary_key, default_value, display_name, sort_order "
+                + "is_primary_key, default_value, display_name, sort_order, pk_generation_json::text AS pk_json "
                 + "FROM rt_field_definitions WHERE table_id = ? ORDER BY sort_order ASC";
         return jdbcTemplate.query(sql, (rs, n) -> RelationFieldDTO.builder()
                 .fieldName(rs.getString("field_name"))
@@ -619,7 +635,18 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
                 .defaultValue(rs.getString("default_value"))
                 .displayName(rs.getString("display_name"))
                 .sortOrder((Integer) rs.getObject("sort_order"))
+                .pkGeneration(parsePkGeneration(rs.getString("pk_json")))
                 .build(), tableId);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> parsePkGeneration(String json) {
+        if (json == null || json.isBlank()) return null;
+        try {
+            return objectMapper.readValue(json, new TypeReference<LinkedHashMap<String, Object>>() {});
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private String findPrimaryKeyField(List<RelationFieldDTO> fields) {
@@ -737,11 +764,21 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
         List<Map<String, Object>> rawRows = templateService.parseImport(fileBytes, format);
         List<RowValidationResult> results = RelationRowValidator.validateRows(rawRows, fields);
 
+        // Auto-generate PK values per strategy for rows without one (manual PKs come from the file).
+        String pkField = findPrimaryKeyField(fields);
+        boolean autoPk = pkField != null && fields.stream()
+                .anyMatch(f -> pkField.equals(f.getFieldName()) && !RelationRowValidator.isManualPk(f));
+
         int inserted = 0;
         List<Map<String, Object>> errors = new ArrayList<>();
         for (RowValidationResult r : results) {
             if (r.isValid()) {
-                insertRow(tableId, fields, r.getValues(), userId);
+                Map<String, Object> row = new LinkedHashMap<>(r.getValues());
+                if (autoPk && row.get(pkField) == null) {
+                    List<String> values = allocatePrimaryKeys(tableId, userId, pkField, 1);
+                    if (!values.isEmpty()) row.put(pkField, values.get(0));
+                }
+                insertRow(tableId, fields, row, userId);
                 inserted++;
             } else {
                 r.getErrors().forEach(err -> errors.add(Map.of(

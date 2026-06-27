@@ -129,7 +129,9 @@ class RelationTableStatusPreservationTest {
 
         RelationTableDataServiceImpl dataService = new RelationTableDataServiceImpl(
                 tableRepo, versionRepo, auditService,
-                org.mockito.Mockito.mock(com.admin.service.RelationTableAccessService.class), jdbcTemplate, objectMapper);
+                org.mockito.Mockito.mock(com.admin.service.RelationTableAccessService.class),
+                org.mockito.Mockito.mock(com.admin.service.RelationTablePrimaryKeyAllocationService.class),
+                jdbcTemplate, objectMapper);
 
         // Build a DEPLOYED + enabled=true table
         RelationTableDefinition deployedEnabledTable = buildTableDefinition(
@@ -178,7 +180,9 @@ class RelationTableStatusPreservationTest {
 
         RelationTableDataServiceImpl dataService = new RelationTableDataServiceImpl(
                 tableRepo, versionRepo, auditService,
-                org.mockito.Mockito.mock(com.admin.service.RelationTableAccessService.class), jdbcTemplate, objectMapper);
+                org.mockito.Mockito.mock(com.admin.service.RelationTableAccessService.class),
+                org.mockito.Mockito.mock(com.admin.service.RelationTablePrimaryKeyAllocationService.class),
+                jdbcTemplate, objectMapper);
 
         // Build a DEPLOYED table
         RelationTableDefinition deployedTable = buildTableDefinition(

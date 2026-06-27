@@ -76,4 +76,10 @@ public class RelationFieldDTO implements Serializable {
      * Display order of the field
      */
     private Integer sortOrder;
+
+    /**
+     * Primary-key generation config (e.g. {@code {"strategy":"uuid|sequence|manual", ...}}).
+     * Only meaningful when {@link #isPrimaryKey} is true; null otherwise.
+     */
+    private java.util.Map<String, Object> pkGeneration;
 }

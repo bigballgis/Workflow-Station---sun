@@ -272,14 +272,14 @@
           <el-switch
             v-if="field.dataType === 'BOOLEAN'"
             v-model="formData[field.fieldName]"
-            :disabled="(dialogMode === 'edit' && field.isPrimaryKey) || isFkFieldDisabled(field)"
+            :disabled="isPkFieldDisabled(field) || isFkFieldDisabled(field)"
           />
           <el-input-number
             v-else-if="isNumericType(field.dataType)"
             v-model="formData[field.fieldName]"
             :precision="field.dataType === 'DECIMAL' ? (field.scale || 2) : 0"
             style="width: 100%;"
-            :disabled="(dialogMode === 'edit' && field.isPrimaryKey) || isFkFieldDisabled(field)"
+            :disabled="isPkFieldDisabled(field) || isFkFieldDisabled(field)"
           />
           <el-date-picker
             v-else-if="field.dataType === 'DATE'"
@@ -287,7 +287,7 @@
             type="date"
             value-format="YYYY-MM-DD"
             style="width: 100%;"
-            :disabled="(dialogMode === 'edit' && field.isPrimaryKey) || isFkFieldDisabled(field)"
+            :disabled="isPkFieldDisabled(field) || isFkFieldDisabled(field)"
           />
           <el-date-picker
             v-else-if="field.dataType === 'TIMESTAMP'"
@@ -295,20 +295,20 @@
             type="datetime"
             value-format="YYYY-MM-DD HH:mm:ss"
             style="width: 100%;"
-            :disabled="(dialogMode === 'edit' && field.isPrimaryKey) || isFkFieldDisabled(field)"
+            :disabled="isPkFieldDisabled(field) || isFkFieldDisabled(field)"
           />
           <el-input
             v-else-if="field.dataType === 'TEXT'"
             v-model="formData[field.fieldName]"
             type="textarea"
             :rows="3"
-            :disabled="(dialogMode === 'edit' && field.isPrimaryKey) || isFkFieldDisabled(field)"
+            :disabled="isPkFieldDisabled(field) || isFkFieldDisabled(field)"
           />
           <el-input
             v-else
             v-model="formData[field.fieldName]"
             :maxlength="field.length || undefined"
-            :disabled="(dialogMode === 'edit' && field.isPrimaryKey) || isFkFieldDisabled(field)"
+            :disabled="isPkFieldDisabled(field) || isFkFieldDisabled(field)"
           />
         </el-form-item>
       </el-form>
@@ -411,7 +411,7 @@ const {
   selectedTableId, searchKeyword, tableSearchKeyword, currentPage, pageSize, totalElements, dataRows,
   fetchDataError, dialogVisible, dialogMode, formData,
   selectedTable, canWrite, fieldColumns, visibleFieldColumns, filteredTables,
-  isNumericType, isRowDisabled, isFkFieldDisabled,
+  isNumericType, isRowDisabled, isFkFieldDisabled, isPkFieldDisabled,
   fetchData, handleSelectTable, handlePageChange, handleSizeChange,
   openAddDialog, openEditDialog, handleSaveRecord, handleDisable, handleEnable, handleDelete,
   formatHKT, handleExport, handleDownloadTemplate, openImportDialog, handleImportFile, init, refresh,

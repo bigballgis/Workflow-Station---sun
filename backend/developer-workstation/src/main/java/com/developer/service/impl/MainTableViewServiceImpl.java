@@ -61,21 +61,18 @@ public class MainTableViewServiceImpl implements MainTableViewService {
         FunctionUnit functionUnit = assertFunctionUnitExists(functionUnitId);
         TableDefinition table = resolveViewableTable(functionUnitId, request.tableId());
 
-        MainTableViewConfig defaultView = viewConfigRepository.findByMainTableIdAndIsDefaultTrue(table.getId())
-                .orElseGet(() -> buildDefaultConfig(functionUnit, table));
-
+        // A manually-created view starts empty (no fields); the developer adds columns from the catalog.
         MainTableViewConfig created = MainTableViewConfig.builder()
                 .functionUnit(functionUnit)
                 .mainTableId(table.getId())
                 .viewName(request.viewName().trim())
                 .isDefault(false)
-                .sortConfig(copySortConfig(defaultView.getSortConfig()))
-                .filterConfig(copyFilterConfig(defaultView.getFilterConfig()))
+                .sortConfig(new ArrayList<>())
+                .filterConfig(Map.of("conditions", List.of()))
                 .status(MainTableViewStatus.DRAFT)
                 .viewFields(new ArrayList<>())
                 .build();
 
-        cloneFields(defaultView, created);
         return toDto(viewConfigRepository.save(created));
     }
 

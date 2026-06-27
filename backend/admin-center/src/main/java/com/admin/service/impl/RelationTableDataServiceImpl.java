@@ -49,6 +49,7 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
     private final RelationTableVersionRepository versionRepository;
     private final RelationTableAuditService auditService;
     private final RelationTableAccessService accessService;
+    private final com.admin.service.RelationTablePrimaryKeyAllocationService primaryKeyAllocationService;
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
     private final RelationTableTemplateService templateService = new RelationTableTemplateService();
@@ -407,12 +408,24 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
         List<Map<String, Object>> rawRows = templateService.parseImport(fileBytes, format);
         List<RowValidationResult> results = RelationRowValidator.validateRows(rawRows, fields);
 
+        // Auto-generate PK values per strategy for imported rows that don't carry one
+        // (manual-strategy PKs come from the file and were validated as required above).
+        String pkField = findPrimaryKeyField(fields);
+        boolean autoPk = pkField != null && fields.stream()
+                .anyMatch(f -> pkField.equals(f.getFieldName()) && !RelationRowValidator.isManualPk(f));
+
         int inserted = 0;
         List<Map<String, Object>> errors = new ArrayList<>();
         for (RowValidationResult r : results) {
             if (r.isValid()) {
-                // Reuse addData for PK allocation, audit and timestamp handling.
-                addData(tableId, new LinkedHashMap<>(r.getValues()));
+                Map<String, Object> row = new LinkedHashMap<>(r.getValues());
+                if (autoPk && row.get(pkField) == null) {
+                    List<String> values = primaryKeyAllocationService
+                            .allocate(tableId, pkField, 1, "rt-" + tableId).getValues();
+                    if (values != null && !values.isEmpty()) row.put(pkField, values.get(0));
+                }
+                // Reuse addData for storage row-id, audit and timestamp handling.
+                addData(tableId, row);
                 inserted++;
             } else {
                 r.getErrors().forEach(err -> errors.add(Map.of(
@@ -465,7 +478,7 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
             }
         }
         List<RelationFieldDTO> fields = jdbcTemplate.query(
-                "SELECT id, field_name, data_type, length, precision_value, scale, nullable, is_primary_key, default_value, display_name, sort_order "
+                "SELECT id, field_name, data_type, length, precision_value, scale, nullable, is_primary_key, default_value, display_name, sort_order, pk_generation_json::text AS pk_json "
                 + "FROM rt_field_definitions WHERE table_id = ? ORDER BY sort_order ASC",
                 (rs, rowNum) -> RelationFieldDTO.builder()
                         .id(rs.getLong("id"))
@@ -479,6 +492,7 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
                         .defaultValue(rs.getString("default_value"))
                         .displayName(rs.getString("display_name"))
                         .sortOrder(rs.getInt("sort_order"))
+                        .pkGeneration(parsePkGenerationJson(rs.getString("pk_json")))
                         .build(),
                 tableDef.getId());
         if (fields.isEmpty()) {
@@ -505,6 +519,17 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
             return objectMapper.readValue(json, new TypeReference<LinkedHashMap<String, Object>>() {});
         } catch (JsonProcessingException e) {
             throw new RuntimeException("Failed to parse row JSON data", e);
+        }
+    }
+
+    private Map<String, Object> parsePkGenerationJson(String json) {
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(json, new TypeReference<LinkedHashMap<String, Object>>() {});
+        } catch (Exception e) {
+            return null;
         }
     }
 

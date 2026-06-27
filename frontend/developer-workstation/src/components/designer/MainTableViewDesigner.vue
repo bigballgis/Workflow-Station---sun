@@ -19,6 +19,7 @@ const {
   removeDisplayFilterTag, addSortField, removeSort, handleSave, onFieldDragStart, onFieldDragEnd, onGridDrop,
   onColDragStart, onColDragOver, onColDragLeave, onColDrop, onColDragEnd,
   isFkField, isPkField, onFkColumnClick,
+  selectedCatalogFields, toggleCatalogSelect, addSelectedFields, clearAllFields,
 } = useMainTableViewDesigner(props, emit)
 </script>
 
@@ -90,7 +91,7 @@ const {
 
             class="field-item"
 
-            :class="{ dragging: dragSourceField === field.fieldName }"
+            :class="{ dragging: dragSourceField === field.fieldName, selected: selectedCatalogFields.has(field.fieldName) }"
 
             draggable="true"
 
@@ -98,9 +99,15 @@ const {
 
             @dragend="onFieldDragEnd"
 
-            @click="addField(field)"
+            @click="toggleCatalogSelect(field.fieldName)"
 
           >
+
+            <el-checkbox
+              :model-value="selectedCatalogFields.has(field.fieldName)"
+              @click.stop
+              @change="toggleCatalogSelect(field.fieldName)"
+            />
 
             <el-icon class="field-icon">
 
@@ -122,6 +129,25 @@ const {
 
           />
 
+        </div>
+
+        <div class="columns-panel-actions">
+          <el-button
+            type="primary"
+            size="small"
+            :disabled="!selectedCatalogFields.size"
+            @click="addSelectedFields"
+          >
+            {{ t('mainTableView.addSelectedColumns') }}
+            <template v-if="selectedCatalogFields.size">({{ selectedCatalogFields.size }})</template>
+          </el-button>
+          <el-button
+            size="small"
+            :disabled="!visibleColumns.length"
+            @click="clearAllFields"
+          >
+            {{ t('mainTableView.clearAllColumns') }}
+          </el-button>
         </div>
 
       </div>

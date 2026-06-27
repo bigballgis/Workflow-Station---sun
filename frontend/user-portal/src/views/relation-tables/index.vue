@@ -197,14 +197,14 @@
           <el-switch
             v-if="field.dataType === 'BOOLEAN'"
             v-model="formData[field.fieldName]"
-            :disabled="dialogMode === 'edit' && field.isPrimaryKey"
+            :disabled="isPkDisabled(field)"
           />
           <el-input-number
             v-else-if="['INTEGER', 'BIGINT', 'DECIMAL'].includes(field.dataType)"
             v-model="formData[field.fieldName]"
             :precision="field.dataType === 'DECIMAL' ? (field.scale || 2) : 0"
             style="width: 100%;"
-            :disabled="dialogMode === 'edit' && field.isPrimaryKey"
+            :disabled="isPkDisabled(field)"
           />
           <el-date-picker
             v-else-if="field.dataType === 'DATE'"
@@ -212,7 +212,7 @@
             type="date"
             value-format="YYYY-MM-DD"
             style="width: 100%;"
-            :disabled="dialogMode === 'edit' && field.isPrimaryKey"
+            :disabled="isPkDisabled(field)"
           />
           <el-date-picker
             v-else-if="field.dataType === 'TIMESTAMP'"
@@ -220,13 +220,13 @@
             type="datetime"
             value-format="YYYY-MM-DD HH:mm:ss"
             style="width: 100%;"
-            :disabled="dialogMode === 'edit' && field.isPrimaryKey"
+            :disabled="isPkDisabled(field)"
           />
           <el-input
             v-else
             v-model="formData[field.fieldName]"
             :maxlength="field.length || undefined"
-            :disabled="dialogMode === 'edit' && field.isPrimaryKey"
+            :disabled="isPkDisabled(field)"
           />
         </el-form-item>
       </el-form>
@@ -514,7 +514,21 @@ const handleExport = async () => {
 }
 
 // ---- Add / Edit ----
-const openAddDialog = () => {
+const pkStrategy = (f: RelationFieldDef): string => (f.pkGeneration?.strategy as string) ?? 'uuid'
+
+/**
+ * Primary key is non-editable by default. Only the `manual` strategy in add mode lets the
+ * user type it; on edit it is always locked, and on add with any auto strategy it is
+ * generated server-side and shown read-only.
+ */
+const isPkDisabled = (f: RelationFieldDef): boolean => {
+  if (!f.isPrimaryKey) return false
+  if (dialogMode.value === 'edit') return true
+  return pkStrategy(f) !== 'manual'
+}
+
+const openAddDialog = async () => {
+  if (!selectedTableId.value) return
   dialogMode.value = 'add'
   editingRowId.value = null
   const fd: Record<string, any> = {}
@@ -523,6 +537,17 @@ const openAddDialog = () => {
   }
   formData.value = fd
   dialogVisible.value = true
+  // Auto-generate PK values per strategy (skip manual, which the user types).
+  try {
+    for (const f of editableFields.value) {
+      if (!f.isPrimaryKey || pkStrategy(f) === 'manual') continue
+      const res: any = await relationTableApi.allocatePrimaryKeys(selectedTableId.value, f.fieldName)
+      const values = res?.data?.values ?? res?.values
+      if (values?.[0] != null) formData.value[f.fieldName] = values[0]
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.error?.message || e?.response?.data?.message || 'Failed to allocate primary key')
+  }
 }
 
 const openEditDialog = (row: Record<string, any>) => {

@@ -55,7 +55,8 @@ class PortalRelationTableQueryDataSearchTest {
                 any(Object[].class)))
                 .thenReturn(Collections.emptyList());
 
-        PortalRelationTableService service = new PortalRelationTableServiceImpl(jdbcTemplate, roleAccess, objectMapper);
+        PortalRelationTableService service = new PortalRelationTableServiceImpl(jdbcTemplate, roleAccess, objectMapper,
+                mock(com.platform.common.fk.PrimaryKeyAllocationService.class));
         PageResponse<Map<String, Object>> result = service.queryTableData(tableId, userId, 0, 10, "acme");
 
         assertThat(result.getTotalElements()).isEqualTo(1L);

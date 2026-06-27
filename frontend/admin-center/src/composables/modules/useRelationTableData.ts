@@ -120,6 +120,20 @@ export function useRelationTableData() {
   const isFkFieldDisabled = (field: FieldDefinitionResponse) =>
     !!field.isForeignKey && (field.fkDisplayMode == null || field.fkDisplayMode === 'readonly')
 
+  const pkStrategy = (field: FieldDefinitionResponse): string =>
+    (field.pkGeneration as { strategy?: string } | undefined)?.strategy ?? 'uuid'
+
+  /**
+   * Primary key fields are non-editable by default. The only exception is the `manual`
+   * strategy in add mode, where the user must type the key themselves. On edit the PK is
+   * always locked; on add with any auto strategy (uuid/sequence/…) it is auto-generated + locked.
+   */
+  const isPkFieldDisabled = (field: FieldDefinitionResponse): boolean => {
+    if (!field.isPrimaryKey) return false
+    if (dialogMode.value === 'edit') return true
+    return pkStrategy(field) !== 'manual'
+  }
+
   const openAddDialog = async () => {
     if (!selectedTableId.value) return
     dialogMode.value = 'add'
@@ -269,7 +283,7 @@ export function useRelationTableData() {
     tables, selectedTableId, searchKeyword, tableSearchKeyword, currentPage, pageSize, totalElements, dataRows,
     fetchDataError, dialogVisible, dialogMode, editingRowId, formData,
     selectedTable, canWrite, fieldColumns, visibleFieldColumns, filteredTables,
-    isNumericType, isRowDisabled, isFkFieldDisabled,
+    isNumericType, isRowDisabled, isFkFieldDisabled, isPkFieldDisabled,
     fetchTables, fetchData, handleSelectTable, handlePageChange, handleSizeChange,
     openAddDialog, openEditDialog, handleSaveRecord, handleDisable, handleEnable, handleDelete,
     formatHKT, handleExport, handleDownloadTemplate, openImportDialog, handleImportFile, init, refresh,

@@ -56,6 +56,14 @@ public final class RelationRowValidator {
         return fieldName != null && SYSTEM_FIELDS.contains(fieldName.toLowerCase());
     }
 
+    /** A primary key whose generation strategy is {@code manual} (must be supplied by the user). */
+    public static boolean isManualPk(RelationFieldDTO field) {
+        if (!Boolean.TRUE.equals(field.getIsPrimaryKey())) return false;
+        Object strategy = field.getPkGeneration() == null ? null : field.getPkGeneration().get("strategy");
+        // Default strategy is uuid (auto) when unspecified, so only explicit "manual" is required input.
+        return "manual".equalsIgnoreCase(String.valueOf(strategy));
+    }
+
     /**
      * Validate and coerce one row.
      *
@@ -81,13 +89,16 @@ public final class RelationRowValidator {
             String text = raw == null ? null : raw.toString().trim();
             boolean blank = text == null || text.isEmpty();
 
-            boolean required = Boolean.FALSE.equals(field.getNullable())
-                    || Boolean.TRUE.equals(field.getIsPrimaryKey());
+            // Auto-generated PKs (uuid/sequence/…) are NOT required from the file — only a
+            // `manual` PK is. Non-PK required = non-nullable.
+            boolean required = Boolean.TRUE.equals(field.getIsPrimaryKey())
+                    ? isManualPk(field)
+                    : Boolean.FALSE.equals(field.getNullable());
             if (blank) {
                 if (required) {
                     result.addError(name, "Required field is empty");
                 }
-                continue; // empty optional -> leave unset (DB/default handles it)
+                continue; // empty optional / auto-PK -> leave unset (server generates / DB default)
             }
 
             Object coerced = coerce(field, text, result);

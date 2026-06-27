@@ -19,9 +19,6 @@ const tables = ref<TableDefinition[]>([])
 const selectedViewId = ref<number | null>(null)
 const hasMainTable = ref(false)
 const navCollapsed = ref(false)
-const createDialogVisible = ref(false)
-const newViewName = ref('')
-const createTableId = ref<number | null>(null)
 
 const selectedView = ref<MainTableViewDefinition | null>(null)
 
@@ -96,11 +93,25 @@ async function loadSelectedView() {
 
 watch(selectedViewId, loadSelectedView)
 
-// tableId pre-selects the table (per-group +). Omit it (top-level +) to let the user pick the table.
-function openCreateDialog(tableId?: number) {
-  createTableId.value = tableId ?? (viewableTables.value[0]?.id ?? null)
-  newViewName.value = ''
-  createDialogVisible.value = true
+// Per-table "+": create an empty view directly under that table (no dialog, no field copy).
+// The table is already known from the group, so no table picker is needed; the developer renames
+// it in the properties panel and adds columns from the catalog.
+async function handleAddView(table: TableDefinition) {
+  const baseName = t('mainTableView.newViewName')
+  const existing = new Set(
+    views.value.filter(v => v.mainTableId === table.id).map(v => v.viewName),
+  )
+  let name = baseName
+  let i = 2
+  while (existing.has(name)) name = `${baseName} ${i++}`
+  try {
+    const res = await mainTableViewApi.create(props.functionUnitId, name, table.id)
+    await loadViews()
+    selectedViewId.value = res.data.id
+    ElMessage.success(t('mainTableView.created'))
+  } catch (e: any) {
+    ElMessage.error(e?.message || t('common.saveFailed'))
+  }
 }
 
 const seeding = ref(false)
@@ -125,28 +136,6 @@ async function handleSeedDefaults() {
     ElMessage.error(e?.message || t('common.saveFailed'))
   } finally {
     seeding.value = false
-  }
-}
-
-async function handleCreateView() {
-  const name = newViewName.value.trim()
-  if (!createTableId.value) {
-    ElMessage.warning(t('mainTableView.selectTablePlaceholder'))
-    return
-  }
-  if (!name) {
-    ElMessage.warning(t('mainTableView.viewNamePlaceholder'))
-    return
-  }
-  try {
-    const res = await mainTableViewApi.create(props.functionUnitId, name, createTableId.value)
-    createDialogVisible.value = false
-    newViewName.value = ''
-    await loadViews()
-    selectedViewId.value = res.data.id
-    ElMessage.success(t('mainTableView.created'))
-  } catch (e: any) {
-    ElMessage.error(e?.message || t('common.saveFailed'))
   }
 }
 
@@ -230,14 +219,6 @@ onMounted(async () => {
                 {{ t('mainTableView.generateDefaults') }}
               </el-button>
               <el-button
-                v-if="!navCollapsed"
-                type="primary"
-                size="small"
-                :icon="Plus"
-                :title="t('mainTableView.createView')"
-                @click="openCreateDialog()"
-              />
-              <el-button
                 text
                 size="small"
                 :icon="navCollapsed ? DArrowRight : DArrowLeft"
@@ -264,7 +245,7 @@ onMounted(async () => {
                   link
                   :icon="Plus"
                   :title="t('mainTableView.createView')"
-                  @click="openCreateDialog(group.table.id)"
+                  @click="handleAddView(group.table)"
                 />
               </div>
               <el-menu
@@ -326,48 +307,6 @@ onMounted(async () => {
       </div>
     </template>
 
-    <el-dialog
-      v-model="createDialogVisible"
-      :title="t('mainTableView.createView')"
-      width="400px"
-    >
-      <el-form
-        label-position="top"
-        @submit.prevent
-      >
-        <el-form-item :label="t('mainTableView.selectTable')">
-          <el-select
-            v-model="createTableId"
-            :placeholder="t('mainTableView.selectTablePlaceholder')"
-            style="width: 100%"
-          >
-            <el-option
-              v-for="tbl in viewableTables"
-              :key="tbl.id"
-              :label="tableLabel(tbl)"
-              :value="tbl.id"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item :label="t('mainTableView.viewName')">
-          <el-input
-            v-model="newViewName"
-            :placeholder="t('mainTableView.viewNamePlaceholder')"
-          />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="createDialogVisible = false">
-          {{ t('common.cancel') }}
-        </el-button>
-        <el-button
-          type="primary"
-          @click="handleCreateView"
-        >
-          {{ t('common.create') }}
-        </el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 

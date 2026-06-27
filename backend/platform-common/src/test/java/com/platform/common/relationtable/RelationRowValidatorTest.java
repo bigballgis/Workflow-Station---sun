@@ -75,11 +75,24 @@ class RelationRowValidatorTest {
     }
 
     @Test
-    void primaryKeyTreatedAsRequired() {
+    void manualPrimaryKeyRequired() {
         var pk = RelationFieldDTO.builder().fieldName("id").dataType(RelationDataType.VARCHAR)
-                .nullable(true).isPrimaryKey(true).build();
+                .nullable(true).isPrimaryKey(true)
+                .pkGeneration(Map.of("strategy", "manual")).build();
         var r = RelationRowValidator.validateRow(1, Map.of("id", ""), List.of(pk));
         assertThat(r.isValid()).isFalse();
+    }
+
+    @Test
+    void autoPrimaryKeyNotRequiredOnImport() {
+        // uuid / sequence / unspecified strategy => generated server-side, not required from file
+        var uuidPk = RelationFieldDTO.builder().fieldName("id").dataType(RelationDataType.VARCHAR)
+                .nullable(true).isPrimaryKey(true).pkGeneration(Map.of("strategy", "uuid")).build();
+        assertThat(RelationRowValidator.validateRow(1, Map.of("id", ""), List.of(uuidPk)).isValid()).isTrue();
+
+        var defaultPk = RelationFieldDTO.builder().fieldName("id").dataType(RelationDataType.VARCHAR)
+                .nullable(true).isPrimaryKey(true).build();
+        assertThat(RelationRowValidator.validateRow(1, Map.of("id", ""), List.of(defaultPk)).isValid()).isTrue();
     }
 
     @Test

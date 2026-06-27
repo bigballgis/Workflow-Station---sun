@@ -44,6 +44,8 @@ const filterEditorRoot = ref(parseFilterConfigToEditorRoot(null))
 const enableExport = ref(true)
 const enableImport = ref(true)
 const catalogFields = ref<MainTableFieldCatalogItem[]>([])
+const fieldMetaMap = ref<Record<string, { isPrimaryKey: boolean; isForeignKey: boolean; refTableId: number | null }>>({})
+const selectedCatalogFields = ref<Set<string>>(new Set())
 const mainTableName = ref('')
 const filterDialogVisible = ref(false)
 const addColumnPopoverVisible = ref(false)
@@ -107,6 +109,16 @@ async function loadCatalog() {
     // Catalog is scoped to THIS view's owning table (not always MAIN).
     const table = tables.find(tbl => tbl.id === props.view.mainTableId)
     mainTableName.value = table?.tableDisplayName || table?.tableName || ''
+    // Remember FK/PK metadata per field so newly-added columns render as links immediately
+    // (before a save round-trip refreshes the backend-derived flags).
+    fieldMetaMap.value = {}
+    for (const f of table?.fieldDefinitions || []) {
+      fieldMetaMap.value[f.fieldName] = {
+        isPrimaryKey: !!f.isPrimaryKey,
+        isForeignKey: !!f.isForeignKey,
+        refTableId: f.refTableId ?? null,
+      }
+    }
     const business: MainTableFieldCatalogItem[] = (table?.fieldDefinitions || []).map(f => ({
       fieldName: f.fieldName,
       displayName: f.displayName || f.fieldName,
@@ -119,6 +131,7 @@ async function loadCatalog() {
       : business
   } catch {
     catalogFields.value = []
+    fieldMetaMap.value = {}
   }
 }
 
@@ -128,16 +141,21 @@ async function loadCatalog() {
 watch(() => props.view?.mainTableId, () => { loadCatalog() }, { immediate: true })
 
 // Designer-internal FK navigation: clicking a FK column opens the referenced table's default view.
+// Flags come from the view field (backend-derived) or fall back to the table's catalog metadata
+// (so columns just added in this session render as links before a save round-trip).
 function isFkField(fieldName: string): boolean {
-  return !!viewFields.value.find(f => f.fieldName === fieldName)?.isForeignKey
+  const f = viewFields.value.find(v => v.fieldName === fieldName)
+  return !!(f?.isForeignKey ?? fieldMetaMap.value[fieldName]?.isForeignKey)
 }
 function isPkField(fieldName: string): boolean {
-  return !!viewFields.value.find(f => f.fieldName === fieldName)?.isPrimaryKey
+  const f = viewFields.value.find(v => v.fieldName === fieldName)
+  return !!(f?.isPrimaryKey ?? fieldMetaMap.value[fieldName]?.isPrimaryKey)
 }
 function onFkColumnClick(fieldName: string) {
-  const field = viewFields.value.find(f => f.fieldName === fieldName)
-  if (field?.isForeignKey && field.refTableId) {
-    emit('navigate-to-table-view', field.refTableId)
+  const f = viewFields.value.find(v => v.fieldName === fieldName)
+  const refTableId = f?.refTableId ?? fieldMetaMap.value[fieldName]?.refTableId
+  if ((f?.isForeignKey ?? fieldMetaMap.value[fieldName]?.isForeignKey) && refTableId) {
+    emit('navigate-to-table-view', refTableId)
   }
 }
 
@@ -226,6 +244,7 @@ function formatFilterTag(cond: FilterCondition): string {
 
 function addField(field: MainTableFieldCatalogItem) {
   if (viewFields.value.some(f => f.fieldName === field.fieldName)) return
+  const meta = fieldMetaMap.value[field.fieldName]
   viewFields.value.push({
     fieldName: field.fieldName,
     displayLabel: field.displayName || field.fieldName,
@@ -233,8 +252,36 @@ function addField(field: MainTableFieldCatalogItem) {
     sortOrder: viewFields.value.length,
     visible: true,
     systemField: field.systemField ?? false,
+    isPrimaryKey: meta?.isPrimaryKey ?? false,
+    isForeignKey: meta?.isForeignKey ?? false,
+    refTableId: meta?.refTableId ?? null,
   })
   addColumnPopoverVisible.value = false
+}
+
+// Multi-select: toggle a catalog field's selection, then add all selected at once.
+function toggleCatalogSelect(fieldName: string) {
+  const next = new Set(selectedCatalogFields.value)
+  if (next.has(fieldName)) next.delete(fieldName)
+  else next.add(fieldName)
+  selectedCatalogFields.value = next
+}
+
+function addSelectedFields() {
+  for (const field of filteredCatalog.value) {
+    if (selectedCatalogFields.value.has(field.fieldName)) {
+      addField(field)
+    }
+  }
+  selectedCatalogFields.value = new Set()
+}
+
+// Remove every column from the view at once.
+function clearAllFields() {
+  viewFields.value = []
+  sortConfig.value = []
+  filterEditorRoot.value = parseFilterConfigToEditorRoot(null)
+  filterConfig.value = serializeFilterEditorRoot(filterEditorRoot.value)
 }
 
 
@@ -407,5 +454,6 @@ const previewRowCount = 3
     removeDisplayFilterTag, addSortField, removeSort, handleSave, onFieldDragStart, onFieldDragEnd, onGridDrop,
     onColDragStart, onColDragOver, onColDragLeave, onColDrop, onColDragEnd, getFieldDataType,
     isFkField, isPkField, onFkColumnClick,
+    selectedCatalogFields, toggleCatalogSelect, addSelectedFields, clearAllFields,
   }
 }

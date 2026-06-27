@@ -25,6 +25,7 @@ export interface RelationFieldDef {
   isPrimaryKey?: boolean
   displayName?: string
   sortOrder?: number
+  pkGeneration?: Record<string, any>
 }
 
 export interface RelationImportResult {
@@ -95,6 +96,10 @@ export const relationTableApi = {
   /** 获取字段定义（含类型，供编辑表单使用） */
   getFieldDefinitions: (tableId: number) =>
     request.get<{ data: RelationFieldDef[] }>(`/relation-tables/${tableId}/fields`),
+
+  /** 按策略分配主键值（add-row 自动生成，需要 READ_WRITE） */
+  allocatePrimaryKeys: (tableId: number, fieldName: string, count?: number) =>
+    request.post<{ data: { values: string[] } }>(`/relation-tables/${tableId}/primary-keys/allocate`, { fieldName, count }),
 
   /** 新增数据（需要 READ_WRITE） */
   addData: (tableId: number, data: Record<string, any>) =>
