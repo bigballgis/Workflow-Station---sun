@@ -52,6 +52,25 @@ CREATE INDEX IF NOT EXISTS idx_rt_field_table_id ON rt_field_definitions(table_i
 
 COMMENT ON TABLE rt_field_definitions IS 'Field definitions for Relation Tables';
 
+-- 2b. PK Sequences (rt_pk_sequences) — 与 admin-center Flyway V207 一致；
+-- relation table 主键自动生成的计数器，全新初始化必须带上，否则 PK 生成在新库上崩溃
+CREATE TABLE IF NOT EXISTS rt_pk_sequences (
+    id              BIGSERIAL       PRIMARY KEY,
+    table_id        BIGINT          NOT NULL,
+    field_name      VARCHAR(100)    NOT NULL,
+    scope_type      VARCHAR(32)     NOT NULL DEFAULT 'perTable',
+    scope_key       VARCHAR(128)    NOT NULL DEFAULT '',
+    prefix          VARCHAR(64)     DEFAULT '',
+    pad_width       INTEGER         DEFAULT 6,
+    current_value   BIGINT          NOT NULL DEFAULT 0,
+    updated_at      TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+    CONSTRAINT uk_rt_pk_seq UNIQUE (table_id, field_name, scope_type, scope_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_rt_pk_sequences_table ON rt_pk_sequences(table_id);
+
+COMMENT ON TABLE rt_pk_sequences IS 'Counter table for Relation Table auto-generated primary keys';
+
 -- 3. Table Versions (rt_table_versions)
 CREATE TABLE IF NOT EXISTS rt_table_versions (
     id                  BIGSERIAL       PRIMARY KEY,
@@ -121,6 +140,14 @@ CREATE TABLE IF NOT EXISTS rt_table_data_rows (
 
 CREATE INDEX IF NOT EXISTS idx_rt_data_rows_table_id ON rt_table_data_rows(table_id);
 CREATE INDEX IF NOT EXISTS idx_rt_data_rows_table_status ON rt_table_data_rows(table_id, status);
+
+-- 搜索/分页性能索引（与 admin-center Flyway V214 保持一致；全新初始化即带上）
+-- 字段名由用户动态定义，无法逐字段建索引；用整行 data::text 的 pg_trgm GIN 加速 ILIKE '%term%'
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE INDEX IF NOT EXISTS idx_rt_data_rows_data_trgm
+    ON rt_table_data_rows USING gin ((data::text) gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_rt_data_rows_table_id_id
+    ON rt_table_data_rows (table_id, id);
 
 COMMENT ON TABLE rt_table_data_rows IS 'Relation Table row data stored as JSON';
 

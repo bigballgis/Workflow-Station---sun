@@ -16,3 +16,7 @@
 > 关键提醒：前端用 `Dockerfile.local`、不用多阶段构建；`.sh`/`.sql` 必须 LF；
 > 改环境变量必须同一会话内同步 K8s ConfigMap/Secret（见 `deploy/CONFIG_SYNC.md`）。
 > 改可部署单元后按根 `debug-mode-docker-workflow` 规则重建对应 Compose 服务并核对日志。
+>
+> **Schema 唯一来源 = `deploy/init-scripts/00-schema/`**（快照式）。Flyway 已清退（2026-06），
+> 后端不再有 `db/migration`，历史归档于 `docs/legacy-flyway-migrations/`。新增/改表只改 00-schema，
+> **不要再写 Flyway 迁移，也不要再做"Flyway↔init 双轨同步"**（双轨已消除）。

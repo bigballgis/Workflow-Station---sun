@@ -447,6 +447,11 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
 
     /**
      * Builds JSON search WHERE clause ({@code data->>'field' ILIKE}).
+     *
+     * <p>A leading {@code data::text ILIKE ?} guard is prepended so the pg_trgm GIN index
+     * {@code idx_rt_data_rows_data_trgm} can serve the leading-wildcard search; the per-field
+     * clause then filters out whole-row false positives (e.g. matches on JSON keys/punctuation),
+     * keeping the result set identical to the per-field-only predicate. See migration V214.
      */
     private String buildJsonSearchWhereClause(List<RelationFieldDTO> fields, String search, List<Object> params) {
         if (search == null || search.isBlank()) {
@@ -464,10 +469,12 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
         String conditions = searchableFields.stream()
                 .map(f -> "data->>'" + f + "' ILIKE ? ESCAPE '\\'")
                 .collect(Collectors.joining(" OR "));
+        // index-accelerated broad guard (trgm GIN) first, then exact per-field filter for correctness
+        params.add(searchPattern);
         for (int i = 0; i < searchableFields.size(); i++) {
             params.add(searchPattern);
         }
-        return " AND (" + conditions + ")";
+        return " AND data::text ILIKE ? ESCAPE '\\' AND (" + conditions + ")";
     }
 
     private boolean isSafeFieldName(String fieldName) {

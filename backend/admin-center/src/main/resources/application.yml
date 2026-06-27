@@ -105,10 +105,10 @@ spring:
           time_zone: Asia/Shanghai
 
   flyway:
-    enabled: true
-    locations: classpath:db/migration/admin-center,classpath:db/migration/platform-security
-    baseline-on-migrate: true
-    validate-on-migrate: false
+    # schema 唯一来源 = deploy/init-scripts/00-schema（见 docs/schema-single-source-init-scripts-plan.md）。
+    # Flyway 已清退（所有环境本就 SPRING_FLYWAY_ENABLED=false，迁移从未在部署中执行）；
+    # 历史迁移归档于 docs/legacy-flyway-migrations/。此处固化为 false，不再依赖 env 覆盖。
+    enabled: false
   
   # 禁用静态资源处理，避免与 API 路由冲突
   web:

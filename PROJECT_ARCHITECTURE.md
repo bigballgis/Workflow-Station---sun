@@ -183,7 +183,11 @@ Workflow-Station---sun/
 
 ## 9. 数据与脚本约定
 
-- 初始化/变更脚本目录：`deploy/init-scripts/`
+- **Schema 唯一事实来源：`deploy/init-scripts/00-schema/`**（快照式：表+列+索引写在一起）。
+  新增/改表只改这里。Flyway 已于 2026-06 清退（所有环境本就 `SPRING_FLYWAY_ENABLED=false`、
+  迁移从未在部署中执行），历史迁移归档于 `docs/legacy-flyway-migrations/`。
+  详见 `docs/schema-single-source-init-scripts-plan.md`。**不要再写 Flyway 迁移。**
+- 初始化/种子脚本目录：`deploy/init-scripts/`（schema + 角色 + demo 种子 + post-seed）
 - 表名前缀：
   - `dw_`：developer-workstation
   - `ac_`：admin-center

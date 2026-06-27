@@ -92,7 +92,9 @@ CREATE TABLE IF NOT EXISTS dw_table_definitions (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_table_function_unit FOREIGN KEY (function_unit_id) REFERENCES dw_function_units(id) ON DELETE CASCADE,
-    CONSTRAINT uk_dw_table_name UNIQUE (function_unit_id, table_name),
+    -- 全局唯一(与 Flyway V320 一致)：per-table PK 序列依赖 table_name 全局稳定身份。
+    -- 历史上曾是 UNIQUE(function_unit_id, table_name)；V320 改为全局，init 同步对齐。
+    CONSTRAINT uk_dw_table_name UNIQUE (table_name),
     CONSTRAINT chk_table_type CHECK (table_type IN ('MAIN', 'SUB', 'ACTION', 'RELATION'))
 );
 
@@ -127,6 +129,9 @@ CREATE TABLE IF NOT EXISTS dw_field_definitions (
 );
 
 CREATE INDEX IF NOT EXISTS idx_dw_field_definitions_table ON dw_field_definitions(table_id);
+-- 与 Flyway V317 一致：FK 字段的部分索引(仅 is_foreign_key=TRUE 的行)
+CREATE INDEX IF NOT EXISTS idx_dw_field_definitions_fk_ref
+    ON dw_field_definitions(ref_table_id) WHERE is_foreign_key = TRUE;
 
 -- =====================================================
 -- 6. Foreign Keys Table (dw_foreign_keys)

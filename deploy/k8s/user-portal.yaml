@@ -10,7 +10,9 @@ metadata:
     app.kubernetes.io/name: user-portal
     app.kubernetes.io/instance: user-portal
 spec:
-  replicas: 1
+  # P0-2: user-portal 无 @Scheduled 任务、JWT 无状态(httpOnly cookie 按请求校验)、
+  # 通过 ClusterIP Service 负载均衡，可安全多副本。HPA 在下方按 CPU 扩缩(min=2)。
+  replicas: 2
   selector:
     matchLabels:
       app: user-portal
@@ -152,3 +154,40 @@ spec:
       protocol: HTTP
     hosts:
     - workflow-station-backend-user-portal.__BASE_DOMAIN__
+---
+# P0-2: 按 CPU 自动扩缩(基于 requests.cpu=500m 的百分比)。需集群已装 metrics-server。
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: user-portal-hpa
+  namespace: __NAMESPACE__
+  labels:
+    app: user-portal
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: user-portal
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+---
+# P0-2: 保证节点排空/集群升级期间至少 1 个 pod 在线，消除滚动维护停服窗口。
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: user-portal-pdb
+  namespace: __NAMESPACE__
+  labels:
+    app: user-portal
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: user-portal

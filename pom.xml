@@ -38,8 +38,8 @@
         
         <!-- Database -->
         <postgresql.version>42.7.10</postgresql.version>
-        <flyway.version>10.4.1</flyway.version>
-        
+        <!-- Flyway 已清退：schema 唯一来源 = deploy/init-scripts；见 docs/schema-single-source-init-scripts-plan.md -->
+
         <!-- Security -->
         <jjwt.version>0.12.3</jjwt.version>
         
@@ -202,11 +202,6 @@
                 <artifactId>postgresql</artifactId>
                 <version>${postgresql.version}</version>
             </dependency>
-            <dependency>
-                <groupId>org.flywaydb</groupId>
-                <artifactId>flyway-core</artifactId>
-                <version>${flyway.version}</version>
-            </dependency>
 
             <!-- JWT -->
             <dependency>
@@ -308,11 +303,6 @@
                             <include>**/*PropertyTest.java</include>
                         </includes>
                     </configuration>
-                </plugin>
-                <plugin>
-                    <groupId>org.flywaydb</groupId>
-                    <artifactId>flyway-maven-plugin</artifactId>
-                    <version>${flyway.version}</version>
                 </plugin>
             </plugins>
         </pluginManagement>

@@ -262,8 +262,11 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
                     String keywordClause = sanitizedFields.stream()
                             .map(f -> "data->>'" + f + "' ILIKE ?")
                             .collect(Collectors.joining(" OR "));
-                    predicates.add("(" + keywordClause + ")");
                     String likePattern = "%" + keyword + "%";
+                    // index-accelerated broad guard (trgm GIN, V214) before exact per-field filter
+                    predicates.add("data::text ILIKE ?");
+                    params.add(likePattern);
+                    predicates.add("(" + keywordClause + ")");
                     sanitizedFields.forEach(ignored -> params.add(likePattern));
                 }
             }
@@ -548,7 +551,12 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
     }
 
     /**
-     * @return SQL fragment like {@code  AND (data->>'f1' ILIKE ? OR ...)} or empty when search is blank
+     * @return SQL fragment like {@code  AND data::text ILIKE ? AND (data->>'f1' ILIKE ? OR ...)}
+     *         or empty when search is blank
+     *
+     * <p>The leading {@code data::text ILIKE ?} guard lets the pg_trgm GIN index
+     * {@code idx_rt_data_rows_data_trgm} serve the leading-wildcard search; the per-field clause
+     * then filters whole-row false positives, keeping the result identical. See migration V214.
      */
     private String buildJsonDataSearchClause(List<String> fieldNames, String search, List<Object> outParams) {
         if (search == null || search.isBlank() || fieldNames == null || fieldNames.isEmpty()) {
@@ -564,8 +572,9 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
                 .map(f -> "data->>'" + f + "' ILIKE ?")
                 .collect(Collectors.joining(" OR "));
         String likePattern = "%" + search + "%";
+        outParams.add(likePattern); // index-accelerated broad guard (trgm GIN)
         sanitizedFields.forEach(ignored -> outParams.add(likePattern));
-        return " AND (" + keywordClause + ")";
+        return " AND data::text ILIKE ? AND (" + keywordClause + ")";
     }
 
     private String buildSystemUserSearchClause(String search, List<Object> outParams) {
