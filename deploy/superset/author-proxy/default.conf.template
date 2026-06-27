@@ -1,0 +1,90 @@
+# =============================================================================
+# Superset AUTHOR UI gateway (k8s) — JWT gate WITHOUT Istio ext_authz.
+#
+# This is the in-cluster equivalent of the dev nginx-edge ":8087" server block.
+# Because registering an ext_authz provider in meshConfig.extensionProviders
+# requires mesh-admin rights (blocked by company policy), we run this same gate
+# as an ordinary nginx container in front of Superset instead. No mesh config,
+# no EnvoyFilter — just a reverse proxy that does an auth_request subrequest to
+# admin-center and injects the validated X-Remote-* identity for REMOTE_USER SSO.
+#
+# ${INGRESS_HOST} and ${POD_NAMESPACE} are substituted at container start by the
+# stock nginx image's envsubst step (NGINX_ENVSUBST_FILTER pins it to just those
+# two so nginx's own $variables are never touched).
+# =============================================================================
+
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+server {
+    listen 8080;
+    server_name _;
+    client_max_body_size 50M;
+
+    # Ungated liveness/readiness probe.
+    location = /healthz {
+        access_log off;
+        return 200 "ok\n";
+    }
+
+    # auth_request subrequest -> admin-center authorize endpoint. Validates the
+    # platform JWT cookie and returns X-Remote-User / X-Remote-Roles (200),
+    # 401 (no/invalid JWT) or 403 (no BI role mapping). Internal-only.
+    location = /_superset_authz {
+        internal;
+        proxy_pass http://admin-center-service.${POD_NAMESPACE}.svc.cluster.local:8080/api/v1/admin/internal/bi/superset/authorize;
+        proxy_pass_request_body off;
+        proxy_set_header Content-Length "";
+        proxy_set_header Host $host;
+        proxy_set_header X-Original-URI $request_uri;
+        proxy_set_header Cookie $http_cookie;   # forward JWT cookie to the filter
+        # Strip Origin: this is an internal server-to-server call. Forwarding the
+        # browser's Origin (e.g. a Superset telemetry POST) makes admin-center's
+        # CORS filter reject the subrequest with 403, denying the whole request.
+        proxy_set_header Origin "";
+    }
+
+    location / {
+        auth_request /_superset_authz;
+        auth_request_set $sx_user  $upstream_http_x_remote_user;
+        auth_request_set $sx_roles $upstream_http_x_remote_roles;
+        auth_request_set $sx_email $upstream_http_x_remote_email;
+        auth_request_set $sx_first $upstream_http_x_remote_firstname;
+
+        # Inject trusted identity. These also OVERRIDE any client-forged X-Remote-*
+        # of the same name (forgery stripping) — set every header the SM reads.
+        # Firstname is URL-encoded by the authz endpoint (may contain non-ASCII).
+        proxy_set_header X-Remote-User      $sx_user;
+        proxy_set_header X-Remote-Roles     $sx_roles;
+        proxy_set_header X-Remote-Email     $sx_email;
+        proxy_set_header X-Remote-Firstname $sx_first;
+        proxy_set_header X-Remote-Lastname  "";
+
+        proxy_pass http://hase-hermes-workflow-superset.${POD_NAMESPACE}.svc.cluster.local:80;
+        proxy_http_version 1.1;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_buffering off;
+        proxy_read_timeout 600s;
+
+        error_page 401 = @superset_login;
+        error_page 403 = @superset_forbidden;
+    }
+
+    # Unauthenticated -> bounce to the unified login WITH SSO params (admin client
+    # so the callback sets ac_access_token — the cookie the authz endpoint reads).
+    # Mirrors dev's @superset_login and APP_SECURITY_LOGOUT_REDIRECT_TARGET.
+    location @superset_login {
+        return 302 "https://${INGRESS_HOST}/login/?client_id=admin&redirect_uri=https%3A%2F%2F${INGRESS_HOST}%2Fadmin%2Fsso%2Fcallback&state=superset-author";
+    }
+    location @superset_forbidden {
+        default_type text/plain;
+        return 403 "No Superset access: your account has no BI role mapping.\n";
+    }
+}
