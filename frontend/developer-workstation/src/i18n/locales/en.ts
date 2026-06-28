@@ -343,6 +343,7 @@ export default {
     newViewName: 'New view',
     clearAllColumns: 'Clear all',
     addSelectedColumns: 'Add selected',
+    renameHint: 'Double-click to rename',
     fieldCatalog: 'Field catalog',
     tableColumns: 'Table columns',
     addViewColumn: '+ View column',

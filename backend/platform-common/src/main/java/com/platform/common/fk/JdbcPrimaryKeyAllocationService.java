@@ -23,15 +23,24 @@ public class JdbcPrimaryKeyAllocationService implements PrimaryKeyAllocationServ
     @Override
     @Transactional
     public List<String> allocate(Long tableId, String fieldName, PkGenerationConfig config, int count, String scopeKey) {
+        // No explicit counter table: fall back to the heuristic (DW table presence -> dw_pk_sequences).
+        return allocate(tableId, fieldName, config, count, scopeKey, null);
+    }
+
+    @Override
+    @Transactional
+    public List<String> allocate(Long tableId, String fieldName, PkGenerationConfig config, int count,
+                                 String scopeKey, String sequenceTable) {
         if (tableId == null || fieldName == null || fieldName.isBlank()) {
             throw new IllegalArgumentException("tableId and fieldName are required");
         }
         int n = count <= 0 ? 1 : count;
         String strategy = config != null && config.getStrategy() != null
                 ? config.getStrategy() : "manual";
+        String table = resolveSequenceTable(tableId, sequenceTable);
         return switch (strategy) {
             case "uuid" -> allocateUuid(n);
-            case "autoIncrement", "prefixedSequence" -> allocateSequence(tableId, fieldName, config, n, scopeKey);
+            case "autoIncrement", "prefixedSequence" -> allocateSequence(table, tableId, fieldName, config, n, scopeKey);
             default -> throw new IllegalArgumentException("PK strategy does not support allocation: " + strategy);
         };
     }
@@ -45,7 +54,7 @@ public class JdbcPrimaryKeyAllocationService implements PrimaryKeyAllocationServ
     }
 
     private List<String> allocateSequence(
-            Long tableId, String fieldName, PkGenerationConfig config, int count, String scopeKey) {
+            String sequenceTable, Long tableId, String fieldName, PkGenerationConfig config, int count, String scopeKey) {
         // Per-table counters only: scope_key is always empty so numbering is continuous per table+field.
         String scopeType = "perTable";
         String scope = "";
@@ -54,7 +63,6 @@ public class JdbcPrimaryKeyAllocationService implements PrimaryKeyAllocationServ
                 ? config.getPadWidth() : 6;
         long startValue = config != null && config.getStartValue() != null ? config.getStartValue() : 1L;
 
-        String sequenceTable = resolveSequenceTable(tableId);
         ensureSequenceRow(sequenceTable, tableId, fieldName, scopeType, scope, prefix, padWidth, startValue);
 
         Long updated = jdbcTemplate.queryForObject(
@@ -112,8 +120,16 @@ public class JdbcPrimaryKeyAllocationService implements PrimaryKeyAllocationServ
                 startValue - 1);
     }
 
-    /** Heuristic: DW tables use dw_pk_sequences; AC RT ids are detected by table existence. */
-    private String resolveSequenceTable(Long tableId) {
+    /**
+     * Resolve the counter table. When the caller passes an explicit table (recommended), use it
+     * verbatim — this avoids cross-domain collisions when a DW table id and an AC relation table id
+     * happen to be equal. Only the legacy heuristic (DW table presence) is used when no override is
+     * given. The override is whitelisted to the two known counter tables to keep it injection-safe.
+     */
+    private String resolveSequenceTable(Long tableId, String override) {
+        if ("dw_pk_sequences".equals(override) || "rt_pk_sequences".equals(override)) {
+            return override;
+        }
         Integer dw = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM dw_table_definitions WHERE id = ?",
                 Integer.class,

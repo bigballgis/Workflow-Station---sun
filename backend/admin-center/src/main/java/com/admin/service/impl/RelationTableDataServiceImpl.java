@@ -216,6 +216,19 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
                 .filter(e -> validFieldNames.contains(e.getKey()))
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (a, b) -> b, LinkedHashMap::new));
 
+        // Auto-generate the primary key per its generation strategy when the caller did not supply one
+        // (manual-strategy PKs must be provided by the caller). This guarantees a PK regardless of how
+        // the request was made (UI, import, or direct API), instead of relying on the client to allocate.
+        boolean autoPk = pkField != null && fields.stream()
+                .anyMatch(f -> pkField.equals(f.getFieldName()) && !RelationRowValidator.isManualPk(f));
+        if (autoPk && isBlank(filteredData.get(pkField))) {
+            List<String> values = primaryKeyAllocationService
+                    .allocate(tableId, pkField, 1, "rt-" + tableId).getValues();
+            if (values != null && !values.isEmpty()) {
+                filteredData.put(pkField, values.get(0));
+            }
+        }
+
         String currentUser = SecurityContextUtils.getCurrentUsername().orElse("system");
         java.sql.Timestamp now = java.sql.Timestamp.from(Instant.now());
         if (validFieldNames.contains("created_at")) filteredData.put("created_at", now);
@@ -539,6 +552,11 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
         } catch (JsonProcessingException e) {
             throw new RuntimeException("Failed to serialize row JSON data", e);
         }
+    }
+
+    /** True when a value is null or an empty/whitespace string (used to detect a missing PK). */
+    private boolean isBlank(Object value) {
+        return value == null || value.toString().trim().isEmpty();
     }
 
     private String resolveRowId(String pkField, Map<String, Object> data) {

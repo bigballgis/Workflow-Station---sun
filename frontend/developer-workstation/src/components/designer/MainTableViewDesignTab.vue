@@ -139,6 +139,33 @@ async function handleSeedDefaults() {
   }
 }
 
+// Inline rename of a view directly from the left nav (double-click the name).
+const editingViewId = ref<number | null>(null)
+const editingViewName = ref('')
+
+function startRename(view: MainTableViewDefinition) {
+  editingViewId.value = view.id
+  editingViewName.value = view.viewName
+}
+
+async function commitRename(view: MainTableViewDefinition) {
+  const name = editingViewName.value.trim()
+  editingViewId.value = null
+  if (!name || name === view.viewName) return
+  try {
+    await mainTableViewApi.update(props.functionUnitId, view.id, { viewName: name })
+    const idx = views.value.findIndex(v => v.id === view.id)
+    if (idx >= 0) views.value[idx] = { ...views.value[idx], viewName: name }
+    if (selectedView.value?.id === view.id) selectedView.value.viewName = name
+  } catch (e: any) {
+    ElMessage.error(e?.message || t('common.saveFailed'))
+  }
+}
+
+function cancelRename() {
+  editingViewId.value = null
+}
+
 async function handleDeleteView(view: MainTableViewDefinition) {
   if (view.isDefault) {
     ElMessage.warning(t('mainTableView.cannotDeleteDefault'))
@@ -258,16 +285,32 @@ onMounted(async () => {
                   :index="String(view.id)"
                 >
                   <div class="view-menu-row">
-                    <span>{{ view.viewName }}</span>
+                    <el-input
+                      v-if="editingViewId === view.id"
+                      v-model="editingViewName"
+                      size="small"
+                      autofocus
+                      class="view-rename-input"
+                      @click.stop
+                      @keyup.enter="commitRename(view)"
+                      @keyup.esc="cancelRename"
+                      @blur="commitRename(view)"
+                    />
+                    <span
+                      v-else
+                      class="view-name-text"
+                      :title="t('mainTableView.renameHint')"
+                      @dblclick.stop="startRename(view)"
+                    >{{ view.viewName }}</span>
                     <el-tag
-                      v-if="view.isDefault"
+                      v-if="view.isDefault && editingViewId !== view.id"
                       size="small"
                       type="info"
                     >
                       {{ t('mainTableView.defaultTag') }}
                     </el-tag>
                     <el-button
-                      v-if="!view.isDefault"
+                      v-if="!view.isDefault && editingViewId !== view.id"
                       type="danger"
                       size="small"
                       link
@@ -367,6 +410,15 @@ onMounted(async () => {
   align-items: center;
   gap: 6px;
   width: 100%;
+}
+.view-name-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.view-rename-input {
+  flex: 1;
 }
 .view-editor-panel {
   flex: 1;

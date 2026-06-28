@@ -608,7 +608,8 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
                 ? com.platform.common.dto.PkGenerationConfig.builder().strategy("uuid").build()
                 : objectMapper.convertValue(pk.getPkGeneration(), com.platform.common.dto.PkGenerationConfig.class);
         int n = (count != null && count > 0) ? count : 1;
-        return primaryKeyAllocationService.allocate(tableId, fieldName, config, n, "rt-" + tableId);
+        // Relation-table data lives in rt_* tables; pin the counter table to avoid DW id collisions.
+        return primaryKeyAllocationService.allocate(tableId, fieldName, config, n, "rt-" + tableId, "rt_pk_sequences");
     }
 
     /** Ensure the current user (active role) may write to the table; throws 403 otherwise. */
@@ -656,6 +657,11 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
                 .findFirst().orElse(null);
     }
 
+    /** True when a value is null or an empty/whitespace string (used to detect a missing PK). */
+    private boolean isBlankValue(Object value) {
+        return value == null || value.toString().trim().isEmpty();
+    }
+
     @Override
     @Transactional
     public Map<String, Object> addData(Long tableId, String userId, Map<String, Object> data) {
@@ -683,7 +689,16 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
         if (validFieldNames.contains("updated_at")) row.put("updated_at", now.toString());
         if (validFieldNames.contains("updated_by")) row.put("updated_by", userId);
 
+        // Auto-generate the primary key per its strategy when the caller did not supply one
+        // (manual-strategy PKs must be provided). Guarantees a populated PK regardless of client.
         String pkField = findPrimaryKeyField(fields);
+        boolean autoPk = pkField != null && fields.stream()
+                .anyMatch(f -> pkField.equals(f.getFieldName()) && !RelationRowValidator.isManualPk(f));
+        if (autoPk && isBlankValue(row.get(pkField))) {
+            List<String> values = allocatePrimaryKeys(tableId, userId, pkField, 1);
+            if (!values.isEmpty()) row.put(pkField, values.get(0));
+        }
+
         Object pkVal = pkField != null ? row.get(pkField) : null;
         String rowId = pkVal != null ? String.valueOf(pkVal) : UUID.randomUUID().toString();
 
@@ -764,21 +779,12 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
         List<Map<String, Object>> rawRows = templateService.parseImport(fileBytes, format);
         List<RowValidationResult> results = RelationRowValidator.validateRows(rawRows, fields);
 
-        // Auto-generate PK values per strategy for rows without one (manual PKs come from the file).
-        String pkField = findPrimaryKeyField(fields);
-        boolean autoPk = pkField != null && fields.stream()
-                .anyMatch(f -> pkField.equals(f.getFieldName()) && !RelationRowValidator.isManualPk(f));
-
         int inserted = 0;
         List<Map<String, Object>> errors = new ArrayList<>();
         for (RowValidationResult r : results) {
             if (r.isValid()) {
-                Map<String, Object> row = new LinkedHashMap<>(r.getValues());
-                if (autoPk && row.get(pkField) == null) {
-                    List<String> values = allocatePrimaryKeys(tableId, userId, pkField, 1);
-                    if (!values.isEmpty()) row.put(pkField, values.get(0));
-                }
-                insertRow(tableId, fields, row, userId);
+                // insertRow auto-generates the PK per strategy when a row carries none.
+                insertRow(tableId, fields, new LinkedHashMap<>(r.getValues()), userId);
                 inserted++;
             } else {
                 r.getErrors().forEach(err -> errors.add(Map.of(
