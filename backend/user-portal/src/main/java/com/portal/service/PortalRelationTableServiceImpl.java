@@ -135,9 +135,14 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
             dataParams.add(size);
             dataParams.add(page * size);
             List<Map<String, Object>> rows = jdbcTemplate.query(
-                    "SELECT data FROM " + DATA_ROWS_TABLE + " WHERE table_id = ?" + searchClause
+                    "SELECT data, status FROM " + DATA_ROWS_TABLE + " WHERE table_id = ?" + searchClause
                             + " ORDER BY id LIMIT ? OFFSET ?",
-                    (rs, rowNum) -> parseJsonRow(rs.getString("data")),
+                    (rs, rowNum) -> {
+                        Map<String, Object> row = parseJsonRow(rs.getString("data"));
+                        // Surface the row-level status column so the UI can toggle Active/Inactive.
+                        row.put("status", rs.getString("status"));
+                        return row;
+                    },
                     dataParams.toArray());
 
             return PageResponse.of(rows, page, size, total);

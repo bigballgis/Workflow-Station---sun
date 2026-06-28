@@ -477,7 +477,8 @@ const fetchData = async () => {
     totalElements.value = pageData?.totalElements || 0
 
     if (dataRows.value.length > 0) {
-      columns.value = Object.keys(dataRows.value[0])
+      // `status` is surfaced for the Active/Inactive toggle but is not a displayable data column.
+      columns.value = Object.keys(dataRows.value[0]).filter(c => c !== 'status')
     } else {
       columns.value = []
     }

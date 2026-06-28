@@ -187,16 +187,20 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
         List<Object> dataParams = new ArrayList<>(params);
         dataParams.add(pageable.getPageSize());
         dataParams.add(pageable.getOffset());
-        String dataSql = "SELECT row_id, data FROM " + DATA_ROWS_TABLE
+        String dataSql = "SELECT row_id, data, status FROM " + DATA_ROWS_TABLE
                 + " WHERE table_id = ?" + searchClause
                 + " ORDER BY id LIMIT ? OFFSET ?";
 
-        List<RelationTableDataRowDTO> dtoList = jdbcTemplate.query(dataSql, (rs, rowNum) ->
-                RelationTableDataRowDTO.builder()
-                        .rowId(rs.getString("row_id"))
-                        .tableId(tableId)
-                        .data(parseRowData(rs.getString("data")))
-                        .build(),
+        List<RelationTableDataRowDTO> dtoList = jdbcTemplate.query(dataSql, (rs, rowNum) -> {
+                    Map<String, Object> data = parseRowData(rs.getString("data"));
+                    // Surface the row-level status column so the UI can toggle Active/Inactive.
+                    data.put("status", rs.getString("status"));
+                    return RelationTableDataRowDTO.builder()
+                            .rowId(rs.getString("row_id"))
+                            .tableId(tableId)
+                            .data(data)
+                            .build();
+                },
                 dataParams.toArray());
 
         return new PageImpl<>(dtoList, pageable, total);

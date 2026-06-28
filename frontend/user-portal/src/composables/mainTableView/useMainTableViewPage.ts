@@ -298,7 +298,11 @@ function isFkLinkCell(col: MainTableViewFieldColumn, row: GridDisplayRow): boole
 // Drill to the referenced table's published default view, pre-filtered by this cell's FK value.
 function openFkTarget(col: MainTableViewFieldColumn, row: GridDisplayRow) {
   if (!isFkLinkCell(col, row)) return
-  const value = String(row.values?.[col.fieldName])
+  const raw = row.values?.[col.fieldName]
+  // Lookup values are objects {id,name,...}: filter the target by the referenced record's id.
+  const value = raw && typeof raw === 'object'
+    ? String((raw as Record<string, unknown>).id ?? '')
+    : String(raw)
   router.push({
     path: `/views/${encodeURIComponent(col.refFunctionUnitCode as string)}`,
     query: { viewId: String(col.refViewId), fk: value },

@@ -7,10 +7,61 @@ export function csvEscape(value: string): string {
   return value
 }
 
+// Preferred display keys for a lookup/FK object value, in priority order.
+const LOOKUP_DISPLAY_KEYS = ['name', 'displayName', 'display_name', 'label', 'title', 'text']
+
+/** Extract a human-readable label from a lookup/FK object value (e.g. {id,name,...} → "name"). */
+export function lookupDisplayText(obj: Record<string, unknown>): string {
+  for (const key of LOOKUP_DISPLAY_KEYS) {
+    const v = obj[key]
+    if (v != null && typeof v !== 'object' && String(v).trim() !== '') return String(v)
+  }
+  // Fall back to the first non-id primitive string value.
+  for (const [k, v] of Object.entries(obj)) {
+    if (k === 'id' || k.endsWith('Id') || k.endsWith('_id')) continue
+    if (v != null && typeof v !== 'object' && String(v).trim() !== '') return String(v)
+  }
+  // Last resort: the id itself.
+  const id = obj.id
+  return id != null ? String(id) : ''
+}
+
+/** Filename from an upload URL, preferring the ?originalName= param, else the last path segment. */
+export function fileDisplayText(value: string): string {
+  const qIdx = value.indexOf('?')
+  if (qIdx >= 0) {
+    const params = new URLSearchParams(value.substring(qIdx + 1))
+    const original = params.get('originalName')
+    if (original && original.trim() !== '') return original
+  }
+  const path = value.substring(0, qIdx >= 0 ? qIdx : undefined).split('#')[0]
+  const last = path.substring(path.lastIndexOf('/') + 1)
+  try {
+    return decodeURIComponent(last || value)
+  } catch {
+    return last || value
+  }
+}
+
 export function formatMainTableViewCell(value: unknown): string {
   if (value == null) return '-'
-  if (typeof value === 'object') return JSON.stringify(value)
-  return String(value)
+  if (Array.isArray(value)) {
+    // Multi-value lookup / multi-file: join each element's display text.
+    const parts = value.map(v =>
+      v != null && typeof v === 'object'
+        ? lookupDisplayText(v as Record<string, unknown>)
+        : String(v),
+    ).filter(s => s.trim() !== '')
+    return parts.length ? parts.join(', ') : '-'
+  }
+  if (typeof value === 'object') {
+    const text = lookupDisplayText(value as Record<string, unknown>)
+    return text.trim() !== '' ? text : '-'
+  }
+  // A bare upload path/URL → show just the filename.
+  const str = String(value)
+  if (/\/(api\/v\d+\/)?upload\/files\//.test(str)) return fileDisplayText(str)
+  return str
 }
 
 export function downloadMainTableViewRowsAsCsv(

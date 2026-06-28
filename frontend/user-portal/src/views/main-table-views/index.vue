@@ -593,7 +593,8 @@ const {
     margin-top: 2px;
     font-size: 12px;
     font-weight: 700;
-    color: var(--el-color-primary);
+    /* Muted secondary color so the selected option's primary-blue stands out distinctly. */
+    color: var(--el-text-color-secondary);
     text-transform: uppercase;
     letter-spacing: 0.04em;
     background: var(--el-fill-color-light);

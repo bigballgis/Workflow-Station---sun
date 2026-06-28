@@ -361,24 +361,81 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
     }
 
     private List<Map<String, Object>> loadAndProjectRows(String userId, ViewDefinition view, String search) {
+        // View Design shows ALL data of the function unit (every initiator), not just the current user.
         Pageable pageable = PageRequest.of(0, 5000, Sort.by(Sort.Direction.DESC, "startTime"));
         Page<ProcessInstance> instances = processInstanceRepository
-                .findByFunctionUnitCodeAndStartUserIdOrderByStartTimeDesc(view.functionUnitCode(), userId, pageable);
+                .findByFunctionUnitCodeOrderByStartTimeDesc(view.functionUnitCode(), pageable);
 
+        boolean isSub = "SUB".equalsIgnoreCase(view.tableType());
         List<Map<String, Object>> rows = new ArrayList<>();
         String needle = search != null ? search.trim().toLowerCase(Locale.ROOT) : null;
+        // SUB rows can appear under several form bindings + repeat across process snapshots — dedup by PK.
+        Set<String> seenSubKeys = new LinkedHashSet<>();
 
         for (ProcessInstance pi : instances.getContent()) {
-            Map<String, Object> row = projectInstanceRow(pi, view);
-            if (!PortalMainTableViewFilterUtils.matchesFilter(row, view.filterConfig())) {
-                continue;
+            List<Map<String, Object>> piRows = isSub
+                    ? projectSubTableRows(pi, view, seenSubKeys)
+                    : List.of(projectInstanceRow(pi, view));
+            for (Map<String, Object> row : piRows) {
+                if (!PortalMainTableViewFilterUtils.matchesFilter(row, view.filterConfig())) {
+                    continue;
+                }
+                if (needle != null && !needle.isEmpty()
+                        && !PortalMainTableViewFilterUtils.matchesSearch(row, needle)) {
+                    continue;
+                }
+                rows.add(row);
             }
-            if (needle != null && !needle.isEmpty() && !PortalMainTableViewFilterUtils.matchesSearch(row, needle)) {
-                continue;
-            }
-            rows.add(row);
         }
         return rows;
+    }
+
+    /**
+     * Flatten a SUB-table view's rows from a process instance's {@code variables.__subTables__}.
+     * Each of the view-table's form bindings contributes a list keyed by its binding id; rows are
+     * deduplicated by primary-key signature so the same child row bound into multiple forms appears once.
+     */
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> projectSubTableRows(ProcessInstance pi, ViewDefinition view,
+                                                          Set<String> seenSubKeys) {
+        Map<String, Object> vars = pi.getVariables();
+        if (vars == null) {
+            return List.of();
+        }
+        Object subTablesObj = vars.get("__subTables__");
+        if (!(subTablesObj instanceof Map<?, ?> subTables)) {
+            return List.of();
+        }
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (String bindingKey : view.subBindingKeys()) {
+            Object listObj = subTables.get(bindingKey);
+            if (!(listObj instanceof List<?> list)) {
+                continue;
+            }
+            for (Object item : list) {
+                if (!(item instanceof Map<?, ?> rowMap)) {
+                    continue;
+                }
+                Map<String, Object> source = (Map<String, Object>) rowMap;
+                // Dedup signature: process instance + the row's own id/keys.
+                String sig = pi.getId() + "|" + bindingKey + "|"
+                        + String.valueOf(source.getOrDefault("id",
+                            source.getOrDefault("id_idw", source.hashCode())));
+                if (!seenSubKeys.add(sig)) {
+                    continue;
+                }
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("_processInstanceId", pi.getId());
+                for (ViewFieldDef field : view.fields()) {
+                    if (!Boolean.TRUE.equals(field.visible())) {
+                        continue;
+                    }
+                    row.put(field.fieldName(), source.get(field.fieldName()));
+                }
+                out.add(row);
+            }
+        }
+        return out;
     }
 
     private Map<String, Object> projectInstanceRow(ProcessInstance pi, ViewDefinition view) {
@@ -494,9 +551,11 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
     private ViewDefinition loadPublishedView(Long viewId) {
         List<Map<String, Object>> rows = jdbcTemplate.queryForList("""
                 SELECT v.id, v.view_name, v.sort_config::text AS sort_config,
-                       v.filter_config::text AS filter_config, fu.code AS fu_code
+                       v.filter_config::text AS filter_config, fu.code AS fu_code,
+                       v.main_table_id, td.table_type
                 FROM dw_main_table_view_configs v
                 INNER JOIN dw_function_units fu ON fu.id = v.function_unit_id
+                LEFT JOIN dw_table_definitions td ON td.id = v.main_table_id
                 WHERE v.id = ? AND v.status = 'PUBLISHED'
                 """, viewId);
         if (rows.isEmpty()) {
@@ -518,13 +577,28 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                         rs.getBoolean("is_system_field")),
                 viewId);
 
+        Long mainTableId = row.get("main_table_id") != null
+                ? ((Number) row.get("main_table_id")).longValue() : null;
+        String tableType = stringVal(row.get("table_type"));
+        // SUB-table data is nested under variables.__subTables__, keyed by each binding id that maps
+        // this table into a form. Collect those binding keys so we can flatten the rows below.
+        List<String> subBindingKeys = new ArrayList<>();
+        if ("SUB".equalsIgnoreCase(tableType) && mainTableId != null) {
+            subBindingKeys = jdbcTemplate.queryForList(
+                    "SELECT id FROM dw_form_table_bindings WHERE table_id = ?",
+                    Long.class, mainTableId).stream().map(String::valueOf).toList();
+        }
+
         return new ViewDefinition(
                 viewId,
                 stringVal(row.get("view_name")),
                 stringVal(row.get("fu_code")),
                 parseJsonList(stringVal(row.get("sort_config"))),
                 parseJsonMap(stringVal(row.get("filter_config"))),
-                fields);
+                fields,
+                mainTableId,
+                tableType,
+                subBindingKeys);
     }
 
     private void assertFuAccess(String userId, String functionUnitCode) {
@@ -604,5 +678,8 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
             String functionUnitCode,
             List<Map<String, Object>> sortConfig,
             Map<String, Object> filterConfig,
-            List<ViewFieldDef> fields) {}
+            List<ViewFieldDef> fields,
+            Long mainTableId,
+            String tableType,
+            List<String> subBindingKeys) {}
 }

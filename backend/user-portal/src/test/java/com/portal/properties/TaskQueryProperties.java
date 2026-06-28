@@ -13,6 +13,7 @@ import com.portal.dto.TaskQueryRequest;
 import com.portal.entity.DelegationRule;
 import com.portal.enums.DelegationStatus;
 import com.portal.enums.DelegationType;
+import com.portal.repository.BusinessUnitRepository;
 import com.portal.repository.DelegationRuleRepository;
 import com.portal.repository.ProcessHistoryRepository;
 import com.portal.repository.ProcessInstanceRepository;
@@ -67,6 +68,9 @@ class TaskQueryProperties {
     @Mock
     private PortalWorkspaceAuthService portalWorkspaceAuthService;
 
+    @Mock
+    private BusinessUnitRepository businessUnitRepository;
+
     private TaskQueryComponent taskQueryComponent;
     private Random random;
 
@@ -80,7 +84,8 @@ class TaskQueryProperties {
             workflowEngineClient,
             taskActionService,
             new DelegatedTaskQueryComponent(workflowEngineClient, delegationRuleRepository),
-            new WorkspaceTaskFilterComponent(workflowEngineClient, virtualGroupAccessComponent, portalWorkspaceAuthService),
+            new WorkspaceTaskFilterComponent(
+                workflowEngineClient, virtualGroupAccessComponent, portalWorkspaceAuthService, businessUnitRepository),
             new MiParticipantEnrichmentComponent(jdbcTemplate),
             new TaskHistoryComponent(workflowEngineClient, processInstanceRepository, processHistoryRepository, jdbcTemplate, requestIdEnricher),
             requestIdEnricher

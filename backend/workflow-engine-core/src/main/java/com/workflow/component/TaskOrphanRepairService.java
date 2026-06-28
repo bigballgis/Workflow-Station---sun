@@ -277,7 +277,9 @@ public class TaskOrphanRepairService {
         if (!StringUtils.hasText(activeBusinessUnitId) || tasks == null || tasks.isEmpty()) {
             return tasks;
         }
-        String activeBu = activeBusinessUnitId.trim();
+        // The JWT activeBusinessUnitId is a BU *id*, but BPMN businessUnitId is now a *code*
+        // (code-based assignment). Convert id -> code before comparing, mirroring TaskAssignmentListener.
+        String activeBu = mapActiveBusinessUnitIdToCode(activeBusinessUnitId.trim());
         List<Task> out = new ArrayList<>();
         for (Task t : tasks) {
             if (fixedBuRoleVisibleForActiveWorkspace(t, activeBu, queryUserId)) {
@@ -285,6 +287,20 @@ public class TaskOrphanRepairService {
             }
         }
         return out;
+    }
+
+    /**
+     * Map the workspace-context {@code activeBusinessUnitId} (a BU id) to a BU code via AdminCenter,
+     * so it can be compared against the code-based BPMN {@code businessUnitId}. Falls back to the
+     * original value when the client is unavailable or the BU has no resolvable code (e.g. unit tests,
+     * or an already-code value), keeping the legacy id-vs-id comparison working.
+     */
+    private String mapActiveBusinessUnitIdToCode(String businessUnitId) {
+        if (!StringUtils.hasText(businessUnitId) || adminCenterClient == null) {
+            return businessUnitId;
+        }
+        String code = adminCenterClient.getBusinessUnitCodeById(businessUnitId.trim());
+        return StringUtils.hasText(code) ? code : businessUnitId;
     }
 
     private boolean fixedBuRoleVisibleForActiveWorkspace(Task t, String activeBu, String queryUserId) {
