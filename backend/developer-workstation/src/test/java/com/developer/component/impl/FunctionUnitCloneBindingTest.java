@@ -48,6 +48,7 @@ class FunctionUnitCloneBindingTest {
     @Mock private FunctionUnitDevGroupAssignmentRepository functionUnitDevGroupAssignmentRepository;
     @Mock private com.developer.component.VersionComponent versionComponent;
     @Mock private com.developer.util.DeveloperWorkstationSequenceSynchronizer sequenceSynchronizer;
+    @Mock private com.developer.component.TableDesignComponent tableDesignComponent;
 
     private FunctionUnitComponentImpl component;
 
@@ -55,6 +56,8 @@ class FunctionUnitCloneBindingTest {
     void setUp() {
         lenient().when(functionUnitDevGroupAssignmentRepository.findByFunctionUnitId(anyLong()))
                 .thenReturn(List.of());
+        lenient().when(tableDesignComponent.isTableNameAvailable(anyString(), isNull()))
+                .thenReturn(true);
         component = new FunctionUnitComponentImpl(
                 functionUnitRepository,
                 processDefinitionRepository,
@@ -75,7 +78,8 @@ class FunctionUnitCloneBindingTest {
                 versionComponent,
                 sequenceSynchronizer,
                 mock(com.developer.service.MainTableViewService.class),
-                mock(com.developer.repository.ForeignKeyRepository.class));
+                mock(com.developer.repository.ForeignKeyRepository.class),
+                tableDesignComponent);
     }
 
     @Test

@@ -4,17 +4,17 @@ import MainTableViewColumnResizeHandle from '@/components/mainTableView/MainTabl
 import { useMainTableViewPage } from '@/composables/mainTableView/useMainTableViewPage'
 
 const {
-  t, Search, Download, Refresh, Upload, dataLoading, functionUnits, views, selectedViewId, searchKeyword,
+  t, Search, Download, Refresh, dataLoading, functionUnits, selectedViewId, searchKeyword,
   gridColumns, allRows, dataTotal, currentPage, pageSize, gridRuntime, filterDialogVisible, filterDialogField,
-  filterDraft, widthDialogVisible, widthDialogField, widthDraft, tableRef, selectedTableRows, importing,
-  importInputRef, importProgressVisible, importProgressPercent, importProgressPhase, importProgressFileName,
+  filterDraft, widthDialogVisible, widthDialogField, widthDraft, tableRef, selectedTableRows,
+  importProgressVisible, importProgressPercent, importProgressPhase, importProgressFileName,
   importResultVisible, importResult, importProgressLabel, importResultStatus, importResultHeadline,
-  selectedFuCode, selectedViewMeta, showExportButton, showImportButton, selectedFu, displayColumns,
+  selectedFuCode, selectedViewMeta, showExportButton, selectedFu, displayColumns, groupedViews,
   MTV_SELECTION_COL_WIDTH, gridTotalColumnWidth, gridInnerStyle, processedRows, groupedRows, pagedRows, displayTotal,
   handleSearch, handlePageChange, formatCell, isRowSelectable, getRowKey, onSelectionChange, openRow, columnIndex,
   isFkLinkCell, openFkTarget,
   handleColumnCommand, applyColumnFilter, clearColumnFilter, applyColumnWidth, handleColumnResize, handleColumnResizeEnd,
-  handleExport, triggerImport, handleImportFile, mtvHeaderCellClassName, rowClassName, spanMethod,
+  handleExport, mtvHeaderCellClassName, rowClassName, spanMethod,
   loadData, columnWidth, isGroupHeaderRow, COLUMN_WIDTH_MIN, COLUMN_WIDTH_MAX,
 } = useMainTableViewPage()
 </script>
@@ -36,14 +36,33 @@ const {
           <el-select
             v-model="selectedViewId"
             size="default"
-            style="width: 220px;"
+            style="width: 240px;"
+            popper-class="mtv-view-select-popper"
           >
-            <el-option
-              v-for="v in views"
-              :key="v.id"
-              :label="v.viewName"
-              :value="v.id"
-            />
+            <el-option-group
+              v-for="group in groupedViews"
+              :key="group.tableId ?? group.label"
+              :label="group.label"
+            >
+              <el-option
+                v-for="v in group.views"
+                :key="v.id"
+                :label="v.viewName"
+                :value="v.id"
+              >
+                <span class="mtv-view-option">
+                  <span class="mtv-view-option-name">{{ v.viewName }}</span>
+                  <el-tag
+                    v-if="v.isDefault"
+                    size="small"
+                    type="info"
+                    effect="plain"
+                  >
+                    {{ t('mainTableView.defaultTag') }}
+                  </el-tag>
+                </span>
+              </el-option>
+            </el-option-group>
           </el-select>
           <el-input
             v-model="searchKeyword"
@@ -71,21 +90,6 @@ const {
           >
             {{ t('common.export') }}
           </el-button>
-          <el-button
-            v-if="showImportButton"
-            :icon="Upload"
-            :loading="importing"
-            @click="triggerImport"
-          >
-            {{ t('common.import') }}
-          </el-button>
-          <input
-            ref="importInputRef"
-            type="file"
-            accept=".csv,text/csv"
-            class="hidden-import-input"
-            @change="handleImportFile"
-          >
           <span
             v-if="selectedTableRows.length"
             class="grid-hint"
@@ -577,5 +581,40 @@ const {
 
 :deep(.el-result) {
   padding: 12px 0 8px;
+}
+</style>
+
+<style lang="scss">
+/* Teleported view-selector popper — styles the per-table group headers so the grouping reads clearly.
+   Not scoped: the dropdown renders at <body> root via popper-class. */
+.mtv-view-select-popper {
+  .el-select-group__title {
+    padding: 6px 12px 4px;
+    margin-top: 2px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--el-color-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    background: var(--el-fill-color-light);
+    border-top: 1px solid var(--el-border-color-lighter);
+  }
+  .el-select-group:first-child .el-select-group__title {
+    border-top: none;
+    margin-top: 0;
+  }
+  .el-select-group__wrap:not(:last-of-type)::after {
+    display: none;
+  }
+  .el-select-dropdown__item {
+    padding-left: 22px;
+  }
+  .mtv-view-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+  }
 }
 </style>

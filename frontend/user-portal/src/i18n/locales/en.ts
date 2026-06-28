@@ -105,6 +105,7 @@ export default {
   },
   mainTableView: {
     openRelatedRecord: 'Open related record',
+    defaultTag: 'Default',
     functionUnits: 'Function Units',
     noPublishedFu: 'No published function units with views',
     selectFuAndView: 'Select a function unit and view',

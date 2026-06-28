@@ -93,6 +93,10 @@ public class TaskAssignmentListener implements FlowableEventListener {
     @Lazy
     private MultiInstanceTaskWriter multiInstanceTaskWriter;
 
+    @Autowired
+    @Lazy
+    private com.workflow.client.AdminCenterClient adminCenterClient;
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     // ---- Package-private accessors so collaborators can read injected services without owning them.
@@ -138,6 +142,19 @@ public class TaskAssignmentListener implements FlowableEventListener {
             multiInstanceTaskWriter = writer;
         }
         return writer;
+    }
+
+    /**
+     * Map the workspace-context {@code activeBusinessUnitId} (a BU id) to a BU code via AdminCenter.
+     * When the client bean was not injected (unit tests constructing this listener directly), the
+     * original id is returned unchanged rather than NPE-ing.
+     */
+    private String mapActiveBusinessUnitIdToCode(String businessUnitId) {
+        if (businessUnitId == null || businessUnitId.isBlank() || adminCenterClient == null) {
+            return businessUnitId;
+        }
+        String code = adminCenterClient.getBusinessUnitCodeById(businessUnitId.trim());
+        return (code != null && !code.isBlank()) ? code : businessUnitId;
     }
 
     @Override
@@ -363,7 +380,11 @@ public class TaskAssignmentListener implements FlowableEventListener {
                 anchorUserId = resolveAnchorUserId(anchor, initiatorId, processInstanceId);
             }
 
-            String activeBusinessUnitId = getStringVariable(processVariables, "activeBusinessUnitId");
+            // activeBusinessUnitId is the workspace-context variable, still stored as a BU *id*.
+            // The task-assignment chain is code-based (BPMN role/BU are codes), so convert it to a
+            // BU code before handing it to the resolver (used as the hierarchy anchor BU).
+            String activeBusinessUnitIdRaw = getStringVariable(processVariables, "activeBusinessUnitId");
+            String activeBusinessUnitId = mapActiveBusinessUnitIdToCode(activeBusinessUnitIdRaw);
 
             List<String> resolvedRoleIds = AssigneeRoleIdsSupport.parseRoleIds(roleIdsRaw, roleId);
 
@@ -553,6 +574,8 @@ public class TaskAssignmentListener implements FlowableEventListener {
         String roleVar = manualAssignRoleVariable != null && !manualAssignRoleVariable.isBlank()
                 ? manualAssignRoleVariable.trim()
                 : "manualAssignRole_" + defKey;
+        // The task-assignment chain is code-based: these manual-assign process variables must carry a
+        // BU *code* and role *code* (not ids), consistent with BPMN-fixed assignee config.
         String buId = getStringVariable(variables, buVar);
         String rid = getStringVariable(variables, roleVar);
         if (buId == null || buId.isBlank() || rid == null || rid.isBlank()) {

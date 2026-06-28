@@ -7,7 +7,7 @@
 
 import { ref, computed } from 'vue'
 import { notifySuccess, notifyError, notifyConfirm } from '@/utils/notify'
-import { relationTableDataApi, type RelationTableResponse, type RelationTableDataRow, type FieldDefinitionResponse } from '@/api/relationTable'
+import { relationTableDataApi, type RelationTableResponse, type RelationTableDataRow, type FieldDefinitionResponse, type RelationImportResult } from '@/api/relationTable'
 
 export function useRelationTableData() {
   const tableListLoading = ref(false)
@@ -38,7 +38,8 @@ export function useRelationTableData() {
   const exportingTemplate = ref(false)
   const importDialogVisible = ref(false)
   const importing = ref(false)
-  const importResult = ref<{ inserted: number; failed: number; errors: Array<{ row: number; field: string; message: string }> } | null>(null)
+  const importResult = ref<RelationImportResult | null>(null)
+  const pendingImportFile = ref<File | null>(null)
 
   // ---- Computed ----
   const selectedTable = computed(() => tables.value.find(t => t.id === selectedTableId.value) ?? null)
@@ -251,25 +252,50 @@ export function useRelationTableData() {
     finally { exportingTemplate.value = false }
   }
 
-  const openImportDialog = () => { importResult.value = null; importDialogVisible.value = true }
+  const openImportDialog = () => {
+    importResult.value = null
+    pendingImportFile.value = null
+    importDialogVisible.value = true
+  }
 
+  const importErrorMessage = (e: unknown, fallback: string): string => {
+    const err = e as { response?: { data?: { error?: { message?: string }; message?: string } }; message?: string }
+    return err?.response?.data?.error?.message || err?.response?.data?.message || err?.message || fallback
+  }
+
+  // Step 1: selecting a file validates only (dryRun) and shows a preview; nothing is inserted yet.
   const handleImportFile = async (file: File) => {
     if (!selectedTableId.value) return
+    pendingImportFile.value = file
     importing.value = true
     importResult.value = null
     try {
       const format = file.name.toLowerCase().endsWith('.xlsx') ? 'xlsx' : 'csv'
-      const res = await relationTableDataApi.importData(selectedTableId.value, file, format)
+      importResult.value = await relationTableDataApi.importData(selectedTableId.value, file, format, true)
+    } catch (e: unknown) {
+      pendingImportFile.value = null
+      notifyError(importErrorMessage(e, 'Validation failed'))
+    } finally { importing.value = false }
+  }
+
+  // Step 2: user confirms -> re-validate + insert server-side (dryRun=false).
+  const handleConfirmImport = async () => {
+    if (!selectedTableId.value || !pendingImportFile.value) return
+    importing.value = true
+    try {
+      const file = pendingImportFile.value
+      const format = file.name.toLowerCase().endsWith('.xlsx') ? 'xlsx' : 'csv'
+      const res = await relationTableDataApi.importData(selectedTableId.value, file, format, false)
       importResult.value = res
-      if (res.inserted > 0) {
+      pendingImportFile.value = null
+      if ((res.inserted ?? 0) > 0) {
         notifySuccess(`Imported ${res.inserted} row(s)${res.failed ? `, ${res.failed} failed` : ''}`)
         await fetchData()
       } else if (res.failed > 0) {
         notifyError(`All ${res.failed} row(s) failed validation`)
       }
     } catch (e: unknown) {
-      const err = e as { response?: { data?: { error?: { message?: string }; message?: string } }; message?: string }
-      notifyError(err?.response?.data?.error?.message || err?.response?.data?.message || err?.message || 'Import failed')
+      notifyError(importErrorMessage(e, 'Import failed'))
     } finally { importing.value = false }
   }
 
@@ -286,6 +312,6 @@ export function useRelationTableData() {
     isNumericType, isRowDisabled, isFkFieldDisabled, isPkFieldDisabled,
     fetchTables, fetchData, handleSelectTable, handlePageChange, handleSizeChange,
     openAddDialog, openEditDialog, handleSaveRecord, handleDisable, handleEnable, handleDelete,
-    formatHKT, handleExport, handleDownloadTemplate, openImportDialog, handleImportFile, init, refresh,
+    formatHKT, handleExport, handleDownloadTemplate, openImportDialog, handleImportFile, handleConfirmImport, init, refresh,
   }
 }

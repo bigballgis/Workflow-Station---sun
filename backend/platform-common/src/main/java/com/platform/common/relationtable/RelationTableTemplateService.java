@@ -45,28 +45,20 @@ public class RelationTableTemplateService {
 
     private byte[] generateCsvTemplate(List<RelationFieldDTO> cols) {
         StringBuilder header = new StringBuilder();
-        StringBuilder hint = new StringBuilder();
         for (int i = 0; i < cols.size(); i++) {
-            if (i > 0) {
-                header.append(',');
-                hint.append(',');
-            }
-            header.append(escapeCsv(cols.get(i).getFieldName()));
-            hint.append(escapeCsv(typeHint(cols.get(i))));
+            if (i > 0) header.append(',');
+            header.append(escapeCsv(headerLabel(cols.get(i))));
         }
-        // Header row + a commented hint row (consumers skip rows whose first cell starts with '#').
-        String csv = header + "\n#" + hint + "\n";
-        return csv.getBytes(StandardCharsets.UTF_8);
+        // Single header row only; the type/length hint is embedded in each header label.
+        return (header + "\n").getBytes(StandardCharsets.UTF_8);
     }
 
     private byte[] generateXlsxTemplate(List<RelationFieldDTO> cols) {
         try (Workbook wb = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             Sheet sheet = wb.createSheet("Import");
             Row header = sheet.createRow(0);
-            Row hint = sheet.createRow(1);
             for (int i = 0; i < cols.size(); i++) {
-                header.createCell(i).setCellValue(cols.get(i).getFieldName());
-                hint.createCell(i).setCellValue(typeHint(cols.get(i)));
+                header.createCell(i).setCellValue(headerLabel(cols.get(i)));
                 sheet.autoSizeColumn(i);
             }
             wb.write(out);
@@ -76,12 +68,33 @@ public class RelationTableTemplateService {
         }
     }
 
+    /**
+     * Header label shown to the user: {@code fieldName (TYPE(len) *required)} — the type/length hint is
+     * embedded directly in the header so there is no separate hint row. {@link #fieldNameFromHeader}
+     * strips this annotation back to the bare field name when parsing an uploaded file.
+     */
+    private String headerLabel(RelationFieldDTO f) {
+        return f.getFieldName() + " (" + typeHint(f) + ")";
+    }
+
     private String typeHint(RelationFieldDTO f) {
         RelationDataType t = f.getDataType() != null ? f.getDataType() : RelationDataType.VARCHAR;
         StringBuilder sb = new StringBuilder(t.getCode());
         if (f.getLength() != null && f.getLength() > 0) sb.append('(').append(f.getLength()).append(')');
         if (Boolean.FALSE.equals(f.getNullable()) || Boolean.TRUE.equals(f.getIsPrimaryKey())) sb.append(" *required");
         return sb.toString();
+    }
+
+    /**
+     * Recover the bare field name from a (possibly annotated) header cell. Field names are slug-like
+     * ({@code ^[a-z][a-z0-9_]*$}) so they never contain a space; everything from the first space — i.e.
+     * the {@code (TYPE …)} annotation our own template adds — is dropped. Plain headers pass through.
+     */
+    static String fieldNameFromHeader(String header) {
+        if (header == null) return null;
+        String trimmed = header.trim();
+        int sp = trimmed.indexOf(' ');
+        return sp >= 0 ? trimmed.substring(0, sp) : trimmed;
     }
 
     /**
@@ -147,7 +160,8 @@ public class RelationTableTemplateService {
     private Map<String, Object> toRowMap(List<String> headers, List<String> cells) {
         Map<String, Object> map = new LinkedHashMap<>();
         for (int i = 0; i < headers.size(); i++) {
-            String key = headers.get(i) == null ? null : headers.get(i).trim();
+            // Headers may carry a "(TYPE …)" annotation from our template; map back to the bare field name.
+            String key = fieldNameFromHeader(headers.get(i));
             if (key == null || key.isEmpty()) continue;
             String value = i < cells.size() ? cells.get(i) : null;
             map.put(key, value);

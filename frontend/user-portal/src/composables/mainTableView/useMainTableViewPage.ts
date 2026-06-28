@@ -86,6 +86,23 @@ const selectedFu = computed(() =>
   functionUnits.value.find(f => f.functionUnitCode === selectedFuCode.value),
 )
 
+// Group views by their owning table for the selector (parity with DW View Design left nav).
+const groupedViews = computed(() => {
+  const groups: Array<{ tableId: number | null; label: string; views: MainTableViewSummary[] }> = []
+  const byTable = new Map<string, { tableId: number | null; label: string; views: MainTableViewSummary[] }>()
+  for (const v of views.value) {
+    const key = String(v.tableId ?? v.tableLabel ?? '')
+    let g = byTable.get(key)
+    if (!g) {
+      g = { tableId: v.tableId ?? null, label: v.tableLabel || v.viewName, views: [] }
+      byTable.set(key, g)
+      groups.push(g)
+    }
+    g.views.push(v)
+  }
+  return groups
+})
+
 const displayColumns = computed(() => orderedColumns(gridColumns.value, gridRuntime))
 
 const MTV_SELECTION_COL_WIDTH = 48
@@ -498,7 +515,7 @@ onMounted(async () => {
     filterDraft, widthDialogVisible, widthDialogField, widthDraft, tableRef, selectedTableRows, importing,
     importInputRef, importProgressVisible, importProgressPercent, importProgressPhase, importProgressFileName,
     importResultVisible, importResult, importProgressLabel, importResultStatus, importResultHeadline,
-    selectedFuCode, selectedViewMeta, showExportButton, showImportButton, selectedFu, displayColumns,
+    selectedFuCode, selectedViewMeta, showExportButton, showImportButton, selectedFu, displayColumns, groupedViews,
     MTV_SELECTION_COL_WIDTH, gridTotalColumnWidth, gridInnerStyle, processedRows, groupedRows, pagedRows, displayTotal,
     handleSearch, handlePageChange, formatCell, isRowSelectable, getRowKey, onSelectionChange, openRow, columnIndex,
     isFkLinkCell, openFkTarget,

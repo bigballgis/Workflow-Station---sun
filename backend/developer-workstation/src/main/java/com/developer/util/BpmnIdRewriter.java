@@ -73,15 +73,7 @@ public final class BpmnIdRewriter {
     }
 
     /**
-     * Rewrite ID references in BPMN XML, name-first with ID fallback.
-     *
-     * @param bpmnXml             original BPMN XML (may be Base64 encoded)
-     * @param tableIdMapping      old TableDefinition.id → new id (fallback for subTableId / tableId)
-     * @param formIdMapping       old FormDefinition.id → new id (fallback for formId)
-     * @param actionIdMapping     old ActionDefinition.id → new id (array elements mapped individually for actionIds)
-     * @param clonedTableNameToId clone-side table name → clone TableDefinition.id (preferred when subTableName/tableName present in block)
-     * @param clonedFormNameToId  clone-side form name → clone FormDefinition.id (preferred when formName present in block)
-     * @return rewritten BPMN XML, encoding matches input; returns unchanged for null/blank input
+     * Overload without table renaming — keeps {@code subTableName}/{@code tableName} values verbatim.
      */
     public static String rewrite(String bpmnXml,
                                  Map<Long, Long> tableIdMapping,
@@ -89,6 +81,32 @@ public final class BpmnIdRewriter {
                                  Map<Long, Long> actionIdMapping,
                                  Map<String, Long> clonedTableNameToId,
                                  Map<String, Long> clonedFormNameToId) {
+        return rewrite(bpmnXml, tableIdMapping, formIdMapping, actionIdMapping,
+                clonedTableNameToId, clonedFormNameToId, Map.of());
+    }
+
+    /**
+     * Rewrite ID references in BPMN XML, name-first with ID fallback.
+     *
+     * @param bpmnXml             original BPMN XML (may be Base64 encoded)
+     * @param tableIdMapping      old TableDefinition.id → new id (fallback for subTableId / tableId)
+     * @param formIdMapping       old FormDefinition.id → new id (fallback for formId)
+     * @param actionIdMapping     old ActionDefinition.id → new id (array elements mapped individually for actionIds)
+     * @param clonedTableNameToId clone-side table name → clone TableDefinition.id (preferred when subTableName/tableName present in block).
+     *                            Keyed by the table name as it appears in the SOURCE BPMN (resolution runs before any name rewrite).
+     * @param clonedFormNameToId  clone-side form name → clone FormDefinition.id (preferred when formName present in block)
+     * @param sourceToNewTableName source table name → renamed clone table name. When non-empty, {@code subTableName}/{@code tableName}
+     *                            property VALUES are rewritten to the new name so the cloned BPMN's runtime table references
+     *                            (e.g. MI {@code subTableName} → physical/JSON sub-table) point at the clone's tables, not the source's.
+     * @return rewritten BPMN XML, encoding matches input; returns unchanged for null/blank input
+     */
+    public static String rewrite(String bpmnXml,
+                                 Map<Long, Long> tableIdMapping,
+                                 Map<Long, Long> formIdMapping,
+                                 Map<Long, Long> actionIdMapping,
+                                 Map<String, Long> clonedTableNameToId,
+                                 Map<String, Long> clonedFormNameToId,
+                                 Map<String, String> sourceToNewTableName) {
         if (bpmnXml == null || bpmnXml.isBlank()) {
             return bpmnXml;
         }
@@ -96,7 +114,8 @@ public final class BpmnIdRewriter {
                 || isNonEmpty(formIdMapping)
                 || isNonEmpty(actionIdMapping)
                 || isNonEmpty(clonedTableNameToId)
-                || isNonEmpty(clonedFormNameToId);
+                || isNonEmpty(clonedFormNameToId)
+                || isNonEmpty(sourceToNewTableName);
         if (!hasAnyMapping) {
             return bpmnXml;
         }
@@ -106,7 +125,7 @@ public final class BpmnIdRewriter {
 
         String rewritten = rewriteAll(decoded,
                 tableIdMapping, formIdMapping, actionIdMapping,
-                clonedTableNameToId, clonedFormNameToId);
+                clonedTableNameToId, clonedFormNameToId, sourceToNewTableName);
 
         if (rewritten.equals(decoded)) {
             return bpmnXml;
@@ -127,7 +146,8 @@ public final class BpmnIdRewriter {
                                      Map<Long, Long> formIdMapping,
                                      Map<Long, Long> actionIdMapping,
                                      Map<String, Long> clonedTableNameToId,
-                                     Map<String, Long> clonedFormNameToId) {
+                                     Map<String, Long> clonedFormNameToId,
+                                     Map<String, String> sourceToNewTableName) {
         Matcher m = PROPERTIES_BLOCK.matcher(xml);
         StringBuilder sb = new StringBuilder();
         int pos = 0;
@@ -140,7 +160,7 @@ public final class BpmnIdRewriter {
             sb.append(rewriteBlock(
                     m.group(),
                     tableIdMapping, formIdMapping, actionIdMapping,
-                    clonedTableNameToId, clonedFormNameToId));
+                    clonedTableNameToId, clonedFormNameToId, sourceToNewTableName));
             pos = m.end();
         }
         sb.append(rewriteUnwrapped(
@@ -158,7 +178,8 @@ public final class BpmnIdRewriter {
                                        Map<Long, Long> formIdMapping,
                                        Map<Long, Long> actionIdMapping,
                                        Map<String, Long> clonedTableNameToId,
-                                       Map<String, Long> clonedFormNameToId) {
+                                       Map<String, Long> clonedFormNameToId,
+                                       Map<String, String> sourceToNewTableName) {
         Matcher openM = OPENING_PROPERTIES_TAG.matcher(block);
         if (!openM.find()) {
             return block;
@@ -206,6 +227,14 @@ public final class BpmnIdRewriter {
             if (!Objects.equals(oldActionIds, newActionIds)) {
                 rewrites.put("actionIds", newActionIds);
             }
+        }
+
+        // Rename table-name references (subTableName / tableName) to the clone's renamed tables.
+        // Runtime reads these values directly (e.g. MI subTableName → physical/JSON sub-table), so a
+        // stale source name here would make the clone read the SOURCE table's data.
+        if (isNonEmpty(sourceToNewTableName)) {
+            applyTableNameRewrite("subTableName", nameToValue, sourceToNewTableName, rewrites);
+            applyTableNameRewrite("tableName", nameToValue, sourceToNewTableName, rewrites);
         }
 
         if (rewrites.isEmpty()) {
@@ -294,6 +323,24 @@ public final class BpmnIdRewriter {
             }
         }
         return result;
+    }
+
+    /**
+     * Queue a rewrite of a table-name property value ({@code subTableName} / {@code tableName}) to its
+     * renamed clone counterpart, when present in this block and mapped.
+     */
+    private static void applyTableNameRewrite(String property,
+                                              Map<String, String> nameToValue,
+                                              Map<String, String> sourceToNewTableName,
+                                              Map<String, String> rewrites) {
+        String oldName = nameToValue.get(property);
+        if (oldName == null || oldName.isBlank()) {
+            return;
+        }
+        String newName = sourceToNewTableName.get(oldName.trim());
+        if (newName != null && !newName.equals(oldName)) {
+            rewrites.put(property, newName);
+        }
     }
 
     /**

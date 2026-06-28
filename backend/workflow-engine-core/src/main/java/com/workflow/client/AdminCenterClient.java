@@ -215,12 +215,10 @@ public class AdminCenterClient {
     // ==================== 任务分配相关 API ====================
     
     /**
-     * 获取用户的业务单元ID
+     * 获取用户当前业务单元的 <strong>code</strong>（任务分配链路统一 code）。
      * @param userId 用户ID
-     * @return 业务单元ID，如果用户没有业务单元则返回null
-     */
-    /**
-     * @param activeBusinessUnitId 可选；多 BU 时须传入与用户 UBR 一致的当前业务单元
+     * @param activeBusinessUnitId 可选；多 BU 时须传入与用户 UBR 一致的当前业务单元 <strong>code</strong>
+     * @return 业务单元 code，如果用户没有（唯一可确定的）业务单元则返回 null
      */
     public String getUserBusinessUnitId(String userId, String activeBusinessUnitId) {
         try {
@@ -256,9 +254,40 @@ public class AdminCenterClient {
     }
     
     /**
-     * 获取业务单元的父业务单元ID
-     * @param businessUnitId 业务单元ID
-     * @return 父业务单元ID，如果没有父级则返回null
+     * 业务单元 id → code。供运行时把工作台上下文 {@code activeBusinessUnitId}（仍为 id）
+     * 转成 code 再进入任务分配 code 链路。未找到返回 null。
+     */
+    public String getBusinessUnitCodeById(String businessUnitId) {
+        if (businessUnitId == null || businessUnitId.isBlank()) {
+            return null;
+        }
+        try {
+            String url = adminCenterUrl + "/api/v1/admin/task-assignment/business-units/by-id/"
+                    + businessUnitId.trim() + "/code";
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<Map<String, Object>>() {}
+            );
+            Map<String, Object> result = response.getBody();
+            if (result != null) {
+                Object code = result.get("code");
+                if (code != null && !code.toString().isEmpty()) {
+                    return code.toString();
+                }
+            }
+            return null;
+        } catch (Exception e) {
+            log.error("Failed to get business unit code by id {}: {}", businessUnitId, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 获取父业务单元的 <strong>code</strong>（hierarchy 沿父链全程 code）。
+     * @param businessUnitId 业务单元 code
+     * @return 父业务单元 code，如果没有父级则返回 null
      */
     public String getParentBusinessUnitId(String businessUnitId) {
         try {
@@ -287,8 +316,8 @@ public class AdminCenterClient {
     
     /**
      * 获取业务单元中拥有指定角色的用户ID列表
-     * @param businessUnitId 业务单元ID
-     * @param roleId 角色ID（BU_BOUNDED类型）
+     * @param businessUnitId 业务单元 code
+     * @param roleId 角色 code（BU_BOUNDED类型）
      * @return 用户ID列表
      */
     public List<String> getUsersByBusinessUnitAndRole(String businessUnitId, String roleId) {
@@ -312,6 +341,8 @@ public class AdminCenterClient {
 
     /**
      * 自某 BU 起沿父链向上，收集各层 BU 中拥有指定角色的用户 ID（并集、保序去重）。
+     * @param startBusinessUnitId 起始 BU code
+     * @param roleId 角色 code
      */
     public List<String> collectUserIdsForRoleInBusinessUnitHierarchy(String startBusinessUnitId, String roleId) {
         if (startBusinessUnitId == null || startBusinessUnitId.isBlank() || roleId == null || roleId.isBlank()) {
@@ -333,7 +364,7 @@ public class AdminCenterClient {
     
     /**
      * 获取拥有指定BU无关型角色的用户ID列表
-     * @param roleId 角色ID（BU_UNBOUNDED类型）
+     * @param roleId 角色 code（BU_UNBOUNDED类型）
      * @return 用户ID列表
      */
     public List<String> getUsersByUnboundedRole(String roleId) {
@@ -382,9 +413,9 @@ public class AdminCenterClient {
     }
     
     /**
-     * 获取业务单元的准入角色ID列表
-     * @param businessUnitId 业务单元ID
-     * @return 角色ID列表
+     * 获取业务单元的准入角色 code 列表
+     * @param businessUnitId 业务单元 code
+     * @return 角色 code 列表
      */
     public List<String> getEligibleRoleIds(String businessUnitId) {
         try {
@@ -407,8 +438,8 @@ public class AdminCenterClient {
     
     /**
      * 检查角色是否是业务单元的准入角色
-     * @param businessUnitId 业务单元ID
-     * @param roleId 角色ID
+     * @param businessUnitId 业务单元 code
+     * @param roleId 角色 code
      * @return 是否是准入角色
      */
     public boolean isEligibleRole(String businessUnitId, String roleId) {

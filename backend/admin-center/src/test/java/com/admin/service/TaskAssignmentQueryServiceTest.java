@@ -69,27 +69,46 @@ class TaskAssignmentQueryServiceTest {
     
     private static final String USER_ID = "user-001";
     private static final String BU_ID = "bu-001";
+    private static final String BU_CODE = "BU_FINANCE";
     private static final String PARENT_BU_ID = "bu-parent";
+    private static final String PARENT_BU_CODE = "BU_HQ";
     private static final String ROLE_ID = "role-001";
+    private static final String ROLE_CODE = "ROLE_MANAGER";
     private static final String VG_ID = "vg-001";
+
+    private static BusinessUnit bu(String id, String code) {
+        BusinessUnit b = new BusinessUnit();
+        b.setId(id);
+        b.setCode(code);
+        return b;
+    }
+
+    private static Role roleOf(String id, String code, RoleType type) {
+        Role r = new Role();
+        r.setId(id);
+        r.setCode(code);
+        r.setType(EntityTypeConverter.fromRoleType(type));
+        return r;
+    }
     
     @Nested
     @DisplayName("getUserBusinessUnitId Tests")
     class GetUserBusinessUnitIdTests {
         
         @Test
-        @DisplayName("Should return business unit ID when user has assignment")
-        void shouldReturnBusinessUnitIdWhenUserHasAssignment() {
+        @DisplayName("Should return business unit CODE when user has single assignment")
+        void shouldReturnBusinessUnitCodeWhenUserHasAssignment() {
             UserBusinessUnitRole assignment = new UserBusinessUnitRole();
             assignment.setUserId(USER_ID);
             assignment.setBusinessUnitId(BU_ID);
-            
+
             when(userBusinessUnitRoleRepository.findByUserId(USER_ID))
                     .thenReturn(Arrays.asList(assignment));
-            
+            when(businessUnitRepository.findById(BU_ID)).thenReturn(Optional.of(bu(BU_ID, BU_CODE)));
+
             String result = service.getUserBusinessUnitId(USER_ID);
-            
-            assertThat(result).isEqualTo(BU_ID);
+
+            assertThat(result).isEqualTo(BU_CODE);
         }
         
         @Test
@@ -123,7 +142,7 @@ class TaskAssignmentQueryServiceTest {
         }
 
         @Test
-        @DisplayName("Should return preferred business unit when user has UBR for it")
+        @DisplayName("Should return preferred business unit CODE when user has UBR for it")
         void shouldReturnPreferredWhenMultiBu() {
             UserBusinessUnitRole assignment1 = new UserBusinessUnitRole();
             assignment1.setUserId(USER_ID);
@@ -135,9 +154,47 @@ class TaskAssignmentQueryServiceTest {
 
             when(userBusinessUnitRoleRepository.findByUserId(USER_ID))
                     .thenReturn(Arrays.asList(assignment1, assignment2));
+            // preferred is a CODE; resolve code → entity then match against UBR ids
+            when(businessUnitRepository.findByCode("BU_OTHER")).thenReturn(Optional.of(bu("bu-002", "BU_OTHER")));
+            when(businessUnitRepository.findByCode(BU_CODE)).thenReturn(Optional.of(bu(BU_ID, BU_CODE)));
 
-            assertThat(service.getUserBusinessUnitId(USER_ID, "bu-002")).isEqualTo("bu-002");
-            assertThat(service.getUserBusinessUnitId(USER_ID, BU_ID)).isEqualTo(BU_ID);
+            assertThat(service.getUserBusinessUnitId(USER_ID, "BU_OTHER")).isEqualTo("BU_OTHER");
+            assertThat(service.getUserBusinessUnitId(USER_ID, BU_CODE)).isEqualTo(BU_CODE);
+        }
+
+        @Test
+        @DisplayName("Should return null when preferred code not found")
+        void shouldReturnNullWhenPreferredCodeNotFound() {
+            UserBusinessUnitRole assignment = new UserBusinessUnitRole();
+            assignment.setUserId(USER_ID);
+            assignment.setBusinessUnitId(BU_ID);
+
+            when(userBusinessUnitRoleRepository.findByUserId(USER_ID))
+                    .thenReturn(Arrays.asList(assignment));
+            when(businessUnitRepository.findByCode("BU_UNKNOWN")).thenReturn(Optional.empty());
+
+            assertThat(service.getUserBusinessUnitId(USER_ID, "BU_UNKNOWN")).isNull();
+        }
+    }
+
+    @Nested
+    @DisplayName("getBusinessUnitCodeById Tests")
+    class GetBusinessUnitCodeByIdTests {
+
+        @Test
+        @DisplayName("Should map id to code")
+        void shouldMapIdToCode() {
+            when(businessUnitRepository.findById(BU_ID)).thenReturn(Optional.of(bu(BU_ID, BU_CODE)));
+            assertThat(service.getBusinessUnitCodeById(BU_ID)).isEqualTo(BU_CODE);
+        }
+
+        @Test
+        @DisplayName("Should return null for unknown id or blank")
+        void shouldReturnNullForUnknownOrBlank() {
+            when(businessUnitRepository.findById("nope")).thenReturn(Optional.empty());
+            assertThat(service.getBusinessUnitCodeById("nope")).isNull();
+            assertThat(service.getBusinessUnitCodeById(" ")).isNull();
+            assertThat(service.getBusinessUnitCodeById(null)).isNull();
         }
     }
     
@@ -146,39 +203,39 @@ class TaskAssignmentQueryServiceTest {
     class GetParentBusinessUnitIdTests {
         
         @Test
-        @DisplayName("Should return parent ID when business unit has parent")
-        void shouldReturnParentIdWhenHasParent() {
-            BusinessUnit bu = new BusinessUnit();
-            bu.setId(BU_ID);
-            bu.setParentId(PARENT_BU_ID);
-            
-            when(businessUnitRepository.findById(BU_ID)).thenReturn(Optional.of(bu));
-            
-            String result = service.getParentBusinessUnitId(BU_ID);
-            
-            assertThat(result).isEqualTo(PARENT_BU_ID);
+        @DisplayName("Should return parent CODE when business unit has parent")
+        void shouldReturnParentCodeWhenHasParent() {
+            BusinessUnit child = bu(BU_ID, BU_CODE);
+            child.setParentId(PARENT_BU_ID);
+
+            when(businessUnitRepository.findByCode(BU_CODE)).thenReturn(Optional.of(child));
+            when(businessUnitRepository.findById(PARENT_BU_ID))
+                    .thenReturn(Optional.of(bu(PARENT_BU_ID, PARENT_BU_CODE)));
+
+            String result = service.getParentBusinessUnitId(BU_CODE);
+
+            assertThat(result).isEqualTo(PARENT_BU_CODE);
         }
-        
+
         @Test
         @DisplayName("Should return null when business unit has no parent")
         void shouldReturnNullWhenNoParent() {
-            BusinessUnit bu = new BusinessUnit();
-            bu.setId(BU_ID);
-            bu.setParentId(null);
-            
-            when(businessUnitRepository.findById(BU_ID)).thenReturn(Optional.of(bu));
-            
-            String result = service.getParentBusinessUnitId(BU_ID);
-            
+            BusinessUnit root = bu(BU_ID, BU_CODE);
+            root.setParentId(null);
+
+            when(businessUnitRepository.findByCode(BU_CODE)).thenReturn(Optional.of(root));
+
+            String result = service.getParentBusinessUnitId(BU_CODE);
+
             assertThat(result).isNull();
         }
-        
+
         @Test
         @DisplayName("Should throw exception when business unit not found")
         void shouldThrowExceptionWhenNotFound() {
-            when(businessUnitRepository.findById(BU_ID)).thenReturn(Optional.empty());
-            
-            assertThatThrownBy(() -> service.getParentBusinessUnitId(BU_ID))
+            when(businessUnitRepository.findByCode(BU_CODE)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.getParentBusinessUnitId(BU_CODE))
                     .isInstanceOf(BusinessUnitNotFoundException.class);
         }
     }
@@ -188,71 +245,59 @@ class TaskAssignmentQueryServiceTest {
     class GetUsersByBusinessUnitAndRoleTests {
         
         @Test
-        @DisplayName("Should return user IDs when users exist with role in BU")
+        @DisplayName("Should return user IDs when users exist with role in BU (by code)")
         void shouldReturnUserIdsWhenUsersExist() {
-            Role role = new Role();
-            role.setId(ROLE_ID);
-            role.setType(EntityTypeConverter.fromRoleType(RoleType.BU_BOUNDED));
-            
-            when(businessUnitRepository.existsById(BU_ID)).thenReturn(true);
-            when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.of(role));
+            when(businessUnitRepository.findByCode(BU_CODE)).thenReturn(Optional.of(bu(BU_ID, BU_CODE)));
+            when(roleRepository.findByCode(ROLE_CODE)).thenReturn(Optional.of(roleOf(ROLE_ID, ROLE_CODE, RoleType.BU_BOUNDED)));
             when(userBusinessUnitRoleRepository.findUserIdsByBusinessUnitIdAndRoleId(BU_ID, ROLE_ID))
                     .thenReturn(Arrays.asList("user-001", "user-002"));
-            
-            List<String> result = service.getUsersByBusinessUnitAndRole(BU_ID, ROLE_ID);
-            
+
+            List<String> result = service.getUsersByBusinessUnitAndRole(BU_CODE, ROLE_CODE);
+
             assertThat(result).containsExactly("user-001", "user-002");
         }
-        
+
         @Test
         @DisplayName("Should return empty list when no users with role in BU")
         void shouldReturnEmptyListWhenNoUsers() {
-            Role role = new Role();
-            role.setId(ROLE_ID);
-            role.setType(EntityTypeConverter.fromRoleType(RoleType.BU_BOUNDED));
-            
-            when(businessUnitRepository.existsById(BU_ID)).thenReturn(true);
-            when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.of(role));
+            when(businessUnitRepository.findByCode(BU_CODE)).thenReturn(Optional.of(bu(BU_ID, BU_CODE)));
+            when(roleRepository.findByCode(ROLE_CODE)).thenReturn(Optional.of(roleOf(ROLE_ID, ROLE_CODE, RoleType.BU_BOUNDED)));
             when(userBusinessUnitRoleRepository.findUserIdsByBusinessUnitIdAndRoleId(BU_ID, ROLE_ID))
                     .thenReturn(Collections.emptyList());
-            
-            List<String> result = service.getUsersByBusinessUnitAndRole(BU_ID, ROLE_ID);
-            
+
+            List<String> result = service.getUsersByBusinessUnitAndRole(BU_CODE, ROLE_CODE);
+
             assertThat(result).isEmpty();
         }
-        
+
         @Test
         @DisplayName("Should return empty list when role is not BU_BOUNDED")
         void shouldReturnEmptyListWhenRoleNotBuBounded() {
-            Role role = new Role();
-            role.setId(ROLE_ID);
-            role.setType(EntityTypeConverter.fromRoleType(RoleType.BU_UNBOUNDED));
-            
-            when(businessUnitRepository.existsById(BU_ID)).thenReturn(true);
-            when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.of(role));
-            
-            List<String> result = service.getUsersByBusinessUnitAndRole(BU_ID, ROLE_ID);
-            
+            when(businessUnitRepository.findByCode(BU_CODE)).thenReturn(Optional.of(bu(BU_ID, BU_CODE)));
+            when(roleRepository.findByCode(ROLE_CODE)).thenReturn(Optional.of(roleOf(ROLE_ID, ROLE_CODE, RoleType.BU_UNBOUNDED)));
+
+            List<String> result = service.getUsersByBusinessUnitAndRole(BU_CODE, ROLE_CODE);
+
             assertThat(result).isEmpty();
             verify(userBusinessUnitRoleRepository, never()).findUserIdsByBusinessUnitIdAndRoleId(any(), any());
         }
-        
+
         @Test
-        @DisplayName("Should throw exception when business unit not found")
+        @DisplayName("Should throw exception when business unit code not found")
         void shouldThrowExceptionWhenBuNotFound() {
-            when(businessUnitRepository.existsById(BU_ID)).thenReturn(false);
-            
-            assertThatThrownBy(() -> service.getUsersByBusinessUnitAndRole(BU_ID, ROLE_ID))
+            when(businessUnitRepository.findByCode(BU_CODE)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.getUsersByBusinessUnitAndRole(BU_CODE, ROLE_CODE))
                     .isInstanceOf(BusinessUnitNotFoundException.class);
         }
-        
+
         @Test
-        @DisplayName("Should throw exception when role not found")
+        @DisplayName("Should throw exception when role code not found")
         void shouldThrowExceptionWhenRoleNotFound() {
-            when(businessUnitRepository.existsById(BU_ID)).thenReturn(true);
-            when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.empty());
-            
-            assertThatThrownBy(() -> service.getUsersByBusinessUnitAndRole(BU_ID, ROLE_ID))
+            when(businessUnitRepository.findByCode(BU_CODE)).thenReturn(Optional.of(bu(BU_ID, BU_CODE)));
+            when(roleRepository.findByCode(ROLE_CODE)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.getUsersByBusinessUnitAndRole(BU_CODE, ROLE_CODE))
                     .isInstanceOf(RoleNotFoundException.class);
         }
     }
@@ -262,61 +307,49 @@ class TaskAssignmentQueryServiceTest {
     class GetUsersByUnboundedRoleTests {
         
         @Test
-        @DisplayName("Should return user IDs through virtual groups")
+        @DisplayName("Should return user IDs through virtual groups (by role code)")
         void shouldReturnUserIdsThroughVirtualGroups() {
-            Role role = new Role();
-            role.setId(ROLE_ID);
-            role.setType(EntityTypeConverter.fromRoleType(RoleType.BU_UNBOUNDED));
-            
-            when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.of(role));
+            when(roleRepository.findByCode(ROLE_CODE)).thenReturn(Optional.of(roleOf(ROLE_ID, ROLE_CODE, RoleType.BU_UNBOUNDED)));
             when(virtualGroupRoleRepository.findVirtualGroupIdsByRoleId(ROLE_ID))
                     .thenReturn(Arrays.asList(VG_ID, "vg-002"));
             when(virtualGroupMemberRepository.findUserIdsByVirtualGroupIds(anyList()))
                     .thenReturn(Arrays.asList("user-001", "user-002", "user-003"));
-            
-            List<String> result = service.getUsersByUnboundedRole(ROLE_ID);
-            
+
+            List<String> result = service.getUsersByUnboundedRole(ROLE_CODE);
+
             assertThat(result).containsExactly("user-001", "user-002", "user-003");
         }
-        
+
         @Test
         @DisplayName("Should return empty list when no virtual groups bound to role")
         void shouldReturnEmptyListWhenNoVirtualGroups() {
-            Role role = new Role();
-            role.setId(ROLE_ID);
-            role.setType(EntityTypeConverter.fromRoleType(RoleType.BU_UNBOUNDED));
-            
-            when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.of(role));
+            when(roleRepository.findByCode(ROLE_CODE)).thenReturn(Optional.of(roleOf(ROLE_ID, ROLE_CODE, RoleType.BU_UNBOUNDED)));
             when(virtualGroupRoleRepository.findVirtualGroupIdsByRoleId(ROLE_ID))
                     .thenReturn(Collections.emptyList());
-            
-            List<String> result = service.getUsersByUnboundedRole(ROLE_ID);
-            
+
+            List<String> result = service.getUsersByUnboundedRole(ROLE_CODE);
+
             assertThat(result).isEmpty();
             verify(virtualGroupMemberRepository, never()).findUserIdsByVirtualGroupIds(anyList());
         }
-        
+
         @Test
         @DisplayName("Should return empty list when role is not BU_UNBOUNDED")
         void shouldReturnEmptyListWhenRoleNotBuUnbounded() {
-            Role role = new Role();
-            role.setId(ROLE_ID);
-            role.setType(EntityTypeConverter.fromRoleType(RoleType.BU_BOUNDED));
-            
-            when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.of(role));
-            
-            List<String> result = service.getUsersByUnboundedRole(ROLE_ID);
-            
+            when(roleRepository.findByCode(ROLE_CODE)).thenReturn(Optional.of(roleOf(ROLE_ID, ROLE_CODE, RoleType.BU_BOUNDED)));
+
+            List<String> result = service.getUsersByUnboundedRole(ROLE_CODE);
+
             assertThat(result).isEmpty();
             verify(virtualGroupRoleRepository, never()).findVirtualGroupIdsByRoleId(any());
         }
-        
+
         @Test
-        @DisplayName("Should throw exception when role not found")
+        @DisplayName("Should throw exception when role code not found")
         void shouldThrowExceptionWhenRoleNotFound() {
-            when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.empty());
-            
-            assertThatThrownBy(() -> service.getUsersByUnboundedRole(ROLE_ID))
+            when(roleRepository.findByCode(ROLE_CODE)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.getUsersByUnboundedRole(ROLE_CODE))
                     .isInstanceOf(RoleNotFoundException.class);
         }
     }
@@ -372,43 +405,48 @@ class TaskAssignmentQueryServiceTest {
     class GetEligibleRoleIdsTests {
         
         @Test
-        @DisplayName("Should return eligible role IDs")
-        void shouldReturnEligibleRoleIds() {
+        @DisplayName("Should return eligible role CODES")
+        void shouldReturnEligibleRoleCodes() {
             BusinessUnitRole bur1 = new BusinessUnitRole();
             bur1.setBusinessUnitId(BU_ID);
             bur1.setRoleId("role-001");
-            
+
             BusinessUnitRole bur2 = new BusinessUnitRole();
             bur2.setBusinessUnitId(BU_ID);
             bur2.setRoleId("role-002");
-            
-            when(businessUnitRepository.existsById(BU_ID)).thenReturn(true);
+
+            when(businessUnitRepository.findByCode(BU_CODE)).thenReturn(Optional.of(bu(BU_ID, BU_CODE)));
             when(businessUnitRoleRepository.findByBusinessUnitId(BU_ID))
                     .thenReturn(Arrays.asList(bur1, bur2));
-            
-            List<String> result = service.getEligibleRoleIds(BU_ID);
-            
-            assertThat(result).containsExactly("role-001", "role-002");
+            when(roleRepository.findByIdIn(Arrays.asList("role-001", "role-002")))
+                    .thenReturn(Arrays.asList(
+                            roleOf("role-001", "ROLE_A", RoleType.BU_BOUNDED),
+                            roleOf("role-002", "ROLE_B", RoleType.BU_BOUNDED)));
+
+            List<String> result = service.getEligibleRoleIds(BU_CODE);
+
+            assertThat(result).containsExactlyInAnyOrder("ROLE_A", "ROLE_B");
         }
-        
+
         @Test
         @DisplayName("Should return empty list when no eligible roles")
         void shouldReturnEmptyListWhenNoEligibleRoles() {
-            when(businessUnitRepository.existsById(BU_ID)).thenReturn(true);
+            when(businessUnitRepository.findByCode(BU_CODE)).thenReturn(Optional.of(bu(BU_ID, BU_CODE)));
             when(businessUnitRoleRepository.findByBusinessUnitId(BU_ID))
                     .thenReturn(Collections.emptyList());
-            
-            List<String> result = service.getEligibleRoleIds(BU_ID);
-            
+            when(roleRepository.findByIdIn(Collections.emptyList())).thenReturn(Collections.emptyList());
+
+            List<String> result = service.getEligibleRoleIds(BU_CODE);
+
             assertThat(result).isEmpty();
         }
-        
+
         @Test
-        @DisplayName("Should throw exception when business unit not found")
+        @DisplayName("Should throw exception when business unit code not found")
         void shouldThrowExceptionWhenBuNotFound() {
-            when(businessUnitRepository.existsById(BU_ID)).thenReturn(false);
-            
-            assertThatThrownBy(() -> service.getEligibleRoleIds(BU_ID))
+            when(businessUnitRepository.findByCode(BU_CODE)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.getEligibleRoleIds(BU_CODE))
                     .isInstanceOf(BusinessUnitNotFoundException.class);
         }
     }
@@ -418,25 +456,38 @@ class TaskAssignmentQueryServiceTest {
     class IsEligibleRoleTests {
         
         @Test
-        @DisplayName("Should return true when role is eligible")
+        @DisplayName("Should return true when role is eligible (by code)")
         void shouldReturnTrueWhenEligible() {
+            when(businessUnitRepository.findByCode(BU_CODE)).thenReturn(Optional.of(bu(BU_ID, BU_CODE)));
+            when(roleRepository.findByCode(ROLE_CODE)).thenReturn(Optional.of(roleOf(ROLE_ID, ROLE_CODE, RoleType.BU_BOUNDED)));
             when(businessUnitRoleRepository.existsByBusinessUnitIdAndRoleId(BU_ID, ROLE_ID))
                     .thenReturn(true);
-            
-            boolean result = service.isEligibleRole(BU_ID, ROLE_ID);
-            
+
+            boolean result = service.isEligibleRole(BU_CODE, ROLE_CODE);
+
             assertThat(result).isTrue();
         }
-        
+
         @Test
         @DisplayName("Should return false when role is not eligible")
         void shouldReturnFalseWhenNotEligible() {
+            when(businessUnitRepository.findByCode(BU_CODE)).thenReturn(Optional.of(bu(BU_ID, BU_CODE)));
+            when(roleRepository.findByCode(ROLE_CODE)).thenReturn(Optional.of(roleOf(ROLE_ID, ROLE_CODE, RoleType.BU_BOUNDED)));
             when(businessUnitRoleRepository.existsByBusinessUnitIdAndRoleId(BU_ID, ROLE_ID))
                     .thenReturn(false);
-            
-            boolean result = service.isEligibleRole(BU_ID, ROLE_ID);
-            
+
+            boolean result = service.isEligibleRole(BU_CODE, ROLE_CODE);
+
             assertThat(result).isFalse();
+        }
+
+        @Test
+        @DisplayName("Should return false when BU or role code not found")
+        void shouldReturnFalseWhenCodeNotFound() {
+            when(businessUnitRepository.findByCode(BU_CODE)).thenReturn(Optional.empty());
+
+            assertThat(service.isEligibleRole(BU_CODE, ROLE_CODE)).isFalse();
+            verify(businessUnitRoleRepository, never()).existsByBusinessUnitIdAndRoleId(any(), any());
         }
     }
     

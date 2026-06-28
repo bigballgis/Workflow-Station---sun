@@ -80,7 +80,8 @@ class DecisionTableActionValidationTest {
                 org.mockito.Mockito.mock(com.developer.component.VersionComponent.class),
                 org.mockito.Mockito.mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class),
                 org.mockito.Mockito.mock(com.developer.service.MainTableViewService.class),
-                org.mockito.Mockito.mock(com.developer.repository.ForeignKeyRepository.class)
+                org.mockito.Mockito.mock(com.developer.repository.ForeignKeyRepository.class),
+                org.mockito.Mockito.mock(com.developer.component.TableDesignComponent.class)
         );
     }
 

@@ -32,6 +32,47 @@ export function useUserTaskAssignee(ctx: UserTaskPropertyContext) {
     t
   } = ctx
 
+  // ---- id ⇄ code mapping at the BPMN boundary ----
+  // UI refs (roleId/roleIds/businessUnitId) always hold DB ids so existing select/filter/label logic is unchanged.
+  // BPMN extension props (roleIds/roleId/businessUnitId) hold *codes* so an imported Function Unit resolves
+  // against the target environment without manual editing (ids differ per env; codes are unique & stable).
+
+  /** All role catalogs merged for id⇄code lookup, regardless of current assignee type. */
+  function allKnownRoles(): RoleInfo[] {
+    return [...buBoundedRoles.value, ...buUnboundedRoles.value, ...eligibleRoles.value]
+  }
+
+  function roleIdToCode(id: string): string {
+    const r = allKnownRoles().find(role => role.id === id)
+    return r?.code || id
+  }
+
+  function roleCodeToId(code: string): string {
+    const r = allKnownRoles().find(role => role.code === code)
+    return r?.id || code
+  }
+
+  function businessUnitIdToCode(id: string): string {
+    const bu = findBusinessUnitById(businessUnits.value, id)
+    return bu?.code || id
+  }
+
+  function findBusinessUnitByCode(units: BusinessUnitInfo[], code: string): BusinessUnitInfo | null {
+    for (const unit of units) {
+      if (unit.code === code) return unit
+      if (unit.children) {
+        const found = findBusinessUnitByCode(unit.children, code)
+        if (found) return found
+      }
+    }
+    return null
+  }
+
+  function businessUnitCodeToId(code: string): string {
+    const bu = findBusinessUnitByCode(businessUnits.value, code)
+    return bu?.id || code
+  }
+
   const ROLE_ID_ASSIGNEE_TYPES: AssigneeTypeEnum[] = [
     'HIERARCHY_ROLE',
     'BU_ROLE',
@@ -234,8 +275,10 @@ export function useUserTaskAssignee(ctx: UserTaskPropertyContext) {
     const normalized = filterRoleIdsForAssigneeType(ids)
     roleIds.value = normalized
     roleId.value = normalized[0] ?? ''
-    updateExtProp('roleIds', serializeRoleIds(normalized))
-    updateExtProp('roleId', roleId.value)
+    // Persist codes (stable across environments), not ids
+    const codes = normalized.map(roleIdToCode)
+    updateExtProp('roleIds', serializeRoleIds(codes))
+    updateExtProp('roleId', codes[0] ?? '')
 
     const typeLabel = getAssigneeTypeLabel(assigneeType.value)
     const names = normalized
@@ -260,14 +303,21 @@ export function useUserTaskAssignee(ctx: UserTaskPropertyContext) {
     syncRoleExtProps(ids)
   }
 
+  /**
+   * Load persisted role *codes* from BPMN and map them back to ids for the UI.
+   * Role catalogs must be loaded before calling this so code→id resolves; unknown
+   * codes are kept as-is (degrade gracefully rather than dropping the selection).
+   */
   function loadRoleIdsFromExt(ext: { roleIds?: string; roleId?: string }) {
-    const parsed = parseRoleIdsFromExt(ext)
-    roleIds.value = parsed
-    roleId.value = parsed[0] ?? ''
+    const parsedCodes = parseRoleIdsFromExt(ext)
+    const ids = parsedCodes.map(roleCodeToId)
+    roleIds.value = ids
+    roleId.value = ids[0] ?? ''
   }
 
   async function handleBusinessUnitChange(id: string) {
-    updateExtProp('businessUnitId', id)
+    // Persist BU code (stable across environments), not id
+    updateExtProp('businessUnitId', id ? businessUnitIdToCode(id) : '')
 
     // Clear role selection
     roleId.value = ''
@@ -389,6 +439,7 @@ export function useUserTaskAssignee(ctx: UserTaskPropertyContext) {
     loadRoles,
     loadBusinessUnits,
     loadEligibleRoles,
-    sanitizePersistedRoleIds
+    sanitizePersistedRoleIds,
+    businessUnitCodeToId
   }
 }

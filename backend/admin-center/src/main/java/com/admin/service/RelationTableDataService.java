@@ -56,6 +56,9 @@ public interface RelationTableDataService {
 
     /**
      * 导入数据（按公共校验器校验后插入），返回 {inserted, failed, errors}
+     *
+     * @param dryRun 为 true 时只校验、不写入；返回 {dryRun:true, validCount, failed, errors}，
+     *               用于「先预览校验结果、再点击确认导入」的两步流程。
      */
-    Map<String, Object> importData(Long tableId, byte[] fileBytes, String format);
+    Map<String, Object> importData(Long tableId, byte[] fileBytes, String format, boolean dryRun);
 }

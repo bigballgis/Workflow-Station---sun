@@ -88,7 +88,8 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
             VersionComponent versionComponent,
             DeveloperWorkstationSequenceSynchronizer sequenceSynchronizer,
             MainTableViewService mainTableViewService,
-            ForeignKeyRepository foreignKeyRepository) {
+            ForeignKeyRepository foreignKeyRepository,
+            com.developer.component.TableDesignComponent tableDesignComponent) {
         this.functionUnitRepository = functionUnitRepository;
         this.processDefinitionRepository = processDefinitionRepository;
         this.versionRepository = versionRepository;
@@ -119,7 +120,8 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
                 functionUnitWorkspaceAccessService,
                 sequenceSynchronizer,
                 this.codeGenerator,
-                mainTableViewService);
+                mainTableViewService,
+                tableDesignComponent);
         this.responseAssembler = new FunctionUnitResponseAssembler(functionUnitDevGroupAssignmentRepository);
     }
 

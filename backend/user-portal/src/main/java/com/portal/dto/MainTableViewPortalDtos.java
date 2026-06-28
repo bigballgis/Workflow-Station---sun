@@ -22,6 +22,9 @@ public final class MainTableViewPortalDtos {
             Long id,
             String viewName,
             Boolean isDefault,
+            // Owning table — lets the portal group the view selector by table (parity with View Design).
+            Long tableId,
+            String tableLabel,
             Boolean enableExport,
             Boolean enableImport
     ) {}

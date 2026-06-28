@@ -164,10 +164,8 @@ async function handleDeleteView(view: MainTableViewDefinition) {
 
 function onViewSaved(updated: MainTableViewDefinition) {
   selectedView.value = updated
-  const idx = views.value.findIndex(v => v.id === updated.id)
-  if (idx >= 0) {
-    views.value[idx] = { ...views.value[idx], ...updated }
-  }
+  // Reassign the array so the grouped nav computed re-derives (and the left-nav name updates).
+  views.value = views.value.map(v => (v.id === updated.id ? { ...v, ...updated } : v))
 }
 
 // Designer-internal FK navigation: open the default view of the referenced table.

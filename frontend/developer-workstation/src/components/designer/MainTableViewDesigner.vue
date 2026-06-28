@@ -12,7 +12,7 @@ const emit = defineEmits<{
 const {
   t, Search, Close, Menu, DArrowRight, DArrowLeft, Plus, Filter, CaretTop, CaretBottom, Connection, Key,
   columnsPanelOpen, propsPanelOpen, fieldSearchKeyword, saving, viewName, viewFields, sortConfig, filterConfig,
-  enableExport, enableImport, mainTableName, filterDialogVisible, addColumnPopoverVisible, thenSortField,
+  enableExport, mainTableName, filterDialogVisible, addColumnPopoverVisible, thenSortField,
   dragOverIndex, dragSourceField, visibleColumns, displayFilterConditions,
   sortFieldOptions, filteredCatalog, previewRowCount, fieldLabel, getFieldIcon, getMockValue, sortIndicator,
   formatFilterTag, addField, removeField, toggleSortDirection, sortDirectionTooltip, onFilterEditorSave,
@@ -463,12 +463,6 @@ const {
             <el-checkbox v-model="enableExport">
 
               {{ t('mainTableView.enableExport') }}
-
-            </el-checkbox>
-
-            <el-checkbox v-model="enableImport">
-
-              {{ t('mainTableView.enableImport') }}
 
             </el-checkbox>
 

@@ -165,6 +165,53 @@ public class MainTableViewServiceImpl implements MainTableViewService {
 
     @Override
     @Transactional
+    public void propagateFieldChangesToViews(Long tableId, List<FieldLabelChange> changes) {
+        if (changes == null || changes.isEmpty()) {
+            return;
+        }
+        List<MainTableViewConfig> views = viewConfigRepository.findByMainTableIdWithFields(tableId);
+        if (views.isEmpty()) {
+            return;
+        }
+        Map<String, FieldLabelChange> byOldName = new HashMap<>();
+        for (FieldLabelChange c : changes) {
+            if (c.oldFieldName() != null && !c.oldFieldName().isBlank()) {
+                byOldName.put(c.oldFieldName(), c);
+            }
+        }
+        List<MainTableViewConfig> dirty = new ArrayList<>();
+        for (MainTableViewConfig view : views) {
+            boolean changed = false;
+            for (MainTableViewField vf : view.getViewFields()) {
+                FieldLabelChange c = byOldName.get(vf.getFieldName());
+                if (c == null) {
+                    continue;
+                }
+                // Refresh the column label only when it still matches the OLD display name (or the old
+                // field name when no label was set) — preserves labels the developer customized by hand.
+                String oldLabelDefault = c.oldDisplayName() != null ? c.oldDisplayName() : c.oldFieldName();
+                if (java.util.Objects.equals(vf.getDisplayLabel(), oldLabelDefault)
+                        || vf.getDisplayLabel() == null
+                        || vf.getDisplayLabel().isBlank()) {
+                    vf.setDisplayLabel(c.newDisplayName() != null ? c.newDisplayName() : c.newFieldName());
+                    changed = true;
+                }
+                if (c.newFieldName() != null && !c.newFieldName().equals(vf.getFieldName())) {
+                    vf.setFieldName(c.newFieldName());
+                    changed = true;
+                }
+            }
+            if (changed) {
+                dirty.add(view);
+            }
+        }
+        if (!dirty.isEmpty()) {
+            viewConfigRepository.saveAll(dirty);
+        }
+    }
+
+    @Override
+    @Transactional
     public void publishViewsForFunctionUnit(Long functionUnitId) {
         List<MainTableViewConfig> views = viewConfigRepository.findByFunctionUnitIdWithFields(functionUnitId);
         for (MainTableViewConfig view : views) {

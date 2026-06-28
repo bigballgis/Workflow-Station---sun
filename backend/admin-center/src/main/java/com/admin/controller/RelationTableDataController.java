@@ -88,11 +88,13 @@ public class RelationTableDataController {
     public ResponseEntity<Map<String, Object>> importData(
             @Parameter(description = "Table definition ID") @PathVariable Long tableId,
             @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
-            @RequestParam(required = false) String format) throws java.io.IOException {
+            @RequestParam(required = false) String format,
+            @Parameter(description = "When true, validate only and do not insert (preview step)")
+            @RequestParam(required = false, defaultValue = "false") boolean dryRun) throws java.io.IOException {
         String fmt = (format != null && !format.isBlank()) ? format
                 : (file.getOriginalFilename() != null && file.getOriginalFilename().toLowerCase().endsWith(".xlsx") ? "xlsx" : "csv");
-        log.info("Importing data into table: tableId={}, format={}", tableId, fmt);
-        Map<String, Object> result = dataService.importData(tableId, file.getBytes(), fmt);
+        log.info("Importing data into table: tableId={}, format={}, dryRun={}", tableId, fmt, dryRun);
+        Map<String, Object> result = dataService.importData(tableId, file.getBytes(), fmt, dryRun);
         return ResponseEntity.ok(result);
     }
 

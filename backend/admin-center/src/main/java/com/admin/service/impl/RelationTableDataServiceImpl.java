@@ -15,8 +15,10 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.platform.common.dto.RelationFieldDTO;
 import com.platform.common.dto.RelationTableDataRowDTO;
+import com.platform.common.enums.RelationDataType;
 import com.platform.common.enums.RelationPermissionLevel;
 import com.platform.common.enums.RelationTableStatus;
+import com.platform.common.relationtable.RelationCsvValueFormatter;
 import com.platform.common.relationtable.RelationRowValidator;
 import com.platform.common.relationtable.RelationTableTemplateService;
 import com.platform.common.relationtable.RowValidationResult;
@@ -378,6 +380,9 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
         List<String> columnNames = fields.stream()
                 .map(RelationFieldDTO::getFieldName)
                 .collect(Collectors.toList());
+        Map<String, RelationDataType> typeByField = fields.stream()
+                .filter(f -> f.getFieldName() != null)
+                .collect(Collectors.toMap(RelationFieldDTO::getFieldName, RelationFieldDTO::getDataType, (a, b) -> a));
 
         List<Map<String, Object>> rows = jdbcTemplate.query(
                 "SELECT data FROM " + DATA_ROWS_TABLE + " WHERE table_id = ? ORDER BY id LIMIT ?",
@@ -388,16 +393,15 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
         csv.append(String.join(",", columnNames)).append("\n");
         for (Map<String, Object> row : rows) {
             csv.append(columnNames.stream()
-                    .map(f -> escapeCsvValue(row.get(f)))
+                    .map(f -> escapeCsvValue(RelationCsvValueFormatter.format(row.get(f), typeByField.get(f))))
                     .collect(Collectors.joining(","))
             ).append("\n");
         }
         return csv.toString();
     }
 
-    private String escapeCsvValue(Object value) {
-        if (value == null) return "";
-        String str = value.toString();
+    private String escapeCsvValue(String str) {
+        if (str == null) return "";
         if (str.contains(",") || str.contains("\"") || str.contains("\n")) {
             return "\"" + str.replace("\"", "\"\"") + "\"";
         }
@@ -413,7 +417,7 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
 
     @Override
     @Transactional
-    public Map<String, Object> importData(Long tableId, byte[] fileBytes, String format) {
+    public Map<String, Object> importData(Long tableId, byte[] fileBytes, String format, boolean dryRun) {
         requireWriteAccess(tableId);
         RelationTableDefinition tableDef = getDeployedTableDefinition(tableId);
         List<RelationFieldDTO> fields = getDeployedFields(tableDef);
@@ -426,6 +430,27 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
         }
         List<RowValidationResult> results = RelationRowValidator.validateRows(rawRows, fields);
 
+        List<Map<String, Object>> errors = new ArrayList<>();
+        for (RowValidationResult r : results) {
+            if (!r.isValid()) {
+                r.getErrors().forEach(err -> errors.add(Map.of(
+                        "row", err.getRow(),
+                        "field", err.getField() == null ? "" : err.getField(),
+                        "message", err.getMessage())));
+            }
+        }
+        long validCount = results.stream().filter(RowValidationResult::isValid).count();
+
+        // Dry run: validate only, do not write. Used by the two-step "preview then confirm" flow.
+        if (dryRun) {
+            Map<String, Object> preview = new LinkedHashMap<>();
+            preview.put("dryRun", true);
+            preview.put("validCount", validCount);
+            preview.put("failed", results.size() - (int) validCount);
+            preview.put("errors", errors);
+            return preview;
+        }
+
         // Auto-generate PK values per strategy for imported rows that don't carry one
         // (manual-strategy PKs come from the file and were validated as required above).
         String pkField = findPrimaryKeyField(fields);
@@ -433,7 +458,6 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
                 .anyMatch(f -> pkField.equals(f.getFieldName()) && !RelationRowValidator.isManualPk(f));
 
         int inserted = 0;
-        List<Map<String, Object>> errors = new ArrayList<>();
         for (RowValidationResult r : results) {
             if (r.isValid()) {
                 Map<String, Object> row = new LinkedHashMap<>(r.getValues());
@@ -445,11 +469,6 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
                 // Reuse addData for storage row-id, audit and timestamp handling.
                 addData(tableId, row);
                 inserted++;
-            } else {
-                r.getErrors().forEach(err -> errors.add(Map.of(
-                        "row", err.getRow(),
-                        "field", err.getField() == null ? "" : err.getField(),
-                        "message", err.getMessage())));
             }
         }
         Map<String, Object> summary = new LinkedHashMap<>();

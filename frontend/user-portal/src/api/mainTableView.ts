@@ -15,6 +15,8 @@ export interface MainTableViewSummary {
   id: number
   viewName: string
   isDefault?: boolean
+  tableId?: number | null
+  tableLabel?: string | null
   enableExport?: boolean
   enableImport?: boolean
 }

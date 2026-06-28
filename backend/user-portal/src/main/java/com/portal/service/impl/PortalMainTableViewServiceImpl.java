@@ -92,11 +92,15 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
         assertFuAccess(userId, functionUnitCode);
         try {
             return jdbcTemplate.query("""
-                            SELECT v.id, v.view_name, v.is_default, v.filter_config::text AS filter_config
+                            SELECT v.id, v.view_name, v.is_default, v.filter_config::text AS filter_config,
+                                   v.main_table_id,
+                                   COALESCE(td.table_display_name, td.table_name) AS table_label
                             FROM dw_main_table_view_configs v
                             INNER JOIN dw_function_units fu ON fu.id = v.function_unit_id
+                            LEFT JOIN dw_table_definitions td ON td.id = v.main_table_id
                             WHERE fu.code = ? AND v.status = 'PUBLISHED'
-                            ORDER BY v.is_default DESC, v.view_name
+                            ORDER BY COALESCE(td.table_display_name, td.table_name),
+                                     v.is_default DESC, v.view_name
                             """,
                     (rs, rowNum) -> {
                         Map<String, Object> toolbar = parseToolbarConfig(stringVal(rs.getString("filter_config")));
@@ -104,6 +108,8 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                                 .id(rs.getLong("id"))
                                 .viewName(rs.getString("view_name"))
                                 .isDefault(rs.getBoolean("is_default"))
+                                .tableId(rs.getObject("main_table_id") != null ? rs.getLong("main_table_id") : null)
+                                .tableLabel(rs.getString("table_label"))
                                 .enableExport(toolbarEnable(toolbar, "enableExport", true))
                                 .enableImport(toolbarEnable(toolbar, "enableImport", true))
                                 .build();

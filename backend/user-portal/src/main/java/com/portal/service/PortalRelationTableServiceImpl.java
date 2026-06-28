@@ -7,6 +7,7 @@ import com.platform.common.dto.RelationTableDTO;
 import com.platform.common.enums.RelationDataType;
 import com.platform.common.enums.RelationPermissionLevel;
 import com.platform.common.enums.RelationTableStatus;
+import com.platform.common.relationtable.RelationCsvValueFormatter;
 import com.platform.common.relationtable.RelationRowValidator;
 import com.platform.common.relationtable.RelationTableTemplateService;
 import com.platform.common.relationtable.RowValidationResult;
@@ -164,10 +165,14 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
             return "";
         }
 
-        List<String> fieldNames = getFieldNames(tableId);
-        if (fieldNames.isEmpty()) {
+        List<RelationFieldDTO> fields = loadFields(tableId);
+        if (fields.isEmpty()) {
             return "";
         }
+        List<String> fieldNames = fields.stream().map(RelationFieldDTO::getFieldName).collect(Collectors.toList());
+        Map<String, RelationDataType> typeByField = fields.stream()
+                .filter(f -> f.getFieldName() != null)
+                .collect(Collectors.toMap(RelationFieldDTO::getFieldName, RelationFieldDTO::getDataType, (a, b) -> a));
 
         try {
             List<Map<String, Object>> rows = jdbcTemplate.query(
@@ -179,7 +184,7 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
             csv.append(String.join(",", fieldNames)).append("\n");
             for (Map<String, Object> row : rows) {
                 csv.append(fieldNames.stream()
-                        .map(f -> escapeCsvValue(row.get(f)))
+                        .map(f -> escapeCsvValue(RelationCsvValueFormatter.format(row.get(f), typeByField.get(f))))
                         .collect(Collectors.joining(","))
                 ).append("\n");
             }
@@ -773,7 +778,7 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
 
     @Override
     @Transactional
-    public Map<String, Object> importData(Long tableId, String userId, byte[] fileBytes, String format) {
+    public Map<String, Object> importData(Long tableId, String userId, byte[] fileBytes, String format, boolean dryRun) {
         requireWriteAccess(tableId, userId);
         List<RelationFieldDTO> fields = loadFields(tableId);
         List<Map<String, Object>> rawRows = templateService.parseImport(fileBytes, format);
@@ -784,18 +789,33 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
         }
         List<RowValidationResult> results = RelationRowValidator.validateRows(rawRows, fields);
 
-        int inserted = 0;
         List<Map<String, Object>> errors = new ArrayList<>();
+        for (RowValidationResult r : results) {
+            if (!r.isValid()) {
+                r.getErrors().forEach(err -> errors.add(Map.of(
+                        "row", err.getRow(),
+                        "field", err.getField() == null ? "" : err.getField(),
+                        "message", err.getMessage())));
+            }
+        }
+        long validCount = results.stream().filter(RowValidationResult::isValid).count();
+
+        // Dry run: validate only, do not write. Used by the two-step "preview then confirm" flow.
+        if (dryRun) {
+            Map<String, Object> preview = new LinkedHashMap<>();
+            preview.put("dryRun", true);
+            preview.put("validCount", validCount);
+            preview.put("failed", results.size() - (int) validCount);
+            preview.put("errors", errors);
+            return preview;
+        }
+
+        int inserted = 0;
         for (RowValidationResult r : results) {
             if (r.isValid()) {
                 // insertRow auto-generates the PK per strategy when a row carries none.
                 insertRow(tableId, fields, new LinkedHashMap<>(r.getValues()), userId);
                 inserted++;
-            } else {
-                r.getErrors().forEach(err -> errors.add(Map.of(
-                        "row", err.getRow(),
-                        "field", err.getField() == null ? "" : err.getField(),
-                        "message", err.getMessage())));
             }
         }
         Map<String, Object> summary = new LinkedHashMap<>();

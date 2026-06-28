@@ -323,7 +323,8 @@ const {
   loadRoles,
   loadBusinessUnits,
   loadEligibleRoles,
-  sanitizePersistedRoleIds
+  sanitizePersistedRoleIds,
+  businessUnitCodeToId
 } = assigneeApi
 
 // 多实例子任务 / element-variable 逻辑
@@ -380,12 +381,8 @@ async function loadPropertiesAsync() {
       updateExtProp('assigneeLabel', t('properties.initiator'))
     }
   }
-  ctx.roleId.value = ext.roleId || ''
-  loadRoleIdsFromExt(ext)
-  if (ctx.roleIds.value.length > 0 && !ext.roleIds) {
-    updateExtProp('roleIds', ctx.roleIds.value.join(','))
-  }
-  ctx.businessUnitId.value = ext.businessUnitId || ''
+  // NOTE: role/BU values in BPMN are *codes* (env-stable). They are mapped back to ids
+  // for the UI after the catalogs load (see code→id mapping below). Don't bind ids here.
   ctx.assigneeLabel.value = ext.assigneeLabel || ''
   ctx.candidateUsers.value = ext.candidateUsers || ''
   ctx.candidateGroups.value = ext.candidateGroups || ''
@@ -415,16 +412,22 @@ async function loadPropertiesAsync() {
     loadSubTaskMiProgressFields()
   }
 
-  // Load role/BU catalogs before binding selects so tags show names, not raw ids
+  // Load role/BU catalogs first so persisted *codes* can be mapped back to ids for the UI,
+  // and so tags show names rather than raw codes.
   if (needsRoleId.value) {
     await loadRoles()
   }
   if (needsBuForRole.value) {
     await loadBusinessUnits()
-    if (ctx.businessUnitId.value) {
-      await loadEligibleRoles(ctx.businessUnitId.value)
+    // BPMN stores BU code; map to id for the tree-select, then load eligible roles by id
+    const buId = ext.businessUnitId ? businessUnitCodeToId(ext.businessUnitId) : ''
+    ctx.businessUnitId.value = buId
+    if (buId) {
+      await loadEligibleRoles(buId)
     }
   }
+  // BPMN stores role codes; map to ids now that catalogs (incl. eligibleRoles) are loaded
+  loadRoleIdsFromExt(ext)
   sanitizePersistedRoleIds()
 }
 

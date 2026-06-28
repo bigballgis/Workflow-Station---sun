@@ -26,6 +26,7 @@ import com.developer.repository.ProcessDefinitionRepository;
 import com.developer.repository.SubTableViewConfigRepository;
 import com.developer.repository.TableDefinitionRepository;
 import com.developer.repository.TableRelationRepository;
+import com.developer.component.TableDesignComponent;
 import com.developer.security.FunctionUnitWorkspaceAccessService;
 import com.developer.security.WorkspaceAccessAction;
 import com.developer.service.MainTableViewService;
@@ -70,6 +71,7 @@ class FunctionUnitCloner {
     private final DeveloperWorkstationSequenceSynchronizer sequenceSynchronizer;
     private final FunctionUnitCodeGenerator codeGenerator;
     private final MainTableViewService mainTableViewService;
+    private final TableDesignComponent tableDesignComponent;
 
     @Transactional
     FunctionUnit clone(Long id, String newName) {
@@ -102,11 +104,18 @@ class FunctionUnitCloner {
         // collect old→new ID map, then write process definition and rewrite BPMN ID references.
         // Otherwise BPMN still references source subTableId/formId/actionIds and deploy validation fails.
 
-        // Clone table definitions
+        // Clone table definitions. table_name is globally unique (uk_dw_table_name spans dw_ + rt_),
+        // so each cloned table gets a fresh unique name; sourceTableName→newTableName lets us rewrite
+        // BPMN table-name references (e.g. MI subTableName) to the clone's tables.
         Map<Long, TableDefinition> tableMapping = new HashMap<>();
+        Map<String, String> sourceToNewTableName = new HashMap<>();
         for (TableDefinition sourceTable : sourceTables) {
-            TableDefinition clonedTable = cloneTable(sourceTable, cloned);
+            String newTableName = generateUniqueTableName(sourceTable.getTableName());
+            TableDefinition clonedTable = cloneTable(sourceTable, cloned, newTableName);
             tableMapping.put(sourceTable.getId(), clonedTable);
+            if (sourceTable.getTableName() != null) {
+                sourceToNewTableName.put(sourceTable.getTableName(), newTableName);
+            }
         }
 
         // Clone FK relations after all tables (FKs may cross tables)
@@ -175,11 +184,15 @@ class FunctionUnitCloner {
             for (Map.Entry<Long, TableDefinition> entry : tableMapping.entrySet()) {
                 tableIdMapping.put(entry.getKey(), entry.getValue().getId());
             }
-            // Clone-side name→new ID map (preferred; fixes dirty BPMN where id/name diverge).
-            // Names reused as-is; cloneTable/cloneForm keep source names.
+            // Name→new ID map for name-first resolution (fixes dirty BPMN where id/name diverge).
+            // Keyed by the SOURCE table name, because that's what the source BPMN still carries at
+            // resolution time; the name VALUE itself is rewritten afterwards via sourceToNewTableName.
             Map<String, Long> clonedTableNameToId = new HashMap<>();
-            for (TableDefinition clonedTable : tableMapping.values()) {
-                clonedTableNameToId.put(clonedTable.getTableName(), clonedTable.getId());
+            for (TableDefinition sourceTable : sourceTables) {
+                TableDefinition clonedTable = tableMapping.get(sourceTable.getId());
+                if (sourceTable.getTableName() != null && clonedTable != null) {
+                    clonedTableNameToId.put(sourceTable.getTableName(), clonedTable.getId());
+                }
             }
             Map<String, Long> clonedFormNameToId = new HashMap<>();
             for (FormDefinition sourceForm : sourceForms) {
@@ -194,7 +207,8 @@ class FunctionUnitCloner {
                     formIdMapping,
                     actionIdMapping,
                     clonedTableNameToId,
-                    clonedFormNameToId);
+                    clonedFormNameToId,
+                    sourceToNewTableName);
             rewrittenBpmn = BpmnProcessIdRewriter.rewriteToFunctionUnitCode(rewrittenBpmn, cloned.getCode());
             ProcessDefinition clonedProcess = ProcessDefinition.builder()
                     .functionUnit(cloned)
@@ -208,10 +222,46 @@ class FunctionUnitCloner {
         return cloned;
     }
 
-    private TableDefinition cloneTable(TableDefinition source, FunctionUnit target) {
+    /**
+     * Derive a globally-unique table name for a cloned table. {@code uk_dw_table_name} is global and the
+     * designer's availability check spans both {@code dw_table_definitions} and {@code rt_table_definitions},
+     * so we append {@code _copyN} (and a short random tail as a last resort) until the name is free.
+     * Names stay within VARCHAR(100) and the BPMN/identifier-safe {@code [a-z0-9_]} subset.
+     */
+    private String generateUniqueTableName(String sourceTableName) {
+        String base = sourceTableName != null && !sourceTableName.isBlank() ? sourceTableName : "table";
+        // Reserve room for the longest suffix we append ("_copy" + up to ~3 digits, or "_" + 6 random).
+        final int maxBaseLen = 92;
+        if (base.length() > maxBaseLen) {
+            base = base.substring(0, maxBaseLen);
+        }
+        for (int i = 1; i <= 50; i++) {
+            String candidate = base + "_copy" + (i == 1 ? "" : i);
+            if (tableDesignComponent.isTableNameAvailable(candidate, null)) {
+                return candidate;
+            }
+        }
+        // Last resort: random tail. SecureRandom not needed — uniqueness, not unpredictability.
+        java.util.concurrent.ThreadLocalRandom random = java.util.concurrent.ThreadLocalRandom.current();
+        String chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+        for (int attempt = 0; attempt < 20; attempt++) {
+            StringBuilder tail = new StringBuilder();
+            for (int i = 0; i < 6; i++) {
+                tail.append(chars.charAt(random.nextInt(chars.length())));
+            }
+            String candidate = base + "_" + tail;
+            if (tableDesignComponent.isTableNameAvailable(candidate, null)) {
+                return candidate;
+            }
+        }
+        throw new DeveloperBusinessException("CLONE_TABLE_NAME_EXHAUSTED",
+                "Could not derive a unique table name for clone of '" + sourceTableName + "'");
+    }
+
+    private TableDefinition cloneTable(TableDefinition source, FunctionUnit target, String newTableName) {
         TableDefinition cloned = TableDefinition.builder()
                 .functionUnit(target)
-                .tableName(source.getTableName())
+                .tableName(newTableName)
                 .tableType(source.getTableType())
                 .tableDisplayName(source.getTableDisplayName())
                 .displayName(source.getDisplayName())

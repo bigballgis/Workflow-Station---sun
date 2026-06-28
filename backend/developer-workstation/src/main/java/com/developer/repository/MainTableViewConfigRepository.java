@@ -31,5 +31,8 @@ public interface MainTableViewConfigRepository extends JpaRepository<MainTableVi
             + "WHERE v.functionUnit.id = :functionUnitId ORDER BY v.isDefault DESC, v.viewName ASC")
     List<MainTableViewConfig> findByFunctionUnitIdWithFields(@Param("functionUnitId") Long functionUnitId);
 
+    @Query("SELECT v FROM MainTableViewConfig v LEFT JOIN FETCH v.viewFields WHERE v.mainTableId = :tableId")
+    List<MainTableViewConfig> findByMainTableIdWithFields(@Param("tableId") Long tableId);
+
     void deleteByFunctionUnitId(Long functionUnitId);
 }

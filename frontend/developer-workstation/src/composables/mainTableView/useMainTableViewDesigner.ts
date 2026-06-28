@@ -370,7 +370,8 @@ async function handleSave() {
         ...filterConfig.value,
         toolbar: {
           enableExport: enableExport.value,
-          enableImport: enableImport.value,
+          // Import is no longer offered in views — always disabled.
+          enableImport: false,
         },
       },
       fields,
