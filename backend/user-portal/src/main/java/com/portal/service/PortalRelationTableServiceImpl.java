@@ -83,7 +83,7 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
         // Resolve the permission level per table against the user's ACTIVE role (single role the user
         // logged in / switched to). Tables with no grant for the active role are filtered out.
         String activeRoleId = SecurityContextUtils.getCurrentActiveRoleId().orElse(null);
-        return allVisible.stream()
+        List<RelationTableDTO> result = allVisible.stream()
                 .map(table -> {
                     try {
                         String level = resolvePermissionLevelForRoles(table.getId(), activeRoleId, userRoleIds);
@@ -96,7 +96,26 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
                     }
                 })
                 .filter(table -> table.getPermissionLevel() != null)
-                .collect(Collectors.toList());
+                .collect(Collectors.toCollection(ArrayList::new));
+
+        // Always surface the system User table as a built-in READ-ONLY table for any authenticated user.
+        result.add(0, systemUserTableDto());
+        return result;
+    }
+
+    /** The built-in System User virtual table — always READ-ONLY, not backed by rt_table_access grants. */
+    private RelationTableDTO systemUserTableDto() {
+        return RelationTableDTO.builder()
+                .id(SYSTEM_USER_TABLE_ID)
+                .tableName(SYSTEM_USER_TABLE_NAME)
+                .displayName("User")
+                .description("System users (read-only)")
+                .status(RelationTableStatus.DEPLOYED)
+                .enabled(true)
+                .portalVisible(true)
+                .currentVersion(1)
+                .permissionLevel(RelationPermissionLevel.READONLY)
+                .build();
     }
 
     @Override
@@ -104,14 +123,15 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
     public PageResponse<Map<String, Object>> queryTableData(Long tableId, String userId,
                                                              int page, int size, String search) {
         try {
+            // The built-in System User table is readable by any authenticated user (no rt_table_access grant).
+            if (SYSTEM_USER_TABLE_ID.equals(tableId)) {
+                return querySystemUserTableData(page, size, search);
+            }
+
             // Verify access
             Set<String> userRoleIds = getUserRoleIds(userId);
             if (!hasAccess(tableId, userRoleIds)) {
                 return PageResponse.of(Collections.emptyList(), page, size, 0);
-            }
-
-            if (SYSTEM_USER_TABLE_ID.equals(tableId)) {
-                return querySystemUserTableData(page, size, search);
             }
 
             if (!isDeployedRelationTable(tableId)) {
@@ -155,14 +175,15 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
     @Override
     @Transactional(readOnly = true)
     public String exportCsv(Long tableId, String userId, int maxRows) {
+        // The built-in System User table is exportable by any authenticated user (no rt_table_access grant).
+        if (SYSTEM_USER_TABLE_ID.equals(tableId)) {
+            return exportSystemUserCsv(userId, maxRows);
+        }
+
         Set<String> userRoleIds = getUserRoleIds(userId);
         if (!hasAccess(tableId, userRoleIds)) {
             log.warn("Export CSV access denied for user {} on table {}", userId, tableId);
             return "";
-        }
-
-        if (SYSTEM_USER_TABLE_ID.equals(tableId)) {
-            return exportSystemUserCsv(userId, maxRows);
         }
 
         if (!isDeployedRelationTable(tableId)) {
@@ -593,6 +614,10 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
     @Override
     @Transactional(readOnly = true)
     public String resolvePermissionLevel(Long tableId, String userId) {
+        // The built-in System User table is always read-only for any authenticated user.
+        if (SYSTEM_USER_TABLE_ID.equals(tableId)) {
+            return RelationPermissionLevel.READONLY;
+        }
         String activeRoleId = SecurityContextUtils.getCurrentActiveRoleId().orElse(null);
         return resolvePermissionLevelForRoles(tableId, activeRoleId, getUserRoleIds(userId));
     }
@@ -907,7 +932,11 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
         if (search == null || search.isBlank()) {
             return "";
         }
-        List<String> sanitizedFields = DEFAULT_SYSTEM_USER_SEARCH_FIELDS.stream()
+        // Include `id` so a lookup drill-down filtered by the referenced user id resolves the row.
+        List<String> searchableFields = new ArrayList<>();
+        searchableFields.add("id");
+        searchableFields.addAll(DEFAULT_SYSTEM_USER_SEARCH_FIELDS);
+        List<String> sanitizedFields = searchableFields.stream()
                 .map(this::sanitizeIdentifier)
                 .toList();
         String keywordClause = sanitizedFields.stream()

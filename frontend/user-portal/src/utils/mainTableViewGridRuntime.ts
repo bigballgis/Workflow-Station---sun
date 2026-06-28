@@ -1,5 +1,6 @@
 import type { MainTableViewDataRow, MainTableViewFieldColumn } from '@/api/mainTableView'
 import { clampColumnWidth } from '@/utils/mainTableViewColumnResizeCursor'
+import { formatMainTableViewCell } from '@/utils/mainTableViewCsvExport'
 
 export { COLUMN_WIDTH_MIN, COLUMN_WIDTH_MAX, clampColumnWidth } from '@/utils/mainTableViewColumnResizeCursor'
 
@@ -81,7 +82,10 @@ export function setColumnWidth(
 function cellText(row: MainTableViewDataRow, fieldName: string): string {
   const v = row.values[fieldName]
   if (v == null) return ''
-  return String(v)
+  // Use the same display formatting as cells so group labels show filenames (not upload URLs) and
+  // lookup/FK display names (not "[object Object]"). formatMainTableViewCell returns '-' for empties.
+  const formatted = formatMainTableViewCell(v)
+  return formatted === '-' ? '' : formatted
 }
 
 function compareValues(a: unknown, b: unknown): number {
@@ -177,6 +181,28 @@ export function applyGroupBy(
     out.push(...items)
   }
   return out
+}
+
+/**
+ * Remove any runtime state (groupBy, sort, filters) that references a field not present in the given
+ * columns. Prevents a prior view's grouping/sort/filter from mis-rendering against another view's data.
+ */
+export function pruneRuntimeToColumns(
+  state: GridRuntimeState,
+  columns: MainTableViewFieldColumn[],
+): void {
+  const valid = new Set(columns.map(c => c.fieldName))
+  if (state.groupBy && !valid.has(state.groupBy)) {
+    state.groupBy = null
+  }
+  if (state.sort && !valid.has(state.sort.fieldName)) {
+    state.sort = null
+  }
+  for (const field of Object.keys(state.filters)) {
+    if (!valid.has(field)) {
+      delete state.filters[field]
+    }
+  }
 }
 
 export function moveColumn(

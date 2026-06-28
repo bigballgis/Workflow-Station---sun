@@ -417,10 +417,13 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                     continue;
                 }
                 Map<String, Object> source = (Map<String, Object>) rowMap;
-                // Dedup signature: process instance + the row's own id/keys.
-                String sig = pi.getId() + "|" + bindingKey + "|"
-                        + String.valueOf(source.getOrDefault("id",
-                            source.getOrDefault("id_idw", source.hashCode())));
+                // Dedup by process instance + the row's own id — NOT the binding key. The same physical
+                // sub-row is duplicated under every binding key that maps this table into a form (and
+                // sometimes under both numeric + named keys), so keying on bindingKey would emit it once
+                // per binding → identical rows repeated N times.
+                String rowId = String.valueOf(source.getOrDefault("id",
+                        source.getOrDefault("id_idw", source.hashCode())));
+                String sig = pi.getId() + "|" + rowId;
                 if (!seenSubKeys.add(sig)) {
                     continue;
                 }
@@ -467,12 +470,25 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
     }
 
     private List<MainTableViewFieldColumn> visibleColumns(ViewDefinition view) {
-        Map<String, FkColumnMeta> fkMeta = loadFkColumnMeta(view.id());
+        Map<String, FkColumnMeta> resolvedFk = loadFkColumnMeta(view.id());
+        // SUB views: the main-id column is a FK back to the owning MAIN table. That linkage lives on the
+        // form-table binding (foreign_key_field), not in dw_field_definitions, so resolve it separately.
+        if ("SUB".equalsIgnoreCase(view.tableType()) && view.mainTableId() != null) {
+            Map<String, FkColumnMeta> merged = new LinkedHashMap<>(resolvedFk);
+            loadSubMainFkMeta(view.mainTableId())
+                    .ifPresent(m -> merged.putIfAbsent(m.fieldName(), m.meta()));
+            resolvedFk = merged;
+        }
+        final Map<String, FkColumnMeta> fkMeta = resolvedFk;
+        // Lookup columns reference a Relation Table (via the form's lookupConfig), not a DW table — resolve
+        // field → relation-table id so the portal can link the cell to that table's data.
+        final Map<String, Long> lookupMeta = loadLookupColumnMeta(view.mainTableId());
         return view.fields().stream()
                 .filter(f -> Boolean.TRUE.equals(f.visible()))
                 .sorted(Comparator.comparingInt(f -> f.sortOrder() != null ? f.sortOrder() : 0))
                 .map(f -> {
                     FkColumnMeta fk = fkMeta.get(f.fieldName());
+                    Long lookupTableId = lookupMeta.get(f.fieldName());
                     return MainTableViewFieldColumn.builder()
                             .fieldName(f.fieldName())
                             .displayLabel(f.displayLabel() != null ? f.displayLabel() : f.fieldName())
@@ -482,9 +498,83 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                             .refViewId(fk != null ? fk.refViewId() : null)
                             .refFunctionUnitCode(fk != null ? fk.refFunctionUnitCode() : null)
                             .refPrimaryKeyFields(fk != null ? fk.refPrimaryKeyFields() : null)
+                            .isLookup(lookupTableId != null)
+                            .lookupTableId(lookupTableId)
                             .build();
                 })
                 .toList();
+    }
+
+    /**
+     * Resolve lookup columns for the view's owning table: scan every form that binds the table, parse each
+     * {@code type:"lookup"} widget's {@code props.lookupConfig}, and map the widget's {@code field} →
+     * the referenced Relation Table id. The portal links such cells to that Relation Table's data.
+     */
+    private Map<String, Long> loadLookupColumnMeta(Long tableId) {
+        if (tableId == null) {
+            return Map.of();
+        }
+        try {
+            List<String> formConfigs = jdbcTemplate.query("""
+                    SELECT DISTINCT f.config_json::text AS cfg
+                    FROM dw_form_table_bindings b
+                    INNER JOIN dw_form_definitions f ON f.id = b.form_id
+                    WHERE b.table_id = ? AND f.config_json IS NOT NULL
+                    """, (rs, n) -> rs.getString("cfg"), tableId);
+            Map<String, Long> meta = new LinkedHashMap<>();
+            for (String cfg : formConfigs) {
+                collectLookupFields(cfg, meta);
+            }
+            return meta;
+        } catch (Exception e) {
+            log.warn("Failed to load lookup column metadata for table {}: {}", tableId, e.getMessage());
+            return Map.of();
+        }
+    }
+
+    /** Walk a form config JSON tree, recording each lookup widget's field → relation-table id. */
+    private void collectLookupFields(String configJson, Map<String, Long> out) {
+        if (configJson == null || configJson.isBlank()) {
+            return;
+        }
+        try {
+            walkLookupNodes(objectMapper.readTree(configJson), out);
+        } catch (Exception e) {
+            log.warn("Failed to parse form config for lookup fields: {}", e.getMessage());
+        }
+    }
+
+    private void walkLookupNodes(com.fasterxml.jackson.databind.JsonNode node, Map<String, Long> out) {
+        if (node == null) {
+            return;
+        }
+        if (node.isObject()) {
+            String type = node.path("type").asText(null);
+            String field = node.path("field").asText(null);
+            if ("lookup".equalsIgnoreCase(type) && field != null && !field.isBlank()) {
+                Long refTableId = parseLookupConfigTableId(node.path("props").path("lookupConfig").asText(null));
+                if (refTableId != null) {
+                    out.putIfAbsent(field, refTableId);
+                }
+            }
+            node.fields().forEachRemaining(e -> walkLookupNodes(e.getValue(), out));
+        } else if (node.isArray()) {
+            node.forEach(child -> walkLookupNodes(child, out));
+        }
+    }
+
+    /** {@code lookupConfig} is a JSON string holding {tableId, ...}; extract the referenced table id. */
+    private Long parseLookupConfigTableId(String lookupConfigJson) {
+        if (lookupConfigJson == null || lookupConfigJson.isBlank()) {
+            return null;
+        }
+        try {
+            com.fasterxml.jackson.databind.JsonNode cfg = objectMapper.readTree(lookupConfigJson);
+            com.fasterxml.jackson.databind.JsonNode tableId = cfg.get("tableId");
+            return tableId != null && tableId.isNumber() ? tableId.asLong() : null;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     /**
@@ -524,6 +614,52 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
         } catch (Exception e) {
             log.warn("Failed to load FK column metadata for view {}: {}", viewId, e.getMessage());
             return Map.of();
+        }
+    }
+
+    /**
+     * Resolve the FK metadata for a SUB table's main-id column. The SUB→MAIN link is stored on the
+     * form-table binding ({@code foreign_key_field}); the MAIN table is the PRIMARY-bound table on the
+     * same form(s). Returns the main-id field name + the MAIN table's published default view, or empty
+     * when no such published default view exists (graceful degrade to plain text).
+     */
+    private Optional<SubMainFk> loadSubMainFkMeta(Long subTableId) {
+        try {
+            List<Map<String, Object>> rows = jdbcTemplate.queryForList("""
+                    SELECT sub.foreign_key_field AS fk_field,
+                           rv.id AS ref_view_id,
+                           rfu.code AS ref_fu_code
+                    FROM dw_form_table_bindings sub
+                    INNER JOIN dw_form_table_bindings main
+                            ON main.form_id = sub.form_id
+                           AND main.binding_type = 'PRIMARY'
+                    INNER JOIN dw_table_definitions rt ON rt.id = main.table_id
+                    INNER JOIN dw_function_units rfu ON rfu.id = rt.function_unit_id
+                    INNER JOIN dw_main_table_view_configs rv
+                            ON rv.main_table_id = main.table_id
+                           AND rv.is_default = TRUE
+                           AND rv.status = 'PUBLISHED'
+                    WHERE sub.table_id = ?
+                      AND sub.binding_type = 'SUB'
+                      AND sub.foreign_key_field IS NOT NULL
+                    LIMIT 1
+                    """, subTableId);
+            if (rows.isEmpty()) {
+                return Optional.empty();
+            }
+            Map<String, Object> row = rows.get(0);
+            String fkField = stringVal(row.get("fk_field"));
+            if (fkField == null || fkField.isBlank()) {
+                return Optional.empty();
+            }
+            FkColumnMeta meta = new FkColumnMeta(
+                    ((Number) row.get("ref_view_id")).longValue(),
+                    stringVal(row.get("ref_fu_code")),
+                    List.of());
+            return Optional.of(new SubMainFk(fkField, meta));
+        } catch (Exception e) {
+            log.warn("Failed to resolve SUB main FK metadata for table {}: {}", subTableId, e.getMessage());
+            return Optional.empty();
         }
     }
 
@@ -663,6 +799,8 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
             Long refViewId,
             String refFunctionUnitCode,
             List<String> refPrimaryKeyFields) {}
+
+    private record SubMainFk(String fieldName, FkColumnMeta meta) {}
 
     private record ViewFieldDef(
             String fieldName,

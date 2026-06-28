@@ -368,11 +368,14 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { Search, Download, Plus, Upload, ArrowDown, Expand, Fold } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { relationTableApi, type RelationTableDTO, type RelationFieldDef, type RelationImportResult } from '@/api/relationTable'
 
 const SYSTEM_FIELDS = new Set(['created_at', 'created_by', 'updated_at', 'updated_by', 'status'])
+
+const route = useRoute()
 
 const tableListLoading = ref(false)
 const dataLoading = ref(false)
@@ -436,8 +439,16 @@ const fetchTables = async () => {
   try {
     const res = await relationTableApi.getVisibleTables()
     tables.value = res.data || []
-    if (!selectedTableId.value && tables.value.length > 0) {
-      selectedTableId.value = tables.value[0].id
+    // Honor a drill-down from Views: ?tableId=<id>&search=<value> preselects that table + filter.
+    const queryTableId = route.query.tableId != null ? Number(route.query.tableId) : null
+    const target = queryTableId != null && tables.value.some(t => t.id === queryTableId)
+      ? queryTableId
+      : (tables.value.length > 0 ? tables.value[0].id : null)
+    if (!selectedTableId.value && target != null) {
+      selectedTableId.value = target
+      if (queryTableId === target && typeof route.query.search === 'string') {
+        searchKeyword.value = route.query.search
+      }
       fetchDisplayNames()
       fetchFieldDefs()
       fetchData()
