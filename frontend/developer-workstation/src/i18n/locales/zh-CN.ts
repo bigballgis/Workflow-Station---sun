@@ -380,7 +380,7 @@ export default {
     newViewName: '新视图',
     clearAllColumns: '清空全部',
     addSelectedColumns: '添加所选',
-    renameHint: '双击重命名',
+    selectAllColumns: '全选',
     fieldCatalog: '字段目录',
     tableColumns: '表列',
     addViewColumn: '+ 视图列',

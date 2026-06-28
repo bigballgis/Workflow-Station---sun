@@ -27,5 +27,10 @@ public enum ContentType {
     /**
      * 操作定义 (Action)
      */
-    ACTION
+    ACTION,
+
+    /**
+     * 主表视图设计 (Main Table View Design)
+     */
+    MAIN_TABLE_VIEW
 }

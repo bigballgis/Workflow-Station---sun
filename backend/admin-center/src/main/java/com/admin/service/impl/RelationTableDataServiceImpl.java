@@ -419,6 +419,11 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
         List<RelationFieldDTO> fields = getDeployedFields(tableDef);
 
         List<Map<String, Object>> rawRows = templateService.parseImport(fileBytes, format);
+        if (rawRows.size() > RelationTableTemplateService.MAX_IMPORT_ROWS) {
+            throw new IllegalArgumentException(
+                    "Too many rows: " + rawRows.size() + ". A single import is limited to "
+                            + RelationTableTemplateService.MAX_IMPORT_ROWS + " rows.");
+        }
         List<RowValidationResult> results = RelationRowValidator.validateRows(rawRows, fields);
 
         // Auto-generate PK values per strategy for imported rows that don't carry one

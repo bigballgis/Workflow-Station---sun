@@ -31,6 +31,9 @@ public class RelationTableTemplateService {
     public static final String FORMAT_CSV = "csv";
     public static final String FORMAT_XLSX = "xlsx";
 
+    /** Maximum number of data rows accepted in a single import (files with more are rejected). */
+    public static final int MAX_IMPORT_ROWS = 1000;
+
     /** Build an import template containing only a header row of importable field names. */
     public byte[] generateTemplate(List<RelationFieldDTO> fields, String format) {
         List<RelationFieldDTO> cols = RelationRowValidator.importableFields(fields);

@@ -100,6 +100,17 @@ public class FunctionUnitPackageParser {
             }
         }
 
+        // Main Table View design (views/main_table_views.json): stored verbatim as an opaque blob,
+        // exactly like tables/*.json — admin-center does not parse or rebuild it.
+        if (rawFiles.containsKey("views/main_table_views.json")) {
+            contents.add(FunctionUnitManagerComponent.ContentInfo.builder()
+                    .contentType(ContentType.MAIN_TABLE_VIEW)
+                    .contentName("main_table_views.json")
+                    .contentPath("/views/main_table_views.json")
+                    .contentData(new String(rawFiles.get("views/main_table_views.json"), StandardCharsets.UTF_8))
+                    .build());
+        }
+
         for (Map.Entry<String, byte[]> file : rawFiles.entrySet()) {
             String fileName = file.getKey();
             if (fileName.startsWith("forms/") && fileName.endsWith(".json")) {

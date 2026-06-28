@@ -777,6 +777,11 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
         requireWriteAccess(tableId, userId);
         List<RelationFieldDTO> fields = loadFields(tableId);
         List<Map<String, Object>> rawRows = templateService.parseImport(fileBytes, format);
+        if (rawRows.size() > com.platform.common.relationtable.RelationTableTemplateService.MAX_IMPORT_ROWS) {
+            throw new IllegalArgumentException(
+                    "Too many rows: " + rawRows.size() + ". A single import is limited to "
+                            + com.platform.common.relationtable.RelationTableTemplateService.MAX_IMPORT_ROWS + " rows.");
+        }
         List<RowValidationResult> results = RelationRowValidator.validateRows(rawRows, fields);
 
         int inserted = 0;

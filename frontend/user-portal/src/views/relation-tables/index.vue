@@ -255,7 +255,7 @@
         :closable="false"
         style="margin-bottom: 12px;"
       >
-        Download a template first, fill it in, then upload (CSV or Excel). Rows are validated against the table structure; invalid rows are skipped.
+        Download a template first, fill it in, then upload (CSV or Excel). Rows are validated against the table structure; invalid rows are skipped. Auto-generated primary keys are filled by the system, so they are not included in the template. Up to 1000 rows per import.
       </el-alert>
       <el-upload
         drag

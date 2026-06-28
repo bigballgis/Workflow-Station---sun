@@ -96,6 +96,28 @@ class RelationRowValidatorTest {
     }
 
     @Test
+    void autoPrimaryKeyExcludedFromImportableAndIgnoredWhenFilled() {
+        // An auto-generated PK must not appear in the template...
+        var autoPk = RelationFieldDTO.builder().fieldName("id").dataType(RelationDataType.INTEGER)
+                .nullable(true).isPrimaryKey(true).pkGeneration(Map.of("strategy", "prefixedSequence")).build();
+        var name = field("name", RelationDataType.VARCHAR, true);
+        assertThat(RelationRowValidator.importableFieldNames(List.of(autoPk, name)))
+                .containsExactly("name");
+
+        // ...and a stale file that still carries a (non-integer) value for it must NOT fail validation.
+        var r = RelationRowValidator.validateRow(1, Map.of("id", "dd", "name", "x"), List.of(autoPk, name));
+        assertThat(r.isValid()).isTrue();
+        assertThat(r.getValues()).doesNotContainKey("id").containsEntry("name", "x");
+    }
+
+    @Test
+    void manualPrimaryKeyStillIncludedInImportable() {
+        var manualPk = RelationFieldDTO.builder().fieldName("id").dataType(RelationDataType.VARCHAR)
+                .nullable(true).isPrimaryKey(true).pkGeneration(Map.of("strategy", "manual")).build();
+        assertThat(RelationRowValidator.importableFieldNames(List.of(manualPk))).containsExactly("id");
+    }
+
+    @Test
     void systemFieldsExcludedFromImportable() {
         var fields = List.of(
                 field("name", RelationDataType.VARCHAR, true),

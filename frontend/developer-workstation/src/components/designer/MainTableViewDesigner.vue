@@ -20,6 +20,7 @@ const {
   onColDragStart, onColDragOver, onColDragLeave, onColDrop, onColDragEnd,
   isFkField, isPkField, onFkColumnClick,
   selectedCatalogFields, toggleCatalogSelect, addSelectedFields, clearAllFields,
+  allCatalogSelected, someCatalogSelected, toggleSelectAllCatalog,
 } = useMainTableViewDesigner(props, emit)
 </script>
 
@@ -79,6 +80,19 @@ const {
 
           </el-input>
 
+        </div>
+
+        <div
+          v-if="filteredCatalog.length"
+          class="columns-select-all"
+        >
+          <el-checkbox
+            :model-value="allCatalogSelected"
+            :indeterminate="someCatalogSelected && !allCatalogSelected"
+            @change="toggleSelectAllCatalog($event === true)"
+          >
+            {{ t('mainTableView.selectAllColumns') }}
+          </el-checkbox>
         </div>
 
         <div class="columns-field-list">
