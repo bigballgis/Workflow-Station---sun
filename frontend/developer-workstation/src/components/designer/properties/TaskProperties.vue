@@ -68,6 +68,27 @@
 
       <div class="email-field-block">
         <label class="email-field-label">
+          {{ t('properties.emailTemplate') }}
+        </label>
+        <el-select
+          v-model="emailTemplateId"
+          :placeholder="t('properties.emailTemplatePlaceholder')"
+          style="width: 100%"
+          clearable
+          @change="applyEmailTemplate"
+        >
+          <el-option
+            v-for="tpl in emailTemplates"
+            :key="tpl.id"
+            :label="tpl.name"
+            :value="String(tpl.id)"
+          />
+        </el-select>
+        <div class="form-tip">{{ t('properties.emailTemplateHint') }}</div>
+      </div>
+
+      <div class="email-field-block">
+        <label class="email-field-label">
           {{ t('properties.emailSubject') }}
           <span class="email-required-mark">*</span>
         </label>
@@ -83,12 +104,10 @@
           {{ t('properties.emailBody') }}
           <span class="email-required-mark">*</span>
         </label>
-        <el-input
+        <EmailRichBodyEditor
           v-model="emailBody"
-          type="textarea"
-          :rows="5"
-          :placeholder="t('properties.emailBodyPlaceholder')"
-          @input="onEmailConfigChange('emailBody', emailBody)"
+          :function-unit-id="props.functionUnitId"
+          @update:modelValue="onEmailConfigChange('emailBody', emailBody)"
         />
       </div>
 
@@ -674,14 +693,20 @@
  * `@/composables/taskProperties/*`。此处仅做组装、props 透传与生命周期绑定，
  * 模板/样式与拆分前逐字节一致，emit/props/i18n key/行为均零变化。
  */
-import { ref, reactive, watch, onMounted, computed } from 'vue'
+import { ref, reactive, watch, onMounted, computed, defineAsyncComponent } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { ElMessage } from 'element-plus'
 import { ArrowDown } from '@element-plus/icons-vue'
 import type { BpmnElement, BpmnModeler } from '@/types/bpmn'
 import { getExtensionProperties } from '@/utils/bpmnExtensions'
+import { emailTemplateApi } from '@/api/emailTemplate'
 import { useTaskPropertiesState } from '@/composables/taskProperties/useTaskPropertiesState'
 import { useTaskPropertiesForms } from '@/composables/taskProperties/useTaskPropertiesForms'
 import { useSendTaskEmailAttachments } from '@/composables/taskProperties/useSendTaskEmailAttachments'
+
+const EmailRichBodyEditor = defineAsyncComponent(
+  () => import('@/components/designer/email/EmailRichBodyEditor.vue')
+)
 
 const { t } = useI18n()
 
@@ -734,6 +759,7 @@ const {
   messageName,
   messagePayload,
   connectionId,
+  emailTemplateId,
   emailFrom,
   emailTo,
   emailCc,
@@ -786,10 +812,33 @@ function loadEmailProperties() {
 }
 
 // 表单绑定逻辑（依赖 formId/updateExtProp，通过 wrapper 闭包破环）
-const { forms, emailConnections, handleFormChange, loadForms, loadEmailConnections } = useTaskPropertiesForms(propsAccessor, {
+const {
+  forms,
+  emailConnections,
+  emailTemplates,
+  handleFormChange,
+  loadForms,
+  loadEmailConnections,
+  loadEmailTemplates
+} = useTaskPropertiesForms(propsAccessor, {
   formId,
   updateExtProp
 })
+
+async function applyEmailTemplate(templateId: string) {
+  updateExtProp('emailTemplateId', templateId || '')
+  if (!templateId) return
+  try {
+    const res = await emailTemplateApi.get(props.functionUnitId, Number(templateId))
+    const tpl = res.data
+    emailSubject.value = tpl.subject || ''
+    emailBody.value = tpl.bodyHtml || ''
+    onEmailConfigChange('emailSubject', emailSubject.value)
+    onEmailConfigChange('emailBody', emailBody.value)
+  } catch {
+    ElMessage.error(t('properties.emailTemplateLoadFailed'))
+  }
+}
 
 watch(() => props.element, loadEmailProperties, { immediate: true })
 
@@ -797,6 +846,7 @@ onMounted(() => {
   loadEmailProperties()
   loadForms()
   loadEmailConnections()
+  loadEmailTemplates()
 })
 </script>
 

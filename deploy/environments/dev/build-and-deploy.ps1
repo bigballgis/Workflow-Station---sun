@@ -586,6 +586,41 @@ Wait-ForContainerHealth -ContainerName "platform-user-portal-dev" -DisplayName "
 Wait-ForContainerHealth -ContainerName "platform-developer-workstation-dev" -DisplayName "Developer Workstation"
 Wait-ForContainerHealth -ContainerName "platform-edge-frontend-dev" -DisplayName "Edge frontend (single-origin)"
 
+# Superset setup must run via host docker exec — never from postgres init-scripts.
+# Superset prints benign warnings (e.g. flask-limiter in-memory storage) to stderr.
+# Under $ErrorActionPreference="Stop", merged native stderr (2>&1) would be promoted to a
+# terminating NativeCommandError, so temporarily relax to Continue and rely on $LASTEXITCODE.
+$supersetContainer = "platform-superset-dev"
+$supersetRunning = docker ps -q -f "name=^/${supersetContainer}$" 2>$null
+if ($supersetRunning) {
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+
+    Write-Host "  Running Superset db upgrade..." -ForegroundColor DarkGray
+    docker exec $supersetContainer superset db upgrade 2>&1 | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "  Superset db upgrade complete." -ForegroundColor Green
+    } else {
+        Write-Host "  WARNING: Superset db upgrade failed — retry: docker exec $supersetContainer superset db upgrade" -ForegroundColor Yellow
+    }
+
+    Write-Host "  Running Superset init (admin + roles)..." -ForegroundColor DarkGray
+    docker exec $supersetContainer superset fab create-admin `
+        --username admin --firstname Admin --lastname User `
+        --email admin@superset.com --password admin123 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "  Superset admin may already exist (continuing)." -ForegroundColor DarkGray
+    }
+    docker exec $supersetContainer superset init 2>&1 | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "  Superset init complete." -ForegroundColor Green
+    } else {
+        Write-Host "  WARNING: Superset init failed — retry: ./deploy/scripts/superset-init.sh" -ForegroundColor Yellow
+    }
+
+    $ErrorActionPreference = $prevEap
+}
+
 Write-Host "  Current service status:" -ForegroundColor Cyan
 docker compose -f $ComposeFile --env-file $EnvFile ps
 

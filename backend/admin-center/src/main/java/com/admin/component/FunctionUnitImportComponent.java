@@ -70,18 +70,29 @@ public class FunctionUnitImportComponent {
             FunctionUnitPackageParser.ParsedImportPackage parsed = parseImportRequest(request);
             FunctionUnitManagerComponent.FunctionPackageContent packageContent = parsed.getPackageContent();
 
-            // 3. No conflict strategy: name absent → import as a new unit; name present → overwrite the
-            //    latest row's content in place. Import does NOT bump the version — version increments are
-            //    owned by deploy. The imported package just becomes the new pending image of that unit.
+            // 3. Catalog import rules:
+            //    - Same name + same (code, version) → overwrite that row in place (re-import)
+            //    - Same name + new semver from DW publish → new catalog row (portal sees new version)
+            //    - Name absent → new unit; (code, version) taken under another name → next free patch
             FunctionUnit existingByName = functionUnitRepository.findLatestByName(packageContent.getName()).orElse(null);
-            final boolean versioned = existingByName != null;
-            if (versioned) {
-                // Keep the existing code + version unchanged; reuse the same row.
+            FunctionUnit overwriteTarget = null;
+            boolean versioned = false;
+
+            if (existingByName != null) {
                 packageContent.setCode(existingByName.getCode());
-                packageContent.setVersion(existingByName.getVersion());
+                String incomingVersion = packageContent.getVersion();
+                Optional<FunctionUnit> existingSameVersion = functionUnitRepository.findByCodeAndVersion(
+                        existingByName.getCode(), incomingVersion);
+                versioned = true;
+                if (existingSameVersion.isPresent()) {
+                    overwriteTarget = existingSameVersion.get();
+                } else {
+                    log.info("Importing new catalog version {} for code {} (latest by name was {})",
+                            incomingVersion, existingByName.getCode(), existingByName.getVersion());
+                }
             } else if (packageContent.getCode() != null
-                    && functionUnitRepository.existsByCodeAndVersion(packageContent.getCode(), packageContent.getVersion())) {
-                // New name but the (code, version) pair is taken under another name → pick the next free version.
+                    && functionUnitRepository.existsByCodeAndVersion(
+                            packageContent.getCode(), packageContent.getVersion())) {
                 packageContent.setVersion(nextAvailableVersion(packageContent.getCode()));
             }
 
@@ -92,9 +103,9 @@ public class FunctionUnitImportComponent {
             // 4. Detect dependency conflicts
             List<ImportResult.DependencyConflict> conflicts = detectConflicts(packageContent);
 
-            // 5. Create a new unit, or overwrite the existing same-name unit's content in place.
-            FunctionUnit functionUnit = versioned
-                    ? overwriteFunctionUnit(existingByName, packageContent, request, importerId)
+            // 5. Create a new unit, or overwrite the matching (code, version) row in place.
+            FunctionUnit functionUnit = overwriteTarget != null
+                    ? overwriteFunctionUnit(overwriteTarget, packageContent, request, importerId)
                     : createFunctionUnit(packageContent, request, importerId);
 
             // 7. Save dependencies
@@ -409,9 +420,9 @@ public class FunctionUnitImportComponent {
     }
 
     /**
-     * Overwrite an existing same-name function unit's content in place: clear its old child content
+     * Overwrite an existing (code, version) row in place: clear its old child content
      * (contents/dependencies/access; actions are cleared by saveImportedActions) and refresh metadata,
-     * keeping the same id, code and version. Version is NOT changed — deploy owns version increments.
+     * keeping the same id, code and version.
      */
     private FunctionUnit overwriteFunctionUnit(FunctionUnit existing,
                                                FunctionUnitManagerComponent.FunctionPackageContent packageContent,

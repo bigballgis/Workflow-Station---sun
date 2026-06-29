@@ -58,6 +58,7 @@ export function useTaskPropertiesState(
 
   // Send task email config
   const connectionId = ref('')
+  const emailTemplateId = ref('')
   const emailFrom = ref('')
   const emailTo = ref('')
   const emailCc = ref('')
@@ -147,6 +148,7 @@ export function useTaskPropertiesState(
 
     // Send task email properties
     connectionId.value = ext.connectionId || ''
+    emailTemplateId.value = ext.emailTemplateId || ''
     emailFrom.value = ext.emailFrom || ''
     emailTo.value = ext.emailTo || ''
     emailCc.value = ext.emailCc || ''
@@ -207,6 +209,7 @@ export function useTaskPropertiesState(
     messageName,
     messagePayload,
     connectionId,
+    emailTemplateId,
     emailFrom,
     emailTo,
     emailCc,

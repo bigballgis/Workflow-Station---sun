@@ -6,6 +6,7 @@ import com.workflow.client.AdminCenterClient;
 import com.workflow.service.EmailSendOptions;
 import com.workflow.service.EmailSenderService;
 import com.workflow.util.BpmnExtensionUtils;
+import com.workflow.util.EmailTemplateResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.flowable.bpmn.model.BpmnModel;
@@ -79,8 +80,8 @@ public class SendEmailTaskDelegate implements JavaDelegate {
         String resolvedFrom = BpmnExtensionUtils.resolveExpression(emailFrom, variables);
         String resolvedFromName = emailFromName != null
                 ? BpmnExtensionUtils.resolveExpression(emailFromName, variables) : null;
-        String resolvedSubject = BpmnExtensionUtils.resolveExpression(emailSubject, variables);
-        String resolvedBody = BpmnExtensionUtils.resolveExpression(
+        String resolvedSubject = EmailTemplateResolver.resolve(emailSubject, variables);
+        String resolvedBody = EmailTemplateResolver.resolve(
                 emailBody != null ? emailBody : "", variables);
         List<EmailSendOptions.EmailAttachmentPart> attachments =
                 parseAttachments(emailAttachmentsJson, variables);

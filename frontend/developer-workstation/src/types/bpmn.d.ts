@@ -155,6 +155,7 @@ export interface MessageEventProperties {
 export interface SendTaskEmailProperties {
   sendMode?: 'email' | 'message'
   connectionId?: string
+  emailTemplateId?: string
   emailFrom?: string
   emailFromName?: string
   emailTo?: string

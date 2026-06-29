@@ -11,6 +11,7 @@ import type { BpmnElement, BpmnModeler } from '@/types/bpmn'
 import type { FormDefinition } from '@/api/functionUnit'
 import { functionUnitApi } from '@/api/functionUnit'
 import { connectionApi, type EmailConnection } from '@/api/connection'
+import { emailTemplateApi, type EmailTemplate } from '@/api/emailTemplate'
 
 /** 透传 props 的响应式访问器（与 SFC 内 reactive 适配器结构一致） */
 export interface TaskPropertiesAccessor {
@@ -31,6 +32,7 @@ export function useTaskPropertiesForms(
 ) {
   const forms = ref<FormDefinition[]>([])
   const emailConnections = ref<EmailConnection[]>([])
+  const emailTemplates = ref<EmailTemplate[]>([])
 
   function handleFormChange(id: number | null) {
     deps.updateExtProp('formId', id)
@@ -58,11 +60,22 @@ export function useTaskPropertiesForms(
     }
   }
 
+  async function loadEmailTemplates() {
+    try {
+      const res = await emailTemplateApi.list(props.functionUnitId)
+      emailTemplates.value = (res.data || []).filter(t => t.enabled)
+    } catch {
+      emailTemplates.value = []
+    }
+  }
+
   return {
     forms,
     emailConnections,
+    emailTemplates,
     handleFormChange,
     loadForms,
-    loadEmailConnections
+    loadEmailConnections,
+    loadEmailTemplates
   }
 }

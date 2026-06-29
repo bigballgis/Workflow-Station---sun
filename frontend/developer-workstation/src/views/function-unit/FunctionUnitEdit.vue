@@ -134,6 +134,15 @@
           />
         </el-tab-pane>
         <el-tab-pane
+          :label="t('emailTemplate.title')"
+          name="email-templates"
+        >
+          <EmailTemplateDesigner
+            v-if="activeTab === 'email-templates'"
+            :function-unit-id="functionUnitId"
+          />
+        </el-tab-pane>
+        <el-tab-pane
           :label="t('functionUnit.decisions')"
           name="decisions"
         >
@@ -445,6 +454,7 @@ import FormDesigner from '@/components/designer/FormDesigner.vue'
 import MainTableViewDesignTab from '@/components/designer/MainTableViewDesignTab.vue'
 import ActionDesigner from '@/components/designer/ActionDesigner.vue'
 import ConnectionDesigner from '@/components/designer/ConnectionDesigner.vue'
+import EmailTemplateDesigner from '@/components/designer/EmailTemplateDesigner.vue'
 import DecisionList from '@/components/designer/DecisionList.vue'
 import VersionManager from '@/components/version/VersionManager.vue'
 import IconPreview from '@/components/icon/IconPreview.vue'
