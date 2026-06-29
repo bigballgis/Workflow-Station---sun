@@ -3,6 +3,8 @@ package com.developer.component.impl;
 import com.developer.dto.ExportManifest;
 import com.developer.entity.ActionDefinition;
 import com.developer.entity.DecisionDefinition;
+import com.developer.entity.EmailConnection;
+import com.developer.entity.EmailMonitorRule;
 import com.developer.entity.FieldDefinition;
 import com.developer.entity.ForeignKey;
 import com.developer.entity.FormDefinition;
@@ -18,6 +20,8 @@ import com.developer.exception.DeveloperBusinessException;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.ActionDefinitionRepository;
 import com.developer.repository.DecisionDefinitionRepository;
+import com.developer.repository.EmailConnectionRepository;
+import com.developer.repository.EmailMonitorRuleRepository;
 import com.developer.repository.FormDefinitionRepository;
 import com.developer.repository.FormStageBindingRepository;
 import com.developer.repository.FunctionUnitRepository;
@@ -66,6 +70,8 @@ public class FunctionUnitExporter {
     private final FormDefinitionRepository formDefinitionRepository;
     private final ActionDefinitionRepository actionDefinitionRepository;
     private final DecisionDefinitionRepository decisionDefinitionRepository;
+    private final EmailConnectionRepository emailConnectionRepository;
+    private final EmailMonitorRuleRepository emailMonitorRuleRepository;
     private final FormStageBindingRepository formStageBindingRepository;
     private final TableRelationRepository tableRelationRepository;
     private final SubTableViewConfigRepository subTableViewConfigRepository;
@@ -127,6 +133,8 @@ public class FunctionUnitExporter {
             List<String> tableFiles = new ArrayList<>();
             List<String> formFiles = new ArrayList<>();
             List<String> actionFiles = new ArrayList<>();
+            List<String> connectionFiles = new ArrayList<>();
+            List<String> monitorFiles = new ArrayList<>();
 
             // Export process definition — decode Base64 to raw XML
             String processFile = null;
@@ -209,6 +217,28 @@ public class FunctionUnitExporter {
                 actionIndex++;
             }
 
+            // Export email connections
+            int connectionIndex = 0;
+            for (EmailConnection connection : emailConnectionRepository.findByFunctionUnitIdOrderByNameAsc(functionUnitId)) {
+                String fileName = "connections/connection_" + connectionIndex + ".json";
+                byte[] data = objectMapper.writeValueAsBytes(serializeConnection(connection));
+                fileContents.put(fileName, data);
+                addZipEntry(zos, fileName, data);
+                connectionFiles.add(fileName);
+                connectionIndex++;
+            }
+
+            // Export inbound email monitor rules
+            int monitorIndex = 0;
+            for (EmailMonitorRule rule : emailMonitorRuleRepository.findByFunctionUnitIdOrderByNameAsc(functionUnitId)) {
+                String fileName = "email-monitors/monitor_" + monitorIndex + ".json";
+                byte[] data = objectMapper.writeValueAsBytes(serializeMonitorRule(rule));
+                fileContents.put(fileName, data);
+                addZipEntry(zos, fileName, data);
+                monitorFiles.add(fileName);
+                monitorIndex++;
+            }
+
             // Export decision definitions (DMN XML)
             List<String> decisionFiles = new ArrayList<>();
             int decisionIndex = 0;
@@ -249,6 +279,8 @@ public class FunctionUnitExporter {
                             .forms(formFiles)
                             .actions(actionFiles)
                             .decisions(decisionFiles)
+                            .connections(connectionFiles)
+                            .emailMonitors(monitorFiles)
                             .build())
                     .dependencies(new ArrayList<>())
                     .icon(iconInfo)
@@ -460,6 +492,51 @@ public class FunctionUnitExporter {
         map.put("buttonColor", action.getButtonColor());
         map.put("description", action.getDisplayName());
         map.put("isDefault", action.getIsDefault());
+        return map;
+    }
+
+    private Map<String, Object> serializeConnection(EmailConnection connection) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("connectionUid", connection.getConnectionUid());
+        map.put("name", connection.getName());
+        map.put("connectionType", connection.getConnectionType().name());
+        map.put("host", connection.getHost());
+        map.put("port", connection.getPort());
+        map.put("username", connection.getUsername());
+        map.put("passwordEncrypted", connection.getPasswordEncrypted());
+        map.put("fromEmail", connection.getFromEmail());
+        map.put("fromName", connection.getFromName());
+        map.put("useTls", connection.getUseTls());
+        map.put("enabled", connection.getEnabled());
+        map.put("direction", connection.getDirection() != null ? connection.getDirection().name() : "OUTBOUND");
+        map.put("oauthProvider", connection.getOauthProvider() != null ? connection.getOauthProvider().name() : null);
+        map.put("oauthRefreshTokenEncrypted", connection.getOauthRefreshTokenEncrypted());
+        map.put("oauthAccessTokenEncrypted", connection.getOauthAccessTokenEncrypted());
+        map.put("tokenExpiresAt", connection.getTokenExpiresAt() != null ? connection.getTokenExpiresAt().toString() : null);
+        map.put("mailboxAddress", connection.getMailboxAddress());
+        map.put("oauthScopes", connection.getOauthScopes());
+        return map;
+    }
+
+    private Map<String, Object> serializeMonitorRule(EmailMonitorRule rule) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("ruleUid", rule.getRuleUid());
+        map.put("name", rule.getName());
+        map.put("enabled", rule.getEnabled());
+        map.put("connectionUid", rule.getConnectionUid());
+        map.put("processDefinitionKey", rule.getProcessDefinitionKey());
+        map.put("startEventId", rule.getStartEventId());
+        map.put("folderLabel", rule.getFolderLabel());
+        map.put("filterFrom", rule.getFilterFrom());
+        map.put("filterSubject", rule.getFilterSubject());
+        map.put("actionType", rule.getActionType() != null ? rule.getActionType().name() : "START_PROCESS");
+        map.put("targetFormId", rule.getTargetFormId());
+        map.put("targetBindingId", rule.getTargetBindingId());
+        map.put("systemInitiatorUserId", rule.getSystemInitiatorUserId());
+        map.put("extractionRules", rule.getExtractionRules());
+        map.put("correlation", rule.getCorrelation());
+        map.put("pollIntervalSeconds", rule.getPollIntervalSeconds());
+        map.put("reviewOnMissing", rule.getReviewOnMissing());
         return map;
     }
 }

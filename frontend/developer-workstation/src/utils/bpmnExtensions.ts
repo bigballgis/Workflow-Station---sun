@@ -355,6 +355,18 @@ export function isProcess(element: BpmnElement): boolean {
   return getElementType(element) === 'bpmn:Process'
 }
 
+/** Walks parent chain to find the enclosing bpmn:Process id (process definition key). */
+export function resolveProcessDefinitionKey(element: BpmnElement | null | undefined): string {
+  let bo = element?.businessObject as { $type?: string; id?: string; $parent?: unknown } | undefined
+  while (bo) {
+    if (bo.$type === 'bpmn:Process') {
+      return bo.id || ''
+    }
+    bo = bo.$parent as typeof bo | undefined
+  }
+  return ''
+}
+
 /**
  * 获取元素的基本属性
  */

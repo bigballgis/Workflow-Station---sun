@@ -126,6 +126,21 @@ public class TaskFormComponent {
         return r;
     }
 
+    /** Lazy: hydrates {@code up_process_instance} for engine-only starts (email monitor). */
+    @Lazy
+    @Autowired
+    private ProcessInstanceHydrationComponent processInstanceHydration;
+
+    private ProcessInstance requireProcessInstance(String processInstanceId) {
+        ProcessInstanceHydrationComponent hydration = processInstanceHydration;
+        if (hydration != null) {
+            return hydration.requireProcessInstance(processInstanceId);
+        }
+        return processInstanceRepository.findById(processInstanceId)
+                .orElseThrow(() -> new PortalException("404",
+                        "Process instance not found: " + processInstanceId));
+    }
+
     @Value("${developer-workstation.url:http://localhost:8091}")
     private String developerWorkstationUrl;
 
@@ -149,9 +164,7 @@ public class TaskFormComponent {
         log.info("[PERF] form-data.fetchTaskFormByStageId took {} ms", (System.nanoTime() - __t) / 1_000_000L);
 
         // Get process instance for variables
-        ProcessInstance processInstance = processInstanceRepository.findById(taskInfo.processInstanceId)
-                .orElseThrow(() -> new PortalException("404",
-                        "Process instance not found: " + taskInfo.processInstanceId));
+        ProcessInstance processInstance = requireProcessInstance(taskInfo.processInstanceId);
 
         Map<String, Object> allVariables = processInstance.getVariables() != null
                 ? processInstance.getVariables()
@@ -285,9 +298,7 @@ public class TaskFormComponent {
         AtomicReference<Set<String>> concurrentFieldsRef = new AtomicReference<>(Set.of());
 
         taskFormWriteTx().executeWithoutResult(status -> {
-            ProcessInstance processInstance = processInstanceRepository.findById(taskInfo.processInstanceId)
-                    .orElseThrow(() -> new PortalException("404",
-                            "Process instance not found: " + taskInfo.processInstanceId));
+            ProcessInstance processInstance = requireProcessInstance(taskInfo.processInstanceId);
 
             Map<String, Object> currentVariables = processInstance.getVariables() != null
                     ? new HashMap<>(processInstance.getVariables())
@@ -374,9 +385,7 @@ public class TaskFormComponent {
 
         TaskInfo taskInfo = getTaskInfo(taskId);
 
-        ProcessInstance processInstance = processInstanceRepository.findById(taskInfo.processInstanceId)
-                .orElseThrow(() -> new PortalException("404",
-                        "Process instance not found: " + taskInfo.processInstanceId));
+        ProcessInstance processInstance = requireProcessInstance(taskInfo.processInstanceId);
 
         Map<String, Object> allVariables = processInstance.getVariables() != null
                 ? processInstance.getVariables()
@@ -511,9 +520,7 @@ public class TaskFormComponent {
 
     private void persistTaskFormSnapshot(String taskId, String userId, String taskDefinitionKey,
                                          String processInstanceId, Map<String, Object> completedVariables) {
-        ProcessInstance processInstance = processInstanceRepository.findById(processInstanceId)
-                .orElseThrow(() -> new PortalException("404",
-                        "Process instance not found: " + processInstanceId));
+        ProcessInstance processInstance = requireProcessInstance(processInstanceId);
 
         Map<String, Object> merged = new HashMap<>();
         if (processInstance.getVariables() != null) {

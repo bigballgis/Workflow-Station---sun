@@ -134,6 +134,8 @@ export interface StartEventProperties {
   formId?: number
   formName?: string
   initiator?: string
+  emailMonitorRuleId?: string
+  emailMonitorEnabled?: string
 }
 
 export interface EndEventProperties {

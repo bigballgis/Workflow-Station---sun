@@ -23,10 +23,47 @@ const adminCenterAxios = axios.create({
   withCredentials: true
 })
 
+adminCenterAxios.interceptors.request.use(config => {
+  const user = getUser()
+  if (user?.userId) {
+    config.headers['X-User-Id'] = user.userId
+  }
+  return config
+})
+
 adminCenterAxios.interceptors.response.use(
   response => response.data,
   error => Promise.reject(error)
 )
+
+/** Platform user row for initiator / assignee pickers */
+export interface PlatformUserOption {
+  id: string
+  username: string
+  displayName: string
+  email: string
+}
+
+interface AdminUserListRow {
+  id: string
+  username?: string
+  fullName?: string
+  displayName?: string
+  email?: string
+}
+
+interface AdminUserPage {
+  content?: AdminUserListRow[]
+}
+
+function mapPlatformUser(u: AdminUserListRow): PlatformUserOption {
+  return {
+    id: u.id,
+    username: u.username ?? '',
+    displayName: u.displayName || u.fullName || u.username || u.id,
+    email: u.email ?? ''
+  }
+}
 
 /** User business unit membership */
 export interface UserBusinessUnitMembership {
@@ -77,5 +114,26 @@ export const userApi = {
 
   /** Change password (developer-workstation auth service) */
   changePassword: (data: { oldPassword: string; newPassword: string }): Promise<void> =>
-    workstationAuthAxios.post('/change-password', data)
+    workstationAuthAxios.post('/change-password', data),
+
+  /** Search platform users (name / username / email) for System Initiator picker */
+  searchUsers: async (keyword?: string): Promise<PlatformUserOption[]> => {
+    const params: Record<string, string | number> = { page: 0, size: 50 }
+    const q = keyword?.trim()
+    if (q) params.keyword = q
+    const res = (await adminCenterAxios.get('/users', { params })) as AdminUserPage
+    return (res.content ?? []).map(mapPlatformUser)
+  },
+
+  getUserById: async (userId: string): Promise<PlatformUserOption | null> => {
+    const id = userId.trim()
+    if (!id) return null
+    try {
+      const u = (await adminCenterAxios.get(`/users/${encodeURIComponent(id)}`)) as AdminUserListRow
+      if (!u?.id) return null
+      return mapPlatformUser(u)
+    } catch {
+      return null
+    }
+  }
 }

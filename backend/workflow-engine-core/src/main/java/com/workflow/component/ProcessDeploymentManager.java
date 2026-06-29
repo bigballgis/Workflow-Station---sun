@@ -12,7 +12,9 @@ import org.flowable.bpmn.converter.BpmnXMLConverter;
 import org.flowable.bpmn.model.BpmnModel;
 import org.flowable.bpmn.model.ExtensionElement;
 import org.flowable.bpmn.model.ImplementationType;
+import org.flowable.bpmn.model.FlowElement;
 import org.flowable.bpmn.model.Process;
+import org.flowable.bpmn.model.SendTask;
 import org.flowable.bpmn.model.ServiceTask;
 import org.flowable.engine.RepositoryService;
 import org.flowable.engine.RuntimeService;
@@ -28,6 +30,7 @@ import javax.xml.stream.XMLStreamReader;
 import java.io.ByteArrayInputStream;
 import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -377,7 +380,9 @@ public class ProcessDeploymentManager {
                 .replaceAll("(</\\s*)MultiInstanceLoopCharacteristics(\\s*>)", "$1multiInstanceLoopCharacteristics$2");
 
         // Bind Activepieces service tasks to the apTaskExecutor delegate (see method doc).
-        return bindActivepiecesServiceTasks(normalized);
+        String withApTasks = bindActivepiecesServiceTasks(normalized);
+        // Convert designer Send Email tasks (bpmn:sendTask + connectionId) to serviceTask delegates.
+        return bindSendEmailTasks(withApTasks);
     }
 
     /**
@@ -457,6 +462,109 @@ public class ProcessDeploymentManager {
             }
         }
         return false;
+    }
+
+    /**
+     * Convert BPMN Send Tasks created by the email designer into Service Tasks bound to
+     * {@code ${sendEmailTaskDelegate}}.
+     *
+     * <p>The designer emits {@code bpmn:sendTask} with custom extension properties (connectionId,
+     * emailTo, …) but no Flowable {@code type}/{@code operation}, so deploy validation fails with
+     * {@code flowable-sendtask-invalid-implementation}. SendTask in Flowable 7 does not support
+     * JavaDelegate; ServiceTask does — same pattern as {@link #bindActivepiecesServiceTasks}.
+     */
+    private String bindSendEmailTasks(String bpmnXml) {
+        if (bpmnXml == null || bpmnXml.isBlank()) {
+            return bpmnXml;
+        }
+        if (!bpmnXml.contains("sendTask") && !bpmnXml.contains("SendTask")) {
+            return bpmnXml;
+        }
+        if (!bpmnXml.contains("connectionId")) {
+            return bpmnXml;
+        }
+        try {
+            BpmnXMLConverter converter = new BpmnXMLConverter();
+            XMLInputFactory xif = XMLInputFactory.newInstance();
+            xif.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, Boolean.FALSE);
+            xif.setProperty(XMLInputFactory.SUPPORT_DTD, Boolean.FALSE);
+            XMLStreamReader reader = xif.createXMLStreamReader(new StringReader(bpmnXml));
+            BpmnModel model = converter.convertToBpmnModel(reader);
+
+            boolean changed = false;
+            for (Process process : model.getProcesses()) {
+                List<SendTask> emailSendTasks = new ArrayList<>();
+                for (SendTask sendTask : process.findFlowElementsOfType(SendTask.class, true)) {
+                    if (isSendEmailTask(sendTask)) {
+                        emailSendTasks.add(sendTask);
+                    }
+                }
+                for (SendTask sendTask : emailSendTasks) {
+                    ServiceTask serviceTask = toSendEmailServiceTask(sendTask);
+                    process.removeFlowElement(sendTask.getId());
+                    process.addFlowElement(serviceTask);
+                    changed = true;
+                    log.info("Converted Send Email task '{}' to serviceTask with sendEmailTaskDelegate",
+                            sendTask.getId());
+                }
+            }
+
+            if (!changed) {
+                return bpmnXml;
+            }
+            return new String(converter.convertToXML(model), StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            log.warn("Send Email task binding skipped (deploy continues with original XML): {}",
+                    e.getMessage());
+            return bpmnXml;
+        }
+    }
+
+    private boolean isSendEmailTask(SendTask sendTask) {
+        String connectionId = getExtensionPropertyValue(sendTask, "connectionId");
+        return StringUtils.hasText(connectionId);
+    }
+
+    private ServiceTask toSendEmailServiceTask(SendTask sendTask) {
+        ServiceTask serviceTask = new ServiceTask();
+        serviceTask.setId(sendTask.getId());
+        serviceTask.setName(sendTask.getName());
+        serviceTask.setDocumentation(sendTask.getDocumentation());
+        if (sendTask.getExtensionElements() != null) {
+            serviceTask.setExtensionElements(new HashMap<>(sendTask.getExtensionElements()));
+        }
+        serviceTask.setExecutionListeners(sendTask.getExecutionListeners());
+        serviceTask.setLoopCharacteristics(sendTask.getLoopCharacteristics());
+        serviceTask.setAsynchronous(sendTask.isAsynchronous());
+        serviceTask.setExclusive(sendTask.isExclusive());
+        serviceTask.setNotExclusive(sendTask.isNotExclusive());
+        serviceTask.setImplementationType(ImplementationType.IMPLEMENTATION_TYPE_DELEGATEEXPRESSION);
+        serviceTask.setImplementation("${sendEmailTaskDelegate}");
+        return serviceTask;
+    }
+
+    private String getExtensionPropertyValue(FlowElement element, String propertyName) {
+        Map<String, List<ExtensionElement>> extensionElements = element.getExtensionElements();
+        if (extensionElements == null || extensionElements.isEmpty()) {
+            return null;
+        }
+        List<ExtensionElement> propertiesElements = extensionElements.get("properties");
+        if (propertiesElements == null) {
+            return null;
+        }
+        for (ExtensionElement propertiesElement : propertiesElements) {
+            List<ExtensionElement> propertyElements = propertiesElement.getChildElements().get("property");
+            if (propertyElements == null) {
+                continue;
+            }
+            for (ExtensionElement propertyElement : propertyElements) {
+                String name = propertyElement.getAttributeValue(null, "name");
+                if (propertyName.equals(name)) {
+                    return propertyElement.getAttributeValue(null, "value");
+                }
+            }
+        }
+        return null;
     }
 
     private ProcessDefinitionResult convertToProcessDefinitionResult(ProcessDefinition processDefinition, Deployment deployment) {

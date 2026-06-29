@@ -1,5 +1,6 @@
 package com.portal.controller;
 
+import com.portal.component.ProcessInstanceHydrationComponent;
 import com.portal.component.ProcessRuntimePurgeComponent;
 import com.portal.config.PortalInternalApiProperties;
 import com.platform.common.dto.ApiResponse;
@@ -23,6 +24,21 @@ public class InternalRuntimeController {
 
     private final PortalInternalApiProperties portalInternalApiProperties;
     private final ProcessRuntimePurgeComponent processRuntimePurgeComponent;
+    private final ProcessInstanceHydrationComponent processInstanceHydrationComponent;
+
+    @PostMapping("/hydrate-process-instance")
+    public ApiResponse<Map<String, Object>> hydrateProcessInstance(
+            @RequestHeader(value = "X-Internal-Token", required = false) String token,
+            @RequestBody Map<String, String> body) {
+        portalInternalApiProperties.requireValidToken(token);
+        String rawId = body != null ? body.get("processInstanceId") : null;
+        if (!StringUtils.hasText(rawId)) {
+            return ApiResponse.error("BAD_REQUEST", "processInstanceId 不能为空");
+        }
+        String processInstanceId = rawId.trim();
+        processInstanceHydrationComponent.requireProcessInstance(processInstanceId);
+        return ApiResponse.success(Map.of("processInstanceId", processInstanceId, "hydrated", true));
+    }
 
     @PostMapping("/purge-by-catalog")
     public ApiResponse<Map<String, Object>> purgeByCatalog(

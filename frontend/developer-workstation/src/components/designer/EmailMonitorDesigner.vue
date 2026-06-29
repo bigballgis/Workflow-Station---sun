@@ -1,0 +1,286 @@
+<template>
+  <div class="email-monitor-designer">
+    <div class="designer-toolbar">
+      <el-button type="primary" @click="openCreateDialog">{{ t('emailMonitor.create') }}</el-button>
+      <el-button @click="loadRules" :loading="loading">
+        <el-icon><Refresh /></el-icon> {{ t('common.refresh') }}
+      </el-button>
+    </div>
+
+    <el-alert
+      v-if="inboundConnections.length === 0"
+      type="warning"
+      :closable="false"
+      :title="t('emailMonitor.noInboundConnection')"
+      style="margin-bottom: 12px;"
+    />
+
+    <el-table
+      :data="rules"
+      v-loading="loading"
+      stripe
+      class="monitor-rules-table"
+      @row-click="handleRowClick"
+    >
+      <el-table-column prop="name" :label="t('emailMonitor.name')" min-width="160" />
+      <el-table-column prop="connectionUid" :label="t('emailMonitor.connection')" min-width="160">
+        <template #default="{ row }">{{ connectionName(row.connectionUid) }}</template>
+      </el-table-column>
+      <el-table-column prop="processDefinitionKey" :label="t('emailMonitor.process')" min-width="140" show-overflow-tooltip />
+      <el-table-column prop="startEventId" :label="t('emailMonitor.startEventId')" min-width="120" show-overflow-tooltip />
+      <el-table-column prop="enabled" :label="t('emailMonitor.enabled')" width="90">
+        <template #default="{ row }">
+          <el-tag :type="row.enabled ? 'success' : 'info'" size="small">
+            {{ row.enabled ? t('common.yes') : t('common.no') }}
+          </el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column :label="t('common.actions')" width="160">
+        <template #default="{ row }">
+          <div class="row-actions" @click.stop>
+            <el-button link type="primary" @click="openEditDialog(row as EmailMonitorRule)">{{ t('common.edit') }}</el-button>
+            <el-button link type="danger" @click="handleDelete(row as EmailMonitorRule)">{{ t('common.delete') }}</el-button>
+          </div>
+        </template>
+      </el-table-column>
+    </el-table>
+
+    <el-dialog
+      v-model="showFormDialog"
+      :title="editingId ? t('emailMonitor.edit') : t('emailMonitor.create')"
+      width="900px"
+      destroy-on-close
+      top="5vh"
+    >
+      <el-form :model="form" label-position="top" class="monitor-form">
+        <div class="form-grid">
+          <el-form-item :label="t('emailMonitor.name')" required>
+            <el-input v-model="form.name" :placeholder="t('emailMonitor.namePlaceholder')" />
+          </el-form-item>
+          <el-form-item :label="t('emailMonitor.connection')" required>
+            <el-select v-model="form.connectionUid" style="width: 100%;" :placeholder="t('emailMonitor.connectionPlaceholder')">
+              <el-option
+                v-for="c in inboundConnections"
+                :key="c.connectionUid"
+                :label="`${c.name} (${c.connectionType})`"
+                :value="c.connectionUid"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item :label="t('emailMonitor.process')">
+            <el-input v-model="form.processDefinitionKey" :placeholder="t('emailMonitor.processPlaceholder')" />
+          </el-form-item>
+          <el-form-item :label="t('emailMonitor.systemInitiator')">
+            <SystemInitiatorSelect v-model="form.systemInitiatorUserId" />
+          </el-form-item>
+          <el-form-item :label="t('emailMonitor.folderLabel')">
+            <el-input v-model="form.folderLabel" placeholder="INBOX" />
+          </el-form-item>
+          <el-form-item :label="t('emailMonitor.pollInterval')">
+            <el-input-number v-model="form.pollIntervalSeconds" :min="30" :step="30" controls-position="right" />
+          </el-form-item>
+          <el-form-item :label="t('emailMonitor.filterFrom')">
+            <el-input v-model="form.filterFrom" :placeholder="t('emailMonitor.filterFromPlaceholder')" />
+          </el-form-item>
+          <el-form-item :label="t('emailMonitor.filterSubject')">
+            <el-input v-model="form.filterSubject" :placeholder="t('emailMonitor.filterSubjectPlaceholder')" />
+          </el-form-item>
+        </div>
+        <el-form-item>
+          <el-checkbox v-model="form.reviewOnMissing">{{ t('emailMonitor.reviewOnMissing') }}</el-checkbox>
+        </el-form-item>
+
+        <el-divider>{{ t('emailMonitor.wizard.title') }}</el-divider>
+        <EmailExtractionWizard v-model="form.extractionRules" :function-unit-id="functionUnitId" />
+      </el-form>
+      <template #footer>
+        <el-button @click="showFormDialog = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="handleSave" :loading="saving">{{ t('common.save') }}</el-button>
+      </template>
+    </el-dialog>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, reactive, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Refresh } from '@element-plus/icons-vue'
+import EmailExtractionWizard from '@/components/designer/email/EmailExtractionWizard.vue'
+import SystemInitiatorSelect from '@/components/designer/email/SystemInitiatorSelect.vue'
+import {
+  emailMonitorApi,
+  type EmailMonitorRule,
+  type EmailMonitorRuleRequest
+} from '@/api/emailMonitor'
+import { connectionApi, type EmailConnection } from '@/api/connection'
+import { resolveUserFacingHttpMessage } from '@/utils/httpErrorMessage'
+
+const props = defineProps<{ functionUnitId: number }>()
+const { t } = useI18n()
+
+const rules = ref<EmailMonitorRule[]>([])
+const connections = ref<EmailConnection[]>([])
+const loading = ref(false)
+const saving = ref(false)
+const showFormDialog = ref(false)
+const editingId = ref<number | null>(null)
+
+const inboundConnections = computed(() =>
+  connections.value.filter(c => c.direction === 'INBOUND' || c.direction === 'BOTH')
+)
+
+const defaultForm = (): EmailMonitorRuleRequest => ({
+  name: '',
+  enabled: true,
+  connectionUid: '',
+  processDefinitionKey: '',
+  systemInitiatorUserId: '',
+  folderLabel: 'INBOX',
+  filterFrom: '',
+  filterSubject: '',
+  actionType: 'START_PROCESS',
+  pollIntervalSeconds: 60,
+  reviewOnMissing: true,
+  extractionRules: {}
+})
+
+const form = reactive<EmailMonitorRuleRequest>(defaultForm())
+
+function connectionName(uid: string): string {
+  return connections.value.find(c => c.connectionUid === uid)?.name ?? uid
+}
+
+async function loadRules() {
+  loading.value = true
+  try {
+    const [rulesRes, connRes] = await Promise.all([
+      emailMonitorApi.list(props.functionUnitId),
+      connectionApi.list(props.functionUnitId)
+    ])
+    rules.value = rulesRes.data || []
+    connections.value = connRes.data || []
+  } catch {
+    ElMessage.error(t('emailMonitor.loadFailed'))
+  } finally {
+    loading.value = false
+  }
+}
+
+function openCreateDialog() {
+  editingId.value = null
+  Object.assign(form, defaultForm())
+  showFormDialog.value = true
+}
+
+function handleRowClick(row: EmailMonitorRule) {
+  void openEditDialog(row)
+}
+
+async function openEditDialog(row: EmailMonitorRule) {
+  editingId.value = row.id
+  try {
+    const res = await emailMonitorApi.get(props.functionUnitId, row.id)
+    const r = res.data
+    Object.assign(form, {
+      name: r.name,
+      enabled: r.enabled,
+      connectionUid: r.connectionUid,
+      processDefinitionKey: r.processDefinitionKey || '',
+      systemInitiatorUserId: r.systemInitiatorUserId || '',
+      folderLabel: r.folderLabel || 'INBOX',
+      filterFrom: r.filterFrom || '',
+      filterSubject: r.filterSubject || '',
+      actionType: r.actionType || 'START_PROCESS',
+      pollIntervalSeconds: r.pollIntervalSeconds || 60,
+      reviewOnMissing: r.reviewOnMissing ?? true,
+      extractionRules: r.extractionRules || {}
+    })
+    showFormDialog.value = true
+  } catch {
+    ElMessage.error(t('emailMonitor.loadFailed'))
+  }
+}
+
+async function handleSave() {
+  if (!form.name.trim()) {
+    ElMessage.warning(t('emailMonitor.nameRequired'))
+    return
+  }
+  if (!form.connectionUid) {
+    ElMessage.warning(t('emailMonitor.connectionRequired'))
+    return
+  }
+  saving.value = true
+  try {
+    const payload: EmailMonitorRuleRequest = {
+      ...form,
+      name: form.name.trim(),
+      processDefinitionKey: form.processDefinitionKey?.trim() || undefined,
+      systemInitiatorUserId: form.systemInitiatorUserId?.trim() || undefined,
+      filterFrom: form.filterFrom?.trim() || undefined,
+      filterSubject: form.filterSubject?.trim() || undefined
+    }
+    if (editingId.value) {
+      await emailMonitorApi.update(props.functionUnitId, editingId.value, payload)
+    } else {
+      await emailMonitorApi.create(props.functionUnitId, payload)
+    }
+    ElMessage.success(t('common.saveSuccess'))
+    showFormDialog.value = false
+    await loadRules()
+  } catch (e) {
+    ElMessage.error(resolveUserFacingHttpMessage(e, t) || t('common.saveFailed'))
+  } finally {
+    saving.value = false
+  }
+}
+
+async function handleDelete(row: EmailMonitorRule) {
+  try {
+    await ElMessageBox.confirm(
+      t('emailMonitor.deleteConfirm', { name: row.name }),
+      t('common.confirm'),
+      { type: 'warning' }
+    )
+    await emailMonitorApi.delete(props.functionUnitId, row.id)
+    ElMessage.success(t('common.deleteSuccess'))
+    await loadRules()
+  } catch {
+    // cancelled or failed
+  }
+}
+
+onMounted(loadRules)
+</script>
+
+<style scoped lang="scss">
+.email-monitor-designer {
+  padding: 8px 0;
+}
+.designer-toolbar {
+  margin-bottom: 16px;
+  display: flex;
+  gap: 8px;
+}
+.monitor-form {
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 16px;
+  }
+  :deep(.el-form-item) {
+    margin-bottom: 14px;
+  }
+}
+.monitor-rules-table {
+  :deep(.el-table__body tr) {
+    cursor: pointer;
+  }
+  .row-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+}
+</style>

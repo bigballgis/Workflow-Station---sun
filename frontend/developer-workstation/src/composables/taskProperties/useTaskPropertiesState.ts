@@ -56,6 +56,19 @@ export function useTaskPropertiesState(
   const messageName = ref('')
   const messagePayload = ref('')
 
+  // Send task email config
+  const connectionId = ref('')
+  const emailTemplateId = ref('')
+  const emailFrom = ref('')
+  const emailTo = ref('')
+  const emailCc = ref('')
+  const emailBcc = ref('')
+  const emailReplyTo = ref('')
+  const emailImportance = ref('normal')
+  const emailSensitivity = ref('normal')
+  const emailSubject = ref('')
+  const emailBody = ref('')
+
   // Business rule task config
   const ruleEngine = ref('dmn')
   const decisionRef = ref('')
@@ -75,6 +88,12 @@ export function useTaskPropertiesState(
       'bpmn:Task': t('properties.taskTypeTask')
     }
     return names[taskType.value] || t('properties.taskTypeTask')
+  })
+
+  const isSendEmailTask = computed(() => {
+    if (taskType.value === 'bpmn:SendTask') return true
+    if (!props.element) return false
+    return getElementType(props.element) === 'bpmn:SendTask'
   })
 
   function loadProperties() {
@@ -127,6 +146,19 @@ export function useTaskPropertiesState(
     messageName.value = ext.messageName || ''
     messagePayload.value = ext.messagePayload || ''
 
+    // Send task email properties
+    connectionId.value = ext.connectionId || ''
+    emailTemplateId.value = ext.emailTemplateId || ''
+    emailFrom.value = ext.emailFrom || ''
+    emailTo.value = ext.emailTo || ''
+    emailCc.value = ext.emailCc || ''
+    emailBcc.value = ext.emailBcc || ''
+    emailReplyTo.value = ext.emailReplyTo || ''
+    emailImportance.value = ext.emailImportance || 'normal'
+    emailSensitivity.value = ext.emailSensitivity || 'normal'
+    emailSubject.value = ext.emailSubject || ''
+    emailBody.value = ext.emailBody || ext.messagePayload || ''
+
     // Business rule task properties
     ruleEngine.value = ext.ruleEngine || 'dmn'
     decisionRef.value = ext.decisionRef || ''
@@ -141,6 +173,13 @@ export function useTaskPropertiesState(
   function updateExtProp(name: string, value: any) {
     if (!props.element || !props.modeler) return
     setExtensionProperty(props.modeler, props.element, name, value)
+  }
+
+  function onEmailConfigChange(name: string, value: unknown) {
+    updateExtProp(name, value)
+    if (name === 'connectionId' && value) {
+      updateExtProp('sendMode', 'email')
+    }
   }
 
   return {
@@ -169,13 +208,26 @@ export function useTaskPropertiesState(
     resultVariable,
     messageName,
     messagePayload,
+    connectionId,
+    emailTemplateId,
+    emailFrom,
+    emailTo,
+    emailCc,
+    emailBcc,
+    emailReplyTo,
+    emailImportance,
+    emailSensitivity,
+    emailSubject,
+    emailBody,
     ruleEngine,
     decisionRef,
     ruleResultVariable,
     basicProps,
     taskTypeLabel,
+    isSendEmailTask,
     loadProperties,
     updateBasicProp,
-    updateExtProp
+    updateExtProp,
+    onEmailConfigChange
   }
 }

@@ -837,3 +837,111 @@
   note: |
     assigneeRoleIds.ts vitest 12 cases；verify-dw-assignee-multi-role.mjs 截图已绿。
     UserTaskProperties.vue 拆分为 UserTaskAssigneeConfigSection + UserTaskSubTaskConfigSection（provide/inject），495 行。
+- id: "1461"
+  status: fixed
+  fixed_at: "2026-06-30"
+  severity: major
+  category: deploy
+  summary: "dev 部署 init SQL 中断：build-and-deploy.ps1 用未赋值的 $env:POSTGRES_USER + psql stderr 被升级为终止错误"
+  file: "deploy/environments/dev/build-and-deploy.ps1"
+  note: |
+    症状一（role "-d"）：第 427 行 psql -U $env:POSTGRES_USER -d $env:POSTGRES_DB；--env-file 只对 docker compose 生效，
+    PowerShell 会话内 $env:POSTGRES_* 从未赋值（为空），psql 把 -d 当成用户名 → role "-d" does not exist。
+    修复一：迁移循环前从 .env 解析 POSTGRES_USER/POSTGRES_DB 到本地变量 $PgUser/$PgDb（带 dev 默认值），改用其传给 psql。
+    症状二（NativeCommandError 中断）：psql 对幂等脚本输出预期 WARNING/ERROR 到 stderr（如给本分支不存在的 ShowcaseLine 加列），
+    脚本顶部 $ErrorActionPreference='Stop' + PowerShell 7.4+ 把原生命令 stderr 升级为终止性错误 → 整个部署中断。
+    修复二：迁移循环用 try/finally 临时设 $ErrorActionPreference='Continue' 且关闭 $PSNativeCommandUseErrorActionPreference，循环后还原。
+    验证：补跑 00-schema/*.sql 全部成功，6 张 email 表（dw_/sys_/we_）已创建；脚本 Parser 语法检查通过。
+    遗留（既有、非本次）：Get-Content 管道把 SQL 中文 COMMENT 转成 ? 触发 syntax error，仅影响注释，ON_ERROR_STOP=0 跳过。
+    说明：此脚本仅 dev 使用；SIT/UAT/PROD 走 deploy/k8s，不受影响。
+- id: "1462"
+  status: fixed
+  fixed_at: "2026-06-30"
+  severity: major
+  category: bug
+  summary: "0627 Send Email 节点导致 FU 发布 validate 失败：flowable-sendtask-invalid-implementation"
+  file: "backend/workflow-engine-core/src/main/java/com/workflow/component/ProcessDeploymentManager.java"
+  note: |
+    症状：Designer 发布 MCY 等到 Admin Center 时 deploy.validate_failed；admin-center 日志 Dry-run failed，
+    workflow-engine 400：sendTask Activity_1lu6qyk 缺少 type/operation（flowable-sendtask-invalid-implementation）。
+    根因：0627 邮件功能设计器导出 bpmn:sendTask + connectionId 扩展属性，但 Flowable 7 SendTask 不支持 JavaDelegate。
+    修复：deploy 时 normalizeBpmnXml 将含 connectionId 的 SendTask 转为 ServiceTask + delegateExpression ${sendEmailTaskDelegate}；
+    单测 ProcessDeploymentManagerSendEmailTest；容器内 deploy API 验证通过。
+- id: "1463"
+  status: fixed
+  fixed_at: "2026-06-30"
+  severity: major
+  category: bug
+  summary: "Process Design Send Task 选中后 Task Config 面板空白"
+  file: "frontend/developer-workstation/src/components/designer/properties/SendTaskProperties.vue"
+  note: |
+    症状：MCY FU48 选中 bpmn:sendTask（Activity_1lu6qyk）时右侧仅显示标题「Task Config / Send Task Config」，内容区空白。
+    根因链：（1）SendTask 走通用 TaskProperties，邮件 UI 与 wangeditor 异步 chunk 导致渲染失败；（2）properties.email* i18n
+    placeholder 含 user@example.com 与 ${businessKey}，vue-i18n 将 @ 与 {} 解析为 linked/插值语法 → SyntaxError 整组件崩溃。
+    修复：NodePropertiesPanel 路由至独立 SendTaskProperties；i18n 三语 placeholder 改用 $'{'var'}' 与 {'@'} 转义（与 emailTemplate.subjectPlaceholder 一致）；
+    Playwright 验证 FU48 面板 3 个 form-item + 邮件字段可见。
+- id: "1464"
+  status: fixed
+  fixed_at: "2026-06-30"
+  severity: major
+  category: bug
+  summary: "Portal 启动含 Send Email 节点流程失败：No catching boundary event found for errorCode 'EMAIL_CONFIG_INVALID'"
+  file: "backend/user-portal/src/main/java/com/portal/component/ProcessStartComponent.java"
+  note: |
+    症状：User Portal 发起 MCY 流程报 400 BAD_REQUEST：Failed to start process instance: No catching boundary event
+    found for error with errorCode 'EMAIL_CONFIG_INVALID', neither in same process nor in parent process。
+    根因：Send Email 节点（Start 后第一个节点，同步执行）经 #1462 转为 serviceTask + ${sendEmailTaskDelegate}。
+    SendEmailTaskDelegate.resolveFunctionUnitId 依赖流程变量 functionUnitId/functionUnitCode，但 ProcessStartComponent.startProcess
+    只放入 formData + initiator + workspace context，从未注入 functionUnitId/Code → 解析为空 → throw BpmnError("EMAIL_CONFIG_INVALID")。
+    该节点无 boundary error event，BpmnError 向上传播未被捕获 → Flowable 终止整个流程启动事务，门户收到 400。
+    修复：startProcess 注入 variables.put("functionUnitId", pin.catalogId()) 与 functionUnitCode = pin.code()
+    （pin.catalogId() 即 admin-center FU 实体 id，邮件连接 syncConnections/getCredentials 即以此为键）。
+    避免类似错误（pattern）：同步 serviceTask/delegate 抛 BpmnError 而流程无对应 boundary error event 时，会以
+    "No catching boundary event found for errorCode 'XXX'" 终止整个启动/办理事务，错误信息对用户极不友好。
+    新增依赖流程变量的 delegate 时：(1) 必须确认启动/办理入口已注入所需变量；(2) 技术/配置类失败应优先抛常规异常或
+    记录失败并继续，BpmnError 仅用于设计师可挂 boundary 捕获的业务错误。
+- id: "1465"
+  status: fixed
+  fixed_at: "2026-06-30"
+  severity: major
+  category: bug
+  summary: "Email Monitor Field Mapping 目标字段下拉选不到主表主键字段（如 case_number）"
+  file: "frontend/developer-workstation/src/composables/email/useProcessFormSubBindings.ts"
+  note: |
+    症状：FU48 Email Monitors → New Monitor → Field Mapping，Target Field 下拉只有 Legal Hold，选不到 Case Number。
+    根因：extractMappableFields 统一用 !f.isPrimaryKey 过滤掉所有主键字段；HMDC_Case(table 113) 的 case_number 为业务主键
+    (is_primary_key=t)，被一刀切排除。但邮件入站抽取的核心场景恰是把邮件里的 case number 填进主表主键。
+    修复：extractMappableFields 增加 includePrimaryKey 参数；loadMainFieldOptions 解析主表(PRIMARY binding / MAIN 表)时传 true，
+    保留业务主键可选；子表 binding 仍传默认 false（子表主键为自动分配 UUID，不应从邮件映射）。
+    验证：Playwright FU48 New Monitor → Field Mapping，Target Field 下拉 = ["Case Number (case_number)","Legal Hold (legal_hold)"]；
+    截图 frontend/developer-workstation/verification-screenshots/2026-06-29_email-fieldmap-target-options.png。
+- id: "1466"
+  status: fixed
+  fixed_at: "2026-06-30"
+  severity: major
+  category: architecture
+  summary: "Email Monitor 触发的流程未写入 User Portal（My Request / 待办不可见）"
+  file: "backend/workflow-engine-core/src/main/java/com/workflow/email/inbound/EmailMonitorProcessor.java"
+  note: |
+    症状：发邮件后 we_email_processed_messages 显示 STARTED、Flowable act_hi_procinst 有记录，但 up_process_instance 无
+    business_key LIKE 'email:%' 行，Portal My Request / To Do 看不到。
+    根因：EmailMonitorProcessor 直接调 workflow-engine ProcessEngineComponent.startProcess，绕过 user-portal
+    ProcessStartComponent（persistRunningProcessInstance / 任务同步 / FU catalog pin）。
+    修复：新增 EmailMonitorPortalSyncComponent，流程 STARTED 后异步 POST user-portal
+    /api/portal/internal/runtime/hydrate-process-instance（X-Internal-Token），复用 ProcessInstanceHydrationComponent；
+    docker-compose 为 workflow-engine + user-portal 注入 PORTAL_INTERNAL_API_TOKEN。
+    单测：EmailMonitorProcessorTest 断言 hydratePortalProcessInstanceAsync 被调用。
+- id: "1467"
+  status: fixed
+  fixed_at: "2026-06-30"
+  severity: major
+  category: bug
+  summary: "Email Monitor 转发邮件 HTML 子表未抽取 + 主字段规则与转发主题不匹配"
+  file: "backend/workflow-engine-core/src/main/java/com/workflow/email/inbound/ImapInboundMailClient.java"
+  note: |
+    症状：FU48 规则 extraction_rules 配了 subTables(271/273) 与 case_number REGEX，但流程变量仅有 initiator/functionUnitId/__inboundEmail__，
+    无 case_number、无 __subTables__。
+    根因一（配置）：case_number 用 SUBJECT REGEX (?<=校验码为)\d+，转发主题「转发：…请查收校验码 <Leo>」不含「校验码为123」→ 主字段空（设计师须改 TEXT_AND_HTML+LABEL）。
+    根因二（代码）：子表抽取依赖 email.html()；ImapInboundMailClient.extractParts 不递归 message/rfc822 嵌套转发件。
+    修复：extractParts 递归 nested Message / message/rfc822 InputStream；text/html 与 text/plain 支持 InputStream 内容；
+    __inboundEmail__ 快照含 html 字段。单测：ImapInboundMailClientExtractTest。

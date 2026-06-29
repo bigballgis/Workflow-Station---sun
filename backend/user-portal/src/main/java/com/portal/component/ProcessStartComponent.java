@@ -103,7 +103,7 @@ public class ProcessStartComponent {
         Map<String, Object> variables = request.getFormData() != null ? new HashMap<>(request.getFormData()) : new HashMap<>();
         variables.remove("activeBusinessUnitId");
         variables.remove("activeRoleId");
-        variables.put("initiator", userId);
+        applyCatalogContextToVariables(variables, userId, pin.catalogId(), pin.code());
         // Demo FU fu-20260403-a1b2c5: assign-participants node uses INITIATOR; scripts still read participant_assigner_user_id
         if ("fu-20260403-a1b2c5".equals(pin.code())) {
             variables.put("participant_assigner_user_id", userId);
@@ -153,6 +153,14 @@ public class ProcessStartComponent {
         ProcessAssigneeSnapshot nextAssigneeSnapshot = ProcessAssigneeSnapshot.empty();
         String initiatorTaskIdForHistory;
         String initiatorTaskDefKeyForHistory;
+    }
+
+    /** Catalog context required by Send Email delegate and other FU-scoped service tasks. */
+    static void applyCatalogContextToVariables(
+            Map<String, Object> variables, String userId, String catalogId, String catalogCode) {
+        variables.put("initiator", userId);
+        variables.put("functionUnitId", catalogId);
+        variables.put("functionUnitCode", catalogCode);
     }
 
     private ActiveCatalogPin resolveActiveCatalogPin(String userId, String processKey) {

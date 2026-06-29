@@ -144,10 +144,19 @@ export function buildRules(columns: DialogColumn[]): FormRules {
     if (col.required) {
       const trigger =
         col.type === 'select' || col.type === 'date' || col.type === 'datetime' || col.type === 'checkbox' || col.type === 'timerange' || col.type === 'treeselect'
-        || col.type === 'cascader' || col.type === 'transfer'
+        || col.type === 'cascader' || col.type === 'transfer' || col.type === 'switch'
           ? 'change'
           : 'blur'
-      rules[col.field] = [{ required: true, message: `${col.label} is required`, trigger }]
+      if (col.type === 'switch') {
+        rules[col.field] = [{
+          type: 'boolean',
+          required: true,
+          message: `${col.label} is required`,
+          trigger,
+        }]
+      } else {
+        rules[col.field] = [{ required: true, message: `${col.label} is required`, trigger }]
+      }
     }
   }
   return rules

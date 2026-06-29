@@ -34,6 +34,16 @@
       <!-- Sub-process properties (multi-instance config lives here) -->
       <SubProcessProperties
         v-else-if="isSubProcessElement"
+        :key="selectedElement.id"
+        :modeler="modeler"
+        :element="selectedElement"
+        :function-unit-id="functionUnitId"
+      />
+
+      <!-- Send task (email) — dedicated panel; avoids generic TaskProperties async/chunk issues -->
+      <SendTaskProperties
+        v-else-if="isSendTaskElement"
+        :key="selectedElement.id"
         :modeler="modeler"
         :element="selectedElement"
         :function-unit-id="functionUnitId"
@@ -42,6 +52,7 @@
       <!-- Other task properties (generic task, script task, etc.) -->
       <TaskProperties
         v-else-if="isTaskElement"
+        :key="selectedElement.id"
         :modeler="modeler"
         :element="selectedElement"
         :function-unit-id="functionUnitId"
@@ -100,7 +111,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { User, Setting, Share, Connection, Flag } from '@element-plus/icons-vue'
+import { User, Setting, Share, Connection, Flag, Message } from '@element-plus/icons-vue'
 import type { BpmnElement, BpmnModeler } from '@/types/bpmn'
 import {
   isUserTask,
@@ -112,13 +123,15 @@ import {
   isTask,
   getBasicProperties,
   setBasicProperties,
-  getElementType
+  getElementType,
+  getExtensionProperties
 } from '@/utils/bpmnExtensions'
 import ProcessProperties from './ProcessProperties.vue'
 import TaskProperties from './TaskProperties.vue'
 import UserTaskProperties from './UserTaskProperties.vue'
 import ServiceTaskProperties from './ServiceTaskProperties.vue'
 import SubProcessProperties from './SubProcessProperties.vue'
+import SendTaskProperties from './SendTaskProperties.vue'
 import GatewayProperties from './GatewayProperties.vue'
 import SequenceFlowProperties from './SequenceFlowProperties.vue'
 import EventProperties from './EventProperties.vue'
@@ -214,13 +227,22 @@ const isSubProcessElement = computed(() => {
   return type === 'bpmn:SubProcess' || type === 'bpmn:AdHocSubProcess' || type === 'bpmn:Transaction'
 })
 
+const isSendTaskElement = computed(() => {
+  if (!selectedElement.value) return false
+  const type = getElementType(selectedElement.value)
+  if (type === 'bpmn:SendTask') return true
+  const ext = getExtensionProperties(selectedElement.value)
+  return ext.sendMode === 'email' || Boolean(ext.connectionId)
+})
+
 const isTaskElement = computed(() => {
   if (!selectedElement.value) return false
-  // Exclude UserTask, ServiceTask and SubProcess — they have dedicated components
+  // Exclude UserTask, ServiceTask, SubProcess and SendTask — they have dedicated components
   if (
     isUserTask(selectedElement.value) ||
     isServiceTask(selectedElement.value) ||
-    isSubProcessElement.value
+    isSubProcessElement.value ||
+    isSendTaskElement.value
   ) {
     return false
   }
@@ -272,6 +294,11 @@ const panelTitle = computed(() => {
   if (isServiceTaskElement.value) {
     return t('properties.serviceTaskConfig')
   }
+
+  // Send task (email)
+  if (isSendTaskElement.value) {
+    return t('properties.sendTaskConfig')
+  }
   
   // Other task types
   if (isTaskElement.value) {
@@ -314,6 +341,11 @@ const elementIcon = computed(() => {
   // Service task
   if (isServiceTaskElement.value) {
     return Setting
+  }
+
+  // Send task (email)
+  if (isSendTaskElement.value) {
+    return Message
   }
   
   // Other task types
@@ -413,8 +445,16 @@ onUnmounted(() => {
 
 .panel-content {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 12px;
+
+  :deep(.send-task-properties),
+  :deep(.task-properties),
+  :deep(.user-task-properties),
+  :deep(.service-task-properties) {
+    min-height: 120px;
+  }
 }
 
 .basic-properties {

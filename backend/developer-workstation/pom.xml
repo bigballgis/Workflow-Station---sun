@@ -50,6 +50,11 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
+        <!-- Email: SMTP test/send for email connections (jakarta.mail) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
         <!-- Resilience4j：跨服务 RestTemplate 调用统一熔断 + 指标（Micrometer） -->
         <dependency>
             <groupId>io.github.resilience4j</groupId>

@@ -68,6 +68,8 @@ export function useFormData(deps: FormDataDeps) {
         data[field.key] = field.defaultValue
       } else if (field.type === 'checkbox') {
         data[field.key] = []
+      } else if (field.type === 'switch') {
+        data[field.key] = false
       } else {
         data[field.key] = null
       }
@@ -112,11 +114,23 @@ export function useFormData(deps: FormDataDeps) {
           ),
         )
       } else if (field.required) {
-        fieldRules.push({
-          required: true,
-          message: t('common.pleaseInput', { label: field.label }),
-          trigger: field.type === 'select' || field.type === 'checkbox' ? 'change' : 'blur',
-        })
+        const trigger = field.type === 'select' || field.type === 'checkbox' || field.type === 'switch'
+          ? 'change'
+          : 'blur'
+        if (field.type === 'switch') {
+          fieldRules.push({
+            type: 'boolean',
+            required: true,
+            message: t('common.pleaseInput', { label: field.label }),
+            trigger,
+          })
+        } else {
+          fieldRules.push({
+            required: true,
+            message: t('common.pleaseInput', { label: field.label }),
+            trigger,
+          })
+        }
       }
       if (fieldRules.length > 0) {
         rules[field.key] = fieldRules
