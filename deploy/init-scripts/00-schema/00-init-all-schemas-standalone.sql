@@ -69,5 +69,7 @@ COMMIT;
 \i 00-schema/42-add-dw-binding-link-mode.sql
 \i 00-schema/43-add-dw-field-fk-pk-metadata.sql
 \i 00-schema/44-ac-ldap-sync-audit.sql
+\i 00-schema/45-dw-email-connections.sql
+\i 00-schema/46-sys-email-connections.sql
 
 \echo '=== All schemas created successfully ==='

@@ -1,5 +1,216 @@
 <template>
   <div class="task-properties">
+    <!-- Send task email: always visible (not inside collapse — avoids To missing from DOM / scroll) -->
+    <div
+      v-if="isSendEmailTask"
+      class="send-task-email-section"
+    >
+      <div class="send-task-email-section__title">
+        {{ t('properties.emailConfig') }}
+      </div>
+
+      <div
+        id="send-task-email-to"
+        class="email-field-block email-to-field-wrap"
+      >
+        <label class="email-field-label">
+          {{ t('properties.emailTo') }}
+          <span class="email-required-mark">*</span>
+        </label>
+        <el-input
+          v-model="emailTo"
+          :placeholder="t('properties.emailToPlaceholder')"
+          @input="onEmailConfigChange('emailTo', emailTo)"
+        />
+        <div class="form-tip">{{ t('properties.emailToHint') }}</div>
+      </div>
+
+      <div
+        id="send-task-email-connection"
+        class="email-field-block"
+      >
+        <label class="email-field-label">
+          {{ t('properties.emailConnection') }}
+          <span class="email-required-mark">*</span>
+        </label>
+        <el-select
+          v-model="connectionId"
+          :placeholder="t('properties.emailConnectionPlaceholder')"
+          style="width: 100%"
+          clearable
+          @change="onEmailConfigChange('connectionId', connectionId)"
+        >
+          <el-option
+            v-for="conn in emailConnections"
+            :key="conn.connectionUid"
+            :label="conn.name"
+            :value="conn.connectionUid"
+          />
+        </el-select>
+        <div class="form-tip">{{ t('properties.emailConnectionHint') }}</div>
+      </div>
+
+      <div
+        id="send-task-email-from"
+        class="email-field-block"
+      >
+        <label class="email-field-label">
+          {{ t('properties.emailFrom') }}
+          <span class="email-required-mark">*</span>
+        </label>
+        <el-input
+          v-model="emailFrom"
+          :placeholder="t('properties.emailFromPlaceholder')"
+          @input="onEmailConfigChange('emailFrom', emailFrom)"
+        />
+        <div class="form-tip">{{ t('properties.emailFromHint') }}</div>
+      </div>
+
+      <div class="email-field-block">
+        <label class="email-field-label">
+          {{ t('properties.emailSubject') }}
+          <span class="email-required-mark">*</span>
+        </label>
+        <el-input
+          v-model="emailSubject"
+          :placeholder="t('properties.emailSubjectPlaceholder')"
+          @input="onEmailConfigChange('emailSubject', emailSubject)"
+        />
+      </div>
+
+      <div class="email-field-block">
+        <label class="email-field-label">
+          {{ t('properties.emailBody') }}
+          <span class="email-required-mark">*</span>
+        </label>
+        <el-input
+          v-model="emailBody"
+          type="textarea"
+          :rows="5"
+          :placeholder="t('properties.emailBodyPlaceholder')"
+          @input="onEmailConfigChange('emailBody', emailBody)"
+        />
+      </div>
+
+      <div class="email-advanced-toggle">
+        <el-button
+          link
+          type="primary"
+          @click="emailAdvancedOpen = !emailAdvancedOpen"
+        >
+          {{ emailAdvancedOpen ? t('properties.emailHideAdvanced') : t('properties.emailShowAdvanced') }}
+          <el-icon class="email-advanced-chevron" :class="{ open: emailAdvancedOpen }">
+            <ArrowDown />
+          </el-icon>
+        </el-button>
+      </div>
+
+      <div
+        v-show="emailAdvancedOpen"
+        class="email-advanced-panel"
+      >
+        <div class="email-field-block">
+          <label class="email-field-label">{{ t('properties.emailCc') }}</label>
+          <el-input
+            v-model="emailCc"
+            :placeholder="t('properties.emailCcPlaceholder')"
+            @input="onEmailConfigChange('emailCc', emailCc)"
+          />
+        </div>
+
+        <div class="email-field-block">
+          <label class="email-field-label">{{ t('properties.emailBcc') }}</label>
+          <el-input
+            v-model="emailBcc"
+            :placeholder="t('properties.emailBccPlaceholder')"
+            @input="onEmailConfigChange('emailBcc', emailBcc)"
+          />
+        </div>
+
+        <div class="email-attachments-block">
+          <div class="email-attachments-label">{{ t('properties.emailAttachments') }}</div>
+          <div
+            v-for="(att, index) in emailAttachments"
+            :key="index"
+            class="email-attachment-item"
+          >
+            <div class="email-field-block">
+              <label class="email-field-label">{{ t('properties.emailAttachmentName') }}</label>
+              <el-input
+                v-model="att.name"
+                :placeholder="t('properties.emailAttachmentNamePlaceholder')"
+                @input="onAttachmentChange"
+              />
+            </div>
+            <div class="email-field-block">
+              <label class="email-field-label">{{ t('properties.emailAttachmentContent') }}</label>
+              <el-input
+                v-model="att.content"
+                type="textarea"
+                :rows="2"
+                :placeholder="t('properties.emailAttachmentContentPlaceholder')"
+                @input="onAttachmentChange"
+              />
+            </div>
+            <el-button
+              link
+              type="danger"
+              @click="removeAttachment(index)"
+            >
+              {{ t('common.delete') }}
+            </el-button>
+          </div>
+          <el-button
+            size="small"
+            @click="addAttachment"
+          >
+            {{ t('properties.emailAddAttachment') }}
+          </el-button>
+        </div>
+
+        <div class="email-field-block">
+          <label class="email-field-label">{{ t('properties.emailSensitivity') }}</label>
+          <el-select
+            v-model="emailSensitivity"
+            style="width: 100%"
+            @change="onEmailConfigChange('emailSensitivity', emailSensitivity)"
+          >
+            <el-option
+              v-for="opt in emailSensitivityOptions"
+              :key="opt.value"
+              :label="opt.label"
+              :value="opt.value"
+            />
+          </el-select>
+        </div>
+
+        <div class="email-field-block">
+          <label class="email-field-label">{{ t('properties.emailReplyTo') }}</label>
+          <el-input
+            v-model="emailReplyTo"
+            :placeholder="t('properties.emailReplyToPlaceholder')"
+            @input="onEmailConfigChange('emailReplyTo', emailReplyTo)"
+          />
+        </div>
+
+        <div class="email-field-block">
+          <label class="email-field-label">{{ t('properties.emailImportance') }}</label>
+          <el-select
+            v-model="emailImportance"
+            style="width: 100%"
+            @change="onEmailConfigChange('emailImportance', emailImportance)"
+          >
+            <el-option
+              v-for="opt in emailImportanceOptions"
+              :key="opt.value"
+              :label="opt.label"
+              :value="opt.value"
+            />
+          </el-select>
+        </div>
+      </div>
+    </div>
+
     <el-collapse v-model="activeGroups">
       <!-- Basic info -->
       <el-collapse-item
@@ -388,8 +599,8 @@
         </el-collapse-item>
       </template>
 
-      <!-- Send/Receive task config -->
-      <template v-if="taskType === 'bpmn:SendTask' || taskType === 'bpmn:ReceiveTask'">
+      <!-- Receive task config -->
+      <template v-if="taskType === 'bpmn:ReceiveTask'">
         <el-collapse-item
           :title="t('properties.message')"
           name="message"
@@ -403,18 +614,6 @@
                 v-model="messageName"
                 :placeholder="t('properties.messageNamePlaceholder')"
                 @change="updateExtProp('messageName', messageName)"
-              />
-            </el-form-item>
-            <el-form-item
-              v-if="taskType === 'bpmn:SendTask'"
-              :label="t('properties.messagePayload')"
-            >
-              <el-input
-                v-model="messagePayload"
-                type="textarea"
-                :rows="3"
-                :placeholder="t('properties.messagePayloadPlaceholder')"
-                @change="updateExtProp('messagePayload', messagePayload)"
               />
             </el-form-item>
           </el-form>
@@ -475,11 +674,14 @@
  * `@/composables/taskProperties/*`。此处仅做组装、props 透传与生命周期绑定，
  * 模板/样式与拆分前逐字节一致，emit/props/i18n key/行为均零变化。
  */
-import { ref, reactive, watch, onMounted } from 'vue'
+import { ref, reactive, watch, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { ArrowDown } from '@element-plus/icons-vue'
 import type { BpmnElement, BpmnModeler } from '@/types/bpmn'
+import { getExtensionProperties } from '@/utils/bpmnExtensions'
 import { useTaskPropertiesState } from '@/composables/taskProperties/useTaskPropertiesState'
 import { useTaskPropertiesForms } from '@/composables/taskProperties/useTaskPropertiesForms'
+import { useSendTaskEmailAttachments } from '@/composables/taskProperties/useSendTaskEmailAttachments'
 
 const { t } = useI18n()
 
@@ -531,27 +733,70 @@ const {
   resultVariable,
   messageName,
   messagePayload,
+  connectionId,
+  emailFrom,
+  emailTo,
+  emailCc,
+  emailBcc,
+  emailReplyTo,
+  emailImportance,
+  emailSensitivity,
+  emailSubject,
+  emailBody,
   ruleEngine,
   decisionRef,
   ruleResultVariable,
   basicProps,
   taskTypeLabel,
+  isSendEmailTask,
   loadProperties,
   updateBasicProp,
-  updateExtProp
+  updateExtProp,
+  onEmailConfigChange
 } = useTaskPropertiesState(propsAccessor, t)
 
+const emailAdvancedOpen = ref(false)
+
+const emailImportanceOptions = computed(() => [
+  { value: 'low', label: t('properties.emailImportanceLow') },
+  { value: 'normal', label: t('properties.emailImportanceNormal') },
+  { value: 'high', label: t('properties.emailImportanceHigh') }
+])
+
+const emailSensitivityOptions = computed(() => [
+  { value: 'normal', label: t('properties.emailSensitivityNormal') },
+  { value: 'personal', label: t('properties.emailSensitivityPersonal') },
+  { value: 'private', label: t('properties.emailSensitivityPrivate') },
+  { value: 'confidential', label: t('properties.emailSensitivityConfidential') }
+])
+
+const {
+  emailAttachments,
+  loadFromExtension: loadEmailAttachments,
+  addAttachment,
+  removeAttachment,
+  onAttachmentChange
+} = useSendTaskEmailAttachments(updateExtProp)
+
+function loadEmailProperties() {
+  loadProperties()
+  if (props.element) {
+    loadEmailAttachments(getExtensionProperties(props.element).emailAttachments)
+  }
+}
+
 // 表单绑定逻辑（依赖 formId/updateExtProp，通过 wrapper 闭包破环）
-const { forms, handleFormChange, loadForms } = useTaskPropertiesForms(propsAccessor, {
+const { forms, emailConnections, handleFormChange, loadForms, loadEmailConnections } = useTaskPropertiesForms(propsAccessor, {
   formId,
   updateExtProp
 })
 
-watch(() => props.element, loadProperties, { immediate: true })
+watch(() => props.element, loadEmailProperties, { immediate: true })
 
 onMounted(() => {
-  loadProperties()
+  loadEmailProperties()
   loadForms()
+  loadEmailConnections()
 })
 </script>
 
@@ -595,11 +840,88 @@ onMounted(() => {
     }
   }
   
+  .send-task-email-section {
+    margin-bottom: 12px;
+    padding: 8px 4px 4px;
+    border: 1px solid #e4e7ed;
+    border-radius: 6px;
+    background: #fff;
+
+    &__title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #303133;
+      margin-bottom: 8px;
+      padding: 0 8px;
+    }
+  }
+
+  .email-field-block {
+    margin-bottom: 12px;
+    padding: 0 4px;
+
+    .email-field-label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: #606266;
+      padding-bottom: 4px;
+      line-height: 1.4;
+    }
+  }
+
+  .email-to-field-wrap {
+    .email-field-label {
+      font-weight: 700;
+      color: #303133;
+    }
+  }
+
+  .email-required-mark {
+    color: #f56c6c;
+    margin-left: 2px;
+  }
+
   .form-tip {
     font-size: 11px;
     color: #909399;
     margin-top: 4px;
     line-height: 1.4;
+  }
+
+  .email-advanced-toggle {
+    margin: 4px 0 8px;
+  }
+
+  .email-advanced-chevron {
+    margin-left: 4px;
+    transition: transform 0.2s ease;
+    &.open {
+      transform: rotate(180deg);
+    }
+  }
+
+  .email-advanced-panel {
+    padding-top: 4px;
+    border-top: 1px dashed #e4e7ed;
+  }
+
+  .email-attachments-block {
+    margin-bottom: 12px;
+  }
+
+  .email-attachments-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #606266;
+    margin-bottom: 8px;
+  }
+
+  .email-attachment-item {
+    padding: 8px;
+    margin-bottom: 8px;
+    background: #fafafa;
+    border-radius: 4px;
   }
 }
 </style>

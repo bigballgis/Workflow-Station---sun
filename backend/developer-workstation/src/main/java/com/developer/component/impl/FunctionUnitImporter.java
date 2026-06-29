@@ -204,6 +204,14 @@ public class FunctionUnitImporter {
             }
         }
 
+        if (packageData.containsKey("connections")) {
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> connections = (List<Map<String, Object>>) packageData.get("connections");
+            for (Map<String, Object> connectionData : connections) {
+                importWriter.importEmailConnection(functionUnit, connectionData);
+            }
+        }
+
         // Write process after tables/forms/actions import; rewrite old BPMN IDs (same as clone)
         if (packageData.containsKey("process")) {
             String bpmnXml = (String) packageData.get("process");

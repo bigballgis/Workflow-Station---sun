@@ -1,0 +1,7 @@
+# Override for email feature dev deploy (use with main docker-compose.dev.yml).
+services:
+  developer-workstation:
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://${POSTGRES_HOST:-postgres}:5432/${POSTGRES_DB}?currentSchema=public
+      SPRING_JPA_PROPERTIES_HIBERNATE_DEFAULT_SCHEMA: public
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update

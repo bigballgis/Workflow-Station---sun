@@ -39,6 +39,23 @@ $RootDir = Resolve-Path "$PSScriptRoot/../../.."
 $ComposeFile = "$PSScriptRoot/docker-compose.dev.yml"
 $EnvFile = "$PSScriptRoot/.env"
 
+# Load .env into the current PowerShell session so $env:POSTGRES_USER / $env:POSTGRES_DB
+# (used by the manual psql migration step) are populated. docker compose reads .env via
+# --env-file, but those values are NOT exported to this shell automatically.
+if (Test-Path $EnvFile) {
+    Get-Content $EnvFile | ForEach-Object {
+        $line = $_.Trim()
+        if ($line -and -not $line.StartsWith("#") -and $line.Contains("=")) {
+            $idx = $line.IndexOf("=")
+            $key = $line.Substring(0, $idx).Trim()
+            $val = $line.Substring($idx + 1).Trim()
+            if ($key) {
+                Set-Item -Path "env:$key" -Value $val
+            }
+        }
+    }
+}
+
 # ==================== Service Registry ====================
 # Maps compose service name -> Maven module path, container name, type
 $ServiceRegistry = @{
@@ -419,7 +436,10 @@ if (-not $SkipInfra) {
         Get-ChildItem -Path $InitScriptsDir -Filter "*.sql" | Sort-Object Name | ForEach-Object {
             $scriptName = $_.Name
             Write-Host "    $scriptName" -ForegroundColor DarkGray
+            $prevEap = $ErrorActionPreference
+            $ErrorActionPreference = "Continue"
             Get-Content $_.FullName | docker exec -i platform-postgres-dev psql -U $env:POSTGRES_USER -d $env:POSTGRES_DB -v ON_ERROR_STOP=0 2>&1 | Out-Null
+            $ErrorActionPreference = $prevEap
             if ($LASTEXITCODE -ne 0) {
                 Write-Host "    WARNING: $scriptName had errors (may be expected for idempotent scripts)" -ForegroundColor Yellow
             }

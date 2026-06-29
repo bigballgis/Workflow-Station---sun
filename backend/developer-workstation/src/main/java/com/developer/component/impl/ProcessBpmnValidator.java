@@ -86,7 +86,56 @@ public class ProcessBpmnValidator {
             result.addError(e.getCode(), e.getMessage(), e.getElementId());
         }
 
+        validateSendEmailTasks(bpmnXml, result);
+
         return result;
+    }
+
+    private void validateSendEmailTasks(String bpmnXml, ValidationResult result) {
+        Pattern sendTaskPattern = Pattern.compile("<bpmn:sendTask[^>]*id=\"([^\"]+)\"[^>]*>");
+        Matcher matcher = sendTaskPattern.matcher(bpmnXml);
+        while (matcher.find()) {
+            String taskId = matcher.group(1);
+            int start = matcher.start();
+            int end = bpmnXml.indexOf("</bpmn:sendTask>", start);
+            if (end < 0) {
+                end = Math.min(start + 2000, bpmnXml.length());
+            }
+            String block = bpmnXml.substring(start, end);
+            String sendMode = extractCustomProperty(block, "sendMode");
+            if (sendMode != null && !"email".equalsIgnoreCase(sendMode)) {
+                continue;
+            }
+            String connectionId = extractCustomProperty(block, "connectionId");
+            String emailTo = extractCustomProperty(block, "emailTo");
+            String emailFrom = extractCustomProperty(block, "emailFrom");
+            String emailSubject = extractCustomProperty(block, "emailSubject");
+            if (connectionId == null || connectionId.isBlank()) {
+                result.addError("SEND_TASK_MISSING_CONNECTION", "Send Task 未配置邮件连接", taskId);
+            }
+            if (emailTo == null || emailTo.isBlank()) {
+                result.addError("SEND_TASK_MISSING_RECIPIENT", "Send Task 未配置收件人", taskId);
+            }
+            if (emailFrom == null || emailFrom.isBlank()) {
+                result.addError("SEND_TASK_MISSING_FROM", "Send Task 未配置发件邮箱", taskId);
+            }
+            if (emailSubject == null || emailSubject.isBlank()) {
+                result.addError("SEND_TASK_MISSING_SUBJECT", "Send Task 未配置邮件主题", taskId);
+            }
+        }
+    }
+
+    private String extractCustomProperty(String block, String propertyName) {
+        Pattern pattern = Pattern.compile(
+                "name=\"" + Pattern.quote(propertyName) + "\"\\s+value=\"([^\"]*)\"");
+        Matcher matcher = pattern.matcher(block);
+        if (matcher.find()) {
+            return matcher.group(1);
+        }
+        pattern = Pattern.compile(
+                "value=\"([^\"]*)\"\\s+name=\"" + Pattern.quote(propertyName) + "\"");
+        matcher = pattern.matcher(block);
+        return matcher.find() ? matcher.group(1) : null;
     }
 
     public Map<String, Object> parseBpmnXml(String bpmnXml) {

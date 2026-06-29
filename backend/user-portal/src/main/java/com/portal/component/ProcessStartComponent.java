@@ -104,6 +104,8 @@ public class ProcessStartComponent {
         variables.remove("activeBusinessUnitId");
         variables.remove("activeRoleId");
         variables.put("initiator", userId);
+        variables.put("functionUnitId", pin.catalogId());
+        variables.put("functionUnitCode", pin.code());
         // Demo FU fu-20260403-a1b2c5: assign-participants node uses INITIATOR; scripts still read participant_assigner_user_id
         if ("fu-20260403-a1b2c5".equals(pin.code())) {
             variables.put("participant_assigner_user_id", userId);

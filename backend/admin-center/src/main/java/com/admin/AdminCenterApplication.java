@@ -14,6 +14,7 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
+import com.platform.security.encryption.impl.AesEncryptionService;
 import com.platform.security.resolver.TargetResolverFactory;
 import com.platform.security.service.impl.UserRoleServiceImpl;
 
@@ -24,7 +25,7 @@ import com.platform.security.service.impl.UserRoleServiceImpl;
 @SpringBootApplication
 @ComponentScan(
     basePackages = {"com.admin", "com.platform.common", "com.platform.messaging", "com.platform.security.filter", "com.platform.security.config"},
-    basePackageClasses = {TargetResolverFactory.class, UserRoleServiceImpl.class},
+    basePackageClasses = {TargetResolverFactory.class, UserRoleServiceImpl.class, AesEncryptionService.class},
     excludeFilters = {
         // 排除platform-security中的repository，由单独的配置类处理
         @ComponentScan.Filter(type = FilterType.REGEX, pattern = "com\\.platform\\.security\\.repository\\..*"),

@@ -3,6 +3,7 @@ package com.developer.component.impl;
 import com.developer.dto.ExportManifest;
 import com.developer.entity.ActionDefinition;
 import com.developer.entity.DecisionDefinition;
+import com.developer.entity.EmailConnection;
 import com.developer.entity.FieldDefinition;
 import com.developer.entity.ForeignKey;
 import com.developer.entity.FormDefinition;
@@ -18,6 +19,7 @@ import com.developer.exception.DeveloperBusinessException;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.ActionDefinitionRepository;
 import com.developer.repository.DecisionDefinitionRepository;
+import com.developer.repository.EmailConnectionRepository;
 import com.developer.repository.FormDefinitionRepository;
 import com.developer.repository.FormStageBindingRepository;
 import com.developer.repository.FunctionUnitRepository;
@@ -66,6 +68,7 @@ public class FunctionUnitExporter {
     private final FormDefinitionRepository formDefinitionRepository;
     private final ActionDefinitionRepository actionDefinitionRepository;
     private final DecisionDefinitionRepository decisionDefinitionRepository;
+    private final EmailConnectionRepository emailConnectionRepository;
     private final FormStageBindingRepository formStageBindingRepository;
     private final TableRelationRepository tableRelationRepository;
     private final SubTableViewConfigRepository subTableViewConfigRepository;
@@ -127,6 +130,7 @@ public class FunctionUnitExporter {
             List<String> tableFiles = new ArrayList<>();
             List<String> formFiles = new ArrayList<>();
             List<String> actionFiles = new ArrayList<>();
+            List<String> connectionFiles = new ArrayList<>();
 
             // Export process definition — decode Base64 to raw XML
             String processFile = null;
@@ -209,6 +213,17 @@ public class FunctionUnitExporter {
                 actionIndex++;
             }
 
+            // Export email connections
+            int connectionIndex = 0;
+            for (EmailConnection connection : emailConnectionRepository.findByFunctionUnitIdOrderByNameAsc(functionUnitId)) {
+                String fileName = "connections/connection_" + connectionIndex + ".json";
+                byte[] data = objectMapper.writeValueAsBytes(serializeConnection(connection));
+                fileContents.put(fileName, data);
+                addZipEntry(zos, fileName, data);
+                connectionFiles.add(fileName);
+                connectionIndex++;
+            }
+
             // Export decision definitions (DMN XML)
             List<String> decisionFiles = new ArrayList<>();
             int decisionIndex = 0;
@@ -249,6 +264,7 @@ public class FunctionUnitExporter {
                             .forms(formFiles)
                             .actions(actionFiles)
                             .decisions(decisionFiles)
+                            .connections(connectionFiles)
                             .build())
                     .dependencies(new ArrayList<>())
                     .icon(iconInfo)
@@ -460,6 +476,22 @@ public class FunctionUnitExporter {
         map.put("buttonColor", action.getButtonColor());
         map.put("description", action.getDisplayName());
         map.put("isDefault", action.getIsDefault());
+        return map;
+    }
+
+    private Map<String, Object> serializeConnection(EmailConnection connection) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("connectionUid", connection.getConnectionUid());
+        map.put("name", connection.getName());
+        map.put("connectionType", connection.getConnectionType().name());
+        map.put("host", connection.getHost());
+        map.put("port", connection.getPort());
+        map.put("username", connection.getUsername());
+        map.put("passwordEncrypted", connection.getPasswordEncrypted());
+        map.put("fromEmail", connection.getFromEmail());
+        map.put("fromName", connection.getFromName());
+        map.put("useTls", connection.getUseTls());
+        map.put("enabled", connection.getEnabled());
         return map;
     }
 }

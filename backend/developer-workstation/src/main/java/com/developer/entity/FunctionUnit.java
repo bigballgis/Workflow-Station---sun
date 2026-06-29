@@ -163,5 +163,11 @@ public class FunctionUnit {
     @OneToMany(mappedBy = "functionUnit", cascade = CascadeType.ALL, orphanRemoval = true)
     @org.hibernate.annotations.OnDelete(action = org.hibernate.annotations.OnDeleteAction.CASCADE)
     @Builder.Default
+    private List<EmailConnection> emailConnections = new ArrayList<>();
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "functionUnit", cascade = CascadeType.ALL, orphanRemoval = true)
+    @org.hibernate.annotations.OnDelete(action = org.hibernate.annotations.OnDeleteAction.CASCADE)
+    @Builder.Default
     private List<Version> versions = new ArrayList<>();
 }

@@ -42,6 +42,7 @@
       <!-- Other task properties (generic task, script task, etc.) -->
       <TaskProperties
         v-else-if="isTaskElement"
+        :key="selectedElement?.id"
         :modeler="modeler"
         :element="selectedElement"
         :function-unit-id="functionUnitId"
