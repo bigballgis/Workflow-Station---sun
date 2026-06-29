@@ -80,6 +80,14 @@ public class AdminApiExceptionHandler {
         return respond(HttpStatus.CONFLICT, ex.getErrorCode(), ex.getErrorMessage(), traceId, request);
     }
 
+    @ExceptionHandler(BusinessUnitNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleBusinessUnitNotFound(
+            BusinessUnitNotFoundException ex, HttpServletRequest request) {
+        String traceId = shortTraceId();
+        log.warn("Business unit not found [{}]: {}", traceId, ex.getMessage());
+        return respond(HttpStatus.NOT_FOUND, "BUSINESS_UNIT_NOT_FOUND", ex.getMessage(), traceId, request);
+    }
+
     @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
     public ResponseEntity<ApiResponse<Void>> handleAccessDenied(
             org.springframework.security.access.AccessDeniedException ex, HttpServletRequest request) {

@@ -1,4 +1,4 @@
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { useI18n } from 'vue-i18n'
 import { permissionApi, type BusinessUnit, type RoleInfo } from '@/api/permission'
@@ -22,6 +22,29 @@ export function useApplyPermission(t: TFn, deps: UseApplyPermissionDeps) {
   const beneficiaryOptions = ref<{ userId: string; username: string; displayName?: string }[]>([])
   const applicableBusinessUnits = ref<BusinessUnit[]>([])
   const eligibleRoles = ref<RoleInfo[]>([])
+
+  /**
+   * 后端返回的是「已扁平化（带 parentId、无 children）」的可申请业务单元列表。
+   * 这里按 parentId 重建嵌套树，供 el-tree-select 级联展示；
+   * parentId 不在可申请集合内（如父级已加入被过滤）的节点挂到根，保证子节点仍可见。
+   */
+  const applicableBusinessUnitTree = computed<BusinessUnit[]>(() => {
+    const list = applicableBusinessUnits.value
+    const nodeMap = new Map<string, BusinessUnit & { children: BusinessUnit[] }>()
+    list.forEach((bu) => {
+      nodeMap.set(bu.id, { ...bu, children: [] })
+    })
+    const roots: BusinessUnit[] = []
+    nodeMap.forEach((node) => {
+      const parent = node.parentId ? nodeMap.get(node.parentId) : undefined
+      if (parent) {
+        parent.children.push(node)
+      } else {
+        roots.push(node)
+      }
+    })
+    return roots
+  })
 
   // 申请表单
   const applyForm = reactive({
@@ -167,6 +190,7 @@ export function useApplyPermission(t: TFn, deps: UseApplyPermissionDeps) {
     loadingBeneficiarySearch,
     beneficiaryOptions,
     applicableBusinessUnits,
+    applicableBusinessUnitTree,
     eligibleRoles,
     applyForm,
     loadApplicableBusinessUnits,

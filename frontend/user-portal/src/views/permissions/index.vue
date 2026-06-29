@@ -660,23 +660,20 @@
           :label="t('permission.businessUnit')"
           required
         >
-          <el-select 
-            v-model="applyForm.businessUnitId" 
-            :placeholder="t('permission.selectBusinessUnit')" 
-            style="width: 100%;" 
-            filterable 
+          <el-tree-select
+            v-model="applyForm.businessUnitId"
+            :data="applicableBusinessUnitTree"
+            :props="{ label: 'name', children: 'children' }"
+            node-key="id"
+            :placeholder="t('permission.selectBusinessUnit')"
+            style="width: 100%;"
+            filterable
+            check-strictly
             :loading="loadingBusinessUnits"
             :disabled="!loadingBusinessUnits && applicableBusinessUnits.length === 0"
             :teleported="false"
             @change="onBusinessUnitChange"
-          >
-            <el-option
-              v-for="bu in applicableBusinessUnits"
-              :key="bu.id"
-              :label="bu.name"
-              :value="bu.id"
-            />
-          </el-select>
+          />
           <div
             v-if="!loadingBusinessUnits && applicableBusinessUnits.length === 0"
             class="form-hint"
@@ -1081,6 +1078,7 @@ const {
   loadingBeneficiarySearch,
   beneficiaryOptions,
   applicableBusinessUnits,
+  applicableBusinessUnitTree,
   eligibleRoles,
   applyForm,
   searchBeneficiaryUsers,
