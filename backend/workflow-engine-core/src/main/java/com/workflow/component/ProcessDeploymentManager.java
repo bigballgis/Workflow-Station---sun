@@ -5,6 +5,7 @@ import com.workflow.dto.response.DeploymentResult;
 import com.workflow.dto.response.ProcessDefinitionResult;
 import com.workflow.exception.WorkflowBusinessException;
 import com.workflow.exception.WorkflowValidationException;
+import com.workflow.util.BpmnDeployEnhancer;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -63,16 +64,17 @@ public class ProcessDeploymentManager {
 
             // Normalize known legacy BPMN serialization issues before validation/deploy
             String normalizedBpmnXml = normalizeBpmnXml(request.getBpmnXml());
+            String enhancedBpmnXml = BpmnDeployEnhancer.enhance(normalizedBpmnXml);
 
             // Validate BPMN file format
-            validateBpmnFile(normalizedBpmnXml);
+            validateBpmnFile(enhancedBpmnXml);
 
             // Create deployment
             Deployment deployment = repositoryService.createDeployment()
                 .name(request.getName())
                 .category(request.getCategory())
                 .key(request.getKey())
-                .addString(request.getKey() + ".bpmn", normalizedBpmnXml)
+                .addString(request.getKey() + ".bpmn", enhancedBpmnXml)
                 .deploy();
 
             // Get deployed process definitions
@@ -342,9 +344,10 @@ public class ProcessDeploymentManager {
         // Finally use Flowable for deeper validation (only after basic validation passes)
         try {
             String normalizedBpmnContent = normalizeBpmnXml(bpmnContent);
+            String enhancedBpmnContent = BpmnDeployEnhancer.enhance(normalizedBpmnContent);
             Deployment tempDeployment = repositoryService.createDeployment()
                 .name("temp-validation")
-                .addInputStream("temp.bpmn", new ByteArrayInputStream(normalizedBpmnContent.getBytes()))
+                .addInputStream("temp.bpmn", new ByteArrayInputStream(enhancedBpmnContent.getBytes()))
                 .deploy();
 
             // Validation succeeded, delete temp deployment

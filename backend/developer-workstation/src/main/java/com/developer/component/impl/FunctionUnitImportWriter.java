@@ -2,6 +2,7 @@ package com.developer.component.impl;
 
 import com.developer.entity.ActionDefinition;
 import com.developer.entity.DecisionDefinition;
+import com.developer.entity.EmailConnection;
 import com.developer.entity.FieldDefinition;
 import com.developer.entity.ForeignKey;
 import com.developer.entity.FormDefinition;
@@ -17,6 +18,7 @@ import com.developer.enums.ActionType;
 import com.developer.enums.BindingLinkMode;
 import com.developer.enums.BindingMode;
 import com.developer.enums.BindingType;
+import com.developer.enums.ConnectionType;
 import com.developer.enums.DataType;
 import com.developer.enums.FormType;
 import com.developer.enums.SubMode;
@@ -24,6 +26,7 @@ import com.developer.enums.TableType;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.ActionDefinitionRepository;
 import com.developer.repository.DecisionDefinitionRepository;
+import com.developer.repository.EmailConnectionRepository;
 import com.developer.repository.FormDefinitionRepository;
 import com.developer.repository.FormTableBindingRepository;
 import com.developer.repository.SubTableViewConfigRepository;
@@ -39,6 +42,7 @@ import org.springframework.stereotype.Component;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * 功能单元导入写入协作类。
@@ -54,6 +58,7 @@ public class FunctionUnitImportWriter {
     private final FormDefinitionRepository formDefinitionRepository;
     private final ActionDefinitionRepository actionDefinitionRepository;
     private final DecisionDefinitionRepository decisionDefinitionRepository;
+    private final EmailConnectionRepository emailConnectionRepository;
     private final FormTableBindingRepository formTableBindingRepository;
     private final TableRelationRepository tableRelationRepository;
     private final SubTableViewConfigRepository subTableViewConfigRepository;
@@ -483,6 +488,28 @@ public class FunctionUnitImportWriter {
                 .isDefault(isDefault)
                 .build();
         return actionDefinitionRepository.save(action);
+    }
+
+    void importEmailConnection(FunctionUnit functionUnit, Map<String, Object> connectionData) {
+        EmailConnection connection = EmailConnection.builder()
+                .connectionUid(connectionData.get("connectionUid") != null
+                        ? (String) connectionData.get("connectionUid")
+                        : UUID.randomUUID().toString())
+                .functionUnit(functionUnit)
+                .name((String) connectionData.get("name"))
+                .connectionType(connectionData.get("connectionType") != null
+                        ? ConnectionType.valueOf((String) connectionData.get("connectionType"))
+                        : ConnectionType.SMTP)
+                .host((String) connectionData.get("host"))
+                .port(connectionData.get("port") != null ? ((Number) connectionData.get("port")).intValue() : 587)
+                .username((String) connectionData.get("username"))
+                .passwordEncrypted((String) connectionData.get("passwordEncrypted"))
+                .fromEmail((String) connectionData.get("fromEmail"))
+                .fromName((String) connectionData.get("fromName"))
+                .useTls(connectionData.get("useTls") != null ? (Boolean) connectionData.get("useTls") : true)
+                .enabled(connectionData.get("enabled") != null ? (Boolean) connectionData.get("enabled") : true)
+                .build();
+        emailConnectionRepository.save(connection);
     }
 
     /**

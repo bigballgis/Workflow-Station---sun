@@ -43,6 +43,23 @@ $EnvFile = "$PSScriptRoot/.env"
 # AP_BRIDGE_URL on the admin-center-frontend container (docker-entrypoint.sh -> config.js).
 # See the compose service env. The frontend image is built once and promoted across envs,
 # so a build-time value can't differ per environment.
+#
+# Load .env into the current PowerShell session so $env:POSTGRES_USER / $env:POSTGRES_DB
+# (used by the manual psql migration step) are populated. docker compose reads .env via
+# --env-file, but those values are NOT exported to this shell automatically.
+if (Test-Path $EnvFile) {
+    Get-Content $EnvFile | ForEach-Object {
+        $line = $_.Trim()
+        if ($line -and -not $line.StartsWith("#") -and $line.Contains("=")) {
+            $idx = $line.IndexOf("=")
+            $key = $line.Substring(0, $idx).Trim()
+            $val = $line.Substring($idx + 1).Trim()
+            if ($key) {
+                Set-Item -Path "env:$key" -Value $val
+            }
+        }
+    }
+}
 
 # ==================== Service Registry ====================
 # Maps compose service name -> Maven module path, container name, type
@@ -424,7 +441,10 @@ if (-not $SkipInfra) {
         Get-ChildItem -Path $InitScriptsDir -Filter "*.sql" | Sort-Object Name | ForEach-Object {
             $scriptName = $_.Name
             Write-Host "    $scriptName" -ForegroundColor DarkGray
+            $prevEap = $ErrorActionPreference
+            $ErrorActionPreference = "Continue"
             Get-Content $_.FullName | docker exec -i platform-postgres-dev psql -U $env:POSTGRES_USER -d $env:POSTGRES_DB -v ON_ERROR_STOP=0 2>&1 | Out-Null
+            $ErrorActionPreference = $prevEap
             if ($LASTEXITCODE -ne 0) {
                 Write-Host "    WARNING: $scriptName had errors (may be expected for idempotent scripts)" -ForegroundColor Yellow
             }
@@ -570,6 +590,41 @@ Wait-ForContainerHealth -ContainerName "platform-admin-center-dev" -DisplayName 
 Wait-ForContainerHealth -ContainerName "platform-user-portal-dev" -DisplayName "User Portal"
 Wait-ForContainerHealth -ContainerName "platform-developer-workstation-dev" -DisplayName "Developer Workstation"
 Wait-ForContainerHealth -ContainerName "platform-edge-frontend-dev" -DisplayName "Edge frontend (single-origin)"
+
+# Superset setup must run via host docker exec — never from postgres init-scripts.
+# Superset prints benign warnings (e.g. flask-limiter in-memory storage) to stderr.
+# Under $ErrorActionPreference="Stop", merged native stderr (2>&1) would be promoted to a
+# terminating NativeCommandError, so temporarily relax to Continue and rely on $LASTEXITCODE.
+$supersetContainer = "platform-superset-dev"
+$supersetRunning = docker ps -q -f "name=^/${supersetContainer}$" 2>$null
+if ($supersetRunning) {
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+
+    Write-Host "  Running Superset db upgrade..." -ForegroundColor DarkGray
+    docker exec $supersetContainer superset db upgrade 2>&1 | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "  Superset db upgrade complete." -ForegroundColor Green
+    } else {
+        Write-Host "  WARNING: Superset db upgrade failed — retry: docker exec $supersetContainer superset db upgrade" -ForegroundColor Yellow
+    }
+
+    Write-Host "  Running Superset init (admin + roles)..." -ForegroundColor DarkGray
+    docker exec $supersetContainer superset fab create-admin `
+        --username admin --firstname Admin --lastname User `
+        --email admin@superset.com --password admin123 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "  Superset admin may already exist (continuing)." -ForegroundColor DarkGray
+    }
+    docker exec $supersetContainer superset init 2>&1 | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "  Superset init complete." -ForegroundColor Green
+    } else {
+        Write-Host "  WARNING: Superset init failed — retry: ./deploy/scripts/superset-init.sh" -ForegroundColor Yellow
+    }
+
+    $ErrorActionPreference = $prevEap
+}
 
 Write-Host "  Current service status:" -ForegroundColor Cyan
 docker compose -f $ComposeFile --env-file $EnvFile ps

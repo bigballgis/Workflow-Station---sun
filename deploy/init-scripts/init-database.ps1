@@ -105,7 +105,9 @@ $migrations = @(
     "00-schema/41-dw-function-unit-tags.sql",
     "00-schema/42-add-dw-binding-link-mode.sql",
     "00-schema/43-add-dw-field-fk-pk-metadata.sql",
-    "00-schema/44-ac-ldap-sync-audit.sql"
+    "00-schema/44-ac-ldap-sync-audit.sql",
+    "00-schema/45-dw-email-connections.sql",
+    "00-schema/46-sys-email-connections.sql"
 )
 foreach ($m in $migrations) {
     $path = Join-Path $ScriptDir $m

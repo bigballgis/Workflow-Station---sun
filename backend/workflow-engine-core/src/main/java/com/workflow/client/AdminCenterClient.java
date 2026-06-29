@@ -14,6 +14,7 @@ import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Admin Center 客户端
@@ -508,6 +509,53 @@ public class AdminCenterClient {
         } catch (Exception e) {
             log.error("Failed to get BU unbounded roles: {}", e.getMessage());
             return Collections.emptyList();
+        }
+    }
+
+    /**
+     * 获取功能单元邮件连接凭据（内部 API）
+     */
+    public Optional<Map<String, Object>> getEmailConnectionCredentials(String functionUnitId, String connectionId) {
+        try {
+            String url = adminCenterUrl + "/api/v1/admin/internal/function-units/"
+                    + functionUnitId + "/connections/" + connectionId + "/credentials";
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<Map<String, Object>>() {}
+            );
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                return Optional.of(response.getBody());
+            }
+            return Optional.empty();
+        } catch (Exception e) {
+            log.error("Failed to get email connection credentials for {} / {}: {}",
+                    functionUnitId, connectionId, e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * 按功能单元 code 解析 Admin Center 中的功能单元 ID
+     */
+    public Optional<String> resolveFunctionUnitIdByCode(String functionUnitCode) {
+        try {
+            String url = adminCenterUrl + "/api/v1/admin/internal/function-units/by-code/"
+                    + functionUnitCode + "/id";
+            ResponseEntity<Map<String, String>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<Map<String, String>>() {}
+            );
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                return Optional.ofNullable(response.getBody().get("functionUnitId"));
+            }
+            return Optional.empty();
+        } catch (Exception e) {
+            log.error("Failed to resolve function unit id by code {}: {}", functionUnitCode, e.getMessage());
+            return Optional.empty();
         }
     }
 
