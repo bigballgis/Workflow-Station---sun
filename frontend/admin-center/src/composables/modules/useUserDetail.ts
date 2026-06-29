@@ -79,9 +79,12 @@ export function useUserDetail(userId: Ref<string>) {
   const onAssignBuChange = async () => {
     const buId = assignForm.businessUnitId; assignForm.roleId = ''; assignRoleOptions.value = []; assignRoleLoaded.value = false
     if (!buId) return
+    // eligible-roles 接口按 BU code 查询（任务分配链路统一 code），而表单/分配接口用 BU id
+    const buCode = businessUnits.value.find(b => b.id === buId)?.code
+    if (!buCode) { assignRoleLoaded.value = true; return }
     assignRoleLoading.value = true
     try {
-      const assignable = await listAssignableBuBoundedRoles(buId)
+      const assignable = await listAssignableBuBoundedRoles(buCode)
       const taken = new Set(buRoles.value.filter(r => r.businessUnitId === buId).map(r => r.roleId))
       assignRoleOptions.value = assignable.filter(r => !taken.has(r.id))
     } catch (e: unknown) { const msg = e instanceof Error ? e.message : undefined; notifyError(msg || terr(AppErrorCode.USER_ACTION_FAILED)) }
