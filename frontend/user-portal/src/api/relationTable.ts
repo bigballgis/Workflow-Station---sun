@@ -29,7 +29,9 @@ export interface RelationFieldDef {
 }
 
 export interface RelationImportResult {
-  inserted: number
+  dryRun?: boolean
+  validCount?: number
+  inserted?: number
   failed: number
   errors: Array<{ row: number; field: string; message: string }>
 }
@@ -121,10 +123,11 @@ export const relationTableApi = {
     }),
 
   /** 导入数据 (csv|xlsx) */
-  importData: (tableId: number, file: File, format?: 'csv' | 'xlsx') => {
+  importData: (tableId: number, file: File, format?: 'csv' | 'xlsx', dryRun = false) => {
     const formData = new FormData()
     formData.append('file', file)
     if (format) formData.append('format', format)
+    formData.append('dryRun', String(dryRun))
     return request.post<{ data: RelationImportResult }>(`/relation-tables/${tableId}/import`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     })

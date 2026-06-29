@@ -13,6 +13,7 @@ import org.springframework.data.domain.AuditorAware;
 import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 
+import com.platform.security.encryption.impl.AesEncryptionService;
 import com.platform.security.resolver.TargetResolverFactory;
 import com.platform.security.service.impl.UserRoleServiceImpl;
 import com.platform.security.util.SecurityContextUtils;
@@ -26,7 +27,7 @@ import java.util.Optional;
 @EnableConfigurationProperties(com.developer.config.SecurityConfigurationProperties.class)
 @ComponentScan(
     basePackages = {"com.developer", "com.platform.common", "com.platform.cache", "com.platform.security.exception", "com.platform.security.filter", "com.platform.security.config"},
-    basePackageClasses = {TargetResolverFactory.class, UserRoleServiceImpl.class},
+    basePackageClasses = {TargetResolverFactory.class, UserRoleServiceImpl.class, AesEncryptionService.class},
     excludeFilters = {
         @ComponentScan.Filter(type = FilterType.REGEX, pattern = "com\\.platform\\.security\\.repository\\..*"),
         @ComponentScan.Filter(type = FilterType.REGEX, pattern = "com\\.platform\\.security\\.service\\.impl\\.(?!UserRoleServiceImpl|JwtTokenServiceImpl).*"),

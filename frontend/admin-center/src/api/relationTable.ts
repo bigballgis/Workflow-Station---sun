@@ -290,19 +290,22 @@ export const relationTableDataApi = {
     }),
 
   /** 导入数据 (csv|xlsx)，返回 {inserted, failed, errors} */
-  importData: (tableId: number, file: File, format?: 'csv' | 'xlsx') => {
+  importData: (tableId: number, file: File, format?: 'csv' | 'xlsx', dryRun = false) => {
     const formData = new FormData()
     formData.append('file', file)
     if (format) formData.append('format', format)
+    formData.append('dryRun', String(dryRun))
     return post<RelationImportResult>(`/relation-tables/data/${tableId}/import`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
   },
 }
 
-/** 导入结果 */
+/** 导入结果（dryRun=true 时返回 validCount 而非 inserted） */
 export interface RelationImportResult {
-  inserted: number
+  dryRun?: boolean
+  validCount?: number
+  inserted?: number
   failed: number
   errors: Array<{ row: number; field: string; message: string }>
 }

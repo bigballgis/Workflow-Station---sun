@@ -1,8 +1,10 @@
 package com.portal.component;
 
+import com.platform.security.entity.BusinessUnit;
 import com.platform.security.util.SecurityContextUtils;
 import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.TaskInfo;
+import com.portal.repository.BusinessUnitRepository;
 import com.portal.service.PortalWorkspaceAuthService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,6 +31,7 @@ public class WorkspaceTaskFilterComponent {
     private final WorkflowEngineClient workflowEngineClient;
     private final VirtualGroupAccessComponent virtualGroupAccessComponent;
     private final PortalWorkspaceAuthService portalWorkspaceAuthService;
+    private final BusinessUnitRepository businessUnitRepository;
 
     /**
      * FIXED_BU_ROLE or BU_ROLE with an explicit businessUnitId in BPMN extensions:
@@ -48,7 +51,9 @@ public class WorkspaceTaskFilterComponent {
         if (activeBuOpt.isEmpty()) {
             return tasks;
         }
-        String activeBu = normalizeBuId(activeBuOpt.get());
+        // The JWT activeBusinessUnitId is a BU *id*, but BPMN businessUnitId is now a *code*
+        // (code-based assignment). Convert id -> code so FIXED_BU_ROLE pool tasks aren't all hidden.
+        String activeBu = resolveActiveBusinessUnitCode(normalizeBuId(activeBuOpt.get()));
         List<TaskInfo> out = new ArrayList<>();
         for (TaskInfo t : tasks) {
             if (t == null) {
@@ -116,6 +121,35 @@ public class WorkspaceTaskFilterComponent {
             return "";
         }
         return raw.trim();
+    }
+
+    private static final long BU_CODE_CACHE_TTL_MS = 300_000L;
+    private final Map<String, BuCodeCacheEntry> buCodeCache = new ConcurrentHashMap<>();
+
+    private record BuCodeCacheEntry(String code, long timestampMs) {}
+
+    /**
+     * Resolve a BU <em>id</em> (from the JWT active workspace) to its <em>code</em> for comparison
+     * against the code-based BPMN {@code businessUnitId}. BU id→code is effectively immutable, so it's
+     * cached for a short TTL to avoid a DB hit on every To Do / dashboard refresh. When the id has no
+     * resolvable code (e.g. it is already a code, or the BU is missing), the original value is returned,
+     * preserving the legacy id-vs-id comparison.
+     */
+    private String resolveActiveBusinessUnitCode(String activeBuId) {
+        if (activeBuId == null || activeBuId.isBlank()) {
+            return activeBuId;
+        }
+        String key = activeBuId.trim();
+        BuCodeCacheEntry hit = buCodeCache.get(key);
+        if (hit != null && System.currentTimeMillis() - hit.timestampMs() < BU_CODE_CACHE_TTL_MS) {
+            return hit.code();
+        }
+        String resolved = businessUnitRepository.findById(key)
+                .map(BusinessUnit::getCode)
+                .filter(c -> c != null && !c.isBlank())
+                .orElse(key);
+        buCodeCache.put(key, new BuCodeCacheEntry(resolved, System.currentTimeMillis()));
+        return resolved;
     }
 
     /**

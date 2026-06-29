@@ -15,8 +15,10 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.platform.common.dto.RelationFieldDTO;
 import com.platform.common.dto.RelationTableDataRowDTO;
+import com.platform.common.enums.RelationDataType;
 import com.platform.common.enums.RelationPermissionLevel;
 import com.platform.common.enums.RelationTableStatus;
+import com.platform.common.relationtable.RelationCsvValueFormatter;
 import com.platform.common.relationtable.RelationRowValidator;
 import com.platform.common.relationtable.RelationTableTemplateService;
 import com.platform.common.relationtable.RowValidationResult;
@@ -185,16 +187,20 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
         List<Object> dataParams = new ArrayList<>(params);
         dataParams.add(pageable.getPageSize());
         dataParams.add(pageable.getOffset());
-        String dataSql = "SELECT row_id, data FROM " + DATA_ROWS_TABLE
+        String dataSql = "SELECT row_id, data, status FROM " + DATA_ROWS_TABLE
                 + " WHERE table_id = ?" + searchClause
                 + " ORDER BY id LIMIT ? OFFSET ?";
 
-        List<RelationTableDataRowDTO> dtoList = jdbcTemplate.query(dataSql, (rs, rowNum) ->
-                RelationTableDataRowDTO.builder()
-                        .rowId(rs.getString("row_id"))
-                        .tableId(tableId)
-                        .data(parseRowData(rs.getString("data")))
-                        .build(),
+        List<RelationTableDataRowDTO> dtoList = jdbcTemplate.query(dataSql, (rs, rowNum) -> {
+                    Map<String, Object> data = parseRowData(rs.getString("data"));
+                    // Surface the row-level status column so the UI can toggle Active/Inactive.
+                    data.put("status", rs.getString("status"));
+                    return RelationTableDataRowDTO.builder()
+                            .rowId(rs.getString("row_id"))
+                            .tableId(tableId)
+                            .data(data)
+                            .build();
+                },
                 dataParams.toArray());
 
         return new PageImpl<>(dtoList, pageable, total);
@@ -215,6 +221,19 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
         Map<String, Object> filteredData = data.entrySet().stream()
                 .filter(e -> validFieldNames.contains(e.getKey()))
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (a, b) -> b, LinkedHashMap::new));
+
+        // Auto-generate the primary key per its generation strategy when the caller did not supply one
+        // (manual-strategy PKs must be provided by the caller). This guarantees a PK regardless of how
+        // the request was made (UI, import, or direct API), instead of relying on the client to allocate.
+        boolean autoPk = pkField != null && fields.stream()
+                .anyMatch(f -> pkField.equals(f.getFieldName()) && !RelationRowValidator.isManualPk(f));
+        if (autoPk && isBlank(filteredData.get(pkField))) {
+            List<String> values = primaryKeyAllocationService
+                    .allocate(tableId, pkField, 1, "rt-" + tableId).getValues();
+            if (values != null && !values.isEmpty()) {
+                filteredData.put(pkField, values.get(0));
+            }
+        }
 
         String currentUser = SecurityContextUtils.getCurrentUsername().orElse("system");
         java.sql.Timestamp now = java.sql.Timestamp.from(Instant.now());
@@ -365,6 +384,9 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
         List<String> columnNames = fields.stream()
                 .map(RelationFieldDTO::getFieldName)
                 .collect(Collectors.toList());
+        Map<String, RelationDataType> typeByField = fields.stream()
+                .filter(f -> f.getFieldName() != null)
+                .collect(Collectors.toMap(RelationFieldDTO::getFieldName, RelationFieldDTO::getDataType, (a, b) -> a));
 
         List<Map<String, Object>> rows = jdbcTemplate.query(
                 "SELECT data FROM " + DATA_ROWS_TABLE + " WHERE table_id = ? ORDER BY id LIMIT ?",
@@ -375,16 +397,15 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
         csv.append(String.join(",", columnNames)).append("\n");
         for (Map<String, Object> row : rows) {
             csv.append(columnNames.stream()
-                    .map(f -> escapeCsvValue(row.get(f)))
+                    .map(f -> escapeCsvValue(RelationCsvValueFormatter.format(row.get(f), typeByField.get(f))))
                     .collect(Collectors.joining(","))
             ).append("\n");
         }
         return csv.toString();
     }
 
-    private String escapeCsvValue(Object value) {
-        if (value == null) return "";
-        String str = value.toString();
+    private String escapeCsvValue(String str) {
+        if (str == null) return "";
         if (str.contains(",") || str.contains("\"") || str.contains("\n")) {
             return "\"" + str.replace("\"", "\"\"") + "\"";
         }
@@ -400,13 +421,39 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
 
     @Override
     @Transactional
-    public Map<String, Object> importData(Long tableId, byte[] fileBytes, String format) {
+    public Map<String, Object> importData(Long tableId, byte[] fileBytes, String format, boolean dryRun) {
         requireWriteAccess(tableId);
         RelationTableDefinition tableDef = getDeployedTableDefinition(tableId);
         List<RelationFieldDTO> fields = getDeployedFields(tableDef);
 
         List<Map<String, Object>> rawRows = templateService.parseImport(fileBytes, format);
+        if (rawRows.size() > RelationTableTemplateService.MAX_IMPORT_ROWS) {
+            throw new IllegalArgumentException(
+                    "Too many rows: " + rawRows.size() + ". A single import is limited to "
+                            + RelationTableTemplateService.MAX_IMPORT_ROWS + " rows.");
+        }
         List<RowValidationResult> results = RelationRowValidator.validateRows(rawRows, fields);
+
+        List<Map<String, Object>> errors = new ArrayList<>();
+        for (RowValidationResult r : results) {
+            if (!r.isValid()) {
+                r.getErrors().forEach(err -> errors.add(Map.of(
+                        "row", err.getRow(),
+                        "field", err.getField() == null ? "" : err.getField(),
+                        "message", err.getMessage())));
+            }
+        }
+        long validCount = results.stream().filter(RowValidationResult::isValid).count();
+
+        // Dry run: validate only, do not write. Used by the two-step "preview then confirm" flow.
+        if (dryRun) {
+            Map<String, Object> preview = new LinkedHashMap<>();
+            preview.put("dryRun", true);
+            preview.put("validCount", validCount);
+            preview.put("failed", results.size() - (int) validCount);
+            preview.put("errors", errors);
+            return preview;
+        }
 
         // Auto-generate PK values per strategy for imported rows that don't carry one
         // (manual-strategy PKs come from the file and were validated as required above).
@@ -415,7 +462,6 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
                 .anyMatch(f -> pkField.equals(f.getFieldName()) && !RelationRowValidator.isManualPk(f));
 
         int inserted = 0;
-        List<Map<String, Object>> errors = new ArrayList<>();
         for (RowValidationResult r : results) {
             if (r.isValid()) {
                 Map<String, Object> row = new LinkedHashMap<>(r.getValues());
@@ -427,11 +473,6 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
                 // Reuse addData for storage row-id, audit and timestamp handling.
                 addData(tableId, row);
                 inserted++;
-            } else {
-                r.getErrors().forEach(err -> errors.add(Map.of(
-                        "row", err.getRow(),
-                        "field", err.getField() == null ? "" : err.getField(),
-                        "message", err.getMessage())));
             }
         }
         Map<String, Object> summary = new LinkedHashMap<>();
@@ -539,6 +580,11 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
         } catch (JsonProcessingException e) {
             throw new RuntimeException("Failed to serialize row JSON data", e);
         }
+    }
+
+    /** True when a value is null or an empty/whitespace string (used to detect a missing PK). */
+    private boolean isBlank(Object value) {
+        return value == null || value.toString().trim().isEmpty();
     }
 
     private String resolveRowId(String pkField, Map<String, Object> data) {

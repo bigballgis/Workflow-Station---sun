@@ -26,40 +26,50 @@ public class TaskAssignmentController {
     // ==================== 用户业务单元查询 ====================
     
     @GetMapping("/users/{userId}/business-unit")
-    @Operation(summary = "获取用户的业务单元ID",
-            description = "多 BU 场景下可传 activeBusinessUnitId（须与用户 UBR 一致）；否则仅在唯一 BU 时返回")
+    @Operation(summary = "获取用户的业务单元 code",
+            description = "任务分配链路统一用 BU code。多 BU 场景下可传 activeBusinessUnitId（BU code，须与用户 UBR 一致）；否则仅在唯一 BU 时返回。返回值为 BU code。")
     public ResponseEntity<Map<String, String>> getUserBusinessUnitId(
             @PathVariable String userId,
             @RequestParam(required = false) String activeBusinessUnitId) {
-        String businessUnitId = taskAssignmentQueryService.getUserBusinessUnitId(userId, activeBusinessUnitId);
-        return ResponseEntity.ok(Map.of("businessUnitId", businessUnitId != null ? businessUnitId : ""));
+        String businessUnitCode = taskAssignmentQueryService.getUserBusinessUnitId(userId, activeBusinessUnitId);
+        return ResponseEntity.ok(Map.of("businessUnitId", businessUnitCode != null ? businessUnitCode : ""));
     }
-    
+
+    @GetMapping("/business-units/by-id/{businessUnitId}/code")
+    @Operation(summary = "业务单元 id → code",
+            description = "供运行时把工作台上下文 activeBusinessUnitId（仍为 id）转成 code，再进入任务分配 code 链路")
+    public ResponseEntity<Map<String, String>> getBusinessUnitCodeById(@PathVariable String businessUnitId) {
+        String code = taskAssignmentQueryService.getBusinessUnitCodeById(businessUnitId);
+        return ResponseEntity.ok(Map.of("code", code != null ? code : ""));
+    }
+
     @GetMapping("/business-units/{businessUnitId}/parent")
-    @Operation(summary = "获取业务单元的父业务单元ID")
-    public ResponseEntity<Map<String, String>> getParentBusinessUnitId(@PathVariable String businessUnitId) {
-        String parentId = taskAssignmentQueryService.getParentBusinessUnitId(businessUnitId);
-        return ResponseEntity.ok(Map.of("parentBusinessUnitId", parentId != null ? parentId : ""));
+    @Operation(summary = "获取业务单元的父业务单元 code",
+            description = "路径参数为 BU code；返回父 BU 的 code（无父级时为空）")
+    public ResponseEntity<Map<String, String>> getParentBusinessUnitId(@PathVariable("businessUnitId") String businessUnitCode) {
+        String parentCode = taskAssignmentQueryService.getParentBusinessUnitId(businessUnitCode);
+        return ResponseEntity.ok(Map.of("parentBusinessUnitId", parentCode != null ? parentCode : ""));
     }
     
     // ==================== 业务单元角色用户查询 ====================
     
     @GetMapping("/business-units/{businessUnitId}/roles/{roleId}/users")
-    @Operation(summary = "获取业务单元中拥有指定角色的用户ID列表")
+    @Operation(summary = "获取业务单元中拥有指定角色的用户ID列表",
+               description = "路径参数 businessUnitId / roleId 均为 code（任务分配链路统一 code）")
     public ResponseEntity<List<String>> getUsersByBusinessUnitAndRole(
-            @PathVariable String businessUnitId,
-            @PathVariable String roleId) {
-        List<String> userIds = taskAssignmentQueryService.getUsersByBusinessUnitAndRole(businessUnitId, roleId);
+            @PathVariable("businessUnitId") String businessUnitCode,
+            @PathVariable("roleId") String roleCode) {
+        List<String> userIds = taskAssignmentQueryService.getUsersByBusinessUnitAndRole(businessUnitCode, roleCode);
         return ResponseEntity.ok(userIds);
     }
-    
+
     // ==================== BU无关型角色用户查询 ====================
-    
+
     @GetMapping("/roles/{roleId}/users")
-    @Operation(summary = "获取拥有指定BU无关型角色的用户ID列表", 
-               description = "通过查询绑定了该角色的虚拟组的所有成员")
-    public ResponseEntity<List<String>> getUsersByUnboundedRole(@PathVariable String roleId) {
-        List<String> userIds = taskAssignmentQueryService.getUsersByUnboundedRole(roleId);
+    @Operation(summary = "获取拥有指定BU无关型角色的用户ID列表",
+               description = "路径参数 roleId 为 role code；通过查询绑定了该角色的虚拟组的所有成员")
+    public ResponseEntity<List<String>> getUsersByUnboundedRole(@PathVariable("roleId") String roleCode) {
+        List<String> userIds = taskAssignmentQueryService.getUsersByUnboundedRole(roleCode);
         return ResponseEntity.ok(userIds);
     }
 
@@ -74,18 +84,20 @@ public class TaskAssignmentController {
     // ==================== 业务单元准入角色查询 ====================
     
     @GetMapping("/business-units/{businessUnitId}/eligible-roles")
-    @Operation(summary = "获取业务单元的准入角色ID列表")
-    public ResponseEntity<List<String>> getEligibleRoleIds(@PathVariable String businessUnitId) {
-        List<String> roleIds = taskAssignmentQueryService.getEligibleRoleIds(businessUnitId);
-        return ResponseEntity.ok(roleIds);
+    @Operation(summary = "获取业务单元的准入角色 code 列表",
+               description = "路径参数 businessUnitId 为 BU code；返回准入角色的 code 列表")
+    public ResponseEntity<List<String>> getEligibleRoleIds(@PathVariable("businessUnitId") String businessUnitCode) {
+        List<String> roleCodes = taskAssignmentQueryService.getEligibleRoleIds(businessUnitCode);
+        return ResponseEntity.ok(roleCodes);
     }
-    
+
     @GetMapping("/business-units/{businessUnitId}/roles/{roleId}/eligible")
-    @Operation(summary = "检查角色是否是业务单元的准入角色")
+    @Operation(summary = "检查角色是否是业务单元的准入角色",
+               description = "路径参数 businessUnitId / roleId 均为 code")
     public ResponseEntity<Map<String, Boolean>> isEligibleRole(
-            @PathVariable String businessUnitId,
-            @PathVariable String roleId) {
-        boolean eligible = taskAssignmentQueryService.isEligibleRole(businessUnitId, roleId);
+            @PathVariable("businessUnitId") String businessUnitCode,
+            @PathVariable("roleId") String roleCode) {
+        boolean eligible = taskAssignmentQueryService.isEligibleRole(businessUnitCode, roleCode);
         return ResponseEntity.ok(Map.of("eligible", eligible));
     }
     

@@ -12,7 +12,7 @@ const emit = defineEmits<{
 const {
   t, Search, Close, Menu, DArrowRight, DArrowLeft, Plus, Filter, CaretTop, CaretBottom, Connection, Key,
   columnsPanelOpen, propsPanelOpen, fieldSearchKeyword, saving, viewName, viewFields, sortConfig, filterConfig,
-  enableExport, enableImport, mainTableName, filterDialogVisible, addColumnPopoverVisible, thenSortField,
+  enableExport, mainTableName, filterDialogVisible, addColumnPopoverVisible, thenSortField,
   dragOverIndex, dragSourceField, visibleColumns, displayFilterConditions,
   sortFieldOptions, filteredCatalog, previewRowCount, fieldLabel, getFieldIcon, getMockValue, sortIndicator,
   formatFilterTag, addField, removeField, toggleSortDirection, sortDirectionTooltip, onFilterEditorSave,
@@ -20,6 +20,7 @@ const {
   onColDragStart, onColDragOver, onColDragLeave, onColDrop, onColDragEnd,
   isFkField, isPkField, onFkColumnClick,
   selectedCatalogFields, toggleCatalogSelect, addSelectedFields, clearAllFields,
+  allCatalogSelected, someCatalogSelected, toggleSelectAllCatalog,
 } = useMainTableViewDesigner(props, emit)
 </script>
 
@@ -79,6 +80,19 @@ const {
 
           </el-input>
 
+        </div>
+
+        <div
+          v-if="filteredCatalog.length"
+          class="columns-select-all"
+        >
+          <el-checkbox
+            :model-value="allCatalogSelected"
+            :indeterminate="someCatalogSelected && !allCatalogSelected"
+            @change="toggleSelectAllCatalog($event === true)"
+          >
+            {{ t('mainTableView.selectAllColumns') }}
+          </el-checkbox>
         </div>
 
         <div class="columns-field-list">
@@ -449,12 +463,6 @@ const {
             <el-checkbox v-model="enableExport">
 
               {{ t('mainTableView.enableExport') }}
-
-            </el-checkbox>
-
-            <el-checkbox v-model="enableImport">
-
-              {{ t('mainTableView.enableImport') }}
 
             </el-checkbox>
 

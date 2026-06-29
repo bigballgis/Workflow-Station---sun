@@ -21,7 +21,9 @@ param(
     [switch]$SkipFrontend = $false,
     [switch]$SkipBackend = $false,
     [switch]$PushOnly = $false,
-    [switch]$NoPush = $false
+    [switch]$NoPush = $false,
+    # Max services built/pushed in parallel (docker build/push run concurrently per service)
+    [int]$MaxParallel = 4
 )
 
 $ErrorActionPreference = "Stop"
@@ -64,6 +66,7 @@ Write-Host "=========================================" -ForegroundColor Yellow
 Write-Host "  Registry: $Registry"
 Write-Host "  Tag: $Tag"
 Write-Host "  Services: $Services"
+Write-Host "  MaxParallel: $MaxParallel"
 Write-Host "  JavaBaseImage: $JavaBaseImage"
 Write-Host "=========================================" -ForegroundColor Yellow
 
@@ -111,83 +114,95 @@ if (-not $SkipBackend -and -not $PushOnly) {
     Write-Ok "Maven build complete"
 }
 
-# 2. Docker Build & Push (Backend)
+# 2. Docker Build & Push (Backend) — parallel across services
 if (-not $SkipBackend) {
-    Write-Step "Building backend Docker images..."
+    Write-Step "Building backend Docker images (parallel x$MaxParallel)..."
 
-    foreach ($svc in $selectedBackend) {
-        $imageName = "$Registry/$($svc.Name):$Tag"
-        $contextDir = Join-Path $ProjectRoot $svc.Dir
-
-        if (-not $PushOnly) {
-            Write-Host "   Building $($svc.Name)..." -ForegroundColor Gray
-            docker build `
-                --build-arg "JAVA_BASE_IMAGE=$JavaBaseImage" `
-                --pull=false `
-                -t $imageName $contextDir
-            if ($LASTEXITCODE -ne 0) { Write-Fail "Docker build failed: $($svc.Name)" }
-            docker tag $imageName "$Registry/$($svc.Name):latest"
+    $backendJobs = foreach ($svc in $selectedBackend) {
+        Start-ThreadJob -ThrottleLimit $MaxParallel -Name $svc.Name -ArgumentList @(
+            $svc.Name, (Join-Path $ProjectRoot $svc.Dir), "$Registry/$($svc.Name):$Tag",
+            "$Registry/$($svc.Name):latest", $JavaBaseImage, [bool]$PushOnly, [bool]$NoPush
+        ) -ScriptBlock {
+            param($Name, $ContextDir, $ImageName, $LatestName, $JavaBaseImage, $PushOnly, $NoPush)
+            $log = [System.Collections.Generic.List[string]]::new()
+            if (-not $PushOnly) {
+                $log.Add(">> [$Name] docker build")
+                docker build --build-arg "JAVA_BASE_IMAGE=$JavaBaseImage" --pull=false -t $ImageName $ContextDir 2>&1 | ForEach-Object { $log.Add("[$Name] $_") }
+                if ($LASTEXITCODE -ne 0) { return @{ Name = $Name; Ok = $false; Stage = "build"; Log = $log } }
+                docker tag $ImageName $LatestName 2>&1 | ForEach-Object { $log.Add("[$Name] $_") }
+            }
+            if (-not $NoPush) {
+                $log.Add(">> [$Name] docker push")
+                docker push $ImageName 2>&1 | ForEach-Object { $log.Add("[$Name] $_") }
+                if ($LASTEXITCODE -ne 0) { return @{ Name = $Name; Ok = $false; Stage = "push"; Log = $log } }
+                docker push $LatestName 2>&1 | ForEach-Object { $log.Add("[$Name] $_") }
+            }
+            return @{ Name = $Name; Ok = $true; Log = $log }
         }
+    }
 
-        if (-not $NoPush) {
-            Write-Host "   Pushing $imageName..." -ForegroundColor Gray
-            docker push $imageName
-            if ($LASTEXITCODE -ne 0) { Write-Fail "Docker push failed: $imageName" }
-            docker push "$Registry/$($svc.Name):latest"
-        }
-
-        Write-Ok $svc.Name
+    $backendResults = $backendJobs | Receive-Job -Wait -AutoRemoveJob
+    foreach ($r in $backendResults) {
+        $r.Log | ForEach-Object { Write-Host "   $_" -ForegroundColor Gray }
+        if ($r.Ok) { Write-Ok $r.Name } else { Write-Fail "Backend $($r.Stage) failed: $($r.Name)" }
     }
 }
 
-# 3. Docker Build & Push (Frontend — local npm build + Dockerfile.local)
+# 3. Docker Build & Push (Frontend — local npm build + Dockerfile.local) — parallel across services
 if (-not $SkipFrontend) {
-    Write-Step "Building frontend (local npm build + Docker)..."
+    Write-Step "Building frontend (local npm build + Docker, parallel x$MaxParallel)..."
 
-    foreach ($svc in $selectedFrontend) {
-        $imageName = "$Registry/$($svc.Name):$Tag"
-        $contextDir = Join-Path $ProjectRoot $svc.Dir
-
-        if (-not $PushOnly) {
-            # npm install + build locally (Docker multi-stage build not used)
-            Write-Host "   npm install & build $($svc.Name)..." -ForegroundColor Gray
-            Push-Location $contextDir
-            try {
-                # Skip npm install when node_modules is already up to date with
-                # package.json / package-lock.json (mtime comparison)
-                $marker = Join-Path $contextDir "node_modules\.package-lock.json"
-                $manifests = @("package.json", "package-lock.json") |
-                    ForEach-Object { Join-Path $contextDir $_ } | Where-Object { Test-Path $_ }
-                $newestManifest = ($manifests | ForEach-Object { (Get-Item $_).LastWriteTime } | Measure-Object -Maximum).Maximum
-                if ((Test-Path $marker) -and ((Get-Item $marker).LastWriteTime -ge $newestManifest)) {
-                    Write-Host "   node_modules up to date, skipping npm install" -ForegroundColor DarkGray
-                } else {
-                    npm install --prefer-offline --no-audit 2>&1 | Out-Null
-                    if ($LASTEXITCODE -ne 0) { Pop-Location; Write-Fail "npm install failed: $($svc.Name)" }
+    $frontendJobs = foreach ($svc in $selectedFrontend) {
+        Start-ThreadJob -ThrottleLimit $MaxParallel -Name $svc.Name -ArgumentList @(
+            $svc.Name, (Join-Path $ProjectRoot $svc.Dir), "$Registry/$($svc.Name):$Tag",
+            "$Registry/$($svc.Name):latest", [bool]$PushOnly, [bool]$NoPush
+        ) -ScriptBlock {
+            param($Name, $ContextDir, $ImageName, $LatestName, $PushOnly, $NoPush)
+            $log = [System.Collections.Generic.List[string]]::new()
+            if (-not $PushOnly) {
+                Push-Location $ContextDir
+                try {
+                    # Skip npm install when node_modules is already up to date (mtime compare)
+                    $marker = Join-Path $ContextDir "node_modules\.package-lock.json"
+                    $manifests = @("package.json", "package-lock.json") |
+                        ForEach-Object { Join-Path $ContextDir $_ } | Where-Object { Test-Path $_ }
+                    $newestManifest = ($manifests | ForEach-Object { (Get-Item $_).LastWriteTime } | Measure-Object -Maximum).Maximum
+                    if ((Test-Path $marker) -and ((Get-Item $marker).LastWriteTime -ge $newestManifest)) {
+                        $log.Add("[$Name] node_modules up to date, skipping npm install")
+                    } else {
+                        $log.Add(">> [$Name] npm install")
+                        npm install --prefer-offline --no-audit 2>&1 | ForEach-Object { $log.Add("[$Name] $_") }
+                        if ($LASTEXITCODE -ne 0) { Pop-Location; return @{ Name = $Name; Ok = $false; Stage = "npm install"; Log = $log } }
+                    }
+                    # Remove auto-generated dts files before build to avoid Windows file locking (errno -4094)
+                    Remove-Item -Path "src/components.d.ts", "src/auto-imports.d.ts" -Force -ErrorAction SilentlyContinue
+                    $log.Add(">> [$Name] vite build")
+                    npx vite build 2>&1 | ForEach-Object { $log.Add("[$Name] $_") }
+                    if ($LASTEXITCODE -ne 0) { Pop-Location; return @{ Name = $Name; Ok = $false; Stage = "vite build"; Log = $log } }
+                } finally {
+                    Pop-Location
                 }
-                # Remove auto-generated dts files before build to avoid Windows file locking (errno -4094)
-                Remove-Item -Path "src/components.d.ts", "src/auto-imports.d.ts" -Force -ErrorAction SilentlyContinue
-                npx vite build
-                if ($LASTEXITCODE -ne 0) { Pop-Location; Write-Fail "vite build failed: $($svc.Name)" }
-            } finally {
-                Pop-Location
+
+                $log.Add(">> [$Name] docker build (Dockerfile.local)")
+                docker build -f "$ContextDir/Dockerfile.local" -t $ImageName $ContextDir 2>&1 | ForEach-Object { $log.Add("[$Name] $_") }
+                if ($LASTEXITCODE -ne 0) { return @{ Name = $Name; Ok = $false; Stage = "docker build"; Log = $log } }
+                docker tag $ImageName $LatestName 2>&1 | ForEach-Object { $log.Add("[$Name] $_") }
             }
 
-            # Docker image copies pre-built dist/ only
-            Write-Host "   Docker build $($svc.Name) (Dockerfile.local)..." -ForegroundColor Gray
-            docker build -f "$contextDir/Dockerfile.local" -t $imageName $contextDir
-            if ($LASTEXITCODE -ne 0) { Write-Fail "Docker build failed: $($svc.Name)" }
-            docker tag $imageName "$Registry/$($svc.Name):latest"
+            if (-not $NoPush) {
+                $log.Add(">> [$Name] docker push")
+                docker push $ImageName 2>&1 | ForEach-Object { $log.Add("[$Name] $_") }
+                if ($LASTEXITCODE -ne 0) { return @{ Name = $Name; Ok = $false; Stage = "push"; Log = $log } }
+                docker push $LatestName 2>&1 | ForEach-Object { $log.Add("[$Name] $_") }
+            }
+            return @{ Name = $Name; Ok = $true; Log = $log }
         }
+    }
 
-        if (-not $NoPush) {
-            Write-Host "   Pushing $imageName..." -ForegroundColor Gray
-            docker push $imageName
-            if ($LASTEXITCODE -ne 0) { Write-Fail "Docker push failed: $imageName" }
-            docker push "$Registry/$($svc.Name):latest"
-        }
-
-        Write-Ok $svc.Name
+    $frontendResults = $frontendJobs | Receive-Job -Wait -AutoRemoveJob
+    foreach ($r in $frontendResults) {
+        $r.Log | ForEach-Object { Write-Host "   $_" -ForegroundColor Gray }
+        if ($r.Ok) { Write-Ok $r.Name } else { Write-Fail "Frontend $($r.Stage) failed: $($r.Name)" }
     }
 }
 

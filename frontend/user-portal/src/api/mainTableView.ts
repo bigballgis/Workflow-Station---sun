@@ -15,6 +15,8 @@ export interface MainTableViewSummary {
   id: number
   viewName: string
   isDefault?: boolean
+  tableId?: number | null
+  tableLabel?: string | null
   enableExport?: boolean
   enableImport?: boolean
 }
@@ -29,6 +31,9 @@ export interface MainTableViewFieldColumn {
   refViewId?: number | null
   refFunctionUnitCode?: string | null
   refPrimaryKeyFields?: string[] | null
+  // Lookup drill-down: link to the referenced Relation Table's data, filtered by this cell's value.
+  isLookup?: boolean
+  lookupTableId?: number | null
 }
 
 export interface MainTableViewDataRow {

@@ -192,6 +192,58 @@ class BpmnIdRewriterTest {
         assertThat(rewritten).contains("name=\"subTableName\" value=\"subtable\"");
     }
 
+    /**
+     * Clone renames tables (uk_dw_table_name is global). The BPMN's subTableName/tableName VALUES must be
+     * rewritten to the renamed clone tables, else MI runtime (loadSubTableRow(subTableName,...)) reads the
+     * SOURCE table's data. subTableId resolution still keys off the SOURCE name present at resolution time.
+     */
+    @Test
+    void rewritesTableNameValuesToRenamedCloneTables() {
+        String xml = """
+                <custom:properties>
+                  <custom:property name="subTableName" value="participants" />
+                  <custom:property name="subTableId" value="20" />
+                  <custom:property name="tableName" value="main" />
+                  <custom:property name="tableId" value="10" />
+                </custom:properties>
+                """;
+
+        Map<Long, Long> tableIdMapping = Map.of(20L, 220L, 10L, 110L);
+        Map<String, Long> clonedTableNameToId = Map.of("participants", 220L, "main", 110L);
+        Map<String, String> sourceToNewTableName = Map.of("participants", "participants_copy", "main", "main_copy");
+
+        String rewritten = BpmnIdRewriter.rewrite(
+                xml, tableIdMapping, Map.of(), Map.of(),
+                clonedTableNameToId, Map.of(), sourceToNewTableName);
+
+        assertThat(rewritten)
+                .contains("name=\"subTableName\" value=\"participants_copy\"")
+                .contains("name=\"tableName\" value=\"main_copy\"")
+                .contains("name=\"subTableId\" value=\"220\"")
+                .contains("name=\"tableId\" value=\"110\"")
+                .doesNotContain("value=\"participants\"")
+                .doesNotContain("value=\"main\"");
+    }
+
+    @Test
+    void keepsTableNameValuesWhenNoRenameMapping() {
+        String xml = """
+                <custom:properties>
+                  <custom:property name="subTableName" value="participants" />
+                  <custom:property name="subTableId" value="20" />
+                </custom:properties>
+                """;
+
+        String rewritten = BpmnIdRewriter.rewrite(
+                xml, Map.of(20L, 220L), Map.of(), Map.of(),
+                Map.of("participants", 220L), Map.of(), Map.of());
+
+        assertThat(rewritten)
+                .as("empty rename map → subTableName value untouched")
+                .contains("name=\"subTableName\" value=\"participants\"")
+                .contains("name=\"subTableId\" value=\"220\"");
+    }
+
     @Test
     void resolvesFormIdByNameWhenSourceMismatch() {
         String xml = """

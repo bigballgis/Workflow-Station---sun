@@ -337,7 +337,7 @@
         :closable="false"
         style="margin-bottom: 12px;"
       >
-        Download a template first, fill it in, then upload (CSV or Excel). Rows are validated against the table structure; invalid rows are skipped.
+        Download a template first, fill it in, then upload (CSV or Excel). Rows are validated against the table structure; invalid rows are skipped. Auto-generated primary keys are filled by the system, so they are not included in the template. Up to 1000 rows per import.
       </el-alert>
       <el-upload
         drag
@@ -355,13 +355,21 @@
         v-if="importing"
         style="margin-top: 12px;"
       >
-        <el-icon class="is-loading"><Loading /></el-icon> Importing...
+        <el-icon class="is-loading"><Loading /></el-icon> Validating...
       </div>
       <div
         v-if="importResult"
         style="margin-top: 12px;"
       >
         <el-alert
+          v-if="importResult.dryRun"
+          :type="importResult.failed > 0 ? 'warning' : 'success'"
+          :closable="false"
+          :title="`${importResult.validCount} valid row(s), ${importResult.failed} invalid${importResult.failed > 0 ? ' (will be skipped)' : ''}. Click “Confirm Import” to import.`"
+          style="margin-bottom: 8px;"
+        />
+        <el-alert
+          v-else
           :type="importResult.failed > 0 ? 'warning' : 'success'"
           :closable="false"
           :title="`Inserted ${importResult.inserted}, Failed ${importResult.failed}`"
@@ -394,6 +402,14 @@
         <el-button @click="importDialogVisible = false">
           Close
         </el-button>
+        <el-button
+          v-if="importResult && importResult.dryRun && (importResult.validCount ?? 0) > 0"
+          type="primary"
+          :loading="importing"
+          @click="handleConfirmImport"
+        >
+          Confirm Import ({{ importResult.validCount }})
+        </el-button>
       </template>
     </el-dialog>
   </div>
@@ -414,7 +430,7 @@ const {
   isNumericType, isRowDisabled, isFkFieldDisabled, isPkFieldDisabled,
   fetchData, handleSelectTable, handlePageChange, handleSizeChange,
   openAddDialog, openEditDialog, handleSaveRecord, handleDisable, handleEnable, handleDelete,
-  formatHKT, handleExport, handleDownloadTemplate, openImportDialog, handleImportFile, init, refresh,
+  formatHKT, handleExport, handleDownloadTemplate, openImportDialog, handleImportFile, handleConfirmImport, init, refresh,
 } = useRelationTableData()
 
 const onImportFileChange = (file: { raw?: File }) => {

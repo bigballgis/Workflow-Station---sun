@@ -22,6 +22,9 @@ public final class MainTableViewPortalDtos {
             Long id,
             String viewName,
             Boolean isDefault,
+            // Owning table — lets the portal group the view selector by table (parity with View Design).
+            Long tableId,
+            String tableLabel,
             Boolean enableExport,
             Boolean enableImport
     ) {}
@@ -37,7 +40,11 @@ public final class MainTableViewPortalDtos {
             Boolean isForeignKey,
             Long refViewId,
             String refFunctionUnitCode,
-            List<String> refPrimaryKeyFields
+            List<String> refPrimaryKeyFields,
+            // Lookup drill-down: when isLookup, the portal links to the referenced Relation Table's data
+            // (lookupTableId), pre-filtered by this cell's value. Resolved from the form's lookupConfig.
+            Boolean isLookup,
+            Long lookupTableId
     ) {}
 
     @Builder

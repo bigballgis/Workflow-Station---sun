@@ -83,7 +83,9 @@ export default {
     submit: '提交',
     refresh: '刷新',
     export: '导出',
-    import: '导入'
+    import: '导入',
+    expand: '展开',
+    collapse: '收起'
   },
   menu: {
     dashboard: '首页',
@@ -105,6 +107,12 @@ export default {
   },
   mainTableView: {
     openRelatedRecord: '打开关联记录',
+    openLookupTable: '在关联表中查看',
+    downloadFile: '下载文件',
+    availableViews: '可用视图',
+    searchViews: '搜索视图...',
+    noViews: '暂无可用视图',
+    defaultTag: '默认',
     functionUnits: '功能单元',
     noPublishedFu: '暂无已发布且配置了视图的功能单元',
     selectFuAndView: '请选择功能单元和视图',

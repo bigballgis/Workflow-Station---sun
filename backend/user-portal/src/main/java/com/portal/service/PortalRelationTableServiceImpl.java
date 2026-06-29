@@ -7,6 +7,7 @@ import com.platform.common.dto.RelationTableDTO;
 import com.platform.common.enums.RelationDataType;
 import com.platform.common.enums.RelationPermissionLevel;
 import com.platform.common.enums.RelationTableStatus;
+import com.platform.common.relationtable.RelationCsvValueFormatter;
 import com.platform.common.relationtable.RelationRowValidator;
 import com.platform.common.relationtable.RelationTableTemplateService;
 import com.platform.common.relationtable.RowValidationResult;
@@ -82,7 +83,7 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
         // Resolve the permission level per table against the user's ACTIVE role (single role the user
         // logged in / switched to). Tables with no grant for the active role are filtered out.
         String activeRoleId = SecurityContextUtils.getCurrentActiveRoleId().orElse(null);
-        return allVisible.stream()
+        List<RelationTableDTO> result = allVisible.stream()
                 .map(table -> {
                     try {
                         String level = resolvePermissionLevelForRoles(table.getId(), activeRoleId, userRoleIds);
@@ -95,7 +96,26 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
                     }
                 })
                 .filter(table -> table.getPermissionLevel() != null)
-                .collect(Collectors.toList());
+                .collect(Collectors.toCollection(ArrayList::new));
+
+        // Always surface the system User table as a built-in READ-ONLY table for any authenticated user.
+        result.add(0, systemUserTableDto());
+        return result;
+    }
+
+    /** The built-in System User virtual table — always READ-ONLY, not backed by rt_table_access grants. */
+    private RelationTableDTO systemUserTableDto() {
+        return RelationTableDTO.builder()
+                .id(SYSTEM_USER_TABLE_ID)
+                .tableName(SYSTEM_USER_TABLE_NAME)
+                .displayName("User")
+                .description("System users (read-only)")
+                .status(RelationTableStatus.DEPLOYED)
+                .enabled(true)
+                .portalVisible(true)
+                .currentVersion(1)
+                .permissionLevel(RelationPermissionLevel.READONLY)
+                .build();
     }
 
     @Override
@@ -103,14 +123,15 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
     public PageResponse<Map<String, Object>> queryTableData(Long tableId, String userId,
                                                              int page, int size, String search) {
         try {
+            // The built-in System User table is readable by any authenticated user (no rt_table_access grant).
+            if (SYSTEM_USER_TABLE_ID.equals(tableId)) {
+                return querySystemUserTableData(page, size, search);
+            }
+
             // Verify access
             Set<String> userRoleIds = getUserRoleIds(userId);
             if (!hasAccess(tableId, userRoleIds)) {
                 return PageResponse.of(Collections.emptyList(), page, size, 0);
-            }
-
-            if (SYSTEM_USER_TABLE_ID.equals(tableId)) {
-                return querySystemUserTableData(page, size, search);
             }
 
             if (!isDeployedRelationTable(tableId)) {
@@ -134,9 +155,14 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
             dataParams.add(size);
             dataParams.add(page * size);
             List<Map<String, Object>> rows = jdbcTemplate.query(
-                    "SELECT data FROM " + DATA_ROWS_TABLE + " WHERE table_id = ?" + searchClause
+                    "SELECT data, status FROM " + DATA_ROWS_TABLE + " WHERE table_id = ?" + searchClause
                             + " ORDER BY id LIMIT ? OFFSET ?",
-                    (rs, rowNum) -> parseJsonRow(rs.getString("data")),
+                    (rs, rowNum) -> {
+                        Map<String, Object> row = parseJsonRow(rs.getString("data"));
+                        // Surface the row-level status column so the UI can toggle Active/Inactive.
+                        row.put("status", rs.getString("status"));
+                        return row;
+                    },
                     dataParams.toArray());
 
             return PageResponse.of(rows, page, size, total);
@@ -149,14 +175,15 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
     @Override
     @Transactional(readOnly = true)
     public String exportCsv(Long tableId, String userId, int maxRows) {
+        // The built-in System User table is exportable by any authenticated user (no rt_table_access grant).
+        if (SYSTEM_USER_TABLE_ID.equals(tableId)) {
+            return exportSystemUserCsv(userId, maxRows);
+        }
+
         Set<String> userRoleIds = getUserRoleIds(userId);
         if (!hasAccess(tableId, userRoleIds)) {
             log.warn("Export CSV access denied for user {} on table {}", userId, tableId);
             return "";
-        }
-
-        if (SYSTEM_USER_TABLE_ID.equals(tableId)) {
-            return exportSystemUserCsv(userId, maxRows);
         }
 
         if (!isDeployedRelationTable(tableId)) {
@@ -164,10 +191,14 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
             return "";
         }
 
-        List<String> fieldNames = getFieldNames(tableId);
-        if (fieldNames.isEmpty()) {
+        List<RelationFieldDTO> fields = loadFields(tableId);
+        if (fields.isEmpty()) {
             return "";
         }
+        List<String> fieldNames = fields.stream().map(RelationFieldDTO::getFieldName).collect(Collectors.toList());
+        Map<String, RelationDataType> typeByField = fields.stream()
+                .filter(f -> f.getFieldName() != null)
+                .collect(Collectors.toMap(RelationFieldDTO::getFieldName, RelationFieldDTO::getDataType, (a, b) -> a));
 
         try {
             List<Map<String, Object>> rows = jdbcTemplate.query(
@@ -179,7 +210,7 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
             csv.append(String.join(",", fieldNames)).append("\n");
             for (Map<String, Object> row : rows) {
                 csv.append(fieldNames.stream()
-                        .map(f -> escapeCsvValue(row.get(f)))
+                        .map(f -> escapeCsvValue(RelationCsvValueFormatter.format(row.get(f), typeByField.get(f))))
                         .collect(Collectors.joining(","))
                 ).append("\n");
             }
@@ -583,6 +614,10 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
     @Override
     @Transactional(readOnly = true)
     public String resolvePermissionLevel(Long tableId, String userId) {
+        // The built-in System User table is always read-only for any authenticated user.
+        if (SYSTEM_USER_TABLE_ID.equals(tableId)) {
+            return RelationPermissionLevel.READONLY;
+        }
         String activeRoleId = SecurityContextUtils.getCurrentActiveRoleId().orElse(null);
         return resolvePermissionLevelForRoles(tableId, activeRoleId, getUserRoleIds(userId));
     }
@@ -608,7 +643,8 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
                 ? com.platform.common.dto.PkGenerationConfig.builder().strategy("uuid").build()
                 : objectMapper.convertValue(pk.getPkGeneration(), com.platform.common.dto.PkGenerationConfig.class);
         int n = (count != null && count > 0) ? count : 1;
-        return primaryKeyAllocationService.allocate(tableId, fieldName, config, n, "rt-" + tableId);
+        // Relation-table data lives in rt_* tables; pin the counter table to avoid DW id collisions.
+        return primaryKeyAllocationService.allocate(tableId, fieldName, config, n, "rt-" + tableId, "rt_pk_sequences");
     }
 
     /** Ensure the current user (active role) may write to the table; throws 403 otherwise. */
@@ -656,6 +692,11 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
                 .findFirst().orElse(null);
     }
 
+    /** True when a value is null or an empty/whitespace string (used to detect a missing PK). */
+    private boolean isBlankValue(Object value) {
+        return value == null || value.toString().trim().isEmpty();
+    }
+
     @Override
     @Transactional
     public Map<String, Object> addData(Long tableId, String userId, Map<String, Object> data) {
@@ -683,7 +724,16 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
         if (validFieldNames.contains("updated_at")) row.put("updated_at", now.toString());
         if (validFieldNames.contains("updated_by")) row.put("updated_by", userId);
 
+        // Auto-generate the primary key per its strategy when the caller did not supply one
+        // (manual-strategy PKs must be provided). Guarantees a populated PK regardless of client.
         String pkField = findPrimaryKeyField(fields);
+        boolean autoPk = pkField != null && fields.stream()
+                .anyMatch(f -> pkField.equals(f.getFieldName()) && !RelationRowValidator.isManualPk(f));
+        if (autoPk && isBlankValue(row.get(pkField))) {
+            List<String> values = allocatePrimaryKeys(tableId, userId, pkField, 1);
+            if (!values.isEmpty()) row.put(pkField, values.get(0));
+        }
+
         Object pkVal = pkField != null ? row.get(pkField) : null;
         String rowId = pkVal != null ? String.valueOf(pkVal) : UUID.randomUUID().toString();
 
@@ -758,33 +808,44 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
 
     @Override
     @Transactional
-    public Map<String, Object> importData(Long tableId, String userId, byte[] fileBytes, String format) {
+    public Map<String, Object> importData(Long tableId, String userId, byte[] fileBytes, String format, boolean dryRun) {
         requireWriteAccess(tableId, userId);
         List<RelationFieldDTO> fields = loadFields(tableId);
         List<Map<String, Object>> rawRows = templateService.parseImport(fileBytes, format);
+        if (rawRows.size() > com.platform.common.relationtable.RelationTableTemplateService.MAX_IMPORT_ROWS) {
+            throw new IllegalArgumentException(
+                    "Too many rows: " + rawRows.size() + ". A single import is limited to "
+                            + com.platform.common.relationtable.RelationTableTemplateService.MAX_IMPORT_ROWS + " rows.");
+        }
         List<RowValidationResult> results = RelationRowValidator.validateRows(rawRows, fields);
 
-        // Auto-generate PK values per strategy for rows without one (manual PKs come from the file).
-        String pkField = findPrimaryKeyField(fields);
-        boolean autoPk = pkField != null && fields.stream()
-                .anyMatch(f -> pkField.equals(f.getFieldName()) && !RelationRowValidator.isManualPk(f));
-
-        int inserted = 0;
         List<Map<String, Object>> errors = new ArrayList<>();
         for (RowValidationResult r : results) {
-            if (r.isValid()) {
-                Map<String, Object> row = new LinkedHashMap<>(r.getValues());
-                if (autoPk && row.get(pkField) == null) {
-                    List<String> values = allocatePrimaryKeys(tableId, userId, pkField, 1);
-                    if (!values.isEmpty()) row.put(pkField, values.get(0));
-                }
-                insertRow(tableId, fields, row, userId);
-                inserted++;
-            } else {
+            if (!r.isValid()) {
                 r.getErrors().forEach(err -> errors.add(Map.of(
                         "row", err.getRow(),
                         "field", err.getField() == null ? "" : err.getField(),
                         "message", err.getMessage())));
+            }
+        }
+        long validCount = results.stream().filter(RowValidationResult::isValid).count();
+
+        // Dry run: validate only, do not write. Used by the two-step "preview then confirm" flow.
+        if (dryRun) {
+            Map<String, Object> preview = new LinkedHashMap<>();
+            preview.put("dryRun", true);
+            preview.put("validCount", validCount);
+            preview.put("failed", results.size() - (int) validCount);
+            preview.put("errors", errors);
+            return preview;
+        }
+
+        int inserted = 0;
+        for (RowValidationResult r : results) {
+            if (r.isValid()) {
+                // insertRow auto-generates the PK per strategy when a row carries none.
+                insertRow(tableId, fields, new LinkedHashMap<>(r.getValues()), userId);
+                inserted++;
             }
         }
         Map<String, Object> summary = new LinkedHashMap<>();
@@ -871,7 +932,11 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
         if (search == null || search.isBlank()) {
             return "";
         }
-        List<String> sanitizedFields = DEFAULT_SYSTEM_USER_SEARCH_FIELDS.stream()
+        // Include `id` so a lookup drill-down filtered by the referenced user id resolves the row.
+        List<String> searchableFields = new ArrayList<>();
+        searchableFields.add("id");
+        searchableFields.addAll(DEFAULT_SYSTEM_USER_SEARCH_FIELDS);
+        List<String> sanitizedFields = searchableFields.stream()
                 .map(this::sanitizeIdentifier)
                 .toList();
         String keywordClause = sanitizedFields.stream()

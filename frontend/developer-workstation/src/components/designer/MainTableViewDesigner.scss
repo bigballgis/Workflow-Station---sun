@@ -9,7 +9,7 @@
 
 .designer-toolbar {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
   margin-bottom: 10px;
   padding-bottom: 8px;
@@ -127,6 +127,11 @@
   gap: 8px;
   padding: 8px 12px;
   border-top: 1px solid var(--el-border-color-lighter);
+}
+
+.columns-select-all {
+  padding: 4px 14px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
 }
 
 

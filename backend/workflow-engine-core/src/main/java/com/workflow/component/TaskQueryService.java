@@ -60,7 +60,9 @@ public class TaskQueryService {
             validateUserId(userId);
 
             int fetchLimit = (page + 1) * size;
-            taskOrphanRepairService.repairOrphanMultiInstanceTasks(fetchLimit);
+            // Rate-limited: orphan repair (incl. per-task variable reads + admin-center round-trips for
+            // BU_ROLE pools) must not run on every To Do / dashboard / My Request refresh.
+            taskOrphanRepairService.maybeRepairOrphanTasks(fetchLimit);
 
             List<Task> assignedTasks = taskService.createTaskQuery()
                 .taskAssignee(userId)

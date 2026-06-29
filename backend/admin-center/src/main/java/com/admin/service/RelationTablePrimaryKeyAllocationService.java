@@ -37,8 +37,9 @@ public class RelationTablePrimaryKeyAllocationService {
         PkGenerationConfig config = toPkConfig(field.getPkGenerationJson());
         int n = count != null && count > 0 ? count : 1;
         String effectiveScope = scopeKey != null ? scopeKey : "rt-" + tableId;
+        // Always use the relation-table counter table; AC relation table ids can collide with DW ids.
         List<String> values = primaryKeyAllocationService.allocate(
-                tableId, fieldName, config, n, effectiveScope);
+                tableId, fieldName, config, n, effectiveScope, "rt_pk_sequences");
         return AllocatePrimaryKeyResponse.builder().values(values).build();
     }
 

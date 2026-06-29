@@ -58,7 +58,7 @@ public class FunctionUnitPropertyTest {
                 mock(com.developer.repository.TableRelationRepository.class),
                 mock(com.developer.repository.SubTableViewConfigRepository.class),
                 versionRepo, iconRepo, objectMapper, userDisplayNameService,
-                workspaceAccessService, devGroupAssignmentRepository, mock(com.developer.component.VersionComponent.class), mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class), mock(com.developer.service.MainTableViewService.class), mock(com.developer.repository.ForeignKeyRepository.class));
+                workspaceAccessService, devGroupAssignmentRepository, mock(com.developer.component.VersionComponent.class), mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class), mock(com.developer.service.MainTableViewService.class), mock(com.developer.repository.ForeignKeyRepository.class), mock(com.developer.component.TableDesignComponent.class));
     }
     
     /**
@@ -194,7 +194,7 @@ public class FunctionUnitPropertyTest {
                 mock(com.developer.repository.SubTableViewConfigRepository.class),
                 versionRepo, iconRepo, objectMapper, userDisplayNameService,
                 workspaceAccessService, devGroupAssignmentRepository,
-                mock(com.developer.component.VersionComponent.class), mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class), mock(com.developer.service.MainTableViewService.class), mock(com.developer.repository.ForeignKeyRepository.class));
+                mock(com.developer.component.VersionComponent.class), mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class), mock(com.developer.service.MainTableViewService.class), mock(com.developer.repository.ForeignKeyRepository.class), mock(com.developer.component.TableDesignComponent.class));
 
         // 原始功能单元 + 流程定义
         FunctionUnit original = new FunctionUnit();
@@ -263,6 +263,14 @@ public class FunctionUnitPropertyTest {
         com.developer.repository.TableRelationRepository relationRepo =
                 mock(com.developer.repository.TableRelationRepository.class);
 
+        // Clone renames cloned tables to a free name; the cloner asks this component whether a candidate
+        // is available, so it must report true (an unstubbed mock returns false → "name exhausted").
+        com.developer.component.TableDesignComponent tableDesignComponent =
+                mock(com.developer.component.TableDesignComponent.class);
+        org.mockito.Mockito.when(tableDesignComponent.isTableNameAvailable(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.isNull()))
+                .thenReturn(true);
+
         FunctionUnitComponent component = new FunctionUnitComponentImpl(
                 repository, processRepo, tableRepo, formRepo, actionRepo,
                 mock(com.developer.repository.DecisionDefinitionRepository.class),
@@ -272,7 +280,7 @@ public class FunctionUnitPropertyTest {
                 mock(com.developer.repository.SubTableViewConfigRepository.class),
                 versionRepo, iconRepo, objectMapper, userDisplayNameService,
                 workspaceAccessService, devGroupAssignmentRepository,
-                mock(com.developer.component.VersionComponent.class), mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class), mock(com.developer.service.MainTableViewService.class), mock(com.developer.repository.ForeignKeyRepository.class));
+                mock(com.developer.component.VersionComponent.class), mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class), mock(com.developer.service.MainTableViewService.class), mock(com.developer.repository.ForeignKeyRepository.class), tableDesignComponent);
 
         // 源功能单元：含 1 sub 表（id=13）、1 表单（id=11）、1 动作（id=12），
         // BPMN 中 subTableId=13 / formId=11 / actionIds=[12]

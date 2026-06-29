@@ -83,7 +83,9 @@ export default {
     submit: 'Submit',
     refresh: 'Refresh',
     export: 'Export',
-    import: 'Import'
+    import: 'Import',
+    expand: 'Expand',
+    collapse: 'Collapse'
   },
   menu: {
     dashboard: 'Home',
@@ -105,6 +107,12 @@ export default {
   },
   mainTableView: {
     openRelatedRecord: 'Open related record',
+    openLookupTable: 'Open in relation table',
+    downloadFile: 'Download file',
+    availableViews: 'Available Views',
+    searchViews: 'Search views...',
+    noViews: 'No views available',
+    defaultTag: 'Default',
     functionUnits: 'Function Units',
     noPublishedFu: 'No published function units with views',
     selectFuAndView: 'Select a function unit and view',

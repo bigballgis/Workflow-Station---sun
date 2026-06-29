@@ -59,6 +59,10 @@ public interface ProcessInstanceRepository extends JpaRepository<ProcessInstance
     Page<ProcessInstance> findByFunctionUnitCodeAndStartUserIdOrderByStartTimeDesc(
             String functionUnitCode, String startUserId, Pageable pageable);
 
+    // All instances of a function unit (any initiator) — View Design shows all FU data, not per-user.
+    Page<ProcessInstance> findByFunctionUnitCodeOrderByStartTimeDesc(
+            String functionUnitCode, Pageable pageable);
+
 
     /**
      * Conditional update: updates {@code currentNode} and {@code currentAssignee} only when status is not COMPLETED.

@@ -153,15 +153,21 @@ spec:
     - hermes-workflow-superset-internal-proxy.__BASE_DOMAIN__
 ---
 # =============================================================================
-# Superset AUTHOR UI gateway (Phase 1 "E") — JWT-gated via Istio ext_authz.
-# Authors reach Superset's native UI through this host. An AuthorizationPolicy
-# (CUSTOM action) calls the admin-center authorize endpoint, which validates the
-# platform JWT and returns X-Remote-User / X-Remote-Roles; Envoy injects those
-# upstream so the custom SecurityManager logs the author in (REMOTE_USER SSO).
+# Superset AUTHOR UI gateway (Phase 1 "E") — JWT-gated by an in-cluster nginx
+# reverse proxy. NO Istio ext_authz / meshConfig changes (those need mesh-admin
+# rights blocked by company policy).
 #
-# PREREQUISITE (cluster-ops, NOT in this repo): the ext_authz provider named
-# "superset-bi-ext-authz" must be declared in the mesh's meshConfig
-# extensionProviders. See deploy/k8s/SUPERSET_SSO_GATEWAY.md.
+# Authors reach Superset's native UI through this host. The author VirtualService
+# routes to the "superset-author-proxy" nginx Deployment, which does an
+# auth_request subrequest to the admin-center authorize endpoint (validates the
+# platform JWT) and injects the validated X-Remote-* identity upstream so the
+# custom SecurityManager logs the author in (REMOTE_USER SSO). This is the same
+# gate proven in dev's nginx-edge ":8087" server block.
+#
+# Bypass protection: a normal action:DENY AuthorizationPolicy (see bottom) blocks
+# any request to Superset that carries X-Remote-* unless it comes from the
+# gateway's ServiceAccount — so the gate cannot be skipped. No meshConfig needed.
+# See deploy/k8s/SUPERSET_SSO_GATEWAY.md.
 # =============================================================================
 apiVersion: networking.istio.io/v1
 kind: Gateway
@@ -192,8 +198,8 @@ spec:
   http:
   - retries:
       attempts: 0
-    # Strip client-forged identity headers; the ext_authz provider re-injects the
-    # validated X-Remote-User / X-Remote-Roles (headersToUpstreamOnAllow).
+    # Defense-in-depth: strip client-forged identity headers at the ingress edge.
+    # The nginx gateway re-injects the validated X-Remote-* after auth_request.
     headers:
       request:
         remove:
@@ -204,29 +210,154 @@ spec:
         - x-remote-lastname
     route:
     - destination:
-        host: hase-hermes-workflow-superset
-        subset: v1
+        host: hase-hermes-workflow-superset-author-proxy
         port:
           number: 80
     timeout: 30s
 ---
-# CUSTOM AuthorizationPolicy: gate ONLY the author host with ext_authz.
-# Embed-host traffic does not match (different host) and stays ungated.
+# -----------------------------------------------------------------------------
+# nginx author proxy: validates the platform JWT (auth_request -> admin-center)
+# and injects X-Remote-* for REMOTE_USER SSO. Replaces the Istio ext_authz path.
+# (Named "-author-proxy" to stay distinct from the Istio Gateway resource
+# "hase-hermes-workflow-superset-author-gateway".)
+# Image is built from deploy/superset/author-proxy/ (FROM nginx:alpine).
+# -----------------------------------------------------------------------------
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: superset-author-proxy
+  namespace: __NAMESPACE__
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hase-hermes-workflow-superset-author-proxy
+  namespace: __NAMESPACE__
+  labels:
+    app: hase-hermes-workflow-superset-author-proxy
+    component: analytics
+    app.kubernetes.io/name: hase-hermes-workflow-superset-author-proxy
+    app.kubernetes.io/instance: hase-hermes-workflow-superset-author-proxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: hase-hermes-workflow-superset-author-proxy
+      app.kubernetes.io/instance: hase-hermes-workflow-superset-author-proxy
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/inject: "true"
+        sidecar.istio.io/rewriteAppHTTPProbers: "true"
+        proxy.istio.io/config: '{ "holdApplicationUntilProxyStarts": true }'
+      labels:
+        app: hase-hermes-workflow-superset-author-proxy
+        component: analytics
+        app.kubernetes.io/name: hase-hermes-workflow-superset-author-proxy
+        app.kubernetes.io/instance: hase-hermes-workflow-superset-author-proxy
+    spec:
+      serviceAccountName: superset-author-proxy
+      imagePullSecrets:
+      - name: nexus3
+      containers:
+      - name: nginx
+        image: nexus3.hk.hsbc:18080/hsbc-238092-cmbhase-bisp/workflow-station2/superset-author-proxy:__IMAGE_TAG__
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        # ${INGRESS_HOST} (unified-login host) is read from the platform config;
+        # ${POD_NAMESPACE} feeds the in-cluster service DNS for the upstreams.
+        # NGINX_ENVSUBST_FILTER pins envsubst to ONLY these two so nginx's own
+        # $variables in the template are never substituted.
+        - name: INGRESS_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: INGRESS_HOST
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: NGINX_ENVSUBST_FILTER
+          value: "^(INGRESS_HOST|POD_NAMESPACE)$"
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hase-hermes-workflow-superset-author-proxy
+  namespace: __NAMESPACE__
+  labels:
+    app: hase-hermes-workflow-superset-author-proxy
+spec:
+  selector:
+    app: hase-hermes-workflow-superset-author-proxy
+  ports:
+  - name: http
+    protocol: TCP
+    port: 80
+    targetPort: 8080
+  type: ClusterIP
+---
+# Allow the proxy's sidecar to reach same-namespace services (admin-center,
+# Superset) and istio-system, in case a restrictive mesh-default Sidecar applies.
+apiVersion: networking.istio.io/v1beta1
+kind: Sidecar
+metadata:
+  name: hase-hermes-workflow-superset-author-proxy-sidecar
+  namespace: __NAMESPACE__
+spec:
+  workloadSelector:
+    labels:
+      app: hase-hermes-workflow-superset-author-proxy
+  egress:
+  - hosts:
+    - ./*
+    - istio-system/*
+---
+# Bypass protection (replaces the old CUSTOM ext_authz policy): DENY any request
+# to Superset that carries an X-Remote-User header UNLESS it originates from the
+# author-proxy's ServiceAccount. Author traffic flows ingress -> proxy pod
+# (proxy injects X-Remote-*) -> Superset, so its source principal is the
+# proxy SA and is allowed. Embed/guest-token traffic carries NO X-Remote-*
+# (stripped at the embed VirtualService) so it never matches and stays ungated.
+# Requires mTLS (PeerAuthentication) so source principals are populated.
+# This is a normal action:DENY policy — NO meshConfig extensionProvider needed.
 apiVersion: security.istio.io/v1
 kind: AuthorizationPolicy
 metadata:
-  name: hase-hermes-workflow-superset-author-extauthz
+  name: hase-hermes-workflow-superset-deny-forged-remote-user
   namespace: __NAMESPACE__
 spec:
   selector:
     matchLabels:
       app: hase-hermes-workflow-superset
-  action: CUSTOM
-  provider:
-    # Must match a meshConfig extensionProviders[].name (cluster-ops managed).
-    name: superset-bi-ext-authz
+  action: DENY
   rules:
-  - to:
-    - operation:
-        hosts:
-        - hermes-workflow-superset-author.__BASE_DOMAIN__
+  - from:
+    - source:
+        notPrincipals:
+        - cluster.local/ns/__NAMESPACE__/sa/superset-author-proxy
+    when:
+    - key: request.headers[x-remote-user]
+      values: ["*"]

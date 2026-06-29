@@ -180,6 +180,11 @@ public class TableDesignComponentImpl implements TableDesignComponent {
         List<FormConfigFieldRenamer.FieldChange> changes = computeFieldChanges(originals, request.getFields());
         if (!changes.isEmpty()) {
             propagateFieldChangesToForms(functionUnitId, saved, changes);
+            // Also refresh View Design column field names + labels for this table's views.
+            mainTableViewService.propagateFieldChangesToViews(saved.getId(), changes.stream()
+                    .map(c -> new MainTableViewService.FieldLabelChange(
+                            c.oldFieldName(), c.newFieldName(), c.oldDisplayName(), c.newDisplayName()))
+                    .toList());
         }
 
         fieldFkPkSyncService.syncForeignKeysForFunctionUnit(functionUnitId);

@@ -23,6 +23,7 @@ import com.portal.entity.DelegationRule;
 import com.portal.enums.DelegationStatus;
 import com.portal.enums.DelegationType;
 import com.portal.exception.PortalException;
+import com.portal.repository.BusinessUnitRepository;
 import com.portal.repository.DelegationAuditRepository;
 import com.portal.repository.DelegationRuleRepository;
 import com.portal.repository.ProcessHistoryRepository;
@@ -84,6 +85,9 @@ class TaskProcessProperties {
     private PortalWorkspaceAuthService portalWorkspaceAuthService;
 
     @Mock
+    private BusinessUnitRepository businessUnitRepository;
+
+    @Mock
     private ChangeHistoryComponent changeHistoryComponent;
 
     @Mock
@@ -103,7 +107,8 @@ class TaskProcessProperties {
             workflowEngineClient,
             taskActionService,
             new DelegatedTaskQueryComponent(workflowEngineClient, delegationRuleRepository),
-            new WorkspaceTaskFilterComponent(workflowEngineClient, virtualGroupAccessComponent, portalWorkspaceAuthService),
+            new WorkspaceTaskFilterComponent(
+                workflowEngineClient, virtualGroupAccessComponent, portalWorkspaceAuthService, businessUnitRepository),
             new MiParticipantEnrichmentComponent(jdbcTemplate),
             new TaskHistoryComponent(workflowEngineClient, processInstanceRepository, processHistoryRepository, jdbcTemplate, requestIdEnricher),
             requestIdEnricher

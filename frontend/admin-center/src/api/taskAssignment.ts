@@ -11,18 +11,25 @@ export interface BuBoundedRole {
 }
 
 export const taskAssignmentApi = {
-  getEligibleRoleIds: (businessUnitId: string) =>
-    get<string[]>(`/task-assignment/business-units/${businessUnitId}/eligible-roles`),
+  /**
+   * 准入角色查询。任务分配链路统一用 BU code（见 48e2ec21 code 化重构），
+   * 故入参为 BU code、返回值为角色 code 列表。
+   */
+  getEligibleRoleCodes: (businessUnitCode: string) =>
+    get<string[]>(`/task-assignment/business-units/${businessUnitCode}/eligible-roles`),
 
   getBuBoundedRoles: () => get<BuBoundedRole[]>(`/task-assignment/roles/bu-bounded`)
 }
 
-/** 某业务单元下可分配的 BU_BOUNDED 角色：准入角色 ID ∩ 全量 BU 绑定型角色 */
-export async function listAssignableBuBoundedRoles(businessUnitId: string): Promise<BuBoundedRole[]> {
-  const [eligibleIds, buBounded] = await Promise.all([
-    taskAssignmentApi.getEligibleRoleIds(businessUnitId),
+/**
+ * 某业务单元下可分配的 BU_BOUNDED 角色：准入角色 ∩ 全量 BU 绑定型角色。
+ * 任务分配链路统一用 code：入参为 BU code，eligible-roles 返回的也是 role code，故按 code 求交。
+ */
+export async function listAssignableBuBoundedRoles(businessUnitCode: string): Promise<BuBoundedRole[]> {
+  const [eligibleCodes, buBounded] = await Promise.all([
+    taskAssignmentApi.getEligibleRoleCodes(businessUnitCode),
     taskAssignmentApi.getBuBoundedRoles()
   ])
-  const eligible = new Set(eligibleIds)
-  return buBounded.filter((r) => eligible.has(r.id))
+  const eligible = new Set(eligibleCodes)
+  return buBounded.filter((r) => eligible.has(r.code))
 }

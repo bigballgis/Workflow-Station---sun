@@ -1,20 +1,23 @@
 <script setup lang="ts">
+import { Expand, Fold } from '@element-plus/icons-vue'
 import MainTableViewColumnMenu from '@/components/mainTableView/MainTableViewColumnMenu.vue'
 import MainTableViewColumnResizeHandle from '@/components/mainTableView/MainTableViewColumnResizeHandle.vue'
 import { useMainTableViewPage } from '@/composables/mainTableView/useMainTableViewPage'
 
 const {
-  t, Search, Download, Refresh, Upload, dataLoading, functionUnits, views, selectedViewId, searchKeyword,
+  t, Search, Download, Refresh, dataLoading, functionUnits, selectedViewId, searchKeyword,
   gridColumns, allRows, dataTotal, currentPage, pageSize, gridRuntime, filterDialogVisible, filterDialogField,
-  filterDraft, widthDialogVisible, widthDialogField, widthDraft, tableRef, selectedTableRows, importing,
-  importInputRef, importProgressVisible, importProgressPercent, importProgressPhase, importProgressFileName,
+  filterDraft, widthDialogVisible, widthDialogField, widthDraft, tableRef, selectedTableRows,
+  importProgressVisible, importProgressPercent, importProgressPhase, importProgressFileName,
   importResultVisible, importResult, importProgressLabel, importResultStatus, importResultHeadline,
-  selectedFuCode, selectedViewMeta, showExportButton, showImportButton, selectedFu, displayColumns,
-  MTV_SELECTION_COL_WIDTH, gridTotalColumnWidth, gridInnerStyle, processedRows, groupedRows, pagedRows, displayTotal,
-  handleSearch, handlePageChange, formatCell, isRowSelectable, getRowKey, onSelectionChange, openRow, columnIndex,
-  isFkLinkCell, openFkTarget,
+  selectedFuCode, selectedViewMeta, showExportButton, selectedFu, displayColumns, groupedViews,
+  viewListCollapsed, viewSearchKeyword, filteredGroupedViews, handleSelectView,
+  MTV_SELECTION_COL_WIDTH, gridTotalColumnWidth, gridInnerStyle, gridScrollRef, gridFits, gridTableKey,
+  processedRows, groupedRows, pagedRows, displayTotal,
+  handleSearch, handlePageChange, handleSizeChange, formatCell, isRowSelectable, getRowKey, onSelectionChange, openRow, columnIndex,
+  isFkLinkCell, openFkTarget, isLookupLinkCell, openLookupTarget, isFileLinkCell, fileLinksOf, downloadFile,
   handleColumnCommand, applyColumnFilter, clearColumnFilter, applyColumnWidth, handleColumnResize, handleColumnResizeEnd,
-  handleExport, triggerImport, handleImportFile, mtvHeaderCellClassName, rowClassName, spanMethod,
+  handleExport, mtvHeaderCellClassName, rowClassName, spanMethod,
   loadData, columnWidth, isGroupHeaderRow, COLUMN_WIDTH_MIN, COLUMN_WIDTH_MAX,
 } = useMainTableViewPage()
 </script>
@@ -27,96 +30,160 @@ const {
       </span>
     </div>
 
-    <div
-      v-loading="dataLoading"
-      class="data-grid-panel"
-    >
-      <template v-if="selectedFuCode && selectedViewId">
-        <div class="grid-toolbar">
-          <el-select
-            v-model="selectedViewId"
-            size="default"
-            style="width: 220px;"
+    <div class="data-layout">
+      <!-- Left: View list grouped by table (collapsible) — parity with Relation Tables -->
+      <div
+        v-if="viewListCollapsed"
+        class="view-list-panel collapsed"
+      >
+        <el-tooltip
+          :content="t('common.expand')"
+          placement="right"
+        >
+          <el-button
+            text
+            class="collapse-toggle"
+            @click="viewListCollapsed = false"
           >
-            <el-option
-              v-for="v in views"
-              :key="v.id"
-              :label="v.viewName"
-              :value="v.id"
-            />
-          </el-select>
+            <el-icon><Expand /></el-icon>
+          </el-button>
+        </el-tooltip>
+      </div>
+      <div
+        v-else
+        class="view-list-panel"
+      >
+        <div class="panel-title">
+          <span>{{ t('mainTableView.availableViews') }}</span>
+          <el-tooltip
+            :content="t('common.collapse')"
+            placement="top"
+          >
+            <el-button
+              text
+              size="small"
+              class="collapse-toggle"
+              @click="viewListCollapsed = true"
+            >
+              <el-icon><Fold /></el-icon>
+            </el-button>
+          </el-tooltip>
+        </div>
+        <div style="padding: 6px 8px;">
           <el-input
-            v-model="searchKeyword"
-            :placeholder="t('common.search')"
+            v-model="viewSearchKeyword"
+            :placeholder="t('mainTableView.searchViews')"
             clearable
-            style="width: 240px;"
-            @keyup.enter="handleSearch"
-            @clear="handleSearch"
+            size="small"
           >
             <template #prefix>
               <el-icon><Search /></el-icon>
             </template>
           </el-input>
-          <el-button
-            :icon="Refresh"
-            @click="loadData"
-          >
-            {{ t('common.refresh') }}
-          </el-button>
-          <el-button
-            v-if="showExportButton"
-            type="primary"
-            :icon="Download"
-            @click="handleExport"
-          >
-            {{ t('common.export') }}
-          </el-button>
-          <el-button
-            v-if="showImportButton"
-            :icon="Upload"
-            :loading="importing"
-            @click="triggerImport"
-          >
-            {{ t('common.import') }}
-          </el-button>
-          <input
-            ref="importInputRef"
-            type="file"
-            accept=".csv,text/csv"
-            class="hidden-import-input"
-            @change="handleImportFile"
-          >
-          <span
-            v-if="selectedTableRows.length"
-            class="grid-hint"
-          >
-            {{ t('mainTableView.selectedRows', { count: selectedTableRows.length }) }}
-          </span>
-          <span
-            v-if="dataTotal > allRows.length"
-            class="grid-hint"
-          >
-            {{ t('mainTableView.rowsTruncated', { shown: allRows.length, total: dataTotal }) }}
-          </span>
         </div>
-
-        <div
-          v-if="displayColumns.length"
-          class="mtv-data-grid-scroll"
+        <el-menu
+          :default-active="selectedViewId ? String(selectedViewId) : ''"
+          unique-opened
+          @select="handleSelectView"
         >
+          <el-menu-item-group
+            v-for="group in filteredGroupedViews"
+            :key="group.tableId ?? group.label"
+            :title="group.label"
+          >
+            <el-menu-item
+              v-for="v in group.views"
+              :key="v.id"
+              :index="String(v.id)"
+            >
+              <span class="mtv-view-option">
+                <span class="mtv-view-option-name">{{ v.viewName }}</span>
+                <el-tag
+                  v-if="v.isDefault"
+                  size="small"
+                  type="info"
+                  effect="plain"
+                >
+                  {{ t('mainTableView.defaultTag') }}
+                </el-tag>
+              </span>
+            </el-menu-item>
+          </el-menu-item-group>
+        </el-menu>
+        <el-empty
+          v-if="!filteredGroupedViews.length"
+          :description="t('mainTableView.noViews')"
+          :image-size="60"
+        />
+      </div>
+
+      <!-- Right: Data grid -->
+      <div
+        v-loading="dataLoading"
+        class="data-grid-panel"
+      >
+        <template v-if="selectedFuCode && selectedViewId">
+          <div class="grid-toolbar">
+            <el-input
+              v-model="searchKeyword"
+              :placeholder="t('common.search')"
+              clearable
+              style="width: 240px;"
+              @keyup.enter="handleSearch"
+              @clear="handleSearch"
+            >
+              <template #prefix>
+                <el-icon><Search /></el-icon>
+              </template>
+            </el-input>
+            <el-button
+              :icon="Refresh"
+              @click="loadData"
+            >
+              {{ t('common.refresh') }}
+            </el-button>
+            <el-button
+              v-if="showExportButton"
+              type="primary"
+              :icon="Download"
+              @click="handleExport"
+            >
+              {{ t('common.export') }}
+            </el-button>
+            <span
+              v-if="selectedTableRows.length"
+              class="grid-hint"
+            >
+              {{ t('mainTableView.selectedRows', { count: selectedTableRows.length }) }}
+            </span>
+            <span
+              v-if="dataTotal > allRows.length"
+              class="grid-hint"
+            >
+              {{ t('mainTableView.rowsTruncated', { shown: allRows.length, total: dataTotal }) }}
+            </span>
+          </div>
+
+          <div
+            v-if="displayColumns.length"
+            ref="gridScrollRef"
+            class="mtv-data-grid-scroll"
+          >
           <div
             class="mtv-data-grid-inner"
             :style="gridInnerStyle"
           >
             <el-table
+              :key="gridTableKey"
               ref="tableRef"
               :data="pagedRows"
               :row-key="getRowKey"
               stripe
-              :fit="false"
-              table-layout="fixed"
+              :fit="gridFits"
+              :table-layout="gridFits ? 'auto' : 'fixed'"
               style="width: 100%;"
               class="mtv-data-grid"
+              :class="{ 'mtv-data-grid--fit': gridFits }"
               :header-cell-class-name="mtvHeaderCellClassName"
               :span-method="spanMethod"
               :row-class-name="rowClassName"
@@ -133,7 +200,8 @@ const {
             v-for="col in displayColumns"
             :key="col.fieldName"
             :prop="col.fieldName"
-            :width="columnWidth(col, gridRuntime)"
+            :width="gridFits ? undefined : columnWidth(col, gridRuntime)"
+            :min-width="gridFits ? columnWidth(col, gridRuntime) : undefined"
             show-overflow-tooltip
           >
             <template #header>
@@ -160,6 +228,24 @@ const {
                   <span class="group-count">({{ row._groupCount }})</span>
                 </div>
               </template>
+              <template v-else-if="isFileLinkCell(col, row)">
+                <span class="mtv-file-cell">
+                  <a
+                    v-for="(file, fi) in fileLinksOf(col, row)"
+                    :key="fi"
+                    class="mtv-file-link"
+                    :title="t('mainTableView.downloadFile')"
+                    @click.stop="downloadFile(file)"
+                  >{{ file.name }}</a>
+                </span>
+              </template>
+              <template v-else-if="isLookupLinkCell(col, row)">
+                <a
+                  class="mtv-fk-link"
+                  :title="t('mainTableView.openLookupTable')"
+                  @click.stop="openLookupTarget(col, row)"
+                >{{ formatCell(row.values[col.fieldName]) }}</a>
+              </template>
               <template v-else-if="isFkLinkCell(col, row)">
                 <a
                   class="mtv-fk-link"
@@ -177,23 +263,27 @@ const {
         </div>
 
         <div
-          v-if="displayTotal > pageSize"
+          v-if="displayTotal > 0"
           class="pagination-wrap"
         >
           <el-pagination
             v-model:current-page="currentPage"
+            background
             :page-size="pageSize"
             :total="displayTotal"
-            layout="total, prev, pager, next"
+            :page-sizes="[10, 20, 50, 100]"
+            layout="total, sizes, prev, pager, next"
             @current-change="handlePageChange"
+            @size-change="handleSizeChange"
           />
         </div>
-      </template>
+        </template>
 
-      <el-empty
-        v-else
-        :description="t('mainTableView.selectFuAndView')"
-      />
+        <el-empty
+          v-else
+          :description="t('mainTableView.selectFuAndView')"
+        />
+      </div>
     </div>
 
     <el-dialog
@@ -397,7 +487,57 @@ const {
     font-weight: 600;
   }
 }
+.data-layout {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  min-width: 0;
+  max-width: 100%;
+}
+.view-list-panel {
+  width: 240px;
+  flex-shrink: 0;
+  align-self: stretch;
+  min-height: calc(100vh - 160px);
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 4px;
+  background: var(--el-bg-color);
+  overflow-y: auto;
+  transition: width 0.2s ease;
+
+  :deep(.el-menu) {
+    border-right: none;
+  }
+  :deep(.el-menu-item.is-active) {
+    background-color: var(--el-color-primary-light-9, #ecf5ff);
+    color: var(--el-color-primary, #409eff);
+  }
+  :deep(.el-menu-item.is-active)::before {
+    display: none;
+  }
+}
+.view-list-panel.collapsed {
+  width: 40px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 8px;
+  overflow: hidden;
+}
+.collapse-toggle {
+  padding: 4px;
+}
+.panel-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 8px 8px 16px;
+  font-weight: 600;
+  font-size: 14px;
+  border-bottom: 1px solid var(--el-border-color-light);
+}
 .data-grid-panel {
+  flex: 1;
   min-height: calc(100vh - 160px);
   min-width: 0;
   max-width: 100%;
@@ -441,6 +581,18 @@ const {
 }
 :deep(.mtv-data-grid .el-table__inner-wrapper) {
   width: 100% !important;
+}
+/* When the columns underflow the panel, stretch the scrollbar view + the actual <table> elements to
+   fill the width so the grid never renders half-empty. Element Plus' fit mode (table-layout:auto) then
+   distributes the slack across columns. The body table sits inside an el-scrollbar whose __view sizes
+   to content by default — force that chain (and the header) to 100%. */
+:deep(.mtv-data-grid--fit .el-scrollbar__view),
+:deep(.mtv-data-grid--fit .el-table__header-wrapper),
+:deep(.mtv-data-grid--fit .el-table__body-wrapper),
+:deep(.mtv-data-grid--fit .el-table__header),
+:deep(.mtv-data-grid--fit .el-table__body) {
+  width: 100% !important;
+  min-width: 100% !important;
 }
 .col-header-cell {
   position: static;
@@ -489,6 +641,19 @@ const {
 }
 
 .mtv-fk-link {
+  color: var(--el-color-primary);
+  cursor: pointer;
+
+  &:hover { text-decoration: underline; }
+}
+
+.mtv-file-cell {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+
+.mtv-file-link {
   color: var(--el-color-primary);
   cursor: pointer;
 
@@ -577,5 +742,29 @@ const {
 
 :deep(.el-result) {
   padding: 12px 0 8px;
+}
+
+/* Left-nav view row: name on the left, Default tag pushed to the right. */
+.mtv-view-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+.mtv-view-option-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Per-table group header in the left nav — uppercased + muted so grouping reads clearly. */
+.view-list-panel :deep(.el-menu-item-group__title) {
+  padding: 8px 12px 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--el-text-color-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 </style>

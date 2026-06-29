@@ -96,7 +96,7 @@ public class FunctionUnitIconPropertyTest {
                 mock(com.developer.repository.TableRelationRepository.class),
                 mock(com.developer.repository.SubTableViewConfigRepository.class),
                 versionRepo, iconRepository, objectMapper, userDisplayNameService,
-                workspaceAccessService, devGroupAssignmentRepository, mock(com.developer.component.VersionComponent.class), mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class), mock(com.developer.service.MainTableViewService.class), mock(com.developer.repository.ForeignKeyRepository.class));
+                workspaceAccessService, devGroupAssignmentRepository, mock(com.developer.component.VersionComponent.class), mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class), mock(com.developer.service.MainTableViewService.class), mock(com.developer.repository.ForeignKeyRepository.class), mock(com.developer.component.TableDesignComponent.class));
         
         // Create function unit with icon
         FunctionUnitRequest request = new FunctionUnitRequest();
@@ -158,7 +158,7 @@ public class FunctionUnitIconPropertyTest {
                 mock(com.developer.repository.TableRelationRepository.class),
                 mock(com.developer.repository.SubTableViewConfigRepository.class),
                 versionRepo, iconRepository, objectMapper, userDisplayNameService,
-                workspaceAccessService, devGroupAssignmentRepository, mock(com.developer.component.VersionComponent.class), mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class), mock(com.developer.service.MainTableViewService.class), mock(com.developer.repository.ForeignKeyRepository.class));
+                workspaceAccessService, devGroupAssignmentRepository, mock(com.developer.component.VersionComponent.class), mock(com.developer.util.DeveloperWorkstationSequenceSynchronizer.class), mock(com.developer.service.MainTableViewService.class), mock(com.developer.repository.ForeignKeyRepository.class), mock(com.developer.component.TableDesignComponent.class));
         
         // Create function unit without icon
         FunctionUnitRequest request = new FunctionUnitRequest();

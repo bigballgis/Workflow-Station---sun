@@ -194,9 +194,10 @@ public class PortalRelationTableController {
             @PathVariable Long tableId,
             @CurrentUserId String userId,
             @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
-            @RequestParam(required = false) String format) throws java.io.IOException {
+            @RequestParam(required = false) String format,
+            @RequestParam(required = false, defaultValue = "false") boolean dryRun) throws java.io.IOException {
         String fmt = resolveFormat(format, file.getOriginalFilename());
-        Map<String, Object> result = service.importData(tableId, userId, file.getBytes(), fmt);
+        Map<String, Object> result = service.importData(tableId, userId, file.getBytes(), fmt, dryRun);
         return ResponseEntity.ok(ApiResponse.success(result));
     }
 

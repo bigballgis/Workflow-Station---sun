@@ -5,10 +5,43 @@
     </div>
 
     <div class="data-layout">
-      <!-- Left: Table list -->
-      <div class="table-list-panel">
+      <!-- Left: Table list (collapsible) -->
+      <div
+        v-if="tableListCollapsed"
+        class="table-list-panel collapsed"
+      >
+        <el-tooltip
+          content="Expand"
+          placement="right"
+        >
+          <el-button
+            text
+            class="collapse-toggle"
+            @click="tableListCollapsed = false"
+          >
+            <el-icon><Expand /></el-icon>
+          </el-button>
+        </el-tooltip>
+      </div>
+      <div
+        v-else
+        class="table-list-panel"
+      >
         <div class="panel-title">
-          Available Tables
+          <span>Available Tables</span>
+          <el-tooltip
+            content="Collapse"
+            placement="top"
+          >
+            <el-button
+              text
+              size="small"
+              class="collapse-toggle"
+              @click="tableListCollapsed = true"
+            >
+              <el-icon><Fold /></el-icon>
+            </el-button>
+          </el-tooltip>
         </div>
         <div style="padding: 6px 8px;">
           <el-input
@@ -255,7 +288,7 @@
         :closable="false"
         style="margin-bottom: 12px;"
       >
-        Download a template first, fill it in, then upload (CSV or Excel). Rows are validated against the table structure; invalid rows are skipped.
+        Download a template first, fill it in, then upload (CSV or Excel). Rows are validated against the table structure; invalid rows are skipped. Auto-generated primary keys are filled by the system, so they are not included in the template. Up to 1000 rows per import.
       </el-alert>
       <el-upload
         drag
@@ -273,13 +306,21 @@
         v-if="importing"
         style="margin-top: 12px;"
       >
-        Importing...
+        Validating...
       </div>
       <div
         v-if="importResult"
         style="margin-top: 12px;"
       >
         <el-alert
+          v-if="importResult.dryRun"
+          :type="importResult.failed > 0 ? 'warning' : 'success'"
+          :closable="false"
+          :title="`${importResult.validCount} valid row(s), ${importResult.failed} invalid${importResult.failed > 0 ? ' (will be skipped)' : ''}. Click “Confirm Import” to import.`"
+          style="margin-bottom: 8px;"
+        />
+        <el-alert
+          v-else
           :type="importResult.failed > 0 ? 'warning' : 'success'"
           :closable="false"
           :title="`Inserted ${importResult.inserted}, Failed ${importResult.failed}`"
@@ -312,6 +353,14 @@
         <el-button @click="importDialogVisible = false">
           Close
         </el-button>
+        <el-button
+          v-if="importResult && importResult.dryRun && (importResult.validCount ?? 0) > 0"
+          type="primary"
+          :loading="importing"
+          @click="handleConfirmImport"
+        >
+          Confirm Import ({{ importResult.validCount }})
+        </el-button>
       </template>
     </el-dialog>
   </div>
@@ -319,11 +368,14 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { Search, Download, Plus, Upload, ArrowDown } from '@element-plus/icons-vue'
+import { useRoute } from 'vue-router'
+import { Search, Download, Plus, Upload, ArrowDown, Expand, Fold } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { relationTableApi, type RelationTableDTO, type RelationFieldDef, type RelationImportResult } from '@/api/relationTable'
 
 const SYSTEM_FIELDS = new Set(['created_at', 'created_by', 'updated_at', 'updated_by', 'status'])
+
+const route = useRoute()
 
 const tableListLoading = ref(false)
 const dataLoading = ref(false)
@@ -333,6 +385,7 @@ const selectedTableId = ref<number | null>(null)
 
 const searchKeyword = ref('')
 const tableSearchKeyword = ref('')
+const tableListCollapsed = ref(false)
 const currentPage = ref(1)
 const pageSize = ref(20)
 const totalElements = ref(0)
@@ -364,6 +417,7 @@ const exportingTemplate = ref(false)
 const importDialogVisible = ref(false)
 const importing = ref(false)
 const importResult = ref<RelationImportResult | null>(null)
+const pendingImportFile = ref<File | null>(null)
 
 const isRowInactive = (row: Record<string, any>): boolean =>
   String(row.status ?? '').toUpperCase() === 'INACTIVE'
@@ -385,8 +439,16 @@ const fetchTables = async () => {
   try {
     const res = await relationTableApi.getVisibleTables()
     tables.value = res.data || []
-    if (!selectedTableId.value && tables.value.length > 0) {
-      selectedTableId.value = tables.value[0].id
+    // Honor a drill-down from Views: ?tableId=<id>&search=<value> preselects that table + filter.
+    const queryTableId = route.query.tableId != null ? Number(route.query.tableId) : null
+    const target = queryTableId != null && tables.value.some(t => t.id === queryTableId)
+      ? queryTableId
+      : (tables.value.length > 0 ? tables.value[0].id : null)
+    if (!selectedTableId.value && target != null) {
+      selectedTableId.value = target
+      if (queryTableId === target && typeof route.query.search === 'string') {
+        searchKeyword.value = route.query.search
+      }
       fetchDisplayNames()
       fetchFieldDefs()
       fetchData()
@@ -426,7 +488,8 @@ const fetchData = async () => {
     totalElements.value = pageData?.totalElements || 0
 
     if (dataRows.value.length > 0) {
-      columns.value = Object.keys(dataRows.value[0])
+      // `status` is surfaced for the Active/Inactive toggle but is not a displayable data column.
+      columns.value = Object.keys(dataRows.value[0]).filter(c => c !== 'status')
     } else {
       columns.value = []
     }
@@ -622,23 +685,44 @@ const handleDownloadTemplate = async (format: 'csv' | 'xlsx') => {
 
 const openImportDialog = () => {
   importResult.value = null
+  pendingImportFile.value = null
   importDialogVisible.value = true
 }
 
+// Step 1: selecting a file validates only (dryRun) and shows a preview; nothing is inserted yet.
 const onImportFileChange = (file: { raw?: File }) => {
-  if (file.raw) handleImportFile(file.raw)
+  if (file.raw) handleValidateImport(file.raw)
 }
 
-const handleImportFile = async (file: File) => {
+const handleValidateImport = async (file: File) => {
   if (!selectedTableId.value) return
+  pendingImportFile.value = file
   importing.value = true
   importResult.value = null
   try {
     const format = file.name.toLowerCase().endsWith('.xlsx') ? 'xlsx' : 'csv'
-    const res: any = await relationTableApi.importData(selectedTableId.value, file, format)
+    const res: any = await relationTableApi.importData(selectedTableId.value, file, format, true)
     importResult.value = res?.data ?? res
+  } catch (e: any) {
+    pendingImportFile.value = null
+    ElMessage.error(e?.response?.data?.error?.message || e?.response?.data?.message || 'Validation failed')
+  } finally {
+    importing.value = false
+  }
+}
+
+// Step 2: user confirms -> re-validate + insert server-side (dryRun=false).
+const handleConfirmImport = async () => {
+  if (!selectedTableId.value || !pendingImportFile.value) return
+  importing.value = true
+  try {
+    const file = pendingImportFile.value
+    const format = file.name.toLowerCase().endsWith('.xlsx') ? 'xlsx' : 'csv'
+    const res: any = await relationTableApi.importData(selectedTableId.value, file, format, false)
+    importResult.value = res?.data ?? res
+    pendingImportFile.value = null
     const r = importResult.value
-    if (r && r.inserted > 0) {
+    if (r && (r.inserted ?? 0) > 0) {
       ElMessage.success(`Imported ${r.inserted} row(s)${r.failed ? `, ${r.failed} failed` : ''}`)
       await fetchData()
     } else if (r && r.failed > 0) {
@@ -680,6 +764,20 @@ onMounted(fetchTables)
   border: 1px solid var(--el-border-color-light);
   border-radius: 4px;
   overflow-y: auto;
+  transition: width 0.2s ease;
+}
+
+.table-list-panel.collapsed {
+  width: 40px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 8px;
+  overflow: hidden;
+}
+
+.collapse-toggle {
+  padding: 4px;
 }
 
 .table-list-panel :deep(.el-menu-item.is-active) {
@@ -692,7 +790,10 @@ onMounted(fetchTables)
 }
 
 .panel-title {
-  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 8px 8px 16px;
   font-weight: 600;
   font-size: 14px;
   border-bottom: 1px solid var(--el-border-color-light);

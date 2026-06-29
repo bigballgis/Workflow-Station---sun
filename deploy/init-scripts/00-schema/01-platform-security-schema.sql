@@ -620,10 +620,16 @@ CREATE TABLE IF NOT EXISTS sys_function_unit_contents (
     flowable_process_definition_id VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_content_func_unit FOREIGN KEY (function_unit_id) REFERENCES sys_function_units(id),
-    CONSTRAINT chk_content_type CHECK (content_type IN ('PROCESS', 'FORM', 'DATA_TABLE', 'SCRIPT'))
+    CONSTRAINT chk_content_type CHECK (content_type IN ('PROCESS', 'FORM', 'DATA_TABLE', 'SCRIPT', 'ACTION', 'MAIN_TABLE_VIEW'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_fu_content_func_unit ON sys_function_unit_contents(function_unit_id);
+
+-- Already-running DBs created the constraint before MAIN_TABLE_VIEW/ACTION existed; CREATE TABLE
+-- IF NOT EXISTS won't replace it, so drop and re-add the widened CHECK explicitly.
+ALTER TABLE sys_function_unit_contents DROP CONSTRAINT IF EXISTS chk_content_type;
+ALTER TABLE sys_function_unit_contents ADD CONSTRAINT chk_content_type
+    CHECK (content_type IN ('PROCESS', 'FORM', 'DATA_TABLE', 'SCRIPT', 'ACTION', 'MAIN_TABLE_VIEW'));
 
 -- =====================================================
 -- 29. Function Unit Access (sys_function_unit_access)

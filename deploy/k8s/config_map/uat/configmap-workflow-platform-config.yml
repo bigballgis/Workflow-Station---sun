@@ -84,15 +84,16 @@ data:
   N8N_DIAGNOSTICS_ENABLED: "false"
   N8N_RESTRICT_ENVIRONMENT_VARIABLES_ACCESS: "false"
   N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
-  # Activepieces (PROD runtime only — UI not exposed; Istio routes only /api/v1/webhooks).
+  # Activepieces (uat: UI exposed via login bridge). DB/Redis = 共享平台那套(同 SPRING_DATASOURCE_*)。
   ACTIVEPIECES_POSTGRES_HOST: "uat-postgres.internal"
-  ACTIVEPIECES_POSTGRES_PORT: "25011"
+  ACTIVEPIECES_POSTGRES_PORT: "5432"
   ACTIVEPIECES_POSTGRES_DATABASE: "workflow_platform_uat"
   ACTIVEPIECES_POSTGRES_USERNAME: "platform_uat"
   ACTIVEPIECES_REDIS_HOST: "redis-service.__NAMESPACE__"
   ACTIVEPIECES_REDIS_PORT: "6379"
-  ACTIVEPIECES_FRONTEND_URL: "https://uat-activepieces.company.com/"
-  ACTIVEPIECES_WEBHOOK_URL: "https://uat-activepieces.company.com/"
+  # AP 自身公网基址 = 登录桥网关主机(与 AP_BRIDGE_URL 同主机);若 ingress 配了 TLS 改成 https。
+  ACTIVEPIECES_FRONTEND_URL: "http://hermes-workflow-activepieces.__BASE_DOMAIN__/"
+  ACTIVEPIECES_WEBHOOK_URL: "http://hermes-workflow-activepieces.__BASE_DOMAIN__/"
   # --- AP shared-account login bridge (NON-PROD: uat/sit have the UI) ---
   # Share the platform JWT across sub-domains so the AP gateway host receives it.
   JWT_COOKIE_DOMAIN: ".__BASE_DOMAIN__"

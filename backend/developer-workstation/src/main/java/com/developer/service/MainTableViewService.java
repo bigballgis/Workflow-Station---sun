@@ -25,6 +25,17 @@ public interface MainTableViewService {
 
     void seedDefaultViewsForFunctionUnit(Long functionUnitId);
 
+    /**
+     * Propagate Table Design field changes into this table's view configs: rename a view field when its
+     * field name changed, and refresh its column label when the field's display name changed (only when
+     * the label still matches the old display name, so manual label tweaks are preserved).
+     */
+    void propagateFieldChangesToViews(Long tableId, List<FieldLabelChange> changes);
+
+    /** A single field's old/new name + display-name, derived from a Table Design save. */
+    record FieldLabelChange(String oldFieldName, String newFieldName,
+                            String oldDisplayName, String newDisplayName) {}
+
     void publishViewsForFunctionUnit(Long functionUnitId);
 
     List<Map<String, Object>> snapshotViewsForFunctionUnit(Long functionUnitId);

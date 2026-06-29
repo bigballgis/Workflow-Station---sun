@@ -267,6 +267,23 @@ function toggleCatalogSelect(fieldName: string) {
   selectedCatalogFields.value = next
 }
 
+// Select-all over the currently-filtered catalog (respects the search box).
+const allCatalogSelected = computed(() =>
+  filteredCatalog.value.length > 0
+  && filteredCatalog.value.every(f => selectedCatalogFields.value.has(f.fieldName)),
+)
+const someCatalogSelected = computed(() =>
+  filteredCatalog.value.some(f => selectedCatalogFields.value.has(f.fieldName)),
+)
+function toggleSelectAllCatalog(checked: boolean) {
+  const next = new Set(selectedCatalogFields.value)
+  for (const f of filteredCatalog.value) {
+    if (checked) next.add(f.fieldName)
+    else next.delete(f.fieldName)
+  }
+  selectedCatalogFields.value = next
+}
+
 function addSelectedFields() {
   for (const field of filteredCatalog.value) {
     if (selectedCatalogFields.value.has(field.fieldName)) {
@@ -353,7 +370,8 @@ async function handleSave() {
         ...filterConfig.value,
         toolbar: {
           enableExport: enableExport.value,
-          enableImport: enableImport.value,
+          // Import is no longer offered in views — always disabled.
+          enableImport: false,
         },
       },
       fields,
@@ -455,5 +473,6 @@ const previewRowCount = 3
     onColDragStart, onColDragOver, onColDragLeave, onColDrop, onColDragEnd, getFieldDataType,
     isFkField, isPkField, onFkColumnClick,
     selectedCatalogFields, toggleCatalogSelect, addSelectedFields, clearAllFields,
+    allCatalogSelected, someCatalogSelected, toggleSelectAllCatalog,
   }
 }
