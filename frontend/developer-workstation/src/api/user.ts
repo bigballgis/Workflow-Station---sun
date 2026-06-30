@@ -112,6 +112,10 @@ export const userApi = {
       params: profileContext ? { profileContext } : undefined
     }),
 
+  /** Change password (developer-workstation auth service) */
+  changePassword: (data: { oldPassword: string; newPassword: string }): Promise<void> =>
+    workstationAuthAxios.post('/change-password', data),
+
   /** Search platform users (name / username / email) for System Initiator picker */
   searchUsers: async (keyword?: string): Promise<PlatformUserOption[]> => {
     const params: Record<string, string | number> = { page: 0, size: 50 }

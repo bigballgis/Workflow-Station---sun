@@ -388,8 +388,8 @@
         </el-collapse-item>
       </template>
 
-      <!-- Send/Receive task config -->
-      <template v-if="taskType === 'bpmn:SendTask' || taskType === 'bpmn:ReceiveTask'">
+      <!-- Receive task config -->
+      <template v-if="taskType === 'bpmn:ReceiveTask'">
         <el-collapse-item
           :title="t('properties.message')"
           name="message"
@@ -403,18 +403,6 @@
                 v-model="messageName"
                 :placeholder="t('properties.messageNamePlaceholder')"
                 @change="updateExtProp('messageName', messageName)"
-              />
-            </el-form-item>
-            <el-form-item
-              v-if="taskType === 'bpmn:SendTask'"
-              :label="t('properties.messagePayload')"
-            >
-              <el-input
-                v-model="messagePayload"
-                type="textarea"
-                :rows="3"
-                :placeholder="t('properties.messagePayloadPlaceholder')"
-                @change="updateExtProp('messagePayload', messagePayload)"
               />
             </el-form-item>
           </el-form>
@@ -541,8 +529,11 @@ const {
   updateExtProp
 } = useTaskPropertiesState(propsAccessor, t)
 
-// 表单绑定逻辑（依赖 formId/updateExtProp，通过 wrapper 闭包破环）
-const { forms, handleFormChange, loadForms } = useTaskPropertiesForms(propsAccessor, {
+const {
+  forms,
+  handleFormChange,
+  loadForms
+} = useTaskPropertiesForms(propsAccessor, {
   formId,
   updateExtProp
 })
@@ -593,13 +584,6 @@ onMounted(() => {
       color: #606266;
       padding-bottom: 4px;
     }
-  }
-  
-  .form-tip {
-    font-size: 11px;
-    color: #909399;
-    margin-top: 4px;
-    line-height: 1.4;
   }
 }
 </style>

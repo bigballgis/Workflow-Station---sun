@@ -74,6 +74,21 @@ public class ProcessFormComponent {
         return t;
     }
 
+    /** Lazy: hydrates {@code up_process_instance} for engine-only starts (email monitor). */
+    @Lazy
+    @Autowired
+    private ProcessInstanceHydrationComponent processInstanceHydration;
+
+    private ProcessInstance requireProcessInstance(String processInstanceId) {
+        ProcessInstanceHydrationComponent hydration = processInstanceHydration;
+        if (hydration != null) {
+            return hydration.requireProcessInstance(processInstanceId);
+        }
+        return processInstanceRepository.findById(processInstanceId)
+                .orElseThrow(() -> new PortalException("404",
+                        "Process instance not found: " + processInstanceId));
+    }
+
     @Value("${admin-center.url:http://localhost:8090}")
     private String adminCenterUrl;
 
@@ -88,8 +103,7 @@ public class ProcessFormComponent {
     public ProcessFormData getProcessFormData(String processInstanceId) {
         log.debug("Getting process form data for process instance: {}", processInstanceId);
 
-        ProcessInstance processInstance = processInstanceRepository.findById(processInstanceId)
-                .orElseThrow(() -> new PortalException("404", "Process instance not found: " + processInstanceId));
+        ProcessInstance processInstance = requireProcessInstance(processInstanceId);
 
         Map<String, Object> variables = processInstance.getVariables() != null
                 ? processInstance.getVariables()
@@ -156,8 +170,7 @@ public class ProcessFormComponent {
     public void submitProcessFormUpdate(String processInstanceId, String userId, Map<String, Object> formData) {
         log.info("Submitting process form update for process: {}, user: {}", processInstanceId, userId);
 
-        ProcessInstance gate = processInstanceRepository.findById(processInstanceId)
-                .orElseThrow(() -> new PortalException("404", "Process instance not found: " + processInstanceId));
+        ProcessInstance gate = requireProcessInstance(processInstanceId);
 
         if (!userId.equals(gate.getStartUserId())) {
             log.warn("User {} attempted to update process form for process {} owned by {}", userId, processInstanceId, gate.getStartUserId());
@@ -171,8 +184,7 @@ public class ProcessFormComponent {
         AtomicReference<Map<String, Object>> oldValuesRef = new AtomicReference<>();
 
         processFormWriteTx().executeWithoutResult(status -> {
-            ProcessInstance processInstance = processInstanceRepository.findById(processInstanceId)
-                    .orElseThrow(() -> new PortalException("404", "Process instance not found: " + processInstanceId));
+            ProcessInstance processInstance = requireProcessInstance(processInstanceId);
 
             Map<String, Object> oldValues = processInstance.getVariables() != null
                     ? new HashMap<>(processInstance.getVariables())
@@ -345,9 +357,7 @@ public class ProcessFormComponent {
      * Whether the process is in Return_To_Requester state.
      */
     public boolean isInReturnToRequesterState(String processInstanceId) {
-        return processInstanceRepository.findById(processInstanceId)
-                .map(pi -> RETURN_TO_REQUESTER.equals(pi.getStatus()))
-                .orElse(false);
+        return RETURN_TO_REQUESTER.equals(requireProcessInstance(processInstanceId).getStatus());
     }
 
     // ==================== Private Helper Methods ====================

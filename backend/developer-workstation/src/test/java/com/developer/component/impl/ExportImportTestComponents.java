@@ -2,6 +2,8 @@ package com.developer.component.impl;
 
 import com.developer.repository.ActionDefinitionRepository;
 import com.developer.repository.DecisionDefinitionRepository;
+import com.developer.repository.EmailConnectionRepository;
+import com.developer.repository.EmailMonitorRuleRepository;
 import com.developer.repository.FormDefinitionRepository;
 import com.developer.repository.FormStageBindingRepository;
 import com.developer.repository.FormTableBindingRepository;
@@ -38,12 +40,20 @@ public final class ExportImportTestComponents {
             TableRelationRepository tableRelationRepository,
             FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService,
             ObjectMapper objectMapper) {
+        EmailConnectionRepository emailConnectionRepository = Mockito.mock(EmailConnectionRepository.class);
+        Mockito.when(emailConnectionRepository.findByFunctionUnitIdOrderByNameAsc(Mockito.anyLong()))
+                .thenReturn(java.util.List.of());
+        EmailMonitorRuleRepository emailMonitorRuleRepository = Mockito.mock(EmailMonitorRuleRepository.class);
+        Mockito.when(emailMonitorRuleRepository.findByFunctionUnitIdOrderByNameAsc(Mockito.anyLong()))
+                .thenReturn(java.util.List.of());
         FunctionUnitExporter exporter = new FunctionUnitExporter(
                 functionUnitRepository,
                 tableDefinitionRepository,
                 formDefinitionRepository,
                 actionDefinitionRepository,
                 decisionDefinitionRepository,
+                emailConnectionRepository,
+                emailMonitorRuleRepository,
                 formStageBindingRepository,
                 tableRelationRepository,
                 Mockito.mock(SubTableViewConfigRepository.class),
@@ -90,6 +100,7 @@ public final class ExportImportTestComponents {
                 formDefinitionRepository,
                 actionDefinitionRepository,
                 decisionDefinitionRepository,
+                Mockito.mock(EmailConnectionRepository.class),
                 formTableBindingRepository,
                 tableRelationRepository,
                 Mockito.mock(SubTableViewConfigRepository.class),

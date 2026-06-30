@@ -78,6 +78,14 @@
           </el-form-item>
         </el-form>
       </el-collapse-item>
+
+      <StartEventEmailMonitorSection
+        v-if="isStart"
+        :modeler="modeler"
+        :element="element"
+        :function-unit-id="functionUnitId"
+        :update-ext-prop="updateExtProp"
+      />
       
       <!-- End event config -->
       <el-collapse-item
@@ -362,6 +370,7 @@ import { useI18n } from 'vue-i18n'
 import type { BpmnElement, BpmnModeler } from '@/types/bpmn'
 import { useEventState } from '@/composables/eventProperties/useEventState'
 import { useEventDefinitions } from '@/composables/eventProperties/useEventDefinitions'
+import StartEventEmailMonitorSection from './StartEventEmailMonitorSection.vue'
 
 const { t } = useI18n()
 
@@ -371,7 +380,7 @@ const props = defineProps<{
   functionUnitId: number
 }>()
 
-const activeGroups = ref(['basic', 'start', 'end', 'timer', 'message', 'signal', 'error'])
+const activeGroups = ref(['basic', 'start', 'emailMonitor', 'end', 'timer', 'message', 'signal', 'error'])
 
 // 以 reactive 适配器透传 props，使 composable 读取 props.element/modeler 时保持响应性
 const propsAccessor = reactive({

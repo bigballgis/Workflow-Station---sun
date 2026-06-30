@@ -130,10 +130,14 @@ public class ProcessController {
             result.put("processInstanceId", instance.getProcessInstanceId());
             result.put("processDefinitionId", instance.getProcessDefinitionId());
             result.put("processDefinitionKey", instance.getProcessDefinitionKey());
+            result.put("processDefinitionName", instance.getProcessDefinitionName());
             result.put("businessKey", instance.getBusinessKey());
             result.put("status", instance.getState());
             result.put("startTime", instance.getStartTime());
             result.put("startUserId", instance.getStartUserId());
+            if (instance.getVariables() != null) {
+                result.put("variables", instance.getVariables());
+            }
             return ResponseEntity.ok(ApiResponse.success(result));
         } else {
             return ResponseEntity.notFound().build();

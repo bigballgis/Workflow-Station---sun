@@ -48,10 +48,41 @@ function resolveRulePropsMaxLength(rule: Record<string, unknown>): number | unde
 
 function defaultValidateTrigger(fieldType?: string): 'blur' | 'change' {
 
-  if (fieldType === 'select' || fieldType === 'checkbox' || fieldType === 'radio') return 'change'
+  if (
+    fieldType === 'select'
+    || fieldType === 'checkbox'
+    || fieldType === 'radio'
+    || fieldType === 'switch'
+  ) {
+    return 'change'
+  }
 
   return 'blur'
 
+}
+
+function isBooleanSwitchFieldType(fieldType?: string): boolean {
+  return fieldType === 'switch'
+}
+
+/** async-validator treats bare `required: true` as failing on `false`; boolean fields need `type: 'boolean'`. */
+function buildRequiredValidationRule(
+  extras: Record<string, unknown> = {},
+  fieldType?: string,
+): Record<string, unknown> {
+  if (isBooleanSwitchFieldType(fieldType)) {
+    return {
+      type: 'boolean',
+      required: true,
+      trigger: 'change',
+      ...extras,
+    }
+  }
+  return {
+    required: true,
+    trigger: defaultValidateTrigger(fieldType),
+    ...extras,
+  }
 }
 
 
@@ -106,7 +137,7 @@ export function convertFormCreateDesignerValidateEntry(
 
   if (item.required === true) {
 
-    return { ...baseEntry(item, fieldType), required: true }
+    return buildRequiredValidationRule(baseEntry(item, fieldType), fieldType)
 
   }
 
@@ -126,7 +157,13 @@ export function convertFormCreateDesignerValidateEntry(
 
       case 'required':
 
-        return { required: true, trigger, ...(message != null && message !== '' ? { message } : {}) }
+        return buildRequiredValidationRule(
+          {
+            trigger,
+            ...(message != null && message !== '' ? { message } : {}),
+          },
+          fieldType,
+        )
 
       case 'len':
 
@@ -323,13 +360,7 @@ export function mapFormCreateValidateToElementPlusRules(
 
   if (isFormCreateRuleRequired(rule) && !hasRequiredEntry) {
 
-    mapped.unshift({
-
-      required: true,
-
-      trigger: defaultValidateTrigger(fieldType),
-
-    })
+    mapped.unshift(buildRequiredValidationRule({}, fieldType))
 
   }
 

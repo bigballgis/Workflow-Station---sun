@@ -244,6 +244,35 @@ public class WorkflowEngineProcessClient {
     }
 
     /**
+     * Returns process instance detail (includes variables when available).
+     */
+    public Optional<Map<String, Object>> getProcessInstance(String processInstanceId) {
+        if (!engine.isAvailable() || processInstanceId == null || processInstanceId.isEmpty()) {
+            return Optional.empty();
+        }
+        try {
+            String url = engine.engineUrl() + "/api/v1/processes/instances/" + processInstanceId;
+
+            HttpHeaders headers = new HttpHeaders();
+            engine.forwardInboundAuthorization(headers);
+            HttpEntity<Void> entity = new HttpEntity<>(headers);
+
+            ResponseEntity<Map<String, Object>> response = engine.restTemplate().exchange(
+                url, HttpMethod.GET, entity,
+                new ParameterizedTypeReference<Map<String, Object>>() {});
+
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()));
+            }
+        } catch (HttpClientErrorException.NotFound e) {
+            log.debug("Process instance not found in workflow engine: {}", processInstanceId);
+        } catch (Exception e) {
+            log.warn("Failed to get process instance from workflow engine: {}", e.getMessage());
+        }
+        return Optional.empty();
+    }
+
+    /**
      * Cancels (terminates) process instance
      */
     public Optional<Map<String, Object>> cancelProcessInstance(String processInstanceId, String reason) {

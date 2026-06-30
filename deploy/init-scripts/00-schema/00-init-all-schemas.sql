@@ -73,5 +73,11 @@ COMMIT;
 \i /docker-entrypoint-initdb.d/00-schema/42-add-dw-binding-link-mode.sql
 \i /docker-entrypoint-initdb.d/00-schema/43-add-dw-field-fk-pk-metadata.sql
 \i /docker-entrypoint-initdb.d/00-schema/44-ac-ldap-sync-audit.sql
+\i /docker-entrypoint-initdb.d/00-schema/45-dw-email-connections.sql
+\i /docker-entrypoint-initdb.d/00-schema/46-sys-email-connections.sql
+\i /docker-entrypoint-initdb.d/00-schema/47-dw-email-templates.sql
+\i /docker-entrypoint-initdb.d/00-schema/48-dw-email-monitor-rules.sql
+\i /docker-entrypoint-initdb.d/00-schema/49-sys-email-monitor-rules.sql
+\i /docker-entrypoint-initdb.d/00-schema/50-we-email-inbound.sql
 
 \echo 'All schemas created successfully.'

@@ -1,6 +1,8 @@
 package com.admin.controller;
 
 import com.admin.component.DeploymentManagerComponent;
+import com.admin.component.EmailConnectionSyncComponent;
+import com.admin.component.EmailMonitorSyncComponent;
 import com.admin.component.FunctionUnitManagerComponent;
 import com.admin.component.ProcessDeploymentComponent;
 import com.admin.component.ActionDefinitionImportWriter;
@@ -51,6 +53,8 @@ public class FunctionUnitImportController {
     private final DeploymentManagerComponent deploymentManager;
     private final ProcessDeploymentComponent processDeploymentComponent;
     private final ActionDefinitionImportWriter actionDefinitionImportWriter;
+    private final EmailConnectionSyncComponent emailConnectionSyncComponent;
+    private final EmailMonitorSyncComponent emailMonitorSyncComponent;
     private final ObjectMapper objectMapper;
     private final I18nService i18nService;
     
@@ -138,6 +142,25 @@ public class FunctionUnitImportController {
                 // transaction (derived delete -> em.remove), which a plain controller method lacks.
                 actionDefinitionImportWriter.replaceActions(
                         importResult.getFunctionUnit().getId(), actions);
+
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> connections = (List<Map<String, Object>>) packageData.get("connections");
+                if (connections != null && !connections.isEmpty()) {
+                    emailConnectionSyncComponent.syncConnections(
+                            importResult.getFunctionUnit().getId(), connections);
+                    log.info("Synced {} email connections for function unit {}",
+                            connections.size(), importResult.getFunctionUnit().getId());
+                }
+
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> emailMonitors =
+                        (List<Map<String, Object>>) packageData.get("emailMonitors");
+                if (emailMonitors != null && !emailMonitors.isEmpty()) {
+                    emailMonitorSyncComponent.syncMonitorRules(
+                            importResult.getFunctionUnit().getId(), emailMonitors);
+                    log.info("Synced {} email monitor rules for function unit {}",
+                            emailMonitors.size(), importResult.getFunctionUnit().getId());
+                }
                 
                 result.put("status", "SUCCESS");
                 result.put("functionUnitId", importResult.getFunctionUnit().getId());
@@ -520,6 +543,38 @@ public class FunctionUnitImportController {
         }
         if (!actions.isEmpty()) {
             result.put("actions", actions);
+        }
+
+        List<Map<String, Object>> connections = new ArrayList<>();
+        for (String fileName : rawFiles.keySet()) {
+            if (fileName.startsWith("connections/") && fileName.endsWith(".json")) {
+                try {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> connectionData = objectMapper.readValue(rawFiles.get(fileName), Map.class);
+                    connections.add(connectionData);
+                } catch (Exception e) {
+                    log.warn("Failed to parse connection file: {}", fileName, e);
+                }
+            }
+        }
+        if (!connections.isEmpty()) {
+            result.put("connections", connections);
+        }
+
+        List<Map<String, Object>> emailMonitors = new ArrayList<>();
+        for (String fileName : rawFiles.keySet()) {
+            if (fileName.startsWith("email-monitors/") && fileName.endsWith(".json")) {
+                try {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> monitorData = objectMapper.readValue(rawFiles.get(fileName), Map.class);
+                    emailMonitors.add(monitorData);
+                } catch (Exception e) {
+                    log.warn("Failed to parse email monitor file: {}", fileName, e);
+                }
+            }
+        }
+        if (!emailMonitors.isEmpty()) {
+            result.put("emailMonitors", emailMonitors);
         }
         
         return result;

@@ -130,6 +130,15 @@ public class ExportImportPackageParser {
             }
             result.put("decisions", decisions);
 
+            // Parse email connections
+            List<Map<String, Object>> connections = new ArrayList<>();
+            for (String fileName : rawFiles.keySet()) {
+                if (fileName.startsWith("connections/") && fileName.endsWith(".json")) {
+                    connections.add(objectMapper.readValue(rawFiles.get(fileName), Map.class));
+                }
+            }
+            result.put("connections", connections);
+
             // Store checksum for verification
             if (rawFiles.containsKey("checksum.sha256")) {
                 result.put("checksum", new String(rawFiles.get("checksum.sha256"), StandardCharsets.UTF_8));

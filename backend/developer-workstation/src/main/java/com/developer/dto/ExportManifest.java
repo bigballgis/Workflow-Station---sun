@@ -82,6 +82,8 @@ public class ExportManifest {
         private List<String> forms;
         private List<String> actions;
         private List<String> decisions;
+        private List<String> connections;
+        private List<String> emailMonitors;
     }
     
     @Data

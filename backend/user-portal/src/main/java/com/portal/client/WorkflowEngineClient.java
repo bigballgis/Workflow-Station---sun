@@ -380,6 +380,13 @@ public class WorkflowEngineClient {
     // ==================== Process status and history（委托 processClient） ====================
 
     /**
+     * Returns process instance detail (includes variables when available).
+     */
+    public Optional<Map<String, Object>> getProcessInstance(String processInstanceId) {
+        return processClient.getProcessInstance(processInstanceId);
+    }
+
+    /**
      * Returns process instance status
      * Checks whether process completed and returns last activity node
      */

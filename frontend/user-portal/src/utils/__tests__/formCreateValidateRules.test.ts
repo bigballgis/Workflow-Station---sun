@@ -155,6 +155,30 @@ describe('formCreateValidateRules', () => {
 
 
 
+  it('mapFormCreateValidateToElementPlusRules uses boolean required for switch fields', () => {
+    const rules = mapFormCreateValidateToElementPlusRules({
+      $required: true,
+    }, 'switch')
+
+    expect(rules).toHaveLength(1)
+    expect(rules[0]).toMatchObject({ type: 'boolean', required: true, trigger: 'change' })
+  })
+
+  it('convertFormCreateDesignerValidateEntry maps required mode for switch as boolean', () => {
+    expect(
+      convertFormCreateDesignerValidateEntry({
+        mode: 'required',
+        message: 'Legal Hold is required',
+        trigger: 'change',
+      }, 'switch'),
+    ).toEqual({
+      type: 'boolean',
+      required: true,
+      trigger: 'change',
+      message: 'Legal Hold is required',
+    })
+  })
+
   it('applyFormCreateValidationToFormField sets field.required and field.rules', () => {
 
     const field: FormField = { key: 'I', label: 'lDDFF', type: 'text' }

@@ -35,6 +35,16 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+# PowerShell 7.4+ promotes a native command's non-zero exit code to a terminating error when
+# $ErrorActionPreference='Stop'. This script is designed around explicit `$LASTEXITCODE` checks
+# after each docker/mvn/npm call (and intentionally tolerates failures such as `docker image
+# inspect` for a missing image, or a flaky mirror pull during base-image fallback). Opt out so
+# those manual checks remain the single source of truth instead of aborting mid-step.
+if (Test-Path variable:PSNativeCommandUseErrorActionPreference) {
+    $PSNativeCommandUseErrorActionPreference = $false
+}
+
 $RootDir = Resolve-Path "$PSScriptRoot/../../.."
 $ComposeFile = "$PSScriptRoot/docker-compose.dev.yml"
 $EnvFile = "$PSScriptRoot/.env"
@@ -177,9 +187,39 @@ function Resolve-BaseImage {
     )
 
     foreach ($img in $Candidates) {
+        # If the image is already present locally, use it without hitting any registry.
+        # Use `docker images -q` (NOT `docker image inspect`): for a missing image it exits 0 and
+        # writes nothing to stderr, whereas `inspect` writes "No such image" to stderr which, under
+        # $ErrorActionPreference='Stop' in Windows PowerShell 5.1, is promoted to a terminating
+        # error (RemoteException) even with `*> $null` redirection.
+        $localImageId = docker images -q $img 2>$null
+        if ($localImageId) {
+            Write-Host "  Base image already present locally: $img" -ForegroundColor Green
+            return $img
+        }
+
         Write-Host "  Trying base image: $img" -ForegroundColor DarkGray
-        $pullOutput = docker pull $img 2>&1
-        $pullExit = $LASTEXITCODE
+        # A failing 'docker pull' writes to stderr and returns non-zero. With
+        # $ErrorActionPreference='Stop' (+ PowerShell 7.4 native error handling) that aborts
+        # the script before the next candidate is tried, defeating the mirror fallback.
+        # Relax locally so we can inspect $LASTEXITCODE and continue to the next candidate.
+        $prevEAP = $ErrorActionPreference
+        $prevNativeEAP = $null
+        if (Test-Path variable:PSNativeCommandUseErrorActionPreference) {
+            $prevNativeEAP = $PSNativeCommandUseErrorActionPreference
+            $PSNativeCommandUseErrorActionPreference = $false
+        }
+        $ErrorActionPreference = 'Continue'
+        try {
+            $pullOutput = docker pull $img 2>&1
+            $pullExit = $LASTEXITCODE
+        }
+        finally {
+            $ErrorActionPreference = $prevEAP
+            if ($null -ne $prevNativeEAP) {
+                $PSNativeCommandUseErrorActionPreference = $prevNativeEAP
+            }
+        }
         # Show last 3 lines of pull output for context (but keep function output stream clean)
         $pullOutput | Select-Object -Last 3 | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray }
         if ($pullExit -eq 0) {
@@ -419,14 +459,45 @@ if (-not $SkipInfra) {
     
     # Run incremental schema migrations (docker-entrypoint-initdb.d only runs on first init)
     Write-Host "  Running DB schema migrations..." -ForegroundColor DarkGray
+
+    # Resolve Postgres credentials from .env (the PowerShell $env: vars are NOT populated
+    # by --env-file; that only applies to compose). Fall back to dev defaults.
+    $PgUser = "platform_dev"
+    $PgDb = "workflow_platform_dev"
+    if (Test-Path $EnvFile) {
+        foreach ($line in Get-Content $EnvFile) {
+            if ($line -match '^\s*POSTGRES_USER\s*=\s*(\S+)') { $PgUser = $Matches[1] }
+            if ($line -match '^\s*POSTGRES_DB\s*=\s*(\S+)') { $PgDb = $Matches[1] }
+        }
+    }
+
     $InitScriptsDir = "$RootDir/deploy/init-scripts/00-schema"
     if (Test-Path $InitScriptsDir) {
-        Get-ChildItem -Path $InitScriptsDir -Filter "*.sql" | Sort-Object Name | ForEach-Object {
-            $scriptName = $_.Name
-            Write-Host "    $scriptName" -ForegroundColor DarkGray
-            Get-Content $_.FullName | docker exec -i platform-postgres-dev psql -U $env:POSTGRES_USER -d $env:POSTGRES_DB -v ON_ERROR_STOP=0 2>&1 | Out-Null
-            if ($LASTEXITCODE -ne 0) {
-                Write-Host "    WARNING: $scriptName had errors (may be expected for idempotent scripts)" -ForegroundColor Yellow
+        # psql writes expected WARNINGs/ERRORs to stderr for idempotent scripts (e.g. a column
+        # add against a table that this branch does not have). With $ErrorActionPreference='Stop'
+        # plus PowerShell 7.4+ native-command error handling, that stderr is otherwise promoted
+        # to a terminating error and aborts the whole deploy. Relax both locally, then restore.
+        $prevEAP = $ErrorActionPreference
+        $prevNativeEAP = $null
+        if (Test-Path variable:PSNativeCommandUseErrorActionPreference) {
+            $prevNativeEAP = $PSNativeCommandUseErrorActionPreference
+            $PSNativeCommandUseErrorActionPreference = $false
+        }
+        $ErrorActionPreference = 'Continue'
+        try {
+            Get-ChildItem -Path $InitScriptsDir -Filter "*.sql" | Sort-Object Name | ForEach-Object {
+                $scriptName = $_.Name
+                Write-Host "    $scriptName" -ForegroundColor DarkGray
+                Get-Content $_.FullName | docker exec -i platform-postgres-dev psql -U $PgUser -d $PgDb -v ON_ERROR_STOP=0 2>&1 | Out-Null
+                if ($LASTEXITCODE -ne 0) {
+                    Write-Host "    WARNING: $scriptName had errors (may be expected for idempotent scripts)" -ForegroundColor Yellow
+                }
+            }
+        }
+        finally {
+            $ErrorActionPreference = $prevEAP
+            if ($null -ne $prevNativeEAP) {
+                $PSNativeCommandUseErrorActionPreference = $prevNativeEAP
             }
         }
         Write-Host "  Schema migrations complete." -ForegroundColor Green

@@ -3,10 +3,8 @@ package com.platform.common.security;
 import lombok.extern.slf4j.Slf4j;
 
 import java.net.InetAddress;
-import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.net.URL;
 import java.net.UnknownHostException;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -88,21 +86,41 @@ public final class SsrfProtection {
             throw new SsrfException("URL must have a host");
         }
 
-        String hostLower = host.toLowerCase();
+        validateHostname(host, allowedHosts);
+        log.debug("SSRF validation passed: {}", truncate(urlString));
+    }
 
-        // 3. Allowlisted internal service hostnames (Docker/K8s DNS names)
-        if (allowedHosts != null && allowedHosts.contains(hostLower)) {
-            log.debug("SSRF validation passed (allowed host): {}", truncate(host));
+    /**
+     * Validate a bare hostname (no scheme) for outbound connections such as SMTP/IMAP.
+     *
+     * @param hostname     host or bracketed IPv6 literal
+     * @param allowedHosts hostnames permitted to resolve to private addresses (case-insensitive)
+     */
+    public static void validateHostname(String hostname, Set<String> allowedHosts) {
+        if (hostname == null || hostname.isBlank()) {
+            throw new SsrfException("Hostname must not be blank");
+        }
+        String host = hostname.trim();
+        if (host.contains("://") || host.contains("/") || host.contains("@") || host.contains(" ")) {
+            throw new SsrfException("Invalid hostname");
+        }
+
+        String hostLower = host.toLowerCase();
+        if (hostLower.startsWith("[") && hostLower.endsWith("]")) {
+            hostLower = hostLower.substring(1, hostLower.length() - 1);
+        }
+
+        Set<String> normalizedAllowed = normalizeAllowedHosts(allowedHosts);
+        if (normalizedAllowed.contains(hostLower)) {
+            log.debug("SSRF hostname validation passed (allowed host): {}", truncate(host));
             return;
         }
 
-        // 4. Block known-bad hostnames
         if (BLOCKED_HOSTS.contains(hostLower)) {
             log.warn("SSRF blocked — hostname: {}", truncate(host));
             throw new SsrfException("Requests to " + host + " are not allowed");
         }
 
-        // 5. Resolve and check IP
         try {
             InetAddress addr = InetAddress.getByName(host);
             if (addr.isLoopbackAddress() || addr.isLinkLocalAddress() || addr.isSiteLocalAddress()) {
@@ -110,7 +128,6 @@ public final class SsrfProtection {
                 throw new SsrfException("Requests to internal addresses are not allowed");
             }
 
-            // Check against private ranges (catches edge cases isSiteLocalAddress misses)
             byte[] bytes = addr.getAddress();
             if (bytes.length == 4) {
                 long ip = ipToLong(bytes);
@@ -122,18 +139,32 @@ public final class SsrfProtection {
                 }
             }
 
-            // IPv6 loopback
             if (bytes.length == 16 && addr.isLoopbackAddress()) {
                 log.warn("SSRF blocked — IPv6 loopback: {}", truncate(host));
                 throw new SsrfException("Requests to internal addresses are not allowed");
             }
         } catch (UnknownHostException e) {
-            // If DNS resolution fails, the URL can't be reached anyway — allow it
-            // (if attacker controls DNS, they can't point to internal IPs without DNS working)
             log.debug("SSRF check: host {} could not be resolved, allowing (DNS failure)", truncate(host));
         }
 
-        log.debug("SSRF validation passed: {}", truncate(urlString));
+        log.debug("SSRF hostname validation passed: {}", truncate(host));
+    }
+
+    public static void validateHostname(String hostname) {
+        validateHostname(hostname, Set.of());
+    }
+
+    private static Set<String> normalizeAllowedHosts(Set<String> allowedHosts) {
+        if (allowedHosts == null || allowedHosts.isEmpty()) {
+            return Set.of();
+        }
+        Set<String> out = new HashSet<>();
+        for (String h : allowedHosts) {
+            if (h != null && !h.isBlank()) {
+                out.add(h.trim().toLowerCase());
+            }
+        }
+        return out;
     }
 
     private static long ipToLong(String ip) {

@@ -134,6 +134,8 @@ export interface StartEventProperties {
   formId?: number
   formName?: string
   initiator?: string
+  emailMonitorRuleId?: string
+  emailMonitorEnabled?: string
 }
 
 export interface EndEventProperties {
@@ -152,6 +154,25 @@ export interface MessageEventProperties {
   correlationKey?: string
 }
 
+export interface SendTaskEmailProperties {
+  sendMode?: 'email' | 'message'
+  connectionId?: string
+  emailTemplateId?: string
+  emailFrom?: string
+  emailFromName?: string
+  emailTo?: string
+  emailCc?: string
+  emailBcc?: string
+  emailReplyTo?: string
+  emailImportance?: 'low' | 'normal' | 'high'
+  emailSensitivity?: 'normal' | 'personal' | 'private' | 'confidential'
+  emailAttachments?: string
+  emailSubject?: string
+  emailBody?: string
+  messageName?: string
+  messagePayload?: string
+}
+
 export type NodeProperties = 
   | UserTaskProperties 
   | ServiceTaskProperties 
@@ -161,3 +182,4 @@ export type NodeProperties =
   | EndEventProperties
   | TimerEventProperties
   | MessageEventProperties
+  | SendTaskEmailProperties

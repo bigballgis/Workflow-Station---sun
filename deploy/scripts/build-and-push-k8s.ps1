@@ -124,18 +124,20 @@ if (-not $SkipBackend) {
             "$Registry/$($svc.Name):latest", $JavaBaseImage, [bool]$PushOnly, [bool]$NoPush
         ) -ScriptBlock {
             param($Name, $ContextDir, $ImageName, $LatestName, $JavaBaseImage, $PushOnly, $NoPush)
-            $log = [System.Collections.Generic.List[string]]::new()
+            # Use a native PowerShell array (not a generic List) so this runs under
+            # Constrained Language Mode, where [System.Collections.Generic.List[...]]::new() is blocked.
+            $log = @()
             if (-not $PushOnly) {
-                $log.Add(">> [$Name] docker build")
-                docker build --build-arg "JAVA_BASE_IMAGE=$JavaBaseImage" --pull=false -t $ImageName $ContextDir 2>&1 | ForEach-Object { $log.Add("[$Name] $_") }
+                $log += ">> [$Name] docker build"
+                docker build --build-arg "JAVA_BASE_IMAGE=$JavaBaseImage" --pull=false -t $ImageName $ContextDir 2>&1 | ForEach-Object { $log += "[$Name] $_" }
                 if ($LASTEXITCODE -ne 0) { return @{ Name = $Name; Ok = $false; Stage = "build"; Log = $log } }
-                docker tag $ImageName $LatestName 2>&1 | ForEach-Object { $log.Add("[$Name] $_") }
+                docker tag $ImageName $LatestName 2>&1 | ForEach-Object { $log += "[$Name] $_" }
             }
             if (-not $NoPush) {
-                $log.Add(">> [$Name] docker push")
-                docker push $ImageName 2>&1 | ForEach-Object { $log.Add("[$Name] $_") }
+                $log += ">> [$Name] docker push"
+                docker push $ImageName 2>&1 | ForEach-Object { $log += "[$Name] $_" }
                 if ($LASTEXITCODE -ne 0) { return @{ Name = $Name; Ok = $false; Stage = "push"; Log = $log } }
-                docker push $LatestName 2>&1 | ForEach-Object { $log.Add("[$Name] $_") }
+                docker push $LatestName 2>&1 | ForEach-Object { $log += "[$Name] $_" }
             }
             return @{ Name = $Name; Ok = $true; Log = $log }
         }
@@ -158,7 +160,9 @@ if (-not $SkipFrontend) {
             "$Registry/$($svc.Name):latest", [bool]$PushOnly, [bool]$NoPush
         ) -ScriptBlock {
             param($Name, $ContextDir, $ImageName, $LatestName, $PushOnly, $NoPush)
-            $log = [System.Collections.Generic.List[string]]::new()
+            # Use a native PowerShell array (not a generic List) so this runs under
+            # Constrained Language Mode, where [System.Collections.Generic.List[...]]::new() is blocked.
+            $log = @()
             if (-not $PushOnly) {
                 Push-Location $ContextDir
                 try {
@@ -168,32 +172,32 @@ if (-not $SkipFrontend) {
                         ForEach-Object { Join-Path $ContextDir $_ } | Where-Object { Test-Path $_ }
                     $newestManifest = ($manifests | ForEach-Object { (Get-Item $_).LastWriteTime } | Measure-Object -Maximum).Maximum
                     if ((Test-Path $marker) -and ((Get-Item $marker).LastWriteTime -ge $newestManifest)) {
-                        $log.Add("[$Name] node_modules up to date, skipping npm install")
+                        $log += "[$Name] node_modules up to date, skipping npm install"
                     } else {
-                        $log.Add(">> [$Name] npm install")
-                        npm install --prefer-offline --no-audit 2>&1 | ForEach-Object { $log.Add("[$Name] $_") }
+                        $log += ">> [$Name] npm install"
+                        npm install --prefer-offline --no-audit 2>&1 | ForEach-Object { $log += "[$Name] $_" }
                         if ($LASTEXITCODE -ne 0) { Pop-Location; return @{ Name = $Name; Ok = $false; Stage = "npm install"; Log = $log } }
                     }
                     # Remove auto-generated dts files before build to avoid Windows file locking (errno -4094)
                     Remove-Item -Path "src/components.d.ts", "src/auto-imports.d.ts" -Force -ErrorAction SilentlyContinue
-                    $log.Add(">> [$Name] vite build")
-                    npx vite build 2>&1 | ForEach-Object { $log.Add("[$Name] $_") }
+                    $log += ">> [$Name] vite build"
+                    npx vite build 2>&1 | ForEach-Object { $log += "[$Name] $_" }
                     if ($LASTEXITCODE -ne 0) { Pop-Location; return @{ Name = $Name; Ok = $false; Stage = "vite build"; Log = $log } }
                 } finally {
                     Pop-Location
                 }
 
-                $log.Add(">> [$Name] docker build (Dockerfile.local)")
-                docker build -f "$ContextDir/Dockerfile.local" -t $ImageName $ContextDir 2>&1 | ForEach-Object { $log.Add("[$Name] $_") }
+                $log += ">> [$Name] docker build (Dockerfile.local)"
+                docker build -f "$ContextDir/Dockerfile.local" -t $ImageName $ContextDir 2>&1 | ForEach-Object { $log += "[$Name] $_" }
                 if ($LASTEXITCODE -ne 0) { return @{ Name = $Name; Ok = $false; Stage = "docker build"; Log = $log } }
-                docker tag $ImageName $LatestName 2>&1 | ForEach-Object { $log.Add("[$Name] $_") }
+                docker tag $ImageName $LatestName 2>&1 | ForEach-Object { $log += "[$Name] $_" }
             }
 
             if (-not $NoPush) {
-                $log.Add(">> [$Name] docker push")
-                docker push $ImageName 2>&1 | ForEach-Object { $log.Add("[$Name] $_") }
+                $log += ">> [$Name] docker push"
+                docker push $ImageName 2>&1 | ForEach-Object { $log += "[$Name] $_" }
                 if ($LASTEXITCODE -ne 0) { return @{ Name = $Name; Ok = $false; Stage = "push"; Log = $log } }
-                docker push $LatestName 2>&1 | ForEach-Object { $log.Add("[$Name] $_") }
+                docker push $LatestName 2>&1 | ForEach-Object { $log += "[$Name] $_" }
             }
             return @{ Name = $Name; Ok = $true; Log = $log }
         }

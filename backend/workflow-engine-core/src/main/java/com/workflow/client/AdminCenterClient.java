@@ -14,6 +14,7 @@ import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Admin Center 客户端
@@ -215,10 +216,12 @@ public class AdminCenterClient {
     // ==================== 任务分配相关 API ====================
     
     /**
-     * 获取用户当前业务单元的 <strong>code</strong>（任务分配链路统一 code）。
+     * 获取用户的业务单元ID
      * @param userId 用户ID
-     * @param activeBusinessUnitId 可选；多 BU 时须传入与用户 UBR 一致的当前业务单元 <strong>code</strong>
-     * @return 业务单元 code，如果用户没有（唯一可确定的）业务单元则返回 null
+     * @return 业务单元ID，如果用户没有业务单元则返回null
+     */
+    /**
+     * @param activeBusinessUnitId 可选；多 BU 时须传入与用户 UBR 一致的当前业务单元
      */
     public String getUserBusinessUnitId(String userId, String activeBusinessUnitId) {
         try {
@@ -252,10 +255,11 @@ public class AdminCenterClient {
     public String getUserBusinessUnitId(String userId) {
         return getUserBusinessUnitId(userId, null);
     }
-    
+
     /**
-     * 业务单元 id → code。供运行时把工作台上下文 {@code activeBusinessUnitId}（仍为 id）
-     * 转成 code 再进入任务分配 code 链路。未找到返回 null。
+     * 业务单元 id → code（工作台 activeBusinessUnitId 仍为 id 时的运行时转换）
+     * @param businessUnitId 业务单元 id
+     * @return BU code，未找到时返回 null
      */
     public String getBusinessUnitCodeById(String businessUnitId) {
         if (businessUnitId == null || businessUnitId.isBlank()) {
@@ -279,15 +283,15 @@ public class AdminCenterClient {
             }
             return null;
         } catch (Exception e) {
-            log.error("Failed to get business unit code by id {}: {}", businessUnitId, e.getMessage());
+            log.error("Failed to get business unit code for id {}: {}", businessUnitId, e.getMessage());
             return null;
         }
     }
 
     /**
-     * 获取父业务单元的 <strong>code</strong>（hierarchy 沿父链全程 code）。
-     * @param businessUnitId 业务单元 code
-     * @return 父业务单元 code，如果没有父级则返回 null
+     * 获取业务单元的父业务单元ID
+     * @param businessUnitId 业务单元ID
+     * @return 父业务单元ID，如果没有父级则返回null
      */
     public String getParentBusinessUnitId(String businessUnitId) {
         try {
@@ -316,8 +320,8 @@ public class AdminCenterClient {
     
     /**
      * 获取业务单元中拥有指定角色的用户ID列表
-     * @param businessUnitId 业务单元 code
-     * @param roleId 角色 code（BU_BOUNDED类型）
+     * @param businessUnitId 业务单元ID
+     * @param roleId 角色ID（BU_BOUNDED类型）
      * @return 用户ID列表
      */
     public List<String> getUsersByBusinessUnitAndRole(String businessUnitId, String roleId) {
@@ -341,8 +345,6 @@ public class AdminCenterClient {
 
     /**
      * 自某 BU 起沿父链向上，收集各层 BU 中拥有指定角色的用户 ID（并集、保序去重）。
-     * @param startBusinessUnitId 起始 BU code
-     * @param roleId 角色 code
      */
     public List<String> collectUserIdsForRoleInBusinessUnitHierarchy(String startBusinessUnitId, String roleId) {
         if (startBusinessUnitId == null || startBusinessUnitId.isBlank() || roleId == null || roleId.isBlank()) {
@@ -364,7 +366,7 @@ public class AdminCenterClient {
     
     /**
      * 获取拥有指定BU无关型角色的用户ID列表
-     * @param roleId 角色 code（BU_UNBOUNDED类型）
+     * @param roleId 角色ID（BU_UNBOUNDED类型）
      * @return 用户ID列表
      */
     public List<String> getUsersByUnboundedRole(String roleId) {
@@ -413,9 +415,9 @@ public class AdminCenterClient {
     }
     
     /**
-     * 获取业务单元的准入角色 code 列表
-     * @param businessUnitId 业务单元 code
-     * @return 角色 code 列表
+     * 获取业务单元的准入角色ID列表
+     * @param businessUnitId 业务单元ID
+     * @return 角色ID列表
      */
     public List<String> getEligibleRoleIds(String businessUnitId) {
         try {
@@ -438,8 +440,8 @@ public class AdminCenterClient {
     
     /**
      * 检查角色是否是业务单元的准入角色
-     * @param businessUnitId 业务单元 code
-     * @param roleId 角色 code
+     * @param businessUnitId 业务单元ID
+     * @param roleId 角色ID
      * @return 是否是准入角色
      */
     public boolean isEligibleRole(String businessUnitId, String roleId) {
@@ -508,6 +510,80 @@ public class AdminCenterClient {
         } catch (Exception e) {
             log.error("Failed to get BU unbounded roles: {}", e.getMessage());
             return Collections.emptyList();
+        }
+    }
+
+    /**
+     * 获取 N8N 连接配置（含解密后 apiKey）
+     * 调用 admin-center 的内部 API 获取完整的 N8N 连接配置信息
+     * @param configId N8N 配置ID
+     * @return N8N 配置信息Map，包含 id, name, baseUrl, apiKey, isActive 等；调用失败时返回 null
+     */
+    public Map<String, Object> getN8nConfig(String configId) {
+        try {
+            String url = adminCenterUrl + "/api/v1/admin/n8n-config/" + configId + "/internal";
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<Map<String, Object>>() {}
+            );
+
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                return response.getBody();
+            }
+            return null;
+
+        } catch (Exception e) {
+            log.error("Failed to get N8N config {}: {}", configId, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 获取功能单元邮件连接凭据（内部 API）
+     */
+    public Optional<Map<String, Object>> getEmailConnectionCredentials(String functionUnitId, String connectionId) {
+        try {
+            String url = adminCenterUrl + "/api/v1/admin/internal/function-units/"
+                    + functionUnitId + "/connections/" + connectionId + "/credentials";
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<Map<String, Object>>() {}
+            );
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                return Optional.of(response.getBody());
+            }
+            return Optional.empty();
+        } catch (Exception e) {
+            log.error("Failed to get email connection credentials for {} / {}: {}",
+                    functionUnitId, connectionId, e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * 按功能单元 code 解析 Admin Center 中的功能单元 ID
+     */
+    public Optional<String> resolveFunctionUnitIdByCode(String functionUnitCode) {
+        try {
+            String url = adminCenterUrl + "/api/v1/admin/internal/function-units/by-code/"
+                    + functionUnitCode + "/id";
+            ResponseEntity<Map<String, String>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<Map<String, String>>() {}
+            );
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                return Optional.ofNullable(response.getBody().get("functionUnitId"));
+            }
+            return Optional.empty();
+        } catch (Exception e) {
+            log.error("Failed to resolve function unit id by code {}: {}", functionUnitCode, e.getMessage());
+            return Optional.empty();
         }
     }
 
