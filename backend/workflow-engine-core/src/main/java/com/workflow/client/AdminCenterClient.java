@@ -262,16 +262,18 @@ public class AdminCenterClient {
      * @return BU code，未找到时返回 null
      */
     public String getBusinessUnitCodeById(String businessUnitId) {
+        if (businessUnitId == null || businessUnitId.isBlank()) {
+            return null;
+        }
         try {
             String url = adminCenterUrl + "/api/v1/admin/task-assignment/business-units/by-id/"
-                    + businessUnitId + "/code";
+                    + businessUnitId.trim() + "/code";
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
                     null,
                     new ParameterizedTypeReference<Map<String, Object>>() {}
             );
-
             Map<String, Object> result = response.getBody();
             if (result != null) {
                 Object code = result.get("code");
@@ -280,13 +282,12 @@ public class AdminCenterClient {
                 }
             }
             return null;
-
         } catch (Exception e) {
             log.error("Failed to get business unit code for id {}: {}", businessUnitId, e.getMessage());
             return null;
         }
     }
-    
+
     /**
      * 获取业务单元的父业务单元ID
      * @param businessUnitId 业务单元ID
