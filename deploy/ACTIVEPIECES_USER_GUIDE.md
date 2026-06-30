@@ -135,7 +135,9 @@ docker exec -e AP_INTERNAL_URL=http://localhost:80 \
 
 | 现象 | 原因 / 怎么办 |
 |---|---|
+| **点菜单弹「Service temporarily unavailable」** | 该环境的 AP **共享账号还没引导好**（平台换不到 AP 登录态）。找管理员跑一次共享账号引导（[INTEGRATION §6](ACTIVEPIECES_INTEGRATION.md)），或确认 admin-center 是最新镜像。 |
 | **AP 界面进不去 / 白屏** | 必须先登录平台(admin),再从「Activepieces 自动化」菜单进;别直接开 :8085 |
+| **进了 AP 但在登录页和 flows 之间反复跳** | 共享账号还没有默认 project。用该共享账号在 AP 里手动进一次、建/选一个 project 即可。 |
 | **流程卡在自动化节点不动** | AP flow 没加 **Return Response**,或没 **Publish(ENABLED)** |
 | **门户里"没有下文"** | 纯自动化流程瞬间就跑完了(没人工任务);想有交互就加用户任务 |
 | **申请编号(request id)是 "-"** | 功能单元没配"请求编号"生成规则(需要主表单 + 编号规则);自动化本身不受影响 |

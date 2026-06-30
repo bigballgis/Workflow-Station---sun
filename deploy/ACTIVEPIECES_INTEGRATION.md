@@ -6,27 +6,43 @@
 > 与 [SUPERSET_SSO_INTEGRATION.md](SUPERSET_SSO_INTEGRATION.md) 同类，但 AP 的登录态在 **localStorage**（非 cookie），
 > 故必须用**客户端登录桥**换 token，而不能像 Superset 那样服务端注入 header。
 
+> **2026-06-30 起改用「跨域 SSO 握手（方案 B）」**：原先桥页/token 端点靠平台 JWT cookie 跟到 AP 域来鉴权——
+> 但当 admin 域与 AP 域**不共享一个可安全用作 cookie Domain 的父域**时（IKP 实例就是：admin=`hermes-uat.hk.hsbc`、
+> AP=`hermes-workflow-activepieces.<集群>`，唯一公共父域 `.hk.hsbc` 太宽不可用），cookie 跟不过去 → `/__ap/bridge` 401。
+> 新方案改为：**在 admin 域换好 AP 会话、用一次性 nonce 把它带到 AP 域**，AP 域全程**不需要平台 cookie**，
+> 故两域分属不同父域也能用，且**不再需要 `JWT_COOKIE_DOMAIN`**（见 §5）。
+
 ---
 
-## 1. 方案与数据流
+## 1. 方案与数据流（跨域 SSO 握手）
 
 ```
 非生产（dev :8085 / k8s hermes-workflow-activepieces.<域>）:
 
-  浏览器 ──→ AP 网关
-   │  ① /__ap/bridge（受平台 JWT 门禁）── admin-center 返回桥页 HTML
-   │      桥页 JS: fetch /__ap/token
-   │  ② /__ap/token（受平台 JWT 门禁）── admin-center 用共享账号服务端 sign-in AP → 返回 {token, projectId}
-   │      桥页: localStorage['token']=token; localStorage['projectId']=projectId; location.replace('/')
-   │  ③ /（不门禁）── 反代 AP；AP 读 localStorage 已登录（共享账号 ADMIN）
-   └──────────────────────────────────────────────────────────────
+  ① 浏览器在 admin 域点「Activepieces」
+       GET /api/v1/admin/internal/ap/launch   （admin 域，平台 JWT cookie 在自己域有效）
+       └ admin-center: 验平台 JWT → 共享账号服务端 sign-in AP 拿 {token,projectId}
+                       → 签发一次性 nonce 存 Redis（默认 60s，单次）
+                       → 返回 { bridgeUrl: "<AP桥页>#nonce=<票>" }
+  ② 浏览器整页跳到 AP 域:  /__ap/bridge#nonce=<票>      （AP 域，无需任何平台 cookie）
+       └ admin-center 返回桥页 HTML（不再门禁）；桥页 JS 读 location.hash 的 nonce、抹掉它
+  ③   GET /__ap/token?nonce=<票>                       （AP 域，nonce 兑换，无需 cookie）
+       └ admin-center: 单次消费 nonce → 返回 {token, projectId}
+          桥页: localStorage.clear(); ['token']=token; ['projectId']=projectId; location.replace('/')
+  ④   /（不门禁）── 反代 AP；AP 读 localStorage 已登录（共享账号 ADMIN）
 
 生产（k8s）: 只 activepieces.<域>/api/v1/webhooks 经 Istio 暴露；UI 不开；不需要共享账号。
 ```
 
-**安全模型**：换 token 这步（桥页 + token 端点）受平台 JWT 门禁；AP 自身流量（`/`、`/api/*`）不门禁，
-因为 AP 前端调自己 API 用 AP token（Authorization 头）、不带平台 cookie，门禁会把这些 XHR 401→白屏。
-未登录平台的人到 `/` 只看到 AP 原生登录页（无 token，无害）；**换 token 的唯一入口受门禁**，前提不变。
+**安全模型**：换 token 的鉴权点挪到了**已认证的 admin 域 `/launch`**（cookie 在自己域有效）；
+nonce 不可猜（UUID）、单次消费、短时效（默认 60s），且 **AP token 从不进入 URL**（只在 nonce 兑换时由服务端返回）。
+AP 自身流量（`/`、`/api/*`）不门禁——AP 前端调自己 API 用 AP token（Authorization 头）、不带平台 cookie，
+门禁会把这些 XHR 401→白屏。未登录平台的人到 AP 域只看到 AP 原生登录页（无 token，无害）。
+
+> **同源回退（dev）**：admin 与 AP 在 dev 是同源（都 localhost，cookie 不分端口），故 `/__ap/token` 不带 nonce 时
+> **回退到老的 cookie 校验**；桥页无 nonce 时也带 `credentials:include`。dev 行为与历史一致，不回归。
+> dev `:8085` edge 对 `/__ap/bridge`、`/__ap/token` 仍保留 auth_request（无 cookie 的直接访问会 302 跳登录），
+> 在方案 B 下属冗余但无害（登录态浏览器照样过）。
 
 ---
 
@@ -34,13 +50,18 @@
 
 | 机制 | 说明 | 落点 |
 |---|---|---|
-| **登录桥页** | 取共享账号 AP token + projectId，写 localStorage，跳进 AP。dev/k8s 共用一份 | `backend/admin-center/.../resources/ap/ap-bridge.html`（admin-center `GET /internal/ap/bridge` 返回） |
-| **token 端点** | 校验平台 JWT → 共享账号服务端 sign-in → 返回 `{token, projectId}` | `ApTokenController#token` / `ActivepiecesApiClient#signInShared` |
-| **authz 端点** | 网关 auth_request 校验平台 JWT（200/401/404） | `ApTokenController#authz` |
-| **完整会话** | AP 会话 = localStorage `token` + `projectId`（都裸存）。只写 token 会死循环 | 桥页 + token 端点 |
-| **跨子域 cookie** | 平台 JWT 加 `Domain=.<基础域>`，让 AP 子域网关收到（也修好 Superset 作者网关同类问题） | `JwtProperties.cookieDomain` + `JWT_COOKIE_DOMAIN` |
-| **前端运行时配置** | k8s 前端是一镜像 promote 到多环境，入口 URL 必须**运行时**注入 | `public/config.js` + `docker-entrypoint.sh` envsubst |
-| **共享账号引导** | 空库时把共享账号 sign-up 成 AP 第一个用户（owner） | `deploy/scripts/ap-bootstrap-shared-account.js` + `ap-bootstrap-job.yaml` |
+| **launch 入口（方案 B 核心）** | 在 **admin 域**命中（cookie 有效）：验平台 JWT → 共享账号 sign-in 拿会话 → 签发一次性 nonce → 返回 `{bridgeUrl: "<桥页>#nonce="}` | `ApTokenController#launch`（`GET /api/v1/admin/internal/ap/launch`） |
+| **一次性 nonce 存储** | 不可猜 UUID、单次消费、短 TTL（默认 60s）；状态在 **Redis**（多副本安全），复用 `PlatformSsoService` 范式 | `ap/service/ApBridgeNonceStore.java` |
+| **登录桥页** | 读 URL fragment 的 nonce（抹掉历史）→ `?nonce=` 兑换 → 写 localStorage 跳 AP。**无 nonce 时回退 cookie（dev 同源）** | `resources/ap/ap-bridge.html`（admin-center `GET /internal/ap/bridge` 返回，**不再门禁**） |
+| **token 端点** | 带 `?nonce=` → 单次兑换会话（**无需 cookie**）；无 nonce → 回退平台 JWT 校验 + 现场 sign-in（dev） | `ApTokenController#token` / `ActivepiecesApiClient#signInShared` |
+| **完整会话** | AP 会话 = localStorage `token` + `projectId`（都裸存）。只写 token 会死循环 | 桥页 + token/launch 端点 |
+| **跨域 nonce 握手** | 取代「跨子域 cookie」：AP 域**无需平台 cookie**，故 admin 与 AP 可分属不同父域，**不再需要 `JWT_COOKIE_DOMAIN`** | `ApBridgeNonceStore` + `bridge.public-url` 配置 |
+| **桥页公网地址** | `/launch` 拼 `bridgeUrl` 用的 AP 桥页地址；前端也用它作菜单显隐开关 | `activepieces.bridge.public-url` ← env `AP_BRIDGE_URL` |
+| **前端运行时配置** | k8s 前端是一镜像 promote 到多环境，开关 URL 必须**运行时**注入 | `public/config.js` + `docker-entrypoint.sh` envsubst |
+| **共享账号引导** | 空库时把共享账号 sign-up 成 AP 第一个用户（owner）。**没引导=sign-in 401=点击报 502**（见 §8） | `deploy/scripts/ap-bootstrap-shared-account.js` + `ap-bootstrap-job.yaml` |
+
+> `ApTokenController#authz`（网关 auth_request 校验平台 JWT，200/401/404）保留以兼容 dev `:8085` edge；
+> 方案 B 下 k8s ap-gateway 不需要它。
 
 ---
 
@@ -48,23 +69,25 @@
 
 ### 后端（admin-center / platform-security）
 - **新增** `com.admin.ap` 包：
-  - `controller/ApTokenController.java` —— `/internal/ap/authz`、`/bridge`、`/token`（`bridge.enabled` 关闭时全 404）
+  - `controller/ApTokenController.java` —— `/internal/ap/launch`（方案 B 入口）、`/bridge`、`/token`、`/authz`（`bridge.enabled` 关闭时全 404）
+  - `service/ApBridgeNonceStore.java`（**方案 B 新增**）—— Redis 单次 nonce（issue/consume）
   - `client/ActivepiecesApiClient.java` —— 共享账号 sign-in，返回 `ApSession(token, projectId)`
-  - `config/ActivepiecesProperties.java` + `config/ApConfig.java` —— `activepieces.*` 配置
-  - `exception/ActivepiecesApiException.java`
-  - `resources/ap/ap-bridge.html` —— 桥页（classpath 资源）
-- **改** `JwtProperties.java` —— 加 `cookieDomain`
-- **改** `AuthServiceImpl#setAuthCookie` / `AuthController#expiredCookie` —— 设/清 cookie 一致地加 Domain
-- **改** `application.yml` —— `activepieces.*`、`platform.security.jwt.cookie-domain`
+  - `config/ActivepiecesProperties.java` + `config/ApConfig.java` —— `activepieces.*` 配置（方案 B 加 `bridge.public-url`、`bridge.nonce-ttl-seconds`）
+  - `exception/ActivepiecesApiException.java`（sign-in 失败 → 映射 502）
+  - `resources/ap/ap-bridge.html` —— 桥页（方案 B：读 fragment 的 nonce，无 nonce 回退 cookie）
+- **改** `application.yml` —— `activepieces.*`（含 `bridge.public-url: ${AP_BRIDGE_URL:}`、`bridge.nonce-ttl-seconds`）
 - **改** `application-docker.yml` —— `activepieces.internal-url=http://activepieces:80`
+- **（方案 A 遗留，AP 已不再需要）** `JwtProperties.cookieDomain` + `AuthServiceImpl#setAuthCookie`/`AuthController#expiredCookie` 的 `Domain`
+  + `platform.security.jwt.cookie-domain`（`JWT_COOKIE_DOMAIN`）——**Superset 作者网关可能仍依赖**，AP 这条链已用 nonce 替代，别为了 AP 去配它。
 
 ### 前端（admin-center）
-- **新增** `public/config.js` —— 运行时配置（`window.__APP_CONFIG__.AP_BRIDGE_URL`）
+- **新增** `src/api/ap.ts`（**方案 B 新增**）—— `launchActivepieces()` 调 `/internal/ap/launch` 拿 `bridgeUrl`
+- **新增** `public/config.js` —— 运行时配置（`window.__APP_CONFIG__.AP_BRIDGE_URL`，方案 B 下仅作菜单显隐开关）
 - **改** `index.html` —— 引 `%BASE_URL%config.js`
 - **改** `docker-entrypoint.sh` —— envsubst `AP_BRIDGE_URL` 注入 config.js
 - **改** `src/env.d.ts` —— `Window.__APP_CONFIG__` 类型
-- **改** `src/layouts/AdminLayout.vue` —— 「Activepieces」菜单入口（当前标签跳桥）
-- **改** `src/views/sso/SsoCallback.vue` —— `ap-bridge` 回跳映射
+- **改** `src/layouts/AdminLayout.vue` —— 「Activepieces」菜单：**先调 `launchActivepieces()` 再整页跳** `bridgeUrl`
+- **改** `src/views/sso/SsoCallback.vue` —— `state=ap-bridge` 回跳改为**先 mint 再跳**（不能再跳裸 URL）
 - **改** `i18n/{zh-CN,zh-TW,en}.ts` —— `menu.activepieces`
 
 ### 部署（dev）
@@ -79,9 +102,10 @@
 - **新增** `deploy/k8s/ap-gateway.yaml` —— 非生产 AP 登录桥网关（Istio Gateway+VirtualService）
 - **新增** `deploy/k8s/ap-bootstrap-job.yaml` —— 非生产 共享账号引导 Job
 - **新增** `deploy/scripts/ap-bootstrap-shared-account.js` —— 幂等引导脚本（node）
-- **改** `admin-center-frontend.yaml` —— 注入 `AP_BRIDGE_URL`（configmap，可选）
-- **改** `config_map/{uat,preprod}/...` —— `JWT_COOKIE_DOMAIN`、`ACTIVEPIECES_BRIDGE_ENABLED=true`、
-  `ACTIVEPIECES_INTERNAL_URL`、`ACTIVEPIECES_SHARED_EMAIL`、`AP_BRIDGE_URL`、`ACTIVEPIECES_POSTGRES_*`
+- **改** `admin-center-frontend.yaml` —— 注入 `AP_BRIDGE_URL`（configmap；方案 B 下作菜单开关）
+- **改** `config_map/{uat,preprod}/...` —— `ACTIVEPIECES_BRIDGE_ENABLED=true`、`ACTIVEPIECES_INTERNAL_URL`、
+  `ACTIVEPIECES_SHARED_EMAIL`、`AP_BRIDGE_URL`（admin-center 用它拼 `bridgeUrl`、前端用它作开关）、`ACTIVEPIECES_POSTGRES_*`
+  - `JWT_COOKIE_DOMAIN` —— **AP 方案 B 已不需要**；仅 Superset 作者网关若仍走跨子域 cookie 才保留。
 - **改** `secret/{uat,preprod}/...` —— `ACTIVEPIECES_{ENCRYPTION_KEY,JWT_SECRET,SHARED_PASSWORD,POSTGRES_PASSWORD,REDIS_PASSWORD}`
 - **改** `kustomization.yaml` —— 收录 `activepieces.yaml`
 - **改** `ps1/apply-workflow-station-{all,istio-generated}.ps1` —— `-IncludeApBridgeGateway` 开关
@@ -110,8 +134,9 @@ ACTIVEPIECES_JWT_SECRET=<任意>               # 改了会让旧 token 失效
 # 或 docker compose -f docker-compose.dev.yml build/up 对应服务
 ```
 
-入口：admin 左侧菜单「Activepieces 自动化」→ 跳 `http://localhost:8085/__ap/bridge`。
-首次空库需引导共享账号（见 §6）。
+入口：admin 左侧菜单「Activepieces 自动化」→ 前端调 `/internal/ap/launch` 现签 nonce → 跳
+`http://localhost:8085/__ap/bridge#nonce=...`。dev 同源下也可不带 nonce 走 cookie 回退。
+首次空库需引导共享账号（见 §6），否则点击报 502。
 
 ---
 
@@ -127,26 +152,43 @@ ACTIVEPIECES_JWT_SECRET=<任意>               # 改了会让旧 token 失效
 不带 `-IncludeApBridgeGateway` → 无 UI 网关、无共享账号 Job。configmap/secret 不设 bridge → admin-center 端点 404。
 
 **uat/sit（有 UI）**：
-1. **DNS**：`hermes-workflow-activepieces.<BASE_DOMAIN>` 指向 ingressgateway（按需 TLS）。
+1. **DNS**：`hermes-workflow-activepieces.<BASE_DOMAIN>`（或你的 AP 主机，IKP 实例是
+   `hermes-workflow-activepieces.<集群域>`）指向 ingressgateway（按需 TLS）。
 2. **secret**（每环境一次）：填 `ACTIVEPIECES_SHARED_PASSWORD`、`ACTIVEPIECES_ENCRYPTION_KEY`（32-hex）、
    `ACTIVEPIECES_JWT_SECRET`、AP 库密码。
-3. **部署带开关**：
+3. **configmap**：`AP_BRIDGE_URL = http(s)://<AP 主机>/__ap/bridge`（admin-center envFrom 自动注入 →
+   `bridge.public-url`，`/launch` 用它拼跳转地址；前端 config.js 也用它作菜单开关）。
+4. **部署带开关**：
    ```
    ./apply-workflow-station-all.ps1 -Environment <uat|preprod> -BaseDomain <域> ... -IncludeApBridgeGateway
    ```
    纳入 `ap-gateway.yaml` + `ap-bootstrap-job.yaml`。
-4. Job 自动把共享账号建成 AP 第一个用户（空库时）。
+5. Job 自动把共享账号建成 AP 第一个用户（空库时）。**务必确认 Job 跑成功**——没建共享账号，
+   点 AP 会 502（见 §8「Service temporarily unavailable」）。
 
-> **跨子域前提**：admin-center 必须把平台 JWT cookie 设为 `Domain=.<BASE_DOMAIN>`（configmap `JWT_COOKIE_DOMAIN`），
-> 否则 AP 子域收不到 cookie、换不到 token。
+> **方案 B：admin 域与 AP 域可以不同父域，无需 `JWT_COOKIE_DOMAIN`。**
+> 鉴权在 admin 域 `/launch` 完成（cookie 在自己域有效），AP 域只收一次性 nonce。
+> 所以 IKP 上 admin（`hermes-uat.hk.hsbc`）与 AP（`hermes-workflow-activepieces.<集群>`）分属不同父域**没问题**，
+> 也**不必**把 admin 搬到与 AP 同父域的 internal-proxy 主机下。**唯一要求**：admin-center 这两条路径在各自域可达——
+> - admin 域：`/api/v1/admin/internal/ap/launch`（走 Kong/`/api/v1/admin` 路由，带平台 cookie）
+> - AP 域：`/__ap/bridge`、`/__ap/token`（ap-gateway VirtualService rewrite 到 admin-center-service）
+>
+> **ap-gateway 不需要 ext_authz / AuthorizationPolicy**：`/__ap/token` 自己校验 nonce，桥页 HTML 无机密。
 
 ---
 
 ## 6. 共享账号引导（幂等）
 
-新环境（空库）共享账号不存在；AP「第一个 sign-up 用户 = owner（ADMIN，自动建 platform+project）」，
-有 owner 后 sign-up 变 invitation-only。脚本 `deploy/scripts/ap-bootstrap-shared-account.js`：
-sign-in 探测 → 已存在则跳过；不存在则 sign-up；未配置则跳过。
+新环境（空库）共享账号不存在。脚本 `deploy/scripts/ap-bootstrap-shared-account.js` 幂等地把它建好并**完成 onboarding**。
+
+> **⚠️ AP 0.84 CE 关键行为（实测 2026-06-30）**：sign-up **只建 `user_identity`，不自动建 platform/project**——
+> 账号停在 **ONBOARDING** 态，sign-in 返回 `projectId=null` 的 ONBOARDING token。登录桥需要 projectId，缺了 AP 会循环/卡 onboarding。
+> 所以光 sign-up **不够**，必须再调 **`POST /api/v1/platforms {name}`**（用 ONBOARDING token）完成 onboarding，
+> AP 才会建 platform + 默认 project，之后 sign-in 才返回 **USER token 带非空 projectId**。
+> **引导脚本已包含这一步**（`ACTIVEPIECES_PLATFORM_NAME` 可定制 platform 名，默认 `Hermes Automation`）。
+
+脚本流程：sign-in 探测 → 401 则 sign-up 建身份 → 若仍无 platform（ONBOARDING）则 `POST /platforms` → 复核 projectId 非空。
+幂等：已 onboard（sign-in 带 platformId）直接跳过；未配置共享账号则跳过。
 
 - **k8s**：随 `-IncludeApBridgeGateway` 部署的 Job 自动跑；或手动 `kubectl exec deploy/activepieces -- node - < deploy/scripts/ap-bootstrap-shared-account.js`（带 env）。
 - **dev**：`docker exec -e ACTIVEPIECES_SHARED_EMAIL=... -e ACTIVEPIECES_SHARED_PASSWORD=... -e AP_INTERNAL_URL=http://localhost:80 -i platform-activepieces-dev node - < deploy/scripts/ap-bootstrap-shared-account.js`
@@ -218,14 +260,21 @@ sign-in 探测 → 已存在则跳过；不存在则 sign-up；未配置则跳�
 | AP 白屏，`/api/* 302` 跳登录 | 平台 JWT 门禁加到了 `location /`，拦了 AP 自身 XHR | 门禁只加 `/__ap/bridge`+`/__ap/token`，AP 流量不门禁 |
 | 进 AP 后 `/flows ↔ /sign-in` 死循环 + WebSocket 报错 | 桥页只写了 `token`、漏 `projectId`，AP 没当前项目；WebSocket 报错只是循环导航的**症状** | token 端点返回 `{token,projectId}`，桥页 `localStorage.clear()` 后两者都写 |
 | 改 `AP_JWT_SECRET` 后又循环 | 浏览器旧 token（旧密钥签、未过期）被 AP 判无效 | 桥页每次 `localStorage.clear()` 写新 token；密钥别乱改 |
+| **点 AP 报「Service temporarily unavailable」/ `/launch` 502** | 共享账号没引导：AP sign-in 返 `401 INVALID_CREDENTIALS` → `ActivepiecesApiException` → 502 | 跑引导脚本建共享账号（§6）；确认密码与 `ACTIVEPIECES_SHARED_PASSWORD` 一致。日志看 `signInShared`/`INVALID_CREDENTIALS` |
+| **`/launch` 502 且日志「public-url is not configured」** | `AP_BRIDGE_URL` 没注入 → `bridge.public-url` 空 | configmap/compose 设 `AP_BRIDGE_URL=<AP 主机>/__ap/bridge`，重启 admin-center |
+| **`/launch` 500「No mapping / No endpoint」** | 运行的是**旧镜像**，没有方案 B 的 `/launch` | 重建镜像：Dockerfile 是 `COPY target/*.jar`，**必须先 `mvn ... package`** 出新 jar 再 `docker build`（仅 restart 容器不更新代码） |
+| 进 AP `/flows ↔ /sign-in` 循环、sign-in 返回 `projectId=null`、token 类型 `ONBOARDING` | AP 0.84 CE 的 sign-up **不自动建 platform/project**，账号卡 ONBOARDING（见 §6） | **重跑引导脚本**——新版会 `POST /api/v1/platforms` 完成 onboarding（建 platform+默认 project），之后 sign-in 带非空 projectId。旧版脚本只 sign-up、留下这个坑 |
 
 ---
 
 ## 9. 已知限制 / 待办
 
 - **flow 发布通道**：✅ **MVP 已实现并实测**（见 §7,git 为源 + ap-export.js/ap-import.js + `deploy/ap-flows/`；Git Sync 经实测 CE 不可用）。剩生产 k8s 发布 Job(方案 A 完整形态)待做。
-- **k8s 未集群验证**：`ap-gateway.yaml`、`ap-bootstrap-job.yaml`、cookie-domain、configmap/secret 均为清单，待真集群验证。
-- **会话过期无自动跳登录**：k8s 未认证直接访问 AP host 返回 401（没用 ext_authz）。正常入口（从已登录 admin 点）不受影响。
+- **方案 B（跨域 nonce 握手）已在 dev 实测通过**（2026-06-30）：admin 域 `/launch` 200 → AP 域 `#nonce=` → `/__ap/token?nonce=` 200 → 进 AP。
+  代码 `4382f303 on common_0627`。**k8s/IKP 真集群仍待验证**（DNS、secret、ap-gateway rewrite、共享账号 Job）。
+- **AP 不再依赖 `JWT_COOKIE_DOMAIN`**：admin 与 AP 可分属不同父域。若 Superset 作者网关仍走跨子域 cookie，那条单独保留。
+- **会话过期/直接访问 AP host**：无有效 nonce 时桥页换不到 token（无自动跳平台登录，没用 ext_authz）。
+  正常入口（从已登录 admin 点「Activepieces」→ `/launch` 现签 nonce）不受影响。
 - **AP 共享平台库 `public`（已定案：维持不变）**：AP 用通用表名（user/project/flag/file/folder/platform/flow/app_connection…），
   与平台 135 张前缀表（`ac_/sys_/dw_/up_/we_`）**实测不冲突**。
   - 独立 **schema** 方案**不可行**（实测）：AP 0.84 的连接两条路径都不暴露 TypeORM `schema` 选项，只能经
@@ -239,6 +288,8 @@ sign-in 探测 → 已存在则跳过；不存在则 sign-up；未配置则跳�
 ## 10. 验证状态
 
 - ✅ **AP 桥全链路已实测（dev）**：admin 入口 → 桥 → 换 token → 进 AP（共享账号 ADMIN，/flows 正常、不循环）。
+- ✅ **方案 B 跨域 nonce 握手已实测（dev，2026-06-30）**：`/launch` 200 带 `bridgeUrl` → `/__ap/token?nonce=` 200；
+  `/launch` 无 cookie 返 401、bogus nonce 返 401、`signInShared` 200。
 - ✅ 引导脚本三路径已测：幂等成功 / 未配置跳过 / 密码不符明确报错。
 - ✅ **BPMN service-task → AP 端到端已实测（dev，2026-06-26）**：部署含 AP 节点的 BPMN（部署期自动绑 `${apTaskExecutor}`）→
   起实例 → 调 aptest sync webhook（`http://activepieces:80/api/v1/webhooks/<flowId>/sync`）→ Return Response 结果按 outputMapping
