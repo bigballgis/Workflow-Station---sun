@@ -74,8 +74,4 @@ export const userApi = {
     adminCenterAxios.get(`/users/${userId}/roles`, {
       params: profileContext ? { profileContext } : undefined
     }),
-
-  /** Change password (developer-workstation auth service) */
-  changePassword: (data: { oldPassword: string; newPassword: string }): Promise<void> =>
-    workstationAuthAxios.post('/change-password', data)
 }

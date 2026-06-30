@@ -129,14 +129,6 @@ export const getCurrentUser = async (): Promise<UserInfo> => {
   return response.data;
 };
 
-/** 修改密码（须走 /api/v1/admin/auth，勿使用 /api/v1/auth，避免被网关转发到设计器服务） */
-export const changePassword = async (data: {
-  oldPassword: string;
-  newPassword: string;
-}): Promise<void> => {
-  await authRequest.post("/change-password", data);
-};
-
 /**
  * Validate token.
  */

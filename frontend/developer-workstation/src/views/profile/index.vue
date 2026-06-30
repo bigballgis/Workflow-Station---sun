@@ -52,78 +52,13 @@
         </el-descriptions>
       </div>
     </el-card>
-
-    <el-card class="password-card">
-      <template #header>
-        <div class="card-header">
-          <span>{{ t('profile.changePassword') }}</span>
-        </div>
-      </template>
-
-      <el-form
-        ref="passwordFormRef"
-        :model="passwordForm"
-        :rules="passwordRules"
-        label-width="100px"
-        label-position="left"
-      >
-        <el-form-item
-          :label="t('profile.currentPassword')"
-          prop="oldPassword"
-        >
-          <el-input 
-            v-model="passwordForm.oldPassword" 
-            type="password" 
-            show-password
-            :placeholder="t('profile.currentPasswordPlaceholder')"
-            @blur="passwordFormRef?.validateField('newPassword')"
-          />
-        </el-form-item>
-        <el-form-item
-          :label="t('profile.newPassword')"
-          prop="newPassword"
-        >
-          <el-input 
-            v-model="passwordForm.newPassword" 
-            type="password" 
-            show-password
-            :placeholder="t('profile.newPasswordPlaceholder')"
-            @input="passwordFormRef?.validateField('confirmPassword')"
-          />
-        </el-form-item>
-        <el-form-item
-          :label="t('profile.confirmPassword')"
-          prop="confirmPassword"
-        >
-          <el-input
-            v-model="passwordForm.confirmPassword"
-            type="password"
-            show-password
-            :placeholder="t('profile.confirmPasswordPlaceholder')"
-          />
-        </el-form-item>
-        <el-form-item>
-          <el-button
-            type="primary"
-            :loading="changingPassword"
-            @click="handleChangePassword"
-          >
-            {{ t('profile.changePassword') }}
-          </el-button>
-        </el-form-item>
-      </el-form>
-    </el-card>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, reactive, computed } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessage, FormInstance, FormRules } from 'element-plus'
-import { getUser, clearAuth } from '@/api/auth'
-import { redirectToUnifiedLogin } from '@/utils/sso'
-import { userApi } from '@/api/user'
-import { getChangePasswordFailureMessage } from '@/utils/changePasswordError'
+import { getUser } from '@/api/auth'
 import { languageLabelFor } from '@/utils/languageLabel'
 
 const { t, locale } = useI18n()
@@ -138,45 +73,8 @@ interface UserInfo {
 
 const loading = ref(false)
 const userInfo = ref<UserInfo | null>(null)
-const passwordFormRef = ref<FormInstance>()
-const changingPassword = ref(false)
 
 const languageLabel = computed(() => languageLabelFor(userInfo.value?.language, String(locale.value)))
-
-const passwordForm = reactive({
-  oldPassword: '',
-  newPassword: '',
-  confirmPassword: ''
-})
-
-const validateConfirmPassword = (_rule: unknown, value: string, callback: (e?: Error) => void) => {
-  if (value !== passwordForm.newPassword) {
-    callback(new Error(t('profile.passwordMismatch')))
-  } else {
-    callback()
-  }
-}
-
-const validateNewPasswordDiffers = (_rule: unknown, value: string, callback: (e?: Error) => void) => {
-  if (value && value === passwordForm.oldPassword) {
-    callback(new Error(t('profile.newPasswordSameAsOld')))
-  } else {
-    callback()
-  }
-}
-
-const passwordRules = computed<FormRules>(() => ({
-  oldPassword: [{ required: true, message: t('profile.currentPasswordPlaceholder'), trigger: 'blur' }],
-  newPassword: [
-    { required: true, message: t('profile.newPasswordPlaceholder'), trigger: 'blur' },
-    { min: 6, message: t('profile.passwordMinLength'), trigger: 'blur' },
-    { validator: validateNewPasswordDiffers, trigger: 'blur' }
-  ],
-  confirmPassword: [
-    { required: true, message: t('profile.confirmPasswordPlaceholder'), trigger: 'blur' },
-    { validator: validateConfirmPassword, trigger: 'blur' }
-  ]
-}))
 
 const loadUserInfo = async () => {
   loading.value = true
@@ -192,30 +90,6 @@ const loadUserInfo = async () => {
   }
 }
 
-const handleChangePassword = async () => {
-  if (!passwordFormRef.value) return
-
-  await passwordFormRef.value.validate(async (valid) => {
-    if (!valid) return
-
-    changingPassword.value = true
-    try {
-      await userApi.changePassword({
-        oldPassword: passwordForm.oldPassword,
-        newPassword: passwordForm.newPassword
-      })
-      ElMessage.success(t('profile.passwordChanged'))
-      passwordFormRef.value?.resetFields()
-      clearAuth()
-      redirectToUnifiedLogin('developer-workstation')
-    } catch (error: unknown) {
-      ElMessage.error(getChangePasswordFailureMessage(error, t))
-    } finally {
-      changingPassword.value = false
-    }
-  })
-}
-
 onMounted(() => {
   loadUserInfo()
 })
@@ -229,10 +103,6 @@ onMounted(() => {
 }
 
 .profile-card {
-  margin-bottom: 20px;
-}
-
-.password-card {
   margin-bottom: 20px;
 }
 
