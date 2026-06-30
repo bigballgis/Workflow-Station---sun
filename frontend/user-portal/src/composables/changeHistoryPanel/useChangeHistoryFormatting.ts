@@ -107,6 +107,14 @@ export function useChangeHistoryFormatting(
     if (raw === null || raw === undefined || raw === '') return '—'
     const s = String(raw).trim()
     if (!s) return '—'
+
+    // File upload paths: show original filename instead of internal API path
+    const fileUploadMatch = s.match(/\/api\/v1\/upload\/files\/[^?]+\?originalName=([^&]+)/)
+    if (fileUploadMatch) {
+      const decoded = decodeURIComponent(fileUploadMatch[1]!)
+      return decoded.length <= maxLen ? decoded : `${decoded.slice(0, maxLen)}…`
+    }
+
     if ((s.startsWith('{') && s.endsWith('}')) || (s.startsWith('[') && s.endsWith(']'))) {
       try {
         const parsed = JSON.parse(s) as unknown

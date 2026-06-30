@@ -614,10 +614,10 @@ public class ProcessStartComponent {
                     }
                     List<SubTableChange> changes = new ArrayList<>();
                     for (Map<String, Object> row : rows) {
-                        Object rowId = row.get("id");
+                        String rowId = ChangeHistoryComponent.resolveRowIdentifier(row);
                         changes.add(SubTableChange.builder()
                                 .changeType("ROW_ADD")
-                                .rowIdentifier(String.valueOf(rowId))
+                                .rowIdentifier(rowId)
                                 .oldValues(null)
                                 .newValues(new HashMap<>(row))
                                 .build());
