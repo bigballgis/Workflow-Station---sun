@@ -255,6 +255,37 @@ public class AdminCenterClient {
     public String getUserBusinessUnitId(String userId) {
         return getUserBusinessUnitId(userId, null);
     }
+
+    /**
+     * 业务单元 id → code（工作台 activeBusinessUnitId 仍为 id 时的运行时转换）
+     * @param businessUnitId 业务单元 id
+     * @return BU code，未找到时返回 null
+     */
+    public String getBusinessUnitCodeById(String businessUnitId) {
+        try {
+            String url = adminCenterUrl + "/api/v1/admin/task-assignment/business-units/by-id/"
+                    + businessUnitId + "/code";
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<Map<String, Object>>() {}
+            );
+
+            Map<String, Object> result = response.getBody();
+            if (result != null) {
+                Object code = result.get("code");
+                if (code != null && !code.toString().isEmpty()) {
+                    return code.toString();
+                }
+            }
+            return null;
+
+        } catch (Exception e) {
+            log.error("Failed to get business unit code for id {}: {}", businessUnitId, e.getMessage());
+            return null;
+        }
+    }
     
     /**
      * 获取业务单元的父业务单元ID
