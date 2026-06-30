@@ -30,6 +30,8 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+
 /**
  * Change History component
  * Records field-level change history with a "best-effort" strategy; failures do not block the main flow.
@@ -78,6 +80,18 @@ public class ChangeHistoryComponent {
     );
 
     /**
+     * Per-thread dedup set to prevent duplicate sub-table change records when the same data is
+     * submitted under multiple key aliases (binding ID, table name, normalized name) in
+     * {@code __subTables__}. Keys follow the pattern
+     * {@code processInstanceId|subTableName|changeType|rowIdentifier}.
+     * Evicted when the set grows beyond 500 entries.
+     */
+    private final ThreadLocal<Set<String>> dedupSeenKeys = ThreadLocal.withInitial(HashSet::new);
+
+    /** Fallback row-id field names when the canonical {@code id} column is absent. */
+    private static final String[] ROW_ID_FALLBACK_FIELDS = {"id_idw", "rowId", "_rowKey", "rowKey"};
+
+    /**
      * Record field changes.
      * Compare oldValues and newValues, and create a ChangeHistory record for each changed field.
      */
@@ -103,8 +117,8 @@ public class ChangeHistoryComponent {
                         .userId(context.getUserId())
                         .timestamp(now)
                         .fieldName(fieldName)
-                        .oldValue(oldValue != null ? oldValue.toString() : null)
-                        .newValue(newValue != null ? newValue.toString() : null)
+                        .oldValue(toDisplayString(oldValue))
+                        .newValue(toDisplayString(newValue))
                         .changeType(ChangeType.FIELD_UPDATE)
                         .build();
                 records.add(record);
@@ -135,15 +149,35 @@ public class ChangeHistoryComponent {
 
     /**
      * Record sub-table changes.
+     * <p>
+     * Normalizes sub-table names: skips pure-numeric binding-ID keys and lowercases to merge case variants
+     * (e.g. "People" and "people" are treated as the same table). A per-thread dedup set prevents the same
+     * row change from being recorded multiple times when the same sub-table data is submitted under several
+     * key aliases in {@code __subTables__}.
      */
     public void recordSubTableChanges(ChangeHistoryContext context,
                                       String subTableName,
                                       List<SubTableChange> changes) {
+        // Normalize: skip pure-numeric binding-ID keys; lowercase to merge "People"/"people"
+        String normalizedName = normalizeSubTableNameForHistory(subTableName);
+        if (normalizedName == null) {
+            return;
+        }
+
         Instant now = Instant.now();
         List<ChangeHistory> records = new ArrayList<>();
+        Set<String> seen = dedupSeenKeys.get();
 
         for (SubTableChange change : changes) {
             ChangeType changeType = mapSubTableChangeType(change.getChangeType());
+
+            // Dedup: same (processInstanceId + normalized name + changeType + rowId) → skip
+            String dedupKey = context.getProcessInstanceId() + "|" + normalizedName + "|"
+                    + change.getChangeType() + "|" + change.getRowIdentifier();
+            if (!seen.add(dedupKey)) {
+                log.debug("Skipping duplicate sub-table change record: {}", dedupKey);
+                continue;
+            }
 
             ChangeHistory record = ChangeHistory.builder()
                     .processInstanceId(context.getProcessInstanceId())
@@ -151,14 +185,19 @@ public class ChangeHistoryComponent {
                     .stageId(context.getStageId())
                     .userId(context.getUserId())
                     .timestamp(now)
-                    .fieldName(subTableName)
-                    .oldValue(change.getOldValues() != null ? change.getOldValues().toString() : null)
-                    .newValue(change.getNewValues() != null ? change.getNewValues().toString() : null)
+                    .fieldName(normalizedName)
+                    .oldValue(toDisplayString(change.getOldValues()))
+                    .newValue(toDisplayString(change.getNewValues()))
                     .changeType(changeType)
-                    .subTableName(subTableName)
+                    .subTableName(normalizedName)
                     .rowIdentifier(change.getRowIdentifier())
                     .build();
             records.add(record);
+        }
+
+        // Safety: evict dedup set if it grows too large (unlikely for a single request)
+        if (seen.size() > 500) {
+            seen.clear();
         }
 
         if (records.isEmpty()) {
@@ -395,5 +434,81 @@ public class ChangeHistoryComponent {
                 }
             }
         }
+    }
+
+    // ==================== display helpers ====================
+
+    /**
+     * Converts a value to a user-friendly display string for change history.
+     * Maps and Lists are serialized as JSON; scalars use {@code toString()}.
+     */
+    private String toDisplayString(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof String s) {
+            return s;
+        }
+        if (value instanceof Number || value instanceof Boolean) {
+            return value.toString();
+        }
+        // Maps, Lists, and other complex objects → compact JSON
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (JsonProcessingException e) {
+            return value.toString();
+        }
+    }
+
+    /**
+     * Normalizes a sub-table name from {@code __subTables__} for change history recording.
+     * Returns {@code null} when the key should be skipped (pure-numeric binding IDs).
+     * Otherwise returns the trimmed, lowercased name so that "People" and "people" merge.
+     */
+    static String normalizeSubTableNameForHistory(String rawName) {
+        if (rawName == null || rawName.isBlank()) {
+            return null;
+        }
+        String trimmed = rawName.trim();
+        // Skip pure-numeric keys — these are internal binding IDs, not user-visible table names
+        if (trimmed.matches("\\d+")) {
+            return null;
+        }
+        return trimmed.toLowerCase();
+    }
+
+    /**
+     * Resolves a human-readable row identifier from a sub-table row map.
+     * Tries {@code id}, then common fallback fields ({@code id_idw}, {@code rowId}, …),
+     * falling back to the first non-internal key–value pair.
+     *
+     * @param row the sub-table row map (never null)
+     * @return a displayable row identifier, or {@code null}
+     */
+    public static String resolveRowIdentifier(Map<String, Object> row) {
+        // 1. Canonical "id"
+        Object id = row.get("id");
+        if (id != null) {
+            return String.valueOf(id);
+        }
+        // 2. Known fallback fields
+        for (String field : ROW_ID_FALLBACK_FIELDS) {
+            Object v = row.get(field);
+            if (v != null) {
+                return String.valueOf(v);
+            }
+        }
+        // 3. First non-internal key-value pair as a last resort
+        for (Map.Entry<String, Object> e : row.entrySet()) {
+            String k = e.getKey();
+            if (k == null || k.startsWith("_") || isInternalField(k)) {
+                continue;
+            }
+            Object v = e.getValue();
+            if (v != null) {
+                return String.valueOf(v);
+            }
+        }
+        return null;
     }
 }

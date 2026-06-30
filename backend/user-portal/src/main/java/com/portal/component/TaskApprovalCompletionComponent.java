@@ -346,17 +346,17 @@ public class TaskApprovalCompletionComponent {
             List<Map<String, Object>> newRows) {
         List<SubTableChange> changes = new ArrayList<>();
 
-        // Build row lookup maps by row id
+        // Build row lookup maps by row id (fallback: id_idw, rowId, _rowKey, rowKey, first non-internal value)
         Map<Object, Map<String, Object>> oldRowMap = new HashMap<>();
         for (Map<String, Object> row : oldRows) {
-            Object rowId = row.get("id");
+            Object rowId = ChangeHistoryComponent.resolveRowIdentifier(row);
             if (rowId != null) {
                 oldRowMap.put(rowId, row);
             }
         }
         Map<Object, Map<String, Object>> newRowMap = new HashMap<>();
         for (Map<String, Object> row : newRows) {
-            Object rowId = row.get("id");
+            Object rowId = ChangeHistoryComponent.resolveRowIdentifier(row);
             if (rowId != null) {
                 newRowMap.put(rowId, row);
             }

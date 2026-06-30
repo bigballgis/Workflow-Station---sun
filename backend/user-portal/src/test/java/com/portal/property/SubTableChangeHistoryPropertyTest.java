@@ -89,9 +89,9 @@ public class SubTableChangeHistoryPropertyTest {
             assertThat(saved).hasSize(changeSet.changes.size());
 
             for (ChangeHistory record : saved) {
-                // subTableName must be non-null
+                // subTableName must be non-null (normalized to lowercase; pure-numeric keys are skipped)
                 assertThat(record.getSubTableName()).isNotNull();
-                assertThat(record.getSubTableName()).isEqualTo(changeSet.subTableName);
+                assertThat(record.getSubTableName()).isEqualTo(changeSet.subTableName.toLowerCase());
 
                 // rowIdentifier must be non-null
                 assertThat(record.getRowIdentifier()).isNotNull();
