@@ -1555,10 +1555,12 @@ export default {
       YAHOO: 'Yahoo 邮箱',
       QQ: 'QQ 邮箱',
       NETEASE_163: '163 邮箱',
-      SMTP: 'SMTP（旧版）'
+      SMTP: '自定义 SMTP'
     },
     namePlaceholder: '例如：公司邮箱',
     host: 'SMTP 主机',
+    hostRequired: '请填写 SMTP 主机',
+    smtpHostHint: '按邮箱类型自动填入，可修改（如个人 Outlook 用 smtp-mail.outlook.com、公司中继服务器）。',
     port: '端口',
     username: '用户名',
     password: '密码',

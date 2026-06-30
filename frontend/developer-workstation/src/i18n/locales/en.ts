@@ -1560,10 +1560,12 @@ export default {
       YAHOO: 'Yahoo Mail',
       QQ: 'QQ Mail',
       NETEASE_163: '163 Mail',
-      SMTP: 'SMTP (legacy)'
+      SMTP: 'Custom SMTP'
     },
     namePlaceholder: 'e.g. Company Mail',
     host: 'SMTP Host',
+    hostRequired: 'SMTP host is required',
+    smtpHostHint: 'Prefilled from the provider; edit for personal Outlook (smtp-mail.outlook.com) or a corporate relay.',
     port: 'Port',
     username: 'Username',
     password: 'Password',

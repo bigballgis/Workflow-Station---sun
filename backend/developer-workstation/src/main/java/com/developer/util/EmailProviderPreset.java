@@ -17,7 +17,7 @@ public record EmailProviderPreset(String host, int port, boolean useTls) {
             case YAHOO -> new EmailProviderPreset("smtp.mail.yahoo.com", 587, true);
             case QQ -> new EmailProviderPreset("smtp.qq.com", 587, true);
             case NETEASE_163 -> new EmailProviderPreset("smtp.163.com", 465, true);
-            case SMTP -> new EmailProviderPreset("smtp.gmail.com", 587, true);
+            case SMTP -> new EmailProviderPreset("", 587, true);
         };
     }
 }

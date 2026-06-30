@@ -12,7 +12,7 @@ const PRESETS: Record<EmailProviderType, EmailProviderPreset> = {
   YAHOO: { host: 'smtp.mail.yahoo.com', port: 587, useTls: true },
   QQ: { host: 'smtp.qq.com', port: 587, useTls: true },
   NETEASE_163: { host: 'smtp.163.com', port: 465, useTls: true },
-  SMTP: { host: 'smtp.gmail.com', port: 587, useTls: true }
+  SMTP: { host: '', port: 587, useTls: true }
 }
 
 export const EMAIL_PROVIDER_OPTIONS: EmailProviderType[] = [
@@ -20,7 +20,8 @@ export const EMAIL_PROVIDER_OPTIONS: EmailProviderType[] = [
   'OUTLOOK',
   'YAHOO',
   'QQ',
-  'NETEASE_163'
+  'NETEASE_163',
+  'SMTP'
 ]
 
 export function getEmailProviderPreset(type: string | undefined): EmailProviderPreset {

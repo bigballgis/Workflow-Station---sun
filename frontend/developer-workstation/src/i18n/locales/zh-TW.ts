@@ -1555,10 +1555,12 @@ export default {
       YAHOO: 'Yahoo 信箱',
       QQ: 'QQ 信箱',
       NETEASE_163: '163 信箱',
-      SMTP: 'SMTP（舊版）'
+      SMTP: '自訂 SMTP'
     },
     namePlaceholder: '例如：公司信箱',
     host: 'SMTP 主機',
+    hostRequired: '請填寫 SMTP 主機',
+    smtpHostHint: '依信箱類型自動填入，可修改（如個人 Outlook 用 smtp-mail.outlook.com、公司中繼伺服器）。',
     port: '連接埠',
     username: '使用者名稱',
     password: '密碼',

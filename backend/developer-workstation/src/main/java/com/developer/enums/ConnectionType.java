@@ -9,6 +9,6 @@ public enum ConnectionType {
     YAHOO,
     QQ,
     NETEASE_163,
-    /** @deprecated legacy import; treated as GMAIL preset */
+    /** Custom SMTP — host/port/TLS come from {@link EmailConnectionRequest}. */
     SMTP
 }

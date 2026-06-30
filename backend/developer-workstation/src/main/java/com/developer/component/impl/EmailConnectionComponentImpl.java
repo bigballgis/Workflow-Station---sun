@@ -11,16 +11,20 @@ import com.developer.repository.EmailConnectionRepository;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.util.EmailProviderPreset;
 import com.developer.util.SmtpMailSender;
+import com.platform.common.security.SsrfProtection;
 import com.platform.security.encryption.EncryptionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Component
@@ -31,6 +35,10 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
     private final EmailConnectionRepository emailConnectionRepository;
     private final FunctionUnitRepository functionUnitRepository;
     private final EncryptionService encryptionService;
+
+    /** Corporate SMTP relays / internal hosts permitted (same config as webhook SSRF allowlist). */
+    @Value("${ssrf.allowed-hosts:localhost,n8n}")
+    private List<String> ssrfAllowedHosts;
 
     @Override
     @Transactional(readOnly = true)
@@ -61,7 +69,7 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
             throw new DeveloperBusinessException("VALIDATION_PASSWORD_REQUIRED", "创建连接时必须提供密码");
         }
 
-        EmailProviderPreset preset = EmailProviderPreset.forType(request.getConnectionType());
+        ResolvedSmtpEndpoint endpoint = resolveSmtpEndpoint(request, null);
         String emailAddress = request.getName().trim();
         String username = StringUtils.hasText(request.getUsername()) ? request.getUsername().trim() : emailAddress;
 
@@ -70,13 +78,13 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
                 .functionUnit(functionUnit)
                 .name(emailAddress)
                 .connectionType(request.getConnectionType())
-                .host(preset.host())
-                .port(preset.port())
+                .host(endpoint.host())
+                .port(endpoint.port())
                 .username(username)
                 .passwordEncrypted(encryptionService.encrypt(request.getPassword()))
                 .fromEmail(emailAddress)
                 .fromName(request.getFromName())
-                .useTls(preset.useTls())
+                .useTls(endpoint.useTls())
                 .enabled(request.getEnabled() != null ? request.getEnabled() : true)
                 .direction(request.getDirection() != null
                         ? request.getDirection() : com.developer.enums.EmailConnectionDirection.OUTBOUND)
@@ -96,18 +104,18 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
             throw new DeveloperBusinessException("CONFLICT_CONNECTION_NAME", "连接名称已存在: " + request.getName());
         }
 
-        EmailProviderPreset preset = EmailProviderPreset.forType(request.getConnectionType());
+        ResolvedSmtpEndpoint endpoint = resolveSmtpEndpoint(request, connection);
         String emailAddress = request.getName().trim();
         String username = StringUtils.hasText(request.getUsername()) ? request.getUsername().trim() : emailAddress;
 
         connection.setName(emailAddress);
         connection.setConnectionType(request.getConnectionType());
-        connection.setHost(preset.host());
-        connection.setPort(preset.port());
+        connection.setHost(endpoint.host());
+        connection.setPort(endpoint.port());
         connection.setUsername(username);
         connection.setFromEmail(emailAddress);
         connection.setFromName(request.getFromName());
-        connection.setUseTls(preset.useTls());
+        connection.setUseTls(endpoint.useTls());
         if (request.getEnabled() != null) {
             connection.setEnabled(request.getEnabled());
         }
@@ -138,6 +146,7 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
 
         Map<String, Object> result = new HashMap<>();
         try {
+            validateSmtpHost(connection.getHost());
             SmtpMailSender.SmtpConfig config = toSmtpConfig(connection);
             SmtpMailSender.send(config, testRecipient, null,
                     "Workflow Platform - Connection Test",
@@ -150,6 +159,58 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
             result.put("message", "测试失败: " + e.getMessage());
         }
         return result;
+    }
+
+    private void validateSmtpHost(String host) {
+        try {
+            SsrfProtection.validateHostname(host, allowedSmtpHosts());
+        } catch (SsrfProtection.SsrfException ex) {
+            throw new DeveloperBusinessException("SSRF_SMTP_HOST_BLOCKED", ex.getMessage());
+        }
+    }
+
+    private Set<String> allowedSmtpHosts() {
+        if (ssrfAllowedHosts == null || ssrfAllowedHosts.isEmpty()) {
+            return Set.of();
+        }
+        return ssrfAllowedHosts.stream()
+                .filter(h -> h != null && !h.isBlank())
+                .collect(java.util.stream.Collectors.toCollection(HashSet::new));
+    }
+
+    private ResolvedSmtpEndpoint resolveSmtpEndpoint(EmailConnectionRequest request, EmailConnection existing) {
+        EmailProviderPreset preset = EmailProviderPreset.forType(request.getConnectionType());
+
+        String host = StringUtils.hasText(request.getHost())
+                ? request.getHost().trim()
+                : (existing != null ? existing.getHost() : null);
+        if (!StringUtils.hasText(host)) {
+            host = preset.host();
+        }
+        if (!StringUtils.hasText(host)) {
+            throw new DeveloperBusinessException("VALIDATION_SMTP_HOST_REQUIRED", "SMTP 主机不能为空");
+        }
+
+        int port;
+        if (request.getPort() != null && request.getPort() > 0) {
+            port = request.getPort();
+        } else if (existing != null && existing.getPort() != null && existing.getPort() > 0) {
+            port = existing.getPort();
+        } else {
+            port = preset.port();
+        }
+
+        boolean useTls;
+        if (request.getUseTls() != null) {
+            useTls = Boolean.TRUE.equals(request.getUseTls());
+        } else if (existing != null && existing.getUseTls() != null) {
+            useTls = existing.getUseTls();
+        } else {
+            useTls = preset.useTls();
+        }
+
+        validateSmtpHost(host);
+        return new ResolvedSmtpEndpoint(host, port, useTls);
     }
 
     private void ensureFunctionUnitExists(Long functionUnitId) {
@@ -166,6 +227,8 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
         }
         return connection;
     }
+
+    private record ResolvedSmtpEndpoint(String host, int port, boolean useTls) {}
 
     private SmtpMailSender.SmtpConfig toSmtpConfig(EmailConnection connection) {
         String password = null;

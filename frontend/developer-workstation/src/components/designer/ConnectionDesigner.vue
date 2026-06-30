@@ -57,6 +57,20 @@
             />
           </el-select>
         </el-form-item>
+        <el-form-item :label="t('connection.host')" required>
+          <el-input
+            v-model="form.host"
+            :placeholder="smtpHostPlaceholder"
+            autocomplete="off"
+          />
+          <div class="form-tip">{{ t('connection.smtpHostHint') }}</div>
+        </el-form-item>
+        <el-form-item :label="t('connection.port')" required>
+          <el-input-number v-model="form.port" :min="1" :max="65535" controls-position="right" style="width: 100%" />
+        </el-form-item>
+        <el-form-item :label="t('connection.useTls')">
+          <el-switch v-model="form.useTls" />
+        </el-form-item>
         <el-form-item :label="t('connection.password')" :required="!editingId">
           <el-input
             v-model="form.password"
@@ -103,7 +117,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
@@ -144,6 +158,11 @@ const defaultForm = (): EmailConnectionRequest => ({
 
 const form = reactive<EmailConnectionRequest>(defaultForm())
 
+const smtpHostPlaceholder = computed(
+  () => getEmailProviderPreset(form.connectionType).host || 'smtp.example.com'
+)
+
+/** Switching provider resets SMTP fields to that provider's defaults (user may edit before save). */
 function applyProviderPreset() {
   const preset = getEmailProviderPreset(form.connectionType)
   form.host = preset.host
@@ -152,17 +171,16 @@ function applyProviderPreset() {
 }
 
 function buildPayload(): EmailConnectionRequest {
-  applyProviderPreset()
   const emailAddress = form.name.trim()
   return {
     name: emailAddress,
     connectionType: form.connectionType as EmailProviderType,
-    host: form.host,
+    host: form.host?.trim(),
     port: form.port,
+    useTls: form.useTls,
     username: emailAddress,
     password: form.password,
     fromName: form.fromName?.trim() || undefined,
-    useTls: form.useTls,
     enabled: form.enabled,
     direction: form.direction || 'OUTBOUND',
     mailboxAddress: form.mailboxAddress?.trim() || undefined
@@ -215,6 +233,10 @@ function openTestDialog(row: EmailConnection) {
 async function handleSave() {
   if (!form.name.trim()) {
     ElMessage.warning(t('connection.emailAddressRequired'))
+    return
+  }
+  if (!form.host?.trim()) {
+    ElMessage.warning(t('connection.hostRequired'))
     return
   }
   if (!editingId.value && !form.password) {
