@@ -278,6 +278,10 @@ activepieces:
   internal-url: ${ACTIVEPIECES_INTERNAL_URL:http://localhost:8086}
   bridge:
     enabled: ${ACTIVEPIECES_BRIDGE_ENABLED:false}
+    # 桥页公网地址（浏览器侧）。/launch 在其后附 #nonce=<票> 整页跳转，AP 域无需平台 JWT cookie。
+    # k8s：AP 网关主机，例如 http://hermes-workflow-activepieces.<域>/__ap/bridge；留空 → /launch 返回 502。
+    public-url: ${AP_BRIDGE_URL:}
+    nonce-ttl-seconds: ${ACTIVEPIECES_BRIDGE_NONCE_TTL:60}
   shared-account:
     email: ${ACTIVEPIECES_SHARED_EMAIL:}
     password: ${ACTIVEPIECES_SHARED_PASSWORD:}

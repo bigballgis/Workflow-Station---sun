@@ -11,6 +11,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { clearAuth, exchangeSsoCode, saveTokens, saveUser, USER_ID_KEY, USERNAME_KEY } from '@/api/auth'
 import { consumeSsoReturnPath, redirectToUnifiedLogin } from '@/utils/sso'
 import { canAccessRoute } from '@/utils/permission'
+import { launchActivepieces } from '@/api/ap'
 import { ElMessage } from 'element-plus'
 
 const route = useRoute()
@@ -28,19 +29,10 @@ function isAdminAccessDenied(error: unknown) {
 // with state=superset-author; after the cookie is set we jump back there.
 // Values are a HARDCODED allowlist (never derived from untrusted input) so this
 // cannot be abused as an open redirect.
-// AP login bridge URL from RUNTIME config (per-environment; empty in prod -> no return).
-// Mirrors AdminLayout: window.__APP_CONFIG__, falling back to the dev default under vite dev.
-function apBridgeReturn(): string {
-  const rt = window.__APP_CONFIG__?.AP_BRIDGE_URL
-  if (rt && !rt.includes('${')) return rt
-  return import.meta.env.DEV ? 'http://localhost:8085/__ap/bridge' : ''
-}
-
+// (AP uses a dedicated state=ap-bridge branch below — it needs an async server-side
+//  mint, not a static URL.)
 const SSO_EXTERNAL_RETURNS: Record<string, string> = {
   'superset-author': import.meta.env.VITE_SUPERSET_AUTHOR_URL || 'http://localhost:8087/',
-  // Activepieces gateway bounces unauthenticated users to login with state=ap-bridge;
-  // after the cookie is set, jump back to the AP login bridge.
-  'ap-bridge': apBridgeReturn(),
 }
 
 onMounted(async () => {
@@ -70,12 +62,28 @@ onMounted(async () => {
   localStorage.setItem(USER_ID_KEY, resp.user.userId)
   localStorage.setItem(USERNAME_KEY, resp.user.username || resp.user.displayName || resp.user.userId)
 
+  const state = typeof route.query.state === 'string' ? route.query.state : undefined
+
+  // AP login bridge: the platform cookie is now set on THIS (admin) origin. Mint the
+  // cross-domain launch URL here (server-side /launch), then jump to the AP domain
+  // carrying the one-time nonce — the AP domain needs no platform cookie. Cannot reuse
+  // a static URL: without a freshly minted nonce the AP bridge has nothing to exchange.
+  if (state === 'ap-bridge') {
+    try {
+      const bridgeUrl = await launchActivepieces()
+      if (bridgeUrl) {
+        window.location.href = bridgeUrl
+        return
+      }
+    } catch {
+      // 错误提示已由 request 拦截器统一弹出；落空则继续走 admin dashboard。
+    }
+  }
+
   // If this login was initiated by an external gate (e.g. Superset author UI),
-  // the cookie is now set on localhost — jump back to that origin (skip the admin
+  // the cookie is now set on this origin — jump back to that origin (skip the admin
   // dashboard/permission check; such a user may not have admin access).
-  const externalReturn = typeof route.query.state === 'string'
-    ? SSO_EXTERNAL_RETURNS[route.query.state]
-    : undefined
+  const externalReturn = state ? SSO_EXTERNAL_RETURNS[state] : undefined
   if (externalReturn) {
     window.location.href = externalReturn
     return

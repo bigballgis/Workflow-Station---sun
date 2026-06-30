@@ -3,14 +3,16 @@
 # this host; the shared-account login bridge mints an AP token into localStorage.
 #
 # Routing on hermes-workflow-activepieces.<BASE_DOMAIN>:
-#   /__ap/bridge  -> admin-center  (serves the bridge HTML; self-gates on the platform JWT)
-#   /__ap/token   -> admin-center  (mints the AP token via the shared account; self-gates)
+#   /__ap/bridge  -> admin-center  (serves the bridge HTML; ungated — auth carried by nonce)
+#   /__ap/token   -> admin-center  (resolves the AP session from a one-time ?nonce=)
 #   /             -> activepieces  (the AP app/API; AP self-protects with its own token)
 #
-# No Istio ext_authz/AuthorizationPolicy is needed (unlike the Superset author gateway):
-# the admin-center bridge/token endpoints already validate the platform JWT and return 401
-# when unauthenticated. The platform JWT reaches this sub-domain because admin-center sets
-# the cookie with Domain=.<BASE_DOMAIN> (JWT_COOKIE_DOMAIN, non-prod configmap).
+# Cross-domain SSO handshake (方案 B): this AP host needs NO platform JWT cookie. The platform
+# identity is validated on the ADMIN origin by admin-center's /launch (cookie valid there),
+# which mints the AP session and a one-time nonce; the browser arrives here with #nonce=<票>
+# in the fragment and the bridge exchanges it at /__ap/token. So admin and AP may live on
+# DIFFERENT parent domains — no JWT_COOKIE_DOMAIN widening required. No Istio ext_authz needed:
+# /__ap/token rejects an invalid/expired/used nonce (401); the bridge HTML carries no secret.
 #
 # EXCLUDED from the default deploy set (see apply-workflow-station-istio-generated.ps1);
 # deploy to non-prod with -IncludeApBridgeGateway. PROD is runtime-only (webhooks via

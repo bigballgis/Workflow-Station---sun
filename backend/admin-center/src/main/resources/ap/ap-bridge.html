@@ -1,10 +1,15 @@
 <!DOCTYPE html>
 <!--
   Activepieces 共享账号登录桥（社区版 + 网关共享账号方案）。
-  由 admin-center 提供，经 AP 网关在 /__ap/bridge 暴露（dev :8085 / 非生产 k8s），受平台 JWT 门禁保护。
+  由 admin-center 提供，经 AP 网关在 /__ap/bridge 暴露（dev :8085 / 非生产 k8s）。
   浏览器看到的是网关 origin，故下方相对路径 /__ap/token、/ 都解析到网关。
   作用：取共享账号 AP token → 写 localStorage['token'] → 跳网关根进入 AP。
   AP token 存在 localStorage（非 cookie），故必须用此客户端桥而非服务端 cookie 注入。
+
+  鉴权两路（方案 B 跨域 SSO 握手）：
+  - 跨域：URL fragment 带 #nonce=<票>（由 admin 域 /launch 签发）→ /__ap/token?nonce= 单次兑换，
+    AP 域无需平台 JWT cookie，故 admin 与 AP 分属不同父域也可用。
+  - 同源回退（dev）：无 nonce 时带 cookie 调 /__ap/token（与历史行为一致）。
 -->
 <html lang="zh">
 <head>
@@ -56,9 +61,36 @@
       msg.innerHTML = text + '<br><button onclick="location.reload()">重试</button>';
     }
 
-    fetch(TOKEN_ENDPOINT, { credentials: 'include', headers: { 'Accept': 'application/json' } })
+    // 从 URL fragment 取一次性 nonce（admin 域 /launch 签发）。fragment 不发往服务端、不进访问日志。
+    function readNonce() {
+      var h = window.location.hash || '';
+      if (h.charAt(0) === '#') { h = h.substring(1); }
+      var parts = h.split('&');
+      for (var i = 0; i < parts.length; i++) {
+        var kv = parts[i].split('=');
+        if (kv[0] === 'nonce' && kv[1]) { return decodeURIComponent(kv[1]); }
+      }
+      return '';
+    }
+
+    var nonce = readNonce();
+    // 立即从地址栏抹掉 nonce，避免留在浏览器历史里。
+    if (nonce) {
+      try { history.replaceState(null, '', window.location.pathname + window.location.search); } catch (e) {}
+    }
+
+    // 跨域：?nonce= 单次兑换，无需 cookie；同源回退（dev）：无 nonce 时带 cookie。
+    var url = nonce ? (TOKEN_ENDPOINT + '?nonce=' + encodeURIComponent(nonce)) : TOKEN_ENDPOINT;
+    var opts = { headers: { 'Accept': 'application/json' } };
+    if (!nonce) { opts.credentials = 'include'; }
+
+    fetch(url, opts)
       .then(function (r) {
-        if (r.status === 401) { location.replace(TOKEN_ENDPOINT); return null; } // 网关会 302 到平台登录
+        // 同源回退下 401 = 未登录，让网关 302 到平台登录；nonce 路径 401 = 票失效，提示重试。
+        if (r.status === 401) {
+          if (!nonce) { location.replace(TOKEN_ENDPOINT); return null; }
+          throw new Error('登录票已失效，请重试');
+        }
         if (!r.ok) { throw new Error('HTTP ' + r.status); }
         return r.json();
       })

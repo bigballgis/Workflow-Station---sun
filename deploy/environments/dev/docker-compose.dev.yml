@@ -290,6 +290,9 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
       SPRING_REDIS_HOST: redis
       SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD}
+      # 与 user-portal / developer-workstation 一致指向网内 broker；缺省回退 localhost:9092
+      # 在容器内无法解析 → "No resolvable bootstrap urls" 启动失败。
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       WORKFLOW_ENGINE_URL: http://workflow-engine:8080
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRATION: ${JWT_EXPIRATION}
@@ -323,6 +326,9 @@ services:
       ACTIVEPIECES_BRIDGE_ENABLED: ${ACTIVEPIECES_BRIDGE_ENABLED:-true}
       ACTIVEPIECES_SHARED_EMAIL: ${ACTIVEPIECES_SHARED_EMAIL}
       ACTIVEPIECES_SHARED_PASSWORD: ${ACTIVEPIECES_SHARED_PASSWORD}
+      # 桥页公网地址（浏览器侧）。/launch 在其后附 #nonce=<票> 整页跳转（方案 B 跨域 SSO 握手）。
+      # dev 同源 :8085；k8s 经 configmap AP_BRIDGE_URL 注入 AP 网关主机。
+      AP_BRIDGE_URL: ${ACTIVEPIECES_BRIDGE_PUBLIC_URL:-http://localhost:8085/__ap/bridge}
       # Admin UI「重置密码」后的明文密码（仅 dev 默认 password；生产务必在 .env 中改为强密码）
       USER_RESET_PASSWORD: ${USER_RESET_PASSWORD:-password}
       # AgentNdjsonLog：与下方 volumes 的 /app/logs 对齐，宿主机见 deploy/environments/dev/logs/debug-864cd4.log

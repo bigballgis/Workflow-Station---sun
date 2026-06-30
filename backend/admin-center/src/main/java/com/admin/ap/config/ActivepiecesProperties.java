@@ -29,6 +29,19 @@ public class ActivepiecesProperties {
     @Data
     public static class Bridge {
         private boolean enabled = false;
+
+        /**
+         * AP 网关的桥页公网地址（浏览器侧），例如
+         * {@code http://hermes-workflow-activepieces.<域>/__ap/bridge}（dev：{@code http://localhost:8085/__ap/bridge}）。
+         *
+         * <p>跨域 SSO 握手（方案 B）：admin 域的 {@code /launch} 在此地址后附 {@code #nonce=<一次性票>}，
+         * 浏览器整页跳到 AP 域的桥页；桥页凭 nonce 换 AP token，故 AP 域无需平台 JWT cookie。
+         * 留空表示未配置 → {@code /launch} 返回 502。
+         */
+        private String publicUrl = "";
+
+        /** 跨域握手一次性 nonce 的有效期（秒）。短时、单次消费。 */
+        private int nonceTtlSeconds = 60;
     }
 
     /**

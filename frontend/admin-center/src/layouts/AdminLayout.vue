@@ -191,6 +191,7 @@ import {
 } from '@element-plus/icons-vue'
 import UserProfileDropdown from '@/components/UserProfileDropdown.vue'
 import { hasPermission, PERMISSIONS } from '@/utils/permission'
+import { launchActivepieces } from '@/api/ap'
 
 const route = useRoute()
 const { t } = useI18n()
@@ -198,26 +199,33 @@ const { t } = useI18n()
 const isCollapse = ref(false)
 const activeMenu = computed(() => route.path)
 
-// Activepieces launcher (non-prod only). Opens the shared-account login bridge on the
-// AP gateway in a new tab. The URL comes from RUNTIME config (window.__APP_CONFIG__,
-// injected per-environment at container start) — the frontend image is built once and
-// promoted to uat/sit/prod, so this can't be a build-time value. Non-prod sets it ->
-// the entry shows; prod leaves it empty -> hidden (AP is runtime-only there). Empty or
-// an un-substituted "${...}" placeholder (e.g. `vite dev`) falls back to the dev default.
+// Activepieces launcher (non-prod only). The menu visibility is gated on RUNTIME config
+// (window.__APP_CONFIG__.AP_BRIDGE_URL, injected per-environment at container start) — the
+// frontend image is built once and promoted to uat/sit/prod, so this can't be a build-time
+// value. Non-prod sets it -> the entry shows; prod leaves it empty -> hidden (AP is
+// runtime-only there). Empty or an un-substituted "${...}" placeholder falls back to the
+// dev default. Here the value is used ONLY as the on/off flag — the real bridge URL is
+// minted server-side by /launch (cross-domain SSO handshake), not navigated to directly.
 const apBridgeUrl = computed(() => {
   const rt = window.__APP_CONFIG__?.AP_BRIDGE_URL
   if (rt && !rt.includes('${')) return rt
   return import.meta.env.DEV ? 'http://localhost:8085/__ap/bridge' : ''
 })
 
-const openActivepieces = () => {
+const openActivepieces = async () => {
   if (!apBridgeUrl.value) return
-  // Navigate THIS tab to the bridge — identical semantics to the user typing the URL
-  // (the verified-working path). A new tab opened via window.open/anchor can land in a
-  // separate storage partition where the bridge's localStorage['token'] write doesn't
-  // reach the AP app, leaving AP on its own login page. Same-tab avoids that entirely;
-  // the user returns to admin with the browser back button.
-  window.location.assign(apBridgeUrl.value)
+  // Cross-domain SSO handshake (方案 B): ask the admin-domain /launch endpoint (where the
+  // platform JWT cookie is valid) to sign into AP with the shared account and mint a
+  // one-time nonce, returning the AP bridge URL carrying it. Then navigate THIS tab there.
+  // The AP domain needs no platform cookie, so admin and AP may live on different parent
+  // domains. Same-tab navigation (not a new tab) keeps the bridge's localStorage['token']
+  // write in the same storage partition as the AP app; the user returns via browser back.
+  try {
+    const bridgeUrl = await launchActivepieces()
+    if (bridgeUrl) window.location.assign(bridgeUrl)
+  } catch {
+    // 错误提示已由 request 响应拦截器统一弹出（401 走刷新/登录，502/其它弹 toast）。
+  }
 }
 
 // Permission checks
