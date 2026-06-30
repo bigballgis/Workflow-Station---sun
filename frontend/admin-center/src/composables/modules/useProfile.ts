@@ -1,16 +1,11 @@
 /**
  * 用户 Profile 业务逻辑 composable
  */
-import { ref, reactive, computed } from 'vue'
+import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { AppErrorCode } from '@/types/errors'
-import { errorTranslator } from '@/utils/errorTranslator'
 import { logger } from '@/utils/logger'
-import { notifyError, notifySuccess } from '@/utils/notify'
-import type { FormInstance, FormRules } from 'element-plus'
-import { changePassword, clearAuth, getCurrentUser, getUser, saveUser, USER_KEY, USERNAME_KEY } from '@/api/auth'
+import { getCurrentUser, getUser, saveUser, USER_KEY, USERNAME_KEY } from '@/api/auth'
 import { languageLabelFor } from '@/utils/languageLabel'
-import { redirectToUnifiedLogin } from '@/utils/sso'
 
 interface UserInfo {
   userId?: string
@@ -30,35 +25,8 @@ export function useProfile() {
 
   const loading = ref(false)
   const userInfo = ref<UserInfo | null>(null)
-  const passwordFormRef = ref<FormInstance>()
-  const changingPassword = ref(false)
 
   const languageLabel = computed(() => languageLabelFor(userInfo.value?.language, String(locale.value)))
-
-  const passwordForm = reactive({ oldPassword: '', newPassword: '', confirmPassword: '' })
-
-  const validateConfirmPassword = (_rule: unknown, value: string, callback: (e?: Error) => void) => {
-    if (value !== passwordForm.newPassword) callback(new Error(t('profile.passwordMismatch')))
-    else callback()
-  }
-
-  const validateNewPasswordDiffers = (_rule: unknown, value: string, callback: (e?: Error) => void) => {
-    if (value && value === passwordForm.oldPassword) callback(new Error(t('profile.newPasswordSameAsOld')))
-    else callback()
-  }
-
-  const passwordRules = computed<FormRules>(() => ({
-    oldPassword: [{ required: true, message: t('profile.currentPasswordPlaceholder'), trigger: 'blur' }],
-    newPassword: [
-      { required: true, message: t('profile.newPasswordPlaceholder'), trigger: 'blur' },
-      { min: 6, message: t('profile.passwordMinLength'), trigger: 'blur' },
-      { validator: validateNewPasswordDiffers, trigger: 'blur' }
-    ],
-    confirmPassword: [
-      { required: true, message: t('profile.confirmPasswordPlaceholder'), trigger: 'blur' },
-      { validator: validateConfirmPassword, trigger: 'blur' }
-    ]
-  }))
 
   const loadUserInfo = async () => {
     loading.value = true
@@ -91,28 +59,8 @@ export function useProfile() {
     }
   }
 
-  const handleChangePassword = async () => {
-    if (!passwordFormRef.value) return
-    await passwordFormRef.value.validate(async (valid) => {
-      if (!valid) return
-      changingPassword.value = true
-      try {
-        await changePassword({ oldPassword: passwordForm.oldPassword, newPassword: passwordForm.newPassword })
-        notifySuccess(t('profile.passwordChanged'))
-        passwordFormRef.value?.resetFields()
-        clearAuth()
-        redirectToUnifiedLogin('admin')
-      } catch (error: unknown) {
-        notifyError(t(errorTranslator(AppErrorCode.PROFILE_PASSWORD_CHANGE_FAILED)))
-      } finally {
-        changingPassword.value = false
-      }
-    })
-  }
-
   return {
-    defaultAvatar, loading, userInfo, passwordFormRef, changingPassword,
-    languageLabel, passwordForm, passwordRules,
-    loadUserInfo, handleChangePassword,
+    defaultAvatar, loading, userInfo,
+    languageLabel, loadUserInfo,
   }
 }

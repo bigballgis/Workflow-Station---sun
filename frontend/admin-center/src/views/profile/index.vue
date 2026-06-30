@@ -118,65 +118,6 @@
       </div>
     </el-card>
 
-    <el-card class="password-card">
-      <template #header>
-        <div class="card-header">
-          <span>{{ t('profile.changePassword') }}</span>
-        </div>
-      </template>
-
-      <el-form
-        ref="passwordFormRef"
-        :model="passwordForm"
-        :rules="passwordRules"
-        label-width="100px"
-      >
-        <el-form-item
-          :label="t('profile.currentPassword')"
-          prop="oldPassword"
-        >
-          <el-input
-            v-model="passwordForm.oldPassword"
-            type="password"
-            show-password
-            :placeholder="t('profile.currentPasswordPlaceholder')"
-            @blur="passwordFormRef?.validateField('newPassword')"
-          />
-        </el-form-item>
-        <el-form-item
-          :label="t('profile.newPassword')"
-          prop="newPassword"
-        >
-          <el-input
-            v-model="passwordForm.newPassword"
-            type="password"
-            show-password
-            :placeholder="t('profile.newPasswordPlaceholder')"
-            @input="passwordFormRef?.validateField('confirmPassword')"
-          />
-        </el-form-item>
-        <el-form-item
-          :label="t('profile.confirmPassword')"
-          prop="confirmPassword"
-        >
-          <el-input
-            v-model="passwordForm.confirmPassword"
-            type="password"
-            show-password
-            :placeholder="t('profile.confirmPasswordPlaceholder')"
-          />
-        </el-form-item>
-        <el-form-item>
-          <el-button
-            type="primary"
-            :loading="changingPassword"
-            @click="handleChangePassword"
-          >
-            {{ t('profile.changePassword') }}
-          </el-button>
-        </el-form-item>
-      </el-form>
-    </el-card>
   </div>
 </template>
 
@@ -188,8 +129,8 @@ import { useProfile } from '@/composables/modules/useProfile'
 const { t } = useI18n()
 
 const {
-  defaultAvatar, loading, userInfo, passwordFormRef, changingPassword,
-  languageLabel, passwordForm, passwordRules, loadUserInfo, handleChangePassword,
+  defaultAvatar, loading, userInfo,
+  languageLabel, loadUserInfo,
 } = useProfile()
 
 onMounted(() => {
@@ -209,10 +150,6 @@ onActivated(() => {
 }
 
 .profile-card {
-  margin-bottom: 20px;
-}
-
-.password-card {
   margin-bottom: 20px;
 }
 
