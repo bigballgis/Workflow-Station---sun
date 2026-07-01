@@ -5,6 +5,8 @@ import com.admin.dto.request.LoginRequest;
 import com.admin.dto.response.LoginResponse;
 import com.admin.ldap.LdapAuthenticator;
 import com.admin.ldap.LdapConstants;
+import com.admin.repository.LoginAuditQueryRepository;
+import com.platform.security.entity.LoginAudit;
 import com.platform.security.entity.User;
 import com.platform.security.model.UserStatus;
 import com.admin.repository.UserRepository;
@@ -21,6 +23,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.security.access.AccessDeniedException;
 
 import java.time.LocalDateTime;
@@ -42,18 +45,30 @@ public class AuthServiceImpl implements AuthService {
     /** LDAP 认证器仅 {@code ldap.enabled=true} 时存在，故用 ObjectProvider 可选注入。 */
     private final ObjectProvider<LdapAuthenticator> ldapAuthenticatorProvider;
     private final AdminAuthProperties adminAuthProperties;
+    private final LoginAuditQueryRepository loginAuditQueryRepository;
+    private final TransactionTemplate transactionTemplate;
 
     @Override
     @Transactional
     public LoginResponse login(LoginRequest request, String ipAddress, String userAgent, HttpServletResponse response) {
         log.debug("Login attempt for user: {}", request.getUsername());
 
-        // LDAP 为权威源：优先走 LDAP bind 认证（成功即 JIT 回写 sys_users）；
-        // LDAP 关闭 / 用户不在 LDAP / LDAP 不可用时回退本地账号密码。
-        User user = authenticate(request);
+        User user;
+        try {
+            // LDAP 为权威源：优先走 LDAP bind 认证（成功即 JIT 回写 sys_users）；
+            // LDAP 关闭 / 用户不在 LDAP / LDAP 不可用时回退本地账号密码。
+            user = authenticate(request);
 
-        // JIT 后仍按 sys_users 状态做最终拦截（LDAP lockoutTime 已推导为 LOCKED/INACTIVE）
-        assertAccountActive(user, request.getUsername());
+            // JIT 后仍按 sys_users 状态做最终拦截（LDAP lockoutTime 已推导为 LOCKED/INACTIVE）
+            assertAccountActive(user, request.getUsername());
+        } catch (RuntimeException e) {
+            // Record failed login audit in a new transaction so it survives rollback
+            recordLoginAuditFailure(request.getUsername(), ipAddress, userAgent, e.getMessage());
+            throw e;
+        }
+
+        // Record successful login audit
+        recordLoginAuditSuccess(user.getId(), user.getUsername(), ipAddress, userAgent);
 
         // Align with refresh / platform-security: UserRoleService (sys_role_assignments + virtual group members)
         List<String> userRoleCodes = userRoleService.getEffectiveRoleCodesForUser(user.getId());
@@ -119,9 +134,11 @@ public class AuthServiceImpl implements AuthService {
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         if (user.getStatus() == UserStatus.LOCKED) {
+            recordLoginAuditFailure(user.getUsername(), ipAddress, userAgent, "Account is locked");
             throw new RuntimeException("Account is locked");
         }
         if (user.getStatus() == UserStatus.INACTIVE) {
+            recordLoginAuditFailure(user.getUsername(), ipAddress, userAgent, "Account is disabled");
             throw new RuntimeException("Account is disabled");
         }
 
@@ -132,6 +149,9 @@ public class AuthServiceImpl implements AuthService {
         user.setLastLoginAt(LocalDateTime.now());
         user.setLastLoginIp(ipAddress);
         userRepository.save(user);
+
+        // Record successful SSO login audit
+        recordLoginAuditSuccess(user.getId(), user.getUsername(), ipAddress, userAgent);
 
         List<String> roles = userRoleCodes;
         List<String> permissions = getPermissionsForRoles(roles);
@@ -511,5 +531,59 @@ public class AuthServiceImpl implements AuthService {
             cookie.setDomain(domain.trim());
         }
         response.addCookie(cookie);
+    }
+
+    /**
+     * Record a successful login audit entry. Runs within the current transaction.
+     */
+    private void recordLoginAuditSuccess(String userId, String username, String ipAddress, String userAgent) {
+        try {
+            LoginAudit audit = LoginAudit.builder()
+                    .userId(userId)
+                    .username(username)
+                    .action(LoginAudit.AuditAction.LOGIN)
+                    .ipAddress(ipAddress)
+                    .userAgent(truncateUserAgent(userAgent))
+                    .success(true)
+                    .build();
+            loginAuditQueryRepository.save(audit);
+            log.debug("Recorded login success audit for user: {}", username);
+        } catch (Exception e) {
+            log.error("Failed to record login success audit: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Record a failed login audit entry in a NEW transaction so it survives
+     * the rollback of the calling transaction.
+     */
+    private void recordLoginAuditFailure(String username, String ipAddress, String userAgent, String reason) {
+        try {
+            transactionTemplate.executeWithoutResult(status -> {
+                LoginAudit audit = LoginAudit.builder()
+                        .username(username)
+                        .action(LoginAudit.AuditAction.LOGIN)
+                        .ipAddress(ipAddress)
+                        .userAgent(truncateUserAgent(userAgent))
+                        .success(false)
+                        .failureReason(reason != null && reason.length() > 255
+                                ? reason.substring(0, 255) : reason)
+                        .build();
+                loginAuditQueryRepository.save(audit);
+            });
+            log.debug("Recorded login failure audit for user: {}, reason: {}", username, reason);
+        } catch (Exception e) {
+            log.error("Failed to record login failure audit: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Truncate user agent string to prevent database overflow.
+     */
+    private String truncateUserAgent(String userAgent) {
+        if (userAgent == null) {
+            return null;
+        }
+        return userAgent.length() > 500 ? userAgent.substring(0, 500) : userAgent;
     }
 }

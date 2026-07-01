@@ -13,8 +13,10 @@ import com.platform.security.entity.UserBusinessUnit;
 import com.platform.security.model.UserStatus;
 import com.admin.exception.*;
 import com.admin.repository.BusinessUnitRepository;
+import com.admin.repository.LoginAuditQueryRepository;
 import com.admin.repository.PasswordHistoryRepository;
 import com.admin.repository.UserRepository;
+import com.platform.security.entity.LoginAudit;
 import com.platform.common.audit.Audited;
 import com.platform.common.i18n.I18nService;
 import lombok.RequiredArgsConstructor;
@@ -49,6 +51,7 @@ public class UserManagerComponent {
     private final PasswordHistoryRepository passwordHistoryRepository;
     private final PasswordEncoder passwordEncoder;
     private final com.admin.repository.UserBusinessUnitRepository userBusinessUnitRepository;
+    private final LoginAuditQueryRepository loginAuditQueryRepository;
     private final I18nService i18nService;
 
     /** From env USER_RESET_PASSWORD (see application.yml); not logged or returned in API. */
@@ -388,8 +391,21 @@ public class UserManagerComponent {
                     () -> detail.setFunctionManagerName(user.getFunctionManagerId()));
         }
 
-        // Recent login auditing will plug in via dedicated projections.
-        detail.setLoginHistory(List.of());
+        // Recent login history (most recent 10 LOGIN events)
+        List<UserDetailInfo.LoginHistoryInfo> loginHistory = loginAuditQueryRepository
+                .findByUserIdOrderByCreatedAtDesc(userId)
+                .stream()
+                .filter(a -> a.getAction() == LoginAudit.AuditAction.LOGIN)
+                .limit(10)
+                .map(a -> UserDetailInfo.LoginHistoryInfo.builder()
+                        .loginTime(a.getCreatedAt())
+                        .ipAddress(a.getIpAddress())
+                        .userAgent(a.getUserAgent())
+                        .success(a.isSuccess())
+                        .failureReason(a.getFailureReason())
+                        .build())
+                .collect(Collectors.toList());
+        detail.setLoginHistory(loginHistory);
         
         return detail;
     }
