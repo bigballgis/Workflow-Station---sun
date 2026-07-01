@@ -1,7 +1,6 @@
 import { ElMessage } from 'element-plus'
 import { processApi } from '@/api/process'
 import {
-  defaultAttachmentListColumns,
   buildRelationTableFieldIndexFromDataTables,
 } from '@/components/subTableAddDialogHelpers'
 import {
@@ -12,12 +11,12 @@ import {
   hydrateBindingsRowsFromVariablesBySharedRelationTableId,
   enrichChildBindingRowsFromParentsNestedSubTables,
   coerceSubTablesVariableToMap,
+  isSubTableRowMetaField,
 } from '@/composables/tasks/shared'
 import { clearBpmnParseCache } from '@/utils/bpmnParseCache'
 import {
   getPortalUserId,
   getSavedSubTableRowsFromVariables,
-  isPortalSharedAttachmentTableBinding,
 } from './subTableRowHelpers'
 import type { ApplicationDetailCtx } from './context'
 
@@ -217,10 +216,19 @@ export function createApplicationDetailLoaders(ctx: ApplicationDetailCtx): Appli
             continue
           }
           let columns = ctx.resolveSubTableBindingColumnsForPortal(b, selectedFormConfig, content.forms)
-          if ((!Array.isArray(columns) || columns.length === 0) && isPortalSharedAttachmentTableBinding(b)) {
-            columns = defaultAttachmentListColumns()
+          if (!Array.isArray(columns)) columns = []
+          // Merge live fieldDefinitions for table schema parity (same as Todo phase).
+          const fieldDefs = b.fieldDefinitions as Array<{ fieldName?: string; field_name?: string }> | undefined
+          if (fieldDefs?.length) {
+            const existingFields = new Set(columns.map(c => String(c.field ?? '').trim()).filter(Boolean))
+            for (const fd of fieldDefs) {
+              const fn = String(fd.fieldName ?? fd.field_name ?? '').trim()
+              if (!fn || existingFields.has(fn) || isSubTableRowMetaField(fn)) continue
+              columns.push({ field: fn, label: fn })
+              existingFields.add(fn)
+            }
           }
-          if (!Array.isArray(columns) || columns.length === 0) continue
+          if (columns.length === 0) continue
           const subFormDesign = ctx.resolveSubFormDesign(b, subFormsPayload)
           const bindingPortalViews =
             subTablePortalViewsPayload[b.bindingId]

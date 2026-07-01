@@ -135,6 +135,23 @@ export function deriveColumnsFromRelationFieldDefinitions(fields: RelationFieldD
     .filter((col): col is DialogColumn => col != null)
 }
 
+/**
+ * Merge any table field definition columns that are missing from the current column list.
+ * This keeps sub-table list-views in sync with the table's schema even when individual
+ * form subListViews have not been updated after a field was added to the table design.
+ */
+export function mergeMissingTableFieldColumns(
+  columns: DialogColumn[],
+  tableFields: RelationFieldDef[] | undefined,
+): DialogColumn[] {
+  if (!tableFields?.length) return columns
+  const existing = new Set(columns.map(c => String(c.field ?? '').trim()).filter(Boolean))
+  const fromTable = deriveColumnsFromRelationFieldDefinitions(tableFields)
+  const extra = fromTable.filter(c => !existing.has(String(c.field ?? '').trim()))
+  if (extra.length === 0) return columns
+  return [...columns, ...extra]
+}
+
 /** Index relation-table field definitions from function-unit {@code dataTables} content items. */
 export function buildRelationTableFieldIndexFromDataTables(
   dataTables: unknown[] | undefined | null,

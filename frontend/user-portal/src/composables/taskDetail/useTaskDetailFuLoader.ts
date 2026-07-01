@@ -25,6 +25,7 @@ import {
 } from '@/composables/tasks/miSubProcessScope'
 import {
   mergeListViewFieldColumn,
+  mergeMissingTableFieldColumns,
   inferColumnTypeFromFieldAndValue,
   buildRelationTableFieldIndexFromDataTables,
 } from '@/components/subTableAddDialogHelpers'
@@ -235,7 +236,30 @@ export function createTaskDetailFuLoader(ctx: TaskDetailCtx): TaskDetailFuLoader
 
         for (const b of tableBindings) {
           if (b.bindingType === 'PRIMARY') continue
-          const columns = ctx.deriveColumnsFromBinding(b, subForms, formConfigForSubTables)
+          let columns = ctx.deriveColumnsFromBinding(b, subForms, formConfigForSubTables)
+          // Merge any table field definitions missing from this form's subListViews
+          // so that fields added to the table schema appear in all forms automatically.
+          // Uses two sources: dataTables JSON (rich metadata) + binding's live fieldDefinitions (always current).
+          const existingFields = new Set(
+            (Array.isArray(columns) ? columns : []).map(c => String(c.field ?? '').trim()).filter(Boolean),
+          )
+          if (b.tableId != null) {
+            const tableIdNum = Number(b.tableId)
+            if (Number.isFinite(tableIdNum)) {
+              columns = mergeMissingTableFieldColumns(columns, ctx.cachedRelationTableFieldIndex.get(tableIdNum))
+            }
+          }
+          // Second pass: binding fieldDefinitions come from live dw_field_definitions query,
+          // which is always up-to-date even when the exported table JSON is stale.
+          const fieldDefs = b.fieldDefinitions as Array<{ fieldName?: string; field_name?: string }> | undefined
+          if (fieldDefs?.length) {
+            for (const fd of fieldDefs) {
+              const fn = String(fd.fieldName ?? fd.field_name ?? '').trim()
+              if (!fn || existingFields.has(fn) || isSubTableRowMetaField(fn)) continue
+              columns.push({ field: fn, label: fn })
+              existingFields.add(fn)
+            }
+          }
           const subFormDesign = ctx.resolveSubFormDesign(b, subForms)
           // Per-binding portalViews lookup tolerates both numeric and string keys
           // (JSON.parse always yields strings, but designer code may have stored numeric keys).
