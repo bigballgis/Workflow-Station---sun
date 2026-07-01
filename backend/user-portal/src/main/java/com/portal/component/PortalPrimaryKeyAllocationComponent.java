@@ -36,10 +36,14 @@ public class PortalPrimaryKeyAllocationComponent {
         Map<String, Object> pkJson = loadPkGenerationJson(tableId, request.getFieldName());
         PkGenerationConfig config = toPkConfig(pkJson);
         int count = request.getCount() != null && request.getCount() > 0 ? request.getCount() : 1;
-        String scopeKey = request.getScopeKey() != null ? request.getScopeKey() : String.valueOf(functionUnitId);
         List<String> values = primaryKeyAllocationService.allocate(
-                tableId, request.getFieldName(), config, count, scopeKey);
+                tableId, request.getFieldName(), config, count, "");
         return AllocatePrimaryKeyResponse.builder().values(values).build();
+    }
+
+    /** Package-visible for {@link ProcessSubTablePrimaryKeyEnricherComponent}. */
+    Long resolveFunctionUnitIdForAllocation(String functionUnitIdOrCode) {
+        return resolveFunctionUnitId(functionUnitIdOrCode);
     }
 
     private Long resolveFunctionUnitId(String functionUnitIdOrCode) {

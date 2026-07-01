@@ -38,10 +38,13 @@ public class FunctionUnitAccessService {
                 .map(access -> {
                     FunctionUnitAccessInfo info = FunctionUnitAccessInfo.fromEntity(access);
                     
-                    // 填充目标名称（角色名）
+                    // 填充目标名称（角色名）和 code（供 user-portal 按 code 匹配）
                     if ("ROLE".equals(access.getTargetType())) {
                         roleRepository.findById(access.getTargetId())
-                                .ifPresent(role -> info.setTargetName(role.getName()));
+                                .ifPresent(role -> {
+                                    info.setTargetName(role.getName());
+                                    info.setTargetCode(role.getCode());
+                                });
                     }
                     
                     return info;
@@ -77,6 +80,7 @@ public class FunctionUnitAccessService {
         
         FunctionUnitAccessInfo info = FunctionUnitAccessInfo.fromEntity(access);
         info.setTargetName(role.getName());
+        info.setTargetCode(role.getCode());
         return info;
     }
     
@@ -141,15 +145,67 @@ public class FunctionUnitAccessService {
     }
     
     /**
+     * Copy access configs from the highest-version sibling (same code) that has any access rows.
+     * Used when DW publish creates a new catalog row so Admin Center Access is preserved across deploys.
+     *
+     * @return number of access rows copied
+     */
+    @Transactional
+    public int copyAccessFromSiblingVersions(String code, String targetFunctionUnitId) {
+        if (code == null || code.isBlank()) {
+            return 0;
+        }
+        List<FunctionUnitAccess> sourceConfigs = findLatestSiblingAccessConfigs(code, targetFunctionUnitId);
+        if (sourceConfigs.isEmpty()) {
+            return 0;
+        }
+
+        FunctionUnit target = functionUnitRepository.findById(targetFunctionUnitId)
+                .orElseThrow(() -> new EntityNotFoundException("功能单元不存在: " + targetFunctionUnitId));
+
+        int copied = 0;
+        for (FunctionUnitAccess source : sourceConfigs) {
+            if ("ROLE".equals(source.getTargetType())
+                    && accessRepository.existsByFunctionUnitIdAndRoleId(targetFunctionUnitId, source.getTargetId())) {
+                continue;
+            }
+            accessRepository.save(FunctionUnitAccess.builder()
+                    .functionUnit(target)
+                    .accessType(source.getAccessType())
+                    .targetType(source.getTargetType())
+                    .targetId(source.getTargetId())
+                    .build());
+            copied++;
+        }
+        if (copied > 0) {
+            log.info("Copied {} access config(s) for code {} onto catalog row {}", copied, code, targetFunctionUnitId);
+        }
+        return copied;
+    }
+
+    private List<FunctionUnitAccess> findLatestSiblingAccessConfigs(String code, String targetFunctionUnitId) {
+        for (FunctionUnit sibling : functionUnitRepository.findByCodeOrderByVersionDesc(code)) {
+            if (targetFunctionUnitId.equals(sibling.getId())) {
+                continue;
+            }
+            List<FunctionUnitAccess> configs = accessRepository.findByFunctionUnitId(sibling.getId());
+            if (!configs.isEmpty()) {
+                return configs;
+            }
+        }
+        return List.of();
+    }
+
+    /**
      * 检查用户是否有权限访问功能单元
      */
     @Transactional(readOnly = true)
     public boolean hasAccess(String functionUnitId, String userId) {
         List<FunctionUnitAccess> configs = accessRepository.findByFunctionUnitId(functionUnitId);
         
-        // 如果没有配置任何访问权限，默认所有人可访问
+        // 未配置访问权限 → 拒绝（须在 Admin Center 显式分配角色，与 Relation Table 一致）
         if (configs.isEmpty()) {
-            return true;
+            return false;
         }
         
         // 获取用户的所有角色ID列表（包含所有类型）
@@ -178,10 +234,7 @@ public class FunctionUnitAccessService {
         if (!userRoleIds.isEmpty()) {
             accessibleIds.addAll(accessRepository.findAccessibleFunctionUnitIdsByRoles(userRoleIds));
         }
-        
-        // 获取没有配置访问权限的功能单元（默认所有人可访问）
-        accessibleIds.addAll(accessRepository.findFunctionUnitIdsWithoutAccess());
-        
+
         return accessibleIds;
     }
     

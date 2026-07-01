@@ -67,6 +67,7 @@ public class ProcessStartComponent {
     private final RestTemplate restTemplate;
     private final JdbcTemplate jdbcTemplate;
     private final MeetingParticipantVariablesPersistence meetingParticipantVariablesPersistence;
+    private final ProcessSubTablePrimaryKeyEnricherComponent processSubTablePrimaryKeyEnricherComponent;
     private final TaskFormComponent taskFormComponent;
     private final UserDisplayNameResolver userDisplayNameResolver;
     private final I18nService i18nService;
@@ -110,6 +111,7 @@ public class ProcessStartComponent {
         }
 
         applyWorkspaceContextVariables(userId, variables);
+        processSubTablePrimaryKeyEnricherComponent.allocateMissingPrimaryKeysInVariables(pin.code(), variables);
 
         Map<String, Object> data = workflowEngineClient.startProcess(
                 actualProcessKey, request.getBusinessKey(), userId, variables);

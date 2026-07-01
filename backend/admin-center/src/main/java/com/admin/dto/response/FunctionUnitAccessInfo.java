@@ -24,12 +24,17 @@ public class FunctionUnitAccessInfo {
     private String targetType;  // ROLE, USER, VIRTUAL_GROUP
     private String targetId;    // 目标ID
     private String targetName;  // 目标名称（用于显示）
+    private String targetCode;  // 目标 code（ROLE 时为 role code，供跨环境/code 匹配使用）
     private Instant createdAt;
     private String createdBy;
-    
+
     // 为了向后兼容，保留 roleId 和 roleName 字段
     public String getRoleId() {
         return "ROLE".equals(targetType) ? targetId : null;
+    }
+
+    public String getRoleCode() {
+        return "ROLE".equals(targetType) ? targetCode : null;
     }
     
     public String getRoleName() {

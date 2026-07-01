@@ -91,10 +91,9 @@ export function useTableBindingForm(options: UseTableBindingFormOptions) {
     const localRelation = getTables()
       .filter(t => t.tableType === 'RELATION')
       .map(t => ({ id: t.id, displayLabel: `${t.tableDisplayName || t.tableName} (${tableTypeLabel(t.tableType)})`, fieldDefinitions: t.fieldDefinitions }))
-    const deployedLabel = t('tableBinding.deployedRelationTable')
     const remote = deployedRelationTables.value.map(r => ({
       id: toRelationTableOptionId(r.id), // negative ID to distinguish from local tables
-      displayLabel: `${r.displayName || r.tableName} (${deployedLabel})`,
+      displayLabel: `${r.displayName || r.tableName}`,
       fieldDefinitions: r.fieldDefinitions || []
     }))
     return [...localRelation, ...remote]

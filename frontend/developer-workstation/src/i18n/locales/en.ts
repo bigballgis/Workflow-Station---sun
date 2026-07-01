@@ -1407,7 +1407,7 @@ export default {
     foreignKeyRequired: 'Sub-table binding requires a foreign key field',
     primaryFirstHint: 'Add a Primary (MAIN) table binding first — sub-table bindings require a primary one. (Related bindings can be added independently.)',
     relatedForLookupHint: 'Pick a function-unit Relation table or a deployed relation table. The Lookup widget will list all RELATED bindings here so form fields can reference them.',
-    deployedRelationTable: 'Deployed Relation Table',
+    deployedRelationTableTip: 'Relation tables listed here are deployed relation tables.',
     noMainTableAvailable: 'No MAIN table found in this function unit. Create one in Table Designer first.',
     noSubTableAvailable: 'No SUB table found in this function unit. Create one in Table Designer first.',
     noRelationTableAvailable: 'No RELATION table available in this function unit or admin center.',

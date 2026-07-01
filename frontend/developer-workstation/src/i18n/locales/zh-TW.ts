@@ -1402,7 +1402,7 @@ export default {
     foreignKeyRequired: '子表綁定必須選擇外鍵欄位',
     primaryFirstHint: '請先新增一條主表（PRIMARY/MAIN）綁定，之後才能新增子表綁定（關聯表可獨立新增）。',
     relatedForLookupHint: '可選本功能單元的「關聯表」或管理中心已部署的關聯表；新增後會出現在 Lookup 元件的可選項中，供表單欄位引用。',
-    deployedRelationTable: '已部署的關聯表',
+    deployedRelationTableTip: '列表中的關聯表均為已部署的關聯表。',
     noMainTableAvailable: '目前功能單元沒有 MAIN 類型的表，請先到「表設計器」建立一張主表。',
     noSubTableAvailable: '目前功能單元沒有 SUB 類型的表，請先到「表設計器」建立一張子表。',
     noRelationTableAvailable: '目前功能單元和管理中心都沒有可用的關聯表。',

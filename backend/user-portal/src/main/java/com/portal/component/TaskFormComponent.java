@@ -90,6 +90,14 @@ public class TaskFormComponent {
     @Autowired
     private RequestIdEnricher requestIdEnricher;
 
+    @Lazy
+    @Autowired
+    private ProcessSubTablePrimaryKeyEnricherComponent processSubTablePrimaryKeyEnricherComponent;
+
+    private ProcessSubTablePrimaryKeyEnricherComponent subTablePrimaryKeyEnricher() {
+        return processSubTablePrimaryKeyEnricherComponent;
+    }
+
     private RequestIdEnricher requestIdEnricher() {
         RequestIdEnricher r = requestIdEnricher;
         if (r == null) {
@@ -292,6 +300,18 @@ public class TaskFormComponent {
         if (editableData.isEmpty()) {
             log.debug("No editable fields to update for task: {}", taskId);
             return;
+        }
+
+        if (editableData.containsKey("__subTables__")) {
+            processInstanceRepository.findById(taskInfo.processInstanceId).ifPresent(pi -> {
+                String fuCode = pi.getFunctionUnitCode();
+                if (fuCode != null && !fuCode.isBlank()) {
+                    ProcessSubTablePrimaryKeyEnricherComponent enricher = subTablePrimaryKeyEnricher();
+                    if (enricher != null) {
+                        enricher.allocateMissingPrimaryKeysInVariables(fuCode, editableData);
+                    }
+                }
+            });
         }
 
         AtomicReference<Map<String, Object>> snapshotOldVarsRef = new AtomicReference<>();

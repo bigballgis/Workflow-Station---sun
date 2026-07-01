@@ -6,6 +6,7 @@ import com.admin.repository.FunctionUnitContentRepository;
 import com.admin.repository.FunctionUnitDependencyRepository;
 import com.admin.repository.FunctionUnitRepository;
 import com.admin.repository.RelationTableDefinitionRepository;
+import com.admin.service.FunctionUnitAccessService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.platform.common.i18n.I18nService;
 import org.mockito.Mockito;
@@ -43,6 +44,7 @@ public final class FunctionUnitManagerTestFactory {
                 Mockito.mock(RelationTableDefinitionRepository.class), objectMapper);
         FunctionUnitImportComponent importComponent = new FunctionUnitImportComponent(
                 functionUnitRepository, dependencyRepository, contentRepository, accessRepository,
+                Mockito.mock(FunctionUnitAccessService.class),
                 packageParser, actionDefinitionRepository, versionComponent, relationTableStructureImporter,
                 objectMapper, i18nService);
         FormTableBindingLoader bindingLoader = new FormTableBindingLoader(jdbcTemplate, objectMapper);

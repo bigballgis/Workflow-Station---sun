@@ -41,15 +41,16 @@ public class FunctionUnitAccessComponent {
                     return size() > MAX_CACHE_SIZE;
                 }
             });
-    
-    private final Map<String, CachedData<Set<String>>> functionUnitAccessCache = Collections.synchronizedMap(
+
+    /** Code-keyed cache for New-Request visibility filtering (role code matching, stable across environments). */
+    private final Map<String, CachedData<Set<String>>> userRoleCodesCache = Collections.synchronizedMap(
             new LinkedHashMap<>(64, 0.75f, true) {
                 @Override
                 protected boolean removeEldestEntry(Map.Entry<String, CachedData<Set<String>>> eldest) {
                     return size() > MAX_CACHE_SIZE;
                 }
             });
-    
+
     private final Map<String, CachedData<String>> processKeyCache = Collections.synchronizedMap(
             new LinkedHashMap<>(64, 0.75f, true) {
                 @Override
@@ -59,29 +60,35 @@ public class FunctionUnitAccessComponent {
             });
     
     private static final long CACHE_TTL = TimeUnit.MINUTES.toMillis(5);
+
+    /**
+     * Must include {@code profileContext=PORTAL} so admin-center merges UBR roles
+     * ({@code sys_user_business_unit_roles}), not only virtual-group inheritance.
+     */
+    private static final String USER_BUSINESS_ROLES_QUERY = "profileContext=PORTAL";
     
     /**
      * Check if a user can access a specified function unit
      */
     public boolean canAccessFunctionUnit(String userId, String functionUnitId) {
-        // Get the function unit's access configuration (list of allowed role IDs)
-        Set<String> allowedRoleIds = getFunctionUnitAllowedRoles(functionUnitId);
-        
-        // If no access permissions are configured, all users can access
-        if (allowedRoleIds.isEmpty()) {
-            return true;
+        // Get the function unit's access configuration (list of allowed role CODEs)
+        Set<String> allowedRoleCodes = getFunctionUnitAllowedRoleCodes(functionUnitId);
+
+        // No access config → deny (same as Relation Table access; Admin must assign roles explicitly)
+        if (allowedRoleCodes.isEmpty()) {
+            return false;
         }
-        
-        // Get the user's business role ID list
-        Set<String> userRoleIds = getUserBusinessRoleIds(userId);
-        
+
+        // Get the user's business role CODE list (matched by code, stable across environments)
+        Set<String> userRoleCodes = getUserBusinessRoleCodes(userId);
+
         // Check if there is any intersection
-        for (String roleId : userRoleIds) {
-            if (allowedRoleIds.contains(roleId)) {
+        for (String roleCode : userRoleCodes) {
+            if (allowedRoleCodes.contains(roleCode)) {
                 return true;
             }
         }
-        
+
         return false;
     }
     
@@ -306,23 +313,23 @@ public class FunctionUnitAccessComponent {
             return Collections.emptyList();
         }
         
-        Set<String> userRoleIds = getUserBusinessRoleIds(userId);
+        // Match by role CODE (stable across environments); see getUserBusinessRoleCodes / getFunctionUnitAllowedRoleCodes.
+        Set<String> userRoleCodes = getUserBusinessRoleCodes(userId);
         List<Map<String, Object>> accessible = new ArrayList<>();
-        
+
         for (Map<String, Object> unit : functionUnits) {
             String unitId = (String) unit.get("id");
-            
+
             // Check if the function unit is enabled
             Boolean enabled = parseEnabledFlag(unit.get("enabled"));
             if (enabled != null && !enabled) {
                 log.debug("Function unit {} is disabled, skipping", unitId);
                 continue;
             }
-            
-            Set<String> allowedRoleIds = getFunctionUnitAllowedRoles(unitId);
-            
-            // If no access permissions are configured, or the user has an allowed role
-            if (allowedRoleIds.isEmpty() || hasAnyRole(userRoleIds, allowedRoleIds)) {
+
+            Set<String> allowedRoleCodes = getFunctionUnitAllowedRoleCodes(unitId);
+
+            if (!allowedRoleCodes.isEmpty() && hasAnyRole(userRoleCodes, allowedRoleCodes)) {
                 accessible.add(unit);
             }
         }
@@ -363,7 +370,7 @@ public class FunctionUnitAccessComponent {
         }
         
         try {
-            String url = adminCenterUrl + "/api/v1/admin/users/" + userId + "/roles?type=BUSINESS";
+            String url = adminCenterUrl + "/api/v1/admin/users/" + userId + "/roles?" + USER_BUSINESS_ROLES_QUERY;
             log.info("Fetching user roles from: {}", url);
             
             ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
@@ -382,12 +389,57 @@ public class FunctionUnitAccessComponent {
                     roleIds.add(roleId);
                 }
             }
-            
+
             userRolesCache.put(userId, new CachedData<>(roleIds));
             return roleIds;
-            
+
         } catch (Exception e) {
             log.error("Failed to get user business roles for user {}: {}", userId, e.getMessage(), e);
+            if (cached != null) {
+                return cached.data;
+            }
+            return Collections.emptySet();
+        }
+    }
+
+    /**
+     * Get the user's business role CODE list (for New-Request visibility filtering).
+     * Falls back to role id when a role has no code (legacy/edge roles), so it stays
+     * consistent with {@link #getFunctionUnitAllowedRoleCodes}'s identical fallback.
+     */
+    public Set<String> getUserBusinessRoleCodes(String userId) {
+        CachedData<Set<String>> cached = userRoleCodesCache.get(userId);
+        if (cached != null && !cached.isExpired()) {
+            return cached.data;
+        }
+
+        try {
+            String url = adminCenterUrl + "/api/v1/admin/users/" + userId + "/roles?" + USER_BUSINESS_ROLES_QUERY;
+            ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<List<Map<String, Object>>>() {}
+            );
+
+            Set<String> roleCodes = new HashSet<>();
+            if (response.getBody() != null) {
+                for (Map<String, Object> role : response.getBody()) {
+                    String roleCode = (String) role.get("code");
+                    String key = (roleCode != null && !roleCode.isBlank())
+                            ? roleCode
+                            : (String) role.get("id");
+                    if (key != null) {
+                        roleCodes.add(key);
+                    }
+                }
+            }
+
+            userRoleCodesCache.put(userId, new CachedData<>(roleCodes));
+            return roleCodes;
+
+        } catch (Exception e) {
+            log.error("Failed to get user business role codes for user {}: {}", userId, e.getMessage(), e);
             if (cached != null) {
                 return cached.data;
             }
@@ -400,29 +452,22 @@ public class FunctionUnitAccessComponent {
      */
     public Set<String> getFunctionUnitAllowedRoles(String functionUnitId) {
         log.info("Getting allowed roles for function unit: {}", functionUnitId);
-        
-        CachedData<Set<String>> cached = functionUnitAccessCache.get(functionUnitId);
-        if (cached != null && !cached.isExpired()) {
-            log.info("Returning cached allowed roles for function unit {}: {}", functionUnitId, cached.data);
-            return cached.data;
-        }
-        
+
         try {
             String url = adminCenterUrl + "/api/v1/admin/function-units/" + functionUnitId + "/access";
             log.info("Fetching function unit access from: {}", url);
-            
+
             ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
                     null,
                     new ParameterizedTypeReference<List<Map<String, Object>>>() {}
             );
-            
+
             Set<String> roleIds = new HashSet<>();
             if (response.getBody() != null) {
                 log.info("Got {} access records for function unit {}", response.getBody().size(), functionUnitId);
                 for (Map<String, Object> access : response.getBody()) {
-                    // Check if targetType is ROLE
                     String targetType = (String) access.get("targetType");
                     if ("ROLE".equals(targetType)) {
                         String roleId = (String) access.get("targetId");
@@ -433,31 +478,69 @@ public class FunctionUnitAccessComponent {
                     }
                 }
             }
-            
-            functionUnitAccessCache.put(functionUnitId, new CachedData<>(roleIds));
+
             return roleIds;
-            
+
         } catch (Exception e) {
             log.error("Failed to get function unit access config for {}: {}", functionUnitId, e.getMessage(), e);
-            if (cached != null) {
-                return cached.data;
-            }
             return Collections.emptySet();
         }
     }
-    
+
+    /**
+     * Get the role CODEs allowed to access a function unit (for New-Request visibility filtering).
+     * Reads {@code targetCode} from the admin-center access response; falls back to {@code targetId}
+     * when code is absent — matching {@link #getUserBusinessRoleCodes}'s fallback so both sides stay
+     * comparable.
+     */
+    public Set<String> getFunctionUnitAllowedRoleCodes(String functionUnitId) {
+        // Access config is always fetched live: Admin may add or remove roles at any time.
+        try {
+            String url = adminCenterUrl + "/api/v1/admin/function-units/" + functionUnitId + "/access";
+            ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<List<Map<String, Object>>>() {}
+            );
+
+            Set<String> roleCodes = new HashSet<>();
+            if (response.getBody() != null) {
+                for (Map<String, Object> access : response.getBody()) {
+                    String targetType = (String) access.get("targetType");
+                    if ("ROLE".equals(targetType)) {
+                        String targetCode = (String) access.get("targetCode");
+                        String key = (targetCode != null && !targetCode.isBlank())
+                                ? targetCode
+                                : (String) access.get("targetId");
+                        if (key != null) {
+                            roleCodes.add(key);
+                        }
+                    }
+                }
+            }
+
+            return roleCodes;
+
+        } catch (Exception e) {
+            log.error("Failed to get function unit access codes for {}: {}", functionUnitId, e.getMessage(), e);
+            return Collections.emptySet();
+        }
+    }
+
     /**
      * Clear user role cache
      */
     public void clearUserRolesCache(String userId) {
         userRolesCache.remove(userId);
+        userRoleCodesCache.remove(userId);
     }
     
     /**
-     * Clear function unit access cache
+     * No-op: function unit access is fetched live (not cached).
      */
     public void clearFunctionUnitAccessCache(String functionUnitId) {
-        functionUnitAccessCache.remove(functionUnitId);
+        // intentionally empty
     }
     
     /**
@@ -472,7 +555,7 @@ public class FunctionUnitAccessComponent {
      */
     public void clearAllCache() {
         userRolesCache.clear();
-        functionUnitAccessCache.clear();
+        userRoleCodesCache.clear();
         processKeyCache.clear();
     }
     

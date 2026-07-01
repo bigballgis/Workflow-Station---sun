@@ -1402,7 +1402,7 @@ export default {
     foreignKeyRequired: '子表绑定必须选择外键字段',
     primaryFirstHint: '请先添加一条主表（PRIMARY/MAIN）绑定，之后才能添加子表绑定（关联表可独立添加）。',
     relatedForLookupHint: '可选本功能单元的「关联表」或管理中心已部署的关联表；添加后会出现在 Lookup 组件的可选项里，供表单字段引用。',
-    deployedRelationTable: '已部署的关联表',
+    deployedRelationTableTip: '列表中的关联表均为已部署的关联表。',
     noMainTableAvailable: '当前功能单元没有 MAIN 类型的表，请先到「表设计器」创建一张主表。',
     noSubTableAvailable: '当前功能单元没有 SUB 类型的表，请先到「表设计器」创建一张子表。',
     noRelationTableAvailable: '当前功能单元和管理中心都没有可用的关联表。',

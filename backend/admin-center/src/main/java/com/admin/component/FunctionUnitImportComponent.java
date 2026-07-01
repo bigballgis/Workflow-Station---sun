@@ -16,6 +16,7 @@ import com.admin.repository.FunctionUnitAccessRepository;
 import com.admin.repository.FunctionUnitContentRepository;
 import com.admin.repository.FunctionUnitDependencyRepository;
 import com.admin.repository.FunctionUnitRepository;
+import com.admin.service.FunctionUnitAccessService;
 import com.admin.util.ChecksumUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.platform.common.i18n.I18nService;
@@ -47,6 +48,7 @@ public class FunctionUnitImportComponent {
     private final FunctionUnitDependencyRepository dependencyRepository;
     private final FunctionUnitContentRepository contentRepository;
     private final FunctionUnitAccessRepository accessRepository;
+    private final FunctionUnitAccessService functionUnitAccessService;
     private final FunctionUnitPackageParser packageParser;
     private final ActionDefinitionRepository actionDefinitionRepository;
     private final FunctionUnitVersionComponent versionComponent;
@@ -107,6 +109,11 @@ public class FunctionUnitImportComponent {
             FunctionUnit functionUnit = overwriteTarget != null
                     ? overwriteFunctionUnit(overwriteTarget, packageContent, request, importerId)
                     : createFunctionUnit(packageContent, request, importerId);
+
+            if (overwriteTarget == null && existingByName != null && packageContent.getCode() != null) {
+                functionUnitAccessService.copyAccessFromSiblingVersions(
+                        packageContent.getCode(), functionUnit.getId());
+            }
 
             // 7. Save dependencies
             saveDependencies(functionUnit, packageContent.getDependencies());
@@ -421,15 +428,14 @@ public class FunctionUnitImportComponent {
 
     /**
      * Overwrite an existing (code, version) row in place: clear its old child content
-     * (contents/dependencies/access; actions are cleared by saveImportedActions) and refresh metadata,
-     * keeping the same id, code and version.
+     * (contents/dependencies; actions are cleared by saveImportedActions) and refresh metadata,
+     * keeping the same id, code, version, and Admin Center Access config.
      */
     private FunctionUnit overwriteFunctionUnit(FunctionUnit existing,
                                                FunctionUnitManagerComponent.FunctionPackageContent packageContent,
                                                FunctionUnitImportRequest request,
                                                String importerId) {
-        // Clear old child content so the imported package fully replaces it.
-        accessRepository.deleteByFunctionUnitId(existing.getId());
+        // Clear old child content so the imported package fully replaces it (Access is admin-managed, preserve it).
         contentRepository.deleteByFunctionUnitId(existing.getId());
         dependencyRepository.deleteByFunctionUnitId(existing.getId());
         functionUnitRepository.flush();

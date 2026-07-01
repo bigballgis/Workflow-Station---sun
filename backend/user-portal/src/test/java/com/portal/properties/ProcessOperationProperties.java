@@ -86,6 +86,7 @@ class ProcessOperationProperties {
                 restTemplate,
                 jdbcTemplate,
                 Mockito.mock(com.portal.component.MeetingParticipantVariablesPersistence.class),
+                Mockito.mock(com.portal.component.ProcessSubTablePrimaryKeyEnricherComponent.class),
                 Mockito.mock(TaskFormComponent.class),
                 userDisplayNameResolver,
                 i18nService);

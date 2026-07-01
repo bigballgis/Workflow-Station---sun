@@ -53,10 +53,9 @@ class FunctionUnitAccessProperties {
             @ForAll("functionUnitIds") String functionUnitId) {
         // 模拟功能单元已启用
         mockFunctionUnitEnabled(functionUnitId, true);
-        // 模拟无访问限制（空角色列表）
-        mockFunctionUnitAccess(functionUnitId, Collections.emptyList());
-        // 模拟用户角色
-        mockUserRoles(userId, Collections.emptyList());
+        // 模拟已配置角色且用户持有该角色
+        mockFunctionUnitAccess(functionUnitId, List.of("role-allowed"));
+        mockUserRoles(userId, List.of("role-allowed"));
         
         // 不应抛出异常
         accessComponent.checkFunctionUnitAccess(userId, functionUnitId);
@@ -72,6 +71,19 @@ class FunctionUnitAccessProperties {
         boolean result = accessComponent.isFunctionUnitEnabled(functionUnitId);
         
         assertThat(result).isEqualTo(enabled);
+    }
+
+    @Property(tries = 20)
+    @Label("属性: 未配置访问权限的功能单元应拒绝所有用户")
+    void unconfiguredAccessShouldDenyAllUsers(
+            @ForAll("validUserIds") String userId,
+            @ForAll("functionUnitIds") String functionUnitId) {
+        mockFunctionUnitEnabled(functionUnitId, true);
+        mockFunctionUnitAccess(functionUnitId, Collections.emptyList());
+        mockUserRoles(userId, List.of("role-manager"));
+
+        assertThatThrownBy(() -> accessComponent.checkFunctionUnitAccess(userId, functionUnitId))
+                .isInstanceOf(FunctionUnitAccessComponent.FunctionUnitAccessDeniedException.class);
     }
 
     @Property(tries = 20)
@@ -107,9 +119,14 @@ class FunctionUnitAccessProperties {
         
         // 模拟无访问限制
         for (Map<String, Object> unit : units) {
-            mockFunctionUnitAccess((String) unit.get("id"), Collections.emptyList());
+            String unitId = (String) unit.get("id");
+            if (Boolean.TRUE.equals(unit.get("enabled"))) {
+                mockFunctionUnitAccess(unitId, List.of("portal-role"));
+            } else {
+                mockFunctionUnitAccess(unitId, Collections.emptyList());
+            }
         }
-        mockUserRoles(userId, Collections.emptyList());
+        mockUserRoles(userId, List.of("portal-role"));
         
         List<Map<String, Object>> filtered = accessComponent.filterAccessibleFunctionUnits(userId, units);
         
@@ -135,7 +152,7 @@ class FunctionUnitAccessProperties {
         mockFunctionUnitAccess("unit-1", List.of(userRoleId));
         // unit-2 需要其他角色
         mockFunctionUnitAccess("unit-2", List.of("other-role"));
-        // unit-3 无限制
+        // unit-3 未配置访问权限
         mockFunctionUnitAccess("unit-3", Collections.emptyList());
         
         // 用户有 userRoleId
@@ -143,10 +160,10 @@ class FunctionUnitAccessProperties {
         
         List<Map<String, Object>> filtered = accessComponent.filterAccessibleFunctionUnits(userId, units);
         
-        // 应返回 unit-1（有权限）和 unit-3（无限制）
-        assertThat(filtered).hasSize(2);
+        // 应仅返回 unit-1（有权限）；unit-3 未配置访问权限不可见
+        assertThat(filtered).hasSize(1);
         assertThat(filtered.stream().map(u -> u.get("id")))
-                .containsExactlyInAnyOrder("unit-1", "unit-3");
+                .containsExactly("unit-1");
     }
 
     @Property(tries = 20)
@@ -179,6 +196,22 @@ class FunctionUnitAccessProperties {
         assertThat(filtered).isEmpty();
     }
 
+    @Property(tries = 20)
+    @Label("属性: Admin 移除访问权限后应立即不可见")
+    void removedAccessShouldDenyImmediately(
+            @ForAll("validUserIds") String userId,
+            @ForAll("functionUnitIds") String functionUnitId) {
+        mockFunctionUnitEnabled(functionUnitId, true);
+        mockFunctionUnitAccess(functionUnitId, List.of("role-manager"));
+        mockUserRoles(userId, List.of("role-manager"));
+
+        assertThat(accessComponent.canAccessFunctionUnit(userId, functionUnitId)).isTrue();
+
+        mockFunctionUnitAccess(functionUnitId, Collections.emptyList());
+
+        assertThat(accessComponent.canAccessFunctionUnit(userId, functionUnitId)).isFalse();
+    }
+
     // ==================== Helper Methods ====================
 
     private Map<String, Object> createFunctionUnit(String id, String name, boolean enabled) {
@@ -208,7 +241,9 @@ class FunctionUnitAccessProperties {
         List<Map<String, Object>> accessList = new ArrayList<>();
         for (String roleId : roleIds) {
             Map<String, Object> access = new HashMap<>();
-            access.put("roleId", roleId);
+            access.put("targetType", "ROLE");
+            access.put("targetId", roleId);
+            access.put("targetCode", roleId);
             accessList.add(access);
         }
         

@@ -945,3 +945,22 @@
     根因二（代码）：子表抽取依赖 email.html()；ImapInboundMailClient.extractParts 不递归 message/rfc822 嵌套转发件。
     修复：extractParts 递归 nested Message / message/rfc822 InputStream；text/html 与 text/plain 支持 InputStream 内容；
     __inboundEmail__ 快照含 html 字段。单测：ImapInboundMailClientExtractTest。
+- id: "1468"
+  status: fixed
+  fixed_at: "2026-07-01"
+  severity: major
+  category: bug
+  summary: "User Portal New Requests 不显示已配置 BU 角色可访问的 Function Unit"
+  file: "backend/user-portal/src/main/java/com/portal/component/FunctionUnitAccessComponent.java"
+  note: |
+    症状：Admin Center 为 FU 配置 Department Manager（BU_BOUNDED）后，拥有「共享财务中心 · Department Manager」
+    的 developer 在 New Requests 看不到任何 FU。
+    根因：FunctionUnitAccessComponent 调用 admin /users/{id}/roles?type=BUSINESS 未传 profileContext=PORTAL，
+    admin 仅返回虚拟组继承角色，不含 sys_user_business_unit_roles（UBR）分配的 BU 角色 → 用户 roleCodes 为空。
+    修复：改为 ?profileContext=PORTAL（与 UserPermissionController 一致）；admin access API 返回 targetCode 供 code 匹配；
+    deny-by-default（无 Access 配置拒绝）；**取消 FU access 内存缓存**（原先非空 allow-list 缓存 5min，
+    Admin 删除权限后 Portal 仍可见，新增权限也可能因旧缓存不可见）。
+    验证：curl roles 无 PORTAL=[]，有 PORTAL=[MANAGER]；FU access targetCode=MANAGER；重建 user-portal + admin-center；
+    移除 Multi-Instance Access 后 GET /processes/definitions 仅返回 MCY。
+    Deploy 后 Access 清空：import 同版本覆盖时 deleteByFunctionUnitId(access) + 新版本 catalog id 未继承旧 Access；
+    修复：overwrite 保留 Access；新版本 import 后 copyAccessFromSiblingVersions（同 code 最高版本有 Access 的行）。

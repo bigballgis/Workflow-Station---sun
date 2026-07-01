@@ -252,6 +252,12 @@
               </div>
             </template>
           </el-select>
+          <div
+            v-if="bindingForm.bindingType === 'RELATED'"
+            class="form-item-tip"
+          >
+            {{ t('tableBinding.deployedRelationTableTip') }}
+          </div>
         </el-form-item>
         
         <el-form-item
