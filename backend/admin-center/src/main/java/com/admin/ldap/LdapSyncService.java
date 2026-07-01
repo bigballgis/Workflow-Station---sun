@@ -17,6 +17,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -91,6 +92,7 @@ public class LdapSyncService {
     private final RoleAssignmentRepository roleAssignmentRepository;
     private final UserRepository userRepository;
     private final Environment environment;
+    private final TransactionTemplate transactionTemplate;
     // ==================== 全量 AD 组同步 ====================
     /**
      * 全量 Hermes AD 组同步：解析目标组 → 确保绑定存在 → 清理旧成员 → 拉取 → upsert → 写组成员关系。
@@ -572,30 +574,34 @@ public class LdapSyncService {
     // ==================== 成员清理 ====================
     /** 清理所有 Hermes 虚拟组中由 LDAP 同步添加的旧成员关系。 */
     private void cleanOldLdapMembershipsForBindings() {
-        for (HermesGroupBinding binding : HERMES_BINDINGS) {
-            virtualGroupRepository.findByCode(binding.vgCode).ifPresent(vg -> {
-                List<VirtualGroupMember> members = virtualGroupMemberRepository.findByGroupId(vg.getId());
-                members.stream()
-                        .filter(m -> HERMES_SYNC_MEMBER_ADDED_BY.equals(m.getAddedBy()))
-                        .forEach(m -> virtualGroupMemberRepository.deleteByGroupIdAndUserId(
-                                m.getGroupId(), m.getUserId()));
-            });
-        }
+        transactionTemplate.executeWithoutResult(status -> {
+            for (HermesGroupBinding binding : HERMES_BINDINGS) {
+                virtualGroupRepository.findByCode(binding.vgCode).ifPresent(vg -> {
+                    List<VirtualGroupMember> members = virtualGroupMemberRepository.findByGroupId(vg.getId());
+                    members.stream()
+                            .filter(m -> HERMES_SYNC_MEMBER_ADDED_BY.equals(m.getAddedBy()))
+                            .forEach(m -> virtualGroupMemberRepository.deleteByGroupIdAndUserId(
+                                    m.getGroupId(), m.getUserId()));
+                });
+            }
+        });
     }
    /** 只清理变更组对应的虚拟组的旧成员关系。 */
     private void cleanOldLdapMembershipsForChangedBindings(List<String> changedRoleKeys) {
-        for (HermesGroupBinding binding : HERMES_BINDINGS) {
-            if (!changedRoleKeys.contains(binding.roleKey)) {
-                continue;
+        transactionTemplate.executeWithoutResult(status -> {
+            for (HermesGroupBinding binding : HERMES_BINDINGS) {
+                if (!changedRoleKeys.contains(binding.roleKey)) {
+                    continue;
+                }
+                virtualGroupRepository.findByCode(binding.vgCode).ifPresent(vg -> {
+                    List<VirtualGroupMember> members = virtualGroupMemberRepository.findByGroupId(vg.getId());
+                    members.stream()
+                            .filter(m -> HERMES_SYNC_MEMBER_ADDED_BY.equals(m.getAddedBy()))
+                            .forEach(m -> virtualGroupMemberRepository.deleteByGroupIdAndUserId(
+                                    m.getGroupId(), m.getUserId()));
+                });
             }
-            virtualGroupRepository.findByCode(binding.vgCode).ifPresent(vg -> {
-                List<VirtualGroupMember> members = virtualGroupMemberRepository.findByGroupId(vg.getId());
-                members.stream()
-                        .filter(m -> HERMES_SYNC_MEMBER_ADDED_BY.equals(m.getAddedBy()))
-                        .forEach(m -> virtualGroupMemberRepository.deleteByGroupIdAndUserId(
-                                m.getGroupId(), m.getUserId()));
-            });
-        }
+        });
     }
     // ==================== 批量 Upsert ====================
     /**
@@ -752,26 +758,28 @@ public class LdapSyncService {
         return cns;
     }
 
-   /** 清理用户在 Hermes 虚拟组中不再需要的旧 LDAP 管理成员关系。 */
+    /** 清理用户在 Hermes 虚拟组中不再需要的旧 LDAP 管理成员关系。 */
     private void cleanStaleMembershipsForUser(String userId, Set<String> targetVgCodes) {
-        List<VirtualGroupMember> allMemberships =
-                virtualGroupMemberRepository.findByUserId(userId);
-        for (VirtualGroupMember m : allMemberships) {
-            if (!HERMES_SYNC_MEMBER_ADDED_BY.equals(m.getAddedBy())) {
-                continue; // 跳过非 LDAP 管理的成员关系
+        transactionTemplate.executeWithoutResult(status -> {
+            List<VirtualGroupMember> allMemberships =
+                    virtualGroupMemberRepository.findByUserId(userId);
+            for (VirtualGroupMember m : allMemberships) {
+                if (!HERMES_SYNC_MEMBER_ADDED_BY.equals(m.getAddedBy())) {
+                    continue; // 跳过非 LDAP 管理的成员关系
+                }
+                VirtualGroup vg = virtualGroupRepository.findById(m.getGroupId()).orElse(null);
+                if (vg == null) {
+                    continue;
+                }
+                // 检查是否为 Hermes 虚拟组
+                boolean isHermesVg = HERMES_BINDINGS.stream()
+                        .anyMatch(b -> b.vgCode.equals(vg.getCode()));
+                if (isHermesVg && !targetVgCodes.contains(vg.getCode())) {
+                    virtualGroupMemberRepository.deleteByGroupIdAndUserId(m.getGroupId(), userId);
+                    log.debug("Removed stale Hermes membership: userId={} vg={}", userId, vg.getCode());
+                }
             }
-            VirtualGroup vg = virtualGroupRepository.findById(m.getGroupId()).orElse(null);
-            if (vg == null) {
-                continue;
-            }
-            // 检查是否为 Hermes 虚拟组
-            boolean isHermesVg = HERMES_BINDINGS.stream()
-                    .anyMatch(b -> b.vgCode.equals(vg.getCode()));
-            if (isHermesVg && !targetVgCodes.contains(vg.getCode())) {
-                virtualGroupMemberRepository.deleteByGroupIdAndUserId(m.getGroupId(), userId);
-                log.debug("Removed stale Hermes membership: userId={} vg={}", userId, vg.getCode());
-            }
-        }
+        });
     }
     private List<HermesGroupBinding> findBindings(String roleKey) {
         return HERMES_BINDINGS.stream()

@@ -6,6 +6,7 @@ import com.admin.dto.response.BatchImportResult;
 import com.platform.security.entity.User;
 import com.platform.security.model.UserStatus;
 import com.admin.repository.BusinessUnitRepository;
+import com.admin.repository.LoginAuditQueryRepository;
 import com.admin.repository.PasswordHistoryRepository;
 import com.admin.repository.UserBusinessUnitRepository;
 import com.admin.repository.UserRepository;
@@ -39,27 +40,30 @@ public class UserImportProperties {
     private BusinessUnitRepository businessUnitRepository;
     private PasswordHistoryRepository passwordHistoryRepository;
     private UserBusinessUnitRepository userBusinessUnitRepository;
+    private LoginAuditQueryRepository loginAuditQueryRepository;
     private PasswordEncoder passwordEncoder;
     private I18nService i18nService;
     private UserManagerComponent userManagerComponent;
-    
+
     @BeforeTry
     void setUp() {
         userRepository = mock(UserRepository.class);
         businessUnitRepository = mock(BusinessUnitRepository.class);
         passwordHistoryRepository = mock(PasswordHistoryRepository.class);
         userBusinessUnitRepository = mock(UserBusinessUnitRepository.class);
+        loginAuditQueryRepository = mock(LoginAuditQueryRepository.class);
         passwordEncoder = mock(PasswordEncoder.class);
         i18nService = mock(I18nService.class);
-        
+
         when(i18nService.getMessage(anyString())).thenAnswer(inv -> inv.getArgument(0));
-        
+
         userManagerComponent = new UserManagerComponent(
                 userRepository,
                 businessUnitRepository,
                 passwordHistoryRepository,
                 passwordEncoder,
                 userBusinessUnitRepository,
+                loginAuditQueryRepository,
                 i18nService);
         
         // Default mock behaviors

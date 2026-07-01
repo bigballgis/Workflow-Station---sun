@@ -2,6 +2,7 @@ package com.portal.controller;
 
 import com.platform.security.config.JwtProperties;
 import com.platform.security.dto.UserEffectiveRole;
+import com.platform.security.entity.LoginAudit;
 import com.platform.security.entity.User;
 import com.platform.security.model.UserStatus;
 import com.platform.security.service.JwtTokenService;
@@ -11,6 +12,7 @@ import com.portal.dto.ChangePasswordRequest;
 import com.portal.dto.LoginRequest;
 import com.portal.dto.LoginResponse;
 import com.portal.dto.SwitchWorkspaceRequest;
+import com.portal.repository.LoginAuditQueryRepository;
 import com.portal.service.PortalSessionIssuerService;
 import com.portal.service.PortalWorkspaceAuthService;
 import com.platform.security.repository.UserRepository;
@@ -65,6 +67,7 @@ public class AuthController {
     private final JwtTokenService jwtTokenService;
     private final PortalWorkspaceAuthService portalWorkspaceAuthService;
     private final PortalSessionIssuerService portalSessionIssuerService;
+    private final LoginAuditQueryRepository loginAuditQueryRepository;
     private final JwtProperties jwtProperties;
     
     @Value("${jwt.secret}")
@@ -76,25 +79,37 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request, HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
         String ipAddress = getClientIpAddress(httpRequest);
+        String userAgent = httpRequest.getHeader("User-Agent");
         log.info("Login attempt for user: {} from {}", request.getUsername(), ipAddress);
-        
+
         try {
             log.debug("Looking up user: {}", request.getUsername());
             User user = userRepository.findByUsername(request.getUsername())
-                    .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.invalid_credentials")));
-            
+                    .orElse(null);
+
+            if (user == null) {
+                log.warn("User not found: {}", request.getUsername());
+                recordLoginAuditFailure(null, request.getUsername(), ipAddress, userAgent,
+                        i18nService.getMessage("auth.invalid_credentials"));
+                throw new RuntimeException(i18nService.getMessage("auth.invalid_credentials"));
+            }
+
             log.debug("User found: {}, status: {}", user.getUsername(), user.getStatus());
-            
+
             if (user.isLocked()) {
                 log.warn("User {} is locked", user.getUsername());
+                recordLoginAuditFailure(user.getId(), user.getUsername(), ipAddress, userAgent,
+                        i18nService.getMessage("auth.account_locked"));
                 throw new RuntimeException(i18nService.getMessage("auth.account_locked"));
             }
-            
+
             if (UserStatus.INACTIVE.equals(user.getStatus())) {
                 log.warn("User {} is inactive", user.getUsername());
+                recordLoginAuditFailure(user.getId(), user.getUsername(), ipAddress, userAgent,
+                        i18nService.getMessage("auth.account_disabled"));
                 throw new RuntimeException(i18nService.getMessage("auth.account_disabled"));
             }
-            
+
             log.debug("Checking password for user: {}", user.getUsername());
             if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
                 log.warn("Password mismatch for user: {}", user.getUsername());
@@ -104,14 +119,19 @@ public class AuthController {
                     user.setLockedUntil(LocalDateTime.now().plusMinutes(30));
                 }
                 userRepository.save(user);
+                recordLoginAuditFailure(user.getId(), user.getUsername(), ipAddress, userAgent,
+                        i18nService.getMessage("auth.invalid_credentials"));
                 throw new RuntimeException(i18nService.getMessage("auth.invalid_credentials"));
             }
-            
+
             log.debug("Password matched, updating login info");
             user.resetFailedLoginCount();
             user.setLastLoginAt(LocalDateTime.now());
             user.setLastLoginIp(ipAddress);
             userRepository.save(user);
+
+            // Record successful login audit
+            recordLoginAuditSuccess(user.getId(), user.getUsername(), ipAddress, userAgent);
 
             return portalSessionIssuerService.issuePortalSession(user, request, httpRequest, httpResponse);
         } catch (RuntimeException e) {
@@ -608,5 +628,52 @@ public class AuthController {
             return xForwardedFor.split(",")[0].trim();
         }
         return request.getRemoteAddr();
+    }
+
+    /**
+     * Record a successful login audit entry.
+     */
+    private void recordLoginAuditSuccess(String userId, String username, String ipAddress, String userAgent) {
+        try {
+            LoginAudit audit = LoginAudit.builder()
+                    .userId(userId)
+                    .username(username)
+                    .action(LoginAudit.AuditAction.LOGIN)
+                    .ipAddress(ipAddress)
+                    .userAgent(truncateUserAgent(userAgent))
+                    .success(true)
+                    .build();
+            loginAuditQueryRepository.save(audit);
+            log.debug("Recorded login success audit for user: {}", username);
+        } catch (Exception e) {
+            log.error("Failed to record login success audit: {}", e.getMessage());
+        }
+    }
+
+    private void recordLoginAuditFailure(String userId, String username, String ipAddress,
+                                         String userAgent, String reason) {
+        try {
+            LoginAudit audit = LoginAudit.builder()
+                    .userId(userId)
+                    .username(username)
+                    .action(LoginAudit.AuditAction.LOGIN)
+                    .ipAddress(ipAddress)
+                    .userAgent(truncateUserAgent(userAgent))
+                    .success(false)
+                    .failureReason(reason != null && reason.length() > 255
+                            ? reason.substring(0, 255) : reason)
+                    .build();
+            loginAuditQueryRepository.save(audit);
+            log.debug("Recorded login failure audit for user: {}, reason: {}", username, reason);
+        } catch (Exception e) {
+            log.error("Failed to record login failure audit: {}", e.getMessage());
+        }
+    }
+
+    private String truncateUserAgent(String userAgent) {
+        if (userAgent == null) {
+            return null;
+        }
+        return userAgent.length() > 500 ? userAgent.substring(0, 500) : userAgent;
     }
 }

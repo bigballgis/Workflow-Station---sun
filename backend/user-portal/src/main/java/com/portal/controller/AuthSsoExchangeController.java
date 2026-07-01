@@ -1,11 +1,13 @@
 package com.portal.controller;
 
+import com.platform.security.entity.LoginAudit;
 import com.platform.security.entity.User;
 import com.platform.security.model.UserStatus;
 import com.platform.security.repository.UserRepository;
 import com.portal.client.AdminCenterSsoClient;
 import com.portal.dto.LoginResponse;
 import com.portal.dto.SsoExchangeRequest;
+import com.portal.repository.LoginAuditQueryRepository;
 import com.portal.service.PortalSessionIssuerService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -36,6 +38,7 @@ public class AuthSsoExchangeController {
 
     private final AdminCenterSsoClient adminCenterSsoClient;
     private final UserRepository userRepository;
+    private final LoginAuditQueryRepository loginAuditQueryRepository;
     private final PortalSessionIssuerService portalSessionIssuerService;
 
     private final ConcurrentHashMap<String, PendingRedeem> pendingRedeems = new ConcurrentHashMap<>();
@@ -45,16 +48,27 @@ public class AuthSsoExchangeController {
             @Valid @RequestBody SsoExchangeRequest body,
             HttpServletRequest httpRequest,
             HttpServletResponse httpResponse) {
+        String ipAddress = getClientIpAddress(httpRequest);
+        String userAgent = httpRequest.getHeader("User-Agent");
         try {
             String userId = resolveUserId(body.getCode());
             User user = userRepository.findById(userId)
-                    .orElseThrow(() -> new IllegalArgumentException("User not found"));
+                    .orElse(null);
+
+            if (user == null) {
+                recordLoginAuditFailure(null, userId, ipAddress, userAgent, "User not found");
+                throw new IllegalArgumentException("User not found");
+            }
             if (user.isLocked()) {
+                recordLoginAuditFailure(user.getId(), user.getUsername(), ipAddress, userAgent,
+                        "Account is locked");
                 return ResponseEntity.badRequest().body(LoginResponse.builder()
                         .message("Account is locked")
                         .build());
             }
             if (UserStatus.INACTIVE.equals(user.getStatus())) {
+                recordLoginAuditFailure(user.getId(), user.getUsername(), ipAddress, userAgent,
+                        "Account is disabled");
                 return ResponseEntity.badRequest().body(LoginResponse.builder()
                         .message("Account is disabled")
                         .build());
@@ -62,8 +76,11 @@ public class AuthSsoExchangeController {
 
             user.resetFailedLoginCount();
             user.setLastLoginAt(LocalDateTime.now());
-            user.setLastLoginIp(getClientIpAddress(httpRequest));
+            user.setLastLoginIp(ipAddress);
             userRepository.save(user);
+
+            // Record successful SSO login audit
+            recordLoginAuditSuccess(user.getId(), user.getUsername(), ipAddress, userAgent);
 
             ResponseEntity<LoginResponse> response = portalSessionIssuerService.issuePortalSession(
                     user,
@@ -120,5 +137,55 @@ public class AuthSsoExchangeController {
             return xForwardedFor.split(",")[0].trim();
         }
         return request.getRemoteAddr();
+    }
+
+    /**
+     * Record a successful login audit entry.
+     */
+    private void recordLoginAuditSuccess(String userId, String username, String ipAddress, String userAgent) {
+        try {
+            LoginAudit audit = LoginAudit.builder()
+                    .userId(userId)
+                    .username(username)
+                    .action(LoginAudit.AuditAction.LOGIN)
+                    .ipAddress(ipAddress)
+                    .userAgent(truncateUserAgent(userAgent))
+                    .success(true)
+                    .build();
+            loginAuditQueryRepository.save(audit);
+            log.debug("Recorded SSO login success audit for user: {}", username);
+        } catch (Exception e) {
+            log.error("Failed to record SSO login success audit: {}", e.getMessage());
+        }
+    }
+
+    private void recordLoginAuditFailure(String userId, String username, String ipAddress,
+                                         String userAgent, String reason) {
+        try {
+            LoginAudit audit = LoginAudit.builder()
+                    .userId(userId)
+                    .username(username)
+                    .action(LoginAudit.AuditAction.LOGIN)
+                    .ipAddress(ipAddress)
+                    .userAgent(truncateUserAgent(userAgent))
+                    .success(false)
+                    .failureReason(reason != null && reason.length() > 255
+                            ? reason.substring(0, 255) : reason)
+                    .build();
+            loginAuditQueryRepository.save(audit);
+            log.debug("Recorded SSO login failure audit for user: {}, reason: {}", username, reason);
+        } catch (Exception e) {
+            log.error("Failed to record SSO login failure audit: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Truncate user agent string to prevent database overflow.
+     */
+    private String truncateUserAgent(String userAgent) {
+        if (userAgent == null) {
+            return null;
+        }
+        return userAgent.length() > 500 ? userAgent.substring(0, 500) : userAgent;
     }
 }

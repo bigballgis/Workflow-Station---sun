@@ -1,5 +1,4 @@
 package com.admin.repository;
-
 import com.platform.security.entity.VirtualGroupMember;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -8,10 +7,9 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
-
+import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.Optional;
-
 /**
  * 虚拟组成员仓库接口
  * Note: VirtualGroupMember entity uses groupId and userId as String fields, not relationships
@@ -53,12 +51,14 @@ public interface VirtualGroupMemberRepository extends JpaRepository<VirtualGroup
      * 删除虚拟组的所有成员
      */
     @Modifying
+    @Transactional
     void deleteByGroupId(String groupId);
     
     /**
      * 删除用户的所有虚拟组成员关系
      */
     @Modifying
+    @Transactional
     void deleteByUserId(String userId);
     
     /**
@@ -79,6 +79,7 @@ public interface VirtualGroupMemberRepository extends JpaRepository<VirtualGroup
      * 删除指定虚拟组和用户的成员关系
      */
     @Modifying
+    @Transactional
     void deleteByGroupIdAndUserId(String groupId, String userId);
     
     /**
