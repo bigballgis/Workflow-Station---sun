@@ -1,5 +1,72 @@
 import type { FormRules } from 'element-plus'
 import type { DialogColumn } from './types'
+import { getUser, type UserInfo } from '@/api/auth'
+
+/**
+ * Audit field name patterns that should be auto-filled when a new sub-table row
+ * is created. Case-insensitive; matches snake_case, camelCase, and flat variants.
+ *
+ * This is intentionally generic — any sub-table with these field names gets the
+ * behaviour for free, no per-table wiring required.
+ */
+const AUDIT_FIELD_PATTERNS: ReadonlyArray<{
+  /** Normalised (lowercase + underscores stripped) field-name check. */
+  matches: (normalised: string) => boolean
+  /** Produce the auto-filled value. Receives the stored user (may be null). */
+  fill: (user: UserInfo | null) => string
+}> = [
+  {
+    matches: (n) => n === 'created_at' || n === 'createdat' || n === 'create_time' || n === 'createtime',
+    fill: () => new Date().toISOString(),
+  },
+  {
+    matches: (n) => n === 'updated_at' || n === 'updatedat' || n === 'update_time' || n === 'updatetime',
+    fill: () => new Date().toISOString(),
+  },
+  {
+    matches: (n) => n === 'created_by' || n === 'createdby' || n === 'create_user' || n === 'createuser',
+    fill: (user) => user?.displayName || user?.username || '',
+  },
+  {
+    matches: (n) => n === 'updated_by' || n === 'updatedby' || n === 'update_user' || n === 'updateuser',
+    fill: (user) => user?.displayName || user?.username || '',
+  },
+]
+
+/** Normalise a field name for audit-field comparison. */
+function normaliseFieldName(name: string): string {
+  return name.trim().toLowerCase().replace(/[\s_-]+/g, '')
+}
+
+/**
+ * Apply audit-field auto-fill to an initial row before it opens in the Add dialog.
+ * Callers (e.g. {@link buildInitialRow}) invoke this after type-default seeding
+ * so audit values always win over generic type defaults.
+ */
+function applyAuditFieldDefaults(row: Record<string, unknown>, columns: DialogColumn[]): void {
+  // Resolve user once — all audit columns share the same value.
+  let cachedUser: UserInfo | null | undefined
+  const resolveUser = (): UserInfo | null => {
+    if (cachedUser === undefined) {
+      try {
+        cachedUser = getUser()
+      } catch {
+        cachedUser = null
+      }
+    }
+    return cachedUser
+  }
+
+  for (const col of columns) {
+    const normalised = normaliseFieldName(col.field)
+    for (const pattern of AUDIT_FIELD_PATTERNS) {
+      if (pattern.matches(normalised)) {
+        row[col.field] = pattern.fill(resolveUser())
+        break
+      }
+    }
+  }
+}
 
 export function buildInitialRow(columns: DialogColumn[]): Record<string, unknown> {
   const row: Record<string, unknown> = {}
@@ -52,6 +119,12 @@ export function buildInitialRow(columns: DialogColumn[]): Record<string, unknown
         row[col.field] = ''
     }
   }
+
+  // After type-based defaults are set, apply audit field auto-fill so that
+  // created_at / created_by / updated_at / updated_by always carry the correct
+  // values — regardless of the field's declared type (VARCHAR, TIMESTAMP, etc.).
+  applyAuditFieldDefaults(row, columns)
+
   return row
 }
 
