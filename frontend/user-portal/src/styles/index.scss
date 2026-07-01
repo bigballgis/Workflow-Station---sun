@@ -196,3 +196,22 @@ body {
 .el-cascader__dropdown {
   z-index: 99999 !important;
 }
+
+// 弹窗 / 抽屉内表单：字段名（label）完整显示、不折行，
+// 且让其宽度按文字自适应，使后面的输入框 / 下拉框自然跟随、不遮挡文字。
+// 三前端统一规则 — admin-center / developer-workstation 的 index.scss 同步。
+.el-dialog,
+.el-drawer {
+  // 左/右对齐布局（默认）：覆盖固定 label-width，改为按内容自适应且不换行
+  .el-form:not(.el-form--label-top) .el-form-item__label {
+    width: auto !important;
+    max-width: none !important;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  // label-position=top 时 label 独占一行，仅需保证不折行
+  .el-form--label-top .el-form-item__label {
+    white-space: nowrap;
+  }
+}

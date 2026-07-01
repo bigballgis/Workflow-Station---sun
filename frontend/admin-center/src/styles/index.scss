@@ -136,3 +136,19 @@ html, body, #app {
     }
   }
 }
+
+// 弹窗 / 抽屉内表单：字段名（label）完整显示、不折行，输入框自然跟随、不遮挡文字。
+// 与 user-portal / developer-workstation 的 index.scss 保持同一规则。
+.el-dialog,
+.el-drawer {
+  .el-form:not(.el-form--label-top) .el-form-item__label {
+    width: auto !important;
+    max-width: none !important;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .el-form--label-top .el-form-item__label {
+    white-space: nowrap;
+  }
+}

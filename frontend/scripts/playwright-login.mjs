@@ -72,4 +72,40 @@ export async function loginViaUnifiedSso(page, app, opts = {}) {
   return url
 }
 
+/**
+ * Direct portal username/password login via POST /api/portal/auth/login.
+ * Sets httpOnly session cookies + ws_up_user in localStorage (no unified SSO form).
+ *
+ * Default: developer / password (see deploy/init-scripts/01-admin/05-e2e-test-users-and-business-units.sql)
+ */
+export async function loginViaPortalPassword(page, opts = {}) {
+  const user = opts.user ?? process.env.LOGIN_USER ?? 'developer'
+  const pass = opts.pass ?? process.env.LOGIN_PASS ?? 'password'
+  const origin = (opts.loginOrigin ?? 'http://localhost:3000').replace(/\/$/, '')
+
+  await page.goto(`${origin}/portal/`, { waitUntil: 'domcontentloaded' }).catch(() => {})
+
+  const res = await page.request.post(`${origin}/api/portal/auth/login`, {
+    data: { username: user, password: pass },
+  })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok()) {
+    throw new Error(`Portal password login failed: ${body.message || `HTTP ${res.status()}`} (user=${user})`)
+  }
+  const u = body.user || body.data?.user
+  if (!u?.userId) {
+    throw new Error('Portal password login failed: response missing user')
+  }
+
+  await page.evaluate((userInfo) => {
+    localStorage.setItem('ws_up_user', JSON.stringify(userInfo))
+    localStorage.setItem('ws_up_user_id', String(userInfo.userId))
+  }, u)
+
+  console.log(`[login] portal password ${u.username} (${u.userId}) mode=${u.portalAccessMode ?? '?'}`)
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(1500)
+  return { userId: u.userId, username: u.username, portalAccessMode: u.portalAccessMode }
+}
+
 export { APP_PRESETS }
