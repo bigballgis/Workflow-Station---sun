@@ -17,7 +17,7 @@ export type {
 export { CONTROL_TYPE_MAP, resolveControlComponent } from './subTableAddDialogHelpers/controlTypeMap'
 
 // Row initialization / validation rules / seed merge
-export { buildInitialRow, mergeFormRowWithSeed, buildRules } from './subTableAddDialogHelpers/rowInit'
+export { buildInitialRow, mergeFormRowWithSeed, buildRules, applyEditAuditDefaults } from './subTableAddDialogHelpers/rowInit'
 
 // User-like value display helpers
 export {
@@ -49,6 +49,7 @@ export {
   SHARED_ATTACHMENT_RELATION_TABLE_ID,
   defaultAttachmentListColumns,
   deriveColumnsFromRelationFieldDefinitions,
+  mergeMissingTableFieldColumns,
   buildRelationTableFieldIndexFromDataTables,
   resolveSubListViewColumnsForBinding,
   resolveSubTableSchemaByTableId,

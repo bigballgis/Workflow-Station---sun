@@ -3,7 +3,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   extractUserIdFromCellValue,
   mergeFormRowWithSeed,
-  normalizeSubTableColumns
+  normalizeSubTableColumns,
+  applyEditAuditDefaults,
 } from '@/components/subTableAddDialogHelpers'
 import type { DialogColumn } from '@/components/subTableAddDialogHelpers'
 import {
@@ -173,6 +174,8 @@ export function useSubTableRowDialog(
       if (af) {
         savedRow = applyAssigneeDisplayNameToRow(savedRow, prevAssigneeId)
       }
+      // Refresh updated_at / updated_by on every edit
+      applyEditAuditDefaults(savedRow, subTableDialogColumns.value)
       rows.value[idx] = savedRow
       emit('update:modelValue', [...rows.value])
 

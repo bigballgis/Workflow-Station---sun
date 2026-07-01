@@ -68,6 +68,32 @@ function applyAuditFieldDefaults(row: Record<string, unknown>, columns: DialogCo
   }
 }
 
+/**
+ * Refresh {@code updated_at} / {@code updated_by} fields on an existing row during edit.
+ * Only touches the "updated" family — created_at / created_by are left unchanged.
+ */
+export function applyEditAuditDefaults(row: Record<string, unknown>, columns: DialogColumn[]): void {
+  let cachedUser: UserInfo | null | undefined
+  const resolveUser = (): UserInfo | null => {
+    if (cachedUser === undefined) {
+      try { cachedUser = getUser() } catch { cachedUser = null }
+    }
+    return cachedUser
+  }
+
+  const UPDATED_PATTERNS = AUDIT_FIELD_PATTERNS.filter(p => p.matches('updated_at') || p.matches('updated_by'))
+
+  for (const col of columns) {
+    const normalised = normaliseFieldName(col.field)
+    for (const pattern of UPDATED_PATTERNS) {
+      if (pattern.matches(normalised)) {
+        row[col.field] = pattern.fill(resolveUser())
+        break
+      }
+    }
+  }
+}
+
 export function buildInitialRow(columns: DialogColumn[]): Record<string, unknown> {
   const row: Record<string, unknown> = {}
   for (const col of columns) {

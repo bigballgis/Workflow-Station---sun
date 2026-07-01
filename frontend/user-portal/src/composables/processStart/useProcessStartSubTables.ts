@@ -6,10 +6,9 @@ import {
 } from '@/composables/tasks/shared'
 import {
   deriveColumnsFromRelationFieldDefinitions,
+  mergeMissingTableFieldColumns,
   resolveSubTableSchemaByTableId,
   enrichColumnsWithTableFieldDisplayNames,
-  defaultAttachmentListColumns,
-  SHARED_ATTACHMENT_RELATION_TABLE_ID,
   type RelationFieldDef,
   type DialogColumn,
 } from '@/components/subTableAddDialogHelpers'
@@ -34,19 +33,6 @@ export function createProcessStartSubTables(deps: {
 }) {
   const { caches, subTableBindings, deriveColumnsFromBinding } = deps
 
-  function isPortalSharedAttachmentTableBinding(b: {
-    bindingId?: number
-    tableId?: number | null
-    tableName?: string
-    foreignKeyField?: string | null
-  }): boolean {
-    const tableIdNum = b.tableId != null ? Number(b.tableId) : NaN
-    const tn = normalizeSubTableName(String(b.tableName ?? ''))
-    if (Number.isFinite(tableIdNum) && tableIdNum === SHARED_ATTACHMENT_RELATION_TABLE_ID) return true
-    if (tn === 'attachment') return true
-    return String(b.foreignKeyField ?? '').trim().toLowerCase() === 'main_id' && tn === 'attachment'
-  }
-
   function resolveSubTableBindingColumnsForStart(
     b: {
       bindingId?: number
@@ -69,8 +55,13 @@ export function createProcessStartSubTables(deps: {
         columns = deriveColumnsFromRelationFieldDefinitions(caches.cachedRelationTableFieldIndex.get(tableIdNum)!)
       }
     }
-    if ((!columns || columns.length === 0) && isPortalSharedAttachmentTableBinding(b)) {
-      columns = defaultAttachmentListColumns()
+    // Merge any table field definitions missing from this form's subListViews.
+    // Runs even when columns is empty so table schema can serve as the sole column source.
+    if (Number.isFinite(tableIdNum)) {
+      columns = mergeMissingTableFieldColumns(
+        Array.isArray(columns) ? columns : [],
+        caches.cachedRelationTableFieldIndex.get(tableIdNum),
+      )
     }
     if (Number.isFinite(tableIdNum) && columns?.length) {
       columns = enrichColumnsWithTableFieldDisplayNames(columns, tableIdNum, caches.cachedRelationTableFieldIndex)
@@ -96,7 +87,6 @@ export function createProcessStartSubTables(deps: {
   }
 
   return {
-    isPortalSharedAttachmentTableBinding,
     resolveSubTableBindingColumnsForStart,
     buildStartFormSubTablesPayload,
   }

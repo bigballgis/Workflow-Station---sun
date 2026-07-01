@@ -2,15 +2,14 @@ import { isFormCreateRuleReadonly } from '@/components/formRendererHelpers'
 import { resolveAssigneeFieldForBinding } from '@/utils/subTableAssignment'
 import {
   mergeListViewFieldColumn,
+  mergeMissingTableFieldColumns,
   deriveColumnsFromRelationFieldDefinitions,
   resolveSubTableSchemaByTableId,
   resolveSubListViewColumnsForBinding,
-  defaultAttachmentListColumns,
 } from '@/components/subTableAddDialogHelpers'
 import {
   isSyntheticLookupField,
   isAssigneeLikeLabel,
-  isPortalSharedAttachmentTableBinding,
 } from './subTableRowHelpers'
 import type { ApplicationDetailCtx } from './context'
 
@@ -270,10 +269,6 @@ export function createApplicationDetailColumns(ctx: ApplicationDetailCtx): Appli
       }
     }
 
-    if (isPortalSharedAttachmentTableBinding(binding)) {
-      return defaultAttachmentListColumns()
-    }
-
     return subFormColumns
   }
 
@@ -299,8 +294,13 @@ export function createApplicationDetailColumns(ctx: ApplicationDetailCtx): Appli
         columns = deriveColumnsFromRelationFieldDefinitions(ctx.cachedRelationTableFieldIndex.get(tableIdNum)!)
       }
     }
-    if ((!columns || columns.length === 0) && isPortalSharedAttachmentTableBinding(b)) {
-      columns = defaultAttachmentListColumns()
+    // Merge any table field definitions missing from this form's subListViews.
+    // Runs even when columns is empty so table schema can serve as the sole column source.
+    if (Number.isFinite(tableIdNum)) {
+      columns = mergeMissingTableFieldColumns(
+        Array.isArray(columns) ? columns : [],
+        ctx.cachedRelationTableFieldIndex.get(tableIdNum),
+      )
     }
     return Array.isArray(columns) ? columns : []
   }

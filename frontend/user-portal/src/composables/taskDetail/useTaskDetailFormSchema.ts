@@ -14,10 +14,7 @@ import {
   deriveColumnsFromRelationFieldDefinitions,
   resolveSubTableSchemaByTableId,
   resolveSubListViewColumnsForBinding,
-  defaultAttachmentListColumns,
-  SHARED_ATTACHMENT_RELATION_TABLE_ID,
 } from '@/components/subTableAddDialogHelpers'
-import { normalizeSubTableName } from './subTableRowUtils'
 import type { TaskDetailCtx } from './context'
 
 export interface TaskDetailFormSchemaFns {
@@ -63,19 +60,6 @@ export function createTaskDetailFormSchema(ctx: TaskDetailCtx): TaskDetailFormSc
           : [],
       formOptions: options
     }
-  }
-
-  function isPortalSharedAttachmentTableBinding(b: {
-    bindingId?: number
-    tableId?: number | null
-    tableName?: string
-    foreignKeyField?: string | null
-  }): boolean {
-    const tableIdNum = b.tableId != null ? Number(b.tableId) : NaN
-    const tn = normalizeSubTableName(String(b.tableName ?? ''))
-    if (Number.isFinite(tableIdNum) && tableIdNum === SHARED_ATTACHMENT_RELATION_TABLE_ID) return true
-    if (tn === 'attachment') return true
-    return String(b.foreignKeyField ?? '').trim().toLowerCase() === 'main_id' && tn === 'attachment'
   }
 
   // Derive display columns for a sub-table binding based on table metadata
@@ -294,10 +278,6 @@ export function createTaskDetailFormSchema(ctx: TaskDetailCtx): TaskDetailFormSc
         const fromTable = deriveColumnsFromRelationFieldDefinitions(tableFields)
         if (fromTable.length > 0) return fromTable
       }
-    }
-
-    if (isPortalSharedAttachmentTableBinding(binding)) {
-      return defaultAttachmentListColumns()
     }
 
     return subFormColumns

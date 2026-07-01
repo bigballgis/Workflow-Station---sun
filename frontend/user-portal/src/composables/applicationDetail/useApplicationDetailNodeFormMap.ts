@@ -5,7 +5,6 @@ import {
   findTabsRule,
   isTabPaneRule,
 } from '@/components/formRendererHelpers'
-import { defaultAttachmentListColumns } from '@/components/subTableAddDialogHelpers'
 import {
   resolveSubTablePrimaryKeyFields,
   hydrateChildSubTablesFromParentsNestedRows,
@@ -13,11 +12,11 @@ import {
   hydrateBindingsRowsFromVariablesBySharedRelationTableId,
   enrichChildBindingRowsFromParentsNestedSubTables,
   applySharedAttachmentFinalizeAndMaterialize,
+  isSubTableRowMetaField,
 } from '@/composables/tasks/shared'
 import { getCachedBpmnDocument } from '@/utils/bpmnParseCache'
 import {
   getSavedSubTableRowsFromVariables,
-  isPortalSharedAttachmentTableBinding,
 } from './subTableRowHelpers'
 import type { ApplicationDiagramNodeFormInfo, PreviousFormEntry } from './useApplicationDetailState'
 import type { ApplicationDetailCtx } from './context'
@@ -196,10 +195,19 @@ export function createApplicationDetailNodeFormMap(ctx: ApplicationDetailCtx): A
           for (const b of matchedForm.tableBindings || []) {
             if (b.bindingType === 'PRIMARY') continue
             let cols = ctx.resolveSubTableBindingColumnsForPortal(b, configForSubTables, formsList)
-            if ((!Array.isArray(cols) || cols.length === 0) && isPortalSharedAttachmentTableBinding(b)) {
-              cols = defaultAttachmentListColumns()
+            if (!Array.isArray(cols)) cols = []
+            // Merge live fieldDefinitions for table schema parity (same as Todo phase).
+            const fieldDefs = b.fieldDefinitions as Array<{ fieldName?: string; field_name?: string }> | undefined
+            if (fieldDefs?.length) {
+              const existingFields = new Set(cols.map(c => String(c.field ?? '').trim()).filter(Boolean))
+              for (const fd of fieldDefs) {
+                const fn = String(fd.fieldName ?? fd.field_name ?? '').trim()
+                if (!fn || existingFields.has(fn) || isSubTableRowMetaField(fn)) continue
+                cols.push({ field: fn, label: fn })
+                existingFields.add(fn)
+              }
             }
-            if (!Array.isArray(cols) || cols.length === 0) continue
+            if (cols.length === 0) continue
             const subFormDesign = ctx.resolveSubFormDesign(b, subForms)
             const bindingPortalViews =
               subTablePortalViewsPayload[b.bindingId]
