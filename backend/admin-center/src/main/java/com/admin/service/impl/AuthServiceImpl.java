@@ -23,7 +23,6 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.security.access.AccessDeniedException;
 
 import java.time.LocalDateTime;
@@ -46,7 +45,6 @@ public class AuthServiceImpl implements AuthService {
     private final ObjectProvider<LdapAuthenticator> ldapAuthenticatorProvider;
     private final AdminAuthProperties adminAuthProperties;
     private final LoginAuditQueryRepository loginAuditQueryRepository;
-    private final TransactionTemplate transactionTemplate;
 
     @Override
     @Transactional
@@ -533,9 +531,6 @@ public class AuthServiceImpl implements AuthService {
         response.addCookie(cookie);
     }
 
-    /**
-     * Record a successful login audit entry. Runs within the current transaction.
-     */
     private void recordLoginAuditSuccess(String userId, String username, String ipAddress, String userAgent) {
         try {
             LoginAudit audit = LoginAudit.builder()
@@ -553,24 +548,18 @@ public class AuthServiceImpl implements AuthService {
         }
     }
 
-    /**
-     * Record a failed login audit entry in a NEW transaction so it survives
-     * the rollback of the calling transaction.
-     */
     private void recordLoginAuditFailure(String username, String ipAddress, String userAgent, String reason) {
         try {
-            transactionTemplate.executeWithoutResult(status -> {
-                LoginAudit audit = LoginAudit.builder()
-                        .username(username)
-                        .action(LoginAudit.AuditAction.LOGIN)
-                        .ipAddress(ipAddress)
-                        .userAgent(truncateUserAgent(userAgent))
-                        .success(false)
-                        .failureReason(reason != null && reason.length() > 255
-                                ? reason.substring(0, 255) : reason)
-                        .build();
-                loginAuditQueryRepository.save(audit);
-            });
+            LoginAudit audit = LoginAudit.builder()
+                    .username(username)
+                    .action(LoginAudit.AuditAction.LOGIN)
+                    .ipAddress(ipAddress)
+                    .userAgent(truncateUserAgent(userAgent))
+                    .success(false)
+                    .failureReason(reason != null && reason.length() > 255
+                            ? reason.substring(0, 255) : reason)
+                    .build();
+            loginAuditQueryRepository.save(audit);
             log.debug("Recorded login failure audit for user: {}, reason: {}", username, reason);
         } catch (Exception e) {
             log.error("Failed to record login failure audit: {}", e.getMessage());
