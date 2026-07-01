@@ -4,6 +4,8 @@
  * Parsing counterpart lives in ./bpmnFormBindings.ts.
  */
 
+import { isTaskElement } from './bpmnFormBindings'
+
 export interface BpmnBoundNode {
   nodeId: string
   nodeName: string
@@ -60,7 +62,7 @@ export function buildUpdatedBpmnFormBindingsXml(
   for (let i = 0; i < allElements.length; i++) {
     const el = allElements[i]
     const localName = el.localName || el.nodeName.split(':').pop()
-    if (localName === 'userTask' || localName === 'serviceTask') {
+    if (isTaskElement(localName)) {
       allTasks.push(el)
     }
   }
@@ -194,7 +196,7 @@ export function buildUpdatedBpmnFormBindingsXml(
     for (let i = 0; i < allElements.length; i++) {
       const el = allElements[i]
       const localName = el.localName || el.nodeName.split(':').pop()
-      if ((localName === 'userTask' || localName === 'serviceTask') && el.getAttribute('id') === node.nodeId) {
+      if (isTaskElement(localName) && el.getAttribute('id') === node.nodeId) {
         task = el
         break
       }
