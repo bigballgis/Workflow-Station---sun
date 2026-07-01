@@ -327,3 +327,4 @@ frontend/user-portal/package-lock.json
 !docs/**/*.md
 # Claude Code personal settings
 .claude/settings.local.json
+deploy/pieces_metadata*
