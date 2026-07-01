@@ -17,6 +17,9 @@ export interface EmailConnection {
   hasPassword: boolean
   direction?: EmailConnectionDirection
   mailboxAddress?: string
+  imapHost?: string
+  imapPort?: number
+  imapUseSsl?: boolean
 }
 
 export interface EmailConnectionRequest {
@@ -31,6 +34,9 @@ export interface EmailConnectionRequest {
   enabled?: boolean
   direction?: EmailConnectionDirection
   mailboxAddress?: string
+  imapHost?: string
+  imapPort?: number
+  imapUseSsl?: boolean
 }
 
 export const connectionApi = {

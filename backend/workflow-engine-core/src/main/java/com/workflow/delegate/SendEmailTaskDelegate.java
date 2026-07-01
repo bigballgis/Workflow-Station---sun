@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.workflow.client.AdminCenterClient;
 import com.workflow.service.EmailSendOptions;
 import com.workflow.service.EmailSenderService;
+import com.platform.common.mail.MailDiagnostics;
 import com.workflow.util.BpmnExtensionUtils;
 import com.workflow.util.EmailTemplateResolver;
 import lombok.RequiredArgsConstructor;
@@ -112,6 +113,8 @@ public class SendEmailTaskDelegate implements JavaDelegate {
                     resolvedFrom,
                     resolvedFromName
             );
+            log.info("[SEND-EMAIL-TASK] activity={} connectionId={} functionUnitId={} to={} cc={} bcc={} from={} subject={}",
+                    activityId, connectionId, functionUnitId, resolvedTo, resolvedCc, resolvedBcc, resolvedFrom, resolvedSubject);
             emailSenderService.send(credentialsOpt.get(), options);
             execution.setVariable("emailSendResult", Map.of(
                     "success", true,
@@ -119,13 +122,17 @@ public class SendEmailTaskDelegate implements JavaDelegate {
                     "to", resolvedTo
             ));
         } catch (Exception e) {
-            log.error("Failed to send email for activity {}: {}", activityId, e.getMessage(), e);
+            String causeChain = MailDiagnostics.causeChain(e);
+            String rootCause = MailDiagnostics.rootCause(e);
+            log.error("[SEND-EMAIL-TASK] FAILED activity={} connectionId={} functionUnitId={} to={} | causeChain={} | rootCause={}",
+                    activityId, connectionId, functionUnitId, resolvedTo, causeChain, rootCause, e);
             execution.setVariable("emailSendResult", Map.of(
                     "success", false,
                     "activityId", activityId,
-                    "error", e.getMessage()
+                    "error", rootCause,
+                    "causeChain", causeChain
             ));
-            throw new BpmnError("EMAIL_SEND_FAILED", "邮件发送失败: " + e.getMessage());
+            throw new BpmnError("EMAIL_SEND_FAILED", "邮件发送失败: " + rootCause);
         }
     }
 

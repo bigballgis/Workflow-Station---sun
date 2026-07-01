@@ -1,20 +1,6 @@
 export type EmailProviderType = 'GMAIL' | 'OUTLOOK' | 'YAHOO' | 'QQ' | 'NETEASE_163' | 'SMTP'
 
-export interface EmailProviderPreset {
-  host: string
-  port: number
-  useTls: boolean
-}
-
-const PRESETS: Record<EmailProviderType, EmailProviderPreset> = {
-  GMAIL: { host: 'smtp.gmail.com', port: 587, useTls: true },
-  OUTLOOK: { host: 'smtp.office365.com', port: 587, useTls: true },
-  YAHOO: { host: 'smtp.mail.yahoo.com', port: 587, useTls: true },
-  QQ: { host: 'smtp.qq.com', port: 587, useTls: true },
-  NETEASE_163: { host: 'smtp.163.com', port: 465, useTls: true },
-  SMTP: { host: '', port: 587, useTls: true }
-}
-
+/** Provider label only — SMTP host/port/TLS are always entered manually in the UI. */
 export const EMAIL_PROVIDER_OPTIONS: EmailProviderType[] = [
   'GMAIL',
   'OUTLOOK',
@@ -24,14 +10,11 @@ export const EMAIL_PROVIDER_OPTIONS: EmailProviderType[] = [
   'SMTP'
 ]
 
-export function getEmailProviderPreset(type: string | undefined): EmailProviderPreset {
-  const key = (type || 'GMAIL') as EmailProviderType
-  return PRESETS[key] ?? PRESETS.GMAIL
-}
+const KNOWN: ReadonlySet<string> = new Set(EMAIL_PROVIDER_OPTIONS)
 
 export function normalizeEmailProviderType(type: string | undefined): EmailProviderType {
-  if (type && type in PRESETS) {
+  if (type && KNOWN.has(type)) {
     return type as EmailProviderType
   }
-  return 'GMAIL'
+  return 'SMTP'
 }

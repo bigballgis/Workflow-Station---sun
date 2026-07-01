@@ -24,6 +24,9 @@ public class EmailConnectionResponse {
     private boolean hasPassword;
     private EmailConnectionDirection direction;
     private String mailboxAddress;
+    private String imapHost;
+    private Integer imapPort;
+    private Boolean imapUseSsl;
 
     public static EmailConnectionResponse fromEntity(EmailConnection entity) {
         return EmailConnectionResponse.builder()
@@ -41,6 +44,9 @@ public class EmailConnectionResponse {
                 .hasPassword(entity.getPasswordEncrypted() != null && !entity.getPasswordEncrypted().isBlank())
                 .direction(entity.getDirection())
                 .mailboxAddress(entity.getMailboxAddress())
+                .imapHost(entity.getImapHost())
+                .imapPort(entity.getImapPort())
+                .imapUseSsl(entity.getImapUseSsl())
                 .build();
     }
 }

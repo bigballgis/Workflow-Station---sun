@@ -18,7 +18,12 @@ CREATE TABLE IF NOT EXISTS dw_email_connections (
     UNIQUE(function_unit_id, name)
 );
 
+-- Inbound IMAP endpoint (nullable; used when direction is INBOUND/BOTH). Align with Flyway V8.
+ALTER TABLE dw_email_connections ADD COLUMN IF NOT EXISTS imap_host VARCHAR(255);
+ALTER TABLE dw_email_connections ADD COLUMN IF NOT EXISTS imap_port INTEGER;
+ALTER TABLE dw_email_connections ADD COLUMN IF NOT EXISTS imap_use_ssl BOOLEAN DEFAULT TRUE;
+
 CREATE INDEX IF NOT EXISTS idx_dw_email_conn_fu ON dw_email_connections(function_unit_id);
 CREATE INDEX IF NOT EXISTS idx_dw_email_conn_uid ON dw_email_connections(connection_uid);
 
-COMMENT ON TABLE dw_email_connections IS 'Per–Function Unit SMTP connections (design-time source for email Send Tasks)';
+COMMENT ON TABLE dw_email_connections IS 'Per–Function Unit SMTP/IMAP connections (design-time source for email Send Tasks and inbound monitor)';

@@ -19,6 +19,7 @@ import com.developer.enums.BindingLinkMode;
 import com.developer.enums.BindingMode;
 import com.developer.enums.BindingType;
 import com.developer.enums.ConnectionType;
+import com.developer.enums.EmailConnectionDirection;
 import com.developer.enums.DataType;
 import com.developer.enums.FormType;
 import com.developer.enums.SubMode;
@@ -508,6 +509,15 @@ public class FunctionUnitImportWriter {
                 .fromName((String) connectionData.get("fromName"))
                 .useTls(connectionData.get("useTls") != null ? (Boolean) connectionData.get("useTls") : true)
                 .enabled(connectionData.get("enabled") != null ? (Boolean) connectionData.get("enabled") : true)
+                .direction(connectionData.get("direction") != null
+                        ? EmailConnectionDirection.valueOf((String) connectionData.get("direction"))
+                        : EmailConnectionDirection.OUTBOUND)
+                .mailboxAddress((String) connectionData.get("mailboxAddress"))
+                .imapHost((String) connectionData.get("imapHost"))
+                .imapPort(connectionData.get("imapPort") != null
+                        ? ((Number) connectionData.get("imapPort")).intValue() : null)
+                .imapUseSsl(connectionData.get("imapUseSsl") != null
+                        ? (Boolean) connectionData.get("imapUseSsl") : null)
                 .build();
         emailConnectionRepository.save(connection);
     }

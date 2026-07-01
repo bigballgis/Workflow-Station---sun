@@ -1,5 +1,6 @@
 package com.workflow.email.inbound;
 
+import com.platform.common.mail.MailDiagnostics;
 import com.workflow.email.extract.EmailMessage;
 import jakarta.mail.Folder;
 import jakarta.mail.Message;
@@ -40,6 +41,9 @@ public class ImapInboundMailClient implements InboundMailClient {
         String protocol = access.ssl() ? "imaps" : "imap";
         Session session = Session.getInstance(buildProps(access, protocol));
 
+        log.info("[IMAP-FETCH] begin protocol={} host={} port={} ssl={} user={} folder={} cursor={} max={}",
+                protocol, access.host(), access.port(), access.ssl(), mask(access.username()), folderName, cursor, max);
+
         Store store = null;
         Folder mailFolder = null;
         try {
@@ -53,14 +57,31 @@ public class ImapInboundMailClient implements InboundMailClient {
 
             if (lastUid < 0) {
                 long baseline = Math.max(0, uidFolder.getUIDNext() - 1);
+                log.info("[IMAP-FETCH] host={} folder={} first poll, baseline cursor={}",
+                        access.host(), folderName, baseline);
                 return new FetchResult(List.of(), String.valueOf(baseline));
             }
-            return fetchSince(uidFolder, mailFolder, lastUid, max);
+            FetchResult result = fetchSince(uidFolder, mailFolder, lastUid, max);
+            log.info("[IMAP-FETCH] SUCCESS host={} folder={} fetched={} newCursor={}",
+                    access.host(), folderName, result.messages().size(), result.nextCursor());
+            return result;
         } catch (Exception e) {
-            throw new IllegalStateException("IMAP fetch failed for " + access.host() + ": " + e.getMessage(), e);
+            log.error("[IMAP-FETCH] FAILED host={} port={} ssl={} folder={} | causeChain={} | rootCause={}",
+                    access.host(), access.port(), access.ssl(), folderName,
+                    MailDiagnostics.causeChain(e), MailDiagnostics.rootCause(e), e);
+            throw new IllegalStateException("IMAP fetch failed for " + access.host() + ": "
+                    + MailDiagnostics.rootCause(e), e);
         } finally {
             closeQuietly(mailFolder, store);
         }
+    }
+
+    private static String mask(String value) {
+        if (value == null || value.isBlank()) {
+            return "<none>";
+        }
+        int at = value.indexOf('@');
+        return at > 1 ? value.charAt(0) + "***" + value.substring(at) : value.charAt(0) + "***";
     }
 
     private Properties buildProps(MailboxAccess access, String protocol) {

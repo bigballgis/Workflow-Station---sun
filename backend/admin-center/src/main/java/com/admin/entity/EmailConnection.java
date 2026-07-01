@@ -81,6 +81,15 @@ public class EmailConnection {
     @Column(name = "mailbox_address")
     private String mailboxAddress;
 
+    @Column(name = "imap_host")
+    private String imapHost;
+
+    @Column(name = "imap_port")
+    private Integer imapPort;
+
+    @Column(name = "imap_use_ssl")
+    private Boolean imapUseSsl;
+
     @Column(name = "oauth_scopes", columnDefinition = "TEXT")
     private String oauthScopes;
 

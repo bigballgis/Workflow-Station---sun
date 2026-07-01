@@ -93,6 +93,18 @@ public class EmailConnection {
     @Column(name = "mailbox_address")
     private String mailboxAddress;
 
+    /** Inbound IMAP host (used when direction is INBOUND/BOTH). */
+    @Column(name = "imap_host")
+    private String imapHost;
+
+    /** Inbound IMAP port (typically 993 for SSL). */
+    @Column(name = "imap_port")
+    private Integer imapPort;
+
+    /** Whether inbound IMAP uses implicit SSL (imaps). */
+    @Column(name = "imap_use_ssl")
+    private Boolean imapUseSsl;
+
     @Column(name = "oauth_scopes", columnDefinition = "TEXT")
     private String oauthScopes;
 

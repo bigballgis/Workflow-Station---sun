@@ -95,27 +95,48 @@ public class EmailMonitorScheduler {
         }
         SysEmailConnection connection = connectionRepository.findById(rule.getConnectionUid()).orElse(null);
         if (connection == null || Boolean.FALSE.equals(connection.getEnabled())) {
-            log.debug("Rule {} connection {} missing/disabled", rule.getId(), rule.getConnectionUid());
+            log.warn("[EMAIL-MONITOR] rule {} skipped: connection {} missing/disabled",
+                    rule.getId(), rule.getConnectionUid());
             return null;
         }
         if (!isInbound(connection)) {
-            log.debug("Rule {} connection {} is not inbound-capable", rule.getId(), rule.getConnectionUid());
+            log.warn("[EMAIL-MONITOR] rule {} skipped: connection {} direction={} is not inbound-capable",
+                    rule.getId(), rule.getConnectionUid(), connection.getDirection());
             return null;
         }
-        ImapProviderPreset preset = ImapProviderPreset.forType(connection.getConnectionType());
-        if (preset == null) {
-            log.warn("No IMAP preset for connection type {} (rule {})",
-                    connection.getConnectionType(), rule.getId());
-            return null;
+
+        // Prefer explicitly configured IMAP endpoint; fall back to provider preset for known types.
+        String host = connection.getImapHost();
+        Integer port = connection.getImapPort();
+        boolean ssl = connection.getImapUseSsl() == null || Boolean.TRUE.equals(connection.getImapUseSsl());
+        if (!StringUtils.hasText(host) || port == null || port <= 0) {
+            ImapProviderPreset preset = ImapProviderPreset.forType(connection.getConnectionType());
+            if (preset == null) {
+                log.warn("[EMAIL-MONITOR] rule {} skipped: connection {} type={} has no IMAP host/port configured and no preset available",
+                        rule.getId(), rule.getConnectionUid(), connection.getConnectionType());
+                return null;
+            }
+            host = preset.host();
+            port = preset.port();
+            if (connection.getImapUseSsl() == null) {
+                ssl = preset.ssl();
+            }
+            log.info("[EMAIL-MONITOR] rule {} using IMAP preset for type {}: host={} port={} ssl={}",
+                    rule.getId(), connection.getConnectionType(), host, port, ssl);
+        } else {
+            log.info("[EMAIL-MONITOR] rule {} using configured IMAP endpoint: host={} port={} ssl={}",
+                    rule.getId(), host, port, ssl);
         }
+
         String username = StringUtils.hasText(connection.getMailboxAddress())
                 ? connection.getMailboxAddress() : connection.getUsername();
         String password = decrypt(connection.getPasswordEncrypted());
         if (!StringUtils.hasText(username) || password == null) {
-            log.warn("Rule {} connection {} missing IMAP credentials", rule.getId(), rule.getConnectionUid());
+            log.warn("[EMAIL-MONITOR] rule {} skipped: connection {} missing IMAP credentials (username/password)",
+                    rule.getId(), rule.getConnectionUid());
             return null;
         }
-        return new MailboxAccess(preset.host(), preset.port(), preset.ssl(), username, password);
+        return new MailboxAccess(host, port, ssl, username, password);
     }
 
     private boolean isInbound(SysEmailConnection connection) {

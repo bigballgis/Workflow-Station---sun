@@ -227,6 +227,8 @@ application-local.properties
 .docker/
 docker-compose.override.yml
 docker-compose.local.yml
+# Local dev overlay (Mailpit etc.) — copy from docker-compose.local.example.yml
+deploy/environments/dev/docker-compose.local.yml
 
 # =============================================================================
 # Kubernetes secrets (actual secrets, not templates)

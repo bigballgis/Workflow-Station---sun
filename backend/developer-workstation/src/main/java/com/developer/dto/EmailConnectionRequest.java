@@ -43,4 +43,15 @@ public class EmailConnectionRequest {
 
     /** Optional mailbox address for inbound polling; defaults to the connection email. */
     private String mailboxAddress;
+
+    /** Inbound IMAP host; required when direction includes inbound and no provider preset applies. */
+    private String imapHost;
+
+    /** Inbound IMAP port (typically 993 for SSL). */
+    @Min(1)
+    @Max(65535)
+    private Integer imapPort;
+
+    /** Whether inbound IMAP uses implicit SSL (imaps). */
+    private Boolean imapUseSsl;
 }

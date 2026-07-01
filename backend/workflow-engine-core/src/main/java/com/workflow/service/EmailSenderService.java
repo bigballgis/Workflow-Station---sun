@@ -1,5 +1,7 @@
 package com.workflow.service;
 
+import com.platform.common.mail.MailDiagnostics;
+import com.platform.common.mail.SmtpTransportProperties;
 import jakarta.activation.DataHandler;
 import jakarta.mail.Authenticator;
 import jakarta.mail.Message;
@@ -15,6 +17,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
@@ -25,25 +30,53 @@ import java.util.Properties;
 public class EmailSenderService {
 
     public void send(Map<String, Object> credentials, EmailSendOptions options) throws Exception {
+        String host = (String) credentials.get("host");
+        Object port = credentials.get("port");
+        Object useTls = credentials.get("useTls");
+        log.info("[SMTP-SEND] begin host={} port={} useTls={} to={} cc={} from={} subject={}",
+                host, port, useTls, options.to(), options.cc(), options.fromEmail(), options.subject());
+
         Session session = buildSession(credentials);
-        MimeMessage message = buildMessage(session, credentials, options);
-        Transport.send(message);
-        log.info("Workflow email sent to {}", options.to());
+
+        ByteArrayOutputStream debugBuf = new ByteArrayOutputStream();
+        PrintStream debugOut = new PrintStream(debugBuf, true, StandardCharsets.UTF_8);
+        session.setDebug(true);
+        session.setDebugOut(debugOut);
+
+        try {
+            MimeMessage message = buildMessage(session, credentials, options);
+            Transport.send(message);
+            debugOut.flush();
+            log.info("[SMTP-SEND] SUCCESS host={} to={}\n----- JavaMail trace -----\n{}--------------------------",
+                    host, options.to(), debugBuf.toString(StandardCharsets.UTF_8));
+        } catch (Exception e) {
+            debugOut.flush();
+            log.error("[SMTP-SEND] FAILED host={} port={} useTls={} | causeChain={} | rootCause={}\n----- JavaMail trace -----\n{}--------------------------",
+                    host, port, useTls, MailDiagnostics.causeChain(e), MailDiagnostics.rootCause(e),
+                    debugBuf.toString(StandardCharsets.UTF_8), e);
+            throw e;
+        }
     }
 
     private Session buildSession(Map<String, Object> credentials) {
         String host = (String) credentials.get("host");
-        int port = credentials.get("port") != null ? ((Number) credentials.get("port")).intValue() : 587;
+        if (!StringUtils.hasText(host)) {
+            throw new IllegalArgumentException("SMTP host is required");
+        }
+        if (credentials.get("port") == null) {
+            throw new IllegalArgumentException("SMTP port is required");
+        }
+        int port = ((Number) credentials.get("port")).intValue();
         String username = (String) credentials.get("username");
         String password = (String) credentials.get("password");
-        boolean useTls = credentials.get("useTls") == null || Boolean.TRUE.equals(credentials.get("useTls"));
+        if (credentials.get("useTls") == null) {
+            throw new IllegalArgumentException("SMTP useTls is required");
+        }
+        boolean useTls = Boolean.TRUE.equals(credentials.get("useTls"));
+        boolean auth = StringUtils.hasText(username);
 
         Properties props = new Properties();
-        props.put("mail.smtp.host", host);
-        props.put("mail.smtp.port", String.valueOf(port));
-        props.put("mail.smtp.auth", username != null && !username.isBlank());
-        props.put("mail.smtp.starttls.enable", useTls);
-        props.put("mail.smtp.ssl.protocols", "TLSv1.2");
+        SmtpTransportProperties.apply(props, host.trim(), port, useTls, auth);
 
         if (username != null && !username.isBlank()) {
             return Session.getInstance(props, new Authenticator() {

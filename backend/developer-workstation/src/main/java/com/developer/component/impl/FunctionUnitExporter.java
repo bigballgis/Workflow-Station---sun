@@ -514,6 +514,9 @@ public class FunctionUnitExporter {
         map.put("oauthAccessTokenEncrypted", connection.getOauthAccessTokenEncrypted());
         map.put("tokenExpiresAt", connection.getTokenExpiresAt() != null ? connection.getTokenExpiresAt().toString() : null);
         map.put("mailboxAddress", connection.getMailboxAddress());
+        map.put("imapHost", connection.getImapHost());
+        map.put("imapPort", connection.getImapPort());
+        map.put("imapUseSsl", connection.getImapUseSsl());
         map.put("oauthScopes", connection.getOauthScopes());
         return map;
     }

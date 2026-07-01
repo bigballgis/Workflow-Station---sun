@@ -47,7 +47,15 @@ if (Test-Path variable:PSNativeCommandUseErrorActionPreference) {
 
 $RootDir = Resolve-Path "$PSScriptRoot/../../.."
 $ComposeFile = "$PSScriptRoot/docker-compose.dev.yml"
+$LocalComposeFile = "$PSScriptRoot/docker-compose.local.yml"
 $EnvFile = "$PSScriptRoot/.env"
+
+# Optional gitignored local overlay (Mailpit, extra SSRF hosts, etc.)
+$DevComposeArgs = @("-f", $ComposeFile)
+if (Test-Path $LocalComposeFile) {
+    $DevComposeArgs += @("-f", $LocalComposeFile)
+    Write-Host "[local] Using docker-compose.local.yml overlay (gitignored — not for commit)" -ForegroundColor DarkCyan
+}
 
 # NOTE: the admin "Activepieces" launcher URL is injected at RUNTIME (not build time) via
 # AP_BRIDGE_URL on the admin-center-frontend container (docker-entrypoint.sh -> config.js).
@@ -274,12 +282,12 @@ if ($Service) {
     Write-Host "`n[2/2] Deploying $Service..." -ForegroundColor Yellow
     # 前端 Dockerfile.local 仅 COPY dist；compose 单独 --build 时常命中缓存层，容器内仍是旧资源，表现为「部署了但页面没变」
     if ($svc.Type -eq "frontend") {
-        docker compose -f $ComposeFile --env-file $EnvFile build --no-cache $Service
+        docker compose @DevComposeArgs --env-file $EnvFile build --no-cache $Service
         if ($LASTEXITCODE -ne 0) { throw "Docker build failed for $Service" }
-        docker compose -f $ComposeFile --env-file $EnvFile up -d --no-deps $Service
+        docker compose @DevComposeArgs --env-file $EnvFile up -d --no-deps $Service
     } elseif ($svc.Type -eq "edge") {
         # 仅 nginx:alpine + 挂载 nginx-edge.conf；无镜像构建，改配置后 up 会按 compose 重建/重启
-        docker compose -f $ComposeFile --env-file $EnvFile up -d --no-deps --force-recreate $Service
+        docker compose @DevComposeArgs --env-file $EnvFile up -d --no-deps --force-recreate $Service
     } else {
         # Resolve Java base image with fallback before single-service backend build
         $resolvedJavaImage = Resolve-BaseImage -Candidates @(
@@ -287,9 +295,9 @@ if ($Service) {
             "eclipse-temurin:17-jre",
             "docker.m.daocloud.io/library/eclipse-temurin:17-jre"
         )
-        docker compose -f $ComposeFile --env-file $EnvFile build --build-arg "JAVA_BASE_IMAGE=$resolvedJavaImage" $Service
+        docker compose @DevComposeArgs --env-file $EnvFile build --build-arg "JAVA_BASE_IMAGE=$resolvedJavaImage" $Service
         if ($LASTEXITCODE -ne 0) { throw "Docker compose build failed for $Service" }
-        docker compose -f $ComposeFile --env-file $EnvFile up -d --no-deps $Service
+        docker compose @DevComposeArgs --env-file $EnvFile up -d --no-deps $Service
     }
     if ($LASTEXITCODE -ne 0) { throw "Failed to deploy $Service" }
 
@@ -311,7 +319,7 @@ if ($Service) {
     Write-Host "`n========================================" -ForegroundColor Green
     Write-Host " $Service deployed successfully!" -ForegroundColor Green
     Write-Host "========================================" -ForegroundColor Green
-    docker compose -f $ComposeFile --env-file $EnvFile ps $Service
+    docker compose @DevComposeArgs --env-file $EnvFile ps $Service
     exit 0
 }
 
@@ -338,7 +346,7 @@ if (-not $SkipImagePull) {
 # Step 0b: Clean
 if ($Clean) {
     Write-Host "`n[0/4] Cleaning old containers and volumes..." -ForegroundColor Yellow
-    docker compose -f $ComposeFile --env-file $EnvFile down -v --remove-orphans
+    docker compose @DevComposeArgs --env-file $EnvFile down -v --remove-orphans
     Write-Host "  Done." -ForegroundColor Green
 }
 
@@ -445,12 +453,12 @@ if (-not $SkipInfra) {
         Write-Host "  Will still attempt to start infra; if pulls fail compose will exit with error." -ForegroundColor Yellow
     }
 
-    docker compose -f $ComposeFile --env-file $EnvFile up -d postgres redis kafka n8n
+    docker compose @DevComposeArgs --env-file $EnvFile up -d postgres redis kafka n8n
     if ($LASTEXITCODE -ne 0) {
         Write-Host "  docker compose up failed during infrastructure startup." -ForegroundColor Red
         Write-Host "  This usually means one or more required images could not be pulled." -ForegroundColor Red
         Write-Host "  Check Docker network/proxy settings or ensure the mirror is reachable." -ForegroundColor Yellow
-        docker compose -f $ComposeFile --env-file $EnvFile ps
+        docker compose @DevComposeArgs --env-file $EnvFile ps
         throw "Docker compose infra startup failed"
     }
 
@@ -547,7 +555,7 @@ while (-not $buildOk -and $attemptedImages.Count -le 3) {
         Write-Host "  Retrying build with Java base image: $tryImage" -ForegroundColor Yellow
     }
 
-    docker compose -f $ComposeFile --env-file $EnvFile build --build-arg "JAVA_BASE_IMAGE=$tryImage"
+    docker compose @DevComposeArgs --env-file $EnvFile build --build-arg "JAVA_BASE_IMAGE=$tryImage"
     if ($LASTEXITCODE -eq 0) {
         $buildOk = $true
         $resolvedJavaImage = $tryImage
@@ -558,10 +566,10 @@ while (-not $buildOk -and $attemptedImages.Count -le 3) {
 
     # Fallback 1: try excluding superset-final (heavy, may have independent pull issues)
     Write-Host "  Attempting fallback: rebuild excluding superset-final..." -ForegroundColor Yellow
-    $svcList = docker compose -f $ComposeFile --env-file $EnvFile config --services 2>$null | Where-Object { $_ -ne 'superset-final' }
+    $svcList = docker compose @DevComposeArgs --env-file $EnvFile config --services 2>$null | Where-Object { $_ -ne 'superset-final' }
     if ($svcList -and $svcList.Count -gt 0) {
         Write-Host "  Rebuilding services: $($svcList -join ', ')" -ForegroundColor DarkGray
-        docker compose -f $ComposeFile --env-file $EnvFile build --build-arg "JAVA_BASE_IMAGE=$tryImage" $svcList
+        docker compose @DevComposeArgs --env-file $EnvFile build --build-arg "JAVA_BASE_IMAGE=$tryImage" $svcList
         if ($LASTEXITCODE -eq 0) {
             Write-Host "  Fallback build succeeded (superset-final skipped)." -ForegroundColor Green
             $buildOk = $true
@@ -592,12 +600,12 @@ while (-not $buildOk -and $attemptedImages.Count -le 3) {
 
 if (-not $buildOk) {
     Write-Host "  All build attempts failed." -ForegroundColor Red
-    docker compose -f $ComposeFile --env-file $EnvFile ps
+    docker compose @DevComposeArgs --env-file $EnvFile ps
     throw "Docker compose image build failed (all fallbacks exhausted)"
 }
 if (-not $SkipImagePull) {
     Write-Host "`n[0.5] Pulling images listed in compose (sequential, retries)" -ForegroundColor Yellow
-    $images = docker compose -f $ComposeFile --env-file $EnvFile config --images 2>$null | Sort-Object -Unique
+    $images = docker compose @DevComposeArgs --env-file $EnvFile config --images 2>$null | Sort-Object -Unique
     $failedImages = @()
     foreach ($img in $images) {
         # Skip local dev tags (built locally)
@@ -618,20 +626,20 @@ if (-not $SkipImagePull) {
 if ($ServicesOnly -or $SkipInfra) {
     Write-Host "  Starting only non-infra services (skip infra)..." -ForegroundColor Yellow
     $infra = @('postgres','redis','kafka','n8n','superset-final')
-    $allSvcs = docker compose -f $ComposeFile --env-file $EnvFile config --services 2>$null
+    $allSvcs = docker compose @DevComposeArgs --env-file $EnvFile config --services 2>$null
     $startSvcs = $allSvcs | Where-Object { $infra -notcontains $_ }
     if ($startSvcs -and $startSvcs.Count -gt 0) {
-        docker compose -f $ComposeFile --env-file $EnvFile up -d --no-deps $startSvcs
+        docker compose @DevComposeArgs --env-file $EnvFile up -d --no-deps $startSvcs
     } else {
         Write-Host "  No non-infra services to start." -ForegroundColor DarkGray
     }
 } else {
-    docker compose -f $ComposeFile --env-file $EnvFile up -d
+    docker compose @DevComposeArgs --env-file $EnvFile up -d
 }
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "  docker compose failed. Current service status:" -ForegroundColor Red
-    docker compose -f $ComposeFile --env-file $EnvFile ps
+    docker compose @DevComposeArgs --env-file $EnvFile ps
     throw "Docker compose service startup failed"
 }
 
@@ -643,7 +651,7 @@ Wait-ForContainerHealth -ContainerName "platform-developer-workstation-dev" -Dis
 Wait-ForContainerHealth -ContainerName "platform-edge-frontend-dev" -DisplayName "Edge frontend (single-origin)"
 
 Write-Host "  Current service status:" -ForegroundColor Cyan
-docker compose -f $ComposeFile --env-file $EnvFile ps
+docker compose @DevComposeArgs --env-file $EnvFile ps
 
 Write-Host "`n========================================" -ForegroundColor Green
 Write-Host " Deployment Complete!" -ForegroundColor Green

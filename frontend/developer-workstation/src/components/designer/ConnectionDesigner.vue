@@ -48,7 +48,7 @@
           <div class="form-tip">{{ t('connection.emailAddressHint') }}</div>
         </el-form-item>
         <el-form-item :label="t('connection.providerType')" required>
-          <el-select v-model="form.connectionType" style="width: 100%" @change="applyProviderPreset">
+          <el-select v-model="form.connectionType" style="width: 100%">
             <el-option
               v-for="provider in EMAIL_PROVIDER_OPTIONS"
               :key="provider"
@@ -60,16 +60,31 @@
         <el-form-item :label="t('connection.host')" required>
           <el-input
             v-model="form.host"
-            :placeholder="smtpHostPlaceholder"
+            placeholder="smtp.example.com"
             autocomplete="off"
           />
           <div class="form-tip">{{ t('connection.smtpHostHint') }}</div>
         </el-form-item>
         <el-form-item :label="t('connection.port')" required>
-          <el-input-number v-model="form.port" :min="1" :max="65535" controls-position="right" style="width: 100%" />
+          <el-input-number
+            v-model="form.port"
+            :min="1"
+            :max="65535"
+            controls-position="right"
+            style="width: 100%"
+          />
+          <div class="form-tip">{{ t('connection.smtpPortHint') }}</div>
         </el-form-item>
-        <el-form-item :label="t('connection.useTls')">
-          <el-switch v-model="form.useTls" />
+        <el-form-item :label="t('connection.useTls')" required>
+          <el-radio-group v-model="form.useTls">
+            <el-radio :value="true">{{ t('common.yes') }}</el-radio>
+            <el-radio :value="false">{{ t('common.no') }}</el-radio>
+          </el-radio-group>
+          <div class="form-tip">{{ t('connection.smtpTlsHint') }}</div>
+        </el-form-item>
+        <el-form-item :label="t('connection.username')">
+          <el-input v-model="form.username" autocomplete="off" :placeholder="t('connection.usernamePlaceholder')" />
+          <div class="form-tip">{{ t('connection.usernameHint') }}</div>
         </el-form-item>
         <el-form-item :label="t('connection.password')" :required="!editingId">
           <el-input
@@ -92,6 +107,36 @@
           </el-select>
           <div class="form-tip">{{ t('connection.directionHint') }}</div>
         </el-form-item>
+
+        <template v-if="isInbound">
+          <el-divider content-position="left">{{ t('connection.inboundSection') }}</el-divider>
+          <el-form-item :label="t('connection.mailboxAddress')">
+            <el-input v-model="form.mailboxAddress" autocomplete="off" :placeholder="t('connection.mailboxAddressPlaceholder')" />
+            <div class="form-tip">{{ t('connection.mailboxAddressHint') }}</div>
+          </el-form-item>
+          <el-form-item :label="t('connection.imapHost')" :required="imapRequired">
+            <el-input v-model="form.imapHost" placeholder="imap.example.com" autocomplete="off" />
+            <div class="form-tip">{{ t('connection.imapHostHint') }}</div>
+          </el-form-item>
+          <el-form-item :label="t('connection.imapPort')" :required="imapRequired">
+            <el-input-number
+              v-model="form.imapPort"
+              :min="1"
+              :max="65535"
+              controls-position="right"
+              style="width: 100%"
+            />
+            <div class="form-tip">{{ t('connection.imapPortHint') }}</div>
+          </el-form-item>
+          <el-form-item :label="t('connection.imapUseSsl')">
+            <el-radio-group v-model="form.imapUseSsl">
+              <el-radio :value="true">{{ t('common.yes') }}</el-radio>
+              <el-radio :value="false">{{ t('common.no') }}</el-radio>
+            </el-radio-group>
+            <div class="form-tip">{{ t('connection.imapSslHint') }}</div>
+          </el-form-item>
+        </template>
+
         <el-form-item :label="t('connection.enabled')">
           <el-switch v-model="form.enabled" />
         </el-form-item>
@@ -125,7 +170,6 @@ import { connectionApi, type EmailConnection, type EmailConnectionRequest } from
 import { resolveUserFacingHttpMessage } from '@/utils/httpErrorMessage'
 import {
   EMAIL_PROVIDER_OPTIONS,
-  getEmailProviderPreset,
   normalizeEmailProviderType,
   type EmailProviderType
 } from '@/utils/emailProviderPresets'
@@ -145,45 +189,50 @@ const testRecipient = ref('')
 
 const defaultForm = (): EmailConnectionRequest => ({
   name: '',
-  connectionType: 'GMAIL',
+  connectionType: 'SMTP',
   host: '',
-  port: 587,
+  port: undefined,
   username: '',
   password: '',
   fromName: '',
-  useTls: true,
+  useTls: undefined,
   enabled: true,
-  direction: 'OUTBOUND'
+  direction: 'OUTBOUND',
+  mailboxAddress: '',
+  imapHost: '',
+  imapPort: undefined,
+  imapUseSsl: true
 })
 
 const form = reactive<EmailConnectionRequest>(defaultForm())
 
-const smtpHostPlaceholder = computed(
-  () => getEmailProviderPreset(form.connectionType).host || 'smtp.example.com'
-)
+/** Inbound (IMAP) fields only apply when direction includes inbound. */
+const isInbound = computed(() => form.direction === 'INBOUND' || form.direction === 'BOTH')
 
-/** Switching provider resets SMTP fields to that provider's defaults (user may edit before save). */
-function applyProviderPreset() {
-  const preset = getEmailProviderPreset(form.connectionType)
-  form.host = preset.host
-  form.port = preset.port
-  form.useTls = preset.useTls
-}
+/** Non-SMTP provider types have a built-in IMAP preset in the engine; custom SMTP must fill it in. */
+const hasImapPreset = computed(() => form.connectionType !== 'SMTP')
+
+/** IMAP host/port are mandatory only for custom SMTP used inbound (no preset to fall back on). */
+const imapRequired = computed(() => isInbound.value && !hasImapPreset.value)
 
 function buildPayload(): EmailConnectionRequest {
   const emailAddress = form.name.trim()
+  const inbound = form.direction === 'INBOUND' || form.direction === 'BOTH'
   return {
     name: emailAddress,
     connectionType: form.connectionType as EmailProviderType,
     host: form.host?.trim(),
     port: form.port,
     useTls: form.useTls,
-    username: emailAddress,
+    username: form.username?.trim() || emailAddress,
     password: form.password,
     fromName: form.fromName?.trim() || undefined,
     enabled: form.enabled,
     direction: form.direction || 'OUTBOUND',
-    mailboxAddress: form.mailboxAddress?.trim() || undefined
+    mailboxAddress: inbound ? (form.mailboxAddress?.trim() || undefined) : undefined,
+    imapHost: inbound ? (form.imapHost?.trim() || undefined) : undefined,
+    imapPort: inbound ? form.imapPort : undefined,
+    imapUseSsl: inbound ? form.imapUseSsl : undefined
   }
 }
 
@@ -202,7 +251,6 @@ async function loadConnections() {
 function openCreateDialog() {
   editingId.value = null
   Object.assign(form, defaultForm())
-  applyProviderPreset()
   showFormDialog.value = true
 }
 
@@ -217,6 +265,9 @@ function openEditDialog(row: EmailConnection) {
     password: '',
     direction: row.direction || 'OUTBOUND',
     mailboxAddress: row.mailboxAddress || '',
+    imapHost: row.imapHost || '',
+    imapPort: row.imapPort ?? undefined,
+    imapUseSsl: row.imapUseSsl ?? true,
     fromName: row.fromName || '',
     useTls: row.useTls,
     enabled: row.enabled
@@ -237,6 +288,22 @@ async function handleSave() {
   }
   if (!form.host?.trim()) {
     ElMessage.warning(t('connection.hostRequired'))
+    return
+  }
+  if (form.port == null || form.port < 1 || form.port > 65535) {
+    ElMessage.warning(t('connection.portRequired'))
+    return
+  }
+  if (form.useTls == null) {
+    ElMessage.warning(t('connection.tlsRequired'))
+    return
+  }
+  if (imapRequired.value && !form.imapHost?.trim()) {
+    ElMessage.warning(t('connection.imapHostRequired'))
+    return
+  }
+  if (imapRequired.value && (form.imapPort == null || form.imapPort < 1 || form.imapPort > 65535)) {
+    ElMessage.warning(t('connection.imapPortRequired'))
     return
   }
   if (!editingId.value && !form.password) {

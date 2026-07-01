@@ -59,6 +59,9 @@ public class EmailConnectionSyncComponentImpl implements EmailConnectionSyncComp
                     .oauthAccessTokenEncrypted((String) conn.get("oauthAccessTokenEncrypted"))
                     .tokenExpiresAt(parseInstant(conn.get("tokenExpiresAt")))
                     .mailboxAddress((String) conn.get("mailboxAddress"))
+                    .imapHost((String) conn.get("imapHost"))
+                    .imapPort(conn.get("imapPort") != null ? ((Number) conn.get("imapPort")).intValue() : null)
+                    .imapUseSsl(conn.get("imapUseSsl") != null ? (Boolean) conn.get("imapUseSsl") : null)
                     .oauthScopes((String) conn.get("oauthScopes"))
                     .syncedAt(Instant.now())
                     .build();

@@ -1,0 +1,23 @@
+# =============================================================================
+# 本地开发 overlay 模板（可提交）
+# =============================================================================
+# 用法：
+#   copy docker-compose.local.example.yml docker-compose.local.yml
+# docker-compose.local.yml 已在根 .gitignore，请勿提交。
+# build-and-deploy.ps1 检测到 local 文件后会自动 -f 合并。
+# =============================================================================
+
+services:
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: platform-mailpit-dev
+    ports:
+      - "8025:8025"
+      - "1025:1025"
+    networks:
+      - platform-dev-network
+    restart: unless-stopped
+
+  developer-workstation:
+    environment:
+      SSRF_ALLOWED_HOSTS: n8n,mailpit

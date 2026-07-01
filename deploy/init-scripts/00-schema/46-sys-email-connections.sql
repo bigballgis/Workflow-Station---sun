@@ -16,6 +16,11 @@ CREATE TABLE IF NOT EXISTS sys_email_connections (
     UNIQUE(function_unit_id, name)
 );
 
+-- Inbound IMAP endpoint (nullable; synced from developer-workstation). Align with admin Flyway V215.
+ALTER TABLE sys_email_connections ADD COLUMN IF NOT EXISTS imap_host VARCHAR(255);
+ALTER TABLE sys_email_connections ADD COLUMN IF NOT EXISTS imap_port INTEGER;
+ALTER TABLE sys_email_connections ADD COLUMN IF NOT EXISTS imap_use_ssl BOOLEAN DEFAULT TRUE;
+
 CREATE INDEX IF NOT EXISTS idx_sys_email_conn_fu ON sys_email_connections(function_unit_id);
 
-COMMENT ON TABLE sys_email_connections IS 'SMTP connections synced from developer workstation on Function Unit import/deploy';
+COMMENT ON TABLE sys_email_connections IS 'SMTP/IMAP connections synced from developer workstation on Function Unit import/deploy';

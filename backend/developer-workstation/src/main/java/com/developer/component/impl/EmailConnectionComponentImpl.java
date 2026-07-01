@@ -5,12 +5,14 @@ import com.developer.dto.EmailConnectionRequest;
 import com.developer.dto.EmailConnectionResponse;
 import com.developer.entity.EmailConnection;
 import com.developer.entity.FunctionUnit;
+import com.developer.enums.ConnectionType;
+import com.developer.enums.EmailConnectionDirection;
 import com.developer.exception.DeveloperBusinessException;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.EmailConnectionRepository;
 import com.developer.repository.FunctionUnitRepository;
-import com.developer.util.EmailProviderPreset;
 import com.developer.util.SmtpMailSender;
+import com.platform.common.mail.MailDiagnostics;
 import com.platform.common.security.SsrfProtection;
 import com.platform.security.encryption.EncryptionService;
 import lombok.RequiredArgsConstructor;
@@ -72,6 +74,9 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
         ResolvedSmtpEndpoint endpoint = resolveSmtpEndpoint(request, null);
         String emailAddress = request.getName().trim();
         String username = StringUtils.hasText(request.getUsername()) ? request.getUsername().trim() : emailAddress;
+        EmailConnectionDirection direction = request.getDirection() != null
+                ? request.getDirection() : EmailConnectionDirection.OUTBOUND;
+        ResolvedImapEndpoint imap = resolveImapEndpoint(request, null, direction);
 
         EmailConnection connection = EmailConnection.builder()
                 .connectionUid(UUID.randomUUID().toString())
@@ -86,9 +91,11 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
                 .fromName(request.getFromName())
                 .useTls(endpoint.useTls())
                 .enabled(request.getEnabled() != null ? request.getEnabled() : true)
-                .direction(request.getDirection() != null
-                        ? request.getDirection() : com.developer.enums.EmailConnectionDirection.OUTBOUND)
+                .direction(direction)
                 .mailboxAddress(request.getMailboxAddress())
+                .imapHost(imap.host())
+                .imapPort(imap.port())
+                .imapUseSsl(imap.useSsl())
                 .build();
 
         return EmailConnectionResponse.fromEntity(emailConnectionRepository.save(connection));
@@ -107,6 +114,9 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
         ResolvedSmtpEndpoint endpoint = resolveSmtpEndpoint(request, connection);
         String emailAddress = request.getName().trim();
         String username = StringUtils.hasText(request.getUsername()) ? request.getUsername().trim() : emailAddress;
+        EmailConnectionDirection direction = request.getDirection() != null
+                ? request.getDirection() : connection.getDirection();
+        ResolvedImapEndpoint imap = resolveImapEndpoint(request, connection, direction);
 
         connection.setName(emailAddress);
         connection.setConnectionType(request.getConnectionType());
@@ -123,6 +133,9 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
             connection.setDirection(request.getDirection());
         }
         connection.setMailboxAddress(request.getMailboxAddress());
+        connection.setImapHost(imap.host());
+        connection.setImapPort(imap.port());
+        connection.setImapUseSsl(imap.useSsl());
         if (StringUtils.hasText(request.getPassword())) {
             connection.setPasswordEncrypted(encryptionService.encrypt(request.getPassword()));
         }
@@ -144,6 +157,10 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
             throw new DeveloperBusinessException("VALIDATION_RECIPIENT_REQUIRED", "测试收件人不能为空");
         }
 
+        log.info("[SMTP-TEST] request functionUnitId={} connectionId={} name={} host={} port={} useTls={} direction={} recipient={}",
+                functionUnitId, connectionId, connection.getName(), connection.getHost(), connection.getPort(),
+                connection.getUseTls(), connection.getDirection(), testRecipient);
+
         Map<String, Object> result = new HashMap<>();
         try {
             validateSmtpHost(connection.getHost());
@@ -154,9 +171,14 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
             result.put("success", true);
             result.put("message", "测试邮件发送成功");
         } catch (Exception e) {
-            log.error("Connection test failed for {}: {}", connectionId, e.getMessage());
+            String causeChain = MailDiagnostics.causeChain(e);
+            String rootCause = MailDiagnostics.rootCause(e);
+            log.error("[SMTP-TEST] FAILED connectionId={} host={} port={} useTls={} | causeChain={} | rootCause={}",
+                    connectionId, connection.getHost(), connection.getPort(), connection.getUseTls(),
+                    causeChain, rootCause, e);
             result.put("success", false);
-            result.put("message", "测试失败: " + e.getMessage());
+            result.put("message", "测试失败: " + rootCause);
+            result.put("causeChain", causeChain);
         }
         return result;
     }
@@ -179,38 +201,66 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
     }
 
     private ResolvedSmtpEndpoint resolveSmtpEndpoint(EmailConnectionRequest request, EmailConnection existing) {
-        EmailProviderPreset preset = EmailProviderPreset.forType(request.getConnectionType());
-
         String host = StringUtils.hasText(request.getHost())
                 ? request.getHost().trim()
                 : (existing != null ? existing.getHost() : null);
         if (!StringUtils.hasText(host)) {
-            host = preset.host();
-        }
-        if (!StringUtils.hasText(host)) {
             throw new DeveloperBusinessException("VALIDATION_SMTP_HOST_REQUIRED", "SMTP 主机不能为空");
         }
 
-        int port;
-        if (request.getPort() != null && request.getPort() > 0) {
-            port = request.getPort();
-        } else if (existing != null && existing.getPort() != null && existing.getPort() > 0) {
-            port = existing.getPort();
-        } else {
-            port = preset.port();
+        Integer port = request.getPort() != null && request.getPort() > 0
+                ? request.getPort()
+                : (existing != null ? existing.getPort() : null);
+        if (port == null || port <= 0) {
+            throw new DeveloperBusinessException("VALIDATION_SMTP_PORT_REQUIRED", "SMTP 端口不能为空");
         }
 
-        boolean useTls;
-        if (request.getUseTls() != null) {
-            useTls = Boolean.TRUE.equals(request.getUseTls());
-        } else if (existing != null && existing.getUseTls() != null) {
-            useTls = existing.getUseTls();
-        } else {
-            useTls = preset.useTls();
+        Boolean useTls = request.getUseTls() != null
+                ? request.getUseTls()
+                : (existing != null ? existing.getUseTls() : null);
+        if (useTls == null) {
+            throw new DeveloperBusinessException("VALIDATION_SMTP_TLS_REQUIRED", "请指定是否启用 TLS");
         }
 
         validateSmtpHost(host);
         return new ResolvedSmtpEndpoint(host, port, useTls);
+    }
+
+    /**
+     * Resolves inbound IMAP endpoint from the request (falling back to the existing connection).
+     * Known providers (non-SMTP types) may omit host/port because the engine has a preset;
+     * custom SMTP connections used for inbound must supply host + port explicitly.
+     */
+    private ResolvedImapEndpoint resolveImapEndpoint(EmailConnectionRequest request,
+                                                     EmailConnection existing,
+                                                     EmailConnectionDirection direction) {
+        String host = StringUtils.hasText(request.getImapHost())
+                ? request.getImapHost().trim()
+                : (existing != null ? existing.getImapHost() : null);
+        Integer port = request.getImapPort() != null && request.getImapPort() > 0
+                ? request.getImapPort()
+                : (existing != null ? existing.getImapPort() : null);
+        Boolean useSsl = request.getImapUseSsl() != null
+                ? request.getImapUseSsl()
+                : (existing != null ? existing.getImapUseSsl() : null);
+
+        boolean inbound = direction == EmailConnectionDirection.INBOUND
+                || direction == EmailConnectionDirection.BOTH;
+        boolean hasPreset = request.getConnectionType() != null
+                && request.getConnectionType() != ConnectionType.SMTP;
+
+        if (inbound && !hasPreset) {
+            if (!StringUtils.hasText(host)) {
+                throw new DeveloperBusinessException("VALIDATION_IMAP_HOST_REQUIRED", "入站监控需要填写 IMAP 主机");
+            }
+            if (port == null || port <= 0) {
+                throw new DeveloperBusinessException("VALIDATION_IMAP_PORT_REQUIRED", "入站监控需要填写 IMAP 端口");
+            }
+        }
+        if (StringUtils.hasText(host)) {
+            validateSmtpHost(host);
+        }
+        return new ResolvedImapEndpoint(StringUtils.hasText(host) ? host : null, port, useSsl);
     }
 
     private void ensureFunctionUnitExists(Long functionUnitId) {
@@ -229,6 +279,8 @@ public class EmailConnectionComponentImpl implements EmailConnectionComponent {
     }
 
     private record ResolvedSmtpEndpoint(String host, int port, boolean useTls) {}
+
+    private record ResolvedImapEndpoint(String host, Integer port, Boolean useSsl) {}
 
     private SmtpMailSender.SmtpConfig toSmtpConfig(EmailConnection connection) {
         String password = null;
