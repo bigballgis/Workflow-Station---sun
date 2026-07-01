@@ -21,6 +21,14 @@ export function useUserTaskActions(
     updateExtProp('actionNames', actionNames)
   }
 
+  function handleFormChange(id: number | null) {
+    updateExtProp('formId', id)
+    const form = forms.value.find(f => f.id === id)
+    if (form) {
+      updateExtProp('formName', form.formName)
+    }
+  }
+
   const actionTypeLabel = (type: string) => {
     const map: Record<string, string> = {
       APPROVE: t('action.approve'),
@@ -61,6 +69,7 @@ export function useUserTaskActions(
 
   return {
     handleActionsChange,
+    handleFormChange,
     actionTypeLabel,
     loadForms,
     loadActions

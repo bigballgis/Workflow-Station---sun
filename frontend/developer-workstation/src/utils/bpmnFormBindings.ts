@@ -1,12 +1,33 @@
 /**
- * Parse BPMN userTask / serviceTask → formId bindings (custom extension properties).
+ * Parse BPMN task → formId bindings (custom extension properties).
+ * Covers all BPMN 2.0 task types: task, userTask, serviceTask, scriptTask,
+ * manualTask, sendTask, receiveTask, businessRuleTask.
  * Shared by Form Designer and Process Debug.
  */
+
+/** BPMN 2.0 task element local names that can carry form bindings. */
+export const TASK_LOCAL_NAMES = [
+  'task',
+  'userTask',
+  'serviceTask',
+  'scriptTask',
+  'manualTask',
+  'sendTask',
+  'receiveTask',
+  'businessRuleTask',
+] as const
+
+export type TaskLocalName = (typeof TASK_LOCAL_NAMES)[number]
+
+/** Check whether a BPMN element local-name is a task-like element that can carry form bindings. */
+export function isTaskElement(ln: string | undefined): ln is TaskLocalName {
+  return !!ln && TASK_LOCAL_NAMES.includes(ln as TaskLocalName)
+}
 
 export interface BpmnNodeFormBinding {
   nodeId: string
   nodeName: string
-  nodeType: 'userTask' | 'serviceTask'
+  nodeType: TaskLocalName
   formId: number
   formName?: string
   readOnly: boolean
@@ -73,7 +94,7 @@ export function parseBpmnNodeFormBindings(bpmnXml: string | null | undefined): M
     for (let i = 0; i < all.length; i++) {
       const el = all[i]
       const ln = localName(el)
-      if (ln !== 'userTask' && ln !== 'serviceTask') continue
+      if (!isTaskElement(ln)) continue
 
       const nodeId = el.getAttribute('id') || ''
       if (!nodeId) continue
@@ -84,7 +105,7 @@ export function parseBpmnNodeFormBindings(bpmnXml: string | null | undefined): M
       result.set(nodeId, {
         nodeId,
         nodeName: el.getAttribute('name') || nodeId,
-        nodeType: ln as 'userTask' | 'serviceTask',
+        nodeType: ln,
         formId,
         formName,
         readOnly,

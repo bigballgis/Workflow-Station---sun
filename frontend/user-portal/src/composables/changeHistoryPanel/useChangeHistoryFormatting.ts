@@ -108,13 +108,9 @@ export function useChangeHistoryFormatting(
     const s = String(raw).trim()
     if (!s) return '—'
 
-    // File upload paths: show original filename instead of internal API path
-    const fileUploadMatch = s.match(/\/api\/v1\/upload\/files\/[^?]+\?originalName=([^&]+)/)
-    if (fileUploadMatch) {
-      const decoded = decodeURIComponent(fileUploadMatch[1]!)
-      return decoded.length <= maxLen ? decoded : `${decoded.slice(0, maxLen)}…`
-    }
-
+    // JSON object/array first — sub-table row data is serialised as JSON
+    // and may contain file URLs; we must parse JSON before the file-upload
+    // regex, otherwise the regex greedily captures JSON tail content.
     if ((s.startsWith('{') && s.endsWith('}')) || (s.startsWith('[') && s.endsWith(']'))) {
       try {
         const parsed = JSON.parse(s) as unknown
@@ -125,6 +121,14 @@ export function useChangeHistoryFormatting(
         /* fall through */
       }
     }
+
+    // File upload paths: show original filename instead of internal API path
+    const fileUploadMatch = s.match(/\/api\/v1\/upload\/files\/[^?]+\?originalName=([^&]+)/)
+    if (fileUploadMatch) {
+      const decoded = decodeURIComponent(fileUploadMatch[1]!)
+      return decoded.length <= maxLen ? decoded : `${decoded.slice(0, maxLen)}…`
+    }
+
     if (s.length <= maxLen) return s
     return `${s.slice(0, maxLen)}…`
   }
