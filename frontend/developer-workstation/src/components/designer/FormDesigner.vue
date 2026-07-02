@@ -966,6 +966,7 @@ const {
   mapFieldsToFormRules,
   getRequestIdConfigByTableId,
   buildEffectiveMainFormConfig,
+  buildEffectiveSubFormConfig,
 } = tableFieldRules
 
 // ── Sub-table / relation view state ─────────────────────────────────────────
@@ -1189,6 +1190,7 @@ const formLifecycle = useFormLifecycle({
   showCreateDialog,
   defaultFormOption,
   buildEffectiveMainFormConfig,
+  buildEffectiveSubFormConfig,
   getTableFieldDefinitions,
   getPrimaryBindingFieldDefinitions,
   getTableFieldDefinitionsByTableId,

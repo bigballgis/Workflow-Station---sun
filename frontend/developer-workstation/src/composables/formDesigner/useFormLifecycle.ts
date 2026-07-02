@@ -41,6 +41,12 @@ interface UseFormLifecycleOptions {
   showCreateDialog: Ref<boolean>
   defaultFormOption: ComputedRef<Record<string, any>>
   buildEffectiveMainFormConfig: (row: FormDefinition, bindings: { bindingType: string; tableId: number }[]) => Record<string, any>
+  buildEffectiveSubFormConfig: (
+    subForms: Record<string, unknown> | undefined,
+    bindingId: number,
+    bindings: { id?: number; bindingType: string; tableId: number; sortOrder?: number }[],
+    tableId: number,
+  ) => { rule: unknown[]; options: Record<string, unknown> }
   getTableFieldDefinitions: (tableId: number) => FieldDefinition[]
   getPrimaryBindingFieldDefinitions: () => FieldDefinition[]
   getTableFieldDefinitionsByTableId: (tableId?: number | null) => FieldDefinition[]
@@ -70,7 +76,7 @@ export function useFormLifecycle(options: UseFormLifecycleOptions) {
     functionUnitId, store, selectedForm, designerRef, subDesignerRefs, subFormCache,
     subTableListViewRefs, subTableViewState, relationViewState, subTablePortalViewsState,
     designerSubBindings, activeDesignerTab, showCreateDialog, defaultFormOption,
-    buildEffectiveMainFormConfig, getTableFieldDefinitions, getPrimaryBindingFieldDefinitions,
+    buildEffectiveMainFormConfig, buildEffectiveSubFormConfig, getTableFieldDefinitions, getPrimaryBindingFieldDefinitions,
     getTableFieldDefinitionsByTableId, mergeTaskPermissionsForFields,
     hydrateDesignerRulesFromLatestTableDefaults, refreshFormRulesFromTableMetadata,
     loadSubTableViewConfig, parseFormBindingsFromBpmn,
@@ -239,7 +245,12 @@ export function useFormLifecycle(options: UseFormLifecycleOptions) {
         setTimeout(() => {
           const subRef = subDesignerRefs.value[index]
           if (subRef) {
-          const subConfig = subForms[binding.bindingId] || {}
+          const subConfig = buildEffectiveSubFormConfig(
+            subForms,
+            binding.bindingId,
+            selectedForm.value?.tableBindings ?? [],
+            binding.tableId,
+          )
           try {
             const subFields = getTableFieldDefinitions(binding.tableId)
             let rawRules = subConfig.rule && subConfig.rule.length ? subConfig.rule : []
@@ -314,7 +325,12 @@ export function useFormLifecycle(options: UseFormLifecycleOptions) {
         if (subRef) {
           // Use cache if available (user already visited this tab), else fall back to saved config
           const cached = subFormCache.value[bindingId]
-          const subConfig = cached || subForms[bindingId] || {}
+          const subConfig = cached || buildEffectiveSubFormConfig(
+            subForms,
+            bindingId,
+            selectedForm.value?.tableBindings ?? [],
+            binding.tableId,
+          )
           try {
             const subFields = getTableFieldDefinitions(binding.tableId)
             let rawRules = subConfig.rule && subConfig.rule.length ? subConfig.rule : []

@@ -1,6 +1,7 @@
 import type { ComputedRef, Ref } from 'vue'
 import type { FieldDefinition, FormDefinition, TableBinding } from '@/api/functionUnit'
 import { cloneFormRules, injectUploadButtonLabels, mergeLoadedFormOptions } from '@/utils/formDesigner'
+import { resolveBindingKeyedEntry } from '@/utils/formConfigBindingResolve'
 import {
   applyTableFieldDefaultToRule,
   applyTableFieldDefaultsToRulesAndModel,
@@ -334,6 +335,32 @@ export function useTableFieldRules(options: UseTableFieldRulesOptions) {
     return base
   }
 
+  function buildEffectiveSubFormConfig(
+    subForms: Record<string, unknown> | undefined,
+    bindingId: number,
+    bindings: TableBinding[],
+    tableId: number,
+  ): { rule: unknown[]; options: Record<string, unknown> } {
+    const resolved = resolveBindingKeyedEntry(subForms, bindingId, bindings, 'SUB')
+      ?? subForms?.[bindingId]
+      ?? subForms?.[String(bindingId)]
+    const resolvedMap = (resolved && typeof resolved === 'object'
+      ? resolved
+      : {}) as Record<string, unknown>
+    const rawRule = Array.isArray(resolvedMap.rule) ? resolvedMap.rule : []
+    const options = (resolvedMap.options && typeof resolvedMap.options === 'object'
+      ? resolvedMap.options
+      : {}) as Record<string, unknown>
+    if (rawRule.length > 0) {
+      return { rule: rawRule, options }
+    }
+    const fields = getTableFieldDefinitionsByTableId(tableId)
+    if (!fields.length) {
+      return { rule: [], options }
+    }
+    return { rule: mapFieldsToFormRules(fields), options }
+  }
+
   return {
     getPrimaryBindingFieldDefinitions,
     getTableFieldDefinitionsByTableId,
@@ -346,5 +373,6 @@ export function useTableFieldRules(options: UseTableFieldRulesOptions) {
     getRequestIdConfigByTableId,
     fieldToFormRule,
     buildEffectiveMainFormConfig,
+    buildEffectiveSubFormConfig,
   }
 }

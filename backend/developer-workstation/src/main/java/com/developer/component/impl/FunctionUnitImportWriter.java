@@ -34,6 +34,7 @@ import com.developer.repository.SubTableViewConfigRepository;
 import com.developer.repository.TableDefinitionRepository;
 import com.developer.repository.TableRelationRepository;
 import com.developer.util.FormConfigJsonBindingIdRewriter;
+import com.developer.util.FormConfigJsonOrphanBindingRepair;
 import com.developer.validation.DmnXmlParser;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -284,6 +285,8 @@ public class FunctionUnitImportWriter {
             configJson = new HashMap<>(configJson);
         }
         FormConfigJsonBindingIdRewriter.remapBindingIds(configJson, bindingIdMapping);
+        FormConfigJsonOrphanBindingRepair.repairOrphanedBindingKeys(
+                configJson, formTableBindingRepository.findByFormIdOrderBySortOrder(form.getId()));
         form.setConfigJson(configJson);
 
         importFormStageBindings(form, formData);

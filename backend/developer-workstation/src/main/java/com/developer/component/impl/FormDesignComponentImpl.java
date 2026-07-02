@@ -27,6 +27,7 @@ import com.developer.repository.SubTableViewConfigRepository;
 import com.developer.repository.TableDefinitionRepository;
 import com.developer.service.SubTableViewService;
 import com.developer.util.FormConfigJsonBindingIdRewriter;
+import com.developer.util.FormConfigJsonOrphanBindingRepair;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -180,14 +181,29 @@ public class FormDesignComponentImpl implements FormDesignComponent {
     @Override
     @Transactional(readOnly = true)
     public FormDefinition getById(Long id) {
-        return formDefinitionRepository.findByIdWithBindings(id)
+        FormDefinition form = formDefinitionRepository.findByIdWithBindings(id)
                 .orElseThrow(() -> new ResourceNotFoundException("FormDefinition", id));
+        repairFormConfigBindingKeysIfNeeded(form);
+        return form;
     }
     
     @Override
     @Transactional(readOnly = true)
     public List<FormDefinition> getByFunctionUnitId(Long functionUnitId) {
-        return formDefinitionRepository.findByFunctionUnitIdWithBindings(functionUnitId);
+        List<FormDefinition> forms = formDefinitionRepository.findByFunctionUnitIdWithBindings(functionUnitId);
+        forms.forEach(this::repairFormConfigBindingKeysIfNeeded);
+        return forms;
+    }
+
+    private void repairFormConfigBindingKeysIfNeeded(FormDefinition form) {
+        if (form == null || form.getConfigJson() == null) {
+            return;
+        }
+        List<FormTableBinding> bindings = form.getTableBindings();
+        if (bindings == null || bindings.isEmpty()) {
+            return;
+        }
+        FormConfigJsonOrphanBindingRepair.repairOrphanedBindingKeys(form.getConfigJson(), bindings);
     }
 
     @SuppressWarnings("unchecked")
