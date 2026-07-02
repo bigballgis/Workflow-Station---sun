@@ -17,7 +17,6 @@ frontend/*/verification-screenshots/*.png
 *.jar
 *.war
 *.ear
-*.zip
 *.tar.gz
 *.rar
 
