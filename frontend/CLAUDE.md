@@ -13,6 +13,7 @@
 @../.cursor/rules/i18n-rules.mdc
 @../.cursor/rules/pinia-composable.mdc
 @../.cursor/rules/portal-design-parity.mdc
+@../.cursor/rules/portal-dialog-form-labels.mdc
 @../.cursor/rules/portal-mi-subtable-my-request.mdc
 @../.cursor/rules/vue-frontend.mdc
 <!-- END cursor-rules:auto -->
