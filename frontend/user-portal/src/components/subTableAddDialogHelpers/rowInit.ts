@@ -2,6 +2,14 @@ import type { FormRules } from 'element-plus'
 import type { DialogColumn } from './types'
 import { getUser, type UserInfo } from '@/api/auth'
 
+/** Format the current instant as {@code YYYY-MM-DD HH:mm:ss} in UTC+8 (Asia/Shanghai). */
+function formatTimestampLocal(): string {
+  const d = new Date()
+  const utc8 = new Date(d.getTime() + (d.getTimezoneOffset() + 480) * 60000)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${utc8.getFullYear()}-${pad(utc8.getMonth() + 1)}-${pad(utc8.getDate())} ${pad(utc8.getHours())}:${pad(utc8.getMinutes())}:${pad(utc8.getSeconds())}`
+}
+
 /**
  * Audit field name patterns that should be auto-filled when a new sub-table row
  * is created. Case-insensitive; matches snake_case, camelCase, and flat variants.
@@ -17,11 +25,11 @@ const AUDIT_FIELD_PATTERNS: ReadonlyArray<{
 }> = [
   {
     matches: (n) => n === 'created_at' || n === 'createdat' || n === 'create_time' || n === 'createtime',
-    fill: () => new Date().toISOString(),
+    fill: () => formatTimestampLocal(),
   },
   {
     matches: (n) => n === 'updated_at' || n === 'updatedat' || n === 'update_time' || n === 'updatetime',
-    fill: () => new Date().toISOString(),
+    fill: () => formatTimestampLocal(),
   },
   {
     matches: (n) => n === 'created_by' || n === 'createdby' || n === 'create_user' || n === 'createuser',
@@ -36,6 +44,15 @@ const AUDIT_FIELD_PATTERNS: ReadonlyArray<{
 /** Normalise a field name for audit-field comparison. */
 function normaliseFieldName(name: string): string {
   return name.trim().toLowerCase().replace(/[\s_-]+/g, '')
+}
+
+/**
+ * Single source of truth for "is this a system audit field?".
+ * Use everywhere — column enrichment, readonly marking, dialog guards.
+ */
+export function isAuditField(fieldName: string): boolean {
+  const n = normaliseFieldName(fieldName)
+  return AUDIT_FIELD_PATTERNS.some(p => p.matches(n))
 }
 
 /**

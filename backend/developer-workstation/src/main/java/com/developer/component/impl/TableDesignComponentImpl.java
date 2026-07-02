@@ -41,6 +41,15 @@ public class TableDesignComponentImpl implements TableDesignComponent {
     // DoS mitigation: cap field-definition count.
     private static final int MAX_FIELD_DEFINITIONS = 200;
 
+    /** Standard audit fields auto-appended to every new table. */
+    private record AuditFieldDef(String fieldName, DataType dataType, Integer length, boolean nullable, String displayName) {}
+    private static final List<AuditFieldDef> AUDIT_FIELD_DEFAULTS = List.of(
+            new AuditFieldDef("created_at", DataType.TIMESTAMP, null, true, "Created At"),
+            new AuditFieldDef("created_by", DataType.VARCHAR, 64, true, "Created By"),
+            new AuditFieldDef("updated_at", DataType.TIMESTAMP, null, true, "Updated At"),
+            new AuditFieldDef("updated_by", DataType.VARCHAR, 64, true, "Updated By")
+    );
+
     private final TableDefinitionRepository tableDefinitionRepository;
     private final FieldDefinitionRepository fieldDefinitionRepository;
     private final ForeignKeyRepository foreignKeyRepository;
@@ -77,6 +86,7 @@ public class TableDesignComponentImpl implements TableDesignComponent {
         tableDefinition = tableDefinitionRepository.save(tableDefinition);
         
         // Persist field rows.
+        Set<String> existingFieldNames = new HashSet<>();
         if (request.getFields() != null) {
             // DoS mitigation: enforce field-definition upper bound.
             if (request.getFields().size() > MAX_FIELD_DEFINITIONS) {
@@ -91,6 +101,27 @@ public class TableDesignComponentImpl implements TableDesignComponent {
             for (FieldDefinitionRequest fieldRequest : request.getFields()) {
                 FieldDefinition field = createField(tableDefinition, fieldRequest, sortOrder++);
                 tableDefinition.getFieldDefinitions().add(field);
+                existingFieldNames.add(fieldRequest.getFieldName().toLowerCase());
+            }
+        }
+
+        // Auto-append standard audit fields so every table carries created_at/by
+        // and updated_at/by without manual Designer steps. Portal-side column
+        // enrichment + audit defaults pick them up automatically.
+        int auditSort = existingFieldNames.size();
+        for (AuditFieldDef af : AUDIT_FIELD_DEFAULTS) {
+            if (!existingFieldNames.contains(af.fieldName)) {
+                tableDefinition.getFieldDefinitions().add(
+                        FieldDefinition.builder()
+                                .tableDefinition(tableDefinition)
+                                .fieldName(af.fieldName)
+                                .dataType(af.dataType)
+                                .length(af.length)
+                                .nullable(af.nullable)
+                                .displayName(af.displayName)
+                                .sortOrder(auditSort++)
+                                .build()
+                );
             }
         }
         
@@ -148,6 +179,7 @@ public class TableDesignComponentImpl implements TableDesignComponent {
         fieldDefinitionRepository.deleteByTableDefinitionId(id);
         fieldDefinitionRepository.flush();
         
+        Set<String> existingFieldNamesUpdate = new HashSet<>();
         if (request.getFields() != null && !request.getFields().isEmpty()) {
             // DoS mitigation: enforce field-definition upper bound.
             if (request.getFields().size() > MAX_FIELD_DEFINITIONS) {
@@ -167,9 +199,28 @@ public class TableDesignComponentImpl implements TableDesignComponent {
                     log.warn("Skipping field {} with null dataType", fieldRequest.getFieldName());
                     continue;
                 }
-                
+
                 FieldDefinition field = createField(tableDefinition, fieldRequest, sortOrder++);
                 tableDefinition.getFieldDefinitions().add(field);
+                existingFieldNamesUpdate.add(fieldRequest.getFieldName().toLowerCase());
+            }
+        }
+
+        // Re-attach standard audit fields (same auto-append as create).
+        int auditSortUpdate = existingFieldNamesUpdate.size();
+        for (AuditFieldDef af : AUDIT_FIELD_DEFAULTS) {
+            if (!existingFieldNamesUpdate.contains(af.fieldName)) {
+                tableDefinition.getFieldDefinitions().add(
+                        FieldDefinition.builder()
+                                .tableDefinition(tableDefinition)
+                                .fieldName(af.fieldName)
+                                .dataType(af.dataType)
+                                .length(af.length)
+                                .nullable(af.nullable)
+                                .displayName(af.displayName)
+                                .sortOrder(auditSortUpdate++)
+                                .build()
+                );
             }
         }
         

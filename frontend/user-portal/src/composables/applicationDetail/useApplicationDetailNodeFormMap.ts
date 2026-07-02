@@ -5,6 +5,7 @@ import {
   findTabsRule,
   isTabPaneRule,
 } from '@/components/formRendererHelpers'
+import { isAuditField } from '@/components/subTableAddDialogHelpers'
 import {
   resolveSubTablePrimaryKeyFields,
   hydrateChildSubTablesFromParentsNestedRows,
@@ -203,9 +204,13 @@ export function createApplicationDetailNodeFormMap(ctx: ApplicationDetailCtx): A
               for (const fd of fieldDefs) {
                 const fn = String(fd.fieldName ?? fd.field_name ?? '').trim()
                 if (!fn || existingFields.has(fn) || isSubTableRowMetaField(fn)) continue
-                cols.push({ field: fn, label: fn })
+                cols.push({ field: fn, label: fn, ...(isAuditField(fn) ? { readonly: true } : {}) })
                 existingFields.add(fn)
               }
+            }
+            // Final pass: ensure audit columns already present from subListViews are readonly.
+            for (const col of cols) {
+              if (isAuditField(col.field)) (col as any).readonly = true
             }
             if (cols.length === 0) continue
             const subFormDesign = ctx.resolveSubFormDesign(b, subForms)

@@ -135,6 +135,8 @@ export function deriveColumnsFromRelationFieldDefinitions(fields: RelationFieldD
     .filter((col): col is DialogColumn => col != null)
 }
 
+import { isAuditField } from './rowInit'
+
 /**
  * Merge any table field definition columns that are missing from the current column list.
  * This keeps sub-table list-views in sync with the table's schema even when individual
@@ -149,6 +151,9 @@ export function mergeMissingTableFieldColumns(
   const fromTable = deriveColumnsFromRelationFieldDefinitions(tableFields)
   const extra = fromTable.filter(c => !existing.has(String(c.field ?? '').trim()))
   if (extra.length === 0) return columns
+  for (const col of extra) {
+    if (isAuditField(col.field)) col.readonly = true
+  }
   return [...columns, ...extra]
 }
 
