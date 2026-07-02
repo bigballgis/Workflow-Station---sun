@@ -74,26 +74,30 @@ public final class FormConfigJsonOrphanBindingRepair {
                 .filter(b -> b.getBindingType() == bindingType)
                 .sorted(BINDING_ORDER)
                 .toList();
-        if (typedBindings.isEmpty() || orphanKeys.size() != typedBindings.size()) {
+        if (typedBindings.isEmpty()) {
             return false;
         }
 
         boolean changed = false;
         List<String> remappedOrphans = new ArrayList<>();
-        for (int i = 0; i < typedBindings.size(); i++) {
-            FormTableBinding binding = typedBindings.get(i);
-            String orphanKey = orphanKeys.get(i);
+        List<String> availableOrphans = new ArrayList<>(orphanKeys);
+        for (FormTableBinding binding : typedBindings) {
             String newKey = String.valueOf(binding.getId());
             if (entryIsUsable(keyedMap.get(newKey), fieldName)) {
                 continue;
             }
-            Object orphanValue = keyedMap.get(orphanKey);
-            if (!entryIsUsable(orphanValue, fieldName)) {
-                continue;
+            for (int i = 0; i < availableOrphans.size(); i++) {
+                String orphanKey = availableOrphans.get(i);
+                Object orphanValue = keyedMap.get(orphanKey);
+                if (!entryIsUsable(orphanValue, fieldName)) {
+                    continue;
+                }
+                keyedMap.put(newKey, orphanValue);
+                remappedOrphans.add(orphanKey);
+                availableOrphans.remove(i);
+                changed = true;
+                break;
             }
-            keyedMap.put(newKey, orphanValue);
-            remappedOrphans.add(orphanKey);
-            changed = true;
         }
 
         for (String orphanKey : remappedOrphans) {
@@ -128,7 +132,8 @@ public final class FormConfigJsonOrphanBindingRepair {
         return switch (fieldName) {
             case "subForms" -> hasNonEmptyList(entry.get("rule"));
             case "subListViews" -> hasNonEmptyList(entry.get("columns"));
-            case "relationViews" -> hasNonEmptyList(entry.get("viewFields"));
+            case "relationViews" -> hasNonEmptyList(entry.get("viewFields"))
+                    || hasNonEmptyList(entry.get("allFields"));
             case "subTablePortalViews" -> !entry.isEmpty();
             default -> !entry.isEmpty();
         };

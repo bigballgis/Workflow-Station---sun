@@ -9,6 +9,7 @@ import { getRuleChildren, isCardRule, getLayoutLabel } from '@/utils/formDesigne
 import { mapFormCreateRulesReadonlyDeep } from '@/utils/formCreateRuleUtils'
 import { syncFormRulesWithTableFields } from '@/utils/formFieldMeta'
 import { derivePreviewColumns, parseLookupConfig } from '@/utils/formPreview'
+import { resolveRelationViewEntry } from '@/utils/formConfigBindingResolve'
 
 const DEFAULT_PORTAL_VIEWS: SubTablePortalViewsPreview = {
   assigneeTodo: 'tableOnly',
@@ -122,9 +123,13 @@ function resolveLookupPreviewConfig(
   config: Record<string, any>,
   tables: TableDefinition[],
   bindingId?: number,
+  tableBindings: TableBinding[] = [],
 ) {
   const lookupConfig = parseLookupConfig(rawLookupConfig)
-  const savedRelationView = bindingId ? (config.relationViews || {})[bindingId] : null
+  const savedRelationView = bindingId
+    ? (resolveRelationViewEntry(config.relationViews, bindingId, tableBindings)
+      ?? (config.relationViews || {})[bindingId])
+    : null
   const binding = (config as any)._bindings?.find?.((b: TableBinding) => b.id === bindingId)
   const table = binding ? tables.find(tb => tb.id === binding.tableId) : undefined
   const fieldDefs = ((table as any)?.fieldDefinitions || []).map((f: any) => ({
@@ -222,9 +227,20 @@ function toSubTablePreviewColumns(
   return []
 }
 
-function makeLookupPreviewItem(ruleItem: any, config: Record<string, any>, tables: TableDefinition[]) {
+function makeLookupPreviewItem(
+  ruleItem: any,
+  config: Record<string, any>,
+  tables: TableDefinition[],
+  tableBindings: TableBinding[],
+) {
   const bindingId = parseLookupConfig(ruleItem.props?.lookupConfig || '{}').bindingId
-  const previewConfig = resolveLookupPreviewConfig(ruleItem.props?.lookupConfig || '{}', config, tables, bindingId)
+  const previewConfig = resolveLookupPreviewConfig(
+    ruleItem.props?.lookupConfig || '{}',
+    config,
+    tables,
+    bindingId,
+    tableBindings,
+  )
   return {
     kind: 'lookup' as const,
     label: ruleItem.title || 'Lookup',
@@ -290,6 +306,7 @@ function buildPreviewItems(
   localBindingMap: Map<number, PreviewSubTableBinding>,
   config: Record<string, any>,
   tables: TableDefinition[],
+  tableBindings: TableBinding[],
   keyPrefix = 'seg',
 ): FormPreviewItem[] {
   const items: FormPreviewItem[] = []
@@ -319,16 +336,16 @@ function buildPreviewItems(
       items.push({
         kind: 'card',
         title: getLayoutLabel(ruleItem),
-        items: buildPreviewItems(getRuleChildren(ruleItem), localBindingMap, config, tables, `card_${segmentIndex++}`),
+        items: buildPreviewItems(getRuleChildren(ruleItem), localBindingMap, config, tables, tableBindings, `card_${segmentIndex++}`),
         modelKey: `${keyPrefix}_card_${segmentIndex}`,
       })
     } else if (ruleItem.type === 'lookup') {
       flushSegment()
-      items.push(makeLookupPreviewItem(ruleItem, config, tables))
+      items.push(makeLookupPreviewItem(ruleItem, config, tables, tableBindings))
     } else if (FC_SKIP_PREVIEW.has(ruleItem.type)) {
       if (containsSubTableRule(ruleItem)) {
         flushSegment()
-        items.push(...buildPreviewItems(getRuleChildren(ruleItem), localBindingMap, config, tables, `${keyPrefix}_layout_${segmentIndex++}`))
+        items.push(...buildPreviewItems(getRuleChildren(ruleItem), localBindingMap, config, tables, tableBindings, `${keyPrefix}_layout_${segmentIndex++}`))
       }
     } else {
       currentSegment.push(ruleItem)
@@ -365,7 +382,7 @@ export function buildSavedFormPreviewItems(options: SavedFormPreviewBuildOptions
 
   const bindingMap = buildBindingMap(options)
   try {
-    return buildPreviewItems(rawRule, bindingMap, config, options.tables)
+    return buildPreviewItems(rawRule, bindingMap, config, options.tables, bindings)
   } catch {
     const basicRule = rawRule.filter((r: any) => r.type !== 'subTable')
     return basicRule.length ? [{ kind: 'fields', rule: basicRule, modelKey: 'fallback' }] : []

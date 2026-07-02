@@ -734,6 +734,7 @@ import {
   type PreviewSubTableRowDialogOpen,
 } from './previewSubTableDialog'
 import { cloneFormRules, injectUploadButtonLabels } from '@/utils/formDesigner'
+import { resolveRelationViewEntry } from '@/utils/formConfigBindingResolve'
 import { mapFormCreateRulesReadonlyDeep } from '@/utils/formCreateRuleUtils'
 import { isRequestIdSyntheticField } from '@/utils/formFieldMeta'
 import TableBindingManager from './TableBindingManager.vue'
@@ -1324,7 +1325,11 @@ async function handleBindingUpdate() {
       for (const b of (selectedForm.value.tableBindings || [])) {
         if (b.bindingType === 'RELATED') {
           const id = b.id as number
-          const saved = (config.relationViews || {})[id]
+          const saved = resolveRelationViewEntry(
+            config.relationViews || {},
+            id,
+            selectedForm.value.tableBindings || [],
+          )
           updated[id] = saved
             ? { allFields: saved.allFields || [], viewFields: saved.viewFields || [] }
             : { allFields: [], viewFields: [] }

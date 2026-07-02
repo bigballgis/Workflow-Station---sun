@@ -38,7 +38,29 @@ class FormConfigJsonOrphanBindingRepairTest {
     }
 
     @Test
-    @DisplayName("no-op when subForms keys already match binding ids")
+    @DisplayName("remaps stale relationViews keys to current RELATED binding ids")
+    void remapsStaleRelationViewKeys() {
+        Map<String, Object> configJson = new LinkedHashMap<>();
+        Map<String, Object> relationViews = new LinkedHashMap<>();
+        relationViews.put("300", Map.of(
+                "viewFields", List.of(Map.of("fieldName", "username", "displayName", "Username")),
+                "allFields", List.of(Map.of("fieldName", "username", "displayName", "Username"))));
+        relationViews.put("301", Map.of("viewFields", List.of()));
+        configJson.put("relationViews", relationViews);
+
+        var bindings = List.of(
+                binding(50035L, "RELATED", 2),
+                binding(50037L, "RELATED", 3));
+
+        assertTrue(FormConfigJsonOrphanBindingRepair.repairOrphanedBindingKeys(configJson, bindings));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> repaired = (Map<String, Object>) configJson.get("relationViews");
+        assertTrue(repaired.containsKey("50035"));
+        assertFalse(repaired.containsKey("300"));
+    }
+
+    @Test
     void noOpWhenKeysMatch() {
         Map<String, Object> configJson = new LinkedHashMap<>();
         configJson.put("subForms", new LinkedHashMap<>(Map.of(

@@ -1,6 +1,7 @@
 import type { ComputedRef, Ref } from 'vue'
 import type { FormDefinition } from '@/api/functionUnit'
 import type { SubTableFieldDTO } from '@/api/subTableView'
+import { resolveRelationViewEntry } from '@/utils/formConfigBindingResolve'
 import { parseLookupConfig } from '@/utils/formPreview'
 import { isFormCreateRuleReadonly } from '@/utils/formCreateRuleUtils'
 import { resolveRuleDefaultValue } from '@/utils/formCreateRuleDefaults'
@@ -110,7 +111,9 @@ export function useFormPreviewColumns(options: UseFormPreviewColumnsOptions) {
   function getRelationFieldDefs(bindingId?: number, config: any = {}) {
     if (!bindingId) return []
     const state = relationViewState.value[bindingId]
-    const saved = (config.relationViews || {})[bindingId]
+    const bindings = selectedForm.value?.tableBindings ?? []
+    const saved = resolveRelationViewEntry(config.relationViews, bindingId, bindings)
+      ?? (config.relationViews || {})[bindingId]
     const fields = state?.allFields || saved?.allFields || []
     if (fields.length) {
       return fields.map((f: any) => ({
@@ -151,7 +154,10 @@ export function useFormPreviewColumns(options: UseFormPreviewColumnsOptions) {
     const config = explicitConfig || selectedForm.value?.configJson || {}
     const lookupConfig = parseLookupConfig(rawLookupConfig)
     const bindingId = lookupConfig.bindingId
-    const savedRelationView = bindingId ? (config.relationViews || {})[bindingId] : null
+    const savedRelationView = bindingId
+      ? (resolveRelationViewEntry(config.relationViews, bindingId, selectedForm.value?.tableBindings ?? [])
+        ?? (config.relationViews || {})[bindingId])
+      : null
     return {
       placeholder: 'Click to search',
       searchFields: lookupConfig.searchFields || [],

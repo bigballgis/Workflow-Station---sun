@@ -1,8 +1,9 @@
 import { computed, ref } from 'vue'
 import type { ComputedRef, Ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import type { FieldDefinition, FormDefinition } from '@/api/functionUnit'
+import { resolveRelationViewEntry } from '@/utils/formConfigBindingResolve'
 import { functionUnitApi } from '@/api/functionUnit'
+import type { FormDefinition } from '@/api/functionUnit'
 import type { SubTableFieldDTO } from '@/api/subTableView'
 import { collectSubTableRules } from '@/utils/formDesigner'
 import {
@@ -225,7 +226,11 @@ export function useFormSave(options: UseFormSaveOptions) {
             relationViews[binding.bindingId] = state
           } else {
             // Preserve previously saved data
-            const existing = (selectedForm.value!.configJson?.relationViews || {})[binding.bindingId]
+            const existing = resolveRelationViewEntry(
+              selectedForm.value!.configJson?.relationViews,
+              binding.bindingId,
+              selectedForm.value!.tableBindings ?? [],
+            ) ?? (selectedForm.value!.configJson?.relationViews || {})[binding.bindingId]
             if (existing) relationViews[binding.bindingId] = existing
           }
         }

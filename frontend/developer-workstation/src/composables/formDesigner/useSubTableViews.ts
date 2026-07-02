@@ -112,7 +112,11 @@ export function useSubTableViews(options: UseSubTableViewsOptions) {
 
   function updateRelationViewAllFields(bindingId: number, fields: any[]) {
     const existing = relationViewState.value[bindingId] || { allFields: [], viewFields: [] }
-    relationViewState.value = { ...relationViewState.value, [bindingId]: { ...existing, allFields: fields } }
+    const viewFields = existing.viewFields?.length ? existing.viewFields : fields
+    relationViewState.value = {
+      ...relationViewState.value,
+      [bindingId]: { allFields: fields, viewFields },
+    }
   }
 
   // Sub-table list view state management

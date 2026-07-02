@@ -12,6 +12,7 @@ import {
 } from '@/utils/formCreateDefaultEvents'
 import { stripFormCreateRulesDisabledDeep } from '@/utils/formCreateRuleUtils'
 import { syncFormRulesWithTableFields } from '@/utils/formFieldMeta'
+import { resolveRelationViewEntry } from '@/utils/formConfigBindingResolve'
 import type { TableFieldDefLike } from '@/utils/formCreateRuleDefaults'
 import { parseProcessNodesFromBpmnXml, type BpmnProcessNode } from '@/utils/bpmnFormBindingUpdate'
 import type { SubTableListColumnDTO } from './useSubTableViews'
@@ -149,8 +150,9 @@ export function useFormLifecycle(options: UseFormLifecycleOptions) {
     for (const b of bindings) {
       if (b.bindingType === 'RELATED') {
         const id = b.id as number
-        initialState[id] = savedViews[id]
-          ? { allFields: savedViews[id].allFields || [], viewFields: savedViews[id].viewFields || [] }
+        const saved = resolveRelationViewEntry(savedViews, id, bindings)
+        initialState[id] = saved
+          ? { allFields: saved.allFields || [], viewFields: saved.viewFields || [] }
           : { allFields: [], viewFields: [] }
       }
     }
@@ -298,14 +300,24 @@ export function useFormLifecycle(options: UseFormLifecycleOptions) {
 
     // For RELATED bindings, restore saved view fields
     if (binding.bindingType === 'RELATED') {
-      // Restore saved relation view state if not already loaded
       if (!relationViewState.value[bindingId]) {
-        const saved = (config.relationViews || {})[bindingId]
-        if (saved) {
-          relationViewState.value = {
-            ...relationViewState.value,
-            [bindingId]: { allFields: saved.allFields || [], viewFields: saved.viewFields || [] }
-          }
+        const saved = resolveRelationViewEntry(
+          config.relationViews || {},
+          bindingId,
+          selectedForm.value?.tableBindings ?? [],
+        )
+        relationViewState.value = {
+          ...relationViewState.value,
+          [bindingId]: saved
+            ? { allFields: saved.allFields || [], viewFields: saved.viewFields || [] }
+            : { allFields: [], viewFields: [] },
+        }
+      }
+      const state = relationViewState.value[bindingId]
+      if (state && state.allFields.length > 0 && state.viewFields.length === 0) {
+        relationViewState.value = {
+          ...relationViewState.value,
+          [bindingId]: { ...state, viewFields: [...state.allFields] },
         }
       }
       return

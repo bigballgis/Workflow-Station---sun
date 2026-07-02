@@ -44,3 +44,26 @@ export function resolveBindingKeyedEntry<T>(
   if (index < 0 || index >= orphanKeys.length) return undefined
   return map[orphanKeys[index]]
 }
+
+export interface RelationViewConfigEntry {
+  allFields?: unknown[]
+  viewFields?: unknown[]
+}
+
+/** Resolve persisted relationViews[bindingId] including stale export keys. */
+export function resolveRelationViewEntry(
+  relationViews: Record<string, RelationViewConfigEntry> | undefined,
+  bindingId: number,
+  bindings: BindingLike[],
+): RelationViewConfigEntry | undefined {
+  const entry = resolveBindingKeyedEntry(relationViews, bindingId, bindings, 'RELATED')
+    ?? relationViews?.[bindingId]
+    ?? relationViews?.[String(bindingId)]
+  if (!entry || typeof entry !== 'object') return undefined
+  const rec = entry as Record<string, unknown>
+  const allFields = Array.isArray(rec.allFields) ? rec.allFields : []
+  const viewFields = Array.isArray(rec.viewFields) && rec.viewFields.length > 0
+    ? rec.viewFields
+    : allFields
+  return { allFields, viewFields }
+}
