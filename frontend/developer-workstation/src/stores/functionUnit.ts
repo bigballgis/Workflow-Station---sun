@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { functionUnitApi, type FunctionUnit, type FunctionUnitResponse, type FunctionUnitRequest, type TableDefinition, type FormDefinition, type ActionDefinition, type ProcessDefinition, type Version, type ValidationResult } from '@/api/functionUnit'
+import { sortFormsByType } from '@/utils/formDesigner'
 
 export const useFunctionUnitStore = defineStore('functionUnit', () => {
   const list = ref<FunctionUnitResponse[]>([])
@@ -118,8 +119,8 @@ export const useFunctionUnitStore = defineStore('functionUnit', () => {
   // Form operations
   async function fetchForms(functionUnitId: number) {
     const res = await functionUnitApi.getForms(functionUnitId)
-    forms.value = res.data
-    return res.data
+    forms.value = sortFormsByType(res.data ?? [])
+    return forms.value
   }
 
   async function createForm(functionUnitId: number, data: Partial<FormDefinition>) {

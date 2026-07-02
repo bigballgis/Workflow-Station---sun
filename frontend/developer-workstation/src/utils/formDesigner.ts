@@ -3,6 +3,23 @@
  * Pure functions for form designer operations — no Vue reactivity dependency.
  */
 
+import type { FormDefinition, FormType } from '@/api/functionUnit'
+
+const FORM_TYPE_SORT_ORDER: Record<FormType, number> = {
+  PROCESS: 0,
+  TASK: 1,
+  ACTION: 2,
+}
+
+/** Sort forms for Form Design list: Process → Task → Action, then by name. */
+export function sortFormsByType(forms: FormDefinition[]): FormDefinition[] {
+  return [...forms].sort((a, b) => {
+    const typeDiff = FORM_TYPE_SORT_ORDER[a.formType] - FORM_TYPE_SORT_ORDER[b.formType]
+    if (typeDiff !== 0) return typeDiff
+    return a.formName.localeCompare(b.formName, undefined, { sensitivity: 'base' })
+  })
+}
+
 /**
  * Deep-clone form rules via JSON round-trip. Falls back to shallow copy on failure.
  */
