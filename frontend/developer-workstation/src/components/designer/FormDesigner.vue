@@ -130,8 +130,13 @@
                 :class="{ 'is-active-item': activeDesignerTab === String(b.bindingId) }"
               >
                 <span class="dropdown-item-inner">
-                  <el-icon v-if="activeDesignerTab === String(b.bindingId)" class="check-icon"><Check /></el-icon>
-                  <span>{{ b.tableName }}</span>
+                  <el-icon
+                    class="check-icon"
+                    :class="{ 'is-visible': activeDesignerTab === String(b.bindingId) }"
+                  >
+                    <Check />
+                  </el-icon>
+                  <span class="dropdown-item-label">{{ b.tableName }}</span>
                 </span>
               </el-dropdown-item>
             </el-dropdown-menu>
@@ -164,8 +169,13 @@
                 :class="{ 'is-active-item': activeDesignerTab === String(b.bindingId) }"
               >
                 <span class="dropdown-item-inner">
-                  <el-icon v-if="activeDesignerTab === String(b.bindingId)" class="check-icon"><Check /></el-icon>
-                  <span>{{ b.tableName }}</span>
+                  <el-icon
+                    class="check-icon"
+                    :class="{ 'is-visible': activeDesignerTab === String(b.bindingId) }"
+                  >
+                    <Check />
+                  </el-icon>
+                  <span class="dropdown-item-label">{{ b.tableName }}</span>
                 </span>
               </el-dropdown-item>
             </el-dropdown-menu>
@@ -546,11 +556,11 @@
                 </el-option>
               </el-option-group>
               <el-option-group :label="t('form.allTables')">
-                <el-option 
-                  v-for="table in store.tables" 
-                  :key="table.id" 
-                  :label="`${table.tableName} (${tableTypeLabel(table.tableType)})`" 
-                  :value="table.id" 
+                <el-option
+                  v-for="table in store.tables"
+                  :key="table.id"
+                  :label="`${table.tableDisplayName || table.tableName} (${tableTypeLabel(table.tableType)})`"
+                  :value="table.id"
                 />
               </el-option-group>
             </el-select>
@@ -2000,11 +2010,24 @@ onMounted(() => {
 .dropdown-item-inner {
   display: flex;
   align-items: center;
-  gap: 6px;
+  min-width: 120px;
 
   .check-icon {
-    color: var(--el-color-primary);
+    flex-shrink: 0;
+    width: 16px;
+    margin-right: 6px;
     font-size: 14px;
+    color: var(--el-color-primary);
+    visibility: hidden;
+
+    &.is-visible {
+      visibility: visible;
+    }
+  }
+
+  .dropdown-item-label {
+    flex: 1;
+    min-width: 0;
   }
 }
 

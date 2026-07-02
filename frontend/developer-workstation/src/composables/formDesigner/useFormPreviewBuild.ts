@@ -160,12 +160,15 @@ export function useFormPreviewBuild(options: UseFormPreviewBuildOptions) {
       console.log('[DEBUG] no selectedForm, returning early')
       return
     }
-    // Always use live designer rule so unsaved reordering is reflected in preview.
+    // Always use the MAIN designer's live rule so unsaved reordering is reflected in preview.
+    // Preview renders the whole form (main + inline sub tables); sub designers' live rules are
+    // collected per binding below. Reading the active SUB designer here would render the sub form
+    // as the main form and later clobber the main canvas via setRule.
     // Fall back to saved configJson rule only when the designer ref is unavailable.
     let rawRule: any[] = []
     try {
       prepareDesignerPreviewValidation(getActiveDesignerRef(), t('common.validate'))
-      rawRule = (getActiveDesignerRef() as any)?.getRule?.() || designerRef.value?.getRule() || []
+      rawRule = designerRef.value?.getRule() || []
     } catch {}
     if (!rawRule.length) {
       rawRule = selectedForm.value.configJson?.rule || []
