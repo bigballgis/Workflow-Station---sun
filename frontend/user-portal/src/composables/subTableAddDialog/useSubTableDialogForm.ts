@@ -1,7 +1,7 @@
 import { ref, computed, watch, nextTick, type Ref } from 'vue'
 import type { FormInstance } from 'element-plus'
 import { ElMessage } from 'element-plus'
-import { buildInitialRow, buildRules, mergeFormRowWithSeed } from '@/components/subTableAddDialogHelpers'
+import { buildInitialRow, buildRules, mergeFormRowWithSeed, isAuditField } from '@/components/subTableAddDialogHelpers'
 import type { DialogColumn } from '@/components/subTableAddDialogHelpers'
 import type { RowFormulaRule, ValidationRule } from '@/components/formRendererHelpers'
 import { evaluateFormula, validateField } from '@/components/businessLogicEngine'
@@ -57,7 +57,7 @@ export function useSubTableDialogForm(props: FormProps, emit: FormEmit, t: Dialo
   })
 
   function isColDisabled(col: DialogColumn): boolean {
-    return col.readonly === true || calculatedColumns.value.has(col.field)
+    return col.readonly === true || calculatedColumns.value.has(col.field) || isAuditField(col.field)
   }
 
   // Watch dependent column values and recompute target columns.

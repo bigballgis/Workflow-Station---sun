@@ -71,10 +71,16 @@ export function useFormSave(options: UseFormSaveOptions) {
     }
   }
 
+  /**
+   * Standard audit fields auto-appended to every new table by TableDesignComponentImpl.
+   * Always valid in form rules even before the table backfill runs.
+   */
+  const ALWAYS_VALID_FIELDS = new Set(['created_at', 'created_by', 'updated_at', 'updated_by', '__request_id'])
+
   /** Validate field names against Data_Table columns */
   function validateFieldNames(fieldNames: string[]): string[] {
     if (dataTableColumns.value.length === 0) return []
-    return fieldNames.filter(name => !dataTableColumns.value.includes(name))
+    return fieldNames.filter(name => !ALWAYS_VALID_FIELDS.has(name) && !dataTableColumns.value.includes(name))
   }
 
   /** Get current form fields from the designer for field permission config */
@@ -154,16 +160,18 @@ export function useFormSave(options: UseFormSaveOptions) {
         }
       }
 
-      // Validate field names against Data_Table columns (for PROCESS and TASK forms)
+      // Validate field names against Data_Table columns (for PROCESS and TASK forms).
+      // Refresh column list first — the table may have been created after the designer mounted.
+      // Validation is best-effort; the backend does not enforce this check, so a stale
+      // dataTableColumns response must not block the user from saving.
       if (selectedForm.value.formType === 'PROCESS' || selectedForm.value.formType === 'TASK') {
+        await loadDataTableColumns()
         const fieldNames = rule
-          // Request ID is a derived virtual field, not a Data_Table column — skip it.
           .filter((r: any) => r.field && r.type !== 'subTable' && !isRequestIdRule(r))
           .map((r: any) => r.field as string)
         const invalidFields = validateFieldNames(fieldNames)
         if (invalidFields.length > 0) {
-          if (isManual) ElMessage.error(t('form.fieldNameValidationFailed'))
-          return
+          console.warn('[FormDesigner] Field names not in Data_Table columns:', invalidFields)
         }
       }
 

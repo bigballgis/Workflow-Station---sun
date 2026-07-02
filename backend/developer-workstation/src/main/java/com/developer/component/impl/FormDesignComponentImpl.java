@@ -58,6 +58,14 @@ public class FormDesignComponentImpl implements FormDesignComponent {
      */
     private static final Set<String> RESERVED_VIRTUAL_FIELD_NAMES = Set.of("__request_id");
 
+    /**
+     * Standard audit field names that are auto-appended to every new table by
+     * {@code TableDesignComponentImpl}.  They must pass form-field validation even on
+     * tables that were created before the auto-audit initializer ran.
+     */
+    private static final Set<String> ALWAYS_VALID_AUDIT_FIELDS = Set.of(
+            "created_at", "created_by", "updated_at", "updated_by");
+
     private final FormDefinitionRepository formDefinitionRepository;
     private final FunctionUnitRepository functionUnitRepository;
     private final TableDefinitionRepository tableDefinitionRepository;
@@ -530,6 +538,8 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         List<String> invalidFields = fieldNames.stream()
                 // Request ID is a derived virtual field (not a Data_Table column) — exempt it.
                 .filter(name -> !RESERVED_VIRTUAL_FIELD_NAMES.contains(name))
+                // Standard audit fields are auto-appended to every table by TableDesignComponentImpl.
+                .filter(name -> !ALWAYS_VALID_AUDIT_FIELDS.contains(name))
                 .filter(name -> !columnSet.contains(name))
                 .toList();
         

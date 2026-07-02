@@ -2,6 +2,7 @@ import { ElMessage } from 'element-plus'
 import { processApi } from '@/api/process'
 import {
   buildRelationTableFieldIndexFromDataTables,
+  isAuditField,
 } from '@/components/subTableAddDialogHelpers'
 import {
   resolveSubTablePrimaryKeyFields,
@@ -224,9 +225,13 @@ export function createApplicationDetailLoaders(ctx: ApplicationDetailCtx): Appli
             for (const fd of fieldDefs) {
               const fn = String(fd.fieldName ?? fd.field_name ?? '').trim()
               if (!fn || existingFields.has(fn) || isSubTableRowMetaField(fn)) continue
-              columns.push({ field: fn, label: fn })
+              columns.push({ field: fn, label: fn, ...(isAuditField(fn) ? { readonly: true } : {}) })
               existingFields.add(fn)
             }
+          }
+          // Final pass: ensure audit columns already present from subListViews are readonly.
+          for (const col of columns) {
+            if (isAuditField(col.field)) (col as any).readonly = true
           }
           if (columns.length === 0) continue
           const subFormDesign = ctx.resolveSubFormDesign(b, subFormsPayload)
