@@ -391,10 +391,10 @@ public class UserManagerComponent {
                     () -> detail.setFunctionManagerName(user.getFunctionManagerId()));
         }
 
-        // Recent login history (most recent 10 LOGIN events within 1 hour — test retention window)
-        LocalDateTime oneHourAgo = LocalDateTime.now().minusHours(1);
+        // Recent login history (most recent 10 LOGIN events within 1 day)
+        LocalDateTime oneDayAgo = LocalDateTime.now().minusDays(1);
         List<UserDetailInfo.LoginHistoryInfo> loginHistory = loginAuditQueryRepository
-                .findByUserIdSince(userId, oneHourAgo)
+                .findByUserIdSince(userId, oneDayAgo)
                 .stream()
                 .filter(a -> a.getAction() == LoginAudit.AuditAction.LOGIN)
                 .limit(10)
