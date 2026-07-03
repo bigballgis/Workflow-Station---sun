@@ -174,4 +174,116 @@ class FormConfigJsonBindingIdRewriterTest {
         assertEquals(-501L, ((Number) col.get("componentId")).longValue());
         assertEquals(502L, ((Number) col.get("boundSubTableBindingId")).longValue());
     }
+
+    @Test
+    void remapIds_remapsPortalViewsFormSourceRefs() {
+        Map<String, Object> formSource = new LinkedHashMap<>();
+        formSource.put("type", "linkForm");
+        formSource.put("formId", 11);
+        formSource.put("linkFormColumnId", -101);
+        Map<String, Object> portalViewsEntry = new LinkedHashMap<>();
+        portalViewsEntry.put("assigneeTodo", "formBelowTable");
+        portalViewsEntry.put("assigneeTodoFormSource", formSource);
+
+        Map<String, Object> portalViews = new LinkedHashMap<>();
+        portalViews.put("101", portalViewsEntry);
+
+        Map<String, Object> configJson = new HashMap<>();
+        configJson.put("subTablePortalViews", portalViews);
+
+        FormConfigJsonBindingIdRewriter.remapIds(configJson,
+                Map.of(101L, 501L), Map.of(11L, 91L), Map.of(), Map.of());
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> entry = (Map<String, Object>) ((Map<?, ?>) configJson.get("subTablePortalViews")).get("501");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> fs = (Map<String, Object>) entry.get("assigneeTodoFormSource");
+        assertEquals(91L, ((Number) fs.get("formId")).longValue());
+        assertEquals(-501L, ((Number) fs.get("linkFormColumnId")).longValue());
+    }
+
+    @Test
+    void remapIds_remapsPositiveLinkFormComponentIds() {
+        Map<String, Object> column = new LinkedHashMap<>();
+        column.put("columnType", "linkForm");
+        column.put("componentId", 7);
+        column.put("linkFormColumnId", 7);
+        column.put("linkedFormId", 11);
+
+        Map<String, Object> subListViews = new LinkedHashMap<>();
+        subListViews.put("101", Map.of("columns", List.of(column)));
+
+        Map<String, Object> configJson = new HashMap<>();
+        configJson.put("subListViews", subListViews);
+
+        FormConfigJsonBindingIdRewriter.remapIds(configJson,
+                Map.of(101L, 501L), Map.of(11L, 91L), Map.of(7L, 70L), Map.of());
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> entry = (Map<String, Object>) ((Map<?, ?>) configJson.get("subListViews")).get("501");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> col = (Map<String, Object>) ((List<?>) entry.get("columns")).get(0);
+        assertEquals(70L, ((Number) col.get("componentId")).longValue());
+        assertEquals(70L, ((Number) col.get("linkFormColumnId")).longValue());
+        assertEquals(91L, ((Number) col.get("linkedFormId")).longValue());
+    }
+
+    @Test
+    void remapIds_remapsPortalViewsOnSubTableRuleNode() {
+        Map<String, Object> formSource = new LinkedHashMap<>();
+        formSource.put("type", "subForm");
+        formSource.put("linkFormColumnId", 7);
+        Map<String, Object> portalViews = new LinkedHashMap<>();
+        portalViews.put("assigneeTodoFormSource", formSource);
+        Map<String, Object> props = new LinkedHashMap<>();
+        props.put("portalViews", portalViews);
+        Map<String, Object> subTableNode = new LinkedHashMap<>();
+        subTableNode.put("type", "subTable");
+        subTableNode.put("_bindingId", 101);
+        subTableNode.put("props", props);
+
+        Map<String, Object> configJson = new HashMap<>();
+        configJson.put("rule", new ArrayList<>(List.of(subTableNode)));
+
+        FormConfigJsonBindingIdRewriter.remapIds(configJson,
+                Map.of(101L, 501L), Map.of(), Map.of(7L, 70L), Map.of());
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> node = (Map<String, Object>) ((List<?>) configJson.get("rule")).get(0);
+        assertEquals(501L, ((Number) node.get("_bindingId")).longValue());
+        @SuppressWarnings("unchecked")
+        Map<String, Object> fs = (Map<String, Object>) ((Map<?, ?>) ((Map<?, ?>) node.get("props")).get("portalViews"))
+                .get("assigneeTodoFormSource");
+        assertEquals(70L, ((Number) fs.get("linkFormColumnId")).longValue());
+    }
+
+    @Test
+    void remapIds_remapsLookupConfigRelationTableIdButKeepsVirtualIds() {
+        Map<String, Object> propsReal = new LinkedHashMap<>();
+        propsReal.put("lookupConfig", "{\"bindingId\":35,\"tableId\":1,\"tableName\":\"test\"}");
+        Map<String, Object> lookupReal = new LinkedHashMap<>(Map.of("type", "lookup", "props", propsReal));
+
+        Map<String, Object> propsVirtual = new LinkedHashMap<>();
+        propsVirtual.put("lookupConfig", "{\"bindingId\":36,\"tableId\":-1000000001,\"tableName\":\"sys_users\"}");
+        Map<String, Object> lookupVirtual = new LinkedHashMap<>(Map.of("type", "lookup", "props", propsVirtual));
+
+        Map<String, Object> configJson = new HashMap<>();
+        configJson.put("rule", new ArrayList<>(List.of(lookupReal, lookupVirtual)));
+
+        FormConfigJsonBindingIdRewriter.remapIds(configJson,
+                Map.of(35L, 335L, 36L, 336L), Map.of(), Map.of(),
+                Map.of(1L, 21L, -1000000001L, 999L));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> real = (Map<String, Object>) ((List<?>) configJson.get("rule")).get(0);
+        String realCfg = (String) ((Map<?, ?>) real.get("props")).get("lookupConfig");
+        assertTrue(realCfg.contains("\"tableId\":21"), realCfg);
+        assertTrue(realCfg.contains("\"bindingId\":335"), realCfg);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> virtual = (Map<String, Object>) ((List<?>) configJson.get("rule")).get(1);
+        String virtualCfg = (String) ((Map<?, ?>) virtual.get("props")).get("lookupConfig");
+        assertTrue(virtualCfg.contains("\"tableId\":-1000000001"), virtualCfg);
+        assertTrue(virtualCfg.contains("\"bindingId\":336"), virtualCfg);
+    }
 }

@@ -52,6 +52,7 @@ public class FunctionUnitImporter {
     private final DeveloperWorkstationSequenceSynchronizer sequenceSynchronizer;
     private final ExportImportPackageParser packageParser;
     private final FunctionUnitImportWriter importWriter;
+    private final ProcessBpmnStaleIdFixer staleIdFixer;
     private final VersionComponent versionComponent;
     private final RelationTableStructurePortability relationTablePortability;
     private final MainTableViewPortability mainTableViewPortability;
@@ -176,19 +177,37 @@ public class FunctionUnitImporter {
                 importWriter.recordSourceIdMapping(formData.get("formId"), form.getId(), formIdMapping);
                 importedFormNameToId.put(form.getFormName(), form.getId());
             }
-            for (Map<String, Object> formData : formDataList) {
-                Object sourceFormIdObj = formData.get("formId");
-                if (!(sourceFormIdObj instanceof Number sourceFormId)) {
-                    continue;
+        }
+
+        // Import link form components between form shells (need form ids) and form finalization
+        // (whose configJson remap consumes the componentId mapping for linkForm column references).
+        Map<Long, Long> componentIdMapping = new HashMap<>();
+        if (packageData.containsKey("linkFormComponents")) {
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> linkFormComponents =
+                    (List<Map<String, Object>>) packageData.get("linkFormComponents");
+            for (Map<String, Object> componentData : linkFormComponents) {
+                var component = importWriter.importLinkFormComponent(
+                        functionUnit, componentData, importedFormNameToId, formIdMapping);
+                if (component != null) {
+                    importWriter.recordSourceIdMapping(componentData.get("componentId"), component.getId(), componentIdMapping);
                 }
-                Long newFormId = formIdMapping.get(sourceFormId.longValue());
-                if (newFormId == null) {
-                    continue;
-                }
-                FormDefinition form = formDefinitionRepository.findById(newFormId)
-                        .orElseThrow(() -> new ResourceNotFoundException("FormDefinition", newFormId));
-                importWriter.finalizeFormImport(form, formData, importedTableNameToId, relationTableIdMapping);
             }
+        }
+
+        for (Map<String, Object> formData : formDataList) {
+            Object sourceFormIdObj = formData.get("formId");
+            if (!(sourceFormIdObj instanceof Number sourceFormId)) {
+                continue;
+            }
+            Long newFormId = formIdMapping.get(sourceFormId.longValue());
+            if (newFormId == null) {
+                continue;
+            }
+            FormDefinition form = formDefinitionRepository.findById(newFormId)
+                    .orElseThrow(() -> new ResourceNotFoundException("FormDefinition", newFormId));
+            importWriter.finalizeFormImport(form, formData, importedTableNameToId,
+                    relationTableIdMapping, formIdMapping, componentIdMapping);
         }
 
         Map<Long, Long> actionIdMapping = new HashMap<>();
@@ -227,6 +246,11 @@ public class FunctionUnitImporter {
                     actionIdMapping,
                     importedTableNameToId,
                     importedFormNameToId);
+            // Name-based repair pass: actionIds (and formId/subTableId) that were ALREADY stale in the
+            // source package miss the id mapping above and would stay dangling — the designer/portal then
+            // shows the raw id instead of the action name. Re-resolve them by name against this unit.
+            rewrittenBpmn = staleIdFixer.fixStaleIds(
+                    functionUnit.getId(), XmlEncodingUtil.smartDecode(rewrittenBpmn));
             rewrittenBpmn = BpmnProcessIdRewriter.rewriteToFunctionUnitCode(rewrittenBpmn, functionUnit.getCode());
             assertLastTaskAssigneeTopologyOrThrow(XmlEncodingUtil.smartDecode(rewrittenBpmn));
             ProcessDefinition process = ProcessDefinition.builder()

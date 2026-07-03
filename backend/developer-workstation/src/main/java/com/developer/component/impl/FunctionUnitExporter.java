@@ -11,6 +11,7 @@ import com.developer.entity.FormDefinition;
 import com.developer.entity.FormStageBinding;
 import com.developer.entity.FormTableBinding;
 import com.developer.entity.FunctionUnit;
+import com.developer.entity.LinkFormComponent;
 import com.developer.entity.ProcessDefinition;
 import com.developer.entity.SubTableViewConfig;
 import com.developer.entity.SubTableViewField;
@@ -25,6 +26,7 @@ import com.developer.repository.EmailMonitorRuleRepository;
 import com.developer.repository.FormDefinitionRepository;
 import com.developer.repository.FormStageBindingRepository;
 import com.developer.repository.FunctionUnitRepository;
+import com.developer.repository.LinkFormComponentRepository;
 import com.developer.repository.SubTableViewConfigRepository;
 import com.developer.repository.TableDefinitionRepository;
 import com.developer.repository.TableRelationRepository;
@@ -75,6 +77,7 @@ public class FunctionUnitExporter {
     private final FormStageBindingRepository formStageBindingRepository;
     private final TableRelationRepository tableRelationRepository;
     private final SubTableViewConfigRepository subTableViewConfigRepository;
+    private final LinkFormComponentRepository linkFormComponentRepository;
     private final RelationTableStructurePortability relationTablePortability;
     private final MainTableViewPortability mainTableViewPortability;
     private final FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService;
@@ -204,6 +207,22 @@ public class FunctionUnitExporter {
                 byte[] viewsData = objectMapper.writeValueAsBytes(mainTableViews);
                 fileContents.put(viewsFile, viewsData);
                 addZipEntry(zos, viewsFile, viewsData);
+            }
+
+            // Export link form components (referenced by sub-list-view linkForm columns via componentId;
+            // linkedForm carried by NAME so it survives form id remap on import).
+            List<LinkFormComponent> linkFormComponents =
+                    linkFormComponentRepository.findByFunctionUnitIdOrderBySortOrderAsc(functionUnitId);
+            if (!linkFormComponents.isEmpty()) {
+                Map<Long, String> formIdToName = forms.stream()
+                        .collect(Collectors.toMap(FormDefinition::getId, FormDefinition::getFormName));
+                List<Map<String, Object>> lfcPayload = linkFormComponents.stream()
+                        .map(c -> serializeLinkFormComponent(c, formIdToName))
+                        .toList();
+                String lfcFile = "link-form-components/link_form_components.json";
+                byte[] lfcData = objectMapper.writeValueAsBytes(lfcPayload);
+                fileContents.put(lfcFile, lfcData);
+                addZipEntry(zos, lfcFile, lfcData);
             }
 
             // Export action definitions
@@ -479,6 +498,22 @@ public class FunctionUnitExporter {
         map.put("stageId", stageBinding.getStageId());
         map.put("stageName", stageBinding.getStageName());
         map.put("readOnly", stageBinding.getReadOnly());
+        return map;
+    }
+
+    private Map<String, Object> serializeLinkFormComponent(LinkFormComponent component,
+                                                           Map<Long, String> formIdToName) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("componentId", component.getId());
+        map.put("componentName", component.getComponentName());
+        map.put("linkedFormId", component.getLinkedFormId());
+        map.put("linkedFormName", component.getLinkedFormId() != null
+                ? formIdToName.get(component.getLinkedFormId()) : null);
+        map.put("displayField", component.getDisplayField());
+        map.put("linkText", component.getLinkText());
+        map.put("columnLabel", component.getColumnLabel());
+        map.put("sortOrder", component.getSortOrder());
+        map.put("configJson", component.getConfigJson());
         return map;
     }
 

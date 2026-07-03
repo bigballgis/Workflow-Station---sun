@@ -116,6 +116,7 @@ public class DecisionDesignVersionSnapshotPropertyTest extends DecisionDesignPro
                     mock(com.developer.service.MainTableViewService.class),
                     mock(com.developer.repository.SubTableViewConfigRepository.class),
                     mock(com.developer.repository.ForeignKeyRepository.class),
+                    mock(com.developer.repository.LinkFormComponentRepository.class),
                     mock(com.developer.component.impl.MainTableViewPortability.class)
             );
 

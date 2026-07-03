@@ -89,6 +89,12 @@ public class ExportImportPackageParser {
                         rawFiles.get("relation-tables/relation_tables.json"), List.class));
             }
 
+            // Parse link form components (absent in older packages)
+            if (rawFiles.containsKey("link-form-components/link_form_components.json")) {
+                result.put("linkFormComponents", objectMapper.readValue(
+                        rawFiles.get("link-form-components/link_form_components.json"), List.class));
+            }
+
             // Parse "View Design" main-table view configs
             if (rawFiles.containsKey("views/main_table_views.json")) {
                 result.put("mainTableViews", objectMapper.readValue(

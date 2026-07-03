@@ -9,6 +9,7 @@ import com.developer.entity.FormDefinition;
 import com.developer.entity.FormStageBinding;
 import com.developer.entity.FormTableBinding;
 import com.developer.entity.FunctionUnit;
+import com.developer.entity.LinkFormComponent;
 import com.developer.entity.SubTableViewConfig;
 import com.developer.entity.SubTableViewField;
 import com.developer.entity.TableDefinition;
@@ -30,6 +31,7 @@ import com.developer.repository.DecisionDefinitionRepository;
 import com.developer.repository.EmailConnectionRepository;
 import com.developer.repository.FormDefinitionRepository;
 import com.developer.repository.FormTableBindingRepository;
+import com.developer.repository.LinkFormComponentRepository;
 import com.developer.repository.SubTableViewConfigRepository;
 import com.developer.repository.TableDefinitionRepository;
 import com.developer.repository.TableRelationRepository;
@@ -62,6 +64,7 @@ public class FunctionUnitImportWriter {
     private final DecisionDefinitionRepository decisionDefinitionRepository;
     private final EmailConnectionRepository emailConnectionRepository;
     private final FormTableBindingRepository formTableBindingRepository;
+    private final LinkFormComponentRepository linkFormComponentRepository;
     private final TableRelationRepository tableRelationRepository;
     private final SubTableViewConfigRepository subTableViewConfigRepository;
     private final DmnXmlParser dmnXmlParser;
@@ -274,7 +277,9 @@ public class FunctionUnitImportWriter {
     void finalizeFormImport(FormDefinition form,
                             Map<String, Object> formData,
                             Map<String, Long> importedTableNameToId,
-                            Map<Long, Long> relationTableIdMapping) {
+                            Map<Long, Long> relationTableIdMapping,
+                            Map<Long, Long> formIdMapping,
+                            Map<Long, Long> componentIdMapping) {
         Map<Long, Long> bindingIdMapping =
                 importFormTableBindings(form, formData, importedTableNameToId, relationTableIdMapping);
 
@@ -284,13 +289,50 @@ public class FunctionUnitImportWriter {
         } else {
             configJson = new HashMap<>(configJson);
         }
-        FormConfigJsonBindingIdRewriter.remapBindingIds(configJson, bindingIdMapping);
+        FormConfigJsonBindingIdRewriter.remapIds(
+                configJson, bindingIdMapping, formIdMapping, componentIdMapping, relationTableIdMapping);
         FormConfigJsonOrphanBindingRepair.repairOrphanedBindingKeys(
                 configJson, formTableBindingRepository.findByFormIdOrderBySortOrder(form.getId()));
         form.setConfigJson(configJson);
 
         importFormStageBindings(form, formData);
         formDefinitionRepository.save(form);
+    }
+
+    /**
+     * Recreates a dw_link_form_components row for the imported unit. The linked form is resolved by
+     * NAME first (names are stable across environments), falling back to the form id mapping.
+     * Returns null (and logs) when the linked form cannot be resolved — a dangling linkedFormId would
+     * make every consumer of this component 500 or render nothing.
+     */
+    LinkFormComponent importLinkFormComponent(FunctionUnit functionUnit,
+                                              Map<String, Object> componentData,
+                                              Map<String, Long> importedFormNameToId,
+                                              Map<Long, Long> formIdMapping) {
+        Long linkedFormId = null;
+        if (componentData.get("linkedFormName") instanceof String linkedFormName
+                && importedFormNameToId.containsKey(linkedFormName)) {
+            linkedFormId = importedFormNameToId.get(linkedFormName);
+        } else if (componentData.get("linkedFormId") instanceof Number sourceFormId) {
+            linkedFormId = formIdMapping.get(sourceFormId.longValue());
+        }
+        if (linkedFormId == null) {
+            log.warn("Skipping link form component '{}' import: linked form not resolvable (name={}, id={})",
+                    componentData.get("componentName"),
+                    componentData.get("linkedFormName"), componentData.get("linkedFormId"));
+            return null;
+        }
+        LinkFormComponent component = LinkFormComponent.builder()
+                .functionUnitId(functionUnit.getId())
+                .componentName((String) componentData.get("componentName"))
+                .linkedFormId(linkedFormId)
+                .displayField((String) componentData.get("displayField"))
+                .linkText((String) componentData.get("linkText"))
+                .columnLabel((String) componentData.get("columnLabel"))
+                .sortOrder(componentData.get("sortOrder") instanceof Number number ? number.intValue() : null)
+                .configJson((String) componentData.get("configJson"))
+                .build();
+        return linkFormComponentRepository.save(component);
     }
 
     private Map<Long, Long> importFormTableBindings(FormDefinition form,

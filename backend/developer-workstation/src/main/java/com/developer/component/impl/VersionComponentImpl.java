@@ -41,6 +41,7 @@ public class VersionComponentImpl implements VersionComponent {
     private final MainTableViewService mainTableViewService;
     private final com.developer.repository.SubTableViewConfigRepository subTableViewConfigRepository;
     private final com.developer.repository.ForeignKeyRepository foreignKeyRepository;
+    private final com.developer.repository.LinkFormComponentRepository linkFormComponentRepository;
     private final MainTableViewPortability mainTableViewPortability;
     
     /**
@@ -270,6 +271,10 @@ public class VersionComponentImpl implements VersionComponent {
         // BEFORE clearing forms, while the bindings still exist to join on.
         subTableViewConfigRepository.deleteViewFieldsByFunctionUnitId(functionUnit.getId());
         subTableViewConfigRepository.deleteConfigsByFunctionUnitId(functionUnit.getId());
+
+        // dw_link_form_components rows reference forms by plain id (no FK/cascade); clear them here or a
+        // same-name reimport leaves stale components whose linkedFormId dangles after forms are rebuilt.
+        linkFormComponentRepository.deleteByFunctionUnitId(functionUnit.getId());
 
         // Delete foreign keys first. A ForeignKey's field_id/ref_field_id are NOT NULL; if we let the
         // tableDefinitions clear() cascade-delete fields first, Hibernate dissociates the still-present FK

@@ -12,7 +12,9 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/function-units/{functionUnitId}/link-form-components")
+// NOTE: server.servlet.context-path is already /api/v1 — do not repeat it here, or the
+// controller becomes unreachable (/api/v1/api/v1/...) and the frontend gets a 500.
+@RequestMapping("/function-units/{functionUnitId}/link-form-components")
 @RequiredArgsConstructor
 public class LinkFormComponentController {
     

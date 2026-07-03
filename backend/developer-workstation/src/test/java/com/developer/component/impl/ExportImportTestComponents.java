@@ -9,6 +9,7 @@ import com.developer.repository.FormStageBindingRepository;
 import com.developer.repository.FormTableBindingRepository;
 import com.developer.repository.FunctionUnitDevGroupAssignmentRepository;
 import com.developer.repository.FunctionUnitRepository;
+import com.developer.repository.LinkFormComponentRepository;
 import com.developer.repository.ProcessDefinitionRepository;
 import com.developer.repository.SubTableViewConfigRepository;
 import com.developer.repository.TableDefinitionRepository;
@@ -41,10 +42,13 @@ public final class ExportImportTestComponents {
             FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService,
             ObjectMapper objectMapper) {
         EmailConnectionRepository emailConnectionRepository = Mockito.mock(EmailConnectionRepository.class);
-        Mockito.when(emailConnectionRepository.findByFunctionUnitIdOrderByNameAsc(Mockito.anyLong()))
+        Mockito.lenient().when(emailConnectionRepository.findByFunctionUnitIdOrderByNameAsc(Mockito.anyLong()))
                 .thenReturn(java.util.List.of());
         EmailMonitorRuleRepository emailMonitorRuleRepository = Mockito.mock(EmailMonitorRuleRepository.class);
-        Mockito.when(emailMonitorRuleRepository.findByFunctionUnitIdOrderByNameAsc(Mockito.anyLong()))
+        Mockito.lenient().when(emailMonitorRuleRepository.findByFunctionUnitIdOrderByNameAsc(Mockito.anyLong()))
+                .thenReturn(java.util.List.of());
+        LinkFormComponentRepository linkFormComponentRepository = Mockito.mock(LinkFormComponentRepository.class);
+        Mockito.lenient().when(linkFormComponentRepository.findByFunctionUnitIdOrderBySortOrderAsc(Mockito.anyLong()))
                 .thenReturn(java.util.List.of());
         FunctionUnitExporter exporter = new FunctionUnitExporter(
                 functionUnitRepository,
@@ -57,6 +61,7 @@ public final class ExportImportTestComponents {
                 formStageBindingRepository,
                 tableRelationRepository,
                 Mockito.mock(SubTableViewConfigRepository.class),
+                linkFormComponentRepository,
                 Mockito.mock(RelationTableStructurePortability.class),
                 Mockito.mock(MainTableViewPortability.class),
                 functionUnitWorkspaceAccessService,
@@ -102,10 +107,16 @@ public final class ExportImportTestComponents {
                 decisionDefinitionRepository,
                 Mockito.mock(EmailConnectionRepository.class),
                 formTableBindingRepository,
+                Mockito.mock(LinkFormComponentRepository.class),
                 tableRelationRepository,
                 Mockito.mock(SubTableViewConfigRepository.class),
                 dmnXmlParser,
                 objectMapper);
+
+        ProcessBpmnStaleIdFixer staleIdFixer = new ProcessBpmnStaleIdFixer(
+                tableDefinitionRepository,
+                formDefinitionRepository,
+                actionDefinitionRepository);
 
         FunctionUnitImporter importer = new FunctionUnitImporter(
                 functionUnitRepository,
@@ -115,6 +126,7 @@ public final class ExportImportTestComponents {
                 sequenceSynchronizer,
                 packageParser,
                 importWriter,
+                staleIdFixer,
                 Mockito.mock(com.developer.component.VersionComponent.class),
                 Mockito.mock(RelationTableStructurePortability.class),
                 Mockito.mock(MainTableViewPortability.class),
