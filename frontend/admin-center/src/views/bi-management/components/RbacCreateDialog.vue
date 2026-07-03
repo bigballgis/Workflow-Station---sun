@@ -9,7 +9,7 @@
       ref="createFormRef"
       :model="createForm"
       :rules="createFormRules"
-      label-width="140px"
+      label-width="auto"
     >
       <el-form-item
         :label="t('bi.rbac.colSystemRole')"

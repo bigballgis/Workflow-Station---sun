@@ -99,7 +99,8 @@ export function useSubTableLinkFormDialog(
   const linkedFormFields = computed(() => selectedLinkBinding.value?.formFields || [])
   const linkedFormLabelWidth = computed(() => {
     const width = selectedLinkBinding.value?.formOptions?.form?.labelWidth
-    return typeof width === 'string' && width.trim() ? width : '125px'
+    // fallback 'auto'：弹窗内各行输入框左对齐
+    return typeof width === 'string' && width.trim() ? width : 'auto'
   })
   const canEditSelectedLinkBinding = computed(() => !!(props.editable && selectedLinkBinding.value?.bindingMode === 'EDITABLE'))
 

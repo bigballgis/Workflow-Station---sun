@@ -48,7 +48,8 @@ export function useCustomActions(options: {
   const formPopupData = ref<Record<string, any>>({})
   const formPopupReadOnly = ref(false)
   const formPopupWidth = ref('800px')
-  const formPopupLabelWidth = ref('140px')
+  // 'auto'：EP 取最长 label 宽度，弹窗内各行输入框左对齐
+  const formPopupLabelWidth = ref('auto')
   const formPopupReadOnlyMode = ref(false)
   const currentFormPopupAction = ref<TaskActionInfo | null>(null)
   /**

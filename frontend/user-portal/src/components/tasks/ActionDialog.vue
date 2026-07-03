@@ -8,7 +8,7 @@
   >
     <el-form
       :model="formData"
-      label-width="120px"
+      label-width="auto"
       label-position="left"
       class="task-action-form"
     >

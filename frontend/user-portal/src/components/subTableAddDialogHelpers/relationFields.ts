@@ -138,23 +138,23 @@ export function deriveColumnsFromRelationFieldDefinitions(fields: RelationFieldD
 import { isAuditField } from './rowInit'
 
 /**
- * Merge any table field definition columns that are missing from the current column list.
- * This keeps sub-table list-views in sync with the table's schema even when individual
- * form subListViews have not been updated after a field was added to the table design.
+ * DW-parity fallback: designer-configured columns (subListViews / sub-form rule) are the
+ * source of truth — when any exist, they are returned untouched so the portal shows exactly
+ * the columns designed in Developer Workstation. Only when the form has no designed columns
+ * at all (e.g. attachment bindings without a configured list view) do we fall back to the
+ * table schema, mirroring DW's derivePreviewColumnsFromTable fallback.
  */
 export function mergeMissingTableFieldColumns(
   columns: DialogColumn[],
   tableFields: RelationFieldDef[] | undefined,
 ): DialogColumn[] {
+  if (columns.length > 0) return columns
   if (!tableFields?.length) return columns
-  const existing = new Set(columns.map(c => String(c.field ?? '').trim()).filter(Boolean))
   const fromTable = deriveColumnsFromRelationFieldDefinitions(tableFields)
-  const extra = fromTable.filter(c => !existing.has(String(c.field ?? '').trim()))
-  if (extra.length === 0) return columns
-  for (const col of extra) {
+  for (const col of fromTable) {
     if (isAuditField(col.field)) col.readonly = true
   }
-  return [...columns, ...extra]
+  return fromTable
 }
 
 /** Index relation-table field definitions from function-unit {@code dataTables} content items. */

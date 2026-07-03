@@ -616,7 +616,7 @@
     >
       <el-form
         :model="applyForm"
-        label-width="120px"
+        label-width="auto"
         label-position="left"
         class="apply-form"
       >

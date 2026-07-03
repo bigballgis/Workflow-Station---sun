@@ -5,7 +5,7 @@
     width="500px"
   >
     <el-form
-      label-width="160px"
+      label-width="auto"
       label-position="left"
     >
       <el-form-item :label="t('functionUnit.targetEnvironment')">

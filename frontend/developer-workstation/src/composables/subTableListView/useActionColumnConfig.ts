@@ -37,7 +37,7 @@ export function useActionColumnConfig(options: UseActionColumnConfigOptions) {
   const showActionColumnConfig = ref(false)
   const editingActionColumnIndex = ref<number | null>(null)
   const editingActionColumnType = ref<'linkForm' | 'lookup'>('linkForm')
-  const linkColumnConfig = ref({ boundSubTableBindingId: 0, columnLabel: '', linkText: '' })
+  const linkColumnConfig = ref({ boundSubTableBindingId: 0, boundSubTableName: '', columnLabel: '', linkText: '' })
   const lookupColumnConfig = ref({ columnLabel: 'Lookup', lookupConfig: '{}' })
 
   function openActionColumnConfig(column: SubTableListColumnDTO, index: number) {
@@ -51,6 +51,10 @@ export function useActionColumnConfig(options: UseActionColumnConfigOptions) {
     } else {
       linkColumnConfig.value = {
         boundSubTableBindingId: column.boundSubTableBindingId || props.binding.bindingId,
+        // Persisted display name — the bound binding may live on ANOTHER form of this unit,
+        // in which case the current form's options cannot label it (would show the raw id).
+        boundSubTableName: column.boundSubTableName
+          || resolveSubTableBindingDisplayName(column.boundSubTableBindingId),
         columnLabel: column.columnLabel || column.displayName || 'Link Form',
         linkText: column.linkText || t('linkForm.defaultLinkText')
       }
@@ -83,6 +87,9 @@ export function useActionColumnConfig(options: UseActionColumnConfigOptions) {
             option => option.bindingId === linkColumnConfig.value.boundSubTableBindingId
           )?.tableName
           || resolveSubTableBindingDisplayName(linkColumnConfig.value.boundSubTableBindingId)
+          // Cross-form binding: keep the persisted name instead of blanking it.
+          || linkColumnConfig.value.boundSubTableName
+          || current.boundSubTableName
     }
     emit('update:modelValue', columns)
     emit('save')

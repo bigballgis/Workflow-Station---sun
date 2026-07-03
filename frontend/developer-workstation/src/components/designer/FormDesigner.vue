@@ -523,7 +523,7 @@
         </el-alert>
         
         <el-form
-          label-width="120px"
+          label-width="auto"
           label-position="left"
           style="margin-bottom: 16px;"
         >
@@ -2078,12 +2078,11 @@ onMounted(() => {
       margin-bottom: 18px;
     }
 
-    // label 不截断，自动撑开宽度
+    // label 不折行；保留 label-width 统一宽度使各行输入框左对齐，超长时撑开
     :deep(.el-form-item__label) {
       white-space: nowrap !important;
-      width: auto !important;
-      min-width: fit-content !important;
-      max-width: 200px !important;
+      min-width: max-content !important;
+      max-width: none !important;
       height: auto !important;
       line-height: 1.5 !important;
       padding-top: 6px;

@@ -116,7 +116,7 @@
       :title="$t('dashboard.layoutSettings')"
       width="400px"
     >
-      <el-form label-width="100px">
+      <el-form label-width="auto">
         <el-form-item :label="$t('dashboard.columns')">
           <el-slider
             v-model="columns"
@@ -155,7 +155,7 @@
     >
       <el-form
         v-if="editingWidget"
-        label-width="100px"
+        label-width="auto"
       >
         <el-form-item :label="$t('dashboard.widgetTitle')">
           <el-input v-model="editingWidget.title" />

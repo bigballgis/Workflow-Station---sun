@@ -1,6 +1,10 @@
 import type { ProcessNode, ProcessFlow } from '@/components/ProcessDiagram.vue'
 import { isRejectedName } from '@/utils/statusMatcher'
 import { getCachedBpmnDocument } from '@/utils/bpmnParseCache'
+import {
+  applyDraftReturnDiagramStatus,
+  resolveDiagramStatusSuppressMode,
+} from '@/utils/bpmnDiagramDraftReturn'
 import type { ApplicationDetailCtx } from './context'
 
 export interface ApplicationDetailDiagramParserFns {
@@ -723,6 +727,22 @@ export function createApplicationDetailDiagramParser(ctx: ApplicationDetailCtx):
         const id = flow.getAttribute('id') || `flow_${index}`
         flows.push({ id, sourceRef: flow.getAttribute('sourceRef') || '', targetRef: flow.getAttribute('targetRef') || '', name: flow.getAttribute('name') || '', waypoints: waypointsMap.get(id) })
       })
+
+      // Draft return-to-first-step: history keeps completed records from the prior pass,
+      // but downstream stages must render as pending again (parity with todo task detail).
+      if (processInfo.value.status === 'RUNNING' && !snapshotActive) {
+        const suppressMode = resolveDiagramStatusSuppressMode(xml, {
+          currentTaskName: currentNodeName,
+          historyRecords: historyRecords.value,
+        })
+        if (suppressMode === 'draft-return') {
+          const draftReturn = applyDraftReturnDiagramStatus(nodes, xml, currentNodeId.value)
+          processNodes.value = draftReturn.nodes
+          processFlows.value = flows
+          completedNodeIds.value = draftReturn.completedNodeIds
+          return
+        }
+      }
 
       processNodes.value = nodes
       processFlows.value = flows

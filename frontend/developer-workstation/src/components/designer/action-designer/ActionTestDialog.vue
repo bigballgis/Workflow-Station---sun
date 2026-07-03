@@ -7,7 +7,7 @@
     @update:model-value="$emit('update:modelValue', $event)"
   >
     <el-form
-      label-width="120px"
+      label-width="auto"
       label-position="left"
     >
       <el-form-item :label="$t('action.testData')">

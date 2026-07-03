@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   deriveColumnsFromRelationFieldDefinitions,
+  mergeMissingTableFieldColumns,
   resolveSubTableSchemaByTableId,
   resolveSubListViewColumnsForBinding,
   defaultAttachmentListColumns,
@@ -21,6 +22,34 @@ describe('subTableSchemaResolution', () => {
     const cols = defaultAttachmentListColumns()
     expect(cols.map(c => c.field)).toEqual(['id', 'main_id', 'file'])
     expect(cols[2]?.type).toBe('upload')
+  })
+
+  it('mergeMissingTableFieldColumns keeps designed columns untouched (DW parity)', () => {
+    const designed = [
+      { field: 'name', label: 'name' },
+      { field: 'id', label: 'id' },
+      { field: 'assignee', label: 'assignee' },
+    ]
+    const tableFields = [
+      { fieldName: 'name', dataType: 'VARCHAR', description: 'Name', sortOrder: 0 },
+      { fieldName: 'id_idw', dataType: 'VARCHAR', description: 'id_idw', sortOrder: 1 },
+      { fieldName: 'main_id', dataType: 'VARCHAR', description: 'main id', sortOrder: 2 },
+      { fieldName: 'test', dataType: 'VARCHAR', description: 'test', sortOrder: 3 },
+      { fieldName: 'created_at', dataType: 'TIMESTAMP', description: 'created_at', sortOrder: 4 },
+      { fieldName: 'updated_by', dataType: 'VARCHAR', description: 'updated_by', sortOrder: 5 },
+    ]
+    const cols = mergeMissingTableFieldColumns(designed, tableFields)
+    expect(cols.map(c => c.field)).toEqual(['name', 'id', 'assignee'])
+  })
+
+  it('mergeMissingTableFieldColumns falls back to table schema when no designed columns', () => {
+    const tableFields = [
+      { fieldName: 'name', dataType: 'VARCHAR', description: 'Name', sortOrder: 0 },
+      { fieldName: 'created_at', dataType: 'TIMESTAMP', description: 'created_at', sortOrder: 1 },
+    ]
+    const cols = mergeMissingTableFieldColumns([], tableFields)
+    expect(cols.map(c => c.field)).toEqual(['name', 'created_at'])
+    expect(cols.find(c => c.field === 'created_at')?.readonly).toBe(true)
   })
 
   it('resolveSubTableSchemaByTableId finds sibling form schema for same tableId', () => {

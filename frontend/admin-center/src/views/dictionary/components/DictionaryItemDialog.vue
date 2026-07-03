@@ -9,7 +9,7 @@
       ref="formRef"
       :model="form"
       :rules="rules"
-      label-width="100px"
+      label-width="auto"
     >
       <el-form-item
         :label="t('dictionary.displayName')"

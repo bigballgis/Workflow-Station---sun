@@ -179,14 +179,13 @@ svg:empty {
   }
 }
 
-// Preview 弹窗内 label：左对齐、不截断、自动撑开宽度
-// 用更高优先级选择器覆盖 el-dialog 的规则
+// Preview 弹窗内 label：左对齐、不截断；保留 label-width 统一宽度使输入框左对齐，
+// 文字超出时由 min-width 撑开。用更高优先级选择器覆盖 el-dialog 的规则
 .el-dialog .form-preview-wrapper,
 .form-preview-wrapper {
   .el-form-item__label {
     white-space: nowrap !important;
-    width: auto !important;
-    min-width: fit-content !important;
+    min-width: max-content !important;
     max-width: none !important;
     overflow: visible !important;
     text-overflow: clip !important;
@@ -281,12 +280,13 @@ svg:empty {
   overflow-x: auto;
 }
 
-// 弹窗 / 抽屉内表单：字段名（label）完整显示、不折行，输入框自然跟随、不遮挡文字。
+// 弹窗 / 抽屉内表单：字段名（label）完整显示、不折行，且各行输入框左边缘对齐
+// （保留 label-width 作为统一宽度，文字超出时由 min-width 撑开）。
 // 与 user-portal / admin-center 的 index.scss 保持同一规则。
 .el-dialog,
 .el-drawer {
   .el-form:not(.el-form--label-top) .el-form-item__label {
-    width: auto !important;
+    min-width: max-content;
     max-width: none !important;
     white-space: nowrap;
     flex-shrink: 0;

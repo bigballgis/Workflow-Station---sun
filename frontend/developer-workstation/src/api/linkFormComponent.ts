@@ -15,6 +15,14 @@ apiAxios.interceptors.request.use(config => {
   return config
 })
 
+// Unwrap one axios layer like the other api modules: callers read `res.data` as the
+// ApiResponse payload. Without this, `res.data` is the whole ApiResponse envelope and
+// e.g. linkFormComponents.value ends up as an object (".find is not a function").
+apiAxios.interceptors.response.use(
+  response => response.data,
+  error => Promise.reject(error)
+)
+
 export interface LinkFormComponentResponse {
   id: number
   functionUnitId: number

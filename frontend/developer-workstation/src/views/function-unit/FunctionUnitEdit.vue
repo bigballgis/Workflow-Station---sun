@@ -180,7 +180,7 @@
     >
       <el-form
         :model="editForm"
-        label-width="100px"
+        label-width="auto"
         label-position="left"
       >
         <el-form-item :label="t('functionUnit.icon')">
@@ -313,7 +313,7 @@
     >
       <el-form
         :model="deployForm"
-        label-width="120px"
+        label-width="auto"
         label-position="left"
       >
         <el-form-item :label="t('functionUnit.autoEnable')">

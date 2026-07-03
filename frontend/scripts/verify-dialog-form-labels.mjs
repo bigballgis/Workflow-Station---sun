@@ -23,10 +23,11 @@ const OUT_DIR = join(FRONTEND_ROOT, 'user-portal', 'verification-screenshots')
 const EP_CSS = join(FRONTEND_ROOT, 'user-portal', 'node_modules', 'element-plus', 'dist', 'index.css')
 const PORTAL_INDEX_SCSS = join(FRONTEND_ROOT, 'user-portal', 'src', 'styles', 'index.scss')
 
+// 当前生效规则：保留 label-width 统一宽度（输入框左对齐），min-width 兜底防折行
 const DIALOG_LABEL_RULE = `
 .el-dialog .el-form:not(.el-form--label-top) .el-form-item__label,
 .el-drawer .el-form:not(.el-form--label-top) .el-form-item__label {
-  width: auto !important;
+  min-width: max-content;
   max-width: none !important;
   white-space: nowrap;
   flex-shrink: 0;
@@ -37,11 +38,23 @@ const DIALOG_LABEL_RULE = `
 }
 `
 
+// 旧（错误）规则：width:auto 把 label 压成各自文字宽度 → 各行输入框起点不一
+const OLD_DIALOG_LABEL_RULE = `
+.el-dialog .el-form:not(.el-form--label-top) .el-form-item__label,
+.el-drawer .el-form:not(.el-form--label-top) .el-form-item__label {
+  width: auto !important;
+  max-width: none !important;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+`
+
 const FIELDS = [
+  { label: '名称', type: 'input', placeholder: '请输入名称' },
+  { label: 'ID', type: 'input', placeholder: '请输入 ID' },
   { label: '委托给（被委托人）', type: 'select', placeholder: '请选择被委托人' },
   { label: '委托类型（全部/部分）', type: 'select', placeholder: '请选择委托类型' },
   { label: '流程实例开始时间', type: 'input', placeholder: '请选择开始时间' },
-  { label: '流程实例结束时间', type: 'input', placeholder: '请选择结束时间' },
   { label: '委托原因说明（选填）', type: 'textarea', placeholder: '请输入委托原因' },
 ]
 
@@ -70,12 +83,9 @@ function buildFormItems(labelWidth, extraLabelCss = '') {
 function buildHtml(mode) {
   const epCss = readFileSync(EP_CSS, 'utf8')
   const portalScss = readFileSync(PORTAL_INDEX_SCSS, 'utf8')
-  const labelWidth = '130px'
-  const fixCss = mode === 'after' ? DIALOG_LABEL_RULE : ''
-  const extraLabelCss =
-    mode === 'before'
-      ? `.el-dialog .el-form-item__label { /* before: fixed width only, wraps naturally */ }`
-      : ''
+  const labelWidth = '190px' // 统一宽度须容纳最长 label（规范要求）
+  const fixCss = mode === 'after' ? DIALOG_LABEL_RULE : OLD_DIALOG_LABEL_RULE
+  const extraLabelCss = ''
 
   return `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -98,7 +108,7 @@ ${fixCss}
 <div class="el-dialog" role="dialog">
   <div class="el-dialog__header">
     <span class="el-dialog__title">创建委托</span>
-    <span class="badge ${mode}">${mode === 'before' ? '修复前：label-width=130px，长文字折行' : '修复后：全局 CSS，label 自适应 + 不折行'}</span>
+    <span class="badge ${mode}">${mode === 'before' ? '修复前：width:auto 逐 label 自适应，输入框不对齐' : '修复后：label-width 统一 + min-width 兜底，输入框左对齐且不折行'}</span>
   </div>
   <div class="el-dialog__body">
     <form class="el-form el-form--default el-form--label-left" label-width="${labelWidth}">

@@ -118,7 +118,7 @@
       @closed="resetAddForm"
     >
       <el-form
-        label-width="110px"
+        label-width="auto"
         label-position="left"
         style="margin-bottom: 4px;"
       >
@@ -147,7 +147,7 @@
             Select a Business Unit, then choose one or more of its bound roles.
           </p>
           <el-form
-            label-width="110px"
+            label-width="auto"
             label-position="left"
             style="margin-top: 8px;"
           >

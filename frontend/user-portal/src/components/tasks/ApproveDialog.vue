@@ -6,7 +6,7 @@
   >
     <el-form
       :model="formData"
-      label-width="80px"
+      label-width="auto"
     >
       <el-form-item :label="$t('task.comment')">
         <el-input

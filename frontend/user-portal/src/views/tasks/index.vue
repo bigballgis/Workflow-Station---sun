@@ -245,7 +245,7 @@
     >
       <el-form
         :model="actionForm"
-        label-width="120px"
+        label-width="auto"
         label-position="left"
         class="task-action-form"
       >

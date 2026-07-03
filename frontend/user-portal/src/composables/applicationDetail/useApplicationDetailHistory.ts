@@ -1,6 +1,6 @@
 import type { HistoryRecord } from '@/components/ProcessHistory.vue'
 import { processApi } from '@/api/process'
-import { getHistoryStatus } from './subTableRowHelpers'
+import { getHistoryStatus, getHistoryAction } from './subTableRowHelpers'
 import type { ApplicationDetailCtx } from './context'
 
 export interface ApplicationDetailHistoryFns {
@@ -62,6 +62,7 @@ export function createApplicationDetailHistory(ctx: ApplicationDetailCtx): Appli
           nodeId: item.activityId || `node_${index}`,
           nodeName: item.activityName || item.taskName || t('applicationDetail.unknownNode'),
           status: getHistoryStatus(item.operationType),
+          action: getHistoryAction(item.operationType),
           assigneeName: item.operatorName || '-',
           comment: item.comment,
           createdTime: item.operationTime || '',

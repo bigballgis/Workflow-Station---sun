@@ -197,10 +197,11 @@ export function createApplicationDetailNodeFormMap(ctx: ApplicationDetailCtx): A
             if (b.bindingType === 'PRIMARY') continue
             let cols = ctx.resolveSubTableBindingColumnsForPortal(b, configForSubTables, formsList)
             if (!Array.isArray(cols)) cols = []
-            // Merge live fieldDefinitions for table schema parity (same as Todo phase).
+            // DW parity: designed columns are the source of truth. Live fieldDefinitions only
+            // serve as a fallback when the form has no designed columns at all (same as Todo phase).
             const fieldDefs = b.fieldDefinitions as Array<{ fieldName?: string; field_name?: string }> | undefined
-            if (fieldDefs?.length) {
-              const existingFields = new Set(cols.map(c => String(c.field ?? '').trim()).filter(Boolean))
+            if (cols.length === 0 && fieldDefs?.length) {
+              const existingFields = new Set<string>()
               for (const fd of fieldDefs) {
                 const fn = String(fd.fieldName ?? fd.field_name ?? '').trim()
                 if (!fn || existingFields.has(fn) || isSubTableRowMetaField(fn)) continue

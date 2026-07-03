@@ -260,7 +260,7 @@
     >
       <el-form
         :model="formData"
-        label-width="140px"
+        label-width="auto"
         label-position="left"
       >
         <el-form-item

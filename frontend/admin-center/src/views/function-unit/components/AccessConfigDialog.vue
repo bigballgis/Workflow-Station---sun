@@ -108,7 +108,7 @@
             Select a Business Unit, then choose one of its bound roles.
           </p>
           <el-form
-            label-width="110px"
+            label-width="auto"
             label-position="left"
             style="margin-top: 8px;"
           >

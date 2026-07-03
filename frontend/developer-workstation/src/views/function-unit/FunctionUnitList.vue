@@ -195,7 +195,7 @@
         ref="formRef"
         :model="basicForm"
         :rules="formRules"
-        label-width="100px"
+        label-width="auto"
         label-position="left"
       >
         <el-form-item :label="t('functionUnit.icon')">
@@ -271,7 +271,7 @@
       width="480px"
       @open="initExportSelection"
     >
-      <el-form label-width="100px">
+      <el-form label-width="auto">
         <el-form-item :label="t('functionUnit.name')">
           <el-select
             v-model="exportTargetId"

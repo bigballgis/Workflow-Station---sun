@@ -439,7 +439,7 @@
       :fields="formFields"
       :tabs="formTabs"
       :form-data="miFillDialogData"
-      :label-width="formLabelWidth"
+      label-width="auto"
       :form-read-only="formReadOnly"
       :dialog-read-only="miFillDialogReadOnly"
       :sub-table-bindings="miFillSubTableBindings"

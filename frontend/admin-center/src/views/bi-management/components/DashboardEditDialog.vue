@@ -7,7 +7,7 @@
   >
     <el-form
       :model="editForm"
-      label-width="140px"
+      label-width="auto"
     >
       <el-form-item :label="t('bi.dashboard.colDashboardTitle')">
         <span>{{ editForm.dashboardTitle }}</span>

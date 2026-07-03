@@ -161,7 +161,7 @@
         ref="formRef"
         :model="bindingForm"
         :rules="formRules"
-        label-width="120px"
+        label-width="auto"
         label-position="left"
       >
         <!-- Must-add-primary-first hint -->

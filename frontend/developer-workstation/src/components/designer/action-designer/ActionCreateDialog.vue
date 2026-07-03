@@ -8,7 +8,7 @@
   >
     <el-form
       :model="createForm"
-      label-width="120px"
+      label-width="auto"
       label-position="left"
     >
       <el-form-item

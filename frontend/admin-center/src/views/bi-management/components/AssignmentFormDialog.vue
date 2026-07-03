@@ -11,7 +11,7 @@
       v-loading="dialogInitializing"
       :model="form"
       :rules="formRules"
-      label-width="120px"
+      label-width="auto"
     >
       <el-form-item
         :label="t('bi.assignment.formDashboard')"

@@ -160,7 +160,7 @@
     >
       <el-form
         :model="createForm"
-        label-width="130px"
+        label-width="auto"
         label-position="left"
       >
         <el-form-item :label="t('delegation.delegateTo')">

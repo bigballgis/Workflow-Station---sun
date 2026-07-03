@@ -294,8 +294,8 @@ export function createApplicationDetailColumns(ctx: ApplicationDetailCtx): Appli
         columns = deriveColumnsFromRelationFieldDefinitions(ctx.cachedRelationTableFieldIndex.get(tableIdNum)!)
       }
     }
-    // Merge any table field definitions missing from this form's subListViews.
-    // Runs even when columns is empty so table schema can serve as the sole column source.
+    // DW parity: designed columns are returned untouched; table schema is only a
+    // fallback when no columns were designed for this binding.
     if (Number.isFinite(tableIdNum)) {
       columns = mergeMissingTableFieldColumns(
         Array.isArray(columns) ? columns : [],

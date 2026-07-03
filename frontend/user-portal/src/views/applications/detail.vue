@@ -370,7 +370,7 @@
             v-model="subTaskDetailData"
             :fields="subTaskDetailFields"
             :tabs="[]"
-            label-width="160px"
+            label-width="auto"
             :readonly="true"
             :sub-table-bindings="subTaskDetailSubTableBindings"
             :linked-sub-table-bindings="subTaskDetailLinkableBindings"

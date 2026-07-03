@@ -1,4 +1,5 @@
 import type { FormField } from '@/components/FormRenderer.vue'
+import type { HistoryRecord } from '@/types/historyRecord'
 import { resolveAssigneeFieldForBinding } from '@/utils/subTableAssignment'
 import { SHARED_ATTACHMENT_RELATION_TABLE_ID } from '@/components/subTableAddDialogHelpers'
 import {
@@ -359,4 +360,19 @@ export const getHistoryStatus = (operationType: string): 'completed' | 'current'
     'PENDING': 'current'
   }
   return map[operationType] || 'completed'
+}
+
+export const getHistoryAction = (operationType: string): HistoryRecord['action'] => {
+  const map: Record<string, NonNullable<HistoryRecord['action']>> = {
+    'SUBMIT': 'submit',
+    'APPROVE': 'approve',
+    'REJECT': 'reject',
+    'TRANSFER': 'transfer',
+    'DELEGATE': 'delegate',
+    'WITHDRAW': 'withdraw',
+    'RETURN': 'return',
+    'DRAFT': 'draft',
+    'DRAFT_TASK': 'draft',
+  }
+  return map[operationType]
 }
