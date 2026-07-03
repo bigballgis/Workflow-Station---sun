@@ -46,6 +46,10 @@ public class LoginAudit {
     @Column(name = "user_agent", columnDefinition = "TEXT")
     private String userAgent;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "login_platform", length = 32)
+    private LoginPlatform loginPlatform;
+
     @Column(nullable = false)
     @Builder.Default
     private boolean success = true;
@@ -65,5 +69,11 @@ public class LoginAudit {
         LOGOUT,
         REFRESH,
         TOKEN_REFRESH
+    }
+    
+    public enum LoginPlatform {
+        ADMIN_CENTER,
+        USER_PORTAL,
+        DEVELOPER_WORKSTATION
     }
 }

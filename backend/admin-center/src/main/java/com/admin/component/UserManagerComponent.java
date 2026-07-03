@@ -391,9 +391,10 @@ public class UserManagerComponent {
                     () -> detail.setFunctionManagerName(user.getFunctionManagerId()));
         }
 
-        // Recent login history (most recent 10 LOGIN events)
+        // Recent login history (most recent 10 LOGIN events within 1 day)
+        LocalDateTime oneDayAgo = LocalDateTime.now().minusDays(1);
         List<UserDetailInfo.LoginHistoryInfo> loginHistory = loginAuditQueryRepository
-                .findByUserIdOrderByCreatedAtDesc(userId)
+                .findByUserIdSince(userId, oneDayAgo)
                 .stream()
                 .filter(a -> a.getAction() == LoginAudit.AuditAction.LOGIN)
                 .limit(10)
@@ -401,6 +402,7 @@ public class UserManagerComponent {
                         .loginTime(a.getCreatedAt())
                         .ipAddress(a.getIpAddress())
                         .userAgent(a.getUserAgent())
+                    .loginPlatform(a.getLoginPlatform() != null ? a.getLoginPlatform().name() : null)
                         .success(a.isSuccess())
                         .failureReason(a.getFailureReason())
                         .build())

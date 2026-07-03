@@ -641,6 +641,7 @@ public class AuthController {
                     .action(LoginAudit.AuditAction.LOGIN)
                     .ipAddress(ipAddress)
                     .userAgent(truncateUserAgent(userAgent))
+                    .loginPlatform(LoginAudit.LoginPlatform.USER_PORTAL)
                     .success(true)
                     .build();
             loginAuditQueryRepository.save(audit);
@@ -649,7 +650,7 @@ public class AuthController {
             log.error("Failed to record login success audit: {}", e.getMessage());
         }
     }
-
+    
     private void recordLoginAuditFailure(String userId, String username, String ipAddress,
                                          String userAgent, String reason) {
         try {
@@ -659,6 +660,7 @@ public class AuthController {
                     .action(LoginAudit.AuditAction.LOGIN)
                     .ipAddress(ipAddress)
                     .userAgent(truncateUserAgent(userAgent))
+                .loginPlatform(LoginAudit.LoginPlatform.USER_PORTAL)
                     .success(false)
                     .failureReason(reason != null && reason.length() > 255
                             ? reason.substring(0, 255) : reason)

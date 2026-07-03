@@ -2,8 +2,12 @@ package com.admin.repository;
 
 import com.platform.security.entity.LoginAudit;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -23,4 +27,17 @@ public interface LoginAuditQueryRepository extends JpaRepository<LoginAudit, UUI
      * Find audit records by username, most recent first.
      */
     List<LoginAudit> findByUsernameOrderByCreatedAtDesc(String username);
+
+    /**
+     * Find audit records by user ID within a date window, most recent first.
+     */
+    @Query("SELECT a FROM LoginAudit a WHERE a.userId = :userId AND a.createdAt >= :since ORDER BY a.createdAt DESC")
+    List<LoginAudit> findByUserIdSince(@Param("userId") String userId, @Param("since") LocalDateTime since);
+
+    /**
+     * Delete audit records older than the given cutoff.
+     */
+    @Modifying
+    @Query("DELETE FROM LoginAudit a WHERE a.createdAt < :cutoff")
+    int deleteOlderThan(@Param("cutoff") LocalDateTime cutoff);
 }
