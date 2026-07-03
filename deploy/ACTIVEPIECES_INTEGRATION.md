@@ -264,6 +264,8 @@ ACTIVEPIECES_JWT_SECRET=<任意>               # 改了会让旧 token 失效
 | **`/launch` 502 且日志「public-url is not configured」** | `AP_BRIDGE_URL` 没注入 → `bridge.public-url` 空 | configmap/compose 设 `AP_BRIDGE_URL=<AP 主机>/__ap/bridge`，重启 admin-center |
 | **`/launch` 500「No mapping / No endpoint」** | 运行的是**旧镜像**，没有方案 B 的 `/launch` | 重建镜像：Dockerfile 是 `COPY target/*.jar`，**必须先 `mvn ... package`** 出新 jar 再 `docker build`（仅 restart 容器不更新代码） |
 | 进 AP `/flows ↔ /sign-in` 循环、sign-in 返回 `projectId=null`、token 类型 `ONBOARDING` | AP 0.84 CE 的 sign-up **不自动建 platform/project**，账号卡 ONBOARDING（见 §6） | **重跑引导脚本**——新版会 `POST /api/v1/platforms` 完成 onboarding（建 platform+默认 project），之后 sign-in 带非空 projectId。旧版脚本只 sign-up、留下这个坑 |
+| 清空 `piece_metadata` 后 pieces **又自己回来了** | 只设 `AP_PIECES_SOURCE=DB` 不够：**后台同步 Job（`AP_PIECES_SYNC_MODE` 默认 `OFFICIAL_AUTO`）** 启动即从 cloud.activepieces.com 重新拉元数据入库 | 两个都设：`AP_PIECES_SOURCE=DB` + `AP_PIECES_SYNC_MODE=NONE`（compose 与 k8s 均已加），再清表 |
+| psql 导入 piece 元数据后，列表 `/api/v1/pieces` 有、设计器单查 404 `piece_metadata_not_found` | piece registry 缓存在 AP **进程内存**（piece-cache.ts），只在经 AP 自身 API 改动时用 Redis pubsub 失效；直接写表不触发。列表直查 DB、单查走缓存 | 导入 seed 后**重启 AP**（dev `docker restart`；k8s `rollout restart`） |
 
 ---
 
@@ -282,6 +284,22 @@ ACTIVEPIECES_JWT_SECRET=<任意>               # 改了会让旧 token 失效
     随后 `SELECT * FROM flow` 报 relation 不存在）。n8n 能用 schema 是因为它显式传了 TypeORM `schema`，AP 没有。
   - 唯一能做**硬隔离**的是给 AP **独立 database**（dev 可仿 `n8n_dev`，生产由 DBA 开）。当前不冲突，故维持 public。
 - **Istio Job sidecar**：bootstrap Job 关了 sidecar 注入；若 mesh 为 STRICT mTLS 需另行处理（见 yaml 注记）。
+- **外网下载封禁（IKP 合规，2026-07-02）**：compose 与 `deploy/k8s/activepieces.yaml` 均已设
+  `AP_PIECES_SOURCE=DB` + `AP_PIECES_SYNC_MODE=NONE` + `AP_CLOUD_AUTH_ENABLED=false` + `AP_TELEMETRY_ENABLED=false`——
+  AP 不再从 cloud.activepieces.com / 公网 npm 同步或下载任何 pieces；piece 目录只来自 `piece_metadata` 表，
+  **全新部署 = 空目录**。后果：flow 设计器里没有可选 piece（含 `piece-webhook`），要用 pieces 必须内部投放
+  （DB ARCHIVE 或内部 npm 源）。历史外部数据已于 2026-07-02 全量清除（piece_metadata 10k+ 行与容器缓存）。
+- **离线投放 pieces = 元数据(DB) + 包(内部 npm 源) 两半**（pieces MIT 开源，可自由镜像）：
+  ①运行时装包用的是 **bun 不是 npm**（worker `piece-installer` → `bun install --ignore-scripts`，
+  workspace 在容器 `/usr/src/app/cache/v11/common/`）；bun 认 `NPM_CONFIG_REGISTRY`（bun 1.3.1 容器内实测）。
+  ②已加 `NPM_CONFIG_REGISTRY`：k8s 走 configmap `ACTIVEPIECES_NPM_REGISTRY`（uat/preprod 默认
+  **fail-closed 的 `.invalid` URL**——**空值会静默回落公网 npmjs（实测）**，接 Nexus npm repo 时替换）；
+  dev compose `${ACTIVEPIECES_NPM_REGISTRY:-}` 默认空=公网（仅本机 dev 可接受）。
+  ③元数据行获取：dev 临时开 `AP_PIECES_SYNC_MODE=OFFICIAL_AUTO` 同步→ `COPY (SELECT ... WHERE name IN (白名单))`
+  导出→改回 NONE 清表→导入集群库；`piece_metadata` 表即 piece 白名单。
+  ④镜像根 `bunfig.toml` 有 `minimumReleaseAge=3天`——新发到 Nexus 的包若被拒装先查这个。
+  ⑤**已落地的投放通道 = `deploy/pieces/`**（白名单 pieces.json + 元数据 seed SQL + 预装镜像 Dockerfile，
+  运行时零联网，详见 `deploy/pieces/README.md`）；Nexus npm 源改为兜底防线，非必需。
 
 ---
 

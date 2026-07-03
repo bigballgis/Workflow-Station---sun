@@ -141,7 +141,11 @@ services:
   # Non-prod: UI login via the edge gateway shared-account (see nginx :8085 + bridge).
   # Shares the platform Postgres/Redis. Runs the engine + UI + API on container :80.
   activepieces:
-    image: activepieces/activepieces:0.84.0
+    # Custom image = upstream 0.84.0 + allowlisted pieces pre-installed + Approvals-tab
+    # patch (see deploy/pieces/README.md). Build once: docker compose build activepieces
+    build:
+      context: ../../pieces
+    image: activepieces:0.84.0-pieces
     container_name: platform-activepieces-dev
     depends_on:
       postgres:
@@ -176,6 +180,20 @@ services:
       AP_ENVIRONMENT: prod
       # Silence AP's PostHog product telemetry (floods the browser console / gets rate-limited).
       AP_TELEMETRY_ENABLED: "false"
+      # No-external-download policy (mirrors deploy/k8s/activepieces.yaml): piece catalog
+      # comes ONLY from the piece_metadata table — no cloud.activepieces.com sync, no
+      # public-npm installs, no cloud OAuth2 apps. Pieces must be provisioned internally,
+      # so a fresh rebuild starts with an EMPTY piece catalog.
+      AP_PIECES_SOURCE: DB
+      # SOURCE=DB alone is NOT enough: the background sync job (default OFFICIAL_AUTO)
+      # still re-downloads piece metadata from cloud.activepieces.com into the DB.
+      AP_PIECES_SYNC_MODE: NONE
+      AP_CLOUD_AUTH_ENABLED: "false"
+      # Runtime piece installs use bun, which honors NPM_CONFIG_REGISTRY. Empty (dev
+      # default) = bun falls back to PUBLIC npmjs — acceptable on local dev only (the
+      # piece catalog is empty anyway); k8s uses a fail-closed value instead. Set this
+      # to the internal Nexus npm repo URL to test the offline piece-provisioning flow.
+      NPM_CONFIG_REGISTRY: ${ACTIVEPIECES_NPM_REGISTRY:-}
     volumes:
       - activepieces_data:/app/packages/server/data
     healthcheck:

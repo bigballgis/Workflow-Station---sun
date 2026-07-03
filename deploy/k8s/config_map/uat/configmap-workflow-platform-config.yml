@@ -100,6 +100,10 @@ data:
   ACTIVEPIECES_BRIDGE_ENABLED: "true"
   ACTIVEPIECES_INTERNAL_URL: "http://activepieces-service:80"
   ACTIVEPIECES_SHARED_EMAIL: "hermes-svc@platform.local"
+  # npm registry for AP runtime piece installs (bun honors NPM_CONFIG_REGISTRY).
+  # REPLACE with the internal Nexus npm repo URL before provisioning pieces.
+  # Fail-closed default on purpose: empty would silently fall back to PUBLIC npmjs.
+  ACTIVEPIECES_NPM_REGISTRY: "http://npm-registry-not-configured.invalid/"
   # Frontend runtime config: admin "Activepieces" launcher -> AP gateway bridge.
   AP_BRIDGE_URL: "http://hermes-workflow-activepieces.__BASE_DOMAIN__/__ap/bridge"
   SUPERSET_CONFIG_PATH: "/app/pythonpath/superset_config.py"

@@ -1,0 +1,14 @@
+[
+  { "name": "@activepieces/piece-webhook", "version": "0.1.36" },
+  { "name": "@activepieces/piece-http", "version": "0.11.10" },
+  { "name": "@activepieces/piece-schedule", "version": "0.1.17" },
+  { "name": "@activepieces/piece-csv", "version": "0.4.15" },
+  { "name": "@activepieces/piece-json", "version": "0.1.8" },
+  { "name": "@activepieces/piece-xml", "version": "0.1.15" },
+  { "name": "@activepieces/piece-pdf", "version": "0.5.5" },
+  { "name": "@activepieces/piece-file-helper", "version": "0.1.24" },
+  { "name": "@activepieces/piece-text-helper", "version": "0.5.1" },
+  { "name": "@activepieces/piece-data-mapper", "version": "0.3.16" },
+  { "name": "@activepieces/piece-approval", "version": "0.1.20" },
+  { "name": "@activepieces/piece-todos", "version": "0.0.17" }
+]
