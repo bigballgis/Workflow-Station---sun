@@ -12,6 +12,7 @@
       :model="form"
       :rules="formRules"
       label-width="auto"
+      label-position="left"
     >
       <el-form-item
         :label="t('bi.assignment.formDashboard')"

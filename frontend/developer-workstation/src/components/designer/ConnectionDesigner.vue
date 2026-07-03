@@ -148,7 +148,7 @@
     </el-dialog>
 
     <el-dialog v-model="showTestDialog" :title="t('connection.test')" width="420px">
-      <el-form label-width="auto">
+      <el-form label-width="auto" label-position="left">
         <el-form-item :label="t('connection.testRecipient')" required>
           <el-input v-model="testRecipient" placeholder="test@example.com" />
         </el-form-item>

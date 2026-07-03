@@ -467,10 +467,10 @@ function clearUpload(col: DialogColumn) {
 <style scoped>
 @import '@/styles/form-readonly.scss';
 
+/* 不折行、不截断；label-width=auto 下自然宽度即最长文案，输入框整列对齐 */
 :deep(.el-form-item__label) {
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  min-width: max-content;
 }
 </style>
 

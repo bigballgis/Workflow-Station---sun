@@ -7,6 +7,7 @@
     <el-form
       :model="formData"
       label-width="auto"
+      label-position="left"
     >
       <el-form-item :label="$t('task.comment')">
         <el-input

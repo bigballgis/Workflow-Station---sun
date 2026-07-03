@@ -5,7 +5,10 @@
     width="560px"
     destroy-on-close
   >
-    <el-form label-width="auto">
+    <el-form
+      label-width="auto"
+      label-position="left"
+    >
       <el-form-item :label="t('bi.rbac.colSystemRole')">
         <span>{{ editForm.sysRoleName }}</span>
       </el-form-item>

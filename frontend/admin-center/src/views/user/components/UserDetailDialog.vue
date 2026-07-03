@@ -360,7 +360,10 @@
       append-to-body
       @closed="resetAssignDialog"
     >
-      <el-form label-width="auto">
+      <el-form
+        label-width="auto"
+        label-position="left"
+      >
         <el-form-item :label="t('user.businessUnit')">
           <el-select
             v-model="assignForm.businessUnitId"

@@ -200,14 +200,18 @@ body {
 // 弹窗 / 抽屉内表单：字段名（label）完整显示、不折行，且同一表单内
 // 各行输入框左边缘对齐 —— 保留 label-width 作为统一宽度，仅当文字超出时
 // 由 min-width 撑开（不折行、不被输入框遮挡）。
+// 选择器须包含自定义弹窗外壳（Teleport 到 body、不走 el-dialog 的面板）。
 // 三前端统一规则 — admin-center / developer-workstation 的 index.scss 同步。
 .el-dialog,
-.el-drawer {
+.el-drawer,
+.link-form-modal-panel,
+.sub-table-nested-modal-panel {
   .el-form:not(.el-form--label-top) .el-form-item__label {
     min-width: max-content;
     max-width: none !important;
     white-space: nowrap;
     flex-shrink: 0;
+    justify-content: flex-start; // 弹窗内字段名文字一律左对齐
   }
 
   // label-position=top 时 label 独占一行，仅需保证不折行

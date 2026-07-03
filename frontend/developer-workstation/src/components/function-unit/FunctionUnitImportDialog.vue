@@ -13,7 +13,10 @@
       show-icon
       style="margin-bottom: 12px;"
     />
-    <el-form label-width="auto">
+    <el-form
+      label-width="auto"
+      label-position="left"
+    >
       <el-form-item :label="t('functionUnit.changeLog')">
         <el-input
           v-model="changeLog"

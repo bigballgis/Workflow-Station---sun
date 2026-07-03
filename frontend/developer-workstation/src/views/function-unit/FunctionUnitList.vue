@@ -271,7 +271,10 @@
       width="480px"
       @open="initExportSelection"
     >
-      <el-form label-width="auto">
+      <el-form
+        label-width="auto"
+        label-position="left"
+      >
         <el-form-item :label="t('functionUnit.name')">
           <el-select
             v-model="exportTargetId"

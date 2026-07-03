@@ -109,7 +109,7 @@ const defaultFormOption = {
   showMsg: true,
   form: {
     labelPosition: 'left',
-    labelWidth: '140px',
+    labelWidth: 'auto',
   },
   language: {
     en: {
@@ -130,6 +130,10 @@ function buildDialogFormOption(option: Record<string, any> = {}) {
     form: {
       ...defaultFormOption.form,
       ...(optionForm && typeof optionForm === 'object' ? optionForm : {}),
+      // 弹窗内强制 auto + left：EP 取最长 label 宽度整列对齐、文字左对齐，
+      // 长 label 不折行不错位（设计器配置的固定值/right 也覆盖）
+      labelWidth: 'auto',
+      labelPosition: 'left',
       ...(props.readOnly ? { disabled: true } : {}),
     },
   }

@@ -97,11 +97,9 @@ export function useSubTableLinkFormDialog(
   })
 
   const linkedFormFields = computed(() => selectedLinkBinding.value?.formFields || [])
-  const linkedFormLabelWidth = computed(() => {
-    const width = selectedLinkBinding.value?.formOptions?.form?.labelWidth
-    // fallback 'auto'：弹窗内各行输入框左对齐
-    return typeof width === 'string' && width.trim() ? width : 'auto'
-  })
+  // 弹窗内强制 auto（与 DW SubTableFormDialog 一致）：设计器配置的固定 labelWidth
+  // 会让超长 label 折行/错位，EP auto 取最长 label 整列严格对齐
+  const linkedFormLabelWidth = computed(() => 'auto')
   const canEditSelectedLinkBinding = computed(() => !!(props.editable && selectedLinkBinding.value?.bindingMode === 'EDITABLE'))
 
   /** Field-layout link form only; grid fallback has no footer. */

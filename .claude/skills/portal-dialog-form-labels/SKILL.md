@@ -35,7 +35,9 @@ description: >-
 
 ```scss
 .el-dialog,
-.el-drawer {
+.el-drawer,
+.link-form-modal-panel,          // portal 自定义 link-form 弹窗外壳
+.sub-table-nested-modal-panel {  // dw SubTableNestedModalShell（Teleport 到 body）
   .el-form:not(.el-form--label-top) .el-form-item__label {
     min-width: max-content;   // 不折行、不遮挡；不覆盖 label-width，保住对齐
     max-width: none !important;
@@ -48,12 +50,14 @@ description: >-
 }
 ```
 
-覆盖**所有**弹窗表单，无需逐组件改。组件内**禁止**再写 `width: auto !important` / `max-width: <px>` 之类盖过该规则（developer-workstation 的 `FormPreviewItems.vue`、`FormDesigner.vue` 预览区已按此修正）。
+覆盖**所有**弹窗表单，无需逐组件改。组件内**禁止**再写 `width: auto !important` / `max-width: <px>` / `text-overflow: ellipsis` 之类盖过该规则（developer-workstation 的 `FormPreviewItems.vue`、`FormDesigner.vue` 预览区、`SubTableAddDialog.vue` 已按此修正）。
+
+**自定义弹窗外壳（不走 el-dialog、Teleport 到 body 的面板）不会被 `.el-dialog` 规则罩住** —— 新增此类外壳时必须把面板 class 加进上面三个 index.scss 的选择器列表（曾漏过 `SubTableNestedModalShell` → Form Preview 子表弹窗折行）。
 
 ## 编辑/新增弹窗表单
 
 - 弹窗/抽屉内 el-form **一律 `label-width="auto"`**（EP 2.13 测量最长 label、用 margin 补齐 → 各行输入框严格左对齐，任何超长 label 也不破坏对齐）。三应用已全量清扫，新增弹窗照此写，**不要**再写固定像素。
-  - 例外：设计器/后端下发的 labelWidth 配置可保留（本身统一），fallback 用 `'auto'`。
+- form-create 渲染的弹窗表单同理：`option.form.labelWidth` 在弹窗内**强制 `'auto'`**，设计器配置的固定值也要覆盖（超长字段名会折行错位——DW `SubTableFormDialog` 与 portal `useSubTableLinkFormDialog` 已如此处理）。
 - **不要**为个别 label 单独调宽度，**不要**给 `.el-form-item__content` 加 margin 兜底。
 - 长 label 靠 `min-width: max-content` 自动撑开，不要截断文字（禁 `text-overflow: ellipsis` 配小 `max-width`）。
 

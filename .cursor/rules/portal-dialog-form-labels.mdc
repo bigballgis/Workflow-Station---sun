@@ -11,7 +11,8 @@ alwaysApply: false
 ## 不可违反
 
 - **禁止**用 `width:auto !important` 把 label 压成各自文字宽度——那会让每行输入框起点不一（对齐被破坏）。全局 CSS 只做 `min-width:max-content` 兜底防折行。
-- 弹窗/抽屉内 el-form **一律 `label-width="auto"`**（EP 自动取最长 label 宽度、严格对齐；三应用已全量清扫）；**禁止**固定像素，**不要**为个别 label 单独调宽度。设计器/后端下发的统一 labelWidth 配置可保留，fallback 用 `'auto'`。
+- 弹窗/抽屉内 el-form **一律 `label-width="auto"`**（EP 自动取最长 label 宽度、严格对齐；三应用已全量清扫）；**禁止**固定像素，**不要**为个别 label 单独调宽度。form-create 弹窗表单的 `option.form.labelWidth` 同样**强制 `'auto'`**（设计器配置的固定值也要覆盖）。
+- 自定义弹窗外壳（Teleport 到 body、不走 el-dialog，如 dw `SubTableNestedModalShell`、portal `link-form-modal-panel`）**必须**把面板 class 加入三个 index.scss 全局规则的选择器列表，否则 label 保护失效。
 - 全局修复已在下列文件生效（`.el-dialog` / `.el-drawer` → `min-width:max-content` + `white-space:nowrap`，不覆盖 label-width）；**不要删除或反改**：
   - `frontend/user-portal/src/styles/index.scss`
   - `frontend/admin-center/src/styles/index.scss`

@@ -477,7 +477,10 @@
       width="500px"
       @opened="onAssignDialogOpened"
     >
-      <el-form label-width="auto">
+      <el-form
+        label-width="auto"
+        label-position="left"
+      >
         <el-form-item :label="t('subTable.user')">
           <el-select
             v-model="selectedAssigneeId"

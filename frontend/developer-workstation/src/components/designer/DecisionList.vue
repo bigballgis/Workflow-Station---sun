@@ -136,7 +136,7 @@
       <el-form
         :model="createForm"
         label-width="auto"
-        label-position="right"
+        label-position="left"
       >
         <el-form-item
           :label="t('decision.key')"

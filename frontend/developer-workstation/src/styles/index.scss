@@ -282,14 +282,19 @@ svg:empty {
 
 // 弹窗 / 抽屉内表单：字段名（label）完整显示、不折行，且各行输入框左边缘对齐
 // （保留 label-width 作为统一宽度，文字超出时由 min-width 撑开）。
+// 选择器须包含自定义弹窗外壳（Teleport 到 body、不走 el-dialog 的面板，
+// 如 SubTableNestedModalShell / portal 的 link-form-modal-panel）。
 // 与 user-portal / admin-center 的 index.scss 保持同一规则。
 .el-dialog,
-.el-drawer {
+.el-drawer,
+.link-form-modal-panel,
+.sub-table-nested-modal-panel {
   .el-form:not(.el-form--label-top) .el-form-item__label {
     min-width: max-content;
     max-width: none !important;
     white-space: nowrap;
     flex-shrink: 0;
+    justify-content: flex-start; // 弹窗内字段名文字一律左对齐
   }
 
   .el-form--label-top .el-form-item__label {

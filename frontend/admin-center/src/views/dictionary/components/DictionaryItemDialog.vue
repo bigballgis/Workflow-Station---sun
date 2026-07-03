@@ -10,6 +10,7 @@
       :model="form"
       :rules="rules"
       label-width="auto"
+      label-position="left"
     >
       <el-form-item
         :label="t('dictionary.displayName')"
