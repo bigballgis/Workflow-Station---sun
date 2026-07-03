@@ -79,5 +79,6 @@ COMMIT;
 \i /docker-entrypoint-initdb.d/00-schema/48-dw-email-monitor-rules.sql
 \i /docker-entrypoint-initdb.d/00-schema/49-sys-email-monitor-rules.sql
 \i /docker-entrypoint-initdb.d/00-schema/50-we-email-inbound.sql
+\i /docker-entrypoint-initdb.d/00-schema/51-dw-main-table-view-access.sql
 
 \echo 'All schemas created successfully.'

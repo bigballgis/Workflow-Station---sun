@@ -69,4 +69,12 @@ public class MainTableViewConfig {
     @OrderBy("sortOrder ASC")
     @Builder.Default
     private List<MainTableViewField> viewFields = new ArrayList<>();
+
+    @Column(name = "restrict_to_involved_users", nullable = false)
+    @Builder.Default
+    private Boolean restrictToInvolvedUsers = false;
+
+    @OneToMany(mappedBy = "viewConfig", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<MainTableViewAccess> accessRules = new ArrayList<>();
 }

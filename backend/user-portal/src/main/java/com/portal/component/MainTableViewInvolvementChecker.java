@@ -1,0 +1,114 @@
+package com.portal.component;
+
+import com.portal.entity.ProcessInstance;
+import lombok.RequiredArgsConstructor;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Component;
+
+import java.util.Collection;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+
+/**
+ * Determines whether a user is involved in a process instance for view data scoping:
+ * initiator, task assignee (historic), or MI sub-table participant fields.
+ */
+@Component
+@RequiredArgsConstructor
+public class MainTableViewInvolvementChecker {
+
+    private static final Set<String> MI_PARTICIPANT_KEY_HINTS = Set.of(
+            "assignee", "assignee_user_id", "participant_id", "participant", "id_idw");
+
+    private final JdbcTemplate jdbcTemplate;
+
+    public boolean isUserInvolved(String userId, ProcessInstance processInstance) {
+        if (userId == null || userId.isBlank() || processInstance == null) {
+            return false;
+        }
+        if (userId.equals(processInstance.getStartUserId())) {
+            return true;
+        }
+        if (hasHistoricAssigneeTask(userId, processInstance.getId())) {
+            return true;
+        }
+        return isMiParticipantInVariables(userId, processInstance.getVariables());
+    }
+
+    private boolean hasHistoricAssigneeTask(String userId, String processInstanceId) {
+        if (processInstanceId == null || processInstanceId.isBlank()) {
+            return false;
+        }
+        try {
+            Integer count = jdbcTemplate.queryForObject(
+                    """
+                            SELECT COUNT(*) FROM ACT_HI_TASKINST
+                            WHERE PROC_INST_ID_ = ? AND ASSIGNEE_ = ?
+                            """,
+                    Integer.class,
+                    processInstanceId,
+                    userId);
+            return count != null && count > 0;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private boolean isMiParticipantInVariables(String userId, Map<String, Object> variables) {
+        if (variables == null || variables.isEmpty()) {
+            return false;
+        }
+        Object subTablesObj = variables.get("__subTables__");
+        if (!(subTablesObj instanceof Map<?, ?> subTables)) {
+            return false;
+        }
+        for (Object sliceObj : subTables.values()) {
+            if (!(sliceObj instanceof Collection<?> slice)) {
+                continue;
+            }
+            for (Object rowObj : slice) {
+                if (rowObj instanceof Map<?, ?> rowMap && rowReferencesUser(userId, (Map<String, Object>) rowMap)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean rowReferencesUser(String userId, Map<String, Object> row) {
+        for (Map.Entry<String, Object> entry : row.entrySet()) {
+            String key = entry.getKey();
+            if (key == null) {
+                continue;
+            }
+            String lowerKey = key.toLowerCase(Locale.ROOT);
+            if (MI_PARTICIPANT_KEY_HINTS.stream().anyMatch(lowerKey::contains)
+                    && valueMatchesUser(userId, entry.getValue())) {
+                return true;
+            }
+            if (entry.getValue() instanceof Map<?, ?> nested
+                    && rowReferencesUser(userId, (Map<String, Object>) nested)) {
+                return true;
+            }
+            if (entry.getValue() instanceof Collection<?> nestedList) {
+                for (Object item : nestedList) {
+                    if (item instanceof Map<?, ?> nestedMap
+                            && rowReferencesUser(userId, (Map<String, Object>) nestedMap)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean valueMatchesUser(String userId, Object value) {
+        if (value == null) {
+            return false;
+        }
+        return Objects.equals(userId, String.valueOf(value).trim());
+    }
+}

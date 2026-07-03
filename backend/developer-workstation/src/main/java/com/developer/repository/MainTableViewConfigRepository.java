@@ -24,14 +24,19 @@ public interface MainTableViewConfigRepository extends JpaRepository<MainTableVi
 
     boolean existsByMainTableIdAndIsDefaultTrue(Long mainTableId);
 
-    @Query("SELECT v FROM MainTableViewConfig v LEFT JOIN FETCH v.viewFields WHERE v.id = :id")
+    @Query("SELECT DISTINCT v FROM MainTableViewConfig v "
+            + "LEFT JOIN FETCH v.viewFields "
+            + "WHERE v.id = :id")
     Optional<MainTableViewConfig> findByIdWithFields(@Param("id") Long id);
 
-    @Query("SELECT v FROM MainTableViewConfig v LEFT JOIN FETCH v.viewFields "
+    @Query("SELECT DISTINCT v FROM MainTableViewConfig v "
+            + "LEFT JOIN FETCH v.viewFields "
             + "WHERE v.functionUnit.id = :functionUnitId ORDER BY v.isDefault DESC, v.viewName ASC")
     List<MainTableViewConfig> findByFunctionUnitIdWithFields(@Param("functionUnitId") Long functionUnitId);
 
-    @Query("SELECT v FROM MainTableViewConfig v LEFT JOIN FETCH v.viewFields WHERE v.mainTableId = :tableId")
+    @Query("SELECT DISTINCT v FROM MainTableViewConfig v "
+            + "LEFT JOIN FETCH v.viewFields "
+            + "WHERE v.mainTableId = :tableId")
     List<MainTableViewConfig> findByMainTableIdWithFields(@Param("tableId") Long tableId);
 
     void deleteByFunctionUnitId(Long functionUnitId);

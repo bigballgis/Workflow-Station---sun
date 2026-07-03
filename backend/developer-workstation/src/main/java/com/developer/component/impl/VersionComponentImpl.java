@@ -42,6 +42,9 @@ public class VersionComponentImpl implements VersionComponent {
     private final com.developer.repository.SubTableViewConfigRepository subTableViewConfigRepository;
     private final com.developer.repository.ForeignKeyRepository foreignKeyRepository;
     private final com.developer.repository.LinkFormComponentRepository linkFormComponentRepository;
+    private final com.developer.repository.EmailConnectionRepository emailConnectionRepository;
+    private final com.developer.repository.EmailMonitorRuleRepository emailMonitorRuleRepository;
+    private final com.developer.repository.TableRelationRepository tableRelationRepository;
     private final MainTableViewPortability mainTableViewPortability;
     
     /**
@@ -290,6 +293,23 @@ public class VersionComponentImpl implements VersionComponent {
         if (hadForeignKeys) {
             foreignKeyRepository.deleteByFunctionUnitId(functionUnit.getId());
             foreignKeyRepository.flush();
+        }
+
+        // dw_email_connections.connection_uid and dw_email_monitor_rules.rule_uid are globally unique.
+        // Re-import/rollback rebuilds rows from the ZIP with the same UIDs; lazy collections are often
+        // unloaded, so explicit DELETE-by-FU is required (clear() alone would miss existing rows).
+        Long functionUnitId = functionUnit.getId();
+        emailMonitorRuleRepository.deleteByFunctionUnitId(functionUnitId);
+        emailConnectionRepository.deleteByFunctionUnitId(functionUnitId);
+        tableRelationRepository.deleteByFunctionUnitId(functionUnitId);
+        emailMonitorRuleRepository.flush();
+        emailConnectionRepository.flush();
+        tableRelationRepository.flush();
+        if (functionUnit.getEmailConnections() != null) {
+            functionUnit.getEmailConnections().clear();
+        }
+        if (functionUnit.getTableRelations() != null) {
+            functionUnit.getTableRelations().clear();
         }
 
         boolean dirty = false;

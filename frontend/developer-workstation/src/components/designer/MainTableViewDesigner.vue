@@ -12,7 +12,9 @@ const emit = defineEmits<{
 const {
   t, Search, Close, Menu, DArrowRight, DArrowLeft, Plus, Filter, CaretTop, CaretBottom, Connection, Key,
   columnsPanelOpen, propsPanelOpen, fieldSearchKeyword, saving, viewName, viewFields, sortConfig, filterConfig,
-  enableExport, mainTableName, filterDialogVisible, addColumnPopoverVisible, thenSortField,
+  enableExport, restrictToInvolvedUsers, selectedBusinessUnitIds, selectedRoleIds,
+  businessUnitOptions, roleOptions, accessOptionsLoading,
+  mainTableName, filterDialogVisible, addColumnPopoverVisible, thenSortField,
   dragOverIndex, dragSourceField, visibleColumns, displayFilterConditions,
   sortFieldOptions, filteredCatalog, previewRowCount, fieldLabel, getFieldIcon, getMockValue, sortIndicator,
   formatFilterTag, addField, removeField, toggleSortDirection, sortDirectionTooltip, onFilterEditorSave,
@@ -465,6 +467,81 @@ const {
               {{ t('mainTableView.enableExport') }}
 
             </el-checkbox>
+
+          </div>
+
+        </div>
+
+
+
+        <div class="properties-section access-control-section">
+
+          <label class="section-label">{{ t('mainTableView.accessControl') }}</label>
+
+          <p class="access-hint">{{ t('mainTableView.accessControlHint') }}</p>
+
+          <div class="access-field">
+
+            <label class="access-field-label">{{ t('mainTableView.businessUnits') }}</label>
+
+            <el-select
+              v-model="selectedBusinessUnitIds"
+              multiple
+              filterable
+              collapse-tags
+              collapse-tags-tooltip
+              size="small"
+              class="access-select"
+              :loading="accessOptionsLoading"
+              :placeholder="t('mainTableView.businessUnitsPlaceholder')"
+            >
+
+              <el-option
+                v-for="bu in businessUnitOptions"
+                :key="bu.id"
+                :label="bu.name"
+                :value="bu.id"
+              />
+
+            </el-select>
+
+          </div>
+
+          <div class="access-field">
+
+            <label class="access-field-label">{{ t('mainTableView.roles') }}</label>
+
+            <el-select
+              v-model="selectedRoleIds"
+              multiple
+              filterable
+              collapse-tags
+              collapse-tags-tooltip
+              size="small"
+              class="access-select"
+              :loading="accessOptionsLoading"
+              :disabled="selectedBusinessUnitIds.length === 0"
+              :placeholder="selectedBusinessUnitIds.length === 0
+                ? t('mainTableView.rolesSelectBuFirst')
+                : t('mainTableView.rolesPlaceholder')"
+            >
+
+              <el-option
+                v-for="role in roleOptions"
+                :key="role.id"
+                :label="role.name"
+                :value="role.id"
+              />
+
+            </el-select>
+
+          </div>
+
+          <div class="access-switch-row">
+
+            <span class="access-switch-label">{{ t('mainTableView.restrictToInvolvedUsers') }}</span>
+
+            <el-switch v-model="restrictToInvolvedUsers" size="small" />
 
           </div>
 

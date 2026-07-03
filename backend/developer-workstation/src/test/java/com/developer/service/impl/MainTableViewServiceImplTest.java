@@ -1,10 +1,14 @@
 package com.developer.service.impl;
 
 import com.developer.dto.MainTableViewDtos.CreateMainTableViewRequest;
+import com.developer.dto.MainTableViewDtos.MainTableViewAccessRuleDTO;
+import com.developer.dto.MainTableViewDtos.UpdateMainTableViewRequest;
 import com.developer.entity.FieldDefinition;
 import com.developer.entity.FunctionUnit;
 import com.developer.entity.MainTableViewConfig;
+import com.developer.entity.MainTableViewAccess;
 import com.developer.entity.MainTableViewField;
+import com.developer.enums.MainTableViewAccessTargetType;
 import com.developer.entity.TableDefinition;
 import com.developer.enums.MainTableViewStatus;
 import com.developer.enums.TableType;
@@ -20,6 +24,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -28,6 +33,8 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -41,13 +48,15 @@ class MainTableViewServiceImplTest {
     private FunctionUnitRepository functionUnitRepository;
     @Mock
     private TableDefinitionRepository tableDefinitionRepository;
+    @Mock
+    private JdbcTemplate jdbcTemplate;
 
     private MainTableViewServiceImpl service;
 
     @BeforeEach
     void setUp() {
         service = new MainTableViewServiceImpl(
-                viewConfigRepository, functionUnitRepository, tableDefinitionRepository);
+                viewConfigRepository, functionUnitRepository, tableDefinitionRepository, jdbcTemplate);
     }
 
     @Test
@@ -206,5 +215,96 @@ class MainTableViewServiceImplTest {
 
         assertThatThrownBy(() -> service.createView(1L, new CreateMainTableViewRequest("Custom", 30L)))
                 .isInstanceOf(DeveloperBusinessException.class);
+    }
+
+    @Test
+    void updateView_rejectsPartialAccessRulesBuOnly() {
+        MainTableViewConfig config = viewConfigForAccessUpdate();
+        when(viewConfigRepository.findByIdWithFields(10L)).thenReturn(Optional.of(config));
+
+        UpdateMainTableViewRequest request = new UpdateMainTableViewRequest(
+                null,
+                null,
+                List.of(MainTableViewAccessRuleDTO.builder()
+                        .targetType("BUSINESS_UNIT")
+                        .targetId("bu-e2e-finance")
+                        .build()),
+                null,
+                null,
+                null);
+
+        assertThatThrownBy(() -> service.updateView(1L, 10L, request))
+                .isInstanceOf(DeveloperBusinessException.class)
+                .extracting(ex -> ((DeveloperBusinessException) ex).getErrorCode())
+                .isEqualTo("BIZ_VIEW_ACCESS_BU_ROLE_PAIR");
+    }
+
+    @Test
+    void updateView_rejectsPartialAccessRulesRoleOnly() {
+        MainTableViewConfig config = viewConfigForAccessUpdate();
+        when(viewConfigRepository.findByIdWithFields(10L)).thenReturn(Optional.of(config));
+
+        UpdateMainTableViewRequest request = new UpdateMainTableViewRequest(
+                null,
+                null,
+                List.of(MainTableViewAccessRuleDTO.builder()
+                        .targetType("ROLE")
+                        .targetId("role-manager")
+                        .build()),
+                null,
+                null,
+                null);
+
+        assertThatThrownBy(() -> service.updateView(1L, 10L, request))
+                .isInstanceOf(DeveloperBusinessException.class)
+                .extracting(ex -> ((DeveloperBusinessException) ex).getErrorCode())
+                .isEqualTo("BIZ_VIEW_ACCESS_BU_ROLE_PAIR");
+    }
+
+    @Test
+    void updateView_allowsPairedAccessRules() {
+        MainTableViewConfig config = viewConfigForAccessUpdate();
+        when(viewConfigRepository.findByIdWithFields(10L)).thenReturn(Optional.of(config));
+        when(tableDefinitionRepository.findByIdWithFields(20L)).thenReturn(Optional.of(
+                TableDefinition.builder().id(20L).fieldDefinitions(new ArrayList<>()).build()));
+        when(viewConfigRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(jdbcTemplate.queryForList(anyString(), eq(10L))).thenReturn(List.of());
+
+        UpdateMainTableViewRequest request = new UpdateMainTableViewRequest(
+                null,
+                null,
+                List.of(
+                        MainTableViewAccessRuleDTO.builder()
+                                .targetType("BUSINESS_UNIT")
+                                .targetId("bu-e2e-finance")
+                                .build(),
+                        MainTableViewAccessRuleDTO.builder()
+                                .targetType("ROLE")
+                                .targetId("role-manager")
+                                .build()),
+                null,
+                null,
+                null);
+
+        service.updateView(1L, 10L, request);
+
+        assertThat(config.getAccessRules()).hasSize(2);
+        assertThat(config.getAccessRules()).extracting(MainTableViewAccess::getTargetType)
+                .containsExactlyInAnyOrder(
+                        MainTableViewAccessTargetType.BUSINESS_UNIT,
+                        MainTableViewAccessTargetType.ROLE);
+    }
+
+    private MainTableViewConfig viewConfigForAccessUpdate() {
+        FunctionUnit fu = FunctionUnit.builder().id(1L).build();
+        return MainTableViewConfig.builder()
+                .id(10L)
+                .functionUnit(fu)
+                .mainTableId(20L)
+                .viewName("Case")
+                .status(MainTableViewStatus.DRAFT)
+                .viewFields(new ArrayList<>())
+                .accessRules(new ArrayList<>())
+                .build();
     }
 }

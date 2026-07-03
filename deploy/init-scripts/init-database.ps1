@@ -110,7 +110,9 @@ $migrations = @(
     "00-schema/46-sys-email-connections.sql",
     "00-schema/47-dw-email-templates.sql",
     "00-schema/48-dw-email-monitor-rules.sql",
-    "00-schema/49-sys-email-monitor-rules.sql"
+    "00-schema/49-sys-email-monitor-rules.sql",
+    "00-schema/50-we-email-inbound.sql",
+    "00-schema/51-dw-main-table-view-access.sql"
 )
 foreach ($m in $migrations) {
     $path = Join-Path $ScriptDir $m

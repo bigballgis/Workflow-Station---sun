@@ -201,9 +201,10 @@ public class FunctionUnitExporter {
             }
 
             // Export "View Design": Main Table view configs (by table NAME so they survive id remap).
+            String viewsFile = null;
             List<Map<String, Object>> mainTableViews = mainTableViewPortability.export(functionUnitId, tableIdToName);
             if (!mainTableViews.isEmpty()) {
-                String viewsFile = "views/main_table_views.json";
+                viewsFile = "views/main_table_views.json";
                 byte[] viewsData = objectMapper.writeValueAsBytes(mainTableViews);
                 fileContents.put(viewsFile, viewsData);
                 addZipEntry(zos, viewsFile, viewsData);
@@ -300,6 +301,7 @@ public class FunctionUnitExporter {
                             .decisions(decisionFiles)
                             .connections(connectionFiles)
                             .emailMonitors(monitorFiles)
+                            .mainTableViews(viewsFile)
                             .build())
                     .dependencies(new ArrayList<>())
                     .icon(iconInfo)

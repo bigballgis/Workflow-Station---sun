@@ -15,6 +15,7 @@ import {
   removeFlattenedConditionAt, serializeFilterEditorRoot,
 } from '@/utils/mainTableViewFilter'
 import { functionUnitApi, type TableDefinition } from '@/api/functionUnit'
+import { adminCenterApi, type BusinessUnitInfo, type RoleInfo } from '@/api/adminCenter'
 
 export interface MainTableViewDesignerProps {
   functionUnitId: number
@@ -43,6 +44,12 @@ const filterConfig = ref<FilterConfig>({ logic: 'and', conditions: [], groups: [
 const filterEditorRoot = ref(parseFilterConfigToEditorRoot(null))
 const enableExport = ref(true)
 const enableImport = ref(true)
+const restrictToInvolvedUsers = ref(false)
+const selectedBusinessUnitIds = ref<string[]>([])
+const selectedRoleIds = ref<string[]>([])
+const businessUnitOptions = ref<BusinessUnitInfo[]>([])
+const roleOptions = ref<RoleInfo[]>([])
+const accessOptionsLoading = ref(false)
 const catalogFields = ref<MainTableFieldCatalogItem[]>([])
 const fieldMetaMap = ref<Record<string, { isPrimaryKey: boolean; isForeignKey: boolean; refTableId: number | null }>>({})
 const selectedCatalogFields = ref<Set<string>>(new Set())
@@ -96,11 +103,59 @@ watch(
     filterEditorRoot.value = parseFilterConfigToEditorRoot(filterConfig.value)
     enableExport.value = v.filterConfig?.toolbar?.enableExport !== false
     enableImport.value = v.filterConfig?.toolbar?.enableImport !== false
+    restrictToInvolvedUsers.value = v.restrictToInvolvedUsers === true
+    selectedBusinessUnitIds.value = (v.accessRules || [])
+      .filter(r => r.targetType === 'BUSINESS_UNIT')
+      .map(r => r.targetId)
+    selectedRoleIds.value = (v.accessRules || [])
+      .filter(r => r.targetType === 'ROLE')
+      .map(r => r.targetId)
+    void refreshRoleOptionsForSelectedBus()
   },
   { immediate: true, deep: true },
 )
 
+async function refreshRoleOptionsForSelectedBus() {
+  const buIds = selectedBusinessUnitIds.value.filter(Boolean)
+  if (buIds.length === 0) {
+    roleOptions.value = []
+    selectedRoleIds.value = []
+    return
+  }
+  try {
+    const lists = await Promise.all(buIds.map(id => adminCenterApi.getBusinessUnitEligibleRoles(id)))
+    const byId = new Map<string, RoleInfo>()
+    for (const list of lists) {
+      for (const role of list || []) {
+        if (role?.id) byId.set(role.id, role)
+      }
+    }
+    roleOptions.value = Array.from(byId.values())
+    const allowed = new Set(byId.keys())
+    selectedRoleIds.value = selectedRoleIds.value.filter(id => allowed.has(id))
+  } catch {
+    roleOptions.value = []
+  }
+}
 
+watch(
+  selectedBusinessUnitIds,
+  () => { void refreshRoleOptionsForSelectedBus() },
+  { deep: true },
+)
+
+async function loadAccessOptions() {
+  accessOptionsLoading.value = true
+  try {
+    businessUnitOptions.value = (await adminCenterApi.getBusinessUnits()) || []
+    await refreshRoleOptionsForSelectedBus()
+  } catch {
+    businessUnitOptions.value = []
+    roleOptions.value = []
+  } finally {
+    accessOptionsLoading.value = false
+  }
+}
 
 async function loadCatalog() {
   try {
@@ -135,10 +190,29 @@ async function loadCatalog() {
   }
 }
 
-
-
 // Load the catalog for the current view's table, and reload when switching to a different table.
 watch(() => props.view?.mainTableId, () => { loadCatalog() }, { immediate: true })
+
+loadAccessOptions()
+
+function validateAccessControlSelection(): boolean {
+  const hasBu = selectedBusinessUnitIds.value.length > 0
+  const hasRole = selectedRoleIds.value.length > 0
+  if (hasBu === hasRole) return true
+  ElMessage.warning(t('mainTableView.accessControlBuRoleRequired'))
+  return false
+}
+
+function buildAccessRulesPayload() {
+  const rules: Array<{ targetType: string; targetId: string }> = []
+  for (const id of selectedBusinessUnitIds.value) {
+    if (id) rules.push({ targetType: 'BUSINESS_UNIT', targetId: id })
+  }
+  for (const id of selectedRoleIds.value) {
+    if (id) rules.push({ targetType: 'ROLE', targetId: id })
+  }
+  return rules
+}
 
 // Designer-internal FK navigation: clicking a FK column opens the referenced table's default view.
 // Flags come from the view field (backend-derived) or fall back to the table's catalog metadata
@@ -360,11 +434,14 @@ function removeSort(index: number) {
 
 
 async function handleSave() {
+  if (!validateAccessControlSelection()) return
   saving.value = true
   try {
     const fields = viewFields.value.map((f, i) => ({ ...f, sortOrder: i }))
     const res = await mainTableViewApi.update(props.functionUnitId, props.view.id, {
       viewName: viewName.value.trim() || props.view.viewName,
+      restrictToInvolvedUsers: restrictToInvolvedUsers.value,
+      accessRules: buildAccessRulesPayload(),
       sortConfig: sortConfig.value,
       filterConfig: {
         ...filterConfig.value,
@@ -465,7 +542,9 @@ const previewRowCount = 3
   return {
     t, Search, Close, Menu, DArrowRight, DArrowLeft, Plus, EditPen, Calendar, Document, Coin, SwitchIcon, Filter, CaretTop, CaretBottom, Connection, Key,
     columnsPanelOpen, propsPanelOpen, fieldSearchKeyword, saving, viewName, viewFields, sortConfig, filterConfig, filterEditorRoot,
-    enableExport, enableImport, catalogFields, mainTableName, filterDialogVisible, addColumnPopoverVisible, thenSortField,
+    enableExport, enableImport, restrictToInvolvedUsers, selectedBusinessUnitIds, selectedRoleIds,
+    businessUnitOptions, roleOptions, accessOptionsLoading,
+    catalogFields, mainTableName, filterDialogVisible, addColumnPopoverVisible, thenSortField,
     dragColIndex, dragOverIndex, isDraggingFromPanel, dragSourceField, visibleColumns, displayFilterConditions,
     sortFieldOptions, filteredCatalog, previewRowCount, fieldLabel, getFieldIcon, getMockValue, sortIndicator,
     formatFilterTag, addField, removeField, toggleSortDirection, sortDirectionTooltip, onFilterEditorSave,

@@ -37,6 +37,12 @@ export interface FilterConfig {
   }
 }
 
+export interface MainTableViewAccessRule {
+  targetType: 'ROLE' | 'BUSINESS_UNIT' | string
+  targetId: string
+  targetName?: string | null
+}
+
 export interface MainTableViewDefinition {
   id: number
   functionUnitId: number
@@ -44,6 +50,8 @@ export interface MainTableViewDefinition {
   viewName: string
   isDefault?: boolean
   status?: string
+  restrictToInvolvedUsers?: boolean
+  accessRules?: MainTableViewAccessRule[]
   sortConfig?: Array<{ fieldName: string; direction: string; systemField?: boolean }>
   filterConfig?: FilterConfig
   fields: MainTableViewField[]
@@ -85,6 +93,8 @@ export const mainTableViewApi = {
       `/api/v1/function-units/${functionUnitId}/main-table-views/${viewId}`,
       {
         viewName: payload.viewName,
+        restrictToInvolvedUsers: payload.restrictToInvolvedUsers,
+        accessRules: payload.accessRules,
         sortConfig: payload.sortConfig,
         filterConfig: payload.filterConfig,
         fields: payload.fields,

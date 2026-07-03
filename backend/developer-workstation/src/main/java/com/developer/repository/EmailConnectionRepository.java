@@ -17,4 +17,6 @@ public interface EmailConnectionRepository extends JpaRepository<EmailConnection
     boolean existsByFunctionUnitIdAndName(Long functionUnitId, String name);
 
     boolean existsByFunctionUnitIdAndNameAndIdNot(Long functionUnitId, String name, Long id);
+
+    void deleteByFunctionUnitId(Long functionUnitId);
 }

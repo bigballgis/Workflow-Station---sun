@@ -43,7 +43,7 @@ class FunctionUnitAccessProperties {
         
         assertThatThrownBy(() -> accessComponent.checkFunctionUnitAccess(userId, functionUnitId))
                 .isInstanceOf(FunctionUnitAccessComponent.FunctionUnitDisabledException.class)
-                .hasMessageContaining("禁用");
+                .hasMessageContaining("disabled");
     }
 
     @Property(tries = 20)
@@ -101,7 +101,7 @@ class FunctionUnitAccessProperties {
         
         assertThatThrownBy(() -> accessComponent.checkFunctionUnitAccess(userId, functionUnitId))
                 .isInstanceOf(FunctionUnitAccessComponent.FunctionUnitAccessDeniedException.class)
-                .hasMessageContaining("权限");
+                .hasMessageContaining("permission");
     }
 
     // ==================== Property 7: 功能单元列表过滤 ====================
@@ -224,6 +224,7 @@ class FunctionUnitAccessProperties {
 
     @SuppressWarnings("unchecked")
     private void mockFunctionUnitEnabled(String functionUnitId, boolean enabled) {
+        mockFunctionUnitResolveIdentity(functionUnitId);
         Map<String, Object> response = new HashMap<>();
         response.put("id", functionUnitId);
         response.put("enabled", enabled);
@@ -236,8 +237,37 @@ class FunctionUnitAccessProperties {
                 .thenReturn(ResponseEntity.ok(response));
     }
 
+    /**
+     * {@link FunctionUnitAccessComponent#canAccessFunctionUnit} resolves dw/catalog codes before
+     * loading access rows; property tests stub identity resolve so existing access mocks stay valid.
+     */
+    @SuppressWarnings("unchecked")
+    private void mockFunctionUnitResolveIdentity(String functionUnitIdOrCode) {
+        if (functionUnitIdOrCode == null || functionUnitIdOrCode.isBlank()) {
+            return;
+        }
+        String encoded = java.net.URLEncoder.encode(functionUnitIdOrCode, java.nio.charset.StandardCharsets.UTF_8);
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("id", functionUnitIdOrCode);
+
+        when(restTemplate.exchange(
+                contains("/function-units/by-process-key/" + encoded),
+                eq(HttpMethod.GET),
+                isNull(),
+                any(ParameterizedTypeReference.class)))
+                .thenThrow(new RuntimeException("not found"));
+
+        when(restTemplate.exchange(
+                contains("/function-units/code/" + encoded + "/latest"),
+                eq(HttpMethod.GET),
+                isNull(),
+                any(ParameterizedTypeReference.class)))
+                .thenReturn(ResponseEntity.ok(payload));
+    }
+
     @SuppressWarnings("unchecked")
     private void mockFunctionUnitAccess(String functionUnitId, List<String> roleIds) {
+        mockFunctionUnitResolveIdentity(functionUnitId);
         List<Map<String, Object>> accessList = new ArrayList<>();
         for (String roleId : roleIds) {
             Map<String, Object> access = new HashMap<>();

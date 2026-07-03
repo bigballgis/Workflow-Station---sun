@@ -6,6 +6,7 @@ import com.portal.dto.MainTableViewImportResult;
 import com.portal.dto.MainTableViewPortalDtos.FunctionUnitViewMenuItem;
 import com.portal.dto.MainTableViewPortalDtos.MainTableViewDataPage;
 import com.portal.dto.MainTableViewPortalDtos.MainTableViewSummary;
+import com.portal.security.CurrentUserId;
 import com.portal.service.PortalMainTableViewService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -29,7 +30,7 @@ public class PortalMainTableViewController {
     @GetMapping("/function-units")
     @Operation(summary = "List function units with published Main Table views")
     public ResponseEntity<ApiResponse<List<FunctionUnitViewMenuItem>>> listFunctionUnits(
-            @RequestHeader(value = "X-User-Id", required = false) String userId) {
+            @CurrentUserId String userId) {
         if (userId == null || userId.isBlank()) {
             return ResponseEntity.ok(ApiResponse.success(List.of()));
         }
@@ -39,7 +40,7 @@ public class PortalMainTableViewController {
     @GetMapping("/function-units/{functionUnitCode}/views")
     @Operation(summary = "List published views for a function unit")
     public ResponseEntity<ApiResponse<List<MainTableViewSummary>>> listViews(
-            @RequestHeader(value = "X-User-Id", required = false) String userId,
+            @CurrentUserId String userId,
             @PathVariable String functionUnitCode) {
         if (userId == null || userId.isBlank()) {
             return ResponseEntity.ok(ApiResponse.success(List.of()));
@@ -51,7 +52,7 @@ public class PortalMainTableViewController {
     @GetMapping("/{viewId}/data")
     @Operation(summary = "Query view data (process instance main table rows)")
     public ResponseEntity<ApiResponse<MainTableViewDataPage>> queryData(
-            @RequestHeader(value = "X-User-Id", required = false) String userId,
+            @CurrentUserId String userId,
             @PathVariable Long viewId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
@@ -67,7 +68,7 @@ public class PortalMainTableViewController {
     @GetMapping("/{viewId}/export")
     @Operation(summary = "Export view data as CSV")
     public ResponseEntity<byte[]> exportCsv(
-            @RequestHeader(value = "X-User-Id", required = false) String userId,
+            @CurrentUserId String userId,
             @PathVariable Long viewId,
             @RequestParam(defaultValue = "10000") int maxRows) {
         if (userId == null || userId.isBlank()) {
@@ -83,7 +84,7 @@ public class PortalMainTableViewController {
     @PostMapping(value = "/{viewId}/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "Import view data from CSV (updates by processInstanceId, creates new rows when blank)")
     public ResponseEntity<ApiResponse<MainTableViewImportResult>> importCsv(
-            @RequestHeader(value = "X-User-Id", required = false) String userId,
+            @CurrentUserId String userId,
             @PathVariable Long viewId,
             @RequestParam("file") MultipartFile file) {
         if (userId == null || userId.isBlank()) {

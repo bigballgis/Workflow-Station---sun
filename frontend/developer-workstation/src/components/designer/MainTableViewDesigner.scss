@@ -417,6 +417,45 @@
   gap: 8px;
 }
 
+.access-control-section {
+  .access-hint {
+    margin: 0 0 10px;
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--el-text-color-secondary);
+  }
+
+  .access-field {
+    margin-bottom: 10px;
+  }
+
+  .access-field-label {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 12px;
+    color: var(--el-text-color-regular);
+    white-space: nowrap;
+  }
+
+  .access-select {
+    width: 100%;
+  }
+
+  .access-switch-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 4px;
+  }
+
+  .access-switch-label {
+    font-size: 12px;
+    color: var(--el-text-color-regular);
+    line-height: 1.4;
+  }
+}
+
 
 
 .section-label {

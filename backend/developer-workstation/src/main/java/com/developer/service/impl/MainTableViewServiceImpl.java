@@ -1,16 +1,17 @@
 package com.developer.service.impl;
 
 import com.developer.dto.MainTableViewDtos.CreateMainTableViewRequest;
+import com.developer.dto.MainTableViewDtos.MainTableViewAccessRuleDTO;
 import com.developer.dto.MainTableViewDtos.MainTableViewDTO;
 import com.developer.dto.MainTableViewDtos.MainTableViewFieldDTO;
 import com.developer.dto.MainTableViewDtos.UpdateMainTableViewRequest;
 import com.developer.entity.FieldDefinition;
 import com.developer.entity.FunctionUnit;
-import com.developer.entity.FunctionUnit;
+import com.developer.entity.MainTableViewAccess;
 import com.developer.entity.MainTableViewConfig;
 import com.developer.entity.TableDefinition;
 import com.developer.entity.MainTableViewField;
-import com.developer.entity.TableDefinition;
+import com.developer.enums.MainTableViewAccessTargetType;
 import com.developer.enums.MainTableViewStatus;
 import com.developer.enums.TableType;
 import com.developer.exception.DeveloperBusinessException;
@@ -19,7 +20,9 @@ import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.MainTableViewConfigRepository;
 import com.developer.repository.TableDefinitionRepository;
 import com.developer.service.MainTableViewService;
+import com.developer.util.MainTableViewAccessRulesValidator;
 import lombok.RequiredArgsConstructor;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,7 +30,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -38,6 +43,7 @@ public class MainTableViewServiceImpl implements MainTableViewService {
     private final MainTableViewConfigRepository viewConfigRepository;
     private final FunctionUnitRepository functionUnitRepository;
     private final TableDefinitionRepository tableDefinitionRepository;
+    private final JdbcTemplate jdbcTemplate;
 
     @Override
     @Transactional(readOnly = true)
@@ -89,6 +95,13 @@ public class MainTableViewServiceImpl implements MainTableViewService {
         }
         if (request.filterConfig() != null) {
             config.setFilterConfig(request.filterConfig());
+        }
+        if (request.restrictToInvolvedUsers() != null) {
+            config.setRestrictToInvolvedUsers(request.restrictToInvolvedUsers());
+        }
+        if (request.accessRules() != null) {
+            validateAccessRules(request.accessRules());
+            replaceAccessRules(config, request.accessRules());
         }
         if (request.fields() != null) {
             config.getViewFields().clear();
@@ -215,6 +228,7 @@ public class MainTableViewServiceImpl implements MainTableViewService {
     public void publishViewsForFunctionUnit(Long functionUnitId) {
         List<MainTableViewConfig> views = viewConfigRepository.findByFunctionUnitIdWithFields(functionUnitId);
         for (MainTableViewConfig view : views) {
+            validateAccessRules(loadAccessRuleDtos(view.getId()));
             view.setStatus(MainTableViewStatus.PUBLISHED);
         }
         viewConfigRepository.saveAll(views);
@@ -244,10 +258,14 @@ public class MainTableViewServiceImpl implements MainTableViewService {
                     .isDefault(source.getIsDefault())
                     .sortConfig(copySortConfig(source.getSortConfig()))
                     .filterConfig(copyFilterConfig(source.getFilterConfig()))
+                    .restrictToInvolvedUsers(Boolean.TRUE.equals(source.getRestrictToInvolvedUsers()))
                     .status(MainTableViewStatus.DRAFT)
                     .viewFields(new ArrayList<>())
+                    .accessRules(new ArrayList<>())
                     .build();
             cloneFields(source, cloned);
+            cloneAccessRules(source.getId(), cloned);
+            MainTableViewAccessRulesValidator.validatePairedOrEmptyEntities(cloned.getAccessRules());
             viewConfigRepository.save(cloned);
         }
     }
@@ -419,10 +437,87 @@ public class MainTableViewServiceImpl implements MainTableViewService {
                 .viewName(config.getViewName())
                 .isDefault(config.getIsDefault())
                 .status(config.getStatus() != null ? config.getStatus().name() : MainTableViewStatus.DRAFT.name())
+                .restrictToInvolvedUsers(Boolean.TRUE.equals(config.getRestrictToInvolvedUsers()))
+                .accessRules(loadAccessRuleDtos(config.getId()))
                 .sortConfig(config.getSortConfig())
                 .filterConfig(config.getFilterConfig())
                 .fields(fields)
                 .build();
+    }
+
+    private List<MainTableViewAccessRuleDTO> loadAccessRuleDtos(Long viewConfigId) {
+        if (viewConfigId == null) {
+            return List.of();
+        }
+        try {
+            List<Map<String, Object>> rows = jdbcTemplate.queryForList("""
+                    SELECT a.target_type, a.target_id,
+                           COALESCE(r.name, bu.name) AS target_name
+                    FROM dw_main_table_view_access a
+                    LEFT JOIN sys_roles r
+                           ON a.target_type = 'ROLE' AND r.id = a.target_id
+                    LEFT JOIN sys_business_units bu
+                           ON a.target_type = 'BUSINESS_UNIT' AND bu.id = a.target_id
+                    WHERE a.view_config_id = ?
+                    ORDER BY a.target_type, a.target_id
+                    """, viewConfigId);
+            return rows.stream()
+                    .map(row -> MainTableViewAccessRuleDTO.builder()
+                            .targetType(String.valueOf(row.get("target_type")))
+                            .targetId(String.valueOf(row.get("target_id")))
+                            .targetName(row.get("target_name") != null
+                                    ? String.valueOf(row.get("target_name"))
+                                    : null)
+                            .build())
+                    .toList();
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
+    private void validateAccessRules(List<MainTableViewAccessRuleDTO> rules) {
+        MainTableViewAccessRulesValidator.validatePairedOrEmpty(rules);
+    }
+
+    private void replaceAccessRules(MainTableViewConfig config, List<MainTableViewAccessRuleDTO> rules) {
+        config.getAccessRules().clear();
+        if (rules == null) {
+            return;
+        }
+        for (MainTableViewAccessRuleDTO rule : rules) {
+            if (rule.targetType() == null || rule.targetType().isBlank()
+                    || rule.targetId() == null || rule.targetId().isBlank()) {
+                continue;
+            }
+            MainTableViewAccessTargetType targetType;
+            try {
+                targetType = MainTableViewAccessTargetType.valueOf(rule.targetType().trim().toUpperCase(Locale.ROOT));
+            } catch (IllegalArgumentException ex) {
+                continue;
+            }
+            config.getAccessRules().add(MainTableViewAccess.builder()
+                    .viewConfig(config)
+                    .targetType(targetType)
+                    .targetId(rule.targetId().trim())
+                    .build());
+        }
+    }
+
+    private void cloneAccessRules(Long sourceViewConfigId, MainTableViewConfig target) {
+        for (MainTableViewAccessRuleDTO rule : loadAccessRuleDtos(sourceViewConfigId)) {
+            MainTableViewAccessTargetType targetType;
+            try {
+                targetType = MainTableViewAccessTargetType.valueOf(
+                        rule.targetType().trim().toUpperCase(Locale.ROOT));
+            } catch (IllegalArgumentException ex) {
+                continue;
+            }
+            target.getAccessRules().add(MainTableViewAccess.builder()
+                    .viewConfig(target)
+                    .targetType(targetType)
+                    .targetId(rule.targetId())
+                    .build());
+        }
     }
 
     private Map<String, Object> toSnapshotMap(MainTableViewConfig config) {
@@ -432,8 +527,16 @@ public class MainTableViewServiceImpl implements MainTableViewService {
         snap.put("viewName", config.getViewName());
         snap.put("isDefault", config.getIsDefault());
         snap.put("status", config.getStatus() != null ? config.getStatus().name() : MainTableViewStatus.DRAFT.name());
+        snap.put("restrictToInvolvedUsers", Boolean.TRUE.equals(config.getRestrictToInvolvedUsers()));
         snap.put("sortConfig", config.getSortConfig());
         snap.put("filterConfig", config.getFilterConfig());
+        List<Map<String, Object>> accessRules = loadAccessRuleDtos(config.getId()).stream().map(rule -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("targetType", rule.targetType());
+            m.put("targetId", rule.targetId());
+            return m;
+        }).toList();
+        snap.put("accessRules", accessRules);
         List<Map<String, Object>> fields = config.getViewFields().stream().map(f -> {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("fieldName", f.getFieldName());

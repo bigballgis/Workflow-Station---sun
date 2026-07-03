@@ -2,12 +2,15 @@ package com.portal.service.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portal.component.FunctionUnitAccessComponent;
+import com.portal.component.MainTableViewAccessResolver;
+import com.portal.component.MainTableViewInvolvementChecker;
 import com.portal.component.ProcessComponent;
 import com.portal.dto.MainTableViewImportResult;
 import com.portal.dto.ProcessInstanceInfo;
 import com.portal.dto.ProcessStartRequest;
 import com.portal.entity.ProcessInstance;
 import com.portal.repository.ProcessInstanceRepository;
+import com.portal.repository.UserBusinessUnitRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -46,6 +49,12 @@ class PortalMainTableViewImportTest {
     private FunctionUnitAccessComponent functionUnitAccessComponent;
 
     @Mock
+    private UserBusinessUnitRepository userBusinessUnitRepository;
+
+    @Mock
+    private MainTableViewInvolvementChecker mainTableViewInvolvementChecker;
+
+    @Mock
     private ProcessInstanceRepository processInstanceRepository;
 
     @Mock
@@ -55,14 +64,19 @@ class PortalMainTableViewImportTest {
 
     @BeforeEach
     void setUp() throws Exception {
+        MainTableViewAccessResolver accessResolver = new MainTableViewAccessResolver(
+                functionUnitAccessComponent, userBusinessUnitRepository);
         service = new PortalMainTableViewServiceImpl(
                 jdbcTemplate,
                 new ObjectMapper(),
                 functionUnitAccessComponent,
+                accessResolver,
+                mainTableViewInvolvementChecker,
                 processInstanceRepository,
                 processComponent);
         when(functionUnitAccessComponent.canAccessFunctionUnit(USER_ID, FU_CODE)).thenReturn(true);
         when(functionUnitAccessComponent.isFunctionUnitEnabled(FU_CODE)).thenReturn(true);
+        when(functionUnitAccessComponent.isSystemAdministrator(USER_ID)).thenReturn(true);
         stubPublishedView();
     }
 
@@ -74,7 +88,13 @@ class PortalMainTableViewImportTest {
                         "view_name", "Main",
                         "sort_config", "[]",
                         "filter_config", "{}",
-                        "fu_code", FU_CODE)));
+                        "fu_code", FU_CODE,
+                        "main_table_id", 1L,
+                        "table_type", "MAIN",
+                        "restrict_to_involved_users", false)));
+
+        when(jdbcTemplate.queryForList(contains("dw_main_table_view_access"), eq(VIEW_ID)))
+                .thenReturn(List.of());
 
         when(jdbcTemplate.query(contains("dw_main_table_view_fields"), any(RowMapper.class), eq(VIEW_ID)))
                 .thenAnswer(invocation -> {

@@ -61,18 +61,33 @@ public class FunctionUnitAccessComponent {
     
     private static final long CACHE_TTL = TimeUnit.MINUTES.toMillis(5);
 
+    /** Platform role code for System Administrator — bypasses FU and View access restrictions. */
+    public static final String SYS_ADMIN_ROLE_CODE = "SYS_ADMIN";
+
     /**
      * Must include {@code profileContext=PORTAL} so admin-center merges UBR roles
      * ({@code sys_user_business_unit_roles}), not only virtual-group inheritance.
      */
     private static final String USER_BUSINESS_ROLES_QUERY = "profileContext=PORTAL";
+
+    public boolean isSystemAdministrator(String userId) {
+        if (userId == null || userId.isBlank()) {
+            return false;
+        }
+        // SYS_ADMIN is ADMIN-type; profileContext=PORTAL excludes it from business-role APIs.
+        return getUserRoleCodesForProfile(userId, "ADMIN").contains(SYS_ADMIN_ROLE_CODE);
+    }
     
     /**
      * Check if a user can access a specified function unit
      */
-    public boolean canAccessFunctionUnit(String userId, String functionUnitId) {
-        // Get the function unit's access configuration (list of allowed role CODEs)
-        Set<String> allowedRoleCodes = getFunctionUnitAllowedRoleCodes(functionUnitId);
+    public boolean canAccessFunctionUnit(String userId, String functionUnitIdOrCode) {
+        if (isSystemAdministrator(userId)) {
+            return true;
+        }
+        String resolvedId = resolveFunctionUnitId(functionUnitIdOrCode);
+        // Access rows live on deployed catalog IDs; dw codes / process keys must be resolved first.
+        Set<String> allowedRoleCodes = getFunctionUnitAllowedRoleCodes(resolvedId);
 
         // No access config → deny (same as Relation Table access; Admin must assign roles explicitly)
         if (allowedRoleCodes.isEmpty()) {
@@ -398,6 +413,41 @@ public class FunctionUnitAccessComponent {
             if (cached != null) {
                 return cached.data;
             }
+            return Collections.emptySet();
+        }
+    }
+
+    /**
+     * Role codes for a user under a specific admin-center profile filter.
+     * PORTAL = business roles only; ADMIN = includes {@link #SYS_ADMIN_ROLE_CODE}.
+     */
+    private Set<String> getUserRoleCodesForProfile(String userId, String profileContext) {
+        try {
+            String url = adminCenterUrl + "/api/v1/admin/users/" + userId + "/roles?profileContext="
+                    + profileContext;
+            ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<List<Map<String, Object>>>() {}
+            );
+
+            Set<String> roleCodes = new HashSet<>();
+            if (response.getBody() != null) {
+                for (Map<String, Object> role : response.getBody()) {
+                    String roleCode = (String) role.get("code");
+                    String key = (roleCode != null && !roleCode.isBlank())
+                            ? roleCode
+                            : (String) role.get("id");
+                    if (key != null) {
+                        roleCodes.add(key);
+                    }
+                }
+            }
+            return roleCodes;
+        } catch (Exception e) {
+            log.error("Failed to get user role codes (profile={}) for user {}: {}",
+                    profileContext, userId, e.getMessage(), e);
             return Collections.emptySet();
         }
     }

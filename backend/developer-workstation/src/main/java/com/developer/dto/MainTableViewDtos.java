@@ -28,6 +28,13 @@ public final class MainTableViewDtos {
     ) {}
 
     @Builder
+    public record MainTableViewAccessRuleDTO(
+            String targetType,
+            String targetId,
+            String targetName
+    ) {}
+
+    @Builder
     public record MainTableViewDTO(
             Long id,
             Long functionUnitId,
@@ -35,6 +42,8 @@ public final class MainTableViewDtos {
             String viewName,
             Boolean isDefault,
             String status,
+            Boolean restrictToInvolvedUsers,
+            List<MainTableViewAccessRuleDTO> accessRules,
             List<Map<String, Object>> sortConfig,
             Map<String, Object> filterConfig,
             List<MainTableViewFieldDTO> fields
@@ -47,6 +56,8 @@ public final class MainTableViewDtos {
 
     public record UpdateMainTableViewRequest(
             String viewName,
+            Boolean restrictToInvolvedUsers,
+            List<MainTableViewAccessRuleDTO> accessRules,
             List<Map<String, Object>> sortConfig,
             Map<String, Object> filterConfig,
             List<MainTableViewFieldDTO> fields

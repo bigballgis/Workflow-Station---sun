@@ -3,6 +3,9 @@ package com.portal.service.impl;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portal.component.FunctionUnitAccessComponent;
+import com.portal.component.MainTableViewAccessResolver;
+import com.portal.component.MainTableViewAccessResolver.AccessRule;
+import com.portal.component.MainTableViewInvolvementChecker;
 import com.portal.component.ProcessComponent;
 import com.portal.dto.MainTableViewImportResult;
 import com.portal.dto.ProcessInstanceInfo;
@@ -46,6 +49,8 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
     private final FunctionUnitAccessComponent functionUnitAccessComponent;
+    private final MainTableViewAccessResolver mainTableViewAccessResolver;
+    private final MainTableViewInvolvementChecker mainTableViewInvolvementChecker;
     private final ProcessInstanceRepository processInstanceRepository;
     private final ProcessComponent processComponent;
 
@@ -55,32 +60,48 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
         List<Map<String, Object>> rows;
         try {
             rows = jdbcTemplate.queryForList("""
-                    SELECT fu.id AS fu_id, fu.code AS fu_code, fu.name AS fu_name, COUNT(v.id) AS view_count
+                    SELECT fu.id AS fu_id, fu.code AS fu_code, fu.name AS fu_name, v.id AS view_id
                     FROM dw_main_table_view_configs v
                     INNER JOIN dw_function_units fu ON fu.id = v.function_unit_id
                     WHERE v.status = 'PUBLISHED'
-                    GROUP BY fu.id, fu.code, fu.name
-                    ORDER BY fu.name
+                    ORDER BY fu.name, v.id
                     """);
         } catch (Exception e) {
             log.warn("Main table view menu query failed: {}", e.getMessage());
             return List.of();
         }
 
-        List<FunctionUnitViewMenuItem> result = new ArrayList<>();
+        Map<String, List<Long>> viewIdsByFuCode = new LinkedHashMap<>();
+        Map<String, Map<String, Object>> fuMetaByCode = new LinkedHashMap<>();
         for (Map<String, Object> row : rows) {
             String code = stringVal(row.get("fu_code"));
-            if (code == null || !functionUnitAccessComponent.canAccessFunctionUnit(userId, code)) {
+            if (code == null) {
+                continue;
+            }
+            fuMetaByCode.putIfAbsent(code, row);
+            viewIdsByFuCode.computeIfAbsent(code, k -> new ArrayList<>())
+                    .add(((Number) row.get("view_id")).longValue());
+        }
+
+        List<FunctionUnitViewMenuItem> result = new ArrayList<>();
+        for (Map.Entry<String, Map<String, Object>> entry : fuMetaByCode.entrySet()) {
+            String code = entry.getKey();
+            Map<String, Object> row = entry.getValue();
+            if (!functionUnitAccessComponent.canAccessFunctionUnit(userId, code)) {
                 continue;
             }
             if (!functionUnitAccessComponent.isFunctionUnitEnabled(code)) {
+                continue;
+            }
+            long visibleCount = countVisibleViews(userId, viewIdsByFuCode.getOrDefault(code, List.of()));
+            if (visibleCount <= 0) {
                 continue;
             }
             result.add(FunctionUnitViewMenuItem.builder()
                     .functionUnitId(String.valueOf(row.get("fu_id")))
                     .functionUnitCode(code)
                     .functionUnitName(stringVal(row.get("fu_name")))
-                    .viewCount(((Number) row.get("view_count")).intValue())
+                    .viewCount((int) visibleCount)
                     .build());
         }
         return result;
@@ -91,7 +112,7 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
     public List<MainTableViewSummary> listPublishedViews(String userId, String functionUnitCode) {
         assertFuAccess(userId, functionUnitCode);
         try {
-            return jdbcTemplate.query("""
+            List<MainTableViewSummary> summaries = jdbcTemplate.query("""
                             SELECT v.id, v.view_name, v.is_default, v.filter_config::text AS filter_config,
                                    v.main_table_id,
                                    COALESCE(td.table_display_name, td.table_name) AS table_label
@@ -115,6 +136,9 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                                 .build();
                     },
                     functionUnitCode.trim());
+            return summaries.stream()
+                    .filter(summary -> canUserSeeView(userId, summary.id()))
+                    .toList();
         } catch (Exception e) {
             log.warn("List published views failed for {}: {}", functionUnitCode, e.getMessage());
             return List.of();
@@ -126,6 +150,7 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
     public MainTableViewDataPage queryViewData(String userId, Long viewId, int page, int size, String search) {
         ViewDefinition view = loadPublishedView(viewId);
         assertFuAccess(userId, view.functionUnitCode());
+        assertViewAccess(userId, view);
 
         List<MainTableViewFieldColumn> columns = visibleColumns(view);
         List<Map<String, Object>> allRows = loadAndProjectRows(userId, view, search);
@@ -160,6 +185,7 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
     public byte[] exportViewCsv(String userId, Long viewId, int maxRows) {
         ViewDefinition view = loadPublishedView(viewId);
         assertFuAccess(userId, view.functionUnitCode());
+        assertViewAccess(userId, view);
 
         List<MainTableViewFieldColumn> columns = visibleColumns(view);
         List<Map<String, Object>> allRows = loadAndProjectRows(userId, view, null);
@@ -193,6 +219,7 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
     public MainTableViewImportResult importViewCsv(String userId, Long viewId, byte[] csvBytes) {
         ViewDefinition view = loadPublishedView(viewId);
         assertFuAccess(userId, view.functionUnitCode());
+        assertViewAccess(userId, view);
 
         if (csvBytes == null || csvBytes.length == 0) {
             throw new IllegalArgumentException("CSV file is empty");
@@ -361,7 +388,6 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
     }
 
     private List<Map<String, Object>> loadAndProjectRows(String userId, ViewDefinition view, String search) {
-        // View Design shows ALL data of the function unit (every initiator), not just the current user.
         Pageable pageable = PageRequest.of(0, 5000, Sort.by(Sort.Direction.DESC, "startTime"));
         Page<ProcessInstance> instances = processInstanceRepository
                 .findByFunctionUnitCodeOrderByStartTimeDesc(view.functionUnitCode(), pageable);
@@ -369,10 +395,19 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
         boolean isSub = "SUB".equalsIgnoreCase(view.tableType());
         List<Map<String, Object>> rows = new ArrayList<>();
         String needle = search != null ? search.trim().toLowerCase(Locale.ROOT) : null;
-        // SUB rows can appear under several form bindings + repeat across process snapshots — dedup by PK.
         Set<String> seenSubKeys = new LinkedHashSet<>();
+        Map<String, Boolean> involvementCache = new HashMap<>();
+        boolean skipInvolvementFilter = mainTableViewAccessResolver.isSystemAdministrator(userId);
 
         for (ProcessInstance pi : instances.getContent()) {
+            if (!skipInvolvementFilter && view.restrictToInvolvedUsers()) {
+                Boolean involved = involvementCache.computeIfAbsent(
+                        pi.getId(),
+                        id -> mainTableViewInvolvementChecker.isUserInvolved(userId, pi));
+                if (!Boolean.TRUE.equals(involved)) {
+                    continue;
+                }
+            }
             List<Map<String, Object>> piRows = isSub
                     ? projectSubTableRows(pi, view, seenSubKeys)
                     : List.of(projectInstanceRow(pi, view));
@@ -688,7 +723,8 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
         List<Map<String, Object>> rows = jdbcTemplate.queryForList("""
                 SELECT v.id, v.view_name, v.sort_config::text AS sort_config,
                        v.filter_config::text AS filter_config, fu.code AS fu_code,
-                       v.main_table_id, td.table_type
+                       v.main_table_id, td.table_type,
+                       v.restrict_to_involved_users
                 FROM dw_main_table_view_configs v
                 INNER JOIN dw_function_units fu ON fu.id = v.function_unit_id
                 LEFT JOIN dw_table_definitions td ON td.id = v.main_table_id
@@ -734,7 +770,41 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
                 fields,
                 mainTableId,
                 tableType,
-                subBindingKeys);
+                subBindingKeys,
+                Boolean.TRUE.equals(row.get("restrict_to_involved_users")),
+                loadAccessRules(viewId));
+    }
+
+    private List<AccessRule> loadAccessRules(Long viewId) {
+        try {
+            List<Map<String, Object>> rows = jdbcTemplate.queryForList("""
+                    SELECT target_type, target_id
+                    FROM dw_main_table_view_access
+                    WHERE view_config_id = ?
+                    """, viewId);
+            return mainTableViewAccessResolver.parseAccessRules(rows);
+        } catch (Exception e) {
+            log.warn("Failed to load view access rules for {}: {}", viewId, e.getMessage());
+            return List.of();
+        }
+    }
+
+    private boolean canUserSeeView(String userId, Long viewId) {
+        return mainTableViewAccessResolver.canUserSeeView(userId, loadAccessRules(viewId));
+    }
+
+    private long countVisibleViews(String userId, List<Long> viewIds) {
+        if (viewIds == null || viewIds.isEmpty()) {
+            return 0;
+        }
+        return viewIds.stream().filter(viewId -> canUserSeeView(userId, viewId)).count();
+    }
+
+    private void assertViewAccess(String userId, ViewDefinition view) {
+        if (!mainTableViewAccessResolver.canUserSeeView(userId, view.accessRules())) {
+            throw new FunctionUnitAccessComponent.FunctionUnitAccessDeniedException(
+                    "Access denied for view: " + view.id());
+        }
     }
 
     private void assertFuAccess(String userId, String functionUnitCode) {
@@ -819,5 +889,7 @@ public class PortalMainTableViewServiceImpl implements PortalMainTableViewServic
             List<ViewFieldDef> fields,
             Long mainTableId,
             String tableType,
-            List<String> subBindingKeys) {}
+            List<String> subBindingKeys,
+            boolean restrictToInvolvedUsers,
+            List<AccessRule> accessRules) {}
 }
