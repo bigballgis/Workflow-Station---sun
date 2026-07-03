@@ -79,9 +79,6 @@ public class AuthSsoExchangeController {
             user.setLastLoginIp(ipAddress);
             userRepository.save(user);
 
-            // Record successful SSO login audit
-            recordLoginAuditSuccess(user.getId(), user.getUsername(), ipAddress, userAgent);
-
             ResponseEntity<LoginResponse> response = portalSessionIssuerService.issuePortalSession(
                     user,
                     body.getWorkspaceBusinessUnitId(),
@@ -92,8 +89,11 @@ public class AuthSsoExchangeController {
 
             LoginResponse responseBody = response.getBody();
             if (responseBody != null && "WORKSPACE_CONTEXT_REQUIRED".equals(responseBody.getLoginErrorCode())) {
+                // Workspace not yet selected — defer audit until the second exchange when workspace is set
                 pendingRedeems.put(body.getCode(), new PendingRedeem(userId, Instant.now()));
             } else {
+                // Login fully complete (workspace selected or single-workspace user) — record audit
+                recordLoginAuditSuccess(user.getId(), user.getUsername(), ipAddress, userAgent);
                 pendingRedeems.remove(body.getCode());
             }
 
@@ -150,6 +150,7 @@ public class AuthSsoExchangeController {
                     .action(LoginAudit.AuditAction.LOGIN)
                     .ipAddress(ipAddress)
                     .userAgent(truncateUserAgent(userAgent))
+                    .loginPlatform(LoginAudit.LoginPlatform.USER_PORTAL)
                     .success(true)
                     .build();
             loginAuditQueryRepository.save(audit);
@@ -158,7 +159,7 @@ public class AuthSsoExchangeController {
             log.error("Failed to record SSO login success audit: {}", e.getMessage());
         }
     }
-
+    
     private void recordLoginAuditFailure(String userId, String username, String ipAddress,
                                          String userAgent, String reason) {
         try {
@@ -168,6 +169,7 @@ public class AuthSsoExchangeController {
                     .action(LoginAudit.AuditAction.LOGIN)
                     .ipAddress(ipAddress)
                     .userAgent(truncateUserAgent(userAgent))
+                .loginPlatform(LoginAudit.LoginPlatform.USER_PORTAL)
                     .success(false)
                     .failureReason(reason != null && reason.length() > 255
                             ? reason.substring(0, 255) : reason)

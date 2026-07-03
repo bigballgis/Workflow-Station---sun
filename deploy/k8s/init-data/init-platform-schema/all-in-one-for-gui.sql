@@ -212,6 +212,7 @@ CREATE TABLE IF NOT EXISTS sys_login_audit (
     action VARCHAR(20) NOT NULL,
     ip_address VARCHAR(45),
     user_agent TEXT,
+    login_platform VARCHAR(32),
     success BOOLEAN DEFAULT true,
     failure_reason VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -220,6 +221,9 @@ CREATE TABLE IF NOT EXISTS sys_login_audit (
 CREATE INDEX IF NOT EXISTS idx_login_audit_user ON sys_login_audit(user_id);
 CREATE INDEX IF NOT EXISTS idx_login_audit_username ON sys_login_audit(username);
 CREATE INDEX IF NOT EXISTS idx_login_audit_created ON sys_login_audit(created_at);
+
+-- Ensure login_platform column exists on already-created tables (CREATE TABLE IF NOT EXISTS skips existing)
+ALTER TABLE sys_login_audit ADD COLUMN IF NOT EXISTS login_platform VARCHAR(32);
 
 -- =====================================================
 -- 9. Virtual Groups (sys_virtual_groups)

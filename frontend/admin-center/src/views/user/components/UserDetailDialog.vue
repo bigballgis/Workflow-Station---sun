@@ -314,6 +314,15 @@
             width="140"
           />
           <el-table-column
+            prop="loginPlatform"
+            :label="t('user.loginPlatform')"
+            width="130"
+          >
+            <template #default="{ row }">
+              {{ formatLoginPlatform(row.loginPlatform) }}
+            </template>
+          </el-table-column>
+          <el-table-column
             prop="success"
             :label="t('user.loginStatus')"
             width="80"
@@ -426,6 +435,16 @@ import { useUserDetail } from '@/composables/modules/useUserDetail'
 const props = defineProps<{ modelValue: boolean; userId: string }>()
 defineEmits(['update:modelValue'])
 const { t } = useI18n()
+
+const formatLoginPlatform = (platform?: string) => {
+  if (platform === 'ADMIN_CENTER') {
+    return t('user.loginPlatformAdminCenter')
+  }
+  if (platform === 'USER_PORTAL') {
+    return t('user.loginPlatformUserPortal')
+  }
+  return platform || t('user.notSet')
+}
 
 const { loading, detailActiveTab, user, businessUnits, portalVirtualGroups, platformVirtualGroups,
   platformRoles, buRoleGroups, assignDialogVisible, assignRoleLoading, assignSubmitting,

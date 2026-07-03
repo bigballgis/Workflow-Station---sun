@@ -79,6 +79,7 @@ public class UserDetailInfo {
         private LocalDateTime loginTime;
         private String ipAddress;
         private String userAgent;
+        private String loginPlatform;
         private Boolean success;
         private String failureReason;
     }

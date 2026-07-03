@@ -197,6 +197,7 @@ CREATE TABLE IF NOT EXISTS sys_login_audit (
     action VARCHAR(20) NOT NULL,
     ip_address VARCHAR(45),
     user_agent TEXT,
+    login_platform VARCHAR(32),
     success BOOLEAN DEFAULT true,
     failure_reason VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

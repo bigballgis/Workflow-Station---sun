@@ -539,6 +539,7 @@ public class AuthServiceImpl implements AuthService {
                     .action(LoginAudit.AuditAction.LOGIN)
                     .ipAddress(ipAddress)
                     .userAgent(truncateUserAgent(userAgent))
+                    .loginPlatform(LoginAudit.LoginPlatform.ADMIN_CENTER)
                     .success(true)
                     .build();
             loginAuditQueryRepository.save(audit);
@@ -547,7 +548,6 @@ public class AuthServiceImpl implements AuthService {
             log.error("Failed to record login success audit: {}", e.getMessage());
         }
     }
-
     private void recordLoginAuditFailure(String username, String ipAddress, String userAgent, String reason) {
         try {
             LoginAudit audit = LoginAudit.builder()
@@ -555,6 +555,7 @@ public class AuthServiceImpl implements AuthService {
                     .action(LoginAudit.AuditAction.LOGIN)
                     .ipAddress(ipAddress)
                     .userAgent(truncateUserAgent(userAgent))
+                .loginPlatform(LoginAudit.LoginPlatform.ADMIN_CENTER)
                     .success(false)
                     .failureReason(reason != null && reason.length() > 255
                             ? reason.substring(0, 255) : reason)

@@ -45,6 +45,7 @@ export interface LoginHistory {
   loginTime: string
   ipAddress: string
   userAgent?: string
+  loginPlatform?: string
   success: boolean
   failureReason?: string
 }
