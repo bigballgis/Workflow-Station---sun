@@ -56,11 +56,11 @@ export function isAuditField(fieldName: string): boolean {
 }
 
 /**
- * Apply audit-field auto-fill to an initial row before it opens in the Add dialog.
- * Callers (e.g. {@link buildInitialRow}) invoke this after type-default seeding
- * so audit values always win over generic type defaults.
+ * Fill created_* / updated_* audit values on a row when it is SAVED from the Add dialog.
+ * Must never run when the dialog opens — audit values are generated at real insert time
+ * (dialog save), so an abandoned dialog leaves no timestamps behind.
  */
-function applyAuditFieldDefaults(row: Record<string, unknown>, columns: DialogColumn[]): void {
+export function applyAuditFieldDefaults(row: Record<string, unknown>, columns: DialogColumn[]): void {
   // Resolve user once — all audit columns share the same value.
   let cachedUser: UserInfo | null | undefined
   const resolveUser = (): UserInfo | null => {
@@ -163,10 +163,8 @@ export function buildInitialRow(columns: DialogColumn[]): Record<string, unknown
     }
   }
 
-  // After type-based defaults are set, apply audit field auto-fill so that
-  // created_at / created_by / updated_at / updated_by always carry the correct
-  // values — regardless of the field's declared type (VARCHAR, TIMESTAMP, etc.).
-  applyAuditFieldDefaults(row, columns)
+  // Audit fields (created_at / created_by / updated_at / updated_by) stay empty here:
+  // they are filled by applyAuditFieldDefaults at dialog SAVE time, never on open.
 
   return row
 }
@@ -195,8 +193,9 @@ export function mergeFormRowWithSeed(
 export function buildRules(columns: DialogColumn[]): FormRules {
   const rules: FormRules = {}
   for (const col of columns) {
-    // Auto-PK / readonly FK are system-filled; form-create disabled fields often fail required checks.
-    if (col.required && !col.readonly) {
+    // Auto-PK / readonly FK / audit fields are system-filled (audit values only appear at save);
+    // form-create disabled fields often fail required checks.
+    if (col.required && !col.readonly && !isAuditField(col.field)) {
       const trigger =
         col.type === 'select' || col.type === 'date' || col.type === 'datetime' || col.type === 'checkbox'
         || col.type === 'cascader' || col.type === 'transfer' || col.type === 'lookup' || col.type === 'switch'

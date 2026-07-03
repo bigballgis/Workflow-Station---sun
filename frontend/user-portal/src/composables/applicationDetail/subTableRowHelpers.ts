@@ -1,7 +1,7 @@
 import type { FormField } from '@/components/FormRenderer.vue'
 import type { HistoryRecord } from '@/types/historyRecord'
 import { resolveAssigneeFieldForBinding } from '@/utils/subTableAssignment'
-import { SHARED_ATTACHMENT_RELATION_TABLE_ID } from '@/components/subTableAddDialogHelpers'
+import { SHARED_ATTACHMENT_RELATION_TABLE_ID, isAuditField } from '@/components/subTableAddDialogHelpers'
 import {
   mergeSubTableRowsByRowId,
   dropSubsumedSubTableRows,
@@ -204,14 +204,31 @@ export function isPortalSharedAttachmentTableBinding(b: {
  * leave an empty `data` array. Pick a saved row list whose first row shares enough column names with the binding's
  * list-view columns (conservative threshold) so initiator My Request shows prior-step sub-table rows.
  */
-/** Columns + inline-form field keys used to match variable slices and detect MI placeholder rows. */
+/**
+ * Columns + inline-form field keys used to match variable slices and detect MI placeholder rows.
+ * Non-discriminative keys are excluded — they appear in every sibling sub-table's rows and would
+ * let the fuzzy backfill "claim" another table's rows (e.g. an empty Attachment table adopting a
+ * Transaction row):
+ *  - system audit fields (created_at / created_by / updated_at / updated_by — auto-appended to every table)
+ *  - structural FK / runtime row keys (row_id, id_idw, sub_task_id, …)
+ *  - the binding's own foreign key to the main table (e.g. case_id / main_id)
+ */
 export function collectSubTableBindingMatchKeys(b: {
   columns?: Array<{ field?: string }>
   formFields?: FormField[]
+  foreignKeyField?: string | null
 }): Set<string> {
   const fieldSet = new Set<string>()
+  const fk = String(b.foreignKeyField ?? '').trim().toLowerCase()
+  const add = (key: string) => {
+    const lk = key.toLowerCase()
+    if (isAuditField(key)) return
+    if (SUB_TABLE_STRUCTURAL_FK_KEYS.has(lk)) return
+    if (fk && lk === fk) return
+    fieldSet.add(key)
+  }
   for (const c of b.columns || []) {
-    if (typeof c?.field === 'string' && c.field.length > 0) fieldSet.add(c.field)
+    if (typeof c?.field === 'string' && c.field.length > 0) add(c.field)
   }
   const walkFormFields = (fields?: FormField[]) => {
     if (!Array.isArray(fields)) return
@@ -221,7 +238,7 @@ export function collectSubTableBindingMatchKeys(b: {
       } else if (f.type === 'collapse' && Array.isArray(f.collapsePanels)) {
         for (const panel of f.collapsePanels) walkFormFields(panel.fields)
       } else if (f.type === 'card' || f.type === 'row' || f.type === 'col') walkFormFields(f.children)
-      else if (typeof f.key === 'string' && f.key.length > 0) fieldSet.add(f.key)
+      else if (typeof f.key === 'string' && f.key.length > 0) add(f.key)
     }
   }
   walkFormFields(b.formFields)

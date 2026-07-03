@@ -5,6 +5,8 @@ import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.*;
 import com.portal.entity.ProcessInstance;
 import com.portal.util.SubTableNestingSanitizer;
+import com.portal.util.SystemAuditFieldFiller;
+import com.portal.service.UserDisplayNameResolver;
 import com.portal.exception.PortalException;
 import com.portal.repository.ProcessInstanceRepository;
 import lombok.RequiredArgsConstructor;
@@ -89,6 +91,26 @@ public class TaskFormComponent {
     @Lazy
     @Autowired
     private RequestIdEnricher requestIdEnricher;
+
+    /** Lazy: resolves updated_by display names for system audit fields (null in `new`-constructed tests). */
+    @Lazy
+    @Autowired
+    private UserDisplayNameResolver userDisplayNameResolver;
+
+    /** Display name for audit fields; falls back to the raw user id when the resolver is unavailable. */
+    private String resolveAuditUserDisplay(String userId) {
+        UserDisplayNameResolver resolver = userDisplayNameResolver;
+        if (resolver == null) {
+            return userId;
+        }
+        try {
+            String display = resolver.resolve(userId);
+            return display != null && !display.isBlank() ? display : userId;
+        } catch (RuntimeException ex) {
+            log.debug("resolveAuditUserDisplay failed for {}: {}", userId, ex.getMessage());
+            return userId;
+        }
+    }
 
     @Lazy
     @Autowired
@@ -337,6 +359,9 @@ public class TaskFormComponent {
 
             Map<String, Object> updatedVariables = new HashMap<>(currentVariables);
             updatedVariables.putAll(editableData);
+            // System audit fields: refresh updated_at/updated_by at the real update (key present
+            // only when the field is on the form); created_* is preserved from the insert.
+            SystemAuditFieldFiller.fillOnUpdate(updatedVariables, resolveAuditUserDisplay(userId));
             // Prevent geometric __subTables__ bloat: drop deep nested copies before persisting so each
             // task save stores the canonical one-level structure instead of compounding prior rounds.
             SubTableNestingSanitizer.stripDeepNestedSubTables(updatedVariables);

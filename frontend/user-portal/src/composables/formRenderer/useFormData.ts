@@ -9,6 +9,7 @@ import {
   computeRequestId,
   type RequestIdConfig,
 } from '../../utils/formFieldMeta'
+import { isAuditField } from '../../components/subTableAddDialogHelpers/rowInit'
 
 interface FormDataDeps {
   formRef: Ref<FormInstance | undefined>
@@ -104,6 +105,9 @@ export function useFormData(deps: FormDataDeps) {
     if (deps.readonly()) return {}
     const rules: FormRules = {}
     deps.allFields.value.forEach(field => {
+      // System audit fields stay empty until the backend fills them at insert/update;
+      // never validate them (a designer-set required would block every submit).
+      if (isAuditField(field.key)) return
       const fieldRules: any[] = []
       if (field.rules?.length) {
         fieldRules.push(

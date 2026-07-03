@@ -15,6 +15,7 @@ import com.portal.repository.ProcessInstanceRepository;
 import com.portal.service.PortalWorkspaceAuthService;
 import com.portal.service.ProcessAssigneeSnapshot;
 import com.portal.util.BpmnInitiatorTaskDetection;
+import com.portal.util.SystemAuditFieldFiller;
 import com.portal.service.UserDisplayNameResolver;
 import com.platform.common.i18n.I18nService;
 import com.platform.common.util.ApiResponseBodyUnwrap;
@@ -113,6 +114,11 @@ public class ProcessStartComponent {
         applyWorkspaceContextVariables(userId, variables);
         processSubTablePrimaryKeyEnricherComponent.allocateMissingPrimaryKeysInVariables(pin.code(), variables);
 
+        // System audit fields are generated server-side at the real insert (never pre-filled by
+        // the portal dialog); only fields present on the form (submitted keys) receive values.
+        String startUserDisplayName = userDisplayNameResolver.resolve(userId);
+        SystemAuditFieldFiller.fillOnInsert(variables, startUserDisplayName);
+
         Map<String, Object> data = workflowEngineClient.startProcess(
                 actualProcessKey, request.getBusinessKey(), userId, variables);
         if (data == null || data.get("processInstanceId") == null) {
@@ -123,7 +129,6 @@ public class ProcessStartComponent {
         log.info("Process started via Flowable: {}", flowableProcessInstanceId);
 
         // Persist process instance as RUNNING so ProcessCompletionListener callback finds a row
-        String startUserDisplayName = userDisplayNameResolver.resolve(userId);
         persistRunningProcessInstance(
                 flowableProcessInstanceId, data, processKey, def.processName(), request,
                 userId, startUserDisplayName, variables, pin);

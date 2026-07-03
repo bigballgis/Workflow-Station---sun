@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { buildInitialRow, buildRules } from '../subTableAddDialogHelpers'
+import {
+  applyAuditFieldDefaults,
+  applyEditAuditDefaults,
+  buildInitialRow,
+  buildRules,
+} from '../subTableAddDialogHelpers'
 import type { DialogColumn } from '../subTableAddDialogHelpers'
 
 // Validates: Requirements 3.2, 4.1–4.10
@@ -89,6 +94,57 @@ describe('buildInitialRow', () => {
       dob: null,
       ts: null,
     })
+  })
+})
+
+// Audit values must be generated at SAVE time, never when the dialog opens.
+describe('audit field timing (save-time fill, no open-time prefill)', () => {
+  const auditColumns: DialogColumn[] = [
+    { field: 'created_at', label: 'Created At', type: 'datetime' },
+    { field: 'created_by', label: 'Created By', type: 'text' },
+    { field: 'updated_at', label: 'Updated At', type: 'datetime' },
+    { field: 'updated_by', label: 'Updated By', type: 'text' },
+    { field: 'name', label: 'Name', type: 'text' },
+  ]
+
+  it('buildInitialRow leaves audit fields at type defaults (no timestamps on dialog open)', () => {
+    const row = buildInitialRow(auditColumns)
+    expect(row.created_at).toBeNull()
+    expect(row.created_by).toBe('')
+    expect(row.updated_at).toBeNull()
+    expect(row.updated_by).toBe('')
+  })
+
+  it('applyAuditFieldDefaults fills created_* and updated_* on add-save', () => {
+    const row = buildInitialRow(auditColumns)
+    applyAuditFieldDefaults(row, auditColumns)
+    expect(row.created_at).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)
+    expect(row.updated_at).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)
+    expect(row.name).toBe('')
+  })
+
+  it('applyEditAuditDefaults refreshes only updated_* on edit-save', () => {
+    const row: Record<string, unknown> = {
+      created_at: '2020-01-01 00:00:00',
+      created_by: 'someone',
+      updated_at: '2020-01-01 00:00:00',
+      updated_by: 'someone',
+    }
+    applyEditAuditDefaults(row, auditColumns)
+    expect(row.created_at).toBe('2020-01-01 00:00:00')
+    expect(row.created_by).toBe('someone')
+    expect(row.updated_at).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)
+    expect(row.updated_at).not.toBe('2020-01-01 00:00:00')
+  })
+
+  it('buildRules never requires audit fields (empty until save would block submit)', () => {
+    const required: DialogColumn[] = auditColumns.map(c => ({ ...c, required: true }))
+    const rules = buildRules(required)
+    expect(rules.created_at).toBeUndefined()
+    expect(rules.created_by).toBeUndefined()
+    expect(rules.updated_at).toBeUndefined()
+    expect(rules.updated_by).toBeUndefined()
+    expect(rules.name).toBeDefined()
   })
 })
 

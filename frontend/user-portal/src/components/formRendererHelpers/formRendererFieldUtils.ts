@@ -4,6 +4,7 @@
  */
 
 import type { FormField, FormTab } from './formRendererTypes'
+import { isAuditField } from '../subTableAddDialogHelpers/rowInit'
 
 /** Coerce designer native binding id lists (number[]) into Set for `.has()` lookups. */
 export function asNumberSet(
@@ -19,6 +20,9 @@ export function isFormCreateRuleReadonly(rule: unknown): boolean {
   if (!rule || typeof rule !== 'object') return false
   const r = rule as Record<string, unknown>
   const props = (r.props as Record<string, unknown> | undefined) || {}
+  // System audit fields (created_at / created_by / updated_at / updated_by) are always
+  // read-only: their values are generated server-side at real insert/update time.
+  if (typeof r.field === 'string' && isAuditField(r.field)) return true
   return (
     r.disabled === true ||
     r.readonly === true ||

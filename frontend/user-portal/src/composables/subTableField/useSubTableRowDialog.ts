@@ -4,7 +4,6 @@ import {
   extractUserIdFromCellValue,
   mergeFormRowWithSeed,
   normalizeSubTableColumns,
-  applyEditAuditDefaults,
 } from '@/components/subTableAddDialogHelpers'
 import type { DialogColumn } from '@/components/subTableAddDialogHelpers'
 import {
@@ -174,8 +173,7 @@ export function useSubTableRowDialog(
       if (af) {
         savedRow = applyAssigneeDisplayNameToRow(savedRow, prevAssigneeId)
       }
-      // Refresh updated_at / updated_by on every edit
-      applyEditAuditDefaults(savedRow, subTableDialogColumns.value)
+      // updated_at / updated_by already refreshed by the dialog save funnel (useSubTableDialogForm)
       rows.value[idx] = savedRow
       emit('update:modelValue', [...rows.value])
 

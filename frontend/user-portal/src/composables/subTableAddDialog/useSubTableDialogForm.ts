@@ -1,7 +1,14 @@
 import { ref, computed, watch, nextTick, type Ref } from 'vue'
 import type { FormInstance } from 'element-plus'
 import { ElMessage } from 'element-plus'
-import { buildInitialRow, buildRules, mergeFormRowWithSeed, isAuditField } from '@/components/subTableAddDialogHelpers'
+import {
+  applyAuditFieldDefaults,
+  applyEditAuditDefaults,
+  buildInitialRow,
+  buildRules,
+  mergeFormRowWithSeed,
+  isAuditField,
+} from '@/components/subTableAddDialogHelpers'
 import type { DialogColumn } from '@/components/subTableAddDialogHelpers'
 import type { RowFormulaRule, ValidationRule } from '@/components/formRendererHelpers'
 import { evaluateFormula, validateField } from '@/components/businessLogicEngine'
@@ -171,6 +178,13 @@ export function useSubTableDialogForm(props: FormProps, emit: FormEmit, t: Dialo
     if (!validateColumns()) return
     const seed = props.mode === 'add' ? props.initialData : undefined
     const row = mergeFormRowWithSeed(seed, formData.value as Record<string, unknown>)
+    // Audit fields are generated at real save time (never when the dialog opens):
+    // add fills created_* + updated_*, edit refreshes updated_* only.
+    if (props.mode === 'add') {
+      applyAuditFieldDefaults(row, props.columns)
+    } else {
+      applyEditAuditDefaults(row, props.columns)
+    }
     saving.value = true
     try {
       if (props.saveRow) {

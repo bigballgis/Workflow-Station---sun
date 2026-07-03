@@ -11,6 +11,13 @@ describe('isFormCreateRuleReadonly', () => {
       props: { readonly: false, disabled: true },
     })).toBe(false)
   })
+
+  it('forces system audit fields readonly (values are server-filled at insert/update)', () => {
+    for (const field of ['created_at', 'created_by', 'updated_at', 'updated_by']) {
+      expect(isFormCreateRuleReadonly({ field, props: {} })).toBe(true)
+    }
+    expect(isFormCreateRuleReadonly({ field: 'normal_field', props: {} })).toBe(false)
+  })
 })
 
 describe('isFormFieldReadonly', () => {

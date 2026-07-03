@@ -9,6 +9,8 @@ import com.portal.dto.SubTableChange;
 import com.portal.entity.ProcessInstance;
 import com.portal.exception.PortalException;
 import com.portal.repository.ProcessInstanceRepository;
+import com.portal.service.UserDisplayNameResolver;
+import com.portal.util.SystemAuditFieldFiller;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -56,6 +58,26 @@ public class ProcessFormComponent {
             requestIdEnricher = r;
         }
         return r;
+    }
+
+    /** Lazy: resolves updated_by display names for system audit fields (null in `new`-constructed tests). */
+    @Lazy
+    @Autowired
+    private UserDisplayNameResolver userDisplayNameResolver;
+
+    /** Display name for audit fields; falls back to the raw user id when the resolver is unavailable. */
+    private String resolveAuditUserDisplay(String userId) {
+        UserDisplayNameResolver resolver = userDisplayNameResolver;
+        if (resolver == null) {
+            return userId;
+        }
+        try {
+            String display = resolver.resolve(userId);
+            return display != null && !display.isBlank() ? display : userId;
+        } catch (RuntimeException ex) {
+            log.debug("resolveAuditUserDisplay failed for {}: {}", userId, ex.getMessage());
+            return userId;
+        }
     }
 
     private volatile TransactionTemplate processFormWriteTxTemplate;
@@ -194,6 +216,9 @@ public class ProcessFormComponent {
 
             Map<String, Object> updatedVariables = new HashMap<>(oldValues);
             updatedVariables.putAll(formData);
+            // System audit fields: refresh updated_at/updated_by at the real update (key present
+            // only when the field is on the form); created_* is preserved from the insert.
+            SystemAuditFieldFiller.fillOnUpdate(updatedVariables, resolveAuditUserDisplay(userId));
             processInstance.setVariables(updatedVariables);
             processInstanceRepository.save(processInstance);
 
